@@ -42,14 +42,14 @@ export function FlowCanvas({ onDeploy }: FlowCanvasProps) {
     updateNodeLabel(id, newLabel);
   };
 
-  const handleDeploy = () => {
-    if (onDeploy) {
-      onDeploy(nodes, edges);
-    } else {
-      console.log('DEPLOY:', { nodes, edges });
-      alert('Model data printed to console!\n(Next step: send to Vitruvius backend)');
-    }
-  };
+  // const handleDeploy = () => {
+  //   if (onDeploy) {
+  //     onDeploy(nodes, edges);
+  //   } else {
+  //     console.log('DEPLOY:', { nodes, edges });
+  //     alert('Model data printed to console!\n(Next step: send to Vitruvius backend)');
+  //   }
+  // };
 
   return (
     <div

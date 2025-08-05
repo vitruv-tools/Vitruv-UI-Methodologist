@@ -56,5 +56,10 @@ export const validateFlowData = (flowData: FlowData): boolean => {
 };
 
 export const generateFlowId = (): string => {
-  return `flow_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-}; 
+  const array = new Uint32Array(2);
+  crypto.getRandomValues(array);
+  const randomPart = Array.from(array)
+      .map((n) => n.toString(36))
+      .join('');
+  return `flow_${Date.now()}_${randomPart}`;
+};
