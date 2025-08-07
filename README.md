@@ -34,10 +34,6 @@ For detailed architecture documentation, see [ARCHITECTURE.md](./ARCHITECTURE.md
 
 ## Getting Started
 
-### Prerequisites
-
-- Node.js (version 14 or higher)
-- npm or yarn
 
 ### Installation
 
@@ -109,6 +105,4 @@ The project follows React best practices with:
 4. Add tests for new functionality
 5. Submit a pull request
 
-## License
 
-This project is licensed under the MIT License.
