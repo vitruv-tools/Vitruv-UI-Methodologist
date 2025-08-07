@@ -16,7 +16,21 @@ export interface FlowData {
   edges: FlowEdge[];
 }
 
-export type NodeType = 'sequence' | 'object';
+export type NodeType = 
+  | 'sequence' 
+  | 'object' 
+  | 'class' 
+  | 'component' 
+  | 'composite' 
+  | 'deployment' 
+  | 'package' 
+  | 'profile' 
+  | 'use-case' 
+  | 'activity' 
+  | 'state-machine' 
+  | 'communication' 
+  | 'timing' 
+  | 'interaction-overview';
 
 export interface DragItem {
   type: NodeType;

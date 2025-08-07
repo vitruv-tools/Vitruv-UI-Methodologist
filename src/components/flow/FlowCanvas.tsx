@@ -16,9 +16,10 @@ const nodeTypes = { editable: EditableNode };
 
 interface FlowCanvasProps {
   onDeploy?: (nodes: Node[], edges: Edge[]) => void;
+  sidebarOpen?: boolean;
 }
 
-export function FlowCanvas({ onDeploy }: FlowCanvasProps) {
+export function FlowCanvas({ onDeploy, sidebarOpen = true }: FlowCanvasProps) {
   const reactFlowWrapper = useRef<HTMLDivElement>(null);
   const [reactFlowInstance, setReactFlowInstance] = useState<ReactFlowInstance | null>(null);
   
@@ -51,10 +52,17 @@ export function FlowCanvas({ onDeploy }: FlowCanvasProps) {
     }
   };
 
+  const containerStyle: React.CSSProperties = {
+    flexGrow: 1,
+    height: '100%',
+    width: '100%',
+    position: 'relative',
+  };
+
   return (
     <div
       ref={reactFlowWrapper}
-      style={{ flexGrow: 1, height: '100vh', marginLeft: 180 }}
+      style={containerStyle}
     > 
       <ReactFlow
         nodes={nodes.map(node => ({
@@ -70,6 +78,7 @@ export function FlowCanvas({ onDeploy }: FlowCanvasProps) {
         onDragOver={onDragOver}
         onInit={setReactFlowInstance}
         nodeTypes={nodeTypes}
+        style={{ width: '100%', height: '100%' }}
       >
         <MiniMap />
         <Controls />
