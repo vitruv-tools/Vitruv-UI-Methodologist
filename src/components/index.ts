@@ -8,4 +8,6 @@ export { FlowCanvas } from './flow/FlowCanvas';
 export { EditableNode } from './flow/EditableNode';
 
 // UI components
-export { Button } from './ui/Button'; 
+export { Button } from './ui/Button';
+export { TreeMenu } from './ui/TreeMenu';
+export { ToolsPanel } from './ui/ToolsPanel'; 

@@ -21,6 +21,7 @@ interface FlowCanvasProps {
 export function FlowCanvas({ onDeploy }: FlowCanvasProps) {
   const reactFlowWrapper = useRef<HTMLDivElement>(null);
   const [reactFlowInstance, setReactFlowInstance] = useState<ReactFlowInstance | null>(null);
+  const [isDragOver, setIsDragOver] = useState(false);
   
   const {
     nodes,
@@ -38,23 +39,34 @@ export function FlowCanvas({ onDeploy }: FlowCanvasProps) {
     addNode,
   });
 
+  const handleDragOver = (event: React.DragEvent) => {
+    onDragOver(event);
+    setIsDragOver(true);
+  };
+
+  const handleDragLeave = () => {
+    setIsDragOver(false);
+  };
+
+  const handleDrop = (event: React.DragEvent) => {
+    setIsDragOver(false);
+    onDrop(event);
+  };
+
   const handleLabelChange = (id: string, newLabel: string) => {
     updateNodeLabel(id, newLabel);
   };
 
-  // const handleDeploy = () => {
-  //   if (onDeploy) {
-  //     onDeploy(nodes, edges);
-  //   } else {
-  //     console.log('DEPLOY:', { nodes, edges });
-  //     alert('Model data printed to console!\n(Next step: send to Vitruvius backend)');
-  //   }
-  // };
-
   return (
     <div
       ref={reactFlowWrapper}
-      style={{ flexGrow: 1, height: '100vh', marginLeft: 180 }}
+      style={{ 
+        flexGrow: 1, 
+        height: '100vh',
+        position: 'relative',
+        border: isDragOver ? '3px dashed #3498db' : 'none',
+        transition: 'border 0.2s ease'
+      }}
     > 
       <ReactFlow
         nodes={nodes.map(node => ({
@@ -66,8 +78,9 @@ export function FlowCanvas({ onDeploy }: FlowCanvasProps) {
         onEdgesChange={onEdgesChange}
         onConnect={onConnect}
         fitView
-        onDrop={onDrop}
-        onDragOver={onDragOver}
+        onDrop={handleDrop}
+        onDragOver={handleDragOver}
+        onDragLeave={handleDragLeave}
         onInit={setReactFlowInstance}
         nodeTypes={nodeTypes}
       >
@@ -75,6 +88,28 @@ export function FlowCanvas({ onDeploy }: FlowCanvasProps) {
         <Controls />
         <Background />
       </ReactFlow>
+      
+      {isDragOver && (
+        <div style={{
+          position: 'absolute',
+          top: '50%',
+          left: '50%',
+          transform: 'translate(-50%, -50%)',
+          background: 'rgba(52, 152, 219, 0.95)',
+          color: 'white',
+          padding: '24px 48px',
+          borderRadius: '12px',
+          fontSize: '20px',
+          fontWeight: 'bold',
+          zIndex: 1000,
+          pointerEvents: 'none',
+          boxShadow: '0 8px 32px rgba(52, 152, 219, 0.3)',
+          border: '2px solid rgba(255, 255, 255, 0.3)',
+          backdropFilter: 'blur(10px)'
+        }}>
+          ✨ Drop UML element here ✨
+        </div>
+      )}
     </div>
   );
 } 

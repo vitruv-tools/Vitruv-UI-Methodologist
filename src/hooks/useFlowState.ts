@@ -22,7 +22,13 @@ export function useFlowState() {
       ...node,
       id: getId(),
     };
-    setNodes((nds) => nds.concat(newNode));
+    console.log('useFlowState.addNode called with:', node);
+    console.log('Created newNode:', newNode);
+    setNodes((nds) => {
+      const newNodes = nds.concat(newNode);
+      console.log('Updated nodes array:', newNodes);
+      return newNodes;
+    });
     return newNode.id;
   }, [getId, setNodes]);
 
