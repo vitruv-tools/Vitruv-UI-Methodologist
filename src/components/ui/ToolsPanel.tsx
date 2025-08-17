@@ -1,21 +1,22 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
+import { ConfirmDialog } from './ConfirmDialog';
 
 interface ToolsPanelProps {
   isVisible: boolean;
-  diagramType?: string;
   onClose?: () => void;
+  onEcoreFileUpload?: (fileContent: string, meta?: { fileName?: string; uploadId?: string }) => void;
 }
 
 const toolsPanelStyle: React.CSSProperties = {
-  width: '300px',
-  background: '#ffffff',
-  borderLeft: '1px solid #e0e0e0',
-  padding: '20px',
+  userSelect: 'none',
+  width: '240px',
+  background: '#fff',
+  borderLeft: '1px solid #e5e5e5',
+  padding: '16px',
   boxSizing: 'border-box',
   height: '100vh',
   overflowY: 'auto',
-  boxShadow: '-2px 0 8px rgba(0,0,0,0.1)',
-  transition: 'transform 0.3s ease',
+  transition: 'transform 0.2s ease',
   transform: 'translateX(0)',
 };
 
@@ -25,13 +26,13 @@ const hiddenStyle: React.CSSProperties = {
 };
 
 const titleStyle: React.CSSProperties = {
-  fontSize: '18px',
-  fontWeight: 'bold',
-  marginBottom: '20px',
-  color: '#333',
-  textAlign: 'center',
-  padding: '10px 0',
-  borderBottom: '2px solid #3498db',
+  fontSize: '16px',
+  fontWeight: 700,
+  marginBottom: '12px',
+  color: '#222',
+  textAlign: 'left',
+  padding: '4px 0',
+  borderBottom: '1px solid #e5e5e5',
   position: 'relative',
 };
 
@@ -55,335 +56,208 @@ const closeButtonHoverStyle: React.CSSProperties = {
   color: '#333',
 };
 
-const toolGroupStyle: React.CSSProperties = {
-  marginBottom: '24px',
-};
-
-const groupTitleStyle: React.CSSProperties = {
-  fontSize: '14px',
-  fontWeight: '600',
-  color: '#555',
-  marginBottom: '12px',
-  padding: '8px 0',
-  borderBottom: '1px solid #e0e0e0',
-};
-
-const toolButtonStyle: React.CSSProperties = {
+const addButtonStyle: React.CSSProperties = {
   width: '100%',
-  padding: '16px 20px',
-  margin: '8px 0',
-  border: '2px solid #e0e0e0',
-  borderRadius: '8px',
-  background: '#ffffff',
-  color: '#333',
-  fontSize: '14px',
-  cursor: 'grab',
-  transition: 'all 0.3s ease',
-  display: 'flex',
-  alignItems: 'center',
-  justifyContent: 'space-between',
-  userSelect: 'none',
-  boxShadow: '0 2px 4px rgba(0,0,0,0.05)',
-};
-
-const toolButtonHoverStyle: React.CSSProperties = {
-  background: '#f8f9fa',
-  borderColor: '#3498db',
-  transform: 'translateY(-2px)',
-  boxShadow: '0 4px 12px rgba(52, 152, 219, 0.2)',
-};
-
-const toolButtonDraggingStyle: React.CSSProperties = {
-  background: '#e3f2fd',
-  borderColor: '#2196f3',
-  transform: 'scale(0.98)',
-  opacity: 0.9,
-  boxShadow: '0 6px 20px rgba(33, 150, 243, 0.3)',
-};
-
-const toolIconStyle: React.CSSProperties = {
-  width: '32px',
-  height: '32px',
+  padding: '10px 12px',
+  margin: '8px 0 16px 0',
+  border: '1px solid #cccccc',
   borderRadius: '6px',
-  background: '#3498db',
-  display: 'flex',
+  background: '#ffffff',
+  color: '#222',
+  fontSize: '14px',
+  fontWeight: 500,
+  cursor: 'pointer',
+  transition: 'background 0.15s ease, border-color 0.15s ease',
+  display: 'inline-flex',
   alignItems: 'center',
   justifyContent: 'center',
-  color: 'white',
-  fontSize: '14px',
-  fontWeight: 'bold',
-  boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
+  gap: '8px',
+  userSelect: 'none',
 };
 
-export const ToolsPanel: React.FC<ToolsPanelProps> = ({ isVisible, diagramType, onClose }) => {
-  const [toolUsage, setToolUsage] = useState<Record<string, number>>({});
+const addButtonHoverStyle: React.CSSProperties = {
+  background: '#f6f6f6',
+  borderColor: '#bbbbbb',
+};
+
+const addButtonActiveStyle: React.CSSProperties = {
+  background: '#eeeeee',
+  borderColor: '#aaaaaa',
+};
+
+const instructionsStyle: React.CSSProperties = {
+  marginBottom: '8px',
+  fontSize: '12px',
+  color: '#666',
+};
+
+const fileInputStyle: React.CSSProperties = {
+  display: 'none',
+};
+
+export const ToolsPanel: React.FC<ToolsPanelProps> = ({ isVisible, onClose, onEcoreFileUpload }) => {
+  const [isDragging, setIsDragging] = useState(false);
+  const [isProcessing, setIsProcessing] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  
+  interface UploadedEcoreFile {
+    id: string;
+    fileName: string;
+    uploadedBy: string;
+    uploadedAt: string; // ISO string
+    content?: string;
+  }
+
+  const uploadsStorageKey = 'ecoreUploads';
+
+  const generateId = () => `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+
+  const getInitialUploads = (): UploadedEcoreFile[] => {
+    try {
+      const stored = localStorage.getItem(uploadsStorageKey);
+      if (stored) {
+        return JSON.parse(stored) as UploadedEcoreFile[];
+      }
+    } catch {}
+
+    const now = Date.now();
+    return [
+      {
+        id: generateId(),
+        fileName: 'sample.ecore',
+        uploadedBy: 'you',
+        uploadedAt: new Date(now - 2 * 60 * 60 * 1000).toISOString(), // 2h ago
+        content: '<ecore:EPackage name="Sample" nsURI="" nsPrefix=""><eClassifiers name="Order"><eStructuralFeatures name="id"/></eClassifiers><eClassifiers name="Customer"><eStructuralFeatures name="name"/></eClassifiers></ecore:EPackage>'
+      },
+      {
+        id: generateId(),
+        fileName: 'orders.ecore',
+        uploadedBy: 'alice',
+        uploadedAt: new Date(now - 24 * 60 * 60 * 1000).toISOString(), // 1d ago
+        content: '<ecore:EPackage name="Orders" nsURI="" nsPrefix=""><eClassifiers name="Order"><eStructuralFeatures name="total"/></eClassifiers></ecore:EPackage>'
+      },
+      {
+        id: generateId(),
+        fileName: 'billing.ecore',
+        uploadedBy: 'charlie',
+        uploadedAt: new Date(now - 7 * 60 * 1000).toISOString(), // 7m ago
+        content: '<ecore:EPackage name="Billing" nsURI="" nsPrefix=""><eClassifiers name="Invoice"><eStructuralFeatures name="amount"/></eClassifiers></ecore:EPackage>'
+      },
+    ];
+  };
+
+  const [uploads, setUploads] = useState<UploadedEcoreFile[]>(getInitialUploads);
+  const [confirmState, setConfirmState] = useState<{ open: boolean; targetId?: string; targetName?: string }>(
+    { open: false }
+  );
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(uploadsStorageKey, JSON.stringify(uploads));
+    } catch {}
+  }, [uploads]);
+
+  const formatRelativeTime = (isoDate: string) => {
+    const diffMs = Date.now() - new Date(isoDate).getTime();
+    const seconds = Math.floor(diffMs / 1000);
+    if (seconds < 5) return 'just now';
+    const minutes = Math.floor(seconds / 60);
+    if (minutes < 1) return `${seconds}s ago`;
+    const hours = Math.floor(minutes / 60);
+    if (hours < 1) return `${minutes}m ago`;
+    const days = Math.floor(hours / 24);
+    if (days < 1) return `${hours}h ago`;
+    const months = Math.floor(days / 30);
+    if (months < 1) return `${days}d ago`;
+    const years = Math.floor(months / 12);
+    if (years < 1) return `${months}mo ago`;
+    return `${years}y ago`;
+  };
 
   if (!isVisible) return null;
 
-  const handleDragStart = (event: React.DragEvent, toolType: string, toolName: string) => {
-    console.log('Drag start for tool:', toolType, toolName);
-    
-    // Increment usage counter
-    setToolUsage(prev => ({
-      ...prev,
-      [toolName]: (prev[toolName] || 0) + 1
-    }));
-    
-    // Set drag data
-    event.dataTransfer.setData('application/tool', JSON.stringify({
-      type: toolType,
-      name: toolName,
-      diagramType: diagramType
-    }));
-    event.dataTransfer.effectAllowed = 'copy';
-    
-    // Set drag image with UML representation
-    const dragElement = event.currentTarget as HTMLElement;
-    const rect = dragElement.getBoundingClientRect();
-    const canvas = document.createElement('canvas');
-    const ctx = canvas.getContext('2d');
-    if (ctx) {
-      canvas.width = rect.width;
-      canvas.height = rect.height;
-      
-      // Draw UML-style preview
-      if (toolType === 'element') {
-        // Draw UML rectangle with compartments
-        ctx.fillStyle = '#ffffff';
-        ctx.fillRect(0, 0, rect.width, rect.height);
-        ctx.strokeStyle = '#333333';
-        ctx.lineWidth = 2;
-        ctx.strokeRect(1, 1, rect.width - 2, rect.height - 2);
-        
-        // Draw compartment dividers
-        ctx.strokeStyle = '#cccccc';
-        ctx.lineWidth = 1;
-        ctx.beginPath();
-        ctx.moveTo(0, rect.height * 0.3);
-        ctx.lineTo(rect.width, rect.height * 0.3);
-        ctx.moveTo(0, rect.height * 0.6);
-        ctx.lineTo(rect.width, rect.height * 0.6);
-        ctx.stroke();
-        
-        // Draw text
-        ctx.fillStyle = '#333333';
-        ctx.font = 'bold 14px Arial';
-        ctx.textAlign = 'center';
-        ctx.fillText(toolName, rect.width / 2, 20);
-        
-        if (toolName === 'interface') {
-          ctx.font = 'italic 12px Arial';
-          ctx.fillText('<<interface>>', rect.width / 2, 35);
-        }
-      } else {
-        // Draw simple tool preview
-        ctx.fillStyle = '#e3f2fd';
-        ctx.fillRect(0, 0, rect.width, rect.height);
-        ctx.fillStyle = '#2196f3';
-        ctx.font = '14px Arial';
-        ctx.textAlign = 'center';
-        ctx.fillText(toolName, rect.width / 2, rect.height / 2 + 5);
-      }
-      
-      event.dataTransfer.setDragImage(canvas, rect.width / 2, rect.height / 2);
+  const handleFileSelect = async (file: File) => {
+    if (!file || !file.name.endsWith('.ecore')) {
+      alert('Please select a valid .ecore file');
+      return;
     }
-    
-    // Add visual feedback
-    const target = event.currentTarget as HTMLElement;
-    Object.assign(target.style, toolButtonDraggingStyle);
-  };
 
-  const handleDragEnd = (event: React.DragEvent) => {
-    console.log('Drag end for tool');
-    // Reset visual feedback
-    const target = event.currentTarget as HTMLElement;
-    Object.assign(target.style, toolButtonStyle);
-  };
-
-  // Helper function to render tool button with usage counter
-  const renderToolButton = (toolType: string, toolName: string, displayName: string, iconColor: string) => {
-    const usageCount = toolUsage[toolName] || 0;
+    setIsProcessing(true);
     
-    // Get appropriate icon for UML elements
-    const getIcon = () => {
-      if (toolType === 'element') {
-        switch (toolName) {
-          case 'class':
-            return '⬜';
-          case 'abstract-class':
-            return '⬜';
-          case 'interface':
-            return '⬜';
-          case 'enumeration':
-            return '⬜';
-          case 'package':
-            return '📦';
-          default:
-            return toolName.charAt(0).toUpperCase();
-        }
-      } else if (toolType === 'member') {
-        switch (toolName) {
-          case 'attribute':
-            return '🔧';
-          case 'method':
-            return '⚙️';
-          default:
-            return toolName.charAt(0).toUpperCase();
-        }
-      } else if (toolType === 'relationship') {
-        switch (toolName) {
-          case 'association':
-            return '↔️';
-          case 'aggregation':
-            return '◇';
-          case 'composition':
-            return '◆';
-          case 'inheritance':
-            return '△';
-          case 'realization':
-            return '⟶';
-          case 'dependency':
-            return '⟶';
-          default:
-            return toolName.charAt(0).toUpperCase();
-        }
-      } else if (toolType === 'multiplicity') {
-        return toolName.charAt(0).toUpperCase();
+    try {
+      const content = await file.text();
+      
+      if (onEcoreFileUpload) {
+        onEcoreFileUpload(content, { fileName: file.name });
       }
-      return toolName.charAt(0).toUpperCase();
-    };
-    
-    return (
-      <button 
-        style={toolButtonStyle} 
-        draggable={true}
-        onDragStart={(e) => handleDragStart(e, toolType, toolName)}
-        onDragEnd={handleDragEnd}
-        onMouseEnter={(e) => Object.assign(e.currentTarget.style, toolButtonHoverStyle)} 
-        onMouseLeave={(e) => Object.assign(e.currentTarget.style, toolButtonStyle)}
-      >
-        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-          <span style={{ fontSize: '16px' }}>{getIcon()}</span>
-          <span style={{ fontWeight: '500' }}>{displayName}</span>
-          {usageCount > 0 && (
-            <span style={{
-              background: '#e3f2fd',
-              color: '#1976d2',
-              fontSize: '11px',
-              padding: '3px 8px',
-              borderRadius: '12px',
-              fontWeight: 'bold',
-              marginLeft: 'auto'
-            }}>
-              {usageCount}
-            </span>
-          )}
-        </div>
-        <div style={{...toolIconStyle, background: iconColor}}>
-          {toolName.charAt(0).toUpperCase()}
-        </div>
-      </button>
-    );
+      
+      setUploads(prev => [
+        {
+          id: generateId(),
+          fileName: file.name,
+          uploadedBy: 'you',
+          uploadedAt: new Date().toISOString(),
+          content,
+        },
+        ...prev,
+      ]);
+      
+      console.log('Ecore file uploaded successfully:', file.name);
+    } catch (error) {
+      console.error('Error reading file:', error);
+      alert('Error reading the file. Please try again.');
+    } finally {
+      setIsProcessing(false);
+    }
   };
 
-  const renderClassDiagramTools = () => (
-    <>
-      <div style={toolGroupStyle}>
-        <div style={groupTitleStyle}>Elements</div>
-        {renderToolButton('element', 'class', 'Class', '#2ecc71')}
-        {renderToolButton('element', 'abstract-class', 'Abstract Class', '#16a085')}
-        {renderToolButton('element', 'interface', 'Interface', '#e74c3c')}
-        {renderToolButton('element', 'enumeration', 'Enumeration', '#9b59b6')}
-        {renderToolButton('element', 'package', 'Package', '#f39c12')}
-      </div>
+  const handleButtonClick = () => {
+    fileInputRef.current?.click();
+  };
 
-      <div style={toolGroupStyle}>
-        <div style={groupTitleStyle}>Members</div>
-        {renderToolButton('member', 'attribute', 'Attribute', '#1abc9c')}
-        {renderToolButton('member', 'method', 'Method', '#d35400')}
-      </div>
+  const handleFileInputChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (file) {
+      handleFileSelect(file);
+    }
+    // Reset input value to allow selecting the same file again
+    event.target.value = '';
+  };
 
-      <div style={toolGroupStyle}>
-        <div style={groupTitleStyle}>Relationships</div>
-        {renderToolButton('relationship', 'association', 'Association', '#34495e')}
-        {renderToolButton('relationship', 'aggregation', 'Aggregation', '#27ae60')}
-        {renderToolButton('relationship', 'composition', 'Composition', '#8e44ad')}
-        {renderToolButton('relationship', 'inheritance', 'Inheritance', '#16a085')}
-        {renderToolButton('relationship', 'realization', 'Realization', '#e67e22')}
-        {renderToolButton('relationship', 'dependency', 'Dependency', '#95a5a6')}
-      </div>
+  const handleDragOver = (event: React.DragEvent) => {
+    event.preventDefault();
+    setIsDragging(true);
+  };
 
-      <div style={toolGroupStyle}>
-        <div style={groupTitleStyle}>Multiplicity</div>
-        {renderToolButton('multiplicity', 'one', '1', '#e74c3c')}
-        {renderToolButton('multiplicity', 'many', '*', '#3498db')}
-        {renderToolButton('multiplicity', 'optional', '0..1', '#f39c12')}
-        {renderToolButton('multiplicity', 'range', '1..*', '#9b59b6')}
-      </div>
+  const handleDragLeave = (event: React.DragEvent) => {
+    event.preventDefault();
+    setIsDragging(false);
+  };
 
-      {/* Usage summary */}
-      <div style={{
-        marginTop: '30px',
-        padding: '16px',
-        background: '#f8f9fa',
-        borderRadius: '8px',
-        border: '1px solid #e9ecef'
-      }}>
-        <div style={{
-          fontSize: '14px',
-          fontWeight: '600',
-          color: '#495057',
-          marginBottom: '12px',
-          textAlign: 'center'
-        }}>
-          📊 Usage Summary
-        </div>
-        <div style={{
-          display: 'grid',
-          gridTemplateColumns: 'repeat(2, 1fr)',
-          gap: '8px',
-          fontSize: '12px'
-        }}>
-          {Object.entries(toolUsage).map(([toolName, count]) => (
-            <div key={toolName} style={{
-              display: 'flex',
-              justifyContent: 'space-between',
-              padding: '4px 8px',
-              background: '#ffffff',
-              borderRadius: '4px',
-              border: '1px solid #dee2e6'
-            }}>
-              <span style={{ color: '#6c757d' }}>{toolName}</span>
-              <span style={{ fontWeight: 'bold', color: '#007bff' }}>{count}</span>
-            </div>
-          ))}
-          {Object.keys(toolUsage).length === 0 && (
-            <div style={{
-              gridColumn: '1 / -1',
-              textAlign: 'center',
-              color: '#6c757d',
-              fontStyle: 'italic',
-              padding: '8px'
-            }}>
-              No tools used yet
-            </div>
-          )}
-        </div>
-      </div>
-    </>
-  );
+  const handleDrop = (event: React.DragEvent) => {
+    event.preventDefault();
+    setIsDragging(false);
+    
+    const files = event.dataTransfer.files;
+    if (files.length > 0) {
+      handleFileSelect(files[0]);
+    }
+  };
 
-  const renderDefaultTools = () => (
-    <div style={{ textAlign: 'center', color: '#666', padding: '40px 20px' }}>
-      <div style={{ fontSize: '48px', marginBottom: '16px', color: '#3498db' }}>⚙️</div>
-      <div>Select a diagram type to see available tools</div>
-    </div>
-  );
+  const getButtonStyle = () => {
+    if (isProcessing) {
+      return { ...addButtonStyle, ...addButtonActiveStyle, cursor: 'not-allowed' };
+    }
+    if (isDragging) {
+      return { ...addButtonStyle, ...addButtonHoverStyle };
+    }
+    return addButtonStyle;
+  };
 
   return (
     <div style={isVisible ? toolsPanelStyle : hiddenStyle}>
       <div style={titleStyle}>
-        TOOLS
+        ECORE UPLOADER
         {onClose && (
           <button 
             style={closeButtonStyle}
@@ -396,7 +270,141 @@ export const ToolsPanel: React.FC<ToolsPanelProps> = ({ isVisible, diagramType, 
           </button>
         )}
       </div>
-      {diagramType === 'class' ? renderClassDiagramTools() : renderDefaultTools()}
+      
+      {/* Helper text */}
+      <div style={instructionsStyle}>Upload a .ecore file to open it in the workspace.</div>
+      
+      {/* File Input */}
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept=".ecore"
+        onChange={handleFileInputChange}
+        style={fileInputStyle}
+      />
+      
+      {/* Add Button */}
+      <button 
+        style={getButtonStyle()}
+        onClick={handleButtonClick}
+        disabled={isProcessing}
+        onMouseEnter={(e) => !isProcessing && Object.assign(e.currentTarget.style, addButtonHoverStyle)}
+        onMouseLeave={(e) => !isProcessing && Object.assign(e.currentTarget.style, getButtonStyle())}
+        onDragOver={handleDragOver}
+        onDragLeave={handleDragLeave}
+        onDrop={handleDrop}
+      >
+        {isProcessing ? (
+          <>
+            Uploading...
+          </>
+        ) : (
+          <>
+            Upload .ecore
+          </>
+        )}
+      </button>
+
+      {/* Uploaded Files List */}
+      <div style={{
+        marginTop: '8px',
+        marginBottom: '8px',
+        fontWeight: 700,
+        fontSize: '13px',
+        color: '#222',
+        borderBottom: '1px solid #e5e5e5',
+        paddingBottom: '6px',
+      }}>
+        Uploaded files
+      </div>
+      <div>
+        {[...uploads]
+          .sort((a, b) => new Date(b.uploadedAt).getTime() - new Date(a.uploadedAt).getTime())
+          .map(item => (
+            <div key={item.id} style={{
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '2px',
+              padding: '8px 0',
+              borderBottom: '1px solid #eeeeee',
+              marginBottom: '0px',
+              background: 'transparent',
+              cursor: 'pointer',
+              transition: 'background 0.15s ease',
+              position: 'relative',
+            }}
+            onClick={() => {
+              const fallback = `name="${item.fileName.replace(/\.ecore$/i, '')}"`;
+              const toOpen = item.content && item.content.trim().length > 0 ? item.content : fallback;
+              if (onEcoreFileUpload) {
+                onEcoreFileUpload(toOpen, { fileName: item.fileName, uploadId: item.id });
+              }
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.background = '#f9f9f9';
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.background = 'transparent';
+            }}
+            >
+              {item.uploadedBy && item.uploadedBy.trim().toLowerCase() === 'you' && (
+                <div style={{ position: 'absolute', right: 0, top: '6px' }}>
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setConfirmState({ open: true, targetId: item.id, targetName: item.fileName });
+                    }}
+                    style={{
+                      background: 'transparent',
+                      border: 'none',
+                      color: '#c92a2a',
+                      padding: 0,
+                      borderRadius: 0,
+                      cursor: 'pointer',
+                      fontSize: '12px',
+                      textDecoration: 'underline',
+                    }}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.textDecoration = 'none';
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.textDecoration = 'underline';
+                    }}
+                  >
+                    Delete
+                  </button>
+                </div>
+              )}
+              <div style={{ fontWeight: 600, color: '#222', wordBreak: 'break-all' }}>{item.fileName}</div>
+              <div style={{ fontSize: '12px', color: '#666' }}>
+                <span>by </span>
+                <span style={{ fontWeight: 600 }}>{item.uploadedBy}</span>
+                <span> · </span>
+                <span title={new Date(item.uploadedAt).toLocaleString()}>{formatRelativeTime(item.uploadedAt)}</span>
+              </div>
+            </div>
+          ))}
+        {uploads.length === 0 && (
+          <div style={{ fontSize: '12px', color: '#777' }}>No uploads yet.</div>
+        )}
+      </div>
+      
+      {/* Removed additional info box for a simpler, academic style */}
+
+      <ConfirmDialog
+        isOpen={confirmState.open}
+        title="Delete file?"
+        message={`Are you sure you want to delete "${confirmState.targetName || ''}"? This action cannot be undone.`}
+        confirmText="Delete"
+        cancelText="Cancel"
+        onConfirm={() => {
+          if (confirmState.targetId) {
+            setUploads(prev => prev.filter(u => u.id !== confirmState.targetId));
+          }
+          setConfirmState({ open: false });
+        }}
+        onCancel={() => setConfirmState({ open: false })}
+      />
     </div>
   );
 };

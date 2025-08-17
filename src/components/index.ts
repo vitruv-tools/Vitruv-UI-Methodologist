@@ -11,3 +11,4 @@ export { EditableNode } from './flow/EditableNode';
 export { Button } from './ui/Button';
 export { TreeMenu } from './ui/TreeMenu';
 export { ToolsPanel } from './ui/ToolsPanel'; 
+export { ConfirmDialog } from './ui/ConfirmDialog';

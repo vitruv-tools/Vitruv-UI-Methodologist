@@ -7,46 +7,446 @@ interface UMLNodeData {
   toolName?: string;
   diagramType?: string;
   onLabelChange?: (id: string, label: string) => void;
+  // Extended data for comprehensive editing
+  className?: string;
+  attributes?: string[];
+  methods?: string[];
+  values?: string[];
+  packageName?: string;
+}
+
+interface EditableFieldProps {
+  value: string;
+  onSave: (newValue: string) => void;
+  placeholder?: string;
+  style?: React.CSSProperties;
+  multiline?: boolean;
+  onDelete?: () => void;
+  showDelete?: boolean;
+  showVisibility?: boolean;
+}
+
+// Reusable editable field component
+function EditableField({ value, onSave, placeholder, style, multiline = false, onDelete, showDelete = false, showVisibility = false }: EditableFieldProps & { onDelete?: () => void, showDelete?: boolean, showVisibility?: boolean }) {
+  const [editing, setEditing] = useState(false);
+  const [editValue, setEditValue] = useState(value);
+  const [showOptions, setShowOptions] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [showVisibilityOptions, setShowVisibilityOptions] = useState(false);
+  const [selectedVisibility, setSelectedVisibility] = useState('+');
+  const inputRef = useRef<HTMLInputElement>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  useEffect(() => {
+    if (editing) {
+      if (multiline && textareaRef.current) {
+        textareaRef.current.focus();
+        textareaRef.current.select();
+      } else if (inputRef.current) {
+      inputRef.current.focus();
+        inputRef.current.select();
+      }
+    }
+  }, [editing, multiline]);
+
+  const handleSave = () => {
+    if (editValue.trim() !== value) {
+      onSave(editValue.trim());
+    }
+    setEditing(false);
+  };
+
+  const handleCancel = () => {
+    setEditValue(value);
+    setEditing(false);
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      handleSave();
+    } else if (e.key === 'Escape') {
+      handleCancel();
+    }
+  };
+
+  const handleClick = () => {
+    if (showDelete && onDelete) {
+      setShowOptions(!showOptions);
+    }
+  };
+
+  const handleEdit = () => {
+    setShowOptions(false);
+    setEditing(true);
+  };
+
+  const handleDeleteClick = () => {
+    setShowOptions(false);
+    setShowDeleteConfirm(true);
+  };
+
+  const handleDeleteConfirm = () => {
+    if (onDelete) {
+      onDelete();
+      setShowDeleteConfirm(false);
+    }
+  };
+
+  const handleDeleteCancel = () => {
+    setShowDeleteConfirm(false);
+  };
+
+  const handleAddClick = () => {
+    if (showVisibility) {
+      setShowVisibilityOptions(true);
+    } else {
+      setEditing(true);
+    }
+  };
+
+  const handleVisibilitySelect = (visibility: string) => {
+    setSelectedVisibility(visibility);
+    setShowVisibilityOptions(false);
+    setEditing(true);
+  };
+
+  const handleVisibilitySave = () => {
+    if (editValue.trim()) {
+      const newValue = `${selectedVisibility} ${editValue.trim()}`;
+      onSave(newValue);
+    }
+    setEditing(false);
+    setEditValue('');
+  };
+
+  if (editing) {
+    if (multiline) {
+      return (
+        <textarea
+          ref={textareaRef}
+          value={editValue}
+          onChange={(e) => setEditValue(e.target.value)}
+          onBlur={showVisibility ? handleVisibilitySave : handleSave}
+          onKeyDown={handleKeyDown}
+          style={{
+            width: '100%',
+            border: '2px solid #0071e3',
+            borderRadius: '4px',
+            padding: '4px',
+            fontSize: 'inherit',
+            fontFamily: 'inherit',
+            resize: 'vertical',
+            minHeight: '60px',
+            outline: 'none',
+            ...style
+          }}
+          placeholder={showVisibility ? `${selectedVisibility} name: Type` : placeholder}
+        />
+      );
+    }
+
+    return (
+      <input
+        ref={inputRef}
+        value={editValue}
+        onChange={(e) => setEditValue(e.target.value)}
+        onBlur={showVisibility ? handleVisibilitySave : handleSave}
+        onKeyDown={handleKeyDown}
+        style={{
+          width: '100%',
+          border: '2px solid #0071e3',
+          borderRadius: '4px',
+          padding: '4px',
+          fontSize: 'inherit',
+          fontFamily: 'inherit',
+          outline: 'none',
+          ...style
+        }}
+        placeholder={showVisibility ? `${selectedVisibility} name: Type` : placeholder}
+      />
+    );
+  }
+
+  return (
+    <div style={{ position: 'relative' }}>
+      <div
+        onDoubleClick={() => setEditing(true)}
+        onClick={showVisibility ? handleAddClick : handleClick}
+        style={{
+          cursor: 'pointer',
+          padding: '2px 4px',
+          borderRadius: '2px',
+          transition: 'all 0.2s ease',
+          display: 'flex',
+          alignItems: 'center',
+          gap: '4px',
+          ...style
+        }}
+        onMouseEnter={(e) => {
+          e.currentTarget.style.backgroundColor = '#f0f0f0';
+          e.currentTarget.style.transform = 'scale(1.02)';
+        }}
+        onMouseLeave={(e) => {
+          e.currentTarget.style.backgroundColor = 'transparent';
+          e.currentTarget.style.transform = 'scale(1)';
+        }}
+        title={showVisibility ? "Click to add new item" : showDelete && onDelete ? "Click to show options, double-click to edit" : "Double-click to edit"}
+      >
+        {value || placeholder}
+      </div>
+      
+      {/* Visibility options popup */}
+      {showVisibilityOptions && showVisibility && (
+        <div style={{
+          position: 'absolute',
+          top: '100%',
+          left: '0',
+          background: '#fff',
+          border: '1px solid #ddd',
+          borderRadius: '4px',
+          padding: '4px',
+          boxShadow: '0 2px 8px rgba(0,0,0,0.15)',
+          zIndex: 1000,
+          minWidth: '120px'
+        }}>
+          <div style={{
+            fontSize: '11px',
+            color: '#666',
+            marginBottom: '4px',
+            textAlign: 'center',
+            fontWeight: 'bold'
+          }}>
+            Select visibility:
+          </div>
+          <button
+            onClick={() => handleVisibilitySelect('+')}
+            style={{
+              background: '#28a745',
+              color: 'white',
+              border: 'none',
+              borderRadius: '4px',
+              padding: '4px 8px',
+              fontSize: '11px',
+              cursor: 'pointer',
+              width: '100%',
+              textAlign: 'center',
+              marginBottom: '4px',
+              transition: 'background-color 0.2s'
+            }}
+            onMouseEnter={(e) => e.currentTarget.style.background = '#218838'}
+            onMouseLeave={(e) => e.currentTarget.style.background = '#28a745'}
+            title="Public (+)"
+          >
+            + Public
+          </button>
+          <button
+            onClick={() => handleVisibilitySelect('#')}
+            style={{
+              background: '#ffc107',
+              color: '#212529',
+              border: 'none',
+              borderRadius: '4px',
+              padding: '4px 8px',
+              fontSize: '11px',
+              cursor: 'pointer',
+              width: '100%',
+              textAlign: 'center',
+              marginBottom: '4px',
+              transition: 'background-color 0.2s'
+            }}
+            onMouseEnter={(e) => e.currentTarget.style.background = '#e0a800'}
+            onMouseLeave={(e) => e.currentTarget.style.background = '#ffc107'}
+            title="Protected (#)"
+          >
+            # Protected
+          </button>
+          <button
+            onClick={() => handleVisibilitySelect('-')}
+            style={{
+              background: '#dc3545',
+              color: 'white',
+              border: 'none',
+              borderRadius: '4px',
+              padding: '4px 8px',
+              fontSize: '11px',
+              cursor: 'pointer',
+              width: '100%',
+              textAlign: 'center',
+              transition: 'background-color 0.2s'
+            }}
+            onMouseEnter={(e) => e.currentTarget.style.background = '#c82333'}
+            onMouseLeave={(e) => e.currentTarget.style.background = '#dc3545'}
+            title="Private (-)"
+          >
+            - Private
+          </button>
+        </div>
+      )}
+      
+      {/* Options popup */}
+      {showOptions && showDelete && onDelete && (
+        <div style={{
+          position: 'absolute',
+          top: '100%',
+          left: '0',
+          background: '#fff',
+          border: '1px solid #ddd',
+          borderRadius: '4px',
+          padding: '4px',
+          boxShadow: '0 2px 8px rgba(0,0,0,0.15)',
+          zIndex: 1000,
+          minWidth: '120px'
+        }}>
+          <button
+            onClick={handleEdit}
+            style={{
+              background: '#0071e3',
+              color: 'white',
+              border: 'none',
+              borderRadius: '4px',
+              padding: '4px 8px',
+              fontSize: '11px',
+              cursor: 'pointer',
+              width: '100%',
+              textAlign: 'center',
+              marginBottom: '4px',
+              transition: 'background-color 0.2s'
+            }}
+            onMouseEnter={(e) => e.currentTarget.style.background = '#005bb5'}
+            onMouseLeave={(e) => e.currentTarget.style.background = '#0071e3'}
+            title="Edit this item"
+          >
+            ✏️ Edit
+          </button>
+          <button
+            onClick={handleDeleteClick}
+            style={{
+              background: '#ff6b6b',
+              color: 'white',
+              border: 'none',
+              borderRadius: '4px',
+              padding: '4px 8px',
+              fontSize: '11px',
+              cursor: 'pointer',
+              width: '100%',
+              textAlign: 'center',
+              transition: 'background-color 0.2s'
+            }}
+            onMouseEnter={(e) => e.currentTarget.style.background = '#ff5252'}
+            onMouseLeave={(e) => e.currentTarget.style.background = '#ff6b6b'}
+            title="Delete this item"
+          >
+            🗑️ Delete
+          </button>
+        </div>
+      )}
+
+      {/* Delete confirmation popup */}
+      {showDeleteConfirm && onDelete && (
+        <div style={{
+          position: 'absolute',
+          top: '100%',
+          left: '0',
+          background: '#fff',
+          border: '1px solid #ddd',
+          borderRadius: '4px',
+          padding: '8px',
+          boxShadow: '0 2px 8px rgba(0,0,0,0.15)',
+          zIndex: 1001,
+          minWidth: '150px'
+        }}>
+          <div style={{
+            fontSize: '11px',
+            color: '#666',
+            marginBottom: '8px',
+            textAlign: 'center'
+          }}>
+            Are you sure you want to delete this?
+          </div>
+          <div style={{ display: 'flex', gap: '4px' }}>
+            <button
+              onClick={handleDeleteConfirm}
+              style={{
+                background: '#ff6b6b',
+                color: 'white',
+                border: 'none',
+                borderRadius: '4px',
+                padding: '4px 8px',
+                fontSize: '10px',
+                cursor: 'pointer',
+                flex: 1,
+                transition: 'background-color 0.2s'
+              }}
+              onMouseEnter={(e) => e.currentTarget.style.background = '#ff5252'}
+              onMouseLeave={(e) => e.currentTarget.style.background = '#ff6b6b'}
+            >
+              Yes, Delete
+            </button>
+            <button
+              onClick={handleDeleteCancel}
+              style={{
+                background: '#6c757d',
+                color: 'white',
+                border: 'none',
+                borderRadius: '4px',
+                padding: '4px 8px',
+                fontSize: '10px',
+                cursor: 'pointer',
+                flex: 1,
+                transition: 'background-color 0.2s'
+              }}
+              onMouseEnter={(e) => e.currentTarget.style.background = '#5a6268'}
+              onMouseLeave={(e) => e.currentTarget.style.background = '#6c757d'}
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
 }
 
 export function EditableNode({ id, data, selected, isConnectable, xPos, yPos, ...rest }: NodeProps<UMLNodeData>) {
-  const [editing, setEditing] = useState(false);
-  const [label, setLabel] = useState(data.label || '');
-  const inputRef = useRef<HTMLInputElement>(null);
+  // Extended state for comprehensive editing
+  const [nodeData, setNodeData] = useState<UMLNodeData>({
+    ...data,
+    className: data.className || data.label || 'Class',
+    attributes: data.attributes || ['+ id: Long', '+ name: String', '# type: String'],
+    methods: data.methods || ['+ validate(): Boolean', '+ process(): void'],
+    values: data.values || ['RED', 'GREEN', 'BLUE'],
+    packageName: data.packageName || 'Package'
+  });
 
   // Debug logging
   console.log('EditableNode render:', { id, data, selected });
 
-  // Focus input when entering edit mode
-  useEffect(() => {
-    if (editing && inputRef.current) {
-      inputRef.current.focus();
-    }
-  }, [editing]);
-
-  // Save label and exit edit mode
-  const save = () => {
-    setEditing(false);
+  // Update parent when data changes
+  const updateNodeData = (newData: Partial<UMLNodeData>) => {
+    const updatedData = { ...nodeData, ...newData };
+    setNodeData(updatedData);
+    
+    // Update parent component
     if (data.onLabelChange) {
-      data.onLabelChange(id, label);
+      data.onLabelChange(id, updatedData.className || updatedData.label || '');
     }
   };
 
   // Get node style based on tool type
   const getNodeStyle = () => {
     const baseStyle = {
-      padding: '0px', // Remove padding to let UML compartments handle spacing
+      padding: '0px',
       background: selected ? '#f7f9fa' : '#fff',
       border: selected ? '2px solid #0071e3' : '2px solid #333',
-      borderRadius: '0px', // UML elements typically have sharp corners
-      minWidth: '200px', // Increased for better UML appearance
+      borderRadius: '0px',
+      minWidth: '200px',
       boxShadow: selected ? '0 0 0 2px #cde3fa' : '0 4px 12px rgba(0,0,0,0.15)',
       position: 'relative' as const,
       fontFamily: 'Arial, sans-serif',
-      overflow: 'hidden', // Ensure clean edges
+      overflow: 'hidden',
     };
 
-    // Apply specific styles based on tool type
     if (data.toolType === 'element') {
       switch (data.toolName) {
         case 'class':
@@ -97,119 +497,112 @@ export function EditableNode({ id, data, selected, isConnectable, xPos, yPos, ..
             boxShadow: selected ? '0 0 0 2px #cde3fa' : '0 4px 16px rgba(243, 156, 18, 0.2)',
           };
         default:
-          return baseStyle; // Add default case for unknown element types
+          return baseStyle;
       }
     } else if (data.toolType === 'member') {
       return {
         ...baseStyle,
-        borderColor: '#1abc9c',
-        borderWidth: '1px',
-        background: selected ? '#f0f9f0' : '#f8f9fa',
-        minWidth: '140px',
-        minHeight: '50px',
-        fontSize: '12px',
-        padding: '8px 12px',
-        borderRadius: '4px', // Slight rounding for members
-      };
-    } else if (data.toolType === 'relationship') {
-      return {
-        ...baseStyle,
-        borderColor: '#34495e',
-        borderWidth: '1px',
-        background: selected ? '#f0f0f0' : '#f8f8f8',
-        minWidth: '140px',
-        minHeight: '60px',
-        textAlign: 'center' as const,
-        borderRadius: '20px', // Relationships are typically rounded
-        padding: '12px',
+        minHeight: '40px',
+        borderRadius: '4px',
+        boxShadow: selected ? '0 0 0 2px #cde3fa' : '0 2px 8px rgba(0,0,0,0.1)',
       };
     } else if (data.toolType === 'multiplicity') {
       return {
         ...baseStyle,
-        borderColor: '#e74c3c',
-        borderWidth: '1px',
-        background: selected ? '#fdf0f0' : '#ffffff',
-        minWidth: '50px',
-        minHeight: '40px',
-        textAlign: 'center' as const,
-        fontSize: '14px',
-        fontWeight: 'bold',
-        padding: '8px',
+        minHeight: '30px',
         borderRadius: '4px',
+        boxShadow: selected ? '0 0 0 2px #cde3fa' : '0 2px 8px rgba(0,0,0,0.1)',
       };
     }
 
     return baseStyle;
   };
 
-  // Render UML Class structure
+  // Render UML Class with editable fields
   const renderUMLClass = () => (
     <div style={{ width: '100%' }}>
       {/* Class name section */}
       <div style={{
+        background: '#f8fff8',
         borderBottom: '1px solid #2ecc71',
-        padding: '12px 8px',
+        padding: '8px 0',
         textAlign: 'center',
         fontWeight: 'bold',
         fontSize: '14px',
         color: '#2ecc71',
-        background: '#f8fff8',
-        minHeight: '20px'
+        minHeight: '30px',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center'
       }}>
-        {editing ? (
-          <input
-            ref={inputRef}
-            value={label}
+        <EditableField
+          value={nodeData.className || ''}
+          onSave={(newValue) => updateNodeData({ className: newValue })}
+          placeholder="Class Name"
             style={{ 
-              width: '100%', 
-              border: 'none', 
-              background: 'transparent',
-              fontSize: '14px',
               fontWeight: 'bold',
-              outline: 'none',
-              textAlign: 'center',
-              color: '#2ecc71'
-            }}
-            onChange={e => setLabel(e.target.value)}
-            onBlur={save}
-            onKeyDown={e => {
-              if (e.key === 'Enter') save();
-              if (e.key === 'Escape') setEditing(false);
-            }}
-          />
-        ) : (
-          <div
-            onDoubleClick={() => setEditing(true)}
-            style={{ cursor: 'pointer' }}
-            title="Double-click to rename"
-          >
-            {label}
-          </div>
-        )}
+            fontSize: '14px',
+            color: '#2ecc71',
+            textAlign: 'center'
+          }}
+        />
       </div>
       
       {/* Attributes section */}
       <div style={{
         borderBottom: '1px solid #2ecc71',
         padding: '8px 0',
-        minHeight: '50px',
         fontSize: '12px',
         color: '#666',
-        background: '#ffffff'
+        minHeight: '50px'
       }}>
         <div style={{ 
-          padding: '6px 8px', 
-          fontStyle: 'italic',
-          fontWeight: '600',
+          padding: '4px 8px', 
+          fontWeight: 'bold', 
           color: '#2ecc71',
-          background: '#f8fff8',
-          borderBottom: '1px solid #e8f5e8'
+          background: '#f0f9f0'
         }}>
           Attributes
         </div>
-        <div style={{ padding: '4px 8px' }}>+ name: String</div>
-        <div style={{ padding: '4px 8px' }}>+ age: Integer</div>
-        <div style={{ padding: '4px 8px' }}>- id: Long</div>
+        {nodeData.attributes?.map((attr, index) => (
+          <div key={index} style={{ 
+            padding: '2px 8px',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px'
+          }}>
+            <EditableField
+              value={attr}
+              onSave={(newValue) => {
+                const newAttributes = [...(nodeData.attributes || [])];
+                newAttributes[index] = newValue;
+                updateNodeData({ attributes: newAttributes });
+              }}
+              placeholder="+ attribute: Type"
+              style={{ fontSize: '12px', flex: 1 }}
+              onDelete={() => {
+                const newAttributes = [...(nodeData.attributes || [])];
+                newAttributes.splice(index, 1);
+                updateNodeData({ attributes: newAttributes });
+              }}
+              showDelete={true}
+            />
+          </div>
+        ))}
+        <div style={{ padding: '2px 8px' }}>
+          <EditableField
+            value=""
+            onSave={(newValue) => {
+              if (newValue.trim()) {
+                const newAttributes = [...(nodeData.attributes || []), newValue];
+                updateNodeData({ attributes: newAttributes });
+              }
+            }}
+            placeholder="+ Add attribute..."
+            style={{ fontSize: '12px', fontStyle: 'italic', color: '#999' }}
+            showVisibility={true}
+          />
+        </div>
       </div>
       
       {/* Methods section */}
@@ -217,96 +610,173 @@ export function EditableNode({ id, data, selected, isConnectable, xPos, yPos, ..
         padding: '8px 0',
         fontSize: '12px',
         color: '#666',
-        background: '#ffffff'
+        minHeight: '50px'
       }}>
         <div style={{ 
-          padding: '6px 8px', 
-          fontStyle: 'italic',
-          fontWeight: '600',
+          padding: '4px 8px', 
+          fontWeight: 'bold', 
           color: '#2ecc71',
-          background: '#f8fff8'
+          background: '#f0f9f0'
         }}>
           Methods
         </div>
-        <div style={{ padding: '4px 8px' }}>+ getName(): String</div>
-        <div style={{ padding: '4px 8px' }}>+ setAge(age: Integer)</div>
-        <div style={{ padding: '4px 8px' }}>+ calculate(): Double</div>
+        {nodeData.methods?.map((method, index) => (
+          <div key={index} style={{ 
+            padding: '2px 8px',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px'
+          }}>
+            <EditableField
+              value={method}
+              onSave={(newValue) => {
+                const newMethods = [...(nodeData.methods || [])];
+                newMethods[index] = newValue;
+                updateNodeData({ methods: newMethods });
+              }}
+              placeholder="+ method(): ReturnType"
+              style={{ fontSize: '12px', flex: 1 }}
+              onDelete={() => {
+                const newMethods = [...(nodeData.methods || [])];
+                newMethods.splice(index, 1);
+                updateNodeData({ methods: newMethods });
+              }}
+              showDelete={true}
+            />
+          </div>
+        ))}
+        <div style={{ padding: '2px 8px' }}>
+          <EditableField
+            value=""
+            onSave={(newValue) => {
+              if (newValue.trim()) {
+                const newMethods = [...(nodeData.methods || []), newValue];
+                updateNodeData({ methods: newMethods });
+              }
+            }}
+            placeholder="+ Add method..."
+            style={{ fontSize: '12px', fontStyle: 'italic', color: '#999' }}
+            showVisibility={true}
+          />
+        </div>
       </div>
     </div>
   );
 
-  // Render UML Abstract Class structure
+  // Render UML Abstract Class
   const renderUMLAbstractClass = () => (
     <div style={{ width: '100%' }}>
       {/* Abstract class name section */}
       <div style={{
+        background: '#f0f8f0',
         borderBottom: '1px solid #16a085',
-        padding: '12px 8px',
+        padding: '8px 0',
         textAlign: 'center',
         fontWeight: 'bold',
         fontSize: '14px',
         color: '#16a085',
-        fontStyle: 'italic',
-        background: '#f0f8f0',
-        minHeight: '20px'
+        minHeight: '30px',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center'
       }}>
-        {editing ? (
-          <input
-            ref={inputRef}
-            value={label}
+        <div style={{ fontStyle: 'italic', marginRight: '8px' }}>&lt;&lt;abstract&gt;&gt;</div>
+        <EditableField
+          value={nodeData.className || ''}
+          onSave={(newValue) => updateNodeData({ className: newValue })}
+          placeholder="Abstract Class Name"
             style={{ 
-              width: '100%', 
-              border: 'none', 
-              background: 'transparent',
-              fontSize: '14px',
               fontWeight: 'bold',
-              outline: 'none',
-              textAlign: 'center',
+            fontSize: '14px',
               color: '#16a085',
+            textAlign: 'center',
               fontStyle: 'italic'
             }}
-            onChange={e => setLabel(e.target.value)}
-            onBlur={save}
-            onKeyDown={e => {
-              if (e.key === 'Enter') save();
-              if (e.key === 'Escape') setEditing(false);
-            }}
-          />
-        ) : (
-          <div
-            onDoubleClick={() => setEditing(true)}
-            style={{ cursor: 'pointer' }}
-            title="Double-click to rename"
-          >
-            &lt;&lt;abstract&gt;&gt;
-            <br />
-            {label}
-          </div>
-        )}
+        />
       </div>
       
       {/* Attributes section */}
       <div style={{
         borderBottom: '1px solid #16a085',
         padding: '8px 0',
-        minHeight: '50px',
         fontSize: '12px',
         color: '#666',
-        background: '#ffffff'
+        minHeight: '50px'
       }}>
         <div style={{ 
-          padding: '6px 8px', 
-          fontStyle: 'italic',
-          fontWeight: '600',
+          padding: '4px 8px', 
+          fontWeight: 'bold', 
           color: '#16a085',
-          background: '#f0f8f0',
-          borderBottom: '1px solid #e0f0e0'
+          background: '#f0f8f0'
         }}>
           Attributes
         </div>
-        <div style={{ padding: '4px 8px' }}>+ name: String</div>
-        <div style={{ padding: '4px 8px' }}>+ age: Integer</div>
-        <div style={{ padding: '4px 8px' }}># type: String</div>
+        {nodeData.attributes?.map((attr, index) => (
+          <div key={index} style={{ 
+            padding: '2px 8px',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px'
+          }}>
+            <EditableField
+              value={attr}
+              onSave={(newValue) => {
+                const newAttributes = [...(nodeData.attributes || [])];
+                newAttributes[index] = newValue;
+                updateNodeData({ attributes: newAttributes });
+              }}
+              placeholder="+ attribute: Type"
+              style={{ fontSize: '12px', flex: 1 }}
+              onDelete={() => {
+                const newAttributes = [...(nodeData.attributes || [])];
+                newAttributes.splice(index, 1);
+                updateNodeData({ attributes: newAttributes });
+              }}
+              showDelete={true}
+            />
+            <button
+              onClick={() => {
+                const newAttributes = [...(nodeData.attributes || [])];
+                newAttributes.splice(index, 1);
+                updateNodeData({ attributes: newAttributes });
+              }}
+              style={{
+                background: '#ff6b6b',
+                color: 'white',
+                border: 'none',
+                borderRadius: '50%',
+                width: '16px',
+                height: '16px',
+                fontSize: '10px',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                opacity: 0.7,
+                transition: 'opacity 0.2s'
+              }}
+              onMouseEnter={(e) => e.currentTarget.style.opacity = '1'}
+              onMouseLeave={(e) => e.currentTarget.style.opacity = '0.7'}
+              title="Delete attribute"
+            >
+              ×
+            </button>
+          </div>
+        ))}
+        <div style={{ padding: '2px 8px' }}>
+          <EditableField
+            value=""
+            onSave={(newValue) => {
+              if (newValue.trim()) {
+                const newAttributes = [...(nodeData.attributes || []), newValue];
+                updateNodeData({ attributes: newAttributes });
+              }
+            }}
+            placeholder="+ Add attribute..."
+            style={{ fontSize: '12px', fontStyle: 'italic', color: '#999' }}
+            showVisibility={true}
+          />
+        </div>
       </div>
       
       {/* Methods section */}
@@ -314,160 +784,306 @@ export function EditableNode({ id, data, selected, isConnectable, xPos, yPos, ..
         padding: '8px 0',
         fontSize: '12px',
         color: '#666',
-        background: '#ffffff'
+        minHeight: '50px'
       }}>
         <div style={{ 
-          padding: '6px 8px', 
-          fontStyle: 'italic',
-          fontWeight: '600',
+          padding: '4px 8px', 
+          fontWeight: 'bold', 
           color: '#16a085',
           background: '#f0f8f0'
         }}>
           Methods
         </div>
-        <div style={{ padding: '4px 8px' }}>+ getName(): String</div>
-        <div style={{ padding: '4px 8px' }}>+ setAge(age: Integer)</div>
-        <div style={{ padding: '4px 8px' }}># abstractMethod(): void</div>
+        {nodeData.methods?.map((method, index) => (
+          <div key={index} style={{ 
+            padding: '2px 8px',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px'
+          }}>
+            <EditableField
+              value={method}
+              onSave={(newValue) => {
+                const newMethods = [...(nodeData.methods || [])];
+                newMethods[index] = newValue;
+                updateNodeData({ methods: newMethods });
+              }}
+              placeholder="+ method(): ReturnType"
+              style={{ fontSize: '12px', flex: 1 }}
+            />
+            <button
+              onClick={() => {
+                const newMethods = [...(nodeData.methods || [])];
+                newMethods.splice(index, 1);
+                updateNodeData({ methods: newMethods });
+              }}
+              style={{
+                background: '#ff6b6b',
+                color: 'white',
+                border: 'none',
+                borderRadius: '50%',
+                width: '16px',
+                height: '16px',
+                fontSize: '10px',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                opacity: 0.7,
+                transition: 'opacity 0.2s'
+              }}
+              onMouseEnter={(e) => e.currentTarget.style.opacity = '1'}
+              onMouseLeave={(e) => e.currentTarget.style.opacity = '0.7'}
+              title="Delete method"
+            >
+              ×
+            </button>
+          </div>
+        ))}
+        <div style={{ padding: '2px 8px' }}>
+          <EditableField
+            value=""
+            onSave={(newValue) => {
+              if (newValue.trim()) {
+                const newMethods = [...(nodeData.methods || []), newValue];
+                updateNodeData({ methods: newMethods });
+              }
+            }}
+            placeholder="+ Add method..."
+            style={{ fontSize: '12px', fontStyle: 'italic', color: '#999' }}
+            showVisibility={true}
+          />
+        </div>
       </div>
     </div>
   );
 
-  // Render UML Interface structure
+  // Render UML Interface
   const renderUMLInterface = () => (
     <div style={{ width: '100%' }}>
       {/* Interface name section */}
       <div style={{
+        background: '#fdf0f0',
         borderBottom: '1px solid #e74c3c',
-        padding: '12px 8px',
+        padding: '8px 0',
         textAlign: 'center',
         fontWeight: 'bold',
         fontSize: '14px',
         color: '#e74c3c',
-        background: '#fdf0f0',
-        minHeight: '20px'
+        minHeight: '30px',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center'
       }}>
-        {editing ? (
-          <input
-            ref={inputRef}
-            value={label}
+        <div style={{ fontStyle: 'italic', marginRight: '8px' }}>&lt;&lt;interface&gt;&gt;</div>
+        <EditableField
+          value={nodeData.className || ''}
+          onSave={(newValue) => updateNodeData({ className: newValue })}
+          placeholder="Interface Name"
             style={{ 
-              width: '100%', 
-              border: 'none', 
-              background: 'transparent',
-              fontSize: '14px',
               fontWeight: 'bold',
-              outline: 'none',
-              textAlign: 'center',
-              color: '#e74c3c'
-            }}
-            onChange={e => setLabel(e.target.value)}
-            onBlur={save}
-            onKeyDown={e => {
-              if (e.key === 'Enter') save();
-              if (e.key === 'Escape') setEditing(false);
-            }}
-          />
-        ) : (
-          <div
-            onDoubleClick={() => setEditing(true)}
-            style={{ cursor: 'pointer' }}
-            title="Double-click to rename"
-          >
-            &lt;&lt;interface&gt;&gt;
-            <br />
-            {label}
-          </div>
-        )}
+            fontSize: '14px',
+            color: '#e74c3c',
+            textAlign: 'center'
+          }}
+        />
       </div>
       
-      {/* Methods section */}
+      {/* Methods section only (interfaces don't have attributes) */}
       <div style={{
         padding: '8px 0',
         fontSize: '12px',
         color: '#666',
-        background: '#ffffff'
+        minHeight: '50px'
       }}>
         <div style={{ 
-          padding: '6px 8px', 
-          fontStyle: 'italic',
-          fontWeight: '600',
+          padding: '4px 8px', 
+          fontWeight: 'bold', 
           color: '#e74c3c',
           background: '#fdf0f0'
         }}>
           Methods
         </div>
-        <div style={{ padding: '4px 8px' }}>+ calculate(): Double</div>
-        <div style={{ padding: '4px 8px' }}>+ validate(): Boolean</div>
-        <div style={{ padding: '4px 8px' }}>+ process(): void</div>
+        {nodeData.methods?.map((method, index) => (
+          <div key={index} style={{ 
+            padding: '2px 8px',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px'
+          }}>
+            <EditableField
+              value={method}
+              onSave={(newValue) => {
+                const newMethods = [...(nodeData.methods || [])];
+                newMethods[index] = newValue;
+                updateNodeData({ methods: newMethods });
+              }}
+              placeholder="+ method(): ReturnType"
+              style={{ fontSize: '12px', flex: 1 }}
+            />
+            <button
+              onClick={() => {
+                const newMethods = [...(nodeData.methods || [])];
+                newMethods.splice(index, 1);
+                updateNodeData({ methods: newMethods });
+              }}
+              style={{
+                background: '#ff6b6b',
+                color: 'white',
+                border: 'none',
+                borderRadius: '50%',
+                width: '16px',
+                height: '16px',
+                fontSize: '10px',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                opacity: 0.7,
+                transition: 'opacity 0.2s'
+              }}
+              onMouseEnter={(e) => e.currentTarget.style.opacity = '1'}
+              onMouseLeave={(e) => e.currentTarget.style.opacity = '0.7'}
+              title="Delete method"
+            >
+              ×
+            </button>
+          </div>
+        ))}
+        <div style={{ padding: '2px 8px' }}>
+          <EditableField
+            value=""
+            onSave={(newValue) => {
+              if (newValue.trim()) {
+                const newMethods = [...(nodeData.methods || []), newValue];
+                updateNodeData({ methods: newMethods });
+              }
+            }}
+            placeholder="+ Add method..."
+            style={{ fontSize: '12px', fontStyle: 'italic', color: '#999' }}
+            showVisibility={true}
+          />
+        </div>
       </div>
     </div>
   );
 
-  // Render UML Enumeration structure
+  // Render UML Enumeration
   const renderUMLEnumeration = () => (
     <div style={{ width: '100%' }}>
       {/* Enum name section */}
       <div style={{
+        background: '#f8f0f8',
         borderBottom: '1px solid #9b59b6',
         padding: '8px 0',
         textAlign: 'center',
         fontWeight: 'bold',
         fontSize: '14px',
-        color: '#9b59b6'
+        color: '#9b59b6',
+        minHeight: '30px',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center'
       }}>
-        {editing ? (
-          <input
-            ref={inputRef}
-            value={label}
+        <div style={{ fontStyle: 'italic', marginRight: '8px' }}>&lt;&lt;enumeration&gt;&gt;</div>
+        <EditableField
+          value={nodeData.className || ''}
+          onSave={(newValue) => updateNodeData({ className: newValue })}
+          placeholder="Enumeration Name"
             style={{ 
-              width: '100%', 
-              border: 'none', 
-              background: 'transparent',
-              fontSize: '14px',
               fontWeight: 'bold',
-              outline: 'none',
-              textAlign: 'center',
-              color: '#9b59b6'
-            }}
-            onChange={e => setLabel(e.target.value)}
-            onBlur={save}
-            onKeyDown={e => {
-              if (e.key === 'Enter') save();
-              if (e.key === 'Escape') setEditing(false);
-            }}
-          />
-        ) : (
-          <div
-            onDoubleClick={() => setEditing(true)}
-            style={{ cursor: 'pointer' }}
-            title="Double-click to rename"
-          >
-            &lt;&lt;enumeration&gt;&gt;
-            <br />
-            {label}
-          </div>
-        )}
+            fontSize: '14px',
+            color: '#9b59b6',
+            textAlign: 'center'
+          }}
+        />
       </div>
       
       {/* Values section */}
       <div style={{
         padding: '8px 0',
         fontSize: '12px',
-        color: '#666'
+        color: '#666',
+        minHeight: '50px'
       }}>
-        <div style={{ padding: '4px 8px', fontStyle: 'italic' }}>Values</div>
-        <div style={{ padding: '4px 8px' }}>RED</div>
-        <div style={{ padding: '4px 8px' }}>GREEN</div>
-        <div style={{ padding: '4px 8px' }}>BLUE</div>
+        <div style={{ 
+          padding: '4px 8px', 
+          fontWeight: 'bold', 
+          color: '#9b59b6',
+          background: '#f8f0f8'
+        }}>
+          Values
+        </div>
+        {nodeData.values?.map((value, index) => (
+          <div key={index} style={{ 
+            padding: '2px 8px',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px'
+          }}>
+            <EditableField
+              value={value}
+              onSave={(newValue) => {
+                const newValues = [...(nodeData.values || [])];
+                newValues[index] = newValue;
+                updateNodeData({ values: newValues });
+              }}
+              placeholder="Value"
+              style={{ fontSize: '12px', flex: 1 }}
+            />
+            <button
+              onClick={() => {
+                const newValues = [...(nodeData.values || [])];
+                newValues.splice(index, 1);
+                updateNodeData({ values: newValues });
+              }}
+              style={{
+                background: '#ff6b6b',
+                color: 'white',
+                border: 'none',
+                borderRadius: '50%',
+                width: '16px',
+                height: '16px',
+                fontSize: '10px',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                opacity: 0.7,
+                transition: 'opacity 0.2s'
+              }}
+              onMouseEnter={(e) => e.currentTarget.style.opacity = '1'}
+              onMouseLeave={(e) => e.currentTarget.style.opacity = '0.7'}
+              title="Delete value"
+            >
+              ×
+            </button>
+          </div>
+        ))}
+        <div style={{ padding: '2px 8px' }}>
+          <EditableField
+            value=""
+            onSave={(newValue) => {
+              if (newValue.trim()) {
+                const newValues = [...(nodeData.values || []), newValue];
+                updateNodeData({ values: newValues });
+              }
+            }}
+            placeholder="Add value..."
+            style={{ fontSize: '12px', fontStyle: 'italic', color: '#999' }}
+            showVisibility={true}
+          />
+        </div>
       </div>
     </div>
   );
 
-  // Render UML Package structure
+  // Render UML Package
   const renderUMLPackage = () => (
     <div style={{ width: '100%' }}>
-      {/* Package name section */}
+      {/* Package name section with tab design */}
       <div style={{
+        background: '#fdf8f0',
         borderBottom: '1px solid #f39c12',
         borderRight: '1px solid #f39c12',
         padding: '8px 0',
@@ -475,158 +1091,80 @@ export function EditableNode({ id, data, selected, isConnectable, xPos, yPos, ..
         fontWeight: 'bold',
         fontSize: '14px',
         color: '#f39c12',
+        minHeight: '30px',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
         position: 'relative'
       }}>
-        {editing ? (
-          <input
-            ref={inputRef}
-            value={label}
+        <EditableField
+          value={nodeData.packageName || ''}
+          onSave={(newValue) => updateNodeData({ packageName: newValue })}
+          placeholder="Package Name"
             style={{ 
-              width: '100%', 
-              border: 'none', 
-              background: 'transparent',
-              fontSize: '14px',
               fontWeight: 'bold',
-              outline: 'none',
-              textAlign: 'center',
-              color: '#f39c12'
-            }}
-            onChange={e => setLabel(e.target.value)}
-            onBlur={save}
-            onKeyDown={e => {
-              if (e.key === 'Enter') save();
-              if (e.key === 'Escape') setEditing(false);
-            }}
-          />
-        ) : (
-          <div
-            onDoubleClick={() => setEditing(true)}
-            style={{ cursor: 'pointer' }}
-            title="Double-click to rename"
-          >
-            {label}
-          </div>
-        )}
+            fontSize: '14px',
+            color: '#f39c12',
+            textAlign: 'center'
+          }}
+        />
       </div>
       
-      {/* Package content area */}
+      {/* Package contents */}
       <div style={{
-        padding: '20px 8px',
+        padding: '8px 0',
         fontSize: '12px',
         color: '#666',
-        textAlign: 'center',
-        fontStyle: 'italic'
+        minHeight: '50px'
       }}>
-        Package contents
+        <div style={{ 
+          padding: '4px 8px', 
+          fontWeight: 'bold', 
+          color: '#f39c12',
+          background: '#fdf8f0'
+        }}>
+          Contents
+        </div>
+        <div style={{ padding: '2px 8px', fontStyle: 'italic', color: '#999' }}>
+          Drag classes here...
+        </div>
       </div>
     </div>
   );
 
-  // Render UML Member (Attribute/Method)
+  // Render UML Member (attribute or method)
   const renderUMLMember = () => (
-    <div style={{ width: '100%', textAlign: 'center' }}>
-      {editing ? (
-        <input
-          ref={inputRef}
-          value={label}
-          style={{ 
-            width: '100%', 
-            border: 'none', 
-            background: 'transparent',
-            fontSize: '12px',
-            fontWeight: 'bold',
-            outline: 'none',
-            textAlign: 'center',
-            color: '#1abc9c'
-          }}
-          onChange={e => setLabel(e.target.value)}
-          onBlur={save}
-          onKeyDown={e => {
-            if (e.key === 'Enter') save();
-            if (e.key === 'Escape') setEditing(false);
-          }}
-        />
-      ) : (
-        <div
-          onDoubleClick={() => setEditing(true)}
-          style={{ cursor: 'pointer', fontWeight: 'bold', color: '#1abc9c' }}
-          title="Double-click to rename"
-        >
-          {label}
-        </div>
-      )}
+    <div style={{ width: '100%', textAlign: 'center', padding: '8px' }}>
+      <EditableField
+        value={nodeData.label || ''}
+        onSave={(newValue) => updateNodeData({ label: newValue })}
+        placeholder="+ member: Type"
+        style={{ fontSize: '14px', fontWeight: 'bold' }}
+      />
     </div>
   );
 
-  // Render relationship
+  // Render Relationship
   const renderRelationship = () => (
-    <div style={{ width: '100%', textAlign: 'center' }}>
-      {editing ? (
-        <input
-          ref={inputRef}
-          value={label}
-          style={{ 
-            width: '100%', 
-            border: 'none', 
-            background: 'transparent',
-            fontSize: '14px',
-            fontWeight: 'bold',
-            outline: 'none',
-            textAlign: 'center',
-            color: '#34495e'
-          }}
-          onChange={e => setLabel(e.target.value)}
-          onBlur={save}
-          onKeyDown={e => {
-            if (e.key === 'Enter') save();
-            if (e.key === 'Escape') setEditing(false);
-          }}
-        />
-      ) : (
-        <div
-          onDoubleClick={() => setEditing(true)}
-          style={{ cursor: 'pointer', fontWeight: 'bold', color: '#34495e' }}
-          title="Double-click to rename"
-        >
-          {label}
-        </div>
-      )}
+    <div style={{ width: '100%', textAlign: 'center', padding: '8px' }}>
+      <EditableField
+        value={nodeData.label || ''}
+        onSave={(newValue) => updateNodeData({ label: newValue })}
+        placeholder="Relationship"
+        style={{ fontSize: '14px', fontWeight: 'bold' }}
+      />
     </div>
   );
 
-  // Render multiplicity label
+  // Render Multiplicity
   const renderMultiplicity = () => (
-    <div style={{ width: '100%', textAlign: 'center' }}>
-      {editing ? (
-        <input
-          ref={inputRef}
-          value={label}
-          style={{ 
-            width: '100%', 
-            border: 'none', 
-            background: 'transparent',
-            fontSize: '14px',
-            fontWeight: 'bold',
-            outline: 'none',
-            textAlign: 'center',
-            color: '#e74c3c'
-          }}
-          onChange={e => setLabel(e.target.value)}
-          onBlur={save}
-          onKeyDown={e => {
-            if (e.key === 'Enter') save();
-            if (e.key === 'Escape') setEditing(false);
-          }}
-        />
-      ) : (
-        <div
-          onDoubleClick={() => setEditing(true)}
-          style={{ cursor: 'pointer', fontWeight: 'bold', color: '#e74c3c' }}
-          title="Double-click to rename"
-        >
-          {label}
-        </div>
-      )}
+    <div style={{ width: '100%', textAlign: 'center', padding: '8px' }}>
+      <EditableField
+        value={nodeData.label || ''}
+        onSave={(newValue) => updateNodeData({ label: newValue })}
+        placeholder="1"
+        style={{ fontSize: '14px', fontWeight: 'bold', color: '#e74c3c' }}
+      />
     </div>
   );
 
@@ -653,7 +1191,7 @@ export function EditableNode({ id, data, selected, isConnectable, xPos, yPos, ..
           return renderUMLPackage();
         default:
           console.log('Unknown element type, falling back to relationship');
-          return renderRelationship(); // Fallback for unknown elements
+          return renderRelationship();
       }
     } else if (data.toolType === 'member') {
       console.log('Rendering UML Member');
@@ -667,40 +1205,7 @@ export function EditableNode({ id, data, selected, isConnectable, xPos, yPos, ..
     }
     
     console.log('No specific renderer found, using default');
-    // Default renderer for other types
-    return (
-      <div style={{ width: '100%', textAlign: 'center' }}>
-        {editing ? (
-          <input
-            ref={inputRef}
-            value={label}
-            style={{ 
-              width: '100%', 
-              border: 'none', 
-              background: 'transparent',
-              fontSize: '14px',
-              fontWeight: 'bold',
-              outline: 'none',
-              textAlign: 'center'
-            }}
-            onChange={e => setLabel(e.target.value)}
-            onBlur={save}
-            onKeyDown={e => {
-              if (e.key === 'Enter') save();
-              if (e.key === 'Escape') setEditing(false);
-            }}
-          />
-        ) : (
-          <div
-            onDoubleClick={() => setEditing(true)}
-            style={{ cursor: 'pointer', fontWeight: 'bold' }}
-            title="Double-click to rename"
-          >
-            {label}
-          </div>
-        )}
-      </div>
-    );
+    return renderRelationship();
   };
 
   const nodeStyle = getNodeStyle();

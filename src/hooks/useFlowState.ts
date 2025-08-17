@@ -13,8 +13,22 @@ export function useFlowState() {
   }, [idCounter]);
 
   const onConnect = useCallback(
-    (params: Edge | Connection) => setEdges((eds) => addEdge(params, eds)),
-    [setEdges]
+    (params: Connection) => {
+      const newEdge: Edge = {
+        id: `edge-${getId()}`,
+        type: 'uml',
+        source: params.source!,
+        target: params.target!,
+        sourceHandle: params.sourceHandle,
+        targetHandle: params.targetHandle,
+        data: {
+          relationshipType: 'association',
+          label: 'Association',
+        },
+      };
+      setEdges((eds) => eds.concat(newEdge));
+    },
+    [getId, setEdges]
   );
 
   const addNode = useCallback((node: Omit<Node, 'id'>) => {
@@ -47,6 +61,25 @@ export function useFlowState() {
     setEdges((eds) => eds.filter((edge) => edge.source !== id && edge.target !== id));
   }, [setNodes, setEdges]);
 
+  const addEdge = useCallback((edge: Omit<Edge, 'id'>) => {
+    const newEdge: Edge = {
+      ...edge,
+      id: `edge-${getId()}`,
+    };
+    console.log('useFlowState.addEdge called with:', edge);
+    console.log('Created newEdge:', newEdge);
+    setEdges((eds) => {
+      const newEdges = eds.concat(newEdge);
+      console.log('Updated edges array:', newEdges);
+      return newEdges;
+    });
+    return newEdge.id;
+  }, [getId, setEdges]);
+
+  const removeEdge = useCallback((id: string) => {
+    setEdges((eds) => eds.filter((edge) => edge.id !== id));
+  }, [setEdges]);
+
   const clearFlow = useCallback(() => {
     setNodes([]);
     setEdges([]);
@@ -60,9 +93,13 @@ export function useFlowState() {
     onEdgesChange,
     onConnect,
     addNode,
+    addEdge,
     updateNodeLabel,
     removeNode,
+    removeEdge,
     clearFlow,
     getId,
+    setNodes,
+    setEdges,
   };
 } 

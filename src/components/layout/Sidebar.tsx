@@ -7,9 +7,9 @@ interface SidebarProps {
 }
 
 const sidebarStyle: React.CSSProperties = {
-  width: '350px',
+  width: '280px',
   background: '#ffffff',
-  padding: '16px 12px',
+  padding: '10px 10px',
   boxSizing: 'border-box',
   height: '100vh',
   borderRight: '1px solid #e0e0e0',
@@ -19,10 +19,10 @@ const sidebarStyle: React.CSSProperties = {
 const titleStyle: React.CSSProperties = {
   fontSize: '18px',
   fontWeight: 'bold',
-  marginBottom: '16px',
+  marginBottom: '10px',
   color: '#333',
   textAlign: 'left',
-  padding: '6px 0',
+  padding: '4px 0',
   borderBottom: '1px solid #e0e0e0',
 };
 
