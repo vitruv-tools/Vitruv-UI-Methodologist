@@ -31,8 +31,8 @@ const TreeMenuItem: React.FC<TreeMenuItemProps> = ({ node, level, selectedId, on
   };
 
   const itemStyle: React.CSSProperties = {
-    padding: '12px 16px',
-    margin: '3px 0',
+    padding: '8px 10px',
+    margin: '2px 0',
     cursor: node.draggable ? 'grab' : 'pointer',
     background: isSelected ? 'linear-gradient(135deg, #e8f4fd 0%, #d1ecf1 100%)' : 'none',
     border: isSelected ? '2px solid #3498db' : 'none',
@@ -41,9 +41,9 @@ const TreeMenuItem: React.FC<TreeMenuItemProps> = ({ node, level, selectedId, on
     userSelect: 'none',
     display: 'flex',
     alignItems: 'center',
-    paddingLeft: `${level * 24 + 16}px`,
+    paddingLeft: `${level * 16 + 12}px`,
     fontWeight: isSelected ? 600 : (level === 0 ? 600 : (hasChildren ? 500 : 400)),
-    borderRadius: '8px',
+    borderRadius: '6px',
     transition: 'all 0.2s ease',
     minHeight: '20px',
     boxShadow: isSelected ? '0 4px 12px rgba(52, 152, 219, 0.15)' : 'none',
@@ -57,15 +57,15 @@ const TreeMenuItem: React.FC<TreeMenuItemProps> = ({ node, level, selectedId, on
     cursor: 'pointer',
     fontSize: 12,
     color: isSelected ? '#3498db' : '#666',
-    marginRight: '10px',
+    marginRight: '6px',
     transition: 'all 0.2s ease',
     transform: isSelected ? 'scale(1.1)' : 'scale(1)',
   };
 
   const childrenContainerStyle: React.CSSProperties = {
-    marginLeft: '8px',
+    marginLeft: '4px',
     borderLeft: isSelected ? '2px solid #3498db' : '1px solid #e0e0e0',
-    paddingLeft: '12px',
+    paddingLeft: '8px',
     transition: 'border-color 0.2s ease',
   };
 
@@ -133,7 +133,7 @@ export const TreeMenu: React.FC<TreeMenuProps> = ({ nodes, onNodeClick, onDragSt
     <div style={{ 
       background: '#ffffff',
       borderRadius: '4px',
-      padding: '20px',
+      padding: '10px',
       border: '1px solid #e0e0e0'
     }}>
       {nodes.map((node: TreeNode) => (

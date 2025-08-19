@@ -1,10 +1,11 @@
 import { useCallback } from 'react';
-import { ReactFlowInstance, Node } from 'reactflow';
+import { ReactFlowInstance, Node, Edge } from 'reactflow';
 
 interface UseDragAndDropProps {
   reactFlowInstance: ReactFlowInstance | null;
   reactFlowWrapper: React.RefObject<HTMLDivElement | null>;
   addNode: (node: Omit<Node, 'id'>) => string;
+  addEdge?: (edge: Omit<Edge, 'id'>) => string;
 }
 
 interface ToolData {

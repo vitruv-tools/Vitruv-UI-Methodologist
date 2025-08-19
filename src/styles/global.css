@@ -123,11 +123,16 @@ code {
 .react-flow__controls {
   border-radius: 8px;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  position: fixed !important;
+  left: calc(280px + 16px) !important; /* account for sidebar */
+  bottom: 16px !important;
+  z-index: 30;
 }
 
 .react-flow__minimap {
   border-radius: 8px;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  /* position inherits from React Flow (absolute inside canvas) so it stays visible next to the tools panel */
 }
 
 /* Modern scrollbar for sidebar */
