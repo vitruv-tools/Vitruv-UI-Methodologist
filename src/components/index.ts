@@ -6,6 +6,7 @@ export { Sidebar } from './layout/Sidebar';
 // Flow components
 export { FlowCanvas } from './flow/FlowCanvas';
 export { EditableNode } from './flow/EditableNode';
+export { EcoreFileBox } from './flow/EcoreFileBox';
 
 // UI components
 export { Button } from './ui/Button';

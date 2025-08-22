@@ -2,27 +2,17 @@ import React, { useState, useRef, useEffect } from 'react';
 import { ConfirmDialog } from './ConfirmDialog';
 
 interface ToolsPanelProps {
-  isVisible: boolean;
-  onClose?: () => void;
   onEcoreFileUpload?: (fileContent: string, meta?: { fileName?: string; uploadId?: string }) => void;
 }
 
 const toolsPanelStyle: React.CSSProperties = {
   userSelect: 'none',
-  width: '240px',
+  width: '100%',
   background: '#fff',
-  borderLeft: '1px solid #e5e5e5',
-  padding: '16px',
+  padding: '0',
   boxSizing: 'border-box',
-  height: '100vh',
+  height: 'auto',
   overflowY: 'auto',
-  transition: 'transform 0.2s ease',
-  transform: 'translateX(0)',
-};
-
-const hiddenStyle: React.CSSProperties = {
-  ...toolsPanelStyle,
-  transform: 'translateX(100%)',
 };
 
 const titleStyle: React.CSSProperties = {
@@ -33,27 +23,6 @@ const titleStyle: React.CSSProperties = {
   textAlign: 'left',
   padding: '4px 0',
   borderBottom: '1px solid #e5e5e5',
-  position: 'relative',
-};
-
-const closeButtonStyle: React.CSSProperties = {
-  position: 'absolute',
-  right: '0',
-  top: '50%',
-  transform: 'translateY(-50%)',
-  background: 'none',
-  border: 'none',
-  fontSize: '18px',
-  cursor: 'pointer',
-  color: '#666',
-  padding: '4px 8px',
-  borderRadius: '4px',
-  transition: 'all 0.2s ease',
-};
-
-const closeButtonHoverStyle: React.CSSProperties = {
-  background: '#f8f9fa',
-  color: '#333',
 };
 
 const addButtonStyle: React.CSSProperties = {
@@ -95,9 +64,112 @@ const fileInputStyle: React.CSSProperties = {
   display: 'none',
 };
 
-export const ToolsPanel: React.FC<ToolsPanelProps> = ({ isVisible, onClose, onEcoreFileUpload }) => {
+const filterContainerStyle: React.CSSProperties = {
+  marginBottom: '16px',
+  padding: '12px',
+  background: '#f8f9fa',
+  borderRadius: '8px',
+  border: '1px solid #e9ecef',
+};
+
+const filterRowStyle: React.CSSProperties = {
+  display: 'flex',
+  gap: '8px',
+  marginBottom: '8px',
+  alignItems: 'center',
+};
+
+const filterLabelStyle: React.CSSProperties = {
+  fontSize: '12px',
+  fontWeight: '600',
+  color: '#495057',
+  minWidth: '60px',
+};
+
+const filterInputStyle: React.CSSProperties = {
+  flex: '1',
+  padding: '6px 8px',
+  border: '1px solid #ced4da',
+  borderRadius: '4px',
+  fontSize: '12px',
+};
+
+const filterSelectStyle: React.CSSProperties = {
+  flex: '1',
+  padding: '6px 8px',
+  border: '1px solid #ced4da',
+  borderRadius: '4px',
+  fontSize: '12px',
+  background: '#ffffff',
+};
+
+const fileCardStyle: React.CSSProperties = {
+  background: '#ffffff',
+  border: '1px solid #e9ecef',
+  borderRadius: '8px',
+  padding: '12px',
+  marginBottom: '12px',
+  boxShadow: '0 2px 4px rgba(0,0,0,0.05)',
+  cursor: 'pointer',
+  transition: 'all 0.2s ease',
+  position: 'relative',
+};
+
+const fileCardHoverStyle: React.CSSProperties = {
+  boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
+  transform: 'translateY(-1px)',
+  borderColor: '#007bff',
+};
+
+const toggleContainerStyle: React.CSSProperties = {
+  display: 'flex',
+  gap: '8px',
+  margin: '8px 0',
+  alignItems: 'center',
+};
+
+const toggleButtonStyle: React.CSSProperties = {
+  flex: '1',
+  padding: '8px 12px',
+  border: '1px solid #dee2e6',
+  borderRadius: '6px',
+  background: '#f8f9fa',
+  color: '#495057',
+  fontSize: '12px',
+  fontWeight: '600',
+  cursor: 'pointer',
+  transition: 'all 0.2s ease',
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'space-between',
+};
+
+const toggleButtonHoverStyle: React.CSSProperties = {
+  background: '#e9ecef',
+  borderColor: '#adb5bd',
+};
+
+const sortDropdownStyle: React.CSSProperties = {
+  padding: '8px 12px',
+  border: '1px solid #dee2e6',
+  borderRadius: '6px',
+  background: '#ffffff',
+  color: '#495057',
+  fontSize: '12px',
+  fontWeight: '500',
+  cursor: 'pointer',
+  minWidth: '120px',
+};
+
+export const ToolsPanel: React.FC<ToolsPanelProps> = ({ onEcoreFileUpload }) => {
   const [isDragging, setIsDragging] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [selectedUploader, setSelectedUploader] = useState<string>('all');
+  const [dateFilter, setDateFilter] = useState<string>('all');
+  const [showFilters, setShowFilters] = useState(false);
+  const [sortBy, setSortBy] = useState<'name' | 'date' | 'uploader'>('date');
+  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
   const fileInputRef = useRef<HTMLInputElement>(null);
   
   interface UploadedEcoreFile {
@@ -120,30 +192,8 @@ export const ToolsPanel: React.FC<ToolsPanelProps> = ({ isVisible, onClose, onEc
       }
     } catch {}
 
-    const now = Date.now();
-    return [
-      {
-        id: generateId(),
-        fileName: 'sample.ecore',
-        uploadedBy: 'you',
-        uploadedAt: new Date(now - 2 * 60 * 60 * 1000).toISOString(), // 2h ago
-        content: '<ecore:EPackage name="Sample" nsURI="" nsPrefix=""><eClassifiers name="Order"><eStructuralFeatures name="id"/></eClassifiers><eClassifiers name="Customer"><eStructuralFeatures name="name"/></eClassifiers></ecore:EPackage>'
-      },
-      {
-        id: generateId(),
-        fileName: 'orders.ecore',
-        uploadedBy: 'alice',
-        uploadedAt: new Date(now - 24 * 60 * 60 * 1000).toISOString(), // 1d ago
-        content: '<ecore:EPackage name="Orders" nsURI="" nsPrefix=""><eClassifiers name="Order"><eStructuralFeatures name="total"/></eClassifiers></ecore:EPackage>'
-      },
-      {
-        id: generateId(),
-        fileName: 'billing.ecore',
-        uploadedBy: 'charlie',
-        uploadedAt: new Date(now - 7 * 60 * 1000).toISOString(), // 7m ago
-        content: '<ecore:EPackage name="Billing" nsURI="" nsPrefix=""><eClassifiers name="Invoice"><eStructuralFeatures name="amount"/></eClassifiers></ecore:EPackage>'
-      },
-    ];
+    // Return empty array - no sample data by default
+    return [];
   };
 
   const [uploads, setUploads] = useState<UploadedEcoreFile[]>(getInitialUploads);
@@ -156,6 +206,59 @@ export const ToolsPanel: React.FC<ToolsPanelProps> = ({ isVisible, onClose, onEc
       localStorage.setItem(uploadsStorageKey, JSON.stringify(uploads));
     } catch {}
   }, [uploads]);
+
+  // Filter uploads based on search term, uploader, and date
+  const filteredUploads = uploads.filter(item => {
+    const matchesSearch = item.fileName.toLowerCase().includes(searchTerm.toLowerCase());
+    const matchesUploader = selectedUploader === 'all' || item.uploadedBy === selectedUploader;
+    
+    let matchesDate = true;
+    if (dateFilter !== 'all') {
+      const itemDate = new Date(item.uploadedAt);
+      const now = new Date();
+      const diffTime = Math.abs(now.getTime() - itemDate.getTime());
+      const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+      
+      switch (dateFilter) {
+        case 'today':
+          matchesDate = diffDays <= 1;
+          break;
+        case 'week':
+          matchesDate = diffDays <= 7;
+          break;
+        case 'month':
+          matchesDate = diffDays <= 30;
+          break;
+        case 'year':
+          matchesDate = diffDays <= 365;
+          break;
+      }
+    }
+    
+    return matchesSearch && matchesUploader && matchesDate;
+  });
+
+  // Sort filtered uploads
+  const sortedUploads = [...filteredUploads].sort((a, b) => {
+    let comparison = 0;
+    
+    switch (sortBy) {
+      case 'name':
+        comparison = a.fileName.localeCompare(b.fileName);
+        break;
+      case 'date':
+        comparison = new Date(a.uploadedAt).getTime() - new Date(b.uploadedAt).getTime();
+        break;
+      case 'uploader':
+        comparison = a.uploadedBy.localeCompare(b.uploadedBy);
+        break;
+    }
+    
+    return sortOrder === 'asc' ? comparison : -comparison;
+  });
+
+  // Get unique uploaders for filter dropdown
+  const uniqueUploaders = Array.from(new Set(uploads.map(item => item.uploadedBy)));
 
   const formatRelativeTime = (isoDate: string) => {
     const diffMs = Date.now() - new Date(isoDate).getTime();
@@ -174,11 +277,14 @@ export const ToolsPanel: React.FC<ToolsPanelProps> = ({ isVisible, onClose, onEc
     return `${years}y ago`;
   };
 
-  if (!isVisible) return null;
-
   const handleFileSelect = async (file: File) => {
     if (!file || !file.name.endsWith('.ecore')) {
       alert('Please select a valid .ecore file');
+      return;
+    }
+
+    if (!onEcoreFileUpload) {
+      console.warn('No upload handler provided');
       return;
     }
 
@@ -255,20 +361,9 @@ export const ToolsPanel: React.FC<ToolsPanelProps> = ({ isVisible, onClose, onEc
   };
 
   return (
-    <div style={isVisible ? toolsPanelStyle : hiddenStyle}>
+    <div style={toolsPanelStyle}>
       <div style={titleStyle}>
         ECORE UPLOADER
-        {onClose && (
-          <button 
-            style={closeButtonStyle}
-            onClick={onClose}
-            onMouseEnter={(e) => Object.assign(e.currentTarget.style, closeButtonHoverStyle)}
-            onMouseLeave={(e) => Object.assign(e.currentTarget.style, closeButtonStyle)}
-            title="Close Tools Panel"
-          >
-            ×
-          </button>
-        )}
       </div>
       
       {/* Helper text */}
@@ -307,9 +402,9 @@ export const ToolsPanel: React.FC<ToolsPanelProps> = ({ isVisible, onClose, onEc
 
       {/* Uploaded Files List */}
       <div style={{
-        marginTop: '8px',
+        marginTop: '16px',
         marginBottom: '8px',
-        fontWeight: 700,
+        fontWeight: '700',
         fontSize: '13px',
         color: '#222',
         borderBottom: '1px solid #e5e5e5',
@@ -317,22 +412,91 @@ export const ToolsPanel: React.FC<ToolsPanelProps> = ({ isVisible, onClose, onEc
       }}>
         Uploaded files
       </div>
+
+      {/* Toggle Filters Button and Sort Dropdown */}
+      <div style={toggleContainerStyle}>
+        <button
+          style={toggleButtonStyle}
+          onClick={() => setShowFilters(!showFilters)}
+          onMouseEnter={(e) => Object.assign(e.currentTarget.style, toggleButtonHoverStyle)}
+          onMouseLeave={(e) => Object.assign(e.currentTarget.style, toggleButtonStyle)}
+        >
+          <span>{showFilters ? 'Hide' : 'Show'} Filters</span>
+          <span>{showFilters ? '▼' : '▶'}</span>
+        </button>
+        
+        <select
+          value={`${sortBy}-${sortOrder}`}
+          onChange={(e) => {
+            const [newSortBy, newSortOrder] = e.target.value.split('-') as ['name' | 'date' | 'uploader', 'asc' | 'desc'];
+            setSortBy(newSortBy);
+            setSortOrder(newSortOrder);
+          }}
+          style={sortDropdownStyle}
+        >
+          <option value="date-desc">Newest First</option>
+          <option value="date-asc">Oldest First</option>
+          <option value="name-asc">Name A-Z</option>
+          <option value="name-desc">Name Z-A</option>
+          <option value="uploader-asc">Uploader A-Z</option>
+          <option value="uploader-desc">Uploader Z-A</option>
+        </select>
+      </div>
+
+      {/* Filters */}
+      {showFilters && (
+        <>
+          {uploads.length > 0 && (
+            <div style={filterContainerStyle}>
+              <div style={{ fontSize: '12px', fontWeight: '600', color: '#495057', marginBottom: '8px' }}>
+                Filters
+              </div>
+              <div style={filterRowStyle}>
+                <span style={filterLabelStyle}>Search:</span>
+                <input
+                  type="text"
+                  placeholder="Filter by filename..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  style={filterInputStyle}
+                />
+              </div>
+              <div style={filterRowStyle}>
+                <span style={filterLabelStyle}>Uploader:</span>
+                <select
+                  value={selectedUploader}
+                  onChange={(e) => setSelectedUploader(e.target.value)}
+                  style={filterSelectStyle}
+                >
+                  <option value="all">All uploaders</option>
+                  {uniqueUploaders.map(uploader => (
+                    <option key={uploader} value={uploader}>{uploader}</option>
+                  ))}
+                </select>
+              </div>
+              <div style={filterRowStyle}>
+                <span style={filterLabelStyle}>Date:</span>
+                <select
+                  value={dateFilter}
+                  onChange={(e) => setDateFilter(e.target.value)}
+                  style={filterSelectStyle}
+                >
+                  <option value="all">All time</option>
+                  <option value="today">Today</option>
+                  <option value="week">This week</option>
+                  <option value="month">This month</option>
+                  <option value="year">This year</option>
+                </select>
+              </div>
+            </div>
+          )}
+        </>
+      )}
+
       <div>
-        {[...uploads]
-          .sort((a, b) => new Date(b.uploadedAt).getTime() - new Date(a.uploadedAt).getTime())
+        {[...sortedUploads]
           .map(item => (
-            <div key={item.id} style={{
-              display: 'flex',
-              flexDirection: 'column',
-              gap: '2px',
-              padding: '8px 0',
-              borderBottom: '1px solid #eeeeee',
-              marginBottom: '0px',
-              background: 'transparent',
-              cursor: 'pointer',
-              transition: 'background 0.15s ease',
-              position: 'relative',
-            }}
+            <div key={item.id} style={fileCardStyle}
             onClick={() => {
               const fallback = `name="${item.fileName.replace(/\.ecore$/i, '')}"`;
               const toOpen = item.content && item.content.trim().length > 0 ? item.content : fallback;
@@ -341,14 +505,14 @@ export const ToolsPanel: React.FC<ToolsPanelProps> = ({ isVisible, onClose, onEc
               }
             }}
             onMouseEnter={(e) => {
-              e.currentTarget.style.background = '#f9f9f9';
+              Object.assign(e.currentTarget.style, fileCardHoverStyle);
             }}
             onMouseLeave={(e) => {
-              e.currentTarget.style.background = 'transparent';
+              Object.assign(e.currentTarget.style, fileCardStyle);
             }}
             >
               {item.uploadedBy && item.uploadedBy.trim().toLowerCase() === 'you' && (
-                <div style={{ position: 'absolute', right: 0, top: '6px' }}>
+                <div style={{ position: 'absolute', right: '8px', top: '8px' }}>
                   <button
                     onClick={(e) => {
                       e.stopPropagation();
@@ -357,35 +521,61 @@ export const ToolsPanel: React.FC<ToolsPanelProps> = ({ isVisible, onClose, onEc
                     style={{
                       background: 'transparent',
                       border: 'none',
-                      color: '#c92a2a',
-                      padding: 0,
-                      borderRadius: 0,
+                      color: '#dc3545',
+                      padding: '4px 8px',
+                      borderRadius: '4px',
                       cursor: 'pointer',
-                      fontSize: '12px',
-                      textDecoration: 'underline',
+                      fontSize: '11px',
+                      fontWeight: '600',
+                      transition: 'all 0.2s ease',
                     }}
                     onMouseEnter={(e) => {
-                      e.currentTarget.style.textDecoration = 'none';
+                      e.currentTarget.style.background = '#dc3545';
+                      e.currentTarget.style.color = '#ffffff';
                     }}
                     onMouseLeave={(e) => {
-                      e.currentTarget.style.textDecoration = 'underline';
+                      e.currentTarget.style.background = 'transparent';
+                      e.currentTarget.style.color = '#dc3545';
                     }}
                   >
                     Delete
                   </button>
                 </div>
               )}
-              <div style={{ fontWeight: 600, color: '#222', wordBreak: 'break-all' }}>{item.fileName}</div>
-              <div style={{ fontSize: '12px', color: '#666' }}>
-                <span>by </span>
-                <span style={{ fontWeight: 600 }}>{item.uploadedBy}</span>
-                <span> · </span>
-                <span title={new Date(item.uploadedAt).toLocaleString()}>{formatRelativeTime(item.uploadedAt)}</span>
+              <div style={{ 
+                fontWeight: '600', 
+                color: '#212529', 
+                wordBreak: 'break-all',
+                marginBottom: '4px',
+                fontSize: '14px'
+              }}>
+                {item.fileName}
+              </div>
+              <div style={{ 
+                fontSize: '12px', 
+                color: '#6c757d',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px'
+              }}>
+                <span>by <strong>{item.uploadedBy}</strong></span>
+                <span>•</span>
+                <span title={new Date(item.uploadedAt).toLocaleString()}>
+                  {formatRelativeTime(item.uploadedAt)}
+                </span>
               </div>
             </div>
           ))}
-        {uploads.length === 0 && (
-          <div style={{ fontSize: '12px', color: '#777' }}>No uploads yet.</div>
+        {sortedUploads.length === 0 && (
+          <div style={{ 
+            fontSize: '12px', 
+            color: '#6c757d',
+            textAlign: 'center',
+            padding: '20px',
+            fontStyle: 'italic'
+          }}>
+            {uploads.length === 0 ? 'No uploads yet.' : 'No uploads match your filters.'}
+          </div>
         )}
       </div>
       

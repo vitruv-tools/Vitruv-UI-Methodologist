@@ -12,6 +12,7 @@ import { useFlowState } from '../../hooks/useFlowState';
 import { useDragAndDrop } from '../../hooks/useDragAndDrop';
 import { EditableNode } from './EditableNode';
 import { UMLRelationship } from './UMLRelationship';
+import { EcoreFileBox } from './EcoreFileBox';
 
 const nodeTypes = { editable: EditableNode };
 const edgeTypes = { uml: UMLRelationship };
@@ -20,6 +21,17 @@ interface FlowCanvasProps {
   onDeploy?: (nodes: Node[], edges: Edge[]) => void;
   onToolClick?: (toolType: string, toolName: string, diagramType?: string) => void;
   onDiagramChange?: (nodes: Node[], edges: Edge[]) => void;
+  ecoreFiles?: Array<{
+    id: string;
+    fileName: string;
+    fileContent: string;
+    position: { x: number; y: number };
+  }>;
+  onEcoreFileSelect?: (fileName: string) => void;
+  onEcoreFileExpand?: (fileName: string, fileContent: string) => void;
+  onEcoreFilePositionChange?: (id: string, newPosition: { x: number; y: number }) => void;
+  onEcoreFileDelete?: (id: string) => void;
+  onEcoreFileRename?: (id: string, newFileName: string) => void;
 }
 
 export const FlowCanvas = forwardRef<{ 
@@ -27,11 +39,15 @@ export const FlowCanvas = forwardRef<{
   loadDiagramData: (nodes: any[], edges: any[]) => void;
   getNodes: () => Node[];
   getEdges: () => Edge[];
+  addEcoreFile: (fileName: string, fileContent: string) => void;
+  resetExpandedFile: () => void;
 }, FlowCanvasProps>(
-  ({ onDeploy, onToolClick, onDiagramChange }, ref) => {
+  ({ onDeploy, onToolClick, onDiagramChange, ecoreFiles = [], onEcoreFileSelect, onEcoreFileExpand, onEcoreFilePositionChange, onEcoreFileDelete, onEcoreFileRename }, ref) => {
   const reactFlowWrapper = useRef<HTMLDivElement>(null);
   const [reactFlowInstance, setReactFlowInstance] = useState<ReactFlowInstance | null>(null);
   const [isDragOver, setIsDragOver] = useState(false);
+  const [selectedFileId, setSelectedFileId] = useState<string | null>(null);
+  const [expandedFileId, setExpandedFileId] = useState<string | null>(null);
   
   const {
     nodes,
@@ -215,6 +231,61 @@ export const FlowCanvas = forwardRef<{
     updateNodeLabel(id, newLabel);
   };
 
+  // Add ECORE file to workspace
+  const addEcoreFile = (fileName: string, fileContent: string) => {
+    if (!reactFlowWrapper.current) return;
+    
+    const canvasBounds = reactFlowWrapper.current.getBoundingClientRect();
+    const centerX = canvasBounds.width / 2;
+    const centerY = canvasBounds.height / 2;
+    
+    // Convert screen coordinates to flow coordinates
+    const position = reactFlowInstance ? reactFlowInstance.project({
+      x: centerX,
+      y: centerY,
+    }) : { x: centerX, y: centerY };
+    
+    // Create a new ECORE file entry
+    const newFile = {
+      id: `ecore-${Date.now()}`,
+      fileName,
+      fileContent,
+      position,
+    };
+    
+    // Add to the list (this will be handled by parent component)
+    if (onEcoreFileSelect) {
+      onEcoreFileSelect(fileName);
+    }
+  };
+
+  // Handle ECORE file selection
+  const handleEcoreFileSelect = (fileName: string) => {
+    const file = ecoreFiles.find(f => f.fileName === fileName);
+    if (file) {
+      setSelectedFileId(file.id);
+      if (onEcoreFileSelect) {
+        onEcoreFileSelect(fileName);
+      }
+    }
+  };
+
+  // Handle ECORE file expansion
+  const handleEcoreFileExpand = (fileName: string, fileContent: string) => {
+    const file = ecoreFiles.find(f => f.fileName === fileName);
+    if (file) {
+      // Clear any previously expanded file state first
+      setExpandedFileId(null);
+      // Then set the new expanded file
+      setExpandedFileId(file.id);
+      setSelectedFileId(file.id);
+    }
+    
+    if (onEcoreFileExpand) {
+      onEcoreFileExpand(fileName, fileContent);
+    }
+  };
+
   // Notify parent about diagram changes
   React.useEffect(() => {
     if (onDiagramChange) {
@@ -227,6 +298,8 @@ export const FlowCanvas = forwardRef<{
     loadDiagramData: loadDiagramData,
     getNodes: () => nodes,
     getEdges: () => edges,
+    addEcoreFile: addEcoreFile,
+    resetExpandedFile: () => setExpandedFileId(null),
   }));
 
   return (
@@ -253,14 +326,36 @@ export const FlowCanvas = forwardRef<{
         onDrop={handleDrop}
         onDragOver={handleDragOver}
         onDragLeave={handleDragLeave}
-        onInit={setReactFlowInstance}
         nodeTypes={nodeTypes}
         edgeTypes={edgeTypes}
       >
-        <MiniMap position="bottom-right" style={{ bottom: 80, right: 16, zIndex: 30 }} />
-        <Controls position="bottom-left" style={{ bottom: 16, left: 16, zIndex: 30 }} />
+        <MiniMap position="bottom-right" style={{ bottom: 16, right: 16, zIndex: 30 }} />
+        <Controls position="bottom-left" />
         <Background />
       </ReactFlow>
+      
+      {/* ECORE File Boxes */}
+      {ecoreFiles.map((file) => (
+        <EcoreFileBox
+          key={file.id}
+          id={file.id}
+          fileName={file.fileName}
+          fileContent={file.fileContent}
+          position={file.position}
+          onExpand={handleEcoreFileExpand}
+          onSelect={handleEcoreFileSelect}
+          onPositionChange={(id, newPosition) => {
+            // This will be handled by the parent component
+            if (onEcoreFilePositionChange) {
+              onEcoreFilePositionChange(id, newPosition);
+            }
+          }}
+          onDelete={onEcoreFileDelete}
+          onRename={onEcoreFileRename}
+          isSelected={selectedFileId === file.id}
+          isExpanded={expandedFileId === file.id}
+        />
+      ))}
       
       {isDragOver && (
         <div style={{
