@@ -5,16 +5,14 @@ import { FlowCanvas } from '../flow/FlowCanvas';
 import { parseEcoreFile, createSimpleEcoreDiagram } from '../../utils/ecoreParser';
 import { exportFlowData, importFlowData, generateFlowId, listDocuments, saveDocumentMeta, loadDocumentData, saveDocumentData, StoredDocumentMeta } from '../../utils/flowUtils';
 import { Node, Edge } from 'reactflow';
+import { User } from '../../services/auth';
 
 interface MainLayoutProps {
   onDeploy?: (nodes: any[], edges: any[]) => void;
   onSave?: () => void;
   onLoad?: () => void;
   onNew?: () => void;
-  user?: {
-    name: string;
-    email?: string;
-  };
+  user?: User | null;
   onLogout?: () => void;
 }
 

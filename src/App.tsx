@@ -1,15 +1,45 @@
 import React from 'react';
-import { MainLayout } from './components';
-import { ApiService } from './services/api';
+import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+import { MainLayout, AuthPage } from './components';
+import { AuthProvider, useAuth } from './contexts/AuthContext';
+import { apiService } from './services/api';
 import { exportFlowData } from './utils';
 import { Node, Edge } from 'reactflow';
 import './App.css';
 
-function App() {
+// Protected Route Component
+function ProtectedRoute({ children }: { children: React.ReactNode }) {
+  const { isAuthenticated, isLoading } = useAuth();
+
+  if (isLoading) {
+    return (
+      <div style={{
+        display: 'flex',
+        justifyContent: 'center',
+        alignItems: 'center',
+        height: '100vh',
+        fontSize: '18px',
+        color: '#666'
+      }}>
+        Loading...
+      </div>
+    );
+  }
+
+  if (!isAuthenticated) {
+    return <Navigate to="/auth" replace />;
+  }
+
+  return <>{children}</>;
+}
+
+function AppContent() {
+  const { user, signOut } = useAuth();
+
   const handleDeploy = async (nodes: Node[], edges: Edge[]) => {
     try {
       const flowData = exportFlowData(nodes, edges);
-      const result = await ApiService.deployFlow(flowData);
+      const result = await apiService.deployFlow(flowData);
       
       if (result.success) {
         alert('Flow deployed successfully!');
@@ -37,13 +67,36 @@ function App() {
     console.log('New flow functionality to be implemented');
   };
 
+  const handleLogout = async () => {
+    await signOut();
+  };
+
   return (
     <MainLayout
       onDeploy={handleDeploy}
       onSave={handleSave}
       onLoad={handleLoad}
       onNew={handleNew}
+      user={user}
+      onLogout={handleLogout}
     />
+  );
+}
+
+function App() {
+  return (
+    <Router>
+      <AuthProvider>
+        <Routes>
+          <Route path="/auth" element={<AuthPage />} />
+          <Route path="/" element={
+             <ProtectedRoute>
+              <AppContent />
+            m</ProtectedRoute>
+          } />
+        </Routes>
+      </AuthProvider>
+    </Router>
   );
 }
 

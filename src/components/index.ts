@@ -13,3 +13,8 @@ export { Button } from './ui/Button';
 export { TreeMenu } from './ui/TreeMenu';
 export { ToolsPanel } from './ui/ToolsPanel'; 
 export { ConfirmDialog } from './ui/ConfirmDialog';
+
+// Auth components
+export { SignIn } from './auth/SignIn';
+export { SignUp } from './auth/SignUp';
+export { AuthPage } from './auth/AuthPage';
