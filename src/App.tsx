@@ -92,7 +92,7 @@ function App() {
           <Route path="/" element={
              <ProtectedRoute>
               <AppContent />
-            m</ProtectedRoute>
+            </ProtectedRoute>
           } />
         </Routes>
       </AuthProvider>
