@@ -142,6 +142,66 @@ class ApiService {
   }
 
   /**
+   * Upload a file
+   */
+  async uploadFile(file: File): Promise<{ data: string; message: string }> {
+    const token = await AuthService.ensureValidToken();
+    
+    if (!token) {
+      throw new Error('No valid authentication token available');
+    }
+
+    const formData = new FormData();
+    formData.append('file', file);
+
+    const url = `${this.baseURL}/api/upload`;
+    const headers = {
+      'Authorization': `Bearer ${token}`,
+      // Don't set Content-Type for FormData, let the browser set it with boundary
+    };
+
+    const response = await fetch(url, {
+      method: 'POST',
+      headers,
+      body: formData,
+    });
+
+    if (!response.ok) {
+      if (response.status === 401) {
+        // Token might be invalid, try to refresh
+        try {
+          await AuthService.refreshToken();
+          // Retry the request with the new token
+          const newToken = await AuthService.ensureValidToken();
+          if (newToken) {
+            const retryResponse = await fetch(url, {
+              method: 'POST',
+              headers: {
+                'Authorization': `Bearer ${newToken}`,
+              },
+              body: formData,
+            });
+
+            if (!retryResponse.ok) {
+              throw new Error(`HTTP error! status: ${retryResponse.status}`);
+            }
+
+            return await retryResponse.json();
+          }
+        } catch (refreshError) {
+          console.error('Token refresh failed during upload:', refreshError);
+          // If refresh fails, the user will be signed out by the auth service
+        }
+      }
+      
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(errorData.message || `HTTP error! status: ${response.status}`);
+    }
+
+    return await response.json();
+  }
+
+  /**
    * Get the current base URL
    */
   getBaseURL(): string {

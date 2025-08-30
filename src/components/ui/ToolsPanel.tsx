@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { ConfirmDialog } from './ConfirmDialog';
+import { apiService } from '../../services/api';
 
 interface ToolsPanelProps {
   onEcoreFileUpload?: (fileContent: string, meta?: { fileName?: string; uploadId?: string }) => void;
@@ -170,6 +171,8 @@ export const ToolsPanel: React.FC<ToolsPanelProps> = ({ onEcoreFileUpload }) => 
   const [showFilters, setShowFilters] = useState(false);
   const [sortBy, setSortBy] = useState<'name' | 'date' | 'uploader'>('date');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
+  const [uploadMessage, setUploadMessage] = useState<string>('');
+  const [uploadMessageType, setUploadMessageType] = useState<'success' | 'error'>('success');
   const fileInputRef = useRef<HTMLInputElement>(null);
   
   interface UploadedEcoreFile {
@@ -291,6 +294,15 @@ export const ToolsPanel: React.FC<ToolsPanelProps> = ({ onEcoreFileUpload }) => 
     setIsProcessing(true);
     
     try {
+      // First, upload the file to the API
+      const uploadResponse = await apiService.uploadFile(file);
+      console.log('File uploaded to API:', uploadResponse);
+      
+      // Show success message
+      setUploadMessage(`Successfully uploaded ${file.name} to server`);
+      setUploadMessageType('success');
+      
+      // Read the file content for local processing
       const content = await file.text();
       
       if (onEcoreFileUpload) {
@@ -309,9 +321,15 @@ export const ToolsPanel: React.FC<ToolsPanelProps> = ({ onEcoreFileUpload }) => 
       ]);
       
       console.log('Ecore file uploaded successfully:', file.name);
+      
+      // Clear success message after 3 seconds
+      setTimeout(() => setUploadMessage(''), 3000);
     } catch (error) {
-      console.error('Error reading file:', error);
-      alert('Error reading the file. Please try again.');
+      console.error('Error uploading file:', error);
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      setUploadMessage(`Error uploading file: ${errorMessage}`);
+      setUploadMessageType('error');
+      setTimeout(() => setUploadMessage(''), 5000);
     } finally {
       setIsProcessing(false);
     }
@@ -369,6 +387,22 @@ export const ToolsPanel: React.FC<ToolsPanelProps> = ({ onEcoreFileUpload }) => 
       {/* Helper text */}
       <div style={instructionsStyle}>Upload a .ecore file to open it in the workspace.</div>
       
+      {/* Success/Error Message */}
+      {uploadMessage && (
+        <div style={{
+          padding: '8px 12px',
+          margin: '8px 0',
+          borderRadius: '6px',
+          fontSize: '12px',
+          fontWeight: '500',
+          backgroundColor: uploadMessageType === 'success' ? '#d4edda' : '#f8d7da',
+          color: uploadMessageType === 'success' ? '#155724' : '#721c24',
+          border: `1px solid ${uploadMessageType === 'success' ? '#c3e6cb' : '#f5c6cb'}`,
+        }}>
+          {uploadMessage}
+        </div>
+      )}
+      
       {/* File Input */}
       <input
         ref={fileInputRef}
@@ -391,7 +425,7 @@ export const ToolsPanel: React.FC<ToolsPanelProps> = ({ onEcoreFileUpload }) => 
       >
         {isProcessing ? (
           <>
-            Uploading...
+            Uploading to Server...
           </>
         ) : (
           <>
