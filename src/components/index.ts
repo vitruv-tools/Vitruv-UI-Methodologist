@@ -13,6 +13,8 @@ export { Button } from './ui/Button';
 export { TreeMenu } from './ui/TreeMenu';
 export { ToolsPanel } from './ui/ToolsPanel'; 
 export { ConfirmDialog } from './ui/ConfirmDialog';
+export { CreateModelModal } from './ui/CreateModelModal';
+
 
 // Auth components
 export { SignIn } from './auth/SignIn';

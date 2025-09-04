@@ -1,0 +1,577 @@
+import React, { useState, useRef } from 'react';
+import { apiService } from '../../services/api';
+
+interface CreateModelModalProps {
+  isOpen: boolean;
+  onClose: () => void;
+  onSuccess?: (modelData: any) => void;
+}
+
+interface CreateModelRequest {
+  name: string;
+  description: string;
+  domain: string;
+  keyword: string[];
+  ecoreFileId: number;
+  genModelFileId: number;
+}
+
+interface CreateModelResponse {
+  data: any;
+  message: string;
+}
+
+// Modal styles
+const modalOverlayStyle: React.CSSProperties = {
+  position: 'fixed',
+  top: 0,
+  left: 0,
+  right: 0,
+  bottom: 0,
+  background: 'rgba(0, 0, 0, 0.5)',
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  zIndex: 1000,
+};
+
+const modalStyle: React.CSSProperties = {
+  background: '#ffffff',
+  borderRadius: '8px',
+  padding: '28px',
+  width: '480px',
+  maxWidth: '90vw',
+  maxHeight: '85vh',
+  overflow: 'auto',
+  boxShadow: '0 20px 40px rgba(0, 0, 0, 0.2)',
+  border: '1px solid #d1ecf1',
+  fontFamily: 'Georgia, serif',
+};
+
+const modalHeaderStyle: React.CSSProperties = {
+  display: 'flex',
+  justifyContent: 'space-between',
+  alignItems: 'center',
+  marginBottom: '20px',
+  paddingBottom: '16px',
+  borderBottom: '2px solid #3498db',
+};
+
+const modalTitleStyle: React.CSSProperties = {
+  fontSize: '22px',
+  fontWeight: 700,
+  color: '#2c3e50',
+  margin: 0,
+  fontFamily: 'Georgia, serif',
+};
+
+const closeButtonStyle: React.CSSProperties = {
+  background: 'transparent',
+  border: 'none',
+  fontSize: '28px',
+  color: '#999',
+  cursor: 'pointer',
+  padding: '8px',
+  borderRadius: '8px',
+  transition: 'all 0.2s ease',
+  width: '40px',
+  height: '40px',
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+};
+
+const closeButtonHoverStyle: React.CSSProperties = {
+  background: '#f8f9fa',
+  color: '#333',
+  transform: 'rotate(90deg)',
+};
+
+const formGroupStyle: React.CSSProperties = {
+  marginBottom: '20px',
+};
+
+const labelStyle: React.CSSProperties = {
+  display: 'block',
+  fontSize: '14px',
+  fontWeight: 600,
+  color: '#2c3e50',
+  marginBottom: '8px',
+  fontFamily: 'Georgia, serif',
+};
+
+const inputStyle: React.CSSProperties = {
+  width: '100%',
+  padding: '12px 14px',
+  border: '2px solid #d1ecf1',
+  borderRadius: '6px',
+  fontSize: '14px',
+  boxSizing: 'border-box',
+  transition: 'all 0.3s ease',
+  background: '#f8f9fa',
+  fontFamily: 'Georgia, serif',
+};
+
+const inputFocusStyle: React.CSSProperties = {
+  borderColor: '#3498db',
+  outline: 'none',
+  boxShadow: '0 0 0 3px rgba(52, 152, 219, 0.1)',
+  background: '#ffffff',
+};
+
+const uploadSectionStyle: React.CSSProperties = {
+  marginTop: '20px',
+  padding: '18px',
+  background: '#f8f9fa',
+  borderRadius: '6px',
+  border: '2px dashed #3498db',
+};
+
+const uploadSectionTitleStyle: React.CSSProperties = {
+  fontSize: '15px',
+  fontWeight: 600,
+  color: '#2c3e50',
+  marginBottom: '16px',
+  textAlign: 'center',
+  fontFamily: 'Georgia, serif',
+};
+
+const uploadButtonsContainerStyle: React.CSSProperties = {
+  display: 'flex',
+  gap: '12px',
+  marginBottom: '16px',
+};
+
+const uploadButtonStyle: React.CSSProperties = {
+  flex: '1',
+  padding: '12px 14px',
+  border: '2px solid #3498db',
+  borderRadius: '6px',
+  background: '#ffffff',
+  color: '#2c3e50',
+  fontSize: '14px',
+  fontWeight: 600,
+  cursor: 'pointer',
+  transition: 'all 0.3s ease',
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  gap: '8px',
+  fontFamily: 'Georgia, serif',
+};
+
+const uploadButtonHoverStyle: React.CSSProperties = {
+  borderColor: '#2980b9',
+  background: '#f8f9ff',
+  color: '#2980b9',
+  transform: 'translateY(-1px)',
+  boxShadow: '0 4px 12px rgba(52, 152, 219, 0.15)',
+};
+
+const uploadButtonSuccessStyle: React.CSSProperties = {
+  borderColor: '#27ae60',
+  background: '#d5f4e6',
+  color: '#1e8449',
+};
+
+const fileStatusStyle: React.CSSProperties = {
+  fontSize: '13px',
+  color: '#5a6c7d',
+  textAlign: 'center',
+  marginTop: '8px',
+  fontFamily: 'Georgia, serif',
+  fontStyle: 'italic',
+};
+
+const buttonGroupStyle: React.CSSProperties = {
+  display: 'flex',
+  gap: '12px',
+  marginTop: '24px',
+};
+
+const primaryButtonStyle: React.CSSProperties = {
+  flex: '1',
+  padding: '14px 18px',
+  border: 'none',
+  borderRadius: '6px',
+  background: 'linear-gradient(135deg, #3498db 0%, #2980b9 100%)',
+  color: '#ffffff',
+  fontSize: '14px',
+  fontWeight: 600,
+  cursor: 'pointer',
+  transition: 'all 0.3s ease',
+  fontFamily: 'Georgia, serif',
+};
+
+const primaryButtonDisabledStyle: React.CSSProperties = {
+  background: '#bdc3c7',
+  color: '#7f8c8d',
+  cursor: 'not-allowed',
+  transform: 'none',
+  boxShadow: 'none',
+};
+
+const secondaryButtonStyle: React.CSSProperties = {
+  flex: '1',
+  padding: '14px 18px',
+  border: '2px solid #3498db',
+  borderRadius: '6px',
+  background: '#ffffff',
+  color: '#2c3e50',
+  fontSize: '14px',
+  fontWeight: 600,
+  cursor: 'pointer',
+  transition: 'all 0.3s ease',
+  fontFamily: 'Georgia, serif',
+};
+
+const buttonHoverStyle: React.CSSProperties = {
+  transform: 'translateY(-1px)',
+  boxShadow: '0 5px 15px rgba(52, 152, 219, 0.2)',
+};
+
+const errorMessageStyle: React.CSSProperties = {
+  padding: '8px 12px',
+  margin: '8px 0',
+  borderRadius: '6px',
+  fontSize: '12px',
+  fontWeight: '500',
+  backgroundColor: '#f8d7da',
+  color: '#721c24',
+  border: '1px solid #f5c6cb',
+};
+
+const successMessageStyle: React.CSSProperties = {
+  padding: '8px 12px',
+  margin: '8px 0',
+  borderRadius: '6px',
+  fontSize: '12px',
+  fontWeight: '500',
+  backgroundColor: '#d4edda',
+  color: '#155724',
+  border: '1px solid #c3e6cb',
+};
+
+const fileInputStyle: React.CSSProperties = {
+  display: 'none',
+};
+
+export const CreateModelModal: React.FC<CreateModelModalProps> = ({ 
+  isOpen, 
+  onClose, 
+  onSuccess 
+}) => {
+  const [formData, setFormData] = useState({
+    name: '',
+    description: '',
+    domain: '',
+    keywords: '',
+  });
+
+  const [uploadedFiles, setUploadedFiles] = useState({
+    ecoreFile: null as File | null,
+    genmodelFile: null as File | null,
+  });
+
+  const [uploadedFileIds, setUploadedFileIds] = useState({
+    ecoreFileId: 0,
+    genModelFileId: 0,
+  });
+
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string>('');
+  const [success, setSuccess] = useState<string>('');
+
+  const ecoreFileInputRef = useRef<HTMLInputElement>(null);
+  const genmodelFileInputRef = useRef<HTMLInputElement>(null);
+
+  const canSave = uploadedFileIds.ecoreFileId > 0 && uploadedFileIds.genModelFileId > 0 && formData.name.trim();
+
+  const handleEcoreFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    if (!file.name.endsWith('.ecore')) {
+      setError('Please select a valid .ecore file');
+      return;
+    }
+
+    setIsLoading(true);
+    setError('');
+
+    try {
+      console.log('Uploading .ecore file:', file.name, 'Size:', file.size);
+      
+      const response = await apiService.uploadFile(file, 'ECORE');
+      console.log('Upload response:', response);
+      
+      // Generate a local ID if server doesn't return one
+      const fileId = response.data ? parseInt(response.data) : Date.now() + Math.floor(Math.random() * 1000);
+      
+      setUploadedFileIds(prev => ({ ...prev, ecoreFileId: fileId }));
+      setUploadedFiles(prev => ({ ...prev, ecoreFile: file }));
+      setSuccess(`Successfully uploaded ${file.name}`);
+      setTimeout(() => setSuccess(''), 3000);
+    } catch (err) {
+      console.error('Upload error:', err);
+      setError(`Error uploading ${file.name}: ${err instanceof Error ? err.message : 'Unknown error'}`);
+    } finally {
+      setIsLoading(false);
+    }
+
+    event.target.value = '';
+  };
+
+  const handleGenmodelFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    if (!file.name.endsWith('.genmodel')) {
+      setError('Please select a valid .genmodel file');
+      return;
+    }
+
+    setIsLoading(true);
+    setError('');
+
+    try {
+      console.log('Uploading .genmodel file:', file.name, 'Size:', file.size);
+      
+      const response = await apiService.uploadFile(file, 'GEN_MODEL');
+      console.log('Upload response:', response);
+      
+      // Generate a local ID if server doesn't return one
+      const fileId = response.data ? parseInt(response.data) : Date.now() + Math.floor(Math.random() * 1000);
+      
+      setUploadedFileIds(prev => ({ ...prev, genModelFileId: fileId }));
+      setUploadedFiles(prev => ({ ...prev, genmodelFile: file }));
+      setSuccess(`Successfully uploaded ${file.name}`);
+      setTimeout(() => setSuccess(''), 3000);
+    } catch (err) {
+      console.error('Upload error:', err);
+      setError(`Error uploading ${file.name}: ${err instanceof Error ? err.message : 'Unknown error'}`);
+    } finally {
+      setIsLoading(false);
+    }
+
+    event.target.value = '';
+  };
+
+  const handleCreateModel = async () => {
+    if (!canSave) {
+      setError('Please fill in all required fields and upload both files');
+      return;
+    }
+
+    setIsLoading(true);
+    setError('');
+
+    try {
+      const requestData: CreateModelRequest = {
+        name: formData.name.trim(),
+        description: formData.description.trim(),
+        domain: formData.domain.trim(),
+        keyword: formData.keywords.split(',').map(k => k.trim()).filter(k => k.length > 0),
+        ecoreFileId: uploadedFileIds.ecoreFileId,
+        genModelFileId: uploadedFileIds.genModelFileId,
+      };
+
+      console.log('Creating model with data:', requestData);
+
+      const response = await apiService.createMetaModel(requestData);
+      console.log('Model creation response:', response);
+      
+      setSuccess('Model created successfully!');
+      setTimeout(() => {
+        onSuccess?.(response.data);
+        handleClose();
+      }, 1500);
+    } catch (err) {
+      console.error('Model creation error:', err);
+      setError(`Error creating model: ${err instanceof Error ? err.message : 'Unknown error'}`);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleClose = () => {
+    setFormData({
+      name: '',
+      description: '',
+      domain: '',
+      keywords: '',
+    });
+    setUploadedFiles({
+      ecoreFile: null,
+      genmodelFile: null,
+    });
+    setUploadedFileIds({
+      ecoreFileId: 0,
+      genModelFileId: 0,
+    });
+    setError('');
+    setSuccess('');
+    setIsLoading(false);
+    onClose();
+  };
+
+  if (!isOpen) return null;
+
+  return (
+    <div style={modalOverlayStyle} onClick={handleClose}>
+      <div style={modalStyle} onClick={(e) => e.stopPropagation()}>
+        <div style={modalHeaderStyle}>
+          <h2 style={modalTitleStyle}>Create New Model</h2>
+          <button
+            style={closeButtonStyle}
+            onClick={handleClose}
+            onMouseEnter={(e) => Object.assign(e.currentTarget.style, closeButtonHoverStyle)}
+            onMouseLeave={(e) => Object.assign(e.currentTarget.style, closeButtonStyle)}
+          >
+            ×
+          </button>
+        </div>
+
+        {error && <div style={errorMessageStyle}>{error}</div>}
+        {success && <div style={successMessageStyle}>{success}</div>}
+        
+        <div style={formGroupStyle}>
+          <label style={labelStyle}>Model Name *</label>
+          <input
+            type="text"
+            placeholder="Enter model name..."
+            value={formData.name}
+            onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+            style={inputStyle}
+            onFocus={(e) => Object.assign(e.currentTarget.style, inputFocusStyle)}
+            onBlur={(e) => Object.assign(e.currentTarget.style, inputStyle)}
+          />
+        </div>
+        
+        <div style={formGroupStyle}>
+          <label style={labelStyle}>Description</label>
+          <textarea
+            placeholder="Optional description..."
+            value={formData.description}
+            onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+            style={{
+              ...inputStyle,
+              minHeight: '80px',
+              resize: 'vertical',
+              fontFamily: 'inherit',
+            }}
+            onFocus={(e) => Object.assign(e.currentTarget.style, inputFocusStyle)}
+            onBlur={(e) => Object.assign(e.currentTarget.style, inputStyle)}
+          />
+        </div>
+
+        <div style={formGroupStyle}>
+          <label style={labelStyle}>Keywords</label>
+          <input
+            type="text"
+            placeholder="Enter keywords separated by commas"
+            value={formData.keywords}
+            onChange={(e) => setFormData({ ...formData, keywords: e.target.value })}
+            style={inputStyle}
+            onFocus={(e) => Object.assign(e.currentTarget.style, inputFocusStyle)}
+            onBlur={(e) => Object.assign(e.currentTarget.style, inputStyle)}
+          />
+        </div>
+
+        <div style={formGroupStyle}>
+          <label style={labelStyle}>Domain</label>
+          <input
+            type="text"
+            placeholder="Enter domain"
+            value={formData.domain}
+            onChange={(e) => setFormData({ ...formData, domain: e.target.value })}
+            style={inputStyle}
+            onFocus={(e) => Object.assign(e.currentTarget.style, inputFocusStyle)}
+            onBlur={(e) => Object.assign(e.currentTarget.style, inputStyle)}
+          />
+        </div>
+
+        {/* File Upload Section */}
+        <div style={uploadSectionStyle}>
+          <div style={uploadSectionTitleStyle}>
+            Required Model Files
+          </div>
+          
+          <input
+            ref={ecoreFileInputRef}
+            type="file"
+            accept=".ecore"
+            onChange={handleEcoreFileUpload}
+            style={fileInputStyle}
+          />
+          
+          <input
+            ref={genmodelFileInputRef}
+            type="file"
+            accept=".genmodel"
+            onChange={handleGenmodelFileUpload}
+            style={fileInputStyle}
+          />
+          
+          <div style={uploadButtonsContainerStyle}>
+            <button
+              style={{
+                ...uploadButtonStyle,
+                ...(uploadedFileIds.ecoreFileId > 0 ? uploadButtonSuccessStyle : {})
+              }}
+              onClick={() => ecoreFileInputRef.current?.click()}
+              disabled={isLoading}
+              onMouseEnter={(e) => !uploadedFileIds.ecoreFileId && !isLoading && Object.assign(e.currentTarget.style, uploadButtonHoverStyle)}
+              onMouseLeave={(e) => !uploadedFileIds.ecoreFileId && !isLoading && Object.assign(e.currentTarget.style, uploadButtonStyle)}
+            >
+              {uploadedFileIds.ecoreFileId > 0 ? '✓' : 'Upload'} .ecore
+            </button>
+            
+            <button
+              style={{
+                ...uploadButtonStyle,
+                ...(uploadedFileIds.genModelFileId > 0 ? uploadButtonSuccessStyle : {})
+              }}
+              onClick={() => genmodelFileInputRef.current?.click()}
+              disabled={isLoading}
+              onMouseEnter={(e) => !uploadedFileIds.genModelFileId && !isLoading && Object.assign(e.currentTarget.style, uploadButtonHoverStyle)}
+              onMouseLeave={(e) => !uploadedFileIds.genModelFileId && !isLoading && Object.assign(e.currentTarget.style, uploadButtonStyle)}
+            >
+              {uploadedFileIds.genModelFileId > 0 ? '✓' : 'Upload'} .genmodel
+            </button>
+          </div>
+          
+          <div style={fileStatusStyle}>
+            {uploadedFileIds.ecoreFileId > 0 && uploadedFileIds.genModelFileId > 0 
+              ? '✅ Both files uploaded successfully!' 
+              : 'Please upload both .ecore and .genmodel files to continue'}
+          </div>
+        </div>
+        
+        <div style={buttonGroupStyle}>
+          <button
+            style={secondaryButtonStyle}
+            onClick={handleClose}
+            disabled={isLoading}
+            onMouseEnter={(e) => !isLoading && Object.assign(e.currentTarget.style, buttonHoverStyle)}
+            onMouseLeave={(e) => !isLoading && Object.assign(e.currentTarget.style, secondaryButtonStyle)}
+          >
+            Cancel
+          </button>
+          <button
+            style={{
+              ...primaryButtonStyle,
+              ...(canSave && !isLoading ? {} : primaryButtonDisabledStyle)
+            }}
+            onClick={handleCreateModel}
+            disabled={!canSave || isLoading}
+            onMouseEnter={(e) => canSave && !isLoading && Object.assign(e.currentTarget.style, buttonHoverStyle)}
+            onMouseLeave={(e) => canSave && !isLoading && Object.assign(e.currentTarget.style, primaryButtonStyle)}
+          >
+            {isLoading ? 'Creating...' : canSave ? 'Create Model' : 'Upload Files First'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}; 

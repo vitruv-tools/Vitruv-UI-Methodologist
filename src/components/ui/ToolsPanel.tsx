@@ -1,64 +1,72 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { ConfirmDialog } from './ConfirmDialog';
+import { CreateModelModal } from './CreateModelModal';
 import { apiService } from '../../services/api';
 
 interface ToolsPanelProps {
-  onEcoreFileUpload?: (fileContent: string, meta?: { fileName?: string; uploadId?: string }) => void;
+  onEcoreFileUpload?: (fileContent: string, meta?: { fileName?: string; uploadId?: string; description?: string; keywords?: string; domain?: string; createdAt?: string }) => void;
+  onEcoreFileDelete?: (fileName: string) => void;
 }
 
 const toolsPanelStyle: React.CSSProperties = {
   userSelect: 'none',
   width: '100%',
-  background: '#fff',
-  padding: '0',
+  background: '#f8f9fa',
+  padding: '16px',
   boxSizing: 'border-box',
   height: 'auto',
   overflowY: 'auto',
+  borderRight: '1px solid #e9ecef',
 };
 
 const titleStyle: React.CSSProperties = {
-  fontSize: '16px',
+  fontSize: '18px',
   fontWeight: 700,
-  marginBottom: '12px',
-  color: '#222',
+  marginBottom: '16px',
+  color: '#2c3e50',
   textAlign: 'left',
-  padding: '4px 0',
-  borderBottom: '1px solid #e5e5e5',
+  padding: '8px 0',
+  borderBottom: '2px solid #3498db',
+  fontFamily: 'Georgia, serif',
 };
 
-const addButtonStyle: React.CSSProperties = {
+const createButtonStyle: React.CSSProperties = {
   width: '100%',
-  padding: '10px 12px',
-  margin: '8px 0 16px 0',
-  border: '1px solid #cccccc',
+  padding: '14px 18px',
+  margin: '12px 0 20px 0',
+  border: 'none',
   borderRadius: '6px',
-  background: '#ffffff',
-  color: '#222',
-  fontSize: '14px',
-  fontWeight: 500,
+  background: 'linear-gradient(135deg, #3498db 0%, #2980b9 100%)',
+  color: '#ffffff',
+  fontSize: '15px',
+  fontWeight: 600,
   cursor: 'pointer',
-  transition: 'background 0.15s ease, border-color 0.15s ease',
+  transition: 'all 0.3s ease',
   display: 'inline-flex',
   alignItems: 'center',
   justifyContent: 'center',
-  gap: '8px',
+  gap: '10px',
   userSelect: 'none',
+  boxShadow: '0 3px 10px rgba(52, 152, 219, 0.3)',
+  fontFamily: 'Georgia, serif',
 };
 
-const addButtonHoverStyle: React.CSSProperties = {
-  background: '#f6f6f6',
-  borderColor: '#bbbbbb',
+const createButtonHoverStyle: React.CSSProperties = {
+  transform: 'translateY(-1px)',
+  boxShadow: '0 5px 15px rgba(52, 152, 219, 0.4)',
+  background: 'linear-gradient(135deg, #2980b9 0%, #1f5f8b 100%)',
 };
 
-const addButtonActiveStyle: React.CSSProperties = {
-  background: '#eeeeee',
-  borderColor: '#aaaaaa',
+const createButtonActiveStyle: React.CSSProperties = {
+  transform: 'translateY(0px)',
+  boxShadow: '0 2px 8px rgba(52, 152, 219, 0.3)',
 };
 
 const instructionsStyle: React.CSSProperties = {
-  marginBottom: '8px',
-  fontSize: '12px',
-  color: '#666',
+  marginBottom: '12px',
+  fontSize: '13px',
+  color: '#5a6c7d',
+  fontStyle: 'italic',
+  fontFamily: 'Georgia, serif',
 };
 
 const fileInputStyle: React.CSSProperties = {
@@ -106,20 +114,22 @@ const filterSelectStyle: React.CSSProperties = {
 
 const fileCardStyle: React.CSSProperties = {
   background: '#ffffff',
-  border: '1px solid #e9ecef',
-  borderRadius: '8px',
-  padding: '12px',
-  marginBottom: '12px',
-  boxShadow: '0 2px 4px rgba(0,0,0,0.05)',
+  border: '1px solid #d1ecf1',
+  borderRadius: '6px',
+  padding: '16px',
+  marginBottom: '16px',
+  boxShadow: '0 2px 6px rgba(0,0,0,0.08)',
   cursor: 'pointer',
-  transition: 'all 0.2s ease',
+  transition: 'all 0.3s ease',
   position: 'relative',
+  fontFamily: 'Georgia, serif',
 };
 
 const fileCardHoverStyle: React.CSSProperties = {
-  boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
+  boxShadow: '0 4px 12px rgba(52, 152, 219, 0.15)',
   transform: 'translateY(-1px)',
-  borderColor: '#007bff',
+  borderColor: '#3498db',
+  background: '#f8f9ff',
 };
 
 const toggleContainerStyle: React.CSSProperties = {
@@ -162,232 +172,158 @@ const sortDropdownStyle: React.CSSProperties = {
   minWidth: '120px',
 };
 
-export const ToolsPanel: React.FC<ToolsPanelProps> = ({ onEcoreFileUpload }) => {
-  const [isDragging, setIsDragging] = useState(false);
+const fileNameStyle: React.CSSProperties = {
+  fontWeight: '600',
+  color: '#2c3e50',
+  wordBreak: 'break-all',
+  marginBottom: '6px',
+  fontSize: '15px',
+  fontFamily: 'Georgia, serif',
+};
+
+const fileMetaStyle: React.CSSProperties = {
+  fontSize: '13px',
+  color: '#5a6c7d',
+  display: 'flex',
+  alignItems: 'center',
+  gap: '8px',
+  fontFamily: 'Georgia, serif',
+  fontStyle: 'italic',
+};
+
+const deleteButtonStyle: React.CSSProperties = {
+  position: 'absolute',
+  right: '8px',
+  top: '8px',
+  background: 'transparent',
+  border: 'none',
+  color: '#dc3545',
+  padding: '4px 8px',
+  borderRadius: '4px',
+  cursor: 'pointer',
+  fontSize: '11px',
+  fontWeight: '600',
+  transition: 'all 0.2s ease',
+};
+
+const emptyStateStyle: React.CSSProperties = {
+  fontSize: '13px',
+  color: '#5a6c7d',
+  textAlign: 'center',
+  padding: '24px',
+  fontStyle: 'italic',
+  fontFamily: 'Georgia, serif',
+};
+
+export const ToolsPanel: React.FC<ToolsPanelProps> = ({ onEcoreFileUpload, onEcoreFileDelete }) => {
   const [isProcessing, setIsProcessing] = useState(false);
-  const [searchTerm, setSearchTerm] = useState('');
-  const [selectedUploader, setSelectedUploader] = useState<string>('all');
-  const [dateFilter, setDateFilter] = useState<string>('all');
-  const [showFilters, setShowFilters] = useState(false);
-  const [sortBy, setSortBy] = useState<'name' | 'date' | 'uploader'>('date');
-  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
   const [uploadMessage, setUploadMessage] = useState<string>('');
   const [uploadMessageType, setUploadMessageType] = useState<'success' | 'error'>('success');
-  const fileInputRef = useRef<HTMLInputElement>(null);
-  
-  interface UploadedEcoreFile {
-    id: string;
-    fileName: string;
-    uploadedBy: string;
-    uploadedAt: string; // ISO string
-    content?: string;
-  }
-
-  const uploadsStorageKey = 'ecoreUploads';
-
-  const generateId = () => `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
-
-  const getInitialUploads = (): UploadedEcoreFile[] => {
-    try {
-      const stored = localStorage.getItem(uploadsStorageKey);
-      if (stored) {
-        return JSON.parse(stored) as UploadedEcoreFile[];
-      }
-    } catch {}
-
-    // Return empty array - no sample data by default
-    return [];
-  };
-
-  const [uploads, setUploads] = useState<UploadedEcoreFile[]>(getInitialUploads);
-  const [confirmState, setConfirmState] = useState<{ open: boolean; targetId?: string; targetName?: string }>(
-    { open: false }
-  );
+  const [showCreateModal, setShowCreateModal] = useState(false);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [dateFilter, setDateFilter] = useState<string>('all');
+  const [showFilters, setShowFilters] = useState(false);
+  const [sortBy, setSortBy] = useState<'name' | 'date' | 'domain'>('date');
+  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
+  const [isLoadingModels, setIsLoadingModels] = useState(false);
+  const [apiModels, setApiModels] = useState<any[]>([]);
+  const [apiError, setApiError] = useState<string>('');
 
   useEffect(() => {
-    try {
-      localStorage.setItem(uploadsStorageKey, JSON.stringify(uploads));
-    } catch {}
-  }, [uploads]);
-
-  // Filter uploads based on search term, uploader, and date
-  const filteredUploads = uploads.filter(item => {
-    const matchesSearch = item.fileName.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesUploader = selectedUploader === 'all' || item.uploadedBy === selectedUploader;
-    
-    let matchesDate = true;
-    if (dateFilter !== 'all') {
-      const itemDate = new Date(item.uploadedAt);
-      const now = new Date();
-      const diffTime = Math.abs(now.getTime() - itemDate.getTime());
-      const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+    const fetchData = async () => {
+      setIsLoadingModels(true);
+      setApiError('');
       
-      switch (dateFilter) {
-        case 'today':
-          matchesDate = diffDays <= 1;
-          break;
-        case 'week':
-          matchesDate = diffDays <= 7;
-          break;
-        case 'month':
-          matchesDate = diffDays <= 30;
-          break;
-        case 'year':
-          matchesDate = diffDays <= 365;
-          break;
+      try {
+        const filters: any = {};
+        
+        // Add search filters
+        if (searchTerm.trim()) {
+          filters.name = searchTerm.trim();
+        }
+        
+        // Add date filters
+        if (dateFilter !== 'all') {
+          const now = new Date();
+          let createdFrom: Date;
+          
+          switch (dateFilter) {
+            case 'today':
+              createdFrom = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+              break;
+            case 'week':
+              createdFrom = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+              break;
+            case 'month':
+              createdFrom = new Date(now.getFullYear(), now.getMonth(), 1);
+              break;
+            case 'year':
+              createdFrom = new Date(now.getFullYear(), 0, 1);
+              break;
+            default:
+              createdFrom = new Date(0);
+          }
+          
+          filters.createdFrom = createdFrom.toISOString();
+          filters.createdTo = now.toISOString();
+        }
+        
+        const response = await apiService.findMetaModels(filters);
+        setApiModels(response.data || []);
+      } catch (error) {
+        console.error('Error fetching models from API:', error);
+        setApiError(error instanceof Error ? error.message : 'Failed to fetch models');
+      } finally {
+        setIsLoadingModels(false);
       }
-    }
+    };
     
-    return matchesSearch && matchesUploader && matchesDate;
-  });
+    fetchData();
+  }, [searchTerm, dateFilter]);
 
-  // Sort filtered uploads
-  const sortedUploads = [...filteredUploads].sort((a, b) => {
+  // Sort API models
+  const sortedModels = [...apiModels].sort((a, b) => {
     let comparison = 0;
     
     switch (sortBy) {
       case 'name':
-        comparison = a.fileName.localeCompare(b.fileName);
+        comparison = a.name.localeCompare(b.name);
         break;
       case 'date':
-        comparison = new Date(a.uploadedAt).getTime() - new Date(b.uploadedAt).getTime();
+        comparison = new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
         break;
-      case 'uploader':
-        comparison = a.uploadedBy.localeCompare(b.uploadedBy);
+      case 'domain':
+        comparison = (a.domain || '').localeCompare(b.domain || '');
         break;
     }
     
     return sortOrder === 'asc' ? comparison : -comparison;
   });
 
-  // Get unique uploaders for filter dropdown
-  const uniqueUploaders = Array.from(new Set(uploads.map(item => item.uploadedBy)));
-
   const formatRelativeTime = (isoDate: string) => {
-    const diffMs = Date.now() - new Date(isoDate).getTime();
-    const seconds = Math.floor(diffMs / 1000);
-    if (seconds < 5) return 'just now';
-    const minutes = Math.floor(seconds / 60);
-    if (minutes < 1) return `${seconds}s ago`;
-    const hours = Math.floor(minutes / 60);
-    if (hours < 1) return `${minutes}m ago`;
-    const days = Math.floor(hours / 24);
-    if (days < 1) return `${hours}h ago`;
-    const months = Math.floor(days / 30);
-    if (months < 1) return `${days}d ago`;
-    const years = Math.floor(months / 12);
-    if (years < 1) return `${months}mo ago`;
-    return `${years}y ago`;
-  };
-
-  const handleFileSelect = async (file: File) => {
-    if (!file || !file.name.endsWith('.ecore')) {
-      alert('Please select a valid .ecore file');
-      return;
-    }
-
-    if (!onEcoreFileUpload) {
-      console.warn('No upload handler provided');
-      return;
-    }
-
-    setIsProcessing(true);
-    
-    try {
-      // First, upload the file to the API
-      const uploadResponse = await apiService.uploadFile(file);
-      console.log('File uploaded to API:', uploadResponse);
-      
-      // Show success message
-      setUploadMessage(`Successfully uploaded ${file.name} to server`);
-      setUploadMessageType('success');
-      
-      // Read the file content for local processing
-      const content = await file.text();
-      
-      if (onEcoreFileUpload) {
-        onEcoreFileUpload(content, { fileName: file.name });
-      }
-      
-      setUploads(prev => [
-        {
-          id: generateId(),
-          fileName: file.name,
-          uploadedBy: 'you',
-          uploadedAt: new Date().toISOString(),
-          content,
-        },
-        ...prev,
-      ]);
-      
-      console.log('Ecore file uploaded successfully:', file.name);
-      
-      // Clear success message after 3 seconds
-      setTimeout(() => setUploadMessage(''), 3000);
-    } catch (error) {
-      console.error('Error uploading file:', error);
-      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-      setUploadMessage(`Error uploading file: ${errorMessage}`);
-      setUploadMessageType('error');
-      setTimeout(() => setUploadMessage(''), 5000);
-    } finally {
-      setIsProcessing(false);
-    }
+    const date = new Date(isoDate);
+    const dateStr = date.toLocaleDateString();
+    const timeStr = date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    return `${dateStr} at ${timeStr}`;
   };
 
   const handleButtonClick = () => {
-    fileInputRef.current?.click();
-  };
-
-  const handleFileInputChange = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (file) {
-      handleFileSelect(file);
-    }
-    // Reset input value to allow selecting the same file again
-    event.target.value = '';
-  };
-
-  const handleDragOver = (event: React.DragEvent) => {
-    event.preventDefault();
-    setIsDragging(true);
-  };
-
-  const handleDragLeave = (event: React.DragEvent) => {
-    event.preventDefault();
-    setIsDragging(false);
-  };
-
-  const handleDrop = (event: React.DragEvent) => {
-    event.preventDefault();
-    setIsDragging(false);
-    
-    const files = event.dataTransfer.files;
-    if (files.length > 0) {
-      handleFileSelect(files[0]);
-    }
+    setShowCreateModal(true);
   };
 
   const getButtonStyle = () => {
     if (isProcessing) {
-      return { ...addButtonStyle, ...addButtonActiveStyle, cursor: 'not-allowed' };
+      return { ...createButtonStyle, ...createButtonActiveStyle, cursor: 'not-allowed' };
     }
-    if (isDragging) {
-      return { ...addButtonStyle, ...addButtonHoverStyle };
-    }
-    return addButtonStyle;
+    return createButtonStyle;
   };
 
   return (
     <div style={toolsPanelStyle}>
       <div style={titleStyle}>
-        ECORE UPLOADER
+        Meta Models
       </div>
       
-      {/* Helper text */}
-      <div style={instructionsStyle}>Upload a .ecore file to open it in the workspace.</div>
-      
-      {/* Success/Error Message */}
       {uploadMessage && (
         <div style={{
           padding: '8px 12px',
@@ -403,48 +339,36 @@ export const ToolsPanel: React.FC<ToolsPanelProps> = ({ onEcoreFileUpload }) => 
         </div>
       )}
       
-      {/* File Input */}
-      <input
-        ref={fileInputRef}
-        type="file"
-        accept=".ecore"
-        onChange={handleFileInputChange}
-        style={fileInputStyle}
-      />
-      
-      {/* Add Button */}
       <button 
         style={getButtonStyle()}
         onClick={handleButtonClick}
         disabled={isProcessing}
-        onMouseEnter={(e) => !isProcessing && Object.assign(e.currentTarget.style, addButtonHoverStyle)}
+        onMouseEnter={(e) => !isProcessing && Object.assign(e.currentTarget.style, createButtonHoverStyle)}
         onMouseLeave={(e) => !isProcessing && Object.assign(e.currentTarget.style, getButtonStyle())}
-        onDragOver={handleDragOver}
-        onDragLeave={handleDragLeave}
-        onDrop={handleDrop}
       >
         {isProcessing ? (
           <>
-            Uploading to Server...
+            Creating...
           </>
         ) : (
           <>
-            Upload .ecore
+            Create New Model
           </>
         )}
       </button>
 
-      {/* Uploaded Files List */}
+      {/* Meta Models List */}
       <div style={{
         marginTop: '16px',
         marginBottom: '8px',
         fontWeight: '700',
         fontSize: '13px',
-        color: '#222',
-        borderBottom: '1px solid #e5e5e5',
+        color: '#2c3e50',
+        borderBottom: '1px solid #3498db',
         paddingBottom: '6px',
+        fontFamily: 'Georgia, serif',
       }}>
-        Uploaded files
+        Meta Models
       </div>
 
       {/* Toggle Filters Button and Sort Dropdown */}
@@ -462,7 +386,7 @@ export const ToolsPanel: React.FC<ToolsPanelProps> = ({ onEcoreFileUpload }) => 
         <select
           value={`${sortBy}-${sortOrder}`}
           onChange={(e) => {
-            const [newSortBy, newSortOrder] = e.target.value.split('-') as ['name' | 'date' | 'uploader', 'asc' | 'desc'];
+            const [newSortBy, newSortOrder] = e.target.value.split('-') as ['name' | 'date' | 'domain', 'asc' | 'desc'];
             setSortBy(newSortBy);
             setSortOrder(newSortOrder);
           }}
@@ -472,70 +396,89 @@ export const ToolsPanel: React.FC<ToolsPanelProps> = ({ onEcoreFileUpload }) => 
           <option value="date-asc">Oldest First</option>
           <option value="name-asc">Name A-Z</option>
           <option value="name-desc">Name Z-A</option>
-          <option value="uploader-asc">Uploader A-Z</option>
-          <option value="uploader-desc">Uploader Z-A</option>
+          <option value="domain-asc">Domain A-Z</option>
+          <option value="domain-desc">Domain Z-A</option>
         </select>
       </div>
 
       {/* Filters */}
       {showFilters && (
-        <>
-          {uploads.length > 0 && (
-            <div style={filterContainerStyle}>
-              <div style={{ fontSize: '12px', fontWeight: '600', color: '#495057', marginBottom: '8px' }}>
-                Filters
-              </div>
-              <div style={filterRowStyle}>
-                <span style={filterLabelStyle}>Search:</span>
-                <input
-                  type="text"
-                  placeholder="Filter by filename..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  style={filterInputStyle}
-                />
-              </div>
-              <div style={filterRowStyle}>
-                <span style={filterLabelStyle}>Uploader:</span>
-                <select
-                  value={selectedUploader}
-                  onChange={(e) => setSelectedUploader(e.target.value)}
-                  style={filterSelectStyle}
-                >
-                  <option value="all">All uploaders</option>
-                  {uniqueUploaders.map(uploader => (
-                    <option key={uploader} value={uploader}>{uploader}</option>
-                  ))}
-                </select>
-              </div>
-              <div style={filterRowStyle}>
-                <span style={filterLabelStyle}>Date:</span>
-                <select
-                  value={dateFilter}
-                  onChange={(e) => setDateFilter(e.target.value)}
-                  style={filterSelectStyle}
-                >
-                  <option value="all">All time</option>
-                  <option value="today">Today</option>
-                  <option value="week">This week</option>
-                  <option value="month">This month</option>
-                  <option value="year">This year</option>
-                </select>
-              </div>
-            </div>
-          )}
-        </>
+        <div style={filterContainerStyle}>
+          <div style={{ fontSize: '12px', fontWeight: '600', color: '#495057', marginBottom: '8px' }}>
+            Filters
+          </div>
+          <div style={filterRowStyle}>
+            <span style={filterLabelStyle}>Search:</span>
+            <input
+              type="text"
+              placeholder="Filter by name..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              style={filterInputStyle}
+            />
+          </div>
+          <div style={filterRowStyle}>
+            <span style={filterLabelStyle}>Date:</span>
+            <select
+              value={dateFilter}
+              onChange={(e) => setDateFilter(e.target.value)}
+              style={filterSelectStyle}
+            >
+              <option value="all">All time</option>
+              <option value="today">Today</option>
+              <option value="week">This week</option>
+              <option value="month">This month</option>
+              <option value="year">This year</option>
+            </select>
+          </div>
+        </div>
       )}
 
+      {/* Error Message */}
+      {apiError && (
+        <div style={{
+          padding: '8px 12px',
+          margin: '8px 0',
+          borderRadius: '6px',
+          fontSize: '12px',
+          fontWeight: '500',
+          backgroundColor: '#f8d7da',
+          color: '#721c24',
+          border: '1px solid #f5c6cb',
+        }}>
+          {apiError}
+        </div>
+      )}
+
+      {/* Loading State */}
+      {isLoadingModels && (
+        <div style={{
+          padding: '16px',
+          textAlign: 'center',
+          fontSize: '13px',
+          color: '#5a6c7d',
+          fontStyle: 'italic',
+          fontFamily: 'Georgia, serif',
+        }}>
+          Loading models...
+        </div>
+      )}
+
+      {/* Models List */}
       <div>
-        {[...sortedUploads]
-          .map(item => (
-            <div key={item.id} style={fileCardStyle}
+        {sortedModels.map(model => (
+          <div key={model.id} style={fileCardStyle}
             onClick={() => {
-              const fallback = `name="${item.fileName.replace(/\.ecore$/i, '')}"`;
-              const toOpen = item.content && item.content.trim().length > 0 ? item.content : fallback;
+              // Handle API model selection
               if (onEcoreFileUpload) {
-                onEcoreFileUpload(toOpen, { fileName: item.fileName, uploadId: item.id });
+                onEcoreFileUpload(`name="${model.name}"`, { 
+                  fileName: `${model.name}.ecore`, 
+                  uploadId: model.id.toString(),
+                  description: model.description,
+                  keywords: model.keyword?.join(', '),
+                  domain: model.domain,
+                  createdAt: model.createdAt
+                });
               }
             }}
             onMouseEnter={(e) => {
@@ -544,90 +487,94 @@ export const ToolsPanel: React.FC<ToolsPanelProps> = ({ onEcoreFileUpload }) => 
             onMouseLeave={(e) => {
               Object.assign(e.currentTarget.style, fileCardStyle);
             }}
-            >
-              {item.uploadedBy && item.uploadedBy.trim().toLowerCase() === 'you' && (
-                <div style={{ position: 'absolute', right: '8px', top: '8px' }}>
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setConfirmState({ open: true, targetId: item.id, targetName: item.fileName });
-                    }}
-                    style={{
-                      background: 'transparent',
-                      border: 'none',
-                      color: '#dc3545',
-                      padding: '4px 8px',
-                      borderRadius: '4px',
-                      cursor: 'pointer',
-                      fontSize: '11px',
-                      fontWeight: '600',
-                      transition: 'all 0.2s ease',
-                    }}
-                    onMouseEnter={(e) => {
-                      e.currentTarget.style.background = '#dc3545';
-                      e.currentTarget.style.color = '#ffffff';
-                    }}
-                    onMouseLeave={(e) => {
-                      e.currentTarget.style.background = 'transparent';
-                      e.currentTarget.style.color = '#dc3545';
-                    }}
-                  >
-                    Delete
-                  </button>
-                </div>
-              )}
-              <div style={{ 
-                fontWeight: '600', 
-                color: '#212529', 
-                wordBreak: 'break-all',
-                marginBottom: '4px',
-                fontSize: '14px'
-              }}>
-                {item.fileName}
-              </div>
-              <div style={{ 
-                fontSize: '12px', 
-                color: '#6c757d',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '8px'
-              }}>
-                <span>by <strong>{item.uploadedBy}</strong></span>
-                <span>•</span>
-                <span title={new Date(item.uploadedAt).toLocaleString()}>
-                  {formatRelativeTime(item.uploadedAt)}
-                </span>
-              </div>
+          >
+            <div style={fileNameStyle}>
+              {model.name}
             </div>
-          ))}
-        {sortedUploads.length === 0 && (
-          <div style={{ 
-            fontSize: '12px', 
-            color: '#6c757d',
-            textAlign: 'center',
-            padding: '20px',
-            fontStyle: 'italic'
-          }}>
-            {uploads.length === 0 ? 'No uploads yet.' : 'No uploads match your filters.'}
+            <div style={fileMetaStyle}>
+              <span>Domain: <strong>{model.domain}</strong></span>
+              {model.keyword && model.keyword.length > 0 && (
+                <>
+                  <span>•</span>
+                  <span>Keywords: {model.keyword.join(', ')}</span>
+                </>
+              )}
+              <span>•</span>
+              <span title={new Date(model.createdAt).toLocaleString()}>
+                {formatRelativeTime(model.createdAt)}
+              </span>
+            </div>
+            {model.description && (
+              <div style={{
+                fontSize: '12px',
+                color: '#6c757d',
+                marginTop: '4px',
+                fontStyle: 'italic',
+                fontFamily: 'Georgia, serif',
+              }}>
+                {model.description}
+              </div>
+            )}
+          </div>
+        ))}
+        {!isLoadingModels && sortedModels.length === 0 && !apiError && (
+          <div style={emptyStateStyle}>
+            No models available from server.
           </div>
         )}
       </div>
       
-      {/* Removed additional info box for a simpler, academic style */}
-
-      <ConfirmDialog
-        isOpen={confirmState.open}
-        title="Delete file?"
-        message={`Are you sure you want to delete "${confirmState.targetName || ''}"? This action cannot be undone.`}
-        confirmText="Delete"
-        cancelText="Cancel"
-        onConfirm={() => {
-          if (confirmState.targetId) {
-            setUploads(prev => prev.filter(u => u.id !== confirmState.targetId));
-          }
-          setConfirmState({ open: false });
+      {/* Create Model Modal */}
+      <CreateModelModal
+        isOpen={showCreateModal}
+        onClose={() => setShowCreateModal(false)}
+        onSuccess={(modelData) => {
+          // Handle successful model creation
+          setUploadMessage('Model created successfully!');
+          setUploadMessageType('success');
+          setTimeout(() => setUploadMessage(''), 3000);
+          // Refresh the models list
+          const fetchData = async () => {
+            setIsLoadingModels(true);
+            setApiError('');
+            try {
+              const filters: any = {};
+              if (searchTerm.trim()) {
+                filters.name = searchTerm.trim();
+              }
+              if (dateFilter !== 'all') {
+                const now = new Date();
+                let createdFrom: Date;
+                switch (dateFilter) {
+                  case 'today':
+                    createdFrom = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+                    break;
+                  case 'week':
+                    createdFrom = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+                    break;
+                  case 'month':
+                    createdFrom = new Date(now.getFullYear(), now.getMonth(), 1);
+                    break;
+                  case 'year':
+                    createdFrom = new Date(now.getFullYear(), 0, 1);
+                    break;
+                  default:
+                    createdFrom = new Date(0);
+                }
+                filters.createdFrom = createdFrom.toISOString();
+                filters.createdTo = now.toISOString();
+              }
+              const response = await apiService.findMetaModels(filters);
+              setApiModels(response.data || []);
+            } catch (error) {
+              console.error('Error fetching models from API:', error);
+              setApiError(error instanceof Error ? error.message : 'Failed to fetch models');
+            } finally {
+              setIsLoadingModels(false);
+            }
+          };
+          fetchData();
         }}
-        onCancel={() => setConfirmState({ open: false })}
       />
     </div>
   );

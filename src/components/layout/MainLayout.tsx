@@ -21,6 +21,10 @@ interface EcoreFileBox {
   fileName: string;
   fileContent: string;
   position: { x: number; y: number };
+  description?: string;
+  keywords?: string;
+  domain?: string;
+  createdAt?: string;
 }
 
 export function MainLayout({ onDeploy, onSave, onLoad, onNew, user, onLogout }: MainLayoutProps) {
@@ -72,9 +76,9 @@ export function MainLayout({ onDeploy, onSave, onLoad, onNew, user, onLogout }: 
       return { x: 100, y: 100 };
     }
     
-    // Box dimensions (approximate)
-    const boxWidth = 280; // Based on minWidth + padding
-    const boxHeight = 200; // Based on content height
+    // Box dimensions (fixed size)
+    const boxWidth = 280; // Fixed width
+    const boxHeight = 180; // Fixed height
     const spacing = 40; // Space between boxes
     
     // Try to place new box in a logical grid pattern
@@ -136,7 +140,7 @@ export function MainLayout({ onDeploy, onSave, onLoad, onNew, user, onLogout }: 
     return { x: 100, y: 100 };
   };
 
-  const handleEcoreFileUpload = (fileContent: string, meta?: { fileName?: string }) => {
+  const handleEcoreFileUpload = (fileContent: string, meta?: { fileName?: string; description?: string; keywords?: string; domain?: string; createdAt?: string }) => {
     console.log('Processing .ecore file upload');
     
     try {
@@ -168,6 +172,10 @@ export function MainLayout({ onDeploy, onSave, onLoad, onNew, user, onLogout }: 
         fileName: meta?.fileName || 'untitled.ecore',
         fileContent,
         position: newPosition,
+        description: meta?.description,
+        keywords: meta?.keywords,
+        domain: meta?.domain,
+        createdAt: meta?.createdAt || new Date().toISOString(),
       };
       
       setEcoreFileBoxes(prev => [...prev, newFileBox]);
@@ -279,6 +287,17 @@ export function MainLayout({ onDeploy, onSave, onLoad, onNew, user, onLogout }: 
     }
   };
 
+  // Handle ECORE file deletion from ToolsPanel
+  const handleEcoreFileDeleteFromPanel = (fileName: string) => {
+    setEcoreFileBoxes(prev => prev.filter(box => box.fileName !== fileName));
+    if (selectedFileBoxId) {
+      const selectedBox = ecoreFileBoxes.find(box => box.id === selectedFileBoxId);
+      if (selectedBox && selectedBox.fileName === fileName) {
+        setSelectedFileBoxId(null);
+      }
+    }
+  };
+
   // Handle ECORE file box rename
   const handleEcoreFileRename = (id: string, newFileName: string) => {
     setEcoreFileBoxes(prev => 
@@ -370,10 +389,11 @@ export function MainLayout({ onDeploy, onSave, onLoad, onNew, user, onLogout }: 
       display: 'flex',
       overflow: 'hidden'
     }}>
-      <Sidebar 
-        onDiagramSelect={handleDiagramSelection} 
-        onEcoreFileUpload={handleEcoreFileUpload}
-      />
+             <Sidebar 
+         onDiagramSelect={handleDiagramSelection} 
+         onEcoreFileUpload={handleEcoreFileUpload}
+         onEcoreFileDelete={handleEcoreFileDeleteFromPanel}
+       />
       <div style={{ 
         flexGrow: 1, 
         position: 'relative',

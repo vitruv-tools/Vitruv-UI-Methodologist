@@ -124,19 +124,6 @@ export function SignIn({ onSignInSuccess, onSwitchToSignUp }: SignInProps) {
             </button>
           </p>
         </div>
-
-        <div className="auth-divider">
-          <span>or</span>
-        </div>
-
-        <div className="demo-credentials">
-          <p className="demo-title">API Endpoint</p>
-          <div className="demo-info">
-            <p>This application connects to the backend API at:</p>
-            <p><code>http://localhost:9811/api/v1/users/login</code></p>
-            <p>Make sure your backend server is running on port 9811.</p>
-          </div>
-        </div>
       </div>
     </div>
   );

@@ -3,7 +3,8 @@ import { ToolsPanel } from '../ui/ToolsPanel';
 
 interface SidebarProps {
   onDiagramSelect?: (diagramType: string) => void;
-  onEcoreFileUpload?: (fileContent: string, meta?: { fileName?: string; uploadId?: string }) => void;
+  onEcoreFileUpload?: (fileContent: string, meta?: { fileName?: string; uploadId?: string; description?: string; keywords?: string; domain?: string; createdAt?: string }) => void;
+  onEcoreFileDelete?: (fileName: string) => void;
 }
 
 const sidebarStyle: React.CSSProperties = {
@@ -37,12 +38,13 @@ const subtitleStyle: React.CSSProperties = {
   fontStyle: 'italic',
 };
 
-export function Sidebar({ onDiagramSelect, onEcoreFileUpload }: SidebarProps) {
+export function Sidebar({ onDiagramSelect, onEcoreFileUpload, onEcoreFileDelete }: SidebarProps) {
   return (
     <aside style={sidebarStyle}>
-      <div style={subtitleStyle}>Upload and manage your Ecore files</div>
+      {/* Subtitle removed as per request */}
       <ToolsPanel
         onEcoreFileUpload={onEcoreFileUpload}
+        onEcoreFileDelete={onEcoreFileDelete}
       />
     </aside>
   );

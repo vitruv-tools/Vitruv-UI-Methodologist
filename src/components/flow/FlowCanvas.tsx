@@ -1,4 +1,4 @@
-import React, { useRef, useState, forwardRef, useImperativeHandle } from 'react';
+import React, { useRef, useState, forwardRef, useImperativeHandle, useEffect } from 'react';
 import ReactFlow, {
   MiniMap,
   Controls,
@@ -26,6 +26,10 @@ interface FlowCanvasProps {
     fileName: string;
     fileContent: string;
     position: { x: number; y: number };
+    description?: string;
+    keywords?: string;
+    domain?: string;
+    createdAt?: string;
   }>;
   onEcoreFileSelect?: (fileName: string) => void;
   onEcoreFileExpand?: (fileName: string, fileContent: string) => void;
@@ -41,6 +45,10 @@ export const FlowCanvas = forwardRef<{
   getEdges: () => Edge[];
   addEcoreFile: (fileName: string, fileContent: string) => void;
   resetExpandedFile: () => void;
+  undo: () => void;
+  redo: () => void;
+  canUndo: boolean;
+  canRedo: boolean;
 }, FlowCanvasProps>(
   ({ onDeploy, onToolClick, onDiagramChange, ecoreFiles = [], onEcoreFileSelect, onEcoreFileExpand, onEcoreFilePositionChange, onEcoreFileDelete, onEcoreFileRename }, ref) => {
   const reactFlowWrapper = useRef<HTMLDivElement>(null);
@@ -58,8 +66,13 @@ export const FlowCanvas = forwardRef<{
     addNode,
     addEdge,
     updateNodeLabel,
+    removeNode,
     setNodes,
     setEdges,
+    undo,
+    redo,
+    canUndo,
+    canRedo,
   } = useFlowState();
 
   const { onDrop, onDragOver } = useDragAndDrop({
@@ -68,6 +81,48 @@ export const FlowCanvas = forwardRef<{
     addNode,
     addEdge,
   });
+
+  // Handle keyboard shortcuts for undo/redo
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      // Check if the target is an input or textarea to avoid interfering with text editing
+      const target = event.target as HTMLElement;
+      if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.contentEditable === 'true') {
+        return;
+      }
+
+      if (event.ctrlKey || event.metaKey) {
+        switch (event.key.toLowerCase()) {
+          case 'z':
+            event.preventDefault();
+            if (event.shiftKey) {
+              // Ctrl+Shift+Z or Cmd+Shift+Z for redo
+              if (canRedo) {
+                redo();
+              }
+            } else {
+              // Ctrl+Z or Cmd+Z for undo
+              if (canUndo) {
+                undo();
+              }
+            }
+            break;
+          case 'y':
+            event.preventDefault();
+            // Ctrl+Y or Cmd+Y for redo (alternative)
+            if (canRedo) {
+              redo();
+            }
+            break;
+        }
+      }
+    };
+
+    document.addEventListener('keydown', handleKeyDown);
+    return () => {
+      document.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [undo, redo, canUndo, canRedo]);
 
   // Handle tool clicks by adding elements at canvas center
   const handleToolClick = (toolType: string, toolName: string, diagramType?: string) => {
@@ -300,6 +355,10 @@ export const FlowCanvas = forwardRef<{
     getEdges: () => edges,
     addEcoreFile: addEcoreFile,
     resetExpandedFile: () => setExpandedFileId(null),
+    undo: undo,
+    redo: redo,
+    canUndo: canUndo,
+    canRedo: canRedo,
   }));
 
   return (
@@ -316,7 +375,7 @@ export const FlowCanvas = forwardRef<{
       <ReactFlow
         nodes={nodes.map(node => ({
           ...node,
-          data: { ...node.data, onLabelChange: handleLabelChange }
+          data: { ...node.data, onLabelChange: handleLabelChange, onDelete: removeNode }
         }))}
         edges={edges}
         onNodesChange={onNodesChange}
@@ -333,6 +392,8 @@ export const FlowCanvas = forwardRef<{
         <Controls position="bottom-left" />
         <Background />
       </ReactFlow>
+      
+      
       
       {/* ECORE File Boxes */}
       {ecoreFiles.map((file) => (
@@ -354,6 +415,10 @@ export const FlowCanvas = forwardRef<{
           onRename={onEcoreFileRename}
           isSelected={selectedFileId === file.id}
           isExpanded={expandedFileId === file.id}
+          description={file.description}
+          keywords={file.keywords}
+          domain={file.domain}
+          createdAt={file.createdAt}
         />
       ))}
       
@@ -378,6 +443,8 @@ export const FlowCanvas = forwardRef<{
           ✨ Drop UML element here ✨
         </div>
       )}
+      
+      
     </div>
   );
 }); 

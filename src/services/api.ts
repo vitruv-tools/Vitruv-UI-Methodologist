@@ -142,9 +142,9 @@ class ApiService {
   }
 
   /**
-   * Upload a file
+   * Upload a file with type parameter
    */
-  async uploadFile(file: File): Promise<{ data: string; message: string }> {
+  async uploadFile(file: File, type: 'ECORE' | 'GEN_MODEL' | 'REACTION'): Promise<{ data: string; message: string }> {
     const token = await AuthService.ensureValidToken();
     
     if (!token) {
@@ -154,7 +154,7 @@ class ApiService {
     const formData = new FormData();
     formData.append('file', file);
 
-    const url = `${this.baseURL}/api/upload`;
+    const url = `${this.baseURL}/api/upload/type=${type}`;
     const headers = {
       'Authorization': `Bearer ${token}`,
       // Don't set Content-Type for FormData, let the browser set it with boundary
@@ -165,6 +165,8 @@ class ApiService {
       headers,
       body: formData,
     });
+
+    console.log(`Response status: ${response.status} for upload type ${type}`);
 
     if (!response.ok) {
       if (response.status === 401) {
@@ -186,7 +188,9 @@ class ApiService {
               throw new Error(`HTTP error! status: ${retryResponse.status}`);
             }
 
-            return await retryResponse.json();
+            const result = await retryResponse.json();
+            console.log(`Successful upload for type ${type}:`, result);
+            return result;
           }
         } catch (refreshError) {
           console.error('Token refresh failed during upload:', refreshError);
@@ -198,7 +202,83 @@ class ApiService {
       throw new Error(errorData.message || `HTTP error! status: ${response.status}`);
     }
 
-    return await response.json();
+    const result = await response.json();
+    console.log(`Successful upload for type ${type}:`, result);
+    return result;
+  }
+
+  /**
+   * Create a meta model
+   */
+  async createMetaModel(data: {
+    name: string;
+    description: string;
+    domain: string;
+    keyword: string[];
+    ecoreFileId: number;
+    genModelFileId: number;
+  }): Promise<{ data: any; message: string }> {
+    return this.authenticatedRequest('/api/v1/meta-models', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  }
+
+  /**
+   * Get all meta models
+   */
+  async getMetaModels(): Promise<{ data: any[]; message: string }> {
+    return this.authenticatedRequest('/api/v1/meta-models');
+  }
+
+  /**
+   * Find meta models with filters
+   */
+  async findMetaModels(filters: {
+    name?: string;
+    description?: string;
+    domain?: string;
+    keyword?: string[];
+    ecoreFileId?: number;
+    genModelFileId?: number;
+    createdFrom?: string;
+    createdTo?: string;
+  }): Promise<{ data: any[]; message: string }> {
+    return this.authenticatedRequest('/api/v1/meta-models/find-all', {
+      method: 'POST',
+      body: JSON.stringify(filters),
+    });
+  }
+
+  /**
+   * Get a specific meta model by ID
+   */
+  async getMetaModel(id: string): Promise<{ data: any; message: string }> {
+    return this.authenticatedRequest(`/api/v1/meta-models/${id}`);
+  }
+
+  /**
+   * Update a meta model
+   */
+  async updateMetaModel(id: string, data: {
+    name?: string;
+    description?: string;
+    domain?: string;
+    keyword?: string[];
+  }): Promise<{ data: any; message: string }> {
+    return this.authenticatedRequest(`/api/v1/meta-models/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    });
+  }
+
+  /**
+   * Delete a meta model
+   */
+  async deleteMetaModel(id: string): Promise<{ data: any; message: string }> {
+    return this.authenticatedRequest(`/api/v1/meta-models/${id}`, {
+      method: 'DELETE',
+    });
   }
 
   /**
