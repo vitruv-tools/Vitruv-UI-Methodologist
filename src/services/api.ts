@@ -51,7 +51,25 @@ class ApiService {
             });
 
             if (!retryResponse.ok) {
-              throw new Error(`HTTP error! status: ${retryResponse.status}`);
+              // Capture error body for debugging
+              let retryErrorText = '';
+              try {
+                retryErrorText = await retryResponse.text();
+              } catch {}
+              let retryErrorMessage = retryErrorText;
+              try {
+                const parsed = JSON.parse(retryErrorText);
+                retryErrorMessage = parsed?.message || parsed?.error || retryErrorText;
+              } catch {}
+              console.error('Request failed after token refresh', {
+                url,
+                method: options.method || 'GET',
+                status: retryResponse.status,
+                statusText: retryResponse.statusText,
+                message: retryErrorMessage,
+                body: retryErrorText,
+              });
+              throw new Error(`${retryResponse.status} ${retryResponse.statusText}: ${retryErrorMessage}`);
             }
 
             return await retryResponse.json();
@@ -61,9 +79,25 @@ class ApiService {
           // If refresh fails, the user will be signed out by the auth service
         }
       }
-      
-      const errorData = await response.json().catch(() => ({}));
-      throw new Error(errorData.message || `HTTP error! status: ${response.status}`);
+      // Capture error body for debugging
+      let errorText = '';
+      try {
+        errorText = await response.text();
+      } catch {}
+      let errorMessage = errorText;
+      try {
+        const parsed = JSON.parse(errorText);
+        errorMessage = parsed?.message || parsed?.error || errorText;
+      } catch {}
+      console.error('Request failed', {
+        url,
+        method: options.method || 'GET',
+        status: response.status,
+        statusText: response.statusText,
+        message: errorMessage,
+        body: errorText,
+      });
+      throw new Error(`${response.status} ${response.statusText}: ${errorMessage}`);
     }
 
     return await response.json();
@@ -88,8 +122,25 @@ class ApiService {
     });
 
     if (!response.ok) {
-      const errorData = await response.json().catch(() => ({}));
-      throw new Error(errorData.message || `HTTP error! status: ${response.status}`);
+      // Capture error body for debugging
+      let errorText = '';
+      try {
+        errorText = await response.text();
+      } catch {}
+      let errorMessage = errorText;
+      try {
+        const parsed = JSON.parse(errorText);
+        errorMessage = parsed?.message || parsed?.error || errorText;
+      } catch {}
+      console.error('Public request failed', {
+        url,
+        method: options.method || 'GET',
+        status: response.status,
+        statusText: response.statusText,
+        message: errorMessage,
+        body: errorText,
+      });
+      throw new Error(`${response.status} ${response.statusText}: ${errorMessage}`);
     }
 
     return await response.json();
@@ -185,7 +236,24 @@ class ApiService {
             });
 
             if (!retryResponse.ok) {
-              throw new Error(`HTTP error! status: ${retryResponse.status}`);
+              let retryErrorText = '';
+              try {
+                retryErrorText = await retryResponse.text();
+              } catch {}
+              let retryErrorMessage = retryErrorText;
+              try {
+                const parsed = JSON.parse(retryErrorText);
+                retryErrorMessage = parsed?.message || parsed?.error || retryErrorText;
+              } catch {}
+              console.error('Upload failed after token refresh', {
+                url,
+                type,
+                status: retryResponse.status,
+                statusText: retryResponse.statusText,
+                message: retryErrorMessage,
+                body: retryErrorText,
+              });
+              throw new Error(`${retryResponse.status} ${retryResponse.statusText}: ${retryErrorMessage}`);
             }
 
             const result = await retryResponse.json();
@@ -197,9 +265,24 @@ class ApiService {
           // If refresh fails, the user will be signed out by the auth service
         }
       }
-      
-      const errorData = await response.json().catch(() => ({}));
-      throw new Error(errorData.message || `HTTP error! status: ${response.status}`);
+      let errorText = '';
+      try {
+        errorText = await response.text();
+      } catch {}
+      let errorMessage = errorText;
+      try {
+        const parsed = JSON.parse(errorText);
+        errorMessage = parsed?.message || parsed?.error || errorText;
+      } catch {}
+      console.error('Upload failed', {
+        url,
+        type,
+        status: response.status,
+        statusText: response.statusText,
+        message: errorMessage,
+        body: errorText,
+      });
+      throw new Error(`${response.status} ${response.statusText}: ${errorMessage}`);
     }
 
     const result = await response.json();

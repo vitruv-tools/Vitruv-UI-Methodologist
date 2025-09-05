@@ -305,8 +305,15 @@ export const CreateModelModal: React.FC<CreateModelModalProps> = ({
       const response = await apiService.uploadFile(file, 'ECORE');
       console.log('Upload response:', response);
       
-      // Generate a local ID if server doesn't return one
-      const fileId = response.data ? parseInt(response.data) : Date.now() + Math.floor(Math.random() * 1000);
+      // Extract ID from various possible response shapes
+      const rawData: any = (response as any)?.data;
+      let fileId = (rawData && typeof rawData === 'object' && 'id' in rawData)
+        ? Number(rawData.id)
+        : Number(rawData);
+      if (!Number.isFinite(fileId)) {
+        // Generate a local fallback ID if server doesn't return a usable one
+        fileId = Date.now() + Math.floor(Math.random() * 1000);
+      }
       
       setUploadedFileIds(prev => ({ ...prev, ecoreFileId: fileId }));
       setUploadedFiles(prev => ({ ...prev, ecoreFile: file }));
@@ -340,8 +347,15 @@ export const CreateModelModal: React.FC<CreateModelModalProps> = ({
       const response = await apiService.uploadFile(file, 'GEN_MODEL');
       console.log('Upload response:', response);
       
-      // Generate a local ID if server doesn't return one
-      const fileId = response.data ? parseInt(response.data) : Date.now() + Math.floor(Math.random() * 1000);
+      // Extract ID from various possible response shapes
+      const rawData: any = (response as any)?.data;
+      let fileId = (rawData && typeof rawData === 'object' && 'id' in rawData)
+        ? Number(rawData.id)
+        : Number(rawData);
+      if (!Number.isFinite(fileId)) {
+        // Generate a local fallback ID if server doesn't return a usable one
+        fileId = Date.now() + Math.floor(Math.random() * 1000);
+      }
       
       setUploadedFileIds(prev => ({ ...prev, genModelFileId: fileId }));
       setUploadedFiles(prev => ({ ...prev, genmodelFile: file }));
