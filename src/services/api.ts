@@ -1,60 +1,426 @@
+import { AuthService } from './auth';
 import { FlowData } from '../types/flow';
 
-const API_BASE_URL = process.env.REACT_APP_API_BASE_URL || 'http://localhost:8080/api';
+class ApiService {
+  private baseURL: string;
 
-export class ApiService {
-  private static async request<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
-    const url = `${API_BASE_URL}${endpoint}`;
-    const config: RequestInit = {
-      headers: {
-        'Content-Type': 'application/json',
-        ...options.headers,
-      },
-      ...options,
-    };
-
-    try {
-      const response = await fetch(url, config);
-      
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-      
-      return await response.json();
-    } catch (error) {
-      console.error('API request failed:', error);
-      throw error;
-    }
+  constructor() {
+    this.baseURL = 'http://localhost:9811';
   }
 
-  static async deployFlow(flowData: FlowData): Promise<{ success: boolean; message: string }> {
-    return this.request('/deploy', {
+  /**
+   * Make an authenticated API request with automatic token refresh
+   */
+  async authenticatedRequest<T>(
+    endpoint: string,
+    options: RequestInit = {}
+  ): Promise<T> {
+    // Ensure we have a valid token
+    const token = await AuthService.ensureValidToken();
+    
+    if (!token) {
+      throw new Error('No valid authentication token available');
+    }
+
+    const url = `${this.baseURL}${endpoint}`;
+    const headers = {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${token}`,
+      ...options.headers,
+    };
+
+    const response = await fetch(url, {
+      ...options,
+      headers,
+    });
+
+    if (!response.ok) {
+      if (response.status === 401) {
+        // Token might be invalid, try to refresh
+        try {
+          await AuthService.refreshToken();
+          // Retry the request with the new token
+          const newToken = await AuthService.ensureValidToken();
+          if (newToken) {
+            const retryResponse = await fetch(url, {
+              ...options,
+              headers: {
+                ...headers,
+                'Authorization': `Bearer ${newToken}`,
+              },
+            });
+
+            if (!retryResponse.ok) {
+              // Capture error body for debugging
+              let retryErrorText = '';
+              try {
+                retryErrorText = await retryResponse.text();
+              } catch {}
+              let retryErrorMessage = retryErrorText;
+              try {
+                const parsed = JSON.parse(retryErrorText);
+                retryErrorMessage = parsed?.message || parsed?.error || retryErrorText;
+              } catch {}
+              console.error('Request failed after token refresh', {
+                url,
+                method: options.method || 'GET',
+                status: retryResponse.status,
+                statusText: retryResponse.statusText,
+                message: retryErrorMessage,
+                body: retryErrorText,
+              });
+              throw new Error(`${retryResponse.status} ${retryResponse.statusText}: ${retryErrorMessage}`);
+            }
+
+            return await retryResponse.json();
+          }
+        } catch (refreshError) {
+          console.error('Token refresh failed during request:', refreshError);
+          // If refresh fails, the user will be signed out by the auth service
+        }
+      }
+      // Capture error body for debugging
+      let errorText = '';
+      try {
+        errorText = await response.text();
+      } catch {}
+      let errorMessage = errorText;
+      try {
+        const parsed = JSON.parse(errorText);
+        errorMessage = parsed?.message || parsed?.error || errorText;
+      } catch {}
+      console.error('Request failed', {
+        url,
+        method: options.method || 'GET',
+        status: response.status,
+        statusText: response.statusText,
+        message: errorMessage,
+        body: errorText,
+      });
+      throw new Error(`${response.status} ${response.statusText}: ${errorMessage}`);
+    }
+
+    return await response.json();
+  }
+
+  /**
+   * Make a public API request (no authentication required)
+   */
+  async publicRequest<T>(
+    endpoint: string,
+    options: RequestInit = {}
+  ): Promise<T> {
+    const url = `${this.baseURL}${endpoint}`;
+    const headers = {
+      'Content-Type': 'application/json',
+      ...options.headers,
+    };
+
+    const response = await fetch(url, {
+      ...options,
+      headers,
+    });
+
+    if (!response.ok) {
+      // Capture error body for debugging
+      let errorText = '';
+      try {
+        errorText = await response.text();
+      } catch {}
+      let errorMessage = errorText;
+      try {
+        const parsed = JSON.parse(errorText);
+        errorMessage = parsed?.message || parsed?.error || errorText;
+      } catch {}
+      console.error('Public request failed', {
+        url,
+        method: options.method || 'GET',
+        status: response.status,
+        statusText: response.statusText,
+        message: errorMessage,
+        body: errorText,
+      });
+      throw new Error(`${response.status} ${response.statusText}: ${errorMessage}`);
+    }
+
+    return await response.json();
+  }
+
+  /**
+   * Deploy a flow
+   */
+  async deployFlow(flowData: FlowData): Promise<{ success: boolean; message: string }> {
+    return this.authenticatedRequest('/api/v1/flows/deploy', {
       method: 'POST',
       body: JSON.stringify(flowData),
     });
   }
 
-  static async saveFlow(flowData: FlowData, flowId?: string): Promise<{ id: string; success: boolean }> {
-    const endpoint = flowId ? `/flows/${flowId}` : '/flows';
+  /**
+   * Save a flow
+   */
+  async saveFlow(flowData: FlowData, flowId?: string): Promise<{ id: string; success: boolean }> {
+    const endpoint = flowId ? `/api/v1/flows/${flowId}` : '/api/v1/flows';
     const method = flowId ? 'PUT' : 'POST';
     
-    return this.request(endpoint, {
+    return this.authenticatedRequest(endpoint, {
       method,
       body: JSON.stringify(flowData),
     });
   }
 
-  static async loadFlow(flowId: string): Promise<FlowData> {
-    return this.request(`/flows/${flowId}`);
+  /**
+   * Load a flow by ID
+   */
+  async loadFlow(flowId: string): Promise<FlowData> {
+    return this.authenticatedRequest(`/api/v1/flows/${flowId}`);
   }
 
-  static async listFlows(): Promise<{ id: string; name: string; createdAt: string }[]> {
-    return this.request('/flows');
+  /**
+   * List all flows
+   */
+  async listFlows(): Promise<{ id: string; name: string; createdAt: string }[]> {
+    return this.authenticatedRequest('/api/v1/flows');
   }
 
-  static async deleteFlow(flowId: string): Promise<{ success: boolean }> {
-    return this.request(`/flows/${flowId}`, {
+  /**
+   * Delete a flow
+   */
+  async deleteFlow(flowId: string): Promise<{ success: boolean }> {
+    return this.authenticatedRequest(`/api/v1/flows/${flowId}`, {
       method: 'DELETE',
     });
   }
-} 
+
+  /**
+   * Upload a file with type parameter
+   */
+  async uploadFile(file: File, type: 'ECORE' | 'GEN_MODEL' | 'REACTION'): Promise<{ data: string; message: string }> {
+    const token = await AuthService.ensureValidToken();
+    
+    if (!token) {
+      throw new Error('No valid authentication token available');
+    }
+
+    const formData = new FormData();
+    formData.append('file', file);
+
+    const url = `${this.baseURL}/api/upload/type=${type}`;
+    const headers = {
+      'Authorization': `Bearer ${token}`,
+      // Don't set Content-Type for FormData, let the browser set it with boundary
+    };
+
+    const response = await fetch(url, {
+      method: 'POST',
+      headers,
+      body: formData,
+    });
+
+    console.log(`Response status: ${response.status} for upload type ${type}`);
+
+    if (!response.ok) {
+      if (response.status === 401) {
+        // Token might be invalid, try to refresh
+        try {
+          await AuthService.refreshToken();
+          // Retry the request with the new token
+          const newToken = await AuthService.ensureValidToken();
+          if (newToken) {
+            const retryResponse = await fetch(url, {
+              method: 'POST',
+              headers: {
+                'Authorization': `Bearer ${newToken}`,
+              },
+              body: formData,
+            });
+
+            if (!retryResponse.ok) {
+              let retryErrorText = '';
+              try {
+                retryErrorText = await retryResponse.text();
+              } catch {}
+              let retryErrorMessage = retryErrorText;
+              try {
+                const parsed = JSON.parse(retryErrorText);
+                retryErrorMessage = parsed?.message || parsed?.error || retryErrorText;
+              } catch {}
+              console.error('Upload failed after token refresh', {
+                url,
+                type,
+                status: retryResponse.status,
+                statusText: retryResponse.statusText,
+                message: retryErrorMessage,
+                body: retryErrorText,
+              });
+              throw new Error(`${retryResponse.status} ${retryResponse.statusText}: ${retryErrorMessage}`);
+            }
+
+            const result = await retryResponse.json();
+            console.log(`Successful upload for type ${type}:`, result);
+            return result;
+          }
+        } catch (refreshError) {
+          console.error('Token refresh failed during upload:', refreshError);
+          // If refresh fails, the user will be signed out by the auth service
+        }
+      }
+      let errorText = '';
+      try {
+        errorText = await response.text();
+      } catch {}
+      let errorMessage = errorText;
+      try {
+        const parsed = JSON.parse(errorText);
+        errorMessage = parsed?.message || parsed?.error || errorText;
+      } catch {}
+      console.error('Upload failed', {
+        url,
+        type,
+        status: response.status,
+        statusText: response.statusText,
+        message: errorMessage,
+        body: errorText,
+      });
+      throw new Error(`${response.status} ${response.statusText}: ${errorMessage}`);
+    }
+
+    const result = await response.json();
+    console.log(`Successful upload for type ${type}:`, result);
+    return result;
+  }
+
+  /**
+   * Create a meta model
+   */
+  async createMetaModel(data: {
+    name: string;
+    description: string;
+    domain: string;
+    keyword: string[];
+    ecoreFileId: number;
+    genModelFileId: number;
+  }): Promise<{ data: any; message: string }> {
+    return this.authenticatedRequest('/api/v1/meta-models', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  }
+
+  /**
+   * Get all meta models
+   */
+  async getMetaModels(): Promise<{ data: any[]; message: string }> {
+    return this.authenticatedRequest('/api/v1/meta-models');
+  }
+
+  /**
+   * Find meta models with filters
+   */
+  async findMetaModels(filters: {
+    name?: string;
+    description?: string;
+    domain?: string;
+    keyword?: string[];
+    ecoreFileId?: number;
+    genModelFileId?: number;
+    createdFrom?: string;
+    createdTo?: string;
+  }): Promise<{ data: any[]; message: string }> {
+    return this.authenticatedRequest('/api/v1/meta-models/find-all', {
+      method: 'POST',
+      body: JSON.stringify(filters),
+    });
+  }
+
+  /**
+   * Get a specific meta model by ID
+   */
+  async getMetaModel(id: string): Promise<{ data: any; message: string }> {
+    return this.authenticatedRequest(`/api/v1/meta-models/${id}`);
+  }
+
+  /**
+   * Update a meta model
+   */
+  async updateMetaModel(id: string, data: {
+    name?: string;
+    description?: string;
+    domain?: string;
+    keyword?: string[];
+  }): Promise<{ data: any; message: string }> {
+    return this.authenticatedRequest(`/api/v1/meta-models/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    });
+  }
+
+  /**
+   * Delete a meta model
+   */
+  async deleteMetaModel(id: string): Promise<{ data: any; message: string }> {
+    return this.authenticatedRequest(`/api/v1/meta-models/${id}`, {
+      method: 'DELETE',
+    });
+  }
+
+  /**
+   * Get the current base URL
+   */
+  getBaseURL(): string {
+    return this.baseURL;
+  }
+
+  /**
+   * Set a new base URL
+   */
+  setBaseURL(url: string): void {
+    this.baseURL = url;
+  }
+}
+
+// Export a singleton instance
+export const apiService = new ApiService();
+
+// Example API methods using the authenticated service
+export const userApi = {
+  // Get current user profile
+  getProfile: () => apiService.authenticatedRequest('/api/v1/users/profile'),
+  
+  // Update user profile
+  updateProfile: (data: any) => apiService.authenticatedRequest('/api/v1/users/profile', {
+    method: 'PUT',
+    body: JSON.stringify(data),
+  }),
+  
+  // Get user settings
+  getSettings: () => apiService.authenticatedRequest('/api/v1/users/settings'),
+};
+
+export const projectApi = {
+  // Get user's projects
+  getProjects: () => apiService.authenticatedRequest('/api/v1/projects'),
+  
+  // Create a new project
+  createProject: (data: any) => apiService.authenticatedRequest('/api/v1/projects', {
+    method: 'POST',
+    body: JSON.stringify(data),
+  }),
+  
+  // Get project by ID
+  getProject: (id: string) => apiService.authenticatedRequest(`/api/v1/projects/${id}`),
+  
+  // Update project
+  updateProject: (id: string, data: any) => apiService.authenticatedRequest(`/api/v1/projects/${id}`, {
+    method: 'PUT',
+    body: JSON.stringify(data),
+  }),
+  
+  // Delete project
+  deleteProject: (id: string) => apiService.authenticatedRequest(`/api/v1/projects/${id}`, {
+    method: 'DELETE',
+  }),
+};
+
+// Export the class for testing or custom instances
+export { ApiService }; 

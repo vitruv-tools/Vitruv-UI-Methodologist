@@ -7,6 +7,7 @@ interface UMLNodeData {
   toolName?: string;
   diagramType?: string;
   onLabelChange?: (id: string, label: string) => void;
+  onDelete?: (id: string) => void;
   // Extended data for comprehensive editing
   className?: string;
   attributes?: string[];
@@ -409,27 +410,16 @@ function EditableField({ value, onSave, placeholder, style, multiline = false, o
 }
 
 export function EditableNode({ id, data, selected, isConnectable, xPos, yPos, ...rest }: NodeProps<UMLNodeData>) {
-  // Extended state for comprehensive editing
-  const [nodeData, setNodeData] = useState<UMLNodeData>({
-    ...data,
-    className: data.className || data.label || 'Class',
-    attributes: data.attributes || ['+ id: Long', '+ name: String', '# type: String'],
-    methods: data.methods || ['+ validate(): Boolean', '+ process(): void'],
-    values: data.values || ['RED', 'GREEN', 'BLUE'],
-    packageName: data.packageName || 'Package'
-  });
+  const nodeData = data || {};
+  
+  const updateNodeData = (updates: Partial<UMLNodeData>) => {
+    // This will be handled by the parent component through onNodesChange
+    console.log('Node data update:', updates);
+  };
 
-  // Debug logging
-  console.log('EditableNode render:', { id, data, selected });
-
-  // Update parent when data changes
-  const updateNodeData = (newData: Partial<UMLNodeData>) => {
-    const updatedData = { ...nodeData, ...newData };
-    setNodeData(updatedData);
-    
-    // Update parent component
-    if (data.onLabelChange) {
-      data.onLabelChange(id, updatedData.className || updatedData.label || '');
+  const handleDelete = () => {
+    if (nodeData.onDelete) {
+      nodeData.onDelete(id);
     }
   };
 
@@ -447,8 +437,8 @@ export function EditableNode({ id, data, selected, isConnectable, xPos, yPos, ..
       overflow: 'hidden',
     };
 
-    if (data.toolType === 'element') {
-      switch (data.toolName) {
+    if (nodeData.toolType === 'element') {
+      switch (nodeData.toolName) {
         case 'class':
           return {
             ...baseStyle,
@@ -499,14 +489,14 @@ export function EditableNode({ id, data, selected, isConnectable, xPos, yPos, ..
         default:
           return baseStyle;
       }
-    } else if (data.toolType === 'member') {
+    } else if (nodeData.toolType === 'member') {
       return {
         ...baseStyle,
         minHeight: '40px',
         borderRadius: '4px',
         boxShadow: selected ? '0 0 0 2px #cde3fa' : '0 2px 8px rgba(0,0,0,0.1)',
       };
-    } else if (data.toolType === 'multiplicity') {
+    } else if (nodeData.toolType === 'multiplicity') {
       return {
         ...baseStyle,
         minHeight: '30px',
@@ -521,6 +511,43 @@ export function EditableNode({ id, data, selected, isConnectable, xPos, yPos, ..
   // Render UML Class with editable fields
   const renderUMLClass = () => (
     <div style={{ width: '100%' }}>
+      {/* Delete button - only show when selected */}
+      {selected && (
+        <button
+          onClick={handleDelete}
+          style={{
+            position: 'absolute',
+            top: '-8px',
+            right: '-8px',
+            background: '#e74c3c',
+            color: 'white',
+            border: 'none',
+            borderRadius: '50%',
+            width: '20px',
+            height: '20px',
+            fontSize: '12px',
+            cursor: 'pointer',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 10,
+            boxShadow: '0 2px 4px rgba(0,0,0,0.2)',
+            transition: 'all 0.2s ease'
+          }}
+          onMouseEnter={(e) => {
+            e.currentTarget.style.background = '#c0392b';
+            e.currentTarget.style.transform = 'scale(1.1)';
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.background = '#e74c3c';
+            e.currentTarget.style.transform = 'scale(1)';
+          }}
+          title="Delete node"
+        >
+          ×
+        </button>
+      )}
+      
       {/* Class name section */}
       <div style={{
         background: '#f8fff8',
@@ -666,6 +693,42 @@ export function EditableNode({ id, data, selected, isConnectable, xPos, yPos, ..
   // Render UML Abstract Class
   const renderUMLAbstractClass = () => (
     <div style={{ width: '100%' }}>
+      {/* Delete button - only show when selected */}
+      {selected && (
+        <button
+          onClick={handleDelete}
+          style={{
+            position: 'absolute',
+            top: '-8px',
+            right: '-8px',
+            background: '#e74c3c',
+            color: 'white',
+            border: 'none',
+            borderRadius: '50%',
+            width: '20px',
+            height: '20px',
+            fontSize: '12px',
+            cursor: 'pointer',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 10,
+            boxShadow: '0 2px 4px rgba(0,0,0,0.2)',
+            transition: 'all 0.2s ease'
+          }}
+          onMouseEnter={(e) => {
+            e.currentTarget.style.background = '#c0392b';
+            e.currentTarget.style.transform = 'scale(1.1)';
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.background = '#e74c3c';
+            e.currentTarget.style.transform = 'scale(1)';
+          }}
+          title="Delete node"
+        >
+          ×
+        </button>
+      )}
       {/* Abstract class name section */}
       <div style={{
         background: '#f0f8f0',
@@ -861,6 +924,42 @@ export function EditableNode({ id, data, selected, isConnectable, xPos, yPos, ..
   // Render UML Interface
   const renderUMLInterface = () => (
     <div style={{ width: '100%' }}>
+      {/* Delete button - only show when selected */}
+      {selected && (
+        <button
+          onClick={handleDelete}
+          style={{
+            position: 'absolute',
+            top: '-8px',
+            right: '-8px',
+            background: '#e74c3c',
+            color: 'white',
+            border: 'none',
+            borderRadius: '50%',
+            width: '20px',
+            height: '20px',
+            fontSize: '12px',
+            cursor: 'pointer',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 10,
+            boxShadow: '0 2px 4px rgba(0,0,0,0.2)',
+            transition: 'all 0.2s ease'
+          }}
+          onMouseEnter={(e) => {
+            e.currentTarget.style.background = '#c0392b';
+            e.currentTarget.style.transform = 'scale(1.1)';
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.background = '#e74c3c';
+            e.currentTarget.style.transform = 'scale(1)';
+          }}
+          title="Delete node"
+        >
+          ×
+        </button>
+      )}
       {/* Interface name section */}
       <div style={{
         background: '#fdf0f0',
@@ -971,6 +1070,42 @@ export function EditableNode({ id, data, selected, isConnectable, xPos, yPos, ..
   // Render UML Enumeration
   const renderUMLEnumeration = () => (
     <div style={{ width: '100%' }}>
+      {/* Delete button - only show when selected */}
+      {selected && (
+        <button
+          onClick={handleDelete}
+          style={{
+            position: 'absolute',
+            top: '-8px',
+            right: '-8px',
+            background: '#e74c3c',
+            color: 'white',
+            border: 'none',
+            borderRadius: '50%',
+            width: '20px',
+            height: '20px',
+            fontSize: '12px',
+            cursor: 'pointer',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 10,
+            boxShadow: '0 2px 4px rgba(0,0,0,0.2)',
+            transition: 'all 0.2s ease'
+          }}
+          onMouseEnter={(e) => {
+            e.currentTarget.style.background = '#c0392b';
+            e.currentTarget.style.transform = 'scale(1.1)';
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.background = '#e74c3c';
+            e.currentTarget.style.transform = 'scale(1)';
+          }}
+          title="Delete node"
+        >
+          ×
+        </button>
+      )}
       {/* Enum name section */}
       <div style={{
         background: '#f8f0f8',
@@ -1081,6 +1216,42 @@ export function EditableNode({ id, data, selected, isConnectable, xPos, yPos, ..
   // Render UML Package
   const renderUMLPackage = () => (
     <div style={{ width: '100%' }}>
+      {/* Delete button - only show when selected */}
+      {selected && (
+        <button
+          onClick={handleDelete}
+          style={{
+            position: 'absolute',
+            top: '-8px',
+            right: '-8px',
+            background: '#e74c3c',
+            color: 'white',
+            border: 'none',
+            borderRadius: '50%',
+            width: '20px',
+            height: '20px',
+            fontSize: '12px',
+            cursor: 'pointer',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 10,
+            boxShadow: '0 2px 4px rgba(0,0,0,0.2)',
+            transition: 'all 0.2s ease'
+          }}
+          onMouseEnter={(e) => {
+            e.currentTarget.style.background = '#c0392b';
+            e.currentTarget.style.transform = 'scale(1.1)';
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.background = '#e74c3c';
+            e.currentTarget.style.transform = 'scale(1)';
+          }}
+          title="Delete node"
+        >
+          ×
+        </button>
+      )}
       {/* Package name section with tab design */}
       <div style={{
         background: '#fdf8f0',
@@ -1170,10 +1341,10 @@ export function EditableNode({ id, data, selected, isConnectable, xPos, yPos, ..
 
   // Get the appropriate renderer based on tool type
   const getRenderer = () => {
-    console.log('getRenderer called with:', { toolType: data.toolType, toolName: data.toolName });
+    console.log('getRenderer called with:', { toolType: nodeData.toolType, toolName: nodeData.toolName });
     
-    if (data.toolType === 'element') {
-      switch (data.toolName) {
+    if (nodeData.toolType === 'element') {
+      switch (nodeData.toolName) {
         case 'class':
           console.log('Rendering UML Class');
           return renderUMLClass();
@@ -1193,13 +1364,13 @@ export function EditableNode({ id, data, selected, isConnectable, xPos, yPos, ..
           console.log('Unknown element type, falling back to relationship');
           return renderRelationship();
       }
-    } else if (data.toolType === 'member') {
+    } else if (nodeData.toolType === 'member') {
       console.log('Rendering UML Member');
       return renderUMLMember();
-    } else if (data.toolType === 'relationship') {
+    } else if (nodeData.toolType === 'relationship') {
       console.log('Rendering Relationship');
       return renderRelationship();
-    } else if (data.toolType === 'multiplicity') {
+    } else if (nodeData.toolType === 'multiplicity') {
       console.log('Rendering Multiplicity');
       return renderMultiplicity();
     }

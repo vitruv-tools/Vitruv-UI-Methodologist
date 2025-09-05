@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
+import { User } from '../../services/auth';
 
 interface HeaderProps {
   onSave?: () => void;
@@ -6,10 +7,7 @@ interface HeaderProps {
   onLoad?: () => void;
   onNew?: () => void;
   title?: string;
-  user?: {
-    name: string;
-    email?: string;
-  };
+  user?: User | null;
   onLogout?: () => void;
 }
 

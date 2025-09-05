@@ -1,10 +1,93 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useState, useEffect } from 'react';
 import { useNodesState, useEdgesState, addEdge, Connection, Edge, Node } from 'reactflow';
+import { useUndoRedo } from './useUndoRedo';
 
 export function useFlowState() {
   const [nodes, setNodes, onNodesChange] = useNodesState([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState([]);
   const [idCounter, setIdCounter] = useState(1);
+  const [isApplyingState, setIsApplyingState] = useState(false);
+  const [lastSavedState, setLastSavedState] = useState<{ nodes: Node[]; edges: Edge[]; idCounter: number }>({ 
+    nodes: [], 
+    edges: [], 
+    idCounter: 1 
+  });
+
+  // Initialize undo/redo with current state
+  const {
+    currentState,
+    saveState,
+    undo,
+    redo,
+    canUndo,
+    canRedo,
+    clearHistory
+  } = useUndoRedo({
+    nodes: [],
+    edges: [],
+    idCounter: 1
+  });
+
+  // Save state to history whenever nodes or edges change
+  useEffect(() => {
+    if (isApplyingState) return; // Don't save when applying undo/redo state
+    
+    const currentDiagramState = {
+      nodes,
+      edges,
+      idCounter
+    };
+    
+    // Check if there's actually a meaningful change to save
+    const hasChanged = 
+      lastSavedState.nodes.length !== nodes.length ||
+      lastSavedState.edges.length !== edges.length ||
+      lastSavedState.idCounter !== idCounter ||
+      JSON.stringify(lastSavedState.nodes) !== JSON.stringify(nodes) ||
+      JSON.stringify(lastSavedState.edges) !== JSON.stringify(edges);
+    
+    if (hasChanged && (nodes.length > 0 || edges.length > 0 || idCounter > 1)) {
+      // Create a more descriptive action name based on what changed
+      let actionDescription = 'Diagram change';
+      
+      if (lastSavedState.nodes.length !== nodes.length) {
+        if (nodes.length > lastSavedState.nodes.length) {
+          actionDescription = 'Node added';
+        } else {
+          actionDescription = 'Node deleted';
+        }
+      } else if (lastSavedState.edges.length !== edges.length) {
+        if (edges.length > lastSavedState.edges.length) {
+          actionDescription = 'Connection added';
+        } else {
+          actionDescription = 'Connection deleted';
+        }
+      } else if (nodes.length > 0) {
+        actionDescription = 'Node modified';
+      }
+      
+      console.log(`Saving state: ${actionDescription}`, {
+        nodesBefore: lastSavedState.nodes.length,
+        nodesAfter: nodes.length,
+        edgesBefore: lastSavedState.edges.length,
+        edgesAfter: edges.length
+      });
+      
+      saveState(currentDiagramState, actionDescription);
+      setLastSavedState(currentDiagramState);
+    }
+  }, [nodes, edges, idCounter, saveState, isApplyingState, lastSavedState]);
+
+  // Apply state from undo/redo
+  const applyState = useCallback((state: { nodes: Node[]; edges: Edge[]; idCounter: number }) => {
+    setIsApplyingState(true);
+    setNodes(state.nodes);
+    setEdges(state.edges);
+    setIdCounter(state.idCounter);
+    setLastSavedState(state); // Update the last saved state to match the applied state
+    // Reset the flag after a short delay to allow state to update
+    setTimeout(() => setIsApplyingState(false), 100);
+  }, [setNodes, setEdges]);
 
   const getId = useCallback(() => {
     const newId = idCounter.toString();
@@ -84,7 +167,23 @@ export function useFlowState() {
     setNodes([]);
     setEdges([]);
     setIdCounter(1);
-  }, [setNodes, setEdges]);
+    clearHistory();
+  }, [setNodes, setEdges, clearHistory]);
+
+  // Undo/Redo handlers
+  const handleUndo = useCallback(() => {
+    const previousState = undo();
+    if (previousState) {
+      applyState(previousState);
+    }
+  }, [undo, applyState]);
+
+  const handleRedo = useCallback(() => {
+    const nextState = redo();
+    if (nextState) {
+      applyState(nextState);
+    }
+  }, [redo, applyState]);
 
   return {
     nodes,
@@ -101,5 +200,10 @@ export function useFlowState() {
     getId,
     setNodes,
     setEdges,
+    // Undo/Redo functionality
+    undo: handleUndo,
+    redo: handleRedo,
+    canUndo,
+    canRedo,
   };
 } 
