@@ -9,9 +9,7 @@ export { EditableNode } from './flow/EditableNode';
 export { EcoreFileBox } from './flow/EcoreFileBox';
 
 // UI components
-export { Button } from './ui/Button';
-export { TreeMenu } from './ui/TreeMenu';
-export { ToolsPanel } from './ui/ToolsPanel'; 
+export { ToolsPanel } from './ui/ToolsPanel';
 export { ConfirmDialog } from './ui/ConfirmDialog';
 export { CreateModelModal } from './ui/CreateModelModal';
 

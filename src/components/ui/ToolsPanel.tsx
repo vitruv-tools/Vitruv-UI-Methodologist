@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { CreateModelModal } from './CreateModelModal';
 import { apiService } from '../../services/api';
 
@@ -61,17 +61,7 @@ const createButtonActiveStyle: React.CSSProperties = {
   boxShadow: '0 2px 8px rgba(52, 152, 219, 0.3)',
 };
 
-const instructionsStyle: React.CSSProperties = {
-  marginBottom: '12px',
-  fontSize: '13px',
-  color: '#5a6c7d',
-  fontStyle: 'italic',
-  fontFamily: 'Georgia, serif',
-};
-
-const fileInputStyle: React.CSSProperties = {
-  display: 'none',
-};
+// ... existing code ...
 
 const filterContainerStyle: React.CSSProperties = {
   marginBottom: '16px',
@@ -191,20 +181,7 @@ const fileMetaStyle: React.CSSProperties = {
   fontStyle: 'italic',
 };
 
-const deleteButtonStyle: React.CSSProperties = {
-  position: 'absolute',
-  right: '8px',
-  top: '8px',
-  background: 'transparent',
-  border: 'none',
-  color: '#dc3545',
-  padding: '4px 8px',
-  borderRadius: '4px',
-  cursor: 'pointer',
-  fontSize: '11px',
-  fontWeight: '600',
-  transition: 'all 0.2s ease',
-};
+// ... existing code ...
 
 const emptyStateStyle: React.CSSProperties = {
   fontSize: '13px',
@@ -216,7 +193,7 @@ const emptyStateStyle: React.CSSProperties = {
 };
 
 export const ToolsPanel: React.FC<ToolsPanelProps> = ({ onEcoreFileUpload, onEcoreFileDelete }) => {
-  const [isProcessing, setIsProcessing] = useState(false);
+  const [isProcessing] = useState(false);
   const [uploadMessage, setUploadMessage] = useState<string>('');
   const [uploadMessageType, setUploadMessageType] = useState<'success' | 'error'>('success');
   const [showCreateModal, setShowCreateModal] = useState(false);
@@ -357,7 +334,6 @@ export const ToolsPanel: React.FC<ToolsPanelProps> = ({ onEcoreFileUpload, onEco
         )}
       </button>
 
-      {/* Meta Models List */}
       <div style={{
         marginTop: '16px',
         marginBottom: '8px',
@@ -371,7 +347,6 @@ export const ToolsPanel: React.FC<ToolsPanelProps> = ({ onEcoreFileUpload, onEco
         Meta Models
       </div>
 
-      {/* Toggle Filters Button and Sort Dropdown */}
       <div style={toggleContainerStyle}>
         <button
           style={toggleButtonStyle}
@@ -401,7 +376,6 @@ export const ToolsPanel: React.FC<ToolsPanelProps> = ({ onEcoreFileUpload, onEco
         </select>
       </div>
 
-      {/* Filters */}
       {showFilters && (
         <div style={filterContainerStyle}>
           <div style={{ fontSize: '12px', fontWeight: '600', color: '#495057', marginBottom: '8px' }}>
@@ -434,7 +408,6 @@ export const ToolsPanel: React.FC<ToolsPanelProps> = ({ onEcoreFileUpload, onEco
         </div>
       )}
 
-      {/* Error Message */}
       {apiError && (
         <div style={{
           padding: '8px 12px',
@@ -450,7 +423,6 @@ export const ToolsPanel: React.FC<ToolsPanelProps> = ({ onEcoreFileUpload, onEco
         </div>
       )}
 
-      {/* Loading State */}
       {isLoadingModels && (
         <div style={{
           padding: '16px',
@@ -464,12 +436,10 @@ export const ToolsPanel: React.FC<ToolsPanelProps> = ({ onEcoreFileUpload, onEco
         </div>
       )}
 
-      {/* Models List */}
       <div>
         {sortedModels.map(model => (
           <div key={model.id} style={fileCardStyle}
             onClick={() => {
-              // Handle API model selection
               if (onEcoreFileUpload) {
                 onEcoreFileUpload(`name="${model.name}"`, { 
                   fileName: `${model.name}.ecore`, 
@@ -524,16 +494,13 @@ export const ToolsPanel: React.FC<ToolsPanelProps> = ({ onEcoreFileUpload, onEco
         )}
       </div>
       
-      {/* Create Model Modal */}
       <CreateModelModal
         isOpen={showCreateModal}
         onClose={() => setShowCreateModal(false)}
         onSuccess={(modelData) => {
-          // Handle successful model creation
           setUploadMessage('Model created successfully!');
           setUploadMessageType('success');
           setTimeout(() => setUploadMessage(''), 3000);
-          // Refresh the models list
           const fetchData = async () => {
             setIsLoadingModels(true);
             setApiError('');

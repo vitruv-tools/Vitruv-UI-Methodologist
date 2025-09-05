@@ -15,7 +15,6 @@ class ApiService {
     endpoint: string,
     options: RequestInit = {}
   ): Promise<T> {
-    // Ensure we have a valid token
     const token = await AuthService.ensureValidToken();
     
     if (!token) {
@@ -36,10 +35,8 @@ class ApiService {
 
     if (!response.ok) {
       if (response.status === 401) {
-        // Token might be invalid, try to refresh
         try {
           await AuthService.refreshToken();
-          // Retry the request with the new token
           const newToken = await AuthService.ensureValidToken();
           if (newToken) {
             const retryResponse = await fetch(url, {
@@ -51,7 +48,6 @@ class ApiService {
             });
 
             if (!retryResponse.ok) {
-              // Capture error body for debugging
               let retryErrorText = '';
               try {
                 retryErrorText = await retryResponse.text();
@@ -76,10 +72,8 @@ class ApiService {
           }
         } catch (refreshError) {
           console.error('Token refresh failed during request:', refreshError);
-          // If refresh fails, the user will be signed out by the auth service
         }
       }
-      // Capture error body for debugging
       let errorText = '';
       try {
         errorText = await response.text();
@@ -122,7 +116,6 @@ class ApiService {
     });
 
     if (!response.ok) {
-      // Capture error body for debugging
       let errorText = '';
       try {
         errorText = await response.text();
@@ -208,7 +201,6 @@ class ApiService {
     const url = `${this.baseURL}/api/upload/type=${type}`;
     const headers = {
       'Authorization': `Bearer ${token}`,
-      // Don't set Content-Type for FormData, let the browser set it with boundary
     };
 
     const response = await fetch(url, {
@@ -221,10 +213,8 @@ class ApiService {
 
     if (!response.ok) {
       if (response.status === 401) {
-        // Token might be invalid, try to refresh
         try {
           await AuthService.refreshToken();
-          // Retry the request with the new token
           const newToken = await AuthService.ensureValidToken();
           if (newToken) {
             const retryResponse = await fetch(url, {
@@ -262,7 +252,6 @@ class ApiService {
           }
         } catch (refreshError) {
           console.error('Token refresh failed during upload:', refreshError);
-          // If refresh fails, the user will be signed out by the auth service
         }
       }
       let errorText = '';
@@ -364,63 +353,14 @@ class ApiService {
     });
   }
 
-  /**
-   * Get the current base URL
-   */
-  getBaseURL(): string {
-    return this.baseURL;
-  }
-
-  /**
-   * Set a new base URL
-   */
-  setBaseURL(url: string): void {
-    this.baseURL = url;
-  }
+  // Removed unused getBaseURL and setBaseURL helpers
 }
 
 // Export a singleton instance
 export const apiService = new ApiService();
 
 // Example API methods using the authenticated service
-export const userApi = {
-  // Get current user profile
-  getProfile: () => apiService.authenticatedRequest('/api/v1/users/profile'),
-  
-  // Update user profile
-  updateProfile: (data: any) => apiService.authenticatedRequest('/api/v1/users/profile', {
-    method: 'PUT',
-    body: JSON.stringify(data),
-  }),
-  
-  // Get user settings
-  getSettings: () => apiService.authenticatedRequest('/api/v1/users/settings'),
-};
-
-export const projectApi = {
-  // Get user's projects
-  getProjects: () => apiService.authenticatedRequest('/api/v1/projects'),
-  
-  // Create a new project
-  createProject: (data: any) => apiService.authenticatedRequest('/api/v1/projects', {
-    method: 'POST',
-    body: JSON.stringify(data),
-  }),
-  
-  // Get project by ID
-  getProject: (id: string) => apiService.authenticatedRequest(`/api/v1/projects/${id}`),
-  
-  // Update project
-  updateProject: (id: string, data: any) => apiService.authenticatedRequest(`/api/v1/projects/${id}`, {
-    method: 'PUT',
-    body: JSON.stringify(data),
-  }),
-  
-  // Delete project
-  deleteProject: (id: string) => apiService.authenticatedRequest(`/api/v1/projects/${id}`, {
-    method: 'DELETE',
-  }),
-};
+// Removed unused userApi and projectApi helpers
 
 // Export the class for testing or custom instances
 export { ApiService }; 

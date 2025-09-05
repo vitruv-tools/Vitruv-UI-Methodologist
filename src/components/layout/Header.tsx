@@ -65,7 +65,6 @@ export function Header({ title = 'Vitruvius Modeler', user, onLogout }: HeaderPr
         <h1 style={{ margin: 0, fontSize: 16, fontWeight: 600 }}>{title}</h1>
       </div>
       <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-        {/* User Avatar */}
         <div ref={menuRef} style={{ position: 'relative' }}>
           <button
             onClick={() => setIsMenuOpen((open) => !open)}
@@ -136,9 +135,6 @@ export function Header({ title = 'Vitruvius Modeler', user, onLogout }: HeaderPr
                   setIsMenuOpen(false);
                   if (onLogout) {
                     onLogout();
-                  } else {
-                    // Fallback behavior if no onLogout provided
-                    console.log('Logout clicked');
                   }
                 }}
                 style={{

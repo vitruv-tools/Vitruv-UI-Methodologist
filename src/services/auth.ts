@@ -79,7 +79,6 @@ export class AuthService {
 
     const data: AuthResponse = await response.json();
     
-    // Store tokens in localStorage
     localStorage.setItem('auth.access_token', data.access_token);
     localStorage.setItem('auth.refresh_token', data.refresh_token);
     localStorage.setItem('auth.expires_in', data.expires_in.toString());
@@ -89,7 +88,6 @@ export class AuthService {
     localStorage.setItem('auth.scope', data.scope);
     localStorage.setItem('auth.not_before_policy', data['not-before-policy'].toString());
     
-    // Calculate and store expiration times
     const accessExpiresAt = Date.now() + (data.expires_in * 1000);
     const refreshExpiresAt = Date.now() + (data.refresh_expires_in * 1000);
     localStorage.setItem('auth.access_expires_at', accessExpiresAt.toString());
@@ -122,7 +120,6 @@ export class AuthService {
 
       const data: AuthResponse = await response.json();
       
-      // Update stored tokens
       localStorage.setItem('auth.access_token', data.access_token);
       localStorage.setItem('auth.refresh_token', data.refresh_token);
       localStorage.setItem('auth.expires_in', data.expires_in.toString());
@@ -132,7 +129,6 @@ export class AuthService {
       localStorage.setItem('auth.scope', data.scope);
       localStorage.setItem('auth.not_before_policy', data['not-before-policy'].toString());
       
-      // Update expiration times
       const accessExpiresAt = Date.now() + (data.expires_in * 1000);
       const refreshExpiresAt = Date.now() + (data.refresh_expires_in * 1000);
       localStorage.setItem('auth.access_expires_at', accessExpiresAt.toString());
@@ -147,7 +143,6 @@ export class AuthService {
   }
 
   static async signOut(): Promise<void> {
-    // Clear all auth data from localStorage
     localStorage.removeItem('auth.access_token');
     localStorage.removeItem('auth.refresh_token');
     localStorage.removeItem('auth.expires_in');
@@ -169,14 +164,11 @@ export class AuthService {
       return false;
     }
 
-    // Check if access token has expired
     const now = Date.now();
     const expirationTime = parseInt(accessExpiresAt, 10);
     
     if (now >= expirationTime) {
-      // Access token expired, try to refresh
       this.refreshToken().catch(() => {
-        // If refresh fails, clear auth and return false
         this.signOut();
       });
       return false;
@@ -193,12 +185,10 @@ export class AuthService {
       return null;
     }
 
-    // Check if access token has expired
     const now = Date.now();
     const expirationTime = parseInt(accessExpiresAt, 10);
     
     if (now >= expirationTime) {
-      // Access token expired, try to refresh
       try {
         const refreshResult = await this.refreshToken();
         if (refreshResult) {
@@ -239,43 +229,5 @@ export class AuthService {
     localStorage.setItem('auth.user', JSON.stringify(user));
   }
 
-  // Legacy method for backward compatibility (keeping the old API endpoint)
-  static async signInLegacy(credentials: SignInCredentials): Promise<AuthResponse> {
-    const formData = new URLSearchParams();
-    formData.append('client_id', this.CLIENT_ID);
-    formData.append('username', credentials.username);
-    formData.append('password', credentials.password);
-    formData.append('grant_type', this.GRANT_TYPE);
-
-    const response = await fetch(`${this.API_BASE_URL}/realms/exit/protocol/openid-connect/token`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/x-www-form-urlencoded',
-      },
-      body: formData,
-    });
-
-    if (!response.ok) {
-      const errorData = await response.json().catch(() => ({}));
-      throw new Error(errorData.error_description || `HTTP error! status: ${response.status}`);
-    }
-
-    const data: AuthResponse = await response.json();
-    
-    // Store tokens in localStorage
-    localStorage.setItem('auth.access_token', data.access_token);
-    localStorage.setItem('auth.refresh_token', data.refresh_token);
-    localStorage.setItem('auth.expires_in', data.expires_in.toString());
-    localStorage.setItem('auth.refresh_expires_in', data.refresh_expires_in.toString());
-    localStorage.setItem('auth.token_type', data.token_type);
-    localStorage.setItem('auth.session_state', data.session_state);
-    localStorage.setItem('auth.scope', data.scope);
-    localStorage.setItem('auth.not_before_policy', data['not-before-policy'].toString());
-    
-    // Calculate and store expiration time
-    const expiresAt = Date.now() + (data.expires_in * 1000);
-    localStorage.setItem('auth.expires_at', expiresAt.toString());
-
-    return data;
-  }
+  // Removed unused legacy signIn method
 }

@@ -8,7 +8,6 @@ interface UMLNodeData {
   diagramType?: string;
   onLabelChange?: (id: string, label: string) => void;
   onDelete?: (id: string) => void;
-  // Extended data for comprehensive editing
   className?: string;
   attributes?: string[];
   methods?: string[];
@@ -26,8 +25,6 @@ interface EditableFieldProps {
   showDelete?: boolean;
   showVisibility?: boolean;
 }
-
-// Reusable editable field component
 function EditableField({ value, onSave, placeholder, style, multiline = false, onDelete, showDelete = false, showVisibility = false }: EditableFieldProps & { onDelete?: () => void, showDelete?: boolean, showVisibility?: boolean }) {
   const [editing, setEditing] = useState(false);
   const [editValue, setEditValue] = useState(value);
@@ -197,7 +194,6 @@ function EditableField({ value, onSave, placeholder, style, multiline = false, o
         {value || placeholder}
       </div>
       
-      {/* Visibility options popup */}
       {showVisibilityOptions && showVisibility && (
         <div style={{
           position: 'absolute',
@@ -285,7 +281,6 @@ function EditableField({ value, onSave, placeholder, style, multiline = false, o
         </div>
       )}
       
-      {/* Options popup */}
       {showOptions && showDelete && onDelete && (
         <div style={{
           position: 'absolute',
@@ -343,7 +338,6 @@ function EditableField({ value, onSave, placeholder, style, multiline = false, o
         </div>
       )}
 
-      {/* Delete confirmation popup */}
       {showDeleteConfirm && onDelete && (
         <div style={{
           position: 'absolute',
@@ -413,7 +407,6 @@ export function EditableNode({ id, data, selected, isConnectable, xPos, yPos, ..
   const nodeData = data || {};
   
   const updateNodeData = (updates: Partial<UMLNodeData>) => {
-    // This will be handled by the parent component through onNodesChange
     console.log('Node data update:', updates);
   };
 
@@ -423,7 +416,6 @@ export function EditableNode({ id, data, selected, isConnectable, xPos, yPos, ..
     }
   };
 
-  // Get node style based on tool type
   const getNodeStyle = () => {
     const baseStyle = {
       padding: '0px',
@@ -508,10 +500,8 @@ export function EditableNode({ id, data, selected, isConnectable, xPos, yPos, ..
     return baseStyle;
   };
 
-  // Render UML Class with editable fields
   const renderUMLClass = () => (
     <div style={{ width: '100%' }}>
-      {/* Delete button - only show when selected */}
       {selected && (
         <button
           onClick={handleDelete}
@@ -548,7 +538,6 @@ export function EditableNode({ id, data, selected, isConnectable, xPos, yPos, ..
         </button>
       )}
       
-      {/* Class name section */}
       <div style={{
         background: '#f8fff8',
         borderBottom: '1px solid #2ecc71',
@@ -575,7 +564,6 @@ export function EditableNode({ id, data, selected, isConnectable, xPos, yPos, ..
         />
       </div>
       
-      {/* Attributes section */}
       <div style={{
         borderBottom: '1px solid #2ecc71',
         padding: '8px 0',
@@ -632,7 +620,6 @@ export function EditableNode({ id, data, selected, isConnectable, xPos, yPos, ..
         </div>
       </div>
       
-      {/* Methods section */}
       <div style={{
         padding: '8px 0',
         fontSize: '12px',

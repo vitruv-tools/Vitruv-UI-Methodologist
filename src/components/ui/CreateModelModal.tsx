@@ -16,10 +16,7 @@ interface CreateModelRequest {
   genModelFileId: number;
 }
 
-interface CreateModelResponse {
-  data: any;
-  message: string;
-}
+// ... existing code ...
 
 // Modal styles
 const modalOverlayStyle: React.CSSProperties = {
@@ -268,10 +265,7 @@ export const CreateModelModal: React.FC<CreateModelModalProps> = ({
     keywords: '',
   });
 
-  const [uploadedFiles, setUploadedFiles] = useState({
-    ecoreFile: null as File | null,
-    genmodelFile: null as File | null,
-  });
+  // Removed unused uploadedFiles state
 
   const [uploadedFileIds, setUploadedFileIds] = useState({
     ecoreFileId: 0,
@@ -316,7 +310,6 @@ export const CreateModelModal: React.FC<CreateModelModalProps> = ({
       }
       
       setUploadedFileIds(prev => ({ ...prev, ecoreFileId: fileId }));
-      setUploadedFiles(prev => ({ ...prev, ecoreFile: file }));
       setSuccess(`Successfully uploaded ${file.name}`);
       setTimeout(() => setSuccess(''), 3000);
     } catch (err) {
@@ -358,7 +351,6 @@ export const CreateModelModal: React.FC<CreateModelModalProps> = ({
       }
       
       setUploadedFileIds(prev => ({ ...prev, genModelFileId: fileId }));
-      setUploadedFiles(prev => ({ ...prev, genmodelFile: file }));
       setSuccess(`Successfully uploaded ${file.name}`);
       setTimeout(() => setSuccess(''), 3000);
     } catch (err) {
@@ -415,10 +407,7 @@ export const CreateModelModal: React.FC<CreateModelModalProps> = ({
       domain: '',
       keywords: '',
     });
-    setUploadedFiles({
-      ecoreFile: null,
-      genmodelFile: null,
-    });
+    // Reset removed uploadedFiles state omitted
     setUploadedFileIds({
       ecoreFileId: 0,
       genModelFileId: 0,

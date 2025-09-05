@@ -1,5 +1,5 @@
 import { useCallback, useState, useEffect } from 'react';
-import { useNodesState, useEdgesState, addEdge, Connection, Edge, Node } from 'reactflow';
+import { useNodesState, useEdgesState, Connection, Edge, Node } from 'reactflow';
 import { useUndoRedo } from './useUndoRedo';
 
 export function useFlowState() {
@@ -15,7 +15,6 @@ export function useFlowState() {
 
   // Initialize undo/redo with current state
   const {
-    currentState,
     saveState,
     undo,
     redo,
@@ -28,9 +27,8 @@ export function useFlowState() {
     idCounter: 1
   });
 
-  // Save state to history whenever nodes or edges change
   useEffect(() => {
-    if (isApplyingState) return; // Don't save when applying undo/redo state
+    if (isApplyingState) return;
     
     const currentDiagramState = {
       nodes,
@@ -38,7 +36,6 @@ export function useFlowState() {
       idCounter
     };
     
-    // Check if there's actually a meaningful change to save
     const hasChanged = 
       lastSavedState.nodes.length !== nodes.length ||
       lastSavedState.edges.length !== edges.length ||
@@ -47,7 +44,6 @@ export function useFlowState() {
       JSON.stringify(lastSavedState.edges) !== JSON.stringify(edges);
     
     if (hasChanged && (nodes.length > 0 || edges.length > 0 || idCounter > 1)) {
-      // Create a more descriptive action name based on what changed
       let actionDescription = 'Diagram change';
       
       if (lastSavedState.nodes.length !== nodes.length) {
@@ -78,14 +74,12 @@ export function useFlowState() {
     }
   }, [nodes, edges, idCounter, saveState, isApplyingState, lastSavedState]);
 
-  // Apply state from undo/redo
   const applyState = useCallback((state: { nodes: Node[]; edges: Edge[]; idCounter: number }) => {
     setIsApplyingState(true);
     setNodes(state.nodes);
     setEdges(state.edges);
     setIdCounter(state.idCounter);
-    setLastSavedState(state); // Update the last saved state to match the applied state
-    // Reset the flag after a short delay to allow state to update
+    setLastSavedState(state);
     setTimeout(() => setIsApplyingState(false), 100);
   }, [setNodes, setEdges]);
 
@@ -170,7 +164,6 @@ export function useFlowState() {
     clearHistory();
   }, [setNodes, setEdges, clearHistory]);
 
-  // Undo/Redo handlers
   const handleUndo = useCallback(() => {
     const previousState = undo();
     if (previousState) {
@@ -200,7 +193,6 @@ export function useFlowState() {
     getId,
     setNodes,
     setEdges,
-    // Undo/Redo functionality
     undo: handleUndo,
     redo: handleRedo,
     canUndo,
