@@ -21,10 +21,9 @@ interface AuthProviderProps {
 export function AuthProvider({ children }: AuthProviderProps) {
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
-  const { refreshToken, getValidToken } = useTokenRefresh();
+  const { refreshToken } = useTokenRefresh();
 
   useEffect(() => {
-    // Check if user is already authenticated on app load
     const checkAuth = async () => {
       try {
         if (AuthService.isAuthenticated()) {
@@ -49,7 +48,6 @@ export function AuthProvider({ children }: AuthProviderProps) {
       const authResponse = await AuthService.signIn({ username, password });
       console.log('Auth response:', authResponse);
       
-      // Create a user object from the credentials
       const newUser: User = {
         id: Date.now().toString(),
         username,
@@ -57,7 +55,6 @@ export function AuthProvider({ children }: AuthProviderProps) {
         name: username.split('@')[0],
       };
       
-      // Store user info
       AuthService.setCurrentUser(newUser);
       setUser(newUser);
     } catch (error) {
@@ -68,10 +65,8 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
   const signUp = async (userData: SignUpCredentials) => {
     try {
-      // Call the actual sign-up API endpoint
       const signUpResponse = await AuthService.signUp(userData);
       
-      // Create a user object from the response
       const newUser: User = {
         id: Date.now().toString(),
         username: userData.username,
@@ -79,7 +74,6 @@ export function AuthProvider({ children }: AuthProviderProps) {
         name: `${userData.firstName} ${userData.lastName}`.trim() || userData.username,
       };
       
-      // Store user info
       AuthService.setCurrentUser(newUser);
       setUser(newUser);
       
@@ -96,7 +90,6 @@ export function AuthProvider({ children }: AuthProviderProps) {
       setUser(null);
     } catch (error) {
       console.error('Sign out error:', error);
-      // Even if sign out fails, clear local state
       setUser(null);
     }
   };
@@ -106,7 +99,6 @@ export function AuthProvider({ children }: AuthProviderProps) {
       return await refreshToken();
     } catch (error) {
       console.error('Token refresh failed:', error);
-      // If refresh fails, sign out the user
       await signOut();
       throw error;
     }

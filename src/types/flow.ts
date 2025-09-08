@@ -9,7 +9,6 @@ export interface FlowNode extends Node {
 }
 
 export type FlowEdge = Edge & {
-  // Add any custom edge properties here
 };
 
 export interface FlowData {
@@ -24,7 +23,6 @@ export interface DragItem {
   label: string;
 }
 
-// New interfaces for .ecore file handling
 export interface EcoreElementData {
   name: string;
   type: 'EClass' | 'EAttribute' | 'EReference' | 'EPackage' | 'EEnum' | 'EEnumLiteral';

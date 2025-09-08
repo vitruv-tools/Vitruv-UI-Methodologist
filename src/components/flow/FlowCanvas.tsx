@@ -82,10 +82,8 @@ export const FlowCanvas = forwardRef<{
     addEdge,
   });
 
-  // Handle keyboard shortcuts for undo/redo
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
-      // Check if the target is an input or textarea to avoid interfering with text editing
       const target = event.target as HTMLElement;
       if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.contentEditable === 'true') {
         return;
@@ -96,12 +94,10 @@ export const FlowCanvas = forwardRef<{
           case 'z':
             event.preventDefault();
             if (event.shiftKey) {
-              // Ctrl+Shift+Z or Cmd+Shift+Z for redo
               if (canRedo) {
                 redo();
               }
             } else {
-              // Ctrl+Z or Cmd+Z for undo
               if (canUndo) {
                 undo();
               }
@@ -109,7 +105,6 @@ export const FlowCanvas = forwardRef<{
             break;
           case 'y':
             event.preventDefault();
-            // Ctrl+Y or Cmd+Y for redo (alternative)
             if (canRedo) {
               redo();
             }
@@ -124,7 +119,6 @@ export const FlowCanvas = forwardRef<{
     };
   }, [undo, redo, canUndo, canRedo]);
 
-  // Handle tool clicks by adding elements at canvas center
   const handleToolClick = (toolType: string, toolName: string, diagramType?: string) => {
     if (!reactFlowInstance || !reactFlowWrapper.current) return;
     
@@ -132,7 +126,6 @@ export const FlowCanvas = forwardRef<{
     const centerX = canvasBounds.width / 2;
     const centerY = canvasBounds.height / 2;
     
-    // Convert screen coordinates to flow coordinates
     const position = reactFlowInstance.project({
       x: centerX,
       y: centerY,
@@ -141,7 +134,6 @@ export const FlowCanvas = forwardRef<{
     let label = '';
     let nodeType = 'editable';
     
-    // Handle different tool types
     switch (toolType) {
       case 'element':
         switch (toolName) {
@@ -249,15 +241,12 @@ export const FlowCanvas = forwardRef<{
     addNode(newNode);
   };
 
-  // Load diagram data from .ecore file
   const loadDiagramData = (newNodes: any[], newEdges: any[]) => {
     console.log('Loading diagram data:', { newNodes, newEdges });
     
-    // Clear existing diagram
     setNodes([]);
     setEdges([]);
     
-    // Add new nodes and edges
     if (newNodes.length > 0) {
       setNodes(newNodes);
     }
@@ -286,35 +275,12 @@ export const FlowCanvas = forwardRef<{
     updateNodeLabel(id, newLabel);
   };
 
-  // Add ECORE file to workspace
   const addEcoreFile = (fileName: string, fileContent: string) => {
-    if (!reactFlowWrapper.current) return;
-    
-    const canvasBounds = reactFlowWrapper.current.getBoundingClientRect();
-    const centerX = canvasBounds.width / 2;
-    const centerY = canvasBounds.height / 2;
-    
-    // Convert screen coordinates to flow coordinates
-    const position = reactFlowInstance ? reactFlowInstance.project({
-      x: centerX,
-      y: centerY,
-    }) : { x: centerX, y: centerY };
-    
-    // Create a new ECORE file entry
-    const newFile = {
-      id: `ecore-${Date.now()}`,
-      fileName,
-      fileContent,
-      position,
-    };
-    
-    // Add to the list (this will be handled by parent component)
     if (onEcoreFileSelect) {
       onEcoreFileSelect(fileName);
     }
   };
 
-  // Handle ECORE file selection
   const handleEcoreFileSelect = (fileName: string) => {
     const file = ecoreFiles.find(f => f.fileName === fileName);
     if (file) {
@@ -325,13 +291,10 @@ export const FlowCanvas = forwardRef<{
     }
   };
 
-  // Handle ECORE file expansion
   const handleEcoreFileExpand = (fileName: string, fileContent: string) => {
     const file = ecoreFiles.find(f => f.fileName === fileName);
     if (file) {
-      // Clear any previously expanded file state first
       setExpandedFileId(null);
-      // Then set the new expanded file
       setExpandedFileId(file.id);
       setSelectedFileId(file.id);
     }
@@ -341,7 +304,6 @@ export const FlowCanvas = forwardRef<{
     }
   };
 
-  // Notify parent about diagram changes
   React.useEffect(() => {
     if (onDiagramChange) {
       onDiagramChange(nodes, edges);
@@ -387,6 +349,7 @@ export const FlowCanvas = forwardRef<{
         onDragLeave={handleDragLeave}
         nodeTypes={nodeTypes}
         edgeTypes={edgeTypes}
+        onInit={setReactFlowInstance}
       >
         <MiniMap position="bottom-right" style={{ bottom: 16, right: 16, zIndex: 30 }} />
         <Controls position="bottom-left" />
@@ -395,7 +358,6 @@ export const FlowCanvas = forwardRef<{
       
       
       
-      {/* ECORE File Boxes */}
       {ecoreFiles.map((file) => (
         <EcoreFileBox
           key={file.id}

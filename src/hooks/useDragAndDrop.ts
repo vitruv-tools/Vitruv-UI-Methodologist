@@ -24,7 +24,6 @@ export function useDragAndDrop({
       event.preventDefault();
       console.log('Drop event triggered');
 
-      // Check for tool data first
       const toolDataString = event.dataTransfer.getData('application/tool');
       console.log('Tool data string:', toolDataString);
 
@@ -51,9 +50,8 @@ export function useDragAndDrop({
           console.log('Calculated position:', position);
 
           let label = '';
-          let nodeType = 'editable'; // All nodes use the 'editable' type for now
+          let nodeType = 'editable';
 
-          // Handle different tool types
           switch (toolData.type) {
             case 'element':
               switch (toolData.name) {
@@ -186,7 +184,6 @@ export function useDragAndDrop({
   const onDragOver = useCallback((event: React.DragEvent) => {
     event.preventDefault();
 
-    // Check if it's a tool drop
     const toolDataString = event.dataTransfer.getData('application/tool');
     if (toolDataString) {
       event.dataTransfer.dropEffect = 'copy';

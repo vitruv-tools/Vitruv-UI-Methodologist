@@ -16,10 +16,7 @@ interface CreateModelRequest {
   genModelFileId: number;
 }
 
-interface CreateModelResponse {
-  data: any;
-  message: string;
-}
+// ... existing code ...
 
 // Modal styles
 const modalOverlayStyle: React.CSSProperties = {
@@ -268,10 +265,7 @@ export const CreateModelModal: React.FC<CreateModelModalProps> = ({
     keywords: '',
   });
 
-  const [uploadedFiles, setUploadedFiles] = useState({
-    ecoreFile: null as File | null,
-    genmodelFile: null as File | null,
-  });
+  // Removed unused uploadedFiles state
 
   const [uploadedFileIds, setUploadedFileIds] = useState({
     ecoreFileId: 0,
@@ -316,7 +310,6 @@ export const CreateModelModal: React.FC<CreateModelModalProps> = ({
       }
       
       setUploadedFileIds(prev => ({ ...prev, ecoreFileId: fileId }));
-      setUploadedFiles(prev => ({ ...prev, ecoreFile: file }));
       setSuccess(`Successfully uploaded ${file.name}`);
       setTimeout(() => setSuccess(''), 3000);
     } catch (err) {
@@ -358,7 +351,6 @@ export const CreateModelModal: React.FC<CreateModelModalProps> = ({
       }
       
       setUploadedFileIds(prev => ({ ...prev, genModelFileId: fileId }));
-      setUploadedFiles(prev => ({ ...prev, genmodelFile: file }));
       setSuccess(`Successfully uploaded ${file.name}`);
       setTimeout(() => setSuccess(''), 3000);
     } catch (err) {
@@ -377,6 +369,13 @@ export const CreateModelModal: React.FC<CreateModelModalProps> = ({
       return;
     }
 
+    // Validate keywords
+    const keywords = formData.keywords.trim().split(/\s+/).filter(k => k.length > 0);
+    if (keywords.length === 0) {
+      setError('Please enter at least one keyword');
+      return;
+    }
+
     setIsLoading(true);
     setError('');
 
@@ -385,7 +384,7 @@ export const CreateModelModal: React.FC<CreateModelModalProps> = ({
         name: formData.name.trim(),
         description: formData.description.trim(),
         domain: formData.domain.trim(),
-        keyword: formData.keywords.split(',').map(k => k.trim()).filter(k => k.length > 0),
+        keyword: keywords,
         ecoreFileId: uploadedFileIds.ecoreFileId,
         genModelFileId: uploadedFileIds.genModelFileId,
       };
@@ -415,10 +414,7 @@ export const CreateModelModal: React.FC<CreateModelModalProps> = ({
       domain: '',
       keywords: '',
     });
-    setUploadedFiles({
-      ecoreFile: null,
-      genmodelFile: null,
-    });
+    // Reset removed uploadedFiles state omitted
     setUploadedFileIds({
       ecoreFileId: 0,
       genModelFileId: 0,
@@ -483,13 +479,16 @@ export const CreateModelModal: React.FC<CreateModelModalProps> = ({
           <label style={labelStyle}>Keywords</label>
           <input
             type="text"
-            placeholder="Enter keywords separated by commas"
+            placeholder="Enter keywords separated by spaces (e.g., modeling design architecture)"
             value={formData.keywords}
             onChange={(e) => setFormData({ ...formData, keywords: e.target.value })}
             style={inputStyle}
             onFocus={(e) => Object.assign(e.currentTarget.style, inputFocusStyle)}
             onBlur={(e) => Object.assign(e.currentTarget.style, inputStyle)}
           />
+          <div style={{ fontSize: '12px', color: '#666', marginTop: '4px', fontStyle: 'italic' }}>
+            Note: Use spaces to separate multiple keywords. Each keyword will be added to the array.
+          </div>
         </div>
 
         <div style={formGroupStyle}>

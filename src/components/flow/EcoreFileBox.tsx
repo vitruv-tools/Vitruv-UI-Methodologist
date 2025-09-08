@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { ConfirmDialog } from '../ui/ConfirmDialog';
 
 interface EcoreFileBoxProps {
@@ -19,7 +19,6 @@ interface EcoreFileBoxProps {
   createdAt?: string;
 }
 
-// Modal styles
 const modalOverlayStyle: React.CSSProperties = {
   position: 'fixed',
   top: 0,
@@ -110,7 +109,6 @@ const modalFooterStyle: React.CSSProperties = {
   fontStyle: 'italic',
 };
 
-// Academic-style design with better typography and colors
 const boxStyle: React.CSSProperties = {
   position: 'absolute',
   background: 'linear-gradient(145deg, #ffffff 0%, #f8f9fa 100%)',
@@ -165,15 +163,7 @@ const fileNameStyle: React.CSSProperties = {
   marginBottom: '8px',
 };
 
-const fileInfoStyle: React.CSSProperties = {
-  fontSize: '12px',
-  color: '#6c757d',
-  textAlign: 'center',
-  marginTop: '8px',
-  fontStyle: 'italic',
-  fontFamily: '"Segoe UI", "Roboto", sans-serif',
-  lineHeight: '1.5',
-};
+// ... existing code ...
 
 const tooltipStyle: React.CSSProperties = {
   position: 'absolute',
@@ -364,12 +354,11 @@ export const EcoreFileBox: React.FC<EcoreFileBoxProps> = ({
   };
 
   const handleMouseDown = (e: React.MouseEvent) => {
-    if (e.button !== 0) return; // Only left mouse button
+    if (e.button !== 0) return;
     
     e.preventDefault();
     e.stopPropagation();
     
-    // Add a small delay to prevent accidental dragging
     const rect = boxRef.current?.getBoundingClientRect();
     if (rect) {
       setDragOffset({
@@ -377,53 +366,45 @@ export const EcoreFileBox: React.FC<EcoreFileBoxProps> = ({
         y: e.clientY - rect.top,
       });
       
-      // Small delay to prevent accidental dragging
       setTimeout(() => {
         setIsDragging(true);
       }, 50);
     }
   };
 
-  const handleMouseMove = (e: MouseEvent) => {
+  const handleMouseMove = useCallback((e: MouseEvent) => {
     if (!isDragging || !onPositionChange) return;
     
-    // Prevent default to avoid text selection
     e.preventDefault();
     
-    // Calculate new position with smooth movement
     const newX = e.clientX - dragOffset.x;
     const newY = e.clientY - dragOffset.y;
     
-    // Add bounds checking to prevent boxes from going off-screen
     const minX = 20;
     const minY = 20;
-    const maxX = window.innerWidth - 300; // Box width + margin
-    const maxY = window.innerHeight - 200; // Box height + margin
+    const maxX = window.innerWidth - 300;
+    const maxY = window.innerHeight - 200;
     
     const boundedX = Math.max(minX, Math.min(maxX, newX));
     const boundedY = Math.max(minY, Math.min(maxY, newY));
     
-    // Use smooth movement with easing
     const currentPosition = { x: boundedX, y: boundedY };
     onPositionChange(id, currentPosition);
-  };
+  }, [isDragging, onPositionChange, dragOffset, id]);
 
-  const handleMouseUp = () => {
+  const handleMouseUp = useCallback(() => {
     if (isDragging) {
       setIsDragging(false);
-      // Reset cursor and user select
       document.body.style.cursor = '';
       document.body.style.userSelect = '';
     }
-  };
+  }, [isDragging]);
 
   useEffect(() => {
     if (isDragging) {
-      // Use passive: false for better performance and responsiveness
       document.addEventListener('mousemove', handleMouseMove, { passive: false });
       document.addEventListener('mouseup', handleMouseUp);
       
-      // Add cursor style to body
       document.body.style.cursor = 'grabbing';
       document.body.style.userSelect = 'none';
       
@@ -434,7 +415,7 @@ export const EcoreFileBox: React.FC<EcoreFileBoxProps> = ({
         document.body.style.userSelect = '';
       };
     }
-  }, [isDragging, dragOffset, onPositionChange, id]);
+  }, [isDragging, handleMouseMove, handleMouseUp]);
 
   const handleFileNameDoubleClick = (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -466,16 +447,7 @@ export const EcoreFileBox: React.FC<EcoreFileBoxProps> = ({
     handleSaveEdit();
   };
 
-  const getFileSize = () => {
-    const size = fileContent.length;
-    if (size < 1024) return `${size} chars`;
-    if (size < 1024 * 1024) return `${(size / 1024).toFixed(1)} KB`;
-    return `${(size / (1024 * 1024)).toFixed(1)} MB`;
-  };
-
-  const getFileType = () => {
-    return fileName.endsWith('.ecore') ? 'ECORE Model' : 'Model File';
-  };
+  // ... existing code ...
 
     const formatDate = (dateString: string) => {
     try {
@@ -487,21 +459,17 @@ export const EcoreFileBox: React.FC<EcoreFileBoxProps> = ({
   };
 
   const getAuthorName = () => {
-    // Try to extract author from file content
     try {
-      // Look for common author patterns in ECORE files
       const authorMatch = fileContent.match(/<eAnnotations.*?source="http:\/\/www\.eclipse\.org\/emf\/2002\/GenModel".*?<details.*?key="documentation".*?value="([^"]*)"/);
       if (authorMatch && authorMatch[1]) {
         return authorMatch[1].trim();
       }
       
-      // Look for other author patterns
       const otherAuthorMatch = fileContent.match(/author["\s]*[:=]["\s]*([^"\n\r]+)/i);
       if (otherAuthorMatch && otherAuthorMatch[1]) {
         return otherAuthorMatch[1].trim();
       }
       
-      // Default author if none found
       return 'Unknown Author';
     } catch (error) {
       return 'Unknown Author';
@@ -520,7 +488,7 @@ export const EcoreFileBox: React.FC<EcoreFileBoxProps> = ({
           left: position.x,
           top: position.y,
           transform: isSelected && !isDragging ? 'scale(1.02)' : 'scale(1)',
-          display: isExpanded ? 'none' : 'block', // Hide box when expanded
+          display: isExpanded ? 'none' : 'block',
         }}
         onClick={handleClick}
         onDoubleClick={handleDoubleClick}
@@ -688,7 +656,7 @@ export const EcoreFileBox: React.FC<EcoreFileBoxProps> = ({
         onCancel={cancelDelete}
       />
 
-             {/* Tooltip for file content preview */}
+      
        {isHovered && (
          <div style={{
            ...tooltipStyle,
@@ -714,7 +682,6 @@ export const EcoreFileBox: React.FC<EcoreFileBoxProps> = ({
          </div>
        )}
 
-       {/* Description Modal */}
        {showDescriptionModal && (
          <div style={modalOverlayStyle} onClick={handleModalOverlayClick}>
            <div style={modalContentStyle}>
@@ -749,7 +716,6 @@ export const EcoreFileBox: React.FC<EcoreFileBoxProps> = ({
          </div>
        )}
 
-       {/* Keywords Modal */}
        {showKeywordsModal && (
          <div style={modalOverlayStyle} onClick={handleKeywordsModalOverlayClick}>
            <div style={modalContentStyle}>

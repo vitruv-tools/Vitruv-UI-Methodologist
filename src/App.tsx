@@ -7,7 +7,6 @@ import { exportFlowData } from './utils';
 import { Node, Edge } from 'reactflow';
 import './App.css';
 
-// Protected Route Component
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { isAuthenticated, isLoading } = useAuth();
 

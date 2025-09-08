@@ -3,7 +3,7 @@ import { Sidebar } from './Sidebar';
 import { Header } from './Header';
 import { FlowCanvas } from '../flow/FlowCanvas';
 import { parseEcoreFile, createSimpleEcoreDiagram } from '../../utils/ecoreParser';
-import { exportFlowData, importFlowData, generateFlowId, listDocuments, saveDocumentMeta, loadDocumentData, saveDocumentData, StoredDocumentMeta } from '../../utils/flowUtils';
+import { exportFlowData, generateFlowId, saveDocumentMeta, saveDocumentData, StoredDocumentMeta } from '../../utils/flowUtils';
 import { Node, Edge } from 'reactflow';
 import { User } from '../../services/auth';
 
@@ -351,36 +351,7 @@ export function MainLayout({ onDeploy, onSave, onLoad, onNew, user, onLogout }: 
 
 
 
-  // Switch active tab
-  const openDocument = (id: string) => {
-    const data = loadDocumentData(id);
-    if (data && flowCanvasRef.current?.loadDiagramData) {
-      const restored = importFlowData(data);
-      flowCanvasRef.current.loadDiagramData(restored.nodes as any, restored.edges as any);
-      setActiveDocId(id);
-      const meta = documents.find(d => d.id === id);
-      setActiveFileName(meta?.name);
-      setIsDirty(false);
-    }
-  };
-
-  // New blank document
-  const handleNewClick = () => {
-    const newId = generateFlowId();
-    const now = new Date().toISOString();
-    const newMeta: StoredDocumentMeta = { id: newId, name: 'untitled.ecore', createdAt: now, updatedAt: now };
-    saveDocumentMeta(newMeta);
-    setDocuments(prev => [newMeta, ...prev]);
-    setActiveDocId(newId);
-    setActiveFileName('untitled.ecore');
-    if (flowCanvasRef.current?.loadDiagramData) {
-      flowCanvasRef.current.loadDiagramData([], []);
-    }
-    saveDocumentData(newId, { nodes: [], edges: [] } as any);
-    setIsDirty(false);
-    setSelectedDiagramType('ecore');
-    
-  };
+  // ... existing code ...
 
   return (
     <div style={{ 

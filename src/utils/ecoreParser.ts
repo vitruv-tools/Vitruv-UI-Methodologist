@@ -1,13 +1,6 @@
-import { EcoreFileContent, EcorePackage, EcoreElementData, FlowNode, FlowEdge } from '../types/flow';
-
-/**
- * Parse .ecore file content and convert it to diagram data
- * @param ecoreContent - The content of the .ecore file
- * @returns Object containing nodes and edges for the diagram
- */
+import { FlowNode, FlowEdge } from '../types/flow';
 export const parseEcoreFile = (ecoreContent: string): { nodes: FlowNode[]; edges: FlowEdge[] } => {
   try {
-    // Parse XML content
     const parser = new DOMParser();
     const xmlDoc = parser.parseFromString(ecoreContent, 'text/xml');
     
@@ -19,22 +12,17 @@ export const parseEcoreFile = (ecoreContent: string): { nodes: FlowNode[]; edges
     const edges: FlowEdge[] = [];
     let nodeId = 1;
 
-    // Extract root package information
     const rootPackage = xmlDoc.querySelector('ecore:EPackage');
     if (!rootPackage) {
       throw new Error('No EPackage found in .ecore file');
     }
 
     const packageName = rootPackage.getAttribute('name') || 'RootPackage';
-    const nsURI = rootPackage.getAttribute('nsURI') || '';
-    const nsPrefix = rootPackage.getAttribute('nsPrefix') || '';
 
-    // Parse packages and classes
     const packages = rootPackage.querySelectorAll('eClassifiers');
     packages.forEach((pkg, index) => {
       const pkgName = pkg.getAttribute('name') || `Package${index}`;
       
-      // Create package node
       const packageNode: FlowNode = {
         id: `package-${nodeId++}`,
         type: 'default',
@@ -50,14 +38,12 @@ export const parseEcoreFile = (ecoreContent: string): { nodes: FlowNode[]; edges
       };
       nodes.push(packageNode);
 
-      // Parse classes in this package
       const classes = pkg.querySelectorAll('eStructuralFeatures');
       classes.forEach((cls, classIndex) => {
         const className = cls.getAttribute('name') || `Class${classIndex}`;
         const isAbstract = cls.getAttribute('abstract') === 'true';
         const isInterface = cls.getAttribute('interface') === 'true';
         
-        // Create class node
         const classNode: FlowNode = {
           id: `class-${nodeId++}`,
           type: 'default',
@@ -78,7 +64,6 @@ export const parseEcoreFile = (ecoreContent: string): { nodes: FlowNode[]; edges
         };
         nodes.push(classNode);
 
-        // Create edge from package to class
         edges.push({
           id: `edge-${nodeId++}`,
           source: packageNode.id,
@@ -87,7 +72,6 @@ export const parseEcoreFile = (ecoreContent: string): { nodes: FlowNode[]; edges
           label: 'contains'
         });
 
-        // Parse attributes
         const attributes = cls.querySelectorAll('eAttributes');
         attributes.forEach((attr, attrIndex) => {
           const attrName = attr.getAttribute('name') || `attr${attrIndex}`;
@@ -111,7 +95,6 @@ export const parseEcoreFile = (ecoreContent: string): { nodes: FlowNode[]; edges
           };
           nodes.push(attrNode);
 
-          // Create edge from class to attribute
           edges.push({
             id: `edge-${nodeId++}`,
             source: classNode.id,
@@ -121,7 +104,6 @@ export const parseEcoreFile = (ecoreContent: string): { nodes: FlowNode[]; edges
           });
         });
 
-        // Parse references
         const references = cls.querySelectorAll('eReferences');
         references.forEach((ref, refIndex) => {
           const refName = ref.getAttribute('name') || `ref${refIndex}`;
@@ -145,7 +127,6 @@ export const parseEcoreFile = (ecoreContent: string): { nodes: FlowNode[]; edges
           };
           nodes.push(refNode);
 
-          // Create edge from class to reference
           edges.push({
             id: `edge-${nodeId++}`,
             source: classNode.id,
@@ -160,7 +141,6 @@ export const parseEcoreFile = (ecoreContent: string): { nodes: FlowNode[]; edges
     return { nodes, edges };
   } catch (error) {
     console.error('Error parsing .ecore file:', error);
-    // Return a simple error node
     return {
       nodes: [{
         id: 'error-1',
@@ -180,16 +160,11 @@ export const parseEcoreFile = (ecoreContent: string): { nodes: FlowNode[]; edges
   }
 };
 
-/**
- * Create a simple diagram representation from .ecore content
- * This is a fallback method if XML parsing fails
- */
 export const createSimpleEcoreDiagram = (ecoreContent: string): { nodes: FlowNode[]; edges: FlowEdge[] } => {
   const nodes: FlowNode[] = [];
   const edges: FlowEdge[] = [];
   let nodeId = 1;
 
-  // Create a root node
   const rootNode: FlowNode = {
     id: `root-${nodeId++}`,
     type: 'default',
@@ -204,7 +179,6 @@ export const createSimpleEcoreDiagram = (ecoreContent: string): { nodes: FlowNod
   };
   nodes.push(rootNode);
 
-  // Try to extract class names from the content
   const classMatches = ecoreContent.match(/name="([^"]+)"/g);
   if (classMatches) {
     classMatches.forEach((match, index) => {
@@ -225,7 +199,6 @@ export const createSimpleEcoreDiagram = (ecoreContent: string): { nodes: FlowNod
         };
         nodes.push(classNode);
 
-        // Create edge from root to class
         edges.push({
           id: `edge-${nodeId++}`,
           source: rootNode.id,

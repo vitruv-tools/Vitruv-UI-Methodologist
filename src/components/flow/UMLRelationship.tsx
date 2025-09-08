@@ -101,7 +101,6 @@ export function UMLRelationship({
   return (
     <>
       <defs>
-        {/* Inheritance arrowhead */}
         <marker
           id="arrowhead-inheritance"
           viewBox="0 0 10 10"
@@ -114,7 +113,6 @@ export function UMLRelationship({
           <path d="M 0 0 L 10 5 L 0 10 z" fill="#16a085" />
         </marker>
         
-        {/* Realization arrowhead */}
         <marker
           id="arrowhead-realization"
           viewBox="0 0 10 10"
@@ -127,7 +125,6 @@ export function UMLRelationship({
           <path d="M 0 0 L 10 5 L 0 10 z" fill="#e67e22" />
         </marker>
         
-        {/* Composition arrowhead */}
         <marker
           id="arrowhead-composition"
           viewBox="0 0 10 10"
@@ -140,7 +137,6 @@ export function UMLRelationship({
           <path d="M 0 0 L 10 5 L 0 10 z" fill="#8e44ad" />
         </marker>
         
-        {/* Aggregation arrowhead */}
         <marker
           id="arrowhead-aggregation"
           viewBox="0 0 10 10"
@@ -153,7 +149,6 @@ export function UMLRelationship({
           <path d="M 0 0 L 10 5 L 0 10 z" fill="#27ae60" />
         </marker>
         
-        {/* Association arrowhead */}
         <marker
           id="arrowhead-association"
           viewBox="0 0 10 10"
@@ -166,7 +161,6 @@ export function UMLRelationship({
           <path d="M 0 0 L 10 5 L 0 10 z" fill="#34495e" />
         </marker>
         
-        {/* Dependency arrowhead */}
         <marker
           id="arrowhead-dependency"
           viewBox="0 0 10 10"
@@ -180,7 +174,6 @@ export function UMLRelationship({
         </marker>
       </defs>
 
-      {/* Relationship line */}
       <path
         id={id}
         style={getRelationshipStyle()}
@@ -188,7 +181,6 @@ export function UMLRelationship({
         className="react-flow__edge-path"
       />
 
-      {/* Relationship label */}
       <text
         x={labelX}
         y={labelY}
@@ -206,7 +198,6 @@ export function UMLRelationship({
         {getRelationshipLabel()}
       </text>
 
-      {/* Source multiplicity */}
       {data?.sourceMultiplicity && (
         <text
           x={sourceX + (sourceX < targetX ? -20 : 20)}
@@ -227,7 +218,6 @@ export function UMLRelationship({
         </text>
       )}
 
-      {/* Target multiplicity */}
       {data?.targetMultiplicity && (
         <text
           x={targetX + (targetX < sourceX ? -20 : 20)}
