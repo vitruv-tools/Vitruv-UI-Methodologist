@@ -31,21 +31,6 @@ export function Header({ title = 'Vitruvius Modeler', user, onLogout }: HeaderPr
     return 'U';
   };
 
-  const getUserDisplayName = () => {
-    return user?.name || `${user?.givenName || ''} ${user?.familyName || ''}`.trim() || 'User';
-  };
-
-  const getUserStatusColor = () => {
-    if (user?.emailVerified === false) return '#e74c3c';
-    if (user?.emailVerified === true) return '#27ae60';
-    return '#95a5a6';
-  };
-
-  const getUserStatusText = () => {
-    if (user?.emailVerified === false) return 'Email not verified';
-    if (user?.emailVerified === true) return 'Email verified';
-    return 'Status unknown';
-  };
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
