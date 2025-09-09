@@ -150,6 +150,49 @@ code {
   border-radius: 3px;
 }
 
-.sidebar-scrollbar::-webkit-scrollbar-thumb:hover {
-  background: rgba(255, 255, 255, 0.5);
+/* Academic design animations */
+@keyframes slideDown {
+  from {
+    opacity: 0;
+    transform: translateY(-8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+/* Academic design principles - subtle interactions */
+button {
+  transition: all 0.2s ease;
+  font-family: inherit;
+}
+
+button:hover {
+  /* Subtle hover effects for academic feel */
+}
+
+button:active {
+  transform: none;
+}
+
+/* Academic color palette */
+:root {
+  --academic-primary: #2c3e50;
+  --academic-secondary: #34495e;
+  --academic-muted: #7f8c8d;
+  --academic-light: #bdc3c7;
+  --academic-background: #f8f9fa;
+  --academic-border: #e8e8e8;
+  --academic-success: #27ae60;
+  --academic-error: #e74c3c;
 } 

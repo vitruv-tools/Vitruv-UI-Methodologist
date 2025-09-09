@@ -10,7 +10,6 @@ interface SidebarProps {
 const sidebarStyle: React.CSSProperties = {
   width: '350px',
   background: '#ffffff',
-  padding: '10px 10px',
   boxSizing: 'border-box',
   height: '100vh',
   borderRight: '1px solid #e0e0e0',

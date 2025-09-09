@@ -315,11 +315,36 @@ class ApiService {
     genModelFileId?: number;
     createdFrom?: string;
     createdTo?: string;
+    pageNumber?: number;
+    pageSize?: number;
   }): Promise<{ data: any[]; message: string }> {
-    return this.authenticatedRequest('/api/v1/meta-models/find-all', {
+    // Set default values for pagination
+    const pageNumber = filters.pageNumber ?? 0;
+    const pageSize = filters.pageSize ?? 50;
+    
+    // Build query parameters
+    const queryParams = new URLSearchParams({
+      pageNumber: pageNumber.toString(),
+      pageSize: pageSize.toString(),
+    });
+    
+    const endpoint = `/api/v1/meta-models/find-all?${queryParams.toString()}`;
+    
+    console.log('findMetaModels request:', {
+      endpoint,
+      filters,
+      pageNumber,
+      pageSize,
+    });
+    
+    const result = await this.authenticatedRequest<{ data: any[]; message: string }>(endpoint, {
       method: 'POST',
       body: JSON.stringify(filters),
     });
+    
+    console.log('findMetaModels response:', result);
+    
+    return result;
   }
 
   /**

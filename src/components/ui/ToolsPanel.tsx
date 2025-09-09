@@ -64,11 +64,17 @@ const createButtonActiveStyle: React.CSSProperties = {
 // ... existing code ...
 
 const filterContainerStyle: React.CSSProperties = {
-  marginBottom: '16px',
+  position: 'fixed',
+  top: '230px',
+  left: '16px',
+  right: '16px',
+  zIndex: 1000,
   padding: '12px',
-  background: '#f8f9fa',
+  background: '#ffffff',
+  maxWidth: '320px',
   borderRadius: '8px',
   border: '1px solid #e9ecef',
+  boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
 };
 
 const filterRowStyle: React.CSSProperties = {
@@ -184,12 +190,68 @@ const fileMetaStyle: React.CSSProperties = {
 // ... existing code ...
 
 const emptyStateStyle: React.CSSProperties = {
+  height: 'calc(100vh - 254px)',
+  overflowY: 'auto',
   fontSize: '13px',
   color: '#5a6c7d',
   textAlign: 'center',
   padding: '24px',
   fontStyle: 'italic',
   fontFamily: 'Georgia, serif',
+};
+
+const paginationContainerStyle: React.CSSProperties = {
+  display: 'flex',
+  justifyContent: 'space-between',
+  alignItems: 'center',
+  padding: '12px 0',
+  marginTop: '8px',
+  borderTop: '1px solid #e9ecef',
+  fontFamily: 'Georgia, serif',
+};
+
+const paginationInfoStyle: React.CSSProperties = {
+  fontSize: '12px',
+  color: '#6c757d',
+  fontWeight: '500',
+};
+
+const paginationControlsStyle: React.CSSProperties = {
+  display: 'flex',
+  gap: '4px',
+  alignItems: 'center',
+};
+
+const paginationButtonStyle: React.CSSProperties = {
+  padding: '6px 10px',
+  border: '1px solid #dee2e6',
+  borderRadius: '4px',
+  background: '#ffffff',
+  color: '#495057',
+  fontSize: '12px',
+  fontWeight: '500',
+  cursor: 'pointer',
+  transition: 'all 0.2s ease',
+  minWidth: '32px',
+  textAlign: 'center',
+};
+
+const paginationButtonHoverStyle: React.CSSProperties = {
+  background: '#e9ecef',
+  borderColor: '#adb5bd',
+};
+
+const paginationButtonActiveStyle: React.CSSProperties = {
+  background: '#3498db',
+  color: '#ffffff',
+  borderColor: '#3498db',
+};
+
+const paginationButtonDisabledStyle: React.CSSProperties = {
+  background: '#f8f9fa',
+  color: '#6c757d',
+  borderColor: '#dee2e6',
+  cursor: 'not-allowed',
 };
 
 export const ToolsPanel: React.FC<ToolsPanelProps> = ({ onEcoreFileUpload, onEcoreFileDelete }) => {
@@ -205,6 +267,9 @@ export const ToolsPanel: React.FC<ToolsPanelProps> = ({ onEcoreFileUpload, onEco
   const [isLoadingModels, setIsLoadingModels] = useState(false);
   const [apiModels, setApiModels] = useState<any[]>([]);
   const [apiError, setApiError] = useState<string>('');
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 10;
+  const [expandedCard, setExpandedCard] = useState<number | null>(null);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -247,9 +312,10 @@ export const ToolsPanel: React.FC<ToolsPanelProps> = ({ onEcoreFileUpload, onEco
         
         const response = await apiService.findMetaModels(filters);
         setApiModels(response.data || []);
+        setCurrentPage(1); // Reset to first page when filters change
       } catch (error) {
-        console.error('Error fetching models from API:', error);
-        setApiError(error instanceof Error ? error.message : 'Failed to fetch models');
+        console.error('Error fetching meta models from API:', error);
+        setApiError(error instanceof Error ? error.message : 'Failed to fetch meta models');
       } finally {
         setIsLoadingModels(false);
       }
@@ -276,6 +342,37 @@ export const ToolsPanel: React.FC<ToolsPanelProps> = ({ onEcoreFileUpload, onEco
     
     return sortOrder === 'asc' ? comparison : -comparison;
   });
+
+  // Pagination calculations
+  const totalItems = sortedModels.length;
+  const totalPages = Math.ceil(totalItems / itemsPerPage);
+  const startIndex = (currentPage - 1) * itemsPerPage;
+  const endIndex = startIndex + itemsPerPage;
+  const currentPageItems = sortedModels.slice(startIndex, endIndex);
+
+  // Pagination handlers
+  const goToPage = (page: number) => {
+    if (page >= 1 && page <= totalPages) {
+      setCurrentPage(page);
+    }
+  };
+
+  const goToPreviousPage = () => {
+    if (currentPage > 1) {
+      setCurrentPage(currentPage - 1);
+    }
+  };
+
+  const goToNextPage = () => {
+    if (currentPage < totalPages) {
+      setCurrentPage(currentPage + 1);
+    }
+  };
+
+  const handleCardRightClick = (e: React.MouseEvent, modelId: number) => {
+    e.preventDefault();
+    setExpandedCard(expandedCard === modelId ? null : modelId);
+  };
 
   const formatRelativeTime = (isoDate: string) => {
     const date = new Date(isoDate);
@@ -329,7 +426,7 @@ export const ToolsPanel: React.FC<ToolsPanelProps> = ({ onEcoreFileUpload, onEco
           </>
         ) : (
           <>
-            Create New Model
+            Create New Meta Model
           </>
         )}
       </button>
@@ -436,8 +533,8 @@ export const ToolsPanel: React.FC<ToolsPanelProps> = ({ onEcoreFileUpload, onEco
         </div>
       )}
 
-      <div>
-        {sortedModels.map(model => (
+      <div style={{ height: 'calc(100vh - 311px)', overflowY: 'auto' }}>
+        {currentPageItems.map(model => (
           <div key={model.id} style={fileCardStyle}
             onClick={() => {
               if (onEcoreFileUpload) {
@@ -451,6 +548,7 @@ export const ToolsPanel: React.FC<ToolsPanelProps> = ({ onEcoreFileUpload, onEco
                 });
               }
             }}
+            onContextMenu={(e) => handleCardRightClick(e, model.id)}
             onMouseEnter={(e) => {
               Object.assign(e.currentTarget.style, fileCardHoverStyle);
             }}
@@ -463,42 +561,168 @@ export const ToolsPanel: React.FC<ToolsPanelProps> = ({ onEcoreFileUpload, onEco
             </div>
             <div style={fileMetaStyle}>
               <span>Domain: <strong>{model.domain}</strong></span>
-              {model.keyword && model.keyword.length > 0 && (
-                <>
-                  <span>•</span>
-                  <span>Keywords: {model.keyword.join(', ')}</span>
-                </>
-              )}
               <span>•</span>
               <span title={new Date(model.createdAt).toLocaleString()}>
                 {formatRelativeTime(model.createdAt)}
               </span>
+              {expandedCard === model.id && (
+                <>
+                  <span>•</span>
+                  <span style={{ fontSize: '11px', color: '#6c757d' }}>
+                    Right-click to collapse details
+                  </span>
+                </>
+              )}
             </div>
-            {model.description && (
+            
+            {/* Expanded content - only show when card is expanded */}
+            {expandedCard === model.id && (
+              <>
+                {model.keyword && model.keyword.length > 0 && (
+                  <div style={{
+                    fontSize: '12px',
+                    color: '#495057',
+                    marginTop: '6px',
+                    fontFamily: 'Georgia, serif',
+                  }}>
+                    <strong>Keywords:</strong> {model.keyword.join(', ')}
+                  </div>
+                )}
+                {model.description && (
+                  <div style={{
+                    fontSize: '12px',
+                    color: '#6c757d',
+                    marginTop: '4px',
+                    fontStyle: 'italic',
+                    fontFamily: 'Georgia, serif',
+                    lineHeight: '1.4',
+                  }}>
+                    <strong>Description:</strong> {model.description}
+                  </div>
+                )}
+              </>
+            )}
+            
+            {/* Hint for collapsed state */}
+            {expandedCard !== model.id && (
               <div style={{
-                fontSize: '12px',
-                color: '#6c757d',
+                fontSize: '10px',
+                color: '#adb5bd',
                 marginTop: '4px',
                 fontStyle: 'italic',
                 fontFamily: 'Georgia, serif',
               }}>
-                {model.description}
+                Right-click to view details
               </div>
             )}
           </div>
         ))}
         {!isLoadingModels && sortedModels.length === 0 && !apiError && (
           <div style={emptyStateStyle}>
-            No models available from server.
+            No meta models available from server.
           </div>
         )}
       </div>
+
+      {/* Pagination Controls */}
+      {totalPages > 1 && (
+        <div style={paginationContainerStyle}>
+          <div style={paginationInfoStyle}>
+            Showing {startIndex + 1}-{Math.min(endIndex, totalItems)} of {totalItems} models
+          </div>
+          <div style={paginationControlsStyle}>
+            <button
+              style={{
+                ...paginationButtonStyle,
+                ...(currentPage === 1 ? paginationButtonDisabledStyle : {})
+              }}
+              onClick={goToPreviousPage}
+              disabled={currentPage === 1}
+              onMouseEnter={(e) => {
+                if (currentPage > 1) {
+                  Object.assign(e.currentTarget.style, paginationButtonHoverStyle);
+                }
+              }}
+              onMouseLeave={(e) => {
+                if (currentPage > 1) {
+                  Object.assign(e.currentTarget.style, paginationButtonStyle);
+                }
+              }}
+            >
+              ‹
+            </button>
+            
+            {Array.from({ length: totalPages }, (_, i) => i + 1).map(page => {
+              // Show first page, last page, current page, and pages around current page
+              const shouldShow = 
+                page === 1 || 
+                page === totalPages || 
+                Math.abs(page - currentPage) <= 1;
+              
+              if (!shouldShow) {
+                // Show ellipsis for gaps
+                if (page === 2 && currentPage > 4) {
+                  return <span key={`ellipsis-${page}`} style={{ padding: '0 4px', color: '#6c757d' }}>...</span>;
+                }
+                if (page === totalPages - 1 && currentPage < totalPages - 3) {
+                  return <span key={`ellipsis-${page}`} style={{ padding: '0 4px', color: '#6c757d' }}>...</span>;
+                }
+                return null;
+              }
+              
+              return (
+                <button
+                  key={page}
+                  style={{
+                    ...paginationButtonStyle,
+                    ...(page === currentPage ? paginationButtonActiveStyle : {})
+                  }}
+                  onClick={() => goToPage(page)}
+                  onMouseEnter={(e) => {
+                    if (page !== currentPage) {
+                      Object.assign(e.currentTarget.style, paginationButtonHoverStyle);
+                    }
+                  }}
+                  onMouseLeave={(e) => {
+                    if (page !== currentPage) {
+                      Object.assign(e.currentTarget.style, paginationButtonStyle);
+                    }
+                  }}
+                >
+                  {page}
+                </button>
+              );
+            })}
+            
+            <button
+              style={{
+                ...paginationButtonStyle,
+                ...(currentPage === totalPages ? paginationButtonDisabledStyle : {})
+              }}
+              onClick={goToNextPage}
+              disabled={currentPage === totalPages}
+              onMouseEnter={(e) => {
+                if (currentPage < totalPages) {
+                  Object.assign(e.currentTarget.style, paginationButtonHoverStyle);
+                }
+              }}
+              onMouseLeave={(e) => {
+                if (currentPage < totalPages) {
+                  Object.assign(e.currentTarget.style, paginationButtonStyle);
+                }
+              }}
+            >
+              ›
+            </button>
+          </div>
+        </div>
+      )}
       
       <CreateModelModal
         isOpen={showCreateModal}
         onClose={() => setShowCreateModal(false)}
         onSuccess={(modelData) => {
-          setUploadMessage('Model created successfully!');
+          setUploadMessage('Meta Model created successfully!');
           setUploadMessageType('success');
           setTimeout(() => setUploadMessage(''), 3000);
           const fetchData = async () => {
@@ -534,8 +758,8 @@ export const ToolsPanel: React.FC<ToolsPanelProps> = ({ onEcoreFileUpload, onEco
               const response = await apiService.findMetaModels(filters);
               setApiModels(response.data || []);
             } catch (error) {
-              console.error('Error fetching models from API:', error);
-              setApiError(error instanceof Error ? error.message : 'Failed to fetch models');
+              console.error('Error fetching meta models from API:', error);
+              setApiError(error instanceof Error ? error.message : 'Failed to fetch meta models');
             } finally {
               setIsLoadingModels(false);
             }

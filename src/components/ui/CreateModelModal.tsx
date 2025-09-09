@@ -16,6 +16,18 @@ interface CreateModelRequest {
   genModelFileId: number;
 }
 
+// Secure random number generator helper function
+const getSecureRandomInt = (max: number): number => {
+  const crypto = window.crypto || (window as any).msCrypto;
+  if (crypto && crypto.getRandomValues) {
+    const array = new Uint32Array(1);
+    crypto.getRandomValues(array);
+    return array[0] % max;
+  }
+  // Fallback for environments without crypto support (should not happen in modern browsers)
+  throw new Error('Cryptographically secure random number generation not available');
+};
+
 // ... existing code ...
 
 // Modal styles
@@ -306,7 +318,7 @@ export const CreateModelModal: React.FC<CreateModelModalProps> = ({
         : Number(rawData);
       if (!Number.isFinite(fileId)) {
         // Generate a local fallback ID if server doesn't return a usable one
-        fileId = Date.now() + Math.floor(Math.random() * 1000);
+        fileId = Date.now() + getSecureRandomInt(1000);
       }
       
       setUploadedFileIds(prev => ({ ...prev, ecoreFileId: fileId }));
@@ -347,7 +359,7 @@ export const CreateModelModal: React.FC<CreateModelModalProps> = ({
         : Number(rawData);
       if (!Number.isFinite(fileId)) {
         // Generate a local fallback ID if server doesn't return a usable one
-        fileId = Date.now() + Math.floor(Math.random() * 1000);
+        fileId = Date.now() + getSecureRandomInt(1000);
       }
       
       setUploadedFileIds(prev => ({ ...prev, genModelFileId: fileId }));
@@ -389,19 +401,19 @@ export const CreateModelModal: React.FC<CreateModelModalProps> = ({
         genModelFileId: uploadedFileIds.genModelFileId,
       };
 
-      console.log('Creating model with data:', requestData);
+      console.log('Creating meta model with data:', requestData);
 
       const response = await apiService.createMetaModel(requestData);
-      console.log('Model creation response:', response);
+      console.log('Meta Model creation response:', response);
       
-      setSuccess('Model created successfully!');
+      setSuccess('Meta Model created successfully!');
       setTimeout(() => {
         onSuccess?.(response.data);
         handleClose();
       }, 1500);
     } catch (err) {
-      console.error('Model creation error:', err);
-      setError(`Error creating model: ${err instanceof Error ? err.message : 'Unknown error'}`);
+      console.error('Meta Model creation error:', err);
+      setError(`Error creating meta model: ${err instanceof Error ? err.message : 'Unknown error'}`);
     } finally {
       setIsLoading(false);
     }
@@ -431,7 +443,7 @@ export const CreateModelModal: React.FC<CreateModelModalProps> = ({
     <div style={modalOverlayStyle} onClick={handleClose}>
       <div style={modalStyle} onClick={(e) => e.stopPropagation()}>
         <div style={modalHeaderStyle}>
-          <h2 style={modalTitleStyle}>Create New Model</h2>
+          <h2 style={modalTitleStyle}>Create New Meta Model</h2>
           <button
             style={closeButtonStyle}
             onClick={handleClose}
@@ -446,10 +458,10 @@ export const CreateModelModal: React.FC<CreateModelModalProps> = ({
         {success && <div style={successMessageStyle}>{success}</div>}
         
         <div style={formGroupStyle}>
-          <label style={labelStyle}>Model Name *</label>
+          <label style={labelStyle}>Meta Model Name *</label>
           <input
             type="text"
-            placeholder="Enter model name..."
+            placeholder="Enter meta model name..."
             value={formData.name}
             onChange={(e) => setFormData({ ...formData, name: e.target.value })}
             style={inputStyle}
@@ -507,7 +519,7 @@ export const CreateModelModal: React.FC<CreateModelModalProps> = ({
         {/* File Upload Section */}
         <div style={uploadSectionStyle}>
           <div style={uploadSectionTitleStyle}>
-            Required Model Files
+            Required Meta Model Files
           </div>
           
           <input
@@ -581,7 +593,7 @@ export const CreateModelModal: React.FC<CreateModelModalProps> = ({
             onMouseEnter={(e) => canSave && !isLoading && Object.assign(e.currentTarget.style, buttonHoverStyle)}
             onMouseLeave={(e) => canSave && !isLoading && Object.assign(e.currentTarget.style, primaryButtonStyle)}
           >
-            {isLoading ? 'Creating...' : canSave ? 'Create Model' : 'Upload Files First'}
+            {isLoading ? 'Creating...' : canSave ? 'Create Meta Model' : 'Upload Files First'}
           </button>
         </div>
       </div>
