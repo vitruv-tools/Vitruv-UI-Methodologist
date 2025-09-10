@@ -1,41 +1,31 @@
 import React from 'react';
+import { ToolsPanel } from '../ui/ToolsPanel';
+
+interface SidebarProps {
+  onDiagramSelect?: (diagramType: string) => void;
+  onEcoreFileUpload?: (fileContent: string, meta?: { fileName?: string; uploadId?: string; description?: string; keywords?: string; domain?: string; createdAt?: string }) => void;
+  onEcoreFileDelete?: (fileName: string) => void;
+}
 
 const sidebarStyle: React.CSSProperties = {
-  width: 180,
-  background: '#eee',
-  padding: 20,
+  width: '350px',
+  background: '#ffffff',
   boxSizing: 'border-box',
   height: '100vh',
-  position: 'absolute',
-  left: 0,
-  top: 0,
-  zIndex: 10
+  borderRight: '1px solid #e0e0e0',
+  overflowY: 'auto',
+  overflowX: 'hidden',
 };
 
-const itemStyle: React.CSSProperties = {
-  border: '1px solid #999',
-  padding: 8,
-  marginBottom: 12,
-  background: '#fff',
-  borderRadius: 4,
-  cursor: 'grab',
-  textAlign: 'center'
-};
+// ... existing code ...
 
-const onDragStart = (event: React.DragEvent, nodeType: string) => {
-  event.dataTransfer.setData('application/reactflow', nodeType);
-  event.dataTransfer.effectAllowed = 'move';
-};
-
-export function Sidebar() {
+export function Sidebar({ onDiagramSelect, onEcoreFileUpload, onEcoreFileDelete }: SidebarProps) {
   return (
     <aside style={sidebarStyle}>
-      <div style={itemStyle} draggable onDragStart={event => onDragStart(event, 'sequence')}>
-        Sequence Table
-      </div>
-      <div style={itemStyle} draggable onDragStart={event => onDragStart(event, 'object')}>
-        Object Table
-      </div>
+      <ToolsPanel
+        onEcoreFileUpload={onEcoreFileUpload}
+        onEcoreFileDelete={onEcoreFileDelete}
+      />
     </aside>
   );
 } 

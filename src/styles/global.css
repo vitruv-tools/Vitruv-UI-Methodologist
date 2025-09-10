@@ -11,6 +11,7 @@ body {
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   background-color: #f5f5f5;
+  
 }
 
 code {
@@ -63,6 +64,37 @@ code {
   cursor: grabbing;
 }
 
+/* Responsive breakpoints */
+@media (max-width: 768px) {
+  .sidebar-responsive {
+    width: 100% !important;
+    max-width: 280px;
+  }
+  
+  .header-responsive {
+    padding: 0 12px !important;
+  }
+  
+  .header-responsive h1 {
+    font-size: 16px !important;
+  }
+}
+
+@media (max-width: 480px) {
+  .sidebar-responsive {
+    width: 100% !important;
+    max-width: 100%;
+  }
+  
+  .header-responsive {
+    padding: 0 8px !important;
+  }
+  
+  .header-responsive h1 {
+    font-size: 14px !important;
+  }
+}
+
 /* Scrollbar styles */
 ::-webkit-scrollbar {
   width: 8px;
@@ -70,17 +102,17 @@ code {
 }
 
 ::-webkit-scrollbar-track {
-  background: #f1f1f1;
+  background: rgba(255, 255, 255, 0.1);
   border-radius: 4px;
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #c1c1c1;
+  background: rgba(255, 255, 255, 0.3);
   border-radius: 4px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #a8a8a8;
+  background: rgba(255, 255, 255, 0.5);
 }
 
 /* React Flow custom styles */
@@ -91,9 +123,76 @@ code {
 .react-flow__controls {
   border-radius: 8px;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  position: fixed !important;
+  left: calc(350px + 16px) !important; /* account for sidebar */
+  bottom: 16px !important;
+  z-index: 30;
 }
 
 .react-flow__minimap {
   border-radius: 8px;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  /* position inherits from React Flow (absolute inside canvas) so it stays visible next to the tools panel */
+}
+
+/* Modern scrollbar for sidebar */
+.sidebar-scrollbar::-webkit-scrollbar {
+  width: 6px;
+}
+
+.sidebar-scrollbar::-webkit-scrollbar-track {
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 3px;
+}
+
+.sidebar-scrollbar::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.3);
+  border-radius: 3px;
+}
+
+/* Academic design animations */
+@keyframes slideDown {
+  from {
+    opacity: 0;
+    transform: translateY(-8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+/* Academic design principles - subtle interactions */
+button {
+  transition: all 0.2s ease;
+  font-family: inherit;
+}
+
+button:hover {
+  /* Subtle hover effects for academic feel */
+}
+
+button:active {
+  transform: none;
+}
+
+/* Academic color palette */
+:root {
+  --academic-primary: #2c3e50;
+  --academic-secondary: #34495e;
+  --academic-muted: #7f8c8d;
+  --academic-light: #bdc3c7;
+  --academic-background: #f8f9fa;
+  --academic-border: #e8e8e8;
+  --academic-success: #27ae60;
+  --academic-error: #e74c3c;
 } 

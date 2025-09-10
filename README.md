@@ -7,6 +7,8 @@ A React-based flow modeling application for creating and managing Vitruvius diag
 - **Drag & Drop Interface**: Create flow diagrams by dragging nodes from the sidebar
 - **Editable Nodes**: Double-click nodes to edit their labels
 - **Flow Connections**: Connect nodes to create relationships
+- **Undo/Redo Functionality**: Use Ctrl+Z to undo and Ctrl+Y to redo changes
+- **Node Deletion**: Delete nodes by selecting them and clicking the delete button
 - **Deploy Functionality**: Deploy your models to the Vitruvius backend
 - **Modern UI**: Clean and intuitive user interface
 
@@ -65,10 +67,12 @@ For detailed architecture documentation, see [ARCHITECTURE.md](./ARCHITECTURE.md
 
 ## Usage
 
-1. **Creating Nodes**: Drag "Sequence Table" or "Object Table" from the sidebar onto the canvas
+1. **Creating Nodes**: Drag UML elements from the sidebar onto the canvas
 2. **Editing Nodes**: Double-click any node to edit its label
 3. **Connecting Nodes**: Click and drag from one node's handle to another to create connections
-4. **Deploying**: Click the "Deploy" button to send your model to the backend
+4. **Deleting Nodes**: Select a node and click the red delete button (×) that appears
+5. **Undo/Redo**: Use Ctrl+Z to undo changes or Ctrl+Y to redo them
+6. **Deploying**: Click the "Deploy" button to send your model to the backend
 
 ## Technology Stack
 
