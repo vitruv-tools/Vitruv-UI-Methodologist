@@ -37,6 +37,10 @@ export interface User {
   username: string;
   email?: string;
   name?: string;
+  givenName?: string;
+  familyName?: string;
+  emailVerified?: boolean;
+  scope?: string;
 }
 
 export class AuthService {
