@@ -648,8 +648,8 @@ export const EcoreFileBox: React.FC<EcoreFileBoxProps> = ({
 
       <ConfirmDialog
         isOpen={showDeleteConfirm}
-        title="Delete ECORE File"
-        message={`Are you sure you want to delete "${fileName}"? This action will remove the file from the workspace but will not affect the original uploaded file.`}
+        title="Delete ECORE File from Workspace"
+        message={`Do you want to delete "${fileName}" from workspace?`}
         confirmText="Delete"
         cancelText="Cancel"
         onConfirm={confirmDelete}
