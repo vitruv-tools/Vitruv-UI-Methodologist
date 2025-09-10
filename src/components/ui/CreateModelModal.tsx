@@ -443,7 +443,7 @@ export const CreateModelModal: React.FC<CreateModelModalProps> = ({
     <div style={modalOverlayStyle} onClick={handleClose}>
       <div style={modalStyle} onClick={(e) => e.stopPropagation()}>
         <div style={modalHeaderStyle}>
-          <h2 style={modalTitleStyle}>Create New Meta Model</h2>
+          <h2 style={modalTitleStyle}>Upload New Meta Model</h2>
           <button
             style={closeButtonStyle}
             onClick={handleClose}
