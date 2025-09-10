@@ -458,7 +458,7 @@ export const CreateModelModal: React.FC<CreateModelModalProps> = ({
         {success && <div style={successMessageStyle}>{success}</div>}
         
         <div style={formGroupStyle}>
-          <label style={labelStyle}>Meta Model Name *</label>
+          <label style={labelStyle}>Name *</label>
           <input
             type="text"
             placeholder="Enter meta model name..."
