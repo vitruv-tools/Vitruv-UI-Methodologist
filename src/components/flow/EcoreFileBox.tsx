@@ -240,17 +240,6 @@ const descriptionStyle: React.CSSProperties = {
   overflowWrap: 'break-word',
 };
 
-const authorStyle: React.CSSProperties = {
-  fontSize: '12px',
-  color: '#495057',
-  textAlign: 'center',
-  fontStyle: 'italic',
-  lineHeight: '1.4',
-  marginTop: '8px',
-  fontFamily: '"Georgia", "Times New Roman", serif',
-  fontWeight: '500',
-};
-
 export const EcoreFileBox: React.FC<EcoreFileBoxProps> = ({
   fileName,
   fileContent,
