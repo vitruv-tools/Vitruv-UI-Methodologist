@@ -189,7 +189,8 @@ export function useDragAndDrop({
       event.dataTransfer.dropEffect = 'copy';
       console.log('Tool drag over detected');
     } else {
-      event.dataTransfer.dropEffect = 'move';
+      // Disallow dropping unknown payloads (e.g., external links) onto the canvas
+      event.dataTransfer.dropEffect = 'none';
     }
   }, []);
 

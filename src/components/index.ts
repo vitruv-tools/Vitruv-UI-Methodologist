@@ -12,6 +12,7 @@ export { EcoreFileBox } from './flow/EcoreFileBox';
 export { ToolsPanel } from './ui/ToolsPanel';
 export { ConfirmDialog } from './ui/ConfirmDialog';
 export { CreateModelModal } from './ui/CreateModelModal';
+export { KeywordTagsInput } from './ui/KeywordTagsInput';
 
 
 // Auth components

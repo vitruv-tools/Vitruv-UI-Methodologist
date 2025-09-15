@@ -63,6 +63,11 @@ export function AuthProvider({ children }: AuthProviderProps) {
     };
 
     checkAuth();
+    const onSignOut = () => setUser(null);
+    window.addEventListener('auth:signout', onSignOut);
+    return () => {
+      window.removeEventListener('auth:signout', onSignOut);
+    };
   }, []);
 
   const signIn = async (username: string, password: string) => {
