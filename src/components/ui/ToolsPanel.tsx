@@ -590,13 +590,43 @@ export const ToolsPanel: React.FC<ToolsPanelProps> = ({ onEcoreFileUpload, onEco
         </div>
       )}
       
-      {allowCreate && (
-        <button 
-          style={getButtonStyle()}
-          onClick={handleButtonClick}
-          disabled={isProcessing}
-          onMouseEnter={(e) => !isProcessing && Object.assign(e.currentTarget.style, createButtonHoverStyle)}
-          onMouseLeave={(e) => !isProcessing && Object.assign(e.currentTarget.style, getButtonStyle())}
+      <button 
+        style={getButtonStyle()}
+        onClick={handleButtonClick}
+        disabled={isProcessing}
+        onMouseEnter={(e) => !isProcessing && Object.assign(e.currentTarget.style, createButtonHoverStyle)}
+        onMouseLeave={(e) => !isProcessing && Object.assign(e.currentTarget.style, getButtonStyle())}
+      >
+        {isProcessing ? (
+          <>
+            Creating...
+          </>
+        ) : (
+          <>
+            Upload New Meta Model
+          </>
+        )}
+      </button>
+
+      <div style={{
+        marginTop: '16px',
+        marginBottom: '8px',
+        fontWeight: '700',
+        fontSize: '13px',
+        color: '#2c3e50',
+        borderBottom: '1px solid #3498db',
+        paddingBottom: '6px',
+        fontFamily: 'Georgia, serif',
+      }}>
+        Meta Models
+      </div>
+
+      <div style={toggleContainerStyle}>
+        <button
+          style={toggleButtonStyle}
+          onClick={() => setShowFilters(!showFilters)}
+          onMouseEnter={(e) => Object.assign(e.currentTarget.style, toggleButtonHoverStyle)}
+          onMouseLeave={(e) => Object.assign(e.currentTarget.style, toggleButtonStyle)}
         >
           {isProcessing ? (
             <>
