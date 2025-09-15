@@ -68,7 +68,7 @@ export function Header({ title = 'Vitruvius Modeler', user, onLogout }: HeaderPr
       <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
         <h1 style={{ margin: 0, fontSize: 16, fontWeight: 600 }}>{title}</h1>
         <nav style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <Link to="/mml" style={{
+          <Link to="/mml" draggable={false} onDragStart={(e) => e.preventDefault()} style={{
             color: location.pathname === '/mml' ? '#3498db' : '#ecf0f1',
             textDecoration: 'none',
             padding: '6px 10px',
@@ -77,7 +77,7 @@ export function Header({ title = 'Vitruvius Modeler', user, onLogout }: HeaderPr
             fontWeight: 600,
             fontSize: 13,
           }}>MML</Link>
-          <Link to="/project" style={{
+          <Link to="/project" draggable={false} onDragStart={(e) => e.preventDefault()} style={{
             color: location.pathname === '/project' ? '#3498db' : '#ecf0f1',
             textDecoration: 'none',
             padding: '6px 10px',
