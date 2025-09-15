@@ -1,4 +1,4 @@
-import React, { useState, useRef, KeyboardEvent, useEffect } from 'react';
+import React, { useState, useRef, KeyboardEvent } from 'react';
 
 interface KeywordTagsInputProps {
   keywords: string[];
@@ -130,26 +130,7 @@ export const KeywordTagsInput: React.FC<KeywordTagsInputProps> = ({
   const renderColoredText = () => {
     if (keywords.length === 0) return null;
     
-    let displayText = '';
-    let currentIndex = 0;
-    
-    keywords.forEach((keyword, index) => {
-      if (index > 0) {
-        displayText += ' ';
-        currentIndex++;
-      }
-      
-      // Add each character of the keyword with its color
-      for (let i = 0; i < keyword.length; i++) {
-        displayText += keyword[i];
-        currentIndex++;
-      }
-    });
-    
-    // Add current input value
-    if (inputValue) {
-      displayText += ' ' + inputValue;
-    }
+    // Build colored display of keywords and current input value
     
     return (
       <div style={coloredTextStyle}>

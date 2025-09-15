@@ -1,5 +1,4 @@
 import React, { useEffect, useState, useRef } from 'react';
-import { Sidebar } from './Sidebar';
 import { Header } from './Header';
 import { FlowCanvas } from '../flow/FlowCanvas';
 import { ToolsPanel } from '../ui/ToolsPanel';
@@ -108,10 +107,7 @@ export function MainLayout({ onDeploy, onSave, onLoad, onNew, user, onLogout, le
     };
   }, []);
 
-  const handleDiagramSelection = (diagramType: string) => {
-    console.log('Diagram selected:', diagramType);
-    setSelectedDiagramType(diagramType);
-  };
+  
 
   // Calculate empty position for new box next to existing boxes
   const calculateEmptyPosition = (existingBoxes: EcoreFileBox[]) => {
