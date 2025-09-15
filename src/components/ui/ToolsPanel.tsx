@@ -306,55 +306,176 @@ export const ToolsPanel: React.FC<ToolsPanelProps> = ({ onEcoreFileUpload, onEco
   const [expandedCard, setExpandedCard] = useState<number | null>(null);
   const [parsedFilters, setParsedFilters] = useState<any[]>([]);
 
-  // Parse GitHub-style search syntax
+  // Parse GitHub-style search syntax (supports quoted values and multiple keys)
   const parseSearchQuery = (query: string) => {
-    const filters: any[] = [];
-    const parts = query.split(/\s+/).filter(part => part.trim());
-    
-    for (const part of parts) {
-      // Check if it's a parameter:value format
-      const colonMatch = part.match(/^([a-zA-Z]+):(.+)$/);
-      if (colonMatch) {
-        const [, key, value] = colonMatch;
-        const cleanValue = value.replace(/"/g, '');
-        
-        // Map GitHub-style parameters to our API parameters
-        switch (key.toLowerCase()) {
-          case 'name':
-            filters.push({ key: 'name', value: cleanValue, display: `name:${cleanValue}` });
-            break;
-          case 'domain':
-            filters.push({ key: 'domain', value: cleanValue, display: `domain:${cleanValue}` });
-            break;
-          case 'keywords':
-            filters.push({ key: 'keywords', value: cleanValue, display: `keywords:${cleanValue}` });
-            break;
-          case 'description':
-            filters.push({ key: 'description', value: cleanValue, display: `description:${cleanValue}` });
-            break;
-          case 'created':
-            filters.push({ key: 'created', value: cleanValue, display: `created:${cleanValue}` });
-            break;
-          case 'updated':
-            filters.push({ key: 'updated', value: cleanValue, display: `updated:${cleanValue}` });
-            break;
-          case 'time':
-            // Handle time shortcuts
-            if (cleanValue === 'beforenow' || cleanValue === 'before:now') {
-              filters.push({ key: 'created', value: 'before:now', display: `time:beforenow` });
-            } else if (cleanValue === 'afternow' || cleanValue === 'after:now') {
-              filters.push({ key: 'created', value: 'after:now', display: `time:afternow` });
-            } else {
-              filters.push({ key: 'created', value: cleanValue, display: `time:${cleanValue}` });
-            }
-            break;
-        }
+    const result: any[] = [];
+
+    // Tokenize respecting quotes
+    const tokens: string[] = [];
+    let current = '';
+    let inQuotes = false;
+    for (let i = 0; i < query.length; i++) {
+      const ch = query[i];
+      if (ch === '"') {
+        inQuotes = !inQuotes;
+        continue;
+      }
+      if (!inQuotes && /\s/.test(ch)) {
+        if (current.trim().length > 0) tokens.push(current);
+        current = '';
       } else {
-        // Regular text search - treat as name search
-        filters.push({ key: 'name', value: part, display: `name:${part}` });
+        current += ch;
       }
     }
-    
+    if (current.trim().length > 0) tokens.push(current);
+
+    for (const token of tokens) {
+      const match = token.match(/^([a-zA-Z]+):(.+)$/);
+      if (match) {
+        const key = match[1].toLowerCase();
+        const rawValue = match[2];
+        const cleanValue = rawValue.trim();
+        switch (key) {
+          case 'name':
+            result.push({ key: 'name', value: cleanValue, display: `name:${cleanValue}` });
+            break;
+          case 'domain':
+            result.push({ key: 'domain', value: cleanValue, display: `domain:${cleanValue}` });
+            break;
+          case 'keyword':
+          case 'keywords': {
+            result.push({ key: 'keywords', value: cleanValue, display: `keywords:${cleanValue}` });
+            break;
+          }
+          case 'description':
+          case 'desc':
+            result.push({ key: 'description', value: cleanValue, display: `description:${cleanValue}` });
+            break;
+          case 'created':
+            result.push({ key: 'created', value: cleanValue, display: `created:${cleanValue}` });
+            break;
+          case 'updated':
+            result.push({ key: 'updated', value: cleanValue, display: `updated:${cleanValue}` });
+            break;
+          case 'time': {
+            if (cleanValue === 'beforenow' || cleanValue === 'before:now') {
+              result.push({ key: 'created', value: 'before:now', display: 'time:beforenow' });
+            } else if (cleanValue === 'afternow' || cleanValue === 'after:now') {
+              result.push({ key: 'created', value: 'after:now', display: 'time:afternow' });
+            } else {
+              result.push({ key: 'created', value: cleanValue, display: `time:${cleanValue}` });
+            }
+            break;
+          }
+          default:
+            // Unknown key: treat as name
+            result.push({ key: 'name', value: `${key}:${cleanValue}`, display: `name:${key}:${cleanValue}` });
+        }
+      } else if (token.trim().length > 0) {
+        // Bare word -> name search
+        result.push({ key: 'name', value: token, display: `name:${token}` });
+      }
+    }
+
+    return result;
+  };
+
+  // Build API filter object from parsed filters and dateFilter state
+  const buildApiFiltersFromParsedFilters = (filtersParsed: any[], includeLegacyDate = true) => {
+    const filters: any = {};
+    filtersParsed.forEach(filter => {
+      switch (filter.key) {
+        case 'name':
+          filters.name = filter.value;
+          break;
+        case 'domain':
+          filters.domain = filter.value;
+          break;
+        case 'keywords': {
+          // Map to API's `keyword: string[]`
+          const values = String(filter.value)
+            .split(',')
+            .map(v => v.trim())
+            .filter(v => v.length > 0);
+          if (values.length > 0) filters.keyword = values;
+          break;
+        }
+        case 'description':
+          filters.description = filter.value;
+          break;
+        case 'created': {
+          const v = String(filter.value);
+          if (v.includes('after:')) {
+            const dateStr = v.replace('after:', '');
+            filters.createdFrom = dateStr === 'now' ? new Date().toISOString() : new Date(dateStr).toISOString();
+          } else if (v.includes('before:')) {
+            const dateStr = v.replace('before:', '');
+            filters.createdTo = dateStr === 'now' ? new Date().toISOString() : new Date(dateStr).toISOString();
+          } else if (v.includes('between:')) {
+            const dates = v.replace('between:', '').split('..');
+            if (dates.length === 2) {
+              filters.createdFrom = new Date(dates[0]).toISOString();
+              filters.createdTo = new Date(dates[1]).toISOString();
+            }
+          } else if (v === 'before:now') {
+            filters.createdTo = new Date().toISOString();
+          } else if (v === 'after:now') {
+            filters.createdFrom = new Date().toISOString();
+          } else {
+            filters.createdFrom = new Date(v).toISOString();
+            filters.createdTo = new Date(`${v}T23:59:59`).toISOString();
+          }
+          break;
+        }
+        case 'updated': {
+          const v = String(filter.value);
+          if (v.includes('after:')) {
+            const dateStr = v.replace('after:', '');
+            filters.updatedFrom = dateStr === 'now' ? new Date().toISOString() : new Date(dateStr).toISOString();
+          } else if (v.includes('before:')) {
+            const dateStr = v.replace('before:', '');
+            filters.updatedTo = dateStr === 'now' ? new Date().toISOString() : new Date(dateStr).toISOString();
+          } else if (v.includes('between:')) {
+            const dates = v.replace('between:', '').split('..');
+            if (dates.length === 2) {
+              filters.updatedFrom = new Date(dates[0]).toISOString();
+              filters.updatedTo = new Date(dates[1]).toISOString();
+            }
+          } else {
+            filters.updatedFrom = new Date(v).toISOString();
+            filters.updatedTo = new Date(`${v}T23:59:59`).toISOString();
+          }
+          break;
+        }
+      }
+    });
+
+    if (includeLegacyDate && dateFilter !== 'all') {
+      const now = new Date();
+      let createdFrom: Date;
+      switch (dateFilter) {
+        case 'today':
+          createdFrom = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+          break;
+        case 'week':
+          createdFrom = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+          break;
+        case 'month':
+          createdFrom = new Date(now.getFullYear(), now.getMonth(), 1);
+          break;
+        case 'year':
+          createdFrom = new Date(now.getFullYear(), 0, 1);
+          break;
+        default:
+          createdFrom = new Date(0);
+      }
+      const hasDateFilters = filters.createdFrom || filters.createdTo || filters.updatedFrom || filters.updatedTo;
+      if (!hasDateFilters) {
+        filters.createdFrom = createdFrom.toISOString();
+        filters.createdTo = now.toISOString();
+      }
+    }
+
     return filters;
   };
 
@@ -380,110 +501,7 @@ export const ToolsPanel: React.FC<ToolsPanelProps> = ({ onEcoreFileUpload, onEco
       setApiError('');
       
       try {
-        const filters: any = {};
-        
-        // Process GitHub-style search filters
-        parsedFilters.forEach(filter => {
-          switch (filter.key) {
-            case 'name':
-              filters.name = filter.value;
-              break;
-            case 'domain':
-              filters.domain = filter.value;
-              break;
-            case 'keywords':
-              filters.keywords = filter.value;
-              break;
-            case 'description':
-              filters.description = filter.value;
-              break;
-            case 'created':
-              // Handle date filters
-              if (filter.value.includes('after:')) {
-                const dateStr = filter.value.replace('after:', '');
-                if (dateStr === 'now') {
-                  filters.createdFrom = new Date().toISOString();
-                } else {
-                  filters.createdFrom = new Date(dateStr).toISOString();
-                }
-              } else if (filter.value.includes('before:')) {
-                const dateStr = filter.value.replace('before:', '');
-                if (dateStr === 'now') {
-                  filters.createdTo = new Date().toISOString();
-                } else {
-                  filters.createdTo = new Date(dateStr).toISOString();
-                }
-              } else if (filter.value.includes('between:')) {
-                const dates = filter.value.replace('between:', '').split('..');
-                if (dates.length === 2) {
-                  filters.createdFrom = new Date(dates[0]).toISOString();
-                  filters.createdTo = new Date(dates[1]).toISOString();
-                }
-              } else {
-                // Specific date
-                filters.createdFrom = new Date(filter.value).toISOString();
-                filters.createdTo = new Date(filter.value + 'T23:59:59').toISOString();
-              }
-              break;
-            case 'updated':
-              // Similar to created but for updated field
-              if (filter.value.includes('after:')) {
-                const dateStr = filter.value.replace('after:', '');
-                if (dateStr === 'now') {
-                  filters.updatedFrom = new Date().toISOString();
-                } else {
-                  filters.updatedFrom = new Date(dateStr).toISOString();
-                }
-              } else if (filter.value.includes('before:')) {
-                const dateStr = filter.value.replace('before:', '');
-                if (dateStr === 'now') {
-                  filters.updatedTo = new Date().toISOString();
-                } else {
-                  filters.updatedTo = new Date(dateStr).toISOString();
-                }
-              } else if (filter.value.includes('between:')) {
-                const dates = filter.value.replace('between:', '').split('..');
-                if (dates.length === 2) {
-                  filters.updatedFrom = new Date(dates[0]).toISOString();
-                  filters.updatedTo = new Date(dates[1]).toISOString();
-                }
-              } else {
-                filters.updatedFrom = new Date(filter.value).toISOString();
-                filters.updatedTo = new Date(filter.value + 'T23:59:59').toISOString();
-              }
-              break;
-          }
-        });
-        
-        // Add legacy date filters (keep existing functionality)
-        if (dateFilter !== 'all') {
-          const now = new Date();
-          let createdFrom: Date;
-          
-          switch (dateFilter) {
-            case 'today':
-              createdFrom = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-              break;
-            case 'week':
-              createdFrom = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
-              break;
-            case 'month':
-              createdFrom = new Date(now.getFullYear(), now.getMonth(), 1);
-              break;
-            case 'year':
-              createdFrom = new Date(now.getFullYear(), 0, 1);
-              break;
-            default:
-              createdFrom = new Date(0);
-          }
-          
-          // Only add legacy date filters if no GitHub-style date filters are present
-          const hasDateFilters = parsedFilters.some(f => f.key === 'created' || f.key === 'updated');
-          if (!hasDateFilters) {
-            filters.createdFrom = createdFrom.toISOString();
-            filters.createdTo = now.toISOString();
-          }
-        }
+        const filters = buildApiFiltersFromParsedFilters(parsedFilters, true);
         
         const response = await apiService.findMetaModels(filters);
         setApiModels(response.data || []);
@@ -607,38 +625,6 @@ export const ToolsPanel: React.FC<ToolsPanelProps> = ({ onEcoreFileUpload, onEco
           </>
         )}
       </button>
-
-      <div style={{
-        marginTop: '16px',
-        marginBottom: '8px',
-        fontWeight: '700',
-        fontSize: '13px',
-        color: '#2c3e50',
-        borderBottom: '1px solid #3498db',
-        paddingBottom: '6px',
-        fontFamily: 'Georgia, serif',
-      }}>
-        Meta Models
-      </div>
-
-      <div style={toggleContainerStyle}>
-        <button
-          style={toggleButtonStyle}
-          onClick={() => setShowFilters(!showFilters)}
-          onMouseEnter={(e) => Object.assign(e.currentTarget.style, toggleButtonHoverStyle)}
-          onMouseLeave={(e) => Object.assign(e.currentTarget.style, toggleButtonStyle)}
-        >
-          {isProcessing ? (
-            <>
-              Creating...
-            </>
-          ) : (
-            <>
-              Create New Meta Model
-            </>
-          )}
-        </button>
-      </div>
 
       {!suppressApi && (
         <div style={{
@@ -1034,32 +1020,7 @@ export const ToolsPanel: React.FC<ToolsPanelProps> = ({ onEcoreFileUpload, onEco
             setIsLoadingModels(true);
             setApiError('');
             try {
-              const filters: any = {};
-              if (searchTerm.trim()) {
-                filters.name = searchTerm.trim();
-              }
-              if (dateFilter !== 'all') {
-                const now = new Date();
-                let createdFrom: Date;
-                switch (dateFilter) {
-                  case 'today':
-                    createdFrom = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-                    break;
-                  case 'week':
-                    createdFrom = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
-                    break;
-                  case 'month':
-                    createdFrom = new Date(now.getFullYear(), now.getMonth(), 1);
-                    break;
-                  case 'year':
-                    createdFrom = new Date(now.getFullYear(), 0, 1);
-                    break;
-                  default:
-                    createdFrom = new Date(0);
-                }
-                filters.createdFrom = createdFrom.toISOString();
-                filters.createdTo = now.toISOString();
-              }
+              const filters = buildApiFiltersFromParsedFilters(parsedFilters, true);
               const response = await apiService.findMetaModels(filters);
               setApiModels(response.data || []);
             } catch (error) {

@@ -59,8 +59,20 @@ export class AuthService {
     });
 
     if (!response.ok) {
-      const errorData = await response.json().catch(() => ({}));
-      throw new Error(errorData.message || `HTTP error! status: ${response.status}`);
+      let errorText = '';
+      try {
+        errorText = await response.text();
+      } catch {}
+      let errorMessage = errorText;
+      try {
+        const parsed = JSON.parse(errorText);
+        errorMessage = (parsed as any)?.message || (parsed as any)?.error || errorText;
+      } catch {}
+      const statusLine = `${response.status} ${response.statusText}`.trim();
+      const composedMessage = errorMessage
+        ? `${statusLine}: ${errorMessage}`
+        : statusLine || 'Request failed';
+      throw new Error(composedMessage);
     }
 
     const data: SignUpResponse = await response.json();
@@ -77,8 +89,20 @@ export class AuthService {
     });
 
     if (!response.ok) {
-      const errorData = await response.json().catch(() => ({}));
-      throw new Error(errorData.message || `HTTP error! status: ${response.status}`);
+      let errorText = '';
+      try {
+        errorText = await response.text();
+      } catch {}
+      let errorMessage = errorText;
+      try {
+        const parsed = JSON.parse(errorText);
+        errorMessage = (parsed as any)?.message || (parsed as any)?.error || errorText;
+      } catch {}
+      const statusLine = `${response.status} ${response.statusText}`.trim();
+      const composedMessage = errorMessage
+        ? `${statusLine}: ${errorMessage}`
+        : statusLine || 'Request failed';
+      throw new Error(composedMessage);
     }
 
     const data: AuthResponse = await response.json();

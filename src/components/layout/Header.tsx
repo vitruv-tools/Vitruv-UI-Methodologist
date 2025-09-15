@@ -67,6 +67,9 @@ export function Header({ title = 'Vitruvius Modeler', user, onLogout }: HeaderPr
     }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
         <h1 style={{ margin: 0, fontSize: 16, fontWeight: 600 }}>{title}</h1>
+
+      </div>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
         <nav style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
           <Link to="/mml" draggable={false} onDragStart={(e) => e.preventDefault()} style={{
             color: location.pathname === '/mml' ? '#3498db' : '#ecf0f1',
@@ -87,17 +90,15 @@ export function Header({ title = 'Vitruvius Modeler', user, onLogout }: HeaderPr
             fontSize: 13,
           }}>Project</Link>
         </nav>
-      </div>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
         <div ref={menuRef} style={{ position: 'relative' }}>
           <button
             onClick={() => setIsMenuOpen((open) => !open)}
             aria-haspopup="menu"
             aria-expanded={isMenuOpen}
             title={
-              user?.name || `${user?.givenName || ''} ${user?.familyName || ''}`.trim() || 
-              user?.email || 
-              user?.username || 
+              user?.name || `${user?.givenName || ''} ${user?.familyName || ''}`.trim() ||
+              user?.email ||
+              user?.username ||
               'User menu'
             }
             style={{
@@ -150,7 +151,7 @@ export function Header({ title = 'Vitruvius Modeler', user, onLogout }: HeaderPr
               }}
             >
               {/* User Info Section */}
-              <div style={{ 
+              <div style={{
                 background: '#f8f9fa',
                 padding: '20px',
                 color: '#2c3e50',
@@ -191,7 +192,7 @@ export function Header({ title = 'Vitruvius Modeler', user, onLogout }: HeaderPr
                     )}
                   </div>
                 </div>
-                
+
                 {/* Status Badge */}
                 {user?.emailVerified !== undefined && (
                   <div style={{
@@ -212,9 +213,9 @@ export function Header({ title = 'Vitruvius Modeler', user, onLogout }: HeaderPr
 
               {/* Menu Actions */}
               <div style={{ padding: '16px' }}>
-                <div style={{ 
-                  display: 'flex', 
-                  flexDirection: 'column', 
+                <div style={{
+                  display: 'flex',
+                  flexDirection: 'column',
                   gap: 8,
                 }}>
                   <button
