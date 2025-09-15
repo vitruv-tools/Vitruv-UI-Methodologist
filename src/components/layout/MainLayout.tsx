@@ -593,7 +593,7 @@ export function MainLayout({ onDeploy, onSave, onLoad, onNew, user, onLogout, le
               onEcoreFileRename={handleEcoreFileRename}
             />
             {workspaceTopRightSlot && (
-              <div style={{ position: 'absolute', right: 16, top: 60, zIndex: 23 }}>
+              <div style={{ position: 'absolute', right: 16, top: 60, zIndex: 15 }}>
                 {workspaceTopRightSlot}
               </div>
             )}

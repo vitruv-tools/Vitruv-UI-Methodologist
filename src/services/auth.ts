@@ -102,14 +102,22 @@ export class AuthService {
 
   static async refreshToken(): Promise<AuthResponse | null> {
     const refreshToken = localStorage.getItem('auth.refresh_token');
-    
-    if (!refreshToken) {
+    const refreshExpiresAt = localStorage.getItem('auth.refresh_expires_at');
+
+    if (!refreshToken || !refreshExpiresAt) {
+      return null;
+    }
+
+    const now = Date.now();
+    const refreshExpiry = parseInt(refreshExpiresAt, 10);
+    if (Number.isFinite(refreshExpiry) && now >= refreshExpiry) {
+      await this.signOut();
       return null;
     }
 
     try {
       const requestBody: RefreshTokenRequest = { refreshToken };
-      
+
       const response = await fetch(`${this.LOCAL_API_BASE_URL}/api/v1/users/access-token/by-refresh-token`, {
         method: 'POST',
         headers: {
@@ -123,7 +131,7 @@ export class AuthService {
       }
 
       const data: AuthResponse = await response.json();
-      
+
       localStorage.setItem('auth.access_token', data.access_token);
       localStorage.setItem('auth.refresh_token', data.refresh_token);
       localStorage.setItem('auth.expires_in', data.expires_in.toString());
@@ -132,16 +140,16 @@ export class AuthService {
       localStorage.setItem('auth.session_state', data.session_state);
       localStorage.setItem('auth.scope', data.scope);
       localStorage.setItem('auth.not_before_policy', data['not-before-policy'].toString());
-      
-      const accessExpiresAt = Date.now() + (data.expires_in * 1000);
-      const refreshExpiresAt = Date.now() + (data.refresh_expires_in * 1000);
+
+      const accessExpiresAt = Date.now() + data.expires_in * 1000;
+      const newRefreshExpiresAt = Date.now() + data.refresh_expires_in * 1000;
       localStorage.setItem('auth.access_expires_at', accessExpiresAt.toString());
-      localStorage.setItem('auth.refresh_expires_at', refreshExpiresAt.toString());
+      localStorage.setItem('auth.refresh_expires_at', newRefreshExpiresAt.toString());
 
       return data;
     } catch (error) {
       console.error('Failed to refresh token:', error);
-      this.signOut();
+      await this.signOut();
       return null;
     }
   }
@@ -158,55 +166,52 @@ export class AuthService {
     localStorage.removeItem('auth.access_expires_at');
     localStorage.removeItem('auth.refresh_expires_at');
     localStorage.removeItem('auth.user');
+    try {
+      window.dispatchEvent(new Event('auth:signout'));
+    } catch {}
   }
 
   static isAuthenticated(): boolean {
+    const now = Date.now();
     const accessToken = localStorage.getItem('auth.access_token');
     const accessExpiresAt = localStorage.getItem('auth.access_expires_at');
-    
-    if (!accessToken || !accessExpiresAt) {
-      return false;
-    }
+    const refreshToken = localStorage.getItem('auth.refresh_token');
+    const refreshExpiresAt = localStorage.getItem('auth.refresh_expires_at');
 
-    const now = Date.now();
-    const expirationTime = parseInt(accessExpiresAt, 10);
-    
-    if (now >= expirationTime) {
-      this.refreshToken().catch(() => {
-        this.signOut();
-      });
-      return false;
-    }
+    const accessValid = !!accessToken && !!accessExpiresAt && now < parseInt(accessExpiresAt, 10);
+    const refreshValid = !!refreshToken && !!refreshExpiresAt && now < parseInt(refreshExpiresAt, 10);
 
-    return true;
+    return accessValid || refreshValid;
   }
 
   static async ensureValidToken(): Promise<string | null> {
+    const now = Date.now();
     const accessToken = localStorage.getItem('auth.access_token');
     const accessExpiresAt = localStorage.getItem('auth.access_expires_at');
-    
-    if (!accessToken || !accessExpiresAt) {
+    const refreshToken = localStorage.getItem('auth.refresh_token');
+    const refreshExpiresAt = localStorage.getItem('auth.refresh_expires_at');
+
+    const accessValid = !!accessToken && !!accessExpiresAt && now < parseInt(accessExpiresAt, 10);
+    if (accessValid) {
+      return accessToken as string;
+    }
+
+    const refreshValid = !!refreshToken && !!refreshExpiresAt && now < parseInt(refreshExpiresAt, 10);
+    if (!refreshValid) {
+      await this.signOut();
       return null;
     }
 
-    const now = Date.now();
-    const expirationTime = parseInt(accessExpiresAt, 10);
-    
-    if (now >= expirationTime) {
-      try {
-        const refreshResult = await this.refreshToken();
-        if (refreshResult) {
-          return refreshResult.access_token;
-        }
-      } catch (error) {
-        console.error('Failed to refresh token:', error);
-        this.signOut();
-        return null;
+    try {
+      const refreshResult = await this.refreshToken();
+      if (refreshResult && refreshResult.access_token) {
+        return refreshResult.access_token;
       }
-      return null;
+    } catch (error) {
+      console.error('Failed to refresh token:', error);
     }
-
-    return accessToken;
+    await this.signOut();
+    return null;
   }
 
   static getAccessToken(): string | null {

@@ -1,6 +1,6 @@
 import React from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
-import { MainLayout, AuthPage } from './components';
+import { AuthPage } from './components/auth/AuthPage';
 import { HomePage } from './pages/HomePage';
 import { ProjectPage } from './pages/ProjectPage';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
@@ -33,6 +33,11 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
 
   return <>{children}</>;
 }
+
+const MainLayout = React.lazy(async () => {
+  const mod = await import('./components/layout/MainLayout');
+  return { default: mod.MainLayout } as { default: React.ComponentType<any> };
+});
 
 function AppContent() {
   const { user, signOut } = useAuth();
@@ -73,14 +78,16 @@ function AppContent() {
   };
 
   return (
-    <MainLayout
-      onDeploy={handleDeploy}
-      onSave={handleSave}
-      onLoad={handleLoad}
-      onNew={handleNew}
-      user={user}
-      onLogout={handleLogout}
-    />
+    <React.Suspense fallback={<div>Loading...</div>}>
+      <MainLayout
+        onDeploy={handleDeploy}
+        onSave={handleSave}
+        onLoad={handleLoad}
+        onNew={handleNew}
+        user={user}
+        onLogout={handleLogout}
+      />
+    </React.Suspense>
   );
 }
 
