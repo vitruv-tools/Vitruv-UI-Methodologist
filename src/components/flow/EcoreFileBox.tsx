@@ -240,17 +240,6 @@ const descriptionStyle: React.CSSProperties = {
   overflowWrap: 'break-word',
 };
 
-const authorStyle: React.CSSProperties = {
-  fontSize: '12px',
-  color: '#495057',
-  textAlign: 'center',
-  fontStyle: 'italic',
-  lineHeight: '1.4',
-  marginTop: '8px',
-  fontFamily: '"Georgia", "Times New Roman", serif',
-  fontWeight: '500',
-};
-
 export const EcoreFileBox: React.FC<EcoreFileBoxProps> = ({
   fileName,
   fileContent,
@@ -458,24 +447,6 @@ export const EcoreFileBox: React.FC<EcoreFileBoxProps> = ({
     }
   };
 
-  const getAuthorName = () => {
-    try {
-      const authorMatch = fileContent.match(/<eAnnotations.*?source="http:\/\/www\.eclipse\.org\/emf\/2002\/GenModel".*?<details.*?key="documentation".*?value="([^"]*)"/);
-      if (authorMatch && authorMatch[1]) {
-        return authorMatch[1].trim();
-      }
-      
-      const otherAuthorMatch = fileContent.match(/author["\s]*[:=]["\s]*([^"\n\r]+)/i);
-      if (otherAuthorMatch && otherAuthorMatch[1]) {
-        return otherAuthorMatch[1].trim();
-      }
-      
-      return 'Unknown Author';
-    } catch (error) {
-      return 'Unknown Author';
-    }
-  };
-
   return (
     <>
       <div
@@ -615,10 +586,6 @@ export const EcoreFileBox: React.FC<EcoreFileBoxProps> = ({
               })()}
             </div>
           )}
-         
-         <div style={authorStyle}>
-           by {getAuthorName()}
-         </div>
          
          {createdAt && (
            <div style={{
