@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
+import { Link, useLocation } from 'react-router-dom';
 import { User } from '../../services/auth';
 
 interface HeaderProps {
@@ -46,6 +47,8 @@ export function Header({ title = 'Vitruvius Modeler', user, onLogout }: HeaderPr
     };
   }, [isMenuOpen]);
 
+  const location = useLocation();
+
   return (
     <header className="header-responsive" style={{
       height: 48,
@@ -62,8 +65,28 @@ export function Header({ title = 'Vitruvius Modeler', user, onLogout }: HeaderPr
       right: 0,
       zIndex: 20,
     }}>
-      <div style={{ display: 'flex', alignItems: 'center' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
         <h1 style={{ margin: 0, fontSize: 16, fontWeight: 600 }}>{title}</h1>
+        <nav style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <Link to="/mml" style={{
+            color: location.pathname === '/mml' ? '#3498db' : '#ecf0f1',
+            textDecoration: 'none',
+            padding: '6px 10px',
+            borderRadius: 6,
+            background: location.pathname === '/mml' ? 'rgba(52,152,219,0.15)' : 'transparent',
+            fontWeight: 600,
+            fontSize: 13,
+          }}>MML</Link>
+          <Link to="/project" style={{
+            color: location.pathname === '/project' ? '#3498db' : '#ecf0f1',
+            textDecoration: 'none',
+            padding: '6px 10px',
+            borderRadius: 6,
+            background: location.pathname === '/project' ? 'rgba(52,152,219,0.15)' : 'transparent',
+            fontWeight: 600,
+            fontSize: 13,
+          }}>Project</Link>
+        </nav>
       </div>
       <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
         <div ref={menuRef} style={{ position: 'relative' }}>

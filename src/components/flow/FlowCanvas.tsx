@@ -1,7 +1,6 @@
 import React, { useRef, useState, forwardRef, useImperativeHandle, useEffect } from 'react';
 import ReactFlow, {
   MiniMap,
-  Controls,
   Background,
   ReactFlowInstance,
   Node,
@@ -54,6 +53,7 @@ export const FlowCanvas = forwardRef<{
   const reactFlowWrapper = useRef<HTMLDivElement>(null);
   const [reactFlowInstance, setReactFlowInstance] = useState<ReactFlowInstance | null>(null);
   const [isDragOver, setIsDragOver] = useState(false);
+  const [isInteractive, setIsInteractive] = useState(true);
   const [selectedFileId, setSelectedFileId] = useState<string | null>(null);
   const [expandedFileId, setExpandedFileId] = useState<string | null>(null);
   
@@ -350,9 +350,15 @@ export const FlowCanvas = forwardRef<{
         nodeTypes={nodeTypes}
         edgeTypes={edgeTypes}
         onInit={setReactFlowInstance}
+        nodesDraggable={isInteractive}
+        nodesConnectable={isInteractive}
+        elementsSelectable={isInteractive}
+        panOnDrag={isInteractive}
+        panOnScroll={isInteractive}
+        zoomOnScroll={isInteractive}
+        zoomOnPinch={isInteractive}
       >
         <MiniMap position="bottom-right" style={{ bottom: 16, right: 16, zIndex: 30 }} />
-        <Controls position="bottom-left" />
         <Background />
       </ReactFlow>
       
@@ -384,6 +390,41 @@ export const FlowCanvas = forwardRef<{
         />
       ))}
       
+      {/* Canvas Controls anchored to wrapper so they move with sidebar resizing */}
+      <div style={{ position: 'absolute', left: 16, bottom: 16, zIndex: 31, display: 'flex', flexDirection: 'column', gap: 6 }}>
+        <button
+          onClick={() => reactFlowInstance?.zoomIn?.()}
+          style={{ width: 36, height: 36, borderRadius: 6, border: '1px solid #e5e7eb', background: '#ffffff', cursor: 'pointer' }}
+          title="Zoom in"
+        >
+          +
+        </button>
+        <button
+          onClick={() => reactFlowInstance?.zoomOut?.()}
+          style={{ width: 36, height: 36, borderRadius: 6, border: '1px solid #e5e7eb', background: '#ffffff', cursor: 'pointer' }}
+          title="Zoom out"
+        >
+          –
+        </button>
+        <button
+          onClick={() => reactFlowInstance?.fitView?.({ padding: 0.2 })}
+          style={{ width: 36, height: 36, borderRadius: 6, border: '1px solid #e5e7eb', background: '#ffffff', cursor: 'pointer' }}
+          title="Fit view"
+        >
+          ⛶
+        </button>
+        <button
+          onClick={() => {
+            const next = !isInteractive;
+            setIsInteractive(next);
+          }}
+          style={{ width: 36, height: 36, borderRadius: 6, border: '1px solid #e5e7eb', background: '#ffffff', cursor: 'pointer' }}
+          title={isInteractive ? 'Lock interactions' : 'Unlock interactions'}
+        >
+          {isInteractive ? '🔓' : '🔒'}
+        </button>
+      </div>
+
       {isDragOver && (
         <div style={{
           position: 'absolute',

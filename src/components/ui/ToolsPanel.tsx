@@ -5,6 +5,11 @@ import { apiService } from '../../services/api';
 interface ToolsPanelProps {
   onEcoreFileUpload?: (fileContent: string, meta?: { fileName?: string; uploadId?: string; description?: string; keywords?: string; domain?: string; createdAt?: string }) => void;
   onEcoreFileDelete?: (fileName: string) => void;
+  title?: string;
+  allowCreate?: boolean;
+  enableItemClick?: boolean;
+  showBorder?: boolean;
+  suppressApi?: boolean;
 }
 
 const toolsPanelStyle: React.CSSProperties = {
@@ -283,7 +288,7 @@ const enhancedSearchInputStyle: React.CSSProperties = {
   fontSize: '13px',
 };
 
-export const ToolsPanel: React.FC<ToolsPanelProps> = ({ onEcoreFileUpload, onEcoreFileDelete }) => {
+export const ToolsPanel: React.FC<ToolsPanelProps> = ({ onEcoreFileUpload, onEcoreFileDelete, title = 'Meta Models', allowCreate = true, enableItemClick = true, showBorder = true, suppressApi = false }) => {
   const [isProcessing] = useState(false);
   const [uploadMessage, setUploadMessage] = useState<string>('');
   const [uploadMessageType, setUploadMessageType] = useState<'success' | 'error'>('success');
@@ -364,6 +369,12 @@ export const ToolsPanel: React.FC<ToolsPanelProps> = ({ onEcoreFileUpload, onEco
   }, [searchTerm]);
 
   useEffect(() => {
+    if (suppressApi) {
+      setIsLoadingModels(false);
+      setApiError('');
+      setApiModels([]);
+      return;
+    }
     const fetchData = async () => {
       setIsLoadingModels(true);
       setApiError('');
@@ -486,7 +497,7 @@ export const ToolsPanel: React.FC<ToolsPanelProps> = ({ onEcoreFileUpload, onEco
     };
     
     fetchData();
-  }, [parsedFilters, dateFilter]);
+  }, [parsedFilters, dateFilter, suppressApi]);
 
   // Sort API models
   const sortedModels = [...apiModels].sort((a, b) => {
@@ -556,10 +567,12 @@ export const ToolsPanel: React.FC<ToolsPanelProps> = ({ onEcoreFileUpload, onEco
     return createButtonStyle;
   };
 
+  const panelStyle: React.CSSProperties = { ...toolsPanelStyle, borderRight: showBorder ? toolsPanelStyle.borderRight : 'none' };
+
   return (
-    <div style={toolsPanelStyle}>
+    <div style={panelStyle}>
       <div style={titleStyle}>
-        Meta Models
+        {title}
       </div>
       
       {uploadMessage && (
@@ -577,65 +590,71 @@ export const ToolsPanel: React.FC<ToolsPanelProps> = ({ onEcoreFileUpload, onEco
         </div>
       )}
       
-      <button 
-        style={getButtonStyle()}
-        onClick={handleButtonClick}
-        disabled={isProcessing}
-        onMouseEnter={(e) => !isProcessing && Object.assign(e.currentTarget.style, createButtonHoverStyle)}
-        onMouseLeave={(e) => !isProcessing && Object.assign(e.currentTarget.style, getButtonStyle())}
-      >
-        {isProcessing ? (
-          <>
-            Creating...
-          </>
-        ) : (
-          <>
-            Create New Meta Model
-          </>
-        )}
-      </button>
-
-      <div style={{
-        marginTop: '16px',
-        marginBottom: '8px',
-        fontWeight: '700',
-        fontSize: '13px',
-        color: '#2c3e50',
-        borderBottom: '1px solid #3498db',
-        paddingBottom: '6px',
-        fontFamily: 'Georgia, serif',
-      }}>
-        Meta Models
-      </div>
-
-      <div style={toggleContainerStyle}>
-        <button
-          style={toggleButtonStyle}
-          onClick={() => setShowFilters(!showFilters)}
-          onMouseEnter={(e) => Object.assign(e.currentTarget.style, toggleButtonHoverStyle)}
-          onMouseLeave={(e) => Object.assign(e.currentTarget.style, toggleButtonStyle)}
+      {allowCreate && (
+        <button 
+          style={getButtonStyle()}
+          onClick={handleButtonClick}
+          disabled={isProcessing}
+          onMouseEnter={(e) => !isProcessing && Object.assign(e.currentTarget.style, createButtonHoverStyle)}
+          onMouseLeave={(e) => !isProcessing && Object.assign(e.currentTarget.style, getButtonStyle())}
         >
-          <span>{showFilters ? 'Hide' : 'Show'} Advanced Search</span>
-          <span>{showFilters ? '▼' : '▶'}</span>
+          {isProcessing ? (
+            <>
+              Creating...
+            </>
+          ) : (
+            <>
+              Create New Meta Model
+            </>
+          )}
         </button>
-        
-        <select
-          value={`${sortBy}-${sortOrder}`}
-          onChange={(e) => {
-            const [newSortBy, newSortOrder] = e.target.value.split('-') as ['name' | 'date' | 'domain', 'asc' | 'desc'];
-            setSortBy(newSortBy);
-            setSortOrder(newSortOrder);
-          }}
-          style={sortDropdownStyle}
-        >
-          <option value="date-desc">Newest First</option>
-          <option value="date-asc">Oldest First</option>
-          <option value="name-asc">Name A-Z</option>
-          <option value="name-desc">Name Z-A</option>
-          <option value="domain-asc">Domain A-Z</option>
-          <option value="domain-desc">Domain Z-A</option>
-        </select>
-      </div>
+      )}
+
+      {!suppressApi && (
+        <div style={{
+          marginTop: '16px',
+          marginBottom: '8px',
+          fontWeight: '700',
+          fontSize: '13px',
+          color: '#2c3e50',
+          borderBottom: '1px solid #3498db',
+          paddingBottom: '6px',
+          fontFamily: 'Georgia, serif',
+        }}>
+          {title}
+        </div>
+      )}
+
+      {!suppressApi && (
+        <div style={toggleContainerStyle}>
+          <button
+            style={toggleButtonStyle}
+            onClick={() => setShowFilters(!showFilters)}
+            onMouseEnter={(e) => Object.assign(e.currentTarget.style, toggleButtonHoverStyle)}
+            onMouseLeave={(e) => Object.assign(e.currentTarget.style, toggleButtonStyle)}
+          >
+            <span>{showFilters ? 'Hide' : 'Show'} Advanced Search</span>
+            <span>{showFilters ? '▼' : '▶'}</span>
+          </button>
+          
+          <select
+            value={`${sortBy}-${sortOrder}`}
+            onChange={(e) => {
+              const [newSortBy, newSortOrder] = e.target.value.split('-') as ['name' | 'date' | 'domain', 'asc' | 'desc'];
+              setSortBy(newSortBy);
+              setSortOrder(newSortOrder);
+            }}
+            style={sortDropdownStyle}
+          >
+            <option value="date-desc">Newest First</option>
+            <option value="date-asc">Oldest First</option>
+            <option value="name-asc">Name A-Z</option>
+            <option value="name-desc">Name Z-A</option>
+            <option value="domain-asc">Domain A-Z</option>
+            <option value="domain-desc">Domain Z-A</option>
+          </select>
+        </div>
+      )}
 
       {showFilters && (
         <div style={filterContainerStyle}>
@@ -758,7 +777,7 @@ export const ToolsPanel: React.FC<ToolsPanelProps> = ({ onEcoreFileUpload, onEco
         </div>
       )}
 
-      {apiError && (
+      {!suppressApi && apiError && (
         <div style={{
           padding: '8px 12px',
           margin: '8px 0',
@@ -773,7 +792,7 @@ export const ToolsPanel: React.FC<ToolsPanelProps> = ({ onEcoreFileUpload, onEco
         </div>
       )}
 
-      {isLoadingModels && (
+      {!suppressApi && isLoadingModels && (
         <div style={{
           padding: '16px',
           textAlign: 'center',
@@ -786,10 +805,12 @@ export const ToolsPanel: React.FC<ToolsPanelProps> = ({ onEcoreFileUpload, onEco
         </div>
       )}
 
+      {!suppressApi && (
       <div style={{ height: 'calc(100vh - 311px)', overflowY: 'auto' }}>
-        {currentPageItems.map(model => (
+        {!suppressApi && currentPageItems.map(model => (
           <div key={model.id} style={fileCardStyle}
             onClick={() => {
+              if (!enableItemClick) return;
               if (onEcoreFileUpload) {
                 onEcoreFileUpload(`name="${model.name}"`, { 
                   fileName: `${model.name}.ecore`, 
@@ -870,15 +891,16 @@ export const ToolsPanel: React.FC<ToolsPanelProps> = ({ onEcoreFileUpload, onEco
             )}
           </div>
         ))}
-        {!isLoadingModels && sortedModels.length === 0 && !apiError && (
+        {!suppressApi && !isLoadingModels && sortedModels.length === 0 && !apiError && (
           <div style={emptyStateStyle}>
             No meta models available from server.
           </div>
         )}
       </div>
+      )}
 
       {/* Pagination Controls */}
-      {totalPages > 1 && (
+      {!suppressApi && totalPages > 1 && (
         <div style={paginationContainerStyle}>
           <div style={paginationInfoStyle}>
             Showing {startIndex + 1}-{Math.min(endIndex, totalItems)} of {totalItems} models

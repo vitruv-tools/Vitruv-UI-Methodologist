@@ -1,6 +1,8 @@
 import React from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { MainLayout, AuthPage } from './components';
+import { HomePage } from './pages/HomePage';
+import { ProjectPage } from './pages/ProjectPage';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { apiService } from './services/api';
 import { exportFlowData } from './utils';
@@ -89,8 +91,18 @@ function App() {
         <Routes>
           <Route path="/auth" element={<AuthPage />} />
           <Route path="/" element={
-             <ProtectedRoute>
+            <ProtectedRoute>
+              <HomePage />
+            </ProtectedRoute>
+          } />
+          <Route path="/mml" element={
+            <ProtectedRoute>
               <AppContent />
+            </ProtectedRoute>
+          } />
+          <Route path="/project" element={
+            <ProtectedRoute>
+              <ProjectPage />
             </ProtectedRoute>
           } />
         </Routes>
