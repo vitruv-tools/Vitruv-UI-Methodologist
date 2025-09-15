@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { CreateModelModal } from './CreateModelModal';
 import { apiService } from '../../services/api';
 
@@ -381,7 +381,7 @@ export const ToolsPanel: React.FC<ToolsPanelProps> = ({ onEcoreFileUpload, onEco
   };
 
   // Build API filter object from parsed filters and dateFilter state
-  const buildApiFiltersFromParsedFilters = (filtersParsed: any[], includeLegacyDate = true) => {
+  const buildApiFiltersFromParsedFilters = useCallback((filtersParsed: any[], includeLegacyDate = true) => {
     const filters: any = {};
     filtersParsed.forEach(filter => {
       switch (filter.key) {
@@ -477,7 +477,7 @@ export const ToolsPanel: React.FC<ToolsPanelProps> = ({ onEcoreFileUpload, onEco
     }
 
     return filters;
-  };
+  }, [dateFilter]);
 
   // Update parsed filters when search term changes
   useEffect(() => {
@@ -515,7 +515,7 @@ export const ToolsPanel: React.FC<ToolsPanelProps> = ({ onEcoreFileUpload, onEco
     };
     
     fetchData();
-  }, [parsedFilters, dateFilter, suppressApi]);
+  }, [parsedFilters, dateFilter, suppressApi, buildApiFiltersFromParsedFilters]);
 
   // Sort API models
   const sortedModels = [...apiModels].sort((a, b) => {
