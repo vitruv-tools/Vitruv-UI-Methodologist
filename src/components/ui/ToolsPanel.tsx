@@ -638,7 +638,7 @@ export const ToolsPanel: React.FC<ToolsPanelProps> = ({ onEcoreFileUpload, onEco
             </>
           )}
         </button>
-      )}
+      </div>
 
       {!suppressApi && (
         <div style={{
