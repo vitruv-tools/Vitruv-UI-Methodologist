@@ -10,6 +10,7 @@ export { EcoreFileBox } from './flow/EcoreFileBox';
 
 // UI components
 export { ToolsPanel } from './ui/ToolsPanel';
+export { SidebarTabs } from './ui/SidebarTabs';
 export { ConfirmDialog } from './ui/ConfirmDialog';
 export { CreateModelModal } from './ui/CreateModelModal';
 export { KeywordTagsInput } from './ui/KeywordTagsInput';

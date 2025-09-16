@@ -82,6 +82,21 @@ const filterContainerStyle: React.CSSProperties = {
   boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
 };
 
+const filterCloseButtonStyle: React.CSSProperties = {
+  position: 'absolute',
+  top: '6px',
+  right: '6px',
+  width: '24px',
+  height: '24px',
+  border: 'none',
+  background: 'transparent',
+  color: '#6c757d',
+  fontSize: '16px',
+  lineHeight: '24px',
+  cursor: 'pointer',
+  borderRadius: '4px',
+};
+
 const filterRowStyle: React.CSSProperties = {
   display: 'flex',
   gap: '8px',
@@ -305,6 +320,33 @@ export const ToolsPanel: React.FC<ToolsPanelProps> = ({ onEcoreFileUpload, onEco
   const itemsPerPage = 10;
   const [expandedCard, setExpandedCard] = useState<number | null>(null);
   const [parsedFilters, setParsedFilters] = useState<any[]>([]);
+
+  const handleSearchKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key !== 'Tab') return;
+    const input = e.currentTarget;
+    const value = input.value;
+    const caret = input.selectionStart ?? value.length;
+    let start = caret - 1;
+    while (start >= 0 && !/\s/.test(value[start])) start--;
+    start++;
+    let end = caret;
+    while (end < value.length && !/\s/.test(value[end])) end++;
+    const token = value.slice(start, end);
+    const lower = token.toLowerCase().replace(/:$/, '');
+
+    const candidates = ['name', 'description', 'domain', 'keywords', 'created', 'updated'];
+    const match = candidates.find(k => k.startsWith(lower));
+    const replacement = match ? `${match}:` : null;
+    if (!replacement) return;
+
+    e.preventDefault();
+    const newValue = value.slice(0, start) + replacement + value.slice(end);
+    const newCaret = start + replacement.length;
+    setSearchTerm(newValue);
+    requestAnimationFrame(() => {
+      input.setSelectionRange(newCaret, newCaret);
+    });
+  };
 
   // Parse GitHub-style search syntax (supports quoted values and multiple keys)
   const parseSearchQuery = (query: string) => {
@@ -617,11 +659,11 @@ export const ToolsPanel: React.FC<ToolsPanelProps> = ({ onEcoreFileUpload, onEco
       >
         {isProcessing ? (
           <>
-            Creating...
+            Building...
           </>
         ) : (
           <>
-            Upload New Meta Model
+            Build New Meta Model
           </>
         )}
       </button>
@@ -674,6 +716,16 @@ export const ToolsPanel: React.FC<ToolsPanelProps> = ({ onEcoreFileUpload, onEco
 
       {showFilters && (
         <div style={filterContainerStyle}>
+          <button
+            aria-label="Close filters"
+            title="Close"
+            style={filterCloseButtonStyle}
+            onClick={() => setShowFilters(false)}
+            onMouseEnter={(e) => { e.currentTarget.style.background = '#f1f3f5'; e.currentTarget.style.color = '#495057'; }}
+            onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = '#6c757d'; }}
+          >
+            ×
+          </button>
           <div style={{ fontSize: '12px', fontWeight: '600', color: '#495057', marginBottom: '8px' }}>
             Advanced Search
           </div>
@@ -697,6 +749,7 @@ export const ToolsPanel: React.FC<ToolsPanelProps> = ({ onEcoreFileUpload, onEco
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               style={enhancedSearchInputStyle}
+              onKeyDown={handleSearchKeyDown}
             />
           </div>
           

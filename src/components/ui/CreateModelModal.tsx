@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { apiService } from '../../services/api';
 import { KeywordTagsInput } from './KeywordTagsInput';
 
@@ -317,9 +317,13 @@ export const CreateModelModal: React.FC<CreateModelModalProps> = ({
     ecore: { progress: 0, isUploading: false },
     genmodel: { progress: 0, isUploading: false }
   });
+  const [submitProgress, setSubmitProgress] = useState({ progress: 0, isSubmitting: false });
 
   const ecoreFileInputRef = useRef<HTMLInputElement>(null);
   const genmodelFileInputRef = useRef<HTMLInputElement>(null);
+  const ecoreProgressIntervalRef = useRef<number | null>(null);
+  const genmodelProgressIntervalRef = useRef<number | null>(null);
+  const submitProgressIntervalRef = useRef<number | null>(null);
 
   const canSave = uploadedFileIds.ecoreFileId > 0 && uploadedFileIds.genModelFileId > 0 && formData.name.trim();
 
@@ -339,7 +343,10 @@ export const CreateModelModal: React.FC<CreateModelModalProps> = ({
       console.log('Uploading .ecore file:', file.name, 'Size:', file.size);
       
       // Simulate progress updates
-      const progressInterval = setInterval(() => {
+      if (ecoreProgressIntervalRef.current) {
+        clearInterval(ecoreProgressIntervalRef.current);
+      }
+      ecoreProgressIntervalRef.current = window.setInterval(() => {
         setUploadProgress(prev => ({
           ...prev,
           ecore: { 
@@ -352,7 +359,10 @@ export const CreateModelModal: React.FC<CreateModelModalProps> = ({
       const response = await apiService.uploadFile(file, 'ECORE');
       console.log('Upload response:', response);
       
-      clearInterval(progressInterval);
+      if (ecoreProgressIntervalRef.current) {
+        clearInterval(ecoreProgressIntervalRef.current);
+        ecoreProgressIntervalRef.current = null;
+      }
       
       // Complete the progress
       setUploadProgress(prev => ({ ...prev, ecore: { progress: 100, isUploading: false } }));
@@ -379,6 +389,10 @@ export const CreateModelModal: React.FC<CreateModelModalProps> = ({
       console.error('Upload error:', err);
       setError(`${err instanceof Error ? err.message : 'Unknown error'}`);
       setUploadProgress(prev => ({ ...prev, ecore: { progress: 0, isUploading: false } }));
+      if (ecoreProgressIntervalRef.current) {
+        clearInterval(ecoreProgressIntervalRef.current);
+        ecoreProgressIntervalRef.current = null;
+      }
     }
 
     event.target.value = '';
@@ -400,7 +414,10 @@ export const CreateModelModal: React.FC<CreateModelModalProps> = ({
       console.log('Uploading .genmodel file:', file.name, 'Size:', file.size);
       
       // Simulate progress updates
-      const progressInterval = setInterval(() => {
+      if (genmodelProgressIntervalRef.current) {
+        clearInterval(genmodelProgressIntervalRef.current);
+      }
+      genmodelProgressIntervalRef.current = window.setInterval(() => {
         setUploadProgress(prev => ({
           ...prev,
           genmodel: { 
@@ -413,7 +430,10 @@ export const CreateModelModal: React.FC<CreateModelModalProps> = ({
       const response = await apiService.uploadFile(file, 'GEN_MODEL');
       console.log('Upload response:', response);
       
-      clearInterval(progressInterval);
+      if (genmodelProgressIntervalRef.current) {
+        clearInterval(genmodelProgressIntervalRef.current);
+        genmodelProgressIntervalRef.current = null;
+      }
       
       // Complete the progress
       setUploadProgress(prev => ({ ...prev, genmodel: { progress: 100, isUploading: false } }));
@@ -440,6 +460,10 @@ export const CreateModelModal: React.FC<CreateModelModalProps> = ({
       console.error('Upload error:', err);
       setError(`Error uploading ${file.name}: ${err instanceof Error ? err.message : 'Unknown error'}`);
       setUploadProgress(prev => ({ ...prev, genmodel: { progress: 0, isUploading: false } }));
+      if (genmodelProgressIntervalRef.current) {
+        clearInterval(genmodelProgressIntervalRef.current);
+        genmodelProgressIntervalRef.current = null;
+      }
     }
 
     event.target.value = '';
@@ -459,6 +483,18 @@ export const CreateModelModal: React.FC<CreateModelModalProps> = ({
 
     setIsLoading(true);
     setError('');
+    // Start submit progress animation
+    if (submitProgressIntervalRef.current) {
+      clearInterval(submitProgressIntervalRef.current);
+      submitProgressIntervalRef.current = null;
+    }
+    setSubmitProgress({ progress: 0, isSubmitting: true });
+    submitProgressIntervalRef.current = window.setInterval(() => {
+      setSubmitProgress(prev => ({
+        progress: Math.min(prev.progress + Math.random() * 20, 90),
+        isSubmitting: true,
+      }));
+    }, 200);
 
     try {
       const requestData: CreateModelRequest = {
@@ -475,20 +511,49 @@ export const CreateModelModal: React.FC<CreateModelModalProps> = ({
       const response = await apiService.createMetaModel(requestData);
       console.log('Meta Model creation response:', response);
       
+      // Finish submit progress
+      if (submitProgressIntervalRef.current) {
+        clearInterval(submitProgressIntervalRef.current);
+        submitProgressIntervalRef.current = null;
+      }
+      setSubmitProgress({ progress: 100, isSubmitting: false });
+
       setSuccess('Meta Model created successfully!');
       setTimeout(() => {
         onSuccess?.(response.data);
         handleClose();
       }, 1500);
+      // Reset progress after brief success display if modal remains open
+      setTimeout(() => {
+        setSubmitProgress({ progress: 0, isSubmitting: false });
+      }, 2000);
     } catch (err) {
       console.error('Meta Model creation error:', err);
       setError(`Error creating meta model: ${err instanceof Error ? err.message : 'Unknown error'}`);
+      if (submitProgressIntervalRef.current) {
+        clearInterval(submitProgressIntervalRef.current);
+        submitProgressIntervalRef.current = null;
+      }
+      setSubmitProgress({ progress: 0, isSubmitting: false });
     } finally {
       setIsLoading(false);
     }
   };
 
   const handleClose = () => {
+    if (submitProgressIntervalRef.current) {
+      clearInterval(submitProgressIntervalRef.current);
+      submitProgressIntervalRef.current = null;
+    }
+    if (ecoreProgressIntervalRef.current) {
+      clearInterval(ecoreProgressIntervalRef.current);
+      ecoreProgressIntervalRef.current = null;
+    }
+    if (genmodelProgressIntervalRef.current) {
+      clearInterval(genmodelProgressIntervalRef.current);
+      genmodelProgressIntervalRef.current = null;
+    }
+    setSubmitProgress({ progress: 0, isSubmitting: false });
     setFormData({
       name: '',
       description: '',
@@ -510,13 +575,49 @@ export const CreateModelModal: React.FC<CreateModelModalProps> = ({
     onClose();
   };
 
+  useEffect(() => {
+    if (!isOpen) {
+      if (submitProgressIntervalRef.current) {
+        clearInterval(submitProgressIntervalRef.current);
+        submitProgressIntervalRef.current = null;
+      }
+      if (ecoreProgressIntervalRef.current) {
+        clearInterval(ecoreProgressIntervalRef.current);
+        ecoreProgressIntervalRef.current = null;
+      }
+      if (genmodelProgressIntervalRef.current) {
+        clearInterval(genmodelProgressIntervalRef.current);
+        genmodelProgressIntervalRef.current = null;
+      }
+      setSubmitProgress({ progress: 0, isSubmitting: false });
+      setUploadProgress({
+        ecore: { progress: 0, isUploading: false },
+        genmodel: { progress: 0, isUploading: false }
+      });
+    }
+    return () => {
+      if (submitProgressIntervalRef.current) {
+        clearInterval(submitProgressIntervalRef.current);
+        submitProgressIntervalRef.current = null;
+      }
+      if (ecoreProgressIntervalRef.current) {
+        clearInterval(ecoreProgressIntervalRef.current);
+        ecoreProgressIntervalRef.current = null;
+      }
+      if (genmodelProgressIntervalRef.current) {
+        clearInterval(genmodelProgressIntervalRef.current);
+        genmodelProgressIntervalRef.current = null;
+      }
+    };
+  }, [isOpen]);
+
   if (!isOpen) return null;
 
   return (
     <div style={modalOverlayStyle} onClick={handleClose}>
       <div style={modalStyle} onClick={(e) => e.stopPropagation()}>
         <div style={modalHeaderStyle}>
-          <h2 style={modalTitleStyle}>Upload New Meta Model</h2>
+          <h2 style={modalTitleStyle}>Build New Meta Model</h2>
           <button
             style={closeButtonStyle}
             onClick={handleClose}
@@ -526,6 +627,18 @@ export const CreateModelModal: React.FC<CreateModelModalProps> = ({
             ×
           </button>
         </div>
+
+        {(isLoading || submitProgress.isSubmitting) && (
+          <>
+            <div style={{ fontSize: '13px', color: '#5a6c7d', textAlign: 'center' }}>Submitting...</div>
+            <div style={progressBarContainerStyle}>
+              <div style={{ ...progressBarStyle, width: `${submitProgress.progress}%` }} />
+            </div>
+            <div style={progressTextStyle}>
+              {Math.round(submitProgress.progress)}%
+            </div>
+          </>
+        )}
 
         {error && <div style={errorMessageStyle}>{error}</div>}
         {success && <div style={successMessageStyle}>{success}</div>}

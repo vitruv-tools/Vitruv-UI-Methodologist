@@ -152,6 +152,33 @@ export const MetaModelsPanel: React.FC = () => {
   const [dateFilter, setDateFilter] = useState<'all' | 'today' | 'week' | 'month' | 'year'>('all');
   const [parsedFilters, setParsedFilters] = useState<any[]>([]);
 
+  const handleSearchKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key !== 'Tab') return;
+    const input = e.currentTarget;
+    const value = input.value;
+    const caret = input.selectionStart ?? value.length;
+    let start = caret - 1;
+    while (start >= 0 && !/\s/.test(value[start])) start--;
+    start++;
+    let end = caret;
+    while (end < value.length && !/\s/.test(value[end])) end++;
+    const token = value.slice(start, end);
+    const lower = token.toLowerCase().replace(/:$/, '');
+
+    const candidates = ['name', 'description', 'domain', 'keywords', 'created', 'updated'];
+    const match = candidates.find(k => k.startsWith(lower));
+    const replacement = match ? `${match}:` : null;
+    if (!replacement) return;
+
+    e.preventDefault();
+    const newValue = value.slice(0, start) + replacement + value.slice(end);
+    const newCaret = start + replacement.length;
+    setSearchTerm(newValue);
+    requestAnimationFrame(() => {
+      input.setSelectionRange(newCaret, newCaret);
+    });
+  };
+
   const parseSearchQuery = (query: string) => {
     const filters: any[] = [];
     const parts = query.split(/\s+/).filter(part => part.trim());
@@ -329,6 +356,7 @@ export const MetaModelsPanel: React.FC = () => {
           value={searchTerm}
           onChange={(e) => setSearchTerm(e.target.value)}
           style={searchInputStyle}
+          onKeyDown={handleSearchKeyDown}
         />
         <select
           value={`${sortBy}-${sortOrder}`}
@@ -355,7 +383,17 @@ export const MetaModelsPanel: React.FC = () => {
       </div>
 
       {showFilters && (
-        <div style={{ border: '1px solid #e9ecef', background: '#ffffff', borderRadius: 8, padding: 12, marginBottom: 12 }}>
+        <div style={{ position: 'relative', border: '1px solid #e9ecef', background: '#ffffff', borderRadius: 8, padding: 12, marginBottom: 12 }}>
+          <button
+            aria-label="Close filters"
+            title="Close"
+            style={{ position: 'absolute', top: 6, right: 6, width: 24, height: 24, border: 'none', background: 'transparent', color: '#6c757d', fontSize: 14, cursor: 'pointer', borderRadius: 4 }}
+            onClick={() => setShowFilters(false)}
+            onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.background = '#f1f3f5'; (e.currentTarget as HTMLButtonElement).style.color = '#495057'; }}
+            onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.background = 'transparent'; (e.currentTarget as HTMLButtonElement).style.color = '#6c757d'; }}
+          >
+            ×
+          </button>
           <div style={{ display: 'flex', gap: 8, marginBottom: 8, alignItems: 'center' }}>
             <span style={{ fontSize: 12, fontWeight: 600, minWidth: 60, color: '#495057' }}>Name:</span>
             <input

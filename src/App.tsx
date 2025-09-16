@@ -8,6 +8,7 @@ import { apiService } from './services/api';
 import { exportFlowData } from './utils';
 import { Node, Edge } from 'reactflow';
 import './App.css';
+import { SidebarTabs, MainLayout } from './components';
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { isAuthenticated, isLoading } = useAuth();
@@ -34,10 +35,7 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
   return <>{children}</>;
 }
 
-const MainLayout = React.lazy(async () => {
-  const mod = await import('./components/layout/MainLayout');
-  return { default: mod.MainLayout } as { default: React.ComponentType<any> };
-});
+// Render MainLayout immediately without lazy loading for consistent UX across routes
 
 function AppContent() {
   const { user, signOut } = useAuth();
@@ -78,16 +76,16 @@ function AppContent() {
   };
 
   return (
-    <React.Suspense fallback={<div>Loading...</div>}>
-      <MainLayout
-        onDeploy={handleDeploy}
-        onSave={handleSave}
-        onLoad={handleLoad}
-        onNew={handleNew}
-        user={user}
-        onLogout={handleLogout}
-      />
-    </React.Suspense>
+    <MainLayout
+      onDeploy={handleDeploy}
+      onSave={handleSave}
+      onLoad={handleLoad}
+      onNew={handleNew}
+      user={user}
+      onLogout={handleLogout}
+      leftSidebar={<SidebarTabs width={350} />}
+      leftSidebarWidth={350}
+    />
   );
 }
 
@@ -98,19 +96,19 @@ function App() {
         <Routes>
           <Route path="/auth" element={<AuthPage />} />
           <Route path="/" element={
-            <ProtectedRoute>
+            // <ProtectedRoute>
               <HomePage />
-            </ProtectedRoute>
+            // </ProtectedRoute>
           } />
           <Route path="/mml" element={
-            <ProtectedRoute>
+            // <ProtectedRoute>
               <AppContent />
-            </ProtectedRoute>
+            // </ProtectedRoute>
           } />
           <Route path="/project" element={
-            <ProtectedRoute>
+            // <ProtectedRoute>
               <ProjectPage />
-            </ProtectedRoute>
+            // </ProtectedRoute>
           } />
         </Routes>
       </AuthProvider>

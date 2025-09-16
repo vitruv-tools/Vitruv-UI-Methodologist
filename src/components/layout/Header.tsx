@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Link, useLocation } from 'react-router-dom';
+import { useLocation } from 'react-router-dom';
 import { User } from '../../services/auth';
 
 interface HeaderProps {
@@ -70,26 +70,6 @@ export function Header({ title = 'Vitruvius Modeler', user, onLogout }: HeaderPr
 
       </div>
       <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-        <nav style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <Link to="/mml" draggable={false} onDragStart={(e) => e.preventDefault()} style={{
-            color: location.pathname === '/mml' ? '#3498db' : '#ecf0f1',
-            textDecoration: 'none',
-            padding: '6px 10px',
-            borderRadius: 6,
-            background: location.pathname === '/mml' ? 'rgba(52,152,219,0.15)' : 'transparent',
-            fontWeight: 600,
-            fontSize: 13,
-          }}>MML</Link>
-          <Link to="/project" draggable={false} onDragStart={(e) => e.preventDefault()} style={{
-            color: location.pathname === '/project' ? '#3498db' : '#ecf0f1',
-            textDecoration: 'none',
-            padding: '6px 10px',
-            borderRadius: 6,
-            background: location.pathname === '/project' ? 'rgba(52,152,219,0.15)' : 'transparent',
-            fontWeight: 600,
-            fontSize: 13,
-          }}>Project</Link>
-        </nav>
         <div ref={menuRef} style={{ position: 'relative' }}>
           <button
             onClick={() => setIsMenuOpen((open) => !open)}
