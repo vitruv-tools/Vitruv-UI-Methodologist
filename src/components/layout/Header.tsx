@@ -1,5 +1,4 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { useLocation } from 'react-router-dom';
 import { User } from '../../services/auth';
 
 interface HeaderProps {
@@ -46,8 +45,6 @@ export function Header({ title = 'Vitruvius Modeler', user, onLogout }: HeaderPr
       document.removeEventListener('mousedown', handleClickOutside);
     };
   }, [isMenuOpen]);
-
-  const location = useLocation();
 
   return (
     <header className="header-responsive" style={{
