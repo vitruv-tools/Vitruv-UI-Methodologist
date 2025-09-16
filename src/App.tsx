@@ -96,19 +96,19 @@ function App() {
         <Routes>
           <Route path="/auth" element={<AuthPage />} />
           <Route path="/" element={
-            // <ProtectedRoute>
+             <ProtectedRoute>
               <HomePage />
-            // </ProtectedRoute>
+            </ProtectedRoute>
           } />
           <Route path="/mml" element={
-            // <ProtectedRoute>
+            <ProtectedRoute>
               <AppContent />
-            // </ProtectedRoute>
+             </ProtectedRoute>
           } />
           <Route path="/project" element={
-            // <ProtectedRoute>
+            <ProtectedRoute>
               <ProjectPage />
-            // </ProtectedRoute>
+            </ProtectedRoute>
           } />
         </Routes>
       </AuthProvider>
