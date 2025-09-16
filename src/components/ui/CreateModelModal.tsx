@@ -377,7 +377,7 @@ export const CreateModelModal: React.FC<CreateModelModalProps> = ({
       }, 2000);
     } catch (err) {
       console.error('Upload error:', err);
-      setError(`Error uploading ${file.name}: ${err instanceof Error ? err.message : 'Unknown error'}`);
+      setError(`${err instanceof Error ? err.message : 'Unknown error'}`);
       setUploadProgress(prev => ({ ...prev, ecore: { progress: 0, isUploading: false } }));
     }
 
@@ -689,7 +689,7 @@ export const CreateModelModal: React.FC<CreateModelModalProps> = ({
             onMouseEnter={(e) => canSave && !isLoading && Object.assign(e.currentTarget.style, buttonHoverStyle)}
             onMouseLeave={(e) => canSave && !isLoading && Object.assign(e.currentTarget.style, primaryButtonStyle)}
           >
-            {isLoading ? 'Creating...' : canSave ? 'Create Meta Model' : 'Upload Files First'}
+            {isLoading ? 'Creating...' : canSave ? 'Build Meta Model' : 'Upload Files First'}
           </button>
         </div>
       </div>

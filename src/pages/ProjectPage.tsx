@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { MainLayout } from '../components/layout/MainLayout';
-import { ToolsPanel } from '../components/ui/ToolsPanel';
 import { MetaModelsPanel } from '../components/ui/MetaModelsPanel';
+import { VsumsPanel } from '../components/ui/VsumsPanel';
 import { useAuth } from '../contexts/AuthContext';
 
 export const ProjectPage: React.FC = () => {
@@ -12,7 +12,7 @@ export const ProjectPage: React.FC = () => {
     <MainLayout
       user={user}
       onLogout={signOut}
-      leftSidebar={<ToolsPanel title="vSUMS" allowCreate={false} enableItemClick={false} suppressApi={false} />}
+      leftSidebar={<VsumsPanel />}
       leftSidebarWidth={350}
       rightSidebar={showRight ? (
         <div style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>

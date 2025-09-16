@@ -22,7 +22,7 @@ export const HomePage: React.FC = () => {
         <div style={{ textAlign: 'center' }}>
           <img src={'/assets/22098030.png'} alt="KIT Logo" style={{ width: 140, height: 140, objectFit: 'contain', display: 'block', margin: '0 auto 16px auto' }} />
           <div style={{ fontSize: 28, fontWeight: 700, color: '#2c3e50', letterSpacing: 0.3 }}>
-            Welcome to Vitruvius Modeler
+            Welcome to Vitruvius
           </div>
         </div>
       </div>
