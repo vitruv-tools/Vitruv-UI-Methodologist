@@ -334,7 +334,7 @@ export const ToolsPanel: React.FC<ToolsPanelProps> = ({ onEcoreFileUpload, onEco
     const token = value.slice(start, end);
     const lower = token.toLowerCase().replace(/:$/, '');
 
-    const candidates = ['name', 'description', 'domain', 'keywords', 'created', 'updated'];
+    const candidates = ['name', 'description', 'domain', 'keywords', 'created', 'updated', 'time'];
     const match = candidates.find(k => k.startsWith(lower));
     const replacement = match ? `${match}:` : null;
     if (!replacement) return;
@@ -411,11 +411,11 @@ export const ToolsPanel: React.FC<ToolsPanelProps> = ({ onEcoreFileUpload, onEco
           }
           default:
             // Unknown key: treat as name
-            result.push({ key: 'name', value: `${key}:${cleanValue}`, display: `name:${key}:${cleanValue}` });
+            // result.push({ key: 'name', value: `${key}:${cleanValue}`, display: `name:${key}:${cleanValue}` });
         }
       } else if (token.trim().length > 0) {
         // Bare word -> name search
-        result.push({ key: 'name', value: token, display: `name:${token}` });
+        // result.push({ key: 'name', value: token, display: `name:${token}` });
       }
     }
 
@@ -783,13 +783,16 @@ export const ToolsPanel: React.FC<ToolsPanelProps> = ({ onEcoreFileUpload, onEco
               <input
                 type="text"
                 placeholder="Filter by name..."
-                value={searchTerm.includes(':') ? '' : searchTerm}
-                onChange={(e) => {
-                  if (!e.target.value.includes(':')) {
-                    setSearchTerm(e.target.value);
+                style={filterInputStyle}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    const value = e.currentTarget.value.trim();
+                    if (value) {
+                      setSearchTerm(prev => prev ? `${prev} name:${value}` : `name:${value}`);
+                      e.currentTarget.value = '';
+                    }
                   }
                 }}
-                style={filterInputStyle}
               />
             </div>
             

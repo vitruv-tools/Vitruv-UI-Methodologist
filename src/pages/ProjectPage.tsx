@@ -1,12 +1,27 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { MainLayout } from '../components/layout/MainLayout';
 import { MetaModelsPanel } from '../components/ui/MetaModelsPanel';
 import { SidebarTabs } from '../components';
 import { useAuth } from '../contexts/AuthContext';
+import { VsumTabs } from '../components/ui/VsumTabs';
 
 export const ProjectPage: React.FC = () => {
   const { user, signOut } = useAuth();
   const [showRight, setShowRight] = useState(false);
+  const [openVsums, setOpenVsums] = useState<number[]>([]);
+  const [activeVsumId, setActiveVsumId] = useState<number | null>(null);
+
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const custom = e as CustomEvent<{ id: number }>;
+      const id = custom.detail?.id;
+      if (typeof id !== 'number') return;
+      setOpenVsums(prev => prev.includes(id) ? prev : [...prev, id]);
+      setActiveVsumId(id);
+    };
+    window.addEventListener('vitruv.openVsum', handler as EventListener);
+    return () => window.removeEventListener('vitruv.openVsum', handler as EventListener);
+  }, []);
 
   return (
     <MainLayout
@@ -41,11 +56,28 @@ export const ProjectPage: React.FC = () => {
             </button>
           </div>
           <div style={{ flex: 1, overflow: 'auto' }}>
-            <MetaModelsPanel />
+            <MetaModelsPanel
+              activeVsumId={activeVsumId || undefined}
+              selectedMetaModelIds={activeVsumId ? (openVsums.includes(activeVsumId) ? [] : []) : []}
+              onAddToActiveVsum={(model) => {
+                window.dispatchEvent(new CustomEvent('vitruv.addMetaModelToActiveVsum', { detail: { id: model.id } }));
+              }}
+            />
           </div>
         </div>
       ) : null}
       rightSidebarWidth={350}
+      workspaceOverlay={openVsums.length > 0 ? (
+        <VsumTabs
+          openVsums={openVsums}
+          activeVsumId={activeVsumId}
+          onActivate={(id) => setActiveVsumId(id)}
+          onClose={(id) => {
+            setOpenVsums(prev => prev.filter(x => x !== id));
+            setActiveVsumId(prev => (prev === id ? (openVsums.find(x => x !== id) ?? null) : prev));
+          }}
+        />
+      ) : null}
       workspaceTopRightSlot={!showRight ? (
         <button
           style={{

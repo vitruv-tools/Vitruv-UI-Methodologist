@@ -1,4 +1,5 @@
 import React, { useEffect, useState, useRef } from 'react';
+import { useLocation } from 'react-router-dom';
 import { Header } from './Header';
 import { FlowCanvas } from '../flow/FlowCanvas';
 import { ToolsPanel } from '../ui/ToolsPanel';
@@ -21,6 +22,7 @@ interface MainLayoutProps {
   topRightSlot?: React.ReactNode;
   showWorkspaceInfo?: boolean;
   workspaceTopRightSlot?: React.ReactNode;
+  workspaceOverlay?: React.ReactNode;
 }
 
 interface EcoreFileBox {
@@ -34,7 +36,9 @@ interface EcoreFileBox {
   createdAt?: string;
 }
 
-export function MainLayout({ onDeploy, onSave, onLoad, onNew, user, onLogout, leftSidebar, leftSidebarWidth = 350, rightSidebar, rightSidebarWidth = 0, topRightSlot, showWorkspaceInfo = true, workspaceTopRightSlot }: MainLayoutProps) {
+export function MainLayout({ onDeploy, onSave, onLoad, onNew, user, onLogout, leftSidebar, leftSidebarWidth = 350, rightSidebar, rightSidebarWidth = 0, topRightSlot, showWorkspaceInfo = true, workspaceTopRightSlot, workspaceOverlay }: MainLayoutProps) {
+  const location = useLocation();
+  const isMMLRoute = location.pathname.startsWith('/mml');
   const [selectedDiagramType, setSelectedDiagramType] = useState<string | undefined>();
   const flowCanvasRef = useRef<any>(null);
   const leftAsideRef = useRef<HTMLDivElement | null>(null);
@@ -453,7 +457,7 @@ export function MainLayout({ onDeploy, onSave, onLoad, onNew, user, onLogout, le
         )}
         
         {/* Top-right workspace document panel (separate from ToolsPanel) */}
-        {activeDocId && (
+        {activeDocId && !isMMLRoute && (
           <div style={{ position: 'absolute', right: 16 + (rightSidebarWidth || 0), top: 56, zIndex: 25 }}>
             <div style={{
               background: '#ffffff',
@@ -546,7 +550,7 @@ export function MainLayout({ onDeploy, onSave, onLoad, onNew, user, onLogout, le
         )}
 
         {/* Workspace info panel */}
-        {showWorkspaceInfo && (
+        {showWorkspaceInfo && !isMMLRoute && (
           <div style={{ position: 'absolute', left: 16, top: 56, zIndex: 25 }}>
             <div style={{
               background: '#ffffff',
@@ -577,19 +581,60 @@ export function MainLayout({ onDeploy, onSave, onLoad, onNew, user, onLogout, le
 
         <div style={{ flexGrow: 1, position: 'relative', display: 'flex' }}>
           <div style={{ flexGrow: 1, position: 'relative', display: 'flex' }}>
-            <FlowCanvas 
-              onDeploy={onDeploy} 
-              onDiagramChange={handleDiagramChange} 
-              ref={flowCanvasRef}
-              ecoreFiles={ecoreFileBoxes}
-              onEcoreFileSelect={handleEcoreFileSelect}
-              onEcoreFileExpand={handleEcoreFileExpand}
-              onEcoreFilePositionChange={handleEcoreFilePositionChange}
-              onEcoreFileDelete={handleEcoreFileDelete}
-              onEcoreFileRename={handleEcoreFileRename}
-            />
-            {workspaceTopRightSlot && (
-              <div style={{ position: 'absolute', right: 16, top: 60, zIndex: 15 }}>
+            {workspaceOverlay && (
+              <div style={{ position: 'absolute', left: 0, right: 0, top: 48, zIndex: 20, pointerEvents: 'none' }}>
+                <div style={{ pointerEvents: 'auto' }}>
+                  {workspaceOverlay}
+                </div>
+              </div>
+            )}
+            {isMMLRoute ? (
+              <div style={{ 
+                width: '100%', 
+                height: '100%', 
+                background: '#ffffff',
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                justifyContent: 'center',
+                padding: '40px'
+              }}>
+                <div style={{
+                  textAlign: 'center',
+                  fontFamily: 'Georgia, serif',
+                  color: '#2c3e50',
+                  maxWidth: '600px'
+                }}>
+                  <img 
+                    src="/assets/22098030.png" 
+                    alt="Vitruvius" 
+                    style={{
+                      width: '200px',
+                      height: '200px',
+                      objectFit: 'contain',
+                      marginBottom: '30px'
+                    }}
+                  />
+                  <p style={{ margin: '0 0 20px 0', fontSize: '16px', color: '#6b7280', lineHeight: '1.6' }}>
+                    Meta Model Management Platform
+                  </p>
+                </div>
+              </div>
+            ) : (
+              <FlowCanvas 
+                onDeploy={onDeploy} 
+                onDiagramChange={handleDiagramChange} 
+                ref={flowCanvasRef}
+                ecoreFiles={ecoreFileBoxes}
+                onEcoreFileSelect={handleEcoreFileSelect}
+                onEcoreFileExpand={handleEcoreFileExpand}
+                onEcoreFilePositionChange={handleEcoreFilePositionChange}
+                onEcoreFileDelete={handleEcoreFileDelete}
+                onEcoreFileRename={handleEcoreFileRename}
+              />
+            )}
+            {workspaceTopRightSlot && !isMMLRoute && (
+              <div style={{ position: 'absolute', right: 16, top: 60, zIndex: 30 }}>
                 {workspaceTopRightSlot}
               </div>
             )}

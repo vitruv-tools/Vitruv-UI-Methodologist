@@ -1,6 +1,12 @@
 import React, { useEffect, useState } from 'react';
 import { apiService } from '../../services/api';
 
+interface MetaModelsPanelProps {
+  activeVsumId?: number | null;
+  selectedMetaModelIds?: number[];
+  onAddToActiveVsum?: (model: any) => void;
+}
+
 const containerStyle: React.CSSProperties = {
   userSelect: 'none',
   width: '100%',
@@ -139,7 +145,7 @@ const paginationButtonDisabledStyle: React.CSSProperties = {
   cursor: 'not-allowed',
 };
 
-export const MetaModelsPanel: React.FC = () => {
+export const MetaModelsPanel: React.FC<MetaModelsPanelProps> = ({ activeVsumId, selectedMetaModelIds, onAddToActiveVsum }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [sortBy, setSortBy] = useState<'name' | 'date' | 'domain'>('date');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
@@ -164,6 +170,7 @@ export const MetaModelsPanel: React.FC = () => {
     while (end < value.length && !/\s/.test(value[end])) end++;
     const token = value.slice(start, end);
     const lower = token.toLowerCase().replace(/:$/, '');
+    if (!lower) return;
 
     const candidates = ['name', 'description', 'domain', 'keywords', 'created', 'updated'];
     const match = candidates.find(k => k.startsWith(lower));
@@ -206,7 +213,7 @@ export const MetaModelsPanel: React.FC = () => {
             break;
         }
       } else {
-        filters.push({ key: 'name', value: part });
+        // Ignore bare tokens (no default name:)
       }
     }
     return filters;
@@ -500,6 +507,20 @@ export const MetaModelsPanel: React.FC = () => {
               <span>Domain: <strong>{model.domain}</strong></span>
               <span>•</span>
               <span title={new Date(model.createdAt).toLocaleString()}>{formatRelativeTime(model.createdAt)}</span>
+              {activeVsumId ? (
+                <>
+                  <span>•</span>
+                  {onAddToActiveVsum && (
+                    <button
+                      onClick={() => onAddToActiveVsum(model)}
+                      style={{ padding: '4px 8px', border: '1px solid #dee2e6', borderRadius: 6, background: '#ffffff', cursor: 'pointer', fontSize: 12, fontWeight: 600 }}
+                      disabled={(selectedMetaModelIds || []).includes(model.id)}
+                    >
+                      {(selectedMetaModelIds || []).includes(model.id) ? 'Added' : 'Add to vSUM'}
+                    </button>
+                  )}
+                </>
+              ) : null}
             </div>
           </div>
         ))}
