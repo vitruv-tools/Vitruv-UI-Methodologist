@@ -43,7 +43,6 @@ export const VsumTabs: React.FC<VsumTabsProps> = ({ openVsums, activeVsumId, onA
 
   useEffect(() => {
     const fetchDetails = async (id: number) => {
-      setLoadingId(id);
       setError('');
       try {
         const res = await apiService.getVsumDetails(id);
@@ -51,8 +50,6 @@ export const VsumTabs: React.FC<VsumTabsProps> = ({ openVsums, activeVsumId, onA
         setEdits(prev => ({ ...prev, [id]: { name: res.data.name, metaModelIds: (res.data.metaModels || []).map(m => m.id) } }));
       } catch (e) {
         setError(e instanceof Error ? e.message : 'Failed to load vSUM details');
-      } finally {
-        setLoadingId(null);
       }
     };
     if (activeVsumId && !detailsById[activeVsumId]) {
