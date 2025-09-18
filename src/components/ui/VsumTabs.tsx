@@ -11,7 +11,6 @@ interface VsumTabsProps {
 
 export const VsumTabs: React.FC<VsumTabsProps> = ({ openVsums, activeVsumId, onActivate, onClose }) => {
   const [detailsById, setDetailsById] = useState<Record<number, VsumDetails | undefined>>({});
-  const [loadingId, setLoadingId] = useState<number | null>(null);
   const [error, setError] = useState<string>('');
   const [edits, setEdits] = useState<Record<number, { name: string; metaModelIds: number[] }>>({});
   const [saving, setSaving] = useState(false);
@@ -61,8 +60,7 @@ export const VsumTabs: React.FC<VsumTabsProps> = ({ openVsums, activeVsumId, onA
     }
   }, [activeVsumId, detailsById]);
 
-  const activeEdit = activeVsumId ? edits[activeVsumId] : undefined;
-  const activeDetails = activeVsumId ? detailsById[activeVsumId] : undefined;
+  // Derived states no longer needed: activeEdit, activeDetails
 
   const saveById = async (id: number, override?: { name?: string; metaModelIds?: number[] }) => {
     const edit = edits[id];
@@ -93,7 +91,6 @@ export const VsumTabs: React.FC<VsumTabsProps> = ({ openVsums, activeVsumId, onA
   const ensureDetails = async (id: number) => {
     if (detailsById[id]) return detailsById[id];
     try {
-      setLoadingId(id);
       const res = await apiService.getVsumDetails(id);
       setDetailsById(prev => ({ ...prev, [id]: res.data }));
       setEdits(prev => ({ ...prev, [id]: { name: res.data.name, metaModelIds: (res.data.metaModels || []).map(m => m.id) } }));
@@ -101,8 +98,6 @@ export const VsumTabs: React.FC<VsumTabsProps> = ({ openVsums, activeVsumId, onA
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to load vSUM details');
       return undefined;
-    } finally {
-      setLoadingId(null);
     }
   };
 
