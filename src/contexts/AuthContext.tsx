@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { AuthService, User, SignUpCredentials } from '../services/auth';
+import { apiService } from '../services/api';
 import { useTokenRefresh } from '../hooks/useTokenRefresh';
 import { parseJwtToken, extractUserFromToken } from '../utils/jwtParser';
 
@@ -32,24 +33,38 @@ export function AuthProvider({ children }: AuthProviderProps) {
           if (currentUser) {
             setUser(currentUser);
           } else {
-            // Try to parse user data from stored token if user data is not available
-            const accessToken = AuthService.getAccessToken();
-            if (accessToken) {
-              const tokenData = parseJwtToken(accessToken);
-              if (tokenData) {
-                const extractedUser = extractUserFromToken(tokenData);
-                const userFromToken: User = {
-                  id: Date.now().toString(),
-                  username: extractedUser.username || 'user',
-                  email: extractedUser.email,
-                  name: extractedUser.name,
-                  givenName: extractedUser.givenName,
-                  familyName: extractedUser.familyName,
-                  emailVerified: extractedUser.emailVerified,
-                  scope: extractedUser.scope,
-                };
-                AuthService.setCurrentUser(userFromToken);
-                setUser(userFromToken);
+            try {
+              const { data } = await apiService.getUserInfo();
+              const mapped: User = {
+                id: String(data.id),
+                username: data.email?.split('@')[0] || 'user',
+                email: data.email,
+                name: `${data.firstName ?? ''} ${data.lastName ?? ''}`.trim() || data.email,
+                givenName: data.firstName,
+                familyName: data.lastName,
+              };
+              AuthService.setCurrentUser(mapped);
+              setUser(mapped);
+            } catch (e) {
+              // Fallback: try to parse from token if API not available
+              const accessToken = AuthService.getAccessToken();
+              if (accessToken) {
+                const tokenData = parseJwtToken(accessToken);
+                if (tokenData) {
+                  const extractedUser = extractUserFromToken(tokenData);
+                  const userFromToken: User = {
+                    id: Date.now().toString(),
+                    username: extractedUser.username || 'user',
+                    email: extractedUser.email,
+                    name: extractedUser.name,
+                    givenName: extractedUser.givenName,
+                    familyName: extractedUser.familyName,
+                    emailVerified: extractedUser.emailVerified,
+                    scope: extractedUser.scope,
+                  };
+                  AuthService.setCurrentUser(userFromToken);
+                  setUser(userFromToken);
+                }
               }
             }
           }
@@ -74,36 +89,48 @@ export function AuthProvider({ children }: AuthProviderProps) {
     try {
       const authResponse = await AuthService.signIn({ username, password });
       console.log('Auth response:', authResponse);
-      
-      // Parse JWT token to extract user information
-      const tokenData = parseJwtToken(authResponse.access_token);
-      let newUser: User;
-      
-      if (tokenData) {
-        // Extract user data from JWT token
-        const extractedUser = extractUserFromToken(tokenData);
-        newUser = {
-          id: Date.now().toString(),
-          username: extractedUser.username || username,
-          email: extractedUser.email,
-          name: extractedUser.name,
-          givenName: extractedUser.givenName,
-          familyName: extractedUser.familyName,
-          emailVerified: extractedUser.emailVerified,
-          scope: extractedUser.scope,
+
+      // Prefer authoritative user info from API
+      try {
+        const { data } = await apiService.getUserInfo();
+        const mapped: User = {
+          id: String(data.id),
+          username: data.email?.split('@')[0] || username,
+          email: data.email,
+          name: `${data.firstName ?? ''} ${data.lastName ?? ''}`.trim() || data.email || username,
+          givenName: data.firstName,
+          familyName: data.lastName,
         };
-      } else {
-        // Fallback to basic user data if token parsing fails
-        newUser = {
-          id: Date.now().toString(),
-          username,
-          email: username.includes('@') ? username : undefined,
-          name: username.split('@')[0],
-        };
+        AuthService.setCurrentUser(mapped);
+        setUser(mapped);
+        return;
+      } catch (e) {
+        // Fallback: parse JWT
+        const tokenData = parseJwtToken(authResponse.access_token);
+        let newUser: User;
+        if (tokenData) {
+          const extractedUser = extractUserFromToken(tokenData);
+          newUser = {
+            id: Date.now().toString(),
+            username: extractedUser.username || username,
+            email: extractedUser.email,
+            name: extractedUser.name,
+            givenName: extractedUser.givenName,
+            familyName: extractedUser.familyName,
+            emailVerified: extractedUser.emailVerified,
+            scope: extractedUser.scope,
+          };
+        } else {
+          newUser = {
+            id: Date.now().toString(),
+            username,
+            email: username.includes('@') ? username : undefined,
+            name: username.split('@')[0],
+          };
+        }
+        AuthService.setCurrentUser(newUser);
+        setUser(newUser);
       }
-      
-      AuthService.setCurrentUser(newUser);
-      setUser(newUser);
     } catch (error) {
       console.error('Sign in error:', error);
       throw error;

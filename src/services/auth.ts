@@ -68,11 +68,8 @@ export class AuthService {
         const parsed = JSON.parse(errorText);
         errorMessage = (parsed as any)?.message || (parsed as any)?.error || errorText;
       } catch {}
-      const statusLine = `${response.status} ${response.statusText}`.trim();
-      const composedMessage = errorMessage
-        ? `${statusLine}: ${errorMessage}`
-        : statusLine || 'Request failed';
-      throw new Error(composedMessage);
+      const fallback = response.statusText || 'Request failed';
+      throw new Error(errorMessage || fallback);
     }
 
     const data: SignUpResponse = await response.json();
@@ -98,11 +95,8 @@ export class AuthService {
         const parsed = JSON.parse(errorText);
         errorMessage = (parsed as any)?.message || (parsed as any)?.error || errorText;
       } catch {}
-      const statusLine = `${response.status} ${response.statusText}`.trim();
-      const composedMessage = errorMessage
-        ? `${statusLine}: ${errorMessage}`
-        : statusLine || 'Request failed';
-      throw new Error(composedMessage);
+      const fallback = response.statusText || 'Request failed';
+      throw new Error(errorMessage || fallback);
     }
 
     const data: AuthResponse = await response.json();

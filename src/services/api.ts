@@ -141,6 +141,13 @@ class ApiService {
   }
 
   /**
+   * Get currently authenticated user info
+   */
+  async getUserInfo(): Promise<{ data: { id: number; email: string; firstName: string; lastName: string }; message: string }> {
+    return this.authenticatedRequest('/api/v1/users');
+  }
+
+  /**
    * Deploy a flow
    */
   async deployFlow(flowData: FlowData): Promise<{ success: boolean; message: string }> {
