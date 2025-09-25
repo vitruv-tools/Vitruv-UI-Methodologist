@@ -121,7 +121,7 @@ export function Header({ title = 'Vitruvius Modeler', user, onLogout }: HeaderPr
                 borderRadius: 8,
                 boxShadow: '0 8px 24px rgba(0,0,0,0.12), 0 2px 8px rgba(0,0,0,0.08)',
                 padding: 0,
-                zIndex: 30,
+                zIndex: 50,
                 border: '1px solid #e8e8e8',
                 overflow: 'hidden',
                 animation: 'slideDown 0.2s ease-out',

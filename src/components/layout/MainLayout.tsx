@@ -16,7 +16,8 @@ interface MainLayoutProps {
   user?: User | null;
   onLogout?: () => void;
   leftSidebar?: React.ReactNode;
-  leftSidebarWidth?: number;
+  leftSidebarWidth?: number | string;
+  leftSidebarInitialWidth?: number;
   rightSidebar?: React.ReactNode;
   rightSidebarWidth?: number;
   topRightSlot?: React.ReactNode;
@@ -36,7 +37,7 @@ interface EcoreFileBox {
   createdAt?: string;
 }
 
-export function MainLayout({ onDeploy, onSave, onLoad, onNew, user, onLogout, leftSidebar, leftSidebarWidth = 350, rightSidebar, rightSidebarWidth = 0, topRightSlot, showWorkspaceInfo = true, workspaceTopRightSlot, workspaceOverlay }: MainLayoutProps) {
+export function MainLayout({ onDeploy, onSave, onLoad, onNew, user, onLogout, leftSidebar, leftSidebarWidth = '100%', leftSidebarInitialWidth = 350, rightSidebar, rightSidebarWidth = 0, topRightSlot, showWorkspaceInfo = true, workspaceTopRightSlot, workspaceOverlay }: MainLayoutProps) {
   const location = useLocation();
   const isMMLRoute = location.pathname.startsWith('/mml');
   const [selectedDiagramType, setSelectedDiagramType] = useState<string | undefined>();
@@ -405,7 +406,7 @@ export function MainLayout({ onDeploy, onSave, onLoad, onNew, user, onLogout, le
       overflow: 'hidden'
     }}>
       {leftSidebar ? (
-        <aside ref={leftAsideRef} style={{ width: leftSidebarWidth, background: '#ffffff', borderRight: '1px solid #e0e0e0', overflowY: 'auto', position: 'relative' }}>
+        <aside ref={leftAsideRef} style={{ width: leftSidebarInitialWidth, maxWidth: 650, background: '#ffffff', borderRight: '1px solid #e0e0e0', overflowY: 'auto', position: 'relative' }}>
           {leftSidebar}
           <div
             onMouseDown={(e) => { isResizingLeft.current = true; document.body.style.cursor = 'col-resize'; document.body.style.userSelect = 'none'; e.preventDefault(); }}
@@ -413,10 +414,11 @@ export function MainLayout({ onDeploy, onSave, onLoad, onNew, user, onLogout, le
           />
         </aside>
       ) : (
-        <aside ref={leftAsideRef} style={{ width: 350, background: '#ffffff', borderRight: '1px solid #e0e0e0', overflowY: 'auto', position: 'relative' }}>
+        <aside ref={leftAsideRef} style={{ width: leftSidebarInitialWidth, maxWidth: 650, background: '#ffffff', borderRight: '1px solid #e0e0e0', overflowY: 'auto', position: 'relative' }}>
           <ToolsPanel
             onEcoreFileUpload={handleEcoreFileUpload}
             onEcoreFileDelete={handleEcoreFileDeleteFromPanel}
+            initialWidth={350}
           />
           {/* Drag handle */}
           <div
@@ -634,7 +636,7 @@ export function MainLayout({ onDeploy, onSave, onLoad, onNew, user, onLogout, le
               />
             )}
             {workspaceTopRightSlot && !isMMLRoute && (
-              <div style={{ position: 'absolute', right: 16, top: 60, zIndex: 30 }}>
+              <div style={{ position: 'absolute', right: 16, top: 60, zIndex: 18 }}>
                 {workspaceTopRightSlot}
               </div>
             )}

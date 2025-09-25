@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import { apiService } from '../../services/api';
 import { ConfirmDialog } from './ConfirmDialog';
 
@@ -6,6 +6,7 @@ interface MetaModelsPanelProps {
   activeVsumId?: number | null;
   selectedMetaModelIds?: number[];
   onAddToActiveVsum?: (model: any) => void;
+  initialWidth?: number;
 }
 
 const containerStyle: React.CSSProperties = {
@@ -36,12 +37,33 @@ const controlsRowStyle: React.CSSProperties = {
   alignItems: 'center',
 };
 
-const searchInputStyle: React.CSSProperties = {
+// Match ToolsPanel toggle and sort styles
+const toggleContainerStyle: React.CSSProperties = {
+  display: 'flex',
+  gap: '8px',
+  margin: '8px 0',
+  alignItems: 'center',
+};
+
+const toggleButtonStyle: React.CSSProperties = {
   flex: 1,
-  padding: '8px 10px',
-  border: '1px solid #ced4da',
-  borderRadius: 6,
-  fontSize: 13,
+  padding: '8px 12px',
+  border: '1px solid #dee2e6',
+  borderRadius: '6px',
+  background: '#f8f9fa',
+  color: '#495057',
+  fontSize: '12px',
+  fontWeight: '600',
+  cursor: 'pointer',
+  transition: 'all 0.2s ease',
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'space-between',
+};
+
+const toggleButtonHoverStyle: React.CSSProperties = {
+  background: '#e9ecef',
+  borderColor: '#adb5bd',
 };
 
 const sortDropdownStyle: React.CSSProperties = {
@@ -53,7 +75,67 @@ const sortDropdownStyle: React.CSSProperties = {
   fontSize: '12px',
   fontWeight: '500',
   cursor: 'pointer',
-  minWidth: '140px',
+  minWidth: '120px',
+};
+
+// Exact Advanced Search dropdown styles from ToolsPanel
+const filterContainerStyle: React.CSSProperties = {
+  position: 'fixed',
+  top: '160px',
+  right: '15px',
+  zIndex: 1000,
+  padding: '12px',
+  background: '#ffffff',
+  maxWidth: '320px',
+  borderRadius: '8px',
+  border: '1px solid #e9ecef',
+  boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
+};
+
+const filterCloseButtonStyle: React.CSSProperties = {
+  position: 'absolute',
+  top: '6px',
+  right: '6px',
+  width: '24px',
+  height: '24px',
+  border: 'none',
+  background: 'transparent',
+  color: '#6c757d',
+  fontSize: '16px',
+  lineHeight: '24px',
+  cursor: 'pointer',
+  borderRadius: '4px',
+};
+
+const filterRowStyle: React.CSSProperties = {
+  display: 'flex',
+  gap: '8px',
+  marginBottom: '8px',
+  alignItems: 'center',
+};
+
+const filterLabelStyle: React.CSSProperties = {
+  fontSize: '12px',
+  fontWeight: '600',
+  color: '#495057',
+  minWidth: '60px',
+};
+
+const filterInputStyle: React.CSSProperties = {
+  flex: '1',
+  padding: '6px 8px',
+  border: '1px solid #ced4da',
+  borderRadius: '4px',
+  fontSize: '12px',
+};
+
+const filterSelectStyle: React.CSSProperties = {
+  flex: '1',
+  padding: '6px 8px',
+  border: '1px solid #ced4da',
+  borderRadius: '4px',
+  fontSize: '12px',
+  background: '#ffffff',
 };
 
 const fileCardStyle: React.CSSProperties = {
@@ -146,7 +228,7 @@ const paginationButtonDisabledStyle: React.CSSProperties = {
   cursor: 'not-allowed',
 };
 
-export const MetaModelsPanel: React.FC<MetaModelsPanelProps> = ({ activeVsumId, selectedMetaModelIds, onAddToActiveVsum }) => {
+export const MetaModelsPanel: React.FC<MetaModelsPanelProps> = ({ activeVsumId, selectedMetaModelIds, onAddToActiveVsum, initialWidth }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [sortBy, setSortBy] = useState<'name' | 'date' | 'domain'>('date');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
@@ -176,7 +258,7 @@ export const MetaModelsPanel: React.FC<MetaModelsPanelProps> = ({ activeVsumId, 
     const lower = token.toLowerCase().replace(/:$/, '');
     if (!lower) return;
 
-    const candidates = ['name', 'description', 'domain', 'keywords', 'created', 'updated'];
+    const candidates = ['name', 'description', 'domain', 'keywords', 'created', 'updated', 'time'];
     const match = candidates.find(k => k.startsWith(lower));
     const replacement = match ? `${match}:` : null;
     if (!replacement) return;
@@ -191,36 +273,102 @@ export const MetaModelsPanel: React.FC<MetaModelsPanelProps> = ({ activeVsumId, 
   };
 
   const parseSearchQuery = (query: string) => {
-    const filters: any[] = [];
-    const parts = query.split(/\s+/).filter(part => part.trim());
-    for (const part of parts) {
-      const colonMatch = part.match(/^([a-zA-Z]+):(.+)$/);
-      if (colonMatch) {
-        const [, key, value] = colonMatch;
-        const cleanValue = value.replace(/"/g, '');
-        switch (key.toLowerCase()) {
-          case 'name':
-            filters.push({ key: 'name', value: cleanValue });
-            break;
-          case 'domain':
-            filters.push({ key: 'domain', value: cleanValue });
-            break;
-          case 'keywords':
-            filters.push({ key: 'keywords', value: cleanValue });
-            break;
-          case 'description':
-            filters.push({ key: 'description', value: cleanValue });
-            break;
-          case 'created':
-          case 'updated':
-            filters.push({ key, value: cleanValue });
-            break;
-        }
+    const result: any[] = [];
+
+    // Tokenize respecting quotes
+    const tokens: string[] = [];
+    let current = '';
+    let inQuotes = false;
+    for (let i = 0; i < query.length; i++) {
+      const ch = query[i];
+      if (ch === '"') {
+        inQuotes = !inQuotes;
+        continue;
+      }
+      if (!inQuotes && /\s/.test(ch)) {
+        if (current.trim().length > 0) tokens.push(current);
+        current = '';
       } else {
-        // Ignore bare tokens (no default name:)
+        current += ch;
       }
     }
-    return filters;
+    if (current.trim().length > 0) tokens.push(current);
+
+    for (const token of tokens) {
+      const match = token.match(/^([a-zA-Z]+):(.+)$/);
+      if (match) {
+        const key = match[1].toLowerCase();
+        const rawValue = match[2];
+        const cleanValue = rawValue.trim();
+        switch (key) {
+          case 'name':
+            result.push({ key: 'name', value: cleanValue, display: `name:${cleanValue}` });
+            break;
+          case 'domain':
+            result.push({ key: 'domain', value: cleanValue, display: `domain:${cleanValue}` });
+            break;
+          case 'keyword':
+          case 'keywords': {
+            result.push({ key: 'keywords', value: cleanValue, display: `keywords:${cleanValue}` });
+            break;
+          }
+          case 'description':
+          case 'desc':
+            result.push({ key: 'description', value: cleanValue, display: `description:${cleanValue}` });
+            break;
+          case 'created':
+            result.push({ key: 'created', value: cleanValue, display: `created:${cleanValue}` });
+            break;
+          case 'updated':
+            result.push({ key: 'updated', value: cleanValue, display: `updated:${cleanValue}` });
+            break;
+          case 'time': {
+            if (cleanValue === 'beforenow' || cleanValue === 'before:now') {
+              result.push({ key: 'created', value: 'before:now', display: 'time:beforenow' });
+            } else if (cleanValue === 'afternow' || cleanValue === 'after:now') {
+              result.push({ key: 'created', value: 'after:now', display: 'time:afternow' });
+            } else {
+              result.push({ key: 'created', value: cleanValue, display: `time:${cleanValue}` });
+            }
+            break;
+          }
+          default:
+            // Unknown key: ignore
+        }
+      } else if (token.trim().length > 0) {
+        // Bare word ignored
+      }
+    }
+
+    return result;
+  };
+
+  const filterTagsContainerStyle: React.CSSProperties = {
+    display: 'flex',
+    flexWrap: 'wrap',
+    gap: '4px',
+    marginBottom: '8px',
+    minHeight: '24px',
+  };
+
+  const filterTagStyle: React.CSSProperties = {
+    display: 'inline-flex',
+    alignItems: 'center',
+    padding: '2px 8px',
+    borderRadius: '16px',
+    fontSize: 11,
+    fontWeight: 500,
+    color: '#0366d6',
+    background: '#f1f8ff',
+    border: '1px solid #c8e1ff',
+    margin: '2px',
+    userSelect: 'none',
+  };
+
+  const enhancedSearchInputStyle: React.CSSProperties = {
+    ...filterInputStyle,
+    fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif',
+    fontSize: '13px',
   };
 
   // Keep parsed filters in sync with searchTerm
@@ -232,91 +380,109 @@ export const MetaModelsPanel: React.FC<MetaModelsPanelProps> = ({ activeVsumId, 
     }
   }, [searchTerm]);
 
+  const buildApiFiltersFromParsedFilters = useCallback((filtersParsed: any[], includeLegacyDate = true) => {
+    const filters: any = {};
+    filtersParsed.forEach(filter => {
+      switch (filter.key) {
+        case 'name':
+          filters.name = filter.value;
+          break;
+        case 'domain':
+          filters.domain = filter.value;
+          break;
+        case 'keywords': {
+          const values = String(filter.value)
+            .split(',')
+            .map(v => v.trim())
+            .filter(v => v.length > 0);
+          if (values.length > 0) filters.keyword = values;
+          break;
+        }
+        case 'description':
+          filters.description = filter.value;
+          break;
+        case 'created': {
+          const v = String(filter.value);
+          if (v.includes('after:')) {
+            const dateStr = v.replace('after:', '');
+            filters.createdFrom = dateStr === 'now' ? new Date().toISOString() : new Date(dateStr).toISOString();
+          } else if (v.includes('before:')) {
+            const dateStr = v.replace('before:', '');
+            filters.createdTo = dateStr === 'now' ? new Date().toISOString() : new Date(dateStr).toISOString();
+          } else if (v.includes('between:')) {
+            const dates = v.replace('between:', '').split('..');
+            if (dates.length === 2) {
+              filters.createdFrom = new Date(dates[0]).toISOString();
+              filters.createdTo = new Date(dates[1]).toISOString();
+            }
+          } else if (v === 'before:now') {
+            filters.createdTo = new Date().toISOString();
+          } else if (v === 'after:now') {
+            filters.createdFrom = new Date().toISOString();
+          } else {
+            filters.createdFrom = new Date(v).toISOString();
+            filters.createdTo = new Date(`${v}T23:59:59`).toISOString();
+          }
+          break;
+        }
+        case 'updated': {
+          const v = String(filter.value);
+          if (v.includes('after:')) {
+            const dateStr = v.replace('after:', '');
+            filters.updatedFrom = dateStr === 'now' ? new Date().toISOString() : new Date(dateStr).toISOString();
+          } else if (v.includes('before:')) {
+            const dateStr = v.replace('before:', '');
+            filters.updatedTo = dateStr === 'now' ? new Date().toISOString() : new Date(dateStr).toISOString();
+          } else if (v.includes('between:')) {
+            const dates = v.replace('between:', '').split('..');
+            if (dates.length === 2) {
+              filters.updatedFrom = new Date(dates[0]).toISOString();
+              filters.updatedTo = new Date(dates[1]).toISOString();
+            }
+          } else {
+            filters.updatedFrom = new Date(v).toISOString();
+            filters.updatedTo = new Date(`${v}T23:59:59`).toISOString();
+          }
+          break;
+        }
+      }
+    });
+
+    if (includeLegacyDate && dateFilter !== 'all') {
+      const now = new Date();
+      let createdFrom: Date;
+      switch (dateFilter) {
+        case 'today':
+          createdFrom = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+          break;
+        case 'week':
+          createdFrom = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+          break;
+        case 'month':
+          createdFrom = new Date(now.getFullYear(), now.getMonth(), 1);
+          break;
+        case 'year':
+          createdFrom = new Date(now.getFullYear(), 0, 1);
+          break;
+        default:
+          createdFrom = new Date(0);
+      }
+      const hasDateFilters = filters.createdFrom || filters.createdTo || filters.updatedFrom || filters.updatedTo;
+      if (!hasDateFilters) {
+        filters.createdFrom = createdFrom.toISOString();
+        filters.createdTo = now.toISOString();
+      }
+    }
+
+    return filters;
+  }, [dateFilter]);
+
   useEffect(() => {
     const fetchData = async () => {
       setIsLoadingModels(true);
       setApiError('');
       try {
-        const filters: any = {};
-        parsedFilters.forEach(filter => {
-          switch (filter.key) {
-            case 'name':
-              filters.name = filter.value;
-              break;
-            case 'domain':
-              filters.domain = filter.value;
-              break;
-            case 'keywords':
-              filters.keywords = filter.value;
-              break;
-            case 'description':
-              filters.description = filter.value;
-              break;
-            case 'created':
-              if (filter.value.includes('after:')) {
-                const dateStr = filter.value.replace('after:', '');
-                filters.createdFrom = dateStr === 'now' ? new Date().toISOString() : new Date(dateStr).toISOString();
-              } else if (filter.value.includes('before:')) {
-                const dateStr = filter.value.replace('before:', '');
-                filters.createdTo = dateStr === 'now' ? new Date().toISOString() : new Date(dateStr).toISOString();
-              } else if (filter.value.includes('between:')) {
-                const dates = filter.value.replace('between:', '').split('..');
-                if (dates.length === 2) {
-                  filters.createdFrom = new Date(dates[0]).toISOString();
-                  filters.createdTo = new Date(dates[1]).toISOString();
-                }
-              } else {
-                filters.createdFrom = new Date(filter.value).toISOString();
-                filters.createdTo = new Date(filter.value + 'T23:59:59').toISOString();
-              }
-              break;
-            case 'updated':
-              if (filter.value.includes('after:')) {
-                const dateStr = filter.value.replace('after:', '');
-                filters.updatedFrom = dateStr === 'now' ? new Date().toISOString() : new Date(dateStr).toISOString();
-              } else if (filter.value.includes('before:')) {
-                const dateStr = filter.value.replace('before:', '');
-                filters.updatedTo = dateStr === 'now' ? new Date().toISOString() : new Date(dateStr).toISOString();
-              } else if (filter.value.includes('between:')) {
-                const dates = filter.value.replace('between:', '').split('..');
-                if (dates.length === 2) {
-                  filters.updatedFrom = new Date(dates[0]).toISOString();
-                  filters.updatedTo = new Date(dates[1]).toISOString();
-                }
-              } else {
-                filters.updatedFrom = new Date(filter.value).toISOString();
-                filters.updatedTo = new Date(filter.value + 'T23:59:59').toISOString();
-              }
-              break;
-          }
-        });
-
-        // Add simple date range when no explicit created/updated filters are present
-        if (dateFilter !== 'all') {
-          const hasDateFilters = parsedFilters.some(f => f.key === 'created' || f.key === 'updated');
-          if (!hasDateFilters) {
-            const now = new Date();
-            let createdFrom: Date;
-            switch (dateFilter) {
-              case 'today':
-                createdFrom = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-                break;
-              case 'week':
-                createdFrom = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
-                break;
-              case 'month':
-                createdFrom = new Date(now.getFullYear(), now.getMonth(), 1);
-                break;
-              case 'year':
-                createdFrom = new Date(now.getFullYear(), 0, 1);
-                break;
-              default:
-                createdFrom = new Date(0);
-            }
-            filters.createdFrom = createdFrom.toISOString();
-            filters.createdTo = now.toISOString();
-          }
-        }
+        const filters = buildApiFiltersFromParsedFilters(parsedFilters, true);
         const response = await apiService.findMetaModels(filters);
         setApiModels(response.data || []);
         setCurrentPage(1);
@@ -327,7 +493,7 @@ export const MetaModelsPanel: React.FC<MetaModelsPanelProps> = ({ activeVsumId, 
       }
     };
     fetchData();
-  }, [parsedFilters, dateFilter]);
+  }, [parsedFilters, dateFilter, buildApiFiltersFromParsedFilters]);
 
   const sortedModels = [...apiModels].sort((a, b) => {
     let comparison = 0;
@@ -358,17 +524,24 @@ export const MetaModelsPanel: React.FC<MetaModelsPanelProps> = ({ activeVsumId, 
     return `${dateStr} at ${timeStr}`;
   };
 
+  const panelStyle: React.CSSProperties = { 
+    ...containerStyle, 
+    width: initialWidth ? `${initialWidth}px` : containerStyle.width
+  };
+
   return (
-    <div style={containerStyle}>
+    <div style={panelStyle}>
       <div style={titleStyle}>Meta Models</div>
-      <div style={controlsRowStyle}>
-        <input
-          placeholder="Search (e.g. name:test domain:engineering)"
-          value={searchTerm}
-          onChange={(e) => setSearchTerm(e.target.value)}
-          style={searchInputStyle}
-          onKeyDown={handleSearchKeyDown}
-        />
+      <div style={toggleContainerStyle}>
+        <button
+          style={toggleButtonStyle}
+          onClick={() => setShowFilters(!showFilters)}
+          onMouseEnter={(e) => Object.assign(e.currentTarget.style, toggleButtonHoverStyle)}
+          onMouseLeave={(e) => Object.assign(e.currentTarget.style, toggleButtonStyle)}
+        >
+          <span>{showFilters ? 'Hide' : 'Show'} Advanced Search</span>
+          <span>{showFilters ? '▼' : '▶'}</span>
+        </button>
         <select
           value={`${sortBy}-${sortOrder}`}
           onChange={(e) => {
@@ -385,77 +558,54 @@ export const MetaModelsPanel: React.FC<MetaModelsPanelProps> = ({ activeVsumId, 
           <option value="domain-asc">Domain A-Z</option>
           <option value="domain-desc">Domain Z-A</option>
         </select>
-        <button
-          onClick={() => setShowFilters(v => !v)}
-          style={{ padding: '8px 12px', borderRadius: 6, border: '1px solid #dee2e6', background: '#f8f9fa', cursor: 'pointer', fontWeight: 600 }}
-        >
-          {showFilters ? 'Hide Filters' : 'Show Filters'}
-        </button>
       </div>
 
       {showFilters && (
-        <div style={{ position: 'relative', border: '1px solid #e9ecef', background: '#ffffff', borderRadius: 8, padding: 12, marginBottom: 12 }}>
+        <div style={filterContainerStyle}>
           <button
             aria-label="Close filters"
             title="Close"
-            style={{ position: 'absolute', top: 6, right: 6, width: 24, height: 24, border: 'none', background: 'transparent', color: '#6c757d', fontSize: 14, cursor: 'pointer', borderRadius: 4 }}
+            style={filterCloseButtonStyle}
             onClick={() => setShowFilters(false)}
             onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.background = '#f1f3f5'; (e.currentTarget as HTMLButtonElement).style.color = '#495057'; }}
             onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.background = 'transparent'; (e.currentTarget as HTMLButtonElement).style.color = '#6c757d'; }}
           >
             ×
           </button>
-          <div style={{ display: 'flex', gap: 8, marginBottom: 8, alignItems: 'center' }}>
-            <span style={{ fontSize: 12, fontWeight: 600, minWidth: 60, color: '#495057' }}>Name:</span>
+          <div style={{ fontSize: '12px', fontWeight: 600, color: '#495057', marginBottom: '8px' }}>
+            Advanced Search
+          </div>
+
+          {parsedFilters.length > 0 && (
+            <div style={filterTagsContainerStyle}>
+              {parsedFilters.map((filter, index) => (
+                <div key={index} style={filterTagStyle}>{filter.display}</div>
+              ))}
+            </div>
+          )}
+
+          <div style={filterRowStyle}>
+            <span style={filterLabelStyle}>Search:</span>
             <input
               type="text"
-              placeholder="Filter by name..."
-              style={{ flex: 1, padding: '6px 8px', border: '1px solid #ced4da', borderRadius: 4, fontSize: 12 }}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') {
-                  const value = (e.currentTarget as HTMLInputElement).value.trim();
-                  if (value) setSearchTerm(prev => prev ? `${prev} name:${value}` : `name:${value}`);
-                  (e.currentTarget as HTMLInputElement).value = '';
-                }
-              }}
+              placeholder="name:test domain:engineering time:beforenow created:after:2023-01-01"
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              style={enhancedSearchInputStyle}
+              onKeyDown={handleSearchKeyDown}
             />
           </div>
-          <div style={{ display: 'flex', gap: 8, marginBottom: 8, alignItems: 'center' }}>
-            <span style={{ fontSize: 12, fontWeight: 600, minWidth: 60, color: '#495057' }}>Domain:</span>
-            <input
-              type="text"
-              placeholder="Filter by domain..."
-              style={{ flex: 1, padding: '6px 8px', border: '1px solid #ced4da', borderRadius: 4, fontSize: 12 }}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') {
-                  const value = (e.currentTarget as HTMLInputElement).value.trim();
-                  if (value) setSearchTerm(prev => prev ? `${prev} domain:${value}` : `domain:${value}`);
-                  (e.currentTarget as HTMLInputElement).value = '';
-                }
-              }}
-            />
+
+          <div style={{ fontSize: '10px', color: '#6a737d', marginTop: '4px', fontStyle: 'italic' }}>
+            Use GitHub-style syntax: name:test domain:engineering time:beforenow created:after:2023-01-01
           </div>
-          <div style={{ display: 'flex', gap: 8, marginBottom: 8, alignItems: 'center' }}>
-            <span style={{ fontSize: 12, fontWeight: 600, minWidth: 60, color: '#495057' }}>Keywords:</span>
-            <input
-              type="text"
-              placeholder="Filter by keywords..."
-              style={{ flex: 1, padding: '6px 8px', border: '1px solid #ced4da', borderRadius: 4, fontSize: 12 }}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') {
-                  const value = (e.currentTarget as HTMLInputElement).value.trim();
-                  if (value) setSearchTerm(prev => prev ? `${prev} keywords:${value}` : `keywords:${value}`);
-                  (e.currentTarget as HTMLInputElement).value = '';
-                }
-              }}
-            />
-          </div>
-          <div style={{ display: 'flex', gap: 8, marginBottom: 8, alignItems: 'center' }}>
-            <span style={{ fontSize: 12, fontWeight: 600, minWidth: 60, color: '#495057' }}>Date:</span>
+
+          <div style={filterRowStyle}>
+            <span style={filterLabelStyle}>Date:</span>
             <select
               value={dateFilter}
               onChange={(e) => setDateFilter(e.target.value as any)}
-              style={{ flex: 1, padding: '6px 8px', border: '1px solid #ced4da', borderRadius: 4, fontSize: 12, background: '#ffffff' }}
+              style={filterSelectStyle}
             >
               <option value="all">All time</option>
               <option value="today">Today</option>
@@ -464,8 +614,79 @@ export const MetaModelsPanel: React.FC<MetaModelsPanelProps> = ({ activeVsumId, 
               <option value="year">This year</option>
             </select>
           </div>
-          <div style={{ fontSize: 10, color: '#6a737d', fontStyle: 'italic' }}>
-            Tip: Use GitHub-style filters like <code>name:X domain:Y created:after:2024-01-01</code>
+
+          <div style={{ marginTop: '12px', paddingTop: '12px', borderTop: '1px solid #e9ecef' }}>
+            <div style={{ fontSize: '12px', fontWeight: 600, color: '#495057', marginBottom: '8px' }}>
+              Quick Filters
+            </div>
+
+            <div style={filterRowStyle}>
+              <span style={filterLabelStyle}>Name:</span>
+              <input
+                type="text"
+                placeholder="Filter by name..."
+                style={filterInputStyle}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    const value = (e.currentTarget as HTMLInputElement).value.trim();
+                    if (value) {
+                      setSearchTerm(prev => prev ? `${prev} name:${value}` : `name:${value}`);
+                      (e.currentTarget as HTMLInputElement).value = '';
+                    }
+                  }
+                }}
+              />
+            </div>
+
+            <div style={filterRowStyle}>
+              <span style={filterLabelStyle}>Domain:</span>
+              <input
+                type="text"
+                placeholder="Filter by domain..."
+                style={filterInputStyle}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    const domainValue = (e.currentTarget as HTMLInputElement).value.trim();
+                    if (domainValue) {
+                      setSearchTerm(prev => prev ? `${prev} domain:${domainValue}` : `domain:${domainValue}`);
+                      (e.currentTarget as HTMLInputElement).value = '';
+                    }
+                  }
+                }}
+              />
+            </div>
+
+            <div style={filterRowStyle}>
+              <span style={filterLabelStyle}>Keywords:</span>
+              <input
+                type="text"
+                placeholder="Filter by keywords..."
+                style={filterInputStyle}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    const keywordValue = (e.currentTarget as HTMLInputElement).value.trim();
+                    if (keywordValue) {
+                      setSearchTerm(prev => prev ? `${prev} keywords:${keywordValue}` : `keywords:${keywordValue}`);
+                      (e.currentTarget as HTMLInputElement).value = '';
+                    }
+                  }
+                }}
+              />
+            </div>
+
+            <div style={filterRowStyle}>
+              <span style={filterLabelStyle}>Date:</span>
+              <input
+                type="date"
+                style={filterInputStyle}
+                onChange={(e) => {
+                  const dateValue = (e.target as HTMLInputElement).value;
+                  if (dateValue) {
+                    setSearchTerm(prev => prev ? `${prev} created:${dateValue}` : `created:${dateValue}`);
+                  }
+                }}
+              />
+            </div>
           </div>
         </div>
       )}
@@ -527,7 +748,7 @@ export const MetaModelsPanel: React.FC<MetaModelsPanelProps> = ({ activeVsumId, 
                       style={{ padding: '4px 8px', border: '1px solid #dee2e6', borderRadius: 6, background: '#ffffff', cursor: 'pointer', fontSize: 12, fontWeight: 600 }}
                       disabled={(selectedMetaModelIds || []).includes(model.id)}
                     >
-                      {(selectedMetaModelIds || []).includes(model.id) ? 'Added' : 'Add to vSUM'}
+                      {(selectedMetaModelIds || []).includes(model.id) ? 'Added' : 'Add to Vsum'}
                     </button>
                   )}
                 </>

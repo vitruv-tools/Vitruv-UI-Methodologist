@@ -9,7 +9,7 @@ export const HomePage: React.FC = () => {
   return (
     <div style={{ width: '100vw', height: '100vh', display: 'flex', overflow: 'hidden' }}>
       <aside style={{ width: 350, borderRight: '1px solid #e5e7eb' }}>
-        <SidebarTabs width={350} />
+        <SidebarTabs />
       </aside>
       <div style={{ flex: 1, position: 'relative' }}>
         <Header user={user} onLogout={signOut} />

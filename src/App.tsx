@@ -83,8 +83,8 @@ function AppContent() {
       onNew={handleNew}
       user={user}
       onLogout={handleLogout}
-      leftSidebar={<SidebarTabs width={350} />}
-      leftSidebarWidth={350}
+      leftSidebar={<SidebarTabs />}
+      leftSidebarInitialWidth={350}
     />
   );
 }

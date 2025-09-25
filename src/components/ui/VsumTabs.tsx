@@ -49,7 +49,7 @@ export const VsumTabs: React.FC<VsumTabsProps> = ({ openVsums, activeVsumId, onA
         setDetailsById(prev => ({ ...prev, [id]: res.data }));
         setEdits(prev => ({ ...prev, [id]: { name: res.data.name, metaModelIds: (res.data.metaModels || []).map(m => m.id) } }));
       } catch (e) {
-        setError(e instanceof Error ? e.message : 'Failed to load vSUM details');
+        setError(e instanceof Error ? e.message : 'Failed to load Vsum details');
       }
     };
     if (activeVsumId && !detailsById[activeVsumId]) {
@@ -74,7 +74,7 @@ export const VsumTabs: React.FC<VsumTabsProps> = ({ openVsums, activeVsumId, onA
       setEdits(prev => ({ ...prev, [id]: { name: res.data.name, metaModelIds: (res.data.metaModels || []).map(m => m.id) } }));
       window.dispatchEvent(new CustomEvent('vitruv.refreshVsums'));
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Failed to save vSUM');
+      setError(e instanceof Error ? e.message : 'Failed to save Vsum');
     } finally {
       setSaving(false);
     }
@@ -93,14 +93,14 @@ export const VsumTabs: React.FC<VsumTabsProps> = ({ openVsums, activeVsumId, onA
       setEdits(prev => ({ ...prev, [id]: { name: res.data.name, metaModelIds: (res.data.metaModels || []).map(m => m.id) } }));
       return res.data;
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Failed to load vSUM details');
+      setError(e instanceof Error ? e.message : 'Failed to load Vsum details');
       return undefined;
     }
   };
 
   const beginRename = async (id: number) => {
     await ensureDetails(id);
-    const currentName = edits[id]?.name || detailsById[id]?.name || `vSUM #${id}`;
+    const currentName = edits[id]?.name || detailsById[id]?.name || `Vsum #${id}`;
     setRenamingId(id);
     setRenameValue(currentName);
   };
@@ -138,7 +138,7 @@ export const VsumTabs: React.FC<VsumTabsProps> = ({ openVsums, activeVsumId, onA
         <div style={{ display: 'flex', alignItems: 'center', gap: 6, overflowX: 'auto', flex: 1 }}>
           {openVsums.map(id => {
           const isActive = id === activeVsumId;
-          const name = detailsById[id]?.name || `vSUM #${id}`;
+          const name = detailsById[id]?.name || `Vsum #${id}`;
           const isDirty = !!dirtyById[id];
           return (
             <div

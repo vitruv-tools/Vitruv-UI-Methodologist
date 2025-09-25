@@ -10,6 +10,7 @@ export const ProjectPage: React.FC = () => {
   const [showRight, setShowRight] = useState(false);
   const [openVsums, setOpenVsums] = useState<number[]>([]);
   const [activeVsumId, setActiveVsumId] = useState<number | null>(null);
+  const [selectedMetaModelIds, setSelectedMetaModelIds] = useState<number[]>([]);
 
   useEffect(() => {
     const handler = (e: Event) => {
@@ -23,45 +24,52 @@ export const ProjectPage: React.FC = () => {
     return () => window.removeEventListener('vitruv.openVsum', handler as EventListener);
   }, []);
 
+  // Listen for active Vsum meta model selection changes to reflect in MetaModelsPanel
+  useEffect(() => {
+    const onActiveIds = (e: Event) => {
+      const ce = e as CustomEvent<{ ids: number[] }>;
+      const ids = Array.isArray(ce.detail?.ids) ? ce.detail!.ids : [];
+      setSelectedMetaModelIds(ids);
+    };
+    window.addEventListener('vitruv.activeVsumMetaModels', onActiveIds as EventListener);
+    return () => window.removeEventListener('vitruv.activeVsumMetaModels', onActiveIds as EventListener);
+  }, []);
+
   return (
     <MainLayout
       user={user}
       onLogout={signOut}
-      leftSidebar={<SidebarTabs width={350} />}
-      leftSidebarWidth={350}
+      leftSidebar={<SidebarTabs />}
+      leftSidebarInitialWidth={350}
       rightSidebar={showRight ? (
         <div style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
-          <div style={{
-            padding: 8,
-            borderBottom: '1px solid #e5e7eb',
-            display: 'flex',
-            justifyContent: 'flex-end',
-            background: '#ffffff'
-          }}>
-            <button
-              onClick={() => setShowRight(false)}
-              style={{
-                background: '#f3f4f6',
-                color: '#111827',
-                border: '1px solid #d1d5db',
-                borderRadius: 6,
-                padding: '6px 10px',
-                fontWeight: 600,
-                cursor: 'pointer'
-              }}
-              onMouseEnter={(e) => { e.currentTarget.style.background = '#e5e7eb'; }}
-              onMouseLeave={(e) => { e.currentTarget.style.background = '#f3f4f6'; }}
-            >
-              Close
-            </button>
-          </div>
+          <button
+            onClick={() => setShowRight(false)}
+            style={{
+              position: 'absolute',
+              top: '10px',
+              right: '10px',
+              background: '#f3f4f6',
+              color: '#111827',
+              border: '1px solid #d1d5db',
+              borderRadius: '100%',
+              padding: '3px 10px 6px 10px',
+              fontWeight: 600,
+              cursor: 'pointer',
+            }}
+            onMouseEnter={(e) => { e.currentTarget.style.background = '#e5e7eb'; }}
+            onMouseLeave={(e) => { e.currentTarget.style.background = '#f3f4f6'; }}
+          >
+            x
+          </button>
           <div style={{ flex: 1, overflow: 'auto' }}>
             <MetaModelsPanel
               activeVsumId={activeVsumId || undefined}
-              selectedMetaModelIds={activeVsumId ? (openVsums.includes(activeVsumId) ? [] : []) : []}
+              selectedMetaModelIds={activeVsumId ? selectedMetaModelIds : []}
               onAddToActiveVsum={(model) => {
                 window.dispatchEvent(new CustomEvent('vitruv.addMetaModelToActiveVsum', { detail: { id: model.id } }));
               }}
+              initialWidth={350}
             />
           </div>
         </div>
@@ -87,7 +95,7 @@ export const ProjectPage: React.FC = () => {
             borderRadius: 6,
             padding: '8px 12px',
             fontWeight: 700,
-            cursor: 'pointer'
+            cursor: 'pointer',
           }}
           onClick={() => setShowRight(true)}
         >

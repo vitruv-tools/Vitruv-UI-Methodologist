@@ -129,13 +129,13 @@ export const VsumsPanel: React.FC = () => {
           }
         }));
       } catch (e) {
-        setError(e instanceof Error ? e.message : 'Failed to load vSUM details');
+        setError(e instanceof Error ? e.message : 'Failed to load Vsum details');
       }
     }
   };
 
   const onDelete = async (id: number, name: string) => {
-    const confirmed = window.confirm(`Delete vSUM "${name}"?`);
+    const confirmed = window.confirm(`Delete Vsum "${name}"?`);
     if (!confirmed) return;
     setLoading(true);
     setError('');
@@ -143,7 +143,7 @@ export const VsumsPanel: React.FC = () => {
       await apiService.deleteVsum(id);
       setRefreshIndex(v => v + 1);
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Failed to delete vSUM');
+      setError(e instanceof Error ? e.message : 'Failed to delete Vsum');
     } finally {
       setLoading(false);
     }
@@ -175,7 +175,7 @@ export const VsumsPanel: React.FC = () => {
       setDetailsById(prev => ({ ...prev, [id]: details.data }));
       setItems(details ? (await apiService.getVsums()).data : []);
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Failed to update vSUM');
+      setError(e instanceof Error ? e.message : 'Failed to update Vsum');
     } finally {
       setLoading(false);
     }
@@ -194,7 +194,7 @@ export const VsumsPanel: React.FC = () => {
 
   return (
     <div style={containerStyle}>
-      <div style={titleStyle}>vSUMS</div>
+      {/* <div style={titleStyle}>Vsums</div> */}
       <CreateVsumModal
         isOpen={showCreate}
         onClose={() => setShowCreate(false)}
@@ -222,15 +222,15 @@ export const VsumsPanel: React.FC = () => {
           onMouseEnter={(e) => Object.assign(e.currentTarget.style, createButtonHoverStyle)}
           onMouseLeave={(e) => Object.assign(e.currentTarget.style, createButtonStyle)}
         >
-          Create vSUM
+          Create Vsum
         </button>
 
-      <div style={sectionStyle}>All vSUMs</div>
+      <div style={sectionStyle}>All Vsums</div>
       {loading && (
         <div style={{ padding: 12, fontStyle: 'italic', color: '#5a6c7d' }}>Loading...</div>
       )}
       {!loading && sorted.length === 0 && (
-        <div style={{ ...infoItemStyle, color: '#6c757d', fontStyle: 'italic' }}>No vSUMs available.</div>
+        <div style={{ ...infoItemStyle, color: '#6c757d', fontStyle: 'italic' }}>No Vsums available.</div>
       )}
       {sorted.map(item => {
         const details = detailsById[item.id];

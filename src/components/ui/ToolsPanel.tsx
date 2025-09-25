@@ -10,6 +10,7 @@ interface ToolsPanelProps {
   enableItemClick?: boolean;
   showBorder?: boolean;
   suppressApi?: boolean;
+  initialWidth?: number;
 }
 
 const toolsPanelStyle: React.CSSProperties = {
@@ -303,7 +304,7 @@ const enhancedSearchInputStyle: React.CSSProperties = {
   fontSize: '13px',
 };
 
-export const ToolsPanel: React.FC<ToolsPanelProps> = ({ onEcoreFileUpload, onEcoreFileDelete, title = 'Meta Models', allowCreate = true, enableItemClick = true, showBorder = true, suppressApi = false }) => {
+export const ToolsPanel: React.FC<ToolsPanelProps> = ({ onEcoreFileUpload, onEcoreFileDelete, title = 'Meta Models', allowCreate = true, enableItemClick = true, showBorder = true, suppressApi = false, initialWidth }) => {
   const [isProcessing] = useState(false);
   const [uploadMessage, setUploadMessage] = useState<string>('');
   const [uploadMessageType, setUploadMessageType] = useState<'success' | 'error'>('success');
@@ -627,13 +628,17 @@ export const ToolsPanel: React.FC<ToolsPanelProps> = ({ onEcoreFileUpload, onEco
     return createButtonStyle;
   };
 
-  const panelStyle: React.CSSProperties = { ...toolsPanelStyle, borderRight: showBorder ? toolsPanelStyle.borderRight : 'none' };
+  const panelStyle: React.CSSProperties = { 
+    ...toolsPanelStyle, 
+    borderRight: showBorder ? toolsPanelStyle.borderRight : 'none',
+    width: initialWidth ? `${initialWidth}px` : toolsPanelStyle.width
+  };
 
   return (
     <div style={panelStyle}>
-      <div style={titleStyle}>
+      {/* <div style={titleStyle}>
         {title}
-      </div>
+      </div> */}
       
       {uploadMessage && (
         <div style={{

@@ -4,11 +4,11 @@ import { ToolsPanel } from './ToolsPanel';
 import { VsumsPanel } from './VsumsPanel';
 
 interface SidebarTabsProps {
-  width?: number;
+  width?: number | string;
   showBorder?: boolean;
 }
 
-export const SidebarTabs: React.FC<SidebarTabsProps> = ({ width = 350, showBorder = true }) => {
+export const SidebarTabs: React.FC<SidebarTabsProps> = ({ width = '100%', showBorder = true }) => {
   const location = useLocation();
   const navigate = useNavigate();
 
@@ -39,7 +39,7 @@ export const SidebarTabs: React.FC<SidebarTabsProps> = ({ width = 350, showBorde
   };
 
   return (
-    <div style={{ width, height: '100%', display: 'flex', flexDirection: 'column', background: '#ffffff', borderRight: showBorder ? '1px solid #e5e7eb' : 'none' }}>
+    <div style={{ width: '100%', maxWidth: 650, height: '100%', display: 'flex', flexDirection: 'column', background: '#ffffff', borderRight: showBorder ? '1px solid #e5e7eb' : 'none' }}>
       <div style={{ display: 'flex', gap: 0, padding: 0, margin: 0, position: 'sticky', top: 0, zIndex: 1 }}>
         <button
           style={{ ...tabBase, ...(active === 'mml' ? activeTab : {}) }}
