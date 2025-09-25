@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { apiService } from '../../services/api';
 import { Vsum, VsumDetails } from '../../types';
+import { CreateVsumModal } from './CreateVsumModal';
 
 const containerStyle: React.CSSProperties = {
   userSelect: 'none',
@@ -22,6 +23,34 @@ const titleStyle: React.CSSProperties = {
   padding: '8px 0',
   borderBottom: '2px solid #3498db',
   fontFamily: 'Georgia, serif',
+};
+
+// Create button styles aligned with ToolsPanel design
+const createButtonStyle: React.CSSProperties = {
+  width: '100%',
+  padding: '14px 18px',
+  margin: '12px 0 0 0',
+  border: 'none',
+  borderRadius: '6px',
+  background: 'linear-gradient(135deg, #3498db 0%, #2980b9 100%)',
+  color: '#ffffff',
+  fontSize: '15px',
+  fontWeight: 600,
+  cursor: 'pointer',
+  transition: 'all 0.3s ease',
+  display: 'inline-flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  gap: '10px',
+  userSelect: 'none',
+  boxShadow: '0 3px 10px rgba(52, 152, 219, 0.3)',
+  fontFamily: 'Georgia, serif',
+};
+
+const createButtonHoverStyle: React.CSSProperties = {
+  transform: 'translateY(-1px)',
+  boxShadow: '0 5px 15px rgba(52, 152, 219, 0.4)',
+  background: 'linear-gradient(135deg, #2980b9 0%, #1f5f8b 100%)',
 };
 
 const sectionStyle: React.CSSProperties = {
@@ -48,7 +77,7 @@ export const VsumsPanel: React.FC = () => {
   const [items, setItems] = useState<Vsum[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string>('');
-  const [createName, setCreateName] = useState('');
+  const [showCreate, setShowCreate] = useState(false);
   const [refreshIndex, setRefreshIndex] = useState(0);
   const [detailsById, setDetailsById] = useState<Record<number, VsumDetails | undefined>>({});
   const [expandedIds, setExpandedIds] = useState<Set<number>>(new Set());
@@ -77,21 +106,7 @@ export const VsumsPanel: React.FC = () => {
     return () => window.removeEventListener('vitruv.refreshVsums', onRefresh as EventListener);
   }, []);
 
-  const onCreate = async () => {
-    const name = createName.trim();
-    if (!name) return;
-    setLoading(true);
-    setError('');
-    try {
-      await apiService.createVsum({ name });
-      setCreateName('');
-      setRefreshIndex(v => v + 1);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Failed to create vSUM');
-    } finally {
-      setLoading(false);
-    }
-  };
+  // Creation handled in CreateVsumModal
 
   const toggleExpand = async (id: number) => {
     const next = new Set(expandedIds);
@@ -180,6 +195,11 @@ export const VsumsPanel: React.FC = () => {
   return (
     <div style={containerStyle}>
       <div style={titleStyle}>vSUMS</div>
+      <CreateVsumModal
+        isOpen={showCreate}
+        onClose={() => setShowCreate(false)}
+        onSuccess={() => setRefreshIndex(v => v + 1)}
+      />
 
       {error && (
         <div style={{
@@ -196,24 +216,14 @@ export const VsumsPanel: React.FC = () => {
         </div>
       )}
 
-      <div style={infoItemStyle}>
-        <div style={{ display: 'flex', gap: 8 }}>
-          <input
-            placeholder="New vSUM name"
-            value={createName}
-            onChange={(e) => setCreateName(e.target.value)}
-            style={{ flex: 1, padding: '8px 10px', border: '1px solid #ced4da', borderRadius: 6, fontSize: 13 }}
-            disabled={loading}
-          />
-          <button
-            onClick={onCreate}
-            disabled={loading || !createName.trim()}
-            style={{ padding: '8px 12px', border: '1px solid #dee2e6', borderRadius: 6, background: '#ffffff', cursor: 'pointer', fontWeight: 600 }}
-          >
-            Create
-          </button>
-        </div>
-      </div>
+        <button
+          onClick={() => setShowCreate(true)}
+          style={createButtonStyle}
+          onMouseEnter={(e) => Object.assign(e.currentTarget.style, createButtonHoverStyle)}
+          onMouseLeave={(e) => Object.assign(e.currentTarget.style, createButtonStyle)}
+        >
+          Create vSUM
+        </button>
 
       <div style={sectionStyle}>All vSUMs</div>
       {loading && (

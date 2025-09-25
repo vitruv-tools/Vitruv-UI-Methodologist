@@ -141,6 +141,13 @@ class ApiService {
   }
 
   /**
+   * Get currently authenticated user info
+   */
+  async getUserInfo(): Promise<{ data: { id: number; email: string; firstName: string; lastName: string }; message: string }> {
+    return this.authenticatedRequest('/api/v1/users');
+  }
+
+  /**
    * Deploy a flow
    */
   async deployFlow(flowData: FlowData): Promise<{ success: boolean; message: string }> {
@@ -389,7 +396,7 @@ class ApiService {
   /**
    * vSUMS: Create
    */
-  async createVsum(data: { name: string }): Promise<ApiResponse<Vsum>> {
+  async createVsum(data: { name: string; description?: string }): Promise<ApiResponse<Vsum>> {
     return this.authenticatedRequest('/api/v1/vsums', {
       method: 'POST',
       body: JSON.stringify(data),

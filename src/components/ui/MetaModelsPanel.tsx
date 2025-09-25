@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { apiService } from '../../services/api';
+import { ConfirmDialog } from './ConfirmDialog';
 
 interface MetaModelsPanelProps {
   activeVsumId?: number | null;
@@ -157,6 +158,9 @@ export const MetaModelsPanel: React.FC<MetaModelsPanelProps> = ({ activeVsumId, 
   const [showFilters, setShowFilters] = useState(false);
   const [dateFilter, setDateFilter] = useState<'all' | 'today' | 'week' | 'month' | 'year'>('all');
   const [parsedFilters, setParsedFilters] = useState<any[]>([]);
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  const [deletingId, setDeletingId] = useState<number | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   const handleSearchKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key !== 'Tab') return;
@@ -507,6 +511,13 @@ export const MetaModelsPanel: React.FC<MetaModelsPanelProps> = ({ activeVsumId, 
               <span>Domain: <strong>{model.domain}</strong></span>
               <span>•</span>
               <span title={new Date(model.createdAt).toLocaleString()}>{formatRelativeTime(model.createdAt)}</span>
+              <span>•</span>
+              <button
+                onClick={() => { setDeletingId(model.id); setConfirmOpen(true); }}
+                style={{ padding: '4px 8px', border: '1px solid #dee2e6', borderRadius: 6, background: '#fff', cursor: 'pointer', fontSize: 12, fontWeight: 600, color: '#e03131' }}
+              >
+                Delete
+              </button>
               {activeVsumId ? (
                 <>
                   <span>•</span>
@@ -577,6 +588,29 @@ export const MetaModelsPanel: React.FC<MetaModelsPanelProps> = ({ activeVsumId, 
           </div>
         </div>
       )}
+      <ConfirmDialog
+        isOpen={confirmOpen}
+        title="Delete meta model?"
+        message="This action cannot be undone."
+        confirmText={isDeleting ? 'Deleting…' : 'Delete'}
+        cancelText="Cancel"
+        onConfirm={async () => {
+          if (deletingId == null) return;
+          setIsDeleting(true);
+          setApiError('');
+          try {
+            await apiService.deleteMetaModel(String(deletingId));
+            setApiModels(prev => prev.filter(m => m.id !== deletingId));
+          } catch (err) {
+            setApiError(err instanceof Error ? err.message : 'Failed to delete meta model');
+          } finally {
+            setIsDeleting(false);
+            setConfirmOpen(false);
+            setDeletingId(null);
+          }
+        }}
+        onCancel={() => { if (!isDeleting) { setConfirmOpen(false); setDeletingId(null); } }}
+      />
     </div>
   );
 };

@@ -14,6 +14,7 @@ export { SidebarTabs } from './ui/SidebarTabs';
 export { ConfirmDialog } from './ui/ConfirmDialog';
 export { CreateModelModal } from './ui/CreateModelModal';
 export { KeywordTagsInput } from './ui/KeywordTagsInput';
+export { ToastProvider, useToast } from './ui/ToastProvider';
 
 
 // Auth components

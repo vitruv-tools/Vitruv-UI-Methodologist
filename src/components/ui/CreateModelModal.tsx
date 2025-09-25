@@ -628,17 +628,7 @@ export const CreateModelModal: React.FC<CreateModelModalProps> = ({
           </button>
         </div>
 
-        {(isLoading || submitProgress.isSubmitting) && (
-          <>
-            <div style={{ fontSize: '13px', color: '#5a6c7d', textAlign: 'center' }}>Submitting...</div>
-            <div style={progressBarContainerStyle}>
-              <div style={{ ...progressBarStyle, width: `${submitProgress.progress}%` }} />
-            </div>
-            <div style={progressTextStyle}>
-              {Math.round(submitProgress.progress)}%
-            </div>
-          </>
-        )}
+        {/* Removed top-level submitting progress to show near action buttons */}
 
         {error && <div style={errorMessageStyle}>{error}</div>}
         {success && <div style={successMessageStyle}>{success}</div>}
@@ -805,6 +795,18 @@ export const CreateModelModal: React.FC<CreateModelModalProps> = ({
             {isLoading ? 'Creating...' : canSave ? 'Build Meta Model' : 'Upload Files First'}
           </button>
         </div>
+
+        {(isLoading || submitProgress.isSubmitting) && (
+          <>
+            <div style={{ fontSize: '13px', color: '#5a6c7d', textAlign: 'center', marginTop: '8px' }}>Building...</div>
+            <div style={progressBarContainerStyle}>
+              <div style={{ ...progressBarStyle, width: `${submitProgress.progress}%` }} />
+            </div>
+            <div style={progressTextStyle}>
+              {Math.round(submitProgress.progress)}%
+            </div>
+          </>
+        )}
       </div>
     </div>
   );
