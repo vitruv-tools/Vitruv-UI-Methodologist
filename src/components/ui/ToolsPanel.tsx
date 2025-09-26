@@ -24,16 +24,7 @@ const toolsPanelStyle: React.CSSProperties = {
   borderRight: '1px solid #e9ecef',
 };
 
-const titleStyle: React.CSSProperties = {
-  fontSize: '18px',
-  fontWeight: 700,
-  marginBottom: '16px',
-  color: '#2c3e50',
-  textAlign: 'left',
-  padding: '8px 0',
-  borderBottom: '2px solid #3498db',
-  fontFamily: 'Georgia, serif',
-};
+// Removed unused titleStyle
 
 const createButtonStyle: React.CSSProperties = {
   width: '100%',

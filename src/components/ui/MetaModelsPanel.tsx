@@ -30,12 +30,7 @@ const titleStyle: React.CSSProperties = {
   fontFamily: 'Georgia, serif',
 };
 
-const controlsRowStyle: React.CSSProperties = {
-  display: 'flex',
-  gap: '8px',
-  marginBottom: '12px',
-  alignItems: 'center',
-};
+// Removed unused controlsRowStyle
 
 // Match ToolsPanel toggle and sort styles
 const toggleContainerStyle: React.CSSProperties = {
