@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { apiService } from '../../services/api';
 import { KeywordTagsInput } from './KeywordTagsInput';
+import { useToast } from './ToastProvider';
 
 interface CreateModelModalProps {
   isOpen: boolean;
@@ -296,6 +297,7 @@ export const CreateModelModal: React.FC<CreateModelModalProps> = ({
   onClose, 
   onSuccess 
 }) => {
+  const { showError } = useToast();
   const [formData, setFormData] = useState({
     name: '',
     description: '',
@@ -386,8 +388,10 @@ export const CreateModelModal: React.FC<CreateModelModalProps> = ({
         setUploadProgress(prev => ({ ...prev, ecore: { progress: 0, isUploading: false } }));
       }, 2000);
     } catch (err) {
-      console.error('Upload error:', err);
-      setError(`${err instanceof Error ? err.message : 'Unknown error'}`);
+      console.error('Upload error:', err instanceof Error ? err.message : 'Unknown error');
+      // Display backend error message directly to the user
+      setError(err instanceof Error ? err.message : 'Unknown error');
+      showError(err instanceof Error ? err.message : 'Unknown error');
       setUploadProgress(prev => ({ ...prev, ecore: { progress: 0, isUploading: false } }));
       if (ecoreProgressIntervalRef.current) {
         clearInterval(ecoreProgressIntervalRef.current);
@@ -458,7 +462,9 @@ export const CreateModelModal: React.FC<CreateModelModalProps> = ({
       }, 2000);
     } catch (err) {
       console.error('Upload error:', err);
-      setError(`Error uploading ${file.name}: ${err instanceof Error ? err.message : 'Unknown error'}`);
+      // Display backend error message directly to the user
+      setError(err instanceof Error ? err.message : 'Unknown error');
+      showError(err instanceof Error ? err.message : 'Unknown error');
       setUploadProgress(prev => ({ ...prev, genmodel: { progress: 0, isUploading: false } }));
       if (genmodelProgressIntervalRef.current) {
         clearInterval(genmodelProgressIntervalRef.current);
