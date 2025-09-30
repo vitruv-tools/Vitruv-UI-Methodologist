@@ -1,7 +1,8 @@
 import React, { useEffect, useState, useRef } from 'react';
-import { Sidebar } from './Sidebar';
+import { useLocation } from 'react-router-dom';
 import { Header } from './Header';
 import { FlowCanvas } from '../flow/FlowCanvas';
+import { ToolsPanel } from '../ui/ToolsPanel';
 import { parseEcoreFile, createSimpleEcoreDiagram } from '../../utils/ecoreParser';
 import { exportFlowData, generateFlowId, saveDocumentMeta, saveDocumentData, StoredDocumentMeta } from '../../utils/flowUtils';
 import { Node, Edge } from 'reactflow';
@@ -14,6 +15,15 @@ interface MainLayoutProps {
   onNew?: () => void;
   user?: User | null;
   onLogout?: () => void;
+  leftSidebar?: React.ReactNode;
+  leftSidebarWidth?: number | string;
+  leftSidebarInitialWidth?: number;
+  rightSidebar?: React.ReactNode;
+  rightSidebarWidth?: number;
+  topRightSlot?: React.ReactNode;
+  showWorkspaceInfo?: boolean;
+  workspaceTopRightSlot?: React.ReactNode;
+  workspaceOverlay?: React.ReactNode;
 }
 
 interface EcoreFileBox {
@@ -27,9 +37,15 @@ interface EcoreFileBox {
   createdAt?: string;
 }
 
-export function MainLayout({ onDeploy, onSave, onLoad, onNew, user, onLogout }: MainLayoutProps) {
+export function MainLayout({ onDeploy, onSave, onLoad, onNew, user, onLogout, leftSidebar, leftSidebarWidth = '100%', leftSidebarInitialWidth = 350, rightSidebar, rightSidebarWidth = 0, topRightSlot, showWorkspaceInfo = true, workspaceTopRightSlot, workspaceOverlay }: MainLayoutProps) {
+  const location = useLocation();
+  const isMMLRoute = location.pathname.startsWith('/mml');
   const [selectedDiagramType, setSelectedDiagramType] = useState<string | undefined>();
   const flowCanvasRef = useRef<any>(null);
+  const leftAsideRef = useRef<HTMLDivElement | null>(null);
+  const rightAsideRef = useRef<HTMLDivElement | null>(null);
+  const isResizingLeft = useRef(false);
+  const isResizingRight = useRef(false);
 
   // Active document state (single open doc in workspace)
   const [documents, setDocuments] = useState<StoredDocumentMeta[]>([]);
@@ -64,10 +80,39 @@ export function MainLayout({ onDeploy, onSave, onLoad, onNew, user, onLogout }: 
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const handleDiagramSelection = (diagramType: string) => {
-    console.log('Diagram selected:', diagramType);
-    setSelectedDiagramType(diagramType);
-  };
+  // Handle sidebar drag-resize for left (MML or custom) and right (when present)
+  useEffect(() => {
+    const handleMouseMove = (e: MouseEvent) => {
+      if (isResizingLeft.current && leftAsideRef.current) {
+        const min = 240;
+        const max = 700;
+        const next = Math.min(Math.max(e.clientX, min), max);
+        // Apply width directly to avoid React re-renders during drag
+        leftAsideRef.current.style.width = `${next}px`;
+      }
+      if (isResizingRight.current && rightAsideRef.current) {
+        const min = 260;
+        const max = 700;
+        const viewport = window.innerWidth;
+        const next = Math.min(Math.max(viewport - e.clientX, min), max);
+        rightAsideRef.current.style.width = `${next}px`;
+      }
+    };
+    const handleMouseUp = () => {
+      isResizingLeft.current = false;
+      isResizingRight.current = false;
+      document.body.style.cursor = '';
+      document.body.style.userSelect = '';
+    };
+    window.addEventListener('mousemove', handleMouseMove);
+    window.addEventListener('mouseup', handleMouseUp);
+    return () => {
+      window.removeEventListener('mousemove', handleMouseMove);
+      window.removeEventListener('mouseup', handleMouseUp);
+    };
+  }, []);
+
+  
 
   // Calculate empty position for new box next to existing boxes
   const calculateEmptyPosition = (existingBoxes: EcoreFileBox[]) => {
@@ -360,11 +405,28 @@ export function MainLayout({ onDeploy, onSave, onLoad, onNew, user, onLogout }: 
       display: 'flex',
       overflow: 'hidden'
     }}>
-             <Sidebar 
-         onDiagramSelect={handleDiagramSelection} 
-         onEcoreFileUpload={handleEcoreFileUpload}
-         onEcoreFileDelete={handleEcoreFileDeleteFromPanel}
-       />
+      {leftSidebar ? (
+        <aside ref={leftAsideRef} style={{ width: leftSidebarInitialWidth, maxWidth: 650, background: '#ffffff', borderRight: '1px solid #e0e0e0', overflowY: 'auto', position: 'relative' }}>
+          {leftSidebar}
+          <div
+            onMouseDown={(e) => { isResizingLeft.current = true; document.body.style.cursor = 'col-resize'; document.body.style.userSelect = 'none'; e.preventDefault(); }}
+            style={{ position: 'absolute', right: 0, top: 0, width: 8, height: '100%', cursor: 'col-resize' }}
+          />
+        </aside>
+      ) : (
+        <aside ref={leftAsideRef} style={{ width: leftSidebarInitialWidth, maxWidth: 650, background: '#ffffff', borderRight: '1px solid #e0e0e0', overflowY: 'auto', position: 'relative' }}>
+          <ToolsPanel
+            onEcoreFileUpload={handleEcoreFileUpload}
+            onEcoreFileDelete={handleEcoreFileDeleteFromPanel}
+            initialWidth={350}
+          />
+          {/* Drag handle */}
+          <div
+            onMouseDown={(e) => { isResizingLeft.current = true; document.body.style.cursor = 'col-resize'; document.body.style.userSelect = 'none'; e.preventDefault(); }}
+            style={{ position: 'absolute', right: 0, top: 0, width: 8, height: '100%', cursor: 'col-resize' }}
+          />
+        </aside>
+      )}
       <div style={{ 
         flexGrow: 1, 
         position: 'relative',
@@ -397,8 +459,8 @@ export function MainLayout({ onDeploy, onSave, onLoad, onNew, user, onLogout }: 
         )}
         
         {/* Top-right workspace document panel (separate from ToolsPanel) */}
-        {activeDocId && (
-          <div style={{ position: 'absolute', right: 16, top: 56, zIndex: 25 }}>
+        {activeDocId && !isMMLRoute && (
+          <div style={{ position: 'absolute', right: 16 + (rightSidebarWidth || 0), top: 56, zIndex: 25 }}>
             <div style={{
               background: '#ffffff',
               color: '#2c3e50',
@@ -482,46 +544,115 @@ export function MainLayout({ onDeploy, onSave, onLoad, onNew, user, onLogout }: 
           </div>
         )}
 
-        {/* Workspace info panel */}
-        <div style={{ position: 'absolute', left: 16, top: 56, zIndex: 25 }}>
-          <div style={{
-            background: '#ffffff',
-            color: '#2c3e50',
-            padding: '8px 12px',
-            borderRadius: 10,
-            display: 'flex',
-            alignItems: 'center',
-            gap: 8,
-            boxShadow: '0 8px 24px rgba(0,0,0,0.08)',
-            border: '1px solid #e5e5e5',
-            fontSize: '12px'
-          }}>
-            <span style={{ color: '#34495e' }}>📁 Workspace</span>
-            <span style={{ color: '#7f8c8d' }}>•</span>
-            <span style={{ color: '#34495e' }}>{ecoreFileBoxes.length} ECORE files</span>
-            {ecoreFileBoxes.length > 0 && (
-              <>
-                <span style={{ color: '#7f8c8d' }}>•</span>
-                <span style={{ color: '#34495e' }}>
-                  {documents.filter(doc => doc.sourceFileName).length} diagrams
-                </span>
-              </>
-            )}
+        {/* Optional overlay slot in the top-right area */}
+        {topRightSlot && (
+          <div style={{ position: 'absolute', right: 16 + (rightSidebarWidth || 0), top: 56, zIndex: 24 }}>
+            {topRightSlot}
           </div>
-        </div>
+        )}
+
+        {/* Workspace info panel */}
+        {showWorkspaceInfo && !isMMLRoute && (
+          <div style={{ position: 'absolute', left: 16, top: 56, zIndex: 25 }}>
+            <div style={{
+              background: '#ffffff',
+              color: '#2c3e50',
+              padding: '8px 12px',
+              borderRadius: 10,
+              display: 'flex',
+              alignItems: 'center',
+              gap: 8,
+              boxShadow: '0 8px 24px rgba(0,0,0,0.08)',
+              border: '1px solid #e5e5e5',
+              fontSize: '12px'
+            }}>
+              <span style={{ color: '#34495e' }}>📁 Workspace</span>
+              <span style={{ color: '#7f8c8d' }}>•</span>
+              <span style={{ color: '#34495e' }}>{ecoreFileBoxes.length} ECORE files</span>
+              {ecoreFileBoxes.length > 0 && (
+                <>
+                  <span style={{ color: '#7f8c8d' }}>•</span>
+                  <span style={{ color: '#34495e' }}>
+                    {documents.filter(doc => doc.sourceFileName).length} diagrams
+                  </span>
+                </>
+              )}
+            </div>
+          </div>
+        )}
 
         <div style={{ flexGrow: 1, position: 'relative', display: 'flex' }}>
-          <FlowCanvas 
-            onDeploy={onDeploy} 
-            onDiagramChange={handleDiagramChange} 
-            ref={flowCanvasRef}
-            ecoreFiles={ecoreFileBoxes}
-            onEcoreFileSelect={handleEcoreFileSelect}
-            onEcoreFileExpand={handleEcoreFileExpand}
-            onEcoreFilePositionChange={handleEcoreFilePositionChange}
-            onEcoreFileDelete={handleEcoreFileDelete}
-            onEcoreFileRename={handleEcoreFileRename}
-          />
+          <div style={{ flexGrow: 1, position: 'relative', display: 'flex' }}>
+            {workspaceOverlay && (
+              <div style={{ position: 'absolute', left: 0, right: 0, top: 48, zIndex: 20, pointerEvents: 'none' }}>
+                <div style={{ pointerEvents: 'auto' }}>
+                  {workspaceOverlay}
+                </div>
+              </div>
+            )}
+            {isMMLRoute ? (
+              <div style={{ 
+                width: '100%', 
+                height: '100%', 
+                background: '#ffffff',
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                justifyContent: 'center',
+                padding: '40px'
+              }}>
+                <div style={{
+                  textAlign: 'center',
+                  fontFamily: 'Georgia, serif',
+                  color: '#2c3e50',
+                  maxWidth: '600px'
+                }}>
+                  <img 
+                    src="/assets/22098030.png" 
+                    alt="Vitruvius" 
+                    style={{
+                      width: '200px',
+                      height: '200px',
+                      objectFit: 'contain',
+                      marginBottom: '30px'
+                    }}
+                  />
+                  <p style={{ margin: '0 0 20px 0', fontSize: '16px', color: '#6b7280', lineHeight: '1.6' }}>
+                    Meta Model Management Platform
+                  </p>
+                </div>
+              </div>
+            ) : (
+              <FlowCanvas 
+                onDeploy={onDeploy} 
+                onDiagramChange={handleDiagramChange} 
+                ref={flowCanvasRef}
+                ecoreFiles={ecoreFileBoxes}
+                onEcoreFileSelect={handleEcoreFileSelect}
+                onEcoreFileExpand={handleEcoreFileExpand}
+                onEcoreFilePositionChange={handleEcoreFilePositionChange}
+                onEcoreFileDelete={handleEcoreFileDelete}
+                onEcoreFileRename={handleEcoreFileRename}
+              />
+            )}
+            {workspaceTopRightSlot && !isMMLRoute && (
+              <div style={{ position: 'absolute', right: 16, top: 60, zIndex: 18 }}>
+                {workspaceTopRightSlot}
+              </div>
+            )}
+          </div>
+          {rightSidebar && (
+            <aside ref={rightAsideRef} style={{ width: rightSidebarWidth, borderLeft: '1px solid #e0e0e0', background: '#ffffff', overflowY: 'auto', marginTop: 48, position: 'relative' }}>
+              {/* Right drag handle on the inner left edge */}
+              <div
+                onMouseDown={(e) => { isResizingRight.current = true; document.body.style.cursor = 'col-resize'; document.body.style.userSelect = 'none'; e.preventDefault(); }}
+                style={{ position: 'absolute', left: 0, top: 0, width: 8, height: '100%', cursor: 'col-resize' }}
+              />
+              <div style={{ height: '100%' }}>
+                {rightSidebar}
+              </div>
+            </aside>
+          )}
         </div>
       </div>
     </div>

@@ -1,5 +1,7 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { apiService } from '../../services/api';
+import { KeywordTagsInput } from './KeywordTagsInput';
+import { useToast } from './ToastProvider';
 
 interface CreateModelModalProps {
   isOpen: boolean;
@@ -265,16 +267,42 @@ const fileInputStyle: React.CSSProperties = {
   display: 'none',
 };
 
+const progressBarContainerStyle: React.CSSProperties = {
+  width: '100%',
+  height: '6px',
+  backgroundColor: '#e0e0e0',
+  borderRadius: '3px',
+  overflow: 'hidden',
+  marginTop: '8px',
+};
+
+const progressBarStyle: React.CSSProperties = {
+  height: '100%',
+  backgroundColor: '#3498db',
+  borderRadius: '3px',
+  transition: 'width 0.3s ease',
+  width: '0%',
+};
+
+const progressTextStyle: React.CSSProperties = {
+  fontSize: '12px',
+  color: '#666',
+  textAlign: 'center',
+  marginTop: '4px',
+  fontFamily: 'Georgia, serif',
+};
+
 export const CreateModelModal: React.FC<CreateModelModalProps> = ({ 
   isOpen, 
   onClose, 
   onSuccess 
 }) => {
+  const { showError } = useToast();
   const [formData, setFormData] = useState({
     name: '',
     description: '',
     domain: '',
-    keywords: '',
+    keywords: [] as string[],
   });
 
   // Removed unused uploadedFiles state
@@ -287,9 +315,17 @@ export const CreateModelModal: React.FC<CreateModelModalProps> = ({
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string>('');
   const [success, setSuccess] = useState<string>('');
+  const [uploadProgress, setUploadProgress] = useState({
+    ecore: { progress: 0, isUploading: false },
+    genmodel: { progress: 0, isUploading: false }
+  });
+  const [submitProgress, setSubmitProgress] = useState({ progress: 0, isSubmitting: false });
 
   const ecoreFileInputRef = useRef<HTMLInputElement>(null);
   const genmodelFileInputRef = useRef<HTMLInputElement>(null);
+  const ecoreProgressIntervalRef = useRef<number | null>(null);
+  const genmodelProgressIntervalRef = useRef<number | null>(null);
+  const submitProgressIntervalRef = useRef<number | null>(null);
 
   const canSave = uploadedFileIds.ecoreFileId > 0 && uploadedFileIds.genModelFileId > 0 && formData.name.trim();
 
@@ -302,14 +338,36 @@ export const CreateModelModal: React.FC<CreateModelModalProps> = ({
       return;
     }
 
-    setIsLoading(true);
+    setUploadProgress(prev => ({ ...prev, ecore: { progress: 0, isUploading: true } }));
     setError('');
 
     try {
       console.log('Uploading .ecore file:', file.name, 'Size:', file.size);
       
+      // Simulate progress updates
+      if (ecoreProgressIntervalRef.current) {
+        clearInterval(ecoreProgressIntervalRef.current);
+      }
+      ecoreProgressIntervalRef.current = window.setInterval(() => {
+        setUploadProgress(prev => ({
+          ...prev,
+          ecore: { 
+            progress: Math.min(prev.ecore.progress + Math.random() * 20, 90), 
+            isUploading: true 
+          }
+        }));
+      }, 200);
+
       const response = await apiService.uploadFile(file, 'ECORE');
       console.log('Upload response:', response);
+      
+      if (ecoreProgressIntervalRef.current) {
+        clearInterval(ecoreProgressIntervalRef.current);
+        ecoreProgressIntervalRef.current = null;
+      }
+      
+      // Complete the progress
+      setUploadProgress(prev => ({ ...prev, ecore: { progress: 100, isUploading: false } }));
       
       // Extract ID from various possible response shapes
       const rawData: any = (response as any)?.data;
@@ -324,11 +382,21 @@ export const CreateModelModal: React.FC<CreateModelModalProps> = ({
       setUploadedFileIds(prev => ({ ...prev, ecoreFileId: fileId }));
       setSuccess(`Successfully uploaded ${file.name}`);
       setTimeout(() => setSuccess(''), 3000);
+      
+      // Reset progress after success
+      setTimeout(() => {
+        setUploadProgress(prev => ({ ...prev, ecore: { progress: 0, isUploading: false } }));
+      }, 2000);
     } catch (err) {
-      console.error('Upload error:', err);
-      setError(`Error uploading ${file.name}: ${err instanceof Error ? err.message : 'Unknown error'}`);
-    } finally {
-      setIsLoading(false);
+      console.error('Upload error:', err instanceof Error ? err.message : 'Unknown error');
+      // Display backend error message directly to the user
+      setError(err instanceof Error ? err.message : 'Unknown error');
+      showError(err instanceof Error ? err.message : 'Unknown error');
+      setUploadProgress(prev => ({ ...prev, ecore: { progress: 0, isUploading: false } }));
+      if (ecoreProgressIntervalRef.current) {
+        clearInterval(ecoreProgressIntervalRef.current);
+        ecoreProgressIntervalRef.current = null;
+      }
     }
 
     event.target.value = '';
@@ -343,14 +411,36 @@ export const CreateModelModal: React.FC<CreateModelModalProps> = ({
       return;
     }
 
-    setIsLoading(true);
+    setUploadProgress(prev => ({ ...prev, genmodel: { progress: 0, isUploading: true } }));
     setError('');
 
     try {
       console.log('Uploading .genmodel file:', file.name, 'Size:', file.size);
       
+      // Simulate progress updates
+      if (genmodelProgressIntervalRef.current) {
+        clearInterval(genmodelProgressIntervalRef.current);
+      }
+      genmodelProgressIntervalRef.current = window.setInterval(() => {
+        setUploadProgress(prev => ({
+          ...prev,
+          genmodel: { 
+            progress: Math.min(prev.genmodel.progress + Math.random() * 20, 90), 
+            isUploading: true 
+          }
+        }));
+      }, 200);
+
       const response = await apiService.uploadFile(file, 'GEN_MODEL');
       console.log('Upload response:', response);
+      
+      if (genmodelProgressIntervalRef.current) {
+        clearInterval(genmodelProgressIntervalRef.current);
+        genmodelProgressIntervalRef.current = null;
+      }
+      
+      // Complete the progress
+      setUploadProgress(prev => ({ ...prev, genmodel: { progress: 100, isUploading: false } }));
       
       // Extract ID from various possible response shapes
       const rawData: any = (response as any)?.data;
@@ -365,11 +455,21 @@ export const CreateModelModal: React.FC<CreateModelModalProps> = ({
       setUploadedFileIds(prev => ({ ...prev, genModelFileId: fileId }));
       setSuccess(`Successfully uploaded ${file.name}`);
       setTimeout(() => setSuccess(''), 3000);
+      
+      // Reset progress after success
+      setTimeout(() => {
+        setUploadProgress(prev => ({ ...prev, genmodel: { progress: 0, isUploading: false } }));
+      }, 2000);
     } catch (err) {
       console.error('Upload error:', err);
-      setError(`Error uploading ${file.name}: ${err instanceof Error ? err.message : 'Unknown error'}`);
-    } finally {
-      setIsLoading(false);
+      // Display backend error message directly to the user
+      setError(err instanceof Error ? err.message : 'Unknown error');
+      showError(err instanceof Error ? err.message : 'Unknown error');
+      setUploadProgress(prev => ({ ...prev, genmodel: { progress: 0, isUploading: false } }));
+      if (genmodelProgressIntervalRef.current) {
+        clearInterval(genmodelProgressIntervalRef.current);
+        genmodelProgressIntervalRef.current = null;
+      }
     }
 
     event.target.value = '';
@@ -382,21 +482,32 @@ export const CreateModelModal: React.FC<CreateModelModalProps> = ({
     }
 
     // Validate keywords
-    const keywords = formData.keywords.trim().split(/\s+/).filter(k => k.length > 0);
-    if (keywords.length === 0) {
+    if (formData.keywords.length === 0) {
       setError('Please enter at least one keyword');
       return;
     }
 
     setIsLoading(true);
     setError('');
+    // Start submit progress animation
+    if (submitProgressIntervalRef.current) {
+      clearInterval(submitProgressIntervalRef.current);
+      submitProgressIntervalRef.current = null;
+    }
+    setSubmitProgress({ progress: 0, isSubmitting: true });
+    submitProgressIntervalRef.current = window.setInterval(() => {
+      setSubmitProgress(prev => ({
+        progress: Math.min(prev.progress + Math.random() * 20, 90),
+        isSubmitting: true,
+      }));
+    }, 200);
 
     try {
       const requestData: CreateModelRequest = {
         name: formData.name.trim(),
         description: formData.description.trim(),
         domain: formData.domain.trim(),
-        keyword: keywords,
+        keyword: formData.keywords,
         ecoreFileId: uploadedFileIds.ecoreFileId,
         genModelFileId: uploadedFileIds.genModelFileId,
       };
@@ -406,25 +517,54 @@ export const CreateModelModal: React.FC<CreateModelModalProps> = ({
       const response = await apiService.createMetaModel(requestData);
       console.log('Meta Model creation response:', response);
       
+      // Finish submit progress
+      if (submitProgressIntervalRef.current) {
+        clearInterval(submitProgressIntervalRef.current);
+        submitProgressIntervalRef.current = null;
+      }
+      setSubmitProgress({ progress: 100, isSubmitting: false });
+
       setSuccess('Meta Model created successfully!');
       setTimeout(() => {
         onSuccess?.(response.data);
         handleClose();
       }, 1500);
+      // Reset progress after brief success display if modal remains open
+      setTimeout(() => {
+        setSubmitProgress({ progress: 0, isSubmitting: false });
+      }, 2000);
     } catch (err) {
       console.error('Meta Model creation error:', err);
       setError(`Error creating meta model: ${err instanceof Error ? err.message : 'Unknown error'}`);
+      if (submitProgressIntervalRef.current) {
+        clearInterval(submitProgressIntervalRef.current);
+        submitProgressIntervalRef.current = null;
+      }
+      setSubmitProgress({ progress: 0, isSubmitting: false });
     } finally {
       setIsLoading(false);
     }
   };
 
   const handleClose = () => {
+    if (submitProgressIntervalRef.current) {
+      clearInterval(submitProgressIntervalRef.current);
+      submitProgressIntervalRef.current = null;
+    }
+    if (ecoreProgressIntervalRef.current) {
+      clearInterval(ecoreProgressIntervalRef.current);
+      ecoreProgressIntervalRef.current = null;
+    }
+    if (genmodelProgressIntervalRef.current) {
+      clearInterval(genmodelProgressIntervalRef.current);
+      genmodelProgressIntervalRef.current = null;
+    }
+    setSubmitProgress({ progress: 0, isSubmitting: false });
     setFormData({
       name: '',
       description: '',
       domain: '',
-      keywords: '',
+      keywords: [],
     });
     // Reset removed uploadedFiles state omitted
     setUploadedFileIds({
@@ -434,8 +574,48 @@ export const CreateModelModal: React.FC<CreateModelModalProps> = ({
     setError('');
     setSuccess('');
     setIsLoading(false);
+    setUploadProgress({
+      ecore: { progress: 0, isUploading: false },
+      genmodel: { progress: 0, isUploading: false }
+    });
     onClose();
   };
+
+  useEffect(() => {
+    if (!isOpen) {
+      if (submitProgressIntervalRef.current) {
+        clearInterval(submitProgressIntervalRef.current);
+        submitProgressIntervalRef.current = null;
+      }
+      if (ecoreProgressIntervalRef.current) {
+        clearInterval(ecoreProgressIntervalRef.current);
+        ecoreProgressIntervalRef.current = null;
+      }
+      if (genmodelProgressIntervalRef.current) {
+        clearInterval(genmodelProgressIntervalRef.current);
+        genmodelProgressIntervalRef.current = null;
+      }
+      setSubmitProgress({ progress: 0, isSubmitting: false });
+      setUploadProgress({
+        ecore: { progress: 0, isUploading: false },
+        genmodel: { progress: 0, isUploading: false }
+      });
+    }
+    return () => {
+      if (submitProgressIntervalRef.current) {
+        clearInterval(submitProgressIntervalRef.current);
+        submitProgressIntervalRef.current = null;
+      }
+      if (ecoreProgressIntervalRef.current) {
+        clearInterval(ecoreProgressIntervalRef.current);
+        ecoreProgressIntervalRef.current = null;
+      }
+      if (genmodelProgressIntervalRef.current) {
+        clearInterval(genmodelProgressIntervalRef.current);
+        genmodelProgressIntervalRef.current = null;
+      }
+    };
+  }, [isOpen]);
 
   if (!isOpen) return null;
 
@@ -443,7 +623,7 @@ export const CreateModelModal: React.FC<CreateModelModalProps> = ({
     <div style={modalOverlayStyle} onClick={handleClose}>
       <div style={modalStyle} onClick={(e) => e.stopPropagation()}>
         <div style={modalHeaderStyle}>
-          <h2 style={modalTitleStyle}>Upload New Meta Model</h2>
+          <h2 style={modalTitleStyle}>Build New Meta Model</h2>
           <button
             style={closeButtonStyle}
             onClick={handleClose}
@@ -453,6 +633,8 @@ export const CreateModelModal: React.FC<CreateModelModalProps> = ({
             ×
           </button>
         </div>
+
+        {/* Removed top-level submitting progress to show near action buttons */}
 
         {error && <div style={errorMessageStyle}>{error}</div>}
         {success && <div style={successMessageStyle}>{success}</div>}
@@ -489,17 +671,14 @@ export const CreateModelModal: React.FC<CreateModelModalProps> = ({
 
         <div style={formGroupStyle}>
           <label style={labelStyle}>Keywords</label>
-          <input
-            type="text"
-            placeholder="Enter keywords separated by spaces (e.g., modeling design architecture)"
-            value={formData.keywords}
-            onChange={(e) => setFormData({ ...formData, keywords: e.target.value })}
+          <KeywordTagsInput
+            keywords={formData.keywords}
+            onChange={(keywords) => setFormData({ ...formData, keywords })}
+            placeholder="Type keywords and press Enter..."
             style={inputStyle}
-            onFocus={(e) => Object.assign(e.currentTarget.style, inputFocusStyle)}
-            onBlur={(e) => Object.assign(e.currentTarget.style, inputStyle)}
           />
           <div style={{ fontSize: '12px', color: '#666', marginTop: '4px', fontStyle: 'italic' }}>
-            Note: Use spaces to separate multiple keywords. Each keyword will be added to the array.
+            Press Enter to add each keyword as colored text. Keywords will appear in different colors automatically.
           </div>
         </div>
 
@@ -539,31 +718,57 @@ export const CreateModelModal: React.FC<CreateModelModalProps> = ({
           />
           
           <div style={uploadButtonsContainerStyle}>
-            <button
-              style={{
-                ...uploadButtonStyle,
-                ...(uploadedFileIds.ecoreFileId > 0 ? uploadButtonSuccessStyle : {})
-              }}
-              onClick={() => ecoreFileInputRef.current?.click()}
-              disabled={isLoading}
-              onMouseEnter={(e) => !uploadedFileIds.ecoreFileId && !isLoading && Object.assign(e.currentTarget.style, uploadButtonHoverStyle)}
-              onMouseLeave={(e) => !uploadedFileIds.ecoreFileId && !isLoading && Object.assign(e.currentTarget.style, uploadButtonStyle)}
-            >
-              {uploadedFileIds.ecoreFileId > 0 ? '✓' : 'Upload'} .ecore
-            </button>
+            <div style={{ flex: '1' }}>
+              <button
+                style={{
+                  ...uploadButtonStyle,
+                  ...(uploadedFileIds.ecoreFileId > 0 ? uploadButtonSuccessStyle : {}),
+                  width: '100%'
+                }}
+                onClick={() => ecoreFileInputRef.current?.click()}
+                disabled={uploadProgress.ecore.isUploading}
+                onMouseEnter={(e) => !uploadedFileIds.ecoreFileId && !uploadProgress.ecore.isUploading && Object.assign(e.currentTarget.style, uploadButtonHoverStyle)}
+                onMouseLeave={(e) => !uploadedFileIds.ecoreFileId && !uploadProgress.ecore.isUploading && Object.assign(e.currentTarget.style, uploadButtonStyle)}
+              >
+                {uploadProgress.ecore.isUploading ? 'Uploading...' : uploadedFileIds.ecoreFileId > 0 ? '✓' : 'Upload'} .ecore
+              </button>
+              {uploadProgress.ecore.isUploading && (
+                <>
+                  <div style={progressBarContainerStyle}>
+                    <div style={{ ...progressBarStyle, width: `${uploadProgress.ecore.progress}%` }} />
+                  </div>
+                  <div style={progressTextStyle}>
+                    {Math.round(uploadProgress.ecore.progress)}%
+                  </div>
+                </>
+              )}
+            </div>
             
-            <button
-              style={{
-                ...uploadButtonStyle,
-                ...(uploadedFileIds.genModelFileId > 0 ? uploadButtonSuccessStyle : {})
-              }}
-              onClick={() => genmodelFileInputRef.current?.click()}
-              disabled={isLoading}
-              onMouseEnter={(e) => !uploadedFileIds.genModelFileId && !isLoading && Object.assign(e.currentTarget.style, uploadButtonHoverStyle)}
-              onMouseLeave={(e) => !uploadedFileIds.genModelFileId && !isLoading && Object.assign(e.currentTarget.style, uploadButtonStyle)}
-            >
-              {uploadedFileIds.genModelFileId > 0 ? '✓' : 'Upload'} .genmodel
-            </button>
+            <div style={{ flex: '1' }}>
+              <button
+                style={{
+                  ...uploadButtonStyle,
+                  ...(uploadedFileIds.genModelFileId > 0 ? uploadButtonSuccessStyle : {}),
+                  width: '100%'
+                }}
+                onClick={() => genmodelFileInputRef.current?.click()}
+                disabled={uploadProgress.genmodel.isUploading}
+                onMouseEnter={(e) => !uploadedFileIds.genModelFileId && !uploadProgress.genmodel.isUploading && Object.assign(e.currentTarget.style, uploadButtonHoverStyle)}
+                onMouseLeave={(e) => !uploadedFileIds.genModelFileId && !uploadProgress.genmodel.isUploading && Object.assign(e.currentTarget.style, uploadButtonStyle)}
+              >
+                {uploadProgress.genmodel.isUploading ? 'Uploading...' : uploadedFileIds.genModelFileId > 0 ? '✓' : 'Upload'} .genmodel
+              </button>
+              {uploadProgress.genmodel.isUploading && (
+                <>
+                  <div style={progressBarContainerStyle}>
+                    <div style={{ ...progressBarStyle, width: `${uploadProgress.genmodel.progress}%` }} />
+                  </div>
+                  <div style={progressTextStyle}>
+                    {Math.round(uploadProgress.genmodel.progress)}%
+                  </div>
+                </>
+              )}
+            </div>
           </div>
           
           <div style={fileStatusStyle}>
@@ -593,9 +798,21 @@ export const CreateModelModal: React.FC<CreateModelModalProps> = ({
             onMouseEnter={(e) => canSave && !isLoading && Object.assign(e.currentTarget.style, buttonHoverStyle)}
             onMouseLeave={(e) => canSave && !isLoading && Object.assign(e.currentTarget.style, primaryButtonStyle)}
           >
-            {isLoading ? 'Creating...' : canSave ? 'Create Meta Model' : 'Upload Files First'}
+            {isLoading ? 'Creating...' : canSave ? 'Build Meta Model' : 'Upload Files First'}
           </button>
         </div>
+
+        {(isLoading || submitProgress.isSubmitting) && (
+          <>
+            <div style={{ fontSize: '13px', color: '#5a6c7d', textAlign: 'center', marginTop: '8px' }}>Building...</div>
+            <div style={progressBarContainerStyle}>
+              <div style={{ ...progressBarStyle, width: `${submitProgress.progress}%` }} />
+            </div>
+            <div style={progressTextStyle}>
+              {Math.round(submitProgress.progress)}%
+            </div>
+          </>
+        )}
       </div>
     </div>
   );

@@ -62,8 +62,9 @@ export function Header({ title = 'Vitruvius Modeler', user, onLogout }: HeaderPr
       right: 0,
       zIndex: 20,
     }}>
-      <div style={{ display: 'flex', alignItems: 'center' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
         <h1 style={{ margin: 0, fontSize: 16, fontWeight: 600 }}>{title}</h1>
+
       </div>
       <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
         <div ref={menuRef} style={{ position: 'relative' }}>
@@ -72,9 +73,9 @@ export function Header({ title = 'Vitruvius Modeler', user, onLogout }: HeaderPr
             aria-haspopup="menu"
             aria-expanded={isMenuOpen}
             title={
-              user?.name || `${user?.givenName || ''} ${user?.familyName || ''}`.trim() || 
-              user?.email || 
-              user?.username || 
+              user?.name || `${user?.givenName || ''} ${user?.familyName || ''}`.trim() ||
+              user?.email ||
+              user?.username ||
               'User menu'
             }
             style={{
@@ -120,14 +121,14 @@ export function Header({ title = 'Vitruvius Modeler', user, onLogout }: HeaderPr
                 borderRadius: 8,
                 boxShadow: '0 8px 24px rgba(0,0,0,0.12), 0 2px 8px rgba(0,0,0,0.08)',
                 padding: 0,
-                zIndex: 30,
+                zIndex: 50,
                 border: '1px solid #e8e8e8',
                 overflow: 'hidden',
                 animation: 'slideDown 0.2s ease-out',
               }}
             >
               {/* User Info Section */}
-              <div style={{ 
+              <div style={{
                 background: '#f8f9fa',
                 padding: '20px',
                 color: '#2c3e50',
@@ -168,7 +169,7 @@ export function Header({ title = 'Vitruvius Modeler', user, onLogout }: HeaderPr
                     )}
                   </div>
                 </div>
-                
+
                 {/* Status Badge */}
                 {user?.emailVerified !== undefined && (
                   <div style={{
@@ -189,9 +190,9 @@ export function Header({ title = 'Vitruvius Modeler', user, onLogout }: HeaderPr
 
               {/* Menu Actions */}
               <div style={{ padding: '16px' }}>
-                <div style={{ 
-                  display: 'flex', 
-                  flexDirection: 'column', 
+                <div style={{
+                  display: 'flex',
+                  flexDirection: 'column',
                   gap: 8,
                 }}>
                   <button

@@ -1,5 +1,6 @@
 import { AuthService } from './auth';
 import { FlowData } from '../types/flow';
+import { ApiResponse, Vsum, VsumDetails } from '../types/vsum';
 
 class ApiService {
   private baseURL: string;
@@ -65,7 +66,7 @@ class ApiService {
                 message: retryErrorMessage,
                 body: retryErrorText,
               });
-              throw new Error(`${retryResponse.status} ${retryResponse.statusText}: ${retryErrorMessage}`);
+              throw new Error(retryErrorMessage);
             }
 
             return await retryResponse.json();
@@ -91,7 +92,7 @@ class ApiService {
         message: errorMessage,
         body: errorText,
       });
-      throw new Error(`${response.status} ${response.statusText}: ${errorMessage}`);
+      throw new Error(errorMessage);
     }
 
     return await response.json();
@@ -133,10 +134,17 @@ class ApiService {
         message: errorMessage,
         body: errorText,
       });
-      throw new Error(`${response.status} ${response.statusText}: ${errorMessage}`);
+      throw new Error(errorMessage);
     }
 
     return await response.json();
+  }
+
+  /**
+   * Get currently authenticated user info
+   */
+  async getUserInfo(): Promise<{ data: { id: number; email: string; firstName: string; lastName: string }; message: string }> {
+    return this.authenticatedRequest('/api/v1/users');
   }
 
   /**
@@ -243,7 +251,7 @@ class ApiService {
                 message: retryErrorMessage,
                 body: retryErrorText,
               });
-              throw new Error(`${retryResponse.status} ${retryResponse.statusText}: ${retryErrorMessage}`);
+              throw new Error(retryErrorMessage);
             }
 
             const result = await retryResponse.json();
@@ -271,7 +279,7 @@ class ApiService {
         message: errorMessage,
         body: errorText,
       });
-      throw new Error(`${response.status} ${response.statusText}: ${errorMessage}`);
+      throw new Error(errorMessage);
     }
 
     const result = await response.json();
@@ -374,6 +382,56 @@ class ApiService {
    */
   async deleteMetaModel(id: string): Promise<{ data: any; message: string }> {
     return this.authenticatedRequest(`/api/v1/meta-models/${id}`, {
+      method: 'DELETE',
+    });
+  }
+
+  /**
+   * vSUMS: Get all
+   */
+  async getVsums(): Promise<ApiResponse<Vsum[]>> {
+    return this.authenticatedRequest('/api/v1/vsums/find-all');
+  }
+
+  /**
+   * vSUMS: Create
+   */
+  async createVsum(data: { name: string; description?: string }): Promise<ApiResponse<Vsum>> {
+    return this.authenticatedRequest('/api/v1/vsums', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  }
+
+  /**
+   * vSUMS: Update name and meta model links
+   */
+  async updateVsum(id: number | string, data: { name: string; metaModelIds: number[] }): Promise<ApiResponse<any>> {
+    return this.authenticatedRequest(`/api/v1/vsums/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    });
+  }
+
+  /**
+   * vSUMS: Get details
+   */
+  async getVsumDetails(id: number | string): Promise<ApiResponse<VsumDetails>> {
+    return this.authenticatedRequest(`/api/v1/vsums/${id}/details`);
+  }
+
+  /**
+   * vSUMS: Get by id
+   */
+  async getVsum(id: number | string): Promise<ApiResponse<Vsum>> {
+    return this.authenticatedRequest(`/api/v1/vsums/${id}`);
+  }
+
+  /**
+   * vSUMS: Delete
+   */
+  async deleteVsum(id: number | string): Promise<ApiResponse<Record<string, never>>> {
+    return this.authenticatedRequest(`/api/v1/vsums/${id}`, {
       method: 'DELETE',
     });
   }

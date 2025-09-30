@@ -1,70 +1,83 @@
-import React, { useState, useEffect, useCallback } from 'react';
-import { CreateModelModal } from './CreateModelModal';
+import React, { useEffect, useState, useCallback } from 'react';
 import { apiService } from '../../services/api';
+import { ConfirmDialog } from './ConfirmDialog';
 
-interface ToolsPanelProps {
-  onEcoreFileUpload?: (fileContent: string, meta?: { fileName?: string; uploadId?: string; description?: string; keywords?: string; domain?: string; createdAt?: string }) => void;
-  onEcoreFileDelete?: (fileName: string) => void;
-  title?: string;
-  allowCreate?: boolean;
-  enableItemClick?: boolean;
-  showBorder?: boolean;
-  suppressApi?: boolean;
+interface MetaModelsPanelProps {
+  activeVsumId?: number | null;
+  selectedMetaModelIds?: number[];
+  onAddToActiveVsum?: (model: any) => void;
   initialWidth?: number;
 }
 
-const toolsPanelStyle: React.CSSProperties = {
+const containerStyle: React.CSSProperties = {
   userSelect: 'none',
   width: '100%',
   background: '#f8f9fa',
   padding: '16px',
   boxSizing: 'border-box',
-  height: 'auto',
+  height: '100%',
   overflowY: 'auto',
-  borderRight: '1px solid #e9ecef',
 };
 
-// Removed unused titleStyle
-
-const createButtonStyle: React.CSSProperties = {
-  width: '100%',
-  padding: '14px 18px',
-  margin: '12px 0 20px 0',
-  border: 'none',
-  borderRadius: '6px',
-  background: 'linear-gradient(135deg, #3498db 0%, #2980b9 100%)',
-  color: '#ffffff',
-  fontSize: '15px',
-  fontWeight: 600,
-  cursor: 'pointer',
-  transition: 'all 0.3s ease',
-  display: 'inline-flex',
-  alignItems: 'center',
-  justifyContent: 'center',
-  gap: '10px',
-  userSelect: 'none',
-  boxShadow: '0 3px 10px rgba(52, 152, 219, 0.3)',
+const titleStyle: React.CSSProperties = {
+  fontSize: '18px',
+  fontWeight: 700,
+  marginBottom: '16px',
+  color: '#2c3e50',
+  textAlign: 'left',
+  padding: '8px 0',
+  borderBottom: '2px solid #3498db',
   fontFamily: 'Georgia, serif',
 };
 
-const createButtonHoverStyle: React.CSSProperties = {
-  transform: 'translateY(-1px)',
-  boxShadow: '0 5px 15px rgba(52, 152, 219, 0.4)',
-  background: 'linear-gradient(135deg, #2980b9 0%, #1f5f8b 100%)',
+// Removed unused controlsRowStyle
+
+// Match ToolsPanel toggle and sort styles
+const toggleContainerStyle: React.CSSProperties = {
+  display: 'flex',
+  gap: '8px',
+  margin: '8px 0',
+  alignItems: 'center',
 };
 
-const createButtonActiveStyle: React.CSSProperties = {
-  transform: 'translateY(0px)',
-  boxShadow: '0 2px 8px rgba(52, 152, 219, 0.3)',
+const toggleButtonStyle: React.CSSProperties = {
+  flex: 1,
+  padding: '8px 12px',
+  border: '1px solid #dee2e6',
+  borderRadius: '6px',
+  background: '#f8f9fa',
+  color: '#495057',
+  fontSize: '12px',
+  fontWeight: '600',
+  cursor: 'pointer',
+  transition: 'all 0.2s ease',
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'space-between',
 };
 
-// ... existing code ...
+const toggleButtonHoverStyle: React.CSSProperties = {
+  background: '#e9ecef',
+  borderColor: '#adb5bd',
+};
 
+const sortDropdownStyle: React.CSSProperties = {
+  padding: '8px 12px',
+  border: '1px solid #dee2e6',
+  borderRadius: '6px',
+  background: '#ffffff',
+  color: '#495057',
+  fontSize: '12px',
+  fontWeight: '500',
+  cursor: 'pointer',
+  minWidth: '120px',
+};
+
+// Exact Advanced Search dropdown styles from ToolsPanel
 const filterContainerStyle: React.CSSProperties = {
   position: 'fixed',
-  top: '230px',
-  left: '16px',
-  right: '16px',
+  top: '160px',
+  right: '15px',
   zIndex: 1000,
   padding: '12px',
   background: '#ffffff',
@@ -125,12 +138,9 @@ const fileCardStyle: React.CSSProperties = {
   border: '1px solid #d1ecf1',
   borderRadius: '6px',
   padding: '16px',
-  marginBottom: '16px',
+  marginBottom: '12px',
   boxShadow: '0 2px 6px rgba(0,0,0,0.08)',
-  cursor: 'pointer',
   transition: 'all 0.3s ease',
-  position: 'relative',
-  fontFamily: 'Georgia, serif',
 };
 
 const fileCardHoverStyle: React.CSSProperties = {
@@ -140,76 +150,23 @@ const fileCardHoverStyle: React.CSSProperties = {
   background: '#f8f9ff',
 };
 
-const toggleContainerStyle: React.CSSProperties = {
-  display: 'flex',
-  gap: '8px',
-  margin: '8px 0',
-  alignItems: 'center',
-};
-
-const toggleButtonStyle: React.CSSProperties = {
-  flex: '1',
-  padding: '8px 12px',
-  border: '1px solid #dee2e6',
-  borderRadius: '6px',
-  background: '#f8f9fa',
-  color: '#495057',
-  fontSize: '12px',
-  fontWeight: '600',
-  cursor: 'pointer',
-  transition: 'all 0.2s ease',
-  display: 'flex',
-  alignItems: 'center',
-  justifyContent: 'space-between',
-};
-
-const toggleButtonHoverStyle: React.CSSProperties = {
-  background: '#e9ecef',
-  borderColor: '#adb5bd',
-};
-
-const sortDropdownStyle: React.CSSProperties = {
-  padding: '8px 12px',
-  border: '1px solid #dee2e6',
-  borderRadius: '6px',
-  background: '#ffffff',
-  color: '#495057',
-  fontSize: '12px',
-  fontWeight: '500',
-  cursor: 'pointer',
-  minWidth: '120px',
-};
-
 const fileNameStyle: React.CSSProperties = {
-  fontWeight: '600',
+  fontWeight: 600,
   color: '#2c3e50',
   wordBreak: 'break-all',
   marginBottom: '6px',
-  fontSize: '15px',
+  fontSize: 15,
   fontFamily: 'Georgia, serif',
 };
 
 const fileMetaStyle: React.CSSProperties = {
-  fontSize: '13px',
+  fontSize: 13,
   color: '#5a6c7d',
   display: 'flex',
   alignItems: 'center',
   gap: '8px',
   fontFamily: 'Georgia, serif',
   fontStyle: 'italic',
-};
-
-// ... existing code ...
-
-const emptyStateStyle: React.CSSProperties = {
-  height: 'calc(100vh - 254px)',
-  overflowY: 'auto',
-  fontSize: '13px',
-  color: '#5a6c7d',
-  textAlign: 'center',
-  padding: '24px',
-  fontStyle: 'italic',
-  fontFamily: 'Georgia, serif',
 };
 
 const paginationContainerStyle: React.CSSProperties = {
@@ -266,43 +223,8 @@ const paginationButtonDisabledStyle: React.CSSProperties = {
   cursor: 'not-allowed',
 };
 
-// GitHub-style filter tag styles
-const filterTagStyle: React.CSSProperties = {
-  display: 'inline-flex',
-  alignItems: 'center',
-  padding: '2px 8px',
-  borderRadius: '16px',
-  fontSize: '11px',
-  fontWeight: '500',
-  color: '#0366d6',
-  background: '#f1f8ff',
-  border: '1px solid #c8e1ff',
-  margin: '2px',
-  userSelect: 'none',
-};
-
-const filterTagsContainerStyle: React.CSSProperties = {
-  display: 'flex',
-  flexWrap: 'wrap',
-  gap: '4px',
-  marginBottom: '8px',
-  minHeight: '24px',
-};
-
-const enhancedSearchInputStyle: React.CSSProperties = {
-  ...filterInputStyle,
-  fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif',
-  fontSize: '13px',
-};
-
-export const ToolsPanel: React.FC<ToolsPanelProps> = ({ onEcoreFileUpload, onEcoreFileDelete, title = 'Meta Models', allowCreate = true, enableItemClick = true, showBorder = true, suppressApi = false, initialWidth }) => {
-  const [isProcessing] = useState(false);
-  const [uploadMessage, setUploadMessage] = useState<string>('');
-  const [uploadMessageType, setUploadMessageType] = useState<'success' | 'error'>('success');
-  const [showCreateModal, setShowCreateModal] = useState(false);
+export const MetaModelsPanel: React.FC<MetaModelsPanelProps> = ({ activeVsumId, selectedMetaModelIds, onAddToActiveVsum, initialWidth }) => {
   const [searchTerm, setSearchTerm] = useState('');
-  const [dateFilter, setDateFilter] = useState<string>('all');
-  const [showFilters, setShowFilters] = useState(false);
   const [sortBy, setSortBy] = useState<'name' | 'date' | 'domain'>('date');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
   const [isLoadingModels, setIsLoadingModels] = useState(false);
@@ -310,8 +232,12 @@ export const ToolsPanel: React.FC<ToolsPanelProps> = ({ onEcoreFileUpload, onEco
   const [apiError, setApiError] = useState<string>('');
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 10;
-  const [expandedCard, setExpandedCard] = useState<number | null>(null);
+  const [showFilters, setShowFilters] = useState(false);
+  const [dateFilter, setDateFilter] = useState<'all' | 'today' | 'week' | 'month' | 'year'>('all');
   const [parsedFilters, setParsedFilters] = useState<any[]>([]);
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  const [deletingId, setDeletingId] = useState<number | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   const handleSearchKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key !== 'Tab') return;
@@ -325,6 +251,7 @@ export const ToolsPanel: React.FC<ToolsPanelProps> = ({ onEcoreFileUpload, onEco
     while (end < value.length && !/\s/.test(value[end])) end++;
     const token = value.slice(start, end);
     const lower = token.toLowerCase().replace(/:$/, '');
+    if (!lower) return;
 
     const candidates = ['name', 'description', 'domain', 'keywords', 'created', 'updated', 'time'];
     const match = candidates.find(k => k.startsWith(lower));
@@ -340,7 +267,6 @@ export const ToolsPanel: React.FC<ToolsPanelProps> = ({ onEcoreFileUpload, onEco
     });
   };
 
-  // Parse GitHub-style search syntax (supports quoted values and multiple keys)
   const parseSearchQuery = (query: string) => {
     const result: any[] = [];
 
@@ -402,19 +328,53 @@ export const ToolsPanel: React.FC<ToolsPanelProps> = ({ onEcoreFileUpload, onEco
             break;
           }
           default:
-            // Unknown key: treat as name
-            // result.push({ key: 'name', value: `${key}:${cleanValue}`, display: `name:${key}:${cleanValue}` });
+            // Unknown key: ignore
         }
       } else if (token.trim().length > 0) {
-        // Bare word -> name search
-        // result.push({ key: 'name', value: token, display: `name:${token}` });
+        // Bare word ignored
       }
     }
 
     return result;
   };
 
-  // Build API filter object from parsed filters and dateFilter state
+  const filterTagsContainerStyle: React.CSSProperties = {
+    display: 'flex',
+    flexWrap: 'wrap',
+    gap: '4px',
+    marginBottom: '8px',
+    minHeight: '24px',
+  };
+
+  const filterTagStyle: React.CSSProperties = {
+    display: 'inline-flex',
+    alignItems: 'center',
+    padding: '2px 8px',
+    borderRadius: '16px',
+    fontSize: 11,
+    fontWeight: 500,
+    color: '#0366d6',
+    background: '#f1f8ff',
+    border: '1px solid #c8e1ff',
+    margin: '2px',
+    userSelect: 'none',
+  };
+
+  const enhancedSearchInputStyle: React.CSSProperties = {
+    ...filterInputStyle,
+    fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif',
+    fontSize: '13px',
+  };
+
+  // Keep parsed filters in sync with searchTerm
+  useEffect(() => {
+    if (searchTerm.trim()) {
+      setParsedFilters(parseSearchQuery(searchTerm));
+    } else {
+      setParsedFilters([]);
+    }
+  }, [searchTerm]);
+
   const buildApiFiltersFromParsedFilters = useCallback((filtersParsed: any[], includeLegacyDate = true) => {
     const filters: any = {};
     filtersParsed.forEach(filter => {
@@ -426,7 +386,6 @@ export const ToolsPanel: React.FC<ToolsPanelProps> = ({ onEcoreFileUpload, onEco
           filters.domain = filter.value;
           break;
         case 'keywords': {
-          // Map to API's `keyword: string[]`
           const values = String(filter.value)
             .split(',')
             .map(v => v.trim())
@@ -513,48 +472,26 @@ export const ToolsPanel: React.FC<ToolsPanelProps> = ({ onEcoreFileUpload, onEco
     return filters;
   }, [dateFilter]);
 
-  // Update parsed filters when search term changes
   useEffect(() => {
-    if (searchTerm.trim()) {
-      const filters = parseSearchQuery(searchTerm);
-      setParsedFilters(filters);
-    } else {
-      setParsedFilters([]);
-    }
-  }, [searchTerm]);
-
-  useEffect(() => {
-    if (suppressApi) {
-      setIsLoadingModels(false);
-      setApiError('');
-      setApiModels([]);
-      return;
-    }
     const fetchData = async () => {
       setIsLoadingModels(true);
       setApiError('');
-      
       try {
         const filters = buildApiFiltersFromParsedFilters(parsedFilters, true);
-        
         const response = await apiService.findMetaModels(filters);
         setApiModels(response.data || []);
-        setCurrentPage(1); // Reset to first page when filters change
+        setCurrentPage(1);
       } catch (error) {
-        console.error('Error fetching meta models from API:', error);
         setApiError(error instanceof Error ? error.message : 'Failed to fetch meta models');
       } finally {
         setIsLoadingModels(false);
       }
     };
-    
     fetchData();
-  }, [parsedFilters, dateFilter, suppressApi, buildApiFiltersFromParsedFilters]);
+  }, [parsedFilters, dateFilter, buildApiFiltersFromParsedFilters]);
 
-  // Sort API models
   const sortedModels = [...apiModels].sort((a, b) => {
     let comparison = 0;
-    
     switch (sortBy) {
       case 'name':
         comparison = a.name.localeCompare(b.name);
@@ -566,40 +503,14 @@ export const ToolsPanel: React.FC<ToolsPanelProps> = ({ onEcoreFileUpload, onEco
         comparison = (a.domain || '').localeCompare(b.domain || '');
         break;
     }
-    
     return sortOrder === 'asc' ? comparison : -comparison;
   });
 
-  // Pagination calculations
   const totalItems = sortedModels.length;
   const totalPages = Math.ceil(totalItems / itemsPerPage);
   const startIndex = (currentPage - 1) * itemsPerPage;
   const endIndex = startIndex + itemsPerPage;
   const currentPageItems = sortedModels.slice(startIndex, endIndex);
-
-  // Pagination handlers
-  const goToPage = (page: number) => {
-    if (page >= 1 && page <= totalPages) {
-      setCurrentPage(page);
-    }
-  };
-
-  const goToPreviousPage = () => {
-    if (currentPage > 1) {
-      setCurrentPage(currentPage - 1);
-    }
-  };
-
-  const goToNextPage = () => {
-    if (currentPage < totalPages) {
-      setCurrentPage(currentPage + 1);
-    }
-  };
-
-  const handleCardRightClick = (e: React.MouseEvent, modelId: number) => {
-    e.preventDefault();
-    setExpandedCard(expandedCard === modelId ? null : modelId);
-  };
 
   const formatRelativeTime = (isoDate: string) => {
     const date = new Date(isoDate);
@@ -608,107 +519,41 @@ export const ToolsPanel: React.FC<ToolsPanelProps> = ({ onEcoreFileUpload, onEco
     return `${dateStr} at ${timeStr}`;
   };
 
-  const handleButtonClick = () => {
-    setShowCreateModal(true);
-  };
-
-  const getButtonStyle = () => {
-    if (isProcessing) {
-      return { ...createButtonStyle, ...createButtonActiveStyle, cursor: 'not-allowed' };
-    }
-    return createButtonStyle;
-  };
-
   const panelStyle: React.CSSProperties = { 
-    ...toolsPanelStyle, 
-    borderRight: showBorder ? toolsPanelStyle.borderRight : 'none',
-    width: initialWidth ? `${initialWidth}px` : toolsPanelStyle.width
+    ...containerStyle, 
+    width: initialWidth ? `${initialWidth}px` : containerStyle.width
   };
 
   return (
     <div style={panelStyle}>
-      {/* <div style={titleStyle}>
-        {title}
-      </div> */}
-      
-      {uploadMessage && (
-        <div style={{
-          padding: '8px 12px',
-          margin: '8px 0',
-          borderRadius: '6px',
-          fontSize: '12px',
-          fontWeight: '500',
-          backgroundColor: uploadMessageType === 'success' ? '#d4edda' : '#f8d7da',
-          color: uploadMessageType === 'success' ? '#155724' : '#721c24',
-          border: `1px solid ${uploadMessageType === 'success' ? '#c3e6cb' : '#f5c6cb'}`,
-        }}>
-          {uploadMessage}
-        </div>
-      )}
-      
-      <button 
-        style={getButtonStyle()}
-        onClick={handleButtonClick}
-        disabled={isProcessing}
-        onMouseEnter={(e) => !isProcessing && Object.assign(e.currentTarget.style, createButtonHoverStyle)}
-        onMouseLeave={(e) => !isProcessing && Object.assign(e.currentTarget.style, getButtonStyle())}
-      >
-        {isProcessing ? (
-          <>
-            Building...
-          </>
-        ) : (
-          <>
-            Build New Meta Model
-          </>
-        )}
-      </button>
-
-      {!suppressApi && (
-        <div style={{
-          marginTop: '16px',
-          marginBottom: '8px',
-          fontWeight: '700',
-          fontSize: '13px',
-          color: '#2c3e50',
-          borderBottom: '1px solid #3498db',
-          paddingBottom: '6px',
-          fontFamily: 'Georgia, serif',
-        }}>
-          {title}
-        </div>
-      )}
-
-      {!suppressApi && (
-        <div style={toggleContainerStyle}>
-          <button
-            style={toggleButtonStyle}
-            onClick={() => setShowFilters(!showFilters)}
-            onMouseEnter={(e) => Object.assign(e.currentTarget.style, toggleButtonHoverStyle)}
-            onMouseLeave={(e) => Object.assign(e.currentTarget.style, toggleButtonStyle)}
-          >
-            <span>{showFilters ? 'Hide' : 'Show'} Advanced Search</span>
-            <span>{showFilters ? '▼' : '▶'}</span>
-          </button>
-          
-          <select
-            value={`${sortBy}-${sortOrder}`}
-            onChange={(e) => {
-              const [newSortBy, newSortOrder] = e.target.value.split('-') as ['name' | 'date' | 'domain', 'asc' | 'desc'];
-              setSortBy(newSortBy);
-              setSortOrder(newSortOrder);
-            }}
-            style={sortDropdownStyle}
-          >
-            <option value="date-desc">Newest First</option>
-            <option value="date-asc">Oldest First</option>
-            <option value="name-asc">Name A-Z</option>
-            <option value="name-desc">Name Z-A</option>
-            <option value="domain-asc">Domain A-Z</option>
-            <option value="domain-desc">Domain Z-A</option>
-          </select>
-        </div>
-      )}
+      <div style={titleStyle}>Meta Models</div>
+      <div style={toggleContainerStyle}>
+        <button
+          style={toggleButtonStyle}
+          onClick={() => setShowFilters(!showFilters)}
+          onMouseEnter={(e) => Object.assign(e.currentTarget.style, toggleButtonHoverStyle)}
+          onMouseLeave={(e) => Object.assign(e.currentTarget.style, toggleButtonStyle)}
+        >
+          <span>{showFilters ? 'Hide' : 'Show'} Advanced Search</span>
+          <span>{showFilters ? '▼' : '▶'}</span>
+        </button>
+        <select
+          value={`${sortBy}-${sortOrder}`}
+          onChange={(e) => {
+            const [newSortBy, newSortOrder] = e.target.value.split('-') as ['name' | 'date' | 'domain', 'asc' | 'desc'];
+            setSortBy(newSortBy);
+            setSortOrder(newSortOrder);
+          }}
+          style={sortDropdownStyle}
+        >
+          <option value="date-desc">Newest First</option>
+          <option value="date-asc">Oldest First</option>
+          <option value="name-asc">Name A-Z</option>
+          <option value="name-desc">Name Z-A</option>
+          <option value="domain-asc">Domain A-Z</option>
+          <option value="domain-desc">Domain Z-A</option>
+        </select>
+      </div>
 
       {showFilters && (
         <div style={filterContainerStyle}>
@@ -717,26 +562,23 @@ export const ToolsPanel: React.FC<ToolsPanelProps> = ({ onEcoreFileUpload, onEco
             title="Close"
             style={filterCloseButtonStyle}
             onClick={() => setShowFilters(false)}
-            onMouseEnter={(e) => { e.currentTarget.style.background = '#f1f3f5'; e.currentTarget.style.color = '#495057'; }}
-            onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = '#6c757d'; }}
+            onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.background = '#f1f3f5'; (e.currentTarget as HTMLButtonElement).style.color = '#495057'; }}
+            onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.background = 'transparent'; (e.currentTarget as HTMLButtonElement).style.color = '#6c757d'; }}
           >
             ×
           </button>
-          <div style={{ fontSize: '12px', fontWeight: '600', color: '#495057', marginBottom: '8px' }}>
+          <div style={{ fontSize: '12px', fontWeight: 600, color: '#495057', marginBottom: '8px' }}>
             Advanced Search
           </div>
-          
-          {/* Filter Tags Display */}
+
           {parsedFilters.length > 0 && (
             <div style={filterTagsContainerStyle}>
               {parsedFilters.map((filter, index) => (
-                <div key={index} style={filterTagStyle}>
-                  {filter.display}
-                </div>
+                <div key={index} style={filterTagStyle}>{filter.display}</div>
               ))}
             </div>
           )}
-          
+
           <div style={filterRowStyle}>
             <span style={filterLabelStyle}>Search:</span>
             <input
@@ -748,16 +590,16 @@ export const ToolsPanel: React.FC<ToolsPanelProps> = ({ onEcoreFileUpload, onEco
               onKeyDown={handleSearchKeyDown}
             />
           </div>
-          
+
           <div style={{ fontSize: '10px', color: '#6a737d', marginTop: '4px', fontStyle: 'italic' }}>
             Use GitHub-style syntax: name:test domain:engineering time:beforenow created:after:2023-01-01
           </div>
-          
+
           <div style={filterRowStyle}>
             <span style={filterLabelStyle}>Date:</span>
             <select
               value={dateFilter}
-              onChange={(e) => setDateFilter(e.target.value)}
+              onChange={(e) => setDateFilter(e.target.value as any)}
               style={filterSelectStyle}
             >
               <option value="all">All time</option>
@@ -767,13 +609,12 @@ export const ToolsPanel: React.FC<ToolsPanelProps> = ({ onEcoreFileUpload, onEco
               <option value="year">This year</option>
             </select>
           </div>
-          
-          {/* Original Filter Style */}
+
           <div style={{ marginTop: '12px', paddingTop: '12px', borderTop: '1px solid #e9ecef' }}>
-            <div style={{ fontSize: '12px', fontWeight: '600', color: '#495057', marginBottom: '8px' }}>
+            <div style={{ fontSize: '12px', fontWeight: 600, color: '#495057', marginBottom: '8px' }}>
               Quick Filters
             </div>
-            
+
             <div style={filterRowStyle}>
               <span style={filterLabelStyle}>Name:</span>
               <input
@@ -782,16 +623,16 @@ export const ToolsPanel: React.FC<ToolsPanelProps> = ({ onEcoreFileUpload, onEco
                 style={filterInputStyle}
                 onKeyDown={(e) => {
                   if (e.key === 'Enter') {
-                    const value = e.currentTarget.value.trim();
+                    const value = (e.currentTarget as HTMLInputElement).value.trim();
                     if (value) {
                       setSearchTerm(prev => prev ? `${prev} name:${value}` : `name:${value}`);
-                      e.currentTarget.value = '';
+                      (e.currentTarget as HTMLInputElement).value = '';
                     }
                   }
                 }}
               />
             </div>
-            
+
             <div style={filterRowStyle}>
               <span style={filterLabelStyle}>Domain:</span>
               <input
@@ -800,16 +641,16 @@ export const ToolsPanel: React.FC<ToolsPanelProps> = ({ onEcoreFileUpload, onEco
                 style={filterInputStyle}
                 onKeyDown={(e) => {
                   if (e.key === 'Enter') {
-                    const domainValue = e.currentTarget.value.trim();
+                    const domainValue = (e.currentTarget as HTMLInputElement).value.trim();
                     if (domainValue) {
                       setSearchTerm(prev => prev ? `${prev} domain:${domainValue}` : `domain:${domainValue}`);
-                      e.currentTarget.value = '';
+                      (e.currentTarget as HTMLInputElement).value = '';
                     }
                   }
                 }}
               />
             </div>
-            
+
             <div style={filterRowStyle}>
               <span style={filterLabelStyle}>Keywords:</span>
               <input
@@ -818,23 +659,23 @@ export const ToolsPanel: React.FC<ToolsPanelProps> = ({ onEcoreFileUpload, onEco
                 style={filterInputStyle}
                 onKeyDown={(e) => {
                   if (e.key === 'Enter') {
-                    const keywordValue = e.currentTarget.value.trim();
+                    const keywordValue = (e.currentTarget as HTMLInputElement).value.trim();
                     if (keywordValue) {
                       setSearchTerm(prev => prev ? `${prev} keywords:${keywordValue}` : `keywords:${keywordValue}`);
-                      e.currentTarget.value = '';
+                      (e.currentTarget as HTMLInputElement).value = '';
                     }
                   }
                 }}
               />
             </div>
-            
+
             <div style={filterRowStyle}>
               <span style={filterLabelStyle}>Date:</span>
               <input
                 type="date"
                 style={filterInputStyle}
                 onChange={(e) => {
-                  const dateValue = e.target.value;
+                  const dateValue = (e.target as HTMLInputElement).value;
                   if (dateValue) {
                     setSearchTerm(prev => prev ? `${prev} created:${dateValue}` : `created:${dateValue}`);
                   }
@@ -845,7 +686,7 @@ export const ToolsPanel: React.FC<ToolsPanelProps> = ({ onEcoreFileUpload, onEco
         </div>
       )}
 
-      {!suppressApi && apiError && (
+      {apiError && (
         <div style={{
           padding: '8px 12px',
           margin: '8px 0',
@@ -860,7 +701,7 @@ export const ToolsPanel: React.FC<ToolsPanelProps> = ({ onEcoreFileUpload, onEco
         </div>
       )}
 
-      {!suppressApi && isLoadingModels && (
+      {isLoadingModels && (
         <div style={{
           padding: '16px',
           textAlign: 'center',
@@ -873,218 +714,121 @@ export const ToolsPanel: React.FC<ToolsPanelProps> = ({ onEcoreFileUpload, onEco
         </div>
       )}
 
-      {!suppressApi && (
-      <div style={{ height: 'calc(100vh - 311px)', overflowY: 'auto' }}>
-        {!suppressApi && currentPageItems.map(model => (
-          <div key={model.id} style={fileCardStyle}
-            onClick={() => {
-              if (!enableItemClick) return;
-              if (onEcoreFileUpload) {
-                onEcoreFileUpload(`name="${model.name}"`, { 
-                  fileName: `${model.name}.ecore`, 
-                  uploadId: model.id.toString(),
-                  description: model.description,
-                  keywords: model.keyword?.join(', '),
-                  domain: model.domain,
-                  createdAt: model.createdAt
-                });
-              }
-            }}
-            onContextMenu={(e) => handleCardRightClick(e, model.id)}
-            onMouseEnter={(e) => {
-              Object.assign(e.currentTarget.style, fileCardHoverStyle);
-            }}
-            onMouseLeave={(e) => {
-              Object.assign(e.currentTarget.style, fileCardStyle);
-            }}
+      <div>
+        {currentPageItems.map(model => (
+          <div
+            key={model.id}
+            style={fileCardStyle}
+            onMouseEnter={(e) => Object.assign(e.currentTarget.style, fileCardHoverStyle)}
+            onMouseLeave={(e) => Object.assign(e.currentTarget.style, fileCardStyle)}
           >
-            <div style={fileNameStyle}>
-              {model.name}
-            </div>
+            <div style={fileNameStyle}>{model.name}</div>
             <div style={fileMetaStyle}>
               <span>Domain: <strong>{model.domain}</strong></span>
               <span>•</span>
-              <span title={new Date(model.createdAt).toLocaleString()}>
-                {formatRelativeTime(model.createdAt)}
-              </span>
-              {expandedCard === model.id && (
+              <span title={new Date(model.createdAt).toLocaleString()}>{formatRelativeTime(model.createdAt)}</span>
+              <span>•</span>
+              <button
+                onClick={() => { setDeletingId(model.id); setConfirmOpen(true); }}
+                style={{ padding: '4px 8px', border: '1px solid #dee2e6', borderRadius: 6, background: '#fff', cursor: 'pointer', fontSize: 12, fontWeight: 600, color: '#e03131' }}
+              >
+                Delete
+              </button>
+              {activeVsumId ? (
                 <>
                   <span>•</span>
-                  <span style={{ fontSize: '11px', color: '#6c757d' }}>
-                    Right-click to collapse details
-                  </span>
+                  {onAddToActiveVsum && (
+                    <button
+                      onClick={() => onAddToActiveVsum(model)}
+                      style={{ padding: '4px 8px', border: '1px solid #dee2e6', borderRadius: 6, background: '#ffffff', cursor: 'pointer', fontSize: 12, fontWeight: 600 }}
+                      disabled={(selectedMetaModelIds || []).includes(model.id)}
+                    >
+                      {(selectedMetaModelIds || []).includes(model.id) ? 'Added' : 'Add to Vsum'}
+                    </button>
+                  )}
                 </>
-              )}
+              ) : null}
             </div>
-            
-            {/* Expanded content - only show when card is expanded */}
-            {expandedCard === model.id && (
-              <>
-                {model.keyword && model.keyword.length > 0 && (
-                  <div style={{
-                    fontSize: '12px',
-                    color: '#495057',
-                    marginTop: '6px',
-                    fontFamily: 'Georgia, serif',
-                  }}>
-                    <strong>Keywords:</strong> {model.keyword.join(', ')}
-                  </div>
-                )}
-                {model.description && (
-                  <div style={{
-                    fontSize: '12px',
-                    color: '#6c757d',
-                    marginTop: '4px',
-                    fontStyle: 'italic',
-                    fontFamily: 'Georgia, serif',
-                    lineHeight: '1.4',
-                  }}>
-                    <strong>Description:</strong> {model.description}
-                  </div>
-                )}
-              </>
-            )}
-            
-            {/* Hint for collapsed state */}
-            {expandedCard !== model.id && (
-              <div style={{
-                fontSize: '10px',
-                color: '#adb5bd',
-                marginTop: '4px',
-                fontStyle: 'italic',
-                fontFamily: 'Georgia, serif',
-              }}>
-                Right-click to view details
-              </div>
-            )}
           </div>
         ))}
-        {!suppressApi && !isLoadingModels && sortedModels.length === 0 && !apiError && (
-          <div style={emptyStateStyle}>
+        {!isLoadingModels && sortedModels.length === 0 && !apiError && (
+          <div style={{ padding: 16, fontSize: 13, color: '#6c757d', fontStyle: 'italic' }}>
             No meta models available from server.
           </div>
         )}
       </div>
-      )}
 
-      {/* Pagination Controls */}
-      {!suppressApi && totalPages > 1 && (
+      {totalPages > 1 && (
         <div style={paginationContainerStyle}>
           <div style={paginationInfoStyle}>
             Showing {startIndex + 1}-{Math.min(endIndex, totalItems)} of {totalItems} models
           </div>
           <div style={paginationControlsStyle}>
             <button
-              style={{
-                ...paginationButtonStyle,
-                ...(currentPage === 1 ? paginationButtonDisabledStyle : {})
-              }}
-              onClick={goToPreviousPage}
+              style={{ ...paginationButtonStyle, ...(currentPage === 1 ? paginationButtonDisabledStyle : {}) }}
+              onClick={() => currentPage > 1 && setCurrentPage(currentPage - 1)}
               disabled={currentPage === 1}
-              onMouseEnter={(e) => {
-                if (currentPage > 1) {
-                  Object.assign(e.currentTarget.style, paginationButtonHoverStyle);
-                }
-              }}
-              onMouseLeave={(e) => {
-                if (currentPage > 1) {
-                  Object.assign(e.currentTarget.style, paginationButtonStyle);
-                }
-              }}
+              onMouseEnter={(e) => { if (currentPage > 1) Object.assign(e.currentTarget.style, paginationButtonHoverStyle); }}
+              onMouseLeave={(e) => { if (currentPage > 1) Object.assign(e.currentTarget.style, paginationButtonStyle); }}
             >
               ‹
             </button>
-            
             {Array.from({ length: totalPages }, (_, i) => i + 1).map(page => {
-              // Show first page, last page, current page, and pages around current page
-              const shouldShow = 
-                page === 1 || 
-                page === totalPages || 
-                Math.abs(page - currentPage) <= 1;
-              
+              const shouldShow = page === 1 || page === totalPages || Math.abs(page - currentPage) <= 1;
               if (!shouldShow) {
-                // Show ellipsis for gaps
-                if (page === 2 && currentPage > 4) {
-                  return <span key={`ellipsis-${page}`} style={{ padding: '0 4px', color: '#6c757d' }}>...</span>;
-                }
-                if (page === totalPages - 1 && currentPage < totalPages - 3) {
-                  return <span key={`ellipsis-${page}`} style={{ padding: '0 4px', color: '#6c757d' }}>...</span>;
-                }
+                if (page === 2 && currentPage > 4) return <span key={`ellipsis-${page}`} style={{ padding: '0 4px', color: '#6c757d' }}>...</span>;
+                if (page === totalPages - 1 && currentPage < totalPages - 3) return <span key={`ellipsis-${page}`} style={{ padding: '0 4px', color: '#6c757d' }}>...</span>;
                 return null;
               }
-              
               return (
                 <button
                   key={page}
-                  style={{
-                    ...paginationButtonStyle,
-                    ...(page === currentPage ? paginationButtonActiveStyle : {})
-                  }}
-                  onClick={() => goToPage(page)}
-                  onMouseEnter={(e) => {
-                    if (page !== currentPage) {
-                      Object.assign(e.currentTarget.style, paginationButtonHoverStyle);
-                    }
-                  }}
-                  onMouseLeave={(e) => {
-                    if (page !== currentPage) {
-                      Object.assign(e.currentTarget.style, paginationButtonStyle);
-                    }
-                  }}
+                  style={{ ...paginationButtonStyle, ...(page === currentPage ? paginationButtonActiveStyle : {}) }}
+                  onClick={() => setCurrentPage(page)}
+                  onMouseEnter={(e) => { if (page !== currentPage) Object.assign(e.currentTarget.style, paginationButtonHoverStyle); }}
+                  onMouseLeave={(e) => { if (page !== currentPage) Object.assign(e.currentTarget.style, paginationButtonStyle); }}
                 >
                   {page}
                 </button>
               );
             })}
-            
             <button
-              style={{
-                ...paginationButtonStyle,
-                ...(currentPage === totalPages ? paginationButtonDisabledStyle : {})
-              }}
-              onClick={goToNextPage}
+              style={{ ...paginationButtonStyle, ...(currentPage === totalPages ? paginationButtonDisabledStyle : {}) }}
+              onClick={() => currentPage < totalPages && setCurrentPage(currentPage + 1)}
               disabled={currentPage === totalPages}
-              onMouseEnter={(e) => {
-                if (currentPage < totalPages) {
-                  Object.assign(e.currentTarget.style, paginationButtonHoverStyle);
-                }
-              }}
-              onMouseLeave={(e) => {
-                if (currentPage < totalPages) {
-                  Object.assign(e.currentTarget.style, paginationButtonStyle);
-                }
-              }}
+              onMouseEnter={(e) => { if (currentPage < totalPages) Object.assign(e.currentTarget.style, paginationButtonHoverStyle); }}
+              onMouseLeave={(e) => { if (currentPage < totalPages) Object.assign(e.currentTarget.style, paginationButtonStyle); }}
             >
               ›
             </button>
           </div>
         </div>
       )}
-      
-      <CreateModelModal
-        isOpen={showCreateModal}
-        onClose={() => setShowCreateModal(false)}
-        onSuccess={(modelData) => {
-          setUploadMessage('Meta Model created successfully!');
-          setUploadMessageType('success');
-          setTimeout(() => setUploadMessage(''), 3000);
-          const fetchData = async () => {
-            setIsLoadingModels(true);
-            setApiError('');
-            try {
-              const filters = buildApiFiltersFromParsedFilters(parsedFilters, true);
-              const response = await apiService.findMetaModels(filters);
-              setApiModels(response.data || []);
-            } catch (error) {
-              console.error('Error fetching meta models from API:', error);
-              setApiError(error instanceof Error ? error.message : 'Failed to fetch meta models');
-            } finally {
-              setIsLoadingModels(false);
-            }
-          };
-          fetchData();
+      <ConfirmDialog
+        isOpen={confirmOpen}
+        title="Delete meta model?"
+        message="This action cannot be undone."
+        confirmText={isDeleting ? 'Deleting…' : 'Delete'}
+        cancelText="Cancel"
+        onConfirm={async () => {
+          if (deletingId == null) return;
+          setIsDeleting(true);
+          setApiError('');
+          try {
+            await apiService.deleteMetaModel(String(deletingId));
+            setApiModels(prev => prev.filter(m => m.id !== deletingId));
+          } catch (err) {
+            setApiError(err instanceof Error ? err.message : 'Failed to delete meta model');
+          } finally {
+            setIsDeleting(false);
+            setConfirmOpen(false);
+            setDeletingId(null);
+          }
         }}
+        onCancel={() => { if (!isDeleting) { setConfirmOpen(false); setDeletingId(null); } }}
       />
     </div>
   );
 };
+
+
