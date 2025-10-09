@@ -134,21 +134,6 @@ export const VsumsPanel: React.FC = () => {
     }
   };
 
-  const onDelete = async (id: number, name: string) => {
-    const confirmed = window.confirm(`Delete vSUM "${name}"?`);
-    if (!confirmed) return;
-    setLoading(true);
-    setError('');
-    try {
-      await apiService.deleteVsum(id);
-      setRefreshIndex(v => v + 1);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Failed to delete vSUM');
-    } finally {
-      setLoading(false);
-    }
-  };
-
   const onSave = async (id: number) => {
     const edit = editing[id];
     if (!edit) return;
@@ -255,12 +240,6 @@ export const VsumsPanel: React.FC = () => {
                   style={{ padding: '6px 10px', border: '1px solid #dee2e6', borderRadius: 6, background: '#ffffff', cursor: 'pointer', fontWeight: 600 }}
                 >
                   {isExpanded ? 'Hide details' : 'Details'}
-                </button>
-                <button
-                  onClick={() => onDelete(item.id, item.name)}
-                  style={{ padding: '6px 10px', border: '1px solid #f5c2c7', color: '#b02a37', borderRadius: 6, background: '#fff5f5', cursor: 'pointer', fontWeight: 600 }}
-                >
-                  Delete
                 </button>
               </div>
             </div>
