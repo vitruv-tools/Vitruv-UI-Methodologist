@@ -66,8 +66,6 @@ const createButtonActiveStyle: React.CSSProperties = {
   boxShadow: '0 2px 8px rgba(52, 152, 219, 0.3)',
 };
 
-// ... existing code ...
-
 const filterContainerStyle: React.CSSProperties = {
   position: 'fixed',
   top: '230px',
@@ -207,8 +205,6 @@ const fileMetaStyle: React.CSSProperties = {
   fontStyle: 'italic',
 };
 
-// ... existing code ...
-
 const emptyStateStyle: React.CSSProperties = {
   height: 'calc(100vh - 254px)',
   overflowY: 'auto',
@@ -320,6 +316,9 @@ export const ToolsPanel: React.FC<ToolsPanelProps> = ({ onEcoreFileUpload, onEco
   const itemsPerPage = 10;
   const [expandedCard, setExpandedCard] = useState<number | null>(null);
   const [parsedFilters, setParsedFilters] = useState<any[]>([]);
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [deleteError, setDeleteError] = useState<string>('');
 
   const handleSearchKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key !== 'Tab') return;
@@ -629,6 +628,40 @@ export const ToolsPanel: React.FC<ToolsPanelProps> = ({ onEcoreFileUpload, onEco
 
   const panelStyle: React.CSSProperties = { ...toolsPanelStyle, borderRight: showBorder ? toolsPanelStyle.borderRight : 'none' };
 
+  const handleDeleteClick = (id: string) => {
+    setDeletingId(id);
+    setDeleteError('');
+    setDeleteConfirmOpen(true);
+  };
+
+  const handleConfirmDelete = async () => {
+    if (!deletingId) return;
+    try {
+      await apiService.deleteMetaModel(deletingId);
+      setUploadMessage('Meta Model deleted successfully!');
+      setUploadMessageType('success');
+      // Refresh models
+      const filters = buildApiFiltersFromParsedFilters(parsedFilters, true);
+      const response = await apiService.findMetaModels(filters);
+      setApiModels(response.data || []);
+      setDeleteConfirmOpen(false);
+      setDeletingId(null);
+      setDeleteError('');
+      setTimeout(() => setUploadMessage(''), 3000);
+    } catch (error: any) {
+      // Try to extract backend error message
+      let msg = 'Failed to delete meta model';
+      if (error?.response?.data?.message) {
+        msg = error.response.data.message;
+      } else if (error?.message) {
+        msg = error.message;
+      }
+      setDeleteError(msg);
+      setUploadMessage(msg);
+      setUploadMessageType('error');
+    }
+  };
+
   return (
     <div style={panelStyle}>
       <div style={titleStyle}>
@@ -919,8 +952,28 @@ export const ToolsPanel: React.FC<ToolsPanelProps> = ({ onEcoreFileUpload, onEco
                   </span>
                 </>
               )}
+              {/* Delete button: always visible */}
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleDeleteClick(model.id);
+                }}
+                style={{
+                  padding: '4px 8px',
+                  border: '1px solid #dee2e6',
+                  borderRadius: 6,
+                  background: '#fff',
+                  cursor: 'pointer',
+                  fontSize: 12,
+                  fontWeight: 600,
+                  color: '#e03131',
+                  marginLeft: 'auto'
+                }}
+                title="Delete this meta model"
+              >
+                Delete
+              </button>
             </div>
-            
             {/* Expanded content - only show when card is expanded */}
             {expandedCard === model.id && (
               <>
@@ -1080,7 +1133,6 @@ export const ToolsPanel: React.FC<ToolsPanelProps> = ({ onEcoreFileUpload, onEco
               const response = await apiService.findMetaModels(filters);
               setApiModels(response.data || []);
             } catch (error) {
-              console.error('Error fetching meta models from API:', error);
               setApiError(error instanceof Error ? error.message : 'Failed to fetch meta models');
             } finally {
               setIsLoadingModels(false);
@@ -1089,6 +1141,82 @@ export const ToolsPanel: React.FC<ToolsPanelProps> = ({ onEcoreFileUpload, onEco
           fetchData();
         }}
       />
+
+      {/* Delete confirmation popup */}
+      {deleteConfirmOpen && (
+        <div style={{
+          position: 'fixed',
+          top: 0, left: 0, right: 0, bottom: 0,
+          background: 'rgba(0,0,0,0.25)',
+          zIndex: 9999,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center'
+        }}>
+          <div style={{
+            background: '#fff',
+            borderRadius: 8,
+            boxShadow: '0 4px 24px rgba(0,0,0,0.18)',
+            padding: '32px 24px',
+            minWidth: 320,
+            textAlign: 'center',
+            fontFamily: 'Georgia, serif'
+          }}>
+            <div style={{ fontSize: 16, fontWeight: 700, marginBottom: 16, color: '#e03131' }}>
+              Are you sure you want to delete this meta model?
+            </div>
+            <div style={{ fontSize: 13, color: '#495057', marginBottom: 24 }}>
+              This action cannot be undone.
+            </div>
+            {deleteError && (
+              <div style={{
+                color: '#e03131',
+                background: '#f8d7da',
+                border: '1px solid #f5c6cb',
+                borderRadius: 6,
+                padding: '8px',
+                marginBottom: '16px',
+                fontSize: 13,
+                fontWeight: 500,
+              }}>
+                {deleteError}
+              </div>
+            )}
+            <div style={{ display: 'flex', gap: 12, justifyContent: 'center' }}>
+              <button
+                style={{
+                  padding: '8px 18px',
+                  borderRadius: 6,
+                  border: 'none',
+                  background: '#e03131',
+                  color: '#fff',
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                  fontSize: 14
+                }}
+                onClick={handleConfirmDelete}
+              >
+                Confirm
+              </button>
+              <button
+                style={{
+                  padding: '8px 18px',
+                  borderRadius: 6,
+                  border: '1px solid #dee2e6',
+                  background: '#fff',
+                  color: '#495057',
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                  fontSize: 14
+                }}
+                onClick={() => { setDeleteConfirmOpen(false); setDeletingId(null); setDeleteError(''); }}
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
