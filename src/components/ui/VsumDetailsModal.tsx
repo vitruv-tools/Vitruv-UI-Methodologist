@@ -96,7 +96,7 @@ export const VsumDetailsModal: React.FC<Props> = ({ isOpen, vsumId, onClose, onS
       <div style={overlay} onClick={onClose} role="dialog" aria-modal="true">
         <div style={dialog} onClick={(e)=>e.stopPropagation()}>
           <div style={header}>
-            <h3 style={title}>{details?.name ?? 'vSUM Details'}</h3>
+            <h3 style={title}>{details?.name ?? 'VSUM Details'}</h3>
             <div style={{ display:'flex', gap:8 }}>
               <button
                   onClick={()=>setActiveTab('details')}
@@ -163,7 +163,7 @@ export const VsumDetailsModal: React.FC<Props> = ({ isOpen, vsumId, onClose, onS
                 )
             ) : (
                 !vsumId
-                    ? <div style={{fontStyle:'italic', color:'#6c757d'}}>No vSUM selected.</div>
+                    ? <div style={{fontStyle:'italic', color:'#6c757d'}}>No VSUM selected.</div>
                     : <VsumUsersTab vsumId={vsumId} onChanged={onSaved} />
             )}
           </div>

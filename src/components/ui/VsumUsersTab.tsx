@@ -124,7 +124,7 @@ export const VsumUsersTab: React.FC<Props> = ({ vsumId, onChanged }) => {
 
   // remove member (only non-owner get a button)
   const removeMember = async (vsumUserId: number) => {
-    if (!window.confirm('Remove this member from the vSUM?')) return;
+    if (!window.confirm('Remove this member from the VSUM?')) return;
     try {
       setErr('');
       await apiService.removeVsumMember(vsumUserId); // [REMOVE_MEMBER]

@@ -146,7 +146,7 @@ export const CreateVsumModal: React.FC<CreateVsumModalProps> = ({ isOpen, onClos
       setDescription('');
       onClose();
     } catch (e) {
-      const msg = e instanceof Error ? e.message : 'Failed to create vSUM';
+      const msg = e instanceof Error ? e.message : 'Failed to create VSUM';
       setError(msg);
       showError(msg);
     } finally {
@@ -166,7 +166,7 @@ export const CreateVsumModal: React.FC<CreateVsumModalProps> = ({ isOpen, onClos
     <div style={modalOverlayStyle} onClick={handleClose}>
       <div style={modalStyle} onClick={(e) => e.stopPropagation()}>
         <div style={headerStyle}>
-          <h3 style={titleStyle}>Create vSUM</h3>
+          <h3 style={titleStyle}>Create VSUM</h3>
           <button style={closeButtonStyle} onClick={handleClose}>
             ×
           </button>
@@ -199,7 +199,7 @@ export const CreateVsumModal: React.FC<CreateVsumModalProps> = ({ isOpen, onClos
         <div style={buttonRowStyle}>
           <button style={secondaryButtonStyle} onClick={handleClose} disabled={loading}>Cancel</button>
           <button style={primaryButtonStyle} onClick={handleSubmit} disabled={loading || !name.trim()}>
-            {loading ? 'Creating...' : 'Create vSUM'}
+            {loading ? 'Creating...' : 'Create VSUM'}
           </button>
         </div>
       </div>
