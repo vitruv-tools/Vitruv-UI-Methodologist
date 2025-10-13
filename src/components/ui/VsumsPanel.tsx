@@ -135,7 +135,7 @@ export const VsumsPanel: React.FC = () => {
 
   return (
       <div style={containerStyle}>
-        <div style={titleStyle}>vSUMS</div>
+        <div style={titleStyle}>Projects</div>
 
         <CreateVsumModal
             isOpen={showCreate}
@@ -154,7 +154,7 @@ export const VsumsPanel: React.FC = () => {
           Create
         </button>
 
-        <div style={sectionStyle}>All vSUMs</div>
+        <div style={sectionStyle}>All</div>
 
         {loading && <div style={{ padding: 12, fontStyle: 'italic', color: '#5a6c7d' }}>Loading...</div>}
         {!loading && sorted.length === 0 && (
