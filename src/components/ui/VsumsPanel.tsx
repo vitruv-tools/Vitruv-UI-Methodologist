@@ -151,7 +151,7 @@ export const VsumsPanel: React.FC = () => {
             onMouseEnter={(e) => Object.assign(e.currentTarget.style, createButtonHoverStyle)}
             onMouseLeave={(e) => Object.assign(e.currentTarget.style, createButtonStyle)}
         >
-          Create VSUM
+          Create
         </button>
 
         <div style={sectionStyle}>All vSUMs</div>
