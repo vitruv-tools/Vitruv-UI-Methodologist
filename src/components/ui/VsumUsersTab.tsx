@@ -34,7 +34,7 @@ export const VsumUsersTab: React.FC<Props> = ({ vsumId, onChanged }) => {
   // --- caching objects MUST be inside the component (hooks rule) ---
   const searchTimer = useRef<number | undefined>(undefined);
   const usersCacheRef = useRef<{ at: number; data: UserSearchItem[] } | null>(null);
-  const CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
+  const CACHE_TTL_MS = 30_000;
 
   // ---------- Fetch members ----------
   const fetchMembers = useCallback(async () => {
@@ -48,7 +48,7 @@ export const VsumUsersTab: React.FC<Props> = ({ vsumId, onChanged }) => {
     } finally {
       setLoading(false);
     }
-  }, [vsumId]);
+  }, [vsumId, CACHE_TTL_MS]);
 
   useEffect(() => { fetchMembers(); }, [fetchMembers]);
 
