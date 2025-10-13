@@ -437,7 +437,7 @@ class ApiService {
   }
 
   /**
-   * VSUM USERS: Fetch members of a vSUM
+   * VSUM USERS: Fetch members of a VSUM
    * GET /v1/vsum-users/vsumId={vsumId}
    */
   async getVsumMembers(vsumId: number | string): Promise<ApiResponse<VsumUserResponse[]>> {
@@ -445,7 +445,7 @@ class ApiService {
   }
 
   /**
-   * VSUM USERS: Add member to a vSUM
+   * VSUM USERS: Add member to a VSUM
    * POST /v1/vsum-users/add-member
    * body: { vsumId, userId }
    */
