@@ -344,7 +344,7 @@ class ApiService {
       pageNumber,
       pageSize,
     });
-    
+
     const result = await this.authenticatedRequest<{ data: any[]; message: string }>(endpoint, {
       method: 'POST',
       body: JSON.stringify(filters),
@@ -436,6 +436,53 @@ class ApiService {
     });
   }
 
+  /**
+   * VSUM USERS: Fetch members of a vSUM
+   * GET /v1/vsum-users/vsumId={vsumId}
+   */
+  async getVsumMembers(vsumId: number | string): Promise<ApiResponse<VsumUserResponse[]>> {
+    return this.authenticatedRequest(`/api/v1/vsum-users/vsumId=${vsumId}`);
+  }
+
+  /**
+   * VSUM USERS: Add member to a vSUM
+   * POST /v1/vsum-users/add-member
+   * body: { vsumId, userId }
+   */
+  async addVsumMember(vsumId: number | string, payload: { userId: number }): Promise<ApiResponse<null[]>> {
+    const body: VsumUserPostRequest = {
+      vsumId: Number(vsumId),
+      userId: payload.userId,
+    };
+    return this.authenticatedRequest('/api/v1/vsum-users/add-member', {
+      method: 'POST',
+      body: JSON.stringify(body),
+    });
+  }
+
+  /**
+   * VSUM USERS: Remove member (by vsum-user row id)
+   * DELETE /v1/vsum-users/{id}/remove-member
+   */
+  async removeVsumMember(id: number | string): Promise<ApiResponse<null>> {
+    return this.authenticatedRequest(`/api/v1/vsum-users/${id}/remove-member`, {
+      method: 'DELETE',
+    });
+  }
+
+  /**
+   * USERS: Search people to add (🔧 adjust this to your real endpoint)
+   * Examples:
+   *   GET  /api/v1/users/search?q=...&limit=10
+   *   POST /api/v1/users/search { q, limit }
+   */
+  async searchUsers(params: { pageNumber?: number; pageSize?: number })
+      : Promise<ApiResponse<UserSearchItem[]>> {
+    const pageNumber = params.pageNumber ?? 0;
+    const pageSize = params.pageSize ?? 50;
+    return this.authenticatedRequest(`/api/v1/users/search?pageNumber=${pageNumber}&pageSize=${pageSize}`);
+  }
+
   // Removed unused getBaseURL and setBaseURL helpers
 }
 
@@ -446,4 +493,28 @@ export const apiService = new ApiService();
 // Removed unused userApi and projectApi helpers
 
 // Export the class for testing or custom instances
-export { ApiService }; 
+export { ApiService };
+
+
+export interface VsumUserResponse {
+  id: number;
+  vsumId: number;
+  firstName: string;
+  lastName: string;
+  email: string;
+  role: 'OWNER' | 'MEMBER';
+  roleEn?: string;
+  createdAt: string;
+}
+
+export interface VsumUserPostRequest {
+  vsumId: number;
+  userId: number;
+}
+
+export interface UserSearchItem {
+  id: number;
+  firstName?: string;
+  lastName?: string;
+  email: string;
+}
