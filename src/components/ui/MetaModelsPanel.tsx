@@ -1,6 +1,6 @@
+// src/components/ui/MetaModelsPanel.tsx
 import React, { useEffect, useState } from 'react';
 import { apiService } from '../../services/api';
-import { ConfirmDialog } from './ConfirmDialog';
 
 interface MetaModelsPanelProps {
   activeVsumId?: number | null;
@@ -9,158 +9,150 @@ interface MetaModelsPanelProps {
 }
 
 const containerStyle: React.CSSProperties = {
-  userSelect: 'none',
   width: '100%',
   background: '#f8f9fa',
-  padding: '16px',
+  padding: 16,
   boxSizing: 'border-box',
   height: '100%',
   overflowY: 'auto',
 };
 
 const titleStyle: React.CSSProperties = {
-  fontSize: '18px',
+  fontSize: 24,
   fontWeight: 700,
-  marginBottom: '16px',
+  marginBottom: 12,
   color: '#2c3e50',
   textAlign: 'left',
-  padding: '8px 0',
+  padding: '8px 0 4px',
   borderBottom: '2px solid #3498db',
   fontFamily: 'Georgia, serif',
 };
 
 const controlsRowStyle: React.CSSProperties = {
   display: 'flex',
-  gap: '8px',
-  marginBottom: '12px',
   alignItems: 'center',
+  gap: 12,
+  marginBottom: 14,
+  flexWrap: 'wrap',
 };
 
 const searchInputStyle: React.CSSProperties = {
   flex: 1,
-  padding: '8px 10px',
+  minWidth: 240,
+  padding: '10px 12px',
   border: '1px solid #ced4da',
-  borderRadius: 6,
-  fontSize: 13,
+  borderRadius: 8,
+  fontSize: 14,
+  lineHeight: 1.2,
 };
 
 const sortDropdownStyle: React.CSSProperties = {
-  padding: '8px 12px',
+  padding: '10px 12px',
   border: '1px solid #dee2e6',
-  borderRadius: '6px',
+  borderRadius: 8,
   background: '#ffffff',
   color: '#495057',
-  fontSize: '12px',
-  fontWeight: '500',
+  fontSize: 14,
   cursor: 'pointer',
-  minWidth: '140px',
+  minWidth: 160,
+};
+
+const filterBtnStyle: React.CSSProperties = {
+  padding: '10px 12px',
+  border: '1px solid #dee2e6',
+  borderRadius: 8,
+  background: '#f8f9fa',
+  cursor: 'pointer',
+  fontWeight: 600,
+};
+
+const filtersBoxStyle: React.CSSProperties = {
+  border: '1px solid #e9ecef',
+  background: '#ffffff',
+  borderRadius: 10,
+  padding: 12,
+  marginBottom: 12,
 };
 
 const fileCardStyle: React.CSSProperties = {
   background: '#ffffff',
-  border: '1px solid #d1ecf1',
-  borderRadius: '6px',
-  padding: '16px',
-  marginBottom: '12px',
-  boxShadow: '0 2px 6px rgba(0,0,0,0.08)',
-  transition: 'all 0.3s ease',
+  border: '1px solid #e7f5ff',
+  borderRadius: 12,
+  padding: 16,
+  marginBottom: 12,
+  boxShadow: '0 2px 8px rgba(0,0,0,0.04)',
+  transition: 'box-shadow .2s ease, transform .2s ease, border-color .2s ease',
 };
 
 const fileCardHoverStyle: React.CSSProperties = {
-  boxShadow: '0 4px 12px rgba(52, 152, 219, 0.15)',
+  boxShadow: '0 6px 18px rgba(52,152,219,0.12)',
   transform: 'translateY(-1px)',
   borderColor: '#3498db',
-  background: '#f8f9ff',
+  background: '#f8fbff',
+};
+
+const cardHeaderStyle: React.CSSProperties = {
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'space-between',
+  gap: 12,
+  marginBottom: 6,
 };
 
 const fileNameStyle: React.CSSProperties = {
-  fontWeight: 600,
+  fontWeight: 700,
   color: '#2c3e50',
-  wordBreak: 'break-all',
-  marginBottom: '6px',
-  fontSize: 15,
+  fontSize: 18,
   fontFamily: 'Georgia, serif',
+  margin: 0,
 };
 
-const fileMetaStyle: React.CSSProperties = {
-  fontSize: 13,
+const metaRowStyle: React.CSSProperties = {
+  display: 'flex',
+  alignItems: 'center',
+  gap: 10,
   color: '#5a6c7d',
-  display: 'flex',
-  alignItems: 'center',
-  gap: '8px',
-  fontFamily: 'Georgia, serif',
+  fontSize: 14,
   fontStyle: 'italic',
+  flexWrap: 'wrap',
 };
 
-const paginationContainerStyle: React.CSSProperties = {
-  display: 'flex',
-  justifyContent: 'space-between',
-  alignItems: 'center',
-  padding: '12px 0',
-  marginTop: '8px',
-  borderTop: '1px solid #e9ecef',
-  fontFamily: 'Georgia, serif',
+const dotStyle: React.CSSProperties = {
+  width: 4,
+  height: 4,
+  borderRadius: '50%',
+  background: '#95a5a6',
+  display: 'inline-block',
 };
 
-const paginationInfoStyle: React.CSSProperties = {
-  fontSize: '12px',
-  color: '#6c757d',
-  fontWeight: '500',
+const dateTextStyle: React.CSSProperties = {
+  whiteSpace: 'nowrap', // keep date in one line
 };
 
-const paginationControlsStyle: React.CSSProperties = {
-  display: 'flex',
-  gap: '4px',
-  alignItems: 'center',
-};
-
-const paginationButtonStyle: React.CSSProperties = {
+const addBtnStyle: React.CSSProperties = {
   padding: '6px 10px',
   border: '1px solid #dee2e6',
-  borderRadius: '4px',
+  borderRadius: 8,
   background: '#ffffff',
-  color: '#495057',
-  fontSize: '12px',
-  fontWeight: '500',
   cursor: 'pointer',
-  transition: 'all 0.2s ease',
-  minWidth: '32px',
-  textAlign: 'center',
+  fontSize: 13,
+  fontWeight: 600,
 };
 
-const paginationButtonHoverStyle: React.CSSProperties = {
-  background: '#e9ecef',
-  borderColor: '#adb5bd',
-};
-
-const paginationButtonActiveStyle: React.CSSProperties = {
-  background: '#3498db',
-  color: '#ffffff',
-  borderColor: '#3498db',
-};
-
-const paginationButtonDisabledStyle: React.CSSProperties = {
-  background: '#f8f9fa',
-  color: '#6c757d',
-  borderColor: '#dee2e6',
-  cursor: 'not-allowed',
-};
-
-export const MetaModelsPanel: React.FC<MetaModelsPanelProps> = ({ activeVsumId, selectedMetaModelIds, onAddToActiveVsum }) => {
+export const MetaModelsPanel: React.FC<MetaModelsPanelProps> = ({
+                                                                  activeVsumId,
+                                                                  selectedMetaModelIds,
+                                                                  onAddToActiveVsum,
+                                                                }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [sortBy, setSortBy] = useState<'name' | 'date' | 'domain'>('date');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
   const [isLoadingModels, setIsLoadingModels] = useState(false);
   const [apiModels, setApiModels] = useState<any[]>([]);
   const [apiError, setApiError] = useState<string>('');
-  const [currentPage, setCurrentPage] = useState(1);
-  const itemsPerPage = 10;
   const [showFilters, setShowFilters] = useState(false);
   const [dateFilter, setDateFilter] = useState<'all' | 'today' | 'week' | 'month' | 'year'>('all');
   const [parsedFilters, setParsedFilters] = useState<any[]>([]);
-  const [confirmOpen, setConfirmOpen] = useState(false);
-  const [deletingId, setDeletingId] = useState<number | null>(null);
-  const [isDeleting, setIsDeleting] = useState(false);
 
   const handleSearchKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key !== 'Tab') return;
@@ -185,143 +177,97 @@ export const MetaModelsPanel: React.FC<MetaModelsPanelProps> = ({ activeVsumId, 
     const newValue = value.slice(0, start) + replacement + value.slice(end);
     const newCaret = start + replacement.length;
     setSearchTerm(newValue);
-    requestAnimationFrame(() => {
-      input.setSelectionRange(newCaret, newCaret);
-    });
+    requestAnimationFrame(() => input.setSelectionRange(newCaret, newCaret));
   };
 
   const parseSearchQuery = (query: string) => {
     const filters: any[] = [];
-    const parts = query.split(/\s+/).filter(part => part.trim());
+    const parts = query.split(/\s+/).filter(Boolean);
     for (const part of parts) {
-      const colonMatch = part.match(/^([a-zA-Z]+):(.+)$/);
-      if (colonMatch) {
-        const [, key, value] = colonMatch;
-        const cleanValue = value.replace(/"/g, '');
-        switch (key.toLowerCase()) {
-          case 'name':
-            filters.push({ key: 'name', value: cleanValue });
-            break;
-          case 'domain':
-            filters.push({ key: 'domain', value: cleanValue });
-            break;
-          case 'keywords':
-            filters.push({ key: 'keywords', value: cleanValue });
-            break;
-          case 'description':
-            filters.push({ key: 'description', value: cleanValue });
-            break;
-          case 'created':
-          case 'updated':
-            filters.push({ key, value: cleanValue });
-            break;
-        }
-      } else {
-        // Ignore bare tokens (no default name:)
+      const m = part.match(/^([a-zA-Z]+):(.+)$/);
+      if (!m) continue;
+      const [, key, raw] = m;
+      const value = raw.replace(/"/g, '');
+      switch (key.toLowerCase()) {
+        case 'name':
+        case 'domain':
+        case 'keywords':
+        case 'description':
+        case 'created':
+        case 'updated':
+          filters.push({ key: key.toLowerCase(), value });
+          break;
       }
     }
     return filters;
   };
 
-  // Keep parsed filters in sync with searchTerm
+  // keep parsed filters synced
   useEffect(() => {
-    if (searchTerm.trim()) {
-      setParsedFilters(parseSearchQuery(searchTerm));
-    } else {
-      setParsedFilters([]);
-    }
+    setParsedFilters(searchTerm.trim() ? parseSearchQuery(searchTerm) : []);
   }, [searchTerm]);
 
+  // fetch models
   useEffect(() => {
     const fetchData = async () => {
       setIsLoadingModels(true);
       setApiError('');
       try {
         const filters: any = {};
-        parsedFilters.forEach(filter => {
-          switch (filter.key) {
+        parsedFilters.forEach(f => {
+          const v = String(f.value);
+          switch (f.key) {
             case 'name':
-              filters.name = filter.value;
-              break;
             case 'domain':
-              filters.domain = filter.value;
+            case 'description':
+              filters[f.key] = v;
               break;
             case 'keywords':
-              filters.keywords = filter.value;
-              break;
-            case 'description':
-              filters.description = filter.value;
+              filters.keywords = v;
               break;
             case 'created':
-              if (filter.value.includes('after:')) {
-                const dateStr = filter.value.replace('after:', '');
-                filters.createdFrom = dateStr === 'now' ? new Date().toISOString() : new Date(dateStr).toISOString();
-              } else if (filter.value.includes('before:')) {
-                const dateStr = filter.value.replace('before:', '');
-                filters.createdTo = dateStr === 'now' ? new Date().toISOString() : new Date(dateStr).toISOString();
-              } else if (filter.value.includes('between:')) {
-                const dates = filter.value.replace('between:', '').split('..');
-                if (dates.length === 2) {
-                  filters.createdFrom = new Date(dates[0]).toISOString();
-                  filters.createdTo = new Date(dates[1]).toISOString();
+            case 'updated': {
+              const fromKey = f.key === 'created' ? 'createdFrom' : 'updatedFrom';
+              const toKey = f.key === 'created' ? 'createdTo' : 'updatedTo';
+              if (v.includes('after:')) {
+                const dateStr = v.replace('after:', '');
+                (filters as any)[fromKey] = dateStr === 'now' ? new Date().toISOString() : new Date(dateStr).toISOString();
+              } else if (v.includes('before:')) {
+                const dateStr = v.replace('before:', '');
+                (filters as any)[toKey] = dateStr === 'now' ? new Date().toISOString() : new Date(dateStr).toISOString();
+              } else if (v.includes('between:')) {
+                const [a, b] = v.replace('between:', '').split('..');
+                if (a && b) {
+                  (filters as any)[fromKey] = new Date(a).toISOString();
+                  (filters as any)[toKey] = new Date(b).toISOString();
                 }
               } else {
-                filters.createdFrom = new Date(filter.value).toISOString();
-                filters.createdTo = new Date(filter.value + 'T23:59:59').toISOString();
+                (filters as any)[fromKey] = new Date(v).toISOString();
+                (filters as any)[toKey] = new Date(`${v}T23:59:59`).toISOString();
               }
               break;
-            case 'updated':
-              if (filter.value.includes('after:')) {
-                const dateStr = filter.value.replace('after:', '');
-                filters.updatedFrom = dateStr === 'now' ? new Date().toISOString() : new Date(dateStr).toISOString();
-              } else if (filter.value.includes('before:')) {
-                const dateStr = filter.value.replace('before:', '');
-                filters.updatedTo = dateStr === 'now' ? new Date().toISOString() : new Date(dateStr).toISOString();
-              } else if (filter.value.includes('between:')) {
-                const dates = filter.value.replace('between:', '').split('..');
-                if (dates.length === 2) {
-                  filters.updatedFrom = new Date(dates[0]).toISOString();
-                  filters.updatedTo = new Date(dates[1]).toISOString();
-                }
-              } else {
-                filters.updatedFrom = new Date(filter.value).toISOString();
-                filters.updatedTo = new Date(filter.value + 'T23:59:59').toISOString();
-              }
-              break;
+            }
           }
         });
 
-        // Add simple date range when no explicit created/updated filters are present
         if (dateFilter !== 'all') {
-          const hasDateFilters = parsedFilters.some(f => f.key === 'created' || f.key === 'updated');
-          if (!hasDateFilters) {
+          const hasDate = parsedFilters.some(f => f.key === 'created' || f.key === 'updated');
+          if (!hasDate) {
             const now = new Date();
-            let createdFrom: Date;
-            switch (dateFilter) {
-              case 'today':
-                createdFrom = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-                break;
-              case 'week':
-                createdFrom = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
-                break;
-              case 'month':
-                createdFrom = new Date(now.getFullYear(), now.getMonth(), 1);
-                break;
-              case 'year':
-                createdFrom = new Date(now.getFullYear(), 0, 1);
-                break;
-              default:
-                createdFrom = new Date(0);
-            }
-            filters.createdFrom = createdFrom.toISOString();
-            filters.createdTo = now.toISOString();
+            let from = new Date(0);
+            if (dateFilter === 'today') from = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+            if (dateFilter === 'week') from = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+            if (dateFilter === 'month') from = new Date(now.getFullYear(), now.getMonth(), 1);
+            if (dateFilter === 'year') from = new Date(now.getFullYear(), 0, 1);
+            (filters as any).createdFrom = from.toISOString();
+            (filters as any).createdTo = now.toISOString();
           }
         }
-        const response = await apiService.findMetaModels(filters);
-        setApiModels(response.data || []);
-        setCurrentPage(1);
-      } catch (error) {
-        setApiError(error instanceof Error ? error.message : 'Failed to fetch meta models');
+
+        const res = await apiService.findMetaModels(filters);
+        setApiModels(res.data || []);
+      } catch (e: any) {
+        setApiError(e?.message || 'Failed to fetch meta models');
       } finally {
         setIsLoadingModels(false);
       }
@@ -330,289 +276,178 @@ export const MetaModelsPanel: React.FC<MetaModelsPanelProps> = ({ activeVsumId, 
   }, [parsedFilters, dateFilter]);
 
   const sortedModels = [...apiModels].sort((a, b) => {
-    let comparison = 0;
-    switch (sortBy) {
-      case 'name':
-        comparison = a.name.localeCompare(b.name);
-        break;
-      case 'date':
-        comparison = new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
-        break;
-      case 'domain':
-        comparison = (a.domain || '').localeCompare(b.domain || '');
-        break;
-    }
-    return sortOrder === 'asc' ? comparison : -comparison;
+    let cmp = 0;
+    if (sortBy === 'name') cmp = a.name.localeCompare(b.name);
+    if (sortBy === 'date') cmp = new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
+    if (sortBy === 'domain') cmp = (a.domain || '').localeCompare(b.domain || '');
+    return sortOrder === 'asc' ? cmp : -cmp;
   });
 
-  const totalItems = sortedModels.length;
-  const totalPages = Math.ceil(totalItems / itemsPerPage);
-  const startIndex = (currentPage - 1) * itemsPerPage;
-  const endIndex = startIndex + itemsPerPage;
-  const currentPageItems = sortedModels.slice(startIndex, endIndex);
-
-  const formatRelativeTime = (isoDate: string) => {
-    const date = new Date(isoDate);
-    const dateStr = date.toLocaleDateString();
-    const timeStr = date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-    return `${dateStr} at ${timeStr}`;
+  const formatWhen = (iso: string) => {
+    const d = new Date(iso);
+    const ds = d.toLocaleDateString();
+    const ts = d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    return `${ds} at ${ts}`;
   };
 
   return (
-    <div style={containerStyle}>
-      <div style={titleStyle}>Meta Models</div>
-      <div style={controlsRowStyle}>
-        <input
-          placeholder="Search (e.g. name:test domain:engineering)"
-          value={searchTerm}
-          onChange={(e) => setSearchTerm(e.target.value)}
-          style={searchInputStyle}
-          onKeyDown={handleSearchKeyDown}
-        />
-        <select
-          value={`${sortBy}-${sortOrder}`}
-          onChange={(e) => {
-            const [newSortBy, newSortOrder] = e.target.value.split('-') as ['name' | 'date' | 'domain', 'asc' | 'desc'];
-            setSortBy(newSortBy);
-            setSortOrder(newSortOrder);
-          }}
-          style={sortDropdownStyle}
-        >
-          <option value="date-desc">Newest First</option>
-          <option value="date-asc">Oldest First</option>
-          <option value="name-asc">Name A-Z</option>
-          <option value="name-desc">Name Z-A</option>
-          <option value="domain-asc">Domain A-Z</option>
-          <option value="domain-desc">Domain Z-A</option>
-        </select>
-        <button
-          onClick={() => setShowFilters(v => !v)}
-          style={{ padding: '8px 12px', borderRadius: 6, border: '1px solid #dee2e6', background: '#f8f9fa', cursor: 'pointer', fontWeight: 600 }}
-        >
-          {showFilters ? 'Hide Filters' : 'Show Filters'}
-        </button>
-      </div>
+      <div style={containerStyle}>
+        <div style={titleStyle}>Meta Models</div>
 
-      {showFilters && (
-        <div style={{ position: 'relative', border: '1px solid #e9ecef', background: '#ffffff', borderRadius: 8, padding: 12, marginBottom: 12 }}>
-          <button
-            aria-label="Close filters"
-            title="Close"
-            style={{ position: 'absolute', top: 6, right: 6, width: 24, height: 24, border: 'none', background: 'transparent', color: '#6c757d', fontSize: 14, cursor: 'pointer', borderRadius: 4 }}
-            onClick={() => setShowFilters(false)}
-            onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.background = '#f1f3f5'; (e.currentTarget as HTMLButtonElement).style.color = '#495057'; }}
-            onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.background = 'transparent'; (e.currentTarget as HTMLButtonElement).style.color = '#6c757d'; }}
+        <div style={controlsRowStyle}>
+          <input
+              placeholder="Search (e.g. name:test domain:engineering)"
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              style={searchInputStyle}
+              onKeyDown={handleSearchKeyDown}
+          />
+          <select
+              value={`${sortBy}-${sortOrder}`}
+              onChange={(e) => {
+                const [sb, so] = e.target.value.split('-') as ['name' | 'date' | 'domain', 'asc' | 'desc'];
+                setSortBy(sb);
+                setSortOrder(so);
+              }}
+              style={sortDropdownStyle}
           >
-            ×
+            <option value="date-desc">Newest First</option>
+            <option value="date-asc">Oldest First</option>
+            <option value="name-asc">Name A-Z</option>
+            <option value="name-desc">Name Z-A</option>
+            <option value="domain-asc">Domain A-Z</option>
+            <option value="domain-desc">Domain Z-A</option>
+          </select>
+          <button style={filterBtnStyle} onClick={() => setShowFilters(v => !v)}>
+            {showFilters ? 'Hide Filters' : 'Show Filters'}
           </button>
-          <div style={{ display: 'flex', gap: 8, marginBottom: 8, alignItems: 'center' }}>
-            <span style={{ fontSize: 12, fontWeight: 600, minWidth: 60, color: '#495057' }}>Name:</span>
-            <input
-              type="text"
-              placeholder="Filter by name..."
-              style={{ flex: 1, padding: '6px 8px', border: '1px solid #ced4da', borderRadius: 4, fontSize: 12 }}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') {
-                  const value = (e.currentTarget as HTMLInputElement).value.trim();
-                  if (value) setSearchTerm(prev => prev ? `${prev} name:${value}` : `name:${value}`);
-                  (e.currentTarget as HTMLInputElement).value = '';
-                }
-              }}
-            />
-          </div>
-          <div style={{ display: 'flex', gap: 8, marginBottom: 8, alignItems: 'center' }}>
-            <span style={{ fontSize: 12, fontWeight: 600, minWidth: 60, color: '#495057' }}>Domain:</span>
-            <input
-              type="text"
-              placeholder="Filter by domain..."
-              style={{ flex: 1, padding: '6px 8px', border: '1px solid #ced4da', borderRadius: 4, fontSize: 12 }}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') {
-                  const value = (e.currentTarget as HTMLInputElement).value.trim();
-                  if (value) setSearchTerm(prev => prev ? `${prev} domain:${value}` : `domain:${value}`);
-                  (e.currentTarget as HTMLInputElement).value = '';
-                }
-              }}
-            />
-          </div>
-          <div style={{ display: 'flex', gap: 8, marginBottom: 8, alignItems: 'center' }}>
-            <span style={{ fontSize: 12, fontWeight: 600, minWidth: 60, color: '#495057' }}>Keywords:</span>
-            <input
-              type="text"
-              placeholder="Filter by keywords..."
-              style={{ flex: 1, padding: '6px 8px', border: '1px solid #ced4da', borderRadius: 4, fontSize: 12 }}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') {
-                  const value = (e.currentTarget as HTMLInputElement).value.trim();
-                  if (value) setSearchTerm(prev => prev ? `${prev} keywords:${value}` : `keywords:${value}`);
-                  (e.currentTarget as HTMLInputElement).value = '';
-                }
-              }}
-            />
-          </div>
-          <div style={{ display: 'flex', gap: 8, marginBottom: 8, alignItems: 'center' }}>
-            <span style={{ fontSize: 12, fontWeight: 600, minWidth: 60, color: '#495057' }}>Date:</span>
-            <select
-              value={dateFilter}
-              onChange={(e) => setDateFilter(e.target.value as any)}
-              style={{ flex: 1, padding: '6px 8px', border: '1px solid #ced4da', borderRadius: 4, fontSize: 12, background: '#ffffff' }}
-            >
-              <option value="all">All time</option>
-              <option value="today">Today</option>
-              <option value="week">This week</option>
-              <option value="month">This month</option>
-              <option value="year">This year</option>
-            </select>
-          </div>
-          <div style={{ fontSize: 10, color: '#6a737d', fontStyle: 'italic' }}>
-            Tip: Use GitHub-style filters like <code>name:X domain:Y created:after:2024-01-01</code>
-          </div>
         </div>
-      )}
 
-      {apiError && (
-        <div style={{
-          padding: '8px 12px',
-          margin: '8px 0',
-          borderRadius: '6px',
-          fontSize: '12px',
-          fontWeight: '500',
-          backgroundColor: '#f8d7da',
-          color: '#721c24',
-          border: '1px solid #f5c6cb',
-        }}>
-          {apiError}
-        </div>
-      )}
-
-      {isLoadingModels && (
-        <div style={{
-          padding: '16px',
-          textAlign: 'center',
-          fontSize: '13px',
-          color: '#5a6c7d',
-          fontStyle: 'italic',
-          fontFamily: 'Georgia, serif',
-        }}>
-          Loading models...
-        </div>
-      )}
-
-      <div>
-        {currentPageItems.map(model => (
-          <div
-            key={model.id}
-            style={fileCardStyle}
-            onMouseEnter={(e) => Object.assign(e.currentTarget.style, fileCardHoverStyle)}
-            onMouseLeave={(e) => Object.assign(e.currentTarget.style, fileCardStyle)}
-          >
-            <div style={fileNameStyle}>{model.name}</div>
-            <div style={fileMetaStyle}>
-              <span>Domain: <strong>{model.domain}</strong></span>
-              <span>•</span>
-              <span title={new Date(model.createdAt).toLocaleString()}>{formatRelativeTime(model.createdAt)}</span>
-              <span>•</span>
-              <button
-                onClick={() => { setDeletingId(model.id); setConfirmOpen(true); }}
-                style={{ padding: '4px 8px', border: '1px solid #dee2e6', borderRadius: 6, background: '#fff', cursor: 'pointer', fontSize: 12, fontWeight: 600, color: '#e03131' }}
-              >
-                Delete
-              </button>
-              {activeVsumId ? (
-                <>
-                  <span>•</span>
-                  {onAddToActiveVsum && (
-                    <button
-                      onClick={() => onAddToActiveVsum(model)}
-                      style={{ padding: '4px 8px', border: '1px solid #dee2e6', borderRadius: 6, background: '#ffffff', cursor: 'pointer', fontSize: 12, fontWeight: 600 }}
-                      disabled={(selectedMetaModelIds || []).includes(model.id)}
-                    >
-                      {(selectedMetaModelIds || []).includes(model.id) ? 'Added' : 'Add to VSUM'}
-                    </button>
-                  )}
-                </>
-              ) : null}
+        {showFilters && (
+            <div style={filtersBoxStyle}>
+              <div style={{ display: 'grid', gap: 8 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <span style={{ fontSize: 12, fontWeight: 600, minWidth: 60, color: '#495057' }}>Name:</span>
+                  <input
+                      type="text"
+                      placeholder="Filter by name…"
+                      style={{ flex: 1, padding: '6px 8px', border: '1px solid #ced4da', borderRadius: 6, fontSize: 12 }}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          const v = (e.currentTarget as HTMLInputElement).value.trim();
+                          if (v) setSearchTerm(p => (p ? `${p} name:${v}` : `name:${v}`));
+                          (e.currentTarget as HTMLInputElement).value = '';
+                        }
+                      }}
+                  />
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <span style={{ fontSize: 12, fontWeight: 600, minWidth: 60, color: '#495057' }}>Domain:</span>
+                  <input
+                      type="text"
+                      placeholder="Filter by domain…"
+                      style={{ flex: 1, padding: '6px 8px', border: '1px solid #ced4da', borderRadius: 6, fontSize: 12 }}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          const v = (e.currentTarget as HTMLInputElement).value.trim();
+                          if (v) setSearchTerm(p => (p ? `${p} domain:${v}` : `domain:${v}`));
+                          (e.currentTarget as HTMLInputElement).value = '';
+                        }
+                      }}
+                  />
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <span style={{ fontSize: 12, fontWeight: 600, minWidth: 60, color: '#495057' }}>Keywords:</span>
+                  <input
+                      type="text"
+                      placeholder="Filter by keywords…"
+                      style={{ flex: 1, padding: '6px 8px', border: '1px solid #ced4da', borderRadius: 6, fontSize: 12 }}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          const v = (e.currentTarget as HTMLInputElement).value.trim();
+                          if (v) setSearchTerm(p => (p ? `${p} keywords:${v}` : `keywords:${v}`));
+                          (e.currentTarget as HTMLInputElement).value = '';
+                        }
+                      }}
+                  />
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <span style={{ fontSize: 12, fontWeight: 600, minWidth: 60, color: '#495057' }}>Date:</span>
+                  <select
+                      value={dateFilter}
+                      onChange={(e) => setDateFilter(e.target.value as any)}
+                      style={{ flex: 1, padding: '6px 8px', border: '1px solid #ced4da', borderRadius: 6, fontSize: 12 }}
+                  >
+                    <option value="all">All time</option>
+                    <option value="today">Today</option>
+                    <option value="week">This week</option>
+                    <option value="month">This month</option>
+                    <option value="year">This year</option>
+                  </select>
+                </div>
+                <div style={{ fontSize: 10, color: '#6a737d', fontStyle: 'italic' }}>
+                  Tip: Use filters like <code>name:X domain:Y created:after:2024-01-01</code>
+                </div>
+              </div>
             </div>
-          </div>
-        ))}
-        {!isLoadingModels && sortedModels.length === 0 && !apiError && (
-          <div style={{ padding: 16, fontSize: 13, color: '#6c757d', fontStyle: 'italic' }}>
-            No meta models available from server.
-          </div>
         )}
-      </div>
 
-      {totalPages > 1 && (
-        <div style={paginationContainerStyle}>
-          <div style={paginationInfoStyle}>
-            Showing {startIndex + 1}-{Math.min(endIndex, totalItems)} of {totalItems} models
-          </div>
-          <div style={paginationControlsStyle}>
-            <button
-              style={{ ...paginationButtonStyle, ...(currentPage === 1 ? paginationButtonDisabledStyle : {}) }}
-              onClick={() => currentPage > 1 && setCurrentPage(currentPage - 1)}
-              disabled={currentPage === 1}
-              onMouseEnter={(e) => { if (currentPage > 1) Object.assign(e.currentTarget.style, paginationButtonHoverStyle); }}
-              onMouseLeave={(e) => { if (currentPage > 1) Object.assign(e.currentTarget.style, paginationButtonStyle); }}
-            >
-              ‹
-            </button>
-            {Array.from({ length: totalPages }, (_, i) => i + 1).map(page => {
-              const shouldShow = page === 1 || page === totalPages || Math.abs(page - currentPage) <= 1;
-              if (!shouldShow) {
-                if (page === 2 && currentPage > 4) return <span key={`ellipsis-${page}`} style={{ padding: '0 4px', color: '#6c757d' }}>...</span>;
-                if (page === totalPages - 1 && currentPage < totalPages - 3) return <span key={`ellipsis-${page}`} style={{ padding: '0 4px', color: '#6c757d' }}>...</span>;
-                return null;
-              }
-              return (
-                <button
-                  key={page}
-                  style={{ ...paginationButtonStyle, ...(page === currentPage ? paginationButtonActiveStyle : {}) }}
-                  onClick={() => setCurrentPage(page)}
-                  onMouseEnter={(e) => { if (page !== currentPage) Object.assign(e.currentTarget.style, paginationButtonHoverStyle); }}
-                  onMouseLeave={(e) => { if (page !== currentPage) Object.assign(e.currentTarget.style, paginationButtonStyle); }}
-                >
-                  {page}
-                </button>
-              );
-            })}
-            <button
-              style={{ ...paginationButtonStyle, ...(currentPage === totalPages ? paginationButtonDisabledStyle : {}) }}
-              onClick={() => currentPage < totalPages && setCurrentPage(currentPage + 1)}
-              disabled={currentPage === totalPages}
-              onMouseEnter={(e) => { if (currentPage < totalPages) Object.assign(e.currentTarget.style, paginationButtonHoverStyle); }}
-              onMouseLeave={(e) => { if (currentPage < totalPages) Object.assign(e.currentTarget.style, paginationButtonStyle); }}
-            >
-              ›
-            </button>
-          </div>
+        {apiError && (
+            <div style={{ padding: '8px 12px', margin: '8px 0', borderRadius: 8, fontSize: 12, background: '#fdecea', color: '#b3261e', border: '1px solid #f5c6cb' }}>
+              {apiError}
+            </div>
+        )}
+
+        {isLoadingModels && (
+            <div style={{ padding: 16, textAlign: 'center', fontSize: 13, color: '#5a6c7d', fontStyle: 'italic' }}>
+              Loading models…
+            </div>
+        )}
+
+        <div>
+          {sortedModels.map((model: any) => (
+              <div
+                  key={model.id}
+                  style={fileCardStyle}
+                  onMouseEnter={(e) => Object.assign(e.currentTarget.style, fileCardHoverStyle)}
+                  onMouseLeave={(e) => Object.assign(e.currentTarget.style, fileCardStyle)}
+              >
+                <div style={cardHeaderStyle}>
+                  <h4 style={fileNameStyle}>{model.name}</h4>
+
+                  {activeVsumId && onAddToActiveVsum && (
+                      <button
+                          onClick={() => onAddToActiveVsum(model)}
+                          style={{
+                            ...addBtnStyle,
+                            opacity: (selectedMetaModelIds || []).includes(model.id) ? 0.6 : 1,
+                            cursor: (selectedMetaModelIds || []).includes(model.id) ? 'not-allowed' : 'pointer',
+                          }}
+                          disabled={(selectedMetaModelIds || []).includes(model.id)}
+                      >
+                        {(selectedMetaModelIds || []).includes(model.id) ? 'Added' : 'Add to VSUM'}
+                      </button>
+                  )}
+                </div>
+
+                <div style={metaRowStyle}>
+              <span>
+                <em>Domain:</em>&nbsp;<strong>{model.domain || '—'}</strong>
+              </span>
+                  <span style={dotStyle} />
+                  <span style={dateTextStyle} title={new Date(model.createdAt).toLocaleString()}>
+                {formatWhen(model.createdAt)}
+              </span>
+                </div>
+              </div>
+          ))}
+
+          {!isLoadingModels && !apiError && sortedModels.length === 0 && (
+              <div style={{ padding: 16, fontSize: 13, color: '#6c757d', fontStyle: 'italic' }}>
+                No meta models available from server.
+              </div>
+          )}
         </div>
-      )}
-      <ConfirmDialog
-        isOpen={confirmOpen}
-        title="Delete meta model?"
-        message="This action cannot be undone."
-        confirmText={isDeleting ? 'Deleting…' : 'Delete'}
-        cancelText="Cancel"
-        onConfirm={async () => {
-          if (deletingId == null) return;
-          setIsDeleting(true);
-          setApiError('');
-          try {
-            await apiService.deleteMetaModel(String(deletingId));
-            setApiModels(prev => prev.filter(m => m.id !== deletingId));
-          } catch (err) {
-            setApiError(err instanceof Error ? err.message : 'Failed to delete meta model');
-          } finally {
-            setIsDeleting(false);
-            setConfirmOpen(false);
-            setDeletingId(null);
-          }
-        }}
-        onCancel={() => { if (!isDeleting) { setConfirmOpen(false); setDeletingId(null); } }}
-      />
-    </div>
+      </div>
   );
 };
-
-
