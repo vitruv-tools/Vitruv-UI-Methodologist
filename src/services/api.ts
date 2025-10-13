@@ -413,6 +413,31 @@ class ApiService {
     });
   }
 
+// inside ApiService class
+  async renameVsum(id: number | string, data: { name: string }): Promise<ApiResponse<any>> {
+    return this.authenticatedRequest(`/api/v1/vsums/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    });
+  }
+
+  /**
+   * vSUMS: Sync changes with relationship data
+   */
+  async syncVsumChanges(id: number | string, data: {
+    metaModelIds: number[];
+    metaModelRelationRequests: Array<{
+      sourceId: number;
+      targetId: number;
+      reactionFileId: number;
+    }>;
+  }): Promise<ApiResponse<any>> {
+    return this.authenticatedRequest(`/api/v1/vsums/${id}/sync-changes`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    });
+  }
+
   /**
    * vSUMS: Get details
    */
@@ -518,3 +543,4 @@ export interface UserSearchItem {
   lastName?: string;
   email: string;
 }
+

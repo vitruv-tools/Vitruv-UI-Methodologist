@@ -47,7 +47,7 @@ export const SidebarTabs: React.FC<SidebarTabsProps> = ({ width = 350, showBorde
           onMouseLeave={(e) => { if (active !== 'mml') Object.assign(e.currentTarget.style, tabBase); }}
           onClick={() => navigate('/mml')}
         >
-          MML
+          Meta Model
         </button>
         <button
           style={{ ...tabBase, ...(active === 'project' ? activeTab : {}) }}
@@ -55,7 +55,7 @@ export const SidebarTabs: React.FC<SidebarTabsProps> = ({ width = 350, showBorde
           onMouseLeave={(e) => { if (active !== 'project') Object.assign(e.currentTarget.style, tabBase); }}
           onClick={() => navigate('/project')}
         >
-          Project
+          Projects
         </button>
       </div>
       <div style={{ borderTop: '1px solid #e5e7eb', height: '100%', overflow: 'hidden' }}>

@@ -76,8 +76,7 @@ export const VsumDetailsModal: React.FC<Props> = ({ isOpen, vsumId, onClose, onS
     setSaving(true);
     setError('');
     try {
-      const currentMetaModelIds = (details.metaModels || []).map(m => m.id);
-      await apiService.updateVsum(vsumId, { name: name.trim(), metaModelIds: currentMetaModelIds });
+      await apiService.renameVsum(vsumId, { name: name.trim() });
       onSaved?.();
       onClose();
     } catch (e: any) {
