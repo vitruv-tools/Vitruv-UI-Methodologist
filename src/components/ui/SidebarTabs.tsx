@@ -73,8 +73,8 @@ export const SidebarTabs: React.FC<SidebarTabsProps> = ({ width = 350, showBorde
           <div style={{ height: '100%', display: 'flex', flexDirection: 'column', padding: 16, color: '#6b7280' }}>
             <div style={{ fontWeight: 700, color: '#111827', marginBottom: 8 }}>Choose a workspace</div>
             <div style={{ fontSize: 13, lineHeight: 1.6 }}>
-              Select <span style={{ fontWeight: 700 }}>MML</span> to browse and upload Meta Models, or
-              select <span style={{ fontWeight: 700 }}>Project</span> to open vSUMS project tools.
+              Select <span style={{ fontWeight: 700 }}>Meta Model</span> to browse and upload Meta Models, or
+              select <span style={{ fontWeight: 700 }}>Projects</span> to open vSUMS project tools.
             </div>
           </div>
         )}

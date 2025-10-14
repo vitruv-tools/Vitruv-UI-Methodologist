@@ -406,8 +406,11 @@ class ApiService {
   /**
    * vSUMS: Update name and meta model links
    */
-  async updateVsum(id: number | string, data: { name: string; metaModelIds: number[] }): Promise<ApiResponse<any>> {
-    return this.authenticatedRequest(`/api/v1/vsums/${id}`, {
+  async updateVsumSyncChanges(
+      id: number | string,
+      data: VsumSyncChangesPutRequest
+  ): Promise<ApiResponse<any>> {
+    return this.authenticatedRequest(`/api/v1/vsums/${id}/sync-changes`, {
       method: 'PUT',
       body: JSON.stringify(data),
     });
@@ -542,5 +545,16 @@ export interface UserSearchItem {
   firstName?: string;
   lastName?: string;
   email: string;
+}
+
+export interface MetaModelRelationRequest {
+  sourceId: number;
+  targetId: number;
+  reactionFileId: number;
+}
+
+export interface VsumSyncChangesPutRequest {
+  metaModelIds: number[];
+  metaModelRelationRequests: MetaModelRelationRequest[] | null; // you said null for now
 }
 
