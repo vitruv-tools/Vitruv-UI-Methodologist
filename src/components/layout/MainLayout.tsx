@@ -74,8 +74,8 @@ export function MainLayout({
     // Active document state
     const [documents, setDocuments] = useState<StoredDocumentMeta[]>([]);
     const [activeDocId, setActiveDocId] = useState<string | undefined>(undefined);
-    const [activeFileName, setActiveFileName] = useState<string | undefined>(undefined);
-    const [isDirty, setIsDirty] = useState(false);
+    const [, setActiveFileName] = useState<string | undefined>(undefined);
+    const [, setIsDirty] = useState(false);
 
     // ECORE file boxes in workspace
     const [ecoreFileBoxes, setEcoreFileBoxes] = useState<EcoreFileBox[]>([]);
@@ -249,15 +249,6 @@ export function MainLayout({
         setSelectedDiagramType('ecore');
     };
 
-    const handleCloseDocument = () => {
-        if (!activeDocId) return;
-        setActiveDocId(undefined);
-        setActiveFileName(undefined);
-        setIsDirty(false);
-        flowCanvasRef.current?.loadDiagramData?.([], []);
-        flowCanvasRef.current?.resetExpandedFile?.();
-    };
-
     const handleEcoreFilePositionChange = (id: string, pos: { x: number; y: number }) => {
         setEcoreFileBoxes((prev) => prev.map((b) => (b.id === id ? { ...b, position: pos } : b)));
     };
@@ -282,39 +273,6 @@ export function MainLayout({
     // ---- diagram save ----
     const handleDiagramChange = (_nodes: Node[], _edges: Edge[]) => {
         setIsDirty(true);
-    };
-
-    const handleSaveClick = () => {
-        if (!activeDocId || !flowCanvasRef.current) return;
-        const nodes: Node[] = flowCanvasRef.current?.getNodes?.() || [];
-        const edges: Edge[] = flowCanvasRef.current?.getEdges?.() || [];
-        const data = exportFlowData(nodes, edges);
-        saveDocumentData(activeDocId, data);
-        const meta = documents.find((d) => d.id === activeDocId);
-        if (meta) {
-            const updated = { ...meta, updatedAt: new Date().toISOString() };
-            saveDocumentMeta(updated);
-            setDocuments((prev) => prev.map((m) => (m.id === updated.id ? updated : m)));
-            setActiveFileName(updated.name);
-        }
-        setIsDirty(false);
-    };
-
-    const handleSaveAsClick = () => {
-        if (!flowCanvasRef.current) return;
-        const nodes: Node[] = flowCanvasRef.current?.getNodes?.() || [];
-        const edges: Edge[] = flowCanvasRef.current?.getEdges?.() || [];
-        const data = exportFlowData(nodes, edges);
-        const newId = generateFlowId();
-        const now = new Date().toISOString();
-        const defaultName = 'untitled.ecore';
-        const meta: StoredDocumentMeta = { id: newId, name: defaultName, createdAt: now, updatedAt: now };
-        saveDocumentMeta(meta);
-        saveDocumentData(newId, data);
-        setDocuments((prev) => [meta, ...prev]);
-        setActiveDocId(newId);
-        setActiveFileName(defaultName);
-        setIsDirty(false);
     };
 
     return (
