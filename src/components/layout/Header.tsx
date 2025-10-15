@@ -11,7 +11,7 @@ interface HeaderProps {
   onLogout?: () => void;
 }
 
-export function Header({ title = 'Vitruvius Modeler', user, onLogout }: HeaderProps) {
+export function Header({ title = 'Metadologist Dashboard', user, onLogout }: HeaderProps) {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement | null>(null);
 
