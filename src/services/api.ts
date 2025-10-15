@@ -389,8 +389,17 @@ class ApiService {
   /**
    * vSUMS: Get all
    */
-  async getVsums(): Promise<ApiResponse<Vsum[]>> {
-    return this.authenticatedRequest('/api/v1/vsums/find-all');
+  async getVsumsPaginated(
+      name: string = '',
+      pageNumber: number = 0,
+      pageSize: number = 10
+  ): Promise<ApiResponse<Vsum[]>> {
+    const query = new URLSearchParams({
+      name,
+      pageNumber: pageNumber.toString(),
+      pageSize: pageSize.toString(),
+    });
+    return this.authenticatedRequest(`/api/v1/vsums/find-all?${query.toString()}`);
   }
 
   /**

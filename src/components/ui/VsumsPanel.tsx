@@ -1,11 +1,10 @@
 // src/components/ui/VsumsPanel.tsx
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState, useCallback } from 'react';
 import { apiService } from '../../services/api';
 import { Vsum } from '../../types';
 import { CreateVsumModal } from './CreateVsumModal';
 import { VsumDetailsModal } from './VsumDetailsModal';
 
-// ---- styles (same look & feel as your ToolsPanel) ----
 const containerStyle: React.CSSProperties = {
   userSelect: 'none',
   width: '100%',
@@ -31,7 +30,7 @@ const titleStyle: React.CSSProperties = {
 const createButtonStyle: React.CSSProperties = {
   width: '100%',
   padding: '14px 18px',
-  margin: '12px 0 0 0',
+  marginBottom: '12px',
   border: 'none',
   borderRadius: '6px',
   background: 'linear-gradient(135deg, #3498db 0%, #2980b9 100%)',
@@ -86,65 +85,81 @@ const errorStyle: React.CSSProperties = {
   border: '1px solid #f5c6cb',
 };
 
-// ------------------------------------------------------
-
 export const VsumsPanel: React.FC = () => {
   const [items, setItems] = useState<Vsum[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string>('');
+  const [search, setSearch] = useState('');
+  const [page, setPage] = useState(0);
+  const [hasMore, setHasMore] = useState(true);
 
   const [showCreate, setShowCreate] = useState(false);
-  const [refreshIndex, setRefreshIndex] = useState(0);
-
-  // modal control
   const [detailsId, setDetailsId] = useState<number | null>(null);
 
-  // load list
-  useEffect(() => {
-    const load = async () => {
-      setLoading(true);
-      setError('');
-      try {
-        const res = await apiService.getVsums();
-        setItems(res.data || []);
-      } catch (e) {
-        setError(e instanceof Error ? e.message : 'Failed to load vSUMs');
-      } finally {
-        setLoading(false);
-      }
-    };
-    load();
-  }, [refreshIndex]);
+  const containerRef = useRef<HTMLDivElement | null>(null);
+  const PAGE_SIZE = 10;
 
-  // external refresh event
+  const loadPage = useCallback(
+      async (reset = false) => {
+        if (loading) return;
+        setLoading(true);
+        setError('');
+
+        try {
+          const res = await apiService.getVsumsPaginated(search, reset ? 0 : page, PAGE_SIZE);
+          const newData: Vsum[] = res.data || [];
+          if (reset) {
+            setItems(newData);
+            setPage(1);
+          } else {
+            setItems((prev) => [...prev, ...newData]);
+            setPage((prev) => prev + 1);
+          }
+          setHasMore(newData.length === PAGE_SIZE);
+        } catch (e) {
+          setError(e instanceof Error ? e.message : 'Failed to load VSUMs');
+        } finally {
+          setLoading(false);
+        }
+      },
+      [loading, page, search]
+  );
+
   useEffect(() => {
-    const onRefresh = () => setRefreshIndex(v => v + 1);
-    window.addEventListener('vitruv.refreshVsums', onRefresh as EventListener);
-    return () => window.removeEventListener('vitruv.refreshVsums', onRefresh as EventListener);
-  }, []);
+    loadPage(true);
+  }, [search]);
+
+  useEffect(() => {
+    const handleScroll = () => {
+      const el = containerRef.current;
+      if (!el || loading || !hasMore) return;
+      const bottom = el.scrollHeight - el.scrollTop - el.clientHeight < 150;
+      if (bottom) loadPage();
+    };
+
+    const el = containerRef.current;
+    if (el) el.addEventListener('scroll', handleScroll);
+    return () => el?.removeEventListener('scroll', handleScroll);
+  }, [loading, hasMore, loadPage]);
 
   const formatDateTime = (iso: string) => {
     const d = new Date(iso);
     return `${d.toLocaleDateString()} ${d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
   };
 
-  const sorted = useMemo(
-      () => [...items].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()),
-      [items]
-  );
-
   return (
-      <div style={containerStyle}>
+      <div ref={containerRef} style={containerStyle}>
         <div style={titleStyle}>Projects</div>
 
         <CreateVsumModal
             isOpen={showCreate}
             onClose={() => setShowCreate(false)}
-            onSuccess={() => setRefreshIndex(v => v + 1)}
+            onSuccess={() => loadPage(true)}
         />
 
         {error && <div style={errorStyle}>{error}</div>}
 
+        {/* 🟦 Create button FIRST */}
         <button
             onClick={() => setShowCreate(true)}
             style={createButtonStyle}
@@ -154,14 +169,41 @@ export const VsumsPanel: React.FC = () => {
           Create
         </button>
 
+        {/* 🔍 Search box */}
+        <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
+          <input
+              type="text"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Search by name..."
+              style={{
+                flex: 1,
+                padding: '8px 12px',
+                borderRadius: 6,
+                border: '1px solid #cbd5e1',
+                fontSize: 14,
+                outline: 'none',
+              }}
+          />
+          <button
+              onClick={() => loadPage(true)}
+              style={{
+                padding: '8px 14px',
+                borderRadius: 6,
+                background: '#3b82f6',
+                color: '#fff',
+                border: 'none',
+                cursor: 'pointer',
+                fontWeight: 600,
+              }}
+          >
+            Search
+          </button>
+        </div>
+
         <div style={sectionStyle}>All</div>
 
-        {loading && <div style={{ padding: 12, fontStyle: 'italic', color: '#5a6c7d' }}>Loading...</div>}
-        {!loading && sorted.length === 0 && (
-            <div style={{ ...cardStyle, color: '#6c757d', fontStyle: 'italic' }}>No VSUMs available.</div>
-        )}
-
-        {sorted.map(item => (
+        {items.map((item) => (
             <div
                 key={item.id}
                 style={cardStyle}
@@ -172,24 +214,39 @@ export const VsumsPanel: React.FC = () => {
                   <div style={{ fontWeight: 700, color: '#2c3e50' }}>{item.name}</div>
                   <div style={{ fontSize: 12, color: '#5a6c7d' }}>Created: {formatDateTime(item.createdAt)}</div>
                 </div>
-                <div style={{ display: 'flex', gap: 8 }}>
-                  <button
-                      onClick={() => setDetailsId(item.id)}  // open modal
-                      style={{ padding: '6px 10px', border: '1px solid #dee2e6', borderRadius: 6, background: '#ffffff', cursor: 'pointer', fontWeight: 600 }}
-                  >
-                    Details
-                  </button>
-                </div>
+                <button
+                    onClick={() => setDetailsId(item.id)}
+                    style={{
+                      padding: '6px 10px',
+                      border: '1px solid #dee2e6',
+                      borderRadius: 6,
+                      background: '#ffffff',
+                      cursor: 'pointer',
+                      fontWeight: 600,
+                    }}
+                >
+                  Details
+                </button>
               </div>
             </div>
         ))}
 
-        {/* The popup modal */}
+        {/* 🟡 Empty state (no box, plain text) */}
+        {!loading && items.length === 0 && (
+            <div style={{ textAlign: 'center', color: '#6b7280', marginTop: 40, fontStyle: 'italic' }}>
+              No VSUMs found. Create one to get started.
+            </div>
+        )}
+
+        {loading && (
+            <div style={{ padding: 12, fontStyle: 'italic', color: '#5a6c7d' }}>Loading...</div>
+        )}
+
         <VsumDetailsModal
             isOpen={detailsId !== null}
             vsumId={detailsId}
             onClose={() => setDetailsId(null)}
-            onSaved={() => setRefreshIndex(v => v + 1)}   // refresh list after save
+            onSaved={() => loadPage(true)}
         />
       </div>
   );
