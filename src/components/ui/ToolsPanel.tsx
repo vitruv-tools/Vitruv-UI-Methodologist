@@ -1018,7 +1018,7 @@ export const ToolsPanel: React.FC<ToolsPanelProps> = ({ onEcoreFileUpload, onEco
         ))}
         {!suppressApi && !isLoadingModels && sortedModels.length === 0 && !apiError && (
           <div style={emptyStateStyle}>
-            No meta models available from server.
+            No meta models available.
           </div>
         )}
       </div>
