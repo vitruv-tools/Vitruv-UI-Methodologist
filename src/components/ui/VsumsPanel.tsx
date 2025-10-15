@@ -158,7 +158,7 @@ export const VsumsPanel: React.FC = () => {
 
         {loading && <div style={{ padding: 12, fontStyle: 'italic', color: '#5a6c7d' }}>Loading...</div>}
         {!loading && sorted.length === 0 && (
-            <div style={{ ...cardStyle, color: '#6c757d', fontStyle: 'italic' }}>No vSUMs available.</div>
+            <div style={{ ...cardStyle, color: '#6c757d', fontStyle: 'italic' }}>No VSUMs available.</div>
         )}
 
         {sorted.map(item => (
