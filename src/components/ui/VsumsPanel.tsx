@@ -1,4 +1,3 @@
-// src/components/ui/VsumsPanel.tsx
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { apiService } from '../../services/api';
 import { Vsum } from '../../types';
@@ -92,12 +91,12 @@ export const VsumsPanel: React.FC = () => {
     const [search, setSearch] = useState('');
     const [page, setPage] = useState(0);
     const [hasMore, setHasMore] = useState(true);
-
     const [showCreate, setShowCreate] = useState(false);
     const [detailsId, setDetailsId] = useState<number | null>(null);
 
     const containerRef = useRef<HTMLDivElement | null>(null);
     const rafRef = useRef<number | null>(null);
+    const requestSeq = useRef(0);
     const PAGE_SIZE = 10;
 
     const formatDateTime = (iso: string) => {
@@ -105,62 +104,64 @@ export const VsumsPanel: React.FC = () => {
         return `${d.toLocaleDateString()} ${d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
     };
 
-    // Load first page (stable: only depends on search)
     const loadFirstPage = useCallback(async () => {
+        const mySeq = ++requestSeq.current;
         setLoading(true);
         setError('');
+        setItems([]);
+        setPage(0);
+        setHasMore(true);
+        if (containerRef.current) containerRef.current.scrollTop = 0;
         try {
             const res = await apiService.getVsumsPaginated(search, 0, PAGE_SIZE);
+            if (mySeq !== requestSeq.current) return;
             const newData: Vsum[] = res.data || [];
             setItems(newData);
             setPage(1);
             setHasMore(newData.length === PAGE_SIZE);
         } catch (e) {
+            if (mySeq !== requestSeq.current) return;
             setError(e instanceof Error ? e.message : 'Failed to load VSUMs');
         } finally {
-            setLoading(false);
+            if (mySeq === requestSeq.current) setLoading(false);
         }
     }, [search]);
 
-    // Load next page for infinite scroll
     const loadNextPage = useCallback(async () => {
         if (loading || !hasMore) return;
+        const mySeq = requestSeq.current;
         setLoading(true);
         setError('');
         try {
             const res = await apiService.getVsumsPaginated(search, page, PAGE_SIZE);
+            if (mySeq !== requestSeq.current) return;
             const newData: Vsum[] = res.data || [];
             setItems(prev => [...prev, ...newData]);
             setPage(prev => prev + 1);
             setHasMore(newData.length === PAGE_SIZE);
         } catch (e) {
+            if (mySeq !== requestSeq.current) return;
             setError(e instanceof Error ? e.message : 'Failed to load VSUMs');
         } finally {
-            setLoading(false);
+            if (mySeq === requestSeq.current) setLoading(false);
         }
     }, [search, page, hasMore, loading]);
 
-    // Reload list whenever search changes
     useEffect(() => {
         loadFirstPage();
     }, [loadFirstPage]);
 
-    // Infinite scroll listener (throttled with rAF)
     useEffect(() => {
         const el = containerRef.current;
         if (!el) return;
-
         const onScroll = () => {
             if (rafRef.current) cancelAnimationFrame(rafRef.current);
             rafRef.current = requestAnimationFrame(() => {
                 if (loading || !hasMore) return;
                 const nearBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 150;
-                if (nearBottom) {
-                    loadNextPage();
-                }
+                if (nearBottom) loadNextPage();
             });
         };
-
         el.addEventListener('scroll', onScroll);
         return () => {
             el.removeEventListener('scroll', onScroll);
@@ -180,7 +181,6 @@ export const VsumsPanel: React.FC = () => {
 
             {error && <div style={errorStyle}>{error}</div>}
 
-            {/* Create first */}
             <button
                 onClick={() => setShowCreate(true)}
                 style={createButtonStyle}
@@ -190,7 +190,6 @@ export const VsumsPanel: React.FC = () => {
                 Create
             </button>
 
-            {/* Search */}
             <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
                 <input
                     type="text"
@@ -256,14 +255,12 @@ export const VsumsPanel: React.FC = () => {
                 </div>
             ))}
 
-            {/* Empty state (plain text) */}
             {!loading && items.length === 0 && (
                 <div style={{ textAlign: 'center', color: '#6b7280', marginTop: 40, fontStyle: 'italic' }}>
                     No VSUMs found. Create one to get started.
                 </div>
             )}
 
-            {/* Loading pinned at bottom */}
             {loading && (
                 <div style={{ padding: 12, fontStyle: 'italic', color: '#5a6c7d', marginTop: 12 }}>
                     Loading...
