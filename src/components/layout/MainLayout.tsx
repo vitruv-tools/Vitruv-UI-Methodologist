@@ -5,7 +5,6 @@ import { FlowCanvas } from '../flow/FlowCanvas';
 import { ToolsPanel } from '../ui/ToolsPanel';
 import { parseEcoreFile, createSimpleEcoreDiagram } from '../../utils/ecoreParser';
 import {
-    exportFlowData,
     generateFlowId,
     saveDocumentMeta,
     saveDocumentData,
@@ -73,7 +72,7 @@ export function MainLayout({
 
     // Active document state
     const [documents, setDocuments] = useState<StoredDocumentMeta[]>([]);
-    const [activeDocId, setActiveDocId] = useState<string | undefined>(undefined);
+    const [, setActiveDocId] = useState<string | undefined>(undefined);
     const [, setActiveFileName] = useState<string | undefined>(undefined);
     const [, setIsDirty] = useState(false);
 
