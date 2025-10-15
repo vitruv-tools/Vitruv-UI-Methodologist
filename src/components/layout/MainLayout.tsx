@@ -283,7 +283,7 @@ export function MainLayout({
                 display: 'flex',
                 overflow: 'hidden',
             }}
-        >
+        > 
             {/* Left sidebar (fixed width; no handle) */}
             <aside
                 ref={leftAsideRef}
