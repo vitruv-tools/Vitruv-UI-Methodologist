@@ -444,7 +444,7 @@ export const MetaModelsPanel: React.FC<MetaModelsPanelProps> = ({
 
           {!isLoadingModels && !apiError && sortedModels.length === 0 && (
               <div style={{ padding: 16, fontSize: 13, color: '#6c757d', fontStyle: 'italic' }}>
-                No meta models available from server.
+                No meta models available.
               </div>
           )}
         </div>

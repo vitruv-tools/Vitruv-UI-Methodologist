@@ -12,9 +12,10 @@ interface VsumTabsProps {
 export const VsumTabs: React.FC<VsumTabsProps> = ({ openVsums, activeVsumId, onActivate, onClose }) => {
   const [detailsById, setDetailsById] = useState<Record<number, VsumDetails | undefined>>({});
   const [error, setError] = useState<string>('');
-  const [edits, setEdits] = useState<Record<number, { metaModelIds: number[] }>>({});
+  const [edits, setEdits] = useState<Record<number, { metaModelSourceIds: number[] }>>({});
   const [saving, setSaving] = useState(false);
 
+  // util
   const areIdArraysEqual = (a: number[] = [], b: number[] = []) => {
     if (a.length !== b.length) return false;
     const sa = [...a].sort((x, y) => x - y);
@@ -25,27 +26,34 @@ export const VsumTabs: React.FC<VsumTabsProps> = ({ openVsums, activeVsumId, onA
     return true;
   };
 
+  // dirty = compare by sourceId arrays
   const dirtyById = useMemo(() => {
     const map: Record<number, boolean> = {};
     openVsums.forEach((id) => {
       const edit = edits[id];
       const details = detailsById[id];
       if (!edit || !details) { map[id] = false; return; }
-      const detailsIds = (details.metaModels || []).map(m => m.id);
-      map[id] = !areIdArraysEqual(edit.metaModelIds, detailsIds);
+      const detailsSourceIds = (details.metaModels || [])
+          .map(m => (typeof m.sourceId === 'number' ? m.sourceId : undefined))
+          .filter((v): v is number => typeof v === 'number');
+      map[id] = !areIdArraysEqual(edit.metaModelSourceIds, detailsSourceIds);
     });
     return map;
   }, [openVsums, edits, detailsById]);
 
+  // load details for active vsum and seed edits using sourceId
   useEffect(() => {
     const fetchDetails = async (id: number) => {
       setError('');
       try {
         const res = await apiService.getVsumDetails(id);
         setDetailsById(prev => ({ ...prev, [id]: res.data }));
+        const seededSourceIds = (res.data.metaModels || [])
+            .map(m => (typeof m.sourceId === 'number' ? m.sourceId : undefined))
+            .filter((v): v is number => typeof v === 'number');
         setEdits(prev => ({
           ...prev,
-          [id]: { metaModelIds: (res.data.metaModels || []).map(m => m.id) }
+          [id]: { metaModelSourceIds: seededSourceIds }
         }));
       } catch (e) {
         setError(e instanceof Error ? e.message : 'Failed to load VSUM details');
@@ -56,15 +64,22 @@ export const VsumTabs: React.FC<VsumTabsProps> = ({ openVsums, activeVsumId, onA
     }
   }, [activeVsumId, detailsById]);
 
+  // save changes: send sourceIds in metaModelIds field + metaModelRelationRequests: null
   const saveById = async (
       id: number,
-      override?: { metaModelIds?: number[] }
+      override?: { metaModelSourceIds?: number[] }
   ) => {
     const edit = edits[id];
-    const fallbackMetaIds = (detailsById[id]?.metaModels || []).map(m => m.id);
-    const metaModelIds = override?.metaModelIds ?? edit?.metaModelIds ?? fallbackMetaIds;
 
-    if (!metaModelIds || metaModelIds.length === 0) {
+    // fallback from details using sourceId
+    const fallbackSourceIds = (detailsById[id]?.metaModels || [])
+        .map(m => (typeof m.sourceId === 'number' ? m.sourceId : undefined))
+        .filter((v): v is number => typeof v === 'number');
+
+    const metaModelSourceIds =
+        override?.metaModelSourceIds ?? edit?.metaModelSourceIds ?? fallbackSourceIds;
+
+    if (!metaModelSourceIds || metaModelSourceIds.length === 0) {
       setError('At least one MetaModel is required');
       return;
     }
@@ -72,20 +87,23 @@ export const VsumTabs: React.FC<VsumTabsProps> = ({ openVsums, activeVsumId, onA
     setSaving(true);
     setError('');
     try {
+      // IMPORTANT: backend param is "metaModelIds" but we pass SOURCE IDs here
       await apiService.updateVsumSyncChanges(id, {
-        metaModelIds,
+        metaModelIds: metaModelSourceIds,
         metaModelRelationRequests: null, // not implemented yet
       });
 
       const res = await apiService.getVsumDetails(id);
       setDetailsById(prev => ({ ...prev, [id]: res.data }));
 
-      // keep edit state in sync with server
+      // sync local edits with server (by sourceId again)
+      const serverSourceIds = (res.data.metaModels || [])
+          .map(m => (typeof m.sourceId === 'number' ? m.sourceId : undefined))
+          .filter((v): v is number => typeof v === 'number');
+
       setEdits(prev => ({
         ...prev,
-        [id]: {
-          metaModelIds: (res.data.metaModels || []).map(m => m.id),
-        },
+        [id]: { metaModelSourceIds: serverSourceIds },
       }));
 
       window.dispatchEvent(new CustomEvent('vitruv.refreshVsums'));
@@ -104,17 +122,28 @@ export const VsumTabs: React.FC<VsumTabsProps> = ({ openVsums, activeVsumId, onA
   // handle external "add meta model" event
   useEffect(() => {
     const onAdd = (e: Event) => {
-      const ce = e as CustomEvent<{ id: number }>; // meta model id
+      const ce = e as CustomEvent<{ id?: number; sourceId?: number }>;
       if (!activeVsumId) return;
-      const mmId = ce.detail?.id;
-      if (typeof mmId !== 'number') return;
 
-      const current = edits[activeVsumId] || { metaModelIds: (detailsById[activeVsumId!]?.metaModels || []).map(m => m.id) };
-      if (current.metaModelIds.includes(mmId)) return;
+      // Prefer sourceId; if only id is provided and in your app that id is the global source id, this still works.
+      // If your event sends cloned ids instead, adjust the emitter to pass sourceId.
+      const sourceId = typeof ce.detail?.sourceId === 'number'
+          ? ce.detail.sourceId
+          : (typeof ce.detail?.id === 'number' ? ce.detail.id : undefined);
+
+      if (typeof sourceId !== 'number') return;
+
+      const current = edits[activeVsumId] || {
+        metaModelSourceIds: (detailsById[activeVsumId!]?.metaModels || [])
+            .map(m => (typeof m.sourceId === 'number' ? m.sourceId : undefined))
+            .filter((v): v is number => typeof v === 'number')
+      };
+
+      if (current.metaModelSourceIds.includes(sourceId)) return;
 
       setEdits(prev => ({
         ...prev,
-        [activeVsumId!]: { metaModelIds: [...current.metaModelIds, mmId] }
+        [activeVsumId!]: { metaModelSourceIds: [...current.metaModelSourceIds, sourceId] }
       }));
     };
 
