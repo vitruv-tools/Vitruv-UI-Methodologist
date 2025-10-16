@@ -262,6 +262,7 @@ export const VsumDetailsModal: React.FC<Props> = ({ isOpen, vsumId, onClose, onS
               </button>
 
               <div style={{ display: 'flex', gap: 8 }}>
+              {activeTab === 'details' && (
                 <button
                     style={{
                       padding: '8px 14px',
@@ -277,6 +278,7 @@ export const VsumDetailsModal: React.FC<Props> = ({ isOpen, vsumId, onClose, onS
                 >
                   Delete
                 </button>
+                )}
 
                 {activeTab === 'details' && (
                     <button
