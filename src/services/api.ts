@@ -1,5 +1,6 @@
 import { AuthService } from './auth';
 import { FlowData } from '../types/flow';
+import { ApiResponse, Vsum, VsumDetails } from '../types/vsum';
 
 class ApiService {
   private baseURL: string;
@@ -65,7 +66,7 @@ class ApiService {
                 message: retryErrorMessage,
                 body: retryErrorText,
               });
-              throw new Error(`${retryResponse.status} ${retryResponse.statusText}: ${retryErrorMessage}`);
+              throw new Error(retryErrorMessage);
             }
 
             return await retryResponse.json();
@@ -91,7 +92,7 @@ class ApiService {
         message: errorMessage,
         body: errorText,
       });
-      throw new Error(`${response.status} ${response.statusText}: ${errorMessage}`);
+      throw new Error(errorMessage);
     }
 
     return await response.json();
@@ -133,10 +134,17 @@ class ApiService {
         message: errorMessage,
         body: errorText,
       });
-      throw new Error(`${response.status} ${response.statusText}: ${errorMessage}`);
+      throw new Error(errorMessage);
     }
 
     return await response.json();
+  }
+
+  /**
+   * Get currently authenticated user info
+   */
+  async getUserInfo(): Promise<{ data: { id: number; email: string; firstName: string; lastName: string }; message: string }> {
+    return this.authenticatedRequest('/api/v1/users');
   }
 
   /**
@@ -243,7 +251,7 @@ class ApiService {
                 message: retryErrorMessage,
                 body: retryErrorText,
               });
-              throw new Error(`${retryResponse.status} ${retryResponse.statusText}: ${retryErrorMessage}`);
+              throw new Error(retryErrorMessage);
             }
 
             const result = await retryResponse.json();
@@ -271,7 +279,7 @@ class ApiService {
         message: errorMessage,
         body: errorText,
       });
-      throw new Error(`${response.status} ${response.statusText}: ${errorMessage}`);
+      throw new Error(errorMessage);
     }
 
     const result = await response.json();
@@ -336,7 +344,7 @@ class ApiService {
       pageNumber,
       pageSize,
     });
-    
+
     const result = await this.authenticatedRequest<{ data: any[]; message: string }>(endpoint, {
       method: 'POST',
       body: JSON.stringify(filters),
@@ -378,6 +386,140 @@ class ApiService {
     });
   }
 
+  /**
+   * vSUMS: Get all
+   */
+  async getVsumsPaginated(
+      name: string = '',
+      pageNumber: number = 0,
+      pageSize: number = 10
+  ): Promise<ApiResponse<Vsum[]>> {
+    const query = new URLSearchParams({
+      name,
+      pageNumber: pageNumber.toString(),
+      pageSize: pageSize.toString(),
+    });
+    return this.authenticatedRequest(`/api/v1/vsums/find-all?${query.toString()}`);
+  }
+
+  /**
+   * vSUMS: Create
+   */
+  async createVsum(data: { name: string; description?: string }): Promise<ApiResponse<Vsum>> {
+    return this.authenticatedRequest('/api/v1/vsums', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  }
+
+  /**
+   * vSUMS: Update name and meta model links
+   */
+  async updateVsumSyncChanges(
+      id: number | string,
+      data: VsumSyncChangesPutRequest
+  ): Promise<ApiResponse<any>> {
+    return this.authenticatedRequest(`/api/v1/vsums/${id}/sync-changes`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    });
+  }
+
+// inside ApiService class
+  async renameVsum(id: number | string, data: { name: string }): Promise<ApiResponse<any>> {
+    return this.authenticatedRequest(`/api/v1/vsums/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    });
+  }
+
+  /**
+   * vSUMS: Sync changes with relationship data
+   */
+  async syncVsumChanges(id: number | string, data: {
+    metaModelIds: number[];
+    metaModelRelationRequests: Array<{
+      sourceId: number;
+      targetId: number;
+      reactionFileId: number;
+    }>;
+  }): Promise<ApiResponse<any>> {
+    return this.authenticatedRequest(`/api/v1/vsums/${id}/sync-changes`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    });
+  }
+
+  /**
+   * vSUMS: Get details
+   */
+  async getVsumDetails(id: number | string): Promise<ApiResponse<VsumDetails>> {
+    return this.authenticatedRequest(`/api/v1/vsums/${id}/details`);
+  }
+
+  /**
+   * vSUMS: Get by id
+   */
+  async getVsum(id: number | string): Promise<ApiResponse<Vsum>> {
+    return this.authenticatedRequest(`/api/v1/vsums/${id}`);
+  }
+
+  /**
+   * vSUMS: Delete
+   */
+  async deleteVsum(id: number | string): Promise<ApiResponse<Record<string, never>>> {
+    return this.authenticatedRequest(`/api/v1/vsums/${id}`, {
+      method: 'DELETE',
+    });
+  }
+
+  /**
+   * VSUM USERS: Fetch members of a VSUM
+   * GET /v1/vsum-users/vsumId={vsumId}
+   */
+  async getVsumMembers(vsumId: number | string): Promise<ApiResponse<VsumUserResponse[]>> {
+    return this.authenticatedRequest(`/api/v1/vsum-users/vsumId=${vsumId}`);
+  }
+
+  /**
+   * VSUM USERS: Add member to a VSUM
+   * POST /v1/vsum-users/add-member
+   * body: { vsumId, userId }
+   */
+  async addVsumMember(vsumId: number | string, payload: { userId: number }): Promise<ApiResponse<null[]>> {
+    const body: VsumUserPostRequest = {
+      vsumId: Number(vsumId),
+      userId: payload.userId,
+    };
+    return this.authenticatedRequest('/api/v1/vsum-users/add-member', {
+      method: 'POST',
+      body: JSON.stringify(body),
+    });
+  }
+
+  /**
+   * VSUM USERS: Remove member (by vsum-user row id)
+   * DELETE /v1/vsum-users/{id}/remove-member
+   */
+  async removeVsumMember(id: number | string): Promise<ApiResponse<null>> {
+    return this.authenticatedRequest(`/api/v1/vsum-users/${id}/remove-member`, {
+      method: 'DELETE',
+    });
+  }
+
+  /**
+   * USERS: Search people to add (🔧 adjust this to your real endpoint)
+   * Examples:
+   *   GET  /api/v1/users/search?q=...&limit=10
+   *   POST /api/v1/users/search { q, limit }
+   */
+  async searchUsers(params: { pageNumber?: number; pageSize?: number })
+      : Promise<ApiResponse<UserSearchItem[]>> {
+    const pageNumber = params.pageNumber ?? 0;
+    const pageSize = params.pageSize ?? 50;
+    return this.authenticatedRequest(`/api/v1/users/search?pageNumber=${pageNumber}&pageSize=${pageSize}`);
+  }
+
   // Removed unused getBaseURL and setBaseURL helpers
 }
 
@@ -388,4 +530,40 @@ export const apiService = new ApiService();
 // Removed unused userApi and projectApi helpers
 
 // Export the class for testing or custom instances
-export { ApiService }; 
+export { ApiService };
+
+
+export interface VsumUserResponse {
+  id: number;
+  vsumId: number;
+  firstName: string;
+  lastName: string;
+  email: string;
+  role: 'OWNER' | 'MEMBER';
+  roleEn?: string;
+  createdAt: string;
+}
+
+export interface VsumUserPostRequest {
+  vsumId: number;
+  userId: number;
+}
+
+export interface UserSearchItem {
+  id: number;
+  firstName?: string;
+  lastName?: string;
+  email: string;
+}
+
+export interface MetaModelRelationRequest {
+  sourceId: number;
+  targetId: number;
+  reactionFileId: number;
+}
+
+export interface VsumSyncChangesPutRequest {
+  metaModelIds: number[];
+  metaModelRelationRequests: MetaModelRelationRequest[] | null; // you said null for now
+}
+

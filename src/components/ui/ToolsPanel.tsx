@@ -1,10 +1,15 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { CreateModelModal } from './CreateModelModal';
 import { apiService } from '../../services/api';
 
 interface ToolsPanelProps {
   onEcoreFileUpload?: (fileContent: string, meta?: { fileName?: string; uploadId?: string; description?: string; keywords?: string; domain?: string; createdAt?: string }) => void;
   onEcoreFileDelete?: (fileName: string) => void;
+  title?: string;
+  allowCreate?: boolean;
+  enableItemClick?: boolean;
+  showBorder?: boolean;
+  suppressApi?: boolean;
 }
 
 const toolsPanelStyle: React.CSSProperties = {
@@ -61,8 +66,6 @@ const createButtonActiveStyle: React.CSSProperties = {
   boxShadow: '0 2px 8px rgba(52, 152, 219, 0.3)',
 };
 
-// ... existing code ...
-
 const filterContainerStyle: React.CSSProperties = {
   position: 'fixed',
   top: '230px',
@@ -75,6 +78,21 @@ const filterContainerStyle: React.CSSProperties = {
   borderRadius: '8px',
   border: '1px solid #e9ecef',
   boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
+};
+
+const filterCloseButtonStyle: React.CSSProperties = {
+  position: 'absolute',
+  top: '6px',
+  right: '6px',
+  width: '24px',
+  height: '24px',
+  border: 'none',
+  background: 'transparent',
+  color: '#6c757d',
+  fontSize: '16px',
+  lineHeight: '24px',
+  cursor: 'pointer',
+  borderRadius: '4px',
 };
 
 const filterRowStyle: React.CSSProperties = {
@@ -187,8 +205,6 @@ const fileMetaStyle: React.CSSProperties = {
   fontStyle: 'italic',
 };
 
-// ... existing code ...
-
 const emptyStateStyle: React.CSSProperties = {
   height: 'calc(100vh - 254px)',
   overflowY: 'auto',
@@ -254,7 +270,36 @@ const paginationButtonDisabledStyle: React.CSSProperties = {
   cursor: 'not-allowed',
 };
 
-export const ToolsPanel: React.FC<ToolsPanelProps> = ({ onEcoreFileUpload, onEcoreFileDelete }) => {
+// GitHub-style filter tag styles
+const filterTagStyle: React.CSSProperties = {
+  display: 'inline-flex',
+  alignItems: 'center',
+  padding: '2px 8px',
+  borderRadius: '16px',
+  fontSize: '11px',
+  fontWeight: '500',
+  color: '#0366d6',
+  background: '#f1f8ff',
+  border: '1px solid #c8e1ff',
+  margin: '2px',
+  userSelect: 'none',
+};
+
+const filterTagsContainerStyle: React.CSSProperties = {
+  display: 'flex',
+  flexWrap: 'wrap',
+  gap: '4px',
+  marginBottom: '8px',
+  minHeight: '24px',
+};
+
+const enhancedSearchInputStyle: React.CSSProperties = {
+  ...filterInputStyle,
+  fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif',
+  fontSize: '13px',
+};
+
+export const ToolsPanel: React.FC<ToolsPanelProps> = ({ onEcoreFileUpload, onEcoreFileDelete, title = 'Meta Models', allowCreate = true, enableItemClick = true, showBorder = true, suppressApi = false }) => {
   const [isProcessing] = useState(false);
   const [uploadMessage, setUploadMessage] = useState<string>('');
   const [uploadMessageType, setUploadMessageType] = useState<'success' | 'error'>('success');
@@ -270,45 +315,234 @@ export const ToolsPanel: React.FC<ToolsPanelProps> = ({ onEcoreFileUpload, onEco
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 10;
   const [expandedCard, setExpandedCard] = useState<number | null>(null);
+  const [parsedFilters, setParsedFilters] = useState<any[]>([]);
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [deleteError, setDeleteError] = useState<string>('');
+
+  const handleSearchKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key !== 'Tab') return;
+    const input = e.currentTarget;
+    const value = input.value;
+    const caret = input.selectionStart ?? value.length;
+    let start = caret - 1;
+    while (start >= 0 && !/\s/.test(value[start])) start--;
+    start++;
+    let end = caret;
+    while (end < value.length && !/\s/.test(value[end])) end++;
+    const token = value.slice(start, end);
+    const lower = token.toLowerCase().replace(/:$/, '');
+
+    const candidates = ['name', 'description', 'domain', 'keywords', 'created', 'updated', 'time'];
+    const match = candidates.find(k => k.startsWith(lower));
+    const replacement = match ? `${match}:` : null;
+    if (!replacement) return;
+
+    e.preventDefault();
+    const newValue = value.slice(0, start) + replacement + value.slice(end);
+    const newCaret = start + replacement.length;
+    setSearchTerm(newValue);
+    requestAnimationFrame(() => {
+      input.setSelectionRange(newCaret, newCaret);
+    });
+  };
+
+  // Parse GitHub-style search syntax (supports quoted values and multiple keys)
+  const parseSearchQuery = (query: string) => {
+    const result: any[] = [];
+
+    // Tokenize respecting quotes
+    const tokens: string[] = [];
+    let current = '';
+    let inQuotes = false;
+    for (let i = 0; i < query.length; i++) {
+      const ch = query[i];
+      if (ch === '"') {
+        inQuotes = !inQuotes;
+        continue;
+      }
+      if (!inQuotes && /\s/.test(ch)) {
+        if (current.trim().length > 0) tokens.push(current);
+        current = '';
+      } else {
+        current += ch;
+      }
+    }
+    if (current.trim().length > 0) tokens.push(current);
+
+    for (const token of tokens) {
+      const match = token.match(/^([a-zA-Z]+):(.+)$/);
+      if (match) {
+        const key = match[1].toLowerCase();
+        const rawValue = match[2];
+        const cleanValue = rawValue.trim();
+        switch (key) {
+          case 'name':
+            result.push({ key: 'name', value: cleanValue, display: `name:${cleanValue}` });
+            break;
+          case 'domain':
+            result.push({ key: 'domain', value: cleanValue, display: `domain:${cleanValue}` });
+            break;
+          case 'keyword':
+          case 'keywords': {
+            result.push({ key: 'keywords', value: cleanValue, display: `keywords:${cleanValue}` });
+            break;
+          }
+          case 'description':
+          case 'desc':
+            result.push({ key: 'description', value: cleanValue, display: `description:${cleanValue}` });
+            break;
+          case 'created':
+            result.push({ key: 'created', value: cleanValue, display: `created:${cleanValue}` });
+            break;
+          case 'updated':
+            result.push({ key: 'updated', value: cleanValue, display: `updated:${cleanValue}` });
+            break;
+          case 'time': {
+            if (cleanValue === 'beforenow' || cleanValue === 'before:now') {
+              result.push({ key: 'created', value: 'before:now', display: 'time:beforenow' });
+            } else if (cleanValue === 'afternow' || cleanValue === 'after:now') {
+              result.push({ key: 'created', value: 'after:now', display: 'time:afternow' });
+            } else {
+              result.push({ key: 'created', value: cleanValue, display: `time:${cleanValue}` });
+            }
+            break;
+          }
+          default:
+            // Unknown key: treat as name
+            // result.push({ key: 'name', value: `${key}:${cleanValue}`, display: `name:${key}:${cleanValue}` });
+        }
+      } else if (token.trim().length > 0) {
+        // Bare word -> name search
+        // result.push({ key: 'name', value: token, display: `name:${token}` });
+      }
+    }
+
+    return result;
+  };
+
+  // Build API filter object from parsed filters and dateFilter state
+  const buildApiFiltersFromParsedFilters = useCallback((filtersParsed: any[], includeLegacyDate = true) => {
+    const filters: any = {};
+    filtersParsed.forEach(filter => {
+      switch (filter.key) {
+        case 'name':
+          filters.name = filter.value;
+          break;
+        case 'domain':
+          filters.domain = filter.value;
+          break;
+        case 'keywords': {
+          // Map to API's `keyword: string[]`
+          const values = String(filter.value)
+            .split(',')
+            .map(v => v.trim())
+            .filter(v => v.length > 0);
+          if (values.length > 0) filters.keyword = values;
+          break;
+        }
+        case 'description':
+          filters.description = filter.value;
+          break;
+        case 'created': {
+          const v = String(filter.value);
+          if (v.includes('after:')) {
+            const dateStr = v.replace('after:', '');
+            filters.createdFrom = dateStr === 'now' ? new Date().toISOString() : new Date(dateStr).toISOString();
+          } else if (v.includes('before:')) {
+            const dateStr = v.replace('before:', '');
+            filters.createdTo = dateStr === 'now' ? new Date().toISOString() : new Date(dateStr).toISOString();
+          } else if (v.includes('between:')) {
+            const dates = v.replace('between:', '').split('..');
+            if (dates.length === 2) {
+              filters.createdFrom = new Date(dates[0]).toISOString();
+              filters.createdTo = new Date(dates[1]).toISOString();
+            }
+          } else if (v === 'before:now') {
+            filters.createdTo = new Date().toISOString();
+          } else if (v === 'after:now') {
+            filters.createdFrom = new Date().toISOString();
+          } else {
+            filters.createdFrom = new Date(v).toISOString();
+            filters.createdTo = new Date(`${v}T23:59:59`).toISOString();
+          }
+          break;
+        }
+        case 'updated': {
+          const v = String(filter.value);
+          if (v.includes('after:')) {
+            const dateStr = v.replace('after:', '');
+            filters.updatedFrom = dateStr === 'now' ? new Date().toISOString() : new Date(dateStr).toISOString();
+          } else if (v.includes('before:')) {
+            const dateStr = v.replace('before:', '');
+            filters.updatedTo = dateStr === 'now' ? new Date().toISOString() : new Date(dateStr).toISOString();
+          } else if (v.includes('between:')) {
+            const dates = v.replace('between:', '').split('..');
+            if (dates.length === 2) {
+              filters.updatedFrom = new Date(dates[0]).toISOString();
+              filters.updatedTo = new Date(dates[1]).toISOString();
+            }
+          } else {
+            filters.updatedFrom = new Date(v).toISOString();
+            filters.updatedTo = new Date(`${v}T23:59:59`).toISOString();
+          }
+          break;
+        }
+      }
+    });
+
+    if (includeLegacyDate && dateFilter !== 'all') {
+      const now = new Date();
+      let createdFrom: Date;
+      switch (dateFilter) {
+        case 'today':
+          createdFrom = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+          break;
+        case 'week':
+          createdFrom = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+          break;
+        case 'month':
+          createdFrom = new Date(now.getFullYear(), now.getMonth(), 1);
+          break;
+        case 'year':
+          createdFrom = new Date(now.getFullYear(), 0, 1);
+          break;
+        default:
+          createdFrom = new Date(0);
+      }
+      const hasDateFilters = filters.createdFrom || filters.createdTo || filters.updatedFrom || filters.updatedTo;
+      if (!hasDateFilters) {
+        filters.createdFrom = createdFrom.toISOString();
+        filters.createdTo = now.toISOString();
+      }
+    }
+
+    return filters;
+  }, [dateFilter]);
+
+  // Update parsed filters when search term changes
+  useEffect(() => {
+    if (searchTerm.trim()) {
+      const filters = parseSearchQuery(searchTerm);
+      setParsedFilters(filters);
+    } else {
+      setParsedFilters([]);
+    }
+  }, [searchTerm]);
 
   useEffect(() => {
+    if (suppressApi) {
+      setIsLoadingModels(false);
+      setApiError('');
+      setApiModels([]);
+      return;
+    }
     const fetchData = async () => {
       setIsLoadingModels(true);
       setApiError('');
       
       try {
-        const filters: any = {};
-        
-        // Add search filters
-        if (searchTerm.trim()) {
-          filters.name = searchTerm.trim();
-        }
-        
-        // Add date filters
-        if (dateFilter !== 'all') {
-          const now = new Date();
-          let createdFrom: Date;
-          
-          switch (dateFilter) {
-            case 'today':
-              createdFrom = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-              break;
-            case 'week':
-              createdFrom = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
-              break;
-            case 'month':
-              createdFrom = new Date(now.getFullYear(), now.getMonth(), 1);
-              break;
-            case 'year':
-              createdFrom = new Date(now.getFullYear(), 0, 1);
-              break;
-            default:
-              createdFrom = new Date(0);
-          }
-          
-          filters.createdFrom = createdFrom.toISOString();
-          filters.createdTo = now.toISOString();
-        }
+        const filters = buildApiFiltersFromParsedFilters(parsedFilters, true);
         
         const response = await apiService.findMetaModels(filters);
         setApiModels(response.data || []);
@@ -322,7 +556,7 @@ export const ToolsPanel: React.FC<ToolsPanelProps> = ({ onEcoreFileUpload, onEco
     };
     
     fetchData();
-  }, [searchTerm, dateFilter]);
+  }, [parsedFilters, dateFilter, suppressApi, buildApiFiltersFromParsedFilters]);
 
   // Sort API models
   const sortedModels = [...apiModels].sort((a, b) => {
@@ -392,10 +626,46 @@ export const ToolsPanel: React.FC<ToolsPanelProps> = ({ onEcoreFileUpload, onEco
     return createButtonStyle;
   };
 
+  const panelStyle: React.CSSProperties = { ...toolsPanelStyle, borderRight: showBorder ? toolsPanelStyle.borderRight : 'none' };
+
+  const handleDeleteClick = (id: string) => {
+    setDeletingId(id);
+    setDeleteError('');
+    setDeleteConfirmOpen(true);
+  };
+
+  const handleConfirmDelete = async () => {
+    if (!deletingId) return;
+    try {
+      await apiService.deleteMetaModel(deletingId);
+      setUploadMessage('Meta Model deleted successfully!');
+      setUploadMessageType('success');
+      // Refresh models
+      const filters = buildApiFiltersFromParsedFilters(parsedFilters, true);
+      const response = await apiService.findMetaModels(filters);
+      setApiModels(response.data || []);
+      setDeleteConfirmOpen(false);
+      setDeletingId(null);
+      setDeleteError('');
+      setTimeout(() => setUploadMessage(''), 3000);
+    } catch (error: any) {
+      // Try to extract backend error message
+      let msg = 'Failed to delete meta model';
+      if (error?.response?.data?.message) {
+        msg = error.response.data.message;
+      } else if (error?.message) {
+        msg = error.message;
+      }
+      setDeleteError(msg);
+      setUploadMessage(msg);
+      setUploadMessageType('error');
+    }
+  };
+
   return (
-    <div style={toolsPanelStyle}>
+    <div style={panelStyle}>
       <div style={titleStyle}>
-        Meta Models
+        {title}
       </div>
       
       {uploadMessage && (
@@ -422,72 +692,104 @@ export const ToolsPanel: React.FC<ToolsPanelProps> = ({ onEcoreFileUpload, onEco
       >
         {isProcessing ? (
           <>
-            Creating...
+            Building...
           </>
         ) : (
           <>
-            Upload New Meta Model
+            Build New Meta Model
           </>
         )}
       </button>
 
-      <div style={{
-        marginTop: '16px',
-        marginBottom: '8px',
-        fontWeight: '700',
-        fontSize: '13px',
-        color: '#2c3e50',
-        borderBottom: '1px solid #3498db',
-        paddingBottom: '6px',
-        fontFamily: 'Georgia, serif',
-      }}>
-        Meta Models
-      </div>
+      {!suppressApi && (
+        <div style={{
+          marginTop: '16px',
+          marginBottom: '8px',
+          fontWeight: '700',
+          fontSize: '13px',
+          color: '#2c3e50',
+          borderBottom: '1px solid #3498db',
+          paddingBottom: '6px',
+          fontFamily: 'Georgia, serif',
+        }}>
+          {title}
+        </div>
+      )}
 
-      <div style={toggleContainerStyle}>
-        <button
-          style={toggleButtonStyle}
-          onClick={() => setShowFilters(!showFilters)}
-          onMouseEnter={(e) => Object.assign(e.currentTarget.style, toggleButtonHoverStyle)}
-          onMouseLeave={(e) => Object.assign(e.currentTarget.style, toggleButtonStyle)}
-        >
-          <span>{showFilters ? 'Hide' : 'Show'} Filters</span>
-          <span>{showFilters ? '▼' : '▶'}</span>
-        </button>
-        
-        <select
-          value={`${sortBy}-${sortOrder}`}
-          onChange={(e) => {
-            const [newSortBy, newSortOrder] = e.target.value.split('-') as ['name' | 'date' | 'domain', 'asc' | 'desc'];
-            setSortBy(newSortBy);
-            setSortOrder(newSortOrder);
-          }}
-          style={sortDropdownStyle}
-        >
-          <option value="date-desc">Newest First</option>
-          <option value="date-asc">Oldest First</option>
-          <option value="name-asc">Name A-Z</option>
-          <option value="name-desc">Name Z-A</option>
-          <option value="domain-asc">Domain A-Z</option>
-          <option value="domain-desc">Domain Z-A</option>
-        </select>
-      </div>
+      {!suppressApi && (
+        <div style={toggleContainerStyle}>
+          <button
+            style={toggleButtonStyle}
+            onClick={() => setShowFilters(!showFilters)}
+            onMouseEnter={(e) => Object.assign(e.currentTarget.style, toggleButtonHoverStyle)}
+            onMouseLeave={(e) => Object.assign(e.currentTarget.style, toggleButtonStyle)}
+          >
+            <span>{showFilters ? 'Hide' : 'Show'} Advanced Search</span>
+            <span>{showFilters ? '▼' : '▶'}</span>
+          </button>
+          
+          <select
+            value={`${sortBy}-${sortOrder}`}
+            onChange={(e) => {
+              const [newSortBy, newSortOrder] = e.target.value.split('-') as ['name' | 'date' | 'domain', 'asc' | 'desc'];
+              setSortBy(newSortBy);
+              setSortOrder(newSortOrder);
+            }}
+            style={sortDropdownStyle}
+          >
+            <option value="date-desc">Newest First</option>
+            <option value="date-asc">Oldest First</option>
+            <option value="name-asc">Name A-Z</option>
+            <option value="name-desc">Name Z-A</option>
+            <option value="domain-asc">Domain A-Z</option>
+            <option value="domain-desc">Domain Z-A</option>
+          </select>
+        </div>
+      )}
 
       {showFilters && (
         <div style={filterContainerStyle}>
+          <button
+            aria-label="Close filters"
+            title="Close"
+            style={filterCloseButtonStyle}
+            onClick={() => setShowFilters(false)}
+            onMouseEnter={(e) => { e.currentTarget.style.background = '#f1f3f5'; e.currentTarget.style.color = '#495057'; }}
+            onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = '#6c757d'; }}
+          >
+            ×
+          </button>
           <div style={{ fontSize: '12px', fontWeight: '600', color: '#495057', marginBottom: '8px' }}>
-            Filters
+            Advanced Search
           </div>
+          
+          {/* Filter Tags Display */}
+          {parsedFilters.length > 0 && (
+            <div style={filterTagsContainerStyle}>
+              {parsedFilters.map((filter, index) => (
+                <div key={index} style={filterTagStyle}>
+                  {filter.display}
+                </div>
+              ))}
+            </div>
+          )}
+          
           <div style={filterRowStyle}>
             <span style={filterLabelStyle}>Search:</span>
             <input
               type="text"
-              placeholder="Filter by name..."
+              placeholder="name:test domain:engineering time:beforenow created:after:2023-01-01"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              style={filterInputStyle}
+              style={enhancedSearchInputStyle}
+              onKeyDown={handleSearchKeyDown}
             />
           </div>
+          
+          <div style={{ fontSize: '10px', color: '#6a737d', marginTop: '4px', fontStyle: 'italic' }}>
+            Use GitHub-style syntax: name:test domain:engineering time:beforenow created:after:2023-01-01
+          </div>
+          
           <div style={filterRowStyle}>
             <span style={filterLabelStyle}>Date:</span>
             <select
@@ -502,10 +804,85 @@ export const ToolsPanel: React.FC<ToolsPanelProps> = ({ onEcoreFileUpload, onEco
               <option value="year">This year</option>
             </select>
           </div>
+          
+          {/* Original Filter Style */}
+          <div style={{ marginTop: '12px', paddingTop: '12px', borderTop: '1px solid #e9ecef' }}>
+            <div style={{ fontSize: '12px', fontWeight: '600', color: '#495057', marginBottom: '8px' }}>
+              Quick Filters
+            </div>
+            
+            <div style={filterRowStyle}>
+              <span style={filterLabelStyle}>Name:</span>
+              <input
+                type="text"
+                placeholder="Filter by name..."
+                style={filterInputStyle}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    const value = e.currentTarget.value.trim();
+                    if (value) {
+                      setSearchTerm(prev => prev ? `${prev} name:${value}` : `name:${value}`);
+                      e.currentTarget.value = '';
+                    }
+                  }
+                }}
+              />
+            </div>
+            
+            <div style={filterRowStyle}>
+              <span style={filterLabelStyle}>Domain:</span>
+              <input
+                type="text"
+                placeholder="Filter by domain..."
+                style={filterInputStyle}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    const domainValue = e.currentTarget.value.trim();
+                    if (domainValue) {
+                      setSearchTerm(prev => prev ? `${prev} domain:${domainValue}` : `domain:${domainValue}`);
+                      e.currentTarget.value = '';
+                    }
+                  }
+                }}
+              />
+            </div>
+            
+            <div style={filterRowStyle}>
+              <span style={filterLabelStyle}>Keywords:</span>
+              <input
+                type="text"
+                placeholder="Filter by keywords..."
+                style={filterInputStyle}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    const keywordValue = e.currentTarget.value.trim();
+                    if (keywordValue) {
+                      setSearchTerm(prev => prev ? `${prev} keywords:${keywordValue}` : `keywords:${keywordValue}`);
+                      e.currentTarget.value = '';
+                    }
+                  }
+                }}
+              />
+            </div>
+            
+            <div style={filterRowStyle}>
+              <span style={filterLabelStyle}>Date:</span>
+              <input
+                type="date"
+                style={filterInputStyle}
+                onChange={(e) => {
+                  const dateValue = e.target.value;
+                  if (dateValue) {
+                    setSearchTerm(prev => prev ? `${prev} created:${dateValue}` : `created:${dateValue}`);
+                  }
+                }}
+              />
+            </div>
+          </div>
         </div>
       )}
 
-      {apiError && (
+      {!suppressApi && apiError && (
         <div style={{
           padding: '8px 12px',
           margin: '8px 0',
@@ -520,7 +897,7 @@ export const ToolsPanel: React.FC<ToolsPanelProps> = ({ onEcoreFileUpload, onEco
         </div>
       )}
 
-      {isLoadingModels && (
+      {!suppressApi && isLoadingModels && (
         <div style={{
           padding: '16px',
           textAlign: 'center',
@@ -533,10 +910,12 @@ export const ToolsPanel: React.FC<ToolsPanelProps> = ({ onEcoreFileUpload, onEco
         </div>
       )}
 
+      {!suppressApi && (
       <div style={{ height: 'calc(100vh - 311px)', overflowY: 'auto' }}>
-        {currentPageItems.map(model => (
+        {!suppressApi && currentPageItems.map(model => (
           <div key={model.id} style={fileCardStyle}
             onClick={() => {
+              if (!enableItemClick) return;
               if (onEcoreFileUpload) {
                 onEcoreFileUpload(`name="${model.name}"`, { 
                   fileName: `${model.name}.ecore`, 
@@ -573,8 +952,28 @@ export const ToolsPanel: React.FC<ToolsPanelProps> = ({ onEcoreFileUpload, onEco
                   </span>
                 </>
               )}
+              {/* Delete button: always visible */}
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleDeleteClick(model.id);
+                }}
+                style={{
+                  padding: '4px 8px',
+                  border: '1px solid #dee2e6',
+                  borderRadius: 6,
+                  background: '#fff',
+                  cursor: 'pointer',
+                  fontSize: 12,
+                  fontWeight: 600,
+                  color: '#e03131',
+                  marginLeft: 'auto'
+                }}
+                title="Delete this meta model"
+              >
+                Delete
+              </button>
             </div>
-            
             {/* Expanded content - only show when card is expanded */}
             {expandedCard === model.id && (
               <>
@@ -617,15 +1016,16 @@ export const ToolsPanel: React.FC<ToolsPanelProps> = ({ onEcoreFileUpload, onEco
             )}
           </div>
         ))}
-        {!isLoadingModels && sortedModels.length === 0 && !apiError && (
+        {!suppressApi && !isLoadingModels && sortedModels.length === 0 && !apiError && (
           <div style={emptyStateStyle}>
-            No meta models available from server.
+            No meta models available.
           </div>
         )}
       </div>
+      )}
 
       {/* Pagination Controls */}
-      {totalPages > 1 && (
+      {!suppressApi && totalPages > 1 && (
         <div style={paginationContainerStyle}>
           <div style={paginationInfoStyle}>
             Showing {startIndex + 1}-{Math.min(endIndex, totalItems)} of {totalItems} models
@@ -729,36 +1129,10 @@ export const ToolsPanel: React.FC<ToolsPanelProps> = ({ onEcoreFileUpload, onEco
             setIsLoadingModels(true);
             setApiError('');
             try {
-              const filters: any = {};
-              if (searchTerm.trim()) {
-                filters.name = searchTerm.trim();
-              }
-              if (dateFilter !== 'all') {
-                const now = new Date();
-                let createdFrom: Date;
-                switch (dateFilter) {
-                  case 'today':
-                    createdFrom = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-                    break;
-                  case 'week':
-                    createdFrom = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
-                    break;
-                  case 'month':
-                    createdFrom = new Date(now.getFullYear(), now.getMonth(), 1);
-                    break;
-                  case 'year':
-                    createdFrom = new Date(now.getFullYear(), 0, 1);
-                    break;
-                  default:
-                    createdFrom = new Date(0);
-                }
-                filters.createdFrom = createdFrom.toISOString();
-                filters.createdTo = now.toISOString();
-              }
+              const filters = buildApiFiltersFromParsedFilters(parsedFilters, true);
               const response = await apiService.findMetaModels(filters);
               setApiModels(response.data || []);
             } catch (error) {
-              console.error('Error fetching meta models from API:', error);
               setApiError(error instanceof Error ? error.message : 'Failed to fetch meta models');
             } finally {
               setIsLoadingModels(false);
@@ -767,6 +1141,82 @@ export const ToolsPanel: React.FC<ToolsPanelProps> = ({ onEcoreFileUpload, onEco
           fetchData();
         }}
       />
+
+      {/* Delete confirmation popup */}
+      {deleteConfirmOpen && (
+        <div style={{
+          position: 'fixed',
+          top: 0, left: 0, right: 0, bottom: 0,
+          background: 'rgba(0,0,0,0.25)',
+          zIndex: 9999,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center'
+        }}>
+          <div style={{
+            background: '#fff',
+            borderRadius: 8,
+            boxShadow: '0 4px 24px rgba(0,0,0,0.18)',
+            padding: '32px 24px',
+            minWidth: 320,
+            textAlign: 'center',
+            fontFamily: 'Georgia, serif'
+          }}>
+            <div style={{ fontSize: 16, fontWeight: 700, marginBottom: 16, color: '#e03131' }}>
+              Are you sure you want to delete this meta model?
+            </div>
+            <div style={{ fontSize: 13, color: '#495057', marginBottom: 24 }}>
+              This action cannot be undone.
+            </div>
+            {deleteError && (
+              <div style={{
+                color: '#e03131',
+                background: '#f8d7da',
+                border: '1px solid #f5c6cb',
+                borderRadius: 6,
+                padding: '8px',
+                marginBottom: '16px',
+                fontSize: 13,
+                fontWeight: 500,
+              }}>
+                {deleteError}
+              </div>
+            )}
+            <div style={{ display: 'flex', gap: 12, justifyContent: 'center' }}>
+              <button
+                style={{
+                  padding: '8px 18px',
+                  borderRadius: 6,
+                  border: 'none',
+                  background: '#e03131',
+                  color: '#fff',
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                  fontSize: 14
+                }}
+                onClick={handleConfirmDelete}
+              >
+                Confirm
+              </button>
+              <button
+                style={{
+                  padding: '8px 18px',
+                  borderRadius: 6,
+                  border: '1px solid #dee2e6',
+                  background: '#fff',
+                  color: '#495057',
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                  fontSize: 14
+                }}
+                onClick={() => { setDeleteConfirmOpen(false); setDeletingId(null); setDeleteError(''); }}
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

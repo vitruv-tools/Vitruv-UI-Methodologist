@@ -1,11 +1,14 @@
 import React from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
-import { MainLayout, AuthPage } from './components';
+import { AuthPage } from './components/auth/AuthPage';
+import { HomePage } from './pages/HomePage';
+import { ProjectPage } from './pages/ProjectPage';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { apiService } from './services/api';
 import { exportFlowData } from './utils';
 import { Node, Edge } from 'reactflow';
 import './App.css';
+import { SidebarTabs, MainLayout } from './components';
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { isAuthenticated, isLoading } = useAuth();
@@ -31,6 +34,8 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
 
   return <>{children}</>;
 }
+
+// Render MainLayout immediately without lazy loading for consistent UX across routes
 
 function AppContent() {
   const { user, signOut } = useAuth();
@@ -78,6 +83,8 @@ function AppContent() {
       onNew={handleNew}
       user={user}
       onLogout={handleLogout}
+      leftSidebar={<SidebarTabs width={350} />}
+      leftSidebarWidth={350}
     />
   );
 }
@@ -90,7 +97,17 @@ function App() {
           <Route path="/auth" element={<AuthPage />} />
           <Route path="/" element={
              <ProtectedRoute>
+              <HomePage />
+            </ProtectedRoute>
+          } />
+          <Route path="/mml" element={
+            <ProtectedRoute>
               <AppContent />
+             </ProtectedRoute>
+          } />
+          <Route path="/project" element={
+            <ProtectedRoute>
+              <ProjectPage />
             </ProtectedRoute>
           } />
         </Routes>

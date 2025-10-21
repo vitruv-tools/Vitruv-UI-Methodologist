@@ -14,6 +14,6 @@ afterEach(() => {
 
 test('renders Vitruvius Modeler title', () => {
   render(<App />);
-  const titleElement = screen.getByText(/vitruvius modeler/i);
-  expect(titleElement).toBeInTheDocument();
+  const titleHeading = screen.getByRole('heading', { name: /Metadologist Dashboard/i });
+  expect(titleHeading).toBeInTheDocument();
 });
