@@ -8,16 +8,11 @@ export interface Vsum {
 
 export interface VsumMetaModelRef {
   id: number;
-  sourceId: number;
   name: string;
-  description: string;
-  domain: string;
-  keyword: string[];
+  role: string;
   createdAt: string;
   updatedAt: string;
   removedAt?: string | null;
-  ecoreFileId: number;
-  genModelFileId: number;
 }
 
 export interface VsumDetails extends Vsum {
