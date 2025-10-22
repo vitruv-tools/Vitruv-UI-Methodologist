@@ -33,10 +33,7 @@ export const VsumTabs: React.FC<VsumTabsProps> = ({ openVsums, activeVsumId, onA
       const edit = edits[id];
       const details = detailsById[id];
       if (!edit || !details) { map[id] = false; return; }
-      const detailsSourceIds = (details.metaModels || [])
-          .map(m => (typeof m.sourceId === 'number' ? m.sourceId : undefined))
-          .filter((v): v is number => typeof v === 'number');
-      map[id] = !areIdArraysEqual(edit.metaModelSourceIds, detailsSourceIds);
+      map[id] = !areIdArraysEqual(edit.metaModelSourceIds);
     });
     return map;
   }, [openVsums, edits, detailsById]);
@@ -48,13 +45,6 @@ export const VsumTabs: React.FC<VsumTabsProps> = ({ openVsums, activeVsumId, onA
       try {
         const res = await apiService.getVsumDetails(id);
         setDetailsById(prev => ({ ...prev, [id]: res.data }));
-        const seededSourceIds = (res.data.metaModels || [])
-            .map(m => (typeof m.sourceId === 'number' ? m.sourceId : undefined))
-            .filter((v): v is number => typeof v === 'number');
-        setEdits(prev => ({
-          ...prev,
-          [id]: { metaModelSourceIds: seededSourceIds }
-        }));
       } catch (e) {
         setError(e instanceof Error ? e.message : 'Failed to load VSUM details');
       }
@@ -72,9 +62,7 @@ export const VsumTabs: React.FC<VsumTabsProps> = ({ openVsums, activeVsumId, onA
     const edit = edits[id];
 
     // fallback from details using sourceId
-    const fallbackSourceIds = (detailsById[id]?.metaModels || [])
-        .map(m => (typeof m.sourceId === 'number' ? m.sourceId : undefined))
-        .filter((v): v is number => typeof v === 'number');
+    const fallbackSourceIds = (detailsById[id]?.metaModels);
 
     const metaModelSourceIds =
         override?.metaModelSourceIds ?? edit?.metaModelSourceIds ?? fallbackSourceIds;
@@ -95,16 +83,6 @@ export const VsumTabs: React.FC<VsumTabsProps> = ({ openVsums, activeVsumId, onA
 
       const res = await apiService.getVsumDetails(id);
       setDetailsById(prev => ({ ...prev, [id]: res.data }));
-
-      // sync local edits with server (by sourceId again)
-      const serverSourceIds = (res.data.metaModels || [])
-          .map(m => (typeof m.sourceId === 'number' ? m.sourceId : undefined))
-          .filter((v): v is number => typeof v === 'number');
-
-      setEdits(prev => ({
-        ...prev,
-        [id]: { metaModelSourceIds: serverSourceIds },
-      }));
 
       window.dispatchEvent(new CustomEvent('vitruv.refreshVsums'));
     } catch (e) {
@@ -133,11 +111,7 @@ export const VsumTabs: React.FC<VsumTabsProps> = ({ openVsums, activeVsumId, onA
 
       if (typeof sourceId !== 'number') return;
 
-      const current = edits[activeVsumId] || {
-        metaModelSourceIds: (detailsById[activeVsumId!]?.metaModels || [])
-            .map(m => (typeof m.sourceId === 'number' ? m.sourceId : undefined))
-            .filter((v): v is number => typeof v === 'number')
-      };
+      const current = edits[activeVsumId];
 
       if (current.metaModelSourceIds.includes(sourceId)) return;
 
