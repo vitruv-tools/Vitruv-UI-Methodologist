@@ -45,7 +45,6 @@ export const VsumTabs: React.FC<VsumTabsProps> = ({ openVsums, activeVsumId, onA
       try {
         const res = await apiService.getVsumDetails(id);
         setDetailsById(prev => ({ ...prev, [id]: res.data }));
-        const seededSourceIds = (res.data.metaModels);
       } catch (e) {
         setError(e instanceof Error ? e.message : 'Failed to load VSUM details');
       }
@@ -84,9 +83,6 @@ export const VsumTabs: React.FC<VsumTabsProps> = ({ openVsums, activeVsumId, onA
 
       const res = await apiService.getVsumDetails(id);
       setDetailsById(prev => ({ ...prev, [id]: res.data }));
-
-      // sync local edits with server (by sourceId again)
-      const serverSourceIds = (res.data.metaModels);
 
       window.dispatchEvent(new CustomEvent('vitruv.refreshVsums'));
     } catch (e) {
