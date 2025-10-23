@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import ReactDOM from 'react-dom';
 import { apiService } from '../../services/api';
 import { VsumDetails } from '../../types';
 import { VsumUsersTab } from './VsumUsersTab';
@@ -156,7 +157,7 @@ export const VsumDetailsModal: React.FC<Props> = ({ isOpen, vsumId, onClose, onS
 
   const updatedDateOnly = details?.updatedAt ? new Date(details.updatedAt).toLocaleDateString() : '';
 
-  return (
+  return ReactDOM.createPortal(
       <>
         <div style={overlay} onClick={onClose} role="dialog" aria-modal="true">
           <div style={dialog} onClick={(e) => e.stopPropagation()}>
@@ -359,6 +360,7 @@ export const VsumDetailsModal: React.FC<Props> = ({ isOpen, vsumId, onClose, onS
               </div>
             </div>
         )}
-      </>
+      </>,
+      document.body
   );
 };

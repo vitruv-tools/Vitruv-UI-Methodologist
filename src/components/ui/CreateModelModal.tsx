@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
+import ReactDOM from 'react-dom';
 import { apiService } from '../../services/api';
 import { KeywordTagsInput } from './KeywordTagsInput';
 
@@ -40,7 +41,7 @@ const modalOverlayStyle: React.CSSProperties = {
   display: 'flex',
   alignItems: 'center',
   justifyContent: 'center',
-  zIndex: 1000,
+  zIndex: 10000,
 };
 
 const modalStyle: React.CSSProperties = {
@@ -280,7 +281,7 @@ const overlayStyle: React.CSSProperties = {
   position: 'fixed',
   inset: 0,
   background: 'rgba(0,0,0,0.55)',
-  zIndex: 2000, // above modal
+  zIndex: 11000, // above modal
   display: 'flex',
   alignItems: 'center',
   justifyContent: 'center',
@@ -568,6 +569,13 @@ export const CreateModelModal: React.FC<CreateModelModalProps> = ({
   };
 
   useEffect(() => {
+    if (isOpen) {
+      const prev = document.body.style.overflow;
+      document.body.style.overflow = 'hidden';
+      return () => {
+        document.body.style.overflow = prev;
+      };
+    }
     if (!isOpen) {
       if (submitProgressIntervalRef.current) {
         clearInterval(submitProgressIntervalRef.current);
@@ -605,7 +613,7 @@ export const CreateModelModal: React.FC<CreateModelModalProps> = ({
 
   if (!isOpen) return null;
 
-  return (
+  return ReactDOM.createPortal(
       <>
         {/* Full-screen Submit Overlay */}
         {submitProgress.isSubmitting && (
@@ -797,6 +805,7 @@ export const CreateModelModal: React.FC<CreateModelModalProps> = ({
             </div>
           </div>
         </div>
-      </>
+      </>,
+      document.body
   );
 };
