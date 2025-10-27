@@ -45,25 +45,24 @@ interface EcoreFileBox {
 }
 
 export function MainLayout({
-                               onDeploy,
-                               onSave,
-                               onLoad,
-                               onNew,
-                               user,
-                               onLogout,
-                               leftSidebar,
-                               leftSidebarWidth = 350,
-                               rightSidebar,
-                               rightSidebarWidth = 0,
-                               topRightSlot,
-                               showWorkspaceInfo = true,
-                               workspaceTopRightSlot,
-                               workspaceOverlay,
-                           }: MainLayoutProps) {
+    onDeploy,
+    onSave,
+    onLoad,
+    onNew,
+    user,
+    onLogout,
+    leftSidebar,
+    leftSidebarWidth = 350,
+    rightSidebar,
+    rightSidebarWidth = 0,
+    topRightSlot,
+    showWorkspaceInfo = true,
+    workspaceTopRightSlot,
+    workspaceOverlay,
+}: MainLayoutProps) {
     const location = useLocation();
     const isMMLRoute = location.pathname.startsWith('/mml');
 
-    const [selectedDiagramType, setSelectedDiagramType] = useState<string | undefined>();
     const flowCanvasRef = useRef<any>(null);
     const leftAsideRef = useRef<HTMLDivElement | null>(null);
     const rightAsideRef = useRef<HTMLDivElement | null>(null);
@@ -91,7 +90,7 @@ export function MainLayout({
             keys.forEach((key) => {
                 if (key.startsWith('vitruv.document.data.')) localStorage.removeItem(key);
             });
-        } catch {}
+        } catch { }
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
@@ -166,9 +165,9 @@ export function MainLayout({
 
     const calculateEmptyPosition = (existingBoxes: EcoreFileBox[]) => {
         if (existingBoxes.length === 0) return { x: 100, y: 100 };
-        const boxWidth = 280;
-        const boxHeight = 180;
-        const spacing = 40;
+        const boxWidth = 220;
+        const boxHeight = 140;
+        const spacing = 30;
 
         const rightmost = existingBoxes.reduce((r, b) => (b.position.x > r.position.x ? b : r));
         let newX = rightmost.position.x + boxWidth + spacing;
@@ -214,6 +213,34 @@ export function MainLayout({
         setSelectedFileBoxId(newBox.id);
     };
 
+    // Listen for add file to workspace events
+    useEffect(() => {
+        const handleAddFileToWorkspace = (e: Event) => {
+            const customEvent = e as CustomEvent<{
+                fileContent: string;
+                fileName: string;
+                description?: string;
+                keywords?: string;
+                domain?: string;
+                createdAt?: string;
+            }>;
+            const detail = customEvent.detail;
+            if (detail) {
+                handleEcoreFileUpload(detail.fileContent, {
+                    fileName: detail.fileName,
+                    description: detail.description,
+                    keywords: detail.keywords,
+                    domain: detail.domain,
+                    createdAt: detail.createdAt,
+                });
+            }
+        };
+
+        window.addEventListener('vitruv.addFileToWorkspace', handleAddFileToWorkspace as EventListener);
+        return () => window.removeEventListener('vitruv.addFileToWorkspace', handleAddFileToWorkspace as EventListener);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
+
     const handleEcoreFileSelect = (fileName: string) => {
         const box = ecoreFileBoxes.find((f) => f.fileName === fileName);
         if (box) setSelectedFileBoxId(box.id);
@@ -245,11 +272,6 @@ export function MainLayout({
         flowCanvasRef.current?.loadDiagramData?.(diagramData.nodes, diagramData.edges);
         saveDocumentData(newId, { nodes: diagramData.nodes as any, edges: diagramData.edges as any });
         setIsDirty(false);
-        setSelectedDiagramType('ecore');
-    };
-
-    const handleEcoreFilePositionChange = (id: string, pos: { x: number; y: number }) => {
-        setEcoreFileBoxes((prev) => prev.map((b) => (b.id === id ? { ...b, position: pos } : b)));
     };
 
     const handleEcoreFileDelete = (id: string) => {
@@ -371,46 +393,14 @@ export function MainLayout({
                                     <>
                                         <span style={{ color: '#7f8c8d' }}>•</span>
                                         <span style={{ color: '#34495e' }}>
-                      {documents.filter((d) => d.sourceFileName).length} diagrams
-                    </span>
+                                            {documents.filter((d) => d.sourceFileName).length} diagrams
+                                        </span>
                                     </>
                                 )}
                             </div>
                         </div>
                     )}
-
-                    {/* Status indicator */}
-                    {selectedDiagramType && (
-                        <div
-                            style={{
-                                position: 'absolute',
-                                left: 0,
-                                right: 0,
-                                top: 0,
-                                transform: 'translateY(44px)',
-                                background: '#e3f2fd',
-                                borderBottom: '1px solid #2196f3',
-                                padding: '8px 20px',
-                                fontSize: '14px',
-                                color: '#1976d2',
-                                display: 'flex',
-                                alignItems: 'center',
-                                justifyContent: 'space-between',
-                                zIndex: 10,
-                            }}
-                        >
-              <span>
-                🎯 Active:{' '}
-                  {selectedDiagramType === 'class'
-                      ? 'UML Class Diagram'
-                      : selectedDiagramType === 'ecore'
-                          ? 'Ecore Model'
-                          : selectedDiagramType}{' '}
-                  Tools
-              </span>
-                        </div>
-                    )}
-
+                    
                     {/* FlowCanvas or Welcome */}
                     <div style={{ position: 'absolute', inset: 0 }}>
                         {isMMLRoute ? (
@@ -465,7 +455,6 @@ export function MainLayout({
                                 ecoreFiles={ecoreFileBoxes}
                                 onEcoreFileSelect={handleEcoreFileSelect}
                                 onEcoreFileExpand={handleEcoreFileExpand}
-                                onEcoreFilePositionChange={handleEcoreFilePositionChange}
                                 onEcoreFileDelete={handleEcoreFileDelete}
                                 onEcoreFileRename={handleEcoreFileRename}
                             />

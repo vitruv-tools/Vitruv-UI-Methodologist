@@ -32,7 +32,6 @@ interface FlowCanvasProps {
   }>;
   onEcoreFileSelect?: (fileName: string) => void;
   onEcoreFileExpand?: (fileName: string, fileContent: string) => void;
-  onEcoreFilePositionChange?: (id: string, newPosition: { x: number; y: number }) => void;
   onEcoreFileDelete?: (id: string) => void;
   onEcoreFileRename?: (id: string, newFileName: string) => void;
 }
@@ -49,7 +48,7 @@ export const FlowCanvas = forwardRef<{
   canUndo: boolean;
   canRedo: boolean;
 }, FlowCanvasProps>(
-  ({ onDeploy, onToolClick, onDiagramChange, ecoreFiles = [], onEcoreFileSelect, onEcoreFileExpand, onEcoreFilePositionChange, onEcoreFileDelete, onEcoreFileRename }, ref) => {
+  ({ onDeploy, onToolClick, onDiagramChange, ecoreFiles = [], onEcoreFileSelect, onEcoreFileExpand, onEcoreFileDelete, onEcoreFileRename }, ref) => {
   const reactFlowWrapper = useRef<HTMLDivElement>(null);
   const [reactFlowInstance, setReactFlowInstance] = useState<ReactFlowInstance | null>(null);
   const [isDragOver, setIsDragOver] = useState(false);
@@ -373,12 +372,6 @@ export const FlowCanvas = forwardRef<{
           position={file.position}
           onExpand={handleEcoreFileExpand}
           onSelect={handleEcoreFileSelect}
-          onPositionChange={(id, newPosition) => {
-            // This will be handled by the parent component
-            if (onEcoreFilePositionChange) {
-              onEcoreFilePositionChange(id, newPosition);
-            }
-          }}
           onDelete={onEcoreFileDelete}
           onRename={onEcoreFileRename}
           isSelected={selectedFileId === file.id}

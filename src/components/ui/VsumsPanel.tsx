@@ -223,37 +223,59 @@ export const VsumsPanel: React.FC = () => {
 
             <div style={sectionStyle}>All</div>
 
-            {items.map((item) => (
-                <div
-                    key={item.id}
-                    style={cardStyle}
-                    onDoubleClick={() =>
-                        window.dispatchEvent(new CustomEvent('vitruv.openVsum', { detail: { id: item.id } }))
-                    }
-                >
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
-                        <div style={{ display: 'flex', flexDirection: 'column' }}>
-                            <div style={{ fontWeight: 700, color: '#2c3e50' }}>{item.name}</div>
-                            <div style={{ fontSize: 12, color: '#5a6c7d' }}>
-                                Created: {formatDateTime(item.createdAt)}
+            {items.map((item) => {
+                const role = (item as any).role as string | undefined;
+                const canManage = role === 'OWNER';
+                return (
+                    <div
+                        key={item.id}
+                        style={cardStyle}
+                        onDoubleClick={() =>
+                            window.dispatchEvent(new CustomEvent('vitruv.openVsum', { detail: { id: item.id } }))
+                        }
+                    >
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
+                            <div style={{ display: 'flex', flexDirection: 'column' }}>
+                                <div style={{ fontWeight: 700, color: '#2c3e50', display: 'flex', alignItems: 'center', gap: 8 }}>
+                                    {item.name}
+                                    {role && (
+                                        <span
+                                            style={{
+                                                padding: '2px 6px',
+                                                borderRadius: 6,
+                                                fontSize: 11,
+                                                fontWeight: 700,
+                                                border: '1px solid #e5e7eb',
+                                                background: role === 'OWNER' ? '#ecfdf5' : '#f3f4f6',
+                                                color: role === 'OWNER' ? '#065f46' : '#374151',
+                                            }}
+                                        >
+                      {role}
+                    </span>
+                                    )}
+                                </div>
+                                <div style={{ fontSize: 12, color: '#5a6c7d' }}>Created: {formatDateTime(item.createdAt)}</div>
                             </div>
+
+                            {canManage && (
+                                <button
+                                    onClick={() => setDetailsId(item.id)}
+                                    style={{
+                                        padding: '6px 10px',
+                                        border: '1px solid #dee2e6',
+                                        borderRadius: 6,
+                                        background: '#ffffff',
+                                        cursor: 'pointer',
+                                        fontWeight: 600,
+                                    }}
+                                >
+                                    Details
+                                </button>
+                            )}
                         </div>
-                        <button
-                            onClick={() => setDetailsId(item.id)}
-                            style={{
-                                padding: '6px 10px',
-                                border: '1px solid #dee2e6',
-                                borderRadius: 6,
-                                background: '#ffffff',
-                                cursor: 'pointer',
-                                fontWeight: 600,
-                            }}
-                        >
-                            Details
-                        </button>
                     </div>
-                </div>
-            ))}
+                );
+            })}
 
             {!loading && items.length === 0 && (
                 <div style={{ textAlign: 'center', color: '#6b7280', marginTop: 40, fontStyle: 'italic' }}>

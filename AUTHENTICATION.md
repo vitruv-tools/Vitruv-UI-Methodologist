@@ -269,7 +269,7 @@ The system provides comprehensive error handling:
 
 To test the authentication system:
 
-1. Ensure your backend server is running on `localhost:9811`
+1. Ensure your backend server is running on `http://fe3ab829-d558-4834-afcf-6ed7ca440ca4.ka.bw-cloud-instance.org:8080`
 2. Use the sign-up form to create a new account
 3. Use the sign-in form to authenticate
 4. Check the browser's developer tools to see stored tokens

@@ -8,10 +8,10 @@ export interface Vsum {
 
 export interface VsumMetaModelRef {
   id: number;
-  sourceId: number;
   name: string;
   description: string;
   domain: string;
+  sourceId: number;
   keyword: string[];
   createdAt: string;
   updatedAt: string;
