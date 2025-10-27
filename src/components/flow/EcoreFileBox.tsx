@@ -289,7 +289,7 @@ export const EcoreFileBox: React.FC<EcoreFileBoxProps> = ({
     if (description.length <= maxLength) {
       return { text: description, isTruncated: false };
     }
-    
+
     const truncatedText = description.substring(0, maxLength) + '...';
     return { text: truncatedText, isTruncated: true };
   };
@@ -298,7 +298,7 @@ export const EcoreFileBox: React.FC<EcoreFileBoxProps> = ({
     if (keywords.length <= maxLength) {
       return { text: keywords, isTruncated: false };
     }
-    
+
     const truncatedText = keywords.substring(0, maxLength) + '...';
     return { text: truncatedText, isTruncated: true };
   };
@@ -329,17 +329,6 @@ export const EcoreFileBox: React.FC<EcoreFileBoxProps> = ({
     setShowDeleteConfirm(false);
   };
 
-
-  const handleFileNameDoubleClick = (e: React.MouseEvent) => {
-    e.stopPropagation();
-    setIsEditing(true);
-    setEditName(fileName);
-    setTimeout(() => {
-      inputRef.current?.focus();
-      inputRef.current?.select();
-    }, 0);
-  };
-
   const handleEditKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter') {
       handleSaveEdit();
@@ -362,7 +351,7 @@ export const EcoreFileBox: React.FC<EcoreFileBoxProps> = ({
 
   // ... existing code ...
 
-    const formatDate = (dateString: string) => {
+  const formatDate = (dateString: string) => {
     try {
       const date = new Date(dateString);
       return date.toLocaleDateString();
@@ -390,124 +379,90 @@ export const EcoreFileBox: React.FC<EcoreFileBoxProps> = ({
         onMouseLeave={() => setIsHovered(false)}
         title={`Click to select, double-click to expand\n${fileName}`}
       >
-                           <div style={fileNameStyle}>
-            {isEditing ? (
-              <input
-                type="text"
-                value={editName}
-                onChange={(e) => setEditName(e.target.value)}
-                onKeyDown={handleEditKeyDown}
-                ref={inputRef}
-                style={{
-                  width: '100%',
-                  boxSizing: 'border-box',
-                  border: '2px solid #6c757d',
-                  borderRadius: '6px',
-                  outline: 'none',
-                  fontSize: '16px',
-                  fontWeight: '700',
-                  color: '#212529',
-                  textAlign: 'center',
-                  wordBreak: 'break-word',
-                  lineHeight: '1.4',
-                  padding: '8px 12px',
-                  background: '#ffffff',
-                  fontFamily: '"Georgia", "Times New Roman", serif',
-                  transition: 'border-color 0.2s ease',
-                }}
-                onFocus={(e) => {
-                  e.target.style.borderColor = '#495057';
-                }}
-                onBlur={(e) => {
-                  e.target.style.borderColor = '#6c757d';
-                  handleEditBlur();
-                }}
-              />
-            ) : (
-              <span>
-                {fileName.replace(/\.ecore$/i, '')}
-              </span>
-            )}
+        <div style={fileNameStyle}>
+          <span>
+            {fileName.replace(/\.ecore$/i, '')}
+          </span>
+        </div>
+
+        {description && (
+          <div style={descriptionStyle}>
+            <span style={{ fontWeight: '600', color: '#495057' }}>Description: </span>
+            {(() => {
+              const { text, isTruncated } = truncateDescription(description);
+
+              return (
+                <>
+                  {text}
+                  {isTruncated && (
+                    <button
+                      onClick={handleShowMoreClick}
+                      style={{
+                        background: 'none',
+                        border: 'none',
+                        color: '#3498db',
+                        fontSize: '10px',
+                        cursor: 'pointer',
+                        marginLeft: '6px',
+                        textDecoration: 'underline',
+                        fontFamily: '"Georgia", "Times New Roman", serif',
+                        padding: '0',
+                        lineHeight: '1',
+                      }}
+                    >
+                      See more
+                    </button>
+                  )}
+                </>
+              );
+            })()}
           </div>
-          
-          {description && (
-            <div style={descriptionStyle}>
-              <span style={{ fontWeight: '600', color: '#495057' }}>Description: </span>
-              {(() => {
-                const { text, isTruncated } = truncateDescription(description);
-                
-                return (
-                  <>
-                    {text}
-                    {isTruncated && (
-                      <button
-                        onClick={handleShowMoreClick}
-                        style={{
-                          background: 'none',
-                          border: 'none',
-                          color: '#3498db',
-                          fontSize: '10px',
-                          cursor: 'pointer',
-                          marginLeft: '6px',
-                          textDecoration: 'underline',
-                          fontFamily: '"Georgia", "Times New Roman", serif',
-                          padding: '0',
-                          lineHeight: '1',
-                        }}
-                      >
-                        See more
-                      </button>
-                    )}
-                  </>
-                );
-              })()}
-            </div>
-          )}
-          
-          {keywords && (
-            <div style={{
-              fontSize: '10px',
-              color: '#495057',
-              textAlign: 'center',
-              marginTop: '4px',
-              fontStyle: 'italic',
-              lineHeight: '1.3',
-              fontFamily: '"Georgia", "Times New Roman", serif',
-              fontWeight: '500',
-              wordBreak: 'break-word',
-              overflowWrap: 'break-word',
-            }}>
-              <span style={{ fontWeight: '600', color: '#495057' }}>Keywords: </span>
-              {(() => {
-                const { text, isTruncated } = truncateKeywords(keywords);
-                
-                return (
-                  <>
-                    {text}
-                    {isTruncated && (
-                      <button
-                        onClick={handleShowMoreKeywordsClick}
-                        style={{
-                          background: 'none',
-                          border: 'none',
-                          color: '#3498db',
-                          fontSize: '10px',
-                          cursor: 'pointer',
-                          marginLeft: '6px',
-                          textDecoration: 'underline',
-                          fontFamily: '"Georgia", "Times New Roman", serif',
-                          padding: '0',
-                          lineHeight: '1',
-                        }}
-                      >
-                        See more
-                      </button>
-                    )}
-                  </>
-                );
-              })()}
-            </div>
-          )}
+        )}
+
+        {keywords && (
+          <div style={{
+            fontSize: '10px',
+            color: '#495057',
+            textAlign: 'center',
+            marginTop: '4px',
+            fontStyle: 'italic',
+            lineHeight: '1.3',
+            fontFamily: '"Georgia", "Times New Roman", serif',
+            fontWeight: '500',
+            wordBreak: 'break-word',
+            overflowWrap: 'break-word',
+          }}>
+            <span style={{ fontWeight: '600', color: '#495057' }}>Keywords: </span>
+            {(() => {
+              const { text, isTruncated } = truncateKeywords(keywords);
+
+              return (
+                <>
+                  {text}
+                  {isTruncated && (
+                    <button
+                      onClick={handleShowMoreKeywordsClick}
+                      style={{
+                        background: 'none',
+                        border: 'none',
+                        color: '#3498db',
+                        fontSize: '10px',
+                        cursor: 'pointer',
+                        marginLeft: '6px',
+                        textDecoration: 'underline',
+                        fontFamily: '"Georgia", "Times New Roman", serif',
+                        padding: '0',
+                        lineHeight: '1',
+                      }}
+                    >
+                      See more
+                    </button>
+                  )}
+                </>
+              );
+            })()}
+          </div>
+        )}
         <button
           style={{
             ...deleteButtonStyle,
@@ -532,99 +487,99 @@ export const EcoreFileBox: React.FC<EcoreFileBoxProps> = ({
         onCancel={cancelDelete}
       />
 
-      
-       {isHovered && (
-         <div style={{
-           ...tooltipStyle,
-           opacity: 1,
-         }}>
-           <div style={{ fontWeight: '700', marginBottom: '10px', fontSize: '13px' }}>
-             {fileName}
-           </div>
-           <div style={{ 
-             fontSize: '11px', 
-             lineHeight: '1.5',
-             maxHeight: '120px',
-             overflow: 'hidden',
-             textOverflow: 'ellipsis',
-             color: '#e9ecef'
-           }}>
-             {fileContent.length > 200 
-               ? `${fileContent.substring(0, 200)}...` 
-               : fileContent
-             }
-           </div>
-           <div style={tooltipArrowStyle} />
-         </div>
-       )}
 
-       {showDescriptionModal && (
-         <div style={modalOverlayStyle} onClick={handleModalOverlayClick}>
-           <div style={modalContentStyle}>
-             <div style={modalHeaderStyle}>
-               <h2 style={modalTitleStyle}>
-                 {fileName.replace(/\.ecore$/i, '')} - Description
-               </h2>
-               <button
-                 style={closeButtonStyle}
-                 onClick={handleCloseModal}
-                 onMouseEnter={(e) => {
-                   Object.assign(e.currentTarget.style, closeButtonHoverStyle);
-                 }}
-                 onMouseLeave={(e) => {
-                   Object.assign(e.currentTarget.style, closeButtonStyle);
-                 }}
-                 title="Close"
-               >
-                 ×
-               </button>
-             </div>
-             
-             <div style={descriptionContentStyle}>
-               {description}
-             </div>
-             
-             <div style={modalFooterStyle}>
-               <span>Model: {fileName.replace(/\.ecore$/i, '')}</span>
-               <span>Created: {createdAt ? formatDate(createdAt) : 'Unknown Date'}</span>
-             </div>
-           </div>
-         </div>
-       )}
+      {isHovered && (
+        <div style={{
+          ...tooltipStyle,
+          opacity: 1,
+        }}>
+          <div style={{ fontWeight: '700', marginBottom: '10px', fontSize: '13px' }}>
+            {fileName}
+          </div>
+          <div style={{
+            fontSize: '11px',
+            lineHeight: '1.5',
+            maxHeight: '120px',
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+            color: '#e9ecef'
+          }}>
+            {fileContent.length > 200
+              ? `${fileContent.substring(0, 200)}...`
+              : fileContent
+            }
+          </div>
+          <div style={tooltipArrowStyle} />
+        </div>
+      )}
 
-       {showKeywordsModal && (
-         <div style={modalOverlayStyle} onClick={handleKeywordsModalOverlayClick}>
-           <div style={modalContentStyle}>
-             <div style={modalHeaderStyle}>
-               <h2 style={modalTitleStyle}>
-                 {fileName.replace(/\.ecore$/i, '')} - Keywords
-               </h2>
-               <button
-                 style={closeButtonStyle}
-                 onClick={handleCloseKeywordsModal}
-                 onMouseEnter={(e) => {
-                   Object.assign(e.currentTarget.style, closeButtonHoverStyle);
-                 }}
-                 onMouseLeave={(e) => {
-                   Object.assign(e.currentTarget.style, closeButtonStyle);
-                 }}
-                 title="Close"
-               >
-                 ×
-               </button>
-             </div>
-             
-             <div style={descriptionContentStyle}>
-               {keywords}
-             </div>
-             
-             <div style={modalFooterStyle}>
-               <span>Model: {fileName.replace(/\.ecore$/i, '')}</span>
-               <span>Created: {createdAt ? formatDate(createdAt) : 'Unknown Date'}</span>
-             </div>
-           </div>
-         </div>
-       )}
-     </>
-   );
- };
+      {showDescriptionModal && (
+        <div style={modalOverlayStyle} onClick={handleModalOverlayClick}>
+          <div style={modalContentStyle}>
+            <div style={modalHeaderStyle}>
+              <h2 style={modalTitleStyle}>
+                {fileName.replace(/\.ecore$/i, '')} - Description
+              </h2>
+              <button
+                style={closeButtonStyle}
+                onClick={handleCloseModal}
+                onMouseEnter={(e) => {
+                  Object.assign(e.currentTarget.style, closeButtonHoverStyle);
+                }}
+                onMouseLeave={(e) => {
+                  Object.assign(e.currentTarget.style, closeButtonStyle);
+                }}
+                title="Close"
+              >
+                ×
+              </button>
+            </div>
+
+            <div style={descriptionContentStyle}>
+              {description}
+            </div>
+
+            <div style={modalFooterStyle}>
+              <span>Model: {fileName.replace(/\.ecore$/i, '')}</span>
+              <span>Created: {createdAt ? formatDate(createdAt) : 'Unknown Date'}</span>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showKeywordsModal && (
+        <div style={modalOverlayStyle} onClick={handleKeywordsModalOverlayClick}>
+          <div style={modalContentStyle}>
+            <div style={modalHeaderStyle}>
+              <h2 style={modalTitleStyle}>
+                {fileName.replace(/\.ecore$/i, '')} - Keywords
+              </h2>
+              <button
+                style={closeButtonStyle}
+                onClick={handleCloseKeywordsModal}
+                onMouseEnter={(e) => {
+                  Object.assign(e.currentTarget.style, closeButtonHoverStyle);
+                }}
+                onMouseLeave={(e) => {
+                  Object.assign(e.currentTarget.style, closeButtonStyle);
+                }}
+                title="Close"
+              >
+                ×
+              </button>
+            </div>
+
+            <div style={descriptionContentStyle}>
+              {keywords}
+            </div>
+
+            <div style={modalFooterStyle}>
+              <span>Model: {fileName.replace(/\.ecore$/i, '')}</span>
+              <span>Created: {createdAt ? formatDate(createdAt) : 'Unknown Date'}</span>
+            </div>
+          </div>
+        </div>
+      )}
+    </>
+  );
+};

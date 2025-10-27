@@ -63,7 +63,6 @@ export function MainLayout({
     const location = useLocation();
     const isMMLRoute = location.pathname.startsWith('/mml');
 
-    const [selectedDiagramType, setSelectedDiagramType] = useState<string | undefined>();
     const flowCanvasRef = useRef<any>(null);
     const leftAsideRef = useRef<HTMLDivElement | null>(null);
     const rightAsideRef = useRef<HTMLDivElement | null>(null);
@@ -273,7 +272,6 @@ export function MainLayout({
         flowCanvasRef.current?.loadDiagramData?.(diagramData.nodes, diagramData.edges);
         saveDocumentData(newId, { nodes: diagramData.nodes as any, edges: diagramData.edges as any });
         setIsDirty(false);
-        setSelectedDiagramType('ecore');
     };
 
     const handleEcoreFileDelete = (id: string) => {
