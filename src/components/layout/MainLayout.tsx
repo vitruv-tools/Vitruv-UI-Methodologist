@@ -31,6 +31,9 @@ interface MainLayoutProps {
     showWorkspaceInfo?: boolean;
     workspaceTopRightSlot?: React.ReactNode;
     workspaceOverlay?: React.ReactNode;
+    showWelcomeScreen?: boolean;
+    welcomeTitle?: string;
+    welcomeSubtitle?: string;
 }
 
 interface EcoreFileBox {
@@ -59,6 +62,9 @@ export function MainLayout({
     showWorkspaceInfo = true,
     workspaceTopRightSlot,
     workspaceOverlay,
+    showWelcomeScreen = false,
+    welcomeTitle,
+    welcomeSubtitle,
 }: MainLayoutProps) {
     const location = useLocation();
     const isMMLRoute = location.pathname.startsWith('/mml');
@@ -403,7 +409,7 @@ export function MainLayout({
                     
                     {/* FlowCanvas or Welcome */}
                     <div style={{ position: 'absolute', inset: 0 }}>
-                        {isMMLRoute ? (
+                        {isMMLRoute || showWelcomeScreen ? (
                             <div
                                 style={{
                                     width: '100%',
@@ -443,8 +449,13 @@ export function MainLayout({
                                         />
                                     </div>
                                     <p style={{ margin: '0 0 20px 0', fontSize: 16, color: '#6b7280', lineHeight: 1.6 }}>
-                                        Methodological Dashboard
+                                        {welcomeTitle || 'Methodological Dashboard'}
                                     </p>
+                                    {welcomeSubtitle && (
+                                        <p style={{ margin: '0', fontSize: 14, color: '#6b7280', lineHeight: 1.6 }}>
+                                            {welcomeSubtitle}
+                                        </p>
+                                    )}
                                 </div>
                             </div>
                         ) : (

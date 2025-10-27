@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { User } from '../../services/auth';
+import { apiService } from '../../services/api';
 
 interface HeaderProps {
   onSave?: () => void;
@@ -11,8 +12,17 @@ interface HeaderProps {
   onLogout?: () => void;
 }
 
+interface ApiUserData {
+  id: number;
+  email: string;
+  firstName: string;
+  lastName: string;
+}
+
 export function Header({ title = 'Metadologist Dashboard', user, onLogout }: HeaderProps) {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const [apiUser, setApiUser] = useState<ApiUserData | null>(null);
+  const [isLoadingUser, setIsLoadingUser] = useState(false);
   const menuRef = useRef<HTMLDivElement | null>(null);
 
   const getInitials = (fullName?: string, email?: string) => {
@@ -31,6 +41,43 @@ export function Header({ title = 'Metadologist Dashboard', user, onLogout }: Hea
     return 'U';
   };
 
+  // Get display name from API user or fallback to prop user
+  const getDisplayName = () => {
+    if (apiUser) {
+      return `${apiUser.firstName} ${apiUser.lastName}`.trim() || apiUser.email;
+    }
+    return user?.name || `${user?.givenName || ''} ${user?.familyName || ''}`.trim() || user?.email || 'User';
+  };
+
+  // Get display email
+  const getDisplayEmail = () => {
+    return apiUser?.email || user?.email || '';
+  };
+
+  // Get initials for display
+  const getDisplayInitials = () => {
+    if (apiUser) {
+      return getInitials(`${apiUser.firstName} ${apiUser.lastName}`, apiUser.email);
+    }
+    return getInitials(user?.name, user?.email);
+  };
+
+  // Fetch user info from API
+  useEffect(() => {
+    const fetchUserInfo = async () => {
+      try {
+        setIsLoadingUser(true);
+        const response = await apiService.getUserInfo();
+        setApiUser(response.data);
+      } catch (error) {
+        console.error('Failed to fetch user info:', error);
+      } finally {
+        setIsLoadingUser(false);
+      }
+    };
+
+    fetchUserInfo();
+  }, []);
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -72,12 +119,7 @@ export function Header({ title = 'Metadologist Dashboard', user, onLogout }: Hea
             onClick={() => setIsMenuOpen((open) => !open)}
             aria-haspopup="menu"
             aria-expanded={isMenuOpen}
-            title={
-              user?.name || `${user?.givenName || ''} ${user?.familyName || ''}`.trim() ||
-              user?.email ||
-              user?.username ||
-              'User menu'
-            }
+            title={getDisplayName() || 'User menu'}
             style={{
               width: 36,
               height: 36,
@@ -105,7 +147,7 @@ export function Header({ title = 'Metadologist Dashboard', user, onLogout }: Hea
               e.currentTarget.style.boxShadow = '0 2px 8px rgba(0,0,0,0.1)';
             }}
           >
-            {getInitials(user?.name, user?.email)}
+            {isLoadingUser ? '...' : getDisplayInitials()}
           </button>
 
           {isMenuOpen && (
@@ -151,20 +193,15 @@ export function Header({ title = 'Metadologist Dashboard', user, onLogout }: Hea
                       boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
                     }}
                   >
-                    {getInitials(user?.name, user?.email)}
+                    {isLoadingUser ? '...' : getDisplayInitials()}
                   </div>
                   <div style={{ display: 'flex', flexDirection: 'column', flex: 1 }}>
                     <span style={{ fontWeight: 600, fontSize: 16, marginBottom: 4, color: '#2c3e50' }}>
-                      {user?.name || `${user?.givenName || ''} ${user?.familyName || ''}`.trim() || 'User'}
+                      {isLoadingUser ? 'Loading...' : getDisplayName()}
                     </span>
-                    {user?.email && (
+                    {!isLoadingUser && getDisplayEmail() && (
                       <span style={{ fontSize: 13, color: '#7f8c8d', marginBottom: 2 }}>
-                        {user.email}
-                      </span>
-                    )}
-                    {user?.username && user?.username !== user?.email && (
-                      <span style={{ fontSize: 12, color: '#95a5a6' }}>
-                        @{user.username}
+                        {getDisplayEmail()}
                       </span>
                     )}
                   </div>

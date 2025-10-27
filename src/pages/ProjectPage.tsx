@@ -61,6 +61,8 @@ export const ProjectPage: React.FC = () => {
       onLogout={signOut}
       leftSidebar={<SidebarTabs width={350} />}
       leftSidebarWidth={350}
+      showWelcomeScreen={openVsums.length === 0}
+      welcomeTitle="Welcome to Project Workspace"
       rightSidebar={showRight ? (
         <div style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
           <div style={{
