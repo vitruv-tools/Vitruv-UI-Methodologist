@@ -7,9 +7,11 @@ interface VsumTabsProps {
   activeVsumId: number | null;
   onActivate: (id: number) => void;
   onClose: (id: number) => void;
+  onAddMetaModels?: () => void;
+  showAddButton?: boolean;
 }
 
-export const VsumTabs: React.FC<VsumTabsProps> = ({ openVsums, activeVsumId, onActivate, onClose }) => {
+export const VsumTabs: React.FC<VsumTabsProps> = ({ openVsums, activeVsumId, onActivate, onClose, onAddMetaModels, showAddButton }) => {
   const [detailsById, setDetailsById] = useState<Record<number, VsumDetails | undefined>>({});
   const [error, setError] = useState<string>('');
   const [edits, setEdits] = useState<Record<number, { metaModelSourceIds: number[] }>>({});
@@ -45,6 +47,13 @@ export const VsumTabs: React.FC<VsumTabsProps> = ({ openVsums, activeVsumId, onA
       try {
         const res = await apiService.getVsumDetails(id);
         setDetailsById(prev => ({ ...prev, [id]: res.data }));
+        
+        // Seed initial edit state with sourceIds from metaModels
+        const sourceIds = res.data.metaModels?.map(mm => mm.sourceId) || [];
+        setEdits(prev => ({
+          ...prev,
+          [id]: { metaModelSourceIds: sourceIds }
+        }));
       } catch (e) {
         setError(e instanceof Error ? e.message : 'Failed to load VSUM details');
       }
@@ -62,7 +71,7 @@ export const VsumTabs: React.FC<VsumTabsProps> = ({ openVsums, activeVsumId, onA
     const edit = edits[id];
 
     // fallback from details using sourceId
-    const fallbackSourceIds = (detailsById[id]?.metaModels);
+    const fallbackSourceIds = detailsById[id]?.metaModels?.map(mm => mm.sourceId);
 
     const metaModelSourceIds =
         override?.metaModelSourceIds ?? edit?.metaModelSourceIds ?? fallbackSourceIds;
@@ -113,6 +122,15 @@ export const VsumTabs: React.FC<VsumTabsProps> = ({ openVsums, activeVsumId, onA
 
       const current = edits[activeVsumId];
 
+      // Initialize if not exists
+      if (!current) {
+        setEdits(prev => ({
+          ...prev,
+          [activeVsumId!]: { metaModelSourceIds: [sourceId] }
+        }));
+        return;
+      }
+
       if (current.metaModelSourceIds.includes(sourceId)) return;
 
       setEdits(prev => ({
@@ -130,20 +148,21 @@ export const VsumTabs: React.FC<VsumTabsProps> = ({ openVsums, activeVsumId, onA
   const anyDirty = activeVsumId ? !!dirtyById[activeVsumId] : false;
 
   return (
-      <div
-          style={{
-            background: '#ffffff',
-            borderBottom: '1px solid #e5e7eb',
-            position: 'sticky',
-            top: 0,
-            zIndex: 20,
-            boxShadow: 'inset 0 -1px 0 #e5e7eb',
-            cursor: saving ? 'progress' : 'default'
-          }}
-      >
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 10px' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6, overflowX: 'auto', flex: 1 }}>
-            {openVsums.map(id => {
+      <>
+        <div
+            style={{
+              background: '#ffffff',
+              borderBottom: '1px solid #e5e7eb',
+              position: 'sticky',
+              top: 0,
+              zIndex: 20,
+              boxShadow: 'inset 0 -1px 0 #e5e7eb',
+              cursor: saving ? 'progress' : 'default'
+            }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 10px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, overflowX: 'auto', flex: 1 }}>
+              {openVsums.map(id => {
               const isActive = id === activeVsumId;
               const name = detailsById[id]?.name || `VSUM #${id}`;
               const isDirty = !!dirtyById[id];
@@ -198,11 +217,11 @@ export const VsumTabs: React.FC<VsumTabsProps> = ({ openVsums, activeVsumId, onA
                       ×
                     </button>
                   </div>
-              );
-            })}
-          </div>
+                );
+              })}
+            </div>
 
-          {activeVsumId && (
+            {activeVsumId && (
               <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                 {error && (
                     <div
@@ -240,5 +259,26 @@ export const VsumTabs: React.FC<VsumTabsProps> = ({ openVsums, activeVsumId, onA
           )}
         </div>
       </div>
+      {showAddButton && onAddMetaModels && (
+        <button
+          style={{
+            position: 'absolute',
+            right: 16,
+            top: 56,
+            background: '#3498db',
+            color: '#ffffff',
+            border: '1px solid #2980b9',
+            borderRadius: 6,
+            padding: '8px 12px',
+            fontWeight: 700,
+            cursor: 'pointer',
+            zIndex: 21
+          }}
+          onClick={onAddMetaModels}
+        >
+          + ADD META MODELS
+        </button>
+      )}
+      </>
   );
 };
