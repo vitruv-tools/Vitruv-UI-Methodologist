@@ -44,7 +44,7 @@ jobs:
         run: npm run build
 
       - name: Upload production build (optional)
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: frontend-build
           path: dist/ # or your build output dir
