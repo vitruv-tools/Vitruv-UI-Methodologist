@@ -4,6 +4,7 @@ import { MetaModelsPanel } from '../components/ui/MetaModelsPanel';
 import { SidebarTabs } from '../components';
 import { useAuth } from '../contexts/AuthContext';
 import { VsumTabs } from '../components/ui/VsumTabs';
+import { apiService } from '../services/api';
 
 export const ProjectPage: React.FC = () => {
   const { user, signOut } = useAuth();
@@ -12,12 +13,43 @@ export const ProjectPage: React.FC = () => {
   const [activeVsumId, setActiveVsumId] = useState<number | null>(null);
 
   useEffect(() => {
-    const handler = (e: Event) => {
+    const handler = async (e: Event) => {
       const custom = e as CustomEvent<{ id: number }>;
       const id = custom.detail?.id;
       if (typeof id !== 'number') return;
       setOpenVsums(prev => prev.includes(id) ? prev : [...prev, id]);
       setActiveVsumId(id);
+
+      // Fetch vsum details and load meta models into workspace
+      try {
+        const response = await apiService.getVsumDetails(id);
+        const details = response.data;
+        
+        // Load each meta model into workspace
+        for (const metaModel of details.metaModels || []) {
+          if (metaModel.ecoreFileId) {
+            try {
+              const fileContent = await apiService.getFile(metaModel.ecoreFileId);
+              
+              // Dispatch event to add file to workspace
+              window.dispatchEvent(new CustomEvent('vitruv.addFileToWorkspace', {
+                detail: {
+                  fileContent: fileContent,
+                  fileName: metaModel.name + '.ecore',
+                  description: metaModel.description,
+                  keywords: metaModel.keyword?.join(', '),
+                  domain: metaModel.domain,
+                  createdAt: metaModel.createdAt,
+                }
+              }));
+            } catch (error) {
+              console.error(`Failed to load ECORE file for meta model ${metaModel.name}:`, error);
+            }
+          }
+        }
+      } catch (error) {
+        console.error('Failed to fetch vsum details:', error);
+      }
     };
     window.addEventListener('vitruv.openVsum', handler as EventListener);
     return () => window.removeEventListener('vitruv.openVsum', handler as EventListener);
@@ -59,8 +91,31 @@ export const ProjectPage: React.FC = () => {
             <MetaModelsPanel
               activeVsumId={activeVsumId || undefined}
               selectedMetaModelIds={activeVsumId ? (openVsums.includes(activeVsumId) ? [] : []) : []}
-              onAddToActiveVsum={(model) => {
-                window.dispatchEvent(new CustomEvent('vitruv.addMetaModelToActiveVsum', { detail: { id: model.id } }));
+              onAddToActiveVsum={async (model) => {
+                // Fetch file content from the API
+                try {
+                  if (model.ecoreFileId) {
+                    const fileContent = await apiService.getFile(model.ecoreFileId);
+                    
+                    // Dispatch event to add file to workspace
+                    window.dispatchEvent(new CustomEvent('vitruv.addFileToWorkspace', {
+                      detail: {
+                        fileContent: fileContent,
+                        fileName: model.name + '.ecore',
+                        description: model.description,
+                        keywords: model.keyword?.join(', '),
+                        domain: model.domain,
+                      }
+                    }));
+                  }
+                  
+                  // Also dispatch the event to add meta model to VSUM
+                  window.dispatchEvent(new CustomEvent('vitruv.addMetaModelToActiveVsum', { detail: { id: model.id } }));
+                } catch (error) {
+                  console.error('Failed to fetch file:', error);
+                  // Still dispatch the add event even if file fetch fails
+                  window.dispatchEvent(new CustomEvent('vitruv.addMetaModelToActiveVsum', { detail: { id: model.id } }));
+                }
               }}
             />
           </div>
@@ -76,23 +131,9 @@ export const ProjectPage: React.FC = () => {
             setOpenVsums(prev => prev.filter(x => x !== id));
             setActiveVsumId(prev => (prev === id ? (openVsums.find(x => x !== id) ?? null) : prev));
           }}
+          showAddButton={!showRight}
+          onAddMetaModels={() => setShowRight(true)}
         />
-      ) : null}
-      workspaceTopRightSlot={!showRight ? (
-        <button
-          style={{
-            background: '#3498db',
-            color: '#ffffff',
-            border: '1px solid #2980b9',
-            borderRadius: 6,
-            padding: '8px 12px',
-            fontWeight: 700,
-            cursor: 'pointer'
-          }}
-          onClick={() => setShowRight(true)}
-        >
-          + ADD META MODELS
-        </button>
       ) : null}
       showWorkspaceInfo={false}
     />

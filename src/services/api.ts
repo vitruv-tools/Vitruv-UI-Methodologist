@@ -194,6 +194,55 @@ class ApiService {
   }
 
   /**
+   * Get a file by ID - returns file content directly as text
+   */
+  async getFile(id: number | string): Promise<string> {
+    const token = await AuthService.ensureValidToken();
+    
+    if (!token) {
+      throw new Error('No valid authentication token available');
+    }
+
+    const url = `${this.baseURL}/api/api/files/${id}`;
+    const headers = {
+      'Authorization': `Bearer ${token}`,
+    };
+
+    const response = await fetch(url, {
+      method: 'GET',
+      headers,
+    });
+
+    if (!response.ok) {
+      if (response.status === 401) {
+        try {
+          await AuthService.refreshToken();
+          const newToken = await AuthService.ensureValidToken();
+          if (newToken) {
+            const retryResponse = await fetch(url, {
+              method: 'GET',
+              headers: {
+                'Authorization': `Bearer ${newToken}`,
+              },
+            });
+
+            if (!retryResponse.ok) {
+              throw new Error(`Failed to fetch file: ${retryResponse.statusText}`);
+            }
+
+            return await retryResponse.text();
+          }
+        } catch (refreshError) {
+          console.error('Token refresh failed during file fetch:', refreshError);
+        }
+      }
+      throw new Error(`Failed to fetch file: ${response.statusText}`);
+    }
+
+    return await response.text();
+  }
+
+  /**
    * Upload a file with type parameter
    */
   async uploadFile(file: File, type: 'ECORE' | 'GEN_MODEL' | 'REACTION'): Promise<{ data: string; message: string }> {

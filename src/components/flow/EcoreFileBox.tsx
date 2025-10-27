@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect, useCallback } from 'react';
+import React, { useState, useRef } from 'react';
 import { ConfirmDialog } from '../ui/ConfirmDialog';
 
 interface EcoreFileBoxProps {
@@ -7,7 +7,6 @@ interface EcoreFileBoxProps {
   position: { x: number; y: number };
   onExpand: (fileName: string, fileContent: string) => void;
   onSelect: (fileName: string) => void;
-  onPositionChange?: (id: string, newPosition: { x: number; y: number }) => void;
   onDelete?: (id: string) => void;
   onRename?: (id: string, newFileName: string) => void;
   id: string;
@@ -114,9 +113,8 @@ const boxStyle: React.CSSProperties = {
   background: 'linear-gradient(145deg, #ffffff 0%, #f8f9fa 100%)',
   border: '2px solid #dee2e6',
   borderRadius: '12px',
-  padding: '20px 24px',
-  width: '280px',
-  height: '180px',
+  padding: '14px 16px',
+  width: '220px',
   cursor: 'pointer',
   boxShadow: '0 4px 16px rgba(0,0,0,0.08), 0 2px 8px rgba(0,0,0,0.04)',
   transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
@@ -143,24 +141,16 @@ const selectedBoxStyle: React.CSSProperties = {
   background: 'linear-gradient(145deg, #ffffff 0%, #e9ecef 100%)',
 };
 
-const draggingBoxStyle: React.CSSProperties = {
-  cursor: 'grabbing',
-  opacity: 0.95,
-  transform: 'scale(1.03) rotate(1deg)',
-  zIndex: 200,
-  boxShadow: '0 16px 48px rgba(0,0,0,0.15)',
-  border: '2px solid #495057',
-};
 
 const fileNameStyle: React.CSSProperties = {
-  fontSize: '16px',
+  fontSize: '14px',
   fontWeight: '700',
   color: '#212529',
   textAlign: 'center',
   wordBreak: 'break-word',
-  lineHeight: '1.4',
+  lineHeight: '1.3',
   fontFamily: '"Georgia", "Times New Roman", serif',
-  marginBottom: '8px',
+  marginBottom: '6px',
 };
 
 // ... existing code ...
@@ -229,7 +219,7 @@ const deleteButtonHoverStyle: React.CSSProperties = {
 };
 
 const descriptionStyle: React.CSSProperties = {
-  fontSize: '11px',
+  fontSize: '10px',
   color: '#6c757d',
   textAlign: 'center',
   marginTop: '6px',
@@ -246,7 +236,6 @@ export const EcoreFileBox: React.FC<EcoreFileBoxProps> = ({
   position,
   onExpand,
   onSelect,
-  onPositionChange,
   onDelete,
   onRename,
   id,
@@ -258,8 +247,6 @@ export const EcoreFileBox: React.FC<EcoreFileBoxProps> = ({
   createdAt,
 }) => {
   const [isHovered, setIsHovered] = useState(false);
-  const [isDragging, setIsDragging] = useState(false);
-  const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [editName, setEditName] = useState(fileName);
@@ -342,69 +329,6 @@ export const EcoreFileBox: React.FC<EcoreFileBoxProps> = ({
     setShowDeleteConfirm(false);
   };
 
-  const handleMouseDown = (e: React.MouseEvent) => {
-    if (e.button !== 0) return;
-    
-    e.preventDefault();
-    e.stopPropagation();
-    
-    const rect = boxRef.current?.getBoundingClientRect();
-    if (rect) {
-      setDragOffset({
-        x: e.clientX - rect.left,
-        y: e.clientY - rect.top,
-      });
-      
-      setTimeout(() => {
-        setIsDragging(true);
-      }, 50);
-    }
-  };
-
-  const handleMouseMove = useCallback((e: MouseEvent) => {
-    if (!isDragging || !onPositionChange) return;
-    
-    e.preventDefault();
-    
-    const newX = e.clientX - dragOffset.x;
-    const newY = e.clientY - dragOffset.y;
-    
-    const minX = 20;
-    const minY = 20;
-    const maxX = window.innerWidth - 300;
-    const maxY = window.innerHeight - 200;
-    
-    const boundedX = Math.max(minX, Math.min(maxX, newX));
-    const boundedY = Math.max(minY, Math.min(maxY, newY));
-    
-    const currentPosition = { x: boundedX, y: boundedY };
-    onPositionChange(id, currentPosition);
-  }, [isDragging, onPositionChange, dragOffset, id]);
-
-  const handleMouseUp = useCallback(() => {
-    if (isDragging) {
-      setIsDragging(false);
-      document.body.style.cursor = '';
-      document.body.style.userSelect = '';
-    }
-  }, [isDragging]);
-
-  useEffect(() => {
-    if (isDragging) {
-      document.addEventListener('mousemove', handleMouseMove, { passive: false });
-      document.addEventListener('mouseup', handleMouseUp);
-      
-      document.body.style.cursor = 'grabbing';
-      document.body.style.userSelect = 'none';
-      
-      return () => {
-        document.removeEventListener('mousemove', handleMouseMove);
-        document.removeEventListener('mouseup', handleMouseUp);
-        document.body.style.cursor = '';
-        document.body.style.userSelect = '';
-      };
-    }
-  }, [isDragging, handleMouseMove, handleMouseUp]);
 
   const handleFileNameDoubleClick = (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -454,19 +378,17 @@ export const EcoreFileBox: React.FC<EcoreFileBoxProps> = ({
         style={{
           ...boxStyle,
           ...(isSelected ? selectedBoxStyle : {}),
-          ...(isDragging ? draggingBoxStyle : {}),
           ...(isHovered ? boxHoverStyle : {}),
           left: position.x,
           top: position.y,
-          transform: isSelected && !isDragging ? 'scale(1.02)' : 'scale(1)',
+          transform: isSelected ? 'scale(1.02)' : 'scale(1)',
           display: isExpanded ? 'none' : 'block',
         }}
         onClick={handleClick}
         onDoubleClick={handleDoubleClick}
-        onMouseDown={handleMouseDown}
         onMouseEnter={() => setIsHovered(true)}
         onMouseLeave={() => setIsHovered(false)}
-        title={`Click to select, double-click to expand\nDrag to move\n${fileName}`}
+        title={`Click to select, double-click to expand\n${fileName}`}
       >
                            <div style={fileNameStyle}>
             {isEditing ? (
@@ -502,7 +424,7 @@ export const EcoreFileBox: React.FC<EcoreFileBoxProps> = ({
                 }}
               />
             ) : (
-              <span onDoubleClick={handleFileNameDoubleClick}>
+              <span>
                 {fileName.replace(/\.ecore$/i, '')}
               </span>
             )}
@@ -586,19 +508,6 @@ export const EcoreFileBox: React.FC<EcoreFileBoxProps> = ({
               })()}
             </div>
           )}
-         
-         {createdAt && (
-           <div style={{
-             fontSize: '11px',
-             color: '#6c757d',
-             textAlign: 'center',
-             fontStyle: 'italic',
-             lineHeight: '1.4',
-             fontFamily: '"Georgia", "Times New Roman", serif',
-           }}>
-             Created: {formatDate(createdAt)}
-           </div>
-         )}
         <button
           style={{
             ...deleteButtonStyle,

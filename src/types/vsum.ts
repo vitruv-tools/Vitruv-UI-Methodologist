@@ -9,10 +9,15 @@ export interface Vsum {
 export interface VsumMetaModelRef {
   id: number;
   name: string;
-  role: string;
+  description: string;
+  domain: string;
+  sourceId: number;
+  keyword: string[];
   createdAt: string;
   updatedAt: string;
   removedAt?: string | null;
+  ecoreFileId: number;
+  genModelFileId: number;
 }
 
 export interface VsumDetails extends Vsum {
