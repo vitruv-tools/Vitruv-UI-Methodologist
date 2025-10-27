@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import ReactDOM from 'react-dom';
 import { apiService } from '../../services/api';
 import { useToast } from './ToastProvider';
 
@@ -18,7 +19,7 @@ const modalOverlayStyle: React.CSSProperties = {
   display: 'flex',
   alignItems: 'center',
   justifyContent: 'center',
-  zIndex: 1000,
+  zIndex: 10000,
 };
 
 const modalStyle: React.CSSProperties = {
@@ -128,6 +129,15 @@ export const CreateVsumModal: React.FC<CreateVsumModalProps> = ({ isOpen, onClos
   const [error, setError] = useState('');
   const { showSuccess, showError } = useToast();
 
+  useEffect(() => {
+    if (!isOpen) return;
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.body.style.overflow = prev;
+    };
+  }, [isOpen]);
+
   if (!isOpen) return null;
 
   const handleSubmit = async () => {
@@ -162,7 +172,7 @@ export const CreateVsumModal: React.FC<CreateVsumModalProps> = ({ isOpen, onClos
     onClose();
   };
 
-  return (
+  return ReactDOM.createPortal(
     <div style={modalOverlayStyle} onClick={handleClose}>
       <div style={modalStyle} onClick={(e) => e.stopPropagation()}>
         <div style={headerStyle}>
@@ -203,7 +213,8 @@ export const CreateVsumModal: React.FC<CreateVsumModalProps> = ({ isOpen, onClos
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 };
 
