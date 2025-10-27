@@ -248,12 +248,9 @@ export const EcoreFileBox: React.FC<EcoreFileBoxProps> = ({
 }) => {
   const [isHovered, setIsHovered] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
-  const [isEditing, setIsEditing] = useState(false);
-  const [editName, setEditName] = useState(fileName);
   const [showDescriptionModal, setShowDescriptionModal] = useState(false);
   const [showKeywordsModal, setShowKeywordsModal] = useState(false);
   const boxRef = useRef<HTMLDivElement>(null);
-  const inputRef = useRef<HTMLInputElement>(null);
 
   const handleShowMoreClick = (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -328,28 +325,6 @@ export const EcoreFileBox: React.FC<EcoreFileBoxProps> = ({
   const cancelDelete = () => {
     setShowDeleteConfirm(false);
   };
-
-  const handleEditKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter') {
-      handleSaveEdit();
-    } else if (e.key === 'Escape') {
-      setIsEditing(false);
-      setEditName(fileName);
-    }
-  };
-
-  const handleSaveEdit = () => {
-    if (editName.trim() && editName !== fileName && onRename) {
-      onRename(id, editName.trim());
-    }
-    setIsEditing(false);
-  };
-
-  const handleEditBlur = () => {
-    handleSaveEdit();
-  };
-
-  // ... existing code ...
 
   const formatDate = (dateString: string) => {
     try {
