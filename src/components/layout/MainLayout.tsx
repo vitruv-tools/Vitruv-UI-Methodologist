@@ -170,40 +170,83 @@ export function MainLayout({
     };
 
     const calculateEmptyPosition = (existingBoxes: EcoreFileBox[]) => {
-        if (existingBoxes.length === 0) return { x: 100, y: 100 };
-        const boxWidth = 220;
-        const boxHeight = 140;
-        const spacing = 30;
+    console.log('🎯 calculateEmptyPosition called');
+    console.log('📦 Existing boxes:', existingBoxes.length);
+    console.log('📦 Existing boxes array:', existingBoxes);
+    
+    if (existingBoxes.length === 0) {
+        console.log('✨ First box - returning (100, 100)');
+        return { x: 100, y: 100 };
+    }
+    
+    const boxWidth = 280;
+    const boxHeight = 180;
+    const spacing = 40;
 
-        const rightmost = existingBoxes.reduce((r, b) => (b.position.x > r.position.x ? b : r));
-        let newX = rightmost.position.x + boxWidth + spacing;
-        let newY = rightmost.position.y;
-        if (!wouldOverlap(existingBoxes, { x: newX, y: newY }, boxWidth, boxHeight, spacing)) {
-            return { x: newX, y: newY };
-        }
-        newX = rightmost.position.x;
-        newY = rightmost.position.y + boxHeight + spacing;
-        if (!wouldOverlap(existingBoxes, { x: newX, y: newY }, boxWidth, boxHeight, spacing)) {
-            return { x: newX, y: newY };
-        }
+    // Nimm die letzte Box (nicht die rechteste!)
+    const lastBox = existingBoxes[existingBoxes.length - 1];
+    console.log('📍 Last box position:', lastBox.position);
+    
+    // Berechne neue Position rechts daneben
+    let newX = lastBox.position.x + boxWidth + spacing;
+    let newY = lastBox.position.y;
+    console.log('🔢 Calculated newX:', newX, 'newY:', newY);
+    
+    // Prüfe ob zu weit rechts (Fensterbreite check)
+    const maxX = window.innerWidth - 400;
+    console.log('📏 Window width:', window.innerWidth, 'maxX:', maxX);
+    
+    if (newX > maxX) {
+        // Neue Zeile: Ganz links, eine Zeile tiefer
+        newX = 100;
+        newY = lastBox.position.y + boxHeight + spacing;
+        console.log('🔄 Wrapping to new row:', newX, newY);
+    }
+    
+    // Optional: Collision-Check mit allen existierenden Boxen
+    const wouldOverlap = existingBoxes.some(box => 
+        Math.abs(box.position.x - newX) < boxWidth + spacing &&
+        Math.abs(box.position.y - newY) < boxHeight + spacing
+    );
+    
+    console.log('💥 Would overlap?', wouldOverlap);
+    
+    if (wouldOverlap) {
+        // Fallback: Nutze Grid-Search
+        console.log('⚠️ Using fallback grid search');
         return findFirstEmptyGridPosition(existingBoxes, boxWidth, boxHeight, spacing);
-    };
+    }
+    
+    console.log('✅ Final position:', { x: newX, y: newY });
+    return { x: newX, y: newY };
+};
 
     // ---- ECORE file actions ----
     const handleEcoreFileUpload = (
-        fileContent: string,
-        meta?: { fileName?: string; description?: string; keywords?: string; domain?: string; createdAt?: string }
-    ) => {
-        const existing = ecoreFileBoxes.find((f) => f.fileName === meta?.fileName);
+    fileContent: string,
+    meta?: { fileName?: string; description?: string; keywords?: string; domain?: string; createdAt?: string }
+) => {
+    console.log('📤 handleEcoreFileUpload called');
+    console.log('📄 File name:', meta?.fileName);
+    
+    // ✅ WICHTIG: Nutze functional update, um auf den aktuellen State zuzugreifen
+    setEcoreFileBoxes((prevBoxes) => {
+        console.log('📦 Current boxes before adding:', prevBoxes.length);
+        
+        const existing = prevBoxes.find((f) => f.fileName === meta?.fileName);
         if (existing) {
             setSelectedFileBoxId(existing.id);
-            return;
+            console.log('⚠️ File already exists:', meta?.fileName);
+            return prevBoxes; // Keine Änderung
         }
 
         if (flowCanvasRef.current?.loadDiagramData) flowCanvasRef.current.loadDiagramData([], []);
         if (flowCanvasRef.current?.resetExpandedFile) flowCanvasRef.current.resetExpandedFile();
 
-        const pos = calculateEmptyPosition(ecoreFileBoxes);
+        // ✅ Berechne Position basierend auf dem AKTUELLEN State (prevBoxes)
+        const pos = calculateEmptyPosition(prevBoxes);
+        console.log('🎯 New box will be placed at:', pos);
+        
         const newBox: EcoreFileBox = {
             id: `ecore-box-${Date.now()}`,
             fileName: meta?.fileName || 'untitled.ecore',
@@ -215,10 +258,13 @@ export function MainLayout({
             createdAt: meta?.createdAt || new Date().toISOString(),
         };
 
-        setEcoreFileBoxes((prev) => [...prev, newBox]);
+        console.log('📦 New box created:', newBox);
         setSelectedFileBoxId(newBox.id);
-    };
-
+        
+        // ✅ Return das neue Array mit der neuen Box
+        return [...prevBoxes, newBox];
+    });
+};
     // Listen for add file to workspace events
     useEffect(() => {
         const handleAddFileToWorkspace = (e: Event) => {
