@@ -1,4 +1,5 @@
-import React, { useRef, useState, forwardRef, useImperativeHandle, useEffect } from 'react';
+
+import React, { useRef, useState, forwardRef, useImperativeHandle, useEffect, useCallback } from 'react';
 import ReactFlow, {
   MiniMap,
   Background,
@@ -12,6 +13,8 @@ import { useDragAndDrop } from '../../hooks/useDragAndDrop';
 import { EditableNode } from './EditableNode';
 import { UMLRelationship } from './UMLRelationship';
 import { EcoreFileBox } from './EcoreFileBox';
+import { ConnectionLine } from './ConnectionLine'; // ← NEU
+
 
 const nodeTypes = { 
   editable: EditableNode,
@@ -53,6 +56,13 @@ export const FlowCanvas = forwardRef<{
   // selectedFileId und expandedFileId bleiben, für interne Tracking
   const [selectedFileId, setSelectedFileId] = useState<string | null>(null);
   const [expandedFileId, setExpandedFileId] = useState<string | null>(null);
+
+  const [connectionDragState, setConnectionDragState] = useState<{
+  isActive: boolean;
+  sourceNodeId: string | null;
+  sourceHandle: 'top' | 'bottom' | 'left' | 'right' | null;
+  currentPosition: { x: number; y: number } | null;
+} | null>(null);
   
   const {
     nodes,
@@ -78,6 +88,32 @@ export const FlowCanvas = forwardRef<{
     addNode,
     addEdge,
   });
+
+// NEU: Berechne die absolute Position eines Handles auf dem Canvas
+const getHandlePosition = (
+  nodeId: string, 
+  handle: 'top' | 'bottom' | 'left' | 'right'
+): { x: number; y: number } | null => {
+  const node = nodes.find(n => n.id === nodeId);
+  if (!node) return null;
+  
+  const nodeWidth = 280;  // EcoreFileBox width
+  const nodeHeight = 180; // EcoreFileBox height
+  
+  const nodeX = node.position.x;
+  const nodeY = node.position.y;
+  
+  switch (handle) {
+    case 'top':
+      return { x: nodeX + nodeWidth / 2, y: nodeY };
+    case 'bottom':
+      return { x: nodeX + nodeWidth / 2, y: nodeY + nodeHeight };
+    case 'left':
+      return { x: nodeX, y: nodeY + nodeHeight / 2 };
+    case 'right':
+      return { x: nodeX + nodeWidth, y: nodeY + nodeHeight / 2 };
+  }
+};
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
@@ -115,6 +151,50 @@ export const FlowCanvas = forwardRef<{
       document.removeEventListener('keydown', handleKeyDown);
     };
   }, [undo, redo, canUndo, canRedo]);
+
+// NEU:
+// NEU: Escape-Taste zum Abbrechen
+useEffect(() => {
+  if (!connectionDragState?.isActive) return;
+  
+  console.log('🟦 Adding event listeners');
+  
+
+  const handleEscape = (e: KeyboardEvent) => {
+    if (e.key === 'Escape') {
+      console.log('❌ Connection cancelled by Escape key');
+      setConnectionDragState(null);
+    }
+  };
+  
+  const moveHandler = (e: any) => handleConnectionMove(e);
+  const endHandler = (e: any) => {
+    console.log('🟥 endHandler called via', e.type);
+    handleConnectionEnd(e);
+  };
+  
+  // WICHTIG: { capture: true } für Capture-Phase!
+  document.addEventListener('mousemove', moveHandler, { capture: true });
+  document.addEventListener('mouseup', endHandler, { capture: true });     // ← capture: true
+  document.addEventListener('pointerup', endHandler, { capture: true });   // ← capture: true
+  
+  // Auch auf window
+  window.addEventListener('mouseup', endHandler, { capture: true });
+  window.addEventListener('pointerup', endHandler, { capture: true });
+  
+  document.body.style.cursor = 'crosshair';
+  
+  return () => {
+    console.log('🟦 Removing event listeners');
+    document.removeEventListener('mousemove', moveHandler, { capture: true });
+    document.removeEventListener('mouseup', endHandler, { capture: true });
+    document.removeEventListener('pointerup', endHandler, { capture: true });
+    window.removeEventListener('mouseup', endHandler, { capture: true });
+    window.removeEventListener('pointerup', endHandler, { capture: true });
+    document.body.style.cursor = '';
+  };
+}, [connectionDragState?.isActive]);
+
 
   const handleToolClick = (toolType: string, toolName: string, diagramType?: string) => {
     if (!reactFlowInstance || !reactFlowWrapper.current) return;
@@ -272,6 +352,98 @@ export const FlowCanvas = forwardRef<{
     updateNodeLabel(id, newLabel);
   };
 
+  // NEU: Connection Drag Handler
+const handleConnectionStart = (nodeId: string, handle: 'top' | 'bottom' | 'left' | 'right') => {
+  console.log('🔵 Connection drag started:', { nodeId, handle });
+  
+  setConnectionDragState({
+    isActive: true,
+    sourceNodeId: nodeId,
+    sourceHandle: handle,
+    currentPosition: null,
+  });
+};
+
+const handleConnectionMove = useCallback((e: MouseEvent) => {
+  console.log('🟨 handleConnectionMove');
+  
+  if (!connectionDragState?.isActive || !reactFlowInstance) return;
+  
+  const flowPosition = reactFlowInstance.screenToFlowPosition({
+    x: e.clientX,
+    y: e.clientY,
+  });
+  
+  setConnectionDragState(prev => prev ? {
+    ...prev,
+    currentPosition: flowPosition, // ← Wichtig!
+  } : null);
+  
+  console.log('🔵 Connection dragging to:', flowPosition);
+}, [connectionDragState?.isActive, reactFlowInstance]);
+
+const handleConnectionEnd = (e: MouseEvent) => {
+  console.log('🟥 handleConnectionEnd CALLED', {
+    isActive: connectionDragState?.isActive,
+    hasInstance: !!reactFlowInstance,
+    mousePos: { x: e.clientX, y: e.clientY }
+  });
+  
+  if (!connectionDragState?.isActive || !reactFlowInstance) return;
+  
+  console.log('🔵 Connection drag ended');
+  
+  // Konvertiere Screen-Position zu Flow-Position
+  const flowPosition = reactFlowInstance.screenToFlowPosition({
+    x: e.clientX,
+    y: e.clientY,
+  });
+  
+  // Finde alle Nodes an dieser Position
+  const intersectingNodes = nodes.filter(node => {
+    // Nur EcoreFile Nodes
+    if (node.type !== 'ecoreFile') return false;
+    
+    // Nicht die Source Node selbst
+    if (node.id === connectionDragState.sourceNodeId) return false;
+    
+    // Prüfe ob Maus-Position innerhalb der Node ist
+    const nodeWidth = 280; // EcoreFileBox width
+    const nodeHeight = 180; // EcoreFileBox height
+    
+    const isInside = 
+      flowPosition.x >= node.position.x &&
+      flowPosition.x <= node.position.x + nodeWidth &&
+      flowPosition.y >= node.position.y &&
+      flowPosition.y <= node.position.y + nodeHeight;
+    
+    return isInside;
+  });
+  
+  if (intersectingNodes.length > 0) {
+    const targetNode = intersectingNodes[0];
+    console.log('✅ Connection ended on node:', targetNode.id);
+    
+    // Prüfe ob bereits eine Connection existiert
+    const existingEdge = edges.find(edge => 
+      (edge.source === connectionDragState.sourceNodeId && edge.target === targetNode.id) ||
+      (edge.source === targetNode.id && edge.target === connectionDragState.sourceNodeId)
+    );
+    
+    if (existingEdge) {
+      console.log('⚠️ Connection already exists between these nodes');
+    } else {
+      // TODO: In Paket 5 werden wir hier den Edge erstellen
+      console.log('🎯 Would create edge from', connectionDragState.sourceNodeId, 'to', targetNode.id);
+    }
+  } else {
+    console.log('❌ Connection ended in empty space - cancelled');
+  }
+  
+  // Reset State
+  setConnectionDragState(null);
+};
+
 // NEU:
 // ANPASSUNG in FlowCanvas:
 const addEcoreFile = (fileName: string, fileContent: string, meta?: any) => {
@@ -400,21 +572,24 @@ useImperativeHandle(ref, () => ({
       };
     }
     
-    // Für EcoreFile Nodes: füge callbacks und state hinzu
-    if (node.type === 'ecoreFile') {
-      return {
-        ...node,
-        data: {
-          ...node.data,
-          onExpand: handleEcoreFileExpand,
-          onSelect: handleEcoreFileSelect,
-          onDelete: onEcoreFileDelete,
-          onRename: onEcoreFileRename,
-          isExpanded: expandedFileId === node.id,
-        },
-        selected: selectedFileId === node.id,  // ← ReactFlow's selection system
-      };
-    }
+   // NEU:
+// NEU:
+if (node.type === 'ecoreFile') {
+  return {
+    ...node,
+    data: {
+      ...node.data,
+      onExpand: handleEcoreFileExpand,
+      onSelect: handleEcoreFileSelect,
+      onDelete: onEcoreFileDelete,
+      onRename: onEcoreFileRename,
+      isExpanded: expandedFileId === node.id,
+      onConnectionStart: handleConnectionStart,
+    },
+    selected: selectedFileId === node.id,
+    draggable: !connectionDragState?.isActive, // ← NEU: Node nicht draggable während Connection-Drag
+  };
+}
     
     return node;
   })}
@@ -429,7 +604,7 @@ useImperativeHandle(ref, () => ({
   nodeTypes={nodeTypes}
   edgeTypes={edgeTypes}
   onInit={setReactFlowInstance}
-  nodesDraggable={isInteractive}
+  nodesDraggable={isInteractive && !connectionDragState?.isActive}
   nodesConnectable={isInteractive}
   elementsSelectable={isInteractive}
   panOnDrag={isInteractive}
@@ -441,6 +616,26 @@ useImperativeHandle(ref, () => ({
   <Background />
 </ReactFlow>
 
+{/* NEU: Temporäre Connection Line während Drag */}
+      {connectionDragState?.isActive && 
+       connectionDragState.sourceNodeId && 
+       connectionDragState.sourceHandle && 
+       connectionDragState.currentPosition && (() => {
+         const sourcePos = getHandlePosition(
+           connectionDragState.sourceNodeId,
+           connectionDragState.sourceHandle
+         );
+         
+         if (!sourcePos) return null;
+         
+         return (
+           <ConnectionLine
+             sourcePosition={sourcePos}
+             targetPosition={connectionDragState.currentPosition}
+           />
+         );
+       })()}
+       
 {/* EcoreFileBoxes werden NICHT mehr separat gerendert - sie sind jetzt Nodes! */}
       
       {/* Canvas Controls anchored to wrapper so they move with sidebar resizing */}

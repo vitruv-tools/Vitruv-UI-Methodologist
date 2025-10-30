@@ -4,6 +4,7 @@ import { NodeProps } from 'reactflow';
 import { ConfirmDialog } from '../ui/ConfirmDialog';
 import { ConnectionHandle } from './ConnectionHandle';
 
+// NEU:
 interface EcoreFileBoxData {
   fileName: string;
   fileContent: string;
@@ -11,6 +12,7 @@ interface EcoreFileBoxData {
   onSelect: (fileName: string) => void;
   onDelete?: (id: string) => void;
   onRename?: (id: string, newFileName: string) => void;
+  onConnectionStart?: (nodeId: string, handle: 'top' | 'bottom' | 'left' | 'right') => void; // ← NEU
   isExpanded?: boolean;
   description?: string;
   keywords?: string;
@@ -244,7 +246,20 @@ export const EcoreFileBox: React.FC<NodeProps<EcoreFileBoxData>> = ({
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [showDescriptionModal, setShowDescriptionModal] = useState(false);
   const [showKeywordsModal, setShowKeywordsModal] = useState(false);
-  const {fileName, fileContent, onExpand, onSelect, onDelete, onRename, isExpanded = false, description, keywords, domain, createdAt,} = data;
+const {
+  fileName, 
+  fileContent, 
+  onExpand, 
+  onSelect, 
+  onDelete, 
+  onRename, 
+  onConnectionStart, // ← NEU
+  isExpanded = false, 
+  description, 
+  keywords, 
+  domain, 
+  createdAt,
+} = data;
   const boxRef = useRef<HTMLDivElement>(null);
 
   const handleShowMoreClick = (e: React.MouseEvent) => {
@@ -350,30 +365,42 @@ export const EcoreFileBox: React.FC<NodeProps<EcoreFileBoxData>> = ({
         {/* NEU: Connection Handles - nur wenn selected */}
         {selected && (
           <>
-            <ConnectionHandle 
-              position="top"
-              onConnectionStart={(pos) => {
-                console.log('Connection started from', pos, 'on node', id);
-              }}
-            />
-            <ConnectionHandle 
-              position="bottom"
-              onConnectionStart={(pos) => {
-                console.log('Connection started from', pos, 'on node', id);
-              }}
-            />
-            <ConnectionHandle 
-              position="left"
-              onConnectionStart={(pos) => {
-                console.log('Connection started from', pos, 'on node', id);
-              }}
-            />
-            <ConnectionHandle 
-              position="right"
-              onConnectionStart={(pos) => {
-                console.log('Connection started from', pos, 'on node', id);
-              }}
-            />
+<ConnectionHandle 
+  position="top"
+  onConnectionStart={(pos) => {
+    console.log('Connection started from', pos, 'on node', id);
+    if (onConnectionStart) {
+      onConnectionStart(id, pos);
+    }
+  }}
+/>
+<ConnectionHandle 
+  position="bottom"
+  onConnectionStart={(pos) => {
+    console.log('Connection started from', pos, 'on node', id);
+    if (onConnectionStart) {
+      onConnectionStart(id, pos);
+    }
+  }}
+/>
+<ConnectionHandle 
+  position="left"
+  onConnectionStart={(pos) => {
+    console.log('Connection started from', pos, 'on node', id);
+    if (onConnectionStart) {
+      onConnectionStart(id, pos);
+    }
+  }}
+/>
+<ConnectionHandle 
+  position="right"
+  onConnectionStart={(pos) => {
+    console.log('Connection started from', pos, 'on node', id);
+    if (onConnectionStart) {
+      onConnectionStart(id, pos);
+    }
+  }}
+/>
           </>
         )}
 
