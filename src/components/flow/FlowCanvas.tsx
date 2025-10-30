@@ -159,37 +159,30 @@ useEffect(() => {
   
   console.log('🟦 Adding event listeners');
   
-
-  const handleEscape = (e: KeyboardEvent) => {
-    if (e.key === 'Escape') {
-      console.log('❌ Connection cancelled by Escape key');
-      setConnectionDragState(null);
-    }
+  const moveHandler = (e: any) => {
+    console.log('🟨 moveHandler triggered'); // ← Debug
+    handleConnectionMove(e);
   };
-  
-  const moveHandler = (e: any) => handleConnectionMove(e);
   const endHandler = (e: any) => {
     console.log('🟥 endHandler called via', e.type);
     handleConnectionEnd(e);
   };
   
-  // WICHTIG: { capture: true } für Capture-Phase!
-  document.addEventListener('mousemove', moveHandler, { capture: true });
-  document.addEventListener('mouseup', endHandler, { capture: true });     // ← capture: true
-  document.addEventListener('pointerup', endHandler, { capture: true });   // ← capture: true
+  // NEU: pointermove statt mousemove!
+  document.addEventListener('pointermove', moveHandler, { capture: true }); // ← HIER
+  document.addEventListener('pointerup', endHandler, { capture: true });
   
-  // Auch auf window
-  window.addEventListener('mouseup', endHandler, { capture: true });
+  // Auch window
+  window.addEventListener('pointermove', moveHandler, { capture: true }); // ← HIER
   window.addEventListener('pointerup', endHandler, { capture: true });
   
   document.body.style.cursor = 'crosshair';
   
   return () => {
     console.log('🟦 Removing event listeners');
-    document.removeEventListener('mousemove', moveHandler, { capture: true });
-    document.removeEventListener('mouseup', endHandler, { capture: true });
+    document.removeEventListener('pointermove', moveHandler, { capture: true }); // ← HIER
     document.removeEventListener('pointerup', endHandler, { capture: true });
-    window.removeEventListener('mouseup', endHandler, { capture: true });
+    window.removeEventListener('pointermove', moveHandler, { capture: true }); // ← HIER
     window.removeEventListener('pointerup', endHandler, { capture: true });
     document.body.style.cursor = '';
   };
@@ -356,93 +349,96 @@ useEffect(() => {
 const handleConnectionStart = (nodeId: string, handle: 'top' | 'bottom' | 'left' | 'right') => {
   console.log('🔵 Connection drag started:', { nodeId, handle });
   
+  // NEU: Setze initiale currentPosition auf Handle-Position
+  const initialPosition = getHandlePosition(nodeId, handle);
+  console.log('🔵 Initial position:', initialPosition);
+  
   setConnectionDragState({
     isActive: true,
     sourceNodeId: nodeId,
     sourceHandle: handle,
-    currentPosition: null,
+    currentPosition: initialPosition, // ← Statt null
   });
 };
 
 const handleConnectionMove = useCallback((e: MouseEvent) => {
-  console.log('🟨 handleConnectionMove');
-  
-  if (!connectionDragState?.isActive || !reactFlowInstance) return;
+  if (!reactFlowInstance) return;
   
   const flowPosition = reactFlowInstance.screenToFlowPosition({
     x: e.clientX,
     y: e.clientY,
   });
   
-  setConnectionDragState(prev => prev ? {
-    ...prev,
-    currentPosition: flowPosition, // ← Wichtig!
-  } : null);
+  console.log('🟨 handleConnectionMove - updating position:', flowPosition);
   
-  console.log('🔵 Connection dragging to:', flowPosition);
-}, [connectionDragState?.isActive, reactFlowInstance]);
+  setConnectionDragState(prev => {
+    // Prüfe isActive im State Updater
+    if (!prev?.isActive) return prev;
+    
+    return {
+      ...prev,
+      currentPosition: flowPosition,
+    };
+  });
+}, [reactFlowInstance]); // ← Nur reactFlowInstance dependency!
 
-const handleConnectionEnd = (e: MouseEvent) => {
+const handleConnectionEnd = useCallback((e: MouseEvent) => {
   console.log('🟥 handleConnectionEnd CALLED', {
-    isActive: connectionDragState?.isActive,
-    hasInstance: !!reactFlowInstance,
     mousePos: { x: e.clientX, y: e.clientY }
   });
   
-  if (!connectionDragState?.isActive || !reactFlowInstance) return;
+  if (!reactFlowInstance) return;
   
-  console.log('🔵 Connection drag ended');
-  
-  // Konvertiere Screen-Position zu Flow-Position
-  const flowPosition = reactFlowInstance.screenToFlowPosition({
-    x: e.clientX,
-    y: e.clientY,
-  });
-  
-  // Finde alle Nodes an dieser Position
-  const intersectingNodes = nodes.filter(node => {
-    // Nur EcoreFile Nodes
-    if (node.type !== 'ecoreFile') return false;
+  // Verwende lokale Variable für State
+  setConnectionDragState(currentState => {
+    if (!currentState?.isActive) return null;
     
-    // Nicht die Source Node selbst
-    if (node.id === connectionDragState.sourceNodeId) return false;
+    console.log('🔵 Connection drag ended');
     
-    // Prüfe ob Maus-Position innerhalb der Node ist
-    const nodeWidth = 280; // EcoreFileBox width
-    const nodeHeight = 180; // EcoreFileBox height
+    const flowPosition = reactFlowInstance.screenToFlowPosition({
+      x: e.clientX,
+      y: e.clientY,
+    });
     
-    const isInside = 
-      flowPosition.x >= node.position.x &&
-      flowPosition.x <= node.position.x + nodeWidth &&
-      flowPosition.y >= node.position.y &&
-      flowPosition.y <= node.position.y + nodeHeight;
+    // Finde Target Node
+    const intersectingNodes = nodes.filter(node => {
+      if (node.type !== 'ecoreFile') return false;
+      if (node.id === currentState.sourceNodeId) return false;
+      
+      const nodeWidth = 280;
+      const nodeHeight = 180;
+      
+      const isInside = 
+        flowPosition.x >= node.position.x &&
+        flowPosition.x <= node.position.x + nodeWidth &&
+        flowPosition.y >= node.position.y &&
+        flowPosition.y <= node.position.y + nodeHeight;
+      
+      return isInside;
+    });
     
-    return isInside;
-  });
-  
-  if (intersectingNodes.length > 0) {
-    const targetNode = intersectingNodes[0];
-    console.log('✅ Connection ended on node:', targetNode.id);
-    
-    // Prüfe ob bereits eine Connection existiert
-    const existingEdge = edges.find(edge => 
-      (edge.source === connectionDragState.sourceNodeId && edge.target === targetNode.id) ||
-      (edge.source === targetNode.id && edge.target === connectionDragState.sourceNodeId)
-    );
-    
-    if (existingEdge) {
-      console.log('⚠️ Connection already exists between these nodes');
+    if (intersectingNodes.length > 0) {
+      const targetNode = intersectingNodes[0];
+      console.log('✅ Connection ended on node:', targetNode.id);
+      
+      const existingEdge = edges.find(edge => 
+        (edge.source === currentState.sourceNodeId && edge.target === targetNode.id) ||
+        (edge.source === targetNode.id && edge.target === currentState.sourceNodeId)
+      );
+      
+      if (existingEdge) {
+        console.log('⚠️ Connection already exists between these nodes');
+      } else {
+        console.log('🎯 Would create edge from', currentState.sourceNodeId, 'to', targetNode.id);
+      }
     } else {
-      // TODO: In Paket 5 werden wir hier den Edge erstellen
-      console.log('🎯 Would create edge from', connectionDragState.sourceNodeId, 'to', targetNode.id);
+      console.log('❌ Connection ended in empty space - cancelled');
     }
-  } else {
-    console.log('❌ Connection ended in empty space - cancelled');
-  }
-  
-  // Reset State
-  setConnectionDragState(null);
-};
+    
+    // Return null um State zu clearen
+    return null;
+  });
+}, [reactFlowInstance, nodes, edges]); // ← connectionDragState NICHT hier!
 
 // NEU:
 // ANPASSUNG in FlowCanvas:
@@ -557,7 +553,7 @@ useImperativeHandle(ref, () => ({
         transition: 'border 0.2s ease'
       }}
     > 
-     // NEU:
+
 <ReactFlow
   nodes={nodes.map(node => {
     // Für alle Nodes: füge callbacks hinzu
@@ -614,27 +610,42 @@ if (node.type === 'ecoreFile') {
 >
   <MiniMap position="bottom-right" style={{ bottom: 16, right: 16, zIndex: 30 }} />
   <Background />
+
 </ReactFlow>
 
-{/* NEU: Temporäre Connection Line während Drag */}
-      {connectionDragState?.isActive && 
-       connectionDragState.sourceNodeId && 
-       connectionDragState.sourceHandle && 
-       connectionDragState.currentPosition && (() => {
-         const sourcePos = getHandlePosition(
-           connectionDragState.sourceNodeId,
-           connectionDragState.sourceHandle
-         );
-         
-         if (!sourcePos) return null;
-         
-         return (
-           <ConnectionLine
-             sourcePosition={sourcePos}
-             targetPosition={connectionDragState.currentPosition}
-           />
-         );
-       })()}
+{connectionDragState?.isActive && 
+ connectionDragState.sourceNodeId && 
+ connectionDragState.sourceHandle && 
+ connectionDragState.currentPosition && 
+ reactFlowInstance && 
+ reactFlowWrapper.current && (() => {
+   const sourcePos = getHandlePosition(
+     connectionDragState.sourceNodeId,
+     connectionDragState.sourceHandle
+   );
+   
+   if (!sourcePos) return null;
+   
+   const viewport = reactFlowInstance.getViewport();
+   
+   const sourceScreen = {
+     x: sourcePos.x * viewport.zoom + viewport.x,
+     y: sourcePos.y * viewport.zoom + viewport.y,
+   };
+   
+   const targetScreen = {
+     x: connectionDragState.currentPosition.x * viewport.zoom + viewport.x,
+     y: connectionDragState.currentPosition.y * viewport.zoom + viewport.y,
+   };
+   
+   return (
+     <ConnectionLine
+       sourcePosition={sourceScreen}
+       targetPosition={targetScreen}
+     />
+   );
+ })()}
+
        
 {/* EcoreFileBoxes werden NICHT mehr separat gerendert - sie sind jetzt Nodes! */}
       
