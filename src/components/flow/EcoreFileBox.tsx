@@ -2,6 +2,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { NodeProps } from 'reactflow';
 import { ConfirmDialog } from '../ui/ConfirmDialog';
+import { ConnectionHandle } from './ConnectionHandle';
 
 interface EcoreFileBoxData {
   fileName: string;
@@ -330,23 +331,52 @@ export const EcoreFileBox: React.FC<NodeProps<EcoreFileBoxData>> = ({
   };
 
   return (
-  <>
-    <div
-      ref={boxRef}
-      style={{
-        ...boxStyle,
-        ...(selected ? selectedBoxStyle : {}),  // ← isSelected → selected
-        ...(isHovered ? boxHoverStyle : {}),
-        // left, top, transform entfernt - ReactFlow macht das
-        display: isExpanded ? 'none' : 'block',
-      }}
-      onClick={handleClick}
-      onDoubleClick={handleDoubleClick}
-      // onMouseDown entfernt - ReactFlow übernimmt Drag
-      onMouseEnter={() => setIsHovered(true)}
-      onMouseLeave={() => setIsHovered(false)}
-      title={`Click to select, double-click to expand\n${fileName}`}
-    >
+    <>
+      <div
+        ref={boxRef}
+        style={{
+          ...boxStyle,
+          ...(selected ? selectedBoxStyle : {}),
+          ...(isHovered ? boxHoverStyle : {}),
+          display: isExpanded ? 'none' : 'block',
+          position: 'relative', // ← NEU: für absolute positioning der Handles
+        }}
+        onClick={handleClick}
+        onDoubleClick={handleDoubleClick}
+        onMouseEnter={() => setIsHovered(true)}
+        onMouseLeave={() => setIsHovered(false)}
+        title={`Click to select, double-click to expand\n${fileName}`}
+      >
+        {/* NEU: Connection Handles - nur wenn selected */}
+        {selected && (
+          <>
+            <ConnectionHandle 
+              position="top"
+              onConnectionStart={(pos) => {
+                console.log('Connection started from', pos, 'on node', id);
+              }}
+            />
+            <ConnectionHandle 
+              position="bottom"
+              onConnectionStart={(pos) => {
+                console.log('Connection started from', pos, 'on node', id);
+              }}
+            />
+            <ConnectionHandle 
+              position="left"
+              onConnectionStart={(pos) => {
+                console.log('Connection started from', pos, 'on node', id);
+              }}
+            />
+            <ConnectionHandle 
+              position="right"
+              onConnectionStart={(pos) => {
+                console.log('Connection started from', pos, 'on node', id);
+              }}
+            />
+          </>
+        )}
+
         <div style={fileNameStyle}>
           <span>
             {fileName.replace(/\.ecore$/i, '')}
@@ -431,6 +461,7 @@ export const EcoreFileBox: React.FC<NodeProps<EcoreFileBoxData>> = ({
             })()}
           </div>
         )}
+        
         <button
           style={{
             ...deleteButtonStyle,
