@@ -13,46 +13,44 @@ import { EditableNode } from './EditableNode';
 import { UMLRelationship } from './UMLRelationship';
 import { EcoreFileBox } from './EcoreFileBox';
 
-const nodeTypes = { editable: EditableNode };
+const nodeTypes = { 
+  editable: EditableNode,
+  ecoreFile: EcoreFileBox  // ← Neuer Node-Typ registriert
+};
 const edgeTypes = { uml: UMLRelationship };
 
 interface FlowCanvasProps {
   onDeploy?: (nodes: Node[], edges: Edge[]) => void;
   onToolClick?: (toolType: string, toolName: string, diagramType?: string) => void;
   onDiagramChange?: (nodes: Node[], edges: Edge[]) => void;
-  ecoreFiles?: Array<{
-    id: string;
-    fileName: string;
-    fileContent: string;
-    position: { x: number; y: number };
-    description?: string;
-    keywords?: string;
-    domain?: string;
-    createdAt?: string;
-  }>;
+  // ecoreFiles prop entfernt - wird Teil von nodes
   onEcoreFileSelect?: (fileName: string) => void;
   onEcoreFileExpand?: (fileName: string, fileContent: string) => void;
+  // onEcoreFilePositionChange entfernt - onNodesChange macht das
   onEcoreFileDelete?: (id: string) => void;
   onEcoreFileRename?: (id: string, newFileName: string) => void;
 }
 
+// NEU:
 export const FlowCanvas = forwardRef<{ 
   handleToolClick: (toolType: string, toolName: string, diagramType?: string) => void;
   loadDiagramData: (nodes: any[], edges: any[]) => void;
   getNodes: () => Node[];
   getEdges: () => Edge[];
-  addEcoreFile: (fileName: string, fileContent: string) => void;
+  addEcoreFile: (fileName: string, fileContent: string, meta?: any) => void;  // ← meta hinzugefügt
   resetExpandedFile: () => void;
   undo: () => void;
   redo: () => void;
   canUndo: boolean;
   canRedo: boolean;
 }, FlowCanvasProps>(
-  ({ onDeploy, onToolClick, onDiagramChange, ecoreFiles = [], onEcoreFileSelect, onEcoreFileExpand, onEcoreFileDelete, onEcoreFileRename }, ref) => {
+  ({ onDeploy, onToolClick, onDiagramChange, onEcoreFileSelect, onEcoreFileExpand, onEcoreFileDelete, onEcoreFileRename }, ref) => {
+  // ecoreFiles prop entfernt aus destructuring
   const reactFlowWrapper = useRef<HTMLDivElement>(null);
   const [reactFlowInstance, setReactFlowInstance] = useState<ReactFlowInstance | null>(null);
   const [isDragOver, setIsDragOver] = useState(false);
   const [isInteractive, setIsInteractive] = useState(true);
+  // selectedFileId und expandedFileId bleiben, für interne Tracking
   const [selectedFileId, setSelectedFileId] = useState<string | null>(null);
   const [expandedFileId, setExpandedFileId] = useState<string | null>(null);
   
@@ -274,34 +272,78 @@ export const FlowCanvas = forwardRef<{
     updateNodeLabel(id, newLabel);
   };
 
-  const addEcoreFile = (fileName: string, fileContent: string) => {
+// NEU:
+// ANPASSUNG in FlowCanvas:
+const addEcoreFile = (fileName: string, fileContent: string, meta?: any) => {
+  // Position aus meta verwenden, oder default
+  const position = meta?.position || { x: 100, y: 100 };
+  
+  const newEcoreNode: Node = {
+    id: `ecore-${Date.now()}`,
+    type: 'ecoreFile',
+    position: position,  // ← Verwende die übergebene Position
+    data: {
+      fileName,
+      fileContent,
+      description: meta?.description,
+      keywords: meta?.keywords,
+      domain: meta?.domain,
+      createdAt: meta?.createdAt || new Date().toISOString(),
+      onExpand: handleEcoreFileExpand,
+      onSelect: handleEcoreFileSelect,
+      onDelete: onEcoreFileDelete,
+      onRename: onEcoreFileRename,
+      isExpanded: false,
+    },
+    draggable: true,
+  };
+
+  addNode(newEcoreNode);
+  setSelectedFileId(newEcoreNode.id);
+  
+  if (onEcoreFileSelect) {
+    onEcoreFileSelect(fileName);
+  }
+};
+
+// NEU:
+const handleEcoreFileSelect = (fileName: string) => {
+  const ecoreNode = nodes.find(
+    n => n.type === 'ecoreFile' && n.data.fileName === fileName
+  );
+  if (ecoreNode) {
+    setSelectedFileId(ecoreNode.id);
     if (onEcoreFileSelect) {
       onEcoreFileSelect(fileName);
     }
-  };
+  }
+};
 
-  const handleEcoreFileSelect = (fileName: string) => {
-    const file = ecoreFiles.find(f => f.fileName === fileName);
-    if (file) {
-      setSelectedFileId(file.id);
-      if (onEcoreFileSelect) {
-        onEcoreFileSelect(fileName);
-      }
-    }
-  };
-
-  const handleEcoreFileExpand = (fileName: string, fileContent: string) => {
-    const file = ecoreFiles.find(f => f.fileName === fileName);
-    if (file) {
-      setExpandedFileId(null);
-      setExpandedFileId(file.id);
-      setSelectedFileId(file.id);
-    }
+// NEU:
+const handleEcoreFileExpand = (fileName: string, fileContent: string) => {
+  // Finde den EcoreFile Node im nodes Array
+  const ecoreNode = nodes.find(
+    n => n.type === 'ecoreFile' && n.data.fileName === fileName
+  );
+  
+  if (ecoreNode) {
+    setExpandedFileId(null);
+    setExpandedFileId(ecoreNode.id);
+    setSelectedFileId(ecoreNode.id);
     
-    if (onEcoreFileExpand) {
-      onEcoreFileExpand(fileName, fileContent);
-    }
-  };
+    // Update den Node's data um isExpanded zu setzen
+    const updatedNodes = nodes.map(n => 
+      n.id === ecoreNode.id 
+        ? { ...n, data: { ...n.data, isExpanded: true } }
+        : n
+    );
+    setNodes(updatedNodes);
+  }
+  
+  if (onEcoreFileExpand) {
+    onEcoreFileExpand(fileName, fileContent);
+  }
+};
 
   React.useEffect(() => {
     if (onDiagramChange) {
@@ -309,18 +351,28 @@ export const FlowCanvas = forwardRef<{
     }
   }, [nodes, edges, onDiagramChange]);
 
-  useImperativeHandle(ref, () => ({
-    handleToolClick: handleToolClick,
-    loadDiagramData: loadDiagramData,
-    getNodes: () => nodes,
-    getEdges: () => edges,
-    addEcoreFile: addEcoreFile,
-    resetExpandedFile: () => setExpandedFileId(null),
-    undo: undo,
-    redo: redo,
-    canUndo: canUndo,
-    canRedo: canRedo,
-  }));
+  // NEU (gleich, aber mit angepasster addEcoreFile Signatur):
+useImperativeHandle(ref, () => ({
+  handleToolClick: handleToolClick,
+  loadDiagramData: loadDiagramData,
+  getNodes: () => nodes,
+  getEdges: () => edges,
+  addEcoreFile: addEcoreFile,  // ← Nimmt jetzt (fileName, fileContent, meta)
+  resetExpandedFile: () => {
+    setExpandedFileId(null);
+    // Optional: Update alle EcoreFile Nodes um isExpanded zu clearen
+    const updatedNodes = nodes.map(n => 
+      n.type === 'ecoreFile' 
+        ? { ...n, data: { ...n.data, isExpanded: false } }
+        : n
+    );
+    setNodes(updatedNodes);
+  },
+  undo: undo,
+  redo: redo,
+  canUndo: canUndo,
+  canRedo: canRedo,
+}));
 
   return (
     <div
@@ -333,55 +385,63 @@ export const FlowCanvas = forwardRef<{
         transition: 'border 0.2s ease'
       }}
     > 
-      <ReactFlow
-        nodes={nodes.map(node => ({
-          ...node,
-          data: { ...node.data, onLabelChange: handleLabelChange, onDelete: removeNode }
-        }))}
-        edges={edges}
-        onNodesChange={onNodesChange}
-        onEdgesChange={onEdgesChange}
-        onConnect={onConnect}
-        fitView
-        onDrop={handleDrop}
-        onDragOver={handleDragOver}
-        onDragLeave={handleDragLeave}
-        nodeTypes={nodeTypes}
-        edgeTypes={edgeTypes}
-        onInit={setReactFlowInstance}
-        nodesDraggable={isInteractive}
-        nodesConnectable={isInteractive}
-        elementsSelectable={isInteractive}
-        panOnDrag={isInteractive}
-        panOnScroll={isInteractive}
-        zoomOnScroll={isInteractive}
-        zoomOnPinch={isInteractive}
-      >
-        <MiniMap position="bottom-right" style={{ bottom: 16, right: 16, zIndex: 30 }} />
-        <Background />
-      </ReactFlow>
-      
-      
-      
-      {ecoreFiles.map((file) => (
-        <EcoreFileBox
-          key={file.id}
-          id={file.id}
-          fileName={file.fileName}
-          fileContent={file.fileContent}
-          position={file.position}
-          onExpand={handleEcoreFileExpand}
-          onSelect={handleEcoreFileSelect}
-          onDelete={onEcoreFileDelete}
-          onRename={onEcoreFileRename}
-          isSelected={selectedFileId === file.id}
-          isExpanded={expandedFileId === file.id}
-          description={file.description}
-          keywords={file.keywords}
-          domain={file.domain}
-          createdAt={file.createdAt}
-        />
-      ))}
+     // NEU:
+<ReactFlow
+  nodes={nodes.map(node => {
+    // Für alle Nodes: füge callbacks hinzu
+    if (node.type === 'editable') {
+      return {
+        ...node,
+        data: { 
+          ...node.data, 
+          onLabelChange: handleLabelChange, 
+          onDelete: removeNode 
+        }
+      };
+    }
+    
+    // Für EcoreFile Nodes: füge callbacks und state hinzu
+    if (node.type === 'ecoreFile') {
+      return {
+        ...node,
+        data: {
+          ...node.data,
+          onExpand: handleEcoreFileExpand,
+          onSelect: handleEcoreFileSelect,
+          onDelete: onEcoreFileDelete,
+          onRename: onEcoreFileRename,
+          isExpanded: expandedFileId === node.id,
+        },
+        selected: selectedFileId === node.id,  // ← ReactFlow's selection system
+      };
+    }
+    
+    return node;
+  })}
+  edges={edges}
+  onNodesChange={onNodesChange}
+  onEdgesChange={onEdgesChange}
+  onConnect={onConnect}
+  fitView
+  onDrop={handleDrop}
+  onDragOver={handleDragOver}
+  onDragLeave={handleDragLeave}
+  nodeTypes={nodeTypes}
+  edgeTypes={edgeTypes}
+  onInit={setReactFlowInstance}
+  nodesDraggable={isInteractive}
+  nodesConnectable={isInteractive}
+  elementsSelectable={isInteractive}
+  panOnDrag={isInteractive}
+  panOnScroll={isInteractive}
+  zoomOnScroll={isInteractive}
+  zoomOnPinch={isInteractive}
+>
+  <MiniMap position="bottom-right" style={{ bottom: 16, right: 16, zIndex: 30 }} />
+  <Background />
+</ReactFlow>
+
+{/* EcoreFileBoxes werden NICHT mehr separat gerendert - sie sind jetzt Nodes! */}
       
       {/* Canvas Controls anchored to wrapper so they move with sidebar resizing */}
       <div style={{ position: 'absolute', left: 16, bottom: 16, zIndex: 31, display: 'flex', flexDirection: 'column', gap: 6 }}>

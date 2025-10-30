@@ -1,22 +1,24 @@
-import React, { useState, useRef } from 'react';
+// NEU:
+import React, { useState, useRef, useEffect } from 'react';
+import { NodeProps } from 'reactflow';
 import { ConfirmDialog } from '../ui/ConfirmDialog';
 
-interface EcoreFileBoxProps {
+interface EcoreFileBoxData {
   fileName: string;
   fileContent: string;
-  position: { x: number; y: number };
   onExpand: (fileName: string, fileContent: string) => void;
   onSelect: (fileName: string) => void;
   onDelete?: (id: string) => void;
   onRename?: (id: string, newFileName: string) => void;
-  id: string;
-  isSelected?: boolean;
   isExpanded?: boolean;
   description?: string;
   keywords?: string;
   domain?: string;
   createdAt?: string;
 }
+
+
+
 
 const modalOverlayStyle: React.CSSProperties = {
   position: 'fixed',
@@ -109,16 +111,16 @@ const modalFooterStyle: React.CSSProperties = {
 };
 
 const boxStyle: React.CSSProperties = {
-  position: 'absolute',
+  // position: 'absolute' entfernt - ReactFlow macht das
   background: 'linear-gradient(145deg, #ffffff 0%, #f8f9fa 100%)',
   border: '2px solid #dee2e6',
   borderRadius: '12px',
-  padding: '14px 16px',
-  width: '220px',
+  padding: '20px 24px',
+  width: '280px',
+  height: '180px',
   cursor: 'pointer',
   boxShadow: '0 4px 16px rgba(0,0,0,0.08), 0 2px 8px rgba(0,0,0,0.04)',
   transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
-  zIndex: 100,
   userSelect: 'none',
   fontFamily: '"Segoe UI", "Roboto", "Helvetica Neue", Arial, sans-serif',
   display: 'flex',
@@ -230,26 +232,18 @@ const descriptionStyle: React.CSSProperties = {
   overflowWrap: 'break-word',
 };
 
-export const EcoreFileBox: React.FC<EcoreFileBoxProps> = ({
-  fileName,
-  fileContent,
-  position,
-  onExpand,
-  onSelect,
-  onDelete,
-  onRename,
+export const EcoreFileBox: React.FC<NodeProps<EcoreFileBoxData>> = ({
   id,
-  isSelected = false,
-  isExpanded = false,
-  description,
-  keywords,
-  domain,
-  createdAt,
+  data,
+  selected = false,
+  xPos,
+  yPos,
 }) => {
   const [isHovered, setIsHovered] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [showDescriptionModal, setShowDescriptionModal] = useState(false);
   const [showKeywordsModal, setShowKeywordsModal] = useState(false);
+  const {fileName, fileContent, onExpand, onSelect, onDelete, onRename, isExpanded = false, description, keywords, domain, createdAt,} = data;
   const boxRef = useRef<HTMLDivElement>(null);
 
   const handleShowMoreClick = (e: React.MouseEvent) => {
@@ -336,24 +330,23 @@ export const EcoreFileBox: React.FC<EcoreFileBoxProps> = ({
   };
 
   return (
-    <>
-      <div
-        ref={boxRef}
-        style={{
-          ...boxStyle,
-          ...(isSelected ? selectedBoxStyle : {}),
-          ...(isHovered ? boxHoverStyle : {}),
-          left: position.x,
-          top: position.y,
-          transform: isSelected ? 'scale(1.02)' : 'scale(1)',
-          display: isExpanded ? 'none' : 'block',
-        }}
-        onClick={handleClick}
-        onDoubleClick={handleDoubleClick}
-        onMouseEnter={() => setIsHovered(true)}
-        onMouseLeave={() => setIsHovered(false)}
-        title={`Click to select, double-click to expand\n${fileName}`}
-      >
+  <>
+    <div
+      ref={boxRef}
+      style={{
+        ...boxStyle,
+        ...(selected ? selectedBoxStyle : {}),  // ← isSelected → selected
+        ...(isHovered ? boxHoverStyle : {}),
+        // left, top, transform entfernt - ReactFlow macht das
+        display: isExpanded ? 'none' : 'block',
+      }}
+      onClick={handleClick}
+      onDoubleClick={handleDoubleClick}
+      // onMouseDown entfernt - ReactFlow übernimmt Drag
+      onMouseEnter={() => setIsHovered(true)}
+      onMouseLeave={() => setIsHovered(false)}
+      title={`Click to select, double-click to expand\n${fileName}`}
+    >
         <div style={fileNameStyle}>
           <span>
             {fileName.replace(/\.ecore$/i, '')}
