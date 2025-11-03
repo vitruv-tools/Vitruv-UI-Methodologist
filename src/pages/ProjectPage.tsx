@@ -1,67 +1,88 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import { MainLayout } from '../components/layout/MainLayout';
 import { MetaModelsPanel } from '../components/ui/MetaModelsPanel';
+import { ConfirmDialog } from '../components/ui/ConfirmDialog';
 import { SidebarTabs } from '../components';
 import { useAuth } from '../contexts/AuthContext';
 import { VsumTabs } from '../components/ui/VsumTabs';
 import { apiService } from '../services/api';
+import { useToast } from '../components/ui/ToastProvider';
+
+interface OpenTabInstance { instanceId: string; id: number; }
 
 export const ProjectPage: React.FC = () => {
   const { user, signOut } = useAuth();
   const [showRight, setShowRight] = useState(false);
-  const [openVsums, setOpenVsums] = useState<number[]>([]);
-  const [activeVsumId, setActiveVsumId] = useState<number | null>(null);
+  const [openTabs, setOpenTabs] = useState<OpenTabInstance[]>([]);
+  const [activeInstanceId, setActiveInstanceId] = useState<string | null>(null);
+  const [openChoice, setOpenChoice] = useState<{ id: number; existingInstanceId: string } | null>(null);
+  const { showInfo } = useToast();
+
+  const createInstanceId = useCallback((id: number) => `${id}-${Date.now()}-${Math.random().toString(36).slice(2,8)}` , []);
+
+  const openVsumById = useCallback(async (id: number, { forceNew }: { forceNew?: boolean } = {}) => {
+    let instanceId = forceNew ? undefined : openTabs.find(t => t.id === id)?.instanceId;
+    if (!instanceId) {
+      instanceId = createInstanceId(id);
+      setOpenTabs(prev => [...prev, { instanceId: instanceId!, id }]);
+    } else {
+      showInfo('This project is already open. Switched to it.');
+    }
+    setActiveInstanceId(instanceId);
+
+    // Reset workspace, then load only this project's boxes
+    window.dispatchEvent(new CustomEvent('vitruv.resetWorkspace'));
+    try {
+      const response = await apiService.getVsumDetails(id);
+      const details = response.data;
+      for (const metaModel of details.metaModels || []) {
+        if (metaModel.ecoreFileId) {
+          try {
+            const fileContent = await apiService.getFile(metaModel.ecoreFileId);
+            window.dispatchEvent(new CustomEvent('vitruv.addFileToWorkspace', {
+              detail: {
+                fileContent: fileContent,
+                fileName: metaModel.name + '.ecore',
+                description: metaModel.description,
+                keywords: metaModel.keyword?.join(', '),
+                domain: metaModel.domain,
+                createdAt: metaModel.createdAt,
+              }
+            }));
+          } catch (error) {
+            console.error(`Failed to load ECORE file for meta model ${metaModel.name}:`, error);
+          }
+        }
+      }
+    } catch (error) {
+      console.error('Failed to fetch vsum details:', error);
+    }
+  }, [openTabs, createInstanceId, showInfo]);
 
   useEffect(() => {
     const handler = async (e: Event) => {
-      const custom = e as CustomEvent<{ id: number }>;
+      const custom = e as CustomEvent<{ id: number; forceNew?: boolean }>;
       const id = custom.detail?.id;
       if (typeof id !== 'number') return;
-      setOpenVsums(prev => prev.includes(id) ? prev : [...prev, id]);
-      setActiveVsumId(id);
-
-      // Fetch vsum details and load meta models into workspace
-      try {
-        const response = await apiService.getVsumDetails(id);
-        const details = response.data;
-        
-        // Load each meta model into workspace
-        for (const metaModel of details.metaModels || []) {
-          if (metaModel.ecoreFileId) {
-            try {
-              const fileContent = await apiService.getFile(metaModel.ecoreFileId);
-              
-              // Dispatch event to add file to workspace
-              window.dispatchEvent(new CustomEvent('vitruv.addFileToWorkspace', {
-                detail: {
-                  fileContent: fileContent,
-                  fileName: metaModel.name + '.ecore',
-                  description: metaModel.description,
-                  keywords: metaModel.keyword?.join(', '),
-                  domain: metaModel.domain,
-                  createdAt: metaModel.createdAt,
-                }
-              }));
-            } catch (error) {
-              console.error(`Failed to load ECORE file for meta model ${metaModel.name}:`, error);
-            }
-          }
-        }
-      } catch (error) {
-        console.error('Failed to fetch vsum details:', error);
+      const existing = openTabs.find(t => t.id === id);
+      if (existing && !custom.detail?.forceNew) {
+        setOpenChoice({ id, existingInstanceId: existing.instanceId });
+        return;
       }
+      await openVsumById(id, { forceNew: custom.detail?.forceNew });
     };
     window.addEventListener('vitruv.openVsum', handler as EventListener);
     return () => window.removeEventListener('vitruv.openVsum', handler as EventListener);
-  }, []);
+  }, [openTabs, openVsumById]);
 
   return (
+    <>
     <MainLayout
       user={user}
       onLogout={signOut}
       leftSidebar={<SidebarTabs width={350} />}
       leftSidebarWidth={350}
-      showWelcomeScreen={openVsums.length === 0}
+      showWelcomeScreen={openTabs.length === 0}
       welcomeTitle="Welcome to Project Workspace"
       rightSidebar={showRight ? (
         <div style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
@@ -91,8 +112,8 @@ export const ProjectPage: React.FC = () => {
           </div>
           <div style={{ flex: 1, overflow: 'auto' }}>
             <MetaModelsPanel
-              activeVsumId={activeVsumId || undefined}
-              selectedMetaModelIds={activeVsumId ? (openVsums.includes(activeVsumId) ? [] : []) : []}
+              activeVsumId={activeInstanceId ? (openTabs.find(t => t.instanceId === activeInstanceId)?.id) || undefined : undefined}
+              selectedMetaModelIds={[]}
               onAddToActiveVsum={async (model) => {
                 // Fetch file content from the API
                 try {
@@ -124,14 +145,14 @@ export const ProjectPage: React.FC = () => {
         </div>
       ) : null}
       rightSidebarWidth={350}
-      workspaceOverlay={openVsums.length > 0 ? (
+      workspaceOverlay={openTabs.length > 0 ? (
         <VsumTabs
-          openVsums={openVsums}
-          activeVsumId={activeVsumId}
-          onActivate={(id) => setActiveVsumId(id)}
-          onClose={(id) => {
-            setOpenVsums(prev => prev.filter(x => x !== id));
-            setActiveVsumId(prev => (prev === id ? (openVsums.find(x => x !== id) ?? null) : prev));
+          openTabs={openTabs}
+          activeInstanceId={activeInstanceId}
+          onActivate={(instanceId) => setActiveInstanceId(instanceId)}
+          onClose={(instanceId) => {
+            setOpenTabs(prev => prev.filter(x => x.instanceId !== instanceId));
+            setActiveInstanceId(prev => (prev === instanceId ? (openTabs.find(x => x.instanceId !== instanceId)?.instanceId ?? null) : prev));
           }}
           showAddButton={!showRight}
           onAddMetaModels={() => setShowRight(true)}
@@ -139,7 +160,59 @@ export const ProjectPage: React.FC = () => {
       ) : null}
       showWorkspaceInfo={false}
     />
+    <ConfirmDialog
+      isOpen={!!openChoice}
+      title="Project already open"
+      message="Do you want to open it in a new tab, or reuse the same workspace?"
+      confirmText="Open New Tab"
+      cancelText="Open In Same"
+      onConfirm={async () => {
+        if (!openChoice) return;
+        const id = openChoice.id;
+        setOpenChoice(null);
+        await openVsumById(id, { forceNew: true });
+      }}
+      onCancel={async () => {
+        if (!openChoice) return;
+        const { id, existingInstanceId } = openChoice;
+        setOpenChoice(null);
+        setActiveInstanceId(existingInstanceId);
+        await fetchAndLoadProjectBoxes(id);
+      }}
+    />
+    </>
   );
 };
+
+// Render the choice dialog via portal at the end of the component
+// helper to fetch and load boxes for a vsum id
+async function fetchAndLoadProjectBoxes(id: number) {
+  window.dispatchEvent(new CustomEvent('vitruv.resetWorkspace'));
+  try {
+    const response = await apiService.getVsumDetails(id);
+    const details = response.data;
+    for (const metaModel of details.metaModels || []) {
+      if (metaModel.ecoreFileId) {
+        try {
+          const fileContent = await apiService.getFile(metaModel.ecoreFileId);
+          window.dispatchEvent(new CustomEvent('vitruv.addFileToWorkspace', {
+            detail: {
+              fileContent: fileContent,
+              fileName: metaModel.name + '.ecore',
+              description: metaModel.description,
+              keywords: metaModel.keyword?.join(', '),
+              domain: metaModel.domain,
+              createdAt: metaModel.createdAt,
+            }
+          }));
+        } catch (error) {
+          console.error(`Failed to load ECORE file for meta model ${metaModel.name}:`, error);
+        }
+      }
+    }
+  } catch (error) {
+    console.error('Failed to fetch vsum details:', error);
+  }
+}
 
 

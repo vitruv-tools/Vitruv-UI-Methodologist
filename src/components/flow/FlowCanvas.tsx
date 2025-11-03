@@ -18,7 +18,6 @@ const edgeTypes = { uml: UMLRelationship };
 
 interface FlowCanvasProps {
   onDeploy?: (nodes: Node[], edges: Edge[]) => void;
-  onToolClick?: (toolType: string, toolName: string, diagramType?: string) => void;
   onDiagramChange?: (nodes: Node[], edges: Edge[]) => void;
   ecoreFiles?: Array<{
     id: string;
@@ -37,24 +36,26 @@ interface FlowCanvasProps {
 }
 
 export const FlowCanvas = forwardRef<{ 
-  handleToolClick: (toolType: string, toolName: string, diagramType?: string) => void;
   loadDiagramData: (nodes: any[], edges: any[]) => void;
-  getNodes: () => Node[];
-  getEdges: () => Edge[];
-  addEcoreFile: (fileName: string, fileContent: string) => void;
   resetExpandedFile: () => void;
+  setInteractive: (enabled: boolean) => void;
+  setDraggable: (enabled: boolean) => void;
   undo: () => void;
   redo: () => void;
   canUndo: boolean;
   canRedo: boolean;
 }, FlowCanvasProps>(
-  ({ onDeploy, onToolClick, onDiagramChange, ecoreFiles = [], onEcoreFileSelect, onEcoreFileExpand, onEcoreFileDelete, onEcoreFileRename }, ref) => {
+  ({ onDeploy, onDiagramChange, ecoreFiles = [], onEcoreFileSelect, onEcoreFileExpand, onEcoreFileDelete, onEcoreFileRename }, ref) => {
   const reactFlowWrapper = useRef<HTMLDivElement>(null);
   const [reactFlowInstance, setReactFlowInstance] = useState<ReactFlowInstance | null>(null);
   const [isDragOver, setIsDragOver] = useState(false);
   const [isInteractive, setIsInteractive] = useState(true);
+  const [isDraggable, setIsDraggable] = useState(true);
   const [selectedFileId, setSelectedFileId] = useState<string | null>(null);
   const [expandedFileId, setExpandedFileId] = useState<string | null>(null);
+  const [showEcoreBoxes, setShowEcoreBoxes] = useState<boolean>(true);
+  const [routingStyle, setRoutingStyle] = useState<'curved' | 'orthogonal'>('orthogonal');
+  const [lineSeparation] = useState<number>(36);
   
   const {
     nodes,
@@ -118,131 +119,7 @@ export const FlowCanvas = forwardRef<{
     };
   }, [undo, redo, canUndo, canRedo]);
 
-  const handleToolClick = (toolType: string, toolName: string, diagramType?: string) => {
-    if (!reactFlowInstance || !reactFlowWrapper.current) return;
-    
-    const canvasBounds = reactFlowWrapper.current.getBoundingClientRect();
-    const centerX = canvasBounds.width / 2;
-    const centerY = canvasBounds.height / 2;
-    
-    const position = reactFlowInstance.project({
-      x: centerX,
-      y: centerY,
-    });
-    
-    let label = '';
-    let nodeType = 'editable';
-    
-    switch (toolType) {
-      case 'element':
-        switch (toolName) {
-          case 'class':
-            label = 'Class';
-            break;
-          case 'abstract-class':
-            label = 'AbstractClass';
-            break;
-          case 'interface':
-            label = 'Interface';
-            break;
-          case 'enumeration':
-            label = 'Enumeration';
-            break;
-          case 'package':
-            label = 'Package';
-            break;
-          default:
-            label = toolName;
-        }
-        break;
-      case 'member':
-        switch (toolName) {
-          case 'attribute':
-            label = '+ attribute: Type';
-            break;
-          case 'method':
-            label = '+ method(): ReturnType';
-            break;
-          case 'private-attribute':
-            label = '- privateAttribute: Type';
-            break;
-          case 'protected-attribute':
-            label = '# protectedAttribute: Type';
-            break;
-          case 'private-method':
-            label = '- privateMethod(): ReturnType';
-            break;
-          case 'protected-method':
-            label = '# protectedMethod(): ReturnType';
-            break;
-          default:
-            label = toolName;
-        }
-        break;
-      case 'relationship':
-        switch (toolName) {
-          case 'association':
-            label = 'Association';
-            break;
-          case 'aggregation':
-            label = 'Aggregation';
-            break;
-          case 'composition':
-            label = 'Composition';
-            break;
-          case 'inheritance':
-            label = 'Inheritance';
-            break;
-          case 'realization':
-            label = 'Realization';
-            break;
-          case 'dependency':
-            label = 'Dependency';
-            break;
-          default:
-            label = toolName;
-        }
-        break;
-      case 'multiplicity':
-        switch (toolName) {
-          case 'one':
-            label = '1';
-            break;
-          case 'many':
-            label = '*';
-            break;
-          case 'optional':
-            label = '0..1';
-            break;
-          case 'range':
-            label = '1..*';
-            break;
-          default:
-            label = toolName;
-        }
-        break;
-      default:
-        label = toolName;
-    }
-    
-    const newNode: Omit<Node, 'id'> = {
-      type: nodeType,
-      position,
-      data: {
-        label,
-        toolType,
-        toolName,
-        diagramType
-      }
-    };
-    
-    console.log('Adding new node from tool click:', newNode);
-    addNode(newNode);
-  };
-
   const loadDiagramData = (newNodes: any[], newEdges: any[]) => {
-    console.log('Loading diagram data:', { newNodes, newEdges });
-    
     setNodes([]);
     setEdges([]);
     
@@ -252,8 +129,6 @@ export const FlowCanvas = forwardRef<{
     if (newEdges.length > 0) {
       setEdges(newEdges);
     }
-    
-    console.log('Diagram data loaded successfully');
   };
 
   const handleDragOver = (event: React.DragEvent) => {
@@ -274,12 +149,6 @@ export const FlowCanvas = forwardRef<{
     updateNodeLabel(id, newLabel);
   };
 
-  const addEcoreFile = (fileName: string, fileContent: string) => {
-    if (onEcoreFileSelect) {
-      onEcoreFileSelect(fileName);
-    }
-  };
-
   const handleEcoreFileSelect = (fileName: string) => {
     const file = ecoreFiles.find(f => f.fileName === fileName);
     if (file) {
@@ -296,6 +165,8 @@ export const FlowCanvas = forwardRef<{
       setExpandedFileId(null);
       setExpandedFileId(file.id);
       setSelectedFileId(file.id);
+      // Hide the clicked project box while the UML diagram is open
+      setShowEcoreBoxes(false);
     }
     
     if (onEcoreFileExpand) {
@@ -309,13 +180,13 @@ export const FlowCanvas = forwardRef<{
     }
   }, [nodes, edges, onDiagramChange]);
 
+  
+
   useImperativeHandle(ref, () => ({
-    handleToolClick: handleToolClick,
     loadDiagramData: loadDiagramData,
-    getNodes: () => nodes,
-    getEdges: () => edges,
-    addEcoreFile: addEcoreFile,
     resetExpandedFile: () => setExpandedFileId(null),
+    setInteractive: (enabled: boolean) => setIsInteractive(enabled),
+    setDraggable: (enabled: boolean) => setIsDraggable(enabled),
     undo: undo,
     redo: redo,
     canUndo: canUndo,
@@ -338,7 +209,10 @@ export const FlowCanvas = forwardRef<{
           ...node,
           data: { ...node.data, onLabelChange: handleLabelChange, onDelete: removeNode }
         }))}
-        edges={edges}
+        edges={edges.map(edge => ({
+          ...edge,
+          data: { ...(edge.data as any), routingStyle, separation: lineSeparation }
+        }))}
         onNodesChange={onNodesChange}
         onEdgesChange={onEdgesChange}
         onConnect={onConnect}
@@ -349,7 +223,7 @@ export const FlowCanvas = forwardRef<{
         nodeTypes={nodeTypes}
         edgeTypes={edgeTypes}
         onInit={setReactFlowInstance}
-        nodesDraggable={isInteractive}
+        nodesDraggable={isDraggable}
         nodesConnectable={isInteractive}
         elementsSelectable={isInteractive}
         panOnDrag={isInteractive}
@@ -363,7 +237,7 @@ export const FlowCanvas = forwardRef<{
       
       
       
-      {ecoreFiles.map((file) => (
+      {showEcoreBoxes && ecoreFiles.map((file) => (
         <EcoreFileBox
           key={file.id}
           id={file.id}
@@ -407,6 +281,13 @@ export const FlowCanvas = forwardRef<{
           ⛶
         </button>
         <button
+          onClick={() => setRoutingStyle(prev => prev === 'orthogonal' ? 'curved' : 'orthogonal')}
+          style={{ width: 36, height: 36, borderRadius: 6, border: '1px solid #e5e7eb', background: '#ffffff', cursor: 'pointer' }}
+          title={`Routing: ${routingStyle === 'orthogonal' ? 'Orthogonal' : 'Curved'} (toggle)`}
+        >
+          {routingStyle === 'orthogonal' ? '└' : '∿'}
+        </button>
+        <button
           onClick={() => {
             const next = !isInteractive;
             setIsInteractive(next);
@@ -417,6 +298,32 @@ export const FlowCanvas = forwardRef<{
           {isInteractive ? '🔓' : '🔒'}
         </button>
       </div>
+
+      {/* Toggle to restore hidden project box/card when a UML diagram is open */}
+      {!showEcoreBoxes && (
+        <button
+          onClick={() => setShowEcoreBoxes(true)}
+          style={{
+            position: 'absolute',
+            top: 52,
+            left: 2,
+            zIndex: 31,
+            width: 56,
+            height: 56,
+            borderRadius: 10,
+            border: '1px solid #e5e7eb',
+            background: '#ffffff',
+            cursor: 'pointer',
+            boxShadow: '0 4px 16px rgba(0,0,0,0.12)',
+            fontSize: 28,
+            lineHeight: 1
+          }}
+          title="Show meta model cards"
+          aria-label="Show meta model cards"
+        >
+          🗂️
+        </button>
+      )}
 
       {isDragOver && (
         <div style={{

@@ -112,7 +112,7 @@ const boxStyle: React.CSSProperties = {
   position: 'absolute',
   background: 'linear-gradient(145deg, #ffffff 0%, #f8f9fa 100%)',
   border: '2px solid #dee2e6',
-  borderRadius: '12px',
+  borderRadius: '0',
   padding: '14px 16px',
   width: '220px',
   cursor: 'pointer',

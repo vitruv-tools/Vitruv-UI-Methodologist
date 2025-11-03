@@ -91,13 +91,34 @@ export function useFlowState() {
 
   const onConnect = useCallback(
     (params: Connection) => {
+      // pick best handles if not provided
+      const findNode = (id?: string | null) => nodes.find(n => n.id === id);
+      const src = findNode(params.source);
+      const tgt = findNode(params.target);
+      const chooseHandles = () => {
+        if (!src || !tgt) return { s: params.sourceHandle, t: params.targetHandle } as const;
+        const dx = (tgt.position?.x ?? 0) - (src.position?.x ?? 0);
+        const dy = (tgt.position?.y ?? 0) - (src.position?.y ?? 0);
+        if (Math.abs(dx) >= Math.abs(dy)) {
+          // horizontal preference
+          const s = dx >= 0 ? 'right-source' : 'left-source';
+          const t = dx >= 0 ? 'left-target' : 'right-target';
+          return { s, t } as const;
+        } else {
+          // vertical preference
+          const s = dy >= 0 ? 'bottom-source' : 'top-source';
+          const t = dy >= 0 ? 'top-target' : 'bottom-target';
+          return { s, t } as const;
+        }
+      };
+      const auto = chooseHandles();
       const newEdge: Edge = {
         id: `edge-${getId()}`,
         type: 'uml',
         source: params.source!,
         target: params.target!,
-        sourceHandle: params.sourceHandle,
-        targetHandle: params.targetHandle,
+        sourceHandle: params.sourceHandle ?? auto.s,
+        targetHandle: params.targetHandle ?? auto.t,
         data: {
           relationshipType: 'association',
           label: 'Association',
@@ -105,7 +126,7 @@ export function useFlowState() {
       };
       setEdges((eds) => eds.concat(newEdge));
     },
-    [getId, setEdges]
+    [getId, setEdges, nodes]
   );
 
   const addNode = useCallback((node: Omit<Node, 'id'>) => {
@@ -139,19 +160,100 @@ export function useFlowState() {
   }, [setNodes, setEdges]);
 
   const addEdge = useCallback((edge: Omit<Edge, 'id'>) => {
+    // If handles not provided, choose based on relative positions
+    const findNode = (id?: string) => nodes.find(n => n.id === id);
+    const src = findNode(edge.source);
+    const tgt = findNode(edge.target);
+    const chooseHandles = () => {
+      if (!src || !tgt) return { s: edge.sourceHandle, t: edge.targetHandle } as const;
+      const dx = (tgt.position?.x ?? 0) - (src.position?.x ?? 0);
+      const dy = (tgt.position?.y ?? 0) - (src.position?.y ?? 0);
+      if (Math.abs(dx) >= Math.abs(dy)) {
+        const s = dx >= 0 ? 'right-source' : 'left-source';
+        const t = dx >= 0 ? 'left-target' : 'right-target';
+        return { s, t } as const;
+      } else {
+        const s = dy >= 0 ? 'bottom-source' : 'top-source';
+        const t = dy >= 0 ? 'top-target' : 'bottom-target';
+        return { s, t } as const;
+      }
+    };
+    const auto = chooseHandles();
     const newEdge: Edge = {
       ...edge,
       id: `edge-${getId()}`,
+      sourceHandle: edge.sourceHandle ?? auto.s,
+      targetHandle: edge.targetHandle ?? auto.t,
     };
     console.log('useFlowState.addEdge called with:', edge);
     console.log('Created newEdge:', newEdge);
     setEdges((eds) => {
-      const newEdges = eds.concat(newEdge);
-      console.log('Updated edges array:', newEdges);
-      return newEdges;
+      const updated = eds.concat(newEdge);
+      // recompute parallel edge metadata (index/count) for edges between same node pairs
+      const groups = new Map<string, Edge[]>();
+      for (const e of updated) {
+        const a = e.source;
+        const b = e.target;
+        const key = a < b ? `${a}__${b}` : `${b}__${a}`;
+        const list = groups.get(key) || [];
+        list.push(e);
+        groups.set(key, list);
+      }
+      const withMeta = updated.map((e) => {
+        const a = e.source;
+        const b = e.target;
+        const key = a < b ? `${a}__${b}` : `${b}__${a}`;
+        const list = groups.get(key) || [];
+        const count = list.length;
+        // stable ordering: by id to keep indices stable across renders
+        const sorted = [...list].sort((x, y) => x.id.localeCompare(y.id));
+        const index = sorted.findIndex((x) => x.id === e.id);
+        const data = {
+          ...e.data,
+          parallelIndex: index,
+          parallelCount: count,
+        } as any;
+        return { ...e, data };
+      });
+      console.log('Updated edges array (with parallel meta):', withMeta);
+      return withMeta;
     });
     return newEdge.id;
-  }, [getId, setEdges]);
+  }, [getId, setEdges, nodes]);
+
+  // Keep parallel metadata consistent when edges change via other operations (delete, load, undo/redo)
+  useEffect(() => {
+    if (!edges || edges.length === 0) return;
+    const groups = new Map<string, Edge[]>();
+    for (const e of edges) {
+      const a = e.source;
+      const b = e.target;
+      const key = a < b ? `${a}__${b}` : `${b}__${a}`;
+      const list = groups.get(key) || [];
+      list.push(e);
+      groups.set(key, list);
+    }
+    let changed = false;
+    const recomputed = edges.map((e) => {
+      const a = e.source;
+      const b = e.target;
+      const key = a < b ? `${a}__${b}` : `${b}__${a}`;
+      const list = groups.get(key) || [];
+      const count = list.length;
+      const sorted = [...list].sort((x, y) => x.id.localeCompare(y.id));
+      const index = sorted.findIndex((x) => x.id === e.id);
+      const prevIndex = (e.data as any)?.parallelIndex;
+      const prevCount = (e.data as any)?.parallelCount;
+      if (prevIndex !== index || prevCount !== count) {
+        changed = true;
+        return { ...e, data: { ...(e.data as any), parallelIndex: index, parallelCount: count } };
+      }
+      return e;
+    });
+    if (changed) {
+      setEdges(recomputed);
+    }
+  }, [edges, setEdges]);
 
   const removeEdge = useCallback((id: string) => {
     setEdges((eds) => eds.filter((edge) => edge.id !== id));

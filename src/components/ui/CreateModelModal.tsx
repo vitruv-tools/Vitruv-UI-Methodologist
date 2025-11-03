@@ -46,7 +46,7 @@ const modalOverlayStyle: React.CSSProperties = {
 
 const modalStyle: React.CSSProperties = {
   background: '#ffffff',
-  borderRadius: '8px',
+  borderRadius: '0',
   padding: '28px',
   width: '480px',
   maxWidth: '90vw',
@@ -81,7 +81,7 @@ const closeButtonStyle: React.CSSProperties = {
   color: '#999',
   cursor: 'pointer',
   padding: '8px',
-  borderRadius: '8px',
+  borderRadius: '0',
   transition: 'all 0.2s ease',
   width: '40px',
   height: '40px',

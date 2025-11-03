@@ -230,9 +230,9 @@ export const VsumsPanel: React.FC = () => {
                     <div
                         key={item.id}
                         style={cardStyle}
-                        onDoubleClick={() =>
-                            window.dispatchEvent(new CustomEvent('vitruv.openVsum', { detail: { id: item.id } }))
-                        }
+                        onDoubleClick={() => {
+                            window.dispatchEvent(new CustomEvent('vitruv.openVsum', { detail: { id: item.id } }));
+                        }}
                     >
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
                             <div style={{ display: 'flex', flexDirection: 'column' }}>

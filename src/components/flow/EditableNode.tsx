@@ -419,13 +419,13 @@ export function EditableNode({ id, data, selected, isConnectable, xPos, yPos, ..
   const getNodeStyle = () => {
     const baseStyle = {
       padding: '0px',
-      background: selected ? '#f7f9fa' : '#fff',
-      border: selected ? '2px solid #0071e3' : '2px solid #333',
-      borderRadius: '0px',
-      minWidth: '200px',
-      boxShadow: selected ? '0 0 0 2px #cde3fa' : '0 4px 12px rgba(0,0,0,0.15)',
+      background: '#ffffff',
+      border: selected ? '2px solid #2563eb' : '1px solid #9ca3af',
+      borderRadius: '4px',
+      minWidth: '180px',
+      boxShadow: selected ? '0 4px 12px rgba(37, 99, 235, 0.25)' : '0 2px 8px rgba(0,0,0,0.08)',
       position: 'relative' as const,
-      fontFamily: 'Arial, sans-serif',
+      fontFamily: `-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, 'Noto Sans', 'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol', sans-serif`,
       overflow: 'hidden',
     };
 
@@ -434,49 +434,33 @@ export function EditableNode({ id, data, selected, isConnectable, xPos, yPos, ..
         case 'class':
           return {
             ...baseStyle,
-            borderColor: '#2ecc71',
-            borderWidth: '2px',
-            background: selected ? '#f0f9f0' : '#ffffff',
-            minHeight: '140px',
-            boxShadow: selected ? '0 0 0 2px #cde3fa' : '0 4px 16px rgba(46, 204, 113, 0.2)',
+            borderColor: selected ? '#2563eb' : '#6b7280',
+            background: '#ffffff',
           };
         case 'abstract-class':
           return {
             ...baseStyle,
-            borderColor: '#16a085',
-            borderWidth: '2px',
-            background: selected ? '#f0f8f0' : '#ffffff',
-            minHeight: '140px',
-            fontStyle: 'italic',
-            boxShadow: selected ? '0 0 0 2px #cde3fa' : '0 4px 16px rgba(22, 160, 133, 0.2)',
+            borderColor: selected ? '#2563eb' : '#6b7280',
+            background: '#ffffff',
           };
         case 'interface':
           return {
             ...baseStyle,
-            borderColor: '#e74c3c',
-            borderWidth: '2px',
+            borderColor: selected ? '#2563eb' : '#6b7280',
             borderStyle: 'dashed',
-            background: selected ? '#fdf0f0' : '#ffffff',
-            minHeight: '120px',
-            boxShadow: selected ? '0 0 0 2px #cde3fa' : '0 4px 16px rgba(231, 76, 60, 0.2)',
+            background: '#ffffff',
           };
         case 'enumeration':
           return {
             ...baseStyle,
-            borderColor: '#9b59b6',
-            borderWidth: '2px',
-            background: selected ? '#f8f0f8' : '#ffffff',
-            minHeight: '120px',
-            boxShadow: selected ? '0 0 0 2px #cde3fa' : '0 4px 16px rgba(155, 89, 182, 0.2)',
+            borderColor: selected ? '#2563eb' : '#6b7280',
+            background: '#ffffff',
           };
         case 'package':
           return {
             ...baseStyle,
-            borderColor: '#f39c12',
-            borderWidth: '2px',
-            background: selected ? '#fdf8f0' : '#ffffff',
-            minHeight: '100px',
-            boxShadow: selected ? '0 0 0 2px #cde3fa' : '0 4px 16px rgba(243, 156, 18, 0.2)',
+            borderColor: selected ? '#2563eb' : '#6b7280',
+            background: '#ffffff',
           };
         default:
           return baseStyle;
@@ -486,14 +470,14 @@ export function EditableNode({ id, data, selected, isConnectable, xPos, yPos, ..
         ...baseStyle,
         minHeight: '40px',
         borderRadius: '4px',
-        boxShadow: selected ? '0 0 0 2px #cde3fa' : '0 2px 8px rgba(0,0,0,0.1)',
+        boxShadow: selected ? '0 4px 12px rgba(37, 99, 235, 0.25)' : '0 2px 8px rgba(0,0,0,0.08)',
       };
     } else if (nodeData.toolType === 'multiplicity') {
       return {
         ...baseStyle,
         minHeight: '30px',
         borderRadius: '4px',
-        boxShadow: selected ? '0 0 0 2px #cde3fa' : '0 2px 8px rgba(0,0,0,0.1)',
+        boxShadow: selected ? '0 4px 12px rgba(37, 99, 235, 0.25)' : '0 2px 8px rgba(0,0,0,0.08)',
       };
     }
 
@@ -509,27 +493,27 @@ export function EditableNode({ id, data, selected, isConnectable, xPos, yPos, ..
             position: 'absolute',
             top: '-8px',
             right: '-8px',
-            background: '#e74c3c',
+            background: '#ef4444',
             color: 'white',
             border: 'none',
             borderRadius: '50%',
-            width: '20px',
-            height: '20px',
+            width: '22px',
+            height: '22px',
             fontSize: '12px',
             cursor: 'pointer',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
             zIndex: 10,
-            boxShadow: '0 2px 4px rgba(0,0,0,0.2)',
+            boxShadow: '0 4px 12px rgba(239,68,68,0.3)',
             transition: 'all 0.2s ease'
           }}
           onMouseEnter={(e) => {
-            e.currentTarget.style.background = '#c0392b';
+            e.currentTarget.style.background = '#dc2626';
             e.currentTarget.style.transform = 'scale(1.1)';
           }}
           onMouseLeave={(e) => {
-            e.currentTarget.style.background = '#e74c3c';
+            e.currentTarget.style.background = '#ef4444';
             e.currentTarget.style.transform = 'scale(1)';
           }}
           title="Delete node"
@@ -538,149 +522,79 @@ export function EditableNode({ id, data, selected, isConnectable, xPos, yPos, ..
         </button>
       )}
       
+      {/* Class Name Section */}
       <div style={{
-        background: '#f8fff8',
-        borderBottom: '1px solid #2ecc71',
-        padding: '8px 0',
+        borderBottom: '1px solid #d1d5db',
+        padding: '8px 12px',
         textAlign: 'center',
-        fontWeight: 'bold',
-        fontSize: '14px',
-        color: '#2ecc71',
-        minHeight: '30px',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center'
+        fontWeight: 600,
+        fontSize: '13px',
+        color: '#1f2937',
+        background: '#f9fafb'
       }}>
         <EditableField
           value={nodeData.className || ''}
           onSave={(newValue) => updateNodeData({ className: newValue })}
           placeholder="Class Name"
-            style={{ 
-              fontWeight: 'bold',
-            fontSize: '14px',
-            color: '#2ecc71',
+          style={{ 
+            fontWeight: '600',
+            fontSize: '13px',
+            color: '#1f2937',
             textAlign: 'center'
           }}
         />
       </div>
       
-      <div style={{
-        borderBottom: '1px solid #2ecc71',
-        padding: '8px 0',
-        fontSize: '12px',
-        color: '#666',
-        minHeight: '50px'
-      }}>
-        <div style={{ 
-          padding: '4px 8px', 
-          fontWeight: 'bold', 
-          color: '#2ecc71',
-          background: '#f0f9f0'
+      {/* Attributes Section */}
+      {nodeData.attributes && nodeData.attributes.length > 0 && (
+        <div style={{
+          borderBottom: '1px solid #d1d5db',
+          padding: '4px 0',
+          fontSize: '11px',
+          color: '#374151',
+          background: '#ffffff'
         }}>
-          Attributes
+          {nodeData.attributes.map((attr, index) => (
+            <div key={index} style={{ 
+              padding: '2px 12px',
+              display: 'flex',
+              alignItems: 'center',
+              fontSize: '11px',
+              fontFamily: 'monospace'
+            }}>
+              {attr}
+            </div>
+          ))}
         </div>
-        {nodeData.attributes?.map((attr, index) => (
-          <div key={index} style={{ 
-            padding: '2px 8px',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '8px'
-          }}>
-            <EditableField
-              value={attr}
-              onSave={(newValue) => {
-                const newAttributes = [...(nodeData.attributes || [])];
-                newAttributes[index] = newValue;
-                updateNodeData({ attributes: newAttributes });
-              }}
-              placeholder="+ attribute: Type"
-              style={{ fontSize: '12px', flex: 1 }}
-              onDelete={() => {
-                const newAttributes = [...(nodeData.attributes || [])];
-                newAttributes.splice(index, 1);
-                updateNodeData({ attributes: newAttributes });
-              }}
-              showDelete={true}
-            />
-          </div>
-        ))}
-        <div style={{ padding: '2px 8px' }}>
-          <EditableField
-            value=""
-            onSave={(newValue) => {
-              if (newValue.trim()) {
-                const newAttributes = [...(nodeData.attributes || []), newValue];
-                updateNodeData({ attributes: newAttributes });
-              }
-            }}
-            placeholder="+ Add attribute..."
-            style={{ fontSize: '12px', fontStyle: 'italic', color: '#999' }}
-            showVisibility={true}
-          />
-        </div>
-      </div>
+      )}
       
-      <div style={{
-        padding: '8px 0',
-        fontSize: '12px',
-        color: '#666',
-        minHeight: '50px'
-      }}>
-        <div style={{ 
-          padding: '4px 8px', 
-          fontWeight: 'bold', 
-          color: '#2ecc71',
-          background: '#f0f9f0'
+      {/* Methods Section */}
+      {nodeData.methods && nodeData.methods.length > 0 && (
+        <div style={{
+          padding: '4px 0',
+          fontSize: '11px',
+          color: '#374151',
+          background: '#ffffff'
         }}>
-          Methods
+          {nodeData.methods.map((method, index) => (
+            <div key={index} style={{ 
+              padding: '2px 12px',
+              display: 'flex',
+              alignItems: 'center',
+              fontSize: '11px',
+              fontFamily: 'monospace'
+            }}>
+              {method}
+            </div>
+          ))}
         </div>
-        {nodeData.methods?.map((method, index) => (
-          <div key={index} style={{ 
-            padding: '2px 8px',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '8px'
-          }}>
-            <EditableField
-              value={method}
-              onSave={(newValue) => {
-                const newMethods = [...(nodeData.methods || [])];
-                newMethods[index] = newValue;
-                updateNodeData({ methods: newMethods });
-              }}
-              placeholder="+ method(): ReturnType"
-              style={{ fontSize: '12px', flex: 1 }}
-              onDelete={() => {
-                const newMethods = [...(nodeData.methods || [])];
-                newMethods.splice(index, 1);
-                updateNodeData({ methods: newMethods });
-              }}
-              showDelete={true}
-            />
-          </div>
-        ))}
-        <div style={{ padding: '2px 8px' }}>
-          <EditableField
-            value=""
-            onSave={(newValue) => {
-              if (newValue.trim()) {
-                const newMethods = [...(nodeData.methods || []), newValue];
-                updateNodeData({ methods: newMethods });
-              }
-            }}
-            placeholder="+ Add method..."
-            style={{ fontSize: '12px', fontStyle: 'italic', color: '#999' }}
-            showVisibility={true}
-          />
-        </div>
-      </div>
+      )}
     </div>
   );
 
   // Render UML Abstract Class
   const renderUMLAbstractClass = () => (
     <div style={{ width: '100%' }}>
-      {/* Delete button - only show when selected */}
       {selected && (
         <button
           onClick={handleDelete}
@@ -688,27 +602,27 @@ export function EditableNode({ id, data, selected, isConnectable, xPos, yPos, ..
             position: 'absolute',
             top: '-8px',
             right: '-8px',
-            background: '#e74c3c',
+            background: '#ef4444',
             color: 'white',
             border: 'none',
             borderRadius: '50%',
-            width: '20px',
-            height: '20px',
+            width: '22px',
+            height: '22px',
             fontSize: '12px',
             cursor: 'pointer',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
             zIndex: 10,
-            boxShadow: '0 2px 4px rgba(0,0,0,0.2)',
+            boxShadow: '0 4px 12px rgba(239,68,68,0.3)',
             transition: 'all 0.2s ease'
           }}
           onMouseEnter={(e) => {
-            e.currentTarget.style.background = '#c0392b';
+            e.currentTarget.style.background = '#dc2626';
             e.currentTarget.style.transform = 'scale(1.1)';
           }}
           onMouseLeave={(e) => {
-            e.currentTarget.style.background = '#e74c3c';
+            e.currentTarget.style.background = '#ef4444';
             e.currentTarget.style.transform = 'scale(1)';
           }}
           title="Delete node"
@@ -716,202 +630,77 @@ export function EditableNode({ id, data, selected, isConnectable, xPos, yPos, ..
           ×
         </button>
       )}
-      {/* Abstract class name section */}
+      
       <div style={{
-        background: '#f0f8f0',
-        borderBottom: '1px solid #16a085',
-        padding: '8px 0',
+        borderBottom: '1px solid #d1d5db',
+        padding: '8px 12px',
         textAlign: 'center',
-        fontWeight: 'bold',
-        fontSize: '14px',
-        color: '#16a085',
-        minHeight: '30px',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center'
+        fontWeight: 600,
+        fontSize: '13px',
+        color: '#1f2937',
+        background: '#f9fafb',
+        fontStyle: 'italic'
       }}>
-        <div style={{ fontStyle: 'italic', marginRight: '8px' }}>&lt;&lt;abstract&gt;&gt;</div>
+        <span style={{ fontSize: '10px', fontWeight: 'normal' }}>&lt;&lt;abstract&gt;&gt;</span>
+        {' '}
         <EditableField
           value={nodeData.className || ''}
           onSave={(newValue) => updateNodeData({ className: newValue })}
           placeholder="Abstract Class Name"
-            style={{ 
-              fontWeight: 'bold',
-            fontSize: '14px',
-              color: '#16a085',
+          style={{ 
+            fontWeight: '600',
+            fontSize: '13px',
+            color: '#1f2937',
             textAlign: 'center',
-              fontStyle: 'italic'
-            }}
+            fontStyle: 'italic'
+          }}
         />
       </div>
       
-      {/* Attributes section */}
-      <div style={{
-        borderBottom: '1px solid #16a085',
-        padding: '8px 0',
-        fontSize: '12px',
-        color: '#666',
-        minHeight: '50px'
-      }}>
-        <div style={{ 
-          padding: '4px 8px', 
-          fontWeight: 'bold', 
-          color: '#16a085',
-          background: '#f0f8f0'
+      {nodeData.attributes && nodeData.attributes.length > 0 && (
+        <div style={{
+          borderBottom: '1px solid #d1d5db',
+          padding: '4px 0',
+          fontSize: '11px',
+          color: '#374151',
+          background: '#ffffff'
         }}>
-          Attributes
+          {nodeData.attributes.map((attr, index) => (
+            <div key={index} style={{ 
+              padding: '2px 12px',
+              fontSize: '11px',
+              fontFamily: 'monospace'
+            }}>
+              {attr}
+            </div>
+          ))}
         </div>
-        {nodeData.attributes?.map((attr, index) => (
-          <div key={index} style={{ 
-            padding: '2px 8px',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '8px'
-          }}>
-            <EditableField
-              value={attr}
-              onSave={(newValue) => {
-                const newAttributes = [...(nodeData.attributes || [])];
-                newAttributes[index] = newValue;
-                updateNodeData({ attributes: newAttributes });
-              }}
-              placeholder="+ attribute: Type"
-              style={{ fontSize: '12px', flex: 1 }}
-              onDelete={() => {
-                const newAttributes = [...(nodeData.attributes || [])];
-                newAttributes.splice(index, 1);
-                updateNodeData({ attributes: newAttributes });
-              }}
-              showDelete={true}
-            />
-            <button
-              onClick={() => {
-                const newAttributes = [...(nodeData.attributes || [])];
-                newAttributes.splice(index, 1);
-                updateNodeData({ attributes: newAttributes });
-              }}
-              style={{
-                background: '#ff6b6b',
-                color: 'white',
-                border: 'none',
-                borderRadius: '50%',
-                width: '16px',
-                height: '16px',
-                fontSize: '10px',
-                cursor: 'pointer',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                opacity: 0.7,
-                transition: 'opacity 0.2s'
-              }}
-              onMouseEnter={(e) => e.currentTarget.style.opacity = '1'}
-              onMouseLeave={(e) => e.currentTarget.style.opacity = '0.7'}
-              title="Delete attribute"
-            >
-              ×
-            </button>
-          </div>
-        ))}
-        <div style={{ padding: '2px 8px' }}>
-          <EditableField
-            value=""
-            onSave={(newValue) => {
-              if (newValue.trim()) {
-                const newAttributes = [...(nodeData.attributes || []), newValue];
-                updateNodeData({ attributes: newAttributes });
-              }
-            }}
-            placeholder="+ Add attribute..."
-            style={{ fontSize: '12px', fontStyle: 'italic', color: '#999' }}
-            showVisibility={true}
-          />
-        </div>
-      </div>
+      )}
       
-      {/* Methods section */}
-      <div style={{
-        padding: '8px 0',
-        fontSize: '12px',
-        color: '#666',
-        minHeight: '50px'
-      }}>
-        <div style={{ 
-          padding: '4px 8px', 
-          fontWeight: 'bold', 
-          color: '#16a085',
-          background: '#f0f8f0'
+      {nodeData.methods && nodeData.methods.length > 0 && (
+        <div style={{
+          padding: '4px 0',
+          fontSize: '11px',
+          color: '#374151',
+          background: '#ffffff'
         }}>
-          Methods
+          {nodeData.methods.map((method, index) => (
+            <div key={index} style={{ 
+              padding: '2px 12px',
+              fontSize: '11px',
+              fontFamily: 'monospace'
+            }}>
+              {method}
+            </div>
+          ))}
         </div>
-        {nodeData.methods?.map((method, index) => (
-          <div key={index} style={{ 
-            padding: '2px 8px',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '8px'
-          }}>
-            <EditableField
-              value={method}
-              onSave={(newValue) => {
-                const newMethods = [...(nodeData.methods || [])];
-                newMethods[index] = newValue;
-                updateNodeData({ methods: newMethods });
-              }}
-              placeholder="+ method(): ReturnType"
-              style={{ fontSize: '12px', flex: 1 }}
-            />
-            <button
-              onClick={() => {
-                const newMethods = [...(nodeData.methods || [])];
-                newMethods.splice(index, 1);
-                updateNodeData({ methods: newMethods });
-              }}
-              style={{
-                background: '#ff6b6b',
-                color: 'white',
-                border: 'none',
-                borderRadius: '50%',
-                width: '16px',
-                height: '16px',
-                fontSize: '10px',
-                cursor: 'pointer',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                opacity: 0.7,
-                transition: 'opacity 0.2s'
-              }}
-              onMouseEnter={(e) => e.currentTarget.style.opacity = '1'}
-              onMouseLeave={(e) => e.currentTarget.style.opacity = '0.7'}
-              title="Delete method"
-            >
-              ×
-            </button>
-          </div>
-        ))}
-        <div style={{ padding: '2px 8px' }}>
-          <EditableField
-            value=""
-            onSave={(newValue) => {
-              if (newValue.trim()) {
-                const newMethods = [...(nodeData.methods || []), newValue];
-                updateNodeData({ methods: newMethods });
-              }
-            }}
-            placeholder="+ Add method..."
-            style={{ fontSize: '12px', fontStyle: 'italic', color: '#999' }}
-            showVisibility={true}
-          />
-        </div>
-      </div>
+      )}
     </div>
   );
 
   // Render UML Interface
   const renderUMLInterface = () => (
     <div style={{ width: '100%' }}>
-      {/* Delete button - only show when selected */}
       {selected && (
         <button
           onClick={handleDelete}
@@ -919,27 +708,27 @@ export function EditableNode({ id, data, selected, isConnectable, xPos, yPos, ..
             position: 'absolute',
             top: '-8px',
             right: '-8px',
-            background: '#e74c3c',
+            background: '#ef4444',
             color: 'white',
             border: 'none',
             borderRadius: '50%',
-            width: '20px',
-            height: '20px',
+            width: '22px',
+            height: '22px',
             fontSize: '12px',
             cursor: 'pointer',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
             zIndex: 10,
-            boxShadow: '0 2px 4px rgba(0,0,0,0.2)',
+            boxShadow: '0 4px 12px rgba(239,68,68,0.3)',
             transition: 'all 0.2s ease'
           }}
           onMouseEnter={(e) => {
-            e.currentTarget.style.background = '#c0392b';
+            e.currentTarget.style.background = '#dc2626';
             e.currentTarget.style.transform = 'scale(1.1)';
           }}
           onMouseLeave={(e) => {
-            e.currentTarget.style.background = '#e74c3c';
+            e.currentTarget.style.background = '#ef4444';
             e.currentTarget.style.transform = 'scale(1)';
           }}
           title="Delete node"
@@ -947,117 +736,57 @@ export function EditableNode({ id, data, selected, isConnectable, xPos, yPos, ..
           ×
         </button>
       )}
-      {/* Interface name section */}
+      
       <div style={{
-        background: '#fdf0f0',
-        borderBottom: '1px solid #e74c3c',
-        padding: '8px 0',
+        borderBottom: '1px solid #d1d5db',
+        padding: '8px 12px',
         textAlign: 'center',
-        fontWeight: 'bold',
-        fontSize: '14px',
-        color: '#e74c3c',
-        minHeight: '30px',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center'
+        fontWeight: 600,
+        fontSize: '13px',
+        color: '#1f2937',
+        background: '#f9fafb',
+        fontStyle: 'italic'
       }}>
-        <div style={{ fontStyle: 'italic', marginRight: '8px' }}>&lt;&lt;interface&gt;&gt;</div>
+        <span style={{ fontSize: '10px', fontWeight: 'normal' }}>&lt;&lt;interface&gt;&gt;</span>
+        {' '}
         <EditableField
           value={nodeData.className || ''}
           onSave={(newValue) => updateNodeData({ className: newValue })}
           placeholder="Interface Name"
-            style={{ 
-              fontWeight: 'bold',
-            fontSize: '14px',
-            color: '#e74c3c',
-            textAlign: 'center'
+          style={{ 
+            fontWeight: '600',
+            fontSize: '13px',
+            color: '#1f2937',
+            textAlign: 'center',
+            fontStyle: 'italic'
           }}
         />
       </div>
       
-      {/* Methods section only (interfaces don't have attributes) */}
-      <div style={{
-        padding: '8px 0',
-        fontSize: '12px',
-        color: '#666',
-        minHeight: '50px'
-      }}>
-        <div style={{ 
-          padding: '4px 8px', 
-          fontWeight: 'bold', 
-          color: '#e74c3c',
-          background: '#fdf0f0'
+      {nodeData.methods && nodeData.methods.length > 0 && (
+        <div style={{
+          padding: '4px 0',
+          fontSize: '11px',
+          color: '#374151',
+          background: '#ffffff'
         }}>
-          Methods
+          {nodeData.methods.map((method, index) => (
+            <div key={index} style={{ 
+              padding: '2px 12px',
+              fontSize: '11px',
+              fontFamily: 'monospace'
+            }}>
+              {method}
+            </div>
+          ))}
         </div>
-        {nodeData.methods?.map((method, index) => (
-          <div key={index} style={{ 
-            padding: '2px 8px',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '8px'
-          }}>
-            <EditableField
-              value={method}
-              onSave={(newValue) => {
-                const newMethods = [...(nodeData.methods || [])];
-                newMethods[index] = newValue;
-                updateNodeData({ methods: newMethods });
-              }}
-              placeholder="+ method(): ReturnType"
-              style={{ fontSize: '12px', flex: 1 }}
-            />
-            <button
-              onClick={() => {
-                const newMethods = [...(nodeData.methods || [])];
-                newMethods.splice(index, 1);
-                updateNodeData({ methods: newMethods });
-              }}
-              style={{
-                background: '#ff6b6b',
-                color: 'white',
-                border: 'none',
-                borderRadius: '50%',
-                width: '16px',
-                height: '16px',
-                fontSize: '10px',
-                cursor: 'pointer',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                opacity: 0.7,
-                transition: 'opacity 0.2s'
-              }}
-              onMouseEnter={(e) => e.currentTarget.style.opacity = '1'}
-              onMouseLeave={(e) => e.currentTarget.style.opacity = '0.7'}
-              title="Delete method"
-            >
-              ×
-            </button>
-          </div>
-        ))}
-        <div style={{ padding: '2px 8px' }}>
-          <EditableField
-            value=""
-            onSave={(newValue) => {
-              if (newValue.trim()) {
-                const newMethods = [...(nodeData.methods || []), newValue];
-                updateNodeData({ methods: newMethods });
-              }
-            }}
-            placeholder="+ Add method..."
-            style={{ fontSize: '12px', fontStyle: 'italic', color: '#999' }}
-            showVisibility={true}
-          />
-        </div>
-      </div>
+      )}
     </div>
   );
 
   // Render UML Enumeration
   const renderUMLEnumeration = () => (
     <div style={{ width: '100%' }}>
-      {/* Delete button - only show when selected */}
       {selected && (
         <button
           onClick={handleDelete}
@@ -1065,27 +794,27 @@ export function EditableNode({ id, data, selected, isConnectable, xPos, yPos, ..
             position: 'absolute',
             top: '-8px',
             right: '-8px',
-            background: '#e74c3c',
+            background: '#ef4444',
             color: 'white',
             border: 'none',
             borderRadius: '50%',
-            width: '20px',
-            height: '20px',
+            width: '22px',
+            height: '22px',
             fontSize: '12px',
             cursor: 'pointer',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
             zIndex: 10,
-            boxShadow: '0 2px 4px rgba(0,0,0,0.2)',
+            boxShadow: '0 4px 12px rgba(239,68,68,0.3)',
             transition: 'all 0.2s ease'
           }}
           onMouseEnter={(e) => {
-            e.currentTarget.style.background = '#c0392b';
+            e.currentTarget.style.background = '#dc2626';
             e.currentTarget.style.transform = 'scale(1.1)';
           }}
           onMouseLeave={(e) => {
-            e.currentTarget.style.background = '#e74c3c';
+            e.currentTarget.style.background = '#ef4444';
             e.currentTarget.style.transform = 'scale(1)';
           }}
           title="Delete node"
@@ -1093,110 +822,51 @@ export function EditableNode({ id, data, selected, isConnectable, xPos, yPos, ..
           ×
         </button>
       )}
-      {/* Enum name section */}
+      
       <div style={{
-        background: '#f8f0f8',
-        borderBottom: '1px solid #9b59b6',
-        padding: '8px 0',
+        borderBottom: '1px solid #d1d5db',
+        padding: '8px 12px',
         textAlign: 'center',
-        fontWeight: 'bold',
-        fontSize: '14px',
-        color: '#9b59b6',
-        minHeight: '30px',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center'
+        fontWeight: 600,
+        fontSize: '13px',
+        color: '#1f2937',
+        background: '#f9fafb',
+        fontStyle: 'italic'
       }}>
-        <div style={{ fontStyle: 'italic', marginRight: '8px' }}>&lt;&lt;enumeration&gt;&gt;</div>
+        <span style={{ fontSize: '10px', fontWeight: 'normal' }}>&lt;&lt;enumeration&gt;&gt;</span>
+        {' '}
         <EditableField
           value={nodeData.className || ''}
           onSave={(newValue) => updateNodeData({ className: newValue })}
           placeholder="Enumeration Name"
-            style={{ 
-              fontWeight: 'bold',
-            fontSize: '14px',
-            color: '#9b59b6',
-            textAlign: 'center'
+          style={{ 
+            fontWeight: '600',
+            fontSize: '13px',
+            color: '#1f2937',
+            textAlign: 'center',
+            fontStyle: 'italic'
           }}
         />
       </div>
       
-      {/* Values section */}
-      <div style={{
-        padding: '8px 0',
-        fontSize: '12px',
-        color: '#666',
-        minHeight: '50px'
-      }}>
-        <div style={{ 
-          padding: '4px 8px', 
-          fontWeight: 'bold', 
-          color: '#9b59b6',
-          background: '#f8f0f8'
+      {nodeData.values && nodeData.values.length > 0 && (
+        <div style={{
+          padding: '4px 0',
+          fontSize: '11px',
+          color: '#374151',
+          background: '#ffffff'
         }}>
-          Values
+          {nodeData.values.map((value, index) => (
+            <div key={index} style={{ 
+              padding: '2px 12px',
+              fontSize: '11px',
+              fontFamily: 'monospace'
+            }}>
+              {value}
+            </div>
+          ))}
         </div>
-        {nodeData.values?.map((value, index) => (
-          <div key={index} style={{ 
-            padding: '2px 8px',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '8px'
-          }}>
-            <EditableField
-              value={value}
-              onSave={(newValue) => {
-                const newValues = [...(nodeData.values || [])];
-                newValues[index] = newValue;
-                updateNodeData({ values: newValues });
-              }}
-              placeholder="Value"
-              style={{ fontSize: '12px', flex: 1 }}
-            />
-            <button
-              onClick={() => {
-                const newValues = [...(nodeData.values || [])];
-                newValues.splice(index, 1);
-                updateNodeData({ values: newValues });
-              }}
-              style={{
-                background: '#ff6b6b',
-                color: 'white',
-                border: 'none',
-                borderRadius: '50%',
-                width: '16px',
-                height: '16px',
-                fontSize: '10px',
-                cursor: 'pointer',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                opacity: 0.7,
-                transition: 'opacity 0.2s'
-              }}
-              onMouseEnter={(e) => e.currentTarget.style.opacity = '1'}
-              onMouseLeave={(e) => e.currentTarget.style.opacity = '0.7'}
-              title="Delete value"
-            >
-              ×
-            </button>
-          </div>
-        ))}
-        <div style={{ padding: '2px 8px' }}>
-          <EditableField
-            value=""
-            onSave={(newValue) => {
-              if (newValue.trim()) {
-                const newValues = [...(nodeData.values || []), newValue];
-                updateNodeData({ values: newValues });
-              }
-            }}
-            placeholder="Add value..."
-            style={{ fontSize: '12px', fontStyle: 'italic', color: '#999' }}
-            showVisibility={true}
-          />
-        </div>
-      </div>
+      )}
     </div>
   );
 
@@ -1373,25 +1043,144 @@ export function EditableNode({ id, data, selected, isConnectable, xPos, yPos, ..
       {/* Render the appropriate UML element */}
       {getRenderer()}
 
-      {/* Connection handles */}
+      {/* Midpoint handles per side; targets on Left/Top, sources on Right/Bottom */}
+      {/* Left side: allow both target and source */}
       <Handle 
         type="target" 
-        position={Position.Top} 
+        position={Position.Left} 
         isConnectable={isConnectable}
+        id="left-target"
         style={{ 
-          background: '#0071e3',
-          width: '8px',
-          height: '8px'
+          top: '50%',
+          left: 0,
+          transform: 'translateY(-50%)',
+          background: '#6b7280',
+          width: '10px',
+          height: '10px',
+          borderRadius: '50%',
+          border: '2px solid #ffffff'
         }}
       />
       <Handle 
         type="source" 
+        position={Position.Left} 
+        isConnectable={isConnectable}
+        id="left-source"
+        style={{ 
+          top: '50%',
+          left: 0,
+          transform: 'translateY(-50%)',
+          background: '#6b7280',
+          width: '10px',
+          height: '10px',
+          borderRadius: '50%',
+          border: '2px solid #ffffff',
+          boxShadow: 'inset 0 0 0 2px rgba(0,0,0,0.08)'
+        }}
+      />
+
+      {/* Top side: allow both target and source */}
+      <Handle 
+        type="target" 
+        position={Position.Top} 
+        isConnectable={isConnectable}
+        id="top-target"
+        style={{ 
+          top: 0,
+          left: '50%',
+          transform: 'translateX(-50%)',
+          background: '#6b7280',
+          width: '10px',
+          height: '10px',
+          borderRadius: '50%',
+          border: '2px solid #ffffff'
+        }}
+      />
+      <Handle 
+        type="source" 
+        position={Position.Top} 
+        isConnectable={isConnectable}
+        id="top-source"
+        style={{ 
+          top: 0,
+          left: '50%',
+          transform: 'translateX(-50%)',
+          background: '#6b7280',
+          width: '10px',
+          height: '10px',
+          borderRadius: '50%',
+          border: '2px solid #ffffff',
+          boxShadow: 'inset 0 0 0 2px rgba(0,0,0,0.08)'
+        }}
+      />
+
+      {/* Right side: allow both source and target */}
+      <Handle 
+        type="source" 
+        position={Position.Right} 
+        isConnectable={isConnectable}
+        id="right-source"
+        style={{ 
+          top: '50%',
+          right: 0,
+          transform: 'translateY(-50%)',
+          background: '#6b7280',
+          width: '10px',
+          height: '10px',
+          borderRadius: '50%',
+          border: '2px solid #ffffff'
+        }}
+      />
+      <Handle 
+        type="target" 
+        position={Position.Right} 
+        isConnectable={isConnectable}
+        id="right-target"
+        style={{ 
+          top: '50%',
+          right: 0,
+          transform: 'translateY(-50%)',
+          background: '#6b7280',
+          width: '10px',
+          height: '10px',
+          borderRadius: '50%',
+          border: '2px solid #ffffff',
+          boxShadow: 'inset 0 0 0 2px rgba(0,0,0,0.08)'
+        }}
+      />
+
+      {/* Bottom side: allow both source and target */}
+      <Handle 
+        type="source" 
         position={Position.Bottom} 
         isConnectable={isConnectable}
+        id="bottom-source"
         style={{ 
-          background: '#0071e3',
-          width: '8px',
-          height: '8px'
+          bottom: 0,
+          left: '50%',
+          transform: 'translateX(-50%)',
+          background: '#6b7280',
+          width: '10px',
+          height: '10px',
+          borderRadius: '50%',
+          border: '2px solid #ffffff'
+        }}
+      />
+      <Handle 
+        type="target" 
+        position={Position.Bottom} 
+        isConnectable={isConnectable}
+        id="bottom-target"
+        style={{ 
+          bottom: 0,
+          left: '50%',
+          transform: 'translateX(-50%)',
+          background: '#6b7280',
+          width: '10px',
+          height: '10px',
+          borderRadius: '50%',
+          border: '2px solid #ffffff',
+          boxShadow: 'inset 0 0 0 2px rgba(0,0,0,0.08)'
         }}
       />
     </div>

@@ -24,7 +24,7 @@ const modalOverlayStyle: React.CSSProperties = {
 
 const modalStyle: React.CSSProperties = {
   background: '#ffffff',
-  borderRadius: '8px',
+  borderRadius: '0',
   padding: '24px',
   width: '480px',
   maxWidth: '90vw',
@@ -59,7 +59,7 @@ const closeButtonStyle: React.CSSProperties = {
   color: '#6c757d',
   cursor: 'pointer',
   padding: '6px 10px',
-  borderRadius: '6px',
+  borderRadius: '0',
 };
 
 const formGroupStyle: React.CSSProperties = {
@@ -79,7 +79,7 @@ const inputStyle: React.CSSProperties = {
   width: '100%',
   padding: '10px 12px',
   border: '1px solid #ced4da',
-  borderRadius: '6px',
+  borderRadius: 0,
   fontSize: '13px',
   boxSizing: 'border-box',
   background: '#ffffff',
