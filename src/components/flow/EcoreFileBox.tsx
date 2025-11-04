@@ -1,10 +1,10 @@
-// NEU:
 import React, { useState, useRef, useEffect } from 'react';
 import { NodeProps } from 'reactflow';
 import { ConfirmDialog } from '../ui/ConfirmDialog';
 import { ConnectionHandle } from './ConnectionHandle';
 
-// NEU:
+
+
 interface EcoreFileBoxData {
   fileName: string;
   fileContent: string;
@@ -12,8 +12,9 @@ interface EcoreFileBoxData {
   onSelect: (fileName: string) => void;
   onDelete?: (id: string) => void;
   onRename?: (id: string, newFileName: string) => void;
-  onConnectionStart?: (nodeId: string, handle: 'top' | 'bottom' | 'left' | 'right') => void; // ← NEU
+  onConnectionStart?: (nodeId: string, handle: 'top' | 'bottom' | 'left' | 'right') => void;
   isExpanded?: boolean;
+  isConnectionActive?: boolean; // ← NEU!
   description?: string;
   keywords?: string;
   domain?: string;
@@ -253,8 +254,9 @@ const {
   onSelect, 
   onDelete, 
   onRename, 
-  onConnectionStart, // ← NEU
-  isExpanded = false, 
+  onConnectionStart,
+  isExpanded = false,
+  isConnectionActive = false, // ← NEU!
   description, 
   keywords, 
   domain, 
@@ -345,28 +347,27 @@ const {
     }
   };
 
-  return (
-    <>
-      <div
-        ref={boxRef}
-        style={{
-          ...boxStyle,
-          ...(selected ? selectedBoxStyle : {}),
-          ...(isHovered ? boxHoverStyle : {}),
-          display: isExpanded ? 'none' : 'block',
-          position: 'relative', // ← NEU: für absolute positioning der Handles
-        }}
-        onClick={handleClick}
-        onDoubleClick={handleDoubleClick}
-        onMouseEnter={() => setIsHovered(true)}
-        onMouseLeave={() => setIsHovered(false)}
-        title={`Click to select, double-click to expand\n${fileName}`}
-      >
-        {/* NEU: Connection Handles - nur wenn selected */}
-        {selected && (
-          <>
+return (
+  <>
+    <div
+      ref={boxRef}
+      style={{
+        ...boxStyle,
+        ...(selected ? selectedBoxStyle : {}),
+        ...(isHovered ? boxHoverStyle : {}),
+        display: isExpanded ? 'none' : 'block',
+        position: 'relative',
+      }}
+      onClick={handleClick}
+      onDoubleClick={handleDoubleClick}
+      onMouseEnter={() => setIsHovered(true)}
+      onMouseLeave={() => setIsHovered(false)}
+      title={`Click to select, double-click to expand\n${fileName}`}
+    >
+      {/* Connection Handles - zeige wenn selected ODER wenn Connection aktiv ist */}
 <ConnectionHandle 
   position="top"
+  isVisible={selected || isConnectionActive} // ← GEÄNDERT!
   onConnectionStart={(pos) => {
     console.log('Connection started from', pos, 'on node', id);
     if (onConnectionStart) {
@@ -376,6 +377,7 @@ const {
 />
 <ConnectionHandle 
   position="bottom"
+  isVisible={selected || isConnectionActive} // ← GEÄNDERT!
   onConnectionStart={(pos) => {
     console.log('Connection started from', pos, 'on node', id);
     if (onConnectionStart) {
@@ -385,6 +387,7 @@ const {
 />
 <ConnectionHandle 
   position="left"
+  isVisible={selected || isConnectionActive} // ← GEÄNDERT!
   onConnectionStart={(pos) => {
     console.log('Connection started from', pos, 'on node', id);
     if (onConnectionStart) {
@@ -394,6 +397,7 @@ const {
 />
 <ConnectionHandle 
   position="right"
+  isVisible={selected || isConnectionActive} // ← GEÄNDERT!
   onConnectionStart={(pos) => {
     console.log('Connection started from', pos, 'on node', id);
     if (onConnectionStart) {
@@ -401,14 +405,13 @@ const {
     }
   }}
 />
-          </>
-        )}
+      <div style={fileNameStyle}>
+        <span>
+          {fileName.replace(/\.ecore$/i, '')}
+        </span>
+      </div>
 
-        <div style={fileNameStyle}>
-          <span>
-            {fileName.replace(/\.ecore$/i, '')}
-          </span>
-        </div>
+      {/* Rest bleibt gleich... */}
 
         {description && (
           <div style={descriptionStyle}>

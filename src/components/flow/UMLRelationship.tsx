@@ -1,5 +1,6 @@
 import React from 'react';
 import { EdgeProps, getBezierPath } from 'reactflow';
+import { getEdgeColor } from '../../utils/edgeColorUtils';
 
 interface UMLRelationshipData {
   label?: string;
@@ -10,6 +11,8 @@ interface UMLRelationshipData {
 
 export function UMLRelationship({
   id,
+  source,
+  target,
   sourceX,
   sourceY,
   targetX,
@@ -28,10 +31,15 @@ export function UMLRelationship({
     targetPosition,
   });
 
+  // Get consistent color for this node pair
+  // Get consistent color for this node pair
+const edgeColor = getEdgeColor(source, target);
+console.log('🎨 Edge Color:', edgeColor, 'for', source, '->', target); // ← FÜGE DIESE ZEILE HINZU
+
   const getRelationshipStyle = () => {
     const baseStyle = {
       strokeWidth: selected ? '3px' : '2px',
-      stroke: selected ? '#0071e3' : '#333',
+      stroke: edgeColor, // Use the assigned color
       fill: 'none',
     };
 
@@ -39,40 +47,34 @@ export function UMLRelationship({
       case 'inheritance':
         return {
           ...baseStyle,
-          stroke: '#16a085',
-          markerEnd: 'url(#arrowhead-inheritance)',
+          markerEnd: `url(#arrowhead-inheritance-${id})`,
         };
       case 'realization':
         return {
           ...baseStyle,
-          stroke: '#e67e22',
           strokeDasharray: '5,5',
-          markerEnd: 'url(#arrowhead-realization)',
+          markerEnd: `url(#arrowhead-realization-${id})`,
         };
       case 'composition':
         return {
           ...baseStyle,
-          stroke: '#8e44ad',
-          markerEnd: 'url(#arrowhead-composition)',
+          markerEnd: `url(#arrowhead-composition-${id})`,
         };
       case 'aggregation':
         return {
           ...baseStyle,
-          stroke: '#27ae60',
-          markerEnd: 'url(#arrowhead-aggregation)',
+          markerEnd: `url(#arrowhead-aggregation-${id})`,
         };
       case 'association':
         return {
           ...baseStyle,
-          stroke: '#34495e',
-          markerEnd: 'url(#arrowhead-association)',
+          markerEnd: `url(#arrowhead-association-${id})`,
         };
       case 'dependency':
         return {
           ...baseStyle,
-          stroke: '#95a5a6',
           strokeDasharray: '3,3',
-          markerEnd: 'url(#arrowhead-dependency)',
+          markerEnd: `url(#arrowhead-dependency-${id})`,
         };
       default:
         return baseStyle;
@@ -102,75 +104,75 @@ export function UMLRelationship({
     <>
       <defs>
         <marker
-          id="arrowhead-inheritance"
+          id={`arrowhead-inheritance-${id}`}
           viewBox="0 0 10 10"
           refX="9"
-          refY="3"
+          refY="5"
           markerWidth="6"
           markerHeight="6"
           orient="auto"
         >
-          <path d="M 0 0 L 10 5 L 0 10 z" fill="#16a085" />
+          <path d="M 0 0 L 10 5 L 0 10 z" fill={edgeColor} />
         </marker>
         
         <marker
-          id="arrowhead-realization"
+          id={`arrowhead-realization-${id}`}
           viewBox="0 0 10 10"
           refX="9"
-          refY="3"
+          refY="5"
           markerWidth="6"
           markerHeight="6"
           orient="auto"
         >
-          <path d="M 0 0 L 10 5 L 0 10 z" fill="#e67e22" />
+          <path d="M 0 0 L 10 5 L 0 10 z" fill={edgeColor} />
         </marker>
         
         <marker
-          id="arrowhead-composition"
+          id={`arrowhead-composition-${id}`}
           viewBox="0 0 10 10"
           refX="9"
-          refY="3"
+          refY="5"
           markerWidth="6"
           markerHeight="6"
           orient="auto"
         >
-          <path d="M 0 0 L 10 5 L 0 10 z" fill="#8e44ad" />
+          <path d="M 0 0 L 10 5 L 0 10 z" fill={edgeColor} />
         </marker>
         
         <marker
-          id="arrowhead-aggregation"
+          id={`arrowhead-aggregation-${id}`}
           viewBox="0 0 10 10"
           refX="9"
-          refY="3"
+          refY="5"
           markerWidth="6"
           markerHeight="6"
           orient="auto"
         >
-          <path d="M 0 0 L 10 5 L 0 10 z" fill="#27ae60" />
+          <path d="M 0 0 L 10 5 L 0 10 z" fill={edgeColor} />
         </marker>
         
         <marker
-          id="arrowhead-association"
+          id={`arrowhead-association-${id}`}
           viewBox="0 0 10 10"
           refX="9"
-          refY="3"
+          refY="5"
           markerWidth="6"
           markerHeight="6"
           orient="auto"
         >
-          <path d="M 0 0 L 10 5 L 0 10 z" fill="#34495e" />
+          <path d="M 0 0 L 10 5 L 0 10 z" fill={edgeColor} />
         </marker>
         
         <marker
-          id="arrowhead-dependency"
+          id={`arrowhead-dependency-${id}`}
           viewBox="0 0 10 10"
           refX="9"
-          refY="3"
+          refY="5"
           markerWidth="6"
           markerHeight="6"
           orient="auto"
         >
-          <path d="M 0 0 L 10 5 L 0 10 z" fill="#95a5a6" />
+          <path d="M 0 0 L 10 5 L 0 10 z" fill={edgeColor} />
         </marker>
       </defs>
 
@@ -190,7 +192,7 @@ export function UMLRelationship({
         style={{
           fontSize: '12px',
           fontWeight: 'bold',
-          fill: '#333',
+          fill: edgeColor,
           background: '#fff',
           padding: '2px 4px',
         }}
@@ -208,7 +210,7 @@ export function UMLRelationship({
           style={{
             fontSize: '10px',
             fontWeight: 'bold',
-            fill: '#e74c3c',
+            fill: edgeColor,
             background: '#fff',
             padding: '1px 3px',
             borderRadius: '3px',
@@ -228,7 +230,7 @@ export function UMLRelationship({
           style={{
             fontSize: '10px',
             fontWeight: 'bold',
-            fill: '#e74c3c',
+            fill: edgeColor,
             background: '#fff',
             padding: '1px 3px',
             borderRadius: '3px',

@@ -1,4 +1,3 @@
-
 import React, { useRef, useState, forwardRef, useImperativeHandle, useEffect, useCallback } from 'react';
 import ReactFlow, {
   MiniMap,
@@ -26,10 +25,8 @@ interface FlowCanvasProps {
   onDeploy?: (nodes: Node[], edges: Edge[]) => void;
   onToolClick?: (toolType: string, toolName: string, diagramType?: string) => void;
   onDiagramChange?: (nodes: Node[], edges: Edge[]) => void;
-  // ecoreFiles prop entfernt - wird Teil von nodes
   onEcoreFileSelect?: (fileName: string) => void;
   onEcoreFileExpand?: (fileName: string, fileContent: string) => void;
-  // onEcoreFilePositionChange entfernt - onNodesChange macht das
   onEcoreFileDelete?: (id: string) => void;
   onEcoreFileRename?: (id: string, newFileName: string) => void;
 }
@@ -46,23 +43,22 @@ export const FlowCanvas = forwardRef<{
   redo: () => void;
   canUndo: boolean;
   canRedo: boolean;
-}, FlowCanvasProps>(
+}, FlowCanvasProps>( 
   ({ onDeploy, onToolClick, onDiagramChange, onEcoreFileSelect, onEcoreFileExpand, onEcoreFileDelete, onEcoreFileRename }, ref) => {
   // ecoreFiles prop entfernt aus destructuring
   const reactFlowWrapper = useRef<HTMLDivElement>(null);
   const [reactFlowInstance, setReactFlowInstance] = useState<ReactFlowInstance | null>(null);
   const [isDragOver, setIsDragOver] = useState(false);
   const [isInteractive, setIsInteractive] = useState(true);
-  // selectedFileId und expandedFileId bleiben, für interne Tracking
   const [selectedFileId, setSelectedFileId] = useState<string | null>(null);
   const [expandedFileId, setExpandedFileId] = useState<string | null>(null);
 
   const [connectionDragState, setConnectionDragState] = useState<{
-  isActive: boolean;
-  sourceNodeId: string | null;
-  sourceHandle: 'top' | 'bottom' | 'left' | 'right' | null;
-  currentPosition: { x: number; y: number } | null;
-} | null>(null);
+    isActive: boolean;
+    sourceNodeId: string | null;
+    sourceHandle: 'top' | 'bottom' | 'left' | 'right' | null;
+    currentPosition: { x: number; y: number } | null;
+  } | null>(null);
   
   const {
     nodes,
@@ -82,6 +78,81 @@ export const FlowCanvas = forwardRef<{
     canRedo,
   } = useFlowState();
 
+  // --- FARBLISTE + ZUORDNUNGS-MAP (25 Farben, zyklisch) ---
+  const COLOR_LIST = [
+    '#1f77b4', '#ff7f0e', '#2ca02c', '#d62728', '#9467bd',
+    '#8c564b', '#e377c2', '#7f7f7f', '#bcbd22', '#17becf',
+    '#368bd6', '#ff9f40', '#4daf4a', '#ff6b6b', '#b388eb',
+    '#9c6644', '#f39ed1', '#a9a9a9', '#c9d22f', '#33c7c7',
+    '#2a86d6', '#ffb86b', '#63c37a', '#ff4f7a', '#b08fe8'
+  ];
+  const LOCALSTORAGE_KEY = 'flow_edge_color_map_v1';
+
+  // Map pairKey -> color
+  const edgeColorMapRef = useRef<Map<string, string>>(new Map());
+  const nextColorIndexRef = useRef<number>(0);
+
+  // unordered key: a::b == b::a
+  const pairKey = (a: string, b: string) => (a < b ? `${a}::${b}` : `${b}::${a}`);
+
+  // lade persistente Zuordnung falls vorhanden
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(LOCALSTORAGE_KEY);
+      if (raw) {
+        const parsed = JSON.parse(raw) as Record<string, string>;
+        edgeColorMapRef.current = new Map(Object.entries(parsed));
+        // advance nextColorIndexRef so we continue after used colors
+        const used = new Set(Object.values(parsed));
+        let maxIndex = 0;
+        COLOR_LIST.forEach((c, i) => { if (used.has(c)) maxIndex = Math.max(maxIndex, i + 1); });
+        nextColorIndexRef.current = maxIndex % COLOR_LIST.length;
+      }
+    } catch (e) {
+      // ignore
+      console.warn('Failed to load edge color map', e);
+    }
+  }, []);
+
+  const persistEdgeColorMap = () => {
+  try {
+    const obj: Record<string, string> = {};
+    edgeColorMapRef.current.forEach((v, k) => {
+      obj[k] = v;
+    });
+    localStorage.setItem(LOCALSTORAGE_KEY, JSON.stringify(obj));
+  } catch (e) {
+    // ignore
+  }
+};
+
+
+  const getColorForPair = (idA: string, idB: string) => {
+    const key = pairKey(idA, idB);
+    const existing = edgeColorMapRef.current.get(key);
+    if (existing) return existing;
+    const color = COLOR_LIST[nextColorIndexRef.current % COLOR_LIST.length];
+    edgeColorMapRef.current.set(key, color);
+    nextColorIndexRef.current += 1;
+    persistEdgeColorMap();
+    return color;
+  };
+
+  const removePairColor = (idA: string, idB: string) => {
+    const key = pairKey(idA, idB);
+    if (edgeColorMapRef.current.delete(key)) persistEdgeColorMap();
+  };
+  // --- ENDE FARBLISTE + MAP ---
+
+  // ← HIER DAS NEUE useEffect EINFÜGEN:
+  useEffect(() => {
+    console.log('🟦🟦🟦 EDGES STATE CHANGED:', edges);
+    console.log('🟦🟦🟦 Number of edges:', edges.length);
+    if (edges.length > 0) {
+      console.log('🟦🟦🟦 First edge:', edges[0]);
+    }
+  }, [edges]);
+
   const { onDrop, onDragOver } = useDragAndDrop({
     reactFlowInstance,
     reactFlowWrapper,
@@ -89,31 +160,31 @@ export const FlowCanvas = forwardRef<{
     addEdge,
   });
 
-// NEU: Berechne die absolute Position eines Handles auf dem Canvas
-const getHandlePosition = (
-  nodeId: string, 
-  handle: 'top' | 'bottom' | 'left' | 'right'
-): { x: number; y: number } | null => {
-  const node = nodes.find(n => n.id === nodeId);
-  if (!node) return null;
-  
-  const nodeWidth = 280;  // EcoreFileBox width
-  const nodeHeight = 180; // EcoreFileBox height
-  
-  const nodeX = node.position.x;
-  const nodeY = node.position.y;
-  
-  switch (handle) {
-    case 'top':
-      return { x: nodeX + nodeWidth / 2, y: nodeY };
-    case 'bottom':
-      return { x: nodeX + nodeWidth / 2, y: nodeY + nodeHeight };
-    case 'left':
-      return { x: nodeX, y: nodeY + nodeHeight / 2 };
-    case 'right':
-      return { x: nodeX + nodeWidth, y: nodeY + nodeHeight / 2 };
-  }
-};
+  // NEU: Berechne die absolute Position eines Handles auf dem Canvas
+  const getHandlePosition = (
+    nodeId: string, 
+    handle: 'top' | 'bottom' | 'left' | 'right'
+  ): { x: number; y: number } | null => {
+    const node = nodes.find(n => n.id === nodeId);
+    if (!node) return null;
+    
+    const nodeWidth = 280;  // EcoreFileBox width
+    const nodeHeight = 180; // EcoreFileBox height
+    
+    const nodeX = node.position.x;
+    const nodeY = node.position.y;
+    
+    switch (handle) {
+      case 'top':
+        return { x: nodeX + nodeWidth / 2, y: nodeY };
+      case 'bottom':
+        return { x: nodeX + nodeWidth / 2, y: nodeY + nodeHeight };
+      case 'left':
+        return { x: nodeX, y: nodeY + nodeHeight / 2 };
+      case 'right':
+        return { x: nodeX + nodeWidth, y: nodeY + nodeHeight / 2 };
+    }
+  };
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
@@ -152,41 +223,41 @@ const getHandlePosition = (
     };
   }, [undo, redo, canUndo, canRedo]);
 
-// NEU:
-// NEU: Escape-Taste zum Abbrechen
-useEffect(() => {
-  if (!connectionDragState?.isActive) return;
-  
-  console.log('🟦 Adding event listeners');
-  
-  const moveHandler = (e: any) => {
-    console.log('🟨 moveHandler triggered'); // ← Debug
-    handleConnectionMove(e);
-  };
-  const endHandler = (e: any) => {
-    console.log('🟥 endHandler called via', e.type);
-    handleConnectionEnd(e);
-  };
-  
-  // NEU: pointermove statt mousemove!
-  document.addEventListener('pointermove', moveHandler, { capture: true }); // ← HIER
-  document.addEventListener('pointerup', endHandler, { capture: true });
-  
-  // Auch window
-  window.addEventListener('pointermove', moveHandler, { capture: true }); // ← HIER
-  window.addEventListener('pointerup', endHandler, { capture: true });
-  
-  document.body.style.cursor = 'crosshair';
-  
-  return () => {
-    console.log('🟦 Removing event listeners');
-    document.removeEventListener('pointermove', moveHandler, { capture: true }); // ← HIER
-    document.removeEventListener('pointerup', endHandler, { capture: true });
-    window.removeEventListener('pointermove', moveHandler, { capture: true }); // ← HIER
-    window.removeEventListener('pointerup', endHandler, { capture: true });
-    document.body.style.cursor = '';
-  };
-}, [connectionDragState?.isActive]);
+  // NEU:
+  // NEU: Escape-Taste zum Abbrechen
+  useEffect(() => {
+    if (!connectionDragState?.isActive) return;
+    
+    console.log('🟦 Adding event listeners');
+    
+    const moveHandler = (e: any) => {
+      console.log('🟨 moveHandler triggered'); // ← Debug
+      handleConnectionMove(e);
+    };
+    const endHandler = (e: any) => {
+      console.log('🟥 endHandler called via', e.type);
+      handleConnectionEnd(e);
+    };
+    
+    // NEU: pointermove statt mousemove!
+    document.addEventListener('pointermove', moveHandler, { capture: true }); // ← HIER
+    document.addEventListener('pointerup', endHandler, { capture: true });
+    
+    // Auch window
+    window.addEventListener('pointermove', moveHandler, { capture: true }); // ← HIER
+    window.addEventListener('pointerup', endHandler, { capture: true });
+    
+    document.body.style.cursor = 'crosshair';
+    
+    return () => {
+      console.log('🟦 Removing event listeners');
+      document.removeEventListener('pointermove', moveHandler, { capture: true }); // ← HIER
+      document.removeEventListener('pointerup', endHandler, { capture: true });
+      window.removeEventListener('pointermove', moveHandler, { capture: true }); // ← HIER
+      window.removeEventListener('pointerup', endHandler, { capture: true });
+      document.body.style.cursor = '';
+    };
+  }, [connectionDragState?.isActive]);
 
 
   const handleToolClick = (toolType: string, toolName: string, diagramType?: string) => {
@@ -346,52 +417,57 @@ useEffect(() => {
   };
 
   // NEU: Connection Drag Handler
-const handleConnectionStart = (nodeId: string, handle: 'top' | 'bottom' | 'left' | 'right') => {
-  console.log('🔵 Connection drag started:', { nodeId, handle });
-  
-  // NEU: Setze initiale currentPosition auf Handle-Position
-  const initialPosition = getHandlePosition(nodeId, handle);
-  console.log('🔵 Initial position:', initialPosition);
-  
-  setConnectionDragState({
-    isActive: true,
-    sourceNodeId: nodeId,
-    sourceHandle: handle,
-    currentPosition: initialPosition, // ← Statt null
-  });
-};
-
-const handleConnectionMove = useCallback((e: MouseEvent) => {
-  if (!reactFlowInstance) return;
-  
-  const flowPosition = reactFlowInstance.screenToFlowPosition({
-    x: e.clientX,
-    y: e.clientY,
-  });
-  
-  console.log('🟨 handleConnectionMove - updating position:', flowPosition);
-  
-  setConnectionDragState(prev => {
-    // Prüfe isActive im State Updater
-    if (!prev?.isActive) return prev;
+  const handleConnectionStart = (nodeId: string, handle: 'top' | 'bottom' | 'left' | 'right') => {
+    console.log('🔵 Connection drag started:', { nodeId, handle });
     
-    return {
-      ...prev,
-      currentPosition: flowPosition,
-    };
-  });
-}, [reactFlowInstance]); // ← Nur reactFlowInstance dependency!
+    // NEU: Setze initiale currentPosition auf Handle-Position
+    const initialPosition = getHandlePosition(nodeId, handle);
+    console.log('🔵 Initial position:', initialPosition);
+    
+    setConnectionDragState({
+      isActive: true,
+      sourceNodeId: nodeId,
+      sourceHandle: handle,
+      currentPosition: initialPosition, // ← Statt null
+    });
+  };
 
-const handleConnectionEnd = useCallback((e: MouseEvent) => {
-  console.log('🟥 handleConnectionEnd CALLED', {
-    mousePos: { x: e.clientX, y: e.clientY }
-  });
-  
-  if (!reactFlowInstance) return;
-  
-  // Verwende lokale Variable für State
-  setConnectionDragState(currentState => {
-    if (!currentState?.isActive) return null;
+  const handleConnectionMove = useCallback((e: MouseEvent) => {
+    if (!reactFlowInstance) return;
+    
+    const flowPosition = reactFlowInstance.screenToFlowPosition({
+      x: e.clientX,
+      y: e.clientY,
+    });
+    
+    console.log('🟨 handleConnectionMove - updating position:', flowPosition);
+    
+    setConnectionDragState(prev => {
+      // Prüfe isActive im State Updater
+      if (!prev?.isActive) return prev;
+      
+      return {
+        ...prev,
+        currentPosition: flowPosition,
+      };
+    });
+  }, [reactFlowInstance]); // ← Nur reactFlowInstance dependency!
+
+  const handleConnectionEnd = useCallback((e: MouseEvent) => {
+    console.log('🟥 handleConnectionEnd CALLED');
+    
+    if (!reactFlowInstance) {
+      console.log('❌ No reactFlowInstance');
+      return;
+    }
+    
+    const currentState = connectionDragState;
+    console.log('🟥 Current state:', currentState);
+    
+    if (!currentState?.isActive || !currentState.sourceNodeId) {
+      console.log('❌ No active connection or no source node');
+      return;
+    }
     
     console.log('🔵 Connection drag ended');
     
@@ -399,6 +475,8 @@ const handleConnectionEnd = useCallback((e: MouseEvent) => {
       x: e.clientX,
       y: e.clientY,
     });
+    
+    console.log('🔵 Flow position:', flowPosition);
     
     // Finde Target Node
     const intersectingNodes = nodes.filter(node => {
@@ -417,6 +495,8 @@ const handleConnectionEnd = useCallback((e: MouseEvent) => {
       return isInside;
     });
     
+    console.log('🔵 Intersecting nodes:', intersectingNodes);
+    
     if (intersectingNodes.length > 0) {
       const targetNode = intersectingNodes[0];
       console.log('✅ Connection ended on node:', targetNode.id);
@@ -426,92 +506,135 @@ const handleConnectionEnd = useCallback((e: MouseEvent) => {
         (edge.source === targetNode.id && edge.target === currentState.sourceNodeId)
       );
       
-      if (existingEdge) {
-        console.log('⚠️ Connection already exists between these nodes');
+      console.log('🔵 Existing edge?', existingEdge);
+      
+      if (!existingEdge) {
+        // NEU: Berechne nächstgelegenen Handle am Ziel
+        const sourceNodePos = nodes.find(n => n.id === currentState.sourceNodeId)?.position;
+        const targetNodePos = targetNode.position;
+        
+        let targetHandle: 'top' | 'bottom' | 'left' | 'right' = 'left';
+        
+        if (sourceNodePos && targetNodePos) {
+          const dx = targetNodePos.x - sourceNodePos.x;
+          const dy = targetNodePos.y - sourceNodePos.y;
+          
+          // Welche Seite ist am nächsten?
+          if (Math.abs(dx) > Math.abs(dy)) {
+            // Horizontal
+            targetHandle = dx > 0 ? 'left' : 'right';
+          } else {
+            // Vertical
+            targetHandle = dy > 0 ? 'top' : 'bottom';
+          }
+        }
+        console.log('🔵 Calculated sourceHandle:', currentState.sourceHandle);
+        console.log('🔵 Calculated targetHandle:', targetHandle);
+
+        // --- HIER: Farbe für dieses Node-Paar anfordern ---
+        const color = getColorForPair(currentState.sourceNodeId, targetNode.id);
+
+        const newEdge: Edge = {
+          id: `edge-${currentState.sourceNodeId}-${targetNode.id}-${Date.now()}`,
+          source: currentState.sourceNodeId,
+          target: targetNode.id,
+          sourceHandle: currentState.sourceHandle,
+          targetHandle: targetHandle, // ← NEU: Berechneter Handle!
+          type: 'default',
+          style: {
+            stroke: color,
+            strokeWidth: 2,
+          },
+        };
+        
+        console.log('🎯 Creating edge:', newEdge);
+        console.log('🎯 Calling addEdge...');
+        addEdge(newEdge);
+        console.log('🎯 addEdge called!');
       } else {
-        console.log('🎯 Would create edge from', currentState.sourceNodeId, 'to', targetNode.id);
+        console.log('⚠️ Connection already exists');
       }
     } else {
       console.log('❌ Connection ended in empty space - cancelled');
     }
     
-    // Return null um State zu clearen
-    return null;
-  });
-}, [reactFlowInstance, nodes, edges]); // ← connectionDragState NICHT hier!
+    // Reset State
+    console.log('🔵 Resetting connection state');
+    setConnectionDragState(null);
+  }, [reactFlowInstance, nodes, edges, addEdge, connectionDragState]);
 
-// NEU:
-// ANPASSUNG in FlowCanvas:
-const addEcoreFile = (fileName: string, fileContent: string, meta?: any) => {
-  // Position aus meta verwenden, oder default
-  const position = meta?.position || { x: 100, y: 100 };
-  
-  const newEcoreNode: Node = {
-    id: `ecore-${Date.now()}`,
-    type: 'ecoreFile',
-    position: position,  // ← Verwende die übergebene Position
-    data: {
-      fileName,
-      fileContent,
-      description: meta?.description,
-      keywords: meta?.keywords,
-      domain: meta?.domain,
-      createdAt: meta?.createdAt || new Date().toISOString(),
-      onExpand: handleEcoreFileExpand,
-      onSelect: handleEcoreFileSelect,
-      onDelete: onEcoreFileDelete,
-      onRename: onEcoreFileRename,
-      isExpanded: false,
-    },
-    draggable: true,
-  };
+  // NEU:
+  // ANPASSUNG in FlowCanvas:
+  const addEcoreFile = (fileName: string, fileContent: string, meta?: any) => {
+    // Position aus meta verwenden, oder default
+    const position = meta?.position || { x: 100, y: 100 };
+    
+    const newEcoreNode: Node = {
+      id: `ecore-${Date.now()}`,
+      type: 'ecoreFile',
+      position: position,  // ← Verwende die übergebene Position
+      data: {
+        fileName,
+        fileContent,
+        description: meta?.description,
+        keywords: meta?.keywords,
+        domain: meta?.domain,
+        createdAt: meta?.createdAt || new Date().toISOString(),
+        onExpand: handleEcoreFileExpand,
+        onSelect: handleEcoreFileSelect,
+        onDelete: onEcoreFileDelete,
+        onRename: onEcoreFileRename,
+        isExpanded: false,
+      },
+      draggable: true,
+    };
 
-  addNode(newEcoreNode);
-  setSelectedFileId(newEcoreNode.id);
-  
-  if (onEcoreFileSelect) {
-    onEcoreFileSelect(fileName);
-  }
-};
-
-// NEU:
-const handleEcoreFileSelect = (fileName: string) => {
-  const ecoreNode = nodes.find(
-    n => n.type === 'ecoreFile' && n.data.fileName === fileName
-  );
-  if (ecoreNode) {
-    setSelectedFileId(ecoreNode.id);
+    addNode(newEcoreNode);
+    setSelectedFileId(newEcoreNode.id);
+    
     if (onEcoreFileSelect) {
       onEcoreFileSelect(fileName);
     }
-  }
-};
+  };
 
-// NEU:
-const handleEcoreFileExpand = (fileName: string, fileContent: string) => {
-  // Finde den EcoreFile Node im nodes Array
-  const ecoreNode = nodes.find(
-    n => n.type === 'ecoreFile' && n.data.fileName === fileName
-  );
-  
-  if (ecoreNode) {
-    setExpandedFileId(null);
-    setExpandedFileId(ecoreNode.id);
-    setSelectedFileId(ecoreNode.id);
-    
-    // Update den Node's data um isExpanded zu setzen
-    const updatedNodes = nodes.map(n => 
-      n.id === ecoreNode.id 
-        ? { ...n, data: { ...n.data, isExpanded: true } }
-        : n
+  // NEU:
+  const handleEcoreFileSelect = (fileName: string) => {
+    const ecoreNode = nodes.find(
+      n => n.type === 'ecoreFile' && n.data.fileName === fileName
     );
-    setNodes(updatedNodes);
-  }
-  
-  if (onEcoreFileExpand) {
-    onEcoreFileExpand(fileName, fileContent);
-  }
-};
+    if (ecoreNode) {
+      setSelectedFileId(ecoreNode.id);
+      if (onEcoreFileSelect) {
+        onEcoreFileSelect(fileName);
+      }
+    }
+  };
+
+  // NEU:
+  const handleEcoreFileExpand = (fileName: string, fileContent: string) => {
+    // Finde den EcoreFile Node im nodes Array
+    const ecoreNode = nodes.find(
+      n => n.type === 'ecoreFile' && n.data.fileName === fileName
+    );
+    
+    if (ecoreNode) {
+      setExpandedFileId(null);
+      setExpandedFileId(ecoreNode.id);
+      setSelectedFileId(ecoreNode.id);
+      
+      // Update den Node's data um isExpanded zu setzen
+      const updatedNodes = nodes.map(n => 
+        n.id === ecoreNode.id 
+          ? { ...n, data: { ...n.data, isExpanded: true } }
+          : n
+      );
+      setNodes(updatedNodes);
+    }
+    
+    if (onEcoreFileExpand) {
+      onEcoreFileExpand(fileName, fileContent);
+    }
+  };
 
   React.useEffect(() => {
     if (onDiagramChange) {
@@ -520,27 +643,27 @@ const handleEcoreFileExpand = (fileName: string, fileContent: string) => {
   }, [nodes, edges, onDiagramChange]);
 
   // NEU (gleich, aber mit angepasster addEcoreFile Signatur):
-useImperativeHandle(ref, () => ({
-  handleToolClick: handleToolClick,
-  loadDiagramData: loadDiagramData,
-  getNodes: () => nodes,
-  getEdges: () => edges,
-  addEcoreFile: addEcoreFile,  // ← Nimmt jetzt (fileName, fileContent, meta)
-  resetExpandedFile: () => {
-    setExpandedFileId(null);
-    // Optional: Update alle EcoreFile Nodes um isExpanded zu clearen
-    const updatedNodes = nodes.map(n => 
-      n.type === 'ecoreFile' 
-        ? { ...n, data: { ...n.data, isExpanded: false } }
-        : n
-    );
-    setNodes(updatedNodes);
-  },
-  undo: undo,
-  redo: redo,
-  canUndo: canUndo,
-  canRedo: canRedo,
-}));
+  useImperativeHandle(ref, () => ({
+    handleToolClick: handleToolClick,
+    loadDiagramData: loadDiagramData,
+    getNodes: () => nodes,
+    getEdges: () => edges,
+    addEcoreFile: addEcoreFile,  // ← Nimmt jetzt (fileName, fileContent, meta)
+    resetExpandedFile: () => {
+      setExpandedFileId(null);
+      // Optional: Update alle EcoreFile Nodes um isExpanded zu clearen
+      const updatedNodes = nodes.map(n => 
+        n.type === 'ecoreFile' 
+          ? { ...n, data: { ...n.data, isExpanded: false } }
+          : n
+      );
+      setNodes(updatedNodes);
+    },
+    undo: undo,
+    redo: redo,
+    canUndo: canUndo,
+    canRedo: canRedo,
+  }));
 
   return (
     <div
@@ -554,159 +677,156 @@ useImperativeHandle(ref, () => ({
       }}
     > 
 
-<ReactFlow
-  nodes={nodes.map(node => {
-    // Für alle Nodes: füge callbacks hinzu
-    if (node.type === 'editable') {
-      return {
-        ...node,
-        data: { 
-          ...node.data, 
-          onLabelChange: handleLabelChange, 
-          onDelete: removeNode 
+    <ReactFlow
+      nodes={nodes.map(node => {
+        // Für alle Nodes: füge callbacks hinzu
+        if (node.type === 'editable') {
+          return {
+            ...node,
+            data: { 
+              ...node.data, 
+              onLabelChange: handleLabelChange, 
+              onDelete: removeNode 
+            }
+          };
         }
-      };
-    }
-    
-   // NEU:
-// NEU:
-if (node.type === 'ecoreFile') {
-  return {
-    ...node,
-    data: {
-      ...node.data,
-      onExpand: handleEcoreFileExpand,
-      onSelect: handleEcoreFileSelect,
-      onDelete: onEcoreFileDelete,
-      onRename: onEcoreFileRename,
-      isExpanded: expandedFileId === node.id,
-      onConnectionStart: handleConnectionStart,
-    },
-    selected: selectedFileId === node.id,
-    draggable: !connectionDragState?.isActive, // ← NEU: Node nicht draggable während Connection-Drag
-  };
-}
-    
-    return node;
-  })}
-  edges={edges}
-  onNodesChange={onNodesChange}
-  onEdgesChange={onEdgesChange}
-  onConnect={onConnect}
-  fitView
-  onDrop={handleDrop}
-  onDragOver={handleDragOver}
-  onDragLeave={handleDragLeave}
-  nodeTypes={nodeTypes}
-  edgeTypes={edgeTypes}
-  onInit={setReactFlowInstance}
-  nodesDraggable={isInteractive && !connectionDragState?.isActive}
-  nodesConnectable={isInteractive}
-  elementsSelectable={isInteractive}
-  panOnDrag={isInteractive}
-  panOnScroll={isInteractive}
-  zoomOnScroll={isInteractive}
-  zoomOnPinch={isInteractive}
->
-  <MiniMap position="bottom-right" style={{ bottom: 16, right: 16, zIndex: 30 }} />
-  <Background />
+        
+        if (node.type === 'ecoreFile') {
+          return {
+            ...node,
+            data: {
+              ...node.data,
+              onExpand: handleEcoreFileExpand,
+              onSelect: handleEcoreFileSelect,
+              onDelete: onEcoreFileDelete,
+              onRename: onEcoreFileRename,
+              isExpanded: expandedFileId === node.id,
+              onConnectionStart: handleConnectionStart,
+              isConnectionActive: connectionDragState?.isActive || false, // ← NEU!
+            },
+            selected: selectedFileId === node.id,
+            draggable: !connectionDragState?.isActive,
+          };
+        }
+        
+        return node;
+      })}
+      edges={edges}
+      onNodesChange={onNodesChange}
+      onEdgesChange={onEdgesChange}
+      onConnect={onConnect}
+      fitView
+      onDrop={handleDrop}
+      onDragOver={handleDragOver}
+      onDragLeave={handleDragLeave}
+      nodeTypes={nodeTypes}
+      edgeTypes={edgeTypes}
+      onInit={setReactFlowInstance}
+      nodesDraggable={isInteractive && !connectionDragState?.isActive}
+      nodesConnectable={isInteractive}
+      elementsSelectable={isInteractive}
+      panOnDrag={isInteractive}
+      panOnScroll={isInteractive}
+      zoomOnScroll={isInteractive}
+      zoomOnPinch={isInteractive}
+    >
+      <MiniMap position="bottom-right" style={{ bottom: 16, right: 16, zIndex: 30 }} />
+      <Background />
+    </ReactFlow>
 
-</ReactFlow>
-
-{connectionDragState?.isActive && 
- connectionDragState.sourceNodeId && 
- connectionDragState.sourceHandle && 
- connectionDragState.currentPosition && 
- reactFlowInstance && 
- reactFlowWrapper.current && (() => {
-   const sourcePos = getHandlePosition(
-     connectionDragState.sourceNodeId,
-     connectionDragState.sourceHandle
-   );
-   
-   if (!sourcePos) return null;
-   
-   const viewport = reactFlowInstance.getViewport();
-   
-   const sourceScreen = {
-     x: sourcePos.x * viewport.zoom + viewport.x,
-     y: sourcePos.y * viewport.zoom + viewport.y,
-   };
-   
-   const targetScreen = {
-     x: connectionDragState.currentPosition.x * viewport.zoom + viewport.x,
-     y: connectionDragState.currentPosition.y * viewport.zoom + viewport.y,
-   };
-   
-   return (
-     <ConnectionLine
-       sourcePosition={sourceScreen}
-       targetPosition={targetScreen}
-     />
-   );
- })()}
-
+    {connectionDragState?.isActive && 
+     connectionDragState.sourceNodeId && 
+     connectionDragState.sourceHandle && 
+     connectionDragState.currentPosition && 
+     reactFlowInstance && 
+     reactFlowWrapper.current && (() => {
+       const sourcePos = getHandlePosition(
+         connectionDragState.sourceNodeId,
+         connectionDragState.sourceHandle
+       );
        
-{/* EcoreFileBoxes werden NICHT mehr separat gerendert - sie sind jetzt Nodes! */}
-      
-      {/* Canvas Controls anchored to wrapper so they move with sidebar resizing */}
-      <div style={{ position: 'absolute', left: 16, bottom: 16, zIndex: 31, display: 'flex', flexDirection: 'column', gap: 6 }}>
-        <button
-          onClick={() => reactFlowInstance?.zoomIn?.()}
-          style={{ width: 36, height: 36, borderRadius: 6, border: '1px solid #e5e7eb', background: '#ffffff', cursor: 'pointer' }}
-          title="Zoom in"
-        >
-          +
-        </button>
-        <button
-          onClick={() => reactFlowInstance?.zoomOut?.()}
-          style={{ width: 36, height: 36, borderRadius: 6, border: '1px solid #e5e7eb', background: '#ffffff', cursor: 'pointer' }}
-          title="Zoom out"
-        >
-          –
-        </button>
-        <button
-          onClick={() => reactFlowInstance?.fitView?.({ padding: 0.2 })}
-          style={{ width: 36, height: 36, borderRadius: 6, border: '1px solid #e5e7eb', background: '#ffffff', cursor: 'pointer' }}
-          title="Fit view"
-        >
-          ⛶
-        </button>
-        <button
-          onClick={() => {
-            const next = !isInteractive;
-            setIsInteractive(next);
-          }}
-          style={{ width: 36, height: 36, borderRadius: 6, border: '1px solid #e5e7eb', background: '#ffffff', cursor: 'pointer' }}
-          title={isInteractive ? 'Lock interactions' : 'Unlock interactions'}
-        >
-          {isInteractive ? '🔓' : '🔒'}
-        </button>
-      </div>
+       if (!sourcePos) return null;
+       
+       const viewport = reactFlowInstance.getViewport();
+       
+       const sourceScreen = {
+         x: sourcePos.x * viewport.zoom + viewport.x,
+         y: sourcePos.y * viewport.zoom + viewport.y,
+       };
+       
+       const targetScreen = {
+         x: connectionDragState.currentPosition.x * viewport.zoom + viewport.x,
+         y: connectionDragState.currentPosition.y * viewport.zoom + viewport.y,
+       };
+       
+       return (
+         <ConnectionLine
+           sourcePosition={sourceScreen}
+           targetPosition={targetScreen}
+         />
+       );
+     })()}
 
-      {isDragOver && (
-        <div style={{
-          position: 'absolute',
-          top: '50%',
-          left: '50%',
-          transform: 'translate(-50%, -50%)',
-          background: 'rgba(52, 152, 219, 0.95)',
-          color: 'white',
-          padding: '24px 48px',
-          borderRadius: '12px',
-          fontSize: '20px',
-          fontWeight: 'bold',
-          zIndex: 1000,
-          pointerEvents: 'none',
-          boxShadow: '0 8px 32px rgba(52, 152, 219, 0.3)',
-          border: '2px solid rgba(255, 255, 255, 0.3)',
-          backdropFilter: 'blur(10px)'
-        }}>
-          ✨ Drop UML element here ✨
-        </div>
-      )}
-      
-      
+           
+    {/* EcoreFileBoxes werden NICHT mehr separat gerendert - sie sind jetzt Nodes! */}      
+    {/* Canvas Controls anchored to wrapper so they move with sidebar resizing */}
+    <div style={{ position: 'absolute', left: 16, bottom: 16, zIndex: 31, display: 'flex', flexDirection: 'column', gap: 6 }}>
+      <button
+        onClick={() => reactFlowInstance?.zoomIn?.()}
+        style={{ width: 36, height: 36, borderRadius: 6, border: '1px solid #e5e7eb', background: '#ffffff', cursor: 'pointer' }}
+        title="Zoom in"
+      >
+        +
+      </button>
+      <button
+        onClick={() => reactFlowInstance?.zoomOut?.()}
+        style={{ width: 36, height: 36, borderRadius: 6, border: '1px solid #e5e7eb', background: '#ffffff', cursor: 'pointer' }}
+        title="Zoom out"
+      >
+        –
+      </button>
+      <button
+        onClick={() => reactFlowInstance?.fitView?.({ padding: 0.2 })}
+        style={{ width: 36, height: 36, borderRadius: 6, border: '1px solid #e5e7eb', background: '#ffffff', cursor: 'pointer' }}
+        title="Fit view"
+      >
+        ⛶
+      </button>
+      <button
+        onClick={() => {
+          const next = !isInteractive;
+          setIsInteractive(next);
+        }}
+        style={{ width: 36, height: 36, borderRadius: 6, border: '1px solid #e5e7eb', background: '#ffffff', cursor: 'pointer' }}
+        title={isInteractive ? 'Lock interactions' : 'Unlock interactions'}
+      >
+        {isInteractive ? '🔓' : '🔒'}
+      </button>
     </div>
+
+    {isDragOver && (
+      <div style={{
+        position: 'absolute',
+        top: '50%',
+        left: '50%',
+        transform: 'translate(-50%, -50%)',
+        background: 'rgba(52, 152, 219, 0.95)',
+        color: 'white',
+        padding: '24px 48px',
+        borderRadius: '12px',
+        fontSize: '20px',
+        fontWeight: 'bold',
+        zIndex: 1000,
+        pointerEvents: 'none',
+        boxShadow: '0 8px 32px rgba(52, 152, 219, 0.3)',
+        border: '2px solid rgba(255, 255, 255, 0.3)',
+        backdropFilter: 'blur(10px)'
+      }}>
+        ✨ Drop UML element here ✨
+      </div>
+    )}
+    
+    
+  </div>
   );
-}); 
+});
