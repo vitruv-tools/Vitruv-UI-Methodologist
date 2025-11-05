@@ -31,15 +31,13 @@ export function UMLRelationship({
     targetPosition,
   });
 
-  // Get consistent color for this node pair
-  // Get consistent color for this node pair
 const edgeColor = getEdgeColor(source, target);
-console.log('🎨 Edge Color:', edgeColor, 'for', source, '->', target); // ← FÜGE DIESE ZEILE HINZU
+console.log('🎨 Edge Color:', edgeColor, 'for', source, '->', target);
 
   const getRelationshipStyle = () => {
     const baseStyle = {
       strokeWidth: selected ? '3px' : '2px',
-      stroke: edgeColor, // Use the assigned color
+      stroke: edgeColor,
       fill: 'none',
     };
 

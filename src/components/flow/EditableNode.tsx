@@ -25,7 +25,17 @@ interface EditableFieldProps {
   showDelete?: boolean;
   showVisibility?: boolean;
 }
-function EditableField({ value, onSave, placeholder, style, multiline = false, onDelete, showDelete = false, showVisibility = false }: EditableFieldProps & { onDelete?: () => void, showDelete?: boolean, showVisibility?: boolean }) {
+
+function EditableField({
+  value,
+  onSave,
+  placeholder,
+  style,
+  multiline = false,
+  onDelete,
+  showDelete = false,
+  showVisibility = false
+}: EditableFieldProps) {
   const [editing, setEditing] = useState(false);
   const [editValue, setEditValue] = useState(value);
   const [showOptions, setShowOptions] = useState(false);
@@ -41,7 +51,7 @@ function EditableField({ value, onSave, placeholder, style, multiline = false, o
         textareaRef.current.focus();
         textareaRef.current.select();
       } else if (inputRef.current) {
-      inputRef.current.focus();
+        inputRef.current.focus();
         inputRef.current.select();
       }
     }
@@ -189,11 +199,17 @@ function EditableField({ value, onSave, placeholder, style, multiline = false, o
           e.currentTarget.style.backgroundColor = 'transparent';
           e.currentTarget.style.transform = 'scale(1)';
         }}
-        title={showVisibility ? "Click to add new item" : showDelete && onDelete ? "Click to show options, double-click to edit" : "Double-click to edit"}
+        title={
+          showVisibility
+            ? "Click to add new item"
+            : showDelete && onDelete
+              ? "Click to show options, double-click to edit"
+              : "Double-click to edit"
+        }
       >
         {value || placeholder}
       </div>
-      
+
       {showVisibilityOptions && showVisibility && (
         <div style={{
           position: 'absolute',
@@ -280,7 +296,7 @@ function EditableField({ value, onSave, placeholder, style, multiline = false, o
           </button>
         </div>
       )}
-      
+
       {showOptions && showDelete && onDelete && (
         <div style={{
           position: 'absolute',
@@ -403,9 +419,9 @@ function EditableField({ value, onSave, placeholder, style, multiline = false, o
   );
 }
 
-export function EditableNode({ id, data, selected, isConnectable, xPos, yPos, ...rest }: NodeProps<UMLNodeData>) {
+export function EditableNode({ id, data, selected, isConnectable }: NodeProps<UMLNodeData>) {
   const nodeData = data || {};
-  
+
   const updateNodeData = (updates: Partial<UMLNodeData>) => {
     console.log('Node data update:', updates);
   };
@@ -537,7 +553,7 @@ export function EditableNode({ id, data, selected, isConnectable, xPos, yPos, ..
           ×
         </button>
       )}
-      
+
       <div style={{
         background: '#f8fff8',
         borderBottom: '1px solid #2ecc71',
@@ -555,15 +571,15 @@ export function EditableNode({ id, data, selected, isConnectable, xPos, yPos, ..
           value={nodeData.className || ''}
           onSave={(newValue) => updateNodeData({ className: newValue })}
           placeholder="Class Name"
-            style={{ 
-              fontWeight: 'bold',
+          style={{
+            fontWeight: 'bold',
             fontSize: '14px',
             color: '#2ecc71',
             textAlign: 'center'
           }}
         />
       </div>
-      
+
       <div style={{
         borderBottom: '1px solid #2ecc71',
         padding: '8px 0',
@@ -571,16 +587,16 @@ export function EditableNode({ id, data, selected, isConnectable, xPos, yPos, ..
         color: '#666',
         minHeight: '50px'
       }}>
-        <div style={{ 
-          padding: '4px 8px', 
-          fontWeight: 'bold', 
+        <div style={{
+          padding: '4px 8px',
+          fontWeight: 'bold',
           color: '#2ecc71',
           background: '#f0f9f0'
         }}>
           Attributes
         </div>
         {nodeData.attributes?.map((attr, index) => (
-          <div key={index} style={{ 
+          <div key={index} style={{
             padding: '2px 8px',
             display: 'flex',
             alignItems: 'center',
@@ -619,23 +635,23 @@ export function EditableNode({ id, data, selected, isConnectable, xPos, yPos, ..
           />
         </div>
       </div>
-      
+
       <div style={{
         padding: '8px 0',
         fontSize: '12px',
         color: '#666',
         minHeight: '50px'
       }}>
-        <div style={{ 
-          padding: '4px 8px', 
-          fontWeight: 'bold', 
+        <div style={{
+          padding: '4px 8px',
+          fontWeight: 'bold',
           color: '#2ecc71',
           background: '#f0f9f0'
         }}>
           Methods
         </div>
         {nodeData.methods?.map((method, index) => (
-          <div key={index} style={{ 
+          <div key={index} style={{
             padding: '2px 8px',
             display: 'flex',
             alignItems: 'center',
@@ -677,10 +693,8 @@ export function EditableNode({ id, data, selected, isConnectable, xPos, yPos, ..
     </div>
   );
 
-  // Render UML Abstract Class
   const renderUMLAbstractClass = () => (
     <div style={{ width: '100%' }}>
-      {/* Delete button - only show when selected */}
       {selected && (
         <button
           onClick={handleDelete}
@@ -716,7 +730,7 @@ export function EditableNode({ id, data, selected, isConnectable, xPos, yPos, ..
           ×
         </button>
       )}
-      {/* Abstract class name section */}
+
       <div style={{
         background: '#f0f8f0',
         borderBottom: '1px solid #16a085',
@@ -735,17 +749,16 @@ export function EditableNode({ id, data, selected, isConnectable, xPos, yPos, ..
           value={nodeData.className || ''}
           onSave={(newValue) => updateNodeData({ className: newValue })}
           placeholder="Abstract Class Name"
-            style={{ 
-              fontWeight: 'bold',
+          style={{
+            fontWeight: 'bold',
             fontSize: '14px',
-              color: '#16a085',
+            color: '#16a085',
             textAlign: 'center',
-              fontStyle: 'italic'
-            }}
+            fontStyle: 'italic'
+          }}
         />
       </div>
-      
-      {/* Attributes section */}
+
       <div style={{
         borderBottom: '1px solid #16a085',
         padding: '8px 0',
@@ -753,16 +766,16 @@ export function EditableNode({ id, data, selected, isConnectable, xPos, yPos, ..
         color: '#666',
         minHeight: '50px'
       }}>
-        <div style={{ 
-          padding: '4px 8px', 
-          fontWeight: 'bold', 
+        <div style={{
+          padding: '4px 8px',
+          fontWeight: 'bold',
           color: '#16a085',
           background: '#f0f8f0'
         }}>
           Attributes
         </div>
         {nodeData.attributes?.map((attr, index) => (
-          <div key={index} style={{ 
+          <div key={index} style={{
             padding: '2px 8px',
             display: 'flex',
             alignItems: 'center',
@@ -784,33 +797,6 @@ export function EditableNode({ id, data, selected, isConnectable, xPos, yPos, ..
               }}
               showDelete={true}
             />
-            <button
-              onClick={() => {
-                const newAttributes = [...(nodeData.attributes || [])];
-                newAttributes.splice(index, 1);
-                updateNodeData({ attributes: newAttributes });
-              }}
-              style={{
-                background: '#ff6b6b',
-                color: 'white',
-                border: 'none',
-                borderRadius: '50%',
-                width: '16px',
-                height: '16px',
-                fontSize: '10px',
-                cursor: 'pointer',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                opacity: 0.7,
-                transition: 'opacity 0.2s'
-              }}
-              onMouseEnter={(e) => e.currentTarget.style.opacity = '1'}
-              onMouseLeave={(e) => e.currentTarget.style.opacity = '0.7'}
-              title="Delete attribute"
-            >
-              ×
-            </button>
           </div>
         ))}
         <div style={{ padding: '2px 8px' }}>
@@ -828,24 +814,23 @@ export function EditableNode({ id, data, selected, isConnectable, xPos, yPos, ..
           />
         </div>
       </div>
-      
-      {/* Methods section */}
+
       <div style={{
         padding: '8px 0',
         fontSize: '12px',
         color: '#666',
         minHeight: '50px'
       }}>
-        <div style={{ 
-          padding: '4px 8px', 
-          fontWeight: 'bold', 
+        <div style={{
+          padding: '4px 8px',
+          fontWeight: 'bold',
           color: '#16a085',
           background: '#f0f8f0'
         }}>
           Methods
         </div>
         {nodeData.methods?.map((method, index) => (
-          <div key={index} style={{ 
+          <div key={index} style={{
             padding: '2px 8px',
             display: 'flex',
             alignItems: 'center',
@@ -860,34 +845,13 @@ export function EditableNode({ id, data, selected, isConnectable, xPos, yPos, ..
               }}
               placeholder="+ method(): ReturnType"
               style={{ fontSize: '12px', flex: 1 }}
-            />
-            <button
-              onClick={() => {
+              onDelete={() => {
                 const newMethods = [...(nodeData.methods || [])];
                 newMethods.splice(index, 1);
                 updateNodeData({ methods: newMethods });
               }}
-              style={{
-                background: '#ff6b6b',
-                color: 'white',
-                border: 'none',
-                borderRadius: '50%',
-                width: '16px',
-                height: '16px',
-                fontSize: '10px',
-                cursor: 'pointer',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                opacity: 0.7,
-                transition: 'opacity 0.2s'
-              }}
-              onMouseEnter={(e) => e.currentTarget.style.opacity = '1'}
-              onMouseLeave={(e) => e.currentTarget.style.opacity = '0.7'}
-              title="Delete method"
-            >
-              ×
-            </button>
+              showDelete={true}
+            />
           </div>
         ))}
         <div style={{ padding: '2px 8px' }}>
@@ -908,10 +872,8 @@ export function EditableNode({ id, data, selected, isConnectable, xPos, yPos, ..
     </div>
   );
 
-  // Render UML Interface
   const renderUMLInterface = () => (
     <div style={{ width: '100%' }}>
-      {/* Delete button - only show when selected */}
       {selected && (
         <button
           onClick={handleDelete}
@@ -947,7 +909,7 @@ export function EditableNode({ id, data, selected, isConnectable, xPos, yPos, ..
           ×
         </button>
       )}
-      {/* Interface name section */}
+
       <div style={{
         background: '#fdf0f0',
         borderBottom: '1px solid #e74c3c',
@@ -966,32 +928,31 @@ export function EditableNode({ id, data, selected, isConnectable, xPos, yPos, ..
           value={nodeData.className || ''}
           onSave={(newValue) => updateNodeData({ className: newValue })}
           placeholder="Interface Name"
-            style={{ 
-              fontWeight: 'bold',
+          style={{
+            fontWeight: 'bold',
             fontSize: '14px',
             color: '#e74c3c',
             textAlign: 'center'
           }}
         />
       </div>
-      
-      {/* Methods section only (interfaces don't have attributes) */}
+
       <div style={{
         padding: '8px 0',
         fontSize: '12px',
         color: '#666',
         minHeight: '50px'
       }}>
-        <div style={{ 
-          padding: '4px 8px', 
-          fontWeight: 'bold', 
+        <div style={{
+          padding: '4px 8px',
+          fontWeight: 'bold',
           color: '#e74c3c',
           background: '#fdf0f0'
         }}>
           Methods
         </div>
         {nodeData.methods?.map((method, index) => (
-          <div key={index} style={{ 
+          <div key={index} style={{
             padding: '2px 8px',
             display: 'flex',
             alignItems: 'center',
@@ -1006,34 +967,13 @@ export function EditableNode({ id, data, selected, isConnectable, xPos, yPos, ..
               }}
               placeholder="+ method(): ReturnType"
               style={{ fontSize: '12px', flex: 1 }}
-            />
-            <button
-              onClick={() => {
+              onDelete={() => {
                 const newMethods = [...(nodeData.methods || [])];
                 newMethods.splice(index, 1);
                 updateNodeData({ methods: newMethods });
               }}
-              style={{
-                background: '#ff6b6b',
-                color: 'white',
-                border: 'none',
-                borderRadius: '50%',
-                width: '16px',
-                height: '16px',
-                fontSize: '10px',
-                cursor: 'pointer',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                opacity: 0.7,
-                transition: 'opacity 0.2s'
-              }}
-              onMouseEnter={(e) => e.currentTarget.style.opacity = '1'}
-              onMouseLeave={(e) => e.currentTarget.style.opacity = '0.7'}
-              title="Delete method"
-            >
-              ×
-            </button>
+              showDelete={true}
+            />
           </div>
         ))}
         <div style={{ padding: '2px 8px' }}>
@@ -1054,10 +994,8 @@ export function EditableNode({ id, data, selected, isConnectable, xPos, yPos, ..
     </div>
   );
 
-  // Render UML Enumeration
   const renderUMLEnumeration = () => (
     <div style={{ width: '100%' }}>
-      {/* Delete button - only show when selected */}
       {selected && (
         <button
           onClick={handleDelete}
@@ -1093,7 +1031,7 @@ export function EditableNode({ id, data, selected, isConnectable, xPos, yPos, ..
           ×
         </button>
       )}
-      {/* Enum name section */}
+
       <div style={{
         background: '#f8f0f8',
         borderBottom: '1px solid #9b59b6',
@@ -1112,32 +1050,31 @@ export function EditableNode({ id, data, selected, isConnectable, xPos, yPos, ..
           value={nodeData.className || ''}
           onSave={(newValue) => updateNodeData({ className: newValue })}
           placeholder="Enumeration Name"
-            style={{ 
-              fontWeight: 'bold',
+          style={{
+            fontWeight: 'bold',
             fontSize: '14px',
             color: '#9b59b6',
             textAlign: 'center'
           }}
         />
       </div>
-      
-      {/* Values section */}
+
       <div style={{
         padding: '8px 0',
         fontSize: '12px',
         color: '#666',
         minHeight: '50px'
       }}>
-        <div style={{ 
-          padding: '4px 8px', 
-          fontWeight: 'bold', 
+        <div style={{
+          padding: '4px 8px',
+          fontWeight: 'bold',
           color: '#9b59b6',
           background: '#f8f0f8'
         }}>
           Values
         </div>
         {nodeData.values?.map((value, index) => (
-          <div key={index} style={{ 
+          <div key={index} style={{
             padding: '2px 8px',
             display: 'flex',
             alignItems: 'center',
@@ -1152,34 +1089,13 @@ export function EditableNode({ id, data, selected, isConnectable, xPos, yPos, ..
               }}
               placeholder="Value"
               style={{ fontSize: '12px', flex: 1 }}
-            />
-            <button
-              onClick={() => {
+              onDelete={() => {
                 const newValues = [...(nodeData.values || [])];
                 newValues.splice(index, 1);
                 updateNodeData({ values: newValues });
               }}
-              style={{
-                background: '#ff6b6b',
-                color: 'white',
-                border: 'none',
-                borderRadius: '50%',
-                width: '16px',
-                height: '16px',
-                fontSize: '10px',
-                cursor: 'pointer',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                opacity: 0.7,
-                transition: 'opacity 0.2s'
-              }}
-              onMouseEnter={(e) => e.currentTarget.style.opacity = '1'}
-              onMouseLeave={(e) => e.currentTarget.style.opacity = '0.7'}
-              title="Delete value"
-            >
-              ×
-            </button>
+              showDelete={true}
+            />
           </div>
         ))}
         <div style={{ padding: '2px 8px' }}>
@@ -1200,10 +1116,8 @@ export function EditableNode({ id, data, selected, isConnectable, xPos, yPos, ..
     </div>
   );
 
-  // Render UML Package
   const renderUMLPackage = () => (
     <div style={{ width: '100%' }}>
-      {/* Delete button - only show when selected */}
       {selected && (
         <button
           onClick={handleDelete}
@@ -1239,7 +1153,7 @@ export function EditableNode({ id, data, selected, isConnectable, xPos, yPos, ..
           ×
         </button>
       )}
-      {/* Package name section with tab design */}
+
       <div style={{
         background: '#fdf8f0',
         borderBottom: '1px solid #f39c12',
@@ -1259,25 +1173,24 @@ export function EditableNode({ id, data, selected, isConnectable, xPos, yPos, ..
           value={nodeData.packageName || ''}
           onSave={(newValue) => updateNodeData({ packageName: newValue })}
           placeholder="Package Name"
-            style={{ 
-              fontWeight: 'bold',
+          style={{
+            fontWeight: 'bold',
             fontSize: '14px',
             color: '#f39c12',
             textAlign: 'center'
           }}
         />
       </div>
-      
-      {/* Package contents */}
+
       <div style={{
         padding: '8px 0',
         fontSize: '12px',
         color: '#666',
         minHeight: '50px'
       }}>
-        <div style={{ 
-          padding: '4px 8px', 
-          fontWeight: 'bold', 
+        <div style={{
+          padding: '4px 8px',
+          fontWeight: 'bold',
           color: '#f39c12',
           background: '#fdf8f0'
         }}>
@@ -1290,7 +1203,6 @@ export function EditableNode({ id, data, selected, isConnectable, xPos, yPos, ..
     </div>
   );
 
-  // Render UML Member (attribute or method)
   const renderUMLMember = () => (
     <div style={{ width: '100%', textAlign: 'center', padding: '8px' }}>
       <EditableField
@@ -1302,7 +1214,6 @@ export function EditableNode({ id, data, selected, isConnectable, xPos, yPos, ..
     </div>
   );
 
-  // Render Relationship
   const renderRelationship = () => (
     <div style={{ width: '100%', textAlign: 'center', padding: '8px' }}>
       <EditableField
@@ -1314,7 +1225,6 @@ export function EditableNode({ id, data, selected, isConnectable, xPos, yPos, ..
     </div>
   );
 
-  // Render Multiplicity
   const renderMultiplicity = () => (
     <div style={{ width: '100%', textAlign: 'center', padding: '8px' }}>
       <EditableField
@@ -1326,10 +1236,9 @@ export function EditableNode({ id, data, selected, isConnectable, xPos, yPos, ..
     </div>
   );
 
-  // Get the appropriate renderer based on tool type
   const getRenderer = () => {
     console.log('getRenderer called with:', { toolType: nodeData.toolType, toolName: nodeData.toolName });
-    
+
     if (nodeData.toolType === 'element') {
       switch (nodeData.toolName) {
         case 'class':
@@ -1361,7 +1270,7 @@ export function EditableNode({ id, data, selected, isConnectable, xPos, yPos, ..
       console.log('Rendering Multiplicity');
       return renderMultiplicity();
     }
-    
+
     console.log('No specific renderer found, using default');
     return renderRelationship();
   };
@@ -1370,25 +1279,23 @@ export function EditableNode({ id, data, selected, isConnectable, xPos, yPos, ..
 
   return (
     <div style={nodeStyle}>
-      {/* Render the appropriate UML element */}
       {getRenderer()}
 
-      {/* Connection handles */}
-      <Handle 
-        type="target" 
-        position={Position.Top} 
+      <Handle
+        type="target"
+        position={Position.Top}
         isConnectable={isConnectable}
-        style={{ 
+        style={{
           background: '#0071e3',
           width: '8px',
           height: '8px'
         }}
       />
-      <Handle 
-        type="source" 
-        position={Position.Bottom} 
+      <Handle
+        type="source"
+        position={Position.Bottom}
         isConnectable={isConnectable}
-        style={{ 
+        style={{
           background: '#0071e3',
           width: '8px',
           height: '8px'
@@ -1396,4 +1303,4 @@ export function EditableNode({ id, data, selected, isConnectable, xPos, yPos, ..
       />
     </div>
   );
-} 
+}

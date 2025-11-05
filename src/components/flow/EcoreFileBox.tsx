@@ -3,8 +3,6 @@ import { NodeProps } from 'reactflow';
 import { ConfirmDialog } from '../ui/ConfirmDialog';
 import { ConnectionHandle } from './ConnectionHandle';
 
-
-
 interface EcoreFileBoxData {
   fileName: string;
   fileContent: string;
@@ -14,15 +12,12 @@ interface EcoreFileBoxData {
   onRename?: (id: string, newFileName: string) => void;
   onConnectionStart?: (nodeId: string, handle: 'top' | 'bottom' | 'left' | 'right') => void;
   isExpanded?: boolean;
-  isConnectionActive?: boolean; // ← NEU!
+  isConnectionActive?: boolean;
   description?: string;
   keywords?: string;
   domain?: string;
   createdAt?: string;
 }
-
-
-
 
 const modalOverlayStyle: React.CSSProperties = {
   position: 'fixed',
@@ -115,7 +110,6 @@ const modalFooterStyle: React.CSSProperties = {
 };
 
 const boxStyle: React.CSSProperties = {
-  // position: 'absolute' entfernt - ReactFlow macht das
   background: 'linear-gradient(145deg, #ffffff 0%, #f8f9fa 100%)',
   border: '2px solid #dee2e6',
   borderRadius: '12px',
@@ -147,7 +141,6 @@ const selectedBoxStyle: React.CSSProperties = {
   background: 'linear-gradient(145deg, #ffffff 0%, #e9ecef 100%)',
 };
 
-
 const fileNameStyle: React.CSSProperties = {
   fontSize: '14px',
   fontWeight: '700',
@@ -158,8 +151,6 @@ const fileNameStyle: React.CSSProperties = {
   fontFamily: '"Georgia", "Times New Roman", serif',
   marginBottom: '6px',
 };
-
-// ... existing code ...
 
 const tooltipStyle: React.CSSProperties = {
   position: 'absolute',
@@ -247,21 +238,23 @@ export const EcoreFileBox: React.FC<NodeProps<EcoreFileBoxData>> = ({
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [showDescriptionModal, setShowDescriptionModal] = useState(false);
   const [showKeywordsModal, setShowKeywordsModal] = useState(false);
-const {
-  fileName, 
-  fileContent, 
-  onExpand, 
-  onSelect, 
-  onDelete, 
-  onRename, 
-  onConnectionStart,
-  isExpanded = false,
-  isConnectionActive = false, // ← NEU!
-  description, 
-  keywords, 
-  domain, 
-  createdAt,
-} = data;
+
+  const {
+    fileName,
+    fileContent,
+    onExpand,
+    onSelect,
+    onDelete,
+    onRename,
+    onConnectionStart,
+    isExpanded = false,
+    isConnectionActive = false,
+    description,
+    keywords,
+    domain,
+    createdAt,
+  } = data;
+
   const boxRef = useRef<HTMLDivElement>(null);
 
   const handleShowMoreClick = (e: React.MouseEvent) => {
@@ -347,71 +340,69 @@ const {
     }
   };
 
-return (
-  <>
-    <div
-      ref={boxRef}
-      style={{
-        ...boxStyle,
-        ...(selected ? selectedBoxStyle : {}),
-        ...(isHovered ? boxHoverStyle : {}),
-        display: isExpanded ? 'none' : 'block',
-        position: 'relative',
-      }}
-      onClick={handleClick}
-      onDoubleClick={handleDoubleClick}
-      onMouseEnter={() => setIsHovered(true)}
-      onMouseLeave={() => setIsHovered(false)}
-      title={`Click to select, double-click to expand\n${fileName}`}
-    >
-      {/* Connection Handles - zeige wenn selected ODER wenn Connection aktiv ist */}
-<ConnectionHandle 
-  position="top"
-  isVisible={selected || isConnectionActive} // ← GEÄNDERT!
-  onConnectionStart={(pos) => {
-    console.log('Connection started from', pos, 'on node', id);
-    if (onConnectionStart) {
-      onConnectionStart(id, pos);
-    }
-  }}
-/>
-<ConnectionHandle 
-  position="bottom"
-  isVisible={selected || isConnectionActive} // ← GEÄNDERT!
-  onConnectionStart={(pos) => {
-    console.log('Connection started from', pos, 'on node', id);
-    if (onConnectionStart) {
-      onConnectionStart(id, pos);
-    }
-  }}
-/>
-<ConnectionHandle 
-  position="left"
-  isVisible={selected || isConnectionActive} // ← GEÄNDERT!
-  onConnectionStart={(pos) => {
-    console.log('Connection started from', pos, 'on node', id);
-    if (onConnectionStart) {
-      onConnectionStart(id, pos);
-    }
-  }}
-/>
-<ConnectionHandle 
-  position="right"
-  isVisible={selected || isConnectionActive} // ← GEÄNDERT!
-  onConnectionStart={(pos) => {
-    console.log('Connection started from', pos, 'on node', id);
-    if (onConnectionStart) {
-      onConnectionStart(id, pos);
-    }
-  }}
-/>
-      <div style={fileNameStyle}>
-        <span>
-          {fileName.replace(/\.ecore$/i, '')}
-        </span>
-      </div>
+  return (
+    <>
+      <div
+        ref={boxRef}
+        style={{
+          ...boxStyle,
+          ...(selected ? selectedBoxStyle : {}),
+          ...(isHovered ? boxHoverStyle : {}),
+          display: isExpanded ? 'none' : 'block',
+          position: 'relative',
+        }}
+        onClick={handleClick}
+        onDoubleClick={handleDoubleClick}
+        onMouseEnter={() => setIsHovered(true)}
+        onMouseLeave={() => setIsHovered(false)}
+        title={`Click to select, double-click to expand\n${fileName}`}
+      >
+        <ConnectionHandle
+          position="top"
+          isVisible={selected || isConnectionActive}
+          onConnectionStart={(pos) => {
+            console.log('Connection started from', pos, 'on node', id);
+            if (onConnectionStart) {
+              onConnectionStart(id, pos);
+            }
+          }}
+        />
+        <ConnectionHandle
+          position="bottom"
+          isVisible={selected || isConnectionActive}
+          onConnectionStart={(pos) => {
+            console.log('Connection started from', pos, 'on node', id);
+            if (onConnectionStart) {
+              onConnectionStart(id, pos);
+            }
+          }}
+        />
+        <ConnectionHandle
+          position="left"
+          isVisible={selected || isConnectionActive}
+          onConnectionStart={(pos) => {
+            console.log('Connection started from', pos, 'on node', id);
+            if (onConnectionStart) {
+              onConnectionStart(id, pos);
+            }
+          }}
+        />
+        <ConnectionHandle
+          position="right"
+          isVisible={selected || isConnectionActive}
+          onConnectionStart={(pos) => {
+            console.log('Connection started from', pos, 'on node', id);
+            if (onConnectionStart) {
+              onConnectionStart(id, pos);
+            }
+          }}
+        />
 
-      {/* Rest bleibt gleich... */}
+        <div style={fileNameStyle}>
+          <span>
+            {fileName.replace(/\.ecore$/i, '')}
+          </span>
+        </div>
 
         {description && (
           <div style={descriptionStyle}>
@@ -491,7 +482,7 @@ return (
             })()}
           </div>
         )}
-        
+
         <button
           style={{
             ...deleteButtonStyle,
@@ -515,7 +506,6 @@ return (
         onConfirm={confirmDelete}
         onCancel={cancelDelete}
       />
-
 
       {isHovered && (
         <div style={{

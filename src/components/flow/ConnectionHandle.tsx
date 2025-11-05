@@ -1,4 +1,3 @@
-// src/components/flow/ConnectionHandle.tsx
 import React, { useState } from 'react';
 import { Handle, Position } from 'reactflow';
 
@@ -24,7 +23,6 @@ export const ConnectionHandle: React.FC<ConnectionHandleProps> = ({
 }) => {
   const [isHovered, setIsHovered] = useState(false);
 
-  // NOTE: kein display hier — das visuelle Element wird bedingt gerendert
   const baseStyle: React.CSSProperties = {
     position: 'absolute',
     cursor: 'crosshair',
@@ -32,8 +30,6 @@ export const ConnectionHandle: React.FC<ConnectionHandleProps> = ({
     zIndex: 1000,
     alignItems: 'center',
     justifyContent: 'center',
-    // pointerEvents hier nur für die visuelle Wrapper-Logik,
-    // die React Flow Handles haben ihre eigenen pointerEvents unten.
   };
 
   const offset = isHovered ? '20px' : '18px';
@@ -131,7 +127,6 @@ export const ConnectionHandle: React.FC<ConnectionHandleProps> = ({
 
   return (
     <>
-      {/* React Flow Handles - IMMER im DOM (source + target!) */}
       <Handle
         type="source"
         position={getReactFlowPosition(position)}
@@ -142,7 +137,7 @@ export const ConnectionHandle: React.FC<ConnectionHandleProps> = ({
           height: 1,
           border: 'none',
           background: 'transparent',
-          pointerEvents: 'auto', // wichtig, damit React Flow die Interaktion erkennt
+          pointerEvents: 'auto',
         }}
       />
 
@@ -160,7 +155,6 @@ export const ConnectionHandle: React.FC<ConnectionHandleProps> = ({
         }}
       />
 
-      {/* Visueller Pfeil - nur rendern wenn sichtbar */}
       {isVisible && (
         <div
           style={getPositionStyle()}
