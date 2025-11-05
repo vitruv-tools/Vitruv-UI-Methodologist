@@ -5,9 +5,9 @@ import { ApiResponse, Vsum, VsumDetails } from '../types/vsum';
 class ApiService {
   private baseURL: string;
 
-constructor() {
-  this.baseURL = 'http://localhost:9811';
-}
+  constructor() {
+    this.baseURL = 'http://fe3ab829-d558-4834-afcf-6ed7ca440ca4.ka.bw-cloud-instance.org:8080';
+  }
 
   /**
    * Make an authenticated API request with automatic token refresh
