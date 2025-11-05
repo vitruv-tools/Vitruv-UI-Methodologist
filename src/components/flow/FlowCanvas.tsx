@@ -14,6 +14,14 @@ import { UMLRelationship } from './UMLRelationship';
 import { EcoreFileBox } from './EcoreFileBox';
 import { ConnectionLine } from './ConnectionLine';
 
+const COLOR_LIST = [
+  '#1f77b4', '#ff7f0e', '#2ca02c', '#d62728', '#9467bd',
+  '#8c564b', '#e377c2', '#7f7f7f', '#bcbd22', '#17becf',
+  '#368bd6', '#ff9f40', '#4daf4a', '#ff6b6b', '#b388eb',
+  '#9c6644', '#f39ed1', '#a9a9a9', '#c9d22f', '#33c7c7',
+  '#2a86d6', '#ffb86b', '#63c37a', '#ff4f7a', '#b08fe8'
+];
+
 const nodeTypes = {
   editable: EditableNode,
   ecoreFile: EcoreFileBox
@@ -76,13 +84,6 @@ export const FlowCanvas = forwardRef<{
       canRedo,
     } = useFlowState();
 
-    const COLOR_LIST = [
-      '#1f77b4', '#ff7f0e', '#2ca02c', '#d62728', '#9467bd',
-      '#8c564b', '#e377c2', '#7f7f7f', '#bcbd22', '#17becf',
-      '#368bd6', '#ff9f40', '#4daf4a', '#ff6b6b', '#b388eb',
-      '#9c6644', '#f39ed1', '#a9a9a9', '#c9d22f', '#33c7c7',
-      '#2a86d6', '#ffb86b', '#63c37a', '#ff4f7a', '#b08fe8'
-    ];
     const LOCALSTORAGE_KEY = 'flow_edge_color_map_v1';
     const edgeColorMapRef = useRef<Map<string, string>>(new Map());
     const nextColorIndexRef = useRef<number>(0);
@@ -117,7 +118,7 @@ export const FlowCanvas = forwardRef<{
       }
     };
 
-    const getColorForPair = (idA: string, idB: string) => {
+    const getColorForPair = React.useCallback((idA: string, idB: string) => {
       const key = pairKey(idA, idB);
       const existing = edgeColorMapRef.current.get(key);
       if (existing) return existing;
@@ -126,12 +127,7 @@ export const FlowCanvas = forwardRef<{
       nextColorIndexRef.current += 1;
       persistEdgeColorMap();
       return color;
-    };
-
-    const removePairColor = (idA: string, idB: string) => {
-      const key = pairKey(idA, idB);
-      if (edgeColorMapRef.current.delete(key)) persistEdgeColorMap();
-    };
+    }, []);
 
     useEffect(() => {
       console.log('EDGES STATE CHANGED:', edges);
@@ -210,6 +206,123 @@ export const FlowCanvas = forwardRef<{
       };
     }, [undo, redo, canUndo, canRedo]);
 
+    const handleConnectionEnd = useCallback((e: MouseEvent) => {
+      console.log('handleConnectionEnd CALLED');
+
+      if (!reactFlowInstance) {
+        console.log('❌ No reactFlowInstance');
+        return;
+      }
+
+      const currentState = connectionDragState;
+
+      if (!currentState?.isActive || !currentState.sourceNodeId) {
+        console.log('❌ No active connection or no source node');
+        return;
+      }
+
+      console.log('🔵 Connection drag ended');
+
+      const flowPosition = reactFlowInstance.screenToFlowPosition({
+        x: e.clientX,
+        y: e.clientY,
+      });
+
+      const intersectingNodes = nodes.filter(node => {
+        if (node.type !== 'ecoreFile') return false;
+        if (node.id === currentState.sourceNodeId) return false;
+
+        const nodeWidth = 280;
+        const nodeHeight = 180;
+
+        const isInside =
+          flowPosition.x >= node.position.x &&
+          flowPosition.x <= node.position.x + nodeWidth &&
+          flowPosition.y >= node.position.y &&
+          flowPosition.y <= node.position.y + nodeHeight;
+
+        return isInside;
+      });
+
+      console.log('🔵 Intersecting nodes:', intersectingNodes);
+
+      if (intersectingNodes.length > 0) {
+        const targetNode = intersectingNodes[0];
+        console.log('✅ Connection ended on node:', targetNode.id);
+
+        const existingEdge = edges.find(edge =>
+          (edge.source === currentState.sourceNodeId && edge.target === targetNode.id) ||
+          (edge.source === targetNode.id && edge.target === currentState.sourceNodeId)
+        );
+
+        console.log('🔵 Existing edge?', existingEdge);
+
+        if (!existingEdge) {
+          const sourceNodePos = nodes.find(n => n.id === currentState.sourceNodeId)?.position;
+          const targetNodePos = targetNode.position;
+
+          let targetHandle: 'top' | 'bottom' | 'left' | 'right' = 'left';
+
+          if (sourceNodePos && targetNodePos) {
+            const dx = targetNodePos.x - sourceNodePos.x;
+            const dy = targetNodePos.y - sourceNodePos.y;
+
+            if (Math.abs(dx) > Math.abs(dy)) {
+              targetHandle = dx > 0 ? 'left' : 'right';
+            } else {
+              targetHandle = dy > 0 ? 'top' : 'bottom';
+            }
+          }
+          console.log('🔵 Calculated sourceHandle:', currentState.sourceHandle);
+          console.log('🔵 Calculated targetHandle:', targetHandle);
+
+          const color = getColorForPair(currentState.sourceNodeId, targetNode.id);
+
+          const newEdge: Edge = {
+            id: `edge-${currentState.sourceNodeId}-${targetNode.id}-${Date.now()}`,
+            source: currentState.sourceNodeId,
+            target: targetNode.id,
+            sourceHandle: currentState.sourceHandle,
+            targetHandle: targetHandle,
+            type: 'default',
+            style: {
+              stroke: color,
+              strokeWidth: 2,
+            },
+          };
+
+          console.log('🎯 Creating edge:', newEdge);
+          addEdge(newEdge);
+        } else {
+          console.log('⚠️ Connection already exists');
+        }
+      } else {
+        console.log('❌ Connection ended in empty space - cancelled');
+      }
+
+      setConnectionDragState(null);
+    }, [reactFlowInstance, nodes, edges, addEdge, connectionDragState, getColorForPair]);
+
+    const handleConnectionMove = useCallback((e: MouseEvent) => {
+      if (!reactFlowInstance) return;
+
+      const flowPosition = reactFlowInstance.screenToFlowPosition({
+        x: e.clientX,
+        y: e.clientY,
+      });
+
+      console.log('🟨 handleConnectionMove - updating position:', flowPosition);
+
+      setConnectionDragState(prev => {
+        if (!prev?.isActive) return prev;
+
+        return {
+          ...prev,
+          currentPosition: flowPosition,
+        };
+      });
+    }, [reactFlowInstance]);
+
     useEffect(() => {
       if (!connectionDragState?.isActive) return;
 
@@ -235,7 +348,7 @@ export const FlowCanvas = forwardRef<{
         window.removeEventListener('pointerup', endHandler, { capture: true });
         document.body.style.cursor = '';
       };
-    }, [connectionDragState?.isActive]);
+    }, [connectionDragState?.isActive, handleConnectionMove, handleConnectionEnd]);
 
     const handleToolClick = (toolType: string, toolName: string, diagramType?: string) => {
       if (!reactFlowInstance || !reactFlowWrapper.current) return;
@@ -406,123 +519,6 @@ export const FlowCanvas = forwardRef<{
         currentPosition: initialPosition,
       });
     };
-
-    const handleConnectionMove = useCallback((e: MouseEvent) => {
-      if (!reactFlowInstance) return;
-
-      const flowPosition = reactFlowInstance.screenToFlowPosition({
-        x: e.clientX,
-        y: e.clientY,
-      });
-
-      console.log('🟨 handleConnectionMove - updating position:', flowPosition);
-
-      setConnectionDragState(prev => {
-        if (!prev?.isActive) return prev;
-
-        return {
-          ...prev,
-          currentPosition: flowPosition,
-        };
-      });
-    }, [reactFlowInstance]);
-
-    const handleConnectionEnd = useCallback((e: MouseEvent) => {
-      console.log('handleConnectionEnd CALLED');
-
-      if (!reactFlowInstance) {
-        console.log('❌ No reactFlowInstance');
-        return;
-      }
-
-      const currentState = connectionDragState;
-
-      if (!currentState?.isActive || !currentState.sourceNodeId) {
-        console.log('❌ No active connection or no source node');
-        return;
-      }
-
-      console.log('🔵 Connection drag ended');
-
-      const flowPosition = reactFlowInstance.screenToFlowPosition({
-        x: e.clientX,
-        y: e.clientY,
-      });
-
-      const intersectingNodes = nodes.filter(node => {
-        if (node.type !== 'ecoreFile') return false;
-        if (node.id === currentState.sourceNodeId) return false;
-
-        const nodeWidth = 280;
-        const nodeHeight = 180;
-
-        const isInside =
-          flowPosition.x >= node.position.x &&
-          flowPosition.x <= node.position.x + nodeWidth &&
-          flowPosition.y >= node.position.y &&
-          flowPosition.y <= node.position.y + nodeHeight;
-
-        return isInside;
-      });
-
-      console.log('🔵 Intersecting nodes:', intersectingNodes);
-
-      if (intersectingNodes.length > 0) {
-        const targetNode = intersectingNodes[0];
-        console.log('✅ Connection ended on node:', targetNode.id);
-
-        const existingEdge = edges.find(edge =>
-          (edge.source === currentState.sourceNodeId && edge.target === targetNode.id) ||
-          (edge.source === targetNode.id && edge.target === currentState.sourceNodeId)
-        );
-
-        console.log('🔵 Existing edge?', existingEdge);
-
-        if (!existingEdge) {
-          const sourceNodePos = nodes.find(n => n.id === currentState.sourceNodeId)?.position;
-          const targetNodePos = targetNode.position;
-
-          let targetHandle: 'top' | 'bottom' | 'left' | 'right' = 'left';
-
-          if (sourceNodePos && targetNodePos) {
-            const dx = targetNodePos.x - sourceNodePos.x;
-            const dy = targetNodePos.y - sourceNodePos.y;
-
-            if (Math.abs(dx) > Math.abs(dy)) {
-              targetHandle = dx > 0 ? 'left' : 'right';
-            } else {
-              targetHandle = dy > 0 ? 'top' : 'bottom';
-            }
-          }
-          console.log('🔵 Calculated sourceHandle:', currentState.sourceHandle);
-          console.log('🔵 Calculated targetHandle:', targetHandle);
-
-          const color = getColorForPair(currentState.sourceNodeId, targetNode.id);
-
-          const newEdge: Edge = {
-            id: `edge-${currentState.sourceNodeId}-${targetNode.id}-${Date.now()}`,
-            source: currentState.sourceNodeId,
-            target: targetNode.id,
-            sourceHandle: currentState.sourceHandle,
-            targetHandle: targetHandle,
-            type: 'default',
-            style: {
-              stroke: color,
-              strokeWidth: 2,
-            },
-          };
-
-          console.log('🎯 Creating edge:', newEdge);
-          addEdge(newEdge);
-        } else {
-          console.log('⚠️ Connection already exists');
-        }
-      } else {
-        console.log('❌ Connection ended in empty space - cancelled');
-      }
-
-      setConnectionDragState(null);
-    }, [reactFlowInstance, nodes, edges, addEdge, connectionDragState]);
 
     const addEcoreFile = (fileName: string, fileContent: string, meta?: any) => {
       const position = meta?.position || { x: 100, y: 100 };

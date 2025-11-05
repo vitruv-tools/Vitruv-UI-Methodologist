@@ -75,8 +75,6 @@ export function MainLayout({
     // ECORE file boxes in workspace
     const [selectedFileBoxId, setSelectedFileBoxId] = useState<string | null>(null);
 
-        // NEU - Hinzufügen bei den anderen State-Deklarationen:
-const [selectedDiagramType, setSelectedDiagramType] = useState<string | undefined>();
 
     // Start with an empty workspace
     useEffect(() => {
@@ -282,7 +280,6 @@ const handleEcoreFileExpand = (fileName: string, fileContent: string) => {
     flowCanvasRef.current?.loadDiagramData?.(diagramData.nodes, diagramData.edges);
     saveDocumentData(newId, { nodes: diagramData.nodes as any, edges: diagramData.edges as any });
     setIsDirty(false);
-    setSelectedDiagramType('ecore');
     
     // Update selected file
     const nodes = flowCanvasRef.current?.getNodes() || [];

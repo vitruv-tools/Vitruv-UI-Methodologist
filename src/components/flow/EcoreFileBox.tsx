@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef } from 'react';
 import { NodeProps } from 'reactflow';
 import { ConfirmDialog } from '../ui/ConfirmDialog';
 import { ConnectionHandle } from './ConnectionHandle';
@@ -245,13 +245,11 @@ export const EcoreFileBox: React.FC<NodeProps<EcoreFileBoxData>> = ({
     onExpand,
     onSelect,
     onDelete,
-    onRename,
     onConnectionStart,
     isExpanded = false,
     isConnectionActive = false,
     description,
     keywords,
-    domain,
     createdAt,
   } = data;
 

@@ -6,7 +6,7 @@ class ApiService {
   private baseURL: string;
 
   constructor() {
-    this.baseURL = 'http://fe3ab829-d558-4834-afcf-6ed7ca440ca4.ka.bw-cloud-instance.org:8080';
+    this.baseURL = 'http://localhost:9811';
   }
 
   /**

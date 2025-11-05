@@ -33,13 +33,6 @@ export const EDGE_COLORS = [
   '#58D68D', // Emerald Green
 ];
 
-/**
- * Interface for edge connection data
- */
-interface EdgeConnection {
-  source: string;
-  target: string;
-}
 
 /**
  * Global registry to track assigned colors for node pairs
