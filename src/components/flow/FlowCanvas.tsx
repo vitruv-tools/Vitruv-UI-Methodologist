@@ -13,6 +13,7 @@ import { EditableNode } from './EditableNode';
 import { UMLRelationship } from './UMLRelationship';
 import { EcoreFileBox } from './EcoreFileBox';
 import { ConnectionLine } from './ConnectionLine';
+import { CodeEditorModal } from './CodeEditorModal';
 
 const COLOR_LIST = [
   '#1f77b4', '#ff7f0e', '#2ca02c', '#d62728', '#9467bd',
@@ -66,6 +67,15 @@ export const FlowCanvas = forwardRef<{
       currentPosition: { x: number; y: number } | null;
     } | null>(null);
 
+    // State für Code Editor Modal
+    const [codeEditorState, setCodeEditorState] = useState<{
+      isOpen: boolean;
+      edgeId: string | null;
+      initialCode: string;
+      sourceFileName?: string;
+      targetFileName?: string;
+    } | null>(null);
+
     const {
       nodes,
       edges,
@@ -76,12 +86,14 @@ export const FlowCanvas = forwardRef<{
       addEdge,
       updateNodeLabel,
       removeNode,
+      removeEdge,
       setNodes,
       setEdges,
       undo,
       redo,
       canUndo,
       canRedo,
+      updateEdgeCode,
     } = useFlowState();
 
     const LOCALSTORAGE_KEY = 'flow_edge_color_map_v1';
@@ -284,7 +296,7 @@ export const FlowCanvas = forwardRef<{
             target: targetNode.id,
             sourceHandle: currentState.sourceHandle,
             targetHandle: targetHandle,
-            type: 'default',
+            type: 'uml',
             style: {
               stroke: color,
               strokeWidth: 2,
@@ -349,6 +361,50 @@ export const FlowCanvas = forwardRef<{
         document.body.style.cursor = '';
       };
     }, [connectionDragState?.isActive, handleConnectionMove, handleConnectionEnd]);
+
+    // Handler für Edge Doppelklick
+    const handleEdgeDoubleClick = useCallback((edgeId: string) => {
+      const edge = edges.find(e => e.id === edgeId);
+      if (!edge) return;
+
+      // Finde die Source und Target Nodes
+      const sourceNode = nodes.find(n => n.id === edge.source);
+      const targetNode = nodes.find(n => n.id === edge.target);
+
+      const sourceFileName = sourceNode?.type === 'ecoreFile' 
+        ? sourceNode.data.fileName 
+        : undefined;
+      const targetFileName = targetNode?.type === 'ecoreFile' 
+        ? targetNode.data.fileName 
+        : undefined;
+
+      setCodeEditorState({
+        isOpen: true,
+        edgeId,
+        initialCode: edge.data?.code || '',
+        sourceFileName,
+        targetFileName,
+      });
+    }, [edges, nodes]);
+
+    // Handler zum Schließen des Code Editors
+    const handleCloseCodeEditor = useCallback(() => {
+      setCodeEditorState(null);
+    }, []);
+
+    // Handler zum Speichern des Codes
+    const handleSaveCode = useCallback((code: string) => {
+      if (codeEditorState?.edgeId) {
+        updateEdgeCode(codeEditorState.edgeId, code);
+      }
+    }, [codeEditorState, updateEdgeCode]);
+
+    // Handler zum Löschen einer Edge
+    const handleDeleteEdge = useCallback(() => {
+      if (codeEditorState?.edgeId) {
+        removeEdge(codeEditorState.edgeId);
+      }
+    }, [codeEditorState, removeEdge]);
 
     const handleToolClick = (toolType: string, toolName: string, diagramType?: string) => {
       if (!reactFlowInstance || !reactFlowWrapper.current) return;
@@ -656,7 +712,13 @@ export const FlowCanvas = forwardRef<{
 
             return node;
           })}
-          edges={edges}
+          edges={edges.map(edge => ({
+            ...edge,
+            data: {
+              ...edge.data,
+              onDoubleClick: handleEdgeDoubleClick,
+            },
+          }))}
           onNodesChange={onNodesChange}
           onEdgesChange={onEdgesChange}
           onConnect={onConnect}
@@ -766,6 +828,20 @@ export const FlowCanvas = forwardRef<{
           }}>
             Drop files here
           </div>
+        )}
+
+        {/* Code Editor Modal */}
+        {codeEditorState && (
+          <CodeEditorModal
+            isOpen={codeEditorState.isOpen}
+            onClose={handleCloseCodeEditor}
+            onSave={handleSaveCode}
+            onDelete={handleDeleteEdge}
+            initialCode={codeEditorState.initialCode}
+            edgeId={codeEditorState.edgeId || ''}
+            sourceFileName={codeEditorState.sourceFileName}
+            targetFileName={codeEditorState.targetFileName}
+          />
         )}
       </div>
     );
