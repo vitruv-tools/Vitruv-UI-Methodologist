@@ -51,7 +51,7 @@ let colorIndex = 0;
  */
 function normalizeNodePair(sourceId: string, targetId: string): string {
   // Sort alphabetically to ensure consistency
-  const [first, second] = [sourceId, targetId].sort();
+  const [first, second] = [sourceId, targetId].sort((a, b) => a.localeCompare(b));
   return `${first}|${second}`;
 }
 

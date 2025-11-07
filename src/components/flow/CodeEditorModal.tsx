@@ -1,14 +1,14 @@
 import React, { useState, useRef, useEffect } from 'react';
 
 interface CodeEditorModalProps {
-  isOpen: boolean;
-  onClose: () => void;
-  onSave: (code: string) => void;
-  onDelete?: () => void;
-  initialCode?: string;
-  edgeId: string;
-  sourceFileName?: string;
-  targetFileName?: string;
+  readonly isOpen: boolean;
+  readonly onClose: () => void;
+  readonly onSave: (code: string) => void;
+  readonly onDelete?: () => void;
+  readonly initialCode?: string;
+  readonly edgeId: string;
+  readonly sourceFileName?: string;
+  readonly targetFileName?: string;
 }
 
 // Gemeinsame Button-Styles
@@ -91,7 +91,7 @@ export function CodeEditorModal({
   };
 
   const handleDelete = () => {
-    if (window.confirm('Möchtest du diese Relation wirklich löschen? Diese Aktion kann nicht rückgängig gemacht werden.')) {
+    if (globalThis.confirm('Do you want to delete this relation? Note: this action cannot be reverted!')) {
       onDelete?.();
       onClose();
     }
@@ -108,7 +108,7 @@ export function CodeEditorModal({
 
       const { selectionStart: start, selectionEnd: end } = textarea;
       const newCode = code.substring(0, start) + '  ' + code.substring(end);
-      
+
       handleCodeChange(newCode);
       setTimeout(() => {
         textarea.selectionStart = textarea.selectionEnd = start + 2;
@@ -136,7 +136,7 @@ export function CodeEditorModal({
   };
 
   const handleClear = () => {
-    if (window.confirm('Möchtest du den gesamten Code löschen?')) {
+    if (globalThis.confirm('Do you want to delete the whole code?')) {
       handleCodeChange('');
     }
   };
