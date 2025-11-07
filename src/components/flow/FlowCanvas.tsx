@@ -15,6 +15,7 @@ import { EcoreFileBox } from './EcoreFileBox';
 import { ConnectionLine } from './ConnectionLine';
 import { CodeEditorModal } from './CodeEditorModal';
 
+// Konstanten
 const COLOR_LIST = [
   '#1f77b4', '#ff7f0e', '#2ca02c', '#d62728', '#9467bd',
   '#8c564b', '#e377c2', '#7f7f7f', '#bcbd22', '#17becf',
@@ -23,12 +24,16 @@ const COLOR_LIST = [
   '#2a86d6', '#ffb86b', '#63c37a', '#ff4f7a', '#b08fe8'
 ];
 
+const LOCALSTORAGE_KEY = 'flow_edge_color_map_v1';
+const NODE_DIMENSIONS = { width: 280, height: 180 };
+
 const nodeTypes = {
   editable: EditableNode,
   ecoreFile: EcoreFileBox
 };
 const edgeTypes = { uml: UMLRelationship };
 
+// Types
 interface FlowCanvasProps {
   onDeploy?: (nodes: Node[], edges: Edge[]) => void;
   onToolClick?: (toolType: string, toolName: string, diagramType?: string) => void;
@@ -38,6 +43,84 @@ interface FlowCanvasProps {
   onEcoreFileDelete?: (id: string) => void;
   onEcoreFileRename?: (id: string, newFileName: string) => void;
 }
+
+interface ConnectionDragState {
+  isActive: boolean;
+  sourceNodeId: string | null;
+  sourceHandle: 'top' | 'bottom' | 'left' | 'right' | null;
+  currentPosition: { x: number; y: number } | null;
+}
+
+interface CodeEditorState {
+  isOpen: boolean;
+  edgeId: string | null;
+  initialCode: string;
+  sourceFileName?: string;
+  targetFileName?: string;
+}
+
+type HandlePosition = 'top' | 'bottom' | 'left' | 'right';
+
+// Utility Functions
+const pairKey = (a: string, b: string) => (a < b ? `${a}::${b}` : `${b}::${a}`);
+
+const createZoomButton = (
+  onClick: () => void,
+  title: string,
+  icon: string
+) => (
+  <button
+    onClick={onClick}
+    style={{
+      width: 36,
+      height: 36,
+      borderRadius: 6,
+      border: '1px solid #e5e7eb',
+      background: '#ffffff',
+      cursor: 'pointer'
+    }}
+    title={title}
+  >
+    {icon}
+  </button>
+);
+
+// Label Mapping
+const TOOL_LABELS: Record<string, Record<string, string>> = {
+  element: {
+    'class': 'Class',
+    'abstract-class': 'AbstractClass',
+    'interface': 'Interface',
+    'enumeration': 'Enumeration',
+    'package': 'Package',
+  },
+  member: {
+    'attribute': '+ attribute: Type',
+    'method': '+ method(): ReturnType',
+    'private-attribute': '- privateAttribute: Type',
+    'protected-attribute': '# protectedAttribute: Type',
+    'private-method': '- privateMethod(): ReturnType',
+    'protected-method': '# protectedMethod(): ReturnType',
+  },
+  relationship: {
+    'association': 'Association',
+    'aggregation': 'Aggregation',
+    'composition': 'Composition',
+    'inheritance': 'Inheritance',
+    'realization': 'Realization',
+    'dependency': 'Dependency',
+  },
+  multiplicity: {
+    'one': '1',
+    'many': '*',
+    'optional': '0..1',
+    'range': '1..*',
+  },
+};
+
+const getToolLabel = (toolType: string, toolName: string): string => {
+  return TOOL_LABELS[toolType]?.[toolName] || toolName;
+};
 
 export const FlowCanvas = forwardRef<{
   handleToolClick: (toolType: string, toolName: string, diagramType?: string) => void;
@@ -59,22 +142,8 @@ export const FlowCanvas = forwardRef<{
     const [isInteractive, setIsInteractive] = useState(true);
     const [selectedFileId, setSelectedFileId] = useState<string | null>(null);
     const [expandedFileId, setExpandedFileId] = useState<string | null>(null);
-
-    const [connectionDragState, setConnectionDragState] = useState<{
-      isActive: boolean;
-      sourceNodeId: string | null;
-      sourceHandle: 'top' | 'bottom' | 'left' | 'right' | null;
-      currentPosition: { x: number; y: number } | null;
-    } | null>(null);
-
-    // State für Code Editor Modal
-    const [codeEditorState, setCodeEditorState] = useState<{
-      isOpen: boolean;
-      edgeId: string | null;
-      initialCode: string;
-      sourceFileName?: string;
-      targetFileName?: string;
-    } | null>(null);
+    const [connectionDragState, setConnectionDragState] = useState<ConnectionDragState | null>(null);
+    const [codeEditorState, setCodeEditorState] = useState<CodeEditorState | null>(null);
 
     const {
       nodes,
@@ -96,12 +165,10 @@ export const FlowCanvas = forwardRef<{
       updateEdgeCode,
     } = useFlowState();
 
-    const LOCALSTORAGE_KEY = 'flow_edge_color_map_v1';
     const edgeColorMapRef = useRef<Map<string, string>>(new Map());
     const nextColorIndexRef = useRef<number>(0);
 
-    const pairKey = (a: string, b: string) => (a < b ? `${a}::${b}` : `${b}::${a}`);
-
+    // Edge Color Management
     useEffect(() => {
       try {
         const raw = localStorage.getItem(LOCALSTORAGE_KEY);
@@ -110,7 +177,9 @@ export const FlowCanvas = forwardRef<{
           edgeColorMapRef.current = new Map(Object.entries(parsed));
           const used = new Set(Object.values(parsed));
           let maxIndex = 0;
-          COLOR_LIST.forEach((c, i) => { if (used.has(c)) maxIndex = Math.max(maxIndex, i + 1); });
+          COLOR_LIST.forEach((c, i) => { 
+            if (used.has(c)) maxIndex = Math.max(maxIndex, i + 1); 
+          });
           nextColorIndexRef.current = maxIndex % COLOR_LIST.length;
         }
       } catch (e) {
@@ -118,7 +187,7 @@ export const FlowCanvas = forwardRef<{
       }
     }, []);
 
-    const persistEdgeColorMap = () => {
+    const persistEdgeColorMap = useCallback(() => {
       try {
         const obj: Record<string, string> = {};
         edgeColorMapRef.current.forEach((v, k) => {
@@ -128,9 +197,9 @@ export const FlowCanvas = forwardRef<{
       } catch (e) {
         // Silent fail
       }
-    };
+    }, []);
 
-    const getColorForPair = React.useCallback((idA: string, idB: string) => {
+    const getColorForPair = useCallback((idA: string, idB: string) => {
       const key = pairKey(idA, idB);
       const existing = edgeColorMapRef.current.get(key);
       if (existing) return existing;
@@ -139,7 +208,7 @@ export const FlowCanvas = forwardRef<{
       nextColorIndexRef.current += 1;
       persistEdgeColorMap();
       return color;
-    }, []);
+    }, [persistEdgeColorMap]);
 
     useEffect(() => {
       console.log('EDGES STATE CHANGED:', edges);
@@ -156,31 +225,56 @@ export const FlowCanvas = forwardRef<{
       addEdge,
     });
 
-    const getHandlePosition = (
+    // Helper: Get Handle Position
+    const getHandlePosition = useCallback((
       nodeId: string,
-      handle: 'top' | 'bottom' | 'left' | 'right'
+      handle: HandlePosition
     ): { x: number; y: number } | null => {
       const node = nodes.find(n => n.id === nodeId);
       if (!node) return null;
 
-      const nodeWidth = 280;
-      const nodeHeight = 180;
+      const { x: nodeX, y: nodeY } = node.position;
+      const { width, height } = NODE_DIMENSIONS;
 
-      const nodeX = node.position.x;
-      const nodeY = node.position.y;
+      const positions: Record<HandlePosition, { x: number; y: number }> = {
+        top: { x: nodeX + width / 2, y: nodeY },
+        bottom: { x: nodeX + width / 2, y: nodeY + height },
+        left: { x: nodeX, y: nodeY + height / 2 },
+        right: { x: nodeX + width, y: nodeY + height / 2 },
+      };
 
-      switch (handle) {
-        case 'top':
-          return { x: nodeX + nodeWidth / 2, y: nodeY };
-        case 'bottom':
-          return { x: nodeX + nodeWidth / 2, y: nodeY + nodeHeight };
-        case 'left':
-          return { x: nodeX, y: nodeY + nodeHeight / 2 };
-        case 'right':
-          return { x: nodeX + nodeWidth, y: nodeY + nodeHeight / 2 };
+      return positions[handle];
+    }, [nodes]);
+
+    // Helper: Calculate Target Handle
+    const calculateTargetHandle = useCallback((
+      sourcePos: { x: number; y: number },
+      targetPos: { x: number; y: number }
+    ): HandlePosition => {
+      const dx = targetPos.x - sourcePos.x;
+      const dy = targetPos.y - sourcePos.y;
+
+      if (Math.abs(dx) > Math.abs(dy)) {
+        return dx > 0 ? 'left' : 'right';
       }
-    };
+      return dy > 0 ? 'top' : 'bottom';
+    }, []);
 
+    // Helper: Check if position is inside node
+    const isPositionInsideNode = useCallback((
+      position: { x: number; y: number },
+      node: Node
+    ): boolean => {
+      const { width, height } = NODE_DIMENSIONS;
+      return (
+        position.x >= node.position.x &&
+        position.x <= node.position.x + width &&
+        position.y >= node.position.y &&
+        position.y <= node.position.y + height
+      );
+    }, []);
+
+    // Keyboard Shortcuts
     useEffect(() => {
       const handleKeyDown = (event: KeyboardEvent) => {
         const target = event.target as HTMLElement;
@@ -188,48 +282,33 @@ export const FlowCanvas = forwardRef<{
           return;
         }
 
-        if (event.ctrlKey || event.metaKey) {
-          switch (event.key.toLowerCase()) {
-            case 'z':
-              event.preventDefault();
-              if (event.shiftKey) {
-                if (canRedo) {
-                  redo();
-                }
-              } else {
-                if (canUndo) {
-                  undo();
-                }
-              }
-              break;
-            case 'y':
-              event.preventDefault();
-              if (canRedo) {
-                redo();
-              }
-              break;
+        if (!(event.ctrlKey || event.metaKey)) return;
+
+        const key = event.key.toLowerCase();
+        
+        if (key === 'z') {
+          event.preventDefault();
+          if (event.shiftKey) {
+            if (canRedo) redo();
+          } else {
+            if (canUndo) undo();
           }
+        } else if (key === 'y') {
+          event.preventDefault();
+          if (canRedo) redo();
         }
       };
 
       document.addEventListener('keydown', handleKeyDown);
-      return () => {
-        document.removeEventListener('keydown', handleKeyDown);
-      };
+      return () => document.removeEventListener('keydown', handleKeyDown);
     }, [undo, redo, canUndo, canRedo]);
 
+    // Connection Handlers
     const handleConnectionEnd = useCallback((e: MouseEvent) => {
       console.log('handleConnectionEnd CALLED');
 
-      if (!reactFlowInstance) {
-        console.log('❌ No reactFlowInstance');
-        return;
-      }
-
-      const currentState = connectionDragState;
-
-      if (!currentState?.isActive || !currentState.sourceNodeId) {
-        console.log('❌ No active connection or no source node');
+      if (!reactFlowInstance || !connectionDragState?.isActive || !connectionDragState.sourceNodeId) {
+        console.log('❌ Invalid connection state');
         return;
       }
 
@@ -241,19 +320,10 @@ export const FlowCanvas = forwardRef<{
       });
 
       const intersectingNodes = nodes.filter(node => {
-        if (node.type !== 'ecoreFile') return false;
-        if (node.id === currentState.sourceNodeId) return false;
-
-        const nodeWidth = 280;
-        const nodeHeight = 180;
-
-        const isInside =
-          flowPosition.x >= node.position.x &&
-          flowPosition.x <= node.position.x + nodeWidth &&
-          flowPosition.y >= node.position.y &&
-          flowPosition.y <= node.position.y + nodeHeight;
-
-        return isInside;
+        if (node.type !== 'ecoreFile' || node.id === connectionDragState.sourceNodeId) {
+          return false;
+        }
+        return isPositionInsideNode(flowPosition, node);
       });
 
       console.log('🔵 Intersecting nodes:', intersectingNodes);
@@ -263,38 +333,32 @@ export const FlowCanvas = forwardRef<{
         console.log('✅ Connection ended on node:', targetNode.id);
 
         const existingEdge = edges.find(edge =>
-          (edge.source === currentState.sourceNodeId && edge.target === targetNode.id) ||
-          (edge.source === targetNode.id && edge.target === currentState.sourceNodeId)
+          (edge.source === connectionDragState.sourceNodeId && edge.target === targetNode.id) ||
+          (edge.source === targetNode.id && edge.target === connectionDragState.sourceNodeId)
         );
 
-        console.log('🔵 Existing edge?', existingEdge);
-
         if (!existingEdge) {
-          const sourceNodePos = nodes.find(n => n.id === currentState.sourceNodeId)?.position;
+          const sourceNodePos = nodes.find(n => n.id === connectionDragState.sourceNodeId)?.position;
           const targetNodePos = targetNode.position;
 
-          let targetHandle: 'top' | 'bottom' | 'left' | 'right' = 'left';
+          let targetHandle: HandlePosition = 'left';
 
           if (sourceNodePos && targetNodePos) {
-            const dx = targetNodePos.x - sourceNodePos.x;
-            const dy = targetNodePos.y - sourceNodePos.y;
-
-            if (Math.abs(dx) > Math.abs(dy)) {
-              targetHandle = dx > 0 ? 'left' : 'right';
-            } else {
-              targetHandle = dy > 0 ? 'top' : 'bottom';
-            }
+            targetHandle = calculateTargetHandle(sourceNodePos, targetNodePos);
           }
-          console.log('🔵 Calculated sourceHandle:', currentState.sourceHandle);
-          console.log('🔵 Calculated targetHandle:', targetHandle);
 
-          const color = getColorForPair(currentState.sourceNodeId, targetNode.id);
+          console.log('🔵 Calculated handles:', {
+            source: connectionDragState.sourceHandle,
+            target: targetHandle
+          });
+
+          const color = getColorForPair(connectionDragState.sourceNodeId, targetNode.id);
 
           const newEdge: Edge = {
-            id: `edge-${currentState.sourceNodeId}-${targetNode.id}-${Date.now()}`,
-            source: currentState.sourceNodeId,
+            id: `edge-${connectionDragState.sourceNodeId}-${targetNode.id}-${Date.now()}`,
+            source: connectionDragState.sourceNodeId,
             target: targetNode.id,
-            sourceHandle: currentState.sourceHandle,
+            sourceHandle: connectionDragState.sourceHandle,
             targetHandle: targetHandle,
             type: 'uml',
             style: {
@@ -313,7 +377,7 @@ export const FlowCanvas = forwardRef<{
       }
 
       setConnectionDragState(null);
-    }, [reactFlowInstance, nodes, edges, addEdge, connectionDragState, getColorForPair]);
+    }, [reactFlowInstance, nodes, edges, addEdge, connectionDragState, getColorForPair, isPositionInsideNode, calculateTargetHandle]);
 
     const handleConnectionMove = useCallback((e: MouseEvent) => {
       if (!reactFlowInstance) return;
@@ -327,7 +391,6 @@ export const FlowCanvas = forwardRef<{
 
       setConnectionDragState(prev => {
         if (!prev?.isActive) return prev;
-
         return {
           ...prev,
           currentPosition: flowPosition,
@@ -335,186 +398,95 @@ export const FlowCanvas = forwardRef<{
       });
     }, [reactFlowInstance]);
 
+    // Connection Event Listeners
     useEffect(() => {
       if (!connectionDragState?.isActive) return;
 
-      const moveHandler = (e: any) => {
-        handleConnectionMove(e);
-      };
-      const endHandler = (e: any) => {
-        handleConnectionEnd(e);
+      const handlers = {
+        move: (e: any) => handleConnectionMove(e),
+        end: (e: any) => handleConnectionEnd(e),
       };
 
-      document.addEventListener('pointermove', moveHandler, { capture: true });
-      document.addEventListener('pointerup', endHandler, { capture: true });
+      const addListeners = () => {
+        const targets = [document, window];
+        const events = ['pointermove', 'pointerup'] as const;
+        
+        targets.forEach(target => {
+          events.forEach((event, idx) => {
+            target.addEventListener(event, idx === 0 ? handlers.move : handlers.end, { capture: true });
+          });
+        });
+      };
 
-      window.addEventListener('pointermove', moveHandler, { capture: true });
-      window.addEventListener('pointerup', endHandler, { capture: true });
+      const removeListeners = () => {
+        const targets = [document, window];
+        const events = ['pointermove', 'pointerup'] as const;
+        
+        targets.forEach(target => {
+          events.forEach((event, idx) => {
+            target.removeEventListener(event, idx === 0 ? handlers.move : handlers.end, { capture: true });
+          });
+        });
+      };
 
       document.body.style.cursor = 'crosshair';
+      addListeners();
 
       return () => {
-        document.removeEventListener('pointermove', moveHandler, { capture: true });
-        document.removeEventListener('pointerup', endHandler, { capture: true });
-        window.removeEventListener('pointermove', moveHandler, { capture: true });
-        window.removeEventListener('pointerup', endHandler, { capture: true });
+        removeListeners();
         document.body.style.cursor = '';
       };
     }, [connectionDragState?.isActive, handleConnectionMove, handleConnectionEnd]);
 
-    // Handler für Edge Doppelklick
+    // Code Editor Handlers
     const handleEdgeDoubleClick = useCallback((edgeId: string) => {
       const edge = edges.find(e => e.id === edgeId);
       if (!edge) return;
 
-      // Finde die Source und Target Nodes
-      const sourceNode = nodes.find(n => n.id === edge.source);
-      const targetNode = nodes.find(n => n.id === edge.target);
-
-      const sourceFileName = sourceNode?.type === 'ecoreFile' 
-        ? sourceNode.data.fileName 
-        : undefined;
-      const targetFileName = targetNode?.type === 'ecoreFile' 
-        ? targetNode.data.fileName 
-        : undefined;
+      const getFileName = (nodeId: string) => {
+        const node = nodes.find(n => n.id === nodeId);
+        return node?.type === 'ecoreFile' ? node.data.fileName : undefined;
+      };
 
       setCodeEditorState({
         isOpen: true,
         edgeId,
         initialCode: edge.data?.code || '',
-        sourceFileName,
-        targetFileName,
+        sourceFileName: getFileName(edge.source),
+        targetFileName: getFileName(edge.target),
       });
     }, [edges, nodes]);
 
-    // Handler zum Schließen des Code Editors
     const handleCloseCodeEditor = useCallback(() => {
       setCodeEditorState(null);
     }, []);
 
-    // Handler zum Speichern des Codes
     const handleSaveCode = useCallback((code: string) => {
       if (codeEditorState?.edgeId) {
         updateEdgeCode(codeEditorState.edgeId, code);
       }
     }, [codeEditorState, updateEdgeCode]);
 
-    // Handler zum Löschen einer Edge
     const handleDeleteEdge = useCallback(() => {
       if (codeEditorState?.edgeId) {
         removeEdge(codeEditorState.edgeId);
       }
     }, [codeEditorState, removeEdge]);
 
-    const handleToolClick = (toolType: string, toolName: string, diagramType?: string) => {
+    // Tool Click Handler
+    const handleToolClick = useCallback((toolType: string, toolName: string, diagramType?: string) => {
       if (!reactFlowInstance || !reactFlowWrapper.current) return;
 
       const canvasBounds = reactFlowWrapper.current.getBoundingClientRect();
-      const centerX = canvasBounds.width / 2;
-      const centerY = canvasBounds.height / 2;
-
       const position = reactFlowInstance.project({
-        x: centerX,
-        y: centerY,
+        x: canvasBounds.width / 2,
+        y: canvasBounds.height / 2,
       });
 
-      let label = '';
-      let nodeType = 'editable';
-
-      switch (toolType) {
-        case 'element':
-          switch (toolName) {
-            case 'class':
-              label = 'Class';
-              break;
-            case 'abstract-class':
-              label = 'AbstractClass';
-              break;
-            case 'interface':
-              label = 'Interface';
-              break;
-            case 'enumeration':
-              label = 'Enumeration';
-              break;
-            case 'package':
-              label = 'Package';
-              break;
-            default:
-              label = toolName;
-          }
-          break;
-        case 'member':
-          switch (toolName) {
-            case 'attribute':
-              label = '+ attribute: Type';
-              break;
-            case 'method':
-              label = '+ method(): ReturnType';
-              break;
-            case 'private-attribute':
-              label = '- privateAttribute: Type';
-              break;
-            case 'protected-attribute':
-              label = '# protectedAttribute: Type';
-              break;
-            case 'private-method':
-              label = '- privateMethod(): ReturnType';
-              break;
-            case 'protected-method':
-              label = '# protectedMethod(): ReturnType';
-              break;
-            default:
-              label = toolName;
-          }
-          break;
-        case 'relationship':
-          switch (toolName) {
-            case 'association':
-              label = 'Association';
-              break;
-            case 'aggregation':
-              label = 'Aggregation';
-              break;
-            case 'composition':
-              label = 'Composition';
-              break;
-            case 'inheritance':
-              label = 'Inheritance';
-              break;
-            case 'realization':
-              label = 'Realization';
-              break;
-            case 'dependency':
-              label = 'Dependency';
-              break;
-            default:
-              label = toolName;
-          }
-          break;
-        case 'multiplicity':
-          switch (toolName) {
-            case 'one':
-              label = '1';
-              break;
-            case 'many':
-              label = '*';
-              break;
-            case 'optional':
-              label = '0..1';
-              break;
-            case 'range':
-              label = '1..*';
-              break;
-            default:
-              label = toolName;
-          }
-          break;
-        default:
-          label = toolName;
-      }
+      const label = getToolLabel(toolType, toolName);
 
       const newNode: Omit<Node, 'id'> = {
-        type: nodeType,
+        type: 'editable',
         position,
         data: {
           label,
@@ -526,43 +498,38 @@ export const FlowCanvas = forwardRef<{
 
       console.log('Adding new node from tool click:', newNode);
       addNode(newNode);
-    };
+    }, [reactFlowInstance, addNode]);
 
-    const loadDiagramData = (newNodes: any[], newEdges: any[]) => {
+    // Diagram Data Management
+    const loadDiagramData = useCallback((newNodes: any[], newEdges: any[]) => {
       console.log('Loading diagram data:', { newNodes, newEdges });
-
       setNodes([]);
       setEdges([]);
-
-      if (newNodes.length > 0) {
-        setNodes(newNodes);
-      }
-      if (newEdges.length > 0) {
-        setEdges(newEdges);
-      }
-
+      if (newNodes.length > 0) setNodes(newNodes);
+      if (newEdges.length > 0) setEdges(newEdges);
       console.log('Diagram data loaded successfully');
-    };
+    }, [setNodes, setEdges]);
 
-    const handleDragOver = (event: React.DragEvent) => {
+    // Drag & Drop Handlers
+    const handleDragOver = useCallback((event: React.DragEvent) => {
       onDragOver(event);
       setIsDragOver(true);
-    };
+    }, [onDragOver]);
 
-    const handleDragLeave = () => {
+    const handleDragLeave = useCallback(() => {
       setIsDragOver(false);
-    };
+    }, []);
 
-    const handleDrop = (event: React.DragEvent) => {
+    const handleDrop = useCallback((event: React.DragEvent) => {
       setIsDragOver(false);
       onDrop(event);
-    };
+    }, [onDrop]);
 
-    const handleLabelChange = (id: string, newLabel: string) => {
+    const handleLabelChange = useCallback((id: string, newLabel: string) => {
       updateNodeLabel(id, newLabel);
-    };
+    }, [updateNodeLabel]);
 
-    const handleConnectionStart = (nodeId: string, handle: 'top' | 'bottom' | 'left' | 'right') => {
+    const handleConnectionStart = useCallback((nodeId: string, handle: HandlePosition) => {
       console.log('🔵 Connection drag started:', { nodeId, handle });
 
       const initialPosition = getHandlePosition(nodeId, handle);
@@ -574,9 +541,53 @@ export const FlowCanvas = forwardRef<{
         sourceHandle: handle,
         currentPosition: initialPosition,
       });
-    };
+    }, [getHandlePosition]);
 
-    const addEcoreFile = (fileName: string, fileContent: string, meta?: any) => {
+    // ---------------------------
+    // Ecore File Handlers (define these BEFORE addEcoreFile)
+    // ---------------------------
+
+    const handleEcoreFileSelect = useCallback((fileName: string) => {
+      const ecoreNode = nodes.find(
+        n => n.type === 'ecoreFile' && n.data.fileName === fileName
+      );
+      if (ecoreNode) {
+        setSelectedFileId(ecoreNode.id);
+        onEcoreFileSelect?.(fileName);
+      }
+    }, [nodes, onEcoreFileSelect]);
+
+    const handleEcoreFileExpand = useCallback((fileName: string, fileContent: string) => {
+      const ecoreNode = nodes.find(
+        n => n.type === 'ecoreFile' && n.data.fileName === fileName
+      );
+
+      if (ecoreNode) {
+        setExpandedFileId(ecoreNode.id);
+        setSelectedFileId(ecoreNode.id);
+        const updatedNodes = nodes.map(n =>
+          n.id === ecoreNode.id
+            ? { ...n, data: { ...n.data, isExpanded: true } }
+            : n
+        );
+        setNodes(updatedNodes);
+      }
+
+      onEcoreFileExpand?.(fileName, fileContent);
+    }, [nodes, setNodes, onEcoreFileExpand]);
+
+    const resetExpandedFile = useCallback(() => {
+      setExpandedFileId(null);
+      const updatedNodes = nodes.map(n =>
+        n.type === 'ecoreFile'
+          ? { ...n, data: { ...n.data, isExpanded: false } }
+          : n
+      );
+      setNodes(updatedNodes);
+    }, [nodes, setNodes]);
+
+    // Ecore File Add - now safe to reference the handlers above
+    const addEcoreFile = useCallback((fileName: string, fileContent: string, meta?: any) => {
       const position = meta?.position || { x: 100, y: 100 };
 
       const newEcoreNode: Node = {
@@ -605,68 +616,103 @@ export const FlowCanvas = forwardRef<{
       if (onEcoreFileSelect) {
         onEcoreFileSelect(fileName);
       }
-    };
+    }, [addNode, handleEcoreFileExpand, handleEcoreFileSelect, onEcoreFileSelect, onEcoreFileDelete, onEcoreFileRename]);
 
-    const handleEcoreFileSelect = (fileName: string) => {
-      const ecoreNode = nodes.find(
-        n => n.type === 'ecoreFile' && n.data.fileName === fileName
-      );
-      if (ecoreNode) {
-        setSelectedFileId(ecoreNode.id);
-        if (onEcoreFileSelect) {
-          onEcoreFileSelect(fileName);
-        }
-      }
-    };
-
-    const handleEcoreFileExpand = (fileName: string, fileContent: string) => {
-      const ecoreNode = nodes.find(
-        n => n.type === 'ecoreFile' && n.data.fileName === fileName
-      );
-
-      if (ecoreNode) {
-        setExpandedFileId(null);
-        setExpandedFileId(ecoreNode.id);
-        setSelectedFileId(ecoreNode.id);
-        const updatedNodes = nodes.map(n =>
-          n.id === ecoreNode.id
-            ? { ...n, data: { ...n.data, isExpanded: true } }
-            : n
-        );
-        setNodes(updatedNodes);
-      }
-
-      if (onEcoreFileExpand) {
-        onEcoreFileExpand(fileName, fileContent);
-      }
-    };
-
-    React.useEffect(() => {
-      if (onDiagramChange) {
-        onDiagramChange(nodes, edges);
-      }
+    // Diagram Change Effect
+    useEffect(() => {
+      onDiagramChange?.(nodes, edges);
     }, [nodes, edges, onDiagramChange]);
 
+    // Imperative Handle
     useImperativeHandle(ref, () => ({
-      handleToolClick: handleToolClick,
-      loadDiagramData: loadDiagramData,
+      handleToolClick,
+      loadDiagramData,
       getNodes: () => nodes,
       getEdges: () => edges,
-      addEcoreFile: addEcoreFile,
-      resetExpandedFile: () => {
-        setExpandedFileId(null);
-        const updatedNodes = nodes.map(n =>
-          n.type === 'ecoreFile'
-            ? { ...n, data: { ...n.data, isExpanded: false } }
-            : n
-        );
-        setNodes(updatedNodes);
+      addEcoreFile,
+      resetExpandedFile,
+      undo,
+      redo,
+      canUndo,
+      canRedo,
+    }), [handleToolClick, loadDiagramData, nodes, edges, addEcoreFile, resetExpandedFile, undo, redo, canUndo, canRedo]);
+
+    // Helper: Map nodes with handlers
+    const mappedNodes = nodes.map(node => {
+      if (node.type === 'editable') {
+        return {
+          ...node,
+          data: {
+            ...node.data,
+            onLabelChange: handleLabelChange,
+            onDelete: removeNode
+          }
+        };
+      }
+
+      if (node.type === 'ecoreFile') {
+        return {
+          ...node,
+          data: {
+            ...node.data,
+            onExpand: handleEcoreFileExpand,
+            onSelect: handleEcoreFileSelect,
+            onDelete: onEcoreFileDelete,
+            onRename: onEcoreFileRename,
+            isExpanded: expandedFileId === node.id,
+            onConnectionStart: handleConnectionStart,
+            isConnectionActive: connectionDragState?.isActive || false,
+          },
+          selected: selectedFileId === node.id,
+          draggable: !connectionDragState?.isActive,
+        };
+      }
+
+      return node;
+    });
+
+    // Helper: Map edges with handlers
+    const mappedEdges = edges.map(edge => ({
+      ...edge,
+      data: {
+        ...edge.data,
+        onDoubleClick: handleEdgeDoubleClick,
       },
-      undo: undo,
-      redo: redo,
-      canUndo: canUndo,
-      canRedo: canRedo,
     }));
+
+    // Helper: Calculate connection line positions
+    const getConnectionLinePositions = () => {
+      if (!connectionDragState?.isActive ||
+          !connectionDragState.sourceNodeId ||
+          !connectionDragState.sourceHandle ||
+          !connectionDragState.currentPosition ||
+          !reactFlowInstance ||
+          !reactFlowWrapper.current) {
+        return null;
+      }
+
+      const sourcePos = getHandlePosition(
+        connectionDragState.sourceNodeId,
+        connectionDragState.sourceHandle
+      );
+
+      if (!sourcePos) return null;
+
+      const viewport = reactFlowInstance.getViewport();
+
+      return {
+        source: {
+          x: sourcePos.x * viewport.zoom + viewport.x,
+          y: sourcePos.y * viewport.zoom + viewport.y,
+        },
+        target: {
+          x: connectionDragState.currentPosition.x * viewport.zoom + viewport.x,
+          y: connectionDragState.currentPosition.y * viewport.zoom + viewport.y,
+        },
+      };
+    };
+
+    const connectionLinePositions = getConnectionLinePositions();
 
     return (
       <div
@@ -680,45 +726,8 @@ export const FlowCanvas = forwardRef<{
         }}
       >
         <ReactFlow
-          nodes={nodes.map(node => {
-            if (node.type === 'editable') {
-              return {
-                ...node,
-                data: {
-                  ...node.data,
-                  onLabelChange: handleLabelChange,
-                  onDelete: removeNode
-                }
-              };
-            }
-
-            if (node.type === 'ecoreFile') {
-              return {
-                ...node,
-                data: {
-                  ...node.data,
-                  onExpand: handleEcoreFileExpand,
-                  onSelect: handleEcoreFileSelect,
-                  onDelete: onEcoreFileDelete,
-                  onRename: onEcoreFileRename,
-                  isExpanded: expandedFileId === node.id,
-                  onConnectionStart: handleConnectionStart,
-                  isConnectionActive: connectionDragState?.isActive || false,
-                },
-                selected: selectedFileId === node.id,
-                draggable: !connectionDragState?.isActive,
-              };
-            }
-
-            return node;
-          })}
-          edges={edges.map(edge => ({
-            ...edge,
-            data: {
-              ...edge.data,
-              onDoubleClick: handleEdgeDoubleClick,
-            },
-          }))}
+          nodes={mappedNodes}
+          edges={mappedEdges}
           onNodesChange={onNodesChange}
           onEdgesChange={onEdgesChange}
           onConnect={onConnect}
@@ -741,73 +750,35 @@ export const FlowCanvas = forwardRef<{
           <Background />
         </ReactFlow>
 
-        {connectionDragState?.isActive &&
-          connectionDragState.sourceNodeId &&
-          connectionDragState.sourceHandle &&
-          connectionDragState.currentPosition &&
-          reactFlowInstance &&
-          reactFlowWrapper.current && (() => {
-            const sourcePos = getHandlePosition(
-              connectionDragState.sourceNodeId,
-              connectionDragState.sourceHandle
-            );
+        {/* Connection Line */}
+        {connectionLinePositions && (
+          <ConnectionLine
+            sourcePosition={connectionLinePositions.source}
+            targetPosition={connectionLinePositions.target}
+          />
+        )}
 
-            if (!sourcePos) return null;
-
-            const viewport = reactFlowInstance.getViewport();
-
-            const sourceScreen = {
-              x: sourcePos.x * viewport.zoom + viewport.x,
-              y: sourcePos.y * viewport.zoom + viewport.y,
-            };
-
-            const targetScreen = {
-              x: connectionDragState.currentPosition.x * viewport.zoom + viewport.x,
-              y: connectionDragState.currentPosition.y * viewport.zoom + viewport.y,
-            };
-
-            return (
-              <ConnectionLine
-                sourcePosition={sourceScreen}
-                targetPosition={targetScreen}
-              />
-            );
-          })()}
-
-        <div style={{ position: 'absolute', left: 16, bottom: 16, zIndex: 31, display: 'flex', flexDirection: 'column', gap: 6 }}>
-          <button
-            onClick={() => reactFlowInstance?.zoomIn?.()}
-            style={{ width: 36, height: 36, borderRadius: 6, border: '1px solid #e5e7eb', background: '#ffffff', cursor: 'pointer' }}
-            title="Zoom in"
-          >
-            +
-          </button>
-          <button
-            onClick={() => reactFlowInstance?.zoomOut?.()}
-            style={{ width: 36, height: 36, borderRadius: 6, border: '1px solid #e5e7eb', background: '#ffffff', cursor: 'pointer' }}
-            title="Zoom out"
-          >
-            –
-          </button>
-          <button
-            onClick={() => reactFlowInstance?.fitView?.({ padding: 0.2 })}
-            style={{ width: 36, height: 36, borderRadius: 6, border: '1px solid #e5e7eb', background: '#ffffff', cursor: 'pointer' }}
-            title="Fit view"
-          >
-            ⛶
-          </button>
-          <button
-            onClick={() => {
-              const next = !isInteractive;
-              setIsInteractive(next);
-            }}
-            style={{ width: 36, height: 36, borderRadius: 6, border: '1px solid #e5e7eb', background: '#ffffff', cursor: 'pointer' }}
-            title={isInteractive ? 'Lock interactions' : 'Unlock interactions'}
-          >
-            {isInteractive ? '🔓' : '🔒'}
-          </button>
+        {/* Zoom Controls */}
+        <div style={{ 
+          position: 'absolute', 
+          left: 16, 
+          bottom: 16, 
+          zIndex: 31, 
+          display: 'flex', 
+          flexDirection: 'column', 
+          gap: 6 
+        }}>
+          {createZoomButton(() => reactFlowInstance?.zoomIn?.(), 'Zoom in', '+')}
+          {createZoomButton(() => reactFlowInstance?.zoomOut?.(), 'Zoom out', '–')}
+          {createZoomButton(() => reactFlowInstance?.fitView?.({ padding: 0.2 }), 'Fit view', '⛶')}
+          {createZoomButton(
+            () => setIsInteractive(prev => !prev),
+            isInteractive ? 'Lock interactions' : 'Unlock interactions',
+            isInteractive ? '🔓' : '🔒'
+          )}
         </div>
 
+        {/* Drag Over Overlay */}
         {isDragOver && (
           <div style={{
             position: 'absolute',

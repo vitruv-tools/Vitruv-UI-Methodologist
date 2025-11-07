@@ -19,22 +19,19 @@ interface EcoreFileBoxData {
   createdAt?: string;
 }
 
-const modalOverlayStyle: React.CSSProperties = {
-  position: 'fixed',
-  top: 0,
-  left: 0,
-  right: 0,
-  bottom: 0,
-  background: 'rgba(0, 0, 0, 0.5)',
-  display: 'flex',
-  alignItems: 'center',
-  justifyContent: 'center',
-  zIndex: 1000,
-  backdropFilter: 'blur(4px)',
-};
+type HandlePosition = 'top' | 'bottom' | 'left' | 'right';
 
-const modalContentStyle: React.CSSProperties = {
-  background: 'linear-gradient(145deg, #ffffff 0%, #f8f9fa 100%)',
+// Font Families
+const FONT_SERIF = '"Georgia", "Times New Roman", serif';
+const FONT_SANS = '"Segoe UI", "Roboto", "Helvetica Neue", Arial, sans-serif';
+
+// Common Styles
+const gradientBackground = (color1: string, color2: string) => 
+  `linear-gradient(145deg, ${color1} 0%, ${color2} 100%)`;
+
+
+const createModalStyle = (): React.CSSProperties => ({
+  background: gradientBackground('#ffffff', '#f8f9fa'),
   border: '2px solid #dee2e6',
   borderRadius: '16px',
   padding: '32px',
@@ -44,7 +41,52 @@ const modalContentStyle: React.CSSProperties = {
   overflow: 'auto',
   boxShadow: '0 20px 60px rgba(0,0,0,0.15), 0 8px 32px rgba(0,0,0,0.1)',
   position: 'relative',
-  fontFamily: '"Segoe UI", "Roboto", "Helvetica Neue", Arial, sans-serif',
+  fontFamily: FONT_SANS,
+});
+
+const createButtonStyle = (
+  bgStart: string,
+  bgEnd: string,
+  size: { width: number | string; height: number },
+  fontSize: number = 16
+): React.CSSProperties => ({
+  background: gradientBackground(bgStart, bgEnd),
+  color: 'white',
+  border: 'none',
+  borderRadius: '8px',
+  width: size.width,
+  height: size.height,
+  cursor: 'pointer',
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  fontSize: `${fontSize}px`,
+  fontWeight: '600',
+  transition: 'all 0.2s ease',
+  fontFamily: FONT_SANS,
+});
+
+const createTextStyle = (
+  fontSize: number,
+  color: string,
+  additionalStyles?: React.CSSProperties
+): React.CSSProperties => ({
+  fontSize: `${fontSize}px`,
+  color,
+  fontFamily: FONT_SERIF,
+  ...additionalStyles,
+});
+
+// Modal Styles
+const modalOverlayStyle: React.CSSProperties = {
+  position: 'fixed',
+  inset: 0,
+  background: 'rgba(0, 0, 0, 0.5)',
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  zIndex: 1000,
+  backdropFilter: 'blur(4px)',
 };
 
 const modalHeaderStyle: React.CSSProperties = {
@@ -54,47 +96,6 @@ const modalHeaderStyle: React.CSSProperties = {
   marginBottom: '24px',
   paddingBottom: '16px',
   borderBottom: '2px solid #e9ecef',
-};
-
-const modalTitleStyle: React.CSSProperties = {
-  fontSize: '24px',
-  fontWeight: '700',
-  color: '#212529',
-  fontFamily: '"Georgia", "Times New Roman", serif',
-  margin: 0,
-};
-
-const closeButtonStyle: React.CSSProperties = {
-  background: 'linear-gradient(145deg, #6c757d 0%, #495057 100%)',
-  color: 'white',
-  border: 'none',
-  borderRadius: '8px',
-  width: '32px',
-  height: '32px',
-  cursor: 'pointer',
-  display: 'flex',
-  alignItems: 'center',
-  justifyContent: 'center',
-  fontSize: '16px',
-  fontWeight: '600',
-  transition: 'all 0.2s ease',
-  boxShadow: '0 4px 12px rgba(108, 117, 125, 0.3)',
-};
-
-const closeButtonHoverStyle: React.CSSProperties = {
-  background: 'linear-gradient(145deg, #495057 0%, #343a40 100%)',
-  transform: 'scale(1.05)',
-  boxShadow: '0 6px 16px rgba(108, 117, 125, 0.4)',
-};
-
-const descriptionContentStyle: React.CSSProperties = {
-  fontSize: '16px',
-  lineHeight: '1.8',
-  color: '#495057',
-  fontFamily: '"Georgia", "Times New Roman", serif',
-  textAlign: 'justify',
-  whiteSpace: 'pre-wrap',
-  wordBreak: 'break-word',
 };
 
 const modalFooterStyle: React.CSSProperties = {
@@ -109,8 +110,9 @@ const modalFooterStyle: React.CSSProperties = {
   fontStyle: 'italic',
 };
 
+// Box Styles
 const boxStyle: React.CSSProperties = {
-  background: 'linear-gradient(145deg, #ffffff 0%, #f8f9fa 100%)',
+  background: gradientBackground('#ffffff', '#f8f9fa'),
   border: '2px solid #dee2e6',
   borderRadius: '12px',
   padding: '20px 24px',
@@ -120,36 +122,26 @@ const boxStyle: React.CSSProperties = {
   boxShadow: '0 4px 16px rgba(0,0,0,0.08), 0 2px 8px rgba(0,0,0,0.04)',
   transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
   userSelect: 'none',
-  fontFamily: '"Segoe UI", "Roboto", "Helvetica Neue", Arial, sans-serif',
+  fontFamily: FONT_SANS,
   display: 'flex',
   flexDirection: 'column',
   justifyContent: 'space-between',
   boxSizing: 'border-box',
 };
 
-const boxHoverStyle: React.CSSProperties = {
-  border: '2px solid #6c757d',
-  boxShadow: '0 8px 32px rgba(108, 117, 125, 0.15)',
-  transform: 'translateY(-2px) scale(1.01)',
-  background: 'linear-gradient(145deg, #ffffff 0%, #f1f3f4 100%)',
-};
-
-const selectedBoxStyle: React.CSSProperties = {
-  border: '2px solid #495057',
-  boxShadow: '0 8px 32px rgba(73, 80, 87, 0.2)',
-  transform: 'scale(1.02)',
-  background: 'linear-gradient(145deg, #ffffff 0%, #e9ecef 100%)',
-};
-
-const fileNameStyle: React.CSSProperties = {
-  fontSize: '14px',
-  fontWeight: '700',
-  color: '#212529',
-  textAlign: 'center',
-  wordBreak: 'break-word',
-  lineHeight: '1.3',
-  fontFamily: '"Georgia", "Times New Roman", serif',
-  marginBottom: '6px',
+const boxVariantStyles = {
+  hover: {
+    border: '2px solid #6c757d',
+    boxShadow: '0 8px 32px rgba(108, 117, 125, 0.15)',
+    transform: 'translateY(-2px) scale(1.01)',
+    background: gradientBackground('#ffffff', '#f1f3f4'),
+  },
+  selected: {
+    border: '2px solid #495057',
+    boxShadow: '0 8px 32px rgba(73, 80, 87, 0.2)',
+    transform: 'scale(1.02)',
+    background: gradientBackground('#ffffff', '#e9ecef'),
+  },
 };
 
 const tooltipStyle: React.CSSProperties = {
@@ -170,69 +162,134 @@ const tooltipStyle: React.CSSProperties = {
   opacity: 0,
   transition: 'opacity 0.3s ease',
   border: '1px solid #6c757d',
-  fontFamily: '"Segoe UI", "Roboto", sans-serif',
+  fontFamily: FONT_SANS,
 };
 
-const tooltipArrowStyle: React.CSSProperties = {
-  position: 'absolute',
-  top: '100%',
-  left: '50%',
-  transform: 'translateX(-50%)',
-  width: 0,
-  height: 0,
-  borderLeft: '8px solid transparent',
-  borderRight: '8px solid transparent',
-  borderTop: '8px solid #495057',
+// Utility Functions
+const truncateText = (text: string, maxLength: number) => {
+  if (text.length <= maxLength) {
+    return { text, isTruncated: false };
+  }
+  return { text: text.substring(0, maxLength) + '...', isTruncated: true };
 };
 
-const deleteButtonStyle: React.CSSProperties = {
-  position: 'absolute',
-  top: '-8px',
-  left: '-8px',
-  background: 'linear-gradient(145deg, #dc3545 0%, #c82333 100%)',
-  color: 'white',
-  borderRadius: '6px',
-  width: 'auto',
-  height: '24px',
-  fontSize: '10px',
-  cursor: 'pointer',
-  display: 'flex',
-  alignItems: 'center',
-  justifyContent: 'center',
-  boxShadow: '0 2px 8px rgba(220, 53, 69, 0.3)',
-  transition: 'all 0.2s ease',
-  border: '1px solid #ffffff',
-  fontFamily: '"Segoe UI", "Roboto", sans-serif',
-  fontWeight: '600',
-  padding: '0 8px',
-  textTransform: 'uppercase',
-  letterSpacing: '0.5px',
+const formatDate = (dateString: string) => {
+  try {
+    return new Date(dateString).toLocaleDateString();
+  } catch {
+    return 'Unknown Date';
+  }
 };
 
-const deleteButtonHoverStyle: React.CSSProperties = {
-  background: 'linear-gradient(145deg, #c82333 0%, #a71e2a 100%)',
-  transform: 'scale(1.05)',
-  boxShadow: '0 4px 12px rgba(220, 53, 69, 0.4)',
+const removeEcoreExtension = (fileName: string) => fileName.replace(/\.ecore$/i, '');
+
+// Sub-Components
+const SeeMoreButton: React.FC<{ onClick: (e: React.MouseEvent) => void }> = ({ onClick }) => (
+  <button
+    onClick={onClick}
+    style={{
+      background: 'none',
+      border: 'none',
+      color: '#3498db',
+      fontSize: '10px',
+      cursor: 'pointer',
+      marginLeft: '6px',
+      textDecoration: 'underline',
+      fontFamily: FONT_SERIF,
+      padding: '0',
+      lineHeight: '1',
+    }}
+  >
+    See more
+  </button>
+);
+
+const ModalContent: React.FC<{
+  fileName: string;
+  content: string;
+  title: string;
+  createdAt?: string;
+  onClose: () => void;
+  onOverlayClick: (e: React.MouseEvent) => void;
+}> = ({ fileName, content, title, createdAt, onClose, onOverlayClick }) => {
+  const [isCloseHovered, setIsCloseHovered] = useState(false);
+
+  return (
+    <div style={modalOverlayStyle} onClick={onOverlayClick}>
+      <div style={createModalStyle()}>
+        <div style={modalHeaderStyle}>
+          <h2 style={createTextStyle(24, '#212529', { fontWeight: '700', margin: 0 })}>
+            {removeEcoreExtension(fileName)} - {title}
+          </h2>
+          <button
+            style={{
+              ...createButtonStyle('#6c757d', '#495057', { width: 32, height: 32 }),
+              ...(isCloseHovered && {
+                background: gradientBackground('#495057', '#343a40'),
+                transform: 'scale(1.05)',
+                boxShadow: '0 6px 16px rgba(108, 117, 125, 0.4)',
+              }),
+            }}
+            onClick={onClose}
+            onMouseEnter={() => setIsCloseHovered(true)}
+            onMouseLeave={() => setIsCloseHovered(false)}
+            title="Close"
+          >
+            ×
+          </button>
+        </div>
+
+        <div style={createTextStyle(16, '#495057', { 
+          lineHeight: '1.8',
+          textAlign: 'justify',
+          whiteSpace: 'pre-wrap',
+          wordBreak: 'break-word',
+        })}>
+          {content}
+        </div>
+
+        <div style={modalFooterStyle}>
+          <span>Model: {removeEcoreExtension(fileName)}</span>
+          <span>Created: {createdAt ? formatDate(createdAt) : 'Unknown Date'}</span>
+        </div>
+      </div>
+    </div>
+  );
 };
 
-const descriptionStyle: React.CSSProperties = {
-  fontSize: '10px',
-  color: '#6c757d',
-  textAlign: 'center',
-  marginTop: '6px',
-  fontStyle: 'italic',
-  lineHeight: '1.4',
-  fontFamily: '"Georgia", "Times New Roman", serif',
-  wordBreak: 'break-word',
-  overflowWrap: 'break-word',
+const InfoSection: React.FC<{
+  label: string;
+  content: string;
+  maxLength: number;
+  onShowMore: (e: React.MouseEvent) => void;
+  additionalStyles?: React.CSSProperties;
+}> = ({ label, content, maxLength, onShowMore, additionalStyles }) => {
+  const { text, isTruncated } = truncateText(content, maxLength);
+
+  return (
+    <div style={{
+      fontSize: '10px',
+      color: '#6c757d',
+      textAlign: 'center',
+      marginTop: '6px',
+      fontStyle: 'italic',
+      lineHeight: '1.4',
+      fontFamily: FONT_SERIF,
+      wordBreak: 'break-word',
+      overflowWrap: 'break-word',
+      ...additionalStyles,
+    }}>
+      <span style={{ fontWeight: '600', color: '#495057' }}>{label}: </span>
+      {text}
+      {isTruncated && <SeeMoreButton onClick={onShowMore} />}
+    </div>
+  );
 };
 
 export const EcoreFileBox: React.FC<NodeProps<EcoreFileBoxData>> = ({
   id,
   data,
   selected = false,
-  xPos,
-  yPos,
 }) => {
   const [isHovered, setIsHovered] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
@@ -255,54 +312,7 @@ export const EcoreFileBox: React.FC<NodeProps<EcoreFileBoxData>> = ({
 
   const boxRef = useRef<HTMLDivElement>(null);
 
-  const handleShowMoreClick = (e: React.MouseEvent) => {
-    e.stopPropagation();
-    setShowDescriptionModal(true);
-  };
-
-  const handleShowMoreKeywordsClick = (e: React.MouseEvent) => {
-    e.stopPropagation();
-    setShowKeywordsModal(true);
-  };
-
-  const handleCloseModal = () => {
-    setShowDescriptionModal(false);
-  };
-
-  const handleCloseKeywordsModal = () => {
-    setShowKeywordsModal(false);
-  };
-
-  const handleModalOverlayClick = (e: React.MouseEvent) => {
-    if (e.target === e.currentTarget) {
-      handleCloseModal();
-    }
-  };
-
-  const handleKeywordsModalOverlayClick = (e: React.MouseEvent) => {
-    if (e.target === e.currentTarget) {
-      handleCloseKeywordsModal();
-    }
-  };
-
-  const truncateDescription = (description: string, maxLength: number = 70) => {
-    if (description.length <= maxLength) {
-      return { text: description, isTruncated: false };
-    }
-
-    const truncatedText = description.substring(0, maxLength) + '...';
-    return { text: truncatedText, isTruncated: true };
-  };
-
-  const truncateKeywords = (keywords: string, maxLength: number = 40) => {
-    if (keywords.length <= maxLength) {
-      return { text: keywords, isTruncated: false };
-    }
-
-    const truncatedText = keywords.substring(0, maxLength) + '...';
-    return { text: truncatedText, isTruncated: true };
-  };
-
+  // Event Handlers
   const handleClick = (e: React.MouseEvent) => {
     e.stopPropagation();
     onSelect(fileName);
@@ -318,25 +328,36 @@ export const EcoreFileBox: React.FC<NodeProps<EcoreFileBoxData>> = ({
     setShowDeleteConfirm(true);
   };
 
+  const handleModalClose = (setter: React.Dispatch<React.SetStateAction<boolean>>) => () => {
+    setter(false);
+  };
+
+  const handleModalOverlayClick = (setter: React.Dispatch<React.SetStateAction<boolean>>) => 
+    (e: React.MouseEvent) => {
+      if (e.target === e.currentTarget) {
+        setter(false);
+      }
+    };
+
   const confirmDelete = () => {
-    if (onDelete) {
-      onDelete(id);
-    }
+    onDelete?.(id);
     setShowDeleteConfirm(false);
   };
 
-  const cancelDelete = () => {
-    setShowDeleteConfirm(false);
+  const handleConnectionStartWrapper = (position: HandlePosition) => {
+    console.log('Connection started from', position, 'on node', id);
+    onConnectionStart?.(id, position);
   };
 
-  const formatDate = (dateString: string) => {
-    try {
-      const date = new Date(dateString);
-      return date.toLocaleDateString();
-    } catch {
-      return 'Unknown Date';
-    }
-  };
+  // Render Connection Handles
+  const connectionHandles = (['top', 'bottom', 'left', 'right'] as const).map(position => (
+    <ConnectionHandle
+      key={position}
+      position={position}
+      isVisible={selected || isConnectionActive}
+      onConnectionStart={() => handleConnectionStartWrapper(position)}
+    />
+  ));
 
   return (
     <>
@@ -344,8 +365,8 @@ export const EcoreFileBox: React.FC<NodeProps<EcoreFileBoxData>> = ({
         ref={boxRef}
         style={{
           ...boxStyle,
-          ...(selected ? selectedBoxStyle : {}),
-          ...(isHovered ? boxHoverStyle : {}),
+          ...(selected && boxVariantStyles.selected),
+          ...(isHovered && boxVariantStyles.hover),
           display: isExpanded ? 'none' : 'block',
           position: 'relative',
         }}
@@ -355,141 +376,62 @@ export const EcoreFileBox: React.FC<NodeProps<EcoreFileBoxData>> = ({
         onMouseLeave={() => setIsHovered(false)}
         title={`Click to select, double-click to expand\n${fileName}`}
       >
-        <ConnectionHandle
-          position="top"
-          isVisible={selected || isConnectionActive}
-          onConnectionStart={(pos) => {
-            console.log('Connection started from', pos, 'on node', id);
-            if (onConnectionStart) {
-              onConnectionStart(id, pos);
-            }
-          }}
-        />
-        <ConnectionHandle
-          position="bottom"
-          isVisible={selected || isConnectionActive}
-          onConnectionStart={(pos) => {
-            console.log('Connection started from', pos, 'on node', id);
-            if (onConnectionStart) {
-              onConnectionStart(id, pos);
-            }
-          }}
-        />
-        <ConnectionHandle
-          position="left"
-          isVisible={selected || isConnectionActive}
-          onConnectionStart={(pos) => {
-            console.log('Connection started from', pos, 'on node', id);
-            if (onConnectionStart) {
-              onConnectionStart(id, pos);
-            }
-          }}
-        />
-        <ConnectionHandle
-          position="right"
-          isVisible={selected || isConnectionActive}
-          onConnectionStart={(pos) => {
-            console.log('Connection started from', pos, 'on node', id);
-            if (onConnectionStart) {
-              onConnectionStart(id, pos);
-            }
-          }}
-        />
+        {connectionHandles}
 
-        <div style={fileNameStyle}>
-          <span>
-            {fileName.replace(/\.ecore$/i, '')}
-          </span>
+        <div style={createTextStyle(14, '#212529', { 
+          fontWeight: '700',
+          textAlign: 'center',
+          wordBreak: 'break-word',
+          lineHeight: '1.3',
+          marginBottom: '6px',
+        })}>
+          <span>{removeEcoreExtension(fileName)}</span>
         </div>
 
         {description && (
-          <div style={descriptionStyle}>
-            <span style={{ fontWeight: '600', color: '#495057' }}>Description: </span>
-            {(() => {
-              const { text, isTruncated } = truncateDescription(description);
-
-              return (
-                <>
-                  {text}
-                  {isTruncated && (
-                    <button
-                      onClick={handleShowMoreClick}
-                      style={{
-                        background: 'none',
-                        border: 'none',
-                        color: '#3498db',
-                        fontSize: '10px',
-                        cursor: 'pointer',
-                        marginLeft: '6px',
-                        textDecoration: 'underline',
-                        fontFamily: '"Georgia", "Times New Roman", serif',
-                        padding: '0',
-                        lineHeight: '1',
-                      }}
-                    >
-                      See more
-                    </button>
-                  )}
-                </>
-              );
-            })()}
-          </div>
+          <InfoSection
+            label="Description"
+            content={description}
+            maxLength={70}
+            onShowMore={(e) => {
+              e.stopPropagation();
+              setShowDescriptionModal(true);
+            }}
+          />
         )}
 
         {keywords && (
-          <div style={{
-            fontSize: '10px',
-            color: '#495057',
-            textAlign: 'center',
-            marginTop: '4px',
-            fontStyle: 'italic',
-            lineHeight: '1.3',
-            fontFamily: '"Georgia", "Times New Roman", serif',
-            fontWeight: '500',
-            wordBreak: 'break-word',
-            overflowWrap: 'break-word',
-          }}>
-            <span style={{ fontWeight: '600', color: '#495057' }}>Keywords: </span>
-            {(() => {
-              const { text, isTruncated } = truncateKeywords(keywords);
-
-              return (
-                <>
-                  {text}
-                  {isTruncated && (
-                    <button
-                      onClick={handleShowMoreKeywordsClick}
-                      style={{
-                        background: 'none',
-                        border: 'none',
-                        color: '#3498db',
-                        fontSize: '10px',
-                        cursor: 'pointer',
-                        marginLeft: '6px',
-                        textDecoration: 'underline',
-                        fontFamily: '"Georgia", "Times New Roman", serif',
-                        padding: '0',
-                        lineHeight: '1',
-                      }}
-                    >
-                      See more
-                    </button>
-                  )}
-                </>
-              );
-            })()}
-          </div>
+          <InfoSection
+            label="Keywords"
+            content={keywords}
+            maxLength={40}
+            onShowMore={(e) => {
+              e.stopPropagation();
+              setShowKeywordsModal(true);
+            }}
+            additionalStyles={{ marginTop: '4px', fontWeight: '500', color: '#495057' }}
+          />
         )}
 
         <button
           style={{
-            ...deleteButtonStyle,
-            ...(isHovered ? deleteButtonHoverStyle : {}),
+            ...createButtonStyle('#dc3545', '#c82333', { width: 'auto', height: 24 }, 10),
+            position: 'absolute',
+            top: '-8px',
+            left: '-8px',
+            padding: '0 8px',
+            textTransform: 'uppercase',
+            letterSpacing: '0.5px',
+            border: '1px solid #ffffff',
+            boxShadow: '0 2px 8px rgba(220, 53, 69, 0.3)',
+            ...(isHovered && {
+              background: gradientBackground('#c82333', '#a71e2a'),
+              transform: 'scale(1.05)',
+              boxShadow: '0 4px 12px rgba(220, 53, 69, 0.4)',
+            }),
           }}
           onClick={handleDeleteClick}
           title="Delete file"
-          onMouseEnter={() => setIsHovered(true)}
-          onMouseLeave={() => setIsHovered(false)}
         >
           Delete
         </button>
@@ -502,14 +444,11 @@ export const EcoreFileBox: React.FC<NodeProps<EcoreFileBoxData>> = ({
         confirmText="Delete"
         cancelText="Cancel"
         onConfirm={confirmDelete}
-        onCancel={cancelDelete}
+        onCancel={() => setShowDeleteConfirm(false)}
       />
 
       {isHovered && (
-        <div style={{
-          ...tooltipStyle,
-          opacity: 1,
-        }}>
+        <div style={{ ...tooltipStyle, opacity: 1 }}>
           <div style={{ fontWeight: '700', marginBottom: '10px', fontSize: '13px' }}>
             {fileName}
           </div>
@@ -521,81 +460,42 @@ export const EcoreFileBox: React.FC<NodeProps<EcoreFileBoxData>> = ({
             textOverflow: 'ellipsis',
             color: '#e9ecef'
           }}>
-            {fileContent.length > 200
-              ? `${fileContent.substring(0, 200)}...`
-              : fileContent
-            }
+            {fileContent.length > 200 ? `${fileContent.substring(0, 200)}...` : fileContent}
           </div>
-          <div style={tooltipArrowStyle} />
+          <div style={{
+            position: 'absolute',
+            top: '100%',
+            left: '50%',
+            transform: 'translateX(-50%)',
+            width: 0,
+            height: 0,
+            borderLeft: '8px solid transparent',
+            borderRight: '8px solid transparent',
+            borderTop: '8px solid #495057',
+          }} />
         </div>
       )}
 
-      {showDescriptionModal && (
-        <div style={modalOverlayStyle} onClick={handleModalOverlayClick}>
-          <div style={modalContentStyle}>
-            <div style={modalHeaderStyle}>
-              <h2 style={modalTitleStyle}>
-                {fileName.replace(/\.ecore$/i, '')} - Description
-              </h2>
-              <button
-                style={closeButtonStyle}
-                onClick={handleCloseModal}
-                onMouseEnter={(e) => {
-                  Object.assign(e.currentTarget.style, closeButtonHoverStyle);
-                }}
-                onMouseLeave={(e) => {
-                  Object.assign(e.currentTarget.style, closeButtonStyle);
-                }}
-                title="Close"
-              >
-                ×
-              </button>
-            </div>
-
-            <div style={descriptionContentStyle}>
-              {description}
-            </div>
-
-            <div style={modalFooterStyle}>
-              <span>Model: {fileName.replace(/\.ecore$/i, '')}</span>
-              <span>Created: {createdAt ? formatDate(createdAt) : 'Unknown Date'}</span>
-            </div>
-          </div>
-        </div>
+      {showDescriptionModal && description && (
+        <ModalContent
+          fileName={fileName}
+          content={description}
+          title="Description"
+          createdAt={createdAt}
+          onClose={handleModalClose(setShowDescriptionModal)}
+          onOverlayClick={handleModalOverlayClick(setShowDescriptionModal)}
+        />
       )}
 
-      {showKeywordsModal && (
-        <div style={modalOverlayStyle} onClick={handleKeywordsModalOverlayClick}>
-          <div style={modalContentStyle}>
-            <div style={modalHeaderStyle}>
-              <h2 style={modalTitleStyle}>
-                {fileName.replace(/\.ecore$/i, '')} - Keywords
-              </h2>
-              <button
-                style={closeButtonStyle}
-                onClick={handleCloseKeywordsModal}
-                onMouseEnter={(e) => {
-                  Object.assign(e.currentTarget.style, closeButtonHoverStyle);
-                }}
-                onMouseLeave={(e) => {
-                  Object.assign(e.currentTarget.style, closeButtonStyle);
-                }}
-                title="Close"
-              >
-                ×
-              </button>
-            </div>
-
-            <div style={descriptionContentStyle}>
-              {keywords}
-            </div>
-
-            <div style={modalFooterStyle}>
-              <span>Model: {fileName.replace(/\.ecore$/i, '')}</span>
-              <span>Created: {createdAt ? formatDate(createdAt) : 'Unknown Date'}</span>
-            </div>
-          </div>
-        </div>
+      {showKeywordsModal && keywords && (
+        <ModalContent
+          fileName={fileName}
+          content={keywords}
+          title="Keywords"
+          createdAt={createdAt}
+          onClose={handleModalClose(setShowKeywordsModal)}
+          onOverlayClick={handleModalOverlayClick(setShowKeywordsModal)}
+        />
       )}
     </>
   );

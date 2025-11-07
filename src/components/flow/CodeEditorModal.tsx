@@ -4,18 +4,39 @@ interface CodeEditorModalProps {
   isOpen: boolean;
   onClose: () => void;
   onSave: (code: string) => void;
-  onDelete?: () => void; // NEU: Handler zum Löschen der Edge
+  onDelete?: () => void;
   initialCode?: string;
   edgeId: string;
   sourceFileName?: string;
   targetFileName?: string;
 }
 
+// Gemeinsame Button-Styles
+const buttonBaseStyles = {
+  padding: '6px 12px',
+  border: 'none',
+  borderRadius: '4px',
+  fontSize: '13px',
+  fontWeight: 500,
+  cursor: 'pointer',
+} as const;
+
+const createButtonStyles = (
+  backgroundColor: string,
+  color: string = '#fff',
+  disabled: boolean = false
+) => ({
+  ...buttonBaseStyles,
+  backgroundColor: disabled ? '#333' : backgroundColor,
+  color: disabled ? '#666' : color,
+  cursor: disabled ? 'not-allowed' : 'pointer',
+});
+
 export function CodeEditorModal({
   isOpen,
   onClose,
   onSave,
-  onDelete, // NEU
+  onDelete,
   initialCode = '',
   edgeId,
   sourceFileName,
@@ -26,12 +47,14 @@ export function CodeEditorModal({
   const [historyIndex, setHistoryIndex] = useState(0);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
+  // Reset state when modal opens or initialCode changes
   useEffect(() => {
     setCode(initialCode);
     setHistory([initialCode]);
     setHistoryIndex(0);
   }, [initialCode, isOpen]);
 
+  // Auto-focus textarea when modal opens
   useEffect(() => {
     if (isOpen && textareaRef.current) {
       textareaRef.current.focus();
@@ -67,49 +90,46 @@ export function CodeEditorModal({
     onClose();
   };
 
-  // NEU: Handler zum Löschen der Relation
   const handleDelete = () => {
     if (window.confirm('Möchtest du diese Relation wirklich löschen? Diese Aktion kann nicht rückgängig gemacht werden.')) {
-      if (onDelete) {
-        onDelete();
-      }
+      onDelete?.();
       onClose();
     }
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
+    const isCtrlOrCmd = e.ctrlKey || e.metaKey;
+
     // Tab-Unterstützung im Editor
     if (e.key === 'Tab') {
       e.preventDefault();
       const textarea = textareaRef.current;
       if (!textarea) return;
 
-      const start = textarea.selectionStart;
-      const end = textarea.selectionEnd;
+      const { selectionStart: start, selectionEnd: end } = textarea;
       const newCode = code.substring(0, start) + '  ' + code.substring(end);
       
       handleCodeChange(newCode);
-      
       setTimeout(() => {
         textarea.selectionStart = textarea.selectionEnd = start + 2;
       }, 0);
+      return;
     }
 
+    if (!isCtrlOrCmd) return;
+
     // Strg+S zum Speichern
-    if ((e.ctrlKey || e.metaKey) && e.key === 's') {
+    if (e.key === 's') {
       e.preventDefault();
       handleSave();
     }
-
     // Strg+Z für Undo
-    if ((e.ctrlKey || e.metaKey) && e.key === 'z' && !e.shiftKey) {
+    else if (e.key === 'z' && !e.shiftKey) {
       e.preventDefault();
       handleUndo();
     }
-
     // Strg+Shift+Z oder Strg+Y für Redo
-    if (((e.ctrlKey || e.metaKey) && e.shiftKey && e.key === 'z') ||
-        ((e.ctrlKey || e.metaKey) && e.key === 'y')) {
+    else if ((e.shiftKey && e.key === 'z') || e.key === 'y') {
       e.preventDefault();
       handleRedo();
     }
@@ -122,7 +142,6 @@ export function CodeEditorModal({
   };
 
   const handleFormat = () => {
-    // Einfache Formatierung: Entferne überflüssige Leerzeilen
     const formatted = code
       .split('\n')
       .map(line => line.trimEnd())
@@ -133,14 +152,15 @@ export function CodeEditorModal({
 
   if (!isOpen) return null;
 
+  const canUndo = historyIndex > 0;
+  const canRedo = historyIndex < history.length - 1;
+  const lineCount = code.split('\n').length;
+
   return (
     <div
       style={{
         position: 'fixed',
-        top: 0,
-        left: 0,
-        right: 0,
-        bottom: 0,
+        inset: 0,
         backgroundColor: 'rgba(0, 0, 0, 0.5)',
         display: 'flex',
         alignItems: 'center',
@@ -216,34 +236,16 @@ export function CodeEditorModal({
         >
           <button
             onClick={handleUndo}
-            disabled={historyIndex <= 0}
-            style={{
-              padding: '6px 12px',
-              backgroundColor: historyIndex <= 0 ? '#333' : '#0e639c',
-              color: historyIndex <= 0 ? '#666' : '#fff',
-              border: 'none',
-              borderRadius: '4px',
-              cursor: historyIndex <= 0 ? 'not-allowed' : 'pointer',
-              fontSize: '13px',
-              fontWeight: 500,
-            }}
+            disabled={!canUndo}
+            style={createButtonStyles('#0e639c', '#fff', !canUndo)}
             title="Rückgängig (Strg+Z)"
           >
             ↶ Undo
           </button>
           <button
             onClick={handleRedo}
-            disabled={historyIndex >= history.length - 1}
-            style={{
-              padding: '6px 12px',
-              backgroundColor: historyIndex >= history.length - 1 ? '#333' : '#0e639c',
-              color: historyIndex >= history.length - 1 ? '#666' : '#fff',
-              border: 'none',
-              borderRadius: '4px',
-              cursor: historyIndex >= history.length - 1 ? 'not-allowed' : 'pointer',
-              fontSize: '13px',
-              fontWeight: 500,
-            }}
+            disabled={!canRedo}
+            style={createButtonStyles('#0e639c', '#fff', !canRedo)}
             title="Wiederholen (Strg+Shift+Z)"
           >
             ↷ Redo
@@ -251,64 +253,41 @@ export function CodeEditorModal({
           <div style={{ width: '1px', backgroundColor: '#444', margin: '0 4px' }} />
           <button
             onClick={handleFormat}
-            style={{
-              padding: '6px 12px',
-              backgroundColor: '#0e639c',
-              color: '#fff',
-              border: 'none',
-              borderRadius: '4px',
-              cursor: 'pointer',
-              fontSize: '13px',
-              fontWeight: 500,
-            }}
+            style={createButtonStyles('#0e639c')}
             title="Code formatieren"
           >
             Format
           </button>
           <button
             onClick={handleClear}
-            style={{
-              padding: '6px 12px',
-              backgroundColor: '#c72e2e',
-              color: '#fff',
-              border: 'none',
-              borderRadius: '4px',
-              cursor: 'pointer',
-              fontSize: '13px',
-              fontWeight: 500,
-            }}
+            style={createButtonStyles('#c72e2e')}
             title="Alles löschen"
           >
             🗑 Clear
           </button>
           <div style={{ flex: 1 }} />
-          {/* NEU: Delete Relation Button */}
-          <button
-            onClick={handleDelete}
-            style={{
-              padding: '6px 20px',
-              backgroundColor: '#8b0000',
-              color: '#fff',
-              border: 'none',
-              borderRadius: '4px',
-              cursor: 'pointer',
-              fontSize: '13px',
-              fontWeight: 600,
-            }}
-            title="Relation löschen"
-          >
-            🗑️ Delete Relation
-          </button>
+          {onDelete && (
+            <button
+              onClick={handleDelete}
+              style={{
+                ...buttonBaseStyles,
+                padding: '6px 20px',
+                backgroundColor: '#8b0000',
+                color: '#fff',
+                fontWeight: 600,
+              }}
+              title="Relation löschen"
+            >
+              🗑️ Delete Relation
+            </button>
+          )}
           <button
             onClick={handleSave}
             style={{
+              ...buttonBaseStyles,
               padding: '6px 20px',
               backgroundColor: '#0e7a0d',
               color: '#fff',
-              border: 'none',
-              borderRadius: '4px',
-              cursor: 'pointer',
-              fontSize: '13px',
               fontWeight: 600,
             }}
             title="Speichern (Strg+S)"
@@ -334,7 +313,7 @@ export function CodeEditorModal({
               userSelect: 'none',
             }}
           >
-            {code.split('\n').map((_, index) => (
+            {Array.from({ length: lineCount }, (_, index) => (
               <div
                 key={index}
                 style={{
@@ -392,7 +371,7 @@ export function CodeEditorModal({
           }}
         >
           <div style={{ color: '#888', fontSize: '12px' }}>
-            {code.split('\n').length} Zeilen · {code.length} Zeichen
+            {lineCount} Zeilen · {code.length} Zeichen
           </div>
           <div style={{ color: '#888', fontSize: '12px' }}>
             Edge ID: {edgeId}
