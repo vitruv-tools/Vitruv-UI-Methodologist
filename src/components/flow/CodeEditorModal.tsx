@@ -158,6 +158,7 @@ export function CodeEditorModal({
 
   return (
     <div
+      role="button"
       style={{
         position: 'fixed',
         inset: 0,
@@ -238,7 +239,7 @@ export function CodeEditorModal({
             onClick={handleUndo}
             disabled={!canUndo}
             style={createButtonStyles('#0e639c', '#fff', !canUndo)}
-            title="Rückgängig (Strg+Z)"
+            title="Undo (Ctlr+Z)"
           >
             ↶ Undo
           </button>
@@ -246,7 +247,7 @@ export function CodeEditorModal({
             onClick={handleRedo}
             disabled={!canRedo}
             style={createButtonStyles('#0e639c', '#fff', !canRedo)}
-            title="Wiederholen (Strg+Shift+Z)"
+            title="Repeat (Ctlr+Shift+Z)"
           >
             ↷ Redo
           </button>
@@ -254,14 +255,14 @@ export function CodeEditorModal({
           <button
             onClick={handleFormat}
             style={createButtonStyles('#0e639c')}
-            title="Code formatieren"
+            title="format code"
           >
             Format
           </button>
           <button
             onClick={handleClear}
             style={createButtonStyles('#c72e2e')}
-            title="Alles löschen"
+            title="delete all"
           >
             🗑 Clear
           </button>
@@ -276,7 +277,7 @@ export function CodeEditorModal({
                 color: '#fff',
                 fontWeight: 600,
               }}
-              title="Relation löschen"
+              title="delete relation"
             >
               🗑️ Delete Relation
             </button>
@@ -290,7 +291,7 @@ export function CodeEditorModal({
               color: '#fff',
               fontWeight: 600,
             }}
-            title="Speichern (Strg+S)"
+            title="Save (Ctlr+S)"
           >
             💾 Save
           </button>
@@ -355,7 +356,7 @@ export function CodeEditorModal({
               lineHeight: '20px',
               tabSize: 2,
             }}
-            placeholder="// Schreibe hier deinen Code..."
+            placeholder="// Write your reaction here..."
           />
         </div>
 
