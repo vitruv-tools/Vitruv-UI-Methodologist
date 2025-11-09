@@ -1,4 +1,4 @@
-import React, { useRef, useState, forwardRef, useImperativeHandle, useEffect, useCallback } from 'react';
+import React, { useRef, useState, forwardRef, useImperativeHandle, useEffect } from 'react';
 import ReactFlow, { MiniMap, Background, ReactFlowInstance, Node, Edge } from 'reactflow';
 import 'reactflow/dist/style.css';
 import { useFlowState } from '../../hooks/useFlowState';
@@ -65,7 +65,6 @@ export const FlowCanvas = forwardRef<FlowCanvasHandle, FlowCanvasProps>(
       onEdgesChange,
       onConnect,
       addNode,
-      addEdge,
       updateNodeLabel,
       removeNode,
       removeEdge,

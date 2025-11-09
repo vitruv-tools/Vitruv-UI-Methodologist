@@ -67,50 +67,7 @@ const VISIBILITY_OPTIONS: Array<{
   { symbol: '-', label: 'Private', color: '#dc3545', hoverColor: '#c82333', title: 'Private (-)' },
 ];
 
-const ELEMENT_STYLES: Record<string, ElementStyleConfig> = {
-  class: {
-    borderColor: '#2ecc71',
-    background: '#ffffff',
-    selectedBackground: '#f0f9f0',
-    headerBackground: '#f8fff8',
-    sectionBackground: '#f0f9f0',
-    minHeight: '140px',
-  },
-  'abstract-class': {
-    borderColor: '#16a085',
-    background: '#ffffff',
-    selectedBackground: '#f0f8f0',
-    headerBackground: '#f0f8f0',
-    sectionBackground: '#f0f8f0',
-    minHeight: '140px',
-    fontStyle: 'italic',
-  },
-  interface: {
-    borderColor: '#e74c3c',
-    background: '#ffffff',
-    selectedBackground: '#fdf0f0',
-    headerBackground: '#fdf0f0',
-    sectionBackground: '#fdf0f0',
-    borderStyle: 'dashed',
-    minHeight: '120px',
-  },
-  enumeration: {
-    borderColor: '#9b59b6',
-    background: '#ffffff',
-    selectedBackground: '#f8f0f8',
-    headerBackground: '#f8f0f8',
-    sectionBackground: '#f8f0f8',
-    minHeight: '120px',
-  },
-  package: {
-    borderColor: '#f39c12',
-    background: '#ffffff',
-    selectedBackground: '#fdf8f0',
-    headerBackground: '#fdf8f0',
-    sectionBackground: '#fdf8f0',
-    minHeight: '100px',
-  },
-};
+// NOTE: element style presets were removed since node styles are composed via umlNodeStyles helpers
 
 // Utility Functions
 const createButtonStyle = (
@@ -220,136 +177,7 @@ const MenuTitle: React.FC<{ children: React.ReactNode }> = ({ children }) => (
   </div>
 );
 
-const DeleteButton: React.FC<{ onClick: () => void }> = ({ onClick }) => {
-  const [isHovered, setIsHovered] = useState(false);
-  
-  return (
-    <button
-      onClick={onClick}
-      onMouseEnter={() => setIsHovered(true)}
-      onMouseLeave={() => setIsHovered(false)}
-      style={{
-        position: 'absolute',
-        top: '-8px',
-        right: '-8px',
-        background: isHovered ? '#c0392b' : '#e74c3c',
-        color: 'white',
-        border: 'none',
-        borderRadius: '50%',
-        width: '20px',
-        height: '20px',
-        fontSize: '12px',
-        cursor: 'pointer',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        zIndex: 10,
-        boxShadow: '0 2px 4px rgba(0,0,0,0.2)',
-        transition: 'all 0.2s ease',
-        transform: isHovered ? 'scale(1.1)' : 'scale(1)',
-      }}
-      title="Delete node"
-    >
-      ×
-    </button>
-  );
-};
-
-const SectionHeader: React.FC<{
-  title: string;
-  color: string;
-  background: string;
-}> = ({ title, color, background }) => (
-  <div style={{
-    padding: '4px 8px',
-    fontWeight: 'bold',
-    color,
-    background,
-  }}>
-    {title}
-  </div>
-);
-
-const ClassHeader: React.FC<{
-  value: string;
-  placeholder: string;
-  onSave: (value: string) => void;
-  style: ElementStyleConfig;
-  stereotype?: string;
-}> = ({ value, placeholder, onSave, style, stereotype }) => (
-  <div style={{
-    background: style.headerBackground,
-    borderBottom: `1px solid ${style.borderColor}`,
-    padding: '8px 0',
-    textAlign: 'center',
-    fontWeight: 'bold',
-    fontSize: '14px',
-    color: style.borderColor,
-    minHeight: '30px',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-  }}>
-    {stereotype && (
-      <div style={{ fontStyle: 'italic', marginRight: '8px' }}>
-        &lt;&lt;{stereotype}&gt;&gt;
-      </div>
-    )}
-    <EditableField
-      value={value}
-      onSave={onSave}
-      placeholder={placeholder}
-      style={{
-        fontWeight: 'bold',
-        fontSize: '14px',
-        color: style.borderColor,
-        textAlign: 'center',
-        ...(style.fontStyle && { fontStyle: style.fontStyle }),
-      }}
-    />
-  </div>
-);
-
-const EditableList: React.FC<{
-  items: string[] | undefined;
-  placeholder: string;
-  addPlaceholder: string;
-  onUpdate: (items: string[]) => void;
-  showVisibility?: boolean;
-}> = ({ items, placeholder, addPlaceholder, onUpdate, showVisibility = false }) => (
-  <>
-    {items?.map((item, index) => (
-      <div key={index} style={{
-        padding: '2px 8px',
-        display: 'flex',
-        alignItems: 'center',
-        gap: '8px',
-      }}>
-        <EditableField
-          value={item}
-          onSave={(newValue) => onUpdate(updateArray(items, index, 'update', newValue))}
-          placeholder={placeholder}
-          style={{ fontSize: '12px', flex: 1 }}
-          onDelete={() => onUpdate(updateArray(items, index, 'delete'))}
-          showDelete={true}
-        />
-      </div>
-    ))}
-    <div style={{ padding: '2px 8px' }}>
-      <EditableField
-        value=""
-        onSave={(newValue) => {
-          if (newValue.trim()) {
-            onUpdate(addToArray(items, newValue));
-          }
-        }}
-        placeholder={addPlaceholder}
-        style={{ fontSize: '12px', fontStyle: 'italic', color: '#999' }}
-        showVisibility={showVisibility}
-      />
-    </div>
-  </>
-);
+// Removed unused SectionHeader, ClassHeader and EditableList subcomponents
 
 function EditableField({
   value,
@@ -845,20 +673,7 @@ export function EditableNode({ id, data, selected, isConnectable }: NodeProps<UM
     </div>
   );
 
-  // Render UML Member (attribute or method)
-  const renderUMLMember = () => (
-    <div style={{ width: '100%', textAlign: 'center', padding: '8px' }}>
-      <EditableField
-        value={nodeData.label || ''}
-        onSave={(newValue) => updateNodeData({ label: newValue })}
-        placeholder="+ member: Type"
-        style={{ 
-          fontSize: '14px', 
-          fontWeight: 'bold'
-        }}
-      />
-    </div>
-  );
+  // Member node is handled by renderSimpleNode via getRenderer
 
   // Simple fallback renderer for generic items
   const renderSimpleNode = (defaultPlaceholder: string, textColor?: string) => (

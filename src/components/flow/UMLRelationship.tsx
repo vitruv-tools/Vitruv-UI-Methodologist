@@ -91,14 +91,7 @@ export function UMLRelationship({
     (data as any)?.onDoubleClick?.(id);
   };
 
-  const markerTypes = [
-    'inheritance',
-    'realization',
-    'composition',
-    'aggregation',
-    'association',
-    'dependency',
-  ];
+  // marker types are described via ids in <defs> below
 
   const getRelationshipStyle = () => {
     const baseStyle = {
