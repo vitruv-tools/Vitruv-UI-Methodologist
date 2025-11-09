@@ -851,11 +851,26 @@ export function EditableNode({ id, data, selected, isConnectable }: NodeProps<UM
       <EditableField
         value={nodeData.label || ''}
         onSave={(newValue) => updateNodeData({ label: newValue })}
-        placeholder={placeholder}
+        placeholder="+ member: Type"
         style={{ 
           fontSize: '14px', 
+          fontWeight: 'bold'
+        }}
+      />
+    </div>
+  );
+
+  // Simple fallback renderer for generic items
+  const renderSimpleNode = (defaultPlaceholder: string, textColor?: string) => (
+    <div style={{ width: '100%', textAlign: 'center', padding: '8px' }}>
+      <EditableField
+        value={nodeData.label || ''}
+        onSave={(newValue) => updateNodeData({ label: newValue })}
+        placeholder={defaultPlaceholder}
+        style={{
+          fontSize: '14px',
           fontWeight: 'bold',
-          ...(color && { color }),
+          ...(textColor ? { color: textColor } : {}),
         }}
       />
     </div>
@@ -865,57 +880,19 @@ export function EditableNode({ id, data, selected, isConnectable }: NodeProps<UM
     const { toolType, toolName } = nodeData;
 
     if (toolType === 'element') {
-      const styleConfig = toolName && ELEMENT_STYLES[toolName];
-      
-      if (!styleConfig) return renderSimpleNode('Relationship');
-
-      const configs: Record<string, any> = {
-        'class': {
-          sections: [
-            { title: 'Attributes', dataKey: 'attributes', placeholder: '+ attribute: Type', addPlaceholder: '+ Add attribute...' },
-            { title: 'Methods', dataKey: 'methods', placeholder: '+ method(): ReturnType', addPlaceholder: '+ Add method...' },
-          ],
-          placeholder: 'Class Name',
-        },
-        'abstract-class': {
-          sections: [
-            { title: 'Attributes', dataKey: 'attributes', placeholder: '+ attribute: Type', addPlaceholder: '+ Add attribute...' },
-            { title: 'Methods', dataKey: 'methods', placeholder: '+ method(): ReturnType', addPlaceholder: '+ Add method...' },
-          ],
-          placeholder: 'Abstract Class Name',
-          stereotype: 'abstract',
-        },
-        'interface': {
-          sections: [
-            { title: 'Methods', dataKey: 'methods', placeholder: '+ method(): ReturnType', addPlaceholder: '+ Add method...' },
-          ],
-          placeholder: 'Interface Name',
-          stereotype: 'interface',
-        },
-        'enumeration': {
-          sections: [
-            { title: 'Values', dataKey: 'values', placeholder: 'Value', addPlaceholder: 'Add value...' },
-          ],
-          placeholder: 'Enumeration Name',
-          stereotype: 'enumeration',
-        },
-        'package': {
-          sections: [
-            { title: 'Contents', dataKey: 'methods', placeholder: '', addPlaceholder: '' },
-          ],
-          placeholder: 'Package Name',
-          stereotype: 'package',
-        },
-      };
-
-      const config = configs[toolName];
-      if (config) {
-        return renderUMLStructure(
-          styleConfig,
-          config.sections,
-          config.placeholder,
-          config.stereotype
-        );
+      switch (toolName) {
+        case 'class':
+          return renderUMLClass();
+        case 'abstract-class':
+          return renderUMLAbstractClass();
+        case 'interface':
+          return renderUMLInterface();
+        case 'enumeration':
+          return renderUMLEnumeration();
+        case 'package':
+          return renderUMLPackage();
+        default:
+          return renderSimpleNode('Element');
       }
     }
 

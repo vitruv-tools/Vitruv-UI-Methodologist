@@ -204,7 +204,6 @@ export function MainLayout({
         const handleResetWorkspace = () => {
             if (flowCanvasRef.current?.loadDiagramData) flowCanvasRef.current.loadDiagramData([], []);
             if (flowCanvasRef.current?.resetExpandedFile) flowCanvasRef.current.resetExpandedFile();
-            setEcoreFileBoxes([]);
             try {
                 localStorage.removeItem('vitruv.documents');
                 const keys = Object.keys(localStorage);

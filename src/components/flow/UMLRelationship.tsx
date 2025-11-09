@@ -87,7 +87,9 @@ export function UMLRelationship({
     endSegDx = targetX - mx; endSegDy = targetY - my;
   }
 
-  const edgeColor = getEdgeColor(source, target);
+  const handleDoubleClick = () => {
+    (data as any)?.onDoubleClick?.(id);
+  };
 
   const markerTypes = [
     'inheritance',
@@ -272,13 +274,6 @@ export function UMLRelationship({
           strokeLinecap: 'butt',
           strokeLinejoin: 'miter',
         }}
-        d={edgePath}
-        onDoubleClick={handleDoubleClick}
-      />
-
-      <path 
-        id={id} 
-        style={getRelationshipStyle()} 
         d={edgePath}
         onDoubleClick={handleDoubleClick}
       />
