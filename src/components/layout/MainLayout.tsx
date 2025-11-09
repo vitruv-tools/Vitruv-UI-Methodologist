@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useLocation } from 'react-router-dom';
 import { Header } from './Header';
 import { FlowCanvas } from '../flow/FlowCanvas';
@@ -37,17 +37,6 @@ interface MainLayoutProps {
     welcomeSubtitle?: string;
 }
 
-interface EcoreFileBox {
-    id: string;
-    fileName: string;
-    fileContent: string;
-    position: { x: number; y: number };
-    description?: string;
-    keywords?: string;
-    domain?: string;
-    createdAt?: string;
-}
-
 export function MainLayout({
     onDeploy,
     onSave,
@@ -83,7 +72,6 @@ export function MainLayout({
     const [, setIsDirty] = useState(false);
 
     // ECORE file boxes in workspace
-    const [ecoreFileBoxes, setEcoreFileBoxes] = useState<EcoreFileBox[]>([]);
     const [selectedFileBoxId, setSelectedFileBoxId] = useState<string | null>(null);
 
     // Start with an empty workspace
@@ -98,7 +86,7 @@ export function MainLayout({
                 if (key.startsWith('vitruv.document.data.')) localStorage.removeItem(key);
             });
         } catch { }
-        // eslint-disable-next-line react-hooks/exhaustive-deps
+        // run once on mount
     }, []);
 
     // (Disabled when ENABLE_RESIZE === false)
@@ -134,91 +122,82 @@ export function MainLayout({
         };
     }, []);
 
-    // ---- helpers for ECORE boxes positioning ----
-    const wouldOverlap = (
-        existing: EcoreFileBox[],
-        position: { x: number; y: number },
-        boxWidth: number,
-        boxHeight: number,
-        spacing: number
-    ) =>
-        existing.some(
-            (b) =>
-                Math.abs(b.position.x - position.x) < boxWidth + spacing &&
-                Math.abs(b.position.y - position.y) < boxHeight + spacing
+    // calculateEmptyPosition als useCallback (stabil)
+    const calculateEmptyPosition = useCallback(() => {
+        const ecoreNodes = flowCanvasRef.current?.getNodes?.()?.filter(
+            (n: any) => n.type === 'ecoreFile'
+        ) || [];
+
+        if (ecoreNodes.length === 0) return { x: 100, y: 100 };
+
+        const boxWidth = 280;
+        const boxHeight = 180;
+        const spacing = 40;
+
+        // find rightmost node; if reduce on empty array would throw but we already guarded length
+        const rightmost = ecoreNodes.reduce((r: any, b: any) =>
+            (b.position.x > r.position.x ? b : r)
         );
 
-    const findFirstEmptyGridPosition = (
-        existing: EcoreFileBox[],
-        boxWidth: number,
-        boxHeight: number,
-        spacing: number
-    ) => {
-        const gridSize = boxWidth + spacing;
-        let gridX = 100;
-        let gridY = 100;
-
-        while (gridY < 800) {
-            while (gridX < 1200) {
-                const pos = { x: gridX, y: gridY };
-                if (!wouldOverlap(existing, pos, boxWidth, boxHeight, spacing)) return pos;
-                gridX += gridSize;
-            }
-            gridX = 100;
-            gridY += gridSize;
-        }
-        return { x: 100, y: 100 };
-    };
-
-    const calculateEmptyPosition = (existingBoxes: EcoreFileBox[]) => {
-        if (existingBoxes.length === 0) return { x: 100, y: 100 };
-        const boxWidth = 220;
-        const boxHeight = 140;
-        const spacing = 30;
-
-        const rightmost = existingBoxes.reduce((r, b) => (b.position.x > r.position.x ? b : r));
+        // try to place to the right
         let newX = rightmost.position.x + boxWidth + spacing;
         let newY = rightmost.position.y;
-        if (!wouldOverlap(existingBoxes, { x: newX, y: newY }, boxWidth, boxHeight, spacing)) {
+
+        const wouldOverlap = ecoreNodes.some((node: any) =>
+            Math.abs(node.position.x - newX) < boxWidth + spacing &&
+            Math.abs(node.position.y - newY) < boxHeight + spacing
+        );
+
+        if (!wouldOverlap) {
             return { x: newX, y: newY };
         }
+
+        // otherwise below
         newX = rightmost.position.x;
         newY = rightmost.position.y + boxHeight + spacing;
-        if (!wouldOverlap(existingBoxes, { x: newX, y: newY }, boxWidth, boxHeight, spacing)) {
-            return { x: newX, y: newY };
-        }
-        return findFirstEmptyGridPosition(existingBoxes, boxWidth, boxHeight, spacing);
-    };
 
-    // ---- ECORE file actions ----
-    const handleEcoreFileUpload = (
+        return { x: newX, y: newY };
+    }, []); // Ref is stable, no other deps
+
+    // handleEcoreFileUpload als useCallback (stabil)
+    const handleEcoreFileUpload = useCallback((
         fileContent: string,
         meta?: { fileName?: string; description?: string; keywords?: string; domain?: string; createdAt?: string }
     ) => {
-        const existing = ecoreFileBoxes.find((f) => f.fileName === meta?.fileName);
+        // Prüfe ob File bereits existiert
+        const existingNodes = flowCanvasRef.current?.getNodes?.() || [];
+        const existing = existingNodes.find(
+            (n: any) => n.type === 'ecoreFile' && n.data.fileName === meta?.fileName
+        );
+
         if (existing) {
             setSelectedFileBoxId(existing.id);
             return;
         }
 
-        if (flowCanvasRef.current?.loadDiagramData) flowCanvasRef.current.loadDiagramData([], []);
-        if (flowCanvasRef.current?.resetExpandedFile) flowCanvasRef.current.resetExpandedFile();
+        // Clear canvas für neues File
+        if (flowCanvasRef.current?.loadDiagramData) {
+            flowCanvasRef.current.loadDiagramData([], []);
+        }
+        if (flowCanvasRef.current?.resetExpandedFile) {
+            flowCanvasRef.current.resetExpandedFile();
+        }
 
-        const pos = calculateEmptyPosition(ecoreFileBoxes);
-        const newBox: EcoreFileBox = {
-            id: `ecore-box-${Date.now()}`,
-            fileName: meta?.fileName || 'untitled.ecore',
-            fileContent,
-            position: pos,
-            description: meta?.description,
-            keywords: meta?.keywords,
-            domain: meta?.domain,
-            createdAt: meta?.createdAt || new Date().toISOString(),
-        };
+        // Berechne Position für neue Box
+        const position = calculateEmptyPosition();
 
-        setEcoreFileBoxes((prev) => [...prev, newBox]);
-        setSelectedFileBoxId(newBox.id);
-    };
+        // Erstelle das File über FlowCanvas's addEcoreFile
+        if (flowCanvasRef.current?.addEcoreFile) {
+            flowCanvasRef.current.addEcoreFile(
+                meta?.fileName || 'untitled.ecore',
+                fileContent,
+                {
+                    ...meta,
+                    position,
+                }
+            );
+        }
+    }, [calculateEmptyPosition]);
 
     // Listen for workspace events
     useEffect(() => {
@@ -272,14 +251,24 @@ export function MainLayout({
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
-    const handleEcoreFileSelect = (fileName: string) => {
-        const box = ecoreFileBoxes.find((f) => f.fileName === fileName);
-        if (box) setSelectedFileBoxId(box.id);
-    };
+    const handleEcoreFileSelect = useCallback((fileName: string) => {
+        const nodes = flowCanvasRef.current?.getNodes?.() || [];
+        const ecoreNode = nodes.find(
+            (n: any) => n.type === 'ecoreFile' && n.data.fileName === fileName
+        );
+        if (ecoreNode) {
+            setSelectedFileBoxId(ecoreNode.id);
+        }
+    }, []);
 
-    const handleEcoreFileExpand = (fileName: string, fileContent: string) => {
-        if (flowCanvasRef.current?.loadDiagramData) flowCanvasRef.current.loadDiagramData([], []);
-        if (flowCanvasRef.current?.resetExpandedFile) flowCanvasRef.current.resetExpandedFile();
+    const handleEcoreFileExpand = useCallback((fileName: string, fileContent: string) => {
+        // Clear current diagram
+        if (flowCanvasRef.current?.loadDiagramData) {
+            flowCanvasRef.current.loadDiagramData([], []);
+        }
+        if (flowCanvasRef.current?.resetExpandedFile) {
+            flowCanvasRef.current.resetExpandedFile();
+        }
 
         // Prefer UML generator; fall back to previous parsers
         let diagramData = generateUMLFromEcore(fileContent);
@@ -290,6 +279,7 @@ export function MainLayout({
             diagramData = createSimpleEcoreDiagram(fileContent);
         }
 
+        // Save as document
         const newId = generateFlowId();
         const now = new Date().toISOString();
         const meta: StoredDocumentMeta = {
@@ -304,30 +294,64 @@ export function MainLayout({
         setActiveDocId(newId);
         setActiveFileName(fileName);
 
+        // Load parsed diagram
         flowCanvasRef.current?.loadDiagramData?.(diagramData.nodes, diagramData.edges);
         // Make generated UML read-only by default, but allow moving boxes
         flowCanvasRef.current?.setInteractive?.(false);
         flowCanvasRef.current?.setDraggable?.(true);
         saveDocumentData(newId, { nodes: diagramData.nodes as any, edges: diagramData.edges as any });
         setIsDirty(false);
-    };
 
-    const handleEcoreFileDelete = (id: string) => {
-        setEcoreFileBoxes((prev) => prev.filter((b) => b.id !== id));
-        if (selectedFileBoxId === id) setSelectedFileBoxId(null);
-    };
-
-    const handleEcoreFileDeleteFromPanel = (fileName: string) => {
-        setEcoreFileBoxes((prev) => prev.filter((b) => b.fileName !== fileName));
-        if (selectedFileBoxId) {
-            const sel = ecoreFileBoxes.find((b) => b.id === selectedFileBoxId);
-            if (sel && sel.fileName === fileName) setSelectedFileBoxId(null);
+        // Update selected file
+        const nodes = flowCanvasRef.current?.getNodes?.() || [];
+        const ecoreNode = nodes.find(
+            (n: any) => n.type === 'ecoreFile' && n.data.fileName === fileName
+        );
+        if (ecoreNode) {
+            setSelectedFileBoxId(ecoreNode.id);
         }
-    };
+    }, [setDocuments]);
 
-    const handleEcoreFileRename = (id: string, newName: string) => {
-        setEcoreFileBoxes((prev) => prev.map((b) => (b.id === id ? { ...b, fileName: newName } : b)));
-    };
+    const handleEcoreFileDelete = useCallback((id: string) => {
+        // Remove Node from FlowCanvas
+        const currentNodes = flowCanvasRef.current?.getNodes?.() || [];
+        const updatedNodes = currentNodes.filter((n: any) => n.id !== id);
+
+        if (flowCanvasRef.current?.loadDiagramData) {
+            const edges = flowCanvasRef.current?.getEdges?.() || [];
+            flowCanvasRef.current.loadDiagramData(updatedNodes, edges);
+        }
+
+        // Clear selection if deleted
+        if (selectedFileBoxId === id) {
+            setSelectedFileBoxId(null);
+        }
+    }, [selectedFileBoxId]);
+
+    const handleEcoreFileDeleteFromPanel = useCallback((fileName: string) => {
+        const currentNodes = flowCanvasRef.current?.getNodes?.() || [];
+        const nodeToDelete = currentNodes.find(
+            (n: any) => n.type === 'ecoreFile' && n.data.fileName === fileName
+        );
+
+        if (nodeToDelete) {
+            handleEcoreFileDelete(nodeToDelete.id);
+        }
+    }, [handleEcoreFileDelete]);
+
+    const handleEcoreFileRename = useCallback((id: string, newName: string) => {
+        const currentNodes = flowCanvasRef.current?.getNodes?.() || [];
+        const updatedNodes = currentNodes.map((n: any) =>
+            n.id === id && n.type === 'ecoreFile'
+                ? { ...n, data: { ...n.data, fileName: newName } }
+                : n
+        );
+
+        if (flowCanvasRef.current?.loadDiagramData) {
+            const edges = flowCanvasRef.current?.getEdges?.() || [];
+            flowCanvasRef.current.loadDiagramData(updatedNodes, edges);
+        }
+    }, []);
 
     // ---- diagram save ----
     const handleDiagramChange = (_nodes: Node[], _edges: Edge[]) => {
@@ -426,8 +450,10 @@ export function MainLayout({
                             >
                                 <span style={{ color: '#34495e' }}>📁 Workspace</span>
                                 <span style={{ color: '#7f8c8d' }}>•</span>
-                                <span style={{ color: '#34495e' }}>{ecoreFileBoxes.length} ECORE files</span>
-                                {ecoreFileBoxes.length > 0 && (
+                                <span style={{ color: '#34495e' }}>
+                                    {flowCanvasRef.current?.getNodes?.()?.filter((n: any) => n.type === 'ecoreFile').length || 0} ECORE files
+                                </span>
+                                {(flowCanvasRef.current?.getNodes?.()?.filter((n: any) => n.type === 'ecoreFile').length || 0) > 0 && (
                                     <>
                                         <span style={{ color: '#7f8c8d' }}>•</span>
                                         <span style={{ color: '#34495e' }}>
@@ -438,7 +464,7 @@ export function MainLayout({
                             </div>
                         </div>
                     )}
-                    
+
                     {/* FlowCanvas or Welcome */}
                     <div style={{ position: 'absolute', inset: 0 }}>
                         {isMMLRoute || showWelcomeScreen ? (
@@ -495,9 +521,10 @@ export function MainLayout({
                                 onDeploy={onDeploy}
                                 onDiagramChange={handleDiagramChange}
                                 ref={flowCanvasRef}
-                                ecoreFiles={ecoreFileBoxes}
+                                // ecoreFiles prop entfernt - Nodes sind jetzt Teil von FlowCanvas State
                                 onEcoreFileSelect={handleEcoreFileSelect}
                                 onEcoreFileExpand={handleEcoreFileExpand}
+                                // onEcoreFilePositionChange removed - ReactFlow handles position
                                 onEcoreFileDelete={handleEcoreFileDelete}
                                 onEcoreFileRename={handleEcoreFileRename}
                             />
