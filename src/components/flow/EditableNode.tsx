@@ -41,17 +41,6 @@ interface EditableFieldProps {
   showVisibility?: boolean;
 }
 
-interface ElementStyleConfig {
-  borderColor: string;
-  background: string;
-  selectedBackground: string;
-  headerBackground: string;
-  sectionBackground: string;
-  minHeight: string;
-  borderStyle?: string;
-  fontStyle?: string;
-}
-
 type VisibilityType = '+' | '#' | '-';
 
 // Constants
@@ -104,27 +93,6 @@ const createInputStyle = (editing: boolean, style?: React.CSSProperties): React.
   outline: 'none',
   ...style,
 });
-
-const updateArray = <T,>(
-  array: T[] | undefined,
-  index: number,
-  operation: 'update' | 'delete',
-  newValue?: T
-): T[] => {
-  const arr = array || [];
-  if (operation === 'delete') {
-    return arr.filter((_, i) => i !== index);
-  }
-  const newArr = [...arr];
-  if (newValue !== undefined) {
-    newArr[index] = newValue;
-  }
-  return newArr;
-};
-
-const addToArray = <T,>(array: T[] | undefined, value: T): T[] => {
-  return [...(array || []), value];
-};
 
 // Sub-Components
 const VisibilityButton: React.FC<{
