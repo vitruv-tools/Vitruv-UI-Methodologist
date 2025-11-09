@@ -35,7 +35,7 @@ interface FlowCanvasProps {
   onEcoreFileRename?: (id: string, newFileName: string) => void;
 }
 
-export const FlowCanvas = forwardRef<{ 
+type FlowCanvasHandle = {
   loadDiagramData: (nodes: any[], edges: any[]) => void;
   resetExpandedFile: () => void;
   setInteractive: (enabled: boolean) => void;
@@ -44,7 +44,9 @@ export const FlowCanvas = forwardRef<{
   redo: () => void;
   canUndo: boolean;
   canRedo: boolean;
-}, FlowCanvasProps>(
+};
+
+export const FlowCanvas = forwardRef<FlowCanvasHandle, FlowCanvasProps>(
   ({ onDeploy, onDiagramChange, ecoreFiles = [], onEcoreFileSelect, onEcoreFileExpand, onEcoreFileDelete, onEcoreFileRename }, ref) => {
   const reactFlowWrapper = useRef<HTMLDivElement>(null);
   const [reactFlowInstance, setReactFlowInstance] = useState<ReactFlowInstance | null>(null);
@@ -56,6 +58,7 @@ export const FlowCanvas = forwardRef<{
   const [showEcoreBoxes, setShowEcoreBoxes] = useState<boolean>(true);
   const [routingStyle, setRoutingStyle] = useState<'curved' | 'orthogonal'>('orthogonal');
   const [lineSeparation] = useState<number>(36);
+  const controlButtonStyle: React.CSSProperties = { width: 36, height: 36, borderRadius: 6, border: '1px solid #e5e7eb', background: '#ffffff', cursor: 'pointer' };
   
   const {
     nodes,
@@ -288,28 +291,28 @@ export const FlowCanvas = forwardRef<{
       <div style={{ position: 'absolute', left: 16, bottom: 16, zIndex: 31, display: 'flex', flexDirection: 'column', gap: 6 }}>
         <button
           onClick={() => reactFlowInstance?.zoomIn?.()}
-          style={{ width: 36, height: 36, borderRadius: 6, border: '1px solid #e5e7eb', background: '#ffffff', cursor: 'pointer' }}
+          style={controlButtonStyle}
           title="Zoom in"
         >
           +
         </button>
         <button
           onClick={() => reactFlowInstance?.zoomOut?.()}
-          style={{ width: 36, height: 36, borderRadius: 6, border: '1px solid #e5e7eb', background: '#ffffff', cursor: 'pointer' }}
+          style={controlButtonStyle}
           title="Zoom out"
         >
           –
         </button>
         <button
           onClick={() => reactFlowInstance?.fitView?.({ padding: 0.2 })}
-          style={{ width: 36, height: 36, borderRadius: 6, border: '1px solid #e5e7eb', background: '#ffffff', cursor: 'pointer' }}
+          style={controlButtonStyle}
           title="Fit view"
         >
           ⛶
         </button>
         <button
           onClick={() => setRoutingStyle(prev => prev === 'orthogonal' ? 'curved' : 'orthogonal')}
-          style={{ width: 36, height: 36, borderRadius: 6, border: '1px solid #e5e7eb', background: '#ffffff', cursor: 'pointer' }}
+          style={controlButtonStyle}
           title={`Routing: ${routingStyle === 'orthogonal' ? 'Orthogonal' : 'Curved'} (toggle)`}
         >
           {routingStyle === 'orthogonal' ? '└' : '∿'}
@@ -319,7 +322,7 @@ export const FlowCanvas = forwardRef<{
             const next = !isInteractive;
             setIsInteractive(next);
           }}
-          style={{ width: 36, height: 36, borderRadius: 6, border: '1px solid #e5e7eb', background: '#ffffff', cursor: 'pointer' }}
+          style={controlButtonStyle}
           title={isInteractive ? 'Lock interactions' : 'Unlock interactions'}
         >
           {isInteractive ? '🔓' : '🔒'}
