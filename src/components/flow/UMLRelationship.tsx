@@ -6,10 +6,14 @@ interface UMLRelationshipData {
   relationshipType: string;
   sourceMultiplicity?: string;
   targetMultiplicity?: string;
+  code?: string; // NEU: Code für diese Relation
+  onDoubleClick?: (edgeId: string) => void; // NEU: Handler für Doppelklick
 }
 
 export function UMLRelationship({
   id,
+  source,
+  target,
   sourceX,
   sourceY,
   targetX,
@@ -82,6 +86,17 @@ export function UMLRelationship({
     startSegDx = mx - sourceX; startSegDy = my - sourceY;
     endSegDx = targetX - mx; endSegDy = targetY - my;
   }
+
+  const edgeColor = getEdgeColor(source, target);
+
+  const markerTypes = [
+    'inheritance',
+    'realization',
+    'composition',
+    'aggregation',
+    'association',
+    'dependency',
+  ];
 
   const getRelationshipStyle = () => {
     const baseStyle = {
@@ -258,13 +273,19 @@ export function UMLRelationship({
           strokeLinejoin: 'miter',
         }}
         d={edgePath}
-        className="react-flow__edge-path"
+        onDoubleClick={handleDoubleClick}
+      />
+
+      <path 
+        id={id} 
+        style={getRelationshipStyle()} 
+        d={edgePath}
+        onDoubleClick={handleDoubleClick}
       />
 
       <text
         x={labelX}
         y={labelY}
-        className="react-flow__edge-text"
         textAnchor="middle"
         dominantBaseline="middle"
         style={{

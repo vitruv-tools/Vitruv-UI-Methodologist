@@ -2,6 +2,8 @@ import { useCallback, useState, useEffect } from 'react';
 import { useNodesState, useEdgesState, Connection, Edge, Node } from 'reactflow';
 import { useUndoRedo } from './useUndoRedo';
 
+const STORAGE_KEY = 'flow_diagram_state_v1';
+
 export function useFlowState() {
   const chooseHandlesForPair = useCallback((src?: Node, tgt?: Node, preferredSource?: string | null, preferredTarget?: string | null) => {
     if (!src || !tgt) {
@@ -57,6 +59,7 @@ export function useFlowState() {
     edges: [], 
     idCounter: 1 
   });
+  const [isInitialized, setIsInitialized] = useState(false);
 
   // Initialize undo/redo with current state
   const {
@@ -71,6 +74,54 @@ export function useFlowState() {
     edges: [],
     idCounter: 1
   });
+
+  // NEU: Lade gespeicherten State beim Start
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem(STORAGE_KEY);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        console.log('Loading saved diagram state:', parsed);
+        
+        if (parsed.nodes && Array.isArray(parsed.nodes)) {
+          setNodes(parsed.nodes);
+        }
+        if (parsed.edges && Array.isArray(parsed.edges)) {
+          setEdges(parsed.edges);
+        }
+        if (parsed.idCounter) {
+          setIdCounter(parsed.idCounter);
+        }
+        
+        setLastSavedState({
+          nodes: parsed.nodes || [],
+          edges: parsed.edges || [],
+          idCounter: parsed.idCounter || 1
+        });
+      }
+    } catch (e) {
+      console.warn('Failed to load diagram state from localStorage', e);
+    }
+    setIsInitialized(true);
+  }, [setNodes, setEdges]);
+
+  // NEU: Speichere State bei Änderungen
+  useEffect(() => {
+    if (!isInitialized) return;
+    
+    const stateToSave = {
+      nodes,
+      edges,
+      idCounter
+    };
+    
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(stateToSave));
+      console.log('Saved diagram state to localStorage');
+    } catch (e) {
+      console.warn('Failed to save diagram state to localStorage', e);
+    }
+  }, [nodes, edges, idCounter, isInitialized]);
 
   useEffect(() => {
     if (isApplyingState) return;
@@ -232,11 +283,29 @@ export function useFlowState() {
     setEdges((eds) => eds.filter((edge) => edge.id !== id));
   }, [setEdges]);
 
+  // NEU: Funktion zum Aktualisieren des Edge-Codes
+  const updateEdgeCode = useCallback((edgeId: string, code: string) => {
+    setEdges((eds) =>
+      eds.map((edge) =>
+        edge.id === edgeId
+          ? { ...edge, data: { ...edge.data, code } }
+          : edge
+      )
+    );
+  }, [setEdges]);
+
   const clearFlow = useCallback(() => {
     setNodes([]);
     setEdges([]);
     setIdCounter(1);
     clearHistory();
+    
+    // NEU: Lösche auch den gespeicherten State
+    try {
+      localStorage.removeItem(STORAGE_KEY);
+    } catch (e) {
+      console.warn('Failed to clear localStorage', e);
+    }
   }, [setNodes, setEdges, clearHistory]);
 
   const handleUndo = useCallback(() => {
@@ -272,5 +341,6 @@ export function useFlowState() {
     redo: handleRedo,
     canUndo,
     canRedo,
+    updateEdgeCode,
   };
-} 
+}
