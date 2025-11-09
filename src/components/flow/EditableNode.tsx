@@ -1,5 +1,19 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { NodeProps, Handle, Position } from 'reactflow';
+import {
+  getBaseNodeStyle,
+  headerBaseStyle,
+  italicHeaderStyle,
+  borderedSectionBodyStyle,
+  sectionBodyStyle,
+  listItemStyle,
+  packageHeaderStyle,
+  packageContentStyle,
+  packageContentTitleStyle,
+  packageHintStyle,
+  getDeleteButtonStyle,
+  handleStyles
+} from './umlNodeStyles';
 
 interface UMLNodeData {
   label: string;
@@ -417,17 +431,7 @@ export function EditableNode({ id, data, selected, isConnectable, xPos, yPos, ..
   };
 
   const getNodeStyle = () => {
-    const baseStyle = {
-      padding: '0px',
-      background: '#ffffff',
-      border: selected ? '2px solid #2563eb' : '1px solid #9ca3af',
-      borderRadius: '4px',
-      minWidth: '180px',
-      boxShadow: selected ? '0 4px 12px rgba(37, 99, 235, 0.25)' : '0 2px 8px rgba(0,0,0,0.08)',
-      position: 'relative' as const,
-      fontFamily: `-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, 'Noto Sans', 'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol', sans-serif`,
-      overflow: 'hidden',
-    };
+    const baseStyle = getBaseNodeStyle(!!selected);
 
     if (nodeData.toolType === 'element') {
       switch (nodeData.toolName) {
@@ -484,54 +488,52 @@ export function EditableNode({ id, data, selected, isConnectable, xPos, yPos, ..
     return baseStyle;
   };
 
+  const DeleteButton: React.FC<{
+    onDeleteClick: () => void;
+    title?: string;
+    background?: string;
+    hoverBackground?: string;
+    size?: number;
+    boxShadow?: string;
+  }> = ({ onDeleteClick, title = 'Delete node', background = '#ef4444', hoverBackground = '#dc2626', size = 22, boxShadow = '0 4px 12px rgba(239,68,68,0.3)' }) => {
+    return (
+      <button
+        onMouseDown={(e) => { e.stopPropagation(); e.preventDefault(); }}
+        onClick={(e) => { e.stopPropagation(); e.preventDefault(); onDeleteClick(); }}
+        style={getDeleteButtonStyle({ background, size, boxShadow })}
+        onMouseEnter={(e) => {
+          e.currentTarget.style.background = hoverBackground;
+          e.currentTarget.style.transform = 'scale(1.1)';
+        }}
+        onMouseLeave={(e) => {
+          e.currentTarget.style.background = background;
+          e.currentTarget.style.transform = 'scale(1)';
+        }}
+        title={title}
+      >
+        ×
+      </button>
+    );
+  };
+
+  const renderLines = (items: string[]) => (
+    <>
+      {items.map((text, index) => (
+        <div key={index} style={listItemStyle}>
+          {text}
+        </div>
+      ))}
+    </>
+  );
+
   const renderUMLClass = () => (
     <div style={{ width: '100%' }}>
       {selected && (
-        <button
-          onClick={handleDelete}
-          style={{
-            position: 'absolute',
-            top: '-8px',
-            right: '-8px',
-            background: '#ef4444',
-            color: 'white',
-            border: 'none',
-            borderRadius: '50%',
-            width: '22px',
-            height: '22px',
-            fontSize: '12px',
-            cursor: 'pointer',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            zIndex: 10,
-            boxShadow: '0 4px 12px rgba(239,68,68,0.3)',
-            transition: 'all 0.2s ease'
-          }}
-          onMouseEnter={(e) => {
-            e.currentTarget.style.background = '#dc2626';
-            e.currentTarget.style.transform = 'scale(1.1)';
-          }}
-          onMouseLeave={(e) => {
-            e.currentTarget.style.background = '#ef4444';
-            e.currentTarget.style.transform = 'scale(1)';
-          }}
-          title="Delete node"
-        >
-          ×
-        </button>
+        <DeleteButton onDeleteClick={handleDelete} />
       )}
       
       {/* Class Name Section */}
-      <div style={{
-        borderBottom: '1px solid #d1d5db',
-        padding: '8px 12px',
-        textAlign: 'center',
-        fontWeight: 600,
-        fontSize: '13px',
-        color: '#1f2937',
-        background: '#f9fafb'
-      }}>
+      <div style={headerBaseStyle}>
         <EditableField
           value={nodeData.className || ''}
           onSave={(newValue) => updateNodeData({ className: newValue })}
@@ -547,46 +549,15 @@ export function EditableNode({ id, data, selected, isConnectable, xPos, yPos, ..
       
       {/* Attributes Section */}
       {nodeData.attributes && nodeData.attributes.length > 0 && (
-        <div style={{
-          borderBottom: '1px solid #d1d5db',
-          padding: '4px 0',
-          fontSize: '11px',
-          color: '#374151',
-          background: '#ffffff'
-        }}>
-          {nodeData.attributes.map((attr, index) => (
-            <div key={index} style={{ 
-              padding: '2px 12px',
-              display: 'flex',
-              alignItems: 'center',
-              fontSize: '11px',
-              fontFamily: 'monospace'
-            }}>
-              {attr}
-            </div>
-          ))}
+        <div style={borderedSectionBodyStyle}>
+          {renderLines(nodeData.attributes)}
         </div>
       )}
       
       {/* Methods Section */}
       {nodeData.methods && nodeData.methods.length > 0 && (
-        <div style={{
-          padding: '4px 0',
-          fontSize: '11px',
-          color: '#374151',
-          background: '#ffffff'
-        }}>
-          {nodeData.methods.map((method, index) => (
-            <div key={index} style={{ 
-              padding: '2px 12px',
-              display: 'flex',
-              alignItems: 'center',
-              fontSize: '11px',
-              fontFamily: 'monospace'
-            }}>
-              {method}
-            </div>
-          ))}
+        <div style={sectionBodyStyle}>
+          {renderLines(nodeData.methods)}
         </div>
       )}
     </div>
@@ -596,51 +567,10 @@ export function EditableNode({ id, data, selected, isConnectable, xPos, yPos, ..
   const renderUMLAbstractClass = () => (
     <div style={{ width: '100%' }}>
       {selected && (
-        <button
-          onClick={handleDelete}
-          style={{
-            position: 'absolute',
-            top: '-8px',
-            right: '-8px',
-            background: '#ef4444',
-            color: 'white',
-            border: 'none',
-            borderRadius: '50%',
-            width: '22px',
-            height: '22px',
-            fontSize: '12px',
-            cursor: 'pointer',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            zIndex: 10,
-            boxShadow: '0 4px 12px rgba(239,68,68,0.3)',
-            transition: 'all 0.2s ease'
-          }}
-          onMouseEnter={(e) => {
-            e.currentTarget.style.background = '#dc2626';
-            e.currentTarget.style.transform = 'scale(1.1)';
-          }}
-          onMouseLeave={(e) => {
-            e.currentTarget.style.background = '#ef4444';
-            e.currentTarget.style.transform = 'scale(1)';
-          }}
-          title="Delete node"
-        >
-          ×
-        </button>
+        <DeleteButton onDeleteClick={handleDelete} />
       )}
       
-      <div style={{
-        borderBottom: '1px solid #d1d5db',
-        padding: '8px 12px',
-        textAlign: 'center',
-        fontWeight: 600,
-        fontSize: '13px',
-        color: '#1f2937',
-        background: '#f9fafb',
-        fontStyle: 'italic'
-      }}>
+      <div style={italicHeaderStyle}>
         <span style={{ fontSize: '10px', fontWeight: 'normal' }}>&lt;&lt;abstract&gt;&gt;</span>
         {' '}
         <EditableField
@@ -658,41 +588,14 @@ export function EditableNode({ id, data, selected, isConnectable, xPos, yPos, ..
       </div>
       
       {nodeData.attributes && nodeData.attributes.length > 0 && (
-        <div style={{
-          borderBottom: '1px solid #d1d5db',
-          padding: '4px 0',
-          fontSize: '11px',
-          color: '#374151',
-          background: '#ffffff'
-        }}>
-          {nodeData.attributes.map((attr, index) => (
-            <div key={index} style={{ 
-              padding: '2px 12px',
-              fontSize: '11px',
-              fontFamily: 'monospace'
-            }}>
-              {attr}
-            </div>
-          ))}
+        <div style={borderedSectionBodyStyle}>
+          {renderLines(nodeData.attributes)}
         </div>
       )}
       
       {nodeData.methods && nodeData.methods.length > 0 && (
-        <div style={{
-          padding: '4px 0',
-          fontSize: '11px',
-          color: '#374151',
-          background: '#ffffff'
-        }}>
-          {nodeData.methods.map((method, index) => (
-            <div key={index} style={{ 
-              padding: '2px 12px',
-              fontSize: '11px',
-              fontFamily: 'monospace'
-            }}>
-              {method}
-            </div>
-          ))}
+        <div style={sectionBodyStyle}>
+          {renderLines(nodeData.methods)}
         </div>
       )}
     </div>
@@ -702,51 +605,10 @@ export function EditableNode({ id, data, selected, isConnectable, xPos, yPos, ..
   const renderUMLInterface = () => (
     <div style={{ width: '100%' }}>
       {selected && (
-        <button
-          onClick={handleDelete}
-          style={{
-            position: 'absolute',
-            top: '-8px',
-            right: '-8px',
-            background: '#ef4444',
-            color: 'white',
-            border: 'none',
-            borderRadius: '50%',
-            width: '22px',
-            height: '22px',
-            fontSize: '12px',
-            cursor: 'pointer',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            zIndex: 10,
-            boxShadow: '0 4px 12px rgba(239,68,68,0.3)',
-            transition: 'all 0.2s ease'
-          }}
-          onMouseEnter={(e) => {
-            e.currentTarget.style.background = '#dc2626';
-            e.currentTarget.style.transform = 'scale(1.1)';
-          }}
-          onMouseLeave={(e) => {
-            e.currentTarget.style.background = '#ef4444';
-            e.currentTarget.style.transform = 'scale(1)';
-          }}
-          title="Delete node"
-        >
-          ×
-        </button>
+        <DeleteButton onDeleteClick={handleDelete} />
       )}
       
-      <div style={{
-        borderBottom: '1px solid #d1d5db',
-        padding: '8px 12px',
-        textAlign: 'center',
-        fontWeight: 600,
-        fontSize: '13px',
-        color: '#1f2937',
-        background: '#f9fafb',
-        fontStyle: 'italic'
-      }}>
+      <div style={italicHeaderStyle}>
         <span style={{ fontSize: '10px', fontWeight: 'normal' }}>&lt;&lt;interface&gt;&gt;</span>
         {' '}
         <EditableField
@@ -764,21 +626,8 @@ export function EditableNode({ id, data, selected, isConnectable, xPos, yPos, ..
       </div>
       
       {nodeData.methods && nodeData.methods.length > 0 && (
-        <div style={{
-          padding: '4px 0',
-          fontSize: '11px',
-          color: '#374151',
-          background: '#ffffff'
-        }}>
-          {nodeData.methods.map((method, index) => (
-            <div key={index} style={{ 
-              padding: '2px 12px',
-              fontSize: '11px',
-              fontFamily: 'monospace'
-            }}>
-              {method}
-            </div>
-          ))}
+        <div style={sectionBodyStyle}>
+          {renderLines(nodeData.methods)}
         </div>
       )}
     </div>
@@ -788,51 +637,10 @@ export function EditableNode({ id, data, selected, isConnectable, xPos, yPos, ..
   const renderUMLEnumeration = () => (
     <div style={{ width: '100%' }}>
       {selected && (
-        <button
-          onClick={handleDelete}
-          style={{
-            position: 'absolute',
-            top: '-8px',
-            right: '-8px',
-            background: '#ef4444',
-            color: 'white',
-            border: 'none',
-            borderRadius: '50%',
-            width: '22px',
-            height: '22px',
-            fontSize: '12px',
-            cursor: 'pointer',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            zIndex: 10,
-            boxShadow: '0 4px 12px rgba(239,68,68,0.3)',
-            transition: 'all 0.2s ease'
-          }}
-          onMouseEnter={(e) => {
-            e.currentTarget.style.background = '#dc2626';
-            e.currentTarget.style.transform = 'scale(1.1)';
-          }}
-          onMouseLeave={(e) => {
-            e.currentTarget.style.background = '#ef4444';
-            e.currentTarget.style.transform = 'scale(1)';
-          }}
-          title="Delete node"
-        >
-          ×
-        </button>
+        <DeleteButton onDeleteClick={handleDelete} />
       )}
       
-      <div style={{
-        borderBottom: '1px solid #d1d5db',
-        padding: '8px 12px',
-        textAlign: 'center',
-        fontWeight: 600,
-        fontSize: '13px',
-        color: '#1f2937',
-        background: '#f9fafb',
-        fontStyle: 'italic'
-      }}>
+      <div style={italicHeaderStyle}>
         <span style={{ fontSize: '10px', fontWeight: 'normal' }}>&lt;&lt;enumeration&gt;&gt;</span>
         {' '}
         <EditableField
@@ -850,21 +658,8 @@ export function EditableNode({ id, data, selected, isConnectable, xPos, yPos, ..
       </div>
       
       {nodeData.values && nodeData.values.length > 0 && (
-        <div style={{
-          padding: '4px 0',
-          fontSize: '11px',
-          color: '#374151',
-          background: '#ffffff'
-        }}>
-          {nodeData.values.map((value, index) => (
-            <div key={index} style={{ 
-              padding: '2px 12px',
-              fontSize: '11px',
-              fontFamily: 'monospace'
-            }}>
-              {value}
-            </div>
-          ))}
+        <div style={sectionBodyStyle}>
+          {renderLines(nodeData.values)}
         </div>
       )}
     </div>
@@ -875,56 +670,16 @@ export function EditableNode({ id, data, selected, isConnectable, xPos, yPos, ..
     <div style={{ width: '100%' }}>
       {/* Delete button - only show when selected */}
       {selected && (
-        <button
-          onClick={handleDelete}
-          style={{
-            position: 'absolute',
-            top: '-8px',
-            right: '-8px',
-            background: '#e74c3c',
-            color: 'white',
-            border: 'none',
-            borderRadius: '50%',
-            width: '20px',
-            height: '20px',
-            fontSize: '12px',
-            cursor: 'pointer',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            zIndex: 10,
-            boxShadow: '0 2px 4px rgba(0,0,0,0.2)',
-            transition: 'all 0.2s ease'
-          }}
-          onMouseEnter={(e) => {
-            e.currentTarget.style.background = '#c0392b';
-            e.currentTarget.style.transform = 'scale(1.1)';
-          }}
-          onMouseLeave={(e) => {
-            e.currentTarget.style.background = '#e74c3c';
-            e.currentTarget.style.transform = 'scale(1)';
-          }}
-          title="Delete node"
-        >
-          ×
-        </button>
+        <DeleteButton
+          onDeleteClick={handleDelete}
+          background="#e74c3c"
+          hoverBackground="#c0392b"
+          size={20}
+          boxShadow="0 2px 4px rgba(0,0,0,0.2)"
+        />
       )}
       {/* Package name section with tab design */}
-      <div style={{
-        background: '#fdf8f0',
-        borderBottom: '1px solid #f39c12',
-        borderRight: '1px solid #f39c12',
-        padding: '8px 0',
-        textAlign: 'center',
-        fontWeight: 'bold',
-        fontSize: '14px',
-        color: '#f39c12',
-        minHeight: '30px',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        position: 'relative'
-      }}>
+      <div style={packageHeaderStyle}>
         <EditableField
           value={nodeData.packageName || ''}
           onSave={(newValue) => updateNodeData({ packageName: newValue })}
@@ -939,21 +694,11 @@ export function EditableNode({ id, data, selected, isConnectable, xPos, yPos, ..
       </div>
       
       {/* Package contents */}
-      <div style={{
-        padding: '8px 0',
-        fontSize: '12px',
-        color: '#666',
-        minHeight: '50px'
-      }}>
-        <div style={{ 
-          padding: '4px 8px', 
-          fontWeight: 'bold', 
-          color: '#f39c12',
-          background: '#fdf8f0'
-        }}>
+      <div style={packageContentStyle}>
+        <div style={packageContentTitleStyle}>
           Contents
         </div>
-        <div style={{ padding: '2px 8px', fontStyle: 'italic', color: '#999' }}>
+        <div style={packageHintStyle}>
           Drag classes here...
         </div>
       </div>
@@ -1050,33 +795,14 @@ export function EditableNode({ id, data, selected, isConnectable, xPos, yPos, ..
         position={Position.Left} 
         isConnectable={isConnectable}
         id="left-target"
-        style={{ 
-          top: '50%',
-          left: 0,
-          transform: 'translateY(-50%)',
-          background: '#6b7280',
-          width: '10px',
-          height: '10px',
-          borderRadius: '50%',
-          border: '2px solid #ffffff'
-        }}
+        style={handleStyles.leftTarget}
       />
       <Handle 
         type="source" 
         position={Position.Left} 
         isConnectable={isConnectable}
         id="left-source"
-        style={{ 
-          top: '50%',
-          left: 0,
-          transform: 'translateY(-50%)',
-          background: '#6b7280',
-          width: '10px',
-          height: '10px',
-          borderRadius: '50%',
-          border: '2px solid #ffffff',
-          boxShadow: 'inset 0 0 0 2px rgba(0,0,0,0.08)'
-        }}
+        style={handleStyles.leftSource}
       />
 
       {/* Top side: allow both target and source */}
@@ -1085,33 +811,14 @@ export function EditableNode({ id, data, selected, isConnectable, xPos, yPos, ..
         position={Position.Top} 
         isConnectable={isConnectable}
         id="top-target"
-        style={{ 
-          top: 0,
-          left: '50%',
-          transform: 'translateX(-50%)',
-          background: '#6b7280',
-          width: '10px',
-          height: '10px',
-          borderRadius: '50%',
-          border: '2px solid #ffffff'
-        }}
+        style={handleStyles.topTarget}
       />
       <Handle 
         type="source" 
         position={Position.Top} 
         isConnectable={isConnectable}
         id="top-source"
-        style={{ 
-          top: 0,
-          left: '50%',
-          transform: 'translateX(-50%)',
-          background: '#6b7280',
-          width: '10px',
-          height: '10px',
-          borderRadius: '50%',
-          border: '2px solid #ffffff',
-          boxShadow: 'inset 0 0 0 2px rgba(0,0,0,0.08)'
-        }}
+        style={handleStyles.topSource}
       />
 
       {/* Right side: allow both source and target */}
@@ -1120,33 +827,14 @@ export function EditableNode({ id, data, selected, isConnectable, xPos, yPos, ..
         position={Position.Right} 
         isConnectable={isConnectable}
         id="right-source"
-        style={{ 
-          top: '50%',
-          right: 0,
-          transform: 'translateY(-50%)',
-          background: '#6b7280',
-          width: '10px',
-          height: '10px',
-          borderRadius: '50%',
-          border: '2px solid #ffffff'
-        }}
+        style={handleStyles.rightSource}
       />
       <Handle 
         type="target" 
         position={Position.Right} 
         isConnectable={isConnectable}
         id="right-target"
-        style={{ 
-          top: '50%',
-          right: 0,
-          transform: 'translateY(-50%)',
-          background: '#6b7280',
-          width: '10px',
-          height: '10px',
-          borderRadius: '50%',
-          border: '2px solid #ffffff',
-          boxShadow: 'inset 0 0 0 2px rgba(0,0,0,0.08)'
-        }}
+        style={handleStyles.rightTarget}
       />
 
       {/* Bottom side: allow both source and target */}
@@ -1155,33 +843,14 @@ export function EditableNode({ id, data, selected, isConnectable, xPos, yPos, ..
         position={Position.Bottom} 
         isConnectable={isConnectable}
         id="bottom-source"
-        style={{ 
-          bottom: 0,
-          left: '50%',
-          transform: 'translateX(-50%)',
-          background: '#6b7280',
-          width: '10px',
-          height: '10px',
-          borderRadius: '50%',
-          border: '2px solid #ffffff'
-        }}
+        style={handleStyles.bottomSource}
       />
       <Handle 
         type="target" 
         position={Position.Bottom} 
         isConnectable={isConnectable}
         id="bottom-target"
-        style={{ 
-          bottom: 0,
-          left: '50%',
-          transform: 'translateX(-50%)',
-          background: '#6b7280',
-          width: '10px',
-          height: '10px',
-          borderRadius: '50%',
-          border: '2px solid #ffffff',
-          boxShadow: 'inset 0 0 0 2px rgba(0,0,0,0.08)'
-        }}
+        style={handleStyles.bottomTarget}
       />
     </div>
   );

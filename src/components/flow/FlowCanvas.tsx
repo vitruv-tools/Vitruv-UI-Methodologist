@@ -67,6 +67,7 @@ export const FlowCanvas = forwardRef<{
     addEdge,
     updateNodeLabel,
     removeNode,
+    removeEdge,
     setNodes,
     setEdges,
     undo,
@@ -87,6 +88,32 @@ export const FlowCanvas = forwardRef<{
       const target = event.target as HTMLElement;
       if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.contentEditable === 'true') {
         return;
+      }
+
+      // Delete selected nodes/edges or selected Ecore box
+      if (event.key === 'Delete' || event.key === 'Backspace') {
+        // Try React Flow selection first
+        if (reactFlowInstance) {
+          const selectedNodes = reactFlowInstance.getNodes().filter(n => n.selected);
+          const selectedEdges = reactFlowInstance.getEdges().filter(e => e.selected);
+          if (selectedNodes.length > 0) {
+            event.preventDefault();
+            selectedNodes.forEach((n) => removeNode(n.id));
+            return;
+          }
+          if (selectedEdges.length > 0) {
+            event.preventDefault();
+            selectedEdges.forEach((e) => removeEdge(e.id));
+            return;
+          }
+        }
+        // If no RF selection, delete selected Ecore box if any
+        if (selectedFileId && onEcoreFileDelete) {
+          event.preventDefault();
+          onEcoreFileDelete(selectedFileId);
+          setSelectedFileId(null);
+          return;
+        }
       }
 
       if (event.ctrlKey || event.metaKey) {

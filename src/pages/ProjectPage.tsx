@@ -30,33 +30,7 @@ export const ProjectPage: React.FC = () => {
     }
     setActiveInstanceId(instanceId);
 
-    // Reset workspace, then load only this project's boxes
-    window.dispatchEvent(new CustomEvent('vitruv.resetWorkspace'));
-    try {
-      const response = await apiService.getVsumDetails(id);
-      const details = response.data;
-      for (const metaModel of details.metaModels || []) {
-        if (metaModel.ecoreFileId) {
-          try {
-            const fileContent = await apiService.getFile(metaModel.ecoreFileId);
-            window.dispatchEvent(new CustomEvent('vitruv.addFileToWorkspace', {
-              detail: {
-                fileContent: fileContent,
-                fileName: metaModel.name + '.ecore',
-                description: metaModel.description,
-                keywords: metaModel.keyword?.join(', '),
-                domain: metaModel.domain,
-                createdAt: metaModel.createdAt,
-              }
-            }));
-          } catch (error) {
-            console.error(`Failed to load ECORE file for meta model ${metaModel.name}:`, error);
-          }
-        }
-      }
-    } catch (error) {
-      console.error('Failed to fetch vsum details:', error);
-    }
+    await fetchAndLoadProjectBoxes(id);
   }, [openTabs, createInstanceId, showInfo]);
 
   useEffect(() => {
