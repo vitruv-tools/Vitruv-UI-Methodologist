@@ -452,6 +452,20 @@ class ApiService {
   }
 
   /**
+   * vSUMS: Get all removed (trash)
+   */
+  async getRemovedVsumsPaginated(
+      pageNumber: number = 0,
+      pageSize: number = 50
+  ): Promise<ApiResponse<Vsum[]>> {
+    const query = new URLSearchParams({
+      pageNumber: pageNumber.toString(),
+      pageSize: pageSize.toString(),
+    });
+    return this.authenticatedRequest(`/api/v1/vsums/find-all-removed?${query.toString()}`);
+  }
+
+  /**
    * vSUMS: Create
    */
   async createVsum(data: { name: string; description?: string }): Promise<ApiResponse<Vsum>> {
@@ -514,11 +528,28 @@ class ApiService {
   }
 
   /**
+   * vSUMS: Version history for a non-deleted VSUM
+   * GET /api/v1/vsums/find-all/vsumId={vsumId}
+   */
+  async getVsumVersions(vsumId: number | string): Promise<ApiResponse<Array<{ id: number; createdAt: string }>>> {
+    return this.authenticatedRequest(`/api/v1/vsums/find-all/vsumId=${vsumId}`);
+  }
+
+  /**
    * vSUMS: Delete
    */
   async deleteVsum(id: number | string): Promise<ApiResponse<Record<string, never>>> {
     return this.authenticatedRequest(`/api/v1/vsums/${id}`, {
       method: 'DELETE',
+    });
+  }
+
+  /**
+   * vSUMS: Recover a previously removed VSUM
+   */
+  async recoverVsum(id: number | string): Promise<ApiResponse<Record<string, never>>> {
+    return this.authenticatedRequest(`/api/v1/vsums/${id}/recovery`, {
+      method: 'PUT',
     });
   }
 
