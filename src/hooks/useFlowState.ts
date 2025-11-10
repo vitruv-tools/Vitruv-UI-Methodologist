@@ -5,6 +5,51 @@ import { useUndoRedo } from './useUndoRedo';
 const STORAGE_KEY = 'flow_diagram_state_v1';
 
 export function useFlowState() {
+  const chooseHandlesForPair = useCallback((src?: Node, tgt?: Node, preferredSource?: string | null, preferredTarget?: string | null) => {
+    if (!src || !tgt) {
+      return { s: preferredSource ?? undefined, t: preferredTarget ?? undefined } as const;
+    }
+    const dx = (tgt.position?.x ?? 0) - (src.position?.x ?? 0);
+    const dy = (tgt.position?.y ?? 0) - (src.position?.y ?? 0);
+    if (Math.abs(dx) >= Math.abs(dy)) {
+      const s = dx >= 0 ? 'right-source' : 'left-source';
+      const t = dx >= 0 ? 'left-target' : 'right-target';
+      return { s, t } as const;
+    } else {
+      const s = dy >= 0 ? 'bottom-source' : 'top-source';
+      const t = dy >= 0 ? 'top-target' : 'bottom-target';
+      return { s, t } as const;
+    }
+  }, []);
+
+  const applyParallelEdgeMeta = useCallback((edges: Edge[]) => {
+    // group edges by unordered node pair
+    const groups = new Map<string, Edge[]>();
+    for (const e of edges) {
+      const a = e.source;
+      const b = e.target;
+      const key = a < b ? `${a}__${b}` : `${b}__${a}`;
+      const list = groups.get(key) || [];
+      list.push(e);
+      groups.set(key, list);
+    }
+    return edges.map((e) => {
+      const a = e.source;
+      const b = e.target;
+      const key = a < b ? `${a}__${b}` : `${b}__${a}`;
+      const list = groups.get(key) || [];
+      const count = list.length;
+      const sorted = [...list].sort((x, y) => x.id.localeCompare(y.id));
+      const index = sorted.findIndex((x) => x.id === e.id);
+      const data = {
+        ...e.data,
+        parallelIndex: index,
+        parallelCount: count,
+      } as any;
+      return { ...e, data };
+    });
+  }, []);
+
   const [nodes, setNodes, onNodesChange] = useNodesState([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState([]);
   const [idCounter, setIdCounter] = useState(1);
@@ -142,13 +187,18 @@ export function useFlowState() {
 
   const onConnect = useCallback(
     (params: Connection) => {
+      // pick best handles if not provided
+      const findNode = (id?: string | null) => nodes.find(n => n.id === id);
+      const src = findNode(params.source);
+      const tgt = findNode(params.target);
+      const auto = chooseHandlesForPair(src, tgt, params.sourceHandle, params.targetHandle);
       const newEdge: Edge = {
         id: `edge-${getId()}`,
         type: 'uml',
         source: params.source!,
         target: params.target!,
-        sourceHandle: params.sourceHandle,
-        targetHandle: params.targetHandle,
+        sourceHandle: params.sourceHandle ?? auto.s,
+        targetHandle: params.targetHandle ?? auto.t,
         data: {
           relationshipType: 'association',
           label: 'Association',
@@ -156,7 +206,7 @@ export function useFlowState() {
       };
       setEdges((eds) => eds.concat(newEdge));
     },
-    [getId, setEdges]
+    [getId, setEdges, nodes, chooseHandlesForPair]
   );
 
   const addNode = useCallback((node: Omit<Node, 'id'>) => {
@@ -190,19 +240,44 @@ export function useFlowState() {
   }, [setNodes, setEdges]);
 
   const addEdge = useCallback((edge: Omit<Edge, 'id'>) => {
+    // If handles not provided, choose based on relative positions
+    const findNode = (id?: string) => nodes.find(n => n.id === id);
+    const src = findNode(edge.source);
+    const tgt = findNode(edge.target);
+    const auto = chooseHandlesForPair(src, tgt, edge.sourceHandle, edge.targetHandle);
     const newEdge: Edge = {
       ...edge,
       id: `edge-${getId()}`,
+      sourceHandle: edge.sourceHandle ?? auto.s,
+      targetHandle: edge.targetHandle ?? auto.t,
     };
     console.log('useFlowState.addEdge called with:', edge);
     console.log('Created newEdge:', newEdge);
     setEdges((eds) => {
-      const newEdges = eds.concat(newEdge);
-      console.log('Updated edges array:', newEdges);
-      return newEdges;
+      const updated = eds.concat(newEdge);
+      const withMeta = applyParallelEdgeMeta(updated);
+      console.log('Updated edges array (with parallel meta):', withMeta);
+      return withMeta;
     });
     return newEdge.id;
-  }, [getId, setEdges]);
+  }, [getId, setEdges, nodes, applyParallelEdgeMeta, chooseHandlesForPair]);
+
+  // Keep parallel metadata consistent when edges change via other operations (delete, load, undo/redo)
+  useEffect(() => {
+    if (!edges || edges.length === 0) return;
+    const recomputed = applyParallelEdgeMeta(edges);
+    // detect if parallel meta changed to avoid unnecessary re-renders
+    const changed = edges.some((e, i) => {
+      const prevIndex = (e.data as any)?.parallelIndex;
+      const prevCount = (e.data as any)?.parallelCount;
+      const nextIndex = (recomputed[i].data as any)?.parallelIndex;
+      const nextCount = (recomputed[i].data as any)?.parallelCount;
+      return prevIndex !== nextIndex || prevCount !== nextCount;
+    });
+    if (changed) {
+      setEdges(recomputed);
+    }
+  }, [edges, setEdges, applyParallelEdgeMeta]);
 
   const removeEdge = useCallback((id: string) => {
     setEdges((eds) => eds.filter((edge) => edge.id !== id));

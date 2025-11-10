@@ -4,6 +4,7 @@ import { Header } from './Header';
 import { FlowCanvas } from '../flow/FlowCanvas';
 import { ToolsPanel } from '../ui/ToolsPanel';
 import { parseEcoreFile, createSimpleEcoreDiagram } from '../../utils/ecoreParser';
+import { generateUMLFromEcore } from '../../utils/umlGenerator';
 import {
     generateFlowId,
     saveDocumentMeta,
@@ -198,8 +199,19 @@ export function MainLayout({
         }
     }, [calculateEmptyPosition]);
 
-    // Listen for add file to workspace events
+    // Listen for workspace events
     useEffect(() => {
+        const handleResetWorkspace = () => {
+            if (flowCanvasRef.current?.loadDiagramData) flowCanvasRef.current.loadDiagramData([], []);
+            if (flowCanvasRef.current?.resetExpandedFile) flowCanvasRef.current.resetExpandedFile();
+            try {
+                localStorage.removeItem('vitruv.documents');
+                const keys = Object.keys(localStorage);
+                keys.forEach((key) => {
+                    if (key.startsWith('vitruv.document.data.')) localStorage.removeItem(key);
+                });
+            } catch {}
+        };
         const handleAddFileToWorkspace = (e: Event) => {
             const customEvent = e as CustomEvent<{
                 fileContent: string;
@@ -222,8 +234,21 @@ export function MainLayout({
         };
 
         window.addEventListener('vitruv.addFileToWorkspace', handleAddFileToWorkspace as EventListener);
-        return () => window.removeEventListener('vitruv.addFileToWorkspace', handleAddFileToWorkspace as EventListener);
-    }, [handleEcoreFileUpload]); // handleEcoreFileUpload ist stabil (useCallback)
+        window.addEventListener('vitruv.resetWorkspace', handleResetWorkspace as EventListener);
+        const handleExpandFileInWorkspace = (e: Event) => {
+            const customEvent = e as CustomEvent<{ fileName: string; fileContent: string }>;
+            const detail = customEvent.detail;
+            if (!detail) return;
+            handleEcoreFileExpand(detail.fileName, detail.fileContent);
+        };
+        window.addEventListener('vitruv.expandFileInWorkspace', handleExpandFileInWorkspace as EventListener);
+        return () => {
+            window.removeEventListener('vitruv.addFileToWorkspace', handleAddFileToWorkspace as EventListener);
+            window.removeEventListener('vitruv.expandFileInWorkspace', handleExpandFileInWorkspace as EventListener);
+            window.removeEventListener('vitruv.resetWorkspace', handleResetWorkspace as EventListener);
+        };
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
 
     const handleEcoreFileSelect = useCallback((fileName: string) => {
         const nodes = flowCanvasRef.current?.getNodes?.() || [];
@@ -244,9 +269,12 @@ export function MainLayout({
             flowCanvasRef.current.resetExpandedFile();
         }
 
-        // Parse Ecore file
-        let diagramData = parseEcoreFile(fileContent);
-        if (diagramData.nodes.length === 1 && diagramData.nodes[0].data.label === 'Error parsing .ecore file') {
+        // Prefer UML generator; fall back to previous parsers
+        let diagramData = generateUMLFromEcore(fileContent);
+        if (!diagramData.nodes.length) {
+            diagramData = parseEcoreFile(fileContent);
+        }
+        if (diagramData.nodes.length === 1 && (diagramData.nodes[0].data as any).label === 'Error parsing .ecore file') {
             diagramData = createSimpleEcoreDiagram(fileContent);
         }
 
@@ -267,6 +295,9 @@ export function MainLayout({
 
         // Load parsed diagram
         flowCanvasRef.current?.loadDiagramData?.(diagramData.nodes, diagramData.edges);
+        // Make generated UML read-only by default, but allow moving boxes
+        flowCanvasRef.current?.setInteractive?.(false);
+        flowCanvasRef.current?.setDraggable?.(true);
         saveDocumentData(newId, { nodes: diagramData.nodes as any, edges: diagramData.edges as any });
         setIsDirty(false);
 

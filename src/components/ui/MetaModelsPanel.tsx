@@ -41,7 +41,7 @@ const searchInputStyle: React.CSSProperties = {
   minWidth: 240,
   padding: '10px 12px',
   border: '1px solid #ced4da',
-  borderRadius: 8,
+  borderRadius: 0,
   fontSize: 14,
   lineHeight: 1.2,
 };
@@ -49,7 +49,7 @@ const searchInputStyle: React.CSSProperties = {
 const sortDropdownStyle: React.CSSProperties = {
   padding: '10px 12px',
   border: '1px solid #dee2e6',
-  borderRadius: 8,
+  borderRadius: 0,
   background: '#ffffff',
   color: '#495057',
   fontSize: 14,
@@ -60,7 +60,7 @@ const sortDropdownStyle: React.CSSProperties = {
 const filterBtnStyle: React.CSSProperties = {
   padding: '10px 12px',
   border: '1px solid #dee2e6',
-  borderRadius: 8,
+  borderRadius: 0,
   background: '#f8f9fa',
   cursor: 'pointer',
   fontWeight: 600,
@@ -69,7 +69,7 @@ const filterBtnStyle: React.CSSProperties = {
 const filtersBoxStyle: React.CSSProperties = {
   border: '1px solid #e9ecef',
   background: '#ffffff',
-  borderRadius: 10,
+  borderRadius: 0,
   padding: 12,
   marginBottom: 12,
 };
@@ -77,7 +77,7 @@ const filtersBoxStyle: React.CSSProperties = {
 const fileCardStyle: React.CSSProperties = {
   background: '#ffffff',
   border: '1px solid #e7f5ff',
-  borderRadius: 12,
+  borderRadius: 0,
   padding: 16,
   marginBottom: 12,
   boxShadow: '0 2px 8px rgba(0,0,0,0.04)',

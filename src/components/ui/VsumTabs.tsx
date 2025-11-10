@@ -2,16 +2,21 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { VsumDetails } from '../../types';
 import { apiService } from '../../services/api';
 
+interface OpenTabInstance {
+  instanceId: string;
+  id: number;
+}
+
 interface VsumTabsProps {
-  openVsums: number[];
-  activeVsumId: number | null;
-  onActivate: (id: number) => void;
-  onClose: (id: number) => void;
+  openTabs: OpenTabInstance[];
+  activeInstanceId: string | null;
+  onActivate: (instanceId: string) => void;
+  onClose: (instanceId: string) => void;
   onAddMetaModels?: () => void;
   showAddButton?: boolean;
 }
 
-export const VsumTabs: React.FC<VsumTabsProps> = ({ openVsums, activeVsumId, onActivate, onClose, onAddMetaModels, showAddButton }) => {
+export const VsumTabs: React.FC<VsumTabsProps> = ({ openTabs, activeInstanceId, onActivate, onClose, onAddMetaModels, showAddButton }) => {
   const [detailsById, setDetailsById] = useState<Record<number, VsumDetails | undefined>>({});
   const [error, setError] = useState<string>('');
   const [edits, setEdits] = useState<Record<number, { metaModelSourceIds: number[] }>>({});
@@ -31,17 +36,19 @@ export const VsumTabs: React.FC<VsumTabsProps> = ({ openVsums, activeVsumId, onA
   // dirty = compare by sourceId arrays
   const dirtyById = useMemo(() => {
     const map: Record<number, boolean> = {};
-    openVsums.forEach((id) => {
+    openTabs.forEach(({ id }) => {
       const edit = edits[id];
       const details = detailsById[id];
       if (!edit || !details) { map[id] = false; return; }
       map[id] = !areIdArraysEqual(edit.metaModelSourceIds);
     });
     return map;
-  }, [openVsums, edits, detailsById]);
+  }, [openTabs, edits, detailsById]);
 
   // load details for active vsum and seed edits using sourceId
   useEffect(() => {
+    const active = openTabs.find(t => t.instanceId === activeInstanceId);
+    const activeId = active?.id;
     const fetchDetails = async (id: number) => {
       setError('');
       try {
@@ -58,10 +65,10 @@ export const VsumTabs: React.FC<VsumTabsProps> = ({ openVsums, activeVsumId, onA
         setError(e instanceof Error ? e.message : 'Failed to load VSUM details');
       }
     };
-    if (activeVsumId && !detailsById[activeVsumId]) {
-      fetchDetails(activeVsumId);
+    if (activeId && !detailsById[activeId]) {
+      fetchDetails(activeId);
     }
-  }, [activeVsumId, detailsById]);
+  }, [activeInstanceId, openTabs, detailsById]);
 
   // save changes: send sourceIds in metaModelIds field + metaModelRelationRequests: null
   const saveById = async (
@@ -102,15 +109,19 @@ export const VsumTabs: React.FC<VsumTabsProps> = ({ openVsums, activeVsumId, onA
   };
 
   const onSave = async () => {
-    if (!activeVsumId) return;
-    await saveById(activeVsumId);
+    const active = openTabs.find(t => t.instanceId === activeInstanceId);
+    const id = active?.id;
+    if (!id) return;
+    await saveById(id);
   };
 
   // handle external "add meta model" event
   useEffect(() => {
     const onAdd = (e: Event) => {
       const ce = e as CustomEvent<{ id?: number; sourceId?: number }>;
-      if (!activeVsumId) return;
+      const active = openTabs.find(t => t.instanceId === activeInstanceId);
+      const activeId = active?.id;
+      if (!activeId) return;
 
       // Prefer sourceId; if only id is provided and in your app that id is the global source id, this still works.
       // If your event sends cloned ids instead, adjust the emitter to pass sourceId.
@@ -120,13 +131,13 @@ export const VsumTabs: React.FC<VsumTabsProps> = ({ openVsums, activeVsumId, onA
 
       if (typeof sourceId !== 'number') return;
 
-      const current = edits[activeVsumId];
+      const current = edits[activeId];
 
       // Initialize if not exists
       if (!current) {
         setEdits(prev => ({
           ...prev,
-          [activeVsumId!]: { metaModelSourceIds: [sourceId] }
+          [activeId!]: { metaModelSourceIds: [sourceId] }
         }));
         return;
       }
@@ -135,17 +146,18 @@ export const VsumTabs: React.FC<VsumTabsProps> = ({ openVsums, activeVsumId, onA
 
       setEdits(prev => ({
         ...prev,
-        [activeVsumId!]: { metaModelSourceIds: [...current.metaModelSourceIds, sourceId] }
+        [activeId!]: { metaModelSourceIds: [...current.metaModelSourceIds, sourceId] }
       }));
     };
 
     window.addEventListener('vitruv.addMetaModelToActiveVsum', onAdd as EventListener);
     return () => window.removeEventListener('vitruv.addMetaModelToActiveVsum', onAdd as EventListener);
-  }, [activeVsumId, edits, detailsById]);
+  }, [activeInstanceId, openTabs, edits, detailsById]);
 
-  if (openVsums.length === 0) return null;
+  if (openTabs.length === 0) return null;
 
-  const anyDirty = activeVsumId ? !!dirtyById[activeVsumId] : false;
+  const active = openTabs.find(t => t.instanceId === activeInstanceId);
+  const anyDirty = active ? !!dirtyById[active.id] : false;
 
   return (
       <>
@@ -162,13 +174,13 @@ export const VsumTabs: React.FC<VsumTabsProps> = ({ openVsums, activeVsumId, onA
         >
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 10px' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 6, overflowX: 'auto', flex: 1 }}>
-              {openVsums.map(id => {
-              const isActive = id === activeVsumId;
-              const name = detailsById[id]?.name || `VSUM #${id}`;
-              const isDirty = !!dirtyById[id];
+              {openTabs.map(tab => {
+              const isActive = tab.instanceId === activeInstanceId;
+              const name = detailsById[tab.id]?.name || `VSUM #${tab.id}`;
+              const isDirty = !!dirtyById[tab.id];
               return (
                   <div
-                      key={id}
+                      key={tab.instanceId}
                       style={{
                         display: 'flex',
                         alignItems: 'center',
@@ -181,7 +193,7 @@ export const VsumTabs: React.FC<VsumTabsProps> = ({ openVsums, activeVsumId, onA
                         cursor: 'pointer',
                         boxShadow: isActive ? '0 1px 2px rgba(0,0,0,0.04)' : 'none'
                       }}
-                      onClick={() => onActivate(id)}
+                      onClick={() => onActivate(tab.instanceId)}
                       aria-current={isActive ? 'page' : undefined}
                       title={name}
                   >
@@ -196,7 +208,7 @@ export const VsumTabs: React.FC<VsumTabsProps> = ({ openVsums, activeVsumId, onA
                     <button
                         onClick={(e) => {
                           e.stopPropagation();
-                          onClose(id);
+                          onClose(tab.instanceId);
                         }}
                         style={{
                           border: '1px solid transparent',
@@ -221,7 +233,7 @@ export const VsumTabs: React.FC<VsumTabsProps> = ({ openVsums, activeVsumId, onA
               })}
             </div>
 
-            {activeVsumId && (
+            {activeInstanceId && (
               <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                 {error && (
                     <div

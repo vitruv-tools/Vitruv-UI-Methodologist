@@ -1,5 +1,19 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { NodeProps, Handle, Position } from 'reactflow';
+import {
+  getBaseNodeStyle,
+  headerBaseStyle,
+  italicHeaderStyle,
+  borderedSectionBodyStyle,
+  sectionBodyStyle,
+  listItemStyle,
+  packageHeaderStyle,
+  packageContentStyle,
+  packageContentTitleStyle,
+  packageHintStyle,
+  getDeleteButtonStyle,
+  handleStyles
+} from './umlNodeStyles';
 
 // Types
 interface UMLNodeData {
@@ -27,17 +41,6 @@ interface EditableFieldProps {
   showVisibility?: boolean;
 }
 
-interface ElementStyleConfig {
-  borderColor: string;
-  background: string;
-  selectedBackground: string;
-  headerBackground: string;
-  sectionBackground: string;
-  minHeight: string;
-  borderStyle?: string;
-  fontStyle?: string;
-}
-
 type VisibilityType = '+' | '#' | '-';
 
 // Constants
@@ -53,50 +56,7 @@ const VISIBILITY_OPTIONS: Array<{
   { symbol: '-', label: 'Private', color: '#dc3545', hoverColor: '#c82333', title: 'Private (-)' },
 ];
 
-const ELEMENT_STYLES: Record<string, ElementStyleConfig> = {
-  class: {
-    borderColor: '#2ecc71',
-    background: '#ffffff',
-    selectedBackground: '#f0f9f0',
-    headerBackground: '#f8fff8',
-    sectionBackground: '#f0f9f0',
-    minHeight: '140px',
-  },
-  'abstract-class': {
-    borderColor: '#16a085',
-    background: '#ffffff',
-    selectedBackground: '#f0f8f0',
-    headerBackground: '#f0f8f0',
-    sectionBackground: '#f0f8f0',
-    minHeight: '140px',
-    fontStyle: 'italic',
-  },
-  interface: {
-    borderColor: '#e74c3c',
-    background: '#ffffff',
-    selectedBackground: '#fdf0f0',
-    headerBackground: '#fdf0f0',
-    sectionBackground: '#fdf0f0',
-    borderStyle: 'dashed',
-    minHeight: '120px',
-  },
-  enumeration: {
-    borderColor: '#9b59b6',
-    background: '#ffffff',
-    selectedBackground: '#f8f0f8',
-    headerBackground: '#f8f0f8',
-    sectionBackground: '#f8f0f8',
-    minHeight: '120px',
-  },
-  package: {
-    borderColor: '#f39c12',
-    background: '#ffffff',
-    selectedBackground: '#fdf8f0',
-    headerBackground: '#fdf8f0',
-    sectionBackground: '#fdf8f0',
-    minHeight: '100px',
-  },
-};
+// NOTE: element style presets were removed since node styles are composed via umlNodeStyles helpers
 
 // Utility Functions
 const createButtonStyle = (
@@ -133,27 +93,6 @@ const createInputStyle = (editing: boolean, style?: React.CSSProperties): React.
   outline: 'none',
   ...style,
 });
-
-const updateArray = <T,>(
-  array: T[] | undefined,
-  index: number,
-  operation: 'update' | 'delete',
-  newValue?: T
-): T[] => {
-  const arr = array || [];
-  if (operation === 'delete') {
-    return arr.filter((_, i) => i !== index);
-  }
-  const newArr = [...arr];
-  if (newValue !== undefined) {
-    newArr[index] = newValue;
-  }
-  return newArr;
-};
-
-const addToArray = <T,>(array: T[] | undefined, value: T): T[] => {
-  return [...(array || []), value];
-};
 
 // Sub-Components
 const VisibilityButton: React.FC<{
@@ -206,136 +145,7 @@ const MenuTitle: React.FC<{ children: React.ReactNode }> = ({ children }) => (
   </div>
 );
 
-const DeleteButton: React.FC<{ onClick: () => void }> = ({ onClick }) => {
-  const [isHovered, setIsHovered] = useState(false);
-  
-  return (
-    <button
-      onClick={onClick}
-      onMouseEnter={() => setIsHovered(true)}
-      onMouseLeave={() => setIsHovered(false)}
-      style={{
-        position: 'absolute',
-        top: '-8px',
-        right: '-8px',
-        background: isHovered ? '#c0392b' : '#e74c3c',
-        color: 'white',
-        border: 'none',
-        borderRadius: '50%',
-        width: '20px',
-        height: '20px',
-        fontSize: '12px',
-        cursor: 'pointer',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        zIndex: 10,
-        boxShadow: '0 2px 4px rgba(0,0,0,0.2)',
-        transition: 'all 0.2s ease',
-        transform: isHovered ? 'scale(1.1)' : 'scale(1)',
-      }}
-      title="Delete node"
-    >
-      ×
-    </button>
-  );
-};
-
-const SectionHeader: React.FC<{
-  title: string;
-  color: string;
-  background: string;
-}> = ({ title, color, background }) => (
-  <div style={{
-    padding: '4px 8px',
-    fontWeight: 'bold',
-    color,
-    background,
-  }}>
-    {title}
-  </div>
-);
-
-const ClassHeader: React.FC<{
-  value: string;
-  placeholder: string;
-  onSave: (value: string) => void;
-  style: ElementStyleConfig;
-  stereotype?: string;
-}> = ({ value, placeholder, onSave, style, stereotype }) => (
-  <div style={{
-    background: style.headerBackground,
-    borderBottom: `1px solid ${style.borderColor}`,
-    padding: '8px 0',
-    textAlign: 'center',
-    fontWeight: 'bold',
-    fontSize: '14px',
-    color: style.borderColor,
-    minHeight: '30px',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-  }}>
-    {stereotype && (
-      <div style={{ fontStyle: 'italic', marginRight: '8px' }}>
-        &lt;&lt;{stereotype}&gt;&gt;
-      </div>
-    )}
-    <EditableField
-      value={value}
-      onSave={onSave}
-      placeholder={placeholder}
-      style={{
-        fontWeight: 'bold',
-        fontSize: '14px',
-        color: style.borderColor,
-        textAlign: 'center',
-        ...(style.fontStyle && { fontStyle: style.fontStyle }),
-      }}
-    />
-  </div>
-);
-
-const EditableList: React.FC<{
-  items: string[] | undefined;
-  placeholder: string;
-  addPlaceholder: string;
-  onUpdate: (items: string[]) => void;
-  showVisibility?: boolean;
-}> = ({ items, placeholder, addPlaceholder, onUpdate, showVisibility = false }) => (
-  <>
-    {items?.map((item, index) => (
-      <div key={index} style={{
-        padding: '2px 8px',
-        display: 'flex',
-        alignItems: 'center',
-        gap: '8px',
-      }}>
-        <EditableField
-          value={item}
-          onSave={(newValue) => onUpdate(updateArray(items, index, 'update', newValue))}
-          placeholder={placeholder}
-          style={{ fontSize: '12px', flex: 1 }}
-          onDelete={() => onUpdate(updateArray(items, index, 'delete'))}
-          showDelete={true}
-        />
-      </div>
-    ))}
-    <div style={{ padding: '2px 8px' }}>
-      <EditableField
-        value=""
-        onSave={(newValue) => {
-          if (newValue.trim()) {
-            onUpdate(addToArray(items, newValue));
-          }
-        }}
-        placeholder={addPlaceholder}
-        style={{ fontSize: '12px', fontStyle: 'italic', color: '#999' }}
-        showVisibility={showVisibility}
-      />
-    </div>
-  </>
-);
+// Removed unused SectionHeader, ClassHeader and EditableList subcomponents
 
 function EditableField({
   value,
@@ -554,34 +364,51 @@ export function EditableNode({ id, data, selected, isConnectable }: NodeProps<UM
     nodeData.onDelete?.(id);
   };
 
-  const getNodeStyle = (): React.CSSProperties => {
-    const baseStyle: React.CSSProperties = {
-      padding: '0px',
-      background: selected ? '#f7f9fa' : '#fff',
-      border: selected ? '2px solid #0071e3' : '2px solid #333',
-      borderRadius: '0px',
-      minWidth: '200px',
-      boxShadow: selected ? '0 0 0 2px #cde3fa' : '0 4px 12px rgba(0,0,0,0.15)',
-      position: 'relative',
-      fontFamily: 'Arial, sans-serif',
-      overflow: 'hidden',
-    };
+  const getNodeStyle = () => {
+    const baseStyle = getBaseNodeStyle(!!selected);
 
-    const toolName = nodeData.toolName;
-    const elementStyle = toolName && ELEMENT_STYLES[toolName];
-
-    if (nodeData.toolType === 'element' && elementStyle) {
+    if (nodeData.toolType === 'element') {
+      switch (nodeData.toolName) {
+        case 'class':
+          return {
+            ...baseStyle,
+            borderColor: selected ? '#2563eb' : '#6b7280',
+            background: '#ffffff',
+          };
+        case 'abstract-class':
+          return {
+            ...baseStyle,
+            borderColor: selected ? '#2563eb' : '#6b7280',
+            background: '#ffffff',
+          };
+        case 'interface':
+          return {
+            ...baseStyle,
+            borderColor: selected ? '#2563eb' : '#6b7280',
+            borderStyle: 'dashed',
+            background: '#ffffff',
+          };
+        case 'enumeration':
+          return {
+            ...baseStyle,
+            borderColor: selected ? '#2563eb' : '#6b7280',
+            background: '#ffffff',
+          };
+        case 'package':
+          return {
+            ...baseStyle,
+            borderColor: selected ? '#2563eb' : '#6b7280',
+            background: '#ffffff',
+          };
+        default:
+          return baseStyle;
+      }
+    } else if (nodeData.toolType === 'member') {
       return {
         ...baseStyle,
-        borderColor: elementStyle.borderColor,
-        borderWidth: '2px',
-        borderStyle: elementStyle.borderStyle || 'solid',
-        background: selected ? elementStyle.selectedBackground : elementStyle.background,
-        minHeight: elementStyle.minHeight,
-        boxShadow: selected 
-          ? '0 0 0 2px #cde3fa' 
-          : `0 4px 16px ${elementStyle.borderColor}33`,
-        ...(elementStyle.fontStyle && { fontStyle: elementStyle.fontStyle }),
+        minHeight: '40px',
+        borderRadius: '4px',
+        boxShadow: selected ? '0 4px 12px rgba(37, 99, 235, 0.25)' : '0 2px 8px rgba(0,0,0,0.08)',
       };
     }
 
@@ -590,82 +417,243 @@ export function EditableNode({ id, data, selected, isConnectable }: NodeProps<UM
         ...baseStyle,
         minHeight: nodeData.toolType === 'member' ? '40px' : '30px',
         borderRadius: '4px',
-        boxShadow: selected ? '0 0 0 2px #cde3fa' : '0 2px 8px rgba(0,0,0,0.1)',
+        boxShadow: selected ? '0 4px 12px rgba(37, 99, 235, 0.25)' : '0 2px 8px rgba(0,0,0,0.08)',
       };
     }
 
     return baseStyle;
   };
 
-  const renderUMLStructure = (
-    styleConfig: ElementStyleConfig,
-    sections: Array<{
-      title: string;
-      items?: string[];
-      placeholder: string;
-      addPlaceholder: string;
-      dataKey: 'attributes' | 'methods' | 'values';
-    }>,
-    headerPlaceholder: string,
-    stereotype?: string
-  ) => (
-    <div style={{ width: '100%' }}>
-      {selected && <DeleteButton onClick={handleDelete} />}
-      
-      <ClassHeader
-        value={nodeData.className || nodeData.packageName || ''}
-        placeholder={headerPlaceholder}
-        onSave={(newValue) => updateNodeData(
-          stereotype === 'package' ? { packageName: newValue } : { className: newValue }
-        )}
-        style={styleConfig}
-        stereotype={stereotype}
-      />
+  const DeleteButton: React.FC<{
+    onDeleteClick: () => void;
+    title?: string;
+    background?: string;
+    hoverBackground?: string;
+    size?: number;
+    boxShadow?: string;
+  }> = ({ onDeleteClick, title = 'Delete node', background = '#ef4444', hoverBackground = '#dc2626', size = 22, boxShadow = '0 4px 12px rgba(239,68,68,0.3)' }) => {
+    return (
+      <button
+        onMouseDown={(e) => { e.stopPropagation(); e.preventDefault(); }}
+        onClick={(e) => { e.stopPropagation(); e.preventDefault(); onDeleteClick(); }}
+        style={getDeleteButtonStyle({ background, size, boxShadow })}
+        onMouseEnter={(e) => {
+          e.currentTarget.style.background = hoverBackground;
+          e.currentTarget.style.transform = 'scale(1.1)';
+        }}
+        onMouseLeave={(e) => {
+          e.currentTarget.style.background = background;
+          e.currentTarget.style.transform = 'scale(1)';
+        }}
+        title={title}
+      >
+        ×
+      </button>
+    );
+  };
 
-      {sections.map((section, idx) => (
-        <div
-          key={section.title}
-          style={{
-            borderBottom: idx < sections.length - 1 ? `1px solid ${styleConfig.borderColor}` : undefined,
-            padding: '8px 0',
-            fontSize: '12px',
-            color: '#666',
-            minHeight: '50px',
-          }}
-        >
-          <SectionHeader
-            title={section.title}
-            color={styleConfig.borderColor}
-            background={styleConfig.sectionBackground}
-          />
-          {section.title === 'Contents' ? (
-            <div style={{ padding: '2px 8px', fontStyle: 'italic', color: '#999' }}>
-              Drag classes here...
-            </div>
-          ) : (
-            <EditableList
-              items={nodeData[section.dataKey]}
-              placeholder={section.placeholder}
-              addPlaceholder={section.addPlaceholder}
-              onUpdate={(newItems) => updateNodeData({ [section.dataKey]: newItems })}
-              showVisibility={section.dataKey !== 'values'}
-            />
-          )}
+  const renderLines = (items: string[]) => (
+    <>
+      {items.map((text, index) => (
+        <div key={index} style={listItemStyle}>
+          {text}
         </div>
       ))}
+    </>
+  );
+
+  const renderUMLClass = () => (
+    <div style={{ width: '100%' }}>
+      {selected && (
+        <DeleteButton onDeleteClick={handleDelete} />
+      )}
+      
+      {/* Class Name Section */}
+      <div style={headerBaseStyle}>
+        <EditableField
+          value={nodeData.className || ''}
+          onSave={(newValue) => updateNodeData({ className: newValue })}
+          placeholder="Class Name"
+          style={{ 
+            fontWeight: '600',
+            fontSize: '13px',
+            color: '#1f2937',
+            textAlign: 'center'
+          }}
+        />
+      </div>
+      
+      {/* Attributes Section */}
+      {nodeData.attributes && nodeData.attributes.length > 0 && (
+        <div style={borderedSectionBodyStyle}>
+          {renderLines(nodeData.attributes)}
+        </div>
+      )}
+      
+      {/* Methods Section */}
+      {nodeData.methods && nodeData.methods.length > 0 && (
+        <div style={sectionBodyStyle}>
+          {renderLines(nodeData.methods)}
+        </div>
+      )}
     </div>
   );
 
-  const renderSimpleNode = (placeholder: string, color?: string) => (
+  // Render UML Abstract Class
+  const renderUMLAbstractClass = () => (
+    <div style={{ width: '100%' }}>
+      {selected && (
+        <DeleteButton onDeleteClick={handleDelete} />
+      )}
+      
+      <div style={italicHeaderStyle}>
+        <span style={{ fontSize: '10px', fontWeight: 'normal' }}>&lt;&lt;abstract&gt;&gt;</span>
+        {' '}
+        <EditableField
+          value={nodeData.className || ''}
+          onSave={(newValue) => updateNodeData({ className: newValue })}
+          placeholder="Abstract Class Name"
+          style={{ 
+            fontWeight: '600',
+            fontSize: '13px',
+            color: '#1f2937',
+            textAlign: 'center',
+            fontStyle: 'italic'
+          }}
+        />
+      </div>
+      
+      {nodeData.attributes && nodeData.attributes.length > 0 && (
+        <div style={borderedSectionBodyStyle}>
+          {renderLines(nodeData.attributes)}
+        </div>
+      )}
+      
+      {nodeData.methods && nodeData.methods.length > 0 && (
+        <div style={sectionBodyStyle}>
+          {renderLines(nodeData.methods)}
+        </div>
+      )}
+    </div>
+  );
+
+  // Render UML Interface
+  const renderUMLInterface = () => (
+    <div style={{ width: '100%' }}>
+      {selected && (
+        <DeleteButton onDeleteClick={handleDelete} />
+      )}
+      
+      <div style={italicHeaderStyle}>
+        <span style={{ fontSize: '10px', fontWeight: 'normal' }}>&lt;&lt;interface&gt;&gt;</span>
+        {' '}
+        <EditableField
+          value={nodeData.className || ''}
+          onSave={(newValue) => updateNodeData({ className: newValue })}
+          placeholder="Interface Name"
+          style={{ 
+            fontWeight: '600',
+            fontSize: '13px',
+            color: '#1f2937',
+            textAlign: 'center',
+            fontStyle: 'italic'
+          }}
+        />
+      </div>
+      
+      {nodeData.methods && nodeData.methods.length > 0 && (
+        <div style={sectionBodyStyle}>
+          {renderLines(nodeData.methods)}
+        </div>
+      )}
+    </div>
+  );
+
+  // Render UML Enumeration
+  const renderUMLEnumeration = () => (
+    <div style={{ width: '100%' }}>
+      {selected && (
+        <DeleteButton onDeleteClick={handleDelete} />
+      )}
+      
+      <div style={italicHeaderStyle}>
+        <span style={{ fontSize: '10px', fontWeight: 'normal' }}>&lt;&lt;enumeration&gt;&gt;</span>
+        {' '}
+        <EditableField
+          value={nodeData.className || ''}
+          onSave={(newValue) => updateNodeData({ className: newValue })}
+          placeholder="Enumeration Name"
+          style={{ 
+            fontWeight: '600',
+            fontSize: '13px',
+            color: '#1f2937',
+            textAlign: 'center',
+            fontStyle: 'italic'
+          }}
+        />
+      </div>
+      
+      {nodeData.values && nodeData.values.length > 0 && (
+        <div style={sectionBodyStyle}>
+          {renderLines(nodeData.values)}
+        </div>
+      )}
+    </div>
+  );
+
+  // Render UML Package
+  const renderUMLPackage = () => (
+    <div style={{ width: '100%' }}>
+      {/* Delete button - only show when selected */}
+      {selected && (
+        <DeleteButton
+          onDeleteClick={handleDelete}
+          background="#e74c3c"
+          hoverBackground="#c0392b"
+          size={20}
+          boxShadow="0 2px 4px rgba(0,0,0,0.2)"
+        />
+      )}
+      {/* Package name section with tab design */}
+      <div style={packageHeaderStyle}>
+        <EditableField
+          value={nodeData.packageName || ''}
+          onSave={(newValue) => updateNodeData({ packageName: newValue })}
+          placeholder="Package Name"
+            style={{ 
+              fontWeight: 'bold',
+            fontSize: '14px',
+            color: '#f39c12',
+            textAlign: 'center'
+          }}
+        />
+      </div>
+      
+      {/* Package contents */}
+      <div style={packageContentStyle}>
+        <div style={packageContentTitleStyle}>
+          Contents
+        </div>
+        <div style={packageHintStyle}>
+          Drag classes here...
+        </div>
+      </div>
+    </div>
+  );
+
+  // Member node is handled by renderSimpleNode via getRenderer
+
+  // Simple fallback renderer for generic items
+  const renderSimpleNode = (defaultPlaceholder: string, textColor?: string) => (
     <div style={{ width: '100%', textAlign: 'center', padding: '8px' }}>
       <EditableField
         value={nodeData.label || ''}
         onSave={(newValue) => updateNodeData({ label: newValue })}
-        placeholder={placeholder}
-        style={{ 
-          fontSize: '14px', 
+        placeholder={defaultPlaceholder}
+        style={{
+          fontSize: '14px',
           fontWeight: 'bold',
-          ...(color && { color }),
+          ...(textColor ? { color: textColor } : {}),
         }}
       />
     </div>
@@ -675,57 +663,19 @@ export function EditableNode({ id, data, selected, isConnectable }: NodeProps<UM
     const { toolType, toolName } = nodeData;
 
     if (toolType === 'element') {
-      const styleConfig = toolName && ELEMENT_STYLES[toolName];
-      
-      if (!styleConfig) return renderSimpleNode('Relationship');
-
-      const configs: Record<string, any> = {
-        'class': {
-          sections: [
-            { title: 'Attributes', dataKey: 'attributes', placeholder: '+ attribute: Type', addPlaceholder: '+ Add attribute...' },
-            { title: 'Methods', dataKey: 'methods', placeholder: '+ method(): ReturnType', addPlaceholder: '+ Add method...' },
-          ],
-          placeholder: 'Class Name',
-        },
-        'abstract-class': {
-          sections: [
-            { title: 'Attributes', dataKey: 'attributes', placeholder: '+ attribute: Type', addPlaceholder: '+ Add attribute...' },
-            { title: 'Methods', dataKey: 'methods', placeholder: '+ method(): ReturnType', addPlaceholder: '+ Add method...' },
-          ],
-          placeholder: 'Abstract Class Name',
-          stereotype: 'abstract',
-        },
-        'interface': {
-          sections: [
-            { title: 'Methods', dataKey: 'methods', placeholder: '+ method(): ReturnType', addPlaceholder: '+ Add method...' },
-          ],
-          placeholder: 'Interface Name',
-          stereotype: 'interface',
-        },
-        'enumeration': {
-          sections: [
-            { title: 'Values', dataKey: 'values', placeholder: 'Value', addPlaceholder: 'Add value...' },
-          ],
-          placeholder: 'Enumeration Name',
-          stereotype: 'enumeration',
-        },
-        'package': {
-          sections: [
-            { title: 'Contents', dataKey: 'methods', placeholder: '', addPlaceholder: '' },
-          ],
-          placeholder: 'Package Name',
-          stereotype: 'package',
-        },
-      };
-
-      const config = configs[toolName];
-      if (config) {
-        return renderUMLStructure(
-          styleConfig,
-          config.sections,
-          config.placeholder,
-          config.stereotype
-        );
+      switch (toolName) {
+        case 'class':
+          return renderUMLClass();
+        case 'abstract-class':
+          return renderUMLAbstractClass();
+        case 'interface':
+          return renderUMLInterface();
+        case 'enumeration':
+          return renderUMLEnumeration();
+        case 'package':
+          return renderUMLPackage();
+        default:
+          return renderSimpleNode('Element');
       }
     }
 
@@ -738,17 +688,70 @@ export function EditableNode({ id, data, selected, isConnectable }: NodeProps<UM
   return (
     <div style={getNodeStyle()}>
       {getRenderer()}
-      <Handle
-        type="target"
-        position={Position.Top}
+
+      {/* Midpoint handles per side; targets on Left/Top, sources on Right/Bottom */}
+      {/* Left side: allow both target and source */}
+      <Handle 
+        type="target" 
+        position={Position.Left} 
         isConnectable={isConnectable}
-        style={{ background: '#0071e3', width: '8px', height: '8px' }}
+        id="left-target"
+        style={handleStyles.leftTarget}
       />
-      <Handle
-        type="source"
-        position={Position.Bottom}
+      <Handle 
+        type="source" 
+        position={Position.Left} 
         isConnectable={isConnectable}
-        style={{ background: '#0071e3', width: '8px', height: '8px' }}
+        id="left-source"
+        style={handleStyles.leftSource}
+      />
+
+      {/* Top side: allow both target and source */}
+      <Handle 
+        type="target" 
+        position={Position.Top} 
+        isConnectable={isConnectable}
+        id="top-target"
+        style={handleStyles.topTarget}
+      />
+      <Handle 
+        type="source" 
+        position={Position.Top} 
+        isConnectable={isConnectable}
+        id="top-source"
+        style={handleStyles.topSource}
+      />
+
+      {/* Right side: allow both source and target */}
+      <Handle 
+        type="source" 
+        position={Position.Right} 
+        isConnectable={isConnectable}
+        id="right-source"
+        style={handleStyles.rightSource}
+      />
+      <Handle 
+        type="target" 
+        position={Position.Right} 
+        isConnectable={isConnectable}
+        id="right-target"
+        style={handleStyles.rightTarget}
+      />
+
+      {/* Bottom side: allow both source and target */}
+      <Handle 
+        type="source" 
+        position={Position.Bottom} 
+        isConnectable={isConnectable}
+        id="bottom-source"
+        style={handleStyles.bottomSource}
+      />
+      <Handle 
+        type="target" 
+        position={Position.Bottom} 
+        isConnectable={isConnectable}
+        id="bottom-target"
+        style={handleStyles.bottomTarget}
       />
     </div>
   );

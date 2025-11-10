@@ -114,10 +114,11 @@ const modalFooterStyle: React.CSSProperties = {
 const boxStyle: React.CSSProperties = {
   background: gradientBackground('#ffffff', '#f8f9fa'),
   border: '2px solid #dee2e6',
-  borderRadius: '12px',
-  padding: '20px 24px',
-  width: '280px',
-  height: '180px',
+
+  borderRadius: '0',
+  padding: '14px 16px',
+  width: '220px',
+
   cursor: 'pointer',
   boxShadow: '0 4px 16px rgba(0,0,0,0.08), 0 2px 8px rgba(0,0,0,0.04)',
   transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',

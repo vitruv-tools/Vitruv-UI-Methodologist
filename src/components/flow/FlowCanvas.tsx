@@ -1,42 +1,17 @@
-import React, { useRef, useState, forwardRef, useImperativeHandle, useEffect, useCallback } from 'react';
-import ReactFlow, {
-  MiniMap,
-  Background,
-  ReactFlowInstance,
-  Node,
-  Edge,
-} from 'reactflow';
+import React, { useRef, useState, forwardRef, useImperativeHandle, useEffect } from 'react';
+import ReactFlow, { MiniMap, Background, ReactFlowInstance, Node, Edge } from 'reactflow';
 import 'reactflow/dist/style.css';
 import { useFlowState } from '../../hooks/useFlowState';
 import { useDragAndDrop } from '../../hooks/useDragAndDrop';
 import { EditableNode } from './EditableNode';
 import { UMLRelationship } from './UMLRelationship';
 import { EcoreFileBox } from './EcoreFileBox';
-import { ConnectionLine } from './ConnectionLine';
-import { CodeEditorModal } from './CodeEditorModal';
 
-// Konstanten
-const COLOR_LIST = [
-  '#1f77b4', '#ff7f0e', '#2ca02c', '#d62728', '#9467bd',
-  '#8c564b', '#e377c2', '#7f7f7f', '#bcbd22', '#17becf',
-  '#368bd6', '#ff9f40', '#4daf4a', '#ff6b6b', '#b388eb',
-  '#9c6644', '#f39ed1', '#a9a9a9', '#c9d22f', '#33c7c7',
-  '#2a86d6', '#ffb86b', '#63c37a', '#ff4f7a', '#b08fe8'
-];
-
-const LOCALSTORAGE_KEY = 'flow_edge_color_map_v1';
-const NODE_DIMENSIONS = { width: 280, height: 180 };
-
-const nodeTypes = {
-  editable: EditableNode,
-  ecoreFile: EcoreFileBox
-};
+const nodeTypes = { editable: EditableNode, ecoreFile: EcoreFileBox };
 const edgeTypes = { uml: UMLRelationship };
 
-// Types
 interface FlowCanvasProps {
   onDeploy?: (nodes: Node[], edges: Edge[]) => void;
-  onToolClick?: (toolType: string, toolName: string, diagramType?: string) => void;
   onDiagramChange?: (nodes: Node[], edges: Edge[]) => void;
   onEcoreFileSelect?: (fileName: string) => void;
   onEcoreFileExpand?: (fileName: string, fileContent: string) => void;
@@ -44,106 +19,44 @@ interface FlowCanvasProps {
   onEcoreFileRename?: (id: string, newFileName: string) => void;
 }
 
-interface ConnectionDragState {
-  isActive: boolean;
-  sourceNodeId: string | null;
-  sourceHandle: 'top' | 'bottom' | 'left' | 'right' | null;
-  currentPosition: { x: number; y: number } | null;
-}
+type FlowCanvasHandle = {
+  loadDiagramData: (nodes: any[], edges: any[]) => void;
+  resetExpandedFile: () => void;
+  setInteractive: (enabled: boolean) => void;
+  setDraggable: (enabled: boolean) => void;
+  addEcoreFile: (
+    fileName: string,
+    fileContent: string,
+    meta?: { position?: { x: number; y: number }; description?: string; keywords?: string; domain?: string; createdAt?: string }
+  ) => string;
+  getNodes: () => Node[];
+  getEdges: () => Edge[];
+  undo: () => void;
+  redo: () => void;
+  canUndo: boolean;
+  canRedo: boolean;
+};
 
-interface CodeEditorState {
-  isOpen: boolean;
-  edgeId: string | null;
-  initialCode: string;
-  sourceFileName?: string;
-  targetFileName?: string;
-}
-
-type HandlePosition = 'top' | 'bottom' | 'left' | 'right';
-
-// Utility Functions
-const pairKey = (a: string, b: string) => (a < b ? `${a}::${b}` : `${b}::${a}`);
-
-const createZoomButton = (
-  onClick: () => void,
-  title: string,
-  icon: string
-) => (
-  <button
-    onClick={onClick}
-    style={{
+export const FlowCanvas = forwardRef<FlowCanvasHandle, FlowCanvasProps>(
+  ({ onDeploy, onDiagramChange, onEcoreFileSelect, onEcoreFileExpand, onEcoreFileDelete, onEcoreFileRename }, ref) => {
+    const reactFlowWrapper = useRef<HTMLDivElement>(null);
+    const [reactFlowInstance, setReactFlowInstance] = useState<ReactFlowInstance | null>(null);
+    const [isDragOver, setIsDragOver] = useState(false);
+    const [isInteractive, setIsInteractive] = useState(true);
+    const [isDraggable, setIsDraggable] = useState(true);
+    const [selectedFileId, setSelectedFileId] = useState<string | null>(null);
+    const [expandedFileId, setExpandedFileId] = useState<string | null>(null);
+    const [routingStyle, setRoutingStyle] = useState<'curved' | 'orthogonal'>('orthogonal');
+    const [lineSeparation] = useState<number>(36);
+    const controlButtonStyle: React.CSSProperties = {
       width: 36,
       height: 36,
       borderRadius: 6,
       border: '1px solid #e5e7eb',
       background: '#ffffff',
-      cursor: 'pointer'
-    }}
-    title={title}
-  >
-    {icon}
-  </button>
-);
-
-// Label Mapping
-const TOOL_LABELS: Record<string, Record<string, string>> = {
-  element: {
-    'class': 'Class',
-    'abstract-class': 'AbstractClass',
-    'interface': 'Interface',
-    'enumeration': 'Enumeration',
-    'package': 'Package',
-  },
-  member: {
-    'attribute': '+ attribute: Type',
-    'method': '+ method(): ReturnType',
-    'private-attribute': '- privateAttribute: Type',
-    'protected-attribute': '# protectedAttribute: Type',
-    'private-method': '- privateMethod(): ReturnType',
-    'protected-method': '# protectedMethod(): ReturnType',
-  },
-  relationship: {
-    'association': 'Association',
-    'aggregation': 'Aggregation',
-    'composition': 'Composition',
-    'inheritance': 'Inheritance',
-    'realization': 'Realization',
-    'dependency': 'Dependency',
-  },
-  multiplicity: {
-    'one': '1',
-    'many': '*',
-    'optional': '0..1',
-    'range': '1..*',
-  },
-};
-
-const getToolLabel = (toolType: string, toolName: string): string => {
-  return TOOL_LABELS[toolType]?.[toolName] || toolName;
-};
-
-export const FlowCanvas = forwardRef<{
-  handleToolClick: (toolType: string, toolName: string, diagramType?: string) => void;
-  loadDiagramData: (nodes: any[], edges: any[]) => void;
-  getNodes: () => Node[];
-  getEdges: () => Edge[];
-  addEcoreFile: (fileName: string, fileContent: string, meta?: any) => void;
-  resetExpandedFile: () => void;
-  undo: () => void;
-  redo: () => void;
-  canUndo: boolean;
-  canRedo: boolean;
-}, FlowCanvasProps>(
-  ({ onDeploy, onToolClick, onDiagramChange, onEcoreFileSelect, onEcoreFileExpand, onEcoreFileDelete, onEcoreFileRename }, ref) => {
-
-    const reactFlowWrapper = useRef<HTMLDivElement>(null);
-    const [reactFlowInstance, setReactFlowInstance] = useState<ReactFlowInstance | null>(null);
-    const [isDragOver, setIsDragOver] = useState(false);
-    const [isInteractive, setIsInteractive] = useState(true);
-    const [selectedFileId, setSelectedFileId] = useState<string | null>(null);
-    const [expandedFileId, setExpandedFileId] = useState<string | null>(null);
-    const [connectionDragState, setConnectionDragState] = useState<ConnectionDragState | null>(null);
-    const [codeEditorState, setCodeEditorState] = useState<CodeEditorState | null>(null);
+      cursor: 'pointer',
+    };
+    const hiddenEcoreNodeRef = useRef<Node | null>(null);
 
     const {
       nodes,
@@ -152,7 +65,6 @@ export const FlowCanvas = forwardRef<{
       onEdgesChange,
       onConnect,
       addNode,
-      addEdge,
       updateNodeLabel,
       removeNode,
       removeEdge,
@@ -162,557 +74,146 @@ export const FlowCanvas = forwardRef<{
       redo,
       canUndo,
       canRedo,
-      updateEdgeCode,
     } = useFlowState();
-
-    const edgeColorMapRef = useRef<Map<string, string>>(new Map());
-    const nextColorIndexRef = useRef<number>(0);
-
-    // Edge Color Management
-    useEffect(() => {
-      try {
-        const raw = localStorage.getItem(LOCALSTORAGE_KEY);
-        if (raw) {
-          const parsed = JSON.parse(raw) as Record<string, string>;
-          edgeColorMapRef.current = new Map(Object.entries(parsed));
-          const used = new Set(Object.values(parsed));
-          let maxIndex = 0;
-          COLOR_LIST.forEach((c, i) => { 
-            if (used.has(c)) maxIndex = Math.max(maxIndex, i + 1); 
-          });
-          nextColorIndexRef.current = maxIndex % COLOR_LIST.length;
-        }
-      } catch (e) {
-        console.warn('Failed to load edge color map', e);
-      }
-    }, []);
-
-    const persistEdgeColorMap = useCallback(() => {
-      try {
-        const obj: Record<string, string> = {};
-        edgeColorMapRef.current.forEach((v, k) => {
-          obj[k] = v;
-        });
-        localStorage.setItem(LOCALSTORAGE_KEY, JSON.stringify(obj));
-      } catch (e) {
-        // Silent fail
-      }
-    }, []);
-
-    const getColorForPair = useCallback((idA: string, idB: string) => {
-      const key = pairKey(idA, idB);
-      const existing = edgeColorMapRef.current.get(key);
-      if (existing) return existing;
-      const color = COLOR_LIST[nextColorIndexRef.current % COLOR_LIST.length];
-      edgeColorMapRef.current.set(key, color);
-      nextColorIndexRef.current += 1;
-      persistEdgeColorMap();
-      return color;
-    }, [persistEdgeColorMap]);
-
-    useEffect(() => {
-      console.log('EDGES STATE CHANGED:', edges);
-      console.log('Number of edges:', edges.length);
-      if (edges.length > 0) {
-        console.log('First edge:', edges[0]);
-      }
-    }, [edges]);
 
     const { onDrop, onDragOver } = useDragAndDrop({
       reactFlowInstance,
       reactFlowWrapper,
       addNode,
-      addEdge,
     });
 
-    // Helper: Get Handle Position
-    const getHandlePosition = useCallback((
-      nodeId: string,
-      handle: HandlePosition
-    ): { x: number; y: number } | null => {
-      const node = nodes.find(n => n.id === nodeId);
-      if (!node) return null;
+    const loadDiagramData = (newNodes: any[], newEdges: any[]) => {
+      setNodes([]);
+      setEdges([]);
+      if (newNodes.length > 0) setNodes(newNodes);
+      if (newEdges.length > 0) setEdges(newEdges);
+    };
 
-      const { x: nodeX, y: nodeY } = node.position;
-      const { width, height } = NODE_DIMENSIONS;
+    const handleCanvasDragOver = (event: React.DragEvent) => {
+      onDragOver(event);
+      setIsDragOver(true);
+    };
 
-      const positions: Record<HandlePosition, { x: number; y: number }> = {
-        top: { x: nodeX + width / 2, y: nodeY },
-        bottom: { x: nodeX + width / 2, y: nodeY + height },
-        left: { x: nodeX, y: nodeY + height / 2 },
-        right: { x: nodeX + width, y: nodeY + height / 2 },
-      };
+    const handleDragLeave = () => setIsDragOver(false);
 
-      return positions[handle];
-    }, [nodes]);
+    const handleDrop = (event: React.DragEvent) => {
+      setIsDragOver(false);
+      onDrop(event);
+    };
 
-    // Helper: Calculate Target Handle
-    const calculateTargetHandle = useCallback((
-      sourcePos: { x: number; y: number },
-      targetPos: { x: number; y: number }
-    ): HandlePosition => {
-      const dx = targetPos.x - sourcePos.x;
-      const dy = targetPos.y - sourcePos.y;
+    const handleLabelChange = (id: string, newLabel: string) => {
+      updateNodeLabel(id, newLabel);
+    };
 
-      if (Math.abs(dx) > Math.abs(dy)) {
-        return dx > 0 ? 'left' : 'right';
+    const handleEcoreFileSelect = (fileName: string) => {
+      const node = nodes.find((n) => n.type === 'ecoreFile' && (n.data as any)?.fileName === fileName);
+      if (node) {
+        setSelectedFileId(node.id);
+        onEcoreFileSelect?.(fileName);
       }
-      return dy > 0 ? 'top' : 'bottom';
-    }, []);
+    };
 
-    // Helper: Check if position is inside node
-    const isPositionInsideNode = useCallback((
-      position: { x: number; y: number },
-      node: Node
-    ): boolean => {
-      const { width, height } = NODE_DIMENSIONS;
-      return (
-        position.x >= node.position.x &&
-        position.x <= node.position.x + width &&
-        position.y >= node.position.y &&
-        position.y <= node.position.y + height
-      );
-    }, []);
+    const handleEcoreFileExpand = (fileName: string, fileContent: string) => {
+      const node = nodes.find((n) => n.type === 'ecoreFile' && (n.data as any)?.fileName === fileName);
+      if (node) {
+        setExpandedFileId(null);
+        setExpandedFileId(node.id);
+        setSelectedFileId(node.id);
+        // remember this ecore card so we can bring it back alongside UML
+        hiddenEcoreNodeRef.current = { ...node };
+      }
+      onEcoreFileExpand?.(fileName, fileContent);
+      // Lightly zoom out so the generated UML is seen from a bit farther
+      requestAnimationFrame(() => {
+        try {
+          reactFlowInstance?.zoomTo?.(0.8);
+        } catch {}
+      });
+    };
 
-    // Keyboard Shortcuts
+    useEffect(() => {
+      if (onDiagramChange) onDiagramChange(nodes, edges);
+    }, [nodes, edges, onDiagramChange]);
+
+    // No auto-fit on load to avoid over-zooming; keep user's viewport
+
     useEffect(() => {
       const handleKeyDown = (event: KeyboardEvent) => {
-        const target = event.target as HTMLElement;
-        if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.contentEditable === 'true') {
-          return;
+        if (event.key === 'Delete' || event.key === 'Backspace') {
+          // Try React Flow selection first
+          if (reactFlowInstance) {
+            const selectedNodes = reactFlowInstance.getNodes().filter((n) => n.selected);
+            const selectedEdges = reactFlowInstance.getEdges().filter((e) => e.selected);
+            if (selectedNodes.length > 0) {
+              event.preventDefault();
+              selectedNodes.forEach((n) => removeNode(n.id));
+              return;
+            }
+            if (selectedEdges.length > 0) {
+              event.preventDefault();
+              selectedEdges.forEach((e) => removeEdge(e.id));
+              return;
+            }
+          }
+          // If no RF selection, delete selected Ecore box if any
+          if (selectedFileId && onEcoreFileDelete) {
+            event.preventDefault();
+            onEcoreFileDelete(selectedFileId);
+            setSelectedFileId(null);
+            return;
+          }
         }
 
-        if (!(event.ctrlKey || event.metaKey)) return;
-
-        const key = event.key.toLowerCase();
-        
-        if (key === 'z') {
-          event.preventDefault();
-          if (event.shiftKey) {
-            if (canRedo) redo();
-          } else {
-            if (canUndo) undo();
+        if (event.ctrlKey || event.metaKey) {
+          switch (event.key.toLowerCase()) {
+            case 'z':
+              event.preventDefault();
+              if (event.shiftKey) {
+                if (canRedo) redo();
+              } else {
+                if (canUndo) undo();
+              }
+              break;
+            case 'y':
+              event.preventDefault();
+              if (canRedo) redo();
+              break;
           }
-        } else if (key === 'y') {
-          event.preventDefault();
-          if (canRedo) redo();
         }
       };
 
       document.addEventListener('keydown', handleKeyDown);
       return () => document.removeEventListener('keydown', handleKeyDown);
-    }, [undo, redo, canUndo, canRedo]);
+    }, [reactFlowInstance, selectedFileId, onEcoreFileDelete, removeNode, removeEdge, canUndo, canRedo, undo, redo]);
 
-    // Connection Handlers
-    const handleConnectionEnd = useCallback((e: MouseEvent) => {
-      console.log('handleConnectionEnd CALLED');
-
-      if (!reactFlowInstance || !connectionDragState?.isActive || !connectionDragState.sourceNodeId) {
-        console.log('❌ Invalid connection state');
-        return;
-      }
-
-      console.log('🔵 Connection drag ended');
-
-      const flowPosition = reactFlowInstance.screenToFlowPosition({
-        x: e.clientX,
-        y: e.clientY,
-      });
-
-      const intersectingNodes = nodes.filter(node => {
-        if (node.type !== 'ecoreFile' || node.id === connectionDragState.sourceNodeId) {
-          return false;
-        }
-        return isPositionInsideNode(flowPosition, node);
-      });
-
-      console.log('🔵 Intersecting nodes:', intersectingNodes);
-
-      if (intersectingNodes.length > 0) {
-        const targetNode = intersectingNodes[0];
-        console.log('✅ Connection ended on node:', targetNode.id);
-
-        const existingEdge = edges.find(edge =>
-          (edge.source === connectionDragState.sourceNodeId && edge.target === targetNode.id) ||
-          (edge.source === targetNode.id && edge.target === connectionDragState.sourceNodeId)
-        );
-
-        if (!existingEdge) {
-          const sourceNodePos = nodes.find(n => n.id === connectionDragState.sourceNodeId)?.position;
-          const targetNodePos = targetNode.position;
-
-          let targetHandle: HandlePosition = 'left';
-
-          if (sourceNodePos && targetNodePos) {
-            targetHandle = calculateTargetHandle(sourceNodePos, targetNodePos);
-          }
-
-          console.log('🔵 Calculated handles:', {
-            source: connectionDragState.sourceHandle,
-            target: targetHandle
-          });
-
-          const color = getColorForPair(connectionDragState.sourceNodeId, targetNode.id);
-
-          const newEdge: Edge = {
-            id: `edge-${connectionDragState.sourceNodeId}-${targetNode.id}-${Date.now()}`,
-            source: connectionDragState.sourceNodeId,
-            target: targetNode.id,
-            sourceHandle: connectionDragState.sourceHandle,
-            targetHandle: targetHandle,
-            type: 'uml',
-            style: {
-              stroke: color,
-              strokeWidth: 2,
-            },
-          };
-
-          console.log('🎯 Creating edge:', newEdge);
-          addEdge(newEdge);
-        } else {
-          console.log('⚠️ Connection already exists');
-        }
-      } else {
-        console.log('❌ Connection ended in empty space - cancelled');
-      }
-
-      setConnectionDragState(null);
-    }, [reactFlowInstance, nodes, edges, addEdge, connectionDragState, getColorForPair, isPositionInsideNode, calculateTargetHandle]);
-
-    const handleConnectionMove = useCallback((e: MouseEvent) => {
-      if (!reactFlowInstance) return;
-
-      const flowPosition = reactFlowInstance.screenToFlowPosition({
-        x: e.clientX,
-        y: e.clientY,
-      });
-
-      console.log('🟨 handleConnectionMove - updating position:', flowPosition);
-
-      setConnectionDragState(prev => {
-        if (!prev?.isActive) return prev;
-        return {
-          ...prev,
-          currentPosition: flowPosition,
-        };
-      });
-    }, [reactFlowInstance]);
-
-    // Connection Event Listeners
-    useEffect(() => {
-      if (!connectionDragState?.isActive) return;
-
-      const handlers = {
-        move: (e: any) => handleConnectionMove(e),
-        end: (e: any) => handleConnectionEnd(e),
-      };
-
-      const addListeners = () => {
-        const targets = [document, window];
-        const events = ['pointermove', 'pointerup'] as const;
-        
-        targets.forEach(target => {
-          events.forEach((event, idx) => {
-            target.addEventListener(event, idx === 0 ? handlers.move : handlers.end, { capture: true });
-          });
-        });
-      };
-
-      const removeListeners = () => {
-        const targets = [document, window];
-        const events = ['pointermove', 'pointerup'] as const;
-        
-        targets.forEach(target => {
-          events.forEach((event, idx) => {
-            target.removeEventListener(event, idx === 0 ? handlers.move : handlers.end, { capture: true });
-          });
-        });
-      };
-
-      document.body.style.cursor = 'crosshair';
-      addListeners();
-
-      return () => {
-        removeListeners();
-        document.body.style.cursor = '';
-      };
-    }, [connectionDragState?.isActive, handleConnectionMove, handleConnectionEnd]);
-
-    // Code Editor Handlers
-    const handleEdgeDoubleClick = useCallback((edgeId: string) => {
-      const edge = edges.find(e => e.id === edgeId);
-      if (!edge) return;
-
-      const getFileName = (nodeId: string) => {
-        const node = nodes.find(n => n.id === nodeId);
-        return node?.type === 'ecoreFile' ? node.data.fileName : undefined;
-      };
-
-      setCodeEditorState({
-        isOpen: true,
-        edgeId,
-        initialCode: edge.data?.code || '',
-        sourceFileName: getFileName(edge.source),
-        targetFileName: getFileName(edge.target),
-      });
-    }, [edges, nodes]);
-
-    const handleCloseCodeEditor = useCallback(() => {
-      setCodeEditorState(null);
-    }, []);
-
-    const handleSaveCode = useCallback((code: string) => {
-      if (codeEditorState?.edgeId) {
-        updateEdgeCode(codeEditorState.edgeId, code);
-      }
-    }, [codeEditorState, updateEdgeCode]);
-
-    const handleDeleteEdge = useCallback(() => {
-      if (codeEditorState?.edgeId) {
-        removeEdge(codeEditorState.edgeId);
-      }
-    }, [codeEditorState, removeEdge]);
-
-    // Tool Click Handler
-    const handleToolClick = useCallback((toolType: string, toolName: string, diagramType?: string) => {
-      if (!reactFlowInstance || !reactFlowWrapper.current) return;
-
-      const canvasBounds = reactFlowWrapper.current.getBoundingClientRect();
-      const position = reactFlowInstance.project({
-        x: canvasBounds.width / 2,
-        y: canvasBounds.height / 2,
-      });
-
-      const label = getToolLabel(toolType, toolName);
-
-      const newNode: Omit<Node, 'id'> = {
-        type: 'editable',
-        position,
-        data: {
-          label,
-          toolType,
-          toolName,
-          diagramType
-        }
-      };
-
-      console.log('Adding new node from tool click:', newNode);
-      addNode(newNode);
-    }, [reactFlowInstance, addNode]);
-
-    // Diagram Data Management
-    const loadDiagramData = useCallback((newNodes: any[], newEdges: any[]) => {
-      console.log('Loading diagram data:', { newNodes, newEdges });
-      setNodes([]);
-      setEdges([]);
-      if (newNodes.length > 0) setNodes(newNodes);
-      if (newEdges.length > 0) setEdges(newEdges);
-      console.log('Diagram data loaded successfully');
-    }, [setNodes, setEdges]);
-
-    // Drag & Drop Handlers
-    const handleDragOver = useCallback((event: React.DragEvent) => {
-      onDragOver(event);
-      setIsDragOver(true);
-    }, [onDragOver]);
-
-    const handleDragLeave = useCallback(() => {
-      setIsDragOver(false);
-    }, []);
-
-    const handleDrop = useCallback((event: React.DragEvent) => {
-      setIsDragOver(false);
-      onDrop(event);
-    }, [onDrop]);
-
-    const handleLabelChange = useCallback((id: string, newLabel: string) => {
-      updateNodeLabel(id, newLabel);
-    }, [updateNodeLabel]);
-
-    const handleConnectionStart = useCallback((nodeId: string, handle: HandlePosition) => {
-      console.log('🔵 Connection drag started:', { nodeId, handle });
-
-      const initialPosition = getHandlePosition(nodeId, handle);
-      console.log('🔵 Initial position:', initialPosition);
-
-      setConnectionDragState({
-        isActive: true,
-        sourceNodeId: nodeId,
-        sourceHandle: handle,
-        currentPosition: initialPosition,
-      });
-    }, [getHandlePosition]);
-
-    // ---------------------------
-    // Ecore File Handlers (define these BEFORE addEcoreFile)
-    // ---------------------------
-
-    const handleEcoreFileSelect = useCallback((fileName: string) => {
-      const ecoreNode = nodes.find(
-        n => n.type === 'ecoreFile' && n.data.fileName === fileName
-      );
-      if (ecoreNode) {
-        setSelectedFileId(ecoreNode.id);
-        onEcoreFileSelect?.(fileName);
-      }
-    }, [nodes, onEcoreFileSelect]);
-
-    const handleEcoreFileExpand = useCallback((fileName: string, fileContent: string) => {
-      const ecoreNode = nodes.find(
-        n => n.type === 'ecoreFile' && n.data.fileName === fileName
-      );
-
-      if (ecoreNode) {
-        setExpandedFileId(ecoreNode.id);
-        setSelectedFileId(ecoreNode.id);
-        const updatedNodes = nodes.map(n =>
-          n.id === ecoreNode.id
-            ? { ...n, data: { ...n.data, isExpanded: true } }
-            : n
-        );
-        setNodes(updatedNodes);
-      }
-
-      onEcoreFileExpand?.(fileName, fileContent);
-    }, [nodes, setNodes, onEcoreFileExpand]);
-
-    const resetExpandedFile = useCallback(() => {
-      setExpandedFileId(null);
-      const updatedNodes = nodes.map(n =>
-        n.type === 'ecoreFile'
-          ? { ...n, data: { ...n.data, isExpanded: false } }
-          : n
-      );
-      setNodes(updatedNodes);
-    }, [nodes, setNodes]);
-
-    // Ecore File Add - now safe to reference the handlers above
-    const addEcoreFile = useCallback((fileName: string, fileContent: string, meta?: any) => {
-      const position = meta?.position || { x: 100, y: 100 };
-
-      const newEcoreNode: Node = {
-        id: `ecore-${Date.now()}`,
-        type: 'ecoreFile',
-        position: position,
-        data: {
-          fileName,
-          fileContent,
-          description: meta?.description,
-          keywords: meta?.keywords,
-          domain: meta?.domain,
-          createdAt: meta?.createdAt || new Date().toISOString(),
-          onExpand: handleEcoreFileExpand,
-          onSelect: handleEcoreFileSelect,
-          onDelete: onEcoreFileDelete,
-          onRename: onEcoreFileRename,
-          isExpanded: false,
-        },
-        draggable: true,
-      };
-
-      addNode(newEcoreNode);
-      setSelectedFileId(newEcoreNode.id);
-
-      if (onEcoreFileSelect) {
-        onEcoreFileSelect(fileName);
-      }
-    }, [addNode, handleEcoreFileExpand, handleEcoreFileSelect, onEcoreFileSelect, onEcoreFileDelete, onEcoreFileRename]);
-
-    // Diagram Change Effect
-    useEffect(() => {
-      onDiagramChange?.(nodes, edges);
-    }, [nodes, edges, onDiagramChange]);
-
-    // Imperative Handle
     useImperativeHandle(ref, () => ({
-      handleToolClick,
       loadDiagramData,
+      resetExpandedFile: () => setExpandedFileId(null),
+      setInteractive: (enabled: boolean) => setIsInteractive(enabled),
+      setDraggable: (enabled: boolean) => setIsDraggable(enabled),
+      addEcoreFile: (fileName, fileContent, meta) => {
+        const position = meta?.position ?? { x: 100, y: 100 };
+        const id = addNode({
+          type: 'ecoreFile',
+          position,
+          data: {
+            fileName,
+            fileContent,
+            description: meta?.description,
+            keywords: meta?.keywords,
+            domain: meta?.domain,
+            createdAt: meta?.createdAt,
+          },
+        });
+        return id;
+      },
       getNodes: () => nodes,
       getEdges: () => edges,
-      addEcoreFile,
-      resetExpandedFile,
       undo,
       redo,
       canUndo,
       canRedo,
-    }), [handleToolClick, loadDiagramData, nodes, edges, addEcoreFile, resetExpandedFile, undo, redo, canUndo, canRedo]);
-
-    // Helper: Map nodes with handlers
-    const mappedNodes = nodes.map(node => {
-      if (node.type === 'editable') {
-        return {
-          ...node,
-          data: {
-            ...node.data,
-            onLabelChange: handleLabelChange,
-            onDelete: removeNode
-          }
-        };
-      }
-
-      if (node.type === 'ecoreFile') {
-        return {
-          ...node,
-          data: {
-            ...node.data,
-            onExpand: handleEcoreFileExpand,
-            onSelect: handleEcoreFileSelect,
-            onDelete: onEcoreFileDelete,
-            onRename: onEcoreFileRename,
-            isExpanded: expandedFileId === node.id,
-            onConnectionStart: handleConnectionStart,
-            isConnectionActive: connectionDragState?.isActive || false,
-          },
-          selected: selectedFileId === node.id,
-          draggable: !connectionDragState?.isActive,
-        };
-      }
-
-      return node;
-    });
-
-    // Helper: Map edges with handlers
-    const mappedEdges = edges.map(edge => ({
-      ...edge,
-      data: {
-        ...edge.data,
-        onDoubleClick: handleEdgeDoubleClick,
-      },
     }));
-
-    // Helper: Calculate connection line positions
-    const getConnectionLinePositions = () => {
-      if (!connectionDragState?.isActive ||
-          !connectionDragState.sourceNodeId ||
-          !connectionDragState.sourceHandle ||
-          !connectionDragState.currentPosition ||
-          !reactFlowInstance ||
-          !reactFlowWrapper.current) {
-        return null;
-      }
-
-      const sourcePos = getHandlePosition(
-        connectionDragState.sourceNodeId,
-        connectionDragState.sourceHandle
-      );
-
-      if (!sourcePos) return null;
-
-      const viewport = reactFlowInstance.getViewport();
-
-      return {
-        source: {
-          x: sourcePos.x * viewport.zoom + viewport.x,
-          y: sourcePos.y * viewport.zoom + viewport.y,
-        },
-        target: {
-          x: connectionDragState.currentPosition.x * viewport.zoom + viewport.x,
-          y: connectionDragState.currentPosition.y * viewport.zoom + viewport.y,
-        },
-      };
-    };
-
-    const connectionLinePositions = getConnectionLinePositions();
 
     return (
       <div
@@ -722,23 +223,50 @@ export const FlowCanvas = forwardRef<{
           height: '100%',
           position: 'relative',
           border: isDragOver ? '3px dashed #3498db' : 'none',
-          transition: 'border 0.2s ease'
+          transition: 'border 0.2s ease',
         }}
       >
         <ReactFlow
-          nodes={mappedNodes}
-          edges={mappedEdges}
+          nodes={nodes.map((node) => {
+            if (node.type === 'editable') {
+              return {
+                ...node,
+                data: { ...node.data, onLabelChange: handleLabelChange, onDelete: removeNode },
+              };
+            }
+            if (node.type === 'ecoreFile') {
+              return {
+                ...node,
+                data: {
+                  ...(node.data as any),
+                  onExpand: handleEcoreFileExpand,
+                  onSelect: handleEcoreFileSelect,
+                  onDelete: onEcoreFileDelete,
+                  onRename: onEcoreFileRename,
+                  isSelected: selectedFileId === node.id,
+                  isExpanded: expandedFileId === node.id,
+                },
+              };
+            }
+            return node;
+          })}
+          edges={edges.map((edge) => ({
+            ...edge,
+            data: { ...(edge.data as any), routingStyle, separation: lineSeparation },
+          }))}
           onNodesChange={onNodesChange}
           onEdgesChange={onEdgesChange}
           onConnect={onConnect}
-          fitView
           onDrop={handleDrop}
-          onDragOver={handleDragOver}
+          onDragOver={handleCanvasDragOver}
           onDragLeave={handleDragLeave}
           nodeTypes={nodeTypes}
           edgeTypes={edgeTypes}
           onInit={setReactFlowInstance}
-          nodesDraggable={isInteractive && !connectionDragState?.isActive}
+          minZoom={0.6}
+          maxZoom={1.6}
+          defaultViewport={{ x: 0, y: 0, zoom: 0.8 }}
+          nodesDraggable={isDraggable}
           nodesConnectable={isInteractive}
           elementsSelectable={isInteractive}
           panOnDrag={isInteractive}
@@ -750,70 +278,97 @@ export const FlowCanvas = forwardRef<{
           <Background />
         </ReactFlow>
 
-        {/* Connection Line */}
-        {connectionLinePositions && (
-          <ConnectionLine
-            sourcePosition={connectionLinePositions.source}
-            targetPosition={connectionLinePositions.target}
-          />
-        )}
-
-        {/* Zoom Controls */}
-        <div style={{ 
-          position: 'absolute', 
-          left: 16, 
-          bottom: 16, 
-          zIndex: 31, 
-          display: 'flex', 
-          flexDirection: 'column', 
-          gap: 6 
-        }}>
-          {createZoomButton(() => reactFlowInstance?.zoomIn?.(), 'Zoom in', '+')}
-          {createZoomButton(() => reactFlowInstance?.zoomOut?.(), 'Zoom out', '–')}
-          {createZoomButton(() => reactFlowInstance?.fitView?.({ padding: 0.2 }), 'Fit view', '⛶')}
-          {createZoomButton(
-            () => setIsInteractive(prev => !prev),
-            isInteractive ? 'Lock interactions' : 'Unlock interactions',
-            isInteractive ? '🔓' : '🔒'
-          )}
+        <div
+          style={{
+            position: 'absolute',
+            left: 16,
+            bottom: 16,
+            zIndex: 31,
+            display: 'flex',
+            flexDirection: 'column',
+            gap: 6,
+          }}
+        >
+          <button onClick={() => reactFlowInstance?.zoomIn?.()} style={controlButtonStyle} title="Zoom in">
+            +
+          </button>
+          <button onClick={() => reactFlowInstance?.zoomOut?.()} style={controlButtonStyle} title="Zoom out">
+            –
+          </button>
+          <button onClick={() => reactFlowInstance?.fitView?.({ padding: 0.2 })} style={controlButtonStyle} title="Fit view">
+            ⛶
+          </button>
+          <button
+            onClick={() => setRoutingStyle((prev) => (prev === 'orthogonal' ? 'curved' : 'orthogonal'))}
+            style={controlButtonStyle}
+            title={`Routing: ${routingStyle === 'orthogonal' ? 'Orthogonal' : 'Curved'} (toggle)`}
+          >
+            {routingStyle === 'orthogonal' ? '└' : '∿'}
+          </button>
+          <button
+            onClick={() => setIsInteractive((prev) => !prev)}
+            style={controlButtonStyle}
+            title={isInteractive ? 'Lock interactions' : 'Unlock interactions'}
+          >
+            {isInteractive ? '🔓' : '🔒'}
+          </button>
         </div>
 
-        {/* Drag Over Overlay */}
+        {hiddenEcoreNodeRef.current && !nodes.some((n) => n.id === hiddenEcoreNodeRef.current?.id) && (
+          <button
+            onClick={() => {
+              const saved = hiddenEcoreNodeRef.current;
+              if (!saved) return;
+              if (!nodes.some((n) => n.id === saved.id)) {
+                setNodes((nds) => nds.concat(saved));
+              }
+            }}
+            style={{
+              position: 'absolute',
+              top: 52,
+              left: 2,
+              zIndex: 31,
+              width: 56,
+              height: 56,
+              borderRadius: 10,
+              border: '1px solid #e5e7eb',
+              background: '#ffffff',
+              cursor: 'pointer',
+              boxShadow: '0 4px 16px rgba(0,0,0,0.12)',
+              fontSize: 28,
+              lineHeight: 1,
+            }}
+            title="Show model card"
+            aria-label="Show model card"
+          >
+            🗂️
+          </button>
+        )}
+
         {isDragOver && (
-          <div style={{
-            position: 'absolute',
-            top: '50%',
-            left: '50%',
-            transform: 'translate(-50%, -50%)',
-            background: 'rgba(52, 152, 219, 0.95)',
-            color: 'white',
-            padding: '24px 48px',
-            borderRadius: '12px',
-            fontSize: '20px',
-            fontWeight: 'bold',
-            zIndex: 1000,
-            pointerEvents: 'none',
-            boxShadow: '0 8px 32px rgba(52, 152, 219, 0.3)',
-            border: '2px solid rgba(255, 255, 255, 0.3)',
-            backdropFilter: 'blur(10px)'
-          }}>
+          <div
+            style={{
+              position: 'absolute',
+              top: '50%',
+              left: '50%',
+              transform: 'translate(-50%, -50%)',
+              background: 'rgba(52, 152, 219, 0.95)',
+              color: 'white',
+              padding: '24px 48px',
+              borderRadius: '12px',
+              fontSize: '20px',
+              fontWeight: 'bold',
+              zIndex: 1000,
+              pointerEvents: 'none',
+              boxShadow: '0 8px 32px rgba(52, 152, 219, 0.3)',
+              border: '2px solid rgba(255, 255, 255, 0.3)',
+              backdropFilter: 'blur(10px)',
+            }}
+          >
             Drop files here
           </div>
         )}
-
-        {/* Code Editor Modal */}
-        {codeEditorState && (
-          <CodeEditorModal
-            isOpen={codeEditorState.isOpen}
-            onClose={handleCloseCodeEditor}
-            onSave={handleSaveCode}
-            onDelete={handleDeleteEdge}
-            initialCode={codeEditorState.initialCode}
-            edgeId={codeEditorState.edgeId || ''}
-            sourceFileName={codeEditorState.sourceFileName}
-            targetFileName={codeEditorState.targetFileName}
-          />
-        )}
       </div>
     );
-  });
+  }
+);
