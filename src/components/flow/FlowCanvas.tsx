@@ -57,6 +57,7 @@ export const FlowCanvas = forwardRef<FlowCanvasHandle, FlowCanvasProps>(
       cursor: 'pointer',
     };
     const hiddenEcoreNodeRef = useRef<Node | null>(null);
+    const hadEcoreBoxesRef = useRef(false);
 
     const {
       nodes,
@@ -134,6 +135,17 @@ export const FlowCanvas = forwardRef<FlowCanvasHandle, FlowCanvasProps>(
     useEffect(() => {
       if (onDiagramChange) onDiagramChange(nodes, edges);
     }, [nodes, edges, onDiagramChange]);
+
+    // Notify host when workspace becomes empty (e.g., last box deleted)
+    useEffect(() => {
+      const hasEcore = nodes.some((n) => n.type === 'ecoreFile');
+      if (hadEcoreBoxesRef.current && !hasEcore) {
+        try {
+          window.dispatchEvent(new CustomEvent('vitruv.closeActiveWorkspace'));
+        } catch {}
+      }
+      hadEcoreBoxesRef.current = hasEcore;
+    }, [nodes]);
 
     // No auto-fit on load to avoid over-zooming; keep user's viewport
 
