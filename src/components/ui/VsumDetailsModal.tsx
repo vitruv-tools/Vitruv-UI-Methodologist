@@ -88,11 +88,16 @@ export const VsumDetailsModal: React.FC<Props> = ({ isOpen, vsumId, onClose, onS
   const [name, setName] = useState('');
   const [error, setError] = useState('');
   const [saving, setSaving] = useState(false);
-  const [activeTab, setActiveTab] = useState<'details' | 'users'>('details');
+  const [activeTab, setActiveTab] = useState<'details' | 'users' | 'versions'>('details');
   const [loading, setLoading] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState('');
+  const [versionsLoading, setVersionsLoading] = useState(false);
+  const [versionsError, setVersionsError] = useState('');
+  const [versions, setVersions] = useState<Array<{ id: number; createdAt: string }>>([]);
+  const [recovering, setRecovering] = useState(false);
+  const [recoverError, setRecoverError] = useState('');
 
   useEffect(() => {
     if (!isOpen) return;
@@ -122,6 +127,24 @@ export const VsumDetailsModal: React.FC<Props> = ({ isOpen, vsumId, onClose, onS
     load();
   }, [isOpen, vsumId]);
 
+  // Load versions when the tab is opened
+  useEffect(() => {
+    const loadVersions = async () => {
+      if (!isOpen || !vsumId || activeTab !== 'versions') return;
+      setVersionsLoading(true);
+      setVersionsError('');
+      try {
+        const res = await apiService.getVsumVersions(vsumId);
+        setVersions(res.data || []);
+      } catch (e: any) {
+        setVersionsError(e?.message || 'Failed to load versions');
+      } finally {
+        setVersionsLoading(false);
+      }
+    };
+    loadVersions();
+  }, [isOpen, vsumId, activeTab]);
+
   const save = async () => {
     if (!vsumId || !details) return;
     setSaving(true);
@@ -134,6 +157,21 @@ export const VsumDetailsModal: React.FC<Props> = ({ isOpen, vsumId, onClose, onS
       setError(e?.response?.data?.message || e?.message || 'Save failed');
     } finally {
       setSaving(false);
+    }
+  };
+
+  const recover = async () => {
+    if (!vsumId) return;
+    setRecoverError('');
+    setRecovering(true);
+    try {
+      await apiService.recoverVsum(vsumId);
+      onSaved?.();
+      onClose();
+    } catch (e: any) {
+      setRecoverError(e?.response?.data?.message || e?.message || 'Recover failed');
+    } finally {
+      setRecovering(false);
     }
   };
 
@@ -190,6 +228,19 @@ export const VsumDetailsModal: React.FC<Props> = ({ isOpen, vsumId, onClose, onS
                 >
                   Manage Users
                 </button>
+                <button
+                    onClick={() => setActiveTab('versions')}
+                    style={{
+                      border: '1px solid #dee2e6',
+                      background: activeTab === 'versions' ? '#e7f5ff' : '#fff',
+                      borderRadius: 6,
+                      padding: '6px 10px',
+                      cursor: 'pointer',
+                      fontWeight: 700,
+                    }}
+                >
+                  Versions
+                </button>
                 <button aria-label="Close" style={closeBtn} onClick={onClose}>
                   ×
                 </button>
@@ -210,6 +261,21 @@ export const VsumDetailsModal: React.FC<Props> = ({ isOpen, vsumId, onClose, onS
                       }}
                   >
                     {error}
+                  </div>
+              )}
+              {recoverError && (
+                  <div
+                      style={{
+                        marginBottom: 12,
+                        padding: 10,
+                        border: '1px solid #f5c6cb',
+                        background: '#f8d7da',
+                        color: '#721c24',
+                        borderRadius: 6,
+                        fontSize: 12,
+                      }}
+                  >
+                    {recoverError}
                   </div>
               )}
 
@@ -241,8 +307,50 @@ export const VsumDetailsModal: React.FC<Props> = ({ isOpen, vsumId, onClose, onS
                   )
               ) : !vsumId ? (
                   <div style={{ fontStyle: 'italic', color: '#6c757d' }}>No VSUM selected.</div>
-              ) : (
+              ) : activeTab === 'users' ? (
                   <VsumUsersTab vsumId={vsumId} onChanged={onSaved} />
+              ) : (
+                  <div>
+                    {versionsError && (
+                        <div
+                            style={{
+                              marginBottom: 12,
+                              padding: 10,
+                              border: '1px solid #f5c6cb',
+                              background: '#f8d7da',
+                              color: '#721c24',
+                              borderRadius: 6,
+                              fontSize: 12,
+                            }}
+                        >
+                          {versionsError}
+                        </div>
+                    )}
+                    {versionsLoading ? (
+                        <div style={{ fontStyle: 'italic', color: '#6c757d' }}>Loading versions…</div>
+                    ) : versions.length === 0 ? (
+                        <div style={{ fontStyle: 'italic', color: '#6c757d' }}>No versions found.</div>
+                    ) : (
+                        <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                          <thead>
+                          <tr>
+                            <th style={{ border: '1px solid #e9ecef', padding: 8, textAlign: 'left', fontSize: 12 }}>Version ID</th>
+                            <th style={{ border: '1px solid #e9ecef', padding: 8, textAlign: 'left', fontSize: 12 }}>Created At</th>
+                          </tr>
+                          </thead>
+                          <tbody>
+                          {versions.map(v => (
+                              <tr key={v.id}>
+                                <td style={{ border: '1px solid #e9ecef', padding: 8, fontSize: 13 }}>{v.id}</td>
+                                <td style={{ border: '1px solid #e9ecef', padding: 8, fontSize: 13 }}>
+                                  {new Date(v.createdAt).toLocaleString([], { hour: '2-digit', minute: '2-digit', year: 'numeric', month: '2-digit', day: '2-digit' })}
+                                </td>
+                              </tr>
+                          ))}
+                          </tbody>
+                        </table>
+                    )}
+                  </div>
               )}
             </div>
 
@@ -263,7 +371,26 @@ export const VsumDetailsModal: React.FC<Props> = ({ isOpen, vsumId, onClose, onS
               </button>
 
               <div style={{ display: 'flex', gap: 8 }}>
-              {activeTab === 'details' && (
+              {details?.removedAt && (
+                <button
+                    style={{
+                      padding: '6px 10px',
+                      borderRadius: 6,
+                      border: '1px solid #10b981',
+                      background: recovering ? '#d1fae5' : '#10b981',
+                      color: '#fff',
+                      fontWeight: 700,
+                      cursor: recovering ? 'not-allowed' : 'pointer',
+                      fontSize: 12,
+                    }}
+                    onDoubleClick={recover}
+                    disabled={recovering}
+                    title="Double-click to recover this VSUM"
+                >
+                  {recovering ? 'Recovering…' : 'Recover (double‑click)'}
+                </button>
+              )}
+              {activeTab === 'details' && !details?.removedAt && (
                 <button
                     style={{
                       padding: '8px 14px',
