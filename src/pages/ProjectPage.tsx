@@ -20,6 +20,18 @@ export const ProjectPage: React.FC = () => {
 
   const createInstanceId = useCallback((id: number) => `${id}-${Date.now()}-${Math.random().toString(36).slice(2,8)}` , []);
 
+  const closeActiveWorkspaceTab = useCallback(() => {
+    if (!activeInstanceId) return;
+    setOpenTabs(prev => {
+      const filtered = prev.filter(x => x.instanceId !== activeInstanceId);
+      const nextActive = filtered.length > 0 ? filtered[filtered.length - 1].instanceId : null;
+      setActiveInstanceId(nextActive);
+      return filtered;
+    });
+    setShowRight(false);
+    window.dispatchEvent(new CustomEvent('vitruv.resetWorkspace'));
+  }, [activeInstanceId]);
+
   const openVsumById = useCallback(async (id: number, { forceNew }: { forceNew?: boolean } = {}) => {
     let instanceId = forceNew ? undefined : openTabs.find(t => t.id === id)?.instanceId;
     if (!instanceId) {
@@ -49,6 +61,19 @@ export const ProjectPage: React.FC = () => {
     return () => window.removeEventListener('vitruv.openVsum', handler as EventListener);
   }, [openTabs, openVsumById]);
 
+  // Close active workspace tab when canvas becomes empty (no boxes)
+  useEffect(() => {
+    window.addEventListener('vitruv.closeActiveWorkspace', closeActiveWorkspaceTab as EventListener);
+    return () => window.removeEventListener('vitruv.closeActiveWorkspace', closeActiveWorkspaceTab as EventListener);
+  }, [closeActiveWorkspaceTab]);
+
+  // Ensure "Add Meta Models" sidebar is hidden when no VSUM tabs are open
+  useEffect(() => {
+    if (openTabs.length === 0 && showRight) {
+      setShowRight(false);
+    }
+  }, [openTabs.length, showRight]);
+
   return (
     <>
     <MainLayout
@@ -58,7 +83,7 @@ export const ProjectPage: React.FC = () => {
       leftSidebarWidth={350}
       showWelcomeScreen={openTabs.length === 0}
       welcomeTitle="Welcome to Project Workspace"
-      rightSidebar={showRight ? (
+      rightSidebar={(showRight && openTabs.length > 0) ? (
         <div style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
           <div style={{
             padding: 8,
