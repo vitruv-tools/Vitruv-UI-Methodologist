@@ -199,32 +199,31 @@ export const FlowCanvas = forwardRef<{
 
   
     useEffect(() => {
-      console.log('Loading edge color map for:', { userId, projectId, storageKey });
-      try {
-        const raw = localStorage.getItem(storageKey);
-        if (raw) {
-          const parsed = JSON.parse(raw) as Record<string, string>;
-          edgeColorMapRef.current = new Map(Object.entries(parsed));
-          const used = new Set(Object.values(parsed));
-          let maxIndex = 0;
-          COLOR_LIST.forEach((c, i) => { 
-            if (used.has(c)) maxIndex = Math.max(maxIndex, i + 1); 
-          });
-          nextColorIndexRef.current = maxIndex % COLOR_LIST.length;
-          console.log('Loaded edge color map:', edgeColorMapRef.current.size, 'entries');
-        } else {
-     
-          
-          console.log('No edge color map found, resetting');
-          edgeColorMapRef.current = new Map();
-          nextColorIndexRef.current = 0;
-        }
-      } catch (e) {
-        console.warn('Failed to load edge color map', e);
-        edgeColorMapRef.current = new Map();
-        nextColorIndexRef.current = 0;
-      }
-    }, [storageKey]);
+  console.log('Loading edge color map for:', { userId, projectId, storageKey });
+  try {
+    const raw = localStorage.getItem(storageKey);
+    if (raw) {
+      const parsed = JSON.parse(raw) as Record<string, string>;
+      edgeColorMapRef.current = new Map(Object.entries(parsed));
+      const used = new Set(Object.values(parsed));
+      let maxIndex = 0;
+      COLOR_LIST.forEach((c, i) => { 
+        if (used.has(c)) maxIndex = Math.max(maxIndex, i + 1); 
+      });
+      nextColorIndexRef.current = maxIndex % COLOR_LIST.length;
+      console.log('Loaded edge color map:', edgeColorMapRef.current.size, 'entries');
+    } else {
+      console.log('No edge color map found, resetting');
+      edgeColorMapRef.current = new Map();
+      nextColorIndexRef.current = 0;
+    }
+  } catch (e) {
+    console.warn('Failed to load edge color map', e);
+    edgeColorMapRef.current = new Map();
+    nextColorIndexRef.current = 0;
+  }
+}, [userId, projectId, storageKey]);
+
 
     const persistEdgeColorMap = useCallback(() => {
       try {
