@@ -858,10 +858,20 @@ export const FlowCanvas = forwardRef<{
 
         const relations = custom.detail?.relations ?? [];
         relations.forEach(relation => {
-          const sourceNode = nodes.find(n => n.type === 'ecoreFile' && n.data?.metaModelId === relation.sourceId);
-          const targetNode = nodes.find(n => n.type === 'ecoreFile' && n.data?.metaModelId === relation.targetId);
+          // Match against both metaModelId and metaModelSourceId to handle all cases
+          const sourceNode = nodes.find(n => 
+            n.type === 'ecoreFile' && 
+            (n.data?.metaModelId === relation.sourceId || n.data?.metaModelSourceId === relation.sourceId)
+          );
+          const targetNode = nodes.find(n => 
+            n.type === 'ecoreFile' && 
+            (n.data?.metaModelId === relation.targetId || n.data?.metaModelSourceId === relation.targetId)
+          );
 
-          if (!sourceNode || !targetNode) return;
+          if (!sourceNode || !targetNode) {
+            console.warn('Could not find nodes for relation:', relation, 'Available nodes:', nodes.filter(n => n.type === 'ecoreFile').map(n => ({ id: n.id, metaModelId: n.data?.metaModelId, metaModelSourceId: n.data?.metaModelSourceId })));
+            return;
+          }
 
           const exists = edges.some(edge => edge.data?.backendRelationId === relation.id);
           if (exists) return;
