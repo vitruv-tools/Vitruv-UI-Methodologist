@@ -161,17 +161,25 @@ export const VsumTabs: React.FC<VsumTabsProps> = ({
       return;
     }
 
+    // Filter relations to only include those where both sourceId and targetId
+    // are present in the current list of metamodels
     const metaModelRelationRequests =
         snap && snap.metaModelRelationRequests && snap.metaModelRelationRequests.length > 0
-            ? snap.metaModelRelationRequests
-            : null;
+            ? snap.metaModelRelationRequests.filter(relation => 
+                metaModelSourceIds.includes(relation.sourceId) && 
+                metaModelSourceIds.includes(relation.targetId)
+              )
+            : [];
+
+    // Only send relations if there are valid ones, otherwise send null
+    const relationsToSend = metaModelRelationRequests.length > 0 ? metaModelRelationRequests : null;
 
     setSaving(true);
     setError('');
     try {
       await apiService.updateVsumSyncChanges(id, {
         metaModelIds: metaModelSourceIds,
-        metaModelRelationRequests,
+        metaModelRelationRequests: relationsToSend,
       });
 
       // reload backend details so dirty calculation is correct

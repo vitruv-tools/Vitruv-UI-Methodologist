@@ -614,9 +614,9 @@ class ApiService {
     formData.append('file', file);
 
     const url = `${this.baseURL}/api/upload/${fileId}/update-reaction`;
-    const headers = {
-      'Authorization': `Bearer ${token}`,
-    };
+    // const headers = {
+    //   'Authorization': `Bearer ${token}`,
+    // };
 
     const doRequest = async (authHeader: string) => {
       const response = await fetch(url, {
