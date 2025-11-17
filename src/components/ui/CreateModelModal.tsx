@@ -278,7 +278,12 @@ export const CreateModelModal: React.FC<CreateModelModalProps> = ({
   const genmodelProgressIntervalRef = useRef<number | null>(null);
   const submitProgressIntervalRef = useRef<number | null>(null);
 
-  const canSave = uploadedFileIds.ecoreFileId > 0 && uploadedFileIds.genModelFileId > 0 && formData.name.trim();
+  const canSave = uploadedFileIds.ecoreFileId > 0 && 
+    uploadedFileIds.genModelFileId > 0 && 
+    formData.name.trim() &&
+    formData.description.trim() &&
+    formData.domain.trim() &&
+    formData.keywords.length > 0;
 
   const handleEcoreFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -435,12 +440,24 @@ export const CreateModelModal: React.FC<CreateModelModalProps> = ({
   };
 
   const handleCreateModel = async () => {
-    if (!canSave) {
-      setError('Please fill in all required fields and upload both files');
+    if (!formData.name.trim()) {
+      setError('Please enter a name');
+      return;
+    }
+    if (!formData.description.trim()) {
+      setError('Please enter a description');
+      return;
+    }
+    if (!formData.domain.trim()) {
+      setError('Please enter a domain');
       return;
     }
     if (formData.keywords.length === 0) {
       setError('Please enter at least one keyword');
+      return;
+    }
+    if (uploadedFileIds.ecoreFileId === 0 || uploadedFileIds.genModelFileId === 0) {
+      setError('Please upload both .ecore and .genmodel files');
       return;
     }
 
@@ -597,9 +614,9 @@ export const CreateModelModal: React.FC<CreateModelModalProps> = ({
             </div>
 
             <div style={formGroupStyle}>
-              <label style={labelStyle}>Description</label>
+              <label style={labelStyle}>Description *</label>
               <textarea
-                  placeholder="Optional description..."
+                  placeholder="Enter description..."
                   value={formData.description}
                   onChange={(e) => setFormData({ ...formData, description: e.target.value })}
                   style={{ ...inputStyle, minHeight: '80px', resize: 'vertical', fontFamily: 'inherit' }}
@@ -609,7 +626,7 @@ export const CreateModelModal: React.FC<CreateModelModalProps> = ({
             </div>
 
             <div style={formGroupStyle}>
-              <label style={labelStyle}>Keywords</label>
+              <label style={labelStyle}>Keywords *</label>
               <KeywordTagsInput
                   keywords={formData.keywords}
                   onChange={(keywords) => setFormData({ ...formData, keywords })}
@@ -622,7 +639,7 @@ export const CreateModelModal: React.FC<CreateModelModalProps> = ({
             </div>
 
             <div style={formGroupStyle}>
-              <label style={labelStyle}>Domain</label>
+              <label style={labelStyle}>Domain *</label>
               <input
                   type="text"
                   placeholder="Enter domain"
@@ -734,7 +751,7 @@ export const CreateModelModal: React.FC<CreateModelModalProps> = ({
                   onMouseEnter={(e) => canSave && !isLoading && !submitProgress.isSubmitting && Object.assign(e.currentTarget.style, buttonHoverStyle)}
                   onMouseLeave={(e) => canSave && !isLoading && !submitProgress.isSubmitting && Object.assign(e.currentTarget.style, primaryButtonStyle)}
               >
-                {isLoading ? 'Creating...' : canSave ? 'Build Meta Model' : 'Upload Files First'}
+                {isLoading ? 'Creating...' : canSave ? 'Build Meta Model' : 'Complete All Fields'}
               </button>
             </div>
           </div>

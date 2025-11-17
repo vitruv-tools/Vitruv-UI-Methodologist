@@ -203,7 +203,7 @@ class ApiService {
       throw new Error('No valid authentication token available');
     }
 
-    const url = `${this.baseURL}/api/files/${id}`;
+    const url = `${this.baseURL}/api/api/files/${id}`;
     const headers = {
       'Authorization': `Bearer ${token}`,
     };
