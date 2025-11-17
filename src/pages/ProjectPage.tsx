@@ -7,6 +7,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { VsumTabs } from '../components/ui/VsumTabs';
 import { apiService } from '../services/api';
 import { useToast } from '../components/ui/ToastProvider';
+import { WorkspaceSnapshot, WorkspaceSnapshotRequest } from '../types/workspace';
 
 interface OpenTabInstance { instanceId: string; id: number; }
 
@@ -19,6 +20,19 @@ export const ProjectPage: React.FC = () => {
   const { showInfo } = useToast();
 
   const createInstanceId = useCallback((id: number) => `${id}-${Date.now()}-${Math.random().toString(36).slice(2,8)}` , []);
+
+  const requestWorkspaceSnapshot = useCallback(() => {
+    return new Promise<WorkspaceSnapshot | null>((resolve) => {
+      const timeout = window.setTimeout(() => resolve(null), 2000);
+      const detail: WorkspaceSnapshotRequest = {
+        resolve: (snapshot) => {
+          window.clearTimeout(timeout);
+          resolve(snapshot);
+        },
+      };
+      window.dispatchEvent(new CustomEvent<WorkspaceSnapshotRequest>('vitruv.requestWorkspaceSnapshot', { detail }));
+    });
+  }, []);
 
   const closeActiveWorkspaceTab = useCallback(() => {
     if (!activeInstanceId) return;
@@ -127,16 +141,18 @@ export const ProjectPage: React.FC = () => {
                         description: model.description,
                         keywords: model.keyword?.join(', '),
                         domain: model.domain,
+                        metaModelId: model.id,
+                        metaModelSourceId: model.sourceId ?? model.id,
                       }
                     }));
                   }
                   
                   // Also dispatch the event to add meta model to VSUM
-                  window.dispatchEvent(new CustomEvent('vitruv.addMetaModelToActiveVsum', { detail: { id: model.id } }));
+                  window.dispatchEvent(new CustomEvent('vitruv.addMetaModelToActiveVsum', { detail: { id: model.id, sourceId: model.sourceId ?? model.id } }));
                 } catch (error) {
                   console.error('Failed to fetch file:', error);
                   // Still dispatch the add event even if file fetch fails
-                  window.dispatchEvent(new CustomEvent('vitruv.addMetaModelToActiveVsum', { detail: { id: model.id } }));
+                  window.dispatchEvent(new CustomEvent('vitruv.addMetaModelToActiveVsum', { detail: { id: model.id, sourceId: model.sourceId ?? model.id } }));
                 }
               }}
             />
@@ -155,6 +171,7 @@ export const ProjectPage: React.FC = () => {
           }}
           showAddButton={!showRight}
           onAddMetaModels={() => setShowRight(true)}
+          requestWorkspaceSnapshot={requestWorkspaceSnapshot}
         />
       ) : null}
       showWorkspaceInfo={false}
@@ -202,12 +219,29 @@ async function fetchAndLoadProjectBoxes(id: number) {
               keywords: metaModel.keyword?.join(', '),
               domain: metaModel.domain,
               createdAt: metaModel.createdAt,
+              metaModelId: metaModel.id,
+              metaModelSourceId: metaModel.sourceId ?? metaModel.id,
             }
           }));
         } catch (error) {
           console.error(`Failed to load ECORE file for meta model ${metaModel.name}:`, error);
         }
       }
+    }
+
+    if (details.metaModelsRelation && details.metaModelsRelation.length > 0) {
+      const relations = details.metaModelsRelation.map((relation: any) => ({
+        id: relation.id,
+        sourceId: relation.sourceId,
+        targetId: relation.targetId,
+        reactionFileId: relation.reactionFileStorageId ?? null,
+      }));
+
+      setTimeout(() => {
+        window.dispatchEvent(new CustomEvent('vitruv.loadMetaModelRelations', {
+          detail: { relations }
+        }));
+      }, 0);
     }
   } catch (error) {
     console.error('Failed to fetch vsum details:', error);

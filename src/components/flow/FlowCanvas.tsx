@@ -15,6 +15,8 @@ import { ReactionRelationship } from './ReactionRelationship';
 import { EcoreFileBox } from './EcoreFileBox';
 import { ConnectionLine } from './ConnectionLine';
 import { CodeEditorModal } from './CodeEditorModal';
+import { apiService, MetaModelRelationRequest } from '../../services/api';
+import { WorkspaceSnapshot } from '../../types/workspace';
 
 const COLOR_LIST = [
   '#ab1c91ff', '#ff7f0e', '#2ca02c', '#d62728', '#9467bd',
@@ -68,6 +70,7 @@ interface CodeEditorState {
   initialCode: string;
   sourceFileName?: string;
   targetFileName?: string;
+  reactionFileId?: number | null;
 }
 
 type HandlePosition = 'top' | 'bottom' | 'left' | 'right';
@@ -148,6 +151,7 @@ export const FlowCanvas = forwardRef<{
   canUndo: boolean;
   canRedo: boolean;
   getReactionEdges: () => Edge[];
+  getWorkspaceSnapshot: () => WorkspaceSnapshot;
 }, FlowCanvasProps>(
   ({ 
     onDeploy, 
@@ -310,6 +314,20 @@ export const FlowCanvas = forwardRef<{
       );
     }, []);
 
+    const getMetaModelSourceIdForNode = useCallback((nodeId?: string | null) => {
+      if (!nodeId) return undefined;
+      const node = nodes.find(n => n.id === nodeId);
+      const value = node?.data?.metaModelSourceId ?? node?.data?.metaModelId;
+      return typeof value === 'number' ? value : undefined;
+    }, [nodes]);
+
+    const getBackendMetaModelIdForNode = useCallback((nodeId?: string | null) => {
+      if (!nodeId) return undefined;
+      const node = nodes.find(n => n.id === nodeId);
+      const value = node?.data?.metaModelId ?? node?.data?.metaModelSourceId;
+      return typeof value === 'number' ? value : undefined;
+    }, [nodes]);
+
     useEffect(() => {
       const handleKeyDown = (event: KeyboardEvent) => {
         const target = event.target as HTMLElement;
@@ -424,6 +442,12 @@ export const FlowCanvas = forwardRef<{
               stroke: color,
               strokeWidth: 2,
             },
+            data: {
+              sourceMetaModelId: getBackendMetaModelIdForNode(connectionDragState.sourceNodeId),
+              targetMetaModelId: getBackendMetaModelIdForNode(targetNode.id),
+              sourceMetaModelSourceId: getMetaModelSourceIdForNode(connectionDragState.sourceNodeId),
+              targetMetaModelSourceId: getMetaModelSourceIdForNode(targetNode.id),
+            }
           };
 
           console.log('🎯 Creating edge:', newEdge);
@@ -436,7 +460,7 @@ export const FlowCanvas = forwardRef<{
       }
 
       setConnectionDragState(null);
-    }, [reactFlowInstance, nodes, edges, addEdge, connectionDragState, getColorForPair, isPositionInsideNode, calculateTargetHandle]);
+    }, [reactFlowInstance, nodes, edges, addEdge, connectionDragState, getColorForPair, isPositionInsideNode, calculateTargetHandle, getBackendMetaModelIdForNode, getMetaModelSourceIdForNode]);
 
     const handleConnectionMove = useCallback((e: MouseEvent) => {
       if (!reactFlowInstance) return;
@@ -496,7 +520,7 @@ export const FlowCanvas = forwardRef<{
       };
     }, [connectionDragState?.isActive, handleConnectionMove, handleConnectionEnd]);
 
-    const handleEdgeDoubleClick = useCallback((edgeId: string) => {
+    const handleEdgeDoubleClick = useCallback(async (edgeId: string) => {
       const edge = edges.find(e => e.id === edgeId);
       if (!edge) return;
 
@@ -505,12 +529,24 @@ export const FlowCanvas = forwardRef<{
         return node?.type === 'ecoreFile' ? node.data.fileName : undefined;
       };
 
+      let initialCode = edge.data?.code || '';
+      const reactionFileId = edge.data?.reactionFileId;
+
+      if (!initialCode && typeof reactionFileId === 'number') {
+        try {
+          initialCode = await apiService.getFile(reactionFileId);
+        } catch (error) {
+          console.error('Failed to fetch reaction file', error);
+        }
+      }
+
       setCodeEditorState({
         isOpen: true,
         edgeId,
-        initialCode: edge.data?.code || '',
+        initialCode,
         sourceFileName: getFileName(edge.source),
         targetFileName: getFileName(edge.target),
+        reactionFileId,
       });
     }, [edges, nodes]);
 
@@ -518,11 +554,72 @@ export const FlowCanvas = forwardRef<{
       setCodeEditorState(null);
     }, []);
 
-    const handleSaveCode = useCallback((code: string) => {
-      if (codeEditorState?.edgeId) {
-        updateEdgeCode(codeEditorState.edgeId, code);
+    const handleSaveCode = useCallback(async (code: string) => {
+      if (!codeEditorState?.edgeId) {
+        return;
       }
-    }, [codeEditorState, updateEdgeCode]);
+
+      const edgeId = codeEditorState.edgeId;
+
+      const extractFileId = (data: unknown): number | null => {
+        if (data == null) return null;
+        if (typeof data === 'number') return Number.isFinite(data) ? data : null;
+        if (typeof data === 'string') {
+          const parsed = Number(data);
+          return Number.isFinite(parsed) ? parsed : null;
+        }
+        if (typeof data === 'object' && 'id' in (data as Record<string, unknown>)) {
+          const value = (data as Record<string, unknown>).id;
+          if (typeof value === 'number') return Number.isFinite(value) ? value : null;
+          if (typeof value === 'string') {
+            const parsed = Number(value);
+            return Number.isFinite(parsed) ? parsed : null;
+          }
+        }
+        return null;
+      };
+
+      try {
+        const fileName = `reaction-${edgeId}-${Date.now()}.txt`;
+        const file = new File([code], fileName, { type: 'text/plain;charset=utf-8' });
+        const uploadResult = await apiService.uploadFile(file, 'REACTION');
+        const reactionFileId = extractFileId(uploadResult?.data);
+
+        updateEdgeCode(edgeId, code);
+
+        if (reactionFileId != null) {
+          setCodeEditorState(prev =>
+            prev
+              ? {
+                  ...prev,
+                  reactionFileId,
+                }
+              : prev
+          );
+        }
+
+        setEdges(prev =>
+          prev.map(edge =>
+            edge.id === edgeId
+                ? {
+                  ...edge,
+                  data: {
+                    ...edge.data,
+                    reactionFileId: reactionFileId ?? edge.data?.reactionFileId ?? null,
+                    sourceMetaModelId: getBackendMetaModelIdForNode(edge.source) ?? edge.data?.sourceMetaModelId,
+                    targetMetaModelId: getBackendMetaModelIdForNode(edge.target) ?? edge.data?.targetMetaModelId,
+                    sourceMetaModelSourceId: getMetaModelSourceIdForNode(edge.source) ?? edge.data?.sourceMetaModelSourceId,
+                    targetMetaModelSourceId: getMetaModelSourceIdForNode(edge.target) ?? edge.data?.targetMetaModelSourceId,
+                  },
+                }
+                : edge
+          )
+        );
+      } catch (err) {
+        console.error('Failed to upload reaction file', err);
+        throw err;
+      }
+    }, [codeEditorState, updateEdgeCode, setEdges, getBackendMetaModelIdForNode, getMetaModelSourceIdForNode]);
 
     const handleDeleteEdge = useCallback(() => {
       if (codeEditorState?.edgeId) {
@@ -652,7 +749,10 @@ export const FlowCanvas = forwardRef<{
           keywords: meta?.keywords,
           domain: meta?.domain,
           createdAt: meta?.createdAt || new Date().toISOString(),
-          metaModelId: meta?.metaModelId,
+          metaModelId: typeof meta?.metaModelId === 'number' ? meta.metaModelId : undefined,
+          metaModelSourceId: typeof meta?.metaModelSourceId === 'number'
+              ? meta.metaModelSourceId
+              : (typeof meta?.metaModelId === 'number' ? meta.metaModelId : undefined),
           onExpand: handleEcoreFileExpand,
           onSelect: handleEcoreFileSelect,
           onDelete: onEcoreFileDelete,
@@ -702,6 +802,10 @@ export const FlowCanvas = forwardRef<{
           data: {
             code: code,
             originalEdgeId: originalEdgeId,
+            sourceMetaModelId: getBackendMetaModelIdForNode(sourceNodeId),
+            targetMetaModelId: getBackendMetaModelIdForNode(targetNodeId),
+            sourceMetaModelSourceId: getMetaModelSourceIdForNode(sourceNodeId),
+            targetMetaModelSourceId: getMetaModelSourceIdForNode(targetNodeId),
           },
           style: {
             stroke: color,
@@ -718,7 +822,60 @@ export const FlowCanvas = forwardRef<{
       return () => {
         window.removeEventListener('vitruv.createReactionEdge', handleCreateReactionEdge as EventListener);
       };
-    }, [nodes, addEdge, getColorForPair]);
+    }, [nodes, addEdge, getColorForPair, getBackendMetaModelIdForNode, getMetaModelSourceIdForNode]);
+
+    useEffect(() => {
+      const handleLoadMetaModelRelations = (e: Event) => {
+        const custom = e as CustomEvent<{
+          relations?: Array<{
+            id: number;
+            sourceId: number;
+            targetId: number;
+            reactionFileId?: number | null;
+          }>;
+        }>;
+
+        const relations = custom.detail?.relations ?? [];
+        relations.forEach(relation => {
+          const sourceNode = nodes.find(n => n.type === 'ecoreFile' && n.data?.metaModelId === relation.sourceId);
+          const targetNode = nodes.find(n => n.type === 'ecoreFile' && n.data?.metaModelId === relation.targetId);
+
+          if (!sourceNode || !targetNode) return;
+
+          const exists = edges.some(edge => edge.data?.backendRelationId === relation.id);
+          if (exists) return;
+
+          const color = getColorForPair(sourceNode.id, targetNode.id);
+
+          const newEdge: Edge = {
+            id: `edge-backend-${relation.id}-${Date.now()}`,
+            source: sourceNode.id,
+            target: targetNode.id,
+            type: 'reactions',
+            sourceHandle: 'right',
+            targetHandle: 'left',
+            data: {
+              code: '',
+              backendRelationId: relation.id,
+              reactionFileId: relation.reactionFileId ?? null,
+              sourceMetaModelId: sourceNode.data?.metaModelId ?? sourceNode.data?.metaModelSourceId,
+              targetMetaModelId: targetNode.data?.metaModelId ?? targetNode.data?.metaModelSourceId,
+              sourceMetaModelSourceId: sourceNode.data?.metaModelSourceId ?? sourceNode.data?.metaModelId,
+              targetMetaModelSourceId: targetNode.data?.metaModelSourceId ?? targetNode.data?.metaModelId,
+            },
+            style: {
+              stroke: color,
+              strokeWidth: 2,
+            },
+          };
+
+          addEdge(newEdge);
+        });
+      };
+
+      window.addEventListener('vitruv.loadMetaModelRelations', handleLoadMetaModelRelations as EventListener);
+      return () => window.removeEventListener('vitruv.loadMetaModelRelations', handleLoadMetaModelRelations as EventListener);
+    }, [nodes, edges, addEdge, getColorForPair]);
 
     useEffect(() => {
       onDiagramChange?.(nodes, edges);
@@ -727,6 +884,45 @@ export const FlowCanvas = forwardRef<{
     const getReactionEdges = useCallback(() => {
       return edges.filter(e => e.type === 'reactions');
     }, [edges]);
+
+    const buildWorkspaceSnapshot = useCallback((): WorkspaceSnapshot => {
+      const metaModelIds = Array.from(
+          new Set(
+              nodes
+                  .filter(node => node.type === 'ecoreFile')
+                  .map(node => node.data?.metaModelSourceId ?? node.data?.metaModelId)
+                  .filter((value): value is number => typeof value === 'number')
+          )
+      );
+
+      const metaModelRelationRequests: MetaModelRelationRequest[] = edges
+          .filter(edge => edge.type === 'reactions')
+          .map(edge => {
+            const sourceMetaModelId = edge.data?.sourceMetaModelId ?? getBackendMetaModelIdForNode(edge.source);
+            const targetMetaModelId = edge.data?.targetMetaModelId ?? getBackendMetaModelIdForNode(edge.target);
+            const reactionFileId = edge.data?.reactionFileId;
+
+            if (
+                typeof sourceMetaModelId !== 'number' ||
+                typeof targetMetaModelId !== 'number' ||
+                typeof reactionFileId !== 'number'
+            ) {
+              return null;
+            }
+
+            return {
+              sourceId: sourceMetaModelId,
+              targetId: targetMetaModelId,
+              reactionFileId,
+            };
+          })
+          .filter((req): req is MetaModelRelationRequest => req !== null);
+
+      return {
+        metaModelIds,
+        metaModelRelationRequests,
+      };
+    }, [nodes, edges, getBackendMetaModelIdForNode]);
 
     useImperativeHandle(ref, () => ({
       handleToolClick,
@@ -740,7 +936,8 @@ export const FlowCanvas = forwardRef<{
       canUndo,
       canRedo,
       getReactionEdges,
-    }), [handleToolClick, loadDiagramData, nodes, edges, addEcoreFile, resetExpandedFile, undo, redo, canUndo, canRedo, getReactionEdges]);
+      getWorkspaceSnapshot: buildWorkspaceSnapshot,
+    }), [handleToolClick, loadDiagramData, nodes, edges, addEcoreFile, resetExpandedFile, undo, redo, canUndo, canRedo, getReactionEdges, buildWorkspaceSnapshot]);
 
     const mappedNodes = nodes.map(node => {
       if (node.type === 'editable') {

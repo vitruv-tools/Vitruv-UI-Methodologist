@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { VsumDetails } from '../../types';
 import { apiService } from '../../services/api';
+import { WorkspaceSnapshot } from '../../types/workspace';
 
 interface OpenTabInstance {
   instanceId: string;
@@ -14,9 +15,18 @@ interface VsumTabsProps {
   onClose: (instanceId: string) => void;
   onAddMetaModels?: () => void;
   showAddButton?: boolean;
+  requestWorkspaceSnapshot?: () => Promise<WorkspaceSnapshot | null>;
 }
 
-export const VsumTabs: React.FC<VsumTabsProps> = ({ openTabs, activeInstanceId, onActivate, onClose, onAddMetaModels, showAddButton }) => {
+export const VsumTabs: React.FC<VsumTabsProps> = ({
+  openTabs,
+  activeInstanceId,
+  onActivate,
+  onClose,
+  onAddMetaModels,
+  showAddButton,
+  requestWorkspaceSnapshot,
+}) => {
   const [detailsById, setDetailsById] = useState<Record<number, VsumDetails | undefined>>({});
   const [error, setError] = useState<string>('');
   const [edits, setEdits] = useState<Record<number, { metaModelSourceIds: number[] }>>({});
@@ -40,7 +50,8 @@ export const VsumTabs: React.FC<VsumTabsProps> = ({ openTabs, activeInstanceId, 
       const edit = edits[id];
       const details = detailsById[id];
       if (!edit || !details) { map[id] = false; return; }
-      map[id] = !areIdArraysEqual(edit.metaModelSourceIds);
+      const detailSourceIds = details.metaModels?.map(mm => mm.sourceId) || [];
+      map[id] = !areIdArraysEqual(edit.metaModelSourceIds, detailSourceIds);
     });
     return map;
   }, [openTabs, edits, detailsById]);
@@ -80,13 +91,28 @@ export const VsumTabs: React.FC<VsumTabsProps> = ({ openTabs, activeInstanceId, 
     // fallback from details using sourceId
     const fallbackSourceIds = detailsById[id]?.metaModels?.map(mm => mm.sourceId);
 
+    let workspaceSnapshot: WorkspaceSnapshot | null = null;
+    if (requestWorkspaceSnapshot) {
+      try {
+        workspaceSnapshot = await requestWorkspaceSnapshot();
+      } catch (snapshotError) {
+        console.warn('Failed to fetch workspace snapshot', snapshotError);
+      }
+    }
+
     const metaModelSourceIds =
-        override?.metaModelSourceIds ?? edit?.metaModelSourceIds ?? fallbackSourceIds;
+        (workspaceSnapshot?.metaModelIds?.length
+            ? workspaceSnapshot.metaModelIds
+            : override?.metaModelSourceIds ?? edit?.metaModelSourceIds ?? fallbackSourceIds);
 
     if (!metaModelSourceIds || metaModelSourceIds.length === 0) {
       setError('At least one MetaModel is required');
       return;
     }
+
+    const relationRequestsFromSnapshot = workspaceSnapshot?.metaModelRelationRequests ?? [];
+    const metaModelRelationRequests =
+        relationRequestsFromSnapshot.length > 0 ? relationRequestsFromSnapshot : null;
 
     setSaving(true);
     setError('');
@@ -94,11 +120,19 @@ export const VsumTabs: React.FC<VsumTabsProps> = ({ openTabs, activeInstanceId, 
       // IMPORTANT: backend param is "metaModelIds" but we pass SOURCE IDs here
       await apiService.updateVsumSyncChanges(id, {
         metaModelIds: metaModelSourceIds,
-        metaModelRelationRequests: null, // not implemented yet
+        metaModelRelationRequests,
       });
 
       const res = await apiService.getVsumDetails(id);
       setDetailsById(prev => ({ ...prev, [id]: res.data }));
+
+      const savedMetaModelIds = workspaceSnapshot?.metaModelIds;
+      if (savedMetaModelIds?.length) {
+        setEdits(prev => ({
+          ...prev,
+          [id]: { metaModelSourceIds: savedMetaModelIds }
+        }));
+      }
 
       window.dispatchEvent(new CustomEvent('vitruv.refreshVsums'));
     } catch (e) {
