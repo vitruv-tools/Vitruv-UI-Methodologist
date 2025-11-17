@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { VsumDetails } from '../../types';
 import { apiService } from '../../services/api';
 import { WorkspaceSnapshot } from '../../types/workspace';
@@ -19,20 +19,21 @@ interface VsumTabsProps {
 }
 
 export const VsumTabs: React.FC<VsumTabsProps> = ({
-  openTabs,
-  activeInstanceId,
-  onActivate,
-  onClose,
-  onAddMetaModels,
-  showAddButton,
-  requestWorkspaceSnapshot,
-}) => {
+                                                    openTabs,
+                                                    activeInstanceId,
+                                                    onActivate,
+                                                    onClose,
+                                                    onAddMetaModels,
+                                                    showAddButton,
+                                                    requestWorkspaceSnapshot,
+                                                  }) => {
   const [detailsById, setDetailsById] = useState<Record<number, VsumDetails | undefined>>({});
   const [error, setError] = useState<string>('');
-  const [edits, setEdits] = useState<Record<number, { metaModelSourceIds: number[] }>>({});
   const [saving, setSaving] = useState(false);
+  const [workspaceSnapshot, setWorkspaceSnapshot] = useState<WorkspaceSnapshot | null>(null);
 
-  // util
+  // ---- helpers ---------------------------------------------------
+
   const areIdArraysEqual = (a: number[] = [], b: number[] = []) => {
     if (a.length !== b.length) return false;
     const sa = [...a].sort((x, y) => x - y);
@@ -43,96 +44,139 @@ export const VsumTabs: React.FC<VsumTabsProps> = ({
     return true;
   };
 
-  // dirty = compare by sourceId arrays
-  const dirtyById = useMemo(() => {
-    const map: Record<number, boolean> = {};
-    openTabs.forEach(({ id }) => {
-      const edit = edits[id];
-      const details = detailsById[id];
-      if (!edit || !details) { map[id] = false; return; }
-      const detailSourceIds = details.metaModels?.map(mm => mm.sourceId) || [];
-      map[id] = !areIdArraysEqual(edit.metaModelSourceIds, detailSourceIds);
-    });
-    return map;
-  }, [openTabs, edits, detailsById]);
+  const computeDirty = (
+      backend: VsumDetails | undefined,
+      snapshot: WorkspaceSnapshot | null
+  ): boolean => {
+    if (!backend || !snapshot) return false;
 
-  // load details for active vsum and seed edits using sourceId
+    // Compare meta-model IDs (sourceId on backend vs snapshot.metaModelIds)
+    const backendSourceIds =
+        backend.metaModels
+            ?.map(mm => mm.sourceId)
+            .filter((x): x is number => typeof x === 'number') ?? [];
+    const snapIds = snapshot.metaModelIds ?? [];
+
+    if (!areIdArraysEqual(backendSourceIds, snapIds)) {
+      return true;
+    }
+
+    // Compare relations (sourceId, targetId, reactionFileId)
+    const backendRelsRaw = (backend as any).metaModelsRelation ?? [];
+    const backendRels = (backendRelsRaw as Array<any>)
+        .map(r => `${r.sourceId}->${r.targetId}#${r.reactionFileId ?? ''}`)
+        .sort();
+
+    const snapRelsRaw = snapshot.metaModelRelationRequests ?? [];
+    const snapRels = snapRelsRaw
+        .map(r => `${r.sourceId}->${r.targetId}#${r.reactionFileId ?? ''}`)
+        .sort();
+
+    if (backendRels.length !== snapRels.length) return true;
+    for (let i = 0; i < backendRels.length; i++) {
+      if (backendRels[i] !== snapRels[i]) return true;
+    }
+
+    return false;
+  };
+
+  // ---- load VSUM details for active tab --------------------------
+
   useEffect(() => {
     const active = openTabs.find(t => t.instanceId === activeInstanceId);
     const activeId = active?.id;
+    if (!activeId || detailsById[activeId]) return;
+
     const fetchDetails = async (id: number) => {
       setError('');
       try {
         const res = await apiService.getVsumDetails(id);
         setDetailsById(prev => ({ ...prev, [id]: res.data }));
-        
-        // Seed initial edit state with sourceIds from metaModels
-        const sourceIds = res.data.metaModels?.map(mm => mm.sourceId) || [];
-        setEdits(prev => ({
-          ...prev,
-          [id]: { metaModelSourceIds: sourceIds }
-        }));
       } catch (e) {
         setError(e instanceof Error ? e.message : 'Failed to load VSUM details');
       }
     };
-    if (activeId && !detailsById[activeId]) {
-      fetchDetails(activeId);
-    }
+
+    fetchDetails(activeId);
   }, [activeInstanceId, openTabs, detailsById]);
 
-  // save changes: send sourceIds in metaModelIds field + metaModelRelationRequests: null
-  const saveById = async (
-      id: number,
-      override?: { metaModelSourceIds?: number[] }
-  ) => {
-    const edit = edits[id];
+  // ---- keep workspace snapshot in sync (polling) -----------------
 
-    // fallback from details using sourceId
-    const fallbackSourceIds = detailsById[id]?.metaModels?.map(mm => mm.sourceId);
+  useEffect(() => {
+    if (!requestWorkspaceSnapshot || !activeInstanceId) {
+      setWorkspaceSnapshot(null);
+      return;
+    }
 
-    let workspaceSnapshot: WorkspaceSnapshot | null = null;
-    if (requestWorkspaceSnapshot) {
+    let cancelled = false;
+
+    const update = async () => {
       try {
-        workspaceSnapshot = await requestWorkspaceSnapshot();
-      } catch (snapshotError) {
-        console.warn('Failed to fetch workspace snapshot', snapshotError);
+        const snap = await requestWorkspaceSnapshot();
+        if (!cancelled) {
+          setWorkspaceSnapshot(snap);
+        }
+      } catch (e) {
+        console.warn('Failed to fetch workspace snapshot', e);
+      }
+    };
+
+    // initial fetch
+    update();
+
+    // polling to keep dirty state in sync with canvas
+    const intervalId = window.setInterval(update, 800);
+
+    return () => {
+      cancelled = true;
+      window.clearInterval(intervalId);
+    };
+  }, [requestWorkspaceSnapshot, activeInstanceId]);
+
+  // ---- save logic ------------------------------------------------
+
+  const saveById = async (id: number) => {
+    const backend = detailsById[id];
+    if (!backend) return;
+
+    // make sure we have a fresh snapshot before saving
+    let snap = workspaceSnapshot;
+    if (!snap && requestWorkspaceSnapshot) {
+      try {
+        snap = await requestWorkspaceSnapshot();
+      } catch (e) {
+        console.warn('Failed to refresh workspace snapshot before save', e);
       }
     }
 
     const metaModelSourceIds =
-        (workspaceSnapshot?.metaModelIds?.length
-            ? workspaceSnapshot.metaModelIds
-            : override?.metaModelSourceIds ?? edit?.metaModelSourceIds ?? fallbackSourceIds);
+        snap?.metaModelIds?.length
+            ? snap.metaModelIds
+            : backend.metaModels
+            ?.map(mm => mm.sourceId)
+            .filter((x): x is number => typeof x === 'number') ?? [];
 
     if (!metaModelSourceIds || metaModelSourceIds.length === 0) {
       setError('At least one MetaModel is required');
       return;
     }
 
-    const relationRequestsFromSnapshot = workspaceSnapshot?.metaModelRelationRequests ?? [];
     const metaModelRelationRequests =
-        relationRequestsFromSnapshot.length > 0 ? relationRequestsFromSnapshot : null;
+        snap && snap.metaModelRelationRequests && snap.metaModelRelationRequests.length > 0
+            ? snap.metaModelRelationRequests
+            : null;
 
     setSaving(true);
     setError('');
     try {
-      // IMPORTANT: backend param is "metaModelIds" but we pass SOURCE IDs here
       await apiService.updateVsumSyncChanges(id, {
         metaModelIds: metaModelSourceIds,
         metaModelRelationRequests,
       });
 
+      // reload backend details so dirty calculation is correct
       const res = await apiService.getVsumDetails(id);
       setDetailsById(prev => ({ ...prev, [id]: res.data }));
-
-      const savedMetaModelIds = workspaceSnapshot?.metaModelIds;
-      if (savedMetaModelIds?.length) {
-        setEdits(prev => ({
-          ...prev,
-          [id]: { metaModelSourceIds: savedMetaModelIds }
-        }));
-      }
 
       window.dispatchEvent(new CustomEvent('vitruv.refreshVsums'));
     } catch (e) {
@@ -149,49 +193,16 @@ export const VsumTabs: React.FC<VsumTabsProps> = ({
     await saveById(id);
   };
 
-  // handle external "add meta model" event
-  useEffect(() => {
-    const onAdd = (e: Event) => {
-      const ce = e as CustomEvent<{ id?: number; sourceId?: number }>;
-      const active = openTabs.find(t => t.instanceId === activeInstanceId);
-      const activeId = active?.id;
-      if (!activeId) return;
-
-      // Prefer sourceId; if only id is provided and in your app that id is the global source id, this still works.
-      // If your event sends cloned ids instead, adjust the emitter to pass sourceId.
-      const sourceId = typeof ce.detail?.sourceId === 'number'
-          ? ce.detail.sourceId
-          : (typeof ce.detail?.id === 'number' ? ce.detail.id : undefined);
-
-      if (typeof sourceId !== 'number') return;
-
-      const current = edits[activeId];
-
-      // Initialize if not exists
-      if (!current) {
-        setEdits(prev => ({
-          ...prev,
-          [activeId!]: { metaModelSourceIds: [sourceId] }
-        }));
-        return;
-      }
-
-      if (current.metaModelSourceIds.includes(sourceId)) return;
-
-      setEdits(prev => ({
-        ...prev,
-        [activeId!]: { metaModelSourceIds: [...current.metaModelSourceIds, sourceId] }
-      }));
-    };
-
-    window.addEventListener('vitruv.addMetaModelToActiveVsum', onAdd as EventListener);
-    return () => window.removeEventListener('vitruv.addMetaModelToActiveVsum', onAdd as EventListener);
-  }, [activeInstanceId, openTabs, edits, detailsById]);
+  // ---- derived UI state ------------------------------------------
 
   if (openTabs.length === 0) return null;
 
   const active = openTabs.find(t => t.instanceId === activeInstanceId);
-  const anyDirty = active ? !!dirtyById[active.id] : false;
+  const anyDirty = active
+      ? computeDirty(detailsById[active.id], workspaceSnapshot)
+      : false;
+
+  // ---- render ----------------------------------------------------
 
   return (
       <>
@@ -203,128 +214,153 @@ export const VsumTabs: React.FC<VsumTabsProps> = ({
               top: 0,
               zIndex: 20,
               boxShadow: 'inset 0 -1px 0 #e5e7eb',
-              cursor: saving ? 'progress' : 'default'
+              cursor: saving ? 'progress' : 'default',
             }}
         >
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 10px' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 6, overflowX: 'auto', flex: 1 }}>
+            <div
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 6,
+                  overflowX: 'auto',
+                  flex: 1,
+                }}
+            >
               {openTabs.map(tab => {
-              const isActive = tab.instanceId === activeInstanceId;
-              const name = detailsById[tab.id]?.name || `VSUM #${tab.id}`;
-              const isDirty = !!dirtyById[tab.id];
-              return (
-                  <div
-                      key={tab.instanceId}
-                      style={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: 8,
-                        padding: '6px 12px',
-                        border: isActive ? '1px solid #bfdbfe' : '1px solid #e5e7eb',
-                        borderBottom: isActive ? '2px solid #3b82f6' : '1px solid #e5e7eb',
-                        borderRadius: 8,
-                        background: isActive ? '#f0f7ff' : '#ffffff',
-                        cursor: 'pointer',
-                        boxShadow: isActive ? '0 1px 2px rgba(0,0,0,0.04)' : 'none'
-                      }}
-                      onClick={() => onActivate(tab.instanceId)}
-                      aria-current={isActive ? 'page' : undefined}
-                      title={name}
-                  >
-                    {isDirty && (
-                        <span
-                            aria-label="Unsaved changes"
-                            title="Unsaved changes"
-                            style={{ width: 6, height: 6, borderRadius: 6, background: '#f59e0b', display: 'inline-block' }}
-                        />
-                    )}
-                    <span style={{ fontWeight: 700, color: '#1f2937', fontSize: 12, whiteSpace: 'nowrap' }}>{name}</span>
-                    <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          onClose(tab.instanceId);
-                        }}
+                const isActive = tab.instanceId === activeInstanceId;
+                const name = detailsById[tab.id]?.name || `VSUM #${tab.id}`;
+                const isTabDirty = computeDirty(detailsById[tab.id], workspaceSnapshot);
+
+                return (
+                    <div
+                        key={tab.instanceId}
                         style={{
-                          border: '1px solid transparent',
-                          background: 'transparent',
-                          color: '#64748b',
-                          cursor: 'pointer',
-                          borderRadius: 4,
-                          lineHeight: 1,
-                          width: 16,
-                          height: 16,
-                          display: 'inline-flex',
+                          display: 'flex',
                           alignItems: 'center',
-                          justifyContent: 'center'
+                          gap: 8,
+                          padding: '6px 12px',
+                          border: isActive ? '1px solid #bfdbfe' : '1px solid #e5e7eb',
+                          borderBottom: isActive ? '2px solid #3b82f6' : '1px solid #e5e7eb',
+                          borderRadius: 8,
+                          background: isActive ? '#f0f7ff' : '#ffffff',
+                          cursor: 'pointer',
+                          boxShadow: isActive ? '0 1px 2px rgba(0,0,0,0.04)' : 'none',
                         }}
-                        aria-label={`Close ${name}`}
-                        title="Close"
+                        onClick={() => onActivate(tab.instanceId)}
+                        aria-current={isActive ? 'page' : undefined}
+                        title={name}
                     >
-                      ×
-                    </button>
-                  </div>
+                      {isTabDirty && (
+                          <span
+                              aria-label="Unsaved changes"
+                              title="Unsaved changes"
+                              style={{
+                                width: 6,
+                                height: 6,
+                                borderRadius: 6,
+                                background: '#f59e0b',
+                                display: 'inline-block',
+                              }}
+                          />
+                      )}
+                      <span
+                          style={{
+                            fontWeight: 700,
+                            color: '#1f2937',
+                            fontSize: 12,
+                            whiteSpace: 'nowrap',
+                          }}
+                      >
+                    {name}
+                  </span>
+                      <button
+                          onClick={e => {
+                            e.stopPropagation();
+                            onClose(tab.instanceId);
+                          }}
+                          style={{
+                            border: '1px solid transparent',
+                            background: 'transparent',
+                            color: '#64748b',
+                            cursor: 'pointer',
+                            borderRadius: 4,
+                            lineHeight: 1,
+                            width: 16,
+                            height: 16,
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                          }}
+                          aria-label={`Close ${name}`}
+                          title="Close"
+                      >
+                        ×
+                      </button>
+                    </div>
                 );
               })}
             </div>
 
             {activeInstanceId && (
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                {error && (
-                    <div
-                        role="alert"
-                        style={{
-                          padding: '4px 8px',
-                          border: '1px solid #fecaca',
-                          color: '#991b1b',
-                          background: '#fef2f2',
-                          borderRadius: 6,
-                          fontSize: 11
-                        }}
-                    >
-                      {error}
-                    </div>
-                )}
-                {anyDirty && (
-                    <button
-                        onClick={onSave}
-                        disabled={saving}
-                        style={{
-                          padding: '6px 10px',
-                          border: '1px solid #3b82f6',
-                          borderRadius: 8,
-                          background: saving ? '#bfdbfe' : '#3b82f6',
-                          color: '#ffffff',
-                          fontWeight: 700,
-                          cursor: saving ? 'not-allowed' : 'pointer'
-                        }}
-                    >
-                      {saving ? 'Saving…' : 'Save changes'}
-                    </button>
-                )}
-              </div>
-          )}
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  {error && (
+                      <div
+                          role="alert"
+                          style={{
+                            padding: '4px 8px',
+                            border: '1px solid #fecaca',
+                            color: '#991b1b',
+                            background: '#fef2f2',
+                            borderRadius: 6,
+                            fontSize: 11,
+                          }}
+                      >
+                        {error}
+                      </div>
+                  )}
+                  {anyDirty && (
+                      <button
+                          onClick={onSave}
+                          disabled={saving}
+                          style={{
+                            padding: '6px 10px',
+                            border: '1px solid #3b82f6',
+                            borderRadius: 8,
+                            background: saving ? '#bfdbfe' : '#3b82f6',
+                            color: '#ffffff',
+                            fontWeight: 700,
+                            cursor: saving ? 'not-allowed' : 'pointer',
+                          }}
+                      >
+                        {saving ? 'Saving…' : 'Save changes'}
+                      </button>
+                  )}
+                </div>
+            )}
+          </div>
         </div>
-      </div>
-      {showAddButton && onAddMetaModels && (
-        <button
-          style={{
-            position: 'absolute',
-            right: 16,
-            top: 56,
-            background: '#3498db',
-            color: '#ffffff',
-            border: '1px solid #2980b9',
-            borderRadius: 6,
-            padding: '8px 12px',
-            fontWeight: 700,
-            cursor: 'pointer',
-            zIndex: 21
-          }}
-          onClick={onAddMetaModels}
-        >
-          + ADD META MODELS
-        </button>
-      )}
+
+        {showAddButton && onAddMetaModels && (
+            <button
+                style={{
+                  position: 'absolute',
+                  right: 16,
+                  top: 56,
+                  background: '#3498db',
+                  color: '#ffffff',
+                  border: '1px solid #2980b9',
+                  borderRadius: 6,
+                  padding: '8px 12px',
+                  fontWeight: 700,
+                  cursor: 'pointer',
+                  zIndex: 21,
+                }}
+                onClick={onAddMetaModels}
+            >
+              + ADD META MODELS
+            </button>
+        )}
       </>
   );
 };

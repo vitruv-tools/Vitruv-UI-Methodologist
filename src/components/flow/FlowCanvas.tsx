@@ -32,7 +32,7 @@ const nodeTypes = {
   editable: EditableNode,
   ecoreFile: EcoreFileBox
 };
-const edgeTypes = { 
+const edgeTypes = {
   uml: UMLRelationship,
   reactions: ReactionRelationship
 };
@@ -153,13 +153,13 @@ export const FlowCanvas = forwardRef<{
   getReactionEdges: () => Edge[];
   getWorkspaceSnapshot: () => WorkspaceSnapshot;
 }, FlowCanvasProps>(
-  ({ 
-    onDeploy, 
-    onToolClick, 
-    onDiagramChange, 
-    onEcoreFileSelect, 
-    onEcoreFileExpand, 
-    onEcoreFileDelete, 
+  ({
+    onDeploy,
+    onToolClick,
+    onDiagramChange,
+    onEcoreFileSelect,
+    onEcoreFileExpand,
+    onEcoreFileDelete,
     onEcoreFileRename,
     userId,
     projectId
@@ -201,7 +201,7 @@ export const FlowCanvas = forwardRef<{
     const edgeColorMapRef = useRef<Map<string, string>>(new Map());
     const nextColorIndexRef = useRef<number>(0);
 
-  
+
     useEffect(() => {
   console.log('Loading edge color map for:', { userId, projectId, storageKey });
   try {
@@ -211,8 +211,8 @@ export const FlowCanvas = forwardRef<{
       edgeColorMapRef.current = new Map(Object.entries(parsed));
       const used = new Set(Object.values(parsed));
       let maxIndex = 0;
-      COLOR_LIST.forEach((c, i) => { 
-        if (used.has(c)) maxIndex = Math.max(maxIndex, i + 1); 
+      COLOR_LIST.forEach((c, i) => {
+        if (used.has(c)) maxIndex = Math.max(maxIndex, i + 1);
       });
       nextColorIndexRef.current = maxIndex % COLOR_LIST.length;
       console.log('Loaded edge color map:', edgeColorMapRef.current.size, 'entries');
@@ -363,7 +363,7 @@ export const FlowCanvas = forwardRef<{
         if (!(event.ctrlKey || event.metaKey)) return;
 
         const key = event.key.toLowerCase();
-        
+
         if (key === 'z') {
           event.preventDefault();
           if (event.shiftKey) {
@@ -492,7 +492,7 @@ export const FlowCanvas = forwardRef<{
       const addListeners = () => {
         const targets = [document, window];
         const events = ['pointermove', 'pointerup'] as const;
-        
+
         targets.forEach(target => {
           events.forEach((event, idx) => {
             target.addEventListener(event, idx === 0 ? handlers.move : handlers.end, { capture: true });
@@ -503,7 +503,7 @@ export const FlowCanvas = forwardRef<{
       const removeListeners = () => {
         const targets = [document, window];
         const events = ['pointermove', 'pointerup'] as const;
-        
+
         targets.forEach(target => {
           events.forEach((event, idx) => {
             target.removeEventListener(event, idx === 0 ? handlers.move : handlers.end, { capture: true });
@@ -582,41 +582,62 @@ export const FlowCanvas = forwardRef<{
       try {
         const fileName = `reaction-${edgeId}-${Date.now()}.txt`;
         const file = new File([code], fileName, { type: 'text/plain;charset=utf-8' });
-        const uploadResult = await apiService.uploadFile(file, 'REACTION');
-        const reactionFileId = extractFileId(uploadResult?.data);
 
-        updateEdgeCode(edgeId, code);
+        // 🔑 decide: upload new or update existing
+        let reactionFileId = codeEditorState.reactionFileId ?? null;
 
         if (reactionFileId != null) {
+          // ✅ already have file → UPDATE
+          await apiService.updateReactionFile(reactionFileId, file);
+        } else {
+          // ✅ no file yet → CREATE
+          const uploadResult = await apiService.uploadFile(file, 'REACTION');
+          reactionFileId = extractFileId(uploadResult?.data);
+        }
+
+        // update code in local state (history, etc.)
+        updateEdgeCode(edgeId, code);
+
+        // keep editor state in sync
+        if (reactionFileId != null) {
           setCodeEditorState(prev =>
-            prev
-              ? {
-                  ...prev,
-                  reactionFileId,
-                }
-              : prev
+              prev
+                  ? {
+                    ...prev,
+                    reactionFileId,
+                  }
+                  : prev
           );
         }
 
+        // update edge data in ReactFlow graph
         setEdges(prev =>
-          prev.map(edge =>
-            edge.id === edgeId
-                ? {
-                  ...edge,
-                  data: {
-                    ...edge.data,
-                    reactionFileId: reactionFileId ?? edge.data?.reactionFileId ?? null,
-                    sourceMetaModelId: getBackendMetaModelIdForNode(edge.source) ?? edge.data?.sourceMetaModelId,
-                    targetMetaModelId: getBackendMetaModelIdForNode(edge.target) ?? edge.data?.targetMetaModelId,
-                    sourceMetaModelSourceId: getMetaModelSourceIdForNode(edge.source) ?? edge.data?.sourceMetaModelSourceId,
-                    targetMetaModelSourceId: getMetaModelSourceIdForNode(edge.target) ?? edge.data?.targetMetaModelSourceId,
-                  },
-                }
-                : edge
-          )
+            prev.map(edge =>
+                edge.id === edgeId
+                    ? {
+                      ...edge,
+                      data: {
+                        ...edge.data,
+                        reactionFileId: reactionFileId ?? edge.data?.reactionFileId ?? null,
+                        sourceMetaModelId:
+                            getBackendMetaModelIdForNode(edge.source) ??
+                            edge.data?.sourceMetaModelId,
+                        targetMetaModelId:
+                            getBackendMetaModelIdForNode(edge.target) ??
+                            edge.data?.targetMetaModelId,
+                        sourceMetaModelSourceId:
+                            getMetaModelSourceIdForNode(edge.source) ??
+                            edge.data?.sourceMetaModelSourceId,
+                        targetMetaModelSourceId:
+                            getMetaModelSourceIdForNode(edge.target) ??
+                            edge.data?.targetMetaModelSourceId,
+                      },
+                    }
+                    : edge
+            )
         );
       } catch (err) {
-        console.error('Failed to upload reaction file', err);
+        console.error('Failed to save reaction file', err);
         throw err;
       }
     }, [codeEditorState, updateEdgeCode, setEdges, getBackendMetaModelIdForNode, getMetaModelSourceIdForNode]);
@@ -770,7 +791,7 @@ export const FlowCanvas = forwardRef<{
       }
     }, [addNode, handleEcoreFileExpand, handleEcoreFileSelect, onEcoreFileSelect, onEcoreFileDelete, onEcoreFileRename]);
 
-  
+
     useEffect(() => {
       const handleCreateReactionEdge = (e: Event) => {
         const custom = e as CustomEvent<{
@@ -779,19 +800,19 @@ export const FlowCanvas = forwardRef<{
           code: string;
           originalEdgeId: number;
         }>;
-        
+
         const { sourceNodeId, targetNodeId, code, originalEdgeId } = custom.detail;
-        
+
         const sourceNode = nodes.find(n => n.id === sourceNodeId);
         const targetNode = nodes.find(n => n.id === targetNodeId);
-        
+
         if (!sourceNode || !targetNode) {
           console.warn('Could not find nodes for edge creation:', custom.detail);
           return;
         }
-        
+
         const color = getColorForPair(sourceNodeId, targetNodeId);
-        
+
         const newEdge: Edge = {
           id: `edge-${sourceNodeId}-${targetNodeId}-${Date.now()}`,
           source: sourceNodeId,
@@ -812,13 +833,13 @@ export const FlowCanvas = forwardRef<{
             strokeWidth: 2,
           },
         };
-        
+
         console.log('Creating reaction edge from event:', newEdge);
         addEdge(newEdge);
       };
-      
+
       window.addEventListener('vitruv.createReactionEdge', handleCreateReactionEdge as EventListener);
-      
+
       return () => {
         window.removeEventListener('vitruv.createReactionEdge', handleCreateReactionEdge as EventListener);
       };
