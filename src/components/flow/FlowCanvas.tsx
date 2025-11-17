@@ -24,7 +24,6 @@ const COLOR_LIST = [
   '#2a86d6', '#ffb86b', '#63c37a', '#ff4f7a', '#b08fe8'
 ];
 
-const LOCALSTORAGE_KEY = 'flow_edge_color_map_v1';
 const NODE_DIMENSIONS = { width: 280, height: 180 };
 
 const nodeTypes = {
@@ -37,6 +36,13 @@ const edgeTypes = {
 };
 
 
+const getLocalStorageKey = (userId?: string, projectId?: string) => {
+  if (userId && projectId) {
+    return `flow_edge_color_map_v1_user_${userId}_project_${projectId}`;
+  }
+  return 'flow_edge_color_map_v1'; // Fallback
+};
+
 interface FlowCanvasProps {
   onDeploy?: (nodes: Node[], edges: Edge[]) => void;
   onToolClick?: (toolType: string, toolName: string, diagramType?: string) => void;
@@ -45,6 +51,8 @@ interface FlowCanvasProps {
   onEcoreFileExpand?: (fileName: string, fileContent: string) => void;
   onEcoreFileDelete?: (id: string) => void;
   onEcoreFileRename?: (id: string, newFileName: string) => void;
+  userId?: string;
+  projectId?: string;
 }
 
 interface ConnectionDragState {
@@ -139,8 +147,19 @@ export const FlowCanvas = forwardRef<{
   redo: () => void;
   canUndo: boolean;
   canRedo: boolean;
+  getReactionEdges: () => Edge[];
 }, FlowCanvasProps>(
-  ({ onDeploy, onToolClick, onDiagramChange, onEcoreFileSelect, onEcoreFileExpand, onEcoreFileDelete, onEcoreFileRename }, ref) => {
+  ({ 
+    onDeploy, 
+    onToolClick, 
+    onDiagramChange, 
+    onEcoreFileSelect, 
+    onEcoreFileExpand, 
+    onEcoreFileDelete, 
+    onEcoreFileRename,
+    userId,
+    projectId
+  }, ref) => {
 
     const reactFlowWrapper = useRef<HTMLDivElement>(null);
     const [reactFlowInstance, setReactFlowInstance] = useState<ReactFlowInstance | null>(null);
@@ -151,6 +170,9 @@ export const FlowCanvas = forwardRef<{
     const [connectionDragState, setConnectionDragState] = useState<ConnectionDragState | null>(null);
     const [codeEditorState, setCodeEditorState] = useState<CodeEditorState | null>(null);
     const [routingStyle, setRoutingStyle] = useState<'curved' | 'orthogonal'>('orthogonal');
+
+
+    const storageKey = getLocalStorageKey(userId, projectId);
 
     const {
       nodes,
@@ -175,9 +197,11 @@ export const FlowCanvas = forwardRef<{
     const edgeColorMapRef = useRef<Map<string, string>>(new Map());
     const nextColorIndexRef = useRef<number>(0);
 
+  
     useEffect(() => {
+      console.log('Loading edge color map for:', { userId, projectId, storageKey });
       try {
-        const raw = localStorage.getItem(LOCALSTORAGE_KEY);
+        const raw = localStorage.getItem(storageKey);
         if (raw) {
           const parsed = JSON.parse(raw) as Record<string, string>;
           edgeColorMapRef.current = new Map(Object.entries(parsed));
@@ -187,11 +211,20 @@ export const FlowCanvas = forwardRef<{
             if (used.has(c)) maxIndex = Math.max(maxIndex, i + 1); 
           });
           nextColorIndexRef.current = maxIndex % COLOR_LIST.length;
+          console.log('Loaded edge color map:', edgeColorMapRef.current.size, 'entries');
+        } else {
+     
+          
+          console.log('No edge color map found, resetting');
+          edgeColorMapRef.current = new Map();
+          nextColorIndexRef.current = 0;
         }
       } catch (e) {
         console.warn('Failed to load edge color map', e);
+        edgeColorMapRef.current = new Map();
+        nextColorIndexRef.current = 0;
       }
-    }, []);
+    }, [storageKey]);
 
     const persistEdgeColorMap = useCallback(() => {
       try {
@@ -199,11 +232,12 @@ export const FlowCanvas = forwardRef<{
         edgeColorMapRef.current.forEach((v, k) => {
           obj[k] = v;
         });
-        localStorage.setItem(LOCALSTORAGE_KEY, JSON.stringify(obj));
+        localStorage.setItem(storageKey, JSON.stringify(obj));
+        console.log('Persisted edge color map to:', storageKey);
       } catch (e) {
-        // Silent fail
+        console.error('Failed to persist edge color map', e);
       }
-    }, []);
+    }, [storageKey]);
 
     const getColorForPair = useCallback((idA: string, idB: string) => {
       const key = pairKey(idA, idB);
@@ -494,6 +528,7 @@ export const FlowCanvas = forwardRef<{
     const handleDeleteEdge = useCallback(() => {
       if (codeEditorState?.edgeId) {
         removeEdge(codeEditorState.edgeId);
+        setCodeEditorState(null);
       }
     }, [codeEditorState, removeEdge]);
 
@@ -618,6 +653,7 @@ export const FlowCanvas = forwardRef<{
           keywords: meta?.keywords,
           domain: meta?.domain,
           createdAt: meta?.createdAt || new Date().toISOString(),
+          metaModelId: meta?.metaModelId,
           onExpand: handleEcoreFileExpand,
           onSelect: handleEcoreFileSelect,
           onDelete: onEcoreFileDelete,
@@ -635,9 +671,63 @@ export const FlowCanvas = forwardRef<{
       }
     }, [addNode, handleEcoreFileExpand, handleEcoreFileSelect, onEcoreFileSelect, onEcoreFileDelete, onEcoreFileRename]);
 
+  
+    useEffect(() => {
+      const handleCreateReactionEdge = (e: Event) => {
+        const custom = e as CustomEvent<{
+          sourceNodeId: string;
+          targetNodeId: string;
+          code: string;
+          originalEdgeId: number;
+        }>;
+        
+        const { sourceNodeId, targetNodeId, code, originalEdgeId } = custom.detail;
+        
+        const sourceNode = nodes.find(n => n.id === sourceNodeId);
+        const targetNode = nodes.find(n => n.id === targetNodeId);
+        
+        if (!sourceNode || !targetNode) {
+          console.warn('Could not find nodes for edge creation:', custom.detail);
+          return;
+        }
+        
+        const color = getColorForPair(sourceNodeId, targetNodeId);
+        
+        const newEdge: Edge = {
+          id: `edge-${sourceNodeId}-${targetNodeId}-${Date.now()}`,
+          source: sourceNodeId,
+          target: targetNodeId,
+          sourceHandle: 'right',
+          targetHandle: 'left',
+          type: 'reactions',
+          data: {
+            code: code,
+            originalEdgeId: originalEdgeId,
+          },
+          style: {
+            stroke: color,
+            strokeWidth: 2,
+          },
+        };
+        
+        console.log('Creating reaction edge from event:', newEdge);
+        addEdge(newEdge);
+      };
+      
+      window.addEventListener('vitruv.createReactionEdge', handleCreateReactionEdge as EventListener);
+      
+      return () => {
+        window.removeEventListener('vitruv.createReactionEdge', handleCreateReactionEdge as EventListener);
+      };
+    }, [nodes, addEdge, getColorForPair]);
+
     useEffect(() => {
       onDiagramChange?.(nodes, edges);
     }, [nodes, edges, onDiagramChange]);
+
+    const getReactionEdges = useCallback(() => {
+      return edges.filter(e => e.type === 'reactions');
+    }, [edges]);
 
     useImperativeHandle(ref, () => ({
       handleToolClick,
@@ -650,7 +740,8 @@ export const FlowCanvas = forwardRef<{
       redo,
       canUndo,
       canRedo,
-    }), [handleToolClick, loadDiagramData, nodes, edges, addEcoreFile, resetExpandedFile, undo, redo, canUndo, canRedo]);
+      getReactionEdges,
+    }), [handleToolClick, loadDiagramData, nodes, edges, addEcoreFile, resetExpandedFile, undo, redo, canUndo, canRedo, getReactionEdges]);
 
     const mappedNodes = nodes.map(node => {
       if (node.type === 'editable') {
@@ -789,33 +880,32 @@ export const FlowCanvas = forwardRef<{
           />
         )}
 
-{/* Zoom & Control Buttons */}
-<div
-  style={{
-    position: 'absolute',
-    left: 16,
-    bottom: 16,
-    zIndex: 31,
-    display: 'flex',
-    flexDirection: 'column',
-    gap: 6
-  }}
->
-  {createControlButton(() => reactFlowInstance?.zoomIn?.(), 'Zoom in', '+')}
-  {createControlButton(() => reactFlowInstance?.zoomOut?.(), 'Zoom out', '–')}
-  {createControlButton(() => reactFlowInstance?.fitView?.({ padding: 0.2 }), 'Fit view', '⛶')}
-  {createControlButton(
-    () => setRoutingStyle(prev => prev === 'curved' ? 'orthogonal' : 'curved'),
-    `Edge style: ${routingStyle === 'curved' ? 'Curved' : 'Orthogonal'} (click to toggle)`,
-    routingStyle === 'orthogonal' ? '└' : '∿'
-  )}
-  {createControlButton(
-    () => setIsInteractive(prev => !prev),
-    isInteractive ? 'Lock interactions' : 'Unlock interactions',
-    isInteractive ? '🔓' : '🔒'
-  )}
-</div>
-
+        {/* Zoom & Control Buttons */}
+        <div
+          style={{
+            position: 'absolute',
+            left: 16,
+            bottom: 16,
+            zIndex: 31,
+            display: 'flex',
+            flexDirection: 'column',
+            gap: 6
+          }}
+        >
+          {createControlButton(() => reactFlowInstance?.zoomIn?.(), 'Zoom in', '+')}
+          {createControlButton(() => reactFlowInstance?.zoomOut?.(), 'Zoom out', '–')}
+          {createControlButton(() => reactFlowInstance?.fitView?.({ padding: 0.2 }), 'Fit view', '⛶')}
+          {createControlButton(
+            () => setRoutingStyle(prev => prev === 'curved' ? 'orthogonal' : 'curved'),
+            `Edge style: ${routingStyle === 'curved' ? 'Curved' : 'Orthogonal'} (click to toggle)`,
+            routingStyle === 'orthogonal' ? '└' : '∿'
+          )}
+          {createControlButton(
+            () => setIsInteractive(prev => !prev),
+            isInteractive ? 'Lock interactions' : 'Unlock interactions',
+            isInteractive ? '🔓' : '🔒'
+          )}
+        </div>
 
         {/* Drag Over Overlay */}
         {isDragOver && (
