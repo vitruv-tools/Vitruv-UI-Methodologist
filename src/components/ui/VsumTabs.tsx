@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { VsumDetails } from '../../types';
-import { apiService } from '../../services/api';
+import {apiService, MetaModelRelationRequest} from '../../services/api';
 import { WorkspaceSnapshot } from '../../types/workspace';
 
 interface OpenTabInstance {
@@ -139,7 +139,7 @@ export const VsumTabs: React.FC<VsumTabsProps> = ({
     const backend = detailsById[id];
     if (!backend) return;
 
-    // make sure we have a fresh snapshot before saving
+    // Make sure we have a fresh snapshot before saving
     let snap = workspaceSnapshot;
     if (!snap && requestWorkspaceSnapshot) {
       try {
@@ -148,30 +148,85 @@ export const VsumTabs: React.FC<VsumTabsProps> = ({
         console.warn('Failed to refresh workspace snapshot before save', e);
       }
     }
+    if (!snap) {
+      snap = { metaModelIds: [], metaModelRelationRequests: [] };
+    }
 
-    const metaModelSourceIds =
-        snap?.metaModelIds?.length
-            ? snap.metaModelIds
-            : backend.metaModels
-            ?.map(mm => mm.sourceId)
-            .filter((x): x is number => typeof x === 'number') ?? [];
+    const backendMetaModels = backend.metaModels ?? [];
 
-    if (!metaModelSourceIds || metaModelSourceIds.length === 0) {
+    // 1) PARENT collection: stable meta model IDs (sourceId)
+    const parentMetaModelIds =
+        backendMetaModels
+            .map(mm => mm.sourceId)
+            .filter((x): x is number => typeof x === 'number');
+
+    // 2) CLONE collection: per-workspace meta model IDs (id)
+    const cloneMetaModelIds =
+        backendMetaModels
+            .map(mm => mm.id)
+            .filter((x): x is number => typeof x === 'number');
+
+    // --- derive metaModelIds (use PARENTS) ------------------------
+
+    // snap.metaModelIds currently holds CLONE ids from the canvas.
+    // Map them back to parent sourceId. If that fails, fall back to all parents.
+    const mappedParentIdsFromSnapshot =
+        (snap.metaModelIds ?? [])
+            .map(cloneId => {
+              const mm = backendMetaModels.find(m => m.id === cloneId);
+              return mm?.sourceId;
+            })
+            .filter((x): x is number => typeof x === 'number');
+
+    const metaModelIds =
+        mappedParentIdsFromSnapshot.length > 0
+            ? mappedParentIdsFromSnapshot
+            : parentMetaModelIds;
+
+    if (metaModelIds.length === 0) {
       setError('At least one MetaModel is required');
       return;
     }
 
-    const metaModelRelationRequests =
-        snap && snap.metaModelRelationRequests && snap.metaModelRelationRequests.length > 0
-            ? snap.metaModelRelationRequests
-            : null;
+    // --- derive relations (use CLONES for filtering, PARENTS for sending) ---
+
+    const rawRelations = snap.metaModelRelationRequests ?? [];
+
+    // First filter by what actually exists on the canvas (clone IDs)
+    const filteredByClones = (snap?.metaModelRelationRequests ?? []).filter(rel =>
+        cloneMetaModelIds.includes(rel.sourceId) &&
+        cloneMetaModelIds.includes(rel.targetId)
+    );
+
+    // Then map relation sourceId/targetId from cloneId -> parent sourceId
+    const mappedRelations = (snap?.metaModelRelationRequests ?? [])
+        .map(rel => {
+          const srcParent = backendMetaModels.find(m => m.id === rel.sourceId)?.sourceId;
+          const tgtParent = backendMetaModels.find(m => m.id === rel.targetId)?.sourceId;
+
+          if (typeof srcParent !== "number" || typeof tgtParent !== "number") {
+            return null;
+          }
+
+          return {
+            sourceId: srcParent,
+            targetId: tgtParent,
+            reactionFileId: rel.reactionFileId ?? null, // required by backend
+          };
+        })
+        .filter((r): r is MetaModelRelationRequest => r !== null);
+
+    const relationsToSend: MetaModelRelationRequest[] | null =
+        mappedRelations.length > 0 ? mappedRelations : null;
+
+    // --- send to backend -----------------------------------------
 
     setSaving(true);
     setError('');
     try {
       await apiService.updateVsumSyncChanges(id, {
-        metaModelIds: metaModelSourceIds,
-        metaModelRelationRequests,
+        metaModelIds,                // PARENT IDs
+        metaModelRelationRequests: relationsToSend, // mapped to PARENT IDs
       });
 
       // reload backend details so dirty calculation is correct
@@ -185,6 +240,7 @@ export const VsumTabs: React.FC<VsumTabsProps> = ({
       setSaving(false);
     }
   };
+
 
   const onSave = async () => {
     const active = openTabs.find(t => t.instanceId === activeInstanceId);

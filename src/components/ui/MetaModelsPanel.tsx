@@ -425,7 +425,7 @@ export const MetaModelsPanel: React.FC<MetaModelsPanelProps> = ({
                   }}
                   disabled={(selectedMetaModelIds || []).includes(model.id)}
                 >
-                  {(selectedMetaModelIds || []).includes(model.id) ? 'Added' : 'Add to VSUM'}
+                  {(selectedMetaModelIds || []).includes(model.id) ? 'Added' : '+'}
                 </button>
               )}
             </div>

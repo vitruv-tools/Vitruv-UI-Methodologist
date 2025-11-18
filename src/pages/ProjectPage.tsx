@@ -237,11 +237,12 @@ async function fetchAndLoadProjectBoxes(id: number) {
         reactionFileId: relation.reactionFileStorageId ?? null,
       }));
 
+      // Wait for metamodel boxes to be fully rendered before loading relations
       setTimeout(() => {
         window.dispatchEvent(new CustomEvent('vitruv.loadMetaModelRelations', {
           detail: { relations }
         }));
-      }, 0);
+      }, 300);
     }
   } catch (error) {
     console.error('Failed to fetch vsum details:', error);
