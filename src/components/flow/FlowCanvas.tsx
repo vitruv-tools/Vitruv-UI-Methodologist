@@ -897,9 +897,14 @@ export const FlowCanvas = forwardRef<{
             targetId: number;
             reactionFileId?: number | null;
           }>;
+          preserveExisting?: boolean; // Flag to preserve existing edges
         }>;
 
         const relations = custom.detail?.relations ?? [];
+        const preserveExisting = custom.detail?.preserveExisting ?? false;
+        
+        // If preserveExisting is true, only add relations that don't already exist
+        // This prevents overwriting unsaved edges when adding a new metamodel
         relations.forEach(relation => {
           // Match against both metaModelId and metaModelSourceId to handle all cases
           const sourceNode = nodes.find(n => 
@@ -916,8 +921,23 @@ export const FlowCanvas = forwardRef<{
             return;
           }
 
-          const exists = edges.some(edge => edge.data?.backendRelationId === relation.id);
-          if (exists) return;
+          // Check if edge already exists by backendRelationId
+          const existsByBackendId = edges.some(edge => edge.data?.backendRelationId === relation.id);
+          if (existsByBackendId) return;
+
+          // If preserveExisting is true, also check if there's already an edge between these nodes
+          // (even if it's not saved to backend yet)
+          if (preserveExisting) {
+            const existsBetweenNodes = edges.some(edge => 
+              edge.type === 'reactions' &&
+              ((edge.source === sourceNode.id && edge.target === targetNode.id) ||
+               (edge.source === targetNode.id && edge.target === sourceNode.id))
+            );
+            if (existsBetweenNodes) {
+              console.log('Preserving existing edge between nodes:', sourceNode.id, targetNode.id);
+              return;
+            }
+          }
 
           const color = getColorForPair(sourceNode.id, targetNode.id);
 
