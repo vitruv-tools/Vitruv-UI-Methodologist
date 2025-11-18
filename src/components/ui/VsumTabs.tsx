@@ -160,14 +160,6 @@ export const VsumTabs: React.FC<VsumTabsProps> = ({
             .map(mm => mm.sourceId)
             .filter((x): x is number => typeof x === 'number');
 
-    // 2) CLONE collection: per-workspace meta model IDs (id)
-    const cloneMetaModelIds =
-        backendMetaModels
-            .map(mm => mm.id)
-            .filter((x): x is number => typeof x === 'number');
-
-    // --- derive metaModelIds (use PARENTS) ------------------------
-
     // snap.metaModelIds currently holds CLONE ids from the canvas.
     // Map them back to parent sourceId. If that fails, fall back to all parents.
     const mappedParentIdsFromSnapshot =
