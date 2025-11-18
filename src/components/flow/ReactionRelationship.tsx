@@ -34,16 +34,8 @@ export function ReactionRelationship({
   const py = ux;
   
   const count = Math.max(1, data?.parallelCount ?? 1);
-  const index = Math.max(0, data?.parallelIndex ?? 0);
-  const separation = Math.max(12, Math.min(72, data?.separation ?? 36));
-  
+
   // Stable tiny spread per edge id to avoid clustering at crossings
-  const hash = (s: string) => {
-    let h = 0;
-    for (let i = 0; i < s.length; i++) h = ((h << 5) - h + s.charCodeAt(i)) | 0;
-    return h;
-  };
-  const centerIndex = (count - 1) / 2; // centers around 0
   const offset = 0;
 
   let edgePath: string;
