@@ -20,8 +20,16 @@ export interface VsumMetaModelRef {
   genModelFileId: number;
 }
 
+export interface VsumMetaModelRelation {
+  id: number;
+  sourceId: number;
+  targetId: number;
+  reactionFileStorageId?: number | null;
+}
+
 export interface VsumDetails extends Vsum {
   metaModels: VsumMetaModelRef[];
+  metaModelsRelation?: VsumMetaModelRelation[];
 }
 
 export interface ApiResponse<T> {

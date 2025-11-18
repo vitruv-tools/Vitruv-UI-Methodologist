@@ -3,7 +3,7 @@ import React, { useState, useRef, useEffect } from 'react';
 interface CodeEditorModalProps {
   readonly isOpen: boolean;
   readonly onClose: () => void;
-  readonly onSave: (code: string) => void;
+  readonly onSave: (code: string) => Promise<void> | void;
   readonly onDelete?: () => void;
   readonly initialCode?: string;
   readonly edgeId: string;
@@ -45,6 +45,7 @@ export function CodeEditorModal({
   const [code, setCode] = useState(initialCode);
   const [history, setHistory] = useState<string[]>([initialCode]);
   const [historyIndex, setHistoryIndex] = useState(0);
+  const [saving, setSaving] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   // Reset state when modal opens or initialCode changes
@@ -85,9 +86,19 @@ export function CodeEditorModal({
     }
   };
 
-  const handleSave = () => {
-    onSave(code);
-    onClose();
+  const handleSave = async () => {
+    if (saving) return;
+    try {
+      setSaving(true);
+      await onSave(code);
+      onClose();
+    } catch (err) {
+      console.error('Failed to save reaction', err);
+      const message = err instanceof Error ? err.message : 'Failed to save reaction';
+      globalThis.alert(message);
+    } finally {
+      setSaving(false);
+    }
   };
 
   const handleDelete = () => {
@@ -284,16 +295,17 @@ export function CodeEditorModal({
           )}
           <button
             onClick={handleSave}
+            disabled={saving}
             style={{
               ...buttonBaseStyles,
               padding: '6px 20px',
-              backgroundColor: '#0e7a0d',
+              backgroundColor: saving ? '#0b5e0b' : '#0e7a0d',
               color: '#fff',
               fontWeight: 600,
             }}
             title="Save (Ctlr+S)"
           >
-            💾 Save
+            {saving ? 'Saving…' : '💾 Save'}
           </button>
         </div>
 

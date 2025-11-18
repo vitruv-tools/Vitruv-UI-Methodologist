@@ -203,7 +203,7 @@ class ApiService {
       throw new Error('No valid authentication token available');
     }
 
-    const url = `${this.baseURL}/api/api/files/${id}`;
+    const url = `${this.baseURL}/api/files/${id}`;
     const headers = {
       'Authorization': `Bearer ${token}`,
     };
@@ -598,6 +598,81 @@ class ApiService {
     const pageNumber = params.pageNumber ?? 0;
     const pageSize = params.pageSize ?? 50;
     return this.authenticatedRequest(`/api/v1/users/search?pageNumber=${pageNumber}&pageSize=${pageSize}`);
+  }
+
+  async updateReactionFile(
+      fileId: number | string,
+      file: File
+  ): Promise<{ data: string; message: string }> {
+    const token = await AuthService.ensureValidToken();
+
+    if (!token) {
+      throw new Error('No valid authentication token available');
+    }
+
+    const formData = new FormData();
+    formData.append('file', file);
+
+    const url = `${this.baseURL}/api/upload/${fileId}/update-reaction`;
+    // const headers = {
+    //   'Authorization': `Bearer ${token}`,
+    // };
+
+    const doRequest = async (authHeader: string) => {
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'Authorization': authHeader,
+        },
+        body: formData,
+      });
+
+      if (!response.ok) {
+        let errorText = '';
+        try {
+          errorText = await response.text();
+        } catch {}
+        let errorMessage = errorText;
+        try {
+          const parsed = JSON.parse(errorText);
+          errorMessage = parsed?.message || parsed?.error || errorText;
+        } catch {}
+
+        console.error('Update reaction file failed', {
+          url,
+          fileId,
+          status: response.status,
+          statusText: response.statusText,
+          message: errorMessage,
+          body: errorText,
+        });
+
+        throw new Error(errorMessage);
+      }
+
+      const result = await response.json();
+      console.log(`Successful reaction file update for id ${fileId}:`, result);
+      return result as { data: string; message: string };
+    };
+
+    try {
+      // first try with current token
+      return await doRequest(`Bearer ${token}`);
+    } catch (err: any) {
+      // if it was 401, try refresh like in uploadFile
+      if (err instanceof Error && /401/.test(err.message)) {
+        try {
+          await AuthService.refreshToken();
+          const newToken = await AuthService.ensureValidToken();
+          if (newToken) {
+            return await doRequest(`Bearer ${newToken}`);
+          }
+        } catch (refreshError) {
+          console.error('Token refresh failed during updateReactionFile:', refreshError);
+        }
+      }
+      throw err;
+    }
   }
 
   // Removed unused getBaseURL and setBaseURL helpers

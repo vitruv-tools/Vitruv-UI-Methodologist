@@ -13,6 +13,7 @@ import {
 } from '../../utils/flowUtils';
 import { Node, Edge } from 'reactflow';
 import { User } from '../../services/auth';
+import { WorkspaceSnapshot, WorkspaceSnapshotRequest } from '../../types/workspace';
 
 const ENABLE_RESIZE = false;   // <- keep false to prevent any user resizing
 const HEADER_HEIGHT = 48;
@@ -160,9 +161,19 @@ export function MainLayout({
     }, []); // Ref is stable, no other deps
 
     // handleEcoreFileUpload als useCallback (stabil)
+    type EcoreMeta = {
+        fileName?: string;
+        description?: string;
+        keywords?: string;
+        domain?: string;
+        createdAt?: string;
+        metaModelId?: number;
+        metaModelSourceId?: number;
+    };
+
     const handleEcoreFileUpload = useCallback((
         fileContent: string,
-        meta?: { fileName?: string; description?: string; keywords?: string; domain?: string; createdAt?: string }
+        meta?: EcoreMeta
     ) => {
         // Prüfe ob File bereits existiert
         const existingNodes = flowCanvasRef.current?.getNodes?.() || [];
@@ -220,6 +231,8 @@ export function MainLayout({
                 keywords?: string;
                 domain?: string;
                 createdAt?: string;
+                metaModelId?: number;
+                metaModelSourceId?: number;
             }>;
             const detail = customEvent.detail;
             if (detail) {
@@ -229,6 +242,8 @@ export function MainLayout({
                     keywords: detail.keywords,
                     domain: detail.domain,
                     createdAt: detail.createdAt,
+                    metaModelId: detail.metaModelId,
+                    metaModelSourceId: detail.metaModelSourceId,
                 });
             }
         };
@@ -248,6 +263,24 @@ export function MainLayout({
             window.removeEventListener('vitruv.resetWorkspace', handleResetWorkspace as EventListener);
         };
         // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
+
+    useEffect(() => {
+        const handleWorkspaceSnapshotRequest = (event: Event) => {
+            const detail = (event as CustomEvent<WorkspaceSnapshotRequest>).detail;
+            if (!detail || typeof detail.resolve !== 'function') {
+                return;
+            }
+            const snapshot: WorkspaceSnapshot =
+                flowCanvasRef.current?.getWorkspaceSnapshot?.() ?? {
+                    metaModelIds: [],
+                    metaModelRelationRequests: [],
+                };
+            detail.resolve(snapshot);
+        };
+
+        window.addEventListener('vitruv.requestWorkspaceSnapshot', handleWorkspaceSnapshotRequest as EventListener);
+        return () => window.removeEventListener('vitruv.requestWorkspaceSnapshot', handleWorkspaceSnapshotRequest as EventListener);
     }, []);
 
     const handleEcoreFileSelect = useCallback((fileName: string) => {
