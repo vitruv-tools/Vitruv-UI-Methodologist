@@ -81,9 +81,9 @@ export function UMLRelationship({
     // Curved quadratic path
     const mx = (sourceX + targetX) / 2 + px * offset;
     const my = (sourceY + targetY) / 2 + py * offset;
-    edgePath = `M ${sourceX},${sourceY} Q ${mx},${my} ${targetX},${targetY}`;
-    labelX = mx;
-    labelY = my;
+    edgePath = `M ${sourceX},${sourceY} L ${targetX},${targetY}`;
+    labelX = (sourceX + targetX) / 2;
+    labelY = (sourceY + targetY) / 2;
     startSegDx = mx - sourceX; startSegDy = my - sourceY;
     endSegDx = targetX - mx; endSegDy = targetY - my;
   }
