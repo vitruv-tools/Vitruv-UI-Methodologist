@@ -238,9 +238,11 @@ async function fetchAndLoadProjectBoxes(id: number) {
       }));
 
       // Wait for metamodel boxes to be fully rendered before loading relations
+      // Set preserveExisting to false when loading from backend (full reload)
+      // This allows backend relations to be loaded even if there are existing edges
       setTimeout(() => {
         window.dispatchEvent(new CustomEvent('vitruv.loadMetaModelRelations', {
-          detail: { relations }
+          detail: { relations, preserveExisting: false }
         }));
       }, 300);
     }
