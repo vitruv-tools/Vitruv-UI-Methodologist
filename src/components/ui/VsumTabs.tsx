@@ -188,16 +188,6 @@ export const VsumTabs: React.FC<VsumTabsProps> = ({
       return;
     }
 
-    // --- derive relations (use CLONES for filtering, PARENTS for sending) ---
-
-    const rawRelations = snap.metaModelRelationRequests ?? [];
-
-    // First filter by what actually exists on the canvas (clone IDs)
-    const filteredByClones = (snap?.metaModelRelationRequests ?? []).filter(rel =>
-        cloneMetaModelIds.includes(rel.sourceId) &&
-        cloneMetaModelIds.includes(rel.targetId)
-    );
-
     // Then map relation sourceId/targetId from cloneId -> parent sourceId
     const mappedRelations = (snap?.metaModelRelationRequests ?? [])
         .map(rel => {
