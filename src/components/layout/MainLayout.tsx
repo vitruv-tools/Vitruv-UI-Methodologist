@@ -36,6 +36,7 @@ interface MainLayoutProps {
     showWelcomeScreen?: boolean;
     welcomeTitle?: string;
     welcomeSubtitle?: string;
+    workspaceKey?: string;
 }
 
 export function MainLayout({
@@ -56,6 +57,7 @@ export function MainLayout({
     showWelcomeScreen = false,
     welcomeTitle,
     welcomeSubtitle,
+    workspaceKey,
 }: MainLayoutProps) {
     const location = useLocation();
     const isMMLRoute = location.pathname.startsWith('/mml');
@@ -550,6 +552,7 @@ export function MainLayout({
                             </div>
                         ) : (
                             <FlowCanvas
+                                key={workspaceKey || 'default-workspace'}
                                 onDeploy={onDeploy}
                                 onDiagramChange={handleDiagramChange}
                                 ref={flowCanvasRef}
