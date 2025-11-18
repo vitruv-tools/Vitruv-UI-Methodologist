@@ -6,8 +6,10 @@ interface UMLRelationshipData {
   relationshipType: string;
   sourceMultiplicity?: string;
   targetMultiplicity?: string;
-  code?: string; // NEU: Code für diese Relation
-  onDoubleClick?: (edgeId: string) => void; // NEU: Handler für Doppelklick
+  routingStyle?: 'curved' | 'orthogonal';
+  separation?: number;
+  parallelIndex?: number;
+  parallelCount?: number;
 }
 
 export function UMLRelationship({
@@ -19,8 +21,7 @@ export function UMLRelationship({
   targetX,
   targetY,
   data,
-  selected,
-}: EdgeProps<UMLRelationshipData & { parallelIndex?: number; parallelCount?: number; routingStyle?: 'curved' | 'orthogonal'; separation?: number }>) {
+}: EdgeProps<UMLRelationshipData>) {
   // Compute orthogonal (Manhattan) path with a bend and parallel offset
   const dx = targetX - sourceX;
   const dy = targetY - sourceY;
@@ -30,16 +31,16 @@ export function UMLRelationship({
   // Perpendicular to the overall direction
   const px = -uy;
   const py = ux;
-  const count = Math.max(1, (data as any)?.parallelCount ?? 1);
-  const index = Math.max(0, (data as any)?.parallelIndex ?? 0);
-  const separation = Math.max(12, Math.min(72, (data as any)?.separation ?? 36));
+  const count = Math.max(1, data?.parallelCount ?? 1);
+  const index = Math.max(0, data?.parallelIndex ?? 0);
+  const separation = Math.max(12, Math.min(72, data?.separation ?? 36));
   // Stable tiny spread per edge id to avoid clustering at crossings
   const hash = (s: string) => {
     let h = 0;
     for (let i = 0; i < s.length; i++) h = ((h << 5) - h + s.charCodeAt(i)) | 0;
     return h;
   };
-  const jitter = ((hash(id) % 5) - 2) * 4; // -8, -4, 0, 4, 8 px
+  const jitter = ((hash(id) % 5) - 2) * 4;
   const centerIndex = (count - 1) / 2; // centers around 0
   const offsetMultiplier = (index - centerIndex);
   const offset = offsetMultiplier * separation + jitter;
@@ -48,7 +49,7 @@ export function UMLRelationship({
   let labelY: number;
   // For multiplicity placement we need segment directions
   let startSegDx = 0, startSegDy = 0, endSegDx = 0, endSegDy = 0;
-  if ((data as any)?.routingStyle === 'orthogonal') {
+  if (data?.routingStyle === 'orthogonal') {
     // 3-segment orthogonal
     const preferHorizontalFirst = Math.abs(dx) >= Math.abs(dy);
     let p1x = sourceX;
@@ -87,43 +88,39 @@ export function UMLRelationship({
     endSegDx = targetX - mx; endSegDy = targetY - my;
   }
 
-  const handleDoubleClick = () => {
-    (data as any)?.onDoubleClick?.(id);
-  };
-
   // marker types are described via ids in <defs> below
 
   const getRelationshipStyle = () => {
     const baseStyle = {
-      strokeWidth: selected ? '4.5px' : '2.5px',
-      stroke: selected ? '#ef4444' : '#374151',
+      strokeWidth: '2.5px',
+      stroke: '#374151',
       fill: 'none',
-      opacity: selected ? '1' : '0.9',
+      opacity: '0.9',
     };
 
     switch (data?.relationshipType) {
       case 'inheritance':
         return {
           ...baseStyle,
-          markerEnd: selected ? 'url(#arrowhead-inheritance-selected)' : 'url(#arrowhead-inheritance)',
+          markerEnd: 'url(#arrowhead-inheritance)',
         };
       case 'realization':
         return {
           ...baseStyle,
           strokeDasharray: '10,6',
-          markerEnd: selected ? 'url(#arrowhead-realization-selected)' : 'url(#arrowhead-realization)',
+          markerEnd: 'url(#arrowhead-realization)',
         };
       case 'composition':
         return {
           ...baseStyle,
           // UML: filled diamond at the whole (source) end, no arrow at target
-          markerStart: selected ? 'url(#diamond-composition-selected)' : 'url(#diamond-composition)',
+          markerStart: 'url(#diamond-composition)',
         };
       case 'aggregation':
         return {
           ...baseStyle,
           // UML: hollow diamond at the whole (source) end, no arrow at target
-          markerStart: selected ? 'url(#diamond-aggregation-selected)' : 'url(#diamond-aggregation)',
+          markerStart: 'url(#diamond-aggregation)',
         };
       case 'association':
         return {
@@ -135,7 +132,7 @@ export function UMLRelationship({
           ...baseStyle,
           strokeDasharray: '8,5',
           // UML: dashed line with open arrow
-          markerEnd: selected ? 'url(#arrowhead-open-dependency-selected)' : 'url(#arrowhead-open-dependency)',
+          markerEnd: 'url(#arrowhead-open-dependency)',
         };
       default:
         return baseStyle;
@@ -147,7 +144,7 @@ export function UMLRelationship({
     return data?.label || '';
   };
 
-  const connectionCount = Math.max(1, (data as any)?.parallelCount ?? 1);
+  const connectionCount = Math.max(1, data?.parallelCount ?? 1);
 
   return (
     <>
@@ -163,17 +160,6 @@ export function UMLRelationship({
         >
           <path d="M 0 0 L 10 5 L 0 10 z" fill="#ffffff" stroke="#374151" strokeWidth="2" />
         </marker>
-        <marker
-          id="arrowhead-inheritance-selected"
-          viewBox="0 0 10 10"
-          refX="9"
-          refY="5"
-          markerWidth="8"
-          markerHeight="8"
-          orient="auto"
-        >
-          <path d="M 0 0 L 10 5 L 0 10 z" fill="#ffffff" stroke="#ef4444" strokeWidth="2" />
-        </marker>
         
         <marker
           id="arrowhead-realization"
@@ -186,30 +172,13 @@ export function UMLRelationship({
         >
           <path d="M 0 0 L 10 5 L 0 10 z" fill="#ffffff" stroke="#374151" strokeWidth="2" />
         </marker>
-        <marker
-          id="arrowhead-realization-selected"
-          viewBox="0 0 10 10"
-          refX="9"
-          refY="5"
-          markerWidth="8"
-          markerHeight="8"
-          orient="auto"
-        >
-          <path d="M 0 0 L 10 5 L 0 10 z" fill="#ffffff" stroke="#ef4444" strokeWidth="2" />
-        </marker>
         
         {/* Diamonds for aggregation/composition at source side */}
         <marker id="diamond-aggregation" viewBox="0 0 12 12" refX="1" refY="6" markerWidth="12" markerHeight="12" orient="auto">
           <path d="M 6 0 L 12 6 L 6 12 L 0 6 Z" fill="#ffffff" stroke="#374151" strokeWidth="2" />
         </marker>
-        <marker id="diamond-aggregation-selected" viewBox="0 0 12 12" refX="1" refY="6" markerWidth="12" markerHeight="12" orient="auto">
-          <path d="M 6 0 L 12 6 L 6 12 L 0 6 Z" fill="#ffffff" stroke="#ef4444" strokeWidth="2" />
-        </marker>
         <marker id="diamond-composition" viewBox="0 0 12 12" refX="1" refY="6" markerWidth="12" markerHeight="12" orient="auto">
           <path d="M 6 0 L 12 6 L 6 12 L 0 6 Z" fill="#374151" />
-        </marker>
-        <marker id="diamond-composition-selected" viewBox="0 0 12 12" refX="1" refY="6" markerWidth="12" markerHeight="12" orient="auto">
-          <path d="M 6 0 L 12 6 L 6 12 L 0 6 Z" fill="#ef4444" />
         </marker>
         
         <marker
@@ -223,24 +192,10 @@ export function UMLRelationship({
         >
           <path d="M 0 0 L 10 5 L 0 10 z" fill="#374151" />
         </marker>
-        <marker
-          id="arrowhead-association-selected"
-          viewBox="0 0 10 10"
-          refX="9"
-          refY="5"
-          markerWidth="8"
-          markerHeight="8"
-          orient="auto"
-        >
-          <path d="M 0 0 L 10 5 L 0 10 z" fill="#ef4444" />
-        </marker>
         
         {/* Open arrow for dependency */}
         <marker id="arrowhead-open-dependency" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto">
           <path d="M 0 0 L 10 5 L 0 10" fill="none" stroke="#374151" strokeWidth="2" />
-        </marker>
-        <marker id="arrowhead-open-dependency-selected" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto">
-          <path d="M 0 0 L 10 5 L 0 10" fill="none" stroke="#ef4444" strokeWidth="2" />
         </marker>
       </defs>
 
@@ -251,7 +206,7 @@ export function UMLRelationship({
         className="react-flow__edge-path"
         style={{
           stroke: '#ffffff',
-          strokeWidth: selected ? 8 : 7,
+          strokeWidth: 7,
           opacity: 0.95,
           fill: 'none',
           strokeLinecap: 'butt',
@@ -268,7 +223,6 @@ export function UMLRelationship({
           strokeLinejoin: 'miter',
         }}
         d={edgePath}
-        onDoubleClick={handleDoubleClick}
       />
 
       <text
@@ -279,7 +233,7 @@ export function UMLRelationship({
         style={{
           fontSize: '12px',
           fontWeight: 700,
-          fill: selected ? '#ef4444' : '#1f2937',
+          fill: '#1f2937',
           stroke: '#ffffff',
           strokeWidth: 3.5,
           paintOrder: 'stroke fill',
@@ -289,8 +243,8 @@ export function UMLRelationship({
         {getRelationshipLabel()}
       </text>
 
-      {/* Connection count badge: visible on selection to make relation more visible */}
-      {selected && connectionCount > 1 && (
+      {/* Connection count badge - immer sichtbar wenn mehrere Verbindungen */}
+      {connectionCount > 1 && (
         <g>
           <rect
             x={labelX - 12}
@@ -299,7 +253,7 @@ export function UMLRelationship({
             ry={6}
             width={24}
             height={16}
-            fill="#ef4444"
+            fill="#374151"
             stroke="#ffffff"
             strokeWidth={2}
           />
@@ -342,7 +296,7 @@ export function UMLRelationship({
           style={{
             fontSize: '13px',
             fontWeight: 800,
-            fill: selected ? '#ef4444' : '#111827',
+            fill: '#111827',
             stroke: '#ffffff',
             strokeWidth: 4,
             paintOrder: 'stroke fill',
@@ -376,7 +330,7 @@ export function UMLRelationship({
           style={{
             fontSize: '13px',
             fontWeight: 800,
-            fill: selected ? '#ef4444' : '#111827',
+            fill: '#111827',
             stroke: '#ffffff',
             strokeWidth: 4,
             paintOrder: 'stroke fill',
