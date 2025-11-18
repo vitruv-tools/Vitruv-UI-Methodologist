@@ -960,6 +960,7 @@ export const FlowCanvas = forwardRef<{
     }, [edges]);
 
     const buildWorkspaceSnapshot = useCallback((): WorkspaceSnapshot => {
+      // metaModelIds = parent sourceId for each ecore node
       const metaModelIds = Array.from(
           new Set(
               nodes
@@ -972,21 +973,20 @@ export const FlowCanvas = forwardRef<{
       const metaModelRelationRequests: MetaModelRelationRequest[] = edges
           .filter(edge => edge.type === 'reactions')
           .map(edge => {
-            const sourceMetaModelId = edge.data?.sourceMetaModelId ?? getBackendMetaModelIdForNode(edge.source);
-            const targetMetaModelId = edge.data?.targetMetaModelId ?? getBackendMetaModelIdForNode(edge.target);
-            const reactionFileId = edge.data?.reactionFileId;
+            const sourceId = getMetaModelSourceIdForNode(edge.source);
+            const targetId = getMetaModelSourceIdForNode(edge.target);
+            const reactionFileId =
+                typeof edge.data?.reactionFileId === 'number'
+                    ? edge.data.reactionFileId
+                    : null;
 
-            if (
-                typeof sourceMetaModelId !== 'number' ||
-                typeof targetMetaModelId !== 'number' ||
-                typeof reactionFileId !== 'number'
-            ) {
+            if (typeof sourceId !== 'number' || typeof targetId !== 'number') {
               return null;
             }
 
             return {
-              sourceId: sourceMetaModelId,
-              targetId: targetMetaModelId,
+              sourceId,
+              targetId,
               reactionFileId,
             };
           })
@@ -996,7 +996,7 @@ export const FlowCanvas = forwardRef<{
         metaModelIds,
         metaModelRelationRequests,
       };
-    }, [nodes, edges, getBackendMetaModelIdForNode]);
+    }, [nodes, edges, getMetaModelSourceIdForNode]);
 
     useEffect(() => {
       if (!nodes.length || !edges.length) return;
