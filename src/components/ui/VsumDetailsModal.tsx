@@ -310,47 +310,38 @@ export const VsumDetailsModal: React.FC<Props> = ({ isOpen, vsumId, onClose, onS
               ) : activeTab === 'users' ? (
                   <VsumUsersTab vsumId={vsumId} onChanged={onSaved} />
               ) : (
-                  <div>
-                    {versionsError && (
-                        <div
-                            style={{
-                              marginBottom: 12,
-                              padding: 10,
-                              border: '1px solid #f5c6cb',
-                              background: '#f8d7da',
-                              color: '#721c24',
-                              borderRadius: 6,
-                              fontSize: 12,
-                            }}
-                        >
-                          {versionsError}
-                        </div>
-                    )}
-                    {versionsLoading ? (
-                        <div style={{ fontStyle: 'italic', color: '#6c757d' }}>Loading versions…</div>
-                    ) : versions.length === 0 ? (
-                        <div style={{ fontStyle: 'italic', color: '#6c757d' }}>No versions found.</div>
-                    ) : (
-                        <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-                          <thead>
-                          <tr>
-                            <th style={{ border: '1px solid #e9ecef', padding: 8, textAlign: 'left', fontSize: 12 }}>Version ID</th>
-                            <th style={{ border: '1px solid #e9ecef', padding: 8, textAlign: 'left', fontSize: 12 }}>Created At</th>
-                          </tr>
-                          </thead>
-                          <tbody>
-                          {versions.map(v => (
-                              <tr key={v.id}>
-                                <td style={{ border: '1px solid #e9ecef', padding: 8, fontSize: 13 }}>{v.id}</td>
-                                <td style={{ border: '1px solid #e9ecef', padding: 8, fontSize: 13 }}>
-                                  {new Date(v.createdAt).toLocaleString([], { hour: '2-digit', minute: '2-digit', year: 'numeric', month: '2-digit', day: '2-digit' })}
-                                </td>
-                              </tr>
-                          ))}
-                          </tbody>
-                        </table>
-                    )}
-                  </div>
+                  <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                    <thead>
+                    <tr>
+                      <th style={{ border: '1px solid #e9ecef', padding: 8, textAlign: 'left', fontSize: 12 }}>
+                        #
+                      </th>
+                      <th style={{ border: '1px solid #e9ecef', padding: 8, textAlign: 'left', fontSize: 12 }}>
+                        Versions
+                      </th>
+                    </tr>
+                    </thead>
+
+                    <tbody>
+                    {versions.map((v, index) => (
+                        <tr key={v.id}>
+                          <td style={{ border: '1px solid #e9ecef', padding: 8, fontSize: 13 }}>
+                            {index + 1}
+                          </td>
+
+                          <td style={{ border: '1px solid #e9ecef', padding: 8, fontSize: 13 }}>
+                            {new Date(v.createdAt).toLocaleString([], {
+                              hour: '2-digit',
+                              minute: '2-digit',
+                              year: 'numeric',
+                              month: '2-digit',
+                              day: '2-digit',
+                            })}
+                          </td>
+                        </tr>
+                    ))}
+                    </tbody>
+                  </table>
               )}
             </div>
 
