@@ -9,7 +9,10 @@ import { apiService } from '../services/api';
 import { useToast } from '../components/ui/ToastProvider';
 import { WorkspaceSnapshot, WorkspaceSnapshotRequest } from '../types/workspace';
 
-interface OpenTabInstance { instanceId: string; id: number; }
+interface OpenTabInstance { 
+  instanceId: string; 
+  id: number;
+}
 
 export const ProjectPage: React.FC = () => {
   const { user, signOut } = useAuth();
@@ -55,8 +58,7 @@ export const ProjectPage: React.FC = () => {
       showInfo('This project is already open. Switched to it.');
     }
     setActiveInstanceId(instanceId);
-
-    await fetchAndLoadProjectBoxes(id);
+    // Note: fetchAndLoadProjectBoxes is now handled by the useEffect watching activeInstanceId
   }, [openTabs, createInstanceId, showInfo]);
 
   useEffect(() => {
@@ -88,6 +90,17 @@ export const ProjectPage: React.FC = () => {
     }
   }, [openTabs.length, showRight]);
 
+  // Reload workspace content when switching between tabs
+  useEffect(() => {
+    if (!activeInstanceId) return;
+    
+    const activeTab = openTabs.find(t => t.instanceId === activeInstanceId);
+    if (!activeTab) return;
+
+    // Load the project boxes for the newly active tab
+    fetchAndLoadProjectBoxes(activeTab.id);
+  }, [activeInstanceId]);
+
   return (
     <>
     <MainLayout
@@ -97,6 +110,7 @@ export const ProjectPage: React.FC = () => {
       leftSidebarWidth={350}
       showWelcomeScreen={openTabs.length === 0}
       welcomeTitle="Methodological Dashboard"
+      workspaceKey={activeInstanceId || undefined}
       rightSidebar={(showRight && openTabs.length > 0) ? (
         <div style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
           <div style={{
@@ -190,10 +204,10 @@ export const ProjectPage: React.FC = () => {
       }}
       onCancel={async () => {
         if (!openChoice) return;
-        const { id, existingInstanceId } = openChoice;
+        const { existingInstanceId } = openChoice;
         setOpenChoice(null);
         setActiveInstanceId(existingInstanceId);
-        await fetchAndLoadProjectBoxes(id);
+        // Note: fetchAndLoadProjectBoxes is now handled by the useEffect watching activeInstanceId
       }}
     />
     </>
