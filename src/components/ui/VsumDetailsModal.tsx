@@ -93,8 +93,6 @@ export const VsumDetailsModal: React.FC<Props> = ({ isOpen, vsumId, onClose, onS
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState('');
-  const [versionsLoading, setVersionsLoading] = useState(false);
-  const [versionsError, setVersionsError] = useState('');
   const [versions, setVersions] = useState<Array<{ id: number; createdAt: string }>>([]);
   const [recovering, setRecovering] = useState(false);
   const [recoverError, setRecoverError] = useState('');
@@ -131,15 +129,11 @@ export const VsumDetailsModal: React.FC<Props> = ({ isOpen, vsumId, onClose, onS
   useEffect(() => {
     const loadVersions = async () => {
       if (!isOpen || !vsumId || activeTab !== 'versions') return;
-      setVersionsLoading(true);
-      setVersionsError('');
       try {
         const res = await apiService.getVsumVersions(vsumId);
         setVersions(res.data || []);
       } catch (e: any) {
-        setVersionsError(e?.message || 'Failed to load versions');
       } finally {
-        setVersionsLoading(false);
       }
     };
     loadVersions();
