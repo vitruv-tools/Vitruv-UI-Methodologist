@@ -1,4 +1,12 @@
-import React, { useRef, useState, forwardRef, useImperativeHandle, useEffect, useCallback } from 'react';
+import React, {
+  useRef,
+  useState,
+  forwardRef,
+  useImperativeHandle,
+  useEffect,
+  useCallback,
+  useMemo,
+} from 'react';
 import ReactFlow, {
   MiniMap,
   Background,
@@ -540,6 +548,7 @@ export const FlowCanvas = forwardRef<{
         }
       }
 
+      console.log(edges)
       setCodeEditorState({
         isOpen: true,
         edgeId,
@@ -676,11 +685,45 @@ export const FlowCanvas = forwardRef<{
     }, [reactFlowInstance, addNode]);
 
     const loadDiagramData = useCallback((newNodes: any[], newEdges: any[]) => {
-      console.log('Loading diagram data:', { newNodes, newEdges });
+      console.log('Loading diagram data (raw):', { newNodes, newEdges });
+
+      const nodesWithIds = newNodes.map((n, idx) => ({
+        ...n,
+        id: n.id ?? `loaded-node-${idx}-${Date.now()}`,
+      }));
+
+      const seen = new Set<string>();
+      const edgesWithUniqueIds = newEdges.map((e, idx) => {
+        let baseId = e.id ?? `loaded-edge-${idx}`;
+        if (seen.has(baseId)) {
+          let k = 1;
+          let newId = `${baseId}-${k}`;
+          while (seen.has(newId)) {
+            k += 1;
+            newId = `${baseId}-${k}`;
+          }
+          console.warn('🔁 Renaming duplicate loaded edge id:', baseId, '→', newId, e);
+          baseId = newId;
+        }
+        seen.add(baseId);
+
+        return {
+          ...e,
+          id: baseId,
+        };
+      });
+
+      console.log(
+          'Edges after uniquify:',
+          edgesWithUniqueIds.map(e => e.id)
+      );
+
       setNodes([]);
       setEdges([]);
-      if (newNodes.length > 0) setNodes(newNodes);
-      if (newEdges.length > 0) setEdges(newEdges);
+
+      if (nodesWithIds.length > 0) setNodes(nodesWithIds);
+      if (edgesWithUniqueIds.length > 0) setEdges(edgesWithUniqueIds);
+
       console.log('Diagram data loaded successfully');
     }, [setNodes, setEdges]);
 
@@ -917,6 +960,7 @@ export const FlowCanvas = forwardRef<{
     }, [edges]);
 
     const buildWorkspaceSnapshot = useCallback((): WorkspaceSnapshot => {
+      // metaModelIds = parent sourceId for each ecore node
       const metaModelIds = Array.from(
           new Set(
               nodes
@@ -929,21 +973,20 @@ export const FlowCanvas = forwardRef<{
       const metaModelRelationRequests: MetaModelRelationRequest[] = edges
           .filter(edge => edge.type === 'reactions')
           .map(edge => {
-            const sourceMetaModelId = edge.data?.sourceMetaModelId ?? getBackendMetaModelIdForNode(edge.source);
-            const targetMetaModelId = edge.data?.targetMetaModelId ?? getBackendMetaModelIdForNode(edge.target);
-            const reactionFileId = edge.data?.reactionFileId;
+            const sourceId = getMetaModelSourceIdForNode(edge.source);
+            const targetId = getMetaModelSourceIdForNode(edge.target);
+            const reactionFileId =
+                typeof edge.data?.reactionFileId === 'number'
+                    ? edge.data.reactionFileId
+                    : null;
 
-            if (
-                typeof sourceMetaModelId !== 'number' ||
-                typeof targetMetaModelId !== 'number' ||
-                typeof reactionFileId !== 'number'
-            ) {
+            if (typeof sourceId !== 'number' || typeof targetId !== 'number') {
               return null;
             }
 
             return {
-              sourceId: sourceMetaModelId,
-              targetId: targetMetaModelId,
+              sourceId,
+              targetId,
               reactionFileId,
             };
           })
@@ -953,7 +996,49 @@ export const FlowCanvas = forwardRef<{
         metaModelIds,
         metaModelRelationRequests,
       };
-    }, [nodes, edges, getBackendMetaModelIdForNode]);
+    }, [nodes, edges, getMetaModelSourceIdForNode]);
+
+    useEffect(() => {
+      if (!nodes.length || !edges.length) return;
+
+      const nodeIds = new Set(nodes.map(n => n.id));
+      const filteredEdges = edges.filter(
+          (e) => nodeIds.has(e.source) && nodeIds.has(e.target)
+      );
+
+      if (filteredEdges.length !== edges.length) {
+        console.log('🧹 Removing orphan reaction edges after node deletion');
+        setEdges(filteredEdges);
+      }
+    }, [nodes, edges, setEdges]);
+
+    useEffect(() => {
+      if (!edges.length) return;
+
+      const seen = new Map<string, number>();
+      let changed = false;
+
+      const fixedEdges = edges.map((edge) => {
+        const count = seen.get(edge.id) ?? 0;
+
+        if (count === 0) {
+          // first time we see this id -> ok
+          seen.set(edge.id, 1);
+          return edge;
+        }
+
+        // duplicate id -> create a new one
+        const newId = `${edge.id}__${count}`;
+        seen.set(edge.id, count + 1);
+        changed = true;
+        console.warn('🔁 Renaming duplicate edge id:', edge.id, '→', newId, edge);
+        return { ...edge, id: newId };
+      });
+
+      if (changed) {
+        setEdges(fixedEdges);
+      }
+    }, [edges, setEdges]);
 
     useImperativeHandle(ref, () => ({
       handleToolClick,
@@ -1003,15 +1088,39 @@ export const FlowCanvas = forwardRef<{
       return node;
     });
 
-    const mappedEdges = edges.map(edge => ({
+    // 🔍 Ensure all edge IDs are unique – ReactFlow + React need this
+// تضمین یکتایی id ولی بدون حذف edgeها
+    const uniqueEdges = useMemo(() => {
+      const idCount = new Map<string, number>();
+
+      return edges.map((e, index) => {
+        const baseId = e.id || `edge-${index}`;
+        const count = idCount.get(baseId) ?? 0;
+        idCount.set(baseId, count + 1);
+
+        if (count === 0) {
+          // اولین بار، همون id اصلی
+          return { ...e, id: baseId };
+        }
+
+        // دفعات بعد، id جدید بساز
+        const newId = `${baseId}-dup-${count}`;
+        console.warn('🔁 Renaming duplicate edge id:', baseId, '→', newId, e);
+        return { ...e, id: newId };
+      });
+    }, [edges]);
+
+    const mappedEdges = uniqueEdges.map(edge => ({
       ...edge,
       data: {
         ...edge.data,
-        onDoubleClick: edge.type === 'reactions' ? handleEdgeDoubleClick : undefined,
+        onDoubleClick:
+            edge.type === 'reactions'
+                ? () => handleEdgeDoubleClick(edge.id)
+                : undefined,
         routingStyle,
         separation: 36,
       },
-
       selectable: edge.type === 'reactions',
       focusable: edge.type === 'reactions',
       style: {

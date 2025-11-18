@@ -33,21 +33,9 @@ export function ReactionRelationship({
   const px = -uy;
   const py = ux;
   
-  const count = Math.max(1, data?.parallelCount ?? 1);
-  const index = Math.max(0, data?.parallelIndex ?? 0);
-  const separation = Math.max(12, Math.min(72, data?.separation ?? 36));
-  
   // Stable tiny spread per edge id to avoid clustering at crossings
-  const hash = (s: string) => {
-    let h = 0;
-    for (let i = 0; i < s.length; i++) h = ((h << 5) - h + s.charCodeAt(i)) | 0;
-    return h;
-  };
-  const jitter = ((hash(id) % 5) - 2) * 4; // -8, -4, 0, 4, 8 px
-  const centerIndex = (count - 1) / 2; // centers around 0
-  const offsetMultiplier = (index - centerIndex);
-  const offset = offsetMultiplier * separation + jitter;
-  
+  const offset = 0;
+
   let edgePath: string;
   let labelX: number;
   let labelY: number;
@@ -61,21 +49,18 @@ export function ReactionRelationship({
     let bendY: number;
     
     // Extra fan-out near endpoints to reduce shared segments even across different pairs
-    const fanStart = ((hash(id + '-s') % 9) - 4) * 6; // -24..24 px
-    const fanEnd = ((hash(id + '-t') % 9) - 4) * 6;   // -24..24 px
-    
     if (preferHorizontalFirst) {
-      bendX = sourceX + dx / 2 + px * (offset + fanStart);
-      bendY = sourceY + py * (offset + fanStart);
+      bendX = sourceX + dx / 2 + px * (offset);
+      bendY = sourceY + py * (offset);
     } else {
-      bendX = sourceX + px * (offset + fanStart);
-      bendY = sourceY + dy / 2 + py * (offset + fanStart);
+      bendX = sourceX + px * (offset);
+      bendY = sourceY + dy / 2 + py * (offset);
     }
     
     const p2x = bendX;
     const p2y = bendY;
-    const p3x = preferHorizontalFirst ? bendX : targetX + px * (offset + fanEnd);
-    const p3y = preferHorizontalFirst ? targetY + py * (offset + fanEnd) : bendY;
+    const p3x = preferHorizontalFirst ? bendX : targetX + px * (offset);
+    const p3y = preferHorizontalFirst ? targetY + py * (offset) : bendY;
     const p4x = targetX;
     const p4y = targetY;
     
@@ -84,11 +69,9 @@ export function ReactionRelationship({
     labelY = (p2y + p3y) / 2;
   } else {
     // Curved quadratic path
-    const mx = (sourceX + targetX) / 2 + px * offset;
-    const my = (sourceY + targetY) / 2 + py * offset;
-    edgePath = `M ${sourceX},${sourceY} Q ${mx},${my} ${targetX},${targetY}`;
-    labelX = mx;
-    labelY = my;
+      edgePath = `M ${sourceX},${sourceY} L ${targetX},${targetY}`;
+      labelX = (sourceX + targetX) / 2;
+      labelY = (sourceY + targetY) / 2;
   }
 
   const handleDoubleClick = (e: React.MouseEvent) => {
