@@ -714,7 +714,7 @@ export interface UserSearchItem {
 export interface MetaModelRelationRequest {
   sourceId: number;
   targetId: number;
-  reactionFileId: number;
+  reactionFileId: number;  // Use 0 when there's no reaction file
 }
 
 export interface VsumSyncChangesPutRequest {

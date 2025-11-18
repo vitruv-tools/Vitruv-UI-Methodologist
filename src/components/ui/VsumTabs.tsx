@@ -170,11 +170,20 @@ export const VsumTabs: React.FC<VsumTabsProps> = ({
         const filteredRelations =
             (snap.metaModelRelationRequests ?? []).filter(rel =>
                 metaModelIds.includes(rel.sourceId) &&
-                metaModelIds.includes(rel.targetId)
+                metaModelIds.includes(rel.targetId) &&
+                rel.reactionFileId > 0  // Only include relations with actual reaction files
             );
 
         const relationsToSend: MetaModelRelationRequest[] | null =
             filteredRelations.length > 0 ? filteredRelations : null;
+
+        console.log('💾 Saving VSUM changes:', {
+            vsumId: id,
+            metaModelIds,
+            relationCount: relationsToSend?.length ?? 0,
+            relations: relationsToSend,
+            note: 'Only sending relations with valid reaction files (reactionFileId > 0)',
+        });
 
         setSaving(true);
         setError('');
