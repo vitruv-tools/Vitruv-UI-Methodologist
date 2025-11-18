@@ -15,44 +15,48 @@ interface ToolsPanelProps {
 const toolsPanelStyle: React.CSSProperties = {
   userSelect: 'none',
   width: '100%',
+  maxWidth: '100%',
   background: '#f8f9fa',
-  padding: '16px',
+  padding: 'clamp(8px, 2vw, 16px)',
   boxSizing: 'border-box',
   height: 'auto',
   overflowY: 'auto',
   borderRight: '1px solid #e9ecef',
+  minWidth: '200px',
 };
 
 const titleStyle: React.CSSProperties = {
-  fontSize: '18px',
+  fontSize: 'clamp(14px, 3vw, 18px)',
   fontWeight: 700,
-  marginBottom: '16px',
+  marginBottom: 'clamp(8px, 2vw, 16px)',
   color: '#2c3e50',
   textAlign: 'left',
-  padding: '8px 0',
+  padding: 'clamp(4px, 1vw, 8px) 0',
   borderBottom: '2px solid #3498db',
   fontFamily: 'Georgia, serif',
+  lineHeight: '1.2',
 };
 
 const createButtonStyle: React.CSSProperties = {
   width: '100%',
-  padding: '14px 18px',
-  margin: '12px 0 20px 0',
+  padding: 'clamp(10px, 2vw, 14px) clamp(12px, 3vw, 18px)',
+  margin: 'clamp(8px, 2vw, 12px) 0 clamp(12px, 3vw, 20px) 0',
   border: 'none',
   borderRadius: '6px',
   background: 'linear-gradient(135deg, #3498db 0%, #2980b9 100%)',
   color: '#ffffff',
-  fontSize: '15px',
+  fontSize: 'clamp(12px, 2.5vw, 15px)',
   fontWeight: 600,
   cursor: 'pointer',
   transition: 'all 0.3s ease',
   display: 'inline-flex',
   alignItems: 'center',
   justifyContent: 'center',
-  gap: '10px',
+  gap: 'clamp(6px, 1.5vw, 10px)',
   userSelect: 'none',
   boxShadow: '0 3px 10px rgba(52, 152, 219, 0.3)',
   fontFamily: 'Georgia, serif',
+  minHeight: '44px',
 };
 
 const createButtonHoverStyle: React.CSSProperties = {
@@ -130,13 +134,19 @@ const fileCardStyle: React.CSSProperties = {
   background: '#ffffff',
   border: '1px solid #d1ecf1',
   borderRadius: '6px',
-  padding: '16px',
-  marginBottom: '16px',
+  padding: '12px',
+  marginBottom: '12px',
   boxShadow: '0 2px 6px rgba(0,0,0,0.08)',
   cursor: 'pointer',
   transition: 'all 0.3s ease',
   position: 'relative',
   fontFamily: 'Georgia, serif',
+  width: '100%',
+  maxWidth: '100%',
+  boxSizing: 'border-box',
+  minHeight: '60px',
+  display: 'flex',
+  flexDirection: 'column',
 };
 
 const fileCardHoverStyle: React.CSSProperties = {
@@ -189,20 +199,24 @@ const sortDropdownStyle: React.CSSProperties = {
 const fileNameStyle: React.CSSProperties = {
   fontWeight: '600',
   color: '#2c3e50',
-  wordBreak: 'break-all',
+  wordBreak: 'break-word',
   marginBottom: '6px',
-  fontSize: '15px',
+  fontSize: 'clamp(13px, 2.5vw, 15px)',
   fontFamily: 'Georgia, serif',
+  lineHeight: '1.3',
+  overflowWrap: 'break-word',
 };
 
 const fileMetaStyle: React.CSSProperties = {
-  fontSize: '13px',
+  fontSize: 'clamp(11px, 2vw, 13px)',
   color: '#5a6c7d',
   display: 'flex',
   alignItems: 'center',
-  gap: '8px',
+  gap: '6px',
   fontFamily: 'Georgia, serif',
   fontStyle: 'italic',
+  flexWrap: 'wrap',
+  lineHeight: '1.4',
 };
 
 const emptyStateStyle: React.CSSProperties = {
@@ -911,7 +925,13 @@ export const ToolsPanel: React.FC<ToolsPanelProps> = ({ onEcoreFileUpload, onEco
       )}
 
       {!suppressApi && (
-      <div style={{ height: 'calc(100vh - 311px)', overflowY: 'auto' }}>
+      <div style={{ 
+        height: 'calc(100vh - 311px)', 
+        overflowY: 'auto',
+        width: '100%',
+        maxWidth: '100%',
+        boxSizing: 'border-box'
+      }}>
         {!suppressApi && currentPageItems.map(model => (
           <div key={model.id} style={fileCardStyle}
             onClick={() => {
@@ -964,10 +984,13 @@ export const ToolsPanel: React.FC<ToolsPanelProps> = ({ onEcoreFileUpload, onEco
                   borderRadius: 6,
                   background: '#fff',
                   cursor: 'pointer',
-                  fontSize: 12,
+                  fontSize: 'clamp(10px, 1.8vw, 12px)',
                   fontWeight: 600,
                   color: '#e03131',
-                  marginLeft: 'auto'
+                  marginLeft: 'auto',
+                  minWidth: 'fit-content',
+                  whiteSpace: 'nowrap',
+                  flexShrink: 0
                 }}
                 title="Delete this meta model"
               >
@@ -979,22 +1002,26 @@ export const ToolsPanel: React.FC<ToolsPanelProps> = ({ onEcoreFileUpload, onEco
               <>
                 {model.keyword && model.keyword.length > 0 && (
                   <div style={{
-                    fontSize: '12px',
+                    fontSize: 'clamp(11px, 2vw, 12px)',
                     color: '#495057',
                     marginTop: '6px',
                     fontFamily: 'Georgia, serif',
+                    wordBreak: 'break-word',
+                    lineHeight: '1.4'
                   }}>
                     <strong>Keywords:</strong> {model.keyword.join(', ')}
                   </div>
                 )}
                 {model.description && (
                   <div style={{
-                    fontSize: '12px',
+                    fontSize: 'clamp(11px, 2vw, 12px)',
                     color: '#6c757d',
                     marginTop: '4px',
                     fontStyle: 'italic',
                     fontFamily: 'Georgia, serif',
                     lineHeight: '1.4',
+                    wordBreak: 'break-word',
+                    overflowWrap: 'break-word'
                   }}>
                     <strong>Description:</strong> {model.description}
                   </div>
@@ -1005,11 +1032,12 @@ export const ToolsPanel: React.FC<ToolsPanelProps> = ({ onEcoreFileUpload, onEco
             {/* Hint for collapsed state */}
             {expandedCard !== model.id && (
               <div style={{
-                fontSize: '10px',
+                fontSize: 'clamp(9px, 1.5vw, 10px)',
                 color: '#adb5bd',
                 marginTop: '4px',
                 fontStyle: 'italic',
                 fontFamily: 'Georgia, serif',
+                lineHeight: '1.3'
               }}>
                 Right-click to view details
               </div>

@@ -194,6 +194,55 @@ class ApiService {
   }
 
   /**
+   * Get a file by ID - returns file content directly as text
+   */
+  async getFile(id: number | string): Promise<string> {
+    const token = await AuthService.ensureValidToken();
+    
+    if (!token) {
+      throw new Error('No valid authentication token available');
+    }
+
+    const url = `${this.baseURL}/api/files/${id}`;
+    const headers = {
+      'Authorization': `Bearer ${token}`,
+    };
+
+    const response = await fetch(url, {
+      method: 'GET',
+      headers,
+    });
+
+    if (!response.ok) {
+      if (response.status === 401) {
+        try {
+          await AuthService.refreshToken();
+          const newToken = await AuthService.ensureValidToken();
+          if (newToken) {
+            const retryResponse = await fetch(url, {
+              method: 'GET',
+              headers: {
+                'Authorization': `Bearer ${newToken}`,
+              },
+            });
+
+            if (!retryResponse.ok) {
+              throw new Error(`Failed to fetch file: ${retryResponse.statusText}`);
+            }
+
+            return await retryResponse.text();
+          }
+        } catch (refreshError) {
+          console.error('Token refresh failed during file fetch:', refreshError);
+        }
+      }
+      throw new Error(`Failed to fetch file: ${response.statusText}`);
+    }
+
+    return await response.text();
+  }
+
+  /**
    * Upload a file with type parameter
    */
   async uploadFile(file: File, type: 'ECORE' | 'GEN_MODEL' | 'REACTION'): Promise<{ data: string; message: string }> {
@@ -403,6 +452,20 @@ class ApiService {
   }
 
   /**
+   * vSUMS: Get all removed (trash)
+   */
+  async getRemovedVsumsPaginated(
+      pageNumber: number = 0,
+      pageSize: number = 50
+  ): Promise<ApiResponse<Vsum[]>> {
+    const query = new URLSearchParams({
+      pageNumber: pageNumber.toString(),
+      pageSize: pageSize.toString(),
+    });
+    return this.authenticatedRequest(`/api/v1/vsums/find-all-removed?${query.toString()}`);
+  }
+
+  /**
    * vSUMS: Create
    */
   async createVsum(data: { name: string; description?: string }): Promise<ApiResponse<Vsum>> {
@@ -465,11 +528,28 @@ class ApiService {
   }
 
   /**
+   * vSUMS: Version history for a non-deleted VSUM
+   * GET /api/v1/vsums/find-all/vsumId={vsumId}
+   */
+  async getVsumVersions(vsumId: number | string): Promise<ApiResponse<Array<{ id: number; createdAt: string }>>> {
+    return this.authenticatedRequest(`/api/v1/vsums/find-all/vsumId=${vsumId}`);
+  }
+
+  /**
    * vSUMS: Delete
    */
   async deleteVsum(id: number | string): Promise<ApiResponse<Record<string, never>>> {
     return this.authenticatedRequest(`/api/v1/vsums/${id}`, {
       method: 'DELETE',
+    });
+  }
+
+  /**
+   * vSUMS: Recover a previously removed VSUM
+   */
+  async recoverVsum(id: number | string): Promise<ApiResponse<Record<string, never>>> {
+    return this.authenticatedRequest(`/api/v1/vsums/${id}/recovery`, {
+      method: 'PUT',
     });
   }
 
@@ -518,6 +598,81 @@ class ApiService {
     const pageNumber = params.pageNumber ?? 0;
     const pageSize = params.pageSize ?? 50;
     return this.authenticatedRequest(`/api/v1/users/search?pageNumber=${pageNumber}&pageSize=${pageSize}`);
+  }
+
+  async updateReactionFile(
+      fileId: number | string,
+      file: File
+  ): Promise<{ data: string; message: string }> {
+    const token = await AuthService.ensureValidToken();
+
+    if (!token) {
+      throw new Error('No valid authentication token available');
+    }
+
+    const formData = new FormData();
+    formData.append('file', file);
+
+    const url = `${this.baseURL}/api/upload/${fileId}/update-reaction`;
+    // const headers = {
+    //   'Authorization': `Bearer ${token}`,
+    // };
+
+    const doRequest = async (authHeader: string) => {
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'Authorization': authHeader,
+        },
+        body: formData,
+      });
+
+      if (!response.ok) {
+        let errorText = '';
+        try {
+          errorText = await response.text();
+        } catch {}
+        let errorMessage = errorText;
+        try {
+          const parsed = JSON.parse(errorText);
+          errorMessage = parsed?.message || parsed?.error || errorText;
+        } catch {}
+
+        console.error('Update reaction file failed', {
+          url,
+          fileId,
+          status: response.status,
+          statusText: response.statusText,
+          message: errorMessage,
+          body: errorText,
+        });
+
+        throw new Error(errorMessage);
+      }
+
+      const result = await response.json();
+      console.log(`Successful reaction file update for id ${fileId}:`, result);
+      return result as { data: string; message: string };
+    };
+
+    try {
+      // first try with current token
+      return await doRequest(`Bearer ${token}`);
+    } catch (err: any) {
+      // if it was 401, try refresh like in uploadFile
+      if (err instanceof Error && /401/.test(err.message)) {
+        try {
+          await AuthService.refreshToken();
+          const newToken = await AuthService.ensureValidToken();
+          if (newToken) {
+            return await doRequest(`Bearer ${newToken}`);
+          }
+        } catch (refreshError) {
+          console.error('Token refresh failed during updateReactionFile:', refreshError);
+        }
+      }
+      throw err;
+    }
   }
 
   // Removed unused getBaseURL and setBaseURL helpers

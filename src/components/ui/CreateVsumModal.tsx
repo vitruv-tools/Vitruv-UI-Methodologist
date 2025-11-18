@@ -1,6 +1,13 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import ReactDOM from 'react-dom';
 import { apiService } from '../../services/api';
 import { useToast } from './ToastProvider';
+import {
+  modalOverlayStyle,
+  labelStyle,
+  inputStyle,
+  errorMessageStyle,
+} from './sharedStyles';
 
 interface CreateVsumModalProps {
   isOpen: boolean;
@@ -8,22 +15,9 @@ interface CreateVsumModalProps {
   onSuccess?: (vsum: any) => void;
 }
 
-const modalOverlayStyle: React.CSSProperties = {
-  position: 'fixed',
-  top: 0,
-  left: 0,
-  right: 0,
-  bottom: 0,
-  background: 'rgba(0, 0, 0, 0.5)',
-  display: 'flex',
-  alignItems: 'center',
-  justifyContent: 'center',
-  zIndex: 1000,
-};
-
 const modalStyle: React.CSSProperties = {
   background: '#ffffff',
-  borderRadius: '8px',
+  borderRadius: '0',
   padding: '24px',
   width: '480px',
   maxWidth: '90vw',
@@ -58,32 +52,14 @@ const closeButtonStyle: React.CSSProperties = {
   color: '#6c757d',
   cursor: 'pointer',
   padding: '6px 10px',
-  borderRadius: '6px',
+  borderRadius: '0',
 };
 
 const formGroupStyle: React.CSSProperties = {
   marginBottom: '14px',
 };
 
-const labelStyle: React.CSSProperties = {
-  display: 'block',
-  fontSize: '13px',
-  fontWeight: 600,
-  color: '#2c3e50',
-  marginBottom: '6px',
-  fontFamily: 'Georgia, serif',
-};
-
-const inputStyle: React.CSSProperties = {
-  width: '100%',
-  padding: '10px 12px',
-  border: '1px solid #ced4da',
-  borderRadius: '6px',
-  fontSize: '13px',
-  boxSizing: 'border-box',
-  background: '#ffffff',
-  fontFamily: 'Georgia, serif',
-};
+const inputStyleLocal: React.CSSProperties = { ...inputStyle, border: '1px solid #ced4da', borderRadius: 0, fontSize: '13px', background: '#ffffff' };
 
 const buttonRowStyle: React.CSSProperties = {
   display: 'flex',
@@ -110,23 +86,21 @@ const secondaryButtonStyle: React.CSSProperties = {
   fontWeight: 600,
 };
 
-const errorMessageStyle: React.CSSProperties = {
-  padding: '8px 12px',
-  margin: '8px 0',
-  borderRadius: '6px',
-  fontSize: '12px',
-  fontWeight: '500',
-  backgroundColor: '#f8d7da',
-  color: '#721c24',
-  border: '1px solid #f5c6cb',
-};
-
 export const CreateVsumModal: React.FC<CreateVsumModalProps> = ({ isOpen, onClose, onSuccess }) => {
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const { showSuccess, showError } = useToast();
+
+  useEffect(() => {
+    if (!isOpen) return;
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.body.style.overflow = prev;
+    };
+  }, [isOpen]);
 
   if (!isOpen) return null;
 
@@ -162,7 +136,7 @@ export const CreateVsumModal: React.FC<CreateVsumModalProps> = ({ isOpen, onClos
     onClose();
   };
 
-  return (
+  return ReactDOM.createPortal(
     <div style={modalOverlayStyle} onClick={handleClose}>
       <div style={modalStyle} onClick={(e) => e.stopPropagation()}>
         <div style={headerStyle}>
@@ -180,7 +154,7 @@ export const CreateVsumModal: React.FC<CreateVsumModalProps> = ({ isOpen, onClos
             placeholder="Enter name"
             value={name}
             onChange={(e) => setName(e.target.value)}
-            style={inputStyle}
+            style={inputStyleLocal}
             disabled={loading}
           />
         </div>
@@ -191,7 +165,7 @@ export const CreateVsumModal: React.FC<CreateVsumModalProps> = ({ isOpen, onClos
             placeholder="Optional description"
             value={description}
             onChange={(e) => setDescription(e.target.value)}
-            style={{ ...inputStyle, minHeight: 80, resize: 'vertical' }}
+            style={{ ...inputStyleLocal, minHeight: 80, resize: 'vertical' }}
             disabled={loading}
           />
         </div>
@@ -203,7 +177,8 @@ export const CreateVsumModal: React.FC<CreateVsumModalProps> = ({ isOpen, onClos
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 };
 

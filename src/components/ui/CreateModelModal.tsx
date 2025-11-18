@@ -1,6 +1,18 @@
 import React, { useState, useRef, useEffect } from 'react';
+import ReactDOM from 'react-dom';
 import { apiService } from '../../services/api';
 import { KeywordTagsInput } from './KeywordTagsInput';
+import {
+  modalOverlayStyle,
+  formGroupStyle,
+  labelStyle,
+  inputStyle,
+  errorMessageStyle,
+  successMessageStyle,
+  fileInputStyle,
+  progressBarContainerStyle,
+  progressBarStyle,
+} from './sharedStyles';
 
 interface CreateModelModalProps {
   isOpen: boolean;
@@ -29,23 +41,9 @@ const getSecureRandomInt = (max: number): number => {
   throw new Error('Cryptographically secure random number generation not available');
 };
 
-// Modal styles
-const modalOverlayStyle: React.CSSProperties = {
-  position: 'fixed',
-  top: 0,
-  left: 0,
-  right: 0,
-  bottom: 0,
-  background: 'rgba(0, 0, 0, 0.5)',
-  display: 'flex',
-  alignItems: 'center',
-  justifyContent: 'center',
-  zIndex: 1000,
-};
-
 const modalStyle: React.CSSProperties = {
   background: '#ffffff',
-  borderRadius: '8px',
+  borderRadius: '0',
   padding: '28px',
   width: '480px',
   maxWidth: '90vw',
@@ -80,7 +78,7 @@ const closeButtonStyle: React.CSSProperties = {
   color: '#999',
   cursor: 'pointer',
   padding: '8px',
-  borderRadius: '8px',
+  borderRadius: '0',
   transition: 'all 0.2s ease',
   width: '40px',
   height: '40px',
@@ -93,29 +91,6 @@ const closeButtonHoverStyle: React.CSSProperties = {
   background: '#f8f9fa',
   color: '#333',
   transform: 'rotate(90deg)',
-};
-
-const formGroupStyle: React.CSSProperties = { marginBottom: '20px' };
-
-const labelStyle: React.CSSProperties = {
-  display: 'block',
-  fontSize: '14px',
-  fontWeight: 600,
-  color: '#2c3e50',
-  marginBottom: '8px',
-  fontFamily: 'Georgia, serif',
-};
-
-const inputStyle: React.CSSProperties = {
-  width: '100%',
-  padding: '12px 14px',
-  border: '2px solid #d1ecf1',
-  borderRadius: '6px',
-  fontSize: '14px',
-  boxSizing: 'border-box',
-  transition: 'all 0.3s ease',
-  background: '#f8f9fa',
-  fontFamily: 'Georgia, serif',
 };
 
 const inputFocusStyle: React.CSSProperties = {
@@ -236,51 +211,11 @@ const buttonHoverStyle: React.CSSProperties = {
   boxShadow: '0 5px 15px rgba(52, 152, 219, 0.2)',
 };
 
-const errorMessageStyle: React.CSSProperties = {
-  padding: '8px 12px',
-  margin: '8px 0',
-  borderRadius: '6px',
-  fontSize: '12px',
-  fontWeight: '500',
-  backgroundColor: '#f8d7da',
-  color: '#721c24',
-  border: '1px solid #f5c6cb',
-};
-
-const successMessageStyle: React.CSSProperties = {
-  padding: '8px 12px',
-  margin: '8px 0',
-  borderRadius: '6px',
-  fontSize: '12px',
-  fontWeight: '500',
-  backgroundColor: '#d4edda',
-  color: '#155724',
-  border: '1px solid #c3e6cb',
-};
-
-const fileInputStyle: React.CSSProperties = { display: 'none' };
-
-const progressBarContainerStyle: React.CSSProperties = {
-  width: '100%',
-  height: '6px',
-  backgroundColor: '#e0e0e0',
-  borderRadius: '3px',
-  overflow: 'hidden',
-};
-
-const progressBarStyle: React.CSSProperties = {
-  height: '100%',
-  backgroundColor: '#3498db',
-  borderRadius: '3px',
-  transition: 'width 0.3s ease',
-  width: '0%',
-};
-
 const overlayStyle: React.CSSProperties = {
   position: 'fixed',
   inset: 0,
   background: 'rgba(0,0,0,0.55)',
-  zIndex: 2000, // above modal
+  zIndex: 11000, // above modal
   display: 'flex',
   alignItems: 'center',
   justifyContent: 'center',
@@ -343,7 +278,12 @@ export const CreateModelModal: React.FC<CreateModelModalProps> = ({
   const genmodelProgressIntervalRef = useRef<number | null>(null);
   const submitProgressIntervalRef = useRef<number | null>(null);
 
-  const canSave = uploadedFileIds.ecoreFileId > 0 && uploadedFileIds.genModelFileId > 0 && formData.name.trim();
+  const canSave = uploadedFileIds.ecoreFileId > 0 && 
+    uploadedFileIds.genModelFileId > 0 && 
+    formData.name.trim() &&
+    formData.description.trim() &&
+    formData.domain.trim() &&
+    formData.keywords.length > 0;
 
   const handleEcoreFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -500,12 +440,24 @@ export const CreateModelModal: React.FC<CreateModelModalProps> = ({
   };
 
   const handleCreateModel = async () => {
-    if (!canSave) {
-      setError('Please fill in all required fields and upload both files');
+    if (!formData.name.trim()) {
+      setError('Please enter a name');
+      return;
+    }
+    if (!formData.description.trim()) {
+      setError('Please enter a description');
+      return;
+    }
+    if (!formData.domain.trim()) {
+      setError('Please enter a domain');
       return;
     }
     if (formData.keywords.length === 0) {
       setError('Please enter at least one keyword');
+      return;
+    }
+    if (uploadedFileIds.ecoreFileId === 0 || uploadedFileIds.genModelFileId === 0) {
+      setError('Please upload both .ecore and .genmodel files');
       return;
     }
 
@@ -568,6 +520,13 @@ export const CreateModelModal: React.FC<CreateModelModalProps> = ({
   };
 
   useEffect(() => {
+    if (isOpen) {
+      const prev = document.body.style.overflow;
+      document.body.style.overflow = 'hidden';
+      return () => {
+        document.body.style.overflow = prev;
+      };
+    }
     if (!isOpen) {
       if (submitProgressIntervalRef.current) {
         clearInterval(submitProgressIntervalRef.current);
@@ -605,7 +564,7 @@ export const CreateModelModal: React.FC<CreateModelModalProps> = ({
 
   if (!isOpen) return null;
 
-  return (
+  return ReactDOM.createPortal(
       <>
         {/* Full-screen Submit Overlay */}
         {submitProgress.isSubmitting && (
@@ -655,9 +614,9 @@ export const CreateModelModal: React.FC<CreateModelModalProps> = ({
             </div>
 
             <div style={formGroupStyle}>
-              <label style={labelStyle}>Description</label>
+              <label style={labelStyle}>Description *</label>
               <textarea
-                  placeholder="Optional description..."
+                  placeholder="Enter description..."
                   value={formData.description}
                   onChange={(e) => setFormData({ ...formData, description: e.target.value })}
                   style={{ ...inputStyle, minHeight: '80px', resize: 'vertical', fontFamily: 'inherit' }}
@@ -667,7 +626,7 @@ export const CreateModelModal: React.FC<CreateModelModalProps> = ({
             </div>
 
             <div style={formGroupStyle}>
-              <label style={labelStyle}>Keywords</label>
+              <label style={labelStyle}>Keywords *</label>
               <KeywordTagsInput
                   keywords={formData.keywords}
                   onChange={(keywords) => setFormData({ ...formData, keywords })}
@@ -680,7 +639,7 @@ export const CreateModelModal: React.FC<CreateModelModalProps> = ({
             </div>
 
             <div style={formGroupStyle}>
-              <label style={labelStyle}>Domain</label>
+              <label style={labelStyle}>Domain *</label>
               <input
                   type="text"
                   placeholder="Enter domain"
@@ -792,11 +751,12 @@ export const CreateModelModal: React.FC<CreateModelModalProps> = ({
                   onMouseEnter={(e) => canSave && !isLoading && !submitProgress.isSubmitting && Object.assign(e.currentTarget.style, buttonHoverStyle)}
                   onMouseLeave={(e) => canSave && !isLoading && !submitProgress.isSubmitting && Object.assign(e.currentTarget.style, primaryButtonStyle)}
               >
-                {isLoading ? 'Creating...' : canSave ? 'Build Meta Model' : 'Upload Files First'}
+                {isLoading ? 'Creating...' : canSave ? 'Build Meta Model' : 'Complete All Fields'}
               </button>
             </div>
           </div>
         </div>
-      </>
+      </>,
+      document.body
   );
 };

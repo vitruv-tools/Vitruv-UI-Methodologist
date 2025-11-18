@@ -41,7 +41,7 @@ const searchInputStyle: React.CSSProperties = {
   minWidth: 240,
   padding: '10px 12px',
   border: '1px solid #ced4da',
-  borderRadius: 8,
+  borderRadius: 0,
   fontSize: 14,
   lineHeight: 1.2,
 };
@@ -49,7 +49,7 @@ const searchInputStyle: React.CSSProperties = {
 const sortDropdownStyle: React.CSSProperties = {
   padding: '10px 12px',
   border: '1px solid #dee2e6',
-  borderRadius: 8,
+  borderRadius: 0,
   background: '#ffffff',
   color: '#495057',
   fontSize: 14,
@@ -60,7 +60,7 @@ const sortDropdownStyle: React.CSSProperties = {
 const filterBtnStyle: React.CSSProperties = {
   padding: '10px 12px',
   border: '1px solid #dee2e6',
-  borderRadius: 8,
+  borderRadius: 0,
   background: '#f8f9fa',
   cursor: 'pointer',
   fontWeight: 600,
@@ -69,7 +69,7 @@ const filterBtnStyle: React.CSSProperties = {
 const filtersBoxStyle: React.CSSProperties = {
   border: '1px solid #e9ecef',
   background: '#ffffff',
-  borderRadius: 10,
+  borderRadius: 0,
   padding: 12,
   marginBottom: 12,
 };
@@ -77,7 +77,7 @@ const filtersBoxStyle: React.CSSProperties = {
 const fileCardStyle: React.CSSProperties = {
   background: '#ffffff',
   border: '1px solid #e7f5ff',
-  borderRadius: 12,
+  borderRadius: 0,
   padding: 16,
   marginBottom: 12,
   boxShadow: '0 2px 8px rgba(0,0,0,0.04)',
@@ -140,10 +140,10 @@ const addBtnStyle: React.CSSProperties = {
 };
 
 export const MetaModelsPanel: React.FC<MetaModelsPanelProps> = ({
-                                                                  activeVsumId,
-                                                                  selectedMetaModelIds,
-                                                                  onAddToActiveVsum,
-                                                                }) => {
+  activeVsumId,
+  selectedMetaModelIds,
+  onAddToActiveVsum,
+}) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [sortBy, setSortBy] = useState<'name' | 'date' | 'domain'>('date');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
@@ -291,163 +291,163 @@ export const MetaModelsPanel: React.FC<MetaModelsPanelProps> = ({
   };
 
   return (
-      <div style={containerStyle}>
-        <div style={titleStyle}>Meta Models</div>
+    <div style={containerStyle}>
+      <div style={titleStyle}>Meta Models</div>
 
-        <div style={controlsRowStyle}>
-          <input
-              placeholder="Search (e.g. name:test domain:engineering)"
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              style={searchInputStyle}
-              onKeyDown={handleSearchKeyDown}
-          />
-          <select
-              value={`${sortBy}-${sortOrder}`}
-              onChange={(e) => {
-                const [sb, so] = e.target.value.split('-') as ['name' | 'date' | 'domain', 'asc' | 'desc'];
-                setSortBy(sb);
-                setSortOrder(so);
-              }}
-              style={sortDropdownStyle}
-          >
-            <option value="date-desc">Newest First</option>
-            <option value="date-asc">Oldest First</option>
-            <option value="name-asc">Name A-Z</option>
-            <option value="name-desc">Name Z-A</option>
-            <option value="domain-asc">Domain A-Z</option>
-            <option value="domain-desc">Domain Z-A</option>
-          </select>
-          <button style={filterBtnStyle} onClick={() => setShowFilters(v => !v)}>
-            {showFilters ? 'Hide Filters' : 'Show Filters'}
-          </button>
-        </div>
+      <div style={controlsRowStyle}>
+        <input
+          placeholder="Search (e.g. name:test domain:engineering)"
+          value={searchTerm}
+          onChange={(e) => setSearchTerm(e.target.value)}
+          style={searchInputStyle}
+          onKeyDown={handleSearchKeyDown}
+        />
+        <select
+          value={`${sortBy}-${sortOrder}`}
+          onChange={(e) => {
+            const [sb, so] = e.target.value.split('-') as ['name' | 'date' | 'domain', 'asc' | 'desc'];
+            setSortBy(sb);
+            setSortOrder(so);
+          }}
+          style={sortDropdownStyle}
+        >
+          <option value="date-desc">Newest First</option>
+          <option value="date-asc">Oldest First</option>
+          <option value="name-asc">Name A-Z</option>
+          <option value="name-desc">Name Z-A</option>
+          <option value="domain-asc">Domain A-Z</option>
+          <option value="domain-desc">Domain Z-A</option>
+        </select>
+        <button style={filterBtnStyle} onClick={() => setShowFilters(v => !v)}>
+          {showFilters ? 'Hide Filters' : 'Show Filters'}
+        </button>
+      </div>
 
-        {showFilters && (
-            <div style={filtersBoxStyle}>
-              <div style={{ display: 'grid', gap: 8 }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <span style={{ fontSize: 12, fontWeight: 600, minWidth: 60, color: '#495057' }}>Name:</span>
-                  <input
-                      type="text"
-                      placeholder="Filter by name…"
-                      style={{ flex: 1, padding: '6px 8px', border: '1px solid #ced4da', borderRadius: 6, fontSize: 12 }}
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter') {
-                          const v = (e.currentTarget as HTMLInputElement).value.trim();
-                          if (v) setSearchTerm(p => (p ? `${p} name:${v}` : `name:${v}`));
-                          (e.currentTarget as HTMLInputElement).value = '';
-                        }
-                      }}
-                  />
-                </div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <span style={{ fontSize: 12, fontWeight: 600, minWidth: 60, color: '#495057' }}>Domain:</span>
-                  <input
-                      type="text"
-                      placeholder="Filter by domain…"
-                      style={{ flex: 1, padding: '6px 8px', border: '1px solid #ced4da', borderRadius: 6, fontSize: 12 }}
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter') {
-                          const v = (e.currentTarget as HTMLInputElement).value.trim();
-                          if (v) setSearchTerm(p => (p ? `${p} domain:${v}` : `domain:${v}`));
-                          (e.currentTarget as HTMLInputElement).value = '';
-                        }
-                      }}
-                  />
-                </div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <span style={{ fontSize: 12, fontWeight: 600, minWidth: 60, color: '#495057' }}>Keywords:</span>
-                  <input
-                      type="text"
-                      placeholder="Filter by keywords…"
-                      style={{ flex: 1, padding: '6px 8px', border: '1px solid #ced4da', borderRadius: 6, fontSize: 12 }}
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter') {
-                          const v = (e.currentTarget as HTMLInputElement).value.trim();
-                          if (v) setSearchTerm(p => (p ? `${p} keywords:${v}` : `keywords:${v}`));
-                          (e.currentTarget as HTMLInputElement).value = '';
-                        }
-                      }}
-                  />
-                </div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <span style={{ fontSize: 12, fontWeight: 600, minWidth: 60, color: '#495057' }}>Date:</span>
-                  <select
-                      value={dateFilter}
-                      onChange={(e) => setDateFilter(e.target.value as any)}
-                      style={{ flex: 1, padding: '6px 8px', border: '1px solid #ced4da', borderRadius: 6, fontSize: 12 }}
-                  >
-                    <option value="all">All time</option>
-                    <option value="today">Today</option>
-                    <option value="week">This week</option>
-                    <option value="month">This month</option>
-                    <option value="year">This year</option>
-                  </select>
-                </div>
-                <div style={{ fontSize: 10, color: '#6a737d', fontStyle: 'italic' }}>
-                  Tip: Use filters like <code>name:X domain:Y created:after:2024-01-01</code>
-                </div>
-              </div>
+      {showFilters && (
+        <div style={filtersBoxStyle}>
+          <div style={{ display: 'grid', gap: 8 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <span style={{ fontSize: 12, fontWeight: 600, minWidth: 60, color: '#495057' }}>Name:</span>
+              <input
+                type="text"
+                placeholder="Filter by name…"
+                style={{ flex: 1, padding: '6px 8px', border: '1px solid #ced4da', borderRadius: 6, fontSize: 12 }}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    const v = (e.currentTarget as HTMLInputElement).value.trim();
+                    if (v) setSearchTerm(p => (p ? `${p} name:${v}` : `name:${v}`));
+                    (e.currentTarget as HTMLInputElement).value = '';
+                  }
+                }}
+              />
             </div>
-        )}
-
-        {apiError && (
-            <div style={{ padding: '8px 12px', margin: '8px 0', borderRadius: 8, fontSize: 12, background: '#fdecea', color: '#b3261e', border: '1px solid #f5c6cb' }}>
-              {apiError}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <span style={{ fontSize: 12, fontWeight: 600, minWidth: 60, color: '#495057' }}>Domain:</span>
+              <input
+                type="text"
+                placeholder="Filter by domain…"
+                style={{ flex: 1, padding: '6px 8px', border: '1px solid #ced4da', borderRadius: 6, fontSize: 12 }}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    const v = (e.currentTarget as HTMLInputElement).value.trim();
+                    if (v) setSearchTerm(p => (p ? `${p} domain:${v}` : `domain:${v}`));
+                    (e.currentTarget as HTMLInputElement).value = '';
+                  }
+                }}
+              />
             </div>
-        )}
-
-        {isLoadingModels && (
-            <div style={{ padding: 16, textAlign: 'center', fontSize: 13, color: '#5a6c7d', fontStyle: 'italic' }}>
-              Loading models…
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <span style={{ fontSize: 12, fontWeight: 600, minWidth: 60, color: '#495057' }}>Keywords:</span>
+              <input
+                type="text"
+                placeholder="Filter by keywords…"
+                style={{ flex: 1, padding: '6px 8px', border: '1px solid #ced4da', borderRadius: 6, fontSize: 12 }}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    const v = (e.currentTarget as HTMLInputElement).value.trim();
+                    if (v) setSearchTerm(p => (p ? `${p} keywords:${v}` : `keywords:${v}`));
+                    (e.currentTarget as HTMLInputElement).value = '';
+                  }
+                }}
+              />
             </div>
-        )}
-
-        <div>
-          {sortedModels.map((model: any) => (
-              <div
-                  key={model.id}
-                  style={fileCardStyle}
-                  onMouseEnter={(e) => Object.assign(e.currentTarget.style, fileCardHoverStyle)}
-                  onMouseLeave={(e) => Object.assign(e.currentTarget.style, fileCardStyle)}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <span style={{ fontSize: 12, fontWeight: 600, minWidth: 60, color: '#495057' }}>Date:</span>
+              <select
+                value={dateFilter}
+                onChange={(e) => setDateFilter(e.target.value as any)}
+                style={{ flex: 1, padding: '6px 8px', border: '1px solid #ced4da', borderRadius: 6, fontSize: 12 }}
               >
-                <div style={cardHeaderStyle}>
-                  <h4 style={fileNameStyle}>{model.name}</h4>
+                <option value="all">All time</option>
+                <option value="today">Today</option>
+                <option value="week">This week</option>
+                <option value="month">This month</option>
+                <option value="year">This year</option>
+              </select>
+            </div>
+            <div style={{ fontSize: 10, color: '#6a737d', fontStyle: 'italic' }}>
+              Tip: Use filters like <code>name:X domain:Y created:after:2024-01-01</code>
+            </div>
+          </div>
+        </div>
+      )}
 
-                  {activeVsumId && onAddToActiveVsum && (
-                      <button
-                          onClick={() => onAddToActiveVsum(model)}
-                          style={{
-                            ...addBtnStyle,
-                            opacity: (selectedMetaModelIds || []).includes(model.id) ? 0.6 : 1,
-                            cursor: (selectedMetaModelIds || []).includes(model.id) ? 'not-allowed' : 'pointer',
-                          }}
-                          disabled={(selectedMetaModelIds || []).includes(model.id)}
-                      >
-                        {(selectedMetaModelIds || []).includes(model.id) ? 'Added' : 'Add to VSUM'}
-                      </button>
-                  )}
-                </div>
+      {apiError && (
+        <div style={{ padding: '8px 12px', margin: '8px 0', borderRadius: 8, fontSize: 12, background: '#fdecea', color: '#b3261e', border: '1px solid #f5c6cb' }}>
+          {apiError}
+        </div>
+      )}
 
-                <div style={metaRowStyle}>
+      {isLoadingModels && (
+        <div style={{ padding: 16, textAlign: 'center', fontSize: 13, color: '#5a6c7d', fontStyle: 'italic' }}>
+          Loading models…
+        </div>
+      )}
+
+      <div>
+        {sortedModels.map((model: any) => (
+          <div
+            key={model.id}
+            style={fileCardStyle}
+            onMouseEnter={(e) => Object.assign(e.currentTarget.style, fileCardHoverStyle)}
+            onMouseLeave={(e) => Object.assign(e.currentTarget.style, fileCardStyle)}
+          >
+            <div style={cardHeaderStyle}>
+              <h4 style={fileNameStyle}>{model.name}</h4>
+
+              {activeVsumId && onAddToActiveVsum && (
+                <button
+                  onClick={() => onAddToActiveVsum(model)}
+                  style={{
+                    ...addBtnStyle,
+                    opacity: (selectedMetaModelIds || []).includes(model.id) ? 0.6 : 1,
+                    cursor: (selectedMetaModelIds || []).includes(model.id) ? 'not-allowed' : 'pointer',
+                  }}
+                  disabled={(selectedMetaModelIds || []).includes(model.id)}
+                >
+                  {(selectedMetaModelIds || []).includes(model.id) ? 'Added' : '+'}
+                </button>
+              )}
+            </div>
+
+            <div style={metaRowStyle}>
               <span>
                 <em>Domain:</em>&nbsp;<strong>{model.domain || '—'}</strong>
               </span>
-                  <span style={dotStyle} />
-                  <span style={dateTextStyle} title={new Date(model.createdAt).toLocaleString()}>
+              <span style={dotStyle} />
+              <span style={dateTextStyle} title={new Date(model.createdAt).toLocaleString()}>
                 {formatWhen(model.createdAt)}
               </span>
-                </div>
-              </div>
-          ))}
+            </div>
+          </div>
+        ))}
 
-          {!isLoadingModels && !apiError && sortedModels.length === 0 && (
-              <div style={{ padding: 16, fontSize: 13, color: '#6c757d', fontStyle: 'italic' }}>
-                No meta models available.
-              </div>
-          )}
-        </div>
+        {!isLoadingModels && !apiError && sortedModels.length === 0 && (
+          <div style={{ padding: 16, fontSize: 13, color: '#6c757d', fontStyle: 'italic' }}>
+            No meta models available.
+          </div>
+        )}
       </div>
+    </div>
   );
 };
