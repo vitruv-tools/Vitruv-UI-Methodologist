@@ -998,7 +998,20 @@ export const FlowCanvas = forwardRef<{
       };
     }, [nodes, edges, getBackendMetaModelIdForNode]);
 
-    // ✅ Ensure all edge IDs are unique – fix duplicate "edge-4" etc.
+    useEffect(() => {
+      if (!nodes.length || !edges.length) return;
+
+      const nodeIds = new Set(nodes.map(n => n.id));
+      const filteredEdges = edges.filter(
+          (e) => nodeIds.has(e.source) && nodeIds.has(e.target)
+      );
+
+      if (filteredEdges.length !== edges.length) {
+        console.log('🧹 Removing orphan reaction edges after node deletion');
+        setEdges(filteredEdges);
+      }
+    }, [nodes, edges, setEdges]);
+
     useEffect(() => {
       if (!edges.length) return;
 
