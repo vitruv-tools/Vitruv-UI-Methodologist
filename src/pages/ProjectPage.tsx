@@ -96,7 +96,7 @@ export const ProjectPage: React.FC = () => {
       leftSidebar={<SidebarTabs width={350} />}
       leftSidebarWidth={350}
       showWelcomeScreen={openTabs.length === 0}
-      welcomeTitle="Welcome to Project Workspace"
+      welcomeTitle="Methodological Dashboard"
       rightSidebar={(showRight && openTabs.length > 0) ? (
         <div style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
           <div style={{

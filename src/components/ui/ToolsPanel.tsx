@@ -333,6 +333,7 @@ export const ToolsPanel: React.FC<ToolsPanelProps> = ({ onEcoreFileUpload, onEco
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [deleteError, setDeleteError] = useState<string>('');
+  const [viewModel, setViewModel] = useState<any | null>(null);
 
   const handleSearchKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key !== 'Tab') return;
@@ -934,19 +935,10 @@ export const ToolsPanel: React.FC<ToolsPanelProps> = ({ onEcoreFileUpload, onEco
       }}>
         {!suppressApi && currentPageItems.map(model => (
           <div key={model.id} style={fileCardStyle}
-            onClick={() => {
-              if (!enableItemClick) return;
-              if (onEcoreFileUpload) {
-                onEcoreFileUpload(`name="${model.name}"`, { 
-                  fileName: `${model.name}.ecore`, 
-                  uploadId: model.id.toString(),
-                  description: model.description,
-                  keywords: model.keyword?.join(', '),
-                  domain: model.domain,
-                  createdAt: model.createdAt
-                });
-              }
-            }}
+               onClick={() => {
+                 if (!enableItemClick) return;
+                 setViewModel(model);
+               }}
             onContextMenu={(e) => handleCardRightClick(e, model.id)}
             onMouseEnter={(e) => {
               Object.assign(e.currentTarget.style, fileCardHoverStyle);
@@ -1050,6 +1042,158 @@ export const ToolsPanel: React.FC<ToolsPanelProps> = ({ onEcoreFileUpload, onEco
           </div>
         )}
       </div>
+      )}
+
+      {/* Read-only Meta Model Details Modal */}
+      {viewModel && (
+          <div
+              style={{
+                userSelect: 'text',
+                position: 'fixed',
+                inset: 0,
+                background: 'rgba(0,0,0,0.35)',
+                zIndex: 9998,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+              }}
+          >
+            <div
+                style={{
+                  background: '#ffffff',
+                  borderRadius: 10,
+                  boxShadow: '0 6px 24px rgba(0,0,0,0.2)',
+                  padding: '24px 28px',
+                  maxWidth: 520,
+                  width: '90%',
+                  fontFamily: 'Georgia, serif',
+                }}
+            >
+              <div
+                  style={{
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'center',
+                    marginBottom: 16,
+                  }}
+              >
+                <div
+                    style={{
+                      fontSize: 18,
+                      fontWeight: 700,
+                      color: '#2c3e50',
+                    }}
+                >
+                  Meta Model Details
+                </div>
+                <button
+                    onClick={() => setViewModel(null)}
+                    style={{
+                      border: 'none',
+                      background: 'transparent',
+                      fontSize: 18,
+                      cursor: 'pointer',
+                      color: '#6c757d',
+                    }}
+                    aria-label="Close"
+                    title="Close"
+                >
+                  ×
+                </button>
+              </div>
+
+              <div
+                  style={{
+                    fontSize: 13,
+                    color: '#495057',
+                    lineHeight: 1.5,
+                  }}
+              >
+                <p>
+                  <strong>Name:</strong> {viewModel.name}
+                </p>
+                <p style={{ marginTop: 12 }}>
+                  <strong>Description:</strong>
+                  <br />
+                  <span style={{ fontStyle: 'italic' }}>
+                  {viewModel.description || 'No description provided.'}
+                </span>
+                </p>
+                <p>
+                  <strong>Domain:</strong> {viewModel.domain || '—'}
+                </p>
+                <p>
+                  <strong>Keywords:</strong>{' '}
+                  {viewModel.keyword && viewModel.keyword.length > 0
+                      ? viewModel.keyword.join(', ')
+                      : '—'}
+                </p>
+                <p>
+                  <strong>Created At:</strong>{' '}
+                  {viewModel.createdAt
+                      ? formatRelativeTime(viewModel.createdAt)
+                      : '—'}
+                </p>
+                {viewModel.updatedAt && (
+                    <p>
+                      <strong>Updated At:</strong>{' '}
+                      {formatRelativeTime(viewModel.updatedAt)}
+                    </p>
+                )}
+              </div>
+
+              <div
+                  style={{
+                    marginTop: 20,
+                    display: 'flex',
+                    justifyContent: 'flex-end',
+                    gap: 8,
+                  }}
+              >
+                {onEcoreFileUpload && (
+                    <button
+                        onClick={() => {
+                          onEcoreFileUpload(`name="${viewModel.name}"`, {
+                            fileName: `${viewModel.name}.ecore`,
+                            uploadId: viewModel.id?.toString(),
+                            description: viewModel.description,
+                            keywords: viewModel.keyword?.join(', '),
+                            domain: viewModel.domain,
+                            createdAt: viewModel.createdAt,
+                          });
+                        }}
+                        style={{
+                          padding: '8px 14px',
+                          borderRadius: 6,
+                          border: '1px solid #3498db',
+                          background: '#3498db',
+                          color: '#ffffff',
+                          fontSize: 13,
+                          fontWeight: 600,
+                          cursor: 'pointer',
+                        }}
+                    >
+                      Load into workspace
+                    </button>
+                )}
+                <button
+                    onClick={() => setViewModel(null)}
+                    style={{
+                      padding: '8px 14px',
+                      borderRadius: 6,
+                      border: '1px solid #dee2e6',
+                      background: '#ffffff',
+                      color: '#495057',
+                      fontSize: 13,
+                      fontWeight: 600,
+                      cursor: 'pointer',
+                    }}
+                >
+                  Close
+                </button>
+              </div>
+            </div>
+          </div>
       )}
 
       {/* Pagination Controls */}
