@@ -33,8 +33,6 @@ export function ReactionRelationship({
   const px = -uy;
   const py = ux;
   
-  const count = Math.max(1, data?.parallelCount ?? 1);
-
   // Stable tiny spread per edge id to avoid clustering at crossings
   const offset = 0;
 
