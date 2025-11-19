@@ -1,8 +1,8 @@
-import React, {createContext, useContext, useState, useEffect, ReactNode} from 'react';
-import {AuthService, User, SignUpCredentials} from '../services/auth';
-import {apiService} from '../services/api';
-import {useTokenRefresh} from '../hooks/useTokenRefresh';
-import {parseJwtToken, extractUserFromToken} from '../utils/jwtParser';
+import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import { AuthService, User, SignUpCredentials } from '../services/auth';
+import { apiService } from '../services/api';
+import { useTokenRefresh } from '../hooks/useTokenRefresh';
+import { parseJwtToken, extractUserFromToken } from '../utils/jwtParser';
 
 interface AuthContextType {
     user: User | null;
@@ -20,10 +20,30 @@ interface AuthProviderProps {
     children: ReactNode;
 }
 
-export function AuthProvider({children}: AuthProviderProps) {
+export function calculatePasswordStrength(password: string): number {
+    let score = 0;
+
+    if (password.length >= 8) score++;
+    if (/[A-Z]/.test(password)) score++;
+    if (/[a-z]/.test(password)) score++;
+    if (/\d/.test(password)) score++;
+    if (/[@$!%*?&]/.test(password)) score++;
+
+    return score;
+}
+
+export function getPasswordStrengthLabel(score: number): string {
+    if (score <= 1) return 'Very weak';
+    if (score === 2) return 'Weak';
+    if (score === 3) return 'Medium';
+    if (score === 4) return 'Strong';
+    return 'Very strong';
+}
+
+export function AuthProvider({ children }: AuthProviderProps) {
     const [user, setUser] = useState<User | null>(null);
     const [isLoading, setIsLoading] = useState(true);
-    const {refreshToken} = useTokenRefresh();
+    const { refreshToken } = useTokenRefresh();
 
     useEffect(() => {
         const checkAuth = async () => {
@@ -34,7 +54,7 @@ export function AuthProvider({children}: AuthProviderProps) {
                         setUser(currentUser);
                     } else {
                         try {
-                            const {data} = await apiService.getUserInfo();
+                            const { data } = await apiService.getUserInfo();
                             const mapped: User = {
                                 id: String(data.id),
                                 username: data.email?.split('@')[0] || 'user',
@@ -86,10 +106,10 @@ export function AuthProvider({children}: AuthProviderProps) {
 
     const signIn = async (username: string, password: string) => {
         try {
-            const authResponse = await AuthService.signIn({username, password});
+            const authResponse = await AuthService.signIn({ username, password });
 
             try {
-                const {data} = await apiService.getUserInfo();
+                const { data } = await apiService.getUserInfo();
                 const mapped: User = {
                     id: String(data.id),
                     username: data.email?.split('@')[0] || username,
@@ -135,7 +155,7 @@ export function AuthProvider({children}: AuthProviderProps) {
 
     // 🔐 SIGN UP with:
     // - Username required and length ≥ 4
-    // - Password regex validation
+    // - Password detailed validation (with explicit allowed symbols)
     const signUp = async (userData: SignUpCredentials) => {
         try {
             // Username validation
@@ -143,13 +163,33 @@ export function AuthProvider({children}: AuthProviderProps) {
                 throw new Error('Username must be at least 4 characters long.');
             }
 
-            // Password regex validation
-            const passwordRegex =
-                /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,}$/;
+            const password = userData.password;
+            const errors: string[] = [];
 
-            if (!passwordRegex.test(userData.password)) {
+            if (password.length < 8) {
+                errors.push('• At least 8 characters');
+            }
+            if (!/[A-Z]/.test(password)) {
+                errors.push('• One uppercase letter (A–Z)');
+            }
+            if (!/[a-z]/.test(password)) {
+                errors.push('• One lowercase letter (a–z)');
+            }
+            if (!/\d/.test(password)) {
+                errors.push('• One number (0–9)');
+            }
+            if (!/[@$!%*?&]/.test(password)) {
+                errors.push('• One special symbol (choose from: @  $  !  %  *  ?  &)');
+            }
+
+            if (errors.length > 0) {
+                const strengthScore = calculatePasswordStrength(password);
+                const strengthLabel = getPasswordStrengthLabel(strengthScore);
+
                 throw new Error(
-                    'Password must contain uppercase, lowercase, number, special character, and be at least 8 characters.'
+                    `Password is not strong enough (current: ${strengthLabel}).\n` +
+                    'Please make sure it includes:\n' +
+                    errors.join('\n')
                 );
             }
 
@@ -203,11 +243,7 @@ export function AuthProvider({children}: AuthProviderProps) {
         refreshToken: handleRefreshToken,
     };
 
-    return (
-        <AuthContext.Provider value={value}>
-            {children}
-        </AuthContext.Provider>
-    );
+    return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }
 
 export function useAuth(): AuthContextType {
