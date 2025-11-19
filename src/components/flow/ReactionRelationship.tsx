@@ -92,8 +92,47 @@ export function ReactionRelationship({
   
   const connectionCount = Math.max(1, data?.parallelCount ?? 1);
 
+  // Unique marker IDs for this edge
+  const markerId = `arrowhead-${id}`;
+  const markerIdSelected = `arrowhead-${id}-selected`;
+
   return (
     <>
+      {/* Define arrow markers */}
+      <defs>
+        {/* Normal arrow marker */}
+        <marker
+          id={markerId}
+          markerWidth="10"
+          markerHeight="10"
+          refX="9"
+          refY="3"
+          orient="auto"
+          markerUnits="strokeWidth"
+        >
+          <path
+            d="M0,0 L0,6 L9,3 z"
+            fill={edgeColor}
+          />
+        </marker>
+        
+        {/* Selected arrow marker */}
+        <marker
+          id={markerIdSelected}
+          markerWidth="10"
+          markerHeight="10"
+          refX="9"
+          refY="3"
+          orient="auto"
+          markerUnits="strokeWidth"
+        >
+          <path
+            d="M0,0 L0,6 L9,3 z"
+            fill="#ef4444"
+          />
+        </marker>
+      </defs>
+
       {/* Underlay halo to improve visibility at crossings */}
       <path
         id={`${id}-underlay`}
@@ -122,7 +161,7 @@ export function ReactionRelationship({
         onDoubleClick={handleDoubleClick}
       />
 
-      {/* Main edge stroke */}
+      {/* Main edge stroke with arrow marker */}
       <path
         id={id}
         style={{
@@ -132,7 +171,7 @@ export function ReactionRelationship({
           cursor: 'pointer',
           strokeLinecap: 'round',
           strokeLinejoin: 'round',
-          // KEIN Pfeil für Reaction Edges
+          markerEnd: `url(#${selected ? markerIdSelected : markerId})`,
         }}
         d={edgePath}
         onDoubleClick={handleDoubleClick}
