@@ -182,6 +182,11 @@ export const FlowCanvas = forwardRef<{
     const [connectionDragState, setConnectionDragState] = useState<ConnectionDragState | null>(null);
     const [codeEditorState, setCodeEditorState] = useState<CodeEditorState | null>(null);
     const [routingStyle, setRoutingStyle] = useState<'curved' | 'orthogonal'>('orthogonal');
+    const [edgeDragState, setEdgeDragState] = useState<{
+      edgeId: string;
+      isDragging: boolean;
+      controlPoint?: { x: number; y: number };
+    } | null>(null);
 
 
     const storageKey = getLocalStorageKey(userId, projectId);
@@ -189,7 +194,7 @@ export const FlowCanvas = forwardRef<{
     const {
       nodes,
       edges,
-      onNodesChange,
+      onNodesChange: originalOnNodesChange,
       onEdgesChange,
       onConnect,
       addNode,
@@ -205,6 +210,86 @@ export const FlowCanvas = forwardRef<{
       canRedo,
       updateEdgeCode,
     } = useFlowState();
+
+    // Wrapper to auto-update edge handles when nodes move
+    const onNodesChange = useCallback((changes: any) => {
+      originalOnNodesChange(changes);
+      
+      // Check if any nodes finished moving (dragging ended)
+      const finishedDragging = changes.some((change: any) => 
+        change.type === 'position' && change.dragging === false
+      );
+      
+      if (finishedDragging) {
+        console.log('🔄 Node drag finished, recalculating edge handles...');
+        
+        // Small delay to ensure node positions are updated in state
+        setTimeout(() => {
+          setEdges(currentEdges => {
+            // Get fresh nodes from state
+            setNodes(currentNodes => {
+              const updatedEdges = currentEdges.map(edge => {
+                if (edge.type !== 'reactions') return edge;
+                
+                const sourceNode = currentNodes.find(n => n.id === edge.source);
+                const targetNode = currentNodes.find(n => n.id === edge.target);
+                
+                if (!sourceNode || !targetNode) return edge;
+                
+                // Calculate optimal handles based on relative positions
+                const dx = targetNode.position.x - sourceNode.position.x;
+                const dy = targetNode.position.y - sourceNode.position.y;
+                
+                let newSourceHandle: HandlePosition;
+                let newTargetHandle: HandlePosition;
+                
+                // Determine best handles based on dominant direction
+                if (Math.abs(dx) > Math.abs(dy)) {
+                  // Horizontal dominance
+                  newSourceHandle = dx > 0 ? 'right' : 'left';
+                  newTargetHandle = dx > 0 ? 'left' : 'right';
+                } else {
+                  // Vertical dominance
+                  newSourceHandle = dy > 0 ? 'bottom' : 'top';
+                  newTargetHandle = dy > 0 ? 'top' : 'bottom';
+                }
+                
+                // Only update if handles changed
+                if (edge.sourceHandle !== newSourceHandle || edge.targetHandle !== newTargetHandle) {
+                  console.log(`✅ Auto-updating edge ${edge.id} handles:`, {
+                    positions: { dx, dy },
+                    old: { source: edge.sourceHandle, target: edge.targetHandle },
+                    new: { source: newSourceHandle, target: newTargetHandle }
+                  });
+                  
+                  return {
+                    ...edge,
+                    sourceHandle: newSourceHandle,
+                    targetHandle: newTargetHandle,
+                    // Clear custom control point since path needs recalculation
+                    data: {
+                      ...edge.data,
+                      customControlPoint: undefined,
+                    }
+                  };
+                }
+                
+                return edge;
+              });
+              
+              // Apply the edge updates
+              if (updatedEdges !== currentEdges) {
+                setTimeout(() => setEdges(updatedEdges), 0);
+              }
+              
+              return currentNodes; // Return unchanged nodes
+            });
+            
+            return currentEdges; // Return current edges (will be updated in nested setTimeout)
+          });
+        }, 100);
+      }
+    }, [originalOnNodesChange, setEdges, setNodes]);
 
     const edgeColorMapRef = useRef<Map<string, string>>(new Map());
     const nextColorIndexRef = useRef<number>(0);
@@ -277,11 +362,20 @@ export const FlowCanvas = forwardRef<{
         edges.forEach(edge => {
           if (edge.type !== 'reactions') return;
 
+          // Add edge if THIS node is the source
           if (edge.source === node.id && edge.sourceHandle) {
-            sideMap.get(edge.sourceHandle as HandlePosition)?.push(edge.id);
+            const handle = edge.sourceHandle as HandlePosition;
+            if (!sideMap.get(handle)?.includes(edge.id)) {
+              sideMap.get(handle)?.push(edge.id);
+            }
           }
+          
+          // Add edge if THIS node is the target
           if (edge.target === node.id && edge.targetHandle) {
-            sideMap.get(edge.targetHandle as HandlePosition)?.push(edge.id);
+            const handle = edge.targetHandle as HandlePosition;
+            if (!sideMap.get(handle)?.includes(edge.id)) {
+              sideMap.get(handle)?.push(edge.id);
+            }
           }
         });
 
@@ -289,13 +383,31 @@ export const FlowCanvas = forwardRef<{
         const nodeDistribution = new Map<HandlePosition, Array<{ edgeId: string; index: number; total: number }>>();
         
         sideMap.forEach((edgeIds, position) => {
-          const total = edgeIds.length;
-          const distribution = edgeIds.map((edgeId, index) => ({
+          // Sort edge IDs to ensure consistent ordering
+          // Important: Sort by the OTHER node's ID to keep related edges together
+          const sortedEdgeIds = [...edgeIds].sort((a, b) => {
+            const edgeA = edges.find(e => e.id === a);
+            const edgeB = edges.find(e => e.id === b);
+            if (!edgeA || !edgeB) return 0;
+            
+            // Get the OTHER node for each edge
+            const otherNodeA = edgeA.source === node.id ? edgeA.target : edgeA.source;
+            const otherNodeB = edgeB.source === node.id ? edgeB.target : edgeB.source;
+            
+            return otherNodeA.localeCompare(otherNodeB);
+          });
+          
+          const total = sortedEdgeIds.length;
+          const distribution = sortedEdgeIds.map((edgeId, index) => ({
             edgeId,
             index,
             total
           }));
           nodeDistribution.set(position, distribution);
+          
+          if (total > 1) {
+            console.log(`📊 Node ${node.id} - ${position} handle: ${total} edges`, sortedEdgeIds);
+          }
         });
 
         map.set(node.id, nodeDistribution);
@@ -1190,6 +1302,19 @@ export const FlowCanvas = forwardRef<{
       const sourceData = sourceDistribution?.get(edge.sourceHandle as HandlePosition)?.find(d => d.edgeId === edge.id);
       const targetData = targetDistribution?.get(edge.targetHandle as HandlePosition)?.find(d => d.edgeId === edge.id);
 
+      if (sourceData || targetData) {
+        console.log(`Edge ${edge.id.substring(0, 20)}...`, {
+          source: edge.source,
+          target: edge.target,
+          sourceHandle: edge.sourceHandle,
+          targetHandle: edge.targetHandle,
+          sourceData,
+          targetData,
+          parallelIndex: sourceData?.index ?? targetData?.index,
+          parallelCount: sourceData?.total ?? targetData?.total,
+        });
+      }
+
       return {
         ...edge,
         data: {
@@ -1202,6 +1327,24 @@ export const FlowCanvas = forwardRef<{
           separation: 36,
           parallelIndex: sourceData?.index ?? targetData?.index,
           parallelCount: sourceData?.total ?? targetData?.total,
+          customControlPoint: edge.data?.customControlPoint,
+          onEdgeDragStart: edge.type === 'reactions' ? (edgeId: string) => {
+            setEdgeDragState({ edgeId, isDragging: true });
+          } : undefined,
+          onEdgeDrag: edge.type === 'reactions' ? (edgeId: string, point: { x: number; y: number }) => {
+            setEdgeDragState(prev => prev ? { ...prev, controlPoint: point } : null);
+          } : undefined,
+          onEdgeDragEnd: edge.type === 'reactions' ? (edgeId: string, point: { x: number; y: number }) => {
+            // Save the custom control point to edge data
+            setEdges(prevEdges => 
+              prevEdges.map(e => 
+                e.id === edgeId 
+                  ? { ...e, data: { ...e.data, customControlPoint: point } }
+                  : e
+              )
+            );
+            setEdgeDragState(null);
+          } : undefined,
         },
         selectable: edge.type === 'reactions',
         focusable: edge.type === 'reactions',
