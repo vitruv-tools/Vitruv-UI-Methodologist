@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useEffect, useRef } from 'react';
+import React, { useState, useCallback, useEffect, useMemo } from 'react';
 import { EdgeProps, Position, useReactFlow } from 'reactflow';
 
 interface ReactionRelationshipData {
@@ -6,7 +6,6 @@ interface ReactionRelationshipData {
   code?: string;
   onDoubleClick?: (edgeId: string) => void;
   routingStyle?: 'curved' | 'orthogonal';
-  separation?: number;
   sourceParallelIndex?: number;
   sourceParallelCount?: number;
   targetParallelIndex?: number;
@@ -22,12 +21,13 @@ interface ReactionRelationshipData {
 type HandlePosition = 'top' | 'bottom' | 'left' | 'right';
 
 const NODE_DIMENSIONS = { width: 220, height: 180 };
+const EDGE_SPACING = 25;
 
 interface PathSegment {
   start: { x: number; y: number };
   end: { x: number; y: number };
   isHorizontal: boolean;
-  canDrag: boolean; // First and last segments can't be dragged
+  canDrag: boolean;
 }
 
 export function ReactionRelationship({
@@ -49,63 +49,39 @@ export function ReactionRelationship({
   const [isDraggingSegment, setIsDraggingSegment] = useState(false);
   const [draggedSegmentIndex, setDraggedSegmentIndex] = useState<number | null>(null);
   const [tempControlPoint, setTempControlPoint] = useState<{ x: number; y: number } | null>(null);
-  const dragStartPosRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
 
-  // Calculate offsets for parallel edges
-  const sourceParallelCount = data?.sourceParallelCount ?? 1;
-  const sourceParallelIndex = data?.sourceParallelIndex ?? 0;
-  
-  let sourceOffsetX = 0;
-  let sourceOffsetY = 0;
-  
-  if (sourceParallelCount > 1) {
-    const EDGE_SPACING = 25;
-    const centerOffset = (sourceParallelCount - 1) / 2;
-    const indexOffset = sourceParallelIndex - centerOffset;
+  const calculateParallelOffset = (
+    parallelCount: number,
+    parallelIndex: number,
+    isVertical: boolean
+  ): { offsetX: number; offsetY: number } => {
+    if (parallelCount <= 1) return { offsetX: 0, offsetY: 0 };
+    
+    const centerOffset = (parallelCount - 1) / 2;
+    const indexOffset = parallelIndex - centerOffset;
     const offset = indexOffset * EDGE_SPACING;
     
-    if (sourcePosition === Position.Top || sourcePosition === Position.Bottom) {
-      sourceOffsetX = offset;
-    } else {
-      sourceOffsetY = offset;
-    }
-  }
-  
-  const targetParallelCount = data?.targetParallelCount ?? 1;
-  const targetParallelIndex = data?.targetParallelIndex ?? 0;
-  
-  let targetOffsetX = 0;
-  let targetOffsetY = 0;
-  
-  if (targetParallelCount > 1) {
-    const EDGE_SPACING = 25;
-    const centerOffset = (targetParallelCount - 1) / 2;
-    const indexOffset = targetParallelIndex - centerOffset;
-    const offset = indexOffset * EDGE_SPACING;
-    
-    if (targetPosition === Position.Top || targetPosition === Position.Bottom) {
-      targetOffsetX = offset;
-    } else {
-      targetOffsetY = offset;
-    }
-  }
+    return isVertical 
+      ? { offsetX: 0, offsetY: offset }
+      : { offsetX: offset, offsetY: 0 };
+  };
 
-  const actualSourceX = sourceX + sourceOffsetX;
-  const actualSourceY = sourceY + sourceOffsetY;
-  const actualTargetX = targetX + targetOffsetX;
-  const actualTargetY = targetY + targetOffsetY;
+  const sourceOffset = calculateParallelOffset(
+    data?.sourceParallelCount ?? 1,
+    data?.sourceParallelIndex ?? 0,
+    sourcePosition === Position.Left || sourcePosition === Position.Right
+  );
 
-  const dx = actualTargetX - actualSourceX;
-  const dy = actualTargetY - actualSourceY;
+  const targetOffset = calculateParallelOffset(
+    data?.targetParallelCount ?? 1,
+    data?.targetParallelIndex ?? 0,
+    targetPosition === Position.Left || targetPosition === Position.Right
+  );
 
-  let edgePath: string;
-  let labelX: number;
-  let labelY: number;
-  let arrowX: number;
-  let arrowY: number;
-  let arrowAngle: number;
-  let controlPoint: { x: number; y: number } | null = null;
-  let segments: PathSegment[] = [];
+  const actualSourceX = sourceX + sourceOffset.offsetX;
+  const actualSourceY = sourceY + sourceOffset.offsetY;
+  const actualTargetX = targetX + targetOffset.offsetX;
+  const actualTargetY = targetY + targetOffset.offsetY;
 
   const getClosestHandle = useCallback((point: { x: number; y: number }, nodeId: string): HandlePosition | null => {
     if (!reactFlowInstance) return null;
@@ -113,15 +89,12 @@ export function ReactionRelationship({
     const node = reactFlowInstance.getNode(nodeId);
     if (!node) return null;
 
-    const nodeX = node.position.x;
-    const nodeY = node.position.y;
     const { width, height } = NODE_DIMENSIONS;
-
     const handles = {
-      top: { x: nodeX + width / 2, y: nodeY },
-      bottom: { x: nodeX + width / 2, y: nodeY + height },
-      left: { x: nodeX, y: nodeY + height / 2 },
-      right: { x: nodeX + width, y: nodeY + height / 2 },
+      top: { x: node.position.x + width / 2, y: node.position.y },
+      bottom: { x: node.position.x + width / 2, y: node.position.y + height },
+      left: { x: node.position.x, y: node.position.y + height / 2 },
+      right: { x: node.position.x + width, y: node.position.y + height / 2 },
     };
 
     let closestHandle: HandlePosition = 'right';
@@ -129,9 +102,7 @@ export function ReactionRelationship({
 
     (Object.keys(handles) as HandlePosition[]).forEach(handle => {
       const handlePos = handles[handle];
-      const distance = Math.sqrt(
-        Math.pow(point.x - handlePos.x, 2) + Math.pow(point.y - handlePos.y, 2)
-      );
+      const distance = Math.hypot(point.x - handlePos.x, point.y - handlePos.y);
       if (distance < minDistance) {
         minDistance = distance;
         closestHandle = handle;
@@ -140,97 +111,70 @@ export function ReactionRelationship({
 
     return closestHandle;
   }, [reactFlowInstance]);
-  
-  if (data?.routingStyle === 'orthogonal') {
-  const centerX = tempControlPoint?.x ?? data?.customControlPoint?.x ?? (actualSourceX + actualTargetX) / 2;
-  const centerY = tempControlPoint?.y ?? data?.customControlPoint?.y ?? (actualSourceY + actualTargetY) / 2;
 
-  let pathParts: string[] = [];
+  // Memoize path calculations
+  const pathData = useMemo(() => {
+    const centerX = tempControlPoint?.x ?? data?.customControlPoint?.x ?? (actualSourceX + actualTargetX) / 2;
+    const centerY = tempControlPoint?.y ?? data?.customControlPoint?.y ?? (actualSourceY + actualTargetY) / 2;
+    const dx = actualTargetX - actualSourceX;
+    const dy = actualTargetY - actualSourceY;
 
-  if (sourcePosition === Position.Right || sourcePosition === Position.Left) {
-    // Source horizontal -> vertical -> horizontal target
-    pathParts.push(`M ${actualSourceX},${actualSourceY}`);
-    pathParts.push(`L ${centerX},${actualSourceY}`);
-    pathParts.push(`L ${centerX},${actualTargetY}`);
-    pathParts.push(`L ${actualTargetX},${actualTargetY}`);
-    
-    // BUILD SEGMENTS ARRAY
-    segments = [
-      {
-        start: { x: actualSourceX, y: actualSourceY },
-        end: { x: centerX, y: actualSourceY },
-        isHorizontal: true,
-        canDrag: false // First segment
-      },
-      {
-        start: { x: centerX, y: actualSourceY },
-        end: { x: centerX, y: actualTargetY },
-        isHorizontal: false,
-        canDrag: true // Middle segment - draggable!
-      },
-      {
-        start: { x: centerX, y: actualTargetY },
-        end: { x: actualTargetX, y: actualTargetY },
-        isHorizontal: true,
-        canDrag: false // Last segment
-      }
-    ];
-  } else {
-    // Source vertical -> horizontal -> vertical target
-    pathParts.push(`M ${actualSourceX},${actualSourceY}`);
-    pathParts.push(`L ${actualSourceX},${centerY}`);
-    pathParts.push(`L ${actualTargetX},${centerY}`);
-    pathParts.push(`L ${actualTargetX},${actualTargetY}`);
-    
-    // BUILD SEGMENTS ARRAY
-    segments = [
-      {
-        start: { x: actualSourceX, y: actualSourceY },
-        end: { x: actualSourceX, y: centerY },
-        isHorizontal: false,
-        canDrag: false // First segment
-      },
-      {
-        start: { x: actualSourceX, y: centerY },
-        end: { x: actualTargetX, y: centerY },
-        isHorizontal: true,
-        canDrag: true // Middle segment - draggable!
-      },
-      {
-        start: { x: actualTargetX, y: centerY },
-        end: { x: actualTargetX, y: actualTargetY },
-        isHorizontal: false,
-        canDrag: false // Last segment
-      }
-    ];
-  }
+    if (data?.routingStyle === 'orthogonal') {
+      const isSourceHorizontal = sourcePosition === Position.Right || sourcePosition === Position.Left;
 
-  edgePath = pathParts.join(' ');
-  controlPoint = { x: centerX, y: centerY };
-  labelX = centerX;
-  labelY = centerY;
-  
-  arrowX = actualTargetX;
-  arrowY = actualTargetY;
-  
-  if (targetPosition === Position.Top) {
-    arrowAngle = 90;
-  } else if (targetPosition === Position.Bottom) {
-    arrowAngle = -90;
-  } else if (targetPosition === Position.Left) {
-    arrowAngle = 0;
-  } else {
-    arrowAngle = 180;
-  }
-} else {
-    edgePath = `M ${actualSourceX},${actualSourceY} L ${actualTargetX},${actualTargetY}`;
-    labelX = (actualSourceX + actualTargetX) / 2;
-    labelY = (actualSourceY + actualTargetY) / 2;
-    
-    arrowX = actualTargetX;
-    arrowY = actualTargetY;
-    arrowAngle = Math.atan2(dy, dx) * (180 / Math.PI);
-  }
+      const edgePath = isSourceHorizontal
+        ? `M ${actualSourceX},${actualSourceY} L ${centerX},${actualSourceY} L ${centerX},${actualTargetY} L ${actualTargetX},${actualTargetY}`
+        : `M ${actualSourceX},${actualSourceY} L ${actualSourceX},${centerY} L ${actualTargetX},${centerY} L ${actualTargetX},${actualTargetY}`;
+
+      const segments: PathSegment[] = isSourceHorizontal
+        ? [
+            { start: { x: actualSourceX, y: actualSourceY }, end: { x: centerX, y: actualSourceY }, isHorizontal: true, canDrag: false },
+            { start: { x: centerX, y: actualSourceY }, end: { x: centerX, y: actualTargetY }, isHorizontal: false, canDrag: true },
+            { start: { x: centerX, y: actualTargetY }, end: { x: actualTargetX, y: actualTargetY }, isHorizontal: true, canDrag: false }
+          ]
+        : [
+            { start: { x: actualSourceX, y: actualSourceY }, end: { x: actualSourceX, y: centerY }, isHorizontal: false, canDrag: false },
+            { start: { x: actualSourceX, y: centerY }, end: { x: actualTargetX, y: centerY }, isHorizontal: true, canDrag: true },
+            { start: { x: actualTargetX, y: centerY }, end: { x: actualTargetX, y: actualTargetY }, isHorizontal: false, canDrag: false }
+          ];
+
+      const arrowAngles = { [Position.Top]: 90, [Position.Bottom]: -90, [Position.Left]: 0, [Position.Right]: 180 };
+
+      return {
+        edgePath,
+        labelX: centerX,
+        labelY: centerY,
+        arrowX: actualTargetX,
+        arrowY: actualTargetY,
+        arrowAngle: arrowAngles[targetPosition] ?? 0,
+        controlPoint: { x: centerX, y: centerY },
+        segments,
+      };
+    }
+
+    return {
+      edgePath: `M ${actualSourceX},${actualSourceY} L ${actualTargetX},${actualTargetY}`,
+      labelX: (actualSourceX + actualTargetX) / 2,
+      labelY: (actualSourceY + actualTargetY) / 2,
+      arrowX: actualTargetX,
+      arrowY: actualTargetY,
+      arrowAngle: Math.atan2(dy, dx) * (180 / Math.PI),
+      controlPoint: null,
+      segments: [],
+    };
+  }, [
+    actualSourceX,
+    actualSourceY,
+    actualTargetX,
+    actualTargetY,
+    data?.routingStyle,
+    data?.customControlPoint,
+    tempControlPoint,
+    sourcePosition,
+    targetPosition,
+  ]);
+
+  const { edgePath, labelX, labelY, arrowX, arrowY, arrowAngle, controlPoint, segments } = pathData;
 
   const handleSegmentDragStart = useCallback((e: React.PointerEvent, segmentIndex: number) => {
     e.stopPropagation();
@@ -238,79 +182,47 @@ export function ReactionRelationship({
 
     const targetEl = e.target as HTMLElement;
     if (targetEl.setPointerCapture) {
-      try { targetEl.setPointerCapture(e.pointerId); } catch (err) { /* ignore */ }
+      try { targetEl.setPointerCapture(e.pointerId); } catch {}
     }
 
-    if (!reactFlowInstance) return;
+    if (!reactFlowInstance || !controlPoint) return;
 
-    const flowPos = reactFlowInstance.screenToFlowPosition({
-      x: (e as unknown as PointerEvent).clientX,
-      y: (e as unknown as PointerEvent).clientY,
-    });
-
-    dragStartPosRef.current = flowPos;
     setIsDraggingSegment(true);
     setDraggedSegmentIndex(segmentIndex);
-    
-    if (controlPoint) {
-      setTempControlPoint(controlPoint);
-    }
-
+    setTempControlPoint(controlPoint);
     data?.onEdgeDragStart?.(id);
   }, [id, data, reactFlowInstance, controlPoint]);
 
-const handleSegmentDrag = useCallback((e: PointerEvent) => {
-  if (!isDraggingSegment || draggedSegmentIndex === null || !reactFlowInstance) return;
+  const handleSegmentDrag = useCallback((e: PointerEvent) => {
+    if (!isDraggingSegment || draggedSegmentIndex === null || !reactFlowInstance || !controlPoint) return;
 
-  const flowPos = reactFlowInstance.screenToFlowPosition({
-    x: e.clientX,
-    y: e.clientY,
-  });
+    const flowPos = reactFlowInstance.screenToFlowPosition({ x: e.clientX, y: e.clientY });
+    const segment = segments[draggedSegmentIndex];
+    if (!segment) return;
 
-  const segment = segments[draggedSegmentIndex];
-  if (!segment) return;
+    const newControlPoint = { ...controlPoint };
+    if (segment.isHorizontal) {
+      newControlPoint.y = flowPos.y;
+    } else {
+      newControlPoint.x = flowPos.x;
+    }
 
-  if (!controlPoint) return;
+    setTempControlPoint(newControlPoint);
+    data?.onEdgeDrag?.(id, newControlPoint);
 
-  let newControlPoint = { ...controlPoint };
+    const newSourceHandle = getClosestHandle(newControlPoint, source);
+    const newTargetHandle = getClosestHandle(newControlPoint, target);
 
-  // SNAPPING: Only allow movement in one direction
-  if (segment.isHorizontal) {
-    // Dragging horizontal segment - move vertically only
-    newControlPoint.y = flowPos.y;
-    // Keep X unchanged
-  } else {
-    // Dragging vertical segment - move horizontally only
-    newControlPoint.x = flowPos.x;
-    // Keep Y unchanged
-  }
-
-  setTempControlPoint(newControlPoint);
-  data?.onEdgeDrag?.(id, newControlPoint);
-
-  const newSourceHandle = getClosestHandle(newControlPoint, source);
-  const newTargetHandle = getClosestHandle(newControlPoint, target);
-
-  if (newSourceHandle && newTargetHandle) {
-    if (newSourceHandle !== sourcePosition || newTargetHandle !== targetPosition) {
+    if (newSourceHandle && newTargetHandle && 
+        (newSourceHandle !== sourcePosition || newTargetHandle !== targetPosition)) {
       data?.onHandleChange?.(id, newSourceHandle, newTargetHandle);
     }
-  }
 
-  data?.onReorderRequest?.(id, newControlPoint);
-}, [isDraggingSegment, draggedSegmentIndex, id, reactFlowInstance, data, segments, controlPoint, getClosestHandle, source, target, sourcePosition, targetPosition]);
+    data?.onReorderRequest?.(id, newControlPoint);
+  }, [isDraggingSegment, draggedSegmentIndex, id, reactFlowInstance, data, segments, controlPoint, getClosestHandle, source, target, sourcePosition, targetPosition]);
 
-
-
-
-
-const handleSegmentDragEnd = useCallback((e: PointerEvent) => {
-    if (!isDraggingSegment || !reactFlowInstance) return;
-
-    const flowPos = reactFlowInstance.screenToFlowPosition({
-      x: e.clientX,
-      y: e.clientY,
-    });
+  const handleSegmentDragEnd = useCallback((e: PointerEvent) => {
+    if (!isDraggingSegment) return;
 
     if (tempControlPoint) {
       data?.onEdgeDragEnd?.(id, tempControlPoint);
@@ -318,7 +230,7 @@ const handleSegmentDragEnd = useCallback((e: PointerEvent) => {
 
     setIsDraggingSegment(false);
     setDraggedSegmentIndex(null);
-  }, [isDraggingSegment, id, reactFlowInstance, data, tempControlPoint]);
+  }, [isDraggingSegment, id, data, tempControlPoint]);
 
   useEffect(() => {
     if (!isDraggingSegment) return;
@@ -340,12 +252,14 @@ const handleSegmentDragEnd = useCallback((e: PointerEvent) => {
 
   const handleDoubleClick = (e: React.MouseEvent) => {
     e.stopPropagation();
-    if (data?.onDoubleClick) data.onDoubleClick(id);
+    data?.onDoubleClick?.(id);
   };
 
   const hasCode = data?.code && data.code.trim().length > 0;
   const edgeColor = style?.stroke || '#3b82f6';
   const edgeWidth = style?.strokeWidth || 2;
+  const sourceParallelCount = data?.sourceParallelCount ?? 1;
+  const targetParallelCount = data?.targetParallelCount ?? 1;
 
   return (
     <>
@@ -477,7 +391,6 @@ const handleSegmentDragEnd = useCallback((e: PointerEvent) => {
         </g>
       )}
 
-      {/* Draggable segments - only middle segments */}
       {selected && data?.routingStyle === 'orthogonal' && segments.map((segment, index) => {
         if (!segment.canDrag) return null;
         
@@ -486,7 +399,6 @@ const handleSegmentDragEnd = useCallback((e: PointerEvent) => {
         
         return (
           <g key={`segment-${index}`}>
-            {/* Invisible thick line for easier grabbing */}
             <path
               d={segmentPath}
               style={{
@@ -499,7 +411,6 @@ const handleSegmentDragEnd = useCallback((e: PointerEvent) => {
               onPointerDown={(e) => handleSegmentDragStart(e, index)}
             />
             
-            {/* Visual feedback */}
             <path
               d={segmentPath}
               style={{
@@ -514,7 +425,6 @@ const handleSegmentDragEnd = useCallback((e: PointerEvent) => {
         );
       })}
 
-      {/* Center indicator on middle segment */}
       {selected && data?.routingStyle === 'orthogonal' && controlPoint && (
         <circle
           cx={controlPoint.x}
