@@ -1295,39 +1295,39 @@ export const FlowCanvas = forwardRef<{
     }, [edges]);
 
     const mappedEdges = uniqueEdges.map(edge => {
-      // Get distribution metadata for this edge
-      const sourceDistribution = edgeDistributionMap.get(edge.source);
-      const targetDistribution = edgeDistributionMap.get(edge.target);
-      
-      const sourceData = sourceDistribution?.get(edge.sourceHandle as HandlePosition)?.find(d => d.edgeId === edge.id);
-      const targetData = targetDistribution?.get(edge.targetHandle as HandlePosition)?.find(d => d.edgeId === edge.id);
+  // Get distribution metadata for this edge
+  const sourceDistribution = edgeDistributionMap.get(edge.source);
+  const targetDistribution = edgeDistributionMap.get(edge.target);
+  
+  const sourceData = sourceDistribution?.get(edge.sourceHandle as HandlePosition)?.find(d => d.edgeId === edge.id);
+  const targetData = targetDistribution?.get(edge.targetHandle as HandlePosition)?.find(d => d.edgeId === edge.id);
 
-      if (sourceData || targetData) {
-        console.log(`Edge ${edge.id.substring(0, 20)}...`, {
-          source: edge.source,
-          target: edge.target,
-          sourceHandle: edge.sourceHandle,
-          targetHandle: edge.targetHandle,
-          sourceData,
-          targetData,
-          parallelIndex: sourceData?.index ?? targetData?.index,
-          parallelCount: sourceData?.total ?? targetData?.total,
-        });
-      }
+  if (sourceData || targetData) {
+    console.log(`Edge ${edge.id.substring(0, 20)}...`, {
+      source: edge.source,
+      target: edge.target,
+      sourceHandle: edge.sourceHandle,
+      targetHandle: edge.targetHandle,
+      sourceData,
+      targetData,
+    });
+  }
 
-      return {
-        ...edge,
-        data: {
-          ...edge.data,
-          onDoubleClick:
-              edge.type === 'reactions'
-                  ? () => handleEdgeDoubleClick(edge.id)
-                  : undefined,
-          routingStyle,
-          separation: 36,
-          parallelIndex: sourceData?.index ?? targetData?.index,
-          parallelCount: sourceData?.total ?? targetData?.total,
-          customControlPoint: edge.data?.customControlPoint,
+  return {
+    ...edge,
+    data: {
+      ...edge.data,
+      onDoubleClick:
+          edge.type === 'reactions'
+              ? () => handleEdgeDoubleClick(edge.id)
+              : undefined,
+      routingStyle,
+      separation: 36,
+      sourceParallelIndex: sourceData?.index,
+      sourceParallelCount: sourceData?.total,
+      targetParallelIndex: targetData?.index,
+      targetParallelCount: targetData?.total,
+      customControlPoint: edge.data?.customControlPoint,
           onEdgeDragStart: edge.type === 'reactions' ? (edgeId: string) => {
             setEdgeDragState({ edgeId, isDragging: true });
           } : undefined,

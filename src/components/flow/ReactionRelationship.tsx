@@ -7,8 +7,10 @@ interface ReactionRelationshipData {
   onDoubleClick?: (edgeId: string) => void;
   routingStyle?: 'curved' | 'orthogonal';
   separation?: number;
-  parallelIndex?: number;
-  parallelCount?: number;
+  sourceParallelIndex?: number;
+  sourceParallelCount?: number;
+  targetParallelIndex?: number;
+  targetParallelCount?: number;
   customControlPoint?: { x: number; y: number };
   onEdgeDragStart?: (edgeId: string) => void;
   onEdgeDrag?: (edgeId: string, point: { x: number; y: number }) => void;
@@ -35,19 +37,17 @@ export function ReactionRelationship({
   const [tempControlPoint, setTempControlPoint] = useState<{ x: number; y: number } | null>(null);
   const dragOffsetRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
 
-  // Calculate offset for multiple edges on the same side
-  const parallelCount = data?.parallelCount ?? 1;
-  const parallelIndex = data?.parallelIndex ?? 0;
+  // Calculate offset for source handle
+  const sourceParallelCount = data?.sourceParallelCount ?? 1;
+  const sourceParallelIndex = data?.sourceParallelIndex ?? 0;
   
   let sourceOffsetX = 0;
   let sourceOffsetY = 0;
-  let targetOffsetX = 0;
-  let targetOffsetY = 0;
   
-  if (parallelCount > 1) {
+  if (sourceParallelCount > 1) {
     const EDGE_SPACING = 25;
-    const centerOffset = (parallelCount - 1) / 2;
-    const indexOffset = parallelIndex - centerOffset;
+    const centerOffset = (sourceParallelCount - 1) / 2;
+    const indexOffset = sourceParallelIndex - centerOffset;
     const offset = indexOffset * EDGE_SPACING;
     
     if (sourcePosition === Position.Top || sourcePosition === Position.Bottom) {
@@ -55,6 +55,20 @@ export function ReactionRelationship({
     } else {
       sourceOffsetY = offset;
     }
+  }
+  
+  // Calculate offset for target handle
+  const targetParallelCount = data?.targetParallelCount ?? 1;
+  const targetParallelIndex = data?.targetParallelIndex ?? 0;
+  
+  let targetOffsetX = 0;
+  let targetOffsetY = 0;
+  
+  if (targetParallelCount > 1) {
+    const EDGE_SPACING = 25;
+    const centerOffset = (targetParallelCount - 1) / 2;
+    const indexOffset = targetParallelIndex - centerOffset;
+    const offset = indexOffset * EDGE_SPACING;
     
     if (targetPosition === Position.Top || targetPosition === Position.Bottom) {
       targetOffsetX = offset;
@@ -79,17 +93,23 @@ export function ReactionRelationship({
   let arrowAngle: number;
   let controlPoint: { x: number; y: number } | null = null;
 
+  // --- Helper: compute midpoint of the middle segment (used to pin control point when not dragging) ---
+  const midpoint = (a: { x: number; y: number }, b: { x: number; y: number }) => ({
+    x: (a.x + b.x) / 2,
+    y: (a.y + b.y) / 2,
+  });
+  
   if (data?.routingStyle === 'orthogonal') {
-    // Orthogonal (eckig) mode with draggable middle segment
+    // Orthogonal (eckig) mode with draggable control point
     
     // Default bend point at midpoint (used for fallback)
     const defaultBendX = actualSourceX + dx / 2;
     const defaultBendY = actualSourceY + dy / 2;
 
-    // Use custom control point if exists, otherwise use default
+    // Use custom control point if exists
     let bendPointCandidate = data?.customControlPoint || { x: defaultBendX, y: defaultBendY };
 
-    // If there is a tempControlPoint (user is actively dragging), use that
+    // If there is a tempControlPoint (user dragged), use that as candidate
     if (tempControlPoint) {
       bendPointCandidate = tempControlPoint;
     }
@@ -119,7 +139,7 @@ export function ReactionRelationship({
       p4y = actualTargetY;
     }
 
-    // Magnetic snapping - only applied while dragging
+    // Magnetic snapping - only applied while dragging to keep behavior but not change default shown position
     const SNAP_THRESHOLD = 30;
     if (isDraggingEdge) {
       // apply snap to the current bendPointCandidate (so during drag it snaps)
@@ -141,20 +161,28 @@ export function ReactionRelationship({
         p2y = bendPointCandidate.y;
         p3y = bendPointCandidate.y;
       }
+    } else {
+      // NOT dragging: we want the control point *exactly at the middle* of the central segment
+      // central segment is between (p2x,p2y) and (p3x,p3y)
+      const mid = midpoint({ x: p2x, y: p2y }, { x: p3x, y: p3y });
+      bendPointCandidate = mid;
+      // ensure segments reflect that midpoint (so the visible path uses the same)
+      if (sourcePosition === Position.Right || sourcePosition === Position.Left) {
+        p2x = bendPointCandidate.x;
+        p3x = bendPointCandidate.x;
+      } else {
+        p2y = bendPointCandidate.y;
+        p3y = bendPointCandidate.y;
+      }
     }
 
-    // Control point is ALWAYS at the midpoint of the middle segment
-    // This ensures the circle stays centered on the middle segment
-    controlPoint = {
-      x: (p2x + p3x) / 2,
-      y: (p2y + p3y) / 2,
-    };
+    controlPoint = bendPointCandidate;
 
     edgePath = `M ${p1x},${p1y} L ${p2x},${p2y} L ${p3x},${p3y} L ${p4x},${p4y}`;
     
-    // Label at the control point (middle of middle segment)
-    labelX = controlPoint.x;
-    labelY = controlPoint.y;
+    // Label at the middle of the middle segment
+    labelX = (p2x + p3x) / 2;
+    labelY = (p2y + p3y) / 2;
     
     arrowX = actualTargetX;
     arrowY = actualTargetY;
@@ -184,7 +212,7 @@ export function ReactionRelationship({
     arrowAngle = Math.atan2(dy, dx) * (180 / Math.PI);
   }
 
-  // --- Pointer handlers: drag the entire middle segment by moving the bend point ---
+  // --- Pointer handlers with offset to avoid jump on start ---
   const handleControlPointDragStart = useCallback((e: React.PointerEvent) => {
     e.stopPropagation();
     e.preventDefault();
@@ -199,29 +227,28 @@ export function ReactionRelationship({
       return;
     }
 
-    // Get flow coords of pointer
+    // get flow coords of pointer
     const flowPos = reactFlowInstance.screenToFlowPosition({
       x: (e as unknown as PointerEvent).clientX,
       y: (e as unknown as PointerEvent).clientY,
     });
 
-    // Compute drag offset = current bend point - pointer pos
-    // The bend point is stored in data?.customControlPoint OR calculated as default
-    const currentBendPoint = data?.customControlPoint || {
-      x: actualSourceX + dx / 2,
-      y: actualSourceY + dy / 2,
-    };
+    // compute drag offset = current control point - pointer pos
+    if (controlPoint) {
+      dragOffsetRef.current = {
+        x: controlPoint.x - flowPos.x,
+        y: controlPoint.y - flowPos.y,
+      };
+      // make sure tempControlPoint exists so UI doesn't jump to some other value
+      setTempControlPoint(controlPoint);
+    } else {
+      dragOffsetRef.current = { x: 0, y: 0 };
+      setTempControlPoint({ x: flowPos.x, y: flowPos.y });
+    }
 
-    dragOffsetRef.current = {
-      x: currentBendPoint.x - flowPos.x,
-      y: currentBendPoint.y - flowPos.y,
-    };
-
-    // Initialize tempControlPoint to current bend point
-    setTempControlPoint(currentBendPoint);
     setIsDraggingEdge(true);
     data?.onEdgeDragStart?.(id);
-  }, [id, data, reactFlowInstance, actualSourceX, actualSourceY, dx, dy]);
+  }, [id, data, reactFlowInstance, controlPoint]);
 
   const handleControlPointDrag = useCallback((e: PointerEvent) => {
     if (!isDraggingEdge || !reactFlowInstance) return;
@@ -231,15 +258,14 @@ export function ReactionRelationship({
       y: e.clientY,
     });
 
-    // Calculate new bend point position with offset
-    const newBendPoint = {
+    const newPos = {
       x: flowPos.x + dragOffsetRef.current.x,
       y: flowPos.y + dragOffsetRef.current.y,
     };
 
-    // Update temp control point (this moves the entire middle segment)
-    setTempControlPoint(newBendPoint);
-    data?.onEdgeDrag?.(id, newBendPoint);
+    // update temp control point while dragging
+    setTempControlPoint(newPos);
+    data?.onEdgeDrag?.(id, newPos);
   }, [isDraggingEdge, id, reactFlowInstance, data]);
 
   const handleControlPointDragEnd = useCallback((e: PointerEvent) => {
@@ -250,17 +276,21 @@ export function ReactionRelationship({
       y: e.clientY,
     });
 
-    // Calculate final bend point position
-    const finalBendPoint = {
+    const finalPos = {
       x: flowPos.x + dragOffsetRef.current.x,
       y: flowPos.y + dragOffsetRef.current.y,
     };
 
-    // Save the bend point (not the control point which is derived from it)
-    data?.onEdgeDragEnd?.(id, finalBendPoint);
+    data?.onEdgeDragEnd?.(id, finalPos);
 
     setIsDraggingEdge(false);
-    setTempControlPoint(null);
+    // if you want the control point to stay where user dropped it, keep tempControlPoint(finalPos).
+    // If you want it to snap back to middle on deselect, set null here. I'll keep the user's final pos:
+    setTempControlPoint(finalPos);
+    // Optional: release pointer capture
+    try {
+      // document.releasePointerCapture is not necessarily available here — we captured on element.
+    } catch (err) { /* ignore */ }
   }, [isDraggingEdge, id, reactFlowInstance, data]);
 
   // Add/remove event listeners for dragging
@@ -276,12 +306,16 @@ export function ReactionRelationship({
     };
   }, [isDraggingEdge, handleControlPointDrag, handleControlPointDragEnd]);
 
-  // Clear temp control point when edge becomes deselected
+  // If edge becomes deselected, clear temp control point to force midpoint display next time
   useEffect(() => {
     if (!selected) {
       setTempControlPoint(null);
+    } else {
+      // if selected and there is no tempControlPoint, we keep it null so controlPoint shows midpoint (see above).
+      // if you prefer to initialize tempControlPoint to midpoint when selected, uncomment:
+      // setTempControlPoint({ x: labelX, y: labelY });
     }
-  }, [selected]);
+  }, [selected, labelX, labelY]);
 
   const handleDoubleClick = (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -399,7 +433,7 @@ export function ReactionRelationship({
       )}
 
       {/* Connection count badge on selection */}
-      {selected && parallelCount > 1 && (
+      {selected && (sourceParallelCount > 1 || targetParallelCount > 1) && (
         <g>
           <rect
             x={labelX - 12}
@@ -424,7 +458,7 @@ export function ReactionRelationship({
               pointerEvents: 'none',
             }}
           >
-            {String(parallelCount)}
+            {String(Math.max(sourceParallelCount, targetParallelCount))}
           </text>
         </g>
       )}
