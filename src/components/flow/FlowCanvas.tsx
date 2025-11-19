@@ -34,7 +34,7 @@ const COLOR_LIST = [
   '#2a86d6', '#ffb86b', '#63c37a', '#ff4f7a', '#b08fe8'
 ];
 
-const NODE_DIMENSIONS = { width: 280, height: 180 };
+const NODE_DIMENSIONS = { width: 220, height: 180 };
 
 const nodeTypes = {
   editable: EditableNode,
@@ -182,6 +182,7 @@ export const FlowCanvas = forwardRef<{
     const [connectionDragState, setConnectionDragState] = useState<ConnectionDragState | null>(null);
     const [codeEditorState, setCodeEditorState] = useState<CodeEditorState | null>(null);
     const [routingStyle, setRoutingStyle] = useState<'curved' | 'orthogonal'>('orthogonal');
+    const edgeReorderBufferRef = useRef<Map<string, { controlPoint: { x: number; y: number }; timestamp: number }>>(new Map());
     const [, setEdgeDragState] = useState<{
       edgeId: string;
       isDragging: boolean;
@@ -1294,6 +1295,126 @@ export const FlowCanvas = forwardRef<{
       });
     }, [edges]);
 
+    const handleEdgeHandleChange = useCallback((edgeId: string, newSourceHandle: string, newTargetHandle: string) => {
+  setEdges(prevEdges => 
+    prevEdges.map(edge => {
+      if (edge.id === edgeId) {
+        console.log(`🔄 Changing handles for edge ${edgeId}:`, {
+          old: { source: edge.sourceHandle, target: edge.targetHandle },
+          new: { source: newSourceHandle, target: newTargetHandle }
+        });
+        
+        return {
+          ...edge,
+          sourceHandle: newSourceHandle,
+          targetHandle: newTargetHandle,
+          data: {
+            ...edge.data,
+            customControlPoint: undefined, // Clear custom control point on handle change
+          }
+        };
+      }
+      return edge;
+    })
+  );
+}, [setEdges]);
+
+const handleEdgeReorderRequest = useCallback((edgeId: string, controlPoint: { x: number; y: number }) => {
+  const now = Date.now();
+  edgeReorderBufferRef.current.set(edgeId, { controlPoint, timestamp: now });
+  
+  // Debounce: only reorder if no new request in 150ms
+  setTimeout(() => {
+    const buffered = edgeReorderBufferRef.current.get(edgeId);
+    if (buffered && buffered.timestamp === now) {
+      performEdgeReorder(edgeId, buffered.controlPoint);
+      edgeReorderBufferRef.current.delete(edgeId);
+    }
+  }, 150);
+}, []);
+
+const performEdgeReorder = useCallback((edgeId: string, controlPoint: { x: number; y: number }) => {
+  const edge = edges.find(e => e.id === edgeId);
+  if (!edge || edge.type !== 'reactions') return;
+
+  setEdges(prevEdges => {
+    // Get all edges on the same side (source and target)
+    const sameSourceEdges = prevEdges.filter(e => 
+      e.type === 'reactions' && 
+      e.source === edge.source && 
+      e.sourceHandle === edge.sourceHandle
+    );
+    
+    const sameTargetEdges = prevEdges.filter(e => 
+      e.type === 'reactions' && 
+      e.target === edge.target && 
+      e.targetHandle === edge.targetHandle
+    );
+
+    const sourceNode = nodes.find(n => n.id === edge.source);
+    const targetNode = nodes.find(n => n.id === edge.target);
+
+    if (!sourceNode || !targetNode) return prevEdges;
+
+    // Sort edges based on control point position relative to handle orientation
+    const sortEdges = (edgesList: Edge[], nodeId: string, handle: string) => {
+      return [...edgesList].sort((a, b) => {
+        const aIsTarget = a.id === edgeId;
+        const bIsTarget = b.id === edgeId;
+
+        // Current dragged edge uses controlPoint, others use their current position
+        const aPos = aIsTarget ? controlPoint : (a.data?.customControlPoint || calculateDefaultControlPoint(a));
+        const bPos = bIsTarget ? controlPoint : (b.data?.customControlPoint || calculateDefaultControlPoint(b));
+
+        // Sort based on handle orientation
+        if (handle === 'top' || handle === 'bottom') {
+          return aPos.x - bPos.x; // Left to right
+        } else {
+          return aPos.y - bPos.y; // Top to bottom
+        }
+      });
+    };
+
+    const calculateDefaultControlPoint = (e: Edge) => {
+      const src = nodes.find(n => n.id === e.source);
+      const tgt = nodes.find(n => n.id === e.target);
+      if (!src || !tgt) return { x: 0, y: 0 };
+      return {
+        x: (src.position.x + tgt.position.x + NODE_DIMENSIONS.width) / 2,
+        y: (src.position.y + tgt.position.y + NODE_DIMENSIONS.height) / 2
+      };
+    };
+
+    // Reorder both sides
+    const reorderedSourceEdges = sameSourceEdges.length > 1 ? sortEdges(sameSourceEdges, edge.source, edge.sourceHandle!) : sameSourceEdges;
+    const reorderedTargetEdges = sameTargetEdges.length > 1 ? sortEdges(sameTargetEdges, edge.target, edge.targetHandle!) : sameTargetEdges;
+
+    // Update indices
+    const updatedEdges = prevEdges.map(e => {
+      const sourceIndex = reorderedSourceEdges.findIndex(re => re.id === e.id);
+      const targetIndex = reorderedTargetEdges.findIndex(re => re.id === e.id);
+
+      if (sourceIndex !== -1 || targetIndex !== -1) {
+        return {
+          ...e,
+          data: {
+            ...e.data,
+            sourceParallelIndex: sourceIndex !== -1 ? sourceIndex : e.data?.sourceParallelIndex,
+            sourceParallelCount: sourceIndex !== -1 ? reorderedSourceEdges.length : e.data?.sourceParallelCount,
+            targetParallelIndex: targetIndex !== -1 ? targetIndex : e.data?.targetParallelIndex,
+            targetParallelCount: targetIndex !== -1 ? reorderedTargetEdges.length : e.data?.targetParallelCount,
+          }
+        };
+      }
+      
+      return e;
+    });
+
+    console.log(`📊 Reordered edges for ${edgeId}`);
+    return updatedEdges;
+  });
+}, [edges, nodes, setEdges]);
+
     const mappedEdges = uniqueEdges.map(edge => {
   // Get distribution metadata for this edge
   const sourceDistribution = edgeDistributionMap.get(edge.source);
@@ -1345,6 +1466,8 @@ export const FlowCanvas = forwardRef<{
             );
             setEdgeDragState(null);
           } : undefined,
+          onHandleChange: edge.type === 'reactions' ? handleEdgeHandleChange : undefined,
+onReorderRequest: edge.type === 'reactions' ? handleEdgeReorderRequest : undefined,
         },
         selectable: edge.type === 'reactions',
         focusable: edge.type === 'reactions',
