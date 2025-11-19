@@ -3,6 +3,12 @@ import { NodeProps } from 'reactflow';
 import { ConfirmDialog } from '../ui/ConfirmDialog';
 import { ConnectionHandle } from './ConnectionHandle';
 
+interface EdgeDistributionData {
+  edgeId: string;
+  index: number;
+  total: number;
+}
+
 interface EcoreFileBoxData {
   fileName: string;
   fileContent: string;
@@ -17,6 +23,7 @@ interface EcoreFileBoxData {
   keywords?: string;
   domain?: string;
   createdAt?: string;
+  edgeDistribution?: Map<'top' | 'bottom' | 'left' | 'right', EdgeDistributionData[]>;
 }
 
 type HandlePosition = 'top' | 'bottom' | 'left' | 'right';
@@ -114,11 +121,9 @@ const modalFooterStyle: React.CSSProperties = {
 const boxStyle: React.CSSProperties = {
   background: gradientBackground('#ffffff', '#f8f9fa'),
   border: '2px solid #dee2e6',
-
   borderRadius: '0',
   padding: '14px 16px',
   width: '220px',
-
   cursor: 'pointer',
   boxShadow: '0 4px 16px rgba(0,0,0,0.08), 0 2px 8px rgba(0,0,0,0.04)',
   transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
@@ -309,6 +314,7 @@ export const EcoreFileBox: React.FC<NodeProps<EcoreFileBoxData>> = ({
     description,
     keywords,
     createdAt,
+    edgeDistribution,
   } = data;
 
   const boxRef = useRef<HTMLDivElement>(null);
@@ -350,15 +356,39 @@ export const EcoreFileBox: React.FC<NodeProps<EcoreFileBoxData>> = ({
     onConnectionStart?.(id, position);
   };
 
-  // Render Connection Handles
-  const connectionHandles = (['top', 'bottom', 'left', 'right'] as const).map(position => (
-    <ConnectionHandle
-      key={position}
-      position={position}
-      isVisible={selected || isConnectionActive}
-      onConnectionStart={() => handleConnectionStartWrapper(position)}
-    />
-  ));
+  // Render Connection Handles with distribution data
+  const connectionHandles = (['top', 'bottom', 'left', 'right'] as const).map(position => {
+    const sideDistribution = edgeDistribution?.get(position);
+    const totalHandles = sideDistribution?.length || 0;
+    
+    // If no edges on this side, show single handle
+    if (totalHandles === 0) {
+      return (
+        <ConnectionHandle
+          key={position}
+          position={position}
+          isVisible={selected || isConnectionActive}
+          onConnectionStart={() => handleConnectionStartWrapper(position)}
+          offsetIndex={0}
+          totalHandles={1}
+        />
+      );
+    }
+    
+    // For sides with edges, we still show just one handle but positioned based on total count
+    // The visual handles shown are just for creating new connections
+    // The actual edge attachment points are calculated in FlowCanvas
+    return (
+      <ConnectionHandle
+        key={position}
+        position={position}
+        isVisible={selected || isConnectionActive}
+        onConnectionStart={() => handleConnectionStartWrapper(position)}
+        offsetIndex={0}
+        totalHandles={1}
+      />
+    );
+  });
 
   return (
     <>
