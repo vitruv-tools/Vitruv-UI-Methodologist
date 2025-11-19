@@ -113,6 +113,25 @@ export const ProjectPage: React.FC = () => {
     return () => window.removeEventListener('vitruv.closeActiveWorkspace', closeActiveWorkspaceTab as EventListener);
   }, [closeActiveWorkspaceTab]);
 
+  // Reload workspace when returning from expanded metamodel view
+  useEffect(() => {
+    const handleReloadWorkspace = async () => {
+      if (!activeInstanceId) return;
+      
+      const activeTab = openTabs.find(t => t.instanceId === activeInstanceId);
+      if (!activeTab) return;
+
+      console.log('🔃 Reloading workspace for VSUM:', activeTab.id);
+      
+      // Reload the project boxes for the active tab
+      // skipReset = true because the reset is already done in handleBackToWorkspace
+      await fetchAndLoadProjectBoxes(activeTab.id, true);
+    };
+
+    window.addEventListener('vitruv.reloadWorkspace', handleReloadWorkspace as EventListener);
+    return () => window.removeEventListener('vitruv.reloadWorkspace', handleReloadWorkspace as EventListener);
+  }, [activeInstanceId, openTabs]);
+
   // Ensure "Add Meta Models" sidebar is hidden when no VSUM tabs are open
   useEffect(() => {
     if (openTabs.length === 0 && showRight) {
@@ -219,11 +238,26 @@ export const ProjectPage: React.FC = () => {
 
 // Render the choice dialog via portal at the end of the component
 // helper to fetch and load boxes for a vsum id
-async function fetchAndLoadProjectBoxes(id: number) {
-  window.dispatchEvent(new CustomEvent('vitruv.resetWorkspace'));
+async function fetchAndLoadProjectBoxes(id: number, skipReset: boolean = false) {
+  console.log('📥 Fetching VSUM details for ID:', id, 'skipReset:', skipReset);
+  
+  // Only reset workspace if not already done (e.g., when loading a new project)
+  // When returning from UML view, the reset is already done in handleBackToWorkspace
+  if (!skipReset) {
+    console.log('🔄 Triggering workspace reset');
+    window.dispatchEvent(new CustomEvent('vitruv.resetWorkspace'));
+  }
+  
   try {
     const response = await apiService.getVsumDetails(id);
     const details = response.data;
+    
+    console.log('📊 VSUM details received:', {
+      metaModelCount: details.metaModels?.length || 0,
+      relationCount: details.metaModelsRelation?.length || 0,
+    });
+    
+    // Load all metamodel boxes
     for (const metaModel of details.metaModels || []) {
       if (metaModel.ecoreFileId) {
         try {
@@ -246,6 +280,7 @@ async function fetchAndLoadProjectBoxes(id: number) {
       }
     }
 
+    // Load connections between metamodels
     if (details.metaModelsRelation && details.metaModelsRelation.length > 0) {
       const relations = details.metaModelsRelation.map((relation: any) => ({
         id: relation.id,
@@ -261,7 +296,7 @@ async function fetchAndLoadProjectBoxes(id: number) {
         window.dispatchEvent(new CustomEvent('vitruv.loadMetaModelRelations', {
           detail: { relations, preserveExisting: false }
         }));
-      }, 300);
+      }, 400);
     }
   } catch (error) {
     console.error('Failed to fetch vsum details:', error);

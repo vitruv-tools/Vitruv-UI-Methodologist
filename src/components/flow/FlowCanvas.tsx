@@ -995,10 +995,11 @@ export const FlowCanvas = forwardRef<{
           .map(edge => {
             const sourceId = getMetaModelSourceIdForNode(edge.source);
             const targetId = getMetaModelSourceIdForNode(edge.target);
+            // Use 0 when there's no reaction file (backend expects a number, not null)
             const reactionFileId =
                 typeof edge.data?.reactionFileId === 'number'
                     ? edge.data.reactionFileId
-                    : null;
+                    : 0;
 
             if (typeof sourceId !== 'number' || typeof targetId !== 'number') {
               return null;
