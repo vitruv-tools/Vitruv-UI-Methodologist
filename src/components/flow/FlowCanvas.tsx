@@ -182,7 +182,7 @@ export const FlowCanvas = forwardRef<{
     const [connectionDragState, setConnectionDragState] = useState<ConnectionDragState | null>(null);
     const [codeEditorState, setCodeEditorState] = useState<CodeEditorState | null>(null);
     const [routingStyle, setRoutingStyle] = useState<'curved' | 'orthogonal'>('orthogonal');
-    const [edgeDragState, setEdgeDragState] = useState<{
+    const [, setEdgeDragState] = useState<{
       edgeId: string;
       isDragging: boolean;
       controlPoint?: { x: number; y: number };
