@@ -23,6 +23,13 @@ type HandlePosition = 'top' | 'bottom' | 'left' | 'right';
 
 const NODE_DIMENSIONS = { width: 220, height: 180 };
 
+interface PathSegment {
+  start: { x: number; y: number };
+  end: { x: number; y: number };
+  isHorizontal: boolean;
+  canDrag: boolean; // First and last segments can't be dragged
+}
+
 export function ReactionRelationship({
   id,
   source,
@@ -39,11 +46,12 @@ export function ReactionRelationship({
 }: EdgeProps<ReactionRelationshipData>) {
   
   const reactFlowInstance = useReactFlow();
-  const [isDraggingEdge, setIsDraggingEdge] = useState(false);
+  const [isDraggingSegment, setIsDraggingSegment] = useState(false);
+  const [draggedSegmentIndex, setDraggedSegmentIndex] = useState<number | null>(null);
   const [tempControlPoint, setTempControlPoint] = useState<{ x: number; y: number } | null>(null);
-  const dragOffsetRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
+  const dragStartPosRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
 
-  // Calculate offset for source handle
+  // Calculate offsets for parallel edges
   const sourceParallelCount = data?.sourceParallelCount ?? 1;
   const sourceParallelIndex = data?.sourceParallelIndex ?? 0;
   
@@ -63,7 +71,6 @@ export function ReactionRelationship({
     }
   }
   
-  // Calculate offset for target handle
   const targetParallelCount = data?.targetParallelCount ?? 1;
   const targetParallelIndex = data?.targetParallelIndex ?? 0;
   
@@ -98,13 +105,8 @@ export function ReactionRelationship({
   let arrowY: number;
   let arrowAngle: number;
   let controlPoint: { x: number; y: number } | null = null;
+  let segments: PathSegment[] = [];
 
-  const midpoint = (a: { x: number; y: number }, b: { x: number; y: number }) => ({
-    x: (a.x + b.x) / 2,
-    y: (a.y + b.y) / 2,
-  });
-
-  // Helper: Calculate closest handle to a point
   const getClosestHandle = useCallback((point: { x: number; y: number }, nodeId: string): HandlePosition | null => {
     if (!reactFlowInstance) return null;
     
@@ -115,7 +117,6 @@ export function ReactionRelationship({
     const nodeY = node.position.y;
     const { width, height } = NODE_DIMENSIONS;
 
-    // Handle center positions
     const handles = {
       top: { x: nodeX + width / 2, y: nodeY },
       bottom: { x: nodeX + width / 2, y: nodeY + height },
@@ -141,92 +142,87 @@ export function ReactionRelationship({
   }, [reactFlowInstance]);
   
   if (data?.routingStyle === 'orthogonal') {
-    const defaultBendX = actualSourceX + dx / 2;
-    const defaultBendY = actualSourceY + dy / 2;
+  const centerX = tempControlPoint?.x ?? data?.customControlPoint?.x ?? (actualSourceX + actualTargetX) / 2;
+  const centerY = tempControlPoint?.y ?? data?.customControlPoint?.y ?? (actualSourceY + actualTargetY) / 2;
 
-    let bendPointCandidate = data?.customControlPoint || { x: defaultBendX, y: defaultBendY };
+  let pathParts: string[] = [];
 
-    if (tempControlPoint) {
-      bendPointCandidate = tempControlPoint;
-    }
-
-    let p1x: number, p1y: number, p2x: number, p2y: number, p3x: number, p3y: number, p4x: number, p4y: number;
-
-    if (sourcePosition === Position.Right || sourcePosition === Position.Left) {
-      p1x = actualSourceX;
-      p1y = actualSourceY;
-      p2x = bendPointCandidate.x;
-      p2y = actualSourceY;
-      p3x = bendPointCandidate.x;
-      p3y = actualTargetY;
-      p4x = actualTargetX;
-      p4y = actualTargetY;
-    } else {
-      p1x = actualSourceX;
-      p1y = actualSourceY;
-      p2x = actualSourceX;
-      p2y = bendPointCandidate.y;
-      p3x = actualTargetX;
-      p3y = bendPointCandidate.y;
-      p4x = actualTargetX;
-      p4y = actualTargetY;
-    }
-
-    const SNAP_THRESHOLD = 30;
-    if (isDraggingEdge) {
-      if (Math.abs(bendPointCandidate.x - actualSourceX) < SNAP_THRESHOLD) {
-        bendPointCandidate = { ...bendPointCandidate, x: actualSourceX };
-      } else if (Math.abs(bendPointCandidate.x - actualTargetX) < SNAP_THRESHOLD) {
-        bendPointCandidate = { ...bendPointCandidate, x: actualTargetX };
-      }
-      if (Math.abs(bendPointCandidate.y - actualSourceY) < SNAP_THRESHOLD) {
-        bendPointCandidate = { ...bendPointCandidate, y: actualSourceY };
-      } else if (Math.abs(bendPointCandidate.y - actualTargetY) < SNAP_THRESHOLD) {
-        bendPointCandidate = { ...bendPointCandidate, y: actualTargetY };
-      }
-      if (sourcePosition === Position.Right || sourcePosition === Position.Left) {
-        p2x = bendPointCandidate.x;
-        p3x = bendPointCandidate.x;
-      } else {
-        p2y = bendPointCandidate.y;
-        p3y = bendPointCandidate.y;
-      }
-    } else {
-      const mid = midpoint({ x: p2x, y: p2y }, { x: p3x, y: p3y });
-      bendPointCandidate = mid;
-      if (sourcePosition === Position.Right || sourcePosition === Position.Left) {
-        p2x = bendPointCandidate.x;
-        p3x = bendPointCandidate.x;
-      } else {
-        p2y = bendPointCandidate.y;
-        p3y = bendPointCandidate.y;
-      }
-    }
-
-    controlPoint = bendPointCandidate;
-
-    edgePath = `M ${p1x},${p1y} L ${p2x},${p2y} L ${p3x},${p3y} L ${p4x},${p4y}`;
+  if (sourcePosition === Position.Right || sourcePosition === Position.Left) {
+    // Source horizontal -> vertical -> horizontal target
+    pathParts.push(`M ${actualSourceX},${actualSourceY}`);
+    pathParts.push(`L ${centerX},${actualSourceY}`);
+    pathParts.push(`L ${centerX},${actualTargetY}`);
+    pathParts.push(`L ${actualTargetX},${actualTargetY}`);
     
-    labelX = (p2x + p3x) / 2;
-    labelY = (p2y + p3y) / 2;
-    
-    arrowX = actualTargetX;
-    arrowY = actualTargetY;
-    
-    if (targetPosition === Position.Top) {
-      arrowAngle = 90;
-    } else if (targetPosition === Position.Bottom) {
-      arrowAngle = -90;
-    } else if (targetPosition === Position.Left) {
-      arrowAngle = 0;
-    } else if (targetPosition === Position.Right) {
-      arrowAngle = 180;
-    } else {
-      const finalDx = p4x - p3x;
-      const finalDy = p4y - p3y;
-      arrowAngle = Math.atan2(finalDy, finalDx) * (180 / Math.PI);
-    }
+    // BUILD SEGMENTS ARRAY
+    segments = [
+      {
+        start: { x: actualSourceX, y: actualSourceY },
+        end: { x: centerX, y: actualSourceY },
+        isHorizontal: true,
+        canDrag: false // First segment
+      },
+      {
+        start: { x: centerX, y: actualSourceY },
+        end: { x: centerX, y: actualTargetY },
+        isHorizontal: false,
+        canDrag: true // Middle segment - draggable!
+      },
+      {
+        start: { x: centerX, y: actualTargetY },
+        end: { x: actualTargetX, y: actualTargetY },
+        isHorizontal: true,
+        canDrag: false // Last segment
+      }
+    ];
   } else {
+    // Source vertical -> horizontal -> vertical target
+    pathParts.push(`M ${actualSourceX},${actualSourceY}`);
+    pathParts.push(`L ${actualSourceX},${centerY}`);
+    pathParts.push(`L ${actualTargetX},${centerY}`);
+    pathParts.push(`L ${actualTargetX},${actualTargetY}`);
+    
+    // BUILD SEGMENTS ARRAY
+    segments = [
+      {
+        start: { x: actualSourceX, y: actualSourceY },
+        end: { x: actualSourceX, y: centerY },
+        isHorizontal: false,
+        canDrag: false // First segment
+      },
+      {
+        start: { x: actualSourceX, y: centerY },
+        end: { x: actualTargetX, y: centerY },
+        isHorizontal: true,
+        canDrag: true // Middle segment - draggable!
+      },
+      {
+        start: { x: actualTargetX, y: centerY },
+        end: { x: actualTargetX, y: actualTargetY },
+        isHorizontal: false,
+        canDrag: false // Last segment
+      }
+    ];
+  }
+
+  edgePath = pathParts.join(' ');
+  controlPoint = { x: centerX, y: centerY };
+  labelX = centerX;
+  labelY = centerY;
+  
+  arrowX = actualTargetX;
+  arrowY = actualTargetY;
+  
+  if (targetPosition === Position.Top) {
+    arrowAngle = 90;
+  } else if (targetPosition === Position.Bottom) {
+    arrowAngle = -90;
+  } else if (targetPosition === Position.Left) {
+    arrowAngle = 0;
+  } else {
+    arrowAngle = 180;
+  }
+} else {
     edgePath = `M ${actualSourceX},${actualSourceY} L ${actualTargetX},${actualTargetY}`;
     labelX = (actualSourceX + actualTargetX) / 2;
     labelY = (actualSourceY + actualTargetY) / 2;
@@ -236,7 +232,7 @@ export function ReactionRelationship({
     arrowAngle = Math.atan2(dy, dx) * (180 / Math.PI);
   }
 
-  const handleControlPointDragStart = useCallback((e: React.PointerEvent) => {
+  const handleSegmentDragStart = useCallback((e: React.PointerEvent, segmentIndex: number) => {
     e.stopPropagation();
     e.preventDefault();
 
@@ -245,91 +241,96 @@ export function ReactionRelationship({
       try { targetEl.setPointerCapture(e.pointerId); } catch (err) { /* ignore */ }
     }
 
-    if (!reactFlowInstance) {
-      setIsDraggingEdge(false);
-      return;
-    }
+    if (!reactFlowInstance) return;
 
     const flowPos = reactFlowInstance.screenToFlowPosition({
       x: (e as unknown as PointerEvent).clientX,
       y: (e as unknown as PointerEvent).clientY,
     });
 
+    dragStartPosRef.current = flowPos;
+    setIsDraggingSegment(true);
+    setDraggedSegmentIndex(segmentIndex);
+    
     if (controlPoint) {
-      dragOffsetRef.current = {
-        x: controlPoint.x - flowPos.x,
-        y: controlPoint.y - flowPos.y,
-      };
       setTempControlPoint(controlPoint);
-    } else {
-      dragOffsetRef.current = { x: 0, y: 0 };
-      setTempControlPoint({ x: flowPos.x, y: flowPos.y });
     }
 
-    setIsDraggingEdge(true);
     data?.onEdgeDragStart?.(id);
   }, [id, data, reactFlowInstance, controlPoint]);
 
-  const handleControlPointDrag = useCallback((e: PointerEvent) => {
-    if (!isDraggingEdge || !reactFlowInstance) return;
+const handleSegmentDrag = useCallback((e: PointerEvent) => {
+  if (!isDraggingSegment || draggedSegmentIndex === null || !reactFlowInstance) return;
+
+  const flowPos = reactFlowInstance.screenToFlowPosition({
+    x: e.clientX,
+    y: e.clientY,
+  });
+
+  const segment = segments[draggedSegmentIndex];
+  if (!segment) return;
+
+  if (!controlPoint) return;
+
+  let newControlPoint = { ...controlPoint };
+
+  // SNAPPING: Only allow movement in one direction
+  if (segment.isHorizontal) {
+    // Dragging horizontal segment - move vertically only
+    newControlPoint.y = flowPos.y;
+    // Keep X unchanged
+  } else {
+    // Dragging vertical segment - move horizontally only
+    newControlPoint.x = flowPos.x;
+    // Keep Y unchanged
+  }
+
+  setTempControlPoint(newControlPoint);
+  data?.onEdgeDrag?.(id, newControlPoint);
+
+  const newSourceHandle = getClosestHandle(newControlPoint, source);
+  const newTargetHandle = getClosestHandle(newControlPoint, target);
+
+  if (newSourceHandle && newTargetHandle) {
+    if (newSourceHandle !== sourcePosition || newTargetHandle !== targetPosition) {
+      data?.onHandleChange?.(id, newSourceHandle, newTargetHandle);
+    }
+  }
+
+  data?.onReorderRequest?.(id, newControlPoint);
+}, [isDraggingSegment, draggedSegmentIndex, id, reactFlowInstance, data, segments, controlPoint, getClosestHandle, source, target, sourcePosition, targetPosition]);
+
+
+
+
+
+const handleSegmentDragEnd = useCallback((e: PointerEvent) => {
+    if (!isDraggingSegment || !reactFlowInstance) return;
 
     const flowPos = reactFlowInstance.screenToFlowPosition({
       x: e.clientX,
       y: e.clientY,
     });
 
-    const newPos = {
-      x: flowPos.x + dragOffsetRef.current.x,
-      y: flowPos.y + dragOffsetRef.current.y,
-    };
-
-    setTempControlPoint(newPos);
-    data?.onEdgeDrag?.(id, newPos);
-
-    // Check for handle changes
-    const newSourceHandle = getClosestHandle(newPos, source);
-    const newTargetHandle = getClosestHandle(newPos, target);
-
-    if (newSourceHandle && newTargetHandle) {
-      if (newSourceHandle !== sourcePosition || newTargetHandle !== targetPosition) {
-        data?.onHandleChange?.(id, newSourceHandle, newTargetHandle);
-      }
+    if (tempControlPoint) {
+      data?.onEdgeDragEnd?.(id, tempControlPoint);
     }
 
-    // Request reordering
-    data?.onReorderRequest?.(id, newPos);
-  }, [isDraggingEdge, id, reactFlowInstance, data, getClosestHandle, source, target, sourcePosition, targetPosition]);
-
-  const handleControlPointDragEnd = useCallback((e: PointerEvent) => {
-    if (!isDraggingEdge || !reactFlowInstance) return;
-
-    const flowPos = reactFlowInstance.screenToFlowPosition({
-      x: e.clientX,
-      y: e.clientY,
-    });
-
-    const finalPos = {
-      x: flowPos.x + dragOffsetRef.current.x,
-      y: flowPos.y + dragOffsetRef.current.y,
-    };
-
-    data?.onEdgeDragEnd?.(id, finalPos);
-
-    setIsDraggingEdge(false);
-    setTempControlPoint(finalPos);
-  }, [isDraggingEdge, id, reactFlowInstance, data]);
+    setIsDraggingSegment(false);
+    setDraggedSegmentIndex(null);
+  }, [isDraggingSegment, id, reactFlowInstance, data, tempControlPoint]);
 
   useEffect(() => {
-    if (!isDraggingEdge) return;
+    if (!isDraggingSegment) return;
 
-    document.addEventListener('pointermove', handleControlPointDrag);
-    document.addEventListener('pointerup', handleControlPointDragEnd);
+    document.addEventListener('pointermove', handleSegmentDrag);
+    document.addEventListener('pointerup', handleSegmentDragEnd);
 
     return () => {
-      document.removeEventListener('pointermove', handleControlPointDrag);
-      document.removeEventListener('pointerup', handleControlPointDragEnd);
+      document.removeEventListener('pointermove', handleSegmentDrag);
+      document.removeEventListener('pointerup', handleSegmentDragEnd);
     };
-  }, [isDraggingEdge, handleControlPointDrag, handleControlPointDragEnd]);
+  }, [isDraggingSegment, handleSegmentDrag, handleSegmentDragEnd]);
 
   useEffect(() => {
     if (!selected) {
@@ -476,28 +477,54 @@ export function ReactionRelationship({
         </g>
       )}
 
-      {selected && data?.routingStyle === 'orthogonal' && controlPoint && (
-        <g>
-          <circle
-            cx={controlPoint.x}
-            cy={controlPoint.y}
-            r="10"
-            fill={isDraggingEdge ? '#3b82f6' : '#ffffff'}
-            stroke={edgeColor}
-            strokeWidth="3"
-            style={{ cursor: 'move', pointerEvents: 'all' }}
-            onPointerDown={handleControlPointDragStart}
-          />
-          {!isDraggingEdge && (
-            <circle
-              cx={controlPoint.x}
-              cy={controlPoint.y}
-              r="4"
-              fill={edgeColor}
-              style={{ pointerEvents: 'none' }}
+      {/* Draggable segments - only middle segments */}
+      {selected && data?.routingStyle === 'orthogonal' && segments.map((segment, index) => {
+        if (!segment.canDrag) return null;
+        
+        const segmentPath = `M ${segment.start.x},${segment.start.y} L ${segment.end.x},${segment.end.y}`;
+        const isBeingDragged = isDraggingSegment && draggedSegmentIndex === index;
+        
+        return (
+          <g key={`segment-${index}`}>
+            {/* Invisible thick line for easier grabbing */}
+            <path
+              d={segmentPath}
+              style={{
+                strokeWidth: '16px',
+                stroke: 'transparent',
+                fill: 'none',
+                cursor: segment.isHorizontal ? 'ns-resize' : 'ew-resize',
+                pointerEvents: 'all',
+              }}
+              onPointerDown={(e) => handleSegmentDragStart(e, index)}
             />
-          )}
-        </g>
+            
+            {/* Visual feedback */}
+            <path
+              d={segmentPath}
+              style={{
+                strokeWidth: isBeingDragged ? '4px' : '3px',
+                stroke: isBeingDragged ? '#3b82f6' : edgeColor,
+                strokeDasharray: '5,5',
+                opacity: 0.6,
+                pointerEvents: 'none',
+              }}
+            />
+          </g>
+        );
+      })}
+
+      {/* Center indicator on middle segment */}
+      {selected && data?.routingStyle === 'orthogonal' && controlPoint && (
+        <circle
+          cx={controlPoint.x}
+          cy={controlPoint.y}
+          r="6"
+          fill={isDraggingSegment ? '#3b82f6' : '#ffffff'}
+          stroke={edgeColor}
+          strokeWidth="2"
+          style={{ pointerEvents: 'none' }}
+        />
       )}
     </>
   );
