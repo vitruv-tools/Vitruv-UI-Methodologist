@@ -711,7 +711,7 @@ export const ToolsPanel: React.FC<ToolsPanelProps> = ({ onEcoreFileUpload, onEco
           </>
         ) : (
           <>
-            Build New Meta Model
+            Import
           </>
         )}
       </button>

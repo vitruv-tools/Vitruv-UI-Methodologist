@@ -19,7 +19,7 @@ interface ApiUserData {
   lastName: string;
 }
 
-export function Header({ title = 'Metadologist Dashboard', user, onLogout }: HeaderProps) {
+export function Header({ title = 'Methodologist Dashboard', user, onLogout }: HeaderProps) {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [apiUser, setApiUser] = useState<ApiUserData | null>(null);
   const [isLoadingUser, setIsLoadingUser] = useState(false);
