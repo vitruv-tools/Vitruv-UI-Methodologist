@@ -5,6 +5,8 @@ interface ConnectionHandleProps {
   position: 'top' | 'bottom' | 'left' | 'right';
   onConnectionStart?: (position: 'top' | 'bottom' | 'left' | 'right') => void;
   isVisible?: boolean;
+  offsetIndex?: number;
+  totalHandles?: number;
 }
 
 const getReactFlowPosition = (pos: 'top' | 'bottom' | 'left' | 'right'): Position => {
@@ -20,8 +22,20 @@ export const ConnectionHandle: React.FC<ConnectionHandleProps> = ({
   position,
   onConnectionStart,
   isVisible = true,
+  offsetIndex = 0,
+  totalHandles = 1,
 }) => {
   const [isHovered, setIsHovered] = useState(false);
+
+  // Calculate symmetric offset from center
+  const HANDLE_SPACING = 25;
+  let offset = 0;
+  
+  if (totalHandles > 1) {
+    const centerOffset = (totalHandles - 1) / 2;
+    const indexOffset = offsetIndex - centerOffset;
+    offset = indexOffset * HANDLE_SPACING;
+  }
 
   const baseStyle: React.CSSProperties = {
     position: 'absolute',
@@ -32,7 +46,7 @@ export const ConnectionHandle: React.FC<ConnectionHandleProps> = ({
     justifyContent: 'center',
   };
 
-  const offset = isHovered ? '20px' : '18px';
+  const hoverOffset = isHovered ? '20px' : '18px';
 
   const getPositionStyle = (): React.CSSProperties => {
     switch (position) {
@@ -40,32 +54,32 @@ export const ConnectionHandle: React.FC<ConnectionHandleProps> = ({
         return {
           ...baseStyle,
           bottom: '100%',
-          left: '50%',
-          marginBottom: offset,
+          left: `calc(50% + ${offset}px)`,
+          marginBottom: hoverOffset,
           transform: `translateX(-50%) ${isHovered ? 'scale(1.3)' : 'scale(1)'}`,
         };
       case 'bottom':
         return {
           ...baseStyle,
           top: '100%',
-          left: '50%',
-          marginTop: offset,
+          left: `calc(50% + ${offset}px)`,
+          marginTop: hoverOffset,
           transform: `translateX(-50%) ${isHovered ? 'scale(1.3)' : 'scale(1)'}`,
         };
       case 'left':
         return {
           ...baseStyle,
           right: '100%',
-          top: '50%',
-          marginRight: offset,
+          top: `calc(50% + ${offset}px)`,
+          marginRight: hoverOffset,
           transform: `translateY(-50%) ${isHovered ? 'scale(1.3)' : 'scale(1)'}`,
         };
       case 'right':
         return {
           ...baseStyle,
           left: '100%',
-          top: '50%',
-          marginLeft: offset,
+          top: `calc(50% + ${offset}px)`,
+          marginLeft: hoverOffset,
           transform: `translateY(-50%) ${isHovered ? 'scale(1.3)' : 'scale(1)'}`,
         };
     }
@@ -163,7 +177,7 @@ export const ConnectionHandle: React.FC<ConnectionHandleProps> = ({
           onMouseLeave={() => setIsHovered(false)}
           data-nodrag="true"
           className="nodrag"
-          title={`Connect from ${position}`}
+          title={`Connect from ${position}${totalHandles > 1 ? ` (${offsetIndex + 1}/${totalHandles})` : ''}`}
         >
           {getArrowSVG()}
         </div>

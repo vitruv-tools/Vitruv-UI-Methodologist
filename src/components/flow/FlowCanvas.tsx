@@ -50,7 +50,7 @@ const getLocalStorageKey = (userId?: string, projectId?: string) => {
   if (userId && projectId) {
     return `flow_edge_color_map_v1_user_${userId}_project_${projectId}`;
   }
-  return 'flow_edge_color_map_v1'; // Fallback
+  return 'flow_edge_color_map_v1';
 };
 
 interface FlowCanvasProps {
@@ -211,30 +211,30 @@ export const FlowCanvas = forwardRef<{
 
 
     useEffect(() => {
-  console.log('Loading edge color map for:', { userId, projectId, storageKey });
-  try {
-    const raw = localStorage.getItem(storageKey);
-    if (raw) {
-      const parsed = JSON.parse(raw) as Record<string, string>;
-      edgeColorMapRef.current = new Map(Object.entries(parsed));
-      const used = new Set(Object.values(parsed));
-      let maxIndex = 0;
-      COLOR_LIST.forEach((c, i) => {
-        if (used.has(c)) maxIndex = Math.max(maxIndex, i + 1);
-      });
-      nextColorIndexRef.current = maxIndex % COLOR_LIST.length;
-      console.log('Loaded edge color map:', edgeColorMapRef.current.size, 'entries');
-    } else {
-      console.log('No edge color map found, resetting');
-      edgeColorMapRef.current = new Map();
-      nextColorIndexRef.current = 0;
-    }
-  } catch (e) {
-    console.warn('Failed to load edge color map', e);
-    edgeColorMapRef.current = new Map();
-    nextColorIndexRef.current = 0;
-  }
-}, [userId, projectId, storageKey]);
+      console.log('Loading edge color map for:', { userId, projectId, storageKey });
+      try {
+        const raw = localStorage.getItem(storageKey);
+        if (raw) {
+          const parsed = JSON.parse(raw) as Record<string, string>;
+          edgeColorMapRef.current = new Map(Object.entries(parsed));
+          const used = new Set(Object.values(parsed));
+          let maxIndex = 0;
+          COLOR_LIST.forEach((c, i) => {
+            if (used.has(c)) maxIndex = Math.max(maxIndex, i + 1);
+          });
+          nextColorIndexRef.current = maxIndex % COLOR_LIST.length;
+          console.log('Loaded edge color map:', edgeColorMapRef.current.size, 'entries');
+        } else {
+          console.log('No edge color map found, resetting');
+          edgeColorMapRef.current = new Map();
+          nextColorIndexRef.current = 0;
+        }
+      } catch (e) {
+        console.warn('Failed to load edge color map', e);
+        edgeColorMapRef.current = new Map();
+        nextColorIndexRef.current = 0;
+      }
+    }, [userId, projectId, storageKey]);
 
 
     const persistEdgeColorMap = useCallback(() => {
@@ -261,6 +261,49 @@ export const FlowCanvas = forwardRef<{
       return color;
     }, [persistEdgeColorMap]);
 
+    // Calculate edge distribution metadata for each node side
+    const edgeDistributionMap = useMemo(() => {
+      const map = new Map<string, Map<HandlePosition, Array<{ edgeId: string; index: number; total: number }>>>();
+
+      nodes.forEach(node => {
+        if (node.type !== 'ecoreFile') return;
+        
+        const sideMap = new Map<HandlePosition, string[]>();
+        (['top', 'bottom', 'left', 'right'] as HandlePosition[]).forEach(pos => {
+          sideMap.set(pos, []);
+        });
+
+        // Collect all edges connected to each side of this node
+        edges.forEach(edge => {
+          if (edge.type !== 'reactions') return;
+
+          if (edge.source === node.id && edge.sourceHandle) {
+            sideMap.get(edge.sourceHandle as HandlePosition)?.push(edge.id);
+          }
+          if (edge.target === node.id && edge.targetHandle) {
+            sideMap.get(edge.targetHandle as HandlePosition)?.push(edge.id);
+          }
+        });
+
+        // Create distribution metadata for each side
+        const nodeDistribution = new Map<HandlePosition, Array<{ edgeId: string; index: number; total: number }>>();
+        
+        sideMap.forEach((edgeIds, position) => {
+          const total = edgeIds.length;
+          const distribution = edgeIds.map((edgeId, index) => ({
+            edgeId,
+            index,
+            total
+          }));
+          nodeDistribution.set(position, distribution);
+        });
+
+        map.set(node.id, nodeDistribution);
+      });
+
+      return map;
+    }, [nodes, edges]);
+
     useEffect(() => {
       console.log('EDGES STATE CHANGED:', edges);
       console.log('Number of edges:', edges.length);
@@ -278,7 +321,8 @@ export const FlowCanvas = forwardRef<{
 
     const getHandlePosition = useCallback((
       nodeId: string,
-      handle: HandlePosition
+      handle: HandlePosition,
+      edgeId?: string
     ): { x: number; y: number } | null => {
       const node = nodes.find(n => n.id === nodeId);
       if (!node) return null;
@@ -286,15 +330,41 @@ export const FlowCanvas = forwardRef<{
       const { x: nodeX, y: nodeY } = node.position;
       const { width, height } = NODE_DIMENSIONS;
 
+      // Get distribution data for this node and handle
+      const nodeDistribution = edgeDistributionMap.get(nodeId);
+      const sideDistribution = nodeDistribution?.get(handle);
+      
+      let offsetMultiplier = 0;
+      
+      if (sideDistribution && edgeId) {
+        const edgeData = sideDistribution.find(d => d.edgeId === edgeId);
+        if (edgeData && edgeData.total > 1) {
+          // Calculate symmetric offset from center
+          const centerOffset = (edgeData.total - 1) / 2;
+          offsetMultiplier = edgeData.index - centerOffset;
+        }
+      }
+
+      // Spacing between handles when multiple edges exist
+      const HANDLE_SPACING = 25;
+      const offset = offsetMultiplier * HANDLE_SPACING;
+
       const positions: Record<HandlePosition, { x: number; y: number }> = {
-        top: { x:  nodeX + width / 2.55, y: nodeY - 42 },
-        bottom: { x:  nodeX + width / 2.5, y: nodeY + 125 },
+        top: { x: nodeX + width / 2.55, y: nodeY - 42 },
+        bottom: { x: nodeX + width / 2.5, y: nodeY + 125 },
         left: { x: nodeX - 40, y: nodeY + height / 4.4 },
-        right: { x: nodeX + width - 20, y: nodeY + height / 4.4},
+        right: { x: nodeX + width - 20, y: nodeY + height / 4.4 },
       };
 
-      return positions[handle];
-    }, [nodes]);
+      const basePos = positions[handle];
+
+      // Apply offset based on handle orientation
+      if (handle === 'top' || handle === 'bottom') {
+        return { x: basePos.x + offset, y: basePos.y };
+      } else {
+        return { x: basePos.x, y: basePos.y + offset };
+      }
+    }, [nodes, edgeDistributionMap]);
 
     const calculateTargetHandle = useCallback((
       sourcePos: { x: number; y: number },
@@ -417,9 +487,9 @@ export const FlowCanvas = forwardRef<{
         const targetNode = intersectingNodes[0];
         console.log('✅ Connection ended on node:', targetNode.id);
 
+        // Check if edge in THIS DIRECTION already exists (allow bidirectional)
         const existingEdge = edges.find(edge =>
-          (edge.source === connectionDragState.sourceNodeId && edge.target === targetNode.id) ||
-          (edge.source === targetNode.id && edge.target === connectionDragState.sourceNodeId)
+          edge.source === connectionDragState.sourceNodeId && edge.target === targetNode.id
         );
 
         if (!existingEdge) {
@@ -461,7 +531,7 @@ export const FlowCanvas = forwardRef<{
           console.log('🎯 Creating edge:', newEdge);
           addEdge(newEdge);
         } else {
-          console.log('⚠️ Connection already exists');
+          console.log('⚠️ Connection in this direction already exists');
         }
       } else {
         console.log('❌ Connection ended in empty space - cancelled');
@@ -592,22 +662,17 @@ export const FlowCanvas = forwardRef<{
         const fileName = `reaction-${edgeId}-${Date.now()}.txt`;
         const file = new File([code], fileName, { type: 'text/plain;charset=utf-8' });
 
-        // 🔑 decide: upload new or update existing
         let reactionFileId = codeEditorState.reactionFileId ?? null;
 
         if (reactionFileId != null) {
-          // ✅ already have file → UPDATE
           await apiService.updateReactionFile(reactionFileId, file);
         } else {
-          // ✅ no file yet → CREATE
           const uploadResult = await apiService.uploadFile(file, 'REACTION');
           reactionFileId = extractFileId(uploadResult?.data);
         }
 
-        // update code in local state (history, etc.)
         updateEdgeCode(edgeId, code);
 
-        // keep editor state in sync
         if (reactionFileId != null) {
           setCodeEditorState(prev =>
               prev
@@ -619,7 +684,6 @@ export const FlowCanvas = forwardRef<{
           );
         }
 
-        // update edge data in ReactFlow graph
         setEdges(prev =>
             prev.map(edge =>
                 edge.id === edgeId
@@ -897,16 +961,13 @@ export const FlowCanvas = forwardRef<{
             targetId: number;
             reactionFileId?: number | null;
           }>;
-          preserveExisting?: boolean; // Flag to preserve existing edges
+          preserveExisting?: boolean;
         }>;
 
         const relations = custom.detail?.relations ?? [];
         const preserveExisting = custom.detail?.preserveExisting ?? false;
         
-        // If preserveExisting is true, only add relations that don't already exist
-        // This prevents overwriting unsaved edges when adding a new metamodel
         relations.forEach(relation => {
-          // Match against both metaModelId and metaModelSourceId to handle all cases
           const sourceNode = nodes.find(n => 
             n.type === 'ecoreFile' && 
             (n.data?.metaModelId === relation.sourceId || n.data?.metaModelSourceId === relation.sourceId)
@@ -921,12 +982,9 @@ export const FlowCanvas = forwardRef<{
             return;
           }
 
-          // Check if edge already exists by backendRelationId
           const existsByBackendId = edges.some(edge => edge.data?.backendRelationId === relation.id);
           if (existsByBackendId) return;
 
-          // If preserveExisting is true, also check if there's already an edge between these nodes
-          // (even if it's not saved to backend yet)
           if (preserveExisting) {
             const existsBetweenNodes = edges.some(edge => 
               edge.type === 'reactions' &&
@@ -980,7 +1038,6 @@ export const FlowCanvas = forwardRef<{
     }, [edges]);
 
     const buildWorkspaceSnapshot = useCallback((): WorkspaceSnapshot => {
-      // metaModelIds = parent sourceId for each ecore node
       const metaModelIds = Array.from(
           new Set(
               nodes
@@ -995,7 +1052,6 @@ export const FlowCanvas = forwardRef<{
           .map(edge => {
             const sourceId = getMetaModelSourceIdForNode(edge.source);
             const targetId = getMetaModelSourceIdForNode(edge.target);
-            // Use 0 when there's no reaction file (backend expects a number, not null)
             const reactionFileId =
                 typeof edge.data?.reactionFileId === 'number'
                     ? edge.data.reactionFileId
@@ -1043,12 +1099,10 @@ export const FlowCanvas = forwardRef<{
         const count = seen.get(edge.id) ?? 0;
 
         if (count === 0) {
-          // first time we see this id -> ok
           seen.set(edge.id, 1);
           return edge;
         }
 
-        // duplicate id -> create a new one
         const newId = `${edge.id}__${count}`;
         seen.set(edge.id, count + 1);
         changed = true;
@@ -1100,6 +1154,7 @@ export const FlowCanvas = forwardRef<{
             isExpanded: expandedFileId === node.id,
             onConnectionStart: handleConnectionStart,
             isConnectionActive: connectionDragState?.isActive || false,
+            edgeDistribution: edgeDistributionMap.get(node.id),
           },
           selected: selectedFileId === node.id,
           draggable: !connectionDragState?.isActive,
@@ -1109,8 +1164,6 @@ export const FlowCanvas = forwardRef<{
       return node;
     });
 
-    // 🔍 Ensure all edge IDs are unique – ReactFlow + React need this
-// تضمین یکتایی id ولی بدون حذف edgeها
     const uniqueEdges = useMemo(() => {
       const idCount = new Map<string, number>();
 
@@ -1120,35 +1173,44 @@ export const FlowCanvas = forwardRef<{
         idCount.set(baseId, count + 1);
 
         if (count === 0) {
-          // اولین بار، همون id اصلی
           return { ...e, id: baseId };
         }
 
-        // دفعات بعد، id جدید بساز
         const newId = `${baseId}-dup-${count}`;
         console.warn('🔁 Renaming duplicate edge id:', baseId, '→', newId, e);
         return { ...e, id: newId };
       });
     }, [edges]);
 
-    const mappedEdges = uniqueEdges.map(edge => ({
-      ...edge,
-      data: {
-        ...edge.data,
-        onDoubleClick:
-            edge.type === 'reactions'
-                ? () => handleEdgeDoubleClick(edge.id)
-                : undefined,
-        routingStyle,
-        separation: 36,
-      },
-      selectable: edge.type === 'reactions',
-      focusable: edge.type === 'reactions',
-      style: {
-        ...edge.style,
-        pointerEvents: (edge.type === 'uml' ? 'none' : 'all') as React.CSSProperties['pointerEvents'],
-      },
-    }));
+    const mappedEdges = uniqueEdges.map(edge => {
+      // Get distribution metadata for this edge
+      const sourceDistribution = edgeDistributionMap.get(edge.source);
+      const targetDistribution = edgeDistributionMap.get(edge.target);
+      
+      const sourceData = sourceDistribution?.get(edge.sourceHandle as HandlePosition)?.find(d => d.edgeId === edge.id);
+      const targetData = targetDistribution?.get(edge.targetHandle as HandlePosition)?.find(d => d.edgeId === edge.id);
+
+      return {
+        ...edge,
+        data: {
+          ...edge.data,
+          onDoubleClick:
+              edge.type === 'reactions'
+                  ? () => handleEdgeDoubleClick(edge.id)
+                  : undefined,
+          routingStyle,
+          separation: 36,
+          parallelIndex: sourceData?.index ?? targetData?.index,
+          parallelCount: sourceData?.total ?? targetData?.total,
+        },
+        selectable: edge.type === 'reactions',
+        focusable: edge.type === 'reactions',
+        style: {
+          ...edge.style,
+          pointerEvents: (edge.type === 'uml' ? 'none' : 'all') as React.CSSProperties['pointerEvents'],
+        },
+      };
+    });
 
     const getConnectionLinePositions = () => {
       if (!connectionDragState?.isActive ||
@@ -1229,7 +1291,6 @@ export const FlowCanvas = forwardRef<{
           <Background />
         </ReactFlow>
 
-        {/* Connection Line */}
         {connectionLinePositions && (
           <ConnectionLine
             sourcePosition={connectionLinePositions.source}
@@ -1237,7 +1298,6 @@ export const FlowCanvas = forwardRef<{
           />
         )}
 
-        {/* Zoom & Control Buttons */}
         <div
           style={{
             position: 'absolute',
@@ -1264,7 +1324,6 @@ export const FlowCanvas = forwardRef<{
           )}
         </div>
 
-        {/* Drag Over Overlay */}
         {isDragOver && (
           <div style={{
             position: 'absolute',
@@ -1287,7 +1346,6 @@ export const FlowCanvas = forwardRef<{
           </div>
         )}
 
-        {/* Code Editor Modal */}
         {codeEditorState && (
           <CodeEditorModal
             isOpen={codeEditorState.isOpen}

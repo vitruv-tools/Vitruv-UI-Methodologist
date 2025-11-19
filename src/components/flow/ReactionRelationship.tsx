@@ -1,5 +1,5 @@
 import React from 'react';
-import { EdgeProps } from 'reactflow';
+import { EdgeProps, Position } from 'reactflow';
 
 interface ReactionRelationshipData {
   label?: string;
@@ -19,59 +19,94 @@ export function ReactionRelationship({
   sourceY,
   targetX,
   targetY,
+  sourcePosition,
+  targetPosition,
   data,
   selected,
   style,
 }: EdgeProps<ReactionRelationshipData>) {
-  // Compute orthogonal (Manhattan) path with a bend and parallel offset
-  const dx = targetX - sourceX;
-  const dy = targetY - sourceY;
-  const length = Math.max(Math.hypot(dx, dy), 0.0001);
-  const ux = dx / length;
-  const uy = dy / length;
-  // Perpendicular to the overall direction
-  const px = -uy;
-  const py = ux;
   
-  // Stable tiny spread per edge id to avoid clustering at crossings
-  const offset = 0;
+  // Calculate offset for multiple edges on the same side
+  const parallelCount = data?.parallelCount ?? 1;
+  const parallelIndex = data?.parallelIndex ?? 0;
+  
+  let sourceOffsetX = 0;
+  let sourceOffsetY = 0;
+  let targetOffsetX = 0;
+  let targetOffsetY = 0;
+  
+  if (parallelCount > 1) {
+    const EDGE_SPACING = 25;
+    const centerOffset = (parallelCount - 1) / 2;
+    const indexOffset = parallelIndex - centerOffset;
+    const offset = indexOffset * EDGE_SPACING;
+    
+    // Apply offset based on handle position
+    if (sourcePosition === Position.Top || sourcePosition === Position.Bottom) {
+      sourceOffsetX = offset;
+    } else {
+      sourceOffsetY = offset;
+    }
+    
+    if (targetPosition === Position.Top || targetPosition === Position.Bottom) {
+      targetOffsetX = offset;
+    } else {
+      targetOffsetY = offset;
+    }
+  }
+
+  const actualSourceX = sourceX + sourceOffsetX;
+  const actualSourceY = sourceY + sourceOffsetY;
+  const actualTargetX = targetX + targetOffsetX;
+  const actualTargetY = targetY + targetOffsetY;
+
+  const dx = actualTargetX - actualSourceX;
+  const dy = actualTargetY - actualSourceY;
 
   let edgePath: string;
   let labelX: number;
   let labelY: number;
+  let arrowX: number;
+  let arrowY: number;
+  let arrowAngle: number;
   
   if (data?.routingStyle === 'orthogonal') {
-    // 3-segment orthogonal
     const preferHorizontalFirst = Math.abs(dx) >= Math.abs(dy);
-    let p1x = sourceX;
-    let p1y = sourceY;
+    
     let bendX: number;
     let bendY: number;
     
-    // Extra fan-out near endpoints to reduce shared segments even across different pairs
     if (preferHorizontalFirst) {
-      bendX = sourceX + dx / 2 + px * (offset);
-      bendY = sourceY + py * (offset);
+      bendX = actualSourceX + dx / 2;
+      bendY = actualSourceY;
     } else {
-      bendX = sourceX + px * (offset);
-      bendY = sourceY + dy / 2 + py * (offset);
+      bendX = actualSourceX;
+      bendY = actualSourceY + dy / 2;
     }
     
     const p2x = bendX;
     const p2y = bendY;
-    const p3x = preferHorizontalFirst ? bendX : targetX + px * (offset);
-    const p3y = preferHorizontalFirst ? targetY + py * (offset) : bendY;
-    const p4x = targetX;
-    const p4y = targetY;
+    const p3x = preferHorizontalFirst ? bendX : actualTargetX;
+    const p3y = preferHorizontalFirst ? actualTargetY : bendY;
     
-    edgePath = `M ${p1x},${p1y} L ${p2x},${p2y} L ${p3x},${p3y} L ${p4x},${p4y}`;
+    edgePath = `M ${actualSourceX},${actualSourceY} L ${p2x},${p2y} L ${p3x},${p3y} L ${actualTargetX},${actualTargetY}`;
     labelX = (p2x + p3x) / 2;
     labelY = (p2y + p3y) / 2;
+    
+    arrowX = actualTargetX;
+    arrowY = actualTargetY;
+    
+    const finalDx = actualTargetX - p3x;
+    const finalDy = actualTargetY - p3y;
+    arrowAngle = Math.atan2(finalDy, finalDx) * (180 / Math.PI);
   } else {
-    // Curved quadratic path
-      edgePath = `M ${sourceX},${sourceY} L ${targetX},${targetY}`;
-      labelX = (sourceX + targetX) / 2;
-      labelY = (sourceY + targetY) / 2;
+    edgePath = `M ${actualSourceX},${actualSourceY} L ${actualTargetX},${actualTargetY}`;
+    labelX = (actualSourceX + actualTargetX) / 2;
+    labelY = (actualSourceY + actualTargetY) / 2;
+    
+    arrowX = actualTargetX;
+    arrowY = actualTargetY;
+    arrowAngle = Math.atan2(dy, dx) * (180 / Math.PI);
   }
 
   const handleDoubleClick = (e: React.MouseEvent) => {
@@ -83,57 +118,13 @@ export function ReactionRelationship({
     }
   };
 
-  // Code-Indikator wenn Code vorhanden
   const hasCode = data?.code && data.code.trim().length > 0;
-  
-  // Edge color from style prop or default
   const edgeColor = style?.stroke || '#3b82f6';
   const edgeWidth = style?.strokeWidth || 2;
-  
-  const connectionCount = Math.max(1, data?.parallelCount ?? 1);
-
-  // Unique marker IDs for this edge
-  const markerId = `arrowhead-${id}`;
-  const markerIdSelected = `arrowhead-${id}-selected`;
 
   return (
     <>
-      {/* Define arrow markers */}
-      <defs>
-        {/* Normal arrow marker */}
-        <marker
-          id={markerId}
-          markerWidth="10"
-          markerHeight="10"
-          refX="9"
-          refY="3"
-          orient="auto"
-          markerUnits="strokeWidth"
-        >
-          <path
-            d="M0,0 L0,6 L9,3 z"
-            fill={edgeColor}
-          />
-        </marker>
-        
-        {/* Selected arrow marker */}
-        <marker
-          id={markerIdSelected}
-          markerWidth="10"
-          markerHeight="10"
-          refX="9"
-          refY="3"
-          orient="auto"
-          markerUnits="strokeWidth"
-        >
-          <path
-            d="M0,0 L0,6 L9,3 z"
-            fill="#ef4444"
-          />
-        </marker>
-      </defs>
-
-      {/* Underlay halo to improve visibility at crossings */}
+      {/* Underlay halo for visibility */}
       <path
         id={`${id}-underlay`}
         d={edgePath}
@@ -148,7 +139,7 @@ export function ReactionRelationship({
         }}
       />
 
-      {/* Unsichtbare größere Klickfläche für bessere UX */}
+      {/* Invisible larger click area */}
       <path
         id={`${id}-clickarea`}
         d={edgePath}
@@ -161,7 +152,7 @@ export function ReactionRelationship({
         onDoubleClick={handleDoubleClick}
       />
 
-      {/* Main edge stroke with arrow marker */}
+      {/* Main edge stroke */}
       <path
         id={id}
         style={{
@@ -171,11 +162,22 @@ export function ReactionRelationship({
           cursor: 'pointer',
           strokeLinecap: 'round',
           strokeLinejoin: 'round',
-          markerEnd: `url(#${selected ? markerIdSelected : markerId})`,
         }}
         d={edgePath}
         onDoubleClick={handleDoubleClick}
       />
+
+      {/* Arrow marker at the end */}
+      <g transform={`translate(${arrowX}, ${arrowY}) rotate(${arrowAngle})`}>
+        <polygon
+          points="-10,-6 0,0 -10,6"
+          fill={selected ? '#ef4444' : edgeColor}
+          stroke={selected ? '#ef4444' : edgeColor}
+          strokeWidth="1"
+          style={{ cursor: 'pointer' }}
+          onDoubleClick={handleDoubleClick}
+        />
+      </g>
 
       {/* Label */}
       {data?.label && (
@@ -198,7 +200,7 @@ export function ReactionRelationship({
         </text>
       )}
 
-      {/* Code-Indikator - zeigt an, dass Code vorhanden ist */}
+      {/* Code indicator badge */}
       {hasCode && (
         <g onDoubleClick={handleDoubleClick} style={{ cursor: 'pointer' }}>
           <circle
@@ -226,8 +228,8 @@ export function ReactionRelationship({
         </g>
       )}
 
-      {/* Connection count badge: visible on selection to make relation more visible */}
-      {selected && connectionCount > 1 && (
+      {/* Connection count badge on selection */}
+      {selected && parallelCount > 1 && (
         <g>
           <rect
             x={labelX - 12}
@@ -252,7 +254,7 @@ export function ReactionRelationship({
               pointerEvents: 'none',
             }}
           >
-            {String(connectionCount)}
+            {String(parallelCount)}
           </text>
         </g>
       )}
