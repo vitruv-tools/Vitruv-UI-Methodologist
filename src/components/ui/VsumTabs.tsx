@@ -1,7 +1,7 @@
-import React, {useEffect, useState} from 'react';
-import {VsumDetails} from '../../types';
-import {apiService, MetaModelRelationRequest} from '../../services/api';
-import {WorkspaceSnapshot} from '../../types/workspace';
+import React, { useEffect, useState } from 'react';
+import { VsumDetails } from '../../types';
+import { apiService, MetaModelRelationRequest } from '../../services/api';
+import { WorkspaceSnapshot } from '../../types/workspace';
 
 interface OpenTabInstance {
     instanceId: string;
@@ -32,7 +32,10 @@ export const VsumTabs: React.FC<VsumTabsProps> = ({
     const [saving, setSaving] = useState(false);
     const [workspaceSnapshot, setWorkspaceSnapshot] = useState<WorkspaceSnapshot | null>(null);
 
-    // ---- helpers ---------------------------------------------------
+    const [popup, setPopup] = useState<{
+        message: string;
+        type: 'success' | 'error' | 'info';
+    } | null>(null);
 
     const areIdArraysEqual = (a: number[] = [], b: number[] = []) => {
         if (a.length !== b.length) return false;
@@ -44,13 +47,9 @@ export const VsumTabs: React.FC<VsumTabsProps> = ({
         return true;
     };
 
-    const computeDirty = (
-        backend: VsumDetails | undefined,
-        snapshot: WorkspaceSnapshot | null
-    ): boolean => {
+    const computeDirty = (backend: VsumDetails | undefined, snapshot: WorkspaceSnapshot | null): boolean => {
         if (!backend || !snapshot) return false;
 
-        // Compare meta-model IDs (sourceId on backend vs snapshot.metaModelIds)
         const backendSourceIds =
             backend.metaModels
                 ?.map(mm => mm.sourceId)
@@ -61,7 +60,6 @@ export const VsumTabs: React.FC<VsumTabsProps> = ({
             return true;
         }
 
-        // Compare relations (sourceId, targetId, reactionFileId)
         const backendRelsRaw = (backend as any).metaModelsRelation ?? [];
         const backendRels = (backendRelsRaw as Array<any>)
             .map(r => `${r.sourceId}->${r.targetId}#${r.reactionFileId ?? ''}`)
@@ -91,7 +89,7 @@ export const VsumTabs: React.FC<VsumTabsProps> = ({
             setError('');
             try {
                 const res = await apiService.getVsumDetails(id);
-                setDetailsById(prev => ({...prev, [id]: res.data}));
+                setDetailsById(prev => ({ ...prev, [id]: res.data }));
             } catch (e) {
                 setError(e instanceof Error ? e.message : 'Failed to load VSUM details');
             }
@@ -121,10 +119,7 @@ export const VsumTabs: React.FC<VsumTabsProps> = ({
             }
         };
 
-        // initial fetch
         update();
-
-        // polling to keep dirty state in sync with canvas
         const intervalId = window.setInterval(update, 800);
 
         return () => {
@@ -132,6 +127,14 @@ export const VsumTabs: React.FC<VsumTabsProps> = ({
             window.clearInterval(intervalId);
         };
     }, [requestWorkspaceSnapshot, activeInstanceId]);
+
+    useEffect(() => {
+        if (!popup) return;
+        const timer = window.setTimeout(() => {
+            setPopup(null);
+        }, 4000);
+        return () => window.clearTimeout(timer);
+    }, [popup]);
 
     // ---- save logic ------------------------------------------------
 
@@ -148,7 +151,7 @@ export const VsumTabs: React.FC<VsumTabsProps> = ({
             }
         }
         if (!snap) {
-            snap = {metaModelIds: [], metaModelRelationRequests: []};
+            snap = { metaModelIds: [], metaModelRelationRequests: [] };
         }
 
         const backendMetaModels = backend.metaModels ?? [];
@@ -163,7 +166,9 @@ export const VsumTabs: React.FC<VsumTabsProps> = ({
         const metaModelIds = snapshotIds.length > 0 ? snapshotIds : backendSourceIds;
 
         if (metaModelIds.length === 0) {
-            setError('At least one MetaModel is required');
+            const msg = 'At least one MetaModel is required';
+            setError(msg);
+            setPopup({ message: msg, type: 'error' });
             return;
         }
 
@@ -171,7 +176,7 @@ export const VsumTabs: React.FC<VsumTabsProps> = ({
             (snap.metaModelRelationRequests ?? []).filter(rel =>
                 metaModelIds.includes(rel.sourceId) &&
                 metaModelIds.includes(rel.targetId) &&
-                rel.reactionFileId > 0  // Only include relations with actual reaction files
+                rel.reactionFileId > 0
             );
 
         const relationsToSend: MetaModelRelationRequest[] | null =
@@ -187,23 +192,32 @@ export const VsumTabs: React.FC<VsumTabsProps> = ({
 
         setSaving(true);
         setError('');
+        setPopup(null);
         try {
-            await apiService.updateVsumSyncChanges(id, {
+            const response: any = await apiService.updateVsumSyncChanges(id, {
                 metaModelIds,
                 metaModelRelationRequests: relationsToSend,
             });
 
+            const backendMessage =
+                response?.data?.message ||
+                response?.message ||
+                'VSUM successfully updated';
+
+            setPopup({ message: backendMessage, type: 'success' });
+
             const res = await apiService.getVsumDetails(id);
-            setDetailsById(prev => ({...prev, [id]: res.data}));
+            setDetailsById(prev => ({ ...prev, [id]: res.data }));
 
             window.dispatchEvent(new CustomEvent('vitruv.refreshVsums'));
         } catch (e) {
-            setError(e instanceof Error ? e.message : 'Failed to save VSUM');
+            const msg = e instanceof Error ? e.message : 'Failed to save VSUM';
+            setError(msg);
+            setPopup({ message: msg, type: 'error' });
         } finally {
             setSaving(false);
         }
     };
-
 
     const onSave = async () => {
         const active = openTabs.find(t => t.instanceId === activeInstanceId);
@@ -211,8 +225,6 @@ export const VsumTabs: React.FC<VsumTabsProps> = ({
         if (!id) return;
         await saveById(id);
     };
-
-    // ---- derived UI state ------------------------------------------
 
     if (openTabs.length === 0) return null;
 
@@ -236,7 +248,7 @@ export const VsumTabs: React.FC<VsumTabsProps> = ({
                     cursor: saving ? 'progress' : 'default',
                 }}
             >
-                <div style={{display: 'flex', alignItems: 'center', gap: 10, padding: '8px 10px'}}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 10px' }}>
                     <div
                         style={{
                             display: 'flex',
@@ -322,7 +334,7 @@ export const VsumTabs: React.FC<VsumTabsProps> = ({
                     </div>
 
                     {activeInstanceId && (
-                        <div style={{display: 'flex', alignItems: 'center', gap: 8}}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                             {error && (
                                 <div
                                     role="alert"
@@ -379,6 +391,67 @@ export const VsumTabs: React.FC<VsumTabsProps> = ({
                 >
                     + ADD META MODELS
                 </button>
+            )}
+
+            {/* 🔹 Popup / toast */}
+            {popup && (
+                <div
+                    style={{
+                        position: 'fixed',
+                        right: 24,
+                        bottom: 24,
+                        zIndex: 9999,
+                        minWidth: 260,
+                        maxWidth: 400,
+                        padding: '10px 14px',
+                        borderRadius: 10,
+                        boxShadow: '0 6px 20px rgba(0,0,0,0.18)',
+                        background:
+                            popup.type === 'success'
+                                ? '#ecfdf3'
+                                : popup.type === 'error'
+                                    ? '#fef2f2'
+                                    : '#eff6ff',
+                        border:
+                            popup.type === 'success'
+                                ? '1px solid #bbf7d0'
+                                : popup.type === 'error'
+                                    ? '1px solid #fecaca'
+                                    : '1px solid #bfdbfe',
+                        color:
+                            popup.type === 'success'
+                                ? '#166534'
+                                : popup.type === 'error'
+                                    ? '#991b1b'
+                                    : '#1d4ed8',
+                        display: 'flex',
+                        alignItems: 'flex-start',
+                        gap: 8,
+                    }}
+                >
+                    <div style={{ fontSize: 16 }}>
+                        {popup.type === 'success' ? '✅' : popup.type === 'error' ? '⚠️' : 'ℹ️'}
+                    </div>
+                    <div style={{ flex: 1, fontSize: 13, fontWeight: 500, whiteSpace: 'pre-wrap' }}>
+                        {popup.message}
+                    </div>
+                    <button
+                        onClick={() => setPopup(null)}
+                        style={{
+                            border: 'none',
+                            background: 'transparent',
+                            color: 'inherit',
+                            cursor: 'pointer',
+                            fontSize: 16,
+                            lineHeight: 1,
+                            padding: 0,
+                            marginLeft: 4,
+                        }}
+                        aria-label="Close notification"
+                    >
+                        ×
+                    </button>
+                </div>
             )}
         </>
     );
