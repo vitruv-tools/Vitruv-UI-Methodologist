@@ -586,7 +586,7 @@ export const CreateModelModal: React.FC<CreateModelModalProps> = ({
         <div style={modalOverlayStyle} onClick={handleClose}>
           <div style={modalStyle} onClick={(e) => e.stopPropagation()}>
             <div style={modalHeaderStyle}>
-              <h2 style={modalTitleStyle}>Import</h2>
+              <h2 style={modalTitleStyle}>Import Meta Model</h2>
               <button
                   style={closeButtonStyle}
                   onClick={handleClose}
@@ -751,7 +751,7 @@ export const CreateModelModal: React.FC<CreateModelModalProps> = ({
                   onMouseEnter={(e) => canSave && !isLoading && !submitProgress.isSubmitting && Object.assign(e.currentTarget.style, buttonHoverStyle)}
                   onMouseLeave={(e) => canSave && !isLoading && !submitProgress.isSubmitting && Object.assign(e.currentTarget.style, primaryButtonStyle)}
               >
-                {isLoading ? 'Creating...' : canSave ? 'Import' : 'Complete All Fields'}
+                {isLoading ? 'Creating...' : canSave ? 'Import Meta Model' : 'Complete All Fields'}
               </button>
             </div>
           </div>
