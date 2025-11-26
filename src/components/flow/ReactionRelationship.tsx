@@ -119,7 +119,12 @@ export function ReactionRelationship({
     const dx = actualTargetX - actualSourceX;
     const dy = actualTargetY - actualSourceY;
 
-    if (data?.routingStyle === 'orthogonal') {
+    // Check if nodes are well-aligned for straight line
+    const isAlignedHorizontally = Math.abs(dy) < 30; // Within 30px vertically
+    const isAlignedVertically = Math.abs(dx) < 30; // Within 30px horizontally
+    const useStraightLine = isAlignedHorizontally || isAlignedVertically;
+
+    if (data?.routingStyle === 'orthogonal' && !useStraightLine) {
       const isSourceHorizontal = sourcePosition === Position.Right || sourcePosition === Position.Left;
 
       const edgePath = isSourceHorizontal
@@ -152,6 +157,7 @@ export function ReactionRelationship({
       };
     }
 
+    // Use straight line when aligned or routing style is 'curved'
     return {
       edgePath: `M ${actualSourceX},${actualSourceY} L ${actualTargetX},${actualTargetY}`,
       labelX: (actualSourceX + actualTargetX) / 2,
@@ -255,7 +261,17 @@ export function ReactionRelationship({
     data?.onDoubleClick?.(id);
   };
 
+  const [isHovered, setIsHovered] = React.useState(false);
   const hasCode = data?.code && data.code.trim().length > 0;
+  
+  const handleClick = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    // Toggle selection by dispatching a custom event
+    const event = new CustomEvent('edge-clicked', { 
+      detail: { edgeId: id, currentlySelected: selected } 
+    });
+    window.dispatchEvent(event);
+  };
   const edgeColor = style?.stroke || '#3b82f6';
   const edgeWidth = style?.strokeWidth || 2;
   const sourceParallelCount = data?.sourceParallelCount ?? 1;
@@ -269,11 +285,12 @@ export function ReactionRelationship({
         className="react-flow__edge-path"
         style={{
           stroke: '#ffffff',
-          strokeWidth: selected ? 8 : 7,
+          strokeWidth: selected ? 8 : (isHovered ? 8 : 7),
           opacity: 0.95,
           fill: 'none',
           strokeLinecap: 'round',
           strokeLinejoin: 'round',
+          transition: 'stroke-width 0.2s ease',
         }}
       />
 
@@ -281,36 +298,49 @@ export function ReactionRelationship({
         id={`${id}-clickarea`}
         d={edgePath}
         style={{
-          strokeWidth: '20px',
+          strokeWidth: '25px',
           stroke: 'transparent',
           fill: 'none',
           cursor: 'pointer',
         }}
+        onClick={handleClick}
         onDoubleClick={handleDoubleClick}
+        onMouseEnter={() => setIsHovered(true)}
+        onMouseLeave={() => setIsHovered(false)}
       />
 
       <path
         id={id}
         style={{
-          strokeWidth: selected ? `${Number(edgeWidth) + 2}px` : `${edgeWidth}px`,
-          stroke: selected ? '#ef4444' : edgeColor,
+          strokeWidth: selected ? `${Number(edgeWidth) + 2}px` : (isHovered ? `${Number(edgeWidth) + 1}px` : `${edgeWidth}px`),
+          stroke: selected ? '#ef4444' : (isHovered ? '#f87171' : edgeColor),
           fill: 'none',
           cursor: 'pointer',
           strokeLinecap: 'round',
           strokeLinejoin: 'round',
+          transition: 'stroke 0.2s ease, stroke-width 0.2s ease',
         }}
         d={edgePath}
+        onClick={handleClick}
         onDoubleClick={handleDoubleClick}
+        onMouseEnter={() => setIsHovered(true)}
+        onMouseLeave={() => setIsHovered(false)}
       />
 
       <g transform={`translate(${arrowX}, ${arrowY}) rotate(${arrowAngle})`}>
         <polygon
           points="-10,-6 0,0 -10,6"
-          fill={selected ? '#ef4444' : edgeColor}
-          stroke={selected ? '#ef4444' : edgeColor}
+          fill={selected ? '#ef4444' : (isHovered ? '#f87171' : edgeColor)}
+          stroke={selected ? '#ef4444' : (isHovered ? '#f87171' : edgeColor)}
           strokeWidth="1"
-          style={{ cursor: 'pointer' }}
+          style={{ 
+            cursor: 'pointer',
+            transition: 'fill 0.2s ease, stroke 0.2s ease'
+          }}
+          onClick={handleClick}
           onDoubleClick={handleDoubleClick}
+          onMouseEnter={() => setIsHovered(true)}
+          onMouseLeave={() => setIsHovered(false)}
         />
       </g>
 
@@ -323,11 +353,12 @@ export function ReactionRelationship({
           style={{
             fontSize: '12px',
             fontWeight: 700,
-            fill: selected ? '#ef4444' : '#1f2937',
+            fill: selected ? '#ef4444' : (isHovered ? '#f87171' : '#1f2937'),
             stroke: '#ffffff',
             strokeWidth: 3.5,
             paintOrder: 'stroke fill',
             pointerEvents: 'none',
+            transition: 'fill 0.2s ease',
           }}
         >
           {data.label}
@@ -340,9 +371,12 @@ export function ReactionRelationship({
             cx={labelX + 20}
             cy={labelY - 15}
             r="10"
-            fill={selected ? '#ef4444' : '#0e639c'}
+            fill={selected ? '#ef4444' : (isHovered ? '#f87171' : '#0e639c')}
             stroke="#fff"
             strokeWidth="2"
+            style={{
+              transition: 'fill 0.2s ease',
+            }}
           />
           <text
             x={labelX + 20}
@@ -361,7 +395,7 @@ export function ReactionRelationship({
         </g>
       )}
 
-      {selected && (sourceParallelCount > 1 || targetParallelCount > 1) && (
+      {(selected || isHovered) && (sourceParallelCount > 1 || targetParallelCount > 1) && (
         <g>
           <rect
             x={labelX - 12}
@@ -370,9 +404,12 @@ export function ReactionRelationship({
             ry={6}
             width={24}
             height={16}
-            fill="#ef4444"
+            fill={selected ? '#ef4444' : '#f87171'}
             stroke="#ffffff"
             strokeWidth={2}
+            style={{
+              transition: 'fill 0.2s ease',
+            }}
           />
           <text
             x={labelX}

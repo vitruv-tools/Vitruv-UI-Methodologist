@@ -229,7 +229,8 @@ export const FlowCanvas = forwardRef<{
             // Get fresh nodes from state
             setNodes(currentNodes => {
               const updatedEdges = currentEdges.map(edge => {
-                if (edge.type !== 'reactions') return edge;
+                // Update handles for both reactions and UML edges
+                if (edge.type !== 'reactions' && edge.type !== 'uml') return edge;
                 
                 const sourceNode = currentNodes.find(n => n.id === edge.source);
                 const targetNode = currentNodes.find(n => n.id === edge.target);
@@ -240,23 +241,37 @@ export const FlowCanvas = forwardRef<{
                 const dx = targetNode.position.x - sourceNode.position.x;
                 const dy = targetNode.position.y - sourceNode.position.y;
                 
-                let newSourceHandle: HandlePosition;
-                let newTargetHandle: HandlePosition;
+                let newSourceHandle: string;
+                let newTargetHandle: string;
                 
-                // Determine best handles based on dominant direction
-                if (Math.abs(dx) > Math.abs(dy)) {
-                  // Horizontal dominance
-                  newSourceHandle = dx > 0 ? 'right' : 'left';
-                  newTargetHandle = dx > 0 ? 'left' : 'right';
+                // Simple rule: compare vertical vs horizontal distance
+                if (Math.abs(dy) > Math.abs(dx)) {
+                  // Vertical connection is dominant
+                  if (dy > 0) {
+                    // Target is BELOW source
+                    newSourceHandle = edge.type === 'uml' ? 'bottom-source' : 'bottom';
+                    newTargetHandle = edge.type === 'uml' ? 'top-target' : 'top';
+                  } else {
+                    // Target is ABOVE source
+                    newSourceHandle = edge.type === 'uml' ? 'top-source' : 'top';
+                    newTargetHandle = edge.type === 'uml' ? 'bottom-target' : 'bottom';
+                  }
                 } else {
-                  // Vertical dominance
-                  newSourceHandle = dy > 0 ? 'bottom' : 'top';
-                  newTargetHandle = dy > 0 ? 'top' : 'bottom';
+                  // Horizontal connection is dominant
+                  if (dx > 0) {
+                    // Target is to the RIGHT of source
+                    newSourceHandle = edge.type === 'uml' ? 'right-source' : 'right';
+                    newTargetHandle = edge.type === 'uml' ? 'left-target' : 'left';
+                  } else {
+                    // Target is to the LEFT of source
+                    newSourceHandle = edge.type === 'uml' ? 'left-source' : 'left';
+                    newTargetHandle = edge.type === 'uml' ? 'right-target' : 'right';
+                  }
                 }
                 
                 // Only update if handles changed
                 if (edge.sourceHandle !== newSourceHandle || edge.targetHandle !== newTargetHandle) {
-                  console.log(`✅ Auto-updating edge ${edge.id} handles:`, {
+                  console.log(`✅ Auto-updating ${edge.type} edge ${edge.id} handles:`, {
                     positions: { dx, dy },
                     old: { source: edge.sourceHandle, target: edge.targetHandle },
                     new: { source: newSourceHandle, target: newTargetHandle }
@@ -462,10 +477,10 @@ export const FlowCanvas = forwardRef<{
       const offset = offsetMultiplier * HANDLE_SPACING;
 
       const positions: Record<HandlePosition, { x: number; y: number }> = {
-        top: { x: nodeX + width / 2.55, y: nodeY - 42 },
-        bottom: { x: nodeX + width / 2.5, y: nodeY + 125 },
-        left: { x: nodeX - 40, y: nodeY + height / 4.4 },
-        right: { x: nodeX + width - 20, y: nodeY + height / 4.4 },
+        top: { x: nodeX + width / 2, y: nodeY },                    // Center of top edge
+        bottom: { x: nodeX + width / 2, y: nodeY + height },        // Center of bottom edge
+        left: { x: nodeX, y: nodeY + height / 2 },                  // Center of left edge
+        right: { x: nodeX + width, y: nodeY + height / 2 },         // Center of right edge
       };
 
       const basePos = positions[handle];
@@ -1011,6 +1026,33 @@ export const FlowCanvas = forwardRef<{
     }, [addNode, handleEcoreFileExpand, handleEcoreFileSelect, onEcoreFileSelect, onEcoreFileDelete, onEcoreFileRename]);
 
 
+    // Helper function to calculate optimal handles based on which direction target is from source
+    const calculateOptimalHandles = useCallback((sourceNode: Node, targetNode: Node) => {
+      const dx = targetNode.position.x - sourceNode.position.x;
+      const dy = targetNode.position.y - sourceNode.position.y;
+      
+      // Simple rule: compare vertical vs horizontal distance
+      if (Math.abs(dy) > Math.abs(dx)) {
+        // Vertical connection is dominant
+        if (dy > 0) {
+          // Target is BELOW source
+          return { sourceHandle: 'bottom-source', targetHandle: 'top-target' };
+        } else {
+          // Target is ABOVE source
+          return { sourceHandle: 'top-source', targetHandle: 'bottom-target' };
+        }
+      } else {
+        // Horizontal connection is dominant
+        if (dx > 0) {
+          // Target is to the RIGHT of source
+          return { sourceHandle: 'right-source', targetHandle: 'left-target' };
+        } else {
+          // Target is to the LEFT of source
+          return { sourceHandle: 'left-source', targetHandle: 'right-target' };
+        }
+      }
+    }, []);
+
     useEffect(() => {
       const handleCreateReactionEdge = (e: Event) => {
         const custom = e as CustomEvent<{
@@ -1031,13 +1073,14 @@ export const FlowCanvas = forwardRef<{
         }
 
         const color = getColorForPair(sourceNodeId, targetNodeId);
+        const handles = calculateOptimalHandles(sourceNode, targetNode);
 
         const newEdge: Edge = {
           id: `edge-${sourceNodeId}-${targetNodeId}-${Date.now()}`,
           source: sourceNodeId,
           target: targetNodeId,
-          sourceHandle: 'right',
-          targetHandle: 'left',
+          sourceHandle: handles.sourceHandle,
+          targetHandle: handles.targetHandle,
           type: 'reactions',
           data: {
             code: code,
@@ -1062,7 +1105,7 @@ export const FlowCanvas = forwardRef<{
       return () => {
         window.removeEventListener('vitruv.createReactionEdge', handleCreateReactionEdge as EventListener);
       };
-    }, [nodes, addEdge, getColorForPair, getBackendMetaModelIdForNode, getMetaModelSourceIdForNode]);
+    }, [nodes, addEdge, getColorForPair, getBackendMetaModelIdForNode, getMetaModelSourceIdForNode, calculateOptimalHandles]);
 
     useEffect(() => {
       const handleLoadMetaModelRelations = (e: Event) => {
@@ -1110,14 +1153,15 @@ export const FlowCanvas = forwardRef<{
           }
 
           const color = getColorForPair(sourceNode.id, targetNode.id);
+          const handles = calculateOptimalHandles(sourceNode, targetNode);
 
           const newEdge: Edge = {
             id: `edge-backend-${relation.id}-${Date.now()}`,
             source: sourceNode.id,
             target: targetNode.id,
             type: 'reactions',
-            sourceHandle: 'right',
-            targetHandle: 'left',
+            sourceHandle: handles.sourceHandle,
+            targetHandle: handles.targetHandle,
             data: {
               code: '',
               backendRelationId: relation.id,
@@ -1139,7 +1183,7 @@ export const FlowCanvas = forwardRef<{
 
       window.addEventListener('vitruv.loadMetaModelRelations', handleLoadMetaModelRelations as EventListener);
       return () => window.removeEventListener('vitruv.loadMetaModelRelations', handleLoadMetaModelRelations as EventListener);
-    }, [nodes, edges, addEdge, getColorForPair]);
+    }, [nodes, edges, addEdge, getColorForPair, calculateOptimalHandles]);
 
     useEffect(() => {
       onDiagramChange?.(nodes, edges);
@@ -1227,6 +1271,365 @@ export const FlowCanvas = forwardRef<{
       }
     }, [edges, setEdges]);
 
+    // Advanced auto-layout with force-directed algorithm for optimal positioning
+    const autoLayoutEcoreBoxes = useCallback(() => {
+      const ecoreNodes = nodes.filter(n => n.type === 'ecoreFile');
+      if (ecoreNodes.length === 0) return;
+      
+      console.log('📐 Auto-layouting', ecoreNodes.length, 'ecore boxes with', edges.length, 'edges');
+      
+      const BOX_WIDTH = 280;
+      const BOX_HEIGHT = 180;
+      const MIN_HORIZONTAL_SPACING = 150;
+      const MIN_VERTICAL_SPACING = 120;
+      const START_X = 100;
+      const START_Y = 100;
+      
+      // Build adjacency map for connected nodes
+      const adjacencyMap = new Map<string, Set<string>>();
+      ecoreNodes.forEach(node => adjacencyMap.set(node.id, new Set()));
+      
+      edges.forEach(edge => {
+        if (edge.type === 'reactions') {
+          adjacencyMap.get(edge.source)?.add(edge.target);
+          adjacencyMap.get(edge.target)?.add(edge.source);
+        }
+      });
+      
+      // Find connected components
+      const visited = new Set<string>();
+      const components: string[][] = [];
+      const isolatedNodes: string[] = [];
+      
+      ecoreNodes.forEach(node => {
+        const connections = adjacencyMap.get(node.id)?.size || 0;
+        if (connections === 0) {
+          isolatedNodes.push(node.id);
+          visited.add(node.id);
+        }
+      });
+      
+      // BFS to find connected components
+      ecoreNodes.forEach(startNode => {
+        if (visited.has(startNode.id)) return;
+        
+        const component: string[] = [];
+        const queue = [startNode.id];
+        visited.add(startNode.id);
+        
+        while (queue.length > 0) {
+          const nodeId = queue.shift()!;
+          component.push(nodeId);
+          
+          adjacencyMap.get(nodeId)?.forEach(neighborId => {
+            if (!visited.has(neighborId)) {
+              visited.add(neighborId);
+              queue.push(neighborId);
+            }
+          });
+        }
+        
+        if (component.length > 0) {
+          components.push(component);
+        }
+      });
+      
+      console.log(`📊 Layout analysis: ${components.length} components, ${isolatedNodes.length} isolated nodes`);
+      
+      // Force-directed layout simulation
+      const layoutComponent = (componentNodes: string[], startX: number, startY: number) => {
+        if (componentNodes.length === 1) {
+          return new Map([[componentNodes[0], { x: startX, y: startY }]]);
+        }
+        
+        // Initialize positions randomly within a bounded area
+        const positions = new Map<string, { x: number; y: number }>();
+        componentNodes.forEach((nodeId, idx) => {
+          const angle = (idx / componentNodes.length) * 2 * Math.PI;
+          const radius = Math.max(200, componentNodes.length * 40);
+          positions.set(nodeId, {
+            x: startX + radius + radius * Math.cos(angle),
+            y: startY + radius + radius * Math.sin(angle)
+          });
+        });
+        
+        // Force-directed algorithm parameters
+        const ITERATIONS = 150;
+        const IDEAL_EDGE_LENGTH = BOX_WIDTH + MIN_HORIZONTAL_SPACING;
+        const REPULSION_STRENGTH = 50000;
+        const ATTRACTION_STRENGTH = 0.3;
+        const DAMPING = 0.85;
+        
+        for (let iter = 0; iter < ITERATIONS; iter++) {
+          const forces = new Map<string, { x: number; y: number }>();
+          componentNodes.forEach(nodeId => forces.set(nodeId, { x: 0, y: 0 }));
+          
+          // Repulsive forces between all nodes (prevent overlap)
+          for (let i = 0; i < componentNodes.length; i++) {
+            for (let j = i + 1; j < componentNodes.length; j++) {
+              const nodeA = componentNodes[i];
+              const nodeB = componentNodes[j];
+              const posA = positions.get(nodeA)!;
+              const posB = positions.get(nodeB)!;
+              
+              const dx = posB.x - posA.x;
+              const dy = posB.y - posA.y;
+              const distance = Math.sqrt(dx * dx + dy * dy) || 1;
+              
+              const force = REPULSION_STRENGTH / (distance * distance);
+              const fx = (dx / distance) * force;
+              const fy = (dy / distance) * force;
+              
+              const forceA = forces.get(nodeA)!;
+              const forceB = forces.get(nodeB)!;
+              forceA.x -= fx;
+              forceA.y -= fy;
+              forceB.x += fx;
+              forceB.y += fy;
+            }
+          }
+          
+          // Attractive forces for connected nodes
+          componentNodes.forEach(nodeId => {
+            const neighbors = adjacencyMap.get(nodeId) || new Set();
+            neighbors.forEach(neighborId => {
+              if (!componentNodes.includes(neighborId)) return;
+              
+              const posA = positions.get(nodeId)!;
+              const posB = positions.get(neighborId)!;
+              
+              const dx = posB.x - posA.x;
+              const dy = posB.y - posA.y;
+              const distance = Math.sqrt(dx * dx + dy * dy) || 1;
+              
+              const force = ATTRACTION_STRENGTH * (distance - IDEAL_EDGE_LENGTH);
+              const fx = (dx / distance) * force;
+              const fy = (dy / distance) * force;
+              
+              const forceA = forces.get(nodeId)!;
+              forceA.x += fx;
+              forceA.y += fy;
+            });
+          });
+          
+          // Apply forces with damping
+          componentNodes.forEach(nodeId => {
+            const pos = positions.get(nodeId)!;
+            const force = forces.get(nodeId)!;
+            
+            pos.x += force.x * DAMPING;
+            pos.y += force.y * DAMPING;
+          });
+        }
+        
+        // Normalize positions to start from (startX, startY)
+        let minX = Infinity, minY = Infinity;
+        positions.forEach(pos => {
+          minX = Math.min(minX, pos.x);
+          minY = Math.min(minY, pos.y);
+        });
+        
+        positions.forEach((pos, nodeId) => {
+          pos.x = pos.x - minX + startX;
+          pos.y = pos.y - minY + startY;
+        });
+        
+        return positions;
+      };
+      
+      // Layout each component
+      const positionMap = new Map<string, { x: number; y: number }>();
+      let currentY = START_Y;
+      
+      components.forEach(component => {
+        const componentPositions = layoutComponent(component, START_X, currentY);
+        componentPositions.forEach((pos, nodeId) => positionMap.set(nodeId, pos));
+        
+        // Find max Y to position next component
+        let maxY = 0;
+        componentPositions.forEach(pos => maxY = Math.max(maxY, pos.y));
+        currentY = maxY + BOX_HEIGHT + MIN_VERTICAL_SPACING * 2;
+      });
+      
+      // Layout isolated nodes in a compact grid
+      if (isolatedNodes.length > 0) {
+        const itemsPerRow = Math.ceil(Math.sqrt(isolatedNodes.length * 2));
+        isolatedNodes.forEach((nodeId, idx) => {
+          const row = Math.floor(idx / itemsPerRow);
+          const col = idx % itemsPerRow;
+          positionMap.set(nodeId, {
+            x: START_X + col * (BOX_WIDTH + MIN_HORIZONTAL_SPACING),
+            y: currentY + row * (BOX_HEIGHT + MIN_VERTICAL_SPACING)
+          });
+        });
+      }
+      
+      // Apply positions to nodes
+      const updatedNodes = nodes.map(node => {
+        if (node.type !== 'ecoreFile') return node;
+        const position = positionMap.get(node.id);
+        return position ? { ...node, position } : node;
+      });
+      
+      setNodes(updatedNodes);
+      
+      // Optimize edge handles after layout
+      setTimeout(() => {
+        const optimizedEdges = edges.map(edge => {
+          if (edge.type !== 'reactions') return edge;
+          
+          const sourceNode = updatedNodes.find(n => n.id === edge.source);
+          const targetNode = updatedNodes.find(n => n.id === edge.target);
+          
+          if (!sourceNode || !targetNode) return edge;
+          
+          const dx = targetNode.position.x - sourceNode.position.x;
+          const dy = targetNode.position.y - sourceNode.position.y;
+          
+          let sourceHandle, targetHandle;
+          
+          // Simple rule: compare vertical vs horizontal distance
+          if (Math.abs(dy) > Math.abs(dx)) {
+            // Vertical connection is dominant
+            if (dy > 0) {
+              // Target is BELOW source
+              sourceHandle = 'bottom-source';
+              targetHandle = 'top-target';
+            } else {
+              // Target is ABOVE source
+              sourceHandle = 'top-source';
+              targetHandle = 'bottom-target';
+            }
+          } else {
+            // Horizontal connection is dominant
+            if (dx > 0) {
+              // Target is to the RIGHT of source
+              sourceHandle = 'right-source';
+              targetHandle = 'left-target';
+            } else {
+              // Target is to the LEFT of source
+              sourceHandle = 'left-source';
+              targetHandle = 'right-target';
+            }
+          }
+          
+          return {
+            ...edge,
+            sourceHandle,
+            targetHandle,
+            data: {
+              ...edge.data,
+              customControlPoint: undefined
+            }
+          };
+        });
+        
+        setEdges(optimizedEdges);
+        
+        // Fit view after layout
+        setTimeout(() => {
+          reactFlowInstance?.fitView({ padding: 0.15, duration: 500 });
+        }, 50);
+      }, 50);
+    }, [nodes, edges, setNodes, setEdges, reactFlowInstance]);
+
+    // Listen for auto-layout trigger
+    useEffect(() => {
+      const handleAutoLayout = () => {
+        console.log('📐 Auto-layout triggered via event');
+        autoLayoutEcoreBoxes();
+      };
+
+      window.addEventListener('vitruv.autoLayoutWorkspace', handleAutoLayout as EventListener);
+
+      return () => {
+        window.removeEventListener('vitruv.autoLayoutWorkspace', handleAutoLayout as EventListener);
+      };
+    }, [autoLayoutEcoreBoxes]);
+
+    // Listen for edge clicks to toggle selection
+    useEffect(() => {
+      const handleEdgeClick = (e: Event) => {
+        const customEvent = e as CustomEvent<{ edgeId: string; currentlySelected: boolean }>;
+        const { edgeId, currentlySelected } = customEvent.detail;
+        
+        setEdges(prevEdges => prevEdges.map(edge => ({
+          ...edge,
+          selected: edge.id === edgeId ? !currentlySelected : false
+        })));
+        
+        // Also deselect all nodes
+        setNodes(prevNodes => prevNodes.map(node => ({
+          ...node,
+          selected: false
+        })));
+      };
+
+      window.addEventListener('edge-clicked', handleEdgeClick as EventListener);
+
+      return () => {
+        window.removeEventListener('edge-clicked', handleEdgeClick as EventListener);
+      };
+    }, [setEdges, setNodes]);
+
+    // Listen for UML edge control point dragging
+    useEffect(() => {
+      const handleControlDrag = (e: Event) => {
+        const customEvent = e as CustomEvent<{ edgeId: string; x: number; y: number }>;
+        const { edgeId, x, y } = customEvent.detail;
+        
+        if (!reactFlowInstance) return;
+        
+        // Convert screen coordinates to flow coordinates
+        const flowPosition = reactFlowInstance.screenToFlowPosition({ x, y });
+        
+        // Update only the specific edge being dragged
+        setEdges(prevEdges => {
+          return prevEdges.map(edge => {
+            if (edge.id === edgeId) {
+              return {
+                ...edge,
+                data: {
+                  ...edge.data,
+                  customControlPoint: flowPosition
+                }
+              };
+            }
+            return edge;
+          });
+        });
+      };
+
+      const handleControlDrop = (e: Event) => {
+        const customEvent = e as CustomEvent<{ edgeId: string; point: { x: number; y: number } | null }>;
+        const { edgeId, point } = customEvent.detail;
+        
+        // Finalize the control point position
+        setEdges(prevEdges => {
+          return prevEdges.map(edge => {
+            if (edge.id === edgeId) {
+              return {
+                ...edge,
+                data: {
+                  ...edge.data,
+                  customControlPoint: point
+                }
+              };
+            }
+            return edge;
+          });
+        });
+      };
+
+      window.addEventListener('uml-edge-control-drag', handleControlDrag as EventListener);
+      window.addEventListener('uml-edge-control-drop', handleControlDrop as EventListener);
+
+      return () => {
+        window.removeEventListener('uml-edge-control-drag', handleControlDrag as EventListener);
+        window.removeEventListener('uml-edge-control-drop', handleControlDrop as EventListener);
+      };
+    }, [setEdges, reactFlowInstance]);
+
     useImperativeHandle(ref, () => ({
       handleToolClick,
       loadDiagramData,
@@ -1240,7 +1643,8 @@ export const FlowCanvas = forwardRef<{
       canRedo,
       getReactionEdges,
       getWorkspaceSnapshot: buildWorkspaceSnapshot,
-    }), [handleToolClick, loadDiagramData, nodes, edges, addEcoreFile, resetExpandedFile, undo, redo, canUndo, canRedo, getReactionEdges, buildWorkspaceSnapshot]);
+      autoLayoutEcoreBoxes,
+    }), [handleToolClick, loadDiagramData, nodes, edges, addEcoreFile, resetExpandedFile, undo, redo, canUndo, canRedo, getReactionEdges, buildWorkspaceSnapshot, autoLayoutEcoreBoxes]);
 
     const mappedNodes = nodes.map(node => {
       if (node.type === 'editable') {
@@ -1531,10 +1935,18 @@ onReorderRequest: edge.type === 'reactions' ? handleEdgeReorderRequest : undefin
           nodesDraggable={isInteractive && !connectionDragState?.isActive}
           nodesConnectable={isInteractive}
           elementsSelectable={isInteractive}
+          edgesUpdatable={false}
+          edgesFocusable={isInteractive}
           panOnDrag={isInteractive}
           panOnScroll={isInteractive}
           zoomOnScroll={isInteractive}
           zoomOnPinch={isInteractive}
+          selectNodesOnDrag={false}
+          onPaneClick={() => {
+            // Deselect all nodes and edges when clicking on background
+            setNodes(nds => nds.map(n => ({ ...n, selected: false })));
+            setEdges(eds => eds.map(e => ({ ...e, selected: false })));
+          }}
         >
           <MiniMap position="bottom-right" style={{ bottom: 16, right: 16, zIndex: 30 }} />
           <Background />
