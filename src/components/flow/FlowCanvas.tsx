@@ -211,6 +211,33 @@ export const FlowCanvas = forwardRef<{
       updateEdgeCode,
     } = useFlowState();
 
+    // Helper function to calculate optimal handles based on which direction target is from source
+    const calculateOptimalHandles = useCallback((sourceNode: Node, targetNode: Node) => {
+      const dx = targetNode.position.x - sourceNode.position.x;
+      const dy = targetNode.position.y - sourceNode.position.y;
+      
+      // Simple rule: compare vertical vs horizontal distance
+      if (Math.abs(dy) > Math.abs(dx)) {
+        // Vertical connection is dominant
+        if (dy > 0) {
+          // Target is BELOW source
+          return { sourceHandle: 'bottom-source', targetHandle: 'top-target' };
+        } else {
+          // Target is ABOVE source
+          return { sourceHandle: 'top-source', targetHandle: 'bottom-target' };
+        }
+      } else {
+        // Horizontal connection is dominant
+        if (dx > 0) {
+          // Target is to the RIGHT of source
+          return { sourceHandle: 'right-source', targetHandle: 'left-target' };
+        } else {
+          // Target is to the LEFT of source
+          return { sourceHandle: 'left-source', targetHandle: 'right-target' };
+        }
+      }
+    }, []);
+
     // Wrapper to auto-update edge handles when nodes move
     const onNodesChange = useCallback((changes: any) => {
       originalOnNodesChange(changes);
@@ -237,40 +264,15 @@ export const FlowCanvas = forwardRef<{
                 
                 if (!sourceNode || !targetNode) return edge;
                 
-                // Calculate optimal handles based on relative positions
-                const dx = targetNode.position.x - sourceNode.position.x;
-                const dy = targetNode.position.y - sourceNode.position.y;
-                
-                let newSourceHandle: string;
-                let newTargetHandle: string;
-                
-                // Simple rule: compare vertical vs horizontal distance
-                if (Math.abs(dy) > Math.abs(dx)) {
-                  // Vertical connection is dominant
-                  if (dy > 0) {
-                    // Target is BELOW source
-                    newSourceHandle = edge.type === 'uml' ? 'bottom-source' : 'bottom';
-                    newTargetHandle = edge.type === 'uml' ? 'top-target' : 'top';
-                  } else {
-                    // Target is ABOVE source
-                    newSourceHandle = edge.type === 'uml' ? 'top-source' : 'top';
-                    newTargetHandle = edge.type === 'uml' ? 'bottom-target' : 'bottom';
-                  }
-                } else {
-                  // Horizontal connection is dominant
-                  if (dx > 0) {
-                    // Target is to the RIGHT of source
-                    newSourceHandle = edge.type === 'uml' ? 'right-source' : 'right';
-                    newTargetHandle = edge.type === 'uml' ? 'left-target' : 'left';
-                  } else {
-                    // Target is to the LEFT of source
-                    newSourceHandle = edge.type === 'uml' ? 'left-source' : 'left';
-                    newTargetHandle = edge.type === 'uml' ? 'right-target' : 'right';
-                  }
-                }
+                // Use calculateOptimalHandles to get new handles
+                const handles = calculateOptimalHandles(sourceNode, targetNode);
+                const newSourceHandle = edge.type === 'uml' ? handles.sourceHandle : handles.sourceHandle.replace('-source', '').replace('-target', '');
+                const newTargetHandle = edge.type === 'uml' ? handles.targetHandle : handles.targetHandle.replace('-target', '').replace('-source', '');
                 
                 // Only update if handles changed
                 if (edge.sourceHandle !== newSourceHandle || edge.targetHandle !== newTargetHandle) {
+                  const dx = targetNode.position.x - sourceNode.position.x;
+                  const dy = targetNode.position.y - sourceNode.position.y;
                   console.log(`✅ Auto-updating ${edge.type} edge ${edge.id} handles:`, {
                     positions: { dx, dy },
                     old: { source: edge.sourceHandle, target: edge.targetHandle },
@@ -304,7 +306,7 @@ export const FlowCanvas = forwardRef<{
           });
         }, 100);
       }
-    }, [originalOnNodesChange, setEdges, setNodes]);
+    }, [originalOnNodesChange, setEdges, setNodes, calculateOptimalHandles]);
 
     const edgeColorMapRef = useRef<Map<string, string>>(new Map());
     const nextColorIndexRef = useRef<number>(0);
@@ -1025,34 +1027,6 @@ export const FlowCanvas = forwardRef<{
       }
     }, [addNode, handleEcoreFileExpand, handleEcoreFileSelect, onEcoreFileSelect, onEcoreFileDelete, onEcoreFileRename]);
 
-
-    // Helper function to calculate optimal handles based on which direction target is from source
-    const calculateOptimalHandles = useCallback((sourceNode: Node, targetNode: Node) => {
-      const dx = targetNode.position.x - sourceNode.position.x;
-      const dy = targetNode.position.y - sourceNode.position.y;
-      
-      // Simple rule: compare vertical vs horizontal distance
-      if (Math.abs(dy) > Math.abs(dx)) {
-        // Vertical connection is dominant
-        if (dy > 0) {
-          // Target is BELOW source
-          return { sourceHandle: 'bottom-source', targetHandle: 'top-target' };
-        } else {
-          // Target is ABOVE source
-          return { sourceHandle: 'top-source', targetHandle: 'bottom-target' };
-        }
-      } else {
-        // Horizontal connection is dominant
-        if (dx > 0) {
-          // Target is to the RIGHT of source
-          return { sourceHandle: 'right-source', targetHandle: 'left-target' };
-        } else {
-          // Target is to the LEFT of source
-          return { sourceHandle: 'left-source', targetHandle: 'right-target' };
-        }
-      }
-    }, []);
-
     useEffect(() => {
       const handleCreateReactionEdge = (e: Event) => {
         const custom = e as CustomEvent<{
@@ -1483,40 +1457,13 @@ export const FlowCanvas = forwardRef<{
           
           if (!sourceNode || !targetNode) return edge;
           
-          const dx = targetNode.position.x - sourceNode.position.x;
-          const dy = targetNode.position.y - sourceNode.position.y;
-          
-          let sourceHandle, targetHandle;
-          
-          // Simple rule: compare vertical vs horizontal distance
-          if (Math.abs(dy) > Math.abs(dx)) {
-            // Vertical connection is dominant
-            if (dy > 0) {
-              // Target is BELOW source
-              sourceHandle = 'bottom-source';
-              targetHandle = 'top-target';
-            } else {
-              // Target is ABOVE source
-              sourceHandle = 'top-source';
-              targetHandle = 'bottom-target';
-            }
-          } else {
-            // Horizontal connection is dominant
-            if (dx > 0) {
-              // Target is to the RIGHT of source
-              sourceHandle = 'right-source';
-              targetHandle = 'left-target';
-            } else {
-              // Target is to the LEFT of source
-              sourceHandle = 'left-source';
-              targetHandle = 'right-target';
-            }
-          }
+          // Use calculateOptimalHandles to get optimal handles
+          const handles = calculateOptimalHandles(sourceNode, targetNode);
           
           return {
             ...edge,
-            sourceHandle,
-            targetHandle,
+            sourceHandle: handles.sourceHandle,
+            targetHandle: handles.targetHandle,
             data: {
               ...edge.data,
               customControlPoint: undefined
@@ -1531,7 +1478,7 @@ export const FlowCanvas = forwardRef<{
           reactFlowInstance?.fitView({ padding: 0.15, duration: 500 });
         }, 50);
       }, 50);
-    }, [nodes, edges, setNodes, setEdges, reactFlowInstance]);
+    }, [nodes, edges, setNodes, setEdges, reactFlowInstance, calculateOptimalHandles]);
 
     // Listen for auto-layout trigger
     useEffect(() => {

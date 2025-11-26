@@ -91,15 +91,6 @@ export function UMLRelationship({
   const index = Math.max(0, data?.parallelIndex ?? 0);
   const separation = Math.max(12, Math.min(72, data?.separation ?? 36));
   // Stable tiny spread per edge id to avoid clustering at crossings
-  const hash = (s: string) => {
-    let h = 0;
-    for (let i = 0; i < s.length; i++) h = ((h << 5) - h + s.charCodeAt(i)) | 0;
-    return h;
-  };
-  const jitter = ((hash(id) % 5) - 2) * 4;
-  const centerIndex = (count - 1) / 2; // centers around 0
-  const offsetMultiplier = (index - centerIndex);
-  const offset = offsetMultiplier * separation + jitter;
   let edgePath: string;
   let labelX: number;
   let labelY: number;
