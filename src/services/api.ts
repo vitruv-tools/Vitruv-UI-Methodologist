@@ -436,6 +436,15 @@ class ApiService {
   }
 
   /**
+   * Delete a file by ID
+   */
+  async deleteFile(id: number): Promise<{ data: any; message: string }> {
+    return this.authenticatedRequest(`/api/v1/files/${id}`, {
+      method: 'DELETE',
+    });
+  }
+
+  /**
    * vSUMS: Get all
    */
   async getVsumsPaginated(
