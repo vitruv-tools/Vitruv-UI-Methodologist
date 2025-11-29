@@ -50,156 +50,237 @@ export function ReactionRelationship({
   const [draggedSegmentIndex, setDraggedSegmentIndex] = useState<number | null>(null);
   const [tempControlPoint, setTempControlPoint] = useState<{ x: number; y: number } | null>(null);
 
+  
+
+  /**
+   * Calculates the offset for parallel edges to distribute them evenly.
+   *
+   * @param parallelCount - Total number of parallel edges
+   * @param parallelIndex - Index of the current edge (0-based)
+   * @param isVertical - Whether the layout is vertical
+   * @returns Object with X and Y offset for positioning
+   */
   const calculateParallelOffset = (
     parallelCount: number,
     parallelIndex: number,
     isVertical: boolean
   ): { offsetX: number; offsetY: number } => {
     if (parallelCount <= 1) return { offsetX: 0, offsetY: 0 };
-    
+
+    // Compute distance from the center
     const centerOffset = (parallelCount - 1) / 2;
     const indexOffset = parallelIndex - centerOffset;
     const offset = indexOffset * EDGE_SPACING;
-    
-    return isVertical 
+
+    // Apply offset based on orientation
+    return isVertical
       ? { offsetX: 0, offsetY: offset }
       : { offsetX: offset, offsetY: 0 };
   };
 
+
+
+  // Calculate offset for the source edge based on its parallel index and orientation
   const sourceOffset = calculateParallelOffset(
-    data?.sourceParallelCount ?? 1,
-    data?.sourceParallelIndex ?? 0,
-    sourcePosition === Position.Left || sourcePosition === Position.Right
+    data?.sourceParallelCount ?? 1, // Total parallel edges at source (default: 1)
+    data?.sourceParallelIndex ?? 0, // Current edge index at source (default: 0)
+    sourcePosition === Position.Left || sourcePosition === Position.Right // Vertical if source is left/right
   );
 
+  // Calculate offset for the target edge based on its parallel index and orientation
   const targetOffset = calculateParallelOffset(
-    data?.targetParallelCount ?? 1,
-    data?.targetParallelIndex ?? 0,
-    targetPosition === Position.Left || targetPosition === Position.Right
+    data?.targetParallelCount ?? 1, // Total parallel edges at target (default: 1)
+    data?.targetParallelIndex ?? 0, // Current edge index at target (default: 0)
+    targetPosition === Position.Left || targetPosition === Position.Right // Vertical if target is left/right
   );
+
 
   const actualSourceX = sourceX + sourceOffset.offsetX;
   const actualSourceY = sourceY + sourceOffset.offsetY;
   const actualTargetX = targetX + targetOffset.offsetX;
   const actualTargetY = targetY + targetOffset.offsetY;
 
-  const getClosestHandle = useCallback((point: { x: number; y: number }, nodeId: string): HandlePosition | null => {
-    if (!reactFlowInstance) return null;
-    
-    const node = reactFlowInstance.getNode(nodeId);
-    if (!node) return null;
 
-    const { width, height } = NODE_DIMENSIONS;
-    const handles = {
-      top: { x: node.position.x + width / 2, y: node.position.y },
-      bottom: { x: node.position.x + width / 2, y: node.position.y + height },
-      left: { x: node.position.x, y: node.position.y + height / 2 },
-      right: { x: node.position.x + width, y: node.position.y + height / 2 },
-    };
+  /**
+   * Finds the closest handle (top, bottom, left, right) on a node to a given point.
+   *
+   * @param point - The reference point
+   * @param nodeId - The ID of the node to check
+   * @returns The closest handle position or null if node not found
+   */
+  const getClosestHandle = useCallback(
+    (point: Readonly<{ x: number; y: number }>, nodeId: string): HandlePosition | null => {
+      if (!reactFlowInstance) return null;
 
-    let closestHandle: HandlePosition = 'right';
-    let minDistance = Infinity;
+      const node = reactFlowInstance.getNode(nodeId);
+      if (!node) return null;
 
-    (Object.keys(handles) as HandlePosition[]).forEach(handle => {
-      const handlePos = handles[handle];
-      const distance = Math.hypot(point.x - handlePos.x, point.y - handlePos.y);
-      if (distance < minDistance) {
-        minDistance = distance;
-        closestHandle = handle;
-      }
-    });
+      const { width, height } = NODE_DIMENSIONS;
 
-    return closestHandle;
-  }, [reactFlowInstance]);
-
-  // Memoize path calculations
-  const pathData = useMemo(() => {
-    const centerX = tempControlPoint?.x ?? data?.customControlPoint?.x ?? (actualSourceX + actualTargetX) / 2;
-    const centerY = tempControlPoint?.y ?? data?.customControlPoint?.y ?? (actualSourceY + actualTargetY) / 2;
-    const dx = actualTargetX - actualSourceX;
-    const dy = actualTargetY - actualSourceY;
-
-    if (data?.routingStyle === 'orthogonal') {
-      const isSourceHorizontal = sourcePosition === Position.Right || sourcePosition === Position.Left;
-
-      const edgePath = isSourceHorizontal
-        ? `M ${actualSourceX},${actualSourceY} L ${centerX},${actualSourceY} L ${centerX},${actualTargetY} L ${actualTargetX},${actualTargetY}`
-        : `M ${actualSourceX},${actualSourceY} L ${actualSourceX},${centerY} L ${actualTargetX},${centerY} L ${actualTargetX},${actualTargetY}`;
-
-      const segments: PathSegment[] = isSourceHorizontal
-        ? [
-            { start: { x: actualSourceX, y: actualSourceY }, end: { x: centerX, y: actualSourceY }, isHorizontal: true, canDrag: false },
-            { start: { x: centerX, y: actualSourceY }, end: { x: centerX, y: actualTargetY }, isHorizontal: false, canDrag: true },
-            { start: { x: centerX, y: actualTargetY }, end: { x: actualTargetX, y: actualTargetY }, isHorizontal: true, canDrag: false }
-          ]
-        : [
-            { start: { x: actualSourceX, y: actualSourceY }, end: { x: actualSourceX, y: centerY }, isHorizontal: false, canDrag: false },
-            { start: { x: actualSourceX, y: centerY }, end: { x: actualTargetX, y: centerY }, isHorizontal: true, canDrag: true },
-            { start: { x: actualTargetX, y: centerY }, end: { x: actualTargetX, y: actualTargetY }, isHorizontal: false, canDrag: false }
-          ];
-
-      const arrowAngles = { [Position.Top]: 90, [Position.Bottom]: -90, [Position.Left]: 0, [Position.Right]: 180 };
-
-      return {
-        edgePath,
-        labelX: centerX,
-        labelY: centerY,
-        arrowX: actualTargetX,
-        arrowY: actualTargetY,
-        arrowAngle: arrowAngles[targetPosition] ?? 0,
-        controlPoint: { x: centerX, y: centerY },
-        segments,
+      // Predefined handle positions for clarity and type safety
+      const handlePositions: Record<HandlePosition, { x: number; y: number }> = {
+        top:    { x: node.position.x + width / 2, y: node.position.y },
+        bottom: { x: node.position.x + width / 2, y: node.position.y + height },
+        left:   { x: node.position.x,             y: node.position.y + height / 2 },
+        right:  { x: node.position.x + width,     y: node.position.y + height / 2 },
       };
-    }
+
+      let closestHandle: HandlePosition = 'right';
+      let minDistanceSquared = Number.POSITIVE_INFINITY;
+
+      // Iterate over handles and compute squared distance (faster than Math.hypot)
+      for (const handle of ['top', 'bottom', 'left', 'right'] as const) {
+        const pos = handlePositions[handle];
+        const dx = point.x - pos.x;
+        const dy = point.y - pos.y;
+        const distanceSquared = dx * dx + dy * dy;
+
+        if (distanceSquared < minDistanceSquared) {
+          minDistanceSquared = distanceSquared;
+          closestHandle = handle;
+        }
+      }
+
+      return closestHandle;
+    },
+    [reactFlowInstance]
+  );
+
+
+
+/**
+ * Memoized calculation of edge path, label position, arrow angle, and segments.
+ */
+const pathData = useMemo(() => {
+  // Determine control point (temporary > custom > midpoint)
+  const centerX = tempControlPoint?.x ?? data?.customControlPoint?.x ?? (actualSourceX + actualTargetX) / 2;
+  const centerY = tempControlPoint?.y ?? data?.customControlPoint?.y ?? (actualSourceY + actualTargetY) / 2;
+
+  const dx = actualTargetX - actualSourceX;
+  const dy = actualTargetY - actualSourceY;
+
+  // Orthogonal routing style
+  if (data?.routingStyle === 'orthogonal') {
+    const isSourceHorizontal = sourcePosition === Position.Right || sourcePosition === Position.Left;
+
+    // Build edge path string
+    const edgePath = isSourceHorizontal
+      ? `M ${actualSourceX},${actualSourceY} L ${centerX},${actualSourceY} L ${centerX},${actualTargetY} L ${actualTargetX},${actualTargetY}`
+      : `M ${actualSourceX},${actualSourceY} L ${actualSourceX},${centerY} L ${actualTargetX},${centerY} L ${actualTargetX},${actualTargetY}`;
+
+    // Define path segments for interaction
+    const segments: PathSegment[] = isSourceHorizontal
+      ? [
+          { start: { x: actualSourceX, y: actualSourceY }, end: { x: centerX, y: actualSourceY }, isHorizontal: true, canDrag: false },
+          { start: { x: centerX, y: actualSourceY }, end: { x: centerX, y: actualTargetY }, isHorizontal: false, canDrag: true },
+          { start: { x: centerX, y: actualTargetY }, end: { x: actualTargetX, y: actualTargetY }, isHorizontal: true, canDrag: false },
+        ]
+      : [
+          { start: { x: actualSourceX, y: actualSourceY }, end: { x: actualSourceX, y: centerY }, isHorizontal: false, canDrag: false },
+          { start: { x: actualSourceX, y: centerY }, end: { x: actualTargetX, y: centerY }, isHorizontal: true, canDrag: true },
+          { start: { x: actualTargetX, y: centerY }, end: { x: actualTargetX, y: actualTargetY }, isHorizontal: false, canDrag: false },
+        ];
+
+    // Arrow angle mapping for orthogonal edges
+    const arrowAngles: Record<Position, number> = {
+      [Position.Top]: 90,
+      [Position.Bottom]: -90,
+      [Position.Left]: 0,
+      [Position.Right]: 180,
+    };
 
     return {
-      edgePath: `M ${actualSourceX},${actualSourceY} L ${actualTargetX},${actualTargetY}`,
-      labelX: (actualSourceX + actualTargetX) / 2,
-      labelY: (actualSourceY + actualTargetY) / 2,
+      edgePath,
+      labelX: centerX,
+      labelY: centerY,
       arrowX: actualTargetX,
       arrowY: actualTargetY,
-      arrowAngle: Math.atan2(dy, dx) * (180 / Math.PI),
-      controlPoint: null,
-      segments: [],
+      arrowAngle: arrowAngles[targetPosition] ?? 0,
+      controlPoint: { x: centerX, y: centerY },
+      segments,
     };
-  }, [
-    actualSourceX,
-    actualSourceY,
-    actualTargetX,
-    actualTargetY,
-    data?.routingStyle,
-    data?.customControlPoint,
-    tempControlPoint,
-    sourcePosition,
-    targetPosition,
-  ]);
+  }
+
+  // Default: straight line routing
+  return {
+    edgePath: `M ${actualSourceX},${actualSourceY} L ${actualTargetX},${actualTargetY}`,
+    labelX: (actualSourceX + actualTargetX) / 2,
+    labelY: (actualSourceY + actualTargetY) / 2,
+    arrowX: actualTargetX,
+    arrowY: actualTargetY,
+    arrowAngle: Math.atan2(dy, dx) * (180 / Math.PI),
+    controlPoint: null,
+    segments: [],
+  };
+}, [
+  actualSourceX,
+  actualSourceY,
+  actualTargetX,
+  actualTargetY,
+  data?.routingStyle,
+  data?.customControlPoint,
+  tempControlPoint,
+  sourcePosition,
+  targetPosition,
+]);
+
 
   const { edgePath, labelX, labelY, arrowX, arrowY, arrowAngle, controlPoint, segments } = pathData;
 
-  const handleSegmentDragStart = useCallback((e: React.PointerEvent, segmentIndex: number) => {
+ 
+/**
+ * Handles the start of a segment drag operation.
+ *
+ * @param e - Pointer event triggered on drag start
+ * @param segmentIndex - Index of the segment being dragged
+ */
+const handleSegmentDragStart = useCallback(
+  (e: React.PointerEvent, segmentIndex: number) => {
+    // Prevent default behavior and stop event bubbling
     e.stopPropagation();
     e.preventDefault();
 
+    // Attempt to capture the pointer for consistent drag events
     const targetEl = e.target as HTMLElement;
     if (targetEl.setPointerCapture) {
-      try { targetEl.setPointerCapture(e.pointerId); } catch {}
+      try {
+        targetEl.setPointerCapture(e.pointerId);
+      } catch {
+        // Ignore errors (e.g., unsupported browsers)
+      }
     }
 
+    // Ensure required state and instance are available
     if (!reactFlowInstance || !controlPoint) return;
 
+    // Update drag state
     setIsDraggingSegment(true);
     setDraggedSegmentIndex(segmentIndex);
     setTempControlPoint(controlPoint);
-    data?.onEdgeDragStart?.(id);
-  }, [id, data, reactFlowInstance, controlPoint]);
 
-  const handleSegmentDrag = useCallback((e: PointerEvent) => {
+    // Trigger optional callback for drag start
+    data?.onEdgeDragStart?.(id);
+  },
+  [id, data, reactFlowInstance, controlPoint]
+);
+
+
+/**
+ * Handles segment dragging by updating the control point and related edge state.
+ *
+ * @param e - Pointer event during drag
+ */
+const handleSegmentDrag = useCallback(
+  (e: PointerEvent) => {
     if (!isDraggingSegment || draggedSegmentIndex === null || !reactFlowInstance || !controlPoint) return;
 
+    // Convert screen coordinates to flow coordinates
     const flowPos = reactFlowInstance.screenToFlowPosition({ x: e.clientX, y: e.clientY });
+
     const segment = segments[draggedSegmentIndex];
     if (!segment) return;
 
+    // Update control point based on segment orientation
     const newControlPoint = { ...controlPoint };
     if (segment.isHorizontal) {
       newControlPoint.y = flowPos.y;
@@ -207,42 +288,77 @@ export function ReactionRelationship({
       newControlPoint.x = flowPos.x;
     }
 
+    // Update temporary control point and trigger callbacks
     setTempControlPoint(newControlPoint);
     data?.onEdgeDrag?.(id, newControlPoint);
 
+    // Check if handle positions need to change
     const newSourceHandle = getClosestHandle(newControlPoint, source);
     const newTargetHandle = getClosestHandle(newControlPoint, target);
 
-    if (newSourceHandle && newTargetHandle && 
-        (newSourceHandle !== sourcePosition || newTargetHandle !== targetPosition)) {
+    if (
+      newSourceHandle &&
+      newTargetHandle &&
+      (newSourceHandle !== sourcePosition || newTargetHandle !== targetPosition)
+    ) {
       data?.onHandleChange?.(id, newSourceHandle, newTargetHandle);
     }
 
+    // Notify reorder request
     data?.onReorderRequest?.(id, newControlPoint);
-  }, [isDraggingSegment, draggedSegmentIndex, id, reactFlowInstance, data, segments, controlPoint, getClosestHandle, source, target, sourcePosition, targetPosition]);
+  },
+  [
+    isDraggingSegment,
+    draggedSegmentIndex,
+    id,
+    reactFlowInstance,
+    data,
+    segments,
+    controlPoint,
+    getClosestHandle,
+    source,
+    target,
+    sourcePosition,
+    targetPosition,
+  ]
+);
 
-  const handleSegmentDragEnd = useCallback((e: PointerEvent) => {
+/**
+ * Handles the end of a segment drag operation.
+ *
+ * @param e - Pointer event triggered on drag end
+ */
+const handleSegmentDragEnd = useCallback(
+  (e: PointerEvent) => {
     if (!isDraggingSegment) return;
 
+    // Trigger drag end callback if control point exists
     if (tempControlPoint) {
       data?.onEdgeDragEnd?.(id, tempControlPoint);
     }
 
+    // Reset drag state
     setIsDraggingSegment(false);
     setDraggedSegmentIndex(null);
-  }, [isDraggingSegment, id, data, tempControlPoint]);
+  },
+  [isDraggingSegment, id, data, tempControlPoint]
+);
 
-  useEffect(() => {
-    if (!isDraggingSegment) return;
+/**
+ * Attach and clean up global pointer event listeners during drag.
+ */
+useEffect(() => {
+  if (!isDraggingSegment) return;
 
-    document.addEventListener('pointermove', handleSegmentDrag);
-    document.addEventListener('pointerup', handleSegmentDragEnd);
+  document.addEventListener('pointermove', handleSegmentDrag);
+  document.addEventListener('pointerup', handleSegmentDragEnd);
 
-    return () => {
-      document.removeEventListener('pointermove', handleSegmentDrag);
-      document.removeEventListener('pointerup', handleSegmentDragEnd);
-    };
-  }, [isDraggingSegment, handleSegmentDrag, handleSegmentDragEnd]);
+  return () => {
+    document.removeEventListener('pointermove', handleSegmentDrag);
+    document.removeEventListener('pointerup', handleSegmentDragEnd);
+  };
+}, [isDraggingSegment, handleSegmentDrag, handleSegmentDragEnd]);
+
 
   useEffect(() => {
     if (!selected) {
@@ -261,144 +377,155 @@ export function ReactionRelationship({
   const sourceParallelCount = data?.sourceParallelCount ?? 1;
   const targetParallelCount = data?.targetParallelCount ?? 1;
 
-  return (
-    <>
-      <path
-        id={`${id}-underlay`}
-        d={edgePath}
-        className="react-flow__edge-path"
+
+return (
+  <>
+    {/* Underlay path for visual thickness */}
+    <path
+      id={`${id}-underlay`}
+      d={edgePath}
+      className="react-flow__edge-path"
+      style={{
+        stroke: '#ffffff',
+        strokeWidth: selected ? 8 : 7,
+        opacity: 0.95,
+        fill: 'none',
+        strokeLinecap: 'round',
+        strokeLinejoin: 'round',
+      }}
+    />
+
+    {/* Invisible click area for better interaction */}
+    <path
+      id={`${id}-clickarea`}
+      d={edgePath}
+      style={{
+        strokeWidth: '20px',
+        stroke: 'transparent',
+        fill: 'none',
+        cursor: 'pointer',
+      }}
+      onDoubleClick={handleDoubleClick}
+    />
+
+    {/* Main edge path */}
+    <path
+      id={id}
+      d={edgePath}
+      style={{
+        strokeWidth: selected ? `${Number(edgeWidth) + 2}px` : `${edgeWidth}px`,
+        stroke: selected ? '#ef4444' : edgeColor,
+        fill: 'none',
+        cursor: 'pointer',
+        strokeLinecap: 'round',
+        strokeLinejoin: 'round',
+      }}
+      onDoubleClick={handleDoubleClick}
+    />
+
+    {/* Arrow marker */}
+    <g transform={`translate(${arrowX}, ${arrowY}) rotate(${arrowAngle})`}>
+      <polygon
+        points="-10,-6 0,0 -10,6"
+        fill={selected ? '#ef4444' : edgeColor}
+        stroke={selected ? '#ef4444' : edgeColor}
+        strokeWidth="1"
+        style={{ cursor: 'pointer' }}
+        onDoubleClick={handleDoubleClick}
+      />
+    </g>
+
+    {/* Edge label */}
+    {data?.label && (
+      <text
+        x={labelX}
+        y={labelY}
+        textAnchor="middle"
+        dominantBaseline="middle"
         style={{
+          fontSize: '12px',
+          fontWeight: 700,
+          fill: selected ? '#ef4444' : '#1f2937',
           stroke: '#ffffff',
-          strokeWidth: selected ? 8 : 7,
-          opacity: 0.95,
-          fill: 'none',
-          strokeLinecap: 'round',
-          strokeLinejoin: 'round',
+          strokeWidth: 3.5,
+          paintOrder: 'stroke fill',
+          pointerEvents: 'none',
         }}
-      />
+      >
+        {data.label}
+      </text>
+    )}
 
-      <path
-        id={`${id}-clickarea`}
-        d={edgePath}
-        style={{
-          strokeWidth: '20px',
-          stroke: 'transparent',
-          fill: 'none',
-          cursor: 'pointer',
-        }}
-        onDoubleClick={handleDoubleClick}
-      />
-
-      <path
-        id={id}
-        style={{
-          strokeWidth: selected ? `${Number(edgeWidth) + 2}px` : `${edgeWidth}px`,
-          stroke: selected ? '#ef4444' : edgeColor,
-          fill: 'none',
-          cursor: 'pointer',
-          strokeLinecap: 'round',
-          strokeLinejoin: 'round',
-        }}
-        d={edgePath}
-        onDoubleClick={handleDoubleClick}
-      />
-
-      <g transform={`translate(${arrowX}, ${arrowY}) rotate(${arrowAngle})`}>
-        <polygon
-          points="-10,-6 0,0 -10,6"
-          fill={selected ? '#ef4444' : edgeColor}
-          stroke={selected ? '#ef4444' : edgeColor}
-          strokeWidth="1"
-          style={{ cursor: 'pointer' }}
-          onDoubleClick={handleDoubleClick}
+    {/* Code indicator */}
+    {hasCode && (
+      <g onDoubleClick={handleDoubleClick} style={{ cursor: 'pointer' }}>
+        <circle
+          cx={labelX + 20}
+          cy={labelY - 15}
+          r="10"
+          fill={selected ? '#ef4444' : '#0e639c'}
+          stroke="#fff"
+          strokeWidth="2"
         />
-      </g>
-
-      {data?.label && (
         <text
-          x={labelX}
-          y={labelY}
+          x={labelX + 20}
+          y={labelY - 15}
           textAnchor="middle"
           dominantBaseline="middle"
           style={{
-            fontSize: '12px',
-            fontWeight: 700,
-            fill: selected ? '#ef4444' : '#1f2937',
-            stroke: '#ffffff',
-            strokeWidth: 3.5,
-            paintOrder: 'stroke fill',
+            fontSize: '11px',
+            fontWeight: 'bold',
+            fill: '#fff',
             pointerEvents: 'none',
           }}
         >
-          {data.label}
+          {'</>'}
         </text>
-      )}
+      </g>
+    )}
 
-      {hasCode && (
-        <g onDoubleClick={handleDoubleClick} style={{ cursor: 'pointer' }}>
-          <circle
-            cx={labelX + 20}
-            cy={labelY - 15}
-            r="10"
-            fill={selected ? '#ef4444' : '#0e639c'}
-            stroke="#fff"
-            strokeWidth="2"
-          />
-          <text
-            x={labelX + 20}
-            y={labelY - 15}
-            textAnchor="middle"
-            dominantBaseline="middle"
-            style={{
-              fontSize: '11px',
-              fontWeight: 'bold',
-              fill: '#fff',
-              pointerEvents: 'none',
-            }}
-          >
-            {'</>'}
-          </text>
-        </g>
-      )}
+    {/* Parallel edge count indicator */}
+    {selected && (sourceParallelCount > 1 || targetParallelCount > 1) && (
+      <g>
+        <rect
+          x={labelX - 12}
+          y={labelY + 8}
+          rx={6}
+          ry={6}
+          width={24}
+          height={16}
+          fill="#ef4444"
+          stroke="#ffffff"
+          strokeWidth={2}
+        />
+        <text
+          x={labelX}
+          y={labelY + 16}
+          textAnchor="middle"
+          dominantBaseline="middle"
+          style={{
+            fontSize: '10px',
+            fontWeight: 800,
+            fill: '#ffffff',
+            pointerEvents: 'none',
+          }}
+        >
+          {String(Math.max(sourceParallelCount, targetParallelCount))}
+        </text>
+      </g>
+    )}
 
-      {selected && (sourceParallelCount > 1 || targetParallelCount > 1) && (
-        <g>
-          <rect
-            x={labelX - 12}
-            y={labelY + 8}
-            rx={6}
-            ry={6}
-            width={24}
-            height={16}
-            fill="#ef4444"
-            stroke="#ffffff"
-            strokeWidth={2}
-          />
-          <text
-            x={labelX}
-            y={labelY + 16}
-            textAnchor="middle"
-            dominantBaseline="middle"
-            style={{
-              fontSize: '10px',
-              fontWeight: 800,
-              fill: '#ffffff',
-              pointerEvents: 'none',
-            }}
-          >
-            {String(Math.max(sourceParallelCount, targetParallelCount))}
-          </text>
-        </g>
-      )}
-
-      {selected && data?.routingStyle === 'orthogonal' && segments.map((segment, index) => {
+    {/* Draggable segments for orthogonal routing */}
+    {selected && data?.routingStyle === 'orthogonal' &&
+      segments.map((segment, index) => {
         if (!segment.canDrag) return null;
-        
+
         const segmentPath = `M ${segment.start.x},${segment.start.y} L ${segment.end.x},${segment.end.y}`;
         const isBeingDragged = isDraggingSegment && draggedSegmentIndex === index;
-        
+
         return (
           <g key={`segment-${index}`}>
+            {/* Invisible drag area */}
             <path
               d={segmentPath}
               style={{
@@ -410,7 +537,8 @@ export function ReactionRelationship({
               }}
               onPointerDown={(e) => handleSegmentDragStart(e, index)}
             />
-            
+
+            {/* Visual segment indicator */}
             <path
               d={segmentPath}
               style={{
@@ -425,17 +553,19 @@ export function ReactionRelationship({
         );
       })}
 
-      {selected && data?.routingStyle === 'orthogonal' && controlPoint && (
-        <circle
-          cx={controlPoint.x}
-          cy={controlPoint.y}
-          r="6"
-          fill={isDraggingSegment ? '#3b82f6' : '#ffffff'}
-          stroke={edgeColor}
-          strokeWidth="2"
-          style={{ pointerEvents: 'none' }}
-        />
-      )}
-    </>
-  );
+    {/* Control point indicator */}
+    {selected && data?.routingStyle === 'orthogonal' && controlPoint && (
+      <circle
+        cx={controlPoint.x}
+        cy={controlPoint.y}
+        r="6"
+        fill={isDraggingSegment ? '#3b82f6' : '#ffffff'}
+        stroke={edgeColor}
+        strokeWidth="2"
+        style={{ pointerEvents: 'none' }}
+      />
+    )}
+  </>
+);
+
 }
