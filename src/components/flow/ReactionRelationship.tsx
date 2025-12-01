@@ -1,34 +1,16 @@
 import React, { useState, useCallback, useEffect, useMemo } from 'react';
 import { EdgeProps, Position, useReactFlow } from 'reactflow';
 
-interface ReactionRelationshipData {
-  label?: string;
-  code?: string;
-  onDoubleClick?: (edgeId: string) => void;
-  routingStyle?: 'curved' | 'orthogonal';
-  sourceParallelIndex?: number;
-  sourceParallelCount?: number;
-  targetParallelIndex?: number;
-  targetParallelCount?: number;
-  customControlPoint?: { x: number; y: number };
-  onEdgeDragStart?: (edgeId: string) => void;
-  onEdgeDrag?: (edgeId: string, point: { x: number; y: number }) => void;
-  onEdgeDragEnd?: (edgeId: string, point: { x: number; y: number }) => void;
-  onHandleChange?: (edgeId: string, sourceHandle: string, targetHandle: string) => void;
-  onReorderRequest?: (edgeId: string, controlPoint: { x: number; y: number }) => void;
-}
 
-type HandlePosition = 'top' | 'bottom' | 'left' | 'right';
+// Import from edgeTypes.ts
+import {
+  ReactionRelationshipData,
+  PathSegment,
+  NODE_DIMENSIONS,
+  EDGE_SPACING,
+  Point,
+} from './edgeTypes';
 
-const NODE_DIMENSIONS = { width: 220, height: 180 };
-const EDGE_SPACING = 25;
-
-interface PathSegment {
-  start: { x: number; y: number };
-  end: { x: number; y: number };
-  isHorizontal: boolean;
-  canDrag: boolean;
-}
 
 export function ReactionRelationship({
   id,
@@ -109,7 +91,7 @@ export function ReactionRelationship({
    * @returns The closest handle position or null if node not found
    */
   const getClosestHandle = useCallback(
-    (point: Readonly<{ x: number; y: number }>, nodeId: string): HandlePosition | null => {
+    (point: Readonly<{ x: number; y: number }>, nodeId: string): Position | null => {
       if (!reactFlowInstance) return null;
 
       const node = reactFlowInstance.getNode(nodeId);
@@ -118,28 +100,35 @@ export function ReactionRelationship({
       const { width, height } = NODE_DIMENSIONS;
 
       // Predefined handle positions for clarity and type safety
-      const handlePositions: Record<HandlePosition, { x: number; y: number }> = {
-        top:    { x: node.position.x + width / 2, y: node.position.y },
-        bottom: { x: node.position.x + width / 2, y: node.position.y + height },
-        left:   { x: node.position.x,             y: node.position.y + height / 2 },
-        right:  { x: node.position.x + width,     y: node.position.y + height / 2 },
-      };
+      
 
-      let closestHandle: HandlePosition = 'right';
-      let minDistanceSquared = Number.POSITIVE_INFINITY;
+  // Map für alle Handles
+  const handlePositions: Record<Position, Point> = {
+    [Position.Top]:    { x: node.position.x + width / 2, y: node.position.y },
+    [Position.Bottom]: { x: node.position.x + width / 2, y: node.position.y + height },
+    [Position.Left]:   { x: node.position.x,             y: node.position.y + height / 2 },
+    [Position.Right]:  { x: node.position.x + width,     y: node.position.y + height / 2 },
+  };
 
-      // Iterate over handles and compute squared distance (faster than Math.hypot)
-      for (const handle of ['top', 'bottom', 'left', 'right'] as const) {
-        const pos = handlePositions[handle];
-        const dx = point.x - pos.x;
-        const dy = point.y - pos.y;
-        const distanceSquared = dx * dx + dy * dy;
+  // Initialwerte
+  let closestHandle: Position = Position.Right;
+  let minDistanceSquared = Number.POSITIVE_INFINITY;
 
-        if (distanceSquared < minDistanceSquared) {
-          minDistanceSquared = distanceSquared;
-          closestHandle = handle;
-        }
-      }
+  // Iteration über alle Handles
+  for (const handle of [Position.Top, Position.Bottom, Position.Left, Position.Right] as const) {
+    const pos = handlePositions[handle]; // ✅ pos ist ein Point
+    const dx = point.x - pos.x;
+    const dy = point.y - pos.y;
+    const distanceSquared = dx * dx + dy * dy;
+
+    if (distanceSquared < minDistanceSquared) {
+      minDistanceSquared = distanceSquared;
+      closestHandle = handle; // ✅ handle ist vom Typ Position
+    }
+  }
+
+return closestHandle;
+
 
       return closestHandle;
     },
