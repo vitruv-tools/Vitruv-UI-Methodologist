@@ -1,12 +1,5 @@
 export type Point = Readonly<{ x: number; y: number }>;
 
-export enum HandlePosition {
-  Top = 'top',
-  Bottom = 'bottom',
-  Left = 'left',
-  Right = 'right',
-}
-
 export enum RoutingStyle {
   Curved = 'curved',
   Orthogonal = 'orthogonal',
