@@ -187,6 +187,7 @@ export const FlowCanvas = forwardRef<{
       isDragging: boolean;
       controlPoint?: { x: number; y: number };
     } | null>(null);
+    const [hoveredMergeGroup, setHoveredMergeGroup] = useState<string | null>(null);
 
 
     const storageKey = getLocalStorageKey(userId, projectId);
@@ -1049,12 +1050,16 @@ export const FlowCanvas = forwardRef<{
         const color = getColorForPair(sourceNodeId, targetNodeId);
         const handles = calculateOptimalHandles(sourceNode, targetNode);
 
+        // Strip -source and -target suffixes from handles for ReactFlow compatibility
+        const cleanSourceHandle = handles.sourceHandle.replace('-source', '').replace('-target', '');
+        const cleanTargetHandle = handles.targetHandle.replace('-target', '').replace('-source', '');
+
         const newEdge: Edge = {
           id: `edge-${sourceNodeId}-${targetNodeId}-${Date.now()}`,
           source: sourceNodeId,
           target: targetNodeId,
-          sourceHandle: handles.sourceHandle,
-          targetHandle: handles.targetHandle,
+          sourceHandle: cleanSourceHandle,
+          targetHandle: cleanTargetHandle,
           type: 'reactions',
           data: {
             code: code,
@@ -1129,13 +1134,22 @@ export const FlowCanvas = forwardRef<{
           const color = getColorForPair(sourceNode.id, targetNode.id);
           const handles = calculateOptimalHandles(sourceNode, targetNode);
 
+          // Strip -source and -target suffixes from handles for ReactFlow compatibility
+          const cleanSourceHandle = handles.sourceHandle.replace('-source', '').replace('-target', '');
+          const cleanTargetHandle = handles.targetHandle.replace('-target', '').replace('-source', '');
+
+          console.log(`✅ Creating metamodel connection: ${sourceNode.data?.fileName} → ${targetNode.data?.fileName}`, {
+            handles: { source: cleanSourceHandle, target: cleanTargetHandle },
+            positions: { source: sourceNode.position, target: targetNode.position }
+          });
+
           const newEdge: Edge = {
             id: `edge-backend-${relation.id}-${Date.now()}`,
             source: sourceNode.id,
             target: targetNode.id,
             type: 'reactions',
-            sourceHandle: handles.sourceHandle,
-            targetHandle: handles.targetHandle,
+            sourceHandle: cleanSourceHandle,
+            targetHandle: cleanTargetHandle,
             data: {
               code: '',
               backendRelationId: relation.id,
@@ -1153,11 +1167,18 @@ export const FlowCanvas = forwardRef<{
 
           addEdge(newEdge);
         });
+
+        // Force ReactFlow to recalculate edge positions after loading
+        if (relations.length > 0) {
+          setTimeout(() => {
+            reactFlowInstance?.fitView({ padding: 0.1, duration: 300 });
+          }, 100);
+        }
       };
 
       window.addEventListener('vitruv.loadMetaModelRelations', handleLoadMetaModelRelations as EventListener);
       return () => window.removeEventListener('vitruv.loadMetaModelRelations', handleLoadMetaModelRelations as EventListener);
-    }, [nodes, edges, addEdge, getColorForPair, calculateOptimalHandles]);
+    }, [nodes, edges, addEdge, getColorForPair, calculateOptimalHandles, reactFlowInstance]);
 
     useEffect(() => {
       onDiagramChange?.(nodes, edges);
@@ -1460,10 +1481,14 @@ export const FlowCanvas = forwardRef<{
           // Use calculateOptimalHandles to get optimal handles
           const handles = calculateOptimalHandles(sourceNode, targetNode);
           
+          // Strip -source and -target suffixes from handles for ReactFlow compatibility
+          const cleanSourceHandle = handles.sourceHandle.replace('-source', '').replace('-target', '');
+          const cleanTargetHandle = handles.targetHandle.replace('-target', '').replace('-source', '');
+          
           return {
             ...edge,
-            sourceHandle: handles.sourceHandle,
-            targetHandle: handles.targetHandle,
+            sourceHandle: cleanSourceHandle,
+            targetHandle: cleanTargetHandle,
             data: {
               ...edge.data,
               customControlPoint: undefined
@@ -1749,6 +1774,92 @@ const handleEdgeReorderRequest = useCallback((edgeId: string, controlPoint: { x:
   performEdgeReorder(edgeId, controlPoint);
 }, [performEdgeReorder]);
 
+    // Calculate merge points for UML edges with same target
+    const umlMergeData = useMemo(() => {
+      const mergePointsMap = new Map<string, { x: number; y: number; mergeGroupId: string }>();
+      const firstInGroupMap = new Map<string, string>(); // mergeGroupId -> first edge id
+      const mergeGroupSourceNodesMap = new Map<string, string[]>(); // mergeGroupId -> array of source node IDs
+      
+      // Count UML edges per source node
+      const edgesPerSource = new Map<string, number>();
+      uniqueEdges.forEach(edge => {
+        if (edge.type === 'uml') {
+          edgesPerSource.set(edge.source, (edgesPerSource.get(edge.source) || 0) + 1);
+        }
+      });
+      
+      // Group UML edges by target
+      const edgesByTarget = new Map<string, Edge[]>();
+      uniqueEdges.forEach(edge => {
+        if (edge.type === 'uml') {
+          const existing = edgesByTarget.get(edge.target) || [];
+          existing.push(edge);
+          edgesByTarget.set(edge.target, existing);
+        }
+      });
+      
+      // Calculate merge point for groups with 2+ edges
+      edgesByTarget.forEach((edgesGroup, targetId) => {
+        if (edgesGroup.length < 2) return;
+        
+        // Filter to only include edges where source has EXACTLY 1 connection
+        const eligibleEdges = edgesGroup.filter(edge => {
+          const sourceConnectionCount = edgesPerSource.get(edge.source) || 0;
+          return sourceConnectionCount === 1;
+        });
+        
+        // Only merge if we have at least 2 eligible edges
+        if (eligibleEdges.length < 2) return;
+        
+        // Sort by source node ID to ensure consistent ordering
+        eligibleEdges.sort((a, b) => a.source.localeCompare(b.source));
+        
+        const targetNode = nodes.find(n => n.id === targetId);
+        if (!targetNode) return;
+        
+        // Calculate average position of eligible source nodes
+        let sumX = 0, sumY = 0;
+        eligibleEdges.forEach(edge => {
+          const sourceNode = nodes.find(n => n.id === edge.source);
+          if (sourceNode) {
+            sumX += sourceNode.position.x + NODE_DIMENSIONS.width / 2;
+            sumY += sourceNode.position.y + NODE_DIMENSIONS.height / 2;
+          }
+        });
+        
+        const avgSourceX = sumX / eligibleEdges.length;
+        const avgSourceY = sumY / eligibleEdges.length;
+        
+        // Use target center for merge point calculation
+        const targetCenterX = targetNode.position.x + NODE_DIMENSIONS.width / 2;
+        const targetCenterY = targetNode.position.y + NODE_DIMENSIONS.height / 2;
+        
+        // Place merge point 40% of the way from average source position to target center
+        const mergeX = avgSourceX + (targetCenterX - avgSourceX) * 0.4;
+        const mergeY = avgSourceY + (targetCenterY - avgSourceY) * 0.4;
+        
+        // Create a unique merge group ID for this target
+        const mergeGroupId = `merge-${targetId}`;
+        
+        // Collect all source node IDs in this merge group
+        const sourceNodes = eligibleEdges.map(edge => edge.source);
+        mergeGroupSourceNodesMap.set(mergeGroupId, sourceNodes);
+        
+        // Store merge point for all eligible edges with group ID
+        eligibleEdges.forEach((edge, index) => {
+          mergePointsMap.set(edge.id, { x: mergeX, y: mergeY, mergeGroupId });
+          console.log(`   Edge ${index}: ${edge.id.slice(-8)} (source: ${edge.source.slice(-6)})`);
+        });
+        
+        // Mark ONLY the first edge to draw the shared segment
+        const firstEdgeId = eligibleEdges[0].id;
+        firstInGroupMap.set(mergeGroupId, firstEdgeId);
+        console.log(`✨ Merge group ${mergeGroupId}: First edge = ${firstEdgeId.slice(-8)}`);
+      });
+      
+      return { mergePointsMap, firstInGroupMap, mergeGroupSourceNodesMap };
+    }, [uniqueEdges, nodes]);
+
     const mappedEdges = uniqueEdges.map(edge => {
   // Get distribution metadata for this edge
   const sourceDistribution = edgeDistributionMap.get(edge.source);
@@ -1768,10 +1879,40 @@ const handleEdgeReorderRequest = useCallback((edgeId: string, controlPoint: { x:
     });
   }
 
+  // Get merge point for UML edges
+  const mergePoint = edge.type === 'uml' ? umlMergeData.mergePointsMap.get(edge.id) : undefined;
+  const hasMerge = !!mergePoint;
+  
+  // Check if this edge is the first in its merge group - STRICT comparison
+  let isFirstInMergeGroup = false;
+  let mergeGroupSourceNodes: string[] = [];
+  if (edge.type === 'uml' && mergePoint?.mergeGroupId) {
+    const firstEdgeId = umlMergeData.firstInGroupMap.get(mergePoint.mergeGroupId);
+    isFirstInMergeGroup = (firstEdgeId === edge.id);
+    mergeGroupSourceNodes = umlMergeData.mergeGroupSourceNodesMap.get(mergePoint.mergeGroupId) || [];
+    
+    console.log(`📦 Checking edge:`, {
+      edgeId: edge.id,
+      firstEdgeId: firstEdgeId,
+      isFirst: isFirstInMergeGroup,
+      match: firstEdgeId === edge.id,
+      exactMatch: String(firstEdgeId) === String(edge.id),
+      mergeGroupSourceNodes
+    });
+  }
+
   return {
     ...edge,
     data: {
       ...edge.data,
+      mergePoint,
+      hasMerge,
+      isFirstInMergeGroup,
+      mergeGroupSourceNodes,
+      hoveredMergeGroup,
+      onMergeGroupHover: edge.type === 'uml' ? (groupId: string | null) => {
+        setHoveredMergeGroup(groupId);
+      } : undefined,
       onDoubleClick:
           edge.type === 'reactions'
               ? () => handleEdgeDoubleClick(edge.id)
@@ -1920,11 +2061,6 @@ onReorderRequest: edge.type === 'reactions' ? handleEdgeReorderRequest : undefin
           {createControlButton(() => reactFlowInstance?.zoomIn?.(), 'Zoom in', '+')}
           {createControlButton(() => reactFlowInstance?.zoomOut?.(), 'Zoom out', '–')}
           {createControlButton(() => reactFlowInstance?.fitView?.({ padding: 0.2 }), 'Fit view', '⛶')}
-          {createControlButton(
-            () => setRoutingStyle(prev => prev === 'curved' ? 'orthogonal' : 'curved'),
-            `Edge style: ${routingStyle === 'curved' ? 'Curved' : 'Orthogonal'} (click to toggle)`,
-            routingStyle === 'orthogonal' ? '└' : '∿'
-          )}
           {createControlButton(
             () => setIsInteractive(prev => !prev),
             isInteractive ? 'Lock interactions' : 'Unlock interactions',

@@ -1,5 +1,5 @@
 import React, { useState, useCallback, useEffect, useMemo } from 'react';
-import { EdgeProps, Position, useReactFlow } from 'reactflow';
+import { EdgeProps, Position, useReactFlow, useStore } from 'reactflow';
 
 interface ReactionRelationshipData {
   label?: string;
@@ -49,6 +49,25 @@ export function ReactionRelationship({
   const [isDraggingSegment, setIsDraggingSegment] = useState(false);
   const [draggedSegmentIndex, setDraggedSegmentIndex] = useState<number | null>(null);
   const [tempControlPoint, setTempControlPoint] = useState<{ x: number; y: number } | null>(null);
+
+  // Subscribe to node selection changes using useStore
+  // This ensures the edge re-renders when any node's selection state changes
+  const nodeSelectionState = useStore((store) => {
+    const nodes = Array.from(store.nodeInternals.values());
+    const sourceNode = nodes.find(n => n.id === source);
+    const targetNode = nodes.find(n => n.id === target);
+    
+    return {
+      isSourceSelected: sourceNode?.selected || false,
+      isTargetSelected: targetNode?.selected || false
+    };
+  });
+  
+  const { isSourceSelected, isTargetSelected } = nodeSelectionState;
+  const isNodeSelected = isSourceSelected || isTargetSelected;
+  
+  // Edge should be highlighted if either the edge itself is selected OR any connected node is selected
+  const isHighlighted = selected || isNodeSelected;
 
   const calculateParallelOffset = (
     parallelCount: number,
@@ -285,7 +304,7 @@ export function ReactionRelationship({
         className="react-flow__edge-path"
         style={{
           stroke: '#ffffff',
-          strokeWidth: selected ? 8 : (isHovered ? 8 : 7),
+          strokeWidth: isHighlighted ? 8 : (isHovered ? 8 : 7),
           opacity: 0.95,
           fill: 'none',
           strokeLinecap: 'round',
@@ -312,8 +331,8 @@ export function ReactionRelationship({
       <path
         id={id}
         style={{
-          strokeWidth: selected ? `${Number(edgeWidth) + 2}px` : (isHovered ? `${Number(edgeWidth) + 1}px` : `${edgeWidth}px`),
-          stroke: selected ? '#ef4444' : (isHovered ? '#f87171' : edgeColor),
+          strokeWidth: isHighlighted ? `${Number(edgeWidth) + 2}px` : (isHovered ? `${Number(edgeWidth) + 1}px` : `${edgeWidth}px`),
+          stroke: isHighlighted ? '#ef4444' : (isHovered ? '#f87171' : edgeColor),
           fill: 'none',
           cursor: 'pointer',
           strokeLinecap: 'round',
@@ -330,8 +349,8 @@ export function ReactionRelationship({
       <g transform={`translate(${arrowX}, ${arrowY}) rotate(${arrowAngle})`}>
         <polygon
           points="-10,-6 0,0 -10,6"
-          fill={selected ? '#ef4444' : (isHovered ? '#f87171' : edgeColor)}
-          stroke={selected ? '#ef4444' : (isHovered ? '#f87171' : edgeColor)}
+          fill={isHighlighted ? '#ef4444' : (isHovered ? '#f87171' : edgeColor)}
+          stroke={isHighlighted ? '#ef4444' : (isHovered ? '#f87171' : edgeColor)}
           strokeWidth="1"
           style={{ 
             cursor: 'pointer',
@@ -353,7 +372,7 @@ export function ReactionRelationship({
           style={{
             fontSize: '12px',
             fontWeight: 700,
-            fill: selected ? '#ef4444' : (isHovered ? '#f87171' : '#1f2937'),
+            fill: isHighlighted ? '#ef4444' : (isHovered ? '#f87171' : '#1f2937'),
             stroke: '#ffffff',
             strokeWidth: 3.5,
             paintOrder: 'stroke fill',
@@ -371,7 +390,7 @@ export function ReactionRelationship({
             cx={labelX + 20}
             cy={labelY - 15}
             r="10"
-            fill={selected ? '#ef4444' : (isHovered ? '#f87171' : '#0e639c')}
+            fill={isHighlighted ? '#ef4444' : (isHovered ? '#f87171' : '#0e639c')}
             stroke="#fff"
             strokeWidth="2"
             style={{
@@ -395,7 +414,7 @@ export function ReactionRelationship({
         </g>
       )}
 
-      {(selected || isHovered) && (sourceParallelCount > 1 || targetParallelCount > 1) && (
+      {(isHighlighted || isHovered) && (sourceParallelCount > 1 || targetParallelCount > 1) && (
         <g>
           <rect
             x={labelX - 12}
@@ -404,7 +423,7 @@ export function ReactionRelationship({
             ry={6}
             width={24}
             height={16}
-            fill={selected ? '#ef4444' : '#f87171'}
+            fill={isHighlighted ? '#ef4444' : '#f87171'}
             stroke="#ffffff"
             strokeWidth={2}
             style={{

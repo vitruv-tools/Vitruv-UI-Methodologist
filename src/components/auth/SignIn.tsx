@@ -52,7 +52,16 @@ export function SignIn({ onSignInSuccess, onSwitchToSignUp }: SignInProps) {
   };
 
   return (
-    <div className="auth-container">
+    <div 
+      className="auth-container"
+      style={{
+        backgroundImage: `url(${process.env.PUBLIC_URL}/assets/22098030.png)`,
+        backgroundSize: 'contain',
+        backgroundPosition: 'center center',
+        backgroundRepeat: 'no-repeat',
+        backgroundColor: '#f0f0f0'
+      }}
+    >
       <div className="auth-card">
         <div className="auth-header">
           <h1>Welcome Back</h1>

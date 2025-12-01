@@ -1,5 +1,5 @@
 import React from 'react';
-import { EdgeProps } from 'reactflow';
+import { EdgeProps, useReactFlow, useStore } from 'reactflow';
 
 interface UMLRelationshipData {
   label?: string;
@@ -12,6 +12,12 @@ interface UMLRelationshipData {
   parallelCount?: number;
   customControlPoint?: { x: number; y: number };
   onUpdateControlPoint?: (edgeId: string, point: { x: number; y: number } | null) => void;
+  mergePoint?: { x: number; y: number; mergeGroupId?: string };
+  hasMerge?: boolean;
+  isFirstInMergeGroup?: boolean;
+  mergeGroupSourceNodes?: string[];
+  hoveredMergeGroup?: string | null;
+  onMergeGroupHover?: (groupId: string | null) => void;
 }
 
 export function UMLRelationship({
@@ -26,9 +32,67 @@ export function UMLRelationship({
   selected,
   style,
 }: EdgeProps<UMLRelationshipData>) {
+  const reactFlowInstance = useReactFlow();
   const [isHovered, setIsHovered] = React.useState(false);
   const [isDragging, setIsDragging] = React.useState(false);
   const [isControlHovered, setIsControlHovered] = React.useState(false);
+  
+  // Subscribe to node selection changes using useStore
+  // This ensures the edge re-renders when any node's selection state changes
+  const mergeGroupSourceNodes = data?.mergeGroupSourceNodes || [];
+  const nodeSelectionState = useStore((store) => {
+    const nodes = Array.from(store.nodeInternals.values());
+    const sourceNode = nodes.find(n => n.id === source);
+    const targetNode = nodes.find(n => n.id === target);
+    const mergeGroupNodes = mergeGroupSourceNodes.map(nodeId => 
+      nodes.find(n => n.id === nodeId)
+    );
+    
+    return {
+      isSourceSelected: sourceNode?.selected || false,
+      isTargetSelected: targetNode?.selected || false,
+      isMergeGroupNodeSelected: mergeGroupNodes.some(n => n?.selected || false)
+    };
+  });
+  
+  const { isSourceSelected, isTargetSelected, isMergeGroupNodeSelected } = nodeSelectionState;
+  
+  // Check if this edge's merge group is currently being hovered
+  const mergeGroupId = data?.mergePoint?.mergeGroupId;
+  const isMergeGroupHovered = !!(mergeGroupId && data?.hoveredMergeGroup === mergeGroupId);
+  
+  // Logic for highlighting:
+  // 1. Individual edge (source to merge point) is red if: 
+  //    - edge selected OR source node selected OR target node selected OR merge group hovered
+  const isIndividualEdgeHighlighted: boolean = !!(selected || isSourceSelected || isTargetSelected || isMergeGroupHovered);
+  
+  // 2. MERGE DOT LOGIC: Merge dot is red if ANY node that has a connection through it is selected
+  //    OR if the merge group is being hovered
+  //    This includes: current source, target, any other source node in the merge group, OR hover
+  const isMergeDotRed: boolean = data?.hasMerge 
+    ? !!(isSourceSelected || isTargetSelected || isMergeGroupNodeSelected || isMergeGroupHovered)
+    : isIndividualEdgeHighlighted;
+  
+  // 3. SHARED SEGMENT LOGIC: Shared segment is red if merge dot is red
+  //    When merge dot is red, everything after it (to target) must be red
+  const isSharedSegmentHighlighted: boolean = isMergeDotRed;
+  
+  // For the main edge path (source to merge), use individual edge highlighting
+  const isHighlighted: boolean = isIndividualEdgeHighlighted;
+  
+  // Debug logging for merged edges
+  if (data?.hasMerge) {
+    console.log(`🔍 Edge ${id.slice(-8)} (source: ${source.slice(-6)}, target: ${target.slice(-6)}):`, {
+      isFirstInMergeGroup: data?.isFirstInMergeGroup,
+      mergeGroupSourceNodes,
+      isSourceSelected,
+      isTargetSelected,
+      isMergeGroupNodeSelected,
+      '→ isMergeDotRed': isMergeDotRed,
+      '→ isSharedSegmentHighlighted': isSharedSegmentHighlighted,
+      '→ isIndividualEdgeHighlighted': isIndividualEdgeHighlighted
+    });
+  }
   
   const handleClick = (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -97,6 +161,9 @@ export function UMLRelationship({
   
   // Use custom control point if set
   const controlPoint = data?.customControlPoint;
+  const mergePoint = data?.mergePoint;
+  const hasMerge = data?.hasMerge;
+  const isFirstInMergeGroup = data?.isFirstInMergeGroup;
   
   const distance = Math.sqrt(dx * dx + dy * dy);
   
@@ -106,13 +173,37 @@ export function UMLRelationship({
   const isAlignedVertically = Math.abs(dx) < 150; // Vertical alignment
   const isReasonableDistance = distance < 800; // Most distances
   
-  const useStraightLine = !controlPoint && count === 1 && 
+  const useStraightLine = !controlPoint && !hasMerge && count === 1 && 
     (isAlignedHorizontally || isAlignedVertically || isReasonableDistance);
   
   // PRIORITY 2: Smooth curve (only for very long distances where straight would cross too much space)
-  const needsCurve = !useStraightLine && !controlPoint && count === 1 && distance > 500;
+  const needsCurve = !useStraightLine && !controlPoint && !hasMerge && count === 1 && distance > 500;
   
-  if (controlPoint) {
+  // Shared segment path (for merged edges)
+  let sharedSegmentPath = '';
+  
+  // PRIORITY 0: Use merge point if edges are merged
+  if (hasMerge && mergePoint) {
+    // Draw ONLY from source to merge point (not to target)
+    edgePath = `M ${sourceX},${sourceY} L ${mergePoint.x},${mergePoint.y}`;
+    
+    console.log(`🔷 Edge ${id}: hasMerge=true, isFirst=${isFirstInMergeGroup}`);
+    
+    // CRITICAL: If this is the first edge in the merge group, draw the shared segment
+    if (isFirstInMergeGroup === true) {
+      sharedSegmentPath = `M ${mergePoint.x},${mergePoint.y} L ${targetX},${targetY}`;
+      console.log(`✅ Drawing shared segment (edge: ${id})`);
+    } else {
+      console.log(`❌ NOT drawing shared segment (edge: ${id})`);
+    }
+    
+    labelX = mergePoint.x;
+    labelY = mergePoint.y;
+    startSegDx = mergePoint.x - sourceX;
+    startSegDy = mergePoint.y - sourceY;
+    endSegDx = targetX - mergePoint.x;
+    endSegDy = targetY - mergePoint.y;
+  } else if (controlPoint) {
     // Custom curved path through user-defined control point
     const cp = controlPoint;
     edgePath = `M ${sourceX},${sourceY} Q ${cp.x},${cp.y} ${targetX},${targetY}`;
@@ -176,11 +267,11 @@ export function UMLRelationship({
 
   // marker types are described via ids in <defs> below
 
-  const getRelationshipStyle = () => {
-    // Priority: selected > hovered > default
-    // When selected: red, when hovered (not selected): lighter red, otherwise: black
-    const strokeColor = selected ? '#ef4444' : (isHovered ? '#f87171' : '#374151');
-    const strokeWidth = selected ? '3.5px' : (isHovered ? '3px' : '2.5px');
+  const getRelationshipStyle = (useHighlight: boolean = isHighlighted) => {
+    // Priority: highlighted (selected or node selected) > hovered > default
+    // When highlighted: red, when hovered (not highlighted): lighter red, otherwise: black
+    const strokeColor = useHighlight ? '#ef4444' : (isHovered ? '#f87171' : '#374151');
+    const strokeWidth = useHighlight ? '3.5px' : (isHovered ? '3px' : '2.5px');
     
     const baseStyle = {
       strokeWidth,
@@ -195,25 +286,25 @@ export function UMLRelationship({
       case 'inheritance':
         return {
           ...baseStyle,
-          markerEnd: selected ? 'url(#arrowhead-inheritance-selected)' : (isHovered ? 'url(#arrowhead-inheritance-hover)' : 'url(#arrowhead-inheritance)'),
+          markerEnd: useHighlight ? 'url(#arrowhead-inheritance-selected)' : (isHovered ? 'url(#arrowhead-inheritance-hover)' : 'url(#arrowhead-inheritance)'),
         };
       case 'realization':
         return {
           ...baseStyle,
           strokeDasharray: '10,6',
-          markerEnd: selected ? 'url(#arrowhead-realization-selected)' : (isHovered ? 'url(#arrowhead-realization-hover)' : 'url(#arrowhead-realization)'),
+          markerEnd: useHighlight ? 'url(#arrowhead-realization-selected)' : (isHovered ? 'url(#arrowhead-realization-hover)' : 'url(#arrowhead-realization)'),
         };
       case 'composition':
         return {
           ...baseStyle,
           // UML: filled diamond at the whole (source) end, no arrow at target
-          markerStart: selected ? 'url(#diamond-composition-selected)' : (isHovered ? 'url(#diamond-composition-hover)' : 'url(#diamond-composition)'),
+          markerStart: useHighlight ? 'url(#diamond-composition-selected)' : (isHovered ? 'url(#diamond-composition-hover)' : 'url(#diamond-composition)'),
         };
       case 'aggregation':
         return {
           ...baseStyle,
           // UML: hollow diamond at the whole (source) end, no arrow at target
-          markerStart: selected ? 'url(#diamond-aggregation-selected)' : (isHovered ? 'url(#diamond-aggregation-hover)' : 'url(#diamond-aggregation)'),
+          markerStart: useHighlight ? 'url(#diamond-aggregation-selected)' : (isHovered ? 'url(#diamond-aggregation-hover)' : 'url(#diamond-aggregation)'),
         };
       case 'association':
         return {
@@ -225,7 +316,7 @@ export function UMLRelationship({
           ...baseStyle,
           strokeDasharray: '8,5',
           // UML: dashed line with open arrow
-          markerEnd: selected ? 'url(#arrowhead-open-dependency-selected)' : (isHovered ? 'url(#arrowhead-open-dependency-hover)' : 'url(#arrowhead-open-dependency)'),
+          markerEnd: useHighlight ? 'url(#arrowhead-open-dependency-selected)' : (isHovered ? 'url(#arrowhead-open-dependency-hover)' : 'url(#arrowhead-open-dependency)'),
         };
       default:
         return baseStyle;
@@ -307,7 +398,7 @@ export function UMLRelationship({
         className="react-flow__edge-path"
         style={{
           stroke: '#ffffff',
-          strokeWidth: selected ? 8 : (isHovered ? 8 : 7),
+          strokeWidth: isHighlighted ? 8 : (isHovered ? 8 : 7),
           opacity: 0.95,
           fill: 'none',
           strokeLinecap: 'butt',
@@ -327,8 +418,20 @@ export function UMLRelationship({
           cursor: 'pointer',
         }}
         onClick={handleClick}
-        onMouseEnter={() => setIsHovered(true)}
-        onMouseLeave={() => setIsHovered(false)}
+        onMouseEnter={() => {
+          setIsHovered(true);
+          // If this edge is part of a merge group, notify parent to highlight entire group
+          if (mergeGroupId && data?.onMergeGroupHover) {
+            data.onMergeGroupHover(mergeGroupId);
+          }
+        }}
+        onMouseLeave={() => {
+          setIsHovered(false);
+          // Clear merge group hover
+          if (mergeGroupId && data?.onMergeGroupHover) {
+            data.onMergeGroupHover(null);
+          }
+        }}
       />
 
       {/* Main edge stroke */}
@@ -338,12 +441,77 @@ export function UMLRelationship({
           ...getRelationshipStyle(),
           strokeLinecap: 'butt',
           strokeLinejoin: 'miter',
+          // Remove markers from individual branches when merged
+          ...(hasMerge && { markerEnd: 'none', markerStart: 'none' })
         }}
         d={edgePath}
         onClick={handleClick}
-        onMouseEnter={() => setIsHovered(true)}
-        onMouseLeave={() => setIsHovered(false)}
+        onMouseEnter={() => {
+          setIsHovered(true);
+          // If this edge is part of a merge group, notify parent to highlight entire group
+          if (mergeGroupId && data?.onMergeGroupHover) {
+            data.onMergeGroupHover(mergeGroupId);
+          }
+        }}
+        onMouseLeave={() => {
+          setIsHovered(false);
+          // Clear merge group hover
+          if (mergeGroupId && data?.onMergeGroupHover) {
+            data.onMergeGroupHover(null);
+          }
+        }}
       />
+
+      {/* Shared segment for merged edges (ONLY rendered by first edge) */}
+      {(sharedSegmentPath && isFirstInMergeGroup === true) && (
+        <>
+          {console.log(`🎨 RENDERING SHARED SEGMENT for edge ${id.slice(-8)}:`, {
+            isMergeDotRed,
+            isSharedSegmentHighlighted,
+            color: isSharedSegmentHighlighted ? 'RED (#ef4444)' : 'BLACK (#374151)'
+          })}
+          {/* Underlay for shared segment */}
+          <path
+            id={`${id}-shared-underlay`}
+            d={sharedSegmentPath}
+            style={{
+              stroke: '#ffffff',
+              strokeWidth: isSharedSegmentHighlighted ? 8 : (isHovered ? 8 : 7),
+              opacity: 0.95,
+              fill: 'none',
+              strokeLinecap: 'butt',
+              strokeLinejoin: 'miter',
+              transition: 'stroke-width 0.2s ease',
+            }}
+          />
+          
+          {/* Shared segment main stroke with marker - use shared segment highlighting */}
+          <path
+            id={`${id}-shared`}
+            d={sharedSegmentPath}
+            style={{
+              ...getRelationshipStyle(isSharedSegmentHighlighted),
+              strokeLinecap: 'butt',
+              strokeLinejoin: 'miter',
+            }}
+            onClick={handleClick}
+            onMouseEnter={() => {
+              setIsHovered(true);
+              // If this edge is part of a merge group, notify parent to highlight entire group
+              if (mergeGroupId && data?.onMergeGroupHover) {
+                data.onMergeGroupHover(mergeGroupId);
+              }
+            }}
+            onMouseLeave={() => {
+              setIsHovered(false);
+              // Clear merge group hover
+              if (mergeGroupId && data?.onMergeGroupHover) {
+                data.onMergeGroupHover(null);
+              }
+            }}
+          />
+        </>
+      )}
 
       <text
         x={labelX}
@@ -373,7 +541,7 @@ export function UMLRelationship({
             ry={6}
             width={24}
             height={16}
-            fill={selected ? '#ef4444' : (isHovered ? '#f87171' : '#374151')}
+            fill={isMergeDotRed ? '#ef4444' : (isHovered ? '#f87171' : '#374151')}
             stroke="#ffffff"
             strokeWidth={2}
             style={{
@@ -419,7 +587,7 @@ export function UMLRelationship({
           style={{
             fontSize: '13px',
             fontWeight: 800,
-            fill: selected ? '#ef4444' : (isHovered ? '#f87171' : '#111827'),
+            fill: isHighlighted ? '#ef4444' : (isHovered ? '#f87171' : '#111827'),
             stroke: '#ffffff',
             strokeWidth: 4,
             paintOrder: 'stroke fill',
@@ -454,7 +622,7 @@ export function UMLRelationship({
           style={{
             fontSize: '13px',
             fontWeight: 800,
-            fill: selected ? '#ef4444' : (isHovered ? '#f87171' : '#111827'),
+            fill: isHighlighted ? '#ef4444' : (isHovered ? '#f87171' : '#111827'),
             stroke: '#ffffff',
             strokeWidth: 4,
             paintOrder: 'stroke fill',
@@ -565,6 +733,49 @@ export function UMLRelationship({
               </>
             );
           })()}
+        </g>
+      )}
+
+      {/* Merge point indicator */}
+      {hasMerge && mergePoint && (
+        <g>
+          {/* Larger invisible hit area for merge point */}
+          <circle
+            cx={mergePoint.x}
+            cy={mergePoint.y}
+            r="15"
+            fill="transparent"
+            style={{
+              cursor: 'pointer',
+            }}
+            onMouseEnter={() => {
+              setIsHovered(true);
+              // Highlight entire merge group when hovering over merge point
+              if (mergeGroupId && data?.onMergeGroupHover) {
+                data.onMergeGroupHover(mergeGroupId);
+              }
+            }}
+            onMouseLeave={() => {
+              setIsHovered(false);
+              // Clear merge group hover
+              if (mergeGroupId && data?.onMergeGroupHover) {
+                data.onMergeGroupHover(null);
+              }
+            }}
+          />
+          {/* Visual merge point dot */}
+          <circle
+            cx={mergePoint.x}
+            cy={mergePoint.y}
+            r="5"
+            fill={isMergeDotRed ? '#ef4444' : (isHovered ? '#f87171' : '#374151')}
+            stroke="#ffffff"
+            strokeWidth="2"
+            style={{
+              transition: 'fill 0.2s ease',
+              pointerEvents: 'none',
+            }}
+          />
         </g>
       )}
     </>
