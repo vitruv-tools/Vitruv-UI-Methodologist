@@ -181,7 +181,7 @@ export const FlowCanvas = forwardRef<{
     const [expandedFileId, setExpandedFileId] = useState<string | null>(null);
     const [connectionDragState, setConnectionDragState] = useState<ConnectionDragState | null>(null);
     const [codeEditorState, setCodeEditorState] = useState<CodeEditorState | null>(null);
-    const [routingStyle, setRoutingStyle] = useState<'curved' | 'orthogonal'>('orthogonal');
+    const [routingStyle] = useState<'curved' | 'orthogonal'>('orthogonal');
     const [, setEdgeDragState] = useState<{
       edgeId: string;
       isDragging: boolean;

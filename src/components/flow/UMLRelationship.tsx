@@ -1,5 +1,5 @@
 import React from 'react';
-import { EdgeProps, useReactFlow, useStore } from 'reactflow';
+import { EdgeProps, useStore } from 'reactflow';
 
 interface UMLRelationshipData {
   label?: string;
@@ -32,7 +32,6 @@ export function UMLRelationship({
   selected,
   style,
 }: EdgeProps<UMLRelationshipData>) {
-  const reactFlowInstance = useReactFlow();
   const [isHovered, setIsHovered] = React.useState(false);
   const [isDragging, setIsDragging] = React.useState(false);
   const [isControlHovered, setIsControlHovered] = React.useState(false);
