@@ -55,7 +55,7 @@ export function SignIn({ onSignInSuccess, onSwitchToSignUp }: SignInProps) {
     <div 
       className="auth-container"
       style={{
-        backgroundImage: `url(${process.env.PUBLIC_URL}/assets/vitruvius.png)`,
+        backgroundImage: `url(${process.env.PUBLIC_URL}/assets/vitruvius1.png)`,
         backgroundSize: 'contain',
         backgroundPosition: 'center center',
         backgroundRepeat: 'no-repeat',
