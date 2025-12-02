@@ -293,8 +293,6 @@ export function ReactionRelationship({
   };
   const edgeColor = style?.stroke || '#3b82f6';
   const edgeWidth = style?.strokeWidth || 2;
-  const sourceParallelCount = data?.sourceParallelCount ?? 1;
-  const targetParallelCount = data?.targetParallelCount ?? 1;
 
   return (
     <>
