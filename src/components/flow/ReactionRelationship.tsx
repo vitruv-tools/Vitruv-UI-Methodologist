@@ -317,7 +317,7 @@ export function ReactionRelationship({
         id={`${id}-clickarea`}
         d={edgePath}
         style={{
-          strokeWidth: '25px',
+          strokeWidth: '40px',
           stroke: 'transparent',
           fill: 'none',
           cursor: 'pointer',
@@ -414,38 +414,6 @@ export function ReactionRelationship({
         </g>
       )}
 
-      {(isHighlighted || isHovered) && (sourceParallelCount > 1 || targetParallelCount > 1) && (
-        <g>
-          <rect
-            x={labelX - 12}
-            y={labelY + 8}
-            rx={6}
-            ry={6}
-            width={24}
-            height={16}
-            fill={isHighlighted ? '#ef4444' : '#f87171'}
-            stroke="#ffffff"
-            strokeWidth={2}
-            style={{
-              transition: 'fill 0.2s ease',
-            }}
-          />
-          <text
-            x={labelX}
-            y={labelY + 16}
-            textAnchor="middle"
-            dominantBaseline="middle"
-            style={{
-              fontSize: '10px',
-              fontWeight: 800,
-              fill: '#ffffff',
-              pointerEvents: 'none',
-            }}
-          >
-            {String(Math.max(sourceParallelCount, targetParallelCount))}
-          </text>
-        </g>
-      )}
 
       {selected && data?.routingStyle === 'orthogonal' && segments.map((segment, index) => {
         if (!segment.canDrag) return null;
@@ -465,6 +433,7 @@ export function ReactionRelationship({
                 pointerEvents: 'all',
               }}
               onPointerDown={(e) => handleSegmentDragStart(e, index)}
+              onDoubleClick={handleDoubleClick}
             />
             
             <path
