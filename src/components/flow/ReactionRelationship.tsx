@@ -176,6 +176,7 @@ const pathData = useMemo(() => {
       [Position.Right]: 180,
     };
 
+    // Use straight line when aligned or routing style is 'curved'
     return {
       edgePath,
       labelX: centerX,
@@ -359,6 +360,7 @@ useEffect(() => {
   };
 
   const hasCode = data?.code && data.code.trim().length > 0;
+  
   const edgeColor = style?.stroke || '#3b82f6';
   const edgeWidth = style?.strokeWidth || 2;
 
@@ -462,6 +464,7 @@ return (
             fontWeight: 'bold',
             fill: '#fff',
             pointerEvents: 'none',
+            transition: 'fill 0.2s ease',
           }}
         >
           {'</>'}
