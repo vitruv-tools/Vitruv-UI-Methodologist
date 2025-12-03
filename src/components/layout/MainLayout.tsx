@@ -600,7 +600,7 @@ export function MainLayout({
                                         }}
                                     >
                                         <img
-                                            src="/assets/22098030.png"
+                                            src="/assets/vitruvius1.png"
                                             alt="Vitruvius"
                                             draggable={false}
                                             onDragStart={(e) => e.preventDefault()}

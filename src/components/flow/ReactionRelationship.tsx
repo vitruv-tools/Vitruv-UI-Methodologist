@@ -1,5 +1,5 @@
 import React, { useState, useCallback, useEffect, useMemo } from 'react';
-import { EdgeProps, Position, useReactFlow } from 'reactflow';
+import { EdgeProps, Position, useReactFlow, useStore } from 'reactflow';
 
 
 // Import from edgeTypes.ts
@@ -176,6 +176,7 @@ const pathData = useMemo(() => {
       [Position.Right]: 180,
     };
 
+    // Use straight line when aligned or routing style is 'curved'
     return {
       edgePath,
       labelX: centerX,
@@ -358,7 +359,17 @@ useEffect(() => {
     data?.onDoubleClick?.(id);
   };
 
+  const [isHovered, setIsHovered] = React.useState(false);
   const hasCode = data?.code && data.code.trim().length > 0;
+  
+  const handleClick = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    // Toggle selection by dispatching a custom event
+    const event = new CustomEvent('edge-clicked', { 
+      detail: { edgeId: id, currentlySelected: selected } 
+    });
+    window.dispatchEvent(event);
+  };
   const edgeColor = style?.stroke || '#3b82f6';
   const edgeWidth = style?.strokeWidth || 2;
 
@@ -417,6 +428,8 @@ return (
         strokeWidth="1"
         style={{ cursor: 'pointer' }}
         onDoubleClick={handleDoubleClick}
+        onMouseEnter={() => setIsHovered(true)}
+        onMouseLeave={() => setIsHovered(false)}
       />
     </g>
 
@@ -462,6 +475,7 @@ return (
             fontWeight: 'bold',
             fill: '#fff',
             pointerEvents: 'none',
+            transition: 'fill 0.2s ease',
           }}
         >
           {'</>'}
