@@ -280,24 +280,31 @@ async function fetchAndLoadProjectBoxes(id: number, skipReset: boolean = false) 
       }
     }
 
-    // Load connections between metamodels
-    if (details.metaModelsRelation && details.metaModelsRelation.length > 0) {
-      const relations = details.metaModelsRelation.map((relation: any) => ({
-        id: relation.id,
-        sourceId: relation.sourceId,
-        targetId: relation.targetId,
-        reactionFileId: relation.reactionFileStorageId ?? null,
-      }));
+    // Wait for all metamodel boxes to be fully rendered
+    setTimeout(() => {
+      // Load connections between metamodels
+      if (details.metaModelsRelation && details.metaModelsRelation.length > 0) {
+        const relations = details.metaModelsRelation.map((relation: any) => ({
+          id: relation.id,
+          sourceId: relation.sourceId,
+          targetId: relation.targetId,
+          reactionFileId: relation.reactionFileStorageId ?? null,
+        }));
 
-      // Wait for metamodel boxes to be fully rendered before loading relations
-      // Set preserveExisting to false when loading from backend (full reload)
-      // This allows backend relations to be loaded even if there are existing edges
-      setTimeout(() => {
+        // Set preserveExisting to false when loading from backend (full reload)
+        // This allows backend relations to be loaded even if there are existing edges
         window.dispatchEvent(new CustomEvent('vitruv.loadMetaModelRelations', {
           detail: { relations, preserveExisting: false }
         }));
-      }, 400);
-    }
+      }
+
+      // Trigger auto-layout to organize the boxes in a grid
+      // Wait a bit more to ensure edges are loaded first
+      setTimeout(() => {
+        console.log('🎨 Triggering auto-layout for workspace');
+        window.dispatchEvent(new CustomEvent('vitruv.autoLayoutWorkspace'));
+      }, 100);
+    }, 400);
   } catch (error) {
     console.error('Failed to fetch vsum details:', error);
   }
