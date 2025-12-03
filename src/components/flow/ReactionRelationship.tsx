@@ -127,10 +127,8 @@ export function ReactionRelationship({
     }
   }
 
-return closestHandle;
 
-
-      return closestHandle;
+    return closestHandle;
     },
     [reactFlowInstance]
   );
