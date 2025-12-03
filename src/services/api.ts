@@ -374,6 +374,7 @@ class ApiService {
     createdTo?: string;
     pageNumber?: number;
     pageSize?: number;
+    ownedByUser?: boolean;
   }): Promise<{ data: any[]; message: string }> {
     // Set default values for pagination
     const pageNumber = filters.pageNumber ?? 0;
@@ -730,4 +731,3 @@ export interface VsumSyncChangesPutRequest {
   metaModelIds: number[];
   metaModelRelationRequests: MetaModelRelationRequest[] | null; // you said null for now
 }
-

@@ -156,12 +156,6 @@ const fileCardHoverStyle: React.CSSProperties = {
   background: '#f8f9ff',
 };
 
-const toggleContainerStyle: React.CSSProperties = {
-  display: 'flex',
-  gap: '8px',
-  margin: '8px 0',
-  alignItems: 'center',
-};
 
 const toggleButtonStyle: React.CSSProperties = {
   flex: '1',
@@ -182,6 +176,26 @@ const toggleButtonStyle: React.CSSProperties = {
 const toggleButtonHoverStyle: React.CSSProperties = {
   background: '#e9ecef',
   borderColor: '#adb5bd',
+};
+
+const ownershipToggleStyle: React.CSSProperties = {
+  padding: '8px 12px',
+  border: '1px solid #dee2e6',
+  borderRadius: '6px',
+  background: '#ffffff',
+  color: '#495057',
+  fontSize: '12px',
+  fontWeight: '600',
+  cursor: 'pointer',
+  transition: 'all 0.2s ease',
+  minWidth: '100px',
+};
+
+const ownershipToggleActiveStyle: React.CSSProperties = {
+  ...ownershipToggleStyle,
+  background: '#3498db',
+  color: '#ffffff',
+  borderColor: '#3498db',
 };
 
 const sortDropdownStyle: React.CSSProperties = {
@@ -284,7 +298,6 @@ const paginationButtonDisabledStyle: React.CSSProperties = {
   cursor: 'not-allowed',
 };
 
-// GitHub-style filter tag styles
 const filterTagStyle: React.CSSProperties = {
   display: 'inline-flex',
   alignItems: 'center',
@@ -334,6 +347,7 @@ export const ToolsPanel: React.FC<ToolsPanelProps> = ({ onEcoreFileUpload, onEco
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [deleteError, setDeleteError] = useState<string>('');
   const [viewModel, setViewModel] = useState<any | null>(null);
+  const [showAllModels, setShowAllModels] = useState(false);
 
   const handleSearchKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key !== 'Tab') return;
@@ -362,11 +376,9 @@ export const ToolsPanel: React.FC<ToolsPanelProps> = ({ onEcoreFileUpload, onEco
     });
   };
 
-  // Parse GitHub-style search syntax (supports quoted values and multiple keys)
   const parseSearchQuery = (query: string) => {
     const result: any[] = [];
 
-    // Tokenize respecting quotes
     const tokens: string[] = [];
     let current = '';
     let inQuotes = false;
@@ -424,21 +436,19 @@ export const ToolsPanel: React.FC<ToolsPanelProps> = ({ onEcoreFileUpload, onEco
             break;
           }
           default:
-            // Unknown key: treat as name
-            // result.push({ key: 'name', value: `${key}:${cleanValue}`, display: `name:${key}:${cleanValue}` });
         }
-      } else if (token.trim().length > 0) {
-        // Bare word -> name search
-        // result.push({ key: 'name', value: token, display: `name:${token}` });
       }
     }
 
     return result;
   };
 
-  // Build API filter object from parsed filters and dateFilter state
   const buildApiFiltersFromParsedFilters = useCallback((filtersParsed: any[], includeLegacyDate = true) => {
     const filters: any = {};
+    
+    // Set ownership filter
+    filters.ownedByUser = !showAllModels;
+    
     filtersParsed.forEach(filter => {
       switch (filter.key) {
         case 'name':
@@ -448,7 +458,6 @@ export const ToolsPanel: React.FC<ToolsPanelProps> = ({ onEcoreFileUpload, onEco
           filters.domain = filter.value;
           break;
         case 'keywords': {
-          // Map to API's `keyword: string[]`
           const values = String(filter.value)
             .split(',')
             .map(v => v.trim())
@@ -533,9 +542,8 @@ export const ToolsPanel: React.FC<ToolsPanelProps> = ({ onEcoreFileUpload, onEco
     }
 
     return filters;
-  }, [dateFilter]);
+  }, [dateFilter, showAllModels]);
 
-  // Update parsed filters when search term changes
   useEffect(() => {
     if (searchTerm.trim()) {
       const filters = parseSearchQuery(searchTerm);
@@ -561,7 +569,7 @@ export const ToolsPanel: React.FC<ToolsPanelProps> = ({ onEcoreFileUpload, onEco
         
         const response = await apiService.findMetaModels(filters);
         setApiModels(response.data || []);
-        setCurrentPage(1); // Reset to first page when filters change
+        setCurrentPage(1);
       } catch (error) {
         console.error('Error fetching meta models from API:', error);
         setApiError(error instanceof Error ? error.message : 'Failed to fetch meta models');
@@ -571,9 +579,8 @@ export const ToolsPanel: React.FC<ToolsPanelProps> = ({ onEcoreFileUpload, onEco
     };
     
     fetchData();
-  }, [parsedFilters, dateFilter, suppressApi, buildApiFiltersFromParsedFilters]);
+  }, [parsedFilters, dateFilter, suppressApi, showAllModels, buildApiFiltersFromParsedFilters]);
 
-  // Sort API models
   const sortedModels = [...apiModels].sort((a, b) => {
     let comparison = 0;
     
@@ -592,14 +599,12 @@ export const ToolsPanel: React.FC<ToolsPanelProps> = ({ onEcoreFileUpload, onEco
     return sortOrder === 'asc' ? comparison : -comparison;
   });
 
-  // Pagination calculations
   const totalItems = sortedModels.length;
   const totalPages = Math.ceil(totalItems / itemsPerPage);
   const startIndex = (currentPage - 1) * itemsPerPage;
   const endIndex = startIndex + itemsPerPage;
   const currentPageItems = sortedModels.slice(startIndex, endIndex);
 
-  // Pagination handlers
   const goToPage = (page: number) => {
     if (page >= 1 && page <= totalPages) {
       setCurrentPage(page);
@@ -655,7 +660,6 @@ export const ToolsPanel: React.FC<ToolsPanelProps> = ({ onEcoreFileUpload, onEco
       await apiService.deleteMetaModel(deletingId);
       setUploadMessage('Meta Model deleted successfully!');
       setUploadMessageType('success');
-      // Refresh models
       const filters = buildApiFiltersFromParsedFilters(parsedFilters, true);
       const response = await apiService.findMetaModels(filters);
       setApiModels(response.data || []);
@@ -664,7 +668,6 @@ export const ToolsPanel: React.FC<ToolsPanelProps> = ({ onEcoreFileUpload, onEco
       setDeleteError('');
       setTimeout(() => setUploadMessage(''), 3000);
     } catch (error: any) {
-      // Try to extract backend error message
       let msg = 'Failed to delete meta model';
       if (error?.response?.data?.message) {
         msg = error.response.data.message;
@@ -677,7 +680,7 @@ export const ToolsPanel: React.FC<ToolsPanelProps> = ({ onEcoreFileUpload, onEco
     }
   };
 
-  return (
+return (
     <div style={panelStyle}>
       <div style={titleStyle}>
         {title}
@@ -732,33 +735,77 @@ export const ToolsPanel: React.FC<ToolsPanelProps> = ({ onEcoreFileUpload, onEco
       )}
 
       {!suppressApi && (
-        <div style={toggleContainerStyle}>
+        <div style={{
+          display: 'flex',
+          gap: '8px',
+          margin: '8px 0',
+          alignItems: 'stretch',
+        }}>
+          {/* Left column: Show Advanced Search */}
           <button
-            style={toggleButtonStyle}
+            style={{
+              ...toggleButtonStyle,
+              flex: '0 0 auto',
+              minWidth: '150px',
+              display: 'flex',
+              justifyContent: 'center',
+              alignItems: 'center',
+              position: 'relative',
+            }}
             onClick={() => setShowFilters(!showFilters)}
-            onMouseEnter={(e) => Object.assign(e.currentTarget.style, toggleButtonHoverStyle)}
-            onMouseLeave={(e) => Object.assign(e.currentTarget.style, toggleButtonStyle)}
+            onMouseEnter={(e) => {
+              Object.assign(e.currentTarget.style, {
+                ...toggleButtonHoverStyle,
+                justifyContent: 'center',
+              });
+            }}
+            onMouseLeave={(e) => {
+              Object.assign(e.currentTarget.style, {
+                ...toggleButtonStyle,
+                justifyContent: 'center',
+              });
+            }}
           >
-            <span>{showFilters ? 'Hide' : 'Show'} Advanced Search</span>
-            <span>{showFilters ? '▼' : '▶'}</span>
+            <span style={{ textAlign: 'center', lineHeight: '1.3' }}>
+              {showFilters ? 'Hide' : 'Show'}<br />Advanced Search
+            </span>
+            <span style={{ position: 'absolute', right: '12px', top: '50%', transform: 'translateY(-50%)' }}>
+              {showFilters ? '▼' : '▶'}
+            </span>
           </button>
           
-          <select
-            value={`${sortBy}-${sortOrder}`}
-            onChange={(e) => {
-              const [newSortBy, newSortOrder] = e.target.value.split('-') as ['name' | 'date' | 'domain', 'asc' | 'desc'];
-              setSortBy(newSortBy);
-              setSortOrder(newSortOrder);
-            }}
-            style={sortDropdownStyle}
-          >
-            <option value="date-desc">Newest First</option>
-            <option value="date-asc">Oldest First</option>
-            <option value="name-asc">Name A-Z</option>
-            <option value="name-desc">Name Z-A</option>
-            <option value="domain-asc">Domain A-Z</option>
-            <option value="domain-desc">Domain Z-A</option>
-          </select>
+          {/* Right column: Sort + Ownership stacked */}
+          <div style={{
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '8px',
+            flex: '1',
+          }}>
+            <select
+              value={`${sortBy}-${sortOrder}`}
+              onChange={(e) => {
+                const [newSortBy, newSortOrder] = e.target.value.split('-') as ['name' | 'date' | 'domain', 'asc' | 'desc'];
+                setSortBy(newSortBy);
+                setSortOrder(newSortOrder);
+              }}
+              style={sortDropdownStyle}
+            >
+              <option value="date-desc">Newest First</option>
+              <option value="date-asc">Oldest First</option>
+              <option value="name-asc">Name A-Z</option>
+              <option value="name-desc">Name Z-A</option>
+              <option value="domain-asc">Domain A-Z</option>
+              <option value="domain-desc">Domain Z-A</option>
+            </select>
+            
+            <button 
+              style={showAllModels ? ownershipToggleActiveStyle : ownershipToggleStyle}
+              onClick={() => setShowAllModels(v => !v)}
+              title={showAllModels ? 'Showing all meta models' : 'Showing only my meta models'}
+            >
+              {showAllModels ? 'All Models' : 'My Models'}
+            </button>
+          </div>
         </div>
       )}
 
@@ -778,7 +825,6 @@ export const ToolsPanel: React.FC<ToolsPanelProps> = ({ onEcoreFileUpload, onEco
             Advanced Search
           </div>
           
-          {/* Filter Tags Display */}
           {parsedFilters.length > 0 && (
             <div style={filterTagsContainerStyle}>
               {parsedFilters.map((filter, index) => (
@@ -820,7 +866,6 @@ export const ToolsPanel: React.FC<ToolsPanelProps> = ({ onEcoreFileUpload, onEco
             </select>
           </div>
           
-          {/* Original Filter Style */}
           <div style={{ marginTop: '12px', paddingTop: '12px', borderTop: '1px solid #e9ecef' }}>
             <div style={{ fontSize: '12px', fontWeight: '600', color: '#495057', marginBottom: '8px' }}>
               Quick Filters
@@ -964,7 +1009,6 @@ export const ToolsPanel: React.FC<ToolsPanelProps> = ({ onEcoreFileUpload, onEco
                   </span>
                 </>
               )}
-              {/* Delete button: always visible */}
               <button
                 onClick={(e) => {
                   e.stopPropagation();
@@ -989,7 +1033,6 @@ export const ToolsPanel: React.FC<ToolsPanelProps> = ({ onEcoreFileUpload, onEco
                 Delete
               </button>
             </div>
-            {/* Expanded content - only show when card is expanded */}
             {expandedCard === model.id && (
               <>
                 {model.keyword && model.keyword.length > 0 && (
@@ -1021,7 +1064,6 @@ export const ToolsPanel: React.FC<ToolsPanelProps> = ({ onEcoreFileUpload, onEco
               </>
             )}
             
-            {/* Hint for collapsed state */}
             {expandedCard !== model.id && (
               <div style={{
                 fontSize: 'clamp(9px, 1.5vw, 10px)',
@@ -1044,7 +1086,6 @@ export const ToolsPanel: React.FC<ToolsPanelProps> = ({ onEcoreFileUpload, onEco
       </div>
       )}
 
-      {/* Read-only Meta Model Details Modal */}
       {viewModel && (
           <div
               style={{
@@ -1196,7 +1237,6 @@ export const ToolsPanel: React.FC<ToolsPanelProps> = ({ onEcoreFileUpload, onEco
           </div>
       )}
 
-      {/* Pagination Controls */}
       {!suppressApi && totalPages > 1 && (
         <div style={paginationContainerStyle}>
           <div style={paginationInfoStyle}>
@@ -1225,14 +1265,12 @@ export const ToolsPanel: React.FC<ToolsPanelProps> = ({ onEcoreFileUpload, onEco
             </button>
             
             {Array.from({ length: totalPages }, (_, i) => i + 1).map(page => {
-              // Show first page, last page, current page, and pages around current page
               const shouldShow = 
                 page === 1 || 
                 page === totalPages || 
                 Math.abs(page - currentPage) <= 1;
               
               if (!shouldShow) {
-                // Show ellipsis for gaps
                 if (page === 2 && currentPage > 4) {
                   return <span key={`ellipsis-${page}`} style={{ padding: '0 4px', color: '#6c757d' }}>...</span>;
                 }
@@ -1314,7 +1352,6 @@ export const ToolsPanel: React.FC<ToolsPanelProps> = ({ onEcoreFileUpload, onEco
         }}
       />
 
-      {/* Delete confirmation popup */}
       {deleteConfirmOpen && (
         <div style={{
           position: 'fixed',

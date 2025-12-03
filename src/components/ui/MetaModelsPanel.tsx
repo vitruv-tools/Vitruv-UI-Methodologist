@@ -1,4 +1,3 @@
-// src/components/ui/MetaModelsPanel.tsx
 import React, { useEffect, useState } from 'react';
 import { apiService } from '../../services/api';
 
@@ -66,6 +65,23 @@ const filterBtnStyle: React.CSSProperties = {
   fontWeight: 600,
 };
 
+const toggleBtnStyle: React.CSSProperties = {
+  padding: '10px 12px',
+  border: '1px solid #dee2e6',
+  borderRadius: 0,
+  background: '#ffffff',
+  cursor: 'pointer',
+  fontWeight: 600,
+  transition: 'all 0.2s ease',
+};
+
+const toggleBtnActiveStyle: React.CSSProperties = {
+  ...toggleBtnStyle,
+  background: '#3498db',
+  color: '#ffffff',
+  borderColor: '#3498db',
+};
+
 const filtersBoxStyle: React.CSSProperties = {
   border: '1px solid #e9ecef',
   background: '#ffffff',
@@ -126,7 +142,7 @@ const dotStyle: React.CSSProperties = {
 };
 
 const dateTextStyle: React.CSSProperties = {
-  whiteSpace: 'nowrap', // keep date in one line
+  whiteSpace: 'nowrap',
 };
 
 const addBtnStyle: React.CSSProperties = {
@@ -153,6 +169,7 @@ export const MetaModelsPanel: React.FC<MetaModelsPanelProps> = ({
   const [showFilters, setShowFilters] = useState(false);
   const [dateFilter, setDateFilter] = useState<'all' | 'today' | 'week' | 'month' | 'year'>('all');
   const [parsedFilters, setParsedFilters] = useState<any[]>([]);
+  const [showAllModels, setShowAllModels] = useState(false);
 
   const handleSearchKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key !== 'Tab') return;
@@ -214,6 +231,10 @@ export const MetaModelsPanel: React.FC<MetaModelsPanelProps> = ({
       setApiError('');
       try {
         const filters: any = {};
+        
+        // Set ownership filter
+        filters.ownedByUser = !showAllModels;
+        
         parsedFilters.forEach(f => {
           const v = String(f.value);
           switch (f.key) {
@@ -273,7 +294,7 @@ export const MetaModelsPanel: React.FC<MetaModelsPanelProps> = ({
       }
     };
     fetchData();
-  }, [parsedFilters, dateFilter]);
+  }, [parsedFilters, dateFilter, showAllModels]);
 
   const sortedModels = [...apiModels].sort((a, b) => {
     let cmp = 0;
@@ -320,6 +341,13 @@ export const MetaModelsPanel: React.FC<MetaModelsPanelProps> = ({
         </select>
         <button style={filterBtnStyle} onClick={() => setShowFilters(v => !v)}>
           {showFilters ? 'Hide Filters' : 'Show Filters'}
+        </button>
+        <button 
+          style={showAllModels ? toggleBtnActiveStyle : toggleBtnStyle}
+          onClick={() => setShowAllModels(v => !v)}
+          title={showAllModels ? 'Showing all meta models' : 'Showing only my meta models'}
+        >
+          {showAllModels ? 'All Models' : 'My Models'}
         </button>
       </div>
 
