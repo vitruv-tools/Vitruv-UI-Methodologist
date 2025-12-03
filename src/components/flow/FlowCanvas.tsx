@@ -36,6 +36,20 @@ const COLOR_LIST = [
 
 const NODE_DIMENSIONS = { width: 280, height: 180 };
 
+// Layout constants for auto-layout algorithm (defined outside component for stable references)
+const LAYOUT_CONFIG = {
+  BOX_WIDTH: 280,
+  BOX_HEIGHT: 180,
+  MIN_HORIZONTAL_SPACING: 150,
+  MIN_VERTICAL_SPACING: 120,
+  START_X: 100,
+  START_Y: 100,
+  ITERATIONS: 150,
+  REPULSION_STRENGTH: 50000,
+  ATTRACTION_STRENGTH: 0.3,
+  DAMPING: 0.85,
+};
+
 const nodeTypes = {
   editable: EditableNode,
   ecoreFile: EcoreFileBox
@@ -182,7 +196,8 @@ export const FlowCanvas = forwardRef<{
     const [connectionDragState, setConnectionDragState] = useState<ConnectionDragState | null>(null);
     const [codeEditorState, setCodeEditorState] = useState<CodeEditorState | null>(null);
     const [routingStyle] = useState<'curved' | 'orthogonal'>('orthogonal');
-    const [_edgeDragState, setEdgeDragState] = useState<{
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    const [_, setEdgeDragState] = useState<{
       edgeId: string;
       isDragging: boolean;
       controlPoint?: { x: number; y: number };
@@ -1277,20 +1292,6 @@ export const FlowCanvas = forwardRef<{
         setEdges(fixedEdges);
       }
     }, [edges, setEdges]);
-
-    // Layout constants
-    const LAYOUT_CONFIG = {
-      BOX_WIDTH: 280,
-      BOX_HEIGHT: 180,
-      MIN_HORIZONTAL_SPACING: 150,
-      MIN_VERTICAL_SPACING: 120,
-      START_X: 100,
-      START_Y: 100,
-      ITERATIONS: 150,
-      REPULSION_STRENGTH: 50000,
-      ATTRACTION_STRENGTH: 0.3,
-      DAMPING: 0.85,
-    };
 
     // Helper to calculate repulsive forces between nodes
     const calculateRepulsiveForces = useCallback((
