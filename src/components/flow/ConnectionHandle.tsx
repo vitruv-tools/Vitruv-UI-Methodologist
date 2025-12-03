@@ -139,6 +139,9 @@ export const ConnectionHandle: React.FC<ConnectionHandleProps> = ({
     }
   };
 
+  const handleCountSuffix = totalHandles > 1 ? ` (${offsetIndex + 1}/${totalHandles})` : '';
+  const handleTitle = `Connect from ${position}${handleCountSuffix}`;
+
   return (
     <>
       <Handle
@@ -177,7 +180,7 @@ export const ConnectionHandle: React.FC<ConnectionHandleProps> = ({
           onMouseLeave={() => setIsHovered(false)}
           data-nodrag="true"
           className="nodrag"
-          title={`Connect from ${position}${totalHandles > 1 ? ` (${offsetIndex + 1}/${totalHandles})` : ''}`}
+          title={handleTitle}
         >
           {getArrowSVG()}
         </div>
