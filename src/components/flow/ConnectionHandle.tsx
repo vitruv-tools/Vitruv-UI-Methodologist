@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+
+import React, { useState, useMemo } from 'react';
 import { Handle, Position } from 'reactflow';
 
 interface ConnectionHandleProps {
@@ -9,6 +10,11 @@ interface ConnectionHandleProps {
   totalHandles?: number;
 }
 
+const HANDLE_SPACING = 25;
+
+/**
+ * Maps custom position string to React Flow Position enum.
+ */
 const getReactFlowPosition = (pos: 'top' | 'bottom' | 'left' | 'right'): Position => {
   switch (pos) {
     case 'top': return Position.Top;
@@ -18,7 +24,11 @@ const getReactFlowPosition = (pos: 'top' | 'bottom' | 'left' | 'right'): Positio
   }
 };
 
-export const ConnectionHandle: React.FC<ConnectionHandleProps> = ({
+/**
+ * ConnectionHandle Component
+ * Displays interactive connection points with hover effects and arrows.
+ */
+export const ConnectionHandle: React.FC<ConnectionHandleProps> = React.memo(({
   position,
   onConnectionStart,
   isVisible = true,
@@ -28,27 +38,30 @@ export const ConnectionHandle: React.FC<ConnectionHandleProps> = ({
   const [isHovered, setIsHovered] = useState(false);
 
   // Calculate symmetric offset from center
-  const HANDLE_SPACING = 25;
-  let offset = 0;
-  
-  if (totalHandles > 1) {
-    const centerOffset = (totalHandles - 1) / 2;
-    const indexOffset = offsetIndex - centerOffset;
-    offset = indexOffset * HANDLE_SPACING;
-  }
-
-  const baseStyle: React.CSSProperties = {
-    position: 'absolute',
-    cursor: 'crosshair',
-    transition: 'all 0.2s ease',
-    zIndex: 1000,
-    alignItems: 'center',
-    justifyContent: 'center',
-  };
+  const offset = useMemo(() => {
+    if (totalHandles > 1) {
+      const centerOffset = (totalHandles - 1) / 2;
+      const indexOffset = offsetIndex - centerOffset;
+      return indexOffset * HANDLE_SPACING;
+    }
+    return 0;
+  }, [offsetIndex, totalHandles]);
 
   const hoverOffset = isHovered ? '20px' : '18px';
 
-  const getPositionStyle = (): React.CSSProperties => {
+  /**
+   * Compute dynamic position styles based on handle position and hover state.
+   */
+  const positionStyle = useMemo<React.CSSProperties>(() => {
+    const baseStyle: React.CSSProperties = {
+      position: 'absolute',
+      cursor: 'crosshair',
+      transition: 'all 0.2s ease',
+      zIndex: 1000,
+      alignItems: 'center',
+      justifyContent: 'center',
+    };
+
     switch (position) {
       case 'top':
         return {
@@ -83,12 +96,14 @@ export const ConnectionHandle: React.FC<ConnectionHandleProps> = ({
           transform: `translateY(-50%) ${isHovered ? 'scale(1.3)' : 'scale(1)'}`,
         };
     }
-  };
+  }, [position, offset, hoverOffset, isHovered]);
 
-  const getArrowSVG = () => {
+  /**
+   * Render directional arrow SVG based on position.
+   */
+  const arrowSVG = useMemo(() => {
     const color = isHovered ? '#2c3e50' : '#95a5a6';
     const size = 24;
-
     const svgStyle: React.CSSProperties = {
       transition: 'all 0.2s ease',
       filter: isHovered
@@ -126,8 +141,11 @@ export const ConnectionHandle: React.FC<ConnectionHandleProps> = ({
           </svg>
         );
     }
-  };
+  }, [position, isHovered]);
 
+  /**
+   * Handle pointer down event to start connection.
+   */
   const handlePointerDownCapture = (e: React.PointerEvent) => {
     console.log('🟢 Handle pointer down CAPTURED');
     e.stopPropagation();
@@ -141,37 +159,24 @@ export const ConnectionHandle: React.FC<ConnectionHandleProps> = ({
 
   return (
     <>
+      {/* Invisible React Flow handles for source and target */}
       <Handle
         type="source"
         position={getReactFlowPosition(position)}
         id={position}
-        style={{
-          opacity: 0,
-          width: 1,
-          height: 1,
-          border: 'none',
-          background: 'transparent',
-          pointerEvents: 'auto',
-        }}
+        style={{ opacity: 0, width: 1, height: 1, border: 'none', background: 'transparent', pointerEvents: 'auto' }}
       />
-
       <Handle
         type="target"
         position={getReactFlowPosition(position)}
         id={position}
-        style={{
-          opacity: 0,
-          width: 1,
-          height: 1,
-          border: 'none',
-          background: 'transparent',
-          pointerEvents: 'auto',
-        }}
+        style={{ opacity: 0, width: 1, height: 1, border: 'none', background: 'transparent', pointerEvents: 'auto' }}
       />
 
+      {/* Visible interactive handle */}
       {isVisible && (
         <div
-          style={getPositionStyle()}
+          style={positionStyle}
           onPointerDownCapture={handlePointerDownCapture}
           onMouseEnter={() => setIsHovered(true)}
           onMouseLeave={() => setIsHovered(false)}
@@ -179,11 +184,11 @@ export const ConnectionHandle: React.FC<ConnectionHandleProps> = ({
           className="nodrag"
           title={`Connect from ${position}${totalHandles > 1 ? ` (${offsetIndex + 1}/${totalHandles})` : ''}`}
         >
-          {getArrowSVG()}
+          {arrowSVG}
         </div>
       )}
     </>
   );
-};
+});
 
 export default ConnectionHandle;
