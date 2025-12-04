@@ -278,8 +278,8 @@ export const CreateModelModal: React.FC<CreateModelModalProps> = ({
   const ecoreProgressIntervalRef = useRef<number | null>(null);
   const genmodelProgressIntervalRef = useRef<number | null>(null);
   const submitProgressIntervalRef = useRef<number | null>(null);
-  const successTimeoutRef = useRef<number | null>(null);
-  const progressResetTimeoutRef = useRef<number | null>(null);
+  const successTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const progressResetTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const canSave = uploadedFileIds.ecoreFileId > 0 && 
     uploadedFileIds.genModelFileId > 0 && 
@@ -290,12 +290,12 @@ export const CreateModelModal: React.FC<CreateModelModalProps> = ({
 
   // Helper to sanitize file names for display (prevent XSS)
   const sanitizeFileName = (fileName: string): string => {
-    return fileName.replace(/[<>]/g, '');
+    return fileName.replaceAll(/[<>]/g, '');
   };
 
   // Helper to extract and validate file ID from upload response
   const extractFileId = (response: any): number => {
-    const rawData: any = (response as any)?.data;
+    const rawData: any = response?.data;
     let fileId = (rawData && typeof rawData === 'object' && 'id' in rawData)
         ? Number(rawData.id)
         : Number(rawData);
@@ -345,8 +345,8 @@ export const CreateModelModal: React.FC<CreateModelModalProps> = ({
       if (successTimeoutRef.current) clearTimeout(successTimeoutRef.current);
       if (progressResetTimeoutRef.current) clearTimeout(progressResetTimeoutRef.current);
       
-      successTimeoutRef.current = window.setTimeout(() => setSuccess(''), 3000);
-      progressResetTimeoutRef.current = window.setTimeout(() => {
+      successTimeoutRef.current = globalThis.setTimeout(() => setSuccess(''), 3000);
+      progressResetTimeoutRef.current = globalThis.setTimeout(() => {
         setUploadProgress(prev => ({ ...prev, ecore: { progress: 0, isUploading: false } }));
       }, 2000);
     } catch (err) {
@@ -403,8 +403,8 @@ export const CreateModelModal: React.FC<CreateModelModalProps> = ({
       if (successTimeoutRef.current) clearTimeout(successTimeoutRef.current);
       if (progressResetTimeoutRef.current) clearTimeout(progressResetTimeoutRef.current);
       
-      successTimeoutRef.current = window.setTimeout(() => setSuccess(''), 3000);
-      progressResetTimeoutRef.current = window.setTimeout(() => {
+      successTimeoutRef.current = globalThis.setTimeout(() => setSuccess(''), 3000);
+      progressResetTimeoutRef.current = globalThis.setTimeout(() => {
         setUploadProgress(prev => ({ ...prev, genmodel: { progress: 0, isUploading: false } }));
       }, 2000);
     } catch (err) {
@@ -648,6 +648,12 @@ export const CreateModelModal: React.FC<CreateModelModalProps> = ({
 
   if (!isOpen) return null;
 
+  const getButtonText = (): string => {
+    if (isLoading) return 'Creating...';
+    if (canSave) return 'Import Meta Model';
+    return 'Complete All Fields';
+  };
+
   return ReactDOM.createPortal(
       <>
         {/* Full-screen Submit Overlay */}
@@ -835,7 +841,7 @@ export const CreateModelModal: React.FC<CreateModelModalProps> = ({
                   onMouseEnter={(e) => canSave && !isLoading && !submitProgress.isSubmitting && Object.assign(e.currentTarget.style, buttonHoverStyle)}
                   onMouseLeave={(e) => canSave && !isLoading && !submitProgress.isSubmitting && Object.assign(e.currentTarget.style, primaryButtonStyle)}
               >
-                {isLoading ? 'Creating...' : canSave ? 'Import Meta Model' : 'Complete All Fields'}
+                {getButtonText()}
               </button>
             </div>
           </div>

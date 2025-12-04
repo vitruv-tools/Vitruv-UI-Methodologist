@@ -20,6 +20,259 @@ interface UMLRelationshipData {
   onMergeGroupHover?: (groupId: string | null) => void;
 }
 
+interface PathResult {
+  edgePath: string;
+  sharedSegmentPath: string;
+  labelX: number;
+  labelY: number;
+  startSegDx: number;
+  startSegDy: number;
+  endSegDx: number;
+  endSegDy: number;
+}
+
+interface PathParams {
+  sourceX: number;
+  sourceY: number;
+  targetX: number;
+  targetY: number;
+  dx: number;
+  dy: number;
+  px: number;
+  py: number;
+  distance: number;
+  controlPoint?: { x: number; y: number };
+  mergePoint?: { x: number; y: number; mergeGroupId?: string };
+  hasMerge?: boolean;
+  isFirstInMergeGroup?: boolean;
+  count: number;
+  id: string;
+}
+
+// Helper: Calculate path for merged edges
+function calculateMergedPath(params: PathParams): PathResult {
+  const { sourceX, sourceY, targetX, targetY, mergePoint, isFirstInMergeGroup, id } = params;
+  
+  const edgePath = `M ${sourceX},${sourceY} L ${mergePoint!.x},${mergePoint!.y}`;
+  let sharedSegmentPath = '';
+  
+  console.log(`🔷 Edge ${id}: hasMerge=true, isFirst=${isFirstInMergeGroup}`);
+  
+  if (isFirstInMergeGroup === true) {
+    sharedSegmentPath = `M ${mergePoint!.x},${mergePoint!.y} L ${targetX},${targetY}`;
+    console.log(`✅ Drawing shared segment (edge: ${id})`);
+  } else {
+    console.log(`❌ NOT drawing shared segment (edge: ${id})`);
+  }
+  
+  return {
+    edgePath,
+    sharedSegmentPath,
+    labelX: mergePoint!.x,
+    labelY: mergePoint!.y,
+    startSegDx: mergePoint!.x - sourceX,
+    startSegDy: mergePoint!.y - sourceY,
+    endSegDx: targetX - mergePoint!.x,
+    endSegDy: targetY - mergePoint!.y,
+  };
+}
+
+// Helper: Calculate path with custom control point
+function calculateControlPointPath(params: PathParams): PathResult {
+  const { sourceX, sourceY, targetX, targetY, controlPoint } = params;
+  const cp = controlPoint!;
+  
+  return {
+    edgePath: `M ${sourceX},${sourceY} Q ${cp.x},${cp.y} ${targetX},${targetY}`,
+    sharedSegmentPath: '',
+    labelX: cp.x,
+    labelY: cp.y,
+    startSegDx: cp.x - sourceX,
+    startSegDy: cp.y - sourceY,
+    endSegDx: targetX - cp.x,
+    endSegDy: targetY - cp.y,
+  };
+}
+
+// Helper: Calculate straight line path
+function calculateStraightPath(params: PathParams): PathResult {
+  const { sourceX, sourceY, targetX, targetY, dx, dy } = params;
+  
+  return {
+    edgePath: `M ${sourceX},${sourceY} L ${targetX},${targetY}`,
+    sharedSegmentPath: '',
+    labelX: (sourceX + targetX) / 2,
+    labelY: (sourceY + targetY) / 2,
+    startSegDx: dx,
+    startSegDy: dy,
+    endSegDx: dx,
+    endSegDy: dy,
+  };
+}
+
+// Helper: Calculate smooth curve path
+function calculateCurvePath(params: PathParams): PathResult {
+  const { sourceX, sourceY, targetX, targetY, px, py, distance } = params;
+  const curveFactor = Math.min(distance * 0.25, 120);
+  const cpX = (sourceX + targetX) / 2 + px * curveFactor;
+  const cpY = (sourceY + targetY) / 2 + py * curveFactor;
+  
+  return {
+    edgePath: `M ${sourceX},${sourceY} Q ${cpX},${cpY} ${targetX},${targetY}`,
+    sharedSegmentPath: '',
+    labelX: cpX,
+    labelY: cpY,
+    startSegDx: cpX - sourceX,
+    startSegDy: cpY - sourceY,
+    endSegDx: targetX - cpX,
+    endSegDy: targetY - cpY,
+  };
+}
+
+// Helper: Calculate orthogonal (angled) path
+function calculateOrthogonalPath(params: PathParams): PathResult {
+  const { sourceX, sourceY, targetX, targetY, dx, dy } = params;
+  const preferHorizontalFirst = Math.abs(dx) >= Math.abs(dy);
+  
+  if (preferHorizontalFirst) {
+    const bendX = sourceX + dx * 0.6;
+    const bendY = sourceY;
+    return {
+      edgePath: `M ${sourceX},${sourceY} L ${bendX},${bendY} L ${bendX},${targetY} L ${targetX},${targetY}`,
+      sharedSegmentPath: '',
+      labelX: (sourceX + targetX) / 2,
+      labelY: (sourceY + targetY) / 2,
+      startSegDx: bendX - sourceX,
+      startSegDy: 0,
+      endSegDx: 0,
+      endSegDy: targetY - bendY,
+    };
+  }
+  
+  const bendX = sourceX;
+  const bendY = sourceY + dy * 0.6;
+  return {
+    edgePath: `M ${sourceX},${sourceY} L ${bendX},${bendY} L ${targetX},${bendY} L ${targetX},${targetY}`,
+    sharedSegmentPath: '',
+    labelX: (sourceX + targetX) / 2,
+    labelY: (sourceY + targetY) / 2,
+    startSegDx: 0,
+    startSegDy: bendY - sourceY,
+    endSegDx: targetX - bendX,
+    endSegDy: 0,
+  };
+}
+
+// Main path calculation function
+function calculateEdgePath(params: PathParams): PathResult {
+  const { controlPoint, hasMerge, mergePoint, count, distance, dx, dy } = params;
+  
+  // PRIORITY 0: Use merge point if edges are merged
+  if (hasMerge && mergePoint) {
+    return calculateMergedPath(params);
+  }
+  
+  // PRIORITY 1: Custom control point
+  if (controlPoint) {
+    return calculateControlPointPath(params);
+  }
+  
+  // PRIORITY 2: Straight line (strongly preferred)
+  const isAlignedHorizontally = Math.abs(dy) < 150;
+  const isAlignedVertically = Math.abs(dx) < 150;
+  const isReasonableDistance = distance < 800;
+  const useStraightLine = count === 1 && (isAlignedHorizontally || isAlignedVertically || isReasonableDistance);
+  
+  if (useStraightLine) {
+    return calculateStraightPath(params);
+  }
+  
+  // PRIORITY 3: Smooth curve for very long distances
+  if (count === 1 && distance > 500) {
+    return calculateCurvePath(params);
+  }
+  
+  // FALLBACK: Orthogonal path
+  return calculateOrthogonalPath(params);
+}
+
+// Helper: Get highlight color based on state
+function getHighlightColor(isHighlighted: boolean, isHovered: boolean): string {
+  if (isHighlighted) return '#ef4444';
+  if (isHovered) return '#f87171';
+  return '#374151';
+}
+
+// Helper: Get stroke width based on state
+function getStrokeWidth(isHighlighted: boolean, isHovered: boolean): string {
+  if (isHighlighted) return '3.5px';
+  if (isHovered) return '3px';
+  return '2.5px';
+}
+
+// Helper: Get marker suffix based on state
+function getMarkerSuffix(isHighlighted: boolean, isHovered: boolean): string {
+  if (isHighlighted) return '-selected';
+  if (isHovered) return '-hover';
+  return '';
+}
+
+// Helper: Build relationship style object
+function buildRelationshipStyle(
+  strokeColor: string,
+  strokeWidth: string,
+  markerSuffix: string,
+  relationshipType?: string
+): Record<string, string> {
+  const baseStyle = {
+    strokeWidth,
+    stroke: strokeColor,
+    fill: 'none',
+    opacity: '0.9',
+    cursor: 'pointer',
+    transition: 'stroke 0.2s ease, stroke-width 0.2s ease',
+  };
+
+  if (relationshipType === 'inheritance') {
+    return { ...baseStyle, markerEnd: `url(#arrowhead-inheritance${markerSuffix})` };
+  }
+  if (relationshipType === 'realization') {
+    return { ...baseStyle, strokeDasharray: '10,6', markerEnd: `url(#arrowhead-realization${markerSuffix})` };
+  }
+  if (relationshipType === 'composition') {
+    return { ...baseStyle, markerStart: `url(#diamond-composition${markerSuffix})` };
+  }
+  if (relationshipType === 'aggregation') {
+    return { ...baseStyle, markerStart: `url(#diamond-aggregation${markerSuffix})` };
+  }
+  if (relationshipType === 'dependency') {
+    return { ...baseStyle, strokeDasharray: '8,5', markerEnd: `url(#arrowhead-open-dependency${markerSuffix})` };
+  }
+  
+  return baseStyle;
+}
+
+// Helper: Calculate multiplicity label position
+function calculateMultiplicityPosition(
+  baseX: number,
+  baseY: number,
+  segDx: number,
+  segDy: number,
+  direction: 'start' | 'end'
+): { x: number; y: number } {
+  const len = Math.max(Math.hypot(segDx, segDy), 0.0001);
+  const ux = segDx / len;
+  const uy = segDy / len;
+  const nx = -uy;
+  const ny = ux;
+  const offset = direction === 'start' ? 18 : -18;
+  
+  return {
+    x: baseX + ux * offset + nx * 16,
+    y: baseY + uy * offset + ny * 16,
+  };
+}
+
 export function UMLRelationship({
   id,
   source,
@@ -99,7 +352,7 @@ export function UMLRelationship({
     const event = new CustomEvent('edge-clicked', { 
       detail: { edgeId: id, currentlySelected: selected } 
     });
-    window.dispatchEvent(event);
+    globalThis.dispatchEvent(event);
   };
 
   const handleControlPointDragStart = (e: React.MouseEvent) => {
@@ -115,7 +368,7 @@ export function UMLRelationship({
       const event = new CustomEvent('uml-edge-control-drag', {
         detail: { edgeId: id, x: e.clientX, y: e.clientY }
       });
-      window.dispatchEvent(event);
+      globalThis.dispatchEvent(event);
     };
 
     const handleMouseUp = () => {
@@ -138,25 +391,18 @@ export function UMLRelationship({
     const event = new CustomEvent('uml-edge-control-drop', {
       detail: { edgeId: id, point: null }
     });
-    window.dispatchEvent(event);
+    globalThis.dispatchEvent(event);
   };
   
   // Compute orthogonal (Manhattan) path with a bend and parallel offset
   const dx = targetX - sourceX;
   const dy = targetY - sourceY;
   const length = Math.max(Math.hypot(dx, dy), 0.0001);
-  const ux = dx / length;
   const uy = dy / length;
   // Perpendicular to the overall direction
   const px = -uy;
-  const py = ux;
+  const py = dx / length;
   const count = Math.max(1, data?.parallelCount ?? 1);
-  
-  let edgePath: string;
-  let labelX: number;
-  let labelY: number;
-  // For multiplicity placement we need segment directions
-  let startSegDx = 0, startSegDy = 0, endSegDx = 0, endSegDy = 0;
   
   // Use custom control point if set
   const controlPoint = data?.customControlPoint;
@@ -164,162 +410,27 @@ export function UMLRelationship({
   const hasMerge = data?.hasMerge;
   const isFirstInMergeGroup = data?.isFirstInMergeGroup;
   
-  const distance = Math.sqrt(dx * dx + dy * dy);
+  const distance = Math.hypot(dx, dy);
   
-  // PRIORITY 1: Straight line (STRONGLY PREFERRED - handles are already optimally placed!)
-  // Since handles are chosen based on box positions, straight lines work well almost always
-  const isAlignedHorizontally = Math.abs(dy) < 150; // Horizontal alignment
-  const isAlignedVertically = Math.abs(dx) < 150; // Vertical alignment
-  const isReasonableDistance = distance < 800; // Most distances
+  // Calculate path using helper function
+  const pathResult = calculateEdgePath({
+    sourceX, sourceY, targetX, targetY,
+    dx, dy, px, py, distance,
+    controlPoint, mergePoint, hasMerge, isFirstInMergeGroup,
+    count, id,
+  });
   
-  const useStraightLine = !controlPoint && !hasMerge && count === 1 && 
-    (isAlignedHorizontally || isAlignedVertically || isReasonableDistance);
-  
-  // PRIORITY 2: Smooth curve (only for very long distances where straight would cross too much space)
-  const needsCurve = !useStraightLine && !controlPoint && !hasMerge && count === 1 && distance > 500;
-  
-  // Shared segment path (for merged edges)
-  let sharedSegmentPath = '';
-  
-  // PRIORITY 0: Use merge point if edges are merged
-  if (hasMerge && mergePoint) {
-    // Draw ONLY from source to merge point (not to target)
-    edgePath = `M ${sourceX},${sourceY} L ${mergePoint.x},${mergePoint.y}`;
-    
-    console.log(`🔷 Edge ${id}: hasMerge=true, isFirst=${isFirstInMergeGroup}`);
-    
-    // CRITICAL: If this is the first edge in the merge group, draw the shared segment
-    if (isFirstInMergeGroup === true) {
-      sharedSegmentPath = `M ${mergePoint.x},${mergePoint.y} L ${targetX},${targetY}`;
-      console.log(`✅ Drawing shared segment (edge: ${id})`);
-    } else {
-      console.log(`❌ NOT drawing shared segment (edge: ${id})`);
-    }
-    
-    labelX = mergePoint.x;
-    labelY = mergePoint.y;
-    startSegDx = mergePoint.x - sourceX;
-    startSegDy = mergePoint.y - sourceY;
-    endSegDx = targetX - mergePoint.x;
-    endSegDy = targetY - mergePoint.y;
-  } else if (controlPoint) {
-    // Custom curved path through user-defined control point
-    const cp = controlPoint;
-    edgePath = `M ${sourceX},${sourceY} Q ${cp.x},${cp.y} ${targetX},${targetY}`;
-    labelX = cp.x;
-    labelY = cp.y;
-    startSegDx = cp.x - sourceX;
-    startSegDy = cp.y - sourceY;
-    endSegDx = targetX - cp.x;
-    endSegDy = targetY - cp.y;
-  } else if (useStraightLine) {
-    // BEST: Simple straight line - cleanest look
-    edgePath = `M ${sourceX},${sourceY} L ${targetX},${targetY}`;
-    labelX = (sourceX + targetX) / 2;
-    labelY = (sourceY + targetY) / 2;
-    startSegDx = dx;
-    startSegDy = dy;
-    endSegDx = dx;
-    endSegDy = dy;
-  } else if (needsCurve) {
-    // PREFERRED: Beautiful smooth curves - more pronounced for better visibility
-    // Calculate control point for natural, visible curve
-    const curveFactor = Math.min(distance * 0.25, 120); // More pronounced curve
-    const cpX = (sourceX + targetX) / 2 + px * curveFactor;
-    const cpY = (sourceY + targetY) / 2 + py * curveFactor;
-    edgePath = `M ${sourceX},${sourceY} Q ${cpX},${cpY} ${targetX},${targetY}`;
-    labelX = cpX;
-    labelY = cpY;
-    startSegDx = cpX - sourceX;
-    startSegDy = cpY - sourceY;
-    endSegDx = targetX - cpX;
-    endSegDy = targetY - cpY;
-  } else {
-    // FALLBACK: Use angle only when necessary (long distances or complex routing)
-    const preferHorizontalFirst = Math.abs(dx) >= Math.abs(dy);
-    
-    // Use simple 2-segment path (one angle)
-    if (preferHorizontalFirst) {
-      // Go horizontal first, then vertical
-      const bendX = sourceX + dx * 0.6; // Bend closer to target
-      const bendY = sourceY;
-      edgePath = `M ${sourceX},${sourceY} L ${bendX},${bendY} L ${bendX},${targetY} L ${targetX},${targetY}`;
-      labelX = (sourceX + targetX) / 2;
-      labelY = (sourceY + targetY) / 2;
-      startSegDx = bendX - sourceX;
-      startSegDy = 0;
-      endSegDx = 0;
-      endSegDy = targetY - bendY;
-    } else {
-      // Go vertical first, then horizontal
-      const bendX = sourceX;
-      const bendY = sourceY + dy * 0.6; // Bend closer to target
-      edgePath = `M ${sourceX},${sourceY} L ${bendX},${bendY} L ${targetX},${bendY} L ${targetX},${targetY}`;
-      labelX = (sourceX + targetX) / 2;
-      labelY = (sourceY + targetY) / 2;
-      startSegDx = 0;
-      startSegDy = bendY - sourceY;
-      endSegDx = targetX - bendX;
-      endSegDy = 0;
-    }
-  }
+  const { edgePath, sharedSegmentPath, labelX, labelY, startSegDx, startSegDy, endSegDx, endSegDy } = pathResult;
 
   // marker types are described via ids in <defs> below
 
   const getRelationshipStyle = (useHighlight: boolean = isHighlighted) => {
-    // Priority: highlighted (selected or node selected) > hovered > default
-    // When highlighted: red, when hovered (not highlighted): lighter red, otherwise: black
-    const strokeColor = useHighlight ? '#ef4444' : (isHovered ? '#f87171' : '#374151');
-    const strokeWidth = useHighlight ? '3.5px' : (isHovered ? '3px' : '2.5px');
+    const strokeColor = getHighlightColor(useHighlight, isHovered);
+    const strokeWidth = getStrokeWidth(useHighlight, isHovered);
+    const markerSuffix = getMarkerSuffix(useHighlight, isHovered);
+    const relationshipType = data?.relationshipType;
     
-    const baseStyle = {
-      strokeWidth,
-      stroke: strokeColor,
-      fill: 'none',
-      opacity: '0.9',
-      cursor: 'pointer',
-      transition: 'stroke 0.2s ease, stroke-width 0.2s ease',
-    };
-
-    switch (data?.relationshipType) {
-      case 'inheritance':
-        return {
-          ...baseStyle,
-          markerEnd: useHighlight ? 'url(#arrowhead-inheritance-selected)' : (isHovered ? 'url(#arrowhead-inheritance-hover)' : 'url(#arrowhead-inheritance)'),
-        };
-      case 'realization':
-        return {
-          ...baseStyle,
-          strokeDasharray: '10,6',
-          markerEnd: useHighlight ? 'url(#arrowhead-realization-selected)' : (isHovered ? 'url(#arrowhead-realization-hover)' : 'url(#arrowhead-realization)'),
-        };
-      case 'composition':
-        return {
-          ...baseStyle,
-          // UML: filled diamond at the whole (source) end, no arrow at target
-          markerStart: useHighlight ? 'url(#diamond-composition-selected)' : (isHovered ? 'url(#diamond-composition-hover)' : 'url(#diamond-composition)'),
-        };
-      case 'aggregation':
-        return {
-          ...baseStyle,
-          // UML: hollow diamond at the whole (source) end, no arrow at target
-          markerStart: useHighlight ? 'url(#diamond-aggregation-selected)' : (isHovered ? 'url(#diamond-aggregation-hover)' : 'url(#diamond-aggregation)'),
-        };
-      case 'association':
-        return {
-          ...baseStyle,
-          // UML: plain solid line for association by default
-        };
-      case 'dependency':
-        return {
-          ...baseStyle,
-          strokeDasharray: '8,5',
-          // UML: dashed line with open arrow
-          markerEnd: useHighlight ? 'url(#arrowhead-open-dependency-selected)' : (isHovered ? 'url(#arrowhead-open-dependency-hover)' : 'url(#arrowhead-open-dependency)'),
-        };
-      default:
-        return baseStyle;
-    }
+    return buildRelationshipStyle(strokeColor, strokeWidth, markerSuffix, relationshipType);
   };
 
   const getRelationshipLabel = () => {
@@ -397,7 +508,7 @@ export function UMLRelationship({
         className="react-flow__edge-path"
         style={{
           stroke: '#ffffff',
-          strokeWidth: isHighlighted ? 8 : (isHovered ? 8 : 7),
+          strokeWidth: (isHighlighted || isHovered) ? 8 : 7,
           opacity: 0.95,
           fill: 'none',
           strokeLinecap: 'butt',
@@ -475,7 +586,7 @@ export function UMLRelationship({
             d={sharedSegmentPath}
             style={{
               stroke: '#ffffff',
-              strokeWidth: isSharedSegmentHighlighted ? 8 : (isHovered ? 8 : 7),
+              strokeWidth: (isSharedSegmentHighlighted || isHovered) ? 8 : 7,
               opacity: 0.95,
               fill: 'none',
               strokeLinecap: 'butt',
@@ -540,7 +651,7 @@ export function UMLRelationship({
             ry={6}
             width={24}
             height={16}
-            fill={isMergeDotRed ? '#ef4444' : (isHovered ? '#f87171' : '#374151')}
+            fill={getHighlightColor(isMergeDotRed, isHovered)}
             stroke="#ffffff"
             strokeWidth={2}
             style={{
@@ -566,27 +677,15 @@ export function UMLRelationship({
 
       {(data?.sourceMultiplicity !== undefined && data?.sourceMultiplicity !== null && data?.sourceMultiplicity !== '') && (
         <text
-          x={(() => {
-            const len = Math.max(Math.hypot(startSegDx, startSegDy), 0.0001);
-            const sx = startSegDx / len;
-            const sy = startSegDy / len;
-            const nx = -sy;
-            return sourceX + sx * 18 + nx * 16;
-          })()}
-          y={(() => {
-            const len = Math.max(Math.hypot(startSegDx, startSegDy), 0.0001);
-            const sx = startSegDx / len;
-            const sy = startSegDy / len;
-            const ny = sx;
-            return sourceY + sy * 18 + ny * 16;
-          })()}
+          x={calculateMultiplicityPosition(sourceX, sourceY, startSegDx, startSegDy, 'start').x}
+          y={calculateMultiplicityPosition(sourceX, sourceY, startSegDx, startSegDy, 'start').y}
           className="react-flow__edge-text"
           textAnchor="middle"
           dominantBaseline="middle"
           style={{
             fontSize: '13px',
             fontWeight: 800,
-            fill: isHighlighted ? '#ef4444' : (isHovered ? '#f87171' : '#111827'),
+            fill: getHighlightColor(isHighlighted, isHovered),
             stroke: '#ffffff',
             strokeWidth: 4,
             paintOrder: 'stroke fill',
@@ -601,27 +700,15 @@ export function UMLRelationship({
 
       {(data?.targetMultiplicity !== undefined && data?.targetMultiplicity !== null && data?.targetMultiplicity !== '') && (
         <text
-          x={(() => {
-            const len = Math.max(Math.hypot(endSegDx, endSegDy), 0.0001);
-            const ex = endSegDx / len;
-            const ey = endSegDy / len;
-            const nx = -ey;
-            return targetX - ex * 18 + nx * 16;
-          })()}
-          y={(() => {
-            const len = Math.max(Math.hypot(endSegDx, endSegDy), 0.0001);
-            const ex = endSegDx / len;
-            const ey = endSegDy / len;
-            const ny = ex;
-            return targetY - ey * 18 + ny * 16;
-          })()}
+          x={calculateMultiplicityPosition(targetX, targetY, endSegDx, endSegDy, 'end').x}
+          y={calculateMultiplicityPosition(targetX, targetY, endSegDx, endSegDy, 'end').y}
           className="react-flow__edge-text"
           textAnchor="middle"
           dominantBaseline="middle"
           style={{
             fontSize: '13px',
             fontWeight: 800,
-            fill: isHighlighted ? '#ef4444' : (isHovered ? '#f87171' : '#111827'),
+            fill: getHighlightColor(isHighlighted, isHovered),
             stroke: '#ffffff',
             strokeWidth: 4,
             paintOrder: 'stroke fill',
@@ -767,7 +854,7 @@ export function UMLRelationship({
             cx={mergePoint.x}
             cy={mergePoint.y}
             r="5"
-            fill={isMergeDotRed ? '#ef4444' : (isHovered ? '#f87171' : '#374151')}
+            fill={getHighlightColor(isMergeDotRed, isHovered)}
             stroke="#ffffff"
             strokeWidth="2"
             style={{

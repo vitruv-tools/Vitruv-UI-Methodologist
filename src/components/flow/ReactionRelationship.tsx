@@ -289,10 +289,36 @@ export function ReactionRelationship({
     const event = new CustomEvent('edge-clicked', { 
       detail: { edgeId: id, currentlySelected: selected } 
     });
-    window.dispatchEvent(event);
+    globalThis.dispatchEvent(event);
   };
   const edgeColor = style?.stroke || '#3b82f6';
   const edgeWidth = style?.strokeWidth || 2;
+
+  // Pre-compute style values to reduce cognitive complexity
+  const getStateBasedColor = (defaultColor: string): string => {
+    if (isHighlighted) return '#ef4444';
+    if (isHovered) return '#f87171';
+    return defaultColor;
+  };
+
+  const getMainStrokeWidth = (): string => {
+    const baseWidth = Number(edgeWidth);
+    if (isHighlighted) return `${baseWidth + 2}px`;
+    if (isHovered) return `${baseWidth + 1}px`;
+    return `${baseWidth}px`;
+  };
+
+  const activeColor = getStateBasedColor(edgeColor);
+  const labelColor = getStateBasedColor('#1f2937');
+  const codeIndicatorColor = getStateBasedColor('#0e639c');
+  const isActive = isHighlighted || isHovered;
+  const underlayWidth = isActive ? 8 : 7;
+  const mainStrokeWidth = getMainStrokeWidth();
+  const controlPointFill = isDraggingSegment ? '#3b82f6' : '#ffffff';
+  const showOrthogonalControls = selected && data?.routingStyle === 'orthogonal';
+
+  const handleMouseEnter = () => setIsHovered(true);
+  const handleMouseLeave = () => setIsHovered(false);
 
   return (
     <>
@@ -302,7 +328,7 @@ export function ReactionRelationship({
         className="react-flow__edge-path"
         style={{
           stroke: '#ffffff',
-          strokeWidth: isHighlighted ? 8 : (isHovered ? 8 : 7),
+          strokeWidth: underlayWidth,
           opacity: 0.95,
           fill: 'none',
           strokeLinecap: 'round',
@@ -322,15 +348,15 @@ export function ReactionRelationship({
         }}
         onClick={handleClick}
         onDoubleClick={handleDoubleClick}
-        onMouseEnter={() => setIsHovered(true)}
-        onMouseLeave={() => setIsHovered(false)}
+        onMouseEnter={handleMouseEnter}
+        onMouseLeave={handleMouseLeave}
       />
 
       <path
         id={id}
         style={{
-          strokeWidth: isHighlighted ? `${Number(edgeWidth) + 2}px` : (isHovered ? `${Number(edgeWidth) + 1}px` : `${edgeWidth}px`),
-          stroke: isHighlighted ? '#ef4444' : (isHovered ? '#f87171' : edgeColor),
+          strokeWidth: mainStrokeWidth,
+          stroke: activeColor,
           fill: 'none',
           cursor: 'pointer',
           strokeLinecap: 'round',
@@ -340,15 +366,15 @@ export function ReactionRelationship({
         d={edgePath}
         onClick={handleClick}
         onDoubleClick={handleDoubleClick}
-        onMouseEnter={() => setIsHovered(true)}
-        onMouseLeave={() => setIsHovered(false)}
+        onMouseEnter={handleMouseEnter}
+        onMouseLeave={handleMouseLeave}
       />
 
       <g transform={`translate(${arrowX}, ${arrowY}) rotate(${arrowAngle})`}>
         <polygon
           points="-10,-6 0,0 -10,6"
-          fill={isHighlighted ? '#ef4444' : (isHovered ? '#f87171' : edgeColor)}
-          stroke={isHighlighted ? '#ef4444' : (isHovered ? '#f87171' : edgeColor)}
+          fill={activeColor}
+          stroke={activeColor}
           strokeWidth="1"
           style={{ 
             cursor: 'pointer',
@@ -356,8 +382,8 @@ export function ReactionRelationship({
           }}
           onClick={handleClick}
           onDoubleClick={handleDoubleClick}
-          onMouseEnter={() => setIsHovered(true)}
-          onMouseLeave={() => setIsHovered(false)}
+          onMouseEnter={handleMouseEnter}
+          onMouseLeave={handleMouseLeave}
         />
       </g>
 
@@ -370,7 +396,7 @@ export function ReactionRelationship({
           style={{
             fontSize: '12px',
             fontWeight: 700,
-            fill: isHighlighted ? '#ef4444' : (isHovered ? '#f87171' : '#1f2937'),
+            fill: labelColor,
             stroke: '#ffffff',
             strokeWidth: 3.5,
             paintOrder: 'stroke fill',
@@ -388,7 +414,7 @@ export function ReactionRelationship({
             cx={labelX + 20}
             cy={labelY - 15}
             r="10"
-            fill={isHighlighted ? '#ef4444' : (isHovered ? '#f87171' : '#0e639c')}
+            fill={codeIndicatorColor}
             stroke="#fff"
             strokeWidth="2"
             style={{
@@ -413,14 +439,15 @@ export function ReactionRelationship({
       )}
 
 
-      {selected && data?.routingStyle === 'orthogonal' && segments.map((segment, index) => {
+      {showOrthogonalControls && segments.map((segment, index) => {
         if (!segment.canDrag) return null;
         
         const segmentPath = `M ${segment.start.x},${segment.start.y} L ${segment.end.x},${segment.end.y}`;
         const isBeingDragged = isDraggingSegment && draggedSegmentIndex === index;
+        const segmentKey = `${id}-segment-${segment.start.x}-${segment.start.y}-${segment.end.x}-${segment.end.y}`;
         
         return (
-          <g key={`segment-${index}`}>
+          <g key={segmentKey}>
             <path
               d={segmentPath}
               style={{
@@ -448,12 +475,12 @@ export function ReactionRelationship({
         );
       })}
 
-      {selected && data?.routingStyle === 'orthogonal' && controlPoint && (
+      {showOrthogonalControls && controlPoint && (
         <circle
           cx={controlPoint.x}
           cy={controlPoint.y}
           r="6"
-          fill={isDraggingSegment ? '#3b82f6' : '#ffffff'}
+          fill={controlPointFill}
           stroke={edgeColor}
           strokeWidth="2"
           style={{ pointerEvents: 'none' }}

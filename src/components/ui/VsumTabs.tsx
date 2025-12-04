@@ -3,6 +3,12 @@ import { VsumDetails } from '../../types';
 import { apiService, MetaModelRelationRequest } from '../../services/api';
 import { WorkspaceSnapshot } from '../../types/workspace';
 
+const POPUP_STYLES = {
+    success: { background: '#ecfdf3', border: '1px solid #bbf7d0', color: '#166534', icon: '✅' },
+    error: { background: '#fef2f2', border: '1px solid #fecaca', color: '#991b1b', icon: '⚠️' },
+    info: { background: '#eff6ff', border: '1px solid #bfdbfe', color: '#1d4ed8', icon: 'ℹ️' },
+} as const;
+
 interface OpenTabInstance {
     instanceId: string;
     id: number;
@@ -120,20 +126,20 @@ export const VsumTabs: React.FC<VsumTabsProps> = ({
         };
 
         update();
-        const intervalId = window.setInterval(update, 800);
+        const intervalId = globalThis.setInterval(update, 800);
 
         return () => {
             cancelled = true;
-            window.clearInterval(intervalId);
+            globalThis.clearInterval(intervalId);
         };
     }, [requestWorkspaceSnapshot, activeInstanceId]);
 
     useEffect(() => {
         if (!popup) return;
-        const timer = window.setTimeout(() => {
+        const timer = globalThis.setTimeout(() => {
             setPopup(null);
         }, 4000);
-        return () => window.clearTimeout(timer);
+        return () => globalThis.clearTimeout(timer);
     }, [popup]);
 
     // ---- save logic ------------------------------------------------
@@ -209,7 +215,7 @@ export const VsumTabs: React.FC<VsumTabsProps> = ({
             const res = await apiService.getVsumDetails(id);
             setDetailsById(prev => ({ ...prev, [id]: res.data }));
 
-            window.dispatchEvent(new CustomEvent('vitruv.refreshVsums'));
+            globalThis.dispatchEvent(new CustomEvent('vitruv.refreshVsums'));
         } catch (e) {
             const msg = e instanceof Error ? e.message : 'Failed to save VSUM';
             setError(msg);
@@ -406,31 +412,16 @@ export const VsumTabs: React.FC<VsumTabsProps> = ({
                         padding: '10px 14px',
                         borderRadius: 10,
                         boxShadow: '0 6px 20px rgba(0,0,0,0.18)',
-                        background:
-                            popup.type === 'success'
-                                ? '#ecfdf3'
-                                : popup.type === 'error'
-                                    ? '#fef2f2'
-                                    : '#eff6ff',
-                        border:
-                            popup.type === 'success'
-                                ? '1px solid #bbf7d0'
-                                : popup.type === 'error'
-                                    ? '1px solid #fecaca'
-                                    : '1px solid #bfdbfe',
-                        color:
-                            popup.type === 'success'
-                                ? '#166534'
-                                : popup.type === 'error'
-                                    ? '#991b1b'
-                                    : '#1d4ed8',
+                        background: POPUP_STYLES[popup.type].background,
+                        border: POPUP_STYLES[popup.type].border,
+                        color: POPUP_STYLES[popup.type].color,
                         display: 'flex',
                         alignItems: 'flex-start',
                         gap: 8,
                     }}
                 >
                     <div style={{ fontSize: 16 }}>
-                        {popup.type === 'success' ? '✅' : popup.type === 'error' ? '⚠️' : 'ℹ️'}
+                        {POPUP_STYLES[popup.type].icon}
                     </div>
                     <div style={{ flex: 1, fontSize: 13, fontWeight: 500, whiteSpace: 'pre-wrap' }}>
                         {popup.message}

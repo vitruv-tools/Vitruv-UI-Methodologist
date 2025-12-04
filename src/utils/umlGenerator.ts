@@ -1,15 +1,244 @@
 import { FlowEdge, FlowNode } from '../types/flow';
 
+// Layout constants
+const NODE_WIDTH = 280;
+const NODE_HEIGHT = 220;
+const HORIZONTAL_SPACING = 30;  // Very tight - boxes almost touching on X
+const VERTICAL_SPACING = 280;   // Large vertical spacing for big Y differences
+const START_X = 150;
+const START_Y = 150;
+
+// Helper function to find a node by ID
+const findNodeById = (nodes: FlowNode[], nodeId: string): FlowNode | undefined => {
+  return nodes.find(n => n.id === nodeId);
+};
+
+// Calculate tree width for hierarchical layout
+const getTreeWidth = (
+  nodeId: string,
+  parentToChildren: Map<string, string[]>
+): number => {
+  const children = parentToChildren.get(nodeId) || [];
+  if (children.length === 0) return 1;
+  return children.reduce((sum, childId) => sum + getTreeWidth(childId, parentToChildren), 0);
+};
+
+// Layout a single tree node and its children recursively
+const layoutTreeNode = (
+  nodeId: string,
+  level: number,
+  leftBound: number,
+  rightBound: number,
+  rootTreeWidth: number,
+  startY: number,
+  nodes: FlowNode[],
+  parentToChildren: Map<string, string[]>
+): void => {
+  const node = findNodeById(nodes, nodeId);
+  if (!node) return;
+  
+  const centerX = (leftBound + rightBound) / 2;
+  const verticalJitter = (Math.random() - 0.5) * 160; // ±80px variation
+  const yPos = startY + level * (NODE_HEIGHT + VERTICAL_SPACING) + verticalJitter;
+  node.position = { x: centerX, y: yPos };
+
+  const children = parentToChildren.get(nodeId) || [];
+  if (children.length === 0) return;
+
+  let childX = leftBound;
+  children.forEach(childId => {
+    const childWidth = getTreeWidth(childId, parentToChildren);
+    const childSpace = (rightBound - leftBound) * (childWidth / Math.max(rootTreeWidth, 1));
+    layoutTreeNode(childId, level + 1, childX, childX + childSpace, rootTreeWidth, startY, nodes, parentToChildren);
+    childX += childSpace;
+  });
+};
+
+// Layout a connected component of nodes
+const layoutComponent = (
+  componentNodes: string[],
+  startX: number,
+  startY: number,
+  nodes: FlowNode[],
+  edges: FlowEdge[],
+  adjacencyMap: Map<string, Set<string>>
+): void => {
+  if (componentNodes.length === 1) {
+    const node = findNodeById(nodes, componentNodes[0]);
+    if (!node) return;
+    const verticalJitter = (Math.random() - 0.5) * 180;
+    node.position = { x: startX, y: startY + verticalJitter };
+    return;
+  }
+
+  const inheritanceEdges = edges.filter(e => 
+    componentNodes.includes(e.source) && 
+    componentNodes.includes(e.target) && 
+    e.data?.relationshipType === 'inheritance'
+  );
+
+  if (inheritanceEdges.length > 0) {
+    const childToParent = new Map<string, string>();
+    const parentToChildren = new Map<string, string[]>();
+
+    inheritanceEdges.forEach(edge => {
+      childToParent.set(edge.source, edge.target);
+      const children = parentToChildren.get(edge.target) || [];
+      children.push(edge.source);
+      parentToChildren.set(edge.target, children);
+    });
+
+    const roots = componentNodes.filter(id => !childToParent.has(id));
+    let currentX = startX;
+
+    roots.forEach(rootId => {
+      const treeWidth = getTreeWidth(rootId, parentToChildren);
+      const treeSpace = treeWidth * (NODE_WIDTH + HORIZONTAL_SPACING);
+      layoutTreeNode(rootId, 0, currentX, currentX + treeSpace, treeWidth, startY, nodes, parentToChildren);
+      currentX += treeSpace + HORIZONTAL_SPACING * 2;
+    });
+  } else {
+    layoutForceDirected(componentNodes, startX, startY, nodes, adjacencyMap);
+  }
+};
+
+// Force-directed layout for non-hierarchical components
+const layoutForceDirected = (
+  componentNodes: string[],
+  startX: number,
+  startY: number,
+  nodes: FlowNode[],
+  adjacencyMap: Map<string, Set<string>>
+): void => {
+  const positions = new Map<string, { x: number; y: number }>();
+  
+  const gridSize = Math.min(Math.max(1, Math.ceil(componentNodes.length / 4)), 2);
+  componentNodes.forEach((nodeId, idx) => {
+    const row = Math.floor(idx / gridSize);
+    const col = idx % gridSize;
+    const verticalJitter = (Math.random() - 0.5) * 200;
+    positions.set(nodeId, {
+      x: startX + col * (NODE_WIDTH + HORIZONTAL_SPACING),
+      y: startY + row * (NODE_HEIGHT + VERTICAL_SPACING) + verticalJitter
+    });
+  });
+
+  const ITERATIONS = 150;
+  const IDEAL_DISTANCE = NODE_WIDTH + HORIZONTAL_SPACING * 0.4;
+  const REPULSION = 28000;
+  const ATTRACTION = 0.65;
+  const DAMPING = 0.85;
+  const VERTICAL_BIAS = 2;
+
+  for (let iter = 0; iter < ITERATIONS; iter++) {
+    const forces = new Map<string, { x: number; y: number }>();
+    componentNodes.forEach(id => forces.set(id, { x: 0, y: 0 }));
+
+    applyRepulsionForces(componentNodes, positions, forces, REPULSION, VERTICAL_BIAS);
+    applyAttractionForces(componentNodes, positions, forces, adjacencyMap, ATTRACTION, IDEAL_DISTANCE);
+
+    const coolingFactor = 1 - (iter / ITERATIONS) * 0.3;
+    componentNodes.forEach(nodeId => {
+      const pos = positions.get(nodeId)!;
+      const force = forces.get(nodeId)!;
+      pos.x += force.x * DAMPING * coolingFactor;
+      pos.y += force.y * DAMPING * coolingFactor;
+    });
+  }
+
+  normalizeAndApplyPositions(componentNodes, positions, startX, startY, nodes);
+};
+
+// Apply repulsion forces between all node pairs
+const applyRepulsionForces = (
+  componentNodes: string[],
+  positions: Map<string, { x: number; y: number }>,
+  forces: Map<string, { x: number; y: number }>,
+  repulsion: number,
+  verticalBias: number
+): void => {
+  for (let i = 0; i < componentNodes.length; i++) {
+    for (let j = i + 1; j < componentNodes.length; j++) {
+      const nodeA = componentNodes[i];
+      const nodeB = componentNodes[j];
+      const posA = positions.get(nodeA)!;
+      const posB = positions.get(nodeB)!;
+
+      const dx = posB.x - posA.x;
+      const dy = posB.y - posA.y;
+      const dist = Math.max(Math.hypot(dx, dy), 1);
+
+      const force = repulsion / (dist * dist);
+      const fx = (dx / dist) * force * 0.15;
+      const fy = (dy / dist) * force * verticalBias;
+
+      forces.get(nodeA)!.x -= fx;
+      forces.get(nodeA)!.y -= fy;
+      forces.get(nodeB)!.x += fx;
+      forces.get(nodeB)!.y += fy;
+    }
+  }
+};
+
+// Apply attraction forces for connected nodes
+const applyAttractionForces = (
+  componentNodes: string[],
+  positions: Map<string, { x: number; y: number }>,
+  forces: Map<string, { x: number; y: number }>,
+  adjacencyMap: Map<string, Set<string>>,
+  attraction: number,
+  idealDistance: number
+): void => {
+  componentNodes.forEach(nodeId => {
+    const neighbors = adjacencyMap.get(nodeId) || new Set();
+    neighbors.forEach(neighborId => {
+      if (!componentNodes.includes(neighborId)) return;
+
+      const posA = positions.get(nodeId)!;
+      const posB = positions.get(neighborId)!;
+
+      const dx = posB.x - posA.x;
+      const dy = posB.y - posA.y;
+      const dist = Math.max(Math.hypot(dx, dy), 1);
+
+      const force = attraction * (dist - idealDistance);
+      const fx = (dx / dist) * force;
+      const fy = (dy / dist) * force;
+
+      forces.get(nodeId)!.x += fx;
+      forces.get(nodeId)!.y += fy;
+    });
+  });
+};
+
+// Normalize positions and apply to nodes
+const normalizeAndApplyPositions = (
+  componentNodes: string[],
+  positions: Map<string, { x: number; y: number }>,
+  startX: number,
+  startY: number,
+  nodes: FlowNode[]
+): void => {
+  let minX = Infinity, minY = Infinity;
+  positions.forEach(pos => {
+    minX = Math.min(minX, pos.x);
+    minY = Math.min(minY, pos.y);
+  });
+
+  componentNodes.forEach(nodeId => {
+    const node = findNodeById(nodes, nodeId);
+    const pos = positions.get(nodeId);
+    if (!node || !pos) return;
+    node.position = {
+      x: pos.x - minX + startX,
+      y: pos.y - minY + startY
+    };
+  });
+};
+
 // Intelligent layout algorithm for UML diagrams
 function applyIntelligentLayout(nodes: FlowNode[], edges: FlowEdge[]): void {
   if (nodes.length === 0) return;
-
-  const NODE_WIDTH = 280;
-  const NODE_HEIGHT = 220;
-  const HORIZONTAL_SPACING = 30;  // Very tight - boxes almost touching on X
-  const VERTICAL_SPACING = 280;   // Large vertical spacing for big Y differences
-  const START_X = 150;
-  const START_Y = 150;
 
   // Build adjacency map
   const adjacencyMap = new Map<string, Set<string>>();
@@ -58,189 +287,19 @@ function applyIntelligentLayout(nodes: FlowNode[], edges: FlowEdge[]): void {
     }
   });
 
-  // Hierarchical layout for inheritance hierarchies
-  const layoutComponent = (componentNodes: string[], startX: number, startY: number) => {
-    if (componentNodes.length === 1) {
-      const node = nodes.find(n => n.id === componentNodes[0])!;
-      // Add large random Y offset for vertical variation
-      const verticalJitter = (Math.random() - 0.5) * 180; // ±90px variation
-      node.position = { x: startX, y: startY + verticalJitter };
-      return;
-    }
-
-    // Check if this is an inheritance hierarchy
-    const inheritanceEdges = edges.filter(e => 
-      componentNodes.includes(e.source) && 
-      componentNodes.includes(e.target) && 
-      e.data?.relationshipType === 'inheritance'
-    );
-
-    if (inheritanceEdges.length > 0) {
-      // Layout as hierarchy (tree) - much cleaner implementation
-      const childToParent = new Map<string, string>();
-      const parentToChildren = new Map<string, string[]>();
-
-      inheritanceEdges.forEach(edge => {
-        childToParent.set(edge.source, edge.target);
-        const children = parentToChildren.get(edge.target) || [];
-        children.push(edge.source);
-        parentToChildren.set(edge.target, children);
-      });
-
-      // Find root nodes (nodes with no parent in component)
-      const roots = componentNodes.filter(id => !childToParent.has(id));
-      
-      // Calculate tree widths for better spacing
-      const getTreeWidth = (nodeId: string): number => {
-        const children = parentToChildren.get(nodeId) || [];
-        if (children.length === 0) return 1;
-        return children.reduce((sum, childId) => sum + getTreeWidth(childId), 0);
-      };
-
-      let currentX = startX;
-
-      roots.forEach(rootId => {
-        const treeWidth = getTreeWidth(rootId);
-        
-        const layoutTree = (nodeId: string, level: number, leftBound: number, rightBound: number) => {
-          const node = nodes.find(n => n.id === nodeId)!;
-          const centerX = (leftBound + rightBound) / 2;
-          // Add large random Y offset for vertical variation
-          const verticalJitter = (Math.random() - 0.5) * 160; // ±80px variation
-          const yPos = startY + level * (NODE_HEIGHT + VERTICAL_SPACING) + verticalJitter;
-          node.position = { x: centerX, y: yPos };
-
-          const children = parentToChildren.get(nodeId) || [];
-          if (children.length === 0) return;
-
-          let childX = leftBound;
-          children.forEach(childId => {
-            const childWidth = getTreeWidth(childId);
-            const childSpace = (rightBound - leftBound) * (childWidth / Math.max(treeWidth, 1));
-            layoutTree(childId, level + 1, childX, childX + childSpace);
-            childX += childSpace;
-          });
-        };
-
-        const treeSpace = treeWidth * (NODE_WIDTH + HORIZONTAL_SPACING);
-        layoutTree(rootId, 0, currentX, currentX + treeSpace);
-        currentX += treeSpace + HORIZONTAL_SPACING * 2;
-      });
-    } else {
-      // Force-directed layout for non-hierarchical components
-      const positions = new Map<string, { x: number; y: number }>();
-      
-      // Initialize with very narrow grid (1-2 columns) for vertical stacking
-      const gridSize = Math.min(Math.max(1, Math.ceil(componentNodes.length / 4)), 2); // 1-2 columns only
-      componentNodes.forEach((nodeId, idx) => {
-        const row = Math.floor(idx / gridSize);
-        const col = idx % gridSize;
-        // Add large random Y offset for big vertical differences
-        const verticalJitter = (Math.random() - 0.5) * 200; // ±100px variation
-        positions.set(nodeId, {
-          x: startX + col * (NODE_WIDTH + HORIZONTAL_SPACING), // Same X for column
-          y: startY + row * (NODE_HEIGHT + VERTICAL_SPACING) + verticalJitter // Large Y variation
-        });
-      });
-
-      // Enhanced force simulation - keep same X, large Y differences
-      const ITERATIONS = 150; // Fewer iterations to preserve column structure
-      const IDEAL_DISTANCE = NODE_WIDTH + HORIZONTAL_SPACING * 0.4;
-      const REPULSION = 28000; // Low repulsion to keep columns together
-      const ATTRACTION = 0.65;
-      const DAMPING = 0.85;
-      const VERTICAL_BIAS = 2.0; // Strong vertical bias for large Y differences
-
-      for (let iter = 0; iter < ITERATIONS; iter++) {
-        const forces = new Map<string, { x: number; y: number }>();
-        componentNodes.forEach(id => forces.set(id, { x: 0, y: 0 }));
-
-        // Repulsion between all pairs - keep same X column, large Y separation
-        for (let i = 0; i < componentNodes.length; i++) {
-          for (let j = i + 1; j < componentNodes.length; j++) {
-            const nodeA = componentNodes[i];
-            const nodeB = componentNodes[j];
-            const posA = positions.get(nodeA)!;
-            const posB = positions.get(nodeB)!;
-
-            const dx = posB.x - posA.x;
-            const dy = posB.y - posA.y;
-            const dist = Math.max(Math.sqrt(dx * dx + dy * dy), 1);
-
-            const force = REPULSION / (dist * dist);
-            const fx = (dx / dist) * force * 0.15; // Very weak horizontal - keep in columns
-            const fy = (dy / dist) * force * VERTICAL_BIAS; // Strong vertical - large Y differences
-
-            forces.get(nodeA)!.x -= fx;
-            forces.get(nodeA)!.y -= fy;
-            forces.get(nodeB)!.x += fx;
-            forces.get(nodeB)!.y += fy;
-          }
-        }
-
-        // Attraction for connected nodes (pull related classes together)
-        componentNodes.forEach(nodeId => {
-          const neighbors = adjacencyMap.get(nodeId) || new Set();
-          neighbors.forEach(neighborId => {
-            if (!componentNodes.includes(neighborId)) return;
-
-            const posA = positions.get(nodeId)!;
-            const posB = positions.get(neighborId)!;
-
-            const dx = posB.x - posA.x;
-            const dy = posB.y - posA.y;
-            const dist = Math.max(Math.sqrt(dx * dx + dy * dy), 1);
-
-            const force = ATTRACTION * (dist - IDEAL_DISTANCE);
-            const fx = (dx / dist) * force;
-            const fy = (dy / dist) * force;
-
-            forces.get(nodeId)!.x += fx;
-            forces.get(nodeId)!.y += fy;
-          });
-        });
-
-        // Apply forces with damping
-        const coolingFactor = 1 - (iter / ITERATIONS) * 0.3; // Gradually reduce movement
-        componentNodes.forEach(nodeId => {
-          const pos = positions.get(nodeId)!;
-          const force = forces.get(nodeId)!;
-          pos.x += force.x * DAMPING * coolingFactor;
-          pos.y += force.y * DAMPING * coolingFactor;
-        });
-      }
-
-      // Normalize positions to start from startX, startY
-      let minX = Infinity, minY = Infinity;
-      positions.forEach(pos => {
-        minX = Math.min(minX, pos.x);
-        minY = Math.min(minY, pos.y);
-      });
-
-      // Apply final positions with normalization
-      componentNodes.forEach(nodeId => {
-        const node = nodes.find(n => n.id === nodeId)!;
-        const pos = positions.get(nodeId)!;
-        node.position = {
-          x: pos.x - minX + startX,
-          y: pos.y - minY + startY
-        };
-      });
-    }
-  };
-
   // Sort components by size (largest first for better layout)
   components.sort((a, b) => b.length - a.length);
 
   // Layout each component with proper spacing
   let currentY = START_Y;
-  components.forEach((component, idx) => {
-    layoutComponent(component, START_X, currentY);
+  components.forEach((component) => {
+    layoutComponent(component, START_X, currentY, nodes, edges, adjacencyMap);
     
     // Find bounds of this component
     let maxX = 0, maxY = 0;
     component.forEach(nodeId => {
-      const node = nodes.find(n => n.id === nodeId)!;
+      const node = findNodeById(nodes, nodeId);
+      if (!node) return;
       maxX = Math.max(maxX, node.position.x);
       maxY = Math.max(maxY, node.position.y);
     });
@@ -253,7 +312,8 @@ function applyIntelligentLayout(nodes: FlowNode[], edges: FlowEdge[]): void {
   if (isolatedNodes.length > 0) {
     const itemsPerRow = Math.min(Math.max(1, Math.ceil(isolatedNodes.length / 3)), 2); // 1-2 columns only
     isolatedNodes.forEach((nodeId, idx) => {
-      const node = nodes.find(n => n.id === nodeId)!;
+      const node = findNodeById(nodes, nodeId);
+      if (!node) return;
       const row = Math.floor(idx / itemsPerRow);
       const col = idx % itemsPerRow;
       // Add large random Y offset for big vertical differences
@@ -283,7 +343,7 @@ function applyIntelligentLayout(nodes: FlowNode[], edges: FlowEdge[]): void {
 
         const dx = nodeB.position.x - nodeA.position.x;
         const dy = nodeB.position.y - nodeA.position.y;
-        const distance = Math.sqrt(dx * dx + dy * dy);
+        const distance = Math.hypot(dx, dy);
 
         if (distance < MIN_DISTANCE) {
           hasOverlap = true;
@@ -325,7 +385,6 @@ export const generateUMLFromEcore = (ecoreContent: string): { nodes: FlowNode[];
       .filter((el: Element) => (el.getAttribute('xsi:type') || el.getAttribute('type') || '').includes('EClass') || el.tagName.endsWith('EClass') || el.querySelector('eStructuralFeatures')) as Element[];
 
     const classNameToNodeId = new Map<string, string>();
-    const classNameToElement = new Map<string, Element>();
 
     // First pass: Create nodes with temporary positions
     classElems.forEach((cls, idx) => {
@@ -384,7 +443,6 @@ export const generateUMLFromEcore = (ecoreContent: string): { nodes: FlowNode[];
 
       nodes.push(node);
       classNameToNodeId.set(className, node.id);
-      classNameToElement.set(className, cls);
     });
 
     // Helper: choose best side handles based on node positions (will be called after layout)

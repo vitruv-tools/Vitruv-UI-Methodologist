@@ -235,7 +235,7 @@ export function MainLayout({
         // IMPORTANT: Force a complete workspace reset first
         // This will clear ALL nodes (UML boxes, metamodel boxes, everything)
         // The reset handler will also change the canvas key
-        window.dispatchEvent(new CustomEvent('vitruv.resetWorkspace'));
+        globalThis.dispatchEvent(new CustomEvent('vitruv.resetWorkspace'));
         
         // Re-enable interactive mode for workspace
         setTimeout(() => {
@@ -252,7 +252,7 @@ export function MainLayout({
         // Trigger workspace reload to restore ONLY metamodel boxes and connections
         // Use a longer delay to ensure complete reset before reload
         setTimeout(() => {
-            window.dispatchEvent(new CustomEvent('vitruv.reloadWorkspace'));
+            globalThis.dispatchEvent(new CustomEvent('vitruv.reloadWorkspace'));
         }, 400);
     }, []);
 
