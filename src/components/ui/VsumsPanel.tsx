@@ -321,13 +321,16 @@ export const VsumsPanel: React.FC = () => {
                 .sort((a, b) => {
                     // Sort by date: newest first (descending order)
                     // For deleted items, use removedAt or updatedAt; for regular items, use createdAt
-                    const dateA = showDeleted 
-                        ? (a.removedAt ? new Date(a.removedAt).getTime() : new Date(a.updatedAt).getTime())
-                        : new Date(a.createdAt).getTime();
-                    const dateB = showDeleted
-                        ? (b.removedAt ? new Date(b.removedAt).getTime() : new Date(b.updatedAt).getTime())
-                        : new Date(b.createdAt).getTime();
-                    return dateB - dateA; // Descending order (newest first)
+                    const getSortDate = (item: Vsum): number => {
+                        if (showDeleted) {
+                            return item.removedAt 
+                                ? new Date(item.removedAt).getTime() 
+                                : new Date(item.updatedAt).getTime();
+                        }
+                        return new Date(item.createdAt).getTime();
+                    };
+                    
+                    return getSortDate(b) - getSortDate(a); // Descending order (newest first)
                 })
             ).map((item) => {
                 const role = (item as any).role as string | undefined;

@@ -128,8 +128,8 @@ export const ProjectPage: React.FC = () => {
       await fetchAndLoadProjectBoxes(activeTab.id, true);
     };
 
-    window.addEventListener('vitruv.reloadWorkspace', handleReloadWorkspace as EventListener);
-    return () => window.removeEventListener('vitruv.reloadWorkspace', handleReloadWorkspace as EventListener);
+    globalThis.addEventListener('vitruv.reloadWorkspace', handleReloadWorkspace as EventListener);
+    return () => globalThis.removeEventListener('vitruv.reloadWorkspace', handleReloadWorkspace as EventListener);
   }, [activeInstanceId, openTabs]);
 
   // Ensure "Add Meta Models" sidebar is hidden when no VSUM tabs are open
@@ -293,7 +293,7 @@ async function fetchAndLoadProjectBoxes(id: number, skipReset: boolean = false) 
 
         // Set preserveExisting to false when loading from backend (full reload)
         // This allows backend relations to be loaded even if there are existing edges
-        window.dispatchEvent(new CustomEvent('vitruv.loadMetaModelRelations', {
+        globalThis.dispatchEvent(new CustomEvent('vitruv.loadMetaModelRelations', {
           detail: { relations, preserveExisting: false }
         }));
       }
@@ -302,7 +302,7 @@ async function fetchAndLoadProjectBoxes(id: number, skipReset: boolean = false) 
       // Wait a bit more to ensure edges are loaded first
       setTimeout(() => {
         console.log('🎨 Triggering auto-layout for workspace');
-        window.dispatchEvent(new CustomEvent('vitruv.autoLayoutWorkspace'));
+        globalThis.dispatchEvent(new CustomEvent('vitruv.autoLayoutWorkspace'));
       }, 100);
     }, 400);
   } catch (error) {

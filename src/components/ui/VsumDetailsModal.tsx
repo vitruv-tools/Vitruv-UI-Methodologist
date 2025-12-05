@@ -196,6 +196,101 @@ export const VsumDetailsModal: React.FC<Props> = ({ isOpen, vsumId, onClose, onS
       ? new Date(details.updatedAt).toLocaleDateString()
       : '';
 
+  const renderVersionsContent = () => {
+    if (versionsLoading) {
+      return (
+        <div style={{ fontStyle: 'italic', color: '#6c757d' }}>
+          Loading versions…
+        </div>
+      );
+    }
+
+    if (versionsError) {
+      return (
+        <div
+          style={{
+            marginBottom: 12,
+            padding: 10,
+            border: '1px solid #f5c6cb',
+            background: '#f8d7da',
+            color: '#721c24',
+            borderRadius: 6,
+            fontSize: 12,
+          }}
+        >
+          {versionsError}
+        </div>
+      );
+    }
+
+    if (versions.length === 0) {
+      return (
+        <div style={{ fontStyle: 'italic', color: '#6c757d' }}>
+          No versions found.
+        </div>
+      );
+    }
+
+    return (
+      <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+        <thead>
+          <tr>
+            <th
+              style={{
+                border: '1px solid #e9ecef',
+                padding: 8,
+                textAlign: 'left',
+                fontSize: 12,
+              }}
+            >
+              #
+            </th>
+            <th
+              style={{
+                border: '1px solid #e9ecef',
+                padding: 8,
+                textAlign: 'left',
+                fontSize: 12,
+              }}
+            >
+              Versions
+            </th>
+          </tr>
+        </thead>
+        <tbody>
+          {versions.map((v, index) => (
+            <tr key={v.id}>
+              <td
+                style={{
+                  border: '1px solid #e9ecef',
+                  padding: 8,
+                  fontSize: 13,
+                }}
+              >
+                {index + 1}
+              </td>
+              <td
+                style={{
+                  border: '1px solid #e9ecef',
+                  padding: 8,
+                  fontSize: 13,
+                }}
+              >
+                {new Date(v.createdAt).toLocaleString([], {
+                  hour: '2-digit',
+                  minute: '2-digit',
+                  year: 'numeric',
+                  month: '2-digit',
+                  day: '2-digit',
+                })}
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    );
+  };
+
   return ReactDOM.createPortal(
       <>
         <div style={overlay} onClick={onClose} role="dialog" aria-modal="true">
@@ -340,90 +435,7 @@ export const VsumDetailsModal: React.FC<Props> = ({ isOpen, vsumId, onClose, onS
               {/* ===================== */}
               {/*     VERSIONS TAB     */}
               {/* ===================== */}
-              {activeTab === 'versions' && (
-                  <>
-                    {versionsLoading ? (
-                        <div style={{ fontStyle: 'italic', color: '#6c757d' }}>
-                          Loading versions…
-                        </div>
-                    ) : versionsError ? (
-                        <div
-                            style={{
-                              marginBottom: 12,
-                              padding: 10,
-                              border: '1px solid #f5c6cb',
-                              background: '#f8d7da',
-                              color: '#721c24',
-                              borderRadius: 6,
-                              fontSize: 12,
-                            }}
-                        >
-                          {versionsError}
-                        </div>
-                    ) : versions.length === 0 ? (
-                        <div style={{ fontStyle: 'italic', color: '#6c757d' }}>
-                          No versions found.
-                        </div>
-                    ) : (
-                        <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-                          <thead>
-                          <tr>
-                            <th
-                                style={{
-                                  border: '1px solid #e9ecef',
-                                  padding: 8,
-                                  textAlign: 'left',
-                                  fontSize: 12,
-                                }}
-                            >
-                              #
-                            </th>
-                            <th
-                                style={{
-                                  border: '1px solid #e9ecef',
-                                  padding: 8,
-                                  textAlign: 'left',
-                                  fontSize: 12,
-                                }}
-                            >
-                              Versions
-                            </th>
-                          </tr>
-                          </thead>
-                          <tbody>
-                          {versions.map((v, index) => (
-                              <tr key={v.id}>
-                                <td
-                                    style={{
-                                      border: '1px solid #e9ecef',
-                                      padding: 8,
-                                      fontSize: 13,
-                                    }}
-                                >
-                                  {index + 1}
-                                </td>
-                                <td
-                                    style={{
-                                      border: '1px solid #e9ecef',
-                                      padding: 8,
-                                      fontSize: 13,
-                                    }}
-                                >
-                                  {new Date(v.createdAt).toLocaleString([], {
-                                    hour: '2-digit',
-                                    minute: '2-digit',
-                                    year: 'numeric',
-                                    month: '2-digit',
-                                    day: '2-digit',
-                                  })}
-                                </td>
-                              </tr>
-                          ))}
-                          </tbody>
-                        </table>
-                    )}
-                  </>
-              )}
+              {activeTab === 'versions' && renderVersionsContent()}
             </div>
 
             {/* ===================== */}
