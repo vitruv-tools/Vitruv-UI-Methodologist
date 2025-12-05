@@ -9,7 +9,10 @@ import { apiService } from '../services/api';
 import { useToast } from '../components/ui/ToastProvider';
 import { WorkspaceSnapshot, WorkspaceSnapshotRequest } from '../types/workspace';
 
-interface OpenTabInstance { instanceId: string; id: number; }
+interface OpenTabInstance { 
+  instanceId: string; 
+  id: number;
+}
 
 export const ProjectPage: React.FC = () => {
   const { user, signOut } = useAuth();
@@ -20,6 +23,36 @@ export const ProjectPage: React.FC = () => {
   const { showInfo } = useToast();
 
   const createInstanceId = useCallback((id: number) => `${id}-${Date.now()}-${Math.random().toString(36).slice(2,8)}` , []);
+
+  // Helper to add a metamodel to the active workspace
+  const addMetaModelToWorkspace = useCallback(async (model: any) => {
+    try {
+      if (model.ecoreFileId) {
+        const fileContent = await apiService.getFile(model.ecoreFileId);
+        
+        // Dispatch event to add file to workspace
+        window.dispatchEvent(new CustomEvent('vitruv.addFileToWorkspace', {
+          detail: {
+            fileContent: fileContent,
+            fileName: model.name + '.ecore',
+            description: model.description,
+            keywords: model.keyword?.join(', '),
+            domain: model.domain,
+            metaModelId: model.id,
+            metaModelSourceId: model.sourceId ?? model.id,
+            createdAt: model.createdAt,
+          }
+        }));
+      }
+      
+      // Also dispatch the event to add meta model to VSUM
+      window.dispatchEvent(new CustomEvent('vitruv.addMetaModelToActiveVsum', { detail: { id: model.id, sourceId: model.sourceId ?? model.id } }));
+    } catch (error) {
+      console.error('Failed to fetch file:', error);
+      // Still dispatch the add event even if file fetch fails
+      window.dispatchEvent(new CustomEvent('vitruv.addMetaModelToActiveVsum', { detail: { id: model.id, sourceId: model.sourceId ?? model.id } }));
+    }
+  }, []);
 
   const requestWorkspaceSnapshot = useCallback(() => {
     return new Promise<WorkspaceSnapshot | null>((resolve) => {
@@ -55,8 +88,7 @@ export const ProjectPage: React.FC = () => {
       showInfo('This project is already open. Switched to it.');
     }
     setActiveInstanceId(instanceId);
-
-    await fetchAndLoadProjectBoxes(id);
+    // Note: fetchAndLoadProjectBoxes is now handled by the useEffect watching activeInstanceId
   }, [openTabs, createInstanceId, showInfo]);
 
   useEffect(() => {
@@ -81,12 +113,42 @@ export const ProjectPage: React.FC = () => {
     return () => window.removeEventListener('vitruv.closeActiveWorkspace', closeActiveWorkspaceTab as EventListener);
   }, [closeActiveWorkspaceTab]);
 
+  // Reload workspace when returning from expanded metamodel view
+  useEffect(() => {
+    const handleReloadWorkspace = async () => {
+      if (!activeInstanceId) return;
+      
+      const activeTab = openTabs.find(t => t.instanceId === activeInstanceId);
+      if (!activeTab) return;
+
+      console.log('🔃 Reloading workspace for VSUM:', activeTab.id);
+      
+      // Reload the project boxes for the active tab
+      // skipReset = true because the reset is already done in handleBackToWorkspace
+      await fetchAndLoadProjectBoxes(activeTab.id, true);
+    };
+
+    globalThis.addEventListener('vitruv.reloadWorkspace', handleReloadWorkspace as EventListener);
+    return () => globalThis.removeEventListener('vitruv.reloadWorkspace', handleReloadWorkspace as EventListener);
+  }, [activeInstanceId, openTabs]);
+
   // Ensure "Add Meta Models" sidebar is hidden when no VSUM tabs are open
   useEffect(() => {
     if (openTabs.length === 0 && showRight) {
       setShowRight(false);
     }
   }, [openTabs.length, showRight]);
+
+  // Reload workspace content when switching between tabs
+  useEffect(() => {
+    if (!activeInstanceId) return;
+    
+    const activeTab = openTabs.find(t => t.instanceId === activeInstanceId);
+    if (!activeTab) return;
+
+    // Load the project boxes for the newly active tab
+    fetchAndLoadProjectBoxes(activeTab.id);
+  }, [activeInstanceId, openTabs]);
 
   return (
     <>
@@ -96,7 +158,8 @@ export const ProjectPage: React.FC = () => {
       leftSidebar={<SidebarTabs width={350} />}
       leftSidebarWidth={350}
       showWelcomeScreen={openTabs.length === 0}
-      welcomeTitle="Welcome to Project Workspace"
+      welcomeTitle="Methodological Dashboard"
+      workspaceKey={activeInstanceId || undefined}
       rightSidebar={(showRight && openTabs.length > 0) ? (
         <div style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
           <div style={{
@@ -127,34 +190,7 @@ export const ProjectPage: React.FC = () => {
             <MetaModelsPanel
               activeVsumId={activeInstanceId ? (openTabs.find(t => t.instanceId === activeInstanceId)?.id) || undefined : undefined}
               selectedMetaModelIds={[]}
-              onAddToActiveVsum={async (model) => {
-                // Fetch file content from the API
-                try {
-                  if (model.ecoreFileId) {
-                    const fileContent = await apiService.getFile(model.ecoreFileId);
-                    
-                    // Dispatch event to add file to workspace
-                    window.dispatchEvent(new CustomEvent('vitruv.addFileToWorkspace', {
-                      detail: {
-                        fileContent: fileContent,
-                        fileName: model.name + '.ecore',
-                        description: model.description,
-                        keywords: model.keyword?.join(', '),
-                        domain: model.domain,
-                        metaModelId: model.id,
-                        metaModelSourceId: model.sourceId ?? model.id,
-                      }
-                    }));
-                  }
-                  
-                  // Also dispatch the event to add meta model to VSUM
-                  window.dispatchEvent(new CustomEvent('vitruv.addMetaModelToActiveVsum', { detail: { id: model.id, sourceId: model.sourceId ?? model.id } }));
-                } catch (error) {
-                  console.error('Failed to fetch file:', error);
-                  // Still dispatch the add event even if file fetch fails
-                  window.dispatchEvent(new CustomEvent('vitruv.addMetaModelToActiveVsum', { detail: { id: model.id, sourceId: model.sourceId ?? model.id } }));
-                }
-              }}
+              onAddToActiveVsum={addMetaModelToWorkspace}
             />
           </div>
         </div>
@@ -190,10 +226,10 @@ export const ProjectPage: React.FC = () => {
       }}
       onCancel={async () => {
         if (!openChoice) return;
-        const { id, existingInstanceId } = openChoice;
+        const { existingInstanceId } = openChoice;
         setOpenChoice(null);
         setActiveInstanceId(existingInstanceId);
-        await fetchAndLoadProjectBoxes(id);
+        // Note: fetchAndLoadProjectBoxes is now handled by the useEffect watching activeInstanceId
       }}
     />
     </>
@@ -202,11 +238,26 @@ export const ProjectPage: React.FC = () => {
 
 // Render the choice dialog via portal at the end of the component
 // helper to fetch and load boxes for a vsum id
-async function fetchAndLoadProjectBoxes(id: number) {
-  window.dispatchEvent(new CustomEvent('vitruv.resetWorkspace'));
+async function fetchAndLoadProjectBoxes(id: number, skipReset: boolean = false) {
+  console.log('📥 Fetching VSUM details for ID:', id, 'skipReset:', skipReset);
+  
+  // Only reset workspace if not already done (e.g., when loading a new project)
+  // When returning from UML view, the reset is already done in handleBackToWorkspace
+  if (!skipReset) {
+    console.log('🔄 Triggering workspace reset');
+    window.dispatchEvent(new CustomEvent('vitruv.resetWorkspace'));
+  }
+  
   try {
     const response = await apiService.getVsumDetails(id);
     const details = response.data;
+    
+    console.log('📊 VSUM details received:', {
+      metaModelCount: details.metaModels?.length || 0,
+      relationCount: details.metaModelsRelation?.length || 0,
+    });
+    
+    // Load all metamodel boxes
     for (const metaModel of details.metaModels || []) {
       if (metaModel.ecoreFileId) {
         try {
@@ -229,21 +280,31 @@ async function fetchAndLoadProjectBoxes(id: number) {
       }
     }
 
-    if (details.metaModelsRelation && details.metaModelsRelation.length > 0) {
-      const relations = details.metaModelsRelation.map((relation: any) => ({
-        id: relation.id,
-        sourceId: relation.sourceId,
-        targetId: relation.targetId,
-        reactionFileId: relation.reactionFileStorageId ?? null,
-      }));
-
-      // Wait for metamodel boxes to be fully rendered before loading relations
-      setTimeout(() => {
-        window.dispatchEvent(new CustomEvent('vitruv.loadMetaModelRelations', {
-          detail: { relations }
+    // Wait for all metamodel boxes to be fully rendered
+    setTimeout(() => {
+      // Load connections between metamodels
+      if (details.metaModelsRelation && details.metaModelsRelation.length > 0) {
+        const relations = details.metaModelsRelation.map((relation: any) => ({
+          id: relation.id,
+          sourceId: relation.sourceId,
+          targetId: relation.targetId,
+          reactionFileId: relation.reactionFileStorageId ?? null,
         }));
-      }, 300);
-    }
+
+        // Set preserveExisting to false when loading from backend (full reload)
+        // This allows backend relations to be loaded even if there are existing edges
+        globalThis.dispatchEvent(new CustomEvent('vitruv.loadMetaModelRelations', {
+          detail: { relations, preserveExisting: false }
+        }));
+      }
+
+      // Trigger auto-layout to organize the boxes in a grid
+      // Wait a bit more to ensure edges are loaded first
+      setTimeout(() => {
+        console.log('🎨 Triggering auto-layout for workspace');
+        globalThis.dispatchEvent(new CustomEvent('vitruv.autoLayoutWorkspace'));
+      }, 100);
+    }, 400);
   } catch (error) {
     console.error('Failed to fetch vsum details:', error);
   }

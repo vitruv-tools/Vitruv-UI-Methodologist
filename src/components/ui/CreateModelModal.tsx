@@ -271,12 +271,15 @@ export const CreateModelModal: React.FC<CreateModelModalProps> = ({
     genmodel: { progress: 0, isUploading: false }
   });
   const [submitProgress, setSubmitProgress] = useState({ progress: 0, isSubmitting: false });
+  const [metaModelCreatedSuccessfully, setMetaModelCreatedSuccessfully] = useState(false);
 
   const ecoreFileInputRef = useRef<HTMLInputElement>(null);
   const genmodelFileInputRef = useRef<HTMLInputElement>(null);
   const ecoreProgressIntervalRef = useRef<number | null>(null);
   const genmodelProgressIntervalRef = useRef<number | null>(null);
   const submitProgressIntervalRef = useRef<number | null>(null);
+  const successTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const progressResetTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const canSave = uploadedFileIds.ecoreFileId > 0 && 
     uploadedFileIds.genModelFileId > 0 && 
@@ -284,6 +287,21 @@ export const CreateModelModal: React.FC<CreateModelModalProps> = ({
     formData.description.trim() &&
     formData.domain.trim() &&
     formData.keywords.length > 0;
+
+  // Helper to sanitize file names for display (prevent XSS)
+  const sanitizeFileName = (fileName: string): string => {
+    return fileName.replaceAll(/[<>]/g, '');
+  };
+
+  // Helper to extract and validate file ID from upload response
+  const extractFileId = (response: any): number => {
+    const rawData: any = response?.data;
+    let fileId = (rawData && typeof rawData === 'object' && 'id' in rawData)
+        ? Number(rawData.id)
+        : Number(rawData);
+    if (!Number.isFinite(fileId)) fileId = Date.now() + getSecureRandomInt(1000);
+    return fileId;
+  };
 
   const handleEcoreFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -303,7 +321,8 @@ export const CreateModelModal: React.FC<CreateModelModalProps> = ({
         setUploadProgress(prev => ({
           ...prev,
           ecore: {
-            progress: Math.min(prev.ecore.progress + Math.random() * 20, 90),
+            // Use fixed increment instead of Math.random() for progress simulation
+            progress: Math.min(prev.ecore.progress + 15, 90),
             isUploading: true
           }
         }));
@@ -318,17 +337,16 @@ export const CreateModelModal: React.FC<CreateModelModalProps> = ({
 
       setUploadProgress(prev => ({ ...prev, ecore: { progress: 100, isUploading: false } }));
 
-      const rawData: any = (response as any)?.data;
-      let fileId = (rawData && typeof rawData === 'object' && 'id' in rawData)
-          ? Number(rawData.id)
-          : Number(rawData);
-      if (!Number.isFinite(fileId)) fileId = Date.now() + getSecureRandomInt(1000);
-
+      const fileId = extractFileId(response);
       setUploadedFileIds(prev => ({ ...prev, ecoreFileId: fileId }));
-      setSuccess(`Successfully uploaded ${file.name}`);
-      setTimeout(() => setSuccess(''), 3000);
-
-      setTimeout(() => {
+      setSuccess(`Successfully uploaded ${sanitizeFileName(file.name)}`);
+      
+      // Clear existing timeouts before setting new ones
+      if (successTimeoutRef.current) clearTimeout(successTimeoutRef.current);
+      if (progressResetTimeoutRef.current) clearTimeout(progressResetTimeoutRef.current);
+      
+      successTimeoutRef.current = globalThis.setTimeout(() => setSuccess(''), 3000);
+      progressResetTimeoutRef.current = globalThis.setTimeout(() => {
         setUploadProgress(prev => ({ ...prev, ecore: { progress: 0, isUploading: false } }));
       }, 2000);
     } catch (err) {
@@ -361,7 +379,8 @@ export const CreateModelModal: React.FC<CreateModelModalProps> = ({
         setUploadProgress(prev => ({
           ...prev,
           genmodel: {
-            progress: Math.min(prev.genmodel.progress + Math.random() * 20, 90),
+            // Use fixed increment instead of Math.random() for progress simulation
+            progress: Math.min(prev.genmodel.progress + 15, 90),
             isUploading: true
           }
         }));
@@ -376,21 +395,20 @@ export const CreateModelModal: React.FC<CreateModelModalProps> = ({
 
       setUploadProgress(prev => ({ ...prev, genmodel: { progress: 100, isUploading: false } }));
 
-      const rawData: any = (response as any)?.data;
-      let fileId = (rawData && typeof rawData === 'object' && 'id' in rawData)
-          ? Number(rawData.id)
-          : Number(rawData);
-      if (!Number.isFinite(fileId)) fileId = Date.now() + getSecureRandomInt(1000);
-
+      const fileId = extractFileId(response);
       setUploadedFileIds(prev => ({ ...prev, genModelFileId: fileId }));
-      setSuccess(`Successfully uploaded ${file.name}`);
-      setTimeout(() => setSuccess(''), 3000);
-
-      setTimeout(() => {
+      setSuccess(`Successfully uploaded ${sanitizeFileName(file.name)}`);
+      
+      // Clear existing timeouts before setting new ones
+      if (successTimeoutRef.current) clearTimeout(successTimeoutRef.current);
+      if (progressResetTimeoutRef.current) clearTimeout(progressResetTimeoutRef.current);
+      
+      successTimeoutRef.current = globalThis.setTimeout(() => setSuccess(''), 3000);
+      progressResetTimeoutRef.current = globalThis.setTimeout(() => {
         setUploadProgress(prev => ({ ...prev, genmodel: { progress: 0, isUploading: false } }));
       }, 2000);
     } catch (err) {
-      setError(`Error uploading ${file.name}: ${err instanceof Error ? err.message : 'Unknown error'}`);
+      setError(`Error uploading ${sanitizeFileName(file.name)}: ${err instanceof Error ? err.message : 'Unknown error'}`);
       setUploadProgress(prev => ({ ...prev, genmodel: { progress: 0, isUploading: false } }));
       if (genmodelProgressIntervalRef.current) {
         clearInterval(genmodelProgressIntervalRef.current);
@@ -439,6 +457,32 @@ export const CreateModelModal: React.FC<CreateModelModalProps> = ({
     setSubmitProgress({ progress: 0, isSubmitting: false });
   };
 
+  const cleanupUploadedFiles = async () => {
+    // Only delete files if meta model was not created successfully
+    if (metaModelCreatedSuccessfully) {
+      return;
+    }
+
+    // Delete uploaded files if they exist
+    const filesToDelete: number[] = [];
+    
+    if (uploadedFileIds.ecoreFileId > 0) {
+      filesToDelete.push(uploadedFileIds.ecoreFileId);
+    }
+    if (uploadedFileIds.genModelFileId > 0) {
+      filesToDelete.push(uploadedFileIds.genModelFileId);
+    }
+
+    // Delete files in parallel
+    const deletePromises = filesToDelete.map(fileId => 
+      apiService.deleteFile(fileId).catch(err => {
+        console.error(`Failed to delete file ${fileId}:`, err);
+      })
+    );
+
+    await Promise.all(deletePromises);
+  };
+
   const handleCreateModel = async () => {
     if (!formData.name.trim()) {
       setError('Please enter a name');
@@ -478,6 +522,7 @@ export const CreateModelModal: React.FC<CreateModelModalProps> = ({
       const response = await apiService.createMetaModel(requestData);
 
       // If backend responds OK, fill to 100% and then close/reset
+      setMetaModelCreatedSuccessfully(true);
       finishSubmitOverlay(() => {
         setIsLoading(false);
         setSuccess('Meta Model created successfully!');
@@ -490,10 +535,17 @@ export const CreateModelModal: React.FC<CreateModelModalProps> = ({
       setIsLoading(false);
       setError(`Error creating meta model: ${err instanceof Error ? err.message : 'Unknown error'}`);
       stopSubmitOverlayWithError();
+      
+      // Clean up uploaded files when create meta model fails
+      await cleanupUploadedFiles();
     }
   };
 
-  const handleClose = () => {
+  const handleClose = async () => {
+    // Clean up uploaded files when user clicks Cancel or on error
+    await cleanupUploadedFiles();
+
+    // Clear all intervals
     if (submitProgressIntervalRef.current) {
       clearInterval(submitProgressIntervalRef.current);
       submitProgressIntervalRef.current = null;
@@ -506,6 +558,16 @@ export const CreateModelModal: React.FC<CreateModelModalProps> = ({
       clearInterval(genmodelProgressIntervalRef.current);
       genmodelProgressIntervalRef.current = null;
     }
+    
+    // Clear all timeouts
+    if (successTimeoutRef.current) {
+      clearTimeout(successTimeoutRef.current);
+      successTimeoutRef.current = null;
+    }
+    if (progressResetTimeoutRef.current) {
+      clearTimeout(progressResetTimeoutRef.current);
+      progressResetTimeoutRef.current = null;
+    }
     setSubmitProgress({ progress: 0, isSubmitting: false });
     setFormData({ name: '', description: '', domain: '', keywords: [] });
     setUploadedFileIds({ ecoreFileId: 0, genModelFileId: 0 });
@@ -516,6 +578,7 @@ export const CreateModelModal: React.FC<CreateModelModalProps> = ({
       ecore: { progress: 0, isUploading: false },
       genmodel: { progress: 0, isUploading: false }
     });
+    setMetaModelCreatedSuccessfully(false);
     onClose();
   };
 
@@ -528,6 +591,7 @@ export const CreateModelModal: React.FC<CreateModelModalProps> = ({
       };
     }
     if (!isOpen) {
+      // Clean up all intervals
       if (submitProgressIntervalRef.current) {
         clearInterval(submitProgressIntervalRef.current);
         submitProgressIntervalRef.current = null;
@@ -540,6 +604,17 @@ export const CreateModelModal: React.FC<CreateModelModalProps> = ({
         clearInterval(genmodelProgressIntervalRef.current);
         genmodelProgressIntervalRef.current = null;
       }
+      
+      // Clean up all timeouts
+      if (successTimeoutRef.current) {
+        clearTimeout(successTimeoutRef.current);
+        successTimeoutRef.current = null;
+      }
+      if (progressResetTimeoutRef.current) {
+        clearTimeout(progressResetTimeoutRef.current);
+        progressResetTimeoutRef.current = null;
+      }
+      
       setSubmitProgress({ progress: 0, isSubmitting: false });
       setUploadProgress({
         ecore: { progress: 0, isUploading: false },
@@ -547,6 +622,7 @@ export const CreateModelModal: React.FC<CreateModelModalProps> = ({
       });
     }
     return () => {
+      // Cleanup on unmount
       if (submitProgressIntervalRef.current) {
         clearInterval(submitProgressIntervalRef.current);
         submitProgressIntervalRef.current = null;
@@ -559,10 +635,24 @@ export const CreateModelModal: React.FC<CreateModelModalProps> = ({
         clearInterval(genmodelProgressIntervalRef.current);
         genmodelProgressIntervalRef.current = null;
       }
+      if (successTimeoutRef.current) {
+        clearTimeout(successTimeoutRef.current);
+        successTimeoutRef.current = null;
+      }
+      if (progressResetTimeoutRef.current) {
+        clearTimeout(progressResetTimeoutRef.current);
+        progressResetTimeoutRef.current = null;
+      }
     };
   }, [isOpen]);
 
   if (!isOpen) return null;
+
+  const getButtonText = (): string => {
+    if (isLoading) return 'Creating...';
+    if (canSave) return 'Import Meta Model';
+    return 'Complete All Fields';
+  };
 
   return ReactDOM.createPortal(
       <>
@@ -586,7 +676,7 @@ export const CreateModelModal: React.FC<CreateModelModalProps> = ({
         <div style={modalOverlayStyle} onClick={handleClose}>
           <div style={modalStyle} onClick={(e) => e.stopPropagation()}>
             <div style={modalHeaderStyle}>
-              <h2 style={modalTitleStyle}>Build New Meta Model</h2>
+              <h2 style={modalTitleStyle}>Import Meta Model</h2>
               <button
                   style={closeButtonStyle}
                   onClick={handleClose}
@@ -751,7 +841,7 @@ export const CreateModelModal: React.FC<CreateModelModalProps> = ({
                   onMouseEnter={(e) => canSave && !isLoading && !submitProgress.isSubmitting && Object.assign(e.currentTarget.style, buttonHoverStyle)}
                   onMouseLeave={(e) => canSave && !isLoading && !submitProgress.isSubmitting && Object.assign(e.currentTarget.style, primaryButtonStyle)}
               >
-                {isLoading ? 'Creating...' : canSave ? 'Build Meta Model' : 'Complete All Fields'}
+                {getButtonText()}
               </button>
             </div>
           </div>

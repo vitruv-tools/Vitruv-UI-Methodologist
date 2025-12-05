@@ -109,8 +109,8 @@ export const VsumDetailsModal: React.FC<Props> = ({ isOpen, vsumId, onClose, onS
   }, [isOpen]);
 
   useEffect(() => {
+    if (!isOpen || !vsumId) return;
     const load = async () => {
-      if (!isOpen || !vsumId) return;
       setLoading(true);
       setError('');
       try {
@@ -127,10 +127,9 @@ export const VsumDetailsModal: React.FC<Props> = ({ isOpen, vsumId, onClose, onS
     load();
   }, [isOpen, vsumId]);
 
-  // Load versions when the tab is opened
   useEffect(() => {
+    if (!isOpen || !vsumId || activeTab !== 'versions') return;
     const loadVersions = async () => {
-      if (!isOpen || !vsumId || activeTab !== 'versions') return;
       setVersionsLoading(true);
       setVersionsError('');
       try {
@@ -193,7 +192,104 @@ export const VsumDetailsModal: React.FC<Props> = ({ isOpen, vsumId, onClose, onS
 
   if (!isOpen) return null;
 
-  const updatedDateOnly = details?.updatedAt ? new Date(details.updatedAt).toLocaleDateString() : '';
+  const updatedDateOnly = details?.updatedAt
+      ? new Date(details.updatedAt).toLocaleDateString()
+      : '';
+
+  const renderVersionsContent = () => {
+    if (versionsLoading) {
+      return (
+        <div style={{ fontStyle: 'italic', color: '#6c757d' }}>
+          Loading versions…
+        </div>
+      );
+    }
+
+    if (versionsError) {
+      return (
+        <div
+          style={{
+            marginBottom: 12,
+            padding: 10,
+            border: '1px solid #f5c6cb',
+            background: '#f8d7da',
+            color: '#721c24',
+            borderRadius: 6,
+            fontSize: 12,
+          }}
+        >
+          {versionsError}
+        </div>
+      );
+    }
+
+    if (versions.length === 0) {
+      return (
+        <div style={{ fontStyle: 'italic', color: '#6c757d' }}>
+          No versions found.
+        </div>
+      );
+    }
+
+    return (
+      <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+        <thead>
+          <tr>
+            <th
+              style={{
+                border: '1px solid #e9ecef',
+                padding: 8,
+                textAlign: 'left',
+                fontSize: 12,
+              }}
+            >
+              #
+            </th>
+            <th
+              style={{
+                border: '1px solid #e9ecef',
+                padding: 8,
+                textAlign: 'left',
+                fontSize: 12,
+              }}
+            >
+              Versions
+            </th>
+          </tr>
+        </thead>
+        <tbody>
+          {versions.map((v, index) => (
+            <tr key={v.id}>
+              <td
+                style={{
+                  border: '1px solid #e9ecef',
+                  padding: 8,
+                  fontSize: 13,
+                }}
+              >
+                {index + 1}
+              </td>
+              <td
+                style={{
+                  border: '1px solid #e9ecef',
+                  padding: 8,
+                  fontSize: 13,
+                }}
+              >
+                {new Date(v.createdAt).toLocaleString([], {
+                  hour: '2-digit',
+                  minute: '2-digit',
+                  year: 'numeric',
+                  month: '2-digit',
+                  day: '2-digit',
+                })}
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    );
+  };
 
   return ReactDOM.createPortal(
       <>
@@ -201,6 +297,7 @@ export const VsumDetailsModal: React.FC<Props> = ({ isOpen, vsumId, onClose, onS
           <div style={dialog} onClick={(e) => e.stopPropagation()}>
             <div style={header}>
               <h3 style={title}>{details?.name ?? 'VSUM Details'}</h3>
+
               <div style={{ display: 'flex', gap: 8 }}>
                 <button
                     onClick={() => setActiveTab('details')}
@@ -215,6 +312,7 @@ export const VsumDetailsModal: React.FC<Props> = ({ isOpen, vsumId, onClose, onS
                 >
                   Details
                 </button>
+
                 <button
                     onClick={() => setActiveTab('users')}
                     style={{
@@ -228,6 +326,7 @@ export const VsumDetailsModal: React.FC<Props> = ({ isOpen, vsumId, onClose, onS
                 >
                   Manage Users
                 </button>
+
                 <button
                     onClick={() => setActiveTab('versions')}
                     style={{
@@ -241,6 +340,7 @@ export const VsumDetailsModal: React.FC<Props> = ({ isOpen, vsumId, onClose, onS
                 >
                   Versions
                 </button>
+
                 <button aria-label="Close" style={closeBtn} onClick={onClose}>
                   ×
                 </button>
@@ -263,6 +363,7 @@ export const VsumDetailsModal: React.FC<Props> = ({ isOpen, vsumId, onClose, onS
                     {error}
                   </div>
               )}
+
               {recoverError && (
                   <div
                       style={{
@@ -279,6 +380,9 @@ export const VsumDetailsModal: React.FC<Props> = ({ isOpen, vsumId, onClose, onS
                   </div>
               )}
 
+              {/* ===================== */}
+              {/*     DETAILS TAB      */}
+              {/* ===================== */}
               {activeTab === 'details' ? (
                   loading || !details ? (
                       <div style={{ fontStyle: 'italic', color: '#6c757d' }}>Loading…</div>
@@ -289,71 +393,54 @@ export const VsumDetailsModal: React.FC<Props> = ({ isOpen, vsumId, onClose, onS
                         </div>
 
                         <div style={label}>Name</div>
-                        <input style={textInput} value={name} onChange={(e) => setName(e.target.value)} />
+                        <input
+                            style={textInput}
+                            value={name}
+                            onChange={(e) => setName(e.target.value)}
+                        />
 
                         <div style={label}>Meta Models</div>
                         {details.metaModels && details.metaModels.length > 0 ? (
                             <ul style={{ margin: 0, paddingLeft: 18 }}>
                               {details.metaModels.map((mm) => (
                                   <li key={mm.id} style={{ marginBottom: 6 }}>
-                                    <span style={{ fontWeight: 700, color: '#2c3e50' }}>{mm.name}</span>
+                          <span style={{ fontWeight: 700, color: '#2c3e50' }}>
+                            {mm.name}
+                          </span>
                                   </li>
                               ))}
                             </ul>
                         ) : (
-                            <div style={{ fontSize: 12, color: '#6c757d', fontStyle: 'italic' }}>No meta models linked.</div>
+                            <div
+                                style={{
+                                  fontSize: 12,
+                                  color: '#6c757d',
+                                  fontStyle: 'italic',
+                                }}
+                            >
+                              No meta models linked.
+                            </div>
                         )}
                       </>
                   )
-              ) : !vsumId ? (
-                  <div style={{ fontStyle: 'italic', color: '#6c757d' }}>No VSUM selected.</div>
-              ) : activeTab === 'users' ? (
+              ) : null}
+
+              {/* ===================== */}
+              {/*     USERS TAB        */}
+              {/* ===================== */}
+              {activeTab === 'users' && vsumId && (
                   <VsumUsersTab vsumId={vsumId} onChanged={onSaved} />
-              ) : (
-                  <div>
-                    {versionsError && (
-                        <div
-                            style={{
-                              marginBottom: 12,
-                              padding: 10,
-                              border: '1px solid #f5c6cb',
-                              background: '#f8d7da',
-                              color: '#721c24',
-                              borderRadius: 6,
-                              fontSize: 12,
-                            }}
-                        >
-                          {versionsError}
-                        </div>
-                    )}
-                    {versionsLoading ? (
-                        <div style={{ fontStyle: 'italic', color: '#6c757d' }}>Loading versions…</div>
-                    ) : versions.length === 0 ? (
-                        <div style={{ fontStyle: 'italic', color: '#6c757d' }}>No versions found.</div>
-                    ) : (
-                        <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-                          <thead>
-                          <tr>
-                            <th style={{ border: '1px solid #e9ecef', padding: 8, textAlign: 'left', fontSize: 12 }}>Version ID</th>
-                            <th style={{ border: '1px solid #e9ecef', padding: 8, textAlign: 'left', fontSize: 12 }}>Created At</th>
-                          </tr>
-                          </thead>
-                          <tbody>
-                          {versions.map(v => (
-                              <tr key={v.id}>
-                                <td style={{ border: '1px solid #e9ecef', padding: 8, fontSize: 13 }}>{v.id}</td>
-                                <td style={{ border: '1px solid #e9ecef', padding: 8, fontSize: 13 }}>
-                                  {new Date(v.createdAt).toLocaleString([], { hour: '2-digit', minute: '2-digit', year: 'numeric', month: '2-digit', day: '2-digit' })}
-                                </td>
-                              </tr>
-                          ))}
-                          </tbody>
-                        </table>
-                    )}
-                  </div>
               )}
+
+              {/* ===================== */}
+              {/*     VERSIONS TAB     */}
+              {/* ===================== */}
+              {activeTab === 'versions' && renderVersionsContent()}
             </div>
 
+            {/* ===================== */}
+            {/*        FOOTER        */}
+            {/* ===================== */}
             <div style={footer}>
               <button
                   style={{
@@ -371,41 +458,41 @@ export const VsumDetailsModal: React.FC<Props> = ({ isOpen, vsumId, onClose, onS
               </button>
 
               <div style={{ display: 'flex', gap: 8 }}>
-              {details?.removedAt && (
-                <button
-                    style={{
-                      padding: '6px 10px',
-                      borderRadius: 6,
-                      border: '1px solid #10b981',
-                      background: recovering ? '#d1fae5' : '#10b981',
-                      color: '#fff',
-                      fontWeight: 700,
-                      cursor: recovering ? 'not-allowed' : 'pointer',
-                      fontSize: 12,
-                    }}
-                    onDoubleClick={recover}
-                    disabled={recovering}
-                    title="Double-click to recover this VSUM"
-                >
-                  {recovering ? 'Recovering…' : 'Recover (double‑click)'}
-                </button>
-              )}
-              {activeTab === 'details' && !details?.removedAt && (
-                <button
-                    style={{
-                      padding: '8px 14px',
-                      borderRadius: 6,
-                      border: '1px solid #fecaca',
-                      background: '#fef2f2',
-                      color: '#dc2626',
-                      fontWeight: 700,
-                      cursor: 'pointer',
-                    }}
-                    onClick={() => setConfirmOpen(true)}
-                    disabled={!vsumId}
-                >
-                  Delete
-                </button>
+                {details?.removedAt && (
+                    <button
+                        style={{
+                          padding: '6px 10px',
+                          borderRadius: 6,
+                          border: '1px solid #10b981',
+                          background: recovering ? '#d1fae5' : '#10b981',
+                          color: '#fff',
+                          fontWeight: 700,
+                          cursor: recovering ? 'not-allowed' : 'pointer',
+                          fontSize: 12,
+                        }}
+                        onDoubleClick={recover}
+                        disabled={recovering}
+                    >
+                      {recovering ? 'Recovering…' : 'Recover (double-click)'}
+                    </button>
+                )}
+
+                {activeTab === 'details' && !details?.removedAt && (
+                    <button
+                        style={{
+                          padding: '8px 14px',
+                          borderRadius: 6,
+                          border: '1px solid #fecaca',
+                          background: '#fef2f2',
+                          color: '#dc2626',
+                          fontWeight: 700,
+                          cursor: 'pointer',
+                        }}
+                        onClick={() => setConfirmOpen(true)}
+                        disabled={!vsumId}
+                    >
+                      Delete
+                    </button>
                 )}
 
                 {activeTab === 'details' && (
@@ -430,10 +517,14 @@ export const VsumDetailsModal: React.FC<Props> = ({ isOpen, vsumId, onClose, onS
           </div>
         </div>
 
+        {/* ===================== */}
+        {/*    DELETE CONFIRM     */}
+        {/* ===================== */}
         {confirmOpen && (
             <div style={confirmOverlay} onClick={() => (!deleting ? setConfirmOpen(false) : null)}>
               <div style={confirmBox} onClick={(e) => e.stopPropagation()}>
                 <div style={confirmHeader}>Are you sure?</div>
+
                 <div style={confirmBody}>
                   This action will permanently delete this VSUM and cannot be undone.
                   {deleteError && (
@@ -452,6 +543,7 @@ export const VsumDetailsModal: React.FC<Props> = ({ isOpen, vsumId, onClose, onS
                       </div>
                   )}
                 </div>
+
                 <div style={confirmFooter}>
                   <button
                       onClick={() => setConfirmOpen(false)}
@@ -468,6 +560,7 @@ export const VsumDetailsModal: React.FC<Props> = ({ isOpen, vsumId, onClose, onS
                   >
                     Cancel
                   </button>
+
                   <button
                       onClick={confirmDelete}
                       disabled={deleting}

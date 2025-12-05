@@ -374,6 +374,7 @@ class ApiService {
     createdTo?: string;
     pageNumber?: number;
     pageSize?: number;
+    ownedByUser?: boolean;
   }): Promise<{ data: any[]; message: string }> {
     // Set default values for pagination
     const pageNumber = filters.pageNumber ?? 0;
@@ -431,6 +432,15 @@ class ApiService {
    */
   async deleteMetaModel(id: string): Promise<{ data: any; message: string }> {
     return this.authenticatedRequest(`/api/v1/meta-models/${id}`, {
+      method: 'DELETE',
+    });
+  }
+
+  /**
+   * Delete a file by ID
+   */
+  async deleteFile(id: number): Promise<{ data: any; message: string }> {
+    return this.authenticatedRequest(`/api/v1/files/${id}`, {
       method: 'DELETE',
     });
   }
@@ -714,11 +724,10 @@ export interface UserSearchItem {
 export interface MetaModelRelationRequest {
   sourceId: number;
   targetId: number;
-  reactionFileId: number;
+  reactionFileId: number;  // Use 0 when there's no reaction file
 }
 
 export interface VsumSyncChangesPutRequest {
   metaModelIds: number[];
   metaModelRelationRequests: MetaModelRelationRequest[] | null; // you said null for now
 }
-

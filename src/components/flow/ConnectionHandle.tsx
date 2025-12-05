@@ -1,12 +1,20 @@
-import React, { useState } from 'react';
+
+import React, { useState, useMemo } from 'react';
 import { Handle, Position } from 'reactflow';
 
 interface ConnectionHandleProps {
   position: 'top' | 'bottom' | 'left' | 'right';
   onConnectionStart?: (position: 'top' | 'bottom' | 'left' | 'right') => void;
   isVisible?: boolean;
+  offsetIndex?: number;
+  totalHandles?: number;
 }
 
+const HANDLE_SPACING = 25;
+
+/**
+ * Maps custom position string to React Flow Position enum.
+ */
 const getReactFlowPosition = (pos: 'top' | 'bottom' | 'left' | 'right'): Position => {
   switch (pos) {
     case 'top': return Position.Top;
@@ -16,65 +24,86 @@ const getReactFlowPosition = (pos: 'top' | 'bottom' | 'left' | 'right'): Positio
   }
 };
 
-export const ConnectionHandle: React.FC<ConnectionHandleProps> = ({
+/**
+ * ConnectionHandle Component
+ * Displays interactive connection points with hover effects and arrows.
+ */
+export const ConnectionHandle: React.FC<ConnectionHandleProps> = React.memo(({
   position,
   onConnectionStart,
   isVisible = true,
+  offsetIndex = 0,
+  totalHandles = 1,
 }) => {
   const [isHovered, setIsHovered] = useState(false);
 
-  const baseStyle: React.CSSProperties = {
-    position: 'absolute',
-    cursor: 'crosshair',
-    transition: 'all 0.2s ease',
-    zIndex: 1000,
-    alignItems: 'center',
-    justifyContent: 'center',
-  };
+  // Calculate symmetric offset from center
+  const offset = useMemo(() => {
+    if (totalHandles > 1) {
+      const centerOffset = (totalHandles - 1) / 2;
+      const indexOffset = offsetIndex - centerOffset;
+      return indexOffset * HANDLE_SPACING;
+    }
+    return 0;
+  }, [offsetIndex, totalHandles]);
 
-  const offset = isHovered ? '20px' : '18px';
+  const hoverOffset = isHovered ? '20px' : '18px';
 
-  const getPositionStyle = (): React.CSSProperties => {
+  /**
+   * Compute dynamic position styles based on handle position and hover state.
+   */
+  const positionStyle = useMemo<React.CSSProperties>(() => {
+    const baseStyle: React.CSSProperties = {
+      position: 'absolute',
+      cursor: 'crosshair',
+      transition: 'all 0.2s ease',
+      zIndex: 1000,
+      alignItems: 'center',
+      justifyContent: 'center',
+    };
+
     switch (position) {
       case 'top':
         return {
           ...baseStyle,
           bottom: '100%',
-          left: '50%',
-          marginBottom: offset,
+          left: `calc(50% + ${offset}px)`,
+          marginBottom: hoverOffset,
           transform: `translateX(-50%) ${isHovered ? 'scale(1.3)' : 'scale(1)'}`,
         };
       case 'bottom':
         return {
           ...baseStyle,
           top: '100%',
-          left: '50%',
-          marginTop: offset,
+          left: `calc(50% + ${offset}px)`,
+          marginTop: hoverOffset,
           transform: `translateX(-50%) ${isHovered ? 'scale(1.3)' : 'scale(1)'}`,
         };
       case 'left':
         return {
           ...baseStyle,
           right: '100%',
-          top: '50%',
-          marginRight: offset,
+          top: `calc(50% + ${offset}px)`,
+          marginRight: hoverOffset,
           transform: `translateY(-50%) ${isHovered ? 'scale(1.3)' : 'scale(1)'}`,
         };
       case 'right':
         return {
           ...baseStyle,
           left: '100%',
-          top: '50%',
-          marginLeft: offset,
+          top: `calc(50% + ${offset}px)`,
+          marginLeft: hoverOffset,
           transform: `translateY(-50%) ${isHovered ? 'scale(1.3)' : 'scale(1)'}`,
         };
     }
-  };
+  }, [position, offset, hoverOffset, isHovered]);
 
-  const getArrowSVG = () => {
+  /**
+   * Render directional arrow SVG based on position.
+   */
+  const arrowSVG = useMemo(() => {
     const color = isHovered ? '#2c3e50' : '#95a5a6';
     const size = 24;
-
     const svgStyle: React.CSSProperties = {
       transition: 'all 0.2s ease',
       filter: isHovered
@@ -112,8 +141,11 @@ export const ConnectionHandle: React.FC<ConnectionHandleProps> = ({
           </svg>
         );
     }
-  };
+  }, [position, isHovered]);
 
+  /**
+   * Handle pointer down event to start connection.
+   */
   const handlePointerDownCapture = (e: React.PointerEvent) => {
     console.log('🟢 Handle pointer down CAPTURED');
     e.stopPropagation();
@@ -125,51 +157,41 @@ export const ConnectionHandle: React.FC<ConnectionHandleProps> = ({
     }
   };
 
+  const handleCountSuffix = totalHandles > 1 ? ` (${offsetIndex + 1}/${totalHandles})` : '';
+  const handleTitle = `Connect from ${position}${handleCountSuffix}`;
+
   return (
     <>
+      {/* Invisible React Flow handles for source and target */}
       <Handle
         type="source"
         position={getReactFlowPosition(position)}
         id={position}
-        style={{
-          opacity: 0,
-          width: 1,
-          height: 1,
-          border: 'none',
-          background: 'transparent',
-          pointerEvents: 'auto',
-        }}
+        style={{ opacity: 0, width: 1, height: 1, border: 'none', background: 'transparent', pointerEvents: 'auto' }}
       />
-
       <Handle
         type="target"
         position={getReactFlowPosition(position)}
         id={position}
-        style={{
-          opacity: 0,
-          width: 1,
-          height: 1,
-          border: 'none',
-          background: 'transparent',
-          pointerEvents: 'auto',
-        }}
+        style={{ opacity: 0, width: 1, height: 1, border: 'none', background: 'transparent', pointerEvents: 'auto' }}
       />
 
+      {/* Visible interactive handle */}
       {isVisible && (
         <div
-          style={getPositionStyle()}
+          style={positionStyle}
           onPointerDownCapture={handlePointerDownCapture}
           onMouseEnter={() => setIsHovered(true)}
           onMouseLeave={() => setIsHovered(false)}
           data-nodrag="true"
           className="nodrag"
-          title={`Connect from ${position}`}
+          title={handleTitle}
         >
-          {getArrowSVG()}
+          {arrowSVG}
         </div>
       )}
     </>
   );
-};
+});
 
 export default ConnectionHandle;
