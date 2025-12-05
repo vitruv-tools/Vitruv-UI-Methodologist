@@ -157,6 +157,9 @@ export const ConnectionHandle: React.FC<ConnectionHandleProps> = React.memo(({
     }
   };
 
+  const handleCountSuffix = totalHandles > 1 ? ` (${offsetIndex + 1}/${totalHandles})` : '';
+  const handleTitle = `Connect from ${position}${handleCountSuffix}`;
+
   return (
     <>
       {/* Invisible React Flow handles for source and target */}
@@ -182,7 +185,7 @@ export const ConnectionHandle: React.FC<ConnectionHandleProps> = React.memo(({
           onMouseLeave={() => setIsHovered(false)}
           data-nodrag="true"
           className="nodrag"
-          title={`Connect from ${position}${totalHandles > 1 ? ` (${offsetIndex + 1}/${totalHandles})` : ''}`}
+          title={handleTitle}
         >
           {arrowSVG}
         </div>

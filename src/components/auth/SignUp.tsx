@@ -39,6 +39,24 @@ const passwordStrengthLabel = (score: number): string => {
   }
 };
 
+const getPasswordBarColor = (score: number): string => {
+  switch (score) {
+    case 0:
+    case 1:
+      return "#dc2626"; // red
+    case 2:
+      return "#f59e0b"; // orange
+    case 3:
+      return "#eab308"; // yellow
+    case 4:
+      return "#10b981"; // green
+    case 5:
+      return "#16a34a"; // dark green
+    default:
+      return "#dc2626";
+  }
+};
+
 export function SignUp({ onSignUpSuccess, onSwitchToSignIn }: SignUpProps) {
   const { signUp } = useAuth();
   const [formData, setFormData] = useState<SignUpCredentials>({
@@ -56,16 +74,7 @@ export function SignUp({ onSignUpSuccess, onSwitchToSignIn }: SignUpProps) {
 
   const passwordScore = calculatePasswordStrength(formData.password);
 
-  const passwordBarColor =
-      passwordScore <= 1
-          ? "#dc2626"
-          : passwordScore === 2
-              ? "#f59e0b"
-              : passwordScore === 3
-                  ? "#eab308"
-                  : passwordScore === 4
-                      ? "#10b981"
-                      : "#16a34a";
+  const passwordBarColor = getPasswordBarColor(passwordScore);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
@@ -148,8 +157,8 @@ export function SignUp({ onSignUpSuccess, onSwitchToSignIn }: SignUpProps) {
             {error && (
                 <div className="error-message">
                   <span className="error-icon">⚠️</span>
-                  {error.split("\n").map((line, idx) => (
-                      <div key={idx}>{line}</div>
+                  {error.split("\n").map((line) => (
+                      <div key={line}>{line}</div>
                   ))}
                 </div>
             )}
@@ -158,8 +167,9 @@ export function SignUp({ onSignUpSuccess, onSwitchToSignIn }: SignUpProps) {
 
             <div className="form-row">
               <div className="form-group">
-                <label>First Name</label>
+                <label htmlFor="firstName">First Name</label>
                 <input
+                    id="firstName"
                     name="firstName"
                     value={formData.firstName}
                     onChange={handleInputChange}
@@ -169,8 +179,9 @@ export function SignUp({ onSignUpSuccess, onSwitchToSignIn }: SignUpProps) {
               </div>
 
               <div className="form-group">
-                <label>Last Name</label>
+                <label htmlFor="lastName">Last Name</label>
                 <input
+                    id="lastName"
                     name="lastName"
                     value={formData.lastName}
                     onChange={handleInputChange}
@@ -181,8 +192,9 @@ export function SignUp({ onSignUpSuccess, onSwitchToSignIn }: SignUpProps) {
             </div>
 
             <div className="form-group">
-              <label>Username *</label>
+              <label htmlFor="username">Username *</label>
               <input
+                  id="username"
                   name="username"
                   value={formData.username}
                   onChange={handleInputChange}
@@ -193,8 +205,9 @@ export function SignUp({ onSignUpSuccess, onSwitchToSignIn }: SignUpProps) {
             </div>
 
             <div className="form-group">
-              <label>Email *</label>
+              <label htmlFor="email">Email *</label>
               <input
+                  id="email"
                   name="email"
                   type="email"
                   value={formData.email}
@@ -206,8 +219,9 @@ export function SignUp({ onSignUpSuccess, onSwitchToSignIn }: SignUpProps) {
             </div>
 
             <div className="form-group">
-              <label>Password *</label>
+              <label htmlFor="password">Password *</label>
               <input
+                  id="password"
                   name="password"
                   type="password"
                   value={formData.password}
@@ -254,8 +268,9 @@ export function SignUp({ onSignUpSuccess, onSwitchToSignIn }: SignUpProps) {
             </div>
 
             <div className="form-group">
-              <label>Confirm Password *</label>
+              <label htmlFor="confirmPassword">Confirm Password *</label>
               <input
+                  id="confirmPassword"
                   name="confirmPassword"
                   type="password"
                   value={confirmPassword}
