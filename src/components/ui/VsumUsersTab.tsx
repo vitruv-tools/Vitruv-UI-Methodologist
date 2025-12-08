@@ -74,7 +74,7 @@ export const VsumUsersTab: React.FC<Props> = ({ vsumId, onChanged }) => {
 
   // debounced client-side filter
   useEffect(() => {
-    if (searchTimer.current) window.clearTimeout(searchTimer.current);
+    if (searchTimer.current) globalThis.clearTimeout(searchTimer.current);
 
     const q = query.trim().toLowerCase();
     if (!q) {
@@ -84,7 +84,7 @@ export const VsumUsersTab: React.FC<Props> = ({ vsumId, onChanged }) => {
     }
 
     setSearching(true);
-    searchTimer.current = window.setTimeout(async () => {
+    searchTimer.current = globalThis.setTimeout(async () => {
       try {
         setErr('');
         const all = await loadUsersForSearch();
@@ -102,7 +102,7 @@ export const VsumUsersTab: React.FC<Props> = ({ vsumId, onChanged }) => {
     }, 250) as unknown as number;
 
     return () => {
-      if (searchTimer.current) window.clearTimeout(searchTimer.current);
+      if (searchTimer.current) globalThis.clearTimeout(searchTimer.current);
     };
   }, [query, loadUsersForSearch]);
 
@@ -124,7 +124,7 @@ export const VsumUsersTab: React.FC<Props> = ({ vsumId, onChanged }) => {
 
   // remove member (only non-owner get a button)
   const removeMember = async (vsumUserId: number) => {
-    if (!window.confirm('Remove this member from the VSUM?')) return;
+    if (!globalThis.confirm('Remove this member from the VSUM?')) return;
     try {
       setErr('');
       await apiService.removeVsumMember(vsumUserId); // [REMOVE_MEMBER]
@@ -162,7 +162,7 @@ export const VsumUsersTab: React.FC<Props> = ({ vsumId, onChanged }) => {
               onClick={addMember}
               disabled={!canAdd}
               style={{ ...primaryBtn, opacity: canAdd ? 1 : 0.6 }}
-              title={!canAdd ? 'Pick a user from search first' : 'Add member'}
+              title={canAdd ? 'Add member' : 'Pick a user from search first'}
           >
             Add member
           </button>
@@ -171,16 +171,22 @@ export const VsumUsersTab: React.FC<Props> = ({ vsumId, onChanged }) => {
         {/* Search dropdown */}
         {query && (
             <div style={{ border: '1px solid #e9ecef', borderRadius: 6, overflow: 'hidden' }}>
-              {searching ? (
+              {searching && (
                   <div style={{ padding: 8, fontStyle: 'italic', color: '#6c757d' }}>Searching…</div>
-              ) : searchResults.length === 0 ? (
+              )}
+              {!searching && searchResults.length === 0 && (
                   <div style={{ padding: 8, fontStyle: 'italic', color: '#6c757d' }}>No users found</div>
-              ) : (
-                  <ul style={{ listStyle: 'none', margin: 0, padding: 0, maxHeight: 220, overflowY: 'auto' }}>
+              )}
+              {!searching && searchResults.length > 0 && (
+                  <ul style={{ listStyle: 'none', margin: 0, padding: 0, maxHeight: 220, overflowY: 'auto' }} role="listbox">
                     {searchResults.map(u => (
                         <li
                             key={u.id}
+                            role="option"
+                            tabIndex={0}
+                            aria-selected={selectedUser?.id === u.id}
                             onClick={() => setSelectedUser(u)}
+                            onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') setSelectedUser(u); }}
                             style={{
                               padding: '8px 10px',
                               cursor: 'pointer',
@@ -217,12 +223,13 @@ export const VsumUsersTab: React.FC<Props> = ({ vsumId, onChanged }) => {
             </tr>
             </thead>
             <tbody>
-            {loading ? (
+            {loading && (
                 <tr><td colSpan={4} style={{ ...td, fontStyle: 'italic', color: '#6c757d' }}>Loading…</td></tr>
-            ) : members.length === 0 ? (
+            )}
+            {!loading && members.length === 0 && (
                 <tr><td colSpan={4} style={{ ...td, fontStyle: 'italic', color: '#6c757d' }}>No members yet.</td></tr>
-            ) : (
-                members.map(m => {
+            )}
+            {!loading && members.length > 0 && members.map(m => {
                   const fullName = [m.firstName, m.lastName].filter(Boolean).join(' ') || '—';
                   const owner = isOwnerRole(m.role, (m as any).roleEn);
                   return (
@@ -239,8 +246,7 @@ export const VsumUsersTab: React.FC<Props> = ({ vsumId, onChanged }) => {
                         </td>
                       </tr>
                   );
-                })
-            )}
+                })}
             </tbody>
           </table>
         </div>

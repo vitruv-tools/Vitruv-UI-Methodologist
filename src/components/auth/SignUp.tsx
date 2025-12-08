@@ -57,7 +57,7 @@ const getPasswordBarColor = (score: number): string => {
   }
 };
 
-export function SignUp({ onSignUpSuccess, onSwitchToSignIn }: SignUpProps) {
+export function SignUp({ onSignUpSuccess, onSwitchToSignIn }: Readonly<SignUpProps>) {
   const { signUp } = useAuth();
   const [formData, setFormData] = useState<SignUpCredentials>({
     username: '',

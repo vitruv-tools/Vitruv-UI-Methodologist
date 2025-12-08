@@ -23,6 +23,12 @@ const getTreeWidth = (
   return children.reduce((sum, childId) => sum + getTreeWidth(childId, parentToChildren), 0);
 };
 
+// Context for tree layout operations
+interface TreeLayoutContext {
+  nodes: FlowNode[];
+  parentToChildren: Map<string, string[]>;
+}
+
 // Layout a single tree node and its children recursively
 const layoutTreeNode = (
   nodeId: string,
@@ -31,10 +37,9 @@ const layoutTreeNode = (
   rightBound: number,
   rootTreeWidth: number,
   startY: number,
-  nodes: FlowNode[],
-  parentToChildren: Map<string, string[]>
+  ctx: TreeLayoutContext
 ): void => {
-  const node = findNodeById(nodes, nodeId);
+  const node = findNodeById(ctx.nodes, nodeId);
   if (!node) return;
   
   const centerX = (leftBound + rightBound) / 2;
@@ -42,14 +47,14 @@ const layoutTreeNode = (
   const yPos = startY + level * (NODE_HEIGHT + VERTICAL_SPACING) + verticalJitter;
   node.position = { x: centerX, y: yPos };
 
-  const children = parentToChildren.get(nodeId) || [];
+  const children = ctx.parentToChildren.get(nodeId) || [];
   if (children.length === 0) return;
 
   let childX = leftBound;
   children.forEach(childId => {
-    const childWidth = getTreeWidth(childId, parentToChildren);
+    const childWidth = getTreeWidth(childId, ctx.parentToChildren);
     const childSpace = (rightBound - leftBound) * (childWidth / Math.max(rootTreeWidth, 1));
-    layoutTreeNode(childId, level + 1, childX, childX + childSpace, rootTreeWidth, startY, nodes, parentToChildren);
+    layoutTreeNode(childId, level + 1, childX, childX + childSpace, rootTreeWidth, startY, ctx);
     childX += childSpace;
   });
 };
@@ -91,10 +96,11 @@ const layoutComponent = (
     const roots = componentNodes.filter(id => !childToParent.has(id));
     let currentX = startX;
 
+    const ctx: TreeLayoutContext = { nodes, parentToChildren };
     roots.forEach(rootId => {
       const treeWidth = getTreeWidth(rootId, parentToChildren);
       const treeSpace = treeWidth * (NODE_WIDTH + HORIZONTAL_SPACING);
-      layoutTreeNode(rootId, 0, currentX, currentX + treeSpace, treeWidth, startY, nodes, parentToChildren);
+      layoutTreeNode(rootId, 0, currentX, currentX + treeSpace, treeWidth, startY, ctx);
       currentX += treeSpace + HORIZONTAL_SPACING * 2;
     });
   } else {
@@ -377,12 +383,12 @@ export const generateUMLFromEcore = (ecoreContent: string): { nodes: FlowNode[];
     const edges: FlowEdge[] = [];
     let nodeId = 1;
 
-    const rootPackage = xmlDoc.querySelector('ecore\\:EPackage, EPackage');
+    const rootPackage = xmlDoc.querySelector(String.raw`ecore\:EPackage, EPackage`);
     const packageName = rootPackage?.getAttribute('name') || 'Package';
 
     // Collect classes first to reference by name
     const classElems = Array.from(xmlDoc.querySelectorAll('eClassifiers[type="ecore:EClass"], eClassifiers EClass, eClassifiers'))
-      .filter((el: Element) => (el.getAttribute('xsi:type') || el.getAttribute('type') || '').includes('EClass') || el.tagName.endsWith('EClass') || el.querySelector('eStructuralFeatures')) as Element[];
+      .filter((el: Element) => (el.getAttribute('xsi:type') || el.getAttribute('type') || '').includes('EClass') || el.tagName.endsWith('EClass') || el.querySelector('eStructuralFeatures'));
 
     const classNameToNodeId = new Map<string, string>();
 
@@ -427,6 +433,14 @@ export const generateUMLFromEcore = (ecoreContent: string): { nodes: FlowNode[];
         attributes.push(`+ ${attrName}: ${typeName}${mult}`);
       });
 
+      // Determine tool name based on class type
+      let toolName = 'class';
+      if (isInterface) {
+        toolName = 'interface';
+      } else if (isAbstract) {
+        toolName = 'abstract-class';
+      }
+
       const node: FlowNode = {
         id: `uml-class-${nodeId++}`,
         type: 'editable',
@@ -434,7 +448,7 @@ export const generateUMLFromEcore = (ecoreContent: string): { nodes: FlowNode[];
         data: {
           label: className,
           toolType: 'element',
-          toolName: isInterface ? 'interface' : isAbstract ? 'abstract-class' : 'class',
+          toolName,
           diagramType: 'uml',
           className: className,
           attributes,

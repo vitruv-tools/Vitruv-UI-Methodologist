@@ -6,12 +6,12 @@ export function AuthPage() {
 
   const handleSignInSuccess = (user: any) => {
     // Redirect to main app - this will be handled by the router
-    window.location.href = '/';
+    globalThis.location.href = '/';
   };
 
   const handleSignUpSuccess = (user: any) => {
     // Redirect to main app - this will be handled by the router
-    window.location.href = '/';
+    globalThis.location.href = '/';
   };
 
   const handleSwitchToSignUp = () => {

@@ -201,10 +201,10 @@ export const MetaModelsPanel: React.FC<MetaModelsPanelProps> = ({
     const filters: any[] = [];
     const parts = query.split(/\s+/).filter(Boolean);
     for (const part of parts) {
-      const m = part.match(/^([a-zA-Z]+):(.+)$/);
+      const m = /^([a-zA-Z]+):(.+)$/.exec(part);
       if (!m) continue;
       const [, key, raw] = m;
-      const value = raw.replace(/"/g, '');
+      const value = raw.replaceAll('"', '');
       switch (key.toLowerCase()) {
         case 'name':
         case 'domain':
@@ -235,53 +235,44 @@ export const MetaModelsPanel: React.FC<MetaModelsPanelProps> = ({
         // Set ownership filter
         filters.ownedByUser = !showAllModels;
         
-        parsedFilters.forEach(f => {
-          const v = String(f.value);
-          switch (f.key) {
-            case 'name':
-            case 'domain':
-            case 'description':
-              filters[f.key] = v;
-              break;
-            case 'keywords':
-              filters.keywords = v;
-              break;
-            case 'created':
-            case 'updated': {
-              const fromKey = f.key === 'created' ? 'createdFrom' : 'updatedFrom';
-              const toKey = f.key === 'created' ? 'createdTo' : 'updatedTo';
-              if (v.includes('after:')) {
-                const dateStr = v.replace('after:', '');
-                (filters as any)[fromKey] = dateStr === 'now' ? new Date().toISOString() : new Date(dateStr).toISOString();
-              } else if (v.includes('before:')) {
-                const dateStr = v.replace('before:', '');
-                (filters as any)[toKey] = dateStr === 'now' ? new Date().toISOString() : new Date(dateStr).toISOString();
-              } else if (v.includes('between:')) {
-                const [a, b] = v.replace('between:', '').split('..');
-                if (a && b) {
-                  (filters as any)[fromKey] = new Date(a).toISOString();
-                  (filters as any)[toKey] = new Date(b).toISOString();
-                }
-              } else {
-                (filters as any)[fromKey] = new Date(v).toISOString();
-                (filters as any)[toKey] = new Date(`${v}T23:59:59`).toISOString();
-              }
-              break;
-            }
+        const parseDateValue = (v: string): { from?: string; to?: string } => {
+          const toISO = (s: string) => (s === 'now' ? new Date().toISOString() : new Date(s).toISOString());
+          if (v.includes('after:')) return { from: toISO(v.replace('after:', '')) };
+          if (v.includes('before:')) return { to: toISO(v.replace('before:', '')) };
+          if (v.includes('between:')) {
+            const [a, b] = v.replace('between:', '').split('..');
+            return a && b ? { from: new Date(a).toISOString(), to: new Date(b).toISOString() } : {};
           }
-        });
+          return { from: new Date(v).toISOString(), to: new Date(`${v}T23:59:59`).toISOString() };
+        };
+
+        for (const f of parsedFilters) {
+          const v = String(f.value);
+          if (f.key === 'name' || f.key === 'domain' || f.key === 'description') {
+            filters[f.key] = v;
+          } else if (f.key === 'keywords') {
+            filters.keywords = v;
+          } else if (f.key === 'created' || f.key === 'updated') {
+            const prefix = f.key === 'created' ? 'created' : 'updated';
+            const { from, to } = parseDateValue(v);
+            if (from) filters[`${prefix}From`] = from;
+            if (to) filters[`${prefix}To`] = to;
+          }
+        }
 
         if (dateFilter !== 'all') {
           const hasDate = parsedFilters.some(f => f.key === 'created' || f.key === 'updated');
           if (!hasDate) {
             const now = new Date();
-            let from = new Date(0);
-            if (dateFilter === 'today') from = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-            if (dateFilter === 'week') from = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
-            if (dateFilter === 'month') from = new Date(now.getFullYear(), now.getMonth(), 1);
-            if (dateFilter === 'year') from = new Date(now.getFullYear(), 0, 1);
-            (filters as any).createdFrom = from.toISOString();
-            (filters as any).createdTo = now.toISOString();
+            const dateFilterMap: Record<string, () => Date> = {
+              today: () => new Date(now.getFullYear(), now.getMonth(), now.getDate()),
+              week: () => new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000),
+              month: () => new Date(now.getFullYear(), now.getMonth(), 1),
+              year: () => new Date(now.getFullYear(), 0, 1),
+            };
+            const from = dateFilterMap[dateFilter]?.() ?? new Date(0);
+            filters.createdFrom = from.toISOString();
+            filters.createdTo = now.toISOString();
           }
         }
 
@@ -436,6 +427,7 @@ export const MetaModelsPanel: React.FC<MetaModelsPanelProps> = ({
         {sortedModels.map((model: any) => (
           <div
             key={model.id}
+            role="article"
             style={fileCardStyle}
             onMouseEnter={(e) => Object.assign(e.currentTarget.style, fileCardHoverStyle)}
             onMouseLeave={(e) => Object.assign(e.currentTarget.style, fileCardStyle)}

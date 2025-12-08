@@ -21,7 +21,7 @@ export function useUndoRedo(initialState: DiagramState) {
 
   const saveState = useCallback((state: DiagramState, description: string) => {
     const newEntry: HistoryEntry = {
-      state: JSON.parse(JSON.stringify(state)), // Deep clone
+      state: structuredClone(state),
       timestamp: Date.now(),
       description
     };

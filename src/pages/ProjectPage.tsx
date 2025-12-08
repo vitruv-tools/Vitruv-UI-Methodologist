@@ -31,7 +31,7 @@ export const ProjectPage: React.FC = () => {
         const fileContent = await apiService.getFile(model.ecoreFileId);
         
         // Dispatch event to add file to workspace
-        window.dispatchEvent(new CustomEvent('vitruv.addFileToWorkspace', {
+        globalThis.dispatchEvent(new CustomEvent('vitruv.addFileToWorkspace', {
           detail: {
             fileContent: fileContent,
             fileName: model.name + '.ecore',
@@ -46,24 +46,24 @@ export const ProjectPage: React.FC = () => {
       }
       
       // Also dispatch the event to add meta model to VSUM
-      window.dispatchEvent(new CustomEvent('vitruv.addMetaModelToActiveVsum', { detail: { id: model.id, sourceId: model.sourceId ?? model.id } }));
+      globalThis.dispatchEvent(new CustomEvent('vitruv.addMetaModelToActiveVsum', { detail: { id: model.id, sourceId: model.sourceId ?? model.id } }));
     } catch (error) {
       console.error('Failed to fetch file:', error);
       // Still dispatch the add event even if file fetch fails
-      window.dispatchEvent(new CustomEvent('vitruv.addMetaModelToActiveVsum', { detail: { id: model.id, sourceId: model.sourceId ?? model.id } }));
+      globalThis.dispatchEvent(new CustomEvent('vitruv.addMetaModelToActiveVsum', { detail: { id: model.id, sourceId: model.sourceId ?? model.id } }));
     }
   }, []);
 
   const requestWorkspaceSnapshot = useCallback(() => {
     return new Promise<WorkspaceSnapshot | null>((resolve) => {
-      const timeout = window.setTimeout(() => resolve(null), 2000);
+      const timeout = globalThis.setTimeout(() => resolve(null), 2000);
       const detail: WorkspaceSnapshotRequest = {
         resolve: (snapshot) => {
-          window.clearTimeout(timeout);
+          globalThis.clearTimeout(timeout);
           resolve(snapshot);
         },
       };
-      window.dispatchEvent(new CustomEvent<WorkspaceSnapshotRequest>('vitruv.requestWorkspaceSnapshot', { detail }));
+      globalThis.dispatchEvent(new CustomEvent<WorkspaceSnapshotRequest>('vitruv.requestWorkspaceSnapshot', { detail }));
     });
   }, []);
 
@@ -71,21 +71,21 @@ export const ProjectPage: React.FC = () => {
     if (!activeInstanceId) return;
     setOpenTabs(prev => {
       const filtered = prev.filter(x => x.instanceId !== activeInstanceId);
-      const nextActive = filtered.length > 0 ? filtered[filtered.length - 1].instanceId : null;
+      const nextActive = filtered.length > 0 ? filtered.at(-1)!.instanceId : null;
       setActiveInstanceId(nextActive);
       return filtered;
     });
     setShowRight(false);
-    window.dispatchEvent(new CustomEvent('vitruv.resetWorkspace'));
+    globalThis.dispatchEvent(new CustomEvent('vitruv.resetWorkspace'));
   }, [activeInstanceId]);
 
   const openVsumById = useCallback(async (id: number, { forceNew }: { forceNew?: boolean } = {}) => {
     let instanceId = forceNew ? undefined : openTabs.find(t => t.id === id)?.instanceId;
-    if (!instanceId) {
+    if (instanceId) {
+      showInfo('This project is already open. Switched to it.');
+    } else {
       instanceId = createInstanceId(id);
       setOpenTabs(prev => [...prev, { instanceId: instanceId!, id }]);
-    } else {
-      showInfo('This project is already open. Switched to it.');
     }
     setActiveInstanceId(instanceId);
     // Note: fetchAndLoadProjectBoxes is now handled by the useEffect watching activeInstanceId
@@ -103,14 +103,14 @@ export const ProjectPage: React.FC = () => {
       }
       await openVsumById(id, { forceNew: custom.detail?.forceNew });
     };
-    window.addEventListener('vitruv.openVsum', handler as EventListener);
-    return () => window.removeEventListener('vitruv.openVsum', handler as EventListener);
+    globalThis.addEventListener('vitruv.openVsum', handler as EventListener);
+    return () => globalThis.removeEventListener('vitruv.openVsum', handler as EventListener);
   }, [openTabs, openVsumById]);
 
   // Close active workspace tab when canvas becomes empty (no boxes)
   useEffect(() => {
-    window.addEventListener('vitruv.closeActiveWorkspace', closeActiveWorkspaceTab as EventListener);
-    return () => window.removeEventListener('vitruv.closeActiveWorkspace', closeActiveWorkspaceTab as EventListener);
+    globalThis.addEventListener('vitruv.closeActiveWorkspace', closeActiveWorkspaceTab as EventListener);
+    return () => globalThis.removeEventListener('vitruv.closeActiveWorkspace', closeActiveWorkspaceTab as EventListener);
   }, [closeActiveWorkspaceTab]);
 
   // Reload workspace when returning from expanded metamodel view
@@ -245,7 +245,7 @@ async function fetchAndLoadProjectBoxes(id: number, skipReset: boolean = false) 
   // When returning from UML view, the reset is already done in handleBackToWorkspace
   if (!skipReset) {
     console.log('🔄 Triggering workspace reset');
-    window.dispatchEvent(new CustomEvent('vitruv.resetWorkspace'));
+    globalThis.dispatchEvent(new CustomEvent('vitruv.resetWorkspace'));
   }
   
   try {
@@ -262,7 +262,7 @@ async function fetchAndLoadProjectBoxes(id: number, skipReset: boolean = false) 
       if (metaModel.ecoreFileId) {
         try {
           const fileContent = await apiService.getFile(metaModel.ecoreFileId);
-          window.dispatchEvent(new CustomEvent('vitruv.addFileToWorkspace', {
+          globalThis.dispatchEvent(new CustomEvent('vitruv.addFileToWorkspace', {
             detail: {
               fileContent: fileContent,
               fileName: metaModel.name + '.ecore',

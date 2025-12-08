@@ -93,7 +93,7 @@ export const ToastProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     const id = idRef.current++;
     const toast: ToastItem = { id, type, message, durationMs };
     setToasts((prev) => [toast, ...prev]);
-    window.setTimeout(() => remove(id), durationMs);
+    globalThis.setTimeout(() => remove(id), durationMs);
   }, [remove]);
 
   const value = useMemo<ToastContextValue>(() => ({
@@ -107,10 +107,10 @@ export const ToastProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       {children}
       <div style={containerStyle} aria-live="polite" aria-atomic="true">
         {toasts.map((t) => (
-          <div key={t.id} style={getToastStyle(t.type)} role="status">
+          <output key={t.id} style={getToastStyle(t.type)}>
             <p style={titleStyle}>{t.message}</p>
             <button style={closeButtonStyle} onClick={() => remove(t.id)} aria-label="Close">×</button>
-          </div>
+          </output>
         ))}
       </div>
     </ToastContext.Provider>

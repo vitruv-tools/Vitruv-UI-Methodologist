@@ -2,9 +2,11 @@
 import React, { useState, useMemo } from 'react';
 import { Handle, Position } from 'reactflow';
 
+type HandlePosition = 'top' | 'bottom' | 'left' | 'right';
+
 interface ConnectionHandleProps {
-  position: 'top' | 'bottom' | 'left' | 'right';
-  onConnectionStart?: (position: 'top' | 'bottom' | 'left' | 'right') => void;
+  position: HandlePosition;
+  onConnectionStart?: (position: HandlePosition) => void;
   isVisible?: boolean;
   offsetIndex?: number;
   totalHandles?: number;
@@ -15,7 +17,7 @@ const HANDLE_SPACING = 25;
 /**
  * Maps custom position string to React Flow Position enum.
  */
-const getReactFlowPosition = (pos: 'top' | 'bottom' | 'left' | 'right'): Position => {
+const getReactFlowPosition = (pos: HandlePosition): Position => {
   switch (pos) {
     case 'top': return Position.Top;
     case 'bottom': return Position.Bottom;
@@ -150,10 +152,22 @@ export const ConnectionHandle: React.FC<ConnectionHandleProps> = React.memo(({
     console.log('🟢 Handle pointer down CAPTURED');
     e.stopPropagation();
     e.preventDefault();
-    (e.target as HTMLElement).setAttribute('data-nodrag', 'true');
+    (e.target as HTMLElement).dataset.nodrag = 'true';
 
     if (onConnectionStart) {
       onConnectionStart(position);
+    }
+  };
+
+  /**
+   * Handle keyboard event for accessibility.
+   */
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault();
+      if (onConnectionStart) {
+        onConnectionStart(position);
+      }
     }
   };
 
@@ -179,13 +193,19 @@ export const ConnectionHandle: React.FC<ConnectionHandleProps> = React.memo(({
       {/* Visible interactive handle */}
       {isVisible && (
         <div
+          role="button"
+          tabIndex={0}
           style={positionStyle}
           onPointerDownCapture={handlePointerDownCapture}
+          onKeyDown={handleKeyDown}
           onMouseEnter={() => setIsHovered(true)}
           onMouseLeave={() => setIsHovered(false)}
+          onFocus={() => setIsHovered(true)}
+          onBlur={() => setIsHovered(false)}
           data-nodrag="true"
           className="nodrag"
           title={handleTitle}
+          aria-label={handleTitle}
         >
           {arrowSVG}
         </div>

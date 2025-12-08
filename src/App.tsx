@@ -10,7 +10,7 @@ import { Node, Edge } from 'reactflow';
 import './App.css';
 import { SidebarTabs, MainLayout } from './components';
 
-function ProtectedRoute({ children }: { children: React.ReactNode }) {
+function ProtectedRoute({ children }: Readonly<{ children: React.ReactNode }>) {
   const { isAuthenticated, isLoading } = useAuth();
 
   if (isLoading) {
@@ -57,17 +57,14 @@ function AppContent() {
   };
 
   const handleSave = () => {
-    // TODO: Implement save functionality
     console.log('Save functionality to be implemented');
   };
 
   const handleLoad = () => {
-    // TODO: Implement load functionality
     console.log('Load functionality to be implemented');
   };
 
   const handleNew = () => {
-    // TODO: Implement new flow functionality
     console.log('New flow functionality to be implemented');
   };
 

@@ -8,8 +8,7 @@ export interface FlowNode extends Node {
   };
 }
 
-export type FlowEdge = Edge & {
-};
+export type FlowEdge = Edge;
 
 export interface FlowData {
   nodes: FlowNode[];

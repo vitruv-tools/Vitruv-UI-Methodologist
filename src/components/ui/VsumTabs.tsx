@@ -69,12 +69,12 @@ export const VsumTabs: React.FC<VsumTabsProps> = ({
         const backendRelsRaw = (backend as any).metaModelsRelation ?? [];
         const backendRels = (backendRelsRaw as Array<any>)
             .map(r => `${r.sourceId}->${r.targetId}#${r.reactionFileId ?? ''}`)
-            .sort();
+            .sort((a, b) => a.localeCompare(b));
 
         const snapRelsRaw = snapshot.metaModelRelationRequests ?? [];
         const snapRels = snapRelsRaw
             .map(r => `${r.sourceId}->${r.targetId}#${r.reactionFileId ?? ''}`)
-            .sort();
+            .sort((a, b) => a.localeCompare(b));
 
         if (backendRels.length !== snapRels.length) return true;
         for (let i = 0; i < backendRels.length; i++) {
@@ -156,9 +156,7 @@ export const VsumTabs: React.FC<VsumTabsProps> = ({
                 console.warn('Failed to refresh workspace snapshot before save', e);
             }
         }
-        if (!snap) {
-            snap = { metaModelIds: [], metaModelRelationRequests: [] };
-        }
+        snap ??= { metaModelIds: [], metaModelRelationRequests: [] };
 
         const backendMetaModels = backend.metaModels ?? [];
 
@@ -272,6 +270,8 @@ export const VsumTabs: React.FC<VsumTabsProps> = ({
                             return (
                                 <div
                                     key={tab.instanceId}
+                                    role="tab"
+                                    tabIndex={0}
                                     style={{
                                         display: 'flex',
                                         alignItems: 'center',
@@ -285,7 +285,13 @@ export const VsumTabs: React.FC<VsumTabsProps> = ({
                                         boxShadow: isActive ? '0 1px 2px rgba(0,0,0,0.04)' : 'none',
                                     }}
                                     onClick={() => onActivate(tab.instanceId)}
-                                    aria-current={isActive ? 'page' : undefined}
+                                    onKeyDown={e => {
+                                        if (e.key === 'Enter' || e.key === ' ') {
+                                            e.preventDefault();
+                                            onActivate(tab.instanceId);
+                                        }
+                                    }}
+                                    aria-selected={isActive}
                                     title={name}
                                 >
                                     {isTabDirty && (

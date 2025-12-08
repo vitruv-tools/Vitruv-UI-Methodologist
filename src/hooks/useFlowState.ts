@@ -50,7 +50,7 @@ export function useFlowState(props?: UseFlowStateProps) {
         ...e.data,
         parallelIndex: index,
         parallelCount: count,
-      } as any;
+      };
       return { ...e, data };
     });
   }, []);
@@ -238,10 +238,10 @@ export function useFlowState(props?: UseFlowStateProps) {
     const recomputed = applyParallelEdgeMeta(edges);
     // detect if parallel meta changed to avoid unnecessary re-renders
     const changed = edges.some((e, i) => {
-      const prevIndex = (e.data as any)?.parallelIndex;
-      const prevCount = (e.data as any)?.parallelCount;
-      const nextIndex = (recomputed[i].data as any)?.parallelIndex;
-      const nextCount = (recomputed[i].data as any)?.parallelCount;
+      const prevIndex = e.data?.parallelIndex;
+      const prevCount = e.data?.parallelCount;
+      const nextIndex = recomputed[i].data?.parallelIndex;
+      const nextCount = recomputed[i].data?.parallelCount;
       return prevIndex !== nextIndex || prevCount !== nextCount;
     });
     if (changed) {

@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import ReactFlow, { Background, Edge, MiniMap, Node, ReactFlowInstance } from 'reactflow';
 import 'reactflow/dist/style.css';
 import { EditableNode } from './EditableNode';
@@ -50,7 +50,8 @@ export const UMLViewerModal: React.FC<UMLViewerModalProps> = ({ isOpen, title, e
   if (!isOpen) return null;
 
   return (
-    <div
+    <dialog
+      open
       style={{
         position: 'fixed',
         inset: 0,
@@ -59,7 +60,16 @@ export const UMLViewerModal: React.FC<UMLViewerModalProps> = ({ isOpen, title, e
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
+        border: 'none',
+        padding: 0,
+        margin: 0,
+        width: '100%',
+        height: '100%',
+        maxWidth: '100%',
+        maxHeight: '100%',
       }}
+      onClose={onClose}
+      onCancel={onClose}
       onClick={(e) => {
         if (e.target === e.currentTarget) onClose();
       }}
@@ -125,7 +135,7 @@ export const UMLViewerModal: React.FC<UMLViewerModalProps> = ({ isOpen, title, e
           </ReactFlow>
         </div>
       </div>
-    </div>
+    </dialog>
   );
 };
 

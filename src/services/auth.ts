@@ -66,7 +66,7 @@ export class AuthService {
       let errorMessage = errorText;
       try {
         const parsed = JSON.parse(errorText);
-        errorMessage = (parsed as any)?.message || (parsed as any)?.error || errorText;
+        errorMessage = parsed?.message || parsed?.error || errorText;
       } catch {}
       const fallback = response.statusText || 'Request failed';
       throw new Error(errorMessage || fallback);
@@ -93,7 +93,7 @@ export class AuthService {
       let errorMessage = errorText;
       try {
         const parsed = JSON.parse(errorText);
-        errorMessage = (parsed as any)?.message || (parsed as any)?.error || errorText;
+        errorMessage = parsed?.message || parsed?.error || errorText;
       } catch {}
       const fallback = response.statusText || 'Request failed';
       throw new Error(errorMessage || fallback);
@@ -127,7 +127,7 @@ export class AuthService {
     }
 
     const now = Date.now();
-    const refreshExpiry = parseInt(refreshExpiresAt, 10);
+    const refreshExpiry = Number.parseInt(refreshExpiresAt, 10);
     if (Number.isFinite(refreshExpiry) && now >= refreshExpiry) {
       await this.signOut();
       return null;
@@ -185,7 +185,7 @@ export class AuthService {
     localStorage.removeItem('auth.refresh_expires_at');
     localStorage.removeItem('auth.user');
     try {
-      window.dispatchEvent(new Event('auth:signout'));
+      globalThis.dispatchEvent(new Event('auth:signout'));
     } catch {}
   }
 
@@ -196,8 +196,8 @@ export class AuthService {
     const refreshToken = localStorage.getItem('auth.refresh_token');
     const refreshExpiresAt = localStorage.getItem('auth.refresh_expires_at');
 
-    const accessValid = !!accessToken && !!accessExpiresAt && now < parseInt(accessExpiresAt, 10);
-    const refreshValid = !!refreshToken && !!refreshExpiresAt && now < parseInt(refreshExpiresAt, 10);
+    const accessValid = !!accessToken && !!accessExpiresAt && now < Number.parseInt(accessExpiresAt, 10);
+    const refreshValid = !!refreshToken && !!refreshExpiresAt && now < Number.parseInt(refreshExpiresAt, 10);
 
     return accessValid || refreshValid;
   }
@@ -209,12 +209,12 @@ export class AuthService {
     const refreshToken = localStorage.getItem('auth.refresh_token');
     const refreshExpiresAt = localStorage.getItem('auth.refresh_expires_at');
 
-    const accessValid = !!accessToken && !!accessExpiresAt && now < parseInt(accessExpiresAt, 10);
+    const accessValid = !!accessToken && !!accessExpiresAt && now < Number.parseInt(accessExpiresAt, 10);
     if (accessValid) {
-      return accessToken as string;
+      return accessToken;
     }
 
-    const refreshValid = !!refreshToken && !!refreshExpiresAt && now < parseInt(refreshExpiresAt, 10);
+    const refreshValid = !!refreshToken && !!refreshExpiresAt && now < Number.parseInt(refreshExpiresAt, 10);
     if (!refreshValid) {
       await this.signOut();
       return null;
@@ -222,7 +222,7 @@ export class AuthService {
 
     try {
       const refreshResult = await this.refreshToken();
-      if (refreshResult && refreshResult.access_token) {
+      if (refreshResult?.access_token) {
         return refreshResult.access_token;
       }
     } catch (error) {

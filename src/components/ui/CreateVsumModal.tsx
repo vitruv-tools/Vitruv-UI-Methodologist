@@ -137,8 +137,8 @@ export const CreateVsumModal: React.FC<CreateVsumModalProps> = ({ isOpen, onClos
   };
 
   return ReactDOM.createPortal(
-    <div style={modalOverlayStyle} onClick={handleClose}>
-      <div style={modalStyle} onClick={(e) => e.stopPropagation()}>
+    <dialog open style={modalOverlayStyle} onClose={handleClose} onCancel={handleClose} onClick={(e) => { if (e.target === e.currentTarget) handleClose(); }} onKeyDown={(e) => { if (e.key === 'Escape') handleClose(); }}>
+      <div style={modalStyle}>
         <div style={headerStyle}>
           <h3 style={titleStyle}>Create</h3>
           <button style={closeButtonStyle} onClick={handleClose}>
@@ -149,8 +149,9 @@ export const CreateVsumModal: React.FC<CreateVsumModalProps> = ({ isOpen, onClos
         {error && <div style={errorMessageStyle}>{error}</div>}
 
         <div style={formGroupStyle}>
-          <label style={labelStyle}>Name *</label>
+          <label htmlFor="vsum-name-input" style={labelStyle}>Name *</label>
           <input
+            id="vsum-name-input"
             placeholder="Enter name"
             value={name}
             onChange={(e) => setName(e.target.value)}
@@ -160,8 +161,9 @@ export const CreateVsumModal: React.FC<CreateVsumModalProps> = ({ isOpen, onClos
         </div>
 
         <div style={formGroupStyle}>
-          <label style={labelStyle}>Description</label>
+          <label htmlFor="vsum-description-input" style={labelStyle}>Description</label>
           <textarea
+            id="vsum-description-input"
             placeholder="Optional description"
             value={description}
             onChange={(e) => setDescription(e.target.value)}
@@ -177,7 +179,7 @@ export const CreateVsumModal: React.FC<CreateVsumModalProps> = ({ isOpen, onClos
           </button>
         </div>
       </div>
-    </div>,
+    </dialog>,
     document.body
   );
 };

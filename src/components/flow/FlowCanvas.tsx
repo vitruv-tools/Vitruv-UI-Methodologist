@@ -197,7 +197,7 @@ export const FlowCanvas = forwardRef<{
     const [codeEditorState, setCodeEditorState] = useState<CodeEditorState | null>(null);
     const [routingStyle] = useState<'curved' | 'orthogonal'>('orthogonal');
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    const [_, setEdgeDragState] = useState<{
+    const [edgeDragState, setEdgeDragState] = useState<{
       edgeId: string;
       isDragging: boolean;
       controlPoint?: { x: number; y: number };
@@ -295,14 +295,11 @@ export const FlowCanvas = forwardRef<{
     const recalculateEdgeHandles = useCallback(() => {
       console.log('🔄 Node drag finished, recalculating edge handles...');
       
-      setNodes(currentNodes => {
-        setEdges(currentEdges => {
-          const updatedEdges = currentEdges.map(edge => updateEdgeHandles(edge, currentNodes));
-          return updatedEdges;
-        });
-        return currentNodes;
-      });
-    }, [setNodes, setEdges, updateEdgeHandles]);
+      if (!reactFlowInstance) return;
+      
+      const currentNodes = reactFlowInstance.getNodes();
+      setEdges(currentEdges => currentEdges.map(edge => updateEdgeHandles(edge, currentNodes)));
+    }, [reactFlowInstance, setEdges, updateEdgeHandles]);
 
     // Wrapper to auto-update edge handles when nodes move
     const onNodesChange = useCallback((changes: any) => {
@@ -557,52 +554,58 @@ export const FlowCanvas = forwardRef<{
     }, [nodes]);
 
     useEffect(() => {
-      const handleKeyDown = (event: KeyboardEvent) => {
-        const target = event.target as HTMLElement;
-        if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.contentEditable === 'true') {
-          return;
-        }
+      const isEditableElement = (target: HTMLElement): boolean => {
+        return target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.contentEditable === 'true';
+      };
 
-
-        if (event.key === 'Delete' || event.key === 'Backspace') {
-          if (reactFlowInstance) {
-            const selectedNodes = reactFlowInstance.getNodes().filter(n => n.selected);
-            const selectedEdges = reactFlowInstance.getEdges().filter(e => e.selected);
-            if (selectedNodes.length > 0) {
-              event.preventDefault();
-              selectedNodes.forEach((n) => removeNode(n.id));
-              return;
-            }
-            if (selectedEdges.length > 0) {
-              event.preventDefault();
-              selectedEdges.forEach((e) => removeEdge(e.id));
-              return;
-            }
-          }
-
-          if (selectedFileId && onEcoreFileDelete) {
+      const handleDeleteKey = (event: KeyboardEvent): boolean => {
+        if (reactFlowInstance) {
+          const selectedNodes = reactFlowInstance.getNodes().filter(n => n.selected);
+          if (selectedNodes.length > 0) {
             event.preventDefault();
-            onEcoreFileDelete(selectedFileId);
-            setSelectedFileId(null);
-            return;
+            selectedNodes.forEach((n) => removeNode(n.id));
+            return true;
+          }
+
+          const selectedEdges = reactFlowInstance.getEdges().filter(e => e.selected);
+          if (selectedEdges.length > 0) {
+            event.preventDefault();
+            selectedEdges.forEach((e) => removeEdge(e.id));
+            return true;
           }
         }
 
-        if (!(event.ctrlKey || event.metaKey)) return;
+        if (selectedFileId && onEcoreFileDelete) {
+          event.preventDefault();
+          onEcoreFileDelete(selectedFileId);
+          setSelectedFileId(null);
+          return true;
+        }
 
+        return false;
+      };
+
+      const handleUndoRedo = (event: KeyboardEvent): void => {
         const key = event.key.toLowerCase();
 
         if (key === 'z') {
           event.preventDefault();
-          if (event.shiftKey) {
-            if (canRedo) redo();
-          } else {
-            if (canUndo) undo();
-          }
-        } else if (key === 'y') {
+          if (event.shiftKey && canRedo) redo();
+          else if (!event.shiftKey && canUndo) undo();
+        } else if (key === 'y' && canRedo) {
           event.preventDefault();
-          if (canRedo) redo();
+          redo();
         }
+      };
+
+      const handleKeyDown = (event: KeyboardEvent) => {
+        if (isEditableElement(event.target as HTMLElement)) return;
+
+        const isDeleteKey = event.key === 'Delete' || event.key === 'Backspace';
+        if (isDeleteKey && handleDeleteKey(event)) return;
+
+        const hasModifier = event.ctrlKey || event.metaKey;
+        if (hasModifier) handleUndoRedo(event);
       };
 
       document.addEventListener('keydown', handleKeyDown);
@@ -642,47 +645,49 @@ export const FlowCanvas = forwardRef<{
           edge.source === connectionDragState.sourceNodeId && edge.target === targetNode.id
         );
 
-        if (!existingEdge) {
-          const sourceNodePos = nodes.find(n => n.id === connectionDragState.sourceNodeId)?.position;
-          const targetNodePos = targetNode.position;
-
-          let targetHandle: HandlePosition = 'left';
-
-          if (sourceNodePos && targetNodePos) {
-            targetHandle = calculateTargetHandle(sourceNodePos, targetNodePos);
-          }
-
-          console.log('🔵 Calculated handles:', {
-            source: connectionDragState.sourceHandle,
-            target: targetHandle
-          });
-
-          const color = getColorForPair(connectionDragState.sourceNodeId, targetNode.id);
-
-          const newEdge: Edge = {
-            id: `edge-${connectionDragState.sourceNodeId}-${targetNode.id}-${Date.now()}`,
-            source: connectionDragState.sourceNodeId,
-            target: targetNode.id,
-            sourceHandle: connectionDragState.sourceHandle,
-            targetHandle: targetHandle,
-            type: 'reactions',
-            style: {
-              stroke: color,
-              strokeWidth: 2,
-            },
-            data: {
-              sourceMetaModelId: getBackendMetaModelIdForNode(connectionDragState.sourceNodeId),
-              targetMetaModelId: getBackendMetaModelIdForNode(targetNode.id),
-              sourceMetaModelSourceId: getMetaModelSourceIdForNode(connectionDragState.sourceNodeId),
-              targetMetaModelSourceId: getMetaModelSourceIdForNode(targetNode.id),
-            }
-          };
-
-          console.log('🎯 Creating edge:', newEdge);
-          addEdge(newEdge);
-        } else {
+        if (existingEdge) {
           console.log('⚠️ Connection in this direction already exists');
+          setConnectionDragState(null);
+          return;
         }
+
+        const sourceNodePos = nodes.find(n => n.id === connectionDragState.sourceNodeId)?.position;
+        const targetNodePos = targetNode.position;
+
+        let targetHandle: HandlePosition = 'left';
+
+        if (sourceNodePos && targetNodePos) {
+          targetHandle = calculateTargetHandle(sourceNodePos, targetNodePos);
+        }
+
+        console.log('🔵 Calculated handles:', {
+          source: connectionDragState.sourceHandle,
+          target: targetHandle
+        });
+
+        const color = getColorForPair(connectionDragState.sourceNodeId, targetNode.id);
+
+        const newEdge: Edge = {
+          id: `edge-${connectionDragState.sourceNodeId}-${targetNode.id}-${Date.now()}`,
+          source: connectionDragState.sourceNodeId,
+          target: targetNode.id,
+          sourceHandle: connectionDragState.sourceHandle,
+          targetHandle: targetHandle,
+          type: 'reactions',
+          style: {
+            stroke: color,
+            strokeWidth: 2,
+          },
+          data: {
+            sourceMetaModelId: getBackendMetaModelIdForNode(connectionDragState.sourceNodeId),
+            targetMetaModelId: getBackendMetaModelIdForNode(targetNode.id),
+            sourceMetaModelSourceId: getMetaModelSourceIdForNode(connectionDragState.sourceNodeId),
+            targetMetaModelSourceId: getMetaModelSourceIdForNode(targetNode.id),
+          }
+        };
+
+        console.log('🎯 Creating edge:', newEdge);
+        addEdge(newEdge);
       } else {
         console.log('❌ Connection ended in empty space - cancelled');
       }
@@ -712,38 +717,23 @@ export const FlowCanvas = forwardRef<{
     useEffect(() => {
       if (!connectionDragState?.isActive) return;
 
-      const handlers = {
-        move: (e: any) => handleConnectionMove(e),
-        end: (e: any) => handleConnectionEnd(e),
-      };
+      const handleMove = (e: any) => handleConnectionMove(e);
+      const handleEnd = (e: any) => handleConnectionEnd(e);
+      const captureOptions = { capture: true };
 
-      const addListeners = () => {
-        const targets = [document, window];
-        const events = ['pointermove', 'pointerup'] as const;
-
-        targets.forEach(target => {
-          events.forEach((event, idx) => {
-            target.addEventListener(event, idx === 0 ? handlers.move : handlers.end, { capture: true });
-          });
-        });
-      };
-
-      const removeListeners = () => {
-        const targets = [document, window];
-        const events = ['pointermove', 'pointerup'] as const;
-
-        targets.forEach(target => {
-          events.forEach((event, idx) => {
-            target.removeEventListener(event, idx === 0 ? handlers.move : handlers.end, { capture: true });
-          });
-        });
-      };
+      // Add listeners to both document and globalThis for cross-browser compatibility
+      document.addEventListener('pointermove', handleMove, captureOptions);
+      document.addEventListener('pointerup', handleEnd, captureOptions);
+      globalThis.addEventListener('pointermove', handleMove, captureOptions);
+      globalThis.addEventListener('pointerup', handleEnd, captureOptions);
 
       document.body.style.cursor = 'crosshair';
-      addListeners();
 
       return () => {
-        removeListeners();
+        document.removeEventListener('pointermove', handleMove, captureOptions);
+        document.removeEventListener('pointerup', handleEnd, captureOptions);
+        globalThis.removeEventListener('pointermove', handleMove, captureOptions);
+        globalThis.removeEventListener('pointerup', handleEnd, captureOptions);
         document.body.style.cursor = '';
       };
     }, [connectionDragState?.isActive, handleConnectionMove, handleConnectionEnd]);
@@ -790,20 +780,21 @@ export const FlowCanvas = forwardRef<{
 
       const edgeId = codeEditorState.edgeId;
 
-      const extractFileId = (data: unknown): number | null => {
-        if (data == null) return null;
-        if (typeof data === 'number') return Number.isFinite(data) ? data : null;
-        if (typeof data === 'string') {
-          const parsed = Number(data);
+      const toFiniteNumber = (value: unknown): number | null => {
+        if (typeof value === 'number') return Number.isFinite(value) ? value : null;
+        if (typeof value === 'string') {
+          const parsed = Number(value);
           return Number.isFinite(parsed) ? parsed : null;
         }
+        return null;
+      };
+
+      const extractFileId = (data: unknown): number | null => {
+        if (data == null) return null;
+        const direct = toFiniteNumber(data);
+        if (direct !== null) return direct;
         if (typeof data === 'object' && 'id' in (data as Record<string, unknown>)) {
-          const value = (data as Record<string, unknown>).id;
-          if (typeof value === 'number') return Number.isFinite(value) ? value : null;
-          if (typeof value === 'string') {
-            const parsed = Number(value);
-            return Number.isFinite(parsed) ? parsed : null;
-          }
+          return toFiniteNumber((data as Record<string, unknown>).id);
         }
         return null;
       };
@@ -814,11 +805,11 @@ export const FlowCanvas = forwardRef<{
 
         let reactionFileId = codeEditorState.reactionFileId ?? null;
 
-        if (reactionFileId != null) {
-          await apiService.updateReactionFile(reactionFileId, file);
-        } else {
+        if (reactionFileId == null) {
           const uploadResult = await apiService.uploadFile(file, 'REACTION');
           reactionFileId = extractFileId(uploadResult?.data);
+        } else {
+          await apiService.updateReactionFile(reactionFileId, file);
         }
 
         updateEdgeCode(edgeId, code);
@@ -1015,6 +1006,10 @@ export const FlowCanvas = forwardRef<{
 
     const addEcoreFile = useCallback((fileName: string, fileContent: string, meta?: any) => {
       const position = meta?.position || { x: 100, y: 100 };
+      const metaModelId = typeof meta?.metaModelId === 'number' ? meta.metaModelId : undefined;
+      const metaModelSourceId = typeof meta?.metaModelSourceId === 'number'
+          ? meta.metaModelSourceId
+          : metaModelId;
 
       const newEcoreNode: Node = {
         id: `ecore-${Date.now()}`,
@@ -1027,10 +1022,8 @@ export const FlowCanvas = forwardRef<{
           keywords: meta?.keywords,
           domain: meta?.domain,
           createdAt: meta?.createdAt || new Date().toISOString(),
-          metaModelId: typeof meta?.metaModelId === 'number' ? meta.metaModelId : undefined,
-          metaModelSourceId: typeof meta?.metaModelSourceId === 'number'
-              ? meta.metaModelSourceId
-              : (typeof meta?.metaModelId === 'number' ? meta.metaModelId : undefined),
+          metaModelId,
+          metaModelSourceId,
           onExpand: handleEcoreFileExpand,
           onSelect: handleEcoreFileSelect,
           onDelete: onEcoreFileDelete,
@@ -1569,20 +1562,16 @@ export const FlowCanvas = forwardRef<{
 
     // Listen for edge clicks to toggle selection
     useEffect(() => {
+      const updateEdgeSelection = (edges: Edge[], edgeId: string, currentlySelected: boolean) =>
+        edges.map(edge => ({ ...edge, selected: edge.id === edgeId ? !currentlySelected : false }));
+
+      const deselectAllNodes = (nodes: Node[]) =>
+        nodes.map(node => ({ ...node, selected: false }));
+
       const handleEdgeClick = (e: Event) => {
-        const customEvent = e as CustomEvent<{ edgeId: string; currentlySelected: boolean }>;
-        const { edgeId, currentlySelected } = customEvent.detail;
-        
-        setEdges(prevEdges => prevEdges.map(edge => ({
-          ...edge,
-          selected: edge.id === edgeId ? !currentlySelected : false
-        })));
-        
-        // Also deselect all nodes
-        setNodes(prevNodes => prevNodes.map(node => ({
-          ...node,
-          selected: false
-        })));
+        const { edgeId, currentlySelected } = (e as CustomEvent<{ edgeId: string; currentlySelected: boolean }>).detail;
+        setEdges(prev => updateEdgeSelection(prev, edgeId, currentlySelected));
+        setNodes(deselectAllNodes);
       };
 
       globalThis.addEventListener('edge-clicked', handleEdgeClick as EventListener);
