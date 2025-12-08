@@ -70,9 +70,9 @@ export function MainLayout({
 
     // Active document state
     const [documents, setDocuments] = useState<StoredDocumentMeta[]>([]);
-    const [activeDocId, setActiveDocId] = useState<string | undefined>(undefined);
-    const [activeFileName, setActiveFileName] = useState<string | undefined>(undefined);
-    const [isDirty, setIsDirty] = useState(false);
+    const [, setActiveDocId] = useState<string | undefined>(undefined);
+    const [, setActiveFileName] = useState<string | undefined>(undefined);
+    const [, setIsDirty] = useState(false);
 
     // ECORE file boxes in workspace
     const [selectedFileBoxId, setSelectedFileBoxId] = useState<string | null>(null);

@@ -220,13 +220,6 @@ const ModalContent: React.FC<{
 }> = ({ fileName, content, title, createdAt, onClose, onOverlayClick }) => {
   const [isCloseHovered, setIsCloseHovered] = useState(false);
 
-  const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === 'Escape' || e.key === 'Enter' || e.key === ' ') {
-      e.preventDefault();
-      onClose();
-    }
-  };
-
   return (
     <dialog
       open

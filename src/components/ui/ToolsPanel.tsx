@@ -326,6 +326,82 @@ const enhancedSearchInputStyle: React.CSSProperties = {
   fontSize: '13px',
 };
 
+// Pure helper functions moved outside component to avoid recreation on each render
+const SEARCH_KEY_MAP: Record<string, string> = {
+  name: 'name',
+  domain: 'domain',
+  keyword: 'keywords',
+  keywords: 'keywords',
+  description: 'description',
+  desc: 'description',
+  created: 'created',
+  updated: 'updated',
+};
+
+const tokenizeQuery = (query: string): string[] => {
+  const tokens: string[] = [];
+  let current = '';
+  let inQuotes = false;
+  
+  for (const ch of query) {
+    if (ch === '"') {
+      inQuotes = !inQuotes;
+      continue;
+    }
+    const isWhitespace = !inQuotes && /\s/.test(ch);
+    if (isWhitespace) {
+      if (current.trim()) tokens.push(current);
+      current = '';
+    } else {
+      current += ch;
+    }
+  }
+  
+  if (current.trim()) tokens.push(current);
+  return tokens;
+};
+
+const parseTimeFilter = (cleanValue: string) => {
+  const isBeforeNow = cleanValue === 'beforenow' || cleanValue === 'before:now';
+  if (isBeforeNow) {
+    return { key: 'created', value: 'before:now', display: 'time:beforenow' };
+  }
+  const isAfterNow = cleanValue === 'afternow' || cleanValue === 'after:now';
+  if (isAfterNow) {
+    return { key: 'created', value: 'after:now', display: 'time:afternow' };
+  }
+  return { key: 'created', value: cleanValue, display: `time:${cleanValue}` };
+};
+
+const parseDateValue = (dateStr: string): string => {
+  return dateStr === 'now' ? new Date().toISOString() : new Date(dateStr).toISOString();
+};
+
+const parseDateRangeFilter = (value: string): { from?: string; to?: string } => {
+  const v = String(value);
+  
+  if (v.includes('after:')) {
+    return { from: parseDateValue(v.replace('after:', '')) };
+  }
+  if (v.includes('before:')) {
+    return { to: parseDateValue(v.replace('before:', '')) };
+  }
+  if (v.includes('between:')) {
+    const dates = v.replace('between:', '').split('..');
+    if (dates.length === 2) {
+      return { from: new Date(dates[0]).toISOString(), to: new Date(dates[1]).toISOString() };
+    }
+    return {};
+  }
+  if (v === 'before:now') {
+    return { to: new Date().toISOString() };
+  }
+  if (v === 'after:now') {
+    return { from: new Date().toISOString() };
+  }
+  return { from: new Date(v).toISOString(), to: new Date(`${v}T23:59:59`).toISOString() };
+};
+
 export const ToolsPanel: React.FC<ToolsPanelProps> = ({ onEcoreFileUpload, onEcoreFileDelete, title = 'Meta Models', allowCreate = true, enableItemClick = true, showBorder = true, suppressApi = false }) => {
   const [isProcessing] = useState(false);
   const [uploadMessage, setUploadMessage] = useState<string>('');
@@ -376,53 +452,7 @@ export const ToolsPanel: React.FC<ToolsPanelProps> = ({ onEcoreFileUpload, onEco
     });
   };
 
-  const tokenizeQuery = (query: string): string[] => {
-    const tokens: string[] = [];
-    let current = '';
-    let inQuotes = false;
-    
-    for (const ch of query) {
-      if (ch === '"') {
-        inQuotes = !inQuotes;
-        continue;
-      }
-      const isWhitespace = !inQuotes && /\s/.test(ch);
-      if (isWhitespace) {
-        if (current.trim()) tokens.push(current);
-        current = '';
-      } else {
-        current += ch;
-      }
-    }
-    
-    if (current.trim()) tokens.push(current);
-    return tokens;
-  };
-
-  const SEARCH_KEY_MAP: Record<string, string> = {
-    name: 'name',
-    domain: 'domain',
-    keyword: 'keywords',
-    keywords: 'keywords',
-    description: 'description',
-    desc: 'description',
-    created: 'created',
-    updated: 'updated',
-  };
-
-  const parseTimeFilter = (cleanValue: string) => {
-    const isBeforeNow = cleanValue === 'beforenow' || cleanValue === 'before:now';
-    if (isBeforeNow) {
-      return { key: 'created', value: 'before:now', display: 'time:beforenow' };
-    }
-    const isAfterNow = cleanValue === 'afternow' || cleanValue === 'after:now';
-    if (isAfterNow) {
-      return { key: 'created', value: 'after:now', display: 'time:afternow' };
-    }
-    return { key: 'created', value: cleanValue, display: `time:${cleanValue}` };
-  };
-
-  const parseSearchQuery = (query: string) => {
+  const parseSearchQuery = useCallback((query: string) => {
     const result: any[] = [];
     const tokens = tokenizeQuery(query);
 
@@ -445,36 +475,7 @@ export const ToolsPanel: React.FC<ToolsPanelProps> = ({ onEcoreFileUpload, onEco
     }
 
     return result;
-  };
-
-  const parseDateValue = (dateStr: string): string => {
-    return dateStr === 'now' ? new Date().toISOString() : new Date(dateStr).toISOString();
-  };
-
-  const parseDateRangeFilter = (value: string): { from?: string; to?: string } => {
-    const v = String(value);
-    
-    if (v.includes('after:')) {
-      return { from: parseDateValue(v.replace('after:', '')) };
-    }
-    if (v.includes('before:')) {
-      return { to: parseDateValue(v.replace('before:', '')) };
-    }
-    if (v.includes('between:')) {
-      const dates = v.replace('between:', '').split('..');
-      if (dates.length === 2) {
-        return { from: new Date(dates[0]).toISOString(), to: new Date(dates[1]).toISOString() };
-      }
-      return {};
-    }
-    if (v === 'before:now') {
-      return { to: new Date().toISOString() };
-    }
-    if (v === 'after:now') {
-      return { from: new Date().toISOString() };
-    }
-    return { from: new Date(v).toISOString(), to: new Date(`${v}T23:59:59`).toISOString() };
-  };
+  }, []);
 
   const getLegacyDateFrom = (filter: string): Date => {
     const now = new Date();
@@ -487,7 +488,7 @@ export const ToolsPanel: React.FC<ToolsPanelProps> = ({ onEcoreFileUpload, onEco
     return dateMap[filter]?.() ?? new Date(0);
   };
 
-  const applyFilterToResult = (filters: any, filter: { key: string; value: string }) => {
+  const applyFilterToResult = useCallback((filters: any, filter: { key: string; value: string }) => {
     const simpleKeys = ['name', 'domain', 'description'];
     if (simpleKeys.includes(filter.key)) {
       filters[filter.key] = filter.value;
@@ -512,7 +513,7 @@ export const ToolsPanel: React.FC<ToolsPanelProps> = ({ onEcoreFileUpload, onEco
       if (range.from) filters.updatedFrom = range.from;
       if (range.to) filters.updatedTo = range.to;
     }
-  };
+  }, []);
 
   const buildApiFiltersFromParsedFilters = useCallback((filtersParsed: any[], includeLegacyDate = true) => {
     const filters: any = {};
@@ -530,7 +531,7 @@ export const ToolsPanel: React.FC<ToolsPanelProps> = ({ onEcoreFileUpload, onEco
     }
 
     return filters;
-  }, [dateFilter, showAllModels]);
+  }, [dateFilter, showAllModels, applyFilterToResult]);
 
   useEffect(() => {
     if (searchTerm.trim()) {
@@ -539,7 +540,7 @@ export const ToolsPanel: React.FC<ToolsPanelProps> = ({ onEcoreFileUpload, onEco
     } else {
       setParsedFilters([]);
     }
-  }, [searchTerm]);
+  }, [searchTerm, parseSearchQuery]);
 
   useEffect(() => {
     if (suppressApi) {

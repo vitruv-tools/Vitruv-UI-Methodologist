@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, useMemo, ReactNode } from 'react';
+import React, { createContext, useContext, useState, useEffect, useMemo, useCallback, ReactNode } from 'react';
 import { AuthService, User, SignUpCredentials } from '../services/auth';
 import { apiService } from '../services/api';
 import { useTokenRefresh } from '../hooks/useTokenRefresh';
@@ -113,7 +113,7 @@ export function AuthProvider({ children }: Readonly<AuthProviderProps>) {
         };
     }, []);
 
-    const signIn = async (username: string, password: string) => {
+    const signIn = useCallback(async (username: string, password: string) => {
         try {
             const authResponse = await AuthService.signIn({ username, password });
 
@@ -160,12 +160,12 @@ export function AuthProvider({ children }: Readonly<AuthProviderProps>) {
             console.error('Sign in error:', error);
             throw error;
         }
-    };
+    }, []);
 
     // 🔐 SIGN UP with:
     // - Username required and length ≥ 4
     // - Password detailed validation (with explicit allowed symbols)
-    const signUp = async (userData: SignUpCredentials) => {
+    const signUp = useCallback(async (userData: SignUpCredentials) => {
         try {
             // Username validation
             if (!userData.username || userData.username.trim().length < 4) {
@@ -220,9 +220,9 @@ export function AuthProvider({ children }: Readonly<AuthProviderProps>) {
             if (error instanceof Error) throw error;
             throw new Error('Sign up failed');
         }
-    };
+    }, []);
 
-    const signOut = async () => {
+    const signOut = useCallback(async () => {
         try {
             await AuthService.signOut();
             setUser(null);
@@ -230,17 +230,22 @@ export function AuthProvider({ children }: Readonly<AuthProviderProps>) {
             console.error('Sign out error:', error);
             setUser(null);
         }
-    };
+    }, []);
 
-    const handleRefreshToken = async () => {
+    const handleRefreshToken = useCallback(async () => {
         try {
             return await refreshToken();
         } catch (error) {
             console.error('Token refresh failed:', error);
-            await signOut();
+            try {
+                await AuthService.signOut();
+                setUser(null);
+            } catch {
+                setUser(null);
+            }
             throw error;
         }
-    };
+    }, [refreshToken]);
 
     const value: AuthContextType = useMemo(() => ({
         user,
