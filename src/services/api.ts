@@ -476,6 +476,16 @@ class ApiService {
   }
 
   /**
+   * vSUMS: Check if VSUM is buildable / trigger buildOrThrow
+   * GET /api/v1/vsums/{id}/build
+   */
+  async buildVsum(id: number | string): Promise<ApiResponse<Record<string, never>>> {
+    return this.authenticatedRequest(`/api/v1/vsums/${id}/build`, {
+      method: 'GET',
+    });
+  }
+
+  /**
    * vSUMS: Create
    */
   async createVsum(data: { name: string; description?: string }): Promise<ApiResponse<Vsum>> {
