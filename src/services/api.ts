@@ -3,10 +3,85 @@ import { FlowData } from '../types/flow';
 import { ApiResponse, Vsum, VsumDetails } from '../types/vsum';
 
 class ApiService {
-  private baseURL: string;
+  private readonly baseURL = 'http://fe3ab829-d558-4834-afcf-6ed7ca440ca4.ka.bw-cloud-instance.org:8080';
 
-  constructor() {
-    this.baseURL = 'http://fe3ab829-d558-4834-afcf-6ed7ca440ca4.ka.bw-cloud-instance.org:8080';
+  /**
+   * Extract error message from response text
+   */
+  private extractErrorMessage(errorText: string): string {
+    try {
+      const parsed = JSON.parse(errorText);
+      return parsed?.message || parsed?.error || errorText;
+    } catch {
+      return errorText;
+    }
+  }
+
+  /**
+   * Safely read response text
+   */
+  private async getResponseText(response: Response): Promise<string> {
+    try {
+      return await response.text();
+    } catch {
+      return '';
+    }
+  }
+
+  /**
+   * Handle failed response by logging and throwing
+   */
+  private async handleFailedResponse(
+    response: Response,
+    url: string,
+    method: string,
+    context: string
+  ): Promise<never> {
+    const errorText = await this.getResponseText(response);
+    const errorMessage = this.extractErrorMessage(errorText);
+    console.error(context, {
+      url,
+      method,
+      status: response.status,
+      statusText: response.statusText,
+      message: errorMessage,
+      body: errorText,
+    });
+    throw new Error(errorMessage);
+  }
+
+  /**
+   * Attempt to retry request with refreshed token
+   */
+  private async retryWithRefreshedToken<T>(
+    url: string,
+    options: RequestInit,
+    headers: Record<string, string>
+  ): Promise<T | null> {
+    try {
+      await AuthService.refreshToken();
+      const newToken = await AuthService.ensureValidToken();
+      if (!newToken) {
+        return null;
+      }
+
+      const retryResponse = await fetch(url, {
+        ...options,
+        headers: {
+          ...headers,
+          'Authorization': `Bearer ${newToken}`,
+        },
+      });
+
+      if (!retryResponse.ok) {
+        await this.handleFailedResponse(retryResponse, url, options.method || 'GET', 'Request failed after token refresh');
+      }
+
+      return await retryResponse.json();
+    } catch (refreshError) {
+      console.error('Token refresh failed during request:', refreshError);
+      return null;
+    }
   }
 
   /**
@@ -23,10 +98,10 @@ class ApiService {
     }
 
     const url = `${this.baseURL}${endpoint}`;
-    const headers = {
+    const headers: Record<string, string> = {
       'Content-Type': 'application/json',
       'Authorization': `Bearer ${token}`,
-      ...options.headers,
+      ...(options.headers as Record<string, string>),
     };
 
     const response = await fetch(url, {
@@ -34,68 +109,18 @@ class ApiService {
       headers,
     });
 
-    if (!response.ok) {
-      if (response.status === 401) {
-        try {
-          await AuthService.refreshToken();
-          const newToken = await AuthService.ensureValidToken();
-          if (newToken) {
-            const retryResponse = await fetch(url, {
-              ...options,
-              headers: {
-                ...headers,
-                'Authorization': `Bearer ${newToken}`,
-              },
-            });
-
-            if (!retryResponse.ok) {
-              let retryErrorText = '';
-              try {
-                retryErrorText = await retryResponse.text();
-              } catch {}
-              let retryErrorMessage = retryErrorText;
-              try {
-                const parsed = JSON.parse(retryErrorText);
-                retryErrorMessage = parsed?.message || parsed?.error || retryErrorText;
-              } catch {}
-              console.error('Request failed after token refresh', {
-                url,
-                method: options.method || 'GET',
-                status: retryResponse.status,
-                statusText: retryResponse.statusText,
-                message: retryErrorMessage,
-                body: retryErrorText,
-              });
-              throw new Error(retryErrorMessage);
-            }
-
-            return await retryResponse.json();
-          }
-        } catch (refreshError) {
-          console.error('Token refresh failed during request:', refreshError);
-        }
-      }
-      let errorText = '';
-      try {
-        errorText = await response.text();
-      } catch {}
-      let errorMessage = errorText;
-      try {
-        const parsed = JSON.parse(errorText);
-        errorMessage = parsed?.message || parsed?.error || errorText;
-      } catch {}
-      console.error('Request failed', {
-        url,
-        method: options.method || 'GET',
-        status: response.status,
-        statusText: response.statusText,
-        message: errorMessage,
-        body: errorText,
-      });
-      throw new Error(errorMessage);
+    if (response.ok) {
+      return await response.json();
     }
 
-    return await response.json();
+    if (response.status === 401) {
+      const retryResult = await this.retryWithRefreshedToken<T>(url, options, headers);
+      if (retryResult !== null) {
+        return retryResult;
+      }
+    }
+
+    return this.handleFailedResponse(response, url, options.method || 'GET', 'Request failed');
   }
 
   /**
@@ -245,6 +270,64 @@ class ApiService {
   /**
    * Upload a file with type parameter
    */
+  /**
+   * Handle failed upload response by logging and throwing
+   */
+  private async handleFailedUpload(
+    response: Response,
+    url: string,
+    type: string,
+    context: string
+  ): Promise<never> {
+    const errorText = await this.getResponseText(response);
+    const errorMessage = this.extractErrorMessage(errorText);
+    console.error(context, {
+      url,
+      type,
+      status: response.status,
+      statusText: response.statusText,
+      message: errorMessage,
+      body: errorText,
+    });
+    throw new Error(errorMessage);
+  }
+
+  /**
+   * Attempt to retry upload with refreshed token
+   */
+  private async retryUploadWithRefreshedToken(
+    url: string,
+    formData: FormData,
+    type: string
+  ): Promise<{ data: string; message: string } | null> {
+    try {
+      await AuthService.refreshToken();
+      const newToken = await AuthService.ensureValidToken();
+      if (!newToken) {
+        return null;
+      }
+
+      const retryResponse = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${newToken}`,
+        },
+        body: formData,
+      });
+
+      if (!retryResponse.ok) {
+        await this.handleFailedUpload(retryResponse, url, type, 'Upload failed after token refresh');
+      }
+
+      const result = await retryResponse.json();
+      console.log(`Successful upload for type ${type}:`, result);
+      return result;
+    } catch (refreshError) {
+      console.error('Token refresh failed during upload:', refreshError);
+      return null;
+    }
+  }
+
   async uploadFile(file: File, type: 'ECORE' | 'GEN_MODEL' | 'REACTION'): Promise<{ data: string; message: string }> {
     const token = await AuthService.ensureValidToken();
     
@@ -256,84 +339,29 @@ class ApiService {
     formData.append('file', file);
 
     const url = `${this.baseURL}/api/upload/type=${type}`;
-    const headers = {
-      'Authorization': `Bearer ${token}`,
-    };
 
     const response = await fetch(url, {
       method: 'POST',
-      headers,
+      headers: { 'Authorization': `Bearer ${token}` },
       body: formData,
     });
 
     console.log(`Response status: ${response.status} for upload type ${type}`);
 
-    if (!response.ok) {
-      if (response.status === 401) {
-        try {
-          await AuthService.refreshToken();
-          const newToken = await AuthService.ensureValidToken();
-          if (newToken) {
-            const retryResponse = await fetch(url, {
-              method: 'POST',
-              headers: {
-                'Authorization': `Bearer ${newToken}`,
-              },
-              body: formData,
-            });
-
-            if (!retryResponse.ok) {
-              let retryErrorText = '';
-              try {
-                retryErrorText = await retryResponse.text();
-              } catch {}
-              let retryErrorMessage = retryErrorText;
-              try {
-                const parsed = JSON.parse(retryErrorText);
-                retryErrorMessage = parsed?.message || parsed?.error || retryErrorText;
-              } catch {}
-              console.error('Upload failed after token refresh', {
-                url,
-                type,
-                status: retryResponse.status,
-                statusText: retryResponse.statusText,
-                message: retryErrorMessage,
-                body: retryErrorText,
-              });
-              throw new Error(retryErrorMessage);
-            }
-
-            const result = await retryResponse.json();
-            console.log(`Successful upload for type ${type}:`, result);
-            return result;
-          }
-        } catch (refreshError) {
-          console.error('Token refresh failed during upload:', refreshError);
-        }
-      }
-      let errorText = '';
-      try {
-        errorText = await response.text();
-      } catch {}
-      let errorMessage = errorText;
-      try {
-        const parsed = JSON.parse(errorText);
-        errorMessage = parsed?.message || parsed?.error || errorText;
-      } catch {}
-      console.error('Upload failed', {
-        url,
-        type,
-        status: response.status,
-        statusText: response.statusText,
-        message: errorMessage,
-        body: errorText,
-      });
-      throw new Error(errorMessage);
+    if (response.ok) {
+      const result = await response.json();
+      console.log(`Successful upload for type ${type}:`, result);
+      return result;
     }
 
-    const result = await response.json();
-    console.log(`Successful upload for type ${type}:`, result);
-    return result;
+    if (response.status === 401) {
+      const retryResult = await this.retryUploadWithRefreshedToken(url, formData, type);
+      if (retryResult !== null) {
+        return retryResult;
+      }
+    }
+
+    return this.handleFailedUpload(response, url, type, 'Upload failed');
   }
 
   /**
@@ -476,6 +504,16 @@ class ApiService {
   }
 
   /**
+   * vSUMS: Check if VSUM is buildable / trigger buildOrThrow
+   * GET /api/v1/vsums/{id}/build
+   */
+  async buildVsum(id: number | string): Promise<ApiResponse<Record<string, never>>> {
+    return this.authenticatedRequest(`/api/v1/vsums/${id}/build`, {
+      method: 'GET',
+    });
+  }
+
+  /**
    * vSUMS: Create
    */
   async createVsum(data: { name: string; description?: string }): Promise<ApiResponse<Vsum>> {
@@ -517,10 +555,7 @@ class ApiService {
       reactionFileId: number;
     }>;
   }): Promise<ApiResponse<any>> {
-    return this.authenticatedRequest(`/api/v1/vsums/${id}/sync-changes`, {
-      method: 'PUT',
-      body: JSON.stringify(data),
-    });
+    return this.updateVsumSyncChanges(id, data);
   }
 
   /**
@@ -624,9 +659,6 @@ class ApiService {
     formData.append('file', file);
 
     const url = `${this.baseURL}/api/upload/${fileId}/update-reaction`;
-    // const headers = {
-    //   'Authorization': `Bearer ${token}`,
-    // };
 
     const doRequest = async (authHeader: string) => {
       const response = await fetch(url, {

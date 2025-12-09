@@ -196,6 +196,44 @@ export const VsumDetailsModal: React.FC<Props> = ({ isOpen, vsumId, onClose, onS
       ? new Date(details.updatedAt).toLocaleDateString()
       : '';
 
+  const renderDetailsContent = (): React.ReactNode => {
+    if (loading || !details) {
+      return <div style={{ fontStyle: 'italic', color: '#6c757d' }}>Loading…</div>;
+    }
+
+    return (
+      <>
+        <div style={{ fontSize: 12, color: '#6c757d', marginBottom: 10 }}>
+          <strong>Updated:</strong> {updatedDateOnly}
+        </div>
+
+        <div style={label}>Name</div>
+        <input
+          style={textInput}
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+        />
+
+        <div style={label}>Meta Models</div>
+        {details.metaModels && details.metaModels.length > 0 ? (
+          <ul style={{ margin: 0, paddingLeft: 18 }}>
+            {details.metaModels.map((mm) => (
+              <li key={mm.id} style={{ marginBottom: 6 }}>
+                <span style={{ fontWeight: 700, color: '#2c3e50' }}>
+                  {mm.name}
+                </span>
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <div style={{ fontSize: 12, color: '#6c757d', fontStyle: 'italic' }}>
+            No meta models linked.
+          </div>
+        )}
+      </>
+    );
+  };
+
   const renderVersionsContent = () => {
     if (versionsLoading) {
       return (
@@ -293,8 +331,8 @@ export const VsumDetailsModal: React.FC<Props> = ({ isOpen, vsumId, onClose, onS
 
   return ReactDOM.createPortal(
       <>
-        <div style={overlay} onClick={onClose} role="dialog" aria-modal="true">
-          <div style={dialog} onClick={(e) => e.stopPropagation()}>
+        <dialog open style={overlay} onClose={onClose} onCancel={onClose} onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
+          <div style={dialog}>
             <div style={header}>
               <h3 style={title}>{details?.name ?? 'VSUM Details'}</h3>
 
@@ -383,47 +421,7 @@ export const VsumDetailsModal: React.FC<Props> = ({ isOpen, vsumId, onClose, onS
               {/* ===================== */}
               {/*     DETAILS TAB      */}
               {/* ===================== */}
-              {activeTab === 'details' ? (
-                  loading || !details ? (
-                      <div style={{ fontStyle: 'italic', color: '#6c757d' }}>Loading…</div>
-                  ) : (
-                      <>
-                        <div style={{ fontSize: 12, color: '#6c757d', marginBottom: 10 }}>
-                          <strong>Updated:</strong> {updatedDateOnly}
-                        </div>
-
-                        <div style={label}>Name</div>
-                        <input
-                            style={textInput}
-                            value={name}
-                            onChange={(e) => setName(e.target.value)}
-                        />
-
-                        <div style={label}>Meta Models</div>
-                        {details.metaModels && details.metaModels.length > 0 ? (
-                            <ul style={{ margin: 0, paddingLeft: 18 }}>
-                              {details.metaModels.map((mm) => (
-                                  <li key={mm.id} style={{ marginBottom: 6 }}>
-                          <span style={{ fontWeight: 700, color: '#2c3e50' }}>
-                            {mm.name}
-                          </span>
-                                  </li>
-                              ))}
-                            </ul>
-                        ) : (
-                            <div
-                                style={{
-                                  fontSize: 12,
-                                  color: '#6c757d',
-                                  fontStyle: 'italic',
-                                }}
-                            >
-                              No meta models linked.
-                            </div>
-                        )}
-                      </>
-                  )
-              ) : null}
+              {activeTab === 'details' && renderDetailsContent()}
 
               {/* ===================== */}
               {/*     USERS TAB        */}
@@ -515,14 +513,14 @@ export const VsumDetailsModal: React.FC<Props> = ({ isOpen, vsumId, onClose, onS
               </div>
             </div>
           </div>
-        </div>
+        </dialog>
 
         {/* ===================== */}
         {/*    DELETE CONFIRM     */}
         {/* ===================== */}
         {confirmOpen && (
-            <div style={confirmOverlay} onClick={() => (!deleting ? setConfirmOpen(false) : null)}>
-              <div style={confirmBox} onClick={(e) => e.stopPropagation()}>
+            <dialog open style={confirmOverlay} onClose={() => setConfirmOpen(false)} onCancel={() => setConfirmOpen(false)} onClick={(e) => { if (e.target === e.currentTarget && !deleting) setConfirmOpen(false); }}>
+              <div style={confirmBox}>
                 <div style={confirmHeader}>Are you sure?</div>
 
                 <div style={confirmBody}>
@@ -578,7 +576,7 @@ export const VsumDetailsModal: React.FC<Props> = ({ isOpen, vsumId, onClose, onS
                   </button>
                 </div>
               </div>
-            </div>
+            </dialog>
         )}
       </>,
       document.body

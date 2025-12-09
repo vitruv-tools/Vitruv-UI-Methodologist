@@ -3,10 +3,6 @@ import { User } from '../../services/auth';
 import { apiService } from '../../services/api';
 
 interface HeaderProps {
-  onSave?: () => void;
-  onSaveAs?: () => void;
-  onLoad?: () => void;
-  onNew?: () => void;
   title?: string;
   user?: User | null;
   onLogout?: () => void;
@@ -19,7 +15,7 @@ interface ApiUserData {
   lastName: string;
 }
 
-export function Header({ title = 'Methodologist Dashboard', user, onLogout }: HeaderProps) {
+export function Header({ title = 'Methodologist Dashboard', user, onLogout }: Readonly<HeaderProps>) {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [apiUser, setApiUser] = useState<ApiUserData | null>(null);
   const [isLoadingUser, setIsLoadingUser] = useState(false);
@@ -29,13 +25,13 @@ export function Header({ title = 'Methodologist Dashboard', user, onLogout }: He
     if (fullName && fullName.trim().length > 0) {
       const parts = fullName.trim().split(/\s+/);
       const first = parts[0]?.[0] ?? '';
-      const last = parts.length > 1 ? parts[parts.length - 1][0] : '';
+      const last = parts.length > 1 ? parts.at(-1)?.[0] ?? '' : '';
       return (first + last).toUpperCase() || 'U';
     }
     if (email) {
       const namePart = email.split('@')[0] ?? '';
       const first = namePart[0] ?? '';
-      const last = namePart[namePart.length - 1] ?? '';
+      const last = namePart.at(-1) ?? '';
       return (first + last).toUpperCase() || 'U';
     }
     return 'U';
@@ -262,7 +258,7 @@ export function Header({ title = 'Methodologist Dashboard', user, onLogout }: He
                       e.currentTarget.style.background = '#e74c3c';
                     }}
                   >
-                    <span style={{ fontSize: 16 }}>↪</span>
+                    <span style={{ fontSize: 16 }}>↪</span>{' '}
                     Sign Out
                   </button>
                 </div>

@@ -31,14 +31,14 @@ interface UMLNodeData {
 }
 
 interface EditableFieldProps {
-  value: string;
-  onSave: (newValue: string) => void;
-  placeholder?: string;
-  style?: React.CSSProperties;
-  multiline?: boolean;
-  onDelete?: () => void;
-  showDelete?: boolean;
-  showVisibility?: boolean;
+  readonly value: string;
+  readonly onSave: (newValue: string) => void;
+  readonly placeholder?: string;
+  readonly style?: React.CSSProperties;
+  readonly multiline?: boolean;
+  readonly onDelete?: () => void;
+  readonly showDelete?: boolean;
+  readonly showVisibility?: boolean;
 }
 
 type VisibilityType = '+' | '#' | '-';
@@ -145,6 +145,41 @@ const MenuTitle: React.FC<{ children: React.ReactNode }> = ({ children }) => (
   </div>
 );
 
+interface DeleteButtonProps {
+  readonly onDeleteClick: () => void;
+  readonly title?: string;
+  readonly background?: string;
+  readonly hoverBackground?: string;
+  readonly size?: number;
+  readonly boxShadow?: string;
+}
+
+const DeleteButton: React.FC<DeleteButtonProps> = ({ 
+  onDeleteClick, 
+  title = 'Delete node', 
+  background = '#ef4444', 
+  hoverBackground = '#dc2626', 
+  size = 22, 
+  boxShadow = '0 4px 12px rgba(239,68,68,0.3)' 
+}) => (
+  <button
+    onMouseDown={(e) => { e.stopPropagation(); e.preventDefault(); }}
+    onClick={(e) => { e.stopPropagation(); e.preventDefault(); onDeleteClick(); }}
+    style={getDeleteButtonStyle({ background, size, boxShadow })}
+    onMouseEnter={(e) => {
+      e.currentTarget.style.background = hoverBackground;
+      e.currentTarget.style.transform = 'scale(1.1)';
+    }}
+    onMouseLeave={(e) => {
+      e.currentTarget.style.background = background;
+      e.currentTarget.style.transform = 'scale(1)';
+    }}
+    title={title}
+  >
+    ×
+  </button>
+);
+
 // Removed unused SectionHeader, ClassHeader and EditableList subcomponents
 
 function EditableField({
@@ -156,7 +191,7 @@ function EditableField({
   onDelete,
   showDelete = false,
   showVisibility = false,
-}: EditableFieldProps) {
+}: Readonly<EditableFieldProps>) {
   const [editing, setEditing] = useState(false);
   const [editValue, setEditValue] = useState(value);
   const [showOptions, setShowOptions] = useState(false);
@@ -249,11 +284,23 @@ function EditableField({
   return (
     <div style={{ position: 'relative' }}>
       <div
+        role="button"
+        tabIndex={0}
         onDoubleClick={() => setEditing(true)}
         onClick={showVisibility 
           ? () => setShowVisibilityOptions(true) 
           : () => setShowOptions(!showOptions)
         }
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            if (showVisibility) {
+              setShowVisibilityOptions(true);
+            } else {
+              setShowOptions(!showOptions);
+            }
+          }
+        }}
         style={{
           cursor: 'pointer',
           padding: '2px 4px',
@@ -366,96 +413,36 @@ export function EditableNode({ id, data, selected, isConnectable }: NodeProps<UM
 
   const getNodeStyle = () => {
     const baseStyle = getBaseNodeStyle(!!selected);
+    const borderColor = selected ? '#2563eb' : '#6b7280';
+    const memberBoxShadow = selected 
+      ? '0 4px 12px rgba(37, 99, 235, 0.25)' 
+      : '0 2px 8px rgba(0,0,0,0.08)';
 
-    if (nodeData.toolType === 'element') {
-      switch (nodeData.toolName) {
-        case 'class':
-          return {
-            ...baseStyle,
-            borderColor: selected ? '#2563eb' : '#6b7280',
-            background: '#ffffff',
-          };
-        case 'abstract-class':
-          return {
-            ...baseStyle,
-            borderColor: selected ? '#2563eb' : '#6b7280',
-            background: '#ffffff',
-          };
-        case 'interface':
-          return {
-            ...baseStyle,
-            borderColor: selected ? '#2563eb' : '#6b7280',
-            borderStyle: 'dashed',
-            background: '#ffffff',
-          };
-        case 'enumeration':
-          return {
-            ...baseStyle,
-            borderColor: selected ? '#2563eb' : '#6b7280',
-            background: '#ffffff',
-          };
-        case 'package':
-          return {
-            ...baseStyle,
-            borderColor: selected ? '#2563eb' : '#6b7280',
-            background: '#ffffff',
-          };
-        default:
-          return baseStyle;
-      }
-    } else if (nodeData.toolType === 'member') {
-      return {
-        ...baseStyle,
-        minHeight: '40px',
-        borderRadius: '4px',
-        boxShadow: selected ? '0 4px 12px rgba(37, 99, 235, 0.25)' : '0 2px 8px rgba(0,0,0,0.08)',
-      };
+    const elementStyles: Record<string, React.CSSProperties> = {
+      'class': { borderColor, background: '#ffffff' },
+      'abstract-class': { borderColor, background: '#ffffff' },
+      'interface': { borderColor, borderStyle: 'dashed', background: '#ffffff' },
+      'enumeration': { borderColor, background: '#ffffff' },
+      'package': { borderColor, background: '#ffffff' },
+    };
+
+    if (nodeData.toolType === 'element' && nodeData.toolName) {
+      const style = elementStyles[nodeData.toolName];
+      return style ? { ...baseStyle, ...style } : baseStyle;
     }
 
     if (nodeData.toolType === 'member' || nodeData.toolType === 'multiplicity') {
-      return {
-        ...baseStyle,
-        minHeight: nodeData.toolType === 'member' ? '40px' : '30px',
-        borderRadius: '4px',
-        boxShadow: selected ? '0 4px 12px rgba(37, 99, 235, 0.25)' : '0 2px 8px rgba(0,0,0,0.08)',
-      };
+      const minHeight = nodeData.toolType === 'member' ? '40px' : '30px';
+      return { ...baseStyle, minHeight, borderRadius: '4px', boxShadow: memberBoxShadow };
     }
 
     return baseStyle;
   };
 
-  const DeleteButton: React.FC<{
-    onDeleteClick: () => void;
-    title?: string;
-    background?: string;
-    hoverBackground?: string;
-    size?: number;
-    boxShadow?: string;
-  }> = ({ onDeleteClick, title = 'Delete node', background = '#ef4444', hoverBackground = '#dc2626', size = 22, boxShadow = '0 4px 12px rgba(239,68,68,0.3)' }) => {
-    return (
-      <button
-        onMouseDown={(e) => { e.stopPropagation(); e.preventDefault(); }}
-        onClick={(e) => { e.stopPropagation(); e.preventDefault(); onDeleteClick(); }}
-        style={getDeleteButtonStyle({ background, size, boxShadow })}
-        onMouseEnter={(e) => {
-          e.currentTarget.style.background = hoverBackground;
-          e.currentTarget.style.transform = 'scale(1.1)';
-        }}
-        onMouseLeave={(e) => {
-          e.currentTarget.style.background = background;
-          e.currentTarget.style.transform = 'scale(1)';
-        }}
-        title={title}
-      >
-        ×
-      </button>
-    );
-  };
-
   const renderLines = (items: string[]) => (
     <>
       {items.map((text, index) => (
-        <div key={index} style={listItemStyle}>
+        <div key={`${text}-${index}`} style={listItemStyle}>
           {text}
         </div>
       ))}

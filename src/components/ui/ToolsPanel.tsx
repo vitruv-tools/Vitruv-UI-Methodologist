@@ -326,6 +326,82 @@ const enhancedSearchInputStyle: React.CSSProperties = {
   fontSize: '13px',
 };
 
+// Pure helper functions moved outside component to avoid recreation on each render
+const SEARCH_KEY_MAP: Record<string, string> = {
+  name: 'name',
+  domain: 'domain',
+  keyword: 'keywords',
+  keywords: 'keywords',
+  description: 'description',
+  desc: 'description',
+  created: 'created',
+  updated: 'updated',
+};
+
+const tokenizeQuery = (query: string): string[] => {
+  const tokens: string[] = [];
+  let current = '';
+  let inQuotes = false;
+  
+  for (const ch of query) {
+    if (ch === '"') {
+      inQuotes = !inQuotes;
+      continue;
+    }
+    const isWhitespace = !inQuotes && /\s/.test(ch);
+    if (isWhitespace) {
+      if (current.trim()) tokens.push(current);
+      current = '';
+    } else {
+      current += ch;
+    }
+  }
+  
+  if (current.trim()) tokens.push(current);
+  return tokens;
+};
+
+const parseTimeFilter = (cleanValue: string) => {
+  const isBeforeNow = cleanValue === 'beforenow' || cleanValue === 'before:now';
+  if (isBeforeNow) {
+    return { key: 'created', value: 'before:now', display: 'time:beforenow' };
+  }
+  const isAfterNow = cleanValue === 'afternow' || cleanValue === 'after:now';
+  if (isAfterNow) {
+    return { key: 'created', value: 'after:now', display: 'time:afternow' };
+  }
+  return { key: 'created', value: cleanValue, display: `time:${cleanValue}` };
+};
+
+const parseDateValue = (dateStr: string): string => {
+  return dateStr === 'now' ? new Date().toISOString() : new Date(dateStr).toISOString();
+};
+
+const parseDateRangeFilter = (value: string): { from?: string; to?: string } => {
+  const v = String(value);
+  
+  if (v.includes('after:')) {
+    return { from: parseDateValue(v.replace('after:', '')) };
+  }
+  if (v.includes('before:')) {
+    return { to: parseDateValue(v.replace('before:', '')) };
+  }
+  if (v.includes('between:')) {
+    const dates = v.replace('between:', '').split('..');
+    if (dates.length === 2) {
+      return { from: new Date(dates[0]).toISOString(), to: new Date(dates[1]).toISOString() };
+    }
+    return {};
+  }
+  if (v === 'before:now') {
+    return { to: new Date().toISOString() };
+  }
+  if (v === 'after:now') {
+    return { from: new Date().toISOString() };
+  }
+  return { from: new Date(v).toISOString(), to: new Date(`${v}T23:59:59`).toISOString() };
+};
+
 export const ToolsPanel: React.FC<ToolsPanelProps> = ({ onEcoreFileUpload, onEcoreFileDelete, title = 'Meta Models', allowCreate = true, enableItemClick = true, showBorder = true, suppressApi = false }) => {
   const [isProcessing] = useState(false);
   const [uploadMessage, setUploadMessage] = useState<string>('');
@@ -376,173 +452,86 @@ export const ToolsPanel: React.FC<ToolsPanelProps> = ({ onEcoreFileUpload, onEco
     });
   };
 
-  const parseSearchQuery = (query: string) => {
+  const parseSearchQuery = useCallback((query: string) => {
     const result: any[] = [];
-
-    const tokens: string[] = [];
-    let current = '';
-    let inQuotes = false;
-    for (let i = 0; i < query.length; i++) {
-      const ch = query[i];
-      if (ch === '"') {
-        inQuotes = !inQuotes;
-        continue;
-      }
-      if (!inQuotes && /\s/.test(ch)) {
-        if (current.trim().length > 0) tokens.push(current);
-        current = '';
-      } else {
-        current += ch;
-      }
-    }
-    if (current.trim().length > 0) tokens.push(current);
+    const tokens = tokenizeQuery(query);
 
     for (const token of tokens) {
-      const match = token.match(/^([a-zA-Z]+):(.+)$/);
-      if (match) {
-        const key = match[1].toLowerCase();
-        const rawValue = match[2];
-        const cleanValue = rawValue.trim();
-        switch (key) {
-          case 'name':
-            result.push({ key: 'name', value: cleanValue, display: `name:${cleanValue}` });
-            break;
-          case 'domain':
-            result.push({ key: 'domain', value: cleanValue, display: `domain:${cleanValue}` });
-            break;
-          case 'keyword':
-          case 'keywords': {
-            result.push({ key: 'keywords', value: cleanValue, display: `keywords:${cleanValue}` });
-            break;
-          }
-          case 'description':
-          case 'desc':
-            result.push({ key: 'description', value: cleanValue, display: `description:${cleanValue}` });
-            break;
-          case 'created':
-            result.push({ key: 'created', value: cleanValue, display: `created:${cleanValue}` });
-            break;
-          case 'updated':
-            result.push({ key: 'updated', value: cleanValue, display: `updated:${cleanValue}` });
-            break;
-          case 'time': {
-            if (cleanValue === 'beforenow' || cleanValue === 'before:now') {
-              result.push({ key: 'created', value: 'before:now', display: 'time:beforenow' });
-            } else if (cleanValue === 'afternow' || cleanValue === 'after:now') {
-              result.push({ key: 'created', value: 'after:now', display: 'time:afternow' });
-            } else {
-              result.push({ key: 'created', value: cleanValue, display: `time:${cleanValue}` });
-            }
-            break;
-          }
-          default:
-        }
+      const match = /^([a-zA-Z]+):(.+)$/.exec(token);
+      if (!match) continue;
+
+      const key = match[1].toLowerCase();
+      const cleanValue = match[2].trim();
+
+      if (key === 'time') {
+        result.push(parseTimeFilter(cleanValue));
+        continue;
+      }
+
+      const mappedKey = SEARCH_KEY_MAP[key];
+      if (mappedKey) {
+        result.push({ key: mappedKey, value: cleanValue, display: `${mappedKey}:${cleanValue}` });
       }
     }
 
     return result;
+  }, []);
+
+  const getLegacyDateFrom = (filter: string): Date => {
+    const now = new Date();
+    const dateMap: Record<string, () => Date> = {
+      today: () => new Date(now.getFullYear(), now.getMonth(), now.getDate()),
+      week: () => new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000),
+      month: () => new Date(now.getFullYear(), now.getMonth(), 1),
+      year: () => new Date(now.getFullYear(), 0, 1),
+    };
+    return dateMap[filter]?.() ?? new Date(0);
   };
+
+  const applyFilterToResult = useCallback((filters: any, filter: { key: string; value: string }) => {
+    const simpleKeys = ['name', 'domain', 'description'];
+    if (simpleKeys.includes(filter.key)) {
+      filters[filter.key] = filter.value;
+      return;
+    }
+
+    if (filter.key === 'keywords') {
+      const values = String(filter.value).split(',').map(v => v.trim()).filter(v => v.length > 0);
+      if (values.length > 0) filters.keyword = values;
+      return;
+    }
+
+    if (filter.key === 'created') {
+      const range = parseDateRangeFilter(filter.value);
+      if (range.from) filters.createdFrom = range.from;
+      if (range.to) filters.createdTo = range.to;
+      return;
+    }
+
+    if (filter.key === 'updated') {
+      const range = parseDateRangeFilter(filter.value);
+      if (range.from) filters.updatedFrom = range.from;
+      if (range.to) filters.updatedTo = range.to;
+    }
+  }, []);
 
   const buildApiFiltersFromParsedFilters = useCallback((filtersParsed: any[], includeLegacyDate = true) => {
     const filters: any = {};
-    
-    // Set ownership filter
     filters.ownedByUser = !showAllModels;
     
-    filtersParsed.forEach(filter => {
-      switch (filter.key) {
-        case 'name':
-          filters.name = filter.value;
-          break;
-        case 'domain':
-          filters.domain = filter.value;
-          break;
-        case 'keywords': {
-          const values = String(filter.value)
-            .split(',')
-            .map(v => v.trim())
-            .filter(v => v.length > 0);
-          if (values.length > 0) filters.keyword = values;
-          break;
-        }
-        case 'description':
-          filters.description = filter.value;
-          break;
-        case 'created': {
-          const v = String(filter.value);
-          if (v.includes('after:')) {
-            const dateStr = v.replace('after:', '');
-            filters.createdFrom = dateStr === 'now' ? new Date().toISOString() : new Date(dateStr).toISOString();
-          } else if (v.includes('before:')) {
-            const dateStr = v.replace('before:', '');
-            filters.createdTo = dateStr === 'now' ? new Date().toISOString() : new Date(dateStr).toISOString();
-          } else if (v.includes('between:')) {
-            const dates = v.replace('between:', '').split('..');
-            if (dates.length === 2) {
-              filters.createdFrom = new Date(dates[0]).toISOString();
-              filters.createdTo = new Date(dates[1]).toISOString();
-            }
-          } else if (v === 'before:now') {
-            filters.createdTo = new Date().toISOString();
-          } else if (v === 'after:now') {
-            filters.createdFrom = new Date().toISOString();
-          } else {
-            filters.createdFrom = new Date(v).toISOString();
-            filters.createdTo = new Date(`${v}T23:59:59`).toISOString();
-          }
-          break;
-        }
-        case 'updated': {
-          const v = String(filter.value);
-          if (v.includes('after:')) {
-            const dateStr = v.replace('after:', '');
-            filters.updatedFrom = dateStr === 'now' ? new Date().toISOString() : new Date(dateStr).toISOString();
-          } else if (v.includes('before:')) {
-            const dateStr = v.replace('before:', '');
-            filters.updatedTo = dateStr === 'now' ? new Date().toISOString() : new Date(dateStr).toISOString();
-          } else if (v.includes('between:')) {
-            const dates = v.replace('between:', '').split('..');
-            if (dates.length === 2) {
-              filters.updatedFrom = new Date(dates[0]).toISOString();
-              filters.updatedTo = new Date(dates[1]).toISOString();
-            }
-          } else {
-            filters.updatedFrom = new Date(v).toISOString();
-            filters.updatedTo = new Date(`${v}T23:59:59`).toISOString();
-          }
-          break;
-        }
-      }
-    });
+    filtersParsed.forEach(filter => applyFilterToResult(filters, filter));
 
-    if (includeLegacyDate && dateFilter !== 'all') {
+    const shouldApplyLegacyDate = includeLegacyDate && dateFilter !== 'all';
+    const hasDateFilters = filters.createdFrom || filters.createdTo || filters.updatedFrom || filters.updatedTo;
+    
+    if (shouldApplyLegacyDate && !hasDateFilters) {
       const now = new Date();
-      let createdFrom: Date;
-      switch (dateFilter) {
-        case 'today':
-          createdFrom = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-          break;
-        case 'week':
-          createdFrom = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
-          break;
-        case 'month':
-          createdFrom = new Date(now.getFullYear(), now.getMonth(), 1);
-          break;
-        case 'year':
-          createdFrom = new Date(now.getFullYear(), 0, 1);
-          break;
-        default:
-          createdFrom = new Date(0);
-      }
-      const hasDateFilters = filters.createdFrom || filters.createdTo || filters.updatedFrom || filters.updatedTo;
-      if (!hasDateFilters) {
-        filters.createdFrom = createdFrom.toISOString();
-        filters.createdTo = now.toISOString();
-      }
+      filters.createdFrom = getLegacyDateFrom(dateFilter).toISOString();
+      filters.createdTo = now.toISOString();
     }
 
     return filters;
-  }, [dateFilter, showAllModels]);
+  }, [dateFilter, showAllModels, applyFilterToResult]);
 
   useEffect(() => {
     if (searchTerm.trim()) {
@@ -551,7 +540,7 @@ export const ToolsPanel: React.FC<ToolsPanelProps> = ({ onEcoreFileUpload, onEco
     } else {
       setParsedFilters([]);
     }
-  }, [searchTerm]);
+  }, [searchTerm, parseSearchQuery]);
 
   useEffect(() => {
     if (suppressApi) {
@@ -827,8 +816,8 @@ return (
           
           {parsedFilters.length > 0 && (
             <div style={filterTagsContainerStyle}>
-              {parsedFilters.map((filter, index) => (
-                <div key={index} style={filterTagStyle}>
+              {parsedFilters.map((filter) => (
+                <div key={`${filter.key}-${filter.value}`} style={filterTagStyle}>
                   {filter.display}
                 </div>
               ))}
@@ -979,11 +968,22 @@ return (
         boxSizing: 'border-box'
       }}>
         {!suppressApi && currentPageItems.map(model => (
-          <div key={model.id} style={fileCardStyle}
-               onClick={() => {
-                 if (!enableItemClick) return;
-                 setViewModel(model);
-               }}
+          <div
+            key={model.id}
+            style={fileCardStyle}
+            role="button"
+            tabIndex={0}
+            onClick={() => {
+              if (!enableItemClick) return;
+              setViewModel(model);
+            }}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                if (!enableItemClick) return;
+                setViewModel(model);
+              }
+            }}
             onContextMenu={(e) => handleCardRightClick(e, model.id)}
             onMouseEnter={(e) => {
               Object.assign(e.currentTarget.style, fileCardHoverStyle);

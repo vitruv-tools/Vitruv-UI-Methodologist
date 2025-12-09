@@ -43,6 +43,8 @@ export const VsumTabs: React.FC<VsumTabsProps> = ({
         type: 'success' | 'error' | 'info';
     } | null>(null);
 
+    const [checkingBuild, setCheckingBuild] = useState(false);
+
     const areIdArraysEqual = (a: number[] = [], b: number[] = []) => {
         if (a.length !== b.length) return false;
         const sa = [...a].sort((x, y) => x - y);
@@ -69,12 +71,12 @@ export const VsumTabs: React.FC<VsumTabsProps> = ({
         const backendRelsRaw = (backend as any).metaModelsRelation ?? [];
         const backendRels = (backendRelsRaw as Array<any>)
             .map(r => `${r.sourceId}->${r.targetId}#${r.reactionFileId ?? ''}`)
-            .sort();
+            .sort((a, b) => a.localeCompare(b));
 
         const snapRelsRaw = snapshot.metaModelRelationRequests ?? [];
         const snapRels = snapRelsRaw
             .map(r => `${r.sourceId}->${r.targetId}#${r.reactionFileId ?? ''}`)
-            .sort();
+            .sort((a, b) => a.localeCompare(b));
 
         if (backendRels.length !== snapRels.length) return true;
         for (let i = 0; i < backendRels.length; i++) {
@@ -134,14 +136,6 @@ export const VsumTabs: React.FC<VsumTabsProps> = ({
         };
     }, [requestWorkspaceSnapshot, activeInstanceId]);
 
-    useEffect(() => {
-        if (!popup) return;
-        const timer = globalThis.setTimeout(() => {
-            setPopup(null);
-        }, 4000);
-        return () => globalThis.clearTimeout(timer);
-    }, [popup]);
-
     // ---- save logic ------------------------------------------------
 
     const saveById = async (id: number) => {
@@ -156,9 +150,7 @@ export const VsumTabs: React.FC<VsumTabsProps> = ({
                 console.warn('Failed to refresh workspace snapshot before save', e);
             }
         }
-        if (!snap) {
-            snap = { metaModelIds: [], metaModelRelationRequests: [] };
-        }
+        snap ??= { metaModelIds: [], metaModelRelationRequests: [] };
 
         const backendMetaModels = backend.metaModels ?? [];
 
@@ -216,10 +208,25 @@ export const VsumTabs: React.FC<VsumTabsProps> = ({
             setDetailsById(prev => ({ ...prev, [id]: res.data }));
 
             globalThis.dispatchEvent(new CustomEvent('vitruv.refreshVsums'));
-        } catch (e) {
-            const msg = e instanceof Error ? e.message : 'Failed to save VSUM';
-            setError(msg);
-            setPopup({ message: msg, type: 'error' });
+        } catch (e: any) {
+            let fullMessage = 'Failed to save VSUM';
+            if (e?.response?.data) {
+                try {
+                    fullMessage =
+                        typeof e.response.data === 'string'
+                            ? e.response.data
+                            : JSON.stringify(e.response.data, null, 2);
+                } catch {
+                    fullMessage = e.response.data?.toString?.() || fullMessage;
+                }
+            } else if (e?.message) {
+                fullMessage = e.message;
+            } else {
+                fullMessage = String(e);
+            }
+
+            setError(fullMessage);
+            setPopup({ message: fullMessage, type: 'error' });
         } finally {
             setSaving(false);
         }
@@ -231,6 +238,48 @@ export const VsumTabs: React.FC<VsumTabsProps> = ({
         if (!id) return;
         await saveById(id);
     };
+
+    // ---- check build ------------------------------------------
+
+    const onCheckBuild = async () => {
+        const active = openTabs.find(t => t.instanceId === activeInstanceId);
+        const id = active?.id;
+        if (!id) return;
+
+        setCheckingBuild(true);
+        setPopup({ message: 'Checking if this VSUM can be built…', type: 'info' });
+
+        try {
+            const res = await apiService.buildVsum(id);
+            const msg =
+                (res as any)?.message ||
+                'This VSUM can be built successfully.';
+            setPopup({ message: msg, type: 'success' });
+        } catch (e: any) {
+            let fullMessage = 'Build failed.';
+            if (e?.response?.data) {
+                try {
+                    fullMessage =
+                        typeof e.response.data === 'string'
+                            ? e.response.data
+                            : JSON.stringify(e.response.data, null, 2);
+                } catch {
+                    fullMessage = e.response.data?.toString?.() || fullMessage;
+                }
+            } else if (e?.message) {
+                fullMessage = e.message;
+            } else {
+                fullMessage = String(e);
+            }
+
+            setError(fullMessage);
+            setPopup({ message: fullMessage, type: 'error' });
+        } finally {
+            setCheckingBuild(false);
+        }
+    };
+
+    // ---- derived UI state ------------------------------------------
 
     if (openTabs.length === 0) return null;
 
@@ -272,6 +321,8 @@ export const VsumTabs: React.FC<VsumTabsProps> = ({
                             return (
                                 <div
                                     key={tab.instanceId}
+                                    role="tab"
+                                    tabIndex={0}
                                     style={{
                                         display: 'flex',
                                         alignItems: 'center',
@@ -285,7 +336,13 @@ export const VsumTabs: React.FC<VsumTabsProps> = ({
                                         boxShadow: isActive ? '0 1px 2px rgba(0,0,0,0.04)' : 'none',
                                     }}
                                     onClick={() => onActivate(tab.instanceId)}
-                                    aria-current={isActive ? 'page' : undefined}
+                                    onKeyDown={e => {
+                                        if (e.key === 'Enter' || e.key === ' ') {
+                                            e.preventDefault();
+                                            onActivate(tab.instanceId);
+                                        }
+                                    }}
+                                    aria-selected={isActive}
                                     title={name}
                                 >
                                     {isTabDirty && (
@@ -309,8 +366,8 @@ export const VsumTabs: React.FC<VsumTabsProps> = ({
                                             whiteSpace: 'nowrap',
                                         }}
                                     >
-                    {name}
-                  </span>
+                                        {name}
+                                    </span>
                                     <button
                                         onClick={e => {
                                             e.stopPropagation();
@@ -341,6 +398,21 @@ export const VsumTabs: React.FC<VsumTabsProps> = ({
 
                     {activeInstanceId && (
                         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                            {checkingBuild && (
+                                <div
+                                    style={{
+                                        padding: '4px 10px',
+                                        borderRadius: 999,
+                                        background: '#dcfce7',
+                                        color: '#166534',
+                                        fontSize: 11,
+                                        fontWeight: 600,
+                                    }}
+                                >
+                                    Checking…
+                                </div>
+                            )}
+
                             {error && (
                                 <div
                                     role="alert"
@@ -351,11 +423,33 @@ export const VsumTabs: React.FC<VsumTabsProps> = ({
                                         background: '#fef2f2',
                                         borderRadius: 6,
                                         fontSize: 11,
+                                        maxWidth: 260,
+                                        whiteSpace: 'nowrap',
+                                        overflow: 'hidden',
+                                        textOverflow: 'ellipsis',
                                     }}
                                 >
                                     {error}
                                 </div>
                             )}
+
+                            <button
+                                onClick={onCheckBuild}
+                                disabled={checkingBuild || saving}
+                                style={{
+                                    padding: '6px 10px',
+                                    borderRadius: 8,
+                                    border: '1px solid #16a34a',
+                                    background: checkingBuild ? '#bbf7d0' : '#22c55e',
+                                    color: '#ffffff',
+                                    fontWeight: 700,
+                                    cursor: checkingBuild || saving ? 'not-allowed' : 'pointer',
+                                    fontSize: 12,
+                                }}
+                            >
+                                {checkingBuild ? 'Checking…' : 'Check build'}
+                            </button>
+
                             {anyDirty && (
                                 <button
                                     onClick={onSave}
@@ -368,6 +462,7 @@ export const VsumTabs: React.FC<VsumTabsProps> = ({
                                         color: '#ffffff',
                                         fontWeight: 700,
                                         cursor: saving ? 'not-allowed' : 'pointer',
+                                        fontSize: 12,
                                     }}
                                 >
                                     {saving ? 'Saving…' : 'Save changes'}
@@ -399,7 +494,6 @@ export const VsumTabs: React.FC<VsumTabsProps> = ({
                 </button>
             )}
 
-            {/* 🔹 Popup / toast */}
             {popup && (
                 <div
                     style={{
@@ -408,7 +502,8 @@ export const VsumTabs: React.FC<VsumTabsProps> = ({
                         bottom: 24,
                         zIndex: 9999,
                         minWidth: 260,
-                        maxWidth: 400,
+                        maxWidth: 600,
+                        maxHeight: '70vh',
                         padding: '10px 14px',
                         borderRadius: 10,
                         boxShadow: '0 6px 20px rgba(0,0,0,0.18)',
@@ -423,7 +518,20 @@ export const VsumTabs: React.FC<VsumTabsProps> = ({
                     <div style={{ fontSize: 16 }}>
                         {POPUP_STYLES[popup.type].icon}
                     </div>
-                    <div style={{ flex: 1, fontSize: 13, fontWeight: 500, whiteSpace: 'pre-wrap' }}>
+                    <div
+                        style={{
+                            flex: 1,
+                            fontSize: 13,
+                            fontWeight: 500,
+                            whiteSpace: 'pre-wrap',
+                            overflowY: 'auto',
+                            maxHeight: '60vh',
+                        }}
+                        onWheel={e => {
+                            // prevent React Flow canvas from handling scroll
+                            e.stopPropagation();
+                        }}
+                    >
                         {popup.message}
                     </div>
                     <button

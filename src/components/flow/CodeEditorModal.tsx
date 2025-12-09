@@ -157,7 +157,7 @@ export function CodeEditorModal({
       .split('\n')
       .map(line => line.trimEnd())
       .join('\n')
-      .replace(/\n{3,}/g, '\n\n');
+      .replaceAll(/\n{3,}/g, '\n\n');
     handleCodeChange(formatted);
   };
 
@@ -168,8 +168,8 @@ export function CodeEditorModal({
   const lineCount = code.split('\n').length;
 
   return (
-    <div
-      role="button"
+    <dialog
+      open
       style={{
         position: 'fixed',
         inset: 0,
@@ -179,10 +179,20 @@ export function CodeEditorModal({
         justifyContent: 'center',
         zIndex: 9999,
         backdropFilter: 'blur(4px)',
+        border: 'none',
+        padding: 0,
+        margin: 0,
+        width: '100%',
+        height: '100%',
+        maxWidth: '100%',
+        maxHeight: '100%',
       }}
-      onClick={onClose}
+      onClose={onClose}
+      onCancel={onClose}
+      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
     >
       <div
+        aria-labelledby="code-editor-title"
         style={{
           backgroundColor: '#1e1e1e',
           borderRadius: '12px',
@@ -195,7 +205,7 @@ export function CodeEditorModal({
           boxShadow: '0 20px 60px rgba(0, 0, 0, 0.4)',
           overflow: 'hidden',
         }}
-        onClick={(e) => e.stopPropagation()}
+        onKeyDown={(e) => e.stopPropagation()}
       >
         {/* Header */}
         <div
@@ -209,7 +219,7 @@ export function CodeEditorModal({
           }}
         >
           <div>
-            <h3 style={{ margin: 0, color: '#fff', fontSize: '18px', fontWeight: 600 }}>
+            <h3 id="code-editor-title" style={{ margin: 0, color: '#fff', fontSize: '18px', fontWeight: 600 }}>
               Reaction Editor
             </h3>
             {sourceFileName && targetFileName && (
@@ -391,6 +401,6 @@ export function CodeEditorModal({
           </div>
         </div>
       </div>
-    </div>
+    </dialog>
   );
 }

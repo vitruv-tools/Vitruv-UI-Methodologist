@@ -58,7 +58,7 @@ export function MainLayout({
     welcomeTitle,
     welcomeSubtitle,
     workspaceKey,
-}: MainLayoutProps) {
+}: Readonly<MainLayoutProps>) {
     const location = useLocation();
     const isMMLRoute = location.pathname.startsWith('/mml');
 
@@ -116,7 +116,7 @@ export function MainLayout({
             if (isResizingRight.current && rightAsideRef.current) {
                 const min = 260;
                 const max = 700;
-                const viewport = window.innerWidth;
+                const viewport = globalThis.innerWidth;
                 const next = Math.min(Math.max(viewport - e.clientX, min), max);
                 rightAsideRef.current.style.width = `${next}px`;
             }
@@ -127,11 +127,11 @@ export function MainLayout({
             document.body.style.cursor = '';
             document.body.style.userSelect = '';
         };
-        window.addEventListener('mousemove', handleMouseMove);
-        window.addEventListener('mouseup', handleMouseUp);
+        globalThis.addEventListener('mousemove', handleMouseMove);
+        globalThis.addEventListener('mouseup', handleMouseUp);
         return () => {
-            window.removeEventListener('mousemove', handleMouseMove);
-            window.removeEventListener('mouseup', handleMouseUp);
+            globalThis.removeEventListener('mousemove', handleMouseMove);
+            globalThis.removeEventListener('mouseup', handleMouseUp);
         };
     }, []);
 
@@ -304,19 +304,19 @@ export function MainLayout({
             }
         };
 
-        window.addEventListener('vitruv.addFileToWorkspace', handleAddFileToWorkspace as EventListener);
-        window.addEventListener('vitruv.resetWorkspace', handleResetWorkspace as EventListener);
+        globalThis.addEventListener('vitruv.addFileToWorkspace', handleAddFileToWorkspace as EventListener);
+        globalThis.addEventListener('vitruv.resetWorkspace', handleResetWorkspace as EventListener);
         const handleExpandFileInWorkspace = (e: Event) => {
             const customEvent = e as CustomEvent<{ fileName: string; fileContent: string }>;
             const detail = customEvent.detail;
             if (!detail) return;
             handleEcoreFileExpand(detail.fileName, detail.fileContent);
         };
-        window.addEventListener('vitruv.expandFileInWorkspace', handleExpandFileInWorkspace as EventListener);
+        globalThis.addEventListener('vitruv.expandFileInWorkspace', handleExpandFileInWorkspace as EventListener);
         return () => {
-            window.removeEventListener('vitruv.addFileToWorkspace', handleAddFileToWorkspace as EventListener);
-            window.removeEventListener('vitruv.expandFileInWorkspace', handleExpandFileInWorkspace as EventListener);
-            window.removeEventListener('vitruv.resetWorkspace', handleResetWorkspace as EventListener);
+            globalThis.removeEventListener('vitruv.addFileToWorkspace', handleAddFileToWorkspace as EventListener);
+            globalThis.removeEventListener('vitruv.expandFileInWorkspace', handleExpandFileInWorkspace as EventListener);
+            globalThis.removeEventListener('vitruv.resetWorkspace', handleResetWorkspace as EventListener);
         };
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
@@ -344,8 +344,8 @@ export function MainLayout({
             detail.resolve(snapshot);
         };
 
-        window.addEventListener('vitruv.requestWorkspaceSnapshot', handleWorkspaceSnapshotRequest as EventListener);
-        return () => window.removeEventListener('vitruv.requestWorkspaceSnapshot', handleWorkspaceSnapshotRequest as EventListener);
+        globalThis.addEventListener('vitruv.requestWorkspaceSnapshot', handleWorkspaceSnapshotRequest as EventListener);
+        return () => globalThis.removeEventListener('vitruv.requestWorkspaceSnapshot', handleWorkspaceSnapshotRequest as EventListener);
     }, [expandedMetaModelName, cachedWorkspaceSnapshot]);
 
     const handleEcoreFileSelect = useCallback((fileName: string) => {
@@ -493,11 +493,19 @@ export function MainLayout({
                 {/* Resize handle removed when ENABLE_RESIZE === false */}
                 {ENABLE_RESIZE && (
                     <div
+                        role="separator"
+                        tabIndex={0}
+                        aria-label="Resize left sidebar"
                         onMouseDown={(e) => {
                             isResizingLeft.current = true;
                             document.body.style.cursor = 'col-resize';
                             document.body.style.userSelect = 'none';
                             e.preventDefault();
+                        }}
+                        onKeyDown={(e) => {
+                            if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
+                                e.preventDefault();
+                            }
                         }}
                         style={{ position: 'absolute', right: 0, top: 0, width: 8, height: '100%', cursor: 'col-resize' }}
                     />
@@ -697,11 +705,19 @@ export function MainLayout({
                 >
                     {ENABLE_RESIZE && (
                         <div
+                            role="separator"
+                            tabIndex={0}
+                            aria-label="Resize right sidebar"
                             onMouseDown={(e) => {
                                 isResizingRight.current = true;
                                 document.body.style.cursor = 'col-resize';
                                 document.body.style.userSelect = 'none';
                                 e.preventDefault();
+                            }}
+                            onKeyDown={(e) => {
+                                if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
+                                    e.preventDefault();
+                                }
                             }}
                             style={{ position: 'absolute', left: 0, top: 0, width: 8, height: '100%', cursor: 'col-resize' }}
                         />

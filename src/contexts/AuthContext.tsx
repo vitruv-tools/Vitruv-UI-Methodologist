@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import React, { createContext, useContext, useState, useEffect, useMemo, useCallback, ReactNode } from 'react';
 import { AuthService, User, SignUpCredentials } from '../services/auth';
 import { apiService } from '../services/api';
 import { useTokenRefresh } from '../hooks/useTokenRefresh';
@@ -40,7 +40,27 @@ export function getPasswordStrengthLabel(score: number): string {
     return 'Very strong';
 }
 
-export function AuthProvider({ children }: AuthProviderProps) {
+function getUserFromAccessToken(): User | null {
+    const accessToken = AuthService.getAccessToken();
+    if (!accessToken) return null;
+
+    const tokenData = parseJwtToken(accessToken);
+    if (!tokenData) return null;
+
+    const extractedUser = extractUserFromToken(tokenData);
+    return {
+        id: Date.now().toString(),
+        username: extractedUser.username || 'user',
+        email: extractedUser.email,
+        name: extractedUser.name,
+        givenName: extractedUser.givenName,
+        familyName: extractedUser.familyName,
+        emailVerified: extractedUser.emailVerified,
+        scope: extractedUser.scope,
+    };
+}
+
+export function AuthProvider({ children }: Readonly<AuthProviderProps>) {
     const [user, setUser] = useState<User | null>(null);
     const [isLoading, setIsLoading] = useState(true);
     const { refreshToken } = useTokenRefresh();
@@ -48,45 +68,18 @@ export function AuthProvider({ children }: AuthProviderProps) {
     useEffect(() => {
         const checkAuth = async () => {
             try {
-                if (AuthService.isAuthenticated()) {
-                    const currentUser = AuthService.getCurrentUser();
-                    if (currentUser) {
-                        setUser(currentUser);
-                    } else {
-                        try {
-                            const { data } = await apiService.getUserInfo();
-                            const mapped: User = {
-                                id: String(data.id),
-                                username: data.email?.split('@')[0] || 'user',
-                                email: data.email,
-                                name: `${data.firstName ?? ''} ${data.lastName ?? ''}`.trim() || data.email,
-                                givenName: data.firstName,
-                                familyName: data.lastName,
-                            };
-                            AuthService.setCurrentUser(mapped);
-                            setUser(mapped);
-                        } catch (e) {
-                            const accessToken = AuthService.getAccessToken();
-                            if (accessToken) {
-                                const tokenData = parseJwtToken(accessToken);
-                                if (tokenData) {
-                                    const extractedUser = extractUserFromToken(tokenData);
-                                    const userFromToken: User = {
-                                        id: Date.now().toString(),
-                                        username: extractedUser.username || 'user',
-                                        email: extractedUser.email,
-                                        name: extractedUser.name,
-                                        givenName: extractedUser.givenName,
-                                        familyName: extractedUser.familyName,
-                                        emailVerified: extractedUser.emailVerified,
-                                        scope: extractedUser.scope,
-                                    };
-                                    AuthService.setCurrentUser(userFromToken);
-                                    setUser(userFromToken);
-                                }
-                            }
-                        }
-                    }
+                if (!AuthService.isAuthenticated()) return;
+
+                const currentUser = AuthService.getCurrentUser();
+                if (currentUser) {
+                    setUser(currentUser);
+                    return;
+                }
+
+                const fetchedUser = await fetchUserFromApi();
+                if (fetchedUser) {
+                    AuthService.setCurrentUser(fetchedUser);
+                    setUser(fetchedUser);
                 }
             } catch (error) {
                 console.error('Auth check failed:', error);
@@ -96,15 +89,31 @@ export function AuthProvider({ children }: AuthProviderProps) {
             }
         };
 
+        const fetchUserFromApi = async (): Promise<User | null> => {
+            try {
+                const { data } = await apiService.getUserInfo();
+                return {
+                    id: String(data.id),
+                    username: data.email?.split('@')[0] || 'user',
+                    email: data.email,
+                    name: `${data.firstName ?? ''} ${data.lastName ?? ''}`.trim() || data.email,
+                    givenName: data.firstName,
+                    familyName: data.lastName,
+                };
+            } catch {
+                return getUserFromAccessToken();
+            }
+        };
+
         checkAuth();
         const onSignOut = () => setUser(null);
-        window.addEventListener('auth:signout', onSignOut);
+        globalThis.addEventListener('auth:signout', onSignOut);
         return () => {
-            window.removeEventListener('auth:signout', onSignOut);
+            globalThis.removeEventListener('auth:signout', onSignOut);
         };
     }, []);
 
-    const signIn = async (username: string, password: string) => {
+    const signIn = useCallback(async (username: string, password: string) => {
         try {
             const authResponse = await AuthService.signIn({ username, password });
 
@@ -121,7 +130,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
                 AuthService.setCurrentUser(mapped);
                 setUser(mapped);
                 return;
-            } catch (e) {
+            } catch {
                 const tokenData = parseJwtToken(authResponse.access_token);
                 let newUser: User;
                 if (tokenData) {
@@ -151,12 +160,12 @@ export function AuthProvider({ children }: AuthProviderProps) {
             console.error('Sign in error:', error);
             throw error;
         }
-    };
+    }, []);
 
     // 🔐 SIGN UP with:
     // - Username required and length ≥ 4
     // - Password detailed validation (with explicit allowed symbols)
-    const signUp = async (userData: SignUpCredentials) => {
+    const signUp = useCallback(async (userData: SignUpCredentials) => {
         try {
             // Username validation
             if (!userData.username || userData.username.trim().length < 4) {
@@ -211,9 +220,9 @@ export function AuthProvider({ children }: AuthProviderProps) {
             if (error instanceof Error) throw error;
             throw new Error('Sign up failed');
         }
-    };
+    }, []);
 
-    const signOut = async () => {
+    const signOut = useCallback(async () => {
         try {
             await AuthService.signOut();
             setUser(null);
@@ -221,19 +230,24 @@ export function AuthProvider({ children }: AuthProviderProps) {
             console.error('Sign out error:', error);
             setUser(null);
         }
-    };
+    }, []);
 
-    const handleRefreshToken = async () => {
+    const handleRefreshToken = useCallback(async () => {
         try {
             return await refreshToken();
         } catch (error) {
             console.error('Token refresh failed:', error);
-            await signOut();
+            try {
+                await AuthService.signOut();
+                setUser(null);
+            } catch {
+                setUser(null);
+            }
             throw error;
         }
-    };
+    }, [refreshToken]);
 
-    const value: AuthContextType = {
+    const value: AuthContextType = useMemo(() => ({
         user,
         isAuthenticated: !!user,
         isLoading,
@@ -241,7 +255,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
         signUp,
         signOut,
         refreshToken: handleRefreshToken,
-    };
+    }), [user, isLoading, signIn, signUp, signOut, handleRefreshToken]);
 
     return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }

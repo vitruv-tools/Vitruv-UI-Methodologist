@@ -135,11 +135,11 @@ export const KeywordTagsInput: React.FC<KeywordTagsInputProps> = ({
     return (
       <div style={coloredTextStyle}>
         {keywords.map((keyword, keywordIndex) => (
-          <span key={keywordIndex}>
+          <span key={keyword}>
             {keywordIndex > 0 && <span style={{ color: '#333' }}>, </span>}
             {keyword.split('').map((char, charIndex) => (
               <span
-                key={`${keywordIndex}-${charIndex}`}
+                key={`${keyword}-${charIndex}`}
                 style={{ color: getTextColor(keywordIndex) }}
               >
                 {char}
@@ -159,12 +159,18 @@ export const KeywordTagsInput: React.FC<KeywordTagsInputProps> = ({
 
   return (
     <div
+      role="presentation"
       style={{
         ...containerStyle,
         ...(isFocused ? containerFocusStyle : {}),
         ...style
       }}
       onClick={handleContainerClick}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          handleContainerClick();
+        }
+      }}
     >
       <input
         ref={inputRef}
