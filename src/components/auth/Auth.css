@@ -109,7 +109,7 @@
 
 .form-group input:disabled {
   background: rgba(237, 242, 247, 0.8);
-  color: #a0aec0;
+  color: #4a5568;
   cursor: not-allowed;
 }
 
@@ -135,16 +135,16 @@
 }
 
 .auth-button.primary {
-  background: linear-gradient(135deg, #00BCD4 0%, #26a69a 100%);
+  background: linear-gradient(135deg, #0097A7 0%, #00796B 100%);
   color: white;
-  box-shadow: 0 8px 24px rgba(0, 188, 212, 0.5);
+  box-shadow: 0 8px 24px rgba(0, 151, 167, 0.5);
   text-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
 }
 
 .auth-button.primary:hover:not(:disabled) {
   transform: translateY(-3px);
-  box-shadow: 0 12px 32px rgba(0, 188, 212, 0.6);
-  background: linear-gradient(135deg, #00d4e8 0%, #2dbfa8 100%);
+  box-shadow: 0 12px 32px rgba(0, 151, 167, 0.6);
+  background: linear-gradient(135deg, #00ACC1 0%, #00897B 100%);
 }
 
 .auth-button.primary:disabled {
@@ -191,7 +191,7 @@
 .error-message {
   background: rgba(254, 215, 215, 0.95);
   border: 2px solid #feb2b2;
-  color: #c53030;
+  color: #9B2C2C;
   padding: 10px 14px;
   border-radius: 10px;
   margin-bottom: 14px;

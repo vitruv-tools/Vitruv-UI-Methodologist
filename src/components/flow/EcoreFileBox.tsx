@@ -221,7 +221,13 @@ const ModalContent: React.FC<{
   const [isCloseHovered, setIsCloseHovered] = useState(false);
 
   return (
-    <div style={modalOverlayStyle} onClick={onOverlayClick}>
+    <dialog
+      open
+      style={modalOverlayStyle}
+      onClose={onClose}
+      onCancel={onClose}
+      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
+    >
       <div style={createModalStyle()}>
         <div style={modalHeaderStyle}>
           <h2 style={createTextStyle(24, '#212529', { fontWeight: '700', margin: 0 })}>
@@ -259,7 +265,7 @@ const ModalContent: React.FC<{
           <span>Created: {createdAt ? formatDate(createdAt) : 'Unknown Date'}</span>
         </div>
       </div>
-    </div>
+    </dialog>
   );
 };
 
@@ -390,6 +396,16 @@ export const EcoreFileBox: React.FC<NodeProps<EcoreFileBoxData>> = ({
     );
   });
 
+  const handleBoxKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      onSelect(fileName);
+    } else if (e.key === ' ') {
+      e.preventDefault();
+      onExpand(fileName, fileContent);
+    }
+  };
+
   return (
     <>
       <div
@@ -403,8 +419,12 @@ export const EcoreFileBox: React.FC<NodeProps<EcoreFileBoxData>> = ({
         }}
         onClick={handleClick}
         onDoubleClick={handleDoubleClick}
+        onKeyDown={handleBoxKeyDown}
         onMouseEnter={() => setIsHovered(true)}
         onMouseLeave={() => setIsHovered(false)}
+        role="button"
+        tabIndex={0}
+        aria-label={`${removeEcoreExtension(fileName)} file. Press Enter to select, Space to expand.`}
         title={`Click to select, double-click to expand\n${fileName}`}
       >
         {connectionHandles}

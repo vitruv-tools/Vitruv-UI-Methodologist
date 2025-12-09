@@ -10,7 +10,7 @@ export function useTokenRefresh() {
       const accessExpiresAt = localStorage.getItem('auth.access_expires_at');
       if (!accessExpiresAt) return;
 
-      const expirationTime = parseInt(accessExpiresAt, 10);
+      const expirationTime = Number.parseInt(accessExpiresAt, 10);
       const now = Date.now();
       const timeUntilExpiry = expirationTime - now;
 
@@ -24,7 +24,7 @@ export function useTokenRefresh() {
         const currentExpiresAt = localStorage.getItem('auth.access_expires_at');
         if (!currentExpiresAt) return;
 
-        const currentExpirationTime = parseInt(currentExpiresAt, 10);
+        const currentExpirationTime = Number.parseInt(currentExpiresAt, 10);
         const currentTime = Date.now();
         const currentTimeUntilExpiry = currentExpirationTime - currentTime;
 

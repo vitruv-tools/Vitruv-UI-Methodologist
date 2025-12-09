@@ -6,7 +6,7 @@ export const exportFlowData = (nodes: Node[], edges: Edge[]): FlowData => {
     nodes: nodes.map(node => ({
       ...node,
       data: (() => {
-        const { onLabelChange, ...rest } = (node.data || {}) as any;
+        const { onLabelChange, ...rest } = node.data || {};
         return { label: rest.label || '', ...rest };
       })()
     })),

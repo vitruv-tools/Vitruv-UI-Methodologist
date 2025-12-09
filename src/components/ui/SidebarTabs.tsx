@@ -12,7 +12,13 @@ export const SidebarTabs: React.FC<SidebarTabsProps> = ({ width = 350, showBorde
   const location = useLocation();
   const navigate = useNavigate();
 
-  const active = location.pathname.startsWith('/project') ? 'project' : location.pathname.startsWith('/mml') ? 'mml' : 'welcome';
+  const getActiveTab = (): string => {
+    if (location.pathname.startsWith('/project')) return 'project';
+    if (location.pathname.startsWith('/mml')) return 'mml';
+    return 'welcome';
+  };
+
+  const active = getActiveTab();
 
   const tabBase: React.CSSProperties = {
     flex: 1,

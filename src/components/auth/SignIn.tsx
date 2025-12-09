@@ -8,7 +8,7 @@ interface SignInProps {
   onSwitchToSignUp: () => void;
 }
 
-export function SignIn({ onSignInSuccess, onSwitchToSignUp }: SignInProps) {
+export function SignIn({ onSignInSuccess, onSwitchToSignUp }: Readonly<SignInProps>) {
   const { signIn } = useAuth();
   const [credentials, setCredentials] = useState<SignInCredentials>({
     username: '',

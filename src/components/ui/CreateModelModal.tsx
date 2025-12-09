@@ -31,8 +31,8 @@ interface CreateModelRequest {
 
 // Secure random number generator helper function
 const getSecureRandomInt = (max: number): number => {
-  const crypto = window.crypto || (window as any).msCrypto;
-  if (crypto && crypto.getRandomValues) {
+  const crypto = globalThis.crypto || (globalThis as any).msCrypto;
+  if (crypto?.getRandomValues) {
     const array = new Uint32Array(1);
     crypto.getRandomValues(array);
     return array[0] % max;
@@ -275,9 +275,9 @@ export const CreateModelModal: React.FC<CreateModelModalProps> = ({
 
   const ecoreFileInputRef = useRef<HTMLInputElement>(null);
   const genmodelFileInputRef = useRef<HTMLInputElement>(null);
-  const ecoreProgressIntervalRef = useRef<number | null>(null);
-  const genmodelProgressIntervalRef = useRef<number | null>(null);
-  const submitProgressIntervalRef = useRef<number | null>(null);
+  const ecoreProgressIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const genmodelProgressIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const submitProgressIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const successTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const progressResetTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -317,7 +317,7 @@ export const CreateModelModal: React.FC<CreateModelModalProps> = ({
 
     try {
       if (ecoreProgressIntervalRef.current) clearInterval(ecoreProgressIntervalRef.current);
-      ecoreProgressIntervalRef.current = window.setInterval(() => {
+      ecoreProgressIntervalRef.current = globalThis.setInterval(() => {
         setUploadProgress(prev => ({
           ...prev,
           ecore: {
@@ -375,7 +375,7 @@ export const CreateModelModal: React.FC<CreateModelModalProps> = ({
 
     try {
       if (genmodelProgressIntervalRef.current) clearInterval(genmodelProgressIntervalRef.current);
-      genmodelProgressIntervalRef.current = window.setInterval(() => {
+      genmodelProgressIntervalRef.current = globalThis.setInterval(() => {
         setUploadProgress(prev => ({
           ...prev,
           genmodel: {
@@ -426,7 +426,7 @@ export const CreateModelModal: React.FC<CreateModelModalProps> = ({
       submitProgressIntervalRef.current = null;
     }
     setSubmitProgress({ progress: 0, isSubmitting: true });
-    submitProgressIntervalRef.current = window.setInterval(() => {
+    submitProgressIntervalRef.current = globalThis.setInterval(() => {
       setSubmitProgress(prev => ({
         progress: Math.min(prev.progress + Math.random() * 16 + 4, 90), // +4..20 each tick up to 90
         isSubmitting: true,
@@ -654,12 +654,24 @@ export const CreateModelModal: React.FC<CreateModelModalProps> = ({
     return 'Complete All Fields';
   };
 
+  const getEcoreButtonText = (): string => {
+    if (uploadProgress.ecore.isUploading) return 'Uploading...';
+    if (uploadedFileIds.ecoreFileId > 0) return '✓';
+    return 'Upload';
+  };
+
+  const getGenmodelButtonText = (): string => {
+    if (uploadProgress.genmodel.isUploading) return 'Uploading...';
+    if (uploadedFileIds.genModelFileId > 0) return '✓';
+    return 'Upload';
+  };
+
   return ReactDOM.createPortal(
       <>
         {/* Full-screen Submit Overlay */}
         {submitProgress.isSubmitting && (
-            <div style={overlayStyle} aria-modal="true" role="dialog" aria-label="Building meta model">
-              <div style={overlayCardStyle} onClick={(e) => e.stopPropagation()}>
+            <dialog open style={overlayStyle} aria-label="Building meta model">
+              <div style={overlayCardStyle} role="presentation" onMouseDown={(e) => e.stopPropagation()}>
                 <div style={overlayTitleStyle}>Building Meta Model…</div>
                 <div style={overlayTextStyle}>Please wait while we process your files.</div>
                 <div style={{ ...progressBarContainerStyle, marginTop: 8 }}>
@@ -669,12 +681,12 @@ export const CreateModelModal: React.FC<CreateModelModalProps> = ({
                   {Math.round(submitProgress.progress)}%
                 </div>
               </div>
-            </div>
+            </dialog>
         )}
 
         {/* Modal */}
-        <div style={modalOverlayStyle} onClick={handleClose}>
-          <div style={modalStyle} onClick={(e) => e.stopPropagation()}>
+        <dialog open style={modalOverlayStyle} onClose={handleClose} onCancel={handleClose} onClick={(e) => { if (e.target === e.currentTarget) handleClose(); }}>
+          <div style={modalStyle}>
             <div style={modalHeaderStyle}>
               <h2 style={modalTitleStyle}>Import Meta Model</h2>
               <button
@@ -691,8 +703,9 @@ export const CreateModelModal: React.FC<CreateModelModalProps> = ({
             {success && <div style={successMessageStyle}>{success}</div>}
 
             <div style={formGroupStyle}>
-              <label style={labelStyle}>Name *</label>
+              <label htmlFor="model-name-input" style={labelStyle}>Name *</label>
               <input
+                  id="model-name-input"
                   type="text"
                   placeholder="Enter meta model name..."
                   value={formData.name}
@@ -704,8 +717,9 @@ export const CreateModelModal: React.FC<CreateModelModalProps> = ({
             </div>
 
             <div style={formGroupStyle}>
-              <label style={labelStyle}>Description *</label>
+              <label htmlFor="model-description-input" style={labelStyle}>Description *</label>
               <textarea
+                  id="model-description-input"
                   placeholder="Enter description..."
                   value={formData.description}
                   onChange={(e) => setFormData({ ...formData, description: e.target.value })}
@@ -716,8 +730,9 @@ export const CreateModelModal: React.FC<CreateModelModalProps> = ({
             </div>
 
             <div style={formGroupStyle}>
-              <label style={labelStyle}>Keywords *</label>
+              <label id="model-keywords-label" style={labelStyle}>Keywords *</label>
               <KeywordTagsInput
+                  aria-labelledby="model-keywords-label"
                   keywords={formData.keywords}
                   onChange={(keywords) => setFormData({ ...formData, keywords })}
                   placeholder="Type keywords and press Enter..."
@@ -729,8 +744,9 @@ export const CreateModelModal: React.FC<CreateModelModalProps> = ({
             </div>
 
             <div style={formGroupStyle}>
-              <label style={labelStyle}>Domain *</label>
+              <label htmlFor="model-domain-input" style={labelStyle}>Domain *</label>
               <input
+                  id="model-domain-input"
                   type="text"
                   placeholder="Enter domain"
                   value={formData.domain}
@@ -773,7 +789,7 @@ export const CreateModelModal: React.FC<CreateModelModalProps> = ({
                       onMouseEnter={(e) => !uploadedFileIds.ecoreFileId && !uploadProgress.ecore.isUploading && Object.assign(e.currentTarget.style, uploadButtonHoverStyle)}
                       onMouseLeave={(e) => !uploadedFileIds.ecoreFileId && !uploadProgress.ecore.isUploading && Object.assign(e.currentTarget.style, uploadButtonStyle)}
                   >
-                    {uploadProgress.ecore.isUploading ? 'Uploading...' : uploadedFileIds.ecoreFileId > 0 ? '✓' : 'Upload'} .ecore
+                    {getEcoreButtonText()} .ecore
                   </button>
                   {uploadProgress.ecore.isUploading && (
                       <>
@@ -799,7 +815,7 @@ export const CreateModelModal: React.FC<CreateModelModalProps> = ({
                       onMouseEnter={(e) => !uploadedFileIds.genModelFileId && !uploadProgress.genmodel.isUploading && Object.assign(e.currentTarget.style, uploadButtonHoverStyle)}
                       onMouseLeave={(e) => !uploadedFileIds.genModelFileId && !uploadProgress.genmodel.isUploading && Object.assign(e.currentTarget.style, uploadButtonStyle)}
                   >
-                    {uploadProgress.genmodel.isUploading ? 'Uploading...' : uploadedFileIds.genModelFileId > 0 ? '✓' : 'Upload'} .genmodel
+                    {getGenmodelButtonText()} .genmodel
                   </button>
                   {uploadProgress.genmodel.isUploading && (
                       <>
@@ -845,7 +861,7 @@ export const CreateModelModal: React.FC<CreateModelModalProps> = ({
               </button>
             </div>
           </div>
-        </div>
+        </dialog>
       </>,
       document.body
   );

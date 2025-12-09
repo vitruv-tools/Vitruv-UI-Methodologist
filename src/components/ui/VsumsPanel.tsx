@@ -199,7 +199,7 @@ export const VsumsPanel: React.FC = () => {
             setSuccess('VSUM recovered successfully.');
             // refresh deleted list
             await loadFirstPage();
-            window.dispatchEvent(new CustomEvent('vitruv.refreshVsums'));
+            globalThis.dispatchEvent(new CustomEvent('vitruv.refreshVsums'));
         } catch (e) {
             setError(e instanceof Error ? e.message : 'Failed to recover VSUM');
         } finally {
@@ -338,9 +338,17 @@ export const VsumsPanel: React.FC = () => {
                 return (
                     <div
                         key={item.id}
+                        role="button"
+                        tabIndex={0}
                         style={cardStyle}
                         onDoubleClick={() => {
-                            window.dispatchEvent(new CustomEvent('vitruv.openVsum', { detail: { id: item.id } }));
+                            globalThis.dispatchEvent(new CustomEvent('vitruv.openVsum', { detail: { id: item.id } }));
+                        }}
+                        onKeyDown={(e) => {
+                            if (e.key === 'Enter' || e.key === ' ') {
+                                e.preventDefault();
+                                globalThis.dispatchEvent(new CustomEvent('vitruv.openVsum', { detail: { id: item.id } }));
+                            }
                         }}
                     >
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>

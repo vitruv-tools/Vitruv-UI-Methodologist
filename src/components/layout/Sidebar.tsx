@@ -19,7 +19,7 @@ const sidebarStyle: React.CSSProperties = {
 
 // ... existing code ...
 
-export function Sidebar({ onDiagramSelect, onEcoreFileUpload, onEcoreFileDelete }: SidebarProps) {
+export function Sidebar({ onDiagramSelect, onEcoreFileUpload, onEcoreFileDelete }: Readonly<SidebarProps>) {
   return (
     <aside style={sidebarStyle}>
       <ToolsPanel
