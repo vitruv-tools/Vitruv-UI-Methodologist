@@ -13,6 +13,33 @@ interface HistoryEntry {
   description: string;
 }
 
+// Deep clone that strips out non-serializable values (functions, Maps, Sets, etc.)
+// This is necessary because node.data may contain callback functions which structuredClone cannot handle
+function cloneStateForHistory(state: DiagramState): DiagramState {
+  const stripNonSerializable = (obj: any): any => {
+    if (obj === null || obj === undefined) return obj;
+    if (typeof obj === 'function') return undefined;
+    if (obj instanceof Map || obj instanceof Set) return undefined;
+    if (Array.isArray(obj)) {
+      return obj.map(stripNonSerializable);
+    }
+    if (typeof obj === 'object') {
+      const result: any = {};
+      for (const key of Object.keys(obj)) {
+        const value = stripNonSerializable(obj[key]);
+        if (value !== undefined) {
+          result[key] = value;
+        }
+      }
+      return result;
+    }
+    return obj;
+  };
+
+  const cleanState = stripNonSerializable(state);
+  return structuredClone(cleanState);
+}
+
 export function useUndoRedo(initialState: DiagramState) {
   const [currentState, setCurrentState] = useState<DiagramState>(initialState);
   const history = useRef<HistoryEntry[]>([]);
@@ -21,7 +48,7 @@ export function useUndoRedo(initialState: DiagramState) {
 
   const saveState = useCallback((state: DiagramState, description: string) => {
     const newEntry: HistoryEntry = {
-      state: structuredClone(state),
+      state: cloneStateForHistory(state),
       timestamp: Date.now(),
       description
     };

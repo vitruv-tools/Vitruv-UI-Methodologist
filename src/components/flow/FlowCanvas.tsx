@@ -800,7 +800,7 @@ export const FlowCanvas = forwardRef<{
       };
 
       try {
-        const fileName = `reaction-${edgeId}-${Date.now()}.txt`;
+        const fileName = `reaction-${edgeId}-${Date.now()}.reactions`;
         const file = new File([code], fileName, { type: 'text/plain;charset=utf-8' });
 
         let reactionFileId = codeEditorState.reactionFileId ?? null;
