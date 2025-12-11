@@ -14,7 +14,7 @@ const resizeObserverError = (e: ErrorEvent) => {
     e.stopImmediatePropagation();
   }
 };
-window.addEventListener('error', resizeObserverError);
+globalThis.addEventListener('error', resizeObserverError);
 
 const root = ReactDOM.createRoot(
   document.getElementById('root') as HTMLElement
