@@ -112,7 +112,7 @@ export function SignUp({ onSignUpSuccess, onSwitchToSignIn }: Readonly<SignUpPro
   };
 
   const validateForm = (): boolean => {
-    const { username, email, password } = formData;
+    const { username, email } = formData;
 
     if (!username || username.trim().length < 4) {
       setError("Username is too short");
