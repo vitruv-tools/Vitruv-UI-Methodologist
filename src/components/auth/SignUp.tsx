@@ -57,6 +57,102 @@ const getPasswordBarColor = (score: number): string => {
   }
 };
 
+interface PasswordRequirementsProps {
+  isPasswordValid: boolean;
+  hasOnlyAllowedChars: boolean;
+  hasMinLength: boolean;
+  hasLowercase: boolean;
+  hasUppercase: boolean;
+  hasNumber: boolean;
+  hasSymbol: boolean;
+}
+
+const PasswordRequirements: React.FC<PasswordRequirementsProps> = ({
+  isPasswordValid,
+  hasOnlyAllowedChars,
+  hasMinLength,
+  hasLowercase,
+  hasUppercase,
+  hasNumber,
+  hasSymbol,
+}) => {
+  if (isPasswordValid) {
+    return null;
+  }
+
+  return (
+    <div className="password-requirements">
+      <div className="password-requirements-title">
+        Password must:
+      </div>
+      <ul className="password-requirements-list">
+        <li
+          className={`password-requirement ${
+            hasOnlyAllowedChars ? "ok" : "fail"
+          }`}
+        >
+          <span className="password-requirement-icon">
+            {hasOnlyAllowedChars ? "✔" : "✖"}
+          </span>
+          <span>
+            Use only letters, numbers, and these symbols: @ $ ! % * ? &
+          </span>
+        </li>
+        <li
+          className={`password-requirement ${
+            hasMinLength ? "ok" : "fail"
+          }`}
+        >
+          <span className="password-requirement-icon">
+            {hasMinLength ? "✔" : "✖"}
+          </span>
+          <span>Be at least 8 characters</span>
+        </li>
+        <li
+          className={`password-requirement ${
+            hasLowercase ? "ok" : "fail"
+          }`}
+        >
+          <span className="password-requirement-icon">
+            {hasLowercase ? "✔" : "✖"}
+          </span>
+          <span>Have at least one lower case character</span>
+        </li>
+        <li
+          className={`password-requirement ${
+            hasUppercase ? "ok" : "fail"
+          }`}
+        >
+          <span className="password-requirement-icon">
+            {hasUppercase ? "✔" : "✖"}
+          </span>
+          <span>Have at least one capital letter</span>
+        </li>
+        <li
+          className={`password-requirement ${
+            hasNumber ? "ok" : "fail"
+          }`}
+        >
+          <span className="password-requirement-icon">
+            {hasNumber ? "✔" : "✖"}
+          </span>
+          <span>Have at least one number</span>
+        </li>
+        <li
+          className={`password-requirement ${
+            hasSymbol ? "ok" : "fail"
+          }`}
+        >
+          <span className="password-requirement-icon">
+            {hasSymbol ? "✔" : "✖"}
+          </span>
+          <span>Have at least one symbol (@ $ ! % * ? &)</span>
+        </li>
+      </ul>
+    </div>
+  );
+};
+
 export function SignUp({ onSignUpSuccess, onSwitchToSignIn }: Readonly<SignUpProps>) {
   const { signUp } = useAuth();
   const [formData, setFormData] = useState<SignUpCredentials>({
@@ -284,76 +380,15 @@ export function SignUp({ onSignUpSuccess, onSwitchToSignIn }: Readonly<SignUpPro
                       {passwordStrengthLabel(passwordScore)}
                     </div>
 
-                    {/* PASSWORD REQUIREMENTS CHECKLIST (shows only while not valid) */}
-                    {!isPasswordValid && (
-                        <div className="password-requirements">
-                          <div className="password-requirements-title">
-                            Password must:
-                          </div>
-                          <ul className="password-requirements-list">
-                            <li
-                                className={`password-requirement ${
-                                  hasOnlyAllowedChars ? "ok" : "fail"
-                                }`}
-                            >
-                              <span className="password-requirement-icon">
-                                {hasOnlyAllowedChars ? "✔" : "✖"}
-                              </span>
-                              Use only letters, numbers, and these symbols: @ $ ! % * ? &
-                            </li>
-                            <li
-                                className={`password-requirement ${
-                                  hasMinLength ? "ok" : "fail"
-                                }`}
-                            >
-                              <span className="password-requirement-icon">
-                                {hasMinLength ? "✔" : "✖"}
-                              </span>
-                              Be at least 8 characters
-                            </li>
-                            <li
-                                className={`password-requirement ${
-                                  hasLowercase ? "ok" : "fail"
-                                }`}
-                            >
-                              <span className="password-requirement-icon">
-                                {hasLowercase ? "✔" : "✖"}
-                              </span>
-                              Have at least one lower case character
-                            </li>
-                            <li
-                                className={`password-requirement ${
-                                  hasUppercase ? "ok" : "fail"
-                                }`}
-                            >
-                              <span className="password-requirement-icon">
-                                {hasUppercase ? "✔" : "✖"}
-                              </span>
-                              Have at least one capital letter
-                            </li>
-                            <li
-                                className={`password-requirement ${
-                                  hasNumber ? "ok" : "fail"
-                                }`}
-                            >
-                              <span className="password-requirement-icon">
-                                {hasNumber ? "✔" : "✖"}
-                              </span>
-                              Have at least one number
-                            </li>
-                            <li
-                                className={`password-requirement ${
-                                  hasSymbol ? "ok" : "fail"
-                                }`}
-                            >
-                              <span className="password-requirement-icon">
-                                {hasSymbol ? "✔" : "✖"}
-                              </span>
-                              Have at least one symbol (@ $ ! % * ? &)
-                            </li>
-                          </ul>
-                        </div>
-                    )}
+                    <PasswordRequirements
+                      isPasswordValid={isPasswordValid}
+                      hasOnlyAllowedChars={hasOnlyAllowedChars}
+                      hasMinLength={hasMinLength}
+                      hasLowercase={hasLowercase}
+                      hasUppercase={hasUppercase}
+                      hasNumber={hasNumber}
+                      hasSymbol={hasSymbol}
+                    />
                   </div>
               )}
             </div>
