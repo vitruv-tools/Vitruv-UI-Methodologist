@@ -10,10 +10,12 @@ import { ToastProvider } from './components/ui/ToastProvider';
 // This error doesn't affect functionality - it just means resize observations
 // couldn't all be delivered in a single animation frame
 const resizeObserverError = (e: ErrorEvent) => {
-  if (e.message === 'ResizeObserver loop completed with undelivered notifications.') {
+  if (typeof e.message === 'string' &&
+      e.message.includes('ResizeObserver loop completed with undelivered notifications')) {
     e.stopImmediatePropagation();
   }
 };
+
 globalThis.addEventListener('error', resizeObserverError);
 
 const root = ReactDOM.createRoot(
