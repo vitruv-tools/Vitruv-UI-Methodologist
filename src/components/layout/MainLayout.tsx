@@ -588,7 +588,7 @@ export function MainLayout({
                                 style={{
                                     width: '100%',
                                     height: '100%',
-                                    background: '#ffffff',
+                                    background: '#f7f9fb',
                                     display: 'flex',
                                     flexDirection: 'column',
                                     alignItems: 'center',
@@ -597,32 +597,31 @@ export function MainLayout({
                                 }}
                             >
                                 <div style={{ textAlign: 'center', fontFamily: 'Georgia, serif', color: '#2c3e50', maxWidth: 600 }}>
-                                    <div
+                                    <img
+                                        src="/assets/vitruvius1.png"
+                                        alt="Vitruvius"
+                                        draggable={false}
+                                        onDragStart={(e) => e.preventDefault()}
                                         style={{
-                                            width: 200,
-                                            height: 200,
-                                            margin: '0 auto 30px',
-                                            overflow: 'hidden',
-                                            borderRadius: 8,
-                                            position: 'relative',
+                                            width: 315,
+                                            height: 315,
+                                            objectFit: 'contain',
+                                            display: 'block',
+                                            margin: '0 auto 16px auto',
+                                            pointerEvents: 'none',
+                                            userSelect: 'none',
+                                        }}
+                                    />
+                                    <p
+                                        style={{
+                                            margin: '0 0 20px 0',
+                                            fontSize: 28,
+                                            fontWeight: 700,
+                                            color: '#2c3e50',
+                                            letterSpacing: 0.3,
+                                            lineHeight: 1.3,
                                         }}
                                     >
-                                        <img
-                                            src="/assets/vitruvius1.png"
-                                            alt="Vitruvius"
-                                            draggable={false}
-                                            onDragStart={(e) => e.preventDefault()}
-                                            style={{
-                                                display: 'block',
-                                                width: '100%',
-                                                height: '100%',
-                                                objectFit: 'contain',
-                                                pointerEvents: 'none',
-                                                userSelect: 'none',
-                                            }}
-                                        />
-                                    </div>
-                                    <p style={{ margin: '0 0 20px 0', fontSize: 16, color: '#6b7280', lineHeight: 1.6 }}>
                                         {welcomeTitle || 'Methodological Dashboard'}
                                     </p>
                                     {welcomeSubtitle && (

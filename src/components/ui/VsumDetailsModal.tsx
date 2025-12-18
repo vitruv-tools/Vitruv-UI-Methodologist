@@ -14,7 +14,13 @@ interface Props {
 const overlay: React.CSSProperties = {
   position: 'fixed',
   inset: 0,
-  background: 'rgba(0,0,0,0.35)',
+  // Dim + blur the entire page behind the modal
+  background: 'rgba(0,0,0,0.5)',
+  backdropFilter: 'blur(3px)',
+  width: '100%',
+  height: '100%',
+  margin: 0,
+  padding: 0,
   display: 'flex',
   alignItems: 'center',
   justifyContent: 'center',
@@ -26,6 +32,8 @@ const dialog: React.CSSProperties = {
   maxHeight: '90vh',
   background: '#fff',
   borderRadius: 12,
+  // Add a subtle dark edge so the white card is clearly visible on white background
+  border: '1px solid #111827',
   boxShadow: '0 10px 30px rgba(0,0,0,0.25)',
   overflow: 'hidden',
   display: 'flex',
@@ -98,6 +106,7 @@ export const VsumDetailsModal: React.FC<Props> = ({ isOpen, vsumId, onClose, onS
   const [versions, setVersions] = useState<Array<{ id: number; createdAt: string }>>([]);
   const [recovering, setRecovering] = useState(false);
   const [recoverError, setRecoverError] = useState('');
+  const [selectedVersionId, setSelectedVersionId] = useState<number | null>(null);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -132,9 +141,15 @@ export const VsumDetailsModal: React.FC<Props> = ({ isOpen, vsumId, onClose, onS
     const loadVersions = async () => {
       setVersionsLoading(true);
       setVersionsError('');
+      setSelectedVersionId(null);
       try {
         const res = await apiService.getVsumVersions(vsumId);
-        setVersions(res.data || []);
+        const data = res.data || [];
+        setVersions(data);
+        if (data.length > 0) {
+          // By default, preselect the most recent version (first in list)
+          setSelectedVersionId(data[0].id);
+        }
       } catch (e: any) {
         setVersionsError(e?.message || 'Failed to load versions');
       } finally {
@@ -235,6 +250,11 @@ export const VsumDetailsModal: React.FC<Props> = ({ isOpen, vsumId, onClose, onS
   };
 
   const renderVersionsContent = () => {
+    const selectedVersion =
+      selectedVersionId != null
+        ? versions.find((v) => v.id === selectedVersionId) || null
+        : null;
+
     if (versionsLoading) {
       return (
         <div style={{ fontStyle: 'italic', color: '#6c757d' }}>
@@ -270,62 +290,174 @@ export const VsumDetailsModal: React.FC<Props> = ({ isOpen, vsumId, onClose, onS
     }
 
     return (
-      <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-        <thead>
-          <tr>
-            <th
-              style={{
-                border: '1px solid #e9ecef',
-                padding: 8,
-                textAlign: 'left',
-                fontSize: 12,
-              }}
-            >
-              #
-            </th>
-            <th
-              style={{
-                border: '1px solid #e9ecef',
-                padding: 8,
-                textAlign: 'left',
-                fontSize: 12,
-              }}
-            >
-              Versions
-            </th>
-          </tr>
-        </thead>
-        <tbody>
-          {versions.map((v, index) => (
-            <tr key={v.id}>
-              <td
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+        <div
+          style={{
+            padding: 10,
+            borderRadius: 8,
+            border: '1px solid #e5e7eb',
+            background: '#f9fafb',
+            fontSize: 12,
+            color: '#4b5563',
+          }}
+        >
+          <strong style={{ color: '#111827' }}>Version history</strong>
+          <div>
+            Browse all saved versions of this vSUM. Select a row to quickly move back in time
+            and understand how the model evolved.
+          </div>
+        </div>
+
+        <div
+          style={{
+            borderRadius: 8,
+            border: '1px solid #e5e7eb',
+            overflow: 'hidden',
+          }}
+        >
+          <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+            <thead>
+            <tr style={{ background: '#f3f4f6' }}>
+              <th
                 style={{
-                  border: '1px solid #e9ecef',
                   padding: 8,
-                  fontSize: 13,
+                  textAlign: 'left',
+                  fontSize: 12,
+                  color: '#6b7280',
+                  borderBottom: '1px solid #e5e7eb',
+                  width: 80,
                 }}
               >
-                {index + 1}
-              </td>
-              <td
+                Version #
+              </th>
+              <th
                 style={{
-                  border: '1px solid #e9ecef',
                   padding: 8,
-                  fontSize: 13,
+                  textAlign: 'left',
+                  fontSize: 12,
+                  color: '#6b7280',
+                  borderBottom: '1px solid #e5e7eb',
                 }}
               >
-                {new Date(v.createdAt).toLocaleString([], {
-                  hour: '2-digit',
-                  minute: '2-digit',
-                  year: 'numeric',
-                  month: '2-digit',
-                  day: '2-digit',
-                })}
-              </td>
+                Created at
+              </th>
+              <th
+                style={{
+                  padding: 8,
+                  textAlign: 'left',
+                  fontSize: 12,
+                  color: '#6b7280',
+                  borderBottom: '1px solid #e5e7eb',
+                  width: 120,
+                }}
+              >
+                Selection
+              </th>
             </tr>
-          ))}
-        </tbody>
-      </table>
+            </thead>
+            <tbody>
+            {versions.map((v, index) => {
+              const isSelected = v.id === selectedVersionId;
+              const isMostRecent = index === 0;
+              return (
+                <tr
+                  key={v.id}
+                  onClick={() => setSelectedVersionId(v.id)}
+                  style={{
+                    cursor: 'pointer',
+                    background: isSelected ? '#eff6ff' : '#ffffff',
+                    transition: 'background 0.12s ease-in-out',
+                  }}
+                >
+                  <td
+                    style={{
+                      padding: 8,
+                      fontSize: 13,
+                      borderTop: '1px solid #e5e7eb',
+                      whiteSpace: 'nowrap',
+                    }}
+                  >
+                    <span style={{ fontWeight: 600 }}>v{versions.length - index}</span>
+                    {isMostRecent && (
+                      <span
+                        style={{
+                          marginLeft: 6,
+                          padding: '2px 6px',
+                          borderRadius: 999,
+                          background: '#dcfce7',
+                          color: '#15803d',
+                          fontSize: 10,
+                          fontWeight: 700,
+                          textTransform: 'uppercase',
+                        }}
+                      >
+                        Current
+                      </span>
+                    )}
+                  </td>
+                  <td
+                    style={{
+                      padding: 8,
+                      fontSize: 13,
+                      borderTop: '1px solid #e5e7eb',
+                    }}
+                  >
+                    {new Date(v.createdAt).toLocaleString([], {
+                      hour: '2-digit',
+                      minute: '2-digit',
+                      year: 'numeric',
+                      month: '2-digit',
+                      day: '2-digit',
+                    })}
+                  </td>
+                  <td
+                    style={{
+                      padding: 8,
+                      fontSize: 13,
+                      borderTop: '1px solid #e5e7eb',
+                    }}
+                  >
+                    <button
+                      type="button"
+                      style={{
+                        padding: '4px 10px',
+                        borderRadius: 999,
+                        border: isSelected ? '1px solid #2563eb' : '1px solid #d1d5db',
+                        background: isSelected ? '#2563eb' : '#ffffff',
+                        color: isSelected ? '#ffffff' : '#374151',
+                        fontSize: 11,
+                        fontWeight: 600,
+                        cursor: 'pointer',
+                      }}
+                    >
+                      {isSelected ? 'Selected' : 'Select'}
+                    </button>
+                  </td>
+                </tr>
+              );
+            })}
+            </tbody>
+          </table>
+        </div>
+
+        {selectedVersion && (
+          <div
+            style={{
+              marginTop: 4,
+              padding: 10,
+              borderRadius: 8,
+              background: '#f9fafb',
+              border: '1px dashed #d1d5db',
+              fontSize: 12,
+              color: '#4b5563',
+            }}
+          >
+            <div style={{ fontWeight: 700, color: '#111827', marginBottom: 4 }}>
+              You are looking at version v{versions.length - versions.indexOf(selectedVersion)}.
+            </div>
+          </div>
+        )}
+      </div>
     );
   };
 

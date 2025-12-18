@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { CreateModelModal } from './CreateModelModal';
+import { EditMetaModelModal } from './EditMetaModelModal';
 import { apiService } from '../../services/api';
 
 interface ToolsPanelProps {
@@ -423,6 +424,7 @@ export const ToolsPanel: React.FC<ToolsPanelProps> = ({ onEcoreFileUpload, onEco
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [deleteError, setDeleteError] = useState<string>('');
   const [viewModel, setViewModel] = useState<any>(null);
+  const [editingModel, setEditingModel] = useState<any | null>(null);
   const [showAllModels, setShowAllModels] = useState(false);
 
   const handleSearchKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
@@ -636,6 +638,7 @@ export const ToolsPanel: React.FC<ToolsPanelProps> = ({ onEcoreFileUpload, onEco
   };
 
   const panelStyle: React.CSSProperties = { ...toolsPanelStyle, borderRight: showBorder ? toolsPanelStyle.borderRight : 'none' };
+  const canEditCurrentList = !showAllModels;
 
   const handleDeleteClick = (id: string) => {
     setDeletingId(id);
@@ -1009,29 +1012,31 @@ return (
                   </span>
                 </>
               )}
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  handleDeleteClick(model.id);
-                }}
-                style={{
-                  padding: '4px 8px',
-                  border: '1px solid #dee2e6',
-                  borderRadius: 6,
-                  background: '#fff',
-                  cursor: 'pointer',
-                  fontSize: 'clamp(10px, 1.8vw, 12px)',
-                  fontWeight: 600,
-                  color: '#e03131',
-                  marginLeft: 'auto',
-                  minWidth: 'fit-content',
-                  whiteSpace: 'nowrap',
-                  flexShrink: 0
-                }}
-                title="Delete this meta model"
-              >
-                Delete
-              </button>
+              {canEditCurrentList && (
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleDeleteClick(model.id);
+                  }}
+                  style={{
+                    padding: '4px 8px',
+                    border: '1px solid #dee2e6',
+                    borderRadius: 6,
+                    background: '#fff',
+                    cursor: 'pointer',
+                    fontSize: 'clamp(10px, 1.8vw, 12px)',
+                    fontWeight: 600,
+                    color: '#e03131',
+                    marginLeft: 'auto',
+                    minWidth: 'fit-content',
+                    whiteSpace: 'nowrap',
+                    flexShrink: 0
+                  }}
+                  title="Delete this meta model"
+                >
+                  Delete
+                </button>
+              )}
             </div>
             {expandedCard === model.id && (
               <>
@@ -1092,7 +1097,13 @@ return (
                 userSelect: 'text',
                 position: 'fixed',
                 inset: 0,
-                background: 'rgba(0,0,0,0.35)',
+                // Full-page dim + blur, same as other modals
+                background: 'rgba(0,0,0,0.5)',
+                backdropFilter: 'blur(3px)',
+                width: '100%',
+                height: '100%',
+                margin: 0,
+                padding: 0,
                 zIndex: 9998,
                 display: 'flex',
                 alignItems: 'center',
@@ -1108,6 +1119,7 @@ return (
                   maxWidth: 520,
                   width: '90%',
                   fontFamily: 'Georgia, serif',
+                  border: '1px solid #111827',
                 }}
             >
               <div
@@ -1216,6 +1228,26 @@ return (
                     >
                       Load into workspace
                     </button>
+                )}
+                {canEditCurrentList && (
+                  <button
+                      onClick={() => {
+                        setEditingModel(viewModel);
+                        setViewModel(null);
+                      }}
+                      style={{
+                        padding: '8px 14px',
+                        borderRadius: 6,
+                        border: '1px solid #2563eb',
+                        background: '#2563eb',
+                        color: '#ffffff',
+                        fontSize: 13,
+                        fontWeight: 600,
+                        cursor: 'pointer',
+                      }}
+                  >
+                    Edit
+                  </button>
                 )}
                 <button
                     onClick={() => setViewModel(null)}
@@ -1425,6 +1457,26 @@ return (
             </div>
           </div>
         </div>
+      )}
+
+      {editingModel && (
+        <EditMetaModelModal
+          isOpen={!!editingModel}
+          model={editingModel}
+          onClose={() => setEditingModel(null)}
+          onSuccess={(updated) => {
+            (async () => {
+              try {
+                const filters = buildApiFiltersFromParsedFilters(parsedFilters, true);
+                const response = await apiService.findMetaModels(filters);
+                setApiModels(response.data || []);
+                setViewModel((prev: any) => (prev && prev.id === updated.id ? updated : prev));
+              } catch (error) {
+                setApiError(error instanceof Error ? error.message : 'Failed to fetch meta models');
+              }
+            })();
+          }}
+        />
       )}
     </div>
   );

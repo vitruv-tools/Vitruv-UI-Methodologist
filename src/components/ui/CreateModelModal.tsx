@@ -50,7 +50,8 @@ const modalStyle: React.CSSProperties = {
   maxHeight: '85vh',
   overflow: 'auto',
   boxShadow: '0 20px 40px rgba(0, 0, 0, 0.2)',
-  border: '1px solid #d1ecf1',
+  // Consistent dark edge so the modal stands out on white background
+  border: '1px solid #111827',
   fontFamily: 'Georgia, serif',
 };
 
