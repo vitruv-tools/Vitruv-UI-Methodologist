@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import { apiService } from '../../services/api';
 import {
   modalOverlayStyle,
@@ -7,9 +7,6 @@ import {
   inputStyle,
   errorMessageStyle,
   successMessageStyle,
-  fileInputStyle,
-  progressBarContainerStyle,
-  progressBarStyle,
 } from './sharedStyles';
 
 export interface MetaModel {
@@ -18,8 +15,6 @@ export interface MetaModel {
   description?: string;
   domain?: string;
   keyword?: string[];
-  ecoreFileId?: number;
-  genModelFileId?: number;
 }
 
 interface EditMetaModelModalProps {
@@ -115,21 +110,6 @@ export const EditMetaModelModal: React.FC<EditMetaModelModalProps> = ({
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
-  
-  // File upload state
-  const [uploadedFileIds, setUploadedFileIds] = useState({
-    ecoreFileId: 0,
-    genModelFileId: 0,
-  });
-  const [uploadProgress, setUploadProgress] = useState({
-    ecore: { progress: 0, isUploading: false },
-    genmodel: { progress: 0, isUploading: false }
-  });
-  
-  const ecoreFileInputRef = useRef<HTMLInputElement>(null);
-  const genmodelFileInputRef = useRef<HTMLInputElement>(null);
-  const ecoreProgressIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const genmodelProgressIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   useEffect(() => {
     if (isOpen && model) {
@@ -137,31 +117,11 @@ export const EditMetaModelModal: React.FC<EditMetaModelModalProps> = ({
       setDescription(model.description || '');
       setDomain(model.domain || '');
       setKeywords(Array.isArray(model.keyword) ? model.keyword : []);
-      setUploadedFileIds({
-        ecoreFileId: model.ecoreFileId || 0,
-        genModelFileId: model.genModelFileId || 0,
-      });
       setError('');
       setSuccess('');
       setIsSaving(false);
-      setUploadProgress({
-        ecore: { progress: 0, isUploading: false },
-        genmodel: { progress: 0, isUploading: false }
-      });
     }
   }, [isOpen, model]);
-
-  // Cleanup intervals on unmount
-  useEffect(() => {
-    return () => {
-      if (ecoreProgressIntervalRef.current) {
-        clearInterval(ecoreProgressIntervalRef.current);
-      }
-      if (genmodelProgressIntervalRef.current) {
-        clearInterval(genmodelProgressIntervalRef.current);
-      }
-    };
-  }, []);
 
   if (!isOpen || !model) return null;
 
@@ -172,126 +132,6 @@ export const EditMetaModelModal: React.FC<EditMetaModelModalProps> = ({
     keywords.length > 0 &&
     !isSaving;
 
-  // Helper to extract file ID from response
-  const extractFileId = (rawData: any): number => {
-    let fileId = (rawData && typeof rawData === 'object' && 'id' in rawData)
-        ? Number(rawData.id)
-        : Number(rawData);
-    if (!Number.isFinite(fileId)) fileId = 0;
-    return fileId;
-  };
-
-  // Helper to sanitize file names for display
-  const sanitizeFileName = (fileName: string): string => {
-    return fileName.replace(/[<>:"/\\|?*]/g, '');
-  };
-
-  const handleEcoreFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (!file) return;
-
-    if (!file.name.endsWith('.ecore')) {
-      setError('Please select a valid .ecore file');
-      return;
-    }
-
-    setUploadProgress(prev => ({ ...prev, ecore: { progress: 0, isUploading: true } }));
-    setError('');
-
-    try {
-      if (ecoreProgressIntervalRef.current) clearInterval(ecoreProgressIntervalRef.current);
-      ecoreProgressIntervalRef.current = globalThis.setInterval(() => {
-        setUploadProgress(prev => ({
-          ...prev,
-          ecore: {
-            progress: Math.min(prev.ecore.progress + 15, 90),
-            isUploading: true
-          }
-        }));
-      }, 200);
-
-      const response = await apiService.uploadFile(file, 'ECORE');
-
-      if (ecoreProgressIntervalRef.current) {
-        clearInterval(ecoreProgressIntervalRef.current);
-        ecoreProgressIntervalRef.current = null;
-      }
-
-      setUploadProgress(prev => ({ ...prev, ecore: { progress: 100, isUploading: false } }));
-
-      const fileId = extractFileId(response);
-      setUploadedFileIds(prev => ({ ...prev, ecoreFileId: fileId }));
-      setSuccess(`Successfully uploaded ${sanitizeFileName(file.name)}`);
-      
-      setTimeout(() => setSuccess(''), 3000);
-      setTimeout(() => {
-        setUploadProgress(prev => ({ ...prev, ecore: { progress: 0, isUploading: false } }));
-      }, 2000);
-    } catch (err) {
-      setError(`${err instanceof Error ? err.message : 'Unknown error'}`);
-      setUploadProgress(prev => ({ ...prev, ecore: { progress: 0, isUploading: false } }));
-      if (ecoreProgressIntervalRef.current) {
-        clearInterval(ecoreProgressIntervalRef.current);
-        ecoreProgressIntervalRef.current = null;
-      }
-    }
-
-    event.target.value = '';
-  };
-
-  const handleGenmodelFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (!file) return;
-
-    if (!file.name.endsWith('.genmodel')) {
-      setError('Please select a valid .genmodel file');
-      return;
-    }
-
-    setUploadProgress(prev => ({ ...prev, genmodel: { progress: 0, isUploading: true } }));
-    setError('');
-
-    try {
-      if (genmodelProgressIntervalRef.current) clearInterval(genmodelProgressIntervalRef.current);
-      genmodelProgressIntervalRef.current = globalThis.setInterval(() => {
-        setUploadProgress(prev => ({
-          ...prev,
-          genmodel: {
-            progress: Math.min(prev.genmodel.progress + 15, 90),
-            isUploading: true
-          }
-        }));
-      }, 200);
-
-      const response = await apiService.uploadFile(file, 'GEN_MODEL');
-
-      if (genmodelProgressIntervalRef.current) {
-        clearInterval(genmodelProgressIntervalRef.current);
-        genmodelProgressIntervalRef.current = null;
-      }
-
-      setUploadProgress(prev => ({ ...prev, genmodel: { progress: 100, isUploading: false } }));
-
-      const fileId = extractFileId(response);
-      setUploadedFileIds(prev => ({ ...prev, genModelFileId: fileId }));
-      setSuccess(`Successfully uploaded ${sanitizeFileName(file.name)}`);
-      
-      setTimeout(() => setSuccess(''), 3000);
-      setTimeout(() => {
-        setUploadProgress(prev => ({ ...prev, genmodel: { progress: 0, isUploading: false } }));
-      }, 2000);
-    } catch (err) {
-      setError(`Error uploading ${sanitizeFileName(file.name)}: ${err instanceof Error ? err.message : 'Unknown error'}`);
-      setUploadProgress(prev => ({ ...prev, genmodel: { progress: 0, isUploading: false } }));
-      if (genmodelProgressIntervalRef.current) {
-        clearInterval(genmodelProgressIntervalRef.current);
-        genmodelProgressIntervalRef.current = null;
-      }
-    }
-
-    event.target.value = '';
-  };
-
   const handleSave = async () => {
     if (!canSave) return;
 
@@ -300,28 +140,12 @@ export const EditMetaModelModal: React.FC<EditMetaModelModalProps> = ({
     setSuccess('');
 
     try {
-      const payload: {
-        name: string;
-        description: string;
-        domain: string;
-        keyword: string[];
-        ecoreFileId?: number;
-        genModelFileId?: number;
-      } = {
+      const payload = {
         name: name.trim(),
         description: description.trim(),
         domain: domain.trim(),
         keyword: keywords,
       };
-
-      // Include file IDs if they exist (either from existing model or newly uploaded)
-      if (uploadedFileIds.ecoreFileId > 0) {
-        payload.ecoreFileId = uploadedFileIds.ecoreFileId;
-      }
-      if (uploadedFileIds.genModelFileId > 0) {
-        payload.genModelFileId = uploadedFileIds.genModelFileId;
-      }
-
       const response = await apiService.updateMetaModel(String(model.id), payload);
       setSuccess('Meta Model updated successfully.');
       onSuccess?.(response.data);
@@ -423,80 +247,6 @@ export const EditMetaModelModal: React.FC<EditMetaModelModalProps> = ({
           </div>
         </div>
 
-        <div style={formGroupStyle}>
-          <label style={labelStyle}>Files (Optional - upload new files to replace existing ones)</label>
-          
-          <div style={{ marginBottom: '12px' }}>
-            <label
-              htmlFor="edit-mm-ecore-file"
-              style={{
-                ...primaryButtonStyle,
-                display: 'inline-block',
-                padding: '8px 16px',
-                cursor: 'pointer',
-                fontSize: '13px',
-              }}
-            >
-              {uploadedFileIds.ecoreFileId > 0 && !uploadProgress.ecore.isUploading
-                ? 'Replace .ecore File'
-                : 'Upload .ecore File'}
-            </label>
-            <input
-              ref={ecoreFileInputRef}
-              id="edit-mm-ecore-file"
-              type="file"
-              accept=".ecore"
-              onChange={handleEcoreFileUpload}
-              style={fileInputStyle}
-            />
-            {uploadProgress.ecore.isUploading && (
-              <div style={{ ...progressBarContainerStyle, marginTop: 8 }}>
-                <div style={{ ...progressBarStyle, width: `${uploadProgress.ecore.progress}%` }} />
-              </div>
-            )}
-            {uploadedFileIds.ecoreFileId > 0 && !uploadProgress.ecore.isUploading && (
-              <div style={{ fontSize: 11, color: '#6b7280', marginTop: 4, fontStyle: 'italic' }}>
-                .ecore file ID: {uploadedFileIds.ecoreFileId}
-              </div>
-            )}
-          </div>
-
-          <div>
-            <label
-              htmlFor="edit-mm-genmodel-file"
-              style={{
-                ...primaryButtonStyle,
-                display: 'inline-block',
-                padding: '8px 16px',
-                cursor: 'pointer',
-                fontSize: '13px',
-              }}
-            >
-              {uploadedFileIds.genModelFileId > 0 && !uploadProgress.genmodel.isUploading
-                ? 'Replace .genmodel File'
-                : 'Upload .genmodel File'}
-            </label>
-            <input
-              ref={genmodelFileInputRef}
-              id="edit-mm-genmodel-file"
-              type="file"
-              accept=".genmodel"
-              onChange={handleGenmodelFileUpload}
-              style={fileInputStyle}
-            />
-            {uploadProgress.genmodel.isUploading && (
-              <div style={{ ...progressBarContainerStyle, marginTop: 8 }}>
-                <div style={{ ...progressBarStyle, width: `${uploadProgress.genmodel.progress}%` }} />
-              </div>
-            )}
-            {uploadedFileIds.genModelFileId > 0 && !uploadProgress.genmodel.isUploading && (
-              <div style={{ fontSize: 11, color: '#6b7280', marginTop: 4, fontStyle: 'italic' }}>
-                .genmodel file ID: {uploadedFileIds.genModelFileId}
-              </div>
-            )}
-          </div>
-        </div>
-
         <div style={footerStyle}>
           <button style={secondaryButtonStyle} onClick={onClose} disabled={isSaving}>
             Cancel
@@ -517,5 +267,3 @@ export const EditMetaModelModal: React.FC<EditMetaModelModalProps> = ({
     </dialog>
   );
 };
-
-
