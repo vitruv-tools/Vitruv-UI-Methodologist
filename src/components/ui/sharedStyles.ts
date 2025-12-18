@@ -8,7 +8,13 @@ export const modalOverlayStyle: React.CSSProperties = {
   left: 0,
   right: 0,
   bottom: 0,
+  // Dim + blur the entire page when a modal is open
   background: 'rgba(0, 0, 0, 0.5)',
+  backdropFilter: 'blur(3px)',
+  width: '100%',
+  height: '100%',
+  margin: 0,
+  padding: 0,
   display: 'flex',
   alignItems: 'center',
   justifyContent: 'center',
