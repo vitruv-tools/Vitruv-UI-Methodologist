@@ -9,11 +9,19 @@ import {
   successMessageStyle,
 } from './sharedStyles';
 
+export interface MetaModel {
+  id: string | number;
+  name: string;
+  description?: string;
+  domain?: string;
+  keyword?: string[];
+}
+
 interface EditMetaModelModalProps {
   isOpen: boolean;
-  model: any | null;
+  model: MetaModel | null;
   onClose: () => void;
-  onSuccess?: (model: any) => void;
+  onSuccess?: (model: MetaModel) => void;
 }
 
 const modalStyle: React.CSSProperties = {
@@ -152,11 +160,18 @@ export const EditMetaModelModal: React.FC<EditMetaModelModalProps> = ({
   };
 
   return (
+    // eslint-disable-next-line jsx-a11y/no-noninteractive-element-interactions
     <dialog
       open
       style={modalOverlayStyle}
       onClose={onClose}
       onCancel={onClose}
+      onKeyDown={(e) => {
+        if (e.key === 'Escape') {
+          e.stopPropagation();
+          onClose();
+        }
+      }}
       onClick={(e) => {
         if (e.target === e.currentTarget) onClose();
       }}
@@ -211,8 +226,9 @@ export const EditMetaModelModal: React.FC<EditMetaModelModalProps> = ({
         </div>
 
         <div style={formGroupStyle}>
-          <label style={labelStyle}>Keywords *</label>
+          <label htmlFor="edit-mm-keywords" style={labelStyle}>Keywords *</label>
           <input
+            id="edit-mm-keywords"
             type="text"
             placeholder="Comma separated keywords"
             value={keywords.join(', ')}

@@ -250,10 +250,7 @@ export const VsumDetailsModal: React.FC<Props> = ({ isOpen, vsumId, onClose, onS
   };
 
   const renderVersionsContent = () => {
-    const selectedVersion =
-      selectedVersionId != null
-        ? versions.find((v) => v.id === selectedVersionId) || null
-        : null;
+    const selectedVersion = versions.find((v) => v.id === selectedVersionId) ?? null;
 
     if (versionsLoading) {
       return (
