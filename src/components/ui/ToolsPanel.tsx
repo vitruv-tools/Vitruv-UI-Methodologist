@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { CreateModelModal } from './CreateModelModal';
-import { EditMetaModelModal } from './EditMetaModelModal';
+import { EditMetaModelModal, type MetaModel } from './EditMetaModelModal';
 import { apiService } from '../../services/api';
 
 interface ToolsPanelProps {
@@ -423,8 +423,8 @@ export const ToolsPanel: React.FC<ToolsPanelProps> = ({ onEcoreFileUpload, onEco
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [deleteError, setDeleteError] = useState<string>('');
-  const [viewModel, setViewModel] = useState<any>(null);
-  const [editingModel, setEditingModel] = useState<any | null>(null);
+  const [viewModel, setViewModel] = useState<(MetaModel & { createdAt?: string; updatedAt?: string }) | null>(null);
+  const [editingModel, setEditingModel] = useState<MetaModel | null>(null);
   const [showAllModels, setShowAllModels] = useState(false);
 
   const handleSearchKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
