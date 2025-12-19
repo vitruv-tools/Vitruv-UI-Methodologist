@@ -16,7 +16,7 @@ const calculatePasswordStrength = (password: string): number => {
   if (/[A-Z]/.test(password)) score++;
   if (/[a-z]/.test(password)) score++;
   if (/\d/.test(password)) score++;
-  if (/[@$!%*?&]/.test(password)) score++;
+  if (/[@$!%?&]/.test(password)) score++;
 
   return score; // 0–5
 };
@@ -95,7 +95,7 @@ const PasswordRequirements: React.FC<PasswordRequirementsProps> = ({
             {hasOnlyAllowedChars ? "✔" : "✖"}
           </span>
           <span>
-            Use only letters, numbers, and these symbols: @ $ ! % * ? &
+            Use only letters, numbers, and these symbols: @ $ ! % ? &
           </span>
         </li>
         <li
@@ -146,7 +146,7 @@ const PasswordRequirements: React.FC<PasswordRequirementsProps> = ({
           <span className="password-requirement-icon">
             {hasSymbol ? "✔" : "✖"}
           </span>
-          <span>Have at least one symbol (@ $ ! % * ? &)</span>
+          <span>Have at least one symbol (@ $ ! % ? &)</span>
         </li>
       </ul>
     </div>
@@ -176,9 +176,9 @@ export function SignUp({ onSignUpSuccess, onSwitchToSignIn }: Readonly<SignUpPro
   const hasUppercase = /[A-Z]/.test(formData.password);
   const hasLowercase = /[a-z]/.test(formData.password);
   const hasNumber = /\d/.test(formData.password);
-  const hasSymbol = /[@$!%*?&]/.test(formData.password);
+  const hasSymbol = /[@$!%?&]/.test(formData.password);
   const hasOnlyAllowedChars =
-    formData.password === '' || /^[A-Za-z0-9@$!%*?&]+$/.test(formData.password);
+    formData.password === '' || /^[A-Za-z0-9@$!%?&]+$/.test(formData.password);
 
   const isPasswordValid =
     hasMinLength &&
