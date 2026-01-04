@@ -22,9 +22,10 @@
     "web-vitals": "^2.1.4"
   },
   "scripts": {
-    "start": "react-scripts start",
-    "build": "react-scripts build",
-    "test": "react-scripts test",
+    "start:remote": "env-cmd -e remote -- react-scripts start",
+    "start:local": "env-cmd -e local -- react-scripts start",
+    "build": "env-cmd -e remote -- react-scripts build",
+    "test": "env-cmd -e remote -- react-scripts test",
     "eject": "react-scripts eject"
   },
   "eslintConfig": {
@@ -44,5 +45,8 @@
       "last 1 firefox version",
       "last 1 safari version"
     ]
+  },
+  "devDependencies": {
+    "env-cmd": "^11.0.0"
   }
 }

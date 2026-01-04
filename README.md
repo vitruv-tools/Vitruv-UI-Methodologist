@@ -52,7 +52,7 @@ For detailed architecture documentation, see [ARCHITECTURE.md](./ARCHITECTURE.md
 
 3. **Start the development server**
    ```bash
-   npm start
+   npm start:remote
    ```
 
 4. **Open your browser**
@@ -60,7 +60,8 @@ For detailed architecture documentation, see [ARCHITECTURE.md](./ARCHITECTURE.md
 
 ## Available Scripts
 
-- **`npm start`** - Runs the app in development mode
+- **`npm start:local`** - Runs the app in development mode with a locally hosted backend
+- **`npm start:remote`** - Runs the app in development mode with a remotely hosted backend
 - **`npm run build`** - Builds the app for production
 - **`npm test`** - Launches the test runner
 - **`npm run eject`** - Ejects from Create React App (one-way operation)

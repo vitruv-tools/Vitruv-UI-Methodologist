@@ -233,9 +233,20 @@ function TokenManagement() {
 ## Configuration
 
 ### Backend URL
-The backend URL is configured in `src/services/auth.ts`:
-```typescript
-private static readonly LOCAL_API_BASE_URL = 'http://fe3ab829-d558-4834-afcf-6ed7ca440ca4.ka.bw-cloud-instance.org:8080';
+The backend URL is configured in .env-cmdrc:
+```json
+{
+    "remote": {
+        "REACT_APP_BACKEND_URL": "http://fe3ab829-d558-4834-afcf-6ed7ca440ca4.ka.bw-cloud-instance.org:8080"
+    },
+    "local": {
+        "REACT_APP_BACKEND_URL": "http://localhost:9811"
+    }
+}
+```
+The environment is selected by the run script, see package.json:
+```sh
+env-cmd -e remote -- react-scripts start
 ```
 
 ### Token Storage
