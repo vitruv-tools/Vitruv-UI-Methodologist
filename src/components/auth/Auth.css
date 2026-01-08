@@ -207,6 +207,78 @@
   font-size: 16px;
 }
 
+/* Password requirements helper */
+.password-requirements {
+  margin-top: 10px;
+  padding: 10px 14px;
+  border-radius: 10px;
+  background: rgba(15, 23, 42, 0.98);
+  border: 1px solid rgba(148, 163, 184, 0.9);
+  box-shadow: 0 10px 25px rgba(15, 23, 42, 0.6);
+  position: relative;
+}
+
+.password-requirements::before {
+  content: '';
+  position: absolute;
+  top: -7px;
+  left: 24px;
+  border-width: 0 7px 7px 7px;
+  border-style: solid;
+  border-color: transparent transparent rgba(15, 23, 42, 0.98) transparent;
+}
+
+.password-requirements-title {
+  font-size: 12px;
+  font-weight: 700;
+  color: #e5e7eb;
+  margin-bottom: 6px;
+}
+
+.password-requirements-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.password-requirement {
+  display: flex;
+  align-items: center;
+  font-size: 12px;
+  margin-bottom: 3px;
+  color: #e5e7eb;
+}
+
+.password-requirement:last-child {
+  margin-bottom: 0;
+}
+
+.password-requirement-icon {
+  width: 16px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  margin-right: 6px;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.password-requirement.ok .password-requirement-icon {
+  color: #22c55e;
+}
+
+.password-requirement.ok {
+  color: #bbf7d0;
+}
+
+.password-requirement.fail .password-requirement-icon {
+  color: #f97373;
+}
+
+.password-requirement.fail {
+  color: #fecaca;
+}
+
 .auth-footer {
   text-align: center;
   margin-top: 12px;

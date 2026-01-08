@@ -16,7 +16,7 @@ const calculatePasswordStrength = (password: string): number => {
   if (/[A-Z]/.test(password)) score++;
   if (/[a-z]/.test(password)) score++;
   if (/\d/.test(password)) score++;
-  if (/[@$!%*?&]/.test(password)) score++;
+  if (/[@$!%?&]/.test(password)) score++;
 
   return score; // 0–5
 };
@@ -57,6 +57,102 @@ const getPasswordBarColor = (score: number): string => {
   }
 };
 
+interface PasswordRequirementsProps {
+  isPasswordValid: boolean;
+  hasOnlyAllowedChars: boolean;
+  hasMinLength: boolean;
+  hasLowercase: boolean;
+  hasUppercase: boolean;
+  hasNumber: boolean;
+  hasSymbol: boolean;
+}
+
+const PasswordRequirements: React.FC<PasswordRequirementsProps> = ({
+  isPasswordValid,
+  hasOnlyAllowedChars,
+  hasMinLength,
+  hasLowercase,
+  hasUppercase,
+  hasNumber,
+  hasSymbol,
+}) => {
+  if (isPasswordValid) {
+    return null;
+  }
+
+  return (
+    <div className="password-requirements">
+      <div className="password-requirements-title">
+        Password must:
+      </div>
+      <ul className="password-requirements-list">
+        <li
+          className={`password-requirement ${
+            hasOnlyAllowedChars ? "ok" : "fail"
+          }`}
+        >
+          <span className="password-requirement-icon">
+            {hasOnlyAllowedChars ? "✔" : "✖"}
+          </span>
+          <span>
+            Use only letters, numbers, and these symbols: @ $ ! % ? &
+          </span>
+        </li>
+        <li
+          className={`password-requirement ${
+            hasMinLength ? "ok" : "fail"
+          }`}
+        >
+          <span className="password-requirement-icon">
+            {hasMinLength ? "✔" : "✖"}
+          </span>
+          <span>Be at least 8 characters</span>
+        </li>
+        <li
+          className={`password-requirement ${
+            hasLowercase ? "ok" : "fail"
+          }`}
+        >
+          <span className="password-requirement-icon">
+            {hasLowercase ? "✔" : "✖"}
+          </span>
+          <span>Have at least one lower case character</span>
+        </li>
+        <li
+          className={`password-requirement ${
+            hasUppercase ? "ok" : "fail"
+          }`}
+        >
+          <span className="password-requirement-icon">
+            {hasUppercase ? "✔" : "✖"}
+          </span>
+          <span>Have at least one capital letter</span>
+        </li>
+        <li
+          className={`password-requirement ${
+            hasNumber ? "ok" : "fail"
+          }`}
+        >
+          <span className="password-requirement-icon">
+            {hasNumber ? "✔" : "✖"}
+          </span>
+          <span>Have at least one number</span>
+        </li>
+        <li
+          className={`password-requirement ${
+            hasSymbol ? "ok" : "fail"
+          }`}
+        >
+          <span className="password-requirement-icon">
+            {hasSymbol ? "✔" : "✖"}
+          </span>
+          <span>Have at least one symbol (@ $ ! % ? &)</span>
+        </li>
+      </ul>
+    </div>
+  );
+};
+
 export function SignUp({ onSignUpSuccess, onSwitchToSignIn }: Readonly<SignUpProps>) {
   const { signUp } = useAuth();
   const [formData, setFormData] = useState<SignUpCredentials>({
@@ -73,8 +169,34 @@ export function SignUp({ onSignUpSuccess, onSwitchToSignIn }: Readonly<SignUpPro
   const [error, setError] = useState<string | null>(null);
 
   const passwordScore = calculatePasswordStrength(formData.password);
-
   const passwordBarColor = getPasswordBarColor(passwordScore);
+
+  // Live password requirement checks for helper UI
+  const hasMinLength = formData.password.length >= 8;
+  const hasUppercase = /[A-Z]/.test(formData.password);
+  const hasLowercase = /[a-z]/.test(formData.password);
+  const hasNumber = /\d/.test(formData.password);
+  const hasSymbol = /[@$!%?&]/.test(formData.password);
+  const hasOnlyAllowedChars =
+    formData.password === '' || /^[A-Za-z0-9@$!%?&]+$/.test(formData.password);
+
+  const isPasswordValid =
+    hasMinLength &&
+    hasUppercase &&
+    hasLowercase &&
+    hasNumber &&
+    hasSymbol &&
+    hasOnlyAllowedChars;
+  const isConfirmValid =
+    !!confirmPassword && confirmPassword === formData.password;
+
+  // Button enabled once all mandatory fields are filled;
+  // validity is still checked on submit with clear error messages.
+  const isFormFilled =
+    !!formData.username &&
+    !!formData.email &&
+    !!formData.password &&
+    !!confirmPassword;
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
@@ -86,33 +208,27 @@ export function SignUp({ onSignUpSuccess, onSwitchToSignIn }: Readonly<SignUpPro
   };
 
   const validateForm = (): boolean => {
-    const { username, email, password } = formData;
+    const { username, email } = formData;
 
     if (!username || username.trim().length < 4) {
-      setError("Username must be at least 4 characters long");
+      setError("Username is too short");
       return false;
     }
 
     if (!email.includes('@')) {
-      setError("Please enter a valid email address");
+      setError("Email is invalid");
       return false;
     }
 
-    const requirements = [];
-
-    if (password.length < 8) requirements.push("• At least 8 characters");
-    if (!/[A-Z]/.test(password)) requirements.push("• One uppercase letter (A–Z)");
-    if (!/[a-z]/.test(password)) requirements.push("• One lowercase letter (a–z)");
-    if (!/\d/.test(password)) requirements.push("• One number (0–9)");
-    if (!/[@$!%*?&]/.test(password)) requirements.push("• One symbol (@ $ ! % * ? &)");
-
-    if (requirements.length > 0) {
-      setError("Password is not strong enough:\n" + requirements.join("\n"));
+    // Password + confirm are enforced by live checklist and disabled button,
+    // but we still show a clear message when user tries to submit.
+    if (!isPasswordValid) {
+      setError("Password does not meet all requirements");
       return false;
     }
 
-    if (password !== confirmPassword) {
-      setError("Passwords do not match");
+    if (!isConfirmValid) {
+      setError("Confirm password is empty or doesn't match");
       return false;
     }
 
@@ -231,7 +347,7 @@ export function SignUp({ onSignUpSuccess, onSwitchToSignIn }: Readonly<SignUpPro
                   required
               />
 
-              {/* PASSWORD STRENGTH METER */}
+              {/* PASSWORD STRENGTH METER + REQUIREMENTS */}
               {formData.password && (
                   <div style={{ marginTop: 6 }}>
                     <div
@@ -263,6 +379,16 @@ export function SignUp({ onSignUpSuccess, onSwitchToSignIn }: Readonly<SignUpPro
                     >
                       {passwordStrengthLabel(passwordScore)}
                     </div>
+
+                    <PasswordRequirements
+                      isPasswordValid={isPasswordValid}
+                      hasOnlyAllowedChars={hasOnlyAllowedChars}
+                      hasMinLength={hasMinLength}
+                      hasLowercase={hasLowercase}
+                      hasUppercase={hasUppercase}
+                      hasNumber={hasNumber}
+                      hasSymbol={hasSymbol}
+                    />
                   </div>
               )}
             </div>
@@ -274,7 +400,10 @@ export function SignUp({ onSignUpSuccess, onSwitchToSignIn }: Readonly<SignUpPro
                   name="confirmPassword"
                   type="password"
                   value={confirmPassword}
-                  onChange={e => setConfirmPassword(e.target.value)}
+                  onChange={e => {
+                    setConfirmPassword(e.target.value);
+                    if (error) setError(null);
+                  }}
                   placeholder="Confirm your password"
                   disabled={isLoading}
                   required
@@ -284,7 +413,7 @@ export function SignUp({ onSignUpSuccess, onSwitchToSignIn }: Readonly<SignUpPro
             <button
                 type="submit"
                 className="auth-button primary"
-                disabled={isLoading}
+                disabled={isLoading || !isFormFilled}
             >
               {isLoading ? "Creating Account..." : "Create Account"}
             </button>
