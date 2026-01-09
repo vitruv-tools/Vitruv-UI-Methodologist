@@ -110,7 +110,7 @@ export const ProjectPage: React.FC = () => {
     };
     globalThis.addEventListener('vitruv.openVsum', handler as EventListener);
     return () => globalThis.removeEventListener('vitruv.openVsum', handler as EventListener);
-  }, [openTabs, openVsumById]);
+  }, [openTabs, openVsumById, showInfo]);
 
   // Close active workspace tab when canvas becomes empty (no boxes)
   useEffect(() => {

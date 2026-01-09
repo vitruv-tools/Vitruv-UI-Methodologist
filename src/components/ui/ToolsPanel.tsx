@@ -139,35 +139,6 @@ const fileCardStyle: React.CSSProperties = {
   boxShadow: '0 2px 6px rgba(0,0,0,0.08)',
 };
 
-const fileCardHoverStyle: React.CSSProperties = {
-  boxShadow: '0 4px 12px rgba(52, 152, 219, 0.15)',
-  transform: 'translateY(-1px)',
-  borderColor: '#3498db',
-  background: '#f8f9ff',
-};
-
-
-const toggleButtonStyle: React.CSSProperties = {
-  flex: '1',
-  padding: '8px 12px',
-  border: '1px solid #dee2e6',
-  borderRadius: '6px',
-  background: '#f8f9fa',
-  color: '#495057',
-  fontSize: '12px',
-  fontWeight: '600',
-  cursor: 'pointer',
-  transition: 'all 0.2s ease',
-  display: 'flex',
-  alignItems: 'center',
-  justifyContent: 'space-between',
-};
-
-const toggleButtonHoverStyle: React.CSSProperties = {
-  background: '#e9ecef',
-  borderColor: '#adb5bd',
-};
-
 const ownershipToggleStyle: React.CSSProperties = {
   padding: '8px 12px',
   border: '1px solid #dee2e6',
@@ -179,44 +150,6 @@ const ownershipToggleStyle: React.CSSProperties = {
   cursor: 'pointer',
   transition: 'all 0.2s ease',
   minWidth: '100px',
-};
-
-const ownershipToggleActiveStyle: React.CSSProperties = {
-  ...ownershipToggleStyle,
-  background: '#3498db',
-  color: '#ffffff',
-  borderColor: '#3498db',
-};
-
-const sortDropdownStyle: React.CSSProperties = {
-  padding: '8px 12px',
-  border: '1px solid #dee2e6',
-  borderRadius: '6px',
-  background: '#ffffff',
-  color: '#495057',
-  fontSize: '12px',
-  fontWeight: '500',
-  cursor: 'pointer',
-  minWidth: '120px',
-};
-
-const fileNameStyle: React.CSSProperties = {
-  fontWeight: '600',
-  color: '#2c3e50',
-  wordBreak: 'break-word',
-  marginBottom: '6px',
-  fontSize: 'clamp(13px, 2.5vw, 15px)',
-  fontFamily: 'Georgia, serif',
-  lineHeight: '1.3',
-  overflowWrap: 'break-word',
-};
-
-const fileMetaStyle: React.CSSProperties = {
-  fontSize: 'clamp(11px, 2vw, 13px)',
-  color: '#5a6c7d',
-  display: 'flex',
-  alignItems: 'center',
-  gap: '6px',
   fontFamily: 'Georgia, serif',
   fontStyle: 'italic',
   flexWrap: 'wrap',
@@ -608,11 +541,6 @@ export const ToolsPanel: React.FC<ToolsPanelProps> = ({ onEcoreFileUpload, onEco
     }
   };
 
-  const handleCardRightClick = (e: React.MouseEvent, modelId: number) => {
-    e.preventDefault();
-    setExpandedCard(expandedCard === modelId ? null : modelId);
-  };
-
   const formatRelativeTime = (isoDate: string) => {
     const date = new Date(isoDate);
     const dateStr = date.toLocaleDateString();
@@ -624,20 +552,7 @@ export const ToolsPanel: React.FC<ToolsPanelProps> = ({ onEcoreFileUpload, onEco
     setShowCreateModal(true);
   };
 
-  const getButtonStyle = () => {
-    if (isProcessing) {
-      return { ...createButtonStyle, ...createButtonActiveStyle, cursor: 'not-allowed' };
-    }
-    return createButtonStyle;
-  };
-
   const panelStyle: React.CSSProperties = { ...toolsPanelStyle, borderRight: showBorder ? toolsPanelStyle.borderRight : 'none' };
-
-  const handleDeleteClick = (id: string) => {
-    setDeletingId(id);
-    setDeleteError('');
-    setDeleteConfirmOpen(true);
-  };
 
   const handleConfirmDelete = async () => {
     if (!deletingId) return;

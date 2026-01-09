@@ -2,7 +2,6 @@ import React, { useState, useEffect } from 'react';
 import ReactDOM from 'react-dom';
 import { apiService } from '../../services/api';
 import { KeywordTagsInput } from './KeywordTagsInput';
-import { useAuth } from '../../contexts/AuthContext';
 import {
   modalOverlayStyle,
   formGroupStyle,
@@ -91,13 +90,6 @@ const buttonHoverStyle: React.CSSProperties = {
   boxShadow: '0 5px 15px rgba(52, 152, 219, 0.2)',
 };
 
-const readOnlyInputStyle: React.CSSProperties = {
-  ...inputStyle,
-  background: '#f8f9fa',
-  color: '#6c757d',
-  cursor: 'not-allowed',
-};
-
 export const EditMetaModelModal: React.FC<EditMetaModelModalProps> = ({
   isOpen,
   onClose,
@@ -105,7 +97,6 @@ export const EditMetaModelModal: React.FC<EditMetaModelModalProps> = ({
   metaModel,
   isOwner,
 }) => {
-  const { user } = useAuth();
   const [formData, setFormData] = useState({
     name: '',
     description: '',
