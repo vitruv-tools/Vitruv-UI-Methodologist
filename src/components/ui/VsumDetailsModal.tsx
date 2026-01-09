@@ -13,12 +13,22 @@ interface Props {
 
 const overlay: React.CSSProperties = {
   position: 'fixed',
-  inset: 0,
-  background: 'rgba(0,0,0,0.35)',
+  top: 0,
+  left: 0,
+  right: 0,
+  bottom: 0,
+  width: '100%',
+  height: '100%',
+  background: 'rgba(0,0,0,0.4)',
+  backdropFilter: 'blur(6px)',
+  WebkitBackdropFilter: 'blur(6px)',
   display: 'flex',
   alignItems: 'center',
   justifyContent: 'center',
   zIndex: 9999,
+  margin: 0,
+  padding: 0,
+  border: 'none',
 };
 const dialog: React.CSSProperties = {
   width: 900,
@@ -48,12 +58,22 @@ const textInput: React.CSSProperties = { width: '100%', padding: '8px 10px', bor
 
 const confirmOverlay: React.CSSProperties = {
   position: 'fixed',
-  inset: 0,
-  background: 'rgba(0,0,0,0.45)',
+  top: 0,
+  left: 0,
+  right: 0,
+  bottom: 0,
+  width: '100%',
+  height: '100%',
+  background: 'rgba(0,0,0,0.4)',
+  backdropFilter: 'blur(6px)',
+  WebkitBackdropFilter: 'blur(6px)',
   display: 'flex',
   alignItems: 'center',
   justifyContent: 'center',
   zIndex: 10000,
+  margin: 0,
+  padding: 0,
+  border: 'none',
 };
 const confirmBox: React.CSSProperties = {
   width: 420,
@@ -98,6 +118,9 @@ export const VsumDetailsModal: React.FC<Props> = ({ isOpen, vsumId, onClose, onS
   const [versions, setVersions] = useState<Array<{ id: number; createdAt: string }>>([]);
   const [recovering, setRecovering] = useState(false);
   const [recoverError, setRecoverError] = useState('');
+  const [restoringVersionId, setRestoringVersionId] = useState<number | null>(null);
+  const [restoreConfirmOpen, setRestoreConfirmOpen] = useState<number | null>(null);
+  const [restoreError, setRestoreError] = useState('');
 
   useEffect(() => {
     if (!isOpen) return;
@@ -234,11 +257,79 @@ export const VsumDetailsModal: React.FC<Props> = ({ isOpen, vsumId, onClose, onS
     );
   };
 
+  const formatRelativeTime = (dateString: string): string => {
+    const date = new Date(dateString);
+    const now = new Date();
+    const diffMs = now.getTime() - date.getTime();
+    const diffMins = Math.floor(diffMs / 60000);
+    const diffHours = Math.floor(diffMs / 3600000);
+    const diffDays = Math.floor(diffMs / 86400000);
+
+    if (diffMins < 1) return 'Just now';
+    if (diffMins < 60) return `${diffMins} minute${diffMins !== 1 ? 's' : ''} ago`;
+    if (diffHours < 24) return `${diffHours} hour${diffHours !== 1 ? 's' : ''} ago`;
+    if (diffDays < 7) return `${diffDays} day${diffDays !== 1 ? 's' : ''} ago`;
+    
+    return date.toLocaleDateString([], {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+    });
+  };
+
+  const formatFullDate = (dateString: string): string => {
+    const date = new Date(dateString);
+    return date.toLocaleString([], {
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+    });
+  };
+
+  const handleRestoreVersion = async (versionId: number) => {
+    if (!vsumId) return;
+    setRestoreError('');
+    setRestoringVersionId(versionId);
+    try {
+      await apiService.restoreVsumVersion(vsumId, versionId);
+      setRestoreConfirmOpen(null);
+      onSaved?.();
+      // Reload versions to reflect the change
+      const res = await apiService.getVsumVersions(vsumId);
+      setVersions(res.data || []);
+    } catch (e: any) {
+      setRestoreError(e?.response?.data?.message || e?.message || 'Failed to restore version');
+    } finally {
+      setRestoringVersionId(null);
+    }
+  };
+
   const renderVersionsContent = () => {
     if (versionsLoading) {
       return (
-        <div style={{ fontStyle: 'italic', color: '#6c757d' }}>
-          Loading versions…
+        <div style={{ 
+          display: 'flex', 
+          flexDirection: 'column', 
+          alignItems: 'center', 
+          justifyContent: 'center', 
+          padding: '40px 20px',
+          color: '#6c757d' 
+        }}>
+          <div style={{ 
+            width: 40, 
+            height: 40, 
+            border: '3px solid #e9ecef', 
+            borderTop: '3px solid #3498db', 
+            borderRadius: '50%', 
+            animation: 'spin 1s linear infinite',
+            marginBottom: 12
+          }} />
+          <div style={{ fontStyle: 'italic', fontSize: 14 }}>Loading versions…</div>
         </div>
       );
     }
@@ -248,84 +339,244 @@ export const VsumDetailsModal: React.FC<Props> = ({ isOpen, vsumId, onClose, onS
         <div
           style={{
             marginBottom: 12,
-            padding: 10,
+            padding: 12,
             border: '1px solid #f5c6cb',
             background: '#f8d7da',
             color: '#721c24',
-            borderRadius: 6,
-            fontSize: 12,
+            borderRadius: 8,
+            fontSize: 13,
+            display: 'flex',
+            alignItems: 'center',
+            gap: 8,
           }}
         >
-          {versionsError}
+          <span style={{ fontSize: 16 }}>⚠️</span>
+          <span>{versionsError}</span>
         </div>
       );
     }
 
     if (versions.length === 0) {
       return (
-        <div style={{ fontStyle: 'italic', color: '#6c757d' }}>
-          No versions found.
+        <div style={{ 
+          display: 'flex', 
+          flexDirection: 'column', 
+          alignItems: 'center', 
+          justifyContent: 'center', 
+          padding: '40px 20px',
+          color: '#6c757d',
+          textAlign: 'center'
+        }}>
+          <div style={{ fontSize: 48, marginBottom: 16, opacity: 0.5 }}>📋</div>
+          <div style={{ fontSize: 16, fontWeight: 600, marginBottom: 8, color: '#495057' }}>No versions found</div>
+          <div style={{ fontSize: 13 }}>Version history will appear here once versions are created.</div>
         </div>
       );
     }
 
+    // Sort versions by date (newest first)
+    const sortedVersions = [...versions].sort((a, b) => 
+      new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+    );
+    const currentVersionId = sortedVersions[0]?.id;
+
     return (
-      <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-        <thead>
-          <tr>
-            <th
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+        {restoreError && (
+          <div
+            style={{
+              padding: 12,
+              border: '1px solid #f5c6cb',
+              background: '#f8d7da',
+              color: '#721c24',
+              borderRadius: 8,
+              fontSize: 13,
+              display: 'flex',
+              alignItems: 'center',
+              gap: 8,
+            }}
+          >
+            <span style={{ fontSize: 16 }}>⚠️</span>
+            <span>{restoreError}</span>
+            <button
+              onClick={() => setRestoreError('')}
               style={{
-                border: '1px solid #e9ecef',
-                padding: 8,
-                textAlign: 'left',
-                fontSize: 12,
+                marginLeft: 'auto',
+                border: 'none',
+                background: 'transparent',
+                color: '#721c24',
+                cursor: 'pointer',
+                fontSize: 18,
+                lineHeight: 1,
+                padding: 0,
+                width: 20,
+                height: 20,
               }}
+              aria-label="Dismiss error"
             >
-              #
-            </th>
-            <th
-              style={{
-                border: '1px solid #e9ecef',
-                padding: 8,
-                textAlign: 'left',
-                fontSize: 12,
-              }}
-            >
-              Versions
-            </th>
-          </tr>
-        </thead>
-        <tbody>
-          {versions.map((v, index) => (
-            <tr key={v.id}>
-              <td
+              ×
+            </button>
+          </div>
+        )}
+
+        <div style={{ 
+          fontSize: 12, 
+          color: '#6c757d', 
+          marginBottom: 8,
+          padding: '8px 12px',
+          background: '#f8f9fa',
+          borderRadius: 6,
+          border: '1px solid #e9ecef'
+        }}>
+          <strong>Total versions:</strong> {versions.length} • <strong>Current:</strong> Version #{currentVersionId}
+        </div>
+
+        <div style={{ 
+          display: 'flex', 
+          flexDirection: 'column', 
+          gap: 10,
+          maxHeight: '60vh',
+          overflowY: 'auto',
+          paddingRight: 4,
+        }}>
+          {sortedVersions.map((v, index) => {
+            const isCurrent = v.id === currentVersionId;
+            const isRestoring = restoringVersionId === v.id;
+            
+            return (
+              <div
+                key={v.id}
                 style={{
-                  border: '1px solid #e9ecef',
-                  padding: 8,
-                  fontSize: 13,
+                  border: isCurrent 
+                    ? '2px solid #3498db' 
+                    : '1px solid #e9ecef',
+                  borderRadius: 10,
+                  padding: 16,
+                  background: isCurrent 
+                    ? '#f0f7ff' 
+                    : '#ffffff',
+                  boxShadow: isCurrent
+                    ? '0 2px 8px rgba(52, 152, 219, 0.15)'
+                    : '0 1px 3px rgba(0, 0, 0, 0.08)',
+                  transition: 'all 0.2s ease',
+                  position: 'relative',
+                }}
+                onMouseEnter={(e) => {
+                  if (!isCurrent) {
+                    e.currentTarget.style.boxShadow = '0 4px 12px rgba(0, 0, 0, 0.12)';
+                    e.currentTarget.style.transform = 'translateY(-2px)';
+                  }
+                }}
+                onMouseLeave={(e) => {
+                  if (!isCurrent) {
+                    e.currentTarget.style.boxShadow = '0 1px 3px rgba(0, 0, 0, 0.08)';
+                    e.currentTarget.style.transform = 'translateY(0)';
+                  }
                 }}
               >
-                {index + 1}
-              </td>
-              <td
-                style={{
-                  border: '1px solid #e9ecef',
-                  padding: 8,
-                  fontSize: 13,
-                }}
-              >
-                {new Date(v.createdAt).toLocaleString([], {
-                  hour: '2-digit',
-                  minute: '2-digit',
-                  year: 'numeric',
-                  month: '2-digit',
-                  day: '2-digit',
-                })}
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
+                <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12 }}>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+                      <div style={{
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        width: 32,
+                        height: 32,
+                        borderRadius: '50%',
+                        background: isCurrent ? '#3498db' : '#6c757d',
+                        color: '#fff',
+                        fontWeight: 700,
+                        fontSize: 14,
+                      }}>
+                        {versions.length - index}
+                      </div>
+                      <div>
+                        <div style={{ 
+                          display: 'flex', 
+                          alignItems: 'center', 
+                          gap: 6,
+                          marginBottom: 4 
+                        }}>
+                          <span style={{ 
+                            fontWeight: 700, 
+                            fontSize: 15, 
+                            color: '#2c3e50' 
+                          }}>
+                            Version #{v.id}
+                          </span>
+                          {isCurrent && (
+                            <span style={{
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              padding: '2px 8px',
+                              borderRadius: 12,
+                              background: '#3498db',
+                              color: '#fff',
+                              fontSize: 11,
+                              fontWeight: 600,
+                            }}>
+                              Current
+                            </span>
+                          )}
+                        </div>
+                        <div style={{ 
+                          fontSize: 13, 
+                          color: '#6c757d',
+                          marginBottom: 4
+                        }}>
+                          {formatRelativeTime(v.createdAt)}
+                        </div>
+                        <div style={{ 
+                          fontSize: 12, 
+                          color: '#9ca3af',
+                          fontFamily: 'monospace'
+                        }}>
+                          {formatFullDate(v.createdAt)}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                  
+                  {!isCurrent && (
+                    <button
+                      onClick={() => setRestoreConfirmOpen(v.id)}
+                      disabled={isRestoring || restoringVersionId !== null}
+                      style={{
+                        padding: '8px 16px',
+                        borderRadius: 6,
+                        border: '1px solid #3498db',
+                        background: isRestoring ? '#bfdbfe' : '#3498db',
+                        color: '#fff',
+                        fontWeight: 600,
+                        fontSize: 13,
+                        cursor: isRestoring || restoringVersionId !== null ? 'not-allowed' : 'pointer',
+                        opacity: isRestoring || restoringVersionId !== null ? 0.6 : 1,
+                        transition: 'all 0.2s ease',
+                        whiteSpace: 'nowrap',
+                      }}
+                      onMouseEnter={(e) => {
+                        if (!isRestoring && restoringVersionId === null) {
+                          e.currentTarget.style.background = '#2980b9';
+                          e.currentTarget.style.borderColor = '#2980b9';
+                        }
+                      }}
+                      onMouseLeave={(e) => {
+                        if (!isRestoring && restoringVersionId === null) {
+                          e.currentTarget.style.background = '#3498db';
+                          e.currentTarget.style.borderColor = '#3498db';
+                        }
+                      }}
+                    >
+                      {isRestoring ? 'Restoring…' : 'Restore'}
+                    </button>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
     );
   };
 
@@ -573,6 +824,73 @@ export const VsumDetailsModal: React.FC<Props> = ({ isOpen, vsumId, onClose, onS
                       }}
                   >
                     {deleting ? 'Deleting…' : 'Delete'}
+                  </button>
+                </div>
+              </div>
+            </dialog>
+        )}
+
+        {/* ===================== */}
+        {/*   RESTORE CONFIRM     */}
+        {/* ===================== */}
+        {restoreConfirmOpen !== null && (
+            <dialog open style={confirmOverlay} onClose={() => setRestoreConfirmOpen(null)} onCancel={() => setRestoreConfirmOpen(null)} onClick={(e) => { if (e.target === e.currentTarget && !restoringVersionId) setRestoreConfirmOpen(null); }}>
+              <div style={confirmBox}>
+                <div style={confirmHeader}>Restore to this version?</div>
+
+                <div style={confirmBody}>
+                  This will restore the VSUM to the selected version. The current version will be saved as a new version in the history.
+                  {restoreError && (
+                      <div
+                          style={{
+                            marginTop: 12,
+                            padding: 10,
+                            border: '1px solid #f5c6cb',
+                            background: '#f8d7da',
+                            color: '#721c24',
+                            borderRadius: 6,
+                            fontSize: 12,
+                          }}
+                      >
+                        {restoreError}
+                      </div>
+                  )}
+                </div>
+
+                <div style={confirmFooter}>
+                  <button
+                      onClick={() => {
+                        setRestoreConfirmOpen(null);
+                        setRestoreError('');
+                      }}
+                      disabled={restoringVersionId !== null}
+                      style={{
+                        padding: '8px 14px',
+                        borderRadius: 6,
+                        border: '1px solid #dee2e6',
+                        background: '#fff',
+                        color: '#374151',
+                        fontWeight: 700,
+                        cursor: 'pointer',
+                      }}
+                  >
+                    Cancel
+                  </button>
+
+                  <button
+                      onClick={() => handleRestoreVersion(restoreConfirmOpen)}
+                      disabled={restoringVersionId !== null}
+                      style={{
+                        padding: '8px 14px',
+                        borderRadius: 6,
+                        border: 'none',
+                        background: '#3498db',
+                        color: '#fff',
+                        fontWeight: 700,
+                        cursor: 'pointer',
+                      }}
+                  >
+                    {restoringVersionId === restoreConfirmOpen ? 'Restoring…' : 'Restore'}
                   </button>
                 </div>
               </div>

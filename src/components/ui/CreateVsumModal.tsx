@@ -137,7 +137,21 @@ export const CreateVsumModal: React.FC<CreateVsumModalProps> = ({ isOpen, onClos
   };
 
   return ReactDOM.createPortal(
-    <dialog open style={modalOverlayStyle} onClose={handleClose} onCancel={handleClose} onClick={(e) => { if (e.target === e.currentTarget) handleClose(); }} onKeyDown={(e) => { if (e.key === 'Escape') handleClose(); }}>
+    <dialog open style={{
+      ...modalOverlayStyle,
+      background: 'transparent',
+      backdropFilter: 'blur(6px)',
+      WebkitBackdropFilter: 'blur(6px)',
+      top: 0,
+      left: 0,
+      right: 0,
+      bottom: 0,
+      width: '100%',
+      height: '100%',
+      margin: 0,
+      padding: 0,
+      border: 'none',
+    }} onClose={handleClose} onCancel={handleClose} onClick={(e) => { if (e.target === e.currentTarget) handleClose(); }} onKeyDown={(e) => { if (e.key === 'Escape') handleClose(); }}>
       <div style={modalStyle}>
         <div style={headerStyle}>
           <h3 style={titleStyle}>Create</h3>

@@ -279,38 +279,46 @@ export function MainLayout({
             } catch {}
         };
         const handleAddFileToWorkspace = (e: Event) => {
-            const customEvent = e as CustomEvent<{
-                fileContent: string;
-                fileName: string;
-                description?: string;
-                keywords?: string;
-                domain?: string;
-                createdAt?: string;
-                metaModelId?: number;
-                metaModelSourceId?: number;
-            }>;
-            const detail = customEvent.detail;
-            if (detail) {
-                console.log('📦 Adding file to workspace:', detail.fileName);
-                handleEcoreFileUpload(detail.fileContent, {
-                    fileName: detail.fileName,
-                    description: detail.description,
-                    keywords: detail.keywords,
-                    domain: detail.domain,
-                    createdAt: detail.createdAt,
-                    metaModelId: detail.metaModelId,
-                    metaModelSourceId: detail.metaModelSourceId,
-                });
+            try {
+                const customEvent = e as CustomEvent<{
+                    fileContent: string;
+                    fileName: string;
+                    description?: string;
+                    keywords?: string;
+                    domain?: string;
+                    createdAt?: string;
+                    metaModelId?: number;
+                    metaModelSourceId?: number;
+                }>;
+                const detail = customEvent.detail;
+                if (detail) {
+                    console.log('📦 Adding file to workspace:', detail.fileName);
+                    handleEcoreFileUpload(detail.fileContent, {
+                        fileName: detail.fileName,
+                        description: detail.description,
+                        keywords: detail.keywords,
+                        domain: detail.domain,
+                        createdAt: detail.createdAt,
+                        metaModelId: detail.metaModelId,
+                        metaModelSourceId: detail.metaModelSourceId,
+                    });
+                }
+            } catch (error) {
+                console.error('Error handling addFileToWorkspace event:', error);
             }
         };
 
         globalThis.addEventListener('vitruv.addFileToWorkspace', handleAddFileToWorkspace as EventListener);
         globalThis.addEventListener('vitruv.resetWorkspace', handleResetWorkspace as EventListener);
         const handleExpandFileInWorkspace = (e: Event) => {
-            const customEvent = e as CustomEvent<{ fileName: string; fileContent: string }>;
-            const detail = customEvent.detail;
-            if (!detail) return;
-            handleEcoreFileExpand(detail.fileName, detail.fileContent);
+            try {
+                const customEvent = e as CustomEvent<{ fileName: string; fileContent: string }>;
+                const detail = customEvent.detail;
+                if (!detail) return;
+                handleEcoreFileExpand(detail.fileName, detail.fileContent);
+            } catch (error) {
+                console.error('Error handling expandFileInWorkspace event:', error);
+            }
         };
         globalThis.addEventListener('vitruv.expandFileInWorkspace', handleExpandFileInWorkspace as EventListener);
         return () => {
@@ -596,40 +604,22 @@ export function MainLayout({
                                     padding: '40px',
                                 }}
                             >
-                                <div style={{ textAlign: 'center', fontFamily: 'Georgia, serif', color: '#2c3e50', maxWidth: 600 }}>
-                                    <div
+                                <div style={{ textAlign: 'center' }}>
+                                    <img
+                                        src="/assets/vitruvius1.png"
+                                        alt="Vitruvius"
+                                        draggable={false}
+                                        onDragStart={(e) => e.preventDefault()}
                                         style={{
-                                            width: 200,
-                                            height: 200,
-                                            margin: '0 auto 30px',
-                                            overflow: 'hidden',
-                                            borderRadius: 8,
-                                            position: 'relative',
+                                            display: 'block',
+                                            width: 600,
+                                            height: 600,
+                                            objectFit: 'contain',
+                                            margin: '0 auto',
+                                            pointerEvents: 'none',
+                                            userSelect: 'none',
                                         }}
-                                    >
-                                        <img
-                                            src="/assets/vitruvius1.png"
-                                            alt="Vitruvius"
-                                            draggable={false}
-                                            onDragStart={(e) => e.preventDefault()}
-                                            style={{
-                                                display: 'block',
-                                                width: '100%',
-                                                height: '100%',
-                                                objectFit: 'contain',
-                                                pointerEvents: 'none',
-                                                userSelect: 'none',
-                                            }}
-                                        />
-                                    </div>
-                                    <p style={{ margin: '0 0 20px 0', fontSize: 16, color: '#6b7280', lineHeight: 1.6 }}>
-                                        {welcomeTitle || 'Methodological Dashboard'}
-                                    </p>
-                                    {welcomeSubtitle && (
-                                        <p style={{ margin: '0', fontSize: 14, color: '#6b7280', lineHeight: 1.6 }}>
-                                            {welcomeSubtitle}
-                                        </p>
-                                    )}
+                                    />
                                 </div>
                             </div>
                         ) : (
