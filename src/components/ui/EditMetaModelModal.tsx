@@ -367,13 +367,19 @@ export const EditMetaModelModal: React.FC<EditMetaModelModalProps> = ({
     try {
       // Build payload for PUT /api/v1/meta-models/{id}
       // Use newly uploaded file IDs if available, otherwise use original ones from model
-      const ecoreFileId = uploadedFileIds.ecoreFileId !== null
-        ? uploadedFileIds.ecoreFileId
-        : (typeof model.ecoreFileId === 'number' ? model.ecoreFileId : 0);
-      
-      const genModelFileId = uploadedFileIds.genModelFileId !== null
-        ? uploadedFileIds.genModelFileId
-        : (typeof model.genModelFileId === 'number' ? model.genModelFileId : 0);
+      let ecoreFileId = 0;
+      if (uploadedFileIds.ecoreFileId) {
+        ecoreFileId = uploadedFileIds.ecoreFileId;
+      } else if (model.ecoreFileId) {
+        ecoreFileId = model.ecoreFileId;
+      }
+
+      let genModelFileId = 0;
+      if (uploadedFileIds.genModelFileId) {
+        genModelFileId = uploadedFileIds.genModelFileId;
+      } else if (model.genModelFileId) {
+        genModelFileId = model.genModelFileId;
+      }
 
       const payload = {
         name: name.trim(),
@@ -412,14 +418,14 @@ export const EditMetaModelModal: React.FC<EditMetaModelModalProps> = ({
 
   const getEcoreButtonText = (): string => {
     if (uploadProgress.ecore.isUploading) return 'Uploading...';
-    if (uploadedFileIds.ecoreFileId !== null) return '✓ Replaced';
+    if (uploadedFileIds.ecoreFileId) return '✓ Replaced';
     if (model.ecoreFileId) return 'Replace .ecore';
     return 'Upload .ecore';
   };
 
   const getGenmodelButtonText = (): string => {
     if (uploadProgress.genmodel.isUploading) return 'Uploading...';
-    if (uploadedFileIds.genModelFileId !== null) return '✓ Replaced';
+    if (uploadedFileIds.genModelFileId) return '✓ Replaced';
     if (model.genModelFileId) return 'Replace .genmodel';
     return 'Upload .genmodel';
   };
@@ -536,7 +542,7 @@ export const EditMetaModelModal: React.FC<EditMetaModelModalProps> = ({
               <button
                 style={{
                   ...uploadButtonStyle,
-                  ...(uploadedFileIds.ecoreFileId !== null ? uploadButtonSuccessStyle : {}),
+                  ...(uploadedFileIds.ecoreFileId ? uploadButtonSuccessStyle : {}),
                   width: '100%',
                 }}
                 onClick={() => ecoreFileInputRef.current?.click()}
@@ -570,7 +576,7 @@ export const EditMetaModelModal: React.FC<EditMetaModelModalProps> = ({
               <button
                 style={{
                   ...uploadButtonStyle,
-                  ...(uploadedFileIds.genModelFileId !== null ? uploadButtonSuccessStyle : {}),
+                  ...(uploadedFileIds.genModelFileId ? uploadButtonSuccessStyle : {}),
                   width: '100%',
                 }}
                 onClick={() => genmodelFileInputRef.current?.click()}
@@ -602,11 +608,7 @@ export const EditMetaModelModal: React.FC<EditMetaModelModalProps> = ({
           </div>
 
           <div style={fileStatusStyle}>
-            {uploadedFileIds.ecoreFileId !== null || uploadedFileIds.genModelFileId !== null
-              ? '✅ New files will replace existing ones when you save'
-              : model.ecoreFileId && model.genModelFileId
-                ? 'Current files will be kept. Upload new files to replace them.'
-                : 'Files are optional. Upload new files if needed.'}
+            {getFileStatusMessage()}
           </div>
         </div>
 
