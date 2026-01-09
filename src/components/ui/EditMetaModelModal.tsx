@@ -27,11 +27,9 @@ interface EditMetaModelModalProps {
 const modalStyle: React.CSSProperties = {
   background: '#ffffff',
   borderRadius: 0,
-  padding: '24px',
+  padding: '20px',
   width: '480px',
   maxWidth: '90vw',
-  maxHeight: '85vh',
-  overflow: 'auto',
   boxShadow: '0 20px 40px rgba(0, 0, 0, 0.2)',
   // Consistent dark edge so the modal stands out on white background
   border: '1px solid #111827',
