@@ -65,11 +65,6 @@ const createButtonHoverStyle: React.CSSProperties = {
   background: 'linear-gradient(135deg, #2980b9 0%, #1f5f8b 100%)',
 };
 
-const createButtonActiveStyle: React.CSSProperties = {
-  background: '#2563eb',
-  cursor: 'not-allowed',
-};
-
 const filterContainerStyle: React.CSSProperties = {
   position: 'fixed',
   top: '230px',
@@ -137,23 +132,6 @@ const fileCardStyle: React.CSSProperties = {
   padding: '12px',
   marginBottom: '12px',
   boxShadow: '0 2px 6px rgba(0,0,0,0.08)',
-};
-
-const ownershipToggleStyle: React.CSSProperties = {
-  padding: '8px 12px',
-  border: '1px solid #dee2e6',
-  borderRadius: '6px',
-  background: '#ffffff',
-  color: '#495057',
-  fontSize: '12px',
-  fontWeight: '600',
-  cursor: 'pointer',
-  transition: 'all 0.2s ease',
-  minWidth: '100px',
-  fontFamily: 'Georgia, serif',
-  fontStyle: 'italic',
-  flexWrap: 'wrap',
-  lineHeight: '1.4',
 };
 
 const emptyStateStyle: React.CSSProperties = {
@@ -340,7 +318,6 @@ export const ToolsPanel: React.FC<ToolsPanelProps> = ({ onEcoreFileUpload, onEco
   const [apiError, setApiError] = useState<string>('');
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 10;
-  const [expandedCard, setExpandedCard] = useState<number | null>(null);
   const [parsedFilters, setParsedFilters] = useState<any[]>([]);
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
