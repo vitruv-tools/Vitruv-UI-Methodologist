@@ -121,6 +121,21 @@ export const EditMetaModelModal: React.FC<EditMetaModelModalProps> = ({
     }
   }, [isOpen, metaModel]);
 
+  useEffect(() => {
+    const handleEscape = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && isOpen) {
+        onClose();
+      }
+    };
+
+    if (isOpen) {
+      document.addEventListener('keydown', handleEscape);
+      return () => {
+        document.removeEventListener('keydown', handleEscape);
+      };
+    }
+  }, [isOpen, onClose]);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     // Backend handles permission checks, allow submission for all users
@@ -159,10 +174,22 @@ export const EditMetaModelModal: React.FC<EditMetaModelModalProps> = ({
   };
 
   return ReactDOM.createPortal(
-    <div style={overlayStyle} onClick={(e) => e.target === e.currentTarget && onClose()}>
+    <div
+      style={overlayStyle}
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="edit-meta-model-title"
+      onClick={(e) => e.target === e.currentTarget && onClose()}
+      onKeyDown={(e) => {
+        if (e.key === 'Escape') {
+          onClose();
+        }
+      }}
+      tabIndex={-1}
+    >
       <div style={modalStyle} onClick={(e) => e.stopPropagation()}>
         <div style={modalHeaderStyle}>
-          <h2 style={modalTitleStyle}>
+          <h2 id="edit-meta-model-title" style={modalTitleStyle}>
             Edit Meta Model
           </h2>
           <button
@@ -182,8 +209,9 @@ export const EditMetaModelModal: React.FC<EditMetaModelModalProps> = ({
 
         <form onSubmit={handleSubmit}>
           <div style={formGroupStyle}>
-            <label style={labelStyle}>Name *</label>
+            <label htmlFor="edit-meta-model-name" style={labelStyle}>Name *</label>
             <input
+              id="edit-meta-model-name"
               type="text"
               value={formData.name}
               onChange={(e) => setFormData({ ...formData, name: e.target.value })}
@@ -195,8 +223,9 @@ export const EditMetaModelModal: React.FC<EditMetaModelModalProps> = ({
           </div>
 
           <div style={formGroupStyle}>
-            <label style={labelStyle}>Description *</label>
+            <label htmlFor="edit-meta-model-description" style={labelStyle}>Description *</label>
             <textarea
+              id="edit-meta-model-description"
               value={formData.description}
               onChange={(e) => setFormData({ ...formData, description: e.target.value })}
               style={{
@@ -211,8 +240,9 @@ export const EditMetaModelModal: React.FC<EditMetaModelModalProps> = ({
           </div>
 
           <div style={formGroupStyle}>
-            <label style={labelStyle}>Domain *</label>
+            <label htmlFor="edit-meta-model-domain" style={labelStyle}>Domain *</label>
             <input
+              id="edit-meta-model-domain"
               type="text"
               value={formData.domain}
               onChange={(e) => setFormData({ ...formData, domain: e.target.value })}
@@ -224,8 +254,9 @@ export const EditMetaModelModal: React.FC<EditMetaModelModalProps> = ({
           </div>
 
           <div style={formGroupStyle}>
-            <label style={labelStyle}>Keywords *</label>
+            <label htmlFor="edit-meta-model-keywords" style={labelStyle}>Keywords *</label>
             <KeywordTagsInput
+              id="edit-meta-model-keywords"
               keywords={formData.keywords}
               onChange={(keywords) => setFormData({ ...formData, keywords })}
             />

@@ -303,6 +303,20 @@ const parseDateRangeFilter = (value: string): { from?: string; to?: string } => 
   return { from: new Date(v).toISOString(), to: new Date(`${v}T23:59:59`).toISOString() };
 };
 
+const checkModelOwnership = (viewModel: any, user: any): boolean => {
+  const userId = user?.id ? String(user.id) : null;
+  if (!userId || !viewModel) return false;
+  
+  return (
+    String(viewModel.ownerId) === userId ||
+    String(viewModel.userId) === userId ||
+    viewModel.ownedByUser ||
+    String(viewModel.owner?.id) === userId ||
+    String(viewModel.createdBy) === userId ||
+    String(viewModel.createdById) === userId
+  );
+};
+
 export const ToolsPanel: React.FC<ToolsPanelProps> = ({ onEcoreFileUpload, onEcoreFileDelete, title = 'Meta Models', allowCreate = true, enableItemClick = true, showBorder = true, suppressApi = false }) => {
   const [isProcessing] = useState(false);
   const [uploadMessage, setUploadMessage] = useState<string>('');
@@ -950,37 +964,6 @@ return (
                 Details
               </button>
             </div>
-            {false && (
-              <>
-                {model.keyword && model.keyword.length > 0 && (
-                  <div style={{
-                    fontSize: 'clamp(11px, 2vw, 12px)',
-                    color: '#495057',
-                    marginTop: '6px',
-                    fontFamily: 'Georgia, serif',
-                    wordBreak: 'break-word',
-                    lineHeight: '1.4'
-                  }}>
-                    <strong>Keywords:</strong> {model.keyword.join(', ')}
-                  </div>
-                )}
-                {model.description && (
-                  <div style={{
-                    fontSize: 'clamp(11px, 2vw, 12px)',
-                    color: '#6c757d',
-                    marginTop: '4px',
-                    fontStyle: 'italic',
-                    fontFamily: 'Georgia, serif',
-                    lineHeight: '1.4',
-                    wordBreak: 'break-word',
-                    overflowWrap: 'break-word'
-                  }}>
-                    <strong>Description:</strong> {model.description}
-                  </div>
-                )}
-              </>
-            )}
-            
           </div>
         ))}
         {!suppressApi && !isLoadingModels && sortedModels.length === 0 && !apiError && (
@@ -1002,23 +985,41 @@ return (
                 bottom: 0,
                 width: '100%',
                 height: '100%',
-                background: 'rgba(0,0,0,0.4)',
-                backdropFilter: 'blur(6px)',
-                WebkitBackdropFilter: 'blur(6px)',
-                zIndex: 9998,
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
                 margin: 0,
                 padding: 0,
                 border: 'none',
+                background: 'transparent',
+                zIndex: 9998,
               }}
-              onClose={() => setViewModel(null)}
-              onCancel={() => setViewModel(null)}
-              onClick={(e) => { if (e.target === e.currentTarget) setViewModel(null); }}
           >
             <div
+              role="presentation"
+              style={{
+                position: 'fixed',
+                top: 0,
+                left: 0,
+                right: 0,
+                bottom: 0,
+                width: '100%',
+                height: '100%',
+                background: 'rgba(0,0,0,0.4)',
+                backdropFilter: 'blur(6px)',
+                WebkitBackdropFilter: 'blur(6px)',
+                zIndex: -1,
+              }}
+              onClick={() => setViewModel(null)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ' || e.key === 'Escape') {
+                  e.preventDefault();
+                  setViewModel(null);
+                }
+              }}
+              tabIndex={0}
+              aria-hidden="true"
+            />
+            <div
                 style={{
+                  position: 'relative',
                   width: 900,
                   maxWidth: '95vw',
                   maxHeight: '90vh',
@@ -1029,10 +1030,15 @@ return (
                   display: 'flex',
                   flexDirection: 'column',
                   fontFamily: 'Georgia, serif',
+                  margin: 'auto',
                 }}
+                role="dialog"
+                aria-modal="true"
+                aria-labelledby="dialog-title"
+                onClick={(e) => e.stopPropagation()}
             >
               <div style={{ padding: '16px 20px', borderBottom: '1px solid #e9ecef', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                <h3 style={{ margin: 0, fontSize: 18, fontWeight: 700, color: '#2c3e50' }}>{viewModel.name ?? 'Meta Model Details'}</h3>
+                <h3 id="dialog-title" style={{ margin: 0, fontSize: 18, fontWeight: 700, color: '#2c3e50' }}>{viewModel.name ?? 'Meta Model Details'}</h3>
 
                 <div style={{ display: 'flex', gap: 8 }}>
                   <button
@@ -1051,19 +1057,11 @@ return (
                   
                   {/* Edit button - temporarily visible for all to debug ownership */}
                   {(() => {
-                    // Check if user is owner - check multiple possible field names
-                    const userId = user?.id ? String(user.id) : null;
-                    const isOwner = userId && (
-                      String(viewModel?.ownerId) === userId ||
-                      String(viewModel?.userId) === userId ||
-                      viewModel?.ownedByUser === true ||
-                      String(viewModel?.owner?.id) === userId ||
-                      String(viewModel?.createdBy) === userId ||
-                      String(viewModel?.createdById) === userId
-                    );
+                    const isOwner = checkModelOwnership(viewModel, user);
                     
                     // Detailed debug logging - expand this in console to see all fields
                     if (viewModel) {
+                      const userId = user?.id ? String(user.id) : null;
                       console.log('=== EDIT BUTTON OWNERSHIP DEBUG ===');
                       console.log('Current User:', user);
                       console.log('User ID (string):', userId);
@@ -1089,8 +1087,6 @@ return (
                       console.log('===================================');
                     }
                     
-                    // Temporarily show Edit button for all models to test
-                    // TODO: Change back to isOwner check once we identify the correct field
                     return (
                       <button
                           onClick={() => {
@@ -1212,8 +1208,29 @@ return (
 
       {/* Meta Model Delete Confirmation */}
       {metaModelDeleteConfirmOpen && viewModel && (
-          <dialog
-              open
+          <div
+              role="dialog"
+              aria-modal="true"
+              style={{
+                position: 'fixed',
+                top: 0,
+                left: 0,
+                right: 0,
+                bottom: 0,
+                width: '100%',
+                height: '100%',
+                margin: 0,
+                padding: 0,
+                border: 'none',
+                background: 'transparent',
+                zIndex: 10000,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+              }}
+          >
+            <div
+              role="presentation"
               style={{
                 position: 'fixed',
                 top: 0,
@@ -1225,20 +1242,21 @@ return (
                 background: 'rgba(0,0,0,0.4)',
                 backdropFilter: 'blur(6px)',
                 WebkitBackdropFilter: 'blur(6px)',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                zIndex: 10000,
-                margin: 0,
-                padding: 0,
-                border: 'none',
+                zIndex: -1,
               }}
-              onClose={() => setMetaModelDeleteConfirmOpen(false)}
-              onCancel={() => setMetaModelDeleteConfirmOpen(false)}
-              onClick={(e) => { if (e.target === e.currentTarget && !metaModelDeleting) setMetaModelDeleteConfirmOpen(false); }}
-          >
+              onClick={() => { if (!metaModelDeleting) setMetaModelDeleteConfirmOpen(false); }}
+              onKeyDown={(e) => {
+                if ((e.key === 'Enter' || e.key === ' ' || e.key === 'Escape') && !metaModelDeleting) {
+                  e.preventDefault();
+                  setMetaModelDeleteConfirmOpen(false);
+                }
+              }}
+              tabIndex={0}
+              aria-hidden="true"
+            />
             <div
                 style={{
+                  position: 'relative',
                   width: 420,
                   maxWidth: '90vw',
                   background: '#fff',
@@ -1246,11 +1264,16 @@ return (
                   boxShadow: '0 14px 34px rgba(0,0,0,0.25)',
                   overflow: 'hidden',
                   fontFamily: 'Georgia, serif',
+                  margin: 'auto',
                 }}
+                role="dialog"
+                aria-modal="true"
+                aria-labelledby="delete-dialog-title"
+                onClick={(e) => e.stopPropagation()}
             >
-              <div style={{ padding: '12px 16px', borderBottom: '1px solid #f0f0f0', fontWeight: 700, color: '#1f2937' }}>
+              <h2 id="delete-dialog-title" style={{ padding: '12px 16px', borderBottom: '1px solid #f0f0f0', fontWeight: 700, color: '#1f2937', margin: 0, fontSize: 16 }}>
                 Are you sure?
-              </div>
+              </h2>
 
               <div style={{ padding: '16px', color: '#4b5563', fontSize: 14 }}>
                 This action will permanently delete this Meta Model and cannot be undone.
@@ -1333,7 +1356,7 @@ return (
                 </button>
               </div>
             </div>
-          </dialog>
+          </div>
       )}
 
       {!suppressApi && totalPages > 1 && (
@@ -1579,15 +1602,7 @@ return (
             await refreshData();
           }}
           metaModel={viewModel}
-          isOwner={(() => {
-            const userId = user?.id ? String(user.id) : null;
-            return !!(userId && (
-              String(viewModel?.ownerId) === userId ||
-              String(viewModel?.userId) === userId ||
-              viewModel?.ownedByUser === true ||
-              String(viewModel?.owner?.id) === userId
-            ));
-          })()}
+          isOwner={checkModelOwnership(viewModel, user)}
         />
       )}
     </div>

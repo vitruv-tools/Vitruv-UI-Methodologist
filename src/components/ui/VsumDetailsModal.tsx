@@ -266,9 +266,9 @@ export const VsumDetailsModal: React.FC<Props> = ({ isOpen, vsumId, onClose, onS
     const diffDays = Math.floor(diffMs / 86400000);
 
     if (diffMins < 1) return 'Just now';
-    if (diffMins < 60) return `${diffMins} minute${diffMins !== 1 ? 's' : ''} ago`;
-    if (diffHours < 24) return `${diffHours} hour${diffHours !== 1 ? 's' : ''} ago`;
-    if (diffDays < 7) return `${diffDays} day${diffDays !== 1 ? 's' : ''} ago`;
+    if (diffMins < 60) return `${diffMins} minute${diffMins === 1 ? '' : 's'} ago`;
+    if (diffHours < 24) return `${diffHours} hour${diffHours === 1 ? '' : 's'} ago`;
+    if (diffDays < 7) return `${diffDays} day${diffDays === 1 ? '' : 's'} ago`;
     
     return date.toLocaleDateString([], {
       year: 'numeric',
@@ -446,6 +446,7 @@ export const VsumDetailsModal: React.FC<Props> = ({ isOpen, vsumId, onClose, onS
             return (
               <div
                 key={v.id}
+                className={isCurrent ? 'version-card-current' : 'version-card-hover'}
                 style={{
                   border: isCurrent 
                     ? '2px solid #3498db' 
@@ -460,18 +461,6 @@ export const VsumDetailsModal: React.FC<Props> = ({ isOpen, vsumId, onClose, onS
                     : '0 1px 3px rgba(0, 0, 0, 0.08)',
                   transition: 'all 0.2s ease',
                   position: 'relative',
-                }}
-                onMouseEnter={(e) => {
-                  if (!isCurrent) {
-                    e.currentTarget.style.boxShadow = '0 4px 12px rgba(0, 0, 0, 0.12)';
-                    e.currentTarget.style.transform = 'translateY(-2px)';
-                  }
-                }}
-                onMouseLeave={(e) => {
-                  if (!isCurrent) {
-                    e.currentTarget.style.boxShadow = '0 1px 3px rgba(0, 0, 0, 0.08)';
-                    e.currentTarget.style.transform = 'translateY(0)';
-                  }
                 }}
               >
                 <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12 }}>
@@ -582,8 +571,32 @@ export const VsumDetailsModal: React.FC<Props> = ({ isOpen, vsumId, onClose, onS
 
   return ReactDOM.createPortal(
       <>
-        <dialog open style={overlay} onClose={onClose} onCancel={onClose} onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
-          <div style={dialog}>
+        <style>{`
+          .version-card-hover:not(.version-card-current):hover {
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12) !important;
+            transform: translateY(-2px);
+          }
+        `}</style>
+        <dialog open style={overlay} onClose={onClose} onCancel={onClose}>
+          <button
+            type="button"
+            aria-label="Close dialog"
+            onClick={onClose}
+            style={{
+              position: 'absolute',
+              top: 0,
+              left: 0,
+              right: 0,
+              bottom: 0,
+              width: '100%',
+              height: '100%',
+              border: 'none',
+              background: 'transparent',
+              cursor: 'pointer',
+              zIndex: 0,
+            }}
+          />
+          <div style={{ ...dialog, position: 'relative', zIndex: 1 }} onClick={(e) => e.stopPropagation()}>
             <div style={header}>
               <h3 style={title}>{details?.name ?? 'VSUM Details'}</h3>
 
@@ -770,8 +783,27 @@ export const VsumDetailsModal: React.FC<Props> = ({ isOpen, vsumId, onClose, onS
         {/*    DELETE CONFIRM     */}
         {/* ===================== */}
         {confirmOpen && (
-            <dialog open style={confirmOverlay} onClose={() => setConfirmOpen(false)} onCancel={() => setConfirmOpen(false)} onClick={(e) => { if (e.target === e.currentTarget && !deleting) setConfirmOpen(false); }}>
-              <div style={confirmBox}>
+            <dialog open style={confirmOverlay} onClose={() => setConfirmOpen(false)} onCancel={() => setConfirmOpen(false)}>
+              <button
+                type="button"
+                aria-label="Close dialog"
+                onClick={() => { if (!deleting) setConfirmOpen(false); }}
+                disabled={deleting}
+                style={{
+                  position: 'absolute',
+                  top: 0,
+                  left: 0,
+                  right: 0,
+                  bottom: 0,
+                  width: '100%',
+                  height: '100%',
+                  border: 'none',
+                  background: 'transparent',
+                  cursor: deleting ? 'not-allowed' : 'pointer',
+                  zIndex: 0,
+                }}
+              />
+              <div style={{ ...confirmBox, position: 'relative', zIndex: 1 }} onClick={(e) => e.stopPropagation()}>
                 <div style={confirmHeader}>Are you sure?</div>
 
                 <div style={confirmBody}>
@@ -834,8 +866,27 @@ export const VsumDetailsModal: React.FC<Props> = ({ isOpen, vsumId, onClose, onS
         {/*   RESTORE CONFIRM     */}
         {/* ===================== */}
         {restoreConfirmOpen !== null && (
-            <dialog open style={confirmOverlay} onClose={() => setRestoreConfirmOpen(null)} onCancel={() => setRestoreConfirmOpen(null)} onClick={(e) => { if (e.target === e.currentTarget && !restoringVersionId) setRestoreConfirmOpen(null); }}>
-              <div style={confirmBox}>
+            <dialog open style={confirmOverlay} onClose={() => setRestoreConfirmOpen(null)} onCancel={() => setRestoreConfirmOpen(null)}>
+              <button
+                type="button"
+                aria-label="Close dialog"
+                onClick={() => { if (!restoringVersionId) setRestoreConfirmOpen(null); }}
+                disabled={restoringVersionId !== null}
+                style={{
+                  position: 'absolute',
+                  top: 0,
+                  left: 0,
+                  right: 0,
+                  bottom: 0,
+                  width: '100%',
+                  height: '100%',
+                  border: 'none',
+                  background: 'transparent',
+                  cursor: restoringVersionId !== null ? 'not-allowed' : 'pointer',
+                  zIndex: 0,
+                }}
+              />
+              <div style={{ ...confirmBox, position: 'relative', zIndex: 1 }} onClick={(e) => e.stopPropagation()}>
                 <div style={confirmHeader}>Restore to this version?</div>
 
                 <div style={confirmBody}>

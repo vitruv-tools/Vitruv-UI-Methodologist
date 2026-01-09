@@ -5,6 +5,7 @@ interface KeywordTagsInputProps {
   onChange: (keywords: string[]) => void;
   placeholder?: string;
   style?: React.CSSProperties;
+  id?: string;
 }
 
 // Color palette for text colors - highly visible against white background
@@ -85,7 +86,8 @@ export const KeywordTagsInput: React.FC<KeywordTagsInputProps> = ({
   keywords,
   onChange,
   placeholder = "Type keywords and press Enter...",
-  style
+  style,
+  id
 }) => {
   const [inputValue, setInputValue] = useState('');
   const [isFocused, setIsFocused] = useState(false);
@@ -159,7 +161,6 @@ export const KeywordTagsInput: React.FC<KeywordTagsInputProps> = ({
 
   return (
     <div
-      role="presentation"
       style={{
         ...containerStyle,
         ...(isFocused ? containerFocusStyle : {}),
@@ -174,6 +175,7 @@ export const KeywordTagsInput: React.FC<KeywordTagsInputProps> = ({
     >
       <input
         ref={inputRef}
+        id={id}
         type="text"
         value={inputValue}
         onChange={handleInputChange}
