@@ -32,11 +32,9 @@ interface EditMetaModelModalProps {
 const modalStyle: React.CSSProperties = {
   background: '#ffffff',
   borderRadius: 0,
-  padding: '24px',
+  padding: '20px',
   width: '480px',
   maxWidth: '90vw',
-  maxHeight: '85vh',
-  overflow: 'auto',
   boxShadow: '0 20px 40px rgba(0, 0, 0, 0.2)',
   // Consistent dark edge so the modal stands out on white background
   border: '1px solid #111827',
@@ -183,7 +181,12 @@ export const EditMetaModelModal: React.FC<EditMetaModelModalProps> = ({
 
   // Helper to sanitize file names for display
   const sanitizeFileName = (fileName: string): string => {
-    return fileName.replace(/[<>:"/\\|?*]/g, '');
+    const invalidChars = ['<', '>', ':', '"', '/', '\\', '|', '?', '*'];
+    let sanitized = fileName;
+    for (const char of invalidChars) {
+      sanitized = sanitized.replaceAll(char, '');
+    }
+    return sanitized;
   };
 
   const handleEcoreFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -424,7 +427,7 @@ export const EditMetaModelModal: React.FC<EditMetaModelModalProps> = ({
         </div>
 
         <div style={formGroupStyle}>
-          <label style={labelStyle}>Files (Optional - upload new files to replace existing ones)</label>
+          <div style={labelStyle}>Files (Optional - upload new files to replace existing ones)</div>
           
           <div style={{ marginBottom: '12px' }}>
             <label
