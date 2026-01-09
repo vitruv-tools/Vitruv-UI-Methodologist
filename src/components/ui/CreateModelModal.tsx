@@ -709,7 +709,6 @@ export const CreateModelModal: React.FC<CreateModelModalProps> = ({
         {/* Modal */}
         <dialog 
           open 
-          role="dialog"
           aria-modal="true"
           aria-labelledby="modal-title"
           tabIndex={-1}
