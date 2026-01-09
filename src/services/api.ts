@@ -448,6 +448,8 @@ class ApiService {
     description?: string;
     domain?: string;
     keyword?: string[];
+    ecoreFileId?: number;
+    genModelFileId?: number;
   }): Promise<{ data: any; message: string }> {
     return this.authenticatedRequest(`/api/v1/meta-models/${id}`, {
       method: 'PUT',
