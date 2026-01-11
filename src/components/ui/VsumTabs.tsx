@@ -236,7 +236,15 @@ export const VsumTabs: React.FC<VsumTabsProps> = ({
         const active = openTabs.find(t => t.instanceId === activeInstanceId);
         const id = active?.id;
         if (!id) return;
-        await saveById(id);
+        try {
+            await saveById(id);
+        } catch (error) {
+            console.error('Save failed:', error);
+            setPopup({ 
+                message: error instanceof Error ? error.message : 'Failed to save VSUM', 
+                type: 'error' 
+            });
+        }
     };
 
     // ---- check build ------------------------------------------

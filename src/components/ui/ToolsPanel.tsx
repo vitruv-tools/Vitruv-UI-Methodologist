@@ -1,6 +1,8 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { CreateModelModal } from './CreateModelModal';
+import { EditMetaModelModal } from './EditMetaModelModal';
 import { apiService } from '../../services/api';
+import { useAuth } from '../../contexts/AuthContext';
 
 interface ToolsPanelProps {
   onEcoreFileUpload?: (fileContent: string, meta?: { fileName?: string; uploadId?: string; description?: string; keywords?: string; domain?: string; createdAt?: string }) => void;
@@ -26,48 +28,41 @@ const toolsPanelStyle: React.CSSProperties = {
 };
 
 const titleStyle: React.CSSProperties = {
-  fontSize: 'clamp(14px, 3vw, 18px)',
+  fontSize: '18px',
   fontWeight: 700,
-  marginBottom: 'clamp(8px, 2vw, 16px)',
+  marginBottom: '16px',
   color: '#2c3e50',
   textAlign: 'left',
-  padding: 'clamp(4px, 1vw, 8px) 0',
-  borderBottom: '2px solid #3498db',
+  padding: '8px 0',
+  borderBottom: '1px solid #2c3e50',
   fontFamily: 'Georgia, serif',
-  lineHeight: '1.2',
 };
 
 const createButtonStyle: React.CSSProperties = {
   width: '100%',
-  padding: 'clamp(10px, 2vw, 14px) clamp(12px, 3vw, 18px)',
-  margin: 'clamp(8px, 2vw, 12px) 0 clamp(12px, 3vw, 20px) 0',
+  padding: '14px 18px',
+  marginBottom: '12px',
   border: 'none',
   borderRadius: '6px',
   background: 'linear-gradient(135deg, #3498db 0%, #2980b9 100%)',
   color: '#ffffff',
-  fontSize: 'clamp(12px, 2.5vw, 15px)',
+  fontSize: '15px',
   fontWeight: 600,
   cursor: 'pointer',
   transition: 'all 0.3s ease',
   display: 'inline-flex',
   alignItems: 'center',
   justifyContent: 'center',
-  gap: 'clamp(6px, 1.5vw, 10px)',
+  gap: '10px',
   userSelect: 'none',
   boxShadow: '0 3px 10px rgba(52, 152, 219, 0.3)',
   fontFamily: 'Georgia, serif',
-  minHeight: '44px',
 };
 
 const createButtonHoverStyle: React.CSSProperties = {
   transform: 'translateY(-1px)',
   boxShadow: '0 5px 15px rgba(52, 152, 219, 0.4)',
   background: 'linear-gradient(135deg, #2980b9 0%, #1f5f8b 100%)',
-};
-
-const createButtonActiveStyle: React.CSSProperties = {
-  transform: 'translateY(0px)',
-  boxShadow: '0 2px 8px rgba(52, 152, 219, 0.3)',
 };
 
 const filterContainerStyle: React.CSSProperties = {
@@ -137,100 +132,6 @@ const fileCardStyle: React.CSSProperties = {
   padding: '12px',
   marginBottom: '12px',
   boxShadow: '0 2px 6px rgba(0,0,0,0.08)',
-  cursor: 'pointer',
-  transition: 'all 0.3s ease',
-  position: 'relative',
-  fontFamily: 'Georgia, serif',
-  width: '100%',
-  maxWidth: '100%',
-  boxSizing: 'border-box',
-  minHeight: '60px',
-  display: 'flex',
-  flexDirection: 'column',
-};
-
-const fileCardHoverStyle: React.CSSProperties = {
-  boxShadow: '0 4px 12px rgba(52, 152, 219, 0.15)',
-  transform: 'translateY(-1px)',
-  borderColor: '#3498db',
-  background: '#f8f9ff',
-};
-
-
-const toggleButtonStyle: React.CSSProperties = {
-  flex: '1',
-  padding: '8px 12px',
-  border: '1px solid #dee2e6',
-  borderRadius: '6px',
-  background: '#f8f9fa',
-  color: '#495057',
-  fontSize: '12px',
-  fontWeight: '600',
-  cursor: 'pointer',
-  transition: 'all 0.2s ease',
-  display: 'flex',
-  alignItems: 'center',
-  justifyContent: 'space-between',
-};
-
-const toggleButtonHoverStyle: React.CSSProperties = {
-  background: '#e9ecef',
-  borderColor: '#adb5bd',
-};
-
-const ownershipToggleStyle: React.CSSProperties = {
-  padding: '8px 12px',
-  border: '1px solid #dee2e6',
-  borderRadius: '6px',
-  background: '#ffffff',
-  color: '#495057',
-  fontSize: '12px',
-  fontWeight: '600',
-  cursor: 'pointer',
-  transition: 'all 0.2s ease',
-  minWidth: '100px',
-};
-
-const ownershipToggleActiveStyle: React.CSSProperties = {
-  ...ownershipToggleStyle,
-  background: '#3498db',
-  color: '#ffffff',
-  borderColor: '#3498db',
-};
-
-const sortDropdownStyle: React.CSSProperties = {
-  padding: '8px 12px',
-  border: '1px solid #dee2e6',
-  borderRadius: '6px',
-  background: '#ffffff',
-  color: '#495057',
-  fontSize: '12px',
-  fontWeight: '500',
-  cursor: 'pointer',
-  minWidth: '120px',
-};
-
-const fileNameStyle: React.CSSProperties = {
-  fontWeight: '600',
-  color: '#2c3e50',
-  wordBreak: 'break-word',
-  marginBottom: '6px',
-  fontSize: 'clamp(13px, 2.5vw, 15px)',
-  fontFamily: 'Georgia, serif',
-  lineHeight: '1.3',
-  overflowWrap: 'break-word',
-};
-
-const fileMetaStyle: React.CSSProperties = {
-  fontSize: 'clamp(11px, 2vw, 13px)',
-  color: '#5a6c7d',
-  display: 'flex',
-  alignItems: 'center',
-  gap: '6px',
-  fontFamily: 'Georgia, serif',
-  fontStyle: 'italic',
-  flexWrap: 'wrap',
-  lineHeight: '1.4',
 };
 
 const emptyStateStyle: React.CSSProperties = {
@@ -402,6 +303,20 @@ const parseDateRangeFilter = (value: string): { from?: string; to?: string } => 
   return { from: new Date(v).toISOString(), to: new Date(`${v}T23:59:59`).toISOString() };
 };
 
+const checkModelOwnership = (viewModel: any, user: any): boolean => {
+  const userId = user?.id ? String(user.id) : null;
+  if (!userId || !viewModel) return false;
+  
+  return (
+    String(viewModel.ownerId) === userId ||
+    String(viewModel.userId) === userId ||
+    viewModel.ownedByUser ||
+    String(viewModel.owner?.id) === userId ||
+    String(viewModel.createdBy) === userId ||
+    String(viewModel.createdById) === userId
+  );
+};
+
 export const ToolsPanel: React.FC<ToolsPanelProps> = ({ onEcoreFileUpload, onEcoreFileDelete, title = 'Meta Models', allowCreate = true, enableItemClick = true, showBorder = true, suppressApi = false }) => {
   const [isProcessing] = useState(false);
   const [uploadMessage, setUploadMessage] = useState<string>('');
@@ -417,13 +332,18 @@ export const ToolsPanel: React.FC<ToolsPanelProps> = ({ onEcoreFileUpload, onEco
   const [apiError, setApiError] = useState<string>('');
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 10;
-  const [expandedCard, setExpandedCard] = useState<number | null>(null);
   const [parsedFilters, setParsedFilters] = useState<any[]>([]);
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [deleteError, setDeleteError] = useState<string>('');
   const [viewModel, setViewModel] = useState<any>(null);
   const [showAllModels, setShowAllModels] = useState(false);
+  const [metaModelModalTab, setMetaModelModalTab] = useState<'details' | 'edit'>('details');
+  const [showEditModal, setShowEditModal] = useState(false);
+  const { user } = useAuth();
+  const [metaModelDeleteConfirmOpen, setMetaModelDeleteConfirmOpen] = useState(false);
+  const [metaModelDeleting, setMetaModelDeleting] = useState(false);
+  const [metaModelDeleteError, setMetaModelDeleteError] = useState<string>('');
 
   const handleSearchKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key !== 'Tab') return;
@@ -612,11 +532,6 @@ export const ToolsPanel: React.FC<ToolsPanelProps> = ({ onEcoreFileUpload, onEco
     }
   };
 
-  const handleCardRightClick = (e: React.MouseEvent, modelId: number) => {
-    e.preventDefault();
-    setExpandedCard(expandedCard === modelId ? null : modelId);
-  };
-
   const formatRelativeTime = (isoDate: string) => {
     const date = new Date(isoDate);
     const dateStr = date.toLocaleDateString();
@@ -628,20 +543,7 @@ export const ToolsPanel: React.FC<ToolsPanelProps> = ({ onEcoreFileUpload, onEco
     setShowCreateModal(true);
   };
 
-  const getButtonStyle = () => {
-    if (isProcessing) {
-      return { ...createButtonStyle, ...createButtonActiveStyle, cursor: 'not-allowed' };
-    }
-    return createButtonStyle;
-  };
-
   const panelStyle: React.CSSProperties = { ...toolsPanelStyle, borderRight: showBorder ? toolsPanelStyle.borderRight : 'none' };
-
-  const handleDeleteClick = (id: string) => {
-    setDeletingId(id);
-    setDeleteError('');
-    setDeleteConfirmOpen(true);
-  };
 
   const handleConfirmDelete = async () => {
     if (!deletingId) return;
@@ -691,11 +593,11 @@ return (
       )}
       
       <button 
-        style={getButtonStyle()}
+        style={createButtonStyle}
         onClick={handleButtonClick}
         disabled={isProcessing}
         onMouseEnter={(e) => !isProcessing && Object.assign(e.currentTarget.style, createButtonHoverStyle)}
-        onMouseLeave={(e) => !isProcessing && Object.assign(e.currentTarget.style, getButtonStyle())}
+        onMouseLeave={(e) => !isProcessing && Object.assign(e.currentTarget.style, createButtonStyle)}
       >
         {isProcessing ? (
           <>
@@ -709,67 +611,74 @@ return (
       </button>
 
       {!suppressApi && (
-        <div style={{
-          marginTop: '16px',
-          marginBottom: '8px',
-          fontWeight: '700',
-          fontSize: '13px',
-          color: '#2c3e50',
-          borderBottom: '1px solid #3498db',
-          paddingBottom: '6px',
-          fontFamily: 'Georgia, serif',
-        }}>
-          {title}
-        </div>
-      )}
+        <>
+          <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
+            <input
+              type="text"
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              placeholder="Search by name..."
+              style={{
+                flex: 1,
+                padding: '8px 12px',
+                borderRadius: 6,
+                border: '1px solid #cbd5e1',
+                fontSize: 14,
+                outline: 'none',
+              }}
+            />
+            <button
+              onClick={() => {
+                const filters = buildApiFiltersFromParsedFilters(parseSearchQuery(searchTerm), true);
+                const fetchData = async () => {
+                  setIsLoadingModels(true);
+                  setApiError('');
+                  try {
+                    const response = await apiService.findMetaModels(filters);
+                    setApiModels(response.data || []);
+                    setCurrentPage(1);
+                  } catch (error) {
+                    setApiError(error instanceof Error ? error.message : 'Failed to fetch meta models');
+                  } finally {
+                    setIsLoadingModels(false);
+                  }
+                };
+                fetchData();
+              }}
+              style={{
+                padding: '8px 14px',
+                borderRadius: 6,
+                background: '#3b82f6',
+                color: '#fff',
+                border: 'none',
+                cursor: 'pointer',
+                fontWeight: 600,
+              }}
+            >
+              Search
+            </button>
+          </div>
 
-      {!suppressApi && (
-        <div style={{
-          display: 'flex',
-          gap: '8px',
-          margin: '8px 0',
-          alignItems: 'stretch',
-        }}>
-          {/* Left column: Show Advanced Search */}
-          <button
-            style={{
-              ...toggleButtonStyle,
-              flex: '0 0 auto',
-              minWidth: '150px',
-              display: 'flex',
-              justifyContent: 'center',
-              alignItems: 'center',
-              position: 'relative',
-            }}
-            onClick={() => setShowFilters(!showFilters)}
-            onMouseEnter={(e) => {
-              Object.assign(e.currentTarget.style, {
-                ...toggleButtonHoverStyle,
-                justifyContent: 'center',
-              });
-            }}
-            onMouseLeave={(e) => {
-              Object.assign(e.currentTarget.style, {
-                ...toggleButtonStyle,
-                justifyContent: 'center',
-              });
-            }}
-          >
-            <span style={{ textAlign: 'center', lineHeight: '1.3' }}>
-              {showFilters ? 'Hide' : 'Show'}<br />Advanced Search
-            </span>
-            <span style={{ position: 'absolute', right: '12px', top: '50%', transform: 'translateY(-50%)' }}>
-              {showFilters ? '▼' : '▶'}
-            </span>
-          </button>
-          
-          {/* Right column: Sort + Ownership stacked */}
-          <div style={{
-            display: 'flex',
-            flexDirection: 'column',
-            gap: '8px',
-            flex: '1',
-          }}>
+          <div style={{ display: 'flex', gap: 8, marginBottom: 12, alignItems: 'center' }}>
+            <button
+              onClick={() => setShowFilters(!showFilters)}
+              style={{
+                padding: '8px 12px',
+                borderRadius: 6,
+                border: '1px solid #e5e7eb',
+                background: '#ffffff',
+                cursor: 'pointer',
+                fontWeight: 600,
+                fontSize: 13,
+                color: '#374151',
+                display: 'flex',
+                alignItems: 'center',
+                gap: 6,
+              }}
+            >
+              {showFilters ? 'Hide' : 'Show'} Advanced Search
+              <span style={{ fontSize: 10 }}>{showFilters ? '▼' : '▶'}</span>
+            </button>
             <select
               value={`${sortBy}-${sortOrder}`}
               onChange={(e) => {
@@ -777,7 +686,17 @@ return (
                 setSortBy(newSortBy);
                 setSortOrder(newSortOrder);
               }}
-              style={sortDropdownStyle}
+              style={{
+                padding: '8px 12px',
+                borderRadius: 6,
+                border: '1px solid #e5e7eb',
+                background: '#ffffff',
+                cursor: 'pointer',
+                fontWeight: 600,
+                fontSize: 13,
+                color: '#374151',
+                outline: 'none',
+              }}
             >
               <option value="date-desc">Newest First</option>
               <option value="date-asc">Oldest First</option>
@@ -786,16 +705,39 @@ return (
               <option value="domain-asc">Domain A-Z</option>
               <option value="domain-desc">Domain Z-A</option>
             </select>
-            
             <button 
-              style={showAllModels ? ownershipToggleActiveStyle : ownershipToggleStyle}
               onClick={() => setShowAllModels(v => !v)}
-              title={showAllModels ? 'Showing all meta models' : 'Showing only my meta models'}
+              style={{
+                padding: '8px 12px',
+                borderRadius: 6,
+                border: '1px solid #e5e7eb',
+                background: '#ffffff',
+                cursor: 'pointer',
+                fontWeight: 600,
+                fontSize: 13,
+                color: '#374151',
+              }}
+              title={showAllModels ? 'Show only my meta models' : 'Show all meta models'}
             >
               {showAllModels ? 'All Models' : 'My Models'}
             </button>
           </div>
-        </div>
+
+          <div
+            style={{
+              marginTop: '16px',
+              marginBottom: '8px',
+              fontWeight: 700,
+              fontSize: '13px',
+              color: '#2c3e50',
+              borderBottom: '1px solid #2c3e50',
+              paddingBottom: '6px',
+              fontFamily: 'Georgia, serif',
+            }}
+          >
+            {showAllModels ? 'All' : 'My Models'}
+          </div>
+        </>
       )}
 
       {showFilters && (
@@ -973,109 +915,55 @@ return (
             style={fileCardStyle}
             role="button"
             tabIndex={0}
-            onClick={() => {
-              if (!enableItemClick) return;
-              setViewModel(model);
-            }}
             onKeyDown={(e) => {
               if (e.key === 'Enter' || e.key === ' ') {
                 e.preventDefault();
                 if (!enableItemClick) return;
+                console.log('=== BACKEND RESPONSE - Meta Model Data (from card click) ===');
+                console.log('Full model object:', model);
+                console.log('Model keys:', Object.keys(model));
+                console.log('Ownership fields check:', {
+                  ownerId: model.ownerId,
+                  userId: model.userId,
+                  ownedByUser: model.ownedByUser,
+                  owner: model.owner,
+                  currentUser: user,
+                });
+                console.log('==========================================');
                 setViewModel(model);
               }
             }}
-            onContextMenu={(e) => handleCardRightClick(e, model.id)}
-            onMouseEnter={(e) => {
-              Object.assign(e.currentTarget.style, fileCardHoverStyle);
-            }}
-            onMouseLeave={(e) => {
-              Object.assign(e.currentTarget.style, fileCardStyle);
-            }}
           >
-            <div style={fileNameStyle}>
-              {model.name}
-            </div>
-            <div style={fileMetaStyle}>
-              <span>Domain: <strong>{model.domain}</strong></span>
-              <span>•</span>
-              <span title={new Date(model.createdAt).toLocaleString()}>
-                {formatRelativeTime(model.createdAt)}
-              </span>
-              {expandedCard === model.id && (
-                <>
-                  <span>•</span>
-                  <span style={{ fontSize: '11px', color: '#6c757d' }}>
-                    Right-click to collapse details
-                  </span>
-                </>
-              )}
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
+              <div style={{ display: 'flex', flexDirection: 'column' }}>
+                <div style={{ fontWeight: 700, color: '#2c3e50', display: 'flex', alignItems: 'center', gap: 8 }}>
+                  {model.name}
+                </div>
+                <div style={{ fontSize: 12, color: '#5a6c7d' }}>
+                  Created: {(() => {
+                    const d = new Date(model.createdAt);
+                    return `${d.toLocaleDateString()} ${d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
+                  })()}
+                </div>
+              </div>
+
               <button
                 onClick={(e) => {
                   e.stopPropagation();
-                  handleDeleteClick(model.id);
+                  setViewModel(model);
                 }}
                 style={{
-                  padding: '4px 8px',
+                  padding: '6px 10px',
                   border: '1px solid #dee2e6',
                   borderRadius: 6,
-                  background: '#fff',
+                  background: '#ffffff',
                   cursor: 'pointer',
-                  fontSize: 'clamp(10px, 1.8vw, 12px)',
                   fontWeight: 600,
-                  color: '#e03131',
-                  marginLeft: 'auto',
-                  minWidth: 'fit-content',
-                  whiteSpace: 'nowrap',
-                  flexShrink: 0
                 }}
-                title="Delete this meta model"
               >
-                Delete
+                Details
               </button>
             </div>
-            {expandedCard === model.id && (
-              <>
-                {model.keyword && model.keyword.length > 0 && (
-                  <div style={{
-                    fontSize: 'clamp(11px, 2vw, 12px)',
-                    color: '#495057',
-                    marginTop: '6px',
-                    fontFamily: 'Georgia, serif',
-                    wordBreak: 'break-word',
-                    lineHeight: '1.4'
-                  }}>
-                    <strong>Keywords:</strong> {model.keyword.join(', ')}
-                  </div>
-                )}
-                {model.description && (
-                  <div style={{
-                    fontSize: 'clamp(11px, 2vw, 12px)',
-                    color: '#6c757d',
-                    marginTop: '4px',
-                    fontStyle: 'italic',
-                    fontFamily: 'Georgia, serif',
-                    lineHeight: '1.4',
-                    wordBreak: 'break-word',
-                    overflowWrap: 'break-word'
-                  }}>
-                    <strong>Description:</strong> {model.description}
-                  </div>
-                )}
-              </>
-            )}
-            
-            {expandedCard !== model.id && (
-              <div style={{
-                fontSize: 'clamp(9px, 1.5vw, 10px)',
-                color: '#adb5bd',
-                marginTop: '4px',
-                fontStyle: 'italic',
-                fontFamily: 'Georgia, serif',
-                lineHeight: '1.3'
-              }}>
-                Right-click to view details
-              </div>
-            )}
           </div>
         ))}
         {!suppressApi && !isLoadingModels && sortedModels.length === 0 && !apiError && (
@@ -1087,150 +975,384 @@ return (
       )}
 
       {viewModel && (
-          <div
+          <dialog
+              open
               style={{
-                userSelect: 'text',
                 position: 'fixed',
-                inset: 0,
-                background: 'rgba(0,0,0,0.35)',
+                top: 0,
+                left: 0,
+                right: 0,
+                bottom: 0,
+                width: '100%',
+                height: '100%',
+                margin: 0,
+                padding: 0,
+                border: 'none',
+                background: 'transparent',
                 zIndex: 9998,
+              }}
+          >
+            <div
+              role="presentation"
+              style={{
+                position: 'fixed',
+                top: 0,
+                left: 0,
+                right: 0,
+                bottom: 0,
+                width: '100%',
+                height: '100%',
+                background: 'rgba(0,0,0,0.4)',
+                backdropFilter: 'blur(6px)',
+                WebkitBackdropFilter: 'blur(6px)',
+                zIndex: -1,
+              }}
+              onClick={() => setViewModel(null)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ' || e.key === 'Escape') {
+                  e.preventDefault();
+                  setViewModel(null);
+                }
+              }}
+              tabIndex={0}
+              aria-hidden="true"
+            />
+            <div
+                style={{
+                  position: 'relative',
+                  width: 900,
+                  maxWidth: '95vw',
+                  maxHeight: '90vh',
+                  background: '#fff',
+                  borderRadius: 12,
+                  boxShadow: '0 10px 30px rgba(0,0,0,0.25)',
+                  overflow: 'hidden',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  fontFamily: 'Georgia, serif',
+                  margin: 'auto',
+                }}
+                role="dialog"
+                aria-modal="true"
+                aria-labelledby="dialog-title"
+                onClick={(e) => e.stopPropagation()}
+            >
+              <div style={{ padding: '16px 20px', borderBottom: '1px solid #e9ecef', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <h3 id="dialog-title" style={{ margin: 0, fontSize: 18, fontWeight: 700, color: '#2c3e50' }}>{viewModel.name ?? 'Meta Model Details'}</h3>
+
+                <div style={{ display: 'flex', gap: 8 }}>
+                  <button
+                      onClick={() => setMetaModelModalTab('details')}
+                      style={{
+                        border: '1px solid #dee2e6',
+                        background: metaModelModalTab === 'details' ? '#e7f5ff' : '#fff',
+                        borderRadius: 6,
+                        padding: '6px 10px',
+                        cursor: 'pointer',
+                        fontWeight: 700,
+                      }}
+                  >
+                    Details
+                  </button>
+                  
+                  {/* Edit button - temporarily visible for all to debug ownership */}
+                  {(() => {
+                    const isOwner = checkModelOwnership(viewModel, user);
+                    
+                    // Detailed debug logging - expand this in console to see all fields
+                    if (viewModel) {
+                      const userId = user?.id ? String(user.id) : null;
+                      console.log('=== EDIT BUTTON OWNERSHIP DEBUG ===');
+                      console.log('Current User:', user);
+                      console.log('User ID (string):', userId);
+                      console.log('Meta Model Object:', viewModel);
+                      console.log('All Meta Model Keys:', Object.keys(viewModel));
+                      console.log('Ownership Field Values:', {
+                        ownerId: viewModel.ownerId,
+                        userId: viewModel.userId,
+                        ownedByUser: viewModel.ownedByUser,
+                        owner: viewModel.owner,
+                        createdBy: viewModel.createdBy,
+                        createdById: viewModel.createdById,
+                      });
+                      console.log('Comparison Results:', {
+                        'ownerId === userId': String(viewModel.ownerId) === userId,
+                        'userId === userId': String(viewModel.userId) === userId,
+                        'ownedByUser === true': viewModel.ownedByUser === true,
+                        'owner.id === userId': String(viewModel.owner?.id) === userId,
+                        'createdBy === userId': String(viewModel.createdBy) === userId,
+                        'createdById === userId': String(viewModel.createdById) === userId,
+                      });
+                      console.log('Final isOwner result:', isOwner);
+                      console.log('===================================');
+                    }
+                    
+                    return (
+                      <button
+                          onClick={() => {
+                            setShowEditModal(true);
+                          }}
+                          style={{
+                            border: '1px solid #dee2e6',
+                            background: metaModelModalTab === 'edit' ? '#e7f5ff' : '#fff',
+                            borderRadius: 6,
+                            padding: '6px 10px',
+                            cursor: 'pointer',
+                            fontWeight: 700,
+                          }}
+                      >
+                        Edit
+                      </button>
+                    );
+                  })()}
+
+                  <button aria-label="Close" style={{ border: 'none', background: 'transparent', fontSize: 22, cursor: 'pointer', color: '#6c757d' }} onClick={() => setViewModel(null)}>
+                    ×
+                  </button>
+                </div>
+              </div>
+
+              <div style={{ padding: 20, overflowY: 'auto', flex: 1 }}>
+                {metaModelModalTab === 'edit' && (
+                    <div style={{ fontSize: 13, color: '#6c757d', fontStyle: 'italic', textAlign: 'center', padding: '20px' }}>
+                      Click the "Edit" button above to open the edit modal.
+                    </div>
+                )}
+                {metaModelModalTab === 'details' && (
+                    <>
+                      <div style={{ fontSize: 12, color: '#6c757d', marginBottom: 10 }}>
+                        {viewModel.updatedAt && (
+                            <>
+                              <strong>Updated:</strong> {new Date(viewModel.updatedAt).toLocaleDateString()}
+                            </>
+                        )}
+                      </div>
+
+                      <div style={{ fontSize: 12, fontWeight: 700, color: '#495057', marginTop: 12, marginBottom: 6 }}>Name</div>
+                      <div style={{ fontSize: 13, color: '#2c3e50', marginBottom: 12 }}>{viewModel.name}</div>
+
+                      <div style={{ fontSize: 12, fontWeight: 700, color: '#495057', marginTop: 12, marginBottom: 6 }}>Description</div>
+                      <div style={{ fontSize: 13, color: '#2c3e50', marginBottom: 12 }}>
+                        {viewModel.description || <span style={{ fontStyle: 'italic', color: '#6c757d' }}>No description provided.</span>}
+                      </div>
+
+                      <div style={{ fontSize: 12, fontWeight: 700, color: '#495057', marginTop: 12, marginBottom: 6 }}>Domain</div>
+                      <div style={{ fontSize: 13, color: '#2c3e50', marginBottom: 12 }}>{viewModel.domain || '—'}</div>
+
+                      <div style={{ fontSize: 12, fontWeight: 700, color: '#495057', marginTop: 12, marginBottom: 6 }}>Keywords</div>
+                      <div style={{ fontSize: 13, color: '#2c3e50', marginBottom: 12 }}>
+                        {viewModel.keyword && viewModel.keyword.length > 0
+                            ? viewModel.keyword.join(', ')
+                            : '—'}
+                      </div>
+
+                      {viewModel.createdAt && (
+                          <>
+                            <div style={{ fontSize: 12, fontWeight: 700, color: '#495057', marginTop: 12, marginBottom: 6 }}>Created At</div>
+                            <div style={{ fontSize: 13, color: '#2c3e50', marginBottom: 12 }}>
+                              {formatRelativeTime(viewModel.createdAt)}
+                            </div>
+                          </>
+                      )}
+
+                      {viewModel.updatedAt && (
+                          <>
+                            <div style={{ fontSize: 12, fontWeight: 700, color: '#495057', marginTop: 12, marginBottom: 6 }}>Updated At</div>
+                            <div style={{ fontSize: 13, color: '#2c3e50', marginBottom: 12 }}>
+                              {formatRelativeTime(viewModel.updatedAt)}
+                            </div>
+                          </>
+                      )}
+                    </>
+                )}
+              </div>
+
+              <div style={{ padding: '12px 20px', borderTop: '1px solid #e9ecef', display: 'flex', justifyContent: 'space-between', gap: 8 }}>
+                <button
+                    style={{
+                      padding: '8px 14px',
+                      borderRadius: 6,
+                      border: '1px solid #dee2e6',
+                      background: '#fff',
+                      color: '#495057',
+                      fontWeight: 700,
+                      cursor: 'pointer',
+                    }}
+                    onClick={() => setViewModel(null)}
+                >
+                  Close
+                </button>
+
+                <div style={{ display: 'flex', gap: 8 }}>
+                  {metaModelModalTab === 'details' && (
+                      <button
+                          style={{
+                            padding: '8px 14px',
+                            borderRadius: 6,
+                            border: '1px solid #fecaca',
+                            background: '#fef2f2',
+                            color: '#dc2626',
+                            fontWeight: 700,
+                            cursor: 'pointer',
+                          }}
+                          onClick={() => setMetaModelDeleteConfirmOpen(true)}
+                      >
+                        Delete
+                      </button>
+                  )}
+                </div>
+              </div>
+            </div>
+          </dialog>
+      )}
+
+      {/* Meta Model Delete Confirmation */}
+      {metaModelDeleteConfirmOpen && viewModel && (
+          <div
+              role="dialog"
+              aria-modal="true"
+              style={{
+                position: 'fixed',
+                top: 0,
+                left: 0,
+                right: 0,
+                bottom: 0,
+                width: '100%',
+                height: '100%',
+                margin: 0,
+                padding: 0,
+                border: 'none',
+                background: 'transparent',
+                zIndex: 10000,
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
               }}
           >
             <div
+              role="presentation"
+              style={{
+                position: 'fixed',
+                top: 0,
+                left: 0,
+                right: 0,
+                bottom: 0,
+                width: '100%',
+                height: '100%',
+                background: 'rgba(0,0,0,0.4)',
+                backdropFilter: 'blur(6px)',
+                WebkitBackdropFilter: 'blur(6px)',
+                zIndex: -1,
+              }}
+              onClick={() => { if (!metaModelDeleting) setMetaModelDeleteConfirmOpen(false); }}
+              onKeyDown={(e) => {
+                if ((e.key === 'Enter' || e.key === ' ' || e.key === 'Escape') && !metaModelDeleting) {
+                  e.preventDefault();
+                  setMetaModelDeleteConfirmOpen(false);
+                }
+              }}
+              tabIndex={0}
+              aria-hidden="true"
+            />
+            <div
                 style={{
-                  background: '#ffffff',
+                  position: 'relative',
+                  width: 420,
+                  maxWidth: '90vw',
+                  background: '#fff',
                   borderRadius: 10,
-                  boxShadow: '0 6px 24px rgba(0,0,0,0.2)',
-                  padding: '24px 28px',
-                  maxWidth: 520,
-                  width: '90%',
+                  boxShadow: '0 14px 34px rgba(0,0,0,0.25)',
+                  overflow: 'hidden',
                   fontFamily: 'Georgia, serif',
+                  margin: 'auto',
                 }}
+                role="dialog"
+                aria-modal="true"
+                aria-labelledby="delete-dialog-title"
+                onClick={(e) => e.stopPropagation()}
             >
-              <div
-                  style={{
-                    display: 'flex',
-                    justifyContent: 'space-between',
-                    alignItems: 'center',
-                    marginBottom: 16,
-                  }}
-              >
-                <div
-                    style={{
-                      fontSize: 18,
-                      fontWeight: 700,
-                      color: '#2c3e50',
-                    }}
-                >
-                  Meta Model Details
-                </div>
-                <button
-                    onClick={() => setViewModel(null)}
-                    style={{
-                      border: 'none',
-                      background: 'transparent',
-                      fontSize: 18,
-                      cursor: 'pointer',
-                      color: '#6c757d',
-                    }}
-                    aria-label="Close"
-                    title="Close"
-                >
-                  ×
-                </button>
-              </div>
+              <h2 id="delete-dialog-title" style={{ padding: '12px 16px', borderBottom: '1px solid #f0f0f0', fontWeight: 700, color: '#1f2937', margin: 0, fontSize: 16 }}>
+                Are you sure?
+              </h2>
 
-              <div
-                  style={{
-                    fontSize: 13,
-                    color: '#495057',
-                    lineHeight: 1.5,
-                  }}
-              >
-                <p>
-                  <strong>Name:</strong> {viewModel.name}
-                </p>
-                <p style={{ marginTop: 12 }}>
-                  <strong>Description:</strong>
-                  <br />
-                  <span style={{ fontStyle: 'italic' }}>
-                  {viewModel.description || 'No description provided.'}
-                </span>
-                </p>
-                <p>
-                  <strong>Domain:</strong> {viewModel.domain || '—'}
-                </p>
-                <p>
-                  <strong>Keywords:</strong>{' '}
-                  {viewModel.keyword && viewModel.keyword.length > 0
-                      ? viewModel.keyword.join(', ')
-                      : '—'}
-                </p>
-                <p>
-                  <strong>Created At:</strong>{' '}
-                  {viewModel.createdAt
-                      ? formatRelativeTime(viewModel.createdAt)
-                      : '—'}
-                </p>
-                {viewModel.updatedAt && (
-                    <p>
-                      <strong>Updated At:</strong>{' '}
-                      {formatRelativeTime(viewModel.updatedAt)}
-                    </p>
-                )}
-              </div>
-
-              <div
-                  style={{
-                    marginTop: 20,
-                    display: 'flex',
-                    justifyContent: 'flex-end',
-                    gap: 8,
-                  }}
-              >
-                {onEcoreFileUpload && (
-                    <button
-                        onClick={() => {
-                          onEcoreFileUpload(`name="${viewModel.name}"`, {
-                            fileName: `${viewModel.name}.ecore`,
-                            uploadId: viewModel.id?.toString(),
-                            description: viewModel.description,
-                            keywords: viewModel.keyword?.join(', '),
-                            domain: viewModel.domain,
-                            createdAt: viewModel.createdAt,
-                          });
-                        }}
+              <div style={{ padding: '16px', color: '#4b5563', fontSize: 14 }}>
+                This action will permanently delete this Meta Model and cannot be undone.
+                {metaModelDeleteError && (
+                    <div
                         style={{
-                          padding: '8px 14px',
+                          marginTop: 12,
+                          padding: 10,
+                          border: '1px solid #f5c6cb',
+                          background: '#f8d7da',
+                          color: '#721c24',
                           borderRadius: 6,
-                          border: '1px solid #3498db',
-                          background: '#3498db',
-                          color: '#ffffff',
-                          fontSize: 13,
-                          fontWeight: 600,
-                          cursor: 'pointer',
+                          fontSize: 12,
                         }}
                     >
-                      Load into workspace
-                    </button>
+                      {metaModelDeleteError}
+                    </div>
                 )}
+              </div>
+
+              <div style={{ padding: '12px 16px', borderTop: '1px solid #f0f0f0', display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
                 <button
-                    onClick={() => setViewModel(null)}
+                    onClick={() => {
+                      setMetaModelDeleteConfirmOpen(false);
+                      setMetaModelDeleteError('');
+                    }}
+                    disabled={metaModelDeleting}
                     style={{
                       padding: '8px 14px',
                       borderRadius: 6,
                       border: '1px solid #dee2e6',
-                      background: '#ffffff',
-                      color: '#495057',
-                      fontSize: 13,
-                      fontWeight: 600,
+                      background: '#fff',
+                      color: '#374151',
+                      fontWeight: 700,
                       cursor: 'pointer',
                     }}
                 >
-                  Close
+                  Cancel
+                </button>
+
+                <button
+                    onClick={async () => {
+                      if (!viewModel?.id) return;
+                      setMetaModelDeleteError('');
+                      setMetaModelDeleting(true);
+                      try {
+                        await apiService.deleteMetaModel(viewModel.id);
+                        setMetaModelDeleteConfirmOpen(false);
+                        setViewModel(null);
+                        setUploadMessage('Meta Model deleted successfully!');
+                        setUploadMessageType('success');
+                        const filters = buildApiFiltersFromParsedFilters(parsedFilters, true);
+                        const response = await apiService.findMetaModels(filters);
+                        setApiModels(response.data || []);
+                        setTimeout(() => setUploadMessage(''), 3000);
+                      } catch (error: any) {
+                        let msg = 'Failed to delete meta model';
+                        if (error?.response?.data?.message) {
+                          msg = error.response.data.message;
+                        } else if (error?.message) {
+                          msg = error.message;
+                        }
+                        setMetaModelDeleteError(msg);
+                      } finally {
+                        setMetaModelDeleting(false);
+                      }
+                    }}
+                    disabled={metaModelDeleting}
+                    style={{
+                      padding: '8px 14px',
+                      borderRadius: 6,
+                      border: 'none',
+                      background: '#dc2626',
+                      color: '#fff',
+                      fontWeight: 700,
+                      cursor: 'pointer',
+                    }}
+                >
+                  {metaModelDeleting ? 'Deleting…' : 'Delete'}
                 </button>
               </div>
             </div>
@@ -1425,6 +1547,63 @@ return (
             </div>
           </div>
         </div>
+      )}
+
+      {/* Edit Meta Model Modal */}
+      {showEditModal && viewModel && (
+        <EditMetaModelModal
+          isOpen={showEditModal}
+          onClose={() => {
+            setShowEditModal(false);
+            setMetaModelModalTab('details');
+          }}
+          onSuccess={async () => {
+            // Refresh the meta models list and get updated model data
+            // This handles all 3 backend scenarios:
+            // 1. Original owned by user -> updates original
+            // 2. Clone owned by user, original also owned -> updates both
+            // 3. Clone owned by user, original owned by different user -> creates new source, updates both
+            const refreshData = async () => {
+              setIsLoadingModels(true);
+              setApiError('');
+              try {
+                // First, refresh the list
+                const filters = buildApiFiltersFromParsedFilters(parsedFilters, true);
+                const listResponse = await apiService.findMetaModels(filters);
+                setApiModels(listResponse.data || []);
+                
+                // Then, fetch the specific meta model to get latest data including any new source relationships
+                // This is important for scenario 3 where a new source might be created
+                try {
+                  const modelResponse = await apiService.getMetaModel(String(viewModel.id));
+                  if (modelResponse.data) {
+                    setViewModel(modelResponse.data);
+                  } else {
+                    // Fallback: find in the list
+                    const updatedModel = listResponse.data?.find((m: any) => m.id === viewModel.id);
+                    if (updatedModel) {
+                      setViewModel(updatedModel);
+                    }
+                  }
+                } catch (modelError) {
+                  // If fetching specific model fails, use the list data
+                  console.warn('Could not fetch specific model, using list data:', modelError);
+                  const updatedModel = listResponse.data?.find((m: any) => m.id === viewModel.id);
+                  if (updatedModel) {
+                    setViewModel(updatedModel);
+                  }
+                }
+              } catch (error) {
+                console.error('Error refreshing meta models:', error);
+              } finally {
+                setIsLoadingModels(false);
+              }
+            };
+            await refreshData();
+          }}
+          metaModel={viewModel}
+          isOwner={checkModelOwnership(viewModel, user)}
+        />
       )}
     </div>
   );

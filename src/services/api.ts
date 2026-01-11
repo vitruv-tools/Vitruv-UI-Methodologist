@@ -448,6 +448,8 @@ class ApiService {
     description?: string;
     domain?: string;
     keyword?: string[];
+    ecoreFileId?: number;
+    genModelFileId?: number;
   }): Promise<{ data: any; message: string }> {
     return this.authenticatedRequest(`/api/v1/meta-models/${id}`, {
       method: 'PUT',
@@ -594,6 +596,16 @@ class ApiService {
    */
   async recoverVsum(id: number | string): Promise<ApiResponse<Record<string, never>>> {
     return this.authenticatedRequest(`/api/v1/vsums/${id}/recovery`, {
+      method: 'PUT',
+    });
+  }
+
+  /**
+   * vSUMS: Restore to a specific version
+   * PUT /api/v1/vsums/{vsumId}/restore/{versionId}
+   */
+  async restoreVsumVersion(vsumId: number | string, versionId: number | string): Promise<ApiResponse<Record<string, never>>> {
+    return this.authenticatedRequest(`/api/v1/vsums/${vsumId}/restore/${versionId}`, {
       method: 'PUT',
     });
   }

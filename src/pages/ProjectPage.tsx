@@ -101,11 +101,16 @@ export const ProjectPage: React.FC = () => {
         setOpenChoice({ id, existingInstanceId: existing.instanceId });
         return;
       }
-      await openVsumById(id, { forceNew: custom.detail?.forceNew });
+      try {
+        await openVsumById(id, { forceNew: custom.detail?.forceNew });
+      } catch (error) {
+        console.error('Failed to open VSUM:', error);
+        showInfo(error instanceof Error ? error.message : 'Failed to open project');
+      }
     };
     globalThis.addEventListener('vitruv.openVsum', handler as EventListener);
     return () => globalThis.removeEventListener('vitruv.openVsum', handler as EventListener);
-  }, [openTabs, openVsumById]);
+  }, [openTabs, openVsumById, showInfo]);
 
   // Close active workspace tab when canvas becomes empty (no boxes)
   useEffect(() => {
@@ -123,9 +128,13 @@ export const ProjectPage: React.FC = () => {
 
       console.log('🔃 Reloading workspace for VSUM:', activeTab.id);
       
-      // Reload the project boxes for the active tab
-      // skipReset = true because the reset is already done in handleBackToWorkspace
-      await fetchAndLoadProjectBoxes(activeTab.id, true);
+      try {
+        // Reload the project boxes for the active tab
+        // skipReset = true because the reset is already done in handleBackToWorkspace
+        await fetchAndLoadProjectBoxes(activeTab.id, true);
+      } catch (error) {
+        console.error('Failed to reload workspace:', error);
+      }
     };
 
     globalThis.addEventListener('vitruv.reloadWorkspace', handleReloadWorkspace as EventListener);
@@ -222,7 +231,12 @@ export const ProjectPage: React.FC = () => {
         if (!openChoice) return;
         const id = openChoice.id;
         setOpenChoice(null);
-        await openVsumById(id, { forceNew: true });
+        try {
+          await openVsumById(id, { forceNew: true });
+        } catch (error) {
+          console.error('Failed to open VSUM in new tab:', error);
+          showInfo(error instanceof Error ? error.message : 'Failed to open project');
+        }
       }}
       onCancel={async () => {
         if (!openChoice) return;

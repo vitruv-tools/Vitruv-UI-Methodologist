@@ -69,7 +69,12 @@ function AppContent() {
   };
 
   const handleLogout = async () => {
-    await signOut();
+    try {
+      await signOut();
+    } catch (error) {
+      console.error('Logout error:', error);
+      // Still proceed with logout even if there's an error
+    }
   };
 
   return (

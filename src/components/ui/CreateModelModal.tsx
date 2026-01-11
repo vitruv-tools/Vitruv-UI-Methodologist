@@ -213,12 +213,22 @@ const buttonHoverStyle: React.CSSProperties = {
 
 const overlayStyle: React.CSSProperties = {
   position: 'fixed',
-  inset: 0,
-  background: 'rgba(0,0,0,0.55)',
-  zIndex: 11000, // above modal
+  top: 0,
+  left: 0,
+  right: 0,
+  bottom: 0,
+  width: '100%',
+  height: '100%',
+  background: 'transparent',
+  backdropFilter: 'blur(6px)',
+  WebkitBackdropFilter: 'blur(6px)',
+  zIndex: 11000,
   display: 'flex',
   alignItems: 'center',
   justifyContent: 'center',
+  margin: 0,
+  padding: 0,
+  border: 'none',
 };
 
 const overlayCardStyle: React.CSSProperties = {
@@ -477,10 +487,17 @@ export const CreateModelModal: React.FC<CreateModelModalProps> = ({
     const deletePromises = filesToDelete.map(fileId => 
       apiService.deleteFile(fileId).catch(err => {
         console.error(`Failed to delete file ${fileId}:`, err);
+        // Return null to indicate failure, but don't throw
+        return null;
       })
     );
 
-    await Promise.all(deletePromises);
+    try {
+      await Promise.all(deletePromises);
+    } catch (error) {
+      console.error('Error during file cleanup:', error);
+      // Continue even if cleanup fails
+    }
   };
 
   const handleCreateModel = async () => {
@@ -670,7 +687,12 @@ export const CreateModelModal: React.FC<CreateModelModalProps> = ({
       <>
         {/* Full-screen Submit Overlay */}
         {submitProgress.isSubmitting && (
-            <dialog open style={overlayStyle} aria-label="Building meta model">
+            <dialog open style={{
+              ...overlayStyle,
+              background: 'transparent',
+              backdropFilter: 'blur(6px)',
+              WebkitBackdropFilter: 'blur(6px)',
+            }} aria-label="Building meta model">
               <div style={overlayCardStyle} role="presentation" onMouseDown={(e) => e.stopPropagation()}>
                 <div style={overlayTitleStyle}>Building Meta Model…</div>
                 <div style={overlayTextStyle}>Please wait while we process your files.</div>
@@ -685,10 +707,38 @@ export const CreateModelModal: React.FC<CreateModelModalProps> = ({
         )}
 
         {/* Modal */}
-        <dialog open style={modalOverlayStyle} onClose={handleClose} onCancel={handleClose} onClick={(e) => { if (e.target === e.currentTarget) handleClose(); }}>
+        <dialog 
+          open 
+          aria-modal="true"
+          aria-labelledby="modal-title"
+          tabIndex={-1}
+          style={{
+            ...modalOverlayStyle,
+            background: 'transparent',
+            backdropFilter: 'blur(6px)',
+            WebkitBackdropFilter: 'blur(6px)',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            width: '100%',
+            height: '100%',
+            margin: 0,
+            padding: 0,
+            border: 'none',
+          }} 
+          onClose={handleClose} 
+          onCancel={handleClose}
+          onClick={(e) => { if (e.target === e.currentTarget) handleClose(); }}
+          onKeyDown={(e) => { 
+            if (e.key === 'Escape') {
+              handleClose();
+            }
+          }}
+        >
           <div style={modalStyle}>
             <div style={modalHeaderStyle}>
-              <h2 style={modalTitleStyle}>Import Meta Model</h2>
+              <h2 id="modal-title" style={modalTitleStyle}>Import Meta Model</h2>
               <button
                   style={closeButtonStyle}
                   onClick={handleClose}
