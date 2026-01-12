@@ -3,6 +3,7 @@ import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-d
 import { AuthPage } from './components/auth/AuthPage';
 import { HomePage } from './pages/HomePage';
 import { ProjectPage } from './pages/ProjectPage';
+import { EditorTest } from './pages/EditorTest';  // <- NEU
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { apiService } from './services/api';
 import { exportFlowData } from './utils';
@@ -34,8 +35,6 @@ function ProtectedRoute({ children }: Readonly<{ children: React.ReactNode }>) {
 
   return <>{children}</>;
 }
-
-// Render MainLayout immediately without lazy loading for consistent UX across routes
 
 function AppContent() {
   const { user, signOut } = useAuth();
@@ -73,7 +72,6 @@ function AppContent() {
       await signOut();
     } catch (error) {
       console.error('Logout error:', error);
-      // Still proceed with logout even if there's an error
     }
   };
 
@@ -112,6 +110,8 @@ function App() {
               <ProjectPage />
             </ProtectedRoute>
           } />
+          {/* NEU - EditorTest Route */}
+          <Route path="/editor-test" element={<EditorTest />} />
         </Routes>
       </AuthProvider>
     </Router>

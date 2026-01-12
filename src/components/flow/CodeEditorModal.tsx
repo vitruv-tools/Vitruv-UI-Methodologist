@@ -1,4 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
+import Editor, { OnMount, Monaco } from '@monaco-editor/react';
+import { reactionsMonarch } from './ReactionsMonarchGrammar';
 
 interface CodeEditorModalProps {
   readonly isOpen: boolean;
@@ -11,7 +13,6 @@ interface CodeEditorModalProps {
   readonly targetFileName?: string;
 }
 
-// Gemeinsame Button-Styles
 const buttonBaseStyles = {
   padding: '6px 12px',
   border: 'none',
@@ -43,46 +44,82 @@ export function CodeEditorModal({
   targetFileName,
 }: CodeEditorModalProps) {
   const [code, setCode] = useState(initialCode);
-  const [history, setHistory] = useState<string[]>([initialCode]);
-  const [historyIndex, setHistoryIndex] = useState(0);
   const [saving, setSaving] = useState(false);
-  const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const editorRef = useRef<any>(null); 
+  const [lspConnected, setLspConnected] = useState(false);
 
-  // Reset state when modal opens or initialCode changes
   useEffect(() => {
     setCode(initialCode);
-    setHistory([initialCode]);
-    setHistoryIndex(0);
   }, [initialCode, isOpen]);
 
-  // Auto-focus textarea when modal opens
-  useEffect(() => {
-    if (isOpen && textareaRef.current) {
-      textareaRef.current.focus();
-    }
-  }, [isOpen]);
-
-  const handleCodeChange = (newCode: string) => {
-    setCode(newCode);
-    const newHistory = history.slice(0, historyIndex + 1);
-    newHistory.push(newCode);
-    setHistory(newHistory);
-    setHistoryIndex(newHistory.length - 1);
+  const handleEditorDidMount: OnMount = (editor, monacoInstance) => {
+    editorRef.current = editor;
+    
+    monacoInstance.languages.register({ id: 'reactions' });
+    monacoInstance.languages.setMonarchTokensProvider('reactions', reactionsMonarch);
+    
+    connectToLsp(monacoInstance);
+    
+    editor.focus();
   };
 
-  const handleUndo = () => {
-    if (historyIndex > 0) {
-      const newIndex = historyIndex - 1;
-      setHistoryIndex(newIndex);
-      setCode(history[newIndex]);
-    }
-  };
+  const connectToLsp = (monacoInstance: Monaco) => {
+    try {
+      const wsUrl = 'ws://localhost:9811/lsp';
+      const webSocket = new WebSocket(wsUrl);
 
-  const handleRedo = () => {
-    if (historyIndex < history.length - 1) {
-      const newIndex = historyIndex + 1;
-      setHistoryIndex(newIndex);
-      setCode(history[newIndex]);
+      webSocket.onopen = () => {
+        console.log('LSP WebSocket connected');
+        setLspConnected(true);
+
+        const initMessage = {
+          jsonrpc: '2.0',
+          id: 1,
+          method: 'initialize',
+          params: {
+            processId: null,
+            rootUri: null,
+            capabilities: {
+              textDocument: {
+                completion: {
+                  completionItem: {
+                    snippetSupport: true
+                  }
+                },
+                hover: {},
+                signatureHelp: {},
+                definition: {},
+                references: {},
+                documentSymbol: {},
+              }
+            }
+          }
+        };
+
+        webSocket.send(JSON.stringify(initMessage));
+      };
+
+      webSocket.onmessage = (event) => {
+        try {
+          const message = JSON.parse(event.data);
+          console.log('LSP Response:', message);
+        } catch (err) {
+          console.error('Failed to parse LSP message', err);
+        }
+      };
+
+      webSocket.onerror = (error) => {
+        console.error('LSP WebSocket error:', error);
+        setLspConnected(false);
+      };
+
+      webSocket.onclose = () => {
+        console.log('LSP WebSocket closed');
+        setLspConnected(false);
+      };
+
+    } catch (err) {
+      console.error('Failed to connect to LSP', err);
     }
   };
 
@@ -108,64 +145,25 @@ export function CodeEditorModal({
     }
   };
 
-  const handleKeyDown = (e: React.KeyboardEvent) => {
-    const isCtrlOrCmd = e.ctrlKey || e.metaKey;
+  const handleUndo = () => {
+    editorRef.current?.trigger('keyboard', 'undo', null);
+  };
 
-    // Tab-Unterstützung im Editor
-    if (e.key === 'Tab') {
-      e.preventDefault();
-      const textarea = textareaRef.current;
-      if (!textarea) return;
+  const handleRedo = () => {
+    editorRef.current?.trigger('keyboard', 'redo', null);
+  };
 
-      const { selectionStart: start, selectionEnd: end } = textarea;
-      const newCode = code.substring(0, start) + '  ' + code.substring(end);
-
-      handleCodeChange(newCode);
-      setTimeout(() => {
-        textarea.selectionStart = textarea.selectionEnd = start + 2;
-      }, 0);
-      return;
-    }
-
-    if (!isCtrlOrCmd) return;
-
-    // Strg+S zum Speichern
-    if (e.key === 's') {
-      e.preventDefault();
-      handleSave();
-    }
-    // Strg+Z für Undo
-    else if (e.key === 'z' && !e.shiftKey) {
-      e.preventDefault();
-      handleUndo();
-    }
-    // Strg+Shift+Z oder Strg+Y für Redo
-    else if ((e.shiftKey && e.key === 'z') || e.key === 'y') {
-      e.preventDefault();
-      handleRedo();
-    }
+  const handleFormat = () => {
+    editorRef.current?.getAction('editor.action.formatDocument')?.run();
   };
 
   const handleClear = () => {
     if (globalThis.confirm('Do you want to delete the whole code?')) {
-      handleCodeChange('');
+      setCode('');
     }
   };
 
-  const handleFormat = () => {
-    const formatted = code
-      .split('\n')
-      .map(line => line.trimEnd())
-      .join('\n')
-      .replaceAll(/\n{3,}/g, '\n\n');
-    handleCodeChange(formatted);
-  };
-
   if (!isOpen) return null;
-
-  const canUndo = historyIndex > 0;
-  const canRedo = historyIndex < history.length - 1;
-  const lineCount = code.split('\n').length;
 
   return (
     <dialog
@@ -207,7 +205,6 @@ export function CodeEditorModal({
         }}
         onKeyDown={(e) => e.stopPropagation()}
       >
-        {/* Header */}
         <div
           style={{
             padding: '16px 24px',
@@ -221,6 +218,11 @@ export function CodeEditorModal({
           <div>
             <h3 id="code-editor-title" style={{ margin: 0, color: '#fff', fontSize: '18px', fontWeight: 600 }}>
               Reaction Editor
+              {lspConnected && (
+                <span style={{ marginLeft: '12px', color: '#0e7a0d', fontSize: '14px' }}>
+                  ● LSP Connected
+                </span>
+              )}
             </h3>
             {sourceFileName && targetFileName && (
               <p style={{ margin: '4px 0 0 0', color: '#888', fontSize: '16px' }}>
@@ -245,7 +247,6 @@ export function CodeEditorModal({
           </button>
         </div>
 
-        {/* Toolbar */}
         <div
           style={{
             padding: '12px 24px',
@@ -258,17 +259,15 @@ export function CodeEditorModal({
         >
           <button
             onClick={handleUndo}
-            disabled={!canUndo}
-            style={createButtonStyles('#0e639c', '#fff', !canUndo)}
-            title="Undo (Ctlr+Z)"
+            style={createButtonStyles('#0e639c')}
+            title="Undo (Ctrl+Z)"
           >
             ↶ Undo
           </button>
           <button
             onClick={handleRedo}
-            disabled={!canRedo}
-            style={createButtonStyles('#0e639c', '#fff', !canRedo)}
-            title="Repeat (Ctlr+Shift+Z)"
+            style={createButtonStyles('#0e639c')}
+            title="Redo (Ctrl+Shift+Z)"
           >
             ↷ Redo
           </button>
@@ -276,14 +275,14 @@ export function CodeEditorModal({
           <button
             onClick={handleFormat}
             style={createButtonStyles('#0e639c')}
-            title="format code"
+            title="Format code"
           >
             Format
           </button>
           <button
             onClick={handleClear}
             style={createButtonStyles('#c72e2e')}
-            title="delete all"
+            title="Delete all"
           >
             🗑 Clear
           </button>
@@ -298,7 +297,7 @@ export function CodeEditorModal({
                 color: '#fff',
                 fontWeight: 600,
               }}
-              title="delete relation"
+              title="Delete relation"
             >
               🗑️ Delete Relation
             </button>
@@ -313,76 +312,35 @@ export function CodeEditorModal({
               color: '#fff',
               fontWeight: 600,
             }}
-            title="Save (Ctlr+S)"
+            title="Save (Ctrl+S)"
           >
             {saving ? 'Saving…' : '💾 Save'}
           </button>
         </div>
 
-        {/* Code Editor */}
-        <div style={{ flex: 1, position: 'relative', overflow: 'hidden' }}>
-          {/* Line Numbers */}
-          <div
-            style={{
-              position: 'absolute',
-              left: 0,
-              top: 0,
-              bottom: 0,
-              width: '50px',
-              backgroundColor: '#1e1e1e',
-              borderRight: '1px solid #333',
-              padding: '16px 8px',
-              overflow: 'hidden',
-              userSelect: 'none',
-            }}
-          >
-            {Array.from({ length: lineCount }, (_, index) => (
-              <div
-                key={index}
-                style={{
-                  color: '#858585',
-                  fontSize: '13px',
-                  fontFamily: 'Consolas, Monaco, "Courier New", monospace',
-                  lineHeight: '20px',
-                  textAlign: 'right',
-                }}
-              >
-                {index + 1}
-              </div>
-            ))}
-          </div>
-
-          {/* Textarea */}
-          <textarea
-            ref={textareaRef}
+        <div style={{ flex: 1, overflow: 'hidden' }}>
+          <Editor
+            height="100%"
+            language="reactions"
+            theme="vs-dark"
             value={code}
-            onChange={(e) => handleCodeChange(e.target.value)}
-            onKeyDown={handleKeyDown}
-            spellCheck={false}
-            style={{
-              position: 'absolute',
-              left: '50px',
-              top: 0,
-              right: 0,
-              bottom: 0,
-              width: 'calc(100% - 50px)',
-              height: '100%',
-              padding: '16px',
-              backgroundColor: '#1e1e1e',
-              color: '#d4d4d4',
-              border: 'none',
-              outline: 'none',
-              resize: 'none',
-              fontFamily: 'Consolas, Monaco, "Courier New", monospace',
-              fontSize: '13px',
-              lineHeight: '20px',
+            onChange={(value) => setCode(value || '')}
+            onMount={handleEditorDidMount}
+            options={{
+              minimap: { enabled: true },
+              fontSize: 13,
+              lineNumbers: 'on',
+              roundedSelection: false,
+              scrollBeyondLastLine: false,
+              automaticLayout: true,
               tabSize: 2,
+              wordWrap: 'off',
+              formatOnPaste: true,
+              formatOnType: true,
             }}
-            placeholder="// Write your reaction here..."
           />
         </div>
 
-        {/* Footer */}
         <div
           style={{
             padding: '12px 24px',
@@ -394,7 +352,7 @@ export function CodeEditorModal({
           }}
         >
           <div style={{ color: '#888', fontSize: '12px' }}>
-            {lineCount} Zeilen · {code.length} Zeichen
+            {code.split('\n').length} Zeilen · {code.length} Zeichen
           </div>
           <div style={{ color: '#888', fontSize: '12px' }}>
             Edge ID: {edgeId}
