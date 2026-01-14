@@ -174,7 +174,6 @@ export const MetaModelsPanel: React.FC<MetaModelsPanelProps> = ({
   const [isLoadingModels, setIsLoadingModels] = useState(false);
   const [apiModels, setApiModels] = useState<any[]>([]);
   const [apiError, setApiError] = useState<string>('');
-  const [dateFilter, setDateFilter] = useState<'all' | 'today' | 'week' | 'month' | 'year'>('all');
   const [parsedFilters, setParsedFilters] = useState<any[]>([]);
   const [showAllModels, setShowAllModels] = useState(false);
 
@@ -267,22 +266,6 @@ export const MetaModelsPanel: React.FC<MetaModelsPanelProps> = ({
           }
         }
 
-        if (dateFilter !== 'all') {
-          const hasDate = parsedFilters.some(f => f.key === 'created' || f.key === 'updated');
-          if (!hasDate) {
-            const now = new Date();
-            const dateFilterMap: Record<string, () => Date> = {
-              today: () => new Date(now.getFullYear(), now.getMonth(), now.getDate()),
-              week: () => new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000),
-              month: () => new Date(now.getFullYear(), now.getMonth(), 1),
-              year: () => new Date(now.getFullYear(), 0, 1),
-            };
-            const from = dateFilterMap[dateFilter]?.() ?? new Date(0);
-            filters.createdFrom = from.toISOString();
-            filters.createdTo = now.toISOString();
-          }
-        }
-
         const res = await apiService.findMetaModels(filters);
         setApiModels(res.data || []);
       } catch (e: any) {
@@ -292,7 +275,7 @@ export const MetaModelsPanel: React.FC<MetaModelsPanelProps> = ({
       }
     };
     fetchData();
-  }, [parsedFilters, dateFilter, showAllModels]);
+  }, [parsedFilters, showAllModels]);
 
   const sortedModels = [...apiModels].sort((a, b) => {
     let cmp = 0;
