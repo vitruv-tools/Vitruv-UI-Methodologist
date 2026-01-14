@@ -3,6 +3,7 @@ import { apiService } from '../../services/api';
 import { Vsum } from '../../types';
 import { CreateVsumModal } from './CreateVsumModal';
 import { VsumDetailsModal } from './VsumDetailsModal';
+import { ConfirmDialog } from './ConfirmDialog';
 
 const containerStyle: React.CSSProperties = {
     userSelect: 'none',
@@ -22,17 +23,17 @@ const titleStyle: React.CSSProperties = {
     color: '#2c3e50',
     textAlign: 'left',
     padding: '8px 0',
-    borderBottom: '2px solid #3498db',
+    borderBottom: '2px solid #049484',
     fontFamily: 'Georgia, serif',
 };
 
 const createButtonStyle: React.CSSProperties = {
     width: '100%',
-    padding: '14px 18px',
+    padding: '12px 18px',
     marginBottom: '12px',
     border: 'none',
-    borderRadius: '6px',
-    background: 'linear-gradient(135deg, #3498db 0%, #2980b9 100%)',
+    borderRadius: '8px',
+    background: 'linear-gradient(135deg, #049484 0%, #037368 100%)',
     color: '#ffffff',
     fontSize: '15px',
     fontWeight: 600,
@@ -43,41 +44,38 @@ const createButtonStyle: React.CSSProperties = {
     justifyContent: 'center',
     gap: '10px',
     userSelect: 'none',
-    boxShadow: '0 3px 10px rgba(52, 152, 219, 0.3)',
+    boxShadow: '0 2px 8px rgba(4, 148, 132, 0.25)',
     fontFamily: 'Georgia, serif',
 };
 
 const createButtonHoverStyle: React.CSSProperties = {
     transform: 'translateY(-1px)',
-    boxShadow: '0 5px 15px rgba(52, 152, 219, 0.4)',
-    background: 'linear-gradient(135deg, #2980b9 0%, #1f5f8b 100%)',
-};
-
-const sectionStyle: React.CSSProperties = {
-    marginTop: '16px',
-    marginBottom: '8px',
-    fontWeight: 700,
-    fontSize: '13px',
-    color: '#2c3e50',
-    borderBottom: '1px solid #3498db',
-    paddingBottom: '6px',
-    fontFamily: 'Georgia, serif',
+    boxShadow: '0 4px 12px rgba(4, 148, 132, 0.35)',
+    background: 'linear-gradient(135deg, #037368 0%, #025850 100%)',
 };
 
 const cardStyle: React.CSSProperties = {
     background: '#ffffff',
-    border: '1px solid #d1ecf1',
-    borderRadius: '6px',
-    padding: '12px',
-    marginBottom: '12px',
-    boxShadow: '0 2px 6px rgba(0,0,0,0.08)',
+    border: '1px solid #e5e7eb',
+    borderRadius: '12px',
+    padding: '16px',
+    marginBottom: '10px',
+    boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
+    transition: 'all 0.25s cubic-bezier(0.4, 0, 0.2, 1)',
+    cursor: 'pointer',
+};
+
+const cardHoverStyle: React.CSSProperties = {
+    boxShadow: '0 8px 24px rgba(4, 148, 132, 0.15)',
+    transform: 'translateY(-2px)',
+    borderColor: '#049484',
 };
 
 const errorStyle: React.CSSProperties = {
-    padding: '8px 12px',
+    padding: '10px 14px',
     margin: '8px 0',
-    borderRadius: '6px',
-    fontSize: '12px',
+    borderRadius: '8px',
+    fontSize: '13px',
     fontWeight: 500,
     backgroundColor: '#f8d7da',
     color: '#721c24',
@@ -85,10 +83,10 @@ const errorStyle: React.CSSProperties = {
 };
 
 const successStyle: React.CSSProperties = {
-    padding: '8px 12px',
+    padding: '10px 14px',
     margin: '8px 0',
-    borderRadius: '6px',
-    fontSize: '12px',
+    borderRadius: '8px',
+    fontSize: '13px',
     fontWeight: 500,
     backgroundColor: '#d1fae5',
     color: '#065f46',
@@ -107,6 +105,7 @@ export const VsumsPanel: React.FC = () => {
     const [showCreate, setShowCreate] = useState(false);
     const [detailsId, setDetailsId] = useState<number | null>(null);
     const [recoveringId, setRecoveringId] = useState<number | null>(null);
+    const [recoverConfirmId, setRecoverConfirmId] = useState<number | null>(null);
 
     const containerRef = useRef<HTMLDivElement | null>(null);
     const rafRef = useRef<number | null>(null);
@@ -226,94 +225,109 @@ export const VsumsPanel: React.FC = () => {
                 onMouseEnter={(e) => Object.assign(e.currentTarget.style, createButtonHoverStyle)}
                 onMouseLeave={(e) => Object.assign(e.currentTarget.style, createButtonStyle)}
             >
-                Create
+                Create New Project
             </button>
 
-            <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
+            {/* View Toggle Tabs */}
+            <div style={{ 
+                display: 'flex', 
+                gap: 0, 
+                marginBottom: 16,
+                borderBottom: '2px solid #e5e7eb',
+            }}>
+                <button
+                    onClick={() => setShowDeleted(false)}
+                    style={{
+                        flex: 1,
+                        padding: '12px 16px',
+                        border: 'none',
+                        borderBottom: !showDeleted ? '3px solid #049484' : '3px solid transparent',
+                        background: !showDeleted ? '#f0f9ff' : 'transparent',
+                        color: !showDeleted ? '#049484' : '#6b7280',
+                        fontWeight: 700,
+                        fontSize: 14,
+                        cursor: 'pointer',
+                        transition: 'all 0.2s ease',
+                        fontFamily: 'Georgia, serif',
+                    }}
+                    onMouseEnter={(e) => {
+                        if (showDeleted) e.currentTarget.style.background = '#f9fafb';
+                    }}
+                    onMouseLeave={(e) => {
+                        if (showDeleted) e.currentTarget.style.background = 'transparent';
+                    }}
+                >
+                    Active Projects
+                </button>
+                <button
+                    onClick={() => setShowDeleted(true)}
+                    style={{
+                        flex: 1,
+                        padding: '12px 16px',
+                        border: 'none',
+                        borderBottom: showDeleted ? '3px solid #049484' : '3px solid transparent',
+                        background: showDeleted ? '#f0f9ff' : 'transparent',
+                        color: showDeleted ? '#049484' : '#6b7280',
+                        fontWeight: 700,
+                        fontSize: 14,
+                        cursor: 'pointer',
+                        transition: 'all 0.2s ease',
+                        fontFamily: 'Georgia, serif',
+                    }}
+                    onMouseEnter={(e) => {
+                        if (!showDeleted) e.currentTarget.style.background = '#f9fafb';
+                    }}
+                    onMouseLeave={(e) => {
+                        if (!showDeleted) e.currentTarget.style.background = 'transparent';
+                    }}
+                >
+                    Deleted Projects
+                </button>
+            </div>
+
+            {/* Search Bar */}
+            <div style={{ position: 'relative', marginBottom: 12 }}>
+                <svg 
+                    style={{ position: 'absolute', left: 14, top: '50%', transform: 'translateY(-50%)', color: '#9ca3af' }}
+                    width="16" 
+                    height="16" 
+                    viewBox="0 0 24 24" 
+                    fill="none" 
+                    stroke="currentColor" 
+                    strokeWidth="2"
+                >
+                    <circle cx="11" cy="11" r="8"/>
+                    <path d="m21 21-4.35-4.35"/>
+                </svg>
                 <input
                     type="text"
                     value={search}
                     onChange={(e) => setSearch(e.target.value)}
-                    placeholder="Search by name..."
+                    onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                            loadFirstPage();
+                        }
+                    }}
+                    placeholder="Search projects... (press Enter)"
                     style={{
-                        flex: 1,
-                        padding: '8px 12px',
-                        borderRadius: 6,
-                        border: '1px solid #cbd5e1',
+                        width: '100%',
+                        padding: '12px 14px 12px 42px',
+                        borderRadius: '8px',
+                        border: '2px solid #e5e7eb',
                         fontSize: 14,
                         outline: 'none',
+                        transition: 'all 0.2s ease',
+                        boxSizing: 'border-box',
+                    }}
+                    onFocus={(e) => {
+                        e.currentTarget.style.borderColor = '#049484';
+                        e.currentTarget.style.boxShadow = '0 0 0 3px rgba(4, 148, 132, 0.1)';
+                    }}
+                    onBlur={(e) => {
+                        e.currentTarget.style.borderColor = '#e5e7eb';
+                        e.currentTarget.style.boxShadow = 'none';
                     }}
                 />
-                <button
-                    onClick={() => loadFirstPage()}
-                    style={{
-                        padding: '8px 14px',
-                        borderRadius: 6,
-                        background: '#3b82f6',
-                        color: '#fff',
-                        border: 'none',
-                        cursor: 'pointer',
-                        fontWeight: 600,
-                    }}
-                >
-                    Search
-                </button>
-            </div>
-
-            <div
-                style={{
-                    ...sectionStyle,
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'space-between'
-                }}
-            >
-                <span>{showDeleted ? 'Deleted' : 'All'}</span>
-                <button
-                    onClick={() => {
-                        // Toggle view; loadFirstPage will auto-run via effect due to dependency on showDeleted
-                        setShowDeleted(prev => !prev);
-                    }}
-                    style={{
-                        display: 'inline-flex',
-                        alignItems: 'center',
-                        gap: 6,
-                        padding: '4px 8px',
-                        borderRadius: 6,
-                        border: '1px solid #e5e7eb',
-                        background: '#ffffff',
-                        cursor: 'pointer',
-                        fontWeight: 700,
-                        fontSize: 12,
-                        color: '#374151'
-                    }}
-                    title={showDeleted ? 'Show all VSUMs' : 'Show deleted VSUMs'}
-                    aria-label={showDeleted ? 'Show all VSUMs' : 'Show deleted VSUMs'}
-                >
-                    {/* Academic-styled archive/trash icon (inline SVG, slightly larger) */}
-                    <svg
-                        width="16"
-                        height="16"
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        xmlns="http://www.w3.org/2000/svg"
-                        aria-hidden="true"
-                        focusable="false"
-                        style={{ display: 'block' }}
-                    >
-                        {/* Lid */}
-                        <path d="M9 4h6" stroke="#374151" strokeWidth="1.8" strokeLinecap="round" />
-                        {/* Handle */}
-                        <path d="M10.5 4c0-1 1-2 1.5-2s1.5 1 1.5 2" stroke="#374151" strokeWidth="1.6" strokeLinecap="round" />
-                        {/* Top line */}
-                        <path d="M4 6h16" stroke="#374151" strokeWidth="1.8" strokeLinecap="round" />
-                        {/* Body */}
-                        <path d="M6 6l1 13a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-13" stroke="#374151" strokeWidth="1.6" strokeLinejoin="round" />
-                        {/* Inner lines */}
-                        <path d="M10 10v7M14 10v7" stroke="#6B7280" strokeWidth="1.4" strokeLinecap="round" />
-                    </svg>
-                    {showDeleted ? 'Show All' : 'Deleted'}
-                </button>
             </div>
 
             {(items
@@ -338,27 +352,32 @@ export const VsumsPanel: React.FC = () => {
                 return (
                     <div
                         key={item.id}
-                        role="button"
-                        tabIndex={0}
                         style={cardStyle}
+                        onMouseEnter={(e) => Object.assign(e.currentTarget.style, cardHoverStyle)}
+                        onMouseLeave={(e) => Object.assign(e.currentTarget.style, cardStyle)}
                         onDoubleClick={() => {
-                            globalThis.dispatchEvent(new CustomEvent('vitruv.openVsum', { detail: { id: item.id } }));
-                        }}
-                        onKeyDown={(e) => {
-                            if (e.key === 'Enter' || e.key === ' ') {
-                                e.preventDefault();
+                            if (!showDeleted) {
                                 globalThis.dispatchEvent(new CustomEvent('vitruv.openVsum', { detail: { id: item.id } }));
                             }
                         }}
                     >
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
-                            <div style={{ display: 'flex', flexDirection: 'column' }}>
-                                <div style={{ fontWeight: 700, color: '#2c3e50', display: 'flex', alignItems: 'center', gap: 8 }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12 }}>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: 6, flex: 1 }}>
+                                <div style={{ 
+                                    fontWeight: 700, 
+                                    color: '#1f2937', 
+                                    fontSize: 16,
+                                    display: 'flex', 
+                                    alignItems: 'center', 
+                                    gap: 8,
+                                    flexWrap: 'wrap',
+                                    fontFamily: 'Georgia, serif',
+                                }}>
                                     {item.name}
                                     {role && (
                                         <span
                                             style={{
-                                                padding: '2px 6px',
+                                                padding: '3px 8px',
                                                 borderRadius: 6,
                                                 fontSize: 11,
                                                 fontWeight: 700,
@@ -367,13 +386,13 @@ export const VsumsPanel: React.FC = () => {
                                                 color: role === 'OWNER' ? '#065f46' : '#374151',
                                             }}
                                         >
-                      {role}
-                    </span>
+                                            {role}
+                                        </span>
                                     )}
                                     {showDeleted && (
                                         <span
                                             style={{
-                                                padding: '2px 6px',
+                                                padding: '3px 8px',
                                                 borderRadius: 6,
                                                 fontSize: 11,
                                                 fontWeight: 700,
@@ -383,50 +402,88 @@ export const VsumsPanel: React.FC = () => {
                                             }}
                                             title={item.removedAt ? `Deleted at ${formatDateTime(item.removedAt)}` : 'Deleted'}
                                         >
-                      Deleted
-                    </span>
+                                            Deleted
+                                        </span>
                                     )}
                                 </div>
-                                <div style={{ fontSize: 12, color: '#5a6c7d' }}>
+                                <div style={{ fontSize: 12, color: '#9ca3af' }}>
                                     {showDeleted
-                                        ? `Deleted: ${formatDateTime(item.removedAt || item.updatedAt)}`
-                                        : `Created: ${formatDateTime(item.createdAt)}`}
+                                        ? `Deleted: ${(() => {
+                                            const d = new Date(item.removedAt || item.updatedAt);
+                                            return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+                                        })()}`
+                                        : `Created: ${(() => {
+                                            const d = new Date(item.createdAt);
+                                            return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+                                        })()}`}
                                 </div>
                             </div>
 
                             {canManage && !showDeleted && (
                                 <button
-                                    onClick={() => setDetailsId(item.id)}
+                                    onClick={(e) => {
+                                        e.stopPropagation();
+                                        setDetailsId(item.id);
+                                    }}
                                     style={{
-                                        padding: '6px 10px',
-                                        border: '1px solid #dee2e6',
-                                        borderRadius: 6,
+                                        padding: '8px 16px',
+                                        border: '1px solid #049484',
+                                        borderRadius: 8,
                                         background: '#ffffff',
                                         cursor: 'pointer',
                                         fontWeight: 600,
+                                        fontSize: 13,
+                                        color: '#049484',
+                                        transition: 'all 0.2s ease',
+                                        whiteSpace: 'nowrap',
+                                    }}
+                                    onMouseEnter={(e) => {
+                                        e.currentTarget.style.background = '#049484';
+                                        e.currentTarget.style.color = '#ffffff';
+                                    }}
+                                    onMouseLeave={(e) => {
+                                        e.currentTarget.style.background = '#ffffff';
+                                        e.currentTarget.style.color = '#049484';
                                     }}
                                 >
-                                    Details
+                                    View Details
                                 </button>
                             )}
 
                             {showDeleted && (
                                 <button
-                                    onDoubleClick={() => recoverVsum(item.id)}
+                                    onClick={() => setRecoverConfirmId(item.id)}
                                     disabled={recoveringId === item.id}
                                     style={{
-                                        padding: '4px 8px',
-                                        border: '1px solid #10b981',
-                                        borderRadius: 6,
-                                        background: recoveringId === item.id ? '#d1fae5' : '#10b981',
+                                        padding: '8px 16px',
+                                        border: 'none',
+                                        borderRadius: 8,
+                                        background: recoveringId === item.id 
+                                            ? '#86efac' 
+                                            : '#10b981',
                                         color: '#ffffff',
                                         cursor: recoveringId === item.id ? 'not-allowed' : 'pointer',
-                                        fontWeight: 700,
-                                        fontSize: 12,
+                                        fontWeight: 600,
+                                        fontSize: 13,
+                                        transition: 'all 0.2s ease',
+                                        boxShadow: '0 2px 8px rgba(16, 185, 129, 0.25)',
+                                        whiteSpace: 'nowrap',
                                     }}
-                                    title="Double-click to recover this VSUM"
+                                    title="Click to restore this project"
+                                    onMouseEnter={(e) => {
+                                        if (recoveringId !== item.id) {
+                                            e.currentTarget.style.background = '#059669';
+                                            e.currentTarget.style.boxShadow = '0 4px 12px rgba(16, 185, 129, 0.35)';
+                                        }
+                                    }}
+                                    onMouseLeave={(e) => {
+                                        if (recoveringId !== item.id) {
+                                            e.currentTarget.style.background = '#10b981';
+                                            e.currentTarget.style.boxShadow = '0 2px 8px rgba(16, 185, 129, 0.25)';
+                                        }
+                                    }}
                                 >
-                                    {recoveringId === item.id ? 'Recovering…' : 'Recover (double‑click)'}
+                                    {recoveringId === item.id ? 'Restoring...' : 'Restore'}
                                 </button>
                             )}
                         </div>
@@ -435,16 +492,84 @@ export const VsumsPanel: React.FC = () => {
             })}
 
             {!loading && items.filter(item => showDeleted ? !!item.removedAt : !item.removedAt).length === 0 && (
-                <div style={{ textAlign: 'center', color: '#6b7280', marginTop: 40, fontStyle: 'italic' }}>
-                    {showDeleted ? 'No deleted VSUMs.' : 'No VSUMs found. Create one to get started.'}
+                <div style={{
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: 12,
+                    padding: '64px 24px',
+                    textAlign: 'center',
+                }}>
+                    <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="#cbd5e1" strokeWidth="1.5">
+                        <path d="M9 13h6m-3-3v6m5 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+                    </svg>
+                    <div style={{ fontWeight: 600, fontSize: 16, color: '#374151' }}>
+                        {showDeleted ? 'No Deleted Projects' : 'No Projects Found'}
+                    </div>
+                    <div style={{ fontSize: 13, color: '#9ca3af', maxWidth: 280 }}>
+                        {showDeleted 
+                            ? 'You don\'t have any deleted projects.' 
+                            : 'Create your first project to get started.'}
+                    </div>
                 </div>
             )}
 
             {loading && (
-                <div style={{ padding: 12, fontStyle: 'italic', color: '#5a6c7d', marginTop: 12 }}>
-                    Loading...
+                <div style={{
+                    padding: '32px 16px',
+                    textAlign: 'center',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: 'center',
+                    gap: 12,
+                }}>
+                    <div style={{
+                        width: 40,
+                        height: 40,
+                        border: '4px solid #e5e7eb',
+                        borderTop: '4px solid #049484',
+                        borderRadius: '50%',
+                        animation: 'spin 1s linear infinite',
+                    }} />
+                    <div style={{
+                        fontSize: '14px',
+                        color: '#6b7280',
+                        fontWeight: 500,
+                    }}>
+                        Loading projects...
+                    </div>
+                    <style>{`
+                        @keyframes spin {
+                            0% { transform: rotate(0deg); }
+                            100% { transform: rotate(360deg); }
+                        }
+                    `}</style>
                 </div>
             )}
+
+            <ConfirmDialog
+                isOpen={recoverConfirmId !== null}
+                title="Restore Project"
+                message={
+                    <>
+                        Are you sure you want to restore this project?
+                        <br />
+                        <br />
+                        This will move it back to your active projects list.
+                    </>
+                }
+                confirmText="Restore"
+                cancelText="Cancel"
+                variant="success"
+                onConfirm={() => {
+                    if (recoverConfirmId !== null) {
+                        recoverVsum(recoverConfirmId);
+                        setRecoverConfirmId(null);
+                    }
+                }}
+                onCancel={() => setRecoverConfirmId(null)}
+            />
 
             <VsumDetailsModal
                 isOpen={detailsId !== null}

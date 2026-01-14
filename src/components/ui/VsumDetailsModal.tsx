@@ -36,25 +36,45 @@ const dialog: React.CSSProperties = {
   maxHeight: '90vh',
   background: '#fff',
   borderRadius: 12,
-  boxShadow: '0 10px 30px rgba(0,0,0,0.25)',
+  boxShadow: '0 20px 60px rgba(4, 148, 132, 0.15), 0 10px 30px rgba(0, 0, 0, 0.1)',
   overflow: 'hidden',
   display: 'flex',
   flexDirection: 'column',
   fontFamily: 'Georgia, serif',
+  border: '1px solid #e3f2fd',
 };
 const header: React.CSSProperties = {
-  padding: '16px 20px',
-  borderBottom: '1px solid #e9ecef',
+  padding: '20px 24px',
+  borderBottom: '2px solid #049484',
   display: 'flex',
   alignItems: 'center',
   justifyContent: 'space-between',
+  background: 'linear-gradient(135deg, #f8fcff 0%, #e8f4f8 100%)',
 };
-const title: React.CSSProperties = { margin: 0, fontSize: 18, fontWeight: 700, color: '#2c3e50' };
+const title: React.CSSProperties = { margin: 0, fontSize: 20, fontWeight: 700, color: '#2c3e50', letterSpacing: '0.01em' };
 const closeBtn: React.CSSProperties = { border: 'none', background: 'transparent', fontSize: 22, cursor: 'pointer', color: '#6c757d' };
 const body: React.CSSProperties = { padding: 20, overflowY: 'auto' };
 const footer: React.CSSProperties = { padding: '12px 20px', borderTop: '1px solid #e9ecef', display: 'flex', justifyContent: 'space-between', gap: 8 };
-const label: React.CSSProperties = { fontSize: 12, fontWeight: 700, color: '#495057', marginTop: 12, marginBottom: 6 };
-const textInput: React.CSSProperties = { width: '100%', padding: '8px 10px', border: '1px solid #dee2e6', borderRadius: 6, fontSize: 13 };
+const label: React.CSSProperties = { 
+  fontSize: 13, 
+  fontWeight: 700, 
+  color: '#2c3e50', 
+  marginTop: 16, 
+  marginBottom: 8,
+  fontFamily: 'Georgia, serif',
+  letterSpacing: '0.01em',
+};
+const textInput: React.CSSProperties = { 
+  width: '100%', 
+  padding: '12px 14px', 
+  border: '2px solid #e9ecef', 
+  borderRadius: 8, 
+  fontSize: 14,
+  outline: 'none',
+  transition: 'all 0.2s ease',
+  fontFamily: 'Georgia, serif',
+  background: '#f8f9fa',
+};
 
 const confirmOverlay: React.CSSProperties = {
   position: 'fixed',
@@ -76,31 +96,36 @@ const confirmOverlay: React.CSSProperties = {
   border: 'none',
 };
 const confirmBox: React.CSSProperties = {
-  width: 420,
+  width: 460,
   maxWidth: '90vw',
   background: '#fff',
-  borderRadius: 10,
-  boxShadow: '0 14px 34px rgba(0,0,0,0.25)',
+  borderRadius: 12,
+  boxShadow: '0 20px 60px rgba(4, 148, 132, 0.15), 0 10px 30px rgba(0, 0, 0, 0.1)',
   overflow: 'hidden',
   fontFamily: 'Georgia, serif',
+  border: '1px solid #e3f2fd',
 };
 const confirmHeader: React.CSSProperties = {
-  padding: '12px 16px',
-  borderBottom: '1px solid #f0f0f0',
+  padding: '16px 20px',
+  borderBottom: '2px solid #049484',
   fontWeight: 700,
-  color: '#1f2937',
+  color: '#2c3e50',
+  fontSize: 18,
+  background: 'linear-gradient(135deg, #f8fcff 0%, #e8f4f8 100%)',
 };
 const confirmBody: React.CSSProperties = {
-  padding: '16px',
-  color: '#4b5563',
+  padding: '20px',
+  color: '#495057',
   fontSize: 14,
+  lineHeight: 1.6,
 };
 const confirmFooter: React.CSSProperties = {
-  padding: '12px 16px',
-  borderTop: '1px solid #f0f0f0',
+  padding: '16px 20px',
+  borderTop: '1px solid #e9ecef',
   display: 'flex',
   justifyContent: 'flex-end',
-  gap: 8,
+  gap: 10,
+  background: '#f8f9fa',
 };
 
 export const VsumDetailsModal: React.FC<Props> = ({ isOpen, vsumId, onClose, onSaved }) => {
@@ -235,6 +260,16 @@ export const VsumDetailsModal: React.FC<Props> = ({ isOpen, vsumId, onClose, onS
           style={textInput}
           value={name}
           onChange={(e) => setName(e.target.value)}
+          onFocus={(e) => {
+            e.currentTarget.style.borderColor = '#049484';
+            e.currentTarget.style.background = '#ffffff';
+            e.currentTarget.style.boxShadow = '0 0 0 3px rgba(4, 148, 132, 0.1)';
+          }}
+          onBlur={(e) => {
+            e.currentTarget.style.borderColor = '#e9ecef';
+            e.currentTarget.style.background = '#f8f9fa';
+            e.currentTarget.style.boxShadow = 'none';
+          }}
         />
 
         <div style={label}>Meta Models</div>
@@ -324,7 +359,7 @@ export const VsumDetailsModal: React.FC<Props> = ({ isOpen, vsumId, onClose, onS
             width: 40, 
             height: 40, 
             border: '3px solid #e9ecef', 
-            borderTop: '3px solid #3498db', 
+            borderTop: '3px solid #049484', 
             borderRadius: '50%', 
             animation: 'spin 1s linear infinite',
             marginBottom: 12
@@ -425,7 +460,7 @@ export const VsumDetailsModal: React.FC<Props> = ({ isOpen, vsumId, onClose, onS
           marginBottom: 8,
           padding: '8px 12px',
           background: '#f8f9fa',
-          borderRadius: 6,
+          borderRadius: 8,
           border: '1px solid #e9ecef'
         }}>
           <strong>Total versions:</strong> {versions.length} • <strong>Current:</strong> Version #{currentVersionId}
@@ -449,7 +484,7 @@ export const VsumDetailsModal: React.FC<Props> = ({ isOpen, vsumId, onClose, onS
                 className={isCurrent ? 'version-card-current' : 'version-card-hover'}
                 style={{
                   border: isCurrent 
-                    ? '2px solid #3498db' 
+                    ? '2px solid #049484' 
                     : '1px solid #e9ecef',
                   borderRadius: 10,
                   padding: 16,
@@ -473,7 +508,7 @@ export const VsumDetailsModal: React.FC<Props> = ({ isOpen, vsumId, onClose, onS
                         width: 32,
                         height: 32,
                         borderRadius: '50%',
-                        background: isCurrent ? '#3498db' : '#6c757d',
+                        background: isCurrent ? '#049484' : '#6c757d',
                         color: '#fff',
                         fontWeight: 700,
                         fontSize: 14,
@@ -500,7 +535,7 @@ export const VsumDetailsModal: React.FC<Props> = ({ isOpen, vsumId, onClose, onS
                               alignItems: 'center',
                               padding: '2px 8px',
                               borderRadius: 12,
-                              background: '#3498db',
+                              background: '#049484',
                               color: '#fff',
                               fontSize: 11,
                               fontWeight: 600,
@@ -533,9 +568,9 @@ export const VsumDetailsModal: React.FC<Props> = ({ isOpen, vsumId, onClose, onS
                       disabled={isRestoring || restoringVersionId !== null}
                       style={{
                         padding: '8px 16px',
-                        borderRadius: 6,
-                        border: '1px solid #3498db',
-                        background: isRestoring ? '#bfdbfe' : '#3498db',
+                        borderRadius: 8,
+                        border: '1px solid #049484',
+                        background: isRestoring ? '#bfdbfe' : '#049484',
                         color: '#fff',
                         fontWeight: 600,
                         fontSize: 13,
@@ -552,8 +587,8 @@ export const VsumDetailsModal: React.FC<Props> = ({ isOpen, vsumId, onClose, onS
                       }}
                       onMouseLeave={(e) => {
                         if (!isRestoring && restoringVersionId === null) {
-                          e.currentTarget.style.background = '#3498db';
-                          e.currentTarget.style.borderColor = '#3498db';
+                          e.currentTarget.style.background = '#049484';
+                          e.currentTarget.style.borderColor = '#049484';
                         }
                       }}
                     >
@@ -604,12 +639,17 @@ export const VsumDetailsModal: React.FC<Props> = ({ isOpen, vsumId, onClose, onS
                 <button
                     onClick={() => setActiveTab('details')}
                     style={{
-                      border: '1px solid #dee2e6',
-                      background: activeTab === 'details' ? '#e7f5ff' : '#fff',
-                      borderRadius: 6,
-                      padding: '6px 10px',
+                      border: activeTab === 'details' ? 'none' : '1px solid #dee2e6',
+                      background: activeTab === 'details' ? '#049484' : '#fff',
+                      color: activeTab === 'details' ? '#fff' : '#495057',
+                      borderRadius: 8,
+                      padding: '8px 16px',
                       cursor: 'pointer',
-                      fontWeight: 700,
+                      fontWeight: 600,
+                      fontSize: 13,
+                      fontFamily: 'Georgia, serif',
+                      transition: 'all 0.2s ease',
+                      boxShadow: activeTab === 'details' ? '0 2px 8px rgba(4, 148, 132, 0.3)' : 'none',
                     }}
                 >
                   Details
@@ -618,12 +658,17 @@ export const VsumDetailsModal: React.FC<Props> = ({ isOpen, vsumId, onClose, onS
                 <button
                     onClick={() => setActiveTab('users')}
                     style={{
-                      border: '1px solid #dee2e6',
-                      background: activeTab === 'users' ? '#e7f5ff' : '#fff',
-                      borderRadius: 6,
-                      padding: '6px 10px',
+                      border: activeTab === 'users' ? 'none' : '1px solid #dee2e6',
+                      background: activeTab === 'users' ? '#049484' : '#fff',
+                      color: activeTab === 'users' ? '#fff' : '#495057',
+                      borderRadius: 8,
+                      padding: '8px 16px',
                       cursor: 'pointer',
-                      fontWeight: 700,
+                      fontWeight: 600,
+                      fontSize: 13,
+                      fontFamily: 'Georgia, serif',
+                      transition: 'all 0.2s ease',
+                      boxShadow: activeTab === 'users' ? '0 2px 8px rgba(4, 148, 132, 0.3)' : 'none',
                     }}
                 >
                   Manage Users
@@ -632,12 +677,17 @@ export const VsumDetailsModal: React.FC<Props> = ({ isOpen, vsumId, onClose, onS
                 <button
                     onClick={() => setActiveTab('versions')}
                     style={{
-                      border: '1px solid #dee2e6',
-                      background: activeTab === 'versions' ? '#e7f5ff' : '#fff',
-                      borderRadius: 6,
-                      padding: '6px 10px',
+                      border: activeTab === 'versions' ? 'none' : '1px solid #dee2e6',
+                      background: activeTab === 'versions' ? '#049484' : '#fff',
+                      color: activeTab === 'versions' ? '#fff' : '#495057',
+                      borderRadius: 8,
+                      padding: '8px 16px',
                       cursor: 'pointer',
-                      fontWeight: 700,
+                      fontWeight: 600,
+                      fontSize: 13,
+                      fontFamily: 'Georgia, serif',
+                      transition: 'all 0.2s ease',
+                      boxShadow: activeTab === 'versions' ? '0 2px 8px rgba(4, 148, 132, 0.3)' : 'none',
                     }}
                 >
                   Versions
@@ -658,7 +708,7 @@ export const VsumDetailsModal: React.FC<Props> = ({ isOpen, vsumId, onClose, onS
                         border: '1px solid #f5c6cb',
                         background: '#f8d7da',
                         color: '#721c24',
-                        borderRadius: 6,
+                        borderRadius: 8,
                         fontSize: 12,
                       }}
                   >
@@ -674,7 +724,7 @@ export const VsumDetailsModal: React.FC<Props> = ({ isOpen, vsumId, onClose, onS
                         border: '1px solid #f5c6cb',
                         background: '#f8d7da',
                         color: '#721c24',
-                        borderRadius: 6,
+                        borderRadius: 8,
                         fontSize: 12,
                       }}
                   >
@@ -706,15 +756,26 @@ export const VsumDetailsModal: React.FC<Props> = ({ isOpen, vsumId, onClose, onS
             <div style={footer}>
               <button
                   style={{
-                    padding: '8px 14px',
-                    borderRadius: 6,
+                    padding: '10px 20px',
+                    borderRadius: 8,
                     border: '1px solid #dee2e6',
                     background: '#fff',
                     color: '#495057',
-                    fontWeight: 700,
+                    fontWeight: 600,
                     cursor: 'pointer',
+                    fontSize: 14,
+                    fontFamily: 'Georgia, serif',
+                    transition: 'all 0.2s ease',
                   }}
                   onClick={onClose}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.background = '#f8f9fa';
+                    e.currentTarget.style.borderColor = '#adb5bd';
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.background = '#fff';
+                    e.currentTarget.style.borderColor = '#dee2e6';
+                  }}
               >
                 Close
               </button>
@@ -723,14 +784,17 @@ export const VsumDetailsModal: React.FC<Props> = ({ isOpen, vsumId, onClose, onS
                 {details?.removedAt && (
                     <button
                         style={{
-                          padding: '6px 10px',
-                          borderRadius: 6,
+                          padding: '10px 20px',
+                          borderRadius: 8,
                           border: '1px solid #10b981',
-                          background: recovering ? '#d1fae5' : '#10b981',
+                          background: recovering ? '#d1fae5' : 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
                           color: '#fff',
-                          fontWeight: 700,
+                          fontWeight: 600,
                           cursor: recovering ? 'not-allowed' : 'pointer',
-                          fontSize: 12,
+                          fontSize: 14,
+                          fontFamily: 'Georgia, serif',
+                          transition: 'all 0.2s ease',
+                          boxShadow: recovering ? 'none' : '0 2px 8px rgba(16, 185, 129, 0.3)',
                         }}
                         onDoubleClick={recover}
                         disabled={recovering}
@@ -742,16 +806,27 @@ export const VsumDetailsModal: React.FC<Props> = ({ isOpen, vsumId, onClose, onS
                 {activeTab === 'details' && !details?.removedAt && (
                     <button
                         style={{
-                          padding: '8px 14px',
-                          borderRadius: 6,
-                          border: '1px solid #fecaca',
+                          padding: '10px 20px',
+                          borderRadius: 8,
+                          border: '1px solid #dc2626',
                           background: '#fef2f2',
                           color: '#dc2626',
-                          fontWeight: 700,
+                          fontWeight: 600,
                           cursor: 'pointer',
+                          fontSize: 14,
+                          fontFamily: 'Georgia, serif',
+                          transition: 'all 0.2s ease',
                         }}
                         onClick={() => setConfirmOpen(true)}
                         disabled={!vsumId}
+                        onMouseEnter={(e) => {
+                          e.currentTarget.style.background = '#dc2626';
+                          e.currentTarget.style.color = '#fff';
+                        }}
+                        onMouseLeave={(e) => {
+                          e.currentTarget.style.background = '#fef2f2';
+                          e.currentTarget.style.color = '#dc2626';
+                        }}
                     >
                       Delete
                     </button>
@@ -760,16 +835,30 @@ export const VsumDetailsModal: React.FC<Props> = ({ isOpen, vsumId, onClose, onS
                 {activeTab === 'details' && (
                     <button
                         style={{
-                          padding: '8px 14px',
-                          borderRadius: 6,
+                          padding: '10px 24px',
+                          borderRadius: 8,
                           border: 'none',
-                          background: '#3498db',
+                          background: 'linear-gradient(135deg, #049484 0%, #037368 100%)',
                           color: '#fff',
-                          fontWeight: 700,
+                          fontWeight: 600,
                           cursor: 'pointer',
+                          fontSize: 14,
+                          fontFamily: 'Georgia, serif',
+                          transition: 'all 0.2s ease',
+                          boxShadow: '0 2px 8px rgba(4, 148, 132, 0.3)',
                         }}
                         onClick={save}
                         disabled={saving}
+                        onMouseEnter={(e) => {
+                          if (!saving) {
+                            e.currentTarget.style.transform = 'translateY(-1px)';
+                            e.currentTarget.style.boxShadow = '0 4px 12px rgba(4, 148, 132, 0.4)';
+                          }
+                        }}
+                        onMouseLeave={(e) => {
+                          e.currentTarget.style.transform = 'translateY(0)';
+                          e.currentTarget.style.boxShadow = '0 2px 8px rgba(4, 148, 132, 0.3)';
+                        }}
                     >
                       {saving ? 'Saving…' : 'Save'}
                     </button>
@@ -816,7 +905,7 @@ export const VsumDetailsModal: React.FC<Props> = ({ isOpen, vsumId, onClose, onS
                             border: '1px solid #f5c6cb',
                             background: '#f8d7da',
                             color: '#721c24',
-                            borderRadius: 6,
+                            borderRadius: 8,
                             fontSize: 12,
                           }}
                       >
@@ -830,13 +919,24 @@ export const VsumDetailsModal: React.FC<Props> = ({ isOpen, vsumId, onClose, onS
                       onClick={() => setConfirmOpen(false)}
                       disabled={deleting}
                       style={{
-                        padding: '8px 14px',
-                        borderRadius: 6,
+                        padding: '10px 20px',
+                        borderRadius: 8,
                         border: '1px solid #dee2e6',
                         background: '#fff',
-                        color: '#374151',
-                        fontWeight: 700,
-                        cursor: 'pointer',
+                        color: '#495057',
+                        fontWeight: 600,
+                        cursor: deleting ? 'not-allowed' : 'pointer',
+                        fontSize: 14,
+                        fontFamily: 'Georgia, serif',
+                        transition: 'all 0.2s ease',
+                      }}
+                      onMouseEnter={(e) => {
+                        if (!deleting) {
+                          e.currentTarget.style.background = '#f8f9fa';
+                        }
+                      }}
+                      onMouseLeave={(e) => {
+                        e.currentTarget.style.background = '#fff';
                       }}
                   >
                     Cancel
@@ -846,13 +946,27 @@ export const VsumDetailsModal: React.FC<Props> = ({ isOpen, vsumId, onClose, onS
                       onClick={confirmDelete}
                       disabled={deleting}
                       style={{
-                        padding: '8px 14px',
-                        borderRadius: 6,
+                        padding: '10px 24px',
+                        borderRadius: 8,
                         border: 'none',
-                        background: '#dc2626',
+                        background: deleting ? '#fca5a5' : 'linear-gradient(135deg, #dc2626 0%, #b91c1c 100%)',
                         color: '#fff',
-                        fontWeight: 700,
-                        cursor: 'pointer',
+                        fontWeight: 600,
+                        cursor: deleting ? 'not-allowed' : 'pointer',
+                        fontSize: 14,
+                        fontFamily: 'Georgia, serif',
+                        transition: 'all 0.2s ease',
+                        boxShadow: deleting ? 'none' : '0 2px 8px rgba(220, 38, 38, 0.3)',
+                      }}
+                      onMouseEnter={(e) => {
+                        if (!deleting) {
+                          e.currentTarget.style.transform = 'translateY(-1px)';
+                          e.currentTarget.style.boxShadow = '0 4px 12px rgba(220, 38, 38, 0.4)';
+                        }
+                      }}
+                      onMouseLeave={(e) => {
+                        e.currentTarget.style.transform = 'translateY(0)';
+                        e.currentTarget.style.boxShadow = '0 2px 8px rgba(220, 38, 38, 0.3)';
                       }}
                   >
                     {deleting ? 'Deleting…' : 'Delete'}
@@ -899,7 +1013,7 @@ export const VsumDetailsModal: React.FC<Props> = ({ isOpen, vsumId, onClose, onS
                             border: '1px solid #f5c6cb',
                             background: '#f8d7da',
                             color: '#721c24',
-                            borderRadius: 6,
+                            borderRadius: 8,
                             fontSize: 12,
                           }}
                       >
@@ -916,13 +1030,24 @@ export const VsumDetailsModal: React.FC<Props> = ({ isOpen, vsumId, onClose, onS
                       }}
                       disabled={restoringVersionId !== null}
                       style={{
-                        padding: '8px 14px',
-                        borderRadius: 6,
+                        padding: '10px 20px',
+                        borderRadius: 8,
                         border: '1px solid #dee2e6',
                         background: '#fff',
-                        color: '#374151',
-                        fontWeight: 700,
-                        cursor: 'pointer',
+                        color: '#495057',
+                        fontWeight: 600,
+                        cursor: restoringVersionId !== null ? 'not-allowed' : 'pointer',
+                        fontSize: 14,
+                        fontFamily: 'Georgia, serif',
+                        transition: 'all 0.2s ease',
+                      }}
+                      onMouseEnter={(e) => {
+                        if (restoringVersionId === null) {
+                          e.currentTarget.style.background = '#f8f9fa';
+                        }
+                      }}
+                      onMouseLeave={(e) => {
+                        e.currentTarget.style.background = '#fff';
                       }}
                   >
                     Cancel
@@ -932,13 +1057,27 @@ export const VsumDetailsModal: React.FC<Props> = ({ isOpen, vsumId, onClose, onS
                       onClick={() => handleRestoreVersion(restoreConfirmOpen)}
                       disabled={restoringVersionId !== null}
                       style={{
-                        padding: '8px 14px',
-                        borderRadius: 6,
+                        padding: '10px 24px',
+                        borderRadius: 8,
                         border: 'none',
-                        background: '#3498db',
+                        background: restoringVersionId !== null ? '#a5d6d3' : 'linear-gradient(135deg, #049484 0%, #037368 100%)',
                         color: '#fff',
-                        fontWeight: 700,
-                        cursor: 'pointer',
+                        fontWeight: 600,
+                        cursor: restoringVersionId !== null ? 'not-allowed' : 'pointer',
+                        fontSize: 14,
+                        fontFamily: 'Georgia, serif',
+                        transition: 'all 0.2s ease',
+                        boxShadow: restoringVersionId !== null ? 'none' : '0 2px 8px rgba(4, 148, 132, 0.3)',
+                      }}
+                      onMouseEnter={(e) => {
+                        if (restoringVersionId === null) {
+                          e.currentTarget.style.transform = 'translateY(-1px)';
+                          e.currentTarget.style.boxShadow = '0 4px 12px rgba(4, 148, 132, 0.4)';
+                        }
+                      }}
+                      onMouseLeave={(e) => {
+                        e.currentTarget.style.transform = 'translateY(0)';
+                        e.currentTarget.style.boxShadow = '0 2px 8px rgba(4, 148, 132, 0.3)';
                       }}
                   >
                     {restoringVersionId === restoreConfirmOpen ? 'Restoring…' : 'Restore'}

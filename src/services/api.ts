@@ -507,10 +507,10 @@ class ApiService {
 
   /**
    * vSUMS: Check if VSUM is buildable / trigger buildOrThrow
-   * GET /api/v1/vsums/{id}/build
+   * GET /api/v1/vsums/{id}/build/check
    */
   async buildVsum(id: number | string): Promise<ApiResponse<Record<string, never>>> {
-    return this.authenticatedRequest(`/api/v1/vsums/${id}/build`, {
+    return this.authenticatedRequest(`/api/v1/vsums/${id}/build/check`, {
       method: 'GET',
     });
   }
@@ -576,10 +576,10 @@ class ApiService {
 
   /**
    * vSUMS: Version history for a non-deleted VSUM
-   * GET /api/v1/vsums/find-all/vsumId={vsumId}
+   * GET /api/v1/vsum-histories/find-all/vsumId={vsumId}
    */
   async getVsumVersions(vsumId: number | string): Promise<ApiResponse<Array<{ id: number; createdAt: string }>>> {
-    return this.authenticatedRequest(`/api/v1/vsums/find-all/vsumId=${vsumId}`);
+    return this.authenticatedRequest(`/api/v1/vsum-histories/find-all/vsumId=${vsumId}`);
   }
 
   /**
