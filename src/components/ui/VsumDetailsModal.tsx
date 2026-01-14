@@ -163,20 +163,28 @@ interface ConfirmButtonProps {
 const ConfirmButton: React.FC<ConfirmButtonProps> = ({ label, onClick, variant, disabled = false }) => {
   const isConfirm = variant === 'confirm';
   
+  const getBackgroundColor = () => {
+    if (!isConfirm) return '#fff';
+    return disabled ? '#fca5a5' : 'linear-gradient(135deg, #dc2626 0%, #b91c1c 100%)';
+  };
+
+  const getBoxShadow = () => {
+    if (!isConfirm) return 'none';
+    return disabled ? 'none' : '0 2px 8px rgba(220, 38, 38, 0.3)';
+  };
+
   const style: React.CSSProperties = {
     padding: '10px 24px',
     borderRadius: 8,
     border: isConfirm ? 'none' : '1px solid #dee2e6',
-    background: isConfirm 
-      ? (disabled ? '#fca5a5' : 'linear-gradient(135deg, #dc2626 0%, #b91c1c 100%)')
-      : '#fff',
+    background: getBackgroundColor(),
     color: isConfirm ? '#fff' : '#495057',
     fontWeight: 600,
     cursor: disabled ? 'not-allowed' : 'pointer',
     fontSize: 14,
     fontFamily: 'Georgia, serif',
     transition: 'all 0.2s ease',
-    boxShadow: isConfirm ? (disabled ? 'none' : '0 2px 8px rgba(220, 38, 38, 0.3)') : 'none',
+    boxShadow: getBoxShadow(),
   };
 
   const handleMouseEnter = (e: React.MouseEvent<HTMLButtonElement>) => {
@@ -221,20 +229,28 @@ interface RestoreConfirmButtonProps {
 const RestoreConfirmButton: React.FC<RestoreConfirmButtonProps> = ({ label, onClick, variant, disabled = false }) => {
   const isConfirm = variant === 'confirm';
   
+  const getBackgroundColor = () => {
+    if (!isConfirm) return '#fff';
+    return disabled ? '#a5d6d3' : 'linear-gradient(135deg, #049484 0%, #037368 100%)';
+  };
+
+  const getBoxShadow = () => {
+    if (!isConfirm) return 'none';
+    return disabled ? 'none' : '0 2px 8px rgba(4, 148, 132, 0.3)';
+  };
+
   const style: React.CSSProperties = {
     padding: '10px 24px',
     borderRadius: 8,
     border: isConfirm ? 'none' : '1px solid #dee2e6',
-    background: isConfirm 
-      ? (disabled ? '#a5d6d3' : 'linear-gradient(135deg, #049484 0%, #037368 100%)')
-      : '#fff',
+    background: getBackgroundColor(),
     color: isConfirm ? '#fff' : '#495057',
     fontWeight: 600,
     cursor: disabled ? 'not-allowed' : 'pointer',
     fontSize: 14,
     fontFamily: 'Georgia, serif',
     transition: 'all 0.2s ease',
-    boxShadow: isConfirm ? (disabled ? 'none' : '0 2px 8px rgba(4, 148, 132, 0.3)') : 'none',
+    boxShadow: getBoxShadow(),
   };
 
   const handleMouseEnter = (e: React.MouseEvent<HTMLButtonElement>) => {
@@ -609,7 +625,7 @@ const VersionCard: React.FC<VersionCardProps> = ({
           <VersionRestoreButton
             versionId={version.id}
             isRestoring={isRestoring}
-            isAnyRestoring={restoringVersionId === null ? false : true}
+            isAnyRestoring={restoringVersionId !== null}
             onClick={() => onRestore(version.id)}
           />
         )}
@@ -1056,7 +1072,7 @@ export const VsumDetailsModal: React.FC<Props> = ({ isOpen, vsumId, onClose, onS
                 type="button"
                 aria-label="Close dialog"
                 onClick={() => { if (!restoringVersionId) setRestoreConfirmOpen(null); }}
-                disabled={restoringVersionId === null ? false : true}
+                disabled={restoringVersionId !== null}
                 style={{
                   position: 'absolute',
                   top: 0,
@@ -1085,13 +1101,13 @@ export const VsumDetailsModal: React.FC<Props> = ({ isOpen, vsumId, onClose, onS
                       setRestoreError('');
                     }}
                     variant="cancel"
-                    disabled={restoringVersionId === null ? false : true}
+                    disabled={restoringVersionId !== null}
                   />
                   <RestoreConfirmButton
                     label={restoringVersionId === restoreConfirmOpen ? 'Restoring…' : 'Restore'}
                     onClick={() => handleRestoreVersion(restoreConfirmOpen)}
                     variant="confirm"
-                    disabled={restoringVersionId === null ? false : true}
+                    disabled={restoringVersionId !== null}
                   />
                 </div>
               </div>
