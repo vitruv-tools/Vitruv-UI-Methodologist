@@ -291,7 +291,7 @@ export const MetaModelsPanel: React.FC<MetaModelsPanelProps> = ({
 
       <div style={tabsContainerStyle}>
         <button
-          style={!showAllModels ? tabActiveStyle : tabStyle}
+          style={showAllModels ? tabStyle : tabActiveStyle}
           onClick={() => setShowAllModels(false)}
           onMouseEnter={(e) => {
             if (showAllModels) {

@@ -11,6 +11,264 @@ interface Props {
   onSaved?: () => void;
 }
 
+// Helper Components
+interface TabButtonProps {
+  label: string;
+  isActive: boolean;
+  onClick: () => void;
+}
+
+const TabButton: React.FC<TabButtonProps> = ({ label, isActive, onClick }) => (
+  <button
+    onClick={onClick}
+    style={{
+      border: isActive ? 'none' : '1px solid #dee2e6',
+      background: isActive ? '#049484' : '#fff',
+      color: isActive ? '#fff' : '#495057',
+      borderRadius: 8,
+      padding: '8px 16px',
+      cursor: 'pointer',
+      fontWeight: 600,
+      fontSize: 13,
+      fontFamily: 'Georgia, serif',
+      transition: 'all 0.2s ease',
+      boxShadow: isActive ? '0 2px 8px rgba(4, 148, 132, 0.3)' : 'none',
+    }}
+  >
+    {label}
+  </button>
+);
+
+interface ActionButtonProps {
+  label: string;
+  onClick: () => void;
+  variant: 'primary' | 'secondary' | 'danger' | 'success';
+  disabled?: boolean;
+  onDoubleClick?: () => void;
+}
+
+const ActionButton: React.FC<ActionButtonProps> = ({ 
+  label, 
+  onClick, 
+  variant, 
+  disabled = false,
+  onDoubleClick 
+}) => {
+  const getVariantStyles = () => {
+    const baseStyle = {
+      padding: '10px 20px',
+      borderRadius: 8,
+      fontWeight: 600,
+      cursor: disabled ? 'not-allowed' : 'pointer',
+      fontSize: 14,
+      fontFamily: 'Georgia, serif',
+      transition: 'all 0.2s ease',
+    };
+
+    switch (variant) {
+      case 'primary':
+        return {
+          ...baseStyle,
+          border: 'none',
+          background: 'linear-gradient(135deg, #049484 0%, #037368 100%)',
+          color: '#fff',
+          boxShadow: '0 2px 8px rgba(4, 148, 132, 0.3)',
+          padding: '10px 24px',
+        };
+      case 'danger':
+        return {
+          ...baseStyle,
+          border: '1px solid #dc2626',
+          background: '#fef2f2',
+          color: '#dc2626',
+        };
+      case 'success':
+        return {
+          ...baseStyle,
+          border: '1px solid #10b981',
+          background: disabled ? '#d1fae5' : 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
+          color: '#fff',
+          boxShadow: disabled ? 'none' : '0 2px 8px rgba(16, 185, 129, 0.3)',
+        };
+      case 'secondary':
+      default:
+        return {
+          ...baseStyle,
+          border: '1px solid #dee2e6',
+          background: '#fff',
+          color: '#495057',
+        };
+    }
+  };
+
+  const handleMouseEnter = (e: React.MouseEvent<HTMLButtonElement>) => {
+    if (disabled) return;
+    
+    switch (variant) {
+      case 'primary':
+        e.currentTarget.style.transform = 'translateY(-1px)';
+        e.currentTarget.style.boxShadow = '0 4px 12px rgba(4, 148, 132, 0.4)';
+        break;
+      case 'danger':
+        e.currentTarget.style.background = '#dc2626';
+        e.currentTarget.style.color = '#fff';
+        break;
+      case 'secondary':
+        e.currentTarget.style.background = '#f8f9fa';
+        e.currentTarget.style.borderColor = '#adb5bd';
+        break;
+    }
+  };
+
+  const handleMouseLeave = (e: React.MouseEvent<HTMLButtonElement>) => {
+    if (disabled) return;
+    
+    switch (variant) {
+      case 'primary':
+        e.currentTarget.style.transform = 'translateY(0)';
+        e.currentTarget.style.boxShadow = '0 2px 8px rgba(4, 148, 132, 0.3)';
+        break;
+      case 'danger':
+        e.currentTarget.style.background = '#fef2f2';
+        e.currentTarget.style.color = '#dc2626';
+        break;
+      case 'secondary':
+        e.currentTarget.style.background = '#fff';
+        e.currentTarget.style.borderColor = '#dee2e6';
+        break;
+    }
+  };
+
+  return (
+    <button
+      onClick={onClick}
+      onDoubleClick={onDoubleClick}
+      disabled={disabled}
+      style={getVariantStyles()}
+      onMouseEnter={handleMouseEnter}
+      onMouseLeave={handleMouseLeave}
+    >
+      {label}
+    </button>
+  );
+};
+
+interface ConfirmButtonProps {
+  label: string;
+  onClick: () => void;
+  variant: 'confirm' | 'cancel';
+  disabled?: boolean;
+}
+
+const ConfirmButton: React.FC<ConfirmButtonProps> = ({ label, onClick, variant, disabled = false }) => {
+  const isConfirm = variant === 'confirm';
+  
+  const style: React.CSSProperties = {
+    padding: '10px 24px',
+    borderRadius: 8,
+    border: isConfirm ? 'none' : '1px solid #dee2e6',
+    background: isConfirm 
+      ? (disabled ? '#fca5a5' : 'linear-gradient(135deg, #dc2626 0%, #b91c1c 100%)')
+      : '#fff',
+    color: isConfirm ? '#fff' : '#495057',
+    fontWeight: 600,
+    cursor: disabled ? 'not-allowed' : 'pointer',
+    fontSize: 14,
+    fontFamily: 'Georgia, serif',
+    transition: 'all 0.2s ease',
+    boxShadow: isConfirm ? (disabled ? 'none' : '0 2px 8px rgba(220, 38, 38, 0.3)') : 'none',
+  };
+
+  const handleMouseEnter = (e: React.MouseEvent<HTMLButtonElement>) => {
+    if (disabled) return;
+    if (isConfirm) {
+      e.currentTarget.style.transform = 'translateY(-1px)';
+      e.currentTarget.style.boxShadow = '0 4px 12px rgba(220, 38, 38, 0.4)';
+    } else {
+      e.currentTarget.style.background = '#f8f9fa';
+    }
+  };
+
+  const handleMouseLeave = (e: React.MouseEvent<HTMLButtonElement>) => {
+    if (isConfirm) {
+      e.currentTarget.style.transform = 'translateY(0)';
+      e.currentTarget.style.boxShadow = '0 2px 8px rgba(220, 38, 38, 0.3)';
+    } else {
+      e.currentTarget.style.background = '#fff';
+    }
+  };
+
+  return (
+    <button
+      onClick={onClick}
+      disabled={disabled}
+      style={style}
+      onMouseEnter={handleMouseEnter}
+      onMouseLeave={handleMouseLeave}
+    >
+      {label}
+    </button>
+  );
+};
+
+interface RestoreConfirmButtonProps {
+  label: string;
+  onClick: () => void;
+  variant: 'confirm' | 'cancel';
+  disabled?: boolean;
+}
+
+const RestoreConfirmButton: React.FC<RestoreConfirmButtonProps> = ({ label, onClick, variant, disabled = false }) => {
+  const isConfirm = variant === 'confirm';
+  
+  const style: React.CSSProperties = {
+    padding: '10px 24px',
+    borderRadius: 8,
+    border: isConfirm ? 'none' : '1px solid #dee2e6',
+    background: isConfirm 
+      ? (disabled ? '#a5d6d3' : 'linear-gradient(135deg, #049484 0%, #037368 100%)')
+      : '#fff',
+    color: isConfirm ? '#fff' : '#495057',
+    fontWeight: 600,
+    cursor: disabled ? 'not-allowed' : 'pointer',
+    fontSize: 14,
+    fontFamily: 'Georgia, serif',
+    transition: 'all 0.2s ease',
+    boxShadow: isConfirm ? (disabled ? 'none' : '0 2px 8px rgba(4, 148, 132, 0.3)') : 'none',
+  };
+
+  const handleMouseEnter = (e: React.MouseEvent<HTMLButtonElement>) => {
+    if (disabled) return;
+    if (isConfirm) {
+      e.currentTarget.style.transform = 'translateY(-1px)';
+      e.currentTarget.style.boxShadow = '0 4px 12px rgba(4, 148, 132, 0.4)';
+    } else {
+      e.currentTarget.style.background = '#f8f9fa';
+    }
+  };
+
+  const handleMouseLeave = (e: React.MouseEvent<HTMLButtonElement>) => {
+    if (isConfirm) {
+      e.currentTarget.style.transform = 'translateY(0)';
+      e.currentTarget.style.boxShadow = '0 2px 8px rgba(4, 148, 132, 0.3)';
+    } else {
+      e.currentTarget.style.background = '#fff';
+    }
+  };
+
+  return (
+    <button
+      onClick={onClick}
+      disabled={disabled}
+      style={style}
+      onMouseEnter={handleMouseEnter}
+      onMouseLeave={handleMouseLeave}
+    >
+      {label}
+    </button>
+  );
+};
+
 const overlay: React.CSSProperties = {
   position: 'fixed',
   top: 0,
@@ -126,6 +384,238 @@ const confirmFooter: React.CSSProperties = {
   justifyContent: 'flex-end',
   gap: 10,
   background: '#f8f9fa',
+};
+
+// Error Message Component
+interface ErrorMessageProps {
+  message: string;
+  onDismiss?: () => void;
+}
+
+const ErrorMessage: React.FC<ErrorMessageProps> = ({ message, onDismiss }) => (
+  <div
+    style={{
+      marginBottom: 12,
+      padding: onDismiss ? 12 : 10,
+      border: '1px solid #f5c6cb',
+      background: '#f8d7da',
+      color: '#721c24',
+      borderRadius: 8,
+      fontSize: onDismiss ? 13 : 12,
+      display: 'flex',
+      alignItems: 'center',
+      gap: 8,
+    }}
+  >
+    {onDismiss && <span style={{ fontSize: 16 }}>⚠️</span>}
+    <span>{message}</span>
+    {onDismiss && (
+      <button
+        onClick={onDismiss}
+        style={{
+          marginLeft: 'auto',
+          border: 'none',
+          background: 'transparent',
+          color: '#721c24',
+          cursor: 'pointer',
+          fontSize: 18,
+          lineHeight: 1,
+          padding: 0,
+          width: 20,
+          height: 20,
+        }}
+        aria-label="Dismiss error"
+      >
+        ×
+      </button>
+    )}
+  </div>
+);
+
+// Version Restore Button Component
+interface VersionRestoreButtonProps {
+  versionId: number;
+  isRestoring: boolean;
+  isAnyRestoring: boolean;
+  onClick: () => void;
+}
+
+const VersionRestoreButton: React.FC<VersionRestoreButtonProps> = ({ 
+  versionId, 
+  isRestoring, 
+  isAnyRestoring, 
+  onClick 
+}) => {
+  const isDisabled = isRestoring || isAnyRestoring;
+  
+  const style: React.CSSProperties = {
+    padding: '8px 16px',
+    borderRadius: 8,
+    border: '1px solid #049484',
+    background: isRestoring ? '#bfdbfe' : '#049484',
+    color: '#fff',
+    fontWeight: 600,
+    fontSize: 13,
+    cursor: isDisabled ? 'not-allowed' : 'pointer',
+    opacity: isDisabled ? 0.6 : 1,
+    transition: 'all 0.2s ease',
+    whiteSpace: 'nowrap',
+  };
+
+  const handleMouseEnter = (e: React.MouseEvent<HTMLButtonElement>) => {
+    if (!isDisabled) {
+      e.currentTarget.style.background = '#2980b9';
+      e.currentTarget.style.borderColor = '#2980b9';
+    }
+  };
+
+  const handleMouseLeave = (e: React.MouseEvent<HTMLButtonElement>) => {
+    if (!isDisabled) {
+      e.currentTarget.style.background = '#049484';
+      e.currentTarget.style.borderColor = '#049484';
+    }
+  };
+
+  return (
+    <button
+      onClick={onClick}
+      disabled={isDisabled}
+      style={style}
+      onMouseEnter={handleMouseEnter}
+      onMouseLeave={handleMouseLeave}
+    >
+      {isRestoring ? 'Restoring…' : 'Restore'}
+    </button>
+  );
+};
+
+// Helper functions for date formatting
+const formatRelativeTime = (dateString: string): string => {
+  const date = new Date(dateString);
+  const now = new Date();
+  const diffMs = now.getTime() - date.getTime();
+  const diffMins = Math.floor(diffMs / 60000);
+  const diffHours = Math.floor(diffMs / 3600000);
+  const diffDays = Math.floor(diffMs / 86400000);
+
+  if (diffMins < 1) return 'Just now';
+  if (diffMins < 60) return `${diffMins} minute${diffMins === 1 ? '' : 's'} ago`;
+  if (diffHours < 24) return `${diffHours} hour${diffHours === 1 ? '' : 's'} ago`;
+  if (diffDays < 7) return `${diffDays} day${diffDays === 1 ? '' : 's'} ago`;
+  
+  return date.toLocaleDateString([], {
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+};
+
+const formatFullDate = (dateString: string): string => {
+  const date = new Date(dateString);
+  return date.toLocaleString([], {
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+  });
+};
+
+// Version Card Component
+interface VersionCardProps {
+  version: { id: number; createdAt: string };
+  index: number;
+  totalVersions: number;
+  isCurrent: boolean;
+  isRestoring: boolean;
+  restoringVersionId: number | null;
+  onRestore: (versionId: number) => void;
+}
+
+const VersionCard: React.FC<VersionCardProps> = ({
+  version,
+  index,
+  totalVersions,
+  isCurrent,
+  isRestoring,
+  restoringVersionId,
+  onRestore,
+}) => {
+  return (
+    <div
+      className={isCurrent ? 'version-card-current' : 'version-card-hover'}
+      style={{
+        border: isCurrent ? '2px solid #049484' : '1px solid #e9ecef',
+        borderRadius: 10,
+        padding: 16,
+        background: isCurrent ? '#f0f7ff' : '#ffffff',
+        boxShadow: isCurrent
+          ? '0 2px 8px rgba(52, 152, 219, 0.15)'
+          : '0 1px 3px rgba(0, 0, 0, 0.08)',
+        transition: 'all 0.2s ease',
+        position: 'relative',
+      }}
+    >
+      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12 }}>
+        <div style={{ flex: 1 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+            <div style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              width: 32,
+              height: 32,
+              borderRadius: '50%',
+              background: isCurrent ? '#049484' : '#6c757d',
+              color: '#fff',
+              fontWeight: 700,
+              fontSize: 14,
+            }}>
+              {totalVersions - index}
+            </div>
+            <div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
+                <span style={{ fontWeight: 700, fontSize: 15, color: '#2c3e50' }}>
+                  Version #{version.id}
+                </span>
+                {isCurrent && (
+                  <span style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    padding: '2px 8px',
+                    borderRadius: 12,
+                    background: '#049484',
+                    color: '#fff',
+                    fontSize: 11,
+                    fontWeight: 600,
+                  }}>
+                    Current
+                  </span>
+                )}
+              </div>
+              <div style={{ fontSize: 13, color: '#6c757d', marginBottom: 4 }}>
+                {formatRelativeTime(version.createdAt)}
+              </div>
+              <div style={{ fontSize: 12, color: '#9ca3af', fontFamily: 'monospace' }}>
+                {formatFullDate(version.createdAt)}
+              </div>
+            </div>
+          </div>
+        </div>
+        {!isCurrent && (
+          <VersionRestoreButton
+            versionId={version.id}
+            isRestoring={isRestoring}
+            isAnyRestoring={restoringVersionId === null ? false : true}
+            onClick={() => onRestore(version.id)}
+          />
+        )}
+      </div>
+    </div>
+  );
 };
 
 export const VsumDetailsModal: React.FC<Props> = ({ isOpen, vsumId, onClose, onSaved }) => {
@@ -292,40 +782,6 @@ export const VsumDetailsModal: React.FC<Props> = ({ isOpen, vsumId, onClose, onS
     );
   };
 
-  const formatRelativeTime = (dateString: string): string => {
-    const date = new Date(dateString);
-    const now = new Date();
-    const diffMs = now.getTime() - date.getTime();
-    const diffMins = Math.floor(diffMs / 60000);
-    const diffHours = Math.floor(diffMs / 3600000);
-    const diffDays = Math.floor(diffMs / 86400000);
-
-    if (diffMins < 1) return 'Just now';
-    if (diffMins < 60) return `${diffMins} minute${diffMins === 1 ? '' : 's'} ago`;
-    if (diffHours < 24) return `${diffHours} hour${diffHours === 1 ? '' : 's'} ago`;
-    if (diffDays < 7) return `${diffDays} day${diffDays === 1 ? '' : 's'} ago`;
-    
-    return date.toLocaleDateString([], {
-      year: 'numeric',
-      month: 'short',
-      day: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit',
-    });
-  };
-
-  const formatFullDate = (dateString: string): string => {
-    const date = new Date(dateString);
-    return date.toLocaleString([], {
-      year: 'numeric',
-      month: 'long',
-      day: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit',
-      second: '2-digit',
-    });
-  };
-
   const handleRestoreVersion = async (versionId: number) => {
     if (!vsumId) return;
     setRestoreError('');
@@ -342,6 +798,42 @@ export const VsumDetailsModal: React.FC<Props> = ({ isOpen, vsumId, onClose, onS
     } finally {
       setRestoringVersionId(null);
     }
+  };
+
+  const renderFooterActions = () => {
+    const showRecover = details?.removedAt;
+    const showDelete = activeTab === 'details' && !details?.removedAt;
+    const showSave = activeTab === 'details';
+
+    return (
+      <>
+        {showRecover && (
+          <ActionButton
+            label={recovering ? 'Recovering…' : 'Recover (double-click)'}
+            onClick={() => {}}
+            onDoubleClick={recover}
+            variant="success"
+            disabled={recovering}
+          />
+        )}
+        {showDelete && (
+          <ActionButton
+            label="Delete"
+            onClick={() => setConfirmOpen(true)}
+            variant="danger"
+            disabled={!vsumId}
+          />
+        )}
+        {showSave && (
+          <ActionButton
+            label={saving ? 'Saving…' : 'Save'}
+            onClick={save}
+            variant="primary"
+            disabled={saving}
+          />
+        )}
+      </>
+    );
   };
 
   const renderVersionsContent = () => {
@@ -370,25 +862,7 @@ export const VsumDetailsModal: React.FC<Props> = ({ isOpen, vsumId, onClose, onS
     }
 
     if (versionsError) {
-      return (
-        <div
-          style={{
-            marginBottom: 12,
-            padding: 12,
-            border: '1px solid #f5c6cb',
-            background: '#f8d7da',
-            color: '#721c24',
-            borderRadius: 8,
-            fontSize: 13,
-            display: 'flex',
-            alignItems: 'center',
-            gap: 8,
-          }}
-        >
-          <span style={{ fontSize: 16 }}>⚠️</span>
-          <span>{versionsError}</span>
-        </div>
-      );
+      return <ErrorMessage message={versionsError} onDismiss={() => setVersionsError('')} />;
     }
 
     if (versions.length === 0) {
@@ -417,42 +891,7 @@ export const VsumDetailsModal: React.FC<Props> = ({ isOpen, vsumId, onClose, onS
 
     return (
       <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-        {restoreError && (
-          <div
-            style={{
-              padding: 12,
-              border: '1px solid #f5c6cb',
-              background: '#f8d7da',
-              color: '#721c24',
-              borderRadius: 8,
-              fontSize: 13,
-              display: 'flex',
-              alignItems: 'center',
-              gap: 8,
-            }}
-          >
-            <span style={{ fontSize: 16 }}>⚠️</span>
-            <span>{restoreError}</span>
-            <button
-              onClick={() => setRestoreError('')}
-              style={{
-                marginLeft: 'auto',
-                border: 'none',
-                background: 'transparent',
-                color: '#721c24',
-                cursor: 'pointer',
-                fontSize: 18,
-                lineHeight: 1,
-                padding: 0,
-                width: 20,
-                height: 20,
-              }}
-              aria-label="Dismiss error"
-            >
-              ×
-            </button>
-          </div>
-        )}
+        {restoreError && <ErrorMessage message={restoreError} onDismiss={() => setRestoreError('')} />}
 
         <div style={{ 
           fontSize: 12, 
@@ -474,131 +913,18 @@ export const VsumDetailsModal: React.FC<Props> = ({ isOpen, vsumId, onClose, onS
           overflowY: 'auto',
           paddingRight: 4,
         }}>
-          {sortedVersions.map((v, index) => {
-            const isCurrent = v.id === currentVersionId;
-            const isRestoring = restoringVersionId === v.id;
-            
-            return (
-              <div
-                key={v.id}
-                className={isCurrent ? 'version-card-current' : 'version-card-hover'}
-                style={{
-                  border: isCurrent 
-                    ? '2px solid #049484' 
-                    : '1px solid #e9ecef',
-                  borderRadius: 10,
-                  padding: 16,
-                  background: isCurrent 
-                    ? '#f0f7ff' 
-                    : '#ffffff',
-                  boxShadow: isCurrent
-                    ? '0 2px 8px rgba(52, 152, 219, 0.15)'
-                    : '0 1px 3px rgba(0, 0, 0, 0.08)',
-                  transition: 'all 0.2s ease',
-                  position: 'relative',
-                }}
-              >
-                <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12 }}>
-                  <div style={{ flex: 1 }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
-                      <div style={{
-                        display: 'inline-flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        width: 32,
-                        height: 32,
-                        borderRadius: '50%',
-                        background: isCurrent ? '#049484' : '#6c757d',
-                        color: '#fff',
-                        fontWeight: 700,
-                        fontSize: 14,
-                      }}>
-                        {versions.length - index}
-                      </div>
-                      <div>
-                        <div style={{ 
-                          display: 'flex', 
-                          alignItems: 'center', 
-                          gap: 6,
-                          marginBottom: 4 
-                        }}>
-                          <span style={{ 
-                            fontWeight: 700, 
-                            fontSize: 15, 
-                            color: '#2c3e50' 
-                          }}>
-                            Version #{v.id}
-                          </span>
-                          {isCurrent && (
-                            <span style={{
-                              display: 'inline-flex',
-                              alignItems: 'center',
-                              padding: '2px 8px',
-                              borderRadius: 12,
-                              background: '#049484',
-                              color: '#fff',
-                              fontSize: 11,
-                              fontWeight: 600,
-                            }}>
-                              Current
-                            </span>
-                          )}
-                        </div>
-                        <div style={{ 
-                          fontSize: 13, 
-                          color: '#6c757d',
-                          marginBottom: 4
-                        }}>
-                          {formatRelativeTime(v.createdAt)}
-                        </div>
-                        <div style={{ 
-                          fontSize: 12, 
-                          color: '#9ca3af',
-                          fontFamily: 'monospace'
-                        }}>
-                          {formatFullDate(v.createdAt)}
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                  
-                  {!isCurrent && (
-                    <button
-                      onClick={() => setRestoreConfirmOpen(v.id)}
-                      disabled={isRestoring || restoringVersionId !== null}
-                      style={{
-                        padding: '8px 16px',
-                        borderRadius: 8,
-                        border: '1px solid #049484',
-                        background: isRestoring ? '#bfdbfe' : '#049484',
-                        color: '#fff',
-                        fontWeight: 600,
-                        fontSize: 13,
-                        cursor: isRestoring || restoringVersionId !== null ? 'not-allowed' : 'pointer',
-                        opacity: isRestoring || restoringVersionId !== null ? 0.6 : 1,
-                        transition: 'all 0.2s ease',
-                        whiteSpace: 'nowrap',
-                      }}
-                      onMouseEnter={(e) => {
-                        if (!isRestoring && restoringVersionId === null) {
-                          e.currentTarget.style.background = '#2980b9';
-                          e.currentTarget.style.borderColor = '#2980b9';
-                        }
-                      }}
-                      onMouseLeave={(e) => {
-                        if (!isRestoring && restoringVersionId === null) {
-                          e.currentTarget.style.background = '#049484';
-                          e.currentTarget.style.borderColor = '#049484';
-                        }
-                      }}
-                    >
-                      {isRestoring ? 'Restoring…' : 'Restore'}
-                    </button>
-                  )}
-                </div>
-              </div>
-            );
-          })}
+          {sortedVersions.map((v, index) => (
+            <VersionCard
+              key={v.id}
+              version={v}
+              index={index}
+              totalVersions={versions.length}
+              isCurrent={v.id === currentVersionId}
+              isRestoring={restoringVersionId === v.id}
+              restoringVersionId={restoringVersionId}
+              onRestore={setRestoreConfirmOpen}
+            />
+          ))}
         </div>
       </div>
     );
@@ -636,63 +962,21 @@ export const VsumDetailsModal: React.FC<Props> = ({ isOpen, vsumId, onClose, onS
               <h3 style={title}>{details?.name ?? 'VSUM Details'}</h3>
 
               <div style={{ display: 'flex', gap: 8 }}>
-                <button
-                    onClick={() => setActiveTab('details')}
-                    style={{
-                      border: activeTab === 'details' ? 'none' : '1px solid #dee2e6',
-                      background: activeTab === 'details' ? '#049484' : '#fff',
-                      color: activeTab === 'details' ? '#fff' : '#495057',
-                      borderRadius: 8,
-                      padding: '8px 16px',
-                      cursor: 'pointer',
-                      fontWeight: 600,
-                      fontSize: 13,
-                      fontFamily: 'Georgia, serif',
-                      transition: 'all 0.2s ease',
-                      boxShadow: activeTab === 'details' ? '0 2px 8px rgba(4, 148, 132, 0.3)' : 'none',
-                    }}
-                >
-                  Details
-                </button>
-
-                <button
-                    onClick={() => setActiveTab('users')}
-                    style={{
-                      border: activeTab === 'users' ? 'none' : '1px solid #dee2e6',
-                      background: activeTab === 'users' ? '#049484' : '#fff',
-                      color: activeTab === 'users' ? '#fff' : '#495057',
-                      borderRadius: 8,
-                      padding: '8px 16px',
-                      cursor: 'pointer',
-                      fontWeight: 600,
-                      fontSize: 13,
-                      fontFamily: 'Georgia, serif',
-                      transition: 'all 0.2s ease',
-                      boxShadow: activeTab === 'users' ? '0 2px 8px rgba(4, 148, 132, 0.3)' : 'none',
-                    }}
-                >
-                  Manage Users
-                </button>
-
-                <button
-                    onClick={() => setActiveTab('versions')}
-                    style={{
-                      border: activeTab === 'versions' ? 'none' : '1px solid #dee2e6',
-                      background: activeTab === 'versions' ? '#049484' : '#fff',
-                      color: activeTab === 'versions' ? '#fff' : '#495057',
-                      borderRadius: 8,
-                      padding: '8px 16px',
-                      cursor: 'pointer',
-                      fontWeight: 600,
-                      fontSize: 13,
-                      fontFamily: 'Georgia, serif',
-                      transition: 'all 0.2s ease',
-                      boxShadow: activeTab === 'versions' ? '0 2px 8px rgba(4, 148, 132, 0.3)' : 'none',
-                    }}
-                >
-                  Versions
-                </button>
-
+                <TabButton
+                  label="Details"
+                  isActive={activeTab === 'details'}
+                  onClick={() => setActiveTab('details')}
+                />
+                <TabButton
+                  label="Manage Users"
+                  isActive={activeTab === 'users'}
+                  onClick={() => setActiveTab('users')}
+                />
+                <TabButton
+                  label="Versions"
+                  isActive={activeTab === 'versions'}
+                  onClick={() => setActiveTab('versions')}
+                />
                 <button aria-label="Close" style={closeBtn} onClick={onClose}>
                   ×
                 </button>
@@ -700,177 +984,27 @@ export const VsumDetailsModal: React.FC<Props> = ({ isOpen, vsumId, onClose, onS
             </div>
 
             <div style={body}>
-              {error && (
-                  <div
-                      style={{
-                        marginBottom: 12,
-                        padding: 10,
-                        border: '1px solid #f5c6cb',
-                        background: '#f8d7da',
-                        color: '#721c24',
-                        borderRadius: 8,
-                        fontSize: 12,
-                      }}
-                  >
-                    {error}
-                  </div>
-              )}
+              {error && <ErrorMessage message={error} />}
+              {recoverError && <ErrorMessage message={recoverError} />}
 
-              {recoverError && (
-                  <div
-                      style={{
-                        marginBottom: 12,
-                        padding: 10,
-                        border: '1px solid #f5c6cb',
-                        background: '#f8d7da',
-                        color: '#721c24',
-                        borderRadius: 8,
-                        fontSize: 12,
-                      }}
-                  >
-                    {recoverError}
-                  </div>
-              )}
-
-              {/* ===================== */}
-              {/*     DETAILS TAB      */}
-              {/* ===================== */}
               {activeTab === 'details' && renderDetailsContent()}
-
-              {/* ===================== */}
-              {/*     USERS TAB        */}
-              {/* ===================== */}
-              {activeTab === 'users' && vsumId && (
-                  <VsumUsersTab vsumId={vsumId} onChanged={onSaved} />
-              )}
-
-              {/* ===================== */}
-              {/*     VERSIONS TAB     */}
-              {/* ===================== */}
+              {activeTab === 'users' && vsumId && <VsumUsersTab vsumId={vsumId} onChanged={onSaved} />}
               {activeTab === 'versions' && renderVersionsContent()}
             </div>
 
-            {/* ===================== */}
-            {/*        FOOTER        */}
-            {/* ===================== */}
             <div style={footer}>
-              <button
-                  style={{
-                    padding: '10px 20px',
-                    borderRadius: 8,
-                    border: '1px solid #dee2e6',
-                    background: '#fff',
-                    color: '#495057',
-                    fontWeight: 600,
-                    cursor: 'pointer',
-                    fontSize: 14,
-                    fontFamily: 'Georgia, serif',
-                    transition: 'all 0.2s ease',
-                  }}
-                  onClick={onClose}
-                  onMouseEnter={(e) => {
-                    e.currentTarget.style.background = '#f8f9fa';
-                    e.currentTarget.style.borderColor = '#adb5bd';
-                  }}
-                  onMouseLeave={(e) => {
-                    e.currentTarget.style.background = '#fff';
-                    e.currentTarget.style.borderColor = '#dee2e6';
-                  }}
-              >
-                Close
-              </button>
-
+              <ActionButton
+                label="Close"
+                onClick={onClose}
+                variant="secondary"
+              />
               <div style={{ display: 'flex', gap: 8 }}>
-                {details?.removedAt && (
-                    <button
-                        style={{
-                          padding: '10px 20px',
-                          borderRadius: 8,
-                          border: '1px solid #10b981',
-                          background: recovering ? '#d1fae5' : 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
-                          color: '#fff',
-                          fontWeight: 600,
-                          cursor: recovering ? 'not-allowed' : 'pointer',
-                          fontSize: 14,
-                          fontFamily: 'Georgia, serif',
-                          transition: 'all 0.2s ease',
-                          boxShadow: recovering ? 'none' : '0 2px 8px rgba(16, 185, 129, 0.3)',
-                        }}
-                        onDoubleClick={recover}
-                        disabled={recovering}
-                    >
-                      {recovering ? 'Recovering…' : 'Recover (double-click)'}
-                    </button>
-                )}
-
-                {activeTab === 'details' && !details?.removedAt && (
-                    <button
-                        style={{
-                          padding: '10px 20px',
-                          borderRadius: 8,
-                          border: '1px solid #dc2626',
-                          background: '#fef2f2',
-                          color: '#dc2626',
-                          fontWeight: 600,
-                          cursor: 'pointer',
-                          fontSize: 14,
-                          fontFamily: 'Georgia, serif',
-                          transition: 'all 0.2s ease',
-                        }}
-                        onClick={() => setConfirmOpen(true)}
-                        disabled={!vsumId}
-                        onMouseEnter={(e) => {
-                          e.currentTarget.style.background = '#dc2626';
-                          e.currentTarget.style.color = '#fff';
-                        }}
-                        onMouseLeave={(e) => {
-                          e.currentTarget.style.background = '#fef2f2';
-                          e.currentTarget.style.color = '#dc2626';
-                        }}
-                    >
-                      Delete
-                    </button>
-                )}
-
-                {activeTab === 'details' && (
-                    <button
-                        style={{
-                          padding: '10px 24px',
-                          borderRadius: 8,
-                          border: 'none',
-                          background: 'linear-gradient(135deg, #049484 0%, #037368 100%)',
-                          color: '#fff',
-                          fontWeight: 600,
-                          cursor: 'pointer',
-                          fontSize: 14,
-                          fontFamily: 'Georgia, serif',
-                          transition: 'all 0.2s ease',
-                          boxShadow: '0 2px 8px rgba(4, 148, 132, 0.3)',
-                        }}
-                        onClick={save}
-                        disabled={saving}
-                        onMouseEnter={(e) => {
-                          if (!saving) {
-                            e.currentTarget.style.transform = 'translateY(-1px)';
-                            e.currentTarget.style.boxShadow = '0 4px 12px rgba(4, 148, 132, 0.4)';
-                          }
-                        }}
-                        onMouseLeave={(e) => {
-                          e.currentTarget.style.transform = 'translateY(0)';
-                          e.currentTarget.style.boxShadow = '0 2px 8px rgba(4, 148, 132, 0.3)';
-                        }}
-                    >
-                      {saving ? 'Saving…' : 'Save'}
-                    </button>
-                )}
+                {renderFooterActions()}
               </div>
             </div>
           </div>
         </dialog>
 
-        {/* ===================== */}
-        {/*    DELETE CONFIRM     */}
-        {/* ===================== */}
         {confirmOpen && (
             <dialog open style={confirmOverlay} onClose={() => setConfirmOpen(false)} onCancel={() => setConfirmOpen(false)}>
               <button
@@ -894,98 +1028,35 @@ export const VsumDetailsModal: React.FC<Props> = ({ isOpen, vsumId, onClose, onS
               />
               <div style={{ ...confirmBox, position: 'relative', zIndex: 1 }} onClick={(e) => e.stopPropagation()}>
                 <div style={confirmHeader}>Are you sure?</div>
-
                 <div style={confirmBody}>
                   This action will permanently delete this VSUM and cannot be undone.
-                  {deleteError && (
-                      <div
-                          style={{
-                            marginTop: 12,
-                            padding: 10,
-                            border: '1px solid #f5c6cb',
-                            background: '#f8d7da',
-                            color: '#721c24',
-                            borderRadius: 8,
-                            fontSize: 12,
-                          }}
-                      >
-                        {deleteError}
-                      </div>
-                  )}
+                  {deleteError && <ErrorMessage message={deleteError} />}
                 </div>
-
                 <div style={confirmFooter}>
-                  <button
-                      onClick={() => setConfirmOpen(false)}
-                      disabled={deleting}
-                      style={{
-                        padding: '10px 20px',
-                        borderRadius: 8,
-                        border: '1px solid #dee2e6',
-                        background: '#fff',
-                        color: '#495057',
-                        fontWeight: 600,
-                        cursor: deleting ? 'not-allowed' : 'pointer',
-                        fontSize: 14,
-                        fontFamily: 'Georgia, serif',
-                        transition: 'all 0.2s ease',
-                      }}
-                      onMouseEnter={(e) => {
-                        if (!deleting) {
-                          e.currentTarget.style.background = '#f8f9fa';
-                        }
-                      }}
-                      onMouseLeave={(e) => {
-                        e.currentTarget.style.background = '#fff';
-                      }}
-                  >
-                    Cancel
-                  </button>
-
-                  <button
-                      onClick={confirmDelete}
-                      disabled={deleting}
-                      style={{
-                        padding: '10px 24px',
-                        borderRadius: 8,
-                        border: 'none',
-                        background: deleting ? '#fca5a5' : 'linear-gradient(135deg, #dc2626 0%, #b91c1c 100%)',
-                        color: '#fff',
-                        fontWeight: 600,
-                        cursor: deleting ? 'not-allowed' : 'pointer',
-                        fontSize: 14,
-                        fontFamily: 'Georgia, serif',
-                        transition: 'all 0.2s ease',
-                        boxShadow: deleting ? 'none' : '0 2px 8px rgba(220, 38, 38, 0.3)',
-                      }}
-                      onMouseEnter={(e) => {
-                        if (!deleting) {
-                          e.currentTarget.style.transform = 'translateY(-1px)';
-                          e.currentTarget.style.boxShadow = '0 4px 12px rgba(220, 38, 38, 0.4)';
-                        }
-                      }}
-                      onMouseLeave={(e) => {
-                        e.currentTarget.style.transform = 'translateY(0)';
-                        e.currentTarget.style.boxShadow = '0 2px 8px rgba(220, 38, 38, 0.3)';
-                      }}
-                  >
-                    {deleting ? 'Deleting…' : 'Delete'}
-                  </button>
+                  <ConfirmButton
+                    label="Cancel"
+                    onClick={() => setConfirmOpen(false)}
+                    variant="cancel"
+                    disabled={deleting}
+                  />
+                  <ConfirmButton
+                    label={deleting ? 'Deleting…' : 'Delete'}
+                    onClick={confirmDelete}
+                    variant="confirm"
+                    disabled={deleting}
+                  />
                 </div>
               </div>
             </dialog>
         )}
 
-        {/* ===================== */}
-        {/*   RESTORE CONFIRM     */}
-        {/* ===================== */}
         {restoreConfirmOpen !== null && (
             <dialog open style={confirmOverlay} onClose={() => setRestoreConfirmOpen(null)} onCancel={() => setRestoreConfirmOpen(null)}>
               <button
                 type="button"
                 aria-label="Close dialog"
                 onClick={() => { if (!restoringVersionId) setRestoreConfirmOpen(null); }}
-                disabled={restoringVersionId !== null}
+                disabled={restoringVersionId === null ? false : true}
                 style={{
                   position: 'absolute',
                   top: 0,
@@ -996,92 +1067,32 @@ export const VsumDetailsModal: React.FC<Props> = ({ isOpen, vsumId, onClose, onS
                   height: '100%',
                   border: 'none',
                   background: 'transparent',
-                  cursor: restoringVersionId !== null ? 'not-allowed' : 'pointer',
+                  cursor: restoringVersionId === null ? 'pointer' : 'not-allowed',
                   zIndex: 0,
                 }}
               />
               <div style={{ ...confirmBox, position: 'relative', zIndex: 1 }} onClick={(e) => e.stopPropagation()}>
                 <div style={confirmHeader}>Restore to this version?</div>
-
                 <div style={confirmBody}>
                   This will restore the VSUM to the selected version. The current version will be saved as a new version in the history.
-                  {restoreError && (
-                      <div
-                          style={{
-                            marginTop: 12,
-                            padding: 10,
-                            border: '1px solid #f5c6cb',
-                            background: '#f8d7da',
-                            color: '#721c24',
-                            borderRadius: 8,
-                            fontSize: 12,
-                          }}
-                      >
-                        {restoreError}
-                      </div>
-                  )}
+                  {restoreError && <ErrorMessage message={restoreError} />}
                 </div>
-
                 <div style={confirmFooter}>
-                  <button
-                      onClick={() => {
-                        setRestoreConfirmOpen(null);
-                        setRestoreError('');
-                      }}
-                      disabled={restoringVersionId !== null}
-                      style={{
-                        padding: '10px 20px',
-                        borderRadius: 8,
-                        border: '1px solid #dee2e6',
-                        background: '#fff',
-                        color: '#495057',
-                        fontWeight: 600,
-                        cursor: restoringVersionId !== null ? 'not-allowed' : 'pointer',
-                        fontSize: 14,
-                        fontFamily: 'Georgia, serif',
-                        transition: 'all 0.2s ease',
-                      }}
-                      onMouseEnter={(e) => {
-                        if (restoringVersionId === null) {
-                          e.currentTarget.style.background = '#f8f9fa';
-                        }
-                      }}
-                      onMouseLeave={(e) => {
-                        e.currentTarget.style.background = '#fff';
-                      }}
-                  >
-                    Cancel
-                  </button>
-
-                  <button
-                      onClick={() => handleRestoreVersion(restoreConfirmOpen)}
-                      disabled={restoringVersionId !== null}
-                      style={{
-                        padding: '10px 24px',
-                        borderRadius: 8,
-                        border: 'none',
-                        background: restoringVersionId !== null ? '#a5d6d3' : 'linear-gradient(135deg, #049484 0%, #037368 100%)',
-                        color: '#fff',
-                        fontWeight: 600,
-                        cursor: restoringVersionId !== null ? 'not-allowed' : 'pointer',
-                        fontSize: 14,
-                        fontFamily: 'Georgia, serif',
-                        transition: 'all 0.2s ease',
-                        boxShadow: restoringVersionId !== null ? 'none' : '0 2px 8px rgba(4, 148, 132, 0.3)',
-                      }}
-                      onMouseEnter={(e) => {
-                        if (restoringVersionId === null) {
-                          e.currentTarget.style.transform = 'translateY(-1px)';
-                          e.currentTarget.style.boxShadow = '0 4px 12px rgba(4, 148, 132, 0.4)';
-                        }
-                      }}
-                      onMouseLeave={(e) => {
-                        e.currentTarget.style.transform = 'translateY(0)';
-                        e.currentTarget.style.boxShadow = '0 2px 8px rgba(4, 148, 132, 0.3)';
-                      }}
-                  >
-                    {restoringVersionId === restoreConfirmOpen ? 'Restoring…' : 'Restore'}
-                  </button>
+                  <RestoreConfirmButton
+                    label="Cancel"
+                    onClick={() => {
+                      setRestoreConfirmOpen(null);
+                      setRestoreError('');
+                    }}
+                    variant="cancel"
+                    disabled={restoringVersionId === null ? false : true}
+                  />
+                  <RestoreConfirmButton
+                    label={restoringVersionId === restoreConfirmOpen ? 'Restoring…' : 'Restore'}
+                    onClick={() => handleRestoreVersion(restoreConfirmOpen)}
+                    variant="confirm"
+                    disabled={restoringVersionId === null ? false : true}
+                  />
                 </div>
               </div>
             </dialog>

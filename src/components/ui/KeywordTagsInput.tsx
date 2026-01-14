@@ -103,7 +103,7 @@ export const KeywordTagsInput: React.FC<KeywordTagsInputProps> = ({
     // Check if user typed a comma
     if (value.includes(',')) {
       const parts = value.split(',');
-      const lastPart = parts[parts.length - 1].trim();
+      const lastPart = parts.at(-1)?.trim() ?? '';
       const keywordsToAdd = parts.slice(0, -1).map(k => k.trim()).filter(k => k.length > 0);
       
       if (keywordsToAdd.length > 0) {

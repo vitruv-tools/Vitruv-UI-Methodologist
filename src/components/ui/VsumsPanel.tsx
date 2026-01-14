@@ -241,9 +241,9 @@ export const VsumsPanel: React.FC = () => {
                         flex: 1,
                         padding: '12px 16px',
                         border: 'none',
-                        borderBottom: !showDeleted ? '3px solid #049484' : '3px solid transparent',
-                        background: !showDeleted ? '#f0f9ff' : 'transparent',
-                        color: !showDeleted ? '#049484' : '#6b7280',
+                        borderBottom: showDeleted ? '3px solid transparent' : '3px solid #049484',
+                        background: showDeleted ? 'transparent' : '#f0f9ff',
+                        color: showDeleted ? '#6b7280' : '#049484',
                         fontWeight: 700,
                         fontSize: 14,
                         cursor: 'pointer',
@@ -352,11 +352,19 @@ export const VsumsPanel: React.FC = () => {
                 return (
                     <div
                         key={item.id}
+                        role="button"
+                        tabIndex={0}
                         style={cardStyle}
                         onMouseEnter={(e) => Object.assign(e.currentTarget.style, cardHoverStyle)}
                         onMouseLeave={(e) => Object.assign(e.currentTarget.style, cardStyle)}
-                        onDoubleClick={() => {
+                        onClick={() => {
                             if (!showDeleted) {
+                                globalThis.dispatchEvent(new CustomEvent('vitruv.openVsum', { detail: { id: item.id } }));
+                            }
+                        }}
+                        onKeyDown={(e) => {
+                            if ((e.key === 'Enter' || e.key === ' ') && !showDeleted) {
+                                e.preventDefault();
                                 globalThis.dispatchEvent(new CustomEvent('vitruv.openVsum', { detail: { id: item.id } }));
                             }
                         }}

@@ -664,6 +664,7 @@ export const ToolsPanel: React.FC<ToolsPanelProps> = ({ onEcoreFileUpload, onEco
           setViewModel(modelResponse.data);
         }
       } catch (modelError) {
+        console.error('Failed to fetch updated model details, using data from list:', modelError);
         const updatedModel = listResponse.data?.find((m: any) => m.id === viewModel.id);
         if (updatedModel) {
           setViewModel(updatedModel);
@@ -736,9 +737,9 @@ return (
                 flex: 1,
                 padding: '12px 16px',
                 border: 'none',
-                borderBottom: !showAllModels ? '3px solid #049484' : '3px solid transparent',
-                background: !showAllModels ? '#f0f9ff' : 'transparent',
-                color: !showAllModels ? '#049484' : '#6b7280',
+                borderBottom: showAllModels ? '3px solid transparent' : '3px solid #049484',
+                background: showAllModels ? 'transparent' : '#f0f9ff',
+                color: showAllModels ? '#6b7280' : '#049484',
                 fontWeight: 700,
                 fontSize: 14,
                 cursor: 'pointer',
@@ -869,17 +870,18 @@ return (
                 borderColor: showFilters ? '#049484' : '#e5e7eb',
               }}
               onMouseEnter={(e) => {
-                if (!showFilters) {
-                  Object.assign(e.currentTarget.style, standardButtonHoverStyle);
+                if (showFilters) {
+                  return;
                 }
+                Object.assign(e.currentTarget.style, standardButtonHoverStyle);
               }}
               onMouseLeave={(e) => {
-                if (!showFilters) {
-                  e.currentTarget.style.background = '#ffffff';
-                  e.currentTarget.style.borderColor = '#e5e7eb';
-                } else {
+                if (showFilters) {
                   e.currentTarget.style.background = '#049484';
                   e.currentTarget.style.borderColor = '#049484';
+                } else {
+                  e.currentTarget.style.background = '#ffffff';
+                  e.currentTarget.style.borderColor = '#e5e7eb';
                 }
               }}
             >
@@ -1117,6 +1119,8 @@ return (
         {!suppressApi && currentPageItems.map(model => (
           <div
             key={model.id}
+            role="group"
+            aria-label={`Meta model: ${model.name}`}
             style={fileCardStyle}
             onMouseEnter={(e) => Object.assign(e.currentTarget.style, fileCardHoverStyle)}
             onMouseLeave={(e) => Object.assign(e.currentTarget.style, fileCardStyle)}
@@ -1410,7 +1414,7 @@ return (
                       )}
 
                       <div style={{ marginBottom: 14 }}>
-                        <label style={{ 
+                        <label htmlFor="metamodel-name" style={{ 
                           display: 'block', 
                           fontSize: 12, 
                           fontWeight: 700, 
@@ -1423,6 +1427,7 @@ return (
                           Name *
                         </label>
                         <input
+                          id="metamodel-name"
                           type="text"
                           value={editFormData.name}
                           onChange={(e) => setEditFormData({ ...editFormData, name: e.target.value })}
@@ -1449,7 +1454,7 @@ return (
                       </div>
 
                       <div style={{ marginBottom: 14 }}>
-                        <label style={{ 
+                        <label htmlFor="metamodel-description" style={{ 
                           display: 'block', 
                           fontSize: 12, 
                           fontWeight: 700, 
@@ -1462,6 +1467,7 @@ return (
                           Description *
                         </label>
                         <textarea
+                          id="metamodel-description"
                           value={editFormData.description}
                           onChange={(e) => setEditFormData({ ...editFormData, description: e.target.value })}
                           style={{
@@ -1490,7 +1496,7 @@ return (
                       </div>
 
                       <div style={{ marginBottom: 14 }}>
-                        <label style={{ 
+                        <label htmlFor="metamodel-domain" style={{ 
                           display: 'block', 
                           fontSize: 12, 
                           fontWeight: 700, 
@@ -1503,6 +1509,7 @@ return (
                           Domain *
                         </label>
                         <input
+                          id="metamodel-domain"
                           type="text"
                           value={editFormData.domain}
                           onChange={(e) => setEditFormData({ ...editFormData, domain: e.target.value })}
@@ -1529,7 +1536,7 @@ return (
                       </div>
 
                       <div style={{ marginBottom: 14 }}>
-                        <label style={{ 
+                        <label htmlFor="metamodel-keywords" style={{ 
                           display: 'block', 
                           fontSize: 12, 
                           fontWeight: 700, 
@@ -1542,6 +1549,7 @@ return (
                           Keywords *
                         </label>
                         <KeywordTagsInput
+                          id="metamodel-keywords"
                           keywords={editFormData.keywords}
                           onChange={(keywords) => setEditFormData({ ...editFormData, keywords })}
                           placeholder="Type keywords separated by commas or press Enter..."
@@ -1687,7 +1695,7 @@ return (
                                 const color = colors[index % colors.length];
                                 
                                 return (
-                                  <React.Fragment key={index}>
+                                  <React.Fragment key={keyword}>
                                     <span style={{ color, fontWeight: 600 }}>
                                       {keyword}
                                     </span>
@@ -1961,6 +1969,7 @@ return (
                   letterSpacing: '0.01em'
                 }}>
                   <span style={{ fontSize: 24 }}>⚠️</span>
+                  {' '}
                   Confirm Deletion
                 </h2>
               </div>
@@ -2246,6 +2255,7 @@ return (
           }}>
             <div style={{ fontSize: 18, fontWeight: 700, marginBottom: 12, color: '#dc2626', display: 'flex', alignItems: 'center', gap: 10 }}>
               <span style={{ fontSize: 24 }}>⚠️</span>
+              {' '}
               Are you sure?
             </div>
             <div style={{ fontSize: 14, color: '#4b5563', marginBottom: 20, lineHeight: 1.6 }}>
