@@ -91,14 +91,6 @@ const sortDropdownStyle: React.CSSProperties = {
   boxSizing: 'border-box',
 };
 
-const filtersBoxStyle: React.CSSProperties = {
-  border: '2px solid #e9ecef',
-  background: '#f8f9fa',
-  borderRadius: 8,
-  padding: 14,
-  marginBottom: 16,
-};
-
 const fileCardStyle: React.CSSProperties = {
   background: '#ffffff',
   border: '2px solid #e9ecef',
@@ -182,7 +174,6 @@ export const MetaModelsPanel: React.FC<MetaModelsPanelProps> = ({
   const [isLoadingModels, setIsLoadingModels] = useState(false);
   const [apiModels, setApiModels] = useState<any[]>([]);
   const [apiError, setApiError] = useState<string>('');
-  const [showFilters, setShowFilters] = useState(false);
   const [dateFilter, setDateFilter] = useState<'all' | 'today' | 'week' | 'month' | 'year'>('all');
   const [parsedFilters, setParsedFilters] = useState<any[]>([]);
   const [showAllModels, setShowAllModels] = useState(false);
@@ -311,13 +302,6 @@ export const MetaModelsPanel: React.FC<MetaModelsPanelProps> = ({
     return sortOrder === 'asc' ? cmp : -cmp;
   });
 
-  const formatWhen = (iso: string) => {
-    const d = new Date(iso);
-    const ds = d.toLocaleDateString();
-    const ts = d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-    return `${ds} at ${ts}`;
-  };
-
   return (
     <div style={containerStyle}>
       <div style={titleStyle}>Meta Models</div>
@@ -398,75 +382,6 @@ export const MetaModelsPanel: React.FC<MetaModelsPanelProps> = ({
           <option value="domain-desc">Domain Z-A</option>
         </select>
       </div>
-
-      {showFilters && (
-        <div style={filtersBoxStyle}>
-          <div style={{ display: 'grid', gap: 8 }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              <span style={{ fontSize: 12, fontWeight: 600, minWidth: 60, color: '#495057' }}>Name:</span>
-              <input
-                type="text"
-                placeholder="Filter by name…"
-                style={{ flex: 1, padding: '6px 8px', border: '1px solid #ced4da', borderRadius: 6, fontSize: 12 }}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') {
-                    const v = (e.currentTarget as HTMLInputElement).value.trim();
-                    if (v) setSearchTerm(p => (p ? `${p} name:${v}` : `name:${v}`));
-                    (e.currentTarget as HTMLInputElement).value = '';
-                  }
-                }}
-              />
-            </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              <span style={{ fontSize: 12, fontWeight: 600, minWidth: 60, color: '#495057' }}>Domain:</span>
-              <input
-                type="text"
-                placeholder="Filter by domain…"
-                style={{ flex: 1, padding: '6px 8px', border: '1px solid #ced4da', borderRadius: 6, fontSize: 12 }}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') {
-                    const v = (e.currentTarget as HTMLInputElement).value.trim();
-                    if (v) setSearchTerm(p => (p ? `${p} domain:${v}` : `domain:${v}`));
-                    (e.currentTarget as HTMLInputElement).value = '';
-                  }
-                }}
-              />
-            </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              <span style={{ fontSize: 12, fontWeight: 600, minWidth: 60, color: '#495057' }}>Keywords:</span>
-              <input
-                type="text"
-                placeholder="Filter by keywords…"
-                style={{ flex: 1, padding: '6px 8px', border: '1px solid #ced4da', borderRadius: 6, fontSize: 12 }}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') {
-                    const v = (e.currentTarget as HTMLInputElement).value.trim();
-                    if (v) setSearchTerm(p => (p ? `${p} keywords:${v}` : `keywords:${v}`));
-                    (e.currentTarget as HTMLInputElement).value = '';
-                  }
-                }}
-              />
-            </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              <span style={{ fontSize: 12, fontWeight: 600, minWidth: 60, color: '#495057' }}>Date:</span>
-              <select
-                value={dateFilter}
-                onChange={(e) => setDateFilter(e.target.value as any)}
-                style={{ flex: 1, padding: '6px 8px', border: '1px solid #ced4da', borderRadius: 6, fontSize: 12 }}
-              >
-                <option value="all">All time</option>
-                <option value="today">Today</option>
-                <option value="week">This week</option>
-                <option value="month">This month</option>
-                <option value="year">This year</option>
-              </select>
-            </div>
-            <div style={{ fontSize: 10, color: '#6a737d', fontStyle: 'italic' }}>
-              Tip: Use filters like <code>name:X domain:Y created:after:2024-01-01</code>
-            </div>
-          </div>
-        </div>
-      )}
 
       {apiError && (
         <div style={{ 

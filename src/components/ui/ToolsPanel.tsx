@@ -2,7 +2,6 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { CreateModelModal } from './CreateModelModal';
 import { KeywordTagsInput } from './KeywordTagsInput';
 import { apiService } from '../../services/api';
-import { useAuth } from '../../contexts/AuthContext';
 
 interface ToolsPanelProps {
   onEcoreFileUpload?: (fileContent: string, meta?: { fileName?: string; uploadId?: string; description?: string; keywords?: string; domain?: string; createdAt?: string }) => void;
@@ -85,35 +84,6 @@ const standardButtonStyle: React.CSSProperties = {
 const standardButtonHoverStyle: React.CSSProperties = {
   background: '#f9fafb',
   borderColor: '#d1d5db',
-};
-
-const searchButtonStyle: React.CSSProperties = {
-  padding: '10px 20px',
-  borderRadius: '8px',
-  background: '#049484',
-  color: '#fff',
-  border: 'none',
-  cursor: 'pointer',
-  fontWeight: 600,
-  fontSize: 14,
-  transition: 'all 0.2s ease',
-  outline: 'none',
-  whiteSpace: 'nowrap',
-};
-
-const searchButtonHoverStyle: React.CSSProperties = {
-  background: '#037368',
-  boxShadow: '0 2px 8px rgba(4, 148, 132, 0.25)',
-};
-
-const searchInputStyle: React.CSSProperties = {
-  flex: 1,
-  padding: '10px 14px',
-  borderRadius: '8px',
-  border: '1px solid #e5e7eb',
-  fontSize: 14,
-  outline: 'none',
-  transition: 'border-color 0.2s ease',
 };
 
 const filterContainerStyle: React.CSSProperties = {
@@ -371,20 +341,6 @@ const parseDateRangeFilter = (value: string): { from?: string; to?: string } => 
   return { from: new Date(v).toISOString(), to: new Date(`${v}T23:59:59`).toISOString() };
 };
 
-const checkModelOwnership = (viewModel: any, user: any): boolean => {
-  const userId = user?.id ? String(user.id) : null;
-  if (!userId || !viewModel) return false;
-  
-  return (
-    String(viewModel.ownerId) === userId ||
-    String(viewModel.userId) === userId ||
-    viewModel.ownedByUser ||
-    String(viewModel.owner?.id) === userId ||
-    String(viewModel.createdBy) === userId ||
-    String(viewModel.createdById) === userId
-  );
-};
-
 export const ToolsPanel: React.FC<ToolsPanelProps> = ({ onEcoreFileUpload, onEcoreFileDelete, title = 'Meta Models', allowCreate = true, enableItemClick = true, showBorder = true, suppressApi = false }) => {
   const [isProcessing] = useState(false);
   const [uploadMessage, setUploadMessage] = useState<string>('');
@@ -408,7 +364,6 @@ export const ToolsPanel: React.FC<ToolsPanelProps> = ({ onEcoreFileUpload, onEco
   const [viewModel, setViewModel] = useState<any>(null);
   const [showAllModels, setShowAllModels] = useState(false);
   const [metaModelModalTab, setMetaModelModalTab] = useState<'details' | 'edit'>('details');
-  const { user } = useAuth();
   const [metaModelDeleteConfirmOpen, setMetaModelDeleteConfirmOpen] = useState(false);
   const [metaModelDeleting, setMetaModelDeleting] = useState(false);
   const [metaModelDeleteError, setMetaModelDeleteError] = useState<string>('');
@@ -552,7 +507,7 @@ export const ToolsPanel: React.FC<ToolsPanelProps> = ({ onEcoreFileUpload, onEco
     } else {
       setParsedFilters([]);
     }
-  }, [debouncedSearchTerm]);
+  }, [debouncedSearchTerm, parseSearchQuery]);
 
   // Initialize edit form when viewModel changes
   useEffect(() => {
@@ -594,7 +549,7 @@ export const ToolsPanel: React.FC<ToolsPanelProps> = ({ onEcoreFileUpload, onEco
     };
     
     fetchData();
-  }, [parsedFilters, dateFilter, suppressApi, showAllModels]);
+  }, [parsedFilters, dateFilter, suppressApi, showAllModels, buildApiFiltersFromParsedFilters]);
 
   const sortedModels = [...apiModels].sort((a, b) => {
     let comparison = 0;
