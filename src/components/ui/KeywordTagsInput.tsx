@@ -8,44 +8,51 @@ interface KeywordTagsInputProps {
   id?: string;
 }
 
-// Color palette for text colors - highly visible against white background
-const TEXT_COLORS = [
-  '#d32f2f', // Dark Red
-  '#1976d2', // Dark Blue
-  '#388e3c', // Dark Green
-  '#f57c00', // Dark Orange
-  '#7b1fa2', // Dark Purple
-  '#00796b', // Dark Teal
-  '#c2185b', // Dark Pink
-  '#5d4037', // Dark Brown
-  '#303f9f', // Indigo
-  '#e64a19', // Deep Orange
-];
-
-const getTextColor = (index: number): string => {
-  return TEXT_COLORS[index % TEXT_COLORS.length];
-};
-
 const containerStyle: React.CSSProperties = {
   width: '100%',
   minHeight: '48px',
   border: '2px solid #d1ecf1',
-  borderRadius: '6px',
+  borderRadius: '8px',
   padding: '8px',
   background: '#f8f9fa',
   display: 'flex',
+  flexWrap: 'wrap',
   alignItems: 'center',
+  gap: '6px',
   cursor: 'text',
   transition: 'all 0.3s ease',
   fontFamily: 'Georgia, serif',
-  position: 'relative',
 };
 
 const containerFocusStyle: React.CSSProperties = {
-  borderColor: '#3498db',
+  borderColor: '#049484',
   outline: 'none',
-  boxShadow: '0 0 0 3px rgba(52, 152, 219, 0.1)',
+  boxShadow: '0 0 0 3px rgba(4, 148, 132, 0.1)',
   background: '#ffffff',
+};
+
+const tagStyle: React.CSSProperties = {
+  display: 'inline-flex',
+  alignItems: 'center',
+  gap: '6px',
+  padding: '4px 10px',
+  background: 'linear-gradient(135deg, #049484 0%, #037368 100%)',
+  color: '#ffffff',
+  borderRadius: '6px',
+  fontSize: '13px',
+  fontWeight: 500,
+};
+
+const removeButtonStyle: React.CSSProperties = {
+  background: 'transparent',
+  border: 'none',
+  color: '#ffffff',
+  cursor: 'pointer',
+  padding: '0 2px',
+  fontSize: '16px',
+  lineHeight: '1',
+  fontWeight: 600,
+  transition: 'opacity 0.2s ease',
 };
 
 const inputStyle: React.CSSProperties = {
@@ -54,38 +61,16 @@ const inputStyle: React.CSSProperties = {
   background: 'transparent',
   fontSize: '14px',
   fontFamily: 'inherit',
-  width: '100%',
+  flex: '1',
+  minWidth: '120px',
   padding: '4px',
   color: '#333',
-};
-
-const placeholderStyle: React.CSSProperties = {
-  color: '#999',
-  fontSize: '14px',
-  fontStyle: 'italic',
-  pointerEvents: 'none',
-  position: 'absolute',
-  left: '12px',
-  top: '50%',
-  transform: 'translateY(-50%)',
-};
-
-const coloredTextStyle: React.CSSProperties = {
-  position: 'absolute',
-  left: '12px',
-  top: '50%',
-  transform: 'translateY(-50%)',
-  fontSize: '14px',
-  fontFamily: 'inherit',
-  pointerEvents: 'none',
-  whiteSpace: 'pre',
-  zIndex: 1,
 };
 
 export const KeywordTagsInput: React.FC<KeywordTagsInputProps> = ({
   keywords,
   onChange,
-  placeholder = "Type keywords and press Enter...",
+  placeholder = "Type keywords separated by commas or press Enter...",
   style,
   id
 }) => {
@@ -113,11 +98,28 @@ export const KeywordTagsInput: React.FC<KeywordTagsInputProps> = ({
   };
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setInputValue(e.target.value);
+    const value = e.target.value;
+    
+    // Check if user typed a comma
+    if (value.includes(',')) {
+      const parts = value.split(',');
+      const lastPart = parts.at(-1)?.trim() ?? '';
+      const keywordsToAdd = parts.slice(0, -1).map(k => k.trim()).filter(k => k.length > 0);
+      
+      if (keywordsToAdd.length > 0) {
+        const newKeywords = keywordsToAdd.filter(k => !keywords.includes(k));
+        if (newKeywords.length > 0) {
+          onChange([...keywords, ...newKeywords]);
+        }
+      }
+      
+      setInputValue(lastPart);
+    } else {
+      setInputValue(value);
+    }
   };
 
   const handleInputBlur = () => {
-    // Add keyword if there's text in input when losing focus
     if (inputValue.trim()) {
       addKeyword();
     }
@@ -128,35 +130,8 @@ export const KeywordTagsInput: React.FC<KeywordTagsInputProps> = ({
     setIsFocused(true);
   };
 
-  // Create colored text display
-  const renderColoredText = () => {
-    if (keywords.length === 0) return null;
-    
-    // Build colored display of keywords and current input value
-    
-    return (
-      <div style={coloredTextStyle}>
-        {keywords.map((keyword, keywordIndex) => (
-          <span key={keyword}>
-            {keywordIndex > 0 && <span style={{ color: '#333' }}>, </span>}
-            {keyword.split('').map((char, charIndex) => (
-              <span
-                key={`${keyword}-${charIndex}`}
-                style={{ color: getTextColor(keywordIndex) }}
-              >
-                {char}
-              </span>
-            ))}
-          </span>
-        ))}
-        {inputValue && (
-          <>
-            {keywords.length > 0 && <span style={{ color: '#333' }}>, </span>}
-            <span style={{ color: '#333' }}>{inputValue}</span>
-          </>
-        )}
-      </div>
-    );
+  const removeKeyword = (keywordToRemove: string) => {
+    onChange(keywords.filter(k => k !== keywordToRemove));
   };
 
   return (
@@ -173,6 +148,29 @@ export const KeywordTagsInput: React.FC<KeywordTagsInputProps> = ({
         }
       }}
     >
+      {keywords.map((keyword) => (
+        <div key={keyword} style={tagStyle}>
+          <span>{keyword}</span>
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              removeKeyword(keyword);
+            }}
+            style={removeButtonStyle}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.opacity = '0.7';
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.opacity = '1';
+            }}
+            aria-label={`Remove ${keyword}`}
+          >
+            ×
+          </button>
+        </div>
+      ))}
+      
       <input
         ref={inputRef}
         id={id}
@@ -182,20 +180,9 @@ export const KeywordTagsInput: React.FC<KeywordTagsInputProps> = ({
         onKeyDown={handleKeyDown}
         onFocus={handleInputFocus}
         onBlur={handleInputBlur}
-        style={{
-          ...inputStyle,
-          color: keywords.length > 0 ? 'transparent' : '#333',
-        }}
-        placeholder=""
+        style={inputStyle}
+        placeholder={keywords.length === 0 ? placeholder : ''}
       />
-      
-      {renderColoredText()}
-      
-      {keywords.length === 0 && !isFocused && (
-        <div style={placeholderStyle}>
-          {placeholder}
-        </div>
-      )}
     </div>
   );
 };

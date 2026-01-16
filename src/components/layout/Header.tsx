@@ -92,13 +92,13 @@ export function Header({ title = 'Methodologist Dashboard', user, onLogout }: Re
   return (
     <header className="header-responsive" style={{
       height: 48,
-      background: '#2c3e50',
+      background: 'linear-gradient(135deg, #049484 0%, #037368 100%)',
       color: '#fff',
       display: 'flex',
       alignItems: 'center',
       justifyContent: 'space-between',
       padding: '0 12px',
-      boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
+      boxShadow: '0 2px 8px rgba(4, 148, 132, 0.25)',
       position: 'absolute',
       top: 0,
       left: 0,

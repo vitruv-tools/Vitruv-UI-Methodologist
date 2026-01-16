@@ -34,7 +34,7 @@ const headerStyle: React.CSSProperties = {
   alignItems: 'center',
   marginBottom: '16px',
   paddingBottom: '12px',
-  borderBottom: '2px solid #3498db',
+  borderBottom: '2px solid #049484',
 };
 
 const titleStyle: React.CSSProperties = {

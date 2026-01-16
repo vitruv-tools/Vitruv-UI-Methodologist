@@ -38,7 +38,7 @@ const modalHeaderStyle: React.CSSProperties = {
   alignItems: 'center',
   marginBottom: '20px',
   paddingBottom: '16px',
-  borderBottom: '2px solid #3498db',
+  borderBottom: '2px solid #049484',
 };
 
 const modalTitleStyle: React.CSSProperties = {
@@ -66,7 +66,7 @@ const closeButtonStyle: React.CSSProperties = {
 };
 
 const inputFocusStyle: React.CSSProperties = {
-  borderColor: '#3498db',
+  borderColor: '#049484',
   outline: 'none',
   boxShadow: '0 0 0 3px rgba(52, 152, 219, 0.1)',
   background: '#ffffff',
@@ -76,7 +76,7 @@ const buttonStyle: React.CSSProperties = {
   padding: '12px 24px',
   borderRadius: '6px',
   border: 'none',
-  background: 'linear-gradient(135deg, #3498db 0%, #2980b9 100%)',
+  background: 'linear-gradient(135deg, #049484 0%, #2980b9 100%)',
   color: '#ffffff',
   fontSize: '14px',
   fontWeight: 600,

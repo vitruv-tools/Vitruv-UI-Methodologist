@@ -60,7 +60,7 @@ const modalHeaderStyle: React.CSSProperties = {
   alignItems: 'center',
   marginBottom: '20px',
   paddingBottom: '16px',
-  borderBottom: '2px solid #3498db',
+  borderBottom: '2px solid #049484',
 };
 
 const modalTitleStyle: React.CSSProperties = {
@@ -94,7 +94,7 @@ const closeButtonHoverStyle: React.CSSProperties = {
 };
 
 const inputFocusStyle: React.CSSProperties = {
-  borderColor: '#3498db',
+  borderColor: '#049484',
   outline: 'none',
   boxShadow: '0 0 0 3px rgba(52, 152, 219, 0.1)',
   background: '#ffffff',
@@ -105,7 +105,7 @@ const uploadSectionStyle: React.CSSProperties = {
   padding: '18px',
   background: '#f8f9fa',
   borderRadius: '6px',
-  border: '2px dashed #3498db',
+  border: '2px dashed #049484',
 };
 
 const uploadSectionTitleStyle: React.CSSProperties = {
@@ -126,7 +126,7 @@ const uploadButtonsContainerStyle: React.CSSProperties = {
 const uploadButtonStyle: React.CSSProperties = {
   flex: '1',
   padding: '12px 14px',
-  border: '2px solid #3498db',
+  border: '2px solid #049484',
   borderRadius: '6px',
   background: '#ffffff',
   color: '#2c3e50',
@@ -175,7 +175,7 @@ const primaryButtonStyle: React.CSSProperties = {
   padding: '14px 18px',
   border: 'none',
   borderRadius: '6px',
-  background: 'linear-gradient(135deg, #3498db 0%, #2980b9 100%)',
+  background: 'linear-gradient(135deg, #049484 0%, #2980b9 100%)',
   color: '#ffffff',
   fontSize: '14px',
   fontWeight: 600,
@@ -195,7 +195,7 @@ const primaryButtonDisabledStyle: React.CSSProperties = {
 const secondaryButtonStyle: React.CSSProperties = {
   flex: '1',
   padding: '14px 18px',
-  border: '2px solid #3498db',
+  border: '2px solid #049484',
   borderRadius: '6px',
   background: '#ffffff',
   color: '#2c3e50',
