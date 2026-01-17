@@ -370,7 +370,7 @@ function applyIntelligentLayout(nodes: FlowNode[], edges: FlowEdge[]): void {
   }
 }
 
-export const generateUMLFromEcore = (ecoreContent: string): { nodes: FlowNode[]; edges: FlowEdge[] } => {
+export const generateUMLFromEcore = (ecoreName: string, ecoreContent: string): { nodes: FlowNode[]; edges: FlowEdge[] } => {
   try {
     const parser = new DOMParser();
     const xmlDoc = parser.parseFromString(ecoreContent, 'text/xml');
@@ -442,10 +442,11 @@ export const generateUMLFromEcore = (ecoreContent: string): { nodes: FlowNode[];
       }
 
       const node: FlowNode = {
-        id: `uml-class-${nodeId++}`,
+        id: `${ecoreName}-uml-class-${nodeId++}`,
         type: 'editable',
         position: { x: 0, y: 0 }, // Will be calculated later
         data: {
+          model: ecoreName,
           label: className,
           toolType: 'element',
           toolName,
@@ -533,7 +534,7 @@ export const generateUMLFromEcore = (ecoreContent: string): { nodes: FlowNode[];
 
         const handles = chooseHandles(sourceId, targetId);
         edges.push({
-          id: `uml-edge-${nodeId++}`,
+          id: `${ecoreName}-uml-edge-${nodeId++}`,
           source: sourceId,
           target: targetId,
           type: 'uml',
@@ -561,7 +562,7 @@ export const generateUMLFromEcore = (ecoreContent: string): { nodes: FlowNode[];
         if (!supId) return;
         const handles = chooseHandles(subId, supId);
         edges.push({
-          id: `uml-gen-${nodeId++}`,
+          id: `${ecoreName}-uml-gen-${nodeId++}`,
           source: subId,
           target: supId,
           type: 'uml',
@@ -585,10 +586,11 @@ export const generateUMLFromEcore = (ecoreContent: string): { nodes: FlowNode[];
     // Optional package node
     if (nodes.length > 0) {
       const pkgNode: FlowNode = {
-        id: `uml-pkg-${nodeId++}`,
+        id: `${ecoreName}-uml-pkg-${nodeId++}`,
         type: 'editable',
         position: { x: 80, y: 40 },
         data: {
+          model: ecoreName,
           label: packageName,
           toolType: 'element',
           toolName: 'package',

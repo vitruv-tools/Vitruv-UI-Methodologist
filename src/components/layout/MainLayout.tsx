@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { ComponentRef, ElementRef, useCallback, useEffect, useRef, useState } from 'react';
 import { useLocation } from 'react-router-dom';
 import { Header } from './Header';
 import { FlowCanvas } from '../flow/FlowCanvas';
@@ -62,7 +62,7 @@ export function MainLayout({
     const location = useLocation();
     const isMMLRoute = location.pathname.startsWith('/mml');
 
-    const flowCanvasRef = useRef<any>(null);
+    const flowCanvasRef = useRef<ComponentRef<typeof FlowCanvas>>(null);
     const leftAsideRef = useRef<HTMLDivElement | null>(null);
     const rightAsideRef = useRef<HTMLDivElement | null>(null);
     const isResizingLeft = useRef(false);
@@ -78,7 +78,7 @@ export function MainLayout({
     const [selectedFileBoxId, setSelectedFileBoxId] = useState<string | null>(null);
     
     // Track when a metamodel is expanded (showing UML)
-    const [expandedMetaModelName, setExpandedMetaModelName] = useState<string | null>(null);
+    const [expandedMetaModelNames, setExpandedMetaModelNames] = useState<Set<string> | null>(null);
     
     // Force FlowCanvas to remount when switching between workspace and UML view
     const [canvasKey, setCanvasKey] = useState<string>('workspace-initial');
@@ -187,43 +187,55 @@ export function MainLayout({
         fileContent: string,
         meta?: EcoreMeta
     ) => {
-        // Check if file already exists to prevent duplicates
-        const existingNodes = flowCanvasRef.current?.getNodes?.() || [];
-        const existing = existingNodes.find(
-            (n: any) => n.type === 'ecoreFile' && n.data.fileName === meta?.fileName
-        );
+        // In expanded mode, we expand new meta models to facilitate defining reactions
+        if (expandedMetaModelNames) {
+            if (expandedMetaModelNames.has(meta?.fileName ?? "")) {
+                console.log('⚠️ File already expanded, skipping:', meta?.fileName);
+                return;
+            }
 
-        if (existing) {
-            console.log('⚠️ File already exists, skipping:', meta?.fileName);
-            setSelectedFileBoxId(existing.id);
-            return;
-        }
+            console.log('➕ Adding expanded metamodel:', meta?.fileName);
 
-        console.log('➕ Adding new metamodel box:', meta?.fileName);
-        
-        // DON'T clear canvas when adding metamodel boxes to workspace
-        // The workspace should accumulate multiple metamodel boxes
-        // Only clear if explicitly needed elsewhere
-        
-        // Calculate position for new box
-        const position = calculateEmptyPosition();
-
-        // Create the file via FlowCanvas's addEcoreFile
-        if (flowCanvasRef.current?.addEcoreFile) {
-            flowCanvasRef.current.addEcoreFile(
-                meta?.fileName || 'untitled.ecore',
-                fileContent,
-                {
-                    ...meta,
-                    position,
-                }
+            handleEcoreFileExpand(meta?.fileName!, fileContent, false, false); 
+        } else {
+            // Check if file already exists to prevent duplicates
+            const existingNodes = flowCanvasRef.current?.getNodes?.() || [];
+            const existing = existingNodes.find(
+                (n: any) => n.type === 'ecoreFile' && n.data.fileName === meta?.fileName
             );
+
+            if (existing) {
+                console.log('⚠️ File already exists, skipping:', meta?.fileName);
+                setSelectedFileBoxId(existing.id);
+                return;
+            }
+
+            console.log('➕ Adding new metamodel box:', meta?.fileName);
+            
+            // DON'T clear canvas when adding metamodel boxes to workspace
+            // The workspace should accumulate multiple metamodel boxes
+            // Only clear if explicitly needed elsewhere
+            
+            // Calculate position for new box
+            const position = calculateEmptyPosition();
+
+            // Create the file via FlowCanvas's addEcoreFile
+            if (flowCanvasRef.current?.addEcoreFile) {
+                flowCanvasRef.current.addEcoreFile(
+                    meta?.fileName || 'untitled.ecore',
+                    fileContent,
+                    {
+                        ...meta,
+                        position,
+                    }
+                );
+            }
         }
-    }, [calculateEmptyPosition]);
+    }, [calculateEmptyPosition, expandedMetaModelNames]);
 
     // Function to return to workspace from expanded metamodel view
     const handleBackToWorkspace = useCallback(() => {
-        setExpandedMetaModelName(null);
+        setExpandedMetaModelNames(null);
         
         // Clear the cached workspace snapshot since we're returning to workspace view
         setCachedWorkspaceSnapshot(null);
@@ -239,7 +251,9 @@ export function MainLayout({
         
         // Re-enable interactive mode for workspace
         setTimeout(() => {
+            //@ts-expect-error
             if (flowCanvasRef.current?.setInteractive) {
+                //@ts-expect-error
                 flowCanvasRef.current.setInteractive(true);
             }
             
@@ -260,7 +274,7 @@ export function MainLayout({
     useEffect(() => {
         const handleResetWorkspace = () => {
             console.log('🔄 Resetting workspace - clearing all nodes');
-            setExpandedMetaModelName(null);
+            setExpandedMetaModelNames(null);
             // Force canvas key reset to ensure fresh state
             const newKey = `workspace-reset-${Date.now()}`;
             console.log('🔑 Setting new canvas key:', newKey);
@@ -319,7 +333,7 @@ export function MainLayout({
             globalThis.removeEventListener('vitruv.resetWorkspace', handleResetWorkspace as EventListener);
         };
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, []);
+    }, [expandedMetaModelNames]);
 
     useEffect(() => {
         const handleWorkspaceSnapshotRequest = (event: Event) => {
@@ -330,7 +344,7 @@ export function MainLayout({
             
             // If viewing UML diagram, return the cached workspace snapshot
             // This ensures relations are saved even when viewing UML
-            if (expandedMetaModelName && cachedWorkspaceSnapshot) {
+            if (expandedMetaModelNames && cachedWorkspaceSnapshot) {
                 console.log('📸 Using cached workspace snapshot while viewing UML:', cachedWorkspaceSnapshot);
                 detail.resolve(cachedWorkspaceSnapshot);
                 return;
@@ -346,7 +360,7 @@ export function MainLayout({
 
         globalThis.addEventListener('vitruv.requestWorkspaceSnapshot', handleWorkspaceSnapshotRequest as EventListener);
         return () => globalThis.removeEventListener('vitruv.requestWorkspaceSnapshot', handleWorkspaceSnapshotRequest as EventListener);
-    }, [expandedMetaModelName, cachedWorkspaceSnapshot]);
+    }, [expandedMetaModelNames, cachedWorkspaceSnapshot]);
 
     const handleEcoreFileSelect = useCallback((fileName: string) => {
         const nodes = flowCanvasRef.current?.getNodes?.() || [];
@@ -358,34 +372,41 @@ export function MainLayout({
         }
     }, []);
 
-    const handleEcoreFileExpand = useCallback((fileName: string, fileContent: string) => {
-        // Cache the current workspace snapshot before switching to UML view
-        // This is critical for saving relations even when viewing UML
-        const currentSnapshot = flowCanvasRef.current?.getWorkspaceSnapshot?.() ?? {
-            metaModelIds: [],
-            metaModelRelationRequests: [],
-        };
-        setCachedWorkspaceSnapshot(currentSnapshot);
-        console.log('📸 Cached workspace snapshot before UML view:', currentSnapshot);
+    const handleEcoreFileExpand = useCallback((fileName: string, fileContent: string, cacheWorkspaceSnapshot: boolean = true, remountCanvas: boolean = true) => {
+        if (cacheWorkspaceSnapshot) {
+            // Cache the current workspace snapshot before switching to UML view
+            // This is critical for saving relations even when viewing UML
+            const currentSnapshot = flowCanvasRef.current?.getWorkspaceSnapshot?.() ?? {
+                metaModelIds: [],
+                metaModelRelationRequests: [],
+            };
+            setCachedWorkspaceSnapshot(currentSnapshot);
+            console.log('📸 Cached workspace snapshot before UML view:', currentSnapshot);
+        }
         
         // Mark that we're viewing an expanded metamodel
-        setExpandedMetaModelName(fileName);
+        const currentlyExpanded = new Set<string>();
+        if (expandedMetaModelNames) Array.from(expandedMetaModelNames.values()).forEach(v => currentlyExpanded.add(v));
+        currentlyExpanded.add(fileName);
+        setExpandedMetaModelNames(currentlyExpanded);
         
-        // Force FlowCanvas to remount with a new key for UML view
-        // This ensures a completely fresh canvas without any metamodel boxes
-        setCanvasKey(`uml-${fileName}-${Date.now()}`);
-        
-        // IMPORTANT: Completely clear the entire canvas including all metamodel boxes
-        // This ensures we start fresh with only the UML diagram
-        if (flowCanvasRef.current?.loadDiagramData) {
-            flowCanvasRef.current.loadDiagramData([], []);
-        }
-        if (flowCanvasRef.current?.resetExpandedFile) {
-            flowCanvasRef.current.resetExpandedFile();
+        if (remountCanvas) {
+            // Force FlowCanvas to remount with a new key for UML view
+            // This ensures a completely fresh canvas without any metamodel boxes
+            setCanvasKey(`uml-${fileName}-${Date.now()}`);
+            
+            // IMPORTANT: Completely clear the entire canvas including all metamodel boxes
+            // This ensures we start fresh with only the UML diagram
+            if (flowCanvasRef.current?.loadDiagramData) {
+                flowCanvasRef.current.loadDiagramData([], []);
+            }
+            if (flowCanvasRef.current?.resetExpandedFile) {
+                flowCanvasRef.current.resetExpandedFile();
+            }
         }
 
         // Prefer UML generator; fall back to previous parsers
-        let diagramData = generateUMLFromEcore(fileContent);
+        let diagramData = generateUMLFromEcore(fileName, fileContent);
         if (!diagramData.nodes.length) {
             diagramData = parseEcoreFile(fileContent);
         }
@@ -411,14 +432,16 @@ export function MainLayout({
         // Use a delay to ensure the canvas is remounted and ready before loading UML
         setTimeout(() => {
             // Load parsed UML diagram (ONLY UML boxes, no metamodel boxes)
-            flowCanvasRef.current?.loadDiagramData?.(diagramData.nodes, diagramData.edges);
+            flowCanvasRef.current?.loadDiagramData?.(diagramData.nodes, diagramData.edges, !remountCanvas, "model");
             // Make generated UML read-only by default, but allow moving boxes
+            //@ts-expect-error
             flowCanvasRef.current?.setInteractive?.(false);
+            //@ts-expect-error
             flowCanvasRef.current?.setDraggable?.(true);
             saveDocumentData(newId, { nodes: diagramData.nodes as any, edges: diagramData.edges as any });
             setIsDirty(false);
         }, 100);
-    }, [setDocuments]);
+    }, [setDocuments, setExpandedMetaModelNames, expandedMetaModelNames]);
 
     const handleEcoreFileDelete = useCallback((id: string) => {
         // Remove Node from FlowCanvas
@@ -648,7 +671,7 @@ export function MainLayout({
                         )}
 
                         {/* Back to Workspace button - shown when viewing expanded metamodel */}
-                        {expandedMetaModelName && !isMMLRoute && (
+                        {expandedMetaModelNames && !isMMLRoute && (
                             <button
                                 onClick={handleBackToWorkspace}
                                 style={{
@@ -673,7 +696,7 @@ export function MainLayout({
                                 onMouseLeave={(e) => {
                                     e.currentTarget.style.background = '#3498db';
                                 }}
-                                title={`Back to workspace from ${expandedMetaModelName}`}
+                                title={`Back to workspace from ${Array.from(expandedMetaModelNames.values()).join(", ")}`}
                             >
                                 <svg width="14" height="14" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
                                     <path d="M10 13L5 8L10 3" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>

@@ -5,6 +5,7 @@ export interface FlowNode extends Node {
     label: string;
     onLabelChange?: (id: string, label: string) => void;
     ecoreData?: EcoreElementData;
+    model?: string;
   };
 }
 

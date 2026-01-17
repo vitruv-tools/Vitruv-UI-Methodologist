@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { NodeProps, Handle, Position } from 'reactflow';
+import { NodeProps, Handle, Position, Connection } from 'reactflow';
 import {
   getBaseNodeStyle,
   headerBaseStyle,
@@ -440,13 +440,41 @@ export function EditableNode({ id, data, selected, isConnectable }: NodeProps<UM
   };
 
   const renderLines = (items: string[]) => (
-    <>
+    <div style={{ position: 'relative', width: '100%' }}>
       {items.map((text, index) => (
         <div key={`${text}-${index}`} style={listItemStyle}>
           {text}
+          <Handle 
+            type="target" 
+            position={Position.Left} 
+            isConnectable={isConnectable}
+            id="reaction"
+            style={handleStyles.leftTarget}
+          />
+          <Handle 
+            type="source" 
+            position={Position.Left} 
+            isConnectable={isConnectable}
+            id="reaction"
+            style={handleStyles.leftSource}
+          />
+          <Handle 
+            type="target" 
+            position={Position.Right} 
+            isConnectable={isConnectable}
+            id="reaction"
+            style={handleStyles.rightTarget}
+          />
+          <Handle 
+            type="source" 
+            position={Position.Right} 
+            isConnectable={isConnectable}
+            id="reaction"
+            style={handleStyles.rightSource}
+          />
         </div>
       ))}
-    </>
+    </div>
   );
 
   const renderUMLClass = () => (

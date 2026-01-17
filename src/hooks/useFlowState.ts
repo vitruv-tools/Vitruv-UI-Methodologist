@@ -162,19 +162,35 @@ export function useFlowState(props?: UseFlowStateProps) {
       const src = findNode(params.source);
       const tgt = findNode(params.target);
       const auto = chooseHandlesForPair(src, tgt, params.sourceHandle, params.targetHandle);
-      const newEdge: Edge = {
-        id: `edge-${getId()}`,
-        type: 'uml',
-        source: params.source!,
-        target: params.target!,
-        sourceHandle: params.sourceHandle ?? auto.s,
-        targetHandle: params.targetHandle ?? auto.t,
-        data: {
-          relationshipType: 'association',
-          label: 'Association',
-        },
-      };
-      setEdges((eds) => eds.concat(newEdge));
+      
+      if (src?.data?.model != tgt?.data?.model) {
+        const newEdge: Edge = {
+          id: `edge-${getId()}`,
+          type: 'reactions',
+          source: params.source!,
+          target: params.target!,
+          sourceHandle: params.sourceHandle ?? auto.s,
+          targetHandle: params.targetHandle ?? auto.t,
+          data: {
+            relationshipType: 'association',
+          },
+        };
+        setEdges((eds) => eds.concat(newEdge));
+      } else if (params.sourceHandle !== "reaction" && params.targetHandle !== "reaction") {
+        const newEdge: Edge = {
+          id: `edge-${getId()}`,
+          type: 'uml',
+          source: params.source!,
+          target: params.target!,
+          sourceHandle: params.sourceHandle ?? auto.s,
+          targetHandle: params.targetHandle ?? auto.t,
+          data: {
+            relationshipType: 'association',
+            label: 'Association',
+          },
+        };
+        setEdges((eds) => eds.concat(newEdge));
+      }
     },
     [getId, setEdges, nodes, chooseHandlesForPair]
   );

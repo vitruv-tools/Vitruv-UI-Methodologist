@@ -52,6 +52,8 @@ export const listItemStyle: React.CSSProperties = {
   fontFamily: 'monospace',
   display: 'flex',
   alignItems: 'center',
+  minHeight: '20px',
+  position: 'relative',
 };
 
 // Package header style

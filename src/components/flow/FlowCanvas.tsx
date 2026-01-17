@@ -25,6 +25,7 @@ import { ConnectionLine } from './ConnectionLine';
 import { CodeEditorModal } from './CodeEditorModal';
 import { apiService, MetaModelRelationRequest } from '../../services/api';
 import { WorkspaceSnapshot } from '../../types/workspace';
+import { FlowEdge, FlowNode } from '../../types';
 
 const COLOR_LIST = [
   '#ab1c91ff', '#ff7f0e', '#2ca02c', '#d62728', '#9467bd',
@@ -163,7 +164,7 @@ const getToolLabel = (toolType: string, toolName: string): string => {
 
 export const FlowCanvas = forwardRef<{
   handleToolClick: (toolType: string, toolName: string, diagramType?: string) => void;
-  loadDiagramData: (nodes: any[], edges: any[]) => void;
+  loadDiagramData: (nodes: FlowNode[], edges: FlowEdge[], additive?: boolean, rearrangeBy?: string) => void;
   getNodes: () => Node[];
   getEdges: () => Edge[];
   addEcoreFile: (fileName: string, fileContent: string, meta?: any) => void;
@@ -889,16 +890,18 @@ export const FlowCanvas = forwardRef<{
       addNode(newNode);
     }, [reactFlowInstance, addNode]);
 
-    const loadDiagramData = useCallback((newNodes: any[], newEdges: any[]) => {
-      console.log('Loading diagram data (raw):', { newNodes, newEdges });
-
-      const nodesWithIds = newNodes.map((n, idx) => ({
+    // Helper: Ensure all nodes have unique IDs
+    const ensureNodeIds = useCallback((newNodes: FlowNode[]) => {
+      return newNodes.map((n, idx) => ({
         ...n,
         id: n.id ?? `loaded-node-${idx}-${Date.now()}`,
       }));
+    }, []);
 
-      const seen = new Set<string>();
-      const edgesWithUniqueIds = newEdges.map((e, idx) => {
+    // Helper: Ensure all edges have unique IDs (avoiding conflicts with existing edges)
+    const ensureUniqueEdgeIds = useCallback((newEdges: FlowEdge[], existingEdgeIds: Set<string>) => {
+      const seen = new Set(existingEdgeIds);
+      return newEdges.map((e, idx) => {
         let baseId = e.id ?? `loaded-edge-${idx}`;
         if (seen.has(baseId)) {
           let k = 1;
@@ -911,26 +914,180 @@ export const FlowCanvas = forwardRef<{
           baseId = newId;
         }
         seen.add(baseId);
+        return { ...e, id: baseId };
+      });
+    }, []);
 
-        return {
-          ...e,
-          id: baseId,
-        };
+    // Helper: Handle additive vs non-additive loading
+    const mergeWithExisting = useCallback((
+      newNodes: FlowNode[],
+      newEdges: FlowEdge[],
+      additive: boolean
+    ) => {
+      if (!additive) {
+        setNodes([]);
+        setEdges([]);
+        return { nodesToProcess: newNodes, edgesToProcess: newEdges };
+      }
+
+      // Additive mode: merge with existing, filtering out debug boxes
+      newNodes.push(...nodes.filter(n => !n.id.startsWith('debug-box-')));
+      newEdges.push(...edges.filter(e => !e.id.startsWith('debug-box-')));
+      return { nodesToProcess: newNodes, edgesToProcess: newEdges };
+    }, [nodes, edges, setNodes, setEdges]);
+
+    // Helper: Calculate bounding boxes for each rearrange key
+    const calculateBoundingBoxes = useCallback((nodesToArrange: FlowNode[], rearrangeBy: string) => {
+      const boundingBox: { [key: string]: { rearrangeKey: string; left: number; right: number; top: number; bottom: number } } = {};
+
+      nodesToArrange.forEach(n => {
+        const rearrangeKey = (n.data[rearrangeBy as keyof typeof n.data] as string) ?? "";
+        if (!boundingBox[rearrangeKey]) {
+          boundingBox[rearrangeKey] = { rearrangeKey, left: n.position.x, right: n.position.x, top: n.position.y, bottom: n.position.y };
+        }
+        boundingBox[rearrangeKey].left = Math.min(boundingBox[rearrangeKey].left, n.position.x);
+        boundingBox[rearrangeKey].right = Math.max(boundingBox[rearrangeKey].right, n.position.x + NODE_DIMENSIONS.width);
+        boundingBox[rearrangeKey].top = Math.min(boundingBox[rearrangeKey].top, n.position.y);
+        boundingBox[rearrangeKey].bottom = Math.max(boundingBox[rearrangeKey].bottom, n.position.y + NODE_DIMENSIONS.height);
       });
 
-      console.log(
-          'Edges after uniquify:',
-          edgesWithUniqueIds.map(e => e.id)
-      );
+      return Object.values(boundingBox);
+    }, []);
 
-      setNodes([]);
-      setEdges([]);
+    // Helper: Check if two bounding boxes overlap
+    const boxesOverlap = (a: { left: number; right: number; top: number; bottom: number }, b: { left: number; right: number; top: number; bottom: number }) => {
+      return !(a.right <= b.left || a.left >= b.right || a.bottom <= b.top || a.top >= b.bottom);
+    };
 
-      if (nodesWithIds.length > 0) setNodes(nodesWithIds);
-      if (edgesWithUniqueIds.length > 0) setEdges(edgesWithUniqueIds);
+    // Helper: Calculate minimum separation offset between overlapping boxes
+    const calculateSeparationOffset = (
+      a: { left: number; right: number; top: number; bottom: number },
+      b: { left: number; right: number; top: number; bottom: number }
+    ) => {
+      const moveLeft = b.left - a.right;
+      const moveRight = b.right - a.left;
+      const moveUp = b.top - a.bottom;
+      const moveDown = b.bottom - a.top;
+
+      const xOffset = Math.abs(moveLeft) < Math.abs(moveRight) ? moveLeft : moveRight;
+      const yOffset = Math.abs(moveUp) < Math.abs(moveDown) ? moveUp : moveDown;
+
+      return Math.abs(xOffset) < Math.abs(yOffset) ? { x: xOffset, y: 0 } : { x: 0, y: yOffset };
+    };
+
+    // Helper: Apply offset to a bounding box
+    const applyBoxOffset = (
+      box: { rearrangeKey: string; left: number; right: number; top: number; bottom: number },
+      offset: { x: number; y: number }
+    ) => ({
+      rearrangeKey: box.rearrangeKey,
+      left: box.left + offset.x,
+      right: box.right + offset.x,
+      top: box.top + offset.y,
+      bottom: box.bottom + offset.y,
+    });
+
+    // Helper: Calculate all necessary offsets to separate overlapping boxes
+    const calculateBoxOffsets = useCallback((boxes: Array<{ rearrangeKey: string; left: number; right: number; top: number; bottom: number }>) => {
+      const offsets: { rearrangeKey: string; x: number; y: number }[] = [];
+      const maxIterations = 100;
+      let iteration = 0;
+
+      for (let i = 0; i < boxes.length && iteration < maxIterations; i++) {
+        for (let j = i + 1; j < boxes.length && iteration < maxIterations; j++) {
+          iteration++;
+          if (boxesOverlap(boxes[i], boxes[j])) {
+            const offset = calculateSeparationOffset(boxes[i], boxes[j]);
+            offsets[i] = {
+              rearrangeKey: boxes[i].rearrangeKey,
+              x: (offsets[i]?.x ?? 0) + offset.x,
+              y: (offsets[i]?.y ?? 0) + offset.y,
+            };
+            boxes[i] = applyBoxOffset(boxes[i], offset);
+          }
+        }
+      }
+
+      return offsets;
+    }, []);
+
+    // Helper: Create debug visualization nodes for bounding boxes
+    const createDebugNodes = useCallback((boxes: Array<{ rearrangeKey: string; left: number; right: number; top: number; bottom: number }>) => {
+      return boxes.map((box, idx) => ({
+        id: `debug-box-${box.rearrangeKey}-${Date.now()}-${idx}`,
+        type: 'default',
+        position: { x: box.left, y: box.top },
+        data: { label: `[DEBUG] ${box.rearrangeKey}`, group: box.rearrangeKey },
+        draggable: false,
+        selectable: true,
+        style: {
+          width: box.right - box.left,
+          height: box.bottom - box.top,
+          backgroundColor: 'rgba(255, 0, 0, 0.05)',
+          border: '2px dashed #FF0000',
+          borderRadius: '4px',
+          fontSize: '10px',
+          padding: '4px',
+          color: '#FF0000',
+          pointerEvents: 'none',
+          zIndex: -1,
+        },
+      }));
+    }, []);
+
+    // Helper: Apply calculated offsets to actual nodes
+    const applyOffsetsToNodes = useCallback((
+      nodesToOffset: FlowNode[],
+      offsets: Array<{ rearrangeKey: string; x: number; y: number }>,
+      rearrangeBy: string
+    ) => {
+      nodesToOffset.forEach(n => {
+        const offset = offsets.find(o => o.rearrangeKey === (n.data[rearrangeBy as keyof typeof n.data] as string));
+        if (offset) {
+          n.position = {
+            x: n.position.x + offset.x,
+            y: n.position.y + offset.y,
+          };
+        }
+      });
+    }, []);
+
+    // Main: Load diagram data with optional rearrangement
+    const loadDiagramData = useCallback((newNodes: FlowNode[], newEdges: FlowEdge[], additive: boolean = false, rearrangeBy: string | undefined = undefined) => {
+      console.log('Loading diagram data (raw):', { newNodes, newEdges });
+
+      // Step 1: Ensure all nodes and edges have unique IDs
+      const nodesWithIds = ensureNodeIds(newNodes);
+      const existingEdgeIds = additive ? new Set(edges.map(e => e.id)) : new Set<string>();
+      const edgesWithUniqueIds = ensureUniqueEdgeIds(newEdges, existingEdgeIds);
+
+      console.log('Edges after uniquify:', edgesWithUniqueIds.map(e => e.id));
+
+      // Step 2: Handle additive vs non-additive loading
+      const { nodesToProcess, edgesToProcess } = mergeWithExisting(nodesWithIds, edgesWithUniqueIds, additive);
+
+      // Step 3: Apply rearrangement if requested
+      if (rearrangeBy) {
+        const boxes = calculateBoundingBoxes(nodesToProcess, rearrangeBy);
+        const offsets = calculateBoxOffsets(boxes);
+
+        // Add debug nodes (only in development)
+        if (false && process.env.NODE_ENV === 'development') {
+          const debugNodes = createDebugNodes(boxes);
+          //@ts-ignore
+          nodesToProcess.push(...debugNodes);
+        }
+
+        // Apply offsets to actual nodes
+        applyOffsetsToNodes(nodesToProcess, offsets, rearrangeBy);
+      }
+
+      // Step 4: Finalize - set the state
+      if (nodesToProcess.length > 0) setNodes(nodesToProcess);
+      if (edgesToProcess.length > 0) setEdges(edgesToProcess);
 
       console.log('Diagram data loaded successfully');
-    }, [setNodes, setEdges]);
+    }, [ensureNodeIds, ensureUniqueEdgeIds, mergeWithExisting, calculateBoundingBoxes, calculateBoxOffsets, createDebugNodes, applyOffsetsToNodes, edges, setNodes, setEdges]);
 
 
     const handleDragOver = useCallback((event: React.DragEvent) => {
