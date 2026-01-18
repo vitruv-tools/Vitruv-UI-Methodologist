@@ -78,6 +78,8 @@ interface FlowCanvasProps {
   onEcoreFileRename?: (id: string, newFileName: string) => void;
   userId?: string;
   projectId?: string;
+  reactionFiles?: Set<{fromModel: string; toModel: string; id: number}>;
+  onReactionFilesChange?: (files: Set<{fromModel: string; toModel: string; id: number}>) => void;
 }
 
 interface ConnectionDragState {
@@ -125,6 +127,7 @@ const createControlButton = (onClick: () => void, title: string, icon: React.Rea
   </button>
 );
 
+type ReactionFile = { fromModel: string, toModel: string, id: number };
 
 const TOOL_LABELS: Record<string, Record<string, string>> = {
   element: {
@@ -185,7 +188,9 @@ export const FlowCanvas = forwardRef<{
     onEcoreFileDelete,
     onEcoreFileRename,
     userId,
-    projectId
+    projectId,
+    reactionFiles: externalReactionFiles,
+    onReactionFilesChange,
   }, ref) => {
 
     const reactFlowWrapper = useRef<HTMLDivElement>(null);
@@ -196,6 +201,9 @@ export const FlowCanvas = forwardRef<{
     const [expandedFileId, setExpandedFileId] = useState<string | null>(null);
     const [connectionDragState, setConnectionDragState] = useState<ConnectionDragState | null>(null);
     const [codeEditorState, setCodeEditorState] = useState<CodeEditorState | null>(null);
+    // Use external reactionFiles prop if provided, otherwise use internal state
+    const reactionFileIds = externalReactionFiles ?? new Set<ReactionFile>();
+    const setReactionFileIds = onReactionFilesChange ?? (() => {});
     const [routingStyle] = useState<'curved' | 'orthogonal'>('orthogonal');
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const [edgeDragState, setEdgeDragState] = useState<{
@@ -748,6 +756,21 @@ export const FlowCanvas = forwardRef<{
         return node?.type === 'ecoreFile' ? node.data.fileName : undefined;
       };
 
+      // Try to infer reactionFileId if missing
+      if (!edge.data?.reactionFileId) {
+        const source = nodes.find(n => n.id === edge.source)!;
+        const target = nodes.find(n => n.id === edge.target)!;
+        for (const reactionFile of Array.from(reactionFileIds.values())) {
+          if (reactionFile.fromModel === source.data.model && reactionFile.toModel === target.data.model) {
+            edge.data ??= {};
+            edge.data!.reactionFileId = reactionFile.id;
+            break;
+
+            // TODO(Reinbold): We only care about a specific part of the source code no the entire file.
+          }
+        }
+      }
+
       let initialCode = edge.data?.code || '';
       const reactionFileId = edge.data?.reactionFileId;
 
@@ -768,7 +791,7 @@ export const FlowCanvas = forwardRef<{
         targetFileName: getFileName(edge.target),
         reactionFileId,
       });
-    }, [edges, nodes]);
+    }, [edges, nodes, reactionFileIds]);
 
     const handleCloseCodeEditor = useCallback(() => {
       setCodeEditorState(null);
@@ -1274,24 +1297,40 @@ export const FlowCanvas = forwardRef<{
     }, [edges]);
 
     // Helper to process a single relation and create edge
+    // Returns the reaction file to add (if any) for batch accumulation
     const processRelation = useCallback((
       relation: { id: number; sourceId: number; targetId: number; reactionFileId?: number | null },
       preserveExisting: boolean
-    ) => {
+    ): {fromModel: string; toModel: string; id: number} | null => {
       const sourceNode = findNodeByMetaModelId(relation.sourceId);
       const targetNode = findNodeByMetaModelId(relation.targetId);
 
       if (!sourceNode || !targetNode) {
         console.warn('Could not find nodes for relation:', relation, 'Available nodes:', nodes.filter(n => n.type === 'ecoreFile').map(n => ({ id: n.id, metaModelId: n.data?.metaModelId, metaModelSourceId: n.data?.metaModelSourceId })));
-        return;
+        return null;
+      }
+
+      if (!sourceNode.data?.fileName || !targetNode.data?.fileName) {
+        console.warn('Source or target node missing fileName:', { sourceNode, targetNode });
+        return null;
+      }
+
+      // Return the reaction file to be accumulated by the caller
+      let reactionFileToAdd: {fromModel: string; toModel: string; id: number} | null = null;
+      if (relation.reactionFileId !== null && relation.reactionFileId !== undefined) {
+        reactionFileToAdd = {
+          fromModel: sourceNode.data!.fileName,
+          toModel: targetNode.data!.fileName,
+          id: relation.reactionFileId
+        };
       }
 
       const existsByBackendId = edges.some(edge => edge.data?.backendRelationId === relation.id);
-      if (existsByBackendId) return;
+      if (existsByBackendId) return reactionFileToAdd;
 
       if (preserveExisting && edgeExistsBetweenNodes(sourceNode.id, targetNode.id)) {
         console.log('Preserving existing edge between nodes:', sourceNode.id, targetNode.id);
-        return;
+        return reactionFileToAdd;
       }
 
       const color = getColorForPair(sourceNode.id, targetNode.id);
@@ -1327,6 +1366,7 @@ export const FlowCanvas = forwardRef<{
       };
 
       addEdge(newEdge);
+      return reactionFileToAdd;
     }, [nodes, edges, findNodeByMetaModelId, edgeExistsBetweenNodes, getColorForPair, calculateOptimalHandles, addEdge]);
 
     useEffect(() => {
@@ -1344,7 +1384,17 @@ export const FlowCanvas = forwardRef<{
         const relations = custom.detail?.relations ?? [];
         const preserveExisting = custom.detail?.preserveExisting ?? false;
         
-        relations.forEach(relation => processRelation(relation, preserveExisting));
+        // Accumulate all reaction files from all relations
+        const accumulatedFiles = new Set<{fromModel: string; toModel: string; id: number}>();
+        relations.forEach(relation => {
+          const reactionFile = processRelation(relation, preserveExisting);
+          if (reactionFile) {
+            accumulatedFiles.add(reactionFile);
+          }
+        });
+        
+        // Update reaction files state once with all accumulated files
+        setReactionFileIds(accumulatedFiles);
 
         if (relations.length > 0) {
           setTimeout(() => {
@@ -1355,7 +1405,7 @@ export const FlowCanvas = forwardRef<{
 
       globalThis.addEventListener('vitruv.loadMetaModelRelations', handleLoadMetaModelRelations as EventListener);
       return () => globalThis.removeEventListener('vitruv.loadMetaModelRelations', handleLoadMetaModelRelations as EventListener);
-    }, [processRelation, reactFlowInstance]);
+    }, [processRelation, reactFlowInstance, setReactionFileIds]);
 
     useEffect(() => {
       onDiagramChange?.(nodes, edges);

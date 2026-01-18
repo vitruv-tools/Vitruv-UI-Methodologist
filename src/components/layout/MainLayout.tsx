@@ -86,6 +86,9 @@ export function MainLayout({
     // Cache the workspace snapshot when switching to UML view
     // This ensures we can save relations even when viewing UML
     const [cachedWorkspaceSnapshot, setCachedWorkspaceSnapshot] = useState<WorkspaceSnapshot | null>(null);
+    
+    // Reaction files state - lifted from FlowCanvas to persist across remounts
+    const [reactionFiles, setReactionFiles] = useState<Set<{fromModel: string; toModel: string; id: number}>>(new Set());
 
     // Start with an empty workspace
     useEffect(() => {
@@ -667,6 +670,8 @@ export function MainLayout({
                                 // onEcoreFilePositionChange removed - ReactFlow handles position
                                 onEcoreFileDelete={handleEcoreFileDelete}
                                 onEcoreFileRename={handleEcoreFileRename}
+                                reactionFiles={reactionFiles}
+                                onReactionFilesChange={setReactionFiles}
                             />
                         )}
 
