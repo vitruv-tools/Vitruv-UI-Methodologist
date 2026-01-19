@@ -43,7 +43,7 @@ function AppContent() {
     try {
       const flowData = exportFlowData(nodes, edges);
       const result = await apiService.deployFlow(flowData);
-      
+
       if (result.success) {
         alert('Flow deployed successfully!');
       } else {
@@ -96,21 +96,21 @@ function App() {
         <Routes>
           <Route path="/auth" element={<AuthPage />} />
           <Route path="/" element={
-             <ProtectedRoute>
+            <ProtectedRoute>
               <HomePage />
             </ProtectedRoute>
           } />
           <Route path="/mml" element={
             <ProtectedRoute>
               <AppContent />
-             </ProtectedRoute>
+            </ProtectedRoute>
           } />
           <Route path="/project" element={
             <ProtectedRoute>
               <ProjectPage />
             </ProtectedRoute>
           } />
-          {/* NEU - EditorTest Route */}
+          {/*Editor Test Route*/}
           <Route path="/editor-test" element={<EditorTest />} />
         </Routes>
       </AuthProvider>

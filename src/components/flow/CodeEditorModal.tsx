@@ -50,7 +50,7 @@ export function CodeEditorModal({
   const [saving, setSaving] = useState(false);
   const editorRef = useRef<monaco.editor.IStandaloneCodeEditor | null>(null);
   const [lspConnected, setLspConnected] = useState(false);
-  const lspReady = useRef(false); // ✅ NEU
+  const lspReady = useRef(false);
   const webSocketRef = useRef<WebSocket | null>(null);
   const lspInitialized = useRef(false);
   const workspaceRootUri = useRef<string | null>(null);
@@ -58,33 +58,25 @@ export function CodeEditorModal({
   const versionCounter = useRef(1);
 
   useEffect(() => {
-    console.log('📝 Code changed, initialCode:', initialCode.substring(0, 50));
     setCode(initialCode);
   }, [initialCode, isOpen]);
 
   const handleEditorDidMount: OnMount = (editor, monacoInstance) => {
-    console.log('🎨 Editor mounted!');
     editorRef.current = editor;
 
-    console.log('📋 Registering reactions language...');
     monacoInstance.languages.register({ id: 'reactions' });
     monacoInstance.languages.setLanguageConfiguration('reactions', reactionsLanguageConfig);
     monacoInstance.languages.setMonarchTokensProvider('reactions', reactionsMonarch);
-    console.log('✅ Language registered');
 
     monacoInstance.editor.defineTheme('reactions-theme', reactionsTheme);
     monacoInstance.editor.setTheme('reactions-theme');
 
-    console.log('🔌 Registering completion provider...');
     monacoInstance.languages.registerCompletionItemProvider('reactions', {
-      triggerCharacters: ['.', ' ', '\n'],
+      triggerCharacters: ['.', ' ', '\n', ':'],
       provideCompletionItems: async (model, position) => {
-        console.log('🎯 provideCompletionItems CALLED at position:', position);
 
         return new Promise((resolve) => {
-          // ✅ KORREKTUR: lspReady.current statt lspReady
           if (!lspReady.current) {
-            console.log('⏳ LSP not ready yet, returning empty suggestions');
             resolve({ suggestions: [] });
             return;
           }
@@ -98,7 +90,6 @@ export function CodeEditorModal({
           console.log('✅ WebSocket is open and LSP is ready');
 
           const wordInfo = model.getWordUntilPosition(position);
-          console.log('📝 Word info:', wordInfo);
 
           const range = {
             startLineNumber: position.lineNumber,
@@ -106,10 +97,7 @@ export function CodeEditorModal({
             startColumn: wordInfo.startColumn,
             endColumn: wordInfo.endColumn
           };
-          console.log('📏 Range:', range);
-
           const requestId = Math.floor(Math.random() * 2147483647);
-          console.log('🆔 Generated requestId:', requestId);
 
           const request = {
             jsonrpc: '2.0',
@@ -132,26 +120,17 @@ export function CodeEditorModal({
           console.log('📤 Sending completion request:', request);
 
           const messageHandler = (event: MessageEvent) => {
-            console.log('📨 [messageHandler] Triggered with event:', event.data);
             try {
               const message = JSON.parse(event.data);
-              console.log('📨 [messageHandler] Parsed message:', message);
-              console.log('📨 [messageHandler] Message ID:', message.id, 'Expected:', requestId);
-
               if (message.id === requestId) {
-                console.log('🎉 [messageHandler] ID MATCH!');
 
                 if (message.result) {
-                  console.log('🎯 [messageHandler] Got result:', message.result);
 
                   const items = Array.isArray(message.result)
                     ? message.result
                     : message.result.items || [];
 
-                  console.log('📋 [messageHandler] Items count:', items.length);
-
                   const suggestions = items.map((item: any, idx: number) => {
-                    console.log(`  Item ${idx}:`, item.label, item.kind);
 
                     let insertText = item.insertText || item.label;
                     let itemRange = range;
@@ -180,21 +159,20 @@ export function CodeEditorModal({
                     };
                   });
 
-                  console.log('✅ [messageHandler] Returning', suggestions.length, 'suggestions');
                   webSocketRef.current?.removeEventListener('message', messageHandler);
                   resolve({ suggestions });
                 } else {
-                  console.log('⚠️ [messageHandler] No result in message');
+
                 }
               } else {
-                console.log('⏭️ [messageHandler] ID mismatch, ignoring');
+
               }
             } catch (err) {
               console.error('💥 [messageHandler] Parse error:', err);
             }
           };
 
-          console.log('👂 Adding message event listener');
+
           webSocketRef.current.addEventListener('message', messageHandler);
 
           console.log('📤 Actually sending to WebSocket now...');
@@ -203,13 +181,11 @@ export function CodeEditorModal({
 
           setTimeout(() => {
             console.log('⏰ TIMEOUT reached after 2000ms');
-            console.log('🧹 Removing messageHandler');
             webSocketRef.current?.removeEventListener('message', messageHandler);
 
             const keywords = reactionsMonarch.keywords || [];
             const typedText = wordInfo.word.toLowerCase();
 
-            console.log('🔤 Filtering keywords, typed:', typedText);
             const suggestions = keywords
               .filter((keyword: string) =>
                 keyword.toLowerCase().startsWith(typedText)
@@ -221,7 +197,6 @@ export function CodeEditorModal({
                 range: range
               }));
 
-            console.log('📋 Fallback keywords count:', suggestions.length);
             resolve({ suggestions });
           }, 2000);
         });
@@ -240,8 +215,6 @@ export function CodeEditorModal({
     console.log('✅ Editor setup complete');
   };
 
-  console.log('🔍 localStorage:', localStorage);
-  console.log('🔍 userId from localStorage:', localStorage.getItem('auth.user'));
 
   const sendInitialize = (rootUri: string, webSocket: WebSocket) => {
     if (!rootUri) {
@@ -283,9 +256,7 @@ export function CodeEditorModal({
       }
     };
 
-    console.log('📤 Sending initialize message with rootUri:', rootUri);
     webSocket.send(JSON.stringify(initMessage));
-    console.log('✅ Initialize sent');
   };
 
   const connectToLsp = (monacoInstance: Monaco) => {
@@ -300,32 +271,25 @@ export function CodeEditorModal({
       }
 
       const wsUrl = `ws://localhost:9811/lsp?userId=${encodeURIComponent(userId)}`;
-
-      console.log('🌐 Creating WebSocket to:', wsUrl);
       const webSocket = new WebSocket(wsUrl);
 
       webSocketRef.current = webSocket;
 
       // RAW message logger
       webSocket.addEventListener('message', (event) => {
-        console.log('🔵 RAW WebSocket Message received:', event.data);
+
       });
 
       webSocket.onopen = () => {
-        console.log('✅ LSP WebSocket OPENED');
         setLspConnected(true);
-
-        console.log('⏳ Waiting for workspaceReady message from backend...');
       };
 
       webSocket.onmessage = (event) => {
-        console.log('📥 onmessage handler triggered');
 
         try {
           const message = JSON.parse(event.data);
-          console.log('📨 Parsed message in onmessage:', message);
 
-          // ✅ Auf workspaceReady warten
+          // wait for workspaceReady
           if (message.type === 'workspaceReady') {
             const rootUri = message.rootUri;
 
@@ -336,15 +300,13 @@ export function CodeEditorModal({
             }
 
             workspaceRootUri.current = rootUri;
-            console.log('📁 Got rootUri from backend:', workspaceRootUri.current);
 
-            // JETZT erst Initialize senden
+
             sendInitialize(rootUri, webSocket);
             return;
           }
 
           if (message.method === 'textDocument/publishDiagnostics') {
-            console.log('🔴 Diagnostics received:', message.params.diagnostics);
 
             const diagnostics = message.params.diagnostics || [];
             const markers = diagnostics.map((diag: any) => ({
@@ -362,16 +324,11 @@ export function CodeEditorModal({
             const model = editorRef.current?.getModel();
             if (model) {
               monacoInstance.editor.setModelMarkers(model, 'reactions', markers);
-              console.log('✅ Markers set:', markers.length);
             }
           }
 
           if (message.id === 1 && message.result) {
-            console.log('🎉 Initialize response received!');
-            console.log('🔧 Capabilities:', message.result.capabilities);
             lspInitialized.current = true;
-
-            console.log('📤 Sending initialized notification');
             webSocket.send(JSON.stringify({
               jsonrpc: '2.0',
               method: 'initialized',
@@ -379,10 +336,6 @@ export function CodeEditorModal({
             }));
 
             if (editorRef.current) {
-              console.log('📤 Sending didOpen notification');
-              console.log('📤 Current code length:', code.length);  // ✅ DEBUG
-              console.log('📤 Edge ID:', edgeId);  // ✅ DEBUG
-              console.log('📤 Workspace Root URI:', workspaceRootUri.current);  // ✅ Debug!
 
               webSocket.send(JSON.stringify({
                 jsonrpc: '2.0',
@@ -396,20 +349,10 @@ export function CodeEditorModal({
                   }
                 }
               }));
-              console.log('✅ didOpen sent');
-
-              // ✅ NEU: Jetzt ist LSP komplett bereit!
-              console.log('🚀 Setting lspReady to TRUE');  // ✅ DEBUG
               lspReady.current = true;
-              console.log('🚀 Setting lspReady to TRUE');
-              console.log('✅ LSP is now fully ready for completions');
             } else {
-              console.error('❌ editorRef.current is null!');  // ✅ DEBUG
+              console.error('❌ editorRef.current is null!');
             }
-          }
-
-          if (message.result && (message.result.items || Array.isArray(message.result))) {
-            console.log('🎯 Got completion items in onmessage:', message.result);
           }
 
         } catch (err) {
@@ -421,14 +364,11 @@ export function CodeEditorModal({
         console.error('❌ LSP WebSocket ERROR:', error);
         setLspConnected(false);
         lspReady.current = false;
-        console.log('🚀 Setting lspReady to TRUE');
       };
 
       webSocket.onclose = () => {
-        console.log('🔴 LSP WebSocket CLOSED');
         setLspConnected(false);
         lspReady.current = false;
-        console.log('🚀 Setting lspReady to TRUE');
         lspInitialized.current = false;
       };
 
@@ -438,9 +378,7 @@ export function CodeEditorModal({
   };
 
   useEffect(() => {
-    console.log('🧹 Cleanup effect registered');
     return () => {
-      console.log('🧹 Cleaning up WebSocket');
       if (webSocketRef.current) {
         webSocketRef.current.close();
       }
@@ -448,7 +386,6 @@ export function CodeEditorModal({
   }, []);
 
   const handleSave = async () => {
-    console.log('💾 Save clicked');
     if (saving) return;
     try {
       setSaving(true);
@@ -464,7 +401,6 @@ export function CodeEditorModal({
   };
 
   const handleDelete = () => {
-    console.log('🗑️ Delete clicked');
     if (globalThis.confirm('Do you want to delete this relation? Note: this action cannot be reverted!')) {
       onDelete?.();
       onClose();
@@ -472,33 +408,26 @@ export function CodeEditorModal({
   };
 
   const handleUndo = () => {
-    console.log('↶ Undo clicked');
     editorRef.current?.trigger('keyboard', 'undo', null);
   };
 
   const handleRedo = () => {
-    console.log('↷ Redo clicked');
     editorRef.current?.trigger('keyboard', 'redo', null);
   };
 
   const handleFormat = () => {
-    console.log('🎨 Format clicked');
     editorRef.current?.getAction('editor.action.formatDocument')?.run();
   };
 
   const handleClear = () => {
-    console.log('🗑 Clear clicked');
     if (globalThis.confirm('Do you want to delete the whole code?')) {
       setCode('');
     }
   };
 
   if (!isOpen) {
-    console.log('🚫 Modal not open, returning null');
     return null;
   }
-
-  console.log('✅ Rendering modal');
 
   return (
     <dialog
@@ -660,7 +589,6 @@ export function CodeEditorModal({
             theme="vs-dark"
             value={code}
             onChange={(value) => {
-              console.log('✏️ Code changed in editor');
               setCode(value || '');
 
               if (webSocketRef.current && webSocketRef.current.readyState === WebSocket.OPEN && lspInitialized.current) {
@@ -681,7 +609,6 @@ export function CodeEditorModal({
                     ]
                   }
                 };
-                console.log('📤 Sending didChange');
                 webSocketRef.current.send(JSON.stringify(didChangeMessage));
               }
             }}
