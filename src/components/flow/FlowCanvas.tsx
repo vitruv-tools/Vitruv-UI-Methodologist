@@ -25,6 +25,7 @@ import { ConnectionLine } from './ConnectionLine';
 import { CodeEditorModal } from './CodeEditorModal';
 import { apiService, MetaModelRelationRequest } from '../../services/api';
 import { WorkspaceSnapshot } from '../../types/workspace';
+import { extractNsUriFromEcore } from '../../utils';
 
 const COLOR_LIST = [
   '#ab1c91ff', '#ff7f0e', '#2ca02c', '#d62728', '#9467bd',
@@ -739,36 +740,62 @@ export const FlowCanvas = forwardRef<{
     }, [connectionDragState?.isActive, handleConnectionMove, handleConnectionEnd]);
 
     const handleEdgeDoubleClick = useCallback(async (edgeId: string) => {
-      const edge = edges.find(e => e.id === edgeId);
-      if (!edge) return;
+  const edge = edges.find(e => e.id === edgeId);
+  if (!edge) return;
 
-      const getFileName = (nodeId: string) => {
-        const node = nodes.find(n => n.id === nodeId);
-        return node?.type === 'ecoreFile' ? node.data.fileName : undefined;
-      };
+  const getFileName = (nodeId: string) => {
+    const node = nodes.find(n => n.id === nodeId);
+    return node?.type === 'ecoreFile' ? node.data.fileName : undefined;
+  };
 
-      let initialCode = edge.data?.code || '';
-      const reactionFileId = edge.data?.reactionFileId;
+  // Hole Source und Target Nodes um nsUri und fileName zu extrahieren
+  const sourceNode = nodes.find(n => n.id === edge.source);
+  const targetNode = nodes.find(n => n.id === edge.target);
 
-      if (!initialCode && typeof reactionFileId === 'number') {
-        try {
-          initialCode = await apiService.getFile(reactionFileId);
-        } catch (error) {
-          console.error('Failed to fetch reaction file', error);
-        }
-      }
+  let initialCode = edge.data?.code || '';
+  const reactionFileId = edge.data?.reactionFileId;
 
-      console.log(edges)
-      setCodeEditorState({
-        isOpen: true,
-        edgeId,
-        initialCode,
-        sourceFileName: getFileName(edge.source),
-        targetFileName: getFileName(edge.target),
-        reactionFileId,
-      });
-    }, [edges, nodes]);
+  if (!initialCode && typeof reactionFileId === 'number') {
+    try {
+      initialCode = await apiService.getFile(reactionFileId);
+    } catch (error) {
+      console.error('Failed to fetch reaction file', error);
+    }
+  }
 
+  if (!initialCode || initialCode.trim() === '') {
+    const sourceFileName = getFileName(edge.source);
+    const targetFileName = getFileName(edge.target);
+    
+    const sourcePackageName = sourceFileName?.replace('.ecore', '') || 'source';
+    const targetPackageName = targetFileName?.replace('.ecore', '') || 'target';
+    
+    const sourceUri = sourceNode?.data?.nsUri || `http://vitruv.tools/${sourcePackageName}`;
+    const targetUri = targetNode?.data?.nsUri || `http://vitruv.tools/${targetPackageName}`;
+    
+    const reactionsName = `${sourcePackageName}To${targetPackageName}`;
+    
+    initialCode = `import "${sourceUri}" as ${sourcePackageName}
+import "${targetUri}" as ${targetPackageName}
+
+reactions: ${reactionsName}
+in reaction to changes in ${sourcePackageName}
+execute actions in ${targetPackageName}
+
+`;
+  }
+
+  console.log(edges);
+  setCodeEditorState({
+    isOpen: true,
+    edgeId,
+    initialCode,
+    sourceFileName: getFileName(edge.source),
+    targetFileName: getFileName(edge.target),
+    reactionFileId,
+  });
+}, [edges, nodes]);
+    
     const handleCloseCodeEditor = useCallback(() => {
       setCodeEditorState(null);
     }, []);
@@ -1011,6 +1038,9 @@ export const FlowCanvas = forwardRef<{
           ? meta.metaModelSourceId
           : metaModelId;
 
+      const nsUri = extractNsUriFromEcore(fileContent);
+
+
       const newEcoreNode: Node = {
         id: `ecore-${Date.now()}`,
         type: 'ecoreFile',
@@ -1018,6 +1048,7 @@ export const FlowCanvas = forwardRef<{
         data: {
           fileName,
           fileContent,
+          nsUri,
           description: meta?.description,
           keywords: meta?.keywords,
           domain: meta?.domain,

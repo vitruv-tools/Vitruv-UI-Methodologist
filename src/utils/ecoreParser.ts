@@ -160,6 +160,11 @@ export const parseEcoreFile = (ecoreContent: string): { nodes: FlowNode[]; edges
   }
 };
 
+export function extractNsUriFromEcore(ecoreContent: string): string | null {
+  const match = ecoreContent.match(/nsURI="([^"]+)"/);
+  return match ? match[1] : null;
+}
+
 export const createSimpleEcoreDiagram = (ecoreContent: string): { nodes: FlowNode[]; edges: FlowEdge[] } => {
   const nodes: FlowNode[] = [];
   const edges: FlowEdge[] = [];
