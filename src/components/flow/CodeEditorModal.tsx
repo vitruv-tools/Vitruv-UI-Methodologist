@@ -303,6 +303,16 @@ export function CodeEditorModal({
     webSocket.send(JSON.stringify(initMessage));
   };
 
+  const getDiagnosticSeverity = (severityCode: number, monacoInstance: Monaco) => {
+    if (severityCode === 1) {
+      return monacoInstance.MarkerSeverity.Error;
+    }
+    if (severityCode === 2) {
+      return monacoInstance.MarkerSeverity.Warning;
+    }
+    return monacoInstance.MarkerSeverity.Info;
+  };
+
   const connectToLsp = (monacoInstance: Monaco) => {
     console.log('🔌 connectToLsp called');
     try {
@@ -343,9 +353,7 @@ export function CodeEditorModal({
           if (message.method === 'textDocument/publishDiagnostics') {
             const diagnostics = message.params.diagnostics || [];
             const markers = diagnostics.map((diag: any) => ({
-              severity: diag.severity === 1 ? monacoInstance.MarkerSeverity.Error :
-                diag.severity === 2 ? monacoInstance.MarkerSeverity.Warning :
-                  monacoInstance.MarkerSeverity.Info,
+              severity: getDiagnosticSeverity(diag.severity, monacoInstance),
               startLineNumber: diag.range.start.line + 1,
               startColumn: diag.range.start.character + 1,
               endLineNumber: diag.range.end.line + 1,
