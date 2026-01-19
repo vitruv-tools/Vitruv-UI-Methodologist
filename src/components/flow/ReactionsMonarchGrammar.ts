@@ -25,9 +25,9 @@ export const reactionsMonarch: languages.IMonarchLanguage = {
     '%=', '<<=', '>>=', '>>>='
   ],
 
-  symbols: /[=><!~?:&|+\-*\/\^%]+/,
+  symbols: /[=><!~?:&|+\-/*^%]+/,
 
-  escapes: /\\(?:[abfnrtv\\"']|x[0-9A-Fa-f]{1,4}|u[0-9A-Fa-f]{4}|U[0-9A-Fa-f]{8})/,
+  escapes: /\\(?:[abfnrtv"']|x[0-9A-Fa-f]{1,4}|u[0-9A-Fa-f]{4}|U[0-9A-Fa-f]{8})/,
 
   tokenizer: {
     root: [
@@ -40,7 +40,7 @@ export const reactionsMonarch: languages.IMonarchLanguage = {
 
       { include: '@whitespace' },
 
-      [/[{}()\[\]]/, 'delimiter.bracket'],
+      [/[{}()[\]]/, 'delimiter.bracket'],
       [/[<>](?!@symbols)/, 'delimiter.bracket'],
       [/@symbols/, {
         cases: {
@@ -49,7 +49,7 @@ export const reactionsMonarch: languages.IMonarchLanguage = {
         }
       }],
 
-      [/\d*\.\d+([eE][\-+]?\d+)?/, 'number.float'],
+      [/\d*\.\d+([eE][+-]?\d+)?/, 'number.float'],
       [/0[xX][0-9a-fA-F]+/, 'number.hex'],
       [/\d+/, 'number'],
 
@@ -64,9 +64,10 @@ export const reactionsMonarch: languages.IMonarchLanguage = {
     ],
 
     comment: [
-      [/[^\/*]+/, 'comment'],
+      [/[^/*]+/, 'comment'],
       [/\/\*/, 'comment', '@push'],
       ["\\*/", 'comment', '@pop'],
+      // eslint-disable-next-line no-useless-escape
       [/[\/*]/, 'comment']
     ],
 
