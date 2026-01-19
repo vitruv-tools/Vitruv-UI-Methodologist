@@ -66,9 +66,8 @@ export const reactionsMonarch: languages.IMonarchLanguage = {
     comment: [
       [/[^/*]+/, 'comment'],
       [/\/\*/, 'comment', '@push'],
-      ["\\*/", 'comment', '@pop'],
-      // eslint-disable-next-line no-useless-escape
-      [/[\/*]/, 'comment']
+      [/\*\//, 'comment', '@pop'],
+      [/[/*]/, 'comment']
     ],
 
     string: [

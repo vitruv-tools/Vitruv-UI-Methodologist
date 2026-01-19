@@ -54,12 +54,188 @@ export function CodeEditorModal({
   const webSocketRef = useRef<WebSocket | null>(null);
   const lspInitialized = useRef(false);
   const workspaceRootUri = useRef<string | null>(null);
-
   const versionCounter = useRef(1);
 
   useEffect(() => {
     setCode(initialCode);
   }, [initialCode, isOpen]);
+
+  // Extracted: Process LSP completion response
+  const processCompletionResponse = (
+    message: any,
+    requestId: number,
+    range: any,
+    monacoInstance: Monaco
+  ): any[] | null => {
+    if (message.id !== requestId) {
+      return null;
+    }
+
+    if (!message.result) {
+      console.log('📭 No completion results');
+      return null;
+    }
+
+    const items = Array.isArray(message.result)
+      ? message.result
+      : message.result.items || [];
+
+    return items.map((item: any) => {
+      let insertText = item.insertText || item.label;
+      let itemRange = range;
+
+      if (item.textEdit) {
+        insertText = item.textEdit.newText;
+        if (item.textEdit.range) {
+          itemRange = {
+            startLineNumber: item.textEdit.range.start.line + 1,
+            endLineNumber: item.textEdit.range.end.line + 1,
+            startColumn: item.textEdit.range.start.character + 1,
+            endColumn: item.textEdit.range.end.character + 1
+          };
+        }
+      }
+
+      return {
+        label: item.label,
+        kind: item.kind || monacoInstance.languages.CompletionItemKind.Text,
+        insertText: insertText,
+        detail: item.detail,
+        documentation: item.documentation,
+        sortText: item.sortText,
+        filterText: item.filterText,
+        range: itemRange
+      };
+    });
+  };
+
+  // Extracted: Get fallback keyword suggestions
+  const getFallbackSuggestions = (
+    wordInfo: any,
+    range: any,
+    monacoInstance: Monaco
+  ) => {
+    const keywords = reactionsMonarch.keywords || [];
+    const typedText = wordInfo.word.toLowerCase();
+
+    return keywords
+      .filter((keyword: string) =>
+        keyword.toLowerCase().startsWith(typedText)
+      )
+      .map((keyword: string) => ({
+        label: keyword,
+        kind: monacoInstance.languages.CompletionItemKind.Keyword,
+        insertText: keyword,
+        range: range
+      }));
+  };
+
+  // Extracted: Handle timeout for completion request
+  const handleCompletionTimeout = (
+    messageHandler: (event: MessageEvent) => void,
+    wordInfo: any,
+    range: any,
+    monacoInstance: Monaco,
+    resolve: (value: { suggestions: any[] }) => void
+  ) => {
+    console.log('⏰ TIMEOUT reached after 2000ms');
+    webSocketRef.current?.removeEventListener('message', messageHandler);
+    const suggestions = getFallbackSuggestions(wordInfo, range, monacoInstance);
+    resolve({ suggestions });
+  };
+
+  // Extracted: Create message handler for completion requests
+  const createCompletionMessageHandler = (
+    requestId: number,
+    monacoInstance: Monaco,
+    range: any,
+    resolve: (value: { suggestions: any[] }) => void
+  ) => {
+    const messageHandler = (event: MessageEvent) => {
+      try {
+        const message = JSON.parse(event.data);
+        const suggestions = processCompletionResponse(message, requestId, range, monacoInstance);
+
+        if (suggestions) {
+          webSocketRef.current?.removeEventListener('message', messageHandler);
+          resolve({ suggestions });
+        }
+      } catch (err) {
+        console.error('💥 [messageHandler] Parse error:', err);
+      }
+    };
+
+    return messageHandler;
+  };
+
+  // Extracted: Request completion from LSP server
+  const requestCompletionFromLsp = (
+    model: any,
+    position: any,
+    monacoInstance: Monaco
+  ): Promise<{ suggestions: any[] }> => {
+    return new Promise((resolve) => {
+      if (!lspReady.current) {
+        resolve({ suggestions: [] });
+        return;
+      }
+
+      if (!webSocketRef.current || webSocketRef.current.readyState !== WebSocket.OPEN) {
+        console.log('❌ WebSocket not open, state:', webSocketRef.current?.readyState);
+        resolve({ suggestions: [] });
+        return;
+      }
+
+      console.log('✅ WebSocket is open and LSP is ready');
+
+      const wordInfo = model.getWordUntilPosition(position);
+      const range = {
+        startLineNumber: position.lineNumber,
+        endLineNumber: position.lineNumber,
+        startColumn: wordInfo.startColumn,
+        endColumn: wordInfo.endColumn
+      };
+
+      const requestId = Math.floor(Math.random() * 2147483647);
+      const request = {
+        jsonrpc: '2.0',
+        id: requestId,
+        method: 'textDocument/completion',
+        params: {
+          textDocument: {
+            uri: `${workspaceRootUri.current}reaction-${edgeId}.reactions`,
+          },
+          position: {
+            line: position.lineNumber - 1,
+            character: position.column - 1
+          },
+          context: {
+            triggerKind: 1
+          }
+        }
+      };
+
+      console.log('📤 Sending completion request:', request);
+
+      const messageHandler = createCompletionMessageHandler(
+        requestId,
+        monacoInstance,
+        range,
+        resolve
+      );
+
+      webSocketRef.current.addEventListener('message', messageHandler);
+      console.log('📤 Actually sending to WebSocket now...');
+      webSocketRef.current.send(JSON.stringify(request));
+      console.log('✅ Sent!');
+
+      // Setup timeout with extracted handler
+      setTimeout(
+        () => handleCompletionTimeout(messageHandler, wordInfo, range, monacoInstance, resolve),
+        2000
+      );
+    });
+  };
 
   const handleEditorDidMount: OnMount = (editor, monacoInstance) => {
     editorRef.current = editor;
@@ -74,147 +250,15 @@ export function CodeEditorModal({
     monacoInstance.languages.registerCompletionItemProvider('reactions', {
       triggerCharacters: ['.', ' ', '\n', ':'],
       provideCompletionItems: async (model, position) => {
-
-        return new Promise((resolve) => {
-          if (!lspReady.current) {
-            resolve({ suggestions: [] });
-            return;
-          }
-
-          if (!webSocketRef.current || webSocketRef.current.readyState !== WebSocket.OPEN) {
-            console.log('❌ WebSocket not open, state:', webSocketRef.current?.readyState);
-            resolve({ suggestions: [] });
-            return;
-          }
-
-          console.log('✅ WebSocket is open and LSP is ready');
-
-          const wordInfo = model.getWordUntilPosition(position);
-
-          const range = {
-            startLineNumber: position.lineNumber,
-            endLineNumber: position.lineNumber,
-            startColumn: wordInfo.startColumn,
-            endColumn: wordInfo.endColumn
-          };
-          const requestId = Math.floor(Math.random() * 2147483647);
-
-          const request = {
-            jsonrpc: '2.0',
-            id: requestId,
-            method: 'textDocument/completion',
-            params: {
-              textDocument: {
-                uri: `${workspaceRootUri.current}reaction-${edgeId}.reactions`,
-              },
-              position: {
-                line: position.lineNumber - 1,
-                character: position.column - 1
-              },
-              context: {
-                triggerKind: 1
-              }
-            }
-          };
-
-          console.log('📤 Sending completion request:', request);
-
-          const messageHandler = (event: MessageEvent) => {
-            try {
-              const message = JSON.parse(event.data);
-              if (message.id === requestId) {
-
-                if (message.result) {
-
-                  const items = Array.isArray(message.result)
-                    ? message.result
-                    : message.result.items || [];
-
-                  const suggestions = items.map((item: any, idx: number) => {
-
-                    let insertText = item.insertText || item.label;
-                    let itemRange = range;
-
-                    if (item.textEdit) {
-                      insertText = item.textEdit.newText;
-                      if (item.textEdit.range) {
-                        itemRange = {
-                          startLineNumber: item.textEdit.range.start.line + 1,
-                          endLineNumber: item.textEdit.range.end.line + 1,
-                          startColumn: item.textEdit.range.start.character + 1,
-                          endColumn: item.textEdit.range.end.character + 1
-                        };
-                      }
-                    }
-
-                    return {
-                      label: item.label,
-                      kind: item.kind || monacoInstance.languages.CompletionItemKind.Text,
-                      insertText: insertText,
-                      detail: item.detail,
-                      documentation: item.documentation,
-                      sortText: item.sortText,
-                      filterText: item.filterText,
-                      range: itemRange
-                    };
-                  });
-
-                  webSocketRef.current?.removeEventListener('message', messageHandler);
-                  resolve({ suggestions });
-                } else {
-
-                }
-              } else {
-
-              }
-            } catch (err) {
-              console.error('💥 [messageHandler] Parse error:', err);
-            }
-          };
-
-
-          webSocketRef.current.addEventListener('message', messageHandler);
-
-          console.log('📤 Actually sending to WebSocket now...');
-          webSocketRef.current.send(JSON.stringify(request));
-          console.log('✅ Sent!');
-
-          setTimeout(() => {
-            console.log('⏰ TIMEOUT reached after 2000ms');
-            webSocketRef.current?.removeEventListener('message', messageHandler);
-
-            const keywords = reactionsMonarch.keywords || [];
-            const typedText = wordInfo.word.toLowerCase();
-
-            const suggestions = keywords
-              .filter((keyword: string) =>
-                keyword.toLowerCase().startsWith(typedText)
-              )
-              .map((keyword: string) => ({
-                label: keyword,
-                kind: monacoInstance.languages.CompletionItemKind.Keyword,
-                insertText: keyword,
-                range: range
-              }));
-
-            resolve({ suggestions });
-          }, 2000);
-        });
+        return requestCompletionFromLsp(model, position, monacoInstance);
       }
-
-
     });
 
-
-
     console.log('✅ Completion provider registered');
-
     connectToLsp(monacoInstance);
-
     editor.focus();
     console.log('✅ Editor setup complete');
   };
-
 
   const sendInitialize = (rootUri: string, webSocket: WebSocket) => {
     if (!rootUri) {
@@ -275,24 +319,16 @@ export function CodeEditorModal({
 
       webSocketRef.current = webSocket;
 
-      // RAW message logger
-      webSocket.addEventListener('message', (event) => {
-
-      });
-
       webSocket.onopen = () => {
         setLspConnected(true);
       };
 
       webSocket.onmessage = (event) => {
-
         try {
           const message = JSON.parse(event.data);
 
-          // wait for workspaceReady
           if (message.type === 'workspaceReady') {
             const rootUri = message.rootUri;
-
 
             if (!rootUri) {
               console.error('❌ workspaceReady message contains no rootUri');
@@ -300,14 +336,11 @@ export function CodeEditorModal({
             }
 
             workspaceRootUri.current = rootUri;
-
-
             sendInitialize(rootUri, webSocket);
             return;
           }
 
           if (message.method === 'textDocument/publishDiagnostics') {
-
             const diagnostics = message.params.diagnostics || [];
             const markers = diagnostics.map((diag: any) => ({
               severity: diag.severity === 1 ? monacoInstance.MarkerSeverity.Error :
@@ -336,7 +369,6 @@ export function CodeEditorModal({
             }));
 
             if (editorRef.current) {
-
               webSocket.send(JSON.stringify({
                 jsonrpc: '2.0',
                 method: 'textDocument/didOpen',
@@ -483,8 +515,8 @@ export function CodeEditorModal({
             <h3 id="code-editor-title" style={{ margin: 0, color: '#fff', fontSize: '18px', fontWeight: 600 }}>
               Reaction Editor
               {lspConnected && (
-                <span style={{ marginLeft: '12px', color: lspReady ? '#0e7a0d' : '#ff9800', fontSize: '14px' }}>
-                  ● {lspReady ? 'LSP Ready' : 'LSP Initializing...'}
+                <span style={{ marginLeft: '12px', color: lspReady.current ? '#0e7a0d' : '#ff9800', fontSize: '14px' }}>
+                  ● {lspReady.current ? 'LSP Ready' : 'LSP Initializing...'}
                 </span>
               )}
             </h3>
