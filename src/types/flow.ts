@@ -6,6 +6,8 @@ export interface FlowNode extends Node {
     onLabelChange?: (id: string, label: string) => void;
     ecoreData?: EcoreElementData;
     model?: string;
+    isBoundingBox?: boolean;
+    group?: string;
   };
 }
 

@@ -90,6 +90,9 @@ export function MainLayout({
     // Reaction files state - lifted from FlowCanvas to persist across remounts
     const [reactionFiles, setReactionFiles] = useState<Set<{fromModel: string; toModel: string; id: number}>>(new Set());
 
+    // Workspace or expanded mode
+    const [mode, setMode] = useState<'workspace' | 'expanded'>('workspace');
+
     // Start with an empty workspace
     useEffect(() => {
         if (flowCanvasRef.current?.loadDiagramData) {
@@ -238,6 +241,7 @@ export function MainLayout({
 
     // Function to return to workspace from expanded metamodel view
     const handleBackToWorkspace = useCallback(() => {
+        setMode('workspace');
         setExpandedMetaModelNames(null);
         
         // Clear the cached workspace snapshot since we're returning to workspace view
@@ -271,7 +275,7 @@ export function MainLayout({
         setTimeout(() => {
             globalThis.dispatchEvent(new CustomEvent('vitruv.reloadWorkspace'));
         }, 400);
-    }, []);
+    }, [setMode]);
 
     // Listen for workspace events
     useEffect(() => {
@@ -376,6 +380,7 @@ export function MainLayout({
     }, []);
 
     const handleEcoreFileExpand = useCallback((fileName: string, fileContent: string, cacheWorkspaceSnapshot: boolean = true, remountCanvas: boolean = true) => {
+        setMode('expanded');
         if (cacheWorkspaceSnapshot) {
             // Cache the current workspace snapshot before switching to UML view
             // This is critical for saving relations even when viewing UML
@@ -435,7 +440,7 @@ export function MainLayout({
         // Use a delay to ensure the canvas is remounted and ready before loading UML
         setTimeout(() => {
             // Load parsed UML diagram (ONLY UML boxes, no metamodel boxes)
-            flowCanvasRef.current?.loadDiagramData?.(diagramData.nodes, diagramData.edges, !remountCanvas, "model");
+            flowCanvasRef.current?.loadDiagramData?.(diagramData.nodes, diagramData.edges, !remountCanvas);
             // Make generated UML read-only by default, but allow moving boxes
             //@ts-expect-error
             flowCanvasRef.current?.setInteractive?.(false);
@@ -444,7 +449,7 @@ export function MainLayout({
             saveDocumentData(newId, { nodes: diagramData.nodes as any, edges: diagramData.edges as any });
             setIsDirty(false);
         }, 100);
-    }, [setDocuments, setExpandedMetaModelNames, expandedMetaModelNames]);
+    }, [setDocuments, setExpandedMetaModelNames, expandedMetaModelNames, setMode]);
 
     const handleEcoreFileDelete = useCallback((id: string) => {
         // Remove Node from FlowCanvas
@@ -671,6 +676,7 @@ export function MainLayout({
                                 onEcoreFileDelete={handleEcoreFileDelete}
                                 onEcoreFileRename={handleEcoreFileRename}
                                 reactionFiles={reactionFiles}
+                                mode={mode}
                                 onReactionFilesChange={setReactionFiles}
                             />
                         )}
