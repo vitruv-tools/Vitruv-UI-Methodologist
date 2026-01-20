@@ -44,6 +44,7 @@ export const VsumTabs: React.FC<VsumTabsProps> = ({
     } | null>(null);
 
     const [checkingBuild, setCheckingBuild] = useState(false);
+    const [downloadingArtifact, setDownloadingArtifact] = useState(false);
 
     const areIdArraysEqual = (a: number[] = [], b: number[] = []) => {
         if (a.length !== b.length) return false;
@@ -244,6 +245,38 @@ export const VsumTabs: React.FC<VsumTabsProps> = ({
                 message: error instanceof Error ? error.message : 'Failed to save VSUM', 
                 type: 'error' 
             });
+        }
+    };
+
+    // ---- download artifact -------------------------------------
+    const onDownloadArtifact = async () => {
+        const active = openTabs.find(t => t.instanceId === activeInstanceId);
+        if (!active) return;
+        
+        setDownloadingArtifact(true);
+        setError('');
+        try {
+            const blob = await apiService.downloadVsumArtifact(active.id);
+            
+            // Create a download link and trigger it
+            const url = window.URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = `vsum-${active.id}-artifact.zip`;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            window.URL.revokeObjectURL(url);
+            
+            setPopup({ message: 'Artifact downloaded successfully!', type: 'success' });
+            setTimeout(() => setPopup(null), 3000);
+        } catch (err: any) {
+            const errorMsg = err?.message || 'Failed to download artifact';
+            setError(errorMsg);
+            setPopup({ message: errorMsg, type: 'error' });
+            setTimeout(() => setPopup(null), 5000);
+        } finally {
+            setDownloadingArtifact(false);
         }
     };
 
@@ -458,19 +491,60 @@ export const VsumTabs: React.FC<VsumTabsProps> = ({
                                 {checkingBuild ? 'Checking…' : 'Check build'}
                             </button>
 
+                            <button
+                                onClick={onDownloadArtifact}
+                                disabled={downloadingArtifact || saving}
+                                style={{
+                                    padding: '6px 10px',
+                                    borderRadius: 8,
+                                    border: '1px solid #037368',
+                                    background: downloadingArtifact ? '#a5d6d3' : '#049484',
+                                    color: '#ffffff',
+                                    fontWeight: 700,
+                                    cursor: downloadingArtifact || saving ? 'not-allowed' : 'pointer',
+                                    fontSize: 12,
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: 4,
+                                }}
+                                onMouseEnter={(e) => {
+                                    if (!downloadingArtifact && !saving) {
+                                        e.currentTarget.style.background = '#037368';
+                                    }
+                                }}
+                                onMouseLeave={(e) => {
+                                    if (!downloadingArtifact && !saving) {
+                                        e.currentTarget.style.background = '#049484';
+                                    }
+                                }}
+                            >
+                                <span>{downloadingArtifact ? '⏳' : ''}</span>
+                                <span>{downloadingArtifact ? 'Downloading…' : 'Download ZIP'}</span>
+                            </button>
+
                             {anyDirty && (
                                 <button
                                     onClick={onSave}
                                     disabled={saving}
                                     style={{
                                         padding: '6px 10px',
-                                        border: '1px solid #3b82f6',
+                                        border: '1px solid #037368',
                                         borderRadius: 8,
-                                        background: saving ? '#bfdbfe' : '#3b82f6',
+                                        background: saving ? '#a5d6d3' : '#049484',
                                         color: '#ffffff',
                                         fontWeight: 700,
                                         cursor: saving ? 'not-allowed' : 'pointer',
                                         fontSize: 12,
+                                    }}
+                                    onMouseEnter={(e) => {
+                                        if (!saving) {
+                                            e.currentTarget.style.background = '#037368';
+                                        }
+                                    }}
+                                    onMouseLeave={(e) => {
+                                        if (!saving) {
+                                            e.currentTarget.style.background = '#049484';
+                                        }
                                     }}
                                 >
                                     {saving ? 'Saving…' : 'Save changes'}
@@ -487,9 +561,9 @@ export const VsumTabs: React.FC<VsumTabsProps> = ({
                         position: 'absolute',
                         right: 16,
                         top: 56,
-                        background: '#3498db',
+                        background: '#049484',
                         color: '#ffffff',
-                        border: '1px solid #2980b9',
+                        border: '1px solid #037368',
                         borderRadius: 6,
                         padding: '8px 12px',
                         fontWeight: 700,
@@ -497,6 +571,12 @@ export const VsumTabs: React.FC<VsumTabsProps> = ({
                         zIndex: 21,
                     }}
                     onClick={onAddMetaModels}
+                    onMouseEnter={(e) => {
+                        e.currentTarget.style.background = '#037368';
+                    }}
+                    onMouseLeave={(e) => {
+                        e.currentTarget.style.background = '#049484';
+                    }}
                 >
                     + ADD META MODELS
                 </button>
