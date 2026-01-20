@@ -259,14 +259,14 @@ export const VsumTabs: React.FC<VsumTabsProps> = ({
             const blob = await apiService.downloadVsumArtifact(active.id);
             
             // Create a download link and trigger it
-            const url = window.URL.createObjectURL(blob);
-            const link = document.createElement('a');
+            const url = globalThis.URL.createObjectURL(blob);
+            const link = globalThis.document.createElement('a');
             link.href = url;
             link.download = `vsum-${active.id}-artifact.zip`;
-            document.body.appendChild(link);
+            globalThis.document.body.appendChild(link);
             link.click();
-            document.body.removeChild(link);
-            window.URL.revokeObjectURL(url);
+            link.remove();
+            globalThis.URL.revokeObjectURL(url);
             
             setPopup({ message: 'Artifact downloaded successfully!', type: 'success' });
             setTimeout(() => setPopup(null), 3000);
