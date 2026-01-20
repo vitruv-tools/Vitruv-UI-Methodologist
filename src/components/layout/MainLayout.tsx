@@ -645,9 +645,9 @@ export function MainLayout({
                                     position: 'absolute',
                                     left: 16,
                                     top: 56,
-                                    background: '#3498db',
+                                    background: '#049484',
                                     color: '#ffffff',
-                                    border: '1px solid #2980b9',
+                                    border: '1px solid #037368',
                                     borderRadius: 6,
                                     padding: '8px 12px',
                                     fontWeight: 700,
@@ -658,10 +658,10 @@ export function MainLayout({
                                     gap: 6,
                                 }}
                                 onMouseEnter={(e) => {
-                                    e.currentTarget.style.background = '#2980b9';
+                                    e.currentTarget.style.background = '#037368';
                                 }}
                                 onMouseLeave={(e) => {
-                                    e.currentTarget.style.background = '#3498db';
+                                    e.currentTarget.style.background = '#049484';
                                 }}
                                 title={`Back to workspace from ${expandedMetaModelName}`}
                             >

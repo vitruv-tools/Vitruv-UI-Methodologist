@@ -516,6 +516,68 @@ class ApiService {
   }
 
   /**
+   * vSUMS: Download artifact as ZIP file
+   * GET /api/v1/vsums/{id}/build/artifact
+   * Returns a ZIP file blob containing the build artifact
+   */
+  async downloadVsumArtifact(id: number | string): Promise<Blob> {
+    const token = await AuthService.ensureValidToken();
+    
+    if (!token) {
+      throw new Error('No valid authentication token available');
+    }
+
+    const url = `${this.baseURL}/api/v1/vsums/${id}/build/artifact`;
+    const headers: Record<string, string> = {
+      'Authorization': `Bearer ${token}`,
+    };
+
+    const response = await fetch(url, {
+      method: 'GET',
+      headers,
+    });
+
+    if (response.ok) {
+      return await response.blob();
+    }
+
+    if (response.status === 401) {
+      try {
+        await AuthService.refreshToken();
+        const newToken = await AuthService.ensureValidToken();
+        if (newToken) {
+          const retryResponse = await fetch(url, {
+            method: 'GET',
+            headers: {
+              'Authorization': `Bearer ${newToken}`,
+            },
+          });
+
+          if (!retryResponse.ok) {
+            const errorText = await this.getResponseText(retryResponse);
+            const errorMessage = this.extractErrorMessage(errorText);
+            throw new Error(errorMessage);
+          }
+
+          return await retryResponse.blob();
+        }
+      } catch (refreshError) {
+        console.error('Token refresh failed during artifact download:', refreshError);
+      }
+    }
+
+    const errorText = await this.getResponseText(response);
+    const errorMessage = this.extractErrorMessage(errorText);
+    console.error('Artifact download failed', {
+      url,
+      status: response.status,
+      statusText: response.statusText,
+      message: errorMessage,
+    });
+    throw new Error(errorMessage);
+  }
+
+  /**
    * vSUMS: Create
    */
   async createVsum(data: { name: string; description?: string }): Promise<ApiResponse<Vsum>> {
