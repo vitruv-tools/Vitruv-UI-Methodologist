@@ -13,7 +13,7 @@ The authentication system provides:
 ## API Endpoints
 
 ### Sign Up
-- **URL**: `POST https://mwa.sdq.kastel.kit.edu/api/v1/users/sign-up`
+- **URL**: `POST https://fe3ab829-d558-4834-afcf-6ed7ca440ca4.ka.bw-cloud-instance.org/api/v1/users/sign-up`
 - **Request Body**:
   ```json
   {
@@ -34,7 +34,7 @@ The authentication system provides:
   ```
 
 ### Sign In
-- **URL**: `POST https://mwa.sdq.kastel.kit.edu/api/v1/users/login`
+- **URL**: `POST https://fe3ab829-d558-4834-afcf-6ed7ca440ca4.ka.bw-cloud-instance.org/api/v1/users/login`
 - **Request Body**:
   ```json
   {
@@ -57,7 +57,7 @@ The authentication system provides:
   ```
 
 ### Token Refresh
-- **URL**: `POST https://mwa.sdq.kastel.kit.edu/api/v1/users/access-token/by-refresh-token`
+- **URL**: `POST https://fe3ab829-d558-4834-afcf-6ed7ca440ca4.ka.bw-cloud-instance.org/api/v1/users/access-token/by-refresh-token`
 - **Request Body**:
   ```json
   {
@@ -235,7 +235,7 @@ function TokenManagement() {
 ### Backend URL
 The backend URL is configured in `src/services/auth.ts`:
 ```typescript
-private static readonly LOCAL_API_BASE_URL = 'https://mwa.sdq.kastel.kit.edu';
+private static readonly LOCAL_API_BASE_URL = 'https://fe3ab829-d558-4834-afcf-6ed7ca440ca4.ka.bw-cloud-instance.org';
 ```
 
 ### Token Storage
@@ -269,7 +269,7 @@ The system provides comprehensive error handling:
 
 To test the authentication system:
 
-1. Ensure your backend server is running on `https://mwa.sdq.kastel.kit.edu`
+1. Ensure your backend server is running on `https://fe3ab829-d558-4834-afcf-6ed7ca440ca4.ka.bw-cloud-instance.org`
 2. Use the sign-up form to create a new account
 3. Use the sign-in form to authenticate
 4. Check the browser's developer tools to see stored tokens

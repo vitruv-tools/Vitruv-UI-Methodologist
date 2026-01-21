@@ -3,7 +3,7 @@ import { FlowData } from '../types/flow';
 import { ApiResponse, Vsum, VsumDetails } from '../types/vsum';
 
 class ApiService {
-  private readonly baseURL = 'https://mwa.sdq.kastel.kit.edu';
+  private readonly baseURL = 'https://fe3ab829-d558-4834-afcf-6ed7ca440ca4.ka.bw-cloud-instance.org';
 
   /**
    * Extract error message from response text
