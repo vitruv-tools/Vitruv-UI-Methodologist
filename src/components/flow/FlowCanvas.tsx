@@ -14,6 +14,8 @@ import ReactFlow, {
   Node,
   Edge,
   NodeChange,
+  Connection,
+  OnConnectStartParams,
 } from 'reactflow';
 import 'reactflow/dist/style.css';
 import { useFlowState } from '../../hooks/useFlowState';
@@ -33,6 +35,8 @@ import {
   createOrUpdateBoundingBoxNodes,
   applyOffsetsToNodes,
 } from '../../utils/boundingBoxUtils';
+import type { EdgeValidator } from './EdgeValidator';
+import { ReactionEdgeValidator } from './ReactionEdgeValidator';
 
 const COLOR_LIST = [
   '#ab1c91ff', '#ff7f0e', '#2ca02c', '#d62728', '#9467bd',
@@ -222,6 +226,7 @@ export const FlowCanvas = forwardRef<{
     } | null>(null);
     const [hoveredMergeGroup, setHoveredMergeGroup] = useState<string | null>(null);
 
+    const edgeValidators: EdgeValidator[] = [new ReactionEdgeValidator()];
 
     const storageKey = getLocalStorageKey(userId, projectId);
 
@@ -332,6 +337,10 @@ export const FlowCanvas = forwardRef<{
 
     const onInit = useCallback((rfi: ReactFlowInstance) => {
       setReactFlowInstance(rfi);
+      document.documentElement.style.setProperty(
+        "--handle-pointer-events-source",
+        "auto"
+      );
     }, [setReactFlowInstance]);
 
     // Recalculate edge handles after node drag ends
@@ -369,6 +378,7 @@ export const FlowCanvas = forwardRef<{
           setTimeout(recalculateBoundingBoxes, 100, true);
         }
       } else if (changes.some((c) => c.type === 'dimensions' && !c.resizing)) {
+        // Dimension change without resizing happens if nodes are programmatically added
         if (mode === 'expanded') {
           setTimeout(recalculateBoundingBoxes, 100, true);
         }
@@ -1053,6 +1063,11 @@ export const FlowCanvas = forwardRef<{
 
       const initialPosition = getHandlePosition(nodeId, handle);
       console.log('🔵 Initial position:', initialPosition);
+
+      document.documentElement.style.setProperty(
+        "--handle-pointer-events-source",
+        "none"
+      );
 
       setConnectionDragState({
         isActive: true,
@@ -2103,6 +2118,54 @@ const handleEdgeReorderRequest = useCallback((edgeId: string, controlPoint: { x:
 
     const connectionLinePositions = getConnectionLinePositions();
 
+    const isValidConnection = useCallback((params: Connection) => {
+      return edgeValidators.some(validator => validator.isValidConnection(params, nodes, edges));
+    }, [nodes, edges]);
+
+    const onConnectStart = useCallback(
+      (event: unknown, params: OnConnectStartParams) => {
+        document.documentElement.style.setProperty(
+          "--handle-pointer-events-source",
+          "none",
+        );
+        document.documentElement.style.setProperty(
+          "--handle-pointer-events-target",
+          "auto",
+        );
+        document.documentElement.style.setProperty(
+          "--reaction-handle-opacity-source",
+          "0",
+        );
+        document.documentElement.style.setProperty(
+          "--reaction-handle-opacity-target",
+          "1",
+        );
+      },
+      [],
+    );
+
+    const onConnectEnd = useCallback(
+      (event: MouseEvent | TouchEvent) => {
+        document.documentElement.style.setProperty(
+          "--handle-pointer-events-source",
+          "auto",
+        );
+        document.documentElement.style.setProperty(
+          "--handle-pointer-events-target",
+          "none",
+        );
+        document.documentElement.style.setProperty(
+          "--reaction-handle-opacity-source",
+          "1",
+        );
+        document.documentElement.style.setProperty(
+          "--reaction-handle-opacity-target",
+          "0",
+        );
+      },
+      [],
+    );
+
     return (
       <div
         ref={reactFlowWrapper}
@@ -2142,6 +2205,9 @@ const handleEdgeReorderRequest = useCallback((edgeId: string, controlPoint: { x:
             setNodes(nds => nds.map(n => ({ ...n, selected: false })));
             setEdges(eds => eds.map(e => ({ ...e, selected: false })));
           }}
+          isValidConnection={isValidConnection}
+          onConnectStart={onConnectStart}
+          onConnectEnd={onConnectEnd}
         >
           <MiniMap position="bottom-right" style={{ bottom: 16, right: 16, zIndex: 30 }} />
           <Background />

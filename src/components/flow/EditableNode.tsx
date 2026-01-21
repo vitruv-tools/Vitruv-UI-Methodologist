@@ -449,28 +449,28 @@ export function EditableNode({ id, data, selected, isConnectable }: NodeProps<UM
             position={Position.Left} 
             isConnectable={isConnectable}
             id="reaction"
-            style={handleStyles.leftTarget}
+            className="uml reaction-handle"
           />
           <Handle 
             type="source" 
             position={Position.Left} 
             isConnectable={isConnectable}
             id="reaction"
-            style={handleStyles.leftSource}
+            className="uml reaction-handle"
           />
           <Handle 
             type="target" 
             position={Position.Right} 
             isConnectable={isConnectable}
             id="reaction"
-            style={handleStyles.rightTarget}
+            className="uml reaction-handle"
           />
           <Handle 
             type="source" 
             position={Position.Right} 
             isConnectable={isConnectable}
             id="reaction"
-            style={handleStyles.rightSource}
+            className="uml reaction-handle"
           />
         </div>
       ))}

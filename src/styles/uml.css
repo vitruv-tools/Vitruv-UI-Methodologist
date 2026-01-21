@@ -1,0 +1,82 @@
+:root {
+  --reaction-handle-size: 10px;
+  --reaction-handle-bg: #6b7280;
+  --reaction-handle-border: 2px solid #ffffff;
+}
+
+/* Base and raised variants */
+.reaction-handle-base {
+  background: var(--reaction-handle-bg);
+  width: var(--reaction-handle-size);
+  height: var(--reaction-handle-size);
+  border-radius: 50%;
+  border: var(--reaction-handle-border);
+}
+
+.reaction-handle-raised {
+  background: var(--reaction-handle-bg);
+  width: var(--reaction-handle-size);
+  height: var(--reaction-handle-size);
+  border-radius: 50%;
+  border: var(--reaction-handle-border);
+  box-shadow: inset 0 0 0 2px rgba(0, 0, 0, 0.08);
+}
+
+/* Positioning helpers */
+.uml.react-flow__handle-left {
+  top: 50%;
+  left: 0;
+  transform: translateY(-50%);
+}
+
+.uml.react-flow__handle-top {
+  top: 0;
+  left: 50%;
+  transform: translateX(-50%);
+}
+
+.uml.react-flow__handle-right {
+  top: 50%;
+  right: 0;
+  transform: translateY(-50%);
+}
+
+.uml.react-flow__handle-bottom {
+  bottom: 0;
+  left: 50%;
+  transform: translateX(-50%);
+}
+
+.uml.reaction-handle.react-flow__handle.connecting {
+  background: #ff6060;
+}
+
+.uml.reaction-handle.react-flow__handle.valid {
+  background: #55dd99;
+}
+
+.uml.reaction-handle.react-flow__handle {
+  background-color: var(--xy-handle-background-color-default);
+  border: 1px solid var(--xy-handle-border-color, var(--xy-handle-border-color-default));
+}
+
+.uml.reaction-handle.react-flow__handle.connectionindicator:hover {
+  pointer-events: all;
+  border-color: var(--xy-theme-edge-hover);
+}
+
+.uml.reaction-handle.react-flow__handle.connectionindicator:focus,
+.uml.reaction-handle.react-flow__handle.connectingfrom,
+.uml.reaction-handle.react-flow__handle.connectingto {
+  border-color: var(--xy-theme-edge-hover);
+}
+
+.uml.reaction-handle.source {
+    pointer-events: var(--handle-pointer-events-source);
+    opacity: var(--reaction-handle-opacity-source);
+}
+
+.uml.reaction-handle.target {
+    pointer-events: var(--handle-pointer-events-target);
+    opacity: var(--reaction-handle-opacity-target);
+}
