@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { NodeProps, Handle, Position, Connection } from 'reactflow';
+import { NodeProps, Handle, Position } from 'reactflow';
 import {
   getBaseNodeStyle,
   headerBaseStyle,
@@ -712,6 +712,7 @@ export function EditableNode({ id, data, selected, isConnectable }: NodeProps<UM
         isConnectable={isConnectable}
         id="left-target"
         style={handleStyles.leftTarget}
+        className="uml vsum-handle"
       />
       <Handle 
         type="source" 
@@ -719,6 +720,7 @@ export function EditableNode({ id, data, selected, isConnectable }: NodeProps<UM
         isConnectable={isConnectable}
         id="left-source"
         style={handleStyles.leftSource}
+        className="uml vsum-handle"
       />
 
       {/* Top side: allow both target and source */}
@@ -728,6 +730,7 @@ export function EditableNode({ id, data, selected, isConnectable }: NodeProps<UM
         isConnectable={isConnectable}
         id="top-target"
         style={handleStyles.topTarget}
+        className="uml vsum-handle"
       />
       <Handle 
         type="source" 
@@ -735,15 +738,18 @@ export function EditableNode({ id, data, selected, isConnectable }: NodeProps<UM
         isConnectable={isConnectable}
         id="top-source"
         style={handleStyles.topSource}
+        className="uml vsum-handle"
       />
 
       {/* Right side: allow both source and target */}
+      <div>
       <Handle 
         type="source" 
         position={Position.Right} 
         isConnectable={isConnectable}
         id="right-source"
         style={handleStyles.rightSource}
+        className="uml vsum-handle"
       />
       <Handle 
         type="target" 
@@ -751,7 +757,9 @@ export function EditableNode({ id, data, selected, isConnectable }: NodeProps<UM
         isConnectable={isConnectable}
         id="right-target"
         style={handleStyles.rightTarget}
+        className="uml vsum-handle"
       />
+      </div>
 
       {/* Bottom side: allow both source and target */}
       <Handle 
@@ -760,6 +768,7 @@ export function EditableNode({ id, data, selected, isConnectable }: NodeProps<UM
         isConnectable={isConnectable}
         id="bottom-source"
         style={handleStyles.bottomSource}
+        className="uml vsum-handle"
       />
       <Handle 
         type="target" 
@@ -767,6 +776,7 @@ export function EditableNode({ id, data, selected, isConnectable }: NodeProps<UM
         isConnectable={isConnectable}
         id="bottom-target"
         style={handleStyles.bottomTarget}
+        className="uml vsum-handle"
       />
     </div>
   );

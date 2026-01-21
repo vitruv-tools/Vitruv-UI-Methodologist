@@ -36,10 +36,14 @@
   --color-background: #fefefe;
   --color-hover-bg: #f6f6f6;
   --color-disabled: #76797e;
-  --handle-pointer-events-source: auto;
+  --reaction-handle-pointer-events-source: auto;
+  --reaction-handle-pointer-events-target: auto;
   --reaction-handle-opacity-source: 1;
-  --handle-pointer-events-target: auto;
   --reaction-handle-opacity-target: 1;
+  --vsum-handle-pointer-events-source: auto;
+  --vsum-handle-pointer-events-target: auto;
+  --vsum-handle-opacity-source: 1;
+  --vsum-handle-opacity-target: 1;
 }
 
 .transparent {

@@ -6,6 +6,7 @@ import React, {
   useEffect,
   useCallback,
   useMemo,
+  useContext
 } from 'react';
 import ReactFlow, {
   MiniMap,
@@ -37,6 +38,8 @@ import {
 } from '../../utils/boundingBoxUtils';
 import type { EdgeValidator } from './EdgeValidator';
 import { ReactionEdgeValidator } from './ReactionEdgeValidator';
+import { MainContext } from '../../contexts/MainContext';
+import { setHandlePointerEvents, setHandleOpacity } from '../../utils';
 
 const COLOR_LIST = [
   '#ab1c91ff', '#ff7f0e', '#2ca02c', '#d62728', '#9467bd',
@@ -89,8 +92,6 @@ interface FlowCanvasProps {
   onEcoreFileRename?: (id: string, newFileName: string) => void;
   userId?: string;
   projectId?: string;
-  reactionFiles?: Set<{fromModel: string; toModel: string; id: number}>;
-  mode?: 'workspace' | 'expanded';
   onReactionFilesChange?: (files: Set<{fromModel: string; toModel: string; id: number}>) => void;
 }
 
@@ -201,11 +202,9 @@ export const FlowCanvas = forwardRef<{
     onEcoreFileRename,
     userId,
     projectId,
-    reactionFiles: externalReactionFiles,
-    mode,
     onReactionFilesChange,
   }, ref) => {
-
+    const mainContext = useContext(MainContext);
     const reactFlowWrapper = useRef<HTMLDivElement>(null);
     const [reactFlowInstance, setReactFlowInstance] = useState<ReactFlowInstance | null>(null);
     const [isDragOver, setIsDragOver] = useState(false);
@@ -214,8 +213,6 @@ export const FlowCanvas = forwardRef<{
     const [expandedFileId, setExpandedFileId] = useState<string | null>(null);
     const [connectionDragState, setConnectionDragState] = useState<ConnectionDragState | null>(null);
     const [codeEditorState, setCodeEditorState] = useState<CodeEditorState | null>(null);
-    // Use external reactionFiles prop if provided, otherwise use internal state
-    const reactionFileIds = externalReactionFiles ?? new Set<ReactionFile>();
     const setReactionFileIds = onReactionFilesChange ?? (() => {});
     const [routingStyle] = useState<'curved' | 'orthogonal'>('orthogonal');
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
@@ -354,11 +351,11 @@ export const FlowCanvas = forwardRef<{
     }, [reactFlowInstance, setEdges, updateEdgeHandles]);
 
     const recalculateAfterNodeChange = useCallback(() => {
-      if (mode === 'expanded') {
+      if (mainContext?.mode === 'expanded' || mainContext?.mode === 'reactions') {
         recalculateBoundingBoxes(false);
       }
       recalculateEdgeHandles();
-    }, [recalculateBoundingBoxes, recalculateEdgeHandles, mode]);
+    }, [recalculateBoundingBoxes, recalculateEdgeHandles]);
 
     // Wrapper to auto-update edge handles when nodes move
     // Called when drag and drop of nodes ends
@@ -374,12 +371,12 @@ export const FlowCanvas = forwardRef<{
         // Small delay to ensure node positions are updated in state
         setTimeout(recalculateAfterNodeChange, 100);
       } else if (changes.some((c) => ["add", "remove"].includes(c.type))) {
-        if (mode === 'expanded') {
+        if (mainContext?.mode === 'expanded' || mainContext?.mode === 'reactions') {
           setTimeout(recalculateBoundingBoxes, 100, true);
         }
       } else if (changes.some((c) => c.type === 'dimensions' && !c.resizing)) {
         // Dimension change without resizing happens if nodes are programmatically added
-        if (mode === 'expanded') {
+        if (mainContext?.mode === 'expanded' || mainContext?.mode === 'reactions') {
           setTimeout(recalculateBoundingBoxes, 100, true);
         }
       }
@@ -820,7 +817,7 @@ export const FlowCanvas = forwardRef<{
       if (!edge.data?.reactionFileId) {
         const source = nodes.find(n => n.id === edge.source)!;
         const target = nodes.find(n => n.id === edge.target)!;
-        for (const reactionFile of Array.from(reactionFileIds.values())) {
+        for (const reactionFile of Array.from(mainContext!.reactionFiles.values())) {
           if (reactionFile.fromModel === source.data.model && reactionFile.toModel === target.data.model) {
             edge.data ??= {};
             edge.data!.reactionFileId = reactionFile.id;
@@ -851,7 +848,7 @@ export const FlowCanvas = forwardRef<{
         targetFileName: getFileName(edge.target),
         reactionFileId,
       });
-    }, [edges, nodes, reactionFileIds]);
+    }, [edges, nodes]);
 
     const handleCloseCodeEditor = useCallback(() => {
       setCodeEditorState(null);
@@ -2122,49 +2119,23 @@ const handleEdgeReorderRequest = useCallback((edgeId: string, controlPoint: { x:
       return edgeValidators.some(validator => validator.isValidConnection(params, nodes, edges));
     }, [nodes, edges]);
 
-    const onConnectStart = useCallback(
-      (event: unknown, params: OnConnectStartParams) => {
-        document.documentElement.style.setProperty(
-          "--handle-pointer-events-source",
-          "none",
-        );
-        document.documentElement.style.setProperty(
-          "--handle-pointer-events-target",
-          "auto",
-        );
-        document.documentElement.style.setProperty(
-          "--reaction-handle-opacity-source",
-          "0",
-        );
-        document.documentElement.style.setProperty(
-          "--reaction-handle-opacity-target",
-          "1",
-        );
-      },
-      [],
-    );
+    const onConnectStart = (event: unknown, params: OnConnectStartParams) => {
+      if (mainContext?.mode === "reactions") {
+        setHandlePointerEvents("reaction", "source", "none");
+        setHandlePointerEvents("reaction", "target", "auto");
+        setHandleOpacity("reaction", "source", 0);
+        setHandleOpacity("reaction", "target", 1);
+      }
+    };
 
-    const onConnectEnd = useCallback(
-      (event: MouseEvent | TouchEvent) => {
-        document.documentElement.style.setProperty(
-          "--handle-pointer-events-source",
-          "auto",
-        );
-        document.documentElement.style.setProperty(
-          "--handle-pointer-events-target",
-          "none",
-        );
-        document.documentElement.style.setProperty(
-          "--reaction-handle-opacity-source",
-          "1",
-        );
-        document.documentElement.style.setProperty(
-          "--reaction-handle-opacity-target",
-          "0",
-        );
-      },
-      [],
-    );
+    const onConnectEnd = (event: MouseEvent | TouchEvent) => {
+      if (mainContext?.mode === "reactions") {
+        setHandlePointerEvents("reaction", "source", "auto");
+        setHandlePointerEvents("reaction", "target", "none");
+        setHandleOpacity("reaction", "source", 1);
+        setHandleOpacity("reaction", "target", 0);
+      }
+    };
 
     return (
       <div

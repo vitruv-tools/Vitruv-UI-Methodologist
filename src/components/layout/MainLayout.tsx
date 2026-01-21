@@ -1,5 +1,6 @@
 import React, { ComponentRef, ElementRef, useCallback, useEffect, useRef, useState } from 'react';
 import { useLocation } from 'react-router-dom';
+import { Switch, FormControlLabel } from '@mui/material';
 import { Header } from './Header';
 import { FlowCanvas } from '../flow/FlowCanvas';
 import { ToolsPanel } from '../ui/ToolsPanel';
@@ -10,10 +11,13 @@ import {
     saveDocumentMeta,
     saveDocumentData,
     StoredDocumentMeta,
+    setHandleOpacity,
+    setHandlePointerEvents,
 } from '../../utils/flowUtils';
 import { Node, Edge } from 'reactflow';
 import { User } from '../../services/auth';
 import { WorkspaceSnapshot, WorkspaceSnapshotRequest } from '../../types/workspace';
+import { MainContext } from '../../contexts/MainContext';
 
 const ENABLE_RESIZE = false;   // <- keep false to prevent any user resizing
 const HEADER_HEIGHT = 48;
@@ -91,7 +95,7 @@ export function MainLayout({
     const [reactionFiles, setReactionFiles] = useState<Set<{fromModel: string; toModel: string; id: number}>>(new Set());
 
     // Workspace or expanded mode
-    const [mode, setMode] = useState<'workspace' | 'expanded'>('workspace');
+    const [mode, setMode] = useState<'workspace' | 'expanded' | 'reactions'>('workspace');
 
     // Start with an empty workspace
     useEffect(() => {
@@ -140,6 +144,30 @@ export function MainLayout({
             globalThis.removeEventListener('mouseup', handleMouseUp);
         };
     }, []);
+
+    const handleExpandedModeSwitch = useCallback((newMode: typeof mode) => {
+        if (mode === newMode) return;
+        setMode(newMode);
+        if (newMode === 'reactions') {
+            setHandlePointerEvents("reaction", "source", "auto");
+            setHandlePointerEvents("reaction", "target", "auto");
+            setHandleOpacity("reaction", "source", 1);
+            setHandleOpacity("reaction", "target", 1);
+            setHandlePointerEvents("vsum", "source", "none");
+            setHandlePointerEvents("vsum", "target", "none");
+            setHandleOpacity("vsum", "source", 0);
+            setHandleOpacity("vsum", "target", 0);
+        } else if (newMode === 'expanded') {
+            setHandlePointerEvents("reaction", "source", "none");
+            setHandlePointerEvents("reaction", "target", "none");
+            setHandleOpacity("reaction", "source", 0);
+            setHandleOpacity("reaction", "target", 0);
+            setHandlePointerEvents("vsum", "source", "auto");
+            setHandlePointerEvents("vsum", "target", "auto");
+            setHandleOpacity("vsum", "source", 1);
+            setHandleOpacity("vsum", "target", 1);
+        }
+    }, [mode, setMode]);
 
     // calculateEmptyPosition als useCallback (stabil)
     const calculateEmptyPosition = useCallback(() => {
@@ -241,7 +269,8 @@ export function MainLayout({
 
     // Function to return to workspace from expanded metamodel view
     const handleBackToWorkspace = useCallback(() => {
-        setMode('workspace');
+        console.log('⬅️ Returning to workspace view from mode:', mode);
+        handleExpandedModeSwitch('workspace');
         setExpandedMetaModelNames(null);
         
         // Clear the cached workspace snapshot since we're returning to workspace view
@@ -275,7 +304,7 @@ export function MainLayout({
         setTimeout(() => {
             globalThis.dispatchEvent(new CustomEvent('vitruv.reloadWorkspace'));
         }, 400);
-    }, [setMode]);
+    }, [mode, handleExpandedModeSwitch]);
 
     // Listen for workspace events
     useEffect(() => {
@@ -380,7 +409,9 @@ export function MainLayout({
     }, []);
 
     const handleEcoreFileExpand = useCallback((fileName: string, fileContent: string, cacheWorkspaceSnapshot: boolean = true, remountCanvas: boolean = true) => {
-        setMode('expanded');
+        if (mode !== 'expanded' && mode !== 'reactions') {
+            handleExpandedModeSwitch('expanded');
+        }
         if (cacheWorkspaceSnapshot) {
             // Cache the current workspace snapshot before switching to UML view
             // This is critical for saving relations even when viewing UML
@@ -449,7 +480,7 @@ export function MainLayout({
             saveDocumentData(newId, { nodes: diagramData.nodes as any, edges: diagramData.edges as any });
             setIsDirty(false);
         }, 100);
-    }, [setDocuments, setExpandedMetaModelNames, expandedMetaModelNames, setMode]);
+    }, [setDocuments, setExpandedMetaModelNames, expandedMetaModelNames, handleExpandedModeSwitch]);
 
     const handleEcoreFileDelete = useCallback((id: string) => {
         // Remove Node from FlowCanvas
@@ -497,6 +528,10 @@ export function MainLayout({
         setIsDirty(true);
     };
 
+    // initialize handle states based on current mode
+    handleExpandedModeSwitch(mode); 
+
+    const value = React.useMemo(() => ({ mode: mode, reactionFiles: reactionFiles }), [mode, reactionFiles]);
     return (
         <div
             style={{
@@ -664,6 +699,7 @@ export function MainLayout({
                                 </div>
                             </div>
                         ) : (
+                            <MainContext.Provider value={value}>
                             <FlowCanvas
                                 key={`${workspaceKey || 'default-workspace'}-${canvasKey}`}
                                 onDeploy={onDeploy}
@@ -675,10 +711,9 @@ export function MainLayout({
                                 // onEcoreFilePositionChange removed - ReactFlow handles position
                                 onEcoreFileDelete={handleEcoreFileDelete}
                                 onEcoreFileRename={handleEcoreFileRename}
-                                reactionFiles={reactionFiles}
-                                mode={mode}
                                 onReactionFilesChange={setReactionFiles}
                             />
+                            </MainContext.Provider>
                         )}
 
                         {/* Back to Workspace button - shown when viewing expanded metamodel */}
@@ -714,6 +749,46 @@ export function MainLayout({
                                 </svg>
                                 BACK TO WORKSPACE
                             </button>
+                        )}
+                        
+                        {/* VSUM / Reactions toggle switch */}
+                        {(mode === 'expanded' || mode === "reactions") && !isMMLRoute && (
+                            <div style={{
+                                position: 'absolute',
+                                left: 210,
+                                top: 56,
+                                zIndex: 30,
+                                background: '#ffffff',
+                                border: '1px solid #e5e5e5',
+                                borderRadius: 6,
+                                padding: '6px 12px',
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: 8,
+                                boxShadow: '0 2px 8px rgba(0,0,0,0.08)',
+                            }}>
+                                <span style={{ fontSize: '12px', fontWeight: 600, color: mode === 'expanded' ? '#3498db' : '#6b7280' }}>
+                                    VSUM
+                                </span>
+                                <Switch
+                                    checked={mode === 'reactions'}
+                                    onChange={(e) => {
+                                        handleExpandedModeSwitch(e.target.checked ? 'reactions' : 'expanded');
+                                    }}
+                                    size="small"
+                                    sx={{
+                                        '& .MuiSwitch-switchBase.Mui-checked': {
+                                            color: '#3498db',
+                                        },
+                                        '& .MuiSwitch-switchBase.Mui-checked + .MuiSwitch-track': {
+                                            backgroundColor: '#3498db',
+                                        },
+                                    }}
+                                />
+                                <span style={{ fontSize: '12px', fontWeight: 600, color: mode === 'reactions' ? '#3498db' : '#6b7280' }}>
+                                    Reactions
+                                </span>
+                            </div>
                         )}
 
                         {/* Workspace Top-Right slot (e.g., + ADD META MODELS) */}

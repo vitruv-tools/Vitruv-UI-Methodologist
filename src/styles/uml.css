@@ -72,11 +72,21 @@
 }
 
 .uml.reaction-handle.source {
-    pointer-events: var(--handle-pointer-events-source);
+    pointer-events: var(--reaction-handle-pointer-events-source);
     opacity: var(--reaction-handle-opacity-source);
 }
 
 .uml.reaction-handle.target {
-    pointer-events: var(--handle-pointer-events-target);
+    pointer-events: var(--reaction-handle-pointer-events-target);
     opacity: var(--reaction-handle-opacity-target);
+}
+
+.uml.vsum-handle.source {
+    pointer-events: var(--vsum-handle-pointer-events-source);
+    opacity: var(--vsum-handle-opacity-source);
+}
+
+.uml.vsum-handle.target {
+    pointer-events: var(--vsum-handle-pointer-events-target);
+    opacity: var(--vsum-handle-opacity-target);
 }

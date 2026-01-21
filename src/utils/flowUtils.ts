@@ -111,3 +111,21 @@ export const loadDocumentData = (id: string): FlowData | null => {
 export const saveDocumentData = (id: string, data: FlowData) => {
   localStorage.setItem(STORAGE_DATA_KEY + id, JSON.stringify(data));
 };
+
+export function setHandlePointerEvents(category: 'reaction' | 'vsum', type: 'source' | 'target', pointerEvents: React.CSSProperties["pointerEvents"]) {
+  document.documentElement.style.setProperty(
+    `--${category}-handle-pointer-events-${type}`,
+    pointerEvents ?? null,
+  );
+}
+
+export function setHandleOpacity(category: 'reaction' | 'vsum', type: 'source' | 'target', opacity: number) {
+  let opacityStr: string;
+  if (opacity > 1) opacityStr = "1";
+  else if (opacity < 0) opacityStr = "0";
+  else opacityStr = opacity.toString();
+  document.documentElement.style.setProperty(
+    `--${category}-handle-opacity-${type}`,
+    opacityStr,
+  );
+}
