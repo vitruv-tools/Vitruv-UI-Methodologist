@@ -176,7 +176,7 @@ export function useFlowState(props?: UseFlowStateProps) {
           },
         };
         setEdges((eds) => eds.concat(newEdge));
-      } else if (params.sourceHandle !== "reaction" && params.targetHandle !== "reaction") {
+      } else if (params.sourceHandle?.startsWith("reaction") !== true && params.targetHandle?.startsWith("reaction") !== true) {
         const newEdge: Edge = {
           id: `edge-${getId()}`,
           type: 'uml',

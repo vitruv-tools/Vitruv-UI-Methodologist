@@ -17,6 +17,7 @@ import ReactFlow, {
   NodeChange,
   Connection,
   OnConnectStartParams,
+  Panel,
 } from 'reactflow';
 import 'reactflow/dist/style.css';
 import { useFlowState } from '../../hooks/useFlowState';
@@ -2181,6 +2182,7 @@ const handleEdgeReorderRequest = useCallback((edgeId: string, controlPoint: { x:
           onConnectEnd={onConnectEnd}
         >
           <MiniMap position="bottom-right" style={{ bottom: 16, right: 16, zIndex: 30 }} />
+          <Panel position="bottom-center">bottom-center</Panel>
           <Background />
         </ReactFlow>
 

@@ -31,6 +31,7 @@ interface UMLNodeData {
 }
 
 interface EditableFieldProps {
+  readonly id: string;
   readonly value: string;
   readonly onSave: (newValue: string) => void;
   readonly placeholder?: string;
@@ -183,6 +184,7 @@ const DeleteButton: React.FC<DeleteButtonProps> = ({
 // Removed unused SectionHeader, ClassHeader and EditableList subcomponents
 
 function EditableField({
+  id,
   value,
   onSave,
   placeholder,
@@ -303,7 +305,7 @@ function EditableField({
         }}
         style={{
           cursor: 'pointer',
-          padding: '2px 4px',
+          padding: '2px 10px',
           borderRadius: '2px',
           transition: 'all 0.2s ease',
           display: 'flex',
@@ -395,6 +397,34 @@ function EditableField({
           </div>
         </MenuOverlay>
       )}
+      <Handle 
+        type="target" 
+        position={Position.Left} 
+        isConnectable={true}
+        id={`reaction-${id}-left-target`}
+        className="uml reaction-handle"
+      />
+      <Handle 
+        type="source" 
+        position={Position.Left} 
+        isConnectable={true}
+        id={`reaction-${id}-left-source`}
+        className="uml reaction-handle"
+      />
+      <Handle 
+        type="target" 
+        position={Position.Right} 
+        isConnectable={true}
+        id={`reaction-${id}-right-target`}
+        className="uml reaction-handle"
+      />
+      <Handle 
+        type="source" 
+        position={Position.Right} 
+        isConnectable={true}
+        id={`reaction-${id}-right-source`}
+        className="uml reaction-handle"
+      />
     </div>
   );
 }
@@ -444,32 +474,33 @@ export function EditableNode({ id, data, selected, isConnectable }: NodeProps<UM
       {items.map((text, index) => (
         <div key={`${text}-${index}`} style={listItemStyle}>
           {text}
+          {/* TODO(Reinbold): The handle needs to know what it is for. EAttribute? EReference? */}
           <Handle 
             type="target" 
             position={Position.Left} 
             isConnectable={isConnectable}
-            id="reaction"
+            id={`reaction-${id}-${index}-left-target`}
             className="uml reaction-handle"
           />
           <Handle 
             type="source" 
             position={Position.Left} 
             isConnectable={isConnectable}
-            id="reaction"
+            id={`reaction-${id}-${index}-left-source`}
             className="uml reaction-handle"
           />
           <Handle 
             type="target" 
             position={Position.Right} 
             isConnectable={isConnectable}
-            id="reaction"
+            id={`reaction-${id}-${index}-right-target`}
             className="uml reaction-handle"
           />
           <Handle 
             type="source" 
             position={Position.Right} 
             isConnectable={isConnectable}
-            id="reaction"
+            id={`reaction-${id}-${index}-right-source`}
             className="uml reaction-handle"
           />
         </div>
@@ -486,6 +517,7 @@ export function EditableNode({ id, data, selected, isConnectable }: NodeProps<UM
       {/* Class Name Section */}
       <div style={headerBaseStyle}>
         <EditableField
+          id={`${id}-className`}
           value={nodeData.className || ''}
           onSave={(newValue) => updateNodeData({ className: newValue })}
           placeholder="Class Name"
@@ -525,6 +557,7 @@ export function EditableNode({ id, data, selected, isConnectable }: NodeProps<UM
         <span style={{ fontSize: '10px', fontWeight: 'normal' }}>&lt;&lt;abstract&gt;&gt;</span>
         {' '}
         <EditableField
+          id={`${id}-abstractClassName`}
           value={nodeData.className || ''}
           onSave={(newValue) => updateNodeData({ className: newValue })}
           placeholder="Abstract Class Name"
@@ -563,6 +596,7 @@ export function EditableNode({ id, data, selected, isConnectable }: NodeProps<UM
         <span style={{ fontSize: '10px', fontWeight: 'normal' }}>&lt;&lt;interface&gt;&gt;</span>
         {' '}
         <EditableField
+          id={`${id}-interfaceName`}
           value={nodeData.className || ''}
           onSave={(newValue) => updateNodeData({ className: newValue })}
           placeholder="Interface Name"
@@ -595,6 +629,7 @@ export function EditableNode({ id, data, selected, isConnectable }: NodeProps<UM
         <span style={{ fontSize: '10px', fontWeight: 'normal' }}>&lt;&lt;enumeration&gt;&gt;</span>
         {' '}
         <EditableField
+          id={`${id}-enumerationName`}
           value={nodeData.className || ''}
           onSave={(newValue) => updateNodeData({ className: newValue })}
           placeholder="Enumeration Name"
@@ -632,6 +667,7 @@ export function EditableNode({ id, data, selected, isConnectable }: NodeProps<UM
       {/* Package name section with tab design */}
       <div style={packageHeaderStyle}>
         <EditableField
+          id={`${id}-packageName`}
           value={nodeData.packageName || ''}
           onSave={(newValue) => updateNodeData({ packageName: newValue })}
           placeholder="Package Name"
@@ -662,6 +698,7 @@ export function EditableNode({ id, data, selected, isConnectable }: NodeProps<UM
   const renderSimpleNode = (defaultPlaceholder: string, textColor?: string) => (
     <div style={{ width: '100%', textAlign: 'center', padding: '8px' }}>
       <EditableField
+        id={`${id}-simple`}
         value={nodeData.label || ''}
         onSave={(newValue) => updateNodeData({ label: newValue })}
         placeholder={defaultPlaceholder}
