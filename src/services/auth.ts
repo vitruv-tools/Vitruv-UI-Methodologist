@@ -44,8 +44,8 @@ export interface User {
 }
 
 export class AuthService {
-  private static readonly API_BASE_URL = 'https://mwa.sdq.kastel.kit.edu';
-  private static readonly LOCAL_API_BASE_URL = 'https://mwa.sdq.kastel.kit.edu';
+  private static readonly API_BASE_URL = 'https://fe3ab829-d558-4834-afcf-6ed7ca440ca4.ka.bw-cloud-instance.org/';
+  private static readonly LOCAL_API_BASE_URL = 'https://fe3ab829-d558-4834-afcf-6ed7ca440ca4.ka.bw-cloud-instance.org/';
   private static readonly CLIENT_ID = 'exit-normal-customer-mobile-app';
   private static readonly GRANT_TYPE = 'password';
 
