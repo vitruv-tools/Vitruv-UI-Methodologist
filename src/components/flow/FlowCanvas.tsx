@@ -25,6 +25,7 @@ import { useDragAndDrop } from '../../hooks/useDragAndDrop';
 import { EditableNode } from './EditableNode';
 import { UMLRelationship } from './UMLRelationship';
 import { ReactionRelationship } from './ReactionRelationship';
+import { ReactionEditor } from './ReactionEditor';
 import { EcoreFileBox } from './EcoreFileBox';
 import { ConnectionLine } from './ConnectionLine';
 import { CodeEditorModal } from './CodeEditorModal';
@@ -2182,7 +2183,7 @@ const handleEdgeReorderRequest = useCallback((edgeId: string, controlPoint: { x:
           onConnectEnd={onConnectEnd}
         >
           <MiniMap position="bottom-right" style={{ bottom: 16, right: 16, zIndex: 30 }} />
-          <Panel position="bottom-center">bottom-center</Panel>
+          <ReactionEditor />
           <Background />
         </ReactFlow>
 
