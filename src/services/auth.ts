@@ -1,3 +1,5 @@
+import { config } from '../config/environment';
+
 export interface AuthResponse {
   access_token: string;
   refresh_token: string;
@@ -44,8 +46,8 @@ export interface User {
 }
 
 export class AuthService {
-  private static readonly API_BASE_URL = 'https://mwa.sdq.kastel.kit.edu';
-  private static readonly LOCAL_API_BASE_URL = 'https://mwa.sdq.kastel.kit.edu';
+  private static readonly API_BASE_URL = config.apiBaseUrl;
+  private static readonly LOCAL_API_BASE_URL = config.apiBaseUrl;
   private static readonly CLIENT_ID = 'exit-normal-customer-mobile-app';
   private static readonly GRANT_TYPE = 'password';
 

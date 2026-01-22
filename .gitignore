@@ -2,3 +2,10 @@
 /build/
 /node/node_modules/
 /node_modules/
+
+# Environment files
+.env.local
+.env*.local
+
+# Note: .env.staging and .env.production are committed to the repository
+# as they don't contain secrets and are needed for CI/CD
