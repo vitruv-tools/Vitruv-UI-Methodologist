@@ -162,7 +162,9 @@ export const VsumTabs: React.FC<VsumTabsProps> = ({
 
         const snapshotIds = snap.metaModelIds ?? [];
 
-        const metaModelIds = snapshotIds.length > 0 ? snapshotIds : backendSourceIds;
+        // Use snapshot if available, otherwise fall back to backend data
+        // Important: If snapshot exists but is empty, user intentionally removed all MetaModels
+        const metaModelIds = snap.metaModelIds !== undefined ? snapshotIds : backendSourceIds;
 
         if (metaModelIds.length === 0) {
             const msg = 'At least one MetaModel is required';
