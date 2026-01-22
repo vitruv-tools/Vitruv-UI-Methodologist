@@ -50,20 +50,30 @@ For detailed architecture documentation, see [ARCHITECTURE.md](./ARCHITECTURE.md
    npm install
    ```
 
-3. **Start the development server**
+3. **Configure environment** (First time only)
+   ```bash
+   cp .env.example .env.local
+   ```
+   Edit `.env.local` if you need to change the default backend URL. See [ENVIRONMENT_SETUP.md](./ENVIRONMENT_SETUP.md) for details.
+
+4. **Start the development server**
    ```bash
    npm start
    ```
 
-4. **Open your browser**
+5. **Open your browser**
    Navigate to `http://localhost:3000` to view the application.
 
 ## Available Scripts
 
-- **`npm start`** - Runs the app in development mode
-- **`npm run build`** - Builds the app for production
+- **`npm start`** - Runs the app in development mode (uses `.env.local`)
+- **`npm run build`** - Builds the app for production (generic build)
+- **`npm run build:staging`** - Builds the app for staging environment (uses `.env.staging`)
+- **`npm run build:production`** - Builds the app for production environment (uses `.env.production`)
 - **`npm test`** - Launches the test runner
 - **`npm run eject`** - Ejects from Create React App (one-way operation)
+
+For detailed environment configuration, see [ENVIRONMENT_SETUP.md](./ENVIRONMENT_SETUP.md).
 
 ## Usage
 

@@ -1,9 +1,10 @@
 import { AuthService } from './auth';
 import { FlowData } from '../types/flow';
 import { ApiResponse, Vsum, VsumDetails } from '../types/vsum';
+import { config } from '../config/environment';
 
 class ApiService {
-  private readonly baseURL = 'https://mwa.sdq.kastel.kit.edu';
+  private readonly baseURL = config.apiBaseUrl;
 
   /**
    * Extract error message from response text
