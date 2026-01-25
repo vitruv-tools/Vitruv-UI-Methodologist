@@ -8,11 +8,9 @@ RUN npm ci --no-audit
 COPY . .
 
 # Choose environment at build time:
-#   docker build --build-arg BUILD_ENV=staging ...
 # Defaults to production.
 ARG BUILD_ENV=production
 
-# Run the correct build command for your setup
 RUN set -eux; \
     if [ "$BUILD_ENV" = "staging" ]; then \
       npm run build:staging; \
