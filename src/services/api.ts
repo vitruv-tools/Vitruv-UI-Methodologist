@@ -1,10 +1,10 @@
 import { AuthService } from './auth';
 import { FlowData } from '../types/flow';
 import { ApiResponse, Vsum, VsumDetails } from '../types/vsum';
+import { config } from '../config/environment';
 
 class ApiService {
-  private readonly baseURL = 'http://fe3ab829-d558-4834-afcf-6ed7ca440ca4.ka.bw-cloud-instance.org:8080';
-
+  private readonly baseURL = config.apiBaseUrl;
 
   /**
    * Extract error message from response text
@@ -514,6 +514,68 @@ class ApiService {
     return this.authenticatedRequest(`/api/v1/vsums/${id}/build/check`, {
       method: 'GET',
     });
+  }
+
+  /**
+   * vSUMS: Download artifact as ZIP file
+   * GET /api/v1/vsums/{id}/build/artifact
+   * Returns a ZIP file blob containing the build artifact
+   */
+  async downloadVsumArtifact(id: number | string): Promise<Blob> {
+    const token = await AuthService.ensureValidToken();
+    
+    if (!token) {
+      throw new Error('No valid authentication token available');
+    }
+
+    const url = `${this.baseURL}/api/v1/vsums/${id}/build/artifact`;
+    const headers: Record<string, string> = {
+      'Authorization': `Bearer ${token}`,
+    };
+
+    const response = await fetch(url, {
+      method: 'GET',
+      headers,
+    });
+
+    if (response.ok) {
+      return await response.blob();
+    }
+
+    if (response.status === 401) {
+      try {
+        await AuthService.refreshToken();
+        const newToken = await AuthService.ensureValidToken();
+        if (newToken) {
+          const retryResponse = await fetch(url, {
+            method: 'GET',
+            headers: {
+              'Authorization': `Bearer ${newToken}`,
+            },
+          });
+
+          if (!retryResponse.ok) {
+            const errorText = await this.getResponseText(retryResponse);
+            const errorMessage = this.extractErrorMessage(errorText);
+            throw new Error(errorMessage);
+          }
+
+          return await retryResponse.blob();
+        }
+      } catch (refreshError) {
+        console.error('Token refresh failed during artifact download:', refreshError);
+      }
+    }
+
+    const errorText = await this.getResponseText(response);
+    const errorMessage = this.extractErrorMessage(errorText);
+    console.error('Artifact download failed', {
+      url,
+      status: response.status,
+      statusText: response.statusText,
+      message: errorMessage,
+    });
+    throw new Error(errorMessage);
   }
 
   /**

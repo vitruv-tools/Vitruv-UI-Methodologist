@@ -1,6 +1,6 @@
 import React from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
-import { AuthPage } from './components/auth/AuthPage';
+import { AuthPage, KeycloakRedirect } from './components/auth';
 import { HomePage } from './pages/HomePage';
 import { ProjectPage } from './pages/ProjectPage';
 import { EditorTest } from './pages/EditorTest';  // <- NEU
@@ -30,7 +30,7 @@ function ProtectedRoute({ children }: Readonly<{ children: React.ReactNode }>) {
   }
 
   if (!isAuthenticated) {
-    return <Navigate to="/auth" replace />;
+    return <Navigate to="/login" replace />;
   }
 
   return <>{children}</>;
@@ -94,7 +94,8 @@ function App() {
     <Router>
       <AuthProvider>
         <Routes>
-          <Route path="/auth" element={<AuthPage />} />
+          <Route path="/login" element={<AuthPage />} />
+          <Route path="/auth" element={<KeycloakRedirect />} />
           <Route path="/" element={
             <ProtectedRoute>
               <HomePage />
