@@ -185,7 +185,7 @@ export const FlowCanvas = forwardRef<{
     onEcoreFileDelete,
     onEcoreFileRename,
     userId,
-    vsumId: vsumId,
+    vsumId,
   }, ref) => {
 
     const reactFlowWrapper = useRef<HTMLDivElement>(null);
