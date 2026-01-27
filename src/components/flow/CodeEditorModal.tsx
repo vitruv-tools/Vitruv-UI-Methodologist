@@ -12,6 +12,7 @@ interface CodeEditorModalProps {
   readonly edgeId: string;
   readonly sourceFileName?: string;
   readonly targetFileName?: string;
+  readonly vsumId?: string;
 }
 
 const buttonBaseStyles = {
@@ -43,6 +44,7 @@ export function CodeEditorModal({
   edgeId,
   sourceFileName,
   targetFileName,
+  vsumId,
 }: CodeEditorModalProps) {
   console.log('🏗️ CodeEditorModal render, isOpen:', isOpen);
 
@@ -319,12 +321,20 @@ export function CodeEditorModal({
       const rawUser = localStorage.getItem('auth.user');
       const userId = rawUser ? JSON.parse(rawUser).id : null;
 
+
       if (!userId) {
         console.error('❌ No userId available – aborting LSP connection');
         return;
       }
 
-      const wsUrl = `ws://localhost:9811/lsp?userId=${encodeURIComponent(userId)}`;
+
+
+      if (!vsumId) {
+        console.error('❌ No vsumId available – aborting LSP connection');
+        return;
+      }
+
+      const wsUrl = `ws://localhost:9811/lsp?userId=${encodeURIComponent(userId)}&vsumId=${encodeURIComponent(vsumId)}`;
       const webSocket = new WebSocket(wsUrl);
 
       webSocketRef.current = webSocket;

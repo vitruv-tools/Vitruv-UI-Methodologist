@@ -523,7 +523,7 @@ class ApiService {
    */
   async downloadVsumArtifact(id: number | string): Promise<Blob> {
     const token = await AuthService.ensureValidToken();
-    
+
     if (!token) {
       throw new Error('No valid authentication token available');
     }

@@ -61,9 +61,9 @@ const edgeTypes = {
 };
 
 
-const getLocalStorageKey = (userId?: string, projectId?: string) => {
-  if (userId && projectId) {
-    return `flow_edge_color_map_v1_user_${userId}_project_${projectId}`;
+const getLocalStorageKey = (userId?: string, vsumId?: string) => {
+  if (userId && vsumId) {
+    return `flow_edge_color_map_v1_user_${userId}_vsum_${vsumId}`;
   }
   return 'flow_edge_color_map_v1';
 };
@@ -77,7 +77,7 @@ interface FlowCanvasProps {
   onEcoreFileDelete?: (id: string) => void;
   onEcoreFileRename?: (id: string, newFileName: string) => void;
   userId?: string;
-  projectId?: string;
+  vsumId?: string;
 }
 
 interface ConnectionDragState {
@@ -185,7 +185,7 @@ export const FlowCanvas = forwardRef<{
     onEcoreFileDelete,
     onEcoreFileRename,
     userId,
-    projectId
+    vsumId: vsumId,
   }, ref) => {
 
     const reactFlowWrapper = useRef<HTMLDivElement>(null);
@@ -206,7 +206,7 @@ export const FlowCanvas = forwardRef<{
     const [hoveredMergeGroup, setHoveredMergeGroup] = useState<string | null>(null);
 
 
-    const storageKey = getLocalStorageKey(userId, projectId);
+    const storageKey = getLocalStorageKey(userId, vsumId);
 
     const {
       nodes,
@@ -322,7 +322,7 @@ export const FlowCanvas = forwardRef<{
 
 
     useEffect(() => {
-      console.log('Loading edge color map for:', { userId, projectId, storageKey });
+      console.log('Loading edge color map for:', { userId, vsumId, storageKey });
       try {
         const raw = localStorage.getItem(storageKey);
         if (raw) {
@@ -345,7 +345,7 @@ export const FlowCanvas = forwardRef<{
         edgeColorMapRef.current = new Map();
         nextColorIndexRef.current = 0;
       }
-    }, [userId, projectId, storageKey]);
+    }, [userId, vsumId, storageKey]);
 
 
     const persistEdgeColorMap = useCallback(() => {
@@ -2113,6 +2113,7 @@ execute actions in ${targetPackageName}
             edgeId={codeEditorState.edgeId || ''}
             sourceFileName={codeEditorState.sourceFileName}
             targetFileName={codeEditorState.targetFileName}
+            vsumId={vsumId}
           />
         )}
       </div>
