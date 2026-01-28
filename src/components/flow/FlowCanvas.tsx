@@ -739,6 +739,18 @@ export const FlowCanvas = forwardRef<{
       };
     }, [connectionDragState?.isActive, handleConnectionMove, handleConnectionEnd]);
 
+    const getEPackageName = (nodeId: string): string | null => {
+      const node = nodes.find(n => n.id === nodeId);
+      if (!node || node.type !== 'ecoreFile') return null;
+
+      const ecoreContent = node.data.fileContent;
+      if (!ecoreContent) return null;
+
+      // search for: <ecore:EPackage name="DER_NAME_HIER">
+      const nameMatch = ecoreContent.match(/<ecore:EPackage[^>]+name="([^"]+)"/);
+      return nameMatch ? nameMatch[1] : null;
+    };
+
     const handleEdgeDoubleClick = useCallback(async (edgeId: string) => {
       const edge = edges.find(e => e.id === edgeId);
       if (!edge) return;
@@ -767,8 +779,8 @@ export const FlowCanvas = forwardRef<{
         const sourceFileName = getFileName(edge.source);
         const targetFileName = getFileName(edge.target);
 
-        const sourcePackageName = sourceFileName?.replace('.ecore', '') || 'source';
-        const targetPackageName = targetFileName?.replace('.ecore', '') || 'target';
+        const sourcePackageName = getEPackageName(edge.source) || sourceFileName?.replace('.ecore', '') || 'source';
+        const targetPackageName = getEPackageName(edge.target) || targetFileName?.replace('.ecore', '') || 'target';
 
         const sourceUri = sourceNode?.data?.nsUri || `http://vitruv.tools/${sourcePackageName}`;
         const targetUri = targetNode?.data?.nsUri || `http://vitruv.tools/${targetPackageName}`;
