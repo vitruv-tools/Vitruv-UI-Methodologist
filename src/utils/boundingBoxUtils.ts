@@ -1,4 +1,4 @@
-import { FlowNode } from '../types';
+import { FlowNode } from "../types";
 
 export interface BoundingBox {
   rearrangeKey: string;
@@ -23,53 +23,54 @@ const NODE_PADDING = 40;
  */
 const ACCESSIBLE_BBOX_PALETTE = [
   {
-    color: '#648fff',
-    backgroundColor: 'rgba(100, 143, 255, 0.05)',
-    borderStyle: 'solid' as const,
-    label: 'Blue Solid',
+    color: "#648fff",
+    backgroundColor: "rgba(100, 143, 255, 0.05)",
+    borderStyle: "solid" as const,
+    label: "Blue Solid",
   },
   {
-    color: '#ffb000',
-    backgroundColor: 'rgba(255, 176, 0, 0.05)',
-    borderStyle: 'dashed' as const,
-    label: 'Gold Dashed',
+    color: "#ffb000",
+    backgroundColor: "rgba(255, 176, 0, 0.05)",
+    borderStyle: "dashed" as const,
+    label: "Gold Dashed",
   },
   {
-    color: '#dc267f',
-    backgroundColor: 'rgba(220, 38, 127, 0.05)',
-    borderStyle: 'dotted' as const,
-    label: 'Magenta Dotted',
+    color: "#dc267f",
+    backgroundColor: "rgba(220, 38, 127, 0.05)",
+    borderStyle: "dotted" as const,
+    label: "Magenta Dotted",
   },
   {
-    color: '#fe6100',
-    backgroundColor: 'rgba(254, 97, 0, 0.05)',
-    borderStyle: 'double' as const,
-    label: 'Orange Double',
+    color: "#fe6100",
+    backgroundColor: "rgba(254, 97, 0, 0.05)",
+    borderStyle: "double" as const,
+    label: "Orange Double",
   },
   {
-    color: '#785ef0',
-    backgroundColor: 'rgba(120, 94, 240, 0.05)',
-    borderStyle: 'groove' as const,
-    label: 'Purple Groove',
+    color: "#785ef0",
+    backgroundColor: "rgba(120, 94, 240, 0.05)",
+    borderStyle: "groove" as const,
+    label: "Purple Groove",
   },
 ];
 
 /**
  * Calculate bounding boxes for each rearrange key or group
  */
-export const calculateBoundingBoxes = (
+export function calculateBoundingBoxes(
   nodesToArrange: FlowNode[],
-  rearrangeBy?: string
-): BoundingBox[] => {
+  rearrangeBy?: string,
+): BoundingBox[] {
   const boundingBox: { [key: string]: BoundingBox } = {};
 
-  nodesToArrange.forEach(n => {
+  nodesToArrange.forEach((n) => {
     if (n.data.isBoundingBox) return;
     // If no rearrange key is provided, we use the existing group assignment
-    const rearrangeKey = (
-      rearrangeBy ? (n.data[rearrangeBy as keyof typeof n.data] as string) : n.data.group
-    ) ?? "";
-    
+    const rearrangeKey =
+      (rearrangeBy
+        ? (n.data[rearrangeBy as keyof typeof n.data] as string)
+        : n.data.group) ?? "";
+
     if (!boundingBox[rearrangeKey]) {
       boundingBox[rearrangeKey] = {
         rearrangeKey,
@@ -79,16 +80,22 @@ export const calculateBoundingBoxes = (
         bottom: n.position.y,
       };
     }
-    
-    boundingBox[rearrangeKey].left = Math.min(boundingBox[rearrangeKey].left, n.position.x);
+
+    boundingBox[rearrangeKey].left = Math.min(
+      boundingBox[rearrangeKey].left,
+      n.position.x,
+    );
     boundingBox[rearrangeKey].right = Math.max(
       boundingBox[rearrangeKey].right,
-      n.position.x + (n.width ?? NODE_DIMENSIONS.width)
+      n.position.x + (n.width ?? NODE_DIMENSIONS.width),
     );
-    boundingBox[rearrangeKey].top = Math.min(boundingBox[rearrangeKey].top, n.position.y);
+    boundingBox[rearrangeKey].top = Math.min(
+      boundingBox[rearrangeKey].top,
+      n.position.y,
+    );
     boundingBox[rearrangeKey].bottom = Math.max(
       boundingBox[rearrangeKey].bottom,
-      n.position.y + (n.height ?? NODE_DIMENSIONS.height)
+      n.position.y + (n.height ?? NODE_DIMENSIONS.height),
     );
 
     // Tell node about its bounding box
@@ -96,9 +103,9 @@ export const calculateBoundingBoxes = (
   });
 
   const boxes = Object.values(boundingBox);
-  
+
   // Apply padding
-  boxes.forEach(box => {
+  boxes.forEach((box) => {
     box.left -= NODE_PADDING / 2;
     box.right += NODE_PADDING / 2;
     box.top -= NODE_PADDING / 2;
@@ -106,61 +113,67 @@ export const calculateBoundingBoxes = (
   });
 
   return boxes;
-};
+}
 
 /**
  * Check if two bounding boxes overlap
  */
-export const boxesOverlap = (
+export function boxesOverlap(
   a: { left: number; right: number; top: number; bottom: number },
-  b: { left: number; right: number; top: number; bottom: number }
-): boolean => {
+  b: { left: number; right: number; top: number; bottom: number },
+): boolean {
   return !(
     a.right <= b.left ||
     a.left >= b.right ||
     a.bottom <= b.top ||
     a.top >= b.bottom
   );
-};
+}
 
 /**
  * Calculate minimum separation offset between overlapping boxes
  */
-export const calculateSeparationOffset = (
+export function calculateSeparationOffset(
   a: { left: number; right: number; top: number; bottom: number },
-  b: { left: number; right: number; top: number; bottom: number }
-): { x: number; y: number } => {
+  b: { left: number; right: number; top: number; bottom: number },
+): { x: number; y: number } {
   const moveLeft = b.left - a.right;
   const moveRight = b.right - a.left;
   const moveUp = b.top - a.bottom;
   const moveDown = b.bottom - a.top;
 
-  const xOffset = Math.abs(moveLeft) < Math.abs(moveRight) ? moveLeft : moveRight;
+  const xOffset =
+    Math.abs(moveLeft) < Math.abs(moveRight) ? moveLeft : moveRight;
   const yOffset = Math.abs(moveUp) < Math.abs(moveDown) ? moveUp : moveDown;
 
-  return Math.abs(xOffset) < Math.abs(yOffset) ? { x: xOffset, y: 0 } : { x: 0, y: yOffset };
-};
+  return Math.abs(xOffset) < Math.abs(yOffset)
+    ? { x: xOffset, y: 0 }
+    : { x: 0, y: yOffset };
+}
 
 /**
  * Apply offset to a bounding box
  */
-export const applyBoxOffset = (
+export function applyBoxOffset(
   box: BoundingBox,
-  offset: { x: number; y: number }
-): BoundingBox => ({
-  rearrangeKey: box.rearrangeKey,
-  left: box.left + offset.x,
-  right: box.right + offset.x,
-  top: box.top + offset.y,
-  bottom: box.bottom + offset.y,
-});
+  offset: { x: number; y: number },
+): BoundingBox {
+  return {
+    rearrangeKey: box.rearrangeKey,
+    left: box.left + offset.x,
+    right: box.right + offset.x,
+    top: box.top + offset.y,
+    bottom: box.bottom + offset.y,
+  };
+}
 
 /**
  * Calculate all necessary offsets to separate overlapping boxes
  */
-export const calculateAndUpdateBoundingBoxes = (
-  boxes: BoundingBox[]
-): BoxOffset[] => {
+export function calculateAndUpdateBoundingBoxes(
+  boxes: BoundingBox[],
+): BoxOffset[] {
+  const originalBoxes = JSON.stringify(boxes);
   const offsets: BoxOffset[] = [];
   const maxIterations = 100;
   let iteration = 0;
@@ -180,59 +193,62 @@ export const calculateAndUpdateBoundingBoxes = (
     }
   }
 
-  return offsets;
-};
+  // Remove undefined offsets because they indicate no movement needed
+  return offsets.filter((o) => o !== undefined);
+}
 
 export type BoundingBoxNodeData = {
-    boundingBoxPaletteIndex: number;
-}
+  boundingBoxPaletteIndex: number;
+};
 
 /**
  * Create or update debug visualization nodes for bounding boxes
  * Uses carousel-style accessible colors and border styles for colorblind accessibility
  */
-export const createOrUpdateBoundingBoxNodes = (
+export function createOrUpdateBoundingBoxNodes(
   boxes: BoundingBox[],
-  nodes: (FlowNode & { data: Partial<BoundingBoxNodeData> })[]
-): FlowNode[] => {
+  nodes: (FlowNode & { data: Partial<BoundingBoxNodeData> })[],
+): FlowNode[] {
   const result: FlowNode[] = [];
 
   // First we track which palette indexes are already used
-  const boundingBoxPalleteIndexes = new Set<number>(Array.from(Array(ACCESSIBLE_BBOX_PALETTE.length).keys()));
-  nodes.filter(
-      n => n.data.isBoundingBox
-    ).forEach(n => {
-        const paletteIndex = n.data.boundingBoxPaletteIndex;
-        if (paletteIndex !== undefined) {
-            // Mark palette index as used
-            boundingBoxPalleteIndexes.delete(paletteIndex); 
-        }
+  const boundingBoxPalleteIndexes = new Set<number>(
+    Array.from(Array(ACCESSIBLE_BBOX_PALETTE.length).keys()),
+  );
+  nodes
+    .filter((n) => n.data.isBoundingBox)
+    .forEach((n) => {
+      const paletteIndex = n.data.boundingBoxPaletteIndex;
+      if (paletteIndex !== undefined) {
+        // Mark palette index as used
+        boundingBoxPalleteIndexes.delete(paletteIndex);
+      }
     });
 
   for (const [idx, box] of Array.from(boxes.entries())) {
     const existingDebugNode = nodes.find(
-      n => n.data.isBoundingBox && n.data.group === box.rearrangeKey
+      (n) => n.data.isBoundingBox && n.data.group === box.rearrangeKey,
     );
-    
+
     let paletteIndex: number;
     if (existingDebugNode?.data.boundingBoxPaletteIndex !== undefined) {
-        // Preserve color of existing box
-        paletteIndex = existingDebugNode.data.boundingBoxPaletteIndex;
-    }
-    else if (boundingBoxPalleteIndexes.size > 0) {
-        // Carousel through palette styles
-        // Take ones we know are free first
-        paletteIndex = boundingBoxPalleteIndexes.values().next().value!;
-        boundingBoxPalleteIndexes.delete(paletteIndex);
+      // Preserve color of existing box
+      paletteIndex = existingDebugNode.data.boundingBoxPaletteIndex;
+    } else if (boundingBoxPalleteIndexes.size > 0) {
+      // Carousel through palette styles
+      // Take ones we know are free first
+      paletteIndex = boundingBoxPalleteIndexes.values().next().value!;
+      boundingBoxPalleteIndexes.delete(paletteIndex);
     } else {
-        // Fall back to cycling through all styles
-        paletteIndex = idx % ACCESSIBLE_BBOX_PALETTE.length;
+      // Fall back to cycling through all styles
+      paletteIndex = idx % ACCESSIBLE_BBOX_PALETTE.length;
     }
-    const { color, backgroundColor, borderStyle } = ACCESSIBLE_BBOX_PALETTE[paletteIndex];
-    
+    const { color, backgroundColor, borderStyle } =
+      ACCESSIBLE_BBOX_PALETTE[paletteIndex];
+
     const newNode = {
       id: `bbox-${box.rearrangeKey}-${Date.now()}-${idx}`,
-      type: 'default',
+      type: "default",
       position: { x: box.left, y: box.top },
       data: {
         label: `${box.rearrangeKey}`,
@@ -247,11 +263,11 @@ export const createOrUpdateBoundingBoxNodes = (
         height: box.bottom - box.top,
         backgroundColor,
         border: `2px ${borderStyle} ${color}`,
-        borderRadius: '4px',
-        fontSize: '10px',
-        padding: '4px',
+        borderRadius: "4px",
+        fontSize: "10px",
+        padding: "4px",
         color,
-        pointerEvents: 'none' as React.CSSProperties["pointerEvents"],
+        pointerEvents: "none" as React.CSSProperties["pointerEvents"],
         zIndex: -1,
       },
     } as FlowNode;
@@ -265,24 +281,27 @@ export const createOrUpdateBoundingBoxNodes = (
   }
 
   return result;
-};
+}
 
 /**
  * Apply calculated offsets to actual nodes
  */
-export const applyOffsetsToNodes = (
+export function applyOffsetsToNodes(
   nodesToOffset: FlowNode[],
   offsets: BoxOffset[],
-): void => {
-  nodesToOffset.forEach(n => {
-    const offset = offsets.find(
-      o => o.rearrangeKey === (n.data.group as string)
-    );
+): void {
+  for (const n of nodesToOffset) {
+    let offset: BoxOffset | undefined = undefined;
+    for (const o of offsets) {
+      if (o.rearrangeKey === (n.data.group as string)) {
+        offset = o;
+      }
+    }
     if (offset) {
       n.position = {
         x: n.position.x + offset.x,
         y: n.position.y + offset.y,
       };
     }
-  });
-};
+  }
+}
