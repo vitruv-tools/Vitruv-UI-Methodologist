@@ -1,5 +1,7 @@
 import React from 'react';
 import { EdgeProps, useStore } from 'reactflow';
+import type { Edge } from 'reactflow';
+import type { OnEdgeClickParams } from '../../types/flow';
 
 interface UMLRelationshipData {
   label?: string;
@@ -347,7 +349,6 @@ export function UMLRelationship({
   }
   
   const handleClick = (e: React.MouseEvent) => {
-    e.stopPropagation();
     // Toggle selection by dispatching a custom event
     const event = new CustomEvent('edge-clicked', { 
       detail: { edgeId: id, currentlySelected: selected } 
@@ -866,4 +867,8 @@ export function UMLRelationship({
       )}
     </>
   );
+}
+
+export function onEdgeClick(params: OnEdgeClickParams) {
+  params.setUmlEdgeDetailsEdge(params.edge);
 }

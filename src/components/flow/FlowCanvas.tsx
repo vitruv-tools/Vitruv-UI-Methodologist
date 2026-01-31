@@ -23,7 +23,7 @@ import 'reactflow/dist/style.css';
 import { useFlowState } from '../../hooks/useFlowState';
 import { useDragAndDrop } from '../../hooks/useDragAndDrop';
 import { EditableNode } from './EditableNode';
-import { UMLRelationship } from './UMLRelationship';
+import { onEdgeClick as umlOnEdgeClick, UMLRelationship } from './UMLRelationship';
 import { ReactionRelationship } from './ReactionRelationship';
 import { ReactionEditor } from './ReactionEditor';
 import { EcoreFileBox } from './EcoreFileBox';
@@ -42,6 +42,9 @@ import type { EdgeValidator } from './EdgeValidator';
 import { ReactionEdgeValidator } from './ReactionEdgeValidator';
 import { MainContext } from '../../contexts/MainContext';
 import { setHandlePointerEvents, setHandleOpacity } from '../../utils';
+import type { EObject } from 'ecore-ts';
+import { UmlEdgeDetails } from './UmlEdgeDetails';
+import { DragablePanel } from './DragablePanel';
 
 const COLOR_LIST = [
   '#ab1c91ff', '#ff7f0e', '#2ca02c', '#d62728', '#9467bd',
@@ -75,6 +78,11 @@ const edgeTypes = {
   uml: UMLRelationship,
   reactions: ReactionRelationship
 };
+const eventHandlers = {
+  onEdgeClick: {
+    uml: umlOnEdgeClick
+  }
+}
 
 
 const getLocalStorageKey = (userId?: string, projectId?: string) => {
@@ -142,8 +150,6 @@ const createControlButton = (onClick: () => void, title: string, icon: React.Rea
   </button>
 );
 
-type ReactionFile = { fromModel: string, toModel: string, id: number };
-
 const TOOL_LABELS: Record<string, Record<string, string>> = {
   element: {
     'class': 'Class',
@@ -182,7 +188,7 @@ const getToolLabel = (toolType: string, toolName: string): string => {
 
 export const FlowCanvas = forwardRef<{
   handleToolClick: (toolType: string, toolName: string, diagramType?: string) => void;
-  loadDiagramData: (nodes: FlowNode[], edges: FlowEdge[], additive?: boolean) => void;
+  loadDiagramData: (nodes: FlowNode[], edges: FlowEdge[], identifiersToEObject: Map<string, EObject>, additive?: boolean) => void;
   getNodes: () => Node[];
   getEdges: () => Edge[];
   addEcoreFile: (fileName: string, fileContent: string, meta?: any) => void;
@@ -224,6 +230,9 @@ export const FlowCanvas = forwardRef<{
       controlPoint?: { x: number; y: number };
     } | null>(null);
     const [hoveredMergeGroup, setHoveredMergeGroup] = useState<string | null>(null);
+    const [identifiersToEObject, setIdentifiersToEObject] = useState<Map<string, EObject>>(new Map());
+    const [reactionEditorVisible, setReactionEditorVisible] = useState(false);
+    const [umlEdgeDetailsEdge, setUmlEdgeDetailsEdge] = useState<FlowEdge | null>(null);
 
     const edgeValidators: EdgeValidator[] = [new ReactionEdgeValidator()];
 
@@ -1004,21 +1013,26 @@ export const FlowCanvas = forwardRef<{
     const mergeWithExisting = useCallback((
       newNodes: FlowNode[],
       newEdges: FlowEdge[],
+      newIdentifiersToEObject: Map<string, EObject>,
       additive: boolean
     ) => {
       if (!additive) {
         setNodes([]);
         setEdges([]);
-        return { nodesToProcess: newNodes, edgesToProcess: newEdges };
+        setIdentifiersToEObject(new Map());
+        return { nodesToProcess: newNodes, edgesToProcess: newEdges, identifiersToEObjectToProcess: newIdentifiersToEObject };
       }
 
       newNodes.push(...nodes);
       newEdges.push(...edges);
-      return { nodesToProcess: newNodes, edgesToProcess: newEdges };
-    }, [nodes, edges, setNodes, setEdges]);
+      for (const [key, value] of Array.from(identifiersToEObject.entries())) {
+        newIdentifiersToEObject.set(key, value);
+      }
+      return { nodesToProcess: newNodes, edgesToProcess: newEdges, identifiersToEObjectToProcess: newIdentifiersToEObject };
+    }, [nodes, edges, identifiersToEObject, setNodes, setEdges, setIdentifiersToEObject]);
 
     // Main: Load diagram data with optional rearrangement
-    const loadDiagramData = useCallback((newNodes: FlowNode[], newEdges: FlowEdge[], additive: boolean = false) => {
+    const loadDiagramData = useCallback((newNodes: FlowNode[], newEdges: FlowEdge[], identifiersToEObject: Map<string, EObject>, additive: boolean = false) => {
       console.log('Loading diagram data (raw):', { newNodes, newEdges });
 
       // Step 1: Ensure all nodes and edges have unique IDs
@@ -1029,14 +1043,15 @@ export const FlowCanvas = forwardRef<{
       console.log('Edges after uniquify:', edgesWithUniqueIds.map(e => e.id));
 
       // Step 2: Handle additive vs non-additive loading
-      const { nodesToProcess, edgesToProcess } = mergeWithExisting(nodesWithIds, edgesWithUniqueIds, additive);
+      const { nodesToProcess, edgesToProcess, identifiersToEObjectToProcess } = mergeWithExisting(nodesWithIds, edgesWithUniqueIds, identifiersToEObject, additive);
 
       // Step 3: Finalize - set the state
       if (nodesToProcess.length > 0) setNodes(nodesToProcess);
       if (edgesToProcess.length > 0) setEdges(edgesToProcess);
+      setIdentifiersToEObject(identifiersToEObjectToProcess);
 
       console.log('Diagram data loaded successfully');
-    }, [ensureNodeIds, ensureUniqueEdgeIds, mergeWithExisting, calculateBoundingBoxes, calculateAndUpdateBoundingBoxes, createOrUpdateBoundingBoxNodes, applyOffsetsToNodes, edges, setNodes, setEdges]);
+    }, [ensureNodeIds, ensureUniqueEdgeIds, mergeWithExisting, calculateBoundingBoxes, calculateAndUpdateBoundingBoxes, createOrUpdateBoundingBoxNodes, applyOffsetsToNodes, edges, setNodes, setEdges, setIdentifiersToEObject]);
 
 
     const handleDragOver = useCallback((event: React.DragEvent) => {
@@ -2121,23 +2136,30 @@ const handleEdgeReorderRequest = useCallback((edgeId: string, controlPoint: { x:
       return edgeValidators.some(validator => validator.isValidConnection(params, nodes, edges));
     }, [nodes, edges]);
 
-    const onConnectStart = (event: unknown, params: OnConnectStartParams) => {
+    const onConnectStart = useCallback((event: unknown, params: OnConnectStartParams) => {
       if (mainContext?.mode === "reactions") {
         setHandlePointerEvents("reaction", "source", "none");
         setHandlePointerEvents("reaction", "target", "auto");
         setHandleOpacity("reaction", "source", 0);
         setHandleOpacity("reaction", "target", 1);
       }
-    };
+    }, [mainContext]);
 
-    const onConnectEnd = (event: MouseEvent | TouchEvent) => {
+    const onConnectEnd = useCallback((event: MouseEvent | TouchEvent) => {
       if (mainContext?.mode === "reactions") {
         setHandlePointerEvents("reaction", "source", "auto");
         setHandlePointerEvents("reaction", "target", "none");
         setHandleOpacity("reaction", "source", 1);
         setHandleOpacity("reaction", "target", 0);
       }
-    };
+    }, [mainContext]);
+
+    const onEdgeClick = useCallback((event: React.MouseEvent, edge: Edge) => {
+      const handler = eventHandlers.onEdgeClick[edge.type as keyof typeof eventHandlers.onEdgeClick];
+      if (handler) {
+        handler({ edge: edge, event: event, nodes: nodes, edges: edges, identifiersToEObject: identifiersToEObject, setUmlEdgeDetailsEdge: setUmlEdgeDetailsEdge });
+      }
+    }, [nodes, edges, identifiersToEObject, setUmlEdgeDetailsEdge]);
 
     return (
       <div
@@ -2181,10 +2203,30 @@ const handleEdgeReorderRequest = useCallback((edgeId: string, controlPoint: { x:
           isValidConnection={isValidConnection}
           onConnectStart={onConnectStart}
           onConnectEnd={onConnectEnd}
+          onEdgeClick={onEdgeClick}
         >
           <MiniMap position="bottom-right" style={{ bottom: 16, right: 16, zIndex: 30 }} />
-          <ReactionEditor />
-          <Background />
+          {reactionEditorVisible && 
+            <DragablePanel
+              title="Reaction"
+              description="Configure how mappings behave"
+              onClose={() => setReactionEditorVisible(false)}
+            >
+              <ReactionEditor />
+            </DragablePanel>
+          }
+          {umlEdgeDetailsEdge && (
+            <DragablePanel
+              title="UML Edge Details"
+              description=""
+              onClose={() => setUmlEdgeDetailsEdge(null)}
+              className="uml-edge-details-panel"
+              translateX='0%'
+              translateY='50%'
+            >
+              <UmlEdgeDetails edge={umlEdgeDetailsEdge} identifiersToEObject={identifiersToEObject} />
+            </DragablePanel>
+          )}
         </ReactFlow>
 
         {connectionLinePositions && (

@@ -47,5 +47,16 @@
 }
 
 .transparent {
-    opacity: 0;
+  opacity: 0;
+}
+
+.dragable-panel.dragable-panel.react-flow__panel {
+  left: 50%;
+  bottom: 16px;
+  top: auto;
+  pointer-events: all;
+  border-radius: 12px;
+  padding: 0;
+  width: 30%;
+  z-index: 1000;
 }

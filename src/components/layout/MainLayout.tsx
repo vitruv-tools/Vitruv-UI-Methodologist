@@ -5,7 +5,7 @@ import { Header } from './Header';
 import { FlowCanvas } from '../flow/FlowCanvas';
 import { ToolsPanel } from '../ui/ToolsPanel';
 import { parseEcoreFile, createSimpleEcoreDiagram } from '../../utils/ecoreParser';
-import { generateUMLFromEcore } from '../../utils/umlGenerator';
+import { generateUMLFromEcoreTsParser } from '../../utils/umlGenerator';
 import {
     generateFlowId,
     saveDocumentMeta,
@@ -100,7 +100,7 @@ export function MainLayout({
     // Start with an empty workspace
     useEffect(() => {
         if (flowCanvasRef.current?.loadDiagramData) {
-            flowCanvasRef.current.loadDiagramData([], []);
+            flowCanvasRef.current.loadDiagramData([], [], new Map());
         }
         try {
             localStorage.removeItem('vitruv.documents');
@@ -317,7 +317,7 @@ export function MainLayout({
             setCanvasKey(newKey);
             if (flowCanvasRef.current?.loadDiagramData) {
                 console.log('🧹 Clearing canvas diagram data');
-                flowCanvasRef.current.loadDiagramData([], []);
+                flowCanvasRef.current.loadDiagramData([], [], new Map());
             }
             if (flowCanvasRef.current?.resetExpandedFile) flowCanvasRef.current.resetExpandedFile();
             try {
@@ -437,7 +437,7 @@ export function MainLayout({
             // IMPORTANT: Completely clear the entire canvas including all metamodel boxes
             // This ensures we start fresh with only the UML diagram
             if (flowCanvasRef.current?.loadDiagramData) {
-                flowCanvasRef.current.loadDiagramData([], []);
+                flowCanvasRef.current.loadDiagramData([], [], new Map());
             }
             if (flowCanvasRef.current?.resetExpandedFile) {
                 flowCanvasRef.current.resetExpandedFile();
@@ -445,12 +445,13 @@ export function MainLayout({
         }
 
         // Prefer UML generator; fall back to previous parsers
-        let diagramData = generateUMLFromEcore(fileName, fileContent);
+        let diagramData = generateUMLFromEcoreTsParser(fileName, fileContent);
         if (!diagramData.nodes.length) {
-            diagramData = parseEcoreFile(fileContent);
+            // TODO(DEREIFAB): I dont support this fallback as of now
+            Object.assign(diagramData, parseEcoreFile(fileContent));
         }
         if (diagramData.nodes.length === 1 && (diagramData.nodes[0].data as any).label === 'Error parsing .ecore file') {
-            diagramData = createSimpleEcoreDiagram(fileContent);
+            Object.assign(diagramData, createSimpleEcoreDiagram(fileContent));
         }
 
         // Save as document
@@ -471,13 +472,13 @@ export function MainLayout({
         // Use a delay to ensure the canvas is remounted and ready before loading UML
         setTimeout(() => {
             // Load parsed UML diagram (ONLY UML boxes, no metamodel boxes)
-            flowCanvasRef.current?.loadDiagramData?.(diagramData.nodes, diagramData.edges, !remountCanvas);
+            flowCanvasRef.current?.loadDiagramData?.(diagramData.nodes, diagramData.edges, diagramData.identifiersToEObject, !remountCanvas);
             // Make generated UML read-only by default, but allow moving boxes
             //@ts-expect-error
             flowCanvasRef.current?.setInteractive?.(false);
             //@ts-expect-error
             flowCanvasRef.current?.setDraggable?.(true);
-            saveDocumentData(newId, { nodes: diagramData.nodes as any, edges: diagramData.edges as any });
+            saveDocumentData(newId, { nodes: diagramData.nodes, edges: diagramData.edges });
             setIsDirty(false);
         }, 100);
     }, [setDocuments, setExpandedMetaModelNames, expandedMetaModelNames, handleExpandedModeSwitch]);
@@ -489,7 +490,7 @@ export function MainLayout({
 
         if (flowCanvasRef.current?.loadDiagramData) {
             const edges = flowCanvasRef.current?.getEdges?.() || [];
-            flowCanvasRef.current.loadDiagramData(updatedNodes, edges);
+            flowCanvasRef.current.loadDiagramData(updatedNodes, edges, new Map());
         }
 
         // Clear selection if deleted
@@ -519,7 +520,7 @@ export function MainLayout({
 
         if (flowCanvasRef.current?.loadDiagramData) {
             const edges = flowCanvasRef.current?.getEdges?.() || [];
-            flowCanvasRef.current.loadDiagramData(updatedNodes, edges);
+            flowCanvasRef.current.loadDiagramData(updatedNodes, edges, new Map());
         }
     }, []);
 

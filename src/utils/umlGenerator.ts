@@ -1,4 +1,5 @@
 import { FlowEdge, FlowNode } from '../types/flow';
+import { EObject, EReference, EAttribute, ResourceSet, XMI } from 'ecore-ts';
 
 // Layout constants
 const NODE_WIDTH = 280;
@@ -369,6 +370,303 @@ function applyIntelligentLayout(nodes: FlowNode[], edges: FlowEdge[]): void {
     }
   }
 }
+
+function getAllContents(eObject: EObject, prefix: string,weakMap: Map<EObject, string>): EObject[] {
+  const currentPath = `${prefix}/${eObject.get('name')}`;
+  weakMap.set(eObject, currentPath);
+  const contents = eObject.eContents();
+  const result = [...contents];
+  for (const content of contents) {
+    if (weakMap.has(content)) {
+      continue;
+    }
+    if (content instanceof EObject) {
+      result.push(...getAllContents(content, currentPath, weakMap));
+    }
+  }
+  return result;
+}
+
+function parseEcoreXML(ecoreName: string, ecoreContent: string): { resource: EObject; allContents: EObject[], eObjectUniqueIdentifiers: Map<EObject, string> } {
+  //@ts-ignore
+  const resourceSet = ResourceSet.create();
+  if (!resourceSet) {
+    throw new Error('Failed to create ResourceSet for Ecore parsing');
+  }
+  const resource = resourceSet.create({ uri: ecoreName });
+  if (!resource) {
+    throw new Error('Failed to create Resource for Ecore parsing');
+  }
+  resource.parse(ecoreContent, XMI);
+  const eObjectUniqueIdentifiers = new Map<EObject, string>();
+  const allContents = getAllContents(resource, ecoreName, eObjectUniqueIdentifiers);
+  return { resource, allContents, eObjectUniqueIdentifiers };
+}
+
+export const generateUMLFromEcoreTsParser = (ecoreName: string, ecoreContent: string): { nodes: FlowNode[]; edges: FlowEdge[], identifiersToEObject: Map<string, EObject> } => {
+  const identifiersToEObject = new Map<string, EObject>();
+  try {
+    const { resource, allContents, eObjectUniqueIdentifiers } = parseEcoreXML(ecoreName, ecoreContent);
+
+    const nodes: FlowNode[] = [];
+    const edges: FlowEdge[] = [];
+    let nodeId = 1;
+
+    //const rootPackage = xmlDoc.querySelector(String.raw`ecore\:EPackage, EPackage`);
+    const rootPackage = resource.eContents().find((e: EObject) => e.eClass.get('name') === 'EPackage') as EObject | undefined;
+    //const packageName = rootPackage?.getAttribute('name') || 'Package';
+    const packageName = rootPackage?.get<string>('name') || 'Package';
+
+    // Collect classes first to reference by name
+    //const classElems = Array.from(xmlDoc.querySelectorAll('eClassifiers[type="ecore:EClass"], eClassifiers EClass, eClassifiers'))
+    //  .filter((el: Element) => (el.getAttribute('xsi:type') || el.getAttribute('type') || '').includes('EClass') || el.tagName.endsWith('EClass') || el.querySelector('eStructuralFeatures'));
+    const classElems = allContents.filter((e) => e.eClass.get('name') === 'EClass');
+
+    const classNameToNodeId = new Map<string, string>();
+    const classNameToEObject = new Map<string, EObject>();
+
+    // First pass: Create nodes with temporary positions
+    classElems.forEach((cls, idx) => {
+      // const className = cls.getAttribute('name') || `Class${idx + 1}`;
+      // const isAbstract = (cls.getAttribute('abstract') || 'false') === 'true';
+      // const isInterface = (cls.getAttribute('interface') || 'false') === 'true';
+      const className = cls.get<string>('name') || `Class${idx + 1}`;
+      const isAbstract = (cls.get<boolean>('abstract') || false) === true;
+      const isInterface = (cls.get<boolean>('interface') || false) === true;
+
+      const attributes: string[] = [];
+      // Parse EAttributes (not EReferences) from eStructuralFeatures
+      //const allFeatures = cls.querySelectorAll('eStructuralFeatures');
+      const allFeatures = cls.eContents().filter((e: EObject) => [EAttribute.get("name"), EReference.get("name")].includes(e.eClass.get('name'))) as EObject[];
+      allFeatures.forEach((attr, aIdx) => {
+        // Check if this is an EAttribute (not an EReference)
+        //const featureType = attr.getAttribute('xsi:type') || attr.getAttribute('type') || '';
+        // const isAttribute = featureType.includes('EAttribute') || 
+        //                    (!featureType.includes('EReference') && 
+        //                     attr.hasAttribute('eType') && 
+        //                     !attr.hasAttribute('eReferenceType'));
+        const featureType = attr.eClass.get('name') || '';
+        const isAttribute = featureType === EAttribute.get("name");
+        
+        if (!isAttribute) return; // Skip if it's an EReference
+        
+        const attrName = attr.get<string>('name') || `attr${aIdx + 1}`;
+        //const eType = attr.getAttribute('eType') || attr.getAttribute('type') || 'EString';
+        const eType = (attr.get<EObject>('eType')?.eClass as EObject).get<string>('name') || attr.get<string>('type') || 'EString';
+        
+        // TODO(Reinbold): I think this part is obsolete with ecore-ts, since eType name is already cleaned up
+        // Parse type reference - remove the # prefix if present
+        let typeName = eType.split('#').pop() || eType;
+        // Remove any // prefix that might exist
+        typeName = typeName.replace(/^\/\//, '');
+        
+        const lower = attr.get<string>('lowerBound');
+        const upper = attr.get<string>('upperBound');
+        
+        // Format multiplicity - if we have bounds, use them
+        let mult = '';
+        if (lower !== null && upper !== null) {
+          mult = ` [${lower}..${upper}]`;
+        } else if (lower !== null || upper !== null) {
+          mult = ` [${lower || '1'}..${upper || '*'}]`;
+        }
+        
+        attributes.push(`+ ${attrName}: ${typeName}${mult}`);
+      });
+
+      // Determine tool name based on class type
+      let toolName = 'class';
+      if (isInterface) {
+        toolName = 'interface';
+      } else if (isAbstract) {
+        toolName = 'abstract-class';
+      }
+
+      const node: FlowNode = {
+        id: `${ecoreName}-uml-class-${nodeId++}`,
+        type: 'editable',
+        position: { x: 0, y: 0 }, // Will be calculated later
+        data: {
+          model: ecoreName,
+          eObjectId: eObjectUniqueIdentifiers.get(cls!),
+          label: className,
+          toolType: 'element',
+          toolName,
+          diagramType: 'uml',
+          className: className,
+          attributes,
+        },
+      } as FlowNode;
+
+      nodes.push(node);
+      classNameToNodeId.set(className, node.id);
+      classNameToEObject.set(className, cls);
+    });
+
+    // Helper: choose best side handles based on node positions (will be called after layout)
+    const chooseHandles = (sourceId: string, targetId: string) => {
+      const s = nodes.find(n => n.id === sourceId);
+      const t = nodes.find(n => n.id === targetId);
+      if (!s || !t) return { sourceHandle: undefined, targetHandle: undefined } as const;
+      const dx = (t.position?.x ?? 0) - (s.position?.x ?? 0);
+      const dy = (t.position?.y ?? 0) - (s.position?.y ?? 0);
+      
+      // Use angle for more precise handle selection
+      const angle = Math.atan2(dy, dx);
+      const angleDeg = (angle * 180 / Math.PI + 360) % 360;
+      
+      if (angleDeg >= 315 || angleDeg < 45) {
+        return { sourceHandle: 'right-source', targetHandle: 'left-target' } as const;
+      } else if (angleDeg >= 45 && angleDeg < 135) {
+        return { sourceHandle: 'bottom-source', targetHandle: 'top-target' } as const;
+      } else if (angleDeg >= 135 && angleDeg < 225) {
+        return { sourceHandle: 'left-source', targetHandle: 'right-target' } as const;
+      } else {
+        return { sourceHandle: 'top-source', targetHandle: 'bottom-target' } as const;
+      }
+    };
+
+    // Associations via EReferences
+    classElems.forEach((cls) => {
+      const sourceName = cls.get<string>('name') || '';
+      const sourceId = classNameToNodeId.get(sourceName);
+      if (!sourceId) return;
+      
+      // Find all eStructuralFeatures that are EReferences
+      //const allFeatures = cls.querySelectorAll('eStructuralFeatures');
+      const allFeatures = cls.eContents().filter((e: EObject) => [EAttribute.get("name"), EReference.get("name")].includes(e.eClass.get('name'))) as EObject[];
+      allFeatures.forEach((ref) => {
+        // Check if this is an EReference
+        //const featureType = ref.getAttribute('xsi:type') || ref.getAttribute('type') || '';
+        //const isReference = featureType.includes('EReference');
+        const featureType = ref.eClass.get('name') || '';
+        const isReference = featureType === EReference.get("name");
+        
+        if (!isReference) return; // Skip if it's not an EReference
+        
+        //const eType = ref.getAttribute('eType') || '';
+        const eType = (ref.get<EObject>('eType'))?.get<string>('name') || '';
+        // Parse type reference - remove the # prefix if present
+        let targetType = eType.split('#').pop() || eType;
+        // Remove any // prefix that might exist
+        targetType = targetType.replace(/^\/\//, '');
+        
+        const targetId = classNameToNodeId.get(targetType || '');
+        if (!targetId) return;
+        
+        const lower = ref.get<string>('lowerBound');
+        const upper = ref.get<string>('upperBound');
+        const containment = (ref.get<boolean>('containment') || false) === true;
+        
+        // Determine relationship type
+        let relationshipType = 'association';
+        if (containment) {
+          relationshipType = 'composition';
+        }
+
+        // Normalize multiplicity per UML (place at target end only)
+        const normalizeUpper = (u: string | null) => {
+          if (u === null) return undefined;
+          if (u === '*' || u === '-1') return '*';
+          return u;
+        };
+        const normLower = lower ?? undefined;
+        const normUpper = normalizeUpper(upper?.toString() ?? null);
+        let multiplicity: string | undefined = undefined;
+        if (normLower !== undefined || normUpper !== undefined) {
+          const lo = normLower ?? '1';
+          const hi = normUpper ?? '1';
+          multiplicity = lo === hi ? lo : `${lo}..${hi}`;
+        }
+
+        const handles = chooseHandles(sourceId, targetId);
+        const edge: FlowEdge = {
+          id: `${ecoreName}-uml-edge-${nodeId++}`,
+          source: sourceId,
+          target: targetId,
+          type: 'uml',
+          data: {
+            relationshipType: relationshipType,
+            targetMultiplicity: multiplicity,
+            eReferenceId: eObjectUniqueIdentifiers.get(ref),
+            eObjectSourceId: eObjectUniqueIdentifiers.get(classNameToEObject.get(sourceName)!),
+            eObjectTargetId: eObjectUniqueIdentifiers.get(classNameToEObject.get(targetType)!),
+          },
+          sourceHandle: handles.sourceHandle,
+          targetHandle: handles.targetHandle,
+        };
+        edges.push(edge);
+      });
+    });
+
+    // Generalizations via eSuperTypes
+    classElems.forEach((cls) => {
+      const subName = cls.get<string>('name') || '';
+      const subId = classNameToNodeId.get(subName);
+      if (!subId) return;
+      const superTypes = cls.get<EObject[]>('eSuperTypes') ?? [];
+      superTypes.forEach((sup) => {
+        // Parse super type reference - remove # or // prefix
+        let supType = sup.get<string>('name')?.split('#').pop() || '';
+        supType = supType.replace(/^\/\//, '');
+        const supId = classNameToNodeId.get(supType);
+        if (!supId) return;
+        const handles = chooseHandles(subId, supId);
+        const edge: FlowEdge = {
+          id: `${ecoreName}-uml-gen-${nodeId++}`,
+          source: subId,
+          target: supId,
+          type: 'uml',
+          data: { relationshipType: 'inheritance', eObjectSourceId: eObjectUniqueIdentifiers.get(cls), eObjectTargetId: eObjectUniqueIdentifiers.get(sup) },
+          sourceHandle: handles.sourceHandle,
+          targetHandle: handles.targetHandle,
+        };
+        edges.push(edge);
+      });
+    });
+
+    // Apply intelligent layout algorithm
+    applyIntelligentLayout(nodes, edges);
+
+    // Recalculate edge handles based on final positions
+    edges.forEach(edge => {
+      const handles = chooseHandles(edge.source, edge.target);
+      edge.sourceHandle = handles.sourceHandle;
+      edge.targetHandle = handles.targetHandle;
+    });
+
+    // Optional package node
+    if (nodes.length > 0) {
+      const pkgNode: FlowNode = {
+        id: `${ecoreName}-uml-pkg-${nodeId++}`,
+        type: 'editable',
+        position: { x: 80, y: 40 },
+        data: {
+          eObjectId: eObjectUniqueIdentifiers.get(rootPackage!),
+          model: ecoreName,
+          label: packageName,
+          toolType: 'element',
+          toolName: 'package',
+          packageName,
+          diagramType: 'uml',
+        },
+      } as FlowNode;
+      nodes.unshift(pkgNode);
+    }
+
+    for (const [key, value] of Array.from(eObjectUniqueIdentifiers.entries())) {
+      if (identifiersToEObject.has(value)) {
+        throw new Error(`Duplicate EObject identifier found: ${value}`);
+      }
+      identifiersToEObject.set(value, key);
+    }
+
+    return { nodes, edges, identifiersToEObject };
+  } catch (error) {
+    console.error('Error generating UML from Ecore:', error);
+    return { nodes: [], edges: [], identifiersToEObject: new Map<string, EObject>() };
+  }
+};
 
 export const generateUMLFromEcore = (ecoreName: string, ecoreContent: string): { nodes: FlowNode[]; edges: FlowEdge[] } => {
   try {

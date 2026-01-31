@@ -1,7 +1,9 @@
-import { Node, Edge } from 'reactflow';
+import type { EObject } from "ecore-ts";
+import { Node, Edge } from "reactflow";
 
 export interface FlowNode extends Node {
   data: {
+    eObjectId?: string;
     label: string;
     onLabelChange?: (id: string, label: string) => void;
     ecoreData?: EcoreElementData;
@@ -11,14 +13,21 @@ export interface FlowNode extends Node {
   };
 }
 
-export type FlowEdge = Edge;
+export type FlowEdgeData = {
+  relationshipType: string;
+  targetMultiplicity?: string;
+  eReferenceId?: string;
+  eObjectSourceId?: string;
+  eObjectTargetId?: string;
+};
+export type FlowEdge = Edge<FlowEdgeData>;
 
 export interface FlowData {
   nodes: FlowNode[];
   edges: FlowEdge[];
 }
 
-export type NodeType = 'sequence' | 'object' | 'ecore';
+export type NodeType = "sequence" | "object" | "ecore";
 
 export interface DragItem {
   type: NodeType;
@@ -27,7 +36,13 @@ export interface DragItem {
 
 export interface EcoreElementData {
   name: string;
-  type: 'EClass' | 'EAttribute' | 'EReference' | 'EPackage' | 'EEnum' | 'EEnumLiteral';
+  type:
+    | "EClass"
+    | "EAttribute"
+    | "EReference"
+    | "EPackage"
+    | "EEnum"
+    | "EEnumLiteral";
   attributes?: EcoreAttribute[];
   references?: EcoreReference[];
   operations?: EcoreOperation[];
@@ -79,4 +94,13 @@ export interface EcorePackage {
   nsPrefix: string;
   classes: EcoreElementData[];
   packages: EcorePackage[];
-} 
+}
+
+export type OnEdgeClickParams = {
+  edge: FlowEdge,
+  event: React.MouseEvent,
+  nodes: FlowNode[];
+  edges: FlowEdge[];
+  identifiersToEObject: Map<string, EObject>;
+  setUmlEdgeDetailsEdge: (edge: FlowEdge | null) => void;
+};

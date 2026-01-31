@@ -90,3 +90,9 @@
     pointer-events: var(--vsum-handle-pointer-events-target);
     opacity: var(--vsum-handle-opacity-target);
 }
+
+.uml-edge-details-panel.dragable-panel.dragable-panel.react-flow__panel {
+  width: 18%;
+  left: 1px;
+  bottom: 50%;
+}
