@@ -49,6 +49,7 @@ import { UmlEdgeDetails } from './UmlEdgeDetails';
 import { DragablePanel } from './DragablePanel';
 import { GhostNode } from './GhostNode';
 import { disableReactionHandles, enableReactionHandles, recalculateNodesOnEdgesForReactions } from '../../utils/reactionUtils';
+import { DEFAULT_STORAGE_KEY, loadFromStorage, UMLEdgeDetailsConfig, UMLEdgeDetailsConfigPanel } from './UMLEdgeDetailsConfig';
 
 const COLOR_LIST = [
   '#ab1c91ff', '#ff7f0e', '#2ca02c', '#d62728', '#9467bd',
@@ -233,6 +234,7 @@ export const FlowCanvas = forwardRef<{
     const [reactionEditorEdge, setReactionEditorEdge] = useState<FlowEdge | null>(null);
     const [umlEdgeDetailsEdge, setUmlEdgeDetailsEdge] = useState<FlowEdge | null>(null);
     const [currentConnectionStartParams, setCurrentConnectionStartParams] = useState<OnConnectStartParams | null>(null);
+    const [umlDetailsConfig, setUmlDetailsConfig] = useState<Partial<UMLEdgeDetailsConfig>>(loadFromStorage(DEFAULT_STORAGE_KEY));
 
     const dragTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
@@ -2220,8 +2222,9 @@ const handleEdgeReorderRequest = useCallback((edgeId: string, controlPoint: { x:
               className="uml-edge-details-panel"
               translateX='0%'
               translateY='50%'
+              settings={<UMLEdgeDetailsConfigPanel onChange={setUmlDetailsConfig}/>}
             >
-              <UmlEdgeDetails edge={umlEdgeDetailsEdge} identifiersToEObject={identifiersToEObject} />
+              <UmlEdgeDetails edge={umlEdgeDetailsEdge} identifiersToEObject={identifiersToEObject} config={umlDetailsConfig} />
             </DragablePanel>
           )}
         </ReactFlow>
