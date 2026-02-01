@@ -1,7 +1,15 @@
 import React from 'react';
 import { EdgeProps, useStore } from 'reactflow';
-import type { Edge } from 'reactflow';
 import type { OnEdgeClickParams } from '../../types/flow';
+
+export const UMLRelationshipTypes = {
+  INHERITANCE: 'inheritance',
+  COMPOSITION: 'composition',
+  ASSOCIATION: 'association',
+  AGGREGATION: 'aggregation',
+  REALIZATION: 'realization',
+  DEPENDENCY: 'dependency',
+} as const;
 
 interface UMLRelationshipData {
   label?: string;
@@ -235,19 +243,19 @@ function buildRelationshipStyle(
     transition: 'stroke 0.2s ease, stroke-width 0.2s ease',
   };
 
-  if (relationshipType === 'inheritance') {
+  if (relationshipType === UMLRelationshipTypes.INHERITANCE) {
     return { ...baseStyle, markerEnd: `url(#arrowhead-inheritance${markerSuffix})` };
   }
-  if (relationshipType === 'realization') {
+  if (relationshipType === UMLRelationshipTypes.REALIZATION) {
     return { ...baseStyle, strokeDasharray: '10,6', markerEnd: `url(#arrowhead-realization${markerSuffix})` };
   }
-  if (relationshipType === 'composition') {
+  if (relationshipType === UMLRelationshipTypes.COMPOSITION) {
     return { ...baseStyle, markerStart: `url(#diamond-composition${markerSuffix})` };
   }
-  if (relationshipType === 'aggregation') {
+  if (relationshipType === UMLRelationshipTypes.AGGREGATION) {
     return { ...baseStyle, markerStart: `url(#diamond-aggregation${markerSuffix})` };
   }
-  if (relationshipType === 'dependency') {
+  if (relationshipType === UMLRelationshipTypes.DEPENDENCY) {
     return { ...baseStyle, strokeDasharray: '8,5', markerEnd: `url(#arrowhead-open-dependency${markerSuffix})` };
   }
   
@@ -869,6 +877,14 @@ export function UMLRelationship({
   );
 }
 
+/**
+ * Edgle click handler that is called from the FlowCanvas when an uml type edge is clicked.
+ *
+ *  @param params The edge click parameters.
+ */
 export function onEdgeClick(params: OnEdgeClickParams) {
-  params.setUmlEdgeDetailsEdge(params.edge);
+  // TODO(Reinbold): Which relationship types should have details shown on click?
+  if (params.edge.data?.relationshipType !== UMLRelationshipTypes.INHERITANCE) {
+    params.setUmlEdgeDetailsEdge(params.edge);
+  }
 }

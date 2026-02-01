@@ -1,5 +1,6 @@
 import { FlowEdge, FlowNode } from '../types/flow';
 import { EObject, EReference, EAttribute, ResourceSet, XMI } from 'ecore-ts';
+import { UMLRelationshipTypes } from '../components/flow/UMLRelationship';
 
 // Layout constants
 const NODE_WIDTH = 280;
@@ -80,7 +81,7 @@ const layoutComponent = (
   const inheritanceEdges = edges.filter(e => 
     componentNodes.includes(e.source) && 
     componentNodes.includes(e.target) && 
-    e.data?.relationshipType === 'inheritance'
+    e.data?.relationshipType === UMLRelationshipTypes.INHERITANCE
   );
 
   if (inheritanceEdges.length > 0) {
@@ -559,9 +560,9 @@ export const generateUMLFromEcoreTsParser = (ecoreName: string, ecoreContent: st
         const containment = (ref.get<boolean>('containment') || false) === true;
         
         // Determine relationship type
-        let relationshipType = 'association';
+        let relationshipType: typeof UMLRelationshipTypes[keyof typeof UMLRelationshipTypes] = UMLRelationshipTypes.ASSOCIATION;
         if (containment) {
-          relationshipType = 'composition';
+          relationshipType = UMLRelationshipTypes.COMPOSITION;
         }
 
         // Normalize multiplicity per UML (place at target end only)
@@ -617,7 +618,7 @@ export const generateUMLFromEcoreTsParser = (ecoreName: string, ecoreContent: st
           source: subId,
           target: supId,
           type: 'uml',
-          data: { relationshipType: 'inheritance', eObjectSourceId: eObjectUniqueIdentifiers.get(cls), eObjectTargetId: eObjectUniqueIdentifiers.get(sup) },
+          data: { relationshipType: UMLRelationshipTypes.INHERITANCE, eObjectSourceId: eObjectUniqueIdentifiers.get(cls), eObjectTargetId: eObjectUniqueIdentifiers.get(sup) },
           sourceHandle: handles.sourceHandle,
           targetHandle: handles.targetHandle,
         };
@@ -810,9 +811,9 @@ export const generateUMLFromEcore = (ecoreName: string, ecoreContent: string): {
         const containment = (ref.getAttribute('containment') || 'false') === 'true';
         
         // Determine relationship type
-        let relationshipType = 'association';
+        let relationshipType: typeof UMLRelationshipTypes[keyof typeof UMLRelationshipTypes] = UMLRelationshipTypes.ASSOCIATION;
         if (containment) {
-          relationshipType = 'composition';
+          relationshipType = UMLRelationshipTypes.COMPOSITION;
         }
 
         // Normalize multiplicity per UML (place at target end only)
@@ -864,7 +865,7 @@ export const generateUMLFromEcore = (ecoreName: string, ecoreContent: string): {
           source: subId,
           target: supId,
           type: 'uml',
-          data: { relationshipType: 'inheritance' },
+          data: { relationshipType: UMLRelationshipTypes.INHERITANCE },
           sourceHandle: handles.sourceHandle,
           targetHandle: handles.targetHandle,
         } as any);
