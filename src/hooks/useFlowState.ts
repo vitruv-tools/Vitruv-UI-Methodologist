@@ -1,5 +1,5 @@
 import { useCallback, useState, useEffect } from 'react';
-import { useNodesState, useEdgesState, Connection, Edge, Node } from 'reactflow';
+import { useNodesState, useEdgesState, Connection, Edge, Node, NodeChange } from 'reactflow';
 import { useUndoRedo } from './useUndoRedo';
 
 interface UseFlowStateProps {
@@ -64,6 +64,7 @@ export function useFlowState(props?: UseFlowStateProps) {
     edges: [], 
     idCounter: 1 
   });
+  const [isDraggingNode, setIsDraggingNode] = useState(false);
 
   // Initialize undo/redo with current state
   const {
@@ -95,6 +96,7 @@ export function useFlowState(props?: UseFlowStateProps) {
 
   useEffect(() => {
     if (isApplyingState) return;
+    if (isDraggingNode) return;
     
     const currentDiagramState = {
       nodes,
@@ -138,7 +140,7 @@ export function useFlowState(props?: UseFlowStateProps) {
       saveState(currentDiagramState, actionDescription);
       setLastSavedState(currentDiagramState);
     }
-  }, [nodes, edges, idCounter, saveState, isApplyingState, lastSavedState]);
+  }, [nodes, edges, idCounter, saveState, isApplyingState, lastSavedState, isDraggingNode]);
 
   const applyState = useCallback((state: { nodes: Node[]; edges: Edge[]; idCounter: number }) => {
     setIsApplyingState(true);
@@ -300,10 +302,27 @@ export function useFlowState(props?: UseFlowStateProps) {
     }
   }, [redo, applyState]);
 
+  const onNodesChangeHandler = useCallback((changes: NodeChange[]) => {
+    onNodesChange(changes);
+
+    const finishedDragging = changes.some((change: any) => 
+        change.type === 'position' && change.dragging === false
+    );
+    const startedDragging = changes.some((change: any) => 
+        change.type === 'position' && change.dragging === true
+    );
+    if (finishedDragging) {
+      setIsDraggingNode(false);
+    }
+    else if (startedDragging) {
+      setIsDraggingNode(true);
+    }
+  }, [onNodesChange]);
+
   return {
     nodes,
     edges,
-    onNodesChange,
+    onNodesChange: onNodesChangeHandler,
     onEdgesChange,
     onConnect,
     addNode,
