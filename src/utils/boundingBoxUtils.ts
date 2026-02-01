@@ -15,7 +15,10 @@ export interface BoxOffset {
   y: number;
 }
 
-const NODE_DIMENSIONS = { width: 280, height: 180 };
+const NODE_DIMENSIONS = {
+  default: { width: 280, height: 180 },
+  ghost: { width: 0, height: 0 },
+};
 const NODE_PADDING = 40;
 
 /**
@@ -55,6 +58,10 @@ const ACCESSIBLE_BBOX_PALETTE = [
   },
 ];
 
+function getByPath<T>(obj: any, path: string): T | undefined {
+  return path.split(".").reduce((acc, key) => acc?.[key], obj);
+}
+
 /**
  * Calculate bounding boxes for each rearrange key or group
  */
@@ -67,10 +74,9 @@ export function calculateBoundingBoxes(
   nodesToArrange.forEach((n) => {
     if (n.data.isBoundingBox) return;
     // If no rearrange key is provided, we use the existing group assignment
-    const rearrangeKey =
-      (rearrangeBy
-        ? (n.data[rearrangeBy as keyof typeof n.data] as string)
-        : n.data.group);
+    const rearrangeKey = rearrangeBy
+      ? getByPath<string | undefined>(n.data, rearrangeBy)
+      : n.data.group;
 
     if (rearrangeKey === undefined) return;
 
@@ -90,7 +96,7 @@ export function calculateBoundingBoxes(
     );
     boundingBox[rearrangeKey].right = Math.max(
       boundingBox[rearrangeKey].right,
-      n.position.x + (n.width ?? NODE_DIMENSIONS.width),
+      n.position.x + (n.width ?? NODE_DIMENSIONS[(n.type ?? "") as keyof typeof NODE_DIMENSIONS]?.width ?? NODE_DIMENSIONS.default.width),
     );
     boundingBox[rearrangeKey].top = Math.min(
       boundingBox[rearrangeKey].top,
@@ -98,7 +104,7 @@ export function calculateBoundingBoxes(
     );
     boundingBox[rearrangeKey].bottom = Math.max(
       boundingBox[rearrangeKey].bottom,
-      n.position.y + (n.height ?? NODE_DIMENSIONS.height),
+      n.position.y + (n.height ?? NODE_DIMENSIONS[(n.type ?? "") as keyof typeof NODE_DIMENSIONS]?.height ?? NODE_DIMENSIONS.default.height),
     );
 
     // Tell node about its bounding box
@@ -309,11 +315,14 @@ export function applyOffsetsToNodes(
   }
 }
 
-export function recalculateBoundingBoxes(rearrange: boolean, currentNodes: FlowNode[]): FlowNode[] {
-  console.log('🔄 Recalculating bounding boxes...');
+export function recalculateBoundingBoxes(
+  rearrange: boolean,
+  currentNodes: FlowNode[],
+): FlowNode[] {
+  console.log("🔄 Recalculating bounding boxes...");
 
   // Calculate bounding boxes around nodes
-  const boxes = calculateBoundingBoxes(currentNodes, "model");
+  const boxes = calculateBoundingBoxes(currentNodes, "ecore.model");
 
   // Rearrange
   if (rearrange) {
