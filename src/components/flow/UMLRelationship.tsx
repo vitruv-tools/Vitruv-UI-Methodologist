@@ -28,6 +28,8 @@ interface UMLRelationshipData {
   mergeGroupSourceNodes?: string[];
   hoveredMergeGroup?: string | null;
   onMergeGroupHover?: (groupId: string | null) => void;
+  labelX?: number;
+  labelY?: number;
 }
 
 interface PathResult {
@@ -448,6 +450,11 @@ export function UMLRelationship({
   };
 
   const connectionCount = Math.max(1, data?.parallelCount ?? 1);
+
+  if (data) {
+    data.labelX = labelX;
+    data.labelY = labelY;
+  }
 
   return (
     <>

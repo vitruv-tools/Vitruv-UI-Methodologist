@@ -18,6 +18,7 @@ import ReactFlow, {
   Connection,
   OnConnectStartParams,
   Panel,
+  ReactFlowProvider,
 } from 'reactflow';
 import 'reactflow/dist/style.css';
 import { useFlowState } from '../../hooks/useFlowState';
@@ -37,14 +38,17 @@ import {
   calculateAndUpdateBoundingBoxes,
   createOrUpdateBoundingBoxNodes,
   applyOffsetsToNodes,
+  recalculateBoundingBoxes,
 } from '../../utils/boundingBoxUtils';
 import type { EdgeValidator } from './EdgeValidator';
 import { ReactionEdgeValidator } from './ReactionEdgeValidator';
 import { MainContext } from '../../contexts/MainContext';
-import { setHandlePointerEvents, setHandleOpacity } from '../../utils';
+import { setHandlePointerEvents, setHandleOpacity, onConnect, isValidConnection, onConnectStart, onConnectEnd, onReconnect, onReconnectEnd, onEdgesDelete } from '../../utils';
 import type { EObject } from 'ecore-ts';
 import { UmlEdgeDetails } from './UmlEdgeDetails';
 import { DragablePanel } from './DragablePanel';
+import { GhostNode } from './GhostNode';
+import { disableReactionHandles, enableReactionHandles, recalculateNodesOnEdgesForReactions } from '../../utils/reactionUtils';
 
 const COLOR_LIST = [
   '#ab1c91ff', '#ff7f0e', '#2ca02c', '#d62728', '#9467bd',
@@ -72,7 +76,8 @@ const LAYOUT_CONFIG = {
 
 const nodeTypes = {
   editable: EditableNode,
-  ecoreFile: EcoreFileBox
+  ecoreFile: EcoreFileBox,
+  ghost: GhostNode
 };
 const edgeTypes = {
   uml: UMLRelationship,
@@ -233,6 +238,9 @@ export const FlowCanvas = forwardRef<{
     const [identifiersToEObject, setIdentifiersToEObject] = useState<Map<string, EObject>>(new Map());
     const [reactionEditorVisible, setReactionEditorVisible] = useState(false);
     const [umlEdgeDetailsEdge, setUmlEdgeDetailsEdge] = useState<FlowEdge | null>(null);
+    const [currentConnectionStartParams, setCurrentConnectionStartParams] = useState<OnConnectStartParams | null>(null);
+
+    const dragTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
     const edgeValidators: EdgeValidator[] = [new ReactionEdgeValidator()];
 
@@ -243,7 +251,7 @@ export const FlowCanvas = forwardRef<{
       edges,
       onNodesChange: originalOnNodesChange,
       onEdgesChange,
-      onConnect,
+      onConnect: onConnectFS,
       addNode,
       addEdge,
       updateNodeLabel,
@@ -322,27 +330,6 @@ export const FlowCanvas = forwardRef<{
       };
     }, [calculateOptimalHandles]);
 
-    const recalculateBoundingBoxes = useCallback((rearrange: boolean) => {
-      console.log('🔄 Node drag finished, recalculating bounding boxes...');
-
-      if (!reactFlowInstance) return;
-      
-      const currentNodes = reactFlowInstance.getNodes();
-
-      // Calculate bounding boxes around nodes
-      const boxes = calculateBoundingBoxes(currentNodes, "model");
-
-      // Rearrange
-      if (rearrange) {
-        const offsets = calculateAndUpdateBoundingBoxes(boxes);
-        // Apply offsets to actual nodes
-        applyOffsetsToNodes(currentNodes, offsets);
-      }
-
-      const newNodes = createOrUpdateBoundingBoxNodes(boxes, currentNodes);
-      setNodes(currentNodes.concat(newNodes));
-    }, [reactFlowInstance, setNodes, calculateBoundingBoxes, createOrUpdateBoundingBoxNodes, applyOffsetsToNodes]);
-
     const onInit = useCallback((rfi: ReactFlowInstance) => {
       setReactFlowInstance(rfi);
       document.documentElement.style.setProperty(
@@ -352,20 +339,18 @@ export const FlowCanvas = forwardRef<{
     }, [setReactFlowInstance]);
 
     // Recalculate edge handles after node drag ends
-    const recalculateEdgeHandles = useCallback(() => {
+    const recalculateEdgeHandles = useCallback((currentNodes: FlowNode[], currentEdges: FlowEdge[]) => {
       console.log('🔄 Node drag finished, recalculating edge handles...');
       
-      if (!reactFlowInstance) return;
-      
-      const currentNodes = reactFlowInstance.getNodes();
-      setEdges(currentEdges => currentEdges.map(edge => updateEdgeHandles(edge, currentNodes)));
+      return currentEdges.map(edge => updateEdgeHandles(edge, currentNodes));
     }, [reactFlowInstance, setEdges, updateEdgeHandles]);
 
-    const recalculateAfterNodeChange = useCallback(() => {
+    const recalculateAfterNodeChange = useCallback((currentNodes: FlowNode[], currentEdges: FlowEdge[]) => {
       if (mainContext?.mode === 'expanded' || mainContext?.mode === 'reactions') {
-        recalculateBoundingBoxes(false);
+        currentNodes = recalculateBoundingBoxes(false, currentNodes);
       }
-      recalculateEdgeHandles();
+      currentEdges = recalculateEdgeHandles(currentNodes, currentEdges);
+      return { currentNodes, currentEdges };
     }, [recalculateBoundingBoxes, recalculateEdgeHandles]);
 
     // Wrapper to auto-update edge handles when nodes move
@@ -379,16 +364,60 @@ export const FlowCanvas = forwardRef<{
       );
       
       if (finishedDragging) {
+        if (mainContext?.mode === 'reactions') {
+          enableReactionHandles();
+        }
+
         // Small delay to ensure node positions are updated in state
-        setTimeout(recalculateAfterNodeChange, 100);
+        setTimeout((rfi: typeof reactFlowInstance) => { 
+            let currentNodes = rfi!.getNodes() as FlowNode[];
+            let currentEdges = rfi!.getEdges() as FlowEdge[];
+            ({ currentNodes, currentEdges } = recalculateAfterNodeChange(currentNodes, currentEdges));
+            ({ currentNodes, currentEdges } = recalculateNodesOnEdgesForReactions(currentNodes, currentEdges));
+            setNodes(currentNodes);
+            setEdges(currentEdges);
+          }, 100, reactFlowInstance!);
       } else if (changes.some((c) => ["add", "remove"].includes(c.type))) {
         if (mainContext?.mode === 'expanded' || mainContext?.mode === 'reactions') {
-          setTimeout(recalculateBoundingBoxes, 100, true);
+          setTimeout((rfi: typeof reactFlowInstance, rearrange: boolean) => { 
+            let currentNodes = rfi!.getNodes() as FlowNode[];
+            let currentEdges = rfi!.getEdges() as FlowEdge[];
+            currentNodes = recalculateBoundingBoxes(rearrange, currentNodes);
+            ({ currentNodes, currentEdges } = recalculateNodesOnEdgesForReactions(currentNodes, currentEdges));
+            setNodes(currentNodes);
+            setEdges(currentEdges);
+          }, 100, reactFlowInstance!, true);
         }
       } else if (changes.some((c) => c.type === 'dimensions' && !c.resizing)) {
         // Dimension change without resizing happens if nodes are programmatically added
         if (mainContext?.mode === 'expanded' || mainContext?.mode === 'reactions') {
-          setTimeout(recalculateBoundingBoxes, 100, true);
+          setTimeout((rfi: typeof reactFlowInstance, rearrange: boolean) => { 
+            let currentNodes = rfi!.getNodes() as FlowNode[];
+            let currentEdges = rfi!.getEdges() as FlowEdge[];
+            currentNodes = recalculateBoundingBoxes(rearrange, currentNodes);
+            ({ currentNodes, currentEdges } = recalculateNodesOnEdgesForReactions(currentNodes, currentEdges));
+            setNodes(currentNodes);
+            setEdges(currentEdges)
+          }, 100, reactFlowInstance!, true);
+        }
+      } else if (changes.some((c) => c.type === 'position' && c.dragging)) {
+        // This is performance intensive, since it recalculates stuff while dragging
+        // if (dragTimeoutRef.current !== null) return;
+        // dragTimeoutRef.current = setTimeout((rfi: typeof reactFlowInstance, rearrange: boolean) => { 
+        //   let currentNodes = rfi!.getNodes() as FlowNode[];
+        //   let currentEdges = rfi!.getEdges() as FlowEdge[];
+        //   currentNodes = recalculateBoundingBoxes(rearrange, currentNodes);
+        //   if (mainContext?.mode === 'reactions') {
+        //     ({ currentNodes, currentEdges } = recalculateNodesOnEdgesForReactions(currentNodes, currentEdges));
+        //   }
+        //   setNodes(currentNodes);
+        //   setEdges(currentEdges);
+        //   dragTimeoutRef.current = null;
+        // }, 250, reactFlowInstance!, true);
+
+        // Cheap alternative, just hide reaction handles while dragging:
+        if (mainContext?.mode === 'reactions') {
+          disableReactionHandles();
         }
       }
     }, [originalOnNodesChange, recalculateAfterNodeChange, setNodes, nodes]);
@@ -2132,28 +2161,6 @@ const handleEdgeReorderRequest = useCallback((edgeId: string, controlPoint: { x:
 
     const connectionLinePositions = getConnectionLinePositions();
 
-    const isValidConnection = useCallback((params: Connection) => {
-      return edgeValidators.some(validator => validator.isValidConnection(params, nodes, edges));
-    }, [nodes, edges]);
-
-    const onConnectStart = useCallback((event: unknown, params: OnConnectStartParams) => {
-      if (mainContext?.mode === "reactions") {
-        setHandlePointerEvents("reaction", "source", "none");
-        setHandlePointerEvents("reaction", "target", "auto");
-        setHandleOpacity("reaction", "source", 0);
-        setHandleOpacity("reaction", "target", 1);
-      }
-    }, [mainContext]);
-
-    const onConnectEnd = useCallback((event: MouseEvent | TouchEvent) => {
-      if (mainContext?.mode === "reactions") {
-        setHandlePointerEvents("reaction", "source", "auto");
-        setHandlePointerEvents("reaction", "target", "none");
-        setHandleOpacity("reaction", "source", 1);
-        setHandleOpacity("reaction", "target", 0);
-      }
-    }, [mainContext]);
-
     const onEdgeClick = useCallback((event: React.MouseEvent, edge: Edge) => {
       const handler = eventHandlers.onEdgeClick[edge.type as keyof typeof eventHandlers.onEdgeClick];
       if (handler) {
@@ -2177,7 +2184,7 @@ const handleEdgeReorderRequest = useCallback((edgeId: string, controlPoint: { x:
           edges={mappedEdges}
           onNodesChange={onNodesChange}
           onEdgesChange={onEdgesChange}
-          onConnect={onConnect}
+          onConnect={onConnect.bind(null, onConnectFS)}
           fitView
           onDrop={handleDrop}
           onDragOver={handleDragOver}
@@ -2200,9 +2207,12 @@ const handleEdgeReorderRequest = useCallback((edgeId: string, controlPoint: { x:
             setNodes(nds => nds.map(n => ({ ...n, selected: false })));
             setEdges(eds => eds.map(e => ({ ...e, selected: false })));
           }}
-          isValidConnection={isValidConnection}
-          onConnectStart={onConnectStart}
-          onConnectEnd={onConnectEnd}
+          isValidConnection={isValidConnection.bind(null, mainContext, edgeValidators, nodes, edges)}
+          onConnectStart={onConnectStart.bind(null, mainContext, setCurrentConnectionStartParams)}
+          onConnectEnd={onConnectEnd.bind(null, mainContext)}
+          onReconnect={onReconnect}
+          onReconnectEnd={onReconnectEnd}
+          onEdgesDelete={onEdgesDelete}
           onEdgeClick={onEdgeClick}
         >
           <MiniMap position="bottom-right" style={{ bottom: 16, right: 16, zIndex: 30 }} />

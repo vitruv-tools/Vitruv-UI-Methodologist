@@ -11,13 +11,14 @@ import {
     saveDocumentMeta,
     saveDocumentData,
     StoredDocumentMeta,
-    setHandleOpacity,
-    setHandlePointerEvents,
+    disableVsumHandles,
+    enableVsumHandles,
 } from '../../utils/flowUtils';
-import { Node, Edge } from 'reactflow';
+import { Node, Edge, ReactFlowProvider } from 'reactflow';
 import { User } from '../../services/auth';
 import { WorkspaceSnapshot, WorkspaceSnapshotRequest } from '../../types/workspace';
 import { MainContext } from '../../contexts/MainContext';
+import { disableReactionHandles, enableReactionHandles } from '../../utils/reactionUtils';
 
 const ENABLE_RESIZE = false;   // <- keep false to prevent any user resizing
 const HEADER_HEIGHT = 48;
@@ -149,23 +150,11 @@ export function MainLayout({
         if (mode === newMode) return;
         setMode(newMode);
         if (newMode === 'reactions') {
-            setHandlePointerEvents("reaction", "source", "auto");
-            setHandlePointerEvents("reaction", "target", "auto");
-            setHandleOpacity("reaction", "source", 1);
-            setHandleOpacity("reaction", "target", 1);
-            setHandlePointerEvents("vsum", "source", "none");
-            setHandlePointerEvents("vsum", "target", "none");
-            setHandleOpacity("vsum", "source", 0);
-            setHandleOpacity("vsum", "target", 0);
+            enableReactionHandles();
+            disableVsumHandles();
         } else if (newMode === 'expanded') {
-            setHandlePointerEvents("reaction", "source", "none");
-            setHandlePointerEvents("reaction", "target", "none");
-            setHandleOpacity("reaction", "source", 0);
-            setHandleOpacity("reaction", "target", 0);
-            setHandlePointerEvents("vsum", "source", "auto");
-            setHandlePointerEvents("vsum", "target", "auto");
-            setHandleOpacity("vsum", "source", 1);
-            setHandleOpacity("vsum", "target", 1);
+            disableReactionHandles();
+            enableVsumHandles();
         }
     }, [mode, setMode]);
 
@@ -701,19 +690,21 @@ export function MainLayout({
                             </div>
                         ) : (
                             <MainContext.Provider value={value}>
-                            <FlowCanvas
-                                key={`${workspaceKey || 'default-workspace'}-${canvasKey}`}
-                                onDeploy={onDeploy}
-                                onDiagramChange={handleDiagramChange}
-                                ref={flowCanvasRef}
-                                // ecoreFiles prop entfernt - Nodes sind jetzt Teil von FlowCanvas State
-                                onEcoreFileSelect={handleEcoreFileSelect}
-                                onEcoreFileExpand={handleEcoreFileExpand}
-                                // onEcoreFilePositionChange removed - ReactFlow handles position
-                                onEcoreFileDelete={handleEcoreFileDelete}
-                                onEcoreFileRename={handleEcoreFileRename}
-                                onReactionFilesChange={setReactionFiles}
-                            />
+                                <ReactFlowProvider>
+                                    <FlowCanvas
+                                        key={`${workspaceKey || 'default-workspace'}-${canvasKey}`}
+                                        onDeploy={onDeploy}
+                                        onDiagramChange={handleDiagramChange}
+                                        ref={flowCanvasRef}
+                                        // ecoreFiles prop entfernt - Nodes sind jetzt Teil von FlowCanvas State
+                                        onEcoreFileSelect={handleEcoreFileSelect}
+                                        onEcoreFileExpand={handleEcoreFileExpand}
+                                        // onEcoreFilePositionChange removed - ReactFlow handles position
+                                        onEcoreFileDelete={handleEcoreFileDelete}
+                                        onEcoreFileRename={handleEcoreFileRename}
+                                        onReactionFilesChange={setReactionFiles}
+                                    />
+                                </ReactFlowProvider>
                             </MainContext.Provider>
                         )}
 

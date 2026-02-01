@@ -19,6 +19,9 @@ export type FlowEdgeData = {
   eReferenceId?: string;
   eObjectSourceId?: string;
   eObjectTargetId?: string;
+  reactionNodeIdNumber?: number;
+  labelX?: number;
+  labelY?: number;
 };
 export type FlowEdge = Edge<FlowEdgeData>;
 

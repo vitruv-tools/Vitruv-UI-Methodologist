@@ -1,3 +1,4 @@
+import { ReactFlowInstance } from "reactflow";
 import { FlowNode } from "../types";
 
 export interface BoundingBox {
@@ -69,7 +70,9 @@ export function calculateBoundingBoxes(
     const rearrangeKey =
       (rearrangeBy
         ? (n.data[rearrangeBy as keyof typeof n.data] as string)
-        : n.data.group) ?? "";
+        : n.data.group);
+
+    if (rearrangeKey === undefined) return;
 
     if (!boundingBox[rearrangeKey]) {
       boundingBox[rearrangeKey] = {
@@ -304,4 +307,21 @@ export function applyOffsetsToNodes(
       };
     }
   }
+}
+
+export function recalculateBoundingBoxes(rearrange: boolean, currentNodes: FlowNode[]): FlowNode[] {
+  console.log('🔄 Recalculating bounding boxes...');
+
+  // Calculate bounding boxes around nodes
+  const boxes = calculateBoundingBoxes(currentNodes, "model");
+
+  // Rearrange
+  if (rearrange) {
+    const offsets = calculateAndUpdateBoundingBoxes(boxes);
+    // Apply offsets to actual nodes
+    applyOffsetsToNodes(currentNodes, offsets);
+  }
+
+  const newNodes = createOrUpdateBoundingBoxNodes(boxes, currentNodes);
+  return currentNodes.concat(newNodes);
 }

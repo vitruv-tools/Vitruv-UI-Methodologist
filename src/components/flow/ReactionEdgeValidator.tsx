@@ -1,8 +1,13 @@
 import type { Connection } from "reactflow";
+import { MainContextType } from "../../contexts/MainContext";
 import type { FlowNode, FlowEdge } from "../../types";
 import type { EdgeValidator } from "./EdgeValidator";
 
 export class ReactionEdgeValidator implements EdgeValidator {
+  isApplicable(mainContext: MainContextType) {
+    return mainContext?.mode === "reactions";
+  };
+
   isValidConnection(
     connection: Connection,
     nodes: FlowNode[],
