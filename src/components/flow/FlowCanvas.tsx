@@ -24,7 +24,7 @@ import 'reactflow/dist/style.css';
 import { useFlowState } from '../../hooks/useFlowState';
 import { useDragAndDrop } from '../../hooks/useDragAndDrop';
 import { EditableNode } from './EditableNode';
-import { onEdgeClick as umlOnEdgeClick, UMLRelationship } from './UMLRelationship';
+import { UMLRelationship } from './UMLRelationship';
 import { ReactionRelationship } from './ReactionRelationship';
 import { ReactionEditor } from './ReactionEditor';
 import { EcoreFileBox } from './EcoreFileBox';
@@ -43,7 +43,7 @@ import {
 import type { EdgeValidator } from './EdgeValidator';
 import { ReactionEdgeValidator } from './ReactionEdgeValidator';
 import { MainContext } from '../../contexts/MainContext';
-import { setHandlePointerEvents, setHandleOpacity, onConnect, isValidConnection, onConnectStart, onConnectEnd, onReconnect, onReconnectEnd, onEdgesDelete } from '../../utils';
+import { onConnect, isValidConnection, onConnectStart, onConnectEnd, onReconnect, onReconnectEnd, onEdgesDelete, onEdgeClick } from '../../utils';
 import type { EObject } from 'ecore-ts';
 import { UmlEdgeDetails } from './UmlEdgeDetails';
 import { DragablePanel } from './DragablePanel';
@@ -83,12 +83,6 @@ const edgeTypes = {
   uml: UMLRelationship,
   reactions: ReactionRelationship
 };
-const eventHandlers = {
-  onEdgeClick: {
-    uml: umlOnEdgeClick
-  }
-}
-
 
 const getLocalStorageKey = (userId?: string, projectId?: string) => {
   if (userId && projectId) {
@@ -236,7 +230,7 @@ export const FlowCanvas = forwardRef<{
     } | null>(null);
     const [hoveredMergeGroup, setHoveredMergeGroup] = useState<string | null>(null);
     const [identifiersToEObject, setIdentifiersToEObject] = useState<Map<string, EObject>>(new Map());
-    const [reactionEditorVisible, setReactionEditorVisible] = useState(false);
+    const [reactionEditorEdge, setReactionEditorEdge] = useState<FlowEdge | null>(null);
     const [umlEdgeDetailsEdge, setUmlEdgeDetailsEdge] = useState<FlowEdge | null>(null);
     const [currentConnectionStartParams, setCurrentConnectionStartParams] = useState<OnConnectStartParams | null>(null);
 
@@ -372,8 +366,8 @@ export const FlowCanvas = forwardRef<{
         setTimeout((rfi: typeof reactFlowInstance) => { 
             let currentNodes = rfi!.getNodes() as FlowNode[];
             let currentEdges = rfi!.getEdges() as FlowEdge[];
-            ({ currentNodes, currentEdges } = recalculateAfterNodeChange(currentNodes, currentEdges));
             ({ currentNodes, currentEdges } = recalculateNodesOnEdgesForReactions(currentNodes, currentEdges));
+            ({ currentNodes, currentEdges } = recalculateAfterNodeChange(currentNodes, currentEdges));
             setNodes(currentNodes);
             setEdges(currentEdges);
           }, 100, reactFlowInstance!);
@@ -382,8 +376,8 @@ export const FlowCanvas = forwardRef<{
           setTimeout((rfi: typeof reactFlowInstance, rearrange: boolean) => { 
             let currentNodes = rfi!.getNodes() as FlowNode[];
             let currentEdges = rfi!.getEdges() as FlowEdge[];
-            currentNodes = recalculateBoundingBoxes(rearrange, currentNodes);
             ({ currentNodes, currentEdges } = recalculateNodesOnEdgesForReactions(currentNodes, currentEdges));
+            currentNodes = recalculateBoundingBoxes(rearrange, currentNodes);
             setNodes(currentNodes);
             setEdges(currentEdges);
           }, 100, reactFlowInstance!, true);
@@ -394,8 +388,8 @@ export const FlowCanvas = forwardRef<{
           setTimeout((rfi: typeof reactFlowInstance, rearrange: boolean) => { 
             let currentNodes = rfi!.getNodes() as FlowNode[];
             let currentEdges = rfi!.getEdges() as FlowEdge[];
-            currentNodes = recalculateBoundingBoxes(rearrange, currentNodes);
             ({ currentNodes, currentEdges } = recalculateNodesOnEdgesForReactions(currentNodes, currentEdges));
+            currentNodes = recalculateBoundingBoxes(rearrange, currentNodes);
             setNodes(currentNodes);
             setEdges(currentEdges)
           }, 100, reactFlowInstance!, true);
@@ -858,7 +852,7 @@ export const FlowCanvas = forwardRef<{
         const source = nodes.find(n => n.id === edge.source)!;
         const target = nodes.find(n => n.id === edge.target)!;
         for (const reactionFile of Array.from(mainContext!.reactionFiles.values())) {
-          if (reactionFile.fromModel === source.data.model && reactionFile.toModel === target.data.model) {
+          if (reactionFile.fromModel === source.data.ecore?.model && reactionFile.toModel === target.data.ecore?.model) {
             edge.data ??= {};
             edge.data!.reactionFileId = reactionFile.id;
             break;
@@ -1080,7 +1074,7 @@ export const FlowCanvas = forwardRef<{
       setIdentifiersToEObject(identifiersToEObjectToProcess);
 
       console.log('Diagram data loaded successfully');
-    }, [ensureNodeIds, ensureUniqueEdgeIds, mergeWithExisting, calculateBoundingBoxes, calculateAndUpdateBoundingBoxes, createOrUpdateBoundingBoxNodes, applyOffsetsToNodes, edges, setNodes, setEdges, setIdentifiersToEObject]);
+    }, [ensureNodeIds, ensureUniqueEdgeIds, mergeWithExisting, edges, setNodes, setEdges, setIdentifiersToEObject]);
 
 
     const handleDragOver = useCallback((event: React.DragEvent) => {
@@ -2161,13 +2155,6 @@ const handleEdgeReorderRequest = useCallback((edgeId: string, controlPoint: { x:
 
     const connectionLinePositions = getConnectionLinePositions();
 
-    const onEdgeClick = useCallback((event: React.MouseEvent, edge: Edge) => {
-      const handler = eventHandlers.onEdgeClick[edge.type as keyof typeof eventHandlers.onEdgeClick];
-      if (handler) {
-        handler({ edge: edge, event: event, nodes: nodes, edges: edges, identifiersToEObject: identifiersToEObject, setUmlEdgeDetailsEdge: setUmlEdgeDetailsEdge });
-      }
-    }, [nodes, edges, identifiersToEObject, setUmlEdgeDetailsEdge]);
-
     return (
       <div
         ref={reactFlowWrapper}
@@ -2213,16 +2200,16 @@ const handleEdgeReorderRequest = useCallback((edgeId: string, controlPoint: { x:
           onReconnect={onReconnect}
           onReconnectEnd={onReconnectEnd}
           onEdgesDelete={onEdgesDelete}
-          onEdgeClick={onEdgeClick}
+          onEdgeClick={onEdgeClick.bind(null, { nodes, edges, setUmlEdgeDetailsEdge, setReactionEditorEdge, identifiersToEObject})}
         >
           <MiniMap position="bottom-right" style={{ bottom: 16, right: 16, zIndex: 30 }} />
-          {reactionEditorVisible && 
+          {reactionEditorEdge && 
             <DragablePanel
               title="Reaction"
               description="Configure how mappings behave"
-              onClose={() => setReactionEditorVisible(false)}
+              onClose={() => setReactionEditorEdge(null)}
             >
-              <ReactionEditor />
+              <ReactionEditor edge={reactionEditorEdge} identifiersToEObject={identifiersToEObject} />
             </DragablePanel>
           }
           {umlEdgeDetailsEdge && (

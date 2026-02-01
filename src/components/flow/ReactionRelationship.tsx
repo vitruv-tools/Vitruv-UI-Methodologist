@@ -1,5 +1,6 @@
 import React, { useState, useCallback, useEffect, useMemo } from 'react';
 import { EdgeProps, Position, useReactFlow, useStore } from 'reactflow';
+import { OnEdgeClickParams } from '../../types/flow';
 
 interface ReactionRelationshipData {
   label?: string;
@@ -284,7 +285,6 @@ export function ReactionRelationship({
   const hasCode = data?.code && data.code.trim().length > 0;
   
   const handleClick = (e: React.MouseEvent) => {
-    e.stopPropagation();
     // Toggle selection by dispatching a custom event
     const event = new CustomEvent('edge-clicked', { 
       detail: { edgeId: id, currentlySelected: selected } 
@@ -488,4 +488,13 @@ export function ReactionRelationship({
       )}
     </>
   );
+}
+
+/**
+ * Edgle click handler that is called from the FlowCanvas when a reactions edge is clicked.
+ *
+ *  @param params The edge click parameters.
+ */
+export function onEdgeClick(params: OnEdgeClickParams) {
+  params.setReactionEditorEdge(params.edge);
 }

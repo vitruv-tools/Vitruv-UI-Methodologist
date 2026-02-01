@@ -18,12 +18,16 @@ export function recalculateNodesOnEdgesForReactions(
   let anyEdgeChange = false;
   let nextReactionNodeIdNumber: number | null = null;
   for (const edge of currentEdges) {
+    if (edge.data?.ecore === undefined) {
+      continue;
+    }
+
     let reactionNodeId: string = "";
     if (edge.data?.reactionNodeIdNumber !== undefined) {
       reactionNodeId = `reaction-ghost-${edge.data!.reactionNodeIdNumber}`;
     } else {
       nextReactionNodeIdNumber ??= currentEdges
-        .filter((edge) => edge.data?.reactionNodeIdNumber !== undefined)
+        .filter((edge) => edge.data!.reactionNodeIdNumber !== undefined)
         .map<number>((edge) => edge.data!.reactionNodeIdNumber!)
         .reduce((acc: number, curr: number) => (curr > acc ? curr : acc), -1);
       nextReactionNodeIdNumber++;
@@ -41,9 +45,13 @@ export function recalculateNodesOnEdgesForReactions(
       const newNode: FlowNode = {
         id: reactionNodeId,
         type: "ghost",
-        position: { x: edge.data?.labelX ?? 0, y: edge.data?.labelY ?? 0 }, // Will be calculated later
+        position: { x: edge.data.labelX ?? 0, y: edge.data.labelY ?? 0 }, // Will be calculated later
         data: {
           label: "",
+          ecore: {
+            model: edge.data.ecore!.fromModel!,
+            eObjectId: edge.data.ecore!.eObjectSourceId!
+          }
         },
       };
       newNodes.push(newNode);

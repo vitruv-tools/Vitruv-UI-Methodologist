@@ -1,28 +1,34 @@
-import { FlowEdge, FlowNode } from '../types/flow';
-import { EObject, EReference, EAttribute, ResourceSet, XMI } from 'ecore-ts';
-import { UMLRelationshipTypes } from '../components/flow/UMLRelationship';
+import { FlowEdge, FlowNode } from "../types/flow";
+import { EObject, EReference, EAttribute, ResourceSet, XMI } from "ecore-ts";
+import { UMLRelationshipTypes } from "../components/flow/UMLRelationship";
 
 // Layout constants
 const NODE_WIDTH = 280;
 const NODE_HEIGHT = 220;
-const HORIZONTAL_SPACING = 30;  // Very tight - boxes almost touching on X
-const VERTICAL_SPACING = 280;   // Large vertical spacing for big Y differences
+const HORIZONTAL_SPACING = 30; // Very tight - boxes almost touching on X
+const VERTICAL_SPACING = 280; // Large vertical spacing for big Y differences
 const START_X = 150;
 const START_Y = 150;
 
 // Helper function to find a node by ID
-const findNodeById = (nodes: FlowNode[], nodeId: string): FlowNode | undefined => {
-  return nodes.find(n => n.id === nodeId);
+const findNodeById = (
+  nodes: FlowNode[],
+  nodeId: string,
+): FlowNode | undefined => {
+  return nodes.find((n) => n.id === nodeId);
 };
 
 // Calculate tree width for hierarchical layout
 const getTreeWidth = (
   nodeId: string,
-  parentToChildren: Map<string, string[]>
+  parentToChildren: Map<string, string[]>,
 ): number => {
   const children = parentToChildren.get(nodeId) || [];
   if (children.length === 0) return 1;
-  return children.reduce((sum, childId) => sum + getTreeWidth(childId, parentToChildren), 0);
+  return children.reduce(
+    (sum, childId) => sum + getTreeWidth(childId, parentToChildren),
+    0,
+  );
 };
 
 // Context for tree layout operations
@@ -39,24 +45,34 @@ const layoutTreeNode = (
   rightBound: number,
   rootTreeWidth: number,
   startY: number,
-  ctx: TreeLayoutContext
+  ctx: TreeLayoutContext,
 ): void => {
   const node = findNodeById(ctx.nodes, nodeId);
   if (!node) return;
-  
+
   const centerX = (leftBound + rightBound) / 2;
   const verticalJitter = (Math.random() - 0.5) * 160; // ±80px variation
-  const yPos = startY + level * (NODE_HEIGHT + VERTICAL_SPACING) + verticalJitter;
+  const yPos =
+    startY + level * (NODE_HEIGHT + VERTICAL_SPACING) + verticalJitter;
   node.position = { x: centerX, y: yPos };
 
   const children = ctx.parentToChildren.get(nodeId) || [];
   if (children.length === 0) return;
 
   let childX = leftBound;
-  children.forEach(childId => {
+  children.forEach((childId) => {
     const childWidth = getTreeWidth(childId, ctx.parentToChildren);
-    const childSpace = (rightBound - leftBound) * (childWidth / Math.max(rootTreeWidth, 1));
-    layoutTreeNode(childId, level + 1, childX, childX + childSpace, rootTreeWidth, startY, ctx);
+    const childSpace =
+      (rightBound - leftBound) * (childWidth / Math.max(rootTreeWidth, 1));
+    layoutTreeNode(
+      childId,
+      level + 1,
+      childX,
+      childX + childSpace,
+      rootTreeWidth,
+      startY,
+      ctx,
+    );
     childX += childSpace;
   });
 };
@@ -68,7 +84,7 @@ const layoutComponent = (
   startY: number,
   nodes: FlowNode[],
   edges: FlowEdge[],
-  adjacencyMap: Map<string, Set<string>>
+  adjacencyMap: Map<string, Set<string>>,
 ): void => {
   if (componentNodes.length === 1) {
     const node = findNodeById(nodes, componentNodes[0]);
@@ -78,31 +94,40 @@ const layoutComponent = (
     return;
   }
 
-  const inheritanceEdges = edges.filter(e => 
-    componentNodes.includes(e.source) && 
-    componentNodes.includes(e.target) && 
-    e.data?.relationshipType === UMLRelationshipTypes.INHERITANCE
+  const inheritanceEdges = edges.filter(
+    (e) =>
+      componentNodes.includes(e.source) &&
+      componentNodes.includes(e.target) &&
+      e.data?.relationshipType === UMLRelationshipTypes.INHERITANCE,
   );
 
   if (inheritanceEdges.length > 0) {
     const childToParent = new Map<string, string>();
     const parentToChildren = new Map<string, string[]>();
 
-    inheritanceEdges.forEach(edge => {
+    inheritanceEdges.forEach((edge) => {
       childToParent.set(edge.source, edge.target);
       const children = parentToChildren.get(edge.target) || [];
       children.push(edge.source);
       parentToChildren.set(edge.target, children);
     });
 
-    const roots = componentNodes.filter(id => !childToParent.has(id));
+    const roots = componentNodes.filter((id) => !childToParent.has(id));
     let currentX = startX;
 
     const ctx: TreeLayoutContext = { nodes, parentToChildren };
-    roots.forEach(rootId => {
+    roots.forEach((rootId) => {
       const treeWidth = getTreeWidth(rootId, parentToChildren);
       const treeSpace = treeWidth * (NODE_WIDTH + HORIZONTAL_SPACING);
-      layoutTreeNode(rootId, 0, currentX, currentX + treeSpace, treeWidth, startY, ctx);
+      layoutTreeNode(
+        rootId,
+        0,
+        currentX,
+        currentX + treeSpace,
+        treeWidth,
+        startY,
+        ctx,
+      );
       currentX += treeSpace + HORIZONTAL_SPACING * 2;
     });
   } else {
@@ -116,18 +141,21 @@ const layoutForceDirected = (
   startX: number,
   startY: number,
   nodes: FlowNode[],
-  adjacencyMap: Map<string, Set<string>>
+  adjacencyMap: Map<string, Set<string>>,
 ): void => {
   const positions = new Map<string, { x: number; y: number }>();
-  
-  const gridSize = Math.min(Math.max(1, Math.ceil(componentNodes.length / 4)), 2);
+
+  const gridSize = Math.min(
+    Math.max(1, Math.ceil(componentNodes.length / 4)),
+    2,
+  );
   componentNodes.forEach((nodeId, idx) => {
     const row = Math.floor(idx / gridSize);
     const col = idx % gridSize;
     const verticalJitter = (Math.random() - 0.5) * 200;
     positions.set(nodeId, {
       x: startX + col * (NODE_WIDTH + HORIZONTAL_SPACING),
-      y: startY + row * (NODE_HEIGHT + VERTICAL_SPACING) + verticalJitter
+      y: startY + row * (NODE_HEIGHT + VERTICAL_SPACING) + verticalJitter,
     });
   });
 
@@ -140,13 +168,26 @@ const layoutForceDirected = (
 
   for (let iter = 0; iter < ITERATIONS; iter++) {
     const forces = new Map<string, { x: number; y: number }>();
-    componentNodes.forEach(id => forces.set(id, { x: 0, y: 0 }));
+    componentNodes.forEach((id) => forces.set(id, { x: 0, y: 0 }));
 
-    applyRepulsionForces(componentNodes, positions, forces, REPULSION, VERTICAL_BIAS);
-    applyAttractionForces(componentNodes, positions, forces, adjacencyMap, ATTRACTION, IDEAL_DISTANCE);
+    applyRepulsionForces(
+      componentNodes,
+      positions,
+      forces,
+      REPULSION,
+      VERTICAL_BIAS,
+    );
+    applyAttractionForces(
+      componentNodes,
+      positions,
+      forces,
+      adjacencyMap,
+      ATTRACTION,
+      IDEAL_DISTANCE,
+    );
 
     const coolingFactor = 1 - (iter / ITERATIONS) * 0.3;
-    componentNodes.forEach(nodeId => {
+    componentNodes.forEach((nodeId) => {
       const pos = positions.get(nodeId)!;
       const force = forces.get(nodeId)!;
       pos.x += force.x * DAMPING * coolingFactor;
@@ -163,7 +204,7 @@ const applyRepulsionForces = (
   positions: Map<string, { x: number; y: number }>,
   forces: Map<string, { x: number; y: number }>,
   repulsion: number,
-  verticalBias: number
+  verticalBias: number,
 ): void => {
   for (let i = 0; i < componentNodes.length; i++) {
     for (let j = i + 1; j < componentNodes.length; j++) {
@@ -195,11 +236,11 @@ const applyAttractionForces = (
   forces: Map<string, { x: number; y: number }>,
   adjacencyMap: Map<string, Set<string>>,
   attraction: number,
-  idealDistance: number
+  idealDistance: number,
 ): void => {
-  componentNodes.forEach(nodeId => {
+  componentNodes.forEach((nodeId) => {
     const neighbors = adjacencyMap.get(nodeId) || new Set();
-    neighbors.forEach(neighborId => {
+    neighbors.forEach((neighborId) => {
       if (!componentNodes.includes(neighborId)) return;
 
       const posA = positions.get(nodeId)!;
@@ -225,21 +266,22 @@ const normalizeAndApplyPositions = (
   positions: Map<string, { x: number; y: number }>,
   startX: number,
   startY: number,
-  nodes: FlowNode[]
+  nodes: FlowNode[],
 ): void => {
-  let minX = Infinity, minY = Infinity;
-  positions.forEach(pos => {
+  let minX = Infinity,
+    minY = Infinity;
+  positions.forEach((pos) => {
     minX = Math.min(minX, pos.x);
     minY = Math.min(minY, pos.y);
   });
 
-  componentNodes.forEach(nodeId => {
+  componentNodes.forEach((nodeId) => {
     const node = findNodeById(nodes, nodeId);
     const pos = positions.get(nodeId);
     if (!node || !pos) return;
     node.position = {
       x: pos.x - minX + startX,
-      y: pos.y - minY + startY
+      y: pos.y - minY + startY,
     };
   });
 };
@@ -250,9 +292,9 @@ function applyIntelligentLayout(nodes: FlowNode[], edges: FlowEdge[]): void {
 
   // Build adjacency map
   const adjacencyMap = new Map<string, Set<string>>();
-  nodes.forEach(node => adjacencyMap.set(node.id, new Set()));
+  nodes.forEach((node) => adjacencyMap.set(node.id, new Set()));
 
-  edges.forEach(edge => {
+  edges.forEach((edge) => {
     adjacencyMap.get(edge.source)?.add(edge.target);
     adjacencyMap.get(edge.target)?.add(edge.source);
   });
@@ -262,7 +304,7 @@ function applyIntelligentLayout(nodes: FlowNode[], edges: FlowEdge[]): void {
   const components: string[][] = [];
   const isolatedNodes: string[] = [];
 
-  nodes.forEach(node => {
+  nodes.forEach((node) => {
     const connections = adjacencyMap.get(node.id)?.size || 0;
     if (connections === 0) {
       isolatedNodes.push(node.id);
@@ -271,7 +313,7 @@ function applyIntelligentLayout(nodes: FlowNode[], edges: FlowEdge[]): void {
   });
 
   // BFS for components
-  nodes.forEach(startNode => {
+  nodes.forEach((startNode) => {
     if (visited.has(startNode.id)) return;
 
     const component: string[] = [];
@@ -282,7 +324,7 @@ function applyIntelligentLayout(nodes: FlowNode[], edges: FlowEdge[]): void {
       const nodeId = queue.shift()!;
       component.push(nodeId);
 
-      adjacencyMap.get(nodeId)?.forEach(neighborId => {
+      adjacencyMap.get(nodeId)?.forEach((neighborId) => {
         if (!visited.has(neighborId)) {
           visited.add(neighborId);
           queue.push(neighborId);
@@ -302,23 +344,27 @@ function applyIntelligentLayout(nodes: FlowNode[], edges: FlowEdge[]): void {
   let currentY = START_Y;
   components.forEach((component) => {
     layoutComponent(component, START_X, currentY, nodes, edges, adjacencyMap);
-    
+
     // Find bounds of this component
-    let maxX = 0, maxY = 0;
-    component.forEach(nodeId => {
+    let maxX = 0,
+      maxY = 0;
+    component.forEach((nodeId) => {
       const node = findNodeById(nodes, nodeId);
       if (!node) return;
       maxX = Math.max(maxX, node.position.x);
       maxY = Math.max(maxY, node.position.y);
     });
-    
+
     // Add moderate vertical spacing between components like the picture
     currentY = maxY + NODE_HEIGHT + VERTICAL_SPACING * 1.5;
   });
 
   // Layout isolated nodes in very narrow columns (1-2 columns) with large Y variation
   if (isolatedNodes.length > 0) {
-    const itemsPerRow = Math.min(Math.max(1, Math.ceil(isolatedNodes.length / 3)), 2); // 1-2 columns only
+    const itemsPerRow = Math.min(
+      Math.max(1, Math.ceil(isolatedNodes.length / 3)),
+      2,
+    ); // 1-2 columns only
     isolatedNodes.forEach((nodeId, idx) => {
       const node = findNodeById(nodes, nodeId);
       if (!node) return;
@@ -328,7 +374,7 @@ function applyIntelligentLayout(nodes: FlowNode[], edges: FlowEdge[]): void {
       const verticalJitter = (Math.random() - 0.5) * 180; // ±90px variation
       node.position = {
         x: START_X + col * (NODE_WIDTH + HORIZONTAL_SPACING), // Same X for column
-        y: currentY + row * (NODE_HEIGHT + VERTICAL_SPACING) + verticalJitter // Large Y variation
+        y: currentY + row * (NODE_HEIGHT + VERTICAL_SPACING) + verticalJitter, // Large Y variation
       };
     });
   }
@@ -358,10 +404,10 @@ function applyIntelligentLayout(nodes: FlowNode[], edges: FlowEdge[]): void {
           // Push nodes apart - keep same X column, large Y separation
           const pushDistance = (MIN_DISTANCE - distance) / 2 + 5;
           const angle = Math.atan2(dy, dx);
-          
+
           const pushX = Math.cos(angle) * pushDistance * 0.2; // Very weak horizontal - stay in column
           const pushY = Math.sin(angle) * pushDistance * VERTICAL_PUSH_BIAS; // Strong vertical - large Y diff
-          
+
           nodeA.position.x -= pushX;
           nodeA.position.y -= pushY;
           nodeB.position.x += pushX;
@@ -372,8 +418,12 @@ function applyIntelligentLayout(nodes: FlowNode[], edges: FlowEdge[]): void {
   }
 }
 
-function getAllContents(eObject: EObject, prefix: string,weakMap: Map<EObject, string>): EObject[] {
-  const currentPath = `${prefix}/${eObject.get('name')}`;
+function getAllContents(
+  eObject: EObject,
+  prefix: string,
+  weakMap: Map<EObject, string>,
+): EObject[] {
+  const currentPath = `${prefix}/${eObject.get("name")}`;
   weakMap.set(eObject, currentPath);
   const contents = eObject.eContents();
   const result = [...contents];
@@ -388,40 +438,67 @@ function getAllContents(eObject: EObject, prefix: string,weakMap: Map<EObject, s
   return result;
 }
 
-function parseEcoreXML(ecoreName: string, ecoreContent: string): { resource: EObject; allContents: EObject[], eObjectUniqueIdentifiers: Map<EObject, string> } {
+function parseEcoreXML(
+  ecoreName: string,
+  ecoreContent: string,
+): {
+  resource: EObject;
+  allContents: EObject[];
+  eObjectUniqueIdentifiers: Map<EObject, string>;
+} {
   //@ts-ignore
   const resourceSet = ResourceSet.create();
   if (!resourceSet) {
-    throw new Error('Failed to create ResourceSet for Ecore parsing');
+    throw new Error("Failed to create ResourceSet for Ecore parsing");
   }
   const resource = resourceSet.create({ uri: ecoreName });
   if (!resource) {
-    throw new Error('Failed to create Resource for Ecore parsing');
+    throw new Error("Failed to create Resource for Ecore parsing");
   }
   resource.parse(ecoreContent, XMI);
   const eObjectUniqueIdentifiers = new Map<EObject, string>();
-  const allContents = getAllContents(resource, ecoreName, eObjectUniqueIdentifiers);
+  const allContents = getAllContents(
+    resource,
+    ecoreName,
+    eObjectUniqueIdentifiers,
+  );
   return { resource, allContents, eObjectUniqueIdentifiers };
 }
 
-export const generateUMLFromEcoreTsParser = (ecoreName: string, ecoreContent: string): { nodes: FlowNode[]; edges: FlowEdge[], identifiersToEObject: Map<string, EObject> } => {
+export const generateUMLFromEcoreTsParser = (
+  ecoreName: string,
+  ecoreContent: string,
+): {
+  nodes: FlowNode[];
+  edges: FlowEdge[];
+  identifiersToEObject: Map<string, EObject>;
+} => {
   const identifiersToEObject = new Map<string, EObject>();
   try {
-    const { resource, allContents, eObjectUniqueIdentifiers } = parseEcoreXML(ecoreName, ecoreContent);
+    const { resource, allContents, eObjectUniqueIdentifiers } = parseEcoreXML(
+      ecoreName,
+      ecoreContent,
+    );
 
     const nodes: FlowNode[] = [];
     const edges: FlowEdge[] = [];
     let nodeId = 1;
 
     //const rootPackage = xmlDoc.querySelector(String.raw`ecore\:EPackage, EPackage`);
-    const rootPackage = resource.eContents().find((e: EObject) => e.eClass.get('name') === 'EPackage') as EObject | undefined;
+    const rootPackage = resource
+      .eContents()
+      .find((e: EObject) => e.eClass.get("name") === "EPackage") as
+      | EObject
+      | undefined;
     //const packageName = rootPackage?.getAttribute('name') || 'Package';
-    const packageName = rootPackage?.get<string>('name') || 'Package';
+    const packageName = rootPackage?.get<string>("name") || "Package";
 
     // Collect classes first to reference by name
     //const classElems = Array.from(xmlDoc.querySelectorAll('eClassifiers[type="ecore:EClass"], eClassifiers EClass, eClassifiers'))
     //  .filter((el: Element) => (el.getAttribute('xsi:type') || el.getAttribute('type') || '').includes('EClass') || el.tagName.endsWith('EClass') || el.querySelector('eStructuralFeatures'));
-    const classElems = allContents.filter((e) => e.eClass.get('name') === 'EClass');
+    const classElems = allContents.filter(
+      (e) => e.eClass.get("name") === "EClass",
+    );
 
     const classNameToNodeId = new Map<string, string>();
     const classNameToEObject = new Map<string, EObject>();
@@ -431,69 +508,80 @@ export const generateUMLFromEcoreTsParser = (ecoreName: string, ecoreContent: st
       // const className = cls.getAttribute('name') || `Class${idx + 1}`;
       // const isAbstract = (cls.getAttribute('abstract') || 'false') === 'true';
       // const isInterface = (cls.getAttribute('interface') || 'false') === 'true';
-      const className = cls.get<string>('name') || `Class${idx + 1}`;
-      const isAbstract = (cls.get<boolean>('abstract') || false) === true;
-      const isInterface = (cls.get<boolean>('interface') || false) === true;
+      const className = cls.get<string>("name") || `Class${idx + 1}`;
+      const isAbstract = (cls.get<boolean>("abstract") || false) === true;
+      const isInterface = (cls.get<boolean>("interface") || false) === true;
 
       const attributes: string[] = [];
       // Parse EAttributes (not EReferences) from eStructuralFeatures
       //const allFeatures = cls.querySelectorAll('eStructuralFeatures');
-      const allFeatures = cls.eContents().filter((e: EObject) => [EAttribute.get("name"), EReference.get("name")].includes(e.eClass.get('name'))) as EObject[];
+      const allFeatures = cls
+        .eContents()
+        .filter((e: EObject) =>
+          [EAttribute.get("name"), EReference.get("name")].includes(
+            e.eClass.get("name"),
+          ),
+        ) as EObject[];
       allFeatures.forEach((attr, aIdx) => {
         // Check if this is an EAttribute (not an EReference)
         //const featureType = attr.getAttribute('xsi:type') || attr.getAttribute('type') || '';
-        // const isAttribute = featureType.includes('EAttribute') || 
-        //                    (!featureType.includes('EReference') && 
-        //                     attr.hasAttribute('eType') && 
+        // const isAttribute = featureType.includes('EAttribute') ||
+        //                    (!featureType.includes('EReference') &&
+        //                     attr.hasAttribute('eType') &&
         //                     !attr.hasAttribute('eReferenceType'));
-        const featureType = attr.eClass.get('name') || '';
+        const featureType = attr.eClass.get("name") || "";
         const isAttribute = featureType === EAttribute.get("name");
-        
+
         if (!isAttribute) return; // Skip if it's an EReference
-        
-        const attrName = attr.get<string>('name') || `attr${aIdx + 1}`;
+
+        const attrName = attr.get<string>("name") || `attr${aIdx + 1}`;
         //const eType = attr.getAttribute('eType') || attr.getAttribute('type') || 'EString';
-        const eType = (attr.get<EObject>('eType')?.eClass as EObject).get<string>('name') || attr.get<string>('type') || 'EString';
-        
+        const eType =
+          (attr.get<EObject>("eType")?.eClass as EObject).get<string>("name") ||
+          attr.get<string>("type") ||
+          "EString";
+
         // TODO(Reinbold): I think this part is obsolete with ecore-ts, since eType name is already cleaned up
         // Parse type reference - remove the # prefix if present
-        let typeName = eType.split('#').pop() || eType;
+        let typeName = eType.split("#").pop() || eType;
         // Remove any // prefix that might exist
-        typeName = typeName.replace(/^\/\//, '');
-        
-        const lower = attr.get<string>('lowerBound');
-        const upper = attr.get<string>('upperBound');
-        
+        typeName = typeName.replace(/^\/\//, "");
+
+        const lower = attr.get<string>("lowerBound");
+        const upper = attr.get<string>("upperBound");
+
         // Format multiplicity - if we have bounds, use them
-        let mult = '';
+        let mult = "";
         if (lower !== null && upper !== null) {
           mult = ` [${lower}..${upper}]`;
         } else if (lower !== null || upper !== null) {
-          mult = ` [${lower || '1'}..${upper || '*'}]`;
+          mult = ` [${lower || "1"}..${upper || "*"}]`;
         }
-        
+
         attributes.push(`+ ${attrName}: ${typeName}${mult}`);
       });
 
       // Determine tool name based on class type
-      let toolName = 'class';
+      let toolName = "class";
       if (isInterface) {
-        toolName = 'interface';
+        toolName = "interface";
       } else if (isAbstract) {
-        toolName = 'abstract-class';
+        toolName = "abstract-class";
       }
 
       const node: FlowNode = {
         id: `${ecoreName}-uml-class-${nodeId++}`,
-        type: 'editable',
+        type: "editable",
         position: { x: 0, y: 0 }, // Will be calculated later
         data: {
-          model: ecoreName,
-          eObjectId: eObjectUniqueIdentifiers.get(cls!),
+          ecore: {
+            model: ecoreName,
+            eObjectId: eObjectUniqueIdentifiers.get(cls!),
+          },
           label: className,
-          toolType: 'element',
+          toolType: "element",
           toolName,
-          diagramType: 'uml',
+          diagramType: "uml",
           className: className,
           attributes,
         },
@@ -506,61 +594,81 @@ export const generateUMLFromEcoreTsParser = (ecoreName: string, ecoreContent: st
 
     // Helper: choose best side handles based on node positions (will be called after layout)
     const chooseHandles = (sourceId: string, targetId: string) => {
-      const s = nodes.find(n => n.id === sourceId);
-      const t = nodes.find(n => n.id === targetId);
-      if (!s || !t) return { sourceHandle: undefined, targetHandle: undefined } as const;
+      const s = nodes.find((n) => n.id === sourceId);
+      const t = nodes.find((n) => n.id === targetId);
+      if (!s || !t)
+        return { sourceHandle: undefined, targetHandle: undefined } as const;
       const dx = (t.position?.x ?? 0) - (s.position?.x ?? 0);
       const dy = (t.position?.y ?? 0) - (s.position?.y ?? 0);
-      
+
       // Use angle for more precise handle selection
       const angle = Math.atan2(dy, dx);
-      const angleDeg = (angle * 180 / Math.PI + 360) % 360;
-      
+      const angleDeg = ((angle * 180) / Math.PI + 360) % 360;
+
       if (angleDeg >= 315 || angleDeg < 45) {
-        return { sourceHandle: 'right-source', targetHandle: 'left-target' } as const;
+        return {
+          sourceHandle: "right-source",
+          targetHandle: "left-target",
+        } as const;
       } else if (angleDeg >= 45 && angleDeg < 135) {
-        return { sourceHandle: 'bottom-source', targetHandle: 'top-target' } as const;
+        return {
+          sourceHandle: "bottom-source",
+          targetHandle: "top-target",
+        } as const;
       } else if (angleDeg >= 135 && angleDeg < 225) {
-        return { sourceHandle: 'left-source', targetHandle: 'right-target' } as const;
+        return {
+          sourceHandle: "left-source",
+          targetHandle: "right-target",
+        } as const;
       } else {
-        return { sourceHandle: 'top-source', targetHandle: 'bottom-target' } as const;
+        return {
+          sourceHandle: "top-source",
+          targetHandle: "bottom-target",
+        } as const;
       }
     };
 
     // Associations via EReferences
     classElems.forEach((cls) => {
-      const sourceName = cls.get<string>('name') || '';
+      const sourceName = cls.get<string>("name") || "";
       const sourceId = classNameToNodeId.get(sourceName);
       if (!sourceId) return;
-      
+
       // Find all eStructuralFeatures that are EReferences
       //const allFeatures = cls.querySelectorAll('eStructuralFeatures');
-      const allFeatures = cls.eContents().filter((e: EObject) => [EAttribute.get("name"), EReference.get("name")].includes(e.eClass.get('name'))) as EObject[];
+      const allFeatures = cls
+        .eContents()
+        .filter((e: EObject) =>
+          [EAttribute.get("name"), EReference.get("name")].includes(
+            e.eClass.get("name"),
+          ),
+        ) as EObject[];
       allFeatures.forEach((ref) => {
         // Check if this is an EReference
         //const featureType = ref.getAttribute('xsi:type') || ref.getAttribute('type') || '';
         //const isReference = featureType.includes('EReference');
-        const featureType = ref.eClass.get('name') || '';
+        const featureType = ref.eClass.get("name") || "";
         const isReference = featureType === EReference.get("name");
-        
+
         if (!isReference) return; // Skip if it's not an EReference
-        
+
         //const eType = ref.getAttribute('eType') || '';
-        const eType = (ref.get<EObject>('eType'))?.get<string>('name') || '';
+        const eType = ref.get<EObject>("eType")?.get<string>("name") || "";
         // Parse type reference - remove the # prefix if present
-        let targetType = eType.split('#').pop() || eType;
+        let targetType = eType.split("#").pop() || eType;
         // Remove any // prefix that might exist
-        targetType = targetType.replace(/^\/\//, '');
-        
-        const targetId = classNameToNodeId.get(targetType || '');
+        targetType = targetType.replace(/^\/\//, "");
+
+        const targetId = classNameToNodeId.get(targetType || "");
         if (!targetId) return;
-        
-        const lower = ref.get<string>('lowerBound');
-        const upper = ref.get<string>('upperBound');
-        const containment = (ref.get<boolean>('containment') || false) === true;
-        
+
+        const lower = ref.get<string>("lowerBound");
+        const upper = ref.get<string>("upperBound");
+        const containment = (ref.get<boolean>("containment") || false) === true;
+
         // Determine relationship type
-        let relationshipType: typeof UMLRelationshipTypes[keyof typeof UMLRelationshipTypes] = UMLRelationshipTypes.ASSOCIATION;
+        let relationshipType: (typeof UMLRelationshipTypes)[keyof typeof UMLRelationshipTypes] =
+          UMLRelationshipTypes.ASSOCIATION;
         if (containment) {
           relationshipType = UMLRelationshipTypes.COMPOSITION;
         }
@@ -568,15 +676,15 @@ export const generateUMLFromEcoreTsParser = (ecoreName: string, ecoreContent: st
         // Normalize multiplicity per UML (place at target end only)
         const normalizeUpper = (u: string | null) => {
           if (u === null) return undefined;
-          if (u === '*' || u === '-1') return '*';
+          if (u === "*" || u === "-1") return "*";
           return u;
         };
         const normLower = lower ?? undefined;
         const normUpper = normalizeUpper(upper?.toString() ?? null);
         let multiplicity: string | undefined = undefined;
         if (normLower !== undefined || normUpper !== undefined) {
-          const lo = normLower ?? '1';
-          const hi = normUpper ?? '1';
+          const lo = normLower ?? "1";
+          const hi = normUpper ?? "1";
           multiplicity = lo === hi ? lo : `${lo}..${hi}`;
         }
 
@@ -585,13 +693,21 @@ export const generateUMLFromEcoreTsParser = (ecoreName: string, ecoreContent: st
           id: `${ecoreName}-uml-edge-${nodeId++}`,
           source: sourceId,
           target: targetId,
-          type: 'uml',
+          type: "uml",
           data: {
             relationshipType: relationshipType,
             targetMultiplicity: multiplicity,
-            eReferenceId: eObjectUniqueIdentifiers.get(ref),
-            eObjectSourceId: eObjectUniqueIdentifiers.get(classNameToEObject.get(sourceName)!),
-            eObjectTargetId: eObjectUniqueIdentifiers.get(classNameToEObject.get(targetType)!),
+            ecore: {
+              eReferenceId: eObjectUniqueIdentifiers.get(ref)!,
+              eObjectSourceId: eObjectUniqueIdentifiers.get(
+                classNameToEObject.get(sourceName)!,
+              )!,
+              eObjectTargetId: eObjectUniqueIdentifiers.get(
+                classNameToEObject.get(targetType)!,
+              )!,
+              fromModel: ecoreName,
+              toModel: ecoreName,
+            },
           },
           sourceHandle: handles.sourceHandle,
           targetHandle: handles.targetHandle,
@@ -602,14 +718,14 @@ export const generateUMLFromEcoreTsParser = (ecoreName: string, ecoreContent: st
 
     // Generalizations via eSuperTypes
     classElems.forEach((cls) => {
-      const subName = cls.get<string>('name') || '';
+      const subName = cls.get<string>("name") || "";
       const subId = classNameToNodeId.get(subName);
       if (!subId) return;
-      const superTypes = cls.get<EObject[]>('eSuperTypes') ?? [];
+      const superTypes = cls.get<EObject[]>("eSuperTypes") ?? [];
       superTypes.forEach((sup) => {
         // Parse super type reference - remove # or // prefix
-        let supType = sup.get<string>('name')?.split('#').pop() || '';
-        supType = supType.replace(/^\/\//, '');
+        let supType = sup.get<string>("name")?.split("#").pop() || "";
+        supType = supType.replace(/^\/\//, "");
         const supId = classNameToNodeId.get(supType);
         if (!supId) return;
         const handles = chooseHandles(subId, supId);
@@ -617,8 +733,16 @@ export const generateUMLFromEcoreTsParser = (ecoreName: string, ecoreContent: st
           id: `${ecoreName}-uml-gen-${nodeId++}`,
           source: subId,
           target: supId,
-          type: 'uml',
-          data: { relationshipType: UMLRelationshipTypes.INHERITANCE, eObjectSourceId: eObjectUniqueIdentifiers.get(cls), eObjectTargetId: eObjectUniqueIdentifiers.get(sup) },
+          type: "uml",
+          data: {
+            relationshipType: UMLRelationshipTypes.INHERITANCE,
+            ecore: {
+              eObjectSourceId: eObjectUniqueIdentifiers.get(cls)!,
+              eObjectTargetId: eObjectUniqueIdentifiers.get(sup)!,
+              fromModel: ecoreName,
+              toModel: ecoreName,
+            },
+          },
           sourceHandle: handles.sourceHandle,
           targetHandle: handles.targetHandle,
         };
@@ -630,7 +754,7 @@ export const generateUMLFromEcoreTsParser = (ecoreName: string, ecoreContent: st
     applyIntelligentLayout(nodes, edges);
 
     // Recalculate edge handles based on final positions
-    edges.forEach(edge => {
+    edges.forEach((edge) => {
       const handles = chooseHandles(edge.source, edge.target);
       edge.sourceHandle = handles.sourceHandle;
       edge.targetHandle = handles.targetHandle;
@@ -640,16 +764,18 @@ export const generateUMLFromEcoreTsParser = (ecoreName: string, ecoreContent: st
     if (nodes.length > 0) {
       const pkgNode: FlowNode = {
         id: `${ecoreName}-uml-pkg-${nodeId++}`,
-        type: 'editable',
+        type: "editable",
         position: { x: 80, y: 40 },
         data: {
-          eObjectId: eObjectUniqueIdentifiers.get(rootPackage!),
-          model: ecoreName,
+          ecore: {
+            model: ecoreName,
+            eObjectId: eObjectUniqueIdentifiers.get(rootPackage!),
+          },
           label: packageName,
-          toolType: 'element',
-          toolName: 'package',
+          toolType: "element",
+          toolName: "package",
           packageName,
-          diagramType: 'uml',
+          diagramType: "uml",
         },
       } as FlowNode;
       nodes.unshift(pkgNode);
@@ -664,92 +790,114 @@ export const generateUMLFromEcoreTsParser = (ecoreName: string, ecoreContent: st
 
     return { nodes, edges, identifiersToEObject };
   } catch (error) {
-    console.error('Error generating UML from Ecore:', error);
-    return { nodes: [], edges: [], identifiersToEObject: new Map<string, EObject>() };
+    console.error("Error generating UML from Ecore:", error);
+    return {
+      nodes: [],
+      edges: [],
+      identifiersToEObject: new Map<string, EObject>(),
+    };
   }
 };
 
-export const generateUMLFromEcore = (ecoreName: string, ecoreContent: string): { nodes: FlowNode[]; edges: FlowEdge[] } => {
+export const generateUMLFromEcore = (
+  ecoreName: string,
+  ecoreContent: string,
+): { nodes: FlowNode[]; edges: FlowEdge[] } => {
   try {
     const parser = new DOMParser();
-    const xmlDoc = parser.parseFromString(ecoreContent, 'text/xml');
+    const xmlDoc = parser.parseFromString(ecoreContent, "text/xml");
 
-    if (xmlDoc.getElementsByTagName('parsererror').length > 0) {
-      throw new Error('Invalid XML content');
+    if (xmlDoc.getElementsByTagName("parsererror").length > 0) {
+      throw new Error("Invalid XML content");
     }
 
     const nodes: FlowNode[] = [];
     const edges: FlowEdge[] = [];
     let nodeId = 1;
 
-    const rootPackage = xmlDoc.querySelector(String.raw`ecore\:EPackage, EPackage`);
-    const packageName = rootPackage?.getAttribute('name') || 'Package';
+    const rootPackage = xmlDoc.querySelector(
+      String.raw`ecore\:EPackage, EPackage`,
+    );
+    const packageName = rootPackage?.getAttribute("name") || "Package";
 
     // Collect classes first to reference by name
-    const classElems = Array.from(xmlDoc.querySelectorAll('eClassifiers[type="ecore:EClass"], eClassifiers EClass, eClassifiers'))
-      .filter((el: Element) => (el.getAttribute('xsi:type') || el.getAttribute('type') || '').includes('EClass') || el.tagName.endsWith('EClass') || el.querySelector('eStructuralFeatures'));
+    const classElems = Array.from(
+      xmlDoc.querySelectorAll(
+        'eClassifiers[type="ecore:EClass"], eClassifiers EClass, eClassifiers',
+      ),
+    ).filter(
+      (el: Element) =>
+        (el.getAttribute("xsi:type") || el.getAttribute("type") || "").includes(
+          "EClass",
+        ) ||
+        el.tagName.endsWith("EClass") ||
+        el.querySelector("eStructuralFeatures"),
+    );
 
     const classNameToNodeId = new Map<string, string>();
 
     // First pass: Create nodes with temporary positions
     classElems.forEach((cls, idx) => {
-      const className = cls.getAttribute('name') || `Class${idx + 1}`;
-      const isAbstract = (cls.getAttribute('abstract') || 'false') === 'true';
-      const isInterface = (cls.getAttribute('interface') || 'false') === 'true';
+      const className = cls.getAttribute("name") || `Class${idx + 1}`;
+      const isAbstract = (cls.getAttribute("abstract") || "false") === "true";
+      const isInterface = (cls.getAttribute("interface") || "false") === "true";
 
       const attributes: string[] = [];
       // Parse EAttributes (not EReferences) from eStructuralFeatures
-      const allFeatures = cls.querySelectorAll('eStructuralFeatures');
+      const allFeatures = cls.querySelectorAll("eStructuralFeatures");
       allFeatures.forEach((attr, aIdx) => {
         // Check if this is an EAttribute (not an EReference)
-        const featureType = attr.getAttribute('xsi:type') || attr.getAttribute('type') || '';
-        const isAttribute = featureType.includes('EAttribute') || 
-                           (!featureType.includes('EReference') && 
-                            attr.hasAttribute('eType') && 
-                            !attr.hasAttribute('eReferenceType'));
-        
+        const featureType =
+          attr.getAttribute("xsi:type") || attr.getAttribute("type") || "";
+        const isAttribute =
+          featureType.includes("EAttribute") ||
+          (!featureType.includes("EReference") &&
+            attr.hasAttribute("eType") &&
+            !attr.hasAttribute("eReferenceType"));
+
         if (!isAttribute) return; // Skip if it's an EReference
-        
-        const attrName = attr.getAttribute('name') || `attr${aIdx + 1}`;
-        const eType = attr.getAttribute('eType') || attr.getAttribute('type') || 'EString';
-        
+
+        const attrName = attr.getAttribute("name") || `attr${aIdx + 1}`;
+        const eType =
+          attr.getAttribute("eType") || attr.getAttribute("type") || "EString";
+
         // Parse type reference - remove the # prefix if present
-        let typeName = eType.split('#').pop() || eType;
+        let typeName = eType.split("#").pop() || eType;
         // Remove any // prefix that might exist
-        typeName = typeName.replace(/^\/\//, '');
-        
-        const lower = attr.getAttribute('lowerBound');
-        const upper = attr.getAttribute('upperBound');
-        
+        typeName = typeName.replace(/^\/\//, "");
+
+        const lower = attr.getAttribute("lowerBound");
+        const upper = attr.getAttribute("upperBound");
+
         // Format multiplicity - if we have bounds, use them
-        let mult = '';
+        let mult = "";
         if (lower !== null && upper !== null) {
           mult = ` [${lower}..${upper}]`;
         } else if (lower !== null || upper !== null) {
-          mult = ` [${lower || '1'}..${upper || '*'}]`;
+          mult = ` [${lower || "1"}..${upper || "*"}]`;
         }
-        
+
         attributes.push(`+ ${attrName}: ${typeName}${mult}`);
       });
 
       // Determine tool name based on class type
-      let toolName = 'class';
+      let toolName = "class";
       if (isInterface) {
-        toolName = 'interface';
+        toolName = "interface";
       } else if (isAbstract) {
-        toolName = 'abstract-class';
+        toolName = "abstract-class";
       }
 
       const node: FlowNode = {
         id: `${ecoreName}-uml-class-${nodeId++}`,
-        type: 'editable',
+        type: "editable",
         position: { x: 0, y: 0 }, // Will be calculated later
         data: {
           model: ecoreName,
           label: className,
-          toolType: 'element',
+          toolType: "element",
           toolName,
-          diagramType: 'uml',
+          diagramType: "uml",
           className: className,
           attributes,
         },
@@ -761,57 +909,73 @@ export const generateUMLFromEcore = (ecoreName: string, ecoreContent: string): {
 
     // Helper: choose best side handles based on node positions (will be called after layout)
     const chooseHandles = (sourceId: string, targetId: string) => {
-      const s = nodes.find(n => n.id === sourceId);
-      const t = nodes.find(n => n.id === targetId);
-      if (!s || !t) return { sourceHandle: undefined, targetHandle: undefined } as const;
+      const s = nodes.find((n) => n.id === sourceId);
+      const t = nodes.find((n) => n.id === targetId);
+      if (!s || !t)
+        return { sourceHandle: undefined, targetHandle: undefined } as const;
       const dx = (t.position?.x ?? 0) - (s.position?.x ?? 0);
       const dy = (t.position?.y ?? 0) - (s.position?.y ?? 0);
-      
+
       // Use angle for more precise handle selection
       const angle = Math.atan2(dy, dx);
-      const angleDeg = (angle * 180 / Math.PI + 360) % 360;
-      
+      const angleDeg = ((angle * 180) / Math.PI + 360) % 360;
+
       if (angleDeg >= 315 || angleDeg < 45) {
-        return { sourceHandle: 'right-source', targetHandle: 'left-target' } as const;
+        return {
+          sourceHandle: "right-source",
+          targetHandle: "left-target",
+        } as const;
       } else if (angleDeg >= 45 && angleDeg < 135) {
-        return { sourceHandle: 'bottom-source', targetHandle: 'top-target' } as const;
+        return {
+          sourceHandle: "bottom-source",
+          targetHandle: "top-target",
+        } as const;
       } else if (angleDeg >= 135 && angleDeg < 225) {
-        return { sourceHandle: 'left-source', targetHandle: 'right-target' } as const;
+        return {
+          sourceHandle: "left-source",
+          targetHandle: "right-target",
+        } as const;
       } else {
-        return { sourceHandle: 'top-source', targetHandle: 'bottom-target' } as const;
+        return {
+          sourceHandle: "top-source",
+          targetHandle: "bottom-target",
+        } as const;
       }
     };
 
     // Associations via EReferences
     classElems.forEach((cls) => {
-      const sourceName = cls.getAttribute('name') || '';
+      const sourceName = cls.getAttribute("name") || "";
       const sourceId = classNameToNodeId.get(sourceName);
       if (!sourceId) return;
-      
+
       // Find all eStructuralFeatures that are EReferences
-      const allFeatures = cls.querySelectorAll('eStructuralFeatures');
+      const allFeatures = cls.querySelectorAll("eStructuralFeatures");
       allFeatures.forEach((ref) => {
         // Check if this is an EReference
-        const featureType = ref.getAttribute('xsi:type') || ref.getAttribute('type') || '';
-        const isReference = featureType.includes('EReference');
-        
+        const featureType =
+          ref.getAttribute("xsi:type") || ref.getAttribute("type") || "";
+        const isReference = featureType.includes("EReference");
+
         if (!isReference) return; // Skip if it's not an EReference
-        
-        const eType = ref.getAttribute('eType') || '';
+
+        const eType = ref.getAttribute("eType") || "";
         // Parse type reference - remove the # prefix if present
-        let targetType = eType.split('#').pop() || eType;
+        let targetType = eType.split("#").pop() || eType;
         // Remove any // prefix that might exist
-        targetType = targetType.replace(/^\/\//, '');
-        
-        const targetId = classNameToNodeId.get(targetType || '');
+        targetType = targetType.replace(/^\/\//, "");
+
+        const targetId = classNameToNodeId.get(targetType || "");
         if (!targetId) return;
-        
-        const lower = ref.getAttribute('lowerBound');
-        const upper = ref.getAttribute('upperBound');
-        const containment = (ref.getAttribute('containment') || 'false') === 'true';
-        
+
+        const lower = ref.getAttribute("lowerBound");
+        const upper = ref.getAttribute("upperBound");
+        const containment =
+          (ref.getAttribute("containment") || "false") === "true";
+
         // Determine relationship type
-        let relationshipType: typeof UMLRelationshipTypes[keyof typeof UMLRelationshipTypes] = UMLRelationshipTypes.ASSOCIATION;
+        let relationshipType: (typeof UMLRelationshipTypes)[keyof typeof UMLRelationshipTypes] =
+          UMLRelationshipTypes.ASSOCIATION;
         if (containment) {
           relationshipType = UMLRelationshipTypes.COMPOSITION;
         }
@@ -819,15 +983,15 @@ export const generateUMLFromEcore = (ecoreName: string, ecoreContent: string): {
         // Normalize multiplicity per UML (place at target end only)
         const normalizeUpper = (u: string | null) => {
           if (u === null) return undefined;
-          if (u === '*' || u === '-1') return '*';
+          if (u === "*" || u === "-1") return "*";
           return u;
         };
         const normLower = lower ?? undefined;
         const normUpper = normalizeUpper(upper);
         let multiplicity: string | undefined = undefined;
         if (normLower !== undefined || normUpper !== undefined) {
-          const lo = normLower ?? '1';
-          const hi = normUpper ?? '1';
+          const lo = normLower ?? "1";
+          const hi = normUpper ?? "1";
           multiplicity = lo === hi ? lo : `${lo}..${hi}`;
         }
 
@@ -836,7 +1000,7 @@ export const generateUMLFromEcore = (ecoreName: string, ecoreContent: string): {
           id: `${ecoreName}-uml-edge-${nodeId++}`,
           source: sourceId,
           target: targetId,
-          type: 'uml',
+          type: "uml",
           data: {
             relationshipType: relationshipType,
             targetMultiplicity: multiplicity,
@@ -849,14 +1013,16 @@ export const generateUMLFromEcore = (ecoreName: string, ecoreContent: string): {
 
     // Generalizations via eSuperTypes
     classElems.forEach((cls) => {
-      const subName = cls.getAttribute('name') || '';
+      const subName = cls.getAttribute("name") || "";
       const subId = classNameToNodeId.get(subName);
       if (!subId) return;
-      const superTypes = (cls.getAttribute('eSuperTypes') || '').split(' ').filter(Boolean);
+      const superTypes = (cls.getAttribute("eSuperTypes") || "")
+        .split(" ")
+        .filter(Boolean);
       superTypes.forEach((sup) => {
         // Parse super type reference - remove # or // prefix
-        let supType = sup.split('#').pop() || sup;
-        supType = supType.replace(/^\/\//, '');
+        let supType = sup.split("#").pop() || sup;
+        supType = supType.replace(/^\/\//, "");
         const supId = classNameToNodeId.get(supType);
         if (!supId) return;
         const handles = chooseHandles(subId, supId);
@@ -864,7 +1030,7 @@ export const generateUMLFromEcore = (ecoreName: string, ecoreContent: string): {
           id: `${ecoreName}-uml-gen-${nodeId++}`,
           source: subId,
           target: supId,
-          type: 'uml',
+          type: "uml",
           data: { relationshipType: UMLRelationshipTypes.INHERITANCE },
           sourceHandle: handles.sourceHandle,
           targetHandle: handles.targetHandle,
@@ -876,7 +1042,7 @@ export const generateUMLFromEcore = (ecoreName: string, ecoreContent: string): {
     applyIntelligentLayout(nodes, edges);
 
     // Recalculate edge handles based on final positions
-    edges.forEach(edge => {
+    edges.forEach((edge) => {
       const handles = chooseHandles(edge.source, edge.target);
       edge.sourceHandle = handles.sourceHandle;
       edge.targetHandle = handles.targetHandle;
@@ -886,15 +1052,15 @@ export const generateUMLFromEcore = (ecoreName: string, ecoreContent: string): {
     if (nodes.length > 0) {
       const pkgNode: FlowNode = {
         id: `${ecoreName}-uml-pkg-${nodeId++}`,
-        type: 'editable',
+        type: "editable",
         position: { x: 80, y: 40 },
         data: {
           model: ecoreName,
           label: packageName,
-          toolType: 'element',
-          toolName: 'package',
+          toolType: "element",
+          toolName: "package",
           packageName,
-          diagramType: 'uml',
+          diagramType: "uml",
         },
       } as FlowNode;
       nodes.unshift(pkgNode);
@@ -902,9 +1068,7 @@ export const generateUMLFromEcore = (ecoreName: string, ecoreContent: string): {
 
     return { nodes, edges };
   } catch (error) {
-    console.error('Error generating UML from Ecore:', error);
+    console.error("Error generating UML from Ecore:", error);
     return { nodes: [], edges: [] };
   }
 };
-
-

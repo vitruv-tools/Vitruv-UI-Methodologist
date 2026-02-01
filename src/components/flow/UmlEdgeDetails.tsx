@@ -40,7 +40,7 @@ export const UmlEdgeDetails: React.FC<UmlEdgeDetailsProps> = ({
     edge,
     identifiersToEObject,
 }) => {
-    const eObject = identifiersToEObject.get(edge.data?.eReferenceId ?? '');
+    const eObject = identifiersToEObject.get(edge.data?.ecore?.eReferenceId ?? '');
     if (!eObject) {
         return <div>No EReference found for this edge.</div>;
     }
@@ -78,7 +78,7 @@ export const UmlEdgeDetails: React.FC<UmlEdgeDetailsProps> = ({
     const documentation = documentations.join('\n');
 
     // We dont display the source type directly, only its name
-    const eTypeSource = identifiersToEObject.get(edge.data?.eObjectSourceId ?? '');
+    const eTypeSource = identifiersToEObject.get(edge.data?.ecore?.eObjectSourceId ?? '');
     const eTypeSourceName = eTypeSource ? eTypeSource.get<string>('name') : null;
 
 	return (

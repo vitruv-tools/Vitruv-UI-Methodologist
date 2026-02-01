@@ -165,7 +165,7 @@ export function useFlowState(props?: UseFlowStateProps) {
       const tgt = findNode(params.target);
       const auto = chooseHandlesForPair(src, tgt, params.sourceHandle, params.targetHandle);
       
-      if (src?.data?.model != tgt?.data?.model) {
+      if (src?.data?.ecore?.model != tgt?.data?.ecore?.model) {
         const newEdge: Edge = {
           id: `edge-${getId()}`,
           type: 'reactions',

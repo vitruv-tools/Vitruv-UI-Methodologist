@@ -1,6 +1,8 @@
 import { Node, Edge, Connection, OnConnectStartParams } from "reactflow";
 import type { MainContextType } from "../contexts/MainContext";
-import { FlowData } from "../types/flow";
+import { FlowData, OnEdgeClickParams, OnEdgeClickParamsExtension } from "../types/flow";
+import { onEdgeClick as umlOnEdgeClick } from '../components/flow/UMLRelationship';
+import { onEdgeClick as reactionsOnEdgeClick } from '../components/flow/ReactionRelationship';
 
 export const exportFlowData = (nodes: Node[], edges: Edge[]): FlowData => {
   return {
@@ -165,6 +167,7 @@ export function isValidConnection(
   edgeValidators = edgeValidators.filter(validator => validator.isApplicable(mainContext));
   // TODO(Reinbold): This should be false, but there isnt an edge validator for normal connections yet
   if (edgeValidators.length === 0) {
+    console.log("No edge validators applicable, allowing connection by default");
     return true;
   }
   return edgeValidators.some(validator => validator.isValidConnection(params, nodes, edges));
@@ -209,4 +212,19 @@ export function onReconnectEnd(event: MouseEvent | TouchEvent, edge: Edge, handl
 
 export function onEdgesDelete(edges: Edge[]): void {
   // Unused
+}
+
+export function onEdgeClick(params: OnEdgeClickParamsExtension, event: React.MouseEvent, edge: Edge) {
+  const fullParams: OnEdgeClickParams = { ...params, edge: edge, event: event };
+  const handler = eventHandlers.onEdgeClick[edge.type as keyof typeof eventHandlers.onEdgeClick];
+  if (handler) {
+    handler(fullParams);
+  }
+}
+
+export const eventHandlers = {
+  onEdgeClick: {
+    uml: umlOnEdgeClick,
+    reactions: reactionsOnEdgeClick
+  }
 }

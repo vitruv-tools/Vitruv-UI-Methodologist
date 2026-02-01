@@ -7,6 +7,8 @@ import {
 	SelectChangeEvent,
 	Stack,
 } from '@mui/material';
+import type { EObject } from 'ecore-ts';
+import type { FlowEdge } from '../../types/flow';
 
 const REACTION_TYPES = ['Direct Mapping', 'Direct Mapping with Offset'] as const;
 const REACTION_DIRECTIONS = ['M1 to M2', 'M2 to M1', 'Bidirectional'] as const;
@@ -29,6 +31,8 @@ interface ReactionEditorProps {
 	onTypeChange?: (type: ReactionType) => void;
 	onDirectionChange?: (direction: ReactionDirection) => void;
 	disabled?: boolean;
+	edge: FlowEdge;
+    identifiersToEObject: Map<string, EObject>;
 }
 
 export const ReactionEditor: React.FC<ReactionEditorProps> = ({
@@ -37,6 +41,8 @@ export const ReactionEditor: React.FC<ReactionEditorProps> = ({
 	onTypeChange,
 	onDirectionChange,
 	disabled = false,
+	edge,
+	identifiersToEObject,
 }) => {
 	const [localType, setLocalType] = useState<ReactionType>(
 		selectedType ?? REACTION_TYPES[0]
