@@ -8,7 +8,7 @@ import {
 } from "@mui/material";
 import type { FlowEdge } from "../../types/flow";
 import { EObject } from "ecore-ts";
-import { UMLEdgeDetailsConfig } from "./UMLEdgeDetailsConfig";
+import { isUndefinedOrTrue, UMLEdgeDetailsConfig } from "./UMLEdgeDetailsConfig";
 
 const REACTION_TYPES = [
   "Direct Mapping",
@@ -80,13 +80,13 @@ export const UmlEdgeDetails: React.FC<UmlEdgeDetailsProps> = ({
   );
   const eTypeSourceName = eTypeSource ? eTypeSource.get<string>("name") : null;
 
-  const showBounds = (config.showLowerBound || config.showUpperBound);
-  const showProperties = (config.showContainment || config.showBidirectional || config.showDerived || config.showTransient || config.showVolatile || config.showUnsettable || config.showUnique || config.showOrdered);
+  const showBounds = (isUndefinedOrTrue(config.showLowerBound) || isUndefinedOrTrue(config.showUpperBound));
+  const showProperties = (isUndefinedOrTrue(config.showContainment) || isUndefinedOrTrue(config.showBidirectional) || isUndefinedOrTrue(config.showDerived) || isUndefinedOrTrue(config.showTransient) || isUndefinedOrTrue(config.showVolatile) || isUndefinedOrTrue(config.showUnsettable) || isUndefinedOrTrue(config.showUnique) || isUndefinedOrTrue(config.showOrdered));
 
   return (
     <div>
       <Stack spacing={2}>
-        {config.showReferenceName && <TextField
+        {isUndefinedOrTrue(config.showReferenceName) && <TextField
           label="Reference Name"
           value={name || "Not provided"}
           InputProps={{ readOnly: true }}
@@ -94,7 +94,7 @@ export const UmlEdgeDetails: React.FC<UmlEdgeDetailsProps> = ({
           size="small"
         />}
 
-        {config.showSourceType && <TextField
+        {isUndefinedOrTrue(config.showSourceType) && <TextField
           label="Source Type"
           value={eTypeSourceName || "Not provided"}
           InputProps={{ readOnly: true }}
@@ -102,7 +102,7 @@ export const UmlEdgeDetails: React.FC<UmlEdgeDetailsProps> = ({
           size="small"
         />}
 
-        {config.showTargetType && <TextField
+        {isUndefinedOrTrue(config.showTargetType) && <TextField
           label="Target Type"
           value={eTypeName || "Not provided"}
           InputProps={{ readOnly: true }}
@@ -111,7 +111,7 @@ export const UmlEdgeDetails: React.FC<UmlEdgeDetailsProps> = ({
         />}
 
         {showBounds && <Stack direction="row" spacing={2}>
-          {config.showLowerBound && <TextField
+          {isUndefinedOrTrue(config.showLowerBound) && <TextField
             label="Lower Bound"
             value={lowerBound ?? "Not provided"}
             InputProps={{ readOnly: true }}
@@ -119,7 +119,7 @@ export const UmlEdgeDetails: React.FC<UmlEdgeDetailsProps> = ({
             size="small"
           />}
 
-          {config.showUpperBound && <TextField
+          {isUndefinedOrTrue(config.showUpperBound) && <TextField
             label="Upper Bound"
             value={upperBound ?? "Not provided"}
             InputProps={{ readOnly: true }}
@@ -128,7 +128,7 @@ export const UmlEdgeDetails: React.FC<UmlEdgeDetailsProps> = ({
           />}
         </Stack>}
 
-        {config.showDocumentation && documentation !== "" && (
+        {isUndefinedOrTrue(config.showDocumentation) && documentation !== "" && (
           <TextField
             label="Documentation"
             value={documentation}
@@ -145,28 +145,28 @@ export const UmlEdgeDetails: React.FC<UmlEdgeDetailsProps> = ({
             Properties
           </Typography>
           <Stack direction="row" spacing={1} flexWrap="wrap" gap={1}>
-            {config.showContainment && eContainment && (
+            {isUndefinedOrTrue(config.showContainment) && eContainment && (
               <Chip label="Containment" color="primary" size="small" />
             )}
-            {config.showBidirectional && bidirectional && (
+            {isUndefinedOrTrue(config.showBidirectional) && bidirectional && (
               <Chip label="Bidirectional" color="secondary" size="small" />
             )}
-            {config.showDerived && derived && (
+            {isUndefinedOrTrue(config.showDerived) && derived && (
               <Chip label="Derived" size="small" />
             )}
-            {config.showTransient && transient && (
+            {isUndefinedOrTrue(config.showTransient) && transient && (
               <Chip label="Transient" size="small" />
             )}
-            {config.showVolatile && volatile && (
+            {isUndefinedOrTrue(config.showVolatile) && volatile && (
               <Chip label="Volatile" size="small" />
             )}
-            {config.showUnsettable && unsettable && (
+            {isUndefinedOrTrue(config.showUnsettable) && unsettable && (
               <Chip label="Unsettable" size="small" />
             )}
-            {config.showUnique && unique && (
+            {isUndefinedOrTrue(config.showUnique) && unique && (
               <Chip label="Unique" size="small" />
             )}
-            {config.showOrdered && ordered && (
+            {isUndefinedOrTrue(config.showOrdered) && ordered && (
               <Chip label="Ordered" size="small" />
             )}
           </Stack>

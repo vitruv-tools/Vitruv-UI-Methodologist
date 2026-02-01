@@ -46,6 +46,10 @@ export const DEFAULT_UMLEdgeDetailsConfig: UMLEdgeDetailsConfig = {
 
 export const DEFAULT_STORAGE_KEY = "umlEdgeDetailsConfig";
 
+export function isUndefinedOrTrue(value: boolean | undefined): boolean {
+  return value === undefined || value === true;
+}
+
 export function pickBooleans(
   partial?: Partial<UMLEdgeDetailsConfig> | null,
 ): Partial<UMLEdgeDetailsConfig> {
