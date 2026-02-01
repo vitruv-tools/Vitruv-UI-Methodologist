@@ -17,13 +17,7 @@ export type ReactionType = (typeof REACTION_TYPES)[number];
 export type ReactionDirection = (typeof REACTION_DIRECTIONS)[number];
 
 /**
- * Floating panel for configuring reaction mappings inside the React Flow canvas.
- *
- * Key behaviors:
- * - Anchors bottom-center via React Flow Panel and applies a drag offset on top.
- * - Dragging is bounded to the React Flow viewport with small margins to avoid clipping.
- * - Minimize snaps back to the starting anchor; maximize restores the last dragged position.
- * - Type and direction selections are locally controlled but propagate via callbacks.
+ * Configuring reaction mappings inside the React Flow canvas.
  */
 interface ReactionEditorProps {
 	selectedType?: ReactionType;
