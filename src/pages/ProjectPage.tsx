@@ -1,7 +1,6 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { MainLayout } from '../components/layout/MainLayout';
 import { MetaModelsPanel } from '../components/ui/MetaModelsPanel';
-import { ConfirmDialog } from '../components/ui/ConfirmDialog';
 import { SidebarTabs } from '../components';
 import { useAuth } from '../contexts/AuthContext';
 import { VsumTabs } from '../components/ui/VsumTabs';
