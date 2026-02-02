@@ -64,12 +64,12 @@ export class AuthService {
       let errorText = '';
       try {
         errorText = await response.text();
-      } catch {}
+      } catch { }
       let errorMessage = errorText;
       try {
         const parsed = JSON.parse(errorText);
         errorMessage = parsed?.message || parsed?.error || errorText;
-      } catch {}
+      } catch { }
       const fallback = response.statusText || 'Request failed';
       throw new Error(errorMessage || fallback);
     }
@@ -91,18 +91,18 @@ export class AuthService {
       let errorText = '';
       try {
         errorText = await response.text();
-      } catch {}
+      } catch { }
       let errorMessage = errorText;
       try {
         const parsed = JSON.parse(errorText);
         errorMessage = parsed?.message || parsed?.error || errorText;
-      } catch {}
+      } catch { }
       const fallback = response.statusText || 'Request failed';
       throw new Error(errorMessage || fallback);
     }
 
     const data: AuthResponse = await response.json();
-    
+
     localStorage.setItem('auth.access_token', data.access_token);
     localStorage.setItem('auth.refresh_token', data.refresh_token);
     localStorage.setItem('auth.expires_in', data.expires_in.toString());
@@ -111,7 +111,7 @@ export class AuthService {
     localStorage.setItem('auth.session_state', data.session_state);
     localStorage.setItem('auth.scope', data.scope);
     localStorage.setItem('auth.not_before_policy', data['not-before-policy'].toString());
-    
+
     const accessExpiresAt = Date.now() + (data.expires_in * 1000);
     const refreshExpiresAt = Date.now() + (data.refresh_expires_in * 1000);
     localStorage.setItem('auth.access_expires_at', accessExpiresAt.toString());
@@ -188,7 +188,7 @@ export class AuthService {
     localStorage.removeItem('auth.user');
     try {
       globalThis.dispatchEvent(new Event('auth:signout'));
-    } catch {}
+    } catch { }
   }
 
   static isAuthenticated(): boolean {
@@ -246,7 +246,7 @@ export class AuthService {
     if (!userData) {
       return null;
     }
-    
+
     try {
       return JSON.parse(userData);
     } catch {

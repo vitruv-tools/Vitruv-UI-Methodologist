@@ -93,7 +93,7 @@ class ApiService {
     options: RequestInit = {}
   ): Promise<T> {
     const token = await AuthService.ensureValidToken();
-    
+
     if (!token) {
       throw new Error('No valid authentication token available');
     }
@@ -146,12 +146,12 @@ class ApiService {
       let errorText = '';
       try {
         errorText = await response.text();
-      } catch {}
+      } catch { }
       let errorMessage = errorText;
       try {
         const parsed = JSON.parse(errorText);
         errorMessage = parsed?.message || parsed?.error || errorText;
-      } catch {}
+      } catch { }
       console.error('Public request failed', {
         url,
         method: options.method || 'GET',
@@ -189,7 +189,7 @@ class ApiService {
   async saveFlow(flowData: FlowData, flowId?: string): Promise<{ id: string; success: boolean }> {
     const endpoint = flowId ? `/api/v1/flows/${flowId}` : '/api/v1/flows';
     const method = flowId ? 'PUT' : 'POST';
-    
+
     return this.authenticatedRequest(endpoint, {
       method,
       body: JSON.stringify(flowData),
@@ -224,7 +224,7 @@ class ApiService {
    */
   async getFile(id: number | string): Promise<string> {
     const token = await AuthService.ensureValidToken();
-    
+
     if (!token) {
       throw new Error('No valid authentication token available');
     }
@@ -331,7 +331,7 @@ class ApiService {
 
   async uploadFile(file: File, type: 'ECORE' | 'GEN_MODEL' | 'REACTION'): Promise<{ data: string; message: string }> {
     const token = await AuthService.ensureValidToken();
-    
+
     if (!token) {
       throw new Error('No valid authentication token available');
     }
@@ -408,15 +408,15 @@ class ApiService {
     // Set default values for pagination
     const pageNumber = filters.pageNumber ?? 0;
     const pageSize = filters.pageSize ?? 50;
-    
+
     // Build query parameters
     const queryParams = new URLSearchParams({
       pageNumber: pageNumber.toString(),
       pageSize: pageSize.toString(),
     });
-    
+
     const endpoint = `/api/v1/meta-models/find-all?${queryParams.toString()}`;
-    
+
     console.log('findMetaModels request:', {
       endpoint,
       filters,
@@ -428,9 +428,9 @@ class ApiService {
       method: 'POST',
       body: JSON.stringify(filters),
     });
-    
+
     console.log('findMetaModels response:', result);
-    
+
     return result;
   }
 
@@ -480,9 +480,9 @@ class ApiService {
    * vSUMS: Get all
    */
   async getVsumsPaginated(
-      name: string = '',
-      pageNumber: number = 0,
-      pageSize: number = 10
+    name: string = '',
+    pageNumber: number = 0,
+    pageSize: number = 10
   ): Promise<ApiResponse<Vsum[]>> {
     const query = new URLSearchParams({
       name,
@@ -496,8 +496,8 @@ class ApiService {
    * vSUMS: Get all removed (trash)
    */
   async getRemovedVsumsPaginated(
-      pageNumber: number = 0,
-      pageSize: number = 50
+    pageNumber: number = 0,
+    pageSize: number = 50
   ): Promise<ApiResponse<Vsum[]>> {
     const query = new URLSearchParams({
       pageNumber: pageNumber.toString(),
@@ -523,7 +523,7 @@ class ApiService {
    */
   async downloadVsumArtifact(id: number | string): Promise<Blob> {
     const token = await AuthService.ensureValidToken();
-    
+
     if (!token) {
       throw new Error('No valid authentication token available');
     }
@@ -592,8 +592,8 @@ class ApiService {
    * vSUMS: Update name and meta model links
    */
   async updateVsumSyncChanges(
-      id: number | string,
-      data: VsumSyncChangesPutRequest
+    id: number | string,
+    data: VsumSyncChangesPutRequest
   ): Promise<ApiResponse<any>> {
     return this.authenticatedRequest(`/api/v1/vsums/${id}/sync-changes`, {
       method: 'PUT',
@@ -601,7 +601,7 @@ class ApiService {
     });
   }
 
-// inside ApiService class
+  // inside ApiService class
   async renameVsum(id: number | string, data: { name: string }): Promise<ApiResponse<any>> {
     return this.authenticatedRequest(`/api/v1/vsums/${id}`, {
       method: 'PUT',
@@ -714,15 +714,15 @@ class ApiService {
    *   POST /api/v1/users/search { q, limit }
    */
   async searchUsers(params: { pageNumber?: number; pageSize?: number })
-      : Promise<ApiResponse<UserSearchItem[]>> {
+    : Promise<ApiResponse<UserSearchItem[]>> {
     const pageNumber = params.pageNumber ?? 0;
     const pageSize = params.pageSize ?? 50;
     return this.authenticatedRequest(`/api/v1/users/search?pageNumber=${pageNumber}&pageSize=${pageSize}`);
   }
 
   async updateReactionFile(
-      fileId: number | string,
-      file: File
+    fileId: number | string,
+    file: File
   ): Promise<{ data: string; message: string }> {
     const token = await AuthService.ensureValidToken();
 
@@ -748,12 +748,12 @@ class ApiService {
         let errorText = '';
         try {
           errorText = await response.text();
-        } catch {}
+        } catch { }
         let errorMessage = errorText;
         try {
           const parsed = JSON.parse(errorText);
           errorMessage = parsed?.message || parsed?.error || errorText;
-        } catch {}
+        } catch { }
 
         console.error('Update reaction file failed', {
           url,

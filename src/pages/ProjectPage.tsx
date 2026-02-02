@@ -9,8 +9,8 @@ import { apiService } from '../services/api';
 import { useToast } from '../components/ui/ToastProvider';
 import { WorkspaceSnapshot, WorkspaceSnapshotRequest } from '../types/workspace';
 
-interface OpenTabInstance { 
-  instanceId: string; 
+interface OpenTabInstance {
+  instanceId: string;
   id: number;
 }
 
@@ -22,14 +22,14 @@ export const ProjectPage: React.FC = () => {
   const [openChoice, setOpenChoice] = useState<{ id: number; existingInstanceId: string } | null>(null);
   const { showInfo } = useToast();
 
-  const createInstanceId = useCallback((id: number) => `${id}-${Date.now()}-${Math.random().toString(36).slice(2,8)}` , []);
+  const createInstanceId = useCallback((id: number) => `${id}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`, []);
 
   // Helper to add a metamodel to the active workspace
   const addMetaModelToWorkspace = useCallback(async (model: any) => {
     try {
       if (model.ecoreFileId) {
         const fileContent = await apiService.getFile(model.ecoreFileId);
-        
+
         // Dispatch event to add file to workspace
         globalThis.dispatchEvent(new CustomEvent('vitruv.addFileToWorkspace', {
           detail: {
@@ -44,7 +44,7 @@ export const ProjectPage: React.FC = () => {
           }
         }));
       }
-      
+
       // Also dispatch the event to add meta model to VSUM
       globalThis.dispatchEvent(new CustomEvent('vitruv.addMetaModelToActiveVsum', { detail: { id: model.id, sourceId: model.sourceId ?? model.id } }));
     } catch (error) {
@@ -122,12 +122,12 @@ export const ProjectPage: React.FC = () => {
   useEffect(() => {
     const handleReloadWorkspace = async () => {
       if (!activeInstanceId) return;
-      
+
       const activeTab = openTabs.find(t => t.instanceId === activeInstanceId);
       if (!activeTab) return;
 
       console.log('🔃 Reloading workspace for VSUM:', activeTab.id);
-      
+
       try {
         // Reload the project boxes for the active tab
         // skipReset = true because the reset is already done in handleBackToWorkspace
@@ -151,7 +151,7 @@ export const ProjectPage: React.FC = () => {
   // Reload workspace content when switching between tabs
   useEffect(() => {
     if (!activeInstanceId) return;
-    
+
     const activeTab = openTabs.find(t => t.instanceId === activeInstanceId);
     if (!activeTab) return;
 
@@ -159,93 +159,97 @@ export const ProjectPage: React.FC = () => {
     fetchAndLoadProjectBoxes(activeTab.id);
   }, [activeInstanceId, openTabs]);
 
+
   return (
     <>
-    <MainLayout
-      user={user}
-      onLogout={signOut}
-      leftSidebar={<SidebarTabs width={350} />}
-      leftSidebarWidth={350}
-      showWelcomeScreen={openTabs.length === 0}
-      welcomeTitle="Methodological Dashboard"
-      workspaceKey={activeInstanceId || undefined}
-      rightSidebar={(showRight && openTabs.length > 0) ? (
-        <div style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
-          <div style={{
-            padding: 8,
-            borderBottom: '1px solid #e5e7eb',
-            display: 'flex',
-            justifyContent: 'flex-end',
-            background: '#ffffff'
-          }}>
-            <button
-              onClick={() => setShowRight(false)}
-              style={{
-                background: '#f3f4f6',
-                color: '#111827',
-                border: '1px solid #d1d5db',
-                borderRadius: 6,
-                padding: '6px 10px',
-                fontWeight: 600,
-                cursor: 'pointer'
-              }}
-              onMouseEnter={(e) => { e.currentTarget.style.background = '#e5e7eb'; }}
-              onMouseLeave={(e) => { e.currentTarget.style.background = '#f3f4f6'; }}
-            >
-              Close
-            </button>
+      <MainLayout
+        user={user}
+        vsumId={activeInstanceId ?
+          openTabs.find(t => t.instanceId === activeInstanceId)?.id?.toString()
+          : undefined}
+        onLogout={signOut}
+        leftSidebar={<SidebarTabs width={350} />}
+        leftSidebarWidth={350}
+        showWelcomeScreen={openTabs.length === 0}
+        welcomeTitle="Methodological Dashboard"
+        workspaceKey={activeInstanceId || undefined}
+        rightSidebar={(showRight && openTabs.length > 0) ? (
+          <div style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
+            <div style={{
+              padding: 8,
+              borderBottom: '1px solid #e5e7eb',
+              display: 'flex',
+              justifyContent: 'flex-end',
+              background: '#ffffff'
+            }}>
+              <button
+                onClick={() => setShowRight(false)}
+                style={{
+                  background: '#f3f4f6',
+                  color: '#111827',
+                  border: '1px solid #d1d5db',
+                  borderRadius: 6,
+                  padding: '6px 10px',
+                  fontWeight: 600,
+                  cursor: 'pointer'
+                }}
+                onMouseEnter={(e) => { e.currentTarget.style.background = '#e5e7eb'; }}
+                onMouseLeave={(e) => { e.currentTarget.style.background = '#f3f4f6'; }}
+              >
+                Close
+              </button>
+            </div>
+            <div style={{ flex: 1, overflow: 'auto' }}>
+              <MetaModelsPanel
+                activeVsumId={activeInstanceId ? (openTabs.find(t => t.instanceId === activeInstanceId)?.id) || undefined : undefined}
+                selectedMetaModelIds={[]}
+                onAddToActiveVsum={addMetaModelToWorkspace}
+              />
+            </div>
           </div>
-          <div style={{ flex: 1, overflow: 'auto' }}>
-            <MetaModelsPanel
-              activeVsumId={activeInstanceId ? (openTabs.find(t => t.instanceId === activeInstanceId)?.id) || undefined : undefined}
-              selectedMetaModelIds={[]}
-              onAddToActiveVsum={addMetaModelToWorkspace}
-            />
-          </div>
-        </div>
-      ) : null}
-      rightSidebarWidth={350}
-      workspaceOverlay={openTabs.length > 0 ? (
-        <VsumTabs
-          openTabs={openTabs}
-          activeInstanceId={activeInstanceId}
-          onActivate={(instanceId) => setActiveInstanceId(instanceId)}
-          onClose={(instanceId) => {
-            setOpenTabs(prev => prev.filter(x => x.instanceId !== instanceId));
-            setActiveInstanceId(prev => (prev === instanceId ? (openTabs.find(x => x.instanceId !== instanceId)?.instanceId ?? null) : prev));
-          }}
-          showAddButton={!showRight}
-          onAddMetaModels={() => setShowRight(true)}
-          requestWorkspaceSnapshot={requestWorkspaceSnapshot}
-        />
-      ) : null}
-      showWorkspaceInfo={false}
-    />
-    <ConfirmDialog
-      isOpen={!!openChoice}
-      title="Project already open"
-      message="Do you want to open it in a new tab, or reuse the same workspace?"
-      confirmText="Open New Tab"
-      cancelText="Open In Same"
-      onConfirm={async () => {
-        if (!openChoice) return;
-        const id = openChoice.id;
-        setOpenChoice(null);
-        try {
-          await openVsumById(id, { forceNew: true });
-        } catch (error) {
-          console.error('Failed to open VSUM in new tab:', error);
-          showInfo(error instanceof Error ? error.message : 'Failed to open project');
-        }
-      }}
-      onCancel={async () => {
-        if (!openChoice) return;
-        const { existingInstanceId } = openChoice;
-        setOpenChoice(null);
-        setActiveInstanceId(existingInstanceId);
-        // Note: fetchAndLoadProjectBoxes is now handled by the useEffect watching activeInstanceId
-      }}
-    />
+        ) : null}
+        rightSidebarWidth={350}
+        workspaceOverlay={openTabs.length > 0 ? (
+          <VsumTabs
+            openTabs={openTabs}
+            activeInstanceId={activeInstanceId}
+            onActivate={(instanceId) => setActiveInstanceId(instanceId)}
+            onClose={(instanceId) => {
+              setOpenTabs(prev => prev.filter(x => x.instanceId !== instanceId));
+              setActiveInstanceId(prev => (prev === instanceId ? (openTabs.find(x => x.instanceId !== instanceId)?.instanceId ?? null) : prev));
+            }}
+            showAddButton={!showRight}
+            onAddMetaModels={() => setShowRight(true)}
+            requestWorkspaceSnapshot={requestWorkspaceSnapshot}
+          />
+        ) : null}
+        showWorkspaceInfo={false}
+      />
+      <ConfirmDialog
+        isOpen={!!openChoice}
+        title="Project already open"
+        message="Do you want to open it in a new tab, or reuse the same workspace?"
+        confirmText="Open New Tab"
+        cancelText="Open In Same"
+        onConfirm={async () => {
+          if (!openChoice) return;
+          const id = openChoice.id;
+          setOpenChoice(null);
+          try {
+            await openVsumById(id, { forceNew: true });
+          } catch (error) {
+            console.error('Failed to open VSUM in new tab:', error);
+            showInfo(error instanceof Error ? error.message : 'Failed to open project');
+          }
+        }}
+        onCancel={async () => {
+          if (!openChoice) return;
+          const { existingInstanceId } = openChoice;
+          setOpenChoice(null);
+          setActiveInstanceId(existingInstanceId);
+          // Note: fetchAndLoadProjectBoxes is now handled by the useEffect watching activeInstanceId
+        }}
+      />
     </>
   );
 };
@@ -254,23 +258,23 @@ export const ProjectPage: React.FC = () => {
 // helper to fetch and load boxes for a vsum id
 async function fetchAndLoadProjectBoxes(id: number, skipReset: boolean = false) {
   console.log('📥 Fetching VSUM details for ID:', id, 'skipReset:', skipReset);
-  
+
   // Only reset workspace if not already done (e.g., when loading a new project)
   // When returning from UML view, the reset is already done in handleBackToWorkspace
   if (!skipReset) {
     console.log('🔄 Triggering workspace reset');
     globalThis.dispatchEvent(new CustomEvent('vitruv.resetWorkspace'));
   }
-  
+
   try {
     const response = await apiService.getVsumDetails(id);
     const details = response.data;
-    
+
     console.log('📊 VSUM details received:', {
       metaModelCount: details.metaModels?.length || 0,
       relationCount: details.metaModelsRelation?.length || 0,
     });
-    
+
     // Load all metamodel boxes
     for (const metaModel of details.metaModels || []) {
       if (metaModel.ecoreFileId) {

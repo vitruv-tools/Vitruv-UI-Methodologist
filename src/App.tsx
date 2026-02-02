@@ -3,6 +3,7 @@ import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-d
 import { AuthPage, KeycloakRedirect } from './components/auth';
 import { HomePage } from './pages/HomePage';
 import { ProjectPage } from './pages/ProjectPage';
+import { EditorTest } from './pages/EditorTest';  // <- NEU
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { apiService } from './services/api';
 import { exportFlowData } from './utils';
@@ -35,8 +36,6 @@ function ProtectedRoute({ children }: Readonly<{ children: React.ReactNode }>) {
   return <>{children}</>;
 }
 
-// Render MainLayout immediately without lazy loading for consistent UX across routes
-
 function AppContent() {
   const { user, signOut } = useAuth();
 
@@ -44,7 +43,7 @@ function AppContent() {
     try {
       const flowData = exportFlowData(nodes, edges);
       const result = await apiService.deployFlow(flowData);
-      
+
       if (result.success) {
         alert('Flow deployed successfully!');
       } else {
@@ -73,7 +72,6 @@ function AppContent() {
       await signOut();
     } catch (error) {
       console.error('Logout error:', error);
-      // Still proceed with logout even if there's an error
     }
   };
 
@@ -99,20 +97,22 @@ function App() {
           <Route path="/login" element={<AuthPage />} />
           <Route path="/auth" element={<KeycloakRedirect />} />
           <Route path="/" element={
-             <ProtectedRoute>
+            <ProtectedRoute>
               <HomePage />
             </ProtectedRoute>
           } />
           <Route path="/mml" element={
             <ProtectedRoute>
               <AppContent />
-             </ProtectedRoute>
+            </ProtectedRoute>
           } />
           <Route path="/project" element={
             <ProtectedRoute>
               <ProjectPage />
             </ProtectedRoute>
           } />
+          {/*Editor Test Route*/}
+          <Route path="/editor-test" element={<EditorTest />} />
         </Routes>
       </AuthProvider>
     </Router>

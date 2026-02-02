@@ -1,4 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
+import Editor, { OnMount, Monaco } from '@monaco-editor/react';
+import { reactionsMonarch, reactionsTheme, reactionsLanguageConfig } from './ReactionsMonarchGrammar';
+import * as monaco from 'monaco-editor';
 
 interface CodeEditorModalProps {
   readonly isOpen: boolean;
@@ -9,9 +12,9 @@ interface CodeEditorModalProps {
   readonly edgeId: string;
   readonly sourceFileName?: string;
   readonly targetFileName?: string;
+  readonly vsumId?: string;
 }
 
-// Gemeinsame Button-Styles
 const buttonBaseStyles = {
   padding: '6px 12px',
   border: 'none',
@@ -41,50 +44,396 @@ export function CodeEditorModal({
   edgeId,
   sourceFileName,
   targetFileName,
+  vsumId,
 }: CodeEditorModalProps) {
-  const [code, setCode] = useState(initialCode);
-  const [history, setHistory] = useState<string[]>([initialCode]);
-  const [historyIndex, setHistoryIndex] = useState(0);
-  const [saving, setSaving] = useState(false);
-  const textareaRef = useRef<HTMLTextAreaElement>(null);
+  console.log('🏗️ CodeEditorModal render, isOpen:', isOpen);
 
-  // Reset state when modal opens or initialCode changes
+  const [code, setCode] = useState(initialCode);
+  const [saving, setSaving] = useState(false);
+  const editorRef = useRef<monaco.editor.IStandaloneCodeEditor | null>(null);
+  const [lspConnected, setLspConnected] = useState(false);
+  const lspReady = useRef(false);
+  const webSocketRef = useRef<WebSocket | null>(null);
+  const lspInitialized = useRef(false);
+  const workspaceRootUri = useRef<string | null>(null);
+  const versionCounter = useRef(1);
+
   useEffect(() => {
     setCode(initialCode);
-    setHistory([initialCode]);
-    setHistoryIndex(0);
   }, [initialCode, isOpen]);
 
-  // Auto-focus textarea when modal opens
+  // Extracted: Process LSP completion response
+  const processCompletionResponse = (
+    message: any,
+    requestId: number,
+    range: any,
+    monacoInstance: Monaco
+  ): any[] | null => {
+    if (message.id !== requestId) {
+      return null;
+    }
+
+    if (!message.result) {
+      console.log('📭 No completion results');
+      return null;
+    }
+
+    const items = Array.isArray(message.result)
+      ? message.result
+      : message.result.items || [];
+
+    return items.map((item: any) => {
+      let insertText = item.insertText || item.label;
+      let itemRange = range;
+
+      if (item.textEdit) {
+        insertText = item.textEdit.newText;
+        if (item.textEdit.range) {
+          itemRange = {
+            startLineNumber: item.textEdit.range.start.line + 1,
+            endLineNumber: item.textEdit.range.end.line + 1,
+            startColumn: item.textEdit.range.start.character + 1,
+            endColumn: item.textEdit.range.end.character + 1
+          };
+        }
+      }
+
+      return {
+        label: item.label,
+        kind: item.kind || monacoInstance.languages.CompletionItemKind.Text,
+        insertText: insertText,
+        detail: item.detail,
+        documentation: item.documentation,
+        sortText: item.sortText,
+        filterText: item.filterText,
+        range: itemRange
+      };
+    });
+  };
+
+  // Extracted: Get fallback keyword suggestions
+  const getFallbackSuggestions = (
+    wordInfo: any,
+    range: any,
+    monacoInstance: Monaco
+  ) => {
+    const keywords = reactionsMonarch.keywords || [];
+    const typedText = wordInfo.word.toLowerCase();
+
+    return keywords
+      .filter((keyword: string) =>
+        keyword.toLowerCase().startsWith(typedText)
+      )
+      .map((keyword: string) => ({
+        label: keyword,
+        kind: monacoInstance.languages.CompletionItemKind.Keyword,
+        insertText: keyword,
+        range: range
+      }));
+  };
+
+  // Extracted: Handle timeout for completion request
+  const handleCompletionTimeout = (
+    messageHandler: (event: MessageEvent) => void,
+    wordInfo: any,
+    range: any,
+    monacoInstance: Monaco,
+    resolve: (value: { suggestions: any[] }) => void
+  ) => {
+    console.log('⏰ TIMEOUT reached after 2000ms');
+    webSocketRef.current?.removeEventListener('message', messageHandler);
+    const suggestions = getFallbackSuggestions(wordInfo, range, monacoInstance);
+    resolve({ suggestions });
+  };
+
+  // Extracted: Create message handler for completion requests
+  const createCompletionMessageHandler = (
+    requestId: number,
+    monacoInstance: Monaco,
+    range: any,
+    resolve: (value: { suggestions: any[] }) => void
+  ) => {
+    const messageHandler = (event: MessageEvent) => {
+      try {
+        const message = JSON.parse(event.data);
+        const suggestions = processCompletionResponse(message, requestId, range, monacoInstance);
+
+        if (suggestions) {
+          webSocketRef.current?.removeEventListener('message', messageHandler);
+          resolve({ suggestions });
+        }
+      } catch (err) {
+        console.error('💥 [messageHandler] Parse error:', err);
+      }
+    };
+
+    return messageHandler;
+  };
+
+  // Extracted: Request completion from LSP server
+  const requestCompletionFromLsp = (
+    model: any,
+    position: any,
+    monacoInstance: Monaco
+  ): Promise<{ suggestions: any[] }> => {
+    return new Promise((resolve) => {
+      if (!lspReady.current) {
+        resolve({ suggestions: [] });
+        return;
+      }
+
+      if (!webSocketRef.current || webSocketRef.current.readyState !== WebSocket.OPEN) {
+        console.log('❌ WebSocket not open, state:', webSocketRef.current?.readyState);
+        resolve({ suggestions: [] });
+        return;
+      }
+
+      console.log('✅ WebSocket is open and LSP is ready');
+
+      const wordInfo = model.getWordUntilPosition(position);
+      const range = {
+        startLineNumber: position.lineNumber,
+        endLineNumber: position.lineNumber,
+        startColumn: wordInfo.startColumn,
+        endColumn: wordInfo.endColumn
+      };
+
+      const requestId = Math.floor(Math.random() * 2147483647);
+      const request = {
+        jsonrpc: '2.0',
+        id: requestId,
+        method: 'textDocument/completion',
+        params: {
+          textDocument: {
+            uri: `${workspaceRootUri.current}reaction-${edgeId}.reactions`,
+          },
+          position: {
+            line: position.lineNumber - 1,
+            character: position.column - 1
+          },
+          context: {
+            triggerKind: 1
+          }
+        }
+      };
+
+      console.log('📤 Sending completion request:', request);
+
+      const messageHandler = createCompletionMessageHandler(
+        requestId,
+        monacoInstance,
+        range,
+        resolve
+      );
+
+      webSocketRef.current.addEventListener('message', messageHandler);
+      console.log('📤 Actually sending to WebSocket now...');
+      webSocketRef.current.send(JSON.stringify(request));
+      console.log('✅ Sent!');
+
+      // Setup timeout with extracted handler
+      setTimeout(
+        () => handleCompletionTimeout(messageHandler, wordInfo, range, monacoInstance, resolve),
+        2000
+      );
+    });
+  };
+
+  const handleEditorDidMount: OnMount = (editor, monacoInstance) => {
+    editorRef.current = editor;
+
+    monacoInstance.languages.register({ id: 'reactions' });
+    monacoInstance.languages.setLanguageConfiguration('reactions', reactionsLanguageConfig);
+    monacoInstance.languages.setMonarchTokensProvider('reactions', reactionsMonarch);
+
+    monacoInstance.editor.defineTheme('reactions-theme', reactionsTheme);
+    monacoInstance.editor.setTheme('reactions-theme');
+
+    monacoInstance.languages.registerCompletionItemProvider('reactions', {
+      triggerCharacters: ['.', ' ', '\n', ':'],
+      provideCompletionItems: async (model, position) => {
+        return requestCompletionFromLsp(model, position, monacoInstance);
+      }
+    });
+
+    console.log('✅ Completion provider registered');
+    connectToLsp(monacoInstance);
+    editor.focus();
+    console.log('✅ Editor setup complete');
+  };
+
+  const sendInitialize = (rootUri: string, webSocket: WebSocket) => {
+    if (!rootUri) {
+      console.error('❌ No rootUri available');
+      return;
+    }
+
+    const initMessage = {
+      jsonrpc: '2.0',
+      id: 1,
+      method: 'initialize',
+      params: {
+        processId: null,
+        rootUri: rootUri,
+        workspaceFolders: [
+          {
+            uri: rootUri,
+            name: "UserProject"
+          }
+        ],
+        capabilities: {
+          textDocument: {
+            completion: {
+              completionItem: {
+                snippetSupport: true,
+                documentationFormat: ['markdown', 'plaintext']
+              },
+              contextSupport: true
+            },
+            hover: {
+              contentFormat: ['markdown', 'plaintext']
+            },
+            signatureHelp: {},
+            definition: {},
+            references: {},
+            documentSymbol: {},
+          }
+        }
+      }
+    };
+
+    webSocket.send(JSON.stringify(initMessage));
+  };
+
+  const getDiagnosticSeverity = (severityCode: number, monacoInstance: Monaco) => {
+    if (severityCode === 1) {
+      return monacoInstance.MarkerSeverity.Error;
+    }
+    if (severityCode === 2) {
+      return monacoInstance.MarkerSeverity.Warning;
+    }
+    return monacoInstance.MarkerSeverity.Info;
+  };
+
+  const connectToLsp = (monacoInstance: Monaco) => {
+    console.log('🔌 connectToLsp called');
+    try {
+      const rawUser = localStorage.getItem('auth.user');
+      const userId = rawUser ? JSON.parse(rawUser).id : null;
+
+
+      if (!userId) {
+        console.error('❌ No userId available – aborting LSP connection');
+        return;
+      }
+
+
+
+      if (!vsumId) {
+        console.error('❌ No vsumId available – aborting LSP connection');
+        return;
+      }
+
+      const wsUrl = `ws://localhost:9811/lsp?userId=${encodeURIComponent(userId)}&vsumId=${encodeURIComponent(vsumId)}`;
+      const webSocket = new WebSocket(wsUrl);
+
+      webSocketRef.current = webSocket;
+
+      webSocket.onopen = () => {
+        setLspConnected(true);
+      };
+
+      webSocket.onmessage = (event) => {
+        try {
+          const message = JSON.parse(event.data);
+
+          if (message.type === 'workspaceReady') {
+            const rootUri = message.rootUri;
+
+            if (!rootUri) {
+              console.error('❌ workspaceReady message contains no rootUri');
+              return;
+            }
+
+            workspaceRootUri.current = rootUri;
+            sendInitialize(rootUri, webSocket);
+            return;
+          }
+
+          if (message.method === 'textDocument/publishDiagnostics') {
+            const diagnostics = message.params.diagnostics || [];
+            const markers = diagnostics.map((diag: any) => ({
+              severity: getDiagnosticSeverity(diag.severity, monacoInstance),
+              startLineNumber: diag.range.start.line + 1,
+              startColumn: diag.range.start.character + 1,
+              endLineNumber: diag.range.end.line + 1,
+              endColumn: diag.range.end.character + 1,
+              message: diag.message,
+              code: diag.code
+            }));
+
+            const model = editorRef.current?.getModel();
+            if (model) {
+              monacoInstance.editor.setModelMarkers(model, 'reactions', markers);
+            }
+          }
+
+          if (message.id === 1 && message.result) {
+            lspInitialized.current = true;
+            webSocket.send(JSON.stringify({
+              jsonrpc: '2.0',
+              method: 'initialized',
+              params: {}
+            }));
+
+            if (editorRef.current) {
+              webSocket.send(JSON.stringify({
+                jsonrpc: '2.0',
+                method: 'textDocument/didOpen',
+                params: {
+                  textDocument: {
+                    uri: `${workspaceRootUri.current}reaction-${edgeId}.reactions`,
+                    languageId: 'reactions',
+                    version: 1,
+                    text: code
+                  }
+                }
+              }));
+              lspReady.current = true;
+            } else {
+              console.error('❌ editorRef.current is null!');
+            }
+          }
+
+        } catch (err) {
+          console.error('💥 Failed to parse LSP message:', err);
+        }
+      };
+
+      webSocket.onerror = (error) => {
+        console.error('❌ LSP WebSocket ERROR:', error);
+        setLspConnected(false);
+        lspReady.current = false;
+      };
+
+      webSocket.onclose = () => {
+        setLspConnected(false);
+        lspReady.current = false;
+        lspInitialized.current = false;
+      };
+
+    } catch (err) {
+      console.error('💥 Failed to connect to LSP:', err);
+    }
+  };
+
   useEffect(() => {
-    if (isOpen && textareaRef.current) {
-      textareaRef.current.focus();
-    }
-  }, [isOpen]);
-
-  const handleCodeChange = (newCode: string) => {
-    setCode(newCode);
-    const newHistory = history.slice(0, historyIndex + 1);
-    newHistory.push(newCode);
-    setHistory(newHistory);
-    setHistoryIndex(newHistory.length - 1);
-  };
-
-  const handleUndo = () => {
-    if (historyIndex > 0) {
-      const newIndex = historyIndex - 1;
-      setHistoryIndex(newIndex);
-      setCode(history[newIndex]);
-    }
-  };
-
-  const handleRedo = () => {
-    if (historyIndex < history.length - 1) {
-      const newIndex = historyIndex + 1;
-      setHistoryIndex(newIndex);
-      setCode(history[newIndex]);
-    }
-  };
+    return () => {
+      if (webSocketRef.current) {
+        webSocketRef.current.close();
+      }
+    };
+  }, []);
 
   const handleSave = async () => {
     if (saving) return;
@@ -108,64 +457,27 @@ export function CodeEditorModal({
     }
   };
 
-  const handleKeyDown = (e: React.KeyboardEvent) => {
-    const isCtrlOrCmd = e.ctrlKey || e.metaKey;
+  const handleUndo = () => {
+    editorRef.current?.trigger('keyboard', 'undo', null);
+  };
 
-    // Tab-Unterstützung im Editor
-    if (e.key === 'Tab') {
-      e.preventDefault();
-      const textarea = textareaRef.current;
-      if (!textarea) return;
+  const handleRedo = () => {
+    editorRef.current?.trigger('keyboard', 'redo', null);
+  };
 
-      const { selectionStart: start, selectionEnd: end } = textarea;
-      const newCode = code.substring(0, start) + '  ' + code.substring(end);
-
-      handleCodeChange(newCode);
-      setTimeout(() => {
-        textarea.selectionStart = textarea.selectionEnd = start + 2;
-      }, 0);
-      return;
-    }
-
-    if (!isCtrlOrCmd) return;
-
-    // Strg+S zum Speichern
-    if (e.key === 's') {
-      e.preventDefault();
-      handleSave();
-    }
-    // Strg+Z für Undo
-    else if (e.key === 'z' && !e.shiftKey) {
-      e.preventDefault();
-      handleUndo();
-    }
-    // Strg+Shift+Z oder Strg+Y für Redo
-    else if ((e.shiftKey && e.key === 'z') || e.key === 'y') {
-      e.preventDefault();
-      handleRedo();
-    }
+  const handleFormat = () => {
+    editorRef.current?.getAction('editor.action.formatDocument')?.run();
   };
 
   const handleClear = () => {
     if (globalThis.confirm('Do you want to delete the whole code?')) {
-      handleCodeChange('');
+      setCode('');
     }
   };
 
-  const handleFormat = () => {
-    const formatted = code
-      .split('\n')
-      .map(line => line.trimEnd())
-      .join('\n')
-      .replaceAll(/\n{3,}/g, '\n\n');
-    handleCodeChange(formatted);
-  };
-
-  if (!isOpen) return null;
-
-  const canUndo = historyIndex > 0;
-  const canRedo = historyIndex < history.length - 1;
-  const lineCount = code.split('\n').length;
+  if (!isOpen) {
+    return null;
+  }
 
   return (
     <dialog
@@ -207,7 +519,6 @@ export function CodeEditorModal({
         }}
         onKeyDown={(e) => e.stopPropagation()}
       >
-        {/* Header */}
         <div
           style={{
             padding: '16px 24px',
@@ -221,6 +532,11 @@ export function CodeEditorModal({
           <div>
             <h3 id="code-editor-title" style={{ margin: 0, color: '#fff', fontSize: '18px', fontWeight: 600 }}>
               Reaction Editor
+              {lspConnected && (
+                <span style={{ marginLeft: '12px', color: lspReady.current ? '#0e7a0d' : '#ff9800', fontSize: '14px' }}>
+                  ● {lspReady.current ? 'LSP Ready' : 'LSP Initializing...'}
+                </span>
+              )}
             </h3>
             {sourceFileName && targetFileName && (
               <p style={{ margin: '4px 0 0 0', color: '#888', fontSize: '16px' }}>
@@ -245,7 +561,6 @@ export function CodeEditorModal({
           </button>
         </div>
 
-        {/* Toolbar */}
         <div
           style={{
             padding: '12px 24px',
@@ -258,17 +573,15 @@ export function CodeEditorModal({
         >
           <button
             onClick={handleUndo}
-            disabled={!canUndo}
-            style={createButtonStyles('#0e639c', '#fff', !canUndo)}
-            title="Undo (Ctlr+Z)"
+            style={createButtonStyles('#0e639c')}
+            title="Undo (Ctrl+Z)"
           >
             ↶ Undo
           </button>
           <button
             onClick={handleRedo}
-            disabled={!canRedo}
-            style={createButtonStyles('#0e639c', '#fff', !canRedo)}
-            title="Repeat (Ctlr+Shift+Z)"
+            style={createButtonStyles('#0e639c')}
+            title="Redo (Ctrl+Shift+Z)"
           >
             ↷ Redo
           </button>
@@ -276,14 +589,14 @@ export function CodeEditorModal({
           <button
             onClick={handleFormat}
             style={createButtonStyles('#0e639c')}
-            title="format code"
+            title="Format code"
           >
             Format
           </button>
           <button
             onClick={handleClear}
             style={createButtonStyles('#c72e2e')}
-            title="delete all"
+            title="Delete all"
           >
             🗑 Clear
           </button>
@@ -298,7 +611,7 @@ export function CodeEditorModal({
                 color: '#fff',
                 fontWeight: 600,
               }}
-              title="delete relation"
+              title="Delete relation"
             >
               🗑️ Delete Relation
             </button>
@@ -313,76 +626,65 @@ export function CodeEditorModal({
               color: '#fff',
               fontWeight: 600,
             }}
-            title="Save (Ctlr+S)"
+            title="Save (Ctrl+S)"
           >
             {saving ? 'Saving…' : '💾 Save'}
           </button>
         </div>
 
-        {/* Code Editor */}
-        <div style={{ flex: 1, position: 'relative', overflow: 'hidden' }}>
-          {/* Line Numbers */}
-          <div
-            style={{
-              position: 'absolute',
-              left: 0,
-              top: 0,
-              bottom: 0,
-              width: '50px',
-              backgroundColor: '#1e1e1e',
-              borderRight: '1px solid #333',
-              padding: '16px 8px',
-              overflow: 'hidden',
-              userSelect: 'none',
-            }}
-          >
-            {Array.from({ length: lineCount }, (_, index) => (
-              <div
-                key={index}
-                style={{
-                  color: '#858585',
-                  fontSize: '13px',
-                  fontFamily: 'Consolas, Monaco, "Courier New", monospace',
-                  lineHeight: '20px',
-                  textAlign: 'right',
-                }}
-              >
-                {index + 1}
-              </div>
-            ))}
-          </div>
-
-          {/* Textarea */}
-          <textarea
-            ref={textareaRef}
+        <div style={{ flex: 1, overflow: 'hidden' }}>
+          <Editor
+            height="100%"
+            language="reactions"
+            theme="vs-dark"
             value={code}
-            onChange={(e) => handleCodeChange(e.target.value)}
-            onKeyDown={handleKeyDown}
-            spellCheck={false}
-            style={{
-              position: 'absolute',
-              left: '50px',
-              top: 0,
-              right: 0,
-              bottom: 0,
-              width: 'calc(100% - 50px)',
-              height: '100%',
-              padding: '16px',
-              backgroundColor: '#1e1e1e',
-              color: '#d4d4d4',
-              border: 'none',
-              outline: 'none',
-              resize: 'none',
-              fontFamily: 'Consolas, Monaco, "Courier New", monospace',
-              fontSize: '13px',
-              lineHeight: '20px',
-              tabSize: 2,
+            onChange={(value) => {
+              setCode(value || '');
+
+              if (webSocketRef.current && webSocketRef.current.readyState === WebSocket.OPEN && lspInitialized.current) {
+                versionCounter.current++;
+
+                const didChangeMessage = {
+                  jsonrpc: '2.0',
+                  method: 'textDocument/didChange',
+                  params: {
+                    textDocument: {
+                      uri: `${workspaceRootUri.current}reaction-${edgeId}.reactions`,
+                      version: versionCounter.current
+                    },
+                    contentChanges: [
+                      {
+                        text: value || ''
+                      }
+                    ]
+                  }
+                };
+                webSocketRef.current.send(JSON.stringify(didChangeMessage));
+              }
             }}
-            placeholder="// Write your reaction here..."
+            onMount={handleEditorDidMount}
+            options={{
+              minimap: { enabled: true },
+              fontSize: 13,
+              lineNumbers: 'on',
+              roundedSelection: false,
+              scrollBeyondLastLine: false,
+              automaticLayout: true,
+              tabSize: 2,
+              wordWrap: 'off',
+              formatOnPaste: true,
+              formatOnType: true,
+              suggest: {
+                showKeywords: true,
+                showSnippets: true,
+              },
+              autoClosingBrackets: 'always',
+              autoClosingQuotes: 'always',
+              autoSurround: 'languageDefined',
+            }}
           />
         </div>
 
-        {/* Footer */}
         <div
           style={{
             padding: '12px 24px',
@@ -394,7 +696,7 @@ export function CodeEditorModal({
           }}
         >
           <div style={{ color: '#888', fontSize: '12px' }}>
-            {lineCount} Zeilen · {code.length} Zeichen
+            {code.split('\n').length} Zeilen · {code.length} Zeichen
           </div>
           <div style={{ color: '#888', fontSize: '12px' }}>
             Edge ID: {edgeId}
