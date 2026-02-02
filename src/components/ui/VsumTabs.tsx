@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { VsumDetails } from '../../types';
 import { apiService, MetaModelRelationRequest } from '../../services/api';
 import { WorkspaceSnapshot } from '../../types/workspace';
+import { ConfirmDialog } from './ConfirmDialog';
 
 const POPUP_STYLES = {
     success: { background: '#ecfdf3', border: '1px solid #bbf7d0', color: '#166534', icon: '✅' },
@@ -45,6 +46,8 @@ export const VsumTabs: React.FC<VsumTabsProps> = ({
 
     const [checkingBuild, setCheckingBuild] = useState(false);
     const [downloadingArtifact, setDownloadingArtifact] = useState(false);
+    const [closeConfirmInstanceId, setCloseConfirmInstanceId] = useState<string | null>(null);
+    const [unsavedChangesAction, setUnsavedChangesAction] = useState<'build' | 'download' | null>(null);
 
     const areIdArraysEqual = (a: number[] = [], b: number[] = []) => {
         if (a.length !== b.length) return false;
@@ -166,13 +169,6 @@ export const VsumTabs: React.FC<VsumTabsProps> = ({
         // Important: If snapshot exists but is empty, user intentionally removed all MetaModels
         const metaModelIds = snap.metaModelIds !== undefined ? snapshotIds : backendSourceIds;
 
-        if (metaModelIds.length === 0) {
-            const msg = 'At least one MetaModel is required';
-            setError(msg);
-            setPopup({ message: msg, type: 'error' });
-            return;
-        }
-
         const filteredRelations =
             (snap.metaModelRelationRequests ?? []).filter(rel =>
                 metaModelIds.includes(rel.sourceId) &&
@@ -255,6 +251,20 @@ export const VsumTabs: React.FC<VsumTabsProps> = ({
         const active = openTabs.find(t => t.instanceId === activeInstanceId);
         if (!active) return;
         
+        // Check for unsaved changes
+        const isDirty = computeDirty(detailsById[active.id], workspaceSnapshot);
+        if (isDirty) {
+            setUnsavedChangesAction('download');
+            return;
+        }
+        
+        await performDownload();
+    };
+
+    const performDownload = async () => {
+        const active = openTabs.find(t => t.instanceId === activeInstanceId);
+        if (!active) return;
+        
         setDownloadingArtifact(true);
         setError('');
         try {
@@ -285,6 +295,21 @@ export const VsumTabs: React.FC<VsumTabsProps> = ({
     // ---- check build ------------------------------------------
 
     const onCheckBuild = async () => {
+        const active = openTabs.find(t => t.instanceId === activeInstanceId);
+        const id = active?.id;
+        if (!id) return;
+
+        // Check for unsaved changes
+        const isDirty = computeDirty(detailsById[id], workspaceSnapshot);
+        if (isDirty) {
+            setUnsavedChangesAction('build');
+            return;
+        }
+
+        await performBuild();
+    };
+
+    const performBuild = async () => {
         const active = openTabs.find(t => t.instanceId === activeInstanceId);
         const id = active?.id;
         if (!id) return;
@@ -414,7 +439,13 @@ export const VsumTabs: React.FC<VsumTabsProps> = ({
                                     <button
                                         onClick={e => {
                                             e.stopPropagation();
-                                            onClose(tab.instanceId);
+                                            // Check if this tab has unsaved changes
+                                            const tabHasUnsavedChanges = computeDirty(detailsById[tab.id], workspaceSnapshot);
+                                            if (tabHasUnsavedChanges && isActive) {
+                                                setCloseConfirmInstanceId(tab.instanceId);
+                                            } else {
+                                                onClose(tab.instanceId);
+                                            }
                                         }}
                                         style={{
                                             border: '1px solid transparent',
@@ -642,6 +673,56 @@ export const VsumTabs: React.FC<VsumTabsProps> = ({
                     </button>
                 </div>
             )}
+
+            <ConfirmDialog
+                isOpen={closeConfirmInstanceId !== null}
+                title="Unsaved Changes"
+                message="You have unsaved changes in this project. Are you sure you want to close it? Your changes will be lost."
+                confirmText="Close Anyway"
+                cancelText="Keep Open"
+                variant="danger"
+                onConfirm={() => {
+                    if (closeConfirmInstanceId) {
+                        onClose(closeConfirmInstanceId);
+                        setCloseConfirmInstanceId(null);
+                    }
+                }}
+                onCancel={() => setCloseConfirmInstanceId(null)}
+            />
+
+            <ConfirmDialog
+                isOpen={unsavedChangesAction !== null}
+                title="Unsaved Changes"
+                message={`You have unsaved changes. Do you want to save them before ${unsavedChangesAction === 'build' ? 'checking the build' : 'downloading'}?`}
+                confirmText="Save & Continue"
+                cancelText="Continue Anyway"
+                variant="danger"
+                onConfirm={async () => {
+                    const action = unsavedChangesAction;
+                    setUnsavedChangesAction(null);
+                    
+                    // Save first
+                    await onSave();
+                    
+                    // Then perform the action
+                    if (action === 'build') {
+                        await performBuild();
+                    } else if (action === 'download') {
+                        await performDownload();
+                    }
+                }}
+                onCancel={async () => {
+                    const action = unsavedChangesAction;
+                    setUnsavedChangesAction(null);
+                    
+                    // Continue without saving
+                    if (action === 'build') {
+                        await performBuild();
+                    } else if (action === 'download') {
+                        await performDownload();
+                    }
+                }}
+            />
         </>
     );
 };

@@ -6,17 +6,45 @@ import App from './App';
 import reportWebVitals from './reportWebVitals';
 import { ToastProvider } from './components/ui/ToastProvider';
 
-// Suppress benign ResizeObserver error that occurs with React Flow
-// This error doesn't affect functionality - it just means resize observations
-// couldn't all be delivered in a single animation frame
-const resizeObserverError = (e: ErrorEvent) => {
-  if (typeof e.message === 'string' &&
-      e.message.includes('ResizeObserver loop completed with undelivered notifications')) {
-    e.stopImmediatePropagation();
+// Comprehensive ResizeObserver error suppression
+// This error is benign and occurs when resize observations can't all be delivered in one frame
+// Common with React Flow, Monaco Editor, and other dynamic UI components
+
+// Method 1: Patch ResizeObserver to catch errors at the source
+const OriginalResizeObserver = window.ResizeObserver;
+window.ResizeObserver = class extends OriginalResizeObserver {
+  constructor(callback: ResizeObserverCallback) {
+    super((entries, observer) => {
+      requestAnimationFrame(() => {
+        callback(entries, observer);
+      });
+    });
   }
 };
 
-globalThis.addEventListener('error', resizeObserverError);
+// Method 2: Suppress via error event
+const resizeObserverError = (e: ErrorEvent) => {
+  if (
+    (typeof e.message === 'string' && e.message.includes('ResizeObserver loop')) ||
+    (e.error && e.error.message && e.error.message.includes('ResizeObserver loop'))
+  ) {
+    e.stopImmediatePropagation();
+    e.preventDefault();
+    return false;
+  }
+};
+
+window.addEventListener('error', resizeObserverError);
+
+// Method 3: Suppress via console.error override
+const originalConsoleError = console.error;
+console.error = (...args: any[]) => {
+  const message = args[0]?.toString() || '';
+  if (message.includes('ResizeObserver loop')) {
+    return;
+  }
+  originalConsoleError.apply(console, args);
+};
 
 const root = ReactDOM.createRoot(
   document.getElementById('root') as HTMLElement

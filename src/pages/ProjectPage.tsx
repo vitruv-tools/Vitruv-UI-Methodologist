@@ -19,7 +19,6 @@ export const ProjectPage: React.FC = () => {
   const [showRight, setShowRight] = useState(false);
   const [openTabs, setOpenTabs] = useState<OpenTabInstance[]>([]);
   const [activeInstanceId, setActiveInstanceId] = useState<string | null>(null);
-  const [openChoice, setOpenChoice] = useState<{ id: number; existingInstanceId: string } | null>(null);
   const { showInfo } = useToast();
 
   const createInstanceId = useCallback((id: number) => `${id}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`, []);
@@ -98,7 +97,9 @@ export const ProjectPage: React.FC = () => {
       if (typeof id !== 'number') return;
       const existing = openTabs.find(t => t.id === id);
       if (existing && !custom.detail?.forceNew) {
-        setOpenChoice({ id, existingInstanceId: existing.instanceId });
+        // Project already open, just navigate to it
+        setActiveInstanceId(existing.instanceId);
+        showInfo('This project is already open. Switched to it.');
         return;
       }
       try {
@@ -110,7 +111,7 @@ export const ProjectPage: React.FC = () => {
     };
     globalThis.addEventListener('vitruv.openVsum', handler as EventListener);
     return () => globalThis.removeEventListener('vitruv.openVsum', handler as EventListener);
-  }, [openTabs, openVsumById, showInfo]);
+  }, [openTabs, openVsumById, showInfo, setActiveInstanceId]);
 
   // Close active workspace tab when canvas becomes empty (no boxes)
   useEffect(() => {
@@ -158,6 +159,56 @@ export const ProjectPage: React.FC = () => {
     // Load the project boxes for the newly active tab
     fetchAndLoadProjectBoxes(activeTab.id);
   }, [activeInstanceId, openTabs]);
+
+  // Handle VSUM deletion - close any open tabs for the deleted VSUM
+  useEffect(() => {
+    const handleVsumDeleted = (e: Event) => {
+      const custom = e as CustomEvent<{ id: number }>;
+      const deletedId = custom.detail?.id;
+      if (typeof deletedId !== 'number') return;
+      
+      // Close all tabs with this VSUM ID
+      const tabsToClose = openTabs.filter(t => t.id === deletedId);
+      if (tabsToClose.length > 0) {
+        setOpenTabs(prev => prev.filter(t => t.id !== deletedId));
+        
+        // If the active tab was deleted, switch to another tab or clear active
+        if (activeInstanceId && tabsToClose.some(t => t.instanceId === activeInstanceId)) {
+          const remainingTabs = openTabs.filter(t => t.id !== deletedId);
+          setActiveInstanceId(remainingTabs.length > 0 ? remainingTabs.at(-1)!.instanceId : null);
+        }
+        
+        showInfo('The deleted project has been closed.');
+      }
+    };
+
+    globalThis.addEventListener('vitruv.vsumDeleted', handleVsumDeleted as EventListener);
+    return () => globalThis.removeEventListener('vitruv.vsumDeleted', handleVsumDeleted as EventListener);
+  }, [openTabs, activeInstanceId, showInfo]);
+
+  // Handle VSUM version restoration - reload workspace if VSUM is open
+  useEffect(() => {
+    const handleVsumRestored = async (e: Event) => {
+      const custom = e as CustomEvent<{ id: number }>;
+      const restoredId = custom.detail?.id;
+      if (typeof restoredId !== 'number') return;
+      
+      // Check if this VSUM has any open tabs
+      const openTab = openTabs.find(t => t.id === restoredId);
+      if (openTab) {
+        // Reload the workspace for this tab
+        try {
+          await fetchAndLoadProjectBoxes(restoredId);
+          showInfo('Project workspace has been reloaded with the restored version.');
+        } catch (error) {
+          console.error('Failed to reload workspace after version restore:', error);
+        }
+      }
+    };
+
+    globalThis.addEventListener('vitruv.vsumRestored', handleVsumRestored as EventListener);
+    return () => globalThis.removeEventListener('vitruv.vsumRestored', handleVsumRestored as EventListener);
+  }, [openTabs, showInfo]);
 
 
   return (
@@ -224,31 +275,6 @@ export const ProjectPage: React.FC = () => {
           />
         ) : null}
         showWorkspaceInfo={false}
-      />
-      <ConfirmDialog
-        isOpen={!!openChoice}
-        title="Project already open"
-        message="Do you want to open it in a new tab, or reuse the same workspace?"
-        confirmText="Open New Tab"
-        cancelText="Open In Same"
-        onConfirm={async () => {
-          if (!openChoice) return;
-          const id = openChoice.id;
-          setOpenChoice(null);
-          try {
-            await openVsumById(id, { forceNew: true });
-          } catch (error) {
-            console.error('Failed to open VSUM in new tab:', error);
-            showInfo(error instanceof Error ? error.message : 'Failed to open project');
-          }
-        }}
-        onCancel={async () => {
-          if (!openChoice) return;
-          const { existingInstanceId } = openChoice;
-          setOpenChoice(null);
-          setActiveInstanceId(existingInstanceId);
-          // Note: fetchAndLoadProjectBoxes is now handled by the useEffect watching activeInstanceId
-        }}
       />
     </>
   );
