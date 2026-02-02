@@ -11,8 +11,8 @@ import { ToastProvider } from './components/ui/ToastProvider';
 // Common with React Flow, Monaco Editor, and other dynamic UI components
 
 // Method 1: Patch ResizeObserver to catch errors at the source
-const OriginalResizeObserver = window.ResizeObserver;
-window.ResizeObserver = class extends OriginalResizeObserver {
+const OriginalResizeObserver = globalThis.ResizeObserver;
+globalThis.ResizeObserver = class extends OriginalResizeObserver {
   constructor(callback: ResizeObserverCallback) {
     super((entries, observer) => {
       requestAnimationFrame(() => {
@@ -26,7 +26,7 @@ window.ResizeObserver = class extends OriginalResizeObserver {
 const resizeObserverError = (e: ErrorEvent) => {
   if (
     (typeof e.message === 'string' && e.message.includes('ResizeObserver loop')) ||
-    (e.error && e.error.message && e.error.message.includes('ResizeObserver loop'))
+    e.error?.message?.includes('ResizeObserver loop')
   ) {
     e.stopImmediatePropagation();
     e.preventDefault();
@@ -34,7 +34,7 @@ const resizeObserverError = (e: ErrorEvent) => {
   }
 };
 
-window.addEventListener('error', resizeObserverError);
+globalThis.addEventListener('error', resizeObserverError);
 
 // Method 3: Suppress via console.error override
 const originalConsoleError = console.error;

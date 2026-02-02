@@ -331,8 +331,8 @@ export const CreateModelModal: React.FC<CreateModelModalProps> = ({
         try {
           await apiService.deleteFile(uploadedFileIds.ecoreFileId);
           console.log('Deleted previous .ecore file:', uploadedFileIds.ecoreFileId);
-        } catch (deleteErr) {
-          console.warn('Failed to delete previous .ecore file:', deleteErr);
+        } catch (error_) {
+          console.warn('Failed to delete previous .ecore file:', error_);
           // Continue with upload even if deletion fails
         }
       }
@@ -400,8 +400,8 @@ export const CreateModelModal: React.FC<CreateModelModalProps> = ({
         try {
           await apiService.deleteFile(uploadedFileIds.genModelFileId);
           console.log('Deleted previous .genmodel file:', uploadedFileIds.genModelFileId);
-        } catch (deleteErr) {
-          console.warn('Failed to delete previous .genmodel file:', deleteErr);
+        } catch (error_) {
+          console.warn('Failed to delete previous .genmodel file:', error_);
           // Continue with upload even if deletion fails
         }
       }

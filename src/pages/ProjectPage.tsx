@@ -159,31 +159,34 @@ export const ProjectPage: React.FC = () => {
     fetchAndLoadProjectBoxes(activeTab.id);
   }, [activeInstanceId, openTabs]);
 
+  // Handler for VSUM deletion - extracted to reduce nesting
+  const handleVsumDeleted = useCallback((e: Event) => {
+    const custom = e as CustomEvent<{ id: number }>;
+    const deletedId = custom.detail?.id;
+    if (typeof deletedId !== 'number') return;
+    
+    // Close all tabs with this VSUM ID
+    const tabsToClose = openTabs.filter(t => t.id === deletedId);
+    if (tabsToClose.length === 0) return;
+    
+    setOpenTabs(prev => prev.filter(t => t.id !== deletedId));
+    
+    // Check if active tab was deleted
+    const wasActiveTabDeleted = activeInstanceId && tabsToClose.some(t => t.instanceId === activeInstanceId);
+    if (wasActiveTabDeleted) {
+      const remainingTabs = openTabs.filter(t => t.id !== deletedId);
+      const nextActiveInstanceId = remainingTabs.length > 0 ? remainingTabs.at(-1)!.instanceId : null;
+      setActiveInstanceId(nextActiveInstanceId);
+    }
+    
+    showInfo('The deleted project has been closed.');
+  }, [openTabs, activeInstanceId, showInfo]);
+
   // Handle VSUM deletion - close any open tabs for the deleted VSUM
   useEffect(() => {
-    const handleVsumDeleted = (e: Event) => {
-      const custom = e as CustomEvent<{ id: number }>;
-      const deletedId = custom.detail?.id;
-      if (typeof deletedId !== 'number') return;
-      
-      // Close all tabs with this VSUM ID
-      const tabsToClose = openTabs.filter(t => t.id === deletedId);
-      if (tabsToClose.length > 0) {
-        setOpenTabs(prev => prev.filter(t => t.id !== deletedId));
-        
-        // If the active tab was deleted, switch to another tab or clear active
-        if (activeInstanceId && tabsToClose.some(t => t.instanceId === activeInstanceId)) {
-          const remainingTabs = openTabs.filter(t => t.id !== deletedId);
-          setActiveInstanceId(remainingTabs.length > 0 ? remainingTabs.at(-1)!.instanceId : null);
-        }
-        
-        showInfo('The deleted project has been closed.');
-      }
-    };
-
     globalThis.addEventListener('vitruv.vsumDeleted', handleVsumDeleted as EventListener);
     return () => globalThis.removeEventListener('vitruv.vsumDeleted', handleVsumDeleted as EventListener);
-  }, [openTabs, activeInstanceId, showInfo]);
+  }, [handleVsumDeleted]);
 
   // Handle VSUM version restoration - reload workspace if VSUM is open
   useEffect(() => {
@@ -211,71 +214,69 @@ export const ProjectPage: React.FC = () => {
 
 
   return (
-    <>
-      <MainLayout
-        user={user}
-        vsumId={activeInstanceId ?
-          openTabs.find(t => t.instanceId === activeInstanceId)?.id?.toString()
-          : undefined}
-        onLogout={signOut}
-        leftSidebar={<SidebarTabs width={350} />}
-        leftSidebarWidth={350}
-        showWelcomeScreen={openTabs.length === 0}
-        welcomeTitle="Methodological Dashboard"
-        workspaceKey={activeInstanceId || undefined}
-        rightSidebar={(showRight && openTabs.length > 0) ? (
-          <div style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
-            <div style={{
-              padding: 8,
-              borderBottom: '1px solid #e5e7eb',
-              display: 'flex',
-              justifyContent: 'flex-end',
-              background: '#ffffff'
-            }}>
-              <button
-                onClick={() => setShowRight(false)}
-                style={{
-                  background: '#f3f4f6',
-                  color: '#111827',
-                  border: '1px solid #d1d5db',
-                  borderRadius: 6,
-                  padding: '6px 10px',
-                  fontWeight: 600,
-                  cursor: 'pointer'
-                }}
-                onMouseEnter={(e) => { e.currentTarget.style.background = '#e5e7eb'; }}
-                onMouseLeave={(e) => { e.currentTarget.style.background = '#f3f4f6'; }}
-              >
-                Close
-              </button>
-            </div>
-            <div style={{ flex: 1, overflow: 'auto' }}>
-              <MetaModelsPanel
-                activeVsumId={activeInstanceId ? (openTabs.find(t => t.instanceId === activeInstanceId)?.id) || undefined : undefined}
-                selectedMetaModelIds={[]}
-                onAddToActiveVsum={addMetaModelToWorkspace}
-              />
-            </div>
+    <MainLayout
+      user={user}
+      vsumId={activeInstanceId ?
+        openTabs.find(t => t.instanceId === activeInstanceId)?.id?.toString()
+        : undefined}
+      onLogout={signOut}
+      leftSidebar={<SidebarTabs width={350} />}
+      leftSidebarWidth={350}
+      showWelcomeScreen={openTabs.length === 0}
+      welcomeTitle="Methodological Dashboard"
+      workspaceKey={activeInstanceId || undefined}
+      rightSidebar={(showRight && openTabs.length > 0) ? (
+        <div style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
+          <div style={{
+            padding: 8,
+            borderBottom: '1px solid #e5e7eb',
+            display: 'flex',
+            justifyContent: 'flex-end',
+            background: '#ffffff'
+          }}>
+            <button
+              onClick={() => setShowRight(false)}
+              style={{
+                background: '#f3f4f6',
+                color: '#111827',
+                border: '1px solid #d1d5db',
+                borderRadius: 6,
+                padding: '6px 10px',
+                fontWeight: 600,
+                cursor: 'pointer'
+              }}
+              onMouseEnter={(e) => { e.currentTarget.style.background = '#e5e7eb'; }}
+              onMouseLeave={(e) => { e.currentTarget.style.background = '#f3f4f6'; }}
+            >
+              Close
+            </button>
           </div>
-        ) : null}
-        rightSidebarWidth={350}
-        workspaceOverlay={openTabs.length > 0 ? (
-          <VsumTabs
-            openTabs={openTabs}
-            activeInstanceId={activeInstanceId}
-            onActivate={(instanceId) => setActiveInstanceId(instanceId)}
-            onClose={(instanceId) => {
-              setOpenTabs(prev => prev.filter(x => x.instanceId !== instanceId));
-              setActiveInstanceId(prev => (prev === instanceId ? (openTabs.find(x => x.instanceId !== instanceId)?.instanceId ?? null) : prev));
-            }}
-            showAddButton={!showRight}
-            onAddMetaModels={() => setShowRight(true)}
-            requestWorkspaceSnapshot={requestWorkspaceSnapshot}
-          />
-        ) : null}
-        showWorkspaceInfo={false}
-      />
-    </>
+          <div style={{ flex: 1, overflow: 'auto' }}>
+            <MetaModelsPanel
+              activeVsumId={activeInstanceId ? (openTabs.find(t => t.instanceId === activeInstanceId)?.id) || undefined : undefined}
+              selectedMetaModelIds={[]}
+              onAddToActiveVsum={addMetaModelToWorkspace}
+            />
+          </div>
+        </div>
+      ) : null}
+      rightSidebarWidth={350}
+      workspaceOverlay={openTabs.length > 0 ? (
+        <VsumTabs
+          openTabs={openTabs}
+          activeInstanceId={activeInstanceId}
+          onActivate={(instanceId) => setActiveInstanceId(instanceId)}
+          onClose={(instanceId) => {
+            setOpenTabs(prev => prev.filter(x => x.instanceId !== instanceId));
+            setActiveInstanceId(prev => (prev === instanceId ? (openTabs.find(x => x.instanceId !== instanceId)?.instanceId ?? null) : prev));
+          }}
+          showAddButton={!showRight}
+          onAddMetaModels={() => setShowRight(true)}
+          requestWorkspaceSnapshot={requestWorkspaceSnapshot}
+        />
+      ) : null}
+      showWorkspaceInfo={false}
+    />
   );
 };
 
