@@ -703,10 +703,10 @@ class ApiService {
 
   /**
    * vSUMS: Restore to a specific version
-   * PUT /api/v1/vsums/{vsumId}/restore/{versionId}
+   * PUT /api/v1/vsums/{id}/recovery
    */
   async restoreVsumVersion(vsumId: number | string, versionId: number | string): Promise<ApiResponse<Record<string, never>>> {
-    return this.authenticatedRequest(`/api/v1/vsums/${vsumId}/restore/${versionId}`, {
+    return this.authenticatedRequest(`/api/v1/vsums/${versionId}/recovery`, {
       method: 'PUT',
     });
   }
