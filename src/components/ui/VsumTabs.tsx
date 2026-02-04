@@ -692,9 +692,24 @@ export const VsumTabs: React.FC<VsumTabsProps> = ({
 
             <ConfirmDialog
                 isOpen={unsavedChangesAction !== null}
-                title="Unsaved Changes"
-                message={`You have unsaved changes. Do you want to save them before ${unsavedChangesAction === 'build' ? 'checking the build' : 'downloading'}?`}
-                confirmText="Save & Continue"
+                title="Unsaved Changes Detected"
+                message={
+                    <>
+                        <p style={{ margin: '0 0 16px 0', lineHeight: '1.6' }}>
+                            {unsavedChangesAction === 'build' 
+                                ? 'Your project has unsaved changes. To ensure the build check reflects your current work accurately, it is strongly recommended to save before proceeding.'
+                                : 'Your project has unsaved changes. To ensure the downloaded artifact includes your latest work, it is strongly recommended to save before proceeding.'}
+                        </p>
+                        <p style={{ margin: '0 0 8px 0', fontWeight: 700, fontSize: '15px' }}>
+                            What would you like to do?
+                        </p>
+                        <ul style={{ margin: '0', paddingLeft: '20px', lineHeight: '1.8' }}>
+                            <li><strong>Save and Continue:</strong> Your changes will be saved, then the {unsavedChangesAction === 'build' ? 'build check' : 'download'} will proceed.</li>
+                            <li><strong>Continue Anyway:</strong> Proceed immediately without saving (your unsaved changes will not be included).</li>
+                        </ul>
+                    </>
+                }
+                confirmText="Save and Continue"
                 cancelText="Continue Anyway"
                 variant="danger"
                 onConfirm={async () => {

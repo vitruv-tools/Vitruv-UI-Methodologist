@@ -373,6 +373,8 @@ export const CreateModelModal: React.FC<CreateModelModalProps> = ({
     } catch (err) {
       setError(`${err instanceof Error ? err.message : 'Unknown error'}`);
       setUploadProgress(prev => ({ ...prev, ecore: { progress: 0, isUploading: false } }));
+      // Clear the uploaded file ID since the upload failed
+      setUploadedFileIds(prev => ({ ...prev, ecoreFileId: 0 }));
       if (ecoreProgressIntervalRef.current) {
         clearInterval(ecoreProgressIntervalRef.current);
         ecoreProgressIntervalRef.current = null;
@@ -442,6 +444,8 @@ export const CreateModelModal: React.FC<CreateModelModalProps> = ({
     } catch (err) {
       setError(`Error uploading ${sanitizeFileName(file.name)}: ${err instanceof Error ? err.message : 'Unknown error'}`);
       setUploadProgress(prev => ({ ...prev, genmodel: { progress: 0, isUploading: false } }));
+      // Clear the uploaded file ID since the upload failed
+      setUploadedFileIds(prev => ({ ...prev, genModelFileId: 0 }));
       if (genmodelProgressIntervalRef.current) {
         clearInterval(genmodelProgressIntervalRef.current);
         genmodelProgressIntervalRef.current = null;
