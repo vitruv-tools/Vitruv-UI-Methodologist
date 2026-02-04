@@ -695,38 +695,20 @@ export const VsumTabs: React.FC<VsumTabsProps> = ({
                 title="Unsaved Changes Detected"
                 message={
                     <>
-                        <p style={{ margin: '0 0 16px 0', lineHeight: '1.6' }}>
+                        <p style={{ margin: '0 0 12px 0', lineHeight: '1.6' }}>
                             {unsavedChangesAction === 'build' 
-                                ? 'Your project has unsaved changes. To ensure the build check reflects your current work accurately, it is strongly recommended to save before proceeding.'
-                                : 'Your project has unsaved changes. To ensure the downloaded artifact includes your latest work, it is strongly recommended to save before proceeding.'}
+                                ? 'Your project has unsaved changes. The build check will not include these changes.'
+                                : 'Your project has unsaved changes. The downloaded artifact will not include these changes.'}
                         </p>
-                        <p style={{ margin: '0 0 8px 0', fontWeight: 700, fontSize: '15px' }}>
-                            What would you like to do?
+                        <p style={{ margin: '0', fontWeight: 600, fontSize: '14px' }}>
+                            Do you want to continue anyway?
                         </p>
-                        <ul style={{ margin: '0', paddingLeft: '20px', lineHeight: '1.8' }}>
-                            <li><strong>Save and Continue:</strong> Your changes will be saved, then the {unsavedChangesAction === 'build' ? 'build check' : 'download'} will proceed.</li>
-                            <li><strong>Continue Anyway:</strong> Proceed immediately without saving (your unsaved changes will not be included).</li>
-                        </ul>
                     </>
                 }
-                confirmText="Save and Continue"
-                cancelText="Continue Anyway"
+                confirmText="Continue Anyway"
+                cancelText="Close"
                 variant="danger"
                 onConfirm={async () => {
-                    const action = unsavedChangesAction;
-                    setUnsavedChangesAction(null);
-                    
-                    // Save first
-                    await onSave();
-                    
-                    // Then perform the action
-                    if (action === 'build') {
-                        await performBuild();
-                    } else if (action === 'download') {
-                        await performDownload();
-                    }
-                }}
-                onCancel={async () => {
                     const action = unsavedChangesAction;
                     setUnsavedChangesAction(null);
                     
@@ -736,6 +718,10 @@ export const VsumTabs: React.FC<VsumTabsProps> = ({
                     } else if (action === 'download') {
                         await performDownload();
                     }
+                }}
+                onCancel={() => {
+                    // Just close the dialog
+                    setUnsavedChangesAction(null);
                 }}
             />
         </>
