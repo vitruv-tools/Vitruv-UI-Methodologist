@@ -99,6 +99,7 @@ export function AuthProvider({ children }: Readonly<AuthProviderProps>) {
                     name: `${data.firstName ?? ''} ${data.lastName ?? ''}`.trim() || data.email,
                     givenName: data.firstName,
                     familyName: data.lastName,
+                    emailVerified: (data as any).emailVerified,
                 };
             } catch {
                 return getUserFromAccessToken();
@@ -126,6 +127,7 @@ export function AuthProvider({ children }: Readonly<AuthProviderProps>) {
                     name: `${data.firstName ?? ''} ${data.lastName ?? ''}`.trim() || data.email || username,
                     givenName: data.firstName,
                     familyName: data.lastName,
+                    emailVerified: (data as any).emailVerified,
                 };
                 AuthService.setCurrentUser(mapped);
                 setUser(mapped);

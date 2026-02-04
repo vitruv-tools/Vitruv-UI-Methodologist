@@ -1,6 +1,6 @@
 # Vitruvius Modeler
 
-A React-based flow modeling application for creating and managing Vitruvius diagrams.
+A React-based flow modeling application for the [Vitruvius Framework](https://github.com/vitruv-tools), enabling users to visually create and edit models with automatic synchronization across heterogeneous models.
 
 ## Features
 
@@ -10,6 +10,8 @@ A React-based flow modeling application for creating and managing Vitruvius diag
 - **Undo/Redo Functionality**: Use Ctrl+Z to undo and Ctrl+Y to redo changes
 - **Node Deletion**: Delete nodes by selecting them and clicking the delete button
 - **Deploy Functionality**: Deploy your models to the Vitruvius backend
+- **Model Synchronization**: Automatic change propagation across models
+- **Live Validation**: Real-time consistency checks and validations
 - **Modern UI**: Clean and intuitive user interface
 
 ## Project Structure
@@ -90,6 +92,8 @@ For detailed environment configuration, see [ENVIRONMENT_SETUP.md](./ENVIRONMENT
 - **TypeScript** - Type safety
 - **React Flow** - Flow diagram library
 - **React DnD** - Drag and drop functionality
+- **Vitruvius Framework** - Model synchronization backend
+- **Eclipse Modeling Framework (EMF)** - Model interoperability
 
 ## Development
 
@@ -118,5 +122,3 @@ The project follows React best practices with:
 3. Make your changes following the established patterns
 4. Add tests for new functionality
 5. Submit a pull request
-
-
