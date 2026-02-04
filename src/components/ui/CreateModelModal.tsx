@@ -326,6 +326,17 @@ export const CreateModelModal: React.FC<CreateModelModalProps> = ({
     setError('');
 
     try {
+      // Delete the previously uploaded file if it exists
+      if (uploadedFileIds.ecoreFileId > 0) {
+        try {
+          await apiService.deleteFile(uploadedFileIds.ecoreFileId);
+          console.log('Deleted previous .ecore file:', uploadedFileIds.ecoreFileId);
+        } catch (error_) {
+          console.warn('Failed to delete previous .ecore file:', error_);
+          // Continue with upload even if deletion fails
+        }
+      }
+
       if (ecoreProgressIntervalRef.current) clearInterval(ecoreProgressIntervalRef.current);
       ecoreProgressIntervalRef.current = globalThis.setInterval(() => {
         setUploadProgress(prev => ({
@@ -384,6 +395,17 @@ export const CreateModelModal: React.FC<CreateModelModalProps> = ({
     setError('');
 
     try {
+      // Delete the previously uploaded file if it exists
+      if (uploadedFileIds.genModelFileId > 0) {
+        try {
+          await apiService.deleteFile(uploadedFileIds.genModelFileId);
+          console.log('Deleted previous .genmodel file:', uploadedFileIds.genModelFileId);
+        } catch (error_) {
+          console.warn('Failed to delete previous .genmodel file:', error_);
+          // Continue with upload even if deletion fails
+        }
+      }
+
       if (genmodelProgressIntervalRef.current) clearInterval(genmodelProgressIntervalRef.current);
       genmodelProgressIntervalRef.current = globalThis.setInterval(() => {
         setUploadProgress(prev => ({

@@ -736,6 +736,8 @@ export const VsumDetailsModal: React.FC<Props> = ({ isOpen, vsumId, onClose, onS
       await apiService.deleteVsum(vsumId);
       setDeleting(false);
       setConfirmOpen(false);
+      // Notify that VSUM was deleted so open tabs can be closed
+      globalThis.dispatchEvent(new CustomEvent('vitruv.vsumDeleted', { detail: { id: vsumId } }));
       onSaved?.();
       onClose();
     } catch (e: any) {
@@ -806,9 +808,19 @@ export const VsumDetailsModal: React.FC<Props> = ({ isOpen, vsumId, onClose, onS
       await apiService.restoreVsumVersion(vsumId, versionId);
       setRestoreConfirmOpen(null);
       onSaved?.();
-      // Reload versions to reflect the change
-      const res = await apiService.getVsumVersions(vsumId);
-      setVersions(res.data || []);
+      
+      // Reload both details and versions to reflect the change
+      const [detailsRes, versionsRes] = await Promise.all([
+        apiService.getVsumDetails(vsumId),
+        apiService.getVsumVersions(vsumId)
+      ]);
+      
+      setDetails(detailsRes.data);
+      setName(detailsRes.data.name ?? '');
+      setVersions(versionsRes.data || []);
+      
+      // Notify workspace to reload if this VSUM is currently open
+      globalThis.dispatchEvent(new CustomEvent('vitruv.vsumRestored', { detail: { id: vsumId } }));
     } catch (e: any) {
       setRestoreError(e?.response?.data?.message || e?.message || 'Failed to restore version');
     } finally {

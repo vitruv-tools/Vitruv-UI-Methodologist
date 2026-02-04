@@ -357,7 +357,7 @@ export const VsumsPanel: React.FC = () => {
                         style={cardStyle}
                         onMouseEnter={(e) => Object.assign(e.currentTarget.style, cardHoverStyle)}
                         onMouseLeave={(e) => Object.assign(e.currentTarget.style, cardStyle)}
-                        onClick={() => {
+                        onDoubleClick={() => {
                             if (!showDeleted) {
                                 globalThis.dispatchEvent(new CustomEvent('vitruv.openVsum', { detail: { id: item.id } }));
                             }

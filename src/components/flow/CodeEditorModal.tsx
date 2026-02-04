@@ -2,6 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import Editor, { OnMount, Monaco } from '@monaco-editor/react';
 import { reactionsMonarch, reactionsTheme, reactionsLanguageConfig } from './ReactionsMonarchGrammar';
 import * as monaco from 'monaco-editor';
+import { ConfirmDialog } from '../ui/ConfirmDialog';
 
 interface CodeEditorModalProps {
   readonly isOpen: boolean;
@@ -57,6 +58,8 @@ export function CodeEditorModal({
   const lspInitialized = useRef(false);
   const workspaceRootUri = useRef<string | null>(null);
   const versionCounter = useRef(1);
+  const [showDeleteDialog, setShowDeleteDialog] = useState(false);
+  const [showClearDialog, setShowClearDialog] = useState(false);
 
   useEffect(() => {
     setCode(initialCode);
@@ -451,10 +454,7 @@ export function CodeEditorModal({
   };
 
   const handleDelete = () => {
-    if (globalThis.confirm('Do you want to delete this relation? Note: this action cannot be reverted!')) {
-      onDelete?.();
-      onClose();
-    }
+    setShowDeleteDialog(true);
   };
 
   const handleUndo = () => {
@@ -470,9 +470,7 @@ export function CodeEditorModal({
   };
 
   const handleClear = () => {
-    if (globalThis.confirm('Do you want to delete the whole code?')) {
-      setCode('');
-    }
+    setShowClearDialog(true);
   };
 
   if (!isOpen) {
@@ -703,6 +701,35 @@ export function CodeEditorModal({
           </div>
         </div>
       </div>
+
+      <ConfirmDialog
+        isOpen={showDeleteDialog}
+        title="Delete Relation"
+        message="Do you want to delete this relation? Note: this action cannot be reverted!"
+        confirmText="Delete"
+        cancelText="Cancel"
+        variant="danger"
+        onConfirm={() => {
+          onDelete?.();
+          onClose();
+          setShowDeleteDialog(false);
+        }}
+        onCancel={() => setShowDeleteDialog(false)}
+      />
+
+      <ConfirmDialog
+        isOpen={showClearDialog}
+        title="Clear Code"
+        message="Do you want to delete all the code in this editor?"
+        confirmText="Clear All"
+        cancelText="Cancel"
+        variant="danger"
+        onConfirm={() => {
+          setCode('');
+          setShowClearDialog(false);
+        }}
+        onCancel={() => setShowClearDialog(false)}
+      />
     </dialog>
   );
 }
