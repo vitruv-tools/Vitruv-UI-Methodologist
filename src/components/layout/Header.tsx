@@ -188,9 +188,6 @@ const ActionButton: React.FC<ActionButtonProps> = ({ onClick, icon, label, varia
     opacity: disabled ? 0.5 : 1,
   };
 
-  const hoverBackground = isPrimary ? '#037368' : '#c0392b';
-  const activeBackground = isPrimary ? '#049484' : '#e74c3c';
-
   return (
     <button
       onClick={onClick}
@@ -591,11 +588,6 @@ const validatePassword = (password: string): PasswordValidation => {
     isPasswordValid,
   };
 };
-
-const getButtonDisabledStyle = (isDisabled: boolean) => ({
-  cursor: isDisabled ? 'not-allowed' as const : 'pointer' as const,
-  opacity: isDisabled ? 0.6 : 1,
-});
 
 export function Header({ title = 'Methodologist Dashboard', user, onLogout }: Readonly<HeaderProps>) {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
