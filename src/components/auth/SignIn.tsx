@@ -63,7 +63,7 @@ export function SignIn({ onSignInSuccess, onSwitchToSignUp }: Readonly<SignInPro
     setResetError('');
     setResetSuccess('');
 
-    if (!forgotPasswordEmail || !forgotPasswordEmail.includes('@')) {
+    if (!forgotPasswordEmail?.includes('@')) {
       setResetError('Please enter a valid email address');
       return;
     }
@@ -191,6 +191,8 @@ export function SignIn({ onSignInSuccess, onSwitchToSignUp }: Readonly<SignInPro
       {/* Forgot Password Modal */}
       {isForgotPasswordOpen && (
         <div
+          role="button"
+          tabIndex={0}
           style={{
             position: 'fixed',
             top: 0,
@@ -205,17 +207,32 @@ export function SignIn({ onSignInSuccess, onSwitchToSignUp }: Readonly<SignInPro
             justifyContent: 'center',
             zIndex: 10000,
             animation: 'fadeIn 0.2s ease-out',
+            cursor: 'default',
           }}
-          onClick={() => {
-            if (!isSendingReset) {
+          onClick={(e) => {
+            // Only close if clicking directly on the backdrop, not its children
+            if (e.target === e.currentTarget && !isSendingReset) {
               setIsForgotPasswordOpen(false);
               setResetError('');
               setResetSuccess('');
               setForgotPasswordEmail('');
             }
           }}
+          onKeyDown={(e) => {
+            if ((e.key === 'Escape' || e.key === 'Enter' || e.key === ' ') && !isSendingReset) {
+              e.preventDefault();
+              setIsForgotPasswordOpen(false);
+              setResetError('');
+              setResetSuccess('');
+              setForgotPasswordEmail('');
+            }
+          }}
+          aria-label="Close modal"
         >
           <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="forgot-password-title"
             style={{
               background: '#ffffff',
               borderRadius: 16,
@@ -226,7 +243,6 @@ export function SignIn({ onSignInSuccess, onSwitchToSignUp }: Readonly<SignInPro
               overflow: 'hidden',
               animation: 'slideUp 0.3s ease-out',
             }}
-            onClick={(e) => e.stopPropagation()}
           >
             {/* Header with gradient */}
             <div style={{
@@ -235,13 +251,16 @@ export function SignIn({ onSignInSuccess, onSwitchToSignUp }: Readonly<SignInPro
               color: '#ffffff',
               borderBottom: '3px solid #037368',
             }}>
-              <h2 style={{
-                margin: 0,
-                fontSize: 26,
-                fontWeight: 700,
-                letterSpacing: '-0.5px',
-                lineHeight: 1.3,
-              }}>
+              <h2
+                id="forgot-password-title"
+                style={{
+                  margin: 0,
+                  fontSize: 26,
+                  fontWeight: 700,
+                  letterSpacing: '-0.5px',
+                  lineHeight: 1.3,
+                }}
+              >
                 Password Recovery
               </h2>
               <p style={{
@@ -258,17 +277,21 @@ export function SignIn({ onSignInSuccess, onSwitchToSignUp }: Readonly<SignInPro
             {/* Form Content */}
             <div style={{ padding: '32px' }}>
               <div style={{ marginBottom: 24 }}>
-                <label style={{
-                  display: 'block',
-                  marginBottom: 10,
-                  fontSize: 14,
-                  fontWeight: 600,
-                  color: '#1f2937',
-                  letterSpacing: '0.2px',
-                }}>
+                <label
+                  htmlFor="forgot-password-email"
+                  style={{
+                    display: 'block',
+                    marginBottom: 10,
+                    fontSize: 14,
+                    fontWeight: 600,
+                    color: '#1f2937',
+                    letterSpacing: '0.2px',
+                  }}
+                >
                   Registered Email Address
                 </label>
                 <input
+                  id="forgot-password-email"
                   type="email"
                   value={forgotPasswordEmail}
                   onChange={(e) => {

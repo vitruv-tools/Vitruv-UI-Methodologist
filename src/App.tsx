@@ -35,7 +35,7 @@ function ProtectedRoute({ children }: Readonly<{ children: React.ReactNode }>) {
   }
 
   // Check if user needs email verification
-  if (user && user.emailVerified === false) {
+  if (user?.emailVerified === false) {
     return <Navigate to="/verify-otp" replace />;
   }
 

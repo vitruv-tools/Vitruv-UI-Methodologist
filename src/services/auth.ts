@@ -59,6 +59,58 @@ export class AuthService {
   private static readonly CLIENT_ID = 'exit-normal-customer-mobile-app';
   private static readonly GRANT_TYPE = 'password';
 
+  private static async extractErrorMessage(response: Response): Promise<string> {
+    let errorText = '';
+    try {
+      errorText = await response.text();
+    } catch { }
+    
+    let errorMessage = errorText;
+    try {
+      const parsed = JSON.parse(errorText);
+      errorMessage = parsed?.message || parsed?.error || errorText;
+    } catch { }
+    
+    return errorMessage || response.statusText || 'Request failed';
+  }
+
+  private static storeAuthTokens(tokenData: any): void {
+    if (!tokenData.access_token) {
+      console.warn('No authentication tokens found in sign-up response. User may need to sign in separately.');
+      return;
+    }
+
+    localStorage.setItem('auth.access_token', tokenData.access_token);
+    
+    if (tokenData.refresh_token) {
+      localStorage.setItem('auth.refresh_token', tokenData.refresh_token);
+    }
+    if (tokenData.expires_in) {
+      localStorage.setItem('auth.expires_in', tokenData.expires_in.toString());
+      const accessExpiresAt = Date.now() + (tokenData.expires_in * 1000);
+      localStorage.setItem('auth.access_expires_at', accessExpiresAt.toString());
+    }
+    if (tokenData.refresh_expires_in) {
+      localStorage.setItem('auth.refresh_expires_in', tokenData.refresh_expires_in.toString());
+      const refreshExpiresAt = Date.now() + (tokenData.refresh_expires_in * 1000);
+      localStorage.setItem('auth.refresh_expires_at', refreshExpiresAt.toString());
+    }
+    if (tokenData.token_type) {
+      localStorage.setItem('auth.token_type', tokenData.token_type);
+    }
+    if (tokenData.session_state) {
+      localStorage.setItem('auth.session_state', tokenData.session_state);
+    }
+    if (tokenData.scope) {
+      localStorage.setItem('auth.scope', tokenData.scope);
+    }
+    if (tokenData['not-before-policy'] !== undefined) {
+      localStorage.setItem('auth.not_before_policy', tokenData['not-before-policy'].toString());
+    }
+    
+    console.log('Sign-up tokens stored successfully');
+  }
+
   static async signUp(credentials: SignUpCredentials): Promise<SignUpResponse> {
     const response = await fetch(`${this.LOCAL_API_BASE_URL}/api/v1/users/sign-up`, {
       method: 'POST',
@@ -69,58 +121,13 @@ export class AuthService {
     });
 
     if (!response.ok) {
-      let errorText = '';
-      try {
-        errorText = await response.text();
-      } catch { }
-      let errorMessage = errorText;
-      try {
-        const parsed = JSON.parse(errorText);
-        errorMessage = parsed?.message || parsed?.error || errorText;
-      } catch { }
-      const fallback = response.statusText || 'Request failed';
-      throw new Error(errorMessage || fallback);
+      const errorMessage = await this.extractErrorMessage(response);
+      throw new Error(errorMessage);
     }
 
     const responseData: SignUpResponse = await response.json();
-    
-    // Check for tokens at root level or inside data object
     const tokenData = responseData.access_token ? responseData : (responseData.data || {});
-    
-    // Store authentication tokens if they're included in the response
-    if (tokenData.access_token) {
-      localStorage.setItem('auth.access_token', tokenData.access_token);
-      
-      if (tokenData.refresh_token) {
-        localStorage.setItem('auth.refresh_token', tokenData.refresh_token);
-      }
-      if (tokenData.expires_in) {
-        localStorage.setItem('auth.expires_in', tokenData.expires_in.toString());
-        const accessExpiresAt = Date.now() + (tokenData.expires_in * 1000);
-        localStorage.setItem('auth.access_expires_at', accessExpiresAt.toString());
-      }
-      if (tokenData.refresh_expires_in) {
-        localStorage.setItem('auth.refresh_expires_in', tokenData.refresh_expires_in.toString());
-        const refreshExpiresAt = Date.now() + (tokenData.refresh_expires_in * 1000);
-        localStorage.setItem('auth.refresh_expires_at', refreshExpiresAt.toString());
-      }
-      if (tokenData.token_type) {
-        localStorage.setItem('auth.token_type', tokenData.token_type);
-      }
-      if (tokenData.session_state) {
-        localStorage.setItem('auth.session_state', tokenData.session_state);
-      }
-      if (tokenData.scope) {
-        localStorage.setItem('auth.scope', tokenData.scope);
-      }
-      if (tokenData['not-before-policy'] !== undefined) {
-        localStorage.setItem('auth.not_before_policy', tokenData['not-before-policy'].toString());
-      }
-      
-      console.log('Sign-up tokens stored successfully');
-    } else {
-      console.warn('No authentication tokens found in sign-up response. User may need to sign in separately.');
-    }
+    this.storeAuthTokens(tokenData);
     
     return responseData;
   }
