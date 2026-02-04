@@ -10,8 +10,8 @@ export function AuthPage() {
   };
 
   const handleSignUpSuccess = (user: any) => {
-    // Redirect to main app - this will be handled by the router
-    globalThis.location.href = '/';
+    // Redirect to OTP verification page after successful registration
+    globalThis.location.href = '/verify-otp';
   };
 
   const handleSwitchToSignUp = () => {

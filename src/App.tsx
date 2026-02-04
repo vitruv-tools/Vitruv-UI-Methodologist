@@ -4,6 +4,7 @@ import { AuthPage, KeycloakRedirect } from './components/auth';
 import { HomePage } from './pages/HomePage';
 import { ProjectPage } from './pages/ProjectPage';
 import { EditorTest } from './pages/EditorTest';  // <- NEU
+import { OtpVerificationPage } from './pages/OtpVerificationPage';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { apiService } from './services/api';
 import { exportFlowData } from './utils';
@@ -12,7 +13,7 @@ import './App.css';
 import { SidebarTabs, MainLayout } from './components';
 
 function ProtectedRoute({ children }: Readonly<{ children: React.ReactNode }>) {
-  const { isAuthenticated, isLoading } = useAuth();
+  const { isAuthenticated, isLoading, user } = useAuth();
 
   if (isLoading) {
     return (
@@ -31,6 +32,11 @@ function ProtectedRoute({ children }: Readonly<{ children: React.ReactNode }>) {
 
   if (!isAuthenticated) {
     return <Navigate to="/login" replace />;
+  }
+
+  // Check if user needs email verification
+  if (user && user.emailVerified === false) {
+    return <Navigate to="/verify-otp" replace />;
   }
 
   return <>{children}</>;
@@ -96,6 +102,7 @@ function App() {
         <Routes>
           <Route path="/login" element={<AuthPage />} />
           <Route path="/auth" element={<KeycloakRedirect />} />
+          <Route path="/verify-otp" element={<OtpVerificationPage />} />
           <Route path="/" element={
             <ProtectedRoute>
               <HomePage />

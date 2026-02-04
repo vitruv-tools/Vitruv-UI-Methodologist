@@ -28,6 +28,14 @@ export interface SignUpCredentials {
 export interface SignUpResponse {
   data: any;
   message: string;
+  access_token?: string;
+  refresh_token?: string;
+  expires_in?: number;
+  refresh_expires_in?: number;
+  token_type?: string;
+  session_state?: string;
+  scope?: string;
+  'not-before-policy'?: number;
 }
 
 export interface RefreshTokenRequest {
@@ -74,8 +82,47 @@ export class AuthService {
       throw new Error(errorMessage || fallback);
     }
 
-    const data: SignUpResponse = await response.json();
-    return data;
+    const responseData: SignUpResponse = await response.json();
+    
+    // Check for tokens at root level or inside data object
+    const tokenData = responseData.access_token ? responseData : (responseData.data || {});
+    
+    // Store authentication tokens if they're included in the response
+    if (tokenData.access_token) {
+      localStorage.setItem('auth.access_token', tokenData.access_token);
+      
+      if (tokenData.refresh_token) {
+        localStorage.setItem('auth.refresh_token', tokenData.refresh_token);
+      }
+      if (tokenData.expires_in) {
+        localStorage.setItem('auth.expires_in', tokenData.expires_in.toString());
+        const accessExpiresAt = Date.now() + (tokenData.expires_in * 1000);
+        localStorage.setItem('auth.access_expires_at', accessExpiresAt.toString());
+      }
+      if (tokenData.refresh_expires_in) {
+        localStorage.setItem('auth.refresh_expires_in', tokenData.refresh_expires_in.toString());
+        const refreshExpiresAt = Date.now() + (tokenData.refresh_expires_in * 1000);
+        localStorage.setItem('auth.refresh_expires_at', refreshExpiresAt.toString());
+      }
+      if (tokenData.token_type) {
+        localStorage.setItem('auth.token_type', tokenData.token_type);
+      }
+      if (tokenData.session_state) {
+        localStorage.setItem('auth.session_state', tokenData.session_state);
+      }
+      if (tokenData.scope) {
+        localStorage.setItem('auth.scope', tokenData.scope);
+      }
+      if (tokenData['not-before-policy'] !== undefined) {
+        localStorage.setItem('auth.not_before_policy', tokenData['not-before-policy'].toString());
+      }
+      
+      console.log('Sign-up tokens stored successfully');
+    } else {
+      console.warn('No authentication tokens found in sign-up response. User may need to sign in separately.');
+    }
+    
+    return responseData;
   }
 
   static async signIn(credentials: SignInCredentials): Promise<AuthResponse> {

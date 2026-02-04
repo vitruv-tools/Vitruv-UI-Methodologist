@@ -174,6 +174,44 @@ class ApiService {
   }
 
   /**
+   * Change user password
+   */
+  async changePassword(password: string): Promise<{ data: any; message: string }> {
+    return this.authenticatedRequest('/api/v1/users/change-password', {
+      method: 'PUT',
+      body: JSON.stringify({ password }),
+    });
+  }
+
+  /**
+   * Forgot password - sends new password to user's email
+   */
+  async forgotPassword(email: string): Promise<{ data: any; message: string }> {
+    return this.publicRequest(`/api/v1/users/forgot-password?email=${encodeURIComponent(email)}`, {
+      method: 'GET',
+    });
+  }
+
+  /**
+   * Verify OTP code after registration
+   */
+  async verifyOtp(inputCode: string): Promise<{ data: any; message: string }> {
+    return this.authenticatedRequest('/api/v1/users/verify-otp', {
+      method: 'PUT',
+      body: JSON.stringify({ inputCode }),
+    });
+  }
+
+  /**
+   * Resend OTP code
+   */
+  async resendOtp(): Promise<{ data: any; message: string }> {
+    return this.authenticatedRequest('/api/v1/users/resend-otp', {
+      method: 'GET',
+    });
+  }
+
+  /**
    * Deploy a flow
    */
   async deployFlow(flowData: FlowData): Promise<{ success: boolean; message: string }> {
