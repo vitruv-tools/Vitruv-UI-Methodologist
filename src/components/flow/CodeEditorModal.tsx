@@ -65,6 +65,54 @@ export function CodeEditorModal({
     setCode(initialCode);
   }, [initialCode, isOpen]);
 
+  // Cleanup beim Unmount
+  useEffect(() => {
+    return () => {
+      if (webSocketRef.current) {
+        console.log('🧹 Component unmounting - closing WebSocket cleanly');
+        if (webSocketRef.current.readyState === WebSocket.OPEN ||
+          webSocketRef.current.readyState === WebSocket.CONNECTING) {
+          webSocketRef.current.close(1000, 'Editor closed');
+        }
+        webSocketRef.current = null;
+      }
+      lspReady.current = false;
+      lspInitialized.current = false;
+      setLspConnected(false);
+    };
+  }, []);
+
+  // Cleanup beim Browser-Close/Refresh
+  useEffect(() => {
+    const handleBeforeUnload = () => {
+      if (webSocketRef.current &&
+        (webSocketRef.current.readyState === WebSocket.OPEN ||
+          webSocketRef.current.readyState === WebSocket.CONNECTING)) {
+        console.log('🧹 Page unloading - closing WebSocket');
+        webSocketRef.current.close(1000, 'Page unloading');
+      }
+    };
+
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+  }, []);
+
+  // Wrapper für sauberes Schließen
+  const handleClose = () => {
+    console.log('🚪 Modal closing - cleaning up WebSocket');
+    if (webSocketRef.current) {
+      if (webSocketRef.current.readyState === WebSocket.OPEN ||
+        webSocketRef.current.readyState === WebSocket.CONNECTING) {
+        webSocketRef.current.close(1000, 'Modal closed');
+      }
+      webSocketRef.current = null;
+    }
+    lspReady.current = false;
+    lspInitialized.current = false;
+    setLspConnected(false);
+    onClose();
+  };
+
   // Extracted: Process LSP completion response
   const processCompletionResponse = (
     message: any,
@@ -324,33 +372,43 @@ export function CodeEditorModal({
       const rawUser = localStorage.getItem('auth.user');
       const userId = rawUser ? JSON.parse(rawUser).id : null;
 
-
       if (!userId) {
         console.error('❌ No userId available – aborting LSP connection');
         return;
       }
-
-
 
       if (!vsumId) {
         console.error('❌ No vsumId available – aborting LSP connection');
         return;
       }
 
-      const wsUrl = `ws://localhost:9811/lsp?userId=${encodeURIComponent(userId)}&vsumId=${encodeURIComponent(vsumId)}`;
-      const webSocket = new WebSocket(wsUrl);
+      // WebSocket URL aus API_BASE_URL ableiten
+      const apiBaseUrl = process.env.REACT_APP_API_BASE_URL || 'http://localhost:9811';
+      const wsBaseUrl = apiBaseUrl
+        .replace('https://', 'wss://')
+        .replace('http://', 'ws://');
 
+      const wsUrl = `${wsBaseUrl}/lsp?userId=${encodeURIComponent(userId)}&vsumId=${encodeURIComponent(vsumId)}`;
+
+      console.log('🔌 Connecting to LSP at:', wsUrl);
+
+      const webSocket = new WebSocket(wsUrl);
       webSocketRef.current = webSocket;
 
+      console.log('🔌 WebSocket created, initial readyState:', webSocket.readyState);
+
       webSocket.onopen = () => {
+        console.log('✅ WebSocket OPENED! readyState:', webSocket.readyState);
         setLspConnected(true);
       };
 
       webSocket.onmessage = (event) => {
+        console.log('📩 WebSocket message received:', event.data);
         try {
           const message = JSON.parse(event.data);
 
           if (message.type === 'workspaceReady') {
+            console.log('✅ workspaceReady received, rootUri:', message.rootUri);
             const rootUri = message.rootUri;
 
             if (!rootUri) {
@@ -364,6 +422,7 @@ export function CodeEditorModal({
           }
 
           if (message.method === 'textDocument/publishDiagnostics') {
+            console.log('📊 Diagnostics received');
             const diagnostics = message.params.diagnostics || [];
             const markers = diagnostics.map((diag: any) => ({
               severity: getDiagnosticSeverity(diag.severity, monacoInstance),
@@ -382,6 +441,7 @@ export function CodeEditorModal({
           }
 
           if (message.id === 1 && message.result) {
+            console.log('✅ Initialize response received');
             lspInitialized.current = true;
             webSocket.send(JSON.stringify({
               jsonrpc: '2.0',
@@ -389,7 +449,10 @@ export function CodeEditorModal({
               params: {}
             }));
 
+            console.log('📤 Sent initialized notification');
+
             if (editorRef.current) {
+              console.log('📤 Sending didOpen notification');
               webSocket.send(JSON.stringify({
                 jsonrpc: '2.0',
                 method: 'textDocument/didOpen',
@@ -403,6 +466,7 @@ export function CodeEditorModal({
                 }
               }));
               lspReady.current = true;
+              console.log('✅ LSP is now READY');
             } else {
               console.error('❌ editorRef.current is null!');
             }
@@ -415,11 +479,18 @@ export function CodeEditorModal({
 
       webSocket.onerror = (error) => {
         console.error('❌ LSP WebSocket ERROR:', error);
+        console.error('WebSocket state at error:', webSocket.readyState);
+        console.error('WebSocket URL was:', wsUrl);
         setLspConnected(false);
         lspReady.current = false;
       };
 
-      webSocket.onclose = () => {
+      webSocket.onclose = (event) => {
+        console.error('❌ WebSocket CLOSED:', {
+          code: event.code,
+          reason: event.reason,
+          wasClean: event.wasClean
+        });
         setLspConnected(false);
         lspReady.current = false;
         lspInitialized.current = false;
@@ -430,20 +501,12 @@ export function CodeEditorModal({
     }
   };
 
-  useEffect(() => {
-    return () => {
-      if (webSocketRef.current) {
-        webSocketRef.current.close();
-      }
-    };
-  }, []);
-
   const handleSave = async () => {
     if (saving) return;
     try {
       setSaving(true);
       await onSave(code);
-      onClose();
+      handleClose(); // ✅ Statt onClose()
     } catch (err) {
       console.error('Failed to save reaction', err);
       const message = err instanceof Error ? err.message : 'Failed to save reaction';
@@ -497,9 +560,9 @@ export function CodeEditorModal({
         maxWidth: '100%',
         maxHeight: '100%',
       }}
-      onClose={onClose}
-      onCancel={onClose}
-      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
+      onClose={handleClose} // ✅ Statt onClose
+      onCancel={handleClose} // ✅ Statt onClose
+      onClick={(e) => { if (e.target === e.currentTarget) handleClose(); }} // ✅ Statt onClose
     >
       <div
         aria-labelledby="code-editor-title"
@@ -543,7 +606,7 @@ export function CodeEditorModal({
             )}
           </div>
           <button
-            onClick={onClose}
+            onClick={handleClose} // ✅ Statt onClose
             style={{
               background: 'transparent',
               border: 'none',
@@ -711,7 +774,7 @@ export function CodeEditorModal({
         variant="danger"
         onConfirm={() => {
           onDelete?.();
-          onClose();
+          handleClose(); // ✅ Statt onClose()
           setShowDeleteDialog(false);
         }}
         onCancel={() => setShowDeleteDialog(false)}
