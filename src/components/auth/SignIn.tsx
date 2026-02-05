@@ -47,10 +47,10 @@ export function SignIn({ onSignInSuccess, onSwitchToSignUp }: Readonly<SignInPro
     setError(null);
 
     try {
-      await signIn(credentials.username, credentials.password);
+      const userInfo = await signIn(credentials.username, credentials.password);
       
-      // Call success callback
-      onSignInSuccess({ username: credentials.username });
+      // Call success callback with user info including emailVerified status
+      onSignInSuccess(userInfo);
     } catch (err: any) {
       console.error('Sign in error:', err);
       setError(err.message || 'Sign in failed. Please check your credentials.');

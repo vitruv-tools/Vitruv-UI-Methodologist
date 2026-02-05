@@ -5,8 +5,18 @@ export function AuthPage() {
   const [isSignIn, setIsSignIn] = useState(true);
 
   const handleSignInSuccess = (user: any) => {
-    // Redirect to main app - this will be handled by the router
-    globalThis.location.href = '/';
+    // Check if user needs email verification
+    console.log('Sign in successful, user:', user);
+    
+    if (user?.emailVerified === false) {
+      // User is not verified, redirect to OTP verification
+      console.log('User email not verified, redirecting to OTP verification');
+      globalThis.location.href = '/verify-otp';
+    } else {
+      // User is verified or verification status unknown, redirect to main app
+      console.log('User email verified, redirecting to home');
+      globalThis.location.href = '/';
+    }
   };
 
   const handleSignUpSuccess = (user: any) => {
