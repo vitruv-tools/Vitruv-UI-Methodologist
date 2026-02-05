@@ -15,16 +15,8 @@ export function OtpVerificationPage() {
   const [success, setSuccess] = useState<string | null>(null);
   const [timeLeft, setTimeLeft] = useState(OTP_DURATION);
   const [canResend, setCanResend] = useState(false);
-  const [hasToken, setHasToken] = useState(true);
-
-  // Check if user has authentication token
-  useEffect(() => {
-    const token = AuthService.getAccessToken();
-    if (!token) {
-      setHasToken(false);
-      setError('Authentication session expired. Please sign in again.');
-    }
-  }, []);
+  const [failedAttempts, setFailedAttempts] = useState(0);
+  const MAX_ATTEMPTS = 3;
 
   // Countdown timer
   useEffect(() => {
@@ -58,7 +50,11 @@ export function OtpVerificationPage() {
     setError(null);
     setSuccess(null);
 
-    if (!hasToken) {
+    // Check authentication only when user tries to verify
+    const token = AuthService.getAccessToken();
+    const isAuth = AuthService.isAuthenticated();
+    
+    if (!token || !isAuth) {
       setError('Authentication session expired. Please sign in again.');
       setTimeout(() => navigate('/login'), 2000);
       return;
@@ -74,6 +70,23 @@ export function OtpVerificationPage() {
       const response = await apiService.verifyOtp(otpCode);
       setSuccess(response.message || 'Email verified successfully!');
       
+      // Fetch updated user info to get emailVerified status
+      try {
+        const { data } = await apiService.getUserInfo();
+        const updatedUser = {
+          id: String(data.id),
+          username: data.email?.split('@')[0] || 'user',
+          email: data.email,
+          name: `${data.firstName ?? ''} ${data.lastName ?? ''}`.trim() || data.email,
+          givenName: data.firstName,
+          familyName: data.lastName,
+          emailVerified: (data as any).emailVerified,
+        };
+        AuthService.setCurrentUser(updatedUser);
+      } catch (userInfoError) {
+        console.error('Failed to fetch updated user info:', userInfoError);
+      }
+      
       // Redirect to home page after successful verification
       setTimeout(() => {
         navigate('/');
@@ -81,13 +94,31 @@ export function OtpVerificationPage() {
     } catch (err: any) {
       const errorMessage = err.message || 'Invalid OTP code. Please try again.';
       
-      // Check if it's an authentication error
-      if (errorMessage.includes('authentication') || errorMessage.includes('token')) {
-        setError('Your session has expired. Redirecting to login...');
-        setTimeout(() => navigate('/login'), 2000);
-      } else {
-        setError(errorMessage);
+      console.log('OTP Verification Error:', errorMessage); // Debug log
+      
+      // ASSUME it's an invalid code attempt by default
+      // Increment failed attempts counter
+      const newFailedAttempts = failedAttempts + 1;
+      setFailedAttempts(newFailedAttempts);
+      
+      // Check if maximum attempts reached
+      if (newFailedAttempts >= MAX_ATTEMPTS) {
+        setError(
+          `Too many failed attempts (${MAX_ATTEMPTS}/${MAX_ATTEMPTS}).\n\n` +
+          'For security reasons, please sign in again to request a new verification code.'
+        );
+        setTimeout(() => navigate('/login'), 3000);
+        return;
       }
+      
+      // Show error with remaining attempts (user can try again)
+      const remainingAttempts = MAX_ATTEMPTS - newFailedAttempts;
+      setError(
+        `❌ Incorrect verification code\n\n` +
+        `Attempts: ${newFailedAttempts}/${MAX_ATTEMPTS} used\n` +
+        `${remainingAttempts} ${remainingAttempts === 1 ? 'attempt' : 'attempts'} remaining\n\n` +
+        `Please check your email and try again.`
+      );
     } finally {
       setIsVerifying(false);
     }
@@ -97,7 +128,11 @@ export function OtpVerificationPage() {
     setError(null);
     setSuccess(null);
 
-    if (!hasToken) {
+    // Check authentication only when user tries to resend
+    const token = AuthService.getAccessToken();
+    const isAuth = AuthService.isAuthenticated();
+    
+    if (!token || !isAuth) {
       setError('Authentication session expired. Please sign in again.');
       setTimeout(() => navigate('/login'), 2000);
       return;
@@ -111,6 +146,7 @@ export function OtpVerificationPage() {
       setTimeLeft(OTP_DURATION);
       setCanResend(false);
       setOtpCode('');
+      setFailedAttempts(0); // Reset failed attempts with new code
     } catch (err: any) {
       const errorMessage = err.message || 'Failed to resend OTP code';
       
@@ -144,42 +180,34 @@ export function OtpVerificationPage() {
         </div>
 
         <form onSubmit={handleVerifyOtp} className="auth-form">
-          {!hasToken && (
-            <div style={{
-              padding: '14px 16px',
-              background: '#fff3cd',
-              border: '2px solid #ffc107',
-              borderRadius: 8,
-              color: '#856404',
-              fontSize: 14,
-              marginBottom: 20,
-              fontWeight: 500,
-              lineHeight: 1.5,
-            }}>
-              Your authentication session has expired. Please{' '}
-              <button
-                type="button"
-                onClick={() => navigate('/login')}
-                style={{
-                  background: 'none',
-                  border: 'none',
-                  color: '#049484',
-                  textDecoration: 'underline',
-                  cursor: 'pointer',
-                  fontWeight: 600,
-                  padding: 0,
-                }}
-              >
-                sign in again
-              </button>
-              {' '}to continue.
-            </div>
-          )}
-
           {error && (
-            <div className="error-message">
-              <span className="error-icon">⚠️</span>
-              {error}
+            <div className="error-message" style={{ display: 'block' }}>
+              <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8 }}>
+                <span className="error-icon">⚠️</span>
+                <div style={{ flex: 1 }}>
+                  {error}
+                  {error.includes('session expired') && (
+                    <div style={{ marginTop: 12 }}>
+                      <button
+                        type="button"
+                        onClick={() => navigate('/login')}
+                        style={{
+                          padding: '8px 16px',
+                          background: '#049484',
+                          color: 'white',
+                          border: 'none',
+                          borderRadius: 6,
+                          fontWeight: 600,
+                          cursor: 'pointer',
+                          fontSize: 13,
+                        }}
+                      >
+                        Go to Sign In
+                      </button>
+                    </div>
+                  )}
+                </div>
+              </div>
             </div>
           )}
 
@@ -196,6 +224,33 @@ export function OtpVerificationPage() {
               lineHeight: 1.5,
             }}>
               {success}
+            </div>
+          )}
+
+          {/* Show attempts warning after first failure */}
+          {failedAttempts > 0 && failedAttempts < MAX_ATTEMPTS && !error && (
+            <div style={{
+              padding: '12px 14px',
+              background: '#fff3cd',
+              border: '2px solid #ffc107',
+              borderRadius: 8,
+              color: '#856404',
+              fontSize: 13,
+              marginBottom: 16,
+              fontWeight: 500,
+              lineHeight: 1.5,
+              display: 'flex',
+              alignItems: 'center',
+              gap: 8,
+            }}>
+              <span style={{ fontSize: 16 }}>⚠️</span>
+              <div>
+                <strong>Verification attempts:</strong> {failedAttempts}/{MAX_ATTEMPTS} used
+                <br />
+                <span style={{ fontSize: 12 }}>
+                  {MAX_ATTEMPTS - failedAttempts} attempts remaining before requiring sign-in
+                </span>
+              </div>
             </div>
           )}
 

@@ -187,8 +187,9 @@ class ApiService {
    * Forgot password - sends new password to user's email
    */
   async forgotPassword(email: string): Promise<{ data: any; message: string }> {
-    return this.publicRequest(`/api/v1/users/forgot-password?email=${encodeURIComponent(email)}`, {
-      method: 'GET',
+    return this.publicRequest('/api/v1/users/forgot-password', {
+      method: 'POST',
+      body: JSON.stringify({ email }),
     });
   }
 

@@ -167,6 +167,7 @@ export function SignUp({ onSignUpSuccess, onSwitchToSignIn }: Readonly<SignUpPro
   const [confirmPassword, setConfirmPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [isSuccess, setIsSuccess] = useState(false);
 
   const passwordScore = calculatePasswordStrength(formData.password);
   const passwordBarColor = getPasswordBarColor(passwordScore);
@@ -196,7 +197,9 @@ export function SignUp({ onSignUpSuccess, onSwitchToSignIn }: Readonly<SignUpPro
     !!formData.username &&
     !!formData.email &&
     !!formData.password &&
-    !!confirmPassword;
+    !!confirmPassword &&
+    !!formData.firstName &&
+    !!formData.lastName;
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
@@ -208,7 +211,17 @@ export function SignUp({ onSignUpSuccess, onSwitchToSignIn }: Readonly<SignUpPro
   };
 
   const validateForm = (): boolean => {
-    const { username, email } = formData;
+    const { username, email, firstName, lastName } = formData;
+
+    if (!firstName || firstName.trim().length < 2) {
+      setError("First name is required (at least 2 characters)");
+      return false;
+    }
+
+    if (!lastName || lastName.trim().length < 2) {
+      setError("Last name is required (at least 2 characters)");
+      return false;
+    }
 
     if (!username || username.trim().length < 4) {
       setError("Username is too short");
@@ -244,10 +257,30 @@ export function SignUp({ onSignUpSuccess, onSwitchToSignIn }: Readonly<SignUpPro
 
     try {
       await signUp(formData);
-      onSignUpSuccess(formData);
+      setIsSuccess(true);
+      
+      // Show success message briefly before redirecting
+      setTimeout(() => {
+        onSignUpSuccess(formData);
+      }, 2000);
     } catch (err: any) {
-      setError(err.message || "Sign up failed. Please try again.");
-    } finally {
+      const errorMsg = err.message || "Sign up failed. Please try again.";
+      
+      // Add helpful hints for common errors
+      if (errorMsg.toLowerCase().includes('already exists') || errorMsg.toLowerCase().includes('already registered')) {
+        // Email/username already exists - provide clear guidance
+        setError(
+          `${errorMsg}\n\n` +
+          `💡 What to do:\n` +
+          `• Click "Sign In" below if you already have an account\n` +
+          `• Use a different email address if you want to create a new account\n` +
+          `• Click "Forgot your password?" on the sign-in page if you need to reset your password`
+        );
+      } else if (errorMsg.toLowerCase().includes('server error')) {
+        setError(errorMsg);
+      } else {
+        setError(errorMsg);
+      }
       setIsLoading(false);
     }
   };
@@ -271,11 +304,58 @@ export function SignUp({ onSignUpSuccess, onSwitchToSignIn }: Readonly<SignUpPro
 
           <form onSubmit={handleSubmit} className="auth-form">
             {error && (
-                <div className="error-message">
+                <div className="error-message" style={{
+                  whiteSpace: 'pre-wrap',
+                  lineHeight: '1.6',
+                }}>
                   <span className="error-icon">⚠️</span>
-                  {error.split("\n").map((line) => (
-                      <div key={line}>{line}</div>
-                  ))}
+                  <div style={{ flex: 1 }}>
+                    {error.split("\n").map((line, index) => (
+                      <div key={index} style={{
+                        marginBottom: line.trim() === '' ? '8px' : '2px',
+                      }}>
+                        {line}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+            )}
+
+            {isSuccess && (
+                <div style={{
+                  padding: '16px',
+                  background: 'linear-gradient(135deg, #d5f4e6 0%, #c8f0df 100%)',
+                  border: '2px solid #10b981',
+                  borderRadius: 12,
+                  marginBottom: 20,
+                  animation: 'slideIn 0.3s ease-out',
+                }}>
+                  <div style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 12,
+                  }}>
+                    <span style={{ fontSize: 28 }}>✅</span>
+                    <div>
+                      <div style={{
+                        fontSize: 16,
+                        fontWeight: 700,
+                        color: '#065f46',
+                        marginBottom: 4,
+                      }}>
+                        Account Created Successfully!
+                      </div>
+                      <div style={{
+                        fontSize: 14,
+                        color: '#047857',
+                        lineHeight: 1.5,
+                      }}>
+                        A verification code has been sent to <strong>{formData.email}</strong>.
+                        <br />
+                        Redirecting you to email verification...
+                      </div>
+                    </div>
+                  </div>
                 </div>
             )}
 
@@ -283,26 +363,28 @@ export function SignUp({ onSignUpSuccess, onSwitchToSignIn }: Readonly<SignUpPro
 
             <div className="form-row">
               <div className="form-group">
-                <label htmlFor="firstName">First Name</label>
+                <label htmlFor="firstName">First Name *</label>
                 <input
                     id="firstName"
                     name="firstName"
                     value={formData.firstName}
                     onChange={handleInputChange}
                     placeholder="First name"
-                    disabled={isLoading}
+                    disabled={isLoading || isSuccess}
+                    required
                 />
               </div>
 
               <div className="form-group">
-                <label htmlFor="lastName">Last Name</label>
+                <label htmlFor="lastName">Last Name *</label>
                 <input
                     id="lastName"
                     name="lastName"
                     value={formData.lastName}
                     onChange={handleInputChange}
                     placeholder="Last name"
-                    disabled={isLoading}
+                    disabled={isLoading || isSuccess}
+                    required
                 />
               </div>
             </div>
@@ -315,7 +397,7 @@ export function SignUp({ onSignUpSuccess, onSwitchToSignIn }: Readonly<SignUpPro
                   value={formData.username}
                   onChange={handleInputChange}
                   placeholder="Choose a username"
-                  disabled={isLoading}
+                  disabled={isLoading || isSuccess}
                   required
               />
             </div>
@@ -329,7 +411,7 @@ export function SignUp({ onSignUpSuccess, onSwitchToSignIn }: Readonly<SignUpPro
                   value={formData.email}
                   onChange={handleInputChange}
                   placeholder="Enter your email"
-                  disabled={isLoading}
+                  disabled={isLoading || isSuccess}
                   required
               />
             </div>
@@ -343,7 +425,7 @@ export function SignUp({ onSignUpSuccess, onSwitchToSignIn }: Readonly<SignUpPro
                   value={formData.password}
                   onChange={handleInputChange}
                   placeholder="Create a strong password"
-                  disabled={isLoading}
+                  disabled={isLoading || isSuccess}
                   required
               />
 
@@ -405,7 +487,7 @@ export function SignUp({ onSignUpSuccess, onSwitchToSignIn }: Readonly<SignUpPro
                     if (error) setError(null);
                   }}
                   placeholder="Confirm your password"
-                  disabled={isLoading}
+                  disabled={isLoading || isSuccess}
                   required
               />
             </div>
@@ -413,16 +495,21 @@ export function SignUp({ onSignUpSuccess, onSwitchToSignIn }: Readonly<SignUpPro
             <button
                 type="submit"
                 className="auth-button primary"
-                disabled={isLoading || !isFormFilled}
+                disabled={isLoading || !isFormFilled || isSuccess}
             >
-              {isLoading ? "Creating Account..." : "Create Account"}
+              {isSuccess ? (
+                <span style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
+                  <span className="spinner"></span>
+                  Redirecting...
+                </span>
+              ) : isLoading ? "Creating Account..." : "Create Account"}
             </button>
           </form>
 
           <div className="auth-footer">
             <p>
               Already have an account?{" "}
-              <button className="link-button" onClick={onSwitchToSignIn} disabled={isLoading}>
+              <button className="link-button" onClick={onSwitchToSignIn} disabled={isLoading || isSuccess}>
                 Sign In
               </button>
             </p>

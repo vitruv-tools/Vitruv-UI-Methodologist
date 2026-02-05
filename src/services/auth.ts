@@ -53,6 +53,15 @@ export interface User {
   scope?: string;
 }
 
+export interface ForgotPasswordRequest {
+  email: string;
+}
+
+export interface ForgotPasswordResponse {
+  data: any;
+  message: string;
+}
+
 export class AuthService {
   private static readonly API_BASE_URL = config.apiBaseUrl;
   private static readonly LOCAL_API_BASE_URL = config.apiBaseUrl;
@@ -68,7 +77,15 @@ export class AuthService {
     let errorMessage = errorText;
     try {
       const parsed = JSON.parse(errorText);
-      errorMessage = parsed?.message || parsed?.error || errorText;
+      errorMessage = parsed?.message || parsed?.error || parsed?.error_description || errorText;
+      
+      // Log detailed error information for debugging
+      console.error('API Error Details:', {
+        status: response.status,
+        statusText: response.statusText,
+        parsed,
+        rawText: errorText
+      });
     } catch { }
     
     return errorMessage || response.statusText || 'Request failed';
@@ -112,22 +129,111 @@ export class AuthService {
   }
 
   static async signUp(credentials: SignUpCredentials): Promise<SignUpResponse> {
-    const response = await fetch(`${this.LOCAL_API_BASE_URL}/api/v1/users/sign-up`, {
+    console.log('Sign up request payload:', {
+      ...credentials,
+      password: '[REDACTED]',
+      passwordLength: credentials.password.length,
+      usernameLength: credentials.username.length,
+      emailValid: credentials.email.includes('@')
+    });
+
+    try {
+      const response = await fetch(`${this.LOCAL_API_BASE_URL}/api/v1/users/sign-up`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(credentials),
+      });
+
+      console.log('Sign up response status:', response.status, response.statusText);
+
+      if (!response.ok) {
+        const errorMessage = await this.extractErrorMessage(response);
+        console.error('Sign up failed:', {
+          status: response.status,
+          statusText: response.statusText,
+          errorMessage,
+          url: `${this.LOCAL_API_BASE_URL}/api/v1/users/sign-up`,
+          requestData: {
+            username: credentials.username,
+            email: credentials.email,
+            roleType: credentials.roleType,
+            hasFirstName: !!credentials.firstName,
+            hasLastName: !!credentials.lastName
+          }
+        });
+        
+        // Provide user-friendly error messages
+        if (response.status === 409) {
+          // Conflict - user/email already exists
+          if (errorMessage.toLowerCase().includes('already exists')) {
+            throw new Error(errorMessage);
+          }
+          throw new Error('This username or email is already registered. Please use a different one or sign in instead.');
+        } else if (response.status === 500) {
+          throw new Error('Server error occurred. Please try again later or contact support if the problem persists.');
+        } else if (response.status === 400) {
+          throw new Error(errorMessage || 'Invalid registration data. Please check your information and try again.');
+        }
+        
+        throw new Error(errorMessage);
+      }
+
+      const responseData: SignUpResponse = await response.json();
+      console.log('Sign up successful, storing tokens...');
+      const tokenData = responseData.access_token ? responseData : (responseData.data || {});
+      this.storeAuthTokens(tokenData);
+      
+      return responseData;
+    } catch (error: any) {
+      // Catch network errors or JSON parsing errors
+      console.error('Sign up request failed:', {
+        error: error.message,
+        errorType: error.name,
+        credentials: {
+          username: credentials.username,
+          email: credentials.email,
+          roleType: credentials.roleType
+        }
+      });
+      
+      // Re-throw the error if it's already been processed
+      if (error.message && error.message !== 'Failed to fetch') {
+        throw error;
+      }
+      
+      // Network error
+      throw new Error('Network error: Unable to connect to the server. Please check your connection and try again.');
+    }
+  }
+
+  static async forgotPassword(request: ForgotPasswordRequest): Promise<ForgotPasswordResponse> {
+    console.log('Forgot password request for email:', request.email);
+
+    const response = await fetch(`${this.LOCAL_API_BASE_URL}/api/v1/users/forgot-password`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify(credentials),
+      body: JSON.stringify(request),
     });
+
+    console.log('Forgot password response status:', response.status, response.statusText);
 
     if (!response.ok) {
       const errorMessage = await this.extractErrorMessage(response);
+      console.error('Forgot password failed:', {
+        status: response.status,
+        statusText: response.statusText,
+        errorMessage,
+        url: `${this.LOCAL_API_BASE_URL}/api/v1/users/forgot-password`
+      });
       throw new Error(errorMessage);
     }
 
-    const responseData: SignUpResponse = await response.json();
-    const tokenData = responseData.access_token ? responseData : (responseData.data || {});
-    this.storeAuthTokens(tokenData);
+    const responseData: ForgotPasswordResponse = await response.json();
+    console.log('Forgot password request successful:', responseData.message);
     
     return responseData;
   }
