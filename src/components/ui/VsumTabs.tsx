@@ -692,26 +692,23 @@ export const VsumTabs: React.FC<VsumTabsProps> = ({
 
             <ConfirmDialog
                 isOpen={unsavedChangesAction !== null}
-                title="Unsaved Changes"
-                message={`You have unsaved changes. Do you want to save them before ${unsavedChangesAction === 'build' ? 'checking the build' : 'downloading'}?`}
-                confirmText="Save & Continue"
-                cancelText="Continue Anyway"
+                title="Unsaved Changes Detected"
+                message={
+                    <>
+                        <p style={{ margin: '0 0 12px 0', lineHeight: '1.6' }}>
+                            {unsavedChangesAction === 'build' 
+                                ? 'Your project has unsaved changes. The build check will not include these changes.'
+                                : 'Your project has unsaved changes. The downloaded artifact will not include these changes.'}
+                        </p>
+                        <p style={{ margin: '0', fontWeight: 600, fontSize: '14px' }}>
+                            Do you want to continue anyway?
+                        </p>
+                    </>
+                }
+                confirmText="Continue Anyway"
+                cancelText="Close"
                 variant="danger"
                 onConfirm={async () => {
-                    const action = unsavedChangesAction;
-                    setUnsavedChangesAction(null);
-                    
-                    // Save first
-                    await onSave();
-                    
-                    // Then perform the action
-                    if (action === 'build') {
-                        await performBuild();
-                    } else if (action === 'download') {
-                        await performDownload();
-                    }
-                }}
-                onCancel={async () => {
                     const action = unsavedChangesAction;
                     setUnsavedChangesAction(null);
                     
@@ -721,6 +718,10 @@ export const VsumTabs: React.FC<VsumTabsProps> = ({
                     } else if (action === 'download') {
                         await performDownload();
                     }
+                }}
+                onCancel={() => {
+                    // Just close the dialog
+                    setUnsavedChangesAction(null);
                 }}
             />
         </>
