@@ -10,14 +10,14 @@ export function AuthPage() {
     // Check if user needs email verification
     console.log('Sign in successful, user:', user);
     
-    if (user?.emailVerified !== true) {
-      // User is not verified (or status is unknown), redirect to OTP verification
-      console.log('User email not verified, redirecting to OTP verification');
-      navigate('/verify-otp', { replace: true, state: { autoResend: true } });
-    } else {
+    if (user?.emailVerified === true) {
       // User is verified, redirect directly to workspace
       console.log('User email verified, redirecting to workspace');
       navigate('/mml', { replace: true });
+    } else {
+      // User is not verified (or status is unknown), redirect to OTP verification
+      console.log('User email not verified, redirecting to OTP verification');
+      navigate('/verify-otp', { replace: true, state: { autoResend: true } });
     }
   };
 

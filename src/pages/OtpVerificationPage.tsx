@@ -74,6 +74,62 @@ export function OtpVerificationPage() {
       normalized.includes('code expired');
   };
 
+  const showTooManyAttemptsError = () => {
+    setError(
+      `Too many failed attempts (${MAX_ATTEMPTS}/${MAX_ATTEMPTS}).\n\n` +
+      'Please click "Resend Verification Code" to get a new code.'
+    );
+    setCanResend(true);
+  };
+
+  const handleIncorrectOtpAttempt = () => {
+    const newFailedAttempts = failedAttempts + 1;
+    setFailedAttempts(newFailedAttempts);
+
+    if (newFailedAttempts >= MAX_ATTEMPTS) {
+      showTooManyAttemptsError();
+      return;
+    }
+
+    const remainingAttempts = MAX_ATTEMPTS - newFailedAttempts;
+    setError(
+      `❌ Verification code is not valid\n\n` +
+      `Attempts: ${newFailedAttempts}/${MAX_ATTEMPTS} used\n` +
+      `${remainingAttempts} ${remainingAttempts === 1 ? 'attempt' : 'attempts'} remaining\n\n` +
+      `Please check your email and try again.`
+    );
+  };
+
+  const handleVerifyOtpError = (errorMessage: string) => {
+    if (isCodeExpiredError(errorMessage)) {
+      setError('Verification code is expired. Please resend and use the new code.');
+      setCanResend(true);
+      setTimeLeft(0);
+      return;
+    }
+
+    if (isAuthError(errorMessage)) {
+      setError('Authentication session expired. Please sign in again.');
+      setTimeout(() => navigate('/login'), 2000);
+      return;
+    }
+
+    // Treat session-expired text from OTP verify endpoint as an incorrect attempt,
+    // because some backends use that wording for invalid OTP responses.
+    const normalizedError = errorMessage.toLowerCase();
+    const shouldCountAsOtpFailure =
+      isIncorrectCodeError(errorMessage) ||
+      normalizedError.includes('authentication session expired') ||
+      normalizedError.includes('session expired');
+
+    if (shouldCountAsOtpFailure) {
+      handleIncorrectOtpAttempt();
+      return;
+    }
+
+    setError(errorMessage);
+  };
+
   const handleVerifyOtp = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
@@ -85,11 +141,7 @@ export function OtpVerificationPage() {
     }
 
     if (failedAttempts >= MAX_ATTEMPTS) {
-      setError(
-        `Too many failed attempts (${MAX_ATTEMPTS}/${MAX_ATTEMPTS}).\n\n` +
-        'Please click "Resend Verification Code" to get a new code.'
-      );
-      setCanResend(true);
+      showTooManyAttemptsError();
       return;
     }
 
@@ -114,50 +166,7 @@ export function OtpVerificationPage() {
       
       console.log('OTP Verification Error:', errorMessage); // Debug log
 
-      if (isCodeExpiredError(errorMessage)) {
-        setError('Verification code is expired. Please resend and use the new code.');
-        setCanResend(true);
-        setTimeLeft(0);
-        return;
-      }
-
-      if (isAuthError(errorMessage)) {
-        setError('Authentication session expired. Please sign in again.');
-        setTimeout(() => navigate('/login'), 2000);
-        return;
-      }
-
-      // Treat session-expired text from OTP verify endpoint as an incorrect attempt,
-      // because some backends use that wording for invalid OTP responses.
-      const shouldCountAsOtpFailure =
-        isIncorrectCodeError(errorMessage) ||
-        errorMessage.toLowerCase().includes('authentication session expired') ||
-        errorMessage.toLowerCase().includes('session expired');
-
-      if (shouldCountAsOtpFailure) {
-        const newFailedAttempts = failedAttempts + 1;
-        setFailedAttempts(newFailedAttempts);
-
-        if (newFailedAttempts >= MAX_ATTEMPTS) {
-          setError(
-            `Too many failed attempts (${MAX_ATTEMPTS}/${MAX_ATTEMPTS}).\n\n` +
-            'Please click "Resend Verification Code" to get a new code.'
-          );
-          setCanResend(true);
-          return;
-        }
-
-        const remainingAttempts = MAX_ATTEMPTS - newFailedAttempts;
-        setError(
-          `❌ Verification code is not valid\n\n` +
-          `Attempts: ${newFailedAttempts}/${MAX_ATTEMPTS} used\n` +
-          `${remainingAttempts} ${remainingAttempts === 1 ? 'attempt' : 'attempts'} remaining\n\n` +
-          `Please check your email and try again.`
-        );
-        return;
-      }
-
-      setError(errorMessage);
+      handleVerifyOtpError(errorMessage);
     } finally {
       setIsVerifying(false);
     }
