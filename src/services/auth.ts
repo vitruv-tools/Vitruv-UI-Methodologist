@@ -165,11 +165,31 @@ export class AuthService {
         });
         
         // Provide user-friendly error messages
+        const normalizedError = errorMessage.toLowerCase();
+        const usernameAlreadyUsed =
+          normalizedError.includes('username') &&
+          (normalizedError.includes('already') ||
+            normalizedError.includes('exists') ||
+            normalizedError.includes('used') ||
+            normalizedError.includes('taken') ||
+            normalizedError.includes('duplicate'));
+        const emailAlreadyUsed =
+          normalizedError.includes('email') &&
+          (normalizedError.includes('already') ||
+            normalizedError.includes('exists') ||
+            normalizedError.includes('used') ||
+            normalizedError.includes('taken') ||
+            normalizedError.includes('duplicate'));
+
+        // Some backends return 500 even for duplicates, so check message first.
+        if (usernameAlreadyUsed) {
+          throw new Error('Username is already used. Please choose another username.');
+        }
+        if (emailAlreadyUsed) {
+          throw new Error('Email is already used. Please use another email or sign in.');
+        }
+
         if (response.status === 409) {
-          // Conflict - user/email already exists
-          if (errorMessage.toLowerCase().includes('already exists')) {
-            throw new Error(errorMessage);
-          }
           throw new Error('This username or email is already registered. Please use a different one or sign in instead.');
         } else if (response.status === 500) {
           throw new Error('Server error occurred. Please try again later or contact support if the problem persists.');
