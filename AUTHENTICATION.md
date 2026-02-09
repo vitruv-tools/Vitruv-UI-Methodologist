@@ -9,11 +9,24 @@ The authentication system provides:
 - Automatic token refresh
 - Secure API requests with authentication
 - Token management and storage
+- Separate routes for user login and admin authentication
+
+## Authentication Routes
+
+The application uses distinct routes for different authentication flows:
+- **`/login`** - Internal application login page for standard users (sign-in/sign-up)
+- **`/auth`** - Keycloak redirect endpoint for administrator authentication
 
 ## API Endpoints
 
+**Note:** All API endpoints use environment-specific base URLs. The base URL is automatically determined by the current environment. See [ENVIRONMENT_SETUP.md](./ENVIRONMENT_SETUP.md) for details.
+
+- **Local:** `http://localhost:9811`
+- **Staging:** `https://fe3ab829-d558-4834-afcf-6ed7ca440ca4.ka.bw-cloud-instance.org`
+- **Production:** `https://mwa.sdq.kastel.kit.edu`
+
 ### Sign Up
-- **URL**: `POST http://fe3ab829-d558-4834-afcf-6ed7ca440ca4.ka.bw-cloud-instance.org:8080/api/v1/users/sign-up`
+- **URL**: `POST {baseUrl}/api/v1/users/sign-up`
 - **Request Body**:
   ```json
   {
@@ -34,7 +47,7 @@ The authentication system provides:
   ```
 
 ### Sign In
-- **URL**: `POST http://fe3ab829-d558-4834-afcf-6ed7ca440ca4.ka.bw-cloud-instance.org:8080/api/v1/users/login`
+- **URL**: `POST {baseUrl}/api/v1/users/login`
 - **Request Body**:
   ```json
   {
@@ -57,7 +70,7 @@ The authentication system provides:
   ```
 
 ### Token Refresh
-- **URL**: `POST http://fe3ab829-d558-4834-afcf-6ed7ca440ca4.ka.bw-cloud-instance.org:8080/api/v1/users/access-token/by-refresh-token`
+- **URL**: `POST {baseUrl}/api/v1/users/access-token/by-refresh-token`
 - **Request Body**:
   ```json
   {
@@ -233,10 +246,29 @@ function TokenManagement() {
 ## Configuration
 
 ### Backend URL
-The backend URL is configured in `src/services/auth.ts`:
+The backend URL is automatically configured based on the environment. It's managed centrally in `src/config/environment.ts` and loaded from environment variables:
+
 ```typescript
-private static readonly LOCAL_API_BASE_URL = 'http://fe3ab829-d558-4834-afcf-6ed7ca440ca4.ka.bw-cloud-instance.org:8080';
+// src/config/environment.ts
+export const config = {
+  apiBaseUrl: process.env.REACT_APP_API_BASE_URL,
+  environment: process.env.REACT_APP_ENV,
+  // ...
+};
 ```
+
+Both `AuthService` and `ApiService` use this configuration:
+
+```typescript
+import { config } from '../config/environment';
+
+export class AuthService {
+  private static readonly API_BASE_URL = config.apiBaseUrl;
+  // ...
+}
+```
+
+For detailed information about environment configuration, see [ENVIRONMENT_SETUP.md](./ENVIRONMENT_SETUP.md).
 
 ### Token Storage
 Tokens are stored in localStorage with the following keys:
@@ -269,20 +301,27 @@ The system provides comprehensive error handling:
 
 To test the authentication system:
 
-1. Ensure your backend server is running on `http://fe3ab829-d558-4834-afcf-6ed7ca440ca4.ka.bw-cloud-instance.org:8080`
-2. Use the sign-up form to create a new account
-3. Use the sign-in form to authenticate
-4. Check the browser's developer tools to see stored tokens
-5. Test API calls that require authentication
-6. Wait for token expiration to test automatic refresh
+1. Ensure your backend server is running:
+   - **Local:** `http://localhost:9811`
+   - **Staging:** Check staging server status
+   - **Production:** `https://mwa.sdq.kastel.kit.edu`
+2. Verify your `.env.local` file has the correct `REACT_APP_API_BASE_URL`
+3. Use the sign-up form to create a new account
+4. Use the sign-in form to authenticate
+5. Check the browser's developer tools to see stored tokens
+6. Test API calls that require authentication
+7. Wait for token expiration to test automatic refresh
 
 ## Troubleshooting
 
 ### Common Issues
 
 1. **Backend Connection Failed**
-   - Ensure your backend server is running on port 9811
+   - Ensure your backend server is running
+   - Check your environment configuration in `.env.local`
+   - Verify `REACT_APP_API_BASE_URL` is set correctly
    - Check that the API endpoints are accessible
+   - See [ENVIRONMENT_SETUP.md](./ENVIRONMENT_SETUP.md) for environment configuration
 
 2. **Token Refresh Fails**
    - Check that refresh tokens are valid

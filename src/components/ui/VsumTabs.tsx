@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { VsumDetails } from '../../types';
 import { apiService, MetaModelRelationRequest } from '../../services/api';
 import { WorkspaceSnapshot } from '../../types/workspace';
+import { ConfirmDialog } from './ConfirmDialog';
 
 const POPUP_STYLES = {
     success: { background: '#ecfdf3', border: '1px solid #bbf7d0', color: '#166534', icon: '✅' },
@@ -44,6 +45,9 @@ export const VsumTabs: React.FC<VsumTabsProps> = ({
     } | null>(null);
 
     const [checkingBuild, setCheckingBuild] = useState(false);
+    const [downloadingArtifact, setDownloadingArtifact] = useState(false);
+    const [closeConfirmInstanceId, setCloseConfirmInstanceId] = useState<string | null>(null);
+    const [unsavedChangesAction, setUnsavedChangesAction] = useState<'build' | 'download' | null>(null);
 
     const areIdArraysEqual = (a: number[] = [], b: number[] = []) => {
         if (a.length !== b.length) return false;
@@ -161,14 +165,9 @@ export const VsumTabs: React.FC<VsumTabsProps> = ({
 
         const snapshotIds = snap.metaModelIds ?? [];
 
-        const metaModelIds = snapshotIds.length > 0 ? snapshotIds : backendSourceIds;
-
-        if (metaModelIds.length === 0) {
-            const msg = 'At least one MetaModel is required';
-            setError(msg);
-            setPopup({ message: msg, type: 'error' });
-            return;
-        }
+        // Use snapshot if available, otherwise fall back to backend data
+        // Important: If snapshot exists but is empty, user intentionally removed all MetaModels
+        const metaModelIds = snap.metaModelIds !== undefined ? snapshotIds : backendSourceIds;
 
         const filteredRelations =
             (snap.metaModelRelationRequests ?? []).filter(rel =>
@@ -236,12 +235,81 @@ export const VsumTabs: React.FC<VsumTabsProps> = ({
         const active = openTabs.find(t => t.instanceId === activeInstanceId);
         const id = active?.id;
         if (!id) return;
-        await saveById(id);
+        try {
+            await saveById(id);
+        } catch (error) {
+            console.error('Save failed:', error);
+            setPopup({ 
+                message: error instanceof Error ? error.message : 'Failed to save VSUM', 
+                type: 'error' 
+            });
+        }
+    };
+
+    // ---- download artifact -------------------------------------
+    const onDownloadArtifact = async () => {
+        const active = openTabs.find(t => t.instanceId === activeInstanceId);
+        if (!active) return;
+        
+        // Check for unsaved changes
+        const isDirty = computeDirty(detailsById[active.id], workspaceSnapshot);
+        if (isDirty) {
+            setUnsavedChangesAction('download');
+            return;
+        }
+        
+        await performDownload();
+    };
+
+    const performDownload = async () => {
+        const active = openTabs.find(t => t.instanceId === activeInstanceId);
+        if (!active) return;
+        
+        setDownloadingArtifact(true);
+        setError('');
+        try {
+            const blob = await apiService.downloadVsumArtifact(active.id);
+            
+            // Create a download link and trigger it
+            const url = globalThis.URL.createObjectURL(blob);
+            const link = globalThis.document.createElement('a');
+            link.href = url;
+            link.download = `vsum-${active.id}-artifact.zip`;
+            globalThis.document.body.appendChild(link);
+            link.click();
+            link.remove();
+            globalThis.URL.revokeObjectURL(url);
+            
+            setPopup({ message: 'Artifact downloaded successfully!', type: 'success' });
+            setTimeout(() => setPopup(null), 3000);
+        } catch (err: any) {
+            const errorMsg = err?.message || 'Failed to download artifact';
+            setError(errorMsg);
+            setPopup({ message: errorMsg, type: 'error' });
+            setTimeout(() => setPopup(null), 5000);
+        } finally {
+            setDownloadingArtifact(false);
+        }
     };
 
     // ---- check build ------------------------------------------
 
     const onCheckBuild = async () => {
+        const active = openTabs.find(t => t.instanceId === activeInstanceId);
+        const id = active?.id;
+        if (!id) return;
+
+        // Check for unsaved changes
+        const isDirty = computeDirty(detailsById[id], workspaceSnapshot);
+        if (isDirty) {
+            setUnsavedChangesAction('build');
+            return;
+        }
+
+        await performBuild();
+    };
+
+    const performBuild = async () => {
         const active = openTabs.find(t => t.instanceId === activeInstanceId);
         const id = active?.id;
         if (!id) return;
@@ -371,7 +439,13 @@ export const VsumTabs: React.FC<VsumTabsProps> = ({
                                     <button
                                         onClick={e => {
                                             e.stopPropagation();
-                                            onClose(tab.instanceId);
+                                            // Check if this tab has unsaved changes
+                                            const tabHasUnsavedChanges = computeDirty(detailsById[tab.id], workspaceSnapshot);
+                                            if (tabHasUnsavedChanges && isActive) {
+                                                setCloseConfirmInstanceId(tab.instanceId);
+                                            } else {
+                                                onClose(tab.instanceId);
+                                            }
                                         }}
                                         style={{
                                             border: '1px solid transparent',
@@ -450,19 +524,60 @@ export const VsumTabs: React.FC<VsumTabsProps> = ({
                                 {checkingBuild ? 'Checking…' : 'Check build'}
                             </button>
 
+                            <button
+                                onClick={onDownloadArtifact}
+                                disabled={downloadingArtifact || saving}
+                                style={{
+                                    padding: '6px 10px',
+                                    borderRadius: 8,
+                                    border: '1px solid #037368',
+                                    background: downloadingArtifact ? '#a5d6d3' : '#049484',
+                                    color: '#ffffff',
+                                    fontWeight: 700,
+                                    cursor: downloadingArtifact || saving ? 'not-allowed' : 'pointer',
+                                    fontSize: 12,
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: 4,
+                                }}
+                                onMouseEnter={(e) => {
+                                    if (!downloadingArtifact && !saving) {
+                                        e.currentTarget.style.background = '#037368';
+                                    }
+                                }}
+                                onMouseLeave={(e) => {
+                                    if (!downloadingArtifact && !saving) {
+                                        e.currentTarget.style.background = '#049484';
+                                    }
+                                }}
+                            >
+                                <span>{downloadingArtifact ? '⏳' : ''}</span>
+                                <span>{downloadingArtifact ? 'Downloading…' : 'Download ZIP'}</span>
+                            </button>
+
                             {anyDirty && (
                                 <button
                                     onClick={onSave}
                                     disabled={saving}
                                     style={{
                                         padding: '6px 10px',
-                                        border: '1px solid #3b82f6',
+                                        border: '1px solid #037368',
                                         borderRadius: 8,
-                                        background: saving ? '#bfdbfe' : '#3b82f6',
+                                        background: saving ? '#a5d6d3' : '#049484',
                                         color: '#ffffff',
                                         fontWeight: 700,
                                         cursor: saving ? 'not-allowed' : 'pointer',
                                         fontSize: 12,
+                                    }}
+                                    onMouseEnter={(e) => {
+                                        if (!saving) {
+                                            e.currentTarget.style.background = '#037368';
+                                        }
+                                    }}
+                                    onMouseLeave={(e) => {
+                                        if (!saving) {
+                                            e.currentTarget.style.background = '#049484';
+                                        }
                                     }}
                                 >
                                     {saving ? 'Saving…' : 'Save changes'}
@@ -479,9 +594,9 @@ export const VsumTabs: React.FC<VsumTabsProps> = ({
                         position: 'absolute',
                         right: 16,
                         top: 56,
-                        background: '#3498db',
+                        background: '#049484',
                         color: '#ffffff',
-                        border: '1px solid #2980b9',
+                        border: '1px solid #037368',
                         borderRadius: 6,
                         padding: '8px 12px',
                         fontWeight: 700,
@@ -489,6 +604,12 @@ export const VsumTabs: React.FC<VsumTabsProps> = ({
                         zIndex: 21,
                     }}
                     onClick={onAddMetaModels}
+                    onMouseEnter={(e) => {
+                        e.currentTarget.style.background = '#037368';
+                    }}
+                    onMouseLeave={(e) => {
+                        e.currentTarget.style.background = '#049484';
+                    }}
                 >
                     + ADD META MODELS
                 </button>
@@ -552,6 +673,57 @@ export const VsumTabs: React.FC<VsumTabsProps> = ({
                     </button>
                 </div>
             )}
+
+            <ConfirmDialog
+                isOpen={closeConfirmInstanceId !== null}
+                title="Unsaved Changes"
+                message="You have unsaved changes in this project. Are you sure you want to close it? Your changes will be lost."
+                confirmText="Close Anyway"
+                cancelText="Keep Open"
+                variant="danger"
+                onConfirm={() => {
+                    if (closeConfirmInstanceId) {
+                        onClose(closeConfirmInstanceId);
+                        setCloseConfirmInstanceId(null);
+                    }
+                }}
+                onCancel={() => setCloseConfirmInstanceId(null)}
+            />
+
+            <ConfirmDialog
+                isOpen={unsavedChangesAction !== null}
+                title="Unsaved Changes Detected"
+                message={
+                    <>
+                        <p style={{ margin: '0 0 12px 0', lineHeight: '1.6' }}>
+                            {unsavedChangesAction === 'build' 
+                                ? 'Your project has unsaved changes. The build check will not include these changes.'
+                                : 'Your project has unsaved changes. The downloaded artifact will not include these changes.'}
+                        </p>
+                        <p style={{ margin: '0', fontWeight: 600, fontSize: '14px' }}>
+                            Do you want to continue anyway?
+                        </p>
+                    </>
+                }
+                confirmText="Continue Anyway"
+                cancelText="Close"
+                variant="danger"
+                onConfirm={async () => {
+                    const action = unsavedChangesAction;
+                    setUnsavedChangesAction(null);
+                    
+                    // Continue without saving
+                    if (action === 'build') {
+                        await performBuild();
+                    } else if (action === 'download') {
+                        await performDownload();
+                    }
+                }}
+                onCancel={() => {
+                    // Just close the dialog
+                    setUnsavedChangesAction(null);
+                }}
+            />
         </>
     );
 };

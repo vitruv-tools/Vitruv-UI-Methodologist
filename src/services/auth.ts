@@ -1,3 +1,5 @@
+import { config } from '../config/environment';
+
 export interface AuthResponse {
   access_token: string;
   refresh_token: string;
@@ -26,6 +28,14 @@ export interface SignUpCredentials {
 export interface SignUpResponse {
   data: any;
   message: string;
+  access_token?: string;
+  refresh_token?: string;
+  expires_in?: number;
+  refresh_expires_in?: number;
+  token_type?: string;
+  session_state?: string;
+  scope?: string;
+  'not-before-policy'?: number;
 }
 
 export interface RefreshTokenRequest {
@@ -43,37 +53,189 @@ export interface User {
   scope?: string;
 }
 
+export interface ForgotPasswordRequest {
+  email: string;
+}
+
+export interface ForgotPasswordResponse {
+  data: any;
+  message: string;
+}
+
 export class AuthService {
-  private static readonly API_BASE_URL = 'http://fe3ab829-d558-4834-afcf-6ed7ca440ca4.ka.bw-cloud-instance.org:8080';
-  private static readonly LOCAL_API_BASE_URL = 'http://fe3ab829-d558-4834-afcf-6ed7ca440ca4.ka.bw-cloud-instance.org:8080';
+  private static readonly API_BASE_URL = config.apiBaseUrl;
+  private static readonly LOCAL_API_BASE_URL = config.apiBaseUrl;
   private static readonly CLIENT_ID = 'exit-normal-customer-mobile-app';
   private static readonly GRANT_TYPE = 'password';
 
+  private static async extractErrorMessage(response: Response): Promise<string> {
+    let errorText = '';
+    try {
+      errorText = await response.text();
+    } catch { }
+    
+    let errorMessage = errorText;
+    try {
+      const parsed = JSON.parse(errorText);
+      errorMessage = parsed?.message || parsed?.error || parsed?.error_description || errorText;
+      
+      // Log detailed error information for debugging
+      console.error('API Error Details:', {
+        status: response.status,
+        statusText: response.statusText,
+        parsed,
+        rawText: errorText
+      });
+    } catch { }
+    
+    return errorMessage || response.statusText || 'Request failed';
+  }
+
+  private static storeAuthTokens(tokenData: any): void {
+    if (!tokenData.access_token) {
+      console.warn('No authentication tokens found in sign-up response. User may need to sign in separately.');
+      return;
+    }
+
+    localStorage.setItem('auth.access_token', tokenData.access_token);
+    
+    if (tokenData.refresh_token) {
+      localStorage.setItem('auth.refresh_token', tokenData.refresh_token);
+    }
+    if (tokenData.expires_in) {
+      localStorage.setItem('auth.expires_in', tokenData.expires_in.toString());
+      const accessExpiresAt = Date.now() + (tokenData.expires_in * 1000);
+      localStorage.setItem('auth.access_expires_at', accessExpiresAt.toString());
+    }
+    if (tokenData.refresh_expires_in) {
+      localStorage.setItem('auth.refresh_expires_in', tokenData.refresh_expires_in.toString());
+      const refreshExpiresAt = Date.now() + (tokenData.refresh_expires_in * 1000);
+      localStorage.setItem('auth.refresh_expires_at', refreshExpiresAt.toString());
+    }
+    if (tokenData.token_type) {
+      localStorage.setItem('auth.token_type', tokenData.token_type);
+    }
+    if (tokenData.session_state) {
+      localStorage.setItem('auth.session_state', tokenData.session_state);
+    }
+    if (tokenData.scope) {
+      localStorage.setItem('auth.scope', tokenData.scope);
+    }
+    if (tokenData['not-before-policy'] !== undefined) {
+      localStorage.setItem('auth.not_before_policy', tokenData['not-before-policy'].toString());
+    }
+    
+    console.log('Sign-up tokens stored successfully');
+  }
+
   static async signUp(credentials: SignUpCredentials): Promise<SignUpResponse> {
-    const response = await fetch(`${this.LOCAL_API_BASE_URL}/api/v1/users/sign-up`, {
+    console.log('Sign up request payload:', {
+      ...credentials,
+      password: '[REDACTED]',
+      passwordLength: credentials.password.length,
+      usernameLength: credentials.username.length,
+      emailValid: credentials.email.includes('@')
+    });
+
+    try {
+      const response = await fetch(`${this.LOCAL_API_BASE_URL}/api/v1/users/sign-up`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(credentials),
+      });
+
+      console.log('Sign up response status:', response.status, response.statusText);
+
+      if (!response.ok) {
+        const errorMessage = await this.extractErrorMessage(response);
+        console.error('Sign up failed:', {
+          status: response.status,
+          statusText: response.statusText,
+          errorMessage,
+          url: `${this.LOCAL_API_BASE_URL}/api/v1/users/sign-up`,
+          requestData: {
+            username: credentials.username,
+            email: credentials.email,
+            roleType: credentials.roleType,
+            hasFirstName: !!credentials.firstName,
+            hasLastName: !!credentials.lastName
+          }
+        });
+        
+        // Provide user-friendly error messages
+        if (response.status === 409) {
+          // Conflict - user/email already exists
+          if (errorMessage.toLowerCase().includes('already exists')) {
+            throw new Error(errorMessage);
+          }
+          throw new Error('This username or email is already registered. Please use a different one or sign in instead.');
+        } else if (response.status === 500) {
+          throw new Error('Server error occurred. Please try again later or contact support if the problem persists.');
+        } else if (response.status === 400) {
+          throw new Error(errorMessage || 'Invalid registration data. Please check your information and try again.');
+        }
+        
+        throw new Error(errorMessage);
+      }
+
+      const responseData: SignUpResponse = await response.json();
+      console.log('Sign up successful, storing tokens...');
+      const tokenData = responseData.access_token ? responseData : (responseData.data || {});
+      this.storeAuthTokens(tokenData);
+      
+      return responseData;
+    } catch (error: any) {
+      // Catch network errors or JSON parsing errors
+      console.error('Sign up request failed:', {
+        error: error.message,
+        errorType: error.name,
+        credentials: {
+          username: credentials.username,
+          email: credentials.email,
+          roleType: credentials.roleType
+        }
+      });
+      
+      // Re-throw the error if it's already been processed
+      if (error.message && error.message !== 'Failed to fetch') {
+        throw error;
+      }
+      
+      // Network error
+      throw new Error('Network error: Unable to connect to the server. Please check your connection and try again.');
+    }
+  }
+
+  static async forgotPassword(request: ForgotPasswordRequest): Promise<ForgotPasswordResponse> {
+    console.log('Forgot password request for email:', request.email);
+
+    const response = await fetch(`${this.LOCAL_API_BASE_URL}/api/v1/users/forgot-password`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify(credentials),
+      body: JSON.stringify(request),
     });
 
+    console.log('Forgot password response status:', response.status, response.statusText);
+
     if (!response.ok) {
-      let errorText = '';
-      try {
-        errorText = await response.text();
-      } catch {}
-      let errorMessage = errorText;
-      try {
-        const parsed = JSON.parse(errorText);
-        errorMessage = parsed?.message || parsed?.error || errorText;
-      } catch {}
-      const fallback = response.statusText || 'Request failed';
-      throw new Error(errorMessage || fallback);
+      const errorMessage = await this.extractErrorMessage(response);
+      console.error('Forgot password failed:', {
+        status: response.status,
+        statusText: response.statusText,
+        errorMessage,
+        url: `${this.LOCAL_API_BASE_URL}/api/v1/users/forgot-password`
+      });
+      throw new Error(errorMessage);
     }
 
-    const data: SignUpResponse = await response.json();
-    return data;
+    const responseData: ForgotPasswordResponse = await response.json();
+    console.log('Forgot password request successful:', responseData.message);
+    
+    return responseData;
   }
 
   static async signIn(credentials: SignInCredentials): Promise<AuthResponse> {
@@ -89,18 +251,18 @@ export class AuthService {
       let errorText = '';
       try {
         errorText = await response.text();
-      } catch {}
+      } catch { }
       let errorMessage = errorText;
       try {
         const parsed = JSON.parse(errorText);
         errorMessage = parsed?.message || parsed?.error || errorText;
-      } catch {}
+      } catch { }
       const fallback = response.statusText || 'Request failed';
       throw new Error(errorMessage || fallback);
     }
 
     const data: AuthResponse = await response.json();
-    
+
     localStorage.setItem('auth.access_token', data.access_token);
     localStorage.setItem('auth.refresh_token', data.refresh_token);
     localStorage.setItem('auth.expires_in', data.expires_in.toString());
@@ -109,7 +271,7 @@ export class AuthService {
     localStorage.setItem('auth.session_state', data.session_state);
     localStorage.setItem('auth.scope', data.scope);
     localStorage.setItem('auth.not_before_policy', data['not-before-policy'].toString());
-    
+
     const accessExpiresAt = Date.now() + (data.expires_in * 1000);
     const refreshExpiresAt = Date.now() + (data.refresh_expires_in * 1000);
     localStorage.setItem('auth.access_expires_at', accessExpiresAt.toString());
@@ -186,7 +348,7 @@ export class AuthService {
     localStorage.removeItem('auth.user');
     try {
       globalThis.dispatchEvent(new Event('auth:signout'));
-    } catch {}
+    } catch { }
   }
 
   static isAuthenticated(): boolean {
@@ -244,7 +406,7 @@ export class AuthService {
     if (!userData) {
       return null;
     }
-    
+
     try {
       return JSON.parse(userData);
     } catch {

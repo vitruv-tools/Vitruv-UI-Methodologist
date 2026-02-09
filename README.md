@@ -1,6 +1,6 @@
 # Vitruvius Modeler
 
-A React-based flow modeling application for creating and managing Vitruvius diagrams.
+A React-based flow modeling application for the [Vitruvius Framework](https://github.com/vitruv-tools), enabling users to visually create and edit models with automatic synchronization across heterogeneous models.
 
 ## Features
 
@@ -10,6 +10,8 @@ A React-based flow modeling application for creating and managing Vitruvius diag
 - **Undo/Redo Functionality**: Use Ctrl+Z to undo and Ctrl+Y to redo changes
 - **Node Deletion**: Delete nodes by selecting them and clicking the delete button
 - **Deploy Functionality**: Deploy your models to the Vitruvius backend
+- **Model Synchronization**: Automatic change propagation across models
+- **Live Validation**: Real-time consistency checks and validations
 - **Modern UI**: Clean and intuitive user interface
 
 ## Project Structure
@@ -50,20 +52,30 @@ For detailed architecture documentation, see [ARCHITECTURE.md](./ARCHITECTURE.md
    npm install
    ```
 
-3. **Start the development server**
+3. **Configure environment** (First time only)
+   ```bash
+   cp .env.example .env.local
+   ```
+   Edit `.env.local` if you need to change the default backend URL. See [ENVIRONMENT_SETUP.md](./ENVIRONMENT_SETUP.md) for details.
+
+4. **Start the development server**
    ```bash
    npm start
    ```
 
-4. **Open your browser**
+5. **Open your browser**
    Navigate to `http://localhost:3000` to view the application.
 
 ## Available Scripts
 
-- **`npm start`** - Runs the app in development mode
-- **`npm run build`** - Builds the app for production
+- **`npm start`** - Runs the app in development mode (uses `.env.local`)
+- **`npm run build`** - Builds the app for production (generic build)
+- **`npm run build:staging`** - Builds the app for staging environment (uses `.env.staging`)
+- **`npm run build:production`** - Builds the app for production environment (uses `.env.production`)
 - **`npm test`** - Launches the test runner
 - **`npm run eject`** - Ejects from Create React App (one-way operation)
+
+For detailed environment configuration, see [ENVIRONMENT_SETUP.md](./ENVIRONMENT_SETUP.md).
 
 ## Usage
 
@@ -80,6 +92,8 @@ For detailed architecture documentation, see [ARCHITECTURE.md](./ARCHITECTURE.md
 - **TypeScript** - Type safety
 - **React Flow** - Flow diagram library
 - **React DnD** - Drag and drop functionality
+- **Vitruvius Framework** - Model synchronization backend
+- **Eclipse Modeling Framework (EMF)** - Model interoperability
 
 ## Development
 
@@ -108,5 +122,3 @@ The project follows React best practices with:
 3. Make your changes following the established patterns
 4. Add tests for new functionality
 5. Submit a pull request
-
-

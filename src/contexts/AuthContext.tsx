@@ -8,7 +8,7 @@ interface AuthContextType {
     user: User | null;
     isAuthenticated: boolean;
     isLoading: boolean;
-    signIn: (username: string, password: string) => Promise<void>;
+    signIn: (username: string, password: string) => Promise<User>;
     signUp: (userData: SignUpCredentials) => Promise<void>;
     signOut: () => Promise<void>;
     refreshToken: () => Promise<any>;
@@ -99,6 +99,7 @@ export function AuthProvider({ children }: Readonly<AuthProviderProps>) {
                     name: `${data.firstName ?? ''} ${data.lastName ?? ''}`.trim() || data.email,
                     givenName: data.firstName,
                     familyName: data.lastName,
+                    emailVerified: (data as any).emailVerified,
                 };
             } catch {
                 return getUserFromAccessToken();
@@ -113,7 +114,7 @@ export function AuthProvider({ children }: Readonly<AuthProviderProps>) {
         };
     }, []);
 
-    const signIn = useCallback(async (username: string, password: string) => {
+    const signIn = useCallback(async (username: string, password: string): Promise<User> => {
         try {
             const authResponse = await AuthService.signIn({ username, password });
 
@@ -126,10 +127,11 @@ export function AuthProvider({ children }: Readonly<AuthProviderProps>) {
                     name: `${data.firstName ?? ''} ${data.lastName ?? ''}`.trim() || data.email || username,
                     givenName: data.firstName,
                     familyName: data.lastName,
+                    emailVerified: (data as any).emailVerified,
                 };
                 AuthService.setCurrentUser(mapped);
                 setUser(mapped);
-                return;
+                return mapped;
             } catch {
                 const tokenData = parseJwtToken(authResponse.access_token);
                 let newUser: User;
@@ -151,10 +153,12 @@ export function AuthProvider({ children }: Readonly<AuthProviderProps>) {
                         username,
                         email: username.includes('@') ? username : undefined,
                         name: username.split('@')[0],
+                        emailVerified: false, // Default to false if we can't determine
                     };
                 }
                 AuthService.setCurrentUser(newUser);
                 setUser(newUser);
+                return newUser;
             }
         } catch (error) {
             console.error('Sign in error:', error);
@@ -187,8 +191,8 @@ export function AuthProvider({ children }: Readonly<AuthProviderProps>) {
             if (!/\d/.test(password)) {
                 errors.push('• One number (0–9)');
             }
-            if (!/[@$!%*?&]/.test(password)) {
-                errors.push('• One special symbol (choose from: @  $  !  %  *  ?  &)');
+            if (!/[@$!%?&]/.test(password)) {
+                errors.push('• One special symbol (choose from: @  $  !  %  ?  &)');
             }
 
             if (errors.length > 0) {

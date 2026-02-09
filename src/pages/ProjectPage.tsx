@@ -1,7 +1,6 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { MainLayout } from '../components/layout/MainLayout';
 import { MetaModelsPanel } from '../components/ui/MetaModelsPanel';
-import { ConfirmDialog } from '../components/ui/ConfirmDialog';
 import { SidebarTabs } from '../components';
 import { useAuth } from '../contexts/AuthContext';
 import { VsumTabs } from '../components/ui/VsumTabs';
@@ -9,8 +8,8 @@ import { apiService } from '../services/api';
 import { useToast } from '../components/ui/ToastProvider';
 import { WorkspaceSnapshot, WorkspaceSnapshotRequest } from '../types/workspace';
 
-interface OpenTabInstance { 
-  instanceId: string; 
+interface OpenTabInstance {
+  instanceId: string;
   id: number;
 }
 
@@ -19,17 +18,16 @@ export const ProjectPage: React.FC = () => {
   const [showRight, setShowRight] = useState(false);
   const [openTabs, setOpenTabs] = useState<OpenTabInstance[]>([]);
   const [activeInstanceId, setActiveInstanceId] = useState<string | null>(null);
-  const [openChoice, setOpenChoice] = useState<{ id: number; existingInstanceId: string } | null>(null);
   const { showInfo } = useToast();
 
-  const createInstanceId = useCallback((id: number) => `${id}-${Date.now()}-${Math.random().toString(36).slice(2,8)}` , []);
+  const createInstanceId = useCallback((id: number) => `${id}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`, []);
 
   // Helper to add a metamodel to the active workspace
   const addMetaModelToWorkspace = useCallback(async (model: any) => {
     try {
       if (model.ecoreFileId) {
         const fileContent = await apiService.getFile(model.ecoreFileId);
-        
+
         // Dispatch event to add file to workspace
         globalThis.dispatchEvent(new CustomEvent('vitruv.addFileToWorkspace', {
           detail: {
@@ -44,7 +42,7 @@ export const ProjectPage: React.FC = () => {
           }
         }));
       }
-      
+
       // Also dispatch the event to add meta model to VSUM
       globalThis.dispatchEvent(new CustomEvent('vitruv.addMetaModelToActiveVsum', { detail: { id: model.id, sourceId: model.sourceId ?? model.id } }));
     } catch (error) {
@@ -98,14 +96,21 @@ export const ProjectPage: React.FC = () => {
       if (typeof id !== 'number') return;
       const existing = openTabs.find(t => t.id === id);
       if (existing && !custom.detail?.forceNew) {
-        setOpenChoice({ id, existingInstanceId: existing.instanceId });
+        // Project already open, just navigate to it
+        setActiveInstanceId(existing.instanceId);
+        showInfo('This project is already open. Switched to it.');
         return;
       }
-      await openVsumById(id, { forceNew: custom.detail?.forceNew });
+      try {
+        await openVsumById(id, { forceNew: custom.detail?.forceNew });
+      } catch (error) {
+        console.error('Failed to open VSUM:', error);
+        showInfo(error instanceof Error ? error.message : 'Failed to open project');
+      }
     };
     globalThis.addEventListener('vitruv.openVsum', handler as EventListener);
     return () => globalThis.removeEventListener('vitruv.openVsum', handler as EventListener);
-  }, [openTabs, openVsumById]);
+  }, [openTabs, openVsumById, showInfo, setActiveInstanceId]);
 
   // Close active workspace tab when canvas becomes empty (no boxes)
   useEffect(() => {
@@ -117,15 +122,19 @@ export const ProjectPage: React.FC = () => {
   useEffect(() => {
     const handleReloadWorkspace = async () => {
       if (!activeInstanceId) return;
-      
+
       const activeTab = openTabs.find(t => t.instanceId === activeInstanceId);
       if (!activeTab) return;
 
       console.log('🔃 Reloading workspace for VSUM:', activeTab.id);
-      
-      // Reload the project boxes for the active tab
-      // skipReset = true because the reset is already done in handleBackToWorkspace
-      await fetchAndLoadProjectBoxes(activeTab.id, true);
+
+      try {
+        // Reload the project boxes for the active tab
+        // skipReset = true because the reset is already done in handleBackToWorkspace
+        await fetchAndLoadProjectBoxes(activeTab.id, true);
+      } catch (error) {
+        console.error('Failed to reload workspace:', error);
+      }
     };
 
     globalThis.addEventListener('vitruv.reloadWorkspace', handleReloadWorkspace as EventListener);
@@ -142,7 +151,7 @@ export const ProjectPage: React.FC = () => {
   // Reload workspace content when switching between tabs
   useEffect(() => {
     if (!activeInstanceId) return;
-    
+
     const activeTab = openTabs.find(t => t.instanceId === activeInstanceId);
     if (!activeTab) return;
 
@@ -150,10 +159,66 @@ export const ProjectPage: React.FC = () => {
     fetchAndLoadProjectBoxes(activeTab.id);
   }, [activeInstanceId, openTabs]);
 
+  // Handler for VSUM deletion - extracted to reduce nesting
+  const handleVsumDeleted = useCallback((e: Event) => {
+    const custom = e as CustomEvent<{ id: number }>;
+    const deletedId = custom.detail?.id;
+    if (typeof deletedId !== 'number') return;
+    
+    // Close all tabs with this VSUM ID
+    const tabsToClose = openTabs.filter(t => t.id === deletedId);
+    if (tabsToClose.length === 0) return;
+    
+    setOpenTabs(prev => prev.filter(t => t.id !== deletedId));
+    
+    // Check if active tab was deleted
+    const wasActiveTabDeleted = activeInstanceId && tabsToClose.some(t => t.instanceId === activeInstanceId);
+    if (wasActiveTabDeleted) {
+      const remainingTabs = openTabs.filter(t => t.id !== deletedId);
+      const nextActiveInstanceId = remainingTabs.length > 0 ? remainingTabs.at(-1)!.instanceId : null;
+      setActiveInstanceId(nextActiveInstanceId);
+    }
+    
+    showInfo('The deleted project has been closed.');
+  }, [openTabs, activeInstanceId, showInfo]);
+
+  // Handle VSUM deletion - close any open tabs for the deleted VSUM
+  useEffect(() => {
+    globalThis.addEventListener('vitruv.vsumDeleted', handleVsumDeleted as EventListener);
+    return () => globalThis.removeEventListener('vitruv.vsumDeleted', handleVsumDeleted as EventListener);
+  }, [handleVsumDeleted]);
+
+  // Handle VSUM version restoration - reload workspace if VSUM is open
+  useEffect(() => {
+    const handleVsumRestored = async (e: Event) => {
+      const custom = e as CustomEvent<{ id: number }>;
+      const restoredId = custom.detail?.id;
+      if (typeof restoredId !== 'number') return;
+      
+      // Check if this VSUM has any open tabs
+      const openTab = openTabs.find(t => t.id === restoredId);
+      if (openTab) {
+        // Reload the workspace for this tab
+        try {
+          await fetchAndLoadProjectBoxes(restoredId);
+          showInfo('Project workspace has been reloaded with the restored version.');
+        } catch (error) {
+          console.error('Failed to reload workspace after version restore:', error);
+        }
+      }
+    };
+
+    globalThis.addEventListener('vitruv.vsumRestored', handleVsumRestored as EventListener);
+    return () => globalThis.removeEventListener('vitruv.vsumRestored', handleVsumRestored as EventListener);
+  }, [openTabs, showInfo]);
+
+
   return (
-    <>
     <MainLayout
       user={user}
+      vsumId={activeInstanceId ?
+        openTabs.find(t => t.instanceId === activeInstanceId)?.id?.toString()
+        : undefined}
       onLogout={signOut}
       leftSidebar={<SidebarTabs width={350} />}
       leftSidebarWidth={350}
@@ -212,27 +277,6 @@ export const ProjectPage: React.FC = () => {
       ) : null}
       showWorkspaceInfo={false}
     />
-    <ConfirmDialog
-      isOpen={!!openChoice}
-      title="Project already open"
-      message="Do you want to open it in a new tab, or reuse the same workspace?"
-      confirmText="Open New Tab"
-      cancelText="Open In Same"
-      onConfirm={async () => {
-        if (!openChoice) return;
-        const id = openChoice.id;
-        setOpenChoice(null);
-        await openVsumById(id, { forceNew: true });
-      }}
-      onCancel={async () => {
-        if (!openChoice) return;
-        const { existingInstanceId } = openChoice;
-        setOpenChoice(null);
-        setActiveInstanceId(existingInstanceId);
-        // Note: fetchAndLoadProjectBoxes is now handled by the useEffect watching activeInstanceId
-      }}
-    />
-    </>
   );
 };
 
@@ -240,23 +284,23 @@ export const ProjectPage: React.FC = () => {
 // helper to fetch and load boxes for a vsum id
 async function fetchAndLoadProjectBoxes(id: number, skipReset: boolean = false) {
   console.log('📥 Fetching VSUM details for ID:', id, 'skipReset:', skipReset);
-  
+
   // Only reset workspace if not already done (e.g., when loading a new project)
   // When returning from UML view, the reset is already done in handleBackToWorkspace
   if (!skipReset) {
     console.log('🔄 Triggering workspace reset');
     globalThis.dispatchEvent(new CustomEvent('vitruv.resetWorkspace'));
   }
-  
+
   try {
     const response = await apiService.getVsumDetails(id);
     const details = response.data;
-    
+
     console.log('📊 VSUM details received:', {
       metaModelCount: details.metaModels?.length || 0,
       relationCount: details.metaModelsRelation?.length || 0,
     });
-    
+
     // Load all metamodel boxes
     for (const metaModel of details.metaModels || []) {
       if (metaModel.ecoreFileId) {

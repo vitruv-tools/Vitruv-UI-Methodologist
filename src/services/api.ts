@@ -1,9 +1,10 @@
 import { AuthService } from './auth';
 import { FlowData } from '../types/flow';
 import { ApiResponse, Vsum, VsumDetails } from '../types/vsum';
+import { config } from '../config/environment';
 
 class ApiService {
-  private readonly baseURL = 'http://fe3ab829-d558-4834-afcf-6ed7ca440ca4.ka.bw-cloud-instance.org:8080';
+  private readonly baseURL = config.apiBaseUrl;
 
   /**
    * Extract error message from response text
@@ -92,7 +93,7 @@ class ApiService {
     options: RequestInit = {}
   ): Promise<T> {
     const token = await AuthService.ensureValidToken();
-    
+
     if (!token) {
       throw new Error('No valid authentication token available');
     }
@@ -145,12 +146,12 @@ class ApiService {
       let errorText = '';
       try {
         errorText = await response.text();
-      } catch {}
+      } catch { }
       let errorMessage = errorText;
       try {
         const parsed = JSON.parse(errorText);
         errorMessage = parsed?.message || parsed?.error || errorText;
-      } catch {}
+      } catch { }
       console.error('Public request failed', {
         url,
         method: options.method || 'GET',
@@ -173,6 +174,45 @@ class ApiService {
   }
 
   /**
+   * Change user password
+   */
+  async changePassword(password: string): Promise<{ data: any; message: string }> {
+    return this.authenticatedRequest('/api/v1/users/change-password', {
+      method: 'PUT',
+      body: JSON.stringify({ password }),
+    });
+  }
+
+  /**
+   * Forgot password - sends new password to user's email
+   */
+  async forgotPassword(email: string): Promise<{ data: any; message: string }> {
+    return this.publicRequest('/api/v1/users/forgot-password', {
+      method: 'POST',
+      body: JSON.stringify({ email }),
+    });
+  }
+
+  /**
+   * Verify OTP code after registration
+   */
+  async verifyOtp(inputCode: string): Promise<{ data: any; message: string }> {
+    return this.authenticatedRequest('/api/v1/users/verify-otp', {
+      method: 'PUT',
+      body: JSON.stringify({ inputCode }),
+    });
+  }
+
+  /**
+   * Resend OTP code
+   */
+  async resendOtp(): Promise<{ data: any; message: string }> {
+    return this.authenticatedRequest('/api/v1/users/resend-otp', {
+      method: 'GET',
+    });
+  }
+
+  /**
    * Deploy a flow
    */
   async deployFlow(flowData: FlowData): Promise<{ success: boolean; message: string }> {
@@ -188,7 +228,7 @@ class ApiService {
   async saveFlow(flowData: FlowData, flowId?: string): Promise<{ id: string; success: boolean }> {
     const endpoint = flowId ? `/api/v1/flows/${flowId}` : '/api/v1/flows';
     const method = flowId ? 'PUT' : 'POST';
-    
+
     return this.authenticatedRequest(endpoint, {
       method,
       body: JSON.stringify(flowData),
@@ -223,7 +263,7 @@ class ApiService {
    */
   async getFile(id: number | string): Promise<string> {
     const token = await AuthService.ensureValidToken();
-    
+
     if (!token) {
       throw new Error('No valid authentication token available');
     }
@@ -330,7 +370,7 @@ class ApiService {
 
   async uploadFile(file: File, type: 'ECORE' | 'GEN_MODEL' | 'REACTION'): Promise<{ data: string; message: string }> {
     const token = await AuthService.ensureValidToken();
-    
+
     if (!token) {
       throw new Error('No valid authentication token available');
     }
@@ -407,15 +447,15 @@ class ApiService {
     // Set default values for pagination
     const pageNumber = filters.pageNumber ?? 0;
     const pageSize = filters.pageSize ?? 50;
-    
+
     // Build query parameters
     const queryParams = new URLSearchParams({
       pageNumber: pageNumber.toString(),
       pageSize: pageSize.toString(),
     });
-    
+
     const endpoint = `/api/v1/meta-models/find-all?${queryParams.toString()}`;
-    
+
     console.log('findMetaModels request:', {
       endpoint,
       filters,
@@ -427,9 +467,9 @@ class ApiService {
       method: 'POST',
       body: JSON.stringify(filters),
     });
-    
+
     console.log('findMetaModels response:', result);
-    
+
     return result;
   }
 
@@ -448,6 +488,8 @@ class ApiService {
     description?: string;
     domain?: string;
     keyword?: string[];
+    ecoreFileId?: number;
+    genModelFileId?: number;
   }): Promise<{ data: any; message: string }> {
     return this.authenticatedRequest(`/api/v1/meta-models/${id}`, {
       method: 'PUT',
@@ -477,9 +519,9 @@ class ApiService {
    * vSUMS: Get all
    */
   async getVsumsPaginated(
-      name: string = '',
-      pageNumber: number = 0,
-      pageSize: number = 10
+    name: string = '',
+    pageNumber: number = 0,
+    pageSize: number = 10
   ): Promise<ApiResponse<Vsum[]>> {
     const query = new URLSearchParams({
       name,
@@ -493,8 +535,8 @@ class ApiService {
    * vSUMS: Get all removed (trash)
    */
   async getRemovedVsumsPaginated(
-      pageNumber: number = 0,
-      pageSize: number = 50
+    pageNumber: number = 0,
+    pageSize: number = 50
   ): Promise<ApiResponse<Vsum[]>> {
     const query = new URLSearchParams({
       pageNumber: pageNumber.toString(),
@@ -505,12 +547,74 @@ class ApiService {
 
   /**
    * vSUMS: Check if VSUM is buildable / trigger buildOrThrow
-   * GET /api/v1/vsums/{id}/build
+   * GET /api/v1/vsums/{id}/build/check
    */
   async buildVsum(id: number | string): Promise<ApiResponse<Record<string, never>>> {
-    return this.authenticatedRequest(`/api/v1/vsums/${id}/build`, {
+    return this.authenticatedRequest(`/api/v1/vsums/${id}/build/check`, {
       method: 'GET',
     });
+  }
+
+  /**
+   * vSUMS: Download artifact as ZIP file
+   * GET /api/v1/vsums/{id}/build/artifact
+   * Returns a ZIP file blob containing the build artifact
+   */
+  async downloadVsumArtifact(id: number | string): Promise<Blob> {
+    const token = await AuthService.ensureValidToken();
+
+    if (!token) {
+      throw new Error('No valid authentication token available');
+    }
+
+    const url = `${this.baseURL}/api/v1/vsums/${id}/build/artifact`;
+    const headers: Record<string, string> = {
+      'Authorization': `Bearer ${token}`,
+    };
+
+    const response = await fetch(url, {
+      method: 'GET',
+      headers,
+    });
+
+    if (response.ok) {
+      return await response.blob();
+    }
+
+    if (response.status === 401) {
+      try {
+        await AuthService.refreshToken();
+        const newToken = await AuthService.ensureValidToken();
+        if (newToken) {
+          const retryResponse = await fetch(url, {
+            method: 'GET',
+            headers: {
+              'Authorization': `Bearer ${newToken}`,
+            },
+          });
+
+          if (!retryResponse.ok) {
+            const errorText = await this.getResponseText(retryResponse);
+            const errorMessage = this.extractErrorMessage(errorText);
+            throw new Error(errorMessage);
+          }
+
+          return await retryResponse.blob();
+        }
+      } catch (refreshError) {
+        console.error('Token refresh failed during artifact download:', refreshError);
+      }
+    }
+
+    const errorText = await this.getResponseText(response);
+    const errorMessage = this.extractErrorMessage(errorText);
+    console.error('Artifact download failed', {
+      url,
+      status: response.status,
+      statusText: response.statusText,
+      message: errorMessage,
+    });
+    throw new Error(errorMessage);
   }
 
   /**
@@ -527,8 +631,8 @@ class ApiService {
    * vSUMS: Update name and meta model links
    */
   async updateVsumSyncChanges(
-      id: number | string,
-      data: VsumSyncChangesPutRequest
+    id: number | string,
+    data: VsumSyncChangesPutRequest
   ): Promise<ApiResponse<any>> {
     return this.authenticatedRequest(`/api/v1/vsums/${id}/sync-changes`, {
       method: 'PUT',
@@ -536,7 +640,7 @@ class ApiService {
     });
   }
 
-// inside ApiService class
+  // inside ApiService class
   async renameVsum(id: number | string, data: { name: string }): Promise<ApiResponse<any>> {
     return this.authenticatedRequest(`/api/v1/vsums/${id}`, {
       method: 'PUT',
@@ -574,10 +678,10 @@ class ApiService {
 
   /**
    * vSUMS: Version history for a non-deleted VSUM
-   * GET /api/v1/vsums/find-all/vsumId={vsumId}
+   * GET /api/v1/vsum-histories/find-all/vsumId={vsumId}
    */
   async getVsumVersions(vsumId: number | string): Promise<ApiResponse<Array<{ id: number; createdAt: string }>>> {
-    return this.authenticatedRequest(`/api/v1/vsums/find-all/vsumId=${vsumId}`);
+    return this.authenticatedRequest(`/api/v1/vsum-histories/find-all/vsumId=${vsumId}`);
   }
 
   /**
@@ -594,6 +698,16 @@ class ApiService {
    */
   async recoverVsum(id: number | string): Promise<ApiResponse<Record<string, never>>> {
     return this.authenticatedRequest(`/api/v1/vsums/${id}/recovery`, {
+      method: 'PUT',
+    });
+  }
+
+  /**
+   * vSUMS: Restore to a specific version
+   * PUT /api/v1/vsums/{id}/recovery
+   */
+  async restoreVsumVersion(vsumId: number | string, versionId: number | string): Promise<ApiResponse<Record<string, never>>> {
+    return this.authenticatedRequest(`/api/v1/vsums/${versionId}/recovery`, {
       method: 'PUT',
     });
   }
@@ -639,15 +753,15 @@ class ApiService {
    *   POST /api/v1/users/search { q, limit }
    */
   async searchUsers(params: { pageNumber?: number; pageSize?: number })
-      : Promise<ApiResponse<UserSearchItem[]>> {
+    : Promise<ApiResponse<UserSearchItem[]>> {
     const pageNumber = params.pageNumber ?? 0;
     const pageSize = params.pageSize ?? 50;
     return this.authenticatedRequest(`/api/v1/users/search?pageNumber=${pageNumber}&pageSize=${pageSize}`);
   }
 
   async updateReactionFile(
-      fileId: number | string,
-      file: File
+    fileId: number | string,
+    file: File
   ): Promise<{ data: string; message: string }> {
     const token = await AuthService.ensureValidToken();
 
@@ -673,12 +787,12 @@ class ApiService {
         let errorText = '';
         try {
           errorText = await response.text();
-        } catch {}
+        } catch { }
         let errorMessage = errorText;
         try {
           const parsed = JSON.parse(errorText);
           errorMessage = parsed?.message || parsed?.error || errorText;
-        } catch {}
+        } catch { }
 
         console.error('Update reaction file failed', {
           url,

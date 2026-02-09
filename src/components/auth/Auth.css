@@ -27,7 +27,7 @@
   left: 0;
   right: 0;
   height: 5px;
-  background: linear-gradient(90deg, #00BCD4, #26a69a, #00BCD4);
+  background: linear-gradient(90deg, #06b5a0, #05a896, #06b5a0);
   background-size: 200% 100%;
   animation: gradientShift 3s ease infinite;
 }
@@ -46,7 +46,7 @@
   margin: 0 0 6px 0;
   font-size: 26px;
   font-weight: 800;
-  background: linear-gradient(135deg, #00BCD4 0%, #26a69a 100%);
+  background: linear-gradient(135deg, #06b5a0 0%, #05a896 100%);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
@@ -101,9 +101,9 @@
 
 .form-group input:focus {
   outline: none;
-  border-color: #00BCD4;
+  border-color: #06b5a0;
   background: rgba(255, 255, 255, 1);
-  box-shadow: 0 0 0 4px rgba(0, 188, 212, 0.3), 0 4px 12px rgba(0, 188, 212, 0.25);
+  box-shadow: 0 0 0 4px rgba(6, 181, 160, 0.3), 0 4px 12px rgba(6, 181, 160, 0.25);
   transform: translateY(-1px);
 }
 
@@ -135,16 +135,16 @@
 }
 
 .auth-button.primary {
-  background: linear-gradient(135deg, #0097A7 0%, #00796B 100%);
+  background: linear-gradient(135deg, #06b5a0 0%, #05a896 100%);
   color: white;
-  box-shadow: 0 8px 24px rgba(0, 151, 167, 0.5);
+  box-shadow: 0 8px 24px rgba(6, 181, 160, 0.5);
   text-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
 }
 
 .auth-button.primary:hover:not(:disabled) {
   transform: translateY(-3px);
-  box-shadow: 0 12px 32px rgba(0, 151, 167, 0.6);
-  background: linear-gradient(135deg, #00ACC1 0%, #00897B 100%);
+  box-shadow: 0 12px 32px rgba(6, 181, 160, 0.6);
+  background: linear-gradient(135deg, #08d4bc 0%, #06c2ad 100%);
 }
 
 .auth-button.primary:disabled {
@@ -207,6 +207,78 @@
   font-size: 16px;
 }
 
+/* Password requirements helper */
+.password-requirements {
+  margin-top: 10px;
+  padding: 10px 14px;
+  border-radius: 10px;
+  background: rgba(15, 23, 42, 0.98);
+  border: 1px solid rgba(148, 163, 184, 0.9);
+  box-shadow: 0 10px 25px rgba(15, 23, 42, 0.6);
+  position: relative;
+}
+
+.password-requirements::before {
+  content: '';
+  position: absolute;
+  top: -7px;
+  left: 24px;
+  border-width: 0 7px 7px 7px;
+  border-style: solid;
+  border-color: transparent transparent rgba(15, 23, 42, 0.98) transparent;
+}
+
+.password-requirements-title {
+  font-size: 12px;
+  font-weight: 700;
+  color: #e5e7eb;
+  margin-bottom: 6px;
+}
+
+.password-requirements-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.password-requirement {
+  display: flex;
+  align-items: center;
+  font-size: 12px;
+  margin-bottom: 3px;
+  color: #e5e7eb;
+}
+
+.password-requirement:last-child {
+  margin-bottom: 0;
+}
+
+.password-requirement-icon {
+  width: 16px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  margin-right: 6px;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.password-requirement.ok .password-requirement-icon {
+  color: #22c55e;
+}
+
+.password-requirement.ok {
+  color: #bbf7d0;
+}
+
+.password-requirement.fail .password-requirement-icon {
+  color: #f97373;
+}
+
+.password-requirement.fail {
+  color: #fecaca;
+}
+
 .auth-footer {
   text-align: center;
   margin-top: 12px;
@@ -223,7 +295,7 @@
 .link-button {
   background: none;
   border: none;
-  color: #26E7F5;
+  color: #08d4bc;
   font-weight: 700;
   cursor: pointer;
   text-decoration: none;
@@ -235,8 +307,8 @@
 }
 
 .link-button:hover:not(:disabled) {
-  color: #4DF0FB;
-  border-bottom-color: #4DF0FB;
+  color: #0ffad9;
+  border-bottom-color: #0ffad9;
 }
 
 .link-button:disabled {
@@ -362,7 +434,7 @@
   }
   
   .auth-header h1 {
-    background: linear-gradient(135deg, #00BCD4 0%, #26a69a 100%);
+    background: linear-gradient(135deg, #06b5a0 0%, #05a896 100%);
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
     background-clip: text;
@@ -384,7 +456,7 @@
   
   .form-group input:focus {
     background: rgba(255, 255, 255, 1);
-    border-color: #00BCD4;
+    border-color: #06b5a0;
   }
   
   .form-group input::placeholder {
@@ -406,5 +478,17 @@
   
   .demo-info strong {
     color: #ffffff;
+  }
+}
+
+/* Success message animation */
+@keyframes slideIn {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
   }
 }

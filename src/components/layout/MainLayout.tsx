@@ -37,6 +37,7 @@ interface MainLayoutProps {
     welcomeTitle?: string;
     welcomeSubtitle?: string;
     workspaceKey?: string;
+    vsumId?: string,
 }
 
 export function MainLayout({
@@ -58,6 +59,7 @@ export function MainLayout({
     welcomeTitle,
     welcomeSubtitle,
     workspaceKey,
+    vsumId,
 }: Readonly<MainLayoutProps>) {
     const location = useLocation();
     const isMMLRoute = location.pathname.startsWith('/mml');
@@ -76,13 +78,13 @@ export function MainLayout({
 
     // ECORE file boxes in workspace
     const [selectedFileBoxId, setSelectedFileBoxId] = useState<string | null>(null);
-    
+
     // Track when a metamodel is expanded (showing UML)
     const [expandedMetaModelName, setExpandedMetaModelName] = useState<string | null>(null);
-    
+
     // Force FlowCanvas to remount when switching between workspace and UML view
     const [canvasKey, setCanvasKey] = useState<string>('workspace-initial');
-    
+
     // Cache the workspace snapshot when switching to UML view
     // This ensures we can save relations even when viewing UML
     const [cachedWorkspaceSnapshot, setCachedWorkspaceSnapshot] = useState<WorkspaceSnapshot | null>(null);
@@ -200,11 +202,11 @@ export function MainLayout({
         }
 
         console.log('➕ Adding new metamodel box:', meta?.fileName);
-        
+
         // DON'T clear canvas when adding metamodel boxes to workspace
         // The workspace should accumulate multiple metamodel boxes
         // Only clear if explicitly needed elsewhere
-        
+
         // Calculate position for new box
         const position = calculateEmptyPosition();
 
@@ -224,31 +226,31 @@ export function MainLayout({
     // Function to return to workspace from expanded metamodel view
     const handleBackToWorkspace = useCallback(() => {
         setExpandedMetaModelName(null);
-        
+
         // Clear the cached workspace snapshot since we're returning to workspace view
         setCachedWorkspaceSnapshot(null);
-        
+
         // Clear any document state from the UML view
         setActiveDocId(undefined);
         setActiveFileName(undefined);
-        
+
         // IMPORTANT: Force a complete workspace reset first
         // This will clear ALL nodes (UML boxes, metamodel boxes, everything)
         // The reset handler will also change the canvas key
         globalThis.dispatchEvent(new CustomEvent('vitruv.resetWorkspace'));
-        
+
         // Re-enable interactive mode for workspace
         setTimeout(() => {
             if (flowCanvasRef.current?.setInteractive) {
                 flowCanvasRef.current.setInteractive(true);
             }
-            
+
             // Reset the expanded file state
             if (flowCanvasRef.current?.resetExpandedFile) {
                 flowCanvasRef.current.resetExpandedFile();
             }
         }, 100);
-        
+
         // Trigger workspace reload to restore ONLY metamodel boxes and connections
         // Use a longer delay to ensure complete reset before reload
         setTimeout(() => {
@@ -276,41 +278,49 @@ export function MainLayout({
                 keys.forEach((key) => {
                     if (key.startsWith('vitruv.document.data.')) localStorage.removeItem(key);
                 });
-            } catch {}
+            } catch { }
         };
         const handleAddFileToWorkspace = (e: Event) => {
-            const customEvent = e as CustomEvent<{
-                fileContent: string;
-                fileName: string;
-                description?: string;
-                keywords?: string;
-                domain?: string;
-                createdAt?: string;
-                metaModelId?: number;
-                metaModelSourceId?: number;
-            }>;
-            const detail = customEvent.detail;
-            if (detail) {
-                console.log('📦 Adding file to workspace:', detail.fileName);
-                handleEcoreFileUpload(detail.fileContent, {
-                    fileName: detail.fileName,
-                    description: detail.description,
-                    keywords: detail.keywords,
-                    domain: detail.domain,
-                    createdAt: detail.createdAt,
-                    metaModelId: detail.metaModelId,
-                    metaModelSourceId: detail.metaModelSourceId,
-                });
+            try {
+                const customEvent = e as CustomEvent<{
+                    fileContent: string;
+                    fileName: string;
+                    description?: string;
+                    keywords?: string;
+                    domain?: string;
+                    createdAt?: string;
+                    metaModelId?: number;
+                    metaModelSourceId?: number;
+                }>;
+                const detail = customEvent.detail;
+                if (detail) {
+                    console.log('📦 Adding file to workspace:', detail.fileName);
+                    handleEcoreFileUpload(detail.fileContent, {
+                        fileName: detail.fileName,
+                        description: detail.description,
+                        keywords: detail.keywords,
+                        domain: detail.domain,
+                        createdAt: detail.createdAt,
+                        metaModelId: detail.metaModelId,
+                        metaModelSourceId: detail.metaModelSourceId,
+                    });
+                }
+            } catch (error) {
+                console.error('Error handling addFileToWorkspace event:', error);
             }
         };
 
         globalThis.addEventListener('vitruv.addFileToWorkspace', handleAddFileToWorkspace as EventListener);
         globalThis.addEventListener('vitruv.resetWorkspace', handleResetWorkspace as EventListener);
         const handleExpandFileInWorkspace = (e: Event) => {
-            const customEvent = e as CustomEvent<{ fileName: string; fileContent: string }>;
-            const detail = customEvent.detail;
-            if (!detail) return;
-            handleEcoreFileExpand(detail.fileName, detail.fileContent);
+            try {
+                const customEvent = e as CustomEvent<{ fileName: string; fileContent: string }>;
+                const detail = customEvent.detail;
+                if (!detail) return;
+                handleEcoreFileExpand(detail.fileName, detail.fileContent);
+            } catch (error) {
+                console.error('Error handling expandFileInWorkspace event:', error);
+            }
         };
         globalThis.addEventListener('vitruv.expandFileInWorkspace', handleExpandFileInWorkspace as EventListener);
         return () => {
@@ -327,7 +337,7 @@ export function MainLayout({
             if (!detail || typeof detail.resolve !== 'function') {
                 return;
             }
-            
+
             // If viewing UML diagram, return the cached workspace snapshot
             // This ensures relations are saved even when viewing UML
             if (expandedMetaModelName && cachedWorkspaceSnapshot) {
@@ -335,7 +345,7 @@ export function MainLayout({
                 detail.resolve(cachedWorkspaceSnapshot);
                 return;
             }
-            
+
             const snapshot: WorkspaceSnapshot =
                 flowCanvasRef.current?.getWorkspaceSnapshot?.() ?? {
                     metaModelIds: [],
@@ -367,14 +377,14 @@ export function MainLayout({
         };
         setCachedWorkspaceSnapshot(currentSnapshot);
         console.log('📸 Cached workspace snapshot before UML view:', currentSnapshot);
-        
+
         // Mark that we're viewing an expanded metamodel
         setExpandedMetaModelName(fileName);
-        
+
         // Force FlowCanvas to remount with a new key for UML view
         // This ensures a completely fresh canvas without any metamodel boxes
         setCanvasKey(`uml-${fileName}-${Date.now()}`);
-        
+
         // IMPORTANT: Completely clear the entire canvas including all metamodel boxes
         // This ensures we start fresh with only the UML diagram
         if (flowCanvasRef.current?.loadDiagramData) {
@@ -596,46 +606,29 @@ export function MainLayout({
                                     padding: '40px',
                                 }}
                             >
-                                <div style={{ textAlign: 'center', fontFamily: 'Georgia, serif', color: '#2c3e50', maxWidth: 600 }}>
-                                    <div
+                                <div style={{ textAlign: 'center' }}>
+                                    <img
+                                        src="/assets/vitruvius1.png"
+                                        alt="Vitruvius"
+                                        draggable={false}
+                                        onDragStart={(e) => e.preventDefault()}
                                         style={{
-                                            width: 200,
-                                            height: 200,
-                                            margin: '0 auto 30px',
-                                            overflow: 'hidden',
-                                            borderRadius: 8,
-                                            position: 'relative',
+                                            display: 'block',
+                                            width: 600,
+                                            height: 600,
+                                            objectFit: 'contain',
+                                            margin: '0 auto',
+                                            pointerEvents: 'none',
+                                            userSelect: 'none',
                                         }}
-                                    >
-                                        <img
-                                            src="/assets/vitruvius1.png"
-                                            alt="Vitruvius"
-                                            draggable={false}
-                                            onDragStart={(e) => e.preventDefault()}
-                                            style={{
-                                                display: 'block',
-                                                width: '100%',
-                                                height: '100%',
-                                                objectFit: 'contain',
-                                                pointerEvents: 'none',
-                                                userSelect: 'none',
-                                            }}
-                                        />
-                                    </div>
-                                    <p style={{ margin: '0 0 20px 0', fontSize: 16, color: '#6b7280', lineHeight: 1.6 }}>
-                                        {welcomeTitle || 'Methodological Dashboard'}
-                                    </p>
-                                    {welcomeSubtitle && (
-                                        <p style={{ margin: '0', fontSize: 14, color: '#6b7280', lineHeight: 1.6 }}>
-                                            {welcomeSubtitle}
-                                        </p>
-                                    )}
+                                    />
                                 </div>
                             </div>
                         ) : (
                             <FlowCanvas
                                 key={`${workspaceKey || 'default-workspace'}-${canvasKey}`}
                                 onDeploy={onDeploy}
+                                vsumId={vsumId}
                                 onDiagramChange={handleDiagramChange}
                                 ref={flowCanvasRef}
                                 // ecoreFiles prop entfernt - Nodes sind jetzt Teil von FlowCanvas State
@@ -655,9 +648,9 @@ export function MainLayout({
                                     position: 'absolute',
                                     left: 16,
                                     top: 56,
-                                    background: '#3498db',
+                                    background: '#049484',
                                     color: '#ffffff',
-                                    border: '1px solid #2980b9',
+                                    border: '1px solid #037368',
                                     borderRadius: 6,
                                     padding: '8px 12px',
                                     fontWeight: 700,
@@ -668,15 +661,15 @@ export function MainLayout({
                                     gap: 6,
                                 }}
                                 onMouseEnter={(e) => {
-                                    e.currentTarget.style.background = '#2980b9';
+                                    e.currentTarget.style.background = '#037368';
                                 }}
                                 onMouseLeave={(e) => {
-                                    e.currentTarget.style.background = '#3498db';
+                                    e.currentTarget.style.background = '#049484';
                                 }}
                                 title={`Back to workspace from ${expandedMetaModelName}`}
                             >
                                 <svg width="14" height="14" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
-                                    <path d="M10 13L5 8L10 3" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                                    <path d="M10 13L5 8L10 3" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
                                 </svg>
                                 BACK TO WORKSPACE
                             </button>
