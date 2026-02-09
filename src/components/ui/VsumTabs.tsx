@@ -25,6 +25,37 @@ interface VsumTabsProps {
     requestWorkspaceSnapshot?: () => Promise<WorkspaceSnapshot | null>;
 }
 
+const extractBackendError = (
+    err: any,
+    fallbackSummary: string,
+    fallbackDetail?: string
+): { summary: string; detail: string } => {
+    const fallback = fallbackDetail ?? fallbackSummary;
+    const data = err?.response?.data;
+
+    if (data && typeof data === 'object') {
+        const summary =
+            typeof data.error === 'string' && data.error.trim()
+                ? data.error
+                : fallbackSummary;
+        const detail =
+            typeof data.message === 'string' && data.message.trim()
+                ? data.message
+                : summary;
+        return { summary, detail };
+    }
+
+    if (typeof data === 'string' && data.trim()) {
+        return { summary: fallbackSummary, detail: data };
+    }
+
+    if (typeof err?.message === 'string' && err.message.trim()) {
+        return { summary: fallbackSummary, detail: err.message };
+    }
+
+    return { summary: fallbackSummary, detail: fallback };
+};
+
 export const VsumTabs: React.FC<VsumTabsProps> = ({
                                                       openTabs,
                                                       activeInstanceId,
@@ -283,9 +314,13 @@ export const VsumTabs: React.FC<VsumTabsProps> = ({
             setPopup({ message: 'Artifact downloaded successfully!', type: 'success' });
             setTimeout(() => setPopup(null), 3000);
         } catch (err: any) {
-            const errorMsg = err?.message || 'Failed to download artifact';
-            setError(errorMsg);
-            setPopup({ message: errorMsg, type: 'error' });
+            const parsed = extractBackendError(
+                err,
+                'Failed to download artifact',
+                'Artifact download failed.'
+            );
+            setError(parsed.summary);
+            setPopup({ message: parsed.detail, type: 'error' });
             setTimeout(() => setPopup(null), 5000);
         } finally {
             setDownloadingArtifact(false);
@@ -324,24 +359,13 @@ export const VsumTabs: React.FC<VsumTabsProps> = ({
                 'This VSUM can be built successfully.';
             setPopup({ message: msg, type: 'success' });
         } catch (e: any) {
-            let fullMessage = 'Build failed.';
-            if (e?.response?.data) {
-                try {
-                    fullMessage =
-                        typeof e.response.data === 'string'
-                            ? e.response.data
-                            : JSON.stringify(e.response.data, null, 2);
-                } catch {
-                    fullMessage = e.response.data?.toString?.() || fullMessage;
-                }
-            } else if (e?.message) {
-                fullMessage = e.message;
-            } else {
-                fullMessage = String(e);
-            }
-
-            setError(fullMessage);
-            setPopup({ message: fullMessage, type: 'error' });
+            const parsed = extractBackendError(
+                e,
+                'Build failed.',
+                'Build check failed.'
+            );
+            setError(parsed.summary);
+            setPopup({ message: parsed.detail, type: 'error' });
         } finally {
             setCheckingBuild(false);
         }

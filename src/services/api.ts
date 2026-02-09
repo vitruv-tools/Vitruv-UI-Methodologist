@@ -7,6 +7,19 @@ class ApiService {
   private readonly baseURL = config.apiBaseUrl;
 
   /**
+   * Parse backend error payload safely
+   */
+  private parseErrorPayload(errorText: string): Record<string, any> {
+    if (!errorText) return {};
+    try {
+      const parsed = JSON.parse(errorText);
+      return parsed && typeof parsed === 'object' ? parsed : {};
+    } catch {
+      return {};
+    }
+  }
+
+  /**
    * Extract error message from response text
    */
   private extractErrorMessage(errorText: string): string {
@@ -16,6 +29,29 @@ class ApiService {
     } catch {
       return errorText;
     }
+  }
+
+  /**
+   * Build an Error that keeps backend payload on response.data
+   */
+  private createApiError(errorText: string, fallbackMessage: string): Error & { response?: { data: any } } {
+    const parsed = this.parseErrorPayload(errorText);
+    const message =
+      (typeof parsed?.message === 'string' && parsed.message) ||
+      (typeof parsed?.error === 'string' && parsed.error) ||
+      this.extractErrorMessage(errorText) ||
+      fallbackMessage;
+
+    const err = new Error(message) as Error & { response?: { data: any } };
+    err.response = {
+      data: Object.keys(parsed).length > 0
+        ? parsed
+        : {
+          error: fallbackMessage,
+          message: message || fallbackMessage,
+        },
+    };
+    return err;
   }
 
   /**
@@ -48,7 +84,7 @@ class ApiService {
       message: errorMessage,
       body: errorText,
     });
-    throw new Error(errorMessage);
+    throw this.createApiError(errorText, `${method} ${url} failed`);
   }
 
   /**
@@ -160,7 +196,7 @@ class ApiService {
         message: errorMessage,
         body: errorText,
       });
-      throw new Error(errorMessage);
+      throw this.createApiError(errorText, `Public request failed (${response.status})`);
     }
 
     return await response.json();
@@ -595,8 +631,7 @@ class ApiService {
 
           if (!retryResponse.ok) {
             const errorText = await this.getResponseText(retryResponse);
-            const errorMessage = this.extractErrorMessage(errorText);
-            throw new Error(errorMessage);
+            throw this.createApiError(errorText, 'Artifact download failed after token refresh');
           }
 
           return await retryResponse.blob();
@@ -614,7 +649,7 @@ class ApiService {
       statusText: response.statusText,
       message: errorMessage,
     });
-    throw new Error(errorMessage);
+    throw this.createApiError(errorText, 'Artifact download failed');
   }
 
   /**
