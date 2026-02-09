@@ -5,7 +5,7 @@ beforeEach(() => {
   // Seed auth so ProtectedRoute allows access to main app
   localStorage.setItem('auth.access_token', 'test-token');
   localStorage.setItem('auth.access_expires_at', (Date.now() + 60 * 60 * 1000).toString());
-  localStorage.setItem('auth.user', JSON.stringify({ id: '1', username: 'test', name: 'Test User' }));
+  localStorage.setItem('auth.user', JSON.stringify({ id: '1', username: 'test', name: 'Test User', emailVerified: true }));
 });
 
 afterEach(() => {
@@ -14,6 +14,6 @@ afterEach(() => {
 
 test('renders Vitruvius Modeler title', () => {
   render(<App />);
-  const titleHeading = screen.getByRole('heading', { name: /Methodologist Dashboard/i });
-  expect(titleHeading).toBeInTheDocument();
+  const logoImage = screen.getByAltText(/Vitruvius/i);
+  expect(logoImage).toBeInTheDocument();
 });
