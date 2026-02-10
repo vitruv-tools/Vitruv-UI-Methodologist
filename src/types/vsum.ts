@@ -24,6 +24,7 @@ export interface VsumMetaModelRelation {
   id: number;
   sourceId: number;
   targetId: number;
+  reactionFileId?: number | null;
   reactionFileStorageId?: number | null;
 }
 

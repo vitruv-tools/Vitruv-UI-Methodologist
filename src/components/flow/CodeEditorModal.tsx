@@ -36,6 +36,25 @@ const createButtonStyles = (
   cursor: disabled ? 'not-allowed' : 'pointer',
 });
 
+const extractSaveErrorMessage = (err: unknown): string => {
+  if (err instanceof Error && err.message.trim()) {
+    return err.message;
+  }
+
+  const responseData = (err as any)?.response?.data;
+  if (typeof responseData === 'string' && responseData.trim()) {
+    return responseData;
+  }
+  if (responseData && typeof responseData === 'object') {
+    const message = responseData.message ?? responseData.error;
+    if (typeof message === 'string' && message.trim()) {
+      return message;
+    }
+  }
+
+  return 'Failed to save reaction file';
+};
+
 export function CodeEditorModal({
   isOpen,
   onClose,
@@ -509,7 +528,7 @@ export function CodeEditorModal({
       handleClose(); // ✅ Statt onClose()
     } catch (err) {
       console.error('Failed to save reaction', err);
-      const message = err instanceof Error ? err.message : 'Failed to save reaction';
+      const message = extractSaveErrorMessage(err);
       globalThis.alert(message);
     } finally {
       setSaving(false);

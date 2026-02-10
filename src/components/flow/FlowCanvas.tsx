@@ -847,6 +847,9 @@ execute actions in ${targetPackageName}
         if (reactionFileId == null) {
           const uploadResult = await apiService.uploadFile(file, 'REACTION');
           reactionFileId = extractFileId(uploadResult?.data);
+          if (reactionFileId == null) {
+            throw new Error('Reaction file upload succeeded but did not return a file ID.');
+          }
         } else {
           await apiService.updateReactionFile(reactionFileId, file);
         }
