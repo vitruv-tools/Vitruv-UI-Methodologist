@@ -36,6 +36,33 @@ const createButtonStyles = (
   cursor: disabled ? 'not-allowed' : 'pointer',
 });
 
+const extractSaveErrorMessage = (err: unknown): string => {
+  if (err instanceof Error && err.message.trim()) {
+    return err.message;
+  }
+
+  const responseData = (err as any)?.response?.data;
+  if (typeof responseData === 'string' && responseData.trim()) {
+    return responseData;
+  }
+  if (responseData && typeof responseData === 'object') {
+    const message = responseData.message ?? responseData.error;
+    if (typeof message === 'string' && message.trim()) {
+      return message;
+    }
+  }
+
+  return 'Failed to save reaction file';
+};
+
+const buildSaveErrorDialogMessage = (rawMessage: string): string => {
+  const message = rawMessage.trim();
+  if (!message) {
+    return 'Failed to save reaction file. No changes were saved.';
+  }
+  return `${message} No changes were saved.`;
+};
+
 export function CodeEditorModal({
   isOpen,
   onClose,
@@ -60,6 +87,7 @@ export function CodeEditorModal({
   const versionCounter = useRef(1);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [showClearDialog, setShowClearDialog] = useState(false);
+  const [saveErrorMessage, setSaveErrorMessage] = useState<string | null>(null);
 
   useEffect(() => {
     setCode(initialCode);
@@ -110,6 +138,7 @@ export function CodeEditorModal({
     lspReady.current = false;
     lspInitialized.current = false;
     setLspConnected(false);
+    setSaveErrorMessage(null);
     onClose();
   };
 
@@ -509,8 +538,8 @@ export function CodeEditorModal({
       handleClose(); // ✅ Statt onClose()
     } catch (err) {
       console.error('Failed to save reaction', err);
-      const message = err instanceof Error ? err.message : 'Failed to save reaction';
-      globalThis.alert(message);
+      const message = extractSaveErrorMessage(err);
+      setSaveErrorMessage(buildSaveErrorDialogMessage(message));
     } finally {
       setSaving(false);
     }
@@ -792,6 +821,17 @@ export function CodeEditorModal({
           setShowClearDialog(false);
         }}
         onCancel={() => setShowClearDialog(false)}
+      />
+
+      <ConfirmDialog
+        isOpen={saveErrorMessage !== null}
+        title="Unable to save file"
+        message={saveErrorMessage ?? ''}
+        confirmText="OK"
+        singleAction
+        variant="danger"
+        onConfirm={() => setSaveErrorMessage(null)}
+        onCancel={() => setSaveErrorMessage(null)}
       />
     </dialog>
   );

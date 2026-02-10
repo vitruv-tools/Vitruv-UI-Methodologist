@@ -332,7 +332,7 @@ async function fetchAndLoadProjectBoxes(id: number, skipReset: boolean = false) 
           id: relation.id,
           sourceId: relation.sourceId,
           targetId: relation.targetId,
-          reactionFileId: relation.reactionFileStorageId ?? null,
+          reactionFileId: relation.reactionFileId ?? relation.reactionFileStorageId ?? null,
         }));
 
         // Set preserveExisting to false when loading from backend (full reload)
