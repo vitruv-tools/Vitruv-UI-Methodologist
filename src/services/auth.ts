@@ -128,6 +128,39 @@ export class AuthService {
     console.log('Sign-up tokens stored successfully');
   }
 
+  private static hasStoredAuthToken(): boolean {
+    return !!localStorage.getItem('auth.access_token');
+  }
+
+  private static async autoSignInAfterSignUp(credentials: SignUpCredentials): Promise<void> {
+    // Some backends create the user without returning tokens on sign-up.
+    // In that case, sign in immediately so OTP endpoints can be called.
+    if (this.hasStoredAuthToken()) {
+      return;
+    }
+
+    try {
+      await this.signIn({
+        username: credentials.username,
+        password: credentials.password,
+      });
+      return;
+    } catch (usernameSignInError) {
+      console.warn('Auto sign-in with username failed after sign-up:', usernameSignInError);
+    }
+
+    try {
+      await this.signIn({
+        username: credentials.email,
+        password: credentials.password,
+      });
+    } catch (emailSignInError) {
+      console.warn('Auto sign-in with email failed after sign-up:', emailSignInError);
+      // Keep sign-up successful but signal to UI that sign-in is required.
+      throw new Error('Account created, but sign-in is required before email verification. Please sign in and continue.');
+    }
+  }
+
   static async signUp(credentials: SignUpCredentials): Promise<SignUpResponse> {
     console.log('Sign up request payload:', {
       ...credentials,
@@ -204,6 +237,7 @@ export class AuthService {
       console.log('Sign up successful, storing tokens...');
       const tokenData = responseData.access_token ? responseData : (responseData.data || {});
       this.storeAuthTokens(tokenData);
+      await this.autoSignInAfterSignUp(credentials);
       
       return responseData;
     } catch (error: any) {

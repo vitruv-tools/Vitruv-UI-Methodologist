@@ -150,7 +150,11 @@ class ApiService {
       return await response.json();
     }
 
-    if (response.status === 401) {
+    const isOtpEndpoint = endpoint.includes('/verify-otp') || endpoint.includes('/resend-otp');
+
+    // Some backends return 401 for OTP business errors (e.g., wrong code).
+    // For OTP endpoints, do not trigger refresh/signout flow on 401.
+    if (response.status === 401 && !isOtpEndpoint) {
       const retryResult = await this.retryWithRefreshedToken<T>(url, options, headers);
       if (retryResult !== null) {
         return retryResult;
@@ -205,7 +209,7 @@ class ApiService {
   /**
    * Get currently authenticated user info
    */
-  async getUserInfo(): Promise<{ data: { id: number; email: string; firstName: string; lastName: string }; message: string }> {
+  async getUserInfo(): Promise<{ data: { id: number; email: string; firstName: string; lastName: string; emailVerified?: boolean; verified?: boolean }; message: string | null }> {
     return this.authenticatedRequest('/api/v1/users');
   }
 

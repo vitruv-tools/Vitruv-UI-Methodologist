@@ -1,13 +1,16 @@
-import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import React, { useState, useEffect, useRef } from 'react';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { apiService } from '../services/api';
-import { AuthService } from '../services/auth';
+import { useAuth } from '../contexts/AuthContext';
 import '../components/auth/Auth.css';
 
 const OTP_DURATION = 5 * 60; // 5 minutes in seconds
 
 export function OtpVerificationPage() {
   const navigate = useNavigate();
+  const location = useLocation();
+  const { refreshCurrentUser } = useAuth();
+  const hasAutoResentRef = useRef(false);
   const [otpCode, setOtpCode] = useState('');
   const [isVerifying, setIsVerifying] = useState(false);
   const [isResending, setIsResending] = useState(false);
@@ -16,7 +19,7 @@ export function OtpVerificationPage() {
   const [timeLeft, setTimeLeft] = useState(OTP_DURATION);
   const [canResend, setCanResend] = useState(false);
   const [failedAttempts, setFailedAttempts] = useState(0);
-  const MAX_ATTEMPTS = 3;
+  const MAX_ATTEMPTS = 2;
 
   // Countdown timer
   useEffect(() => {
@@ -45,23 +48,100 @@ export function OtpVerificationPage() {
     return `${mins}:${secs.toString().padStart(2, '0')}`;
   };
 
-  const handleVerifyOtp = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setError(null);
-    setSuccess(null);
+  const isIncorrectCodeError = (message: string): boolean => {
+    const normalized = message.toLowerCase();
+    return normalized.includes('invalid otp') ||
+      normalized.includes('incorrect verification code') ||
+      normalized.includes('invalid verification code') ||
+      normalized.includes('invalid code') ||
+      normalized.includes('incorrect code');
+  };
 
-    // Check authentication only when user tries to verify
-    const token = AuthService.getAccessToken();
-    const isAuth = AuthService.isAuthenticated();
-    
-    if (!token || !isAuth) {
+  const isAuthError = (message: string): boolean => {
+    const normalized = message.toLowerCase();
+    return normalized.includes('no valid authentication token') ||
+      normalized.includes('token expired') ||
+      normalized.includes('invalid token') ||
+      normalized.includes('not authenticated');
+  };
+
+  const isCodeExpiredError = (message: string): boolean => {
+    const normalized = message.toLowerCase();
+    return normalized.includes('code is expired') ||
+      normalized.includes('validation code is expired') ||
+      normalized.includes('verification code is expired') ||
+      normalized.includes('otp expired') ||
+      normalized.includes('code expired');
+  };
+
+  const showTooManyAttemptsError = () => {
+    setError(
+      `Too many failed attempts (${MAX_ATTEMPTS}/${MAX_ATTEMPTS}).\n\n` +
+      'Please click "Resend Verification Code" to get a new code.'
+    );
+    setCanResend(true);
+  };
+
+  const handleIncorrectOtpAttempt = () => {
+    const newFailedAttempts = failedAttempts + 1;
+    setFailedAttempts(newFailedAttempts);
+
+    if (newFailedAttempts >= MAX_ATTEMPTS) {
+      showTooManyAttemptsError();
+      return;
+    }
+
+    const remainingAttempts = MAX_ATTEMPTS - newFailedAttempts;
+    setError(
+      `❌ Verification code is not valid\n\n` +
+      `Attempts: ${newFailedAttempts}/${MAX_ATTEMPTS} used\n` +
+      `${remainingAttempts} ${remainingAttempts === 1 ? 'attempt' : 'attempts'} remaining\n\n` +
+      `Please check your email and try again.`
+    );
+  };
+
+  const handleVerifyOtpError = (errorMessage: string) => {
+    if (isCodeExpiredError(errorMessage)) {
+      setError('Verification code is expired. Please resend and use the new code.');
+      setCanResend(true);
+      setTimeLeft(0);
+      return;
+    }
+
+    if (isAuthError(errorMessage)) {
       setError('Authentication session expired. Please sign in again.');
       setTimeout(() => navigate('/login'), 2000);
       return;
     }
 
+    // Treat session-expired text from OTP verify endpoint as an incorrect attempt,
+    // because some backends use that wording for invalid OTP responses.
+    const normalizedError = errorMessage.toLowerCase();
+    const shouldCountAsOtpFailure =
+      isIncorrectCodeError(errorMessage) ||
+      normalizedError.includes('authentication session expired') ||
+      normalizedError.includes('session expired');
+
+    if (shouldCountAsOtpFailure) {
+      handleIncorrectOtpAttempt();
+      return;
+    }
+
+    setError(errorMessage);
+  };
+
+  const handleVerifyOtp = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError(null);
+    setSuccess(null);
+
     if (!otpCode || otpCode.length < 4) {
       setError('Please enter a valid OTP code');
+      return;
+    }
+
+    if (failedAttempts >= MAX_ATTEMPTS) {
+      showTooManyAttemptsError();
       return;
     }
 
@@ -70,55 +150,23 @@ export function OtpVerificationPage() {
       const response = await apiService.verifyOtp(otpCode);
       setSuccess(response.message || 'Email verified successfully!');
       
-      // Fetch updated user info to get emailVerified status
+      // Refresh user context so route guards immediately see verified state
       try {
-        const { data } = await apiService.getUserInfo();
-        const updatedUser = {
-          id: String(data.id),
-          username: data.email?.split('@')[0] || 'user',
-          email: data.email,
-          name: `${data.firstName ?? ''} ${data.lastName ?? ''}`.trim() || data.email,
-          givenName: data.firstName,
-          familyName: data.lastName,
-          emailVerified: (data as any).emailVerified,
-        };
-        AuthService.setCurrentUser(updatedUser);
+        await refreshCurrentUser();
       } catch (userInfoError) {
-        console.error('Failed to fetch updated user info:', userInfoError);
+        console.error('Failed to refresh updated user info:', userInfoError);
       }
       
-      // Redirect to home page after successful verification
+      // Redirect to workspace after successful verification
       setTimeout(() => {
-        navigate('/');
+        navigate('/mml');
       }, 1500);
     } catch (err: any) {
       const errorMessage = err.message || 'Invalid OTP code. Please try again.';
       
       console.log('OTP Verification Error:', errorMessage); // Debug log
-      
-      // ASSUME it's an invalid code attempt by default
-      // Increment failed attempts counter
-      const newFailedAttempts = failedAttempts + 1;
-      setFailedAttempts(newFailedAttempts);
-      
-      // Check if maximum attempts reached
-      if (newFailedAttempts >= MAX_ATTEMPTS) {
-        setError(
-          `Too many failed attempts (${MAX_ATTEMPTS}/${MAX_ATTEMPTS}).\n\n` +
-          'For security reasons, please sign in again to request a new verification code.'
-        );
-        setTimeout(() => navigate('/login'), 3000);
-        return;
-      }
-      
-      // Show error with remaining attempts (user can try again)
-      const remainingAttempts = MAX_ATTEMPTS - newFailedAttempts;
-      setError(
-        `❌ Incorrect verification code\n\n` +
-        `Attempts: ${newFailedAttempts}/${MAX_ATTEMPTS} used\n` +
-        `${remainingAttempts} ${remainingAttempts === 1 ? 'attempt' : 'attempts'} remaining\n\n` +
-        `Please check your email and try again.`
-      );
+
+      handleVerifyOtpError(errorMessage);
     } finally {
       setIsVerifying(false);
     }
@@ -128,21 +176,11 @@ export function OtpVerificationPage() {
     setError(null);
     setSuccess(null);
 
-    // Check authentication only when user tries to resend
-    const token = AuthService.getAccessToken();
-    const isAuth = AuthService.isAuthenticated();
-    
-    if (!token || !isAuth) {
-      setError('Authentication session expired. Please sign in again.');
-      setTimeout(() => navigate('/login'), 2000);
-      return;
-    }
-
     setIsResending(true);
 
     try {
-      const response = await apiService.resendOtp();
-      setSuccess(response.message || 'A new OTP code has been sent to your email');
+      await apiService.resendOtp();
+      setSuccess('A new verification code has been sent to your email. Previous code is no longer valid.');
       setTimeLeft(OTP_DURATION);
       setCanResend(false);
       setOtpCode('');
@@ -151,7 +189,7 @@ export function OtpVerificationPage() {
       const errorMessage = err.message || 'Failed to resend OTP code';
       
       // Check if it's an authentication error
-      if (errorMessage.includes('authentication') || errorMessage.includes('token')) {
+      if (isAuthError(errorMessage)) {
         setError('Your session has expired. Redirecting to login...');
         setTimeout(() => navigate('/login'), 2000);
       } else {
@@ -161,6 +199,20 @@ export function OtpVerificationPage() {
       setIsResending(false);
     }
   };
+
+  useEffect(() => {
+    const shouldAutoResend = Boolean((location.state as { autoResend?: boolean } | null)?.autoResend);
+    if (!shouldAutoResend || hasAutoResentRef.current) {
+      return;
+    }
+
+    hasAutoResentRef.current = true;
+    void handleResendOtp();
+
+    // Clear navigation state so refresh/back won't trigger auto resend again.
+    navigate('/verify-otp', { replace: true });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [location.state, navigate]);
 
   return (
     <div 
@@ -176,7 +228,10 @@ export function OtpVerificationPage() {
       <div className="auth-card" style={{ maxWidth: 480 }}>
         <div className="auth-header">
           <h1>Email Verification</h1>
-          <p>Please enter the verification code sent to your email</p>
+          <p>Please enter the latest verification code sent to your email</p>
+          <p style={{ marginTop: 6, fontSize: 12, color: '#6b7280' }}>
+            If a new code is sent, all previous codes become invalid.
+          </p>
         </div>
 
         <form onSubmit={handleVerifyOtp} className="auth-form">
@@ -307,10 +362,10 @@ export function OtpVerificationPage() {
           <button
             type="submit"
             className="auth-button primary"
-            disabled={isVerifying || !otpCode}
+            disabled={isVerifying || !otpCode || failedAttempts >= MAX_ATTEMPTS}
             style={{
-              background: (isVerifying || !otpCode) ? '#95a5a6' : 'linear-gradient(135deg, #049484 0%, #037368 100%)',
-              opacity: (isVerifying || !otpCode) ? 0.6 : 1,
+              background: (isVerifying || !otpCode || failedAttempts >= MAX_ATTEMPTS) ? '#95a5a6' : 'linear-gradient(135deg, #049484 0%, #037368 100%)',
+              opacity: (isVerifying || !otpCode || failedAttempts >= MAX_ATTEMPTS) ? 0.6 : 1,
             }}
           >
             {isVerifying ? (
@@ -360,6 +415,14 @@ export function OtpVerificationPage() {
             Please check your inbox and spam folder for the verification code. 
             The code is valid for 5 minutes.
           </p>
+          <button
+            type="button"
+            className="link-button"
+            onClick={() => navigate('/login')}
+            style={{ marginTop: 12 }}
+          >
+            Go to Sign In
+          </button>
         </div>
       </div>
     </div>

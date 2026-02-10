@@ -1,27 +1,29 @@
 import React, { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { SignIn, SignUp } from './index';
 
 export function AuthPage() {
   const [isSignIn, setIsSignIn] = useState(true);
+  const navigate = useNavigate();
 
   const handleSignInSuccess = (user: any) => {
     // Check if user needs email verification
     console.log('Sign in successful, user:', user);
     
-    if (user?.emailVerified === false) {
-      // User is not verified, redirect to OTP verification
-      console.log('User email not verified, redirecting to OTP verification');
-      globalThis.location.href = '/verify-otp';
+    if (user?.emailVerified === true) {
+      // User is verified, redirect directly to workspace
+      console.log('User email verified, redirecting to workspace');
+      navigate('/mml', { replace: true });
     } else {
-      // User is verified or verification status unknown, redirect to main app
-      console.log('User email verified, redirecting to home');
-      globalThis.location.href = '/';
+      // User is not verified (or status is unknown), redirect to OTP verification
+      console.log('User email not verified, redirecting to OTP verification');
+      navigate('/verify-otp', { replace: true, state: { autoResend: true } });
     }
   };
 
   const handleSignUpSuccess = (user: any) => {
     // Redirect to OTP verification page after successful registration
-    globalThis.location.href = '/verify-otp';
+    navigate('/verify-otp', { replace: true });
   };
 
   const handleSwitchToSignUp = () => {

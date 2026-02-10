@@ -12,6 +12,7 @@ interface AuthContextType {
     signUp: (userData: SignUpCredentials) => Promise<void>;
     signOut: () => Promise<void>;
     refreshToken: () => Promise<any>;
+    refreshCurrentUser: () => Promise<User | null>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -60,10 +61,34 @@ function getUserFromAccessToken(): User | null {
     };
 }
 
+function resolveVerifiedFlag(data: any): boolean {
+    if (data?.emailVerified === true || data?.verified === true) {
+        return true;
+    }
+    return false;
+}
+
 export function AuthProvider({ children }: Readonly<AuthProviderProps>) {
     const [user, setUser] = useState<User | null>(null);
     const [isLoading, setIsLoading] = useState(true);
     const { refreshToken } = useTokenRefresh();
+
+    const fetchUserFromApi = useCallback(async (): Promise<User | null> => {
+        try {
+            const { data } = await apiService.getUserInfo();
+            return {
+                id: String(data.id),
+                username: data.email?.split('@')[0] || 'user',
+                email: data.email,
+                name: `${data.firstName ?? ''} ${data.lastName ?? ''}`.trim() || data.email,
+                givenName: data.firstName,
+                familyName: data.lastName,
+                emailVerified: resolveVerifiedFlag(data),
+            };
+        } catch {
+            return getUserFromAccessToken();
+        }
+    }, []);
 
     useEffect(() => {
         const checkAuth = async () => {
@@ -89,30 +114,13 @@ export function AuthProvider({ children }: Readonly<AuthProviderProps>) {
             }
         };
 
-        const fetchUserFromApi = async (): Promise<User | null> => {
-            try {
-                const { data } = await apiService.getUserInfo();
-                return {
-                    id: String(data.id),
-                    username: data.email?.split('@')[0] || 'user',
-                    email: data.email,
-                    name: `${data.firstName ?? ''} ${data.lastName ?? ''}`.trim() || data.email,
-                    givenName: data.firstName,
-                    familyName: data.lastName,
-                    emailVerified: (data as any).emailVerified,
-                };
-            } catch {
-                return getUserFromAccessToken();
-            }
-        };
-
         checkAuth();
         const onSignOut = () => setUser(null);
         globalThis.addEventListener('auth:signout', onSignOut);
         return () => {
             globalThis.removeEventListener('auth:signout', onSignOut);
         };
-    }, []);
+    }, [fetchUserFromApi]);
 
     const signIn = useCallback(async (username: string, password: string): Promise<User> => {
         try {
@@ -127,7 +135,7 @@ export function AuthProvider({ children }: Readonly<AuthProviderProps>) {
                     name: `${data.firstName ?? ''} ${data.lastName ?? ''}`.trim() || data.email || username,
                     givenName: data.firstName,
                     familyName: data.lastName,
-                    emailVerified: (data as any).emailVerified,
+                    emailVerified: resolveVerifiedFlag(data),
                 };
                 AuthService.setCurrentUser(mapped);
                 setUser(mapped);
@@ -144,7 +152,7 @@ export function AuthProvider({ children }: Readonly<AuthProviderProps>) {
                         name: extractedUser.name,
                         givenName: extractedUser.givenName,
                         familyName: extractedUser.familyName,
-                        emailVerified: extractedUser.emailVerified,
+                        emailVerified: extractedUser.emailVerified === true,
                         scope: extractedUser.scope,
                     };
                 } else {
@@ -213,6 +221,7 @@ export function AuthProvider({ children }: Readonly<AuthProviderProps>) {
                 username: userData.username,
                 email: userData.email,
                 name: `${userData.firstName} ${userData.lastName}`.trim() || userData.username,
+                emailVerified: false,
             };
 
             AuthService.setCurrentUser(newUser);
@@ -251,15 +260,24 @@ export function AuthProvider({ children }: Readonly<AuthProviderProps>) {
         }
     }, [refreshToken]);
 
+    const refreshCurrentUser = useCallback(async (): Promise<User | null> => {
+        const refreshedUser = await fetchUserFromApi();
+        if (!refreshedUser) return null;
+        AuthService.setCurrentUser(refreshedUser);
+        setUser(refreshedUser);
+        return refreshedUser;
+    }, [fetchUserFromApi]);
+
     const value: AuthContextType = useMemo(() => ({
         user,
-        isAuthenticated: !!user,
+        isAuthenticated: !!user && AuthService.isAuthenticated(),
         isLoading,
         signIn,
         signUp,
         signOut,
         refreshToken: handleRefreshToken,
-    }), [user, isLoading, signIn, signUp, signOut, handleRefreshToken]);
+        refreshCurrentUser,
+    }), [user, isLoading, signIn, signUp, signOut, handleRefreshToken, refreshCurrentUser]);
 
     return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }
