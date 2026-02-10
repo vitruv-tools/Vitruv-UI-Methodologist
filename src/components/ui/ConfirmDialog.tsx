@@ -7,6 +7,7 @@ interface ConfirmDialogProps {
   message?: string | React.ReactNode;
   confirmText?: string;
   cancelText?: string;
+  singleAction?: boolean;
   variant?: 'danger' | 'success';
   onConfirm: () => void;
   onCancel: () => void;
@@ -18,6 +19,7 @@ export const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
   message = 'Are you sure you want to proceed?',
   confirmText = 'Confirm',
   cancelText = 'Cancel',
+  singleAction = false,
   variant = 'danger',
   onConfirm,
   onCancel,
@@ -89,31 +91,33 @@ export const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
           lineHeight: '1.6',
         }}>{message}</div>
         <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px' }}>
-          <button
-            onClick={onCancel}
-            style={{
-              background: '#fff',
-              border: '2px solid #dee2e6',
-              color: '#495057',
-              padding: '10px 20px',
-              borderRadius: '6px',
-              cursor: 'pointer',
-              fontSize: '14px',
-              fontWeight: 600,
-              fontFamily: 'Georgia, serif',
-              transition: 'all 0.2s ease',
-            }}
-            onMouseEnter={(e) => {
-              e.currentTarget.style.background = '#f8f9fa';
-              e.currentTarget.style.borderColor = '#adb5bd';
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.background = '#fff';
-              e.currentTarget.style.borderColor = '#dee2e6';
-            }}
-          >
-            {cancelText}
-          </button>
+          {!singleAction && (
+            <button
+              onClick={onCancel}
+              style={{
+                background: '#fff',
+                border: '2px solid #dee2e6',
+                color: '#495057',
+                padding: '10px 20px',
+                borderRadius: '6px',
+                cursor: 'pointer',
+                fontSize: '14px',
+                fontWeight: 600,
+                fontFamily: 'Georgia, serif',
+                transition: 'all 0.2s ease',
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.background = '#f8f9fa';
+                e.currentTarget.style.borderColor = '#adb5bd';
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.background = '#fff';
+                e.currentTarget.style.borderColor = '#dee2e6';
+              }}
+            >
+              {cancelText}
+            </button>
+          )}
           <button
             onClick={onConfirm}
             style={{
