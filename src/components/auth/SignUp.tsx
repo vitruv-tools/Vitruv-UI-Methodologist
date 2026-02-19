@@ -8,15 +8,15 @@ interface SignUpProps {
   onSwitchToSignIn: () => void;
 }
 
-// Password strength helper
+// Password strength helper (matching backend regex)
 const calculatePasswordStrength = (password: string): number => {
   let score = 0;
 
-  if (password.length >= 8) score++;
-  if (/[A-Z]/.test(password)) score++;
-  if (/[a-z]/.test(password)) score++;
-  if (/\d/.test(password)) score++;
-  if (/[@$!%?&]/.test(password)) score++;
+  if (password.length >= 8 && password.length <= 256) score++;
+  if (/\p{Lu}/u.test(password)) score++;
+  if (/\p{Ll}/u.test(password)) score++;
+  if (/\p{Nd}/u.test(password)) score++;
+  if (/[^\p{L}\p{Nd}\s]/u.test(password)) score++;
 
   return score; // 0–5
 };
@@ -59,7 +59,6 @@ const getPasswordBarColor = (score: number): string => {
 
 interface PasswordRequirementsProps {
   isPasswordValid: boolean;
-  hasOnlyAllowedChars: boolean;
   hasMinLength: boolean;
   hasLowercase: boolean;
   hasUppercase: boolean;
@@ -69,7 +68,6 @@ interface PasswordRequirementsProps {
 
 const PasswordRequirements: React.FC<PasswordRequirementsProps> = ({
   isPasswordValid,
-  hasOnlyAllowedChars,
   hasMinLength,
   hasLowercase,
   hasUppercase,
@@ -88,25 +86,13 @@ const PasswordRequirements: React.FC<PasswordRequirementsProps> = ({
       <ul className="password-requirements-list">
         <li
           className={`password-requirement ${
-            hasOnlyAllowedChars ? "ok" : "fail"
-          }`}
-        >
-          <span className="password-requirement-icon">
-            {hasOnlyAllowedChars ? "✔" : "✖"}
-          </span>
-          <span>
-            Use only letters, numbers, and these symbols: @ $ ! % ? &
-          </span>
-        </li>
-        <li
-          className={`password-requirement ${
             hasMinLength ? "ok" : "fail"
           }`}
         >
           <span className="password-requirement-icon">
             {hasMinLength ? "✔" : "✖"}
           </span>
-          <span>Be at least 8 characters</span>
+          <span>Be at least 8 characters long</span>
         </li>
         <li
           className={`password-requirement ${
@@ -146,7 +132,7 @@ const PasswordRequirements: React.FC<PasswordRequirementsProps> = ({
           <span className="password-requirement-icon">
             {hasSymbol ? "✔" : "✖"}
           </span>
-          <span>Have at least one symbol (@ $ ! % ? &)</span>
+          <span>Have at least one special character</span>
         </li>
       </ul>
     </div>
@@ -172,22 +158,20 @@ export function SignUp({ onSignUpSuccess, onSwitchToSignIn }: Readonly<SignUpPro
   const passwordScore = calculatePasswordStrength(formData.password);
   const passwordBarColor = getPasswordBarColor(passwordScore);
 
-  // Live password requirement checks for helper UI
-  const hasMinLength = formData.password.length >= 8;
-  const hasUppercase = /[A-Z]/.test(formData.password);
-  const hasLowercase = /[a-z]/.test(formData.password);
-  const hasNumber = /\d/.test(formData.password);
-  const hasSymbol = /[@$!%?&]/.test(formData.password);
-  const hasOnlyAllowedChars =
-    formData.password === '' || /^[A-Za-z0-9@$!%?&]+$/.test(formData.password);
+  // Live password requirement checks for helper UI (matching backend regex)
+  // Backend regex: ^(?=.{8,256}$)(?=.*\p{Ll})(?=.*\p{Lu})(?=.*\p{Nd})(?=.*[^\p{L}\p{Nd}\s]).*$
+  const hasMinLength = formData.password.length >= 8 && formData.password.length <= 256;
+  const hasUppercase = /\p{Lu}/u.test(formData.password);
+  const hasLowercase = /\p{Ll}/u.test(formData.password);
+  const hasNumber = /\p{Nd}/u.test(formData.password);
+  const hasSymbol = /[^\p{L}\p{Nd}\s]/u.test(formData.password);
 
   const isPasswordValid =
     hasMinLength &&
     hasUppercase &&
     hasLowercase &&
     hasNumber &&
-    hasSymbol &&
-    hasOnlyAllowedChars;
+    hasSymbol;
   const isConfirmValid =
     !!confirmPassword && confirmPassword === formData.password;
 
@@ -236,7 +220,7 @@ export function SignUp({ onSignUpSuccess, onSwitchToSignIn }: Readonly<SignUpPro
     // Password + confirm are enforced by live checklist and disabled button,
     // but we still show a clear message when user tries to submit.
     if (!isPasswordValid) {
-      setError("Password does not meet all requirements");
+      setError("The password needs to be at least 8 characters long.");
       return false;
     }
 
@@ -464,7 +448,6 @@ export function SignUp({ onSignUpSuccess, onSwitchToSignIn }: Readonly<SignUpPro
 
                     <PasswordRequirements
                       isPasswordValid={isPasswordValid}
-                      hasOnlyAllowedChars={hasOnlyAllowedChars}
                       hasMinLength={hasMinLength}
                       hasLowercase={hasLowercase}
                       hasUppercase={hasUppercase}
