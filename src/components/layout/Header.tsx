@@ -21,7 +21,6 @@ interface PasswordValidation {
   hasLowercase: boolean;
   hasNumber: boolean;
   hasSymbol: boolean;
-  hasOnlyAllowedChars: boolean;
   isPasswordValid: boolean;
 }
 
@@ -79,12 +78,11 @@ const PasswordRequirements: React.FC<PasswordRequirementsProps> = ({ validation,
         flexDirection: 'column',
         gap: 4,
       }}>
-        <ValidationItem isValid={validation.hasOnlyAllowedChars} text="Use only letters, numbers, and symbols: @ $ ! % ? &" />
-        <ValidationItem isValid={validation.hasMinLength} text="Be at least 8 characters" />
+        <ValidationItem isValid={validation.hasMinLength} text="Be at least 8 characters long" />
         <ValidationItem isValid={validation.hasLowercase} text="Have at least one lowercase letter" />
         <ValidationItem isValid={validation.hasUppercase} text="Have at least one uppercase letter" />
         <ValidationItem isValid={validation.hasNumber} text="Have at least one number" />
-        <ValidationItem isValid={validation.hasSymbol} text="Have at least one symbol (@ $ ! % ? &)" />
+        <ValidationItem isValid={validation.hasSymbol} text="Have at least one special character" />
       </ul>
     </div>
   );
@@ -568,15 +566,15 @@ const getInitials = (fullName?: string, email?: string): string => {
 };
 
 const validatePassword = (password: string): PasswordValidation => {
-  const hasMinLength = password.length >= 8;
-  const hasUppercase = /[A-Z]/.test(password);
-  const hasLowercase = /[a-z]/.test(password);
-  const hasNumber = /\d/.test(password);
-  const hasSymbol = /[@$!%?&]/.test(password);
-  const hasOnlyAllowedChars = password === '' || /^[A-Za-z0-9@$!%?&]+$/.test(password);
+  // Backend regex: ^(?=.{8,256}$)(?=.*\p{Ll})(?=.*\p{Lu})(?=.*\p{Nd})(?=.*[^\p{L}\p{Nd}\s]).*$
+  const hasMinLength = password.length >= 8 && password.length <= 256;
+  const hasUppercase = /\p{Lu}/u.test(password);
+  const hasLowercase = /\p{Ll}/u.test(password);
+  const hasNumber = /\p{Nd}/u.test(password);
+  const hasSymbol = /[^\p{L}\p{Nd}\s]/u.test(password);
   
   const isPasswordValid = hasMinLength && hasUppercase && hasLowercase && 
-    hasNumber && hasSymbol && hasOnlyAllowedChars;
+    hasNumber && hasSymbol;
 
   return {
     hasMinLength,
@@ -584,7 +582,6 @@ const validatePassword = (password: string): PasswordValidation => {
     hasLowercase,
     hasNumber,
     hasSymbol,
-    hasOnlyAllowedChars,
     isPasswordValid,
   };
 };
@@ -644,7 +641,7 @@ export function Header({ title = 'Methodologist Dashboard', user, onLogout }: Re
     setPasswordSuccess('');
 
     if (!passwordValidation.isPasswordValid) {
-      setPasswordError('Password does not meet all requirements');
+      setPasswordError('The password needs to be at least 8 characters long.');
       return;
     }
 
