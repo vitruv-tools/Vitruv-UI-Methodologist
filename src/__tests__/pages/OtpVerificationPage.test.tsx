@@ -63,7 +63,7 @@ describe('OtpVerificationPage', () => {
     await userEvent.click(submitButton);
 
     expect(screen.getByText(/Please enter a valid OTP code/i)).toBeInTheDocument();
-    expect(verifyOtpMock).not.toHaveBeenCalled();
+    expect(mockVerifyOtp).not.toHaveBeenCalled();
   });
 
   it('calls verifyOtp and shows success on valid code', async () => {
