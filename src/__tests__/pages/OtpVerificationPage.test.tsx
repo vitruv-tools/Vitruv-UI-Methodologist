@@ -38,7 +38,9 @@ describe('OtpVerificationPage', () => {
   });
 
   afterEach(() => {
-    jest.runOnlyPendingTimers();
+    act(() => {
+      jest.runOnlyPendingTimers();
+    });
     jest.useRealTimers();
   });
 
@@ -50,8 +52,12 @@ describe('OtpVerificationPage', () => {
     expect(screen.getByRole('button', { name: /Verify Email/i })).toBeInTheDocument();
   });
 
-  it('shows validation error when submitting empty code', async () => {
+  it('shows validation error when submitting too short code', async () => {
     render(<OtpVerificationPage />);
+
+    const input = screen.getByLabelText(/Verification Code/i);
+    // Enter a code shorter than the minimum length (4)
+    await userEvent.type(input, '12');
 
     const submitButton = screen.getByRole('button', { name: /Verify Email/i });
     await userEvent.click(submitButton);
