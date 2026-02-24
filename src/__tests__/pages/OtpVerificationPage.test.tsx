@@ -1,9 +1,13 @@
 import React from 'react';
-import { render, screen, fireEvent, act } from '@testing-library/react';
+import { render, screen, act } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { OtpVerificationPage } from '../../pages/OtpVerificationPage';
 
+// Use "mock" prefix so Jest allows referencing them in module factory
 const mockNavigate = jest.fn();
+const mockRefreshCurrentUser = jest.fn();
+const mockVerifyOtp = jest.fn();
+const mockResendOtp = jest.fn();
 
 jest.mock('react-router-dom', () => ({
   // Only mock the hooks that this page uses
@@ -14,21 +18,16 @@ jest.mock('react-router-dom', () => ({
   }),
 }));
 
-const mockRefreshCurrentUser = jest.fn();
-
 jest.mock('../../contexts/AuthContext', () => ({
   useAuth: () => ({
     refreshCurrentUser: mockRefreshCurrentUser,
   }),
 }));
 
-const verifyOtpMock = jest.fn();
-const resendOtpMock = jest.fn();
-
 jest.mock('../../services/api', () => ({
   apiService: {
-    verifyOtp: (...args: any[]) => verifyOtpMock(...args),
-    resendOtp: (...args: any[]) => resendOtpMock(...args),
+    verifyOtp: (...args: any[]) => mockVerifyOtp(...args),
+    resendOtp: (...args: any[]) => mockResendOtp(...args),
   },
 }));
 
@@ -62,7 +61,7 @@ describe('OtpVerificationPage', () => {
   });
 
   it('calls verifyOtp and shows success on valid code', async () => {
-    verifyOtpMock.mockResolvedValueOnce({ message: 'Email verified successfully!' });
+    mockVerifyOtp.mockResolvedValueOnce({ message: 'Email verified successfully!' });
 
     render(<OtpVerificationPage />);
 
@@ -72,7 +71,7 @@ describe('OtpVerificationPage', () => {
     const submitButton = screen.getByRole('button', { name: /Verify Email/i });
     await userEvent.click(submitButton);
 
-    expect(verifyOtpMock).toHaveBeenCalledWith('1234');
+    expect(mockVerifyOtp).toHaveBeenCalledWith('1234');
 
     const successMessage = await screen.findByText(/Email verified successfully!/i);
     expect(successMessage).toBeInTheDocument();
@@ -106,7 +105,7 @@ describe('OtpVerificationPage', () => {
   });
 
   it('resends OTP and resets state when clicking resend', async () => {
-    resendOtpMock.mockResolvedValueOnce({});
+    mockResendOtp.mockResolvedValueOnce({});
 
     render(<OtpVerificationPage />);
 
@@ -117,7 +116,7 @@ describe('OtpVerificationPage', () => {
     const resendButton = screen.getByRole('button', { name: /Resend Verification Code/i });
     await userEvent.click(resendButton);
 
-    expect(resendOtpMock).toHaveBeenCalled();
+    expect(mockResendOtp).toHaveBeenCalled();
     expect(
       await screen.findByText(/A new verification code has been sent/i)
     ).toBeInTheDocument();
