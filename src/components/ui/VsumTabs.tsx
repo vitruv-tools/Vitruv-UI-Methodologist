@@ -74,6 +74,14 @@ const isReactionFilesNotFoundError = (message: string): boolean => {
     return normalized.includes('reaction files not found');
 };
 
+const normalizeReactionFilesNotFoundMessage = (message: string): string => {
+    if (!message) return message;
+    if (isReactionFilesNotFoundError(message)) {
+        return 'Reaction files not found!';
+    }
+    return message;
+};
+
 export const VsumTabs: React.FC<VsumTabsProps> = ({
                                                       openTabs,
                                                       activeInstanceId,
@@ -381,14 +389,16 @@ export const VsumTabs: React.FC<VsumTabsProps> = ({
                         'Failed to save VSUM',
                         'Failed to save VSUM'
                     );
-                    setError(retryParsed.detail);
-                    setPopup({ message: retryParsed.detail, type: 'error' });
+                    const normalizedMessage = normalizeReactionFilesNotFoundMessage(retryParsed.detail);
+                    setError(normalizedMessage);
+                    setPopup({ message: normalizedMessage, type: 'error' });
                     return;
                 }
             }
 
-            setError(parsed.detail);
-            setPopup({ message: parsed.detail, type: 'error' });
+            const normalizedMessage = normalizeReactionFilesNotFoundMessage(parsed.detail);
+            setError(normalizedMessage);
+            setPopup({ message: normalizedMessage, type: 'error' });
         } finally {
             setSaving(false);
         }
