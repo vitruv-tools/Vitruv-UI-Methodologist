@@ -1,7 +1,7 @@
 import { AuthService } from './auth';
 import { FlowData } from '../types/flow';
 import { ApiResponse, Vsum, VsumDetails } from '../types/vsum';
-import { LowCodeReactionMetadataResponse } from "../types/lowCodeReactionMetadataResponse";
+import { LowCodeReactionMetadataResponse } from "../types/LowCodeReactionMetadataResponse";
 
 class ApiService {
   private readonly baseURL = process.env.REACT_APP_BACKEND_URL;

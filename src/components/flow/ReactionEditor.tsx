@@ -15,16 +15,16 @@ import {
   CircularProgress,
 } from "@mui/material";
 import type { EObject } from "ecore-ts";
-import type { FlowEdge } from "../../../types/flow";
+import type { FlowEdge } from "../../types/flow";
 import {
   apiService,
-} from "../../../services/api";
+} from "../../services/api";
 import {
-  LowCodeReactionFieldMetadata} from "../../../types/LowCodeReactionFieldMetadata";
-import { LowCodeReactionMetadataResponse } from "../../../types/LowCodeReactionMetadataResponse";
-import { LowCodeReactionFieldVariables } from "../../../types/LowCodeReactionFieldVariables";
-import { FieldRenderer } from "../FieldRenderer";
-import { getFieldDefaultValue } from "../../../utils/FieldUtils";
+  LowCodeReactionFieldMetadata} from "../../types/LowCodeReactionFieldMetadata";
+import { LowCodeReactionMetadataResponse } from "../../types/LowCodeReactionMetadataResponse";
+import { LowCodeReactionFieldVariables } from "../../types/LowCodeReactionFieldVariables";
+import { FieldRenderer } from "./FieldRenderer";
+import { getFieldDefaultValue } from "../../utils/FieldUtils";
 
 const REACTION_TYPES = [
   "Direct Mapping",

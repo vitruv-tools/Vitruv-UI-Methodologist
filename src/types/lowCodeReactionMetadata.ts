@@ -1,4 +1,4 @@
-import { LowCodeReactionFieldMetadata } from "./lowCodeReactionFieldMetadata";
+import { LowCodeReactionFieldMetadata } from "./LowCodeReactionFieldMetadata";
 
 
 export type LowCodeReactionMetadata = {

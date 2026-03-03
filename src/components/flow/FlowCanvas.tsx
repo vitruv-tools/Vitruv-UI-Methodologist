@@ -45,7 +45,7 @@ import { ReactionEdgeValidator } from './lowcode/ReactionEdgeValidator';
 import { MainContext } from '../../contexts/MainContext';
 import { onConnect, isValidConnection, onConnectStart, onConnectEnd, onReconnect, onReconnectEnd, onEdgesDelete, onEdgeClick } from '../../utils';
 import type { EObject } from 'ecore-ts';
-import { UmlEdgeDetails } from './UmlEdgeDetails';
+import { UmlEdgeDetails } from './UMLEdgeDetails';
 import { DragablePanel } from './DragablePanel';
 import { GhostNode } from './lowcode/GhostNode';
 import { disableReactionHandles, enableReactionHandles, recalculateNodesOnEdgesForReactions } from '../../utils/reactionUtils';

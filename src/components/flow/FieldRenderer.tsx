@@ -13,14 +13,14 @@ import {
   Tooltip,
 } from "@mui/material";
 import HelpOutlineIcon from "@mui/icons-material/HelpOutline";
-import { LowCodeReactionFieldMetadata } from "../../types/lowCodeReactionFieldMetadata";
+import { LowCodeReactionFieldMetadata } from "../../types/LowCodeReactionFieldMetadata";
 import {
   isNumericField,
   isBooleanField,
   isEnumField,
   isStringField,
   getFieldDisplayName,
-} from "../../utils/fieldUtils";
+} from "../../utils/FieldUtils";
 
 /**
  * Render field component based on metadata

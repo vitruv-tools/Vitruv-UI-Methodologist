@@ -1,5 +1,5 @@
-import { LowCodeReactionFieldMetadata } from "../types/lowCodeReactionFieldMetadata";
-import { LowCodeReactionFieldVariables } from "../types/lowCodeReactionFieldVariables";
+import { LowCodeReactionFieldMetadata } from "../types/LowCodeReactionFieldMetadata";
+import { LowCodeReactionFieldVariables } from "../types/LowCodeReactionFieldVariables";
 
 /**
  * Check if a field is a numeric type

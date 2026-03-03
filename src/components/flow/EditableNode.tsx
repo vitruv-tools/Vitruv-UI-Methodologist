@@ -13,7 +13,7 @@ import {
   packageHintStyle,
   getDeleteButtonStyle,
   handleStyles
-} from './umlNodeStyles';
+} from './UMLNodeStyles';
 
 // Types
 interface UMLNodeData {
