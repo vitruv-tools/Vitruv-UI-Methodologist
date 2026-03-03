@@ -5,7 +5,7 @@ import { Header } from './Header';
 import { FlowCanvas } from '../flow/FlowCanvas';
 import { ToolsPanel } from '../ui/ToolsPanel';
 import { parseEcoreFile, createSimpleEcoreDiagram } from '../../utils/ecoreParser';
-import { generateUMLFromEcoreTsParser } from '../../utils/umlGenerator';
+import { generateUMLFromEcoreTsParser } from "../../utils/UMLFromEcoreTS";
 import {
     generateFlowId,
     saveDocumentMeta,
