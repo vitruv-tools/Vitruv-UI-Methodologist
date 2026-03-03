@@ -10,15 +10,6 @@ import type { FlowEdge } from "../../types/flow";
 import { EObject } from "ecore-ts";
 import { isUndefinedOrTrue, UMLEdgeDetailsConfig } from "./UMLEdgeDetailsConfig";
 
-const REACTION_TYPES = [
-  "Direct Mapping",
-  "Direct Mapping with Offset",
-] as const;
-const REACTION_DIRECTIONS = ["M1 to M2", "M2 to M1", "Bidirectional"] as const;
-
-export type ReactionType = (typeof REACTION_TYPES)[number];
-export type ReactionDirection = (typeof REACTION_DIRECTIONS)[number];
-
 /**
  * Shows uml edge details similar to eclipse ecore diagram.
  */

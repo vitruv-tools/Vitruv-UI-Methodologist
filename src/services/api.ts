@@ -717,6 +717,15 @@ class ApiService {
     }
   }
 
+  /**
+   * Gets the metadata for low-code reactions, which includes the expected fields and their types for each reaction.
+   * This is used to dynamically generate forms for reaction configuration in the UI.
+   */
+  async getLowCodeReactionsMetadata()
+      : Promise<ApiResponse<LowCodeReactionMetadataResponse>> {
+    return this.authenticatedRequest(`/api/lowcode-metadata`);
+  }
+
   // Removed unused getBaseURL and setBaseURL helpers
 }
 
@@ -763,3 +772,65 @@ export interface VsumSyncChangesPutRequest {
   metaModelIds: number[];
   metaModelRelationRequests: MetaModelRelationRequest[] | null; // you said null for now
 }
+
+export type LowCodeReactionFieldMetadata = {
+  // Name of the reaction template field
+  name: string;
+  // Type that the reaction template field expects
+  type:
+    | "String"
+    | "Boolean"
+    | "Integer"
+    | "Long"
+    | "Float"
+    | "Double"
+    | "Short"
+    | "Character";
+  // Whether this field is required
+  required: boolean | null;
+  // Whether this field represents a collection of values (e.g., array or list)
+  array: boolean | null;
+  // Whether this field represents a mapping (e.g., dictionary or map)
+  map: boolean | null;
+  // If this field is a mapping, the expected type of the keys
+  mapKeyType: string | null;
+  // If this field is a mapping, the expected type of the values
+  mapValueType: string | null;
+  // If this field has a predefined set of allowable values (e.g., an enum), they are listed here
+  allowableValues: string[] | null;
+  // Minimum and maximum elements of a collection field, if applicable
+  sizeMin: number | null;
+  sizeMax: number | null;
+  // Length constraint for string fields
+  lengthMin: number | null;
+  lengthMax: number | null;
+  // Numerical constraints for numeric fields
+  min: number | null;
+  max: number | null;
+  // Numerical constraints for decimal fields, represented as strings to preserve precision
+  decimalMin: string | null;
+  decimalMinInclusive: boolean | null;
+  decimalMax: string | null;
+  decimalMaxInclusive: boolean | null;
+  // Regular expression pattern that string fields must match, if applicable
+  pattern: string | null;
+  patternFlags: string[] | null;
+  // Display name of the reaction
+  displayName: string | null,
+  // Description of the reaction
+  displayDescription: string | null,
+  // Whether this field should be hidden in the UI
+  displayHide: boolean | null,
+}
+
+export type LowCodeReactionMetadata = {
+  // Display name of the reaction
+  name: string | null,
+  // Description of the reaction
+  description: string | null,
+  // Whether this reaction should be hidden in the UI
+  hide: boolean | null,
+  fields: LowCodeReactionFieldMetadata[],
+}
+
+export type LowCodeReactionMetadataResponse = { reactionMetadataMap: { [reactionName: string]: LowCodeReactionMetadata } };

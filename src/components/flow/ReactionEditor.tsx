@@ -1,17 +1,33 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from "react";
 import {
-	FormControl,
-	InputLabel,
-	MenuItem,
-	Select,
-	SelectChangeEvent,
-	Stack,
-} from '@mui/material';
-import type { EObject } from 'ecore-ts';
-import type { FlowEdge } from '../../types/flow';
+  FormControl,
+  InputLabel,
+  MenuItem,
+  Select,
+  SelectChangeEvent,
+  Stack,
+  Box,
+  Typography,
+  Slider,
+  Checkbox,
+  TextField,
+  FormControlLabel,
+  CircularProgress,
+} from "@mui/material";
+import type { EObject } from "ecore-ts";
+import type { FlowEdge } from "../../types/flow";
+import {
+  apiService,
+  LowCodeReactionMetadataResponse,
+  LowCodeReactionFieldMetadata,
+} from "../../services/api";
+import { FieldRenderer } from "./FieldRenderer";
 
-const REACTION_TYPES = ['Direct Mapping', 'Direct Mapping with Offset'] as const;
-const REACTION_DIRECTIONS = ['M1 to M2', 'M2 to M1', 'Bidirectional'] as const;
+const REACTION_TYPES = [
+  "Direct Mapping",
+  "Direct Mapping with Offset",
+] as const;
+const REACTION_DIRECTIONS = ["M1 to M2", "M2 to M1", "Bidirectional"] as const;
 
 export type ReactionType = (typeof REACTION_TYPES)[number];
 export type ReactionDirection = (typeof REACTION_DIRECTIONS)[number];
@@ -20,90 +36,150 @@ export type ReactionDirection = (typeof REACTION_DIRECTIONS)[number];
  * Configuring reaction mappings inside the React Flow canvas.
  */
 interface ReactionEditorProps {
-	selectedType?: ReactionType;
-	selectedDirection?: ReactionDirection;
-	onTypeChange?: (type: ReactionType) => void;
-	onDirectionChange?: (direction: ReactionDirection) => void;
-	disabled?: boolean;
-	edge: FlowEdge;
-    identifiersToEObject: Map<string, EObject>;
+  selectedType?: ReactionType;
+  selectedDirection?: ReactionDirection;
+  disabled?: boolean;
+  edge: FlowEdge;
+  identifiersToEObject: Map<string, EObject>;
 }
 
 export const ReactionEditor: React.FC<ReactionEditorProps> = ({
-	selectedType,
-	selectedDirection,
-	onTypeChange,
-	onDirectionChange,
-	disabled = false,
-	edge,
-	identifiersToEObject,
+  selectedType,
+  selectedDirection,
+  disabled = false,
+  edge,
+  identifiersToEObject,
 }) => {
-	const [localType, setLocalType] = useState<ReactionType>(
-		selectedType ?? REACTION_TYPES[0]
-	);
-	const [localDirection, setLocalDirection] = useState<ReactionDirection>(
-		selectedDirection ?? REACTION_DIRECTIONS[0]
-	);
+  const [loading, setLoading] = useState(true);
 
-	useEffect(() => {
-		if (selectedType) setLocalType(selectedType);
-	}, [selectedType]);
+  const [lowCodeReactionsMetadata, setLowCodeReactionsMetadata] =
+    useState<LowCodeReactionMetadataResponse>({ reactionMetadataMap: {} });
 
-	useEffect(() => {
-		if (selectedDirection) setLocalDirection(selectedDirection);
-	}, [selectedDirection]);
+  const [selectedTemplate, setSelectedTemplate] = useState<string>("");
+  const [fieldValues, setFieldValues] = useState<Record<string, any>>({});
 
-	const typeOptions = useMemo(() => REACTION_TYPES, []);
-	const directionOptions = useMemo(() => REACTION_DIRECTIONS, []);
+  useEffect(() => {
+    // Fetch low-code reactions metadata on mount
+    const fetchMetadata = async () => {
+      const metadata = await apiService.getLowCodeReactionsMetadata();
+      setLowCodeReactionsMetadata(metadata.data);
 
-	const handleTypeChange = (event: SelectChangeEvent<ReactionType>) => {
-		const value = event.target.value as ReactionType;
-		setLocalType(value);
-		onTypeChange?.(value);
-	};
+      // Set first template as default if available
+      const firstTemplate = Object.keys(metadata.data.reactionMetadataMap)[0];
+      if (firstTemplate) {
+        setSelectedTemplate(firstTemplate);
+        initializeFieldValues(metadata.data.reactionMetadataMap[firstTemplate]?.fields || []);
+      }
 
-	const handleDirectionChange = (
-		event: SelectChangeEvent<ReactionDirection>
-	) => {
-		const value = event.target.value as ReactionDirection;
-		setLocalDirection(value);
-		onDirectionChange?.(value);
-	};
+      setLoading(false);
+    };
 
-	return (
-		<Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5}>
-            <FormControl fullWidth size="small" disabled={disabled}>
-                <InputLabel id="reaction-type-label">Type</InputLabel>
-                <Select
-                    labelId="reaction-type-label"
-                    value={localType}
-                    label="Type"
-                    onChange={handleTypeChange}
-                >
-                    {typeOptions.map((type) => (
-                        <MenuItem key={type} value={type}>
-                            {type}
-                        </MenuItem>
-                    ))}
-                </Select>
-            </FormControl>
+    fetchMetadata();
+  }, []);
 
-            <FormControl fullWidth size="small" disabled={disabled}>
-                <InputLabel id="reaction-direction-label">Direction</InputLabel>
-                <Select
-                    labelId="reaction-direction-label"
-                    value={localDirection}
-                    label="Direction"
-                    onChange={handleDirectionChange}
-                >
-                    {directionOptions.map((direction) => (
-                        <MenuItem key={direction} value={direction}>
-                            {direction}
-                        </MenuItem>
-                    ))}
-                </Select>
-            </FormControl>
-        </Stack>
-	);
+  const initializeFieldValues = (fields: LowCodeReactionFieldMetadata[]) => {
+    const initialValues: Record<string, any> = {};
+    fields.forEach((field) => {
+      // Initialize with default values based on type
+      if (field.type === "Boolean") {
+        initialValues[field.name] = false;
+      } else if (
+        ["Integer", "Long", "Float", "Double", "Short"].includes(field.type)
+      ) {
+        initialValues[field.name] = field.min ?? 0;
+      } else if (field.allowableValues && field.allowableValues.length > 0) {
+        initialValues[field.name] = field.allowableValues[0];
+      } else if (field.array) {
+        initialValues[field.name] = [];
+      } else if (field.map) {
+        initialValues[field.name] = {};
+      } else {
+        initialValues[field.name] = "";
+      }
+    });
+    setFieldValues(initialValues);
+  };
+
+  const templateOptions = useMemo(
+    () => Array.from(Object.entries(lowCodeReactionsMetadata.reactionMetadataMap).filter(([_, v]) => !v.hide).map(([k]) => k)),
+    [lowCodeReactionsMetadata],
+  );
+
+  const currentFields = useMemo(() => {
+    return lowCodeReactionsMetadata.reactionMetadataMap[selectedTemplate]?.fields.filter(field => !field.displayHide) || [];
+  }, [selectedTemplate, lowCodeReactionsMetadata]);
+
+  const handleTemplateChange = (event: SelectChangeEvent<string>) => {
+    const template = event.target.value;
+    setSelectedTemplate(template);
+    const fields = lowCodeReactionsMetadata.reactionMetadataMap[template].fields || [];
+    initializeFieldValues(fields);
+  };
+
+  const handleFieldChange = (fieldName: string, value: any) => {
+    setFieldValues((prev) => ({
+      ...prev,
+      [fieldName]: value,
+    }));
+  };
+
+  if (loading) {
+    return (
+      <Box sx={{ display: "flex", justifyContent: "center", p: 2 }}>
+        <CircularProgress size={24} />
+      </Box>
+    );
+  }
+
+  return (
+    <Stack spacing={2}>
+      {/* Reaction Template Selection */}
+      {templateOptions.length > 0 && (
+        <FormControl fullWidth size="small" disabled={disabled}>
+          <InputLabel id="reaction-template-label">
+            Reaction Template
+          </InputLabel>
+          <Select
+            labelId="reaction-template-label"
+            value={selectedTemplate}
+            label="Reaction Template"
+            onChange={handleTemplateChange}
+          >
+            {templateOptions.map((template) => (
+              <MenuItem key={template} value={template}>
+                {template}
+              </MenuItem>
+            ))}
+          </Select>
+        </FormControl>
+      )}
+
+      {/* Dynamic Fields */}
+      {currentFields.length > 0 && (
+        <Box
+          sx={{
+            p: 2,
+            border: "1px solid #e0e0e0",
+            borderRadius: 1,
+            bgcolor: "#fafafa",
+          }}
+        >
+          <Typography variant="subtitle2" sx={{ mb: 2, fontWeight: 600 }}>
+            Configuration
+          </Typography>
+          <Stack spacing={2}>
+            {currentFields.map((field) => (
+              <FieldRenderer
+                key={field.name}
+                field={field}
+                value={fieldValues[field.name] ?? ""}
+                onChange={(value) => handleFieldChange(field.name, value)}
+                disabled={disabled}
+              />
+            ))}
+          </Stack>
+        </Box>
+      )}
+    </Stack>
+  );
 };
-
