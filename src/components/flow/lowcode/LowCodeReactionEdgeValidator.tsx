@@ -3,7 +3,7 @@ import { MainContextType } from "../../../contexts/MainContext";
 import type { FlowNode, FlowEdge } from "../../../types";
 import type { EdgeValidator } from "../EdgeValidator";
 
-export class ReactionEdgeValidator implements EdgeValidator {
+export class LowCodeReactionEdgeValidator implements EdgeValidator {
   isApplicable(mainContext: MainContextType) {
     return mainContext?.mode === "reactions";
   };

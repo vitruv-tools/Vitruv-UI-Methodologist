@@ -26,7 +26,7 @@ import { useDragAndDrop } from '../../hooks/useDragAndDrop';
 import { EditableNode } from './EditableNode';
 import { UMLRelationship } from './UMLRelationship';
 import { ReactionRelationship } from './ReactionRelationship';
-import { ReactionEditor } from './lowcode/ReactionEditor';
+import { LowCodeReactionEditor } from './lowcode/LowCodeReactionEditor';
 import { EcoreFileBox } from './EcoreFileBox';
 import { ConnectionLine } from './ConnectionLine';
 import { CodeEditorModal } from './CodeEditorModal';
@@ -39,9 +39,9 @@ import {
   createOrUpdateBoundingBoxNodes,
   applyOffsetsToNodes,
   recalculateBoundingBoxes,
-} from '../../utils/boundingBoxUtils';
+} from '../../utils/BoundingBoxUtils';
 import type { EdgeValidator } from './EdgeValidator';
-import { ReactionEdgeValidator } from './lowcode/ReactionEdgeValidator';
+import { LowCodeReactionEdgeValidator } from './lowcode/LowCodeReactionEdgeValidator';
 import { MainContext } from '../../contexts/MainContext';
 import { onConnect, isValidConnection, onConnectStart, onConnectEnd, onReconnect, onReconnectEnd, onEdgesDelete, onEdgeClick } from '../../utils';
 import type { EObject } from 'ecore-ts';
@@ -238,7 +238,7 @@ export const FlowCanvas = forwardRef<{
 
     const dragTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
-    const edgeValidators: EdgeValidator[] = [new ReactionEdgeValidator()];
+    const edgeValidators: EdgeValidator[] = [new LowCodeReactionEdgeValidator()];
 
     const storageKey = getLocalStorageKey(userId, projectId);
 
@@ -2211,7 +2211,7 @@ const handleEdgeReorderRequest = useCallback((edgeId: string, controlPoint: { x:
               description="Configure how mappings behave"
               onClose={() => setReactionEditorEdge(null)}
             >
-              <ReactionEditor edge={reactionEditorEdge} identifiersToEObject={identifiersToEObject} />
+              <LowCodeReactionEditor edge={reactionEditorEdge} identifiersToEObject={identifiersToEObject} />
             </DragablePanel>
           }
           {umlEdgeDetailsEdge && (

@@ -1,4 +1,4 @@
-import { calculateAndUpdateBoundingBoxes } from "./boundingBoxUtils";
+import { calculateAndUpdateBoundingBoxes } from "./BoundingBoxUtils";
 
 test("bug-boundingBoxUtils-undefined-rearrangeKey", () => {
   const boxes = [

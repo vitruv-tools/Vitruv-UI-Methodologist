@@ -44,7 +44,7 @@ interface ReactionEditorProps {
   identifiersToEObject: Map<string, EObject>;
 }
 
-export const ReactionEditor: React.FC<ReactionEditorProps> = ({
+export const LowCodeReactionEditor: React.FC<ReactionEditorProps> = ({
   disabled = false,
   edge,
   identifiersToEObject,
