@@ -15,13 +15,16 @@ import {
   CircularProgress,
 } from "@mui/material";
 import type { EObject } from "ecore-ts";
-import type { FlowEdge } from "../../types/flow";
+import type { FlowEdge } from "../../../types/flow";
 import {
   apiService,
-  LowCodeReactionMetadataResponse,
-  LowCodeReactionFieldMetadata,
-} from "../../services/api";
-import { FieldRenderer } from "./FieldRenderer";
+} from "../../../services/api";
+import {
+  LowCodeReactionFieldMetadata} from "../../../types/lowCodeReactionFieldMetadata";
+import { LowCodeReactionMetadataResponse } from "../../../types/lowCodeReactionMetadataResponse";
+import { LowCodeReactionFieldVariables } from "../../../types/lowCodeReactionFieldVariables";
+import { FieldRenderer } from "../FieldRenderer";
+import { getFieldDefaultValue } from "../../../utils/fieldUtils";
 
 const REACTION_TYPES = [
   "Direct Mapping",
@@ -36,16 +39,12 @@ export type ReactionDirection = (typeof REACTION_DIRECTIONS)[number];
  * Configuring reaction mappings inside the React Flow canvas.
  */
 interface ReactionEditorProps {
-  selectedType?: ReactionType;
-  selectedDirection?: ReactionDirection;
   disabled?: boolean;
   edge: FlowEdge;
   identifiersToEObject: Map<string, EObject>;
 }
 
 export const ReactionEditor: React.FC<ReactionEditorProps> = ({
-  selectedType,
-  selectedDirection,
   disabled = false,
   edge,
   identifiersToEObject,
@@ -79,23 +78,11 @@ export const ReactionEditor: React.FC<ReactionEditorProps> = ({
 
   const initializeFieldValues = (fields: LowCodeReactionFieldMetadata[]) => {
     const initialValues: Record<string, any> = {};
+    const eSourceObj = identifiersToEObject.get(edge.data!.ecore!.eObjectSourceId)!;
+    const eTargetObj = identifiersToEObject.get(edge.data!.ecore!.eObjectTargetId)!;
+    const variables: Partial<LowCodeReactionFieldVariables> = { sourceAlias: edge.data?.ecore?.fromModel, targetAlias: edge.data?.ecore?.toModel, sourceUri: edge.data?.ecore?.eObjectSourceId, targetUri: edge.data?.ecore?.eObjectTargetId };
     fields.forEach((field) => {
-      // Initialize with default values based on type
-      if (field.type === "Boolean") {
-        initialValues[field.name] = false;
-      } else if (
-        ["Integer", "Long", "Float", "Double", "Short"].includes(field.type)
-      ) {
-        initialValues[field.name] = field.min ?? 0;
-      } else if (field.allowableValues && field.allowableValues.length > 0) {
-        initialValues[field.name] = field.allowableValues[0];
-      } else if (field.array) {
-        initialValues[field.name] = [];
-      } else if (field.map) {
-        initialValues[field.name] = {};
-      } else {
-        initialValues[field.name] = "";
-      }
+      initialValues[field.name] = getFieldDefaultValue(field, variables);
     });
     setFieldValues(initialValues);
   };
@@ -162,6 +149,22 @@ export const ReactionEditor: React.FC<ReactionEditorProps> = ({
             border: "1px solid #e0e0e0",
             borderRadius: 1,
             bgcolor: "#fafafa",
+            maxHeight: currentFields.length > 6 ? "400px" : "none",
+            overflowY: currentFields.length > 6 ? "auto" : "visible",
+            "&::-webkit-scrollbar": {
+              width: "8px",
+            },
+            "&::-webkit-scrollbar-track": {
+              backgroundColor: "#f1f1f1",
+              borderRadius: "4px",
+            },
+            "&::-webkit-scrollbar-thumb": {
+              backgroundColor: "#888",
+              borderRadius: "4px",
+              "&:hover": {
+                backgroundColor: "#555",
+              },
+            },
           }}
         >
           <Typography variant="subtitle2" sx={{ mb: 2, fontWeight: 600 }}>

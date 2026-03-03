@@ -1,6 +1,8 @@
 import { useCallback, useState, useEffect } from 'react';
 import { useNodesState, useEdgesState, Connection, Edge, Node, NodeChange } from 'reactflow';
+import { FlowEdge, FlowNode } from '../types';
 import { useUndoRedo } from './useUndoRedo';
+import { createFineGranularReactionEdge } from '../utils/fineGranularReactionUtils';
 
 interface UseFlowStateProps {
   userId?: string;
@@ -165,30 +167,24 @@ export function useFlowState(props?: UseFlowStateProps) {
       const tgt = findNode(params.target);
       const auto = chooseHandlesForPair(src, tgt, params.sourceHandle, params.targetHandle);
       
-      if (src?.data?.ecore?.model != tgt?.data?.ecore?.model) {
+      const fineGranularEdge = createFineGranularReactionEdge(params, src, tgt, getId, auto);
+      if (fineGranularEdge) {
+        setEdges((eds) => eds.concat(fineGranularEdge));
+        return;
+      } else if (
+        params.sourceHandle?.startsWith("reaction") !== true &&
+        params.targetHandle?.startsWith("reaction") !== true
+      ) {
         const newEdge: Edge = {
           id: `edge-${getId()}`,
-          type: 'reactions',
+          type: "uml",
           source: params.source!,
           target: params.target!,
           sourceHandle: params.sourceHandle ?? auto.s,
           targetHandle: params.targetHandle ?? auto.t,
           data: {
-            relationshipType: 'association',
-          },
-        };
-        setEdges((eds) => eds.concat(newEdge));
-      } else if (params.sourceHandle?.startsWith("reaction") !== true && params.targetHandle?.startsWith("reaction") !== true) {
-        const newEdge: Edge = {
-          id: `edge-${getId()}`,
-          type: 'uml',
-          source: params.source!,
-          target: params.target!,
-          sourceHandle: params.sourceHandle ?? auto.s,
-          targetHandle: params.targetHandle ?? auto.t,
-          data: {
-            relationshipType: 'association',
-            label: 'Association',
+            relationshipType: "association",
+            label: "Association",
           },
         };
         setEdges((eds) => eds.concat(newEdge));

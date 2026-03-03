@@ -7,7 +7,7 @@ export { Sidebar } from './layout/Sidebar';
 export { FlowCanvas } from './flow/FlowCanvas';
 export { EditableNode } from './flow/EditableNode';
 export { EcoreFileBox } from './flow/EcoreFileBox';
-export { ReactionEditor } from './flow/ReactionEditor';
+export { ReactionEditor } from './flow/lowcode/ReactionEditor';
 
 // UI components
 export { ToolsPanel } from './ui/ToolsPanel';

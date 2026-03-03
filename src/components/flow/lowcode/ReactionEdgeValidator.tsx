@@ -1,7 +1,7 @@
 import type { Connection } from "reactflow";
-import { MainContextType } from "../../contexts/MainContext";
-import type { FlowNode, FlowEdge } from "../../types";
-import type { EdgeValidator } from "./EdgeValidator";
+import { MainContextType } from "../../../contexts/MainContext";
+import type { FlowNode, FlowEdge } from "../../../types";
+import type { EdgeValidator } from "../EdgeValidator";
 
 export class ReactionEdgeValidator implements EdgeValidator {
   isApplicable(mainContext: MainContextType) {

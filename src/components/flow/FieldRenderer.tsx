@@ -9,8 +9,18 @@ import {
   InputLabel,
   Select,
   MenuItem,
+  IconButton,
+  Tooltip,
 } from "@mui/material";
-import { LowCodeReactionFieldMetadata } from "../../services/api";
+import HelpOutlineIcon from "@mui/icons-material/HelpOutline";
+import { LowCodeReactionFieldMetadata } from "../../types/lowCodeReactionFieldMetadata";
+import {
+  isNumericField,
+  isBooleanField,
+  isEnumField,
+  isStringField,
+  getFieldDisplayName,
+} from "../../utils/fieldUtils";
 
 /**
  * Render field component based on metadata
@@ -30,6 +40,30 @@ export const FieldRenderer: React.FC<FieldRendererProps> = ({
   disabled = false,
   errorMessage,
 }) => {
+  /**
+   * Helper component to render a label with optional help icon
+   */
+  const LabelWithHelp: React.FC<{ text: string; showAsterisk?: boolean }> = ({ 
+    text, 
+    showAsterisk = false 
+  }) => (
+    <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
+      <span>
+        {text}
+        {showAsterisk && <span style={{ color: "red" }}>*</span>}
+      </span>
+      {field.displayDescription && (
+        <Tooltip title={field.displayDescription} arrow placement="top">
+          <IconButton size="small" sx={{ p: 0, ml: 0.5 }}>
+            <HelpOutlineIcon sx={{ fontSize: 16, color: "text.secondary" }} />
+          </IconButton>
+        </Tooltip>
+      )}
+    </Box>
+  );
+
+  const displayName = getFieldDisplayName(field);
+
   /**
    * Validate string against pattern if available
    */
@@ -60,20 +94,8 @@ export const FieldRenderer: React.FC<FieldRendererProps> = ({
     return true;
   };
 
-  const isNumericType = [
-    "integer",
-    "int",
-    "long",
-    "float",
-    "double",
-    "short",
-  ].includes(field.type.toLowerCase());
-  const isBoolean = field.type.toLocaleLowerCase() === "boolean";
-  const isEnum = field.allowableValues && field.allowableValues.length > 0;
-  const isString = field.type.toLocaleLowerCase() === "string";
-
   // Numeric types with slider
-  if (isNumericType && !field.array && !field.map) {
+  if (isNumericField(field) && !field.array && !field.map) {
     const min = field.min ?? 0;
     const max = field.max ?? 100;
     const numValue = typeof value === "number" ? value : min;
@@ -81,8 +103,7 @@ export const FieldRenderer: React.FC<FieldRendererProps> = ({
     return (
       <Box sx={{ width: "100%" }}>
         <Typography variant="body2" sx={{ mb: 1 }}>
-          {field.name}
-          {field.required && <span style={{ color: "red" }}>*</span>}
+          <LabelWithHelp text={displayName} showAsterisk={field.required ?? false} />
         </Typography>
         <Box sx={{ display: "flex", alignItems: "center", gap: 2 }}>
           <Slider
@@ -113,7 +134,7 @@ export const FieldRenderer: React.FC<FieldRendererProps> = ({
   }
 
   // Boolean checkbox
-  if (isBoolean && !field.array && !field.map) {
+  if (isBooleanField(field) && !field.array && !field.map) {
     return (
       <FormControlLabel
         control={
@@ -124,44 +145,60 @@ export const FieldRenderer: React.FC<FieldRendererProps> = ({
           />
         }
         label={
-          <>
-            {field.name}
-            {field.required && <span style={{ color: "red" }}>*</span>}
-          </>
+          <LabelWithHelp text={displayName} showAsterisk={field.required ?? false} />
         }
       />
     );
   }
 
   // Enum / dropdown
-  if (isEnum) {
+  if (isEnumField(field)) {
     return (
-      <FormControl fullWidth size="small" disabled={disabled}>
-        <InputLabel id={`${field.name}-label`}>
-          {field.name}
-          {field.required && <span style={{ color: "red" }}>*</span>}
-        </InputLabel>
-        <Select
-          labelId={`${field.name}-label`}
-          value={value || ""}
-          label={field.name}
-          onChange={(e) => onChange(e.target.value)}
-        >
-          {field.allowableValues!.map((val) => (
-            <MenuItem key={val} value={val}>
-              {val}
-            </MenuItem>
-          ))}
-        </Select>
-      </FormControl>
+      <Box sx={{ position: "relative" }}>
+        <FormControl fullWidth size="small" disabled={disabled}>
+          <InputLabel id={`${field.name}-label`}>
+            {displayName}
+            {field.required && <span style={{ color: "red" }}>*</span>}
+          </InputLabel>
+          <Select
+            labelId={`${field.name}-label`}
+            value={value || ""}
+            label={displayName}
+            onChange={(e) => onChange(e.target.value)}
+          >
+            {field.allowableValues!.map((val) => (
+              <MenuItem key={val} value={val}>
+                {val}
+              </MenuItem>
+            ))}
+          </Select>
+        </FormControl>
+        {field.displayDescription && (
+          <Tooltip title={field.displayDescription} arrow placement="top">
+            <IconButton 
+              size="small" 
+              sx={{ 
+                position: "absolute", 
+                right: 32, 
+                top: 8,
+                p: 0,
+                zIndex: 1
+              }}
+            >
+              <HelpOutlineIcon sx={{ fontSize: 16, color: "text.secondary" }} />
+            </IconButton>
+          </Tooltip>
+        )}
+      </Box>
     );
   }
 
   // String with pattern validation or text field
-  if (isString && !field.array && !field.map) {
-    const isInvalid = !validateStringPattern(value as string, field.pattern);
+  if (isStringField(field) && !field.array && !field.map) {
+    const stringValue = value as string;
+    const isInvalid = !validateStringPattern(stringValue, field.pattern);
     const isLengthInvalid = !validateStringLength(
-      value as string,
+      stringValue,
       field.lengthMin,
       field.lengthMax,
     );
@@ -175,24 +212,42 @@ export const FieldRenderer: React.FC<FieldRendererProps> = ({
     }
 
     return (
-      <TextField
-        fullWidth
-        size="small"
-        label={field.name}
-        value={value as string}
-        onChange={(e) => onChange(e.target.value)}
-        disabled={disabled}
-        error={isInvalid || isLengthInvalid}
-        helperText={helperText}
-        required={field.required ?? false}
-        placeholder={
-          field.pattern
-            ? `Pattern: ${field.pattern}`
-            : field.lengthMin || field.lengthMax
-              ? `Length: ${field.lengthMin ?? 0}-${field.lengthMax ?? "∞"}`
-              : undefined
-        }
-      />
+      <Box sx={{ position: "relative" }}>
+        <TextField
+          fullWidth
+          size="small"
+          label={displayName}
+          value={stringValue}
+          onChange={(e) => onChange(e.target.value)}
+          disabled={disabled}
+          error={isInvalid || isLengthInvalid}
+          helperText={helperText}
+          required={field.required ?? false}
+          placeholder={
+            field.pattern
+              ? `Pattern: ${field.pattern}`
+              : field.lengthMin || field.lengthMax
+                ? `Length: ${field.lengthMin ?? 0}-${field.lengthMax ?? "∞"}`
+                : undefined
+          }
+        />
+        {field.displayDescription && (
+          <Tooltip title={field.displayDescription} arrow placement="top">
+            <IconButton 
+              size="small" 
+              sx={{ 
+                position: "absolute", 
+                right: 8, 
+                top: 8,
+                p: 0,
+                zIndex: 1
+              }}
+            >
+              <HelpOutlineIcon sx={{ fontSize: 16, color: "text.secondary" }} />
+            </IconButton>
+          </Tooltip>
+        )}
+      </Box>
     );
   }
 
@@ -208,10 +263,10 @@ export const FieldRenderer: React.FC<FieldRendererProps> = ({
         }}
       >
         <Typography variant="body2" sx={{ fontWeight: 500, mb: 1 }}>
-          {field.name}
-          {field.required && <span style={{ color: "red" }}>*</span>}
-          {field.array && ` (Array)`}
-          {field.map && ` (Map)`}
+          <LabelWithHelp 
+            text={`${displayName}${field.array ? " (Array)" : field.map ? " (Map)" : ""}`} 
+            showAsterisk={field.required ?? false} 
+          />
         </Typography>
         <Typography variant="caption" color="textSecondary">
           {field.array && `Size: ${field.sizeMin ?? 0}-${field.sizeMax ?? "∞"}`}
@@ -231,7 +286,7 @@ export const FieldRenderer: React.FC<FieldRendererProps> = ({
                 : "JSON"
           }
           value={
-            typeof value === "string" ? value : JSON.stringify(value || {})
+            typeof value === "string" ? value : JSON.stringify(value || (field.array ? [] : {}))
           }
           onChange={(e) => {
             try {
@@ -250,14 +305,32 @@ export const FieldRenderer: React.FC<FieldRendererProps> = ({
 
   // Fallback to text field
   return (
-    <TextField
-      fullWidth
-      size="small"
-      label={field.name}
-      value={value ?? ""}
-      onChange={(e) => onChange(e.target.value)}
-      disabled={disabled}
-      required={field.required ?? false}
-    />
+    <Box sx={{ position: "relative" }}>
+      <TextField
+        fullWidth
+        size="small"
+        label={displayName}
+        value={value ?? ""}
+        onChange={(e) => onChange(e.target.value)}
+        disabled={disabled}
+        required={field.required ?? false}
+      />
+      {field.displayDescription && (
+        <Tooltip title={field.displayDescription} arrow placement="top">
+          <IconButton 
+            size="small" 
+            sx={{ 
+              position: "absolute", 
+              right: 8, 
+              top: 8,
+              p: 0,
+              zIndex: 1
+            }}
+          >
+            <HelpOutlineIcon sx={{ fontSize: 16, color: "text.secondary" }} />
+          </IconButton>
+        </Tooltip>
+      )}
+    </Box>
   );
 };

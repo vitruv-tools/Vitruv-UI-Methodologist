@@ -423,7 +423,16 @@ function getAllContents(
   prefix: string,
   weakMap: Map<EObject, string>,
 ): EObject[] {
-  const currentPath = `${prefix}/${eObject.get("name")}`;
+  // Prefer nsURI if available for unique identification, otherwise use name-based path
+  let currentPath = eObject.get<string>("nsURI");
+  if (currentPath == null) {
+    if (eObject.eClass.get("name") === "EClass") {
+      currentPath = `${prefix}::${eObject.get("name")}`;
+    } else {
+      // Fallback to generic separator for non-class elements
+      currentPath = `${prefix}/${eObject.get("name")}`;
+    }
+  }
   weakMap.set(eObject, currentPath);
   const contents = eObject.eContents();
   const result = [...contents];
@@ -490,12 +499,9 @@ export const generateUMLFromEcoreTsParser = (
       .find((e: EObject) => e.eClass.get("name") === "EPackage") as
       | EObject
       | undefined;
-    //const packageName = rootPackage?.getAttribute('name') || 'Package';
     const packageName = rootPackage?.get<string>("name") || "Package";
 
     // Collect classes first to reference by name
-    //const classElems = Array.from(xmlDoc.querySelectorAll('eClassifiers[type="ecore:EClass"], eClassifiers EClass, eClassifiers'))
-    //  .filter((el: Element) => (el.getAttribute('xsi:type') || el.getAttribute('type') || '').includes('EClass') || el.tagName.endsWith('EClass') || el.querySelector('eStructuralFeatures'));
     const classElems = allContents.filter(
       (e) => e.eClass.get("name") === "EClass",
     );
@@ -505,16 +511,12 @@ export const generateUMLFromEcoreTsParser = (
 
     // First pass: Create nodes with temporary positions
     classElems.forEach((cls, idx) => {
-      // const className = cls.getAttribute('name') || `Class${idx + 1}`;
-      // const isAbstract = (cls.getAttribute('abstract') || 'false') === 'true';
-      // const isInterface = (cls.getAttribute('interface') || 'false') === 'true';
       const className = cls.get<string>("name") || `Class${idx + 1}`;
       const isAbstract = (cls.get<boolean>("abstract") || false) === true;
       const isInterface = (cls.get<boolean>("interface") || false) === true;
 
       const attributes: string[] = [];
       // Parse EAttributes (not EReferences) from eStructuralFeatures
-      //const allFeatures = cls.querySelectorAll('eStructuralFeatures');
       const allFeatures = cls
         .eContents()
         .filter((e: EObject) =>
@@ -524,18 +526,12 @@ export const generateUMLFromEcoreTsParser = (
         ) as EObject[];
       allFeatures.forEach((attr, aIdx) => {
         // Check if this is an EAttribute (not an EReference)
-        //const featureType = attr.getAttribute('xsi:type') || attr.getAttribute('type') || '';
-        // const isAttribute = featureType.includes('EAttribute') ||
-        //                    (!featureType.includes('EReference') &&
-        //                     attr.hasAttribute('eType') &&
-        //                     !attr.hasAttribute('eReferenceType'));
         const featureType = attr.eClass.get("name") || "";
         const isAttribute = featureType === EAttribute.get("name");
 
         if (!isAttribute) return; // Skip if it's an EReference
 
         const attrName = attr.get<string>("name") || `attr${aIdx + 1}`;
-        //const eType = attr.getAttribute('eType') || attr.getAttribute('type') || 'EString';
         const eType =
           (attr.get<EObject>("eType")?.eClass as EObject).get<string>("name") ||
           attr.get<string>("type") ||

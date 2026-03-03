@@ -26,7 +26,7 @@ import { useDragAndDrop } from '../../hooks/useDragAndDrop';
 import { EditableNode } from './EditableNode';
 import { UMLRelationship } from './UMLRelationship';
 import { ReactionRelationship } from './ReactionRelationship';
-import { ReactionEditor } from './ReactionEditor';
+import { ReactionEditor } from './lowcode/ReactionEditor';
 import { EcoreFileBox } from './EcoreFileBox';
 import { ConnectionLine } from './ConnectionLine';
 import { CodeEditorModal } from './CodeEditorModal';
@@ -41,13 +41,13 @@ import {
   recalculateBoundingBoxes,
 } from '../../utils/boundingBoxUtils';
 import type { EdgeValidator } from './EdgeValidator';
-import { ReactionEdgeValidator } from './ReactionEdgeValidator';
+import { ReactionEdgeValidator } from './lowcode/ReactionEdgeValidator';
 import { MainContext } from '../../contexts/MainContext';
 import { onConnect, isValidConnection, onConnectStart, onConnectEnd, onReconnect, onReconnectEnd, onEdgesDelete, onEdgeClick } from '../../utils';
 import type { EObject } from 'ecore-ts';
 import { UmlEdgeDetails } from './UmlEdgeDetails';
 import { DragablePanel } from './DragablePanel';
-import { GhostNode } from './GhostNode';
+import { GhostNode } from './lowcode/GhostNode';
 import { disableReactionHandles, enableReactionHandles, recalculateNodesOnEdgesForReactions } from '../../utils/reactionUtils';
 import { DEFAULT_STORAGE_KEY, loadFromStorage, UMLEdgeDetailsConfig, UMLEdgeDetailsConfigPanel } from './UMLEdgeDetailsConfig';
 
@@ -289,7 +289,7 @@ export const FlowCanvas = forwardRef<{
     // Helper to update a single edge's handles based on node positions
     const updateEdgeHandles = useCallback((edge: Edge, currentNodes: Node[]) => {
       // Update handles for both reactions and UML edges
-      if (edge.type !== 'reactions' && edge.type !== 'uml') return edge;
+      if (edge.type !== 'fine-granular-reaction' && edge.type !== 'reactions' && edge.type !== 'uml') return edge;
       
       const sourceNode = currentNodes.find(n => n.id === edge.source);
       const targetNode = currentNodes.find(n => n.id === edge.target);
@@ -481,7 +481,7 @@ export const FlowCanvas = forwardRef<{
       });
 
       allEdges.forEach(edge => {
-        if (edge.type !== 'reactions') return;
+        if (!["reactions", "fine-granular-reaction"].includes(edge.type ?? "")) return;
 
         if (edge.source === node.id && edge.sourceHandle) {
           const handle = edge.sourceHandle as HandlePosition;
@@ -2078,7 +2078,7 @@ const handleEdgeReorderRequest = useCallback((edgeId: string, controlPoint: { x:
     const mappedEdges = uniqueEdges.map(edge => {
       const { sourceData, targetData } = getEdgeDistributionData(edge);
       const { mergePoint, hasMerge, isFirstInMergeGroup, mergeGroupSourceNodes } = getUmlMergeInfo(edge);
-      const isReaction = edge.type === 'reactions';
+      const isReaction = ["reactions", "fine-granular-reaction"].includes(edge.type ?? "");
       const isUml = edge.type === 'uml';
 
       return {

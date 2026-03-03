@@ -225,6 +225,6 @@ export function onEdgeClick(params: OnEdgeClickParamsExtension, event: React.Mou
 export const eventHandlers = {
   onEdgeClick: {
     uml: umlOnEdgeClick,
-    reactions: reactionsOnEdgeClick
+    'fine-granular-reaction': reactionsOnEdgeClick
   }
 }
