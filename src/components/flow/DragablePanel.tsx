@@ -7,6 +7,8 @@ import {
   Maximize,
   Close,
   Settings,
+  Save,
+  Undo,
 } from "@mui/icons-material";
 
 /**
@@ -21,6 +23,8 @@ interface DragablePanelProps {
   onClose: () => void;
   children: React.ReactNode;
   settings?: React.ReactNode;
+  onSave?: () => void;
+  onUndo?: () => void;
   className?: string;
   translateX?: string;
   translateY?: string;
@@ -32,6 +36,8 @@ export const DragablePanel: React.FC<DragablePanelProps> = ({
   onClose,
   children,
   settings,
+  onSave,
+  onUndo,
   className = "",
   translateX = "-50%",
   translateY = "0%",
@@ -184,6 +190,30 @@ export const DragablePanel: React.FC<DragablePanelProps> = ({
               </Typography>
             </Stack>
             <Stack direction="row" gap={0.5}>
+              {onUndo && (
+                <IconButton
+                  size="small"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onUndo();
+                  }}
+                  aria-label="undo"
+                >
+                  <Undo sx={{ fontSize: 18 }} />
+                </IconButton>
+              )}
+              {onSave && (
+                <IconButton
+                  size="small"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onSave();
+                  }}
+                  aria-label="save"
+                >
+                  <Save sx={{ fontSize: 18 }} />
+                </IconButton>
+              )}
               {settings && (
                 <>
                   <IconButton

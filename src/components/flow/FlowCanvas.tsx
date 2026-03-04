@@ -75,7 +75,8 @@ const nodeTypes = {
 };
 const edgeTypes = {
   uml: UMLRelationship,
-  reactions: ReactionRelationship
+  reactions: ReactionRelationship,
+  'fine-granular-reaction': ReactionRelationship
 };
 
 const getLocalStorageKey = (userId?: string, projectId?: string) => {
@@ -223,6 +224,7 @@ export const FlowCanvas = forwardRef<{
     const [hoveredMergeGroup, setHoveredMergeGroup] = useState<string | null>(null);
     const [identifiersToEObject, setIdentifiersToEObject] = useState<Map<string, EObject>>(new Map());
     const [reactionEditorEdge, setReactionEditorEdge] = useState<FlowEdge | null>(null);
+    const reactionEditorRef = useRef<{ save: () => void; undo: () => void } | null>(null);
     const [umlEdgeDetailsEdge, setUmlEdgeDetailsEdge] = useState<FlowEdge | null>(null);
     const [currentConnectionStartParams, setCurrentConnectionStartParams] = useState<OnConnectStartParams | null>(null);
     const [umlDetailsConfig, setUmlDetailsConfig] = useState<Partial<UMLEdgeDetailsConfig>>(loadFromStorage(DEFAULT_STORAGE_KEY));
@@ -2203,8 +2205,14 @@ const handleEdgeReorderRequest = useCallback((edgeId: string, controlPoint: { x:
               title="Reaction"
               description="Configure how mappings behave"
               onClose={() => setReactionEditorEdge(null)}
+              onSave={() => reactionEditorRef.current?.save()}
+              onUndo={() => reactionEditorRef.current?.undo()}
             >
-              <LowCodeReactionEditor edge={reactionEditorEdge} identifiersToEObject={identifiersToEObject} />
+              <LowCodeReactionEditor 
+                ref={reactionEditorRef}
+                edge={reactionEditorEdge} 
+                identifiersToEObject={identifiersToEObject}
+              />
             </DragablePanel>
           }
           {umlEdgeDetailsEdge && (

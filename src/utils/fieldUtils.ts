@@ -89,8 +89,16 @@ export const getFieldDefaultValue = (
   return "";
 };
 
+function capitalizeFirst(str: string): string {
+  return str[0].toUpperCase() + str.slice(1);
+}
+
 export function evaluateTemplateWithExpressionSupport(template: string, values: Partial<LowCodeReactionFieldVariables>): string {
-  return new Function(...Object.keys(values), `return \`${template}\`;`)(...Object.values(values));
+  const executionContext = {
+    ...values,
+    capitalizeFirst, 
+  }
+  return new Function(...Object.keys(executionContext), `return \`${template}\`;`)(...Object.values(executionContext));
 }
 
 export function evaluateTemplate(template: string, values: Partial<LowCodeReactionFieldVariables>): string {

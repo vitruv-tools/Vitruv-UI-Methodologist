@@ -34,6 +34,7 @@ export interface EditableVsumDetails extends EditableVsum {
   metaModels: EditableVsumMetaModelRef[];
   metaModelsRelation?: EditableVsumMetaModelRelation[];
   identifiersToEObject?: Map<string, EObject>;
+  identifiersToBackendMetaModelId?: Map<string, number>;
 }
 
 export type EditableFineGranularMetaModelRelation = {

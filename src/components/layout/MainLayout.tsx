@@ -441,6 +441,7 @@ export function MainLayout({
 
         const activeVsumDetails = new ActiveVsumDetails();
         activeVsumDetails.setIdentifiersToEObjectMap(diagramData.identifiersToEObject, remountCanvas);
+        activeVsumDetails.addIdentifierToBackendMetaModelIdMap(diagramData.eObjectIdentifierOfMetaModel, backendMetaModelId);
         activeVsumDetails.save();
 
         if (!diagramData.nodes.length) {

@@ -490,6 +490,7 @@ export function generateUMLFromEcoreTsParser(
   nodes: UMLNode[];
   edges: FlowEdge[];
   identifiersToEObject: Map<string, EObject>;
+  eObjectIdentifierOfMetaModel: string;
 } {
   try {
     const { resource, allContents, eObjectUniqueIdentifiers } = parseEcoreXML(
@@ -562,13 +563,14 @@ export function generateUMLFromEcoreTsParser(
       eObjectUniqueIdentifiers
     );
 
-    return { nodes, edges, identifiersToEObject };
+    return { nodes, edges, identifiersToEObject, eObjectIdentifierOfMetaModel: eObjectUniqueIdentifiers.get(rootPackage)! };
   } catch (error) {
     console.error("Error generating UML from Ecore:", error);
     return {
       nodes: [],
       edges: [],
       identifiersToEObject: new Map<string, EObject>(),
+      eObjectIdentifierOfMetaModel: "",
     };
   }
 }

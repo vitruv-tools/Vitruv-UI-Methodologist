@@ -1,4 +1,11 @@
-import React, { useEffect, useMemo, useState } from "react";
+import {
+  useEffect,
+  useMemo,
+  useState,
+  useImperativeHandle,
+  forwardRef,
+  useCallback,
+} from "react";
 import {
   FormControl,
   InputLabel,
@@ -8,10 +15,6 @@ import {
   Stack,
   Box,
   Typography,
-  Slider,
-  Checkbox,
-  TextField,
-  FormControlLabel,
   CircularProgress,
 } from "@mui/material";
 import type { EObject } from "ecore-ts";
@@ -22,6 +25,7 @@ import { LowCodeReactionMetadataResponse } from "../../../types/LowCodeReactionM
 import { LowCodeReactionFieldVariables } from "../../../types/LowCodeReactionFieldVariables";
 import { FieldRenderer } from "../FieldRenderer";
 import { getFieldDefaultValue } from "../../../utils/FieldUtils";
+import { temporarilySaveLowCodeReactionConfig } from "../../../utils/LowCodeReactionUtils";
 
 /**
  * Configuring reaction mappings inside the React Flow canvas.
@@ -32,11 +36,15 @@ interface ReactionEditorProps {
   identifiersToEObject: Map<string, EObject>;
 }
 
-export const LowCodeReactionEditor: React.FC<ReactionEditorProps> = ({
-  disabled = false,
-  edge,
-  identifiersToEObject,
-}) => {
+export interface LowCodeReactionEditorRef {
+  save: () => void;
+  undo: () => void;
+}
+
+export const LowCodeReactionEditor = forwardRef<
+  LowCodeReactionEditorRef,
+  ReactionEditorProps
+>(({ disabled = false, edge, identifiersToEObject }, ref) => {
   const [loading, setLoading] = useState(true);
 
   const [lowCodeReactionsMetadata, setLowCodeReactionsMetadata] =
@@ -131,6 +139,32 @@ export const LowCodeReactionEditor: React.FC<ReactionEditorProps> = ({
     }));
   };
 
+  const handleSave = useCallback(() => {
+    temporarilySaveLowCodeReactionConfig(
+      selectedTemplate,
+      fieldValues,
+      edge,
+    );
+  }, [selectedTemplate, fieldValues, edge]);
+
+  const handleUndo = () => {
+    // Always reset to initial values
+    const fields =
+      lowCodeReactionsMetadata.reactionMetadataMap[selectedTemplate]?.fields ||
+      [];
+    initializeFieldValues(fields);
+  };
+
+  // Expose save and undo methods to parent via ref
+  useImperativeHandle(
+    ref,
+    () => ({
+      save: handleSave,
+      undo: handleUndo,
+    }),
+    [selectedTemplate, fieldValues, lowCodeReactionsMetadata],
+  );
+
   if (loading) {
     return (
       <Box sx={{ display: "flex", justifyContent: "center", p: 2 }}>
@@ -206,4 +240,6 @@ export const LowCodeReactionEditor: React.FC<ReactionEditorProps> = ({
       )}
     </Stack>
   );
-};
+});
+
+LowCodeReactionEditor.displayName = "LowCodeReactionEditor";

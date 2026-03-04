@@ -80,6 +80,20 @@ export class ActiveVsumDetails {
     }
   }
 
+  getIdentifiersToBackendMetaModelIdMap() {
+    if (!this.vsumDetails.identifiersToBackendMetaModelId) {
+      throw new Error("IdentifiersToBackendMetaModelId map is not defined, has UML generation been performed yet?");
+    }
+    return this.vsumDetails.identifiersToBackendMetaModelId;
+  }
+
+  addIdentifierToBackendMetaModelIdMap(eObjectIdentifier: string, backendMetaModelId: number) {
+    if (!this.vsumDetails.identifiersToBackendMetaModelId) {
+      this.vsumDetails.identifiersToBackendMetaModelId = new Map<string, number>();
+    }
+    this.vsumDetails.identifiersToBackendMetaModelId.set(eObjectIdentifier, backendMetaModelId);
+  }
+
   save() {
     this.vsumDetailsStore.setState(this.vsumDetails);
   }
