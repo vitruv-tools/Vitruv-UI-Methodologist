@@ -178,6 +178,7 @@ function resolveToolName(cls: EObject): string {
  * Creates UML class nodes and lookup maps in a first pass.
  */
 function buildClassNodes(
+  rootPackage: EObject,
   classElems: EObject[],
   ecoreName: string,
   eObjectUniqueIdentifiers: Map<EObject, string>,
@@ -192,12 +193,12 @@ function buildClassNodes(
   classElems.forEach((cls, idx) => {
     const className = cls.get<string>("name") || `Class${idx + 1}`;
     const node: UMLNode = {
-      id: `${ecoreName}-uml-class-${nodeId++}`,
+      id: eObjectUniqueIdentifiers.get(cls)!,
       type: "editable",
       position: { x: 0, y: 0 },
       data: {
         ecore: {
-          model: ecoreName,
+          model: eObjectUniqueIdentifiers.get(rootPackage)!,
           eObjectId: eObjectUniqueIdentifiers.get(cls!),
           eAttributeIds: getEAttributes(cls).map((attr) => eObjectUniqueIdentifiers.get(attr)!),
           eReferenceIds: getEReferences(cls).map((ref) => eObjectUniqueIdentifiers.get(ref)!),
@@ -286,6 +287,7 @@ function resolveTargetMultiplicity(
  * Creates UML association/composition edges from EReferences.
  */
 function createAssociationEdges(
+  rootPackage: EObject,
   classElems: EObject[],
   nodes: UMLNode[],
   ecoreName: string,
@@ -321,7 +323,7 @@ function createAssociationEdges(
       const handles = chooseHandlesForNodes(nodes, sourceId, targetId);
 
       edges.push({
-        id: `${ecoreName}-uml-edge-${nodeId++}`,
+        id: eObjectUniqueIdentifiers.get(ref)!,
         source: sourceId,
         target: targetId,
         type: "uml",
@@ -336,8 +338,8 @@ function createAssociationEdges(
             eObjectTargetId: eObjectUniqueIdentifiers.get(
               classNameToEObject.get(targetType)!
             )!,
-            fromModel: ecoreName,
-            toModel: ecoreName,
+            fromModel: eObjectUniqueIdentifiers.get(rootPackage)!,
+            toModel: eObjectUniqueIdentifiers.get(rootPackage)!,
           },
         },
         sourceHandle: handles.sourceHandle,
@@ -353,6 +355,7 @@ function createAssociationEdges(
  * Creates UML inheritance edges from eSuperTypes.
  */
 function createGeneralizationEdges(
+  rootPackage: EObject,
   classElems: EObject[],
   nodes: UMLNode[],
   ecoreName: string,
@@ -382,7 +385,7 @@ function createGeneralizationEdges(
 
       const handles = chooseHandlesForNodes(nodes, subId, supId);
       edges.push({
-        id: `${ecoreName}-uml-gen-${nodeId++}`,
+        id: `${ecoreName}-uml-gen-${nodeId++}`, //This doesnt have a proper ecore element backing it, so we generate an id based on the ecore name and a counter
         source: subId,
         target: supId,
         type: "uml",
@@ -391,8 +394,8 @@ function createGeneralizationEdges(
           ecore: {
             eObjectSourceId: eObjectUniqueIdentifiers.get(cls)!,
             eObjectTargetId: eObjectUniqueIdentifiers.get(sup)!,
-            fromModel: ecoreName,
-            toModel: ecoreName,
+            fromModel: eObjectUniqueIdentifiers.get(rootPackage)!,
+            toModel: eObjectUniqueIdentifiers.get(rootPackage)!,
           },
         },
         sourceHandle: handles.sourceHandle,
@@ -411,7 +414,7 @@ function addPackageNode(
   nodes: UMLNode[],
   ecoreName: string,
   packageName: string,
-  rootPackage: EObject | undefined,
+  rootPackage: EObject,
   eObjectUniqueIdentifiers: Map<EObject, string>,
   startNodeId: number,
   backendMetaModelId: number,
@@ -421,12 +424,12 @@ function addPackageNode(
   }
 
   const pkgNode: UMLNode = {
-    id: `${ecoreName}-uml-pkg-${startNodeId}`,
+    id: eObjectUniqueIdentifiers.get(rootPackage!),
     type: "editable",
     position: { x: 80, y: 40 },
     data: {
       ecore: {
-        model: ecoreName,
+        model: eObjectUniqueIdentifiers.get(rootPackage!),
         eObjectId: eObjectUniqueIdentifiers.get(rootPackage!),
         eAttributeIds: getEAttributes(rootPackage!).map((attr) => eObjectUniqueIdentifiers.get(attr)!),
         eReferenceIds: getEReferences(rootPackage!).map((ref) => eObjectUniqueIdentifiers.get(ref)!),
@@ -501,7 +504,10 @@ export function generateUMLFromEcoreTsParser(
       .eContents()
       .find((e: EObject) => e.eClass.get("name") === EPackage.get<string>("name")) as EObject |
       undefined;
-    const packageName = rootPackage?.get<string>("name") || "Package";
+    if (rootPackage == null) {
+      throw new Error("No root EPackage found in Ecore resource, UML diagram will be generated without package context");
+    }
+    const packageName = rootPackage.get<string>("name") || "Package";
     const classElems = allContents.filter(
       (e) => e.eClass.get("name") === EClass.get<string>("name")
     );
@@ -511,10 +517,11 @@ export function generateUMLFromEcoreTsParser(
       classNameToNodeId,
       classNameToEObject,
       nextNodeId,
-    } = buildClassNodes(classElems, ecoreName, eObjectUniqueIdentifiers, nodeId, backendMetaModelId);
+    } = buildClassNodes(rootPackage, classElems, ecoreName, eObjectUniqueIdentifiers, nodeId, backendMetaModelId);
     nodeId = nextNodeId;
 
     const associations = createAssociationEdges(
+      rootPackage,
       classElems,
       nodes,
       ecoreName,
@@ -527,6 +534,7 @@ export function generateUMLFromEcoreTsParser(
     nodeId = associations.nextNodeId;
 
     const generalizations = createGeneralizationEdges(
+      rootPackage,
       classElems,
       nodes,
       ecoreName,

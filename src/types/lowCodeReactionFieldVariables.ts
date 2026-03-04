@@ -1,6 +1,10 @@
 export type LowCodeReactionFieldVariables = {
+  "sourceModelUri": string;
+  "sourceModelAlias": string;
   "sourceUri": string;
-  "targetUri": string;
   "sourceAlias": string;
+  "targetModelUri": string;
+  "targetModelAlias": string;
+  "targetUri": string;
   "targetAlias": string;
 };

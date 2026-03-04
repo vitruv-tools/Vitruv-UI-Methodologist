@@ -84,15 +84,19 @@ export const getFieldDefaultValue = (
     return {};
   }
   if (field.displayDefaultStringValue != null) {
-    return evaluateTemplate(field.displayDefaultStringValue, variables);
+    return evaluateTemplateWithExpressionSupport(field.displayDefaultStringValue, variables);
   }
   return "";
 };
 
+export function evaluateTemplateWithExpressionSupport(template: string, values: Partial<LowCodeReactionFieldVariables>): string {
+  return new Function(...Object.keys(values), `return \`${template}\`;`)(...Object.values(values));
+}
+
 export function evaluateTemplate(template: string, values: Partial<LowCodeReactionFieldVariables>): string {
-    return template.replace(/\${(.*?)}/g, (_, key) => {
-        return (values as Record<string, string>)[key.trim()] ?? `\$\{${key}\}`;
-    });
+  return template.replace(/\${(.*?)}/g, (_, key) => {
+      return (values as Record<string, string>)[key.trim()] ?? `\$\{${key}\}`;
+  });
 }
 
 /**

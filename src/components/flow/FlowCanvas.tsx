@@ -279,7 +279,7 @@ export const FlowCanvas = forwardRef<{
     // Helper to update a single edge's handles based on node positions
     const updateEdgeHandles = useCallback((edge: Edge, currentNodes: Node[]) => {
       // Update handles for both reactions and UML edges
-      if (edge.type !== 'fine-granular-reaction' && edge.type !== 'reactions' && edge.type !== 'uml') return edge;
+      if (edge.type == 'fine-granular-reaction' || (edge.type !== 'reactions' && edge.type !== 'uml')) return edge;
       
       const sourceNode = currentNodes.find(n => n.id === edge.source);
       const targetNode = currentNodes.find(n => n.id === edge.target);

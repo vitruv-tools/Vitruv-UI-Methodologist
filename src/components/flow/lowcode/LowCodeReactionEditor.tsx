@@ -16,24 +16,12 @@ import {
 } from "@mui/material";
 import type { EObject } from "ecore-ts";
 import type { FlowEdge } from "../../../types/flow";
-import {
-  apiService,
-} from "../../../services/api";
-import {
-  LowCodeReactionFieldMetadata} from "../../../types/LowCodeReactionFieldMetadata";
+import { apiService } from "../../../services/api";
+import { LowCodeReactionFieldMetadata } from "../../../types/LowCodeReactionFieldMetadata";
 import { LowCodeReactionMetadataResponse } from "../../../types/LowCodeReactionMetadataResponse";
 import { LowCodeReactionFieldVariables } from "../../../types/LowCodeReactionFieldVariables";
 import { FieldRenderer } from "../FieldRenderer";
 import { getFieldDefaultValue } from "../../../utils/FieldUtils";
-
-const REACTION_TYPES = [
-  "Direct Mapping",
-  "Direct Mapping with Offset",
-] as const;
-const REACTION_DIRECTIONS = ["M1 to M2", "M2 to M1", "Bidirectional"] as const;
-
-export type ReactionType = (typeof REACTION_TYPES)[number];
-export type ReactionDirection = (typeof REACTION_DIRECTIONS)[number];
 
 /**
  * Configuring reaction mappings inside the React Flow canvas.
@@ -67,7 +55,9 @@ export const LowCodeReactionEditor: React.FC<ReactionEditorProps> = ({
       const firstTemplate = Object.keys(metadata.data.reactionMetadataMap)[0];
       if (firstTemplate) {
         setSelectedTemplate(firstTemplate);
-        initializeFieldValues(metadata.data.reactionMetadataMap[firstTemplate]?.fields || []);
+        initializeFieldValues(
+          metadata.data.reactionMetadataMap[firstTemplate]?.fields || [],
+        );
       }
 
       setLoading(false);
@@ -78,9 +68,30 @@ export const LowCodeReactionEditor: React.FC<ReactionEditorProps> = ({
 
   const initializeFieldValues = (fields: LowCodeReactionFieldMetadata[]) => {
     const initialValues: Record<string, any> = {};
-    const eSourceObj = identifiersToEObject.get(edge.data!.ecore!.eObjectSourceId)!;
-    const eTargetObj = identifiersToEObject.get(edge.data!.ecore!.eObjectTargetId)!;
-    const variables: Partial<LowCodeReactionFieldVariables> = { sourceAlias: edge.data?.ecore?.fromModel, targetAlias: edge.data?.ecore?.toModel, sourceUri: edge.data?.ecore?.eObjectSourceId, targetUri: edge.data?.ecore?.eObjectTargetId };
+    const sourceModelAlias = edge.data?.ecore?.fromModel
+      .split("/")
+      .slice(-1)[0];
+    const targetModelAlias = edge.data?.ecore?.toModel.split("/").slice(-1)[0];
+    const sourceAlias = edge.data?.ecore?.eObjectSourceId
+      .split("/")
+      .slice(-1)[0]
+      .split("::")
+      .slice(-1)[0];
+    const targetAlias = edge.data?.ecore?.eObjectTargetId
+      .split("/")
+      .slice(-1)[0]
+      .split("::")
+      .slice(-1)[0];
+    const variables: Partial<LowCodeReactionFieldVariables> = {
+      sourceAlias: sourceAlias,
+      targetAlias: targetAlias,
+      sourceUri: edge.data?.ecore?.eObjectSourceId,
+      targetUri: edge.data?.ecore?.eObjectTargetId,
+      sourceModelUri: edge.data?.ecore?.fromModel,
+      targetModelUri: edge.data?.ecore?.toModel,
+      sourceModelAlias,
+      targetModelAlias,
+    };
     fields.forEach((field) => {
       initialValues[field.name] = getFieldDefaultValue(field, variables);
     });
@@ -88,18 +99,28 @@ export const LowCodeReactionEditor: React.FC<ReactionEditorProps> = ({
   };
 
   const templateOptions = useMemo(
-    () => Array.from(Object.entries(lowCodeReactionsMetadata.reactionMetadataMap).filter(([_, v]) => !v.hide).map(([k]) => k)),
+    () =>
+      Array.from(
+        Object.entries(lowCodeReactionsMetadata.reactionMetadataMap)
+          .filter(([_, v]) => !v.hide)
+          .map(([k]) => k),
+      ),
     [lowCodeReactionsMetadata],
   );
 
   const currentFields = useMemo(() => {
-    return lowCodeReactionsMetadata.reactionMetadataMap[selectedTemplate]?.fields.filter(field => !field.displayHide) || [];
+    return (
+      lowCodeReactionsMetadata.reactionMetadataMap[
+        selectedTemplate
+      ]?.fields.filter((field) => !field.displayHide) || []
+    );
   }, [selectedTemplate, lowCodeReactionsMetadata]);
 
   const handleTemplateChange = (event: SelectChangeEvent<string>) => {
     const template = event.target.value;
     setSelectedTemplate(template);
-    const fields = lowCodeReactionsMetadata.reactionMetadataMap[template].fields || [];
+    const fields =
+      lowCodeReactionsMetadata.reactionMetadataMap[template].fields || [];
     initializeFieldValues(fields);
   };
 

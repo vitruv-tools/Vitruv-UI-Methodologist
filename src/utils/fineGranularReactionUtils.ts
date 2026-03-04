@@ -1,16 +1,32 @@
-import { Connection, Node } from 'reactflow';
-import { ActiveVsumDetails, NoActiveVsum, NoVsumDetailsStore } from '../store/VsumDetails';
-import { FlowEdge, FlowNodeECoreData, UMLNode } from '../types';
+import { Connection, Node } from "reactflow";
+import {
+  ActiveVsumDetails,
+  NoActiveVsum,
+  NoVsumDetailsStore,
+} from "../store/VsumDetails";
+import { FlowEdge, FlowNodeECoreData, UMLNode } from "../types";
 
-export function getProperEObjectIdFromHandle(handleId: string, ecore: FlowNodeECoreData) {
-  const eObjectIds = [ecore.eObjectId, ecore.eAttributeIds, ecore.eReferenceIds, ecore.eOperationIds, ecore.eAnnotationIds, ecore.eSuperTypeIds].flat();
+export function getProperEObjectIdFromHandle(
+  handleId: string,
+  ecore: FlowNodeECoreData,
+) {
+  const eObjectIds = [
+    ecore.eObjectId,
+    ecore.eAttributeIds,
+    ecore.eReferenceIds,
+    ecore.eOperationIds,
+    ecore.eAnnotationIds,
+    ecore.eSuperTypeIds,
+  ].flat();
   eObjectIds.sort((a, b) => b.length - a.length); // Sort by length to ensure we match the longest possible ID first
   for (const eObjectId of eObjectIds) {
     if (handleId.endsWith(eObjectId)) {
       return eObjectId;
     }
   }
-  throw new Error(`No matching eObjectId found for handleId ${handleId} and ecore ${JSON.stringify(ecore)}`);
+  throw new Error(
+    `No matching eObjectId found for handleId ${handleId} and ecore ${JSON.stringify(ecore)}`,
+  );
 }
 
 /**
@@ -49,10 +65,16 @@ export function createFineGranularReactionEdge(
     }
 
     // Fine granular ecore ids are encoded in the handle id, we need to extract them to know which EObjects are actually involved
-    // E.g. source handle might look like "reaction-left-source-http://vitruv.tools/methodologisttemplate/model2::Entity/name", 
+    // E.g. source handle might look like "reaction-left-source-http://vitruv.tools/methodologisttemplate/model2::Entity/name",
     // so we look for a matching EAttribute on the source node
-    const fineGranularSourceId = getProperEObjectIdFromHandle(params.sourceHandle, (src as UMLNode).data.ecore!);
-    const fineGranularTargetId = getProperEObjectIdFromHandle(params.targetHandle, (tgt as UMLNode).data.ecore!);
+    const fineGranularSourceId = getProperEObjectIdFromHandle(
+      params.sourceHandle,
+      (src as UMLNode).data.ecore!,
+    );
+    const fineGranularTargetId = getProperEObjectIdFromHandle(
+      params.targetHandle,
+      (tgt as UMLNode).data.ecore!,
+    );
     metaModelRelation.fineGranularMetaModelRelationSet.push({
       sourceId: fineGranularSourceId,
       targetId: fineGranularTargetId,
