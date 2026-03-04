@@ -105,6 +105,22 @@ export function CodeEditorModal({
   // Derived: whether the editor has unsaved changes
   const hasUnsavedChanges = code !== savedCode;
 
+  const closeWebSocket = useCallback(() => {
+    if (webSocketRef.current) {
+      console.log('🧹 Component unmounting - closing WebSocket cleanly');
+      if (
+        webSocketRef.current.readyState === WebSocket.OPEN ||
+        webSocketRef.current.readyState === WebSocket.CONNECTING
+      ) {
+        webSocketRef.current.close(1000, 'Editor closed');
+      }
+      webSocketRef.current = null;
+    }
+    setLspReadyBoth(false);
+    lspInitialized.current = false;
+    setLspConnected(false);
+  }, []);
+
   useEffect(() => {
     setCode(initialCode);
     setSavedCode(initialCode);
@@ -129,14 +145,13 @@ export function CodeEditorModal({
     return () => {
       closeWebSocket();
     };
-  }, []);
+  }, [closeWebSocket]);
 
-  // Cleanup on browser close/refresh
   useEffect(() => {
     const handleBeforeUnload = () => closeWebSocket();
     window.addEventListener('beforeunload', handleBeforeUnload);
     return () => window.removeEventListener('beforeunload', handleBeforeUnload);
-  }, []);
+  }, [closeWebSocket]);
 
   // ── Ctrl+S Shortcut ────────────────────────────────────────────────────────
   useEffect(() => {
@@ -151,22 +166,6 @@ export function CodeEditorModal({
     return () => window.removeEventListener('keydown', handleKeyDown);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen, code, saving]);
-
-  const closeWebSocket = () => {
-    if (webSocketRef.current) {
-      console.log('🧹 Component unmounting - closing WebSocket cleanly');
-      if (
-        webSocketRef.current.readyState === WebSocket.OPEN ||
-        webSocketRef.current.readyState === WebSocket.CONNECTING
-      ) {
-        webSocketRef.current.close(1000, 'Editor closed');
-      }
-      webSocketRef.current = null;
-    }
-    setLspReadyBoth(false);
-    lspInitialized.current = false;
-    setLspConnected(false);
-  };
 
   // Close with unsaved-changes guard
   const handleClose = useCallback(() => {
