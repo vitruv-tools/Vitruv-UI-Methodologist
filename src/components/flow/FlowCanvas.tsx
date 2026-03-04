@@ -10,15 +10,11 @@ import React, {
 } from 'react';
 import ReactFlow, {
   MiniMap,
-  Background,
   ReactFlowInstance,
   Node,
   Edge,
   NodeChange,
-  Connection,
   OnConnectStartParams,
-  Panel,
-  ReactFlowProvider,
 } from 'reactflow';
 import 'reactflow/dist/style.css';
 import { useFlowState } from '../../hooks/useFlowState';
@@ -34,22 +30,19 @@ import { apiService, MetaModelRelationRequest } from '../../services/api';
 import { WorkspaceSnapshot } from '../../types/workspace';
 import { FlowEdge, FlowNode } from '../../types';
 import {
-  calculateBoundingBoxes,
-  calculateAndUpdateBoundingBoxes,
-  createOrUpdateBoundingBoxNodes,
-  applyOffsetsToNodes,
   recalculateBoundingBoxes,
 } from '../../utils/BoundingBoxUtils';
 import type { EdgeValidator } from './EdgeValidator';
 import { LowCodeReactionEdgeValidator } from './lowcode/LowCodeReactionEdgeValidator';
 import { MainContext } from '../../contexts/MainContext';
-import { onConnect, isValidConnection, onConnectStart, onConnectEnd, onReconnect, onReconnectEnd, onEdgesDelete, onEdgeClick } from '../../utils';
+import { onConnect, isValidConnection, onConnectStart, onConnectEnd, onReconnect, onReconnectEnd, onEdgesDelete, onEdgeClick, getBackendMetaModelId } from '../../utils';
 import type { EObject } from 'ecore-ts';
 import { UmlEdgeDetails } from './UMLEdgeDetails';
 import { DragablePanel } from './DragablePanel';
 import { GhostNode } from './lowcode/GhostNode';
-import { disableReactionHandles, enableReactionHandles, recalculateNodesOnEdgesForReactions } from '../../utils/reactionUtils';
+import { addReactionEdgeToVsumDetails, disableReactionHandles, enableReactionHandles, recalculateNodesOnEdgesForReactions } from '../../utils/ReactionUtils';
 import { DEFAULT_STORAGE_KEY, loadFromStorage, UMLEdgeDetailsConfig, UMLEdgeDetailsConfigPanel } from './UMLEdgeDetailsConfig';
+import { FlowMetaModelRelationData } from '../../types/FlowMetaModelRelationData';
 
 const COLOR_LIST = [
   '#ab1c91ff', '#ff7f0e', '#2ca02c', '#d62728', '#9467bd',
@@ -97,7 +90,7 @@ interface FlowCanvasProps {
   onToolClick?: (toolType: string, toolName: string, diagramType?: string) => void;
   onDiagramChange?: (nodes: Node[], edges: Edge[]) => void;
   onEcoreFileSelect?: (fileName: string) => void;
-  onEcoreFileExpand?: (fileName: string, fileContent: string) => void;
+  onEcoreFileExpand?: (fileName: string, fileContent: string, backendMetaModelId: number) => void;
   onEcoreFileDelete?: (id: string) => void;
   onEcoreFileRename?: (id: string, newFileName: string) => void;
   userId?: string;
@@ -201,8 +194,6 @@ export const FlowCanvas = forwardRef<{
   getWorkspaceSnapshot: () => WorkspaceSnapshot;
 }, FlowCanvasProps>(
   ({
-    onDeploy,
-    onToolClick,
     onDiagramChange,
     onEcoreFileSelect,
     onEcoreFileExpand,
@@ -236,7 +227,6 @@ export const FlowCanvas = forwardRef<{
     const [currentConnectionStartParams, setCurrentConnectionStartParams] = useState<OnConnectStartParams | null>(null);
     const [umlDetailsConfig, setUmlDetailsConfig] = useState<Partial<UMLEdgeDetailsConfig>>(loadFromStorage(DEFAULT_STORAGE_KEY));
 
-    const dragTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
     const edgeValidators: EdgeValidator[] = [new LowCodeReactionEdgeValidator()];
 
@@ -651,8 +641,7 @@ export const FlowCanvas = forwardRef<{
     const getBackendMetaModelIdForNode = useCallback((nodeId?: string | null) => {
       if (!nodeId) return undefined;
       const node = nodes.find(n => n.id === nodeId);
-      const value = node?.data?.metaModelId ?? node?.data?.metaModelSourceId;
-      return typeof value === 'number' ? value : undefined;
+      return getBackendMetaModelId(node?.data?.metaModelId, node?.data?.metaModelSourceId);
     }, [nodes]);
 
     useEffect(() => {
@@ -714,6 +703,7 @@ export const FlowCanvas = forwardRef<{
       return () => document.removeEventListener('keydown', handleKeyDown);
     }, [undo, redo, canUndo, canRedo, reactFlowInstance, removeNode, removeEdge, selectedFileId, onEcoreFileDelete]);
 
+    // Creation of coarse meta model relations (reactions)
     const handleConnectionEnd = useCallback((e: MouseEvent) => {
       console.log('handleConnectionEnd CALLED');
 
@@ -769,7 +759,7 @@ export const FlowCanvas = forwardRef<{
 
         const color = getColorForPair(connectionDragState.sourceNodeId, targetNode.id);
 
-        const newEdge: Edge = {
+        const newEdge: Edge<FlowMetaModelRelationData> = {
           id: `edge-${connectionDragState.sourceNodeId}-${targetNode.id}-${Date.now()}`,
           source: connectionDragState.sourceNodeId,
           target: targetNode.id,
@@ -787,6 +777,9 @@ export const FlowCanvas = forwardRef<{
             targetMetaModelSourceId: getMetaModelSourceIdForNode(targetNode.id),
           }
         };
+
+        // Also add the edge to the vsum details store
+        addReactionEdgeToVsumDetails(newEdge);
 
         console.log('🎯 Creating edge:', newEdge);
         addEdge(newEdge);
@@ -1126,7 +1119,7 @@ export const FlowCanvas = forwardRef<{
       }
     }, [nodes, onEcoreFileSelect]);
 
-    const handleEcoreFileExpand = useCallback((fileName: string, fileContent: string) => {
+    const handleEcoreFileExpand = useCallback((fileName: string, fileContent: string, backendMetaModelId: number) => {
       const ecoreNode = nodes.find(
         n => n.type === 'ecoreFile' && n.data.fileName === fileName
       );
@@ -1142,7 +1135,7 @@ export const FlowCanvas = forwardRef<{
         setNodes(updatedNodes);
       }
 
-      onEcoreFileExpand?.(fileName, fileContent);
+      onEcoreFileExpand?.(fileName, fileContent, backendMetaModelId);
     }, [nodes, setNodes, onEcoreFileExpand]);
 
     const resetExpandedFile = useCallback(() => {

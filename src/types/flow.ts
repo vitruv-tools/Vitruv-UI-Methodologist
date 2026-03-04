@@ -4,6 +4,11 @@ import { Node, Edge } from "reactflow";
 export type FlowNodeECoreData = {
   model: string;
   eObjectId: string;
+  eAttributeIds: string[];
+  eReferenceIds: string[];
+  eOperationIds: string[];
+  eAnnotationIds: string[];
+  eSuperTypeIds: string[];
 };
 
 export interface FlowNode extends Node {
@@ -17,6 +22,10 @@ export interface FlowNode extends Node {
   };
 }
 
+export type UMLNode = FlowNode & { 
+  data: { backendMetaModelId: number } 
+};
+
 export type FlowEdgeECoreData = {
   eReferenceId?: string;
   eObjectSourceId: string;
@@ -29,7 +38,6 @@ export type FlowEdgeData = {
   relationshipType: string;
   targetMultiplicity?: string;
   ecore?: FlowEdgeECoreData;
-  reactionNodeIdNumber?: number;
   labelX?: number;
   labelY?: number;
 };

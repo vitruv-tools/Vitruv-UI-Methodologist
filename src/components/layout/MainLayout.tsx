@@ -13,12 +13,14 @@ import {
     StoredDocumentMeta,
     disableVsumHandles,
     enableVsumHandles,
+    getBackendMetaModelId,
 } from '../../utils/flowUtils';
 import { Node, Edge, ReactFlowProvider } from 'reactflow';
 import { User } from '../../services/auth';
 import { WorkspaceSnapshot, WorkspaceSnapshotRequest } from '../../types/workspace';
 import { MainContext } from '../../contexts/MainContext';
-import { disableReactionHandles, enableReactionHandles } from '../../utils/reactionUtils';
+import { disableReactionHandles, enableReactionHandles } from '../../utils/ReactionUtils';
+import { ActiveVsumDetails } from '../../store/VsumDetails';
 
 const ENABLE_RESIZE = false;   // <- keep false to prevent any user resizing
 const HEADER_HEIGHT = 48;
@@ -219,7 +221,8 @@ export function MainLayout({
 
             console.log('➕ Adding expanded metamodel:', meta?.fileName);
 
-            handleEcoreFileExpand(meta?.fileName!, fileContent, false, false); 
+            const backendMetaModelId = getBackendMetaModelId(meta?.metaModelId, meta?.metaModelSourceId);
+            handleEcoreFileExpand(meta?.fileName!, fileContent, backendMetaModelId!, false, false); 
         } else {
             // Check if file already exists to prevent duplicates
             const existingNodes = flowCanvasRef.current?.getNodes?.() || [];
@@ -346,10 +349,10 @@ export function MainLayout({
         globalThis.addEventListener('vitruv.addFileToWorkspace', handleAddFileToWorkspace as EventListener);
         globalThis.addEventListener('vitruv.resetWorkspace', handleResetWorkspace as EventListener);
         const handleExpandFileInWorkspace = (e: Event) => {
-            const customEvent = e as CustomEvent<{ fileName: string; fileContent: string }>;
+            const customEvent = e as CustomEvent<{ fileName: string; fileContent: string, backendMetaModelId: number }>;
             const detail = customEvent.detail;
             if (!detail) return;
-            handleEcoreFileExpand(detail.fileName, detail.fileContent);
+            handleEcoreFileExpand(detail.fileName, detail.fileContent, detail.backendMetaModelId);
         };
         globalThis.addEventListener('vitruv.expandFileInWorkspace', handleExpandFileInWorkspace as EventListener);
         return () => {
@@ -397,7 +400,7 @@ export function MainLayout({
         }
     }, []);
 
-    const handleEcoreFileExpand = useCallback((fileName: string, fileContent: string, cacheWorkspaceSnapshot: boolean = true, remountCanvas: boolean = true) => {
+    const handleEcoreFileExpand = useCallback((fileName: string, fileContent: string, backendMetaModelId: number, cacheWorkspaceSnapshot: boolean = true, remountCanvas: boolean = true) => {
         if (mode !== 'expanded' && mode !== 'reactions') {
             handleExpandedModeSwitch('expanded');
         }
@@ -434,7 +437,12 @@ export function MainLayout({
         }
 
         // Prefer UML generator; fall back to previous parsers
-        let diagramData = generateUMLFromEcoreTsParser(fileName, fileContent);
+        let diagramData = generateUMLFromEcoreTsParser(fileName, fileContent, backendMetaModelId);
+
+        const activeVsumDetails = new ActiveVsumDetails();
+        activeVsumDetails.setIdentifiersToEObjectMap(diagramData.identifiersToEObject, remountCanvas);
+        activeVsumDetails.save();
+
         if (!diagramData.nodes.length) {
             // TODO(DEREIFAB): I dont support this fallback as of now
             Object.assign(diagramData, parseEcoreFile(fileContent));

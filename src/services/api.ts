@@ -2,6 +2,7 @@ import { AuthService } from './auth';
 import { FlowData } from '../types/flow';
 import { ApiResponse, Vsum, VsumDetails } from '../types/vsum';
 import { LowCodeReactionMetadataResponse } from "../types/LowCodeReactionMetadataResponse";
+import { createVsumDetailsStore } from '../store/VsumDetails';
 
 class ApiService {
   private readonly baseURL = process.env.REACT_APP_BACKEND_URL;
@@ -563,7 +564,9 @@ class ApiService {
    * vSUMS: Get details
    */
   async getVsumDetails(id: number | string): Promise<ApiResponse<VsumDetails>> {
-    return this.authenticatedRequest(`/api/v1/vsums/${id}/details`);
+    const vsumDetails = await this.authenticatedRequest<ApiResponse<VsumDetails>>(`/api/v1/vsums/${id}/details`);
+    createVsumDetailsStore(id, vsumDetails.data);
+    return vsumDetails;
   }
 
   /**

@@ -3,6 +3,7 @@ import type { MainContextType } from "../contexts/MainContext";
 import { FlowData, OnEdgeClickParams, OnEdgeClickParamsExtension } from "../types/flow";
 import { onEdgeClick as umlOnEdgeClick } from '../components/flow/UMLRelationship';
 import { onEdgeClick as reactionsOnEdgeClick } from '../components/flow/ReactionRelationship';
+import { disableReactionSourceHandles, enableReactionSourceHandles, enableReactionTargetHandles } from "./ReactionUtils";
 
 export const exportFlowData = (nodes: Node[], edges: Edge[]): FlowData => {
   return {
@@ -186,19 +187,15 @@ export function onConnectStart(
   // This is only needed due to our outdated React Flow version lacking proper onConnectEnd parameters
   setCurrentConnectionStartParams(params);
   if (mainContext?.mode === "reactions") {
-    setHandlePointerEvents("reaction", "source", "none");
-    setHandlePointerEvents("reaction", "target", "auto");
-    setHandleOpacity("reaction", "source", 0);
-    setHandleOpacity("reaction", "target", 1);
+    disableReactionSourceHandles();
+    enableReactionTargetHandles();
   }
 }
 
 export function onConnectEnd(mainContext: MainContextType, event: MouseEvent | TouchEvent): void {
   if (mainContext?.mode === "reactions") {
-    setHandlePointerEvents("reaction", "source", "auto");
-    setHandlePointerEvents("reaction", "target", "none");
-    setHandleOpacity("reaction", "source", 1);
-    setHandleOpacity("reaction", "target", 0);
+    enableReactionSourceHandles();
+    enableReactionTargetHandles();
   }
 }
 
@@ -227,4 +224,15 @@ export const eventHandlers = {
     uml: umlOnEdgeClick,
     'fine-granular-reaction': reactionsOnEdgeClick
   }
+}
+
+// This weird snippet of code was extracted from FlowCanvas so it can be reused inside EcoreFileBox.
+export function getBackendMetaModelId(metaModelId?: any, metaModelSourceId?: any): number | undefined {
+  if (metaModelId !== undefined && typeof metaModelId === 'number') {
+    return metaModelId;
+  }
+  if (metaModelSourceId !== undefined && typeof metaModelSourceId === 'number') {
+    return metaModelSourceId;
+  }
+  return undefined;
 }

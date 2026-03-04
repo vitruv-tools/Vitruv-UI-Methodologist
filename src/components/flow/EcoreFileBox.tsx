@@ -1,5 +1,6 @@
 import React, { useState, useRef } from 'react';
 import { NodeProps } from 'reactflow';
+import { getBackendMetaModelId } from '../../utils';
 import { ConfirmDialog } from '../ui/ConfirmDialog';
 import { ConnectionHandle } from './ConnectionHandle';
 
@@ -12,7 +13,7 @@ interface EdgeDistributionData {
 interface EcoreFileBoxData {
   fileName: string;
   fileContent: string;
-  onExpand: (fileName: string, fileContent: string) => void;
+  onExpand: (fileName: string, fileContent: string, backendMetaModelId: number) => void;
   onSelect: (fileName: string) => void;
   onDelete?: (id: string) => void;
   onRename?: (id: string, newFileName: string) => void;
@@ -24,6 +25,8 @@ interface EcoreFileBoxData {
   domain?: string;
   createdAt?: string;
   edgeDistribution?: Map<'top' | 'bottom' | 'left' | 'right', EdgeDistributionData[]>;
+  metaModelId?: number;
+  metaModelSourceId?: number;
 }
 
 type HandlePosition = 'top' | 'bottom' | 'left' | 'right';
@@ -321,6 +324,8 @@ export const EcoreFileBox: React.FC<NodeProps<EcoreFileBoxData>> = ({
     keywords,
     createdAt,
     edgeDistribution,
+    metaModelId,
+    metaModelSourceId,
   } = data;
 
   const boxRef = useRef<HTMLDivElement>(null);
@@ -333,7 +338,12 @@ export const EcoreFileBox: React.FC<NodeProps<EcoreFileBoxData>> = ({
 
   const handleDoubleClick = (e: React.MouseEvent) => {
     e.stopPropagation();
-    onExpand(fileName, fileContent);
+    const backendMetaModelId = getBackendMetaModelId(metaModelId, metaModelSourceId);
+    if (backendMetaModelId == null) {
+      console.warn(`Cannot expand Ecore file "${fileName}" because meta-model ID is missing.`);
+      return;
+    }
+    onExpand(fileName, fileContent, backendMetaModelId);
   };
 
   const handleDeleteClick = (e: React.MouseEvent) => {
@@ -402,7 +412,12 @@ export const EcoreFileBox: React.FC<NodeProps<EcoreFileBoxData>> = ({
       onSelect(fileName);
     } else if (e.key === ' ') {
       e.preventDefault();
-      onExpand(fileName, fileContent);
+      const backendMetaModelId = getBackendMetaModelId(metaModelId, metaModelSourceId);
+      if (backendMetaModelId == null) {
+        console.warn(`Cannot expand Ecore file "${fileName}" because meta-model ID is missing.`);
+        return;
+      }
+      onExpand(fileName, fileContent, backendMetaModelId);
     }
   };
 

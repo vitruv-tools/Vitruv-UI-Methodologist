@@ -1,5 +1,9 @@
+import { EObject } from 'ecore-ts';
 import React, { useState, useRef, useEffect } from 'react';
 import { NodeProps, Handle, Position } from 'reactflow';
+import { ActiveVsumDetails } from '../../store/VsumDetails';
+import { FlowNodeECoreData } from '../../types';
+import { buildAttributeSignature, buildMethodSignature } from '../../utils/UMLFromEcoreTS';
 import {
   getBaseNodeStyle,
   headerBaseStyle,
@@ -28,6 +32,7 @@ interface UMLNodeData {
   methods?: string[];
   values?: string[];
   packageName?: string;
+  ecore?: FlowNodeECoreData;
 }
 
 interface EditableFieldProps {
@@ -180,6 +185,47 @@ const DeleteButton: React.FC<DeleteButtonProps> = ({
     ×
   </button>
 );
+
+export function renderLines(eObjectIds: string[], isConnectable: boolean, buildSignature: (attr: EObject, index: number) => string) {
+  const identifiersToEObjects = new ActiveVsumDetails().getIdentifiersToEObjectMap();
+  const eObjects = eObjectIds.map(id => { return  { id: id, eObject: identifiersToEObjects.get(id) }}).filter(kv => kv.eObject !== undefined) as Array<{ id: string, eObject: EObject }>;
+  return (<div style={{ position: 'relative', width: '100%' }}>
+      {eObjects.map(({ id, eObject }, index) => (
+        <div key={id} style={listItemStyle}>
+          {buildSignature(eObject, index)}
+          {/* TODO(Reinbold): The handle needs to know what it is for. EAttribute? EReference? */}
+          <Handle 
+            type="target" 
+            position={Position.Left} 
+            isConnectable={isConnectable}
+            id={`reaction-${index}-left-target-${id}`}
+            className="uml reaction-handle"
+          />
+          <Handle 
+            type="source" 
+            position={Position.Left} 
+            isConnectable={isConnectable}
+            id={`reaction-${index}-left-source-${id}`}
+            className="uml reaction-handle"
+          />
+          <Handle 
+            type="target" 
+            position={Position.Right} 
+            isConnectable={isConnectable}
+            id={`reaction-${index}-right-target-${id}`}
+            className="uml reaction-handle"
+          />
+          <Handle 
+            type="source" 
+            position={Position.Right} 
+            isConnectable={isConnectable}
+            id={`reaction-${index}-right-source-${id}`}
+            className="uml reaction-handle"
+          />
+        </div>
+      ))}
+    </div>);
+}
 
 // Removed unused SectionHeader, ClassHeader and EditableList subcomponents
 
@@ -401,28 +447,28 @@ function EditableField({
         type="target" 
         position={Position.Left} 
         isConnectable={true}
-        id={`reaction-${id}-left-target`}
+        id={`reaction-left-target-${id}`}
         className="uml reaction-handle"
       />
       <Handle 
         type="source" 
         position={Position.Left} 
         isConnectable={true}
-        id={`reaction-${id}-left-source`}
+        id={`reaction-left-source-${id}`}
         className="uml reaction-handle"
       />
       <Handle 
         type="target" 
         position={Position.Right} 
         isConnectable={true}
-        id={`reaction-${id}-right-target`}
+        id={`reaction-right-target-${id}`}
         className="uml reaction-handle"
       />
       <Handle 
         type="source" 
         position={Position.Right} 
         isConnectable={true}
-        id={`reaction-${id}-right-source`}
+        id={`reaction-right-source-${id}`}
         className="uml reaction-handle"
       />
     </div>
@@ -430,10 +476,10 @@ function EditableField({
 }
 
 // Main Component
-export function EditableNode({ id, data, selected, isConnectable }: NodeProps<UMLNodeData>) {
+export function EditableNode({ id, data, selected, isConnectable }: NodeProps<UMLNodeData & FlowNodeECoreData>) {
   const nodeData = data || {};
 
-  const updateNodeData = (updates: Partial<UMLNodeData>) => {
+  const updateNodeData = (updates: Partial<UMLNodeData & FlowNodeECoreData>) => {
     console.log('Node data update:', updates);
   };
 
@@ -469,45 +515,6 @@ export function EditableNode({ id, data, selected, isConnectable }: NodeProps<UM
     return baseStyle;
   };
 
-  const renderLines = (items: string[]) => (
-    <div style={{ position: 'relative', width: '100%' }}>
-      {items.map((text, index) => (
-        <div key={`${text}-${index}`} style={listItemStyle}>
-          {text}
-          {/* TODO(Reinbold): The handle needs to know what it is for. EAttribute? EReference? */}
-          <Handle 
-            type="target" 
-            position={Position.Left} 
-            isConnectable={isConnectable}
-            id={`reaction-${id}-${index}-left-target`}
-            className="uml reaction-handle"
-          />
-          <Handle 
-            type="source" 
-            position={Position.Left} 
-            isConnectable={isConnectable}
-            id={`reaction-${id}-${index}-left-source`}
-            className="uml reaction-handle"
-          />
-          <Handle 
-            type="target" 
-            position={Position.Right} 
-            isConnectable={isConnectable}
-            id={`reaction-${id}-${index}-right-target`}
-            className="uml reaction-handle"
-          />
-          <Handle 
-            type="source" 
-            position={Position.Right} 
-            isConnectable={isConnectable}
-            id={`reaction-${id}-${index}-right-source`}
-            className="uml reaction-handle"
-          />
-        </div>
-      ))}
-    </div>
-  );
-
   const renderUMLClass = () => (
     <div style={{ width: '100%' }}>
       {selected && (
@@ -517,7 +524,7 @@ export function EditableNode({ id, data, selected, isConnectable }: NodeProps<UM
       {/* Class Name Section */}
       <div style={headerBaseStyle}>
         <EditableField
-          id={`${id}-className`}
+          id={data.ecore!.eObjectId!}
           value={nodeData.className || ''}
           onSave={(newValue) => updateNodeData({ className: newValue })}
           placeholder="Class Name"
@@ -533,14 +540,14 @@ export function EditableNode({ id, data, selected, isConnectable }: NodeProps<UM
       {/* Attributes Section */}
       {nodeData.attributes && nodeData.attributes.length > 0 && (
         <div style={borderedSectionBodyStyle}>
-          {renderLines(nodeData.attributes)}
+          {renderLines(nodeData.ecore?.eAttributeIds || [], isConnectable, buildAttributeSignature)}
         </div>
       )}
       
       {/* Methods Section */}
       {nodeData.methods && nodeData.methods.length > 0 && (
         <div style={sectionBodyStyle}>
-          {renderLines(nodeData.methods)}
+          {renderLines(nodeData.ecore?.eOperationIds || [], isConnectable, buildMethodSignature)}
         </div>
       )}
     </div>
@@ -557,7 +564,7 @@ export function EditableNode({ id, data, selected, isConnectable }: NodeProps<UM
         <span style={{ fontSize: '10px', fontWeight: 'normal' }}>&lt;&lt;abstract&gt;&gt;</span>
         {' '}
         <EditableField
-          id={`${id}-abstractClassName`}
+          id={data.ecore!.eObjectId!}
           value={nodeData.className || ''}
           onSave={(newValue) => updateNodeData({ className: newValue })}
           placeholder="Abstract Class Name"
@@ -573,13 +580,13 @@ export function EditableNode({ id, data, selected, isConnectable }: NodeProps<UM
       
       {nodeData.attributes && nodeData.attributes.length > 0 && (
         <div style={borderedSectionBodyStyle}>
-          {renderLines(nodeData.attributes)}
+          {renderLines(nodeData.ecore?.eAttributeIds || [], isConnectable, buildAttributeSignature)}
         </div>
       )}
       
       {nodeData.methods && nodeData.methods.length > 0 && (
         <div style={sectionBodyStyle}>
-          {renderLines(nodeData.methods)}
+          {renderLines(nodeData.ecore?.eOperationIds || [], isConnectable, buildMethodSignature)}
         </div>
       )}
     </div>
@@ -596,7 +603,7 @@ export function EditableNode({ id, data, selected, isConnectable }: NodeProps<UM
         <span style={{ fontSize: '10px', fontWeight: 'normal' }}>&lt;&lt;interface&gt;&gt;</span>
         {' '}
         <EditableField
-          id={`${id}-interfaceName`}
+          id={data.ecore!.eObjectId!}
           value={nodeData.className || ''}
           onSave={(newValue) => updateNodeData({ className: newValue })}
           placeholder="Interface Name"
@@ -612,7 +619,7 @@ export function EditableNode({ id, data, selected, isConnectable }: NodeProps<UM
       
       {nodeData.methods && nodeData.methods.length > 0 && (
         <div style={sectionBodyStyle}>
-          {renderLines(nodeData.methods)}
+          {renderLines(nodeData.ecore?.eOperationIds || [], isConnectable, buildMethodSignature)}
         </div>
       )}
     </div>
@@ -643,11 +650,11 @@ export function EditableNode({ id, data, selected, isConnectable }: NodeProps<UM
         />
       </div>
       
-      {nodeData.values && nodeData.values.length > 0 && (
+      {/* {nodeData.values && nodeData.values.length > 0 && (
         <div style={sectionBodyStyle}>
-          {renderLines(nodeData.values)}
+          {renderLines(nodeData.ecore?.eValueIds || [], isConnectable, buildValueSignature)}
         </div>
-      )}
+      )} */}
     </div>
   );
 

@@ -1,5 +1,5 @@
-import { FlowEdge, FlowNode } from "../types/flow";
-import { EObject, EReference, EAttribute, ResourceSet, XMI } from "ecore-ts";
+import { FlowEdge, UMLNode } from "../types/flow";
+import { EObject, EReference, EAttribute, ResourceSet, XMI, EPackage, EClass, EString, EOperation, EAnnotation } from "ecore-ts";
 import { UMLRelationshipTypes } from "../components/flow/UMLRelationship";
 import { applyIntelligentLayout } from "./umlGenerator";
 
@@ -14,7 +14,7 @@ function getAllContents(
   // Prefer nsURI if available for unique identification, otherwise use name-based path
   let currentPath = eObject.get<string>("nsURI");
   if (currentPath == null) {
-    if (eObject.eClass.get("name") === "EClass") {
+    if (eObject.eClass.get("name") === EClass.get<string>("name")) {
       currentPath = `${prefix}::${eObject.get("name")}`;
     } else {
       // Fallback to generic separator for non-class elements
@@ -71,24 +71,11 @@ type HandleSelection = {
 };
 
 type ClassBuildResult = {
-  nodes: FlowNode[];
+  nodes: UMLNode[];
   classNameToNodeId: Map<string, string>;
   classNameToEObject: Map<string, EObject>;
   nextNodeId: number;
 };
-
-/**
- * Returns structural features of a class that are relevant for UML generation.
- */
-function getStructuralFeatures(cls: EObject): EObject[] {
-  return cls
-    .eContents()
-    .filter((e: EObject) =>
-      [EAttribute.get("name"), EReference.get("name")].includes(
-        e.eClass.get("name")
-      )
-    ) as EObject[];
-}
 
 /**
  * Normalizes Ecore type references by removing path/hash prefixes.
@@ -100,12 +87,12 @@ function sanitizeTypeReference(value: string): string {
 /**
  * Builds a UML attribute signature from an EAttribute EObject.
  */
-function buildAttributeSignature(attr: EObject, index: number): string {
+export function buildAttributeSignature(attr: EObject, index: number): string {
   const attrName = attr.get<string>("name") || `attr${index + 1}`;
   const eType =
-    (attr.get<EObject>("eType")?.eClass as EObject).get<string>("name") ||
+    (attr.get<EObject>("eType") as EObject)?.get<string>("name") ||
     attr.get<string>("type") ||
-    "EString";
+    EString.get<string>("name")!;
   const typeName = sanitizeTypeReference(eType);
   const lower = attr.get<string>("lowerBound");
   const upper = attr.get<string>("upperBound");
@@ -120,15 +107,52 @@ function buildAttributeSignature(attr: EObject, index: number): string {
   return `+ ${attrName}: ${typeName}${multiplicity}`;
 }
 
+export function buildMethodSignature(op: EObject, index: number): string {
+  throw new Error("Method signature generation not implemented yet");
+}
+
+function getEAttributes(cls: EObject): EObject[] {
+  return cls
+    .eContents()
+    .filter((e: EObject) =>
+      e.eClass.get("name") === EAttribute.get<string>("name")
+    ) as EObject[];
+}
+
+function getEReferences(cls: EObject): EObject[] {
+  return cls
+    .eContents()
+    .filter((e: EObject) =>
+      e.eClass.get("name") === EReference.get<string>("name")
+    ) as EObject[];
+}
+
+function getEOperations(cls: EObject): EObject[] {
+ return cls
+    .eContents()
+    .filter((e: EObject) =>
+      e.eClass.get("name") === EOperation.get<string>("name")
+    ) as EObject[];
+}
+
+function getEAnnotations(cls: EObject): EObject[] {
+ return cls
+    .eContents()
+    .filter((e: EObject) =>
+      e.eClass.get("name") === EAnnotation.get<string>("name")
+    ) as EObject[];
+}
+
+function getESuperTypes(cls: EObject): EObject[] {
+  return cls.get<EObject[]>("eSuperTypes") ?? [];
+}
+
 /**
  * Extracts UML-formatted attributes from an EClass EObject.
  */
 function getClassAttributes(cls: EObject): string[] {
   const attributes: string[] = [];
-  getStructuralFeatures(cls).forEach((feature, index) => {
-    if (feature.eClass.get("name") !== EAttribute.get("name")) {
-      return;
-    }
+  getEAttributes(cls).forEach((feature, index) => {
     attributes.push(buildAttributeSignature(feature, index));
   });
   return attributes;
@@ -157,16 +181,17 @@ function buildClassNodes(
   classElems: EObject[],
   ecoreName: string,
   eObjectUniqueIdentifiers: Map<EObject, string>,
-  startNodeId: number
+  startNodeId: number,
+  backendMetaModelId: number,
 ): ClassBuildResult {
-  const nodes: FlowNode[] = [];
+  const nodes: UMLNode[] = [];
   const classNameToNodeId = new Map<string, string>();
   const classNameToEObject = new Map<string, EObject>();
   let nodeId = startNodeId;
 
   classElems.forEach((cls, idx) => {
     const className = cls.get<string>("name") || `Class${idx + 1}`;
-    const node: FlowNode = {
+    const node: UMLNode = {
       id: `${ecoreName}-uml-class-${nodeId++}`,
       type: "editable",
       position: { x: 0, y: 0 },
@@ -174,6 +199,11 @@ function buildClassNodes(
         ecore: {
           model: ecoreName,
           eObjectId: eObjectUniqueIdentifiers.get(cls!),
+          eAttributeIds: getEAttributes(cls).map((attr) => eObjectUniqueIdentifiers.get(attr)!),
+          eReferenceIds: getEReferences(cls).map((ref) => eObjectUniqueIdentifiers.get(ref)!),
+          eOperationIds: getEOperations(cls).map((op) => eObjectUniqueIdentifiers.get(op)!),
+          eAnnotationIds: getEAnnotations(cls).map((ann) => eObjectUniqueIdentifiers.get(ann)!),
+          eSuperTypeIds: getESuperTypes(cls).map((superType) => eObjectUniqueIdentifiers.get(superType)!),
         },
         label: className,
         toolType: "element",
@@ -181,8 +211,9 @@ function buildClassNodes(
         diagramType: "uml",
         className,
         attributes: getClassAttributes(cls),
+        backendMetaModelId,
       },
-    } as FlowNode;
+    } as UMLNode;
 
     nodes.push(node);
     classNameToNodeId.set(className, node.id);
@@ -196,7 +227,7 @@ function buildClassNodes(
  * Chooses source and target handles based on relative node angle.
  */
 function chooseHandlesForNodes(
-  nodes: FlowNode[],
+  nodes: UMLNode[],
   sourceId: string,
   targetId: string
 ): HandleSelection {
@@ -256,7 +287,7 @@ function resolveTargetMultiplicity(
  */
 function createAssociationEdges(
   classElems: EObject[],
-  nodes: FlowNode[],
+  nodes: UMLNode[],
   ecoreName: string,
   classNameToNodeId: Map<string, string>,
   classNameToEObject: Map<string, EObject>,
@@ -273,11 +304,7 @@ function createAssociationEdges(
       return;
     }
 
-    getStructuralFeatures(cls).forEach((ref) => {
-      if (ref.eClass.get("name") !== EReference.get("name")) {
-        return;
-      }
-
+    getEReferences(cls).forEach((ref) => {
       const eType = ref.get<EObject>("eType")?.get<string>("name") || "";
       const targetType = sanitizeTypeReference(eType);
       const targetId = classNameToNodeId.get(targetType || "");
@@ -327,11 +354,11 @@ function createAssociationEdges(
  */
 function createGeneralizationEdges(
   classElems: EObject[],
-  nodes: FlowNode[],
+  nodes: UMLNode[],
   ecoreName: string,
   classNameToNodeId: Map<string, string>,
   eObjectUniqueIdentifiers: Map<EObject, string>,
-  startNodeId: number
+  startNodeId: number,
 ): { edges: FlowEdge[]; nextNodeId: number } {
   const edges: FlowEdge[] = [];
   let nodeId = startNodeId;
@@ -381,18 +408,19 @@ function createGeneralizationEdges(
  * Prepends an optional package node to the UML node list.
  */
 function addPackageNode(
-  nodes: FlowNode[],
+  nodes: UMLNode[],
   ecoreName: string,
   packageName: string,
   rootPackage: EObject | undefined,
   eObjectUniqueIdentifiers: Map<EObject, string>,
-  startNodeId: number
+  startNodeId: number,
+  backendMetaModelId: number,
 ): number {
   if (nodes.length === 0) {
     return startNodeId;
   }
 
-  const pkgNode: FlowNode = {
+  const pkgNode: UMLNode = {
     id: `${ecoreName}-uml-pkg-${startNodeId}`,
     type: "editable",
     position: { x: 80, y: 40 },
@@ -400,14 +428,20 @@ function addPackageNode(
       ecore: {
         model: ecoreName,
         eObjectId: eObjectUniqueIdentifiers.get(rootPackage!),
+        eAttributeIds: getEAttributes(rootPackage!).map((attr) => eObjectUniqueIdentifiers.get(attr)!),
+        eReferenceIds: getEReferences(rootPackage!).map((ref) => eObjectUniqueIdentifiers.get(ref)!),
+        eOperationIds: getEOperations(rootPackage!).map((op) => eObjectUniqueIdentifiers.get(op)!),
+        eAnnotationIds: getEAnnotations(rootPackage!).map((ann) => eObjectUniqueIdentifiers.get(ann)!),
+        eSuperTypeIds: getESuperTypes(rootPackage!).map((superType) => eObjectUniqueIdentifiers.get(superType)!),
       },
       label: packageName,
       toolType: "element",
       toolName: "package",
       packageName,
       diagramType: "uml",
+      backendMetaModelId,
     },
-  } as FlowNode;
+  } as UMLNode;
 
   nodes.unshift(pkgNode);
   return startNodeId + 1;
@@ -416,7 +450,7 @@ function addPackageNode(
 /**
  * Recomputes all edge handles after layout updates node positions.
  */
-function recalculateEdgeHandles(nodes: FlowNode[], edges: FlowEdge[]) {
+function recalculateEdgeHandles(nodes: UMLNode[], edges: FlowEdge[]) {
   edges.forEach((edge) => {
     const handles = chooseHandlesForNodes(nodes, edge.source, edge.target);
     edge.sourceHandle = handles.sourceHandle;
@@ -447,9 +481,10 @@ function buildIdentifierToEObjectMap(
  */
 export function generateUMLFromEcoreTsParser(
   ecoreName: string,
-  ecoreContent: string
+  ecoreContent: string,
+  backendMetaModelId: number,
 ): {
-  nodes: FlowNode[];
+  nodes: UMLNode[];
   edges: FlowEdge[];
   identifiersToEObject: Map<string, EObject>;
 } {
@@ -464,11 +499,11 @@ export function generateUMLFromEcoreTsParser(
 
     const rootPackage = resource
       .eContents()
-      .find((e: EObject) => e.eClass.get("name") === "EPackage") as EObject |
+      .find((e: EObject) => e.eClass.get("name") === EPackage.get<string>("name")) as EObject |
       undefined;
     const packageName = rootPackage?.get<string>("name") || "Package";
     const classElems = allContents.filter(
-      (e) => e.eClass.get("name") === "EClass"
+      (e) => e.eClass.get("name") === EClass.get<string>("name")
     );
 
     const {
@@ -476,7 +511,7 @@ export function generateUMLFromEcoreTsParser(
       classNameToNodeId,
       classNameToEObject,
       nextNodeId,
-    } = buildClassNodes(classElems, ecoreName, eObjectUniqueIdentifiers, nodeId);
+    } = buildClassNodes(classElems, ecoreName, eObjectUniqueIdentifiers, nodeId, backendMetaModelId);
     nodeId = nextNodeId;
 
     const associations = createAssociationEdges(
@@ -511,7 +546,8 @@ export function generateUMLFromEcoreTsParser(
       packageName,
       rootPackage,
       eObjectUniqueIdentifiers,
-      nodeId
+      nodeId,
+      backendMetaModelId
     );
 
     const identifiersToEObject = buildIdentifierToEObjectMap(

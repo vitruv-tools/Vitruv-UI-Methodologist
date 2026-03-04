@@ -13,14 +13,14 @@ export function GhostNode({ id }: NodeProps) {
         type="target" 
         position={Position.Left} 
         isConnectable={true}
-        id={`reaction-${id}-0-left-target`}
+        id={`reaction-0-left-target-${id}`}
         className="uml reaction-handle"
       />
       <Handle 
         type="source" 
         position={Position.Left} 
         isConnectable={true}
-        id={`reaction-${id}-1-left-source`}
+        id={`reaction-1-left-source-${id}`}
         className="uml reaction-handle"
       />
     </div>

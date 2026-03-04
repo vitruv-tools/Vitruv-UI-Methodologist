@@ -1,6 +1,5 @@
 import { useCallback, useState, useEffect } from 'react';
 import { useNodesState, useEdgesState, Connection, Edge, Node, NodeChange } from 'reactflow';
-import { FlowEdge, FlowNode } from '../types';
 import { useUndoRedo } from './useUndoRedo';
 import { createFineGranularReactionEdge } from '../utils/FineGranularReactionUtils';
 

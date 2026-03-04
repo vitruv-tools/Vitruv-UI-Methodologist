@@ -1,4 +1,7 @@
+import { Edge } from "reactflow";
+import { ActiveVsumDetails, NoActiveVsum, NoVsumDetailsStore } from "../store/VsumDetails";
 import { FlowNode, FlowEdge } from "../types";
+import { FlowMetaModelRelationData } from "../types/FlowMetaModelRelationData";
 import { setHandlePointerEvents, setHandleOpacity } from "./flowUtils";
 
 export function isReactionGhostNode(node: FlowNode): boolean {
@@ -15,28 +18,12 @@ export function recalculateNodesOnEdgesForReactions(
   );
 
   let anyNodeChange = false;
-  let anyEdgeChange = false;
-  let nextReactionNodeIdNumber: number | null = null;
   for (const edge of currentEdges) {
-    if (edge.data?.ecore === undefined) {
+    if (edge.data?.ecore?.eReferenceId === undefined) {
       continue;
     }
 
-    let reactionNodeId: string = "";
-    if (edge.data?.reactionNodeIdNumber !== undefined) {
-      reactionNodeId = `reaction-ghost-${edge.data!.reactionNodeIdNumber}`;
-    } else {
-      nextReactionNodeIdNumber ??= currentEdges
-        .filter((edge) => edge.data!.reactionNodeIdNumber !== undefined)
-        .map<number>((edge) => edge.data!.reactionNodeIdNumber!)
-        .reduce((acc: number, curr: number) => (curr > acc ? curr : acc), -1);
-      nextReactionNodeIdNumber++;
-      if (edge.data) {
-        edge.data.reactionNodeIdNumber = nextReactionNodeIdNumber;
-        anyEdgeChange = true;
-      }
-      reactionNodeId = `reaction-ghost-${nextReactionNodeIdNumber}`;
-    }
+    let reactionNodeId: string = edge.data.ecore.eReferenceId!;
     let node = currentNodes.find((n) => n.id === reactionNodeId);
     if (!node) {
       console.log(
@@ -50,8 +37,13 @@ export function recalculateNodesOnEdgesForReactions(
           label: "",
           ecore: {
             model: edge.data.ecore!.fromModel!,
-            eObjectId: edge.data.ecore!.eObjectSourceId!
-          }
+            eObjectId: edge.data.ecore!.eReferenceId!,
+            eAttributeIds: [],
+            eReferenceIds: [],
+            eOperationIds: [],
+            eAnnotationIds: [],
+            eSuperTypeIds: [],
+          },
         },
       };
       newNodes.push(newNode);
@@ -75,20 +67,66 @@ export function recalculateNodesOnEdgesForReactions(
   }
 
   let nodesToReturn = anyNodeChange ? newNodes : currentNodes;
-  let edgesToReturn = anyEdgeChange ? [...currentEdges] : currentEdges;
-  return { currentNodes: nodesToReturn, currentEdges: edgesToReturn };
+  return { currentNodes: nodesToReturn, currentEdges: currentEdges };
+}
+
+export function addReactionEdgeToVsumDetails(
+  edge: Edge<FlowMetaModelRelationData>,
+) {
+  if (
+    edge.data?.sourceMetaModelId == null ||
+    edge.data?.targetMetaModelId == null
+  ) {
+    console.warn(
+      `Cannot add Edge ${edge.id} to VSUM details. ${edge.data?.sourceMetaModelId === undefined ? "Missing sourceMetaModelId." : ""} ${edge.data?.targetMetaModelId === undefined ? "Missing targetMetaModelId." : ""}`,
+    );
+    return;
+  }
+
+  try {
+    const activeVsumDetails = new ActiveVsumDetails();
+    activeVsumDetails.addMetaModelRelation({
+      id: null,
+      sourceId: edge.data!.sourceMetaModelId!,
+      targetId: edge.data!.targetMetaModelId!,
+      fineGranularMetaModelRelationSet: [],
+    });
+    activeVsumDetails.save();
+  } catch (error) {
+    if (error instanceof NoActiveVsum || error instanceof NoVsumDetailsStore) {
+      console.warn(error);
+      return;
+    }
+    throw error;
+  }
 }
 
 export function enableReactionHandles() {
-  setHandlePointerEvents("reaction", "source", "auto");
-  setHandlePointerEvents("reaction", "target", "auto");
-  setHandleOpacity("reaction", "source", 1);
-  setHandleOpacity("reaction", "target", 1);
+  enableReactionSourceHandles();
+  enableReactionTargetHandles();
 }
 
 export function disableReactionHandles() {
+  disableReactionSourceHandles();
+  disableReactionTargetHandles();
+}
+
+export function enableReactionSourceHandles() {
+  setHandlePointerEvents("reaction", "source", "auto");
+  setHandleOpacity("reaction", "source", 1);
+}
+
+export function disableReactionSourceHandles() {
   setHandlePointerEvents("reaction", "source", "none");
-  setHandlePointerEvents("reaction", "target", "none");
   setHandleOpacity("reaction", "source", 0);
+}
+
+export function enableReactionTargetHandles() {
+  setHandlePointerEvents("reaction", "target", "auto");
+  setHandleOpacity("reaction", "target", 1);
+}
+
+export function disableReactionTargetHandles() {
+  setHandlePointerEvents("reaction", "target", "none");
   setHandleOpacity("reaction", "target", 0);
 }
