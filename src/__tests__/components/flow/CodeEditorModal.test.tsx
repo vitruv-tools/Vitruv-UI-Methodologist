@@ -62,7 +62,7 @@ describe('CodeEditorModal', () => {
     expect(screen.getByText(/Edge ID: edge-123/i)).toBeInTheDocument();
   });
 
-  it('calls onSave and then onClose when Save is clicked', async () => {
+  it('calls onSave when Save is clicked and shows success feedback', async () => {
     const onSave = jest.fn().mockResolvedValue(undefined);
     const onClose = jest.fn();
 
@@ -79,7 +79,8 @@ describe('CodeEditorModal', () => {
     await waitFor(() => {
       expect(onSave).toHaveBeenCalledWith('initial code');
     });
-    expect(onClose).toHaveBeenCalled();
+    // Modal stays open after save - onClose is NOT called automatically
+    expect(onClose).not.toHaveBeenCalled();
   });
 
   it('shows error dialog if save fails', async () => {
