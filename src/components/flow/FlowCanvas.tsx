@@ -613,7 +613,25 @@ export const FlowCanvas = forwardRef<{
       return () => document.removeEventListener('keydown', handleKeyDown);
     }, [undo, redo, canUndo, canRedo, reactFlowInstance, removeNode, removeEdge, selectedFileId, onEcoreFileDelete]);
 
-    const handleConnectionEnd = useCallback((e: MouseEvent) => {
+
+    const buildInitialReactionCode = useCallback((sourceNodeId: string, targetNodeId: string): string => {
+      const sourceNode = nodes.find(n => n.id === sourceNodeId);
+      const targetNode = nodes.find(n => n.id === targetNodeId);
+
+      const getEPackageName = (node: Node | undefined) => {
+        const match = node?.data?.fileContent?.match(/<ecore:EPackage[^>]+name="([^"]+)"/);
+        return match?.[1] ?? node?.data?.fileName?.replace('.ecore', '') ?? 'source';
+      };
+
+      const sourcePackageName = getEPackageName(sourceNode);
+      const targetPackageName = getEPackageName(targetNode);
+      const sourceUri = sourceNode?.data?.nsUri ?? `http://vitruv.tools/${sourcePackageName}`;
+      const targetUri = targetNode?.data?.nsUri ?? `http://vitruv.tools/${targetPackageName}`;
+
+      return `import "${sourceUri}" as ${sourcePackageName}\nimport "${targetUri}" as ${targetPackageName}\n\nreactions: ${sourcePackageName}To${targetPackageName}\nin reaction to changes in ${sourcePackageName}\nexecute actions in ${targetPackageName}\n\n`;
+    }, [nodes]);
+
+    const handleConnectionEnd = useCallback(async (e: MouseEvent) => {
       console.log('handleConnectionEnd CALLED');
 
       if (!reactFlowInstance || !connectionDragState?.isActive || !connectionDragState.sourceNodeId) {
@@ -641,7 +659,6 @@ export const FlowCanvas = forwardRef<{
         const targetNode = intersectingNodes[0];
         console.log('✅ Connection ended on node:', targetNode.id);
 
-        // Check if edge in THIS DIRECTION already exists (allow bidirectional)
         const existingEdge = edges.find(edge =>
           edge.source === connectionDragState.sourceNodeId && edge.target === targetNode.id
         );
@@ -656,7 +673,6 @@ export const FlowCanvas = forwardRef<{
         const targetNodePos = targetNode.position;
 
         let targetHandle: HandlePosition = 'left';
-
         if (sourceNodePos && targetNodePos) {
           targetHandle = calculateTargetHandle(sourceNodePos, targetNodePos);
         }
@@ -668,18 +684,40 @@ export const FlowCanvas = forwardRef<{
 
         const color = getColorForPair(connectionDragState.sourceNodeId, targetNode.id);
 
+        const edgeId = `edge-${connectionDragState.sourceNodeId}-${targetNode.id}-${Date.now()}`;
+        const uniquePadding = ' '.repeat(Math.floor(Math.random() * 50) + 1);
+        const initialContent = buildInitialReactionCode(connectionDragState.sourceNodeId, targetNode.id) + uniquePadding;
+        const fileName = `reaction-${Date.now()}-${Math.random().toString(36).slice(2)}.reactions`;
+        const file = new File([initialContent], fileName, { type: 'text/plain;charset=utf-8' });
+
+        let reactionFileId: number | null = null;
+        try {
+          const uploadResult = await apiService.uploadFile(file, 'REACTION');
+          const raw = uploadResult?.data as any;
+          reactionFileId = typeof raw === 'number' ? raw
+            : typeof raw === 'string' ? Number(raw) || null
+              : typeof raw?.id === 'number' ? raw.id
+                : null;
+
+          if (reactionFileId == null) {
+            console.error('❌ Upload succeeded but no file ID returned');
+          } else {
+            console.log('✅ Reaction file created for new edge:', edgeId, 'fileId:', reactionFileId);
+          }
+        } catch (err) {
+          console.error('Failed to create reaction file for new edge:', err);
+        }
+
         const newEdge: Edge = {
-          id: `edge-${connectionDragState.sourceNodeId}-${targetNode.id}-${Date.now()}`,
+          id: edgeId,
           source: connectionDragState.sourceNodeId,
           target: targetNode.id,
           sourceHandle: connectionDragState.sourceHandle,
           targetHandle: targetHandle,
           type: 'reactions',
-          style: {
-            stroke: color,
-            strokeWidth: 2,
-          },
+          style: { stroke: color, strokeWidth: 2 },
           data: {
+            reactionFileId,
             sourceMetaModelId: getBackendMetaModelIdForNode(connectionDragState.sourceNodeId),
             targetMetaModelId: getBackendMetaModelIdForNode(targetNode.id),
             sourceMetaModelSourceId: getMetaModelSourceIdForNode(connectionDragState.sourceNodeId),
@@ -694,7 +732,8 @@ export const FlowCanvas = forwardRef<{
       }
 
       setConnectionDragState(null);
-    }, [reactFlowInstance, nodes, edges, addEdge, connectionDragState, getColorForPair, isPositionInsideNode, calculateTargetHandle, getBackendMetaModelIdForNode, getMetaModelSourceIdForNode]);
+    }, [reactFlowInstance, nodes, edges, addEdge, connectionDragState, getColorForPair, isPositionInsideNode, calculateTargetHandle, getBackendMetaModelIdForNode, getMetaModelSourceIdForNode, buildInitialReactionCode]);
+
 
     const handleConnectionMove = useCallback((e: MouseEvent) => {
       if (!reactFlowInstance) return;
@@ -725,8 +764,6 @@ export const FlowCanvas = forwardRef<{
       // Add listeners to both document and globalThis for cross-browser compatibility
       document.addEventListener('pointermove', handleMove, captureOptions);
       document.addEventListener('pointerup', handleEnd, captureOptions);
-      globalThis.addEventListener('pointermove', handleMove, captureOptions);
-      globalThis.addEventListener('pointerup', handleEnd, captureOptions);
 
       document.body.style.cursor = 'crosshair';
 
@@ -744,26 +781,10 @@ export const FlowCanvas = forwardRef<{
       const edge = edges.find(e => e.id === edgeId);
       if (!edge) return;
 
-      const getEPackageName = (nodeId: string): string | null => {
-        const node = nodes.find(n => n.id === nodeId);
-        if (!node || node.type !== 'ecoreFile') return null;
-
-        const ecoreContent = node.data.fileContent;
-        if (!ecoreContent) return null;
-
-        // search for: <ecore:EPackage name="DER_NAME_HIER">
-        const nameMatch = ecoreContent.match(/<ecore:EPackage[^>]+name="([^"]+)"/);
-        return nameMatch ? nameMatch[1] : null;
-      };
-
       const getFileName = (nodeId: string) => {
         const node = nodes.find(n => n.id === nodeId);
         return node?.type === 'ecoreFile' ? node.data.fileName : undefined;
       };
-
-      // Hole Source und Target Nodes um nsUri und fileName zu extrahieren
-      const sourceNode = nodes.find(n => n.id === edge.source);
-      const targetNode = nodes.find(n => n.id === edge.target);
 
       let initialCode = edge.data?.code || '';
       const reactionFileId = edge.data?.reactionFileId;
@@ -777,25 +798,7 @@ export const FlowCanvas = forwardRef<{
       }
 
       if (!initialCode || initialCode.trim() === '') {
-        const sourceFileName = getFileName(edge.source);
-        const targetFileName = getFileName(edge.target);
-
-        const sourcePackageName = getEPackageName(edge.source) || sourceFileName?.replace('.ecore', '') || 'source';
-        const targetPackageName = getEPackageName(edge.target) || targetFileName?.replace('.ecore', '') || 'target';
-
-        const sourceUri = sourceNode?.data?.nsUri || `http://vitruv.tools/${sourcePackageName}`;
-        const targetUri = targetNode?.data?.nsUri || `http://vitruv.tools/${targetPackageName}`;
-
-        const reactionsName = `${sourcePackageName}To${targetPackageName}`;
-
-        initialCode = `import "${sourceUri}" as ${sourcePackageName}
-import "${targetUri}" as ${targetPackageName}
-
-reactions: ${reactionsName}
-in reaction to changes in ${sourcePackageName}
-execute actions in ${targetPackageName}
-
-`;
+        initialCode = buildInitialReactionCode(edge.source, edge.target);
       }
 
       setCodeEditorState({
@@ -806,7 +809,7 @@ execute actions in ${targetPackageName}
         targetFileName: getFileName(edge.target),
         reactionFileId,
       });
-    }, [edges, nodes]);
+    }, [edges, nodes, buildInitialReactionCode]);
 
     const handleCloseCodeEditor = useCallback(() => {
       setCodeEditorState(null);
@@ -839,7 +842,7 @@ execute actions in ${targetPackageName}
       };
 
       try {
-        const fileName = `reaction-${edgeId}-${Date.now()}.reactions`;
+        const fileName = `reaction-${Date.now()}-${Math.random().toString(36).slice(2)}.reactions`;
         const file = new File([code], fileName, { type: 'text/plain;charset=utf-8' });
 
         let reactionFileId = codeEditorState.reactionFileId ?? null;
