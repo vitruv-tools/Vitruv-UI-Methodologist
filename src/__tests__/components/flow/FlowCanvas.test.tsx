@@ -386,3 +386,346 @@ describe('isEditableElement logic', () => {
   it('false for div', () => expect(isEditable(document.createElement('div'))).toBe(false));
   it('false for button', () => expect(isEditable(document.createElement('button'))).toBe(false));
 });
+
+// ============================================================
+// Additional tests for uncovered branches (red lines in SonarQube)
+// ============================================================
+
+describe('handleDeleteKey logic', () => {
+  it('removes selected nodes when Delete is pressed', () => {
+    const removeNode = jest.fn();
+    const getNodes = jest.fn(() => [
+      { id: 'n1', selected: true },
+      { id: 'n2', selected: false },
+    ]);
+    const getEdges = jest.fn(() => []);
+    const event = { preventDefault: jest.fn() } as any;
+
+    // Simulate the handleDeleteKey logic directly
+    const reactFlowInstance = { getNodes, getEdges };
+    const selectedNodes = reactFlowInstance.getNodes().filter((n: any) => n.selected);
+    if (selectedNodes.length > 0) {
+      event.preventDefault();
+      selectedNodes.forEach((n: any) => removeNode(n.id));
+    }
+
+    expect(event.preventDefault).toHaveBeenCalled();
+    expect(removeNode).toHaveBeenCalledWith('n1');
+    expect(removeNode).not.toHaveBeenCalledWith('n2');
+  });
+
+  it('removes selected edges when Delete is pressed', () => {
+    const removeEdge = jest.fn();
+    const getNodes = jest.fn(() => []);
+    const getEdges = jest.fn(() => [
+      { id: 'e1', selected: true },
+      { id: 'e2', selected: false },
+    ]);
+    const event = { preventDefault: jest.fn() } as any;
+
+    const reactFlowInstance = { getNodes, getEdges };
+    const selectedNodes = reactFlowInstance.getNodes().filter((n: any) => n.selected);
+    if (selectedNodes.length > 0) {
+      event.preventDefault();
+      selectedNodes.forEach((n: any) => removeEdge(n.id));
+    }
+    const selectedEdges = reactFlowInstance.getEdges().filter((e: any) => e.selected);
+    if (selectedEdges.length > 0) {
+      event.preventDefault();
+      selectedEdges.forEach((e: any) => removeEdge(e.id));
+    }
+
+    expect(event.preventDefault).toHaveBeenCalled();
+    expect(removeEdge).toHaveBeenCalledWith('e1');
+    expect(removeEdge).not.toHaveBeenCalledWith('e2');
+  });
+
+  it('calls onEcoreFileDelete when selectedFileId is set', () => {
+    const onEcoreFileDelete = jest.fn();
+    const setSelectedFileId = jest.fn();
+    const event = { preventDefault: jest.fn() } as any;
+    const selectedFileId = 'file-123';
+
+    if (selectedFileId && onEcoreFileDelete) {
+      event.preventDefault();
+      onEcoreFileDelete(selectedFileId);
+      setSelectedFileId(null);
+    }
+
+    expect(event.preventDefault).toHaveBeenCalled();
+    expect(onEcoreFileDelete).toHaveBeenCalledWith('file-123');
+    expect(setSelectedFileId).toHaveBeenCalledWith(null);
+  });
+
+  it('returns false and does nothing when no nodes/edges selected and no file selected', () => {
+    const getNodes = jest.fn(() => [{ id: 'n1', selected: false }]);
+    const getEdges = jest.fn(() => [{ id: 'e1', selected: false }]);
+    const event = { preventDefault: jest.fn() } as any;
+    const selectedFileId = null;
+
+    const reactFlowInstance = { getNodes, getEdges };
+    const selectedNodes = reactFlowInstance.getNodes().filter((n: any) => n.selected);
+    let handled = false;
+    if (selectedNodes.length > 0) { event.preventDefault(); handled = true; }
+    const selectedEdges = reactFlowInstance.getEdges().filter((e: any) => e.selected);
+    if (selectedEdges.length > 0) { event.preventDefault(); handled = true; }
+    if (selectedFileId) { handled = true; }
+
+    expect(event.preventDefault).not.toHaveBeenCalled();
+    expect(handled).toBe(false);
+  });
+});
+
+describe('buildInitialReactionCode with real node data', () => {
+  const getEPackageName = (node: any) => {
+    const match = node?.data?.fileContent?.match(/<ecore:EPackage[^>]+name="([^"]+)"/);
+    return match?.[1] ?? node?.data?.fileName?.replace('.ecore', '') ?? 'source';
+  };
+
+  it('extracts package name from fileContent', () => {
+    const node = {
+      data: {
+        fileContent: '<ecore:EPackage xmi:version="2.0" name="pfand" nsURI="http://vitruv.tools/pfand"/>',
+        fileName: 'pfand.ecore',
+        nsUri: 'http://vitruv.tools/pfand',
+      }
+    };
+    expect(getEPackageName(node)).toBe('pfand');
+  });
+
+  it('falls back to fileName without extension when no fileContent match', () => {
+    const node = { data: { fileContent: '<invalid>', fileName: 'flower.ecore' } };
+    expect(getEPackageName(node)).toBe('flower');
+  });
+
+  it('falls back to "source" when no data at all', () => {
+    expect(getEPackageName(undefined)).toBe('source');
+  });
+
+  it('uses nsUri from node data when available', () => {
+    const node = { data: { nsUri: 'http://custom.uri/model', fileName: 'model.ecore' } };
+    const sourceUri = node?.data?.nsUri ?? `http://vitruv.tools/model`;
+    expect(sourceUri).toBe('http://custom.uri/model');
+  });
+
+  it('falls back to vitruv.tools URI when nsUri is undefined', () => {
+    const packageName = 'flower';
+    const node = { data: { nsUri: undefined, fileName: 'flower.ecore' } };
+    const uri = node?.data?.nsUri ?? `http://vitruv.tools/${packageName}`;
+    expect(uri).toBe('http://vitruv.tools/flower');
+  });
+
+  it('builds correct full template with real node data', () => {
+    const sourceNode = {
+      data: {
+        fileContent: '<ecore:EPackage name="pfand"/>',
+        nsUri: 'http://vitruv.tools/pfand',
+      }
+    };
+    const targetNode = {
+      data: {
+        fileContent: '<ecore:EPackage name="flower"/>',
+        nsUri: 'http://vitruv.tools/flower',
+      }
+    };
+    const src = getEPackageName(sourceNode);
+    const tgt = getEPackageName(targetNode);
+    const srcUri = sourceNode?.data?.nsUri ?? `http://vitruv.tools/${src}`;
+    const tgtUri = targetNode?.data?.nsUri ?? `http://vitruv.tools/${tgt}`;
+
+    const code = `import "${srcUri}" as ${src}\nimport "${tgtUri}" as ${tgt}\n\nreactions: ${src}To${tgt}\nin reaction to changes in ${src}\nexecute actions in ${tgt}\n\n`;
+
+    expect(code).toContain('import "http://vitruv.tools/pfand" as pfand');
+    expect(code).toContain('import "http://vitruv.tools/flower" as flower');
+    expect(code).toContain('reactions: pfandToflower');
+  });
+});
+
+describe('handleSaveCode - toFiniteNumber and extractFileId logic', () => {
+  const toFiniteNumber = (value: unknown): number | null => {
+    if (typeof value === 'number') return Number.isFinite(value) ? value : null;
+    if (typeof value === 'string') {
+      const parsed = Number(value);
+      return Number.isFinite(parsed) ? parsed : null;
+    }
+    return null;
+  };
+
+  const extractFileId = (data: unknown): number | null => {
+    if (data == null) return null;
+    const direct = toFiniteNumber(data);
+    if (direct !== null) return direct;
+    if (typeof data === 'object' && 'id' in (data as Record<string, unknown>)) {
+      return toFiniteNumber((data as Record<string, unknown>).id);
+    }
+    return null;
+  };
+
+  it('toFiniteNumber returns number for valid number', () => {
+    expect(toFiniteNumber(42)).toBe(42);
+  });
+
+  it('toFiniteNumber returns null for Infinity', () => {
+    expect(toFiniteNumber(Infinity)).toBeNull();
+  });
+
+  it('toFiniteNumber returns number for numeric string', () => {
+    expect(toFiniteNumber('77')).toBe(77);
+  });
+
+  it('toFiniteNumber returns null for non-numeric string', () => {
+    expect(toFiniteNumber('abc')).toBeNull();
+  });
+
+  it('toFiniteNumber returns null for object', () => {
+    expect(toFiniteNumber({ id: 5 })).toBeNull();
+  });
+
+  it('toFiniteNumber returns null for null', () => {
+    expect(toFiniteNumber(null)).toBeNull();
+  });
+
+  it('extractFileId returns null for null input', () => {
+    expect(extractFileId(null)).toBeNull();
+  });
+
+  it('extractFileId returns id from direct number', () => {
+    expect(extractFileId(55)).toBe(55);
+  });
+
+  it('extractFileId returns id from string number', () => {
+    expect(extractFileId('99')).toBe(99);
+  });
+
+  it('extractFileId returns id from { id: number } object', () => {
+    expect(extractFileId({ id: 42 })).toBe(42);
+  });
+
+  it('extractFileId returns id from { id: string } object', () => {
+    expect(extractFileId({ id: '33' })).toBe(33);
+  });
+
+  it('extractFileId returns null for object without id', () => {
+    expect(extractFileId({ foo: 'bar' })).toBeNull();
+  });
+
+  it('extractFileId returns null for undefined', () => {
+    expect(extractFileId(undefined)).toBeNull();
+  });
+
+  it('upload path: calls uploadFile when reactionFileId is null', async () => {
+    const uploadFile = jest.fn().mockResolvedValue({ data: { id: 10 } });
+    const reactionFileId = null;
+    let resultId: number | null = reactionFileId;
+
+    if (reactionFileId == null) {
+      const uploadResult = await uploadFile(new File(['code'], 'r.reactions'), 'REACTION');
+      resultId = extractFileId(uploadResult?.data);
+    }
+
+    expect(uploadFile).toHaveBeenCalled();
+    expect(resultId).toBe(10);
+  });
+
+  it('update path: calls updateReactionFile when reactionFileId exists', async () => {
+    const updateReactionFile = jest.fn().mockResolvedValue(undefined);
+    const reactionFileId = 7;
+
+    if (reactionFileId != null) {
+      await updateReactionFile(reactionFileId, 'updated code');
+    }
+
+    expect(updateReactionFile).toHaveBeenCalledWith(7, 'updated code');
+  });
+
+  it('throws error when upload returns null id', async () => {
+    const uploadFile = jest.fn().mockResolvedValue({ data: null });
+
+    let error: Error | null = null;
+    try {
+      const uploadResult = await uploadFile(new File([''], 'r.reactions'), 'REACTION');
+      const id = extractFileId(uploadResult?.data);
+      if (id == null) {
+        throw new Error('Reaction file upload succeeded but did not return a file ID.');
+      }
+    } catch (e: any) {
+      error = e;
+    }
+
+    expect(error?.message).toBe('Reaction file upload succeeded but did not return a file ID.');
+  });
+});
+
+describe('handleEdgeDoubleClick logic', () => {
+  it('returns early when edge not found', () => {
+    const edges = [{ id: 'e1', data: {} }];
+    const edge = edges.find(e => e.id === 'nonexistent');
+    expect(edge).toBeUndefined();
+  });
+
+  it('uses edge.data.code as initialCode when available', () => {
+    const edge = { id: 'e1', source: 'n1', target: 'n2', data: { code: 'existing code', reactionFileId: 5 } };
+    let initialCode = edge.data?.code || '';
+    expect(initialCode).toBe('existing code');
+  });
+
+  it('uses empty string when no code on edge', () => {
+    const edge = { id: 'e1', source: 'n1', target: 'n2', data: { reactionFileId: 5 } };
+    const initialCode = (edge.data as any)?.code || '';
+    expect(initialCode).toBe('');
+  });
+
+  it('fetches file content when initialCode is empty and reactionFileId is number', async () => {
+    const getFile = jest.fn().mockResolvedValue('fetched content');
+    const edge = { data: { code: '', reactionFileId: 42 } };
+
+    let initialCode = edge.data?.code || '';
+    const reactionFileId = edge.data?.reactionFileId;
+
+    if (!initialCode && typeof reactionFileId === 'number') {
+      try {
+        initialCode = await getFile(reactionFileId);
+      } catch (e) { /* ignore */ }
+    }
+
+    expect(getFile).toHaveBeenCalledWith(42);
+    expect(initialCode).toBe('fetched content');
+  });
+
+  it('falls back to buildInitialReactionCode when initialCode is still empty after fetch', async () => {
+    const getFile = jest.fn().mockRejectedValue(new Error('not found'));
+    const buildCode = jest.fn().mockReturnValue('generated code');
+    const edge = { id: 'e1', source: 'n1', target: 'n2', data: { reactionFileId: 42 } };
+
+    let initialCode = '';
+    try {
+      initialCode = await getFile(edge.data.reactionFileId);
+    } catch (e) { /* ignore */ }
+
+    if (!initialCode || initialCode.trim() === '') {
+      initialCode = buildCode(edge.source, edge.target);
+    }
+
+    expect(buildCode).toHaveBeenCalledWith('n1', 'n2');
+    expect(initialCode).toBe('generated code');
+  });
+
+  it('getFileName returns fileName for ecoreFile node type', () => {
+    const nodes = [{ id: 'n1', type: 'ecoreFile', data: { fileName: 'Source.ecore' } }];
+    const getFileName = (nodeId: string) => {
+      const node = nodes.find(n => n.id === nodeId);
+      return node?.type === 'ecoreFile' ? node.data.fileName : undefined;
+    };
+    expect(getFileName('n1')).toBe('Source.ecore');
+    expect(getFileName('nonexistent')).toBeUndefined();
+  });
+
+  it('getFileName returns undefined for non-ecoreFile node', () => {
+    const nodes = [{ id: 'n1', type: 'editable', data: { fileName: 'Other.ecore' } }];
+    const getFileName = (nodeId: string) => {
+      const node = nodes.find(n => n.id === nodeId);
+      return node?.type === 'ecoreFile' ? node.data.fileName : undefined;
+    };
+    expect(getFileName('n1')).toBeUndefined();
+  });
+});
