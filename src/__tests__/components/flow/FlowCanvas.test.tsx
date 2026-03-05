@@ -4,20 +4,36 @@ import { FlowCanvas } from '../../../components/flow/FlowCanvas';
 import { apiService } from '../../../services/api';
 
 jest.mock('reactflow', () => {
-  const actual = jest.requireActual('reactflow');
+  const MockReactFlow = ({ children }: any) => (
+    <div data-testid="react-flow">{children}</div>
+  );
   return {
-    ...actual,
-    default: jest.fn(({ children }: any) => (
-      <div data-testid="react-flow">{children}</div>
-    )),
+    __esModule: true,
+    default: MockReactFlow,
+    ReactFlow: MockReactFlow,
     MiniMap: () => <div data-testid="minimap" />,
     Background: () => <div data-testid="background" />,
+    Controls: () => <div data-testid="controls" />,
+    Handle: ({ children }: any) => <div>{children}</div>,
+    Position: { Left: 'left', Right: 'right', Top: 'top', Bottom: 'bottom' },
+    MarkerType: { ArrowClosed: 'arrowclosed', Arrow: 'arrow' },
+    ConnectionMode: { Loose: 'loose', Strict: 'strict' },
     useReactFlow: () => ({
       screenToFlowPosition: jest.fn(() => ({ x: 100, y: 100 })),
       getNodes: jest.fn(() => []),
       getEdges: jest.fn(() => []),
       fitView: jest.fn(),
+      project: jest.fn((pos: any) => pos),
     }),
+    useNodes: jest.fn(() => []),
+    useEdges: jest.fn(() => []),
+    useStore: jest.fn(() => ({})),
+    applyNodeChanges: jest.fn((changes: any, nodes: any) => nodes),
+    applyEdgeChanges: jest.fn((changes: any, edges: any) => edges),
+    addEdge: jest.fn((edge: any, edges: any) => [...edges, edge]),
+    getBezierPath: jest.fn(() => ['M0,0', 0, 0, 0, 0]),
+    getStraightPath: jest.fn(() => ['M0,0', 0, 0]),
+    getSimpleBezierPath: jest.fn(() => ['M0,0', 0, 0, 0, 0]),
   };
 });
 
@@ -363,7 +379,7 @@ describe('isDeleteKey logic', () => {
 
 describe('isEditableElement logic', () => {
   const isEditable = (el: Element) =>
-    el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || (el as HTMLElement).isContentEditable;
+    el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || (el as HTMLElement).isContentEditable === true;
 
   it('true for input', () => expect(isEditable(document.createElement('input'))).toBe(true));
   it('true for textarea', () => expect(isEditable(document.createElement('textarea'))).toBe(true));
