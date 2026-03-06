@@ -26,7 +26,7 @@ import { LowCodeReactionEditor } from './lowcode/LowCodeReactionEditor';
 import { EcoreFileBox, EcoreFileBoxData } from './EcoreFileBox';
 import { ConnectionLine } from './ConnectionLine';
 import { CodeEditorModal } from './CodeEditorModal';
-import { apiService, MetaModelRelationRequest } from '../../services/api';
+import { apiService } from '../../services/api';
 import { WorkspaceSnapshot } from '../../types/workspace';
 import { FlowEcoreEdge, FlowEdge, FlowNode } from '../../types';
 import {
@@ -34,7 +34,6 @@ import {
 } from '../../utils/BoundingBoxUtils';
 import type { EdgeValidator } from './EdgeValidator';
 import { LowCodeReactionEdgeValidator } from './lowcode/LowCodeReactionEdgeValidator';
-import { MainContext } from '../../contexts/MainContext';
 import { onConnect, isValidConnection, onConnectStart, onConnectEnd, onReconnect, onReconnectEnd, onEdgesDelete, onEdgeClick, getBackendMetaModelId } from '../../utils';
 import type { EObject } from 'ecore-ts';
 import { UmlEdgeDetails } from './UMLEdgeDetails';
@@ -47,6 +46,7 @@ import { FlowMetaModelRelationData } from '../../types/FlowMetaModelRelationData
 import { useSelectedEdgeStore } from '../../store/SelectedEdge';
 import { ActiveVsumDetails } from '../../store/ActiveVsumDetails';
 import { NoVsumDetailsStoreError } from '../../store/NoVsumDetailsStoreError';
+import { useProjectStore } from '../../store/Project';
 
 const COLOR_LIST = [
   '#ab1c91ff', '#ff7f0e', '#2ca02c', '#d62728', '#9467bd',
@@ -208,7 +208,6 @@ export const FlowCanvas = forwardRef<{
     projectId,
     onReactionFilesChange,
   }, ref) => {
-    const mainContext = useContext(MainContext);
     const reactFlowWrapper = useRef<HTMLDivElement>(null);
     const [reactFlowInstance, setReactFlowInstance] = useState<ReactFlowInstance | null>(null);
     const [isDragOver, setIsDragOver] = useState(false);
@@ -231,7 +230,7 @@ export const FlowCanvas = forwardRef<{
     const [currentConnectionStartParams, setCurrentConnectionStartParams] = useState<OnConnectStartParams | null>(null);
     const [umlDetailsConfig, setUmlDetailsConfig] = useState<Partial<UMLEdgeDetailsConfig>>(loadFromStorage(DEFAULT_STORAGE_KEY));
     const { selectedEdge, setSelectedEdge } = useSelectedEdgeStore();
-
+    const { mode, reactionFiles } = useProjectStore();
 
     const edgeValidators: EdgeValidator[] = [new LowCodeReactionEdgeValidator()];
 
@@ -337,7 +336,7 @@ export const FlowCanvas = forwardRef<{
     }, [reactFlowInstance, setEdges, updateEdgeHandles]);
 
     const recalculateAfterNodeChange = useCallback((currentNodes: FlowNode[], currentEdges: FlowEdge[]) => {
-      if (mainContext?.mode === 'expanded' || mainContext?.mode === 'reactions') {
+      if (mode === 'expanded' || mode === 'reactions') {
         currentNodes = recalculateBoundingBoxes(false, currentNodes);
       }
       currentEdges = recalculateEdgeHandles(currentNodes, currentEdges);
@@ -355,7 +354,7 @@ export const FlowCanvas = forwardRef<{
       );
       
       if (finishedDragging) {
-        if (mainContext?.mode === 'reactions') {
+        if (mode === 'reactions') {
           enableReactionHandles();
         }
 
@@ -369,7 +368,7 @@ export const FlowCanvas = forwardRef<{
             setEdges(currentEdges);
           }, 100, reactFlowInstance!);
       } else if (changes.some((c) => ["add", "remove"].includes(c.type))) {
-        if (mainContext?.mode === 'expanded' || mainContext?.mode === 'reactions') {
+        if (mode === 'expanded' || mode === 'reactions') {
           setTimeout((rfi: typeof reactFlowInstance, rearrange: boolean) => { 
             let currentNodes = rfi!.getNodes() as FlowNode[];
             let currentEdges = rfi!.getEdges() as FlowEdge[];
@@ -381,7 +380,7 @@ export const FlowCanvas = forwardRef<{
         }
       } else if (changes.some((c) => c.type === 'dimensions' && !c.resizing)) {
         // Dimension change without resizing happens if nodes are programmatically added
-        if (mainContext?.mode === 'expanded' || mainContext?.mode === 'reactions') {
+        if (mode === 'expanded' || mode === 'reactions') {
           setTimeout((rfi: typeof reactFlowInstance, rearrange: boolean) => { 
             let currentNodes = rfi!.getNodes() as FlowNode[];
             let currentEdges = rfi!.getEdges() as FlowEdge[];
@@ -398,7 +397,7 @@ export const FlowCanvas = forwardRef<{
         //   let currentNodes = rfi!.getNodes() as FlowNode[];
         //   let currentEdges = rfi!.getEdges() as FlowEdge[];
         //   currentNodes = recalculateBoundingBoxes(rearrange, currentNodes);
-        //   if (mainContext?.mode === 'reactions') {
+        //   if (mode === 'reactions') {
         //     ({ currentNodes, currentEdges } = recalculateNodesOnEdgesForReactions(currentNodes, currentEdges));
         //   }
         //   setNodes(currentNodes);
@@ -407,7 +406,7 @@ export const FlowCanvas = forwardRef<{
         // }, 250, reactFlowInstance!, true);
 
         // Cheap alternative, just hide reaction handles while dragging:
-        if (mainContext?.mode === 'reactions') {
+        if (mode === 'reactions') {
           disableReactionHandles();
         }
       }
@@ -852,7 +851,7 @@ export const FlowCanvas = forwardRef<{
       if (!edge.data?.reactionFileId) {
         const source = nodes.find(n => n.id === edge.source)!;
         const target = nodes.find(n => n.id === edge.target)!;
-        for (const reactionFile of Array.from(mainContext!.reactionFiles.values())) {
+        for (const reactionFile of Array.from(reactionFiles.values())) {
           if (reactionFile.fromModel === source.data.ecore?.model && reactionFile.toModel === target.data.ecore?.model) {
             edge.data ??= {};
             edge.data!.reactionFileId = reactionFile.id;
@@ -2172,9 +2171,9 @@ const handleEdgeReorderRequest = useCallback((edgeId: string, controlPoint: { x:
             setNodes(nds => nds.map(n => ({ ...n, selected: false })));
             setEdges(eds => eds.map(e => ({ ...e, selected: false })));
           }}
-          isValidConnection={isValidConnection.bind(null, mainContext, edgeValidators, nodes, edges)}
-          onConnectStart={onConnectStart.bind(null, mainContext, setCurrentConnectionStartParams)}
-          onConnectEnd={onConnectEnd.bind(null, mainContext)}
+          isValidConnection={isValidConnection.bind(null, edgeValidators, nodes, edges)}
+          onConnectStart={onConnectStart.bind(null, setCurrentConnectionStartParams)}
+          onConnectEnd={onConnectEnd.bind(null)}
           onReconnect={onReconnect}
           onReconnectEnd={onReconnectEnd}
           onEdgesDelete={onEdgesDelete}

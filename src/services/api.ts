@@ -1,6 +1,6 @@
 import { AuthService } from './auth';
 import { FlowData } from '../types/flow';
-import { ApiResponse, Vsum, VsumDetails } from '../types/vsum';
+import { ApiResponse, Vsum, VsumDetails, VsumMetaModelRef } from '../types/vsum';
 import { LowCodeReactionMetadataResponse } from "../types/LowCodeReactionMetadataResponse";
 import { createVsumDetailsStore } from '../store/VsumDetails';
 import { EditableFineGranularMetaModelRelation } from '../types/EditableVsumDetails';
@@ -406,7 +406,7 @@ class ApiService {
     pageNumber?: number;
     pageSize?: number;
     ownedByUser?: boolean;
-  }): Promise<{ data: any[]; message: string }> {
+  }): Promise<{ data: VsumMetaModelRef[]; message: string }> {
     // Set default values for pagination
     const pageNumber = filters.pageNumber ?? 0;
     const pageSize = filters.pageSize ?? 50;
@@ -426,7 +426,7 @@ class ApiService {
       pageSize,
     });
 
-    const result = await this.authenticatedRequest<{ data: any[]; message: string }>(endpoint, {
+    const result = await this.authenticatedRequest<{ data: VsumMetaModelRef[]; message: string }>(endpoint, {
       method: 'POST',
       body: JSON.stringify(filters),
     });

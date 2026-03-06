@@ -1,4 +1,4 @@
-import React, { act, ComponentRef, ElementRef, useCallback, useEffect, useRef, useState } from 'react';
+import React, { ComponentRef, useCallback, useEffect, useRef, useState } from 'react';
 import { useLocation } from 'react-router-dom';
 import { Switch } from '@mui/material';
 import { Header } from './Header';
@@ -18,11 +18,11 @@ import {
 import { Node, Edge, ReactFlowProvider } from 'reactflow';
 import { User } from '../../services/auth';
 import { WorkspaceSnapshot, WorkspaceSnapshotRequest } from '../../types/workspace';
-import { MainContext } from '../../contexts/MainContext';
 import { disableReactionHandles, enableReactionHandles } from '../../utils/FineGranularReactionUtils';
 import { ActiveVsumDetails } from "../../store/ActiveVsumDetails";
 import { EditableVsumMetaModelRef } from '../../types/EditableVsumDetails';
 import { VitruvAddFileToWorkspaceEvent } from '../../types/events/VitruvAddFileToWorkspace';
+import { useProjectStore } from '../../store/Project';
 
 const ENABLE_RESIZE = false;   // <- keep false to prevent any user resizing
 const HEADER_HEIGHT = 48;
@@ -106,12 +106,8 @@ export function MainLayout({
     // Cache the workspace snapshot when switching to UML view
     // This ensures we can save relations even when viewing UML
     const [cachedWorkspaceSnapshot, setCachedWorkspaceSnapshot] = useState<WorkspaceSnapshot | null>(null);
-    
-    // Reaction files state - lifted from FlowCanvas to persist across remounts
-    const [reactionFiles, setReactionFiles] = useState<Set<{fromModel: string; toModel: string; id: number}>>(new Set());
 
-    // Workspace or expanded mode
-    const [mode, setMode] = useState<'workspace' | 'expanded' | 'reactions'>('workspace');
+    const { mode, setMode, setReactionFiles } = useProjectStore();
 
     // Start with an empty workspace
     useEffect(() => {
@@ -529,7 +525,6 @@ export function MainLayout({
     // initialize handle states based on current mode
     handleExpandedModeSwitch(mode); 
 
-    const value = React.useMemo(() => ({ mode: mode, reactionFiles: reactionFiles }), [mode, reactionFiles]);
     return (
         <div
             style={{
@@ -697,23 +692,21 @@ export function MainLayout({
                                 </div>
                             </div>
                         ) : (
-                            <MainContext.Provider value={value}>
-                                <ReactFlowProvider>
-                                    <FlowCanvas
-                                        key={`${workspaceKey || 'default-workspace'}-${canvasKey}`}
-                                        onDeploy={onDeploy}
-                                        onDiagramChange={handleDiagramChange}
-                                        ref={flowCanvasRef}
-                                        // ecoreFiles prop entfernt - Nodes sind jetzt Teil von FlowCanvas State
-                                        onEcoreFileSelect={handleEcoreFileSelect}
-                                        onEcoreFileExpand={handleEcoreFileExpand}
-                                        // onEcoreFilePositionChange removed - ReactFlow handles position
-                                        onEcoreFileDelete={handleEcoreFileDelete}
-                                        onEcoreFileRename={handleEcoreFileRename}
-                                        onReactionFilesChange={setReactionFiles}
-                                    />
-                                </ReactFlowProvider>
-                            </MainContext.Provider>
+                            <ReactFlowProvider>
+                                <FlowCanvas
+                                    key={`${workspaceKey || 'default-workspace'}-${canvasKey}`}
+                                    onDeploy={onDeploy}
+                                    onDiagramChange={handleDiagramChange}
+                                    ref={flowCanvasRef}
+                                    // ecoreFiles prop entfernt - Nodes sind jetzt Teil von FlowCanvas State
+                                    onEcoreFileSelect={handleEcoreFileSelect}
+                                    onEcoreFileExpand={handleEcoreFileExpand}
+                                    // onEcoreFilePositionChange removed - ReactFlow handles position
+                                    onEcoreFileDelete={handleEcoreFileDelete}
+                                    onEcoreFileRename={handleEcoreFileRename}
+                                    onReactionFilesChange={setReactionFiles}
+                                />
+                            </ReactFlowProvider>
                         )}
 
                         {/* Back to Workspace button - shown when viewing expanded metamodel */}

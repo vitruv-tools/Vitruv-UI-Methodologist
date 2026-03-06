@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { apiService } from '../../services/api';
+import { VsumMetaModelRef } from '../../types';
 
 interface MetaModelsPanelProps {
   activeVsumId?: number | null;
@@ -164,7 +165,7 @@ export const MetaModelsPanel: React.FC<MetaModelsPanelProps> = ({
   const [sortBy, setSortBy] = useState<'name' | 'date' | 'domain'>('date');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
   const [isLoadingModels, setIsLoadingModels] = useState(false);
-  const [apiModels, setApiModels] = useState<any[]>([]);
+  const [apiModels, setApiModels] = useState<VsumMetaModelRef[]>([]);
   const [apiError, setApiError] = useState<string>('');
   const [showFilters, setShowFilters] = useState(false);
   const [dateFilter, setDateFilter] = useState<'all' | 'today' | 'week' | 'month' | 'year'>('all');

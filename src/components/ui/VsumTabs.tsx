@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { VsumDetails } from '../../types';
 import { apiService, MetaModelRelationRequest } from '../../services/api';
 import { WorkspaceSnapshot } from '../../types/workspace';
-import { projectStore } from '../../store/Project';
+import { useProjectStore } from '../../store/Project';
 import { VsumDetailsHelper } from "../../store/VsumDetails";
 
 const POPUP_STYLES = {
@@ -106,7 +106,7 @@ export const VsumTabs: React.FC<VsumTabsProps> = ({
         };
 
         fetchDetails(activeId);
-        projectStore.setState({ activeId: activeId });
+        useProjectStore.setState({ activeId: activeId });
     }, [activeInstanceId, openTabs, detailsById]);
 
     // ---- keep workspace snapshot in sync (polling) -----------------

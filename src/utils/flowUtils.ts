@@ -1,10 +1,10 @@
 import { Node, Edge, Connection, OnConnectStartParams } from "reactflow";
-import type { MainContextType } from "../contexts/MainContext";
 import { FlowData, FlowEdge } from "../types/flow";
 import { OnEdgeClickParams, OnEdgeClickParamsExtension, OnEdgeDeleteParams } from "../types/EdgeEventHandlers";
 import { onEdgeClick as umlOnEdgeClick } from './UMLUtils';
 import { onEdgeDelete as reactionsOnEdgeDelete } from "./ReactionUtils";
 import { onEdgeClick as fineGranularReactionOnEdgeClick, onEdgeDelete as fineGranularReactionOnEdgeDelete, disableReactionSourceHandles, enableReactionSourceHandles, enableReactionTargetHandles } from './FineGranularReactionUtils';
+import { useProjectStore } from "../store/Project";
 
 export const exportFlowData = (nodes: Node[], edges: Edge[]): FlowData => {
   return {
@@ -160,13 +160,12 @@ export function disableVsumHandles() {
 }
 
 export function isValidConnection(
-  mainContext: MainContextType,
   edgeValidators: any[],
   nodes: Node[],
   edges: Edge[],
   params: Connection,
 ): boolean {
-  edgeValidators = edgeValidators.filter(validator => validator.isApplicable(mainContext));
+  edgeValidators = edgeValidators.filter(validator => validator.isApplicable());
   // TODO(Reinbold): This should be false, but there isnt an edge validator for normal connections yet
   if (edgeValidators.length === 0) {
     console.log("No edge validators applicable, allowing connection by default");
@@ -180,21 +179,20 @@ export function onConnect(onConnectFS: (connection: Connection) => void, connect
 }
 
 export function onConnectStart(
-  mainContext: MainContextType,
   setCurrentConnectionStartParams: (params: OnConnectStartParams) => void,
   event: unknown,
   params: OnConnectStartParams,
 ): void {
   // This is only needed due to our outdated React Flow version lacking proper onConnectEnd parameters
   setCurrentConnectionStartParams(params);
-  if (mainContext?.mode === "reactions") {
+  if (useProjectStore.getState().mode === "reactions") {
     disableReactionSourceHandles();
     enableReactionTargetHandles();
   }
 }
 
-export function onConnectEnd(mainContext: MainContextType, event: MouseEvent | TouchEvent): void {
-  if (mainContext?.mode === "reactions") {
+export function onConnectEnd(event: MouseEvent | TouchEvent): void {
+  if (useProjectStore.getState().mode === "reactions") {
     enableReactionSourceHandles();
     enableReactionTargetHandles();
   }
