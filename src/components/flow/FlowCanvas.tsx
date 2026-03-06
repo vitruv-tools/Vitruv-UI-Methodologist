@@ -631,6 +631,69 @@ export const FlowCanvas = forwardRef<{
       return `import "${sourceUri}" as ${sourcePackageName}\nimport "${targetUri}" as ${targetPackageName}\n\nreactions: ${sourcePackageName}To${targetPackageName}\nin reaction to changes in ${sourcePackageName}\nexecute actions in ${targetPackageName}\n\n`;
     }, [nodes]);
 
+    const resolveReactionFileId = async (raw: any): Promise<number | null> => {
+      if (typeof raw === 'number') return raw;
+      if (typeof raw === 'string') return Number(raw) || null;
+      if (typeof raw?.id === 'number') return raw.id;
+      return null;
+    };
+
+    const uploadReactionFile = useCallback(async (
+      sourceNodeId: string,
+      targetNodeId: string,
+      edgeId: string
+    ): Promise<number | null> => {
+      const uniquePadding = ' '.repeat(Math.floor(Math.random() * 50) + 1);
+      const initialContent = buildInitialReactionCode(sourceNodeId, targetNodeId) + uniquePadding;
+      const fileName = `reaction-${Date.now()}-${Math.random().toString(36).slice(2)}.reactions`;
+      const file = new File([initialContent], fileName, { type: 'text/plain;charset=utf-8' });
+
+      try {
+        const uploadResult = await apiService.uploadFile(file, 'REACTION');
+        const reactionFileId = await resolveReactionFileId(uploadResult?.data);
+        if (reactionFileId == null) {
+          console.error('❌ Upload succeeded but no file ID returned');
+        } else {
+          console.log('✅ Reaction file created for new edge:', edgeId, 'fileId:', reactionFileId);
+        }
+        return reactionFileId;
+      } catch (err) {
+        console.error('Failed to create reaction file for new edge:', err);
+        return null;
+      }
+    }, [buildInitialReactionCode]);
+
+    const buildNewEdge = useCallback((
+      sourceNodeId: string,
+      targetNode: Node,
+      sourceHandle: string,
+      reactionFileId: number | null,
+      color: string
+    ): Edge => {
+      const sourceNodePos = nodes.find(n => n.id === sourceNodeId)?.position;
+      const targetHandle = sourceNodePos
+        ? calculateTargetHandle(sourceNodePos, targetNode.position)
+        : 'left' as HandlePosition;
+
+      const edgeId = `edge-${sourceNodeId}-${targetNode.id}-${Date.now()}`;
+      return {
+        id: edgeId,
+        source: sourceNodeId,
+        target: targetNode.id,
+        sourceHandle,
+        targetHandle,
+        type: 'reactions',
+        style: { stroke: color, strokeWidth: 2 },
+        data: {
+          reactionFileId,
+          sourceMetaModelId: getBackendMetaModelIdForNode(sourceNodeId),
+          targetMetaModelId: getBackendMetaModelIdForNode(targetNode.id),
+          sourceMetaModelSourceId: getMetaModelSourceIdForNode(sourceNodeId),
+          targetMetaModelSourceId: getMetaModelSourceIdForNode(targetNode.id),
+        }
+      };
+    }, [nodes, calculateTargetHandle, getBackendMetaModelIdForNode, getMetaModelSourceIdForNode]);
+
     const handleConnectionEnd = useCallback(async (e: MouseEvent) => {
       console.log('handleConnectionEnd CALLED');
 
@@ -641,17 +704,12 @@ export const FlowCanvas = forwardRef<{
 
       console.log('🔵 Connection drag ended');
 
-      const flowPosition = reactFlowInstance.screenToFlowPosition({
-        x: e.clientX,
-        y: e.clientY,
-      });
-
-      const intersectingNodes = nodes.filter(node => {
-        if (node.type !== 'ecoreFile' || node.id === connectionDragState.sourceNodeId) {
-          return false;
-        }
-        return isPositionInsideNode(flowPosition, node);
-      });
+      const flowPosition = reactFlowInstance.screenToFlowPosition({ x: e.clientX, y: e.clientY });
+      const intersectingNodes = nodes.filter(node =>
+        node.type === 'ecoreFile'
+        && node.id !== connectionDragState.sourceNodeId
+        && isPositionInsideNode(flowPosition, node)
+      );
 
       console.log('🔵 Intersecting nodes:', intersectingNodes);
 
@@ -659,81 +717,29 @@ export const FlowCanvas = forwardRef<{
         const targetNode = intersectingNodes[0];
         console.log('✅ Connection ended on node:', targetNode.id);
 
-        const existingEdge = edges.find(edge =>
+        const alreadyConnected = edges.some(edge =>
           edge.source === connectionDragState.sourceNodeId && edge.target === targetNode.id
         );
 
-        if (existingEdge) {
+        if (!alreadyConnected) {
+          const color = getColorForPair(connectionDragState.sourceNodeId, targetNode.id);
+          const edgeId = `edge-${connectionDragState.sourceNodeId}-${targetNode.id}-${Date.now()}`;
+          const reactionFileId = await uploadReactionFile(connectionDragState.sourceNodeId, targetNode.id, edgeId);
+          const sourceHandle = connectionDragState?.sourceHandle;
+          if (!sourceHandle) return;
+          const newEdge = buildNewEdge(connectionDragState.sourceNodeId, targetNode, sourceHandle, reactionFileId, color);
+
+          console.log('🎯 Creating edge:', newEdge);
+          addEdge(newEdge);
+        } else {
           console.log('⚠️ Connection in this direction already exists');
-          setConnectionDragState(null);
-          return;
         }
-
-        const sourceNodePos = nodes.find(n => n.id === connectionDragState.sourceNodeId)?.position;
-        const targetNodePos = targetNode.position;
-
-        let targetHandle: HandlePosition = 'left';
-        if (sourceNodePos && targetNodePos) {
-          targetHandle = calculateTargetHandle(sourceNodePos, targetNodePos);
-        }
-
-        console.log('🔵 Calculated handles:', {
-          source: connectionDragState.sourceHandle,
-          target: targetHandle
-        });
-
-        const color = getColorForPair(connectionDragState.sourceNodeId, targetNode.id);
-
-        const edgeId = `edge-${connectionDragState.sourceNodeId}-${targetNode.id}-${Date.now()}`;
-        const uniquePadding = ' '.repeat(Math.floor(Math.random() * 50) + 1);
-        const initialContent = buildInitialReactionCode(connectionDragState.sourceNodeId, targetNode.id) + uniquePadding;
-        const fileName = `reaction-${Date.now()}-${Math.random().toString(36).slice(2)}.reactions`;
-        const file = new File([initialContent], fileName, { type: 'text/plain;charset=utf-8' });
-
-        let reactionFileId: number | null = null;
-        try {
-          const uploadResult = await apiService.uploadFile(file, 'REACTION');
-          const raw = uploadResult?.data as any;
-          reactionFileId = typeof raw === 'number' ? raw
-            : typeof raw === 'string' ? Number(raw) || null
-              : typeof raw?.id === 'number' ? raw.id
-                : null;
-
-          if (reactionFileId == null) {
-            console.error('❌ Upload succeeded but no file ID returned');
-          } else {
-            console.log('✅ Reaction file created for new edge:', edgeId, 'fileId:', reactionFileId);
-          }
-        } catch (err) {
-          console.error('Failed to create reaction file for new edge:', err);
-        }
-
-        const newEdge: Edge = {
-          id: edgeId,
-          source: connectionDragState.sourceNodeId,
-          target: targetNode.id,
-          sourceHandle: connectionDragState.sourceHandle,
-          targetHandle: targetHandle,
-          type: 'reactions',
-          style: { stroke: color, strokeWidth: 2 },
-          data: {
-            reactionFileId,
-            sourceMetaModelId: getBackendMetaModelIdForNode(connectionDragState.sourceNodeId),
-            targetMetaModelId: getBackendMetaModelIdForNode(targetNode.id),
-            sourceMetaModelSourceId: getMetaModelSourceIdForNode(connectionDragState.sourceNodeId),
-            targetMetaModelSourceId: getMetaModelSourceIdForNode(targetNode.id),
-          }
-        };
-
-        console.log('🎯 Creating edge:', newEdge);
-        addEdge(newEdge);
       } else {
         console.log('❌ Connection ended in empty space - cancelled');
       }
 
       setConnectionDragState(null);
-    }, [reactFlowInstance, nodes, edges, addEdge, connectionDragState, getColorForPair, isPositionInsideNode, calculateTargetHandle, getBackendMetaModelIdForNode, getMetaModelSourceIdForNode, buildInitialReactionCode]);
-
+    }, [reactFlowInstance, nodes, edges, addEdge, connectionDragState, getColorForPair, isPositionInsideNode, uploadReactionFile, buildNewEdge]);
 
     const handleConnectionMove = useCallback((e: MouseEvent) => {
       if (!reactFlowInstance) return;

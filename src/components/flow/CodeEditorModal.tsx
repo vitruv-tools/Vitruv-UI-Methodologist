@@ -149,8 +149,8 @@ export function CodeEditorModal({
 
   useEffect(() => {
     const handleBeforeUnload = () => closeWebSocket();
-    window.addEventListener('beforeunload', handleBeforeUnload);
-    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+    globalThis.addEventListener('beforeunload', handleBeforeUnload);
+    return () => globalThis.removeEventListener('beforeunload', handleBeforeUnload);
   }, [closeWebSocket]);
 
   // ── Ctrl+S Shortcut ────────────────────────────────────────────────────────
@@ -162,8 +162,8 @@ export function CodeEditorModal({
         handleSave();
       }
     };
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
+    globalThis.addEventListener('keydown', handleKeyDown);
+    return () => globalThis.removeEventListener('keydown', handleKeyDown);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen, code, saving]);
 
