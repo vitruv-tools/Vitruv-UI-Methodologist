@@ -44,5 +44,4 @@ export type EditableFineGranularMetaModelRelation = {
   reactionFileId?: number;
   lowCodeReactionTemplate?: string;
   lowCodeReactionTemplateParams?: any;
-  action?: 'create' | 'update' | 'delete'; // null for unchanged relations
 }

@@ -3,6 +3,7 @@ import { FlowData } from '../types/flow';
 import { ApiResponse, Vsum, VsumDetails } from '../types/vsum';
 import { LowCodeReactionMetadataResponse } from "../types/LowCodeReactionMetadataResponse";
 import { createVsumDetailsStore } from '../store/VsumDetails';
+import { EditableFineGranularMetaModelRelation } from '../types/EditableVsumDetails';
 
 class ApiService {
   private readonly baseURL = process.env.REACT_APP_BACKEND_URL;
@@ -549,14 +550,7 @@ class ApiService {
   /**
    * vSUMS: Sync changes with relationship data
    */
-  async syncVsumChanges(id: number | string, data: {
-    metaModelIds: number[];
-    metaModelRelationRequests: Array<{
-      sourceId: number;
-      targetId: number;
-      reactionFileId: number;
-    }>;
-  }): Promise<ApiResponse<any>> {
+  async syncVsumChanges(id: number | string, data: VsumSyncChangesPutRequest): Promise<ApiResponse<any>> {
     return this.updateVsumSyncChanges(id, data);
   }
 
@@ -770,6 +764,7 @@ export interface MetaModelRelationRequest {
   sourceId: number;
   targetId: number;
   reactionFileId: number;  // Use 0 when there's no reaction file
+  fineGranularMetaModelRelationSet: EditableFineGranularMetaModelRelation[]; // Include fine-grained relations in the request
 }
 
 export interface VsumSyncChangesPutRequest {

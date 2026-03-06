@@ -4,6 +4,7 @@ import {
   EditableVsumDetails, EditableVsumMetaModelRef,
   EditableVsumMetaModelRelation
 } from "../types/EditableVsumDetails";
+import { WorkspaceSnapshot } from "../types/workspace";
 import { deepClone } from "../utils/DeepClone";
 import { NoVsumDetailsStoreError } from "./NoVsumDetailsStoreError";
 
@@ -158,6 +159,21 @@ export class VsumDetailsHelper {
   get() {
     // We dont return the reference to encourage people to actually use the helper methods rather than just manipulating the details object directly, which would bypass important logic in the helper methods (e.g. for keeping the structure in sync)
     return deepClone(this.vsumDetails);
+  }
+
+  getAsWorkspaceSnapshot() {
+    const workspaceSnapshot: WorkspaceSnapshot = {
+      metaModelIds: this.vsumDetails.metaModels.map((metaModel) => metaModel.id),
+      metaModelRelationRequests: this.vsumDetails.metaModelsRelation?.map(
+        (relation) => ({
+          sourceId: relation.sourceId,
+          targetId: relation.targetId,
+          reactionFileId: relation.reactionFileStorageId ?? 0,
+          fineGranularMetaModelRelationSet: relation.fineGranularMetaModelRelationSet
+        })
+      ) ?? [],
+    };
+    return workspaceSnapshot;
   }
 
   /**

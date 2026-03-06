@@ -174,11 +174,27 @@ export const VsumTabs: React.FC<VsumTabsProps> = ({
         }
 
         const filteredRelations =
-            (snap.metaModelRelationRequests ?? []).filter(rel =>
-                metaModelIds.includes(rel.sourceId) &&
-                metaModelIds.includes(rel.targetId) &&
-                rel.reactionFileId > 0
-            );
+            (snap.metaModelRelationRequests ?? []).filter(rel => {
+                if (!metaModelIds.includes(rel.sourceId) || !metaModelIds.includes(rel.targetId)) {
+                    return false;
+                }
+                // Coarse relation has no reaction file
+                if (rel.reactionFileId === 0) {
+                    // Atleast one fine-grained relation must have a reaction file or be a low-code reaction
+                    return rel.fineGranularMetaModelRelationSet.some(fineRel => {
+                        // Fine-grained relation has a reaction file
+                        if (fineRel.reactionFileId != null) {
+                            return true;
+                        }
+                        // Fine-grained relation has a low-code reaction template with params
+                        if (fineRel.lowCodeReactionTemplate != null && fineRel.lowCodeReactionTemplateParams != null) {
+                            return true;
+                        }
+                        return false;
+                    })
+                }
+                return true;
+            });
 
         const relationsToSend: MetaModelRelationRequest[] | null =
             filteredRelations.length > 0 ? filteredRelations : null;

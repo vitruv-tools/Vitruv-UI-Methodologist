@@ -45,6 +45,8 @@ import { disableReactionHandles, enableReactionHandles, recalculateNodesOnEdgesF
 import { DEFAULT_STORAGE_KEY, loadFromStorage, UMLEdgeDetailsConfig, UMLEdgeDetailsConfigPanel } from './UMLEdgeDetailsConfig';
 import { FlowMetaModelRelationData } from '../../types/FlowMetaModelRelationData';
 import { useSelectedEdgeStore } from '../../store/SelectedEdge';
+import { ActiveVsumDetails } from '../../store/ActiveVsumDetails';
+import { NoVsumDetailsStoreError } from '../../store/NoVsumDetailsStoreError';
 
 const COLOR_LIST = [
   '#ab1c91ff', '#ff7f0e', '#2ca02c', '#d62728', '#9467bd',
@@ -1384,41 +1386,18 @@ export const FlowCanvas = forwardRef<{
     }, [edges]);
 
     const buildWorkspaceSnapshot = useCallback((): WorkspaceSnapshot => {
-      const metaModelIds = Array.from(
-          new Set(
-              nodes
-                  .filter(node => node.type === 'ecoreFile')
-                  .map(node => node.data?.metaModelSourceId ?? node.data?.metaModelId)
-                  .filter((value): value is number => typeof value === 'number')
-          )
-      );
-
-      const metaModelRelationRequests: MetaModelRelationRequest[] = edges
-          .filter(edge => edge.type === 'reactions')
-          .map(edge => {
-            const sourceId = getMetaModelSourceIdForNode(edge.source);
-            const targetId = getMetaModelSourceIdForNode(edge.target);
-            const reactionFileId =
-                typeof edge.data?.reactionFileId === 'number'
-                    ? edge.data.reactionFileId
-                    : 0;
-
-            if (typeof sourceId !== 'number' || typeof targetId !== 'number') {
-              return null;
-            }
-
-            return {
-              sourceId,
-              targetId,
-              reactionFileId,
-            };
-          })
-          .filter((req): req is MetaModelRelationRequest => req !== null);
-
-      return {
-        metaModelIds,
-        metaModelRelationRequests,
-      };
+      try {
+        const activeVsumDetails = new ActiveVsumDetails();
+        return activeVsumDetails.getAsWorkspaceSnapshot();
+      } catch (error) {
+        if (!(error instanceof NoVsumDetailsStoreError)) {
+          throw error;
+        }
+        return {
+          metaModelIds: [],
+          metaModelRelationRequests: []
+        }
+      }
     }, [nodes, edges, getMetaModelSourceIdForNode]);
 
     useEffect(() => {

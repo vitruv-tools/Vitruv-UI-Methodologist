@@ -39,4 +39,5 @@ export function temporarilySaveLowCodeReactionConfig(
 
   fineGranularMetaModelRelation.lowCodeReactionTemplateParams = fieldValues;
   fineGranularMetaModelRelation.lowCodeReactionTemplate = template;
+  activeVsumDetails.saveToStore();
 }
