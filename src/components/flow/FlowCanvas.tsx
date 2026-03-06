@@ -1841,56 +1841,77 @@ execute actions in ${targetPackageName}
     const calculateMergePoint = useCallback((avgSource: { x: number; y: number }, targetNode: Node) => {
       const targetCenterX = targetNode.position.x + NODE_DIMENSIONS.width / 2;
       const targetCenterY = targetNode.position.y + NODE_DIMENSIONS.height / 2;
+
+      // Place merge point vertically under/above the target center so
+      // the last segment into the class box is a straight line into
+      // the middle (no diagonal hit on the left/right side).
       return {
-        x: avgSource.x + (targetCenterX - avgSource.x) * 0.4,
-        y: avgSource.y + (targetCenterY - avgSource.y) * 0.4
+        x: targetCenterX,
+        y: avgSource.y + (targetCenterY - avgSource.y) * 0.4,
       };
     }, []);
 
-    // Calculate merge points for UML edges with same target
+    // Calculate merge points for UML inheritance edges with same target.
+    // We keep merge visualization ONLY for inheritance (like multiple
+    // subclasses pointing to the same superclass), not for other UML
+    // relationships. This gives a clean "fan-in" into the superclass
+    // while keeping compositions and associations as simple lines.
     const umlMergeData = useMemo(() => {
       const mergePointsMap = new Map<string, { x: number; y: number; mergeGroupId: string }>();
       const firstInGroupMap = new Map<string, string>();
       const mergeGroupSourceNodesMap = new Map<string, string[]>();
 
-      // Count UML edges per source node
+      // Consider only UML inheritance edges for merging
+      const umlInheritanceEdges = uniqueEdges.filter(
+        (e) => e.type === 'uml' && (e.data as any)?.relationshipType === 'inheritance'
+      );
+
+      if (umlInheritanceEdges.length === 0) {
+        return { mergePointsMap, firstInGroupMap, mergeGroupSourceNodesMap };
+      }
+
+      // Count inheritance edges per source node
       const edgesPerSource = new Map<string, number>();
-      uniqueEdges.filter(e => e.type === 'uml').forEach(edge => {
+      umlInheritanceEdges.forEach((edge) => {
         edgesPerSource.set(edge.source, (edgesPerSource.get(edge.source) || 0) + 1);
       });
 
-      // Group UML edges by target
+      // Group inheritance edges by target (superclass)
       const edgesByTarget = new Map<string, Edge[]>();
-      uniqueEdges.filter(e => e.type === 'uml').forEach(edge => {
+      umlInheritanceEdges.forEach((edge) => {
         const existing = edgesByTarget.get(edge.target) || [];
         existing.push(edge);
         edgesByTarget.set(edge.target, existing);
       });
 
-      // Process each target group
+      // For each superclass, create one merge point for eligible subclasses
       edgesByTarget.forEach((edgesGroup, targetId) => {
         if (edgesGroup.length < 2) return;
 
-        const eligibleEdges = edgesGroup.filter(edge => (edgesPerSource.get(edge.source) || 0) === 1);
+        // Only merge subclasses that connect to this superclass once
+        const eligibleEdges = edgesGroup.filter(
+          (edge) => (edgesPerSource.get(edge.source) || 0) === 1
+        );
         if (eligibleEdges.length < 2) return;
 
         eligibleEdges.sort((a, b) => a.source.localeCompare(b.source));
 
-        const targetNode = nodes.find(n => n.id === targetId);
+        const targetNode = nodes.find((n) => n.id === targetId);
         if (!targetNode) return;
 
         const avgSourcePos = calculateAverageSourcePosition(eligibleEdges);
         const mergePoint = calculateMergePoint(avgSourcePos, targetNode);
         const mergeGroupId = `merge-${targetId}`;
 
-        mergeGroupSourceNodesMap.set(mergeGroupId, eligibleEdges.map(e => e.source));
-        eligibleEdges.forEach((edge, index) => {
+        mergeGroupSourceNodesMap.set(
+          mergeGroupId,
+          eligibleEdges.map((e) => e.source)
+        );
+        eligibleEdges.forEach((edge) => {
           mergePointsMap.set(edge.id, { ...mergePoint, mergeGroupId });
-          console.log(`   Edge ${index}: ${edge.id.slice(-8)} (source: ${edge.source.slice(-6)})`);
         });
 
         firstInGroupMap.set(mergeGroupId, eligibleEdges[0].id);
-        console.log(`✨ Merge group ${mergeGroupId}: First edge = ${eligibleEdges[0].id.slice(-8)}`);
       });
 
       return { mergePointsMap, firstInGroupMap, mergeGroupSourceNodesMap };
