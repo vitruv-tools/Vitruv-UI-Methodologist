@@ -10,12 +10,12 @@ interface EdgeDistributionData {
   total: number;
 }
 
-interface EcoreFileBoxData {
+export interface EcoreFileBoxData {
   fileName: string;
   fileContent: string;
   onExpand: (fileName: string, fileContent: string, backendMetaModelId: number) => void;
   onSelect: (fileName: string) => void;
-  onDelete?: (id: string) => void;
+  onDelete?: (id: string, metaModelId: number) => void;
   onRename?: (id: string, newFileName: string) => void;
   onConnectionStart?: (nodeId: string, handle: 'top' | 'bottom' | 'left' | 'right') => void;
   isExpanded?: boolean;
@@ -363,7 +363,7 @@ export const EcoreFileBox: React.FC<NodeProps<EcoreFileBoxData>> = ({
     };
 
   const confirmDelete = () => {
-    onDelete?.(id);
+    onDelete?.(id, metaModelId!);
     setShowDeleteConfirm(false);
   };
 

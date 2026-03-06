@@ -1,9 +1,10 @@
 import { Node, Edge, Connection, OnConnectStartParams } from "reactflow";
 import type { MainContextType } from "../contexts/MainContext";
-import { FlowData, OnEdgeClickParams, OnEdgeClickParamsExtension } from "../types/flow";
-import { onEdgeClick as umlOnEdgeClick } from '../components/flow/UMLRelationship';
-import { onEdgeClick as reactionsOnEdgeClick } from '../components/flow/ReactionRelationship';
-import { disableReactionSourceHandles, enableReactionSourceHandles, enableReactionTargetHandles } from "./ReactionUtils";
+import { FlowData, FlowEdge } from "../types/flow";
+import { OnEdgeClickParams, OnEdgeClickParamsExtension, OnEdgeDeleteParams } from "../types/EdgeEventHandlers";
+import { onEdgeClick as umlOnEdgeClick } from './UMLUtils';
+import { onEdgeDelete as reactionsOnEdgeDelete } from "./ReactionUtils";
+import { onEdgeClick as fineGranularReactionOnEdgeClick, onEdgeDelete as fineGranularReactionOnEdgeDelete, disableReactionSourceHandles, enableReactionSourceHandles, enableReactionTargetHandles } from './FineGranularReactionUtils';
 
 export const exportFlowData = (nodes: Node[], edges: Edge[]): FlowData => {
   return {
@@ -207,8 +208,14 @@ export function onReconnectEnd(event: MouseEvent | TouchEvent, edge: Edge, handl
   // Unused
 }
 
-export function onEdgesDelete(edges: Edge[]): void {
-  // Unused
+export function onEdgesDelete(edges: FlowEdge[]): void {
+  for (const edge of edges) {
+    const fullParams: OnEdgeDeleteParams = { edge: edge };
+    const handler = eventHandlers.onEdgesDelete[edge.type as keyof typeof eventHandlers.onEdgesDelete];
+    if (handler) {
+      handler(fullParams);
+    }
+  }
 }
 
 export function onEdgeClick(params: OnEdgeClickParamsExtension, event: React.MouseEvent, edge: Edge) {
@@ -222,7 +229,11 @@ export function onEdgeClick(params: OnEdgeClickParamsExtension, event: React.Mou
 export const eventHandlers = {
   onEdgeClick: {
     uml: umlOnEdgeClick,
-    'fine-granular-reaction': reactionsOnEdgeClick
+    'fine-granular-reaction': fineGranularReactionOnEdgeClick
+  },
+  onEdgesDelete: {
+    'reactions': reactionsOnEdgeDelete,
+    'fine-granular-reaction': fineGranularReactionOnEdgeDelete
   }
 }
 

@@ -8,6 +8,8 @@ import { VsumTabs } from '../components/ui/VsumTabs';
 import { apiService } from '../services/api';
 import { useToast } from '../components/ui/ToastProvider';
 import { WorkspaceSnapshot, WorkspaceSnapshotRequest } from '../types/workspace';
+import { EditableVsumMetaModelRef } from '../types/EditableVsumDetails';
+import { VitruvAddFileToWorkspaceEvent } from '../types/events/VitruvAddFileToWorkspace';
 
 interface OpenTabInstance { 
   instanceId: string; 
@@ -25,13 +27,13 @@ export const ProjectPage: React.FC = () => {
   const createInstanceId = useCallback((id: number) => `${id}-${Date.now()}-${Math.random().toString(36).slice(2,8)}` , []);
 
   // Helper to add a metamodel to the active workspace
-  const addMetaModelToWorkspace = useCallback(async (model: any) => {
+  const addMetaModelToWorkspace = useCallback(async (model: EditableVsumMetaModelRef) => {
     try {
       if (model.ecoreFileId) {
         const fileContent = await apiService.getFile(model.ecoreFileId);
         
         // Dispatch event to add file to workspace
-        globalThis.dispatchEvent(new CustomEvent('vitruv.addFileToWorkspace', {
+        globalThis.dispatchEvent(new CustomEvent<VitruvAddFileToWorkspaceEvent>('vitruv.addFileToWorkspace', {
           detail: {
             fileContent: fileContent,
             fileName: model.name + '.ecore',
@@ -41,6 +43,7 @@ export const ProjectPage: React.FC = () => {
             metaModelId: model.id,
             metaModelSourceId: model.sourceId ?? model.id,
             createdAt: model.createdAt,
+            model: model,
           }
         }));
       }
@@ -262,7 +265,7 @@ async function fetchAndLoadProjectBoxes(id: number, skipReset: boolean = false) 
       if (metaModel.ecoreFileId) {
         try {
           const fileContent = await apiService.getFile(metaModel.ecoreFileId);
-          globalThis.dispatchEvent(new CustomEvent('vitruv.addFileToWorkspace', {
+          globalThis.dispatchEvent(new CustomEvent<VitruvAddFileToWorkspaceEvent>('vitruv.addFileToWorkspace', {
             detail: {
               fileContent: fileContent,
               fileName: metaModel.name + '.ecore',
@@ -272,6 +275,7 @@ async function fetchAndLoadProjectBoxes(id: number, skipReset: boolean = false) 
               createdAt: metaModel.createdAt,
               metaModelId: metaModel.id,
               metaModelSourceId: metaModel.sourceId ?? metaModel.id,
+              model: metaModel,
             }
           }));
         } catch (error) {

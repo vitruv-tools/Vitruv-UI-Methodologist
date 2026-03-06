@@ -1,9 +1,10 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { CreateModelModal } from './CreateModelModal';
 import { apiService } from '../../services/api';
+import { VitruvAddFileToWorkspaceEvent } from '../../types/events/VitruvAddFileToWorkspace';
 
 interface ToolsPanelProps {
-  onEcoreFileUpload?: (fileContent: string, meta?: { fileName?: string; uploadId?: string; description?: string; keywords?: string; domain?: string; createdAt?: string }) => void;
+  onEcoreFileUpload?: (fileContent: string, meta: VitruvAddFileToWorkspaceEvent & { uploadId?: string}) => void;
   onEcoreFileDelete?: (fileName: string) => void;
   title?: string;
   allowCreate?: boolean;
@@ -1201,7 +1202,8 @@ return (
                             keywords: viewModel.keyword?.join(', '),
                             domain: viewModel.domain,
                             createdAt: viewModel.createdAt,
-                          });
+                            model: viewModel
+                          } as any);
                         }}
                         style={{
                           padding: '8px 14px',

@@ -1,10 +1,10 @@
-import { ActiveVsumDetails } from "../store/VsumDetails";
-import { FlowEdge } from "../types";
+import { ActiveVsumDetails } from "../store/ActiveVsumDetails";
+import { FlowEcoreEdge } from "../types";
 
 export function temporarilySaveLowCodeReactionConfig(
   template: string,
   fieldValues: Record<string, any>,
-  edge: FlowEdge,
+  edge: FlowEcoreEdge,
 ) {
   console.log("💾 Saving reaction configuration to VSUM details");
   const activeVsumDetails = new ActiveVsumDetails();

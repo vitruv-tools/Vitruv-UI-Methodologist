@@ -1,6 +1,5 @@
 import React from 'react';
 import { EdgeProps, useStore } from 'reactflow';
-import type { OnEdgeClickParams } from '../../types/flow';
 
 export const UMLRelationshipTypes = {
   INHERITANCE: 'inheritance',
@@ -882,16 +881,4 @@ export function UMLRelationship({
       )}
     </>
   );
-}
-
-/**
- * Edgle click handler that is called from the FlowCanvas when an uml type edge is clicked.
- *
- *  @param params The edge click parameters.
- */
-export function onEdgeClick(params: OnEdgeClickParams) {
-  // TODO(Reinbold): Which relationship types should have details shown on click?
-  if (params.edge.data?.relationshipType !== UMLRelationshipTypes.INHERITANCE) {
-    params.setUmlEdgeDetailsEdge(params.edge);
-  }
 }

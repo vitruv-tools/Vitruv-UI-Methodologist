@@ -1,6 +1,6 @@
-import React, { ComponentRef, ElementRef, useCallback, useEffect, useRef, useState } from 'react';
+import React, { act, ComponentRef, ElementRef, useCallback, useEffect, useRef, useState } from 'react';
 import { useLocation } from 'react-router-dom';
-import { Switch, FormControlLabel } from '@mui/material';
+import { Switch } from '@mui/material';
 import { Header } from './Header';
 import { FlowCanvas } from '../flow/FlowCanvas';
 import { ToolsPanel } from '../ui/ToolsPanel';
@@ -19,11 +19,24 @@ import { Node, Edge, ReactFlowProvider } from 'reactflow';
 import { User } from '../../services/auth';
 import { WorkspaceSnapshot, WorkspaceSnapshotRequest } from '../../types/workspace';
 import { MainContext } from '../../contexts/MainContext';
-import { disableReactionHandles, enableReactionHandles } from '../../utils/ReactionUtils';
-import { ActiveVsumDetails } from '../../store/VsumDetails';
+import { disableReactionHandles, enableReactionHandles } from '../../utils/FineGranularReactionUtils';
+import { ActiveVsumDetails } from "../../store/ActiveVsumDetails";
+import { EditableVsumMetaModelRef } from '../../types/EditableVsumDetails';
+import { VitruvAddFileToWorkspaceEvent } from '../../types/events/VitruvAddFileToWorkspace';
 
 const ENABLE_RESIZE = false;   // <- keep false to prevent any user resizing
 const HEADER_HEIGHT = 48;
+
+export type EcoreMeta = {
+    fileName?: string;
+    description?: string;
+    keywords?: string;
+    domain?: string;
+    createdAt?: string;
+    metaModelId?: number;
+    metaModelSourceId?: number;
+    model?: EditableVsumMetaModelRef;
+};
 
 interface MainLayoutProps {
     onDeploy?: (nodes: any[], edges: any[]) => void;
@@ -198,20 +211,19 @@ export function MainLayout({
     }, []); // Ref is stable, no other deps
 
     // handleEcoreFileUpload als useCallback (stabil)
-    type EcoreMeta = {
-        fileName?: string;
-        description?: string;
-        keywords?: string;
-        domain?: string;
-        createdAt?: string;
-        metaModelId?: number;
-        metaModelSourceId?: number;
-    };
 
     const handleEcoreFileUpload = useCallback((
         fileContent: string,
-        meta?: EcoreMeta
+        meta: VitruvAddFileToWorkspaceEvent
     ) => {
+        if (meta.model != null) {
+            const activeVsumDetails = new ActiveVsumDetails();
+            if (!activeVsumDetails.getMetaModel(meta.model)) {
+                // Meta model not found in store, add it
+                activeVsumDetails.addMetaModel(meta.model);
+            }
+        }
+
         // In expanded mode, we expand new meta models to facilitate defining reactions
         if (expandedMetaModelNames) {
             if (expandedMetaModelNames.has(meta?.fileName ?? "")) {
@@ -321,28 +333,11 @@ export function MainLayout({
             } catch {}
         };
         const handleAddFileToWorkspace = (e: Event) => {
-            const customEvent = e as CustomEvent<{
-                fileContent: string;
-                fileName: string;
-                description?: string;
-                keywords?: string;
-                domain?: string;
-                createdAt?: string;
-                metaModelId?: number;
-                metaModelSourceId?: number;
-            }>;
+            const customEvent = e as CustomEvent<VitruvAddFileToWorkspaceEvent>;
             const detail = customEvent.detail;
             if (detail) {
                 console.log('📦 Adding file to workspace:', detail.fileName);
-                handleEcoreFileUpload(detail.fileContent, {
-                    fileName: detail.fileName,
-                    description: detail.description,
-                    keywords: detail.keywords,
-                    domain: detail.domain,
-                    createdAt: detail.createdAt,
-                    metaModelId: detail.metaModelId,
-                    metaModelSourceId: detail.metaModelSourceId,
-                });
+                handleEcoreFileUpload(detail.fileContent, Object.assign({}, detail)); // Pass a copy of detail as meta. Copying might be unnecessary tbh, but is consistent with old implementation
             }
         };
 
@@ -442,7 +437,7 @@ export function MainLayout({
         const activeVsumDetails = new ActiveVsumDetails();
         activeVsumDetails.setIdentifiersToEObjectMap(diagramData.identifiersToEObject, remountCanvas);
         activeVsumDetails.addIdentifierToBackendMetaModelIdMap(diagramData.eObjectIdentifierOfMetaModel, backendMetaModelId);
-        activeVsumDetails.save();
+        activeVsumDetails.saveToStore();
 
         if (!diagramData.nodes.length) {
             // TODO(DEREIFAB): I dont support this fallback as of now
@@ -481,10 +476,14 @@ export function MainLayout({
         }, 100);
     }, [setDocuments, setExpandedMetaModelNames, expandedMetaModelNames, handleExpandedModeSwitch]);
 
-    const handleEcoreFileDelete = useCallback((id: string) => {
+    const handleEcoreFileDelete = useCallback((id: string, metaModelId: number) => {
         // Remove Node from FlowCanvas
         const currentNodes = flowCanvasRef.current?.getNodes?.() || [];
         const updatedNodes = currentNodes.filter((n: any) => n.id !== id);
+        
+        const activeVsumDetails = new ActiveVsumDetails();
+        // Also remove from ActiveVsumDetails store
+        activeVsumDetails.removeMetaModel({ id: metaModelId });
 
         if (flowCanvasRef.current?.loadDiagramData) {
             const edges = flowCanvasRef.current?.getEdges?.() || [];
@@ -504,7 +503,7 @@ export function MainLayout({
         );
 
         if (nodeToDelete) {
-            handleEcoreFileDelete(nodeToDelete.id);
+            handleEcoreFileDelete(nodeToDelete.id, nodeToDelete.data.metaModelId);
         }
     }, [handleEcoreFileDelete]);
 

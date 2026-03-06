@@ -1,7 +1,10 @@
 import { useCallback, useState, useEffect } from 'react';
 import { useNodesState, useEdgesState, Connection, Edge, Node, NodeChange } from 'reactflow';
-import { useUndoRedo } from './useUndoRedo';
+import { DiagramState, useUndoRedo } from './useUndoRedo';
 import { createFineGranularReactionEdge } from '../utils/FineGranularReactionUtils';
+import { ActiveVsumDetails } from '../store/ActiveVsumDetails';
+import { EditableVsumDetails } from '../types/EditableVsumDetails';
+import { NoVsumDetailsStoreError } from '../store/NoVsumDetailsStoreError';
 
 interface UseFlowStateProps {
   userId?: string;
@@ -78,7 +81,8 @@ export function useFlowState(props?: UseFlowStateProps) {
   } = useUndoRedo({
     nodes: [],
     edges: [],
-    idCounter: 1
+    idCounter: 1,
+    vsumDetails: null,
   });
 
   // Reset state when user/project changes
@@ -99,10 +103,21 @@ export function useFlowState(props?: UseFlowStateProps) {
     if (isApplyingState) return;
     if (isDraggingNode) return;
     
+    let vsumDetails: EditableVsumDetails | null = null;
+    try {
+      const activeVsumDetails = new ActiveVsumDetails();
+      vsumDetails = activeVsumDetails.get();
+    } catch (error) {
+      if (!(error instanceof NoVsumDetailsStoreError)) {
+        // VSUM Details might not have been loaded yet, but thats not an issue.
+        throw error; // re-throw if it's a different error
+      } 
+    }
     const currentDiagramState = {
       nodes,
       edges,
-      idCounter
+      idCounter,
+      vsumDetails
     };
     
     const hasChanged = 
@@ -143,7 +158,12 @@ export function useFlowState(props?: UseFlowStateProps) {
     }
   }, [nodes, edges, idCounter, saveState, isApplyingState, lastSavedState, isDraggingNode]);
 
-  const applyState = useCallback((state: { nodes: Node[]; edges: Edge[]; idCounter: number }) => {
+  const applyState = useCallback((state: DiagramState) => {
+    if (state.vsumDetails != null) {
+      const activeVsumDetails = new ActiveVsumDetails();
+      activeVsumDetails.overwrite(state.vsumDetails);
+      activeVsumDetails.saveToStore();
+    }
     setIsApplyingState(true);
     setNodes(state.nodes);
     setEdges(state.edges);

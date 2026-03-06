@@ -1,4 +1,3 @@
-import type { EObject } from "ecore-ts";
 import { Node, Edge } from "reactflow";
 
 export type FlowNodeECoreData = {
@@ -27,21 +26,23 @@ export type UMLNode = FlowNode & {
 };
 
 export type FlowEdgeECoreData = {
-  eReferenceId?: string;
-  eObjectSourceId: string;
-  eObjectTargetId: string;
-  fromModel: string;
-  toModel: string;
+  ecore: {
+    eReferenceId?: string;
+    eObjectSourceId: string;
+    eObjectTargetId: string;
+    fromModel: string;
+    toModel: string;
+  }
 }
 
 export type FlowEdgeData = {
   relationshipType: string;
   targetMultiplicity?: string;
-  ecore?: FlowEdgeECoreData;
   labelX?: number;
   labelY?: number;
 };
 export type FlowEdge = Edge<FlowEdgeData>;
+export type FlowEcoreEdge = Edge<FlowEdgeData & FlowEdgeECoreData>;
 
 export interface FlowData {
   nodes: FlowNode[];
@@ -116,18 +117,3 @@ export interface EcorePackage {
   classes: EcoreElementData[];
   packages: EcorePackage[];
 }
-
-export type OnEdgeClickParams = OnEdgeClickParamsExtension & OnEdgeClickParamsDefault;
-
-export type OnEdgeClickParamsExtension = {
-  nodes: FlowNode[];
-  edges: FlowEdge[];
-  identifiersToEObject: Map<string, EObject>;
-  setUmlEdgeDetailsEdge: (edge: FlowEdge | null) => void;
-  setReactionEditorEdge: (edge: FlowEdge | null) => void;
-};
-
-export type OnEdgeClickParamsDefault = {
-  edge: FlowEdge,
-  event: React.MouseEvent,
-};

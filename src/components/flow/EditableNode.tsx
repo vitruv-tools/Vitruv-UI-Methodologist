@@ -1,7 +1,7 @@
 import { EObject } from 'ecore-ts';
 import React, { useState, useRef, useEffect } from 'react';
 import { NodeProps, Handle, Position } from 'reactflow';
-import { ActiveVsumDetails } from '../../store/VsumDetails';
+import { ActiveVsumDetails } from "../../store/ActiveVsumDetails";
 import { FlowNodeECoreData } from '../../types';
 import { buildAttributeSignature, buildMethodSignature } from '../../utils/UMLFromEcoreTS';
 import {

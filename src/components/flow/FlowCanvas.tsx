@@ -23,12 +23,12 @@ import { EditableNode } from './EditableNode';
 import { UMLRelationship } from './UMLRelationship';
 import { ReactionRelationship } from './ReactionRelationship';
 import { LowCodeReactionEditor } from './lowcode/LowCodeReactionEditor';
-import { EcoreFileBox } from './EcoreFileBox';
+import { EcoreFileBox, EcoreFileBoxData } from './EcoreFileBox';
 import { ConnectionLine } from './ConnectionLine';
 import { CodeEditorModal } from './CodeEditorModal';
 import { apiService, MetaModelRelationRequest } from '../../services/api';
 import { WorkspaceSnapshot } from '../../types/workspace';
-import { FlowEdge, FlowNode } from '../../types';
+import { FlowEcoreEdge, FlowEdge, FlowNode } from '../../types';
 import {
   recalculateBoundingBoxes,
 } from '../../utils/BoundingBoxUtils';
@@ -40,9 +40,11 @@ import type { EObject } from 'ecore-ts';
 import { UmlEdgeDetails } from './UMLEdgeDetails';
 import { DragablePanel } from './DragablePanel';
 import { GhostNode } from './lowcode/GhostNode';
-import { addReactionEdgeToVsumDetails, disableReactionHandles, enableReactionHandles, recalculateNodesOnEdgesForReactions } from '../../utils/ReactionUtils';
+import { addReactionEdgeToVsumDetails } from '../../utils/ReactionUtils';
+import { disableReactionHandles, enableReactionHandles, recalculateNodesOnEdgesForReactions } from '../../utils/FineGranularReactionUtils';
 import { DEFAULT_STORAGE_KEY, loadFromStorage, UMLEdgeDetailsConfig, UMLEdgeDetailsConfigPanel } from './UMLEdgeDetailsConfig';
 import { FlowMetaModelRelationData } from '../../types/FlowMetaModelRelationData';
+import { useSelectedEdgeStore } from '../../store/SelectedEdge';
 
 const COLOR_LIST = [
   '#ab1c91ff', '#ff7f0e', '#2ca02c', '#d62728', '#9467bd',
@@ -92,7 +94,7 @@ interface FlowCanvasProps {
   onDiagramChange?: (nodes: Node[], edges: Edge[]) => void;
   onEcoreFileSelect?: (fileName: string) => void;
   onEcoreFileExpand?: (fileName: string, fileContent: string, backendMetaModelId: number) => void;
-  onEcoreFileDelete?: (id: string) => void;
+  onEcoreFileDelete?: (id: string, metaModelId: number) => void;
   onEcoreFileRename?: (id: string, newFileName: string) => void;
   userId?: string;
   projectId?: string;
@@ -209,7 +211,7 @@ export const FlowCanvas = forwardRef<{
     const [reactFlowInstance, setReactFlowInstance] = useState<ReactFlowInstance | null>(null);
     const [isDragOver, setIsDragOver] = useState(false);
     const [isInteractive, setIsInteractive] = useState(true);
-    const [selectedFileId, setSelectedFileId] = useState<string | null>(null);
+    const [selectedEcoreFileBox, setSelectedEcoreFileBox] = useState<{id: string, data: EcoreFileBoxData} | null>(null);
     const [expandedFileId, setExpandedFileId] = useState<string | null>(null);
     const [connectionDragState, setConnectionDragState] = useState<ConnectionDragState | null>(null);
     const [codeEditorState, setCodeEditorState] = useState<CodeEditorState | null>(null);
@@ -223,11 +225,10 @@ export const FlowCanvas = forwardRef<{
     } | null>(null);
     const [hoveredMergeGroup, setHoveredMergeGroup] = useState<string | null>(null);
     const [identifiersToEObject, setIdentifiersToEObject] = useState<Map<string, EObject>>(new Map());
-    const [reactionEditorEdge, setReactionEditorEdge] = useState<FlowEdge | null>(null);
     const reactionEditorRef = useRef<{ save: () => void; undo: () => void } | null>(null);
-    const [umlEdgeDetailsEdge, setUmlEdgeDetailsEdge] = useState<FlowEdge | null>(null);
     const [currentConnectionStartParams, setCurrentConnectionStartParams] = useState<OnConnectStartParams | null>(null);
     const [umlDetailsConfig, setUmlDetailsConfig] = useState<Partial<UMLEdgeDetailsConfig>>(loadFromStorage(DEFAULT_STORAGE_KEY));
+    const { selectedEdge, setSelectedEdge } = useSelectedEdgeStore();
 
 
     const edgeValidators: EdgeValidator[] = [new LowCodeReactionEdgeValidator()];
@@ -360,7 +361,7 @@ export const FlowCanvas = forwardRef<{
         setTimeout((rfi: typeof reactFlowInstance) => { 
             let currentNodes = rfi!.getNodes() as FlowNode[];
             let currentEdges = rfi!.getEdges() as FlowEdge[];
-            ({ currentNodes, currentEdges } = recalculateNodesOnEdgesForReactions(currentNodes, currentEdges));
+            ({ currentNodes, currentEdges } = recalculateNodesOnEdgesForReactions(currentNodes, currentEdges as FlowEcoreEdge[]));
             ({ currentNodes, currentEdges } = recalculateAfterNodeChange(currentNodes, currentEdges));
             setNodes(currentNodes);
             setEdges(currentEdges);
@@ -370,7 +371,7 @@ export const FlowCanvas = forwardRef<{
           setTimeout((rfi: typeof reactFlowInstance, rearrange: boolean) => { 
             let currentNodes = rfi!.getNodes() as FlowNode[];
             let currentEdges = rfi!.getEdges() as FlowEdge[];
-            ({ currentNodes, currentEdges } = recalculateNodesOnEdgesForReactions(currentNodes, currentEdges));
+            ({ currentNodes, currentEdges } = recalculateNodesOnEdgesForReactions(currentNodes, currentEdges as FlowEcoreEdge[]));
             currentNodes = recalculateBoundingBoxes(rearrange, currentNodes);
             setNodes(currentNodes);
             setEdges(currentEdges);
@@ -382,7 +383,7 @@ export const FlowCanvas = forwardRef<{
           setTimeout((rfi: typeof reactFlowInstance, rearrange: boolean) => { 
             let currentNodes = rfi!.getNodes() as FlowNode[];
             let currentEdges = rfi!.getEdges() as FlowEdge[];
-            ({ currentNodes, currentEdges } = recalculateNodesOnEdgesForReactions(currentNodes, currentEdges));
+            ({ currentNodes, currentEdges } = recalculateNodesOnEdgesForReactions(currentNodes, currentEdges as FlowEcoreEdge[]));
             currentNodes = recalculateBoundingBoxes(rearrange, currentNodes);
             setNodes(currentNodes);
             setEdges(currentEdges)
@@ -663,15 +664,16 @@ export const FlowCanvas = forwardRef<{
           const selectedEdges = reactFlowInstance.getEdges().filter(e => e.selected);
           if (selectedEdges.length > 0) {
             event.preventDefault();
+            onEdgesDelete(selectedEdges);
             selectedEdges.forEach((e) => removeEdge(e.id));
             return true;
           }
         }
 
-        if (selectedFileId && onEcoreFileDelete) {
+        if (selectedEcoreFileBox && onEcoreFileDelete) {
           event.preventDefault();
-          onEcoreFileDelete(selectedFileId);
-          setSelectedFileId(null);
+          onEcoreFileDelete(selectedEcoreFileBox.id, selectedEcoreFileBox.data.metaModelId!);
+          setSelectedEcoreFileBox(null);
           return true;
         }
 
@@ -703,7 +705,7 @@ export const FlowCanvas = forwardRef<{
 
       document.addEventListener('keydown', handleKeyDown);
       return () => document.removeEventListener('keydown', handleKeyDown);
-    }, [undo, redo, canUndo, canRedo, reactFlowInstance, removeNode, removeEdge, selectedFileId, onEcoreFileDelete]);
+    }, [undo, redo, canUndo, canRedo, reactFlowInstance, removeNode, removeEdge, selectedEcoreFileBox, onEcoreFileDelete]);
 
     // Creation of coarse meta model relations (reactions)
     const handleConnectionEnd = useCallback((e: MouseEvent) => {
@@ -1114,9 +1116,9 @@ export const FlowCanvas = forwardRef<{
     const handleEcoreFileSelect = useCallback((fileName: string) => {
       const ecoreNode = nodes.find(
         n => n.type === 'ecoreFile' && n.data.fileName === fileName
-      );
+      ) as Node<EcoreFileBoxData> | undefined;
       if (ecoreNode) {
-        setSelectedFileId(ecoreNode.id);
+        setSelectedEcoreFileBox({ id: ecoreNode.id, data: ecoreNode.data });
         onEcoreFileSelect?.(fileName);
       }
     }, [nodes, onEcoreFileSelect]);
@@ -1124,11 +1126,11 @@ export const FlowCanvas = forwardRef<{
     const handleEcoreFileExpand = useCallback((fileName: string, fileContent: string, backendMetaModelId: number) => {
       const ecoreNode = nodes.find(
         n => n.type === 'ecoreFile' && n.data.fileName === fileName
-      );
+      ) as Node<EcoreFileBoxData> | undefined;
 
       if (ecoreNode) {
         setExpandedFileId(ecoreNode.id);
-        setSelectedFileId(ecoreNode.id);
+        setSelectedEcoreFileBox({ id: ecoreNode.id, data: ecoreNode.data });
         const updatedNodes = nodes.map(n =>
           n.id === ecoreNode.id
             ? { ...n, data: { ...n.data, isExpanded: true } }
@@ -1157,7 +1159,7 @@ export const FlowCanvas = forwardRef<{
           ? meta.metaModelSourceId
           : metaModelId;
 
-      const newEcoreNode: Node = {
+      const newEcoreNode: Node<EcoreFileBoxData> = {
         id: `ecore-${Date.now()}`,
         type: 'ecoreFile',
         position: position,
@@ -1180,7 +1182,7 @@ export const FlowCanvas = forwardRef<{
       };
 
       addNode(newEcoreNode);
-      setSelectedFileId(newEcoreNode.id);
+      setSelectedEcoreFileBox({ id: newEcoreNode.id, data: newEcoreNode.data });
 
       if (onEcoreFileSelect) {
         onEcoreFileSelect(fileName);
@@ -1832,7 +1834,7 @@ export const FlowCanvas = forwardRef<{
             isConnectionActive: connectionDragState?.isActive || false,
             edgeDistribution: edgeDistributionMap.get(node.id),
           },
-          selected: selectedFileId === node.id,
+          selected: selectedEcoreFileBox?.id === node.id,
           draggable: !connectionDragState?.isActive,
         };
       }
@@ -2197,35 +2199,35 @@ const handleEdgeReorderRequest = useCallback((edgeId: string, controlPoint: { x:
           onReconnect={onReconnect}
           onReconnectEnd={onReconnectEnd}
           onEdgesDelete={onEdgesDelete}
-          onEdgeClick={onEdgeClick.bind(null, { nodes, edges, setUmlEdgeDetailsEdge, setReactionEditorEdge, identifiersToEObject})}
+          onEdgeClick={onEdgeClick.bind(null, { nodes, edges })}
         >
           <MiniMap position="bottom-right" style={{ bottom: 16, right: 16, zIndex: 30 }} />
-          {reactionEditorEdge && 
+          {selectedEdge && selectedEdge.type == 'fine-granular-reaction' && 
             <DragablePanel
               title="Reaction"
               description="Configure how mappings behave"
-              onClose={() => setReactionEditorEdge(null)}
+              onClose={() => setSelectedEdge(null)}
               onSave={() => reactionEditorRef.current?.save()}
               onUndo={() => reactionEditorRef.current?.undo()}
             >
               <LowCodeReactionEditor 
                 ref={reactionEditorRef}
-                edge={reactionEditorEdge} 
+                edge={selectedEdge as FlowEcoreEdge} 
                 identifiersToEObject={identifiersToEObject}
               />
             </DragablePanel>
           }
-          {umlEdgeDetailsEdge && (
+          {selectedEdge && selectedEdge.type == 'uml' && (
             <DragablePanel
               title="UML Edge Details"
               description=""
-              onClose={() => setUmlEdgeDetailsEdge(null)}
+              onClose={() => setSelectedEdge(null)}
               className="uml-edge-details-panel"
               translateX='0%'
               translateY='50%'
               settings={<UMLEdgeDetailsConfigPanel onChange={setUmlDetailsConfig}/>}
             >
-              <UmlEdgeDetails edge={umlEdgeDetailsEdge} identifiersToEObject={identifiersToEObject} config={umlDetailsConfig} />
+              <UmlEdgeDetails edge={selectedEdge as FlowEcoreEdge} identifiersToEObject={identifiersToEObject} config={umlDetailsConfig} />
             </DragablePanel>
           )}
         </ReactFlow>

@@ -18,7 +18,7 @@ import {
   CircularProgress,
 } from "@mui/material";
 import type { EObject } from "ecore-ts";
-import type { FlowEdge } from "../../../types/flow";
+import type { FlowEcoreEdge } from "../../../types/flow";
 import { apiService } from "../../../services/api";
 import { LowCodeReactionFieldMetadata } from "../../../types/LowCodeReactionFieldMetadata";
 import { LowCodeReactionMetadataResponse } from "../../../types/LowCodeReactionMetadataResponse";
@@ -32,7 +32,7 @@ import { temporarilySaveLowCodeReactionConfig } from "../../../utils/LowCodeReac
  */
 interface ReactionEditorProps {
   disabled?: boolean;
-  edge: FlowEdge;
+  edge: FlowEcoreEdge;
   identifiersToEObject: Map<string, EObject>;
 }
 

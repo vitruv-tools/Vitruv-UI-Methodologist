@@ -1,10 +1,19 @@
 import { Connection, Node } from "reactflow";
+import { ActiveVsumDetails } from "../store/ActiveVsumDetails";
+import { NoVsumDetailsStoreError } from "../store/NoVsumDetailsStoreError";
+import { NoActiveVsumError } from "../store/NoActiveVsumError";
 import {
-  ActiveVsumDetails,
-  NoActiveVsum,
-  NoVsumDetailsStore,
-} from "../store/VsumDetails";
-import { FlowEdge, FlowNodeECoreData, UMLNode } from "../types";
+  FlowEcoreEdge,
+  FlowNode,
+  FlowNodeECoreData,
+  UMLNode,
+} from "../types";
+import {
+  OnEdgeClickParams,
+  OnEdgeDeleteParams,
+} from "../types/EdgeEventHandlers";
+import { setHandlePointerEvents, setHandleOpacity } from "./flowUtils";
+import { useSelectedEdgeStore } from "../store/SelectedEdge";
 
 export function getProperEObjectIdFromHandle(
   handleId: string,
@@ -39,7 +48,7 @@ export function createFineGranularReactionEdge(
   tgt: Node<any, string | undefined> | undefined,
   getId: () => string,
   auto: { readonly s: string | undefined; readonly t: string | undefined },
-): FlowEdge | null {
+): FlowEcoreEdge | null {
   if (
     params.sourceHandle?.startsWith("reaction") != true ||
     params.targetHandle?.startsWith("reaction") != true ||
@@ -79,7 +88,7 @@ export function createFineGranularReactionEdge(
       sourceId: fineGranularSourceId,
       targetId: fineGranularTargetId,
     });
-    activeVsumDetails.save();
+    activeVsumDetails.saveToStore();
 
     return {
       id: `edge-${getId()}`,
@@ -99,10 +108,156 @@ export function createFineGranularReactionEdge(
       },
     };
   } catch (error) {
-    if (error instanceof NoActiveVsum || error instanceof NoVsumDetailsStore) {
+    if (
+      error instanceof NoActiveVsumError ||
+      error instanceof NoVsumDetailsStoreError
+    ) {
       console.warn(error);
       return null;
     }
     throw error;
   }
+}
+
+/**
+ * Edgle click handler that is called from the FlowCanvas when a reactions edge is clicked.
+ *
+ *  @param params The edge click parameters.
+ */
+export function onEdgeClick(params: OnEdgeClickParams) {
+  useSelectedEdgeStore.setState({ selectedEdge: params.edge as FlowEcoreEdge | null });
+}
+
+export function onEdgeDelete(params: OnEdgeDeleteParams) {
+  const edge = params.edge as FlowEcoreEdge;
+  const activeVsumDetails = new ActiveVsumDetails();
+  const sourceMetaModelId = activeVsumDetails
+    .getIdentifiersToBackendMetaModelIdMap()
+    .get(edge.data!.ecore!.fromModel!)!;
+  const targetMetaModelId = activeVsumDetails
+    .getIdentifiersToBackendMetaModelIdMap()
+    .get(edge.data!.ecore!.toModel!)!;
+  const metaModelRelation = activeVsumDetails.getMetaModelRelation({
+    sourceId: sourceMetaModelId,
+    targetId: targetMetaModelId,
+  });
+  if (metaModelRelation == null) {
+    console.warn(
+      `No meta model relation found for edge ${edge.id} with source model ${edge.data!.ecore!.fromModel} and target model ${edge.data!.ecore!.toModel}. Cannot delete fine-grained meta model relation.`,
+    );
+    return;
+  }
+  const index = metaModelRelation.fineGranularMetaModelRelationSet.findIndex(
+    (relation) =>
+      relation.sourceId === edge.data!.ecore!.eObjectSourceId &&
+      relation.targetId === edge.data!.ecore!.eObjectTargetId,
+  );
+  if (index == null || index == -1) {
+    console.warn(
+      `No fine-grained meta model relation found for edge ${edge.id}. Cannot delete.`,
+    );
+    return;
+  }
+  metaModelRelation?.fineGranularMetaModelRelationSet?.splice(index, 1);
+  activeVsumDetails.saveToStore();
+
+  if (useSelectedEdgeStore.getState().selectedEdge?.id == edge.id) {
+    useSelectedEdgeStore.setState({ selectedEdge: null });
+  }
+}
+
+export function isReactionGhostNode(node: FlowNode): boolean {
+  return node.type === "ghost" && node.id.startsWith("reaction-ghost-");
+}
+
+export function recalculateNodesOnEdgesForReactions(
+  currentNodes: FlowNode[],
+  currentEdges: FlowEcoreEdge[],
+): { currentNodes: FlowNode[]; currentEdges: FlowEcoreEdge[] } {
+  console.log("🔄 Recalculating nodes on edges for reactions...");
+  const newNodes: FlowNode[] = currentNodes.filter(
+    (n) => !isReactionGhostNode(n),
+  );
+
+  let anyNodeChange = false;
+  for (const edge of currentEdges) {
+    if (edge.data?.ecore?.eReferenceId === undefined) {
+      continue;
+    }
+
+    let reactionNodeId: string = edge.data.ecore.eReferenceId!;
+    let node = currentNodes.find((n) => n.id === reactionNodeId);
+    if (!node) {
+      console.log(
+        `➕ Adding missing reaction node ${reactionNodeId} for edge ${edge.id}`,
+      );
+      const newNode: FlowNode = {
+        id: reactionNodeId,
+        type: "ghost",
+        position: { x: edge.data.labelX ?? 0, y: edge.data.labelY ?? 0 }, // Will be calculated later
+        data: {
+          label: "",
+          ecore: {
+            model: edge.data.ecore!.fromModel!,
+            eObjectId: edge.data.ecore!.eReferenceId!,
+            eAttributeIds: [],
+            eReferenceIds: [],
+            eOperationIds: [],
+            eAnnotationIds: [],
+            eSuperTypeIds: [],
+          },
+        },
+      };
+      newNodes.push(newNode);
+      anyNodeChange = true;
+    } else {
+      const posX = edge.data?.labelX ?? 0;
+      const posY = edge.data?.labelY ?? 0;
+      if (
+        Math.abs(node.position.x - posX) > 0.01 ||
+        Math.abs(node.position.y - posY) > 0.01
+      ) {
+        const updatedNode: FlowNode = Object.assign({}, node, {
+          position: { x: posX, y: posY },
+        });
+        newNodes.push(updatedNode);
+        anyNodeChange = true;
+      } else {
+        newNodes.push(node);
+      }
+    }
+  }
+
+  let nodesToReturn = anyNodeChange ? newNodes : currentNodes;
+  return { currentNodes: nodesToReturn, currentEdges: currentEdges };
+}
+
+export function enableReactionHandles() {
+  enableReactionSourceHandles();
+  enableReactionTargetHandles();
+}
+
+export function disableReactionHandles() {
+  disableReactionSourceHandles();
+  disableReactionTargetHandles();
+}
+
+export function enableReactionSourceHandles() {
+  setHandlePointerEvents("reaction", "source", "auto");
+  setHandleOpacity("reaction", "source", 1);
+}
+
+export function disableReactionSourceHandles() {
+  setHandlePointerEvents("reaction", "source", "none");
+  setHandleOpacity("reaction", "source", 0);
+}
+
+export function enableReactionTargetHandles() {
+  setHandlePointerEvents("reaction", "target", "auto");
+  setHandleOpacity("reaction", "target", 1);
+}
+
+export function disableReactionTargetHandles() {
+  setHandlePointerEvents("reaction", "target", "none");
+  setHandleOpacity("reaction", "target", 0);
 }

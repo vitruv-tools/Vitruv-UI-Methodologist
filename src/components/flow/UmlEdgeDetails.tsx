@@ -6,7 +6,7 @@ import {
   Box,
   Chip,
 } from "@mui/material";
-import type { FlowEdge } from "../../types/flow";
+import type { FlowEcoreEdge } from "../../types/flow";
 import { EObject } from "ecore-ts";
 import { isUndefinedOrTrue, UMLEdgeDetailsConfig } from "./UMLEdgeDetailsConfig";
 
@@ -14,7 +14,7 @@ import { isUndefinedOrTrue, UMLEdgeDetailsConfig } from "./UMLEdgeDetailsConfig"
  * Shows uml edge details similar to eclipse ecore diagram.
  */
 interface UmlEdgeDetailsProps {
-  edge: FlowEdge;
+  edge: FlowEcoreEdge;
   identifiersToEObject: Map<string, EObject>;
   config: Partial<UMLEdgeDetailsConfig>;
 }

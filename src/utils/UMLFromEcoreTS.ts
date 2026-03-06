@@ -1,4 +1,4 @@
-import { FlowEdge, UMLNode } from "../types/flow";
+import { FlowEcoreEdge, UMLNode } from "../types/flow";
 import { EObject, EReference, EAttribute, ResourceSet, XMI, EPackage, EClass, EString, EOperation, EAnnotation } from "ecore-ts";
 import { UMLRelationshipTypes } from "../components/flow/UMLRelationship";
 import { applyIntelligentLayout } from "./umlGenerator";
@@ -295,8 +295,8 @@ function createAssociationEdges(
   classNameToEObject: Map<string, EObject>,
   eObjectUniqueIdentifiers: Map<EObject, string>,
   startNodeId: number
-): { edges: FlowEdge[]; nextNodeId: number } {
-  const edges: FlowEdge[] = [];
+): { edges: FlowEcoreEdge[]; nextNodeId: number } {
+  const edges: FlowEcoreEdge[] = [];
   let nodeId = startNodeId;
 
   classElems.forEach((cls) => {
@@ -362,8 +362,8 @@ function createGeneralizationEdges(
   classNameToNodeId: Map<string, string>,
   eObjectUniqueIdentifiers: Map<EObject, string>,
   startNodeId: number,
-): { edges: FlowEdge[]; nextNodeId: number } {
-  const edges: FlowEdge[] = [];
+): { edges: FlowEcoreEdge[]; nextNodeId: number } {
+  const edges: FlowEcoreEdge[] = [];
   let nodeId = startNodeId;
 
   classElems.forEach((cls) => {
@@ -453,7 +453,7 @@ function addPackageNode(
 /**
  * Recomputes all edge handles after layout updates node positions.
  */
-function recalculateEdgeHandles(nodes: UMLNode[], edges: FlowEdge[]) {
+function recalculateEdgeHandles(nodes: UMLNode[], edges: FlowEcoreEdge[]) {
   edges.forEach((edge) => {
     const handles = chooseHandlesForNodes(nodes, edge.source, edge.target);
     edge.sourceHandle = handles.sourceHandle;
@@ -488,7 +488,7 @@ export function generateUMLFromEcoreTsParser(
   backendMetaModelId: number,
 ): {
   nodes: UMLNode[];
-  edges: FlowEdge[];
+  edges: FlowEcoreEdge[];
   identifiersToEObject: Map<string, EObject>;
   eObjectIdentifierOfMetaModel: string;
 } {
@@ -498,7 +498,7 @@ export function generateUMLFromEcoreTsParser(
       ecoreContent
     );
 
-    const edges: FlowEdge[] = [];
+    const edges: FlowEcoreEdge[] = [];
     let nodeId = 1;
 
     const rootPackage = resource

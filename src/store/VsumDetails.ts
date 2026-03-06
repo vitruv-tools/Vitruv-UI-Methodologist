@@ -1,41 +1,49 @@
 import { EObject } from "ecore-ts";
-import { create, UseBoundStore, StoreApi } from "zustand";
-import { EditableVsumDetails, EditableVsumMetaModelRelation } from "../types/EditableVsumDetails";
-import { projectStore } from "./Project";
+import { create, StoreApi, UseBoundStore } from "zustand";
+import {
+  EditableVsumDetails, EditableVsumMetaModelRef,
+  EditableVsumMetaModelRelation
+} from "../types/EditableVsumDetails";
+import { deepClone } from "../utils/DeepClone";
+import { NoVsumDetailsStoreError } from "./NoVsumDetailsStoreError";
 
-const storeMap = new Map<number | string, UseBoundStore<StoreApi<EditableVsumDetails>> | undefined>();
+/**
+ * We intentionally do not expose the store directly, 
+ * but instead provide helper methods to manipulate the VSUM details.
+ * This allows us to encapsulate the logic for how the details are stored 
+ * and updated, and to ensure that any necessary side effects 
+ * (like updating the structure) are handled correctly.
+ */
+const storeMap = new Map<
+  number | string,
+  UseBoundStore<StoreApi<EditableVsumDetails>> | undefined
+>();
 
-export function createVsumDetailsStore(id: number | string, vsumDetails: EditableVsumDetails) {
+export function createVsumDetailsStore(
+  id: number | string,
+  vsumDetails: EditableVsumDetails,
+) {
   if (!storeMap.has(id)) {
-    const newStore = create<EditableVsumDetails>((_) => (vsumDetails));
+    const newStore = create<EditableVsumDetails>((_) => vsumDetails);
     storeMap.set(id, newStore);
   }
 }
 
-export class NoActiveVsum extends Error {}
+export class VsumDetailsHelper {
+  protected vsumDetails: EditableVsumDetails;
+  protected vsumDetailsStore: UseBoundStore<StoreApi<EditableVsumDetails>>;
 
-export class NoVsumDetailsStore extends Error {}
-
-export class ActiveVsumDetails {
-  private vsumDetails: EditableVsumDetails;
-  private vsumDetailsStore: UseBoundStore<StoreApi<EditableVsumDetails>>;
-
-  constructor() {
-    const vsumDetailsStore = this.getActiveVsumDetailsStore();
+  constructor(id: number) {
+    const vsumDetailsStore = this.getVsumDetailsStoreOrThrow(id);
     this.vsumDetailsStore = vsumDetailsStore;
     this.vsumDetails = vsumDetailsStore.getState();
   }
 
-  private getActiveVsumDetailsStore() {
-    const activeVsumId = projectStore.getState().activeId; // Ensure we have the latest activeInstanceId for any side effects
-    if (!activeVsumId) {
-      throw new NoActiveVsum("No active VSUM ID found");
-    }
-
-    const vsumDetailsStore = this.getVsumDetailsStore(activeVsumId);
+  private getVsumDetailsStoreOrThrow(id: number) {
+    const vsumDetailsStore = this.getVsumDetailsStore(id);
     if (!vsumDetailsStore) {
-      throw new NoVsumDetailsStore(
-        `No VsumDetails store found for active VSUM ID: ${activeVsumId}`,
+      throw new NoVsumDetailsStoreError(
+        `No VsumDetails store found for VSUM ID: ${id}`
       );
     }
 
@@ -46,31 +54,73 @@ export class ActiveVsumDetails {
     return storeMap.get(id);
   }
 
-  addMetaModelRelation(editableMetaModelRelation: EditableVsumMetaModelRelation) {
+  addMetaModel(editableVsumMetaModelRef: EditableVsumMetaModelRef) {
+    this.vsumDetails.metaModels.push(editableVsumMetaModelRef);
+    return editableVsumMetaModelRef;
+  }
+
+  getMetaModel(identifier: Pick<EditableVsumMetaModelRef, "id">) {
+    return this.vsumDetails.metaModels?.find(
+      (metaModel) => metaModel.id === identifier.id
+    );
+  }
+
+  removeMetaModel(identifier: Pick<EditableVsumMetaModelRef, "id">) {
+    const removed = (this.vsumDetails.metaModels =
+      this.vsumDetails.metaModels.filter(
+        (metaModel) => metaModel.id == identifier.id
+      ));
+    this.vsumDetails.metaModels = this.vsumDetails.metaModels.filter(
+      (metaModel) => metaModel.id !== identifier.id
+    );
+    return removed[0];
+  }
+
+  addMetaModelRelation(
+    editableMetaModelRelation: EditableVsumMetaModelRelation
+  ) {
     this.vsumDetails.metaModelsRelation ??= [];
     this.vsumDetails.metaModelsRelation.push(editableMetaModelRelation);
     return editableMetaModelRelation;
   }
 
-  getMetaModelRelation(identifiers: Pick<EditableVsumMetaModelRelation, 'sourceId' | 'targetId'>) {
+  getMetaModelRelation(
+    identifiers: Pick<EditableVsumMetaModelRelation, "sourceId" | "targetId">
+  ) {
     return this.vsumDetails.metaModelsRelation?.find(
-      (relation) =>
-        relation.sourceId === identifiers.sourceId && relation.targetId === identifiers.targetId,
+      (relation) => relation.sourceId === identifiers.sourceId &&
+        relation.targetId === identifiers.targetId
     );
+  }
+
+  removeMetaModelRelation(
+    identifiers: Pick<EditableVsumMetaModelRelation, "sourceId" | "targetId">
+  ) {
+    const index = this.vsumDetails.metaModelsRelation?.findIndex(
+      (relation) => relation.sourceId === identifiers.sourceId &&
+        relation.targetId === identifiers.targetId
+    );
+    if (index !== undefined && index !== -1) {
+      return this.vsumDetails.metaModelsRelation?.splice(index, 1)[0];
+    }
   }
 
   getIdentifiersToEObjectMap() {
     if (!this.vsumDetails.identifiersToEObject) {
-      throw new Error("IdentifiersToEObject map is not defined, has UML generation been performed yet?");
+      throw new Error(
+        "IdentifiersToEObject map is not defined, has UML generation been performed yet?"
+      );
     }
     return this.vsumDetails.identifiersToEObject;
   }
 
-  setIdentifiersToEObjectMap(map: Map<string, EObject>, overwrite: boolean = false) {
+  setIdentifiersToEObjectMap(
+    map: Map<string, EObject>,
+    overwrite: boolean = false
+  ) {
     if (overwrite || !this.vsumDetails.identifiersToEObject) {
       this.vsumDetails.identifiersToEObject = map;
-    }
-    else {
+    } else {
       // Merge with existing map
       const existingMap = this.vsumDetails.identifiersToEObject;
       existingMap.forEach((value, key) => {
@@ -82,19 +132,45 @@ export class ActiveVsumDetails {
 
   getIdentifiersToBackendMetaModelIdMap() {
     if (!this.vsumDetails.identifiersToBackendMetaModelId) {
-      throw new Error("IdentifiersToBackendMetaModelId map is not defined, has UML generation been performed yet?");
+      throw new Error(
+        "IdentifiersToBackendMetaModelId map is not defined, has UML generation been performed yet?"
+      );
     }
     return this.vsumDetails.identifiersToBackendMetaModelId;
   }
 
-  addIdentifierToBackendMetaModelIdMap(eObjectIdentifier: string, backendMetaModelId: number) {
+  addIdentifierToBackendMetaModelIdMap(
+    eObjectIdentifier: string,
+    backendMetaModelId: number
+  ) {
     if (!this.vsumDetails.identifiersToBackendMetaModelId) {
-      this.vsumDetails.identifiersToBackendMetaModelId = new Map<string, number>();
+      this.vsumDetails.identifiersToBackendMetaModelId = new Map<
+        string,
+        number
+      >();
     }
-    this.vsumDetails.identifiersToBackendMetaModelId.set(eObjectIdentifier, backendMetaModelId);
+    this.vsumDetails.identifiersToBackendMetaModelId.set(
+      eObjectIdentifier,
+      backendMetaModelId
+    );
   }
 
-  save() {
+  get() {
+    // We dont return the reference to encourage people to actually use the helper methods rather than just manipulating the details object directly, which would bypass important logic in the helper methods (e.g. for keeping the structure in sync)
+    return deepClone(this.vsumDetails);
+  }
+
+  /**
+   * Overwrites the current vsum details with the new details.
+   * This is useful for cases where we want to replace the entire details object, e.g. when loading a saved VSUM.
+   * NOTE: Do not abuse this method to just update properties.
+   * @param newDetails The new vsum details
+   */
+  overwrite(newDetails: EditableVsumDetails) {
+    this.vsumDetails = newDetails;
+  }
+
+  saveToStore() {
     this.vsumDetailsStore.setState(this.vsumDetails);
   }
 }
