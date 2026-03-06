@@ -721,7 +721,9 @@ export const FlowCanvas = forwardRef<{
           edge.source === connectionDragState.sourceNodeId && edge.target === targetNode.id
         );
 
-        if (!alreadyConnected) {
+        if (alreadyConnected) {
+          console.log('⚠️ Connection in this direction already exists');
+        } else {
           const color = getColorForPair(connectionDragState.sourceNodeId, targetNode.id);
           const edgeId = `edge-${connectionDragState.sourceNodeId}-${targetNode.id}-${Date.now()}`;
           const reactionFileId = await uploadReactionFile(connectionDragState.sourceNodeId, targetNode.id, edgeId);
@@ -731,7 +733,7 @@ export const FlowCanvas = forwardRef<{
 
           console.log('🎯 Creating edge:', newEdge);
           addEdge(newEdge);
-        } else {
+        } {
           console.log('⚠️ Connection in this direction already exists');
         }
       } else {
