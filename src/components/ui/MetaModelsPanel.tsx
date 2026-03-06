@@ -1,10 +1,13 @@
 import React, { useEffect, useState } from 'react';
 import { apiService } from '../../services/api';
+import { ActiveVsumDetails } from '../../store/ActiveVsumDetails';
+import { useProjectStore } from '../../store/Project';
 import { VsumMetaModelRef } from '../../types';
+import { useStore } from 'zustand';
+import { getVsumDetailsStore, VsumDetailsHelper } from '../../store/VsumDetails';
 
 interface MetaModelsPanelProps {
   activeVsumId?: number | null;
-  selectedMetaModelIds?: number[];
   onAddToActiveVsum?: (model: any) => void;
 }
 
@@ -158,7 +161,6 @@ const addBtnStyle: React.CSSProperties = {
 
 export const MetaModelsPanel: React.FC<MetaModelsPanelProps> = ({
   activeVsumId,
-  selectedMetaModelIds,
   onAddToActiveVsum,
 }) => {
   const [searchTerm, setSearchTerm] = useState('');
@@ -171,6 +173,8 @@ export const MetaModelsPanel: React.FC<MetaModelsPanelProps> = ({
   const [dateFilter, setDateFilter] = useState<'all' | 'today' | 'week' | 'month' | 'year'>('all');
   const [parsedFilters, setParsedFilters] = useState<any[]>([]);
   const [showAllModels, setShowAllModels] = useState(false);
+  const { mode, activeId, expandedMetaModelNames } = useProjectStore((state) => ({ mode: state.mode, activeId: state.activeId, expandedMetaModelNames: state.expandedMetaModelNames }));
+  const selectedMetaModels = useStore(getVsumDetailsStore(activeId ?? -1), (state) => state?.metaModels) ?? [];
 
   const handleSearchKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key !== 'Tab') return;
@@ -277,8 +281,13 @@ export const MetaModelsPanel: React.FC<MetaModelsPanelProps> = ({
           }
         }
 
-        const res = await apiService.findMetaModels(filters);
-        setApiModels(res.data || []);
+        const localModelsModes: typeof mode[] = ["expanded", "reactions"];
+        if (localModelsModes.includes(mode)) {
+          setApiModels(selectedMetaModels ?? []);
+        } else {
+          const res = await apiService.findMetaModels(filters);
+          setApiModels(res.data || []);
+        }
       } catch (e: any) {
         setApiError(e?.message || 'Failed to fetch meta models');
       } finally {
@@ -286,7 +295,7 @@ export const MetaModelsPanel: React.FC<MetaModelsPanelProps> = ({
       }
     };
     fetchData();
-  }, [parsedFilters, dateFilter, showAllModels]);
+  }, [parsedFilters, dateFilter, showAllModels, mode, selectedMetaModels, expandedMetaModelNames]);
 
   const sortedModels = [...apiModels].sort((a, b) => {
     let cmp = 0;
@@ -301,6 +310,15 @@ export const MetaModelsPanel: React.FC<MetaModelsPanelProps> = ({
     const ds = d.toLocaleDateString();
     const ts = d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
     return `${ds} at ${ts}`;
+  };
+
+  const alreadyAdded = (model: VsumMetaModelRef) => {
+    if (mode === 'expanded' || mode === 'reactions') {
+      return (selectedMetaModels ?? []).filter(model => expandedMetaModelNames?.has(model.id.toString())).map(m => m.id).includes(model.id);
+    }
+    else {
+      return (selectedMetaModels ?? []).map(m => m.id).includes(model.id);
+    }
   };
 
   return (
@@ -441,12 +459,12 @@ export const MetaModelsPanel: React.FC<MetaModelsPanelProps> = ({
                   onClick={() => onAddToActiveVsum(model)}
                   style={{
                     ...addBtnStyle,
-                    opacity: (selectedMetaModelIds || []).includes(model.id) ? 0.6 : 1,
-                    cursor: (selectedMetaModelIds || []).includes(model.id) ? 'not-allowed' : 'pointer',
+                    opacity: alreadyAdded(model) ? 0.6 : 1,
+                    cursor: alreadyAdded(model) ? 'not-allowed' : 'pointer',
                   }}
-                  disabled={(selectedMetaModelIds || []).includes(model.id)}
+                  disabled={alreadyAdded(model)}
                 >
-                  {(selectedMetaModelIds || []).includes(model.id) ? 'Added' : '+'}
+                  {alreadyAdded(model) ? 'Added' : '+'}
                 </button>
               )}
             </div>

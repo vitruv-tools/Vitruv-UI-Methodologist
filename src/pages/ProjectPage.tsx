@@ -192,7 +192,6 @@ export const ProjectPage: React.FC = () => {
           <div style={{ flex: 1, overflow: 'auto' }}>
             <MetaModelsPanel
               activeVsumId={activeInstanceId ? (openTabs.find(t => t.instanceId === activeInstanceId)?.id) || undefined : undefined}
-              selectedMetaModelIds={[]}
               onAddToActiveVsum={addMetaModelToWorkspace}
             />
           </div>

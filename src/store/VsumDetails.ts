@@ -17,7 +17,7 @@ import { NoVsumDetailsStoreError } from "./NoVsumDetailsStoreError";
  */
 const storeMap = new Map<
   number | string,
-  UseBoundStore<StoreApi<EditableVsumDetails>> | undefined
+  UseBoundStore<StoreApi<EditableVsumDetails | null>> | undefined
 >();
 
 export function createVsumDetailsStore(
@@ -30,9 +30,17 @@ export function createVsumDetailsStore(
   }
 }
 
+export function getVsumDetailsStore(id: number | string) {
+  if (!storeMap.has(id)) {
+    const newStore = create<EditableVsumDetails | null>((_) => null);
+    storeMap.set(id, newStore);
+  }
+  return storeMap.get(id)!;
+}
+
 export class VsumDetailsHelper {
-  protected vsumDetails: EditableVsumDetails;
-  protected vsumDetailsStore: UseBoundStore<StoreApi<EditableVsumDetails>>;
+  protected vsumDetails: EditableVsumDetails | null;
+  protected vsumDetailsStore: UseBoundStore<StoreApi<EditableVsumDetails | null>>;
 
   constructor(id: number) {
     const vsumDetailsStore = this.getVsumDetailsStoreOrThrow(id);
@@ -55,23 +63,28 @@ export class VsumDetailsHelper {
     return storeMap.get(id);
   }
 
+  findMetaModels(filters?: Partial<EditableVsumMetaModelRef>) {
+    //TODO(Reinbold): Local filtering is not implemented
+    return this.vsumDetails?.metaModels ?? [];
+  }
+
   addMetaModel(editableVsumMetaModelRef: EditableVsumMetaModelRef) {
-    this.vsumDetails.metaModels.push(editableVsumMetaModelRef);
+    this.vsumDetails!.metaModels.push(editableVsumMetaModelRef);
     return editableVsumMetaModelRef;
   }
 
   getMetaModel(identifier: Pick<EditableVsumMetaModelRef, "id">) {
-    return this.vsumDetails.metaModels?.find(
+    return this.vsumDetails?.metaModels?.find(
       (metaModel) => metaModel.id === identifier.id
     );
   }
 
   removeMetaModel(identifier: Pick<EditableVsumMetaModelRef, "id">) {
-    const removed = (this.vsumDetails.metaModels =
-      this.vsumDetails.metaModels.filter(
+    const removed = (this.vsumDetails!.metaModels =
+      this.vsumDetails!.metaModels.filter(
         (metaModel) => metaModel.id == identifier.id
       ));
-    this.vsumDetails.metaModels = this.vsumDetails.metaModels.filter(
+    this.vsumDetails!.metaModels = this.vsumDetails!.metaModels.filter(
       (metaModel) => metaModel.id !== identifier.id
     );
     return removed[0];
@@ -80,15 +93,15 @@ export class VsumDetailsHelper {
   addMetaModelRelation(
     editableMetaModelRelation: EditableVsumMetaModelRelation
   ) {
-    this.vsumDetails.metaModelsRelation ??= [];
-    this.vsumDetails.metaModelsRelation.push(editableMetaModelRelation);
+    this.vsumDetails!.metaModelsRelation ??= [];
+    this.vsumDetails!.metaModelsRelation.push(editableMetaModelRelation);
     return editableMetaModelRelation;
   }
 
   getMetaModelRelation(
     identifiers: Pick<EditableVsumMetaModelRelation, "sourceId" | "targetId">
   ) {
-    return this.vsumDetails.metaModelsRelation?.find(
+    return this.vsumDetails?.metaModelsRelation?.find(
       (relation) => relation.sourceId === identifiers.sourceId &&
         relation.targetId === identifiers.targetId
     );
@@ -97,17 +110,17 @@ export class VsumDetailsHelper {
   removeMetaModelRelation(
     identifiers: Pick<EditableVsumMetaModelRelation, "sourceId" | "targetId">
   ) {
-    const index = this.vsumDetails.metaModelsRelation?.findIndex(
+    const index = this.vsumDetails!.metaModelsRelation?.findIndex(
       (relation) => relation.sourceId === identifiers.sourceId &&
         relation.targetId === identifiers.targetId
     );
     if (index !== undefined && index !== -1) {
-      return this.vsumDetails.metaModelsRelation?.splice(index, 1)[0];
+      return this.vsumDetails!.metaModelsRelation?.splice(index, 1)[0];
     }
   }
 
   getIdentifiersToEObjectMap() {
-    if (!this.vsumDetails.identifiersToEObject) {
+    if (!this.vsumDetails?.identifiersToEObject) {
       throw new Error(
         "IdentifiersToEObject map is not defined, has UML generation been performed yet?"
       );
@@ -119,20 +132,20 @@ export class VsumDetailsHelper {
     map: Map<string, EObject>,
     overwrite: boolean = false
   ) {
-    if (overwrite || !this.vsumDetails.identifiersToEObject) {
-      this.vsumDetails.identifiersToEObject = map;
+    if (overwrite || !this.vsumDetails!.identifiersToEObject) {
+      this.vsumDetails!.identifiersToEObject = map;
     } else {
       // Merge with existing map
-      const existingMap = this.vsumDetails.identifiersToEObject;
+      const existingMap = this.vsumDetails!.identifiersToEObject;
       existingMap.forEach((value, key) => {
         map.set(key, value);
       });
-      this.vsumDetails.identifiersToEObject = map;
+      this.vsumDetails!.identifiersToEObject = map;
     }
   }
 
   getIdentifiersToBackendMetaModelIdMap() {
-    if (!this.vsumDetails.identifiersToBackendMetaModelId) {
+    if (!this.vsumDetails?.identifiersToBackendMetaModelId) {
       throw new Error(
         "IdentifiersToBackendMetaModelId map is not defined, has UML generation been performed yet?"
       );
@@ -144,13 +157,13 @@ export class VsumDetailsHelper {
     eObjectIdentifier: string,
     backendMetaModelId: number
   ) {
-    if (!this.vsumDetails.identifiersToBackendMetaModelId) {
-      this.vsumDetails.identifiersToBackendMetaModelId = new Map<
+    if (!this.vsumDetails!.identifiersToBackendMetaModelId) {
+      this.vsumDetails!.identifiersToBackendMetaModelId = new Map<
         string,
         number
       >();
     }
-    this.vsumDetails.identifiersToBackendMetaModelId.set(
+    this.vsumDetails!.identifiersToBackendMetaModelId.set(
       eObjectIdentifier,
       backendMetaModelId
     );
@@ -163,8 +176,8 @@ export class VsumDetailsHelper {
 
   getAsWorkspaceSnapshot() {
     const workspaceSnapshot: WorkspaceSnapshot = {
-      metaModelIds: this.vsumDetails.metaModels.map((metaModel) => metaModel.id),
-      metaModelRelationRequests: this.vsumDetails.metaModelsRelation?.map(
+      metaModelIds: this.vsumDetails?.metaModels.map((metaModel) => metaModel.id) ?? [],
+      metaModelRelationRequests: this.vsumDetails?.metaModelsRelation?.map(
         (relation) => ({
           sourceId: relation.sourceId,
           targetId: relation.targetId,

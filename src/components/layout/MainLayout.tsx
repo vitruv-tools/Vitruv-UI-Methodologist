@@ -97,9 +97,6 @@ export function MainLayout({
     // ECORE file boxes in workspace
     const [selectedFileBoxId, setSelectedFileBoxId] = useState<string | null>(null);
     
-    // Track when a metamodel is expanded (showing UML)
-    const [expandedMetaModelNames, setExpandedMetaModelNames] = useState<Set<string> | null>(null);
-    
     // Force FlowCanvas to remount when switching between workspace and UML view
     const [canvasKey, setCanvasKey] = useState<string>('workspace-initial');
     
@@ -107,7 +104,7 @@ export function MainLayout({
     // This ensures we can save relations even when viewing UML
     const [cachedWorkspaceSnapshot, setCachedWorkspaceSnapshot] = useState<WorkspaceSnapshot | null>(null);
 
-    const { mode, setMode, setReactionFiles } = useProjectStore();
+    const { mode, setMode, setReactionFiles, expandedMetaModelNames, setExpandedMetaModelNames } = useProjectStore();
 
     // Start with an empty workspace
     useEffect(() => {
@@ -409,7 +406,7 @@ export function MainLayout({
         // Mark that we're viewing an expanded metamodel
         const currentlyExpanded = new Set<string>();
         if (expandedMetaModelNames) Array.from(expandedMetaModelNames.values()).forEach(v => currentlyExpanded.add(v));
-        currentlyExpanded.add(fileName);
+        currentlyExpanded.add(backendMetaModelId.toString());
         setExpandedMetaModelNames(currentlyExpanded);
         
         if (remountCanvas) {
