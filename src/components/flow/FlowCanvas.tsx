@@ -733,8 +733,6 @@ export const FlowCanvas = forwardRef<{
 
           console.log('🎯 Creating edge:', newEdge);
           addEdge(newEdge);
-        } {
-          console.log('⚠️ Connection in this direction already exists');
         }
       } else {
         console.log('❌ Connection ended in empty space - cancelled');
