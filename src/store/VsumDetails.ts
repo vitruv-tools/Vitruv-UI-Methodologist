@@ -174,13 +174,24 @@ export class VsumDetailsHelper {
     return deepClone(this.vsumDetails);
   }
 
+  private getMetaModelIdToMetaModelSourceIdMap() {
+    const map = new Map<number, number>();
+    this.vsumDetails?.metaModels.forEach((metaModel) => {
+      map.set(metaModel.id, metaModel.sourceId ?? metaModel.id);
+    });
+    return map;
+  }
+
   getAsWorkspaceSnapshot() {
+    const map = this.getMetaModelIdToMetaModelSourceIdMap();
     const workspaceSnapshot: WorkspaceSnapshot = {
+      //TODO(Reinbold): maybe we also need to do:
+      //metaModelIds: this.vsumDetails?.metaModels.map((metaModel) => map.get(metaModel.id)!) ?? [],
       metaModelIds: this.vsumDetails?.metaModels.map((metaModel) => metaModel.id) ?? [],
       metaModelRelationRequests: this.vsumDetails?.metaModelsRelation?.map(
         (relation) => ({
-          sourceId: relation.sourceId,
-          targetId: relation.targetId,
+          sourceId: map.get(relation.sourceId)!,
+          targetId: map.get(relation.targetId)!,
           reactionFileId: relation.reactionFileStorageId ?? 0,
           fineGranularMetaModelRelationSet: relation.fineGranularMetaModelRelationSet
         })

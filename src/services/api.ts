@@ -3,7 +3,7 @@ import { FlowData } from '../types/flow';
 import { ApiResponse, Vsum, VsumDetails, VsumMetaModelRef } from '../types/vsum';
 import { LowCodeReactionMetadataResponse } from "../types/LowCodeReactionMetadataResponse";
 import { createVsumDetailsStore } from '../store/VsumDetails';
-import { EditableFineGranularMetaModelRelation } from '../types/EditableVsumDetails';
+import { EditableFineGranularMetaModelRelation, EditableVsumDetails } from '../types/EditableVsumDetails';
 
 class ApiService {
   private readonly baseURL = process.env.REACT_APP_BACKEND_URL;
@@ -559,7 +559,7 @@ class ApiService {
    */
   async getVsumDetails(id: number | string): Promise<ApiResponse<VsumDetails>> {
     const vsumDetails = await this.authenticatedRequest<ApiResponse<VsumDetails>>(`/api/v1/vsums/${id}/details`);
-    createVsumDetailsStore(id, vsumDetails.data);
+    createVsumDetailsStore(id, vsumDetails.data as EditableVsumDetails);
     return vsumDetails;
   }
 

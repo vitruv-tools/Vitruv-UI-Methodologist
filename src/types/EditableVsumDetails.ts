@@ -25,7 +25,9 @@ export interface EditableVsumMetaModelRef {
 export interface EditableVsumMetaModelRelation {
   id: number | null;
   sourceId: number;
+  //sourceSourceId: number;
   targetId: number;
+  //targetSourceId: number;
   reactionFileStorageId?: number | null;
   fineGranularMetaModelRelationSet: EditableFineGranularMetaModelRelation[];
 }

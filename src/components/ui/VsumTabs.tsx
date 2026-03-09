@@ -4,6 +4,7 @@ import { apiService, MetaModelRelationRequest } from '../../services/api';
 import { WorkspaceSnapshot } from '../../types/workspace';
 import { useProjectStore } from '../../store/Project';
 import { VsumDetailsHelper } from "../../store/VsumDetails";
+import { ActiveVsumDetails } from '../../store/ActiveVsumDetails';
 
 const POPUP_STYLES = {
     success: { background: '#ecfdf3', border: '1px solid #bbf7d0', color: '#166534', icon: '✅' },
@@ -145,15 +146,7 @@ export const VsumTabs: React.FC<VsumTabsProps> = ({
         const backend = detailsById[id];
         if (!backend) return;
 
-        let snap = workspaceSnapshot;
-        if (!snap && requestWorkspaceSnapshot) {
-            try {
-                snap = await requestWorkspaceSnapshot();
-            } catch (e) {
-                console.warn('Failed to refresh workspace snapshot before save', e);
-            }
-        }
-        snap ??= { metaModelIds: [], metaModelRelationRequests: [] };
+        let snap = new ActiveVsumDetails().getAsWorkspaceSnapshot();
 
         const backendMetaModels = backend.metaModels ?? [];
 
@@ -198,21 +191,6 @@ export const VsumTabs: React.FC<VsumTabsProps> = ({
 
         const relationsToSend: MetaModelRelationRequest[] | null =
             filteredRelations.length > 0 ? filteredRelations : null;
-
-        const vsumDetails = new VsumDetailsHelper(id);
-        relationsToSend?.forEach(rel => {
-            const existingRel = vsumDetails.getMetaModelRelation({
-                sourceId: rel.sourceId,
-                targetId: rel.targetId,
-            });
-            if (!existingRel) {
-                // Can probably happen if undo operations unsync the store and the snapshot contents.
-                // In my opinion, all the model information should be properly stored in the store rather than collected from the React Flow graph, but for now, we at least want to warn about missing relations instead of silently failing to save them.
-                console.warn(`MetaModel relation ${rel.sourceId} -> ${rel.targetId} with reactionFileId ${rel.reactionFileId} is in the workspace snapshot but not in the store`);
-                return [];
-            }
-            
-        });
 
         console.log('💾 Saving VSUM changes:', {
             vsumId: id,
