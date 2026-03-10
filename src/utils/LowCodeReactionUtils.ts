@@ -37,7 +37,6 @@ export function temporarilySaveLowCodeReactionConfig(
     ); // This should not happen as the edge should have created a fine-grained meta model relation on connect if it didn't exist!
   }
 
-  fineGranularMetaModelRelation.lowCodeReactionTemplateParams = fieldValues;
-  fineGranularMetaModelRelation.lowCodeReactionTemplate = template;
+  fineGranularMetaModelRelation.lowCodeReactionRequestBase = fieldValues;
   activeVsumDetails.saveToStore();
 }

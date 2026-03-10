@@ -1,6 +1,7 @@
 import { EObject } from "ecore-ts";
 import { create, StoreApi, UseBoundStore } from "zustand";
 import {
+  EditableFineGranularMetaModelRelation,
   EditableVsumDetails, EditableVsumMetaModelRef,
   EditableVsumMetaModelRelation
 } from "../types/EditableVsumDetails";
@@ -27,6 +28,11 @@ export function createVsumDetailsStore(
   if (!storeMap.has(id)) {
     const newStore = create<EditableVsumDetails>((_) => vsumDetails);
     storeMap.set(id, newStore);
+  } else {
+    const existingStore = storeMap.get(id)!;
+    if (existingStore.getState() == null) {
+      existingStore.setState(vsumDetails);
+    }
   }
 }
 
@@ -107,6 +113,20 @@ export class VsumDetailsHelper {
     );
   }
 
+  getMetaModelRelationByFullyQualifiedName(
+    fromModel: string, toModel: string
+  ) {
+    const sourceId = this.getIdentifiersToBackendMetaModelIdMap()?.get(fromModel);
+    const targetId = this.getIdentifiersToBackendMetaModelIdMap()?.get(toModel);
+    if (sourceId == null || targetId == null) {
+      return undefined;
+    }
+    return this.vsumDetails?.metaModelsRelation?.find(
+      (relation) => relation.sourceId === sourceId &&
+        relation.targetId === targetId
+    );
+  }
+
   removeMetaModelRelation(
     identifiers: Pick<EditableVsumMetaModelRelation, "sourceId" | "targetId">
   ) {
@@ -116,6 +136,24 @@ export class VsumDetailsHelper {
     );
     if (index !== undefined && index !== -1) {
       return this.vsumDetails!.metaModelsRelation?.splice(index, 1)[0];
+    }
+  }
+
+  getFineGranularMetaModelRelation(identifiers: Pick<EditableFineGranularMetaModelRelation, "sourceId" | "targetId">) {
+    return this.vsumDetails?.metaModelsRelation?.map(r => r.fineGranularMetaModelRelationSet)?.flat().find(
+      (relation) => relation.sourceId === identifiers.sourceId &&
+        relation.targetId === identifiers.targetId
+    );
+  }
+
+  removeFineGranularMetaModelRelation(identifiers: Pick<EditableFineGranularMetaModelRelation, "sourceId" | "targetId">) {
+    for (const metaModelRelation of (this.vsumDetails?.metaModelsRelation ?? [])) {
+      for (let i = 0; i < metaModelRelation.fineGranularMetaModelRelationSet.length; i++) {
+        const relation = metaModelRelation.fineGranularMetaModelRelationSet[i];
+        if (relation.sourceId === identifiers.sourceId && relation.targetId === identifiers.targetId) {
+          return metaModelRelation.fineGranularMetaModelRelationSet.splice(i, 1)[0];
+        }
+      }
     }
   }
 
@@ -186,13 +224,14 @@ export class VsumDetailsHelper {
     const map = this.getMetaModelIdToMetaModelSourceIdMap();
     const workspaceSnapshot: WorkspaceSnapshot = {
       //TODO(Reinbold): maybe we also need to do:
-      //metaModelIds: this.vsumDetails?.metaModels.map((metaModel) => map.get(metaModel.id)!) ?? [],
-      metaModelIds: this.vsumDetails?.metaModels.map((metaModel) => metaModel.id) ?? [],
+      metaModelIds: this.vsumDetails?.metaModels.map((metaModel) => map.get(metaModel.id)!) ?? [],
+      // metaModelIds: this.vsumDetails?.metaModels.map((metaModel) => metaModel.id) ?? [],
       metaModelRelationRequests: this.vsumDetails?.metaModelsRelation?.map(
         (relation) => ({
+          id: relation.id ?? null,
           sourceId: map.get(relation.sourceId)!,
           targetId: map.get(relation.targetId)!,
-          reactionFileId: relation.reactionFileStorageId ?? 0,
+          reactionFileId: relation.reactionFileStorageId ?? null,
           fineGranularMetaModelRelationSet: relation.fineGranularMetaModelRelationSet
         })
       ) ?? [],

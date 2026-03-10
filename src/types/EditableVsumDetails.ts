@@ -40,10 +40,9 @@ export interface EditableVsumDetails extends EditableVsum {
 }
 
 export type EditableFineGranularMetaModelRelation = {
-  id?: number; // null for new relations
+  id: number | null; // null for new relations
   sourceId: string;
   targetId: string;
   reactionFileId?: number;
-  lowCodeReactionTemplate?: string;
-  lowCodeReactionTemplateParams?: any;
+  lowCodeReactionRequestBase?: { [key: string]: unknown };
 }

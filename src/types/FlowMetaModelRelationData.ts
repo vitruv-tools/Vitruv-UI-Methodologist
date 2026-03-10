@@ -16,3 +16,15 @@ export type FlowMetaModelRelationData = Partial<{
      */
     targetMetaModelSourceId: number;
 }>;
+
+export function isFlowMetaModelRelationData(data: unknown) : data is FlowMetaModelRelationData {
+    return (
+        typeof data === "object" &&
+        !!data &&
+        typeof (data as FlowMetaModelRelationData) === "object" &&
+        typeof (data as FlowMetaModelRelationData).sourceMetaModelId === "number" &&
+        typeof (data as FlowMetaModelRelationData).targetMetaModelId === "number" &&
+        typeof (data as FlowMetaModelRelationData).sourceMetaModelSourceId === "number" &&
+        typeof (data as FlowMetaModelRelationData).targetMetaModelSourceId === "number"
+    );
+}

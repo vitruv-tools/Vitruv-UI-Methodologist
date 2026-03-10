@@ -1,4 +1,5 @@
 import { Node, Edge } from "reactflow";
+import { FlowFineGranularMetaModelRelationData } from "./FlowFineGranularMetaModelRelationData";
 
 export type FlowNodeECoreData = {
   model: string;
@@ -25,16 +26,6 @@ export type UMLNode = FlowNode & {
   data: { backendMetaModelId: number } 
 };
 
-export type FlowEdgeECoreData = {
-  ecore: {
-    eReferenceId?: string;
-    eObjectSourceId: string;
-    eObjectTargetId: string;
-    fromModel: string;
-    toModel: string;
-  }
-}
-
 export type FlowEdgeData = {
   relationshipType: string;
   targetMultiplicity?: string;
@@ -42,7 +33,7 @@ export type FlowEdgeData = {
   labelY?: number;
 };
 export type FlowEdge = Edge<FlowEdgeData>;
-export type FlowEcoreEdge = Edge<FlowEdgeData & FlowEdgeECoreData>;
+export type FlowEcoreEdge = Edge<FlowEdgeData & FlowFineGranularMetaModelRelationData>;
 
 export interface FlowData {
   nodes: FlowNode[];

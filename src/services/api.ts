@@ -763,7 +763,7 @@ export interface UserSearchItem {
 export interface MetaModelRelationRequest {
   sourceId: number;
   targetId: number;
-  reactionFileId: number;  // Use 0 when there's no reaction file
+  reactionFileId: number | null;  // Use null when there's no reaction file
   fineGranularMetaModelRelationSet: EditableFineGranularMetaModelRelation[]; // Include fine-grained relations in the request
 }
 

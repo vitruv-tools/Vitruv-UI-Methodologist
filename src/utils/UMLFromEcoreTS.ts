@@ -3,6 +3,21 @@ import { EObject, EReference, EAttribute, ResourceSet, XMI, EPackage, EClass, ES
 import { UMLRelationshipTypes } from "../components/flow/UMLRelationship";
 import { applyIntelligentLayout } from "./umlGenerator";
 
+export const ecoreIdentifierSeparators = ["::", ".", "/"] as const;
+
+export function splitByEcoreIdentifierSeparators(value: string | undefined): string[] {
+  if (!value) {
+    return [];
+  }
+
+  const escapedSeparators = [...ecoreIdentifierSeparators]
+    .sort((a, b) => b.length - a.length)
+    .map((separator) => separator.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"));
+
+  const separatorPattern = new RegExp(escapedSeparators.join("|"), "g");
+  return value.split(separatorPattern).filter((part) => part.length > 0);
+}
+
 /**
  * Recursively collects all EObject contents while generating stable, unique identifiers.
  */
@@ -16,8 +31,13 @@ function getAllContents(
   if (currentPath == null) {
     if (eObject.eClass.get("name") === EClass.get<string>("name")) {
       currentPath = `${prefix}::${eObject.get("name")}`;
-    } else {
+    }
+    else if ([EAttribute.get<string>("name"), EReference.get<string>("name")].includes(eObject.eClass.get("name"))) {
+      currentPath = `${prefix}.${eObject.get("name")}`;
+    }
+    else {
       // Fallback to generic separator for non-class elements
+      // Make sure to update ecoreIdentifierSeparators if you add new separators
       currentPath = `${prefix}/${eObject.get("name")}`;
     }
   }

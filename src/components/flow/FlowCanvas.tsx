@@ -39,7 +39,7 @@ import type { EObject } from 'ecore-ts';
 import { UmlEdgeDetails } from './UMLEdgeDetails';
 import { DragablePanel } from './DragablePanel';
 import { GhostNode } from './lowcode/GhostNode';
-import { addReactionEdgeToVsumDetails } from '../../utils/ReactionUtils';
+import { addReactionEdgeToVsumDetails, addReactionFileIdToVsumDetails, removeReactionEdgeFromVsumDetails } from '../../utils/ReactionUtils';
 import { disableReactionHandles, enableReactionHandles, recalculateNodesOnEdgesForReactions } from '../../utils/FineGranularReactionUtils';
 import { DEFAULT_STORAGE_KEY, loadFromStorage, UMLEdgeDetailsConfig, UMLEdgeDetailsConfigPanel } from './UMLEdgeDetailsConfig';
 import { FlowMetaModelRelationData } from '../../types/FlowMetaModelRelationData';
@@ -930,6 +930,7 @@ export const FlowCanvas = forwardRef<{
         updateEdgeCode(edgeId, code);
 
         if (reactionFileId != null) {
+          addReactionFileIdToVsumDetails(edges.find(e => e.id === edgeId), reactionFileId);
           setCodeEditorState(prev =>
               prev
                   ? {
@@ -974,9 +975,10 @@ export const FlowCanvas = forwardRef<{
     const handleDeleteEdge = useCallback(() => {
       if (codeEditorState?.edgeId) {
         removeEdge(codeEditorState.edgeId);
+        removeReactionEdgeFromVsumDetails(edges.find(e => e.id === codeEditorState.edgeId));
         setCodeEditorState(null);
       }
-    }, [codeEditorState, removeEdge]);
+    }, [edges, codeEditorState, removeEdge]);
 
     const handleToolClick = useCallback((toolType: string, toolName: string, diagramType?: string) => {
       if (!reactFlowInstance || !reactFlowWrapper.current) return;

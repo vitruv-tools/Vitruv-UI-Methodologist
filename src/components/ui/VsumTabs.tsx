@@ -180,7 +180,7 @@ export const VsumTabs: React.FC<VsumTabsProps> = ({
                             return true;
                         }
                         // Fine-grained relation has a low-code reaction template with params
-                        if (fineRel.lowCodeReactionTemplate != null && fineRel.lowCodeReactionTemplateParams != null) {
+                        if (fineRel.lowCodeReactionRequestBase != null) {
                             return true;
                         }
                         return false;

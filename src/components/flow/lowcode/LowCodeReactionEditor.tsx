@@ -26,6 +26,7 @@ import { LowCodeReactionFieldVariables } from "../../../types/LowCodeReactionFie
 import { FieldRenderer } from "../FieldRenderer";
 import { getFieldDefaultValue } from "../../../utils/FieldUtils";
 import { temporarilySaveLowCodeReactionConfig } from "../../../utils/LowCodeReactionUtils";
+import { ecoreIdentifierSeparators, splitByEcoreIdentifierSeparators } from "../../../utils/UMLFromEcoreTS";
 
 /**
  * Configuring reaction mappings inside the React Flow canvas.
@@ -76,19 +77,11 @@ export const LowCodeReactionEditor = forwardRef<
 
   const initializeFieldValues = (fields: LowCodeReactionFieldMetadata[]) => {
     const initialValues: Record<string, any> = {};
-    const sourceModelAlias = edge.data?.ecore?.fromModel
-      .split("/")
+    const sourceModelAlias = splitByEcoreIdentifierSeparators(edge.data?.ecore?.fromModel).slice(-1)[0];
+    const targetModelAlias = splitByEcoreIdentifierSeparators(edge.data?.ecore?.toModel).slice(-1)[0];
+    const sourceAlias = splitByEcoreIdentifierSeparators(edge.data?.ecore?.eObjectSourceId)
       .slice(-1)[0];
-    const targetModelAlias = edge.data?.ecore?.toModel.split("/").slice(-1)[0];
-    const sourceAlias = edge.data?.ecore?.eObjectSourceId
-      .split("/")
-      .slice(-1)[0]
-      .split("::")
-      .slice(-1)[0];
-    const targetAlias = edge.data?.ecore?.eObjectTargetId
-      .split("/")
-      .slice(-1)[0]
-      .split("::")
+    const targetAlias = splitByEcoreIdentifierSeparators(edge.data?.ecore?.eObjectTargetId)
       .slice(-1)[0];
     const variables: Partial<LowCodeReactionFieldVariables> = {
       sourceAlias: sourceAlias,

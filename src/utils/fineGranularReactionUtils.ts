@@ -85,6 +85,7 @@ export function createFineGranularReactionEdge(
       (tgt as UMLNode).data.ecore!,
     );
     metaModelRelation.fineGranularMetaModelRelationSet.push({
+      id: null,
       sourceId: fineGranularSourceId,
       targetId: fineGranularTargetId,
     });
