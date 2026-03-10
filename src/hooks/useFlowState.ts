@@ -5,6 +5,7 @@ import { createFineGranularReactionEdge } from '../utils/FineGranularReactionUti
 import { ActiveVsumDetails } from '../store/ActiveVsumDetails';
 import { EditableVsumDetails } from '../types/EditableVsumDetails';
 import { NoVsumDetailsStoreError } from '../store/NoVsumDetailsStoreError';
+import { chooseHandlesForPair as utilChooseHandlesForPair } from '../utils';
 
 interface UseFlowStateProps {
   userId?: string;
@@ -14,22 +15,7 @@ interface UseFlowStateProps {
 export function useFlowState(props?: UseFlowStateProps) {
   const { userId, projectId } = props || {};
   
-  const chooseHandlesForPair = useCallback((src?: Node, tgt?: Node, preferredSource?: string | null, preferredTarget?: string | null) => {
-    if (!src || !tgt) {
-      return { s: preferredSource ?? undefined, t: preferredTarget ?? undefined } as const;
-    }
-    const dx = (tgt.position?.x ?? 0) - (src.position?.x ?? 0);
-    const dy = (tgt.position?.y ?? 0) - (src.position?.y ?? 0);
-    if (Math.abs(dx) >= Math.abs(dy)) {
-      const s = dx >= 0 ? 'right-source' : 'left-source';
-      const t = dx >= 0 ? 'left-target' : 'right-target';
-      return { s, t } as const;
-    } else {
-      const s = dy >= 0 ? 'bottom-source' : 'top-source';
-      const t = dy >= 0 ? 'top-target' : 'bottom-target';
-      return { s, t } as const;
-    }
-  }, []);
+  const chooseHandlesForPair = useCallback(utilChooseHandlesForPair, []);
 
   const applyParallelEdgeMeta = useCallback((edges: Edge[]) => {
     // group edges by unordered node pair

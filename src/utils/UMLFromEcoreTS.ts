@@ -3,7 +3,11 @@ import { EObject, EReference, EAttribute, ResourceSet, XMI, EPackage, EClass, ES
 import { UMLRelationshipTypes } from "../components/flow/UMLRelationship";
 import { applyIntelligentLayout } from "./umlGenerator";
 
-export const ecoreIdentifierSeparators = ["::", ".", "/"] as const;
+export const ecoreClassSeparator = "::" as const;
+export const ecoreFeatureSeparator = "." as const;
+export const ecorePackageSeparator = "/" as const;
+export const ecoreGenericSeparator = "~" as const;
+export const ecoreIdentifierSeparators = [ecoreClassSeparator, ecoreFeatureSeparator, ecoreGenericSeparator] as const;
 
 export function splitByEcoreIdentifierSeparators(value: string | undefined): string[] {
   if (!value) {
@@ -18,6 +22,30 @@ export function splitByEcoreIdentifierSeparators(value: string | undefined): str
   return value.split(separatorPattern).filter((part) => part.length > 0);
 }
 
+export function getHandleIdForEcoreElement(fullyQualifiedName: string, direction: "left" | "right" | "top" | "bottom", type: "source" | "target"): string {
+  return `reaction-${direction}-${type}-${fullyQualifiedName}`;
+}
+
+export function findPackageNameFromEcoreIdentifier(value: string): string {
+  const parts = value.split(ecorePackageSeparator);
+  const previousParts = parts.slice(0, -1);
+  const lastPackagePart = parts.slice(-1)[0];
+  const onlyPackageName = splitByEcoreIdentifierSeparators(lastPackagePart)[0];
+  return [...previousParts, onlyPackageName].join(ecorePackageSeparator);
+}
+
+export function findClassNameFromEcoreIdentifier(value: string): string {
+  const parts = value.split(ecoreClassSeparator);
+  const previousParts = parts.slice(0, -1);
+  const lastClassPart = parts.slice(-1)[0];
+  const onlyClassName = splitByEcoreIdentifierSeparators(lastClassPart)[0];
+  return [...previousParts, onlyClassName].join(ecoreClassSeparator);
+}
+
+export function getNodeNameFromEcoreIdentifier(value: string): string {
+  return value;
+}
+
 /**
  * Recursively collects all EObject contents while generating stable, unique identifiers.
  */
@@ -30,15 +58,18 @@ function getAllContents(
   let currentPath = eObject.get<string>("nsURI");
   if (currentPath == null) {
     if (eObject.eClass.get("name") === EClass.get<string>("name")) {
-      currentPath = `${prefix}::${eObject.get("name")}`;
+      currentPath = `${prefix}${ecoreClassSeparator}${eObject.get("name")}`;
     }
     else if ([EAttribute.get<string>("name"), EReference.get<string>("name")].includes(eObject.eClass.get("name"))) {
-      currentPath = `${prefix}.${eObject.get("name")}`;
+      currentPath = `${prefix}${ecoreFeatureSeparator}${eObject.get("name")}`;
+    }
+    else if ([EPackage.get<string>("name")].includes(eObject.eClass.get("name"))) {
+      currentPath = `${prefix}${ecorePackageSeparator}${eObject.get("name")}`;
     }
     else {
       // Fallback to generic separator for non-class elements
       // Make sure to update ecoreIdentifierSeparators if you add new separators
-      currentPath = `${prefix}/${eObject.get("name")}`;
+      currentPath = `${prefix}${ecoreGenericSeparator}${eObject.get("name")}`;
     }
   }
   weakMap.set(eObject, currentPath);
@@ -213,7 +244,7 @@ function buildClassNodes(
   classElems.forEach((cls, idx) => {
     const className = cls.get<string>("name") || `Class${idx + 1}`;
     const node: UMLNode = {
-      id: eObjectUniqueIdentifiers.get(cls)!,
+      id: getNodeNameFromEcoreIdentifier(eObjectUniqueIdentifiers.get(cls)!),
       type: "editable",
       position: { x: 0, y: 0 },
       data: {
@@ -444,7 +475,7 @@ function addPackageNode(
   }
 
   const pkgNode: UMLNode = {
-    id: eObjectUniqueIdentifiers.get(rootPackage!),
+    id: getNodeNameFromEcoreIdentifier(eObjectUniqueIdentifiers.get(rootPackage)!),
     type: "editable",
     position: { x: 80, y: 40 },
     data: {

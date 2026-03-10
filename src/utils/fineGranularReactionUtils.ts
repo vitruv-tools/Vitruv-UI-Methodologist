@@ -12,8 +12,10 @@ import {
   OnEdgeClickParams,
   OnEdgeDeleteParams,
 } from "../types/EdgeEventHandlers";
-import { setHandlePointerEvents, setHandleOpacity } from "./flowUtils";
+import { setHandlePointerEvents, chooseHandlesForPair, setEdgeOpacity, setHandleOpacity } from "./flowUtils";
 import { useSelectedEdgeStore } from "../store/SelectedEdge";
+import { EditableFineGranularMetaModelRelation, EditableVsumMetaModelRelation } from "../types/EditableVsumDetails";
+import { findClassNameFromEcoreIdentifier, findPackageNameFromEcoreIdentifier, getHandleIdForEcoreElement, getNodeNameFromEcoreIdentifier } from "./UMLFromEcoreTS";
 
 export function getProperEObjectIdFromHandle(
   handleId: string,
@@ -36,6 +38,52 @@ export function getProperEObjectIdFromHandle(
   throw new Error(
     `No matching eObjectId found for handleId ${handleId} and ecore ${JSON.stringify(ecore)}`,
   );
+}
+
+export function createExistingFineGranularReactionEdge(nodes: Node[], fgEdge: EditableFineGranularMetaModelRelation): FlowEcoreEdge {
+  if (fgEdge.id == null) {
+    throw new Error("Existing fine-granular meta model relation must have an id to be converted to an edge");
+  }
+
+  const source = findClassNameFromEcoreIdentifier(fgEdge.sourceId)!;
+  const target = findClassNameFromEcoreIdentifier(fgEdge.targetId)!;
+  const sourceNodeId = getNodeNameFromEcoreIdentifier(source);
+  const targetNodeId = getNodeNameFromEcoreIdentifier(target);
+  const sourceNode = nodes.find(n => n.id === sourceNodeId);
+  const targetNode = nodes.find(n => n.id === targetNodeId);
+
+  if (sourceNode == null || targetNode == null) {
+    throw new Error(`Could not find nodes ${sourceNodeId} ${targetNodeId} for fine-granular reaction edge: ${fgEdge.id}`);
+  }
+
+  const auto = chooseHandlesForPair(sourceNode, targetNode, undefined, undefined, true, false);
+  let sourceHandle: string | undefined = auto.s;
+  let targetHandle: string | undefined = auto.t;
+  if (auto.sourceDirection != null) {
+    sourceHandle = getHandleIdForEcoreElement(source, auto.sourceDirection, "source");
+  }
+  if (auto.targetDirection != null) {
+    targetHandle = getHandleIdForEcoreElement(target, auto.targetDirection, "target");
+  }
+
+  return {
+      id: `${fgEdge.id!}`,
+      type: "fine-granular-reaction",
+      source: source,
+      target: target,
+      sourceHandle: sourceHandle,
+      targetHandle: targetHandle,
+      zIndex: 9999, // Ensure fine-granular reaction edges are always on top
+      data: {
+        ecore: {
+          fromModel: findPackageNameFromEcoreIdentifier(fgEdge.sourceId)!,
+          toModel: findPackageNameFromEcoreIdentifier(fgEdge.targetId)!,
+          eObjectSourceId: fgEdge.sourceId,
+          eObjectTargetId: fgEdge.targetId,
+        },
+        relationshipType: "association",
+      },
+    };
 }
 
 /**
@@ -98,6 +146,7 @@ export function createFineGranularReactionEdge(
       target: params.target!,
       sourceHandle: params.sourceHandle ?? auto.s,
       targetHandle: params.targetHandle ?? auto.t,
+      zIndex: 9999, // Ensure fine-granular reaction edges are always on top
       data: {
         ecore: {
           fromModel: (src as UMLNode)!.data!.ecore!.model,
@@ -238,9 +287,17 @@ export function enableReactionHandles() {
   enableReactionTargetHandles();
 }
 
+export function enableReactionEdges() {
+  setEdgeOpacity("reaction", 1);
+}
+
 export function disableReactionHandles() {
   disableReactionSourceHandles();
   disableReactionTargetHandles();
+}
+
+export function disableReactionEdges() {
+  setEdgeOpacity("reaction", 0);
 }
 
 export function enableReactionSourceHandles() {

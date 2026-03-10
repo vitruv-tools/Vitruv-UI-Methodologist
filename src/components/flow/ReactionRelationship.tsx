@@ -320,7 +320,7 @@ export function ReactionRelationship({
   const handleMouseLeave = () => setIsHovered(false);
 
   return (
-    <>
+    <g className="reaction-edge">
       <path
         id={`${id}-underlay`}
         d={edgePath}
@@ -485,6 +485,6 @@ export function ReactionRelationship({
           style={{ pointerEvents: 'none' }}
         />
       )}
-    </>
+    </g>
   );
 }

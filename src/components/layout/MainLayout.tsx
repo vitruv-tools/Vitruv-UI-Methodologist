@@ -18,7 +18,7 @@ import {
 import { Node, Edge, ReactFlowProvider } from 'reactflow';
 import { User } from '../../services/auth';
 import { WorkspaceSnapshot, WorkspaceSnapshotRequest } from '../../types/workspace';
-import { disableReactionHandles, enableReactionHandles } from '../../utils/FineGranularReactionUtils';
+import { createExistingFineGranularReactionEdge, disableReactionEdges, disableReactionHandles, enableReactionHandles, enableReactionEdges } from '../../utils/FineGranularReactionUtils';
 import { ActiveVsumDetails } from "../../store/ActiveVsumDetails";
 import { EditableVsumMetaModelRef } from '../../types/EditableVsumDetails';
 import { VitruvAddFileToWorkspaceEvent } from '../../types/events/VitruvAddFileToWorkspace';
@@ -104,7 +104,7 @@ export function MainLayout({
     // This ensures we can save relations even when viewing UML
     const [cachedWorkspaceSnapshot, setCachedWorkspaceSnapshot] = useState<WorkspaceSnapshot | null>(null);
 
-    const { mode, setMode, setReactionFiles, expandedMetaModelNames, setExpandedMetaModelNames } = useProjectStore();
+    const { mode, setMode, setReactionFiles, expandedMetaModels, setExpandedMetaModels } = useProjectStore();
 
     // Start with an empty workspace
     useEffect(() => {
@@ -159,9 +159,11 @@ export function MainLayout({
         setMode(newMode);
         if (newMode === 'reactions') {
             enableReactionHandles();
+            enableReactionEdges();
             disableVsumHandles();
         } else if (newMode === 'expanded') {
             disableReactionHandles();
+            disableReactionEdges();
             enableVsumHandles();
         }
     }, [mode, setMode]);
@@ -218,15 +220,15 @@ export function MainLayout({
         }
 
         // In expanded mode, we expand new meta models to facilitate defining reactions
-        if (expandedMetaModelNames) {
-            if (expandedMetaModelNames.has(meta?.fileName ?? "")) {
+        if (expandedMetaModels) {
+            const backendMetaModelId = getBackendMetaModelId(meta?.metaModelId, meta?.metaModelSourceId)!;
+            if (expandedMetaModels.has(backendMetaModelId)) {
                 console.log('⚠️ File already expanded, skipping:', meta?.fileName);
                 return;
             }
 
             console.log('➕ Adding expanded metamodel:', meta?.fileName);
 
-            const backendMetaModelId = getBackendMetaModelId(meta?.metaModelId, meta?.metaModelSourceId);
             handleEcoreFileExpand(meta?.fileName!, fileContent, backendMetaModelId!, false, false); 
         } else {
             // Check if file already exists to prevent duplicates
@@ -262,13 +264,13 @@ export function MainLayout({
                 );
             }
         }
-    }, [calculateEmptyPosition, expandedMetaModelNames]);
+    }, [calculateEmptyPosition, expandedMetaModels]);
 
     // Function to return to workspace from expanded metamodel view
     const handleBackToWorkspace = useCallback(() => {
         console.log('⬅️ Returning to workspace view from mode:', mode);
         handleExpandedModeSwitch('workspace');
-        setExpandedMetaModelNames(null);
+        setExpandedMetaModels(null);
         
         // Clear the cached workspace snapshot since we're returning to workspace view
         setCachedWorkspaceSnapshot(null);
@@ -307,7 +309,7 @@ export function MainLayout({
     useEffect(() => {
         const handleResetWorkspace = () => {
             console.log('🔄 Resetting workspace - clearing all nodes');
-            setExpandedMetaModelNames(null);
+            setExpandedMetaModels(null);
             // Force canvas key reset to ensure fresh state
             const newKey = `workspace-reset-${Date.now()}`;
             console.log('🔑 Setting new canvas key:', newKey);
@@ -349,7 +351,7 @@ export function MainLayout({
             globalThis.removeEventListener('vitruv.resetWorkspace', handleResetWorkspace as EventListener);
         };
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [expandedMetaModelNames]);
+    }, [expandedMetaModels]);
 
     useEffect(() => {
         const handleWorkspaceSnapshotRequest = (event: Event) => {
@@ -360,7 +362,7 @@ export function MainLayout({
             
             // If viewing UML diagram, return the cached workspace snapshot
             // This ensures relations are saved even when viewing UML
-            if (expandedMetaModelNames && cachedWorkspaceSnapshot) {
+            if (expandedMetaModels && cachedWorkspaceSnapshot) {
                 console.log('📸 Using cached workspace snapshot while viewing UML:', cachedWorkspaceSnapshot);
                 detail.resolve(cachedWorkspaceSnapshot);
                 return;
@@ -376,7 +378,7 @@ export function MainLayout({
 
         globalThis.addEventListener('vitruv.requestWorkspaceSnapshot', handleWorkspaceSnapshotRequest as EventListener);
         return () => globalThis.removeEventListener('vitruv.requestWorkspaceSnapshot', handleWorkspaceSnapshotRequest as EventListener);
-    }, [expandedMetaModelNames, cachedWorkspaceSnapshot]);
+    }, [expandedMetaModels, cachedWorkspaceSnapshot]);
 
     const handleEcoreFileSelect = useCallback((fileName: string) => {
         const nodes = flowCanvasRef.current?.getNodes?.() || [];
@@ -404,11 +406,7 @@ export function MainLayout({
         }
         
         // Mark that we're viewing an expanded metamodel
-        const currentlyExpanded = new Set<string>();
-        if (expandedMetaModelNames) Array.from(expandedMetaModelNames.values()).forEach(v => currentlyExpanded.add(v));
-        currentlyExpanded.add(backendMetaModelId.toString());
-        setExpandedMetaModelNames(currentlyExpanded);
-        
+        const currentlyExpanded = new Set<number>();
         if (remountCanvas) {
             // Force FlowCanvas to remount with a new key for UML view
             // This ensures a completely fresh canvas without any metamodel boxes
@@ -422,7 +420,11 @@ export function MainLayout({
             if (flowCanvasRef.current?.resetExpandedFile) {
                 flowCanvasRef.current.resetExpandedFile();
             }
+        } else {
+            if (expandedMetaModels) Array.from(expandedMetaModels.values()).forEach(v => currentlyExpanded.add(v));
         }
+        currentlyExpanded.add(backendMetaModelId);
+        setExpandedMetaModels(currentlyExpanded);
 
         // Prefer UML generator; fall back to previous parsers
         let diagramData = generateUMLFromEcoreTsParser(fileName, fileContent, backendMetaModelId);
@@ -431,6 +433,12 @@ export function MainLayout({
         activeVsumDetails.setIdentifiersToEObjectMap(diagramData.identifiersToEObject, remountCanvas);
         activeVsumDetails.addIdentifierToBackendMetaModelIdMap(diagramData.eObjectIdentifierOfMetaModel, backendMetaModelId);
         activeVsumDetails.saveToStore();
+        
+        // Create existing fine granular reaction edges for this metamodel
+        activeVsumDetails.getMetaModelRelations(Array.from(currentlyExpanded.values()).map(id => ({ id })), { id: backendMetaModelId }).map(mmr => mmr.fineGranularMetaModelRelationSet).flat().filter(fgmmr => fgmmr.id != null).forEach(relation => {
+            const edge = createExistingFineGranularReactionEdge(diagramData.nodes.concat(flowCanvasRef.current?.getNodes() || []), relation);
+            diagramData.edges.push(edge);
+        });
 
         if (!diagramData.nodes.length) {
             // TODO(DEREIFAB): I dont support this fallback as of now
@@ -467,7 +475,7 @@ export function MainLayout({
             saveDocumentData(newId, { nodes: diagramData.nodes, edges: diagramData.edges });
             setIsDirty(false);
         }, 100);
-    }, [setDocuments, setExpandedMetaModelNames, expandedMetaModelNames, handleExpandedModeSwitch]);
+    }, [setDocuments, setExpandedMetaModels, expandedMetaModels, handleExpandedModeSwitch]);
 
     const handleEcoreFileDelete = useCallback((id: string, metaModelId: number) => {
         // Remove Node from FlowCanvas
@@ -707,7 +715,7 @@ export function MainLayout({
                         )}
 
                         {/* Back to Workspace button - shown when viewing expanded metamodel */}
-                        {expandedMetaModelNames && !isMMLRoute && (
+                        {expandedMetaModels && !isMMLRoute && (
                             <button
                                 onClick={handleBackToWorkspace}
                                 style={{
@@ -732,7 +740,7 @@ export function MainLayout({
                                 onMouseLeave={(e) => {
                                     e.currentTarget.style.background = '#3498db';
                                 }}
-                                title={`Back to workspace from ${Array.from(expandedMetaModelNames.values()).join(", ")}`}
+                                title={`Back to workspace from ${Array.from(expandedMetaModels.values()).join(", ")}`}
                             >
                                 <svg width="14" height="14" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
                                     <path d="M10 13L5 8L10 3" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>

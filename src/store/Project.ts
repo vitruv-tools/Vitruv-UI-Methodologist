@@ -7,19 +7,19 @@ export type ProjectStore = {
   activeId: number | null;
   mode: 'workspace' | 'expanded' | 'reactions';
   reactionFiles: Set<ReactionFile>;
-  expandedMetaModelNames: Set<string> | null;
+  expandedMetaModels: Set<number> | null;
   setMode: (mode: ProjectStore['mode']) => void;
   setReactionFiles: (files: ProjectStore['reactionFiles']) => void;
   addReactionFile: (file: ReactionFile) => void;
   setActiveId: (id: number | null) => void;
-  setExpandedMetaModelNames: (names: Set<string> | null) => void;
+  setExpandedMetaModels: (ids: Set<number> | null) => void;
 };
 
 export const useProjectStore = create<ProjectStore>((set) => ({
   activeId: null,
   mode: 'workspace',
   reactionFiles: new Set(),
-  expandedMetaModelNames: null,
+  expandedMetaModels: null,
   setMode(mode: ProjectStore['mode']) {
     set({ mode });
   },
@@ -30,9 +30,9 @@ export const useProjectStore = create<ProjectStore>((set) => ({
     set((state) => ({ reactionFiles: new Set(state.reactionFiles).add(file) }));
   },
   setActiveId(id: number | null) {
-    set({ activeId: id, expandedMetaModelNames: null, reactionFiles: new Set(), mode: 'workspace' });
+    set({ activeId: id, expandedMetaModels: null, reactionFiles: new Set(), mode: 'workspace' });
   },
-  setExpandedMetaModelNames(names: Set<string> | null) {
-    set({ expandedMetaModelNames: names });
+  setExpandedMetaModels(ids: Set<number> | null) {
+    set({ expandedMetaModels: ids });
   }
 }));

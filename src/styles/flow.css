@@ -40,6 +40,8 @@
   --reaction-handle-pointer-events-target: auto;
   --reaction-handle-opacity-source: 1;
   --reaction-handle-opacity-target: 1;
+  --reaction-edge-opacity: 1;
+  --reaction-edge-opacity: 1;
   --vsum-handle-pointer-events-source: auto;
   --vsum-handle-pointer-events-target: auto;
   --vsum-handle-opacity-source: 1;

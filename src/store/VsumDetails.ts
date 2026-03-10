@@ -96,6 +96,14 @@ export class VsumDetailsHelper {
     return removed[0];
   }
 
+  getMetaModelRelations(metaModels: Pick<EditableVsumMetaModelRef, "id">[], target?: Pick<EditableVsumMetaModelRef, "id">) {
+    const result = this.vsumDetails?.metaModelsRelation?.filter(mmr => metaModels.some(mm => mm.id === mmr.sourceId) && metaModels.some(mm => mm.id === mmr.targetId)) ?? [];
+    if (target != null) {
+      return result.filter(mmr => mmr.sourceId === target.id || mmr.targetId === target.id);
+    }
+    return result;
+  }
+
   addMetaModelRelation(
     editableMetaModelRelation: EditableVsumMetaModelRelation
   ) {

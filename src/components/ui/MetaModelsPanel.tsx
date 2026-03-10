@@ -173,7 +173,7 @@ export const MetaModelsPanel: React.FC<MetaModelsPanelProps> = ({
   const [dateFilter, setDateFilter] = useState<'all' | 'today' | 'week' | 'month' | 'year'>('all');
   const [parsedFilters, setParsedFilters] = useState<any[]>([]);
   const [showAllModels, setShowAllModels] = useState(false);
-  const { mode, activeId, expandedMetaModelNames } = useProjectStore((state) => ({ mode: state.mode, activeId: state.activeId, expandedMetaModelNames: state.expandedMetaModelNames }));
+  const { mode, activeId, expandedMetaModelNames } = useProjectStore((state) => ({ mode: state.mode, activeId: state.activeId, expandedMetaModelNames: state.expandedMetaModels }));
   const selectedMetaModels = useStore(getVsumDetailsStore(activeId ?? -1), (state) => state?.metaModels) ?? [];
 
   const handleSearchKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
@@ -314,7 +314,7 @@ export const MetaModelsPanel: React.FC<MetaModelsPanelProps> = ({
 
   const alreadyAdded = (model: VsumMetaModelRef) => {
     if (mode === 'expanded' || mode === 'reactions') {
-      return (selectedMetaModels ?? []).filter(model => expandedMetaModelNames?.has(model.id.toString())).map(m => m.id).includes(model.id);
+      return (selectedMetaModels ?? []).filter(model => expandedMetaModelNames?.has(model.id)).map(m => m.id).includes(model.id);
     }
     else {
       return (selectedMetaModels ?? []).map(m => m.id).includes(model.id);

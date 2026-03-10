@@ -1,9 +1,19 @@
 import { Node, Edge, Connection, OnConnectStartParams } from "reactflow";
 import { FlowData, FlowEdge } from "../types/flow";
-import { OnEdgeClickParams, OnEdgeClickParamsExtension, OnEdgeDeleteParams } from "../types/EdgeEventHandlers";
-import { onEdgeClick as umlOnEdgeClick } from './UMLUtils';
+import {
+  OnEdgeClickParams,
+  OnEdgeClickParamsExtension,
+  OnEdgeDeleteParams,
+} from "../types/EdgeEventHandlers";
+import { onEdgeClick as umlOnEdgeClick } from "./UMLUtils";
 import { onEdgeDelete as reactionsOnEdgeDelete } from "./ReactionUtils";
-import { onEdgeClick as fineGranularReactionOnEdgeClick, onEdgeDelete as fineGranularReactionOnEdgeDelete, disableReactionSourceHandles, enableReactionSourceHandles, enableReactionTargetHandles } from './FineGranularReactionUtils';
+import {
+  onEdgeClick as fineGranularReactionOnEdgeClick,
+  onEdgeDelete as fineGranularReactionOnEdgeDelete,
+  disableReactionSourceHandles,
+  enableReactionSourceHandles,
+  enableReactionTargetHandles,
+} from "./FineGranularReactionUtils";
 import { useProjectStore } from "../store/Project";
 
 export const exportFlowData = (nodes: Node[], edges: Edge[]): FlowData => {
@@ -145,6 +155,20 @@ export function setHandleOpacity(
   );
 }
 
+export function setEdgeOpacity(
+  category: "reaction",
+  opacity: number,
+) {
+  let opacityStr: string;
+  if (opacity > 1) opacityStr = "1";
+  else if (opacity < 0) opacityStr = "0";
+  else opacityStr = opacity.toString();
+  document.documentElement.style.setProperty(
+    `--${category}-edge-opacity`,
+    opacityStr,
+  );
+}
+
 export function enableVsumHandles() {
   setHandlePointerEvents("vsum", "source", "auto");
   setHandlePointerEvents("vsum", "target", "auto");
@@ -165,16 +189,25 @@ export function isValidConnection(
   edges: Edge[],
   params: Connection,
 ): boolean {
-  edgeValidators = edgeValidators.filter(validator => validator.isApplicable());
+  edgeValidators = edgeValidators.filter((validator) =>
+    validator.isApplicable(),
+  );
   // TODO(Reinbold): This should be false, but there isnt an edge validator for normal connections yet
   if (edgeValidators.length === 0) {
-    console.log("No edge validators applicable, allowing connection by default");
+    console.log(
+      "No edge validators applicable, allowing connection by default",
+    );
     return true;
   }
-  return edgeValidators.some(validator => validator.isValidConnection(params, nodes, edges));
+  return edgeValidators.some((validator) =>
+    validator.isValidConnection(params, nodes, edges),
+  );
 }
 
-export function onConnect(onConnectFS: (connection: Connection) => void, connection: Connection): void {
+export function onConnect(
+  onConnectFS: (connection: Connection) => void,
+  connection: Connection,
+): void {
   onConnectFS(connection);
 }
 
@@ -202,23 +235,37 @@ export function onReconnect(oldEdge: Edge, newConnection: Connection): void {
   // Unused
 }
 
-export function onReconnectEnd(event: MouseEvent | TouchEvent, edge: Edge, handleType: "source" | "target"): void {
+export function onReconnectEnd(
+  event: MouseEvent | TouchEvent,
+  edge: Edge,
+  handleType: "source" | "target",
+): void {
   // Unused
 }
 
 export function onEdgesDelete(edges: FlowEdge[]): void {
   for (const edge of edges) {
     const fullParams: OnEdgeDeleteParams = { edge: edge };
-    const handler = eventHandlers.onEdgesDelete[edge.type as keyof typeof eventHandlers.onEdgesDelete];
+    const handler =
+      eventHandlers.onEdgesDelete[
+        edge.type as keyof typeof eventHandlers.onEdgesDelete
+      ];
     if (handler) {
       handler(fullParams);
     }
   }
 }
 
-export function onEdgeClick(params: OnEdgeClickParamsExtension, event: React.MouseEvent, edge: Edge) {
+export function onEdgeClick(
+  params: OnEdgeClickParamsExtension,
+  event: React.MouseEvent,
+  edge: Edge,
+) {
   const fullParams: OnEdgeClickParams = { ...params, edge: edge, event: event };
-  const handler = eventHandlers.onEdgeClick[edge.type as keyof typeof eventHandlers.onEdgeClick];
+  const handler =
+    eventHandlers.onEdgeClick[
+      edge.type as keyof typeof eventHandlers.onEdgeClick
+    ];
   if (handler) {
     handler(fullParams);
   }
@@ -227,21 +274,59 @@ export function onEdgeClick(params: OnEdgeClickParamsExtension, event: React.Mou
 export const eventHandlers = {
   onEdgeClick: {
     uml: umlOnEdgeClick,
-    'fine-granular-reaction': fineGranularReactionOnEdgeClick
+    "fine-granular-reaction": fineGranularReactionOnEdgeClick,
   },
   onEdgesDelete: {
-    'reactions': reactionsOnEdgeDelete,
-    'fine-granular-reaction': fineGranularReactionOnEdgeDelete
-  }
-}
+    reactions: reactionsOnEdgeDelete,
+    "fine-granular-reaction": fineGranularReactionOnEdgeDelete,
+  },
+};
 
 // This weird snippet of code was extracted from FlowCanvas so it can be reused inside EcoreFileBox.
-export function getBackendMetaModelId(metaModelId?: any, metaModelSourceId?: any): number | undefined {
-  if (metaModelId !== undefined && typeof metaModelId === 'number') {
+export function getBackendMetaModelId(
+  metaModelId?: any,
+  metaModelSourceId?: any,
+): number | undefined {
+  if (metaModelId !== undefined && typeof metaModelId === "number") {
     return metaModelId;
   }
-  if (metaModelSourceId !== undefined && typeof metaModelSourceId === 'number') {
+  if (
+    metaModelSourceId !== undefined &&
+    typeof metaModelSourceId === "number"
+  ) {
     return metaModelSourceId;
   }
   return undefined;
+}
+
+export function chooseHandlesForPair(
+  src?: Node,
+  tgt?: Node,
+  preferredSource?: string | null,
+  preferredTarget?: string | null,
+  supportLeftRight: boolean = true,
+  supportTopBottom: boolean = true,
+) {
+  if (!src || !tgt) {
+    return {
+      s: preferredSource ?? undefined,
+      t: preferredTarget ?? undefined,
+    } as const;
+  }
+  const dx = (tgt.position?.x ?? 0) - (src.position?.x ?? 0);
+  const dy = (tgt.position?.y ?? 0) - (src.position?.y ?? 0);
+  if (Math.abs(dx) >= Math.abs(dy) && supportLeftRight) {
+    const s = dx >= 0 ? "right-source" : "left-source";
+    const sourceDirection = dx >= 0 ? "right" : "left";
+    const t = dx >= 0 ? "left-target" : "right-target";
+    const targetDirection = dx >= 0 ? "left" : "right";
+    return { s, t, sourceDirection, targetDirection } as const;
+  } else if (supportTopBottom) {
+    const s = dy >= 0 ? "bottom-source" : "top-source";
+    const sourceDirection = dy >= 0 ? "bottom" : "top";
+    const t = dy >= 0 ? "top-target" : "bottom-target";
+    const targetDirection = dy >= 0 ? "top" : "bottom";
+    return { s, t, sourceDirection, targetDirection } as const;
+  }
+  return { s: undefined, t: undefined, sourceDirection: undefined, targetDirection: undefined };
 }

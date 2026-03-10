@@ -3,7 +3,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { NodeProps, Handle, Position } from 'reactflow';
 import { ActiveVsumDetails } from "../../store/ActiveVsumDetails";
 import { FlowNodeECoreData } from '../../types';
-import { buildAttributeSignature, buildMethodSignature } from '../../utils/UMLFromEcoreTS';
+import { buildAttributeSignature, buildMethodSignature, getHandleIdForEcoreElement } from '../../utils/UMLFromEcoreTS';
 import {
   getBaseNodeStyle,
   headerBaseStyle,
@@ -198,28 +198,28 @@ export function renderLines(eObjectIds: string[], isConnectable: boolean, buildS
             type="target" 
             position={Position.Left} 
             isConnectable={isConnectable}
-            id={`reaction-${index}-left-target-${id}`}
+            id={`${getHandleIdForEcoreElement(id, 'left', 'target')}`}
             className="uml reaction-handle"
           />
           <Handle 
             type="source" 
             position={Position.Left} 
             isConnectable={isConnectable}
-            id={`reaction-${index}-left-source-${id}`}
+            id={`${getHandleIdForEcoreElement(id, 'left', 'source')}`}
             className="uml reaction-handle"
           />
           <Handle 
             type="target" 
             position={Position.Right} 
             isConnectable={isConnectable}
-            id={`reaction-${index}-right-target-${id}`}
+            id={`${getHandleIdForEcoreElement(id, 'right', 'target')}`}
             className="uml reaction-handle"
           />
           <Handle 
             type="source" 
             position={Position.Right} 
             isConnectable={isConnectable}
-            id={`reaction-${index}-right-source-${id}`}
+            id={`${getHandleIdForEcoreElement(id, 'right', 'source')}`}
             className="uml reaction-handle"
           />
         </div>
@@ -447,28 +447,28 @@ function EditableField({
         type="target" 
         position={Position.Left} 
         isConnectable={true}
-        id={`reaction-left-target-${id}`}
+        id={`${getHandleIdForEcoreElement(id, 'left', 'target')}`}
         className="uml reaction-handle"
       />
       <Handle 
         type="source" 
         position={Position.Left} 
         isConnectable={true}
-        id={`reaction-left-source-${id}`}
+        id={`${getHandleIdForEcoreElement(id, 'left', 'source')}`}
         className="uml reaction-handle"
       />
       <Handle 
         type="target" 
         position={Position.Right} 
         isConnectable={true}
-        id={`reaction-right-target-${id}`}
+        id={`${getHandleIdForEcoreElement(id, 'right', 'target')}`}
         className="uml reaction-handle"
       />
       <Handle 
         type="source" 
         position={Position.Right} 
         isConnectable={true}
-        id={`reaction-right-source-${id}`}
+        id={`${getHandleIdForEcoreElement(id, 'right', 'source')}`}
         className="uml reaction-handle"
       />
     </div>
