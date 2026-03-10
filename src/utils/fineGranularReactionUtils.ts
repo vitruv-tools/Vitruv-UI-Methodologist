@@ -1,4 +1,4 @@
-import { Connection, Node } from "reactflow";
+import { Connection, Edge, Node } from "reactflow";
 import { ActiveVsumDetails } from "../store/ActiveVsumDetails";
 import { NoVsumDetailsStoreError } from "../store/NoVsumDetailsStoreError";
 import { NoActiveVsumError } from "../store/NoActiveVsumError";
@@ -56,15 +56,7 @@ export function createExistingFineGranularReactionEdge(nodes: Node[], fgEdge: Ed
     throw new Error(`Could not find nodes ${sourceNodeId} ${targetNodeId} for fine-granular reaction edge: ${fgEdge.id}`);
   }
 
-  const auto = chooseHandlesForPair(sourceNode, targetNode, undefined, undefined, true, false);
-  let sourceHandle: string | undefined = auto.s;
-  let targetHandle: string | undefined = auto.t;
-  if (auto.sourceDirection != null) {
-    sourceHandle = getHandleIdForEcoreElement(source, auto.sourceDirection, "source");
-  }
-  if (auto.targetDirection != null) {
-    targetHandle = getHandleIdForEcoreElement(target, auto.targetDirection, "target");
-  }
+  let { sourceHandle, targetHandle }: { sourceHandle: string | undefined; targetHandle: string | undefined; } = calculateOptimalFineGranularReactionHandles(fgEdge.sourceId, fgEdge.targetId, sourceNode, targetNode);
 
   return {
       id: `${fgEdge.id!}`,
@@ -84,6 +76,22 @@ export function createExistingFineGranularReactionEdge(nodes: Node[], fgEdge: Ed
         relationshipType: "association",
       },
     };
+}
+
+export function calculateOptimalFineGranularReactionHandles(sourceId: string, targetId: string, sourceNode: Node<any, string | undefined>, targetNode: Node<any, string | undefined>) {
+  const source = findClassNameFromEcoreIdentifier(sourceId)!;
+  const target = findClassNameFromEcoreIdentifier(targetId)!;
+
+  const auto = chooseHandlesForPair(sourceNode, targetNode, undefined, undefined, true, false);
+  let sourceHandle: string | undefined = auto.s;
+  let targetHandle: string | undefined = auto.t;
+  if (auto.sourceDirection != null) {
+    sourceHandle = getHandleIdForEcoreElement(source, auto.sourceDirection, "source");
+  }
+  if (auto.targetDirection != null) {
+    targetHandle = getHandleIdForEcoreElement(target, auto.targetDirection, "target");
+  }
+  return { sourceHandle, targetHandle };
 }
 
 /**

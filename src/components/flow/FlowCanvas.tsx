@@ -40,7 +40,7 @@ import { UmlEdgeDetails } from './UMLEdgeDetails';
 import { DragablePanel } from './DragablePanel';
 import { GhostNode } from './lowcode/GhostNode';
 import { addReactionEdgeToVsumDetails, addReactionFileIdToVsumDetails, removeReactionEdgeFromVsumDetails } from '../../utils/ReactionUtils';
-import { disableReactionHandles, enableReactionHandles, recalculateNodesOnEdgesForReactions } from '../../utils/FineGranularReactionUtils';
+import { calculateOptimalFineGranularReactionHandles, disableReactionHandles, enableReactionHandles, recalculateNodesOnEdgesForReactions } from '../../utils/FineGranularReactionUtils';
 import { DEFAULT_STORAGE_KEY, loadFromStorage, UMLEdgeDetailsConfig, UMLEdgeDetailsConfigPanel } from './UMLEdgeDetailsConfig';
 import { FlowMetaModelRelationData } from '../../types/FlowMetaModelRelationData';
 import { useSelectedEdgeStore } from '../../store/SelectedEdge';
@@ -283,17 +283,28 @@ export const FlowCanvas = forwardRef<{
     // Helper to update a single edge's handles based on node positions
     const updateEdgeHandles = useCallback((edge: Edge, currentNodes: Node[]) => {
       // Update handles for both reactions and UML edges
-      if (edge.type == 'fine-granular-reaction' || (edge.type !== 'reactions' && edge.type !== 'uml')) return edge;
+      if (edge.type !== 'reactions' && edge.type !== 'uml' && edge.type !== 'fine-granular-reaction') return edge;
       
       const sourceNode = currentNodes.find(n => n.id === edge.source);
       const targetNode = currentNodes.find(n => n.id === edge.target);
       
       if (!sourceNode || !targetNode) return edge;
       
-      // Use calculateOptimalHandles to get new handles
-      const handles = calculateOptimalHandles(sourceNode, targetNode);
-      const newSourceHandle = edge.type === 'uml' ? handles.sourceHandle : handles.sourceHandle.replace('-source', '').replace('-target', '');
-      const newTargetHandle = edge.type === 'uml' ? handles.targetHandle : handles.targetHandle.replace('-target', '').replace('-source', '');
+      let newSourceHandle: string | undefined;
+      let newTargetHandle: string | undefined;
+      if (edge.type === 'fine-granular-reaction') {
+        ({ sourceHandle: newSourceHandle, targetHandle: newTargetHandle } = calculateOptimalFineGranularReactionHandles(
+          (edge as FlowEcoreEdge).data?.ecore.eObjectSourceId!, 
+          (edge as FlowEcoreEdge).data?.ecore.eObjectTargetId!, 
+          sourceNode,
+          targetNode
+        ));
+      } else {
+        // Use calculateOptimalHandles to get new handles
+        const handles = calculateOptimalHandles(sourceNode, targetNode);
+        newSourceHandle = edge.type === 'uml' ? handles.sourceHandle : handles.sourceHandle.replace('-source', '').replace('-target', '');
+        newTargetHandle = edge.type === 'uml' ? handles.targetHandle : handles.targetHandle.replace('-target', '').replace('-source', '');
+      }
       
       // Only update if handles changed
       if (edge.sourceHandle === newSourceHandle && edge.targetHandle === newTargetHandle) {
