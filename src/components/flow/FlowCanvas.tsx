@@ -37,7 +37,7 @@ import { LowCodeReactionEdgeValidator } from './lowcode/LowCodeReactionEdgeValid
 import { onConnect, isValidConnection, onConnectStart, onConnectEnd, onReconnect, onReconnectEnd, onEdgesDelete, onEdgeClick, getBackendMetaModelId } from '../../utils';
 import type { EObject } from 'ecore-ts';
 import { UmlEdgeDetails } from './UMLEdgeDetails';
-import { DragablePanel } from './DragablePanel';
+import { DragablePanel, type DragablePanelRef } from './DragablePanel';
 import { GhostNode } from './lowcode/GhostNode';
 import { addReactionEdgeToVsumDetails, addReactionFileIdToVsumDetails, removeReactionEdgeFromVsumDetails } from '../../utils/ReactionUtils';
 import { calculateOptimalFineGranularReactionHandles, disableReactionHandles, enableReactionHandles, recalculateNodesOnEdgesForReactions, tryInferReactionFiledIdForFineGranularReactionEdge } from '../../utils/FineGranularReactionUtils';
@@ -227,6 +227,7 @@ export const FlowCanvas = forwardRef<{
     const [hoveredMergeGroup, setHoveredMergeGroup] = useState<string | null>(null);
     const [identifiersToEObject, setIdentifiersToEObject] = useState<Map<string, EObject>>(new Map());
     const reactionEditorRef = useRef<{ save: () => void; undo: () => void } | null>(null);
+    const reactionPanelRef = useRef<DragablePanelRef | null>(null);
     const [currentConnectionStartParams, setCurrentConnectionStartParams] = useState<OnConnectStartParams | null>(null);
     const [umlDetailsConfig, setUmlDetailsConfig] = useState<Partial<UMLEdgeDetailsConfig>>(loadFromStorage(DEFAULT_STORAGE_KEY));
     const { selectedEdge, setSelectedEdge } = useSelectedEdgeStore();
@@ -2199,6 +2200,7 @@ const handleEdgeReorderRequest = useCallback((edgeId: string, controlPoint: { x:
           <MiniMap position="bottom-right" style={{ bottom: 16, right: 16, zIndex: 30 }} />
           {selectedEdge && selectedEdge.type == 'fine-granular-reaction' && 
             <DragablePanel
+              ref={reactionPanelRef}
               title="Reaction"
               description="Configure how mappings behave"
               onClose={() => setSelectedEdge(null)}
@@ -2207,8 +2209,8 @@ const handleEdgeReorderRequest = useCallback((edgeId: string, controlPoint: { x:
             >
               <LowCodeReactionEditor 
                 ref={reactionEditorRef}
-                edge={selectedEdge as FlowEcoreEdge} 
-                identifiersToEObject={identifiersToEObject}
+                panelRef={reactionPanelRef}
+                edge={selectedEdge as FlowEcoreEdge}
               />
             </DragablePanel>
           }

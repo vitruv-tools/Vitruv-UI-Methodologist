@@ -1,4 +1,10 @@
-import React, { useEffect, useRef, useState } from "react";
+import React, {
+  forwardRef,
+  useEffect,
+  useImperativeHandle,
+  useRef,
+  useState,
+} from "react";
 import { Panel } from "reactflow";
 import { IconButton, Paper, Popover, Stack, Typography } from "@mui/material";
 import {
@@ -30,7 +36,11 @@ interface DragablePanelProps {
   translateY?: string;
 }
 
-export const DragablePanel: React.FC<DragablePanelProps> = ({
+export interface DragablePanelRef {
+  setSaveHighlighted: (highlighted: boolean) => void;
+}
+
+export const DragablePanel = forwardRef<DragablePanelRef, DragablePanelProps>(({
   title,
   description,
   onClose,
@@ -41,12 +51,13 @@ export const DragablePanel: React.FC<DragablePanelProps> = ({
   className = "",
   translateX = "-50%",
   translateY = "0%",
-}) => {
+}, ref) => {
   const settingsButtonRef = useRef<HTMLButtonElement>(null);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
   const [offset, setOffset] = useState({ dx: 0, dy: 0 });
   const [isMinimized, setIsMinimized] = useState(false);
+  const [isSaveHighlighted, setIsSaveHighlighted] = useState(false);
   const dragStartRef = useRef({
     // Start mouse x when the current drag started
     startX: 0,
@@ -132,6 +143,14 @@ export const DragablePanel: React.FC<DragablePanelProps> = ({
     }
   }, [isDragging]);
 
+  useImperativeHandle(
+    ref,
+    () => ({
+      setSaveHighlighted: setIsSaveHighlighted,
+    }),
+    [],
+  );
+
   return (
     <Panel
       // Base position; override to bottom-center via styles
@@ -210,6 +229,17 @@ export const DragablePanel: React.FC<DragablePanelProps> = ({
                     onSave();
                   }}
                   aria-label="save"
+                  sx={
+                    isSaveHighlighted
+                      ? {
+                          color: "#ffffff",
+                          bgcolor: "warning.main",
+                          "&:hover": {
+                            bgcolor: "warning.dark",
+                          },
+                        }
+                      : undefined
+                  }
                 >
                   <Save sx={{ fontSize: 18 }} />
                 </IconButton>
@@ -279,4 +309,6 @@ export const DragablePanel: React.FC<DragablePanelProps> = ({
       </Paper>
     </Panel>
   );
-};
+});
+
+DragablePanel.displayName = "DragablePanel";

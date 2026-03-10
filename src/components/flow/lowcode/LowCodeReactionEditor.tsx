@@ -1,10 +1,12 @@
 import {
   useEffect,
   useMemo,
+  useRef,
   useState,
   useImperativeHandle,
   forwardRef,
   useCallback,
+  type RefObject,
 } from "react";
 import {
   FormControl,
@@ -26,7 +28,9 @@ import { LowCodeReactionFieldVariables } from "../../../types/LowCodeReactionFie
 import { FieldRenderer } from "../FieldRenderer";
 import { getFieldDefaultValue } from "../../../utils/FieldUtils";
 import { temporarilySaveLowCodeReactionConfig } from "../../../utils/LowCodeReactionUtils";
-import { ecoreIdentifierSeparators, splitByEcoreIdentifierSeparators } from "../../../utils/UMLFromEcoreTS";
+import { splitByEcoreIdentifierSeparators } from "../../../utils/UMLFromEcoreTS";
+import type { DragablePanelRef } from "../DragablePanel";
+import { ActiveVsumDetails } from "../../../store/ActiveVsumDetails";
 
 /**
  * Configuring reaction mappings inside the React Flow canvas.
@@ -34,7 +38,7 @@ import { ecoreIdentifierSeparators, splitByEcoreIdentifierSeparators } from "../
 interface ReactionEditorProps {
   disabled?: boolean;
   edge: FlowEcoreEdge;
-  identifiersToEObject: Map<string, EObject>;
+  panelRef?: RefObject<DragablePanelRef | null>;
 }
 
 export interface LowCodeReactionEditorRef {
@@ -45,14 +49,52 @@ export interface LowCodeReactionEditorRef {
 export const LowCodeReactionEditor = forwardRef<
   LowCodeReactionEditorRef,
   ReactionEditorProps
->(({ disabled = false, edge, identifiersToEObject }, ref) => {
+>(({ disabled = false, edge, panelRef }, ref) => {
   const [loading, setLoading] = useState(true);
 
   const [lowCodeReactionsMetadata, setLowCodeReactionsMetadata] =
     useState<LowCodeReactionMetadataResponse>({ reactionMetadataMap: {} });
 
+  const [startTemplate, setStartTemplate] = useState<string>("");
   const [selectedTemplate, setSelectedTemplate] = useState<string>("");
   const [fieldValues, setFieldValues] = useState<Record<string, any>>({});
+  const [initialFieldValues, setInitialFieldValues] = useState<Record<string, any> | null>(null);
+  const [isDirty, setIsDirty] = useState(false);
+  const dirtyCheckTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(
+    null,
+  );
+
+  const clearDirtyCheckTimeout = useCallback(() => {
+    if (dirtyCheckTimeoutRef.current) {
+      clearTimeout(dirtyCheckTimeoutRef.current);
+      dirtyCheckTimeoutRef.current = null;
+    }
+  }, []);
+
+  const scheduleDirtyCheck = useCallback(
+    (nextFieldValues: Record<string, any>) => {
+      clearDirtyCheckTimeout();
+      dirtyCheckTimeoutRef.current = setTimeout(() => {
+        const baselineValues = initialFieldValues ?? {};
+        const dirty =
+          JSON.stringify(nextFieldValues) !== JSON.stringify(baselineValues);
+        setIsDirty(dirty);
+        dirtyCheckTimeoutRef.current = null;
+      }, 1000);
+    },
+    [clearDirtyCheckTimeout, initialFieldValues],
+  );
+
+  useEffect(() => {
+    panelRef?.current?.setSaveHighlighted(isDirty);
+  }, [isDirty, panelRef]);
+
+  useEffect(() => {
+    return () => {
+      clearDirtyCheckTimeout();
+      panelRef?.current?.setSaveHighlighted(false);
+    };
+  }, [panelRef, clearDirtyCheckTimeout]);
 
   useEffect(() => {
     // Fetch low-code reactions metadata on mount
@@ -63,10 +105,12 @@ export const LowCodeReactionEditor = forwardRef<
       // Set first template as default if available
       const firstTemplate = Object.keys(metadata.data.reactionMetadataMap)[0];
       if (firstTemplate) {
+        setStartTemplate(firstTemplate);
         setSelectedTemplate(firstTemplate);
         initializeFieldValues(
           metadata.data.reactionMetadataMap[firstTemplate]?.fields || [],
         );
+        setIsDirty(false);
       }
 
       setLoading(false);
@@ -75,7 +119,7 @@ export const LowCodeReactionEditor = forwardRef<
     fetchMetadata();
   }, []);
 
-  const initializeFieldValues = (fields: LowCodeReactionFieldMetadata[]) => {
+  const initializeFieldValues = useCallback((fields: LowCodeReactionFieldMetadata[]) => {
     const initialValues: Record<string, any> = {};
     const sourceModelAlias = splitByEcoreIdentifierSeparators(edge.data?.ecore?.fromModel).slice(-1)[0];
     const targetModelAlias = splitByEcoreIdentifierSeparators(edge.data?.ecore?.toModel).slice(-1)[0];
@@ -96,8 +140,15 @@ export const LowCodeReactionEditor = forwardRef<
     fields.forEach((field) => {
       initialValues[field.name] = getFieldDefaultValue(field, variables);
     });
-    setFieldValues(initialValues);
-  };
+    const activeVsumDetails = new ActiveVsumDetails();
+    const fgmmr = activeVsumDetails.getFineGranularMetaModelRelation({ sourceId: edge.data?.ecore?.eObjectSourceId!, targetId: edge.data?.ecore?.eObjectTargetId! });
+    const nextFieldValues = {
+      ...initialValues,
+      ...(fgmmr?.lowCodeReactionRequestBase || {}),
+    };
+    setFieldValues(nextFieldValues);
+    setInitialFieldValues(nextFieldValues);
+  }, [edge.data?.ecore?.fromModel, edge.data?.ecore?.toModel, edge.data?.ecore?.eObjectSourceId, edge.data?.ecore?.eObjectTargetId]);
 
   const templateOptions = useMemo(
     () =>
@@ -123,29 +174,38 @@ export const LowCodeReactionEditor = forwardRef<
     const fields =
       lowCodeReactionsMetadata.reactionMetadataMap[template].fields || [];
     initializeFieldValues(fields);
+    setIsDirty(true);
   };
 
   const handleFieldChange = (fieldName: string, value: any) => {
-    setFieldValues((prev) => ({
-      ...prev,
+    const newFieldsValues = {
+      ...fieldValues,
       [fieldName]: value,
-    }));
+    };
+    setFieldValues(newFieldsValues);
+    scheduleDirtyCheck(newFieldsValues);
   };
 
   const handleSave = useCallback(() => {
+    clearDirtyCheckTimeout();
     temporarilySaveLowCodeReactionConfig(
       selectedTemplate,
       fieldValues,
       edge,
     );
-  }, [selectedTemplate, fieldValues, edge]);
+    setInitialFieldValues(fieldValues);
+    setIsDirty(false);
+  }, [selectedTemplate, fieldValues, edge, clearDirtyCheckTimeout]);
 
   const handleUndo = () => {
+    clearDirtyCheckTimeout();
+    const templateToRestore = startTemplate || selectedTemplate;
+    setSelectedTemplate(templateToRestore);
     // Always reset to initial values
     const fields =
-      lowCodeReactionsMetadata.reactionMetadataMap[selectedTemplate]?.fields ||
-      [];
+      lowCodeReactionsMetadata.reactionMetadataMap[templateToRestore]?.fields || [];
     initializeFieldValues(fields);
+    setIsDirty(false);
   };
 
   // Expose save and undo methods to parent via ref
