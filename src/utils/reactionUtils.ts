@@ -72,7 +72,7 @@ export function addReactionFileIdToVsumDetails(edge: Edge<unknown> | undefined, 
       console.warn(`Could not find fine granular meta model relation for edge ${edge?.id} to add reaction file id!`);
       return;
     }
-    metaModelRelation!.reactionFileId = reactionFileId;
+    metaModelRelation!.reactionFileStorageId = reactionFileId;
   } else if (isFlowMetaModelRelationData(data)) {
     const metaModelRelation = activeVsumDetails.getMetaModelRelation({ sourceId: data.sourceMetaModelId!, targetId: data.targetMetaModelId! });
     if (metaModelRelation == null) {

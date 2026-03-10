@@ -14,8 +14,9 @@ import {
 } from "../types/EdgeEventHandlers";
 import { setHandlePointerEvents, chooseHandlesForPair, setEdgeOpacity, setHandleOpacity } from "./flowUtils";
 import { useSelectedEdgeStore } from "../store/SelectedEdge";
-import { EditableFineGranularMetaModelRelation, EditableVsumMetaModelRelation } from "../types/EditableVsumDetails";
+import { EditableFineGranularMetaModelRelation } from "../types/EditableVsumDetails";
 import { findClassNameFromEcoreIdentifier, findPackageNameFromEcoreIdentifier, getHandleIdForEcoreElement, getNodeNameFromEcoreIdentifier } from "./UMLFromEcoreTS";
+import { isFlowFineGranularMetaModelRelationData } from "../types/FlowFineGranularMetaModelRelationData";
 
 export function getProperEObjectIdFromHandle(
   handleId: string,
@@ -38,6 +39,15 @@ export function getProperEObjectIdFromHandle(
   throw new Error(
     `No matching eObjectId found for handleId ${handleId} and ecore ${JSON.stringify(ecore)}`,
   );
+}
+
+export function tryInferReactionFiledIdForFineGranularReactionEdge(edge: Edge) {
+  if (isFlowFineGranularMetaModelRelationData(edge.data)) {
+    const activeVsumDetails = new ActiveVsumDetails();
+    const fgmmr = activeVsumDetails.getFineGranularMetaModelRelation({ sourceId: edge.data.ecore.eObjectSourceId, targetId: edge.data.ecore.eObjectTargetId });
+    const reactionFileId = fgmmr?.reactionFileStorageId;
+    return reactionFileId;
+  }
 }
 
 export function createExistingFineGranularReactionEdge(nodes: Node[], fgEdge: EditableFineGranularMetaModelRelation): FlowEcoreEdge {

@@ -40,7 +40,7 @@ import { UmlEdgeDetails } from './UMLEdgeDetails';
 import { DragablePanel } from './DragablePanel';
 import { GhostNode } from './lowcode/GhostNode';
 import { addReactionEdgeToVsumDetails, addReactionFileIdToVsumDetails, removeReactionEdgeFromVsumDetails } from '../../utils/ReactionUtils';
-import { calculateOptimalFineGranularReactionHandles, disableReactionHandles, enableReactionHandles, recalculateNodesOnEdgesForReactions } from '../../utils/FineGranularReactionUtils';
+import { calculateOptimalFineGranularReactionHandles, disableReactionHandles, enableReactionHandles, recalculateNodesOnEdgesForReactions, tryInferReactionFiledIdForFineGranularReactionEdge } from '../../utils/FineGranularReactionUtils';
 import { DEFAULT_STORAGE_KEY, loadFromStorage, UMLEdgeDetailsConfig, UMLEdgeDetailsConfigPanel } from './UMLEdgeDetailsConfig';
 import { FlowMetaModelRelationData } from '../../types/FlowMetaModelRelationData';
 import { useSelectedEdgeStore } from '../../store/SelectedEdge';
@@ -857,6 +857,10 @@ export const FlowCanvas = forwardRef<{
         const node = nodes.find(n => n.id === nodeId);
         return node?.type === 'ecoreFile' ? node.data.fileName : undefined;
       };
+
+      if (edge.data != null && !edge.data.reactionFileId) {
+        edge.data.reactionFileId = tryInferReactionFiledIdForFineGranularReactionEdge(edge);
+      }
 
       // Try to infer reactionFileId if missing
       if (!edge.data?.reactionFileId) {

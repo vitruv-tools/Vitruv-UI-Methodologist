@@ -43,6 +43,6 @@ export type EditableFineGranularMetaModelRelation = {
   id: number | null; // null for new relations
   sourceId: string;
   targetId: string;
-  reactionFileId?: number;
+  reactionFileStorageId?: number;
   lowCodeReactionRequestBase?: { [key: string]: unknown };
 }

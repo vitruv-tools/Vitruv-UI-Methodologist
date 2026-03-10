@@ -176,7 +176,7 @@ export const VsumTabs: React.FC<VsumTabsProps> = ({
                     // Atleast one fine-grained relation must have a reaction file or be a low-code reaction
                     return rel.fineGranularMetaModelRelationSet.some(fineRel => {
                         // Fine-grained relation has a reaction file
-                        if (fineRel.reactionFileId != null) {
+                        if (fineRel.reactionFileStorageId != null) {
                             return true;
                         }
                         // Fine-grained relation has a low-code reaction template with params
