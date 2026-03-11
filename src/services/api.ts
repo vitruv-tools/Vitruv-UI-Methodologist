@@ -454,6 +454,7 @@ class ApiService {
     keyword: string[];
     ecoreFileId: number;
     genModelFileId: number;
+    applyGenModelFixes?: boolean;
   }): Promise<{ data: any; message: string }> {
     return this.authenticatedRequest('/api/v1/meta-models', {
       method: 'POST',
