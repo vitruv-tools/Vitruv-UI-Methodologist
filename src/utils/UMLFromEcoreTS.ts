@@ -7,7 +7,7 @@ export const ecoreClassSeparator = "::" as const;
 export const ecoreFeatureSeparator = "." as const;
 export const ecorePackageSeparator = "/" as const;
 export const ecoreGenericSeparator = "~" as const;
-export const ecoreIdentifierSeparators = [ecoreClassSeparator, ecoreFeatureSeparator, ecoreGenericSeparator] as const;
+export const ecoreIdentifierSeparators = [ecoreClassSeparator, ecoreFeatureSeparator, ecorePackageSeparator, ecoreGenericSeparator] as const;
 
 export function splitByEcoreIdentifierSeparators(value: string | undefined): string[] {
   if (!value) {
