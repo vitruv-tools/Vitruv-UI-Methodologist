@@ -36,8 +36,7 @@ import { hasLowCodeReactionConfig, temporarilySaveLowCodeReactionConfig } from "
 import { splitByEcoreIdentifierSeparators } from "../../../utils/UMLFromEcoreTS";
 import type { DragablePanelOptionalToolbarRef, DragablePanelRef } from "../DragablePanel";
 import { ActiveVsumDetails } from "../../../store/ActiveVsumDetails";
-import { deleteFineGranularReactionEdge, tryInferReactionFiledIdForFineGranularReactionEdge } from "../../../utils/FineGranularReactionUtils";
-import { useFlowState } from "../../../hooks";
+import { deleteFineGranularReactionEdgeFromVsumDetails, tryInferReactionFiledIdForFineGranularReactionEdge } from "../../../utils/FineGranularReactionUtils";
 
 /**
  * Configuring reaction mappings inside the React Flow canvas.
@@ -46,12 +45,13 @@ interface ReactionEditorProps {
   disabled?: boolean;
   edge: FlowEcoreEdge;
   panelRef?: RefObject<DragablePanelRef | null>;
+  onDelete?: (edge: FlowEcoreEdge) => void;
 }
 
 export const LowCodeReactionEditor = forwardRef<
   DragablePanelOptionalToolbarRef,
   ReactionEditorProps
->(({ disabled = false, edge, panelRef }, ref) => {
+>(({ disabled = false, edge, panelRef, onDelete }, ref) => {
   const [loading, setLoading] = useState(true);
 
   const [lowCodeReactionsMetadata, setLowCodeReactionsMetadata] =
@@ -62,11 +62,11 @@ export const LowCodeReactionEditor = forwardRef<
   const [fieldValues, setFieldValues] = useState<Record<string, any>>({});
   const [initialFieldValues, setInitialFieldValues] = useState<Record<string, any> | null>(null);
   const [isDirty, setIsDirty] = useState(false);
+  const [isSaveDialogOpen, setIsSaveDialogOpen] = useState(false);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const dirtyCheckTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(
     null,
   );
-  const { edges, setEdges } = useFlowState();
 
   const clearDirtyCheckTimeout = useCallback(() => {
     if (dirtyCheckTimeoutRef.current) {
@@ -162,8 +162,7 @@ export const LowCodeReactionEditor = forwardRef<
     () =>
       Array.from(
         Object.entries(lowCodeReactionsMetadata.reactionMetadataMap)
-          .filter(([_, v]) => !v.hide)
-          .map(([k]) => k),
+          .filter(([_, v]) => !v.hide),
       ),
     [lowCodeReactionsMetadata],
   );
@@ -194,15 +193,28 @@ export const LowCodeReactionEditor = forwardRef<
     scheduleDirtyCheck(newFieldsValues);
   };
 
-  const handleSave = useCallback(() => {
+  const performSave = useCallback(() => {
+    const newFieldsValues = {
+      ...fieldValues,
+      ["regenerate"]: true
+    }
     clearDirtyCheckTimeout();
     temporarilySaveLowCodeReactionConfig(
-      fieldValues,
+      newFieldsValues,
       edge,
     );
-    setInitialFieldValues(fieldValues);
+    setIsSaveDialogOpen(false);
+    setInitialFieldValues(newFieldsValues);
     setIsDirty(false);
-  }, [selectedTemplate, fieldValues, edge, clearDirtyCheckTimeout]);
+  }, [fieldValues, edge, clearDirtyCheckTimeout]);
+
+  const handleSave = useCallback(() => {
+    if (tryInferReactionFiledIdForFineGranularReactionEdge(edge) != null) {
+      setIsSaveDialogOpen(true);
+    } else {
+      performSave();
+    }
+  }, [edge, performSave]);
 
   const handleUndo = () => {
     clearDirtyCheckTimeout();
@@ -215,12 +227,11 @@ export const LowCodeReactionEditor = forwardRef<
   };
 
   const performDelete = useCallback(() => {
-    deleteFineGranularReactionEdge(edge);
-    const newEdges = edges.filter((e) => e.id !== edge.id);
-    setEdges(newEdges);
+    deleteFineGranularReactionEdgeFromVsumDetails(edge);
+    onDelete?.(edge);
     setIsDeleteDialogOpen(false);
     panelRef?.current?.close();
-  }, [edge, panelRef, edges, setEdges]);
+  }, [edge, onDelete, panelRef]);
 
   const handleDelete = useCallback(() => {
     if (tryInferReactionFiledIdForFineGranularReactionEdge(edge) != null) {
@@ -264,8 +275,8 @@ export const LowCodeReactionEditor = forwardRef<
             onChange={handleTemplateChange}
           >
             {templateOptions.map((template) => (
-              <MenuItem key={template} value={template}>
-                {template}
+              <MenuItem key={template[0]} value={template[0]}>
+                {template[1].name || template[0]}
               </MenuItem>
             ))}
           </Select>
@@ -314,6 +325,30 @@ export const LowCodeReactionEditor = forwardRef<
           </Stack>
         </Box>
       )}
+
+      <Dialog
+        open={isSaveDialogOpen}
+        onClose={() => setIsSaveDialogOpen(false)}
+        aria-labelledby="low-code-reaction-save-dialog-title"
+        aria-describedby="low-code-reaction-save-dialog-description"
+      >
+        <DialogTitle id="low-code-reaction-save-dialog-title">
+          Save reaction?
+        </DialogTitle>
+        <DialogContent>
+          <DialogContentText id="low-code-reaction-save-dialog-description">
+            The reaction will be regenerated and any custom code will be lost.
+          </DialogContentText>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setIsSaveDialogOpen(false)}>
+            Cancel
+          </Button>
+          <Button variant="contained" onClick={performSave}>
+            Save
+          </Button>
+        </DialogActions>
+      </Dialog>
 
       <Dialog
         open={isDeleteDialogOpen}

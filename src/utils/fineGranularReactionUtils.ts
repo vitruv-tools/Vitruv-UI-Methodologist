@@ -18,7 +18,7 @@ import { EditableFineGranularMetaModelRelation } from "../types/EditableVsumDeta
 import { findClassNameFromEcoreIdentifier, findPackageNameFromEcoreIdentifier, getHandleIdForEcoreElement, getNodeNameFromEcoreIdentifier } from "./UMLFromEcoreTS";
 import { isFlowFineGranularMetaModelRelationData } from "../types/FlowFineGranularMetaModelRelationData";
 
-export function deleteFineGranularReactionEdge(edge: FlowEcoreEdge) {
+export function deleteFineGranularReactionEdgeFromVsumDetails(edge: FlowEcoreEdge) {
   const activeVsumDetails = new ActiveVsumDetails();
   activeVsumDetails.removeFineGranularMetaModelRelation({ sourceId: edge.data!.ecore!.eObjectSourceId, targetId: edge.data!.ecore!.eObjectTargetId });
 }

@@ -257,6 +257,10 @@ export const FlowCanvas = forwardRef<{
       updateEdgeCode,
     } = useFlowState();
 
+    const handleDeleteSelectedReactionEdge = useCallback((edgeToDelete: FlowEcoreEdge) => {
+      setEdges((prevEdges) => prevEdges.filter((currentEdge) => currentEdge.id !== edgeToDelete.id));
+    }, [setEdges]);
+
     // Helper function to calculate optimal handles based on which direction target is from source
     const calculateOptimalHandles = useCallback((sourceNode: Node, targetNode: Node) => {
       const dx = targetNode.position.x - sourceNode.position.x;
@@ -2212,6 +2216,7 @@ const handleEdgeReorderRequest = useCallback((edgeId: string, controlPoint: { x:
                 ref={reactionEditorRef}
                 panelRef={reactionPanelRef}
                 edge={selectedEdge as FlowEcoreEdge}
+                onDelete={handleDeleteSelectedReactionEdge}
               />
             </DragablePanel>
           }

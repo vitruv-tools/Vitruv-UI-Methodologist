@@ -2,18 +2,19 @@ import { EObject } from "ecore-ts";
 import { create, StoreApi, UseBoundStore } from "zustand";
 import {
   EditableFineGranularMetaModelRelation,
-  EditableVsumDetails, EditableVsumMetaModelRef,
-  EditableVsumMetaModelRelation
+  EditableVsumDetails,
+  EditableVsumMetaModelRef,
+  EditableVsumMetaModelRelation,
 } from "../types/EditableVsumDetails";
 import { WorkspaceSnapshot } from "../types/workspace";
 import { deepClone } from "../utils/DeepClone";
 import { NoVsumDetailsStoreError } from "./NoVsumDetailsStoreError";
 
 /**
- * We intentionally do not expose the store directly, 
+ * We intentionally do not expose the store directly,
  * but instead provide helper methods to manipulate the VSUM details.
- * This allows us to encapsulate the logic for how the details are stored 
- * and updated, and to ensure that any necessary side effects 
+ * This allows us to encapsulate the logic for how the details are stored
+ * and updated, and to ensure that any necessary side effects
  * (like updating the structure) are handled correctly.
  */
 const storeMap = new Map<
@@ -30,9 +31,7 @@ export function createVsumDetailsStore(
     storeMap.set(id, newStore);
   } else {
     const existingStore = storeMap.get(id)!;
-    if (existingStore.getState() == null) {
-      existingStore.setState(vsumDetails);
-    }
+    existingStore.setState(vsumDetails);
   }
 }
 
@@ -46,7 +45,9 @@ export function getVsumDetailsStore(id: number | string) {
 
 export class VsumDetailsHelper {
   protected vsumDetails: EditableVsumDetails | null;
-  protected vsumDetailsStore: UseBoundStore<StoreApi<EditableVsumDetails | null>>;
+  protected vsumDetailsStore: UseBoundStore<
+    StoreApi<EditableVsumDetails | null>
+  >;
 
   constructor(id: number) {
     const vsumDetailsStore = this.getVsumDetailsStoreOrThrow(id);
@@ -58,7 +59,7 @@ export class VsumDetailsHelper {
     const vsumDetailsStore = this.getVsumDetailsStore(id);
     if (!vsumDetailsStore) {
       throw new NoVsumDetailsStoreError(
-        `No VsumDetails store found for VSUM ID: ${id}`
+        `No VsumDetails store found for VSUM ID: ${id}`,
       );
     }
 
@@ -81,31 +82,41 @@ export class VsumDetailsHelper {
 
   getMetaModel(identifier: Pick<EditableVsumMetaModelRef, "id">) {
     return this.vsumDetails?.metaModels?.find(
-      (metaModel) => metaModel.id === identifier.id
+      (metaModel) => metaModel.id === identifier.id,
     );
   }
 
   removeMetaModel(identifier: Pick<EditableVsumMetaModelRef, "id">) {
     const removed = (this.vsumDetails!.metaModels =
       this.vsumDetails!.metaModels.filter(
-        (metaModel) => metaModel.id == identifier.id
+        (metaModel) => metaModel.id == identifier.id,
       ));
     this.vsumDetails!.metaModels = this.vsumDetails!.metaModels.filter(
-      (metaModel) => metaModel.id !== identifier.id
+      (metaModel) => metaModel.id !== identifier.id,
     );
     return removed[0];
   }
 
-  getMetaModelRelations(metaModels: Pick<EditableVsumMetaModelRef, "id">[], target?: Pick<EditableVsumMetaModelRef, "id">) {
-    const result = this.vsumDetails?.metaModelsRelation?.filter(mmr => metaModels.some(mm => mm.id === mmr.sourceId) && metaModels.some(mm => mm.id === mmr.targetId)) ?? [];
+  getMetaModelRelations(
+    metaModels: Pick<EditableVsumMetaModelRef, "id">[],
+    target?: Pick<EditableVsumMetaModelRef, "id">,
+  ) {
+    const result =
+      this.vsumDetails?.metaModelsRelation?.filter(
+        (mmr) =>
+          metaModels.some((mm) => mm.id === mmr.sourceId) &&
+          metaModels.some((mm) => mm.id === mmr.targetId),
+      ) ?? [];
     if (target != null) {
-      return result.filter(mmr => mmr.sourceId === target.id || mmr.targetId === target.id);
+      return result.filter(
+        (mmr) => mmr.sourceId === target.id || mmr.targetId === target.id,
+      );
     }
     return result;
   }
 
   addMetaModelRelation(
-    editableMetaModelRelation: EditableVsumMetaModelRelation
+    editableMetaModelRelation: EditableVsumMetaModelRelation,
   ) {
     this.vsumDetails!.metaModelsRelation ??= [];
     this.vsumDetails!.metaModelsRelation.push(editableMetaModelRelation);
@@ -113,53 +124,85 @@ export class VsumDetailsHelper {
   }
 
   getMetaModelRelation(
-    identifiers: Pick<EditableVsumMetaModelRelation, "sourceId" | "targetId">
+    identifiers: Pick<EditableVsumMetaModelRelation, "sourceId" | "targetId">,
   ) {
     return this.vsumDetails?.metaModelsRelation?.find(
-      (relation) => relation.sourceId === identifiers.sourceId &&
-        relation.targetId === identifiers.targetId
+      (relation) =>
+        relation.sourceId === identifiers.sourceId &&
+        relation.targetId === identifiers.targetId,
     );
   }
 
-  getMetaModelRelationByFullyQualifiedName(
-    fromModel: string, toModel: string
-  ) {
-    const sourceId = this.getIdentifiersToBackendMetaModelIdMap()?.get(fromModel);
+  getMetaModelRelationByFullyQualifiedName(fromModel: string, toModel: string) {
+    const sourceId =
+      this.getIdentifiersToBackendMetaModelIdMap()?.get(fromModel);
     const targetId = this.getIdentifiersToBackendMetaModelIdMap()?.get(toModel);
     if (sourceId == null || targetId == null) {
       return undefined;
     }
     return this.vsumDetails?.metaModelsRelation?.find(
-      (relation) => relation.sourceId === sourceId &&
-        relation.targetId === targetId
+      (relation) =>
+        relation.sourceId === sourceId && relation.targetId === targetId,
     );
   }
 
   removeMetaModelRelation(
-    identifiers: Pick<EditableVsumMetaModelRelation, "sourceId" | "targetId">
+    identifiers: Pick<EditableVsumMetaModelRelation, "sourceId" | "targetId">,
   ) {
     const index = this.vsumDetails!.metaModelsRelation?.findIndex(
-      (relation) => relation.sourceId === identifiers.sourceId &&
-        relation.targetId === identifiers.targetId
+      (relation) =>
+        relation.sourceId === identifiers.sourceId &&
+        relation.targetId === identifiers.targetId,
     );
     if (index !== undefined && index !== -1) {
       return this.vsumDetails!.metaModelsRelation?.splice(index, 1)[0];
     }
   }
 
-  getFineGranularMetaModelRelation(identifiers: Pick<EditableFineGranularMetaModelRelation, "sourceId" | "targetId">) {
-    return this.vsumDetails?.metaModelsRelation?.map(r => r.fineGranularMetaModelRelationSet)?.flat().find(
-      (relation) => relation.sourceId === identifiers.sourceId &&
-        relation.targetId === identifiers.targetId
-    );
+  getFineGranularMetaModelRelation(
+    identifiers: Pick<
+      EditableFineGranularMetaModelRelation,
+      "sourceId" | "targetId"
+    >,
+  ) {
+    return this.vsumDetails?.metaModelsRelation
+      ?.map((r) => r.fineGranularMetaModelRelationSet)
+      ?.flat()
+      .find(
+        (relation) =>
+          relation.sourceId === identifiers.sourceId &&
+          relation.targetId === identifiers.targetId,
+      );
   }
 
-  removeFineGranularMetaModelRelation(identifiers: Pick<EditableFineGranularMetaModelRelation, "sourceId" | "targetId">) {
-    for (const metaModelRelation of (this.vsumDetails?.metaModelsRelation ?? [])) {
-      for (let i = 0; i < metaModelRelation.fineGranularMetaModelRelationSet.length; i++) {
+  removeFineGranularMetaModelRelation(
+    identifiers: Pick<
+      EditableFineGranularMetaModelRelation,
+      "sourceId" | "targetId"
+    >,
+  ) {
+    for (const metaModelRelation of this.vsumDetails?.metaModelsRelation ??
+      []) {
+      for (
+        let i = 0;
+        i < metaModelRelation.fineGranularMetaModelRelationSet.length;
+        i++
+      ) {
         const relation = metaModelRelation.fineGranularMetaModelRelationSet[i];
-        if (relation.sourceId === identifiers.sourceId && relation.targetId === identifiers.targetId) {
-          return metaModelRelation.fineGranularMetaModelRelationSet.splice(i, 1)[0];
+        if (
+          relation.sourceId === identifiers.sourceId &&
+          relation.targetId === identifiers.targetId
+        ) {
+          const toReturn =
+            metaModelRelation.fineGranularMetaModelRelationSet.splice(i, 1)[0];
+          // Remove obsolete metamodel relation
+          if (
+            metaModelRelation.fineGranularMetaModelRelationSet.length === 0 &&
+            metaModelRelation.reactionFileStorageId == null
+          ) {
+            this.removeMetaModelRelation(metaModelRelation);
+          }
+          return toReturn;
         }
       }
     }
@@ -168,7 +211,7 @@ export class VsumDetailsHelper {
   getIdentifiersToEObjectMap() {
     if (!this.vsumDetails?.identifiersToEObject) {
       throw new Error(
-        "IdentifiersToEObject map is not defined, has UML generation been performed yet?"
+        "IdentifiersToEObject map is not defined, has UML generation been performed yet?",
       );
     }
     return this.vsumDetails.identifiersToEObject;
@@ -176,7 +219,7 @@ export class VsumDetailsHelper {
 
   setIdentifiersToEObjectMap(
     map: Map<string, EObject>,
-    overwrite: boolean = false
+    overwrite: boolean = false,
   ) {
     if (overwrite || !this.vsumDetails!.identifiersToEObject) {
       this.vsumDetails!.identifiersToEObject = map;
@@ -193,7 +236,7 @@ export class VsumDetailsHelper {
   getIdentifiersToBackendMetaModelIdMap() {
     if (!this.vsumDetails?.identifiersToBackendMetaModelId) {
       throw new Error(
-        "IdentifiersToBackendMetaModelId map is not defined, has UML generation been performed yet?"
+        "IdentifiersToBackendMetaModelId map is not defined, has UML generation been performed yet?",
       );
     }
     return this.vsumDetails.identifiersToBackendMetaModelId;
@@ -201,7 +244,7 @@ export class VsumDetailsHelper {
 
   addIdentifierToBackendMetaModelIdMap(
     eObjectIdentifier: string,
-    backendMetaModelId: number
+    backendMetaModelId: number,
   ) {
     if (!this.vsumDetails!.identifiersToBackendMetaModelId) {
       this.vsumDetails!.identifiersToBackendMetaModelId = new Map<
@@ -211,7 +254,7 @@ export class VsumDetailsHelper {
     }
     this.vsumDetails!.identifiersToBackendMetaModelId.set(
       eObjectIdentifier,
-      backendMetaModelId
+      backendMetaModelId,
     );
   }
 
@@ -232,17 +275,20 @@ export class VsumDetailsHelper {
     const map = this.getMetaModelIdToMetaModelSourceIdMap();
     const workspaceSnapshot: WorkspaceSnapshot = {
       //TODO(Reinbold): maybe we also need to do:
-      metaModelIds: this.vsumDetails?.metaModels.map((metaModel) => map.get(metaModel.id)!) ?? [],
+      metaModelIds:
+        this.vsumDetails?.metaModels.map(
+          (metaModel) => map.get(metaModel.id)!,
+        ) ?? [],
       // metaModelIds: this.vsumDetails?.metaModels.map((metaModel) => metaModel.id) ?? [],
-      metaModelRelationRequests: this.vsumDetails?.metaModelsRelation?.map(
-        (relation) => ({
+      metaModelRelationRequests:
+        this.vsumDetails?.metaModelsRelation?.map((relation) => ({
           id: relation.id ?? null,
           sourceId: map.get(relation.sourceId)!,
           targetId: map.get(relation.targetId)!,
           reactionFileId: relation.reactionFileStorageId ?? null,
-          fineGranularMetaModelRelationSet: relation.fineGranularMetaModelRelationSet
-        })
-      ) ?? [],
+          fineGranularMetaModelRelationSet:
+            relation.fineGranularMetaModelRelationSet,
+        })) ?? [],
     };
     return workspaceSnapshot;
   }
