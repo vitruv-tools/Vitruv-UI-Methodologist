@@ -37,7 +37,7 @@ import { LowCodeReactionEdgeValidator } from './lowcode/LowCodeReactionEdgeValid
 import { onConnect, isValidConnection, onConnectStart, onConnectEnd, onReconnect, onReconnectEnd, onEdgesDelete, onEdgeClick, getBackendMetaModelId } from '../../utils';
 import type { EObject } from 'ecore-ts';
 import { UmlEdgeDetails } from './UMLEdgeDetails';
-import { DragablePanel, type DragablePanelRef } from './DragablePanel';
+import { DragablePanel, DragablePanelOptionalToolbarRef, type DragablePanelRef } from './DragablePanel';
 import { GhostNode } from './lowcode/GhostNode';
 import { addReactionEdgeToVsumDetails, addReactionFileIdToVsumDetails, removeReactionEdgeFromVsumDetails } from '../../utils/ReactionUtils';
 import { calculateOptimalFineGranularReactionHandles, disableReactionHandles, enableReactionHandles, recalculateNodesOnEdgesForReactions, tryInferReactionFiledIdForFineGranularReactionEdge } from '../../utils/FineGranularReactionUtils';
@@ -226,7 +226,7 @@ export const FlowCanvas = forwardRef<{
     } | null>(null);
     const [hoveredMergeGroup, setHoveredMergeGroup] = useState<string | null>(null);
     const [identifiersToEObject, setIdentifiersToEObject] = useState<Map<string, EObject>>(new Map());
-    const reactionEditorRef = useRef<{ save: () => void; undo: () => void } | null>(null);
+    const reactionEditorRef = useRef<DragablePanelOptionalToolbarRef | null>(null);
     const reactionPanelRef = useRef<DragablePanelRef | null>(null);
     const [currentConnectionStartParams, setCurrentConnectionStartParams] = useState<OnConnectStartParams | null>(null);
     const [umlDetailsConfig, setUmlDetailsConfig] = useState<Partial<UMLEdgeDetailsConfig>>(loadFromStorage(DEFAULT_STORAGE_KEY));
@@ -2206,6 +2206,7 @@ const handleEdgeReorderRequest = useCallback((edgeId: string, controlPoint: { x:
               onClose={() => setSelectedEdge(null)}
               onSave={() => reactionEditorRef.current?.save()}
               onUndo={() => reactionEditorRef.current?.undo()}
+              onDelete={() => reactionEditorRef.current?.delete()}
             >
               <LowCodeReactionEditor 
                 ref={reactionEditorRef}

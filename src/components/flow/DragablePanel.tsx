@@ -9,6 +9,7 @@ import { Panel } from "reactflow";
 import { IconButton, Paper, Popover, Stack, Typography } from "@mui/material";
 import {
   DragIndicator,
+  Delete,
   Minimize,
   Maximize,
   Close,
@@ -31,13 +32,21 @@ interface DragablePanelProps {
   settings?: React.ReactNode;
   onSave?: () => void;
   onUndo?: () => void;
+  onDelete?: () => void;
   className?: string;
   translateX?: string;
   translateY?: string;
 }
 
+export interface DragablePanelOptionalToolbarRef {
+  save: () => void;
+  undo: () => void;
+  delete: () => void;
+}
+
 export interface DragablePanelRef {
   setSaveHighlighted: (highlighted: boolean) => void;
+  close: () => void;
 }
 
 export const DragablePanel = forwardRef<DragablePanelRef, DragablePanelProps>(({
@@ -48,6 +57,7 @@ export const DragablePanel = forwardRef<DragablePanelRef, DragablePanelProps>(({
   settings,
   onSave,
   onUndo,
+  onDelete,
   className = "",
   translateX = "-50%",
   translateY = "0%",
@@ -147,6 +157,7 @@ export const DragablePanel = forwardRef<DragablePanelRef, DragablePanelProps>(({
     ref,
     () => ({
       setSaveHighlighted: setIsSaveHighlighted,
+      close: onClose,
     }),
     [],
   );
@@ -242,6 +253,18 @@ export const DragablePanel = forwardRef<DragablePanelRef, DragablePanelProps>(({
                   }
                 >
                   <Save sx={{ fontSize: 18 }} />
+                </IconButton>
+              )}
+              {onDelete && (
+                <IconButton
+                  size="small"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onDelete();
+                  }}
+                  aria-label="delete"
+                >
+                  <Delete sx={{ fontSize: 18 }} />
                 </IconButton>
               )}
               {settings && (

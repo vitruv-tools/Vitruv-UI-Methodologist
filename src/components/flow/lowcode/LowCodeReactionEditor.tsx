@@ -18,8 +18,13 @@ import {
   Box,
   Typography,
   CircularProgress,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogContentText,
+  DialogActions,
+  Button,
 } from "@mui/material";
-import type { EObject } from "ecore-ts";
 import type { FlowEcoreEdge } from "../../../types/flow";
 import { apiService } from "../../../services/api";
 import { LowCodeReactionFieldMetadata } from "../../../types/LowCodeReactionFieldMetadata";
@@ -29,8 +34,10 @@ import { FieldRenderer } from "../FieldRenderer";
 import { getFieldDefaultValue } from "../../../utils/FieldUtils";
 import { hasLowCodeReactionConfig, temporarilySaveLowCodeReactionConfig } from "../../../utils/LowCodeReactionUtils";
 import { splitByEcoreIdentifierSeparators } from "../../../utils/UMLFromEcoreTS";
-import type { DragablePanelRef } from "../DragablePanel";
+import type { DragablePanelOptionalToolbarRef, DragablePanelRef } from "../DragablePanel";
 import { ActiveVsumDetails } from "../../../store/ActiveVsumDetails";
+import { deleteFineGranularReactionEdge, tryInferReactionFiledIdForFineGranularReactionEdge } from "../../../utils/FineGranularReactionUtils";
+import { useFlowState } from "../../../hooks";
 
 /**
  * Configuring reaction mappings inside the React Flow canvas.
@@ -41,13 +48,8 @@ interface ReactionEditorProps {
   panelRef?: RefObject<DragablePanelRef | null>;
 }
 
-export interface LowCodeReactionEditorRef {
-  save: () => void;
-  undo: () => void;
-}
-
 export const LowCodeReactionEditor = forwardRef<
-  LowCodeReactionEditorRef,
+  DragablePanelOptionalToolbarRef,
   ReactionEditorProps
 >(({ disabled = false, edge, panelRef }, ref) => {
   const [loading, setLoading] = useState(true);
@@ -60,9 +62,11 @@ export const LowCodeReactionEditor = forwardRef<
   const [fieldValues, setFieldValues] = useState<Record<string, any>>({});
   const [initialFieldValues, setInitialFieldValues] = useState<Record<string, any> | null>(null);
   const [isDirty, setIsDirty] = useState(false);
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const dirtyCheckTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(
     null,
   );
+  const { edges, setEdges } = useFlowState();
 
   const clearDirtyCheckTimeout = useCallback(() => {
     if (dirtyCheckTimeoutRef.current) {
@@ -210,14 +214,31 @@ export const LowCodeReactionEditor = forwardRef<
     initializeFieldValues(fields);
   };
 
+  const performDelete = useCallback(() => {
+    deleteFineGranularReactionEdge(edge);
+    const newEdges = edges.filter((e) => e.id !== edge.id);
+    setEdges(newEdges);
+    setIsDeleteDialogOpen(false);
+    panelRef?.current?.close();
+  }, [edge, panelRef, edges, setEdges]);
+
+  const handleDelete = useCallback(() => {
+    if (tryInferReactionFiledIdForFineGranularReactionEdge(edge) != null) {
+      setIsDeleteDialogOpen(true);
+    } else {
+      performDelete();
+    }
+  }, [edge, performDelete]);
+
   // Expose save and undo methods to parent via ref
   useImperativeHandle(
     ref,
     () => ({
       save: handleSave,
       undo: handleUndo,
+      delete: handleDelete,
     }),
-    [selectedTemplate, fieldValues, lowCodeReactionsMetadata],
+    [handleDelete, handleSave, handleUndo, lowCodeReactionsMetadata, selectedTemplate, fieldValues],
   );
 
   if (loading) {
@@ -293,6 +314,30 @@ export const LowCodeReactionEditor = forwardRef<
           </Stack>
         </Box>
       )}
+
+      <Dialog
+        open={isDeleteDialogOpen}
+        onClose={() => setIsDeleteDialogOpen(false)}
+        aria-labelledby="low-code-reaction-delete-dialog-title"
+        aria-describedby="low-code-reaction-delete-dialog-description"
+      >
+        <DialogTitle id="low-code-reaction-delete-dialog-title">
+          Delete reaction?
+        </DialogTitle>
+        <DialogContent>
+          <DialogContentText id="low-code-reaction-delete-dialog-description">
+            This reaction also has (generated) code, which will also be deleted.
+          </DialogContentText>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setIsDeleteDialogOpen(false)}>
+            Cancel
+          </Button>
+          <Button color="error" variant="contained" onClick={performDelete}>
+            Delete
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Stack>
   );
 });

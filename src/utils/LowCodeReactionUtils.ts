@@ -31,7 +31,6 @@ export function hasLowCodeReactionConfig(edge: FlowEcoreEdge): boolean {
   return fineGranularMetaModelRelation.lowCodeReactionRequestBase != null;
 }
 
-
 export function temporarilySaveLowCodeReactionConfig(
   fieldValues: Record<string, any>,
   edge: FlowEcoreEdge,

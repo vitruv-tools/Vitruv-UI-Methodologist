@@ -18,6 +18,11 @@ import { EditableFineGranularMetaModelRelation } from "../types/EditableVsumDeta
 import { findClassNameFromEcoreIdentifier, findPackageNameFromEcoreIdentifier, getHandleIdForEcoreElement, getNodeNameFromEcoreIdentifier } from "./UMLFromEcoreTS";
 import { isFlowFineGranularMetaModelRelationData } from "../types/FlowFineGranularMetaModelRelationData";
 
+export function deleteFineGranularReactionEdge(edge: FlowEcoreEdge) {
+  const activeVsumDetails = new ActiveVsumDetails();
+  activeVsumDetails.removeFineGranularMetaModelRelation({ sourceId: edge.data!.ecore!.eObjectSourceId, targetId: edge.data!.ecore!.eObjectTargetId });
+}
+
 export function getProperEObjectIdFromHandle(
   handleId: string,
   ecore: FlowNodeECoreData,
@@ -77,6 +82,7 @@ export function createExistingFineGranularReactionEdge(nodes: Node[], fgEdge: Ed
       targetHandle: targetHandle,
       zIndex: 9999, // Ensure fine-granular reaction edges are always on top
       data: {
+        reactionFileId: fgEdge.reactionFileStorageId,
         ecore: {
           fromModel: findPackageNameFromEcoreIdentifier(fgEdge.sourceId)!,
           toModel: findPackageNameFromEcoreIdentifier(fgEdge.targetId)!,

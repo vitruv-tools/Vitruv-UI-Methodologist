@@ -7,6 +7,7 @@ export type FlowFineGranularMetaModelRelationData = {
     fromModel: string;
     toModel: string;
   };
+  reactionFileId?: number;
 };
 
 export function isFlowFineGranularMetaModelRelationData(data: unknown): data is FlowFineGranularMetaModelRelationData {
