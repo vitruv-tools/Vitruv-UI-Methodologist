@@ -165,6 +165,8 @@ export function MainLayout({
             disableReactionHandles();
             disableReactionEdges();
             enableVsumHandles();
+        } else if (newMode === 'workspace') {
+            enableReactionEdges();
         }
     }, [mode, setMode]);
 
