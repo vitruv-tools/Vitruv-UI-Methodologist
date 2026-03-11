@@ -1,8 +1,38 @@
 import { ActiveVsumDetails } from "../store/ActiveVsumDetails";
 import { FlowEcoreEdge } from "../types";
 
+export function hasLowCodeReactionConfig(edge: FlowEcoreEdge): boolean {
+  const activeVsumDetails = new ActiveVsumDetails();
+  const identifiersToBackendMetaModelId =
+    activeVsumDetails.getIdentifiersToBackendMetaModelIdMap();
+  const sourceModelBackendId = identifiersToBackendMetaModelId.get(
+    edge.data!.ecore!.fromModel!,
+  )!;
+  const targetModelBackendId = identifiersToBackendMetaModelId.get(
+    edge.data!.ecore!.toModel!,
+  )!;
+  let metaModelRelation = activeVsumDetails.getMetaModelRelation({
+    sourceId: sourceModelBackendId,
+    targetId: targetModelBackendId,
+  });
+  if (!metaModelRelation) {
+    return false;
+  }
+  let fineGranularMetaModelRelation =
+    metaModelRelation.fineGranularMetaModelRelationSet?.find(
+      (relation) =>
+        relation.sourceId === edge.data!.ecore!.eObjectSourceId &&
+        relation.targetId === edge.data!.ecore!.eObjectTargetId,
+    );
+  if (!fineGranularMetaModelRelation) {
+    return false;
+  }
+
+  return fineGranularMetaModelRelation.lowCodeReactionRequestBase != null;
+}
+
+
 export function temporarilySaveLowCodeReactionConfig(
-  template: string,
   fieldValues: Record<string, any>,
   edge: FlowEcoreEdge,
 ) {

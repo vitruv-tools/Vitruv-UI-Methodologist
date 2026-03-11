@@ -27,7 +27,7 @@ import { LowCodeReactionMetadataResponse } from "../../../types/LowCodeReactionM
 import { LowCodeReactionFieldVariables } from "../../../types/LowCodeReactionFieldVariables";
 import { FieldRenderer } from "../FieldRenderer";
 import { getFieldDefaultValue } from "../../../utils/FieldUtils";
-import { temporarilySaveLowCodeReactionConfig } from "../../../utils/LowCodeReactionUtils";
+import { hasLowCodeReactionConfig, temporarilySaveLowCodeReactionConfig } from "../../../utils/LowCodeReactionUtils";
 import { splitByEcoreIdentifierSeparators } from "../../../utils/UMLFromEcoreTS";
 import type { DragablePanelRef } from "../DragablePanel";
 import { ActiveVsumDetails } from "../../../store/ActiveVsumDetails";
@@ -110,7 +110,6 @@ export const LowCodeReactionEditor = forwardRef<
         initializeFieldValues(
           metadata.data.reactionMetadataMap[firstTemplate]?.fields || [],
         );
-        setIsDirty(false);
       }
 
       setLoading(false);
@@ -148,6 +147,11 @@ export const LowCodeReactionEditor = forwardRef<
     };
     setFieldValues(nextFieldValues);
     setInitialFieldValues(nextFieldValues);
+    if (!hasLowCodeReactionConfig(edge)) {
+      setIsDirty(true);
+    } else {
+      setIsDirty(false);
+    }
   }, [edge.data?.ecore?.fromModel, edge.data?.ecore?.toModel, edge.data?.ecore?.eObjectSourceId, edge.data?.ecore?.eObjectTargetId]);
 
   const templateOptions = useMemo(
@@ -189,7 +193,6 @@ export const LowCodeReactionEditor = forwardRef<
   const handleSave = useCallback(() => {
     clearDirtyCheckTimeout();
     temporarilySaveLowCodeReactionConfig(
-      selectedTemplate,
       fieldValues,
       edge,
     );
@@ -205,7 +208,6 @@ export const LowCodeReactionEditor = forwardRef<
     const fields =
       lowCodeReactionsMetadata.reactionMetadataMap[templateToRestore]?.fields || [];
     initializeFieldValues(fields);
-    setIsDirty(false);
   };
 
   // Expose save and undo methods to parent via ref
