@@ -86,7 +86,7 @@ export function useUndoRedo(initialState: DiagramState) {
 
     currentIndex.current--;
     const previousState = history.current[currentIndex.current].state;
-    
+
     console.log(`Undo performed:`, {
       newIndex: currentIndex.current,
       historyLength: history.current.length,
@@ -94,7 +94,7 @@ export function useUndoRedo(initialState: DiagramState) {
       edgesCount: previousState.edges.length,
       description: history.current[currentIndex.current]?.description
     });
-    
+
     setCurrentState(previousState);
     return previousState;
   }, [canUndo]);
@@ -113,6 +113,7 @@ export function useUndoRedo(initialState: DiagramState) {
   const clearHistory = useCallback(() => {
     history.current = [];
     currentIndex.current = -1;
+    setCurrentState(prev => ({ ...prev }));
   }, []);
 
   const getHistoryInfo = useCallback(() => ({

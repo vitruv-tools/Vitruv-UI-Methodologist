@@ -314,22 +314,21 @@ export function UMLRelationship({
   const isMergeGroupHovered = !!(mergeGroupId && data?.hoveredMergeGroup === mergeGroupId);
   
   // Logic for highlighting:
-  // 1. Individual edge (source to merge point) is red if: 
-  //    - edge selected OR source node selected OR target node selected OR merge group hovered
-  const isIndividualEdgeHighlighted: boolean = !!(selected || isSourceSelected || isTargetSelected || isMergeGroupHovered);
+  // 1. Individual edge (source to merge point) is red ONLY if:
+  //    - this edge is selected OR this edge is hovered.
+  //    Node selection alone no longer turns every incident edge red.
+  const isIndividualEdgeHighlighted: boolean = !!(selected || isHovered);
   
-  // 2. MERGE DOT LOGIC: Merge dot is red if ANY node that has a connection through it is selected
-  //    OR if the merge group is being hovered
-  //    This includes: current source, target, any other source node in the merge group, OR hover
-  const isMergeDotRed: boolean = data?.hasMerge 
-    ? !!(isSourceSelected || isTargetSelected || isMergeGroupNodeSelected || isMergeGroupHovered)
+  // 2. MERGE DOT LOGIC: Merge dot is red when any edge in the merge group
+  //    is highlighted (selected/hovered) OR when the merge group itself is hovered.
+  const isMergeDotRed: boolean = data?.hasMerge
+    ? !!(isIndividualEdgeHighlighted || isMergeGroupHovered)
     : isIndividualEdgeHighlighted;
   
-  // 3. SHARED SEGMENT LOGIC: Shared segment is red if merge dot is red
-  //    When merge dot is red, everything after it (to target) must be red
+  // 3. SHARED SEGMENT LOGIC: Shared segment is red only when merge dot is red.
   const isSharedSegmentHighlighted: boolean = isMergeDotRed;
   
-  // For the main edge path (source to merge), use individual edge highlighting
+  // For the main edge path (source to merge), use individual edge highlighting.
   const isHighlighted: boolean = isIndividualEdgeHighlighted;
   
   // Debug logging for merged edges
@@ -551,8 +550,16 @@ export function UMLRelationship({
           ...getRelationshipStyle(),
           strokeLinecap: 'butt',
           strokeLinejoin: 'miter',
-          // Remove markers from individual branches when merged
-          ...(hasMerge && { markerEnd: 'none', markerStart: 'none' })
+          // For merged edges we suppress markers only for relationships
+          // that use arrowheads at the target side (inheritance/realization/dependency).
+          // For compositions/aggregations we KEEP the diamond on the owning
+          // side (source class) to preserve correct UML semantics.
+          ...(hasMerge &&
+            data?.relationshipType !== 'composition' &&
+            data?.relationshipType !== 'aggregation' && {
+              markerEnd: 'none',
+              markerStart: 'none',
+            })
         }}
         d={edgePath}
         onClick={handleClick}
@@ -600,7 +607,19 @@ export function UMLRelationship({
             id={`${id}-shared`}
             d={sharedSegmentPath}
             style={{
-              ...getRelationshipStyle(isSharedSegmentHighlighted),
+              // On the shared segment we never want the composition/
+              // aggregation diamond to appear at the merge point – it
+              // must stay attached to the owning class at the start of
+              // each branch. Therefore we explicitly clear markerStart
+              // for these relationship types while still allowing
+              // arrowheads for inheritance/realization/dependency.
+              ...(data?.relationshipType === 'composition' ||
+              data?.relationshipType === 'aggregation'
+                ? {
+                    ...getRelationshipStyle(isSharedSegmentHighlighted),
+                    markerStart: 'none',
+                  }
+                : getRelationshipStyle(isSharedSegmentHighlighted)),
               strokeLinecap: 'butt',
               strokeLinejoin: 'miter',
             }}

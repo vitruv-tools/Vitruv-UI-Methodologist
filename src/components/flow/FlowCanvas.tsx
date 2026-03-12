@@ -613,7 +613,88 @@ export const FlowCanvas = forwardRef<{
       return () => document.removeEventListener('keydown', handleKeyDown);
     }, [undo, redo, canUndo, canRedo, reactFlowInstance, removeNode, removeEdge, selectedFileId, onEcoreFileDelete]);
 
-    const handleConnectionEnd = useCallback((e: MouseEvent) => {
+
+    const buildInitialReactionCode = useCallback((sourceNodeId: string, targetNodeId: string): string => {
+      const sourceNode = nodes.find(n => n.id === sourceNodeId);
+      const targetNode = nodes.find(n => n.id === targetNodeId);
+
+      const getEPackageName = (node: Node | undefined) => {
+        const match = node?.data?.fileContent?.match(/<ecore:EPackage[^>]+name="([^"]+)"/);
+        return match?.[1] ?? node?.data?.fileName?.replace('.ecore', '') ?? 'source';
+      };
+
+      const sourcePackageName = getEPackageName(sourceNode);
+      const targetPackageName = getEPackageName(targetNode);
+      const sourceUri = sourceNode?.data?.nsUri ?? `http://vitruv.tools/${sourcePackageName}`;
+      const targetUri = targetNode?.data?.nsUri ?? `http://vitruv.tools/${targetPackageName}`;
+
+      return `import "${sourceUri}" as ${sourcePackageName}\nimport "${targetUri}" as ${targetPackageName}\n\nreactions: ${sourcePackageName}To${targetPackageName}\nin reaction to changes in ${sourcePackageName}\nexecute actions in ${targetPackageName}\n\n`;
+    }, [nodes]);
+
+    const resolveReactionFileId = async (raw: any): Promise<number | null> => {
+      if (typeof raw === 'number') return raw;
+      if (typeof raw === 'string') return Number(raw) || null;
+      if (typeof raw?.id === 'number') return raw.id;
+      return null;
+    };
+
+    const uploadReactionFile = useCallback(async (
+      sourceNodeId: string,
+      targetNodeId: string,
+      edgeId: string
+    ): Promise<number | null> => {
+      const uniquePadding = ' '.repeat(Math.floor(Math.random() * 50) + 1);
+      const initialContent = buildInitialReactionCode(sourceNodeId, targetNodeId) + uniquePadding;
+      const fileName = `reaction-${Date.now()}-${Math.random().toString(36).slice(2)}.reactions`;
+      const file = new File([initialContent], fileName, { type: 'text/plain;charset=utf-8' });
+
+      try {
+        const uploadResult = await apiService.uploadFile(file, 'REACTION');
+        const reactionFileId = await resolveReactionFileId(uploadResult?.data);
+        if (reactionFileId == null) {
+          console.error('❌ Upload succeeded but no file ID returned');
+        } else {
+          console.log('✅ Reaction file created for new edge:', edgeId, 'fileId:', reactionFileId);
+        }
+        return reactionFileId;
+      } catch (err) {
+        console.error('Failed to create reaction file for new edge:', err);
+        return null;
+      }
+    }, [buildInitialReactionCode]);
+
+    const buildNewEdge = useCallback((
+      sourceNodeId: string,
+      targetNode: Node,
+      sourceHandle: string,
+      reactionFileId: number | null,
+      color: string
+    ): Edge => {
+      const sourceNodePos = nodes.find(n => n.id === sourceNodeId)?.position;
+      const targetHandle = sourceNodePos
+        ? calculateTargetHandle(sourceNodePos, targetNode.position)
+        : 'left' as HandlePosition;
+
+      const edgeId = `edge-${sourceNodeId}-${targetNode.id}-${Date.now()}`;
+      return {
+        id: edgeId,
+        source: sourceNodeId,
+        target: targetNode.id,
+        sourceHandle,
+        targetHandle,
+        type: 'reactions',
+        style: { stroke: color, strokeWidth: 2 },
+        data: {
+          reactionFileId,
+          sourceMetaModelId: getBackendMetaModelIdForNode(sourceNodeId),
+          targetMetaModelId: getBackendMetaModelIdForNode(targetNode.id),
+          sourceMetaModelSourceId: getMetaModelSourceIdForNode(sourceNodeId),
+          targetMetaModelSourceId: getMetaModelSourceIdForNode(targetNode.id),
+        }
+      };
+    }, [nodes, calculateTargetHandle, getBackendMetaModelIdForNode, getMetaModelSourceIdForNode]);
+
+    const handleConnectionEnd = useCallback(async (e: MouseEvent) => {
       console.log('handleConnectionEnd CALLED');
 
       if (!reactFlowInstance || !connectionDragState?.isActive || !connectionDragState.sourceNodeId) {
@@ -623,17 +704,12 @@ export const FlowCanvas = forwardRef<{
 
       console.log('🔵 Connection drag ended');
 
-      const flowPosition = reactFlowInstance.screenToFlowPosition({
-        x: e.clientX,
-        y: e.clientY,
-      });
-
-      const intersectingNodes = nodes.filter(node => {
-        if (node.type !== 'ecoreFile' || node.id === connectionDragState.sourceNodeId) {
-          return false;
-        }
-        return isPositionInsideNode(flowPosition, node);
-      });
+      const flowPosition = reactFlowInstance.screenToFlowPosition({ x: e.clientX, y: e.clientY });
+      const intersectingNodes = nodes.filter(node =>
+        node.type === 'ecoreFile'
+        && node.id !== connectionDragState.sourceNodeId
+        && isPositionInsideNode(flowPosition, node)
+      );
 
       console.log('🔵 Intersecting nodes:', intersectingNodes);
 
@@ -641,60 +717,29 @@ export const FlowCanvas = forwardRef<{
         const targetNode = intersectingNodes[0];
         console.log('✅ Connection ended on node:', targetNode.id);
 
-        // Check if edge in THIS DIRECTION already exists (allow bidirectional)
-        const existingEdge = edges.find(edge =>
+        const alreadyConnected = edges.some(edge =>
           edge.source === connectionDragState.sourceNodeId && edge.target === targetNode.id
         );
 
-        if (existingEdge) {
+        if (alreadyConnected) {
           console.log('⚠️ Connection in this direction already exists');
-          setConnectionDragState(null);
-          return;
+        } else {
+          const color = getColorForPair(connectionDragState.sourceNodeId, targetNode.id);
+          const edgeId = `edge-${connectionDragState.sourceNodeId}-${targetNode.id}-${Date.now()}`;
+          const reactionFileId = await uploadReactionFile(connectionDragState.sourceNodeId, targetNode.id, edgeId);
+          const sourceHandle = connectionDragState?.sourceHandle;
+          if (!sourceHandle) return;
+          const newEdge = buildNewEdge(connectionDragState.sourceNodeId, targetNode, sourceHandle, reactionFileId, color);
+
+          console.log('🎯 Creating edge:', newEdge);
+          addEdge(newEdge);
         }
-
-        const sourceNodePos = nodes.find(n => n.id === connectionDragState.sourceNodeId)?.position;
-        const targetNodePos = targetNode.position;
-
-        let targetHandle: HandlePosition = 'left';
-
-        if (sourceNodePos && targetNodePos) {
-          targetHandle = calculateTargetHandle(sourceNodePos, targetNodePos);
-        }
-
-        console.log('🔵 Calculated handles:', {
-          source: connectionDragState.sourceHandle,
-          target: targetHandle
-        });
-
-        const color = getColorForPair(connectionDragState.sourceNodeId, targetNode.id);
-
-        const newEdge: Edge = {
-          id: `edge-${connectionDragState.sourceNodeId}-${targetNode.id}-${Date.now()}`,
-          source: connectionDragState.sourceNodeId,
-          target: targetNode.id,
-          sourceHandle: connectionDragState.sourceHandle,
-          targetHandle: targetHandle,
-          type: 'reactions',
-          style: {
-            stroke: color,
-            strokeWidth: 2,
-          },
-          data: {
-            sourceMetaModelId: getBackendMetaModelIdForNode(connectionDragState.sourceNodeId),
-            targetMetaModelId: getBackendMetaModelIdForNode(targetNode.id),
-            sourceMetaModelSourceId: getMetaModelSourceIdForNode(connectionDragState.sourceNodeId),
-            targetMetaModelSourceId: getMetaModelSourceIdForNode(targetNode.id),
-          }
-        };
-
-        console.log('🎯 Creating edge:', newEdge);
-        addEdge(newEdge);
       } else {
         console.log('❌ Connection ended in empty space - cancelled');
       }
 
       setConnectionDragState(null);
-    }, [reactFlowInstance, nodes, edges, addEdge, connectionDragState, getColorForPair, isPositionInsideNode, calculateTargetHandle, getBackendMetaModelIdForNode, getMetaModelSourceIdForNode]);
+    }, [reactFlowInstance, nodes, edges, addEdge, connectionDragState, getColorForPair, isPositionInsideNode, uploadReactionFile, buildNewEdge]);
 
     const handleConnectionMove = useCallback((e: MouseEvent) => {
       if (!reactFlowInstance) return;
@@ -725,8 +770,6 @@ export const FlowCanvas = forwardRef<{
       // Add listeners to both document and globalThis for cross-browser compatibility
       document.addEventListener('pointermove', handleMove, captureOptions);
       document.addEventListener('pointerup', handleEnd, captureOptions);
-      globalThis.addEventListener('pointermove', handleMove, captureOptions);
-      globalThis.addEventListener('pointerup', handleEnd, captureOptions);
 
       document.body.style.cursor = 'crosshair';
 
@@ -744,26 +787,10 @@ export const FlowCanvas = forwardRef<{
       const edge = edges.find(e => e.id === edgeId);
       if (!edge) return;
 
-      const getEPackageName = (nodeId: string): string | null => {
-        const node = nodes.find(n => n.id === nodeId);
-        if (!node || node.type !== 'ecoreFile') return null;
-
-        const ecoreContent = node.data.fileContent;
-        if (!ecoreContent) return null;
-
-        // search for: <ecore:EPackage name="DER_NAME_HIER">
-        const nameMatch = ecoreContent.match(/<ecore:EPackage[^>]+name="([^"]+)"/);
-        return nameMatch ? nameMatch[1] : null;
-      };
-
       const getFileName = (nodeId: string) => {
         const node = nodes.find(n => n.id === nodeId);
         return node?.type === 'ecoreFile' ? node.data.fileName : undefined;
       };
-
-      // Hole Source und Target Nodes um nsUri und fileName zu extrahieren
-      const sourceNode = nodes.find(n => n.id === edge.source);
-      const targetNode = nodes.find(n => n.id === edge.target);
 
       let initialCode = edge.data?.code || '';
       const reactionFileId = edge.data?.reactionFileId;
@@ -777,25 +804,7 @@ export const FlowCanvas = forwardRef<{
       }
 
       if (!initialCode || initialCode.trim() === '') {
-        const sourceFileName = getFileName(edge.source);
-        const targetFileName = getFileName(edge.target);
-
-        const sourcePackageName = getEPackageName(edge.source) || sourceFileName?.replace('.ecore', '') || 'source';
-        const targetPackageName = getEPackageName(edge.target) || targetFileName?.replace('.ecore', '') || 'target';
-
-        const sourceUri = sourceNode?.data?.nsUri || `http://vitruv.tools/${sourcePackageName}`;
-        const targetUri = targetNode?.data?.nsUri || `http://vitruv.tools/${targetPackageName}`;
-
-        const reactionsName = `${sourcePackageName}To${targetPackageName}`;
-
-        initialCode = `import "${sourceUri}" as ${sourcePackageName}
-import "${targetUri}" as ${targetPackageName}
-
-reactions: ${reactionsName}
-in reaction to changes in ${sourcePackageName}
-execute actions in ${targetPackageName}
-
-`;
+        initialCode = buildInitialReactionCode(edge.source, edge.target);
       }
 
       setCodeEditorState({
@@ -806,7 +815,7 @@ execute actions in ${targetPackageName}
         targetFileName: getFileName(edge.target),
         reactionFileId,
       });
-    }, [edges, nodes]);
+    }, [edges, nodes, buildInitialReactionCode]);
 
     const handleCloseCodeEditor = useCallback(() => {
       setCodeEditorState(null);
@@ -839,7 +848,7 @@ execute actions in ${targetPackageName}
       };
 
       try {
-        const fileName = `reaction-${edgeId}-${Date.now()}.reactions`;
+        const fileName = `reaction-${Date.now()}-${Math.random().toString(36).slice(2)}.reactions`;
         const file = new File([code], fileName, { type: 'text/plain;charset=utf-8' });
 
         let reactionFileId = codeEditorState.reactionFileId ?? null;
@@ -1841,56 +1850,77 @@ execute actions in ${targetPackageName}
     const calculateMergePoint = useCallback((avgSource: { x: number; y: number }, targetNode: Node) => {
       const targetCenterX = targetNode.position.x + NODE_DIMENSIONS.width / 2;
       const targetCenterY = targetNode.position.y + NODE_DIMENSIONS.height / 2;
+
+      // Place merge point vertically under/above the target center so
+      // the last segment into the class box is a straight line into
+      // the middle (no diagonal hit on the left/right side).
       return {
-        x: avgSource.x + (targetCenterX - avgSource.x) * 0.4,
-        y: avgSource.y + (targetCenterY - avgSource.y) * 0.4
+        x: targetCenterX,
+        y: avgSource.y + (targetCenterY - avgSource.y) * 0.4,
       };
     }, []);
 
-    // Calculate merge points for UML edges with same target
+    // Calculate merge points for UML inheritance edges with same target.
+    // We keep merge visualization ONLY for inheritance (like multiple
+    // subclasses pointing to the same superclass), not for other UML
+    // relationships. This gives a clean "fan-in" into the superclass
+    // while keeping compositions and associations as simple lines.
     const umlMergeData = useMemo(() => {
       const mergePointsMap = new Map<string, { x: number; y: number; mergeGroupId: string }>();
       const firstInGroupMap = new Map<string, string>();
       const mergeGroupSourceNodesMap = new Map<string, string[]>();
 
-      // Count UML edges per source node
+      // Consider only UML inheritance edges for merging
+      const umlInheritanceEdges = uniqueEdges.filter(
+        (e) => e.type === 'uml' && (e.data as any)?.relationshipType === 'inheritance'
+      );
+
+      if (umlInheritanceEdges.length === 0) {
+        return { mergePointsMap, firstInGroupMap, mergeGroupSourceNodesMap };
+      }
+
+      // Count inheritance edges per source node
       const edgesPerSource = new Map<string, number>();
-      uniqueEdges.filter(e => e.type === 'uml').forEach(edge => {
+      umlInheritanceEdges.forEach((edge) => {
         edgesPerSource.set(edge.source, (edgesPerSource.get(edge.source) || 0) + 1);
       });
 
-      // Group UML edges by target
+      // Group inheritance edges by target (superclass)
       const edgesByTarget = new Map<string, Edge[]>();
-      uniqueEdges.filter(e => e.type === 'uml').forEach(edge => {
+      umlInheritanceEdges.forEach((edge) => {
         const existing = edgesByTarget.get(edge.target) || [];
         existing.push(edge);
         edgesByTarget.set(edge.target, existing);
       });
 
-      // Process each target group
+      // For each superclass, create one merge point for eligible subclasses
       edgesByTarget.forEach((edgesGroup, targetId) => {
         if (edgesGroup.length < 2) return;
 
-        const eligibleEdges = edgesGroup.filter(edge => (edgesPerSource.get(edge.source) || 0) === 1);
+        // Only merge subclasses that connect to this superclass once
+        const eligibleEdges = edgesGroup.filter(
+          (edge) => (edgesPerSource.get(edge.source) || 0) === 1
+        );
         if (eligibleEdges.length < 2) return;
 
         eligibleEdges.sort((a, b) => a.source.localeCompare(b.source));
 
-        const targetNode = nodes.find(n => n.id === targetId);
+        const targetNode = nodes.find((n) => n.id === targetId);
         if (!targetNode) return;
 
         const avgSourcePos = calculateAverageSourcePosition(eligibleEdges);
         const mergePoint = calculateMergePoint(avgSourcePos, targetNode);
         const mergeGroupId = `merge-${targetId}`;
 
-        mergeGroupSourceNodesMap.set(mergeGroupId, eligibleEdges.map(e => e.source));
-        eligibleEdges.forEach((edge, index) => {
+        mergeGroupSourceNodesMap.set(
+          mergeGroupId,
+          eligibleEdges.map((e) => e.source)
+        );
+        eligibleEdges.forEach((edge) => {
           mergePointsMap.set(edge.id, { ...mergePoint, mergeGroupId });
-          console.log(`   Edge ${index}: ${edge.id.slice(-8)} (source: ${edge.source.slice(-6)})`);
         });
 
         firstInGroupMap.set(mergeGroupId, eligibleEdges[0].id);
-        console.log(`✨ Merge group ${mergeGroupId}: First edge = ${eligibleEdges[0].id.slice(-8)}`);
       });
 
       return { mergePointsMap, firstInGroupMap, mergeGroupSourceNodesMap };
