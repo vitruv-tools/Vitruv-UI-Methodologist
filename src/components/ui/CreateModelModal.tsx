@@ -295,6 +295,13 @@ export const CreateModelModal: React.FC<CreateModelModalProps> = ({
   const [showGenModelFixPrompt, setShowGenModelFixPrompt] = useState(false);
   const [pendingCreateRequest, setPendingCreateRequest] = useState<CreateModelRequest | null>(null);
 
+  const [ecoreInputMode, setEcoreInputMode] = useState<'file' | 'url'>('file');
+  const [genmodelInputMode, setGenmodelInputMode] = useState<'file' | 'url'>('file');
+  const [ecoreUrl, setEcoreUrl] = useState('');
+  const [genmodelUrl, setGenmodelUrl] = useState('');
+  const [ecoreUrlFileName, setEcoreUrlFileName] = useState('');
+  const [genmodelUrlFileName, setGenmodelUrlFileName] = useState('');
+
   const ecoreFileInputRef = useRef<HTMLInputElement>(null);
   const genmodelFileInputRef = useRef<HTMLInputElement>(null);
   const ecoreProgressIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -465,6 +472,152 @@ export const CreateModelModal: React.FC<CreateModelModalProps> = ({
     }
 
     event.target.value = '';
+  };
+
+  const handleEcoreUrlImport = async () => {
+    const url = ecoreUrl.trim();
+    if (!url) {
+      setError('Please enter a URL for the .ecore file');
+      return;
+    }
+    const urlPath = url.split('?')[0];
+    if (!urlPath.endsWith('.ecore')) {
+      setError('URL must point to a .ecore file (ending with .ecore)');
+      return;
+    }
+
+    setUploadProgress(prev => ({ ...prev, ecore: { progress: 0, isUploading: true } }));
+    setError('');
+
+    try {
+      if (uploadedFileIds.ecoreFileId > 0) {
+        try {
+          await apiService.deleteFile(uploadedFileIds.ecoreFileId);
+        } catch (e) {
+          console.warn('Failed to delete previous .ecore file:', e);
+        }
+      }
+
+      if (ecoreProgressIntervalRef.current) clearInterval(ecoreProgressIntervalRef.current);
+      ecoreProgressIntervalRef.current = globalThis.setInterval(() => {
+        setUploadProgress(prev => ({
+          ...prev,
+          ecore: { progress: Math.min(prev.ecore.progress + 15, 90), isUploading: true }
+        }));
+      }, 200);
+
+      const fetchResponse = await fetch(url);
+      if (!fetchResponse.ok) {
+        throw new Error(`Could not fetch file: ${fetchResponse.status} ${fetchResponse.statusText}`);
+      }
+      const blob = await fetchResponse.blob();
+      const fileName = urlPath.split('/').pop() || 'imported.ecore';
+      const file = new File([blob], fileName, { type: blob.type || 'application/octet-stream' });
+
+      const response = await apiService.uploadFile(file, 'ECORE');
+
+      if (ecoreProgressIntervalRef.current) {
+        clearInterval(ecoreProgressIntervalRef.current);
+        ecoreProgressIntervalRef.current = null;
+      }
+
+      setUploadProgress(prev => ({ ...prev, ecore: { progress: 100, isUploading: false } }));
+
+      const fileId = extractFileId(response);
+      setUploadedFileIds(prev => ({ ...prev, ecoreFileId: fileId }));
+      setEcoreUrlFileName(sanitizeFileName(fileName));
+      setSuccess(`Successfully imported ${sanitizeFileName(fileName)}`);
+
+      if (successTimeoutRef.current) clearTimeout(successTimeoutRef.current);
+      if (progressResetTimeoutRef.current) clearTimeout(progressResetTimeoutRef.current);
+
+      successTimeoutRef.current = globalThis.setTimeout(() => setSuccess(''), 3000);
+      progressResetTimeoutRef.current = globalThis.setTimeout(() => {
+        setUploadProgress(prev => ({ ...prev, ecore: { progress: 0, isUploading: false } }));
+      }, 2000);
+    } catch (err) {
+      setError(`Failed to import .ecore from URL: ${err instanceof Error ? err.message : 'Unknown error'}`);
+      setUploadProgress(prev => ({ ...prev, ecore: { progress: 0, isUploading: false } }));
+      setUploadedFileIds(prev => ({ ...prev, ecoreFileId: 0 }));
+      setEcoreUrlFileName('');
+      if (ecoreProgressIntervalRef.current) {
+        clearInterval(ecoreProgressIntervalRef.current);
+        ecoreProgressIntervalRef.current = null;
+      }
+    }
+  };
+
+  const handleGenmodelUrlImport = async () => {
+    const url = genmodelUrl.trim();
+    if (!url) {
+      setError('Please enter a URL for the .genmodel file');
+      return;
+    }
+    const urlPath = url.split('?')[0];
+    if (!urlPath.endsWith('.genmodel')) {
+      setError('URL must point to a .genmodel file (ending with .genmodel)');
+      return;
+    }
+
+    setUploadProgress(prev => ({ ...prev, genmodel: { progress: 0, isUploading: true } }));
+    setError('');
+
+    try {
+      if (uploadedFileIds.genModelFileId > 0) {
+        try {
+          await apiService.deleteFile(uploadedFileIds.genModelFileId);
+        } catch (e) {
+          console.warn('Failed to delete previous .genmodel file:', e);
+        }
+      }
+
+      if (genmodelProgressIntervalRef.current) clearInterval(genmodelProgressIntervalRef.current);
+      genmodelProgressIntervalRef.current = globalThis.setInterval(() => {
+        setUploadProgress(prev => ({
+          ...prev,
+          genmodel: { progress: Math.min(prev.genmodel.progress + 15, 90), isUploading: true }
+        }));
+      }, 200);
+
+      const fetchResponse = await fetch(url);
+      if (!fetchResponse.ok) {
+        throw new Error(`Could not fetch file: ${fetchResponse.status} ${fetchResponse.statusText}`);
+      }
+      const blob = await fetchResponse.blob();
+      const fileName = urlPath.split('/').pop() || 'imported.genmodel';
+      const file = new File([blob], fileName, { type: blob.type || 'application/octet-stream' });
+
+      const response = await apiService.uploadFile(file, 'GEN_MODEL');
+
+      if (genmodelProgressIntervalRef.current) {
+        clearInterval(genmodelProgressIntervalRef.current);
+        genmodelProgressIntervalRef.current = null;
+      }
+
+      setUploadProgress(prev => ({ ...prev, genmodel: { progress: 100, isUploading: false } }));
+
+      const fileId = extractFileId(response);
+      setUploadedFileIds(prev => ({ ...prev, genModelFileId: fileId }));
+      setGenmodelUrlFileName(sanitizeFileName(fileName));
+      setSuccess(`Successfully imported ${sanitizeFileName(fileName)}`);
+
+      if (successTimeoutRef.current) clearTimeout(successTimeoutRef.current);
+      if (progressResetTimeoutRef.current) clearTimeout(progressResetTimeoutRef.current);
+
+      successTimeoutRef.current = globalThis.setTimeout(() => setSuccess(''), 3000);
+      progressResetTimeoutRef.current = globalThis.setTimeout(() => {
+        setUploadProgress(prev => ({ ...prev, genmodel: { progress: 0, isUploading: false } }));
+      }, 2000);
+    } catch (err) {
+      setError(`Failed to import .genmodel from URL: ${err instanceof Error ? err.message : 'Unknown error'}`);
+      setUploadProgress(prev => ({ ...prev, genmodel: { progress: 0, isUploading: false } }));
+      setUploadedFileIds(prev => ({ ...prev, genModelFileId: 0 }));
+      setGenmodelUrlFileName('');
+      if (genmodelProgressIntervalRef.current) {
+        clearInterval(genmodelProgressIntervalRef.current);
+        genmodelProgressIntervalRef.current = null;
+      }
+    }
   };
 
   const startSubmitOverlay = () => {
@@ -711,6 +864,12 @@ export const CreateModelModal: React.FC<CreateModelModalProps> = ({
       genmodel: { progress: 0, isUploading: false }
     });
     setMetaModelCreatedSuccessfully(false);
+    setEcoreInputMode('file');
+    setGenmodelInputMode('file');
+    setEcoreUrl('');
+    setGenmodelUrl('');
+    setEcoreUrlFileName('');
+    setGenmodelUrlFileName('');
     onClose();
   };
 
@@ -903,9 +1062,6 @@ export const CreateModelModal: React.FC<CreateModelModalProps> = ({
                   placeholder="Type keywords and press Enter..."
                   style={inputStyle}
               />
-              <div style={{ fontSize: '12px', color: '#666', marginTop: '4px', fontStyle: 'italic' }}>
-                Press Enter to add each keyword as colored text. Keywords will appear in different colors automatically.
-              </div>
             </div>
 
             <div style={formGroupStyle}>
@@ -926,79 +1082,337 @@ export const CreateModelModal: React.FC<CreateModelModalProps> = ({
             <div style={uploadSectionStyle}>
               <div style={uploadSectionTitleStyle}>Required Meta Model Files</div>
 
-              <input
-                  ref={ecoreFileInputRef}
-                  type="file"
-                  accept=".ecore"
-                  onChange={handleEcoreFileUpload}
-                  style={fileInputStyle}
-              />
-              <input
-                  ref={genmodelFileInputRef}
-                  type="file"
-                  accept=".genmodel"
-                  onChange={handleGenmodelFileUpload}
-                  style={fileInputStyle}
-              />
+              <input ref={ecoreFileInputRef} type="file" accept=".ecore" onChange={handleEcoreFileUpload} style={fileInputStyle} />
+              <input ref={genmodelFileInputRef} type="file" accept=".genmodel" onChange={handleGenmodelFileUpload} style={fileInputStyle} />
 
-              <div style={uploadButtonsContainerStyle}>
-                <div style={{ flex: '1' }}>
-                  <button
+              {/* ── .ecore card ── */}
+              <div style={{
+                background: '#ffffff',
+                border: `1px solid ${uploadedFileIds.ecoreFileId > 0 ? '#86efac' : '#e2e8f0'}`,
+                borderLeft: `3px solid ${uploadedFileIds.ecoreFileId > 0 ? '#22c55e' : '#049484'}`,
+                borderRadius: '8px',
+                marginBottom: '12px',
+                overflow: 'hidden',
+                boxShadow: '0 1px 4px rgba(0,0,0,0.06)',
+              }}>
+                {/* card header */}
+                <div style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  padding: '9px 14px',
+                  background: uploadedFileIds.ecoreFileId > 0 ? '#f0fdf4' : '#f8fffe',
+                  borderBottom: '1px solid #e2e8f0',
+                }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <code style={{
+                      background: '#e6f7f5',
+                      color: '#049484',
+                      fontSize: '12px',
+                      fontWeight: 700,
+                      padding: '2px 8px',
+                      borderRadius: '4px',
+                      border: '1px solid #b2e4df',
+                      letterSpacing: '0.02em',
+                    }}>.ecore</code>
+                    {uploadedFileIds.ecoreFileId > 0 && (
+                      <span style={{ fontSize: '12px', color: '#16a34a', fontWeight: 600 }}>✓ Ready</span>
+                    )}
+                  </div>
+                  {/* segmented toggle */}
+                  <div style={{ display: 'flex', background: '#f1f5f9', borderRadius: '6px', padding: '2px', gap: '2px' }}>
+                    <button
+                      type="button"
+                      onClick={() => { setEcoreInputMode('file'); setUploadedFileIds(prev => ({ ...prev, ecoreFileId: 0 })); setEcoreUrlFileName(''); }}
                       style={{
-                        ...uploadButtonStyle,
-                        ...(uploadedFileIds.ecoreFileId > 0 ? uploadButtonSuccessStyle : {}),
-                        width: '100%'
+                        padding: '4px 11px',
+                        fontSize: '11px',
+                        fontWeight: 600,
+                        border: 'none',
+                        borderRadius: '4px',
+                        cursor: 'pointer',
+                        fontFamily: 'Georgia, serif',
+                        background: ecoreInputMode === 'file' ? '#049484' : 'transparent',
+                        color: ecoreInputMode === 'file' ? '#ffffff' : '#64748b',
+                        transition: 'all 0.15s',
+                        whiteSpace: 'nowrap',
                       }}
-                      onClick={() => ecoreFileInputRef.current?.click()}
-                      disabled={uploadProgress.ecore.isUploading}
-                      onMouseEnter={(e) => !uploadedFileIds.ecoreFileId && !uploadProgress.ecore.isUploading && Object.assign(e.currentTarget.style, uploadButtonHoverStyle)}
-                      onMouseLeave={(e) => !uploadedFileIds.ecoreFileId && !uploadProgress.ecore.isUploading && Object.assign(e.currentTarget.style, uploadButtonStyle)}
-                  >
-                    {getEcoreButtonText()} .ecore
-                  </button>
-                  {uploadProgress.ecore.isUploading && (
-                      <>
-                        <div style={{ ...progressBarContainerStyle, marginTop: 8 }}>
-                          <div style={{ ...progressBarStyle, width: `${uploadProgress.ecore.progress}%` }} />
-                        </div>
-                        <div style={{ fontSize: 12, color: '#666', textAlign: 'center', marginTop: 4 }}>
-                          {Math.round(uploadProgress.ecore.progress)}%
-                        </div>
-                      </>
-                  )}
+                    >⬆ Computer</button>
+                    <button
+                      type="button"
+                      onClick={() => { setEcoreInputMode('url'); setUploadedFileIds(prev => ({ ...prev, ecoreFileId: 0 })); setEcoreUrlFileName(''); }}
+                      style={{
+                        padding: '4px 11px',
+                        fontSize: '11px',
+                        fontWeight: 600,
+                        border: 'none',
+                        borderRadius: '4px',
+                        cursor: 'pointer',
+                        fontFamily: 'Georgia, serif',
+                        background: ecoreInputMode === 'url' ? '#049484' : 'transparent',
+                        color: ecoreInputMode === 'url' ? '#ffffff' : '#64748b',
+                        transition: 'all 0.15s',
+                        whiteSpace: 'nowrap',
+                      }}
+                    >🔗 URL</button>
+                  </div>
                 </div>
 
-                <div style={{ flex: '1' }}>
-                  <button
+                {/* card body */}
+                <div style={{ padding: '12px 14px' }}>
+                  {ecoreInputMode === 'file' ? (
+                    <button
+                      type="button"
+                      onClick={() => ecoreFileInputRef.current?.click()}
+                      disabled={uploadProgress.ecore.isUploading}
                       style={{
-                        ...uploadButtonStyle,
-                        ...(uploadedFileIds.genModelFileId > 0 ? uploadButtonSuccessStyle : {}),
-                        width: '100%'
+                        width: '100%',
+                        padding: '14px 12px',
+                        border: `2px dashed ${uploadedFileIds.ecoreFileId > 0 ? '#86efac' : '#cbd5e1'}`,
+                        borderRadius: '6px',
+                        background: uploadedFileIds.ecoreFileId > 0 ? '#f0fdf4' : '#fafafa',
+                        cursor: uploadProgress.ecore.isUploading ? 'wait' : 'pointer',
+                        textAlign: 'center',
+                        transition: 'all 0.2s',
+                        fontFamily: 'Georgia, serif',
                       }}
+                      onMouseEnter={(e) => { if (!uploadedFileIds.ecoreFileId && !uploadProgress.ecore.isUploading) { e.currentTarget.style.background = '#f0fdff'; e.currentTarget.style.borderColor = '#049484'; } }}
+                      onMouseLeave={(e) => { e.currentTarget.style.background = uploadedFileIds.ecoreFileId > 0 ? '#f0fdf4' : '#fafafa'; e.currentTarget.style.borderColor = uploadedFileIds.ecoreFileId > 0 ? '#86efac' : '#cbd5e1'; }}
+                    >
+                      <div style={{ fontSize: '20px', marginBottom: '4px', lineHeight: 1 }}>
+                        {uploadProgress.ecore.isUploading ? '⏳' : uploadedFileIds.ecoreFileId > 0 ? '✅' : '📂'}
+                      </div>
+                      <div style={{ fontSize: '13px', fontWeight: 600, color: uploadedFileIds.ecoreFileId > 0 ? '#15803d' : '#374151' }}>
+                        {uploadProgress.ecore.isUploading ? 'Uploading…' : uploadedFileIds.ecoreFileId > 0 ? 'File uploaded — click to replace' : 'Click to browse file'}
+                      </div>
+                      {!uploadedFileIds.ecoreFileId && !uploadProgress.ecore.isUploading && (
+                        <div style={{ fontSize: '11px', color: '#94a3b8', marginTop: '3px' }}>Accepts .ecore format</div>
+                      )}
+                    </button>
+                  ) : (
+                    <>
+                      <div style={{ fontSize: '11px', color: '#64748b', marginBottom: '6px', fontStyle: 'italic' }}>
+                        Paste a raw public URL pointing to a <code style={{ background: '#f1f5f9', padding: '1px 4px', borderRadius: '3px' }}>.ecore</code> file
+                      </div>
+                      <div style={{ display: 'flex', gap: '8px' }}>
+                        <input
+                          type="url"
+                          placeholder="https://raw.githubusercontent.com/…/model.ecore"
+                          value={ecoreUrl}
+                          onChange={(e) => { setEcoreUrl(e.target.value); setUploadedFileIds(prev => ({ ...prev, ecoreFileId: 0 })); setEcoreUrlFileName(''); }}
+                          style={{ ...inputStyle, flex: 1, margin: 0, fontSize: '12px', padding: '8px 10px' }}
+                          onFocus={(e) => Object.assign(e.currentTarget.style, { ...inputFocusStyle, flex: '1', margin: '0', fontSize: '12px', padding: '8px 10px' })}
+                          onBlur={(e) => Object.assign(e.currentTarget.style, { ...inputStyle, flex: '1', margin: '0', fontSize: '12px', padding: '8px 10px' })}
+                          disabled={uploadProgress.ecore.isUploading}
+                        />
+                        <button
+                          type="button"
+                          onClick={handleEcoreUrlImport}
+                          disabled={uploadProgress.ecore.isUploading || !ecoreUrl.trim()}
+                          style={{
+                            padding: '8px 16px',
+                            border: 'none',
+                            borderRadius: '6px',
+                            fontSize: '12px',
+                            fontWeight: 600,
+                            fontFamily: 'Georgia, serif',
+                            cursor: uploadProgress.ecore.isUploading || !ecoreUrl.trim() ? 'not-allowed' : 'pointer',
+                            background: uploadedFileIds.ecoreFileId > 0 ? '#22c55e' : '#049484',
+                            color: '#ffffff',
+                            opacity: uploadProgress.ecore.isUploading || !ecoreUrl.trim() ? 0.5 : 1,
+                            transition: 'all 0.2s',
+                            whiteSpace: 'nowrap',
+                          }}
+                        >
+                          {uploadProgress.ecore.isUploading ? '⏳ …' : uploadedFileIds.ecoreFileId > 0 ? '✓ Done' : 'Import'}
+                        </button>
+                      </div>
+                      {ecoreUrlFileName && uploadedFileIds.ecoreFileId > 0 && (
+                        <div style={{ fontSize: '11px', color: '#16a34a', marginTop: '6px', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                          <span>✅</span><span style={{ fontStyle: 'italic' }}>{ecoreUrlFileName}</span>
+                        </div>
+                      )}
+                    </>
+                  )}
+                  {uploadProgress.ecore.isUploading && (
+                    <div style={{ marginTop: '10px' }}>
+                      <div style={{ ...progressBarContainerStyle }}>
+                        <div style={{ ...progressBarStyle, width: `${uploadProgress.ecore.progress}%` }} />
+                      </div>
+                      <div style={{ fontSize: 11, color: '#64748b', textAlign: 'center', marginTop: 3 }}>
+                        {Math.round(uploadProgress.ecore.progress)}%
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* ── .genmodel card ── */}
+              <div style={{
+                background: '#ffffff',
+                border: `1px solid ${uploadedFileIds.genModelFileId > 0 ? '#86efac' : '#e2e8f0'}`,
+                borderLeft: `3px solid ${uploadedFileIds.genModelFileId > 0 ? '#22c55e' : '#2980b9'}`,
+                borderRadius: '8px',
+                marginBottom: '12px',
+                overflow: 'hidden',
+                boxShadow: '0 1px 4px rgba(0,0,0,0.06)',
+              }}>
+                {/* card header */}
+                <div style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  padding: '9px 14px',
+                  background: uploadedFileIds.genModelFileId > 0 ? '#f0fdf4' : '#f8fbff',
+                  borderBottom: '1px solid #e2e8f0',
+                }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <code style={{
+                      background: '#eff6ff',
+                      color: '#2563eb',
+                      fontSize: '12px',
+                      fontWeight: 700,
+                      padding: '2px 8px',
+                      borderRadius: '4px',
+                      border: '1px solid #bfdbfe',
+                      letterSpacing: '0.02em',
+                    }}>.genmodel</code>
+                    {uploadedFileIds.genModelFileId > 0 && (
+                      <span style={{ fontSize: '12px', color: '#16a34a', fontWeight: 600 }}>✓ Ready</span>
+                    )}
+                  </div>
+                  {/* segmented toggle */}
+                  <div style={{ display: 'flex', background: '#f1f5f9', borderRadius: '6px', padding: '2px', gap: '2px' }}>
+                    <button
+                      type="button"
+                      onClick={() => { setGenmodelInputMode('file'); setUploadedFileIds(prev => ({ ...prev, genModelFileId: 0 })); setGenmodelUrlFileName(''); }}
+                      style={{
+                        padding: '4px 11px',
+                        fontSize: '11px',
+                        fontWeight: 600,
+                        border: 'none',
+                        borderRadius: '4px',
+                        cursor: 'pointer',
+                        fontFamily: 'Georgia, serif',
+                        background: genmodelInputMode === 'file' ? '#049484' : 'transparent',
+                        color: genmodelInputMode === 'file' ? '#ffffff' : '#64748b',
+                        transition: 'all 0.15s',
+                        whiteSpace: 'nowrap',
+                      }}
+                    >⬆ Computer</button>
+                    <button
+                      type="button"
+                      onClick={() => { setGenmodelInputMode('url'); setUploadedFileIds(prev => ({ ...prev, genModelFileId: 0 })); setGenmodelUrlFileName(''); }}
+                      style={{
+                        padding: '4px 11px',
+                        fontSize: '11px',
+                        fontWeight: 600,
+                        border: 'none',
+                        borderRadius: '4px',
+                        cursor: 'pointer',
+                        fontFamily: 'Georgia, serif',
+                        background: genmodelInputMode === 'url' ? '#049484' : 'transparent',
+                        color: genmodelInputMode === 'url' ? '#ffffff' : '#64748b',
+                        transition: 'all 0.15s',
+                        whiteSpace: 'nowrap',
+                      }}
+                    >🔗 URL</button>
+                  </div>
+                </div>
+
+                {/* card body */}
+                <div style={{ padding: '12px 14px' }}>
+                  {genmodelInputMode === 'file' ? (
+                    <button
+                      type="button"
                       onClick={() => genmodelFileInputRef.current?.click()}
                       disabled={uploadProgress.genmodel.isUploading}
-                      onMouseEnter={(e) => !uploadedFileIds.genModelFileId && !uploadProgress.genmodel.isUploading && Object.assign(e.currentTarget.style, uploadButtonHoverStyle)}
-                      onMouseLeave={(e) => !uploadedFileIds.genModelFileId && !uploadProgress.genmodel.isUploading && Object.assign(e.currentTarget.style, uploadButtonStyle)}
-                  >
-                    {getGenmodelButtonText()} .genmodel
-                  </button>
+                      style={{
+                        width: '100%',
+                        padding: '14px 12px',
+                        border: `2px dashed ${uploadedFileIds.genModelFileId > 0 ? '#86efac' : '#cbd5e1'}`,
+                        borderRadius: '6px',
+                        background: uploadedFileIds.genModelFileId > 0 ? '#f0fdf4' : '#fafafa',
+                        cursor: uploadProgress.genmodel.isUploading ? 'wait' : 'pointer',
+                        textAlign: 'center',
+                        transition: 'all 0.2s',
+                        fontFamily: 'Georgia, serif',
+                      }}
+                      onMouseEnter={(e) => { if (!uploadedFileIds.genModelFileId && !uploadProgress.genmodel.isUploading) { e.currentTarget.style.background = '#f0f7ff'; e.currentTarget.style.borderColor = '#2980b9'; } }}
+                      onMouseLeave={(e) => { e.currentTarget.style.background = uploadedFileIds.genModelFileId > 0 ? '#f0fdf4' : '#fafafa'; e.currentTarget.style.borderColor = uploadedFileIds.genModelFileId > 0 ? '#86efac' : '#cbd5e1'; }}
+                    >
+                      <div style={{ fontSize: '20px', marginBottom: '4px', lineHeight: 1 }}>
+                        {uploadProgress.genmodel.isUploading ? '⏳' : uploadedFileIds.genModelFileId > 0 ? '✅' : '📂'}
+                      </div>
+                      <div style={{ fontSize: '13px', fontWeight: 600, color: uploadedFileIds.genModelFileId > 0 ? '#15803d' : '#374151' }}>
+                        {uploadProgress.genmodel.isUploading ? 'Uploading…' : uploadedFileIds.genModelFileId > 0 ? 'File uploaded — click to replace' : 'Click to browse file'}
+                      </div>
+                      {!uploadedFileIds.genModelFileId && !uploadProgress.genmodel.isUploading && (
+                        <div style={{ fontSize: '11px', color: '#94a3b8', marginTop: '3px' }}>Accepts .genmodel format</div>
+                      )}
+                    </button>
+                  ) : (
+                    <>
+                      <div style={{ fontSize: '11px', color: '#64748b', marginBottom: '6px', fontStyle: 'italic' }}>
+                        Paste a raw public URL pointing to a <code style={{ background: '#f1f5f9', padding: '1px 4px', borderRadius: '3px' }}>.genmodel</code> file
+                      </div>
+                      <div style={{ display: 'flex', gap: '8px' }}>
+                        <input
+                          type="url"
+                          placeholder="https://raw.githubusercontent.com/…/model.genmodel"
+                          value={genmodelUrl}
+                          onChange={(e) => { setGenmodelUrl(e.target.value); setUploadedFileIds(prev => ({ ...prev, genModelFileId: 0 })); setGenmodelUrlFileName(''); }}
+                          style={{ ...inputStyle, flex: 1, margin: 0, fontSize: '12px', padding: '8px 10px' }}
+                          onFocus={(e) => Object.assign(e.currentTarget.style, { ...inputFocusStyle, flex: '1', margin: '0', fontSize: '12px', padding: '8px 10px' })}
+                          onBlur={(e) => Object.assign(e.currentTarget.style, { ...inputStyle, flex: '1', margin: '0', fontSize: '12px', padding: '8px 10px' })}
+                          disabled={uploadProgress.genmodel.isUploading}
+                        />
+                        <button
+                          type="button"
+                          onClick={handleGenmodelUrlImport}
+                          disabled={uploadProgress.genmodel.isUploading || !genmodelUrl.trim()}
+                          style={{
+                            padding: '8px 16px',
+                            border: 'none',
+                            borderRadius: '6px',
+                            fontSize: '12px',
+                            fontWeight: 600,
+                            fontFamily: 'Georgia, serif',
+                            cursor: uploadProgress.genmodel.isUploading || !genmodelUrl.trim() ? 'not-allowed' : 'pointer',
+                            background: uploadedFileIds.genModelFileId > 0 ? '#22c55e' : '#049484',
+                            color: '#ffffff',
+                            opacity: uploadProgress.genmodel.isUploading || !genmodelUrl.trim() ? 0.5 : 1,
+                            transition: 'all 0.2s',
+                            whiteSpace: 'nowrap',
+                          }}
+                        >
+                          {uploadProgress.genmodel.isUploading ? '⏳ …' : uploadedFileIds.genModelFileId > 0 ? '✓ Done' : 'Import'}
+                        </button>
+                      </div>
+                      {genmodelUrlFileName && uploadedFileIds.genModelFileId > 0 && (
+                        <div style={{ fontSize: '11px', color: '#16a34a', marginTop: '6px', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                          <span>✅</span><span style={{ fontStyle: 'italic' }}>{genmodelUrlFileName}</span>
+                        </div>
+                      )}
+                    </>
+                  )}
                   {uploadProgress.genmodel.isUploading && (
-                      <>
-                        <div style={{ ...progressBarContainerStyle, marginTop: 8 }}>
-                          <div style={{ ...progressBarStyle, width: `${uploadProgress.genmodel.progress}%` }} />
-                        </div>
-                        <div style={{ fontSize: 12, color: '#666', textAlign: 'center', marginTop: 4 }}>
-                          {Math.round(uploadProgress.genmodel.progress)}%
-                        </div>
-                      </>
+                    <div style={{ marginTop: '10px' }}>
+                      <div style={{ ...progressBarContainerStyle }}>
+                        <div style={{ ...progressBarStyle, width: `${uploadProgress.genmodel.progress}%` }} />
+                      </div>
+                      <div style={{ fontSize: 11, color: '#64748b', textAlign: 'center', marginTop: 3 }}>
+                        {Math.round(uploadProgress.genmodel.progress)}%
+                      </div>
+                    </div>
                   )}
                 </div>
               </div>
 
               <div style={fileStatusStyle}>
                 {uploadedFileIds.ecoreFileId > 0 && uploadedFileIds.genModelFileId > 0
-                    ? '✅ Both files uploaded successfully!'
-                    : 'Please upload both .ecore and .genmodel files to continue'}
+                    ? '✅ Both files ready!'
+                    : 'Upload or import both files to continue'}
               </div>
             </div>
 
