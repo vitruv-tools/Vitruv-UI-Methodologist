@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import ReactDOM from 'react-dom';
 import { apiService } from '../../services/api';
 import { KeywordTagsInput } from './KeywordTagsInput';
@@ -39,7 +39,10 @@ interface CreateModelRequest {
   applyGenModelFixes?: boolean;
 }
 
-// Secure random number generator helper function
+type FileKind = 'ecore' | 'genmodel';
+
+// ─── Module-level helpers ────────────────────────────────────────────────────
+
 const getSecureRandomInt = (max: number): number => {
   const crypto = globalThis.crypto || (globalThis as any).msCrypto;
   if (crypto?.getRandomValues) {
@@ -47,9 +50,53 @@ const getSecureRandomInt = (max: number): number => {
     crypto.getRandomValues(array);
     return array[0] % max;
   }
-  // Fallback for environments without crypto support (should not happen in modern browsers)
   throw new Error('Cryptographically secure random number generation not available');
 };
+
+const sanitizeFileName = (fileName: string): string => fileName.replaceAll(/[<>]/g, '');
+
+const extractFileId = (response: any): number => {
+  const rawData: any = response?.data;
+  let fileId = rawData && typeof rawData === 'object' && 'id' in rawData
+    ? Number(rawData.id)
+    : Number(rawData);
+  if (!Number.isFinite(fileId)) fileId = Date.now() + getSecureRandomInt(1000);
+  return fileId;
+};
+
+const parseBackendError = (err: unknown): { message: string; isMetamodelRejected: boolean } => {
+  const anyError = err as any;
+  const backendPayload = anyError?.response?.data;
+  const backendMessage = typeof backendPayload?.message === 'string' ? backendPayload.message : '';
+  const message = backendMessage || (err instanceof Error ? err.message : '') || 'Unknown error';
+  return { message, isMetamodelRejected: message.toLowerCase().includes('metamodel rejected') };
+};
+
+// ─── Per-kind configuration ───────────────────────────────────────────────────
+
+const FILE_KIND_CONFIG: Record<FileKind, {
+  ext: string;
+  apiType: 'ECORE' | 'GEN_MODEL';
+  fileIdKey: 'ecoreFileId' | 'genModelFileId';
+}> = {
+  ecore:    { ext: '.ecore',    apiType: 'ECORE',     fileIdKey: 'ecoreFileId' },
+  genmodel: { ext: '.genmodel', apiType: 'GEN_MODEL', fileIdKey: 'genModelFileId' },
+};
+
+const FILE_CARD_DISPLAY_CONFIGS: Array<{
+  kind: FileKind;
+  accentColor: string;
+  hoverBg: string;
+  badgeBg: string;
+  badgeBorder: string;
+  badgeColor: string;
+  defaultHeaderBg: string;
+}> = [
+  { kind: 'ecore',    accentColor: '#049484', hoverBg: '#f0fdff', badgeBg: '#e6f7f5', badgeBorder: '#b2e4df', badgeColor: '#049484', defaultHeaderBg: '#f8fffe' },
+  { kind: 'genmodel', accentColor: '#2980b9', hoverBg: '#f0f7ff', badgeBg: '#eff6ff', badgeBorder: '#bfdbfe', badgeColor: '#2563eb', defaultHeaderBg: '#f8fbff' },
+];
+
+// ─── Style constants ──────────────────────────────────────────────────────────
 
 const modalStyle: React.CSSProperties = {
   background: '#ffffff',
@@ -126,7 +173,6 @@ const uploadSectionTitleStyle: React.CSSProperties = {
   textAlign: 'center',
   fontFamily: 'Georgia, serif',
 };
-
 
 const fileStatusStyle: React.CSSProperties = {
   fontSize: '13px',
@@ -228,384 +274,416 @@ const overlayTextStyle: React.CSSProperties = {
   textAlign: 'center',
 };
 
-export const CreateModelModal: React.FC<CreateModelModalProps> = ({
-                                                                    isOpen,
-                                                                    onClose,
-                                                                    onSuccess
-                                                                  }) => {
+// ─── Sub-components ───────────────────────────────────────────────────────────
+
+const SubmitProgressOverlay: React.FC<{ progress: number }> = ({ progress }) => (
+  <dialog
+    open
+    style={{ ...overlayStyle, background: 'transparent', backdropFilter: 'blur(6px)', WebkitBackdropFilter: 'blur(6px)' }}
+    aria-label="Building meta model"
+  >
+    <div style={overlayCardStyle} role="presentation" onMouseDown={(e) => e.stopPropagation()}>
+      <div style={overlayTitleStyle}>Building Meta Model…</div>
+      <div style={overlayTextStyle}>Please wait while we process your files.</div>
+      <div style={{ ...progressBarContainerStyle, marginTop: 8 }}>
+        <div style={{ ...progressBarStyle, width: `${progress}%` }} />
+      </div>
+      <div style={{ fontSize: 12, color: '#374151', textAlign: 'center', marginTop: 6 }}>
+        {Math.round(progress)}%
+      </div>
+    </div>
+  </dialog>
+);
+
+interface FileUploadCardProps {
+  ext: string;
+  accentColor: string;
+  hoverBg: string;
+  badgeBg: string;
+  badgeBorder: string;
+  badgeColor: string;
+  headerBg: string;
+  fileId: number;
+  inputMode: 'file' | 'url';
+  uploadProgress: { progress: number; isUploading: boolean };
+  url: string;
+  urlFileName: string;
+  urlPlaceholder: string;
+  onModeChange: (mode: 'file' | 'url') => void;
+  onFileInputClick: () => void;
+  onUrlChange: (url: string) => void;
+  onUrlImport: () => void;
+}
+
+const FileUploadCard: React.FC<FileUploadCardProps> = ({
+  ext, accentColor, hoverBg, badgeBg, badgeBorder, badgeColor, headerBg,
+  fileId, inputMode, uploadProgress, url, urlFileName, urlPlaceholder,
+  onModeChange, onFileInputClick, onUrlChange, onUrlImport,
+}) => {
+  const isUploaded = fileId > 0;
+  const isUploading = uploadProgress.isUploading;
+
+  const fileZoneIcon = isUploading ? '⏳' : isUploaded ? '✅' : '📂';
+  const fileZoneLabel = isUploading ? 'Uploading…' : isUploaded ? 'File uploaded — click to replace' : 'Click to browse file';
+  const urlImportButtonLabel = isUploading ? '⏳ …' : isUploaded ? '✓ Done' : 'Import';
+
+  return (
+    <div style={{
+      background: '#ffffff',
+      border: `1px solid ${isUploaded ? '#86efac' : '#e2e8f0'}`,
+      borderLeft: `3px solid ${isUploaded ? '#22c55e' : accentColor}`,
+      borderRadius: '8px',
+      marginBottom: '12px',
+      overflow: 'hidden',
+      boxShadow: '0 1px 4px rgba(0,0,0,0.06)',
+    }}>
+      {/* card header */}
+      <div style={{
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        padding: '9px 14px',
+        background: headerBg,
+        borderBottom: '1px solid #e2e8f0',
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <code style={{
+            background: badgeBg,
+            color: badgeColor,
+            fontSize: '12px',
+            fontWeight: 700,
+            padding: '2px 8px',
+            borderRadius: '4px',
+            border: `1px solid ${badgeBorder}`,
+            letterSpacing: '0.02em',
+          }}>{ext}</code>
+          {isUploaded && (
+            <span style={{ fontSize: '12px', color: '#16a34a', fontWeight: 600 }}>✓ Ready</span>
+          )}
+        </div>
+        {/* segmented toggle */}
+        <div style={{ display: 'flex', background: '#f1f5f9', borderRadius: '6px', padding: '2px', gap: '2px' }}>
+          <button
+            type="button"
+            onClick={() => onModeChange('file')}
+            style={{
+              padding: '4px 11px', fontSize: '11px', fontWeight: 600, border: 'none',
+              borderRadius: '4px', cursor: 'pointer', fontFamily: 'Georgia, serif',
+              background: inputMode === 'file' ? '#049484' : 'transparent',
+              color: inputMode === 'file' ? '#ffffff' : '#64748b',
+              transition: 'all 0.15s', whiteSpace: 'nowrap',
+            }}
+          >⬆ Computer</button>
+          <button
+            type="button"
+            onClick={() => onModeChange('url')}
+            style={{
+              padding: '4px 11px', fontSize: '11px', fontWeight: 600, border: 'none',
+              borderRadius: '4px', cursor: 'pointer', fontFamily: 'Georgia, serif',
+              background: inputMode === 'url' ? '#049484' : 'transparent',
+              color: inputMode === 'url' ? '#ffffff' : '#64748b',
+              transition: 'all 0.15s', whiteSpace: 'nowrap',
+            }}
+          >🔗 URL</button>
+        </div>
+      </div>
+
+      {/* card body */}
+      <div style={{ padding: '12px 14px' }}>
+        {inputMode === 'file' ? (
+          <button
+            type="button"
+            onClick={onFileInputClick}
+            disabled={isUploading}
+            style={{
+              width: '100%', padding: '14px 12px',
+              border: `2px dashed ${isUploaded ? '#86efac' : '#cbd5e1'}`,
+              borderRadius: '6px',
+              background: isUploaded ? '#f0fdf4' : '#fafafa',
+              cursor: isUploading ? 'wait' : 'pointer',
+              textAlign: 'center', transition: 'all 0.2s', fontFamily: 'Georgia, serif',
+            }}
+            onMouseEnter={(e) => {
+              if (!isUploaded && !isUploading) {
+                e.currentTarget.style.background = hoverBg;
+                e.currentTarget.style.borderColor = accentColor;
+              }
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.background = isUploaded ? '#f0fdf4' : '#fafafa';
+              e.currentTarget.style.borderColor = isUploaded ? '#86efac' : '#cbd5e1';
+            }}
+          >
+            <div style={{ fontSize: '20px', marginBottom: '4px', lineHeight: 1 }}>
+              {fileZoneIcon}
+            </div>
+            <div style={{ fontSize: '13px', fontWeight: 600, color: isUploaded ? '#15803d' : '#374151' }}>
+              {fileZoneLabel}
+            </div>
+            {!isUploaded && !isUploading && (
+              <div style={{ fontSize: '11px', color: '#94a3b8', marginTop: '3px' }}>Accepts {ext} format</div>
+            )}
+          </button>
+        ) : (
+          <>
+            <div style={{ fontSize: '11px', color: '#64748b', marginBottom: '6px', fontStyle: 'italic' }}>
+              Paste a raw public URL pointing to a{' '}
+              <code style={{ background: '#f1f5f9', padding: '1px 4px', borderRadius: '3px' }}>{ext}</code> file
+            </div>
+            <div style={{ display: 'flex', gap: '8px' }}>
+              <input
+                type="url"
+                placeholder={urlPlaceholder}
+                value={url}
+                onChange={(e) => onUrlChange(e.target.value)}
+                style={{ ...inputStyle, flex: 1, margin: 0, fontSize: '12px', padding: '8px 10px' }}
+                onFocus={(e) => Object.assign(e.currentTarget.style, { ...inputFocusStyle, flex: '1', margin: '0', fontSize: '12px', padding: '8px 10px' })}
+                onBlur={(e) => Object.assign(e.currentTarget.style, { ...inputStyle, flex: '1', margin: '0', fontSize: '12px', padding: '8px 10px' })}
+                disabled={isUploading}
+              />
+              <button
+                type="button"
+                onClick={onUrlImport}
+                disabled={isUploading || !url.trim()}
+                style={{
+                  padding: '8px 16px', border: 'none', borderRadius: '6px',
+                  fontSize: '12px', fontWeight: 600, fontFamily: 'Georgia, serif',
+                  cursor: isUploading || !url.trim() ? 'not-allowed' : 'pointer',
+                  background: isUploaded ? '#22c55e' : '#049484',
+                  color: '#ffffff',
+                  opacity: isUploading || !url.trim() ? 0.5 : 1,
+                  transition: 'all 0.2s', whiteSpace: 'nowrap',
+                }}
+              >
+                {urlImportButtonLabel}
+              </button>
+            </div>
+            {urlFileName && isUploaded && (
+              <div style={{ fontSize: '11px', color: '#16a34a', marginTop: '6px', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                <span>✅</span><span style={{ fontStyle: 'italic' }}>{urlFileName}</span>
+              </div>
+            )}
+          </>
+        )}
+        {isUploading && (
+          <div style={{ marginTop: '10px' }}>
+            <div style={{ ...progressBarContainerStyle }}>
+              <div style={{ ...progressBarStyle, width: `${uploadProgress.progress}%` }} />
+            </div>
+            <div style={{ fontSize: 11, color: '#64748b', textAlign: 'center', marginTop: 3 }}>
+              {Math.round(uploadProgress.progress)}%
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
+
+interface FormActionButtonsProps {
+  isLoading: boolean;
+  isSubmitting: boolean;
+  canSave: boolean;
+  buttonText: string;
+  onCancel: () => void;
+  onSubmit: () => void;
+}
+
+const FormActionButtons: React.FC<FormActionButtonsProps> = ({
+  isLoading, isSubmitting, canSave, buttonText, onCancel, onSubmit,
+}) => {
+  const isDisabled = isLoading || isSubmitting;
+  return (
+    <div style={buttonGroupStyle}>
+      <button
+        style={secondaryButtonStyle}
+        onClick={onCancel}
+        disabled={isDisabled}
+        onMouseEnter={(e) => !isDisabled && Object.assign(e.currentTarget.style, buttonHoverStyle)}
+        onMouseLeave={(e) => !isDisabled && Object.assign(e.currentTarget.style, secondaryButtonStyle)}
+      >
+        Cancel
+      </button>
+      <button
+        style={{ ...primaryButtonStyle, ...(canSave && !isLoading ? {} : primaryButtonDisabledStyle) }}
+        onClick={onSubmit}
+        disabled={!canSave || isDisabled}
+        onMouseEnter={(e) => canSave && !isDisabled && Object.assign(e.currentTarget.style, buttonHoverStyle)}
+        onMouseLeave={(e) => canSave && !isDisabled && Object.assign(e.currentTarget.style, primaryButtonStyle)}
+      >
+        {buttonText}
+      </button>
+    </div>
+  );
+};
+
+interface GenModelFixPromptProps {
+  isLoading: boolean;
+  isSubmitting: boolean;
+  onCancel: () => void;
+  onApplyFixes: () => void;
+}
+
+const GenModelFixPrompt: React.FC<GenModelFixPromptProps> = ({
+  isLoading, isSubmitting, onCancel, onApplyFixes,
+}) => {
+  const isDisabled = isLoading || isSubmitting;
+  return (
+    <div style={{
+      marginTop: 20, padding: 14, borderRadius: 6,
+      border: '1px solid #f59e0b', background: '#fffbeb',
+      fontSize: 13, color: '#92400e',
+    }}>
+      <div style={{ fontWeight: 600, marginBottom: 6 }}>
+        We detected issues in your GenModel.
+      </div>
+      <div style={{ marginBottom: 10 }}>
+        Would you like to save the meta model by letting the system automatically modify the GenModel,
+        or cancel this scenario?
+      </div>
+      <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', flexWrap: 'wrap' }}>
+        <button
+          type="button"
+          onClick={onCancel}
+          style={{ ...secondaryButtonStyle, borderColor: '#f97316', color: '#92400e', padding: '8px 12px' }}
+          disabled={isDisabled}
+        >
+          Cancel scenario
+        </button>
+        <button
+          type="button"
+          onClick={onApplyFixes}
+          style={{ ...primaryButtonStyle, padding: '8px 12px' }}
+          disabled={isDisabled}
+        >
+          Save with automatic GenModel fixes
+        </button>
+      </div>
+    </div>
+  );
+};
+
+// ─── Per-kind UI state shape ──────────────────────────────────────────────────
+
+const EMPTY_PER_KIND = {
+  ecore:    { inputMode: 'file' as 'file' | 'url', url: '', urlFileName: '' },
+  genmodel: { inputMode: 'file' as 'file' | 'url', url: '', urlFileName: '' },
+};
+
+// ─── Custom hook ──────────────────────────────────────────────────────────────
+
+function useCreateModelForm({ isOpen, onClose, onSuccess }: CreateModelModalProps) {
   const [formData, setFormData] = useState({
-    name: '',
-    description: '',
-    domain: '',
-    keywords: [] as string[],
+    name: '', description: '', domain: '', keywords: [] as string[],
   });
-
-  const [uploadedFileIds, setUploadedFileIds] = useState({
-    ecoreFileId: 0,
-    genModelFileId: 0,
-  });
-
+  const [uploadedFileIds, setUploadedFileIds] = useState({ ecoreFileId: 0, genModelFileId: 0 });
   const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState<string>('');
-  const [success, setSuccess] = useState<string>('');
-
+  const [error, setError] = useState('');
+  const [success, setSuccess] = useState('');
   const [uploadProgress, setUploadProgress] = useState({
     ecore: { progress: 0, isUploading: false },
-    genmodel: { progress: 0, isUploading: false }
+    genmodel: { progress: 0, isUploading: false },
   });
   const [submitProgress, setSubmitProgress] = useState({ progress: 0, isSubmitting: false });
   const [metaModelCreatedSuccessfully, setMetaModelCreatedSuccessfully] = useState(false);
   const [showGenModelFixPrompt, setShowGenModelFixPrompt] = useState(false);
   const [pendingCreateRequest, setPendingCreateRequest] = useState<CreateModelRequest | null>(null);
 
-  const [ecoreInputMode, setEcoreInputMode] = useState<'file' | 'url'>('file');
-  const [genmodelInputMode, setGenmodelInputMode] = useState<'file' | 'url'>('file');
-  const [ecoreUrl, setEcoreUrl] = useState('');
-  const [genmodelUrl, setGenmodelUrl] = useState('');
-  const [ecoreUrlFileName, setEcoreUrlFileName] = useState('');
-  const [genmodelUrlFileName, setGenmodelUrlFileName] = useState('');
+  // Unified per-kind UI state (replaces 6 separate ecoreInputMode / genmodelUrl / … states)
+  const [perKind, setPerKind] = useState(EMPTY_PER_KIND);
 
-  const ecoreFileInputRef = useRef<HTMLInputElement>(null);
-  const genmodelFileInputRef = useRef<HTMLInputElement>(null);
-  const ecoreProgressIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const fileInputRefs = {
+    ecore:    useRef<HTMLInputElement>(null),
+    genmodel: useRef<HTMLInputElement>(null),
+  };
+  const ecoreProgressIntervalRef    = useRef<ReturnType<typeof setInterval> | null>(null);
   const genmodelProgressIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const submitProgressIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const successTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const progressResetTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const submitProgressIntervalRef   = useRef<ReturnType<typeof setInterval> | null>(null);
+  const successTimeoutRef           = useRef<ReturnType<typeof setTimeout>  | null>(null);
+  const progressResetTimeoutRef     = useRef<ReturnType<typeof setTimeout>  | null>(null);
 
-  const canSave = uploadedFileIds.ecoreFileId > 0 && 
-    uploadedFileIds.genModelFileId > 0 && 
+  const canSave = uploadedFileIds.ecoreFileId > 0 &&
+    uploadedFileIds.genModelFileId > 0 &&
     formData.name.trim() &&
     formData.description.trim() &&
     formData.domain.trim() &&
     formData.keywords.length > 0;
 
-  // Helper to sanitize file names for display (prevent XSS)
-  const sanitizeFileName = (fileName: string): string => {
-    return fileName.replaceAll(/[<>]/g, '');
+  // Stable ref-only cleanup – safe with empty deps
+  const clearAllTimers = useCallback(() => {
+    [ecoreProgressIntervalRef, genmodelProgressIntervalRef, submitProgressIntervalRef].forEach(ref => {
+      if (ref.current) { clearInterval(ref.current); ref.current = null; }
+    });
+    [successTimeoutRef, progressResetTimeoutRef].forEach(ref => {
+      if (ref.current) { clearTimeout(ref.current); ref.current = null; }
+    });
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // ── Per-kind helpers ──────────────────────────────────────────────────────
+
+  const updateKind = (kind: FileKind, patch: Partial<typeof EMPTY_PER_KIND.ecore>) =>
+    setPerKind(prev => ({ ...prev, [kind]: { ...prev[kind], ...patch } }));
+
+  const switchFileMode = (kind: FileKind, mode: 'file' | 'url') => {
+    updateKind(kind, { inputMode: mode, urlFileName: '' });
+    setUploadedFileIds(prev => ({ ...prev, [FILE_KIND_CONFIG[kind].fileIdKey]: 0 }));
   };
 
-  // Helper to extract and validate file ID from upload response
-  const extractFileId = (response: any): number => {
-    const rawData: any = response?.data;
-    let fileId = (rawData && typeof rawData === 'object' && 'id' in rawData)
-        ? Number(rawData.id)
-        : Number(rawData);
-    if (!Number.isFinite(fileId)) fileId = Date.now() + getSecureRandomInt(1000);
-    return fileId;
+  const changeFileUrl = (kind: FileKind, url: string) => {
+    updateKind(kind, { url, urlFileName: '' });
+    setUploadedFileIds(prev => ({ ...prev, [FILE_KIND_CONFIG[kind].fileIdKey]: 0 }));
   };
 
-  const handleEcoreFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (!file) return;
+  // ── Progress simulation ───────────────────────────────────────────────────
 
-    if (!file.name.endsWith('.ecore')) {
-      setError('Please select a valid .ecore file');
-      return;
-    }
-
-    setUploadProgress(prev => ({ ...prev, ecore: { progress: 0, isUploading: true } }));
-    setError('');
-
-    try {
-      // Delete the previously uploaded file if it exists
-      if (uploadedFileIds.ecoreFileId > 0) {
-        try {
-          await apiService.deleteFile(uploadedFileIds.ecoreFileId);
-          console.log('Deleted previous .ecore file:', uploadedFileIds.ecoreFileId);
-        } catch (error_) {
-          console.warn('Failed to delete previous .ecore file:', error_);
-          // Continue with upload even if deletion fails
-        }
-      }
-
-      if (ecoreProgressIntervalRef.current) clearInterval(ecoreProgressIntervalRef.current);
-      ecoreProgressIntervalRef.current = globalThis.setInterval(() => {
-        setUploadProgress(prev => ({
-          ...prev,
-          ecore: {
-            // Use fixed increment instead of Math.random() for progress simulation
-            progress: Math.min(prev.ecore.progress + 15, 90),
-            isUploading: true
-          }
-        }));
-      }, 200);
-
-      const response = await apiService.uploadFile(file, 'ECORE');
-
-      if (ecoreProgressIntervalRef.current) {
-        clearInterval(ecoreProgressIntervalRef.current);
-        ecoreProgressIntervalRef.current = null;
-      }
-
-      setUploadProgress(prev => ({ ...prev, ecore: { progress: 100, isUploading: false } }));
-
-      const fileId = extractFileId(response);
-      setUploadedFileIds(prev => ({ ...prev, ecoreFileId: fileId }));
-      setSuccess(`Successfully uploaded ${sanitizeFileName(file.name)}`);
-      
-      // Clear existing timeouts before setting new ones
-      if (successTimeoutRef.current) clearTimeout(successTimeoutRef.current);
-      if (progressResetTimeoutRef.current) clearTimeout(progressResetTimeoutRef.current);
-      
-      successTimeoutRef.current = globalThis.setTimeout(() => setSuccess(''), 3000);
-      progressResetTimeoutRef.current = globalThis.setTimeout(() => {
-        setUploadProgress(prev => ({ ...prev, ecore: { progress: 0, isUploading: false } }));
-      }, 2000);
-    } catch (err) {
-      setError(`${err instanceof Error ? err.message : 'Unknown error'}`);
-      setUploadProgress(prev => ({ ...prev, ecore: { progress: 0, isUploading: false } }));
-      // Clear the uploaded file ID since the upload failed
-      setUploadedFileIds(prev => ({ ...prev, ecoreFileId: 0 }));
-      if (ecoreProgressIntervalRef.current) {
-        clearInterval(ecoreProgressIntervalRef.current);
-        ecoreProgressIntervalRef.current = null;
-      }
-    }
-
-    event.target.value = '';
+  const scheduleSuccessReset = (kind: FileKind) => {
+    if (successTimeoutRef.current) clearTimeout(successTimeoutRef.current);
+    if (progressResetTimeoutRef.current) clearTimeout(progressResetTimeoutRef.current);
+    successTimeoutRef.current = globalThis.setTimeout(() => setSuccess(''), 3000);
+    progressResetTimeoutRef.current = globalThis.setTimeout(() => {
+      setUploadProgress(prev => ({ ...prev, [kind]: { progress: 0, isUploading: false } }));
+    }, 2000);
   };
 
-  const handleGenmodelFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (!file) return;
-
-    if (!file.name.endsWith('.genmodel')) {
-      setError('Please select a valid .genmodel file');
-      return;
-    }
-
-    setUploadProgress(prev => ({ ...prev, genmodel: { progress: 0, isUploading: true } }));
-    setError('');
-
-    try {
-      // Delete the previously uploaded file if it exists
-      if (uploadedFileIds.genModelFileId > 0) {
-        try {
-          await apiService.deleteFile(uploadedFileIds.genModelFileId);
-          console.log('Deleted previous .genmodel file:', uploadedFileIds.genModelFileId);
-        } catch (error_) {
-          console.warn('Failed to delete previous .genmodel file:', error_);
-          // Continue with upload even if deletion fails
-        }
-      }
-
-      if (genmodelProgressIntervalRef.current) clearInterval(genmodelProgressIntervalRef.current);
-      genmodelProgressIntervalRef.current = globalThis.setInterval(() => {
-        setUploadProgress(prev => ({
-          ...prev,
-          genmodel: {
-            // Use fixed increment instead of Math.random() for progress simulation
-            progress: Math.min(prev.genmodel.progress + 15, 90),
-            isUploading: true
-          }
-        }));
-      }, 200);
-
-      const response = await apiService.uploadFile(file, 'GEN_MODEL');
-
-      if (genmodelProgressIntervalRef.current) {
-        clearInterval(genmodelProgressIntervalRef.current);
-        genmodelProgressIntervalRef.current = null;
-      }
-
-      setUploadProgress(prev => ({ ...prev, genmodel: { progress: 100, isUploading: false } }));
-
-      const fileId = extractFileId(response);
-      setUploadedFileIds(prev => ({ ...prev, genModelFileId: fileId }));
-      setSuccess(`Successfully uploaded ${sanitizeFileName(file.name)}`);
-      
-      // Clear existing timeouts before setting new ones
-      if (successTimeoutRef.current) clearTimeout(successTimeoutRef.current);
-      if (progressResetTimeoutRef.current) clearTimeout(progressResetTimeoutRef.current);
-      
-      successTimeoutRef.current = globalThis.setTimeout(() => setSuccess(''), 3000);
-      progressResetTimeoutRef.current = globalThis.setTimeout(() => {
-        setUploadProgress(prev => ({ ...prev, genmodel: { progress: 0, isUploading: false } }));
-      }, 2000);
-    } catch (err) {
-      setError(`Error uploading ${sanitizeFileName(file.name)}: ${err instanceof Error ? err.message : 'Unknown error'}`);
-      setUploadProgress(prev => ({ ...prev, genmodel: { progress: 0, isUploading: false } }));
-      // Clear the uploaded file ID since the upload failed
-      setUploadedFileIds(prev => ({ ...prev, genModelFileId: 0 }));
-      if (genmodelProgressIntervalRef.current) {
-        clearInterval(genmodelProgressIntervalRef.current);
-        genmodelProgressIntervalRef.current = null;
-      }
-    }
-
-    event.target.value = '';
+  const startProgressSimulation = (kind: FileKind) => {
+    const ref = kind === 'ecore' ? ecoreProgressIntervalRef : genmodelProgressIntervalRef;
+    if (ref.current) clearInterval(ref.current);
+    ref.current = globalThis.setInterval(() => {
+      setUploadProgress(prev => ({
+        ...prev,
+        [kind]: { progress: Math.min(prev[kind].progress + 15, 90), isUploading: true },
+      }));
+    }, 200);
   };
 
-  const handleEcoreUrlImport = async () => {
-    const url = ecoreUrl.trim();
-    if (!url) {
-      setError('Please enter a URL for the .ecore file');
-      return;
-    }
-    const urlPath = url.split('?')[0];
-    if (!urlPath.endsWith('.ecore')) {
-      setError('URL must point to a .ecore file (ending with .ecore)');
-      return;
-    }
-
-    setUploadProgress(prev => ({ ...prev, ecore: { progress: 0, isUploading: true } }));
-    setError('');
-
-    try {
-      if (uploadedFileIds.ecoreFileId > 0) {
-        try {
-          await apiService.deleteFile(uploadedFileIds.ecoreFileId);
-        } catch (e) {
-          console.warn('Failed to delete previous .ecore file:', e);
-        }
-      }
-
-      if (ecoreProgressIntervalRef.current) clearInterval(ecoreProgressIntervalRef.current);
-      ecoreProgressIntervalRef.current = globalThis.setInterval(() => {
-        setUploadProgress(prev => ({
-          ...prev,
-          ecore: { progress: Math.min(prev.ecore.progress + 15, 90), isUploading: true }
-        }));
-      }, 200);
-
-      const fetchResponse = await fetch(url);
-      if (!fetchResponse.ok) {
-        throw new Error(`Could not fetch file: ${fetchResponse.status} ${fetchResponse.statusText}`);
-      }
-      const blob = await fetchResponse.blob();
-      const fileName = urlPath.split('/').pop() || 'imported.ecore';
-      const file = new File([blob], fileName, { type: blob.type || 'application/octet-stream' });
-
-      const response = await apiService.uploadFile(file, 'ECORE');
-
-      if (ecoreProgressIntervalRef.current) {
-        clearInterval(ecoreProgressIntervalRef.current);
-        ecoreProgressIntervalRef.current = null;
-      }
-
-      setUploadProgress(prev => ({ ...prev, ecore: { progress: 100, isUploading: false } }));
-
-      const fileId = extractFileId(response);
-      setUploadedFileIds(prev => ({ ...prev, ecoreFileId: fileId }));
-      setEcoreUrlFileName(sanitizeFileName(fileName));
-      setSuccess(`Successfully imported ${sanitizeFileName(fileName)}`);
-
-      if (successTimeoutRef.current) clearTimeout(successTimeoutRef.current);
-      if (progressResetTimeoutRef.current) clearTimeout(progressResetTimeoutRef.current);
-
-      successTimeoutRef.current = globalThis.setTimeout(() => setSuccess(''), 3000);
-      progressResetTimeoutRef.current = globalThis.setTimeout(() => {
-        setUploadProgress(prev => ({ ...prev, ecore: { progress: 0, isUploading: false } }));
-      }, 2000);
-    } catch (err) {
-      setError(`Failed to import .ecore from URL: ${err instanceof Error ? err.message : 'Unknown error'}`);
-      setUploadProgress(prev => ({ ...prev, ecore: { progress: 0, isUploading: false } }));
-      setUploadedFileIds(prev => ({ ...prev, ecoreFileId: 0 }));
-      setEcoreUrlFileName('');
-      if (ecoreProgressIntervalRef.current) {
-        clearInterval(ecoreProgressIntervalRef.current);
-        ecoreProgressIntervalRef.current = null;
-      }
-    }
+  const stopProgressSimulation = (kind: FileKind) => {
+    const ref = kind === 'ecore' ? ecoreProgressIntervalRef : genmodelProgressIntervalRef;
+    if (ref.current) { clearInterval(ref.current); ref.current = null; }
   };
 
-  const handleGenmodelUrlImport = async () => {
-    const url = genmodelUrl.trim();
-    if (!url) {
-      setError('Please enter a URL for the .genmodel file');
-      return;
-    }
-    const urlPath = url.split('?')[0];
-    if (!urlPath.endsWith('.genmodel')) {
-      setError('URL must point to a .genmodel file (ending with .genmodel)');
-      return;
-    }
+  // ── Submit overlay helpers ────────────────────────────────────────────────
 
-    setUploadProgress(prev => ({ ...prev, genmodel: { progress: 0, isUploading: true } }));
-    setError('');
-
-    try {
-      if (uploadedFileIds.genModelFileId > 0) {
-        try {
-          await apiService.deleteFile(uploadedFileIds.genModelFileId);
-        } catch (e) {
-          console.warn('Failed to delete previous .genmodel file:', e);
-        }
-      }
-
-      if (genmodelProgressIntervalRef.current) clearInterval(genmodelProgressIntervalRef.current);
-      genmodelProgressIntervalRef.current = globalThis.setInterval(() => {
-        setUploadProgress(prev => ({
-          ...prev,
-          genmodel: { progress: Math.min(prev.genmodel.progress + 15, 90), isUploading: true }
-        }));
-      }, 200);
-
-      const fetchResponse = await fetch(url);
-      if (!fetchResponse.ok) {
-        throw new Error(`Could not fetch file: ${fetchResponse.status} ${fetchResponse.statusText}`);
-      }
-      const blob = await fetchResponse.blob();
-      const fileName = urlPath.split('/').pop() || 'imported.genmodel';
-      const file = new File([blob], fileName, { type: blob.type || 'application/octet-stream' });
-
-      const response = await apiService.uploadFile(file, 'GEN_MODEL');
-
-      if (genmodelProgressIntervalRef.current) {
-        clearInterval(genmodelProgressIntervalRef.current);
-        genmodelProgressIntervalRef.current = null;
-      }
-
-      setUploadProgress(prev => ({ ...prev, genmodel: { progress: 100, isUploading: false } }));
-
-      const fileId = extractFileId(response);
-      setUploadedFileIds(prev => ({ ...prev, genModelFileId: fileId }));
-      setGenmodelUrlFileName(sanitizeFileName(fileName));
-      setSuccess(`Successfully imported ${sanitizeFileName(fileName)}`);
-
-      if (successTimeoutRef.current) clearTimeout(successTimeoutRef.current);
-      if (progressResetTimeoutRef.current) clearTimeout(progressResetTimeoutRef.current);
-
-      successTimeoutRef.current = globalThis.setTimeout(() => setSuccess(''), 3000);
-      progressResetTimeoutRef.current = globalThis.setTimeout(() => {
-        setUploadProgress(prev => ({ ...prev, genmodel: { progress: 0, isUploading: false } }));
-      }, 2000);
-    } catch (err) {
-      setError(`Failed to import .genmodel from URL: ${err instanceof Error ? err.message : 'Unknown error'}`);
-      setUploadProgress(prev => ({ ...prev, genmodel: { progress: 0, isUploading: false } }));
-      setUploadedFileIds(prev => ({ ...prev, genModelFileId: 0 }));
-      setGenmodelUrlFileName('');
-      if (genmodelProgressIntervalRef.current) {
-        clearInterval(genmodelProgressIntervalRef.current);
-        genmodelProgressIntervalRef.current = null;
-      }
-    }
-  };
-
-  const startSubmitOverlay = () => {
-    // Start overlay with progress ramping to ~90%
+  const clearSubmitInterval = () => {
     if (submitProgressIntervalRef.current) {
       clearInterval(submitProgressIntervalRef.current);
       submitProgressIntervalRef.current = null;
     }
+  };
+
+  const startSubmitOverlay = () => {
+    clearSubmitInterval();
     setSubmitProgress({ progress: 0, isSubmitting: true });
     submitProgressIntervalRef.current = globalThis.setInterval(() => {
       setSubmitProgress(prev => ({
-        progress: Math.min(prev.progress + Math.random() * 16 + 4, 90), // +4..20 each tick up to 90
+        progress: Math.min(prev.progress + Math.random() * 16 + 4, 90),
         isSubmitting: true,
       }));
     }, 220);
   };
 
   const finishSubmitOverlay = (onDone?: () => void) => {
-    // Smoothly fill to 100
-    if (submitProgressIntervalRef.current) {
-      clearInterval(submitProgressIntervalRef.current);
-      submitProgressIntervalRef.current = null;
-    }
+    clearSubmitInterval();
     setSubmitProgress({ progress: 100, isSubmitting: true });
-    // Let user see 100% briefly
     setTimeout(() => {
       setSubmitProgress({ progress: 0, isSubmitting: false });
       onDone?.();
@@ -613,73 +691,146 @@ export const CreateModelModal: React.FC<CreateModelModalProps> = ({
   };
 
   const stopSubmitOverlayWithError = () => {
-    if (submitProgressIntervalRef.current) {
-      clearInterval(submitProgressIntervalRef.current);
-      submitProgressIntervalRef.current = null;
-    }
-    // Collapse overlay
+    clearSubmitInterval();
     setSubmitProgress({ progress: 0, isSubmitting: false });
   };
 
-  const cleanupUploadedFiles = async () => {
-    // Only delete files if meta model was not created successfully
-    if (metaModelCreatedSuccessfully) {
-      return;
-    }
-
-    // Delete uploaded files if they exist
-    const filesToDelete: number[] = [];
-    
-    if (uploadedFileIds.ecoreFileId > 0) {
-      filesToDelete.push(uploadedFileIds.ecoreFileId);
-    }
-    if (uploadedFileIds.genModelFileId > 0) {
-      filesToDelete.push(uploadedFileIds.genModelFileId);
-    }
-
-    // Delete files in parallel
-    const deletePromises = filesToDelete.map(fileId => 
-      apiService.deleteFile(fileId).catch(err => {
-        console.error(`Failed to delete file ${fileId}:`, err);
-        // Return null to indicate failure, but don't throw
-        return null;
-      })
-    );
-
-    try {
-      await Promise.all(deletePromises);
-    } catch (error) {
-      console.error('Error during file cleanup:', error);
-      // Continue even if cleanup fails
-    }
-  };
-
-  const handleCreateModel = async () => {
-    if (!formData.name.trim()) {
-      setError('Please enter a name');
-      return;
-    }
-    if (!formData.description.trim()) {
-      setError('Please enter a description');
-      return;
-    }
-    if (!formData.domain.trim()) {
-      setError('Please enter a domain');
-      return;
-    }
-    if (formData.keywords.length === 0) {
-      setError('Please enter at least one keyword');
-      return;
-    }
-    if (uploadedFileIds.ecoreFileId === 0 || uploadedFileIds.genModelFileId === 0) {
-      setError('Please upload both .ecore and .genmodel files');
-      return;
-    }
-
+  // Shared setup called at the start of every submit action
+  const prepareSubmit = () => {
     setIsLoading(true);
     setError('');
     setShowGenModelFixPrompt(false);
     startSubmitOverlay();
+  };
+
+  // Shared happy-path handler after a successful API call
+  const onSubmitSuccess = (message: string, responseData: any) => {
+    setMetaModelCreatedSuccessfully(true);
+    finishSubmitOverlay(() => {
+      setIsLoading(false);
+      setSuccess(message);
+      setTimeout(() => { onSuccess?.(responseData); handleClose(); }, 300);
+    });
+  };
+
+  // ── File cleanup ──────────────────────────────────────────────────────────
+
+  const cleanupUploadedFiles = async () => {
+    if (metaModelCreatedSuccessfully) return;
+    const filesToDelete = [uploadedFileIds.ecoreFileId, uploadedFileIds.genModelFileId].filter(id => id > 0);
+    await Promise.all(
+      filesToDelete.map(fileId =>
+        apiService.deleteFile(fileId).catch(err => console.error(`Failed to delete file ${fileId}:`, err))
+      )
+    );
+  };
+
+  // ── Core handlers ─────────────────────────────────────────────────────────
+
+  const handleClose = async () => {
+    await cleanupUploadedFiles();
+    clearAllTimers();
+    setSubmitProgress({ progress: 0, isSubmitting: false });
+    setFormData({ name: '', description: '', domain: '', keywords: [] });
+    setUploadedFileIds({ ecoreFileId: 0, genModelFileId: 0 });
+    setError('');
+    setSuccess('');
+    setIsLoading(false);
+    setUploadProgress({ ecore: { progress: 0, isUploading: false }, genmodel: { progress: 0, isUploading: false } });
+    setMetaModelCreatedSuccessfully(false);
+    setPerKind(EMPTY_PER_KIND);
+    onClose();
+  };
+
+  const handleFileUpload = async (kind: FileKind, event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    const { ext, apiType, fileIdKey } = FILE_KIND_CONFIG[kind];
+    const currentFileId = uploadedFileIds[fileIdKey];
+
+    if (!file.name.endsWith(ext)) { setError(`Please select a valid ${ext} file`); return; }
+
+    setUploadProgress(prev => ({ ...prev, [kind]: { progress: 0, isUploading: true } }));
+    setError('');
+
+    try {
+      if (currentFileId > 0) {
+        await apiService.deleteFile(currentFileId)
+          .catch(e => console.warn(`Failed to delete previous ${ext} file:`, e));
+      }
+      startProgressSimulation(kind);
+      const response = await apiService.uploadFile(file, apiType);
+      stopProgressSimulation(kind);
+      setUploadProgress(prev => ({ ...prev, [kind]: { progress: 100, isUploading: false } }));
+      setUploadedFileIds(prev => ({ ...prev, [fileIdKey]: extractFileId(response) }));
+      setSuccess(`Successfully uploaded ${sanitizeFileName(file.name)}`);
+      scheduleSuccessReset(kind);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Unknown error';
+      setError(kind === 'ecore' ? msg : `Error uploading ${sanitizeFileName(file.name)}: ${msg}`);
+      setUploadProgress(prev => ({ ...prev, [kind]: { progress: 0, isUploading: false } }));
+      setUploadedFileIds(prev => ({ ...prev, [fileIdKey]: 0 }));
+      stopProgressSimulation(kind);
+    }
+    event.target.value = '';
+  };
+
+  const handleUrlImport = async (kind: FileKind) => {
+    const { ext, apiType, fileIdKey } = FILE_KIND_CONFIG[kind];
+    const url = perKind[kind].url.trim();
+    const currentFileId = uploadedFileIds[fileIdKey];
+
+    if (!url) { setError(`Please enter a URL for the ${ext} file`); return; }
+    const urlPath = url.split('?')[0];
+    if (!urlPath.endsWith(ext)) {
+      setError(`URL must point to a ${ext} file (ending with ${ext})`);
+      return;
+    }
+
+    setUploadProgress(prev => ({ ...prev, [kind]: { progress: 0, isUploading: true } }));
+    setError('');
+
+    try {
+      if (currentFileId > 0) {
+        await apiService.deleteFile(currentFileId)
+          .catch(e => console.warn(`Failed to delete previous ${ext} file:`, e));
+      }
+      startProgressSimulation(kind);
+      const fetchResponse = await fetch(url);
+      if (!fetchResponse.ok) {
+        throw new Error(`Could not fetch file: ${fetchResponse.status} ${fetchResponse.statusText}`);
+      }
+      const blob = await fetchResponse.blob();
+      const fileName = urlPath.split('/').pop() || `imported${ext}`;
+      const file = new File([blob], fileName, { type: blob.type || 'application/octet-stream' });
+      const response = await apiService.uploadFile(file, apiType);
+      stopProgressSimulation(kind);
+      setUploadProgress(prev => ({ ...prev, [kind]: { progress: 100, isUploading: false } }));
+      setUploadedFileIds(prev => ({ ...prev, [fileIdKey]: extractFileId(response) }));
+      updateKind(kind, { urlFileName: sanitizeFileName(fileName) });
+      setSuccess(`Successfully imported ${sanitizeFileName(fileName)}`);
+      scheduleSuccessReset(kind);
+    } catch (err) {
+      setError(`Failed to import ${ext} from URL: ${err instanceof Error ? err.message : 'Unknown error'}`);
+      setUploadProgress(prev => ({ ...prev, [kind]: { progress: 0, isUploading: false } }));
+      setUploadedFileIds(prev => ({ ...prev, [fileIdKey]: 0 }));
+      updateKind(kind, { urlFileName: '' });
+      stopProgressSimulation(kind);
+    }
+  };
+
+  const handleCreateModel = async () => {
+    if (!formData.name.trim()) { setError('Please enter a name'); return; }
+    if (!formData.description.trim()) { setError('Please enter a description'); return; }
+    if (!formData.domain.trim()) { setError('Please enter a domain'); return; }
+    if (formData.keywords.length === 0) { setError('Please enter at least one keyword'); return; }
+    if (!uploadedFileIds.ecoreFileId || !uploadedFileIds.genModelFileId) {
+      setError('Please upload both .ecore and .genmodel files');
+      return;
+    }
+
+    prepareSubmit();
 
     try {
       const requestData: CreateModelRequest = {
@@ -690,96 +841,38 @@ export const CreateModelModal: React.FC<CreateModelModalProps> = ({
         ecoreFileId: uploadedFileIds.ecoreFileId,
         genModelFileId: uploadedFileIds.genModelFileId,
       };
-
-      // Store the base request so we can reuse it if the user
-      // chooses to let the backend apply GenModel fixes.
       setPendingCreateRequest(requestData);
-
-      const response = await apiService.createMetaModel({
-        ...requestData,
-        applyGenModelFixes: false,
-      });
-
-      // If backend responds OK, fill to 100% and then close/reset
-      setMetaModelCreatedSuccessfully(true);
-      finishSubmitOverlay(() => {
-        setIsLoading(false);
-        setSuccess('Meta Model created successfully!');
-        setTimeout(() => {
-          onSuccess?.(response.data);
-          handleClose();
-        }, 300);
-      });
+      const response = await apiService.createMetaModel({ ...requestData, applyGenModelFixes: false });
+      onSubmitSuccess('Meta Model created successfully!', response.data);
     } catch (err) {
-      const anyError = err as any;
-      const backendPayload = anyError?.response?.data;
-      const backendMessage =
-        backendPayload && typeof backendPayload.message === 'string' ? backendPayload.message : '';
-      const combinedMessage =
-        backendMessage || (err instanceof Error ? err.message : '') || 'Unknown error';
-      const isMetamodelRejected =
-        typeof combinedMessage === 'string' &&
-        combinedMessage.toLowerCase().includes('metamodel rejected');
-
+      const { message, isMetamodelRejected } = parseBackendError(err);
       setIsLoading(false);
       stopSubmitOverlayWithError();
-
       if (isMetamodelRejected) {
         setError(
-          `We found some issues in your GenModel: ${combinedMessage}. ` +
+          `We found some issues in your GenModel: ${message}. ` +
           'You can let the system modify the GenModel automatically or cancel this operation.'
         );
         setShowGenModelFixPrompt(true);
-        // Do not clean up uploaded files yet; the user may choose to retry
-        // with automatic GenModel fixes using the same uploaded files.
         return;
       }
-
-      setError(`Error creating meta model: ${combinedMessage}`);
-
-      // Clean up uploaded files when create meta model fails for other reasons
+      setError(`Error creating meta model: ${message}`);
       await cleanupUploadedFiles();
     }
   };
 
   const handleApplyGenModelFixes = async () => {
-    if (!pendingCreateRequest) {
-      return;
-    }
-
-    setIsLoading(true);
-    setError('');
-    setShowGenModelFixPrompt(false);
-    startSubmitOverlay();
+    if (!pendingCreateRequest) return;
+    prepareSubmit();
 
     try {
-      const response = await apiService.createMetaModel({
-        ...pendingCreateRequest,
-        applyGenModelFixes: true,
-      });
-
-      setMetaModelCreatedSuccessfully(true);
-      finishSubmitOverlay(() => {
-        setIsLoading(false);
-        setSuccess('Meta Model created successfully with automatic GenModel fixes.');
-        setTimeout(() => {
-          onSuccess?.(response.data);
-          handleClose();
-        }, 300);
-      });
+      const response = await apiService.createMetaModel({ ...pendingCreateRequest, applyGenModelFixes: true });
+      onSubmitSuccess('Meta Model created successfully with automatic GenModel fixes.', response.data);
     } catch (err) {
-      const anyError = err as any;
-      const backendPayload = anyError?.response?.data;
-      const backendMessage =
-        backendPayload && typeof backendPayload.message === 'string' ? backendPayload.message : '';
-      const combinedMessage =
-        backendMessage || (err instanceof Error ? err.message : '') || 'Unknown error';
-
+      const { message } = parseBackendError(err);
       setIsLoading(false);
       stopSubmitOverlayWithError();
-      setError(`Error creating meta model with automatic GenModel fixes: ${combinedMessage}`);
-
-      // Clean up uploaded files when the retry with fixes fails
+      setError(`Error creating meta model with automatic GenModel fixes: ${message}`);
       await cleanupUploadedFiles();
     }
   };
@@ -789,658 +882,213 @@ export const CreateModelModal: React.FC<CreateModelModalProps> = ({
     handleClose();
   };
 
-  const handleClose = async () => {
-    // Clean up uploaded files when user clicks Cancel or on error
-    await cleanupUploadedFiles();
-
-    // Clear all intervals
-    if (submitProgressIntervalRef.current) {
-      clearInterval(submitProgressIntervalRef.current);
-      submitProgressIntervalRef.current = null;
-    }
-    if (ecoreProgressIntervalRef.current) {
-      clearInterval(ecoreProgressIntervalRef.current);
-      ecoreProgressIntervalRef.current = null;
-    }
-    if (genmodelProgressIntervalRef.current) {
-      clearInterval(genmodelProgressIntervalRef.current);
-      genmodelProgressIntervalRef.current = null;
-    }
-    
-    // Clear all timeouts
-    if (successTimeoutRef.current) {
-      clearTimeout(successTimeoutRef.current);
-      successTimeoutRef.current = null;
-    }
-    if (progressResetTimeoutRef.current) {
-      clearTimeout(progressResetTimeoutRef.current);
-      progressResetTimeoutRef.current = null;
-    }
-    setSubmitProgress({ progress: 0, isSubmitting: false });
-    setFormData({ name: '', description: '', domain: '', keywords: [] });
-    setUploadedFileIds({ ecoreFileId: 0, genModelFileId: 0 });
-    setError('');
-    setSuccess('');
-    setIsLoading(false);
-    setUploadProgress({
-      ecore: { progress: 0, isUploading: false },
-      genmodel: { progress: 0, isUploading: false }
-    });
-    setMetaModelCreatedSuccessfully(false);
-    setEcoreInputMode('file');
-    setGenmodelInputMode('file');
-    setEcoreUrl('');
-    setGenmodelUrl('');
-    setEcoreUrlFileName('');
-    setGenmodelUrlFileName('');
-    onClose();
-  };
-
-  useEffect(() => {
-    if (isOpen) {
-      const prev = document.body.style.overflow;
-      document.body.style.overflow = 'hidden';
-      return () => {
-        document.body.style.overflow = prev;
-      };
-    }
-    if (!isOpen) {
-      // Clean up all intervals
-      if (submitProgressIntervalRef.current) {
-        clearInterval(submitProgressIntervalRef.current);
-        submitProgressIntervalRef.current = null;
-      }
-      if (ecoreProgressIntervalRef.current) {
-        clearInterval(ecoreProgressIntervalRef.current);
-        ecoreProgressIntervalRef.current = null;
-      }
-      if (genmodelProgressIntervalRef.current) {
-        clearInterval(genmodelProgressIntervalRef.current);
-        genmodelProgressIntervalRef.current = null;
-      }
-      
-      // Clean up all timeouts
-      if (successTimeoutRef.current) {
-        clearTimeout(successTimeoutRef.current);
-        successTimeoutRef.current = null;
-      }
-      if (progressResetTimeoutRef.current) {
-        clearTimeout(progressResetTimeoutRef.current);
-        progressResetTimeoutRef.current = null;
-      }
-      
-      setSubmitProgress({ progress: 0, isSubmitting: false });
-      setUploadProgress({
-        ecore: { progress: 0, isUploading: false },
-        genmodel: { progress: 0, isUploading: false }
-      });
-    }
-    return () => {
-      // Cleanup on unmount
-      if (submitProgressIntervalRef.current) {
-        clearInterval(submitProgressIntervalRef.current);
-        submitProgressIntervalRef.current = null;
-      }
-      if (ecoreProgressIntervalRef.current) {
-        clearInterval(ecoreProgressIntervalRef.current);
-        ecoreProgressIntervalRef.current = null;
-      }
-      if (genmodelProgressIntervalRef.current) {
-        clearInterval(genmodelProgressIntervalRef.current);
-        genmodelProgressIntervalRef.current = null;
-      }
-      if (successTimeoutRef.current) {
-        clearTimeout(successTimeoutRef.current);
-        successTimeoutRef.current = null;
-      }
-      if (progressResetTimeoutRef.current) {
-        clearTimeout(progressResetTimeoutRef.current);
-        progressResetTimeoutRef.current = null;
-      }
-    };
-  }, [isOpen]);
-
-  if (!isOpen) return null;
-
   const getButtonText = (): string => {
     if (isLoading) return 'Creating...';
     if (canSave) return 'Import Meta Model';
     return 'Complete All Fields';
   };
 
+  useEffect(() => {
+    if (isOpen) {
+      const prev = document.body.style.overflow;
+      document.body.style.overflow = 'hidden';
+      return () => { document.body.style.overflow = prev; };
+    }
+    clearAllTimers();
+    setSubmitProgress({ progress: 0, isSubmitting: false });
+    setUploadProgress({ ecore: { progress: 0, isUploading: false }, genmodel: { progress: 0, isUploading: false } });
+    return clearAllTimers;
+  }, [isOpen, clearAllTimers]);
+
+  return {
+    formData, setFormData,
+    uploadedFileIds,
+    isLoading,
+    error, success,
+    uploadProgress, submitProgress,
+    showGenModelFixPrompt,
+    perKind,
+    fileInputRefs,
+    canSave,
+    handleFileUpload, handleUrlImport,
+    handleCreateModel, handleApplyGenModelFixes,
+    handleCancelGenModelFixScenario, handleClose,
+    switchFileMode, changeFileUrl,
+    getButtonText,
+  };
+}
+
+// ─── Main component ───────────────────────────────────────────────────────────
+
+export const CreateModelModal: React.FC<CreateModelModalProps> = ({
+  isOpen,
+  onClose,
+  onSuccess,
+}) => {
+  const form = useCreateModelForm({ isOpen, onClose, onSuccess });
+
+  if (!isOpen) return null;
+
+  const { uploadedFileIds, uploadProgress, submitProgress, isLoading } = form;
 
   return ReactDOM.createPortal(
-      <>
-        {/* Full-screen Submit Overlay */}
-        {submitProgress.isSubmitting && (
-            <dialog open style={{
-              ...overlayStyle,
-              background: 'transparent',
-              backdropFilter: 'blur(6px)',
-              WebkitBackdropFilter: 'blur(6px)',
-            }} aria-label="Building meta model">
-              <div style={overlayCardStyle} role="presentation" onMouseDown={(e) => e.stopPropagation()}>
-                <div style={overlayTitleStyle}>Building Meta Model…</div>
-                <div style={overlayTextStyle}>Please wait while we process your files.</div>
-                <div style={{ ...progressBarContainerStyle, marginTop: 8 }}>
-                  <div style={{ ...progressBarStyle, width: `${submitProgress.progress}%` }} />
-                </div>
-                <div style={{ fontSize: 12, color: '#374151', textAlign: 'center', marginTop: 6 }}>
-                  {Math.round(submitProgress.progress)}%
-                </div>
-              </div>
-            </dialog>
-        )}
+    <>
+      {submitProgress.isSubmitting && <SubmitProgressOverlay progress={submitProgress.progress} />}
 
-        {/* Modal */}
-        <dialog 
-          open 
-          aria-modal="true"
-          aria-labelledby="modal-title"
-          tabIndex={-1}
-          style={{
-            ...modalOverlayStyle,
-            background: 'transparent',
-            backdropFilter: 'blur(6px)',
-            WebkitBackdropFilter: 'blur(6px)',
-            top: 0,
-            left: 0,
-            right: 0,
-            bottom: 0,
-            width: '100%',
-            height: '100%',
-            margin: 0,
-            padding: 0,
-            border: 'none',
-          }} 
-          onClose={handleClose} 
-          onCancel={handleClose}
-          onClick={(e) => { if (e.target === e.currentTarget) handleClose(); }}
-          onKeyDown={(e) => { 
-            if (e.key === 'Escape') {
-              handleClose();
-            }
-          }}
-        >
-          <div style={modalStyle}>
-            <div style={modalHeaderStyle}>
-              <h2 id="modal-title" style={modalTitleStyle}>Import Meta Model</h2>
-              <button
-                  style={closeButtonStyle}
-                  onClick={handleClose}
-                  onMouseEnter={(e) => Object.assign(e.currentTarget.style, closeButtonHoverStyle)}
-                  onMouseLeave={(e) => Object.assign(e.currentTarget.style, closeButtonStyle)}
-              >
-                ×
-              </button>
-            </div>
-
-            {error && <div style={errorMessageStyle}>{error}</div>}
-            {success && <div style={successMessageStyle}>{success}</div>}
-
-            <div style={formGroupStyle}>
-              <label htmlFor="model-name-input" style={labelStyle}>Name *</label>
-              <input
-                  id="model-name-input"
-                  type="text"
-                  placeholder="Enter meta model name..."
-                  value={formData.name}
-                  onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                  style={inputStyle}
-                  onFocus={(e) => Object.assign(e.currentTarget.style, inputFocusStyle)}
-                  onBlur={(e) => Object.assign(e.currentTarget.style, inputStyle)}
-              />
-            </div>
-
-            <div style={formGroupStyle}>
-              <label htmlFor="model-description-input" style={labelStyle}>Description *</label>
-              <textarea
-                  id="model-description-input"
-                  placeholder="Enter description..."
-                  value={formData.description}
-                  onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                  style={{ ...inputStyle, minHeight: '80px', resize: 'vertical', fontFamily: 'inherit' }}
-                  onFocus={(e) => Object.assign(e.currentTarget.style, inputFocusStyle)}
-                  onBlur={(e) => Object.assign(e.currentTarget.style, inputStyle)}
-              />
-            </div>
-
-            <div style={formGroupStyle}>
-              <label id="model-keywords-label" style={labelStyle}>Keywords *</label>
-              <KeywordTagsInput
-                  aria-labelledby="model-keywords-label"
-                  keywords={formData.keywords}
-                  onChange={(keywords) => setFormData({ ...formData, keywords })}
-                  placeholder="Type keywords and press Enter..."
-                  style={inputStyle}
-              />
-            </div>
-
-            <div style={formGroupStyle}>
-              <label htmlFor="model-domain-input" style={labelStyle}>Domain *</label>
-              <input
-                  id="model-domain-input"
-                  type="text"
-                  placeholder="Enter domain"
-                  value={formData.domain}
-                  onChange={(e) => setFormData({ ...formData, domain: e.target.value })}
-                  style={inputStyle}
-                  onFocus={(e) => Object.assign(e.currentTarget.style, inputFocusStyle)}
-                  onBlur={(e) => Object.assign(e.currentTarget.style, inputStyle)}
-              />
-            </div>
-
-            {/* File Upload Section */}
-            <div style={uploadSectionStyle}>
-              <div style={uploadSectionTitleStyle}>Required Meta Model Files</div>
-
-              <input ref={ecoreFileInputRef} type="file" accept=".ecore" onChange={handleEcoreFileUpload} style={fileInputStyle} />
-              <input ref={genmodelFileInputRef} type="file" accept=".genmodel" onChange={handleGenmodelFileUpload} style={fileInputStyle} />
-
-              {/* ── .ecore card ── */}
-              <div style={{
-                background: '#ffffff',
-                border: `1px solid ${uploadedFileIds.ecoreFileId > 0 ? '#86efac' : '#e2e8f0'}`,
-                borderLeft: `3px solid ${uploadedFileIds.ecoreFileId > 0 ? '#22c55e' : '#049484'}`,
-                borderRadius: '8px',
-                marginBottom: '12px',
-                overflow: 'hidden',
-                boxShadow: '0 1px 4px rgba(0,0,0,0.06)',
-              }}>
-                {/* card header */}
-                <div style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'space-between',
-                  padding: '9px 14px',
-                  background: uploadedFileIds.ecoreFileId > 0 ? '#f0fdf4' : '#f8fffe',
-                  borderBottom: '1px solid #e2e8f0',
-                }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    <code style={{
-                      background: '#e6f7f5',
-                      color: '#049484',
-                      fontSize: '12px',
-                      fontWeight: 700,
-                      padding: '2px 8px',
-                      borderRadius: '4px',
-                      border: '1px solid #b2e4df',
-                      letterSpacing: '0.02em',
-                    }}>.ecore</code>
-                    {uploadedFileIds.ecoreFileId > 0 && (
-                      <span style={{ fontSize: '12px', color: '#16a34a', fontWeight: 600 }}>✓ Ready</span>
-                    )}
-                  </div>
-                  {/* segmented toggle */}
-                  <div style={{ display: 'flex', background: '#f1f5f9', borderRadius: '6px', padding: '2px', gap: '2px' }}>
-                    <button
-                      type="button"
-                      onClick={() => { setEcoreInputMode('file'); setUploadedFileIds(prev => ({ ...prev, ecoreFileId: 0 })); setEcoreUrlFileName(''); }}
-                      style={{
-                        padding: '4px 11px',
-                        fontSize: '11px',
-                        fontWeight: 600,
-                        border: 'none',
-                        borderRadius: '4px',
-                        cursor: 'pointer',
-                        fontFamily: 'Georgia, serif',
-                        background: ecoreInputMode === 'file' ? '#049484' : 'transparent',
-                        color: ecoreInputMode === 'file' ? '#ffffff' : '#64748b',
-                        transition: 'all 0.15s',
-                        whiteSpace: 'nowrap',
-                      }}
-                    >⬆ Computer</button>
-                    <button
-                      type="button"
-                      onClick={() => { setEcoreInputMode('url'); setUploadedFileIds(prev => ({ ...prev, ecoreFileId: 0 })); setEcoreUrlFileName(''); }}
-                      style={{
-                        padding: '4px 11px',
-                        fontSize: '11px',
-                        fontWeight: 600,
-                        border: 'none',
-                        borderRadius: '4px',
-                        cursor: 'pointer',
-                        fontFamily: 'Georgia, serif',
-                        background: ecoreInputMode === 'url' ? '#049484' : 'transparent',
-                        color: ecoreInputMode === 'url' ? '#ffffff' : '#64748b',
-                        transition: 'all 0.15s',
-                        whiteSpace: 'nowrap',
-                      }}
-                    >🔗 URL</button>
-                  </div>
-                </div>
-
-                {/* card body */}
-                <div style={{ padding: '12px 14px' }}>
-                  {ecoreInputMode === 'file' ? (
-                    <button
-                      type="button"
-                      onClick={() => ecoreFileInputRef.current?.click()}
-                      disabled={uploadProgress.ecore.isUploading}
-                      style={{
-                        width: '100%',
-                        padding: '14px 12px',
-                        border: `2px dashed ${uploadedFileIds.ecoreFileId > 0 ? '#86efac' : '#cbd5e1'}`,
-                        borderRadius: '6px',
-                        background: uploadedFileIds.ecoreFileId > 0 ? '#f0fdf4' : '#fafafa',
-                        cursor: uploadProgress.ecore.isUploading ? 'wait' : 'pointer',
-                        textAlign: 'center',
-                        transition: 'all 0.2s',
-                        fontFamily: 'Georgia, serif',
-                      }}
-                      onMouseEnter={(e) => { if (!uploadedFileIds.ecoreFileId && !uploadProgress.ecore.isUploading) { e.currentTarget.style.background = '#f0fdff'; e.currentTarget.style.borderColor = '#049484'; } }}
-                      onMouseLeave={(e) => { e.currentTarget.style.background = uploadedFileIds.ecoreFileId > 0 ? '#f0fdf4' : '#fafafa'; e.currentTarget.style.borderColor = uploadedFileIds.ecoreFileId > 0 ? '#86efac' : '#cbd5e1'; }}
-                    >
-                      <div style={{ fontSize: '20px', marginBottom: '4px', lineHeight: 1 }}>
-                        {uploadProgress.ecore.isUploading ? '⏳' : uploadedFileIds.ecoreFileId > 0 ? '✅' : '📂'}
-                      </div>
-                      <div style={{ fontSize: '13px', fontWeight: 600, color: uploadedFileIds.ecoreFileId > 0 ? '#15803d' : '#374151' }}>
-                        {uploadProgress.ecore.isUploading ? 'Uploading…' : uploadedFileIds.ecoreFileId > 0 ? 'File uploaded — click to replace' : 'Click to browse file'}
-                      </div>
-                      {!uploadedFileIds.ecoreFileId && !uploadProgress.ecore.isUploading && (
-                        <div style={{ fontSize: '11px', color: '#94a3b8', marginTop: '3px' }}>Accepts .ecore format</div>
-                      )}
-                    </button>
-                  ) : (
-                    <>
-                      <div style={{ fontSize: '11px', color: '#64748b', marginBottom: '6px', fontStyle: 'italic' }}>
-                        Paste a raw public URL pointing to a <code style={{ background: '#f1f5f9', padding: '1px 4px', borderRadius: '3px' }}>.ecore</code> file
-                      </div>
-                      <div style={{ display: 'flex', gap: '8px' }}>
-                        <input
-                          type="url"
-                          placeholder="https://raw.githubusercontent.com/…/model.ecore"
-                          value={ecoreUrl}
-                          onChange={(e) => { setEcoreUrl(e.target.value); setUploadedFileIds(prev => ({ ...prev, ecoreFileId: 0 })); setEcoreUrlFileName(''); }}
-                          style={{ ...inputStyle, flex: 1, margin: 0, fontSize: '12px', padding: '8px 10px' }}
-                          onFocus={(e) => Object.assign(e.currentTarget.style, { ...inputFocusStyle, flex: '1', margin: '0', fontSize: '12px', padding: '8px 10px' })}
-                          onBlur={(e) => Object.assign(e.currentTarget.style, { ...inputStyle, flex: '1', margin: '0', fontSize: '12px', padding: '8px 10px' })}
-                          disabled={uploadProgress.ecore.isUploading}
-                        />
-                        <button
-                          type="button"
-                          onClick={handleEcoreUrlImport}
-                          disabled={uploadProgress.ecore.isUploading || !ecoreUrl.trim()}
-                          style={{
-                            padding: '8px 16px',
-                            border: 'none',
-                            borderRadius: '6px',
-                            fontSize: '12px',
-                            fontWeight: 600,
-                            fontFamily: 'Georgia, serif',
-                            cursor: uploadProgress.ecore.isUploading || !ecoreUrl.trim() ? 'not-allowed' : 'pointer',
-                            background: uploadedFileIds.ecoreFileId > 0 ? '#22c55e' : '#049484',
-                            color: '#ffffff',
-                            opacity: uploadProgress.ecore.isUploading || !ecoreUrl.trim() ? 0.5 : 1,
-                            transition: 'all 0.2s',
-                            whiteSpace: 'nowrap',
-                          }}
-                        >
-                          {uploadProgress.ecore.isUploading ? '⏳ …' : uploadedFileIds.ecoreFileId > 0 ? '✓ Done' : 'Import'}
-                        </button>
-                      </div>
-                      {ecoreUrlFileName && uploadedFileIds.ecoreFileId > 0 && (
-                        <div style={{ fontSize: '11px', color: '#16a34a', marginTop: '6px', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                          <span>✅</span><span style={{ fontStyle: 'italic' }}>{ecoreUrlFileName}</span>
-                        </div>
-                      )}
-                    </>
-                  )}
-                  {uploadProgress.ecore.isUploading && (
-                    <div style={{ marginTop: '10px' }}>
-                      <div style={{ ...progressBarContainerStyle }}>
-                        <div style={{ ...progressBarStyle, width: `${uploadProgress.ecore.progress}%` }} />
-                      </div>
-                      <div style={{ fontSize: 11, color: '#64748b', textAlign: 'center', marginTop: 3 }}>
-                        {Math.round(uploadProgress.ecore.progress)}%
-                      </div>
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              {/* ── .genmodel card ── */}
-              <div style={{
-                background: '#ffffff',
-                border: `1px solid ${uploadedFileIds.genModelFileId > 0 ? '#86efac' : '#e2e8f0'}`,
-                borderLeft: `3px solid ${uploadedFileIds.genModelFileId > 0 ? '#22c55e' : '#2980b9'}`,
-                borderRadius: '8px',
-                marginBottom: '12px',
-                overflow: 'hidden',
-                boxShadow: '0 1px 4px rgba(0,0,0,0.06)',
-              }}>
-                {/* card header */}
-                <div style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'space-between',
-                  padding: '9px 14px',
-                  background: uploadedFileIds.genModelFileId > 0 ? '#f0fdf4' : '#f8fbff',
-                  borderBottom: '1px solid #e2e8f0',
-                }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    <code style={{
-                      background: '#eff6ff',
-                      color: '#2563eb',
-                      fontSize: '12px',
-                      fontWeight: 700,
-                      padding: '2px 8px',
-                      borderRadius: '4px',
-                      border: '1px solid #bfdbfe',
-                      letterSpacing: '0.02em',
-                    }}>.genmodel</code>
-                    {uploadedFileIds.genModelFileId > 0 && (
-                      <span style={{ fontSize: '12px', color: '#16a34a', fontWeight: 600 }}>✓ Ready</span>
-                    )}
-                  </div>
-                  {/* segmented toggle */}
-                  <div style={{ display: 'flex', background: '#f1f5f9', borderRadius: '6px', padding: '2px', gap: '2px' }}>
-                    <button
-                      type="button"
-                      onClick={() => { setGenmodelInputMode('file'); setUploadedFileIds(prev => ({ ...prev, genModelFileId: 0 })); setGenmodelUrlFileName(''); }}
-                      style={{
-                        padding: '4px 11px',
-                        fontSize: '11px',
-                        fontWeight: 600,
-                        border: 'none',
-                        borderRadius: '4px',
-                        cursor: 'pointer',
-                        fontFamily: 'Georgia, serif',
-                        background: genmodelInputMode === 'file' ? '#049484' : 'transparent',
-                        color: genmodelInputMode === 'file' ? '#ffffff' : '#64748b',
-                        transition: 'all 0.15s',
-                        whiteSpace: 'nowrap',
-                      }}
-                    >⬆ Computer</button>
-                    <button
-                      type="button"
-                      onClick={() => { setGenmodelInputMode('url'); setUploadedFileIds(prev => ({ ...prev, genModelFileId: 0 })); setGenmodelUrlFileName(''); }}
-                      style={{
-                        padding: '4px 11px',
-                        fontSize: '11px',
-                        fontWeight: 600,
-                        border: 'none',
-                        borderRadius: '4px',
-                        cursor: 'pointer',
-                        fontFamily: 'Georgia, serif',
-                        background: genmodelInputMode === 'url' ? '#049484' : 'transparent',
-                        color: genmodelInputMode === 'url' ? '#ffffff' : '#64748b',
-                        transition: 'all 0.15s',
-                        whiteSpace: 'nowrap',
-                      }}
-                    >🔗 URL</button>
-                  </div>
-                </div>
-
-                {/* card body */}
-                <div style={{ padding: '12px 14px' }}>
-                  {genmodelInputMode === 'file' ? (
-                    <button
-                      type="button"
-                      onClick={() => genmodelFileInputRef.current?.click()}
-                      disabled={uploadProgress.genmodel.isUploading}
-                      style={{
-                        width: '100%',
-                        padding: '14px 12px',
-                        border: `2px dashed ${uploadedFileIds.genModelFileId > 0 ? '#86efac' : '#cbd5e1'}`,
-                        borderRadius: '6px',
-                        background: uploadedFileIds.genModelFileId > 0 ? '#f0fdf4' : '#fafafa',
-                        cursor: uploadProgress.genmodel.isUploading ? 'wait' : 'pointer',
-                        textAlign: 'center',
-                        transition: 'all 0.2s',
-                        fontFamily: 'Georgia, serif',
-                      }}
-                      onMouseEnter={(e) => { if (!uploadedFileIds.genModelFileId && !uploadProgress.genmodel.isUploading) { e.currentTarget.style.background = '#f0f7ff'; e.currentTarget.style.borderColor = '#2980b9'; } }}
-                      onMouseLeave={(e) => { e.currentTarget.style.background = uploadedFileIds.genModelFileId > 0 ? '#f0fdf4' : '#fafafa'; e.currentTarget.style.borderColor = uploadedFileIds.genModelFileId > 0 ? '#86efac' : '#cbd5e1'; }}
-                    >
-                      <div style={{ fontSize: '20px', marginBottom: '4px', lineHeight: 1 }}>
-                        {uploadProgress.genmodel.isUploading ? '⏳' : uploadedFileIds.genModelFileId > 0 ? '✅' : '📂'}
-                      </div>
-                      <div style={{ fontSize: '13px', fontWeight: 600, color: uploadedFileIds.genModelFileId > 0 ? '#15803d' : '#374151' }}>
-                        {uploadProgress.genmodel.isUploading ? 'Uploading…' : uploadedFileIds.genModelFileId > 0 ? 'File uploaded — click to replace' : 'Click to browse file'}
-                      </div>
-                      {!uploadedFileIds.genModelFileId && !uploadProgress.genmodel.isUploading && (
-                        <div style={{ fontSize: '11px', color: '#94a3b8', marginTop: '3px' }}>Accepts .genmodel format</div>
-                      )}
-                    </button>
-                  ) : (
-                    <>
-                      <div style={{ fontSize: '11px', color: '#64748b', marginBottom: '6px', fontStyle: 'italic' }}>
-                        Paste a raw public URL pointing to a <code style={{ background: '#f1f5f9', padding: '1px 4px', borderRadius: '3px' }}>.genmodel</code> file
-                      </div>
-                      <div style={{ display: 'flex', gap: '8px' }}>
-                        <input
-                          type="url"
-                          placeholder="https://raw.githubusercontent.com/…/model.genmodel"
-                          value={genmodelUrl}
-                          onChange={(e) => { setGenmodelUrl(e.target.value); setUploadedFileIds(prev => ({ ...prev, genModelFileId: 0 })); setGenmodelUrlFileName(''); }}
-                          style={{ ...inputStyle, flex: 1, margin: 0, fontSize: '12px', padding: '8px 10px' }}
-                          onFocus={(e) => Object.assign(e.currentTarget.style, { ...inputFocusStyle, flex: '1', margin: '0', fontSize: '12px', padding: '8px 10px' })}
-                          onBlur={(e) => Object.assign(e.currentTarget.style, { ...inputStyle, flex: '1', margin: '0', fontSize: '12px', padding: '8px 10px' })}
-                          disabled={uploadProgress.genmodel.isUploading}
-                        />
-                        <button
-                          type="button"
-                          onClick={handleGenmodelUrlImport}
-                          disabled={uploadProgress.genmodel.isUploading || !genmodelUrl.trim()}
-                          style={{
-                            padding: '8px 16px',
-                            border: 'none',
-                            borderRadius: '6px',
-                            fontSize: '12px',
-                            fontWeight: 600,
-                            fontFamily: 'Georgia, serif',
-                            cursor: uploadProgress.genmodel.isUploading || !genmodelUrl.trim() ? 'not-allowed' : 'pointer',
-                            background: uploadedFileIds.genModelFileId > 0 ? '#22c55e' : '#049484',
-                            color: '#ffffff',
-                            opacity: uploadProgress.genmodel.isUploading || !genmodelUrl.trim() ? 0.5 : 1,
-                            transition: 'all 0.2s',
-                            whiteSpace: 'nowrap',
-                          }}
-                        >
-                          {uploadProgress.genmodel.isUploading ? '⏳ …' : uploadedFileIds.genModelFileId > 0 ? '✓ Done' : 'Import'}
-                        </button>
-                      </div>
-                      {genmodelUrlFileName && uploadedFileIds.genModelFileId > 0 && (
-                        <div style={{ fontSize: '11px', color: '#16a34a', marginTop: '6px', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                          <span>✅</span><span style={{ fontStyle: 'italic' }}>{genmodelUrlFileName}</span>
-                        </div>
-                      )}
-                    </>
-                  )}
-                  {uploadProgress.genmodel.isUploading && (
-                    <div style={{ marginTop: '10px' }}>
-                      <div style={{ ...progressBarContainerStyle }}>
-                        <div style={{ ...progressBarStyle, width: `${uploadProgress.genmodel.progress}%` }} />
-                      </div>
-                      <div style={{ fontSize: 11, color: '#64748b', textAlign: 'center', marginTop: 3 }}>
-                        {Math.round(uploadProgress.genmodel.progress)}%
-                      </div>
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              <div style={fileStatusStyle}>
-                {uploadedFileIds.ecoreFileId > 0 && uploadedFileIds.genModelFileId > 0
-                    ? '✅ Both files ready!'
-                    : 'Upload or import both files to continue'}
-              </div>
-            </div>
-
-            <div style={buttonGroupStyle}>
-              <button
-                  style={secondaryButtonStyle}
-                  onClick={handleClose}
-                  disabled={isLoading || submitProgress.isSubmitting}
-                  onMouseEnter={(e) => !isLoading && !submitProgress.isSubmitting && Object.assign(e.currentTarget.style, buttonHoverStyle)}
-                  onMouseLeave={(e) => !isLoading && !submitProgress.isSubmitting && Object.assign(e.currentTarget.style, secondaryButtonStyle)}
-              >
-                Cancel
-              </button>
-              <button
-                  style={{
-                    ...primaryButtonStyle,
-                    ...(canSave && !isLoading ? {} : primaryButtonDisabledStyle)
-                  }}
-                  onClick={handleCreateModel}
-                  disabled={!canSave || isLoading || submitProgress.isSubmitting}
-                  onMouseEnter={(e) => canSave && !isLoading && !submitProgress.isSubmitting && Object.assign(e.currentTarget.style, buttonHoverStyle)}
-                  onMouseLeave={(e) => canSave && !isLoading && !submitProgress.isSubmitting && Object.assign(e.currentTarget.style, primaryButtonStyle)}
-              >
-                {getButtonText()}
-              </button>
-            </div>
-            {showGenModelFixPrompt && (
-              <div
-                style={{
-                  marginTop: 20,
-                  padding: 14,
-                  borderRadius: 6,
-                  border: '1px solid #f59e0b',
-                  background: '#fffbeb',
-                  fontSize: 13,
-                  color: '#92400e',
-                }}
-              >
-                <div style={{ fontWeight: 600, marginBottom: 6 }}>
-                  We detected issues in your GenModel.
-                </div>
-                <div style={{ marginBottom: 10 }}>
-                  Would you like to save the meta model by letting the system automatically modify the GenModel,
-                  or cancel this scenario?
-                </div>
-                <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', flexWrap: 'wrap' }}>
-                  <button
-                    type="button"
-                    onClick={handleCancelGenModelFixScenario}
-                    style={{
-                      ...secondaryButtonStyle,
-                      borderColor: '#f97316',
-                      color: '#92400e',
-                      padding: '8px 12px',
-                    }}
-                    disabled={isLoading || submitProgress.isSubmitting}
-                  >
-                    Cancel scenario
-                  </button>
-                  <button
-                    type="button"
-                    onClick={handleApplyGenModelFixes}
-                    style={{
-                      ...primaryButtonStyle,
-                      padding: '8px 12px',
-                    }}
-                    disabled={isLoading || submitProgress.isSubmitting}
-                  >
-                    Save with automatic GenModel fixes
-                  </button>
-                </div>
-              </div>
-            )}
+      <dialog
+        open
+        aria-modal="true"
+        aria-labelledby="modal-title"
+        tabIndex={-1}
+        style={{
+          ...modalOverlayStyle,
+          background: 'transparent',
+          backdropFilter: 'blur(6px)',
+          WebkitBackdropFilter: 'blur(6px)',
+          top: 0, left: 0, right: 0, bottom: 0,
+          width: '100%', height: '100%',
+          margin: 0, padding: 0, border: 'none',
+        }}
+        onClose={form.handleClose}
+        onCancel={form.handleClose}
+        onClick={(e) => { if (e.target === e.currentTarget) form.handleClose(); }}
+        onKeyDown={(e) => { if (e.key === 'Escape') form.handleClose(); }}
+      >
+        <div style={modalStyle}>
+          <div style={modalHeaderStyle}>
+            <h2 id="modal-title" style={modalTitleStyle}>Import Meta Model</h2>
+            <button
+              style={closeButtonStyle}
+              onClick={form.handleClose}
+              onMouseEnter={(e) => Object.assign(e.currentTarget.style, closeButtonHoverStyle)}
+              onMouseLeave={(e) => Object.assign(e.currentTarget.style, closeButtonStyle)}
+            >
+              ×
+            </button>
           </div>
-        </dialog>
-      </>,
-      document.body
+
+          {form.error && <div style={errorMessageStyle}>{form.error}</div>}
+          {form.success && <div style={successMessageStyle}>{form.success}</div>}
+
+          <div style={formGroupStyle}>
+            <label htmlFor="model-name-input" style={labelStyle}>Name *</label>
+            <input
+              id="model-name-input"
+              type="text"
+              placeholder="Enter meta model name..."
+              value={form.formData.name}
+              onChange={(e) => form.setFormData({ ...form.formData, name: e.target.value })}
+              style={inputStyle}
+              onFocus={(e) => Object.assign(e.currentTarget.style, inputFocusStyle)}
+              onBlur={(e) => Object.assign(e.currentTarget.style, inputStyle)}
+            />
+          </div>
+
+          <div style={formGroupStyle}>
+            <label htmlFor="model-description-input" style={labelStyle}>Description *</label>
+            <textarea
+              id="model-description-input"
+              placeholder="Enter description..."
+              value={form.formData.description}
+              onChange={(e) => form.setFormData({ ...form.formData, description: e.target.value })}
+              style={{ ...inputStyle, minHeight: '80px', resize: 'vertical', fontFamily: 'inherit' }}
+              onFocus={(e) => Object.assign(e.currentTarget.style, inputFocusStyle)}
+              onBlur={(e) => Object.assign(e.currentTarget.style, inputStyle)}
+            />
+          </div>
+
+          <div style={formGroupStyle}>
+            <label id="model-keywords-label" style={labelStyle}>Keywords *</label>
+            <KeywordTagsInput
+              aria-labelledby="model-keywords-label"
+              keywords={form.formData.keywords}
+              onChange={(keywords) => form.setFormData({ ...form.formData, keywords })}
+              placeholder="Type keywords and press Enter..."
+              style={inputStyle}
+            />
+          </div>
+
+          <div style={formGroupStyle}>
+            <label htmlFor="model-domain-input" style={labelStyle}>Domain *</label>
+            <input
+              id="model-domain-input"
+              type="text"
+              placeholder="Enter domain"
+              value={form.formData.domain}
+              onChange={(e) => form.setFormData({ ...form.formData, domain: e.target.value })}
+              style={inputStyle}
+              onFocus={(e) => Object.assign(e.currentTarget.style, inputFocusStyle)}
+              onBlur={(e) => Object.assign(e.currentTarget.style, inputStyle)}
+            />
+          </div>
+
+          {/* File Upload Section */}
+          <div style={uploadSectionStyle}>
+            <div style={uploadSectionTitleStyle}>Required Meta Model Files</div>
+
+            {FILE_CARD_DISPLAY_CONFIGS.map(({ kind, accentColor, hoverBg, badgeBg, badgeBorder, badgeColor, defaultHeaderBg }) => {
+              const { ext, fileIdKey } = FILE_KIND_CONFIG[kind];
+              const fileId = uploadedFileIds[fileIdKey];
+              const { inputMode, url, urlFileName } = form.perKind[kind];
+              return (
+                <React.Fragment key={kind}>
+                  <input
+                    ref={form.fileInputRefs[kind]}
+                    type="file"
+                    accept={ext}
+                    onChange={(e) => form.handleFileUpload(kind, e)}
+                    style={fileInputStyle}
+                  />
+                  <FileUploadCard
+                    ext={ext}
+                    accentColor={accentColor}
+                    hoverBg={hoverBg}
+                    badgeBg={badgeBg}
+                    badgeBorder={badgeBorder}
+                    badgeColor={badgeColor}
+                    headerBg={fileId > 0 ? '#f0fdf4' : defaultHeaderBg}
+                    fileId={fileId}
+                    inputMode={inputMode}
+                    uploadProgress={uploadProgress[kind]}
+                    url={url}
+                    urlFileName={urlFileName}
+                    urlPlaceholder={`https://raw.githubusercontent.com/…/model${ext}`}
+                    onModeChange={(mode) => form.switchFileMode(kind, mode)}
+                    onFileInputClick={() => form.fileInputRefs[kind].current?.click()}
+                    onUrlChange={(newUrl) => form.changeFileUrl(kind, newUrl)}
+                    onUrlImport={() => form.handleUrlImport(kind)}
+                  />
+                </React.Fragment>
+              );
+            })}
+
+            <div style={fileStatusStyle}>
+              {uploadedFileIds.ecoreFileId > 0 && uploadedFileIds.genModelFileId > 0
+                ? '✅ Both files ready!'
+                : 'Upload or import both files to continue'}
+            </div>
+          </div>
+
+          <FormActionButtons
+            isLoading={isLoading}
+            isSubmitting={submitProgress.isSubmitting}
+            canSave={!!form.canSave}
+            buttonText={form.getButtonText()}
+            onCancel={form.handleClose}
+            onSubmit={form.handleCreateModel}
+          />
+
+          {form.showGenModelFixPrompt && (
+            <GenModelFixPrompt
+              isLoading={isLoading}
+              isSubmitting={submitProgress.isSubmitting}
+              onCancel={form.handleCancelGenModelFixScenario}
+              onApplyFixes={form.handleApplyGenModelFixes}
+            />
+          )}
+        </div>
+      </dialog>
+    </>,
+    document.body
   );
 };
