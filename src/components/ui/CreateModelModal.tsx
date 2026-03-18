@@ -274,6 +274,23 @@ const overlayTextStyle: React.CSSProperties = {
   textAlign: 'center',
 };
 
+// ─── Upload-state label lookup (avoids nested ternaries) ─────────────────────
+
+const UPLOAD_STATE_LABELS = {
+  uploading: { icon: '⏳', dropLabel: 'Uploading…',                       importLabel: '⏳ …'    },
+  uploaded:  { icon: '✅', dropLabel: 'File uploaded — click to replace', importLabel: '✓ Done' },
+  idle:      { icon: '📂', dropLabel: 'Click to browse file',             importLabel: 'Import'  },
+} as const;
+
+type UploadState = keyof typeof UPLOAD_STATE_LABELS;
+
+// Shared base for the file/URL mode toggle buttons
+const modeButtonBaseStyle: React.CSSProperties = {
+  padding: '4px 11px', fontSize: '11px', fontWeight: 600, border: 'none',
+  borderRadius: '4px', cursor: 'pointer', fontFamily: 'Georgia, serif',
+  transition: 'all 0.15s', whiteSpace: 'nowrap',
+};
+
 // ─── Sub-components ───────────────────────────────────────────────────────────
 
 const SubmitProgressOverlay: React.FC<{ progress: number }> = ({ progress }) => (
@@ -294,6 +311,118 @@ const SubmitProgressOverlay: React.FC<{ progress: number }> = ({ progress }) => 
     </div>
   </dialog>
 );
+
+// ── FileDropZone: file-picker button (file mode body) ────────────────────────
+
+interface FileDropZoneProps {
+  isUploaded: boolean;
+  isUploading: boolean;
+  ext: string;
+  hoverBg: string;
+  accentColor: string;
+  icon: string;
+  label: string;
+  labelColor: string;
+  onClick: () => void;
+}
+
+const FileDropZone: React.FC<FileDropZoneProps> = ({
+  isUploaded, isUploading, ext, hoverBg, accentColor, icon, label, labelColor, onClick,
+}) => (
+  <button
+    type="button"
+    onClick={onClick}
+    disabled={isUploading}
+    style={{
+      width: '100%', padding: '14px 12px',
+      border: `2px dashed ${isUploaded ? '#86efac' : '#cbd5e1'}`,
+      borderRadius: '6px',
+      background: isUploaded ? '#f0fdf4' : '#fafafa',
+      cursor: isUploading ? 'wait' : 'pointer',
+      textAlign: 'center', transition: 'all 0.2s', fontFamily: 'Georgia, serif',
+    }}
+    onMouseEnter={(e) => {
+      if (!isUploaded && !isUploading) {
+        e.currentTarget.style.background = hoverBg;
+        e.currentTarget.style.borderColor = accentColor;
+      }
+    }}
+    onMouseLeave={(e) => {
+      e.currentTarget.style.background = isUploaded ? '#f0fdf4' : '#fafafa';
+      e.currentTarget.style.borderColor = isUploaded ? '#86efac' : '#cbd5e1';
+    }}
+  >
+    <div style={{ fontSize: '20px', marginBottom: '4px', lineHeight: 1 }}>{icon}</div>
+    <div style={{ fontSize: '13px', fontWeight: 600, color: labelColor }}>{label}</div>
+    {!isUploaded && !isUploading && (
+      <div style={{ fontSize: '11px', color: '#94a3b8', marginTop: '3px' }}>Accepts {ext} format</div>
+    )}
+  </button>
+);
+
+// ── UrlImportRow: URL input + import button (URL mode body) ───────────────────
+
+interface UrlImportRowProps {
+  ext: string;
+  url: string;
+  urlFileName: string;
+  isUploaded: boolean;
+  isUploading: boolean;
+  urlPlaceholder: string;
+  importLabel: string;
+  onUrlChange: (url: string) => void;
+  onUrlImport: () => void;
+}
+
+const UrlImportRow: React.FC<UrlImportRowProps> = ({
+  ext, url, urlFileName, isUploaded, isUploading, urlPlaceholder, importLabel,
+  onUrlChange, onUrlImport,
+}) => {
+  const isDisabled = isUploading || !url.trim();
+  return (
+    <>
+      <div style={{ fontSize: '11px', color: '#64748b', marginBottom: '6px', fontStyle: 'italic' }}>
+        Paste a raw public URL pointing to a{' '}
+        <code style={{ background: '#f1f5f9', padding: '1px 4px', borderRadius: '3px' }}>{ext}</code> file
+      </div>
+      <div style={{ display: 'flex', gap: '8px' }}>
+        <input
+          type="url"
+          placeholder={urlPlaceholder}
+          value={url}
+          onChange={(e) => onUrlChange(e.target.value)}
+          style={{ ...inputStyle, flex: 1, margin: 0, fontSize: '12px', padding: '8px 10px' }}
+          onFocus={(e) => Object.assign(e.currentTarget.style, { ...inputFocusStyle, flex: '1', margin: '0', fontSize: '12px', padding: '8px 10px' })}
+          onBlur={(e) => Object.assign(e.currentTarget.style, { ...inputStyle, flex: '1', margin: '0', fontSize: '12px', padding: '8px 10px' })}
+          disabled={isUploading}
+        />
+        <button
+          type="button"
+          onClick={onUrlImport}
+          disabled={isDisabled}
+          style={{
+            padding: '8px 16px', border: 'none', borderRadius: '6px',
+            fontSize: '12px', fontWeight: 600, fontFamily: 'Georgia, serif',
+            cursor: isDisabled ? 'not-allowed' : 'pointer',
+            background: isUploaded ? '#22c55e' : '#049484',
+            color: '#ffffff',
+            opacity: isDisabled ? 0.5 : 1,
+            transition: 'all 0.2s', whiteSpace: 'nowrap',
+          }}
+        >
+          {importLabel}
+        </button>
+      </div>
+      {urlFileName && isUploaded && (
+        <div style={{ fontSize: '11px', color: '#16a34a', marginTop: '6px', display: 'flex', alignItems: 'center', gap: '4px' }}>
+          <span>✅</span><span style={{ fontStyle: 'italic' }}>{urlFileName}</span>
+        </div>
+      )}
+    </>
+  );
+};
+
+// ── FileUploadCard ────────────────────────────────────────────────────────────
 
 interface FileUploadCardProps {
   ext: string;
@@ -323,38 +452,43 @@ const FileUploadCard: React.FC<FileUploadCardProps> = ({
   const isUploaded = fileId > 0;
   const isUploading = uploadProgress.isUploading;
 
-  const fileZoneIcon = isUploading ? '⏳' : isUploaded ? '✅' : '📂';
-  const fileZoneLabel = isUploading ? 'Uploading…' : isUploaded ? 'File uploaded — click to replace' : 'Click to browse file';
-  const urlImportButtonLabel = isUploading ? '⏳ …' : isUploaded ? '✓ Done' : 'Import';
+  // Derive upload state once; look up all display strings from the table
+  let uploadState: UploadState = 'idle';
+  if (isUploading) uploadState = 'uploading';
+  else if (isUploaded) uploadState = 'uploaded';
+  const { icon, dropLabel, importLabel } = UPLOAD_STATE_LABELS[uploadState];
+
+  // Pre-compute styles that contain ternaries to keep JSX branch-free
+  const cardStyle: React.CSSProperties = {
+    background: '#ffffff',
+    border: `1px solid ${isUploaded ? '#86efac' : '#e2e8f0'}`,
+    borderLeft: `3px solid ${isUploaded ? '#22c55e' : accentColor}`,
+    borderRadius: '8px', marginBottom: '12px', overflow: 'hidden',
+    boxShadow: '0 1px 4px rgba(0,0,0,0.06)',
+  };
+  const fileModeStyle: React.CSSProperties = {
+    ...modeButtonBaseStyle,
+    background: inputMode === 'file' ? '#049484' : 'transparent',
+    color:      inputMode === 'file' ? '#ffffff'  : '#64748b',
+  };
+  const urlModeStyle: React.CSSProperties = {
+    ...modeButtonBaseStyle,
+    background: inputMode === 'url' ? '#049484' : 'transparent',
+    color:      inputMode === 'url' ? '#ffffff'  : '#64748b',
+  };
+  const labelColor = isUploaded ? '#15803d' : '#374151';
 
   return (
-    <div style={{
-      background: '#ffffff',
-      border: `1px solid ${isUploaded ? '#86efac' : '#e2e8f0'}`,
-      borderLeft: `3px solid ${isUploaded ? '#22c55e' : accentColor}`,
-      borderRadius: '8px',
-      marginBottom: '12px',
-      overflow: 'hidden',
-      boxShadow: '0 1px 4px rgba(0,0,0,0.06)',
-    }}>
+    <div style={cardStyle}>
       {/* card header */}
       <div style={{
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        padding: '9px 14px',
-        background: headerBg,
-        borderBottom: '1px solid #e2e8f0',
+        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+        padding: '9px 14px', background: headerBg, borderBottom: '1px solid #e2e8f0',
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
           <code style={{
-            background: badgeBg,
-            color: badgeColor,
-            fontSize: '12px',
-            fontWeight: 700,
-            padding: '2px 8px',
-            borderRadius: '4px',
-            border: `1px solid ${badgeBorder}`,
+            background: badgeBg, color: badgeColor, fontSize: '12px', fontWeight: 700,
+            padding: '2px 8px', borderRadius: '4px', border: `1px solid ${badgeBorder}`,
             letterSpacing: '0.02em',
           }}>{ext}</code>
           {isUploaded && (
@@ -363,107 +497,27 @@ const FileUploadCard: React.FC<FileUploadCardProps> = ({
         </div>
         {/* segmented toggle */}
         <div style={{ display: 'flex', background: '#f1f5f9', borderRadius: '6px', padding: '2px', gap: '2px' }}>
-          <button
-            type="button"
-            onClick={() => onModeChange('file')}
-            style={{
-              padding: '4px 11px', fontSize: '11px', fontWeight: 600, border: 'none',
-              borderRadius: '4px', cursor: 'pointer', fontFamily: 'Georgia, serif',
-              background: inputMode === 'file' ? '#049484' : 'transparent',
-              color: inputMode === 'file' ? '#ffffff' : '#64748b',
-              transition: 'all 0.15s', whiteSpace: 'nowrap',
-            }}
-          >⬆ Computer</button>
-          <button
-            type="button"
-            onClick={() => onModeChange('url')}
-            style={{
-              padding: '4px 11px', fontSize: '11px', fontWeight: 600, border: 'none',
-              borderRadius: '4px', cursor: 'pointer', fontFamily: 'Georgia, serif',
-              background: inputMode === 'url' ? '#049484' : 'transparent',
-              color: inputMode === 'url' ? '#ffffff' : '#64748b',
-              transition: 'all 0.15s', whiteSpace: 'nowrap',
-            }}
-          >🔗 URL</button>
+          <button type="button" onClick={() => onModeChange('file')} style={fileModeStyle}>⬆ Computer</button>
+          <button type="button" onClick={() => onModeChange('url')}  style={urlModeStyle}>🔗 URL</button>
         </div>
       </div>
 
       {/* card body */}
       <div style={{ padding: '12px 14px' }}>
         {inputMode === 'file' ? (
-          <button
-            type="button"
+          <FileDropZone
+            isUploaded={isUploaded} isUploading={isUploading}
+            ext={ext} hoverBg={hoverBg} accentColor={accentColor}
+            icon={icon} label={dropLabel} labelColor={labelColor}
             onClick={onFileInputClick}
-            disabled={isUploading}
-            style={{
-              width: '100%', padding: '14px 12px',
-              border: `2px dashed ${isUploaded ? '#86efac' : '#cbd5e1'}`,
-              borderRadius: '6px',
-              background: isUploaded ? '#f0fdf4' : '#fafafa',
-              cursor: isUploading ? 'wait' : 'pointer',
-              textAlign: 'center', transition: 'all 0.2s', fontFamily: 'Georgia, serif',
-            }}
-            onMouseEnter={(e) => {
-              if (!isUploaded && !isUploading) {
-                e.currentTarget.style.background = hoverBg;
-                e.currentTarget.style.borderColor = accentColor;
-              }
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.background = isUploaded ? '#f0fdf4' : '#fafafa';
-              e.currentTarget.style.borderColor = isUploaded ? '#86efac' : '#cbd5e1';
-            }}
-          >
-            <div style={{ fontSize: '20px', marginBottom: '4px', lineHeight: 1 }}>
-              {fileZoneIcon}
-            </div>
-            <div style={{ fontSize: '13px', fontWeight: 600, color: isUploaded ? '#15803d' : '#374151' }}>
-              {fileZoneLabel}
-            </div>
-            {!isUploaded && !isUploading && (
-              <div style={{ fontSize: '11px', color: '#94a3b8', marginTop: '3px' }}>Accepts {ext} format</div>
-            )}
-          </button>
+          />
         ) : (
-          <>
-            <div style={{ fontSize: '11px', color: '#64748b', marginBottom: '6px', fontStyle: 'italic' }}>
-              Paste a raw public URL pointing to a{' '}
-              <code style={{ background: '#f1f5f9', padding: '1px 4px', borderRadius: '3px' }}>{ext}</code> file
-            </div>
-            <div style={{ display: 'flex', gap: '8px' }}>
-              <input
-                type="url"
-                placeholder={urlPlaceholder}
-                value={url}
-                onChange={(e) => onUrlChange(e.target.value)}
-                style={{ ...inputStyle, flex: 1, margin: 0, fontSize: '12px', padding: '8px 10px' }}
-                onFocus={(e) => Object.assign(e.currentTarget.style, { ...inputFocusStyle, flex: '1', margin: '0', fontSize: '12px', padding: '8px 10px' })}
-                onBlur={(e) => Object.assign(e.currentTarget.style, { ...inputStyle, flex: '1', margin: '0', fontSize: '12px', padding: '8px 10px' })}
-                disabled={isUploading}
-              />
-              <button
-                type="button"
-                onClick={onUrlImport}
-                disabled={isUploading || !url.trim()}
-                style={{
-                  padding: '8px 16px', border: 'none', borderRadius: '6px',
-                  fontSize: '12px', fontWeight: 600, fontFamily: 'Georgia, serif',
-                  cursor: isUploading || !url.trim() ? 'not-allowed' : 'pointer',
-                  background: isUploaded ? '#22c55e' : '#049484',
-                  color: '#ffffff',
-                  opacity: isUploading || !url.trim() ? 0.5 : 1,
-                  transition: 'all 0.2s', whiteSpace: 'nowrap',
-                }}
-              >
-                {urlImportButtonLabel}
-              </button>
-            </div>
-            {urlFileName && isUploaded && (
-              <div style={{ fontSize: '11px', color: '#16a34a', marginTop: '6px', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                <span>✅</span><span style={{ fontStyle: 'italic' }}>{urlFileName}</span>
-              </div>
-            )}
-          </>
+          <UrlImportRow
+            ext={ext} url={url} urlFileName={urlFileName}
+            isUploaded={isUploaded} isUploading={isUploading}
+            urlPlaceholder={urlPlaceholder} importLabel={importLabel}
+            onUrlChange={onUrlChange} onUrlImport={onUrlImport}
+          />
         )}
         {isUploading && (
           <div style={{ marginTop: '10px' }}>
@@ -675,7 +729,7 @@ function useCreateModelForm({ isOpen, onClose, onSuccess }: CreateModelModalProp
     setSubmitProgress({ progress: 0, isSubmitting: true });
     submitProgressIntervalRef.current = globalThis.setInterval(() => {
       setSubmitProgress(prev => ({
-        progress: Math.min(prev.progress + Math.random() * 16 + 4, 90),
+        progress: Math.min(prev.progress + 10, 90),
         isSubmitting: true,
       }));
     }, 220);
