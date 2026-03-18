@@ -27,6 +27,16 @@ interface CreateModelRequest {
   keyword: string[];
   ecoreFileId: number;
   genModelFileId: number;
+  /**
+   * When true, backend will try to automatically fix issues
+   * in the GenModel before saving the meta model.
+   *
+   * Frontend convention:
+   * - First call should always send `false`
+   * - If backend rejects the GenModel with a "Metamodel rejected" error,
+   *   the user can opt in to a second call with this flag set to `true`.
+   */
+  applyGenModelFixes?: boolean;
 }
 
 // Secure random number generator helper function
@@ -282,6 +292,8 @@ export const CreateModelModal: React.FC<CreateModelModalProps> = ({
   });
   const [submitProgress, setSubmitProgress] = useState({ progress: 0, isSubmitting: false });
   const [metaModelCreatedSuccessfully, setMetaModelCreatedSuccessfully] = useState(false);
+  const [showGenModelFixPrompt, setShowGenModelFixPrompt] = useState(false);
+  const [pendingCreateRequest, setPendingCreateRequest] = useState<CreateModelRequest | null>(null);
 
   const ecoreFileInputRef = useRef<HTMLInputElement>(null);
   const genmodelFileInputRef = useRef<HTMLInputElement>(null);
@@ -550,6 +562,7 @@ export const CreateModelModal: React.FC<CreateModelModalProps> = ({
 
     setIsLoading(true);
     setError('');
+    setShowGenModelFixPrompt(false);
     startSubmitOverlay();
 
     try {
@@ -562,7 +575,14 @@ export const CreateModelModal: React.FC<CreateModelModalProps> = ({
         genModelFileId: uploadedFileIds.genModelFileId,
       };
 
-      const response = await apiService.createMetaModel(requestData);
+      // Store the base request so we can reuse it if the user
+      // chooses to let the backend apply GenModel fixes.
+      setPendingCreateRequest(requestData);
+
+      const response = await apiService.createMetaModel({
+        ...requestData,
+        applyGenModelFixes: false,
+      });
 
       // If backend responds OK, fill to 100% and then close/reset
       setMetaModelCreatedSuccessfully(true);
@@ -575,13 +595,82 @@ export const CreateModelModal: React.FC<CreateModelModalProps> = ({
         }, 300);
       });
     } catch (err) {
+      const anyError = err as any;
+      const backendPayload = anyError?.response?.data;
+      const backendMessage =
+        backendPayload && typeof backendPayload.message === 'string' ? backendPayload.message : '';
+      const combinedMessage =
+        backendMessage || (err instanceof Error ? err.message : '') || 'Unknown error';
+      const isMetamodelRejected =
+        typeof combinedMessage === 'string' &&
+        combinedMessage.toLowerCase().includes('metamodel rejected');
+
       setIsLoading(false);
-      setError(`Error creating meta model: ${err instanceof Error ? err.message : 'Unknown error'}`);
       stopSubmitOverlayWithError();
-      
-      // Clean up uploaded files when create meta model fails
+
+      if (isMetamodelRejected) {
+        setError(
+          `We found some issues in your GenModel: ${combinedMessage}. ` +
+          'You can let the system modify the GenModel automatically or cancel this operation.'
+        );
+        setShowGenModelFixPrompt(true);
+        // Do not clean up uploaded files yet; the user may choose to retry
+        // with automatic GenModel fixes using the same uploaded files.
+        return;
+      }
+
+      setError(`Error creating meta model: ${combinedMessage}`);
+
+      // Clean up uploaded files when create meta model fails for other reasons
       await cleanupUploadedFiles();
     }
+  };
+
+  const handleApplyGenModelFixes = async () => {
+    if (!pendingCreateRequest) {
+      return;
+    }
+
+    setIsLoading(true);
+    setError('');
+    setShowGenModelFixPrompt(false);
+    startSubmitOverlay();
+
+    try {
+      const response = await apiService.createMetaModel({
+        ...pendingCreateRequest,
+        applyGenModelFixes: true,
+      });
+
+      setMetaModelCreatedSuccessfully(true);
+      finishSubmitOverlay(() => {
+        setIsLoading(false);
+        setSuccess('Meta Model created successfully with automatic GenModel fixes.');
+        setTimeout(() => {
+          onSuccess?.(response.data);
+          handleClose();
+        }, 300);
+      });
+    } catch (err) {
+      const anyError = err as any;
+      const backendPayload = anyError?.response?.data;
+      const backendMessage =
+        backendPayload && typeof backendPayload.message === 'string' ? backendPayload.message : '';
+      const combinedMessage =
+        backendMessage || (err instanceof Error ? err.message : '') || 'Unknown error';
+
+      setIsLoading(false);
+      stopSubmitOverlayWithError();
+      setError(`Error creating meta model with automatic GenModel fixes: ${combinedMessage}`);
+
+      // Clean up uploaded files when the retry with fixes fails
+      await cleanupUploadedFiles();
+    }
+  };
+
+  const handleCancelGenModelFixScenario = () => {
+    setShowGenModelFixPrompt(false);
+    handleClose();
   };
 
   const handleClose = async () => {
@@ -936,6 +1025,53 @@ export const CreateModelModal: React.FC<CreateModelModalProps> = ({
                 {getButtonText()}
               </button>
             </div>
+            {showGenModelFixPrompt && (
+              <div
+                style={{
+                  marginTop: 20,
+                  padding: 14,
+                  borderRadius: 6,
+                  border: '1px solid #f59e0b',
+                  background: '#fffbeb',
+                  fontSize: 13,
+                  color: '#92400e',
+                }}
+              >
+                <div style={{ fontWeight: 600, marginBottom: 6 }}>
+                  We detected issues in your GenModel.
+                </div>
+                <div style={{ marginBottom: 10 }}>
+                  Would you like to save the meta model by letting the system automatically modify the GenModel,
+                  or cancel this scenario?
+                </div>
+                <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', flexWrap: 'wrap' }}>
+                  <button
+                    type="button"
+                    onClick={handleCancelGenModelFixScenario}
+                    style={{
+                      ...secondaryButtonStyle,
+                      borderColor: '#f97316',
+                      color: '#92400e',
+                      padding: '8px 12px',
+                    }}
+                    disabled={isLoading || submitProgress.isSubmitting}
+                  >
+                    Cancel scenario
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleApplyGenModelFixes}
+                    style={{
+                      ...primaryButtonStyle,
+                      padding: '8px 12px',
+                    }}
+                    disabled={isLoading || submitProgress.isSubmitting}
+                  >
+                    Save with automatic GenModel fixes
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         </dialog>
       </>,
