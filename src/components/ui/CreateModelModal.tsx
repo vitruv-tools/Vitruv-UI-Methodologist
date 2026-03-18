@@ -127,43 +127,6 @@ const uploadSectionTitleStyle: React.CSSProperties = {
   fontFamily: 'Georgia, serif',
 };
 
-const uploadButtonsContainerStyle: React.CSSProperties = {
-  display: 'flex',
-  gap: '12px',
-  marginBottom: '16px',
-};
-
-const uploadButtonStyle: React.CSSProperties = {
-  flex: '1',
-  padding: '12px 14px',
-  border: '2px solid #049484',
-  borderRadius: '6px',
-  background: '#ffffff',
-  color: '#2c3e50',
-  fontSize: '14px',
-  fontWeight: 600,
-  cursor: 'pointer',
-  transition: 'all 0.3s ease',
-  display: 'flex',
-  alignItems: 'center',
-  justifyContent: 'center',
-  gap: '8px',
-  fontFamily: 'Georgia, serif',
-};
-
-const uploadButtonHoverStyle: React.CSSProperties = {
-  borderColor: '#2980b9',
-  background: '#f8f9ff',
-  color: '#2980b9',
-  transform: 'translateY(-1px)',
-  boxShadow: '0 4px 12px rgba(52, 152, 219, 0.15)',
-};
-
-const uploadButtonSuccessStyle: React.CSSProperties = {
-  borderColor: '#27ae60',
-  background: '#d5f4e6',
-  color: '#1e8449',
-};
 
 const fileStatusStyle: React.CSSProperties = {
   fontSize: '13px',
@@ -945,17 +908,6 @@ export const CreateModelModal: React.FC<CreateModelModalProps> = ({
     return 'Complete All Fields';
   };
 
-  const getEcoreButtonText = (): string => {
-    if (uploadProgress.ecore.isUploading) return 'Uploading...';
-    if (uploadedFileIds.ecoreFileId > 0) return '✓';
-    return 'Upload';
-  };
-
-  const getGenmodelButtonText = (): string => {
-    if (uploadProgress.genmodel.isUploading) return 'Uploading...';
-    if (uploadedFileIds.genModelFileId > 0) return '✓';
-    return 'Upload';
-  };
 
   return ReactDOM.createPortal(
       <>
