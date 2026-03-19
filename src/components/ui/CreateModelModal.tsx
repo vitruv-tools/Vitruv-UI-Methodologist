@@ -438,6 +438,7 @@ interface FileUploadCardProps {
   url: string;
   urlFileName: string;
   urlPlaceholder: string;
+  uploadError: string;
   onModeChange: (mode: 'file' | 'url') => void;
   onFileInputClick: () => void;
   onUrlChange: (url: string) => void;
@@ -447,7 +448,7 @@ interface FileUploadCardProps {
 const FileUploadCard: React.FC<FileUploadCardProps> = ({
   ext, accentColor, hoverBg, badgeBg, badgeBorder, badgeColor, headerBg,
   fileId, inputMode, uploadProgress, url, urlFileName, urlPlaceholder,
-  onModeChange, onFileInputClick, onUrlChange, onUrlImport,
+  uploadError, onModeChange, onFileInputClick, onUrlChange, onUrlImport,
 }) => {
   const isUploaded = fileId > 0;
   const isUploading = uploadProgress.isUploading;
@@ -527,6 +528,17 @@ const FileUploadCard: React.FC<FileUploadCardProps> = ({
             <div style={{ fontSize: 11, color: '#64748b', textAlign: 'center', marginTop: 3 }}>
               {Math.round(uploadProgress.progress)}%
             </div>
+          </div>
+        )}
+        {uploadError && (
+          <div style={{
+            marginTop: '8px', padding: '7px 10px',
+            background: '#fef2f2', border: '1px solid #fca5a5',
+            borderRadius: '6px', fontSize: '12px', color: '#b91c1c',
+            display: 'flex', alignItems: 'flex-start', gap: '6px',
+          }}>
+            <span style={{ flexShrink: 0 }}>⚠️</span>
+            <span>{uploadError}</span>
           </div>
         )}
       </div>
@@ -620,8 +632,8 @@ const GenModelFixPrompt: React.FC<GenModelFixPromptProps> = ({
 // ─── Per-kind UI state shape ──────────────────────────────────────────────────
 
 const EMPTY_PER_KIND = {
-  ecore:    { inputMode: 'file' as 'file' | 'url', url: '', urlFileName: '' },
-  genmodel: { inputMode: 'file' as 'file' | 'url', url: '', urlFileName: '' },
+  ecore:    { inputMode: 'file' as 'file' | 'url', url: '', urlFileName: '', uploadError: '' },
+  genmodel: { inputMode: 'file' as 'file' | 'url', url: '', urlFileName: '', uploadError: '' },
 };
 
 // ─── Custom hook ──────────────────────────────────────────────────────────────
@@ -679,12 +691,22 @@ function useCreateModelForm({ isOpen, onClose, onSuccess }: CreateModelModalProp
     setPerKind(prev => ({ ...prev, [kind]: { ...prev[kind], ...patch } }));
 
   const switchFileMode = (kind: FileKind, mode: 'file' | 'url') => {
-    updateKind(kind, { inputMode: mode, urlFileName: '' });
+    const prevId = uploadedFileIds[FILE_KIND_CONFIG[kind].fileIdKey];
+    if (prevId > 0) {
+      apiService.deleteFile(prevId).catch(e => console.warn(`Failed to delete ${kind} file on mode switch:`, e));
+    }
+    updateKind(kind, { inputMode: mode, urlFileName: '', uploadError: '' });
     setUploadedFileIds(prev => ({ ...prev, [FILE_KIND_CONFIG[kind].fileIdKey]: 0 }));
   };
 
   const changeFileUrl = (kind: FileKind, url: string) => {
-    updateKind(kind, { url, urlFileName: '' });
+    // Delete the previously uploaded file the first time the user edits the URL
+    // (prevId will be 0 on subsequent keystrokes, so this fires only once per upload)
+    const prevId = uploadedFileIds[FILE_KIND_CONFIG[kind].fileIdKey];
+    if (prevId > 0) {
+      apiService.deleteFile(prevId).catch(e => console.warn(`Failed to delete ${kind} file on URL change:`, e));
+    }
+    updateKind(kind, { url, urlFileName: '', uploadError: '' });
     setUploadedFileIds(prev => ({ ...prev, [FILE_KIND_CONFIG[kind].fileIdKey]: 0 }));
   };
 
@@ -803,10 +825,13 @@ function useCreateModelForm({ isOpen, onClose, onSuccess }: CreateModelModalProp
     const { ext, apiType, fileIdKey } = FILE_KIND_CONFIG[kind];
     const currentFileId = uploadedFileIds[fileIdKey];
 
-    if (!file.name.endsWith(ext)) { setError(`Please select a valid ${ext} file`); return; }
+    if (!file.name.endsWith(ext)) {
+      updateKind(kind, { uploadError: `Please select a valid ${ext} file` });
+      return;
+    }
 
     setUploadProgress(prev => ({ ...prev, [kind]: { progress: 0, isUploading: true } }));
-    setError('');
+    updateKind(kind, { uploadError: '' });
 
     try {
       if (currentFileId > 0) {
@@ -822,7 +847,7 @@ function useCreateModelForm({ isOpen, onClose, onSuccess }: CreateModelModalProp
       scheduleSuccessReset(kind);
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Unknown error';
-      setError(kind === 'ecore' ? msg : `Error uploading ${sanitizeFileName(file.name)}: ${msg}`);
+      updateKind(kind, { uploadError: `Error uploading ${sanitizeFileName(file.name)}: ${msg}` });
       setUploadProgress(prev => ({ ...prev, [kind]: { progress: 0, isUploading: false } }));
       setUploadedFileIds(prev => ({ ...prev, [fileIdKey]: 0 }));
       stopProgressSimulation(kind);
@@ -832,18 +857,31 @@ function useCreateModelForm({ isOpen, onClose, onSuccess }: CreateModelModalProp
 
   const handleUrlImport = async (kind: FileKind) => {
     const { ext, apiType, fileIdKey } = FILE_KIND_CONFIG[kind];
-    const url = perKind[kind].url.trim();
     const currentFileId = uploadedFileIds[fileIdKey];
 
-    if (!url) { setError(`Please enter a URL for the ${ext} file`); return; }
-    const urlPath = url.split('?')[0];
+    // Auto-convert GitHub blob page URLs to raw content URLs
+    const rawUrl = perKind[kind].url.trim().replace(
+      /^https?:\/\/github\.com\/([^/]+\/[^/]+)\/blob\/(.+)$/,
+      'https://raw.githubusercontent.com/$1/$2',
+    );
+
+    if (!rawUrl) {
+      updateKind(kind, { uploadError: `Please enter a URL for the ${ext} file` });
+      return;
+    }
+    const urlPath = rawUrl.split('?')[0];
     if (!urlPath.endsWith(ext)) {
-      setError(`URL must point to a ${ext} file (ending with ${ext})`);
+      updateKind(kind, { uploadError: `URL must point to a ${ext} file (ending with ${ext})` });
       return;
     }
 
+    // Reflect the (possibly converted) URL back into the input
+    if (rawUrl !== perKind[kind].url.trim()) {
+      updateKind(kind, { url: rawUrl });
+    }
+
     setUploadProgress(prev => ({ ...prev, [kind]: { progress: 0, isUploading: true } }));
-    setError('');
+    updateKind(kind, { uploadError: '' });
 
     try {
       if (currentFileId > 0) {
@@ -851,9 +889,9 @@ function useCreateModelForm({ isOpen, onClose, onSuccess }: CreateModelModalProp
           .catch(e => console.warn(`Failed to delete previous ${ext} file:`, e));
       }
       startProgressSimulation(kind);
-      const fetchResponse = await fetch(url);
+      const fetchResponse = await fetch(rawUrl);
       if (!fetchResponse.ok) {
-        throw new Error(`Could not fetch file: ${fetchResponse.status} ${fetchResponse.statusText}`);
+        throw new Error(`Server returned ${fetchResponse.status} ${fetchResponse.statusText}`);
       }
       const blob = await fetchResponse.blob();
       const fileName = urlPath.split('/').pop() || `imported${ext}`;
@@ -866,10 +904,14 @@ function useCreateModelForm({ isOpen, onClose, onSuccess }: CreateModelModalProp
       setSuccess(`Successfully imported ${sanitizeFileName(fileName)}`);
       scheduleSuccessReset(kind);
     } catch (err) {
-      setError(`Failed to import ${ext} from URL: ${err instanceof Error ? err.message : 'Unknown error'}`);
+      const raw = err instanceof Error ? err.message : 'Unknown error';
+      const isCors = raw === 'Failed to fetch';
+      const uploadError = isCors
+        ? `Cannot reach that URL from the browser (CORS policy). Use a raw public URL — e.g. raw.githubusercontent.com — or download the file and upload it locally.`
+        : `Failed to import ${ext} from URL: ${raw}`;
+      updateKind(kind, { uploadError, urlFileName: '' });
       setUploadProgress(prev => ({ ...prev, [kind]: { progress: 0, isUploading: false } }));
       setUploadedFileIds(prev => ({ ...prev, [fileIdKey]: 0 }));
-      updateKind(kind, { urlFileName: '' });
       stopProgressSimulation(kind);
     }
   };
@@ -1107,6 +1149,7 @@ export const CreateModelModal: React.FC<CreateModelModalProps> = ({
                     url={url}
                     urlFileName={urlFileName}
                     urlPlaceholder={`https://raw.githubusercontent.com/…/model${ext}`}
+                    uploadError={form.perKind[kind].uploadError}
                     onModeChange={(mode) => form.switchFileMode(kind, mode)}
                     onFileInputClick={() => form.fileInputRefs[kind].current?.click()}
                     onUrlChange={(newUrl) => form.changeFileUrl(kind, newUrl)}
