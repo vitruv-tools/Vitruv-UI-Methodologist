@@ -36,7 +36,7 @@ import type { EdgeValidator } from './EdgeValidator';
 import { LowCodeReactionEdgeValidator } from './lowcode/LowCodeReactionEdgeValidator';
 import { onConnect, isValidConnection, onConnectStart, onConnectEnd, onReconnect, onReconnectEnd, onEdgesDelete, onEdgeClick, getBackendMetaModelId } from '../../utils';
 import type { EObject } from 'ecore-ts';
-import { UmlEdgeDetails } from './UmlEdgeDetails';
+import { UMLEdgeDetails } from './UMLEdgeDetails';
 import { DragablePanel, DragablePanelOptionalToolbarRef, type DragablePanelRef } from './DragablePanel';
 import { GhostNode } from './lowcode/GhostNode';
 import { addReactionEdgeToVsumDetails, addReactionFileIdToVsumDetails, removeReactionEdgeFromVsumDetails } from '../../utils/ReactionUtils';
@@ -2344,7 +2344,7 @@ export const FlowCanvas = forwardRef<{
               translateY='50%'
               settings={<UMLEdgeDetailsConfigPanel onChange={setUmlDetailsConfig}/>}
             >
-              <UmlEdgeDetails edge={selectedEdge as FlowEcoreEdge} identifiersToEObject={identifiersToEObject} config={umlDetailsConfig} />
+              <UMLEdgeDetails edge={selectedEdge as FlowEcoreEdge} identifiersToEObject={identifiersToEObject} config={umlDetailsConfig} />
             </DragablePanel>
           )}
         </ReactFlow>

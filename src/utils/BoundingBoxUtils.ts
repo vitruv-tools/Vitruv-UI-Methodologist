@@ -1,4 +1,3 @@
-import { ReactFlowInstance } from "reactflow";
 import { FlowNode } from "../types";
 
 export interface BoundingBox {

@@ -13,13 +13,13 @@ import { isUndefinedOrTrue, UMLEdgeDetailsConfig } from "./UMLEdgeDetailsConfig"
 /**
  * Shows uml edge details similar to eclipse ecore diagram.
  */
-interface UmlEdgeDetailsProps {
+interface UMLEdgeDetailsProps {
   edge: FlowEcoreEdge;
   identifiersToEObject: Map<string, EObject>;
   config: Partial<UMLEdgeDetailsConfig>;
 }
 
-export const UmlEdgeDetails: React.FC<UmlEdgeDetailsProps> = ({
+export const UMLEdgeDetails: React.FC<UMLEdgeDetailsProps> = ({
   edge,
   identifiersToEObject,
   config
