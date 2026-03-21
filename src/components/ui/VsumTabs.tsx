@@ -5,6 +5,7 @@ import { WorkspaceSnapshot } from '../../types/workspace';
 import { useProjectStore } from '../../store/Project';
 import { VsumDetailsHelper } from "../../store/VsumDetails";
 import { ActiveVsumDetails } from '../../store/ActiveVsumDetails';
+import { ConfirmDialog } from './ConfirmDialog';
 
 const POPUP_STYLES = {
     success: { background: '#ecfdf3', border: '1px solid #bbf7d0', color: '#166534', icon: '✅' },
@@ -27,6 +28,55 @@ interface VsumTabsProps {
     requestWorkspaceSnapshot?: () => Promise<WorkspaceSnapshot | null>;
 }
 
+const extractBackendError = (
+    err: any,
+    fallbackSummary: string,
+    fallbackDetail?: string
+): { summary: string; detail: string } => {
+    const fallback = fallbackDetail ?? fallbackSummary;
+    const data = err?.response?.data;
+
+    if (data && typeof data === 'object') {
+        const summary =
+            typeof data.error === 'string' && data.error.trim()
+                ? data.error
+                : fallbackSummary;
+        const detail =
+            typeof data.message === 'string' && data.message.trim()
+                ? data.message
+                : summary;
+        return { summary, detail };
+    }
+
+    if (typeof data === 'string' && data.trim()) {
+        return { summary: fallbackSummary, detail: data };
+    }
+
+    if (typeof err?.message === 'string' && err.message.trim()) {
+        return { summary: fallbackSummary, detail: err.message };
+    }
+
+    return { summary: fallbackSummary, detail: fallback };
+};
+
+const normalizeReactionFileId = (value: unknown): number => {
+    if (typeof value === 'number' && Number.isFinite(value) && value > 0) {
+        return value;
+    }
+    if (typeof value === 'string') {
+        const parsed = Number(value);
+        if (Number.isFinite(parsed) && parsed > 0) {
+            return parsed;
+        }
+    }
+    return 0;
+};
+
+const isReactionFilesNotFoundError = (message: string): boolean => {
+    const normalized = message.toLowerCase();
+    return normalized.includes('reaction files not found');
+};
+
 export const VsumTabs: React.FC<VsumTabsProps> = ({
                                                       openTabs,
                                                       activeInstanceId,
@@ -40,6 +90,8 @@ export const VsumTabs: React.FC<VsumTabsProps> = ({
     const [error, setError] = useState<string>('');
     const [saving, setSaving] = useState(false);
     const [workspaceSnapshot, setWorkspaceSnapshot] = useState<WorkspaceSnapshot | null>(null);
+    const [savedWorkspaceById, setSavedWorkspaceById] = useState<Record<number, WorkspaceSnapshot>>({});
+    const [knownMissingReactionFileIds, setKnownMissingReactionFileIds] = useState<number[]>([]);
 
     const [popup, setPopup] = useState<{
         message: string;
@@ -47,6 +99,9 @@ export const VsumTabs: React.FC<VsumTabsProps> = ({
     } | null>(null);
 
     const [checkingBuild, setCheckingBuild] = useState(false);
+    const [downloadingArtifact, setDownloadingArtifact] = useState(false);
+    const [closeConfirmInstanceId, setCloseConfirmInstanceId] = useState<string | null>(null);
+    const [unsavedChangesAction, setUnsavedChangesAction] = useState<'build' | 'download' | null>(null);
 
     const areIdArraysEqual = (a: number[] = [], b: number[] = []) => {
         if (a.length !== b.length) return false;
@@ -58,35 +113,55 @@ export const VsumTabs: React.FC<VsumTabsProps> = ({
         return true;
     };
 
-    const computeDirty = (backend: VsumDetails | undefined, snapshot: WorkspaceSnapshot | null): boolean => {
-        if (!backend || !snapshot) return false;
+    const toComparableSnapshot = (snapshot: WorkspaceSnapshot | null | undefined) => {
+        const missingSet = new Set(knownMissingReactionFileIds);
+        const ids = [...(snapshot?.metaModelIds ?? [])].sort((a, b) => a - b);
+        const rels = [...(snapshot?.metaModelRelationRequests ?? [])]
+            .map(r => {
+                const normalizedId = normalizeReactionFileId(r.reactionFileId);
+                const safeId = missingSet.has(normalizedId) ? 0 : normalizedId;
+                return `${r.sourceId}->${r.targetId}#${safeId}`;
+            })
+            .sort((a, b) => a.localeCompare(b));
+        return { ids, rels };
+    };
 
-        const backendSourceIds =
+    const backendToSnapshot = (backend: VsumDetails): WorkspaceSnapshot => {
+        const metaModelIds =
             backend.metaModels
                 ?.map(mm => mm.sourceId)
                 .filter((x): x is number => typeof x === 'number') ?? [];
-        const snapIds = snapshot.metaModelIds ?? [];
+        const metaModelRelationRequests =
+            ((backend as any).metaModelsRelation ?? []).map((r: any) => ({
+                sourceId: r.sourceId,
+                targetId: r.targetId,
+                reactionFileId: normalizeReactionFileId(r.reactionFileId ?? r.reactionFileStorageId),
+            }));
+        return { metaModelIds, metaModelRelationRequests };
+    };
 
-        if (!areIdArraysEqual(backendSourceIds, snapIds)) {
-            return true;
+    const snapshotsEqual = (a: WorkspaceSnapshot | null | undefined, b: WorkspaceSnapshot | null | undefined): boolean => {
+        const ca = toComparableSnapshot(a);
+        const cb = toComparableSnapshot(b);
+        if (!areIdArraysEqual(ca.ids, cb.ids)) return false;
+        if (ca.rels.length !== cb.rels.length) return false;
+        for (let i = 0; i < ca.rels.length; i++) {
+            if (ca.rels[i] !== cb.rels[i]) return false;
+        }
+        return true;
+    };
+
+    const computeDirty = (backend: VsumDetails | undefined, snapshot: WorkspaceSnapshot | null, id?: number): boolean => {
+        if (!snapshot) return false;
+
+        // Prefer explicit local baseline captured after successful save.
+        // This avoids stale backend/polling races causing false "unsaved" prompts.
+        if (typeof id === 'number' && savedWorkspaceById[id]) {
+            return !snapshotsEqual(savedWorkspaceById[id], snapshot);
         }
 
-        const backendRelsRaw = (backend as any).metaModelsRelation ?? [];
-        const backendRels = (backendRelsRaw as Array<any>)
-            .map(r => `${r.sourceId}->${r.targetId}#${r.reactionFileId ?? ''}`)
-            .sort((a, b) => a.localeCompare(b));
-
-        const snapRelsRaw = snapshot.metaModelRelationRequests ?? [];
-        const snapRels = snapRelsRaw
-            .map(r => `${r.sourceId}->${r.targetId}#${r.reactionFileId ?? ''}`)
-            .sort((a, b) => a.localeCompare(b));
-
-        if (backendRels.length !== snapRels.length) return true;
-        for (let i = 0; i < backendRels.length; i++) {
-            if (backendRels[i] !== snapRels[i]) return true;
-        }
-
-        return false;
+        if (!backend) return false;
+        return !snapshotsEqual(backendToSnapshot(backend), snapshot);
     };
 
     // ---- load VSUM details for active tab --------------------------
@@ -101,6 +176,11 @@ export const VsumTabs: React.FC<VsumTabsProps> = ({
             try {
                 const res = await apiService.getVsumDetails(id);
                 setDetailsById(prev => ({ ...prev, [id]: res.data }));
+                setSavedWorkspaceById(prev => (
+                    prev[id]
+                        ? prev
+                        : { ...prev, [id]: backendToSnapshot(res.data) }
+                ));
             } catch (e) {
                 setError(e instanceof Error ? e.message : 'Failed to load VSUM details');
             }
@@ -157,52 +237,108 @@ export const VsumTabs: React.FC<VsumTabsProps> = ({
 
         const snapshotIds = snap.metaModelIds ?? [];
 
-        const metaModelIds = snapshotIds.length > 0 ? snapshotIds : backendSourceIds;
+        // Use snapshot if available, otherwise fall back to backend data
+        // Important: If snapshot exists but is empty, user intentionally removed all MetaModels
+        const metaModelIds = snap.metaModelIds !== undefined ? snapshotIds : backendSourceIds;
 
-        if (metaModelIds.length === 0) {
-            const msg = 'At least one MetaModel is required';
-            setError(msg);
-            setPopup({ message: msg, type: 'error' });
-            return;
+        const relationCandidates =
+            (snap.metaModelRelationRequests ?? [])
+                .filter(rel => {
+                    if (!metaModelIds.includes(rel.sourceId) || !metaModelIds.includes(rel.targetId)) {
+                        return false;
+                    }
+                    // Coarse relation has no reaction file
+                    if (rel.reactionFileId === 0) {
+                        // Atleast one fine-grained relation must have a reaction file or be a low-code reaction
+                        return rel.fineGranularMetaModelRelationSet.some(fineRel => {
+                            // Fine-grained relation has a reaction file
+                            if (fineRel.reactionFileStorageId != null) {
+                                return true;
+                            }
+                            // Fine-grained relation has a low-code reaction template with params
+                            if (fineRel.lowCodeReactionRequestBase != null) {
+                                return true;
+                            }
+                            return false;
+                        })
+                    }
+                    return true;
+                })
+                .map(rel => {
+                    rel.reactionFileId = normalizeReactionFileId(rel.reactionFileId);
+                    rel.fineGranularMetaModelRelationSet.forEach(fineRel => {
+                        fineRel.reactionFileStorageId = normalizeReactionFileId(fineRel.reactionFileStorageId);
+                    });
+                    return rel;
+                });
+
+        // Validate reaction file IDs before save to avoid backend
+        // "Reaction files not found" errors for stale/deleted file IDs.
+        const relationFileIds = Array.from(
+            new Set(
+                relationCandidates
+                    .map(rel => rel.reactionFileId)
+                    .filter((id): id is number => typeof id === 'number' && id > 0)
+            )
+        );
+
+        const validRelationFileIds = new Set<number>();
+        const missingRelationFileIds = new Set<number>();
+        await Promise.all(
+            relationFileIds.map(async (id) => {
+                try {
+                    await apiService.getFile(id);
+                    validRelationFileIds.add(id);
+                } catch {
+                    missingRelationFileIds.add(id);
+                    console.warn(`Skipping relation with missing reaction file id: ${id}`);
+                }
+            })
+        );
+
+        const sanitizedRelations: MetaModelRelationRequest[] = relationCandidates.map(rel =>
+            validRelationFileIds.has(rel.reactionFileId ?? -1)
+                ? rel
+                : { ...rel, reactionFileId: 0 }
+        );
+
+        if (missingRelationFileIds.size > 0) {
+            setKnownMissingReactionFileIds(prev => Array.from(new Set([...prev, ...Array.from(missingRelationFileIds)])));
         }
 
-        const filteredRelations =
-            (snap.metaModelRelationRequests ?? []).filter(rel => {
-                if (!metaModelIds.includes(rel.sourceId) || !metaModelIds.includes(rel.targetId)) {
-                    return false;
-                }
-                // Coarse relation has no reaction file
-                if (rel.reactionFileId === 0) {
-                    // Atleast one fine-grained relation must have a reaction file or be a low-code reaction
-                    return rel.fineGranularMetaModelRelationSet.some(fineRel => {
-                        // Fine-grained relation has a reaction file
-                        if (fineRel.reactionFileStorageId != null) {
-                            return true;
-                        }
-                        // Fine-grained relation has a low-code reaction template with params
-                        if (fineRel.lowCodeReactionRequestBase != null) {
-                            return true;
-                        }
-                        return false;
-                    })
-                }
-                return true;
-            });
-
         const relationsToSend: MetaModelRelationRequest[] | null =
-            filteredRelations.length > 0 ? filteredRelations : null;
+            sanitizedRelations.length > 0 ? sanitizedRelations : null;
 
         console.log('💾 Saving VSUM changes:', {
             vsumId: id,
             metaModelIds,
             relationCount: relationsToSend?.length ?? 0,
             relations: relationsToSend,
-            note: 'Only sending relations with valid reaction files (reactionFileId > 0)',
+            note: 'Sending all valid relations; reactionFileId is 0 when no file is linked',
         });
 
         setSaving(true);
         setError('');
         setPopup(null);
+        const applySuccessfulSave = async (savedRelations: MetaModelRelationRequest[], successMessage: string) => {
+            setPopup({ message: successMessage, type: 'success' });
+
+            const res = await apiService.getVsumDetails(id);
+            setDetailsById(prev => ({ ...prev, [id]: res.data }));
+            setWorkspaceSnapshot({
+                metaModelIds,
+                metaModelRelationRequests: savedRelations,
+            });
+            setSavedWorkspaceById(prev => ({
+                ...prev,
+                [id]: {
+                    metaModelIds,
+                    metaModelRelationRequests: savedRelations,
+                },
+            }));
+
+            globalThis.dispatchEvent(new CustomEvent('vitruv.refreshVsums'));
+        };
         try {
             const response: any = await apiService.updateVsumSyncChanges(id, {
                 metaModelIds,
@@ -214,31 +350,60 @@ export const VsumTabs: React.FC<VsumTabsProps> = ({
                 response?.message ||
                 'VSUM successfully updated';
 
-            setPopup({ message: backendMessage, type: 'success' });
-
-            const res = await apiService.getVsumDetails(id);
-            setDetailsById(prev => ({ ...prev, [id]: res.data }));
-
-            globalThis.dispatchEvent(new CustomEvent('vitruv.refreshVsums'));
+            await applySuccessfulSave(sanitizedRelations, backendMessage);
         } catch (e: any) {
-            let fullMessage = 'Failed to save VSUM';
-            if (e?.response?.data) {
-                try {
-                    fullMessage =
-                        typeof e.response.data === 'string'
-                            ? e.response.data
-                            : JSON.stringify(e.response.data, null, 2);
-                } catch {
-                    fullMessage = e.response.data?.toString?.() || fullMessage;
+            const parsed = extractBackendError(
+                e,
+                'Failed to save VSUM',
+                'Failed to save VSUM'
+            );
+
+            // Recovery path: backend rejected one or more reaction file IDs.
+            // Retry once with relation links kept but reactionFileId reset to 0.
+            if (isReactionFilesNotFoundError(parsed.detail) && sanitizedRelations.length > 0) {
+                const fallbackRelations = sanitizedRelations.map(rel => ({
+                    ...rel,
+                    reactionFileId: 0,
+                }));
+
+                const brokenIds = sanitizedRelations
+                    .map(rel => rel.reactionFileId)
+                    .filter((fileId): fileId is number => typeof fileId === 'number' && fileId > 0);
+
+                if (brokenIds.length > 0) {
+                    setKnownMissingReactionFileIds(prev => Array.from(new Set([...prev, ...brokenIds])));
                 }
-            } else if (e?.message) {
-                fullMessage = e.message;
-            } else {
-                fullMessage = String(e);
+
+                try {
+                    const retryResponse: any = await apiService.updateVsumSyncChanges(id, {
+                        metaModelIds,
+                        metaModelRelationRequests: fallbackRelations,
+                    });
+
+                    const retryMessage =
+                        retryResponse?.data?.message ||
+                        retryResponse?.message ||
+                        'VSUM successfully updated';
+
+                    await applySuccessfulSave(
+                        fallbackRelations,
+                        `${retryMessage} (Missing reaction files were unlinked automatically.)`
+                    );
+                    return;
+                } catch (retryError: any) {
+                    const retryParsed = extractBackendError(
+                        retryError,
+                        'Failed to save VSUM',
+                        'Failed to save VSUM'
+                    );
+                    setError(retryParsed.detail);
+                    setPopup({ message: retryParsed.detail, type: 'error' });
+                    return;
+                }
             }
 
-            setError(fullMessage);
-            setPopup({ message: fullMessage, type: 'error' });
+            setError(parsed.detail);
+            setPopup({ message: parsed.detail, type: 'error' });
         } finally {
             setSaving(false);
         }
@@ -248,12 +413,85 @@ export const VsumTabs: React.FC<VsumTabsProps> = ({
         const active = openTabs.find(t => t.instanceId === activeInstanceId);
         const id = active?.id;
         if (!id) return;
-        await saveById(id);
+        try {
+            await saveById(id);
+        } catch (error) {
+            console.error('Save failed:', error);
+            setPopup({ 
+                message: error instanceof Error ? error.message : 'Failed to save VSUM', 
+                type: 'error' 
+            });
+        }
+    };
+
+    // ---- download artifact -------------------------------------
+    const onDownloadArtifact = async () => {
+        const active = openTabs.find(t => t.instanceId === activeInstanceId);
+        if (!active) return;
+        
+        // Check for unsaved changes
+        const isDirty = computeDirty(detailsById[active.id], workspaceSnapshot, active.id);
+        if (isDirty) {
+            setUnsavedChangesAction('download');
+            return;
+        }
+        
+        await performDownload();
+    };
+
+    const performDownload = async () => {
+        const active = openTabs.find(t => t.instanceId === activeInstanceId);
+        if (!active) return;
+        
+        setDownloadingArtifact(true);
+        setError('');
+        try {
+            const blob = await apiService.downloadVsumArtifact(active.id);
+            
+            // Create a download link and trigger it
+            const url = globalThis.URL.createObjectURL(blob);
+            const link = globalThis.document.createElement('a');
+            link.href = url;
+            link.download = `vsum-${active.id}-artifact.zip`;
+            globalThis.document.body.appendChild(link);
+            link.click();
+            link.remove();
+            globalThis.URL.revokeObjectURL(url);
+            
+            setPopup({ message: 'Artifact downloaded successfully!', type: 'success' });
+            setTimeout(() => setPopup(null), 3000);
+        } catch (err: any) {
+            const parsed = extractBackendError(
+                err,
+                'Failed to download artifact',
+                'Artifact download failed.'
+            );
+            setError(parsed.summary);
+            setPopup({ message: parsed.detail, type: 'error' });
+            setTimeout(() => setPopup(null), 5000);
+        } finally {
+            setDownloadingArtifact(false);
+        }
     };
 
     // ---- check build ------------------------------------------
 
     const onCheckBuild = async () => {
+        const active = openTabs.find(t => t.instanceId === activeInstanceId);
+        const id = active?.id;
+        if (!id) return;
+
+        // Check for unsaved changes
+        const isDirty = computeDirty(detailsById[id], workspaceSnapshot, id);
+        if (isDirty) {
+            setUnsavedChangesAction('build');
+            return;
+        }
+
+        await performBuild();
+    };
+
+    const performBuild = async () => {
         const active = openTabs.find(t => t.instanceId === activeInstanceId);
         const id = active?.id;
         if (!id) return;
@@ -268,24 +506,13 @@ export const VsumTabs: React.FC<VsumTabsProps> = ({
                 'This VSUM can be built successfully.';
             setPopup({ message: msg, type: 'success' });
         } catch (e: any) {
-            let fullMessage = 'Build failed.';
-            if (e?.response?.data) {
-                try {
-                    fullMessage =
-                        typeof e.response.data === 'string'
-                            ? e.response.data
-                            : JSON.stringify(e.response.data, null, 2);
-                } catch {
-                    fullMessage = e.response.data?.toString?.() || fullMessage;
-                }
-            } else if (e?.message) {
-                fullMessage = e.message;
-            } else {
-                fullMessage = String(e);
-            }
-
-            setError(fullMessage);
-            setPopup({ message: fullMessage, type: 'error' });
+            const parsed = extractBackendError(
+                e,
+                'Build failed.',
+                'Build check failed.'
+            );
+            setError(parsed.summary);
+            setPopup({ message: parsed.detail, type: 'error' });
         } finally {
             setCheckingBuild(false);
         }
@@ -297,7 +524,7 @@ export const VsumTabs: React.FC<VsumTabsProps> = ({
 
     const active = openTabs.find(t => t.instanceId === activeInstanceId);
     const anyDirty = active
-        ? computeDirty(detailsById[active.id], workspaceSnapshot)
+        ? computeDirty(detailsById[active.id], workspaceSnapshot, active.id)
         : false;
 
     // ---- render ----------------------------------------------------
@@ -328,7 +555,7 @@ export const VsumTabs: React.FC<VsumTabsProps> = ({
                         {openTabs.map(tab => {
                             const isActive = tab.instanceId === activeInstanceId;
                             const name = detailsById[tab.id]?.name || `VSUM #${tab.id}`;
-                            const isTabDirty = computeDirty(detailsById[tab.id], workspaceSnapshot);
+                            const isTabDirty = computeDirty(detailsById[tab.id], workspaceSnapshot, tab.id);
 
                             return (
                                 <div
@@ -383,7 +610,13 @@ export const VsumTabs: React.FC<VsumTabsProps> = ({
                                     <button
                                         onClick={e => {
                                             e.stopPropagation();
-                                            onClose(tab.instanceId);
+                                            // Check if this tab has unsaved changes
+                                            const tabHasUnsavedChanges = computeDirty(detailsById[tab.id], workspaceSnapshot, tab.id);
+                                            if (tabHasUnsavedChanges && isActive) {
+                                                setCloseConfirmInstanceId(tab.instanceId);
+                                            } else {
+                                                onClose(tab.instanceId);
+                                            }
                                         }}
                                         style={{
                                             border: '1px solid transparent',
@@ -428,6 +661,7 @@ export const VsumTabs: React.FC<VsumTabsProps> = ({
                             {error && (
                                 <div
                                     role="alert"
+                                    title={error}
                                     style={{
                                         padding: '4px 8px',
                                         border: '1px solid #fecaca',
@@ -435,10 +669,10 @@ export const VsumTabs: React.FC<VsumTabsProps> = ({
                                         background: '#fef2f2',
                                         borderRadius: 6,
                                         fontSize: 11,
-                                        maxWidth: 260,
-                                        whiteSpace: 'nowrap',
-                                        overflow: 'hidden',
-                                        textOverflow: 'ellipsis',
+                                        maxWidth: 520,
+                                        whiteSpace: 'normal',
+                                        overflowWrap: 'anywhere',
+                                        lineHeight: 1.35,
                                     }}
                                 >
                                     {error}
@@ -462,19 +696,60 @@ export const VsumTabs: React.FC<VsumTabsProps> = ({
                                 {checkingBuild ? 'Checking…' : 'Check build'}
                             </button>
 
+                            <button
+                                onClick={onDownloadArtifact}
+                                disabled={downloadingArtifact || saving}
+                                style={{
+                                    padding: '6px 10px',
+                                    borderRadius: 8,
+                                    border: '1px solid #037368',
+                                    background: downloadingArtifact ? '#a5d6d3' : '#049484',
+                                    color: '#ffffff',
+                                    fontWeight: 700,
+                                    cursor: downloadingArtifact || saving ? 'not-allowed' : 'pointer',
+                                    fontSize: 12,
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: 4,
+                                }}
+                                onMouseEnter={(e) => {
+                                    if (!downloadingArtifact && !saving) {
+                                        e.currentTarget.style.background = '#037368';
+                                    }
+                                }}
+                                onMouseLeave={(e) => {
+                                    if (!downloadingArtifact && !saving) {
+                                        e.currentTarget.style.background = '#049484';
+                                    }
+                                }}
+                            >
+                                <span>{downloadingArtifact ? '⏳' : ''}</span>
+                                <span>{downloadingArtifact ? 'Downloading…' : 'Download ZIP'}</span>
+                            </button>
+
                             {anyDirty && (
                                 <button
                                     onClick={onSave}
                                     disabled={saving}
                                     style={{
                                         padding: '6px 10px',
-                                        border: '1px solid #3b82f6',
+                                        border: '1px solid #037368',
                                         borderRadius: 8,
-                                        background: saving ? '#bfdbfe' : '#3b82f6',
+                                        background: saving ? '#a5d6d3' : '#049484',
                                         color: '#ffffff',
                                         fontWeight: 700,
                                         cursor: saving ? 'not-allowed' : 'pointer',
                                         fontSize: 12,
+                                    }}
+                                    onMouseEnter={(e) => {
+                                        if (!saving) {
+                                            e.currentTarget.style.background = '#037368';
+                                        }
+                                    }}
+                                    onMouseLeave={(e) => {
+                                        if (!saving) {
+                                            e.currentTarget.style.background = '#049484';
+                                        }
                                     }}
                                 >
                                     {saving ? 'Saving…' : 'Save changes'}
@@ -491,9 +766,9 @@ export const VsumTabs: React.FC<VsumTabsProps> = ({
                         position: 'absolute',
                         right: 16,
                         top: 56,
-                        background: '#3498db',
+                        background: '#049484',
                         color: '#ffffff',
-                        border: '1px solid #2980b9',
+                        border: '1px solid #037368',
                         borderRadius: 6,
                         padding: '8px 12px',
                         fontWeight: 700,
@@ -501,6 +776,12 @@ export const VsumTabs: React.FC<VsumTabsProps> = ({
                         zIndex: 21,
                     }}
                     onClick={onAddMetaModels}
+                    onMouseEnter={(e) => {
+                        e.currentTarget.style.background = '#037368';
+                    }}
+                    onMouseLeave={(e) => {
+                        e.currentTarget.style.background = '#049484';
+                    }}
                 >
                     + ADD META MODELS
                 </button>
@@ -564,6 +845,57 @@ export const VsumTabs: React.FC<VsumTabsProps> = ({
                     </button>
                 </div>
             )}
+
+            <ConfirmDialog
+                isOpen={closeConfirmInstanceId !== null}
+                title="Unsaved Changes"
+                message="You have unsaved changes in this project. Are you sure you want to close it? Your changes will be lost."
+                confirmText="Close Anyway"
+                cancelText="Keep Open"
+                variant="danger"
+                onConfirm={() => {
+                    if (closeConfirmInstanceId) {
+                        onClose(closeConfirmInstanceId);
+                        setCloseConfirmInstanceId(null);
+                    }
+                }}
+                onCancel={() => setCloseConfirmInstanceId(null)}
+            />
+
+            <ConfirmDialog
+                isOpen={unsavedChangesAction !== null}
+                title="Unsaved Changes Detected"
+                message={
+                    <>
+                        <p style={{ margin: '0 0 12px 0', lineHeight: '1.6' }}>
+                            {unsavedChangesAction === 'build' 
+                                ? 'Your project has unsaved changes. The build check will not include these changes.'
+                                : 'Your project has unsaved changes. The downloaded artifact will not include these changes.'}
+                        </p>
+                        <p style={{ margin: '0', fontWeight: 600, fontSize: '14px' }}>
+                            Do you want to continue anyway?
+                        </p>
+                    </>
+                }
+                confirmText="Continue Anyway"
+                cancelText="Close"
+                variant="danger"
+                onConfirm={async () => {
+                    const action = unsavedChangesAction;
+                    setUnsavedChangesAction(null);
+                    
+                    // Continue without saving
+                    if (action === 'build') {
+                        await performBuild();
+                    } else if (action === 'download') {
+                        await performDownload();
+                    }
+                }}
+                onCancel={() => {
+                    // Just close the dialog
+                    setUnsavedChangesAction(null);
+                }}
+            />
         </>
     );
 };

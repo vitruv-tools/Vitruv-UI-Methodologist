@@ -90,13 +90,22 @@ const createTextStyle = (
 // Modal Styles
 const modalOverlayStyle: React.CSSProperties = {
   position: 'fixed',
-  inset: 0,
-  background: 'rgba(0, 0, 0, 0.5)',
+  top: 0,
+  left: 0,
+  right: 0,
+  bottom: 0,
+  width: '100%',
+  height: '100%',
+  background: 'rgba(0, 0, 0, 0.4)',
   display: 'flex',
   alignItems: 'center',
   justifyContent: 'center',
   zIndex: 1000,
-  backdropFilter: 'blur(4px)',
+  backdropFilter: 'blur(6px)',
+  WebkitBackdropFilter: 'blur(6px)',
+  margin: 0,
+  padding: 0,
+  border: 'none',
 };
 
 const modalHeaderStyle: React.CSSProperties = {
@@ -505,9 +514,33 @@ export const EcoreFileBox: React.FC<NodeProps<EcoreFileBoxData>> = ({
 
       <ConfirmDialog
         isOpen={showDeleteConfirm}
-        title="Delete ECORE File from Workspace"
-        message={`Do you want to delete "${fileName}" from workspace?`}
-        confirmText="Delete"
+        title="Delete Meta Model from Workspace"
+        message={
+          <>
+            <div style={{ marginBottom: '16px' }}>
+              Are you sure you want to delete <strong style={{ color: '#dc2626' }}>"{fileName}"</strong> from your workspace?
+            </div>
+            <div style={{
+              padding: '16px',
+              background: '#fff8ed',
+              borderLeft: '4px solid #f59e0b',
+              borderRadius: 6,
+              fontSize: 13,
+              color: '#92400e',
+              lineHeight: 1.7
+            }}>
+              <strong style={{ display: 'block', marginBottom: 8, color: '#b45309' }}>⚠️ Warning:</strong>
+              <ul style={{ margin: 0, paddingLeft: 20 }}>
+                <li style={{ marginBottom: 6 }}>All reactions related to this meta model will be permanently deleted</li>
+                <li>Any edits and changes made to this meta model will be lost</li>
+              </ul>
+              <p style={{ margin: '12px 0 0 0', fontStyle: 'italic', fontSize: 12 }}>
+                This action cannot be undone.
+              </p>
+            </div>
+          </>
+        }
+        confirmText="Delete Permanently"
         cancelText="Cancel"
         onConfirm={confirmDelete}
         onCancel={() => setShowDeleteConfirm(false)}

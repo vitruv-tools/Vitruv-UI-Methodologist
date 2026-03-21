@@ -60,7 +60,7 @@ const modalHeaderStyle: React.CSSProperties = {
   alignItems: 'center',
   marginBottom: '20px',
   paddingBottom: '16px',
-  borderBottom: '2px solid #3498db',
+  borderBottom: '2px solid #049484',
 };
 
 const modalTitleStyle: React.CSSProperties = {
@@ -94,7 +94,7 @@ const closeButtonHoverStyle: React.CSSProperties = {
 };
 
 const inputFocusStyle: React.CSSProperties = {
-  borderColor: '#3498db',
+  borderColor: '#049484',
   outline: 'none',
   boxShadow: '0 0 0 3px rgba(52, 152, 219, 0.1)',
   background: '#ffffff',
@@ -105,7 +105,7 @@ const uploadSectionStyle: React.CSSProperties = {
   padding: '18px',
   background: '#f8f9fa',
   borderRadius: '6px',
-  border: '2px dashed #3498db',
+  border: '2px dashed #049484',
 };
 
 const uploadSectionTitleStyle: React.CSSProperties = {
@@ -126,7 +126,7 @@ const uploadButtonsContainerStyle: React.CSSProperties = {
 const uploadButtonStyle: React.CSSProperties = {
   flex: '1',
   padding: '12px 14px',
-  border: '2px solid #3498db',
+  border: '2px solid #049484',
   borderRadius: '6px',
   background: '#ffffff',
   color: '#2c3e50',
@@ -175,7 +175,7 @@ const primaryButtonStyle: React.CSSProperties = {
   padding: '14px 18px',
   border: 'none',
   borderRadius: '6px',
-  background: 'linear-gradient(135deg, #3498db 0%, #2980b9 100%)',
+  background: 'linear-gradient(135deg, #049484 0%, #2980b9 100%)',
   color: '#ffffff',
   fontSize: '14px',
   fontWeight: 600,
@@ -195,7 +195,7 @@ const primaryButtonDisabledStyle: React.CSSProperties = {
 const secondaryButtonStyle: React.CSSProperties = {
   flex: '1',
   padding: '14px 18px',
-  border: '2px solid #3498db',
+  border: '2px solid #049484',
   borderRadius: '6px',
   background: '#ffffff',
   color: '#2c3e50',
@@ -213,12 +213,22 @@ const buttonHoverStyle: React.CSSProperties = {
 
 const overlayStyle: React.CSSProperties = {
   position: 'fixed',
-  inset: 0,
-  background: 'rgba(0,0,0,0.55)',
-  zIndex: 11000, // above modal
+  top: 0,
+  left: 0,
+  right: 0,
+  bottom: 0,
+  width: '100%',
+  height: '100%',
+  background: 'transparent',
+  backdropFilter: 'blur(6px)',
+  WebkitBackdropFilter: 'blur(6px)',
+  zIndex: 11000,
   display: 'flex',
   alignItems: 'center',
   justifyContent: 'center',
+  margin: 0,
+  padding: 0,
+  border: 'none',
 };
 
 const overlayCardStyle: React.CSSProperties = {
@@ -316,6 +326,17 @@ export const CreateModelModal: React.FC<CreateModelModalProps> = ({
     setError('');
 
     try {
+      // Delete the previously uploaded file if it exists
+      if (uploadedFileIds.ecoreFileId > 0) {
+        try {
+          await apiService.deleteFile(uploadedFileIds.ecoreFileId);
+          console.log('Deleted previous .ecore file:', uploadedFileIds.ecoreFileId);
+        } catch (error_) {
+          console.warn('Failed to delete previous .ecore file:', error_);
+          // Continue with upload even if deletion fails
+        }
+      }
+
       if (ecoreProgressIntervalRef.current) clearInterval(ecoreProgressIntervalRef.current);
       ecoreProgressIntervalRef.current = globalThis.setInterval(() => {
         setUploadProgress(prev => ({
@@ -352,6 +373,8 @@ export const CreateModelModal: React.FC<CreateModelModalProps> = ({
     } catch (err) {
       setError(`${err instanceof Error ? err.message : 'Unknown error'}`);
       setUploadProgress(prev => ({ ...prev, ecore: { progress: 0, isUploading: false } }));
+      // Clear the uploaded file ID since the upload failed
+      setUploadedFileIds(prev => ({ ...prev, ecoreFileId: 0 }));
       if (ecoreProgressIntervalRef.current) {
         clearInterval(ecoreProgressIntervalRef.current);
         ecoreProgressIntervalRef.current = null;
@@ -374,6 +397,17 @@ export const CreateModelModal: React.FC<CreateModelModalProps> = ({
     setError('');
 
     try {
+      // Delete the previously uploaded file if it exists
+      if (uploadedFileIds.genModelFileId > 0) {
+        try {
+          await apiService.deleteFile(uploadedFileIds.genModelFileId);
+          console.log('Deleted previous .genmodel file:', uploadedFileIds.genModelFileId);
+        } catch (error_) {
+          console.warn('Failed to delete previous .genmodel file:', error_);
+          // Continue with upload even if deletion fails
+        }
+      }
+
       if (genmodelProgressIntervalRef.current) clearInterval(genmodelProgressIntervalRef.current);
       genmodelProgressIntervalRef.current = globalThis.setInterval(() => {
         setUploadProgress(prev => ({
@@ -410,6 +444,8 @@ export const CreateModelModal: React.FC<CreateModelModalProps> = ({
     } catch (err) {
       setError(`Error uploading ${sanitizeFileName(file.name)}: ${err instanceof Error ? err.message : 'Unknown error'}`);
       setUploadProgress(prev => ({ ...prev, genmodel: { progress: 0, isUploading: false } }));
+      // Clear the uploaded file ID since the upload failed
+      setUploadedFileIds(prev => ({ ...prev, genModelFileId: 0 }));
       if (genmodelProgressIntervalRef.current) {
         clearInterval(genmodelProgressIntervalRef.current);
         genmodelProgressIntervalRef.current = null;
@@ -477,10 +513,17 @@ export const CreateModelModal: React.FC<CreateModelModalProps> = ({
     const deletePromises = filesToDelete.map(fileId => 
       apiService.deleteFile(fileId).catch(err => {
         console.error(`Failed to delete file ${fileId}:`, err);
+        // Return null to indicate failure, but don't throw
+        return null;
       })
     );
 
-    await Promise.all(deletePromises);
+    try {
+      await Promise.all(deletePromises);
+    } catch (error) {
+      console.error('Error during file cleanup:', error);
+      // Continue even if cleanup fails
+    }
   };
 
   const handleCreateModel = async () => {
@@ -670,7 +713,12 @@ export const CreateModelModal: React.FC<CreateModelModalProps> = ({
       <>
         {/* Full-screen Submit Overlay */}
         {submitProgress.isSubmitting && (
-            <dialog open style={overlayStyle} aria-label="Building meta model">
+            <dialog open style={{
+              ...overlayStyle,
+              background: 'transparent',
+              backdropFilter: 'blur(6px)',
+              WebkitBackdropFilter: 'blur(6px)',
+            }} aria-label="Building meta model">
               <div style={overlayCardStyle} role="presentation" onMouseDown={(e) => e.stopPropagation()}>
                 <div style={overlayTitleStyle}>Building Meta Model…</div>
                 <div style={overlayTextStyle}>Please wait while we process your files.</div>
@@ -685,10 +733,38 @@ export const CreateModelModal: React.FC<CreateModelModalProps> = ({
         )}
 
         {/* Modal */}
-        <dialog open style={modalOverlayStyle} onClose={handleClose} onCancel={handleClose} onClick={(e) => { if (e.target === e.currentTarget) handleClose(); }}>
+        <dialog 
+          open 
+          aria-modal="true"
+          aria-labelledby="modal-title"
+          tabIndex={-1}
+          style={{
+            ...modalOverlayStyle,
+            background: 'transparent',
+            backdropFilter: 'blur(6px)',
+            WebkitBackdropFilter: 'blur(6px)',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            width: '100%',
+            height: '100%',
+            margin: 0,
+            padding: 0,
+            border: 'none',
+          }} 
+          onClose={handleClose} 
+          onCancel={handleClose}
+          onClick={(e) => { if (e.target === e.currentTarget) handleClose(); }}
+          onKeyDown={(e) => { 
+            if (e.key === 'Escape') {
+              handleClose();
+            }
+          }}
+        >
           <div style={modalStyle}>
             <div style={modalHeaderStyle}>
-              <h2 style={modalTitleStyle}>Import Meta Model</h2>
+              <h2 id="modal-title" style={modalTitleStyle}>Import Meta Model</h2>
               <button
                   style={closeButtonStyle}
                   onClick={handleClose}

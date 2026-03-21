@@ -4,9 +4,11 @@ import ReactDOM from 'react-dom';
 interface ConfirmDialogProps {
   isOpen: boolean;
   title?: string;
-  message?: string;
+  message?: string | React.ReactNode;
   confirmText?: string;
   cancelText?: string;
+  singleAction?: boolean;
+  variant?: 'danger' | 'success';
   onConfirm: () => void;
   onCancel: () => void;
 }
@@ -17,10 +19,33 @@ export const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
   message = 'Are you sure you want to proceed?',
   confirmText = 'Confirm',
   cancelText = 'Cancel',
+  singleAction = false,
+  variant = 'danger',
   onConfirm,
   onCancel,
 }) => {
   if (!isOpen) return null;
+
+  const colors = {
+    danger: {
+      titleColor: '#dc2626',
+      icon: '⚠️',
+      buttonBg: '#dc2626',
+      buttonHoverBg: '#b91c1c',
+      buttonShadow: 'rgba(220, 38, 38, 0.3)',
+      buttonHoverShadow: 'rgba(220, 38, 38, 0.4)',
+    },
+    success: {
+      titleColor: '#059669',
+      icon: '✓',
+      buttonBg: '#10b981',
+      buttonHoverBg: '#059669',
+      buttonShadow: 'rgba(16, 185, 129, 0.3)',
+      buttonHoverShadow: 'rgba(16, 185, 129, 0.4)',
+    },
+  };
+
+  const theme = colors[variant];
 
   const dialog = (
     <div style={{
@@ -29,7 +54,9 @@ export const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
       left: 0,
       width: '100vw',
       height: '100vh',
-      background: 'rgba(0,0,0,0.35)',
+      background: 'rgba(0,0,0,0.45)',
+      backdropFilter: 'blur(8px)',
+      WebkitBackdropFilter: 'blur(8px)',
       display: 'flex',
       alignItems: 'center',
       justifyContent: 'center',
@@ -39,59 +66,82 @@ export const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
         background: '#fff',
         borderRadius: '10px',
         boxShadow: '0 10px 30px rgba(0,0,0,0.2)',
-        width: '360px',
+        width: '480px',
         maxWidth: '90vw',
-        padding: '20px',
+        padding: '24px',
         boxSizing: 'border-box',
+        fontFamily: 'Georgia, serif',
       }}>
         <div style={{
-          fontSize: '16px',
+          fontSize: '18px',
           fontWeight: 700,
-          marginBottom: '10px',
-          color: '#222',
-        }}>{title}</div>
+          marginBottom: '16px',
+          color: theme.titleColor,
+          display: 'flex',
+          alignItems: 'center',
+          gap: '10px',
+        }}>
+          <span style={{ fontSize: '22px' }}>{theme.icon}</span>
+          {title}
+        </div>
         <div style={{
           fontSize: '14px',
-          color: '#444',
-          marginBottom: '18px',
+          color: '#374151',
+          marginBottom: '20px',
+          lineHeight: '1.6',
         }}>{message}</div>
-        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
-          <button
-            onClick={onCancel}
-            style={{
-              background: '#f1f3f5',
-              border: '1px solid #dee2e6',
-              color: '#343a40',
-              padding: '8px 12px',
-              borderRadius: '6px',
-              cursor: 'pointer',
-              fontSize: '13px',
-            }}
-            onMouseEnter={(e) => {
-              e.currentTarget.style.background = '#e9ecef';
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.background = '#f1f3f5';
-            }}
-          >
-            {cancelText}
-          </button>
+        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px' }}>
+          {!singleAction && (
+            <button
+              onClick={onCancel}
+              style={{
+                background: '#fff',
+                border: '2px solid #dee2e6',
+                color: '#495057',
+                padding: '10px 20px',
+                borderRadius: '6px',
+                cursor: 'pointer',
+                fontSize: '14px',
+                fontWeight: 600,
+                fontFamily: 'Georgia, serif',
+                transition: 'all 0.2s ease',
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.background = '#f8f9fa';
+                e.currentTarget.style.borderColor = '#adb5bd';
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.background = '#fff';
+                e.currentTarget.style.borderColor = '#dee2e6';
+              }}
+            >
+              {cancelText}
+            </button>
+          )}
           <button
             onClick={onConfirm}
             style={{
-              background: '#e03131',
-              border: '1px solid #c92a2a',
+              background: theme.buttonBg,
+              border: 'none',
               color: '#fff',
-              padding: '8px 12px',
+              padding: '10px 20px',
               borderRadius: '6px',
               cursor: 'pointer',
-              fontSize: '13px',
+              fontSize: '14px',
+              fontWeight: 600,
+              fontFamily: 'Georgia, serif',
+              transition: 'all 0.2s ease',
+              boxShadow: `0 4px 12px ${theme.buttonShadow}`,
             }}
             onMouseEnter={(e) => {
-              e.currentTarget.style.background = '#c92a2a';
+              e.currentTarget.style.background = theme.buttonHoverBg;
+              e.currentTarget.style.transform = 'translateY(-1px)';
+              e.currentTarget.style.boxShadow = `0 6px 16px ${theme.buttonHoverShadow}`;
             }}
             onMouseLeave={(e) => {
-              e.currentTarget.style.background = '#e03131';
+              e.currentTarget.style.background = theme.buttonBg;
+              e.currentTarget.style.transform = 'translateY(0)';
+              e.currentTarget.style.boxShadow = `0 4px 12px ${theme.buttonShadow}`;
             }}
           >
             {confirmText}

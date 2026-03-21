@@ -9,6 +9,8 @@ export const modalOverlayStyle: React.CSSProperties = {
   right: 0,
   bottom: 0,
   background: 'rgba(0, 0, 0, 0.5)',
+  backdropFilter: 'blur(4px)',
+  WebkitBackdropFilter: 'blur(4px)',
   display: 'flex',
   alignItems: 'center',
   justifyContent: 'center',
@@ -30,7 +32,7 @@ export const inputStyle: React.CSSProperties = {
   width: '100%',
   padding: '12px 14px',
   border: '2px solid #d1ecf1',
-  borderRadius: '6px',
+  borderRadius: '8px',
   fontSize: '14px',
   boxSizing: 'border-box',
   transition: 'all 0.3s ease',
@@ -39,10 +41,10 @@ export const inputStyle: React.CSSProperties = {
 };
 
 export const errorMessageStyle: React.CSSProperties = {
-  padding: '8px 12px',
+  padding: '10px 14px',
   margin: '8px 0',
-  borderRadius: '6px',
-  fontSize: '12px',
+  borderRadius: '8px',
+  fontSize: '13px',
   fontWeight: '500',
   backgroundColor: '#f8d7da',
   color: '#721c24',
@@ -50,10 +52,10 @@ export const errorMessageStyle: React.CSSProperties = {
 };
 
 export const successMessageStyle: React.CSSProperties = {
-  padding: '8px 12px',
+  padding: '10px 14px',
   margin: '8px 0',
-  borderRadius: '6px',
-  fontSize: '12px',
+  borderRadius: '8px',
+  fontSize: '13px',
   fontWeight: '500',
   backgroundColor: '#d4edda',
   color: '#155724',
@@ -64,16 +66,16 @@ export const fileInputStyle: React.CSSProperties = { display: 'none' };
 
 export const progressBarContainerStyle: React.CSSProperties = {
   width: '100%',
-  height: '6px',
+  height: '8px',
   backgroundColor: '#e0e0e0',
-  borderRadius: '3px',
+  borderRadius: '4px',
   overflow: 'hidden',
 };
 
 export const progressBarStyle: React.CSSProperties = {
   height: '100%',
-  backgroundColor: '#3498db',
-  borderRadius: '3px',
+  backgroundColor: '#049484',
+  borderRadius: '4px',
   transition: 'width 0.3s ease',
   width: '0%',
 };

@@ -22,3 +22,4 @@ export { ToastProvider, useToast } from './ui/ToastProvider';
 export { SignIn } from './auth/SignIn';
 export { SignUp } from './auth/SignUp';
 export { AuthPage } from './auth/AuthPage';
+export { KeycloakRedirect } from './auth/KeycloakRedirect';

@@ -16,7 +16,10 @@ export function useTokenRefresh() {
 
       // If token expires in less than 5 minutes, refresh immediately
       if (timeUntilExpiry < 5 * 60 * 1000) {
-        AuthService.refreshToken().catch(console.error);
+        AuthService.refreshToken().catch((error) => {
+          console.error('Initial token refresh failed:', error);
+          // Don't throw - this is a background operation
+        });
       }
 
       // Set up interval to check token every minute
@@ -70,7 +73,12 @@ export function useTokenRefresh() {
 
   // Function to get a valid token (refreshes if needed)
   const getValidToken = async () => {
-    return await AuthService.ensureValidToken();
+    try {
+      return await AuthService.ensureValidToken();
+    } catch (error) {
+      console.error('Failed to get valid token:', error);
+      throw error;
+    }
   };
 
   return {

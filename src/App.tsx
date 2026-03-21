@@ -1,8 +1,10 @@
 import React from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
-import { AuthPage } from './components/auth/AuthPage';
+import { AuthPage, KeycloakRedirect } from './components/auth';
 import { HomePage } from './pages/HomePage';
 import { ProjectPage } from './pages/ProjectPage';
+import { EditorTest } from './pages/EditorTest';  // <- NEU
+import { OtpVerificationPage } from './pages/OtpVerificationPage';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { apiService } from './services/api';
 import { exportFlowData } from './utils';
@@ -11,7 +13,7 @@ import './App.css';
 import { SidebarTabs, MainLayout } from './components';
 
 function ProtectedRoute({ children }: Readonly<{ children: React.ReactNode }>) {
-  const { isAuthenticated, isLoading } = useAuth();
+  const { isAuthenticated, isLoading, user } = useAuth();
 
   if (isLoading) {
     return (
@@ -29,13 +31,16 @@ function ProtectedRoute({ children }: Readonly<{ children: React.ReactNode }>) {
   }
 
   if (!isAuthenticated) {
-    return <Navigate to="/auth" replace />;
+    return <Navigate to="/login" replace />;
+  }
+
+  // Only users with explicit verified status can access protected pages
+  if (user?.emailVerified !== true) {
+    return <Navigate to="/verify-otp" replace state={{ autoResend: true }} />;
   }
 
   return <>{children}</>;
 }
-
-// Render MainLayout immediately without lazy loading for consistent UX across routes
 
 function AppContent() {
   const { user, signOut } = useAuth();
@@ -44,7 +49,7 @@ function AppContent() {
     try {
       const flowData = exportFlowData(nodes, edges);
       const result = await apiService.deployFlow(flowData);
-      
+
       if (result.success) {
         alert('Flow deployed successfully!');
       } else {
@@ -69,7 +74,11 @@ function AppContent() {
   };
 
   const handleLogout = async () => {
-    await signOut();
+    try {
+      await signOut();
+    } catch (error) {
+      console.error('Logout error:', error);
+    }
   };
 
   return (
@@ -91,22 +100,26 @@ function App() {
     <Router>
       <AuthProvider>
         <Routes>
-          <Route path="/auth" element={<AuthPage />} />
+          <Route path="/login" element={<AuthPage />} />
+          <Route path="/auth" element={<KeycloakRedirect />} />
+          <Route path="/verify-otp" element={<OtpVerificationPage />} />
           <Route path="/" element={
-             <ProtectedRoute>
+            <ProtectedRoute>
               <HomePage />
             </ProtectedRoute>
           } />
           <Route path="/mml" element={
             <ProtectedRoute>
               <AppContent />
-             </ProtectedRoute>
+            </ProtectedRoute>
           } />
           <Route path="/project" element={
             <ProtectedRoute>
               <ProjectPage />
             </ProtectedRoute>
           } />
+          {/*Editor Test Route*/}
+          <Route path="/editor-test" element={<EditorTest />} />
         </Routes>
       </AuthProvider>
     </Router>

@@ -49,10 +49,10 @@ export function useFlowState(props?: UseFlowStateProps) {
   const [edges, setEdges, onEdgesChange] = useEdgesState([]);
   const [idCounter, setIdCounter] = useState(1);
   const [isApplyingState, setIsApplyingState] = useState(false);
-  const [lastSavedState, setLastSavedState] = useState<{ nodes: Node[]; edges: Edge[]; idCounter: number }>({ 
-    nodes: [], 
-    edges: [], 
-    idCounter: 1 
+  const [lastSavedState, setLastSavedState] = useState<{ nodes: Node[]; edges: Edge[]; idCounter: number }>({
+    nodes: [],
+    edges: [],
+    idCounter: 1
   });
   const [isDraggingNode, setIsDraggingNode] = useState(false);
 
@@ -105,17 +105,17 @@ export function useFlowState(props?: UseFlowStateProps) {
       idCounter,
       vsumDetails
     };
-    
-    const hasChanged = 
+
+    const hasChanged =
       lastSavedState.nodes.length !== nodes.length ||
       lastSavedState.edges.length !== edges.length ||
       lastSavedState.idCounter !== idCounter ||
       JSON.stringify(lastSavedState.nodes) !== JSON.stringify(nodes) ||
       JSON.stringify(lastSavedState.edges) !== JSON.stringify(edges);
-    
+
     if (hasChanged && (nodes.length > 0 || edges.length > 0 || idCounter > 1)) {
       let actionDescription = 'Diagram change';
-      
+
       if (lastSavedState.nodes.length !== nodes.length) {
         if (nodes.length > lastSavedState.nodes.length) {
           actionDescription = 'Node added';
@@ -131,14 +131,14 @@ export function useFlowState(props?: UseFlowStateProps) {
       } else if (nodes.length > 0) {
         actionDescription = 'Node modified';
       }
-      
+
       console.log(`Saving state: ${actionDescription}`, {
         nodesBefore: lastSavedState.nodes.length,
         nodesAfter: nodes.length,
         edgesBefore: lastSavedState.edges.length,
         edgesAfter: edges.length
       });
-      
+
       saveState(currentDiagramState, actionDescription);
       setLastSavedState(currentDiagramState);
     }

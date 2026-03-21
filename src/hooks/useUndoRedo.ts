@@ -16,6 +16,33 @@ interface HistoryEntry {
   description: string;
 }
 
+// Deep clone that strips out non-serializable values (functions, Maps, Sets, etc.)
+// This is necessary because node.data may contain callback functions which structuredClone cannot handle
+function cloneStateForHistory(state: DiagramState): DiagramState {
+  const stripNonSerializable = (obj: any): any => {
+    if (obj === null || obj === undefined) return obj;
+    if (typeof obj === 'function') return undefined;
+    if (obj instanceof Map || obj instanceof Set) return undefined;
+    if (Array.isArray(obj)) {
+      return obj.map(stripNonSerializable);
+    }
+    if (typeof obj === 'object') {
+      const result: any = {};
+      for (const key of Object.keys(obj)) {
+        const value = stripNonSerializable(obj[key]);
+        if (value !== undefined) {
+          result[key] = value;
+        }
+      }
+      return result;
+    }
+    return obj;
+  };
+
+  const cleanState = stripNonSerializable(state);
+  return structuredClone(cleanState);
+}
+
 export function useUndoRedo(initialState: DiagramState) {
   const [currentState, setCurrentState] = useState<DiagramState>(initialState);
   const history = useRef<HistoryEntry[]>([]);
@@ -62,7 +89,7 @@ export function useUndoRedo(initialState: DiagramState) {
 
     currentIndex.current--;
     const previousState = history.current[currentIndex.current].state;
-    
+
     console.log(`Undo performed:`, {
       newIndex: currentIndex.current,
       historyLength: history.current.length,
@@ -70,7 +97,7 @@ export function useUndoRedo(initialState: DiagramState) {
       edgesCount: previousState.edges.length,
       description: history.current[currentIndex.current]?.description
     });
-    
+
     setCurrentState(previousState);
     return previousState;
   }, [canUndo]);
@@ -89,6 +116,7 @@ export function useUndoRedo(initialState: DiagramState) {
   const clearHistory = useCallback(() => {
     history.current = [];
     currentIndex.current = -1;
+    setCurrentState(prev => ({ ...prev }));
   }, []);
 
   const getHistoryInfo = useCallback(() => ({
