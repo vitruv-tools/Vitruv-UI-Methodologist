@@ -59,7 +59,7 @@ const extractBackendError = (
     return { summary: fallbackSummary, detail: fallback };
 };
 
-const normalizeReactionFileId = (value: unknown): number => {
+const normalizeReactionFileId = (value: unknown): number | null => {
     if (typeof value === 'number' && Number.isFinite(value) && value > 0) {
         return value;
     }
@@ -69,7 +69,7 @@ const normalizeReactionFileId = (value: unknown): number => {
             return parsed;
         }
     }
-    return 0;
+    return null;
 };
 
 const isReactionFilesNotFoundError = (message: string): boolean => {
@@ -119,7 +119,7 @@ export const VsumTabs: React.FC<VsumTabsProps> = ({
         const rels = [...(snapshot?.metaModelRelationRequests ?? [])]
             .map(r => {
                 const normalizedId = normalizeReactionFileId(r.reactionFileId);
-                const safeId = missingSet.has(normalizedId) ? 0 : normalizedId;
+                const safeId = missingSet.has(normalizedId ?? 0) ? 0 : normalizedId;
                 return `${r.sourceId}->${r.targetId}#${safeId}`;
             })
             .sort((a, b) => a.localeCompare(b));
@@ -267,7 +267,7 @@ export const VsumTabs: React.FC<VsumTabsProps> = ({
                 .map(rel => {
                     rel.reactionFileId = normalizeReactionFileId(rel.reactionFileId);
                     rel.fineGranularMetaModelRelationSet.forEach(fineRel => {
-                        fineRel.reactionFileStorageId = normalizeReactionFileId(fineRel.reactionFileStorageId);
+                        fineRel.reactionFileStorageId = normalizeReactionFileId(fineRel.reactionFileStorageId) ?? undefined;
                     });
                     return rel;
                 });
