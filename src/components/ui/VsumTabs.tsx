@@ -298,7 +298,7 @@ export const VsumTabs: React.FC<VsumTabsProps> = ({
         const sanitizedRelations: MetaModelRelationRequest[] = relationCandidates.map(rel =>
             validRelationFileIds.has(rel.reactionFileId ?? -1)
                 ? rel
-                : { ...rel, reactionFileId: 0 }
+                : { ...rel, reactionFileId: null }
         );
 
         if (missingRelationFileIds.size > 0) {
