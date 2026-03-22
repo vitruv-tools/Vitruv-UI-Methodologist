@@ -187,7 +187,6 @@ export function applyBoxOffset(
 export function calculateAndUpdateBoundingBoxes(
   boxes: BoundingBox[],
 ): BoxOffset[] {
-  const originalBoxes = JSON.stringify(boxes);
   const offsets: BoxOffset[] = [];
   const maxIterations = 100;
   let iteration = 0;

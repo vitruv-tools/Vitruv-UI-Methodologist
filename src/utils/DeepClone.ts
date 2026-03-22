@@ -41,7 +41,7 @@ export function deepClone<T>(obj: T, seen = new WeakMap()): T {
   // Copy all properties (incl. non-enumerable & symbols)
   for (const key of Reflect.ownKeys(obj)) {
     const desc = Object.getOwnPropertyDescriptor(obj, key);
-    if (desc == undefined)
+    if (desc === undefined || desc === null)
       continue;
     if ("value" in desc) {
       desc.value = deepClone(desc.value, seen);

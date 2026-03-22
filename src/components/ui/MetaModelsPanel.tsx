@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { apiService } from '../../services/api';
 import { useProjectStore } from '../../store/Project';
 import { VsumMetaModelRef } from '../../types';
@@ -179,7 +179,12 @@ export const MetaModelsPanel: React.FC<MetaModelsPanelProps> = ({
   const [parsedFilters, setParsedFilters] = useState<any[]>([]);
   const [showAllModels, setShowAllModels] = useState(false);
   const { mode, activeId, expandedMetaModelNames } = useProjectStore((state) => ({ mode: state.mode, activeId: state.activeId, expandedMetaModelNames: state.expandedMetaModels }));
-  const selectedMetaModels = useStore(getVsumDetailsStore(activeId ?? -1), (state) => state?.metaModels) ?? [];
+  const metaModels = useStore(
+    getVsumDetailsStore(activeId ?? -1),
+    (state) => state?.metaModels
+  );
+
+  const selectedMetaModels = useMemo(() => metaModels ?? [], [metaModels]);
 
   const handleSearchKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key !== 'Tab') return;
@@ -293,13 +298,6 @@ export const MetaModelsPanel: React.FC<MetaModelsPanelProps> = ({
     if (sortBy === 'domain') cmp = (a.domain || '').localeCompare(b.domain || '');
     return sortOrder === 'asc' ? cmp : -cmp;
   });
-
-  const formatWhen = (iso: string) => {
-    const d = new Date(iso);
-    const ds = d.toLocaleDateString();
-    const ts = d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-    return `${ds} at ${ts}`;
-  };
 
   const alreadyAdded = (model: VsumMetaModelRef) => {
     if (mode === 'expanded' || mode === 'reactions') {

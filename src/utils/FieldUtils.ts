@@ -109,6 +109,7 @@ export function evaluateTemplateWithExpressionSupport(template: string, values: 
     ...values,
     capitalizeFirst, 
   }
+  // eslint-disable-next-line no-new-func
   return new Function(...Object.keys(executionContext), `return \`${template}\`;`)(...Object.values(executionContext));
 }
 
@@ -119,7 +120,9 @@ export function evaluateTemplateWithExpressionSupport(template: string, values: 
  * @returns {string} Template with placeholders replaced.
  */
 export function evaluateTemplate(template: string, values: Partial<LowCodeReactionFieldVariables>): string {
+  // eslint-disable-next-line no-useless-escape
   return template.replace(/\${(.*?)}/g, (_, key) => {
+      // eslint-disable-next-line no-useless-escape
       return (values as Record<string, string>)[key.trim()] ?? `\$\{${key}\}`;
   });
 }

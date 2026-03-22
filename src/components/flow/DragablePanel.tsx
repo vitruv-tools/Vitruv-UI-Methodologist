@@ -169,7 +169,7 @@ export const DragablePanel = forwardRef<DragablePanelRef, DragablePanelProps>(({
       setSaveHighlighted: setIsSaveHighlighted,
       close: onClose,
     }),
-    [],
+    [setIsSaveHighlighted, onClose],
   );
 
   return (

@@ -120,7 +120,7 @@ export class VsumDetailsHelper {
   removeMetaModel(identifier: Pick<EditableVsumMetaModelRef, "id">) {
     const removed = (this.vsumDetails!.metaModels =
       this.vsumDetails!.metaModels.filter(
-        (metaModel) => metaModel.id == identifier.id,
+        (metaModel) => metaModel.id === identifier.id,
       ));
     this.vsumDetails!.metaModels = this.vsumDetails!.metaModels.filter(
       (metaModel) => metaModel.id !== identifier.id,

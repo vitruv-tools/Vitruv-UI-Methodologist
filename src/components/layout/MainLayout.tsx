@@ -209,8 +209,94 @@ export function MainLayout({
         return { x: newX, y: newY };
     }, []); // Ref is stable, no other deps
 
-    // handleEcoreFileUpload als useCallback (stabil)
+    const handleEcoreFileExpand = useCallback((fileName: string, fileContent: string, backendMetaModelId: number, cacheWorkspaceSnapshot: boolean = true, remountCanvas: boolean = true) => {
+        if (mode !== 'expanded' && mode !== 'reactions') {
+            handleExpandedModeSwitch('expanded');
+        }
+        if (cacheWorkspaceSnapshot) {
+            // Cache the current workspace snapshot before switching to UML view
+            // This is critical for saving relations even when viewing UML
+            const currentSnapshot = flowCanvasRef.current?.getWorkspaceSnapshot?.() ?? {
+                metaModelIds: [],
+                metaModelRelationRequests: [],
+            };
+            setCachedWorkspaceSnapshot(currentSnapshot);
+            console.log('📸 Cached workspace snapshot before UML view:', currentSnapshot);
+        }
+        
+        // Mark that we're viewing an expanded metamodel
+        const currentlyExpanded = new Set<number>();
+        if (remountCanvas) {
+            // Force FlowCanvas to remount with a new key for UML view
+            // This ensures a completely fresh canvas without any metamodel boxes
+            setCanvasKey(`uml-${fileName}-${Date.now()}`);
+            
+            // IMPORTANT: Completely clear the entire canvas including all metamodel boxes
+            // This ensures we start fresh with only the UML diagram
+            if (flowCanvasRef.current?.loadDiagramData) {
+                flowCanvasRef.current.loadDiagramData([], [], new Map());
+            }
+            if (flowCanvasRef.current?.resetExpandedFile) {
+                flowCanvasRef.current.resetExpandedFile();
+            }
+        } else {
+            if (expandedMetaModels) Array.from(expandedMetaModels.values()).forEach(v => currentlyExpanded.add(v));
+        }
+        currentlyExpanded.add(backendMetaModelId);
+        setExpandedMetaModels(currentlyExpanded);
 
+        // Prefer UML generator; fall back to previous parsers
+        let diagramData = generateUMLFromEcoreTsParser(fileName, fileContent, backendMetaModelId);
+
+        const activeVsumDetails = new ActiveVsumDetails();
+        activeVsumDetails.setIdentifiersToEObjectMap(diagramData.identifiersToEObject, remountCanvas);
+        activeVsumDetails.addIdentifierToBackendMetaModelIdMap(diagramData.eObjectIdentifierOfMetaModel, backendMetaModelId);
+        activeVsumDetails.saveToStore();
+        
+        // Create existing fine granular reaction edges for this metamodel
+        activeVsumDetails.getMetaModelRelations(Array.from(currentlyExpanded.values()).map(id => ({ id })), { id: backendMetaModelId }).map(mmr => mmr.fineGranularMetaModelRelationSet).flat().filter(fgmmr => fgmmr.id != null).forEach(relation => {
+            const edge = createExistingFineGranularReactionEdge(diagramData.nodes.concat(flowCanvasRef.current?.getNodes() || []), relation);
+            diagramData.edges.push(edge);
+        });
+
+        if (!diagramData.nodes.length) {
+            // TODO: This fallback will not work with fine-granular reactions. 
+            Object.assign(diagramData, parseEcoreFile(fileContent));
+        }
+        if (diagramData.nodes.length === 1 && (diagramData.nodes[0].data as any).label === 'Error parsing .ecore file') {
+            Object.assign(diagramData, createSimpleEcoreDiagram(fileContent));
+        }
+
+        // Save as document
+        const newId = generateFlowId();
+        const now = new Date().toISOString();
+        const meta: StoredDocumentMeta = {
+            id: newId,
+            name: fileName,
+            createdAt: now,
+            updatedAt: now,
+            sourceFileName: fileName,
+        };
+        saveDocumentMeta(meta);
+        setDocuments((prev) => [meta, ...prev]);
+        setActiveDocId(newId);
+        setActiveFileName(fileName);
+
+        // Use a delay to ensure the canvas is remounted and ready before loading UML
+        setTimeout(() => {
+            // Load parsed UML diagram (ONLY UML boxes, no metamodel boxes)
+            flowCanvasRef.current?.loadDiagramData?.(diagramData.nodes, diagramData.edges, diagramData.identifiersToEObject, !remountCanvas);
+            // Make generated UML read-only by default, but allow moving boxes
+            //@ts-expect-error
+            flowCanvasRef.current?.setInteractive?.(false);
+            //@ts-expect-error
+            flowCanvasRef.current?.setDraggable?.(true);
+            saveDocumentData(newId, { nodes: diagramData.nodes, edges: diagramData.edges });
+            setIsDirty(false);
+        }, 100);
+    }, [setDocuments, setExpandedMetaModels, expandedMetaModels, handleExpandedModeSwitch, mode]);
+
+    // handleEcoreFileUpload als useCallback (stabil)
     const handleEcoreFileUpload = useCallback((
         fileContent: string,
         meta: VitruvAddFileToWorkspaceEvent
@@ -268,7 +354,7 @@ export function MainLayout({
                 );
             }
         }
-    }, [calculateEmptyPosition, expandedMetaModels]);
+    }, [calculateEmptyPosition, expandedMetaModels, handleEcoreFileExpand]);
 
     // Function to return to workspace from expanded metamodel view
     const handleBackToWorkspace = useCallback(() => {
@@ -307,7 +393,7 @@ export function MainLayout({
         setTimeout(() => {
             globalThis.dispatchEvent(new CustomEvent('vitruv.reloadWorkspace'));
         }, 400);
-    }, [mode, handleExpandedModeSwitch]);
+    }, [mode, handleExpandedModeSwitch, setExpandedMetaModels]);
 
     // Listen for workspace events
     useEffect(() => {
@@ -398,93 +484,6 @@ export function MainLayout({
             setSelectedFileBoxId(ecoreNode.id);
         }
     }, []);
-
-    const handleEcoreFileExpand = useCallback((fileName: string, fileContent: string, backendMetaModelId: number, cacheWorkspaceSnapshot: boolean = true, remountCanvas: boolean = true) => {
-        if (mode !== 'expanded' && mode !== 'reactions') {
-            handleExpandedModeSwitch('expanded');
-        }
-        if (cacheWorkspaceSnapshot) {
-            // Cache the current workspace snapshot before switching to UML view
-            // This is critical for saving relations even when viewing UML
-            const currentSnapshot = flowCanvasRef.current?.getWorkspaceSnapshot?.() ?? {
-                metaModelIds: [],
-                metaModelRelationRequests: [],
-            };
-            setCachedWorkspaceSnapshot(currentSnapshot);
-            console.log('📸 Cached workspace snapshot before UML view:', currentSnapshot);
-        }
-        
-        // Mark that we're viewing an expanded metamodel
-        const currentlyExpanded = new Set<number>();
-        if (remountCanvas) {
-            // Force FlowCanvas to remount with a new key for UML view
-            // This ensures a completely fresh canvas without any metamodel boxes
-            setCanvasKey(`uml-${fileName}-${Date.now()}`);
-            
-            // IMPORTANT: Completely clear the entire canvas including all metamodel boxes
-            // This ensures we start fresh with only the UML diagram
-            if (flowCanvasRef.current?.loadDiagramData) {
-                flowCanvasRef.current.loadDiagramData([], [], new Map());
-            }
-            if (flowCanvasRef.current?.resetExpandedFile) {
-                flowCanvasRef.current.resetExpandedFile();
-            }
-        } else {
-            if (expandedMetaModels) Array.from(expandedMetaModels.values()).forEach(v => currentlyExpanded.add(v));
-        }
-        currentlyExpanded.add(backendMetaModelId);
-        setExpandedMetaModels(currentlyExpanded);
-
-        // Prefer UML generator; fall back to previous parsers
-        let diagramData = generateUMLFromEcoreTsParser(fileName, fileContent, backendMetaModelId);
-
-        const activeVsumDetails = new ActiveVsumDetails();
-        activeVsumDetails.setIdentifiersToEObjectMap(diagramData.identifiersToEObject, remountCanvas);
-        activeVsumDetails.addIdentifierToBackendMetaModelIdMap(diagramData.eObjectIdentifierOfMetaModel, backendMetaModelId);
-        activeVsumDetails.saveToStore();
-        
-        // Create existing fine granular reaction edges for this metamodel
-        activeVsumDetails.getMetaModelRelations(Array.from(currentlyExpanded.values()).map(id => ({ id })), { id: backendMetaModelId }).map(mmr => mmr.fineGranularMetaModelRelationSet).flat().filter(fgmmr => fgmmr.id != null).forEach(relation => {
-            const edge = createExistingFineGranularReactionEdge(diagramData.nodes.concat(flowCanvasRef.current?.getNodes() || []), relation);
-            diagramData.edges.push(edge);
-        });
-
-        if (!diagramData.nodes.length) {
-            // TODO: This fallback will not work with fine-granular reactions. 
-            Object.assign(diagramData, parseEcoreFile(fileContent));
-        }
-        if (diagramData.nodes.length === 1 && (diagramData.nodes[0].data as any).label === 'Error parsing .ecore file') {
-            Object.assign(diagramData, createSimpleEcoreDiagram(fileContent));
-        }
-
-        // Save as document
-        const newId = generateFlowId();
-        const now = new Date().toISOString();
-        const meta: StoredDocumentMeta = {
-            id: newId,
-            name: fileName,
-            createdAt: now,
-            updatedAt: now,
-            sourceFileName: fileName,
-        };
-        saveDocumentMeta(meta);
-        setDocuments((prev) => [meta, ...prev]);
-        setActiveDocId(newId);
-        setActiveFileName(fileName);
-
-        // Use a delay to ensure the canvas is remounted and ready before loading UML
-        setTimeout(() => {
-            // Load parsed UML diagram (ONLY UML boxes, no metamodel boxes)
-            flowCanvasRef.current?.loadDiagramData?.(diagramData.nodes, diagramData.edges, diagramData.identifiersToEObject, !remountCanvas);
-            // Make generated UML read-only by default, but allow moving boxes
-            //@ts-expect-error
-            flowCanvasRef.current?.setInteractive?.(false);
-            //@ts-expect-error
-            flowCanvasRef.current?.setDraggable?.(true);
-            saveDocumentData(newId, { nodes: diagramData.nodes, edges: diagramData.edges });
-            setIsDirty(false);
-        }, 100);
-    }, [setDocuments, setExpandedMetaModels, expandedMetaModels, handleExpandedModeSwitch]);
 
     const handleEcoreFileDelete = useCallback((id: string, metaModelId: number) => {
         // Remove Node from FlowCanvas

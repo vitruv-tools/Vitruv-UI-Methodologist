@@ -152,10 +152,12 @@ export function createFineGranularReactionEdge(
   auto: { readonly s: string | undefined; readonly t: string | undefined },
 ): FlowEcoreEdge | null {
   if (
-    params.sourceHandle?.startsWith("reaction") != true ||
-    params.targetHandle?.startsWith("reaction") != true ||
-    (src as UMLNode)?.data?.ecore == undefined ||
-    (tgt as UMLNode)?.data?.ecore == undefined
+    params.sourceHandle?.startsWith("reaction") !== true ||
+    params.targetHandle?.startsWith("reaction") !== true ||
+    (src as UMLNode)?.data?.ecore === undefined ||
+    (src as UMLNode)?.data?.ecore === null ||
+    (tgt as UMLNode)?.data?.ecore === undefined ||
+    (tgt as UMLNode)?.data?.ecore === null
   ) {
     return null;
   }
@@ -261,7 +263,7 @@ export function onEdgeDelete(params: OnEdgeDeleteParams) {
       relation.sourceId === edge.data!.ecore!.eObjectSourceId &&
       relation.targetId === edge.data!.ecore!.eObjectTargetId,
   );
-  if (index == null || index == -1) {
+  if (index === undefined || index === null || index === -1) {
     console.warn(
       `No fine-grained meta model relation found for edge ${edge.id}. Cannot delete.`,
     );
@@ -270,7 +272,7 @@ export function onEdgeDelete(params: OnEdgeDeleteParams) {
   metaModelRelation?.fineGranularMetaModelRelationSet?.splice(index, 1);
   activeVsumDetails.saveToStore();
 
-  if (useSelectedEdgeStore.getState().selectedEdge?.id == edge.id) {
+  if (useSelectedEdgeStore.getState().selectedEdge?.id === edge.id) {
     useSelectedEdgeStore.setState({ selectedEdge: null });
   }
 }

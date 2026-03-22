@@ -39,7 +39,7 @@ export class LowCodeReactionEdgeValidator implements EdgeValidator {
         return false;
       }
 
-      if (src.data.ecore?.model != tgt.data.ecore?.model) {
+      if (src.data.ecore?.model !== tgt.data.ecore?.model) {
         console.log(`Valid reaction connection between different models src ${src.data.ecore?.model} and target ${tgt.data.ecore?.model}`);
         return true;
       }

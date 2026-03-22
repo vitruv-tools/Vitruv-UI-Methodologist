@@ -99,33 +99,12 @@ export const LowCodeReactionEditor = forwardRef<
   }, [isDirty, panelRef]);
 
   useEffect(() => {
+    const ref = panelRef?.current;
     return () => {
       clearDirtyCheckTimeout();
-      panelRef?.current?.setSaveHighlighted(false);
+      ref?.setSaveHighlighted(false);
     };
   }, [panelRef, clearDirtyCheckTimeout]);
-
-  useEffect(() => {
-    // Fetch low-code reactions metadata on mount
-    const fetchMetadata = async () => {
-      const metadata = await apiService.getLowCodeReactionsMetadata();
-      setLowCodeReactionsMetadata(metadata.data);
-
-      // Set first template as default if available
-      const firstTemplate = Object.keys(metadata.data.reactionMetadataMap)[0];
-      if (firstTemplate) {
-        setStartTemplate(firstTemplate);
-        setSelectedTemplate(firstTemplate);
-        initializeFieldValues(
-          metadata.data.reactionMetadataMap[firstTemplate]?.fields || [],
-        );
-      }
-
-      setLoading(false);
-    };
-
-    fetchMetadata();
-  }, []);
 
   const initializeFieldValues = useCallback((fields: LowCodeReactionFieldMetadata[]) => {
     const initialValues: Record<string, any> = {};
@@ -161,7 +140,7 @@ export const LowCodeReactionEditor = forwardRef<
     } else {
       setIsDirty(false);
     }
-  }, [edge.data?.ecore?.fromModel, edge.data?.ecore?.toModel, edge.data?.ecore?.eObjectSourceId, edge.data?.ecore?.eObjectTargetId]);
+  }, [edge]);
 
   const templateOptions = useMemo(
     () =>
@@ -171,6 +150,28 @@ export const LowCodeReactionEditor = forwardRef<
       ),
     [lowCodeReactionsMetadata],
   );
+
+  useEffect(() => {
+    // Fetch low-code reactions metadata on mount
+    const fetchMetadata = async () => {
+      const metadata = await apiService.getLowCodeReactionsMetadata();
+      setLowCodeReactionsMetadata(metadata.data);
+
+      // Set first template as default if available
+      const firstTemplate = Object.keys(metadata.data.reactionMetadataMap)[0];
+      if (firstTemplate) {
+        setStartTemplate(firstTemplate);
+        setSelectedTemplate(firstTemplate);
+        initializeFieldValues(
+          metadata.data.reactionMetadataMap[firstTemplate]?.fields || [],
+        );
+      }
+
+      setLoading(false);
+    };
+
+    fetchMetadata();
+  }, [initializeFieldValues]);
 
   const currentFields = useMemo(() => {
     return (
@@ -201,7 +202,7 @@ export const LowCodeReactionEditor = forwardRef<
   const performSave = useCallback(() => {
     const newFieldsValues = {
       ...fieldValues,
-      ["regenerate"]: true
+      regenerate: true
     }
     clearDirtyCheckTimeout();
     temporarilySaveLowCodeReactionConfig(
@@ -221,7 +222,7 @@ export const LowCodeReactionEditor = forwardRef<
     }
   }, [edge, performSave]);
 
-  const handleUndo = () => {
+  const handleUndo = useCallback(() => {
     clearDirtyCheckTimeout();
     const templateToRestore = startTemplate || selectedTemplate;
     setSelectedTemplate(templateToRestore);
@@ -229,7 +230,7 @@ export const LowCodeReactionEditor = forwardRef<
     const fields =
       lowCodeReactionsMetadata.reactionMetadataMap[templateToRestore]?.fields || [];
     initializeFieldValues(fields);
-  };
+  }, [clearDirtyCheckTimeout, startTemplate, selectedTemplate, lowCodeReactionsMetadata, initializeFieldValues]);
 
   const performDelete = useCallback(() => {
     deleteFineGranularReactionEdgeFromVsumDetails(edge);
@@ -254,7 +255,7 @@ export const LowCodeReactionEditor = forwardRef<
       undo: handleUndo,
       delete: handleDelete,
     }),
-    [handleDelete, handleSave, handleUndo, lowCodeReactionsMetadata, selectedTemplate, fieldValues],
+    [handleDelete, handleSave, handleUndo],
   );
 
   if (loading) {

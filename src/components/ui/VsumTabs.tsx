@@ -3,7 +3,6 @@ import { VsumDetails } from '../../types';
 import { apiService, MetaModelRelationRequest } from '../../services/api';
 import { WorkspaceSnapshot } from '../../types/workspace';
 import { useProjectStore } from '../../store/Project';
-import { VsumDetailsHelper } from "../../store/VsumDetails";
 import { ActiveVsumDetails } from '../../store/ActiveVsumDetails';
 import { ConfirmDialog } from './ConfirmDialog';
 

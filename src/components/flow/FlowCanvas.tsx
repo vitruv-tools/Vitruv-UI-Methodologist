@@ -6,7 +6,6 @@ import React, {
   useEffect,
   useCallback,
   useMemo,
-  useContext
 } from 'react';
 import ReactFlow, {
   MiniMap,
@@ -218,7 +217,7 @@ export const FlowCanvas = forwardRef<{
     const [expandedFileId, setExpandedFileId] = useState<string | null>(null);
     const [connectionDragState, setConnectionDragState] = useState<ConnectionDragState | null>(null);
     const [codeEditorState, setCodeEditorState] = useState<CodeEditorState | null>(null);
-    const setReactionFileIds = onReactionFilesChange ?? (() => {});
+    const setReactionFileIds = useMemo(() => onReactionFilesChange ?? (() => {}), [onReactionFilesChange]);
     const [routingStyle] = useState<'curved' | 'orthogonal'>('orthogonal');
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const [edgeDragState, setEdgeDragState] = useState<{
@@ -351,7 +350,7 @@ export const FlowCanvas = forwardRef<{
       console.log('🔄 Node drag finished, recalculating edge handles...');
       
       return currentEdges.map(edge => updateEdgeHandles(edge, currentNodes));
-    }, [reactFlowInstance, setEdges, updateEdgeHandles]);
+    }, [updateEdgeHandles]);
 
     const recalculateAfterNodeChange = useCallback((currentNodes: FlowNode[], currentEdges: FlowEdge[]) => {
       if (mode === 'expanded' || mode === 'reactions') {
@@ -359,7 +358,7 @@ export const FlowCanvas = forwardRef<{
       }
       currentEdges = recalculateEdgeHandles(currentNodes, currentEdges);
       return { currentNodes, currentEdges };
-    }, [recalculateBoundingBoxes, recalculateEdgeHandles]);
+    }, [recalculateEdgeHandles, mode]);
 
     // Wrapper to auto-update edge handles when nodes move
     // Called when drag and drop of nodes ends
@@ -428,7 +427,7 @@ export const FlowCanvas = forwardRef<{
           disableReactionHandles();
         }
       }
-    }, [originalOnNodesChange, recalculateAfterNodeChange, setNodes, nodes]);
+    }, [originalOnNodesChange, recalculateAfterNodeChange, setNodes, mode, reactFlowInstance, setEdges]);
 
     const edgeColorMapRef = useRef<Map<string, string>>(new Map());
     const nextColorIndexRef = useRef<number>(0);
@@ -893,7 +892,7 @@ export const FlowCanvas = forwardRef<{
       }
 
       setConnectionDragState(null);
-    }, [reactFlowInstance, nodes, edges, addEdge, connectionDragState, getColorForPair, isPositionInsideNode, uploadReactionFile, buildNewEdge]);
+    }, [reactFlowInstance, nodes, edges, addEdge, connectionDragState, getColorForPair, isPositionInsideNode, uploadReactionFile, buildNewEdge, calculateTargetHandle, getBackendMetaModelIdForNode, getMetaModelSourceIdForNode]);
 
     const handleConnectionMove = useCallback((e: MouseEvent) => {
       if (!reactFlowInstance) return;
@@ -986,7 +985,7 @@ export const FlowCanvas = forwardRef<{
         targetFileName: getFileName(edge.target),
         reactionFileId,
       });
-    }, [edges, nodes, buildInitialReactionCode]);
+    }, [edges, nodes, buildInitialReactionCode, reactionFiles]);
 
     const handleCloseCodeEditor = useCallback(() => {
       setCodeEditorState(null);
@@ -1077,7 +1076,7 @@ export const FlowCanvas = forwardRef<{
         console.error('Failed to save reaction file', err);
         throw err;
       }
-    }, [codeEditorState, updateEdgeCode, setEdges, getBackendMetaModelIdForNode, getMetaModelSourceIdForNode]);
+    }, [codeEditorState, edges, updateEdgeCode, setEdges, getBackendMetaModelIdForNode, getMetaModelSourceIdForNode]);
 
     const handleDeleteEdge = useCallback(() => {
       if (codeEditorState?.edgeId) {
@@ -1510,7 +1509,7 @@ export const FlowCanvas = forwardRef<{
           metaModelRelationRequests: []
         }
       }
-    }, [nodes, edges, getMetaModelSourceIdForNode]);
+    }, []);
 
     useEffect(() => {
       if (!nodes.length || !edges.length) return;
@@ -2314,7 +2313,7 @@ export const FlowCanvas = forwardRef<{
           onEdgeClick={onEdgeClick.bind(null, { nodes, edges })}
         >
           <MiniMap position="bottom-right" style={{ bottom: 16, right: 16, zIndex: 30 }} />
-          {selectedEdge && selectedEdge.type == 'fine-granular-reaction' && 
+          {selectedEdge && selectedEdge.type === 'fine-granular-reaction' && 
             <DragablePanel
               ref={reactionPanelRef}
               title="Reaction"
@@ -2332,7 +2331,7 @@ export const FlowCanvas = forwardRef<{
               />
             </DragablePanel>
           }
-          {selectedEdge && selectedEdge.type == 'uml' && (
+          {selectedEdge && selectedEdge.type === 'uml' && (
             <DragablePanel
               title="UML Edge Details"
               description=""
