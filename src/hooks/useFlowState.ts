@@ -172,7 +172,6 @@ export function useFlowState(props?: UseFlowStateProps) {
       const tgt = findNode(params.target);
       const auto = chooseHandlesForPair(src, tgt, params.sourceHandle, params.targetHandle);
       
-      //TODO(Reinbold): This doesn't create a workspace snapshot :(
       const fineGranularEdge = createFineGranularReactionEdge(params, src, tgt, getId, auto);
       if (fineGranularEdge) {
         setEdges((eds) => eds.concat(fineGranularEdge));

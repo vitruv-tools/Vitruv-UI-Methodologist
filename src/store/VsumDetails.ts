@@ -10,13 +10,6 @@ import { WorkspaceSnapshot } from "../types/workspace";
 import { deepClone } from "../utils/DeepClone";
 import { NoVsumDetailsStoreError } from "./NoVsumDetailsStoreError";
 
-/**
- * We intentionally do not expose the store directly,
- * but instead provide helper methods to manipulate the VSUM details.
- * This allows us to encapsulate the logic for how the details are stored
- * and updated, and to ensure that any necessary side effects
- * (like updating the structure) are handled correctly.
- */
 const storeMap = new Map<
   number | string,
   UseBoundStore<StoreApi<EditableVsumDetails | null>> | undefined
@@ -274,12 +267,10 @@ export class VsumDetailsHelper {
   getAsWorkspaceSnapshot() {
     const map = this.getMetaModelIdToMetaModelSourceIdMap();
     const workspaceSnapshot: WorkspaceSnapshot = {
-      //TODO(Reinbold): maybe we also need to do:
       metaModelIds:
         this.vsumDetails?.metaModels.map(
           (metaModel) => map.get(metaModel.id)!,
         ) ?? [],
-      // metaModelIds: this.vsumDetails?.metaModels.map((metaModel) => metaModel.id) ?? [],
       metaModelRelationRequests:
         this.vsumDetails?.metaModelsRelation?.map((relation) => ({
           id: relation.id ?? null,

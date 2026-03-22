@@ -193,7 +193,6 @@ export function renderLines(eObjectIds: string[], isConnectable: boolean, buildS
       {eObjects.map(({ id, eObject }, index) => (
         <div key={id} style={listItemStyle}>
           {buildSignature(eObject, index)}
-          {/* TODO(Reinbold): The handle needs to know what it is for. EAttribute? EReference? */}
           <Handle 
             type="target" 
             position={Position.Left} 

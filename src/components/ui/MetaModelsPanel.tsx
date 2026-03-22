@@ -1,10 +1,9 @@
 import React, { useEffect, useState } from 'react';
 import { apiService } from '../../services/api';
-import { ActiveVsumDetails } from '../../store/ActiveVsumDetails';
 import { useProjectStore } from '../../store/Project';
 import { VsumMetaModelRef } from '../../types';
 import { useStore } from 'zustand';
-import { getVsumDetailsStore, VsumDetailsHelper } from '../../store/VsumDetails';
+import { getVsumDetailsStore } from '../../store/VsumDetails';
 
 interface MetaModelsPanelProps {
   activeVsumId?: number | null;

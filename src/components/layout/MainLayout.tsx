@@ -450,7 +450,7 @@ export function MainLayout({
         });
 
         if (!diagramData.nodes.length) {
-            // TODO(DEREIFAB): I dont support this fallback as of now
+            // TODO: This fallback will not work with fine-granular reactions. 
             Object.assign(diagramData, parseEcoreFile(fileContent));
         }
         if (diagramData.nodes.length === 1 && (diagramData.nodes[0].data as any).label === 'Error parsing .ecore file') {

@@ -959,8 +959,6 @@ export const FlowCanvas = forwardRef<{
             edge.data ??= {};
             edge.data!.reactionFileId = reactionFile.id;
             break;
-
-            // TODO(Reinbold): We only care about a specific part of the source code no the entire file.
           }
         }
       }
