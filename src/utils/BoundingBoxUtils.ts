@@ -57,6 +57,12 @@ const ACCESSIBLE_BBOX_PALETTE = [
   },
 ];
 
+/**
+ * Safely reads a nested property by dot-separated path.
+ * @param {any} obj - Source object to traverse.
+ * @param {string} path - Dot-separated property path.
+ * @returns {T | undefined} Resolved value or undefined if path is missing.
+ */
 function getByPath<T>(obj: any, path: string): T | undefined {
   return path.split(".").reduce((acc, key) => acc?.[key], obj);
 }
@@ -205,6 +211,9 @@ export function calculateAndUpdateBoundingBoxes(
   return offsets.filter((o) => o !== undefined);
 }
 
+/**
+ * Node data extension used by debug bounding-box helper nodes.
+ */
 export type BoundingBoxNodeData = {
   boundingBoxPaletteIndex: number;
 };
@@ -314,6 +323,12 @@ export function applyOffsetsToNodes(
   }
 }
 
+/**
+ * Rebuilds and optionally rearranges bounding boxes, then returns updated node list.
+ * @param {boolean} rearrange - Whether to separate overlapping boxes before rendering debug nodes.
+ * @param {FlowNode[]} currentNodes - Current diagram nodes.
+ * @returns {FlowNode[]} Nodes including generated or updated bounding-box debug nodes.
+ */
 export function recalculateBoundingBoxes(
   rearrange: boolean,
   currentNodes: FlowNode[],

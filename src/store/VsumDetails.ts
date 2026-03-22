@@ -15,6 +15,12 @@ const storeMap = new Map<
   UseBoundStore<StoreApi<EditableVsumDetails | null>> | undefined
 >();
 
+/**
+ * Creates or updates a VSUM details store for a given VSUM id.
+ * @param {number | string} id - VSUM identifier.
+ * @param {EditableVsumDetails} vsumDetails - Initial or replacement VSUM details.
+ * @returns {void}
+ */
 export function createVsumDetailsStore(
   id: number | string,
   vsumDetails: EditableVsumDetails,
@@ -28,6 +34,11 @@ export function createVsumDetailsStore(
   }
 }
 
+/**
+ * Gets the VSUM details store for a given VSUM id and creates an empty store if needed.
+ * @param {number | string} id - VSUM identifier.
+ * @returns {UseBoundStore<StoreApi<EditableVsumDetails | null>>} The Zustand store instance.
+ */
 export function getVsumDetailsStore(id: number | string) {
   if (!storeMap.has(id)) {
     const newStore = create<EditableVsumDetails | null>((_) => null);
@@ -36,12 +47,19 @@ export function getVsumDetailsStore(id: number | string) {
   return storeMap.get(id)!;
 }
 
+/**
+ * Helper wrapper around VSUM details with utility methods for graph and mapping updates.
+ */
 export class VsumDetailsHelper {
   protected vsumDetails: EditableVsumDetails | null;
   protected vsumDetailsStore: UseBoundStore<
     StoreApi<EditableVsumDetails | null>
   >;
 
+  /**
+   * Creates a helper bound to a VSUM details store.
+   * @param {number} id - VSUM identifier.
+   */
   constructor(id: number) {
     const vsumDetailsStore = this.getVsumDetailsStoreOrThrow(id);
     this.vsumDetailsStore = vsumDetailsStore;
@@ -63,22 +81,42 @@ export class VsumDetailsHelper {
     return storeMap.get(id);
   }
 
+  /**
+   * Returns meta models currently present in VSUM details.
+   * @param {Partial<EditableVsumMetaModelRef>} filters - Optional filters (currently not applied).
+   * @returns {EditableVsumMetaModelRef[]} Matching meta models.
+   */
   findMetaModels(filters?: Partial<EditableVsumMetaModelRef>) {
     //TODO(Reinbold): Local filtering is not implemented
     return this.vsumDetails?.metaModels ?? [];
   }
 
+  /**
+   * Adds a meta model reference to VSUM details.
+   * @param {EditableVsumMetaModelRef} editableVsumMetaModelRef - Meta model to add.
+   * @returns {EditableVsumMetaModelRef} The added meta model.
+   */
   addMetaModel(editableVsumMetaModelRef: EditableVsumMetaModelRef) {
     this.vsumDetails!.metaModels.push(editableVsumMetaModelRef);
     return editableVsumMetaModelRef;
   }
 
+  /**
+   * Finds a meta model by id.
+   * @param {Pick<EditableVsumMetaModelRef, "id">} identifier - Meta model identifier.
+   * @returns {EditableVsumMetaModelRef | undefined} Matching meta model or undefined.
+   */
   getMetaModel(identifier: Pick<EditableVsumMetaModelRef, "id">) {
     return this.vsumDetails?.metaModels?.find(
       (metaModel) => metaModel.id === identifier.id,
     );
   }
 
+  /**
+   * Removes a meta model by id.
+   * @param {Pick<EditableVsumMetaModelRef, "id">} identifier - Meta model identifier.
+   * @returns {EditableVsumMetaModelRef | undefined} Removed meta model.
+   */
   removeMetaModel(identifier: Pick<EditableVsumMetaModelRef, "id">) {
     const removed = (this.vsumDetails!.metaModels =
       this.vsumDetails!.metaModels.filter(
@@ -90,6 +128,12 @@ export class VsumDetailsHelper {
     return removed[0];
   }
 
+  /**
+   * Retrieves relations between provided meta models and an optional target filter.
+   * @param {Pick<EditableVsumMetaModelRef, "id">[]} metaModels - Meta model ids to match.
+   * @param {Pick<EditableVsumMetaModelRef, "id">} target - Optional target id filter.
+   * @returns {EditableVsumMetaModelRelation[]} Matching relations.
+   */
   getMetaModelRelations(
     metaModels: Pick<EditableVsumMetaModelRef, "id">[],
     target?: Pick<EditableVsumMetaModelRef, "id">,
@@ -108,6 +152,11 @@ export class VsumDetailsHelper {
     return result;
   }
 
+  /**
+   * Adds a meta model relation to VSUM details.
+   * @param {EditableVsumMetaModelRelation} editableMetaModelRelation - Relation to add.
+   * @returns {EditableVsumMetaModelRelation} The added relation.
+   */
   addMetaModelRelation(
     editableMetaModelRelation: EditableVsumMetaModelRelation,
   ) {
@@ -116,6 +165,11 @@ export class VsumDetailsHelper {
     return editableMetaModelRelation;
   }
 
+  /**
+   * Finds a meta model relation by source and target ids.
+   * @param {Pick<EditableVsumMetaModelRelation, "sourceId" | "targetId">} identifiers - Relation identifiers.
+   * @returns {EditableVsumMetaModelRelation | undefined} Matching relation.
+   */
   getMetaModelRelation(
     identifiers: Pick<EditableVsumMetaModelRelation, "sourceId" | "targetId">,
   ) {
@@ -126,6 +180,12 @@ export class VsumDetailsHelper {
     );
   }
 
+  /**
+   * Finds a relation using fully qualified model names.
+   * @param {string} fromModel - Source model identifier.
+   * @param {string} toModel - Target model identifier.
+   * @returns {EditableVsumMetaModelRelation | undefined} Matching relation.
+   */
   getMetaModelRelationByFullyQualifiedName(fromModel: string, toModel: string) {
     const sourceId =
       this.getIdentifiersToBackendMetaModelIdMap()?.get(fromModel);
@@ -139,6 +199,11 @@ export class VsumDetailsHelper {
     );
   }
 
+  /**
+   * Removes a meta model relation by source and target ids.
+   * @param {Pick<EditableVsumMetaModelRelation, "sourceId" | "targetId">} identifiers - Relation identifiers.
+   * @returns {EditableVsumMetaModelRelation | undefined} Removed relation.
+   */
   removeMetaModelRelation(
     identifiers: Pick<EditableVsumMetaModelRelation, "sourceId" | "targetId">,
   ) {
@@ -152,6 +217,11 @@ export class VsumDetailsHelper {
     }
   }
 
+  /**
+   * Finds a fine-granular relation by source and target EObject ids.
+   * @param {Pick<EditableFineGranularMetaModelRelation, "sourceId" | "targetId">} identifiers - Fine-granular relation identifiers.
+   * @returns {EditableFineGranularMetaModelRelation | undefined} Matching fine-granular relation.
+   */
   getFineGranularMetaModelRelation(
     identifiers: Pick<
       EditableFineGranularMetaModelRelation,
@@ -168,6 +238,11 @@ export class VsumDetailsHelper {
       );
   }
 
+  /**
+   * Removes a fine-granular relation and cleans obsolete parent relations.
+   * @param {Pick<EditableFineGranularMetaModelRelation, "sourceId" | "targetId">} identifiers - Fine-granular relation identifiers.
+   * @returns {EditableFineGranularMetaModelRelation | undefined} Removed fine-granular relation.
+   */
   removeFineGranularMetaModelRelation(
     identifiers: Pick<
       EditableFineGranularMetaModelRelation,
@@ -201,6 +276,10 @@ export class VsumDetailsHelper {
     }
   }
 
+  /**
+   * Returns the EObject identifier map.
+   * @returns {Map<string, EObject>} Identifier to EObject map.
+   */
   getIdentifiersToEObjectMap() {
     if (!this.vsumDetails?.identifiersToEObject) {
       throw new Error(
@@ -210,6 +289,12 @@ export class VsumDetailsHelper {
     return this.vsumDetails.identifiersToEObject;
   }
 
+  /**
+   * Sets or merges the EObject identifier map.
+   * @param {Map<string, EObject>} map - New identifier map.
+   * @param {boolean} overwrite - Whether to overwrite existing values.
+   * @returns {void}
+   */
   setIdentifiersToEObjectMap(
     map: Map<string, EObject>,
     overwrite: boolean = false,
@@ -226,6 +311,10 @@ export class VsumDetailsHelper {
     }
   }
 
+  /**
+   * Returns the identifier-to-backend-meta-model-id map.
+   * @returns {Map<string, number>} Identifier to backend meta model id map.
+   */
   getIdentifiersToBackendMetaModelIdMap() {
     if (!this.vsumDetails?.identifiersToBackendMetaModelId) {
       throw new Error(
@@ -235,6 +324,12 @@ export class VsumDetailsHelper {
     return this.vsumDetails.identifiersToBackendMetaModelId;
   }
 
+  /**
+   * Adds a mapping from EObject identifier to backend meta model id.
+   * @param {string} eObjectIdentifier - EObject identifier.
+   * @param {number} backendMetaModelId - Backend meta model id.
+   * @returns {void}
+   */
   addIdentifierToBackendMetaModelIdMap(
     eObjectIdentifier: string,
     backendMetaModelId: number,
@@ -251,6 +346,10 @@ export class VsumDetailsHelper {
     );
   }
 
+  /**
+   * Returns a deep-cloned snapshot of current VSUM details.
+   * @returns {EditableVsumDetails | null} Cloned VSUM details.
+   */
   get() {
     // We dont return the reference to encourage people to actually use the helper methods rather than just manipulating the details object directly, which would bypass important logic in the helper methods (e.g. for keeping the structure in sync)
     return deepClone(this.vsumDetails);
@@ -264,6 +363,10 @@ export class VsumDetailsHelper {
     return map;
   }
 
+  /**
+   * Converts current VSUM details into a workspace snapshot payload.
+   * @returns {WorkspaceSnapshot} Workspace snapshot.
+   */
   getAsWorkspaceSnapshot() {
     const map = this.getMetaModelIdToMetaModelSourceIdMap();
     const workspaceSnapshot: WorkspaceSnapshot = {
@@ -294,6 +397,10 @@ export class VsumDetailsHelper {
     this.vsumDetails = newDetails;
   }
 
+  /**
+   * Persists the current helper state back to the underlying Zustand store.
+   * @returns {void}
+   */
   saveToStore() {
     this.vsumDetailsStore.setState(this.vsumDetails);
   }

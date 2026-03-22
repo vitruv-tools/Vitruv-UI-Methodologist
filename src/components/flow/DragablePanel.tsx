@@ -19,10 +19,7 @@ import {
 } from "@mui/icons-material";
 
 /**
- * Key behaviors:
- * - Anchors bottom-center via React Flow Panel and applies a drag offset on top.
- * - Dragging is bounded to the React Flow viewport with small margins to avoid clipping.
- * - Minimize snaps back to the starting anchor; maximize restores the last dragged position.
+ * Properties for rendering the draggable bottom panel and optional toolbar actions.
  */
 interface DragablePanelProps {
   title: string;
@@ -44,11 +41,24 @@ export interface DragablePanelOptionalToolbarRef {
   delete: () => void;
 }
 
+/**
+ * Imperative API exposed by the draggable panel instance.
+ */
 export interface DragablePanelRef {
   setSaveHighlighted: (highlighted: boolean) => void;
   close: () => void;
 }
 
+/**
+ * Renders a draggable panel anchored to the React Flow viewport with optional toolbar actions.
+ * Key behaviors:
+ * - Anchors bottom-center via React Flow Panel and applies a drag offset on top.
+ * - Dragging is bounded to the React Flow viewport with small margins to avoid clipping.
+ * - Minimize snaps back to the starting anchor; maximize restores the last dragged position.
+ * @param {DragablePanelProps} props - Panel content, callbacks, and positioning options.
+ * @param {React.ForwardedRef<DragablePanelRef>} ref - Ref exposing imperative panel controls.
+ * @returns {JSX.Element} The draggable panel container.
+ */
 export const DragablePanel = forwardRef<DragablePanelRef, DragablePanelProps>(({
   title,
   description,

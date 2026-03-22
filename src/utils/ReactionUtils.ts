@@ -7,6 +7,11 @@ import { FlowMetaModelRelationData, isFlowMetaModelRelationData } from "../types
 import { OnEdgeDeleteParams } from "../types/EdgeEventHandlers";
 import { isFlowFineGranularMetaModelRelationData } from "../types/FlowFineGranularMetaModelRelationData";
 
+/**
+ * Adds a high-level reaction relation to VSUM details for a new edge.
+ * @param {Edge<FlowMetaModelRelationData>} edge - React Flow edge carrying relation metadata.
+ * @returns {void}
+ */
 export function addReactionEdgeToVsumDetails(
   edge: Edge<FlowMetaModelRelationData>,
 ) {
@@ -39,6 +44,11 @@ export function addReactionEdgeToVsumDetails(
   }
 }
 
+/**
+ * Deletes a high-level reaction relation from VSUM details.
+ * @param {OnEdgeDeleteParams} params - Deletion payload containing the removed edge.
+ * @returns {void}
+ */
 export function onEdgeDelete(params: OnEdgeDeleteParams) {
   const edge = params.edge as FlowEdge & { data: FlowMetaModelRelationData };
   const activeVsumDetails = new ActiveVsumDetails();
@@ -49,6 +59,11 @@ export function onEdgeDelete(params: OnEdgeDeleteParams) {
   activeVsumDetails.saveToStore();
 }
 
+/**
+ * Removes either fine-granular or high-level relation data for an edge.
+ * @param {Edge<unknown> | undefined} edge - Edge to remove from VSUM details.
+ * @returns {void}
+ */
 export function removeReactionEdgeFromVsumDetails(edge: Edge<unknown> | undefined) {
   const data = edge?.data;
   const activeVsumDetails = new ActiveVsumDetails();
@@ -63,6 +78,12 @@ export function removeReactionEdgeFromVsumDetails(edge: Edge<unknown> | undefine
   activeVsumDetails.saveToStore();
 }
 
+/**
+ * Assigns a reaction file id to the relation represented by an edge.
+ * @param {Edge<unknown> | undefined} edge - Edge whose relation should be updated.
+ * @param {number} reactionFileId - Persisted reaction file identifier.
+ * @returns {void}
+ */
 export function addReactionFileIdToVsumDetails(edge: Edge<unknown> | undefined, reactionFileId: number) {
   const data = edge?.data;
   const activeVsumDetails = new ActiveVsumDetails();

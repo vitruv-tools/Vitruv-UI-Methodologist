@@ -46,10 +46,20 @@ export const DEFAULT_UMLEdgeDetailsConfig: UMLEdgeDetailsConfig = {
 
 export const DEFAULT_STORAGE_KEY = "umlEdgeDetailsConfig";
 
+/**
+ * Returns true when a config flag is enabled or omitted.
+ * @param {boolean | undefined} value - Optional boolean value from partial config.
+ * @returns {boolean} True when the value is undefined or true.
+ */
 export function isUndefinedOrTrue(value: boolean | undefined): boolean {
   return value === undefined || value === true;
 }
 
+/**
+ * Filters unknown entries from a partial config and keeps only boolean fields.
+ * @param {Partial<UMLEdgeDetailsConfig> | null | undefined} partial - Partial config input.
+ * @returns {Partial<UMLEdgeDetailsConfig>} Sanitized config containing only boolean properties.
+ */
 export function pickBooleans(
   partial?: Partial<UMLEdgeDetailsConfig> | null,
 ): Partial<UMLEdgeDetailsConfig> {
@@ -63,6 +73,11 @@ export function pickBooleans(
   return Object.fromEntries(entries) as Partial<UMLEdgeDetailsConfig>;
 };
 
+/**
+ * Loads edge detail configuration from local storage.
+ * @param {string} storageKey - Local storage key used for persisted config.
+ * @returns {Partial<UMLEdgeDetailsConfig>} Parsed and sanitized config values.
+ */
 export function loadFromStorage(storageKey: string): Partial<UMLEdgeDetailsConfig> {
   if (typeof window === "undefined") {
     return {};
@@ -80,6 +95,12 @@ export function loadFromStorage(storageKey: string): Partial<UMLEdgeDetailsConfi
   }
 };
 
+/**
+ * Persists edge detail configuration to local storage.
+ * @param {string} storageKey - Local storage key used for persisted config.
+ * @param {UMLEdgeDetailsConfig} config - Configuration object to persist.
+ * @returns {void}
+ */
 export function saveToStorage(storageKey: string, config: UMLEdgeDetailsConfig) {
   if (typeof window === "undefined") {
     return;
@@ -107,6 +128,11 @@ const mergeConfig = (
   ...storedConfig,
 });
 
+/**
+ * Renders a settings panel for controlling visible UML edge detail sections.
+ * @param {UMLEdgeDetailsConfigProps} props - Storage and callback options for the panel state.
+ * @returns {JSX.Element} A grouped switch-based configuration panel.
+ */
 export const UMLEdgeDetailsConfigPanel: React.FC<UMLEdgeDetailsConfigProps> = ({
   storageKey = DEFAULT_STORAGE_KEY,
   initialConfig,

@@ -186,6 +186,13 @@ const DeleteButton: React.FC<DeleteButtonProps> = ({
   </button>
 );
 
+/**
+ * Renders attribute or method signature lines with reaction handles on both sides.
+ * @param {string[]} eObjectIds - EObject identifiers used to resolve model elements.
+ * @param {boolean} isConnectable - Whether rendered handles should allow connections.
+ * @param {(attr: EObject, index: number) => string} buildSignature - Signature builder for each EObject entry.
+ * @returns {JSX.Element} A list of rendered signature rows with source and target handles.
+ */
 export function renderLines(eObjectIds: string[], isConnectable: boolean, buildSignature: (attr: EObject, index: number) => string) {
   const identifiersToEObjects = new ActiveVsumDetails().getIdentifiersToEObjectMap();
   const eObjects = eObjectIds.map(id => { return  { id: id, eObject: identifiersToEObjects.get(id) }}).filter(kv => kv.eObject !== undefined) as Array<{ id: string, eObject: EObject }>;
@@ -475,6 +482,11 @@ function EditableField({
 }
 
 // Main Component
+/**
+ * Renders a UML-aware editable node with class sections, handles, and inline editing controls.
+ * @param {NodeProps<UMLNodeData & FlowNodeECoreData>} props - React Flow node props carrying UML and Ecore metadata.
+ * @returns {JSX.Element} The node UI tailored to the configured tool type and selection state.
+ */
 export function EditableNode({ id, data, selected, isConnectable }: NodeProps<UMLNodeData & FlowNodeECoreData>) {
   const nodeData = data || {};
 

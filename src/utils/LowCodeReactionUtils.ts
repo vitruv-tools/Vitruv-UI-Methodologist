@@ -1,6 +1,11 @@
 import { ActiveVsumDetails } from "../store/ActiveVsumDetails";
 import { FlowEcoreEdge } from "../types";
 
+/**
+ * Checks whether a fine-granular relation already has stored low-code reaction configuration.
+ * @param {FlowEcoreEdge} edge - Fine-granular edge to inspect.
+ * @returns {boolean} True when configuration exists for the relation.
+ */
 export function hasLowCodeReactionConfig(edge: FlowEcoreEdge): boolean {
   const activeVsumDetails = new ActiveVsumDetails();
   const identifiersToBackendMetaModelId =
@@ -31,6 +36,12 @@ export function hasLowCodeReactionConfig(edge: FlowEcoreEdge): boolean {
   return fineGranularMetaModelRelation.lowCodeReactionRequestBase != null;
 }
 
+/**
+ * Updates the in-store low-code reaction payload for a fine-granular relation.
+ * @param {Record<string, any>} fieldValues - Form values to persist.
+ * @param {FlowEcoreEdge} edge - Fine-granular edge identifying the relation.
+ * @returns {void}
+ */
 export function temporarilySaveLowCodeReactionConfig(
   fieldValues: Record<string, any>,
   edge: FlowEcoreEdge,

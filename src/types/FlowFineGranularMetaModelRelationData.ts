@@ -1,4 +1,7 @@
 
+/**
+ * Edge payload describing a fine-granular relation in the flow diagram.
+ */
 export type FlowFineGranularMetaModelRelationData = {
   ecore: {
     eReferenceId?: string;
@@ -10,6 +13,11 @@ export type FlowFineGranularMetaModelRelationData = {
   reactionFileId?: number;
 };
 
+/**
+ * Type guard for fine-granular relation edge payloads.
+ * @param {unknown} data - Candidate value to validate.
+ * @returns {boolean} True when the value matches FlowFineGranularMetaModelRelationData.
+ */
 export function isFlowFineGranularMetaModelRelationData(data: unknown): data is FlowFineGranularMetaModelRelationData {
   return (
     typeof data === "object" &&

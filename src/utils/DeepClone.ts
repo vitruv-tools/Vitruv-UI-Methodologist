@@ -1,3 +1,10 @@
+/**
+ * Deeply clones plain objects, collections, dates, regex values, and circular references.
+ * @template T
+ * @param {T} obj - Value to clone.
+ * @param {WeakMap<object, unknown>} seen - Cache used for circular-reference handling.
+ * @returns {T} Deep-cloned value.
+ */
 export function deepClone<T>(obj: T, seen = new WeakMap()): T {
   // Primitives & functions
   if (obj === null || typeof obj !== "object")

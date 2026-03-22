@@ -1,3 +1,6 @@
+/**
+ * Runtime variables available when evaluating low-code reaction field templates.
+ */
 export type LowCodeReactionFieldVariables = {
   "sourceModelUri": string;
   "sourceModelAlias": string;

@@ -1,4 +1,7 @@
 
+/**
+ * Field metadata definition for rendering and validating low-code reaction inputs.
+ */
 export type LowCodeReactionFieldMetadata = {
   // Name of the reaction template field
   name: string;

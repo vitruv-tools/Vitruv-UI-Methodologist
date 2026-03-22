@@ -19,6 +19,11 @@ interface UMLEdgeDetailsProps {
   config: Partial<UMLEdgeDetailsConfig>;
 }
 
+/**
+ * Displays read-only details for a selected UML EReference edge.
+ * @param {UMLEdgeDetailsProps} props - Edge context, EObject lookup map, and display config.
+ * @returns {JSX.Element} Edge details including types, bounds, documentation, and flags.
+ */
 export const UMLEdgeDetails: React.FC<UMLEdgeDetailsProps> = ({
   edge,
   identifiersToEObject,

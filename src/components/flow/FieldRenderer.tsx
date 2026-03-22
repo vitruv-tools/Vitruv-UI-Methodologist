@@ -23,7 +23,7 @@ import {
 } from "../../utils/FieldUtils";
 
 /**
- * Render field component based on metadata
+ * Props for rendering and editing one low-code reaction field.
  */
 interface FieldRendererProps {
   field: LowCodeReactionFieldMetadata;
@@ -33,6 +33,11 @@ interface FieldRendererProps {
   errorMessage?: string;
 }
 
+/**
+ * Renders an input control that matches the field metadata type and constraints.
+ * @param {FieldRendererProps} props - Field metadata, value binding, and validation context.
+ * @returns {JSX.Element} The appropriate editor control for the provided field.
+ */
 export const FieldRenderer: React.FC<FieldRendererProps> = ({
   field,
   value,

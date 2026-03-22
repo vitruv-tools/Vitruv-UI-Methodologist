@@ -1,5 +1,8 @@
 import { EObject } from "ecore-ts";
 
+/**
+ * Editable top-level VSUM metadata.
+ */
 export interface EditableVsum {
   id: number;
   name: string;
@@ -8,6 +11,9 @@ export interface EditableVsum {
   removedAt?: string | null;
 }
 
+/**
+ * Editable meta model reference assigned to a VSUM.
+ */
 export interface EditableVsumMetaModelRef {
   id: number;
   name: string;
@@ -22,6 +28,9 @@ export interface EditableVsumMetaModelRef {
   genModelFileId: number;
 }
 
+/**
+ * Editable relation between two meta models inside a VSUM.
+ */
 export interface EditableVsumMetaModelRelation {
   id: number | null;
   sourceId: number;
@@ -32,6 +41,9 @@ export interface EditableVsumMetaModelRelation {
   fineGranularMetaModelRelationSet: EditableFineGranularMetaModelRelation[];
 }
 
+/**
+ * Full editable VSUM details including graph relations and identifier mappings.
+ */
 export interface EditableVsumDetails extends EditableVsum {
   metaModels: EditableVsumMetaModelRef[];
   metaModelsRelation?: EditableVsumMetaModelRelation[];
@@ -39,6 +51,9 @@ export interface EditableVsumDetails extends EditableVsum {
   identifiersToBackendMetaModelId?: Map<string, number>;
 }
 
+/**
+ * Editable fine-granular relation between two concrete EObjects.
+ */
 export type EditableFineGranularMetaModelRelation = {
   id: number | null; // null for new relations
   sourceId: string;

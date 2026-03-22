@@ -1,7 +1,13 @@
 import { create } from "zustand";
 
+/**
+ * Represents a persisted reaction file relation between two meta models.
+ */
 export type ReactionFile = {fromModel: string; toModel: string; id: number};
 
+/**
+ * Central project-level UI and context state.
+ */
 export type ProjectStore = {
   // Active VSUM id
   activeId: number | null;
@@ -15,6 +21,9 @@ export type ProjectStore = {
   setExpandedMetaModels: (ids: Set<number> | null) => void;
 };
 
+/**
+ * Zustand store containing current project mode, active VSUM, and reaction context.
+ */
 export const useProjectStore = create<ProjectStore>((set) => ({
   activeId: null,
   mode: 'workspace',

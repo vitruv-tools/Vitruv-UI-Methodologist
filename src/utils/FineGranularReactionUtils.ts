@@ -18,11 +18,22 @@ import { EditableFineGranularMetaModelRelation } from "../types/EditableVsumDeta
 import { findClassNameFromEcoreIdentifier, findPackageNameFromEcoreIdentifier, getHandleIdForEcoreElement, getNodeNameFromEcoreIdentifier } from "./UMLFromEcoreTS";
 import { isFlowFineGranularMetaModelRelationData } from "../types/FlowFineGranularMetaModelRelationData";
 
+/**
+ * Removes a fine-granular reaction relation from VSUM details using edge EObject ids.
+ * @param {FlowEcoreEdge} edge - Edge to remove from persistent VSUM relation data.
+ * @returns {void}
+ */
 export function deleteFineGranularReactionEdgeFromVsumDetails(edge: FlowEcoreEdge) {
   const activeVsumDetails = new ActiveVsumDetails();
   activeVsumDetails.removeFineGranularMetaModelRelation({ sourceId: edge.data!.ecore!.eObjectSourceId, targetId: edge.data!.ecore!.eObjectTargetId });
 }
 
+/**
+ * Resolves the EObject id encoded at the end of a handle id.
+ * @param {string} handleId - Full handle id from React Flow.
+ * @param {FlowNodeECoreData} ecore - Ecore metadata of the hosting node.
+ * @returns {string} Matching EObject id.
+ */
 export function getProperEObjectIdFromHandle(
   handleId: string,
   ecore: FlowNodeECoreData,
@@ -46,6 +57,11 @@ export function getProperEObjectIdFromHandle(
   );
 }
 
+/**
+ * Tries to read the reaction file id associated with a fine-granular reaction edge.
+ * @param {Edge} edge - Candidate edge.
+ * @returns {number | undefined} Reaction file id when available.
+ */
 export function tryInferReactionFiledIdForFineGranularReactionEdge(edge: Edge) {
   if (isFlowFineGranularMetaModelRelationData(edge.data)) {
     const activeVsumDetails = new ActiveVsumDetails();
@@ -55,6 +71,12 @@ export function tryInferReactionFiledIdForFineGranularReactionEdge(edge: Edge) {
   }
 }
 
+/**
+ * Converts an existing fine-granular relation into a rendered edge.
+ * @param {Node[]} nodes - Available nodes used to resolve source and target.
+ * @param {EditableFineGranularMetaModelRelation} fgEdge - Stored fine-granular relation.
+ * @returns {FlowEcoreEdge} Generated edge representation.
+ */
 export function createExistingFineGranularReactionEdge(nodes: Node[], fgEdge: EditableFineGranularMetaModelRelation): FlowEcoreEdge {
   if (fgEdge.id == null) {
     throw new Error("Existing fine-granular meta model relation must have an id to be converted to an edge");
@@ -94,6 +116,14 @@ export function createExistingFineGranularReactionEdge(nodes: Node[], fgEdge: Ed
     };
 }
 
+  /**
+   * Calculates preferred source and target handles for a fine-granular edge.
+   * @param {string} sourceId - Source EObject identifier.
+   * @param {string} targetId - Target EObject identifier.
+   * @param {Node<any, string | undefined>} sourceNode - Source node.
+   * @param {Node<any, string | undefined>} targetNode - Target node.
+   * @returns {{ sourceHandle: string | undefined; targetHandle: string | undefined; }} Chosen handle ids.
+   */
 export function calculateOptimalFineGranularReactionHandles(sourceId: string, targetId: string, sourceNode: Node<any, string | undefined>, targetNode: Node<any, string | undefined>) {
   const source = findClassNameFromEcoreIdentifier(sourceId)!;
   const target = findClassNameFromEcoreIdentifier(targetId)!;
@@ -194,7 +224,7 @@ export function createFineGranularReactionEdge(
 }
 
 /**
- * Edgle click handler that is called from the FlowCanvas when a reactions edge is clicked.
+ * Edge click handler that is called from the FlowCanvas when a reactions edge is clicked.
  *
  *  @param params The edge click parameters.
  */
@@ -202,6 +232,11 @@ export function onEdgeClick(params: OnEdgeClickParams) {
   useSelectedEdgeStore.setState({ selectedEdge: params.edge as FlowEcoreEdge | null });
 }
 
+/**
+ * Removes the selected fine-granular relation for a deleted edge.
+ * @param {OnEdgeDeleteParams} params - Edge deletion payload.
+ * @returns {void}
+ */
 export function onEdgeDelete(params: OnEdgeDeleteParams) {
   const edge = params.edge as FlowEcoreEdge;
   const activeVsumDetails = new ActiveVsumDetails();
@@ -240,10 +275,21 @@ export function onEdgeDelete(params: OnEdgeDeleteParams) {
   }
 }
 
+/**
+ * Checks whether a node is a synthetic ghost node used for reaction labels.
+ * @param {FlowNode} node - Node to inspect.
+ * @returns {boolean} True when node is a reaction ghost node.
+ */
 export function isReactionGhostNode(node: FlowNode): boolean {
   return node.type === "ghost" && node.id.startsWith("reaction-ghost-");
 }
 
+/**
+ * Synchronizes ghost nodes for reaction edges and updates their positions.
+ * @param {FlowNode[]} currentNodes - Current node collection.
+ * @param {FlowEcoreEdge[]} currentEdges - Current fine-granular reaction edges.
+ * @returns {{ currentNodes: FlowNode[]; currentEdges: FlowEcoreEdge[] }} Updated nodes and unchanged edges.
+ */
 export function recalculateNodesOnEdgesForReactions(
   currentNodes: FlowNode[],
   currentEdges: FlowEcoreEdge[],
@@ -306,39 +352,71 @@ export function recalculateNodesOnEdgesForReactions(
   return { currentNodes: nodesToReturn, currentEdges: currentEdges };
 }
 
+/**
+ * Enables both source and target reaction handles.
+ * @returns {void}
+ */
 export function enableReactionHandles() {
   enableReactionSourceHandles();
   enableReactionTargetHandles();
 }
 
+/**
+ * Makes reaction edges visible.
+ * @returns {void}
+ */
 export function enableReactionEdges() {
   setEdgeOpacity("reaction", 1);
 }
 
+/**
+ * Disables both source and target reaction handles.
+ * @returns {void}
+ */
 export function disableReactionHandles() {
   disableReactionSourceHandles();
   disableReactionTargetHandles();
 }
 
+/**
+ * Hides reaction edges.
+ * @returns {void}
+ */
 export function disableReactionEdges() {
   setEdgeOpacity("reaction", 0);
 }
 
+/**
+ * Enables source reaction handles.
+ * @returns {void}
+ */
 export function enableReactionSourceHandles() {
   setHandlePointerEvents("reaction", "source", "auto");
   setHandleOpacity("reaction", "source", 1);
 }
 
+/**
+ * Disables source reaction handles.
+ * @returns {void}
+ */
 export function disableReactionSourceHandles() {
   setHandlePointerEvents("reaction", "source", "none");
   setHandleOpacity("reaction", "source", 0);
 }
 
+/**
+ * Enables target reaction handles.
+ * @returns {void}
+ */
 export function enableReactionTargetHandles() {
   setHandlePointerEvents("reaction", "target", "auto");
   setHandleOpacity("reaction", "target", 1);
 }
 
+/**
+ * Disables target reaction handles.
+ * @returns {void}
+ */
 export function disableReactionTargetHandles() {
   setHandlePointerEvents("reaction", "target", "none");
   setHandleOpacity("reaction", "target", 0);

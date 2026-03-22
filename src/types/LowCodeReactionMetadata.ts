@@ -1,6 +1,9 @@
 import { LowCodeReactionFieldMetadata } from "./LowCodeReactionFieldMetadata";
 
 
+/**
+ * Metadata describing a low-code reaction template and its fields.
+ */
 export type LowCodeReactionMetadata = {
   // Display name of the reaction
   name: string | null;

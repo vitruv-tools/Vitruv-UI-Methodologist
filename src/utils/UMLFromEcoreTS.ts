@@ -9,6 +9,11 @@ export const ecorePackageSeparator = "/" as const;
 export const ecoreGenericSeparator = "~" as const;
 export const ecoreIdentifierSeparators = [ecoreClassSeparator, ecoreFeatureSeparator, ecorePackageSeparator, ecoreGenericSeparator] as const;
 
+/**
+ * Splits an Ecore identifier by known separators.
+ * @param {string | undefined} value - Identifier to split.
+ * @returns {string[]} Identifier parts.
+ */
 export function splitByEcoreIdentifierSeparators(value: string | undefined): string[] {
   if (!value) {
     return [];
@@ -22,10 +27,22 @@ export function splitByEcoreIdentifierSeparators(value: string | undefined): str
   return value.split(separatorPattern).filter((part) => part.length > 0);
 }
 
+/**
+ * Builds a reaction handle id for a specific Ecore element and direction.
+ * @param {string} fullyQualifiedName - Fully qualified Ecore element identifier.
+ * @param {"left" | "right" | "top" | "bottom"} direction - Handle side direction.
+ * @param {"source" | "target"} type - Handle role.
+ * @returns {string} Encoded handle id.
+ */
 export function getHandleIdForEcoreElement(fullyQualifiedName: string, direction: "left" | "right" | "top" | "bottom", type: "source" | "target"): string {
   return `reaction-${direction}-${type}-${fullyQualifiedName}`;
 }
 
+/**
+ * Extracts package name information from a full Ecore identifier.
+ * @param {string} value - Full Ecore identifier.
+ * @returns {string} Package name portion.
+ */
 export function findPackageNameFromEcoreIdentifier(value: string): string {
   const parts = value.split(ecorePackageSeparator);
   const previousParts = parts.slice(0, -1);
@@ -34,6 +51,11 @@ export function findPackageNameFromEcoreIdentifier(value: string): string {
   return [...previousParts, onlyPackageName].join(ecorePackageSeparator);
 }
 
+/**
+ * Extracts class name information from a full Ecore identifier.
+ * @param {string} value - Full Ecore identifier.
+ * @returns {string} Class name portion.
+ */
 export function findClassNameFromEcoreIdentifier(value: string): string {
   const parts = value.split(ecoreClassSeparator);
   const previousParts = parts.slice(0, -1);
@@ -42,6 +64,11 @@ export function findClassNameFromEcoreIdentifier(value: string): string {
   return [...previousParts, onlyClassName].join(ecoreClassSeparator);
 }
 
+/**
+ * Converts an Ecore identifier into a node id representation.
+ * @param {string} value - Ecore identifier.
+ * @returns {string} Node id.
+ */
 export function getNodeNameFromEcoreIdentifier(value: string): string {
   return value;
 }
@@ -158,6 +185,12 @@ export function buildAttributeSignature(attr: EObject, index: number): string {
   return `+ ${attrName}: ${typeName}${multiplicity}`;
 }
 
+/**
+ * Builds a UML method signature from an EOperation EObject.
+ * @param {EObject} op - EOperation EObject.
+ * @param {number} index - Position index used for fallback naming.
+ * @returns {string} UML-formatted method signature.
+ */
 export function buildMethodSignature(op: EObject, index: number): string {
   throw new Error("Method signature generation not implemented yet");
 }

@@ -89,10 +89,21 @@ export const getFieldDefaultValue = (
   return "";
 };
 
+/**
+ * Capitalizes the first character of a string.
+ * @param {string} str - Input string.
+ * @returns {string} Capitalized string.
+ */
 function capitalizeFirst(str: string): string {
   return str[0].toUpperCase() + str.slice(1);
 }
 
+/**
+ * Evaluates a template string with support for inline expressions.
+ * @param {string} template - Template literal content.
+ * @param {Partial<LowCodeReactionFieldVariables>} values - Variable values used during evaluation.
+ * @returns {string} Evaluated template result.
+ */
 export function evaluateTemplateWithExpressionSupport(template: string, values: Partial<LowCodeReactionFieldVariables>): string {
   const executionContext = {
     ...values,
@@ -101,6 +112,12 @@ export function evaluateTemplateWithExpressionSupport(template: string, values: 
   return new Function(...Object.keys(executionContext), `return \`${template}\`;`)(...Object.values(executionContext));
 }
 
+/**
+ * Evaluates simple placeholder substitutions in a template string.
+ * @param {string} template - Template containing ${...} placeholders.
+ * @param {Partial<LowCodeReactionFieldVariables>} values - Replacement values.
+ * @returns {string} Template with placeholders replaced.
+ */
 export function evaluateTemplate(template: string, values: Partial<LowCodeReactionFieldVariables>): string {
   return template.replace(/\${(.*?)}/g, (_, key) => {
       return (values as Record<string, string>)[key.trim()] ?? `\$\{${key}\}`;

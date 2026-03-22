@@ -48,6 +48,11 @@ interface ReactionEditorProps {
   onDelete?: (edge: FlowEcoreEdge) => void;
 }
 
+/**
+ * Provides a configurable low-code reaction editor for a selected fine-granular reaction edge.
+ * @param {ReactionEditorProps} props - Component props controlling edge context, callbacks, and disabled state.
+ * @returns {JSX.Element} The editor UI with template selection, dynamic fields, and save/undo/delete actions.
+ */
 export const LowCodeReactionEditor = forwardRef<
   DragablePanelOptionalToolbarRef,
   ReactionEditorProps

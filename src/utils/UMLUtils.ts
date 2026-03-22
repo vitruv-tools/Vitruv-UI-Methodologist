@@ -4,9 +4,9 @@ import { FlowEcoreEdge } from "../types";
 import { OnEdgeClickParams } from "../types/EdgeEventHandlers";
 
 /**
- * Edgle click handler that is called from the FlowCanvas when an uml type edge is clicked.
- *
- *  @param params The edge click parameters.
+ * Handles UML edge click events from the flow canvas.
+ * @param {OnEdgeClickParams} params - Edge click parameters.
+ * @returns {void}
  */
 export function onEdgeClick(params: OnEdgeClickParams) {
   // TODO(Reinbold): Which relationship types should have details shown on click?

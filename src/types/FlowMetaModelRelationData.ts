@@ -1,3 +1,6 @@
+/**
+ * Optional edge payload carrying backend and frontend meta model ids.
+ */
 export type FlowMetaModelRelationData = Partial<{
     /**
      * Backend meta model source id
@@ -17,6 +20,11 @@ export type FlowMetaModelRelationData = Partial<{
     targetMetaModelSourceId: number;
 }>;
 
+/**
+ * Type guard for meta-model relation edge payloads.
+ * @param {unknown} data - Candidate value to validate.
+ * @returns {boolean} True when the value matches FlowMetaModelRelationData.
+ */
 export function isFlowMetaModelRelationData(data: unknown) : data is FlowMetaModelRelationData {
     return (
         typeof data === "object" &&

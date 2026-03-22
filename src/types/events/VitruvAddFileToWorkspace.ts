@@ -1,5 +1,8 @@
 import { VsumMetaModelRef } from "../vsum";
 
+/**
+ * Event payload for adding a file and its metadata to the current workspace.
+ */
 export type VitruvAddFileToWorkspaceEvent = {
   fileContent: string;
   fileName: string;
