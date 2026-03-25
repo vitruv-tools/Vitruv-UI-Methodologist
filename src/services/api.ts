@@ -446,7 +446,7 @@ class ApiService {
 
   /**
    * Create a meta model
-   * Backend expects: { detail: { request: { name, description, domain, keyword, ecoreFileId, genModelFileId, applyGenModelFixes } } }
+   * Backend expects a JSON body: { name, description, domain, keyword, ecoreFileId, genModelFileId, applyGenModelFixes }
    */
   async createMetaModel(data: {
     name: string;
@@ -457,13 +457,13 @@ class ApiService {
     genModelFileId: number;
     applyGenModelFixes?: boolean;
   }): Promise<{ data: any; message: string }> {
-    const request = {
+    const body = {
       ...data,
       applyGenModelFixes: data.applyGenModelFixes ?? false,
     };
     return this.authenticatedRequest('/api/v1/meta-models', {
       method: 'POST',
-      body: JSON.stringify({ detail: { request } }),
+      body: JSON.stringify(body),
     });
   }
 
