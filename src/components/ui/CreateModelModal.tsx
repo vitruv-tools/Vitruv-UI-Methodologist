@@ -782,12 +782,7 @@ function useCreateModelForm({ isOpen, onClose, onSuccess }: CreateModelModalProp
 
   useLayoutEffect(() => {
     if (!scrollTarget) return;
-    const el =
-      scrollTarget === 'name' ? nameFieldRef.current
-        : scrollTarget === 'description' ? descriptionFieldRef.current
-          : scrollTarget === 'keywords' ? keywordsFieldRef.current
-            : scrollTarget === 'domain' ? domainFieldRef.current
-              : filesSectionRef.current;
+    const el = fieldSectionRefs[scrollTarget].current;
     if (el) {
       el.scrollIntoView({ behavior: 'smooth', block: 'center' });
     }
