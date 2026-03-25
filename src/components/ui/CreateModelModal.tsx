@@ -780,9 +780,12 @@ function useCreateModelForm({ isOpen, onClose, onSuccess }: CreateModelModalProp
     files: filesSectionRef,
   };
 
+  const fieldSectionRefsRef = useRef(fieldSectionRefs);
+  fieldSectionRefsRef.current = fieldSectionRefs;
+
   useLayoutEffect(() => {
     if (!scrollTarget) return;
-    const el = fieldSectionRefs[scrollTarget].current;
+    const el = fieldSectionRefsRef.current[scrollTarget].current;
     if (el) {
       el.scrollIntoView({ behavior: 'smooth', block: 'center' });
     }
