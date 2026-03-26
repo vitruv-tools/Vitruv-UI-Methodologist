@@ -45,6 +45,7 @@ describe('CodeEditorModal', () => {
     sourceFileName: 'Source.ecore',
     targetFileName: 'Target.ecore',
     vsumId: '1',
+    title: 'Reaction Editor',
   };
 
   beforeEach(() => {
