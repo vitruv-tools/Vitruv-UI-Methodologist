@@ -468,54 +468,6 @@ export const FlowCanvas = forwardRef<{
       addEdge,
     });
 
-    const getHandlePosition = useCallback((
-      nodeId: string,
-      handle: HandlePosition,
-      edgeId?: string
-    ): { x: number; y: number } | null => {
-      const node = nodes.find(n => n.id === nodeId);
-      if (!node) return null;
-
-      const { x: nodeX, y: nodeY } = node.position;
-      const { width, height } = NODE_DIMENSIONS;
-
-      const nodeDistribution = edgeDistributionMap.get(nodeId);
-      const sideDistribution = nodeDistribution?.get(handle);
-
-      let offsetMultiplier = 0;
-      if (sideDistribution && edgeId) {
-        const edgeData = sideDistribution.find(d => d.edgeId === edgeId);
-        if (edgeData && edgeData.total > 1) {
-          const centerOffset = (edgeData.total - 1) / 2;
-          offsetMultiplier = edgeData.index - centerOffset;
-        }
-      }
-
-      const HANDLE_SPACING = 25;
-      const offset = offsetMultiplier * HANDLE_SPACING;
-
-      // Match ConnectionHandle.tsx:
-      // margin: 18px + SVG arrowhead tip at y=2 inside 24px viewBox → 22px from SVG edge
-      // Total from node border to arrow tip: 18 + 22 = 40px
-      const ARROW_TIP_OFFSET = 40;
-
-      const positions: Record<HandlePosition, { x: number; y: number }> = {
-        top: { x: nodeX + width / 2, y: nodeY },
-        bottom: { x: nodeX + width / 2, y: nodeY + height },
-        left: { x: nodeX, y: nodeY + height / 2 },
-        right: { x: nodeX + width, y: nodeY + height / 2 },
-      };
-
-      const basePos = positions[handle];
-
-      if (handle === 'top' || handle === 'bottom') {
-        return { x: basePos.x + offset, y: basePos.y };
-      } else {
-        return { x: basePos.x, y: basePos.y + offset };
-      }
-    }, [nodes, edgeDistributionMap]);
-
-
     const calculateTargetHandle = useCallback((
       sourcePos: { x: number; y: number },
       targetPos: { x: number; y: number }

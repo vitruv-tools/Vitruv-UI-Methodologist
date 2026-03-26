@@ -3,12 +3,6 @@ import { NodeProps } from 'reactflow';
 import { ConfirmDialog } from '../ui/ConfirmDialog';
 import { ConnectionHandle } from './ConnectionHandle';
 
-interface EdgeDistributionData {
-  edgeId: string;
-  index: number;
-  total: number;
-}
-
 interface EcoreFileBoxData {
   fileName: string;
   fileContent: string;
@@ -23,7 +17,6 @@ interface EcoreFileBoxData {
   keywords?: string;
   domain?: string;
   createdAt?: string;
-  edgeDistribution?: Map<'top' | 'bottom' | 'left' | 'right', EdgeDistributionData[]>;
 }
 
 type HandlePosition = 'top' | 'bottom' | 'left' | 'right';
@@ -329,7 +322,6 @@ export const EcoreFileBox: React.FC<NodeProps<EcoreFileBoxData>> = ({
     description,
     keywords,
     createdAt,
-    edgeDistribution,
   } = data;
 
   const boxRef = useRef<HTMLDivElement>(null);
