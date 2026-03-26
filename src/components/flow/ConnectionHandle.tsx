@@ -1,4 +1,3 @@
-
 import React, { useState, useMemo } from 'react';
 import { Handle, Position } from 'reactflow';
 
@@ -6,7 +5,7 @@ type HandlePosition = 'top' | 'bottom' | 'left' | 'right';
 
 interface ConnectionHandleProps {
   position: HandlePosition;
-  onConnectionStart?: (position: HandlePosition) => void;
+  onConnectionStart?: (position: HandlePosition, tipScreenPos: { x: number; y: number }) => void;
   isVisible?: boolean;
   offsetIndex?: number;
   totalHandles?: number;
@@ -146,17 +145,47 @@ export const ConnectionHandle: React.FC<ConnectionHandleProps> = React.memo(({
   }, [position, isHovered]);
 
   /**
-   * Handle pointer down event to start connection.
+   * Measure the exact arrow tip position from the DOM element and pass it up.
+   * This avoids all manual offset calculations and works regardless of
+   * node size, zoom level, or which side the handle is on.
    */
   const handlePointerDownCapture = (e: React.PointerEvent) => {
-    console.log('🟢 Handle pointer down CAPTURED');
     e.stopPropagation();
     e.preventDefault();
     (e.target as HTMLElement).dataset.nodrag = 'true';
 
-    if (onConnectionStart) {
-      onConnectionStart(position);
+    if (!onConnectionStart) return;
+
+    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+
+    // The SVG arrow tip is at the outermost edge of the div, centered on the axis.
+    // top:    tip at top-center    → (left + width/2, top)
+    // bottom: tip at bottom-center → (left + width/2, bottom)
+    // left:   tip at left-center   → (left, top + height/2)
+    // right:  tip at right-center  → (right, top + height/2)
+    let tipX: number;
+    let tipY: number;
+
+    switch (position) {
+      case 'top':
+        tipX = rect.left + rect.width / 2;
+        tipY = rect.top;
+        break;
+      case 'bottom':
+        tipX = rect.left + rect.width / 2;
+        tipY = rect.bottom;
+        break;
+      case 'left':
+        tipX = rect.left;
+        tipY = rect.top + rect.height / 2;
+        break;
+      case 'right':
+        tipX = rect.right;
+        tipY = rect.top + rect.height / 2;
+        break;
     }
+
+    onConnectionStart(position, { x: tipX, y: tipY });
   };
 
   /**
@@ -165,8 +194,9 @@ export const ConnectionHandle: React.FC<ConnectionHandleProps> = React.memo(({
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' || e.key === ' ') {
       e.preventDefault();
+      // For keyboard, fall back to center of the element
       if (onConnectionStart) {
-        onConnectionStart(position);
+        onConnectionStart(position, { x: 0, y: 0 });
       }
     }
   };

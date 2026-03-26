@@ -85,6 +85,7 @@ interface ConnectionDragState {
   sourceNodeId: string | null;
   sourceHandle: 'top' | 'bottom' | 'left' | 'right' | null;
   currentPosition: { x: number; y: number } | null;
+  sourceTipPosition: { x: number; y: number } | null;
 }
 
 interface CodeEditorState {
@@ -467,53 +468,6 @@ export const FlowCanvas = forwardRef<{
       addEdge,
     });
 
-    const getHandlePosition = useCallback((
-      nodeId: string,
-      handle: HandlePosition,
-      edgeId?: string
-    ): { x: number; y: number } | null => {
-      const node = nodes.find(n => n.id === nodeId);
-      if (!node) return null;
-
-      const { x: nodeX, y: nodeY } = node.position;
-      const { width, height } = NODE_DIMENSIONS;
-
-      // Get distribution data for this node and handle
-      const nodeDistribution = edgeDistributionMap.get(nodeId);
-      const sideDistribution = nodeDistribution?.get(handle);
-
-      let offsetMultiplier = 0;
-
-      if (sideDistribution && edgeId) {
-        const edgeData = sideDistribution.find(d => d.edgeId === edgeId);
-        if (edgeData && edgeData.total > 1) {
-          // Calculate symmetric offset from center
-          const centerOffset = (edgeData.total - 1) / 2;
-          offsetMultiplier = edgeData.index - centerOffset;
-        }
-      }
-
-      // Spacing between handles when multiple edges exist
-      const HANDLE_SPACING = 25;
-      const offset = offsetMultiplier * HANDLE_SPACING;
-
-      const positions: Record<HandlePosition, { x: number; y: number }> = {
-        top: { x: nodeX + width / 2, y: nodeY },                    // Center of top edge
-        bottom: { x: nodeX + width / 2, y: nodeY + height },        // Center of bottom edge
-        left: { x: nodeX, y: nodeY + height / 2 },                  // Center of left edge
-        right: { x: nodeX + width, y: nodeY + height / 2 },         // Center of right edge
-      };
-
-      const basePos = positions[handle];
-
-      // Apply offset based on handle orientation
-      if (handle === 'top' || handle === 'bottom') {
-        return { x: basePos.x + offset, y: basePos.y };
-      } else {
-        return { x: basePos.x, y: basePos.y + offset };
-      }
-    }, [nodes, edgeDistributionMap]);
-
     const calculateTargetHandle = useCallback((
       sourcePos: { x: number; y: number },
       targetPos: { x: number; y: number }
@@ -662,6 +616,7 @@ export const FlowCanvas = forwardRef<{
         return null;
       }
     }, [buildInitialReactionCode]);
+
 
     const buildNewEdge = useCallback((
       sourceNodeId: string,
@@ -1002,19 +957,24 @@ export const FlowCanvas = forwardRef<{
       updateNodeLabel(id, newLabel);
     }, [updateNodeLabel]);
 
-    const handleConnectionStart = useCallback((nodeId: string, handle: HandlePosition) => {
-      console.log('🔵 Connection drag started:', { nodeId, handle });
+    const handleConnectionStart = useCallback((
+      nodeId: string,
+      handle: HandlePosition,
+      tipScreenPos: { x: number; y: number }
+    ) => {
+      if (!reactFlowInstance) return;
 
-      const initialPosition = getHandlePosition(nodeId, handle);
-      console.log('🔵 Initial position:', initialPosition);
+      // Convert the DOM screen position of the arrow tip to flow coordinates
+      const flowTipPos = reactFlowInstance.screenToFlowPosition(tipScreenPos);
 
       setConnectionDragState({
         isActive: true,
         sourceNodeId: nodeId,
         sourceHandle: handle,
-        currentPosition: initialPosition,
+        currentPosition: flowTipPos,
+        sourceTipPosition: flowTipPos,
       });
-    }, [getHandlePosition]);
+    }, [reactFlowInstance]);
 
     const handleEcoreFileSelect = useCallback((fileName: string) => {
       const ecoreNode = nodes.find(
@@ -2013,45 +1973,32 @@ export const FlowCanvas = forwardRef<{
     });
 
     const getConnectionLinePositions = () => {
-      if (!connectionDragState?.isActive ||
-        !connectionDragState.sourceNodeId ||
-        !connectionDragState.sourceHandle ||
+      if (
+        !connectionDragState?.isActive ||
+        !connectionDragState.sourceTipPosition ||
         !connectionDragState.currentPosition ||
         !reactFlowInstance ||
-        !reactFlowWrapper.current) {
+        !reactFlowWrapper.current
+      ) {
         return null;
       }
 
-      const sourcePos = getHandlePosition(
-        connectionDragState.sourceNodeId,
-        connectionDragState.sourceHandle
-      );
-
-      if (!sourcePos) return null;
-
       const viewport = reactFlowInstance.getViewport();
+      const tip = connectionDragState.sourceTipPosition;
 
-      console.log('🔍 Connection Line Debug:', {
-        sourceFlowPos: sourcePos,
-        currentFlowPos: connectionDragState.currentPosition,
-        viewport,
-      });
-
-      const result = {
+      return {
         source: {
-          x: sourcePos.x * viewport.zoom + viewport.x,
-          y: sourcePos.y * viewport.zoom + viewport.y,
+          x: tip.x * viewport.zoom + viewport.x,
+          y: tip.y * viewport.zoom + viewport.y,
         },
         target: {
           x: connectionDragState.currentPosition.x * viewport.zoom + viewport.x,
           y: connectionDragState.currentPosition.y * viewport.zoom + viewport.y,
         },
       };
-
-      console.log('🔍 Connection Line Screen Positions:', result);
-
-      return result;
     };
+
+
 
     const connectionLinePositions = getConnectionLinePositions();
 
@@ -2160,6 +2107,10 @@ export const FlowCanvas = forwardRef<{
             sourceFileName={codeEditorState.sourceFileName}
             targetFileName={codeEditorState.targetFileName}
             vsumId={vsumId}
+            lspEndpoint="/lsp"
+            languageId="reactions"
+            fileExtension=".reactions"
+            title="Reaction Editor"
           />
         )}
       </div>
