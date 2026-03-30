@@ -374,7 +374,6 @@ export const FlowCanvas = forwardRef<{
     useEffect(() => {
       if (!reactFlowInstance) return;
       const timeout = setTimeout(() => {
-        //fitViewToCircle(circle);
       }, 500); // ← 100ms war zu wenig
       return () => clearTimeout(timeout);
       // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -1284,12 +1283,6 @@ export const FlowCanvas = forwardRef<{
         const preserveExisting = custom.detail?.preserveExisting ?? false;
 
         relations.forEach(relation => processRelation(relation, preserveExisting));
-
-        if (relations.length > 0) {
-          setTimeout(() => {
-            // fitViewToCircle(circle);
-          }, 300);
-        }
       };
 
       globalThis.addEventListener('vitruv.loadMetaModelRelations', handleLoadMetaModelRelations as EventListener);
@@ -1845,7 +1838,7 @@ export const FlowCanvas = forwardRef<{
 
     const performEdgeReorder = useCallback((edgeId: string, controlPoint: { x: number; y: number }) => {
       const edge = edges.find(e => e.id === edgeId);
-      if (!edge || edge.type !== 'reactions') return;
+      if (edge?.type !== 'reactions') return;
 
       const sourceNode = nodes.find(n => n.id === edge.source);
       const targetNode = nodes.find(n => n.id === edge.target);
@@ -1868,6 +1861,8 @@ export const FlowCanvas = forwardRef<{
         return applyEdgeReorderData(prevEdges, reorderedSourceEdges, reorderedTargetEdges);
       });
     }, [edges, nodes, setEdges, createEdgeReorderComparator, applyEdgeReorderData]);
+
+
 
     const handleEdgeReorderRequest = useCallback((edgeId: string, controlPoint: { x: number; y: number }) => {
       performEdgeReorder(edgeId, controlPoint);
@@ -2136,7 +2131,6 @@ export const FlowCanvas = forwardRef<{
           containerRef={reactFlowWrapper}
           onSelect={() => {
             setCircleSelected(true);
-            // fitViewToCircle(circle);
           }}
           onResize={handleCircleResize}
           onResizePreview={handleCircleResizePreview}

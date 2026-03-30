@@ -9,9 +9,11 @@ export interface Circle {
 
 const NODE_W = 280;
 const NODE_H = 180;
-const NODE_HALF_DIAGONAL = Math.sqrt((NODE_W / 2) ** 2 + (NODE_H / 2) ** 2);
+const NODE_HALF_DIAGONAL = Math.hypot(NODE_W / 2, NODE_H / 2);
 const SPAWN_PADDING = 80;
 const MIN_RADIUS = 260;
+const DEFAULT_NODE_SIZE = { width: NODE_W, height: NODE_H };
+
 
 export function computeInitialCircle(nodes: Pick<Node, 'position'>[]): Circle {
     if (nodes.length === 0) return { cx: 0, cy: 0, r: MIN_RADIUS };
@@ -28,7 +30,7 @@ export function computeInitialCircle(nodes: Pick<Node, 'position'>[]): Circle {
     nodes.forEach(n => {
         const nodeCenterX = n.position.x + NODE_W / 2;
         const nodeCenterY = n.position.y + NODE_H / 2;
-        const distToCenter = Math.sqrt((nodeCenterX - cx) ** 2 + (nodeCenterY - cy) ** 2);
+        const distToCenter = Math.hypot(nodeCenterX - cx, nodeCenterY - cy);
         maxDist = Math.max(maxDist, distToCenter + NODE_HALF_DIAGONAL);
     });
 
@@ -42,7 +44,7 @@ export function computeInitialCircle(nodes: Pick<Node, 'position'>[]): Circle {
 export function clampToCircle(
     position: { x: number; y: number },
     circle: Circle,
-    nodeSize: { width: number; height: number } = { width: NODE_W, height: NODE_H }
+    nodeSize: { width: number; height: number } = DEFAULT_NODE_SIZE
 ): { x: number; y: number } {
     if (circle.r === 0) return position;
 
@@ -60,7 +62,7 @@ export function clampToCircle(
     for (const corner of corners) {
         const dx = corner.x - circle.cx;
         const dy = corner.y - circle.cy;
-        const dist = Math.sqrt(dx * dx + dy * dy);
+        const dist = Math.hypot(dx, dy);
         if (dist > maxDist) {
             maxDist = dist;
             worstCorner = corner;
@@ -86,6 +88,8 @@ export function clampToCircle(
         y: circle.cy + dy * scale - cornerOffsetY,
     };
 }
+
+
 export function clampAllNodesToCircle(
     nodes: Node[],
     circle: Circle
