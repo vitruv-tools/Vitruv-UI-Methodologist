@@ -72,9 +72,8 @@ export const CircleOverlay: React.FC<CircleOverlayProps> = ({
         const rawScreenR = Math.hypot(dx, dy);
         const rawFlowR = rawScreenR / viewport.zoom;
 
-        if (dragStartR.current === null) {
-            dragStartR.current ??= circle.r;
-        }
+        dragStartR.current ??= circle.r;
+
         const startR = dragStartR.current;
         const delta = rawFlowR - startR;
         const resistance = 40;
