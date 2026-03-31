@@ -60,20 +60,25 @@ const typeSelectStyle: React.CSSProperties = {
 
 // Parse "+ attrName: TypeName [mult]" into parts
 function parseAttrString(raw: string): { vis: string; name: string; type: string; mult: string } | null {
-  const m = raw.match(/^([+\-#~]?)\s*([\w]+)\s*:\s*([\w:./\\]+)(.*)?$/);
+  // Hard length cap so the regex cannot be driven into super-linear backtracking
+  // by a pathological input string.
+  if (raw.length > 256) return null;
+  // (.+)? for the trailing multiplicity: the group is either absent (no suffix)
+  // or holds at least one character, so it never captures the empty string.
+  const m = /^([+\-#~]?)\s*(\w+)\s*:\s*([\w:./\\]+)(.+)?$/.exec(raw);
   if (!m) return null;
   return {
     vis: m[1] || '+',
     name: m[2],
     type: m[3],
-    mult: (m[4] || '').trim(),
+    mult: (m[4] ?? '').trim(),
   };
 }
 
 interface AttributeRowProps {
-  raw: string;
-  enumTypes: string[];
-  onUpdate: (newRaw: string) => void;
+  readonly raw: string;
+  readonly enumTypes: string[];
+  readonly onUpdate: (newRaw: string) => void;
 }
 
 function AttributeRow({ raw, enumTypes, onUpdate }: AttributeRowProps) {
@@ -83,7 +88,7 @@ function AttributeRow({ raw, enumTypes, onUpdate }: AttributeRowProps) {
   }
 
   // Only ECore built-in types + model enums — no class names (those are EReferences, not EAttributes)
-  const base = Array.from(new Set([...ECORE_PRIMITIVE_TYPES, ...enumTypes])).sort();
+  const base = Array.from(new Set([...ECORE_PRIMITIVE_TYPES, ...enumTypes])).sort((a, b) => a.localeCompare(b));
   const typeOptions = parsed.type && !base.includes(parsed.type) ? [...base, parsed.type] : base;
 
   const handleTypeChange = (e: React.ChangeEvent<HTMLSelectElement>) => {

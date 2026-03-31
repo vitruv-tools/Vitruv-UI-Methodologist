@@ -488,6 +488,9 @@ export const VsumsPanel: React.FC = () => {
                                         const daysLeft = getDaysLeft(item.removedAt);
                                         const urgency = getDaysLeftUrgency(daysLeft);
                                         const c = URGENCY_COLORS[urgency];
+                                        const daysLeftLabel = daysLeft === 0
+                                            ? 'Deleting soon'
+                                            : `${daysLeft} day${daysLeft === 1 ? '' : 's'} left`;
                                         return (
                                             <span
                                                 style={{
@@ -506,7 +509,7 @@ export const VsumsPanel: React.FC = () => {
                                                     fontFamily: `'Segoe UI', system-ui, sans-serif`,
                                                     whiteSpace: 'nowrap',
                                                 }}
-                                                title={`Permanently deleted in ${daysLeft} day${daysLeft !== 1 ? 's' : ''} (30-day policy)`}
+                                                title={`Permanently deleted in ${daysLeft} day${daysLeft === 1 ? '' : 's'} (30-day policy)`}
                                             >
                                                 {/* Coloured dot indicator */}
                                                 <span style={{
@@ -516,9 +519,7 @@ export const VsumsPanel: React.FC = () => {
                                                     flexShrink: 0,
                                                     display: 'inline-block',
                                                 }} />
-                                                {daysLeft === 0
-                                                    ? 'Deleting soon'
-                                                    : `${daysLeft} day${daysLeft !== 1 ? 's' : ''} left`}
+                                                {daysLeftLabel}
                                             </span>
                                         );
                                     })()}

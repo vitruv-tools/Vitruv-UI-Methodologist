@@ -161,7 +161,7 @@ const layoutForceDirected = (
     componentNodes.forEach(id => forces.set(id, { x: 0, y: 0 }));
 
     // Equal vertical/horizontal repulsion (VERTICAL_BIAS = 1)
-    applyRepulsionForces(componentNodes, positions, forces, REPULSION, 1.0);
+    applyRepulsionForces(componentNodes, positions, forces, REPULSION, 1);
     applyAttractionForces(componentNodes, positions, forces, adjacencyMap, ATTRACTION, IDEAL_DISTANCE);
 
     const coolingFactor = 1 - (iter / ITERATIONS) * 0.6;
