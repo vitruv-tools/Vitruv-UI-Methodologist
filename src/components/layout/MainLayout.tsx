@@ -368,6 +368,43 @@ export function MainLayout({
         }
     }, []);
 
+    // ── UML position persistence (localStorage, no backend needed) ──────────
+    // Key is per-file so different ecore files have independent saved layouts.
+    const getUmlPosKey = useCallback(
+        (fileName: string) => `vitruv.uml.positions.v1.${vsumId ?? 'default'}.${fileName}`,
+        [vsumId]
+    );
+
+    const saveUmlPositions = useCallback((fileName: string, nodes: Node[]) => {
+        try {
+            const posMap: Record<string, { x: number; y: number }> = {};
+            nodes.forEach(n => {
+                if (n.type === 'editable') posMap[n.id] = { x: n.position.x, y: n.position.y };
+            });
+            // Only write to localStorage if there are actual UML boxes to save.
+            // An empty posMap means the canvas was cleared (e.g. transition between views)
+            // and we must NOT overwrite previously saved user positions.
+            if (Object.keys(posMap).length > 0) {
+                localStorage.setItem(getUmlPosKey(fileName), JSON.stringify(posMap));
+            }
+        } catch { /* storage quota / private browsing — silently ignore */ }
+    }, [getUmlPosKey]);
+
+    const restoreUmlPositions = useCallback(<T extends { id: string; position: { x: number; y: number } }>(
+        fileName: string, nodes: T[]
+    ): T[] => {
+        try {
+            const raw = localStorage.getItem(getUmlPosKey(fileName));
+            if (!raw) return nodes;
+            const posMap = JSON.parse(raw) as Record<string, { x: number; y: number }>;
+            return nodes.map(n => {
+                const saved = posMap[n.id];
+                return saved ? { ...n, position: saved } : n;
+            });
+        } catch { return nodes; }
+    }, [getUmlPosKey]);
+    // ────────────────────────────────────────────────────────────────────────
+
     const handleEcoreFileExpand = useCallback((fileName: string, fileContent: string) => {
         // Cache the current workspace snapshot before switching to UML view
         // This is critical for saving relations even when viewing UML
@@ -420,15 +457,18 @@ export function MainLayout({
 
         // Use a delay to ensure the canvas is remounted and ready before loading UML
         setTimeout(() => {
+            // Restore any previously saved node positions for this file
+            const restoredNodes = restoreUmlPositions(fileName, diagramData.nodes as any[]);
+
             // Load parsed UML diagram (ONLY UML boxes, no metamodel boxes)
-            flowCanvasRef.current?.loadDiagramData?.(diagramData.nodes, diagramData.edges);
+            flowCanvasRef.current?.loadDiagramData?.(restoredNodes, diagramData.edges);
             // Make generated UML read-only by default, but allow moving boxes
             flowCanvasRef.current?.setInteractive?.(false);
             flowCanvasRef.current?.setDraggable?.(true);
-            saveDocumentData(newId, { nodes: diagramData.nodes as any, edges: diagramData.edges as any });
+            saveDocumentData(newId, { nodes: restoredNodes as any, edges: diagramData.edges as any });
             setIsDirty(false);
         }, 100);
-    }, [setDocuments]);
+    }, [setDocuments, restoreUmlPositions]);
 
     const handleEcoreFileDelete = useCallback((id: string) => {
         // Remove Node from FlowCanvas
@@ -471,10 +511,23 @@ export function MainLayout({
         }
     }, []);
 
-    // ---- diagram save ----
-    const handleDiagramChange = (_nodes: Node[], _edges: Edge[]) => {
+    // Keep a ref so handleDiagramChange always reads the latest expandedMetaModelName
+    // without needing to recreate the callback (avoids stale-closure overwrites).
+    const expandedMetaModelNameRef = React.useRef<string | null>(expandedMetaModelName);
+    React.useEffect(() => {
+        expandedMetaModelNameRef.current = expandedMetaModelName;
+    }, [expandedMetaModelName]);
+
+    const handleDiagramChange = useCallback((nodes: Node[], _edges: Edge[]) => {
         setIsDirty(true);
-    };
+        // Auto-save UML box positions whenever something moves (drag ends, etc.).
+        // Use a ref so we always have the latest fileName even if React batches
+        // the expandedMetaModelName state update with the canvas-clear call.
+        const fileName = expandedMetaModelNameRef.current;
+        if (fileName) {
+            saveUmlPositions(fileName, nodes);
+        }
+    }, [saveUmlPositions]);
 
     return (
         <div

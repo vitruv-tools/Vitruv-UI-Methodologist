@@ -12,7 +12,9 @@ import {
   packageContentTitleStyle,
   packageHintStyle,
   getDeleteButtonStyle,
-  handleStyles
+  handleStyles,
+  typeLabelStyle,
+  typeAccentColors,
 } from './umlNodeStyles';
 
 // Types
@@ -28,6 +30,90 @@ interface UMLNodeData {
   methods?: string[];
   values?: string[];
   packageName?: string;
+  availableEnumTypes?: string[];
+}
+
+// ─── Inline attribute-type selector (jjodel style) ───────────────────────────
+
+const ECORE_PRIMITIVE_TYPES = [
+  'EString', 'EInt', 'EBoolean', 'EFloat', 'EDouble',
+  'ELong', 'EShort', 'EChar', 'EByte', 'EDate',
+  'EBigDecimal', 'EBigInteger', 'EObject',
+];
+
+const typeSelectStyle: React.CSSProperties = {
+  border: '1.5px solid #b8d0e2',
+  borderRadius: '3px',
+  fontSize: '16px',
+  fontFamily: `'Consolas', 'Courier New', monospace`,
+  color: '#0c436e',
+  background: '#f4f8fc',
+  padding: '2px 5px',
+  cursor: 'pointer',
+  maxWidth: '200px',
+  minWidth: '90px',
+  flexShrink: 1,
+  outline: 'none',
+  height: '28px',
+  lineHeight: '28px',
+};
+
+// Parse "+ attrName: TypeName [mult]" into parts
+function parseAttrString(raw: string): { vis: string; name: string; type: string; mult: string } | null {
+  const m = raw.match(/^([+\-#~]?)\s*([\w]+)\s*:\s*([\w:./\\]+)(.*)?$/);
+  if (!m) return null;
+  return {
+    vis: m[1] || '+',
+    name: m[2],
+    type: m[3],
+    mult: (m[4] || '').trim(),
+  };
+}
+
+interface AttributeRowProps {
+  raw: string;
+  enumTypes: string[];
+  onUpdate: (newRaw: string) => void;
+}
+
+function AttributeRow({ raw, enumTypes, onUpdate }: AttributeRowProps) {
+  const parsed = parseAttrString(raw);
+  if (!parsed) {
+    return <div style={listItemStyle}>{raw}</div>;
+  }
+
+  // Only ECore built-in types + model enums — no class names (those are EReferences, not EAttributes)
+  const base = Array.from(new Set([...ECORE_PRIMITIVE_TYPES, ...enumTypes])).sort();
+  const typeOptions = parsed.type && !base.includes(parsed.type) ? [...base, parsed.type] : base;
+
+  const handleTypeChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    const newType = e.target.value;
+    const rebuilt = `${parsed.vis} ${parsed.name}: ${newType}${parsed.mult ? ' ' + parsed.mult : ''}`;
+    onUpdate(rebuilt);
+  };
+
+  return (
+    <div style={{ ...listItemStyle, display: 'flex', alignItems: 'center', gap: '3px', flexWrap: 'nowrap' }}>
+      <span style={{ color: '#087E8B', fontWeight: 700, flexShrink: 0, minWidth: '9px' }}>
+        {parsed.vis}
+      </span>
+      <span style={{ color: '#1e3a50', flexShrink: 0 }}>{parsed.name}:</span>
+      <select
+        value={parsed.type}
+        style={typeSelectStyle}
+        onChange={handleTypeChange}
+        title={`Type: ${parsed.type}`}
+        onMouseDown={(e) => e.stopPropagation()}
+      >
+        {typeOptions.map(t => (
+          <option key={t} value={t}>{t}</option>
+        ))}
+      </select>
+      {parsed.mult && (
+        <span style={{ color: '#5a7a90', fontSize: '15px', flexShrink: 0 }}>{parsed.mult}</span>
+      )}
+    </div>
+  );
 }
 
 interface EditableFieldProps {
@@ -439,151 +525,113 @@ export function EditableNode({ id, data, selected, isConnectable }: NodeProps<UM
     return baseStyle;
   };
 
+  // Plain text rows for methods / enum values
   const renderLines = (items: string[]) => (
     <>
       {items.map((text, index) => (
-        <div key={`${text}-${index}`} style={listItemStyle}>
-          {text}
-        </div>
+        <div key={`${text}-${index}`} style={listItemStyle}>{text}</div>
       ))}
     </>
   );
 
+  // Attribute rows with inline type-selector dropdown
+  const renderAttributeLines = (items: string[]) => {
+    const enumTypes = nodeData.availableEnumTypes || [];
+    return (
+      <>
+        {items.map((raw, index) => (
+          <AttributeRow
+            key={`${raw}-${index}`}
+            raw={raw}
+            enumTypes={enumTypes}
+            onUpdate={(newRaw) => {
+              const updated = [...items];
+              updated[index] = newRaw;
+              updateNodeData({ attributes: updated });
+            }}
+          />
+        ))}
+      </>
+    );
+  };
+
   const renderUMLClass = () => (
     <div style={{ width: '100%' }}>
-      {selected && (
-        <DeleteButton onDeleteClick={handleDelete} />
-      )}
-      
-      {/* Class Name Section */}
+      {selected && <DeleteButton onDeleteClick={handleDelete} />}
       <div style={headerBaseStyle}>
+        <span style={{ ...typeLabelStyle, color: typeAccentColors['class'] }}>Class:</span>
         <EditableField
           value={nodeData.className || ''}
           onSave={(newValue) => updateNodeData({ className: newValue })}
-          placeholder="Class Name"
-          style={{ 
-            fontWeight: '600',
-            fontSize: '13px',
-            color: '#1f2937',
-            textAlign: 'center'
-          }}
+          placeholder="ClassName"
+          style={{ fontWeight: 600, fontSize: '13px', color: '#0c436e' }}
         />
       </div>
-      
-      {/* Attributes Section */}
       {nodeData.attributes && nodeData.attributes.length > 0 && (
-        <div style={borderedSectionBodyStyle}>
-          {renderLines(nodeData.attributes)}
-        </div>
+        <div style={borderedSectionBodyStyle}>{renderAttributeLines(nodeData.attributes)}</div>
       )}
-      
-      {/* Methods Section */}
       {nodeData.methods && nodeData.methods.length > 0 && (
-        <div style={sectionBodyStyle}>
-          {renderLines(nodeData.methods)}
-        </div>
+        <div style={sectionBodyStyle}>{renderLines(nodeData.methods)}</div>
       )}
     </div>
   );
 
-  // Render UML Abstract Class
   const renderUMLAbstractClass = () => (
     <div style={{ width: '100%' }}>
-      {selected && (
-        <DeleteButton onDeleteClick={handleDelete} />
-      )}
-      
+      {selected && <DeleteButton onDeleteClick={handleDelete} />}
       <div style={italicHeaderStyle}>
-        <span style={{ fontSize: '10px', fontWeight: 'normal' }}>&lt;&lt;abstract&gt;&gt;</span>
-        {' '}
+        <span style={{ ...typeLabelStyle, color: typeAccentColors['abstract-class'], fontStyle: 'italic' }}>Abstract Class:</span>
         <EditableField
           value={nodeData.className || ''}
           onSave={(newValue) => updateNodeData({ className: newValue })}
-          placeholder="Abstract Class Name"
-          style={{ 
-            fontWeight: '600',
-            fontSize: '13px',
-            color: '#1f2937',
-            textAlign: 'center',
-            fontStyle: 'italic'
-          }}
+          placeholder="ClassName"
+          style={{ fontWeight: 600, fontSize: '13px', color: '#0c436e', fontStyle: 'italic' }}
         />
       </div>
-      
       {nodeData.attributes && nodeData.attributes.length > 0 && (
-        <div style={borderedSectionBodyStyle}>
-          {renderLines(nodeData.attributes)}
-        </div>
+        <div style={borderedSectionBodyStyle}>{renderAttributeLines(nodeData.attributes)}</div>
       )}
-      
       {nodeData.methods && nodeData.methods.length > 0 && (
-        <div style={sectionBodyStyle}>
-          {renderLines(nodeData.methods)}
-        </div>
+        <div style={sectionBodyStyle}>{renderLines(nodeData.methods)}</div>
       )}
     </div>
   );
 
-  // Render UML Interface
   const renderUMLInterface = () => (
     <div style={{ width: '100%' }}>
-      {selected && (
-        <DeleteButton onDeleteClick={handleDelete} />
-      )}
-      
+      {selected && <DeleteButton onDeleteClick={handleDelete} />}
       <div style={italicHeaderStyle}>
-        <span style={{ fontSize: '10px', fontWeight: 'normal' }}>&lt;&lt;interface&gt;&gt;</span>
-        {' '}
+        <span style={{ ...typeLabelStyle, color: typeAccentColors['interface'], fontStyle: 'italic' }}>Interface:</span>
         <EditableField
           value={nodeData.className || ''}
           onSave={(newValue) => updateNodeData({ className: newValue })}
-          placeholder="Interface Name"
-          style={{ 
-            fontWeight: '600',
-            fontSize: '13px',
-            color: '#1f2937',
-            textAlign: 'center',
-            fontStyle: 'italic'
-          }}
+          placeholder="InterfaceName"
+          style={{ fontWeight: 600, fontSize: '13px', color: '#0c436e', fontStyle: 'italic' }}
         />
       </div>
-      
+      {nodeData.attributes && nodeData.attributes.length > 0 && (
+        <div style={borderedSectionBodyStyle}>{renderAttributeLines(nodeData.attributes)}</div>
+      )}
       {nodeData.methods && nodeData.methods.length > 0 && (
-        <div style={sectionBodyStyle}>
-          {renderLines(nodeData.methods)}
-        </div>
+        <div style={sectionBodyStyle}>{renderLines(nodeData.methods)}</div>
       )}
     </div>
   );
 
-  // Render UML Enumeration
   const renderUMLEnumeration = () => (
     <div style={{ width: '100%' }}>
-      {selected && (
-        <DeleteButton onDeleteClick={handleDelete} />
-      )}
-      
-      <div style={italicHeaderStyle}>
-        <span style={{ fontSize: '10px', fontWeight: 'normal' }}>&lt;&lt;enumeration&gt;&gt;</span>
-        {' '}
+      {selected && <DeleteButton onDeleteClick={handleDelete} />}
+      <div style={{ ...headerBaseStyle, borderBottomColor: typeAccentColors['enumeration'] }}>
+        <span style={{ ...typeLabelStyle, color: typeAccentColors['enumeration'] }}>Enumeration:</span>
         <EditableField
           value={nodeData.className || ''}
           onSave={(newValue) => updateNodeData({ className: newValue })}
-          placeholder="Enumeration Name"
-          style={{ 
-            fontWeight: '600',
-            fontSize: '13px',
-            color: '#1f2937',
-            textAlign: 'center',
-            fontStyle: 'italic'
-          }}
+          placeholder="EnumName"
+          style={{ fontWeight: 600, fontSize: '13px', color: typeAccentColors['enumeration'] }}
         />
       </div>
-      
       {nodeData.values && nodeData.values.length > 0 && (
-        <div style={sectionBodyStyle}>
-          {renderLines(nodeData.values)}
-        </div>
+        <div style={sectionBodyStyle}>{renderLines(nodeData.values)}</div>
       )}
     </div>
   );
