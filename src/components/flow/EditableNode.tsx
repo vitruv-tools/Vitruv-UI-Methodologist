@@ -63,9 +63,12 @@ function parseAttrString(raw: string): { vis: string; name: string; type: string
   // Hard length cap so the regex cannot be driven into super-linear backtracking
   // by a pathological input string.
   if (raw.length > 256) return null;
-  // (.+)? for the trailing multiplicity: the group is either absent (no suffix)
-  // or holds at least one character, so it never captures the empty string.
-  const m = /^([+\-#~]?)\s*(\w+)\s*:\s*([\w:./\\]+)(.+)?$/.exec(raw);
+  // The multiplicity group must start with \s, which is disjoint from the type
+  // character class [\w:./\\].  This removes any overlap between the two
+  // adjacent quantified groups and prevents super-linear backtracking (ReDoS).
+  // [^\r\n]* replaces .+ to avoid dotAll ambiguity and the nested-quantifier
+  // pattern that static analysers flag.
+  const m = /^([+\-#~]?)\s*(\w+)\s*:\s*([\w:./\\]+)(\s[^\r\n]*)?$/.exec(raw);
   if (!m) return null;
   return {
     vis: m[1] || '+',

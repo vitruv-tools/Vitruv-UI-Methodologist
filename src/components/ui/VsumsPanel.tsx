@@ -488,9 +488,10 @@ export const VsumsPanel: React.FC = () => {
                                         const daysLeft = getDaysLeft(item.removedAt);
                                         const urgency = getDaysLeftUrgency(daysLeft);
                                         const c = URGENCY_COLORS[urgency];
+                                        const dayWord = daysLeft === 1 ? 'day' : 'days';
                                         const daysLeftLabel = daysLeft === 0
                                             ? 'Deleting soon'
-                                            : `${daysLeft} day${daysLeft === 1 ? '' : 's'} left`;
+                                            : `${daysLeft} ${dayWord} left`;
                                         return (
                                             <span
                                                 style={{
