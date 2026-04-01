@@ -115,9 +115,33 @@ code {
   background: rgba(255, 255, 255, 0.5);
 }
 
-/* React Flow custom styles */
+/* React Flow custom styles — jjodel-inspired */
 .react-flow__node {
   font-family: inherit;
+}
+
+/* Handles invisible by default; appear when hovering the node or during a live connection */
+.react-flow__handle {
+  opacity: 0 !important;
+  transition: opacity 0.15s ease;
+  pointer-events: all;
+}
+
+.react-flow__node:hover .react-flow__handle,
+.react-flow__handle:hover,
+.react-flow__handle.connecting {
+  opacity: 1 !important;
+}
+
+/* Thinner, navy edge paths for a clean jjodel look */
+.react-flow__edge-path {
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+/* Remove the default blue edge selection outline */
+.react-flow__edge.selected .react-flow__edge-path {
+  outline: none;
 }
 
 .react-flow__controls {

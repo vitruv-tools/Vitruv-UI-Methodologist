@@ -117,6 +117,29 @@ export const VsumsPanel: React.FC = () => {
         return `${d.toLocaleDateString()} ${d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
     };
 
+    // Returns how many days remain before auto-deletion (backend deletes after 30 days).
+    const getDaysLeft = (removedAt: string | null | undefined): number => {
+        if (!removedAt) return 30;
+        const deletedMs = new Date(removedAt).getTime();
+        const elapsedDays = (Date.now() - deletedMs) / (1000 * 60 * 60 * 24);
+        return Math.max(0, Math.floor(30 - elapsedDays));
+    };
+
+    // Returns urgency level: 'critical' | 'warning' | 'caution' | 'safe'
+    const getDaysLeftUrgency = (days: number) => {
+        if (days <= 3)  return 'critical' as const;
+        if (days <= 7)  return 'warning'  as const;
+        if (days <= 14) return 'caution'  as const;
+        return 'safe' as const;
+    };
+
+    const URGENCY_COLORS = {
+        critical: { bg: '#fef2f2', text: '#991b1b', border: '#fca5a5', dot: '#ef4444' },
+        warning:  { bg: '#fff7ed', text: '#c2410c', border: '#fdba74', dot: '#f97316' },
+        caution:  { bg: '#fefce8', text: '#854d0e', border: '#fde68a', dot: '#eab308' },
+        safe:     { bg: '#f0fdf4', text: '#166534', border: '#bbf7d0', dot: '#22c55e' },
+    };
+
     const loadFirstPage = useCallback(async () => {
         const mySeq = ++requestSeq.current;
         setLoading(true);
@@ -208,6 +231,12 @@ export const VsumsPanel: React.FC = () => {
 
     return (
         <div ref={containerRef} style={containerStyle}>
+            <style>{`
+                @keyframes pulseBadge {
+                    0%, 100% { opacity: 1; }
+                    50% { opacity: 0.55; }
+                }
+            `}</style>
             <div style={titleStyle}>Projects</div>
 
             <CreateVsumModal
@@ -284,6 +313,33 @@ export const VsumsPanel: React.FC = () => {
                     Deleted Projects
                 </button>
             </div>
+
+            {/* 30-day auto-deletion notice — styled to match project teal theme */}
+            {showDeleted && (
+                <div style={{
+                    display: 'flex',
+                    alignItems: 'flex-start',
+                    gap: 10,
+                    padding: '11px 14px',
+                    marginBottom: 14,
+                    borderRadius: 8,
+                    background: '#f0fdf9',
+                    border: '1px solid #99e6da',
+                    fontSize: 12,
+                    color: '#065f46',
+                    lineHeight: 1.6,
+                    fontFamily: 'Georgia, serif',
+                }}>
+                    {/* Clock icon using project teal */}
+                    <svg style={{ flexShrink: 0, marginTop: 1 }} width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#049484" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <circle cx="12" cy="12" r="10"/>
+                        <polyline points="12 6 12 12 16 14"/>
+                    </svg>
+                    <span>
+                        Deleted projects are <strong style={{ color: '#049484' }}>permanently removed after 30 days</strong>. Restore before time runs out.
+                    </span>
+                </div>
+            )}
 
             {/* Search Bar */}
             <div style={{ position: 'relative', marginBottom: 12 }}>
@@ -414,16 +470,60 @@ export const VsumsPanel: React.FC = () => {
                                         </span>
                                     )}
                                 </div>
-                                <div style={{ fontSize: 12, color: '#9ca3af' }}>
-                                    {showDeleted
-                                        ? `Deleted: ${(() => {
-                                            const d = new Date(item.removedAt || item.updatedAt);
-                                            return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
-                                        })()}`
-                                        : `Created: ${(() => {
-                                            const d = new Date(item.createdAt);
-                                            return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
-                                        })()}`}
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                                    <span style={{ fontSize: 12, color: '#9ca3af' }}>
+                                        {showDeleted
+                                            ? `Deleted: ${(() => {
+                                                const d = new Date(item.removedAt || item.updatedAt);
+                                                return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+                                            })()}`
+                                            : `Created: ${(() => {
+                                                const d = new Date(item.createdAt);
+                                                return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+                                            })()}`}
+                                    </span>
+
+                                    {/* Days-left countdown — inline with the date, matches project style */}
+                                    {showDeleted && (() => {
+                                        const daysLeft = getDaysLeft(item.removedAt);
+                                        const urgency = getDaysLeftUrgency(daysLeft);
+                                        const c = URGENCY_COLORS[urgency];
+                                        const dayWord = daysLeft === 1 ? 'day' : 'days';
+                                        const daysLeftLabel = daysLeft === 0
+                                            ? 'Deleting soon'
+                                            : `${daysLeft} ${dayWord} left`;
+                                        return (
+                                            <span
+                                                style={{
+                                                    display: 'inline-flex',
+                                                    alignItems: 'center',
+                                                    gap: 5,
+                                                    padding: '2px 8px',
+                                                    borderRadius: 20,
+                                                    border: `1px solid ${c.border}`,
+                                                    background: c.bg,
+                                                    fontSize: 11,
+                                                    fontWeight: 700,
+                                                    color: c.text,
+                                                    letterSpacing: '0.2px',
+                                                    animation: urgency === 'critical' ? 'pulseBadge 1.4s ease-in-out infinite' : 'none',
+                                                    fontFamily: `'Segoe UI', system-ui, sans-serif`,
+                                                    whiteSpace: 'nowrap',
+                                                }}
+                                                title={`Permanently deleted in ${daysLeft} day${daysLeft === 1 ? '' : 's'} (30-day policy)`}
+                                            >
+                                                {/* Coloured dot indicator */}
+                                                <span style={{
+                                                    width: 6, height: 6,
+                                                    borderRadius: '50%',
+                                                    background: c.dot,
+                                                    flexShrink: 0,
+                                                    display: 'inline-block',
+                                                }} />
+                                                {daysLeftLabel}
+                                            </span>
+                                        );
+                                    })()}
                                 </div>
                             </div>
 
@@ -551,6 +651,10 @@ export const VsumsPanel: React.FC = () => {
                         @keyframes spin {
                             0% { transform: rotate(0deg); }
                             100% { transform: rotate(360deg); }
+                        }
+                        @keyframes pulseBadge {
+                            0%, 100% { opacity: 1; }
+                            50% { opacity: 0.55; }
                         }
                     `}</style>
                 </div>

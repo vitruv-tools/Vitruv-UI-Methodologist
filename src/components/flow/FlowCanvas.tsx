@@ -1764,7 +1764,7 @@ export const FlowCanvas = forwardRef<{
 
     const performEdgeReorder = useCallback((edgeId: string, controlPoint: { x: number; y: number }) => {
       const edge = edges.find(e => e.id === edgeId);
-      if (!edge || edge.type !== 'reactions') return;
+      if (edge?.type !== 'reactions') return;
 
       const sourceNode = nodes.find(n => n.id === edge.source);
       const targetNode = nodes.find(n => n.id === edge.target);
