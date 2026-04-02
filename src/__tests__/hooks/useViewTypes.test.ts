@@ -1,6 +1,13 @@
 import { renderHook, act } from '@testing-library/react';
 import { useViewTypes, ViewType } from '../../hooks/useViewTypes';
 
+// ── crypto mock (jsdom does not implement crypto.randomUUID) ──────────────────
+
+Object.defineProperty(globalThis, 'crypto', {
+    value: { randomUUID: () => `${Math.random().toString(36).slice(2)}-${Date.now()}` },
+    writable: true,
+});
+
 // ── localStorage mock ─────────────────────────────────────────────────────────
 
 let store: Record<string, string> = {};
