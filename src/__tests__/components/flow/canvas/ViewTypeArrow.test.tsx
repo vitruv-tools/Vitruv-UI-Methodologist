@@ -133,7 +133,7 @@ describe('ViewTypeArrow', () => {
     it('closes context menu when backdrop is clicked', () => {
         const { container } = renderArrow();
         openMenu(container);
-        const backdrop = document.body.querySelector('div[style*="inset: 0"]') as HTMLElement;
+        const backdrop = document.body.querySelector('button[aria-label="Close menu"]') as HTMLElement;
         fireEvent.click(backdrop);
         expect(screen.queryByText('ViewType connection')).toBeNull();
     });
@@ -149,7 +149,7 @@ describe('ViewTypeArrow', () => {
         const onDelete = jest.fn();
         const { container } = renderArrow({ onDelete });
         openMenu(container);
-        const backdrop = document.body.querySelector('div[style*="inset: 0"]') as HTMLElement;
+        const backdrop = document.body.querySelector('button[aria-label="Close menu"]') as HTMLElement;
         fireEvent.click(backdrop);
         expect(onDelete).not.toHaveBeenCalled();
     });

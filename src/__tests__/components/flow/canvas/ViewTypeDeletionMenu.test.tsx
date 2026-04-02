@@ -17,7 +17,7 @@ const renderMenu = (props?: any) =>
     render(<ViewTypeDeletionMenu {...defaultProps(props)} />);
 
 const getBackdrop = () =>
-    document.body.querySelector('div[style*="inset: 0"]') as HTMLElement;
+    document.body.querySelector('button[aria-label="Close menu"]') as HTMLElement;
 
 // ── Tests ─────────────────────────────────────────────────────────────────────
 
@@ -43,7 +43,7 @@ describe('ViewTypeDeletionMenu', () => {
 
     it('renders via portal into document.body', () => {
         renderMenu();
-        expect(document.body.querySelector('div[style*="inset: 0"]')).toBeInTheDocument();
+        expect(document.body.querySelector('button[aria-label="Close menu"]')).toBeInTheDocument();
     });
 
     // Delete behavior

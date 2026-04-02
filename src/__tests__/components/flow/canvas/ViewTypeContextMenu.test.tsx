@@ -204,7 +204,7 @@ describe('ViewTypeContextMenu', () => {
         });
         fillLabel('VT1');
         clickNode('A.ecore');
-        clickNode('B.ecore'); // replaces A
+        clickNode('B.ecore');
         clickAdd();
         expect(onAdd).toHaveBeenCalledWith('VT1', 'single', ['n2'], false);
     });
@@ -239,7 +239,7 @@ describe('ViewTypeContextMenu', () => {
         fillLabel('VT1');
         clickNode('A.ecore');
         clickNode('B.ecore');
-        clickNode('A.ecore'); // deselect A
+        clickNode('A.ecore');
         clickAdd();
         expect(onAdd).toHaveBeenCalledWith('VT1', 'multi', ['n2'], false);
     });
@@ -249,11 +249,9 @@ describe('ViewTypeContextMenu', () => {
         renderMenu({ onAdd });
         fillLabel('VT1');
         clickNode('test.ecore');
-        // Switch scope — should reset selection
         fireEvent.click(screen.getByText('◎ Multi'));
         fireEvent.click(screen.getByText('● Single'));
         clickAdd();
-        // Add button should be disabled since selection was reset
         expect(onAdd).not.toHaveBeenCalled();
     });
 
@@ -261,11 +259,8 @@ describe('ViewTypeContextMenu', () => {
 
     it('calls onClose when backdrop is clicked', () => {
         const onClose = jest.fn();
-        const { container } = render(
-            <ViewTypeContextMenu {...defaultProps({ onClose })} />
-        );
-        // The backdrop is the first fixed-inset div rendered via portal in document.body
-        const backdrop = document.body.querySelector('div[style*="inset: 0"]') as HTMLElement;
+        render(<ViewTypeContextMenu {...defaultProps({ onClose })} />);
+        const backdrop = document.body.querySelector('button[aria-label="Close menu"]') as HTMLElement;
         fireEvent.click(backdrop);
         expect(onClose).toHaveBeenCalled();
     });
