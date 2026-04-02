@@ -58,8 +58,10 @@ function rectEdgePoint(
     }
 
     if (candidates.length === 0) return { x: rx, y: ry };
-    return candidates.reduce((best, c) =>
-        Math.hypot(c.x - x1, c.y - y1) < Math.hypot(best.x - x1, best.y - y1) ? c : best
+    return candidates.reduce(
+        (best, c) =>
+            Math.hypot(c.x - x1, c.y - y1) < Math.hypot(best.x - x1, best.y - y1) ? c : best,
+        candidates[0]
     );
 }
 
