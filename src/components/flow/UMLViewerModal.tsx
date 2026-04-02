@@ -36,7 +36,7 @@ export const UMLViewerModal: React.FC<UMLViewerModalProps> = ({ isOpen, title, e
       const t = setTimeout(() => {
         try {
           rfRef.current?.fitView?.({ padding: 0.2 });
-        } catch {}
+        } catch { }
       }, 0);
       return () => clearTimeout(t);
     }

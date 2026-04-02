@@ -26,6 +26,11 @@ import { CodeEditorModal } from './CodeEditorModal';
 import { apiService, MetaModelRelationRequest } from '../../services/api';
 import { WorkspaceSnapshot } from '../../types/workspace';
 import { extractNsUriFromEcore } from '../../utils';
+import { useCircleContainment, clampToCircle, clampAllNodesToCircle, Circle } from '../../hooks/useCircleContainment';
+import { CircleOverlay } from './canvas/CircleOverlay';
+import { useViewTypes, ViewTypeScope } from '../../hooks/useViewTypes';
+
+
 
 const COLOR_LIST = [
   '#ab1c91ff', '#ff7f0e', '#2ca02c', '#d62728', '#9467bd',
@@ -205,6 +210,27 @@ export const FlowCanvas = forwardRef<{
       controlPoint?: { x: number; y: number };
     } | null>(null);
     const [hoveredMergeGroup, setHoveredMergeGroup] = useState<string | null>(null);
+    // Track ReactFlow viewport for CircleOverlay sync
+    const [viewport, setViewport] = useState({ x: 0, y: 0, zoom: 1 });
+
+    // Canvas center in flow coordinates — fixed at origin, ReactFlow's default fitView center
+    const [circleSelected, setCircleSelected] = useState(false);
+    const [circleVisible, setCircleVisible] = useState(true);
+
+    useEffect(() => {
+      if (!circleVisible) return;
+      const displaced = clampAllNodesToCircle(nodes, circle);
+      if (displaced.size > 0) {
+        setNodes(prev => prev.map(n => {
+          const newPos = displaced.get(n.id);
+          return newPos ? { ...n, position: newPos } : n;
+        }));
+      }
+      // Nur wenn circleVisible sich ändert
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [circleVisible]);
+
+    // Circle geometry — radius changes only when ecoreFile node count changes
 
 
     const storageKey = getLocalStorageKey(userId, vsumId);
@@ -228,6 +254,8 @@ export const FlowCanvas = forwardRef<{
       canRedo,
       updateEdgeCode,
     } = useFlowState();
+    const [circle, setCircle] = useCircleContainment(nodes);
+    const { viewTypes, addViewType, deleteViewType, updateAngle, unlinkNode } = useViewTypes(vsumId);
 
     // Helper function to calculate optimal handles based on which direction target is from source
     const calculateOptimalHandles = useCallback((sourceNode: Node, targetNode: Node) => {
@@ -303,20 +331,30 @@ export const FlowCanvas = forwardRef<{
       setEdges(currentEdges => currentEdges.map(edge => updateEdgeHandles(edge, currentNodes)));
     }, [reactFlowInstance, setEdges, updateEdgeHandles]);
 
-    // Wrapper to auto-update edge handles when nodes move
     const onNodesChange = useCallback((changes: any) => {
-      originalOnNodesChange(changes);
+      const clampedChanges = changes.map((change: any) => {
+        if (!circleVisible || change.type !== 'position' || !change.position) return change;
 
-      // Check if any nodes finished moving (dragging ended)
-      const finishedDragging = changes.some((change: any) =>
+        const domNode = document.querySelector(
+          `.react-flow__node[data-id="${change.id}"]`
+        );
+        const nodeSize = domNode
+          ? { width: domNode.clientWidth, height: domNode.clientHeight }
+          : { width: 280, height: 180 };
+
+        return { ...change, position: clampToCircle(change.position, circle, nodeSize) };
+      });
+
+      originalOnNodesChange(clampedChanges);
+
+      const finishedDragging = clampedChanges.some((change: any) =>
         change.type === 'position' && change.dragging === false
       );
-
       if (finishedDragging) {
-        // Small delay to ensure node positions are updated in state
         setTimeout(recalculateEdgeHandles, 100);
       }
-    }, [originalOnNodesChange, recalculateEdgeHandles]);
+    }, [originalOnNodesChange, recalculateEdgeHandles, circle, circleVisible]);
+
 
     const edgeColorMapRef = useRef<Map<string, string>>(new Map());
     const nextColorIndexRef = useRef<number>(0);
@@ -348,6 +386,13 @@ export const FlowCanvas = forwardRef<{
       }
     }, [userId, vsumId, storageKey]);
 
+    useEffect(() => {
+      if (!reactFlowInstance) return;
+      const timeout = setTimeout(() => {
+      }, 500); // ← 100ms war zu wenig
+      return () => clearTimeout(timeout);
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [reactFlowInstance]);
 
     const persistEdgeColorMap = useCallback(() => {
       try {
@@ -976,6 +1021,62 @@ export const FlowCanvas = forwardRef<{
       });
     }, [reactFlowInstance]);
 
+
+    const fitViewToCircle = useCallback((c: Circle) => {
+      if (!reactFlowInstance || !reactFlowWrapper.current) return;
+      const { width, height } = reactFlowWrapper.current.getBoundingClientRect();
+      const padding = 60;
+      const zoom = Math.min(
+        (width - padding * 2) / (c.r * 2),
+        (height - padding * 2) / (c.r * 2)
+      );
+      const clampedZoom = Math.min(Math.max(zoom, 0.05), 2);
+      reactFlowInstance.setViewport({
+        x: width / 2 - c.cx * clampedZoom,
+        y: height / 2 - c.cy * clampedZoom,
+        zoom: clampedZoom,
+      }, { duration: 300 });
+    }, [reactFlowInstance]);
+
+    const handleCircleResizePreview = useCallback((newR: number) => {
+      if (!reactFlowInstance || !reactFlowWrapper.current) return;
+      const { width, height } = reactFlowWrapper.current.getBoundingClientRect();
+      const padding = 60;
+      const zoom = Math.min(
+        (width - padding * 2) / (newR * 2),
+        (height - padding * 2) / (newR * 2)
+      );
+      const clampedZoom = Math.min(Math.max(zoom, 0.05), 2);
+      reactFlowInstance.setViewport({
+        x: width / 2 - circle.cx * clampedZoom,
+        y: height / 2 - circle.cy * clampedZoom,
+        zoom: clampedZoom,
+      });
+    }, [reactFlowInstance, circle.cx, circle.cy]);
+
+    const handleAddViewType = useCallback((
+      label: string, scope: ViewTypeScope, linkedNodeIds: string[], angle: number, editable: boolean
+    ) => {
+      addViewType({ label, scope, angle, linkedNodeIds, editable });
+    }, [addViewType]);
+
+
+    const handleCircleResize = useCallback((newR: number) => {
+      const MIN_RADIUS = 260;
+      const safeR = Math.max(MIN_RADIUS, newR);
+      const newCircle: Circle = { ...circle, r: safeR };
+      setCircle(newCircle);
+
+      const displaced = clampAllNodesToCircle(nodes, newCircle);
+      if (displaced.size > 0) {
+        setNodes(prev => prev.map(n => {
+          const newPos = displaced.get(n.id);
+          return newPos ? { ...n, position: newPos } : n;
+        }));
+      }
+      fitViewToCircle(newCircle);
+    }, [circle, setCircle, nodes, setNodes, fitViewToCircle]);
+
     const handleEcoreFileSelect = useCallback((fileName: string) => {
       const ecoreNode = nodes.find(
         n => n.type === 'ecoreFile' && n.data.fileName === fileName
@@ -1203,17 +1304,11 @@ export const FlowCanvas = forwardRef<{
         const preserveExisting = custom.detail?.preserveExisting ?? false;
 
         relations.forEach(relation => processRelation(relation, preserveExisting));
-
-        if (relations.length > 0) {
-          setTimeout(() => {
-            reactFlowInstance?.fitView({ padding: 0.1, duration: 300 });
-          }, 100);
-        }
       };
 
       globalThis.addEventListener('vitruv.loadMetaModelRelations', handleLoadMetaModelRelations as EventListener);
       return () => globalThis.removeEventListener('vitruv.loadMetaModelRelations', handleLoadMetaModelRelations as EventListener);
-    }, [processRelation, reactFlowInstance]);
+    }, [processRelation, reactFlowInstance, fitViewToCircle, circle]);
 
     useEffect(() => {
       onDiagramChange?.(nodes, edges);
@@ -1788,6 +1883,8 @@ export const FlowCanvas = forwardRef<{
       });
     }, [edges, nodes, setEdges, createEdgeReorderComparator, applyEdgeReorderData]);
 
+
+
     const handleEdgeReorderRequest = useCallback((edgeId: string, controlPoint: { x: number; y: number }) => {
       performEdgeReorder(edgeId, controlPoint);
     }, [performEdgeReorder]);
@@ -1972,6 +2069,8 @@ export const FlowCanvas = forwardRef<{
       };
     });
 
+    const ecoreNodes = nodes.filter(n => n.type === 'ecoreFile');
+
     const getConnectionLinePositions = () => {
       if (
         !connectionDragState?.isActive ||
@@ -2019,13 +2118,16 @@ export const FlowCanvas = forwardRef<{
           onNodesChange={onNodesChange}
           onEdgesChange={onEdgesChange}
           onConnect={onConnect}
-          fitView
           onDrop={handleDrop}
           onDragOver={handleDragOver}
           onDragLeave={handleDragLeave}
           nodeTypes={nodeTypes}
           edgeTypes={edgeTypes}
-          onInit={setReactFlowInstance}
+          onInit={(instance) => {
+            setReactFlowInstance(instance);
+            setViewport(instance.getViewport());
+          }}
+          onMove={(_event, vp) => setViewport(vp)}
           nodesDraggable={isInteractive && !connectionDragState?.isActive}
           nodesConnectable={isInteractive}
           elementsSelectable={isInteractive}
@@ -2037,7 +2139,7 @@ export const FlowCanvas = forwardRef<{
           zoomOnPinch={isInteractive}
           selectNodesOnDrag={false}
           onPaneClick={() => {
-            // Deselect all nodes and edges when clicking on background
+            setCircleSelected(false);
             setNodes(nds => nds.map(n => ({ ...n, selected: false })));
             setEdges(eds => eds.map(e => ({ ...e, selected: false })));
           }}
@@ -2045,6 +2147,27 @@ export const FlowCanvas = forwardRef<{
           <MiniMap position="bottom-right" style={{ bottom: 16, right: 16, zIndex: 30 }} />
           <Background />
         </ReactFlow>
+        {circleVisible && (
+          <CircleOverlay
+            circle={circle}
+            viewport={viewport}
+            selected={circleSelected}
+            containerRef={reactFlowWrapper}
+            onSelect={() => {
+              setCircleSelected(true);
+              fitViewToCircle(circle);
+            }}
+            onResize={handleCircleResize}
+            onResizePreview={handleCircleResizePreview}
+            onResizeEnd={() => { }}
+            viewTypes={viewTypes}
+            ecoreNodes={ecoreNodes}
+            onAddViewType={handleAddViewType}
+            onDeleteViewType={deleteViewType}
+            onUpdateViewTypeAngle={updateAngle}
+            onUnlinkNode={unlinkNode}
+          />
+        )}
 
         {connectionLinePositions && (
           <ConnectionLine
@@ -2066,11 +2189,19 @@ export const FlowCanvas = forwardRef<{
         >
           {createControlButton(() => reactFlowInstance?.zoomIn?.(), 'Zoom in', '+')}
           {createControlButton(() => reactFlowInstance?.zoomOut?.(), 'Zoom out', '–')}
-          {createControlButton(() => reactFlowInstance?.fitView?.({ padding: 0.2 }), 'Fit view', '⛶')}
+          {createControlButton(() => fitViewToCircle(circle), 'Fit view', '⛶')}
           {createControlButton(
             () => setIsInteractive(prev => !prev),
             isInteractive ? 'Lock interactions' : 'Unlock interactions',
             isInteractive ? '🔓' : '🔒'
+          )}
+          {createControlButton(
+            () => {
+              setCircleVisible(prev => !prev);
+              if (circleSelected) setCircleSelected(false);
+            },
+            circleVisible ? 'Hide ViewTypes' : 'Show ViewTypes',
+            circleVisible ? '◎' : '○'
           )}
         </div>
 
