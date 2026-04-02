@@ -18,7 +18,7 @@ function storageKey(vsumId: string) {
 }
 
 function generateId() {
-    return `vt-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    return `vt-${crypto.randomUUID()}`;
 }
 
 export function useViewTypes(vsumId: string | undefined) {
