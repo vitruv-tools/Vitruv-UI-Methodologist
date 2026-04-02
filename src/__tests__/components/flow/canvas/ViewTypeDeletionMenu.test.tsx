@@ -106,7 +106,7 @@ describe('ViewTypeDeletionMenu', () => {
     it('renders menu panel at the correct position', () => {
         renderMenu({ x: 250, y: 350 });
         const panel = document.body.querySelector(
-            'div[style*="left: 250px"], div[style*="left:250px"]'
+            'dialog[style*="left: 250px"], dialog[style*="left:250px"]'
         ) as HTMLElement;
         expect(panel).toBeInTheDocument();
     });

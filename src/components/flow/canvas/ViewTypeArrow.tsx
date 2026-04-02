@@ -225,11 +225,9 @@ export const ViewTypeArrow: React.FC<ViewTypeArrowProps> = ({
                         onClick={closeMenu}
                         onKeyDown={handleBackdropKey}
                     />
-                    <div
-                        role="dialog"
-                        aria-modal="true"
+                    <dialog
+                        open
                         style={{ ...MENU_STYLE, left: menu.x, top: menu.y }}
-                        onClick={e => e.stopPropagation()}
                     >
                         <div style={MENU_LABEL_STYLE}>
                             ViewType connection
@@ -243,7 +241,7 @@ export const ViewTypeArrow: React.FC<ViewTypeArrowProps> = ({
                         >
                             Delete connection
                         </button>
-                    </div>
+                    </dialog>
                 </>,
                 document.body
             )}

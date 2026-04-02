@@ -21,6 +21,7 @@ const BACKDROP_STYLE: React.CSSProperties = {
 
 const MENU_STYLE: React.CSSProperties = {
     position: 'fixed',
+    margin: 0,
     zIndex: 1000,
     background: 'white',
     border: '1px solid #e5e7eb',
@@ -61,11 +62,9 @@ export const ViewTypeDeletionMenu: React.FC<ViewTypeDeletionMenuProps> = ({
             style={BACKDROP_STYLE}
             onClick={onClose}
         />
-        <div
-            role="dialog"
-            aria-modal="true"
+        <dialog
+            open
             style={{ ...MENU_STYLE, left: x, top: y }}
-            onClick={e => e.stopPropagation()}
         >
             <div style={LABEL_STYLE}>
                 {label}
@@ -79,7 +78,7 @@ export const ViewTypeDeletionMenu: React.FC<ViewTypeDeletionMenuProps> = ({
             >
                 Delete view type
             </button>
-        </div>
+        </dialog>
     </>,
     document.body
 );
