@@ -28,6 +28,8 @@ import { WorkspaceSnapshot } from '../../types/workspace';
 import { extractNsUriFromEcore } from '../../utils';
 import { useCircleContainment, clampToCircle, clampAllNodesToCircle, Circle } from '../../hooks/useCircleContainment';
 import { CircleOverlay } from './canvas/CircleOverlay';
+import { useViewTypes, ViewTypeScope } from '../../hooks/useViewTypes';
+
 
 
 const COLOR_LIST = [
@@ -253,6 +255,7 @@ export const FlowCanvas = forwardRef<{
       updateEdgeCode,
     } = useFlowState();
     const [circle, setCircle] = useCircleContainment(nodes);
+    const { viewTypes, addViewType, deleteViewType, updateAngle, unlinkNode } = useViewTypes(vsumId);
 
     // Helper function to calculate optimal handles based on which direction target is from source
     const calculateOptimalHandles = useCallback((sourceNode: Node, targetNode: Node) => {
@@ -1050,6 +1053,12 @@ export const FlowCanvas = forwardRef<{
         zoom: clampedZoom,
       });
     }, [reactFlowInstance, circle.cx, circle.cy]);
+
+    const handleAddViewType = useCallback((
+      label: string, scope: ViewTypeScope, linkedNodeIds: string[], angle: number, editable: boolean
+    ) => {
+      addViewType({ label, scope, angle, linkedNodeIds, editable });
+    }, [addViewType]);
 
 
     const handleCircleResize = useCallback((newR: number) => {
@@ -2060,6 +2069,8 @@ export const FlowCanvas = forwardRef<{
       };
     });
 
+    const ecoreNodes = nodes.filter(n => n.type === 'ecoreFile');
+
     const getConnectionLinePositions = () => {
       if (
         !connectionDragState?.isActive ||
@@ -2149,6 +2160,12 @@ export const FlowCanvas = forwardRef<{
             onResize={handleCircleResize}
             onResizePreview={handleCircleResizePreview}
             onResizeEnd={() => { }}
+            viewTypes={viewTypes}
+            ecoreNodes={ecoreNodes}
+            onAddViewType={handleAddViewType}
+            onDeleteViewType={deleteViewType}
+            onUpdateViewTypeAngle={updateAngle}
+            onUnlinkNode={unlinkNode}
           />
         )}
 
