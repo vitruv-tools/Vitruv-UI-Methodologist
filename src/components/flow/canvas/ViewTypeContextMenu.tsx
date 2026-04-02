@@ -23,6 +23,7 @@ const BACKDROP_STYLE: React.CSSProperties = {
 
 const MENU_STYLE: React.CSSProperties = {
     position: 'fixed',
+    margin: 0,
     zIndex: 1000,
     background: 'white',
     border: '1px solid #e5e7eb',
@@ -142,11 +143,9 @@ export const ViewTypeContextMenu: React.FC<ViewTypeContextMenuProps> = ({
                 style={BACKDROP_STYLE}
                 onClick={onClose}
             />
-            <div
-                role="dialog"
-                aria-modal="true"
+            <dialog
+                open
                 style={{ ...MENU_STYLE, left: x, top: y }}
-                onClick={e => e.stopPropagation()}
             >
                 <div style={{ fontWeight: 600, fontSize: 13, color: '#374151' }}>
                     Add View Type
@@ -234,7 +233,7 @@ export const ViewTypeContextMenu: React.FC<ViewTypeContextMenuProps> = ({
                 >
                     Add
                 </button>
-            </div>
+            </dialog>
         </>,
         document.body
     );
