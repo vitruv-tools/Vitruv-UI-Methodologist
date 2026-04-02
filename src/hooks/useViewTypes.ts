@@ -21,55 +21,85 @@ function generateId() {
     return `vt-${crypto.randomUUID()}`;
 }
 
+// ── Pure state updaters ───────────────────────────────────────────────────────
+
+function addViewTypeUpdater(params: Omit<ViewType, 'id'>) {
+    return (prev: ViewType[]): ViewType[] => [...prev, { ...params, id: generateId() }];
+}
+
+function deleteViewTypeUpdater(id: string) {
+    return (prev: ViewType[]): ViewType[] => prev.filter(vt => vt.id !== id);
+}
+
+function updateAngleUpdater(id: string, angle: number) {
+    return (prev: ViewType[]): ViewType[] => prev.map(vt => vt.id === id ? { ...vt, angle } : vt);
+}
+
+function unlinkNodeUpdater(viewTypeId: string, nodeId: string) {
+    return (prev: ViewType[]): ViewType[] => prev.map(vt =>
+        vt.id === viewTypeId
+            ? { ...vt, linkedNodeIds: vt.linkedNodeIds.filter(n => n !== nodeId) }
+            : vt
+    );
+}
+
+function loadViewTypes(vsumId: string): ViewType[] {
+    try {
+        const raw = localStorage.getItem(storageKey(vsumId));
+        return raw ? JSON.parse(raw) : [];
+    } catch {
+        return [];
+    }
+}
+
+function persistViewTypes(vsumId: string, viewTypes: ViewType[]): void {
+    try {
+        localStorage.setItem(storageKey(vsumId), JSON.stringify(viewTypes));
+    } catch {
+        console.error('Failed to persist viewTypes');
+    }
+}
+
+// ── Hook ──────────────────────────────────────────────────────────────────────
+
 export function useViewTypes(vsumId: string | undefined) {
     const [viewTypes, setViewTypes] = useState<ViewType[]>([]);
     const [isLoaded, setIsLoaded] = useState(false);
 
-    // Load on mount / vsumId change
     useEffect(() => {
         if (!vsumId) {
             setViewTypes([]);
             setIsLoaded(false);
             return;
         }
-        try {
-            const raw = localStorage.getItem(storageKey(vsumId));
-            setViewTypes(raw ? JSON.parse(raw) : []);
-        } catch {
-            setViewTypes([]);
-        }
+        setViewTypes(loadViewTypes(vsumId));
         setIsLoaded(true);
     }, [vsumId]);
 
-    // Persist — only after initial load to avoid overwriting with []
     useEffect(() => {
         if (!vsumId || !isLoaded) return;
-        try {
-            localStorage.setItem(storageKey(vsumId), JSON.stringify(viewTypes));
-        } catch {
-            console.error('Failed to persist viewTypes');
-        }
+        persistViewTypes(vsumId, viewTypes);
     }, [viewTypes, vsumId, isLoaded]);
 
-    const addViewType = useCallback((params: Omit<ViewType, 'id'>) => {
-        setViewTypes(prev => [...prev, { ...params, id: generateId() }]);
-    }, []);
+    const addViewType = useCallback(
+        (params: Omit<ViewType, 'id'>) => setViewTypes(addViewTypeUpdater(params)),
+        []
+    );
 
-    const deleteViewType = useCallback((id: string) => {
-        setViewTypes(prev => prev.filter(vt => vt.id !== id));
-    }, []);
+    const deleteViewType = useCallback(
+        (id: string) => setViewTypes(deleteViewTypeUpdater(id)),
+        []
+    );
 
-    const updateAngle = useCallback((id: string, angle: number) => {
-        setViewTypes(prev => prev.map(vt => vt.id === id ? { ...vt, angle } : vt));
-    }, []);
+    const updateAngle = useCallback(
+        (id: string, angle: number) => setViewTypes(updateAngleUpdater(id, angle)),
+        []
+    );
 
-    const unlinkNode = useCallback((viewTypeId: string, nodeId: string) => {
-        setViewTypes(prev => prev.map(vt =>
-            vt.id === viewTypeId
-                ? { ...vt, linkedNodeIds: vt.linkedNodeIds.filter(n => n !== nodeId) }
-                : vt
-        ));
-    }, []);
+    const unlinkNode = useCallback(
+        (viewTypeId: string, nodeId: string) => setViewTypes(unlinkNodeUpdater(viewTypeId, nodeId)),
+        []
+    );
 
     return { viewTypes, addViewType, deleteViewType, updateAngle, unlinkNode };
 }

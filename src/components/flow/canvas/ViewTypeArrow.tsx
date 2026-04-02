@@ -24,12 +24,29 @@ function circleEdgePoint(
     return { x: cx + (dx / dist) * r, y: cy + (dy / dist) * r };
 }
 
-function rectEdgePoint(
-    x1: number, y1: number,
-    x2: number, y2: number,
-    rx: number, ry: number,
-    rw: number, rh: number
-): { x: number; y: number } {
+function tryEdge(
+    t: number,
+    fixed: number,
+    perp: number,
+    halfPerp: number,
+    makePoint: (perp: number) => { x: number; y: number }
+): { x: number; y: number } | null {
+    if (t <= 0 || Math.abs(perp - fixed) > halfPerp) return null;
+    return makePoint(perp);
+}
+
+interface RectEdgePointParams {
+    x1: number;
+    y1: number;
+    x2: number;
+    y2: number;
+    rx: number;
+    ry: number;
+    rw: number;
+    rh: number;
+}
+
+function rectEdgePoint({ x1, y1, x2, y2, rx, ry, rw, rh }: RectEdgePointParams): { x: number; y: number } {
     const dx = x2 - x1;
     const dy = y2 - y1;
     const halfW = rw / 2;
@@ -37,24 +54,19 @@ function rectEdgePoint(
     const candidates: Array<{ x: number; y: number }> = [];
 
     if (dx !== 0) {
-        const t = (rx + halfW - x1) / dx;
-        const y = y1 + t * dy;
-        if (t > 0 && Math.abs(y - ry) <= halfH) candidates.push({ x: rx + halfW, y });
+        const yAt = (ex: number) => y1 + ((ex - x1) / dx) * dy;
+        const cR = tryEdge((rx + halfW - x1) / dx, ry, yAt(rx + halfW), halfH, y => ({ x: rx + halfW, y }));
+        const cL = tryEdge((rx - halfW - x1) / dx, ry, yAt(rx - halfW), halfH, y => ({ x: rx - halfW, y }));
+        if (cR) candidates.push(cR);
+        if (cL) candidates.push(cL);
     }
-    if (dx !== 0) {
-        const t = (rx - halfW - x1) / dx;
-        const y = y1 + t * dy;
-        if (t > 0 && Math.abs(y - ry) <= halfH) candidates.push({ x: rx - halfW, y });
-    }
+
     if (dy !== 0) {
-        const t = (ry + halfH - y1) / dy;
-        const x = x1 + t * dx;
-        if (t > 0 && Math.abs(x - rx) <= halfW) candidates.push({ x, y: ry + halfH });
-    }
-    if (dy !== 0) {
-        const t = (ry - halfH - y1) / dy;
-        const x = x1 + t * dx;
-        if (t > 0 && Math.abs(x - rx) <= halfW) candidates.push({ x, y: ry - halfH });
+        const xAt = (ey: number) => x1 + ((ey - y1) / dy) * dx;
+        const cB = tryEdge((ry + halfH - y1) / dy, rx, xAt(ry + halfH), halfW, x => ({ x, y: ry + halfH }));
+        const cT = tryEdge((ry - halfH - y1) / dy, rx, xAt(ry - halfH), halfW, x => ({ x, y: ry - halfH }));
+        if (cB) candidates.push(cB);
+        if (cT) candidates.push(cT);
     }
 
     if (candidates.length === 0) return { x: rx, y: ry };
@@ -99,6 +111,46 @@ function shorten(
 
 const ARROW_SIZE = 8;
 
+const BACKDROP_STYLE: React.CSSProperties = {
+    position: 'fixed',
+    inset: 0,
+    zIndex: 999,
+    background: 'transparent',
+    border: 'none',
+    cursor: 'default',
+    padding: 0,
+};
+
+const MENU_STYLE: React.CSSProperties = {
+    position: 'fixed',
+    zIndex: 1000,
+    background: 'white',
+    border: '1px solid #e5e7eb',
+    borderRadius: 10,
+    boxShadow: '0 4px 20px rgba(0,0,0,0.15)',
+    padding: '8px',
+    minWidth: 150,
+};
+
+const MENU_LABEL_STYLE: React.CSSProperties = {
+    fontSize: 12,
+    color: '#6b7280',
+    padding: '4px 8px',
+};
+
+const DELETE_BUTTON_STYLE: React.CSSProperties = {
+    background: 'none',
+    border: 'none',
+    color: '#dc2626',
+    fontSize: 13,
+    fontWeight: 500,
+    padding: '6px 8px',
+    borderRadius: 6,
+    cursor: 'pointer',
+    textAlign: 'left',
+    width: '100%',
+};
+
 export const ViewTypeArrow: React.FC<ViewTypeArrowProps> = ({
     id,
     bubbleCx, bubbleCy, bubbleR,
@@ -109,11 +161,13 @@ export const ViewTypeArrow: React.FC<ViewTypeArrowProps> = ({
     const [menu, setMenu] = useState<{ x: number; y: number } | null>(null);
 
     const rawStart = circleEdgePoint(bubbleCx, bubbleCy, bubbleR, nodeCx, nodeCy);
-    const rawEnd = rectEdgePoint(bubbleCx, bubbleCy, nodeCx, nodeCy, nodeCx, nodeCy, nodeW, nodeH);
+    const rawEnd = rectEdgePoint({
+        x1: bubbleCx, y1: bubbleCy,
+        x2: nodeCx, y2: nodeCy,
+        rx: nodeCx, ry: nodeCy, rw: nodeW, rh: nodeH,
+    });
 
-    // Bubble side always shortened (always has arrowhead)
     const start = shorten(rawEnd.x, rawEnd.y, rawStart.x, rawStart.y, ARROW_SIZE);
-    // Node side only shortened if editable (has arrowhead)
     const end = editable
         ? shorten(rawStart.x, rawStart.y, rawEnd.x, rawEnd.y, ARROW_SIZE)
         : rawEnd;
@@ -126,9 +180,14 @@ export const ViewTypeArrow: React.FC<ViewTypeArrowProps> = ({
         setMenu({ x: e.clientX, y: e.clientY });
     };
 
+    const closeMenu = () => setMenu(null);
+
+    const handleBackdropKey = (e: React.KeyboardEvent) => {
+        if (e.key === 'Enter' || e.key === ' ' || e.key === 'Escape') closeMenu();
+    };
+
     return (
         <>
-            {/* Wide invisible hitbox */}
             <line
                 x1={rawStart.x} y1={rawStart.y}
                 x2={rawEnd.x} y2={rawEnd.y}
@@ -137,7 +196,6 @@ export const ViewTypeArrow: React.FC<ViewTypeArrowProps> = ({
                 style={{ cursor: 'pointer', pointerEvents: 'stroke' }}
                 onClick={handleClick}
             />
-            {/* Shaft */}
             <line
                 x1={start.x} y1={start.y}
                 x2={end.x} y2={end.y}
@@ -145,13 +203,11 @@ export const ViewTypeArrow: React.FC<ViewTypeArrowProps> = ({
                 strokeWidth={1.5}
                 style={{ pointerEvents: 'none' }}
             />
-            {/* Arrowhead at bubble end — always */}
             <polygon
                 points={startArrow}
                 fill="#000000"
                 style={{ pointerEvents: 'none' }}
             />
-            {/* Arrowhead at node end — only if editable */}
             {editable && (
                 <polygon
                     points={endArrow}
@@ -162,44 +218,28 @@ export const ViewTypeArrow: React.FC<ViewTypeArrowProps> = ({
 
             {menu && ReactDOM.createPortal(
                 <>
-                    <div
-                        style={{ position: 'fixed', inset: 0, zIndex: 999 }}
-                        onClick={() => setMenu(null)}
+                    <button
+                        type="button"
+                        aria-label="Close menu"
+                        style={BACKDROP_STYLE}
+                        onClick={closeMenu}
+                        onKeyDown={handleBackdropKey}
                     />
                     <div
-                        style={{
-                            position: 'fixed',
-                            left: menu.x,
-                            top: menu.y,
-                            zIndex: 1000,
-                            background: 'white',
-                            border: '1px solid #e5e7eb',
-                            borderRadius: 10,
-                            boxShadow: '0 4px 20px rgba(0,0,0,0.15)',
-                            padding: '8px',
-                            minWidth: 150,
-                        }}
+                        role="dialog"
+                        aria-modal="true"
+                        style={{ ...MENU_STYLE, left: menu.x, top: menu.y }}
                         onClick={e => e.stopPropagation()}
                     >
-                        <div style={{ fontSize: 12, color: '#6b7280', padding: '4px 8px' }}>
+                        <div style={MENU_LABEL_STYLE}>
                             ViewType connection
                         </div>
                         <button
-                            onClick={() => { onDelete(id); setMenu(null); }}
-                            style={{
-                                background: 'none',
-                                border: 'none',
-                                color: '#dc2626',
-                                fontSize: 13,
-                                fontWeight: 500,
-                                padding: '6px 8px',
-                                borderRadius: 6,
-                                cursor: 'pointer',
-                                textAlign: 'left',
-                                width: '100%',
-                            }}
-                            onMouseEnter={e => (e.currentTarget.style.background = '#fef2f2')}
-                            onMouseLeave={e => (e.currentTarget.style.background = 'none')}
+                            type="button"
+                            style={DELETE_BUTTON_STYLE}
+                            onClick={() => { onDelete(id); closeMenu(); }}
+                            onMouseEnter={e => { e.currentTarget.style.background = '#fef2f2'; }}
+                            onMouseLeave={e => { e.currentTarget.style.background = 'none'; }}
                         >
                             Delete connection
                         </button>
