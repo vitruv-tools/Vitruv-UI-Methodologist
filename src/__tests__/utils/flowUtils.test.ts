@@ -13,6 +13,16 @@ import {
 import { Node, Edge } from 'reactflow';
 import { FlowData } from '../../types/flow';
 
+jest.mock('../../utils/UMLFromEcoreTS', () => ({
+  __esModule: true,
+  getNodeNameFromEcoreIdentifier: jest.fn((value: string) => value),
+  findClassNameFromEcoreIdentifier: jest.fn((value: string) => value),
+  findPackageNameFromEcoreIdentifier: jest.fn((value: string) => value),
+  getHandleIdForEcoreElement: jest.fn((_: string, direction: string, type: string) => `${direction}-${type}`),
+  buildAttributeSignature: jest.fn(() => '+ attr: EString'),
+  buildMethodSignature: jest.fn(() => '+ op(): void'),
+}));
+
 // Mock localStorage
 const localStorageMock = (() => {
   let store: Record<string, string> = {};

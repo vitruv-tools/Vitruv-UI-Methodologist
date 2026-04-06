@@ -13,6 +13,13 @@ jest.mock('reactflow', () => {
   };
 });
 
+jest.mock('../../../utils/UMLFromEcoreTS', () => ({
+  __esModule: true,
+  buildAttributeSignature: jest.fn(() => '+ attr: EString'),
+  buildMethodSignature: jest.fn(() => '+ op(): void'),
+  getHandleIdForEcoreElement: jest.fn((_: string, direction: string, type: string) => `${direction}-${type}`),
+}));
+
 describe('EditableNode', () => {
   it('renders a class node with its name and delete button when selected', () => {
     const onDelete = jest.fn();
@@ -20,7 +27,18 @@ describe('EditableNode', () => {
     render(
       <EditableNode
         id="node-1"
-        data={{ toolType: 'element', toolName: 'class', className: 'MyClass', onDelete }}
+        data={{
+          toolType: 'element',
+          toolName: 'class',
+          className: 'MyClass',
+          onDelete,
+          ecore: {
+            eObjectId: 'person-class',
+            attributeIds: [],
+            operationIds: [],
+            annotationIds: [],
+          },
+        }}
         selected
         isConnectable
       />,
