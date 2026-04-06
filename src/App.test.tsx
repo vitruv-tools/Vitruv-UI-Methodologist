@@ -1,6 +1,16 @@
 import { render, screen } from '@testing-library/react';
 import App from './App';
 
+jest.mock('./utils/UMLFromEcoreTS', () => ({
+  __esModule: true,
+  getNodeNameFromEcoreIdentifier: jest.fn((value: string) => value),
+  findClassNameFromEcoreIdentifier: jest.fn((value: string) => value),
+  findPackageNameFromEcoreIdentifier: jest.fn((value: string) => value),
+  getHandleIdForEcoreElement: jest.fn((_: string, direction: string, type: string) => `${direction}-${type}`),
+  buildAttributeSignature: jest.fn(() => '+ attr: EString'),
+  buildMethodSignature: jest.fn(() => '+ op(): void'),
+}));
+
 beforeEach(() => {
   // Seed auth so ProtectedRoute allows access to main app
   localStorage.setItem('auth.access_token', 'test-token');

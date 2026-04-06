@@ -1,4 +1,7 @@
-import { generateUMLFromEcore } from '../../utils/umlGenerator';
+import { generateUMLFromEcore as generateUMLFromEcoreWithName } from '../../utils/umlGenerator';
+
+const generateUMLFromEcore = (ecoreContent: string) =>
+  generateUMLFromEcoreWithName('test.ecore', ecoreContent);
 
 const getData = (node: any) => node?.data as any;
 

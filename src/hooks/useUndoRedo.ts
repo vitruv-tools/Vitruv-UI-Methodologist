@@ -1,7 +1,6 @@
 import { useCallback, useRef, useState } from 'react';
 import { Node, Edge } from 'reactflow';
 import { EditableVsumDetails } from '../types/EditableVsumDetails';
-import { deepClone } from '../utils/DeepClone';
 
 export interface DiagramState {
   nodes: Node[];
@@ -51,7 +50,7 @@ export function useUndoRedo(initialState: DiagramState) {
 
   const saveState = useCallback((state: DiagramState, description: string) => {
     const newEntry: HistoryEntry = {
-      state: deepClone(state),
+      state: cloneStateForHistory(state),
       timestamp: Date.now(),
       description
     };
