@@ -1,8 +1,20 @@
 import React, { useState, useRef } from 'react';
 import { NodeProps } from 'reactflow';
-import { getBackendMetaModelId } from '../../utils';
 import { ConfirmDialog } from '../ui/ConfirmDialog';
 import { ConnectionHandle } from './ConnectionHandle';
+
+const getBackendMetaModelId = (
+  metaModelId?: unknown,
+  metaModelSourceId?: unknown,
+): number | undefined => {
+  if (typeof metaModelId === 'number') {
+    return metaModelId;
+  }
+  if (typeof metaModelSourceId === 'number') {
+    return metaModelSourceId;
+  }
+  return undefined;
+};
 
 interface EdgeDistributionData {
   edgeId: string;
@@ -17,7 +29,7 @@ export interface EcoreFileBoxData {
   onSelect: (fileName: string) => void;
   onDelete?: (id: string, metaModelId: number) => void;
   onRename?: (id: string, newFileName: string) => void;
-  onConnectionStart?: (nodeId: string, handle: 'top' | 'bottom' | 'left' | 'right') => void;
+  onConnectionStart?: (nodeId: string, handle: 'top' | 'bottom' | 'left' | 'right', tipScreenPos: { x: number; y: number }) => void;
   isExpanded?: boolean;
   isConnectionActive?: boolean;
   description?: string;
@@ -376,9 +388,9 @@ export const EcoreFileBox: React.FC<NodeProps<EcoreFileBoxData>> = ({
     setShowDeleteConfirm(false);
   };
 
-  const handleConnectionStartWrapper = (position: HandlePosition) => {
+  const handleConnectionStartWrapper = (position: HandlePosition, tipScreenPos: { x: number; y: number }) => {
     console.log('Connection started from', position, 'on node', id);
-    onConnectionStart?.(id, position);
+    onConnectionStart?.(id, position, tipScreenPos);
   };
 
   // Render Connection Handles with distribution data
@@ -393,7 +405,7 @@ export const EcoreFileBox: React.FC<NodeProps<EcoreFileBoxData>> = ({
           key={position}
           position={position}
           isVisible={selected || isConnectionActive}
-          onConnectionStart={() => handleConnectionStartWrapper(position)}
+          onConnectionStart={(pos, tipScreenPos) => handleConnectionStartWrapper(pos, tipScreenPos)}
           offsetIndex={0}
           totalHandles={1}
         />
@@ -408,7 +420,7 @@ export const EcoreFileBox: React.FC<NodeProps<EcoreFileBoxData>> = ({
         key={position}
         position={position}
         isVisible={selected || isConnectionActive}
-        onConnectionStart={() => handleConnectionStartWrapper(position)}
+        onConnectionStart={(pos, tipScreenPos) => handleConnectionStartWrapper(pos, tipScreenPos)}
         offsetIndex={0}
         totalHandles={1}
       />
