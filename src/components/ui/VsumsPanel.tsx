@@ -410,27 +410,31 @@ export const VsumsPanel: React.FC = () => {
                         globalThis.dispatchEvent(new CustomEvent('vitruv.openVsum', { detail: { id: item.id } }));
                     }
                 };
-                return (
-                    <div
-                        key={item.id}
-                        style={cardStyle}
-                        role={showDeleted ? undefined : 'button'}
-                        tabIndex={showDeleted ? -1 : 0}
-                        aria-disabled={showDeleted}
-                        onMouseEnter={(e) => Object.assign(e.currentTarget.style, cardHoverStyle)}
-                        onMouseLeave={(e) => Object.assign(e.currentTarget.style, cardStyle)}
-                        onDoubleClick={openVsum}
-                        onTouchEnd={(e) => {
+                const cardInteractionProps = showDeleted
+                    ? {}
+                    : {
+                        role: 'button' as const,
+                        tabIndex: 0,
+                        onDoubleClick: openVsum,
+                        onTouchEnd: (e: React.TouchEvent<HTMLDivElement>) => {
                             e.preventDefault();
                             openVsum();
-                        }}
-                        onKeyDown={(e) => {
-                            if (showDeleted) return;
+                        },
+                        onKeyDown: (e: React.KeyboardEvent<HTMLDivElement>) => {
                             if (e.key === 'Enter' || e.key === ' ') {
                                 e.preventDefault();
                                 openVsum();
                             }
-                        }}
+                        },
+                    };
+                return (
+                    <div
+                        key={item.id}
+                        style={cardStyle}
+                        {...cardInteractionProps}
+                        aria-disabled={showDeleted}
+                        onMouseEnter={(e) => Object.assign(e.currentTarget.style, cardHoverStyle)}
+                        onMouseLeave={(e) => Object.assign(e.currentTarget.style, cardStyle)}
                     >
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12 }}>
                             <div style={{ display: 'flex', flexDirection: 'column', gap: 6, flex: 1 }}>

@@ -97,13 +97,6 @@ export const KeywordTagsInput: React.FC<KeywordTagsInputProps> = ({
     inputRef.current?.focus();
   };
 
-  const handleContainerKeyDown = (e: KeyboardEvent<HTMLDivElement>) => {
-    if (e.key === 'Enter' || e.key === ' ') {
-      e.preventDefault();
-      handleContainerClick();
-    }
-  };
-
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const value = e.target.value;
     
@@ -149,10 +142,6 @@ export const KeywordTagsInput: React.FC<KeywordTagsInputProps> = ({
         ...style
       }}
       onClick={handleContainerClick}
-      onKeyDown={handleContainerKeyDown}
-      tabIndex={0}
-      role="button"
-      aria-label="Focus keyword input"
     >
       {keywords.map((keyword) => (
         <div key={keyword} style={tagStyle}>
