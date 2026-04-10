@@ -555,9 +555,8 @@ export function MainLayout({
                 )}
                 {/* Resize handle removed when ENABLE_RESIZE === false */}
                 {ENABLE_RESIZE && (
-                    <div
-                        role="separator"
-                        tabIndex={0}
+                    <button
+                        type="button"
                         aria-label="Resize left sidebar"
                         onMouseDown={(e) => {
                             isResizingLeft.current = true;
@@ -570,7 +569,17 @@ export function MainLayout({
                                 e.preventDefault();
                             }
                         }}
-                        style={{ position: 'absolute', right: 0, top: 0, width: 8, height: '100%', cursor: 'col-resize' }}
+                        style={{
+                            position: 'absolute',
+                            right: 0,
+                            top: 0,
+                            width: 8,
+                            height: '100%',
+                            cursor: 'col-resize',
+                            background: 'transparent',
+                            border: 'none',
+                            padding: 0,
+                        }}
                     />
                 )}
             </aside>
@@ -750,9 +759,8 @@ export function MainLayout({
                     }}
                 >
                     {ENABLE_RESIZE && (
-                        <div
-                            role="separator"
-                            tabIndex={0}
+                        <button
+                            type="button"
                             aria-label="Resize right sidebar"
                             onMouseDown={(e) => {
                                 isResizingRight.current = true;
@@ -765,7 +773,17 @@ export function MainLayout({
                                     e.preventDefault();
                                 }
                             }}
-                            style={{ position: 'absolute', left: 0, top: 0, width: 8, height: '100%', cursor: 'col-resize' }}
+                            style={{
+                                position: 'absolute',
+                                left: 0,
+                                top: 0,
+                                width: 8,
+                                height: '100%',
+                                cursor: 'col-resize',
+                                background: 'transparent',
+                                border: 'none',
+                                padding: 0,
+                            }}
                         />
                     )}
                     <div style={{ height: '100%' }}>{rightSidebar}</div>

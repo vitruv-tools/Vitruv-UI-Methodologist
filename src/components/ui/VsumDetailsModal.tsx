@@ -985,7 +985,7 @@ export const VsumDetailsModal: React.FC<Props> = ({ isOpen, vsumId, onClose, onS
               zIndex: 0,
             }}
           />
-          <div style={{ ...dialog, position: 'relative', zIndex: 1 }} onClick={(e) => e.stopPropagation()}>
+          <div style={{ ...dialog, position: 'relative', zIndex: 1 }}>
             <div style={header}>
               <h3 style={title}>{details?.name ?? 'VSUM Details'}</h3>
 
@@ -1054,7 +1054,7 @@ export const VsumDetailsModal: React.FC<Props> = ({ isOpen, vsumId, onClose, onS
                   zIndex: 0,
                 }}
               />
-              <div style={{ ...confirmBox, position: 'relative', zIndex: 1 }} onClick={(e) => e.stopPropagation()}>
+              <div style={{ ...confirmBox, position: 'relative', zIndex: 1 }}>
                 <div style={confirmHeader}>Are you sure?</div>
                 <div style={confirmBody}>
                   This action will permanently delete this VSUM and cannot be undone.
@@ -1099,7 +1099,7 @@ export const VsumDetailsModal: React.FC<Props> = ({ isOpen, vsumId, onClose, onS
                   zIndex: 0,
                 }}
               />
-              <div style={{ ...confirmBox, position: 'relative', zIndex: 1 }} onClick={(e) => e.stopPropagation()}>
+              <div style={{ ...confirmBox, position: 'relative', zIndex: 1 }}>
                 <div style={confirmHeader}>Restore to this version?</div>
                 <div style={confirmBody}>
                   This will restore the VSUM to the selected version. The current version will be saved as a new version in the history.

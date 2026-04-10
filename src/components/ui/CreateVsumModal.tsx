@@ -156,7 +156,6 @@ export const CreateVsumModal: React.FC<CreateVsumModalProps> = ({ isOpen, onClos
       }}
       onClose={handleClose}
       onCancel={handleClose}
-      onKeyDown={(e) => { if (e.key === 'Escape') handleClose(); }}
     >
       <button
         type="button"

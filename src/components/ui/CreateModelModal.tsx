@@ -346,7 +346,7 @@ const SubmitProgressOverlay: React.FC<{ progress: number }> = ({ progress }) => 
     style={{ ...overlayStyle, background: 'transparent', backdropFilter: 'blur(6px)', WebkitBackdropFilter: 'blur(6px)' }}
     aria-label="Building meta model"
   >
-    <div style={overlayCardStyle} role="presentation" onMouseDown={(e) => e.stopPropagation()}>
+    <div style={overlayCardStyle} onMouseDown={(e) => e.stopPropagation()}>
       <div style={overlayTitleStyle}>Building Meta Model…</div>
       <div style={overlayTextStyle}>Please wait while we process your files.</div>
       <div style={{ ...progressBarContainerStyle, marginTop: 8 }}>
@@ -1231,7 +1231,6 @@ export const CreateModelModal: React.FC<CreateModelModalProps> = ({
         }}
         onClose={form.handleClose}
         onCancel={form.handleClose}
-        onKeyDown={(e) => { if (e.key === 'Escape') form.handleClose(); }}
       >
         <button
           type="button"
@@ -1311,8 +1310,9 @@ export const CreateModelModal: React.FC<CreateModelModalProps> = ({
           </div>
 
           <div ref={form.fieldSectionRefs.keywords} style={formGroupStyle}>
-            <label id="model-keywords-label" style={labelStyle}>Keywords *</label>
+            <label id="model-keywords-label" htmlFor="model-keywords-input" style={labelStyle}>Keywords *</label>
             <KeywordTagsInput
+              id="model-keywords-input"
               aria-labelledby="model-keywords-label"
               keywords={form.formData.keywords}
               onChange={(keywords) => {

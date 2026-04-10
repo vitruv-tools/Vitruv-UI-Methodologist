@@ -174,17 +174,11 @@ export const EditMetaModelModal: React.FC<EditMetaModelModalProps> = ({
   };
 
   return ReactDOM.createPortal(
-    <div
+    <dialog
+      open
       style={overlayStyle}
-      role="dialog"
       aria-modal="true"
       aria-labelledby="edit-meta-model-title"
-      onKeyDown={(e) => {
-        if (e.key === 'Escape') {
-          onClose();
-        }
-      }}
-      tabIndex={-1}
     >
       <button
         type="button"
@@ -203,7 +197,7 @@ export const EditMetaModelModal: React.FC<EditMetaModelModalProps> = ({
           cursor: 'default',
         }}
       />
-      <div style={{ ...modalStyle, position: 'relative', zIndex: 1 }} onClick={(e) => e.stopPropagation()}>
+      <div style={{ ...modalStyle, position: 'relative', zIndex: 1 }}>
         <div style={modalHeaderStyle}>
           <h2 id="edit-meta-model-title" style={modalTitleStyle}>
             Edit Meta Model
@@ -318,7 +312,7 @@ export const EditMetaModelModal: React.FC<EditMetaModelModalProps> = ({
           </div>
         </form>
       </div>
-    </div>,
+    </dialog>,
     document.body
   );
 };

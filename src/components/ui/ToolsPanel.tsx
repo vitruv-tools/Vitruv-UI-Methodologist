@@ -1225,8 +1225,9 @@ return (
                 justifyContent: 'center',
               }}
           >
-            <div
-              role="presentation"
+            <button
+              type="button"
+              aria-label="Close delete confirmation"
               style={{
                 position: 'fixed',
                 top: 0,
@@ -1276,7 +1277,6 @@ return (
                 role="dialog"
                 aria-modal="true"
                 aria-labelledby="dialog-title"
-                onClick={(e) => e.stopPropagation()}
             >
               <div style={{ 
                 padding: '20px 24px', 
@@ -1910,8 +1910,9 @@ return (
                 justifyContent: 'center',
               }}
           >
-            <div
-              role="presentation"
+            <button
+              type="button"
+              aria-label="Close delete confirmation"
               style={{
                 position: 'fixed',
                 top: 0,
@@ -1924,16 +1925,13 @@ return (
                 backdropFilter: 'blur(8px)',
                 WebkitBackdropFilter: 'blur(8px)',
                 zIndex: -1,
+                border: 'none',
+                padding: 0,
+                margin: 0,
+                cursor: 'default',
               }}
               onClick={() => { if (!metaModelDeleting) setMetaModelDeleteConfirmOpen(false); }}
-              onKeyDown={(e) => {
-                if ((e.key === 'Enter' || e.key === ' ' || e.key === 'Escape') && !metaModelDeleting) {
-                  e.preventDefault();
-                  setMetaModelDeleteConfirmOpen(false);
-                }
-              }}
-              tabIndex={0}
-              aria-hidden="true"
+              disabled={metaModelDeleting}
             />
             <div
                 style={{
@@ -1950,7 +1948,6 @@ return (
                 role="dialog"
                 aria-modal="true"
                 aria-labelledby="delete-dialog-title"
-                onClick={(e) => e.stopPropagation()}
             >
               <div style={{ 
                 padding: '20px 24px', 
