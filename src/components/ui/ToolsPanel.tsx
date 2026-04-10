@@ -696,7 +696,7 @@ export const ToolsPanel: React.FC<ToolsPanelProps> = ({ onEcoreFileUpload, onEco
     }
   };
 
-  const renderToolsPanelContent = () => (
+  const renderMainPanel = () => (
     <div style={panelStyle}>
       <div style={titleStyle}>
         {title}
@@ -2314,6 +2314,8 @@ export const ToolsPanel: React.FC<ToolsPanelProps> = ({ onEcoreFileUpload, onEco
 
     </div>
   );
+
+  const renderToolsPanelContent = () => renderMainPanel();
 
   return renderToolsPanelContent();
 };

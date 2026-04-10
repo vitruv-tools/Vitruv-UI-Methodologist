@@ -1,4 +1,4 @@
-import { AuthService, AuthResponse, SignUpCredentials } from '../../services/auth';
+import { AuthService, AuthResponse, SignUpCredentials } from '../services/auth';
 
 const baseAuthResponse: AuthResponse = {
   access_token: 'access-token',

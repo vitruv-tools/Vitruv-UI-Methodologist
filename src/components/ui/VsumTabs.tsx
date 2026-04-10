@@ -392,8 +392,8 @@ export const VsumTabs: React.FC<VsumTabsProps> = ({
         };
         try {
             await trySaveWithReactionFallback(id, metaModelIds, sanitizedRelations, applySuccessfulSave);
-        } catch (errorDetail: any) {
-            const message = typeof errorDetail === 'string' ? errorDetail : 'Failed to save VSUM';
+        } catch (error_: any) {
+            const message = typeof error_ === 'string' ? error_ : 'Failed to save VSUM';
             setError(message);
             setPopup({ message, type: 'error' });
         } finally {

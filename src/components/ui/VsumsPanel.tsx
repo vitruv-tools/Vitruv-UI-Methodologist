@@ -405,15 +405,30 @@ export const VsumsPanel: React.FC = () => {
             ).map((item) => {
                 const role = (item as any).role as string | undefined;
                 const canManage = role === 'OWNER';
+                const openVsum = () => {
+                    if (!showDeleted) {
+                        globalThis.dispatchEvent(new CustomEvent('vitruv.openVsum', { detail: { id: item.id } }));
+                    }
+                };
                 return (
                     <div
                         key={item.id}
                         style={cardStyle}
+                        role={showDeleted ? undefined : 'button'}
+                        tabIndex={showDeleted ? -1 : 0}
+                        aria-disabled={showDeleted}
                         onMouseEnter={(e) => Object.assign(e.currentTarget.style, cardHoverStyle)}
                         onMouseLeave={(e) => Object.assign(e.currentTarget.style, cardStyle)}
-                        onDoubleClick={() => {
-                            if (!showDeleted) {
-                                globalThis.dispatchEvent(new CustomEvent('vitruv.openVsum', { detail: { id: item.id } }));
+                        onDoubleClick={openVsum}
+                        onTouchEnd={(e) => {
+                            e.preventDefault();
+                            openVsum();
+                        }}
+                        onKeyDown={(e) => {
+                            if (showDeleted) return;
+                            if (e.key === 'Enter' || e.key === ' ') {
+                                e.preventDefault();
+                                openVsum();
                             }
                         }}
                     >
