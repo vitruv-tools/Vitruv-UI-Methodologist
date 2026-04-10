@@ -408,19 +408,11 @@ export const VsumsPanel: React.FC = () => {
                 return (
                     <div
                         key={item.id}
-                        role="button"
-                        tabIndex={0}
                         style={cardStyle}
                         onMouseEnter={(e) => Object.assign(e.currentTarget.style, cardHoverStyle)}
                         onMouseLeave={(e) => Object.assign(e.currentTarget.style, cardStyle)}
                         onDoubleClick={() => {
                             if (!showDeleted) {
-                                globalThis.dispatchEvent(new CustomEvent('vitruv.openVsum', { detail: { id: item.id } }));
-                            }
-                        }}
-                        onKeyDown={(e) => {
-                            if ((e.key === 'Enter' || e.key === ' ') && !showDeleted) {
-                                e.preventDefault();
                                 globalThis.dispatchEvent(new CustomEvent('vitruv.openVsum', { detail: { id: item.id } }));
                             }
                         }}

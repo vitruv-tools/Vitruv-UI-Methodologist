@@ -346,7 +346,7 @@ const SubmitProgressOverlay: React.FC<{ progress: number }> = ({ progress }) => 
     style={{ ...overlayStyle, background: 'transparent', backdropFilter: 'blur(6px)', WebkitBackdropFilter: 'blur(6px)' }}
     aria-label="Building meta model"
   >
-    <div style={overlayCardStyle} onMouseDown={(e) => e.stopPropagation()}>
+    <div style={overlayCardStyle}>
       <div style={overlayTitleStyle}>Building Meta Model…</div>
       <div style={overlayTextStyle}>Please wait while we process your files.</div>
       <div style={{ ...progressBarContainerStyle, marginTop: 8 }}>

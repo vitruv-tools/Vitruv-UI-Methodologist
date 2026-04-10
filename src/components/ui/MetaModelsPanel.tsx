@@ -168,6 +168,8 @@ type ParsedFilter = {
   value: string;
 };
 
+const SEARCH_KEY_CANDIDATES = ['name', 'description', 'domain', 'keywords', 'created', 'updated'] as const;
+
 const toISODate = (input: string) => {
   return input === 'now' ? new Date().toISOString() : new Date(input).toISOString();
 };
@@ -246,8 +248,7 @@ export const MetaModelsPanel: React.FC<MetaModelsPanelProps> = ({
     const lower = token.toLowerCase().replace(/:$/, '');
     if (!lower) return;
 
-    const candidates = ['name', 'description', 'domain', 'keywords', 'created', 'updated'];
-    const match = candidates.find(k => k.startsWith(lower));
+    const match = SEARCH_KEY_CANDIDATES.find(k => k.startsWith(lower));
     const replacement = match ? `${match}:` : null;
     if (!replacement) return;
 

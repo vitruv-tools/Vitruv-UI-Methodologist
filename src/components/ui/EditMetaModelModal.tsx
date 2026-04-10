@@ -168,6 +168,13 @@ export const EditMetaModelModal: React.FC<EditMetaModelModalProps> = ({
 
   if (!isOpen) return null;
 
+  const isSubmitDisabled =
+    isLoading ||
+    !formData.name.trim() ||
+    !formData.description.trim() ||
+    !formData.domain.trim() ||
+    formData.keywords.length === 0;
+
   const overlayStyle: React.CSSProperties = {
     ...modalOverlayStyle,
     zIndex: 10000,
@@ -291,15 +298,15 @@ export const EditMetaModelModal: React.FC<EditMetaModelModalProps> = ({
             </button>
             <button
               type="submit"
-              disabled={isLoading || !formData.name.trim() || !formData.description.trim() || !formData.domain.trim() || formData.keywords.length === 0}
+              disabled={isSubmitDisabled}
               style={{
                 ...buttonStyle,
                 flex: 1,
-                opacity: isLoading || !formData.name.trim() || !formData.description.trim() || !formData.domain.trim() || formData.keywords.length === 0 ? 0.6 : 1,
-                cursor: isLoading || !formData.name.trim() || !formData.description.trim() || !formData.domain.trim() || formData.keywords.length === 0 ? 'not-allowed' : 'pointer',
+                opacity: isSubmitDisabled ? 0.6 : 1,
+                cursor: isSubmitDisabled ? 'not-allowed' : 'pointer',
               }}
               onMouseEnter={(e) => {
-                if (!isLoading && formData.name.trim() && formData.description.trim() && formData.domain.trim() && formData.keywords.length > 0) {
+                if (!isSubmitDisabled) {
                   Object.assign(e.currentTarget.style, buttonHoverStyle);
                 }
               }}

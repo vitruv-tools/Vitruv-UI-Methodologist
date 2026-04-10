@@ -8,4 +8,5 @@ import './__mocks__/resizeObserverMock';
 // Set up environment variables for tests
 process.env.REACT_APP_API_BASE_URL = process.env.REACT_APP_API_BASE_URL || 'http://localhost:9811';
 process.env.REACT_APP_ENV = process.env.REACT_APP_ENV || 'local';
-global.structuredClone = (val: any) => JSON.parse(JSON.stringify(val));
+const nativeStructuredClone = globalThis.structuredClone;
+globalThis.structuredClone = (val: any) => nativeStructuredClone(val);

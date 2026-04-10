@@ -158,19 +158,25 @@ interface ConfirmButtonProps {
   onClick: () => void;
   variant: 'confirm' | 'cancel';
   disabled?: boolean;
+  accent: {
+    disabledBg: string;
+    gradient: string;
+    shadow: string;
+    shadowHover: string;
+  };
 }
 
-const ConfirmButton: React.FC<ConfirmButtonProps> = ({ label, onClick, variant, disabled = false }) => {
+const ConfirmButton: React.FC<ConfirmButtonProps> = ({ label, onClick, variant, disabled = false, accent }) => {
   const isConfirm = variant === 'confirm';
   
   const getBackgroundColor = () => {
     if (!isConfirm) return '#fff';
-    return disabled ? '#fca5a5' : 'linear-gradient(135deg, #dc2626 0%, #b91c1c 100%)';
+    return disabled ? accent.disabledBg : accent.gradient;
   };
 
   const getBoxShadow = () => {
     if (!isConfirm) return 'none';
-    return disabled ? 'none' : '0 2px 8px rgba(220, 38, 38, 0.3)';
+    return disabled ? 'none' : accent.shadow;
   };
 
   const style: React.CSSProperties = {
@@ -191,7 +197,7 @@ const ConfirmButton: React.FC<ConfirmButtonProps> = ({ label, onClick, variant, 
     if (disabled) return;
     if (isConfirm) {
       e.currentTarget.style.transform = 'translateY(-1px)';
-      e.currentTarget.style.boxShadow = '0 4px 12px rgba(220, 38, 38, 0.4)';
+      e.currentTarget.style.boxShadow = accent.shadowHover;
     } else {
       e.currentTarget.style.background = '#f8f9fa';
     }
@@ -200,7 +206,7 @@ const ConfirmButton: React.FC<ConfirmButtonProps> = ({ label, onClick, variant, 
   const handleMouseLeave = (e: React.MouseEvent<HTMLButtonElement>) => {
     if (isConfirm) {
       e.currentTarget.style.transform = 'translateY(0)';
-      e.currentTarget.style.boxShadow = '0 2px 8px rgba(220, 38, 38, 0.3)';
+      e.currentTarget.style.boxShadow = accent.shadow;
     } else {
       e.currentTarget.style.background = '#fff';
     }
@@ -219,70 +225,18 @@ const ConfirmButton: React.FC<ConfirmButtonProps> = ({ label, onClick, variant, 
   );
 };
 
-interface RestoreConfirmButtonProps {
-  label: string;
-  onClick: () => void;
-  variant: 'confirm' | 'cancel';
-  disabled?: boolean;
-}
+const dangerAccent = {
+  disabledBg: '#fca5a5',
+  gradient: 'linear-gradient(135deg, #dc2626 0%, #b91c1c 100%)',
+  shadow: '0 2px 8px rgba(220, 38, 38, 0.3)',
+  shadowHover: '0 4px 12px rgba(220, 38, 38, 0.4)',
+};
 
-const RestoreConfirmButton: React.FC<RestoreConfirmButtonProps> = ({ label, onClick, variant, disabled = false }) => {
-  const isConfirm = variant === 'confirm';
-  
-  const getBackgroundColor = () => {
-    if (!isConfirm) return '#fff';
-    return disabled ? '#a5d6d3' : 'linear-gradient(135deg, #049484 0%, #037368 100%)';
-  };
-
-  const getBoxShadow = () => {
-    if (!isConfirm) return 'none';
-    return disabled ? 'none' : '0 2px 8px rgba(4, 148, 132, 0.3)';
-  };
-
-  const style: React.CSSProperties = {
-    padding: '10px 24px',
-    borderRadius: 8,
-    border: isConfirm ? 'none' : '1px solid #dee2e6',
-    background: getBackgroundColor(),
-    color: isConfirm ? '#fff' : '#495057',
-    fontWeight: 600,
-    cursor: disabled ? 'not-allowed' : 'pointer',
-    fontSize: 14,
-    fontFamily: 'Georgia, serif',
-    transition: 'all 0.2s ease',
-    boxShadow: getBoxShadow(),
-  };
-
-  const handleMouseEnter = (e: React.MouseEvent<HTMLButtonElement>) => {
-    if (disabled) return;
-    if (isConfirm) {
-      e.currentTarget.style.transform = 'translateY(-1px)';
-      e.currentTarget.style.boxShadow = '0 4px 12px rgba(4, 148, 132, 0.4)';
-    } else {
-      e.currentTarget.style.background = '#f8f9fa';
-    }
-  };
-
-  const handleMouseLeave = (e: React.MouseEvent<HTMLButtonElement>) => {
-    if (isConfirm) {
-      e.currentTarget.style.transform = 'translateY(0)';
-      e.currentTarget.style.boxShadow = '0 2px 8px rgba(4, 148, 132, 0.3)';
-    } else {
-      e.currentTarget.style.background = '#fff';
-    }
-  };
-
-  return (
-    <button
-      onClick={onClick}
-      disabled={disabled}
-      style={style}
-      onMouseEnter={handleMouseEnter}
-      onMouseLeave={handleMouseLeave}
-    >
-      {label}
-    </button>
-  );
+const successAccent = {
+  disabledBg: '#a5d6d3',
+  gradient: 'linear-gradient(135deg, #049484 0%, #037368 100%)',
+  shadow: '0 2px 8px rgba(4, 148, 132, 0.3)',
+  shadowHover: '0 4px 12px rgba(4, 148, 132, 0.4)',
 };
 
 const overlay: React.CSSProperties = {
@@ -1066,12 +1020,14 @@ export const VsumDetailsModal: React.FC<Props> = ({ isOpen, vsumId, onClose, onS
                     onClick={() => setConfirmOpen(false)}
                     variant="cancel"
                     disabled={deleting}
+                    accent={dangerAccent}
                   />
                   <ConfirmButton
                     label={deleting ? 'Deleting…' : 'Delete'}
                     onClick={confirmDelete}
                     variant="confirm"
                     disabled={deleting}
+                    accent={dangerAccent}
                   />
                 </div>
               </div>
@@ -1106,7 +1062,7 @@ export const VsumDetailsModal: React.FC<Props> = ({ isOpen, vsumId, onClose, onS
                   {restoreError && <ErrorMessage message={restoreError} />}
                 </div>
                 <div style={confirmFooter}>
-                  <RestoreConfirmButton
+                  <ConfirmButton
                     label="Cancel"
                     onClick={() => {
                       setRestoreConfirmOpen(null);
@@ -1114,12 +1070,14 @@ export const VsumDetailsModal: React.FC<Props> = ({ isOpen, vsumId, onClose, onS
                     }}
                     variant="cancel"
                     disabled={restoringVersionId !== null}
+                    accent={successAccent}
                   />
-                  <RestoreConfirmButton
+                  <ConfirmButton
                     label={restoringVersionId === restoreConfirmOpen ? 'Restoring…' : 'Restore'}
                     onClick={() => handleRestoreVersion(restoreConfirmOpen)}
                     variant="confirm"
                     disabled={restoringVersionId !== null}
+                    accent={successAccent}
                   />
                 </div>
               </div>

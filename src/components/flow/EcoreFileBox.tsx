@@ -236,7 +236,7 @@ const ModalContent: React.FC<{
         style={{
           position: 'absolute',
           inset: 0,
-          backgroundColor: (modalOverlayStyle as React.CSSProperties).backgroundColor || 'rgba(0, 0, 0, 0.5)',
+          backgroundColor: modalOverlayStyle.backgroundColor || 'rgba(0, 0, 0, 0.5)',
           border: 'none',
           padding: 0,
           margin: 0,

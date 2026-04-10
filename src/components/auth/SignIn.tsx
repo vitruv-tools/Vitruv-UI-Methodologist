@@ -42,8 +42,8 @@ export function SignIn({ onSignInSuccess, onSwitchToSignUp }: Readonly<SignInPro
       closeForgotPasswordModal();
     };
 
-    window.addEventListener('keydown', onKeyDown);
-    return () => window.removeEventListener('keydown', onKeyDown);
+    globalThis.addEventListener('keydown', onKeyDown);
+    return () => globalThis.removeEventListener('keydown', onKeyDown);
   }, [isForgotPasswordOpen, isSendingReset]);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -212,6 +212,9 @@ export function SignIn({ onSignInSuccess, onSwitchToSignUp }: Readonly<SignInPro
       {/* Forgot Password Modal */}
       {isForgotPasswordOpen && (
         <div
+          role="button"
+          tabIndex={0}
+          aria-label="Close forgot password modal"
           style={{
             position: 'fixed',
             top: 0,
@@ -231,6 +234,19 @@ export function SignIn({ onSignInSuccess, onSwitchToSignUp }: Readonly<SignInPro
           onClick={(e) => {
             // Only close if clicking directly on the backdrop, not its children
             if (e.target === e.currentTarget && !isSendingReset) {
+              closeForgotPasswordModal();
+            }
+          }}
+          onTouchEnd={(e) => {
+            // Mirror backdrop-close behavior for touch interactions
+            if (e.target === e.currentTarget && !isSendingReset) {
+              closeForgotPasswordModal();
+            }
+          }}
+          onKeyDown={(e) => {
+            if (e.target !== e.currentTarget || isSendingReset) return;
+            if (e.key === 'Enter' || e.key === ' ') {
+              e.preventDefault();
               closeForgotPasswordModal();
             }
           }}

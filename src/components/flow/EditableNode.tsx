@@ -375,13 +375,17 @@ function EditableField({
     return "Double-click to edit";
   };
 
-  const handleFieldClick = () => {
-    if (showVisibility) {
-      setShowVisibilityOptions(true);
-    } else {
-      setShowOptions(!showOptions);
-    }
+  const handleVisibilityFieldClick = () => {
+    setShowVisibilityOptions(true);
   };
+
+  const handleOptionsFieldClick = () => {
+    setShowOptions(!showOptions);
+  };
+
+  const handleFieldClick = showVisibility
+    ? handleVisibilityFieldClick
+    : handleOptionsFieldClick;
 
   return (
     <div style={{ position: 'relative' }}>

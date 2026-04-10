@@ -437,8 +437,8 @@ const ChangePasswordModal: React.FC<ChangePasswordModalProps> = ({
     const onKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape' && !isChanging) onClose();
     };
-    window.addEventListener('keydown', onKeyDown);
-    return () => window.removeEventListener('keydown', onKeyDown);
+    globalThis.addEventListener('keydown', onKeyDown);
+    return () => globalThis.removeEventListener('keydown', onKeyDown);
   }, [isOpen, isChanging, onClose]);
 
   if (!isOpen) return null;

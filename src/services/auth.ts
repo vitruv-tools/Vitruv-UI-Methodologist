@@ -91,6 +91,28 @@ export class AuthService {
     return errorMessage || response.statusText || 'Request failed';
   }
 
+  private static isDuplicateFieldError(
+    normalizedError: string,
+    field: 'username' | 'email'
+  ): boolean {
+    const duplicateKeywords = ['already', 'exists', 'used', 'taken', 'duplicate'];
+    return normalizedError.includes(field) &&
+      duplicateKeywords.some((keyword) => normalizedError.includes(keyword));
+  }
+
+  private static getSignUpErrorMessage(status: number, errorMessage: string): string {
+    if (status === 409) {
+      return 'This username or email is already registered. Please use a different one or sign in instead.';
+    }
+    if (status === 500) {
+      return 'Server error occurred. Please try again later or contact support if the problem persists.';
+    }
+    if (status === 400) {
+      return errorMessage || 'Invalid registration data. Please check your information and try again.';
+    }
+    return errorMessage;
+  }
+
   private static storeAuthTokens(tokenData: any): void {
     if (!tokenData.access_token) {
       console.warn('No authentication tokens found in sign-up response. User may need to sign in separately.');
@@ -196,41 +218,15 @@ export class AuthService {
             hasLastName: !!credentials.lastName
           }
         });
-        
-        // Provide user-friendly error messages
-        const normalizedError = errorMessage.toLowerCase();
-        const usernameAlreadyUsed =
-          normalizedError.includes('username') &&
-          (normalizedError.includes('already') ||
-            normalizedError.includes('exists') ||
-            normalizedError.includes('used') ||
-            normalizedError.includes('taken') ||
-            normalizedError.includes('duplicate'));
-        const emailAlreadyUsed =
-          normalizedError.includes('email') &&
-          (normalizedError.includes('already') ||
-            normalizedError.includes('exists') ||
-            normalizedError.includes('used') ||
-            normalizedError.includes('taken') ||
-            normalizedError.includes('duplicate'));
 
-        // Some backends return 500 even for duplicates, so check message first.
-        if (usernameAlreadyUsed) {
+        const normalizedError = errorMessage.toLowerCase();
+        if (this.isDuplicateFieldError(normalizedError, 'username')) {
           throw new Error('Username is already used. Please choose another username.');
         }
-        if (emailAlreadyUsed) {
+        if (this.isDuplicateFieldError(normalizedError, 'email')) {
           throw new Error('Email is already used. Please use another email or sign in.');
         }
-
-        if (response.status === 409) {
-          throw new Error('This username or email is already registered. Please use a different one or sign in instead.');
-        } else if (response.status === 500) {
-          throw new Error('Server error occurred. Please try again later or contact support if the problem persists.');
-        } else if (response.status === 400) {
-          throw new Error(errorMessage || 'Invalid registration data. Please check your information and try again.');
-        }
-        
-        throw new Error(errorMessage);
+        throw new Error(this.getSignUpErrorMessage(response.status, errorMessage));
       }
 
       const responseData: SignUpResponse = await response.json();

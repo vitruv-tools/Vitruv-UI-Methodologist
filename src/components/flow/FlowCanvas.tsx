@@ -2012,13 +2012,10 @@ export const FlowCanvas = forwardRef<{
       setHoveredMergeGroup(groupId);
     }, []);
 
-    const handleEdgeDragStart = useCallback((edgeId: string) => {
-      void edgeId;
+    const handleEdgeDragStart = useCallback((_edgeId: string) => {
     }, []);
 
-    const handleEdgeDrag = useCallback((edgeId: string, point: { x: number; y: number }) => {
-      void edgeId;
-      void point;
+    const handleEdgeDrag = useCallback((_edgeId: string, _point: { x: number; y: number }) => {
     }, []);
 
     const handleEdgeDragEnd = useCallback((edgeId: string, point: { x: number; y: number }) => {
