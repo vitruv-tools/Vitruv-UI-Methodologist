@@ -426,6 +426,12 @@ export const VsumsPanel: React.FC = () => {
                                 openVsum();
                             }
                         },
+                        onMouseEnter: (e: React.MouseEvent<HTMLDivElement>) => {
+                            Object.assign(e.currentTarget.style, cardHoverStyle);
+                        },
+                        onMouseLeave: (e: React.MouseEvent<HTMLDivElement>) => {
+                            Object.assign(e.currentTarget.style, cardStyle);
+                        },
                     };
                 return (
                     <div
@@ -433,8 +439,6 @@ export const VsumsPanel: React.FC = () => {
                         style={cardStyle}
                         {...cardInteractionProps}
                         aria-disabled={showDeleted}
-                        onMouseEnter={(e) => Object.assign(e.currentTarget.style, cardHoverStyle)}
-                        onMouseLeave={(e) => Object.assign(e.currentTarget.style, cardStyle)}
                     >
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12 }}>
                             <div style={{ display: 'flex', flexDirection: 'column', gap: 6, flex: 1 }}>
