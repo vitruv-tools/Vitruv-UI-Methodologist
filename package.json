@@ -48,27 +48,7 @@
     "extends": [
       "react-app",
       "react-app/jest"
-    ],
-    "plugins": [
-      "jsdoc"
-    ],
-    "rules": {
-      "jsdoc/check-alignment": "warn",
-      "jsdoc/check-tag-names": "warn",
-      "jsdoc/require-description": "warn",
-      "jsdoc/require-jsdoc": [
-        "warn",
-        {
-          "publicOnly": true,
-          "exemptEmptyFunctions": true,
-          "require": {
-            "ClassDeclaration": true,
-            "FunctionDeclaration": true,
-            "MethodDefinition": true
-          }
-        }
-      ]
-    }
+    ]
   },
   "browserslist": {
     "production": [
