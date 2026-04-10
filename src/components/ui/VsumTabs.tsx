@@ -2,6 +2,8 @@ import React, { useEffect, useState } from 'react';
 import { VsumDetails } from '../../types';
 import { apiService, MetaModelRelationRequest } from '../../services/api';
 import { WorkspaceSnapshot } from '../../types/workspace';
+import { useProjectStore } from '../../store/Project';
+import { ActiveVsumDetails } from '../../store/ActiveVsumDetails';
 import { ConfirmDialog } from './ConfirmDialog';
 
 const POPUP_STYLES = {
@@ -56,7 +58,7 @@ const extractBackendError = (
     return { summary: fallbackSummary, detail: fallback };
 };
 
-const normalizeReactionFileId = (value: unknown): number => {
+const normalizeReactionFileId = (value: unknown): number | null => {
     if (typeof value === 'number' && Number.isFinite(value) && value > 0) {
         return value;
     }
@@ -66,7 +68,7 @@ const normalizeReactionFileId = (value: unknown): number => {
             return parsed;
         }
     }
-    return 0;
+    return null;
 };
 
 const isReactionFilesNotFoundError = (message: string): boolean => {
@@ -116,7 +118,7 @@ export const VsumTabs: React.FC<VsumTabsProps> = ({
         const rels = [...(snapshot?.metaModelRelationRequests ?? [])]
             .map(r => {
                 const normalizedId = normalizeReactionFileId(r.reactionFileId);
-                const safeId = missingSet.has(normalizedId) ? 0 : normalizedId;
+                const safeId = missingSet.has(normalizedId ?? 0) ? 0 : normalizedId;
                 return `${r.sourceId}->${r.targetId}#${safeId}`;
             })
             .sort((a, b) => a.localeCompare(b));
@@ -184,6 +186,7 @@ export const VsumTabs: React.FC<VsumTabsProps> = ({
         };
 
         fetchDetails(activeId);
+        useProjectStore.setState({ activeId: activeId });
     }, [activeInstanceId, openTabs, detailsById]);
 
     // ---- keep workspace snapshot in sync (polling) -----------------
@@ -222,15 +225,7 @@ export const VsumTabs: React.FC<VsumTabsProps> = ({
         const backend = detailsById[id];
         if (!backend) return;
 
-        let snap = workspaceSnapshot;
-        if (!snap && requestWorkspaceSnapshot) {
-            try {
-                snap = await requestWorkspaceSnapshot();
-            } catch (e) {
-                console.warn('Failed to refresh workspace snapshot before save', e);
-            }
-        }
-        snap ??= { metaModelIds: [], metaModelRelationRequests: [] };
+        let snap = new ActiveVsumDetails().getAsWorkspaceSnapshot();
 
         const backendMetaModels = backend.metaModels ?? [];
 
@@ -245,17 +240,36 @@ export const VsumTabs: React.FC<VsumTabsProps> = ({
         // Important: If snapshot exists but is empty, user intentionally removed all MetaModels
         const metaModelIds = snap.metaModelIds !== undefined ? snapshotIds : backendSourceIds;
 
-        const relationCandidates: MetaModelRelationRequest[] =
+        const relationCandidates =
             (snap.metaModelRelationRequests ?? [])
-                .filter(rel =>
-                    metaModelIds.includes(rel.sourceId) &&
-                    metaModelIds.includes(rel.targetId)
-                )
-                .map(rel => ({
-                    sourceId: rel.sourceId,
-                    targetId: rel.targetId,
-                    reactionFileId: normalizeReactionFileId(rel.reactionFileId),
-                }));
+                .filter(rel => {
+                    if (!metaModelIds.includes(rel.sourceId) || !metaModelIds.includes(rel.targetId)) {
+                        return false;
+                    }
+                    // Coarse relation has no reaction file
+                    if (rel.reactionFileId === 0) {
+                        // Atleast one fine-grained relation must have a reaction file or be a low-code reaction
+                        return rel.fineGranularMetaModelRelationSet.some(fineRel => {
+                            // Fine-grained relation has a reaction file
+                            if (fineRel.reactionFileStorageId != null) {
+                                return true;
+                            }
+                            // Fine-grained relation has a low-code reaction template with params
+                            if (fineRel.lowCodeReactionRequestBase != null) {
+                                return true;
+                            }
+                            return false;
+                        })
+                    }
+                    return true;
+                })
+                .map(rel => {
+                    rel.reactionFileId = normalizeReactionFileId(rel.reactionFileId);
+                    rel.fineGranularMetaModelRelationSet.forEach(fineRel => {
+                        fineRel.reactionFileStorageId = normalizeReactionFileId(fineRel.reactionFileStorageId) ?? undefined;
+                    });
+                    return rel;
+                });
 
         // Validate reaction file IDs before save to avoid backend
         // "Reaction files not found" errors for stale/deleted file IDs.
@@ -282,9 +296,9 @@ export const VsumTabs: React.FC<VsumTabsProps> = ({
         );
 
         const sanitizedRelations: MetaModelRelationRequest[] = relationCandidates.map(rel =>
-            validRelationFileIds.has(rel.reactionFileId)
+            validRelationFileIds.has(rel.reactionFileId ?? -1)
                 ? rel
-                : { ...rel, reactionFileId: 0 }
+                : { ...rel, reactionFileId: null }
         );
 
         if (missingRelationFileIds.size > 0) {

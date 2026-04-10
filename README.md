@@ -60,7 +60,7 @@ For detailed architecture documentation, see [ARCHITECTURE.md](./ARCHITECTURE.md
 
 4. **Start the development server**
    ```bash
-   npm start
+   npm start:remote
    ```
 
 5. **Open your browser**

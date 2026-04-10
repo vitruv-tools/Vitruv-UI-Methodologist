@@ -1,29 +1,33 @@
-import { FlowEdge, FlowNode } from '../types/flow';
+import { FlowEdge, FlowNode } from "../types/flow";
+import { UMLRelationshipTypes } from "../components/flow/UMLRelationship";
 
-// Layout constants — calibrated to actual rendered node sizes.
-// NODE_WIDTH matches the CSS minWidth (240 px).  NODE_HEIGHT is the base
-// height; attribute-heavy nodes can be 120–180 px tall, so VERTICAL_SPACING
-// is generous to prevent overlaps.
-const NODE_WIDTH = 380;
-const NODE_HEIGHT = 85;
-const HORIZONTAL_SPACING = 80;
-const VERTICAL_SPACING = 130;
-const START_X = 80;
-const START_Y = 60;
+// Layout constants
+const NODE_WIDTH = 280;
+const NODE_HEIGHT = 220;
+const HORIZONTAL_SPACING = 30; // Very tight - boxes almost touching on X
+const VERTICAL_SPACING = 280; // Large vertical spacing for big Y differences
+const START_X = 150;
+const START_Y = 150;
 
 // Helper function to find a node by ID
-const findNodeById = (nodes: FlowNode[], nodeId: string): FlowNode | undefined => {
-  return nodes.find(n => n.id === nodeId);
+const findNodeById = (
+  nodes: FlowNode[],
+  nodeId: string,
+): FlowNode | undefined => {
+  return nodes.find((n) => n.id === nodeId);
 };
 
 // Calculate tree width for hierarchical layout
 const getTreeWidth = (
   nodeId: string,
-  parentToChildren: Map<string, string[]>
+  parentToChildren: Map<string, string[]>,
 ): number => {
   const children = parentToChildren.get(nodeId) || [];
   if (children.length === 0) return 1;
-  return children.reduce((sum, childId) => sum + getTreeWidth(childId, parentToChildren), 0);
+  return children.reduce(
+    (sum, childId) => sum + getTreeWidth(childId, parentToChildren),
+    0,
+  );
 };
 
 // Context for tree layout operations
@@ -32,9 +36,7 @@ interface TreeLayoutContext {
   parentToChildren: Map<string, string[]>;
 }
 
-// Layout a single tree node and its children recursively.
-// Deterministic: no random jitter. Strict level-based Y so all nodes at the
-// same inheritance depth share the same horizontal band (jjodel style).
+// Layout a single tree node and its children recursively
 const layoutTreeNode = (
   nodeId: string,
   level: number,
@@ -42,24 +44,34 @@ const layoutTreeNode = (
   rightBound: number,
   rootTreeWidth: number,
   startY: number,
-  ctx: TreeLayoutContext
+  ctx: TreeLayoutContext,
 ): void => {
   const node = findNodeById(ctx.nodes, nodeId);
   if (!node) return;
 
   const centerX = (leftBound + rightBound) / 2;
-  const yPos = startY + level * (NODE_HEIGHT + VERTICAL_SPACING);
-  // Offset so the node box is centered in its allocated band
-  node.position = { x: centerX - NODE_WIDTH / 2, y: yPos };
+  const verticalJitter = (Math.random() - 0.5) * 160; // ±80px variation
+  const yPos =
+    startY + level * (NODE_HEIGHT + VERTICAL_SPACING) + verticalJitter;
+  node.position = { x: centerX, y: yPos };
 
   const children = ctx.parentToChildren.get(nodeId) || [];
   if (children.length === 0) return;
 
   let childX = leftBound;
-  children.forEach(childId => {
+  children.forEach((childId) => {
     const childWidth = getTreeWidth(childId, ctx.parentToChildren);
-    const childSpace = (rightBound - leftBound) * (childWidth / Math.max(rootTreeWidth, 1));
-    layoutTreeNode(childId, level + 1, childX, childX + childSpace, rootTreeWidth, startY, ctx);
+    const childSpace =
+      (rightBound - leftBound) * (childWidth / Math.max(rootTreeWidth, 1));
+    layoutTreeNode(
+      childId,
+      level + 1,
+      childX,
+      childX + childSpace,
+      rootTreeWidth,
+      startY,
+      ctx,
+    );
     childX += childSpace;
   });
 };
@@ -71,40 +83,50 @@ const layoutComponent = (
   startY: number,
   nodes: FlowNode[],
   edges: FlowEdge[],
-  adjacencyMap: Map<string, Set<string>>
+  adjacencyMap: Map<string, Set<string>>,
 ): void => {
   if (componentNodes.length === 1) {
     const node = findNodeById(nodes, componentNodes[0]);
     if (!node) return;
-    node.position = { x: startX, y: startY };
+    const verticalJitter = (Math.random() - 0.5) * 180;
+    node.position = { x: startX, y: startY + verticalJitter };
     return;
   }
 
-  const inheritanceEdges = edges.filter(e => 
-    componentNodes.includes(e.source) && 
-    componentNodes.includes(e.target) && 
-    e.data?.relationshipType === 'inheritance'
+  const inheritanceEdges = edges.filter(
+    (e) =>
+      componentNodes.includes(e.source) &&
+      componentNodes.includes(e.target) &&
+      e.data?.relationshipType === UMLRelationshipTypes.INHERITANCE,
   );
 
   if (inheritanceEdges.length > 0) {
     const childToParent = new Map<string, string>();
     const parentToChildren = new Map<string, string[]>();
 
-    inheritanceEdges.forEach(edge => {
+    inheritanceEdges.forEach((edge) => {
       childToParent.set(edge.source, edge.target);
       const children = parentToChildren.get(edge.target) || [];
       children.push(edge.source);
       parentToChildren.set(edge.target, children);
     });
 
-    const roots = componentNodes.filter(id => !childToParent.has(id));
+    const roots = componentNodes.filter((id) => !childToParent.has(id));
     let currentX = startX;
 
     const ctx: TreeLayoutContext = { nodes, parentToChildren };
-    roots.forEach(rootId => {
+    roots.forEach((rootId) => {
       const treeWidth = getTreeWidth(rootId, parentToChildren);
       const treeSpace = treeWidth * (NODE_WIDTH + HORIZONTAL_SPACING);
-      layoutTreeNode(rootId, 0, currentX, currentX + treeSpace, treeWidth, startY, ctx);
+      layoutTreeNode(
+        rootId,
+        0,
+        currentX,
+        currentX + treeSpace,
+        treeWidth,
+        startY,
+        ctx,
+      );
       currentX += treeSpace + HORIZONTAL_SPACING * 2;
     });
   } else {
@@ -112,60 +134,59 @@ const layoutComponent = (
   }
 };
 
-// Force-directed layout for non-hierarchical (association-only) components.
-// Uses circular initial placement so connected nodes naturally converge near
-// each other, and equal X/Y repulsion to avoid the previous tall-column look.
+// Force-directed layout for non-hierarchical components
 const layoutForceDirected = (
   componentNodes: string[],
   startX: number,
   startY: number,
   nodes: FlowNode[],
-  adjacencyMap: Map<string, Set<string>>
+  adjacencyMap: Map<string, Set<string>>,
 ): void => {
   const positions = new Map<string, { x: number; y: number }>();
-  const n = componentNodes.length;
 
-  // Place the highest-degree node at the center of the ring so hub-and-spoke
-  // topologies (e.g. many classes pointing to one "System" node) converge with
-  // that hub in the middle rather than far to one side.
-  const sortedByDegree = [...componentNodes].sort(
-    (a, b) => (adjacencyMap.get(b)?.size ?? 0) - (adjacencyMap.get(a)?.size ?? 0)
+  const gridSize = Math.min(
+    Math.max(1, Math.ceil(componentNodes.length / 4)),
+    2,
   );
-  const hubNode = sortedByDegree[0];
-  const otherNodes = sortedByDegree.slice(1);
-
-  // Tighter initial ring — use a smaller slot so nodes start closer together
-  const SLOT = NODE_WIDTH + HORIZONTAL_SPACING / 2;
-  const radius = n <= 2 ? SLOT * 0.8 : (SLOT * n) / (2.8 * Math.PI);
-  const cx = startX + radius;
-  const cy = startY + radius;
-
-  // Hub at center, others evenly on a ring
-  positions.set(hubNode, { x: cx, y: cy });
-  otherNodes.forEach((nodeId, idx) => {
-    const angle = (2 * Math.PI * idx) / Math.max(otherNodes.length, 1) - Math.PI / 2;
+  componentNodes.forEach((nodeId, idx) => {
+    const row = Math.floor(idx / gridSize);
+    const col = idx % gridSize;
+    const verticalJitter = (Math.random() - 0.5) * 200;
     positions.set(nodeId, {
-      x: cx + radius * Math.cos(angle),
-      y: cy + radius * Math.sin(angle),
+      x: startX + col * (NODE_WIDTH + HORIZONTAL_SPACING),
+      y: startY + row * (NODE_HEIGHT + VERTICAL_SPACING) + verticalJitter,
     });
   });
 
-  const ITERATIONS = 200;
-  const IDEAL_DISTANCE = NODE_WIDTH + HORIZONTAL_SPACING * 0.6;
-  const REPULSION = 9000;
-  const ATTRACTION = 0.5;
-  const DAMPING = 0.75;
+  const ITERATIONS = 150;
+  const IDEAL_DISTANCE = NODE_WIDTH + HORIZONTAL_SPACING * 0.4;
+  const REPULSION = 28000;
+  const ATTRACTION = 0.65;
+  const DAMPING = 0.85;
+  const VERTICAL_BIAS = 2;
 
   for (let iter = 0; iter < ITERATIONS; iter++) {
     const forces = new Map<string, { x: number; y: number }>();
-    componentNodes.forEach(id => forces.set(id, { x: 0, y: 0 }));
+    componentNodes.forEach((id) => forces.set(id, { x: 0, y: 0 }));
 
-    // Equal vertical/horizontal repulsion (VERTICAL_BIAS = 1)
-    applyRepulsionForces(componentNodes, positions, forces, REPULSION, 1);
-    applyAttractionForces(componentNodes, positions, forces, adjacencyMap, ATTRACTION, IDEAL_DISTANCE);
+    applyRepulsionForces(
+      componentNodes,
+      positions,
+      forces,
+      REPULSION,
+      VERTICAL_BIAS,
+    );
+    applyAttractionForces(
+      componentNodes,
+      positions,
+      forces,
+      adjacencyMap,
+      ATTRACTION,
+      IDEAL_DISTANCE,
+    );
 
-    const coolingFactor = 1 - (iter / ITERATIONS) * 0.6;
-    componentNodes.forEach(nodeId => {
+    const coolingFactor = 1 - (iter / ITERATIONS) * 0.3;
+    componentNodes.forEach((nodeId) => {
       const pos = positions.get(nodeId)!;
       const force = forces.get(nodeId)!;
       pos.x += force.x * DAMPING * coolingFactor;
@@ -182,7 +203,7 @@ const applyRepulsionForces = (
   positions: Map<string, { x: number; y: number }>,
   forces: Map<string, { x: number; y: number }>,
   repulsion: number,
-  verticalBias: number
+  verticalBias: number,
 ): void => {
   for (let i = 0; i < componentNodes.length; i++) {
     for (let j = i + 1; j < componentNodes.length; j++) {
@@ -214,11 +235,11 @@ const applyAttractionForces = (
   forces: Map<string, { x: number; y: number }>,
   adjacencyMap: Map<string, Set<string>>,
   attraction: number,
-  idealDistance: number
+  idealDistance: number,
 ): void => {
-  componentNodes.forEach(nodeId => {
+  componentNodes.forEach((nodeId) => {
     const neighbors = adjacencyMap.get(nodeId) || new Set();
-    neighbors.forEach(neighborId => {
+    neighbors.forEach((neighborId) => {
       if (!componentNodes.includes(neighborId)) return;
 
       const posA = positions.get(nodeId)!;
@@ -238,50 +259,41 @@ const applyAttractionForces = (
   });
 };
 
-// Normalize positions, compress if too spread out, then apply to nodes.
-// MAX_SPAN limits how wide/tall a single component's bounding box can be so
-// that fitView doesn't need to zoom out too far.
-const MAX_SPAN = 1100;
-
+// Normalize positions and apply to nodes
 const normalizeAndApplyPositions = (
   componentNodes: string[],
   positions: Map<string, { x: number; y: number }>,
   startX: number,
   startY: number,
-  nodes: FlowNode[]
+  nodes: FlowNode[],
 ): void => {
-  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
-  positions.forEach(pos => {
+  let minX = Infinity,
+    minY = Infinity;
+  positions.forEach((pos) => {
     minX = Math.min(minX, pos.x);
     minY = Math.min(minY, pos.y);
-    maxX = Math.max(maxX, pos.x + NODE_WIDTH);
-    maxY = Math.max(maxY, pos.y + NODE_HEIGHT);
   });
 
-  const spanX = maxX - minX;
-  const spanY = maxY - minY;
-  const scale = Math.min(1, MAX_SPAN / Math.max(spanX, spanY, 1));
-
-  componentNodes.forEach(nodeId => {
+  componentNodes.forEach((nodeId) => {
     const node = findNodeById(nodes, nodeId);
     const pos = positions.get(nodeId);
     if (!node || !pos) return;
     node.position = {
-      x: (pos.x - minX) * scale + startX,
-      y: (pos.y - minY) * scale + startY,
+      x: pos.x - minX + startX,
+      y: pos.y - minY + startY,
     };
   });
 };
 
 // Intelligent layout algorithm for UML diagrams
-function applyIntelligentLayout(nodes: FlowNode[], edges: FlowEdge[]): void {
+export function applyIntelligentLayout(nodes: FlowNode[], edges: FlowEdge[]): void {
   if (nodes.length === 0) return;
 
   // Build adjacency map
   const adjacencyMap = new Map<string, Set<string>>();
-  nodes.forEach(node => adjacencyMap.set(node.id, new Set()));
+  nodes.forEach((node) => adjacencyMap.set(node.id, new Set()));
 
-  edges.forEach(edge => {
+  edges.forEach((edge) => {
     adjacencyMap.get(edge.source)?.add(edge.target);
     adjacencyMap.get(edge.target)?.add(edge.source);
   });
@@ -291,7 +303,7 @@ function applyIntelligentLayout(nodes: FlowNode[], edges: FlowEdge[]): void {
   const components: string[][] = [];
   const isolatedNodes: string[] = [];
 
-  nodes.forEach(node => {
+  nodes.forEach((node) => {
     const connections = adjacencyMap.get(node.id)?.size || 0;
     if (connections === 0) {
       isolatedNodes.push(node.id);
@@ -300,7 +312,7 @@ function applyIntelligentLayout(nodes: FlowNode[], edges: FlowEdge[]): void {
   });
 
   // BFS for components
-  nodes.forEach(startNode => {
+  nodes.forEach((startNode) => {
     if (visited.has(startNode.id)) return;
 
     const component: string[] = [];
@@ -311,7 +323,7 @@ function applyIntelligentLayout(nodes: FlowNode[], edges: FlowEdge[]): void {
       const nodeId = queue.shift()!;
       component.push(nodeId);
 
-      adjacencyMap.get(nodeId)?.forEach(neighborId => {
+      adjacencyMap.get(nodeId)?.forEach((neighborId) => {
         if (!visited.has(neighborId)) {
           visited.add(neighborId);
           queue.push(neighborId);
@@ -331,45 +343,51 @@ function applyIntelligentLayout(nodes: FlowNode[], edges: FlowEdge[]): void {
   let currentY = START_Y;
   components.forEach((component) => {
     layoutComponent(component, START_X, currentY, nodes, edges, adjacencyMap);
-    
+
     // Find bounds of this component
-    let maxX = 0, maxY = 0;
-    component.forEach(nodeId => {
+    let maxX = 0,
+      maxY = 0;
+    component.forEach((nodeId) => {
       const node = findNodeById(nodes, nodeId);
       if (!node) return;
       maxX = Math.max(maxX, node.position.x);
       maxY = Math.max(maxY, node.position.y);
     });
-    
-    // Leave a clear gap between disconnected components
-    currentY = maxY + NODE_HEIGHT + VERTICAL_SPACING * 2;
+
+    // Add moderate vertical spacing between components like the picture
+    currentY = maxY + NODE_HEIGHT + VERTICAL_SPACING * 1.5;
   });
 
-  // Layout isolated nodes in a clean grid — no jitter
+  // Layout isolated nodes in very narrow columns (1-2 columns) with large Y variation
   if (isolatedNodes.length > 0) {
-    const cols = Math.ceil(Math.sqrt(isolatedNodes.length));
+    const itemsPerRow = Math.min(
+      Math.max(1, Math.ceil(isolatedNodes.length / 3)),
+      2,
+    ); // 1-2 columns only
     isolatedNodes.forEach((nodeId, idx) => {
       const node = findNodeById(nodes, nodeId);
       if (!node) return;
-      const row = Math.floor(idx / cols);
-      const col = idx % cols;
+      const row = Math.floor(idx / itemsPerRow);
+      const col = idx % itemsPerRow;
+      // Add large random Y offset for big vertical differences
+      const verticalJitter = (Math.random() - 0.5) * 180; // ±90px variation
       node.position = {
-        x: START_X + col * (NODE_WIDTH + HORIZONTAL_SPACING),
-        y: currentY + row * (NODE_HEIGHT + VERTICAL_SPACING),
+        x: START_X + col * (NODE_WIDTH + HORIZONTAL_SPACING), // Same X for column
+        y: currentY + row * (NODE_HEIGHT + VERTICAL_SPACING) + verticalJitter, // Large Y variation
       };
     });
   }
 
-  // Post-process: resolve any remaining box overlaps with equal X/Y push.
-  // Use a generous radius so even tall attribute-heavy boxes don't overlap.
-  const MIN_BOX_DIST = NODE_WIDTH * 0.75;
+  // Post-process: Remove overlaps - keep columns, large Y separation
+  const MIN_DISTANCE = Math.min(HORIZONTAL_SPACING, VERTICAL_SPACING) * 0.4;
+  const VERTICAL_PUSH_BIAS = 2.2; // Strong vertical bias for large Y differences
   let hasOverlap = true;
-  let overlapIter = 0;
-  const MAX_OVERLAP_ITERATIONS = 30;
+  let iterations = 0;
+  const MAX_OVERLAP_ITERATIONS = 25; // Fewer iterations to preserve structure
 
-  while (hasOverlap && overlapIter < MAX_OVERLAP_ITERATIONS) {
+  while (hasOverlap && iterations < MAX_OVERLAP_ITERATIONS) {
     hasOverlap = false;
-    overlapIter++;
+    iterations++;
 
     for (let i = 0; i < nodes.length; i++) {
       for (let j = i + 1; j < nodes.length; j++) {
@@ -380,101 +398,124 @@ function applyIntelligentLayout(nodes: FlowNode[], edges: FlowEdge[]): void {
         const dy = nodeB.position.y - nodeA.position.y;
         const distance = Math.hypot(dx, dy);
 
-        if (distance < MIN_BOX_DIST && distance > 0.001) {
+        if (distance < MIN_DISTANCE) {
           hasOverlap = true;
-          const push = (MIN_BOX_DIST - distance) / 2 + 4;
-          const nx = dx / distance;
-          const ny = dy / distance;
-          nodeA.position.x -= nx * push;
-          nodeA.position.y -= ny * push;
-          nodeB.position.x += nx * push;
-          nodeB.position.y += ny * push;
+          // Push nodes apart - keep same X column, large Y separation
+          const pushDistance = (MIN_DISTANCE - distance) / 2 + 5;
+          const angle = Math.atan2(dy, dx);
+
+          const pushX = Math.cos(angle) * pushDistance * 0.2; // Very weak horizontal - stay in column
+          const pushY = Math.sin(angle) * pushDistance * VERTICAL_PUSH_BIAS; // Strong vertical - large Y diff
+
+          nodeA.position.x -= pushX;
+          nodeA.position.y -= pushY;
+          nodeB.position.x += pushX;
+          nodeB.position.y += pushY;
         }
       }
     }
   }
 }
 
-export const generateUMLFromEcore = (ecoreContent: string): { nodes: FlowNode[]; edges: FlowEdge[] } => {
+export const generateUMLFromEcore = (
+  ecoreName: string,
+  ecoreContent: string,
+): { nodes: FlowNode[]; edges: FlowEdge[] } => {
   try {
     const parser = new DOMParser();
-    const xmlDoc = parser.parseFromString(ecoreContent, 'text/xml');
+    const xmlDoc = parser.parseFromString(ecoreContent, "text/xml");
 
-    if (xmlDoc.getElementsByTagName('parsererror').length > 0) {
-      throw new Error('Invalid XML content');
+    if (xmlDoc.getElementsByTagName("parsererror").length > 0) {
+      throw new Error("Invalid XML content");
     }
 
     const nodes: FlowNode[] = [];
     const edges: FlowEdge[] = [];
     let nodeId = 1;
 
-    const rootPackage = xmlDoc.querySelector(String.raw`ecore\:EPackage, EPackage`);
-    const packageName = rootPackage?.getAttribute('name') || 'Package';
+    const rootPackage = xmlDoc.querySelector(
+      String.raw`ecore\:EPackage, EPackage`,
+    );
+    const packageName = rootPackage?.getAttribute("name") || "Package";
 
     // Collect classes first to reference by name
-    const classElems = Array.from(xmlDoc.querySelectorAll('eClassifiers[type="ecore:EClass"], eClassifiers EClass, eClassifiers'))
-      .filter((el: Element) => (el.getAttribute('xsi:type') || el.getAttribute('type') || '').includes('EClass') || el.tagName.endsWith('EClass') || el.querySelector('eStructuralFeatures'));
+    const classElems = Array.from(
+      xmlDoc.querySelectorAll(
+        'eClassifiers[type="ecore:EClass"], eClassifiers EClass, eClassifiers',
+      ),
+    ).filter(
+      (el: Element) =>
+        (el.getAttribute("xsi:type") || el.getAttribute("type") || "").includes(
+          "EClass",
+        ) ||
+        el.tagName.endsWith("EClass") ||
+        el.querySelector("eStructuralFeatures"),
+    );
 
     const classNameToNodeId = new Map<string, string>();
 
     // First pass: Create nodes with temporary positions
     classElems.forEach((cls, idx) => {
-      const className = cls.getAttribute('name') || `Class${idx + 1}`;
-      const isAbstract = (cls.getAttribute('abstract') || 'false') === 'true';
-      const isInterface = (cls.getAttribute('interface') || 'false') === 'true';
+      const className = cls.getAttribute("name") || `Class${idx + 1}`;
+      const isAbstract = (cls.getAttribute("abstract") || "false") === "true";
+      const isInterface = (cls.getAttribute("interface") || "false") === "true";
 
       const attributes: string[] = [];
       // Parse EAttributes (not EReferences) from eStructuralFeatures
-      const allFeatures = cls.querySelectorAll('eStructuralFeatures');
+      const allFeatures = cls.querySelectorAll("eStructuralFeatures");
       allFeatures.forEach((attr, aIdx) => {
         // Check if this is an EAttribute (not an EReference)
-        const featureType = attr.getAttribute('xsi:type') || attr.getAttribute('type') || '';
-        const isAttribute = featureType.includes('EAttribute') || 
-                           (!featureType.includes('EReference') && 
-                            attr.hasAttribute('eType') && 
-                            !attr.hasAttribute('eReferenceType'));
-        
+        const featureType =
+          attr.getAttribute("xsi:type") || attr.getAttribute("type") || "";
+        const isAttribute =
+          featureType.includes("EAttribute") ||
+          (!featureType.includes("EReference") &&
+            attr.hasAttribute("eType") &&
+            !attr.hasAttribute("eReferenceType"));
+
         if (!isAttribute) return; // Skip if it's an EReference
-        
-        const attrName = attr.getAttribute('name') || `attr${aIdx + 1}`;
-        const eType = attr.getAttribute('eType') || attr.getAttribute('type') || 'EString';
-        
+
+        const attrName = attr.getAttribute("name") || `attr${aIdx + 1}`;
+        const eType =
+          attr.getAttribute("eType") || attr.getAttribute("type") || "EString";
+
         // Parse type reference - remove the # prefix if present
-        let typeName = eType.split('#').pop() || eType;
+        let typeName = eType.split("#").pop() || eType;
         // Remove any // prefix that might exist
-        typeName = typeName.replace(/^\/\//, '');
-        
-        const lower = attr.getAttribute('lowerBound');
-        const upper = attr.getAttribute('upperBound');
-        
+        typeName = typeName.replace(/^\/\//, "");
+
+        const lower = attr.getAttribute("lowerBound");
+        const upper = attr.getAttribute("upperBound");
+
         // Format multiplicity - if we have bounds, use them
-        let mult = '';
+        let mult = "";
         if (lower !== null && upper !== null) {
           mult = ` [${lower}..${upper}]`;
         } else if (lower !== null || upper !== null) {
-          mult = ` [${lower || '1'}..${upper || '*'}]`;
+          mult = ` [${lower || "1"}..${upper || "*"}]`;
         }
-        
+
         attributes.push(`+ ${attrName}: ${typeName}${mult}`);
       });
 
       // Determine tool name based on class type
-      let toolName = 'class';
+      let toolName = "class";
       if (isInterface) {
-        toolName = 'interface';
+        toolName = "interface";
       } else if (isAbstract) {
-        toolName = 'abstract-class';
+        toolName = "abstract-class";
       }
 
       const node: FlowNode = {
-        id: `uml-class-${nodeId++}`,
-        type: 'editable',
+        id: `${ecoreName}-uml-class-${nodeId++}`,
+        type: "editable",
         position: { x: 0, y: 0 }, // Will be calculated later
         data: {
+          model: ecoreName,
           label: className,
-          toolType: 'element',
+          toolType: "element",
           toolName,
-          diagramType: 'uml',
+          diagramType: "uml",
           className: className,
           attributes,
         },
@@ -486,82 +527,98 @@ export const generateUMLFromEcore = (ecoreContent: string): { nodes: FlowNode[];
 
     // Helper: choose best side handles based on node positions (will be called after layout)
     const chooseHandles = (sourceId: string, targetId: string) => {
-      const s = nodes.find(n => n.id === sourceId);
-      const t = nodes.find(n => n.id === targetId);
-      if (!s || !t) return { sourceHandle: undefined, targetHandle: undefined } as const;
+      const s = nodes.find((n) => n.id === sourceId);
+      const t = nodes.find((n) => n.id === targetId);
+      if (!s || !t)
+        return { sourceHandle: undefined, targetHandle: undefined } as const;
       const dx = (t.position?.x ?? 0) - (s.position?.x ?? 0);
       const dy = (t.position?.y ?? 0) - (s.position?.y ?? 0);
-      
+
       // Use angle for more precise handle selection
       const angle = Math.atan2(dy, dx);
-      const angleDeg = (angle * 180 / Math.PI + 360) % 360;
-      
+      const angleDeg = ((angle * 180) / Math.PI + 360) % 360;
+
       if (angleDeg >= 315 || angleDeg < 45) {
-        return { sourceHandle: 'right-source', targetHandle: 'left-target' } as const;
+        return {
+          sourceHandle: "right-source",
+          targetHandle: "left-target",
+        } as const;
       } else if (angleDeg >= 45 && angleDeg < 135) {
-        return { sourceHandle: 'bottom-source', targetHandle: 'top-target' } as const;
+        return {
+          sourceHandle: "bottom-source",
+          targetHandle: "top-target",
+        } as const;
       } else if (angleDeg >= 135 && angleDeg < 225) {
-        return { sourceHandle: 'left-source', targetHandle: 'right-target' } as const;
+        return {
+          sourceHandle: "left-source",
+          targetHandle: "right-target",
+        } as const;
       } else {
-        return { sourceHandle: 'top-source', targetHandle: 'bottom-target' } as const;
+        return {
+          sourceHandle: "top-source",
+          targetHandle: "bottom-target",
+        } as const;
       }
     };
 
     // Associations via EReferences
     classElems.forEach((cls) => {
-      const sourceName = cls.getAttribute('name') || '';
+      const sourceName = cls.getAttribute("name") || "";
       const sourceId = classNameToNodeId.get(sourceName);
       if (!sourceId) return;
-      
+
       // Find all eStructuralFeatures that are EReferences
-      const allFeatures = cls.querySelectorAll('eStructuralFeatures');
+      const allFeatures = cls.querySelectorAll("eStructuralFeatures");
       allFeatures.forEach((ref) => {
         // Check if this is an EReference
-        const featureType = ref.getAttribute('xsi:type') || ref.getAttribute('type') || '';
-        const isReference = featureType.includes('EReference');
-        
+        const featureType =
+          ref.getAttribute("xsi:type") || ref.getAttribute("type") || "";
+        const isReference = featureType.includes("EReference");
+
         if (!isReference) return; // Skip if it's not an EReference
-        
-        const eType = ref.getAttribute('eType') || '';
+
+        const eType = ref.getAttribute("eType") || "";
         // Parse type reference - remove the # prefix if present
-        let targetType = eType.split('#').pop() || eType;
+        let targetType = eType.split("#").pop() || eType;
         // Remove any // prefix that might exist
-        targetType = targetType.replace(/^\/\//, '');
-        
-        const targetId = classNameToNodeId.get(targetType || '');
+        targetType = targetType.replace(/^\/\//, "");
+
+        const targetId = classNameToNodeId.get(targetType || "");
         if (!targetId) return;
-        
-        const lower = ref.getAttribute('lowerBound');
-        const upper = ref.getAttribute('upperBound');
-        const containment = (ref.getAttribute('containment') || 'false') === 'true';
-        
+
+        const lower = ref.getAttribute("lowerBound");
+        const upper = ref.getAttribute("upperBound");
+        const containment =
+          (ref.getAttribute("containment") || "false") === "true";
+
         // Determine relationship type
-        let relationshipType = 'association';
+        let relationshipType: (typeof UMLRelationshipTypes)[keyof typeof UMLRelationshipTypes] =
+          UMLRelationshipTypes.ASSOCIATION;
         if (containment) {
-          relationshipType = 'composition';
+          relationshipType = UMLRelationshipTypes.COMPOSITION;
         }
 
         // Normalize multiplicity per UML (place at target end only)
         const normalizeUpper = (u: string | null) => {
           if (u === null) return undefined;
-          if (u === '*' || u === '-1') return '*';
+          if (u === "*" || u === "-1") return "*";
           return u;
         };
         const normLower = lower ?? undefined;
         const normUpper = normalizeUpper(upper);
         let multiplicity: string | undefined = undefined;
         if (normLower !== undefined || normUpper !== undefined) {
-          const lo = normLower ?? '1';
-          const hi = normUpper ?? '1';
+          const lo = normLower ?? "1";
+          const hi = normUpper ?? "1";
           multiplicity = lo === hi ? lo : `${lo}..${hi}`;
         }
 
         const handles = chooseHandles(sourceId, targetId);
         edges.push({
-          id: `uml-edge-${nodeId++}`,
+          id: `${ecoreName}-uml-edge-${nodeId++}`,
           source: sourceId,
           target: targetId,
-          type: 'uml',
+          type: "uml",
           data: {
             relationshipType: relationshipType,
             targetMultiplicity: multiplicity,
@@ -574,47 +631,36 @@ export const generateUMLFromEcore = (ecoreContent: string): { nodes: FlowNode[];
 
     // Generalizations via eSuperTypes
     classElems.forEach((cls) => {
-      const subName = cls.getAttribute('name') || '';
+      const subName = cls.getAttribute("name") || "";
       const subId = classNameToNodeId.get(subName);
       if (!subId) return;
-      const superTypes = (cls.getAttribute('eSuperTypes') || '').split(' ').filter(Boolean);
+      const superTypes = (cls.getAttribute("eSuperTypes") || "")
+        .split(" ")
+        .filter(Boolean);
       superTypes.forEach((sup) => {
         // Parse super type reference - remove # or // prefix
-        let supType = sup.split('#').pop() || sup;
-        supType = supType.replace(/^\/\//, '');
+        let supType = sup.split("#").pop() || sup;
+        supType = supType.replace(/^\/\//, "");
         const supId = classNameToNodeId.get(supType);
         if (!supId) return;
         const handles = chooseHandles(subId, supId);
         edges.push({
-          id: `uml-gen-${nodeId++}`,
+          id: `${ecoreName}-uml-gen-${nodeId++}`,
           source: subId,
           target: supId,
-          type: 'uml',
-          data: { relationshipType: 'inheritance' },
+          type: "uml",
+          data: { relationshipType: UMLRelationshipTypes.INHERITANCE },
           sourceHandle: handles.sourceHandle,
           targetHandle: handles.targetHandle,
         } as any);
       });
     });
 
-    // Collect EEnum names defined in this model — these are valid attribute
-    // types alongside ECore primitives, but class names are NOT (those are
-    // expressed as EReferences / edges, not attribute types).
-    const enumElems = Array.from(xmlDoc.querySelectorAll('eClassifiers')).filter((el: Element) => {
-      const t = el.getAttribute('xsi:type') || el.getAttribute('type') || '';
-      return t.includes('EEnum') || el.tagName.toLowerCase().includes('eenum');
-    });
-    const modelEnumNames = enumElems
-      .map(e => e.getAttribute('name'))
-      .filter((n): n is string => Boolean(n));
-
-    nodes.forEach(n => { (n.data as any).availableEnumTypes = modelEnumNames; });
-
     // Apply intelligent layout algorithm
     applyIntelligentLayout(nodes, edges);
 
     // Recalculate edge handles based on final positions
-    edges.forEach(edge => {
+    edges.forEach((edge) => {
       const handles = chooseHandles(edge.source, edge.target);
       edge.sourceHandle = handles.sourceHandle;
       edge.targetHandle = handles.targetHandle;
@@ -623,15 +669,16 @@ export const generateUMLFromEcore = (ecoreContent: string): { nodes: FlowNode[];
     // Optional package node
     if (nodes.length > 0) {
       const pkgNode: FlowNode = {
-        id: `uml-pkg-${nodeId++}`,
-        type: 'editable',
+        id: `${ecoreName}-uml-pkg-${nodeId++}`,
+        type: "editable",
         position: { x: 80, y: 40 },
         data: {
+          model: ecoreName,
           label: packageName,
-          toolType: 'element',
-          toolName: 'package',
+          toolType: "element",
+          toolName: "package",
           packageName,
-          diagramType: 'uml',
+          diagramType: "uml",
         },
       } as FlowNode;
       nodes.unshift(pkgNode);
@@ -639,9 +686,7 @@ export const generateUMLFromEcore = (ecoreContent: string): { nodes: FlowNode[];
 
     return { nodes, edges };
   } catch (error) {
-    console.error('Error generating UML from Ecore:', error);
+    console.error("Error generating UML from Ecore:", error);
     return { nodes: [], edges: [] };
   }
 };
-
-

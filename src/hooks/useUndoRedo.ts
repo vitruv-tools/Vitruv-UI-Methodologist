@@ -1,10 +1,12 @@
 import { useCallback, useRef, useState } from 'react';
 import { Node, Edge } from 'reactflow';
+import { EditableVsumDetails } from '../types/EditableVsumDetails';
 
-interface DiagramState {
+export interface DiagramState {
   nodes: Node[];
   edges: Edge[];
   idCounter: number;
+  vsumDetails: EditableVsumDetails | null;
 }
 
 interface HistoryEntry {

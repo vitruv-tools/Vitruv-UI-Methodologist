@@ -1,0 +1,137 @@
+import { LowCodeReactionFieldMetadata } from "../types/LowCodeReactionFieldMetadata";
+import { LowCodeReactionFieldVariables } from "../types/LowCodeReactionFieldVariables";
+
+/**
+ * Check if a field is a numeric type
+ */
+export const isNumericField = (
+  field: LowCodeReactionFieldMetadata,
+): boolean => {
+  return isIntegerField(field) || isDecimalField(field);
+};
+
+/**
+ * Check if a field is a numeric type
+ */
+export const isIntegerField = (
+  field: LowCodeReactionFieldMetadata,
+): boolean => {
+  return ["integer", "int", "long", "short"].includes(field.type.toLowerCase());
+};
+
+/**
+ * Check if a field is a numeric type
+ */
+export const isDecimalField = (
+  field: LowCodeReactionFieldMetadata,
+): boolean => {
+  return ["float", "double"].includes(field.type.toLowerCase());
+};
+
+/**
+ * Check if a field is a boolean type
+ */
+export const isBooleanField = (
+  field: LowCodeReactionFieldMetadata,
+): boolean => {
+  return field.type.toLowerCase() === "boolean";
+};
+
+/**
+ * Check if a field is an enum (has allowable values)
+ */
+export const isEnumField = (field: LowCodeReactionFieldMetadata): boolean => {
+  return !!(field.allowableValues && field.allowableValues.length > 0);
+};
+
+/**
+ * Check if a field is a string type
+ */
+export const isStringField = (field: LowCodeReactionFieldMetadata): boolean => {
+  return field.type.toLowerCase() === "string";
+};
+
+/**
+ * Get the default value for a field based on its metadata
+ */
+export const getFieldDefaultValue = (
+  field: LowCodeReactionFieldMetadata,
+  variables: Partial<LowCodeReactionFieldVariables>,
+): any => {
+  // Fall back to type-based defaults
+  if (isBooleanField(field)) {
+    if (field.displayDefaultBooleanValue != null) {
+      return field.displayDefaultBooleanValue;
+    }
+    return false;
+  }
+  if (isNumericField(field)) {
+    if (isIntegerField(field) && field.displayDefaultIntValue != null) {
+      return field.displayDefaultIntValue;
+    }
+    if (isDecimalField(field) && field.displayDefaultDoubleValue != null) {
+      return field.displayDefaultDoubleValue;
+    }
+    return field.min ?? 0;
+  }
+  if (isEnumField(field)) {
+    return field.allowableValues![0];
+  }
+  if (field.array) {
+    return [];
+  }
+  if (field.map) {
+    return {};
+  }
+  if (field.displayDefaultStringValue != null) {
+    return evaluateTemplateWithExpressionSupport(field.displayDefaultStringValue, variables);
+  }
+  return "";
+};
+
+/**
+ * Capitalizes the first character of a string.
+ * @param {string} str - Input string.
+ * @returns {string} Capitalized string.
+ */
+function capitalizeFirst(str: string): string {
+  return str[0].toUpperCase() + str.slice(1);
+}
+
+/**
+ * Evaluates a template string with support for inline expressions.
+ * @param {string} template - Template literal content.
+ * @param {Partial<LowCodeReactionFieldVariables>} values - Variable values used during evaluation.
+ * @returns {string} Evaluated template result.
+ */
+export function evaluateTemplateWithExpressionSupport(template: string, values: Partial<LowCodeReactionFieldVariables>): string {
+  const executionContext = {
+    ...values,
+    capitalizeFirst, 
+  }
+  // eslint-disable-next-line no-new-func
+  return new Function(...Object.keys(executionContext), `return \`${template}\`;`)(...Object.values(executionContext));
+}
+
+/**
+ * Evaluates simple placeholder substitutions in a template string.
+ * @param {string} template - Template containing ${...} placeholders.
+ * @param {Partial<LowCodeReactionFieldVariables>} values - Replacement values.
+ * @returns {string} Template with placeholders replaced.
+ */
+export function evaluateTemplate(template: string, values: Partial<LowCodeReactionFieldVariables>): string {
+  // eslint-disable-next-line no-useless-escape
+  return template.replaceAll(/\${(.*?)}/g, (_, key) => {
+      // eslint-disable-next-line no-useless-escape
+      return (values as Record<string, string>)[key.trim()] ?? `\$\{${key}\}`;
+  });
+}
+
+/**
+ * Get the display name for a field
+ */
+export const getFieldDisplayName = (
+  field: LowCodeReactionFieldMetadata,
+): string => {
+  return field.displayName || field.name;
+};

@@ -1,0 +1,64 @@
+/* xyflow theme files. Delete these to start from our base */
+
+.react-flow {
+  --xy-background-color: #f7f9fb;
+  /* Custom Variables */
+  --xy-theme-selected: #f57dbd;
+  --xy-theme-hover: #c5c5c5;
+  --xy-theme-edge-hover: black;
+  --xy-theme-color-focus: #e8e8e8;
+
+  /* Built-in Variables see https://reactflow.dev/learn/customization/theming */
+  --xy-node-border-default: 1px solid #ededed;
+
+  --xy-node-boxshadow-default:
+    0px 3.54px 4.55px 0px #00000005, 0px 3.54px 4.55px 0px #0000000d,
+    0px 0.51px 1.01px 0px #0000001a;
+
+  --xy-node-border-radius-default: 8px;
+
+  --xy-handle-background-color-default: #ffffff;
+  --xy-handle-border-color-default: #aaaaaa;
+
+  --xy-edge-label-color-default: #505050;
+}
+
+.react-flow.dark {
+  --xy-node-boxshadow-default:
+    0px 3.54px 4.55px 0px rgba(255, 255, 255, 0.05),
+    /* light shadow */ 0px 3.54px 4.55px 0px rgba(255, 255, 255, 0.13),
+    /* medium shadow */ 0px 0.51px 1.01px 0px rgba(255, 255, 255, 0.2); /* smallest shadow */
+  --xy-theme-color-focus: #535353;
+}
+
+:root {
+  --color-primary: #ff0073;
+  --color-background: #fefefe;
+  --color-hover-bg: #f6f6f6;
+  --color-disabled: #76797e;
+  --reaction-handle-pointer-events-source: auto;
+  --reaction-handle-pointer-events-target: auto;
+  --reaction-handle-opacity-source: 1;
+  --reaction-handle-opacity-target: 1;
+  --reaction-edge-opacity: 1;
+  --reaction-edge-opacity: 1;
+  --vsum-handle-pointer-events-source: auto;
+  --vsum-handle-pointer-events-target: auto;
+  --vsum-handle-opacity-source: 1;
+  --vsum-handle-opacity-target: 1;
+}
+
+.transparent {
+  opacity: 0;
+}
+
+.dragable-panel.dragable-panel.react-flow__panel {
+  left: 50%;
+  bottom: 16px;
+  top: auto;
+  pointer-events: all;
+  border-radius: 12px;
+  padding: 0;
+  width: 25vw;
+  z-index: 1000;
+}

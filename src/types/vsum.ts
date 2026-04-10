@@ -1,3 +1,5 @@
+import { FineGranularMetaModelRelation } from "./FineGranularMetaModelRelation";
+
 export interface Vsum {
   id: number;
   name: string;
@@ -26,6 +28,7 @@ export interface VsumMetaModelRelation {
   targetId: number;
   reactionFileId?: number | null;
   reactionFileStorageId?: number | null;
+  fineGranularMetaModelRelationSet: FineGranularMetaModelRelation[];
 }
 
 export interface VsumDetails extends Vsum {

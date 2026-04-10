@@ -9,6 +9,13 @@ jest.mock('reactflow', () => ({
   MiniMap: () => <div data-testid="minimap" />,
 }));
 
+jest.mock('../../../utils/UMLFromEcoreTS', () => ({
+  __esModule: true,
+  buildAttributeSignature: jest.fn(),
+  buildMethodSignature: jest.fn(),
+  getHandleIdForEcoreElement: jest.fn(),
+}));
+
 jest.mock('../../../utils/umlGenerator', () => ({
   generateUMLFromEcore: () => ({
     nodes: [{ id: 'n1', position: { x: 0, y: 0 }, data: { label: 'Class1' }, type: 'editable' }],

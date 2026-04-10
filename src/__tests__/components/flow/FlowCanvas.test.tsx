@@ -2,6 +2,7 @@ import React, { createRef } from 'react';
 import { render, screen, fireEvent, act } from '@testing-library/react';
 import { FlowCanvas } from '../../../components/flow/FlowCanvas';
 import { apiService } from '../../../services/api';
+import { useProjectStore } from '../../../store/Project';
 
 jest.mock('reactflow', () => {
   const MockReactFlow = ({ children }: any) => (
@@ -86,6 +87,13 @@ jest.mock('../../../components/flow/ConnectionLine', () => ({
   ConnectionLine: () => <svg data-testid="connection-line" />,
 }));
 
+jest.mock('../../../utils/UMLFromEcoreTS', () => ({
+  __esModule: true,
+  buildAttributeSignature: jest.fn(),
+  buildMethodSignature: jest.fn(),
+  getHandleIdForEcoreElement: jest.fn(),
+}));
+
 jest.mock('../../../components/flow/CodeEditorModal', () => ({
   CodeEditorModal: () => <div data-testid="code-editor-modal">Code Editor</div>,
 }));
@@ -101,14 +109,18 @@ jest.mock('../../../services/api', () => ({
 describe('FlowCanvas', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    useProjectStore.getState().setActiveId(1);
   });
 
-  it('renders ReactFlow, minimap, and background', () => {
+  afterEach(() => {
+    useProjectStore.getState().setActiveId(null);
+  });
+
+  it('renders ReactFlow and minimap', () => {
     const ref = createRef<any>();
     render(<FlowCanvas ref={ref} />);
     expect(screen.getByTestId('react-flow')).toBeInTheDocument();
     expect(screen.getByTestId('minimap')).toBeInTheDocument();
-    expect(screen.getByTestId('background')).toBeInTheDocument();
   });
 
   it('exposes imperative methods via ref', () => {

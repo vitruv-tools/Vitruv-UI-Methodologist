@@ -3,12 +3,31 @@ import { NodeProps } from 'reactflow';
 import { ConfirmDialog } from '../ui/ConfirmDialog';
 import { ConnectionHandle } from './ConnectionHandle';
 
-interface EcoreFileBoxData {
+const getBackendMetaModelId = (
+  metaModelId?: unknown,
+  metaModelSourceId?: unknown,
+): number | undefined => {
+  if (typeof metaModelId === 'number') {
+    return metaModelId;
+  }
+  if (typeof metaModelSourceId === 'number') {
+    return metaModelSourceId;
+  }
+  return undefined;
+};
+
+interface EdgeDistributionData {
+  edgeId: string;
+  index: number;
+  total: number;
+}
+
+export interface EcoreFileBoxData {
   fileName: string;
   fileContent: string;
-  onExpand: (fileName: string, fileContent: string) => void;
+  onExpand: (fileName: string, fileContent: string, backendMetaModelId: number) => void;
   onSelect: (fileName: string) => void;
-  onDelete?: (id: string) => void;
+  onDelete?: (id: string, metaModelId: number) => void;
   onRename?: (id: string, newFileName: string) => void;
   onConnectionStart?: (nodeId: string, handle: 'top' | 'bottom' | 'left' | 'right', tipScreenPos: { x: number; y: number }) => void;
   isExpanded?: boolean;
@@ -17,6 +36,9 @@ interface EcoreFileBoxData {
   keywords?: string;
   domain?: string;
   createdAt?: string;
+  edgeDistribution?: Map<'top' | 'bottom' | 'left' | 'right', EdgeDistributionData[]>;
+  metaModelId?: number;
+  metaModelSourceId?: number;
 }
 
 type HandlePosition = 'top' | 'bottom' | 'left' | 'right';
@@ -26,7 +48,7 @@ const FONT_SERIF = '"Georgia", "Times New Roman", serif';
 const FONT_SANS = '"Segoe UI", "Roboto", "Helvetica Neue", Arial, sans-serif';
 
 // Common Styles
-const gradientBackground = (color1: string, color2: string) =>
+const gradientBackground = (color1: string, color2: string) => 
   `linear-gradient(145deg, ${color1} 0%, ${color2} 100%)`;
 
 
@@ -253,7 +275,7 @@ const ModalContent: React.FC<{
           </button>
         </div>
 
-        <div style={createTextStyle(16, '#495057', {
+        <div style={createTextStyle(16, '#495057', { 
           lineHeight: '1.8',
           textAlign: 'justify',
           whiteSpace: 'pre-wrap',
@@ -322,6 +344,9 @@ export const EcoreFileBox: React.FC<NodeProps<EcoreFileBoxData>> = ({
     description,
     keywords,
     createdAt,
+    edgeDistribution,
+    metaModelId,
+    metaModelSourceId,
   } = data;
 
   const boxRef = useRef<HTMLDivElement>(null);
@@ -334,7 +359,12 @@ export const EcoreFileBox: React.FC<NodeProps<EcoreFileBoxData>> = ({
 
   const handleDoubleClick = (e: React.MouseEvent) => {
     e.stopPropagation();
-    onExpand(fileName, fileContent);
+    const backendMetaModelId = getBackendMetaModelId(metaModelId, metaModelSourceId);
+    if (backendMetaModelId == null) {
+      console.warn(`Cannot expand Ecore file "${fileName}" because meta-model ID is missing.`);
+      return;
+    }
+    onExpand(fileName, fileContent, backendMetaModelId);
   };
 
   const handleDeleteClick = (e: React.MouseEvent) => {
@@ -346,7 +376,7 @@ export const EcoreFileBox: React.FC<NodeProps<EcoreFileBoxData>> = ({
     setter(false);
   };
 
-  const handleModalOverlayClick = (setter: React.Dispatch<React.SetStateAction<boolean>>) =>
+  const handleModalOverlayClick = (setter: React.Dispatch<React.SetStateAction<boolean>>) => 
     (e: React.MouseEvent) => {
       if (e.target === e.currentTarget) {
         setter(false);
@@ -354,26 +384,48 @@ export const EcoreFileBox: React.FC<NodeProps<EcoreFileBoxData>> = ({
     };
 
   const confirmDelete = () => {
-    onDelete?.(id);
+    onDelete?.(id, metaModelId!);
     setShowDeleteConfirm(false);
   };
 
-  // Forward position + DOM-measured arrow tip screen position to FlowCanvas
   const handleConnectionStartWrapper = (position: HandlePosition, tipScreenPos: { x: number; y: number }) => {
+    console.log('Connection started from', position, 'on node', id);
     onConnectionStart?.(id, position, tipScreenPos);
   };
 
-  // Render Connection Handles
-  const connectionHandles = (['top', 'bottom', 'left', 'right'] as const).map(position => (
-    <ConnectionHandle
-      key={position}
-      position={position}
-      isVisible={selected || isConnectionActive}
-      onConnectionStart={(pos, tipScreenPos) => handleConnectionStartWrapper(pos, tipScreenPos)}
-      offsetIndex={0}
-      totalHandles={1}
-    />
-  ));
+  // Render Connection Handles with distribution data
+  const connectionHandles = (['top', 'bottom', 'left', 'right'] as const).map(position => {
+    const sideDistribution = edgeDistribution?.get(position);
+    const totalHandles = sideDistribution?.length || 0;
+    
+    // If no edges on this side, show single handle
+    if (totalHandles === 0) {
+      return (
+        <ConnectionHandle
+          key={position}
+          position={position}
+          isVisible={selected || isConnectionActive}
+          onConnectionStart={(pos, tipScreenPos) => handleConnectionStartWrapper(pos, tipScreenPos)}
+          offsetIndex={0}
+          totalHandles={1}
+        />
+      );
+    }
+    
+    // For sides with edges, we still show just one handle but positioned based on total count
+    // The visual handles shown are just for creating new connections
+    // The actual edge attachment points are calculated in FlowCanvas
+    return (
+      <ConnectionHandle
+        key={position}
+        position={position}
+        isVisible={selected || isConnectionActive}
+        onConnectionStart={(pos, tipScreenPos) => handleConnectionStartWrapper(pos, tipScreenPos)}
+        offsetIndex={0}
+        totalHandles={1}
+      />
+    );
+  });
 
   const handleBoxKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter') {
@@ -381,7 +433,12 @@ export const EcoreFileBox: React.FC<NodeProps<EcoreFileBoxData>> = ({
       onSelect(fileName);
     } else if (e.key === ' ') {
       e.preventDefault();
-      onExpand(fileName, fileContent);
+      const backendMetaModelId = getBackendMetaModelId(metaModelId, metaModelSourceId);
+      if (backendMetaModelId == null) {
+        console.warn(`Cannot expand Ecore file "${fileName}" because meta-model ID is missing.`);
+        return;
+      }
+      onExpand(fileName, fileContent, backendMetaModelId);
     }
   };
 
@@ -408,7 +465,7 @@ export const EcoreFileBox: React.FC<NodeProps<EcoreFileBoxData>> = ({
       >
         {connectionHandles}
 
-        <div style={createTextStyle(14, '#212529', {
+        <div style={createTextStyle(14, '#212529', { 
           fontWeight: '700',
           textAlign: 'center',
           wordBreak: 'break-word',

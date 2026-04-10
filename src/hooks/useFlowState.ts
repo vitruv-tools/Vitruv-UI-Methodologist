@@ -1,6 +1,11 @@
 import { useCallback, useState, useEffect } from 'react';
-import { useNodesState, useEdgesState, Connection, Edge, Node } from 'reactflow';
-import { useUndoRedo } from './useUndoRedo';
+import { useNodesState, useEdgesState, Connection, Edge, Node, NodeChange } from 'reactflow';
+import { DiagramState, useUndoRedo } from './useUndoRedo';
+import { createFineGranularReactionEdge } from '../utils/FineGranularReactionUtils';
+import { ActiveVsumDetails } from '../store/ActiveVsumDetails';
+import { EditableVsumDetails } from '../types/EditableVsumDetails';
+import { NoVsumDetailsStoreError } from '../store/NoVsumDetailsStoreError';
+import { chooseHandlesForPair as utilChooseHandlesForPair } from '../utils';
 
 interface UseFlowStateProps {
   userId?: string;
@@ -9,23 +14,8 @@ interface UseFlowStateProps {
 
 export function useFlowState(props?: UseFlowStateProps) {
   const { userId, projectId } = props || {};
-
-  const chooseHandlesForPair = useCallback((src?: Node, tgt?: Node, preferredSource?: string | null, preferredTarget?: string | null) => {
-    if (!src || !tgt) {
-      return { s: preferredSource ?? undefined, t: preferredTarget ?? undefined } as const;
-    }
-    const dx = (tgt.position?.x ?? 0) - (src.position?.x ?? 0);
-    const dy = (tgt.position?.y ?? 0) - (src.position?.y ?? 0);
-    if (Math.abs(dx) >= Math.abs(dy)) {
-      const s = dx >= 0 ? 'right-source' : 'left-source';
-      const t = dx >= 0 ? 'left-target' : 'right-target';
-      return { s, t } as const;
-    } else {
-      const s = dy >= 0 ? 'bottom-source' : 'top-source';
-      const t = dy >= 0 ? 'top-target' : 'bottom-target';
-      return { s, t } as const;
-    }
-  }, []);
+  
+  const chooseHandlesForPair = useCallback(utilChooseHandlesForPair, []);
 
   const applyParallelEdgeMeta = useCallback((edges: Edge[]) => {
     // group edges by unordered node pair
@@ -64,6 +54,7 @@ export function useFlowState(props?: UseFlowStateProps) {
     edges: [],
     idCounter: 1
   });
+  const [isDraggingNode, setIsDraggingNode] = useState(false);
 
   // Initialize undo/redo with current state
   const {
@@ -76,7 +67,8 @@ export function useFlowState(props?: UseFlowStateProps) {
   } = useUndoRedo({
     nodes: [],
     edges: [],
-    idCounter: 1
+    idCounter: 1,
+    vsumDetails: null,
   });
 
   // Reset state when user/project changes
@@ -95,11 +87,23 @@ export function useFlowState(props?: UseFlowStateProps) {
 
   useEffect(() => {
     if (isApplyingState) return;
-
+    if (isDraggingNode) return;
+    
+    let vsumDetails: EditableVsumDetails | null = null;
+    try {
+      const activeVsumDetails = new ActiveVsumDetails();
+      vsumDetails = activeVsumDetails.get();
+    } catch (error) {
+      if (!(error instanceof NoVsumDetailsStoreError)) {
+        // VSUM Details might not have been loaded yet, but thats not an issue.
+        throw error; // re-throw if it's a different error
+      } 
+    }
     const currentDiagramState = {
       nodes,
       edges,
-      idCounter
+      idCounter,
+      vsumDetails
     };
 
     const hasChanged =
@@ -138,9 +142,14 @@ export function useFlowState(props?: UseFlowStateProps) {
       saveState(currentDiagramState, actionDescription);
       setLastSavedState(currentDiagramState);
     }
-  }, [nodes, edges, idCounter, saveState, isApplyingState, lastSavedState]);
+  }, [nodes, edges, idCounter, saveState, isApplyingState, lastSavedState, isDraggingNode]);
 
-  const applyState = useCallback((state: { nodes: Node[]; edges: Edge[]; idCounter: number }) => {
+  const applyState = useCallback((state: DiagramState) => {
+    if (state.vsumDetails != null) {
+      const activeVsumDetails = new ActiveVsumDetails();
+      activeVsumDetails.overwrite(state.vsumDetails);
+      activeVsumDetails.saveToStore();
+    }
     setIsApplyingState(true);
     setNodes(state.nodes);
     setEdges(state.edges);
@@ -162,19 +171,29 @@ export function useFlowState(props?: UseFlowStateProps) {
       const src = findNode(params.source);
       const tgt = findNode(params.target);
       const auto = chooseHandlesForPair(src, tgt, params.sourceHandle, params.targetHandle);
-      const newEdge: Edge = {
-        id: `edge-${getId()}`,
-        type: 'uml',
-        source: params.source!,
-        target: params.target!,
-        sourceHandle: params.sourceHandle ?? auto.s,
-        targetHandle: params.targetHandle ?? auto.t,
-        data: {
-          relationshipType: 'association',
-          label: 'Association',
-        },
-      };
-      setEdges((eds) => eds.concat(newEdge));
+      
+      const fineGranularEdge = createFineGranularReactionEdge(params, src, tgt, getId, auto);
+      if (fineGranularEdge) {
+        setEdges((eds) => eds.concat(fineGranularEdge));
+        return;
+      } else if (
+        params.sourceHandle?.startsWith("reaction") !== true &&
+        params.targetHandle?.startsWith("reaction") !== true
+      ) {
+        const newEdge: Edge = {
+          id: `edge-${getId()}`,
+          type: "uml",
+          source: params.source!,
+          target: params.target!,
+          sourceHandle: params.sourceHandle ?? auto.s,
+          targetHandle: params.targetHandle ?? auto.t,
+          data: {
+            relationshipType: "association",
+            label: "Association",
+          },
+        };
+        setEdges((eds) => eds.concat(newEdge));
+      }
     },
     [getId, setEdges, nodes, chooseHandlesForPair]
   );
@@ -284,10 +303,27 @@ export function useFlowState(props?: UseFlowStateProps) {
     }
   }, [redo, applyState]);
 
+  const onNodesChangeHandler = useCallback((changes: NodeChange[]) => {
+    onNodesChange(changes);
+
+    const finishedDragging = changes.some((change: any) => 
+        change.type === 'position' && change.dragging === false
+    );
+    const startedDragging = changes.some((change: any) => 
+        change.type === 'position' && change.dragging === true
+    );
+    if (finishedDragging) {
+      setIsDraggingNode(false);
+    }
+    else if (startedDragging) {
+      setIsDraggingNode(true);
+    }
+  }, [onNodesChange]);
+
   return {
     nodes,
     edges,
-    onNodesChange,
+    onNodesChange: onNodesChangeHandler,
     onEdgesChange,
     onConnect,
     addNode,

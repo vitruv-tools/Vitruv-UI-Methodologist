@@ -8,6 +8,7 @@ import { generateUMLFromEcore } from '../../utils/umlGenerator';
 interface UMLViewerModalProps {
   isOpen: boolean;
   title?: string;
+  ecoreName?: string;
   ecoreContent: string;
   onClose: () => void;
 }
@@ -15,7 +16,7 @@ interface UMLViewerModalProps {
 const nodeTypes = { editable: EditableNode };
 const edgeTypes = { uml: UMLRelationship };
 
-export const UMLViewerModal: React.FC<UMLViewerModalProps> = ({ isOpen, title, ecoreContent, onClose }) => {
+export const UMLViewerModal: React.FC<UMLViewerModalProps> = ({ isOpen, title, ecoreName, ecoreContent, onClose }) => {
   const [nodes, setNodes] = useState<Node[]>([]);
   const [edges, setEdges] = useState<Edge[]>([]);
   const [ready, setReady] = useState(false);
@@ -24,12 +25,11 @@ export const UMLViewerModal: React.FC<UMLViewerModalProps> = ({ isOpen, title, e
   // Parse once per content
   useEffect(() => {
     if (!isOpen) return;
-    const { nodes: umlNodes, edges: umlEdges } = generateUMLFromEcore(ecoreContent);
+    const { nodes: umlNodes, edges: umlEdges } = generateUMLFromEcore(ecoreName ?? "", ecoreContent);
     setNodes(umlNodes as unknown as Node[]);
     setEdges(umlEdges as unknown as Edge[]);
     setReady(true);
-  }, [isOpen, ecoreContent]);
-
+  }, [isOpen, ecoreName, ecoreContent]);
   useEffect(() => {
     if (ready && rfRef.current) {
       // Delay to ensure layout mounts

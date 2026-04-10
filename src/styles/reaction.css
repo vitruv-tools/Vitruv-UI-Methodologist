@@ -1,0 +1,4 @@
+.reaction-edge {
+  opacity: var(--reaction-edge-opacity) !important;
+}
+

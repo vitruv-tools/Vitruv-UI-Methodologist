@@ -1,5 +1,9 @@
+import { EObject } from 'ecore-ts';
 import React, { useState, useRef, useEffect } from 'react';
 import { NodeProps, Handle, Position } from 'reactflow';
+import { ActiveVsumDetails } from "../../store/ActiveVsumDetails";
+import { FlowNodeECoreData } from '../../types';
+import { buildAttributeSignature, buildMethodSignature, getHandleIdForEcoreElement } from '../../utils/UMLFromEcoreTS';
 import {
   getBaseNodeStyle,
   headerBaseStyle,
@@ -12,10 +16,8 @@ import {
   packageContentTitleStyle,
   packageHintStyle,
   getDeleteButtonStyle,
-  handleStyles,
-  typeLabelStyle,
-  typeAccentColors,
-} from './umlNodeStyles';
+  handleStyles
+} from './UMLNodeStyles';
 
 // Types
 interface UMLNodeData {
@@ -30,101 +32,11 @@ interface UMLNodeData {
   methods?: string[];
   values?: string[];
   packageName?: string;
-  availableEnumTypes?: string[];
-}
-
-// ─── Inline attribute-type selector (jjodel style) ───────────────────────────
-
-const ECORE_PRIMITIVE_TYPES = [
-  'EString', 'EInt', 'EBoolean', 'EFloat', 'EDouble',
-  'ELong', 'EShort', 'EChar', 'EByte', 'EDate',
-  'EBigDecimal', 'EBigInteger', 'EObject',
-];
-
-const typeSelectStyle: React.CSSProperties = {
-  border: '1.5px solid #b8d0e2',
-  borderRadius: '3px',
-  fontSize: '16px',
-  fontFamily: `'Consolas', 'Courier New', monospace`,
-  color: '#0c436e',
-  background: '#f4f8fc',
-  padding: '2px 5px',
-  cursor: 'pointer',
-  maxWidth: '200px',
-  minWidth: '90px',
-  flexShrink: 1,
-  outline: 'none',
-  height: '28px',
-  lineHeight: '28px',
-};
-
-// Parse "+ attrName: TypeName [mult]" into parts
-function parseAttrString(raw: string): { vis: string; name: string; type: string; mult: string } | null {
-  // Hard length cap so the regex cannot be driven into super-linear backtracking
-  // by a pathological input string.
-  if (raw.length > 256) return null;
-  // The multiplicity group must start with \s, which is disjoint from the type
-  // character class [\w:./\\].  This removes any overlap between the two
-  // adjacent quantified groups and prevents super-linear backtracking (ReDoS).
-  // [^\r\n]* replaces .+ to avoid dotAll ambiguity and the nested-quantifier
-  // pattern that static analysers flag.
-  const m = /^([+\-#~]?)\s*(\w+)\s*:\s*([\w:./\\]+)(\s[^\r\n]*)?$/.exec(raw);
-  if (!m) return null;
-  return {
-    vis: m[1] || '+',
-    name: m[2],
-    type: m[3],
-    mult: (m[4] ?? '').trim(),
-  };
-}
-
-interface AttributeRowProps {
-  readonly raw: string;
-  readonly enumTypes: string[];
-  readonly onUpdate: (newRaw: string) => void;
-}
-
-function AttributeRow({ raw, enumTypes, onUpdate }: AttributeRowProps) {
-  const parsed = parseAttrString(raw);
-  if (!parsed) {
-    return <div style={listItemStyle}>{raw}</div>;
-  }
-
-  // Only ECore built-in types + model enums — no class names (those are EReferences, not EAttributes)
-  const base = Array.from(new Set([...ECORE_PRIMITIVE_TYPES, ...enumTypes])).sort((a, b) => a.localeCompare(b));
-  const typeOptions = parsed.type && !base.includes(parsed.type) ? [...base, parsed.type] : base;
-
-  const handleTypeChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
-    const newType = e.target.value;
-    const rebuilt = `${parsed.vis} ${parsed.name}: ${newType}${parsed.mult ? ' ' + parsed.mult : ''}`;
-    onUpdate(rebuilt);
-  };
-
-  return (
-    <div style={{ ...listItemStyle, display: 'flex', alignItems: 'center', gap: '3px', flexWrap: 'nowrap' }}>
-      <span style={{ color: '#087E8B', fontWeight: 700, flexShrink: 0, minWidth: '9px' }}>
-        {parsed.vis}
-      </span>
-      <span style={{ color: '#1e3a50', flexShrink: 0 }}>{parsed.name}:</span>
-      <select
-        value={parsed.type}
-        style={typeSelectStyle}
-        onChange={handleTypeChange}
-        title={`Type: ${parsed.type}`}
-        onMouseDown={(e) => e.stopPropagation()}
-      >
-        {typeOptions.map(t => (
-          <option key={t} value={t}>{t}</option>
-        ))}
-      </select>
-      {parsed.mult && (
-        <span style={{ color: '#5a7a90', fontSize: '15px', flexShrink: 0 }}>{parsed.mult}</span>
-      )}
-    </div>
-  );
+  ecore?: FlowNodeECoreData;
 }
 
 interface EditableFieldProps {
+  readonly id: string;
   readonly value: string;
   readonly onSave: (newValue: string) => void;
   readonly placeholder?: string;
@@ -274,9 +186,57 @@ const DeleteButton: React.FC<DeleteButtonProps> = ({
   </button>
 );
 
+/**
+ * Renders attribute or method signature lines with reaction handles on both sides.
+ * @param {string[]} eObjectIds - EObject identifiers used to resolve model elements.
+ * @param {boolean} isConnectable - Whether rendered handles should allow connections.
+ * @param {(attr: EObject, index: number) => string} buildSignature - Signature builder for each EObject entry.
+ * @returns {JSX.Element} A list of rendered signature rows with source and target handles.
+ */
+export function renderLines(eObjectIds: string[], isConnectable: boolean, buildSignature: (attr: EObject, index: number) => string) {
+  const identifiersToEObjects = new ActiveVsumDetails().getIdentifiersToEObjectMap();
+  const eObjects = eObjectIds.map(id => { return  { id: id, eObject: identifiersToEObjects.get(id) }}).filter(kv => kv.eObject !== undefined) as Array<{ id: string, eObject: EObject }>;
+  return (<div style={{ position: 'relative', width: '100%' }}>
+      {eObjects.map(({ id, eObject }, index) => (
+        <div key={id} style={listItemStyle}>
+          {buildSignature(eObject, index)}
+          <Handle 
+            type="target" 
+            position={Position.Left} 
+            isConnectable={isConnectable}
+            id={`${getHandleIdForEcoreElement(id, 'left', 'target')}`}
+            className="uml reaction-handle"
+          />
+          <Handle 
+            type="source" 
+            position={Position.Left} 
+            isConnectable={isConnectable}
+            id={`${getHandleIdForEcoreElement(id, 'left', 'source')}`}
+            className="uml reaction-handle"
+          />
+          <Handle 
+            type="target" 
+            position={Position.Right} 
+            isConnectable={isConnectable}
+            id={`${getHandleIdForEcoreElement(id, 'right', 'target')}`}
+            className="uml reaction-handle"
+          />
+          <Handle 
+            type="source" 
+            position={Position.Right} 
+            isConnectable={isConnectable}
+            id={`${getHandleIdForEcoreElement(id, 'right', 'source')}`}
+            className="uml reaction-handle"
+          />
+        </div>
+      ))}
+    </div>);
+}
+
 // Removed unused SectionHeader, ClassHeader and EditableList subcomponents
 
 function EditableField({
+  id,
   value,
   onSave,
   placeholder,
@@ -397,7 +357,7 @@ function EditableField({
         }}
         style={{
           cursor: 'pointer',
-          padding: '2px 4px',
+          padding: '2px 10px',
           borderRadius: '2px',
           transition: 'all 0.2s ease',
           display: 'flex',
@@ -489,15 +449,48 @@ function EditableField({
           </div>
         </MenuOverlay>
       )}
+      <Handle 
+        type="target" 
+        position={Position.Left} 
+        isConnectable={true}
+        id={`${getHandleIdForEcoreElement(id, 'left', 'target')}`}
+        className="uml reaction-handle"
+      />
+      <Handle 
+        type="source" 
+        position={Position.Left} 
+        isConnectable={true}
+        id={`${getHandleIdForEcoreElement(id, 'left', 'source')}`}
+        className="uml reaction-handle"
+      />
+      <Handle 
+        type="target" 
+        position={Position.Right} 
+        isConnectable={true}
+        id={`${getHandleIdForEcoreElement(id, 'right', 'target')}`}
+        className="uml reaction-handle"
+      />
+      <Handle 
+        type="source" 
+        position={Position.Right} 
+        isConnectable={true}
+        id={`${getHandleIdForEcoreElement(id, 'right', 'source')}`}
+        className="uml reaction-handle"
+      />
     </div>
   );
 }
 
 // Main Component
-export function EditableNode({ id, data, selected, isConnectable }: NodeProps<UMLNodeData>) {
+/**
+ * Renders a UML-aware editable node with class sections, handles, and inline editing controls.
+ * @param {NodeProps<UMLNodeData & FlowNodeECoreData>} props - React Flow node props carrying UML and Ecore metadata.
+ * @returns {JSX.Element} The node UI tailored to the configured tool type and selection state.
+ */
+export function EditableNode({ id, data, selected, isConnectable }: NodeProps<UMLNodeData & FlowNodeECoreData>) {
   const nodeData = data || {};
 
-  const updateNodeData = (updates: Partial<UMLNodeData>) => {
+  const updateNodeData = (updates: Partial<UMLNodeData & FlowNodeECoreData>) => {
     console.log('Node data update:', updates);
   };
 
@@ -533,114 +526,146 @@ export function EditableNode({ id, data, selected, isConnectable }: NodeProps<UM
     return baseStyle;
   };
 
-  // Plain text rows for methods / enum values
-  const renderLines = (items: string[]) => (
-    <>
-      {items.map((text, index) => (
-        <div key={`${text}-${index}`} style={listItemStyle}>{text}</div>
-      ))}
-    </>
-  );
-
-  // Attribute rows with inline type-selector dropdown
-  const renderAttributeLines = (items: string[]) => {
-    const enumTypes = nodeData.availableEnumTypes || [];
-    return (
-      <>
-        {items.map((raw, index) => (
-          <AttributeRow
-            key={`${raw}-${index}`}
-            raw={raw}
-            enumTypes={enumTypes}
-            onUpdate={(newRaw) => {
-              const updated = [...items];
-              updated[index] = newRaw;
-              updateNodeData({ attributes: updated });
-            }}
-          />
-        ))}
-      </>
-    );
-  };
-
   const renderUMLClass = () => (
     <div style={{ width: '100%' }}>
-      {selected && <DeleteButton onDeleteClick={handleDelete} />}
+      {selected && (
+        <DeleteButton onDeleteClick={handleDelete} />
+      )}
+      
+      {/* Class Name Section */}
       <div style={headerBaseStyle}>
-        <span style={{ ...typeLabelStyle, color: typeAccentColors['class'] }}>Class:</span>
         <EditableField
+          id={data.ecore!.eObjectId!}
           value={nodeData.className || ''}
           onSave={(newValue) => updateNodeData({ className: newValue })}
-          placeholder="ClassName"
-          style={{ fontWeight: 600, fontSize: '13px', color: '#0c436e' }}
+          placeholder="Class Name"
+          style={{ 
+            fontWeight: '600',
+            fontSize: '13px',
+            color: '#1f2937',
+            textAlign: 'center'
+          }}
         />
       </div>
+      
+      {/* Attributes Section */}
       {nodeData.attributes && nodeData.attributes.length > 0 && (
-        <div style={borderedSectionBodyStyle}>{renderAttributeLines(nodeData.attributes)}</div>
+        <div style={borderedSectionBodyStyle}>
+          {renderLines(nodeData.ecore?.eAttributeIds || [], isConnectable, buildAttributeSignature)}
+        </div>
       )}
+      
+      {/* Methods Section */}
       {nodeData.methods && nodeData.methods.length > 0 && (
-        <div style={sectionBodyStyle}>{renderLines(nodeData.methods)}</div>
+        <div style={sectionBodyStyle}>
+          {renderLines(nodeData.ecore?.eOperationIds || [], isConnectable, buildMethodSignature)}
+        </div>
       )}
     </div>
   );
 
+  // Render UML Abstract Class
   const renderUMLAbstractClass = () => (
     <div style={{ width: '100%' }}>
-      {selected && <DeleteButton onDeleteClick={handleDelete} />}
+      {selected && (
+        <DeleteButton onDeleteClick={handleDelete} />
+      )}
+      
       <div style={italicHeaderStyle}>
-        <span style={{ ...typeLabelStyle, color: typeAccentColors['abstract-class'], fontStyle: 'italic' }}>Abstract Class:</span>
+        <span style={{ fontSize: '10px', fontWeight: 'normal' }}>&lt;&lt;abstract&gt;&gt;</span>
+        {' '}
         <EditableField
+          id={data.ecore!.eObjectId!}
           value={nodeData.className || ''}
           onSave={(newValue) => updateNodeData({ className: newValue })}
-          placeholder="ClassName"
-          style={{ fontWeight: 600, fontSize: '13px', color: '#0c436e', fontStyle: 'italic' }}
+          placeholder="Abstract Class Name"
+          style={{ 
+            fontWeight: '600',
+            fontSize: '13px',
+            color: '#1f2937',
+            textAlign: 'center',
+            fontStyle: 'italic'
+          }}
         />
       </div>
+      
       {nodeData.attributes && nodeData.attributes.length > 0 && (
-        <div style={borderedSectionBodyStyle}>{renderAttributeLines(nodeData.attributes)}</div>
+        <div style={borderedSectionBodyStyle}>
+          {renderLines(nodeData.ecore?.eAttributeIds || [], isConnectable, buildAttributeSignature)}
+        </div>
       )}
+      
       {nodeData.methods && nodeData.methods.length > 0 && (
-        <div style={sectionBodyStyle}>{renderLines(nodeData.methods)}</div>
+        <div style={sectionBodyStyle}>
+          {renderLines(nodeData.ecore?.eOperationIds || [], isConnectable, buildMethodSignature)}
+        </div>
       )}
     </div>
   );
 
+  // Render UML Interface
   const renderUMLInterface = () => (
     <div style={{ width: '100%' }}>
-      {selected && <DeleteButton onDeleteClick={handleDelete} />}
+      {selected && (
+        <DeleteButton onDeleteClick={handleDelete} />
+      )}
+      
       <div style={italicHeaderStyle}>
-        <span style={{ ...typeLabelStyle, color: typeAccentColors['interface'], fontStyle: 'italic' }}>Interface:</span>
+        <span style={{ fontSize: '10px', fontWeight: 'normal' }}>&lt;&lt;interface&gt;&gt;</span>
+        {' '}
         <EditableField
+          id={data.ecore!.eObjectId!}
           value={nodeData.className || ''}
           onSave={(newValue) => updateNodeData({ className: newValue })}
-          placeholder="InterfaceName"
-          style={{ fontWeight: 600, fontSize: '13px', color: '#0c436e', fontStyle: 'italic' }}
+          placeholder="Interface Name"
+          style={{ 
+            fontWeight: '600',
+            fontSize: '13px',
+            color: '#1f2937',
+            textAlign: 'center',
+            fontStyle: 'italic'
+          }}
         />
       </div>
-      {nodeData.attributes && nodeData.attributes.length > 0 && (
-        <div style={borderedSectionBodyStyle}>{renderAttributeLines(nodeData.attributes)}</div>
-      )}
+      
       {nodeData.methods && nodeData.methods.length > 0 && (
-        <div style={sectionBodyStyle}>{renderLines(nodeData.methods)}</div>
+        <div style={sectionBodyStyle}>
+          {renderLines(nodeData.ecore?.eOperationIds || [], isConnectable, buildMethodSignature)}
+        </div>
       )}
     </div>
   );
 
+  // Render UML Enumeration
   const renderUMLEnumeration = () => (
     <div style={{ width: '100%' }}>
-      {selected && <DeleteButton onDeleteClick={handleDelete} />}
-      <div style={{ ...headerBaseStyle, borderBottomColor: typeAccentColors['enumeration'] }}>
-        <span style={{ ...typeLabelStyle, color: typeAccentColors['enumeration'] }}>Enumeration:</span>
+      {selected && (
+        <DeleteButton onDeleteClick={handleDelete} />
+      )}
+      
+      <div style={italicHeaderStyle}>
+        <span style={{ fontSize: '10px', fontWeight: 'normal' }}>&lt;&lt;enumeration&gt;&gt;</span>
+        {' '}
         <EditableField
+          id={`${id}-enumerationName`}
           value={nodeData.className || ''}
           onSave={(newValue) => updateNodeData({ className: newValue })}
-          placeholder="EnumName"
-          style={{ fontWeight: 600, fontSize: '13px', color: typeAccentColors['enumeration'] }}
+          placeholder="Enumeration Name"
+          style={{ 
+            fontWeight: '600',
+            fontSize: '13px',
+            color: '#1f2937',
+            textAlign: 'center',
+            fontStyle: 'italic'
+          }}
         />
       </div>
-      {nodeData.values && nodeData.values.length > 0 && (
-        <div style={sectionBodyStyle}>{renderLines(nodeData.values)}</div>
-      )}
+      
+      {/* {nodeData.values && nodeData.values.length > 0 && (
+        <div style={sectionBodyStyle}>
+          {renderLines(nodeData.ecore?.eValueIds || [], isConnectable, buildValueSignature)}
+        </div>
+      )} */}
     </div>
   );
 
@@ -660,6 +685,7 @@ export function EditableNode({ id, data, selected, isConnectable }: NodeProps<UM
       {/* Package name section with tab design */}
       <div style={packageHeaderStyle}>
         <EditableField
+          id={`${id}-packageName`}
           value={nodeData.packageName || ''}
           onSave={(newValue) => updateNodeData({ packageName: newValue })}
           placeholder="Package Name"
@@ -690,6 +716,7 @@ export function EditableNode({ id, data, selected, isConnectable }: NodeProps<UM
   const renderSimpleNode = (defaultPlaceholder: string, textColor?: string) => (
     <div style={{ width: '100%', textAlign: 'center', padding: '8px' }}>
       <EditableField
+        id={`${id}-simple`}
         value={nodeData.label || ''}
         onSave={(newValue) => updateNodeData({ label: newValue })}
         placeholder={defaultPlaceholder}
@@ -740,6 +767,7 @@ export function EditableNode({ id, data, selected, isConnectable }: NodeProps<UM
         isConnectable={isConnectable}
         id="left-target"
         style={handleStyles.leftTarget}
+        className="uml vsum-handle"
       />
       <Handle 
         type="source" 
@@ -747,6 +775,7 @@ export function EditableNode({ id, data, selected, isConnectable }: NodeProps<UM
         isConnectable={isConnectable}
         id="left-source"
         style={handleStyles.leftSource}
+        className="uml vsum-handle"
       />
 
       {/* Top side: allow both target and source */}
@@ -756,6 +785,7 @@ export function EditableNode({ id, data, selected, isConnectable }: NodeProps<UM
         isConnectable={isConnectable}
         id="top-target"
         style={handleStyles.topTarget}
+        className="uml vsum-handle"
       />
       <Handle 
         type="source" 
@@ -763,15 +793,18 @@ export function EditableNode({ id, data, selected, isConnectable }: NodeProps<UM
         isConnectable={isConnectable}
         id="top-source"
         style={handleStyles.topSource}
+        className="uml vsum-handle"
       />
 
       {/* Right side: allow both source and target */}
+      <div>
       <Handle 
         type="source" 
         position={Position.Right} 
         isConnectable={isConnectable}
         id="right-source"
         style={handleStyles.rightSource}
+        className="uml vsum-handle"
       />
       <Handle 
         type="target" 
@@ -779,7 +812,9 @@ export function EditableNode({ id, data, selected, isConnectable }: NodeProps<UM
         isConnectable={isConnectable}
         id="right-target"
         style={handleStyles.rightTarget}
+        className="uml vsum-handle"
       />
+      </div>
 
       {/* Bottom side: allow both source and target */}
       <Handle 
@@ -788,6 +823,7 @@ export function EditableNode({ id, data, selected, isConnectable }: NodeProps<UM
         isConnectable={isConnectable}
         id="bottom-source"
         style={handleStyles.bottomSource}
+        className="uml vsum-handle"
       />
       <Handle 
         type="target" 
@@ -795,6 +831,7 @@ export function EditableNode({ id, data, selected, isConnectable }: NodeProps<UM
         isConnectable={isConnectable}
         id="bottom-target"
         style={handleStyles.bottomTarget}
+        className="uml vsum-handle"
       />
     </div>
   );

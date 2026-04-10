@@ -1,9 +1,12 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { apiService } from '../../services/api';
+import { useProjectStore } from '../../store/Project';
+import { VsumMetaModelRef } from '../../types';
+import { useStore } from 'zustand';
+import { getVsumDetailsStore } from '../../store/VsumDetails';
 
 interface MetaModelsPanelProps {
   activeVsumId?: number | null;
-  selectedMetaModelIds?: number[];
   onAddToActiveVsum?: (model: any) => void;
 }
 
@@ -165,17 +168,23 @@ const addBtnStyle: React.CSSProperties = {
 
 export const MetaModelsPanel: React.FC<MetaModelsPanelProps> = ({
   activeVsumId,
-  selectedMetaModelIds,
   onAddToActiveVsum,
 }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [sortBy, setSortBy] = useState<'name' | 'date' | 'domain'>('date');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
   const [isLoadingModels, setIsLoadingModels] = useState(false);
-  const [apiModels, setApiModels] = useState<any[]>([]);
+  const [apiModels, setApiModels] = useState<VsumMetaModelRef[]>([]);
   const [apiError, setApiError] = useState<string>('');
   const [parsedFilters, setParsedFilters] = useState<any[]>([]);
   const [showAllModels, setShowAllModels] = useState(false);
+  const { mode, activeId, expandedMetaModelNames } = useProjectStore((state) => ({ mode: state.mode, activeId: state.activeId, expandedMetaModelNames: state.expandedMetaModels }));
+  const metaModels = useStore(
+    getVsumDetailsStore(activeId ?? -1),
+    (state) => state?.metaModels
+  );
+
+  const selectedMetaModels = useMemo(() => metaModels ?? [], [metaModels]);
 
   const handleSearchKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key !== 'Tab') return;
@@ -266,8 +275,13 @@ export const MetaModelsPanel: React.FC<MetaModelsPanelProps> = ({
           }
         }
 
-        const res = await apiService.findMetaModels(filters);
-        setApiModels(res.data || []);
+        const localModelsModes: typeof mode[] = ["expanded", "reactions"];
+        if (localModelsModes.includes(mode)) {
+          setApiModels(selectedMetaModels ?? []);
+        } else {
+          const res = await apiService.findMetaModels(filters);
+          setApiModels(res.data || []);
+        }
       } catch (e: any) {
         setApiError(e?.message || 'Failed to fetch meta models');
       } finally {
@@ -275,7 +289,7 @@ export const MetaModelsPanel: React.FC<MetaModelsPanelProps> = ({
       }
     };
     fetchData();
-  }, [parsedFilters, showAllModels]);
+  }, [parsedFilters, showAllModels, mode, selectedMetaModels, expandedMetaModelNames]);
 
   const sortedModels = [...apiModels].sort((a, b) => {
     let cmp = 0;
@@ -284,6 +298,15 @@ export const MetaModelsPanel: React.FC<MetaModelsPanelProps> = ({
     if (sortBy === 'domain') cmp = (a.domain || '').localeCompare(b.domain || '');
     return sortOrder === 'asc' ? cmp : -cmp;
   });
+
+  const alreadyAdded = (model: VsumMetaModelRef) => {
+    if (mode === 'expanded' || mode === 'reactions') {
+      return (selectedMetaModels ?? []).filter(model => expandedMetaModelNames?.has(model.id)).map(m => m.id).includes(model.id);
+    }
+    else {
+      return (selectedMetaModels ?? []).map(m => m.id).includes(model.id);
+    }
+  };
 
   return (
     <div style={containerStyle}>
@@ -424,25 +447,25 @@ export const MetaModelsPanel: React.FC<MetaModelsPanelProps> = ({
                   onClick={() => onAddToActiveVsum(model)}
                   style={{
                     ...addBtnStyle,
-                    opacity: (selectedMetaModelIds || []).includes(model.id) ? 0.6 : 1,
-                    cursor: (selectedMetaModelIds || []).includes(model.id) ? 'not-allowed' : 'pointer',
-                    background: (selectedMetaModelIds || []).includes(model.id) ? '#f8f9fa' : '#ffffff',
+                    opacity: alreadyAdded(model) ? 0.6 : 1,
+                    cursor: alreadyAdded(model) ? 'not-allowed' : 'pointer',
+                    background: alreadyAdded(model) ? '#f8f9fa' : '#ffffff',
                   }}
-                  disabled={(selectedMetaModelIds || []).includes(model.id)}
+                  disabled={alreadyAdded(model)}
                   onMouseEnter={(e) => {
-                    if (!(selectedMetaModelIds || []).includes(model.id)) {
+                    if (!alreadyAdded(model)) {
                       e.currentTarget.style.background = '#049484';
                       e.currentTarget.style.color = '#ffffff';
                     }
                   }}
                   onMouseLeave={(e) => {
-                    if (!(selectedMetaModelIds || []).includes(model.id)) {
+                    if (!alreadyAdded(model)) {
                       e.currentTarget.style.background = '#ffffff';
                       e.currentTarget.style.color = '#049484';
                     }
                   }}
                 >
-                  {(selectedMetaModelIds || []).includes(model.id) ? '✓ Added' : '+ Add'}
+                  {alreadyAdded(model) ? '✓ Added' : '+ Add'}
                 </button>
               )}
             </div>

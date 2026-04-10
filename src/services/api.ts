@@ -1,6 +1,9 @@
 import { AuthService } from './auth';
 import { FlowData } from '../types/flow';
-import { ApiResponse, Vsum, VsumDetails } from '../types/vsum';
+import { ApiResponse, Vsum, VsumDetails, VsumMetaModelRef } from '../types/vsum';
+import { LowCodeReactionMetadataResponse } from "../types/LowCodeReactionMetadataResponse";
+import { createVsumDetailsStore } from '../store/VsumDetails';
+import { EditableFineGranularMetaModelRelation, EditableVsumDetails } from '../types/EditableVsumDetails';
 import { config } from '../config/environment';
 
 class ApiService {
@@ -489,7 +492,7 @@ class ApiService {
     pageNumber?: number;
     pageSize?: number;
     ownedByUser?: boolean;
-  }): Promise<{ data: any[]; message: string }> {
+  }): Promise<{ data: VsumMetaModelRef[]; message: string }> {
     // Set default values for pagination
     const pageNumber = filters.pageNumber ?? 0;
     const pageSize = filters.pageSize ?? 50;
@@ -509,7 +512,7 @@ class ApiService {
       pageSize,
     });
 
-    const result = await this.authenticatedRequest<{ data: any[]; message: string }>(endpoint, {
+    const result = await this.authenticatedRequest<{ data: VsumMetaModelRef[]; message: string }>(endpoint, {
       method: 'POST',
       body: JSON.stringify(filters),
     });
@@ -696,14 +699,7 @@ class ApiService {
   /**
    * vSUMS: Sync changes with relationship data
    */
-  async syncVsumChanges(id: number | string, data: {
-    metaModelIds: number[];
-    metaModelRelationRequests: Array<{
-      sourceId: number;
-      targetId: number;
-      reactionFileId: number;
-    }>;
-  }): Promise<ApiResponse<any>> {
+  async syncVsumChanges(id: number | string, data: VsumSyncChangesPutRequest): Promise<ApiResponse<any>> {
     return this.updateVsumSyncChanges(id, data);
   }
 
@@ -711,7 +707,9 @@ class ApiService {
    * vSUMS: Get details
    */
   async getVsumDetails(id: number | string): Promise<ApiResponse<VsumDetails>> {
-    return this.authenticatedRequest(`/api/v1/vsums/${id}/details`);
+    const vsumDetails = await this.authenticatedRequest<ApiResponse<VsumDetails>>(`/api/v1/vsums/${id}/details`);
+    createVsumDetailsStore(id, vsumDetails.data as EditableVsumDetails);
+    return vsumDetails;
   }
 
   /**
@@ -876,6 +874,15 @@ class ApiService {
     }
   }
 
+  /**
+   * Gets the metadata for low-code reactions, which includes the expected fields and their types for each reaction.
+   * This is used to dynamically generate forms for reaction configuration in the UI.
+   */
+  async getLowCodeReactionsMetadata()
+      : Promise<ApiResponse<LowCodeReactionMetadataResponse>> {
+    return this.authenticatedRequest(`/api/lowcode-metadata`);
+  }
+
   // Removed unused getBaseURL and setBaseURL helpers
 }
 
@@ -915,10 +922,12 @@ export interface UserSearchItem {
 export interface MetaModelRelationRequest {
   sourceId: number;
   targetId: number;
-  reactionFileId: number;  // Use 0 when there's no reaction file
+  reactionFileId: number | null;  // Use null when there's no reaction file
+  fineGranularMetaModelRelationSet: EditableFineGranularMetaModelRelation[]; // Include fine-grained relations in the request
 }
 
 export interface VsumSyncChangesPutRequest {
   metaModelIds: number[];
   metaModelRelationRequests: MetaModelRelationRequest[] | null; // you said null for now
 }
+

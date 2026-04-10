@@ -1,21 +1,46 @@
-import { Node, Edge } from 'reactflow';
+import { Node, Edge } from "reactflow";
+import { FlowFineGranularMetaModelRelationData } from "./FlowFineGranularMetaModelRelationData";
+
+export type FlowNodeECoreData = {
+  model: string;
+  eObjectId: string;
+  eAttributeIds: string[];
+  eReferenceIds: string[];
+  eOperationIds: string[];
+  eAnnotationIds: string[];
+  eSuperTypeIds: string[];
+};
 
 export interface FlowNode extends Node {
   data: {
     label: string;
     onLabelChange?: (id: string, label: string) => void;
     ecoreData?: EcoreElementData;
+    ecore?: FlowNodeECoreData;
+    isBoundingBox?: boolean;
+    group?: string;
   };
 }
 
-export type FlowEdge = Edge;
+export type UMLNode = FlowNode & { 
+  data: { backendMetaModelId: number } 
+};
+
+export type FlowEdgeData = {
+  relationshipType: string;
+  targetMultiplicity?: string;
+  labelX?: number;
+  labelY?: number;
+};
+export type FlowEdge = Edge<FlowEdgeData>;
+export type FlowEcoreEdge = Edge<FlowEdgeData & FlowFineGranularMetaModelRelationData>;
 
 export interface FlowData {
   nodes: FlowNode[];
   edges: FlowEdge[];
 }
 
-export type NodeType = 'sequence' | 'object' | 'ecore';
+export type NodeType = "sequence" | "object" | "ecore";
 
 export interface DragItem {
   type: NodeType;
@@ -24,7 +49,13 @@ export interface DragItem {
 
 export interface EcoreElementData {
   name: string;
-  type: 'EClass' | 'EAttribute' | 'EReference' | 'EPackage' | 'EEnum' | 'EEnumLiteral';
+  type:
+    | "EClass"
+    | "EAttribute"
+    | "EReference"
+    | "EPackage"
+    | "EEnum"
+    | "EEnumLiteral";
   attributes?: EcoreAttribute[];
   references?: EcoreReference[];
   operations?: EcoreOperation[];
@@ -76,4 +107,4 @@ export interface EcorePackage {
   nsPrefix: string;
   classes: EcoreElementData[];
   packages: EcorePackage[];
-} 
+}

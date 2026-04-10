@@ -1,7 +1,29 @@
 import { renderHook, act } from '@testing-library/react';
 import { useFlowState } from '../../hooks/useFlowState';
+import { useProjectStore } from '../../store/Project';
+
+jest.mock('../../utils/UMLFromEcoreTS', () => ({
+    __esModule: true,
+    getNodeNameFromEcoreIdentifier: jest.fn((value: string) => value),
+    findClassNameFromEcoreIdentifier: jest.fn((value: string) => value),
+    findPackageNameFromEcoreIdentifier: jest.fn((value: string) => value),
+    getHandleIdForEcoreElement: jest.fn((_: string, direction: string, type: string) => `${direction}-${type}`),
+    buildAttributeSignature: jest.fn(() => '+ attr: EString'),
+    buildMethodSignature: jest.fn(() => '+ op(): void'),
+}));
 
 describe('useFlowState', () => {
+    beforeEach(() => {
+        act(() => {
+            useProjectStore.getState().setActiveId(1);
+        });
+    });
+
+    afterEach(() => {
+        act(() => {
+            useProjectStore.getState().setActiveId(null);
+        });
+    });
 
     describe('initial state', () => {
         it('should start with empty nodes and edges', () => {

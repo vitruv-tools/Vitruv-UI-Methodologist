@@ -3,6 +3,10 @@
   "version": "0.1.0",
   "private": true,
   "dependencies": {
+    "@emotion/react": "^11.14.0",
+    "@emotion/styled": "^11.14.1",
+    "@mui/icons-material": "^7.3.7",
+    "@mui/material": "^7.3.7",
     "@monaco-editor/react": "^4.7.0",
     "@testing-library/dom": "^10.4.0",
     "@testing-library/jest-dom": "^6.6.3",
@@ -12,6 +16,7 @@
     "@types/node": "^16.18.126",
     "@types/react": "^19.1.8",
     "@types/react-dom": "^19.1.6",
+    "ecore-ts": "^0.17.8",
     "monaco-editor": "^0.55.1",
     "monaco-languageclient": "^10.5.0",
     "react": "^19.1.0",
@@ -34,6 +39,8 @@
     "build": "react-scripts build",
     "build:staging": "env-cmd -f .env.staging react-scripts build",
     "build:production": "env-cmd -f .env.production react-scripts build",
+    "lint": "eslint \"src/**/*.{ts,tsx,js,jsx}\"",
+    "lint:jsdoc": "eslint \"src/{components,contexts,hooks,pages,services,store,types,utils}/**/*.{ts,tsx,js,jsx}\" --quiet --rule \"jsdoc/require-jsdoc:error\"",
     "test": "react-scripts test",
     "eject": "react-scripts eject"
   },
@@ -56,6 +63,7 @@
     ]
   },
   "devDependencies": {
-    "env-cmd": "^11.0.0"
+    "env-cmd": "^11.0.0",
+    "eslint-plugin-jsdoc": "^48.11.0"
   }
 }

@@ -284,7 +284,6 @@ export function ReactionRelationship({
   const hasCode = data?.code && data.code.trim().length > 0;
   
   const handleClick = (e: React.MouseEvent) => {
-    e.stopPropagation();
     // Toggle selection by dispatching a custom event
     const event = new CustomEvent('edge-clicked', { 
       detail: { edgeId: id, currentlySelected: selected } 
@@ -321,7 +320,7 @@ export function ReactionRelationship({
   const handleMouseLeave = () => setIsHovered(false);
 
   return (
-    <>
+    <g className="reaction-edge">
       <path
         id={`${id}-underlay`}
         d={edgePath}
@@ -486,6 +485,6 @@ export function ReactionRelationship({
           style={{ pointerEvents: 'none' }}
         />
       )}
-    </>
+    </g>
   );
 }

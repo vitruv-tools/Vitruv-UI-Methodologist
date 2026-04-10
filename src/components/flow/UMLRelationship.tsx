@@ -1,6 +1,15 @@
 import React from 'react';
 import { EdgeProps, EdgeLabelRenderer, useStore } from 'reactflow';
 
+export const UMLRelationshipTypes = {
+  INHERITANCE: 'inheritance',
+  COMPOSITION: 'composition',
+  ASSOCIATION: 'association',
+  AGGREGATION: 'aggregation',
+  REALIZATION: 'realization',
+  DEPENDENCY: 'dependency',
+} as const;
+
 interface UMLRelationshipData {
   label?: string;
   relationshipType: string;
@@ -18,6 +27,8 @@ interface UMLRelationshipData {
   mergeGroupSourceNodes?: string[];
   hoveredMergeGroup?: string | null;
   onMergeGroupHover?: (groupId: string | null) => void;
+  labelX?: number;
+  labelY?: number;
 }
 
 interface PathResult {
@@ -143,19 +154,19 @@ function buildRelationshipStyle(
     transition: 'stroke 0.2s ease, stroke-width 0.2s ease',
   };
 
-  if (relationshipType === 'inheritance') {
+  if (relationshipType === UMLRelationshipTypes.INHERITANCE) {
     return { ...baseStyle, markerEnd: `url(#arrowhead-inheritance${markerSuffix})` };
   }
-  if (relationshipType === 'realization') {
+  if (relationshipType === UMLRelationshipTypes.REALIZATION) {
     return { ...baseStyle, strokeDasharray: '10,6', markerEnd: `url(#arrowhead-realization${markerSuffix})` };
   }
-  if (relationshipType === 'composition') {
+  if (relationshipType === UMLRelationshipTypes.COMPOSITION) {
     return { ...baseStyle, markerStart: `url(#diamond-composition${markerSuffix})` };
   }
-  if (relationshipType === 'aggregation') {
+  if (relationshipType === UMLRelationshipTypes.AGGREGATION) {
     return { ...baseStyle, markerStart: `url(#diamond-aggregation${markerSuffix})` };
   }
-  if (relationshipType === 'dependency') {
+  if (relationshipType === UMLRelationshipTypes.DEPENDENCY) {
     return { ...baseStyle, strokeDasharray: '8,5', markerEnd: `url(#arrowhead-open-dependency${markerSuffix})` };
   }
   
@@ -205,7 +216,6 @@ export function UMLRelationship({
   const isHighlighted: boolean = !!(selected || isHovered);
   
   const handleClick = (e: React.MouseEvent) => {
-    e.stopPropagation();
     // Toggle selection by dispatching a custom event
     const event = new CustomEvent('edge-clicked', { 
       detail: { edgeId: id, currentlySelected: selected } 
@@ -328,6 +338,11 @@ export function UMLRelationship({
     return data?.label || '';
   };
 
+
+  if (data) {
+    data.labelX = labelX;
+    data.labelY = labelY;
+  }
 
   return (
     <>
