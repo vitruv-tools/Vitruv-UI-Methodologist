@@ -21,7 +21,7 @@ export function splitByEcoreIdentifierSeparators(value: string | undefined): str
 
   const escapedSeparators = [...ecoreIdentifierSeparators]
     .sort((a, b) => b.length - a.length)
-    .map((separator) => separator.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"));
+    .map((separator) => separator.replaceAll(/[.*+?^${}()|[\]\\]/g, "\\$&"));
 
   const separatorPattern = new RegExp(escapedSeparators.join("|"), "g");
   return value.split(separatorPattern).filter((part) => part.length > 0);

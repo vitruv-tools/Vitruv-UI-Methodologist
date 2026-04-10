@@ -121,7 +121,7 @@ export function evaluateTemplateWithExpressionSupport(template: string, values: 
  */
 export function evaluateTemplate(template: string, values: Partial<LowCodeReactionFieldVariables>): string {
   // eslint-disable-next-line no-useless-escape
-  return template.replace(/\${(.*?)}/g, (_, key) => {
+  return template.replaceAll(/\${(.*?)}/g, (_, key) => {
       // eslint-disable-next-line no-useless-escape
       return (values as Record<string, string>)[key.trim()] ?? `\$\{${key}\}`;
   });

@@ -229,7 +229,7 @@ export function createOrUpdateBoundingBoxNodes(
 
   // First we track which palette indexes are already used
   const boundingBoxPalleteIndexes = new Set<number>(
-    Array.from(Array(ACCESSIBLE_BBOX_PALETTE.length).keys()),
+    Array.from(new Array(ACCESSIBLE_BBOX_PALETTE.length).keys()),
   );
   nodes
     .filter((n) => n.data.isBoundingBox)

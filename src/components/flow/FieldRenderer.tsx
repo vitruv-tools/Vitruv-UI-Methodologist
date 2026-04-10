@@ -126,8 +126,8 @@ export const FieldRenderer: React.FC<FieldRendererProps> = ({
             size="small"
             value={numValue}
             onChange={(e) => {
-              const num = parseFloat(e.target.value);
-              if (!isNaN(num)) onChange(num);
+              const num = Number.parseFloat(e.target.value);
+              if (!Number.isNaN(num)) onChange(num);
             }}
             inputProps={{ min, max }}
             disabled={disabled}
