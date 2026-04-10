@@ -93,15 +93,12 @@ export const KeywordTagsInput: React.FC<KeywordTagsInputProps> = ({
     }
   };
 
-  const handleContainerClick = () => {
-    inputRef.current?.focus();
-  };
-
-  const handleContainerKeyDown = (e: KeyboardEvent<HTMLDivElement>) => {
-    if (e.key === 'Enter' || e.key === ' ') {
-      e.preventDefault();
-      handleContainerClick();
+  const handleContainerMouseDown = (e: React.MouseEvent<HTMLDivElement>) => {
+    const target = e.target as HTMLElement;
+    if (target.closest('button')) {
+      return;
     }
+    inputRef.current?.focus();
   };
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -148,9 +145,7 @@ export const KeywordTagsInput: React.FC<KeywordTagsInputProps> = ({
         ...(isFocused ? containerFocusStyle : {}),
         ...style
       }}
-      onClick={handleContainerClick}
-      onKeyDown={handleContainerKeyDown}
-      tabIndex={0}
+      onMouseDown={handleContainerMouseDown}
     >
       {keywords.map((keyword) => (
         <div key={keyword} style={tagStyle}>
