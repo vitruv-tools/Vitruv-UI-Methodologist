@@ -9,4 +9,9 @@ import './__mocks__/resizeObserverMock';
 process.env.REACT_APP_API_BASE_URL = process.env.REACT_APP_API_BASE_URL || 'http://localhost:9811';
 process.env.REACT_APP_ENV = process.env.REACT_APP_ENV || 'local';
 const nativeStructuredClone = globalThis.structuredClone;
-globalThis.structuredClone = (val: any) => nativeStructuredClone(val);
+globalThis.structuredClone = (val: any) => {
+  if (typeof nativeStructuredClone === 'function') {
+    return nativeStructuredClone(val);
+  }
+  return JSON.parse(JSON.stringify(val));
+};
