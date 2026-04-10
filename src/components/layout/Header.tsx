@@ -409,19 +409,16 @@ const ChangePasswordModal: React.FC<ChangePasswordModalProps> = ({
   onSubmit,
   canSubmit,
 }) => {
+  useEffect(() => {
+    if (!isOpen) return;
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && !isChanging) onClose();
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [isOpen, isChanging, onClose]);
+
   if (!isOpen) return null;
-
-  const handleOverlayClick = () => {
-    if (!isChanging) {
-      onClose();
-    }
-  };
-
-  const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === 'Escape' && !isChanging) {
-      onClose();
-    }
-  };
 
   return (
     <div
@@ -432,18 +429,32 @@ const ChangePasswordModal: React.FC<ChangePasswordModalProps> = ({
         left: 0,
         right: 0,
         bottom: 0,
-        background: 'rgba(0, 0, 0, 0.65)',
-        backdropFilter: 'blur(12px)',
-        WebkitBackdropFilter: 'blur(12px)',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
+        background: 'transparent',
+        display: 'grid',
+        placeItems: 'center',
         zIndex: 10000,
         animation: 'fadeIn 0.2s ease-out',
       }}
-      onClick={handleOverlayClick}
-      onKeyDown={handleKeyDown}
     >
+      <button
+        type="button"
+        aria-hidden="true"
+        tabIndex={-1}
+        onClick={() => { if (!isChanging) onClose(); }}
+        style={{
+          position: 'absolute',
+          inset: 0,
+          background: 'rgba(0, 0, 0, 0.65)',
+          backdropFilter: 'blur(12px)',
+          WebkitBackdropFilter: 'blur(12px)',
+          border: 'none',
+          padding: 0,
+          margin: 0,
+          width: '100%',
+          height: '100%',
+          cursor: isChanging ? 'default' : 'pointer',
+        }}
+      />
       <div
         role="dialog"
         aria-modal="true"
@@ -457,9 +468,10 @@ const ChangePasswordModal: React.FC<ChangePasswordModalProps> = ({
           boxShadow: '0 24px 72px rgba(0, 0, 0, 0.3), 0 8px 24px rgba(0, 0, 0, 0.2)',
           overflow: 'hidden',
           animation: 'slideUp 0.3s ease-out',
+          position: 'relative',
+          zIndex: 1,
         }}
         onClick={(e) => e.stopPropagation()}
-        onKeyDown={(e) => e.stopPropagation()}
       >
         {/* Header with gradient */}
         <div style={{

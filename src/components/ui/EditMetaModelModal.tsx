@@ -179,7 +179,6 @@ export const EditMetaModelModal: React.FC<EditMetaModelModalProps> = ({
       role="dialog"
       aria-modal="true"
       aria-labelledby="edit-meta-model-title"
-      onClick={(e) => e.target === e.currentTarget && onClose()}
       onKeyDown={(e) => {
         if (e.key === 'Escape') {
           onClose();
@@ -187,7 +186,24 @@ export const EditMetaModelModal: React.FC<EditMetaModelModalProps> = ({
       }}
       tabIndex={-1}
     >
-      <div style={modalStyle} onClick={(e) => e.stopPropagation()}>
+      <button
+        type="button"
+        aria-hidden="true"
+        tabIndex={-1}
+        onClick={onClose}
+        style={{
+          position: 'absolute',
+          inset: 0,
+          background: 'transparent',
+          border: 'none',
+          padding: 0,
+          margin: 0,
+          width: '100%',
+          height: '100%',
+          cursor: 'default',
+        }}
+      />
+      <div style={{ ...modalStyle, position: 'relative', zIndex: 1 }} onClick={(e) => e.stopPropagation()}>
         <div style={modalHeaderStyle}>
           <h2 id="edit-meta-model-title" style={modalTitleStyle}>
             Edit Meta Model

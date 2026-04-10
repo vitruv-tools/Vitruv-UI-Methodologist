@@ -1223,18 +1223,36 @@ export const CreateModelModal: React.FC<CreateModelModalProps> = ({
         style={{
           ...modalOverlayStyle,
           background: 'transparent',
-          backdropFilter: 'blur(6px)',
-          WebkitBackdropFilter: 'blur(6px)',
           top: 0, left: 0, right: 0, bottom: 0,
           width: '100%', height: '100%',
           margin: 0, padding: 0, border: 'none',
+          display: 'grid',
+          placeItems: 'center',
         }}
         onClose={form.handleClose}
         onCancel={form.handleClose}
-        onClick={(e) => { if (e.target === e.currentTarget) form.handleClose(); }}
         onKeyDown={(e) => { if (e.key === 'Escape') form.handleClose(); }}
       >
-        <div style={modalStyle}>
+        <button
+          type="button"
+          aria-hidden="true"
+          tabIndex={-1}
+          onClick={form.handleClose}
+          style={{
+            position: 'absolute',
+            inset: 0,
+            backgroundColor: 'rgba(0, 0, 0, 0.5)',
+            backdropFilter: 'blur(6px)',
+            WebkitBackdropFilter: 'blur(6px)',
+            border: 'none',
+            padding: 0,
+            margin: 0,
+            width: '100%',
+            height: '100%',
+            cursor: 'default',
+          }}
+        />
+        <div style={{ ...modalStyle, position: 'relative', zIndex: 1 }}>
           <div style={modalHeaderStyle}>
             <h2 id="modal-title" style={modalTitleStyle}>Import Meta Model</h2>
             <button
