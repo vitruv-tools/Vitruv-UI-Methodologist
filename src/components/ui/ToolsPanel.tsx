@@ -696,23 +696,53 @@ export const ToolsPanel: React.FC<ToolsPanelProps> = ({ onEcoreFileUpload, onEco
     }
   };
 
-  const renderMainPanelContentLayout = () => (
+  const renderMainPanelContentMarkup = () => {
+    const isUploadSuccess = uploadMessageType === 'success';
+    const uploadMessageStyle: React.CSSProperties = {
+      padding: '10px 14px',
+      margin: '8px 0',
+      borderRadius: '8px',
+      fontSize: '13px',
+      fontWeight: '500',
+      backgroundColor: isUploadSuccess ? '#d4edda' : '#f8d7da',
+      color: isUploadSuccess ? '#155724' : '#721c24',
+      border: `1px solid ${isUploadSuccess ? '#c3e6cb' : '#f5c6cb'}`,
+    };
+    const createButtonLabel = isProcessing ? 'Building...' : 'Import Meta Model';
+    const myModelsActive = !showAllModels;
+    const allModelsActive = showAllModels;
+    const baseTabStyle: React.CSSProperties = {
+      flex: 1,
+      padding: '12px 16px',
+      border: 'none',
+      fontWeight: 700,
+      fontSize: 14,
+      cursor: 'pointer',
+      transition: 'all 0.2s ease',
+      fontFamily: 'Georgia, serif',
+    };
+    const myModelsTabStyle: React.CSSProperties = {
+      ...baseTabStyle,
+      borderBottom: myModelsActive ? '3px solid #049484' : '3px solid transparent',
+      background: myModelsActive ? '#f0f9ff' : 'transparent',
+      color: myModelsActive ? '#049484' : '#6b7280',
+    };
+    const allModelsTabStyle: React.CSSProperties = {
+      ...baseTabStyle,
+      borderBottom: allModelsActive ? '3px solid #049484' : '3px solid transparent',
+      background: allModelsActive ? '#f0f9ff' : 'transparent',
+      color: allModelsActive ? '#049484' : '#6b7280',
+    };
+    const activeFilterLabel = `${parsedFilters.length} filter${parsedFilters.length > 1 ? 's' : ''} active`;
+
+    return (
     <div style={panelStyle}>
       <div style={titleStyle}>
         {title}
       </div>
       
       {uploadMessage && (
-        <div style={{
-          padding: '10px 14px',
-          margin: '8px 0',
-          borderRadius: '8px',
-          fontSize: '13px',
-          fontWeight: '500',
-          backgroundColor: uploadMessageType === 'success' ? '#d4edda' : '#f8d7da',
-          color: uploadMessageType === 'success' ? '#155724' : '#721c24',
-          border: `1px solid ${uploadMessageType === 'success' ? '#c3e6cb' : '#f5c6cb'}`,
-        }}>
+        <div style={uploadMessageStyle}>
           {uploadMessage}
         </div>
       )}
@@ -724,15 +754,7 @@ export const ToolsPanel: React.FC<ToolsPanelProps> = ({ onEcoreFileUpload, onEco
         onMouseEnter={(e) => !isProcessing && Object.assign(e.currentTarget.style, createButtonHoverStyle)}
         onMouseLeave={(e) => !isProcessing && Object.assign(e.currentTarget.style, createButtonStyle)}
       >
-        {isProcessing ? (
-          <>
-            Building...
-          </>
-        ) : (
-          <>
-            Import Meta Model
-          </>
-        )}
+        {createButtonLabel}
       </button>
 
       {!suppressApi && (
@@ -746,48 +768,24 @@ export const ToolsPanel: React.FC<ToolsPanelProps> = ({ onEcoreFileUpload, onEco
           }}>
             <button
               onClick={() => setShowAllModels(false)}
-              style={{
-                flex: 1,
-                padding: '12px 16px',
-                border: 'none',
-                borderBottom: showAllModels ? '3px solid transparent' : '3px solid #049484',
-                background: showAllModels ? 'transparent' : '#f0f9ff',
-                color: showAllModels ? '#6b7280' : '#049484',
-                fontWeight: 700,
-                fontSize: 14,
-                cursor: 'pointer',
-                transition: 'all 0.2s ease',
-                fontFamily: 'Georgia, serif',
-              }}
+              style={myModelsTabStyle}
               onMouseEnter={(e) => {
-                if (showAllModels) e.currentTarget.style.background = '#f9fafb';
+                if (!myModelsActive) e.currentTarget.style.background = '#f9fafb';
               }}
               onMouseLeave={(e) => {
-                if (showAllModels) e.currentTarget.style.background = 'transparent';
+                if (!myModelsActive) e.currentTarget.style.background = 'transparent';
               }}
             >
               My Models
             </button>
             <button
               onClick={() => setShowAllModels(true)}
-              style={{
-                flex: 1,
-                padding: '12px 16px',
-                border: 'none',
-                borderBottom: showAllModels ? '3px solid #049484' : '3px solid transparent',
-                background: showAllModels ? '#f0f9ff' : 'transparent',
-                color: showAllModels ? '#049484' : '#6b7280',
-                fontWeight: 700,
-                fontSize: 14,
-                cursor: 'pointer',
-                transition: 'all 0.2s ease',
-                fontFamily: 'Georgia, serif',
-              }}
+              style={allModelsTabStyle}
               onMouseEnter={(e) => {
-                if (!showAllModels) e.currentTarget.style.background = '#f9fafb';
+                if (!allModelsActive) e.currentTarget.style.background = '#f9fafb';
               }}
               onMouseLeave={(e) => {
-                if (!showAllModels) e.currentTarget.style.background = 'transparent';
+                if (!allModelsActive) e.currentTarget.style.background = 'transparent';
               }}
             >
               All Models
@@ -916,7 +914,7 @@ export const ToolsPanel: React.FC<ToolsPanelProps> = ({ onEcoreFileUpload, onEco
               alignItems: 'center',
               gap: 8,
             }}>
-              <span style={{ fontWeight: 600 }}>{parsedFilters.length} filter{parsedFilters.length > 1 ? 's' : ''} active</span>
+              <span style={{ fontWeight: 600 }}>{activeFilterLabel}</span>
               <button
                 onClick={() => setSearchTerm('')}
                 style={{
@@ -2314,6 +2312,9 @@ export const ToolsPanel: React.FC<ToolsPanelProps> = ({ onEcoreFileUpload, onEco
 
     </div>
   );
+  };
+
+  const renderMainPanelContentLayout = () => renderMainPanelContentMarkup();
 
   const renderMainPanelContentBody = () => renderMainPanelContentLayout();
 
