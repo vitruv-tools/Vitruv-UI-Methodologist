@@ -13,7 +13,6 @@ import ReactFlow, {
   Node,
   Edge,
   NodeChange,
-  OnConnectStartParams,
 } from 'reactflow';
 import 'reactflow/dist/style.css';
 import { useFlowState } from '../../hooks/useFlowState';
@@ -229,7 +228,6 @@ export const FlowCanvas = forwardRef<{
     const [identifiersToEObject, setIdentifiersToEObject] = useState<Map<string, EObject>>(new Map());
     const reactionEditorRef = useRef<DragablePanelOptionalToolbarRef | null>(null);
     const reactionPanelRef = useRef<DragablePanelRef | null>(null);
-    const [currentConnectionStartParams, setCurrentConnectionStartParams] = useState<OnConnectStartParams | null>(null);
     const [umlDetailsConfig, setUmlDetailsConfig] = useState<Partial<UMLEdgeDetailsConfig>>(loadFromStorage(DEFAULT_STORAGE_KEY));
     const { selectedEdge, setSelectedEdge } = useSelectedEdgeStore();
     const { mode, reactionFiles } = useProjectStore();
@@ -2305,7 +2303,7 @@ export const FlowCanvas = forwardRef<{
             setEdges(eds => eds.map(e => ({ ...e, selected: false })));
           }}
           isValidConnection={isValidConnection.bind(null, edgeValidators, nodes, edges)}
-          onConnectStart={onConnectStart.bind(null, setCurrentConnectionStartParams)}
+          onConnectStart={onConnectStart.bind(null)}
           onConnectEnd={onConnectEnd.bind(null)}
           onReconnect={onReconnect}
           onReconnectEnd={onReconnectEnd}

@@ -129,6 +129,13 @@ export const saveDocumentData = (id: string, data: FlowData) => {
   localStorage.setItem(STORAGE_DATA_KEY + id, JSON.stringify(data));
 };
 
+/**
+ * Updates the CSS pointer-events value for a handle category and direction.
+ *
+ * @param category Handle group to update.
+ * @param type Handle direction to update.
+ * @param pointerEvents CSS pointer-events value to apply.
+ */
 export function setHandlePointerEvents(
   category: "reaction" | "vsum",
   type: "source" | "target",
@@ -140,6 +147,16 @@ export function setHandlePointerEvents(
   );
 }
 
+/**
+ * Updates the CSS opacity value for a handle category and direction.
+ *
+ * The value is clamped to the inclusive range [0, 1] before being written to
+ * the root document element.
+ *
+ * @param category Handle group to update.
+ * @param type Handle direction to update.
+ * @param opacity Desired opacity value.
+ */
 export function setHandleOpacity(
   category: "reaction" | "vsum",
   type: "source" | "target",
@@ -155,6 +172,15 @@ export function setHandleOpacity(
   );
 }
 
+/**
+ * Updates the CSS opacity value for reaction edges.
+ *
+ * The value is clamped to the inclusive range [0, 1] before being written to
+ * the root document element.
+ *
+ * @param category Edge category to update.
+ * @param opacity Desired opacity value.
+ */
 export function setEdgeOpacity(
   category: "reaction",
   opacity: number,
@@ -169,6 +195,9 @@ export function setEdgeOpacity(
   );
 }
 
+/**
+ * Enables both VSUM handles by restoring pointer events and full opacity.
+ */
 export function enableVsumHandles() {
   setHandlePointerEvents("vsum", "source", "auto");
   setHandlePointerEvents("vsum", "target", "auto");
@@ -176,6 +205,9 @@ export function enableVsumHandles() {
   setHandleOpacity("vsum", "target", 1);
 }
 
+/**
+ * Disables both VSUM handles by removing pointer events and hiding them.
+ */
 export function disableVsumHandles() {
   setHandlePointerEvents("vsum", "source", "none");
   setHandlePointerEvents("vsum", "target", "none");
@@ -183,6 +215,17 @@ export function disableVsumHandles() {
   setHandleOpacity("vsum", "target", 0);
 }
 
+/**
+ * Determines whether a connection is valid for the currently applicable edge validators.
+ *
+ * If no validators apply, the connection is allowed by default.
+ *
+ * @param edgeValidators All available edge validators.
+ * @param nodes Current flow nodes.
+ * @param edges Current flow edges.
+ * @param params Connection attempt to validate.
+ * @returns True when at least one applicable validator accepts the connection.
+ */
 export function isValidConnection(
   edgeValidators: any[],
   nodes: Node[],
@@ -204,6 +247,12 @@ export function isValidConnection(
   );
 }
 
+/**
+ * Delegates a successful connection event to the provided handler.
+ *
+ * @param onConnectFS Connection handler to invoke.
+ * @param connection Established connection.
+ */
 export function onConnect(
   onConnectFS: (connection: Connection) => void,
   connection: Connection,
@@ -211,19 +260,27 @@ export function onConnect(
   onConnectFS(connection);
 }
 
+/**
+ * Handles connection start events and updates reaction handle availability when needed.
+ *
+ * @param event Native connect-start event.
+ * @param params React Flow connect-start parameters.
+ */
 export function onConnectStart(
-  setCurrentConnectionStartParams: (params: OnConnectStartParams) => void,
   event: unknown,
   params: OnConnectStartParams,
 ): void {
-  // This is only needed due to our outdated React Flow version lacking proper onConnectEnd parameters
-  setCurrentConnectionStartParams(params);
   if (useProjectStore.getState().mode === "reactions") {
     disableReactionSourceHandles();
     enableReactionTargetHandles();
   }
 }
 
+/**
+ * Restores reaction handle availability after a connection interaction ends.
+ *
+ * @param event Native connect-end event.
+ */
 export function onConnectEnd(event: MouseEvent | TouchEvent): void {
   if (useProjectStore.getState().mode === "reactions") {
     enableReactionSourceHandles();
@@ -231,10 +288,23 @@ export function onConnectEnd(event: MouseEvent | TouchEvent): void {
   }
 }
 
+/**
+ * Placeholder for reconnect handling.
+ *
+ * @param oldEdge Edge being reconnected.
+ * @param newConnection Replacement connection.
+ */
 export function onReconnect(oldEdge: Edge, newConnection: Connection): void {
   // Unused
 }
 
+/**
+ * Placeholder for reconnect-end handling.
+ *
+ * @param event Native reconnect-end event.
+ * @param edge Edge that was being reconnected.
+ * @param handleType Handle side involved in the reconnect.
+ */
 export function onReconnectEnd(
   event: MouseEvent | TouchEvent,
   edge: Edge,
@@ -243,6 +313,11 @@ export function onReconnectEnd(
   // Unused
 }
 
+/**
+ * Dispatches delete events to the edge-type-specific handler.
+ *
+ * @param edges Edges that were removed.
+ */
 export function onEdgesDelete(edges: FlowEdge[]): void {
   for (const edge of edges) {
     const fullParams: OnEdgeDeleteParams = { edge: edge };
@@ -256,6 +331,13 @@ export function onEdgesDelete(edges: FlowEdge[]): void {
   }
 }
 
+/**
+ * Dispatches edge click events to the edge-type-specific handler.
+ *
+ * @param params Additional click parameters.
+ * @param event React click event.
+ * @param edge Clicked edge.
+ */
 export function onEdgeClick(
   params: OnEdgeClickParamsExtension,
   event: React.MouseEvent,
@@ -271,6 +353,9 @@ export function onEdgeClick(
   }
 }
 
+/**
+ * Type-specific event handlers for edge click and delete interactions.
+ */
 export const eventHandlers = {
   onEdgeClick: {
     uml: umlOnEdgeClick,
@@ -282,7 +367,13 @@ export const eventHandlers = {
   },
 };
 
-// This weird snippet of code was extracted from FlowCanvas so it can be reused inside EcoreFileBox.
+/**
+ * Resolves the backend metamodel identifier from either of the supported source fields.
+ *
+ * @param metaModelId Primary metamodel identifier.
+ * @param metaModelSourceId Fallback metamodel identifier.
+ * @returns The first numeric identifier found, or undefined when neither is numeric.
+ */
 export function getBackendMetaModelId(
   metaModelId?: any,
   metaModelSourceId?: any,
@@ -299,6 +390,17 @@ export function getBackendMetaModelId(
   return undefined;
 }
 
+/**
+ * Chooses the best source and target handle pair for two nodes based on their relative position.
+ *
+ * @param src Source node.
+ * @param tgt Target node.
+ * @param preferredSource Preferred source handle if no nodes are available.
+ * @param preferredTarget Preferred target handle if no nodes are available.
+ * @param supportLeftRight Whether horizontal handle selection is allowed.
+ * @param supportTopBottom Whether vertical handle selection is allowed.
+ * @returns The selected source and target handle names plus their directions when available.
+ */
 export function chooseHandlesForPair(
   src?: Node,
   tgt?: Node,
