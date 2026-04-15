@@ -222,10 +222,15 @@ export const ConnectionHandle: React.FC<ConnectionHandleProps> = React.memo(({
 
       {/* Visible interactive handle */}
       {isVisible && (
-        <div
-          role="button"
-          tabIndex={0}
-          style={positionStyle}
+        <button
+          type="button"
+          style={{
+            ...positionStyle,
+            background: 'transparent',
+            border: 0,
+            padding: 0,
+            lineHeight: 0,
+          }}
           onPointerDownCapture={handlePointerDownCapture}
           onKeyDown={handleKeyDown}
           onMouseEnter={() => setIsHovered(true)}
@@ -238,7 +243,7 @@ export const ConnectionHandle: React.FC<ConnectionHandleProps> = React.memo(({
           aria-label={handleTitle}
         >
           {arrowSVG}
-        </div>
+        </button>
       )}
     </>
   );

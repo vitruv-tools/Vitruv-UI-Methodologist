@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { SignInCredentials } from '../../services/auth';
 import { useAuth } from '../../contexts/AuthContext';
 import { apiService } from '../../services/api';
@@ -24,6 +24,27 @@ export function SignIn({ onSignInSuccess, onSwitchToSignUp }: Readonly<SignInPro
   const [isSendingReset, setIsSendingReset] = useState(false);
   const [resetSuccess, setResetSuccess] = useState('');
   const [resetError, setResetError] = useState('');
+
+  const closeForgotPasswordModal = () => {
+    setIsForgotPasswordOpen(false);
+    setResetError('');
+    setResetSuccess('');
+    setForgotPasswordEmail('');
+  };
+
+  useEffect(() => {
+    if (!isForgotPasswordOpen) return;
+
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape') return;
+      if (isSendingReset) return;
+      e.preventDefault();
+      closeForgotPasswordModal();
+    };
+
+    globalThis.addEventListener('keydown', onKeyDown);
+    return () => globalThis.removeEventListener('keydown', onKeyDown);
+  }, [isForgotPasswordOpen, isSendingReset]);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
@@ -193,6 +214,7 @@ export function SignIn({ onSignInSuccess, onSwitchToSignUp }: Readonly<SignInPro
         <div
           role="button"
           tabIndex={0}
+          aria-label="Close forgot password modal"
           style={{
             position: 'fixed',
             top: 0,
@@ -212,29 +234,30 @@ export function SignIn({ onSignInSuccess, onSwitchToSignUp }: Readonly<SignInPro
           onClick={(e) => {
             // Only close if clicking directly on the backdrop, not its children
             if (e.target === e.currentTarget && !isSendingReset) {
-              setIsForgotPasswordOpen(false);
-              setResetError('');
-              setResetSuccess('');
-              setForgotPasswordEmail('');
+              closeForgotPasswordModal();
+            }
+          }}
+          onTouchEnd={(e) => {
+            // Mirror backdrop-close behavior for touch interactions
+            if (e.target === e.currentTarget && !isSendingReset) {
+              closeForgotPasswordModal();
             }
           }}
           onKeyDown={(e) => {
-            if ((e.key === 'Escape' || e.key === 'Enter' || e.key === ' ') && !isSendingReset) {
+            if (e.target !== e.currentTarget || isSendingReset) return;
+            if (e.key === 'Enter' || e.key === ' ') {
               e.preventDefault();
-              setIsForgotPasswordOpen(false);
-              setResetError('');
-              setResetSuccess('');
-              setForgotPasswordEmail('');
+              closeForgotPasswordModal();
             }
           }}
-          aria-label="Close modal"
         >
-          <div
-            role="dialog"
+          <dialog
+            open
             aria-modal="true"
             aria-labelledby="forgot-password-title"
             style={{
               background: '#ffffff',
+              border: 'none',
               borderRadius: 16,
               padding: 0,
               width: '90%',
@@ -435,7 +458,7 @@ export function SignIn({ onSignInSuccess, onSwitchToSignUp }: Readonly<SignInPro
                 </button>
               </div>
             </div>
-          </div>
+          </dialog>
         </div>
       )}
     </div>

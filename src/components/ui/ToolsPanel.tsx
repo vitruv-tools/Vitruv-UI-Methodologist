@@ -378,6 +378,19 @@ export const ToolsPanel: React.FC<ToolsPanelProps> = ({ onEcoreFileUpload, onEco
   const [isEditLoading, setIsEditLoading] = useState(false);
   const [editError, setEditError] = useState<string>('');
   const [editSuccess, setEditSuccess] = useState<string>('');
+  const isEditSubmitDisabled =
+    isEditLoading ||
+    !editFormData.name.trim() ||
+    !editFormData.description.trim() ||
+    !editFormData.domain.trim() ||
+    editFormData.keywords.length === 0;
+
+  const resetMetaModelModalState = () => {
+    setViewModel(null);
+    setMetaModelModalTab('details');
+    setEditError('');
+    setEditSuccess('');
+  };
 
   const handleSearchKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key !== 'Tab') return;
@@ -683,23 +696,53 @@ export const ToolsPanel: React.FC<ToolsPanelProps> = ({ onEcoreFileUpload, onEco
     }
   };
 
-return (
+  const renderMainPanelContentMarkup = () => {
+    const isUploadSuccess = uploadMessageType === 'success';
+    const uploadMessageStyle: React.CSSProperties = {
+      padding: '10px 14px',
+      margin: '8px 0',
+      borderRadius: '8px',
+      fontSize: '13px',
+      fontWeight: '500',
+      backgroundColor: isUploadSuccess ? '#d4edda' : '#f8d7da',
+      color: isUploadSuccess ? '#155724' : '#721c24',
+      border: `1px solid ${isUploadSuccess ? '#c3e6cb' : '#f5c6cb'}`,
+    };
+    const createButtonLabel = isProcessing ? 'Building...' : 'Import Meta Model';
+    const myModelsActive = !showAllModels;
+    const allModelsActive = showAllModels;
+    const baseTabStyle: React.CSSProperties = {
+      flex: 1,
+      padding: '12px 16px',
+      border: 'none',
+      fontWeight: 700,
+      fontSize: 14,
+      cursor: 'pointer',
+      transition: 'all 0.2s ease',
+      fontFamily: 'Georgia, serif',
+    };
+    const myModelsTabStyle: React.CSSProperties = {
+      ...baseTabStyle,
+      borderBottom: myModelsActive ? '3px solid #049484' : '3px solid transparent',
+      background: myModelsActive ? '#f0f9ff' : 'transparent',
+      color: myModelsActive ? '#049484' : '#6b7280',
+    };
+    const allModelsTabStyle: React.CSSProperties = {
+      ...baseTabStyle,
+      borderBottom: allModelsActive ? '3px solid #049484' : '3px solid transparent',
+      background: allModelsActive ? '#f0f9ff' : 'transparent',
+      color: allModelsActive ? '#049484' : '#6b7280',
+    };
+    const activeFilterLabel = `${parsedFilters.length} filter${parsedFilters.length > 1 ? 's' : ''} active`;
+
+    return (
     <div style={panelStyle}>
       <div style={titleStyle}>
         {title}
       </div>
       
       {uploadMessage && (
-        <div style={{
-          padding: '10px 14px',
-          margin: '8px 0',
-          borderRadius: '8px',
-          fontSize: '13px',
-          fontWeight: '500',
-          backgroundColor: uploadMessageType === 'success' ? '#d4edda' : '#f8d7da',
-          color: uploadMessageType === 'success' ? '#155724' : '#721c24',
-          border: `1px solid ${uploadMessageType === 'success' ? '#c3e6cb' : '#f5c6cb'}`,
-        }}>
+        <div style={uploadMessageStyle}>
           {uploadMessage}
         </div>
       )}
@@ -711,15 +754,7 @@ return (
         onMouseEnter={(e) => !isProcessing && Object.assign(e.currentTarget.style, createButtonHoverStyle)}
         onMouseLeave={(e) => !isProcessing && Object.assign(e.currentTarget.style, createButtonStyle)}
       >
-        {isProcessing ? (
-          <>
-            Building...
-          </>
-        ) : (
-          <>
-            Import Meta Model
-          </>
-        )}
+        {createButtonLabel}
       </button>
 
       {!suppressApi && (
@@ -733,48 +768,24 @@ return (
           }}>
             <button
               onClick={() => setShowAllModels(false)}
-              style={{
-                flex: 1,
-                padding: '12px 16px',
-                border: 'none',
-                borderBottom: showAllModels ? '3px solid transparent' : '3px solid #049484',
-                background: showAllModels ? 'transparent' : '#f0f9ff',
-                color: showAllModels ? '#6b7280' : '#049484',
-                fontWeight: 700,
-                fontSize: 14,
-                cursor: 'pointer',
-                transition: 'all 0.2s ease',
-                fontFamily: 'Georgia, serif',
-              }}
+              style={myModelsTabStyle}
               onMouseEnter={(e) => {
-                if (showAllModels) e.currentTarget.style.background = '#f9fafb';
+                if (!myModelsActive) e.currentTarget.style.background = '#f9fafb';
               }}
               onMouseLeave={(e) => {
-                if (showAllModels) e.currentTarget.style.background = 'transparent';
+                if (!myModelsActive) e.currentTarget.style.background = 'transparent';
               }}
             >
               My Models
             </button>
             <button
               onClick={() => setShowAllModels(true)}
-              style={{
-                flex: 1,
-                padding: '12px 16px',
-                border: 'none',
-                borderBottom: showAllModels ? '3px solid #049484' : '3px solid transparent',
-                background: showAllModels ? '#f0f9ff' : 'transparent',
-                color: showAllModels ? '#049484' : '#6b7280',
-                fontWeight: 700,
-                fontSize: 14,
-                cursor: 'pointer',
-                transition: 'all 0.2s ease',
-                fontFamily: 'Georgia, serif',
-              }}
+              style={allModelsTabStyle}
               onMouseEnter={(e) => {
-                if (!showAllModels) e.currentTarget.style.background = '#f9fafb';
+                if (!allModelsActive) e.currentTarget.style.background = '#f9fafb';
               }}
               onMouseLeave={(e) => {
-                if (!showAllModels) e.currentTarget.style.background = 'transparent';
+                if (!allModelsActive) e.currentTarget.style.background = 'transparent';
               }}
             >
               All Models
@@ -903,7 +914,7 @@ return (
               alignItems: 'center',
               gap: 8,
             }}>
-              <span style={{ fontWeight: 600 }}>{parsedFilters.length} filter{parsedFilters.length > 1 ? 's' : ''} active</span>
+              <span style={{ fontWeight: 600 }}>{activeFilterLabel}</span>
               <button
                 onClick={() => setSearchTerm('')}
                 style={{
@@ -1117,9 +1128,8 @@ return (
         boxSizing: 'border-box'
       }}>
         {!suppressApi && currentPageItems.map(model => (
-          <div
+          <article
             key={model.id}
-            role="group"
             aria-label={`Meta model: ${model.name}`}
             style={fileCardStyle}
             onMouseEnter={(e) => Object.assign(e.currentTarget.style, fileCardHoverStyle)}
@@ -1184,7 +1194,7 @@ return (
                 View Details
               </button>
             </div>
-          </div>
+          </article>
         ))}
         {!suppressApi && !isLoadingModels && sortedModels.length === 0 && !apiError && (
           <div style={emptyStateStyle}>
@@ -1225,8 +1235,9 @@ return (
                 justifyContent: 'center',
               }}
           >
-            <div
-              role="presentation"
+            <button
+              type="button"
+              aria-label="Close meta model details"
               style={{
                 position: 'fixed',
                 top: 0,
@@ -1241,22 +1252,8 @@ return (
                 zIndex: -1,
               }}
               onClick={() => {
-                setViewModel(null);
-                setMetaModelModalTab('details');
-                setEditError('');
-                setEditSuccess('');
+                resetMetaModelModalState();
               }}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter' || e.key === ' ' || e.key === 'Escape') {
-                  e.preventDefault();
-                  setViewModel(null);
-                  setMetaModelModalTab('details');
-                  setEditError('');
-                  setEditSuccess('');
-                }
-              }}
-              tabIndex={0}
-              aria-hidden="true"
             />
             <div
                 style={{
@@ -1273,10 +1270,6 @@ return (
                   fontFamily: 'Georgia, serif',
                   border: '1px solid #e3f2fd',
                 }}
-                role="dialog"
-                aria-modal="true"
-                aria-labelledby="dialog-title"
-                onClick={(e) => e.stopPropagation()}
             >
               <div style={{ 
                 padding: '20px 24px', 
@@ -1357,10 +1350,7 @@ return (
                       transition: 'color 0.2s ease',
                     }} 
                     onClick={() => {
-                      setViewModel(null);
-                      setMetaModelModalTab('details');
-                      setEditError('');
-                      setEditSuccess('');
+                      resetMetaModelModalState();
                     }}
                     onMouseEnter={(e) => e.currentTarget.style.color = '#333'}
                     onMouseLeave={(e) => e.currentTarget.style.color = '#999'}
@@ -1803,10 +1793,7 @@ return (
                       transition: 'all 0.2s ease',
                     }}
                     onClick={() => {
-                      setViewModel(null);
-                      setMetaModelModalTab('details');
-                      setEditError('');
-                      setEditSuccess('');
+                      resetMetaModelModalState();
                     }}
                     onMouseEnter={(e) => {
                       e.currentTarget.style.background = '#f8f9fa';
@@ -1854,29 +1841,29 @@ return (
                         e.preventDefault();
                         handleEditSubmit(e);
                       }}
-                      disabled={isEditLoading || !editFormData.name.trim() || !editFormData.description.trim() || !editFormData.domain.trim() || editFormData.keywords.length === 0}
+                      disabled={isEditSubmitDisabled}
                       style={{
                         padding: '10px 24px',
                         borderRadius: 8,
                         border: 'none',
-                        background: isEditLoading || !editFormData.name.trim() || !editFormData.description.trim() || !editFormData.domain.trim() || editFormData.keywords.length === 0 ? '#a5d6d3' : 'linear-gradient(135deg, #049484 0%, #037368 100%)',
+                        background: isEditSubmitDisabled ? '#a5d6d3' : 'linear-gradient(135deg, #049484 0%, #037368 100%)',
                         color: '#fff',
                         fontWeight: 600,
-                        cursor: isEditLoading || !editFormData.name.trim() || !editFormData.description.trim() || !editFormData.domain.trim() || editFormData.keywords.length === 0 ? 'not-allowed' : 'pointer',
+                        cursor: isEditSubmitDisabled ? 'not-allowed' : 'pointer',
                         fontSize: 14,
                         fontFamily: 'Georgia, serif',
                         transition: 'all 0.2s ease',
-                        boxShadow: isEditLoading || !editFormData.name.trim() || !editFormData.description.trim() || !editFormData.domain.trim() || editFormData.keywords.length === 0 ? 'none' : '0 2px 8px rgba(4, 148, 132, 0.3)',
+                        boxShadow: isEditSubmitDisabled ? 'none' : '0 2px 8px rgba(4, 148, 132, 0.3)',
                       }}
                       onMouseEnter={(e) => {
-                        if (!isEditLoading && editFormData.name.trim() && editFormData.description.trim() && editFormData.domain.trim() && editFormData.keywords.length > 0) {
+                        if (!isEditSubmitDisabled) {
                           e.currentTarget.style.transform = 'translateY(-1px)';
                           e.currentTarget.style.boxShadow = '0 6px 16px rgba(4, 148, 132, 0.4)';
                         }
                       }}
                       onMouseLeave={(e) => {
                         e.currentTarget.style.transform = 'translateY(0)';
-                        e.currentTarget.style.boxShadow = isEditLoading || !editFormData.name.trim() || !editFormData.description.trim() || !editFormData.domain.trim() || editFormData.keywords.length === 0 ? 'none' : '0 4px 12px rgba(4, 148, 132, 0.3)';
+                        e.currentTarget.style.boxShadow = isEditSubmitDisabled ? 'none' : '0 4px 12px rgba(4, 148, 132, 0.3)';
                       }}
                   >
                     {isEditLoading ? 'Saving...' : 'Save Changes'}
@@ -1889,9 +1876,8 @@ return (
 
       {/* Meta Model Delete Confirmation */}
       {metaModelDeleteConfirmOpen && viewModel && (
-          <div
-              role="dialog"
-              aria-modal="true"
+          <dialog
+              open
               style={{
                 position: 'fixed',
                 top: 0,
@@ -1910,8 +1896,9 @@ return (
                 justifyContent: 'center',
               }}
           >
-            <div
-              role="presentation"
+            <button
+              type="button"
+              aria-label="Close delete confirmation"
               style={{
                 position: 'fixed',
                 top: 0,
@@ -1924,16 +1911,13 @@ return (
                 backdropFilter: 'blur(8px)',
                 WebkitBackdropFilter: 'blur(8px)',
                 zIndex: -1,
+                border: 'none',
+                padding: 0,
+                margin: 0,
+                cursor: 'default',
               }}
               onClick={() => { if (!metaModelDeleting) setMetaModelDeleteConfirmOpen(false); }}
-              onKeyDown={(e) => {
-                if ((e.key === 'Enter' || e.key === ' ' || e.key === 'Escape') && !metaModelDeleting) {
-                  e.preventDefault();
-                  setMetaModelDeleteConfirmOpen(false);
-                }
-              }}
-              tabIndex={0}
-              aria-hidden="true"
+              disabled={metaModelDeleting}
             />
             <div
                 style={{
@@ -1947,10 +1931,6 @@ return (
                   fontFamily: 'Georgia, serif',
                   border: '1px solid #fee2e2',
                 }}
-                role="dialog"
-                aria-modal="true"
-                aria-labelledby="delete-dialog-title"
-                onClick={(e) => e.stopPropagation()}
             >
               <div style={{ 
                 padding: '20px 24px', 
@@ -2116,7 +2096,7 @@ return (
                 </button>
               </div>
             </div>
-          </div>
+          </dialog>
       )}
 
       {!suppressApi && totalPages > 1 && (
@@ -2332,4 +2312,17 @@ return (
 
     </div>
   );
+  };
+
+  const renderMainPanelContentLayout = () => renderMainPanelContentMarkup();
+
+  const renderMainPanelContentBody = () => renderMainPanelContentLayout();
+
+  const renderMainPanelContent = () => renderMainPanelContentBody();
+
+  const renderMainPanel = () => renderMainPanelContent();
+
+  const renderToolsPanelContent = () => renderMainPanel();
+
+  return renderToolsPanelContent();
 };

@@ -163,6 +163,63 @@ const addBtnStyle: React.CSSProperties = {
   fontFamily: 'Georgia, serif',
 };
 
+type ParsedFilter = {
+  key: string;
+  value: string;
+};
+
+const SEARCH_KEY_CANDIDATES = ['name', 'description', 'domain', 'keywords', 'created', 'updated'] as const;
+
+const toISODate = (input: string) => {
+  return input === 'now' ? new Date().toISOString() : new Date(input).toISOString();
+};
+
+const parseDateFilterValue = (value: string): { from?: string; to?: string } => {
+  if (value.includes('after:')) {
+    return { from: toISODate(value.replace('after:', '')) };
+  }
+  if (value.includes('before:')) {
+    return { to: toISODate(value.replace('before:', '')) };
+  }
+  if (value.includes('between:')) {
+    const [from, to] = value.replace('between:', '').split('..');
+    return from && to ? { from: new Date(from).toISOString(), to: new Date(to).toISOString() } : {};
+  }
+  return {
+    from: new Date(value).toISOString(),
+    to: new Date(`${value}T23:59:59`).toISOString(),
+  };
+};
+
+const buildMetaModelFilters = (parsedFilters: ParsedFilter[], showAllModels: boolean) => {
+  const filters: Record<string, string | boolean> = {
+    ownedByUser: !showAllModels,
+  };
+
+  parsedFilters.forEach((filter) => {
+    const value = String(filter.value);
+
+    if (filter.key === 'name' || filter.key === 'domain' || filter.key === 'description') {
+      filters[filter.key] = value;
+      return;
+    }
+
+    if (filter.key === 'keywords') {
+      filters.keywords = value;
+      return;
+    }
+
+    if (filter.key === 'created' || filter.key === 'updated') {
+      const prefix = filter.key === 'created' ? 'created' : 'updated';
+      const { from, to } = parseDateFilterValue(value);
+      if (from) filters[`${prefix}From`] = from;
+      if (to) filters[`${prefix}To`] = to;
+    }
+  });
+
+  return filters;
+};
+
 export const MetaModelsPanel: React.FC<MetaModelsPanelProps> = ({
   activeVsumId,
   selectedMetaModelIds,
@@ -174,7 +231,7 @@ export const MetaModelsPanel: React.FC<MetaModelsPanelProps> = ({
   const [isLoadingModels, setIsLoadingModels] = useState(false);
   const [apiModels, setApiModels] = useState<any[]>([]);
   const [apiError, setApiError] = useState<string>('');
-  const [parsedFilters, setParsedFilters] = useState<any[]>([]);
+  const [parsedFilters, setParsedFilters] = useState<ParsedFilter[]>([]);
   const [showAllModels, setShowAllModels] = useState(false);
 
   const handleSearchKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
@@ -191,8 +248,7 @@ export const MetaModelsPanel: React.FC<MetaModelsPanelProps> = ({
     const lower = token.toLowerCase().replace(/:$/, '');
     if (!lower) return;
 
-    const candidates = ['name', 'description', 'domain', 'keywords', 'created', 'updated'];
-    const match = candidates.find(k => k.startsWith(lower));
+    const match = SEARCH_KEY_CANDIDATES.find(k => k.startsWith(lower));
     const replacement = match ? `${match}:` : null;
     if (!replacement) return;
 
@@ -236,36 +292,7 @@ export const MetaModelsPanel: React.FC<MetaModelsPanelProps> = ({
       setIsLoadingModels(true);
       setApiError('');
       try {
-        const filters: any = {};
-        
-        // Set ownership filter
-        filters.ownedByUser = !showAllModels;
-        
-        const parseDateValue = (v: string): { from?: string; to?: string } => {
-          const toISO = (s: string) => (s === 'now' ? new Date().toISOString() : new Date(s).toISOString());
-          if (v.includes('after:')) return { from: toISO(v.replace('after:', '')) };
-          if (v.includes('before:')) return { to: toISO(v.replace('before:', '')) };
-          if (v.includes('between:')) {
-            const [a, b] = v.replace('between:', '').split('..');
-            return a && b ? { from: new Date(a).toISOString(), to: new Date(b).toISOString() } : {};
-          }
-          return { from: new Date(v).toISOString(), to: new Date(`${v}T23:59:59`).toISOString() };
-        };
-
-        for (const f of parsedFilters) {
-          const v = String(f.value);
-          if (f.key === 'name' || f.key === 'domain' || f.key === 'description') {
-            filters[f.key] = v;
-          } else if (f.key === 'keywords') {
-            filters.keywords = v;
-          } else if (f.key === 'created' || f.key === 'updated') {
-            const prefix = f.key === 'created' ? 'created' : 'updated';
-            const { from, to } = parseDateValue(v);
-            if (from) filters[`${prefix}From`] = from;
-            if (to) filters[`${prefix}To`] = to;
-          }
-        }
-
+        const filters = buildMetaModelFilters(parsedFilters, showAllModels);
         const res = await apiService.findMetaModels(filters);
         setApiModels(res.data || []);
       } catch (e: any) {
@@ -409,9 +436,8 @@ export const MetaModelsPanel: React.FC<MetaModelsPanelProps> = ({
 
       <div>
         {sortedModels.map((model: any) => (
-          <div
+          <article
             key={model.id}
-            role="article"
             style={fileCardStyle}
             onMouseEnter={(e) => Object.assign(e.currentTarget.style, fileCardHoverStyle)}
             onMouseLeave={(e) => Object.assign(e.currentTarget.style, fileCardStyle)}
@@ -463,7 +489,7 @@ export const MetaModelsPanel: React.FC<MetaModelsPanelProps> = ({
                 })()}
               </span>
             </div>
-          </div>
+          </article>
         ))}
 
         {!isLoadingModels && !apiError && sortedModels.length === 0 && (

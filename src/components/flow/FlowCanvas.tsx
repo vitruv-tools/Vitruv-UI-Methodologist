@@ -203,12 +203,6 @@ export const FlowCanvas = forwardRef<{
     const [connectionDragState, setConnectionDragState] = useState<ConnectionDragState | null>(null);
     const [codeEditorState, setCodeEditorState] = useState<CodeEditorState | null>(null);
     const [routingStyle] = useState<'curved' | 'orthogonal'>('orthogonal');
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    const [edgeDragState, setEdgeDragState] = useState<{
-      edgeId: string;
-      isDragging: boolean;
-      controlPoint?: { x: number; y: number };
-    } | null>(null);
     const [hoveredMergeGroup, setHoveredMergeGroup] = useState<string | null>(null);
     // Track ReactFlow viewport for CircleOverlay sync
     const [viewport, setViewport] = useState({ x: 0, y: 0, zoom: 1 });
@@ -1926,10 +1920,12 @@ export const FlowCanvas = forwardRef<{
       const mergePointsMap = new Map<string, { x: number; y: number; mergeGroupId: string }>();
       const firstInGroupMap = new Map<string, string>();
       const mergeGroupSourceNodesMap = new Map<string, string[]>();
+      const hasRelationshipType = (data: unknown): data is { relationshipType?: string } =>
+        typeof data === 'object' && data !== null && 'relationshipType' in data;
 
       // Consider only UML inheritance edges for merging
       const umlInheritanceEdges = uniqueEdges.filter(
-        (e) => e.type === 'uml' && (e.data as any)?.relationshipType === 'inheritance'
+        (e) => e.type === 'uml' && hasRelationshipType(e.data) && e.data.relationshipType === 'inheritance'
       );
 
       if (umlInheritanceEdges.length === 0) {
@@ -2016,17 +2012,14 @@ export const FlowCanvas = forwardRef<{
       setHoveredMergeGroup(groupId);
     }, []);
 
-    const handleEdgeDragStart = useCallback((edgeId: string) => {
-      setEdgeDragState({ edgeId, isDragging: true });
+    const handleEdgeDragStart = useCallback((_edgeId: string) => {
     }, []);
 
-    const handleEdgeDrag = useCallback((edgeId: string, point: { x: number; y: number }) => {
-      setEdgeDragState(prev => prev ? { ...prev, controlPoint: point } : null);
+    const handleEdgeDrag = useCallback((_edgeId: string, _point: { x: number; y: number }) => {
     }, []);
 
     const handleEdgeDragEnd = useCallback((edgeId: string, point: { x: number; y: number }) => {
       updateEdgeControlPoint(edgeId, point);
-      setEdgeDragState(null);
     }, [updateEdgeControlPoint]);
 
     // Map edges with enriched data

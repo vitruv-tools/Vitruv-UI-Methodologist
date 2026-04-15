@@ -375,27 +375,29 @@ function EditableField({
     return "Double-click to edit";
   };
 
+  const handleVisibilityFieldClick = () => {
+    setShowVisibilityOptions(true);
+  };
+
+  const handleOptionsFieldClick = () => {
+    setShowOptions(!showOptions);
+  };
+
+  const handleFieldClick = showVisibility
+    ? handleVisibilityFieldClick
+    : handleOptionsFieldClick;
+
   return (
     <div style={{ position: 'relative' }}>
-      <div
-        role="button"
-        tabIndex={0}
+      <button
+        type="button"
         onDoubleClick={() => setEditing(true)}
-        onClick={showVisibility 
-          ? () => setShowVisibilityOptions(true) 
-          : () => setShowOptions(!showOptions)
-        }
-        onKeyDown={(e) => {
-          if (e.key === 'Enter' || e.key === ' ') {
-            e.preventDefault();
-            if (showVisibility) {
-              setShowVisibilityOptions(true);
-            } else {
-              setShowOptions(!showOptions);
-            }
-          }
-        }}
+        onClick={handleFieldClick}
         style={{
+          appearance: 'none',
+          background: 'transparent',
+          border: 'none',
+          width: '100%',
           cursor: 'pointer',
           padding: '2px 4px',
           borderRadius: '2px',
@@ -416,7 +418,7 @@ function EditableField({
         title={getTitle()}
       >
         {value || placeholder}
-      </div>
+      </button>
 
       {showVisibilityOptions && showVisibility && (
         <MenuOverlay>

@@ -97,6 +97,7 @@ interface UserAvatarProps {
 
 const UserAvatar: React.FC<UserAvatarProps> = ({ initials, size, isLoading, onClick }) => {
   const [isHovered, setIsHovered] = useState(false);
+  const isClickable = typeof onClick === 'function';
 
   const avatarStyle = {
     width: size,
@@ -110,22 +111,27 @@ const UserAvatar: React.FC<UserAvatarProps> = ({ initials, size, isLoading, onCl
     justifyContent: 'center',
     fontWeight: 600,
     letterSpacing: 0.5,
-    cursor: onClick ? 'pointer' : 'default',
+    cursor: isClickable ? 'pointer' : 'default',
     userSelect: 'none' as const,
     transition: 'all 0.2s ease',
     boxShadow: isHovered ? '0 4px 12px rgba(0,0,0,0.15)' : '0 2px 8px rgba(0,0,0,0.1)',
     fontSize: size > 40 ? 16 : 14,
+    padding: 0,
+    outline: 'none',
+    appearance: 'none' as const,
   };
 
   return (
-    <div
+    <button
+      type="button"
       style={avatarStyle}
       onClick={onClick}
+      disabled={!isClickable}
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
     >
       {isLoading ? '...' : initials}
-    </div>
+    </button>
   );
 };
 
@@ -167,6 +173,11 @@ const ActionButton: React.FC<ActionButtonProps> = ({ onClick, icon, label, varia
   const [isHovered, setIsHovered] = useState(false);
 
   const isPrimary = variant === 'primary';
+  let boxShadow = 'none';
+  if (isPrimary) {
+    boxShadow = isHovered ? '0 2px 6px rgba(4, 148, 132, 0.3)' : '0 1px 3px rgba(0,0,0,0.1)';
+  }
+
   const baseStyle = {
     width: '100%',
     background: isPrimary ? '#049484' : '#e74c3c',
@@ -182,7 +193,7 @@ const ActionButton: React.FC<ActionButtonProps> = ({ onClick, icon, label, varia
     alignItems: 'center',
     gap: 10,
     textAlign: 'left' as const,
-    boxShadow: isPrimary && isHovered ? '0 2px 6px rgba(4, 148, 132, 0.3)' : isPrimary ? '0 1px 3px rgba(0,0,0,0.1)' : 'none',
+    boxShadow,
     opacity: disabled ? 0.5 : 1,
   };
 
@@ -326,6 +337,36 @@ interface ModalButtonProps {
   loadingLabel?: string;
 }
 
+const getModalButtonStyle = (isCancel: boolean, isDisabled: boolean, isHovered: boolean) => {
+  let background = 'linear-gradient(135deg, #049484 0%, #037368 100%)';
+  if (isCancel) {
+    background = '#ffffff';
+  } else if (isDisabled) {
+    background = '#95a5a6';
+  }
+  const boxShadow = !isCancel && !isDisabled ? '0 2px 8px rgba(4, 148, 132, 0.25)' : 'none';
+  let opacity = 1;
+  if (isDisabled) {
+    opacity = isCancel ? 0.5 : 0.6;
+  }
+  const transform = !isCancel && isHovered && !isDisabled ? 'translateY(-1px)' : 'translateY(0)';
+
+  return {
+    padding: isCancel ? '12px 24px' : '12px 28px',
+    borderRadius: 8,
+    border: isCancel ? '2px solid #e5e7eb' : '2px solid #037368',
+    background,
+    color: isCancel ? '#374151' : '#ffffff',
+    cursor: isDisabled ? 'not-allowed' : 'pointer',
+    fontWeight: isCancel ? 600 : 700,
+    fontSize: 14,
+    transition: 'all 0.2s ease',
+    boxShadow,
+    opacity,
+    transform,
+  };
+};
+
 const ModalButton: React.FC<ModalButtonProps> = ({
   onClick,
   label,
@@ -335,30 +376,12 @@ const ModalButton: React.FC<ModalButtonProps> = ({
   loadingLabel,
 }) => {
   const [isHovered, setIsHovered] = useState(false);
-  const isDisabled = disabled || isLoading;
+  const isDisabled = Boolean(disabled || isLoading);
   const isCancel = variant === 'cancel';
-
-  const baseStyle = {
-    padding: isCancel ? '12px 24px' : '12px 28px',
-    borderRadius: 8,
-    border: isCancel ? '2px solid #e5e7eb' : '2px solid #037368',
-    background: isCancel
-      ? '#ffffff'
-      : isDisabled
-      ? '#95a5a6'
-      : 'linear-gradient(135deg, #049484 0%, #037368 100%)',
-    color: isCancel ? '#374151' : '#ffffff',
-    cursor: isDisabled ? 'not-allowed' : 'pointer',
-    fontWeight: isCancel ? 600 : 700,
-    fontSize: 14,
-    transition: 'all 0.2s ease',
-    boxShadow: !isCancel && !isDisabled ? '0 2px 8px rgba(4, 148, 132, 0.25)' : 'none',
-    opacity: isDisabled && !isCancel ? 0.6 : isDisabled ? 0.5 : 1,
-    transform: !isCancel && isHovered && !isDisabled ? 'translateY(-1px)' : 'translateY(0)',
-  };
+  const baseStyle = getModalButtonStyle(Boolean(isCancel), Boolean(isDisabled), Boolean(isHovered));
 
   const handleMouseEnter = () => {
-    if (!isDisabled) setIsHovered(true);
+    setIsHovered(!isDisabled);
   };
 
   const handleMouseLeave = () => {
@@ -409,44 +432,53 @@ const ChangePasswordModal: React.FC<ChangePasswordModalProps> = ({
   onSubmit,
   canSubmit,
 }) => {
+  useEffect(() => {
+    if (!isOpen) return;
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && !isChanging) onClose();
+    };
+    globalThis.addEventListener('keydown', onKeyDown);
+    return () => globalThis.removeEventListener('keydown', onKeyDown);
+  }, [isOpen, isChanging, onClose]);
+
   if (!isOpen) return null;
-
-  const handleOverlayClick = () => {
-    if (!isChanging) {
-      onClose();
-    }
-  };
-
-  const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === 'Escape' && !isChanging) {
-      onClose();
-    }
-  };
 
   return (
     <div
-      role="presentation"
       style={{
         position: 'fixed',
         top: 0,
         left: 0,
         right: 0,
         bottom: 0,
-        background: 'rgba(0, 0, 0, 0.65)',
-        backdropFilter: 'blur(12px)',
-        WebkitBackdropFilter: 'blur(12px)',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
+        background: 'transparent',
+        display: 'grid',
+        placeItems: 'center',
         zIndex: 10000,
         animation: 'fadeIn 0.2s ease-out',
       }}
-      onClick={handleOverlayClick}
-      onKeyDown={handleKeyDown}
     >
-      <div
-        role="dialog"
-        aria-modal="true"
+      <button
+        type="button"
+        aria-hidden="true"
+        tabIndex={-1}
+        onClick={() => { if (!isChanging) onClose(); }}
+        style={{
+          position: 'absolute',
+          inset: 0,
+          background: 'rgba(0, 0, 0, 0.65)',
+          backdropFilter: 'blur(12px)',
+          WebkitBackdropFilter: 'blur(12px)',
+          border: 'none',
+          padding: 0,
+          margin: 0,
+          width: '100%',
+          height: '100%',
+          cursor: isChanging ? 'default' : 'pointer',
+        }}
+      />
+      <dialog
+        open
         aria-labelledby="change-password-title"
         style={{
           background: '#ffffff',
@@ -457,9 +489,9 @@ const ChangePasswordModal: React.FC<ChangePasswordModalProps> = ({
           boxShadow: '0 24px 72px rgba(0, 0, 0, 0.3), 0 8px 24px rgba(0, 0, 0, 0.2)',
           overflow: 'hidden',
           animation: 'slideUp 0.3s ease-out',
+          position: 'relative',
+          zIndex: 1,
         }}
-        onClick={(e) => e.stopPropagation()}
-        onKeyDown={(e) => e.stopPropagation()}
       >
         {/* Header with gradient */}
         <div style={{
@@ -543,7 +575,7 @@ const ChangePasswordModal: React.FC<ChangePasswordModalProps> = ({
             />
           </div>
         </div>
-      </div>
+      </dialog>
     </div>
   );
 };

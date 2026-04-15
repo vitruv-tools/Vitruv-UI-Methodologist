@@ -55,11 +55,10 @@ export const UMLViewerModal: React.FC<UMLViewerModalProps> = ({ isOpen, title, e
       style={{
         position: 'fixed',
         inset: 0,
-        background: 'rgba(0,0,0,0.6)',
+        background: 'transparent',
         zIndex: 10000,
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
+        display: 'grid',
+        placeItems: 'center',
         border: 'none',
         padding: 0,
         margin: 0,
@@ -70,10 +69,24 @@ export const UMLViewerModal: React.FC<UMLViewerModalProps> = ({ isOpen, title, e
       }}
       onClose={onClose}
       onCancel={onClose}
-      onClick={(e) => {
-        if (e.target === e.currentTarget) onClose();
-      }}
     >
+      <button
+        type="button"
+        aria-hidden="true"
+        tabIndex={-1}
+        onClick={onClose}
+        style={{
+          position: 'absolute',
+          inset: 0,
+          background: 'rgba(0,0,0,0.6)',
+          border: 'none',
+          padding: 0,
+          margin: 0,
+          width: '100%',
+          height: '100%',
+          cursor: 'default',
+        }}
+      />
       <div
         style={{
           width: '92vw',
@@ -84,6 +97,8 @@ export const UMLViewerModal: React.FC<UMLViewerModalProps> = ({ isOpen, title, e
           display: 'flex',
           flexDirection: 'column',
           overflow: 'hidden',
+          position: 'relative',
+          zIndex: 1,
         }}
       >
         <div

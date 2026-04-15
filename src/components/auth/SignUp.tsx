@@ -269,6 +269,18 @@ export function SignUp({ onSignUpSuccess, onSwitchToSignIn }: Readonly<SignUpPro
     }
   };
 
+  let submitButtonContent: React.ReactNode = "Create Account";
+  if (isSuccess) {
+    submitButtonContent = (
+      <span style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
+        <span className="spinner"></span>
+        <span>Redirecting...</span>
+      </span>
+    );
+  } else if (isLoading) {
+    submitButtonContent = "Creating Account...";
+  }
+
   return (
       <div 
         className="auth-container"
@@ -293,14 +305,8 @@ export function SignUp({ onSignUpSuccess, onSwitchToSignIn }: Readonly<SignUpPro
                   lineHeight: '1.6',
                 }}>
                   <span className="error-icon">⚠️</span>
-                  <div style={{ flex: 1 }}>
-                    {error.split("\n").map((line, index) => (
-                      <div key={index} style={{
-                        marginBottom: line.trim() === '' ? '8px' : '2px',
-                      }}>
-                        {line}
-                      </div>
-                    ))}
+                  <div style={{ flex: 1, whiteSpace: 'pre-line' }}>
+                    {error}
                   </div>
                 </div>
             )}
@@ -480,12 +486,7 @@ export function SignUp({ onSignUpSuccess, onSwitchToSignIn }: Readonly<SignUpPro
                 className="auth-button primary"
                 disabled={isLoading || !isFormFilled || isSuccess}
             >
-              {isSuccess ? (
-                <span style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
-                  <span className="spinner"></span>
-                  Redirecting...
-                </span>
-              ) : isLoading ? "Creating Account..." : "Create Account"}
+              {submitButtonContent}
             </button>
           </form>
 

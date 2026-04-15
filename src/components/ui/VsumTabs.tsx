@@ -218,10 +218,7 @@ export const VsumTabs: React.FC<VsumTabsProps> = ({
 
     // ---- save logic ------------------------------------------------
 
-    const saveById = async (id: number) => {
-        const backend = detailsById[id];
-        if (!backend) return;
-
+    const getSnapshotForSave = async (): Promise<WorkspaceSnapshot> => {
         let snap = workspaceSnapshot;
         if (!snap && requestWorkspaceSnapshot) {
             try {
@@ -230,7 +227,78 @@ export const VsumTabs: React.FC<VsumTabsProps> = ({
                 console.warn('Failed to refresh workspace snapshot before save', e);
             }
         }
-        snap ??= { metaModelIds: [], metaModelRelationRequests: [] };
+        return snap ?? { metaModelIds: [], metaModelRelationRequests: [] };
+    };
+
+    const getBackendMessage = (response: any): string =>
+        response?.data?.message ||
+        response?.message ||
+        'VSUM successfully updated';
+
+    const mergeKnownMissingReactionFileIds = (ids: Iterable<number>) => {
+        const toAdd = Array.from(ids);
+        if (toAdd.length === 0) return;
+        setKnownMissingReactionFileIds(prev => Array.from(new Set([...prev, ...toAdd])));
+    };
+
+    const trySaveWithReactionFallback = async (
+        id: number,
+        metaModelIds: number[],
+        sanitizedRelations: MetaModelRelationRequest[],
+        applySuccessfulSave: (savedRelations: MetaModelRelationRequest[], successMessage: string) => Promise<void>
+    ): Promise<void> => {
+        try {
+            const response: any = await apiService.updateVsumSyncChanges(id, {
+                metaModelIds,
+                metaModelRelationRequests: sanitizedRelations.length > 0 ? sanitizedRelations : null,
+            });
+            await applySuccessfulSave(sanitizedRelations, getBackendMessage(response));
+            return;
+        } catch (e: any) {
+            const parsed = extractBackendError(
+                e,
+                'Failed to save VSUM',
+                'Failed to save VSUM'
+            );
+
+            if (!isReactionFilesNotFoundError(parsed.detail) || sanitizedRelations.length === 0) {
+                throw parsed.detail;
+            }
+        }
+
+        const fallbackRelations = sanitizedRelations.map(rel => ({
+            ...rel,
+            reactionFileId: 0,
+        }));
+        const brokenIds = sanitizedRelations
+            .map(rel => rel.reactionFileId)
+            .filter((fileId): fileId is number => typeof fileId === 'number' && fileId > 0);
+        mergeKnownMissingReactionFileIds(brokenIds);
+
+        try {
+            const retryResponse: any = await apiService.updateVsumSyncChanges(id, {
+                metaModelIds,
+                metaModelRelationRequests: fallbackRelations,
+            });
+            await applySuccessfulSave(
+                fallbackRelations,
+                `${getBackendMessage(retryResponse)} (Missing reaction files were unlinked automatically.)`
+            );
+        } catch (retryError: any) {
+            const retryParsed = extractBackendError(
+                retryError,
+                'Failed to save VSUM',
+                'Failed to save VSUM'
+            );
+            throw retryParsed.detail;
+        }
+    };
+
+    const saveById = async (id: number) => {
+        const backend = detailsById[id];
+        if (!backend) return;
+
+        const snap = await getSnapshotForSave();
 
         const backendMetaModels = backend.metaModels ?? [];
 
@@ -243,7 +311,7 @@ export const VsumTabs: React.FC<VsumTabsProps> = ({
 
         // Use snapshot if available, otherwise fall back to backend data
         // Important: If snapshot exists but is empty, user intentionally removed all MetaModels
-        const metaModelIds = snap.metaModelIds !== undefined ? snapshotIds : backendSourceIds;
+        const metaModelIds = snap.metaModelIds === undefined ? backendSourceIds : snapshotIds;
 
         const relationCandidates: MetaModelRelationRequest[] =
             (snap.metaModelRelationRequests ?? [])
@@ -287,9 +355,7 @@ export const VsumTabs: React.FC<VsumTabsProps> = ({
                 : { ...rel, reactionFileId: 0 }
         );
 
-        if (missingRelationFileIds.size > 0) {
-            setKnownMissingReactionFileIds(prev => Array.from(new Set([...prev, ...Array.from(missingRelationFileIds)])));
-        }
+        mergeKnownMissingReactionFileIds(missingRelationFileIds);
 
         const relationsToSend: MetaModelRelationRequest[] | null =
             sanitizedRelations.length > 0 ? sanitizedRelations : null;
@@ -325,70 +391,11 @@ export const VsumTabs: React.FC<VsumTabsProps> = ({
             globalThis.dispatchEvent(new CustomEvent('vitruv.refreshVsums'));
         };
         try {
-            const response: any = await apiService.updateVsumSyncChanges(id, {
-                metaModelIds,
-                metaModelRelationRequests: relationsToSend,
-            });
-
-            const backendMessage =
-                response?.data?.message ||
-                response?.message ||
-                'VSUM successfully updated';
-
-            await applySuccessfulSave(sanitizedRelations, backendMessage);
-        } catch (e: any) {
-            const parsed = extractBackendError(
-                e,
-                'Failed to save VSUM',
-                'Failed to save VSUM'
-            );
-
-            // Recovery path: backend rejected one or more reaction file IDs.
-            // Retry once with relation links kept but reactionFileId reset to 0.
-            if (isReactionFilesNotFoundError(parsed.detail) && sanitizedRelations.length > 0) {
-                const fallbackRelations = sanitizedRelations.map(rel => ({
-                    ...rel,
-                    reactionFileId: 0,
-                }));
-
-                const brokenIds = sanitizedRelations
-                    .map(rel => rel.reactionFileId)
-                    .filter((fileId): fileId is number => typeof fileId === 'number' && fileId > 0);
-
-                if (brokenIds.length > 0) {
-                    setKnownMissingReactionFileIds(prev => Array.from(new Set([...prev, ...brokenIds])));
-                }
-
-                try {
-                    const retryResponse: any = await apiService.updateVsumSyncChanges(id, {
-                        metaModelIds,
-                        metaModelRelationRequests: fallbackRelations,
-                    });
-
-                    const retryMessage =
-                        retryResponse?.data?.message ||
-                        retryResponse?.message ||
-                        'VSUM successfully updated';
-
-                    await applySuccessfulSave(
-                        fallbackRelations,
-                        `${retryMessage} (Missing reaction files were unlinked automatically.)`
-                    );
-                    return;
-                } catch (retryError: any) {
-                    const retryParsed = extractBackendError(
-                        retryError,
-                        'Failed to save VSUM',
-                        'Failed to save VSUM'
-                    );
-                    setError(retryParsed.detail);
-                    setPopup({ message: retryParsed.detail, type: 'error' });
-                    return;
-                }
-            }
-
-            setError(parsed.detail);
-            setPopup({ message: parsed.detail, type: 'error' });
+            await trySaveWithReactionFallback(id, metaModelIds, sanitizedRelations, applySuccessfulSave);
+        } catch (error_: any) {
+            const message = typeof error_ === 'string' ? error_ : 'Failed to save VSUM';
+            setError(message);
+            setPopup({ message, type: 'error' });
         } finally {
             setSaving(false);
         }

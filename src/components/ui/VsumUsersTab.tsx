@@ -178,28 +178,29 @@ export const VsumUsersTab: React.FC<Props> = ({ vsumId, onChanged }) => {
                   <div style={{ padding: 8, fontStyle: 'italic', color: '#6c757d' }}>No users found</div>
               )}
               {!searching && searchResults.length > 0 && (
-                  <ul style={{ listStyle: 'none', margin: 0, padding: 0, maxHeight: 220, overflowY: 'auto' }} role="listbox">
+                  <select
+                      size={Math.min(6, searchResults.length)}
+                      value={selectedUser ? String(selectedUser.id) : ''}
+                      onChange={(e) => {
+                        const next = searchResults.find(u => String(u.id) === e.target.value) || null;
+                        setSelectedUser(next);
+                      }}
+                      aria-label="Search results"
+                      style={{
+                        width: '100%',
+                        border: 0,
+                        padding: 0,
+                        maxHeight: 220,
+                        overflowY: 'auto',
+                        fontSize: 13
+                      }}
+                  >
                     {searchResults.map(u => (
-                        <li
-                            key={u.id}
-                            role="option"
-                            tabIndex={0}
-                            aria-selected={selectedUser?.id === u.id}
-                            onClick={() => setSelectedUser(u)}
-                            onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') setSelectedUser(u); }}
-                            style={{
-                              padding: '8px 10px',
-                              cursor: 'pointer',
-                              background: selectedUser?.id === u.id ? '#e7f5ff' : '#fff',
-                              borderBottom: '1px solid #f1f3f5'
-                            }}
-                            title="Click to select this user"
-                        >
-                          <div style={{ fontWeight: 700, fontSize: 13 }}>{userDisplayName(u)}</div>
-                          <div style={{ fontSize: 12, color: '#6c757d' }}>{u.email}</div>
-                        </li>
+                        <option key={u.id} value={String(u.id)}>
+                          {userDisplayName(u)} - {u.email}
+                        </option>
                     ))}
-                  </ul>
+                  </select>
               )}
             </div>
         )}

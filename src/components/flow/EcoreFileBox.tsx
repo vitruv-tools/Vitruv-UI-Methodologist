@@ -218,8 +218,7 @@ const ModalContent: React.FC<{
   title: string;
   createdAt?: string;
   onClose: () => void;
-  onOverlayClick: (e: React.MouseEvent) => void;
-}> = ({ fileName, content, title, createdAt, onClose, onOverlayClick }) => {
+}> = ({ fileName, content, title, createdAt, onClose }) => {
   const [isCloseHovered, setIsCloseHovered] = useState(false);
 
   return (
@@ -228,9 +227,25 @@ const ModalContent: React.FC<{
       style={modalOverlayStyle}
       onClose={onClose}
       onCancel={onClose}
-      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
     >
-      <div style={createModalStyle()}>
+      <button
+        type="button"
+        aria-hidden="true"
+        tabIndex={-1}
+        onClick={onClose}
+        style={{
+          position: 'absolute',
+          inset: 0,
+          backgroundColor: modalOverlayStyle.backgroundColor || 'rgba(0, 0, 0, 0.5)',
+          border: 'none',
+          padding: 0,
+          margin: 0,
+          width: '100%',
+          height: '100%',
+          cursor: 'default',
+        }}
+      />
+      <div style={{ ...createModalStyle(), position: 'relative', zIndex: 1 }}>
         <div style={modalHeaderStyle}>
           <h2 style={createTextStyle(24, '#212529', { fontWeight: '700', margin: 0 })}>
             {removeEcoreExtension(fileName)} - {title}
@@ -324,7 +339,7 @@ export const EcoreFileBox: React.FC<NodeProps<EcoreFileBoxData>> = ({
     createdAt,
   } = data;
 
-  const boxRef = useRef<HTMLDivElement>(null);
+  const boxRef = useRef<HTMLButtonElement>(null);
 
   // Event Handlers
   const handleClick = (e: React.MouseEvent) => {
@@ -345,13 +360,6 @@ export const EcoreFileBox: React.FC<NodeProps<EcoreFileBoxData>> = ({
   const handleModalClose = (setter: React.Dispatch<React.SetStateAction<boolean>>) => () => {
     setter(false);
   };
-
-  const handleModalOverlayClick = (setter: React.Dispatch<React.SetStateAction<boolean>>) =>
-    (e: React.MouseEvent) => {
-      if (e.target === e.currentTarget) {
-        setter(false);
-      }
-    };
 
   const confirmDelete = () => {
     onDelete?.(id);
@@ -375,7 +383,7 @@ export const EcoreFileBox: React.FC<NodeProps<EcoreFileBoxData>> = ({
     />
   ));
 
-  const handleBoxKeyDown = (e: React.KeyboardEvent) => {
+  const handleBoxKeyDown = (e: React.KeyboardEvent<HTMLButtonElement>) => {
     if (e.key === 'Enter') {
       e.preventDefault();
       onSelect(fileName);
@@ -387,7 +395,8 @@ export const EcoreFileBox: React.FC<NodeProps<EcoreFileBoxData>> = ({
 
   return (
     <>
-      <div
+      <button
+        type="button"
         ref={boxRef}
         style={{
           ...boxStyle,
@@ -395,14 +404,19 @@ export const EcoreFileBox: React.FC<NodeProps<EcoreFileBoxData>> = ({
           ...(isHovered && boxVariantStyles.hover),
           display: isExpanded ? 'none' : 'block',
           position: 'relative',
+          // Reset button defaults so it behaves like the old <div>
+          border: 'none',
+          background: 'transparent',
+          padding: 0,
+          width: '100%',
+          textAlign: 'left',
+          font: 'inherit',
         }}
         onClick={handleClick}
         onDoubleClick={handleDoubleClick}
         onKeyDown={handleBoxKeyDown}
         onMouseEnter={() => setIsHovered(true)}
         onMouseLeave={() => setIsHovered(false)}
-        role="button"
-        tabIndex={0}
         aria-label={`${removeEcoreExtension(fileName)} file. Press Enter to select, Space to expand.`}
         title={`Click to select, double-click to expand\n${fileName}`}
       >
@@ -465,7 +479,7 @@ export const EcoreFileBox: React.FC<NodeProps<EcoreFileBoxData>> = ({
         >
           Delete
         </button>
-      </div>
+      </button>
 
       <ConfirmDialog
         isOpen={showDeleteConfirm}
@@ -537,7 +551,6 @@ export const EcoreFileBox: React.FC<NodeProps<EcoreFileBoxData>> = ({
           title="Description"
           createdAt={createdAt}
           onClose={handleModalClose(setShowDescriptionModal)}
-          onOverlayClick={handleModalOverlayClick(setShowDescriptionModal)}
         />
       )}
 
@@ -548,7 +561,6 @@ export const EcoreFileBox: React.FC<NodeProps<EcoreFileBoxData>> = ({
           title="Keywords"
           createdAt={createdAt}
           onClose={handleModalClose(setShowKeywordsModal)}
-          onOverlayClick={handleModalOverlayClick(setShowKeywordsModal)}
         />
       )}
     </>

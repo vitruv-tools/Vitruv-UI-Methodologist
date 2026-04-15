@@ -405,25 +405,40 @@ export const VsumsPanel: React.FC = () => {
             ).map((item) => {
                 const role = (item as any).role as string | undefined;
                 const canManage = role === 'OWNER';
+                const openVsum = () => {
+                    if (!showDeleted) {
+                        globalThis.dispatchEvent(new CustomEvent('vitruv.openVsum', { detail: { id: item.id } }));
+                    }
+                };
+                const cardInteractionProps = showDeleted
+                    ? {}
+                    : {
+                        role: 'button' as const,
+                        tabIndex: 0,
+                        onDoubleClick: openVsum,
+                        onTouchEnd: (e: React.TouchEvent<HTMLDivElement>) => {
+                            e.preventDefault();
+                            openVsum();
+                        },
+                        onKeyDown: (e: React.KeyboardEvent<HTMLDivElement>) => {
+                            if (e.key === 'Enter' || e.key === ' ') {
+                                e.preventDefault();
+                                openVsum();
+                            }
+                        },
+                        onMouseEnter: (e: React.MouseEvent<HTMLDivElement>) => {
+                            Object.assign(e.currentTarget.style, cardHoverStyle);
+                        },
+                        onMouseLeave: (e: React.MouseEvent<HTMLDivElement>) => {
+                            Object.assign(e.currentTarget.style, cardStyle);
+                        },
+                    };
                 return (
                     <div
                         key={item.id}
-                        role="button"
-                        tabIndex={0}
                         style={cardStyle}
-                        onMouseEnter={(e) => Object.assign(e.currentTarget.style, cardHoverStyle)}
-                        onMouseLeave={(e) => Object.assign(e.currentTarget.style, cardStyle)}
-                        onDoubleClick={() => {
-                            if (!showDeleted) {
-                                globalThis.dispatchEvent(new CustomEvent('vitruv.openVsum', { detail: { id: item.id } }));
-                            }
-                        }}
-                        onKeyDown={(e) => {
-                            if ((e.key === 'Enter' || e.key === ' ') && !showDeleted) {
-                                e.preventDefault();
-                                globalThis.dispatchEvent(new CustomEvent('vitruv.openVsum', { detail: { id: item.id } }));
-                            }
-                        }}
+                        {...cardInteractionProps}
+                        aria-disabled={showDeleted}
                     >
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12 }}>
                             <div style={{ display: 'flex', flexDirection: 'column', gap: 6, flex: 1 }}>

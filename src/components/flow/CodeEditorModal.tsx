@@ -265,7 +265,7 @@ export function CodeEditorModal({
   ): Promise<{ suggestions: any[] }> => {
     return new Promise((resolve) => {
       if (!lspReadyRef.current) { resolve({ suggestions: [] }); return; }
-      if (!webSocketRef.current || webSocketRef.current.readyState !== WebSocket.OPEN) {
+      if (webSocketRef.current?.readyState !== WebSocket.OPEN) {
         resolve({ suggestions: [] }); return;
       }
 
@@ -560,12 +560,11 @@ export function CodeEditorModal({
       style={{
         position: 'fixed',
         inset: 0,
-        backgroundColor: 'rgba(0, 0, 0, 0.5)',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
+        backgroundColor: 'transparent',
+        display: 'grid',
+        placeItems: 'center',
         zIndex: 9999,
-        backdropFilter: 'blur(4px)',
+        backdropFilter: 'none',
         border: 'none',
         padding: 0,
         margin: 0,
@@ -576,8 +575,25 @@ export function CodeEditorModal({
       }}
       onClose={handleClose}
       onCancel={handleClose}
-      onClick={(e) => { if (e.target === e.currentTarget) handleClose(); }}
     >
+      <button
+        type="button"
+        aria-hidden="true"
+        tabIndex={-1}
+        onClick={handleClose}
+        style={{
+          position: 'absolute',
+          inset: 0,
+          backgroundColor: 'rgba(0, 0, 0, 0.5)',
+          backdropFilter: 'blur(4px)',
+          border: 'none',
+          padding: 0,
+          margin: 0,
+          width: '100%',
+          height: '100%',
+          cursor: 'default',
+        }}
+      />
       <div
         aria-labelledby="code-editor-title"
         style={{
@@ -591,8 +607,9 @@ export function CodeEditorModal({
           flexDirection: 'column',
           boxShadow: '0 20px 60px rgba(0, 0, 0, 0.4)',
           overflow: 'hidden',
+          position: 'relative',
+          zIndex: 1,
         }}
-        onKeyDown={(e) => e.stopPropagation()}
       >
         {/* Header */}
         <div style={{
