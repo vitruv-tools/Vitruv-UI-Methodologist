@@ -1,5 +1,6 @@
 import React from 'react';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { CreateVsumModal } from '../../../components/ui/CreateVsumModal';
 
 jest.mock('../../../services/api', () => ({
@@ -70,3 +71,90 @@ describe('CreateVsumModal', () => {
   });
 });
 
+
+describe('CreateVsumModal – additional tests', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
+  it('returns null when not open', () => {
+    const { container } = render(
+      <CreateVsumModal isOpen={false} onClose={jest.fn()} />,
+    );
+    expect(container.firstChild).toBeNull();
+  });
+
+  it('Create button is disabled when name is empty', () => {
+    render(<CreateVsumModal isOpen onClose={jest.fn()} />);
+    expect(
+      screen.getByRole('button', { name: /^Create$/i }),
+    ).toBeDisabled();
+  });
+
+  it('shows "Creating..." while submitting', async () => {
+    apiService.createVsum.mockImplementation(
+      () => new Promise((r) => setTimeout(r, 500)),
+    );
+
+    render(<CreateVsumModal isOpen onClose={jest.fn()} />);
+    await userEvent.type(screen.getByLabelText(/Name \*/i), 'My VSUM');
+    fireEvent.click(screen.getByRole('button', { name: /^Create$/i }));
+
+    expect(await screen.findByText(/Creating\.\.\./i)).toBeInTheDocument();
+  });
+
+  it('shows API error when createVsum throws', async () => {
+    apiService.createVsum.mockRejectedValueOnce(new Error('Server offline'));
+
+    render(<CreateVsumModal isOpen onClose={jest.fn()} />);
+    await userEvent.type(screen.getByLabelText(/Name \*/i), 'My VSUM');
+    fireEvent.click(screen.getByRole('button', { name: /^Create$/i }));
+
+    expect(await screen.findByText(/Server offline/i)).toBeInTheDocument();
+  });
+
+  it('passes name and optional description to createVsum', async () => {
+    apiService.createVsum.mockResolvedValueOnce({
+      data: { id: 2, name: 'Ecore VSUM' },
+    });
+
+    render(<CreateVsumModal isOpen onClose={jest.fn()} />);
+    await userEvent.type(screen.getByLabelText(/Name \*/i), 'Ecore VSUM');
+    await userEvent.type(
+      screen.getByLabelText(/Description/i),
+      'A test vsum',
+    );
+    fireEvent.click(screen.getByRole('button', { name: /^Create$/i }));
+
+    await waitFor(() => {
+      expect(apiService.createVsum).toHaveBeenCalledWith({
+        name: 'Ecore VSUM',
+        description: 'A test vsum',
+      });
+    });
+  });
+
+  it('trims whitespace from name before submitting', async () => {
+    apiService.createVsum.mockResolvedValueOnce({ data: { id: 3 } });
+
+    render(<CreateVsumModal isOpen onClose={jest.fn()} />);
+    await userEvent.type(screen.getByLabelText(/Name \*/i), '  Padded Name  ');
+    fireEvent.click(screen.getByRole('button', { name: /^Create$/i }));
+
+    await waitFor(() => {
+      expect(apiService.createVsum).toHaveBeenCalledWith(
+        expect.objectContaining({ name: 'Padded Name' }),
+      );
+    });
+  });
+
+  it('renders as a <dialog> element', () => {
+    const { container } = render(
+      <CreateVsumModal isOpen onClose={jest.fn()} />,
+    );
+    // If modal uses a portal, fall back to document query
+    const dialog =
+      container.querySelector('dialog') ?? document.querySelector('dialog');
+    expect(dialog).not.toBeNull();
+  });
+});

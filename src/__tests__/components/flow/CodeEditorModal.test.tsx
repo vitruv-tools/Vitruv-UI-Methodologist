@@ -35,6 +35,18 @@ jest.mock('../../../components/ui/ConfirmDialog', () => ({
   },
 }));
 
+const defaultProps = {
+  isOpen: true,
+  onClose: jest.fn(),
+  onSave: jest.fn().mockResolvedValue(undefined),
+  initialCode: 'initial code',
+  edgeId: 'edge-123',
+  sourceFileName: 'Source.ecore',
+  targetFileName: 'Target.ecore',
+  vsumId: '1',
+  title: 'Reaction Editor',
+};
+
 describe('CodeEditorModal', () => {
   const defaultProps = {
     isOpen: true,
@@ -271,5 +283,181 @@ describe('CodeEditorModal', () => {
       expect(screen.getByTestId('monaco-editor')).toHaveValue('new initial code');
       expect(screen.queryByText(/Unsaved changes/i)).not.toBeInTheDocument();
     });
+  });
+});
+
+
+describe('CodeEditorModal – additional tests', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    // mock localStorage for auth.user (needed by connectToLsp)
+    jest.spyOn(Storage.prototype, 'getItem').mockImplementation((key) => {
+      if (key === 'auth.user') return JSON.stringify({ id: 'user-1' });
+      return null;
+    });
+    // suppress WebSocket in unit tests
+    (globalThis as any).WebSocket = jest.fn().mockImplementation(() => ({
+      readyState: 3, // CLOSED
+      send: jest.fn(),
+      close: jest.fn(),
+      onopen: null,
+      onmessage: null,
+      onerror: null,
+      onclose: null,
+    }));
+  });
+
+  afterEach(() => {
+    jest.restoreAllMocks();
+  });
+
+  it('returns null when isOpen is false', () => {
+    const { container } = render(<CodeEditorModal {...defaultProps} isOpen={false} />);
+    expect(container.firstChild).toBeNull();
+  });
+
+  it('shows unsaved changes dialog when closing with edits', async () => {
+    render(<CodeEditorModal {...defaultProps} />);
+
+    const editor = screen.getByTestId('monaco-editor');
+    fireEvent.change(editor, { target: { value: 'modified code' } });
+
+    // Click the × close button
+    fireEvent.click(screen.getByTitle(/Close/i));
+
+    expect(
+      await screen.findByTestId('confirm-Unsaved Changes'),
+    ).toBeInTheDocument();
+  });
+
+  it('closes without saving when "Close without saving" is confirmed', async () => {
+    render(<CodeEditorModal {...defaultProps} />);
+
+    const editor = screen.getByTestId('monaco-editor');
+    fireEvent.change(editor, { target: { value: 'modified code' } });
+    fireEvent.click(screen.getByTitle(/Close/i));
+
+    await screen.findByTestId('confirm-Unsaved Changes');
+    fireEvent.click(screen.getByRole('button', { name: /Close without saving/i }));
+
+    await waitFor(() => {
+      expect(defaultProps.onClose).toHaveBeenCalled();
+    });
+  });
+
+  it('keeps editor open when "Keep editing" is clicked', async () => {
+    render(<CodeEditorModal {...defaultProps} />);
+
+    const editor = screen.getByTestId('monaco-editor');
+    fireEvent.change(editor, { target: { value: 'modified code' } });
+    fireEvent.click(screen.getByTitle(/Close/i));
+
+    await screen.findByTestId('confirm-Unsaved Changes');
+    fireEvent.click(screen.getByRole('button', { name: /Keep editing/i }));
+
+    await waitFor(() => {
+      expect(defaultProps.onClose).not.toHaveBeenCalled();
+    });
+    expect(screen.getByTestId('monaco-editor')).toBeInTheDocument();
+  });
+
+  it('shows save error dialog when onSave rejects', async () => {
+    const onSave = jest.fn().mockRejectedValue(new Error('Disk full'));
+    render(<CodeEditorModal {...defaultProps} onSave={onSave} />);
+
+    fireEvent.click(screen.getByTitle(/Save \(Ctrl\+S\)/i));
+
+    expect(
+      await screen.findByTestId('confirm-Unable to save file'),
+    ).toBeInTheDocument();
+    expect(screen.getByText(/Disk full/i)).toBeInTheDocument();
+  });
+
+  it('closes save error dialog on OK', async () => {
+    const onSave = jest.fn().mockRejectedValue(new Error('Disk full'));
+    render(<CodeEditorModal {...defaultProps} onSave={onSave} />);
+
+    fireEvent.click(screen.getByTitle(/Save \(Ctrl\+S\)/i));
+    await screen.findByTestId('confirm-Unable to save file');
+    fireEvent.click(screen.getByRole('button', { name: /OK/i }));
+
+    await waitFor(() => {
+      expect(screen.queryByTestId('confirm-Unable to save file')).not.toBeInTheDocument();
+    });
+  });
+
+  it('shows delete relation dialog on Delete Relation click', async () => {
+    const onDelete = jest.fn();
+    render(<CodeEditorModal {...defaultProps} onDelete={onDelete} />);
+
+    fireEvent.click(screen.getByTitle(/Delete relation/i));
+
+    expect(
+      await screen.findByTestId('confirm-Delete Relation'),
+    ).toBeInTheDocument();
+  });
+
+  it('calls onDelete and onClose when deletion confirmed', async () => {
+    const onDelete = jest.fn();
+    render(<CodeEditorModal {...defaultProps} onDelete={onDelete} />);
+
+    fireEvent.click(screen.getByTitle(/Delete relation/i));
+    await screen.findByTestId('confirm-Delete Relation');
+    fireEvent.click(screen.getByRole('button', { name: /Delete$/i }));
+
+    await waitFor(() => {
+      expect(onDelete).toHaveBeenCalled();
+      expect(defaultProps.onClose).toHaveBeenCalled();
+    });
+  });
+
+  it('shows clear dialog on Clear button click', async () => {
+    render(<CodeEditorModal {...defaultProps} />);
+
+    fireEvent.click(screen.getByTitle(/Clear all code/i));
+
+    expect(
+      await screen.findByTestId('confirm-Clear Code'),
+    ).toBeInTheDocument();
+  });
+
+  it('shows "Unsaved changes" indicator in status bar when code is edited', () => {
+    render(<CodeEditorModal {...defaultProps} />);
+
+    const editor = screen.getByTestId('monaco-editor');
+    fireEvent.change(editor, { target: { value: 'new content' } });
+
+    expect(screen.getByText(/Unsaved changes/i)).toBeInTheDocument();
+  });
+
+  it('shows LSP Offline status when not connected', () => {
+    render(<CodeEditorModal {...defaultProps} />);
+    expect(screen.getByText(/LSP Offline/i)).toBeInTheDocument();
+  });
+
+  it('shows "✓ Saved" feedback after successful save', async () => {
+    const onSave = jest.fn().mockResolvedValue(undefined);
+    render(<CodeEditorModal {...defaultProps} onSave={onSave} />);
+
+    fireEvent.click(screen.getByTitle(/Save \(Ctrl\+S\)/i));
+
+    expect(await screen.findByText(/✓ Saved/i)).toBeInTheDocument();
+  });
+
+  it('displays line and character count in status bar', () => {
+    render(<CodeEditorModal {...defaultProps} initialCode={'line1\nline2'} />);
+    expect(screen.getByText(/2 Lines/i)).toBeInTheDocument();
+    expect(screen.getByText(/Characters/i)).toBeInTheDocument();
+  });
+
+  it('displays edge ID in status bar', () => {
+    render(<CodeEditorModal {...defaultProps} edgeId="my-edge-99" />);
+    expect(screen.getByText(/my-edge-99/i)).toBeInTheDocument();
+  });
+
+  it('calls onInitialize when isOpen is true', () => {
+    const onInitialize = jest.fn().mockReturnValue(undefined);
+    render(<CodeEditorModal {...defaultProps} onInitialize={onInitialize} />);
+    expect(onInitialize).toHaveBeenCalledWith(defaultProps.initialCode);
   });
 });

@@ -3,6 +3,10 @@ import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { SignIn } from '../../../components/auth/SignIn';
 
+const { apiService } = jest.requireMock('../../../services/api') as {
+  apiService: { forgotPassword: jest.Mock };
+};
+
 jest.mock('../../../contexts/AuthContext', () => ({
   useAuth: () => ({
     signIn: mockSignIn,
@@ -146,3 +150,133 @@ describe('SignIn component', () => {
   });
 });
 
+
+describe('SignIn – forgot password dialog', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
+  const renderSignIn = () =>
+    render(
+      <SignIn
+        onSignInSuccess={mockOnSignInSuccess}
+        onSwitchToSignUp={mockOnSwitchToSignUp}
+      />,
+    );
+
+  it('opens forgot password dialog when "Forgot your password?" is clicked', async () => {
+    renderSignIn();
+    await userEvent.click(
+      screen.getByRole('button', { name: /Forgot your password\?/i }),
+    );
+    expect(await screen.findByRole('dialog')).toBeInTheDocument();
+    expect(
+      screen.getByText(/Password Recovery/i),
+    ).toBeInTheDocument();
+  });
+
+  it('closes dialog when Cancel button is clicked', async () => {
+    renderSignIn();
+    await userEvent.click(
+      screen.getByRole('button', { name: /Forgot your password\?/i }),
+    );
+    await screen.findByRole('dialog');
+
+    await userEvent.click(screen.getByRole('button', { name: /Cancel/i }));
+
+    await waitFor(() => {
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    });
+  });
+
+  it('shows error for invalid email in forgot password dialog', async () => {
+    renderSignIn();
+    await userEvent.click(
+      screen.getByRole('button', { name: /Forgot your password\?/i }),
+    );
+
+    const emailInput = await screen.findByLabelText(/Registered Email Address/i);
+    await userEvent.type(emailInput, 'not-an-email');
+    await userEvent.click(
+      screen.getByRole('button', { name: /Submit Request/i }),
+    );
+
+    expect(
+      await screen.findByText(/Please enter a valid email address/i),
+    ).toBeInTheDocument();
+    expect(apiService.forgotPassword).not.toHaveBeenCalled();
+  });
+
+  it('calls forgotPassword with valid email and shows success message', async () => {
+    apiService.forgotPassword.mockResolvedValueOnce({
+      message: 'Reset sent',
+      data: {},
+    });
+
+    renderSignIn();
+    await userEvent.click(
+      screen.getByRole('button', { name: /Forgot your password\?/i }),
+    );
+
+    const emailInput = await screen.findByLabelText(/Registered Email Address/i);
+    await userEvent.type(emailInput, 'user@example.com');
+    await userEvent.click(
+      screen.getByRole('button', { name: /Submit Request/i }),
+    );
+
+    await waitFor(() => {
+      expect(apiService.forgotPassword).toHaveBeenCalledWith('user@example.com');
+    });
+    expect(await screen.findByText(/Reset sent/i)).toBeInTheDocument();
+  });
+
+  it('shows API error when forgotPassword throws', async () => {
+    apiService.forgotPassword.mockRejectedValueOnce(
+      new Error('Email not found'),
+    );
+
+    renderSignIn();
+    await userEvent.click(
+      screen.getByRole('button', { name: /Forgot your password\?/i }),
+    );
+
+    const emailInput = await screen.findByLabelText(/Registered Email Address/i);
+    await userEvent.type(emailInput, 'user@example.com');
+    await userEvent.click(
+      screen.getByRole('button', { name: /Submit Request/i }),
+    );
+
+    expect(await screen.findByText(/Email not found/i)).toBeInTheDocument();
+  });
+
+  it('clears sign-in error when user starts typing', async () => {
+    mockSignIn.mockRejectedValueOnce(new Error('Bad credentials'));
+
+    renderSignIn();
+    await userEvent.type(
+      screen.getByLabelText(/Username or Email/i),
+      'user',
+    );
+    await userEvent.type(screen.getByLabelText(/Password/i), 'pw');
+    await userEvent.click(screen.getByRole('button', { name: /Sign In/i }));
+
+    await screen.findByText(/Bad credentials/i);
+
+    await userEvent.type(
+      screen.getByLabelText(/Username or Email/i),
+      'x',
+    );
+
+    await waitFor(() => {
+      expect(screen.queryByText(/Bad credentials/i)).not.toBeInTheDocument();
+    });
+  });
+
+  it('calls onSwitchToSignUp when Sign Up link is clicked', async () => {
+    renderSignIn();
+    await userEvent.click(
+      screen.getByRole('button', { name: /Sign Up/i }),
+    );
+    expect(mockOnSwitchToSignUp).toHaveBeenCalled();
+  });
+});
