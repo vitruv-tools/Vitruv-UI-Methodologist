@@ -52,9 +52,7 @@ describe('ToolsPanel', () => {
   });
 
   it('fetches meta models from API when not suppressed', async () => {
-    apiService.findMetaModels.mockResolvedValueOnce({
-      data: [],
-    });
+    apiService.findMetaModels.mockResolvedValueOnce({ data: [] });
 
     render(<ToolsPanel />);
 
@@ -64,3 +62,50 @@ describe('ToolsPanel', () => {
   });
 });
 
+
+describe('ToolsPanel – additional tests', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    apiService.findMetaModels.mockResolvedValue({ data: [] });
+  });
+
+  it('renders My Models and All Models tabs when not suppressApi', async () => {
+    render(<ToolsPanel />);
+    expect(await screen.findByRole('button', { name: /My Models/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /All Models/i })).toBeInTheDocument();
+  });
+
+  it('shows empty state when no models', async () => {
+    render(<ToolsPanel />);
+    expect(
+      await screen.findByText(/No Meta Models Found/i),
+    ).toBeInTheDocument();
+  });
+
+  it('renders model cards when API returns data', async () => {
+    apiService.findMetaModels.mockResolvedValue({
+      data: [
+        {
+          id: 1,
+          name: 'Ecore Model',
+          domain: 'Auto',
+          createdAt: new Date().toISOString(),
+          keyword: [],
+        },
+      ],
+    });
+    render(<ToolsPanel />);
+    expect(await screen.findByText(/Ecore Model/i)).toBeInTheDocument();
+  });
+
+  it('uses custom title prop', async () => {
+    render(<ToolsPanel suppressApi title="Custom Panel Title" />);
+    expect(await screen.findByText('Custom Panel Title')).toBeInTheDocument();
+  });
+
+  it('shows API error message', async () => {
+    apiService.findMetaModels.mockRejectedValueOnce(new Error('Fetch error'));
+    render(<ToolsPanel />);
+    expect(await screen.findByText(/Fetch error/i)).toBeInTheDocument();
+  });
+});

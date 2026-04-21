@@ -390,3 +390,189 @@ describe('useDragAndDrop', () => {
         });
     });
 });
+
+
+describe('useDragAndDrop – label mapping', () => {
+    let mockAddNode: jest.Mock;
+    let mockWrapper: React.RefObject<HTMLDivElement>;
+
+    beforeEach(() => {
+        jest.clearAllMocks();
+        mockAddNode = jest.fn().mockReturnValue('new-node-id');
+        mockWrapper = createMockWrapper();
+    });
+
+    it.each([
+        ['element', 'class', 'Class'],
+        ['element', 'abstract-class', 'AbstractClass'],
+        ['element', 'interface', 'Interface'],
+        ['element', 'enumeration', 'Enumeration'],
+        ['element', 'package', 'Package'],
+        ['member', 'attribute', '+ attribute: Type'],
+        ['member', 'method', '+ method(): ReturnType'],
+        ['relationship', 'association', 'Association'],
+        ['relationship', 'inheritance', 'Inheritance'],
+        ['multiplicity', 'one', '1'],
+        ['multiplicity', 'many', '*'],
+        ['multiplicity', 'optional', '0..1'],
+        ['multiplicity', 'range', '1..*'],
+    ] as const)(
+        'drops %s/%s and creates node with label "%s"',
+        (type, name, expectedLabel) => {
+            const { result } = renderHook(() =>
+                useDragAndDrop({
+                    reactFlowInstance: mockReactFlowInstance,
+                    reactFlowWrapper: mockWrapper,
+                    addNode: mockAddNode,
+                }),
+            );
+
+            const event = createMockDragEvent({ type, name, diagramType: 'uml' });
+            act(() => { result.current.onDrop(event); });
+
+            expect(mockAddNode).toHaveBeenCalledTimes(1);
+            const calledWith = mockAddNode.mock.calls[0][0];
+            expect(calledWith.data.label).toBe(expectedLabel);
+        },
+    );
+
+    it('falls back to tool name when no label mapping exists', () => {
+        const { result } = renderHook(() =>
+            useDragAndDrop({
+                reactFlowInstance: mockReactFlowInstance,
+                reactFlowWrapper: mockWrapper,
+                addNode: mockAddNode,
+            }),
+        );
+
+        const event = createMockDragEvent({ type: 'element', name: 'unknown-type', diagramType: 'uml' });
+        act(() => { result.current.onDrop(event); });
+
+        const calledWith = mockAddNode.mock.calls[0][0];
+        expect(calledWith.data.label).toBe('unknown-type');
+    });
+
+    it('passes toolType, toolName and diagramType in node data', () => {
+        const { result } = renderHook(() =>
+            useDragAndDrop({
+                reactFlowInstance: mockReactFlowInstance,
+                reactFlowWrapper: mockWrapper,
+                addNode: mockAddNode,
+            }),
+        );
+
+        act(() => {
+            result.current.onDrop(
+                createMockDragEvent({ type: 'element', name: 'class', diagramType: 'uml' }),
+            );
+        });
+
+        const calledWith = mockAddNode.mock.calls[0][0];
+        expect(calledWith.data.toolType).toBe('element');
+        expect(calledWith.data.toolName).toBe('class');
+        expect(calledWith.data.diagramType).toBe('uml');
+        expect(calledWith.type).toBe('editable');
+    });
+
+    it('does nothing when no ReactFlow instance is available', () => {
+        const { result } = renderHook(() =>
+            useDragAndDrop({
+                reactFlowInstance: null,
+                reactFlowWrapper: mockWrapper,
+                addNode: mockAddNode,
+            }),
+        );
+
+        act(() => {
+            result.current.onDrop(
+                createMockDragEvent({ type: 'element', name: 'class', diagramType: 'uml' }),
+            );
+        });
+
+        expect(mockAddNode).not.toHaveBeenCalled();
+    });
+
+    it('does nothing when wrapper ref is null', () => {
+        const nullWrapper = { current: null } as unknown as React.RefObject<HTMLDivElement>;
+
+        const { result } = renderHook(() =>
+            useDragAndDrop({
+                reactFlowInstance: mockReactFlowInstance,
+                reactFlowWrapper: nullWrapper,
+                addNode: mockAddNode,
+            }),
+        );
+
+        act(() => {
+            result.current.onDrop(
+                createMockDragEvent({ type: 'element', name: 'class', diagramType: 'uml' }),
+            );
+        });
+
+        expect(mockAddNode).not.toHaveBeenCalled();
+    });
+
+    it('handles invalid JSON in tool data gracefully', () => {
+        const badEvent = {
+            preventDefault: jest.fn(),
+            clientX: 300, clientY: 200,
+            dataTransfer: {
+                getData: (key: string) => (key === 'application/tool' ? '{bad-json' : ''),
+                dropEffect: '',
+            },
+        } as unknown as React.DragEvent;
+
+        const { result } = renderHook(() =>
+            useDragAndDrop({
+                reactFlowInstance: mockReactFlowInstance,
+                reactFlowWrapper: mockWrapper,
+                addNode: mockAddNode,
+            }),
+        );
+
+        // Should not throw
+        expect(() => {
+            act(() => { result.current.onDrop(badEvent); });
+        }).not.toThrow();
+
+        expect(mockAddNode).not.toHaveBeenCalled();
+    });
+});
+
+describe('useDragAndDrop – onDragOver dropEffect', () => {
+    let mockWrapper: React.RefObject<HTMLDivElement>;
+
+    beforeEach(() => {
+        mockWrapper = createMockWrapper();
+    });
+
+    it('sets dropEffect to "copy" when tool data is present', () => {
+        const { result } = renderHook(() =>
+            useDragAndDrop({
+                reactFlowInstance: mockReactFlowInstance,
+                reactFlowWrapper: mockWrapper,
+                addNode: jest.fn(),
+            }),
+        );
+
+        const event = createMockDragEvent({ type: 'element', name: 'class', diagramType: 'uml' });
+        act(() => { result.current.onDragOver(event); });
+
+        expect(event.dataTransfer.dropEffect).toBe('copy');
+    });
+
+    it('sets dropEffect to "none" when no tool data is present', () => {
+        const { result } = renderHook(() =>
+            useDragAndDrop({
+                reactFlowInstance: mockReactFlowInstance,
+                reactFlowWrapper: mockWrapper,
+                addNode: jest.fn(),
+            }),
+        );
+
+        const event = createMockDragEvent();
+        act(() => { result.current.onDragOver(event); });
+
+        expect(event.dataTransfer.dropEffect).toBe('none');
+    });
+});

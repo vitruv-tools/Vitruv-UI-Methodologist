@@ -1,8 +1,8 @@
 import React from 'react';
-import { render, screen } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { Vsum } from '../../../types';
 
-// ─── Helpers mirroring VsumsPanel internals ──────────────────────────────────
+// ─── Helpers mirroring VsumsPanel internals ───────────────────────────────────
 
 const getDaysLeft = (removedAt: string | null | undefined): number => {
   if (!removedAt) return 30;
@@ -13,17 +13,17 @@ const getDaysLeft = (removedAt: string | null | undefined): number => {
 
 type Urgency = 'critical' | 'warning' | 'caution' | 'safe';
 const getDaysLeftUrgency = (days: number): Urgency => {
-  if (days <= 3)  return 'critical';
-  if (days <= 7)  return 'warning';
+  if (days <= 3) return 'critical';
+  if (days <= 7) return 'warning';
   if (days <= 14) return 'caution';
   return 'safe';
 };
 
-/** Returns an ISO string for exactly N * 24 h in the past. */
 const daysAgo = (n: number): string =>
   new Date(Date.now() - n * 24 * 60 * 60 * 1000).toISOString();
 
-// ─── getDaysLeft ─────────────────────────────────────────────────────────────
+// ─── getDaysLeft ──────────────────────────────────────────────────────────────
+
 describe('getDaysLeft', () => {
   it('returns 30 when removedAt is null', () => {
     expect(getDaysLeft(null)).toBe(30);
@@ -33,7 +33,7 @@ describe('getDaysLeft', () => {
     expect(getDaysLeft(undefined)).toBe(30);
   });
 
-  it('returns 29 or 30 when deleted just now (microseconds may elapse)', () => {
+  it('returns 29 or 30 when deleted just now', () => {
     const result = getDaysLeft(new Date().toISOString());
     expect(result).toBeGreaterThanOrEqual(29);
     expect(result).toBeLessThanOrEqual(30);
@@ -53,19 +53,21 @@ describe('getDaysLeft', () => {
   });
 });
 
-// ─── getDaysLeftUrgency ──────────────────────────────────────────────────────
+// ─── getDaysLeftUrgency ───────────────────────────────────────────────────────
+
 describe('getDaysLeftUrgency', () => {
   it('critical for 0 days', () => expect(getDaysLeftUrgency(0)).toBe('critical'));
   it('critical for 3 days', () => expect(getDaysLeftUrgency(3)).toBe('critical'));
-  it('warning for 4 days',  () => expect(getDaysLeftUrgency(4)).toBe('warning'));
-  it('warning for 7 days',  () => expect(getDaysLeftUrgency(7)).toBe('warning'));
-  it('caution for 8 days',  () => expect(getDaysLeftUrgency(8)).toBe('caution'));
+  it('warning for 4 days', () => expect(getDaysLeftUrgency(4)).toBe('warning'));
+  it('warning for 7 days', () => expect(getDaysLeftUrgency(7)).toBe('warning'));
+  it('caution for 8 days', () => expect(getDaysLeftUrgency(8)).toBe('caution'));
   it('caution for 14 days', () => expect(getDaysLeftUrgency(14)).toBe('caution'));
-  it('safe for 15 days',    () => expect(getDaysLeftUrgency(15)).toBe('safe'));
-  it('safe for 30 days',    () => expect(getDaysLeftUrgency(30)).toBe('safe'));
+  it('safe for 15 days', () => expect(getDaysLeftUrgency(15)).toBe('safe'));
+  it('safe for 30 days', () => expect(getDaysLeftUrgency(30)).toBe('safe'));
 });
 
-// ─── Countdown badge label format ────────────────────────────────────────────
+// ─── Countdown badge label format ─────────────────────────────────────────────
+
 describe('countdown badge text', () => {
   const badgeText = (daysLeft: number) =>
     daysLeft === 0
@@ -87,6 +89,7 @@ describe('countdown badge text', () => {
 });
 
 // ─── Vsum type contract ───────────────────────────────────────────────────────
+
 describe('Vsum type contract', () => {
   it('includes removedAt for a deleted project', () => {
     const withRemoved: Vsum = {
@@ -97,7 +100,6 @@ describe('Vsum type contract', () => {
       removedAt: daysAgo(5),
     };
     expect(withRemoved.removedAt).toBeDefined();
-    // 5 days ago → ~25 days left (allow for sub-second jitter)
     const days = getDaysLeft(withRemoved.removedAt);
     expect(days).toBeGreaterThanOrEqual(24);
     expect(days).toBeLessThanOrEqual(25);
@@ -116,11 +118,8 @@ describe('Vsum type contract', () => {
 });
 
 // ─── VsumsPanel component (mocked) ───────────────────────────────────────────
-// Mock is defined before the import so jest hoisting works correctly.
-// The factory returns a jest.fn that we retrieve via the mocked module reference.
+
 jest.mock('../../../components/ui/VsumsPanel', () => {
-  // require() inside the factory runs after module system is ready,
-  // avoiding the hoisting issue that prevents JSX from having React in scope.
   const React = require('react');
   return {
     __esModule: true,
@@ -143,5 +142,92 @@ describe('VsumsPanel component (mocked)', () => {
   it('mock factory is invoked once per render', () => {
     render(<VsumsPanel />);
     expect(mockPanel).toHaveBeenCalledTimes(1);
+  });
+});
+
+// ─── VsumsPanel real component tests ─────────────────────────────────────────
+
+jest.mock('../../../services/api', () => ({
+  apiService: {
+    getVsumsPaginated: jest.fn().mockResolvedValue({ data: [] }),
+    getRemovedVsumsPaginated: jest.fn().mockResolvedValue({ data: [] }),
+    recoverVsum: jest.fn().mockResolvedValue({}),
+  },
+}));
+
+jest.mock('../../../components/ui/CreateVsumModal', () => ({
+  CreateVsumModal: ({ isOpen }: any) =>
+    isOpen ? <div data-testid="create-vsum-modal" /> : null,
+}));
+
+jest.mock('../../../components/ui/VsumDetailsModal', () => ({
+  VsumDetailsModal: () => null,
+}));
+
+jest.mock('../../../components/ui/ConfirmDialog', () => ({
+  ConfirmDialog: ({ isOpen, onConfirm, confirmText }: any) =>
+    isOpen ? <button onClick={onConfirm}>{confirmText}</button> : null,
+}));
+
+const { apiService } = require('../../../services/api') as {
+  apiService: Record<string, jest.Mock>;
+};
+
+const { VsumsPanel: RealVsumsPanel } =
+  jest.requireActual('../../../components/ui/VsumsPanel');
+
+describe('VsumsPanel – real component tests', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    apiService.getVsumsPaginated.mockResolvedValue({ data: [] });
+    apiService.getRemovedVsumsPaginated.mockResolvedValue({ data: [] });
+  });
+
+  it('renders Projects title and Create New Project button', async () => {
+    render(<RealVsumsPanel />);
+    expect(await screen.findByText('Projects')).toBeInTheDocument();
+    expect(
+      screen.getByRole('button', { name: /Create New Project/i }),
+    ).toBeInTheDocument();
+  });
+
+  it('shows empty state for active VSUMs', async () => {
+    render(<RealVsumsPanel />);
+    expect(
+      await screen.findByText(/No Projects Found/i),
+    ).toBeInTheDocument();
+  });
+
+  it('renders VSUM cards when API returns data', async () => {
+    apiService.getVsumsPaginated.mockResolvedValueOnce({
+      data: [{
+        id: 1, name: 'Test Project',
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        removedAt: null, role: 'OWNER',
+      }],
+    });
+    render(<RealVsumsPanel />);
+    expect(await screen.findByText('Test Project')).toBeInTheDocument();
+  });
+
+  it('switches to Deleted Projects tab and calls getRemovedVsumsPaginated', async () => {
+    render(<RealVsumsPanel />);
+    fireEvent.click(await screen.findByRole('button', { name: /Deleted Projects/i }));
+    await waitFor(() => {
+      expect(apiService.getRemovedVsumsPaginated).toHaveBeenCalled();
+    });
+  });
+
+  it('opens CreateVsumModal when Create New Project is clicked', async () => {
+    render(<RealVsumsPanel />);
+    fireEvent.click(await screen.findByRole('button', { name: /Create New Project/i }));
+    expect(screen.getByTestId('create-vsum-modal')).toBeInTheDocument();
+  });
+
+  it('shows error message when API fails', async () => {
+    apiService.getVsumsPaginated.mockRejectedValueOnce(new Error('Fetch failed'));
+    render(<RealVsumsPanel />);
+    expect(await screen.findByText(/Fetch failed/i)).toBeInTheDocument();
   });
 });
