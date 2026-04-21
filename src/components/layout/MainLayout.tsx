@@ -699,6 +699,7 @@ export function MainLayout({
                                 // onEcoreFilePositionChange removed - ReactFlow handles position
                                 onEcoreFileDelete={handleEcoreFileDelete}
                                 onEcoreFileRename={handleEcoreFileRename}
+                                umlModalOpen={!!expandedMetaModelName}
                             />
                         )}
 

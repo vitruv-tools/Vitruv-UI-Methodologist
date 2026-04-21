@@ -83,6 +83,7 @@ interface FlowCanvasProps {
   onEcoreFileRename?: (id: string, newFileName: string) => void;
   userId?: string;
   vsumId?: string;
+  umlModalOpen?: boolean;
 }
 
 interface ConnectionDragState {
@@ -192,6 +193,7 @@ export const FlowCanvas = forwardRef<{
     onEcoreFileRename,
     userId,
     vsumId,
+    umlModalOpen,
   }, ref) => {
 
     const reactFlowWrapper = useRef<HTMLDivElement>(null);
@@ -2140,7 +2142,7 @@ export const FlowCanvas = forwardRef<{
           <MiniMap position="bottom-right" style={{ bottom: 16, right: 16, zIndex: 30 }} />
           <Background />
         </ReactFlow>
-        {circleVisible && (
+        {circleVisible && !umlModalOpen && (
           <CircleOverlay
             circle={circle}
             viewport={viewport}
