@@ -847,4 +847,41 @@ describe('handleEdgeDoubleClick logic', () => {
       expect(target.x).toBe(current.x * 1.5 + 5);
     });
   });
+
+  describe('FlowCanvas – umlModalOpen prop', () => {
+    it('renders CircleOverlay when umlModalOpen is false', () => {
+      const ref = createRef<any>();
+      render(<FlowCanvas ref={ref} umlModalOpen={false} />);
+      // CircleOverlay renders an SVG — check it exists
+      expect(document.querySelector('svg')).toBeInTheDocument();
+    });
+
+    it('does not render CircleOverlay when umlModalOpen is true', () => {
+      const ref = createRef<any>();
+      render(<FlowCanvas ref={ref} umlModalOpen={true} />);
+      // CircleOverlay SVG should not be present
+      expect(document.querySelector('svg')).not.toBeInTheDocument();
+    });
+
+    it('does not render CircleOverlay when umlModalOpen is true even if circleVisible would be true', () => {
+      const ref = createRef<any>();
+      const { rerender } = render(<FlowCanvas ref={ref} umlModalOpen={false} />);
+      expect(document.querySelector('svg')).toBeInTheDocument();
+
+      rerender(<FlowCanvas ref={ref} umlModalOpen={true} />);
+      expect(document.querySelector('svg')).not.toBeInTheDocument();
+    });
+
+    it('renders ReactFlow regardless of umlModalOpen', () => {
+      const ref = createRef<any>();
+      render(<FlowCanvas ref={ref} umlModalOpen={true} />);
+      expect(screen.getByTestId('react-flow')).toBeInTheDocument();
+    });
+
+    it('umlModalOpen defaults to undefined and CircleOverlay is shown', () => {
+      const ref = createRef<any>();
+      render(<FlowCanvas ref={ref} />);
+      expect(document.querySelector('svg')).toBeInTheDocument();
+    });
+  });
 });
