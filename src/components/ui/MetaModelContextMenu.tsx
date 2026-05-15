@@ -233,10 +233,10 @@ function getItemStyle(disabled: boolean, isBusy: boolean): React.CSSProperties {
 function MetaModelHighlightCard({
   anchorRect,
   model,
-}: {
+}: Readonly<{
   anchorRect: AnchorRect;
   model: MetaModelWithFileIds;
-}) {
+}>) {
   const createdLabel = model.createdAt
     ? new Date(model.createdAt).toLocaleDateString('en-US', {
         month: 'short',
@@ -279,7 +279,7 @@ function MetaModelHighlightCard({
   );
 }
 
-function FileIcon({ kind }: { kind: MetaModelExportKind }) {
+function FileIcon({ kind }: Readonly<{ kind: MetaModelExportKind }>) {
   const color = kind === 'ecore' ? '#049484' : '#0d9488';
   return (
     <span

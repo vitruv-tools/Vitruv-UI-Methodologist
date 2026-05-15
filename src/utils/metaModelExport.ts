@@ -15,10 +15,10 @@ const KIND_CONFIG = {
   genmodel: { fileIdKey: 'genModelFileId' as const, ext: '.genmodel', label: '.genmodel' },
 } as const;
 
-const UNSAFE_FILE_NAME_CHARS = new Set('<>:"/\\|?*');
+const UNSAFE_FILE_NAME_CHARS = new Set(String.raw`<>:"/\|?*`);
 
 function isUnsafeFileNameChar(char: string): boolean {
-  const code = char.charCodeAt(0);
+  const code = char.codePointAt(0) ?? 0;
   return code < 32 || UNSAFE_FILE_NAME_CHARS.has(char);
 }
 

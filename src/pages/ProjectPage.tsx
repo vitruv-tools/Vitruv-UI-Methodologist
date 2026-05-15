@@ -108,14 +108,14 @@ export const ProjectPage: React.FC = () => {
         showInfo(error instanceof Error ? error.message : 'Failed to open project');
       }
     };
-    globalThis.addEventListener('vitruv.openVsum', handler as EventListener);
-    return () => globalThis.removeEventListener('vitruv.openVsum', handler as EventListener);
+    globalThis.addEventListener('vitruv.openVsum', handler);
+    return () => globalThis.removeEventListener('vitruv.openVsum', handler);
   }, [openTabs, openVsumById, showInfo, setActiveInstanceId]);
 
   // Close active workspace tab when canvas becomes empty (no boxes)
   useEffect(() => {
-    globalThis.addEventListener('vitruv.closeActiveWorkspace', closeActiveWorkspaceTab as EventListener);
-    return () => globalThis.removeEventListener('vitruv.closeActiveWorkspace', closeActiveWorkspaceTab as EventListener);
+    globalThis.addEventListener('vitruv.closeActiveWorkspace', closeActiveWorkspaceTab);
+    return () => globalThis.removeEventListener('vitruv.closeActiveWorkspace', closeActiveWorkspaceTab);
   }, [closeActiveWorkspaceTab]);
 
   // Reload workspace when returning from expanded metamodel view
@@ -137,8 +137,8 @@ export const ProjectPage: React.FC = () => {
       }
     };
 
-    globalThis.addEventListener('vitruv.reloadWorkspace', handleReloadWorkspace as EventListener);
-    return () => globalThis.removeEventListener('vitruv.reloadWorkspace', handleReloadWorkspace as EventListener);
+    globalThis.addEventListener('vitruv.reloadWorkspace', handleReloadWorkspace);
+    return () => globalThis.removeEventListener('vitruv.reloadWorkspace', handleReloadWorkspace);
   }, [activeInstanceId, openTabs]);
 
   // Ensure "Add Meta Models" sidebar is hidden when no VSUM tabs are open
@@ -184,8 +184,8 @@ export const ProjectPage: React.FC = () => {
 
   // Handle VSUM deletion - close any open tabs for the deleted VSUM
   useEffect(() => {
-    globalThis.addEventListener('vitruv.vsumDeleted', handleVsumDeleted as EventListener);
-    return () => globalThis.removeEventListener('vitruv.vsumDeleted', handleVsumDeleted as EventListener);
+    globalThis.addEventListener('vitruv.vsumDeleted', handleVsumDeleted);
+    return () => globalThis.removeEventListener('vitruv.vsumDeleted', handleVsumDeleted);
   }, [handleVsumDeleted]);
 
   // Handle VSUM version restoration - reload workspace if VSUM is open
@@ -208,8 +208,8 @@ export const ProjectPage: React.FC = () => {
       }
     };
 
-    globalThis.addEventListener('vitruv.vsumRestored', handleVsumRestored as EventListener);
-    return () => globalThis.removeEventListener('vitruv.vsumRestored', handleVsumRestored as EventListener);
+    globalThis.addEventListener('vitruv.vsumRestored', handleVsumRestored);
+    return () => globalThis.removeEventListener('vitruv.vsumRestored', handleVsumRestored);
   }, [openTabs, showInfo]);
 
 

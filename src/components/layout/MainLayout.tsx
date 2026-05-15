@@ -310,8 +310,8 @@ export function MainLayout({
             }
         };
 
-        globalThis.addEventListener('vitruv.addFileToWorkspace', handleAddFileToWorkspace as EventListener);
-        globalThis.addEventListener('vitruv.resetWorkspace', handleResetWorkspace as EventListener);
+        globalThis.addEventListener('vitruv.addFileToWorkspace', handleAddFileToWorkspace);
+        globalThis.addEventListener('vitruv.resetWorkspace', handleResetWorkspace);
         const handleExpandFileInWorkspace = (e: Event) => {
             try {
                 const customEvent = e as CustomEvent<{ fileName: string; fileContent: string }>;
@@ -322,11 +322,11 @@ export function MainLayout({
                 console.error('Error handling expandFileInWorkspace event:', error);
             }
         };
-        globalThis.addEventListener('vitruv.expandFileInWorkspace', handleExpandFileInWorkspace as EventListener);
+        globalThis.addEventListener('vitruv.expandFileInWorkspace', handleExpandFileInWorkspace);
         return () => {
-            globalThis.removeEventListener('vitruv.addFileToWorkspace', handleAddFileToWorkspace as EventListener);
-            globalThis.removeEventListener('vitruv.expandFileInWorkspace', handleExpandFileInWorkspace as EventListener);
-            globalThis.removeEventListener('vitruv.resetWorkspace', handleResetWorkspace as EventListener);
+            globalThis.removeEventListener('vitruv.addFileToWorkspace', handleAddFileToWorkspace);
+            globalThis.removeEventListener('vitruv.expandFileInWorkspace', handleExpandFileInWorkspace);
+            globalThis.removeEventListener('vitruv.resetWorkspace', handleResetWorkspace);
         };
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
@@ -354,8 +354,8 @@ export function MainLayout({
             detail.resolve(snapshot);
         };
 
-        globalThis.addEventListener('vitruv.requestWorkspaceSnapshot', handleWorkspaceSnapshotRequest as EventListener);
-        return () => globalThis.removeEventListener('vitruv.requestWorkspaceSnapshot', handleWorkspaceSnapshotRequest as EventListener);
+        globalThis.addEventListener('vitruv.requestWorkspaceSnapshot', handleWorkspaceSnapshotRequest);
+        return () => globalThis.removeEventListener('vitruv.requestWorkspaceSnapshot', handleWorkspaceSnapshotRequest);
     }, [expandedMetaModelName, cachedWorkspaceSnapshot]);
 
     const handleEcoreFileSelect = useCallback((fileName: string) => {
