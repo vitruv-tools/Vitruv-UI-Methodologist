@@ -2,6 +2,10 @@ import React from 'react';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { MetaModelsPanel } from '../../../components/ui/MetaModelsPanel';
 
+jest.mock('../../../utils/downloadTextAsFile', () => ({
+  downloadTextAsFile: jest.fn(),
+}));
+
 jest.mock('../../../services/api', () => {
   const findMetaModels = jest.fn().mockResolvedValue({
     data: [
@@ -14,15 +18,22 @@ jest.mock('../../../services/api', () => {
     ],
   });
 
+  const getFile = jest.fn();
+
   return {
     apiService: {
       findMetaModels,
+      getFile,
     },
   };
 });
 
+const { downloadTextAsFile } = require('../../../utils/downloadTextAsFile') as {
+  downloadTextAsFile: jest.Mock;
+};
+
 const { apiService } = require('../../../services/api') as {
-  apiService: { findMetaModels: jest.Mock };
+  apiService: { findMetaModels: jest.Mock; getFile: jest.Mock };
 };
 
 describe('MetaModelsPanel', () => {
@@ -130,5 +141,34 @@ describe('MetaModelsPanel – additional tests', () => {
 
     const addedBtn = await screen.findByRole('button', { name: /✓ Added/i });
     expect(addedBtn).toBeDisabled();
+  });
+
+  it('shows export menu on right-click and downloads .ecore', async () => {
+    apiService.findMetaModels.mockResolvedValue({
+      data: [
+        {
+          id: 1,
+          name: 'Export Model',
+          domain: 'Demo',
+          createdAt: '2024-01-01T00:00:00Z',
+          ecoreFileId: 100,
+          genModelFileId: 200,
+        },
+      ],
+    });
+    apiService.getFile.mockResolvedValue('<ecore/>');
+
+    render(<MetaModelsPanel />);
+
+    const card = await screen.findByText('Export Model');
+    fireEvent.contextMenu(card.closest('article')!);
+
+    const downloadEcore = await screen.findByRole('menuitem', { name: /Download \.ecore/i });
+    fireEvent.click(downloadEcore);
+
+    await waitFor(() => {
+      expect(apiService.getFile).toHaveBeenCalledWith(100);
+      expect(downloadTextAsFile).toHaveBeenCalledWith('<ecore/>', 'Export Model.ecore');
+    });
   });
 });

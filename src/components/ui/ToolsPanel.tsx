@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { CreateModelModal } from './CreateModelModal';
 import { KeywordTagsInput } from './KeywordTagsInput';
 import { apiService } from '../../services/api';
+import { useMetaModelExportContextMenu } from '../../hooks/useMetaModelExportContextMenu';
 
 interface ToolsPanelProps {
   onEcoreFileUpload?: (fileContent: string, meta?: { fileName?: string; uploadId?: string; description?: string; keywords?: string; domain?: string; createdAt?: string }) => void;
@@ -384,6 +385,8 @@ export const ToolsPanel: React.FC<ToolsPanelProps> = ({ onEcoreFileUpload, onEco
     !editFormData.description.trim() ||
     !editFormData.domain.trim() ||
     editFormData.keywords.length === 0;
+
+  const { handleContextMenu, contextMenu } = useMetaModelExportContextMenu();
 
   const resetMetaModelModalState = () => {
     setViewModel(null);
@@ -1132,6 +1135,7 @@ export const ToolsPanel: React.FC<ToolsPanelProps> = ({ onEcoreFileUpload, onEco
             key={model.id}
             aria-label={`Meta model: ${model.name}`}
             style={fileCardStyle}
+            onContextMenu={(e) => handleContextMenu(e, model)}
             onMouseEnter={(e) => Object.assign(e.currentTarget.style, fileCardHoverStyle)}
             onMouseLeave={(e) => Object.assign(e.currentTarget.style, fileCardStyle)}
           >
@@ -2309,6 +2313,8 @@ export const ToolsPanel: React.FC<ToolsPanelProps> = ({ onEcoreFileUpload, onEco
           </div>
         </div>
       )}
+
+      {contextMenu}
 
     </div>
   );

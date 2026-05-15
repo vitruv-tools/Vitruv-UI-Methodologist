@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { apiService } from '../../services/api';
+import { useMetaModelExportContextMenu } from '../../hooks/useMetaModelExportContextMenu';
 
 interface MetaModelsPanelProps {
   activeVsumId?: number | null;
@@ -233,6 +234,7 @@ export const MetaModelsPanel: React.FC<MetaModelsPanelProps> = ({
   const [apiError, setApiError] = useState<string>('');
   const [parsedFilters, setParsedFilters] = useState<ParsedFilter[]>([]);
   const [showAllModels, setShowAllModels] = useState(false);
+  const { handleContextMenu, contextMenu } = useMetaModelExportContextMenu();
 
   const handleSearchKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key !== 'Tab') return;
@@ -439,6 +441,7 @@ export const MetaModelsPanel: React.FC<MetaModelsPanelProps> = ({
           <article
             key={model.id}
             style={fileCardStyle}
+            onContextMenu={(e) => handleContextMenu(e, model)}
             onMouseEnter={(e) => Object.assign(e.currentTarget.style, fileCardHoverStyle)}
             onMouseLeave={(e) => Object.assign(e.currentTarget.style, fileCardStyle)}
           >
@@ -514,6 +517,8 @@ export const MetaModelsPanel: React.FC<MetaModelsPanelProps> = ({
           </div>
         )}
       </div>
+
+      {contextMenu}
     </div>
   );
 };

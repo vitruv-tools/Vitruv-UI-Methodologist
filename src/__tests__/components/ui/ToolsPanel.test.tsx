@@ -2,11 +2,16 @@ import React from 'react';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { ToolsPanel } from '../../../components/ui/ToolsPanel';
 
+jest.mock('../../../utils/downloadTextAsFile', () => ({
+  downloadTextAsFile: jest.fn(),
+}));
+
 jest.mock('../../../services/api', () => ({
   apiService: {
     findMetaModels: jest.fn().mockResolvedValue({ data: [] }),
     deleteMetaModel: jest.fn().mockResolvedValue({ data: {}, message: 'Deleted' }),
     getMetaModel: jest.fn().mockResolvedValue({ data: {} }),
+    getFile: jest.fn(),
   },
 }));
 
@@ -19,11 +24,16 @@ jest.mock('../../../components/ui/KeywordTagsInput', () => ({
   KeywordTagsInput: () => <div data-testid="keyword-tags-input" />,
 }));
 
+const { downloadTextAsFile } = require('../../../utils/downloadTextAsFile') as {
+  downloadTextAsFile: jest.Mock;
+};
+
 const { apiService } = require('../../../services/api') as {
   apiService: {
     findMetaModels: jest.Mock;
     deleteMetaModel: jest.Mock;
     getMetaModel: jest.Mock;
+    getFile: jest.Mock;
   };
 };
 
@@ -107,5 +117,35 @@ describe('ToolsPanel – additional tests', () => {
     apiService.findMetaModels.mockRejectedValueOnce(new Error('Fetch error'));
     render(<ToolsPanel />);
     expect(await screen.findByText(/Fetch error/i)).toBeInTheDocument();
+  });
+
+  it('shows export menu on right-click and downloads .genmodel', async () => {
+    apiService.findMetaModels.mockResolvedValue({
+      data: [
+        {
+          id: 2,
+          name: 'Tools Export',
+          domain: 'Auto',
+          createdAt: new Date().toISOString(),
+          keyword: [],
+          ecoreFileId: 11,
+          genModelFileId: 22,
+        },
+      ],
+    });
+    apiService.getFile.mockResolvedValue('<genmodel/>');
+
+    render(<ToolsPanel />);
+
+    const card = await screen.findByLabelText(/Meta model: Tools Export/i);
+    fireEvent.contextMenu(card);
+
+    const downloadGen = await screen.findByRole('menuitem', { name: /Download \.genmodel/i });
+    fireEvent.click(downloadGen);
+
+    await waitFor(() => {
+      expect(apiService.getFile).toHaveBeenCalledWith(22);
+      expect(downloadTextAsFile).toHaveBeenCalledWith('<genmodel/>', 'Tools Export.genmodel');
+    });
   });
 });
