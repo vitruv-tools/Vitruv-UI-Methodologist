@@ -15,10 +15,19 @@ const KIND_CONFIG = {
   genmodel: { fileIdKey: 'genModelFileId' as const, ext: '.genmodel', label: '.genmodel' },
 } as const;
 
+const UNSAFE_FILE_NAME_CHARS = new Set('<>:"/\\|?*');
+
+function isUnsafeFileNameChar(char: string): boolean {
+  const code = char.charCodeAt(0);
+  return code < 32 || UNSAFE_FILE_NAME_CHARS.has(char);
+}
+
 export function sanitizeFileBaseName(name: string): string {
   const trimmed = name.trim();
   if (!trimmed) return 'metamodel';
-  return trimmed.replace(/[<>:"/\\|?*\u0000-\u001f]/g, '_');
+  return Array.from(trimmed)
+    .map((char) => (isUnsafeFileNameChar(char) ? '_' : char))
+    .join('');
 }
 
 export function buildMetaModelDownloadFileName(
