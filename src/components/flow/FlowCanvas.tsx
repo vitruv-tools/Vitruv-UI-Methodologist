@@ -1204,10 +1204,10 @@ export const FlowCanvas = forwardRef<{
         addEdge(newEdge);
       };
 
-      globalThis.addEventListener('vitruv.createReactionEdge', handleCreateReactionEdge as EventListener);
+      globalThis.addEventListener('vitruv.createReactionEdge', handleCreateReactionEdge);
 
       return () => {
-        globalThis.removeEventListener('vitruv.createReactionEdge', handleCreateReactionEdge as EventListener);
+        globalThis.removeEventListener('vitruv.createReactionEdge', handleCreateReactionEdge);
       };
     }, [nodes, addEdge, getColorForPair, getBackendMetaModelIdForNode, getMetaModelSourceIdForNode, calculateOptimalHandles]);
 
@@ -1302,8 +1302,8 @@ export const FlowCanvas = forwardRef<{
         relations.forEach(relation => processRelation(relation, preserveExisting));
       };
 
-      globalThis.addEventListener('vitruv.loadMetaModelRelations', handleLoadMetaModelRelations as EventListener);
-      return () => globalThis.removeEventListener('vitruv.loadMetaModelRelations', handleLoadMetaModelRelations as EventListener);
+      globalThis.addEventListener('vitruv.loadMetaModelRelations', handleLoadMetaModelRelations);
+      return () => globalThis.removeEventListener('vitruv.loadMetaModelRelations', handleLoadMetaModelRelations);
     }, [processRelation, reactFlowInstance, fitViewToCircle, circle]);
 
     useEffect(() => {
@@ -1659,10 +1659,10 @@ export const FlowCanvas = forwardRef<{
         autoLayoutEcoreBoxes();
       };
 
-      globalThis.addEventListener('vitruv.autoLayoutWorkspace', handleAutoLayout as EventListener);
+      globalThis.addEventListener('vitruv.autoLayoutWorkspace', handleAutoLayout);
 
       return () => {
-        globalThis.removeEventListener('vitruv.autoLayoutWorkspace', handleAutoLayout as EventListener);
+        globalThis.removeEventListener('vitruv.autoLayoutWorkspace', handleAutoLayout);
       };
     }, [autoLayoutEcoreBoxes]);
 
@@ -1680,10 +1680,10 @@ export const FlowCanvas = forwardRef<{
         setNodes(deselectAllNodes);
       };
 
-      globalThis.addEventListener('edge-clicked', handleEdgeClick as EventListener);
+      globalThis.addEventListener('edge-clicked', handleEdgeClick);
 
       return () => {
-        globalThis.removeEventListener('edge-clicked', handleEdgeClick as EventListener);
+        globalThis.removeEventListener('edge-clicked', handleEdgeClick);
       };
     }, [setEdges, setNodes]);
 
@@ -1714,12 +1714,12 @@ export const FlowCanvas = forwardRef<{
         updateEdgeControlPoint(edgeId, point);
       };
 
-      globalThis.addEventListener('uml-edge-control-drag', handleControlDrag as EventListener);
-      globalThis.addEventListener('uml-edge-control-drop', handleControlDrop as EventListener);
+      globalThis.addEventListener('uml-edge-control-drag', handleControlDrag);
+      globalThis.addEventListener('uml-edge-control-drop', handleControlDrop);
 
       return () => {
-        globalThis.removeEventListener('uml-edge-control-drag', handleControlDrag as EventListener);
-        globalThis.removeEventListener('uml-edge-control-drop', handleControlDrop as EventListener);
+        globalThis.removeEventListener('uml-edge-control-drag', handleControlDrag);
+        globalThis.removeEventListener('uml-edge-control-drop', handleControlDrop);
       };
     }, [reactFlowInstance, updateEdgeControlPoint]);
 
