@@ -350,6 +350,7 @@ export function MainLayout({
                 flowCanvasRef.current?.getWorkspaceSnapshot?.() ?? {
                     metaModelIds: [],
                     metaModelRelationRequests: [],
+                    viewRequests: [],
                 };
             detail.resolve(snapshot);
         };
@@ -411,6 +412,7 @@ export function MainLayout({
         const currentSnapshot = flowCanvasRef.current?.getWorkspaceSnapshot?.() ?? {
             metaModelIds: [],
             metaModelRelationRequests: [],
+            viewRequests: [],
         };
         setCachedWorkspaceSnapshot(currentSnapshot);
         console.log('📸 Cached workspace snapshot before UML view:', currentSnapshot);

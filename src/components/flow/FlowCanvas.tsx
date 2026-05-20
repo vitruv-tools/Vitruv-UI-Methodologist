@@ -1054,7 +1054,13 @@ export const FlowCanvas = forwardRef<{
       label: string, scope: ViewTypeScope, linkedNodeIds: string[], angle: number, editable: boolean
     ) => {
       addViewType({ label, scope, angle, linkedNodeIds, editable });
+      globalThis.dispatchEvent(new CustomEvent('vitruv.syncActiveVsumChanges'));
     }, [addViewType]);
+
+    const handleDeleteViewType = useCallback((id: string) => {
+      deleteViewType(id);
+      globalThis.dispatchEvent(new CustomEvent('vitruv.syncActiveVsumChanges'));
+    }, [deleteViewType]);
 
 
     const handleCircleResize = useCallback((newR: number) => {
@@ -1346,11 +1352,23 @@ export const FlowCanvas = forwardRef<{
         })
         .filter((req): req is MetaModelRelationRequest => req !== null);
 
+      const viewRequests = viewTypes.map(viewType => ({
+        metaModelIds: Array.from(
+          new Set(
+            viewType.linkedNodeIds
+              .map(nodeId => getMetaModelSourceIdForNode(nodeId))
+              .filter((value): value is number => typeof value === 'number')
+          )
+        ),
+        fileStorageId: 0,
+      }));
+
       return {
         metaModelIds,
         metaModelRelationRequests,
+        viewRequests,
       };
-    }, [nodes, edges, getMetaModelSourceIdForNode]);
+    }, [nodes, edges, viewTypes, getMetaModelSourceIdForNode]);
 
     useEffect(() => {
       if (!nodes.length || !edges.length) return;
@@ -2158,7 +2176,7 @@ export const FlowCanvas = forwardRef<{
             viewTypes={viewTypes}
             ecoreNodes={ecoreNodes}
             onAddViewType={handleAddViewType}
-            onDeleteViewType={deleteViewType}
+            onDeleteViewType={handleDeleteViewType}
             onUpdateViewTypeAngle={updateAngle}
             onUnlinkNode={unlinkNode}
           />

@@ -141,8 +141,10 @@ describe('FlowCanvas', () => {
     const snapshot = ref.current.getWorkspaceSnapshot();
     expect(snapshot).toHaveProperty('metaModelIds');
     expect(snapshot).toHaveProperty('metaModelRelationRequests');
+    expect(snapshot).toHaveProperty('viewRequests');
     expect(Array.isArray(snapshot.metaModelIds)).toBe(true);
     expect(Array.isArray(snapshot.metaModelRelationRequests)).toBe(true);
+    expect(Array.isArray(snapshot.viewRequests)).toBe(true);
   });
 
   it('getNodes returns array', () => {
