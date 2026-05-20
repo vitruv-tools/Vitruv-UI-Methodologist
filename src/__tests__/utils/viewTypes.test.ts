@@ -1,5 +1,5 @@
 import { Node } from 'reactflow';
-import { mapBackendViewsToViewTypes } from '../../utils/viewTypes';
+import { computeBestAngle, mapBackendViewsToViewTypes } from '../../utils/viewTypes';
 import { VsumView } from '../../types/vsum';
 
 const makeNode = (id: string, sourceId: number): Node => ({
@@ -7,6 +7,19 @@ const makeNode = (id: string, sourceId: number): Node => ({
   type: 'ecoreFile',
   position: { x: 0, y: 0 },
   data: { metaModelSourceId: sourceId },
+});
+
+describe('computeBestAngle', () => {
+  it('returns top position when no existing angles', () => {
+    expect(computeBestAngle([])).toBeCloseTo(-Math.PI / 2);
+  });
+
+  it('returns a finite angle when other views already exist', () => {
+    const angle = computeBestAngle([0, Math.PI / 2]);
+    expect(Number.isFinite(angle)).toBe(true);
+    expect(angle).toBeGreaterThanOrEqual(-Math.PI);
+    expect(angle).toBeLessThanOrEqual(Math.PI);
+  });
 });
 
 describe('mapBackendViewsToViewTypes', () => {

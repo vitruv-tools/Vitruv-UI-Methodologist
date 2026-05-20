@@ -6,6 +6,7 @@ import { ViewTypeBubble, OUTER_R } from './ViewTypeBubble';
 import { ViewTypeContextMenu } from './ViewTypeContextMenu';
 import { ViewTypeDeletionMenu } from './ViewTypeDeletionMenu';
 import { ViewTypeArrow } from './ViewTypeArrow';
+import { computeBestAngle } from '../../../utils/viewTypes';
 
 interface Viewport {
     x: number;
@@ -33,33 +34,6 @@ interface CircleOverlayProps {
 const HANDLE_ANGLE = Math.PI / 4;
 const HANDLE_RADIUS = 10;
 const MIN_RADIUS = 260;
-
-const computeBestAngle = (existingAngles: number[]): number => {
-    if (existingAngles.length === 0) return -Math.PI / 2;
-
-    const normalized = existingAngles
-        .map(a => ((a % (2 * Math.PI)) + 2 * Math.PI) % (2 * Math.PI))
-        .sort((a, b) => a - b);
-
-    let maxGap = 0;
-    let bestAngle = 0;
-
-    for (let i = 0; i < normalized.length; i++) {
-        const current = normalized[i];
-        const next = i === normalized.length - 1
-            ? normalized[0] + 2 * Math.PI
-            : normalized[i + 1];
-        const gap = next - current;
-        if (gap > maxGap) {
-            maxGap = gap;
-            bestAngle = current + gap / 2;
-        }
-    }
-
-    // Normalize back to [-π, π) like atan2
-    if (bestAngle > Math.PI) bestAngle -= 2 * Math.PI;
-    return bestAngle;
-};
 
 export const CircleOverlay: React.FC<CircleOverlayProps> = ({
     circle,
