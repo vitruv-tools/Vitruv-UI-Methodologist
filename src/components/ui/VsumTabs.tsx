@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { VsumDetails } from '../../types';
 import { apiService, MetaModelRelationRequest } from '../../services/api';
 import { WorkspaceSnapshot } from '../../types/workspace';
@@ -438,19 +438,22 @@ export const VsumTabs: React.FC<VsumTabsProps> = ({
         }
     };
 
+    const saveByIdRef = useRef(saveById);
+    saveByIdRef.current = saveById;
+
     useEffect(() => {
         const handleSyncViewTypeChanges = async () => {
             const active = openTabs.find(t => t.instanceId === activeInstanceId);
             const id = active?.id;
             if (!id || saving) return;
-            await saveById(id, { silent: true });
+            await saveByIdRef.current(id, { silent: true });
         };
 
         globalThis.addEventListener('vitruv.syncActiveVsumChanges', handleSyncViewTypeChanges);
         return () => {
             globalThis.removeEventListener('vitruv.syncActiveVsumChanges', handleSyncViewTypeChanges);
         };
-    }, [openTabs, activeInstanceId, saving, workspaceSnapshot, detailsById]);
+    }, [openTabs, activeInstanceId, saving]);
 
     // ---- download artifact -------------------------------------
     const onDownloadArtifact = async () => {
