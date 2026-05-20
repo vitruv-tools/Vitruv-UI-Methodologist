@@ -9,6 +9,8 @@ export interface ViewType {
     angle: number;
     linkedNodeIds: string[];
     editable: boolean;
+    backendId?: number;
+    fileStorageId?: number;
 }
 
 const STORAGE_KEY = 'vitruv_view_types_v1';
@@ -101,5 +103,9 @@ export function useViewTypes(vsumId: string | undefined) {
         []
     );
 
-    return { viewTypes, addViewType, deleteViewType, updateAngle, unlinkNode };
+    const replaceViewTypes = useCallback((next: ViewType[]) => {
+        setViewTypes(next);
+    }, []);
+
+    return { viewTypes, addViewType, deleteViewType, updateAngle, unlinkNode, replaceViewTypes };
 }

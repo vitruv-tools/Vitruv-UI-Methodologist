@@ -140,7 +140,15 @@ export const VsumTabs: React.FC<VsumTabsProps> = ({
                 targetId: r.targetId,
                 reactionFileId: normalizeReactionFileId(r.reactionFileId ?? r.reactionFileStorageId),
             }));
-        return { metaModelIds, metaModelRelationRequests, viewRequests: [] };
+        const viewRequests =
+            (backend.views ?? []).map(view => ({
+                metaModelIds: (view.assignedModels ?? [])
+                    .map(m => m.sourceId)
+                    .filter((x): x is number => typeof x === 'number')
+                    .sort((a, b) => a - b),
+                fileStorageId: view.fileStorageId ?? 0,
+            }));
+        return { metaModelIds, metaModelRelationRequests, viewRequests };
     };
 
     const snapshotsEqual = (a: WorkspaceSnapshot | null | undefined, b: WorkspaceSnapshot | null | undefined): boolean => {

@@ -92,8 +92,9 @@ export const ProjectPage: React.FC = () => {
   useEffect(() => {
     const handler = async (e: Event) => {
       const custom = e as CustomEvent<{ id: number; forceNew?: boolean }>;
-      const id = custom.detail?.id;
-      if (typeof id !== 'number') return;
+      const rawId = custom.detail?.id;
+      const id = typeof rawId === 'number' ? rawId : Number(rawId);
+      if (!Number.isFinite(id)) return;
       const existing = openTabs.find(t => t.id === id);
       if (existing && !custom.detail?.forceNew) {
         // Project already open, just navigate to it
@@ -299,6 +300,7 @@ async function fetchAndLoadProjectBoxes(id: number, skipReset: boolean = false) 
     console.log('📊 VSUM details received:', {
       metaModelCount: details.metaModels?.length || 0,
       relationCount: details.metaModelsRelation?.length || 0,
+      viewCount: details.views?.length || 0,
     });
 
     // Load all metamodel boxes
@@ -339,6 +341,12 @@ async function fetchAndLoadProjectBoxes(id: number, skipReset: boolean = false) 
         // This allows backend relations to be loaded even if there are existing edges
         globalThis.dispatchEvent(new CustomEvent('vitruv.loadMetaModelRelations', {
           detail: { relations, preserveExisting: false }
+        }));
+      }
+
+      if (details.views && details.views.length > 0) {
+        globalThis.dispatchEvent(new CustomEvent('vitruv.loadVsumViews', {
+          detail: { views: details.views },
         }));
       }
 

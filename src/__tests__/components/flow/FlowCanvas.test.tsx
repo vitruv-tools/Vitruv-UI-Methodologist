@@ -69,6 +69,8 @@ jest.mock('../../../hooks/useDragAndDrop', () => ({
   }),
 }));
 
+const mockReplaceViewTypes = jest.fn();
+
 jest.mock('../../../hooks/useViewTypes', () => ({
   useViewTypes: () => ({
     viewTypes: [{ id: 'vt-1', label: 'VT', scope: 'single', angle: 0, linkedNodeIds: [], editable: true }],
@@ -76,6 +78,7 @@ jest.mock('../../../hooks/useViewTypes', () => ({
     deleteViewType: mockDeleteViewType,
     updateAngle: jest.fn(),
     unlinkNode: jest.fn(),
+    replaceViewTypes: mockReplaceViewTypes,
   }),
 }));
 
@@ -296,6 +299,27 @@ describe('FlowCanvas', () => {
     await act(async () => {
       window.dispatchEvent(new CustomEvent('vitruv.loadMetaModelRelations', {
         detail: { relations: [] },
+      }));
+    });
+    expect(screen.getByTestId('react-flow')).toBeInTheDocument();
+  });
+
+  it('clears view types on vitruv.resetWorkspace', async () => {
+    mockReplaceViewTypes.mockClear();
+    const ref = createRef<any>();
+    render(<FlowCanvas ref={ref} />);
+    await act(async () => {
+      window.dispatchEvent(new CustomEvent('vitruv.resetWorkspace'));
+    });
+    expect(mockReplaceViewTypes).toHaveBeenCalledWith([]);
+  });
+
+  it('handles vitruv.loadVsumViews custom event', async () => {
+    const ref = createRef<any>();
+    render(<FlowCanvas ref={ref} />);
+    await act(async () => {
+      window.dispatchEvent(new CustomEvent('vitruv.loadVsumViews', {
+        detail: { views: [{ id: 1, fileStorageId: 0, assignedModels: [] }] },
       }));
     });
     expect(screen.getByTestId('react-flow')).toBeInTheDocument();
