@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { VsumDetails } from '../../types';
 import { apiService, MetaModelRelationRequest } from '../../services/api';
 import { WorkspaceSnapshot } from '../../types/workspace';
@@ -120,7 +120,13 @@ export const VsumTabs: React.FC<VsumTabsProps> = ({
                 return `${r.sourceId}->${r.targetId}#${safeId}`;
             })
             .sort((a, b) => a.localeCompare(b));
-        return { ids, rels };
+        const views = [...(snapshot?.viewRequests ?? [])]
+            .map(view => {
+                const viewMetaIds = [...(view.metaModelIds ?? [])].sort((a, b) => a - b);
+                return `${viewMetaIds.join(',')}#${view.fileStorageId ?? 0}`;
+            })
+            .sort((a, b) => a.localeCompare(b));
+        return { ids, rels, views };
     };
 
     const backendToSnapshot = (backend: VsumDetails): WorkspaceSnapshot => {
@@ -134,7 +140,15 @@ export const VsumTabs: React.FC<VsumTabsProps> = ({
                 targetId: r.targetId,
                 reactionFileId: normalizeReactionFileId(r.reactionFileId ?? r.reactionFileStorageId),
             }));
-        return { metaModelIds, metaModelRelationRequests };
+        const viewRequests =
+            (backend.views ?? []).map(view => ({
+                metaModelIds: (view.assignedModels ?? [])
+                    .map(m => m.sourceId)
+                    .filter((x): x is number => typeof x === 'number')
+                    .sort((a, b) => a - b),
+                fileStorageId: view.fileStorageId ?? 0,
+            }));
+        return { metaModelIds, metaModelRelationRequests, viewRequests };
     };
 
     const snapshotsEqual = (a: WorkspaceSnapshot | null | undefined, b: WorkspaceSnapshot | null | undefined): boolean => {
@@ -144,6 +158,10 @@ export const VsumTabs: React.FC<VsumTabsProps> = ({
         if (ca.rels.length !== cb.rels.length) return false;
         for (let i = 0; i < ca.rels.length; i++) {
             if (ca.rels[i] !== cb.rels[i]) return false;
+        }
+        if (ca.views.length !== cb.views.length) return false;
+        for (let i = 0; i < ca.views.length; i++) {
+            if (ca.views[i] !== cb.views[i]) return false;
         }
         return true;
     };
@@ -227,7 +245,7 @@ export const VsumTabs: React.FC<VsumTabsProps> = ({
                 console.warn('Failed to refresh workspace snapshot before save', e);
             }
         }
-        return snap ?? { metaModelIds: [], metaModelRelationRequests: [] };
+        return snap ?? { metaModelIds: [], metaModelRelationRequests: [], viewRequests: [] };
     };
 
     const getBackendMessage = (response: any): string =>
@@ -245,12 +263,14 @@ export const VsumTabs: React.FC<VsumTabsProps> = ({
         id: number,
         metaModelIds: number[],
         sanitizedRelations: MetaModelRelationRequest[],
+        viewRequests: WorkspaceSnapshot['viewRequests'],
         applySuccessfulSave: (savedRelations: MetaModelRelationRequest[], successMessage: string) => Promise<void>
     ): Promise<void> => {
         try {
             const response: any = await apiService.updateVsumSyncChanges(id, {
                 metaModelIds,
                 metaModelRelationRequests: sanitizedRelations.length > 0 ? sanitizedRelations : null,
+                viewRequests,
             });
             await applySuccessfulSave(sanitizedRelations, getBackendMessage(response));
             return;
@@ -279,6 +299,7 @@ export const VsumTabs: React.FC<VsumTabsProps> = ({
             const retryResponse: any = await apiService.updateVsumSyncChanges(id, {
                 metaModelIds,
                 metaModelRelationRequests: fallbackRelations,
+                viewRequests,
             });
             await applySuccessfulSave(
                 fallbackRelations,
@@ -294,7 +315,7 @@ export const VsumTabs: React.FC<VsumTabsProps> = ({
         }
     };
 
-    const saveById = async (id: number) => {
+    const saveById = async (id: number, options?: { silent?: boolean }) => {
         const backend = detailsById[id];
         if (!backend) return;
 
@@ -308,6 +329,7 @@ export const VsumTabs: React.FC<VsumTabsProps> = ({
                 .filter((x): x is number => typeof x === 'number');
 
         const snapshotIds = snap.metaModelIds ?? [];
+        const viewRequests = snap.viewRequests ?? [];
 
         // Use snapshot if available, otherwise fall back to backend data
         // Important: If snapshot exists but is empty, user intentionally removed all MetaModels
@@ -370,32 +392,40 @@ export const VsumTabs: React.FC<VsumTabsProps> = ({
 
         setSaving(true);
         setError('');
-        setPopup(null);
+        if (!options?.silent) {
+            setPopup(null);
+        }
         const applySuccessfulSave = async (savedRelations: MetaModelRelationRequest[], successMessage: string) => {
-            setPopup({ message: successMessage, type: 'success' });
+            if (!options?.silent) {
+                setPopup({ message: successMessage, type: 'success' });
+            }
 
             const res = await apiService.getVsumDetails(id);
             setDetailsById(prev => ({ ...prev, [id]: res.data }));
             setWorkspaceSnapshot({
                 metaModelIds,
                 metaModelRelationRequests: savedRelations,
+                viewRequests,
             });
             setSavedWorkspaceById(prev => ({
                 ...prev,
                 [id]: {
                     metaModelIds,
                     metaModelRelationRequests: savedRelations,
+                    viewRequests,
                 },
             }));
 
             globalThis.dispatchEvent(new CustomEvent('vitruv.refreshVsums'));
         };
         try {
-            await trySaveWithReactionFallback(id, metaModelIds, sanitizedRelations, applySuccessfulSave);
+            await trySaveWithReactionFallback(id, metaModelIds, sanitizedRelations, viewRequests, applySuccessfulSave);
         } catch (error_: any) {
             const message = typeof error_ === 'string' ? error_ : 'Failed to save VSUM';
             setError(message);
-            setPopup({ message, type: 'error' });
+            if (!options?.silent) {
+                setPopup({ message, type: 'error' });
+            }
         } finally {
             setSaving(false);
         }
@@ -415,6 +445,23 @@ export const VsumTabs: React.FC<VsumTabsProps> = ({
             });
         }
     };
+
+    const saveByIdRef = useRef(saveById);
+    saveByIdRef.current = saveById;
+
+    useEffect(() => {
+        const handleSyncViewTypeChanges = async () => {
+            const active = openTabs.find(t => t.instanceId === activeInstanceId);
+            const id = active?.id;
+            if (!id || saving) return;
+            await saveByIdRef.current(id, { silent: true });
+        };
+
+        globalThis.addEventListener('vitruv.syncActiveVsumChanges', handleSyncViewTypeChanges);
+        return () => {
+            globalThis.removeEventListener('vitruv.syncActiveVsumChanges', handleSyncViewTypeChanges);
+        };
+    }, [openTabs, activeInstanceId, saving]);
 
     // ---- download artifact -------------------------------------
     const onDownloadArtifact = async () => {

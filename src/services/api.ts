@@ -921,4 +921,8 @@ export interface MetaModelRelationRequest {
 export interface VsumSyncChangesPutRequest {
   metaModelIds: number[];
   metaModelRelationRequests: MetaModelRelationRequest[] | null; // you said null for now
+  viewRequests?: Array<{
+    metaModelIds: number[];
+    fileStorageId: number;
+  }>;
 }

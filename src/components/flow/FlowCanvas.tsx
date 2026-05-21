@@ -29,6 +29,8 @@ import { extractNsUriFromEcore } from '../../utils';
 import { useCircleContainment, clampToCircle, clampAllNodesToCircle, Circle } from '../../hooks/useCircleContainment';
 import { CircleOverlay } from './canvas/CircleOverlay';
 import { useViewTypes, ViewTypeScope } from '../../hooks/useViewTypes';
+import { mapBackendViewsToViewTypes } from '../../utils/viewTypes';
+import { VsumView } from '../../types/vsum';
 
 
 
@@ -251,7 +253,8 @@ export const FlowCanvas = forwardRef<{
       updateEdgeCode,
     } = useFlowState();
     const [circle, setCircle] = useCircleContainment(nodes);
-    const { viewTypes, addViewType, deleteViewType, updateAngle, unlinkNode } = useViewTypes(vsumId);
+    const { viewTypes, addViewType, deleteViewType, updateAngle, unlinkNode, replaceViewTypes } = useViewTypes(vsumId);
+    const backendViewsRef = useRef<VsumView[] | null>(null);
 
     // Helper function to calculate optimal handles based on which direction target is from source
     const calculateOptimalHandles = useCallback((sourceNode: Node, targetNode: Node) => {
@@ -1054,7 +1057,13 @@ export const FlowCanvas = forwardRef<{
       label: string, scope: ViewTypeScope, linkedNodeIds: string[], angle: number, editable: boolean
     ) => {
       addViewType({ label, scope, angle, linkedNodeIds, editable });
+      globalThis.dispatchEvent(new CustomEvent('vitruv.syncActiveVsumChanges'));
     }, [addViewType]);
+
+    const handleDeleteViewType = useCallback((id: string) => {
+      deleteViewType(id);
+      globalThis.dispatchEvent(new CustomEvent('vitruv.syncActiveVsumChanges'));
+    }, [deleteViewType]);
 
 
     const handleCircleResize = useCallback((newR: number) => {
@@ -1307,6 +1316,37 @@ export const FlowCanvas = forwardRef<{
     }, [processRelation, reactFlowInstance, fitViewToCircle, circle]);
 
     useEffect(() => {
+      const handleResetWorkspace = () => {
+        backendViewsRef.current = null;
+        replaceViewTypes([]);
+      };
+
+      globalThis.addEventListener('vitruv.resetWorkspace', handleResetWorkspace);
+      return () => globalThis.removeEventListener('vitruv.resetWorkspace', handleResetWorkspace);
+    }, [replaceViewTypes]);
+
+    useEffect(() => {
+      const handleLoadVsumViews = (e: Event) => {
+        const custom = e as CustomEvent<{ views?: VsumView[] }>;
+        backendViewsRef.current = custom.detail?.views ?? [];
+      };
+
+      globalThis.addEventListener('vitruv.loadVsumViews', handleLoadVsumViews);
+      return () => globalThis.removeEventListener('vitruv.loadVsumViews', handleLoadVsumViews);
+    }, []);
+
+    useEffect(() => {
+      const pendingViews = backendViewsRef.current;
+      if (!pendingViews?.length) return;
+
+      const hasMetaModelNodes = nodes.some(node => node.type === 'ecoreFile');
+      if (!hasMetaModelNodes) return;
+
+      replaceViewTypes(mapBackendViewsToViewTypes(pendingViews, nodes));
+      backendViewsRef.current = null;
+    }, [nodes, replaceViewTypes]);
+
+    useEffect(() => {
       onDiagramChange?.(nodes, edges);
     }, [nodes, edges, onDiagramChange]);
 
@@ -1346,11 +1386,23 @@ export const FlowCanvas = forwardRef<{
         })
         .filter((req): req is MetaModelRelationRequest => req !== null);
 
+      const viewRequests = viewTypes.map(viewType => ({
+        metaModelIds: Array.from(
+          new Set(
+            viewType.linkedNodeIds
+              .map(nodeId => getMetaModelSourceIdForNode(nodeId))
+              .filter((value): value is number => typeof value === 'number')
+          )
+        ),
+        fileStorageId: viewType.fileStorageId ?? 0,
+      }));
+
       return {
         metaModelIds,
         metaModelRelationRequests,
+        viewRequests,
       };
-    }, [nodes, edges, getMetaModelSourceIdForNode]);
+    }, [nodes, edges, viewTypes, getMetaModelSourceIdForNode]);
 
     useEffect(() => {
       if (!nodes.length || !edges.length) return;
@@ -2158,7 +2210,7 @@ export const FlowCanvas = forwardRef<{
             viewTypes={viewTypes}
             ecoreNodes={ecoreNodes}
             onAddViewType={handleAddViewType}
-            onDeleteViewType={deleteViewType}
+            onDeleteViewType={handleDeleteViewType}
             onUpdateViewTypeAngle={updateAngle}
             onUnlinkNode={unlinkNode}
           />
