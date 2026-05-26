@@ -72,6 +72,8 @@ jobs:
       - name: Run SonarCloud scanner
         run: |
           npm install -g sonarqube-scanner 
-          npx sonar-scanner -Dsonar.login=${{ secrets.SONAR_TOKEN }} -Dsonar.organization=vitruv-tools -Dsonar.projectKey=vitruv-tools_Vitruv-UI-Methodologist
+          npx sonar-scanner -Dsonar.login=${{ secrets.SONAR_TOKEN }} \
+          -Dsonar.organization=vitruv-tools  \
+          -Dsonar.projectKey=vitruv-tools_Vitruv-UI-Methodologist
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
