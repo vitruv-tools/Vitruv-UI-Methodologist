@@ -1,4 +1,12 @@
 import { config } from '../config/environment';
+import {
+  fastLoginConstants,
+  getFastLoginAuthorizationUrl as buildFastLoginAuthorizationUrl,
+  getFastLoginTokenUrl,
+  getSavedFastLoginRedirectUri,
+  FAST_LOGIN_REDIRECT_STORAGE_KEY,
+  getFastLoginRedirectUri,
+} from '../config/fastLogin';
 
 export interface AuthResponse {
   access_token: string;
@@ -286,6 +294,67 @@ export class AuthService {
     console.log('Forgot password request successful:', responseData.message);
     
     return responseData;
+  }
+
+  static getFastLoginCallbackUri(): string {
+    return getFastLoginRedirectUri();
+  }
+
+  static getFastLoginAuthorizationUrl(): string {
+    return buildFastLoginAuthorizationUrl();
+  }
+
+  static async exchangeFastLoginCode(code: string): Promise<AuthResponse> {
+    const savedRedirectUri = getSavedFastLoginRedirectUri();
+    const redirectUri = savedRedirectUri || getFastLoginRedirectUri();
+
+    const body = new URLSearchParams({
+      grant_type: 'authorization_code',
+      client_id: fastLoginConstants.clientId,
+      code,
+      redirect_uri: redirectUri,
+    });
+
+    const response = await fetch(
+      getFastLoginTokenUrl(),
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded',
+        },
+        body: body.toString(),
+      },
+    );
+
+    if (!response.ok) {
+      const errorMessage = await this.extractErrorMessage(response);
+      throw new Error(errorMessage || 'Fast login token exchange failed.');
+    }
+
+    const data: AuthResponse = await response.json();
+
+    localStorage.setItem('auth.access_token', data.access_token);
+    if (data.refresh_token) {
+      localStorage.setItem('auth.refresh_token', data.refresh_token);
+    }
+    localStorage.setItem('auth.expires_in', data.expires_in.toString());
+    localStorage.setItem('auth.refresh_expires_in', data.refresh_expires_in.toString());
+    localStorage.setItem('auth.token_type', data.token_type);
+    localStorage.setItem('auth.session_state', data.session_state);
+    localStorage.setItem('auth.scope', data.scope);
+    localStorage.setItem('auth.not_before_policy', data['not-before-policy'].toString());
+
+    const accessExpiresAt = Date.now() + (data.expires_in * 1000);
+    const refreshExpiresAt = Date.now() + (data.refresh_expires_in * 1000);
+    localStorage.setItem('auth.access_expires_at', accessExpiresAt.toString());
+    localStorage.setItem('auth.refresh_expires_at', refreshExpiresAt.toString());
+
+    try {
+      sessionStorage.removeItem(FAST_LOGIN_REDIRECT_STORAGE_KEY);
+    } catch {
+      // ignore
+    }
+    return data;
   }
 
   static async signIn(credentials: SignInCredentials): Promise<AuthResponse> {

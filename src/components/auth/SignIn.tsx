@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { SignInCredentials } from '../../services/auth';
+import { AuthService, SignInCredentials } from '../../services/auth';
 import { useAuth } from '../../contexts/AuthContext';
 import { apiService } from '../../services/api';
 import './Auth.css';
@@ -105,6 +105,16 @@ export function SignIn({ onSignInSuccess, onSwitchToSignUp }: Readonly<SignInPro
     }
   };
 
+  const handleFastLogin = () => {
+    try {
+      setError(null);
+      const authorizationUrl = AuthService.getFastLoginAuthorizationUrl();
+      globalThis.location.assign(authorizationUrl);
+    } catch (err: any) {
+      setError(err?.message || 'Unable to start Fast Login. Please try again.');
+    }
+  };
+
   return (
     <div 
       className="auth-container"
@@ -191,6 +201,16 @@ export function SignIn({ onSignInSuccess, onSwitchToSignUp }: Readonly<SignInPro
             ) : (
               'Sign In'
             )}
+          </button>
+
+          <button
+            type="button"
+            className="auth-button secondary"
+            disabled={isLoading}
+            onClick={handleFastLogin}
+            style={{ marginTop: '12px' }}
+          >
+            Fast Login (KIT/FeLS)
           </button>
         </form>
 
