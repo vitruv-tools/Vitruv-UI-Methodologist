@@ -30,23 +30,34 @@ export function navigateAfterFastLogin(
 
 /**
  * Completes fast login when Keycloak redirects back with ?code=...
+ *
+ * Two-phase design:
+ *  1. Exchange the code for tokens (async, guarded against double-execution).
+ *  2. Navigate only after `user` is committed in AuthContext.
+ *
+ * React.StrictMode runs effects twice in development. The guard ref stops the
+ * second run from starting a second exchange (authorization codes are
+ * single-use). However, the first run's async callback may be cancelled before
+ * it can trigger navigation. Phase 2 solves this: it watches `user` directly
+ * and fires as soon as AuthContext reflects the new user — regardless of
+ * whether phase 1's callback was cancelled by the StrictMode cleanup.
  */
 export function useFastLoginCallback(): {
   isProcessing: boolean;
   error: string | null;
 } {
   const navigate = useNavigate();
-  const { fastLoginWithCode } = useAuth();
+  const { fastLoginWithCode, user } = useAuth();
   const exchangeStartedRef = useRef(false);
+
   const [isProcessing, setIsProcessing] = useState(() => {
-    const params = new URLSearchParams(globalThis.location.search);
     const oauthError = getOAuthCallbackError();
     if (oauthError) return false;
-
-    return params.has('code');
+    return new URLSearchParams(globalThis.location.search).has('code');
   });
   const [error, setError] = useState<string | null>(null);
 
+  // ── Phase 1: kick off the token exchange ─────────────────────────────────
   useEffect(() => {
     const oauthError = getOAuthCallbackError();
     if (oauthError) {
@@ -68,9 +79,9 @@ export function useFastLoginCallback(): {
       return;
     }
 
-    if (exchangeStartedRef.current) {
-      return;
-    }
+    // Guard: authorization codes are single-use. Prevent a second exchange
+    // request (e.g. from React StrictMode's intentional double-mount).
+    if (exchangeStartedRef.current) return;
     exchangeStartedRef.current = true;
 
     console.log('[Fast Login] Authorization code received, starting token exchange');
@@ -79,9 +90,9 @@ export function useFastLoginCallback(): {
 
     const complete = async () => {
       try {
-        const user = await fastLoginWithCode(authorizationCode);
-        if (cancelled) return;
-        navigateAfterFastLogin(user, navigate);
+        // fastLoginWithCode calls setUser() internally — that state update
+        // is what Phase 2 watches to trigger navigation.
+        await fastLoginWithCode(authorizationCode);
       } catch (err: unknown) {
         if (cancelled) return;
         const message =
@@ -98,7 +109,19 @@ export function useFastLoginCallback(): {
     return () => {
       cancelled = true;
     };
-  }, [fastLoginWithCode, navigate]);
+  }, [fastLoginWithCode]);
+
+  // ── Phase 2: navigate once AuthContext has committed the new user ─────────
+  //
+  // Watching `user` (instead of a separate "pendingNavigate" flag) handles the
+  // StrictMode scenario: even if Phase 1's async callback was cancelled before
+  // it could set a flag, fastLoginWithCode already called setUser() — so
+  // `user` becomes non-null and this effect fires on the very next render.
+  useEffect(() => {
+    if (!isProcessing || !user) return;
+
+    navigateAfterFastLogin(user, navigate);
+  }, [isProcessing, user, navigate]);
 
   return { isProcessing, error };
 }
