@@ -354,7 +354,7 @@ export function SignUp({ onSignUpSuccess, onSwitchToSignIn }: Readonly<SignUpPro
           display: block;
           font-size: 13px;
           font-weight: 600;
-          color: #1e293b;
+          color: #049484;
           margin-bottom: 6px;
         }
 
@@ -364,7 +364,7 @@ export function SignUp({ onSignUpSuccess, onSwitchToSignIn }: Readonly<SignUpPro
           border: 1px solid #cbd5e1;
           border-radius: 8px;
           font-size: 14px;
-          color: #1e293b;
+          color: #049484;
           background-color: #ffffff;
           box-sizing: border-box;
           transition: border-color 0.2s;

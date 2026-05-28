@@ -218,7 +218,7 @@ export function SignIn({ onSignInSuccess, onSwitchToSignUp }: Readonly<SignInPro
           display: block;
           font-size: 13px;
           font-weight: 600;
-          color: #1e293b;
+          color: #049484;
           margin-bottom: 6px;
         }
 
@@ -228,7 +228,7 @@ export function SignIn({ onSignInSuccess, onSwitchToSignUp }: Readonly<SignInPro
           border: 1px solid #cbd5e1;
           border-radius: 8px;
           font-size: 14px;
-          color: #1e293b;
+          color: #049484;
           background-color: #ffffff;
           box-sizing: border-box;
           transition: border-color 0.2s;
@@ -265,7 +265,7 @@ export function SignIn({ onSignInSuccess, onSwitchToSignUp }: Readonly<SignInPro
         .mock-forgot-link {
           background: none;
           border: none;
-          color: #1e293b;
+          color: #049484;
           font-weight: 600;
           cursor: pointer;
           font-size: 14px;

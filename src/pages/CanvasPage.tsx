@@ -579,7 +579,7 @@ interface Collaborator { id: string; initials: string; name: string; color: stri
 
 // Mock data – replace with real API data later
 const MOCK_COLLABORATORS: Collaborator[] = [];
-const MY_ACCOUNT = { id: 'me', initials: 'MO', name: 'Max Oesterle (You)', color: '#1e293b', ringColor: '#049484' };
+const MY_ACCOUNT = { id: 'me', initials: 'MO', name: 'Max Oesterle (You)', color: '#049484', ringColor: '#049484' };
 
 interface AvatarProps {
   initials: string;
@@ -822,7 +822,7 @@ const ShareBtn: React.FC = () => {
       onMouseLeave={() => setHov(false)}
       style={{
         height: 34, padding: '0 14px', border: 'none', borderRadius: 6,
-        background: hov ? '#0B1720' : '#1e293b',
+        background: hov ? '#0B1720' : '#049484',
         color: '#ffffff', fontSize: 13, fontWeight: 700,
         cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 5,
         whiteSpace: 'nowrap', transition: 'background 0.15s', flexShrink: 0,
@@ -960,7 +960,7 @@ interface SidebarBtnProps {
 
 const SidebarBtn: React.FC<SidebarBtnProps> = ({ title, onClick, children, active, filled, disabled, loading, color }) => {
   const [hov, setHov] = useState(false);
-  const activeColor = color || '#1e293b';
+  const activeColor = color || '#049484';
   const isFilled = filled || active;
   const bg = isFilled
     ? activeColor
@@ -968,7 +968,7 @@ const SidebarBtn: React.FC<SidebarBtnProps> = ({ title, onClick, children, activ
   const iconColor = disabled
     ? '#c8d3dd'
     : isFilled ? '#ffffff'
-    : hov ? '#1e293b' : '#475569';
+      : hov ? '#049484' : '#475569';
   return (
     <button
       title={title}
@@ -1076,8 +1076,8 @@ const PillBtn: React.FC<PillBtnProps> = ({ onClick, title, children, active, spi
       onMouseLeave={() => setHov(false)}
       style={{
         position: 'relative', width: 40, height: 40, border: 'none', borderRadius: 6,
-        background: active ? '#1e293b' : hov ? '#f1f5f9' : 'transparent',
-        color: active ? '#ffffff' : hov ? '#1e293b' : '#475569',
+        background: active ? '#049484' : hov ? '#f1f5f9' : 'transparent',
+        color: active ? '#ffffff' : hov ? '#049484' : '#475569',
         cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
         transition: 'all 0.12s', flexShrink: 0,
       }}

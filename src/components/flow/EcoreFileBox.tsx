@@ -30,13 +30,13 @@ type HandlePosition = 'top' | 'bottom' | 'left' | 'right';
 // ── domain → card color ───────────────────────────────────────────────────────
 
 const CARD_COLORS: Record<string, string> = {
-  default:  '#bfdbfe',
+  default: '#bfdbfe',
   computer: '#93c5fd',
-  target:   '#86efac',
-  modell:   '#d8b4fe',
-  model:    '#d8b4fe',
-  pcm:      '#fca5a5',
-  source:   '#fca5a5',
+  target: '#86efac',
+  modell: '#d8b4fe',
+  model: '#d8b4fe',
+  pcm: '#fca5a5',
+  source: '#fca5a5',
 };
 
 const FALLBACK_PALETTE = ['#fca5a5', '#fde68a', '#6ee7b7', '#a5b4fc', '#f9a8d4', '#67e8f9', '#fb923c', '#c4b5fd'];
@@ -198,14 +198,14 @@ export const EcoreFileBox: React.FC<NodeProps<EcoreFileBoxData>> = ({ id, data, 
             height: 126,
             borderRadius: 16,
             background: bg,
-            border: `2px solid ${isReactionSource ? '#1e293b' : selected ? darken(bg, 45) : isHovered ? darken(bg, 35) : borderColor}`,
+            border: `2px solid ${isReactionSource ? '#049484' : selected ? darken(bg, 45) : isHovered ? darken(bg, 35) : borderColor}`,
             boxShadow: isReactionSource
               ? '0 0 0 4px #1e293b33, 0 8px 24px rgba(0,0,0,0.15)'
               : selected
-              ? `0 0 0 3px ${darken(bg, 45)}55, 0 8px 24px rgba(0,0,0,0.15)`
-              : isHovered
-              ? '0 8px 24px rgba(0,0,0,0.12)'
-              : '0 3px 10px rgba(0,0,0,0.08)',
+                ? `0 0 0 3px ${darken(bg, 45)}55, 0 8px 24px rgba(0,0,0,0.15)`
+                : isHovered
+                  ? '0 8px 24px rgba(0,0,0,0.12)'
+                  : '0 3px 10px rgba(0,0,0,0.08)',
             display: 'flex',
             flexDirection: 'column',
             alignItems: 'center',
@@ -325,13 +325,13 @@ const ContextMenu: React.FC<ContextMenuProps> = ({
       <span style={{ fontSize: 12, fontWeight: 700, color: '#0f172a' }}>{removeExt(fileName)}</span>
     </div>
 
-    <CMItem icon={<UMLIcon />}     label="Open UML"        onClick={onOpenUML} />
-    <CMItem icon={<ConnectIcon />} label="Add connection"  onClick={onConnect} />
-    <CMItem icon={<EditIcon />}    label="Rename"          onClick={onRename} />
+    <CMItem icon={<UMLIcon />} label="Open UML" onClick={onOpenUML} />
+    <CMItem icon={<ConnectIcon />} label="Add connection" onClick={onConnect} />
+    <CMItem icon={<EditIcon />} label="Rename" onClick={onRename} />
     {onShowDetails && <CMItem icon={<InfoIcon />} label="Details" onClick={onShowDetails} />}
 
     <div style={{ height: 1, background: '#f1f5f9', margin: '4px 2px' }} />
-    <CMItem icon={<TrashIcon />}   label="Remove"          onClick={onDelete} danger />
+    <CMItem icon={<TrashIcon />} label="Remove" onClick={onDelete} danger />
   </div>
 );
 

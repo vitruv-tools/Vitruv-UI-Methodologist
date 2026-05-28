@@ -75,14 +75,14 @@ const isReactionFilesNotFoundError = (message: string): boolean => {
 };
 
 export const VsumTabs: React.FC<VsumTabsProps> = ({
-                                                      openTabs,
-                                                      activeInstanceId,
-                                                      onActivate,
-                                                      onClose,
-                                                      onAddMetaModels,
-                                                      showAddButton,
-                                                      requestWorkspaceSnapshot,
-                                                  }) => {
+    openTabs,
+    activeInstanceId,
+    onActivate,
+    onClose,
+    onAddMetaModels,
+    showAddButton,
+    requestWorkspaceSnapshot,
+}) => {
     const [detailsById, setDetailsById] = useState<Record<number, VsumDetails | undefined>>({});
     const [error, setError] = useState<string>('');
     const [saving, setSaving] = useState(false);
@@ -409,9 +409,9 @@ export const VsumTabs: React.FC<VsumTabsProps> = ({
             await saveById(id);
         } catch (error) {
             console.error('Save failed:', error);
-            setPopup({ 
-                message: error instanceof Error ? error.message : 'Failed to save VSUM', 
-                type: 'error' 
+            setPopup({
+                message: error instanceof Error ? error.message : 'Failed to save VSUM',
+                type: 'error'
             });
         }
     };
@@ -420,26 +420,26 @@ export const VsumTabs: React.FC<VsumTabsProps> = ({
     const onDownloadArtifact = async () => {
         const active = openTabs.find(t => t.instanceId === activeInstanceId);
         if (!active) return;
-        
+
         // Check for unsaved changes
         const isDirty = computeDirty(detailsById[active.id], workspaceSnapshot, active.id);
         if (isDirty) {
             setUnsavedChangesAction('download');
             return;
         }
-        
+
         await performDownload();
     };
 
     const performDownload = async () => {
         const active = openTabs.find(t => t.instanceId === activeInstanceId);
         if (!active) return;
-        
+
         setDownloadingArtifact(true);
         setError('');
         try {
             const blob = await apiService.downloadVsumArtifact(active.id);
-            
+
             // Create a download link and trigger it
             const url = globalThis.URL.createObjectURL(blob);
             const link = globalThis.document.createElement('a');
@@ -449,7 +449,7 @@ export const VsumTabs: React.FC<VsumTabsProps> = ({
             link.click();
             link.remove();
             globalThis.URL.revokeObjectURL(url);
-            
+
             setPopup({ message: 'Artifact downloaded successfully!', type: 'success' });
             setTimeout(() => setPopup(null), 3000);
         } catch (err: any) {
@@ -560,7 +560,7 @@ export const VsumTabs: React.FC<VsumTabsProps> = ({
                                         gap: 8,
                                         padding: '7px 14px',
                                         border: isActive ? '1px solid #cbd5e1' : '1px solid #e5e7eb',
-                                        borderBottom: isActive ? '2px solid #1e293b' : '1px solid #e5e7eb',
+                                        borderBottom: isActive ? '2px solid #049484' : '1px solid #e5e7eb',
                                         borderRadius: 6,
                                         background: isActive ? '#f8fafc' : '#ffffff',
                                         cursor: 'pointer',
@@ -592,7 +592,7 @@ export const VsumTabs: React.FC<VsumTabsProps> = ({
                                     <span
                                         style={{
                                             fontWeight: 600,
-                                            color: '#1e293b',
+                                            color: '#049484',
                                             fontSize: 13,
                                             whiteSpace: 'nowrap',
                                         }}
@@ -860,7 +860,7 @@ export const VsumTabs: React.FC<VsumTabsProps> = ({
                 message={
                     <>
                         <p style={{ margin: '0 0 12px 0', lineHeight: '1.6' }}>
-                            {unsavedChangesAction === 'build' 
+                            {unsavedChangesAction === 'build'
                                 ? 'Your project has unsaved changes. The build check will not include these changes.'
                                 : 'Your project has unsaved changes. The downloaded artifact will not include these changes.'}
                         </p>
@@ -875,7 +875,7 @@ export const VsumTabs: React.FC<VsumTabsProps> = ({
                 onConfirm={async () => {
                     const action = unsavedChangesAction;
                     setUnsavedChangesAction(null);
-                    
+
                     // Continue without saving
                     if (action === 'build') {
                         await performBuild();

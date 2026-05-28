@@ -217,89 +217,89 @@ export const UMLDiagram = forwardRef<UMLDiagramHandle, UMLDiagramProps>(({ ecore
         userSelect: 'none',
       }}
     >
-    <div style={{
-      position: 'absolute',
-      transform: `translate(${vx}px, ${vy}px) scale(${vscale})`,
-      transformOrigin: '0 0',
-      width: totalW,
-      height: totalH,
-    }}>
-    {/* SVG: relationship lines */}
-    <div style={{ position: 'relative', width: totalW, height: totalH }}>
-      <svg
-        style={{ position: 'absolute', top: 0, left: 0, width: totalW, height: totalH, pointerEvents: 'none', overflow: 'visible' }}
-      >
-        <defs>
-          <marker id="uml-inherit" viewBox="0 0 14 14" refX="13" refY="7" markerWidth="11" markerHeight="11" orient="auto">
-            <polygon points="0,0 13,7 0,14" fill="white" stroke="#475569" strokeWidth="1.5" />
-          </marker>
-          <marker id="uml-assoc" viewBox="0 0 13 13" refX="12" refY="6.5" markerWidth="10" markerHeight="10" orient="auto">
-            <path d="M0,0 L12,6.5 L0,13" fill="none" stroke="#475569" strokeWidth="1.5" />
-          </marker>
-          <marker id="uml-compose" viewBox="0 0 18 12" refX="0" refY="6" markerWidth="13" markerHeight="9" orient="auto">
-            <polygon points="0,6 8,0 16,6 8,12" fill="#475569" />
-          </marker>
-          <marker id="uml-agg" viewBox="0 0 18 12" refX="0" refY="6" markerWidth="13" markerHeight="9" orient="auto">
-            <polygon points="0,6 8,0 16,6 8,12" fill="white" stroke="#475569" strokeWidth="1.5" />
-          </marker>
-        </defs>
+      <div style={{
+        position: 'absolute',
+        transform: `translate(${vx}px, ${vy}px) scale(${vscale})`,
+        transformOrigin: '0 0',
+        width: totalW,
+        height: totalH,
+      }}>
+        {/* SVG: relationship lines */}
+        <div style={{ position: 'relative', width: totalW, height: totalH }}>
+          <svg
+            style={{ position: 'absolute', top: 0, left: 0, width: totalW, height: totalH, pointerEvents: 'none', overflow: 'visible' }}
+          >
+            <defs>
+              <marker id="uml-inherit" viewBox="0 0 14 14" refX="13" refY="7" markerWidth="11" markerHeight="11" orient="auto">
+                <polygon points="0,0 13,7 0,14" fill="white" stroke="#475569" strokeWidth="1.5" />
+              </marker>
+              <marker id="uml-assoc" viewBox="0 0 13 13" refX="12" refY="6.5" markerWidth="10" markerHeight="10" orient="auto">
+                <path d="M0,0 L12,6.5 L0,13" fill="none" stroke="#475569" strokeWidth="1.5" />
+              </marker>
+              <marker id="uml-compose" viewBox="0 0 18 12" refX="0" refY="6" markerWidth="13" markerHeight="9" orient="auto">
+                <polygon points="0,6 8,0 16,6 8,12" fill="#475569" />
+              </marker>
+              <marker id="uml-agg" viewBox="0 0 18 12" refX="0" refY="6" markerWidth="13" markerHeight="9" orient="auto">
+                <polygon points="0,6 8,0 16,6 8,12" fill="white" stroke="#475569" strokeWidth="1.5" />
+              </marker>
+            </defs>
 
-        {rels.map(rel => {
-          const src = classes.find(c => c.id === rel.sourceId);
-          const tgt = classes.find(c => c.id === rel.targetId);
-          if (!src || !tgt) return null;
+            {rels.map(rel => {
+              const src = classes.find(c => c.id === rel.sourceId);
+              const tgt = classes.find(c => c.id === rel.targetId);
+              if (!src || !tgt) return null;
 
-          const sh = boxH(src), th = boxH(tgt);
-          const scx = src.x + BW / 2, scy = src.y + sh / 2;
-          const tcx = tgt.x + BW / 2, tcy = tgt.y + th / 2;
-          const p1 = edgePt(src.x, src.y, sh, tcx, tcy);
-          const p2 = edgePt(tgt.x, tgt.y, th, scx, scy);
+              const sh = boxH(src), th = boxH(tgt);
+              const scx = src.x + BW / 2, scy = src.y + sh / 2;
+              const tcx = tgt.x + BW / 2, tcy = tgt.y + th / 2;
+              const p1 = edgePt(src.x, src.y, sh, tcx, tcy);
+              const p2 = edgePt(tgt.x, tgt.y, th, scx, scy);
 
-          const mEnd = rel.type === 'inheritance' ? 'url(#uml-inherit)' : rel.type === 'association' ? 'url(#uml-assoc)' : undefined;
-          const mStart = rel.type === 'composition' ? 'url(#uml-compose)' : undefined;
-          const mx = (p1.x + p2.x) / 2;
-          const my = (p1.y + p2.y) / 2;
+              const mEnd = rel.type === 'inheritance' ? 'url(#uml-inherit)' : rel.type === 'association' ? 'url(#uml-assoc)' : undefined;
+              const mStart = rel.type === 'composition' ? 'url(#uml-compose)' : undefined;
+              const mx = (p1.x + p2.x) / 2;
+              const my = (p1.y + p2.y) / 2;
 
-          return (
-            <g key={rel.id}>
-              <line x1={p1.x} y1={p1.y} x2={p2.x} y2={p2.y}
-                stroke="#475569" strokeWidth="1.5"
-                markerEnd={mEnd} markerStart={mStart}
-              />
-              {rel.label && (
-                <text x={mx} y={my - 5} textAnchor="middle" fontSize="10" fill="#64748b"
-                  fontFamily="ui-sans-serif, system-ui, sans-serif">
-                  {rel.label}
-                </text>
-              )}
-            </g>
-          );
-        })}
-      </svg>
+              return (
+                <g key={rel.id}>
+                  <line x1={p1.x} y1={p1.y} x2={p2.x} y2={p2.y}
+                    stroke="#475569" strokeWidth="1.5"
+                    markerEnd={mEnd} markerStart={mStart}
+                  />
+                  {rel.label && (
+                    <text x={mx} y={my - 5} textAnchor="middle" fontSize="10" fill="#64748b"
+                      fontFamily="ui-sans-serif, system-ui, sans-serif">
+                      {rel.label}
+                    </text>
+                  )}
+                </g>
+              );
+            })}
+          </svg>
 
-      {/* Class boxes */}
-      {classes.map(cls => (
-        <ClassBox
-          key={cls.id}
-          cls={cls}
-          scale={vscale}
-          edit={edit?.classId === cls.id ? edit : null}
-          onMove={moveClass}
-          onStartEditName={() => setEdit({ classId: cls.id, kind: 'name', val: cls.name })}
-          onSaveName={name => saveName(cls.id, name)}
-          onStartEditAttr={attrId => {
-            const a = cls.attributes.find(x => x.id === attrId)!;
-            setEdit({ classId: cls.id, kind: 'attr', attrId, name: a.name, type: a.type });
-          }}
-          onSaveAttr={(attrId, n, t) => saveAttr(cls.id, attrId, n, t)}
-          onCancelEdit={() => setEdit(null)}
-          onAddAttr={() => addAttr(cls.id)}
-          onDeleteAttr={attrId => deleteAttr(cls.id, attrId)}
-          onEditChange={setEdit}
-        />
-      ))}
-    </div>
-    </div>
+          {/* Class boxes */}
+          {classes.map(cls => (
+            <ClassBox
+              key={cls.id}
+              cls={cls}
+              scale={vscale}
+              edit={edit?.classId === cls.id ? edit : null}
+              onMove={moveClass}
+              onStartEditName={() => setEdit({ classId: cls.id, kind: 'name', val: cls.name })}
+              onSaveName={name => saveName(cls.id, name)}
+              onStartEditAttr={attrId => {
+                const a = cls.attributes.find(x => x.id === attrId)!;
+                setEdit({ classId: cls.id, kind: 'attr', attrId, name: a.name, type: a.type });
+              }}
+              onSaveAttr={(attrId, n, t) => saveAttr(cls.id, attrId, n, t)}
+              onCancelEdit={() => setEdit(null)}
+              onAddAttr={() => addAttr(cls.id)}
+              onDeleteAttr={attrId => deleteAttr(cls.id, attrId)}
+              onEditChange={setEdit}
+            />
+          ))}
+        </div>
+      </div>
     </div>
   );
 });
@@ -506,7 +506,7 @@ const AttrRow: React.FC<AttrRowProps> = ({
       }}
     >
       <span style={{ color: '#64748b', flexShrink: 0 }}>{attr.visibility}</span>
-      <span style={{ color: '#1e293b', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+      <span style={{ color: '#049484', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
         {attr.name}
       </span>
       <span style={{ color: '#94a3b8', flexShrink: 0 }}>:</span>
