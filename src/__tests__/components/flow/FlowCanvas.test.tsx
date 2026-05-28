@@ -3,9 +3,6 @@ import { render, screen, fireEvent, act } from '@testing-library/react';
 import { FlowCanvas } from '../../../components/flow/FlowCanvas';
 import { apiService } from '../../../services/api';
 
-const mockAddViewType = jest.fn();
-const mockDeleteViewType = jest.fn();
-
 jest.mock('reactflow', () => {
   const MockReactFlow = ({ children }: any) => (
     <div data-testid="react-flow">{children}</div>
@@ -69,28 +66,6 @@ jest.mock('../../../hooks/useDragAndDrop', () => ({
   }),
 }));
 
-const mockReplaceViewTypes = jest.fn();
-
-jest.mock('../../../hooks/useViewTypes', () => ({
-  useViewTypes: () => ({
-    viewTypes: [{ id: 'vt-1', label: 'VT', scope: 'single', angle: 0, linkedNodeIds: [], editable: true }],
-    addViewType: mockAddViewType,
-    deleteViewType: mockDeleteViewType,
-    updateAngle: jest.fn(),
-    unlinkNode: jest.fn(),
-    replaceViewTypes: mockReplaceViewTypes,
-  }),
-}));
-
-jest.mock('../../../components/flow/canvas/CircleOverlay', () => ({
-  CircleOverlay: (props: any) => (
-    <div>
-      <button onClick={() => props.onAddViewType('VT', 'single', [], 0, true)}>add-viewtype</button>
-      <button onClick={() => props.onDeleteViewType('vt-1')}>delete-viewtype</button>
-    </div>
-  ),
-}));
-
 jest.mock('../../../components/flow/EditableNode', () => ({
   EditableNode: () => <div>Editable Node</div>,
 }));
@@ -126,30 +101,6 @@ jest.mock('../../../services/api', () => ({
 describe('FlowCanvas', () => {
   beforeEach(() => {
     jest.clearAllMocks();
-  });
-
-  it('dispatches sync event when ViewType is added', () => {
-    const dispatchSpy = jest.spyOn(globalThis, 'dispatchEvent');
-    const ref = createRef<any>();
-    render(<FlowCanvas ref={ref} />);
-
-    fireEvent.click(screen.getByText('add-viewtype'));
-
-    expect(mockAddViewType).toHaveBeenCalled();
-    expect(dispatchSpy).toHaveBeenCalledWith(expect.objectContaining({ type: 'vitruv.syncActiveVsumChanges' }));
-    dispatchSpy.mockRestore();
-  });
-
-  it('dispatches sync event when ViewType is deleted', () => {
-    const dispatchSpy = jest.spyOn(globalThis, 'dispatchEvent');
-    const ref = createRef<any>();
-    render(<FlowCanvas ref={ref} />);
-
-    fireEvent.click(screen.getByText('delete-viewtype'));
-
-    expect(mockDeleteViewType).toHaveBeenCalledWith('vt-1');
-    expect(dispatchSpy).toHaveBeenCalledWith(expect.objectContaining({ type: 'vitruv.syncActiveVsumChanges' }));
-    dispatchSpy.mockRestore();
   });
 
   it('renders ReactFlow, minimap, and background', () => {
@@ -190,10 +141,8 @@ describe('FlowCanvas', () => {
     const snapshot = ref.current.getWorkspaceSnapshot();
     expect(snapshot).toHaveProperty('metaModelIds');
     expect(snapshot).toHaveProperty('metaModelRelationRequests');
-    expect(snapshot).toHaveProperty('viewRequests');
     expect(Array.isArray(snapshot.metaModelIds)).toBe(true);
     expect(Array.isArray(snapshot.metaModelRelationRequests)).toBe(true);
-    expect(Array.isArray(snapshot.viewRequests)).toBe(true);
   });
 
   it('getNodes returns array', () => {
@@ -299,27 +248,6 @@ describe('FlowCanvas', () => {
     await act(async () => {
       window.dispatchEvent(new CustomEvent('vitruv.loadMetaModelRelations', {
         detail: { relations: [] },
-      }));
-    });
-    expect(screen.getByTestId('react-flow')).toBeInTheDocument();
-  });
-
-  it('clears view types on vitruv.resetWorkspace', async () => {
-    mockReplaceViewTypes.mockClear();
-    const ref = createRef<any>();
-    render(<FlowCanvas ref={ref} />);
-    await act(async () => {
-      window.dispatchEvent(new CustomEvent('vitruv.resetWorkspace'));
-    });
-    expect(mockReplaceViewTypes).toHaveBeenCalledWith([]);
-  });
-
-  it('handles vitruv.loadVsumViews custom event', async () => {
-    const ref = createRef<any>();
-    render(<FlowCanvas ref={ref} />);
-    await act(async () => {
-      window.dispatchEvent(new CustomEvent('vitruv.loadVsumViews', {
-        detail: { views: [{ id: 1, fileStorageId: 0, assignedModels: [] }] },
       }));
     });
     expect(screen.getByTestId('react-flow')).toBeInTheDocument();
@@ -924,22 +852,24 @@ describe('handleEdgeDoubleClick logic', () => {
     it('renders CircleOverlay when umlModalOpen is false', () => {
       const ref = createRef<any>();
       render(<FlowCanvas ref={ref} umlModalOpen={false} />);
-      expect(screen.getByText('add-viewtype')).toBeInTheDocument();
+      // CircleOverlay renders an SVG — check it exists
+      expect(document.querySelector('svg')).toBeInTheDocument();
     });
 
     it('does not render CircleOverlay when umlModalOpen is true', () => {
       const ref = createRef<any>();
       render(<FlowCanvas ref={ref} umlModalOpen={true} />);
-      expect(screen.queryByText('add-viewtype')).not.toBeInTheDocument();
+      // CircleOverlay SVG should not be present
+      expect(document.querySelector('svg')).not.toBeInTheDocument();
     });
 
     it('does not render CircleOverlay when umlModalOpen is true even if circleVisible would be true', () => {
       const ref = createRef<any>();
       const { rerender } = render(<FlowCanvas ref={ref} umlModalOpen={false} />);
-      expect(screen.getByText('add-viewtype')).toBeInTheDocument();
+      expect(document.querySelector('svg')).toBeInTheDocument();
 
       rerender(<FlowCanvas ref={ref} umlModalOpen={true} />);
-      expect(screen.queryByText('add-viewtype')).not.toBeInTheDocument();
+      expect(document.querySelector('svg')).not.toBeInTheDocument();
     });
 
     it('renders ReactFlow regardless of umlModalOpen', () => {
@@ -951,7 +881,7 @@ describe('handleEdgeDoubleClick logic', () => {
     it('umlModalOpen defaults to undefined and CircleOverlay is shown', () => {
       const ref = createRef<any>();
       render(<FlowCanvas ref={ref} />);
-      expect(screen.getByText('add-viewtype')).toBeInTheDocument();
+      expect(document.querySelector('svg')).toBeInTheDocument();
     });
   });
 });

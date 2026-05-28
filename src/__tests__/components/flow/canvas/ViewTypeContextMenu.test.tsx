@@ -42,7 +42,7 @@ describe('ViewTypeContextMenu', () => {
 
     it('renders the Add View Type heading', () => {
         renderMenu();
-        expect(screen.getByRole('heading', { name: 'Add View Type' })).toBeInTheDocument();
+        expect(screen.getByText('Add View Type')).toBeInTheDocument();
     });
 
     it('renders label input, scope buttons, editable checkbox and Add button', () => {
@@ -173,7 +173,7 @@ describe('ViewTypeContextMenu', () => {
     it('defaults to single scope', () => {
         renderMenu();
         const singleBtn = screen.getByText('● Single');
-        expect(singleBtn).toHaveStyle({ fontWeight: 700 });
+        expect(singleBtn).toHaveStyle({ fontWeight: 600 });
     });
 
     it('switches to multi scope when Multi is clicked', () => {
@@ -268,7 +268,7 @@ describe('ViewTypeContextMenu', () => {
     it('does not close when clicking inside the menu panel', () => {
         const onClose = jest.fn();
         renderMenu({ onClose });
-        fireEvent.click(screen.getByRole('heading', { name: 'Add View Type' }));
+        fireEvent.click(screen.getByText('Add View Type'));
         expect(onClose).not.toHaveBeenCalled();
     });
 

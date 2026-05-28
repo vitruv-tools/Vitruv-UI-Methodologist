@@ -114,167 +114,170 @@ const FILE_CARD_DISPLAY_CONFIGS: Array<{
   defaultHeaderBg: string;
 }> = [
   { kind: 'ecore',    accentColor: '#049484', hoverBg: '#f0fdff', badgeBg: '#e6f7f5', badgeBorder: '#b2e4df', badgeColor: '#049484', defaultHeaderBg: '#f8fffe' },
-  { kind: 'genmodel', accentColor: '#2980b9', hoverBg: '#f0f7ff', badgeBg: '#eff6ff', badgeBorder: '#bfdbfe', badgeColor: '#2563eb', defaultHeaderBg: '#f8fbff' },
+  { kind: 'genmodel', accentColor: '#0B1720', hoverBg: '#f4f6f8', badgeBg: '#eef0f3', badgeBorder: '#c8cdd6', badgeColor: '#0B1720', defaultHeaderBg: '#f8f9fb' },
 ];
 
 // ─── Style constants ──────────────────────────────────────────────────────────
 
+const FONT = 'ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, sans-serif';
+
 const modalStyle: React.CSSProperties = {
   background: '#ffffff',
-  borderRadius: '0',
-  padding: '28px',
-  width: '480px',
-  maxWidth: '90vw',
-  maxHeight: '85vh',
-  overflow: 'auto',
-  boxShadow: '0 20px 40px rgba(0, 0, 0, 0.2)',
-  border: '1px solid #d1ecf1',
-  fontFamily: 'Georgia, serif',
+  borderRadius: 8,
+  padding: 0,
+  width: '540px',
+  maxWidth: '94vw',
+  maxHeight: '90vh',
+  display: 'flex',
+  flexDirection: 'column',
+  overflow: 'hidden',
+  boxShadow: '0 8px 40px rgba(0,0,0,0.18), 0 1px 4px rgba(0,0,0,0.06)',
+  border: '1px solid #e2e8f0',
+  fontFamily: FONT,
 };
 
 const modalHeaderStyle: React.CSSProperties = {
   display: 'flex',
   justifyContent: 'space-between',
-  alignItems: 'center',
-  marginBottom: '20px',
-  paddingBottom: '16px',
-  borderBottom: '2px solid #049484',
+  alignItems: 'flex-start',
+  padding: '22px 24px 18px',
+  background: 'linear-gradient(135deg, #049484, #037368)',
+  flexShrink: 0,
 };
 
 const modalTitleStyle: React.CSSProperties = {
-  fontSize: '22px',
-  fontWeight: 700,
-  color: '#2c3e50',
+  fontSize: 16,
+  fontWeight: 600,
+  color: '#ffffff',
   margin: 0,
-  fontFamily: 'Georgia, serif',
+  fontFamily: FONT,
+  letterSpacing: '-0.01em',
 };
 
 const closeButtonStyle: React.CSSProperties = {
   background: 'transparent',
   border: 'none',
-  fontSize: '28px',
-  color: '#999',
+  fontSize: 18,
+  color: 'rgba(255,255,255,0.75)',
   cursor: 'pointer',
-  padding: '8px',
-  borderRadius: '0',
-  transition: 'all 0.2s ease',
-  width: '40px',
-  height: '40px',
+  padding: 0,
+  borderRadius: 4,
+  transition: 'all 0.15s ease',
+  width: 28,
+  height: 28,
   display: 'flex',
   alignItems: 'center',
   justifyContent: 'center',
+  flexShrink: 0,
+  marginTop: 1,
 };
 
 const closeButtonHoverStyle: React.CSSProperties = {
-  background: '#f8f9fa',
-  color: '#333',
-  transform: 'rotate(90deg)',
+  background: 'rgba(255,255,255,0.15)',
+  color: '#ffffff',
 };
 
 const inputFocusStyle: React.CSSProperties = {
   borderColor: '#049484',
   outline: 'none',
-  boxShadow: '0 0 0 3px rgba(52, 152, 219, 0.1)',
+  boxShadow: '0 0 0 3px rgba(4,148,132,0.1)',
   background: '#ffffff',
 };
 
 const uploadSectionStyle: React.CSSProperties = {
   marginTop: '20px',
-  padding: '18px',
-  background: '#f8f9fa',
-  borderRadius: '6px',
-  border: '2px dashed #049484',
+  paddingTop: '20px',
+  borderTop: '1px solid #f1f5f9',
 };
 
 const uploadSectionTitleStyle: React.CSSProperties = {
-  fontSize: '15px',
+  fontSize: 12,
   fontWeight: 600,
-  color: '#2c3e50',
-  marginBottom: '16px',
-  textAlign: 'center',
-  fontFamily: 'Georgia, serif',
+  color: '#6b7280',
+  marginBottom: 12,
+  textTransform: 'uppercase',
+  letterSpacing: '0.07em',
+  fontFamily: FONT,
 };
 
 /** Shown inside the “Required Meta Model Files” box when POST /meta-models fails. */
 const metaModelImportErrorBannerStyle: React.CSSProperties = {
-  marginBottom: '14px',
+  marginBottom: 12,
   padding: '10px 12px',
   background: '#fef2f2',
-  border: '1px solid #fca5a5',
-  borderRadius: '6px',
-  fontSize: '13px',
+  border: '1px solid #fecaca',
+  borderRadius: 6,
+  fontSize: 13,
   color: '#991b1b',
-  lineHeight: 1.45,
-  fontFamily: 'Georgia, serif',
+  lineHeight: 1.5,
+  fontFamily: FONT,
 };
 
 const fieldInlineErrorStyle: React.CSSProperties = {
-  marginTop: '6px',
-  fontSize: '12px',
-  color: '#b91c1c',
+  marginTop: 5,
+  fontSize: 12,
+  color: '#dc2626',
   lineHeight: 1.45,
-  fontFamily: 'Georgia, serif',
+  fontFamily: FONT,
 };
 
 const inputErrorOutlineStyle: React.CSSProperties = {
-  borderColor: '#f87171',
+  borderColor: '#fca5a5',
   background: '#fffafa',
 };
 
 const fileStatusStyle: React.CSSProperties = {
-  fontSize: '13px',
-  color: '#5a6c7d',
+  fontSize: 11,
+  color: '#9ca3af',
   textAlign: 'center',
-  marginTop: '8px',
-  fontFamily: 'Georgia, serif',
-  fontStyle: 'italic',
+  marginTop: 10,
+  fontFamily: FONT,
 };
 
 const buttonGroupStyle: React.CSSProperties = {
   display: 'flex',
-  gap: '12px',
-  marginTop: '24px',
+  gap: 8,
+  marginTop: 24,
 };
 
 const primaryButtonStyle: React.CSSProperties = {
   flex: '1',
-  padding: '14px 18px',
+  padding: '10px 18px',
   border: 'none',
-  borderRadius: '6px',
-  background: 'linear-gradient(135deg, #049484 0%, #2980b9 100%)',
+  borderRadius: 6,
+  background: '#0B1720',
   color: '#ffffff',
-  fontSize: '14px',
+  fontSize: 14,
   fontWeight: 600,
   cursor: 'pointer',
-  transition: 'all 0.3s ease',
-  fontFamily: 'Georgia, serif',
+  transition: 'background 0.15s ease',
+  fontFamily: FONT,
+  letterSpacing: '-0.01em',
 };
 
 const primaryButtonDisabledStyle: React.CSSProperties = {
-  background: '#bdc3c7',
-  color: '#7f8c8d',
+  background: '#e5e7eb',
+  color: '#9ca3af',
   cursor: 'not-allowed',
-  transform: 'none',
-  boxShadow: 'none',
 };
 
 const secondaryButtonStyle: React.CSSProperties = {
   flex: '1',
-  padding: '14px 18px',
-  border: '2px solid #049484',
-  borderRadius: '6px',
+  padding: '10px 18px',
+  border: '1px solid #e5e7eb',
+  borderRadius: 6,
   background: '#ffffff',
-  color: '#2c3e50',
-  fontSize: '14px',
-  fontWeight: 600,
+  color: '#374151',
+  fontSize: 14,
+  fontWeight: 500,
   cursor: 'pointer',
-  transition: 'all 0.3s ease',
-  fontFamily: 'Georgia, serif',
+  transition: 'all 0.15s ease',
+  fontFamily: FONT,
+  letterSpacing: '-0.01em',
 };
 
 const buttonHoverStyle: React.CSSProperties = {
-  transform: 'translateY(-1px)',
-  boxShadow: '0 5px 15px rgba(52, 152, 219, 0.2)',
+  background: '#f9fafb',
 };
 
 const overlayStyle: React.CSSProperties = {
@@ -298,44 +301,45 @@ const overlayStyle: React.CSSProperties = {
 };
 
 const overlayCardStyle: React.CSSProperties = {
-  width: 'min(520px, 90vw)',
+  width: 'min(400px, 90vw)',
   background: '#fff',
-  borderRadius: 10,
-  padding: '20px 20px 16px',
-  boxShadow: '0 20px 50px rgba(0,0,0,0.35)',
-  border: '1px solid #e5e7eb',
+  borderRadius: 12,
+  overflow: 'hidden',
+  boxShadow: '0 24px 60px rgba(0,0,0,0.28), 0 4px 16px rgba(0,0,0,0.08)',
+  border: '1px solid #e2e8f0',
 };
 
 const overlayTitleStyle: React.CSSProperties = {
-  fontSize: 16,
-  fontWeight: 700,
-  color: '#1f2937',
-  marginBottom: 10,
+  fontSize: 15,
+  fontWeight: 600,
+  color: '#ffffff',
+  marginBottom: 2,
   textAlign: 'center',
+  fontFamily: 'ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, sans-serif',
 };
 
 const overlayTextStyle: React.CSSProperties = {
   fontSize: 12,
-  color: '#6b7280',
-  marginBottom: 8,
+  color: 'rgba(255,255,255,0.75)',
+  marginBottom: 0,
   textAlign: 'center',
+  fontFamily: 'ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, sans-serif',
 };
 
 // ─── Upload-state label lookup (avoids nested ternaries) ─────────────────────
 
 const UPLOAD_STATE_LABELS = {
-  uploading: { icon: '⏳', dropLabel: 'Uploading…',                       importLabel: '⏳ …'    },
-  uploaded:  { icon: '✅', dropLabel: 'File uploaded — click to replace', importLabel: '✓ Done' },
-  idle:      { icon: '📂', dropLabel: 'Click to browse file',             importLabel: 'Import'  },
+  uploading: { dropLabel: 'Uploading…',                       importLabel: 'Uploading…' },
+  uploaded:  { dropLabel: 'File uploaded — click to replace', importLabel: 'Done'       },
+  idle:      { dropLabel: 'Click to select file',             importLabel: 'Import'     },
 } as const;
 
 type UploadState = keyof typeof UPLOAD_STATE_LABELS;
 
-// Shared base for the file/URL mode toggle buttons
 const modeButtonBaseStyle: React.CSSProperties = {
-  padding: '4px 11px', fontSize: '11px', fontWeight: 600, border: 'none',
-  borderRadius: '4px', cursor: 'pointer', fontFamily: 'Georgia, serif',
-  transition: 'all 0.15s', whiteSpace: 'nowrap',
+  padding: '3px 10px', fontSize: '12px', fontWeight: 500, border: 'none',
+  borderRadius: '4px', cursor: 'pointer', fontFamily: FONT,
+  transition: 'all 0.12s', whiteSpace: 'nowrap',
 };
 
 // ─── Sub-components ───────────────────────────────────────────────────────────
@@ -347,13 +351,26 @@ const SubmitProgressOverlay: React.FC<{ progress: number }> = ({ progress }) => 
     aria-label="Building meta model"
   >
     <div style={overlayCardStyle}>
-      <div style={overlayTitleStyle}>Building Meta Model…</div>
-      <div style={overlayTextStyle}>Please wait while we process your files.</div>
-      <div style={{ ...progressBarContainerStyle, marginTop: 8 }}>
-        <div style={{ ...progressBarStyle, width: `${progress}%` }} />
+      {/* Teal gradient header */}
+      <div style={{
+        background: 'linear-gradient(135deg, #049484, #037368)',
+        padding: '18px 24px 16px',
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        gap: 4,
+      }}>
+        <div style={overlayTitleStyle}>Building Meta Model…</div>
+        <div style={overlayTextStyle}>Please wait while we process your files.</div>
       </div>
-      <div style={{ fontSize: 12, color: '#374151', textAlign: 'center', marginTop: 6 }}>
-        {Math.round(progress)}%
+      {/* Progress body */}
+      <div style={{ padding: '18px 24px 20px' }}>
+        <div style={progressBarContainerStyle}>
+          <div style={{ ...progressBarStyle, width: `${progress}%` }} />
+        </div>
+        <div style={{ fontSize: 12, color: '#6b7280', textAlign: 'center', marginTop: 8, fontFamily: FONT }}>
+          {Math.round(progress)}%
+        </div>
       </div>
     </div>
   </dialog>
@@ -365,64 +382,65 @@ interface FileDropZoneProps {
   isUploaded: boolean;
   isUploading: boolean;
   ext: string;
-  hoverBg: string;
   accentColor: string;
-  icon: string;
   label: string;
-  labelColor: string;
-  /** Original filename when uploaded from this device (file mode) */
   uploadedFileName?: string;
   onClick: () => void;
 }
 
 const FileDropZone: React.FC<FileDropZoneProps> = ({
-  isUploaded, isUploading, ext, hoverBg, accentColor, icon, label, labelColor, uploadedFileName, onClick,
-}) => (
-  <button
-    type="button"
-    onClick={onClick}
-    disabled={isUploading}
-    style={{
-      width: '100%', padding: '14px 12px',
-      border: `2px dashed ${isUploaded ? '#86efac' : '#cbd5e1'}`,
-      borderRadius: '6px',
-      background: isUploaded ? '#f0fdf4' : '#fafafa',
-      cursor: isUploading ? 'wait' : 'pointer',
-      textAlign: 'center', transition: 'all 0.2s', fontFamily: 'Georgia, serif',
-    }}
-    onMouseEnter={(e) => {
-      if (!isUploaded && !isUploading) {
-        e.currentTarget.style.background = hoverBg;
-        e.currentTarget.style.borderColor = accentColor;
-      }
-    }}
-    onMouseLeave={(e) => {
-      e.currentTarget.style.background = isUploaded ? '#f0fdf4' : '#fafafa';
-      e.currentTarget.style.borderColor = isUploaded ? '#86efac' : '#cbd5e1';
-    }}
-  >
-    <div style={{ fontSize: '20px', marginBottom: '4px', lineHeight: 1 }}>{icon}</div>
-    <div style={{ fontSize: '13px', fontWeight: 600, color: labelColor }}>{label}</div>
-    {isUploaded && !isUploading && uploadedFileName && (
-      <div
-        title={uploadedFileName}
-        style={{
-          fontSize: '12px',
-          color: '#166534',
-          marginTop: '6px',
-          fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace',
-          wordBreak: 'break-word',
-          lineHeight: 1.35,
-        }}
-      >
-        {uploadedFileName}
-      </div>
-    )}
-    {!isUploaded && !isUploading && (
-      <div style={{ fontSize: '11px', color: '#94a3b8', marginTop: '3px' }}>Accepts {ext} format</div>
-    )}
-  </button>
-);
+  isUploaded, isUploading, ext, accentColor, label, uploadedFileName, onClick,
+}) => {
+  const [hov, setHov] = React.useState(false);
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={isUploading}
+      onMouseEnter={() => setHov(true)}
+      onMouseLeave={() => setHov(false)}
+      style={{
+        width: '100%', padding: '16px 14px',
+        border: `1px solid ${isUploaded ? '#bbf7d0' : hov ? '#94a3b8' : '#e5e7eb'}`,
+        borderRadius: 6,
+        background: isUploaded ? '#f0fdf4' : hov ? '#f9fafb' : '#fafafa',
+        cursor: isUploading ? 'wait' : 'pointer',
+        textAlign: 'center', transition: 'all 0.15s', fontFamily: FONT,
+        display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6,
+      }}
+    >
+      {/* Icon */}
+      {isUploaded ? (
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#16a34a" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <polyline points="20 6 9 17 4 12" />
+        </svg>
+      ) : isUploading ? (
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ animation: 'spin 1s linear infinite' }}>
+          <path d="M21 12a9 9 0 1 1-6.219-8.56" />
+        </svg>
+      ) : (
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={hov ? accentColor : '#9ca3af'} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+          <polyline points="17 8 12 3 7 8" />
+          <line x1="12" y1="3" x2="12" y2="15" />
+        </svg>
+      )}
+      <div style={{ fontSize: 13, fontWeight: 500, color: isUploaded ? '#15803d' : '#374151' }}>{label}</div>
+      {isUploaded && uploadedFileName && (
+        <div title={uploadedFileName} style={{
+          fontSize: 11, color: '#6b7280', maxWidth: '100%',
+          overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+          fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
+        }}>
+          {uploadedFileName}
+        </div>
+      )}
+      {!isUploaded && !isUploading && (
+        <div style={{ fontSize: 11, color: '#9ca3af' }}>{ext}</div>
+      )}
+    </button>
+  );
+};
 
 // ── UrlImportRow: URL input + import button (URL mode body) ───────────────────
 
@@ -466,7 +484,7 @@ const UrlImportRow: React.FC<UrlImportRowProps> = ({
           disabled={isDisabled}
           style={{
             padding: '8px 16px', border: 'none', borderRadius: '6px',
-            fontSize: '12px', fontWeight: 600, fontFamily: 'Georgia, serif',
+            fontSize: '12px', fontWeight: 600, fontFamily: FONT,
             cursor: isDisabled ? 'not-allowed' : 'pointer',
             background: isUploaded ? '#22c55e' : '#049484',
             color: '#ffffff',
@@ -478,8 +496,9 @@ const UrlImportRow: React.FC<UrlImportRowProps> = ({
         </button>
       </div>
       {urlFileName && isUploaded && (
-        <div style={{ fontSize: '11px', color: '#16a34a', marginTop: '6px', display: 'flex', alignItems: 'center', gap: '4px' }}>
-          <span>✅</span><span style={{ fontStyle: 'italic' }}>{urlFileName}</span>
+        <div style={{ fontSize: 11, color: '#16a34a', marginTop: 6, display: 'flex', alignItems: 'center', gap: 4 }}>
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+          <span style={{ fontFamily: 'ui-monospace, monospace', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{urlFileName}</span>
         </div>
       )}
     </>
@@ -527,82 +546,68 @@ const FileUploadCard: React.FC<FileUploadCardProps> = ({
   let uploadState: UploadState = 'idle';
   if (isUploading) uploadState = 'uploading';
   else if (isUploaded) uploadState = 'uploaded';
-  const { icon, dropLabel, importLabel } = UPLOAD_STATE_LABELS[uploadState];
+  const { dropLabel, importLabel } = UPLOAD_STATE_LABELS[uploadState];
 
-  // Pre-compute styles that contain ternaries to keep JSX branch-free
   const cardStyle: React.CSSProperties = {
     background: '#ffffff',
-    border: `1px solid ${isUploaded ? '#86efac' : '#e2e8f0'}`,
-    borderLeft: `3px solid ${isUploaded ? '#22c55e' : accentColor}`,
-    borderRadius: '8px', marginBottom: '12px', overflow: 'hidden',
-    boxShadow: '0 1px 4px rgba(0,0,0,0.06)',
+    border: `1px solid ${isUploaded ? '#bbf7d0' : '#e5e7eb'}`,
+    borderRadius: 6,
+    marginBottom: 10,
+    overflow: 'hidden',
   };
   const fileModeStyle: React.CSSProperties = {
     ...modeButtonBaseStyle,
     background: inputMode === 'file' ? '#049484' : 'transparent',
-    color:      inputMode === 'file' ? '#ffffff'  : '#64748b',
+    color:      inputMode === 'file' ? '#ffffff'  : '#6b7280',
   };
   const urlModeStyle: React.CSSProperties = {
     ...modeButtonBaseStyle,
     background: inputMode === 'url' ? '#049484' : 'transparent',
-    color:      inputMode === 'url' ? '#ffffff'  : '#64748b',
+    color:      inputMode === 'url' ? '#ffffff'  : '#6b7280',
   };
-  const labelColor = isUploaded ? '#15803d' : '#374151';
 
   return (
     <div style={cardStyle}>
       {/* card header */}
       <div style={{
         display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-        padding: '9px 14px', background: headerBg, borderBottom: '1px solid #e2e8f0',
+        padding: '8px 12px', background: '#f9fafb', borderBottom: '1px solid #f1f5f9',
       }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap', flex: 1, minWidth: 0 }}>
-          <code style={{
-            background: badgeBg, color: badgeColor, fontSize: '12px', fontWeight: 700,
-            padding: '2px 8px', borderRadius: '4px', border: `1px solid ${badgeBorder}`,
-            letterSpacing: '0.02em',
-          }}>{ext}</code>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <span style={{
+            fontSize: 11, fontWeight: 600, fontFamily: 'ui-monospace, monospace',
+            color: badgeColor, background: badgeBg,
+            padding: '2px 7px', borderRadius: 4, border: `1px solid ${badgeBorder}`,
+            letterSpacing: '0.03em',
+          }}>{ext}</span>
           {isUploaded && (
-            <span style={{ fontSize: '12px', color: '#16a34a', fontWeight: 600 }}>✓ Ready</span>
+            <span style={{ fontSize: 12, color: '#16a34a', display: 'flex', alignItems: 'center', gap: 3 }}>
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+              Ready
+            </span>
           )}
           {isUploaded && (
-            <button
-              type="button"
-              onClick={onClearUpload}
-              disabled={removeDisabled}
-              title="Remove this file and upload a different one"
-              style={{
-                marginLeft: '4px',
-                padding: '2px 8px',
-                fontSize: '11px',
-                fontWeight: 600,
-                fontFamily: 'Georgia, serif',
-                border: '1px solid #d1d5db',
-                borderRadius: '4px',
-                background: '#fff',
-                color: '#6b7280',
-                cursor: removeDisabled ? 'not-allowed' : 'pointer',
-                opacity: removeDisabled ? 0.5 : 1,
-              }}
-            >
-              Remove
-            </button>
+            <button type="button" onClick={onClearUpload} disabled={removeDisabled} style={{
+              fontSize: 11, fontFamily: FONT, border: '1px solid #e5e7eb', borderRadius: 4,
+              background: '#fff', color: '#6b7280', padding: '1px 7px',
+              cursor: removeDisabled ? 'not-allowed' : 'pointer', opacity: removeDisabled ? 0.4 : 1,
+            }}>Remove</button>
           )}
         </div>
-        {/* segmented toggle */}
-        <div style={{ display: 'flex', background: '#f1f5f9', borderRadius: '6px', padding: '2px', gap: '2px', flexShrink: 0 }}>
-          <button type="button" onClick={() => onModeChange('file')} style={fileModeStyle}>⬆ Computer</button>
-          <button type="button" onClick={() => onModeChange('url')}  style={urlModeStyle}>🔗 URL</button>
+        {/* mode toggle */}
+        <div style={{ display: 'flex', background: '#f1f5f9', borderRadius: 5, padding: 2, gap: 2 }}>
+          <button type="button" onClick={() => onModeChange('file')} style={fileModeStyle}>File</button>
+          <button type="button" onClick={() => onModeChange('url')}  style={urlModeStyle}>URL</button>
         </div>
       </div>
 
       {/* card body */}
-      <div style={{ padding: '12px 14px' }}>
+      <div style={{ padding: '10px 12px' }}>
         {inputMode === 'file' ? (
           <FileDropZone
             isUploaded={isUploaded} isUploading={isUploading}
-            ext={ext} hoverBg={hoverBg} accentColor={accentColor}
-            icon={icon} label={dropLabel} labelColor={labelColor}
+            ext={ext} accentColor={accentColor}
+            label={dropLabel}
             uploadedFileName={localFileName}
             onClick={onFileInputClick}
           />
@@ -615,23 +620,23 @@ const FileUploadCard: React.FC<FileUploadCardProps> = ({
           />
         )}
         {isUploading && (
-          <div style={{ marginTop: '10px' }}>
-            <div style={{ ...progressBarContainerStyle }}>
+          <div style={{ marginTop: 10 }}>
+            <div style={progressBarContainerStyle}>
               <div style={{ ...progressBarStyle, width: `${uploadProgress.progress}%` }} />
             </div>
-            <div style={{ fontSize: 11, color: '#64748b', textAlign: 'center', marginTop: 3 }}>
+            <div style={{ fontSize: 11, color: '#9ca3af', textAlign: 'center', marginTop: 3 }}>
               {Math.round(uploadProgress.progress)}%
             </div>
           </div>
         )}
         {uploadError && (
           <div style={{
-            marginTop: '8px', padding: '7px 10px',
-            background: '#fef2f2', border: '1px solid #fca5a5',
-            borderRadius: '6px', fontSize: '12px', color: '#b91c1c',
-            display: 'flex', alignItems: 'flex-start', gap: '6px',
+            marginTop: 8, padding: '8px 10px',
+            background: '#fef2f2', border: '1px solid #fecaca',
+            borderRadius: 5, fontSize: 12, color: '#b91c1c',
+            display: 'flex', alignItems: 'flex-start', gap: 6,
           }}>
-            <span style={{ flexShrink: 0 }}>⚠️</span>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0, marginTop: 1 }}><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
             <span>{uploadError}</span>
           </div>
         )}
@@ -668,7 +673,7 @@ const FormActionButtons: React.FC<FormActionButtonsProps> = ({
         style={{ ...primaryButtonStyle, ...(canSave && !isLoading ? {} : primaryButtonDisabledStyle) }}
         onClick={onSubmit}
         disabled={!canSave || isDisabled}
-        onMouseEnter={(e) => canSave && !isDisabled && Object.assign(e.currentTarget.style, buttonHoverStyle)}
+        onMouseEnter={(e) => canSave && !isDisabled && Object.assign(e.currentTarget.style, { background: '#049484' })}
         onMouseLeave={(e) => canSave && !isDisabled && Object.assign(e.currentTarget.style, primaryButtonStyle)}
       >
         {buttonText}
@@ -690,9 +695,9 @@ const GenModelFixPrompt: React.FC<GenModelFixPromptProps> = ({
   const isDisabled = isLoading || isSubmitting;
   return (
     <div style={{
-      marginTop: 20, padding: 14, borderRadius: 6,
-      border: '1px solid #f59e0b', background: '#fffbeb',
-      fontSize: 13, color: '#92400e',
+      marginTop: 16, padding: 14, borderRadius: 6,
+      border: '1px solid #fde68a', background: '#fffbeb',
+      fontSize: 13, color: '#78350f', fontFamily: FONT,
     }}>
       <div style={{ fontWeight: 600, marginBottom: 6 }}>
         We detected issues in your GenModel.
@@ -705,7 +710,7 @@ const GenModelFixPrompt: React.FC<GenModelFixPromptProps> = ({
         <button
           type="button"
           onClick={onCancel}
-          style={{ ...secondaryButtonStyle, borderColor: '#f97316', color: '#92400e', padding: '8px 12px' }}
+          style={{ ...secondaryButtonStyle, padding: '8px 12px' }}
           disabled={isDisabled}
         >
           Cancel scenario
@@ -1252,8 +1257,22 @@ export const CreateModelModal: React.FC<CreateModelModalProps> = ({
           }}
         />
         <div style={{ ...modalStyle, position: 'relative', zIndex: 1 }}>
+          {/* ── Scrollbar style injection ── */}
+          <style>{`
+            .cmm-scroll::-webkit-scrollbar { width: 7px; }
+            .cmm-scroll::-webkit-scrollbar-track { background: #f1f5f9; border-radius: 4px; }
+            .cmm-scroll::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
+            .cmm-scroll::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+          `}</style>
+
+          {/* ── Header ── */}
           <div style={modalHeaderStyle}>
-            <h2 id="modal-title" style={modalTitleStyle}>Import Meta Model</h2>
+            <div>
+              <h2 id="modal-title" style={modalTitleStyle}>Import Meta Model</h2>
+              <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.72)', marginTop: 3, fontFamily: FONT }}>
+                Upload your .ecore and .genmodel files
+              </div>
+            </div>
             <button
               style={closeButtonStyle}
               onClick={form.handleClose}
@@ -1264,6 +1283,8 @@ export const CreateModelModal: React.FC<CreateModelModalProps> = ({
             </button>
           </div>
 
+          {/* ── Scrollable body ── */}
+          <div className="cmm-scroll" style={{ flex: 1, overflowY: 'scroll', padding: '16px 24px 24px' }}>
           {form.success && <div style={successMessageStyle}>{form.success}</div>}
 
           <div ref={form.fieldSectionRefs.name} style={formGroupStyle}>
@@ -1431,6 +1452,7 @@ export const CreateModelModal: React.FC<CreateModelModalProps> = ({
             onCancel={form.handleClose}
             onSubmit={form.handleCreateModel}
           />
+          </div>{/* end scrollable body */}
         </div>
       </dialog>
     </>,

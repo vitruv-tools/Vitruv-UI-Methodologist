@@ -1,0 +1,1746 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Vitruvius — Design System</title>
+  <style>
+    /* ── Reset & base ──────────────────────────────────────── */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      /* Brand */
+      --primary:        #049484;
+      --primary-dark:   #037368;
+      --primary-bg:     #f0faf8;
+      --cta-dark:       #0B1720;
+      --cta-hover:      #1e293b;
+      --accent-on-dark: #4ecdc4;
+      --auth-teal:      #06b5a0;
+
+      /* Surfaces */
+      --canvas:         #ffffff;
+      --canvas-muted:   #f8fafc;
+      --canvas-subtle:  #fafafa;
+      --app-bg:         #f7f8fa;
+      --flow-bg:        #f1f2f4;
+      --sidebar:        #0B1720;
+      --sidebar-menu:   #131e2b;
+
+      /* Text */
+      --ink:            #111827;
+      --body-color:     #374151;
+      --muted:          #6b7280;
+      --subtle:         #9ca3af;
+
+      /* Borders */
+      --border:         #e5e7eb;
+      --border-soft:    #e2e8f0;
+      --border-subtle:  #f1f5f9;
+
+      /* Semantic */
+      --error:          #dc2626;
+      --error-bg:       #fef2f2;
+      --error-border:   #fecaca;
+      --success:        #10b981;
+      --success-bg:     #f0fdf4;
+      --success-border: #86efac;
+      --warning:        #f97316;
+      --info:           #3b82f6;
+
+      /* UML */
+      --uml-navy:       #0c436e;
+      --uml-teal:       #087E8B;
+      --uml-maroon:     #5F0F40;
+      --uml-gold:       #d4a017;
+      --uml-sep:        #b8d0e2;
+
+      /* Typography */
+      --font-ui: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      --font-mono: 'Consolas', 'Courier New', monospace;
+      --font-serif: Georgia, serif;
+    }
+
+    body {
+      font-family: var(--font-ui);
+      background: var(--app-bg);
+      color: var(--ink);
+      font-size: 14px;
+      line-height: 1.6;
+    }
+
+    /* ── Sticky nav ────────────────────────────────────────── */
+    .top-nav {
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      background: rgba(11,23,32,0.96);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      border-bottom: 1px solid rgba(255,255,255,0.06);
+      display: flex;
+      align-items: center;
+      gap: 0;
+      padding: 0 32px;
+      height: 46px;
+      overflow-x: auto;
+    }
+    .top-nav a {
+      color: rgba(255,255,255,0.5);
+      text-decoration: none;
+      font-size: 12px;
+      font-weight: 500;
+      padding: 0 14px;
+      height: 46px;
+      display: flex;
+      align-items: center;
+      white-space: nowrap;
+      transition: color 0.15s;
+      border-bottom: 2px solid transparent;
+    }
+    .top-nav a:hover { color: #fff; }
+    .top-nav .nav-logo {
+      color: #fff;
+      font-weight: 700;
+      font-size: 14px;
+      margin-right: 20px;
+      padding-left: 0;
+      border: none;
+      flex-shrink: 0;
+    }
+
+    /* ── Hero ──────────────────────────────────────────────── */
+    .hero {
+      background: linear-gradient(135deg, #049484 0%, #0B1720 100%);
+      padding: 64px 64px 56px;
+      color: #fff;
+    }
+    .hero h1 { font-size: 40px; font-weight: 700; letter-spacing: -0.03em; margin-bottom: 12px; }
+    .hero p  { font-size: 16px; color: rgba(255,255,255,0.7); max-width: 600px; line-height: 1.7; }
+    .hero-badges { display: flex; gap: 8px; margin-top: 20px; flex-wrap: wrap; }
+    .hero-badge {
+      padding: 4px 12px; border-radius: 20px;
+      background: rgba(255,255,255,0.12);
+      border: 1px solid rgba(255,255,255,0.2);
+      font-size: 12px; color: rgba(255,255,255,0.8);
+    }
+
+    /* ── Page layout ───────────────────────────────────────── */
+    .content { max-width: 1200px; margin: 0 auto; padding: 48px 32px; display: flex; flex-direction: column; gap: 48px; }
+
+    /* ── Section card ──────────────────────────────────────── */
+    .section { background: #fff; border: 1px solid var(--border); border-radius: 12px; overflow: hidden; }
+    .section-header {
+      padding: 28px 36px 24px;
+      border-bottom: 1px solid var(--border-subtle);
+    }
+    .section-label { font-size: 11px; font-weight: 700; color: var(--primary); letter-spacing: 0.08em; text-transform: uppercase; margin-bottom: 6px; }
+    .section-title { font-size: 24px; font-weight: 700; letter-spacing: -0.02em; color: var(--ink); }
+    .section-desc  { font-size: 14px; color: var(--muted); margin-top: 4px; }
+    .section-body  { padding: 32px 36px; }
+
+    /* ── Sub-heading ───────────────────────────────────────── */
+    .sub-heading {
+      font-size: 11px; font-weight: 700; letter-spacing: 0.06em;
+      text-transform: uppercase; color: var(--muted);
+      margin-bottom: 16px; margin-top: 32px;
+    }
+    .sub-heading:first-child { margin-top: 0; }
+
+    /* ── Color grid ────────────────────────────────────────── */
+    .color-grid { display: flex; flex-wrap: wrap; gap: 10px; }
+    .swatch {
+      width: 120px; border-radius: 8px;
+      border: 1px solid rgba(0,0,0,0.06);
+      overflow: hidden;
+      cursor: pointer;
+    }
+    .swatch-block { height: 56px; }
+    .swatch-info { padding: 8px 10px; background: var(--canvas); }
+    .swatch-token { font-size: 10px; color: var(--muted); font-weight: 600; margin-bottom: 2px; }
+    .swatch-hex   { font-size: 11px; color: var(--ink); font-weight: 700; font-family: var(--font-mono); }
+
+    /* Dark swatch info */
+    .swatch.dark .swatch-info { background: #1a2635; }
+    .swatch.dark .swatch-token { color: rgba(255,255,255,0.4); }
+    .swatch.dark .swatch-hex   { color: rgba(255,255,255,0.9); }
+
+    /* ── Typography rows ───────────────────────────────────── */
+    .typo-table { width: 100%; border-collapse: collapse; }
+    .typo-table tr { border-bottom: 1px solid var(--border-subtle); }
+    .typo-table tr:last-child { border-bottom: none; }
+    .typo-table td { padding: 20px 0; vertical-align: middle; }
+    .typo-table td:first-child { width: 220px; padding-right: 32px; }
+    .typo-token { font-size: 12px; font-weight: 700; color: var(--ink); font-family: var(--font-mono); margin-bottom: 4px; }
+    .typo-specs { font-size: 11px; color: var(--muted); font-family: var(--font-mono); }
+
+    /* ── Button grid ───────────────────────────────────────── */
+    .btn-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 12px; }
+    .btn-card {
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 24px 20px 16px;
+      display: flex; flex-direction: column; align-items: flex-start; gap: 12px;
+    }
+    .btn-card.dark { background: #1a2535; border-color: rgba(255,255,255,0.1); }
+    .btn-card-label { font-size: 11px; font-weight: 700; color: var(--muted); letter-spacing: 0.04em; }
+    .btn-card.dark .btn-card-label { color: rgba(255,255,255,0.4); }
+    .btn-desc { font-size: 11px; color: var(--subtle); margin-top: 4px; }
+    .btn-card.dark .btn-desc { color: rgba(255,255,255,0.3); }
+
+    /* The actual button styles */
+    .btn-cta-dark {
+      padding: 9px 18px; background: var(--cta-dark); color: #fff;
+      border: none; border-radius: 9px; font-size: 14px; font-weight: 600;
+      cursor: pointer; font-family: var(--font-ui);
+      box-shadow: 0 1px 4px rgba(11,23,32,0.25);
+      transition: background 0.15s;
+      display: inline-flex; align-items: center; gap: 6px;
+    }
+    .btn-cta-dark:hover { background: var(--cta-hover); }
+
+    .btn-primary-teal {
+      padding: 10px 22px;
+      background: linear-gradient(135deg, #049484, #037368);
+      color: #fff; border: 2px solid #037368; border-radius: 8px;
+      font-size: 14px; font-weight: 700; cursor: pointer; font-family: var(--font-ui);
+      box-shadow: 0 2px 8px rgba(4,148,132,0.25);
+      transition: all 0.2s;
+    }
+    .btn-primary-teal:hover { transform: translateY(-1px); box-shadow: 0 4px 12px rgba(4,148,132,0.35); }
+
+    .btn-cancel {
+      padding: 10px 22px; background: #fff;
+      border: 2px solid var(--border); color: var(--body-color);
+      border-radius: 8px; font-size: 14px; font-weight: 600;
+      cursor: pointer; font-family: var(--font-ui); transition: all 0.15s;
+    }
+    .btn-cancel:hover { background: var(--canvas-muted); border-color: #d1d5db; }
+
+    .btn-danger {
+      padding: 10px 20px; background: var(--error); color: #fff;
+      border: none; border-radius: 6px; font-size: 14px; font-weight: 600;
+      cursor: pointer; font-family: var(--font-ui);
+      box-shadow: 0 4px 12px rgba(220,38,38,0.3); transition: all 0.2s;
+    }
+    .btn-danger:hover { background: #b91c1c; transform: translateY(-1px); }
+
+    .btn-filter {
+      padding: 7px 12px; background: #fff;
+      border: 1px solid var(--border); color: var(--body-color);
+      border-radius: 8px; font-size: 13px; font-weight: 500;
+      cursor: pointer; font-family: var(--font-ui); transition: all 0.15s;
+      display: inline-flex; align-items: center; gap: 6px;
+    }
+    .btn-filter.active { border-color: var(--primary); background: var(--primary-bg); color: var(--primary); }
+    .btn-filter:hover:not(.active) { background: var(--canvas-subtle); }
+
+    .btn-row-actions {
+      padding: 4px 8px; background: #fff; color: var(--muted);
+      border: 1px solid var(--border); border-radius: 6px;
+      cursor: pointer; font-family: var(--font-ui); font-size: 18px; font-weight: 400;
+      line-height: 1; transition: all 0.15s;
+      display: inline-flex; align-items: center;
+    }
+    .btn-row-actions:hover { background: var(--canvas-subtle); border-color: #d1d5db; }
+
+    .btn-icon-sm {
+      width: 30px; height: 30px; border-radius: 6px;
+      border: none; background: transparent; color: var(--subtle);
+      cursor: pointer; font-size: 16px; display: inline-flex;
+      align-items: center; justify-content: center; transition: all 0.15s;
+    }
+    .btn-icon-sm:hover { background: var(--border-subtle); color: var(--body-color); }
+
+    .btn-nav-active {
+      display: inline-flex; align-items: center; gap: 10px;
+      padding: 9px 12px; border-radius: 8px; border: none;
+      background: rgba(4,148,132,0.15); color: #fff;
+      font-size: 14px; font-weight: 600; cursor: pointer; font-family: var(--font-ui);
+    }
+    .btn-nav-inactive {
+      display: inline-flex; align-items: center; gap: 10px;
+      padding: 9px 12px; border-radius: 8px; border: none;
+      background: transparent; color: rgba(255,255,255,0.55);
+      font-size: 14px; font-weight: 400; cursor: pointer; font-family: var(--font-ui);
+      transition: all 0.15s;
+    }
+    .btn-nav-inactive:hover { background: rgba(255,255,255,0.05); color: rgba(255,255,255,0.85); }
+
+    /* ── Input states ──────────────────────────────────────── */
+    .input-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 20px; }
+    .input-card { display: flex; flex-direction: column; gap: 8px; }
+    .input-card-label { font-size: 11px; font-weight: 700; color: var(--muted); letter-spacing: 0.04em; }
+    .input-base {
+      width: 100%; padding: 10px 13px;
+      border: 1.5px solid var(--border-soft); border-radius: 8px;
+      font-size: 14px; color: var(--ink); background: var(--canvas-muted);
+      font-family: var(--font-ui); outline: none; transition: all 0.15s;
+    }
+    .input-focus {
+      border-color: var(--primary);
+      box-shadow: 0 0 0 3px rgba(4,148,132,0.1);
+      background: #fff;
+    }
+    .input-error {
+      border-color: var(--error);
+      box-shadow: 0 0 0 3px rgba(220,38,38,0.08);
+    }
+    .input-disabled { opacity: 0.5; cursor: not-allowed; }
+    .input-msg-error { font-size: 12px; color: var(--error); font-weight: 500; display: flex; align-items: center; gap: 4px; }
+    .input-msg-ok { font-size: 12px; color: var(--success); font-weight: 500; display: flex; align-items: center; gap: 4px; }
+
+    /* ── Border radius demo ────────────────────────────────── */
+    .radius-grid { display: flex; flex-wrap: wrap; gap: 16px; align-items: flex-end; }
+    .radius-item { display: flex; flex-direction: column; align-items: center; gap: 10px; }
+    .radius-box {
+      background: linear-gradient(135deg, #049484, #037368);
+      width: 72px; height: 72px;
+    }
+    .radius-pill-box {
+      background: linear-gradient(135deg, #049484, #037368);
+      width: 120px; height: 40px;
+    }
+    .radius-label { font-size: 11px; color: var(--muted); font-family: var(--font-mono); text-align: center; }
+    .radius-token { font-size: 10px; color: var(--subtle); text-align: center; font-weight: 600; }
+
+    /* ── Shadow demo ───────────────────────────────────────── */
+    .shadow-grid { display: flex; flex-wrap: wrap; gap: 24px; }
+    .shadow-item { display: flex; flex-direction: column; align-items: center; gap: 12px; }
+    .shadow-box {
+      width: 120px; height: 80px; background: #fff;
+      border-radius: 8px; border: 1px solid rgba(0,0,0,0.04);
+    }
+    .shadow-label { font-size: 11px; color: var(--muted); font-family: var(--font-mono); text-align: center; }
+    .shadow-desc  { font-size: 10px; color: var(--subtle); text-align: center; max-width: 120px; }
+
+    /* ── UML Nodes ─────────────────────────────────────────── */
+    .uml-grid { display: flex; flex-wrap: wrap; gap: 24px; }
+    .uml-node {
+      min-width: 240px; background: #fff;
+      border: 1.5px solid var(--uml-navy);
+      border-radius: 3px;
+      box-shadow: 0 1px 4px rgba(12,67,110,0.10);
+      font-family: var(--font-ui);
+      overflow: hidden;
+    }
+    .uml-node.selected {
+      border: 2px solid var(--uml-teal);
+      box-shadow: 0 0 0 3px rgba(8,126,139,0.2), 0 2px 8px rgba(12,67,110,0.18);
+    }
+    .uml-header {
+      border-bottom: 2px solid var(--uml-navy);
+      padding: 10px 14px;
+      display: flex; align-items: center; gap: 6px;
+      font-weight: 700; font-size: 14px; color: var(--uml-navy);
+      background: #fff;
+    }
+    .uml-header.italic { font-style: italic; }
+    .uml-type-label {
+      font-size: 12px; font-weight: 600; opacity: 0.65;
+      white-space: nowrap; flex-shrink: 0;
+    }
+    .uml-attrs {
+      border-bottom: 1px solid var(--uml-sep);
+      padding: 4px 0;
+    }
+    .uml-methods { padding: 4px 0; }
+    .uml-row {
+      padding: 5px 14px;
+      font-size: 13px; font-family: var(--font-mono);
+      color: #1e3a50; line-height: 1.4;
+      display: flex; align-items: center; gap: 3px;
+    }
+    .uml-vis-pub  { color: #087E8B; font-weight: 700; min-width: 9px; }
+    .uml-vis-prot { color: #d4a017; font-weight: 700; min-width: 9px; }
+    .uml-vis-priv { color: #dc2626; font-weight: 700; min-width: 9px; }
+    .uml-type-tag {
+      background: #f4f8fc; border: 1.5px solid var(--uml-sep); border-radius: 3px;
+      padding: 1px 5px; font-size: 12px; color: var(--uml-navy); font-family: var(--font-mono);
+    }
+    .uml-pkg-header {
+      background: #f9f4f7; border-bottom: 2px solid var(--uml-maroon);
+      padding: 10px 14px; text-align: center;
+      font-weight: 700; font-size: 14px; color: var(--uml-maroon);
+    }
+    .uml-pkg-body {
+      padding: 8px 14px; font-size: 12px; color: #666; min-height: 40px;
+    }
+    .uml-pkg-title { font-weight: 700; color: var(--uml-maroon); font-size: 12px; margin-bottom: 4px; }
+    .uml-node-label {
+      font-size: 11px; font-weight: 700; color: var(--muted);
+      letter-spacing: 0.04em; margin-bottom: 8px; text-transform: uppercase;
+    }
+
+    /* ── Toast demos ───────────────────────────────────────── */
+    .toast-list { display: flex; flex-direction: column; gap: 8px; max-width: 420px; }
+    .toast {
+      min-width: 280px; max-width: 420px;
+      padding: 10px 12px; border-radius: 8px;
+      border: 1px solid; background: #fff;
+      font-size: 13px; font-weight: 500;
+      display: flex; align-items: flex-start; gap: 10px;
+      box-shadow: 0 10px 20px rgba(0,0,0,0.12);
+    }
+    .toast-text { flex: 1; color: #111827; }
+    .toast-close { color: var(--muted); font-size: 14px; cursor: pointer; margin-left: auto; }
+    .toast.success { border-color: #c6f6d5; background: #f0fff4; }
+    .toast.error   { border-color: #feb2b2; background: #fff5f5; }
+    .toast.info    { border-color: #bee3f8; background: #ebf8ff; }
+
+    /* ── Sidebar preview ───────────────────────────────────── */
+    .sidebar-preview {
+      width: 220px; background: var(--sidebar); border-radius: 10px;
+      overflow: hidden; font-family: var(--font-ui);
+    }
+    .sb-logo {
+      padding: 16px 16px 14px;
+      border-bottom: 1px solid rgba(255,255,255,0.06);
+      display: flex; align-items: center; gap: 8px;
+    }
+    .sb-logo-img {
+      width: 30px; height: 30px; border-radius: 8px;
+      background: linear-gradient(135deg, #049484, #06b89e);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 14px; color: #fff; font-weight: 700;
+    }
+    .sb-logo-name { color: #fff; font-weight: 700; font-size: 16px; letter-spacing: -0.01em; }
+    .sb-nav { padding: 10px 8px; display: flex; flex-direction: column; gap: 2px; }
+    .sb-item {
+      display: flex; align-items: center; gap: 10px;
+      padding: 9px 12px; border-radius: 8px; cursor: pointer;
+    }
+    .sb-item.active { background: rgba(4,148,132,0.15); color: #fff; font-weight: 600; font-size: 14px; }
+    .sb-item.active .sb-icon { color: #4ecdc4; }
+    .sb-item.inactive { color: rgba(255,255,255,0.55); font-size: 14px; }
+    .sb-icon { font-size: 15px; flex-shrink: 0; }
+    .sb-user {
+      border-top: 1px solid rgba(255,255,255,0.07);
+      padding: 10px 14px;
+      display: flex; align-items: center; gap: 10px; cursor: pointer;
+    }
+    .sb-avatar {
+      width: 36px; height: 36px; border-radius: 50%;
+      background: linear-gradient(135deg, #049484, #06b89e);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 12px; font-weight: 700; color: #fff; flex-shrink: 0;
+    }
+    .sb-user-name  { font-size: 13px; font-weight: 600; color: #fff; }
+    .sb-user-role  { font-size: 11px; color: rgba(255,255,255,0.4); margin-top: 1px; }
+
+    /* ── Badge demos ───────────────────────────────────────── */
+    .badge-row { display: flex; flex-wrap: wrap; gap: 8px; }
+    .badge {
+      padding: 3px 10px; border-radius: 20px;
+      font-size: 11px; font-weight: 600; font-family: var(--font-ui);
+    }
+    .urgency-row { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 12px; }
+    .urgency-badge {
+      padding: 4px 12px; border-radius: 20px; font-size: 12px; font-weight: 500;
+      border: 1px solid; display: flex; align-items: center; gap: 6px;
+    }
+    .urgency-dot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
+
+    /* ── Modal card demo ───────────────────────────────────── */
+    .modal-demo {
+      border: 1px solid var(--border-soft);
+      border-radius: 10px; overflow: hidden; max-width: 480px;
+      box-shadow: 0 8px 24px rgba(0,0,0,0.08);
+    }
+    .modal-header-strip {
+      padding: 14px 20px;
+      background: #fff;
+      border-bottom: 1px solid var(--border-subtle);
+      display: flex; align-items: center; justify-content: space-between;
+    }
+    .modal-header-teal {
+      padding: 22px 28px;
+      background: linear-gradient(135deg, #049484, #037368);
+      color: #fff;
+    }
+    .modal-body-preview {
+      padding: 20px;
+      background: var(--canvas);
+      font-size: 14px; color: var(--body-color);
+    }
+
+    /* ── Table demo ────────────────────────────────────────── */
+    .table-demo {
+      border: 1px solid var(--border);
+      border-radius: 12px; overflow: hidden;
+      box-shadow: 0 1px 4px rgba(0,0,0,0.04);
+    }
+    table.demo-tbl { width: 100%; border-collapse: collapse; }
+    table.demo-tbl thead tr { border-bottom: 1px solid #f3f4f6; }
+    table.demo-tbl th {
+      padding: 11px 16px; text-align: left;
+      font-size: 11px; font-weight: 600; color: var(--muted);
+      letter-spacing: 0.04em; text-transform: uppercase;
+      background: #fafafa;
+    }
+    table.demo-tbl td { padding: 12px 16px; font-size: 13px; border-bottom: 1px solid #f9fafb; }
+    table.demo-tbl tr:last-child td { border-bottom: none; }
+    table.demo-tbl tr:hover td { background: var(--canvas-subtle); cursor: pointer; }
+    .td-name { font-weight: 500; color: var(--ink); }
+    .td-muted { color: var(--muted); }
+
+    /* ── Page btn demo ─────────────────────────────────────── */
+    .page-btns { display: flex; gap: 4px; align-items: center; margin-top: 12px; }
+    .page-btn {
+      padding: 5px 10px; border: 1px solid; border-radius: 7px;
+      background: #fff; border-color: var(--border);
+      font-size: 12px; color: var(--body-color); cursor: pointer;
+      min-width: 30px; text-align: center; font-family: var(--font-ui);
+    }
+    .page-btn.active { background: var(--primary); border-color: var(--primary); color: #fff; font-weight: 600; }
+    .page-btn.disabled { color: #d1d5db; cursor: not-allowed; }
+
+    /* ── Confirm dialog demo ───────────────────────────────── */
+    .dialog-demo {
+      max-width: 420px;
+      border-radius: 14px; background: #fff;
+      font-family: var(--font-ui);
+      box-shadow: 0 24px 60px rgba(0,0,0,0.22), 0 4px 16px rgba(0,0,0,0.08);
+      overflow: hidden;
+    }
+    .dialog-demo-content {
+      padding: 32px 32px 8px;
+      display: flex; flex-direction: column; align-items: center; gap: 14px;
+    }
+    .dialog-icon-circle {
+      width: 60px; height: 60px; border-radius: 50%;
+      display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+    }
+    .dialog-title {
+      font-size: 19px; font-weight: 700; color: #111827;
+      text-align: center; line-height: 1.3;
+    }
+    .dialog-body { font-size: 14px; color: #6b7280; text-align: center; line-height: 1.65; max-width: 320px; }
+    .dialog-btns { padding: 24px 32px 28px; display: flex; gap: 10px; }
+
+    /* ── Auth card preview ─────────────────────────────────── */
+    .auth-preview-wrap {
+      background: linear-gradient(135deg, #0B1720 0%, #1a2535 100%);
+      border-radius: 12px; padding: 32px;
+      display: flex; justify-content: center;
+    }
+    .auth-card-demo {
+      background: rgba(40, 40, 40, 0.65);
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
+      border-radius: 16px; padding: 28px 32px;
+      width: 320px; border: 1px solid rgba(255,255,255,0.2);
+      box-shadow: 0 25px 60px rgba(0,0,0,0.5);
+      position: relative; overflow: hidden;
+    }
+    .auth-card-bar {
+      position: absolute; top: 0; left: 0; right: 0; height: 4px;
+      background: linear-gradient(90deg, #06b5a0, #05a896, #06b5a0);
+      background-size: 200%;
+      animation: gradShift 3s ease infinite;
+    }
+    @keyframes gradShift {
+      0%,100% { background-position: 0% 50%; }
+      50%      { background-position: 100% 50%; }
+    }
+    .auth-title {
+      background: linear-gradient(135deg, #06b5a0, #05a896);
+      -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+      background-clip: text;
+      font-size: 22px; font-weight: 800; letter-spacing: -0.025em; margin-bottom: 6px; margin-top: 8px;
+    }
+    .auth-sub { color: #f0f0f0; font-size: 13px; margin-bottom: 16px; }
+    .auth-input-demo {
+      width: 100%; padding: 11px 13px;
+      background: rgba(255,255,255,0.95); border: 2px solid rgba(255,255,255,0.4);
+      border-radius: 12px; font-size: 14px; color: #1a202c;
+      margin-bottom: 10px; font-family: var(--font-ui); outline: none; transition: all 0.3s;
+    }
+    .auth-input-demo:focus { border-color: #06b5a0; box-shadow: 0 0 0 4px rgba(6,181,160,0.3); transform: translateY(-1px); }
+    .auth-btn-demo {
+      width: 100%; padding: 13px;
+      background: linear-gradient(135deg, #047a6e, #058478);
+      color: #fff; border: none; border-radius: 12px;
+      font-size: 15px; font-weight: 700; cursor: pointer;
+      box-shadow: 0 8px 24px rgba(4,122,110,0.5); font-family: var(--font-ui);
+      transition: all 0.3s;
+    }
+    .auth-btn-demo:hover { transform: translateY(-2px); box-shadow: 0 12px 32px rgba(4,122,110,0.6); }
+
+    /* ── Dropdown demo ─────────────────────────────────────── */
+    .dropdown-demo {
+      background: #fff; border: 1px solid var(--border);
+      border-radius: 10px; overflow: hidden;
+      box-shadow: 0 8px 24px rgba(0,0,0,0.12); max-width: 200px;
+    }
+    .dd-item {
+      padding: 9px 14px; font-size: 13px; cursor: pointer;
+      transition: background 0.1s;
+    }
+    .dd-item:hover { background: var(--canvas-subtle); }
+    .dd-item.selected { background: var(--primary-bg); color: var(--primary); font-weight: 600; }
+    .dd-item.danger { color: var(--error); }
+    .dd-item.danger:hover { background: var(--error-bg); }
+    .dd-divider { height: 1px; background: #f3f4f6; margin: 2px 0; }
+
+    /* ── Misc helpers ──────────────────────────────────────── */
+    .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 32px; }
+    .three-col { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 24px; }
+    @media (max-width: 700px) {
+      .two-col, .three-col { grid-template-columns: 1fr; }
+      .content { padding: 24px 16px; }
+      .hero { padding: 40px 24px 36px; }
+      .section-body { padding: 24px 20px; }
+    }
+
+    .spec-tag {
+      display: inline-block; padding: 2px 7px; border-radius: 4px;
+      background: var(--border-subtle); font-size: 11px;
+      font-family: var(--font-mono); color: var(--body-color);
+    }
+    .divider { height: 1px; background: var(--border-subtle); margin: 24px 0; }
+    .note {
+      background: var(--primary-bg); border: 1px solid rgba(4,148,132,0.2);
+      border-radius: 8px; padding: 12px 16px;
+      font-size: 13px; color: var(--body-color); line-height: 1.6;
+    }
+    .note strong { color: var(--primary); }
+  </style>
+</head>
+<body>
+
+<!-- ── Sticky nav ── -->
+<nav class="top-nav">
+  <span class="top-nav nav-logo">Vitruvius DS</span>
+  <a href="#colors">Colors</a>
+  <a href="#typography">Typography</a>
+  <a href="#buttons">Buttons</a>
+  <a href="#inputs">Inputs</a>
+  <a href="#radius">Radius</a>
+  <a href="#shadows">Shadows</a>
+  <a href="#badges">Badges</a>
+  <a href="#uml">UML Nodes</a>
+  <a href="#sidebar">Sidebar</a>
+  <a href="#modals">Modals</a>
+  <a href="#tables">Tables</a>
+  <a href="#toasts">Toasts</a>
+  <a href="#auth">Auth Card</a>
+</nav>
+
+<!-- ── Hero ── -->
+<section class="hero">
+  <h1>Vitruvius Design System</h1>
+  <p>Visual reference for colors, typography, components, and patterns used across the Vitruvius Modeler UI. There are two design modes in one app — the App Shell and the UML Canvas — each with its own visual grammar.</p>
+  <div class="hero-badges">
+    <span class="hero-badge">React 18 · TypeScript</span>
+    <span class="hero-badge">Inline styles (no Tailwind / CSS-in-JS library)</span>
+    <span class="hero-badge">Accent: #049484</span>
+    <span class="hero-badge">jjodel-inspired UML canvas</span>
+  </div>
+</section>
+
+<div class="content">
+
+  <!-- ══════════════════════════════════════════════════ -->
+  <!-- 01 COLORS -->
+  <!-- ══════════════════════════════════════════════════ -->
+  <div id="colors" class="section">
+    <div class="section-header">
+      <div class="section-label">01 — Color Tokens</div>
+      <div class="section-title">The color system</div>
+      <div class="section-desc">One teal accent for the app shell, a dark-navy primary CTA that doesn't compete, and a full semantic palette. UML nodes use a separate, academic sub-palette.</div>
+    </div>
+    <div class="section-body">
+
+      <div class="sub-heading">Brand &amp; Interactive</div>
+      <div class="color-grid">
+        <div class="swatch">
+          <div class="swatch-block" style="background:#049484"></div>
+          <div class="swatch-info"><div class="swatch-token">{colors.primary}</div><div class="swatch-hex">#049484</div></div>
+        </div>
+        <div class="swatch">
+          <div class="swatch-block" style="background:#037368"></div>
+          <div class="swatch-info"><div class="swatch-token">{colors.primary-dark}</div><div class="swatch-hex">#037368</div></div>
+        </div>
+        <div class="swatch">
+          <div class="swatch-block" style="background:#f0faf8; border:1px solid #e0f5f0"></div>
+          <div class="swatch-info"><div class="swatch-token">{colors.primary-bg}</div><div class="swatch-hex">#f0faf8</div></div>
+        </div>
+        <div class="swatch dark">
+          <div class="swatch-block" style="background:#0B1720"></div>
+          <div class="swatch-info"><div class="swatch-token">{colors.cta-dark}</div><div class="swatch-hex">#0B1720</div></div>
+        </div>
+        <div class="swatch dark">
+          <div class="swatch-block" style="background:#4ecdc4"></div>
+          <div class="swatch-info"><div class="swatch-token">{colors.accent-on-dark}</div><div class="swatch-hex">#4ecdc4</div></div>
+        </div>
+        <div class="swatch">
+          <div class="swatch-block" style="background:#06b5a0"></div>
+          <div class="swatch-info"><div class="swatch-token">{colors.auth-primary}</div><div class="swatch-hex">#06b5a0 (auth only)</div></div>
+        </div>
+      </div>
+
+      <div class="sub-heading">Surface</div>
+      <div class="color-grid">
+        <div class="swatch">
+          <div class="swatch-block" style="background:#ffffff; border:1px solid #e5e7eb"></div>
+          <div class="swatch-info"><div class="swatch-token">{colors.canvas}</div><div class="swatch-hex">#ffffff</div></div>
+        </div>
+        <div class="swatch">
+          <div class="swatch-block" style="background:#f8fafc; border:1px solid #e5e7eb"></div>
+          <div class="swatch-info"><div class="swatch-token">{colors.canvas-muted}</div><div class="swatch-hex">#f8fafc</div></div>
+        </div>
+        <div class="swatch">
+          <div class="swatch-block" style="background:#f7f8fa; border:1px solid #e5e7eb"></div>
+          <div class="swatch-info"><div class="swatch-token">{colors.app-bg}</div><div class="swatch-hex">#f7f8fa</div></div>
+        </div>
+        <div class="swatch">
+          <div class="swatch-block" style="background:#f1f2f4; border:1px solid #e5e7eb"></div>
+          <div class="swatch-info"><div class="swatch-token">{colors.flow-bg}</div><div class="swatch-hex">#f1f2f4</div></div>
+        </div>
+        <div class="swatch dark">
+          <div class="swatch-block" style="background:#0B1720"></div>
+          <div class="swatch-info"><div class="swatch-token">{colors.sidebar}</div><div class="swatch-hex">#0B1720</div></div>
+        </div>
+        <div class="swatch dark">
+          <div class="swatch-block" style="background:#131e2b"></div>
+          <div class="swatch-info"><div class="swatch-token">{colors.sidebar-menu}</div><div class="swatch-hex">#131e2b</div></div>
+        </div>
+      </div>
+
+      <div class="sub-heading">Text</div>
+      <div class="color-grid">
+        <div class="swatch">
+          <div class="swatch-block" style="background:#111827"></div>
+          <div class="swatch-info"><div class="swatch-token">{colors.ink}</div><div class="swatch-hex">#111827</div></div>
+        </div>
+        <div class="swatch">
+          <div class="swatch-block" style="background:#374151"></div>
+          <div class="swatch-info"><div class="swatch-token">{colors.body-color}</div><div class="swatch-hex">#374151</div></div>
+        </div>
+        <div class="swatch">
+          <div class="swatch-block" style="background:#6b7280"></div>
+          <div class="swatch-info"><div class="swatch-token">{colors.muted}</div><div class="swatch-hex">#6b7280</div></div>
+        </div>
+        <div class="swatch">
+          <div class="swatch-block" style="background:#9ca3af"></div>
+          <div class="swatch-info"><div class="swatch-token">{colors.subtle}</div><div class="swatch-hex">#9ca3af</div></div>
+        </div>
+      </div>
+
+      <div class="sub-heading">Semantic</div>
+      <div class="color-grid">
+        <div class="swatch">
+          <div class="swatch-block" style="background:#dc2626"></div>
+          <div class="swatch-info"><div class="swatch-token">{colors.error}</div><div class="swatch-hex">#dc2626</div></div>
+        </div>
+        <div class="swatch">
+          <div class="swatch-block" style="background:#fef2f2; border:1px solid #fecaca"></div>
+          <div class="swatch-info"><div class="swatch-token">{colors.error-bg}</div><div class="swatch-hex">#fef2f2</div></div>
+        </div>
+        <div class="swatch">
+          <div class="swatch-block" style="background:#10b981"></div>
+          <div class="swatch-info"><div class="swatch-token">{colors.success}</div><div class="swatch-hex">#10b981</div></div>
+        </div>
+        <div class="swatch">
+          <div class="swatch-block" style="background:#f0fdf4; border:1px solid #86efac"></div>
+          <div class="swatch-info"><div class="swatch-token">{colors.success-bg}</div><div class="swatch-hex">#f0fdf4</div></div>
+        </div>
+        <div class="swatch">
+          <div class="swatch-block" style="background:#f97316"></div>
+          <div class="swatch-info"><div class="swatch-token">{colors.warning}</div><div class="swatch-hex">#f97316</div></div>
+        </div>
+        <div class="swatch">
+          <div class="swatch-block" style="background:#3b82f6"></div>
+          <div class="swatch-info"><div class="swatch-token">{colors.info}</div><div class="swatch-hex">#3b82f6</div></div>
+        </div>
+      </div>
+
+      <div class="sub-heading">UML Node Accents (canvas only)</div>
+      <div class="color-grid">
+        <div class="swatch">
+          <div class="swatch-block" style="background:#0c436e"></div>
+          <div class="swatch-info"><div class="swatch-token">NAVY / Class</div><div class="swatch-hex">#0c436e</div></div>
+        </div>
+        <div class="swatch">
+          <div class="swatch-block" style="background:#087E8B"></div>
+          <div class="swatch-info"><div class="swatch-token">TEAL / Class label</div><div class="swatch-hex">#087E8B</div></div>
+        </div>
+        <div class="swatch">
+          <div class="swatch-block" style="background:#9B2335"></div>
+          <div class="swatch-info"><div class="swatch-token">CRIMSON / Abstract</div><div class="swatch-hex">#9B2335</div></div>
+        </div>
+        <div class="swatch">
+          <div class="swatch-block" style="background:#1a6ea6"></div>
+          <div class="swatch-info"><div class="swatch-token">BLUE / Interface</div><div class="swatch-hex">#1a6ea6</div></div>
+        </div>
+        <div class="swatch">
+          <div class="swatch-block" style="background:#d4a017"></div>
+          <div class="swatch-info"><div class="swatch-token">GOLD / Enum</div><div class="swatch-hex">#d4a017</div></div>
+        </div>
+        <div class="swatch">
+          <div class="swatch-block" style="background:#5F0F40"></div>
+          <div class="swatch-info"><div class="swatch-token">MAROON / Package</div><div class="swatch-hex">#5F0F40</div></div>
+        </div>
+      </div>
+
+      <div class="sub-heading">Borders</div>
+      <div class="color-grid">
+        <div class="swatch">
+          <div class="swatch-block" style="background:#e5e7eb"></div>
+          <div class="swatch-info"><div class="swatch-token">{colors.border}</div><div class="swatch-hex">#e5e7eb</div></div>
+        </div>
+        <div class="swatch">
+          <div class="swatch-block" style="background:#e2e8f0"></div>
+          <div class="swatch-info"><div class="swatch-token">{colors.border-soft}</div><div class="swatch-hex">#e2e8f0</div></div>
+        </div>
+        <div class="swatch">
+          <div class="swatch-block" style="background:#f1f5f9"></div>
+          <div class="swatch-info"><div class="swatch-token">{colors.border-subtle}</div><div class="swatch-hex">#f1f5f9</div></div>
+        </div>
+        <div class="swatch">
+          <div class="swatch-block" style="background:#b8d0e2"></div>
+          <div class="swatch-info"><div class="swatch-token">{colors.uml-sep}</div><div class="swatch-hex">#b8d0e2</div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══════════════════════════════════════════════════ -->
+  <!-- 02 TYPOGRAPHY -->
+  <!-- ══════════════════════════════════════════════════ -->
+  <div id="typography" class="section">
+    <div class="section-header">
+      <div class="section-label">02 — Typography</div>
+      <div class="section-title">Type scale</div>
+      <div class="section-desc">UI sans-serif everywhere. Monospace in UML node attribute lists. Weight ladder: 400 → 500 → 600 → 700 only.</div>
+    </div>
+    <div class="section-body">
+      <div class="note" style="margin-bottom:24px">
+        <strong>Font stacks:</strong>
+        UI: <code style="font-size:12px;font-family:monospace">ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif</code><br>
+        Mono: <code style="font-size:12px;font-family:monospace">'Consolas', 'Courier New', monospace</code> — UML node attributes only
+      </div>
+
+      <table class="typo-table">
+        <tr>
+          <td>
+            <div class="typo-token">{typography.page-title}</div>
+            <div class="typo-specs">26px / 700 / -0.02em</div>
+          </td>
+          <td>
+            <span style="font-size:26px;font-weight:700;letter-spacing:-0.02em;color:#111827">Model Library</span>
+          </td>
+        </tr>
+        <tr>
+          <td>
+            <div class="typo-token">{typography.modal-title}</div>
+            <div class="typo-specs">26px / 700 / -0.5px</div>
+          </td>
+          <td>
+            <span style="font-size:26px;font-weight:700;letter-spacing:-0.5px;color:#111827">Change Password</span>
+          </td>
+        </tr>
+        <tr>
+          <td>
+            <div class="typo-token">{typography.section-head}</div>
+            <div class="typo-specs">18–20px / 600–700</div>
+          </td>
+          <td>
+            <span style="font-size:20px;font-weight:700;color:#111827">Section heading</span>
+          </td>
+        </tr>
+        <tr>
+          <td>
+            <div class="typo-token">{typography.app-title}</div>
+            <div class="typo-specs">16–18px / 700 / -0.01em</div>
+          </td>
+          <td>
+            <span style="font-size:18px;font-weight:700;letter-spacing:-0.01em;color:#ffffff;background:#0B1720;padding:6px 12px;border-radius:6px">Vitruvius</span>
+          </td>
+        </tr>
+        <tr>
+          <td>
+            <div class="typo-token">{typography.body-strong}</div>
+            <div class="typo-specs">14px / 600–700</div>
+          </td>
+          <td>
+            <span style="font-size:14px;font-weight:700;color:#111827">Upload meta-model</span>
+          </td>
+        </tr>
+        <tr>
+          <td>
+            <div class="typo-token">{typography.body}</div>
+            <div class="typo-specs">13–14px / 400–500</div>
+          </td>
+          <td>
+            <span style="font-size:14px;font-weight:400;color:#374151">Default body text. Used in table rows, dropdowns, and form descriptions.</span>
+          </td>
+        </tr>
+        <tr>
+          <td>
+            <div class="typo-token">{typography.caption}</div>
+            <div class="typo-specs">12–13px / 400–600</div>
+          </td>
+          <td>
+            <span style="font-size:12px;font-weight:600;color:#6b7280;letter-spacing:0.04em;text-transform:uppercase">Name · Type · Created</span>
+            <span style="font-size:13px;font-weight:400;color:#6b7280;margin-left:16px">02/01/2025</span>
+          </td>
+        </tr>
+        <tr>
+          <td>
+            <div class="typo-token">{typography.label}</div>
+            <div class="typo-specs">11px / 700 / 0.01em</div>
+          </td>
+          <td>
+            <span style="font-size:11px;font-weight:700;color:#374151;letter-spacing:0.01em">Description</span>
+          </td>
+        </tr>
+        <tr>
+          <td>
+            <div class="typo-token">{typography.micro}</div>
+            <div class="typo-specs">10–11px / 400–500</div>
+          </td>
+          <td>
+            <span style="font-size:11px;font-weight:400;color:rgba(255,255,255,0.4);background:#0B1720;padding:4px 10px;border-radius:4px">maxmuster@kit.edu</span>
+          </td>
+        </tr>
+        <tr>
+          <td>
+            <div class="typo-token">{typography.uml-header}</div>
+            <div class="typo-specs">18px / 700 / 0.1px — nav navy</div>
+          </td>
+          <td>
+            <span style="font-size:18px;font-weight:700;letter-spacing:0.1px;color:#0c436e;font-family:'Segoe UI',sans-serif">VehicleModel</span>
+          </td>
+        </tr>
+        <tr>
+          <td>
+            <div class="typo-token">{typography.uml-body}</div>
+            <div class="typo-specs">16px / 400 — monospace</div>
+          </td>
+          <td>
+            <span style="font-size:16px;font-weight:400;color:#1e3a50;font-family:'Consolas','Courier New',monospace">+ speed: EInt [1]</span>
+          </td>
+        </tr>
+        <tr>
+          <td>
+            <div class="typo-token">{typography.dialog-title}</div>
+            <div class="typo-specs">19px / 700 — ui-sans-serif</div>
+          </td>
+          <td>
+            <span style="font-size:19px;font-weight:700;color:#111827">Delete model?</span>
+          </td>
+        </tr>
+      </table>
+    </div>
+  </div>
+
+  <!-- ══════════════════════════════════════════════════ -->
+  <!-- 03 BUTTONS -->
+  <!-- ══════════════════════════════════════════════════ -->
+  <div id="buttons" class="section">
+    <div class="section-header">
+      <div class="section-label">03 — Button Variants</div>
+      <div class="section-title">Two grammars: dark-navy and teal</div>
+      <div class="section-desc">Dark navy for page-level "create" CTAs. Teal gradient for form submits and modal confirms. They must not appear side by side — they serve different hierarchy levels.</div>
+    </div>
+    <div class="section-body">
+      <div class="btn-grid">
+
+        <div class="btn-card">
+          <div class="btn-card-label">button-cta-dark</div>
+          <button class="btn-cta-dark">
+            <span style="font-size:16px;line-height:1">+</span> Upload model
+          </button>
+          <div class="btn-desc">bg: #0B1720 · radius: 9px · 14px/600<br>Hover: #1e293b</div>
+        </div>
+
+        <div class="btn-card">
+          <div class="btn-card-label">button-primary-teal</div>
+          <button class="btn-primary-teal">Change Password</button>
+          <div class="btn-desc">gradient #049484→#037368 · 8px radius<br>Hover: translateY(-1px)</div>
+        </div>
+
+        <div class="btn-card">
+          <div class="btn-card-label">button-cancel</div>
+          <button class="btn-cancel">Cancel</button>
+          <div class="btn-desc">white bg · 2px solid #e5e7eb · 8px<br>Hover: bg #f8fafc</div>
+        </div>
+
+        <div class="btn-card">
+          <div class="btn-card-label">button-danger</div>
+          <button class="btn-danger">Delete</button>
+          <div class="btn-desc">bg: #dc2626 · 6px radius<br>Hover: #b91c1c + translateY(-1px)</div>
+        </div>
+
+        <div class="btn-card">
+          <div class="btn-card-label">button-filter (default)</div>
+          <button class="btn-filter">
+            Filter: By type
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polyline points="6 9 12 15 18 9"/></svg>
+          </button>
+          <div class="btn-desc">border #e5e7eb · white bg · 8px</div>
+        </div>
+
+        <div class="btn-card">
+          <div class="btn-card-label">button-filter (active)</div>
+          <button class="btn-filter active">
+            Type: Computer
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polyline points="6 9 12 15 18 9"/></svg>
+          </button>
+          <div class="btn-desc">border + text: #049484 · bg: #f0faf8</div>
+        </div>
+
+        <div class="btn-card">
+          <div class="btn-card-label">button-row-actions</div>
+          <button class="btn-row-actions">⋮</button>
+          <div class="btn-desc">4×8px padding · 6px radius · opens menu</div>
+        </div>
+
+        <div class="btn-card">
+          <div class="btn-card-label">button-icon-sm</div>
+          <div style="display:flex;gap:6px">
+            <button class="btn-icon-sm" title="Edit">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+            </button>
+            <button class="btn-icon-sm" title="Close">✕</button>
+          </div>
+          <div class="btn-desc">30×30px · 6px radius · no border<br>Hover: #f1f5f9 bg</div>
+        </div>
+
+        <div class="btn-card dark">
+          <div class="btn-card-label">nav-item (active)</div>
+          <button class="btn-nav-active">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#4ecdc4" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>
+            Model library
+          </button>
+          <div class="btn-desc">rgba(4,148,132,0.15) · white / 600</div>
+        </div>
+
+        <div class="btn-card dark">
+          <div class="btn-card-label">nav-item (inactive)</div>
+          <button class="btn-nav-inactive">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+            Dashboard
+          </button>
+          <div class="btn-desc">transparent → rgba(fff,0.05) on hover</div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+
+  <!-- ══════════════════════════════════════════════════ -->
+  <!-- 04 INPUTS -->
+  <!-- ══════════════════════════════════════════════════ -->
+  <div id="inputs" class="section">
+    <div class="section-header">
+      <div class="section-label">04 — Inputs &amp; Forms</div>
+      <div class="section-title">Input field states</div>
+      <div class="section-desc">Focus always signals with teal border + soft teal ring. All form labels are 11px / 700. Error and success always pair a message line below the field.</div>
+    </div>
+    <div class="section-body">
+      <div class="input-grid">
+
+        <div class="input-card">
+          <div class="input-card-label">Default</div>
+          <div style="font-size:11px;font-weight:700;color:#374151;margin-bottom:5px">Name</div>
+          <input class="input-base" placeholder="e.g. VehicleModel" />
+          <div style="font-size:11px;color:#9ca3af">border: #e2e8f0 · bg: #f8fafc</div>
+        </div>
+
+        <div class="input-card">
+          <div class="input-card-label">Focus</div>
+          <div style="font-size:11px;font-weight:700;color:#374151;margin-bottom:5px">Name</div>
+          <input class="input-base input-focus" value="VehicleModel" />
+          <div style="font-size:11px;color:#9ca3af">border: #049484 · ring: rgba(4,148,132,0.1)</div>
+        </div>
+
+        <div class="input-card">
+          <div class="input-card-label">Error</div>
+          <div style="font-size:11px;font-weight:700;color:#374151;margin-bottom:5px">Password</div>
+          <input class="input-base input-error" value="abc" type="password" />
+          <div class="input-msg-error">
+            <span style="font-size:14px;font-weight:700">×</span>
+            Passwords do not match
+          </div>
+        </div>
+
+        <div class="input-card">
+          <div class="input-card-label">Success validation</div>
+          <div style="font-size:11px;font-weight:700;color:#374151;margin-bottom:5px">Confirm password</div>
+          <input class="input-base" style="border-color:#10b981" value="••••••••" type="password" />
+          <div class="input-msg-ok">
+            <span style="font-size:14px;font-weight:700">✓</span>
+            Passwords match
+          </div>
+        </div>
+
+        <div class="input-card">
+          <div class="input-card-label">Disabled</div>
+          <div style="font-size:11px;font-weight:700;color:#374151;margin-bottom:5px">Email</div>
+          <input class="input-base input-disabled" value="user@kit.edu" disabled />
+          <div style="font-size:11px;color:#9ca3af">opacity: 0.5 · cursor: not-allowed</div>
+        </div>
+
+        <div class="input-card">
+          <div class="input-card-label">Textarea</div>
+          <div style="font-size:11px;font-weight:700;color:#374151;margin-bottom:5px">Description</div>
+          <textarea class="input-base" rows="3" placeholder="Describe the meta-model…" style="resize:vertical"></textarea>
+        </div>
+
+      </div>
+
+      <div class="divider"></div>
+
+      <div class="sub-heading">Auth inputs (auth-page only)</div>
+      <div style="background:#1a2535;padding:20px;border-radius:10px;max-width:360px">
+        <div style="font-size:11px;font-weight:700;color:rgba(255,255,255,0.6);margin-bottom:6px;letter-spacing:0.04em">EMAIL</div>
+        <input style="width:100%;padding:12px 14px;border:2px solid rgba(255,255,255,0.4);border-radius:12px;font-size:15px;background:rgba(255,255,255,0.95);color:#1a202c;outline:none;font-family:var(--font-ui);font-weight:500;box-sizing:border-box" placeholder="you@kit.edu" />
+        <div style="font-size:11px;color:rgba(255,255,255,0.35);margin-top:8px">border-radius: 12px · bg: rgba(255,255,255,0.95) · focus ring: 4px rgba(6,181,160,0.3)</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══════════════════════════════════════════════════ -->
+  <!-- 05 BORDER RADIUS -->
+  <!-- ══════════════════════════════════════════════════ -->
+  <div id="radius" class="section">
+    <div class="section-header">
+      <div class="section-label">05 — Border Radius</div>
+      <div class="section-title">Radius scale</div>
+      <div class="section-desc">UML nodes at 3px is non-negotiable — it's the academic diagram aesthetic. Everything else follows the scale below.</div>
+    </div>
+    <div class="section-body">
+      <div class="radius-grid">
+        <div class="radius-item">
+          <div class="radius-box" style="border-radius:0px"></div>
+          <div class="radius-label">0px</div>
+          <div class="radius-token">{rounded.none}</div>
+        </div>
+        <div class="radius-item">
+          <div class="radius-box" style="border-radius:3px"></div>
+          <div class="radius-label">3px</div>
+          <div class="radius-token">{rounded.uml}<br>UML nodes only</div>
+        </div>
+        <div class="radius-item">
+          <div class="radius-box" style="border-radius:6px"></div>
+          <div class="radius-label">6px</div>
+          <div class="radius-token">{rounded.micro}<br>Row actions, small ctrl</div>
+        </div>
+        <div class="radius-item">
+          <div class="radius-box" style="border-radius:8px"></div>
+          <div class="radius-label">8px</div>
+          <div class="radius-token">{rounded.sm}<br>Buttons · Inputs</div>
+        </div>
+        <div class="radius-item">
+          <div class="radius-box" style="border-radius:10px"></div>
+          <div class="radius-label">10px</div>
+          <div class="radius-token">{rounded.md}<br>Dropdowns · Modals</div>
+        </div>
+        <div class="radius-item">
+          <div class="radius-box" style="border-radius:12px"></div>
+          <div class="radius-label">12px</div>
+          <div class="radius-token">{rounded.lg}<br>Table container</div>
+        </div>
+        <div class="radius-item">
+          <div class="radius-box" style="border-radius:20px"></div>
+          <div class="radius-label">20px</div>
+          <div class="radius-token">{rounded.xl}<br>Auth card</div>
+        </div>
+        <div class="radius-item">
+          <div class="radius-pill-box" style="border-radius:9999px"></div>
+          <div class="radius-label">9999px</div>
+          <div class="radius-token">{rounded.pill}<br>Avatar · Badges</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══════════════════════════════════════════════════ -->
+  <!-- 06 SHADOWS -->
+  <!-- ══════════════════════════════════════════════════ -->
+  <div id="shadows" class="section">
+    <div class="section-header">
+      <div class="section-label">06 — Shadows &amp; Elevation</div>
+      <div class="section-title">Elevation system</div>
+      <div class="section-desc">Shadows float surfaces. Never apply to inline text or static UI elements. UML nodes are flat by default — shadow only on selection.</div>
+    </div>
+    <div class="section-body">
+      <div class="shadow-grid">
+        <div class="shadow-item">
+          <div class="shadow-box" style="box-shadow:none;border:1px solid #e5e7eb"></div>
+          <div class="shadow-label">Flat</div>
+          <div class="shadow-desc">No shadow. Full-bleed surfaces, sidebar, table headers.</div>
+        </div>
+        <div class="shadow-item">
+          <div class="shadow-box" style="box-shadow:0 1px 4px rgba(0,0,0,0.04)"></div>
+          <div class="shadow-label">{shadow.xs}</div>
+          <div class="shadow-desc">Table container, UML diagram preview card.</div>
+        </div>
+        <div class="shadow-item">
+          <div class="shadow-box" style="box-shadow:0 2px 8px rgba(0,0,0,0.08)"></div>
+          <div class="shadow-label">{shadow.sm}</div>
+          <div class="shadow-desc">Cards, React Flow controls, avatar button.</div>
+        </div>
+        <div class="shadow-item">
+          <div class="shadow-box" style="box-shadow:0 8px 24px rgba(0,0,0,0.12)"></div>
+          <div class="shadow-label">{shadow.md}</div>
+          <div class="shadow-desc">Dropdown menus, sidebar user popup.</div>
+        </div>
+        <div class="shadow-item">
+          <div class="shadow-box" style="box-shadow:0 2px 8px rgba(4,148,132,0.25)"></div>
+          <div class="shadow-label">{shadow.header}</div>
+          <div class="shadow-desc">App header — tinted with brand color.</div>
+        </div>
+        <div class="shadow-item">
+          <div class="shadow-box" style="box-shadow:0 24px 64px rgba(0,0,0,0.22),0 4px 16px rgba(0,0,0,0.10)"></div>
+          <div class="shadow-label">{shadow.modal}</div>
+          <div class="shadow-desc">Full modals, large dialogs.</div>
+        </div>
+        <div class="shadow-item">
+          <div class="shadow-box" style="box-shadow:0 0 0 3px rgba(8,126,139,0.2),0 2px 8px rgba(12,67,110,0.18)"></div>
+          <div class="shadow-label">{shadow.uml-focus}</div>
+          <div class="shadow-desc">Selected UML node glow. Teal ring.</div>
+        </div>
+        <div class="shadow-item">
+          <div class="shadow-box" style="background:rgba(40,40,40,0.8);box-shadow:0 25px 80px rgba(0,0,0,0.5),0 0 0 1px rgba(255,255,255,0.2)"></div>
+          <div class="shadow-label">{shadow.auth}</div>
+          <div class="shadow-desc">Auth card. Auth page only.</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══════════════════════════════════════════════════ -->
+  <!-- 07 BADGES -->
+  <!-- ══════════════════════════════════════════════════ -->
+  <div id="badges" class="section">
+    <div class="section-header">
+      <div class="section-label">07 — Badges &amp; Status</div>
+      <div class="section-title">Pills, tags, and urgency states</div>
+      <div class="section-desc">Domain badges pick their color from the D_THEMES map (keyed by domain string). Urgency badges are used in the Projects view to signal deletion timelines.</div>
+    </div>
+    <div class="section-body">
+
+      <div class="sub-heading">Domain Badges (D_THEMES)</div>
+      <div class="badge-row">
+        <span class="badge" style="background:#e0e7ff;color:#4338ca">default</span>
+        <span class="badge" style="background:#dbeafe;color:#1d4ed8">computer</span>
+        <span class="badge" style="background:#d1fae5;color:#065f46">target</span>
+        <span class="badge" style="background:#ede9fe;color:#5b21b6">modell</span>
+        <span class="badge" style="background:#ccfbf1;color:#0f766e">teal</span>
+        <span class="badge" style="background:#fef3c7;color:#92400e">fallback A</span>
+        <span class="badge" style="background:#f3e8ff;color:#7e22ce">fallback B</span>
+        <span class="badge" style="background:#e0f2fe;color:#0369a1">fallback C</span>
+        <span class="badge" style="background:#fce7f3;color:#9d174d">fallback D</span>
+      </div>
+      <div style="margin-top:10px;font-size:12px;color:#6b7280">
+        <code style="font-family:monospace;font-size:11px">padding: 3px 10px · border-radius: 20px · 11px / 600</code>
+      </div>
+
+      <div class="sub-heading" style="margin-top:28px">Urgency States (Projects)</div>
+      <div class="urgency-row">
+        <div class="urgency-badge" style="background:#fef2f2;color:#991b1b;border-color:#fca5a5">
+          <div class="urgency-dot" style="background:#ef4444"></div>
+          Critical — ≤3 days left
+        </div>
+        <div class="urgency-badge" style="background:#fff7ed;color:#c2410c;border-color:#fdba74">
+          <div class="urgency-dot" style="background:#f97316"></div>
+          Warning — ≤7 days
+        </div>
+        <div class="urgency-badge" style="background:#fefce8;color:#854d0e;border-color:#fde68a">
+          <div class="urgency-dot" style="background:#eab308"></div>
+          Caution — ≤14 days
+        </div>
+        <div class="urgency-badge" style="background:#f0fdf4;color:#166534;border-color:#bbf7d0">
+          <div class="urgency-dot" style="background:#22c55e"></div>
+          Safe — &gt;14 days
+        </div>
+      </div>
+
+      <div class="sub-heading" style="margin-top:28px">Status Badge (Email verification)</div>
+      <div class="badge-row">
+        <div style="padding:6px 12px;background:#d5f4e6;color:#27ae60;border-radius:4px;font-size:12px;font-weight:500;border:1px solid #a9dfbf">✓ Email Verified</div>
+        <div style="padding:6px 12px;background:#fadbd8;color:#e74c3c;border-radius:4px;font-size:12px;font-weight:500;border:1px solid #f1948a">⚠ Email Not Verified</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══════════════════════════════════════════════════ -->
+  <!-- 08 UML NODES -->
+  <!-- ══════════════════════════════════════════════════ -->
+  <div id="uml" class="section">
+    <div class="section-header">
+      <div class="section-label">08 — UML Nodes (jjodel-inspired)</div>
+      <div class="section-title">Diagram canvas components</div>
+      <div class="section-desc">Live exclusively on the diagram canvas. Style is deliberately academic: 3px radius, monospace attributes, navy borders. Do not mix with app-shell card styles.</div>
+    </div>
+    <div class="section-body">
+      <div class="uml-grid">
+
+        <!-- Class -->
+        <div>
+          <div class="uml-node-label">Class (default)</div>
+          <div class="uml-node">
+            <div class="uml-header">
+              <span class="uml-type-label" style="color:#087E8B">Class:</span>
+              <span>VehicleModel</span>
+            </div>
+            <div class="uml-attrs">
+              <div class="uml-row"><span class="uml-vis-pub">+</span> speed: <span class="uml-type-tag">EInt</span></div>
+              <div class="uml-row"><span class="uml-vis-prot">#</span> mass: <span class="uml-type-tag">EFloat</span></div>
+              <div class="uml-row"><span class="uml-vis-priv">-</span> id: <span class="uml-type-tag">EString</span></div>
+            </div>
+            <div class="uml-methods">
+              <div class="uml-row"><span class="uml-vis-pub">+</span> validate()</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Abstract Class -->
+        <div>
+          <div class="uml-node-label">Abstract Class</div>
+          <div class="uml-node">
+            <div class="uml-header italic">
+              <span class="uml-type-label" style="color:#9B2335;font-style:italic">Abstract Class:</span>
+              <span style="font-style:italic">BaseElement</span>
+            </div>
+            <div class="uml-attrs">
+              <div class="uml-row"><span class="uml-vis-pub">+</span> name: <span class="uml-type-tag">EString</span></div>
+            </div>
+            <div class="uml-methods">
+              <div class="uml-row"><span class="uml-vis-pub">+</span> serialize()</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Interface -->
+        <div>
+          <div class="uml-node-label">Interface (dashed border)</div>
+          <div class="uml-node" style="border-style:dashed">
+            <div class="uml-header italic">
+              <span class="uml-type-label" style="color:#1a6ea6;font-style:italic">Interface:</span>
+              <span style="font-style:italic">Connectable</span>
+            </div>
+            <div class="uml-methods">
+              <div class="uml-row"><span class="uml-vis-pub">+</span> connect()</div>
+              <div class="uml-row"><span class="uml-vis-pub">+</span> disconnect()</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Enumeration -->
+        <div>
+          <div class="uml-node-label">Enumeration</div>
+          <div class="uml-node">
+            <div class="uml-header" style="border-bottom-color:#d4a017">
+              <span class="uml-type-label" style="color:#d4a017">Enumeration:</span>
+              <span style="color:#d4a017">Status</span>
+            </div>
+            <div class="uml-methods">
+              <div class="uml-row">ACTIVE</div>
+              <div class="uml-row">INACTIVE</div>
+              <div class="uml-row">PENDING</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Package -->
+        <div>
+          <div class="uml-node-label">Package</div>
+          <div class="uml-node">
+            <div class="uml-pkg-header">transport</div>
+            <div class="uml-pkg-body">
+              <div class="uml-pkg-title">Contents</div>
+              <div style="font-style:italic;color:#aaa;font-size:13px">Drag classes here…</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Selected -->
+        <div>
+          <div class="uml-node-label">Class (selected)</div>
+          <div class="uml-node selected">
+            <div class="uml-header" style="border-bottom-color:#087E8B">
+              <span class="uml-type-label" style="color:#087E8B">Class:</span>
+              <span>EngineBlock</span>
+            </div>
+            <div class="uml-attrs">
+              <div class="uml-row"><span class="uml-vis-pub">+</span> power: <span class="uml-type-tag">EInt</span></div>
+            </div>
+          </div>
+        </div>
+
+      </div>
+
+      <div class="divider"></div>
+      <div class="note">
+        <strong>Handle visibility:</strong> Connection handles (8px navy dots) are hidden by default via CSS <code style="font-size:12px;font-family:monospace">opacity: 0</code> on <code style="font-size:12px;font-family:monospace">.react-flow__handle</code>. They appear on node hover with a 0.15s transition. Never make them permanently visible.
+      </div>
+    </div>
+  </div>
+
+  <!-- ══════════════════════════════════════════════════ -->
+  <!-- 09 SIDEBAR -->
+  <!-- ══════════════════════════════════════════════════ -->
+  <div id="sidebar" class="section">
+    <div class="section-header">
+      <div class="section-label">09 — Navigation &amp; Sidebar</div>
+      <div class="section-title">App sidebar + context menu</div>
+      <div class="section-desc">220px fixed, #0B1720. Active nav items use rgba(4,148,132,0.15) fill. The user context menu pops upward from the user card.</div>
+    </div>
+    <div class="section-body">
+      <div style="display:flex;gap:32px;flex-wrap:wrap;align-items:flex-start">
+
+        <!-- Sidebar -->
+        <div class="sidebar-preview">
+          <div class="sb-logo">
+            <div class="sb-logo-img">V</div>
+            <div class="sb-logo-name">Vitruvius</div>
+          </div>
+          <div class="sb-nav">
+            <div class="sb-item inactive">
+              <span class="sb-icon">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+              </span>
+              Dashboard / Projects
+            </div>
+            <div class="sb-item active">
+              <span class="sb-icon" style="color:#4ecdc4">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>
+              </span>
+              Model library
+            </div>
+          </div>
+          <div style="flex:1"></div>
+          <div class="sb-user">
+            <div class="sb-avatar">MM</div>
+            <div style="flex:1;min-width:0">
+              <div class="sb-user-name">Max Muster</div>
+              <div class="sb-user-role">Methodologist</div>
+            </div>
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.35)" stroke-width="2" stroke-linecap="round"><polyline points="18 15 12 9 6 15"/></svg>
+          </div>
+        </div>
+
+        <!-- Context menu -->
+        <div>
+          <div style="font-size:11px;font-weight:700;color:#6b7280;letter-spacing:0.04em;margin-bottom:10px;text-transform:uppercase">User context menu (pops upward)</div>
+          <div style="background:#131e2b;border:1px solid rgba(255,255,255,0.1);border-radius:10px;padding:6px;max-width:220px;box-shadow:0 -8px 32px rgba(0,0,0,0.45)">
+            <div style="display:flex;align-items:center;gap:10px;padding:10px 12px 10px;border-bottom:1px solid rgba(255,255,255,0.08);margin-bottom:4px">
+              <div style="width:36px;height:36px;border-radius:50%;background:linear-gradient(135deg,#049484,#06b89e);display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;color:#fff">MM</div>
+              <div>
+                <div style="font-size:13px;font-weight:600;color:#fff">Max Muster</div>
+                <div style="font-size:11px;color:rgba(255,255,255,0.4);margin-top:1px">max@kit.edu</div>
+                <div style="font-size:11px;color:#4ecdc4">Methodologist</div>
+              </div>
+            </div>
+            <div style="padding:7px 12px;color:rgba(255,255,255,0.7);font-size:13px;cursor:pointer;border-radius:6px">👤 My Profile</div>
+            <div style="padding:7px 12px;color:rgba(255,255,255,0.7);font-size:13px;cursor:pointer;border-radius:6px">🔒 Change Password</div>
+            <div style="height:1px;background:rgba(255,255,255,0.08);margin:2px 0"></div>
+            <div style="padding:7px 12px;color:rgba(255,255,255,0.7);font-size:13px;cursor:pointer;border-radius:6px">⚙️ Settings</div>
+            <div style="height:1px;background:rgba(255,255,255,0.08);margin:2px 0"></div>
+            <div style="padding:7px 12px;color:rgba(248,113,113,0.75);font-size:13px;cursor:pointer;border-radius:6px">↪ Log out</div>
+          </div>
+        </div>
+
+        <!-- Dropdown -->
+        <div>
+          <div style="font-size:11px;font-weight:700;color:#6b7280;letter-spacing:0.04em;margin-bottom:10px;text-transform:uppercase">Dropdown filter menu</div>
+          <div class="dropdown-demo">
+            <div class="dd-item selected">All types</div>
+            <div class="dd-item">computer</div>
+            <div class="dd-item">transport</div>
+            <div class="dd-divider"></div>
+            <div class="dd-item danger">Reset filter</div>
+          </div>
+          <div style="font-size:11px;color:#9ca3af;margin-top:8px">bg: #fff · radius: 10px · shadow.md<br>Selected: primary-bg + primary text</div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+
+  <!-- ══════════════════════════════════════════════════ -->
+  <!-- 10 MODALS -->
+  <!-- ══════════════════════════════════════════════════ -->
+  <div id="modals" class="section">
+    <div class="section-header">
+      <div class="section-label">10 — Modals</div>
+      <div class="section-title">Modal patterns</div>
+      <div class="section-desc">Standard modals use white bg + shadow.modal. ConfirmDialog uses system font, centered icon layout, top accent border. Teal gradient header for Upload, Change Password, and form-submit modals.</div>
+    </div>
+    <div class="section-body">
+      <div class="two-col" style="align-items:start">
+
+        <!-- Standard modal header strip -->
+        <div>
+          <div style="font-size:11px;font-weight:700;color:#6b7280;letter-spacing:0.04em;margin-bottom:10px;text-transform:uppercase">Standard modal header strip</div>
+          <div class="modal-demo">
+            <div class="modal-header-strip">
+              <div style="display:flex;align-items:center;gap:10px">
+                <svg width="24" height="24" viewBox="0 0 32 32" fill="none">
+                  <path d="M16 5L27 11V21L16 27L5 21V11L16 5Z" stroke="#049484" stroke-width="1.6" fill="#04948422" stroke-linejoin="round"/>
+                </svg>
+                <div style="font-size:15px;font-weight:700;color:#0f172a">Modell-Vorschau: <span style="color:#374151;font-weight:600">VehicleModel</span></div>
+              </div>
+              <div style="display:flex;gap:6px">
+                <button class="btn-icon-sm" style="height:30px;padding:0 12px;width:auto;font-size:12px;font-weight:600;border:1px solid #e2e8f0;border-radius:7px;color:#374151;background:#f8fafc">Edit</button>
+                <button class="btn-icon-sm">✕</button>
+              </div>
+            </div>
+            <div class="modal-body-preview" style="font-size:13px;color:#6b7280">
+              bg: #fff · border-bottom: 1px solid #f1f5f9<br>
+              padding: 14px 20px · shadow.modal
+            </div>
+          </div>
+        </div>
+
+        <!-- ConfirmDialog — danger -->
+        <div>
+          <div style="font-size:11px;font-weight:700;color:#6b7280;letter-spacing:0.04em;margin-bottom:10px;text-transform:uppercase">ConfirmDialog — danger</div>
+          <div class="dialog-demo" style="border-top:4px solid #dc2626">
+            <div class="dialog-demo-content">
+              <div class="dialog-icon-circle" style="background:#fef2f2">
+                <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#dc2626" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
+                  <line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>
+                </svg>
+              </div>
+              <div class="dialog-title">Delete model?</div>
+              <div class="dialog-body">Do you really want to delete this model? This action cannot be undone.</div>
+            </div>
+            <div class="dialog-btns">
+              <button style="flex:1;padding:11px 16px;background:#fff;border:1.5px solid #e5e7eb;color:#374151;border-radius:8px;cursor:pointer;font-size:14px;font-weight:600;font-family:inherit">Cancel</button>
+              <button style="flex:1;padding:11px 16px;background:#dc2626;border:none;color:#fff;border-radius:8px;cursor:pointer;font-size:14px;font-weight:600;font-family:inherit;box-shadow:0 4px 14px rgba(220,38,38,0.25)">Delete</button>
+            </div>
+          </div>
+          <div style="font-size:11px;color:#9ca3af;margin-top:8px">border-top: 4px solid #dc2626 · icon circle bg: #fef2f2 · backdrop-filter: blur(8px)</div>
+        </div>
+
+        <!-- Teal gradient modal header (Upload / Change Password) -->
+        <div>
+          <div style="font-size:11px;font-weight:700;color:#6b7280;letter-spacing:0.04em;margin-bottom:10px;text-transform:uppercase">Teal gradient header (Upload / Change Password)</div>
+          <div class="modal-demo">
+            <div class="modal-header-teal">
+              <div style="display:flex;justify-content:space-between;align-items:flex-start">
+                <div>
+                  <div style="font-size:16px;font-weight:600;color:#fff;letter-spacing:-0.01em">Import Meta Model</div>
+                  <div style="font-size:12px;color:rgba(255,255,255,0.72);margin-top:3px">Upload your .ecore and .genmodel files</div>
+                </div>
+                <button style="background:transparent;border:none;color:rgba(255,255,255,0.75);font-size:18px;cursor:pointer;width:28px;height:28px;border-radius:4px;display:flex;align-items:center;justify-content:center">×</button>
+              </div>
+            </div>
+            <div class="modal-body-preview" style="font-size:13px;color:#6b7280">
+              gradient: #049484 → #037368 · title: white · subtitle: rgba(255,255,255,0.72)
+            </div>
+          </div>
+        </div>
+
+        <!-- ConfirmDialog — success -->
+        <div>
+          <div style="font-size:11px;font-weight:700;color:#6b7280;letter-spacing:0.04em;margin-bottom:10px;text-transform:uppercase">ConfirmDialog — success</div>
+          <div class="dialog-demo" style="border-top:4px solid #059669">
+            <div class="dialog-demo-content">
+              <div class="dialog-icon-circle" style="background:#f0fdf4">
+                <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#059669" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/>
+                  <polyline points="22 4 12 14.01 9 11.01"/>
+                </svg>
+              </div>
+              <div class="dialog-title">Upload successful</div>
+              <div class="dialog-body">Your meta-model has been uploaded and is now available in the library.</div>
+            </div>
+            <div class="dialog-btns" style="justify-content:center">
+              <button style="padding:11px 36px;background:#059669;border:none;color:#fff;border-radius:8px;cursor:pointer;font-size:14px;font-weight:600;font-family:inherit;box-shadow:0 4px 14px rgba(5,150,105,0.25)">Done</button>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+
+  <!-- ══════════════════════════════════════════════════ -->
+  <!-- 11 TABLES -->
+  <!-- ══════════════════════════════════════════════════ -->
+  <div id="tables" class="section">
+    <div class="section-header">
+      <div class="section-label">11 — Tables</div>
+      <div class="section-title">Data table pattern</div>
+      <div class="section-desc">White container, 12px radius, very subtle shadow. Header cells #fafafa, uppercase 12px/600. Row hover #fafafa. Name cells always weight-500.</div>
+    </div>
+    <div class="section-body">
+      <div class="table-demo">
+        <table class="demo-tbl">
+          <thead>
+            <tr>
+              <th>Name</th>
+              <th>Type</th>
+              <th>Created</th>
+              <th>Projects</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td class="td-name">VehicleMetaModel</td>
+              <td class="td-muted">transport</td>
+              <td class="td-muted">15/03/2025</td>
+              <td><span style="padding:3px 10px;background:#f3f4f6;border:1px solid #e5e7eb;border-radius:20px;font-size:12px;color:#374151;font-weight:500">Projects</span></td>
+              <td><button class="btn-row-actions">⋮</button></td>
+            </tr>
+            <tr>
+              <td class="td-name">BuildingSystemModel</td>
+              <td class="td-muted">architecture</td>
+              <td class="td-muted">02/01/2025</td>
+              <td><span style="color:#d1d5db;font-size:14px">--</span></td>
+              <td><button class="btn-row-actions">⋮</button></td>
+            </tr>
+            <tr>
+              <td class="td-name">SoftwareProcessModel</td>
+              <td class="td-muted">computer</td>
+              <td class="td-muted">20/11/2024</td>
+              <td><span style="padding:3px 10px;background:#f3f4f6;border:1px solid #e5e7eb;border-radius:20px;font-size:12px;color:#374151;font-weight:500">Projects</span></td>
+              <td><button class="btn-row-actions">⋮</button></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="page-btns">
+        <button class="page-btn disabled">←</button>
+        <button class="page-btn active">1</button>
+        <button class="page-btn">2</button>
+        <button class="page-btn">3</button>
+        <span style="padding:0 4px;color:#9ca3af;font-size:13px">…</span>
+        <button class="page-btn">12</button>
+        <button class="page-btn">→</button>
+      </div>
+      <div style="font-size:12px;color:#9ca3af;margin-top:8px">Pagination: active page uses primary bg + white text</div>
+    </div>
+  </div>
+
+  <!-- ══════════════════════════════════════════════════ -->
+  <!-- 12 TOASTS -->
+  <!-- ══════════════════════════════════════════════════ -->
+  <div id="toasts" class="section">
+    <div class="section-header">
+      <div class="section-label">12 — Toasts &amp; Notifications</div>
+      <div class="section-title">Toast system</div>
+      <div class="section-desc">Fixed top-right, 16px from edges. Color-coded by type. Auto-dismiss after 3000ms. No icons — text-only with a close ×.</div>
+    </div>
+    <div class="section-body">
+      <div class="toast-list">
+        <div class="toast success">
+          <div class="toast-text">Meta-model uploaded successfully.</div>
+          <div class="toast-close">×</div>
+        </div>
+        <div class="toast error">
+          <div class="toast-text">Failed to connect to backend. Please try again.</div>
+          <div class="toast-close">×</div>
+        </div>
+        <div class="toast info">
+          <div class="toast-text">Your session will expire in 5 minutes.</div>
+          <div class="toast-close">×</div>
+        </div>
+      </div>
+      <div style="margin-top:16px;font-size:12px;color:#9ca3af">
+        Position: <code style="font-family:monospace">fixed top:16px right:16px</code> · z-index: 2000 ·
+        shadow: <code style="font-family:monospace">0 10px 20px rgba(0,0,0,0.12)</code> · radius: 8px
+      </div>
+    </div>
+  </div>
+
+  <!-- ══════════════════════════════════════════════════ -->
+  <!-- 13 AUTH CARD -->
+  <!-- ══════════════════════════════════════════════════ -->
+  <div id="auth" class="section">
+    <div class="section-header">
+      <div class="section-label">13 — Auth Card</div>
+      <div class="section-title">Login / Register screen</div>
+      <div class="section-desc">Glassmorphic dark card on a full-bleed background. Exclusive to /login and /verify-otp. Do not reuse this visual pattern inside the app shell.</div>
+    </div>
+    <div class="section-body">
+      <div class="auth-preview-wrap">
+        <div class="auth-card-demo">
+          <div class="auth-card-bar"></div>
+          <div class="auth-title">Vitruvius</div>
+          <div class="auth-sub">Sign in to your account</div>
+          <label style="display:block;font-size:12px;font-weight:700;color:#fff;margin-bottom:6px;letter-spacing:0.02em">EMAIL</label>
+          <input class="auth-input-demo" placeholder="you@kit.edu" />
+          <label style="display:block;font-size:12px;font-weight:700;color:#fff;margin-bottom:6px;letter-spacing:0.02em">PASSWORD</label>
+          <input class="auth-input-demo" placeholder="••••••••" type="password" />
+          <button class="auth-btn-demo" style="margin-top:6px">Sign in</button>
+          <div style="text-align:center;margin-top:14px;font-size:14px;color:#f0f0f0">
+            No account?
+            <span style="color:#08d4bc;font-weight:700;cursor:pointer;border-bottom:2px solid transparent">Register</span>
+          </div>
+        </div>
+      </div>
+      <div style="margin-top:16px;font-size:12px;color:#9ca3af">
+        Card: <code style="font-family:monospace">background: rgba(40,40,40,0.65)</code> · <code style="font-family:monospace">backdrop-filter: blur(25px)</code> · <code style="font-family:monospace">border-radius: 20px</code><br>
+        Inputs: <code style="font-family:monospace">border-radius: 12px</code> · focus: <code style="font-family:monospace">0 0 0 4px rgba(6,181,160,0.3)</code>
+      </div>
+    </div>
+  </div>
+
+</div><!-- /content -->
+
+<!-- ── Footer ── -->
+<footer style="text-align:center;padding:32px 16px 40px;color:#9ca3af;font-size:12px;border-top:1px solid #e5e7eb;background:#fff;margin-top:48px">
+  Vitruvius Modeler — Design System Reference · Karlsruhe Institute of Technology<br>
+  <span style="font-family:monospace;font-size:11px">public/design-system.html</span> · Open via <code style="font-family:monospace">localhost:3000/design-system.html</code> while dev server is running
+</footer>
+
+<script>
+  // Smooth scroll for nav links
+  document.querySelectorAll('.top-nav a').forEach(a => {
+    a.addEventListener('click', e => {
+      const href = a.getAttribute('href');
+      if (href && href.startsWith('#')) {
+        e.preventDefault();
+        const el = document.querySelector(href);
+        if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }
+    });
+  });
+
+  // Highlight active section in nav
+  const sections = document.querySelectorAll('[id]');
+  const navLinks = document.querySelectorAll('.top-nav a[href^="#"]');
+  const observer = new IntersectionObserver(entries => {
+    entries.forEach(entry => {
+      if (entry.isIntersecting) {
+        navLinks.forEach(l => {
+          l.style.color = l.getAttribute('href') === '#' + entry.target.id
+            ? '#ffffff' : 'rgba(255,255,255,0.5)';
+          l.style.borderBottom = l.getAttribute('href') === '#' + entry.target.id
+            ? '2px solid #049484' : '2px solid transparent';
+        });
+      }
+    });
+  }, { threshold: 0.3 });
+  sections.forEach(s => observer.observe(s));
+
+  // Click-to-copy on color swatches
+  document.querySelectorAll('.swatch').forEach(sw => {
+    sw.style.cursor = 'pointer';
+    sw.title = 'Click to copy hex';
+    sw.addEventListener('click', () => {
+      const hex = sw.querySelector('.swatch-hex')?.textContent?.trim().split(' ')[0];
+      if (hex && hex.startsWith('#')) {
+        navigator.clipboard.writeText(hex).then(() => {
+          const info = sw.querySelector('.swatch-info');
+          const orig = info.style.background;
+          info.style.background = '#d1fae5';
+          setTimeout(() => { info.style.background = orig; }, 800);
+        });
+      }
+    });
+  });
+</script>
+</body>
+</html>

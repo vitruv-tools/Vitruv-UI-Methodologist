@@ -1,0 +1,1131 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Vitruv UI – Design System</title>
+  <style>
+    /* ─── Reset & Base ──────────────────────────────────────────────────────── */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
+        'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue', sans-serif;
+      -webkit-font-smoothing: antialiased;
+      background: #f0f2f5;
+      color: #2c3e50;
+      line-height: 1.6;
+    }
+
+    /* ─── Layout ────────────────────────────────────────────────────────────── */
+    .ds-page-header {
+      background: linear-gradient(135deg, #049484 0%, #037368 100%);
+      color: #fff;
+      padding: 32px 48px;
+      box-shadow: 0 2px 8px rgba(4, 148, 132, 0.25);
+    }
+    .ds-page-header h1 {
+      font-family: Georgia, serif;
+      font-size: 28px;
+      font-weight: 700;
+      letter-spacing: -0.5px;
+    }
+    .ds-page-header p {
+      margin-top: 6px;
+      font-size: 15px;
+      opacity: 0.9;
+    }
+
+    .ds-nav {
+      background: #fff;
+      border-bottom: 1px solid #e5e7eb;
+      padding: 0 48px;
+      display: flex;
+      gap: 0;
+      overflow-x: auto;
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      box-shadow: 0 1px 4px rgba(0,0,0,0.07);
+    }
+    .ds-nav a {
+      display: inline-block;
+      padding: 14px 18px;
+      font-size: 13px;
+      font-weight: 600;
+      color: #6b7280;
+      text-decoration: none;
+      border-bottom: 3px solid transparent;
+      white-space: nowrap;
+      transition: all 0.2s;
+    }
+    .ds-nav a:hover { color: #049484; border-bottom-color: #049484; }
+
+    .ds-content { max-width: 1100px; margin: 0 auto; padding: 48px 24px; }
+
+    .ds-section {
+      background: #fff;
+      border-radius: 12px;
+      border: 1px solid #e5e7eb;
+      margin-bottom: 40px;
+      overflow: hidden;
+      box-shadow: 0 1px 4px rgba(0,0,0,0.05);
+    }
+    .ds-section-header {
+      padding: 20px 28px;
+      border-bottom: 2px solid #049484;
+      background: linear-gradient(135deg, #f8fcff 0%, #e8f4f8 100%);
+      display: flex;
+      align-items: baseline;
+      gap: 14px;
+    }
+    .ds-section-header h2 {
+      font-family: Georgia, serif;
+      font-size: 20px;
+      font-weight: 700;
+      color: #2c3e50;
+    }
+    .ds-section-header .ds-tag {
+      font-size: 11px;
+      font-weight: 600;
+      background: #e6f7f5;
+      color: #049484;
+      padding: 2px 8px;
+      border-radius: 4px;
+      border: 1px solid #b2e4df;
+    }
+    .ds-section-body { padding: 28px; }
+
+    .ds-subsection { margin-bottom: 32px; }
+    .ds-subsection:last-child { margin-bottom: 0; }
+    .ds-subsection-title {
+      font-size: 11px;
+      font-weight: 700;
+      color: #9ca3af;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      margin-bottom: 16px;
+      padding-bottom: 8px;
+      border-bottom: 1px solid #f1f3f5;
+    }
+
+    .ds-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+      align-items: center;
+    }
+    .ds-row.ds-col { flex-direction: column; align-items: flex-start; }
+    .ds-label {
+      font-size: 11px;
+      color: #9ca3af;
+      margin-top: 6px;
+      font-family: ui-monospace, monospace;
+    }
+    .ds-pair { display: flex; flex-direction: column; }
+
+    /* ─── Color Palette ─────────────────────────────────────────────────────── */
+    .ds-color-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+      gap: 12px;
+    }
+    .ds-color-chip { border-radius: 8px; overflow: hidden; border: 1px solid #e5e7eb; box-shadow: 0 1px 3px rgba(0,0,0,0.06); }
+    .ds-color-swatch { height: 72px; width: 100%; }
+    .ds-color-info { padding: 10px 12px; background: #fff; }
+    .ds-color-name { font-size: 12px; font-weight: 700; color: #2c3e50; }
+    .ds-color-value { font-size: 11px; color: #9ca3af; font-family: ui-monospace, monospace; margin-top: 2px; }
+
+    /* ─── Typography ────────────────────────────────────────────────────────── */
+    .ds-type-sample {
+      padding: 14px 0;
+      border-bottom: 1px solid #f1f3f5;
+      display: grid;
+      grid-template-columns: 200px 1fr;
+      gap: 16px;
+      align-items: baseline;
+    }
+    .ds-type-sample:last-child { border-bottom: none; }
+    .ds-type-meta { font-size: 11px; font-family: ui-monospace, monospace; color: #9ca3af; }
+
+    /* ─── Buttons ───────────────────────────────────────────────────────────── */
+    .btn-primary {
+      padding: 12px 20px; border: none; border-radius: 8px;
+      background: linear-gradient(135deg, #049484 0%, #037368 100%);
+      color: #ffffff; font-size: 14px; font-weight: 600; cursor: pointer;
+      font-family: Georgia, serif; transition: all 0.2s ease;
+      box-shadow: 0 2px 8px rgba(4, 148, 132, 0.25);
+      display: inline-flex; align-items: center; gap: 8px;
+    }
+    .btn-primary:hover { transform: translateY(-1px); box-shadow: 0 4px 12px rgba(4, 148, 132, 0.35); background: linear-gradient(135deg, #037368 0%, #025850 100%); }
+
+    .btn-secondary {
+      padding: 12px 20px; border: 2px solid #049484; border-radius: 8px;
+      background: #ffffff; color: #2c3e50; font-size: 14px; font-weight: 600;
+      cursor: pointer; font-family: Georgia, serif; transition: all 0.2s ease;
+    }
+    .btn-secondary:hover { transform: translateY(-1px); box-shadow: 0 4px 12px rgba(4, 148, 132, 0.15); }
+
+    .btn-danger {
+      padding: 12px 20px; border: none; border-radius: 8px;
+      background: linear-gradient(135deg, #dc2626 0%, #b91c1c 100%);
+      color: #ffffff; font-size: 14px; font-weight: 600; cursor: pointer;
+      font-family: Georgia, serif; transition: all 0.2s ease;
+      box-shadow: 0 2px 8px rgba(220, 38, 38, 0.3);
+    }
+    .btn-danger:hover { transform: translateY(-1px); box-shadow: 0 4px 12px rgba(220, 38, 38, 0.4); }
+
+    .btn-cancel {
+      padding: 12px 24px; border: 2px solid #e5e7eb; border-radius: 8px;
+      background: #ffffff; color: #374151; font-size: 14px; font-weight: 600;
+      cursor: pointer; font-family: Georgia, serif; transition: all 0.2s ease;
+    }
+    .btn-cancel:hover { background: #f9fafb; border-color: #d1d5db; }
+
+    .btn-ghost-teal {
+      padding: 8px 16px; border: 1px solid #049484; border-radius: 8px;
+      background: #ffffff; color: #049484; font-size: 13px; font-weight: 600;
+      cursor: pointer; transition: all 0.2s ease;
+    }
+    .btn-ghost-teal:hover { background: #049484; color: #ffffff; }
+
+    .btn-standard {
+      padding: 10px 16px; border-radius: 8px; border: 1px solid #e5e7eb;
+      background: #ffffff; cursor: pointer; font-weight: 600; font-size: 14px;
+      color: #374151; display: inline-flex; align-items: center; gap: 6px;
+      transition: all 0.2s ease;
+    }
+    .btn-standard:hover { background: #f9fafb; border-color: #d1d5db; }
+
+    .btn-disabled {
+      padding: 12px 20px; border: none; border-radius: 8px; background: #bdc3c7;
+      color: #7f8c8d; font-size: 14px; font-weight: 600; cursor: not-allowed;
+      font-family: Georgia, serif; opacity: 0.6;
+    }
+    .btn-sm { padding: 8px 12px !important; font-size: 12px !important; border-radius: 6px !important; }
+    .btn-lg { padding: 14px 28px !important; font-size: 15px !important; }
+
+    /* ─── Tab Buttons ───────────────────────────────────────────────────────── */
+    .ds-tabs { display: flex; border-bottom: 2px solid #e5e7eb; }
+    .ds-tab {
+      flex: 1; padding: 12px 16px; border: none; font-weight: 700; font-size: 14px;
+      cursor: pointer; transition: all 0.2s ease; font-family: Georgia, serif; max-width: 160px;
+    }
+    .ds-tab.active { border-bottom: 3px solid #049484; background: #f0f9ff; color: #049484; margin-bottom: -2px; }
+    .ds-tab.inactive { border-bottom: 3px solid transparent; background: transparent; color: #6b7280; }
+    .ds-tab.inactive:hover { background: #f9fafb; }
+
+    /* ─── Inputs ────────────────────────────────────────────────────────────── */
+    .ds-input {
+      width: 100%; max-width: 400px; padding: 12px 14px;
+      border: 2px solid #d1ecf1; border-radius: 8px; font-size: 14px;
+      transition: all 0.3s ease; background: #f8f9fa;
+      font-family: Georgia, serif; outline: none;
+    }
+    .ds-input:focus { border-color: #049484; box-shadow: 0 0 0 3px rgba(4, 148, 132, 0.1); background: #fff; }
+    .ds-input.input-error { border-color: #f87171; background: #fffafa; }
+
+    .ds-textarea {
+      width: 100%; max-width: 400px; padding: 12px 14px;
+      border: 2px solid #d1ecf1; border-radius: 8px; font-size: 14px;
+      min-height: 80px; resize: vertical; font-family: Georgia, serif;
+      transition: all 0.2s ease; background: #f8f9fa; outline: none;
+    }
+    .ds-textarea:focus { border-color: #049484; box-shadow: 0 0 0 3px rgba(4, 148, 132, 0.1); background: #fff; }
+
+    .ds-select {
+      padding: 10px 16px; border: 1px solid #e5e7eb; border-radius: 8px;
+      font-size: 14px; font-weight: 600; color: #374151; background: #ffffff;
+      cursor: pointer; outline: none; transition: all 0.2s ease; max-width: 240px;
+    }
+    .ds-select:hover { background: #f9fafb; border-color: #d1d5db; }
+
+    .ds-label-text { display: block; font-size: 14px; font-weight: 600; color: #2c3e50; margin-bottom: 8px; font-family: Georgia, serif; }
+    .ds-label-upper { display: block; font-size: 12px; font-weight: 700; color: #495057; margin-bottom: 6px; text-transform: uppercase; letter-spacing: 0.5px; font-family: Georgia, serif; }
+    .ds-input-group { margin-bottom: 16px; max-width: 400px; }
+
+    /* ─── Feedback ──────────────────────────────────────────────────────────── */
+    .ds-msg { padding: 10px 14px; border-radius: 8px; font-size: 13px; font-weight: 500; max-width: 440px; line-height: 1.5; }
+    .ds-msg-success { background: #d4edda; color: #155724; border: 1px solid #c3e6cb; }
+    .ds-msg-error   { background: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; }
+    .ds-msg-warning { padding: 16px; background: #fff8ed; border-left: 4px solid #f59e0b; border-radius: 6px; font-size: 14px; color: #92400e; line-height: 1.7; max-width: 440px; }
+    .ds-msg-info    { padding: 8px 12px; background: #f0f9ff; border: 1px solid #bae6fd; border-radius: 8px; font-size: 12px; color: #0369a1; max-width: 440px; }
+    .ds-msg-success-lg { padding: 14px 16px; background: #d5f4e6; border: 2px solid #a9dfbf; border-radius: 8px; color: #166534; font-size: 13px; font-weight: 500; line-height: 1.5; max-width: 440px; }
+    .ds-msg-error-lg   { padding: 14px 16px; background: #fef2f2; border: 2px solid #fecaca; border-radius: 8px; color: #991b1b; font-size: 13px; font-weight: 500; line-height: 1.5; max-width: 440px; }
+    .ds-field-error   { margin-top: 6px; font-size: 12px; color: #b91c1c; display: flex; align-items: center; gap: 4px; }
+    .ds-field-success { margin-top: 6px; font-size: 12px; color: #16a34a; display: flex; align-items: center; gap: 4px; }
+
+    /* ─── Badges / Tags ─────────────────────────────────────────────────────── */
+    .ds-badge { display: inline-flex; align-items: center; padding: 2px 8px; border-radius: 16px; font-size: 11px; font-weight: 500; border: 1px solid; }
+    .ds-badge-blue  { color: #0366d6; background: #f1f8ff; border-color: #c8e1ff; }
+    .ds-badge-teal  { color: #049484; background: #e6f7f5; border-color: #b2e4df; }
+    .ds-badge-green { color: #27ae60; background: #d5f4e6; border-color: #a9dfbf; }
+    .ds-badge-red   { color: #e74c3c; background: #fadbd8; border-color: #f1948a; }
+    .ds-badge-gray  { color: #6b7280; background: #f3f4f6; border-color: #e5e7eb; }
+    .ds-badge-verified { padding: 6px 12px; border-radius: 4px; font-size: 12px; font-weight: 500; }
+    .ds-badge-verified.success { background: #d5f4e6; color: #27ae60; border: 1px solid #a9dfbf; }
+    .ds-badge-verified.warning { background: #fadbd8; color: #e74c3c; border: 1px solid #f1948a; }
+
+    /* ─── Cards ─────────────────────────────────────────────────────────────── */
+    .ds-card { background: #ffffff; border: 1px solid #e5e7eb; border-radius: 12px; padding: 16px; box-shadow: 0 1px 3px rgba(0,0,0,0.05); transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1); max-width: 360px; }
+    .ds-card:hover { box-shadow: 0 8px 24px rgba(4, 148, 132, 0.15); transform: translateY(-2px); border-color: #049484; }
+    .ds-panel { background: #f8f9fa; border: 1px solid #e9ecef; border-radius: 8px; padding: 16px; max-width: 300px; }
+    .ds-panel-title { font-size: 18px; font-weight: 700; margin-bottom: 16px; color: #2c3e50; padding: 8px 0; border-bottom: 2px solid #049484; font-family: Georgia, serif; }
+    .ds-info-block { padding: 12px; background: #f8f9fa; border-radius: 6px; border: 1px solid #e9ecef; max-width: 260px; }
+    .ds-info-block-label { font-size: 12px; font-weight: 700; color: #495057; margin-bottom: 6px; text-transform: uppercase; letter-spacing: 0.5px; font-family: Georgia, serif; }
+    .ds-info-block-value { font-size: 14px; color: #212529; font-family: Georgia, serif; }
+
+    /* ─── Modals ─────────────────────────────────────────────────────────────── */
+    .ds-modal-preview { background: #ffffff; border-radius: 16px; max-width: 480px; overflow: hidden; box-shadow: 0 24px 72px rgba(0,0,0,0.3); border: 1px solid #e5e7eb; }
+    .ds-modal-header-gradient { background: linear-gradient(135deg, #049484 0%, #037368 100%); padding: 28px 32px; color: #fff; border-bottom: 3px solid #037368; }
+    .ds-modal-header-gradient h2 { margin: 0; font-size: 26px; font-weight: 700; letter-spacing: -0.5px; font-family: Georgia, serif; }
+    .ds-modal-header-gradient p { margin: 10px 0 0; font-size: 14px; opacity: 0.95; line-height: 1.5; }
+    .ds-modal-body { padding: 28px 32px; }
+    .ds-modal-footer { padding: 16px 24px; border-top: 1px solid #e9ecef; background: #f8f9fa; display: flex; justify-content: flex-end; gap: 12px; }
+    .ds-modal-header-light { padding: 20px 24px; border-bottom: 2px solid #049484; background: linear-gradient(135deg, #f8fcff 0%, #e8f4f8 100%); display: flex; align-items: center; justify-content: space-between; }
+    .ds-modal-header-light h3 { margin: 0; font-size: 20px; font-weight: 700; color: #2c3e50; font-family: Georgia, serif; letter-spacing: 0.01em; }
+
+    /* ─── Header Bar ─────────────────────────────────────────────────────────── */
+    .ds-header-bar { height: 48px; background: linear-gradient(135deg, #049484 0%, #037368 100%); color: #fff; display: flex; align-items: center; justify-content: space-between; padding: 0 12px; box-shadow: 0 2px 8px rgba(4, 148, 132, 0.25); border-radius: 8px; }
+    .ds-header-title { font-size: 16px; font-weight: 600; }
+    .ds-avatar { width: 36px; height: 36px; border-radius: 50%; background: #ffffff; color: #34495e; border: 2px solid #bdc3c7; display: flex; align-items: center; justify-content: center; font-weight: 600; font-size: 14px; cursor: pointer; user-select: none; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
+
+    /* ─── Pagination ─────────────────────────────────────────────────────────── */
+    .ds-pagination { display: flex; gap: 4px; align-items: center; }
+    .ds-page-btn { padding: 8px 12px; border: 1px solid #e5e7eb; border-radius: 8px; background: #ffffff; color: #374151; font-size: 13px; font-weight: 600; cursor: pointer; transition: all 0.2s ease; min-width: 36px; text-align: center; }
+    .ds-page-btn:hover { background: #f9fafb; border-color: #d1d5db; }
+    .ds-page-btn.active { background: #049484; color: #ffffff; border-color: #049484; box-shadow: 0 2px 4px rgba(4, 148, 132, 0.2); }
+    .ds-page-btn.ds-disabled, .ds-page-btn:disabled { background: #f9fafb; color: #9ca3af; border-color: #e5e7eb; cursor: not-allowed; opacity: 0.6; }
+
+    /* ─── Spinner & Progress ─────────────────────────────────────────────────── */
+    @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+    .ds-spinner { width: 40px; height: 40px; border: 4px solid #e5e7eb; border-top: 4px solid #049484; border-radius: 50%; animation: spin 1s linear infinite; }
+    .ds-progress-track { width: 100%; max-width: 320px; height: 8px; background: #e0e0e0; border-radius: 4px; overflow: hidden; }
+    .ds-progress-fill { height: 100%; background: #049484; border-radius: 4px; transition: width 0.3s ease; }
+
+    /* ─── Upload Zone ────────────────────────────────────────────────────────── */
+    .ds-upload-zone { width: 100%; max-width: 320px; padding: 14px 12px; border: 2px dashed #cbd5e1; border-radius: 6px; background: #fafafa; text-align: center; cursor: pointer; font-family: Georgia, serif; transition: all 0.2s; }
+    .ds-upload-zone:hover { background: #f0fdff; border-color: #049484; }
+    .ds-upload-zone.ready { border: 2px dashed #86efac; background: #f0fdf4; }
+
+    /* ─── Misc ───────────────────────────────────────────────────────────────── */
+    .ds-empty-state { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; font-size: 14px; color: #6b7280; text-align: center; padding: 40px 24px; max-width: 360px; }
+    .ds-empty-state-title { font-weight: 600; font-size: 16px; color: #374151; }
+    .ds-empty-state-sub { font-size: 13px; color: #9ca3af; max-width: 280px; }
+    .ds-code { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; background: #f1f5f9; padding: 2px 6px; border-radius: 4px; font-size: 12px; color: #475569; }
+    .note { font-size: 12px; color: #6b7280; background: #f8f9fa; border: 1px solid #e5e7eb; border-radius: 6px; padding: 8px 12px; font-style: italic; margin-top: 8px; line-height: 1.6; }
+  </style>
+</head>
+<body>
+
+<!-- ═══ PAGE HEADER ════════════════════════════════════════════════════════════ -->
+<header class="ds-page-header">
+  <h1>Vitruv UI — Design System</h1>
+  <p>Orientierungsleitfaden für alle UI-Elemente · Farben · Schriften · Komponenten</p>
+</header>
+
+<!-- ═══ NAVIGATION ════════════════════════════════════════════════════════════ -->
+<nav class="ds-nav">
+  <a href="#colors">Farben</a>
+  <a href="#typography">Typografie</a>
+  <a href="#buttons">Buttons</a>
+  <a href="#inputs">Inputs &amp; Forms</a>
+  <a href="#feedback">Feedback</a>
+  <a href="#badges">Badges &amp; Tags</a>
+  <a href="#cards">Cards &amp; Panels</a>
+  <a href="#modals">Modals</a>
+  <a href="#navigation-sec">Navigation</a>
+  <a href="#misc">Misc</a>
+</nav>
+
+<main class="ds-content">
+
+  <!-- ═══ 1. FARBEN ══════════════════════════════════════════════════════════ -->
+  <section id="colors" class="ds-section">
+    <div class="ds-section-header">
+      <h2>Farben</h2><span class="ds-tag">Color Palette</span>
+    </div>
+    <div class="ds-section-body">
+
+      <div class="ds-subsection">
+        <div class="ds-subsection-title">Brand / Primary</div>
+        <div class="ds-color-grid">
+          <div class="ds-color-chip">
+            <div class="ds-color-swatch" style="background:linear-gradient(135deg,#049484 0%,#037368 100%);"></div>
+            <div class="ds-color-info"><div class="ds-color-name">Primary Gradient</div><div class="ds-color-value">#049484 → #037368</div></div>
+          </div>
+          <div class="ds-color-chip">
+            <div class="ds-color-swatch" style="background:#049484;"></div>
+            <div class="ds-color-info"><div class="ds-color-name">Primary</div><div class="ds-color-value">#049484</div></div>
+          </div>
+          <div class="ds-color-chip">
+            <div class="ds-color-swatch" style="background:#037368;"></div>
+            <div class="ds-color-info"><div class="ds-color-name">Primary Dark</div><div class="ds-color-value">#037368</div></div>
+          </div>
+          <div class="ds-color-chip">
+            <div class="ds-color-swatch" style="background:#025850;"></div>
+            <div class="ds-color-info"><div class="ds-color-name">Primary Darkest</div><div class="ds-color-value">#025850</div></div>
+          </div>
+          <div class="ds-color-chip">
+            <div class="ds-color-swatch" style="background:#e6f7f5;border-bottom:1px solid #e5e7eb;"></div>
+            <div class="ds-color-info"><div class="ds-color-name">Primary Light</div><div class="ds-color-value">#e6f7f5</div></div>
+          </div>
+          <div class="ds-color-chip">
+            <div class="ds-color-swatch" style="background:#f0f9ff;border-bottom:1px solid #e5e7eb;"></div>
+            <div class="ds-color-info"><div class="ds-color-name">Primary Tint</div><div class="ds-color-value">#f0f9ff</div></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="ds-subsection">
+        <div class="ds-subsection-title">Semantische Farben</div>
+        <div class="ds-color-grid">
+          <div class="ds-color-chip">
+            <div class="ds-color-swatch" style="background:linear-gradient(135deg,#dc2626 0%,#b91c1c 100%);"></div>
+            <div class="ds-color-info"><div class="ds-color-name">Danger Gradient</div><div class="ds-color-value">#dc2626 → #b91c1c</div></div>
+          </div>
+          <div class="ds-color-chip">
+            <div class="ds-color-swatch" style="background:#dc2626;"></div>
+            <div class="ds-color-info"><div class="ds-color-name">Error</div><div class="ds-color-value">#dc2626</div></div>
+          </div>
+          <div class="ds-color-chip">
+            <div class="ds-color-swatch" style="background:#fef2f2;border-bottom:1px solid #e5e7eb;"></div>
+            <div class="ds-color-info"><div class="ds-color-name">Error BG</div><div class="ds-color-value">#fef2f2</div></div>
+          </div>
+          <div class="ds-color-chip">
+            <div class="ds-color-swatch" style="background:#16a34a;"></div>
+            <div class="ds-color-info"><div class="ds-color-name">Success</div><div class="ds-color-value">#16a34a</div></div>
+          </div>
+          <div class="ds-color-chip">
+            <div class="ds-color-swatch" style="background:#d4edda;border-bottom:1px solid #e5e7eb;"></div>
+            <div class="ds-color-info"><div class="ds-color-name">Success BG</div><div class="ds-color-value">#d4edda</div></div>
+          </div>
+          <div class="ds-color-chip">
+            <div class="ds-color-swatch" style="background:#f59e0b;"></div>
+            <div class="ds-color-info"><div class="ds-color-name">Warning</div><div class="ds-color-value">#f59e0b</div></div>
+          </div>
+          <div class="ds-color-chip">
+            <div class="ds-color-swatch" style="background:#fff8ed;border-bottom:1px solid #e5e7eb;"></div>
+            <div class="ds-color-info"><div class="ds-color-name">Warning BG</div><div class="ds-color-value">#fff8ed</div></div>
+          </div>
+          <div class="ds-color-chip">
+            <div class="ds-color-swatch" style="background:#0369a1;"></div>
+            <div class="ds-color-info"><div class="ds-color-name">Info</div><div class="ds-color-value">#0369a1</div></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="ds-subsection">
+        <div class="ds-subsection-title">Neutrale Farben</div>
+        <div class="ds-color-grid">
+          <div class="ds-color-chip"><div class="ds-color-swatch" style="background:#2c3e50;"></div><div class="ds-color-info"><div class="ds-color-name">Text Primary</div><div class="ds-color-value">#2c3e50</div></div></div>
+          <div class="ds-color-chip"><div class="ds-color-swatch" style="background:#374151;"></div><div class="ds-color-info"><div class="ds-color-name">Text Dark</div><div class="ds-color-value">#374151</div></div></div>
+          <div class="ds-color-chip"><div class="ds-color-swatch" style="background:#495057;"></div><div class="ds-color-info"><div class="ds-color-name">Text Mid</div><div class="ds-color-value">#495057</div></div></div>
+          <div class="ds-color-chip"><div class="ds-color-swatch" style="background:#6b7280;"></div><div class="ds-color-info"><div class="ds-color-name">Text Secondary</div><div class="ds-color-value">#6b7280</div></div></div>
+          <div class="ds-color-chip"><div class="ds-color-swatch" style="background:#9ca3af;"></div><div class="ds-color-info"><div class="ds-color-name">Text Muted</div><div class="ds-color-value">#9ca3af</div></div></div>
+          <div class="ds-color-chip"><div class="ds-color-swatch" style="background:#f8f9fa;border-bottom:1px solid #e5e7eb;"></div><div class="ds-color-info"><div class="ds-color-name">BG Light</div><div class="ds-color-value">#f8f9fa</div></div></div>
+          <div class="ds-color-chip"><div class="ds-color-swatch" style="background:#e5e7eb;border-bottom:1px solid #d1d5db;"></div><div class="ds-color-info"><div class="ds-color-name">Border</div><div class="ds-color-value">#e5e7eb</div></div></div>
+          <div class="ds-color-chip"><div class="ds-color-swatch" style="background:#d1ecf1;border-bottom:1px solid #bee3f8;"></div><div class="ds-color-info"><div class="ds-color-name">Border Light</div><div class="ds-color-value">#d1ecf1</div></div></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══ 2. TYPOGRAFIE ══════════════════════════════════════════════════════ -->
+  <section id="typography" class="ds-section">
+    <div class="ds-section-header">
+      <h2>Typografie</h2><span class="ds-tag">Typography</span>
+    </div>
+    <div class="ds-section-body">
+
+      <div class="ds-subsection">
+        <div class="ds-subsection-title">Schriftfamilien</div>
+        <div style="display:flex;flex-direction:column;gap:14px;">
+          <div>
+            <span class="ds-code">Georgia, serif</span>
+            <p style="font-family:Georgia,serif;font-size:18px;margin-top:6px;color:#2c3e50;">Überschriften, Labels, Buttons — Primärschrift für UI-Text</p>
+          </div>
+          <div>
+            <span class="ds-code">-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto…</span>
+            <p style="font-size:16px;margin-top:6px;color:#2c3e50;">System Font — Body Text, sekundäre Inhalte, Fließtext</p>
+          </div>
+          <div>
+            <span class="ds-code">source-code-pro, Menlo, Monaco, Consolas, 'Courier New'</span>
+            <p style="font-family:source-code-pro,Menlo,Monaco,Consolas,'Courier New',monospace;font-size:14px;margin-top:6px;color:#2c3e50;">Monospace — Code, Dateinamen, technische Werte</p>
+          </div>
+        </div>
+      </div>
+
+      <div class="ds-subsection">
+        <div class="ds-subsection-title">Schriftgrößen &amp; Stile</div>
+        <div class="ds-type-sample">
+          <div class="ds-type-meta">28px · bold · Georgia<br>Page Header Title</div>
+          <div style="font-family:Georgia,serif;font-size:28px;font-weight:700;color:#fff;background:linear-gradient(135deg,#049484,#037368);padding:8px 16px;border-radius:6px;letter-spacing:-0.5px;display:inline-block;">Methodologist Dashboard</div>
+        </div>
+        <div class="ds-type-sample">
+          <div class="ds-type-meta">26px · bold · Georgia<br>Modal Main Title</div>
+          <div style="font-family:Georgia,serif;font-size:26px;font-weight:700;color:#2c3e50;letter-spacing:-0.5px;">Change Password</div>
+        </div>
+        <div class="ds-type-sample">
+          <div class="ds-type-meta">22px · bold · Georgia<br>Modal Secondary Title</div>
+          <div style="font-family:Georgia,serif;font-size:22px;font-weight:700;color:#2c3e50;">Import Meta Model</div>
+        </div>
+        <div class="ds-type-sample">
+          <div class="ds-type-meta">20px · bold · Georgia<br>Dialog / Section Header</div>
+          <div style="font-family:Georgia,serif;font-size:20px;font-weight:700;color:#2c3e50;">Meta Model Details</div>
+        </div>
+        <div class="ds-type-sample">
+          <div class="ds-type-meta">18px · bold · Georgia<br>Panel Title</div>
+          <div style="font-family:Georgia,serif;font-size:18px;font-weight:700;color:#2c3e50;border-bottom:2px solid #049484;padding-bottom:4px;display:inline-block;">Meta Models</div>
+        </div>
+        <div class="ds-type-sample">
+          <div class="ds-type-meta">16px · bold · Georgia<br>Card Title / Nav h1</div>
+          <div style="font-family:Georgia,serif;font-size:16px;font-weight:700;color:#1f2937;">MyMetaModel</div>
+        </div>
+        <div class="ds-type-sample">
+          <div class="ds-type-meta">14px · 600 · System<br>Standard Body / Buttons</div>
+          <div style="font-size:14px;font-weight:600;color:#374151;">Standard body text and button labels</div>
+        </div>
+        <div class="ds-type-sample">
+          <div class="ds-type-meta">14px · 600 · Georgia<br>Form Labels</div>
+          <div style="font-family:Georgia,serif;font-size:14px;font-weight:600;color:#2c3e50;">Model Name *</div>
+        </div>
+        <div class="ds-type-sample">
+          <div class="ds-type-meta">13px · 500 · System<br>Secondary Info</div>
+          <div style="font-size:13px;font-weight:500;color:#6b7280;">Domain: <span style="color:#049484;font-weight:600;">Engineering</span></div>
+        </div>
+        <div class="ds-type-sample">
+          <div class="ds-type-meta">12px · 700 · CAPS · Georgia<br>Section Labels (Details)</div>
+          <div style="font-family:Georgia,serif;font-size:12px;font-weight:700;color:#495057;text-transform:uppercase;letter-spacing:0.5px;">Domain *</div>
+        </div>
+        <div class="ds-type-sample">
+          <div class="ds-type-meta">12px · 400 · System<br>Timestamps, Hints</div>
+          <div style="font-size:12px;color:#9ca3af;">Created: Jan 15, 2025</div>
+        </div>
+        <div class="ds-type-sample">
+          <div class="ds-type-meta">11px · italic · System<br>Micro-copy, Hints</div>
+          <div style="font-size:11px;color:#94a3b8;font-style:italic;">Accepts .ecore format</div>
+        </div>
+      </div>
+
+      <div class="ds-subsection">
+        <div class="ds-subsection-title">Validation Text</div>
+        <div class="ds-col ds-row">
+          <div class="ds-field-error"><span style="font-size:16px;font-weight:700;">×</span> Passwords do not match</div>
+          <div class="ds-field-success"><span style="font-size:16px;font-weight:700;">✓</span> Passwords match</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══ 3. BUTTONS ══════════════════════════════════════════════════════════ -->
+  <section id="buttons" class="ds-section">
+    <div class="ds-section-header">
+      <h2>Buttons</h2><span class="ds-tag">Interactive</span>
+    </div>
+    <div class="ds-section-body">
+
+      <div class="ds-subsection">
+        <div class="ds-subsection-title">Primary — Hauptaktionen</div>
+        <div class="ds-row">
+          <div class="ds-pair"><button class="btn-primary">Import Meta Model</button><span class="ds-label">Gradient Teal, Georgia, 14px/600</span></div>
+          <div class="ds-pair"><button class="btn-primary"><span>＋</span> Create New</button><span class="ds-label">mit Icon + gap: 8px</span></div>
+          <div class="ds-pair"><button class="btn-primary btn-lg">Save Changes</button><span class="ds-label">btn-lg — 15px, padding 14/28</span></div>
+          <div class="ds-pair"><button class="btn-primary btn-sm">Import</button><span class="ds-label">btn-sm — 12px, padding 8/12</span></div>
+        </div>
+      </div>
+
+      <div class="ds-subsection">
+        <div class="ds-subsection-title">Secondary / Outline — Sekundäre Aktionen</div>
+        <div class="ds-row">
+          <div class="ds-pair"><button class="btn-secondary">Cancel</button><span class="ds-label">Teal Border (2px), white bg</span></div>
+          <div class="ds-pair"><button class="btn-cancel">Close</button><span class="ds-label">Gray Border (2px), neutral</span></div>
+          <div class="ds-pair"><button class="btn-ghost-teal">View Details</button><span class="ds-label">Teal outline → fill on hover</span></div>
+          <div class="ds-pair"><button class="btn-standard">⇅ Newest First</button><span class="ds-label">Neutral, für Sort/Filter</span></div>
+        </div>
+      </div>
+
+      <div class="ds-subsection">
+        <div class="ds-subsection-title">Danger — Destruktive Aktionen</div>
+        <div class="ds-row">
+          <div class="ds-pair"><button class="btn-danger">Delete Permanently</button><span class="ds-label">Red Gradient, Georgia</span></div>
+          <div class="ds-pair"><button class="btn-danger btn-sm">Delete</button><span class="ds-label">btn-danger btn-sm</span></div>
+        </div>
+      </div>
+
+      <div class="ds-subsection">
+        <div class="ds-subsection-title">Disabled States</div>
+        <div class="ds-row">
+          <div class="ds-pair"><button class="btn-disabled" disabled>Complete All Fields</button><span class="ds-label">background: #bdc3c7, opacity 0.6</span></div>
+          <div class="ds-pair"><button class="btn-primary" style="opacity:0.5;cursor:not-allowed;" disabled>Saving...</button><span class="ds-label">Loading: opacity 0.5 + not-allowed</span></div>
+        </div>
+      </div>
+
+      <div class="ds-subsection">
+        <div class="ds-subsection-title">Tab Buttons — Mein Modelle / Alle Modelle</div>
+        <div style="max-width:320px;">
+          <div class="ds-tabs">
+            <button class="ds-tab active">My Models</button>
+            <button class="ds-tab inactive">All Models</button>
+          </div>
+          <div style="height:4px;background:#f8f9fa;border:1px solid #e5e7eb;border-top:none;"></div>
+        </div>
+        <p class="note">Active: bg #f0f9ff, color #049484, borderBottom 3px solid #049484 | Inactive: transparent, color #6b7280</p>
+      </div>
+
+      <div class="ds-subsection">
+        <div class="ds-subsection-title">Modal Tab Buttons — Details / Edit</div>
+        <div class="ds-row">
+          <div class="ds-pair">
+            <button style="border:none;background:#049484;color:#fff;border-radius:8px;padding:8px 16px;cursor:pointer;font-weight:600;font-size:14px;font-family:Georgia,serif;box-shadow:0 2px 8px rgba(4,148,132,0.3);">Details</button>
+            <span class="ds-label">Active: bg #049484, white text, shadow</span>
+          </div>
+          <div class="ds-pair">
+            <button style="border:1px solid #dee2e6;background:#fff;color:#495057;border-radius:8px;padding:8px 16px;cursor:pointer;font-weight:600;font-size:14px;font-family:Georgia,serif;">Edit</button>
+            <span class="ds-label">Inactive: white bg, gray border</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="ds-subsection">
+        <div class="ds-subsection-title">Segmented Toggle — File / URL Mode</div>
+        <div style="display:inline-flex;background:#f1f5f9;border-radius:6px;padding:2px;gap:2px;">
+          <button style="padding:4px 11px;font-size:11px;font-weight:600;border:none;border-radius:4px;cursor:pointer;font-family:Georgia,serif;background:#049484;color:#ffffff;">⬆ Computer</button>
+          <button style="padding:4px 11px;font-size:11px;font-weight:600;border:none;border-radius:4px;cursor:pointer;font-family:Georgia,serif;background:transparent;color:#64748b;">🔗 URL</button>
+        </div>
+        <p class="note">Wrapper: bg #f1f5f9, border-radius 6px, padding 2px. Active: bg #049484. Inactive: transparent + color #64748b</p>
+      </div>
+
+      <div class="ds-subsection">
+        <div class="ds-subsection-title">Action Buttons (User Menu)</div>
+        <div class="ds-row ds-col" style="max-width:240px;">
+          <button style="width:100%;background:#049484;color:#fff;border:1px solid #037368;border-radius:6px;padding:12px 16px;cursor:pointer;font-weight:600;font-size:14px;display:flex;align-items:center;gap:10px;">
+            <span style="font-size:16px;">🔒</span> Change Password
+          </button>
+          <button style="width:100%;background:#e74c3c;color:#fff;border:1px solid #c0392b;border-radius:4px;padding:12px 16px;cursor:pointer;font-weight:500;font-size:14px;display:flex;align-items:center;gap:10px;">
+            <span style="font-size:16px;">↪</span> Sign Out
+          </button>
+        </div>
+        <p class="note">Primary variant: border-radius 6px, fontWeight 600 | Danger variant: border-radius 4px, fontWeight 500</p>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- ═══ 4. INPUTS & FORMS ══════════════════════════════════════════════════ -->
+  <section id="inputs" class="ds-section">
+    <div class="ds-section-header">
+      <h2>Inputs &amp; Forms</h2><span class="ds-tag">Forms</span>
+    </div>
+    <div class="ds-section-body">
+
+      <div class="ds-subsection">
+        <div class="ds-subsection-title">Text Input — Standard</div>
+        <div class="ds-input-group">
+          <label class="ds-label-text">Model Name *</label>
+          <input class="ds-input" type="text" placeholder="Enter meta model name..." />
+          <p class="note">border: 2px solid #d1ecf1 | bg: #f8f9fa | focus: border #049484 + ring rgba(4,148,132,0.1) + bg #fff | font: Georgia</p>
+        </div>
+        <div class="ds-input-group">
+          <label class="ds-label-upper">Domain *</label>
+          <input class="ds-input" type="text" placeholder="Enter domain..." />
+          <p class="note">Uppercase label — in Detail-Modals verwendet (font-size 12px, letter-spacing 0.5px)</p>
+        </div>
+        <div class="ds-input-group">
+          <label class="ds-label-text">Name (Error State) *</label>
+          <input class="ds-input input-error" type="text" placeholder="Enter name..." />
+          <div class="ds-field-error"><span style="font-size:16px;font-weight:700;">×</span> Please enter a name</div>
+          <p class="note">Error: border-color #f87171 + background #fffafa</p>
+        </div>
+      </div>
+
+      <div class="ds-subsection">
+        <div class="ds-subsection-title">Textarea</div>
+        <div class="ds-input-group">
+          <label class="ds-label-text">Description *</label>
+          <textarea class="ds-textarea" placeholder="Enter description..."></textarea>
+          <p class="note">min-height: 80px | resize: vertical | gleiche Border/Focus-Styles wie Input</p>
+        </div>
+      </div>
+
+      <div class="ds-subsection">
+        <div class="ds-subsection-title">Select / Dropdown</div>
+        <div class="ds-input-group">
+          <select class="ds-select">
+            <option>Newest First</option>
+            <option>Oldest First</option>
+            <option>Name A-Z</option>
+            <option>Domain A-Z</option>
+          </select>
+          <p class="note">Gleiches Styling wie btn-standard — border: 1px solid #e5e7eb, bg white, 600 weight</p>
+        </div>
+      </div>
+
+      <div class="ds-subsection">
+        <div class="ds-subsection-title">Search Input</div>
+        <div style="position:relative;max-width:340px;">
+          <svg style="position:absolute;left:14px;top:50%;transform:translateY(-50%);color:#9ca3af;" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/>
+          </svg>
+          <input type="text" placeholder="Search models by name..." style="width:100%;padding:12px 14px 12px 42px;border-radius:8px;border:2px solid #e5e7eb;font-size:14px;outline:none;box-sizing:border-box;" />
+        </div>
+        <p class="note">Padding-left: 42px (Platz für Icon) | border: 2px solid #e5e7eb | focus: border #049484 + shadow</p>
+      </div>
+
+      <div class="ds-subsection">
+        <div class="ds-subsection-title">Upload Zone</div>
+        <div style="display:flex;gap:16px;flex-wrap:wrap;">
+          <div>
+            <div class="ds-upload-zone">
+              <div style="font-size:20px;margin-bottom:4px;">📂</div>
+              <div style="font-size:13px;font-weight:600;color:#374151;">Click to browse file</div>
+              <div style="font-size:11px;color:#94a3b8;margin-top:3px;">Accepts .ecore format</div>
+            </div>
+            <span class="ds-label">Idle — border dashed #cbd5e1</span>
+          </div>
+          <div>
+            <div class="ds-upload-zone ready">
+              <div style="font-size:20px;margin-bottom:4px;">✅</div>
+              <div style="font-size:13px;font-weight:600;color:#15803d;">File uploaded — click to replace</div>
+              <div style="font-size:12px;color:#166534;margin-top:6px;font-family:monospace;">MyModel.ecore</div>
+            </div>
+            <span class="ds-label">Ready — border dashed #86efac, bg #f0fdf4</span>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- ═══ 5. FEEDBACK ════════════════════════════════════════════════════════ -->
+  <section id="feedback" class="ds-section">
+    <div class="ds-section-header">
+      <h2>Feedback &amp; Alerts</h2><span class="ds-tag">Messages</span>
+    </div>
+    <div class="ds-section-body">
+
+      <div class="ds-subsection">
+        <div class="ds-subsection-title">Inline Messages — Panel / Listen-Ansicht</div>
+        <div class="ds-col ds-row">
+          <div class="ds-msg ds-msg-success">✓ Meta Model created successfully!</div>
+          <div class="ds-msg ds-msg-error">Failed to delete meta model. Please try again.</div>
+        </div>
+        <p class="note">fontSize 13px, fontWeight 500, border-radius 8px</p>
+      </div>
+
+      <div class="ds-subsection">
+        <div class="ds-subsection-title">Modal Messages — Größere Feedback-Boxen</div>
+        <div class="ds-col ds-row">
+          <div class="ds-msg-success-lg">✓ Password changed successfully!</div>
+          <div class="ds-msg-error-lg">⚠️ Error creating meta model: Name already exists</div>
+          <div class="ds-msg ds-msg-info">
+            <span style="font-weight:600;">3 filters active</span>
+            <button style="margin-left:16px;padding:4px 8px;background:#fff;border:1px solid #bae6fd;border-radius:6px;font-size:11px;cursor:pointer;font-weight:600;color:#0369a1;">Clear All</button>
+          </div>
+        </div>
+        <p class="note">Success-lg: border 2px, bg #d5f4e6 | Error-lg: border 2px, bg #fef2f2</p>
+      </div>
+
+      <div class="ds-subsection">
+        <div class="ds-subsection-title">Warning Block — Destructive Actions</div>
+        <div class="ds-msg-warning">
+          <strong style="display:block;margin-bottom:8px;color:#b45309;">⚠️ Warning:</strong>
+          <ul style="margin:0;padding-left:20px;">
+            <li style="margin-bottom:6px;">All reactions related to this meta model will be permanently deleted</li>
+            <li>Any edits and changes made to this meta model will be lost</li>
+          </ul>
+          <p style="margin:12px 0 0;font-style:italic;font-size:13px;">This action cannot be undone.</p>
+        </div>
+        <p class="note">border-left: 4px solid #f59e0b | bg #fff8ed | color #92400e</p>
+      </div>
+
+      <div class="ds-subsection">
+        <div class="ds-subsection-title">Progress Bar</div>
+        <div class="ds-progress-track">
+          <div class="ds-progress-fill" style="width:65%;"></div>
+        </div>
+        <p class="note">height 8px | bg track: #e0e0e0 | fill: #049484 | border-radius 4px | transition 0.3s ease</p>
+      </div>
+
+      <div class="ds-subsection">
+        <div class="ds-subsection-title">Loading Spinner</div>
+        <div style="display:flex;align-items:center;gap:16px;">
+          <div class="ds-spinner"></div>
+          <span style="font-size:14px;color:#6b7280;font-weight:500;">Loading models...</span>
+        </div>
+        <p class="note">width/height 40px | border 4px solid #e5e7eb | border-top: #049484 | animation spin 1s linear infinite</p>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- ═══ 6. BADGES & TAGS ════════════════════════════════════════════════════ -->
+  <section id="badges" class="ds-section">
+    <div class="ds-section-header">
+      <h2>Badges &amp; Tags</h2><span class="ds-tag">Labels</span>
+    </div>
+    <div class="ds-section-body">
+
+      <div class="ds-subsection">
+        <div class="ds-subsection-title">Filter Tags (Search)</div>
+        <div class="ds-row">
+          <span class="ds-badge ds-badge-blue">name:mymodel</span>
+          <span class="ds-badge ds-badge-blue">domain:engineering</span>
+          <span class="ds-badge ds-badge-blue">time:beforenow</span>
+        </div>
+        <p class="note">padding 2px 8px | border-radius 16px | font-size 11px | color #0366d6, bg #f1f8ff, border #c8e1ff</p>
+      </div>
+
+      <div class="ds-subsection">
+        <div class="ds-subsection-title">Status Badges</div>
+        <div class="ds-row">
+          <span class="ds-badge ds-badge-teal">✓ Ready</span>
+          <span class="ds-badge ds-badge-green">Uploaded</span>
+          <span class="ds-badge ds-badge-red">Error</span>
+          <span class="ds-badge ds-badge-gray">Inactive</span>
+        </div>
+      </div>
+
+      <div class="ds-subsection">
+        <div class="ds-subsection-title">Email Verified Status Badge</div>
+        <div class="ds-row">
+          <span class="ds-badge-verified success">✓ Email Verified</span>
+          <span class="ds-badge-verified warning">⚠ Email Not Verified</span>
+        </div>
+        <p class="note">padding 6px 12px | border-radius 4px | font-size 12px</p>
+      </div>
+
+      <div class="ds-subsection">
+        <div class="ds-subsection-title">Keyword Chips — Rotierende Farben (in Card / Detail)</div>
+        <div class="ds-row" style="align-items:baseline;flex-wrap:wrap;">
+          <span style="color:#d32f2f;font-weight:600;font-size:14px;font-family:Georgia,serif;">metamodeling</span><span style="color:#2c3e50;">,</span>
+          <span style="color:#1976d2;font-weight:600;font-size:14px;font-family:Georgia,serif;">ecore</span><span style="color:#2c3e50;">,</span>
+          <span style="color:#388e3c;font-weight:600;font-size:14px;font-family:Georgia,serif;">vitruv</span><span style="color:#2c3e50;">,</span>
+          <span style="color:#f57c00;font-weight:600;font-size:14px;font-family:Georgia,serif;">atl</span><span style="color:#2c3e50;">,</span>
+          <span style="color:#7b1fa2;font-weight:600;font-size:14px;font-family:Georgia,serif;">java</span>
+        </div>
+        <p class="note">Palette (index % 10): #d32f2f · #1976d2 · #388e3c · #f57c00 · #7b1fa2 · #00796b · #c2185b · #5d4037 · #303f9f · #e64a19</p>
+      </div>
+
+      <div class="ds-subsection">
+        <div class="ds-subsection-title">File Type Badge (Code Tag)</div>
+        <div class="ds-row">
+          <code style="background:#e6f7f5;color:#049484;font-size:12px;font-weight:700;padding:2px 8px;border-radius:4px;border:1px solid #b2e4df;letter-spacing:0.02em;">.ecore</code>
+          <code style="background:#eff6ff;color:#2563eb;font-size:12px;font-weight:700;padding:2px 8px;border-radius:4px;border:1px solid #bfdbfe;letter-spacing:0.02em;">.genmodel</code>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══ 7. CARDS & PANELS ═══════════════════════════════════════════════════ -->
+  <section id="cards" class="ds-section">
+    <div class="ds-section-header">
+      <h2>Cards &amp; Panels</h2><span class="ds-tag">Layout Blocks</span>
+    </div>
+    <div class="ds-section-body">
+
+      <div class="ds-subsection">
+        <div class="ds-subsection-title">Meta Model Card (Listenansicht)</div>
+        <div class="ds-card">
+          <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;">
+            <div style="display:flex;flex-direction:column;gap:6px;flex:1;">
+              <div style="font-weight:700;color:#1f2937;font-size:16px;font-family:Georgia,serif;">MyMetaModel</div>
+              <div style="font-size:12px;color:#6b7280;font-weight:500;">Domain: <span style="color:#049484;font-weight:600;">Engineering</span></div>
+              <div style="font-size:12px;color:#9ca3af;">Created: Jan 15, 2025</div>
+            </div>
+            <button class="btn-ghost-teal btn-sm">View Details</button>
+          </div>
+        </div>
+        <p class="note">bg white | border 1px solid #e5e7eb | border-radius 12px | padding 16px | Hover: translateY(-2px) + teal shadow + border #049484</p>
+      </div>
+
+      <div class="ds-subsection">
+        <div class="ds-subsection-title">Sidebar Panel</div>
+        <div class="ds-panel">
+          <div class="ds-panel-title">Meta Models</div>
+          <p style="font-size:13px;color:#6b7280;">Panel-Inhalt wird hier gerendert…</p>
+        </div>
+        <p class="note">bg #f8f9fa | borderRight 1px solid #e9ecef | Panel-Titel: borderBottom 2px solid #049484, Georgia serif</p>
+      </div>
+
+      <div class="ds-subsection">
+        <div class="ds-subsection-title">Detail Info Block (Modal / Details-Tab)</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;max-width:480px;">
+          <div class="ds-info-block" style="max-width:100%;">
+            <div class="ds-info-block-label">Name</div>
+            <div class="ds-info-block-value" style="font-weight:600;">MyMetaModel</div>
+          </div>
+          <div class="ds-info-block" style="max-width:100%;">
+            <div class="ds-info-block-label">Domain</div>
+            <div class="ds-info-block-value">Engineering</div>
+          </div>
+          <div style="padding:12px;background:#e8f5e9;border-radius:6px;border:1px solid #c8e6c9;">
+            <div style="font-size:12px;font-weight:700;color:#2e7d32;margin-bottom:6px;text-transform:uppercase;letter-spacing:0.5px;font-family:Georgia,serif;">Created</div>
+            <div style="font-size:14px;color:#1b5e20;font-family:Georgia,serif;">Jan 15, 2025 at 10:30</div>
+          </div>
+          <div style="padding:12px;background:#e3f2fd;border-radius:6px;border:1px solid #bbdefb;">
+            <div style="font-size:12px;font-weight:700;color:#1976d2;margin-bottom:6px;text-transform:uppercase;letter-spacing:0.5px;font-family:Georgia,serif;">Updated</div>
+            <div style="font-size:14px;color:#0d47a1;font-family:Georgia,serif;">Jan 20, 2025 at 14:05</div>
+          </div>
+        </div>
+        <p class="note">Standard block: bg #f8f9fa | Created: bg #e8f5e9, green tones | Updated: bg #e3f2fd, blue tones</p>
+      </div>
+
+      <div class="ds-subsection">
+        <div class="ds-subsection-title">Empty State</div>
+        <div class="ds-empty-state">
+          <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="#cbd5e1" stroke-width="1.5">
+            <path d="M9 13h6m-3-3v6m5 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+          </svg>
+          <div class="ds-empty-state-title">No Meta Models Found</div>
+          <div class="ds-empty-state-sub">You haven't created any models yet. Import your first meta model to get started.</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══ 8. MODALS ══════════════════════════════════════════════════════════ -->
+  <section id="modals" class="ds-section">
+    <div class="ds-section-header">
+      <h2>Modals</h2><span class="ds-tag">Overlays</span>
+    </div>
+    <div class="ds-section-body">
+
+      <div class="ds-subsection">
+        <div class="ds-subsection-title">Modal Typ A — Gradient Header (Auth, Change Password)</div>
+        <div class="ds-modal-preview">
+          <div class="ds-modal-header-gradient">
+            <h2>Change Password</h2>
+            <p>Please create a strong password that meets all security requirements to protect your account.</p>
+          </div>
+          <div class="ds-modal-body">
+            <div class="ds-input-group" style="max-width:100%;">
+              <label class="ds-label-text">New Password</label>
+              <input class="ds-input" style="max-width:100%;" type="password" placeholder="Enter new password" />
+            </div>
+          </div>
+          <div class="ds-modal-footer">
+            <button class="btn-cancel">Cancel</button>
+            <button class="btn-primary">Change Password</button>
+          </div>
+        </div>
+        <p class="note">border-radius 16px | Header: gradient + padding 28/32 | Footer: bg #f8f9fa + borderTop 1px #e9ecef</p>
+      </div>
+
+      <div class="ds-subsection">
+        <div class="ds-subsection-title">Modal Typ B — Light Header mit Tabs (Detail-View, List-Modal)</div>
+        <div class="ds-modal-preview" style="max-width:540px;border-radius:12px;">
+          <div class="ds-modal-header-light">
+            <h3>MyMetaModel</h3>
+            <div style="display:flex;gap:8px;align-items:center;">
+              <button style="border:none;background:#049484;color:#fff;border-radius:8px;padding:8px 16px;cursor:pointer;font-weight:600;font-size:14px;font-family:Georgia,serif;box-shadow:0 2px 8px rgba(4,148,132,0.3);">Details</button>
+              <button style="border:1px solid #dee2e6;background:#fff;color:#495057;border-radius:8px;padding:8px 16px;cursor:pointer;font-weight:600;font-size:14px;font-family:Georgia,serif;">Edit</button>
+              <button style="border:none;background:transparent;font-size:28px;cursor:pointer;color:#999;padding:4px 8px;line-height:1;">×</button>
+            </div>
+          </div>
+          <div style="padding:16px;">
+            <div class="ds-info-block" style="max-width:100%;margin-bottom:12px;">
+              <div class="ds-info-block-label">Description</div>
+              <div class="ds-info-block-value" style="color:#6c757d;font-style:italic;">No description provided</div>
+            </div>
+          </div>
+          <div class="ds-modal-footer" style="justify-content:space-between;">
+            <button class="btn-cancel">Close</button>
+            <button class="btn-danger">Delete</button>
+          </div>
+        </div>
+        <p class="note">border-radius 12px | Header: bg gradient #f8fcff→#e8f4f8 + borderBottom 2px #049484 | Schließen-Button: ×, fontSize 28, color #999</p>
+      </div>
+
+      <div class="ds-subsection">
+        <div class="ds-subsection-title">Backdrop &amp; z-Index Hierarchie</div>
+        <div style="background:#f8f9fa;border:1px solid #e5e7eb;border-radius:8px;padding:16px;max-width:500px;">
+          <table style="border-collapse:collapse;width:100%;font-size:13px;">
+            <thead>
+              <tr style="border-bottom:2px solid #049484;">
+                <th style="padding:8px 10px;text-align:left;font-family:Georgia,serif;color:#2c3e50;">Layer</th>
+                <th style="padding:8px 10px;text-align:left;font-family:Georgia,serif;color:#2c3e50;">z-Index</th>
+                <th style="padding:8px 10px;text-align:left;font-family:Georgia,serif;color:#2c3e50;">Hintergrund</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr style="border-bottom:1px solid #f1f3f5;"><td style="padding:8px 10px;font-weight:600;">App Header</td><td style="padding:8px 10px;color:#049484;font-family:monospace;">1000</td><td style="padding:8px 10px;color:#6b7280;">—</td></tr>
+              <tr style="border-bottom:1px solid #f1f3f5;"><td style="padding:8px 10px;font-weight:600;">Panel Overlay</td><td style="padding:8px 10px;color:#049484;font-family:monospace;">9998</td><td style="padding:8px 10px;color:#6b7280;">transparent</td></tr>
+              <tr style="border-bottom:1px solid #f1f3f5;"><td style="padding:8px 10px;font-weight:600;">Standard Modal</td><td style="padding:8px 10px;color:#049484;font-family:monospace;">10000</td><td style="padding:8px 10px;color:#6b7280;">rgba(0,0,0,0.5) + blur(4–12px)</td></tr>
+              <tr><td style="padding:8px 10px;font-weight:600;">Submit Overlay</td><td style="padding:8px 10px;color:#049484;font-family:monospace;">11000</td><td style="padding:8px 10px;color:#6b7280;">blur(6px)</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══ 9. NAVIGATION ══════════════════════════════════════════════════════ -->
+  <section id="navigation-sec" class="ds-section">
+    <div class="ds-section-header">
+      <h2>Navigation</h2><span class="ds-tag">Shell</span>
+    </div>
+    <div class="ds-section-body">
+
+      <div class="ds-subsection">
+        <div class="ds-subsection-title">App Header Bar</div>
+        <div class="ds-header-bar">
+          <span class="ds-header-title">Methodologist Dashboard</span>
+          <div class="ds-avatar">MO</div>
+        </div>
+        <p class="note">height: 48px | gradient Teal | position: absolute top/left/right 0 | z-index: 1000 | boxShadow rgba(4,148,132,0.25)</p>
+      </div>
+
+      <div class="ds-subsection">
+        <div class="ds-subsection-title">Pagination</div>
+        <div style="display:flex;justify-content:space-between;align-items:center;max-width:440px;padding:12px 0;border-top:1px solid #e9ecef;font-family:Georgia,serif;">
+          <span style="font-size:12px;color:#6c757d;font-weight:500;">Showing 1–10 of 34 models</span>
+          <div class="ds-pagination">
+            <button class="ds-page-btn ds-disabled" disabled>‹</button>
+            <button class="ds-page-btn active">1</button>
+            <button class="ds-page-btn">2</button>
+            <button class="ds-page-btn">3</button>
+            <span style="padding:0 4px;color:#6c757d;">...</span>
+            <button class="ds-page-btn">4</button>
+            <button class="ds-page-btn">›</button>
+          </div>
+        </div>
+        <p class="note">Active page: bg #049484, white text | Disabled: bg #f9fafb, color #9ca3af, opacity 0.6</p>
+      </div>
+
+      <div class="ds-subsection">
+        <div class="ds-subsection-title">User Dropdown (Header Menu)</div>
+        <div style="width:300px;background:#fff;border-radius:8px;box-shadow:0 8px 24px rgba(0,0,0,0.12),0 2px 8px rgba(0,0,0,0.08);border:1px solid #e8e8e8;overflow:hidden;">
+          <div style="background:#f8f9fa;padding:20px;border-bottom:1px solid #e8e8e8;">
+            <div style="display:flex;align-items:center;gap:16px;">
+              <div class="ds-avatar" style="width:48px;height:48px;font-size:16px;">MO</div>
+              <div>
+                <div style="font-weight:600;font-size:16px;color:#2c3e50;">Max Oesterle</div>
+                <div style="font-size:13px;color:#7f8c8d;margin-top:2px;">max@example.com</div>
+              </div>
+            </div>
+            <div style="margin-top:12px;" class="ds-badge-verified success">✓ Email Verified</div>
+          </div>
+          <div style="padding:16px;">
+            <div style="display:flex;flex-direction:column;gap:8px;">
+              <button style="width:100%;background:#049484;color:#fff;border:1px solid #037368;border-radius:6px;padding:12px 16px;cursor:pointer;font-weight:600;font-size:14px;display:flex;align-items:center;gap:10px;text-align:left;"><span style="font-size:16px;">🔒</span> Change Password</button>
+              <button style="width:100%;background:#e74c3c;color:#fff;border:1px solid #c0392b;border-radius:4px;padding:12px 16px;cursor:pointer;font-weight:500;font-size:14px;display:flex;align-items:center;gap:10px;text-align:left;"><span style="font-size:16px;">↪</span> Sign Out</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══ 10. MISC ════════════════════════════════════════════════════════════ -->
+  <section id="misc" class="ds-section">
+    <div class="ds-section-header">
+      <h2>Misc / Tokens</h2><span class="ds-tag">Quick Reference</span>
+    </div>
+    <div class="ds-section-body">
+
+      <div class="ds-subsection">
+        <div class="ds-subsection-title">Border-Radius Referenz</div>
+        <div style="display:flex;flex-wrap:wrap;gap:12px;">
+          <div style="text-align:center;">
+            <div style="width:60px;height:40px;background:#e6f7f5;border:2px solid #049484;border-radius:4px;margin:0 auto;"></div>
+            <div style="font-size:11px;font-weight:700;color:#049484;margin-top:6px;">4px</div>
+            <div style="font-size:10px;color:#9ca3af;">Badges, Tags</div>
+          </div>
+          <div style="text-align:center;">
+            <div style="width:60px;height:40px;background:#e6f7f5;border:2px solid #049484;border-radius:6px;margin:0 auto;"></div>
+            <div style="font-size:11px;font-weight:700;color:#049484;margin-top:6px;">6px</div>
+            <div style="font-size:10px;color:#9ca3af;">Inputs, sm Btn</div>
+          </div>
+          <div style="text-align:center;">
+            <div style="width:60px;height:40px;background:#e6f7f5;border:2px solid #049484;border-radius:8px;margin:0 auto;"></div>
+            <div style="font-size:11px;font-weight:700;color:#049484;margin-top:6px;">8px</div>
+            <div style="font-size:10px;color:#9ca3af;">Buttons, Cards</div>
+          </div>
+          <div style="text-align:center;">
+            <div style="width:60px;height:40px;background:#e6f7f5;border:2px solid #049484;border-radius:12px;margin:0 auto;"></div>
+            <div style="font-size:11px;font-weight:700;color:#049484;margin-top:6px;">12px</div>
+            <div style="font-size:10px;color:#9ca3af;">Modals</div>
+          </div>
+          <div style="text-align:center;">
+            <div style="width:60px;height:40px;background:#e6f7f5;border:2px solid #049484;border-radius:16px;margin:0 auto;"></div>
+            <div style="font-size:11px;font-weight:700;color:#049484;margin-top:6px;">16px</div>
+            <div style="font-size:10px;color:#9ca3af;">Große Modals</div>
+          </div>
+          <div style="text-align:center;">
+            <div style="width:48px;height:48px;background:#e6f7f5;border:2px solid #049484;border-radius:50%;margin:0 auto;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:#049484;">MO</div>
+            <div style="font-size:11px;font-weight:700;color:#049484;margin-top:6px;">50%</div>
+            <div style="font-size:10px;color:#9ca3af;">Avatar</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="ds-subsection">
+        <div class="ds-subsection-title">Box Shadow Stufen</div>
+        <div style="display:flex;flex-wrap:wrap;gap:16px;">
+          <div style="background:#fff;border-radius:8px;padding:14px 18px;box-shadow:0 1px 3px rgba(0,0,0,0.05);border:1px solid #e5e7eb;font-size:12px;color:#6b7280;min-width:160px;">
+            <strong style="color:#2c3e50;">xs</strong> — Cards<br><code class="ds-code">0 1px 3px rgba(0,0,0,.05)</code>
+          </div>
+          <div style="background:#fff;border-radius:8px;padding:14px 18px;box-shadow:0 2px 8px rgba(4,148,132,0.25);font-size:12px;color:#6b7280;min-width:160px;">
+            <strong style="color:#2c3e50;">sm-teal</strong> — Buttons, Header<br><code class="ds-code">0 2px 8px rgba(4,148,132,.25)</code>
+          </div>
+          <div style="background:#fff;border-radius:8px;padding:14px 18px;box-shadow:0 8px 24px rgba(0,0,0,0.12);font-size:12px;color:#6b7280;min-width:160px;">
+            <strong style="color:#2c3e50;">md</strong> — Dropdowns<br><code class="ds-code">0 8px 24px rgba(0,0,0,.12)</code>
+          </div>
+          <div style="background:#fff;border-radius:8px;padding:14px 18px;box-shadow:0 20px 60px rgba(0,0,0,0.3);font-size:12px;color:#6b7280;min-width:160px;">
+            <strong style="color:#2c3e50;">lg</strong> — Modals<br><code class="ds-code">0 20px 60px rgba(0,0,0,.3)</code>
+          </div>
+        </div>
+      </div>
+
+      <div class="ds-subsection">
+        <div class="ds-subsection-title">Transitions</div>
+        <div class="note" style="max-width:500px;font-style:normal;">
+          <strong>Standard:</strong> <code class="ds-code">transition: all 0.2s ease</code> — für Buttons, Inputs, Badges<br>
+          <strong>Smooth:</strong> <code class="ds-code">transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1)</code> — Card Hover<br>
+          <strong>Langsam:</strong> <code class="ds-code">transition: all 0.3s ease</code> — Upload-Bereiche, große Übergänge
+        </div>
+      </div>
+
+      <div class="ds-subsection">
+        <div class="ds-subsection-title">Animations (Keyframes)</div>
+        <div class="note" style="max-width:500px;font-style:normal;">
+          <strong>spin</strong> — Loader-Spinner: <code class="ds-code">1s linear infinite</code><br>
+          <strong>fadeIn</strong> — Modal-Overlay: <code class="ds-code">0.2s ease-out</code><br>
+          <strong>slideUp</strong> — Modal-Dialog: <code class="ds-code">0.3s ease-out</code><br>
+          <strong>slideDown</strong> — Dropdown-Menu: <code class="ds-code">0.2s ease-out</code>
+        </div>
+      </div>
+
+      <div class="ds-subsection">
+        <div class="ds-subsection-title">Hover-Effekte — Zusammenfassung</div>
+        <table style="border-collapse:collapse;width:100%;max-width:620px;font-size:13px;">
+          <thead>
+            <tr style="background:#f8f9fa;border-bottom:2px solid #049484;">
+              <th style="padding:10px 12px;text-align:left;font-family:Georgia,serif;color:#2c3e50;">Element</th>
+              <th style="padding:10px 12px;text-align:left;font-family:Georgia,serif;color:#2c3e50;">Hover-Effekt</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr style="border-bottom:1px solid #f1f3f5;"><td style="padding:10px 12px;font-weight:600;">btn-primary</td><td style="padding:10px 12px;color:#6b7280;"><code class="ds-code">translateY(-1px)</code> + stärkerer Teal-Shadow</td></tr>
+            <tr style="border-bottom:1px solid #f1f3f5;"><td style="padding:10px 12px;font-weight:600;">btn-danger</td><td style="padding:10px 12px;color:#6b7280;"><code class="ds-code">translateY(-1px)</code> + stärkerer Red-Shadow</td></tr>
+            <tr style="border-bottom:1px solid #f1f3f5;"><td style="padding:10px 12px;font-weight:600;">Meta Model Card</td><td style="padding:10px 12px;color:#6b7280;"><code class="ds-code">translateY(-2px)</code> + Teal-Shadow + border #049484</td></tr>
+            <tr style="border-bottom:1px solid #f1f3f5;"><td style="padding:10px 12px;font-weight:600;">btn-ghost-teal</td><td style="padding:10px 12px;color:#6b7280;">background → #049484, color → white (fill)</td></tr>
+            <tr style="border-bottom:1px solid #f1f3f5;"><td style="padding:10px 12px;font-weight:600;">Upload Zone</td><td style="padding:10px 12px;color:#6b7280;">bg → #f0fdff + border → #049484</td></tr>
+            <tr style="border-bottom:1px solid #f1f3f5;"><td style="padding:10px 12px;font-weight:600;">User Avatar</td><td style="padding:10px 12px;color:#6b7280;">border → #7f8c8d + stärkerer Shadow</td></tr>
+            <tr><td style="padding:10px 12px;font-weight:600;">Input / Textarea</td><td style="padding:10px 12px;color:#6b7280;">border → #049484 + ring <code class="ds-code">rgba(4,148,132,0.1)</code></td></tr>
+          </tbody>
+        </table>
+      </div>
+
+    </div>
+  </section>
+
+</main>
+
+<footer style="background:#2c3e50;color:#9ca3af;text-align:center;padding:20px;font-size:12px;margin-top:40px;">
+  Vitruv UI Design System · zuletzt aktualisiert Mai 2025
+</footer>
+
+</body>
+</html>

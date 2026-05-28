@@ -35,7 +35,6 @@ describe('VsumTabs (mocked)', () => {
         requestWorkspaceSnapshot={async () => ({
           metaModelIds: [],
           metaModelRelationRequests: [],
-          viewRequests: [],
         })}
       />,
     );

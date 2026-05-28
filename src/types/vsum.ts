@@ -28,17 +28,9 @@ export interface VsumMetaModelRelation {
   reactionFileStorageId?: number | null;
 }
 
-export interface VsumView {
-  id: number;
-  fileStorageId: number;
-  createdAt?: string;
-  assignedModels: VsumMetaModelRef[];
-}
-
 export interface VsumDetails extends Vsum {
   metaModels: VsumMetaModelRef[];
   metaModelsRelation?: VsumMetaModelRelation[];
-  views?: VsumView[];
 }
 
 export interface ApiResponse<T> {

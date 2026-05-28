@@ -1,6 +1,8 @@
 import React from 'react';
 import ReactDOM from 'react-dom';
 
+const FONT = 'ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, sans-serif';
+
 interface ConfirmDialogProps {
   isOpen: boolean;
   title?: string;
@@ -12,6 +14,21 @@ interface ConfirmDialogProps {
   onConfirm: () => void;
   onCancel: () => void;
 }
+
+const DangerIcon: React.FC = () => (
+  <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#dc2626" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
+    <line x1="12" y1="9" x2="12" y2="13" />
+    <line x1="12" y1="17" x2="12.01" y2="17" />
+  </svg>
+);
+
+const SuccessIcon: React.FC = () => (
+  <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#059669" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
+    <polyline points="22 4 12 14.01 9 11.01" />
+  </svg>
+);
 
 export const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
   isOpen,
@@ -26,93 +43,159 @@ export const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
 }) => {
   if (!isOpen) return null;
 
-  const colors = {
+  const themes = {
     danger: {
-      titleColor: '#dc2626',
-      icon: '⚠️',
+      accentColor: '#dc2626',
+      iconBg: '#fef2f2',
       buttonBg: '#dc2626',
       buttonHoverBg: '#b91c1c',
-      buttonShadow: 'rgba(220, 38, 38, 0.3)',
-      buttonHoverShadow: 'rgba(220, 38, 38, 0.4)',
+      buttonShadow: 'rgba(220,38,38,0.25)',
+      buttonHoverShadow: 'rgba(220,38,38,0.38)',
     },
     success: {
-      titleColor: '#059669',
-      icon: '✓',
-      buttonBg: '#10b981',
-      buttonHoverBg: '#059669',
-      buttonShadow: 'rgba(16, 185, 129, 0.3)',
-      buttonHoverShadow: 'rgba(16, 185, 129, 0.4)',
+      accentColor: '#059669',
+      iconBg: '#f0fdf4',
+      buttonBg: '#059669',
+      buttonHoverBg: '#047857',
+      buttonShadow: 'rgba(5,150,105,0.25)',
+      buttonHoverShadow: 'rgba(5,150,105,0.38)',
     },
   };
 
-  const theme = colors[variant];
+  const theme = themes[variant];
 
   const dialog = (
-    <div style={{
-      position: 'fixed',
-      top: 0,
-      left: 0,
-      width: '100vw',
-      height: '100vh',
-      background: 'rgba(0,0,0,0.45)',
-      backdropFilter: 'blur(8px)',
-      WebkitBackdropFilter: 'blur(8px)',
-      display: 'flex',
-      alignItems: 'center',
-      justifyContent: 'center',
-      zIndex: 9999,
-    }}>
-      <div style={{
-        background: '#fff',
-        borderRadius: '10px',
-        boxShadow: '0 10px 30px rgba(0,0,0,0.2)',
-        width: '480px',
-        maxWidth: '90vw',
-        padding: '24px',
-        boxSizing: 'border-box',
-        fontFamily: 'Georgia, serif',
-      }}>
-        <div style={{
-          fontSize: '18px',
-          fontWeight: 700,
-          marginBottom: '16px',
-          color: theme.titleColor,
-          display: 'flex',
-          alignItems: 'center',
-          gap: '10px',
-        }}>
-          <span style={{ fontSize: '22px' }}>{theme.icon}</span>
-          {title}
+    <div
+      style={{
+        position: 'fixed',
+        top: 0,
+        left: 0,
+        width: '100vw',
+        height: '100vh',
+        background: 'rgba(0,0,0,0.5)',
+        backdropFilter: 'blur(8px)',
+        WebkitBackdropFilter: 'blur(8px)',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        zIndex: 9999,
+      }}
+      onClick={(e) => { if (e.target === e.currentTarget) onCancel(); }}
+    >
+      <div
+        role="alertdialog"
+        aria-modal="true"
+        aria-labelledby="confirm-title"
+        aria-describedby="confirm-message"
+        style={{
+          background: '#ffffff',
+          borderRadius: '14px',
+          boxShadow: '0 24px 60px rgba(0,0,0,0.22), 0 4px 16px rgba(0,0,0,0.08)',
+          width: '420px',
+          maxWidth: '92vw',
+          overflow: 'hidden',
+          boxSizing: 'border-box',
+          borderTop: `4px solid ${theme.accentColor}`,
+          animation: 'confirmDialogIn 0.18s ease',
+        }}
+      >
+        <style>{`
+          @keyframes confirmDialogIn {
+            from { opacity: 0; transform: scale(0.96) translateY(6px); }
+            to   { opacity: 1; transform: scale(1)    translateY(0);   }
+          }
+        `}</style>
+
+        {/* ── Content ── */}
+        <div
+          style={{
+            padding: '32px 32px 8px',
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            gap: '14px',
+            fontFamily: FONT,
+          }}
+        >
+          {/* Icon circle */}
+          <div
+            style={{
+              width: '60px',
+              height: '60px',
+              borderRadius: '50%',
+              background: theme.iconBg,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              flexShrink: 0,
+            }}
+          >
+            {variant === 'danger' ? <DangerIcon /> : <SuccessIcon />}
+          </div>
+
+          {/* Title */}
+          <div
+            id="confirm-title"
+            style={{
+              fontSize: '19px',
+              fontWeight: 700,
+              color: '#111827',
+              textAlign: 'center',
+              lineHeight: 1.3,
+              fontFamily: FONT,
+            }}
+          >
+            {title}
+          </div>
+
+          {/* Message */}
+          <div
+            id="confirm-message"
+            style={{
+              fontSize: '14px',
+              color: '#6b7280',
+              textAlign: 'center',
+              lineHeight: '1.65',
+              fontFamily: FONT,
+              maxWidth: '320px',
+            }}
+          >
+            {message}
+          </div>
         </div>
-        <div style={{
-          fontSize: '14px',
-          color: '#374151',
-          marginBottom: '20px',
-          lineHeight: '1.6',
-        }}>{message}</div>
-        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px' }}>
+
+        {/* ── Buttons ── */}
+        <div
+          style={{
+            padding: '24px 32px 28px',
+            display: 'flex',
+            gap: '10px',
+            justifyContent: singleAction ? 'center' : 'stretch',
+          }}
+        >
           {!singleAction && (
             <button
               onClick={onCancel}
               style={{
+                flex: 1,
+                padding: '11px 16px',
                 background: '#fff',
-                border: '2px solid #dee2e6',
-                color: '#495057',
-                padding: '10px 20px',
-                borderRadius: '6px',
+                border: '1.5px solid #e5e7eb',
+                borderRadius: '8px',
+                color: '#374151',
                 cursor: 'pointer',
                 fontSize: '14px',
                 fontWeight: 600,
-                fontFamily: 'Georgia, serif',
-                transition: 'all 0.2s ease',
+                fontFamily: FONT,
+                transition: 'all 0.15s ease',
               }}
               onMouseEnter={(e) => {
-                e.currentTarget.style.background = '#f8f9fa';
-                e.currentTarget.style.borderColor = '#adb5bd';
+                e.currentTarget.style.background = '#f9fafb';
+                e.currentTarget.style.borderColor = '#d1d5db';
               }}
               onMouseLeave={(e) => {
                 e.currentTarget.style.background = '#fff';
-                e.currentTarget.style.borderColor = '#dee2e6';
+                e.currentTarget.style.borderColor = '#e5e7eb';
               }}
             >
               {cancelText}
@@ -121,27 +204,29 @@ export const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
           <button
             onClick={onConfirm}
             style={{
+              flex: singleAction ? undefined : 1,
+              padding: '11px 16px',
               background: theme.buttonBg,
               border: 'none',
+              borderRadius: '8px',
               color: '#fff',
-              padding: '10px 20px',
-              borderRadius: '6px',
               cursor: 'pointer',
               fontSize: '14px',
               fontWeight: 600,
-              fontFamily: 'Georgia, serif',
-              transition: 'all 0.2s ease',
-              boxShadow: `0 4px 12px ${theme.buttonShadow}`,
+              fontFamily: FONT,
+              transition: 'all 0.15s ease',
+              boxShadow: `0 4px 14px ${theme.buttonShadow}`,
+              ...(singleAction ? { paddingLeft: '36px', paddingRight: '36px' } : {}),
             }}
             onMouseEnter={(e) => {
               e.currentTarget.style.background = theme.buttonHoverBg;
               e.currentTarget.style.transform = 'translateY(-1px)';
-              e.currentTarget.style.boxShadow = `0 6px 16px ${theme.buttonHoverShadow}`;
+              e.currentTarget.style.boxShadow = `0 6px 18px ${theme.buttonHoverShadow}`;
             }}
             onMouseLeave={(e) => {
               e.currentTarget.style.background = theme.buttonBg;
               e.currentTarget.style.transform = 'translateY(0)';
-              e.currentTarget.style.boxShadow = `0 4px 12px ${theme.buttonShadow}`;
+              e.currentTarget.style.boxShadow = `0 4px 14px ${theme.buttonShadow}`;
             }}
           >
             {confirmText}
@@ -153,5 +238,3 @@ export const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
 
   return ReactDOM.createPortal(dialog, document.body);
 };
-
-

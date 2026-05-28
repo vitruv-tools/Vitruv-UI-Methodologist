@@ -147,7 +147,10 @@ class ApiService {
     });
 
     if (response.ok) {
-      return await response.json();
+      // 204 No Content or empty body (common for DELETE) — skip JSON parsing
+      if (response.status === 204) return null as T;
+      const text = await response.text();
+      return text ? JSON.parse(text) as T : null as T;
     }
 
     const isOtpEndpoint = endpoint.includes('/verify-otp') || endpoint.includes('/resend-otp');
@@ -921,8 +924,4 @@ export interface MetaModelRelationRequest {
 export interface VsumSyncChangesPutRequest {
   metaModelIds: number[];
   metaModelRelationRequests: MetaModelRelationRequest[] | null; // you said null for now
-  viewRequests?: Array<{
-    metaModelIds: number[];
-    fileStorageId: number;
-  }>;
 }

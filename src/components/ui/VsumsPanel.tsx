@@ -415,7 +415,6 @@ export const VsumsPanel: React.FC = () => {
                     : {
                         role: 'button' as const,
                         tabIndex: 0,
-                        onClick: openVsum,
                         onDoubleClick: openVsum,
                         onTouchEnd: (e: React.TouchEvent<HTMLDivElement>) => {
                             e.preventDefault();

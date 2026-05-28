@@ -1,36 +1,49 @@
-import React from 'react';
-import { Header } from '../components/layout/Header';
-import { SidebarTabs } from '../components';
-import { useAuth } from '../contexts/AuthContext';
+import React, { useState } from 'react';
+import { AppSidebar, SidebarView } from '../components/layout/AppSidebar';
+import { ModelLibraryTable } from '../components/ui/ModelLibraryTable';
+import { ProjectsView } from '../components/ui/ProjectsView';
+import { AuthService } from '../services/auth';
+
+const ComingSoon: React.FC<{ title: string }> = ({ title }) => (
+  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', color: '#9ca3af', gap: 12 }}>
+    <div style={{ fontSize: 36 }}>⚙️</div>
+    <div style={{ fontSize: 20, fontWeight: 600, color: '#374151' }}>{title}</div>
+    <div style={{ fontSize: 14 }}>Dieser Bereich wird noch entwickelt.</div>
+  </div>
+);
 
 export const HomePage: React.FC = () => {
-  const { user, signOut } = useAuth();
+  const [activeView, setActiveView] = useState<SidebarView>('library');
+
+  const currentUser = AuthService.getCurrentUser();
+  const userName = currentUser
+    ? [currentUser.givenName, currentUser.familyName].filter(Boolean).join(' ') || currentUser.username
+    : 'User';
+  const userEmail = currentUser?.email;
 
   return (
-    <div style={{ width: '100vw', height: '100vh', display: 'flex', overflow: 'hidden' }}>
-      <aside style={{ width: 350, borderRight: '1px solid #e5e7eb' }}>
-        <SidebarTabs width={350} />
-      </aside>
-      <div style={{ flex: 1, position: 'relative' }}>
-        <Header user={user} onLogout={signOut} />
-        <div style={{
-          position: 'absolute',
-          top: 48,
-          left: 0,
-          right: 0,
-          bottom: 0,
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          background: '#f7f9fb'
-        }}>
-          <div style={{ textAlign: 'center' }}>
-            <img src={'/assets/vitruvius1.png'} alt="Vitruvius" style={{ width: 600, height: 600, objectFit: 'contain', display: 'block', margin: '0 auto' }} />
-          </div>
+    <div style={{ width: '100vw', height: '100vh', display: 'flex', overflow: 'hidden', background: '#f7f8fa' }}>
+      <AppSidebar
+        activeView={activeView}
+        onViewChange={setActiveView}
+        userName={userName}
+        userRole="Methodologist"
+        userEmail={userEmail}
+        onSettings={() => setActiveView('settings')}
+        onLogout={() => AuthService.signOut().then(() => window.location.href = '/login')}
+      />
+      <main style={{
+        flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', position: 'relative',
+        backgroundColor: '#f1f2f4',
+        backgroundImage: 'radial-gradient(circle, #b0b7c3 1px, transparent 1px)',
+        backgroundSize: '20px 20px',
+      }}>
+        <div style={{ position: 'relative', flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+          {activeView === 'library'  && <ModelLibraryTable />}
+          {activeView === 'projects' && <ProjectsView />}
+          {activeView === 'settings' && <ComingSoon title="Einstellungen" />}
         </div>
-      </div>
+      </main>
     </div>
   );
 };
-
-

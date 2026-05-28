@@ -8,7 +8,6 @@ import React, {
   useMemo,
 } from 'react';
 import ReactFlow, {
-  MiniMap,
   Background,
   ReactFlowInstance,
   Node,
@@ -20,17 +19,17 @@ import { useDragAndDrop } from '../../hooks/useDragAndDrop';
 import { EditableNode } from './EditableNode';
 import { UMLRelationship } from './UMLRelationship';
 import { ReactionRelationship } from './ReactionRelationship';
-import { EcoreFileBox } from './EcoreFileBox';
+import { EcoreFileBox, cardColor, darken } from './EcoreFileBox';
 import { ConnectionLine } from './ConnectionLine';
 import { CodeEditorModal } from './CodeEditorModal';
+import { ConfirmDialog } from '../ui/ConfirmDialog';
+import { ModelDetailModal } from '../ui/ModelLibraryTable';
 import { apiService, MetaModelRelationRequest } from '../../services/api';
 import { WorkspaceSnapshot } from '../../types/workspace';
 import { extractNsUriFromEcore } from '../../utils';
-import { useCircleContainment, clampToCircle, clampAllNodesToCircle, Circle } from '../../hooks/useCircleContainment';
+import { useCircleContainment, clampToCircle, clampAllNodesToCircle, computeInitialCircle, Circle } from '../../hooks/useCircleContainment';
 import { CircleOverlay } from './canvas/CircleOverlay';
 import { useViewTypes, ViewTypeScope } from '../../hooks/useViewTypes';
-import { mapBackendViewsToViewTypes } from '../../utils/viewTypes';
-import { VsumView } from '../../types/vsum';
 
 
 
@@ -43,6 +42,48 @@ const COLOR_LIST = [
 ];
 
 const NODE_DIMENSIONS = { width: 280, height: 180 };
+
+// ── EcoreFileBox collision helpers ────────────────────────────────────────────
+const ECORE_W = 118;
+const ECORE_H = 126;
+const ECORE_GAP = 20; // minimum clearance between boxes
+
+function ecoreRectsOverlap(ax: number, ay: number, bx: number, by: number): boolean {
+  return (
+    ax < bx + ECORE_W + ECORE_GAP &&
+    ax + ECORE_W + ECORE_GAP > bx &&
+    ay < by + ECORE_H + ECORE_GAP &&
+    ay + ECORE_H + ECORE_GAP > by
+  );
+}
+
+function findFreeEcorePosition(
+  existingNodes: { position: { x: number; y: number } }[],
+  preferred?: { x: number; y: number },
+): { x: number; y: number } {
+  const step = ECORE_W + ECORE_GAP;
+  const startX = preferred?.x ?? 60;
+  const startY = preferred?.y ?? 60;
+
+  const isFree = (x: number, y: number) =>
+    !existingNodes.some(n => ecoreRectsOverlap(x, y, n.position.x, n.position.y));
+
+  if (isFree(startX, startY)) return { x: startX, y: startY };
+
+  // Spiral outward from the preferred position until a free cell is found
+  for (let ring = 1; ring < 30; ring++) {
+    for (let dx = -ring; dx <= ring; dx++) {
+      for (let dy = -ring; dy <= ring; dy++) {
+        if (Math.abs(dx) !== ring && Math.abs(dy) !== ring) continue;
+        const x = startX + dx * step;
+        const y = startY + dy * step;
+        if (x < 0 || y < 0) continue;
+        if (isFree(x, y)) return { x, y };
+      }
+    }
+  }
+  return { x: startX, y: startY + existingNodes.length * (ECORE_H + ECORE_GAP) };
+}
 
 // Layout constants for auto-layout algorithm (defined outside component for stable references)
 const LAYOUT_CONFIG = {
@@ -86,6 +127,9 @@ interface FlowCanvasProps {
   userId?: string;
   vsumId?: string;
   umlModalOpen?: boolean;
+  addReactionMode?: boolean;
+  onReactionModeEnd?: () => void;
+  onHistoryChange?: (canUndo: boolean, canRedo: boolean) => void;
 }
 
 interface ConnectionDragState {
@@ -108,6 +152,158 @@ interface CodeEditorState {
 type HandlePosition = 'top' | 'bottom' | 'left' | 'right';
 
 const pairKey = (a: string, b: string) => (a < b ? `${a}::${b}` : `${b}::${a}`);
+
+// ── CustomMinimap ─────────────────────────────────────────────────────────────
+
+const MINI_NODE_W = 118;
+const MINI_NODE_H = 126;
+
+/** Returns the point where the ray from (w/2,h/2) toward (sx,sy) hits the minimap border,
+ *  or null if (sx,sy) is already inside. Used for off-screen edge indicators. */
+function edgeIndicatorPos(
+  sx: number, sy: number, w: number, h: number,
+): { x: number; y: number } | null {
+  const M = 9;
+  if (sx >= M && sx <= w - M && sy >= M && sy <= h - M) return null;
+  const cx = w / 2, cy = h / 2;
+  const dx = sx - cx, dy = sy - cy;
+  if (dx === 0 && dy === 0) return null;
+  let t = Infinity;
+  if (dx > 0) t = Math.min(t, (w - M - cx) / dx);
+  if (dx < 0) t = Math.min(t, (M - cx) / dx);
+  if (dy > 0) t = Math.min(t, (h - M - cy) / dy);
+  if (dy < 0) t = Math.min(t, (M - cy) / dy);
+  if (!isFinite(t) || t <= 0) return null;
+  return {
+    x: Math.max(M, Math.min(w - M, cx + dx * t)),
+    y: Math.max(M, Math.min(h - M, cy + dy * t)),
+  };
+}
+
+interface CustomMinimapProps {
+  nodes: Node[];
+  edges: Edge[];
+  circle?: Circle;
+  viewport: { x: number; y: number; zoom: number };
+  containerW: number;
+  containerH: number;
+  width: number;
+  height: number;
+}
+
+const CustomMinimap: React.FC<CustomMinimapProps> = ({
+  nodes, edges, circle, viewport, containerW, containerH, width, height,
+}) => {
+  const ecoreNodes = nodes.filter(n => n.type === 'ecoreFile');
+
+  // Viewport center in flow coordinates
+  const flowCX = (-viewport.x + containerW / 2) / viewport.zoom;
+  const flowCY = (-viewport.y + containerH / 2) / viewport.zoom;
+  const visW = containerW / viewport.zoom;
+  const visH = containerH / viewport.zoom;
+
+  // Scale: current viewport fills ~80 % of the minimap — clamped so extreme zooms stay sane.
+  // The minimap always tracks the viewport center, so it shows exactly what the user sees,
+  // scaled down proportionally to minimap size.
+  const mmScale = Math.max(0.03, Math.min(2, Math.min(
+    (width  * 0.80) / Math.max(visW, 50),
+    (height * 0.80) / Math.max(visH, 50),
+  )));
+
+  // Flow → SVG coordinate helpers (centered on current viewport center)
+  const toX = (fx: number) => (fx - flowCX) * mmScale + width  / 2;
+  const toY = (fy: number) => (fy - flowCY) * mmScale + height / 2;
+
+  const nodeMap = new Map(ecoreNodes.map(n => [n.id, n]));
+
+  // Viewport rectangle in SVG space
+  const vpX = toX(flowCX - visW / 2);
+  const vpY = toY(flowCY - visH / 2);
+  const vpW = visW * mmScale;
+  const vpH = visH * mmScale;
+
+  // Off-screen indicators: colored dots at minimap border pointing toward off-screen items
+  const indicators: { x: number; y: number; color: string }[] = [];
+  ecoreNodes.forEach(node => {
+    const sx = toX(node.position.x + MINI_NODE_W / 2);
+    const sy = toY(node.position.y + MINI_NODE_H / 2);
+    const ind = edgeIndicatorPos(sx, sy, width, height);
+    if (ind) indicators.push({ ...ind, color: cardColor(node.data?.domain) });
+  });
+  if (circle && circle.r > 0) {
+    const sx = toX(circle.cx), sy = toY(circle.cy);
+    const ind = edgeIndicatorPos(sx, sy, width, height);
+    if (ind) indicators.push({ ...ind, color: 'rgba(4,148,132,0.85)' });
+  }
+
+  return (
+    <div style={{
+      position: 'absolute', right: 60, bottom: 16,
+      width, height, zIndex: 30,
+      background: '#f0f4f8', borderRadius: 8,
+      border: '1px solid #e2e8f0',
+      boxShadow: '0 2px 8px rgba(0,0,0,0.10)',
+      overflow: 'hidden',
+    }}>
+      <svg width={width} height={height} style={{ display: 'block' }}>
+        {/* Circle (only when circleVisible and it overlaps with visible minimap area) */}
+        {circle && circle.r > 0 && (() => {
+          const cx = toX(circle.cx), cy = toY(circle.cy), r = circle.r * mmScale;
+          if (cx + r < 0 || cx - r > width || cy + r < 0 || cy - r > height) return null;
+          return (
+            <circle cx={cx} cy={cy} r={r}
+              fill="rgba(4,148,132,0.05)" stroke="rgba(4,148,132,0.45)"
+              strokeWidth={1.5} strokeDasharray="4 3"
+            />
+          );
+        })()}
+
+        {/* Edges */}
+        {edges.map(edge => {
+          const src = nodeMap.get(edge.source);
+          const tgt = nodeMap.get(edge.target);
+          if (!src || !tgt) return null;
+          return (
+            <line key={edge.id}
+              x1={toX(src.position.x + MINI_NODE_W / 2)} y1={toY(src.position.y + MINI_NODE_H / 2)}
+              x2={toX(tgt.position.x + MINI_NODE_W / 2)} y2={toY(tgt.position.y + MINI_NODE_H / 2)}
+              stroke="#94a3b8" strokeWidth={1.2}
+            />
+          );
+        })}
+
+        {/* Nodes */}
+        {ecoreNodes.map(node => {
+          const sx = toX(node.position.x), sy = toY(node.position.y);
+          const nw = MINI_NODE_W * mmScale, nh = MINI_NODE_H * mmScale;
+          if (sx + nw < 0 || sx > width || sy + nh < 0 || sy > height) return null;
+          const color = cardColor(node.data?.domain);
+          return (
+            <rect key={node.id} x={sx} y={sy} width={nw} height={nh}
+              rx={Math.max(2, 8 * mmScale)}
+              fill={color} stroke={darken(color, 25)} strokeWidth={1}
+            />
+          );
+        })}
+
+        {/* Current viewport rectangle */}
+        <rect x={vpX} y={vpY} width={vpW} height={vpH}
+          fill="rgba(59,130,246,0.07)" stroke="rgba(59,130,246,0.55)"
+          strokeWidth={1.5} rx={2}
+        />
+
+        {/* Off-screen edge indicators */}
+        {indicators.map((ind, i) => (
+          <circle key={i} cx={ind.x} cy={ind.y} r={4.5}
+            fill={ind.color} stroke="white" strokeWidth={1.2}
+          />
+        ))}
+      </svg>
+    </div>
+  );
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
 
 const createControlButton = (onClick: () => void, title: string, icon: React.ReactNode) => (
   <button
@@ -196,10 +392,15 @@ export const FlowCanvas = forwardRef<{
     userId,
     vsumId,
     umlModalOpen,
+    addReactionMode,
+    onReactionModeEnd,
+    onHistoryChange,
   }, ref) => {
 
     const reactFlowWrapper = useRef<HTMLDivElement>(null);
     const [reactFlowInstance, setReactFlowInstance] = useState<ReactFlowInstance | null>(null);
+    // Ref mirror of reactFlowInstance – always current, safe to read from any closure or setTimeout
+    const reactFlowInstanceRef = useRef<ReactFlowInstance | null>(null);
     const [isDragOver, setIsDragOver] = useState(false);
     const [isInteractive, setIsInteractive] = useState(true);
     const [selectedFileId, setSelectedFileId] = useState<string | null>(null);
@@ -208,12 +409,29 @@ export const FlowCanvas = forwardRef<{
     const [codeEditorState, setCodeEditorState] = useState<CodeEditorState | null>(null);
     const [routingStyle] = useState<'curved' | 'orthogonal'>('orthogonal');
     const [hoveredMergeGroup, setHoveredMergeGroup] = useState<string | null>(null);
+    const [pendingDelete, setPendingDelete] = useState<{ nodeIds: string[]; edgeIds: string[]; fileId: string | null } | null>(null);
+    const [detailModel, setDetailModel] = useState<{ model: any; ecoreContent: string } | null>(null);
+    const handleShowDetails = useCallback((modelObj: any, fileContent: string) => {
+      setDetailModel({ model: modelObj, ecoreContent: fileContent });
+    }, []);
+
+    // Unified delete handler — used by both keyboard Delete and context menu
+    const handleRequestDelete = useCallback((nodeId: string) => {
+      setPendingDelete({ nodeIds: [], edgeIds: [], fileId: nodeId });
+    }, []);
     // Track ReactFlow viewport for CircleOverlay sync
     const [viewport, setViewport] = useState({ x: 0, y: 0, zoom: 1 });
 
     // Canvas center in flow coordinates — fixed at origin, ReactFlow's default fitView center
     const [circleSelected, setCircleSelected] = useState(false);
     const [circleVisible, setCircleVisible] = useState(true);
+
+    // Ref flag: set to true just before setCircle() in autoLayoutEcoreBoxes so the
+    // useEffect below can call fitViewToCircle once React has committed the new circle.
+    const pendingFitToCircle = useRef(false);
+
+    // Add-reaction mode: first clicked node becomes source, second creates the edge
+    const [reactionSourceId, setReactionSourceId] = useState<string | null>(null);
 
     useEffect(() => {
       if (!circleVisible) return;
@@ -253,8 +471,8 @@ export const FlowCanvas = forwardRef<{
       updateEdgeCode,
     } = useFlowState();
     const [circle, setCircle] = useCircleContainment(nodes);
-    const { viewTypes, addViewType, deleteViewType, updateAngle, unlinkNode, replaceViewTypes } = useViewTypes(vsumId);
-    const backendViewsRef = useRef<VsumView[] | null>(null);
+    const { viewTypes, addViewType, deleteViewType, updateAngle, unlinkNode } = useViewTypes(vsumId);
+
 
     // Helper function to calculate optimal handles based on which direction target is from source
     const calculateOptimalHandles = useCallback((sourceNode: Node, targetNode: Node) => {
@@ -332,27 +550,41 @@ export const FlowCanvas = forwardRef<{
 
     const onNodesChange = useCallback((changes: any) => {
       const clampedChanges = changes.map((change: any) => {
-        if (!circleVisible || change.type !== 'position' || !change.position) return change;
+        if (change.type !== 'position' || !change.position) return change;
 
-        const domNode = document.querySelector(
-          `.react-flow__node[data-id="${change.id}"]`
-        );
-        const nodeSize = domNode
-          ? { width: domNode.clientWidth, height: domNode.clientHeight }
-          : { width: 280, height: 180 };
+        let pos = change.position;
 
-        return { ...change, position: clampToCircle(change.position, circle, nodeSize) };
+        // 1. Clamp to circle boundary
+        if (circleVisible) {
+          const domNode = document.querySelector(`.react-flow__node[data-id="${change.id}"]`);
+          const nodeSize = domNode
+            ? { width: domNode.clientWidth, height: domNode.clientHeight }
+            : { width: 280, height: 180 };
+          pos = clampToCircle(pos, circle, nodeSize);
+        }
+
+        // 2. Block movement into another EcoreFileBox
+        const self = nodes.find(n => n.id === change.id);
+        if (self?.type === 'ecoreFile') {
+          const others = nodes.filter(n => n.id !== change.id && n.type === 'ecoreFile');
+          const wouldOverlap = others.some(n =>
+            ecoreRectsOverlap(pos.x, pos.y, n.position.x, n.position.y),
+          );
+          if (wouldOverlap) pos = self.position; // hard wall — revert to current position
+        }
+
+        return { ...change, position: pos };
       });
 
       originalOnNodesChange(clampedChanges);
 
-      const finishedDragging = clampedChanges.some((change: any) =>
-        change.type === 'position' && change.dragging === false
+      const finishedDragging = clampedChanges.some(
+        (c: any) => c.type === 'position' && c.dragging === false,
       );
       if (finishedDragging) {
         setTimeout(recalculateEdgeHandles, 100);
       }
-    }, [originalOnNodesChange, recalculateEdgeHandles, circle, circleVisible]);
+    }, [originalOnNodesChange, recalculateEdgeHandles, circle, circleVisible, nodes]);
 
 
     const edgeColorMapRef = useRef<Map<string, string>>(new Map());
@@ -560,25 +792,24 @@ export const FlowCanvas = forwardRef<{
       const handleDeleteKey = (event: KeyboardEvent): boolean => {
         if (reactFlowInstance) {
           const selectedNodes = reactFlowInstance.getNodes().filter(n => n.selected);
-          if (selectedNodes.length > 0) {
-            event.preventDefault();
-            selectedNodes.forEach((n) => removeNode(n.id));
-            return true;
-          }
-
           const selectedEdges = reactFlowInstance.getEdges().filter(e => e.selected);
-          if (selectedEdges.length > 0) {
+
+          // ecore file nodes → route through confirmation
+          const ecoreNodes = selectedNodes.filter(n => n.type === 'ecoreFile');
+          const otherNodes = selectedNodes.filter(n => n.type !== 'ecoreFile');
+
+          if (ecoreNodes.length > 0 || (selectedFileId && onEcoreFileDelete)) {
             event.preventDefault();
-            selectedEdges.forEach((e) => removeEdge(e.id));
+            const fileId = ecoreNodes[0]?.id ?? selectedFileId ?? null;
+            setPendingDelete({ nodeIds: otherNodes.map(n => n.id), edgeIds: selectedEdges.map(e => e.id), fileId });
             return true;
           }
-        }
 
-        if (selectedFileId && onEcoreFileDelete) {
-          event.preventDefault();
-          onEcoreFileDelete(selectedFileId);
-          setSelectedFileId(null);
-          return true;
+          if (otherNodes.length > 0 || selectedEdges.length > 0) {
+            event.preventDefault();
+            setPendingDelete({ nodeIds: otherNodes.map(n => n.id), edgeIds: selectedEdges.map(e => e.id), fileId: null });
+            return true;
+          }
         }
 
         return false;
@@ -609,7 +840,7 @@ export const FlowCanvas = forwardRef<{
 
       document.addEventListener('keydown', handleKeyDown);
       return () => document.removeEventListener('keydown', handleKeyDown);
-    }, [undo, redo, canUndo, canRedo, reactFlowInstance, removeNode, removeEdge, selectedFileId, onEcoreFileDelete]);
+    }, [undo, redo, canUndo, canRedo, reactFlowInstance, removeNode, removeEdge, selectedFileId, onEcoreFileDelete, setPendingDelete]);
 
 
     const buildInitialReactionCode = useCallback((sourceNodeId: string, targetNodeId: string): string => {
@@ -1021,21 +1252,33 @@ export const FlowCanvas = forwardRef<{
     }, [reactFlowInstance]);
 
 
+    // Uses the ref mirror so it is safe to call from any closure or setTimeout without
+    // worrying about stale captures of reactFlowInstance.
     const fitViewToCircle = useCallback((c: Circle) => {
-      if (!reactFlowInstance || !reactFlowWrapper.current) return;
+      const inst = reactFlowInstanceRef.current;
+      if (!inst || !reactFlowWrapper.current) return;
       const { width, height } = reactFlowWrapper.current.getBoundingClientRect();
+      if (!width || !height) return;
       const padding = 60;
       const zoom = Math.min(
         (width - padding * 2) / (c.r * 2),
         (height - padding * 2) / (c.r * 2)
       );
       const clampedZoom = Math.min(Math.max(zoom, 0.05), 2);
-      reactFlowInstance.setViewport({
+      inst.setViewport({
         x: width / 2 - c.cx * clampedZoom,
         y: height / 2 - c.cy * clampedZoom,
         zoom: clampedZoom,
       }, { duration: 300 });
-    }, [reactFlowInstance]);
+    }, []); // no deps – reads refs directly, always fresh
+
+    // After autoLayoutEcoreBoxes sets a new circle, fit the view once React has committed it.
+    useEffect(() => {
+      if (!pendingFitToCircle.current) return;
+      pendingFitToCircle.current = false;
+      fitViewToCircle(circle);
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [circle]);
 
     const handleCircleResizePreview = useCallback((newR: number) => {
       if (!reactFlowInstance || !reactFlowWrapper.current) return;
@@ -1057,13 +1300,7 @@ export const FlowCanvas = forwardRef<{
       label: string, scope: ViewTypeScope, linkedNodeIds: string[], angle: number, editable: boolean
     ) => {
       addViewType({ label, scope, angle, linkedNodeIds, editable });
-      globalThis.dispatchEvent(new CustomEvent('vitruv.syncActiveVsumChanges'));
     }, [addViewType]);
-
-    const handleDeleteViewType = useCallback((id: string) => {
-      deleteViewType(id);
-      globalThis.dispatchEvent(new CustomEvent('vitruv.syncActiveVsumChanges'));
-    }, [deleteViewType]);
 
 
     const handleCircleResize = useCallback((newR: number) => {
@@ -1086,11 +1323,64 @@ export const FlowCanvas = forwardRef<{
       const ecoreNode = nodes.find(
         n => n.type === 'ecoreFile' && n.data.fileName === fileName
       );
-      if (ecoreNode) {
-        setSelectedFileId(ecoreNode.id);
-        onEcoreFileSelect?.(fileName);
+      if (!ecoreNode) return;
+
+      // ── Add-reaction mode: two-click edge creation ──────────────────────────
+      if (addReactionMode) {
+        if (!reactionSourceId) {
+          // First click — set as source
+          setReactionSourceId(ecoreNode.id);
+        } else if (reactionSourceId === ecoreNode.id) {
+          // Clicked same node — deselect source
+          setReactionSourceId(null);
+        } else {
+          // Second click — create reaction edge
+          const sourceNode = nodes.find(n => n.id === reactionSourceId);
+          if (sourceNode) {
+            const color = getColorForPair(sourceNode.id, ecoreNode.id);
+            const handles = calculateOptimalHandles(sourceNode, ecoreNode);
+            const cleanSrc = handles.sourceHandle.replace('-source', '').replace('-target', '');
+            const cleanTgt = handles.targetHandle.replace('-target', '').replace('-source', '');
+            const newEdge: Edge = {
+              id: `edge-reaction-${Date.now()}`,
+              source: sourceNode.id,
+              target: ecoreNode.id,
+              type: 'reactions',
+              sourceHandle: cleanSrc,
+              targetHandle: cleanTgt,
+              data: {
+                code: '',
+                backendRelationId: null,
+                reactionFileId: null,
+                sourceMetaModelId: sourceNode.data?.metaModelId ?? sourceNode.data?.metaModelSourceId,
+                targetMetaModelId: ecoreNode.data?.metaModelId ?? ecoreNode.data?.metaModelSourceId,
+                sourceMetaModelSourceId: sourceNode.data?.metaModelSourceId ?? sourceNode.data?.metaModelId,
+                targetMetaModelSourceId: ecoreNode.data?.metaModelSourceId ?? ecoreNode.data?.metaModelId,
+              },
+              style: { stroke: color, strokeWidth: 2 },
+            };
+            addEdge(newEdge);
+          }
+          setReactionSourceId(null);
+          onReactionModeEnd?.();
+        }
+        return; // don't do normal select in reaction mode
       }
-    }, [nodes, onEcoreFileSelect]);
+
+      // ── Normal select ───────────────────────────────────────────────────────
+      setSelectedFileId(ecoreNode.id);
+      onEcoreFileSelect?.(fileName);
+    }, [nodes, onEcoreFileSelect, addReactionMode, reactionSourceId, getColorForPair, calculateOptimalHandles, addEdge, onReactionModeEnd]);
+
+    // Clear reaction source when mode is toggled off
+    useEffect(() => {
+      if (!addReactionMode) setReactionSourceId(null);
+    }, [addReactionMode]);
+
+    // Notify parent whenever undo/redo availability changes
+    useEffect(() => {
+      onHistoryChange?.(canUndo, canRedo);
+    }, [canUndo, canRedo, onHistoryChange]);
 
     const handleEcoreFileExpand = useCallback((fileName: string, fileContent: string) => {
       const ecoreNode = nodes.find(
@@ -1100,12 +1390,6 @@ export const FlowCanvas = forwardRef<{
       if (ecoreNode) {
         setExpandedFileId(ecoreNode.id);
         setSelectedFileId(ecoreNode.id);
-        const updatedNodes = nodes.map(n =>
-          n.id === ecoreNode.id
-            ? { ...n, data: { ...n.data, isExpanded: true } }
-            : n
-        );
-        setNodes(updatedNodes);
       }
 
       onEcoreFileExpand?.(fileName, fileContent);
@@ -1122,7 +1406,8 @@ export const FlowCanvas = forwardRef<{
     }, [nodes, setNodes]);
 
     const addEcoreFile = useCallback((fileName: string, fileContent: string, meta?: any) => {
-      const position = meta?.position || { x: 100, y: 100 };
+      const ecoreNodes = nodes.filter(n => n.type === 'ecoreFile');
+      const position = findFreeEcorePosition(ecoreNodes, meta?.position ?? { x: 60, y: 60 });
       const metaModelId = typeof meta?.metaModelId === 'number' ? meta.metaModelId : undefined;
       const metaModelSourceId = typeof meta?.metaModelSourceId === 'number'
         ? meta.metaModelSourceId
@@ -1148,7 +1433,9 @@ export const FlowCanvas = forwardRef<{
           onExpand: handleEcoreFileExpand,
           onSelect: handleEcoreFileSelect,
           onDelete: onEcoreFileDelete,
+          onRequestDelete: handleRequestDelete,
           onRename: onEcoreFileRename,
+          onShowDetails: handleShowDetails,
           isExpanded: false,
         },
         draggable: true,
@@ -1160,7 +1447,7 @@ export const FlowCanvas = forwardRef<{
       if (onEcoreFileSelect) {
         onEcoreFileSelect(fileName);
       }
-    }, [addNode, handleEcoreFileExpand, handleEcoreFileSelect, onEcoreFileSelect, onEcoreFileDelete, onEcoreFileRename]);
+    }, [nodes, addNode, handleEcoreFileExpand, handleEcoreFileSelect, onEcoreFileSelect, onEcoreFileDelete, onEcoreFileRename, handleRequestDelete]);
 
     useEffect(() => {
       const handleCreateReactionEdge = (e: Event) => {
@@ -1213,10 +1500,10 @@ export const FlowCanvas = forwardRef<{
         addEdge(newEdge);
       };
 
-      globalThis.addEventListener('vitruv.createReactionEdge', handleCreateReactionEdge);
+      globalThis.addEventListener('vitruv.createReactionEdge', handleCreateReactionEdge as EventListener);
 
       return () => {
-        globalThis.removeEventListener('vitruv.createReactionEdge', handleCreateReactionEdge);
+        globalThis.removeEventListener('vitruv.createReactionEdge', handleCreateReactionEdge as EventListener);
       };
     }, [nodes, addEdge, getColorForPair, getBackendMetaModelIdForNode, getMetaModelSourceIdForNode, calculateOptimalHandles]);
 
@@ -1311,40 +1598,9 @@ export const FlowCanvas = forwardRef<{
         relations.forEach(relation => processRelation(relation, preserveExisting));
       };
 
-      globalThis.addEventListener('vitruv.loadMetaModelRelations', handleLoadMetaModelRelations);
-      return () => globalThis.removeEventListener('vitruv.loadMetaModelRelations', handleLoadMetaModelRelations);
+      globalThis.addEventListener('vitruv.loadMetaModelRelations', handleLoadMetaModelRelations as EventListener);
+      return () => globalThis.removeEventListener('vitruv.loadMetaModelRelations', handleLoadMetaModelRelations as EventListener);
     }, [processRelation, reactFlowInstance, fitViewToCircle, circle]);
-
-    useEffect(() => {
-      const handleResetWorkspace = () => {
-        backendViewsRef.current = null;
-        replaceViewTypes([]);
-      };
-
-      globalThis.addEventListener('vitruv.resetWorkspace', handleResetWorkspace);
-      return () => globalThis.removeEventListener('vitruv.resetWorkspace', handleResetWorkspace);
-    }, [replaceViewTypes]);
-
-    useEffect(() => {
-      const handleLoadVsumViews = (e: Event) => {
-        const custom = e as CustomEvent<{ views?: VsumView[] }>;
-        backendViewsRef.current = custom.detail?.views ?? [];
-      };
-
-      globalThis.addEventListener('vitruv.loadVsumViews', handleLoadVsumViews);
-      return () => globalThis.removeEventListener('vitruv.loadVsumViews', handleLoadVsumViews);
-    }, []);
-
-    useEffect(() => {
-      const pendingViews = backendViewsRef.current;
-      if (!pendingViews?.length) return;
-
-      const hasMetaModelNodes = nodes.some(node => node.type === 'ecoreFile');
-      if (!hasMetaModelNodes) return;
-
-      replaceViewTypes(mapBackendViewsToViewTypes(pendingViews, nodes));
-      backendViewsRef.current = null;
-    }, [nodes, replaceViewTypes]);
 
     useEffect(() => {
       onDiagramChange?.(nodes, edges);
@@ -1386,23 +1642,11 @@ export const FlowCanvas = forwardRef<{
         })
         .filter((req): req is MetaModelRelationRequest => req !== null);
 
-      const viewRequests = viewTypes.map(viewType => ({
-        metaModelIds: Array.from(
-          new Set(
-            viewType.linkedNodeIds
-              .map(nodeId => getMetaModelSourceIdForNode(nodeId))
-              .filter((value): value is number => typeof value === 'number')
-          )
-        ),
-        fileStorageId: viewType.fileStorageId ?? 0,
-      }));
-
       return {
         metaModelIds,
         metaModelRelationRequests,
-        viewRequests,
       };
-    }, [nodes, edges, viewTypes, getMetaModelSourceIdForNode]);
+    }, [nodes, edges, getMetaModelSourceIdForNode]);
 
     useEffect(() => {
       if (!nodes.length || !edges.length) return;
@@ -1694,15 +1938,22 @@ export const FlowCanvas = forwardRef<{
 
       setNodes(updatedNodes);
 
-      // Optimize edge handles after layout
+      // Optimize edge handles after layout, then center view on the circle.
+      // pendingFitToCircle.current = true signals the useEffect([circle]) below to call
+      // fitViewToCircle() once React has committed the new circle state.
+      // fitViewToCircle now reads reactFlowInstanceRef (a ref, always current) so there
+      // are no stale-closure issues regardless of when the effect fires.
       setTimeout(() => {
         const optimizedEdges = optimizeEdgeHandles(updatedNodes, edges);
         setEdges(optimizedEdges);
 
-        // Fit view after layout
-        setTimeout(() => reactFlowInstance?.fitView({ padding: 0.15, duration: 500 }), 50);
+        // Recompute circle center from final node positions
+        const ecoreUpdated = updatedNodes.filter(n => n.type === 'ecoreFile');
+        const newCircle = computeInitialCircle(ecoreUpdated);
+        pendingFitToCircle.current = true;   // signal the useEffect to fit after commit
+        setCircle(newCircle);
       }, 50);
-    }, [nodes, edges, setNodes, setEdges, reactFlowInstance, buildAdjacencyMap, findConnectedComponents, layoutComponent, optimizeEdgeHandles]);
+    }, [nodes, edges, setNodes, setEdges, buildAdjacencyMap, findConnectedComponents, layoutComponent, optimizeEdgeHandles, setCircle, fitViewToCircle]);
 
     // Listen for auto-layout trigger
     useEffect(() => {
@@ -1711,10 +1962,10 @@ export const FlowCanvas = forwardRef<{
         autoLayoutEcoreBoxes();
       };
 
-      globalThis.addEventListener('vitruv.autoLayoutWorkspace', handleAutoLayout);
+      globalThis.addEventListener('vitruv.autoLayoutWorkspace', handleAutoLayout as EventListener);
 
       return () => {
-        globalThis.removeEventListener('vitruv.autoLayoutWorkspace', handleAutoLayout);
+        globalThis.removeEventListener('vitruv.autoLayoutWorkspace', handleAutoLayout as EventListener);
       };
     }, [autoLayoutEcoreBoxes]);
 
@@ -1732,10 +1983,10 @@ export const FlowCanvas = forwardRef<{
         setNodes(deselectAllNodes);
       };
 
-      globalThis.addEventListener('edge-clicked', handleEdgeClick);
+      globalThis.addEventListener('edge-clicked', handleEdgeClick as EventListener);
 
       return () => {
-        globalThis.removeEventListener('edge-clicked', handleEdgeClick);
+        globalThis.removeEventListener('edge-clicked', handleEdgeClick as EventListener);
       };
     }, [setEdges, setNodes]);
 
@@ -1766,12 +2017,12 @@ export const FlowCanvas = forwardRef<{
         updateEdgeControlPoint(edgeId, point);
       };
 
-      globalThis.addEventListener('uml-edge-control-drag', handleControlDrag);
-      globalThis.addEventListener('uml-edge-control-drop', handleControlDrop);
+      globalThis.addEventListener('uml-edge-control-drag', handleControlDrag as EventListener);
+      globalThis.addEventListener('uml-edge-control-drop', handleControlDrop as EventListener);
 
       return () => {
-        globalThis.removeEventListener('uml-edge-control-drag', handleControlDrag);
-        globalThis.removeEventListener('uml-edge-control-drop', handleControlDrop);
+        globalThis.removeEventListener('uml-edge-control-drag', handleControlDrag as EventListener);
+        globalThis.removeEventListener('uml-edge-control-drop', handleControlDrop as EventListener);
       };
     }, [reactFlowInstance, updateEdgeControlPoint]);
 
@@ -1811,14 +2062,17 @@ export const FlowCanvas = forwardRef<{
             onExpand: handleEcoreFileExpand,
             onSelect: handleEcoreFileSelect,
             onDelete: onEcoreFileDelete,
+            onRequestDelete: handleRequestDelete,
             onRename: onEcoreFileRename,
+            onShowDetails: handleShowDetails,
             isExpanded: expandedFileId === node.id,
             onConnectionStart: handleConnectionStart,
             isConnectionActive: connectionDragState?.isActive || false,
             edgeDistribution: edgeDistributionMap.get(node.id),
+            isReactionSource: reactionSourceId === node.id,
           },
           selected: selectedFileId === node.id,
-          draggable: !connectionDragState?.isActive,
+          draggable: !connectionDragState?.isActive && !addReactionMode,
         };
       }
 
@@ -2156,7 +2410,8 @@ export const FlowCanvas = forwardRef<{
           height: '100%',
           position: 'relative',
           border: isDragOver ? '3px dashed #3498db' : 'none',
-          transition: 'border 0.2s ease'
+          transition: 'border 0.2s ease',
+          cursor: addReactionMode ? (reactionSourceId ? 'crosshair' : 'cell') : undefined,
         }}
       >
         <ReactFlow
@@ -2172,6 +2427,7 @@ export const FlowCanvas = forwardRef<{
           edgeTypes={edgeTypes}
           onInit={(instance) => {
             setReactFlowInstance(instance);
+            reactFlowInstanceRef.current = instance;
             setViewport(instance.getViewport());
           }}
           onMove={(_event, vp) => setViewport(vp)}
@@ -2189,12 +2445,12 @@ export const FlowCanvas = forwardRef<{
             setCircleSelected(false);
             setNodes(nds => nds.map(n => ({ ...n, selected: false })));
             setEdges(eds => eds.map(e => ({ ...e, selected: false })));
+            if (addReactionMode) { setReactionSourceId(null); onReactionModeEnd?.(); }
           }}
         >
-          <MiniMap position="bottom-right" style={{ bottom: 16, right: 16, zIndex: 30 }} />
           <Background />
         </ReactFlow>
-        {circleVisible && !umlModalOpen && (
+        {circleVisible && (
           <CircleOverlay
             circle={circle}
             viewport={viewport}
@@ -2210,7 +2466,7 @@ export const FlowCanvas = forwardRef<{
             viewTypes={viewTypes}
             ecoreNodes={ecoreNodes}
             onAddViewType={handleAddViewType}
-            onDeleteViewType={handleDeleteViewType}
+            onDeleteViewType={deleteViewType}
             onUpdateViewTypeAngle={updateAngle}
             onUnlinkNode={unlinkNode}
           />
@@ -2223,15 +2479,78 @@ export const FlowCanvas = forwardRef<{
           />
         )}
 
+        <CustomMinimap
+          nodes={nodes}
+          edges={edges}
+          circle={circleVisible ? circle : undefined}
+          viewport={viewport}
+          containerW={reactFlowWrapper.current?.clientWidth ?? 800}
+          containerH={reactFlowWrapper.current?.clientHeight ?? 600}
+          width={200}
+          height={204}
+        />
+
+        {/* ── Mode toggle: Modeling ↔ View Types ── */}
+        <div style={{
+          position: 'absolute',
+          top: 14,
+          left: '50%',
+          transform: 'translateX(-50%)',
+          zIndex: 31,
+          display: 'flex',
+          alignItems: 'center',
+          background: '#ffffff',
+          borderRadius: 8,
+          boxShadow: '0 4px 16px rgba(0,0,0,0.13), 0 0 0 1px rgba(0,0,0,0.07)',
+          height: 52,
+          padding: '0 5px',
+          gap: 2,
+          fontFamily: 'ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, sans-serif',
+        }}>
+          {([
+            { label: 'Modeling',   icon: <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="9" y1="21" x2="9" y2="9"/></svg>, active: !circleVisible },
+            { label: 'View Types', icon: <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="9"/><line x1="12" y1="3" x2="12" y2="21"/><line x1="3" y1="12" x2="21" y2="12"/></svg>, active: circleVisible },
+          ] as const).map(({ label, icon, active }) => (
+            <button
+              key={label}
+              onClick={() => {
+                const next = label === 'View Types';
+                setCircleVisible(next);
+                if (!next && circleSelected) setCircleSelected(false);
+              }}
+              style={{
+                display: 'flex', alignItems: 'center', gap: 7,
+                height: 40,
+                padding: '0 16px',
+                border: active ? '1px solid #1e293b' : '1px solid transparent',
+                borderRadius: 6,
+                background: active ? '#1e293b' : 'transparent',
+                color: active ? '#ffffff' : '#64748b',
+                fontSize: 13,
+                fontWeight: 600,
+                cursor: 'pointer',
+                transition: 'all 0.15s',
+                whiteSpace: 'nowrap',
+                fontFamily: 'inherit',
+              }}
+              onMouseEnter={e => { if (!active) { (e.currentTarget as HTMLButtonElement).style.background = '#f1f5f9'; (e.currentTarget as HTMLButtonElement).style.color = '#1e293b'; } }}
+              onMouseLeave={e => { if (!active) { (e.currentTarget as HTMLButtonElement).style.background = 'transparent'; (e.currentTarget as HTMLButtonElement).style.color = '#64748b'; } }}
+            >
+              {icon}
+              {label}
+            </button>
+          ))}
+        </div>
+
         <div
           style={{
             position: 'absolute',
-            left: 16,
+            right: 16,
             bottom: 16,
             zIndex: 31,
             display: 'flex',
             flexDirection: 'column',
-            gap: 6
+            gap: 20
           }}
         >
           {createControlButton(() => reactFlowInstance?.zoomIn?.(), 'Zoom in', '+')}
@@ -2241,14 +2560,6 @@ export const FlowCanvas = forwardRef<{
             () => setIsInteractive(prev => !prev),
             isInteractive ? 'Lock interactions' : 'Unlock interactions',
             isInteractive ? '🔓' : '🔒'
-          )}
-          {createControlButton(
-            () => {
-              setCircleVisible(prev => !prev);
-              if (circleSelected) setCircleSelected(false);
-            },
-            circleVisible ? 'Hide ViewTypes' : 'Show ViewTypes',
-            circleVisible ? '◎' : '○'
           )}
         </div>
 
@@ -2289,6 +2600,36 @@ export const FlowCanvas = forwardRef<{
             languageId="reactions"
             fileExtension=".reactions"
             title="Reaction Editor"
+          />
+        )}
+
+        <ConfirmDialog
+          isOpen={pendingDelete !== null}
+          title="Remove from canvas"
+          message="Do you really want to remove this element from the canvas?"
+          confirmText="Remove"
+          cancelText="Cancel"
+          variant="danger"
+          onCancel={() => setPendingDelete(null)}
+          onConfirm={() => {
+            if (!pendingDelete) return;
+            pendingDelete.nodeIds.forEach(nid => removeNode(nid));
+            pendingDelete.edgeIds.forEach(eid => removeEdge(eid));
+            if (pendingDelete.fileId) {
+              removeNode(pendingDelete.fileId);
+              setSelectedFileId(null);
+              if (onEcoreFileDelete) onEcoreFileDelete(pendingDelete.fileId);
+            }
+            setPendingDelete(null);
+          }}
+        />
+
+        {detailModel && (
+          <ModelDetailModal
+            model={detailModel.model}
+            ecoreContent={detailModel.ecoreContent}
+            onClose={() => setDetailModel(null)}
+            onUpdated={() => setDetailModel(null)}
           />
         )}
       </div>
