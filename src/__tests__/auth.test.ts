@@ -365,3 +365,106 @@ describe('AuthService – additional coverage', () => {
     expect(signOutSpy).toHaveBeenCalled();
   });
 });
+
+// ─────────────────────────────────────────────────────────────────────────────
+// AuthService – exchangeFastLoginCode
+// ─────────────────────────────────────────────────────────────────────────────
+describe('AuthService.exchangeFastLoginCode', () => {
+  beforeEach(() => {
+    localStorage.clear();
+    sessionStorage.clear();
+    jest.restoreAllMocks();
+    global.fetch = jest.fn() as jest.Mock;
+  });
+
+  it('stores all tokens in localStorage on success', async () => {
+    sessionStorage.setItem('fast_login_redirect_uri', 'http://localhost:3000/auth/callback');
+    (global.fetch as jest.Mock).mockResolvedValue({
+      ok: true,
+      json: async () => baseAuthResponse,
+    });
+
+    const result = await AuthService.exchangeFastLoginCode('test-code');
+
+    expect(result.access_token).toBe('access-token');
+    expect(localStorage.getItem('auth.access_token')).toBe('access-token');
+    expect(localStorage.getItem('auth.refresh_token')).toBe('refresh-token');
+    expect(localStorage.getItem('auth.token_type')).toBe('Bearer');
+    expect(localStorage.getItem('auth.scope')).toBe('openid');
+    expect(localStorage.getItem('auth.access_expires_at')).toBeTruthy();
+    expect(localStorage.getItem('auth.refresh_expires_at')).toBeTruthy();
+  });
+
+  it('POSTs to the token endpoint with correct form fields', async () => {
+    sessionStorage.setItem('fast_login_redirect_uri', 'http://localhost:3000/auth/callback');
+    (global.fetch as jest.Mock).mockResolvedValue({
+      ok: true,
+      json: async () => baseAuthResponse,
+    });
+
+    await AuthService.exchangeFastLoginCode('my-code');
+
+    const [url, options] = (global.fetch as jest.Mock).mock.calls[0];
+    expect(url).toMatch(/\/auth\/realms\/methodologist\/protocol\/openid-connect\/token/);
+    expect(options.method).toBe('POST');
+    expect(options.headers['Content-Type']).toBe('application/x-www-form-urlencoded');
+    const body = new URLSearchParams(options.body as string);
+    expect(body.get('grant_type')).toBe('authorization_code');
+    expect(body.get('client_id')).toBe('normal-customer-mobile-app');
+    expect(body.get('code')).toBe('my-code');
+    expect(body.get('redirect_uri')).toBe('http://localhost:3000/auth/callback');
+  });
+
+  it('clears the saved redirect_uri from sessionStorage after success', async () => {
+    sessionStorage.setItem('fast_login_redirect_uri', 'http://localhost:3000/auth/callback');
+    (global.fetch as jest.Mock).mockResolvedValue({
+      ok: true,
+      json: async () => baseAuthResponse,
+    });
+
+    await AuthService.exchangeFastLoginCode('code');
+
+    expect(sessionStorage.getItem('fast_login_redirect_uri')).toBeNull();
+  });
+
+  it('uses saved sessionStorage redirect_uri in the request body', async () => {
+    sessionStorage.setItem('fast_login_redirect_uri', 'https://example.com/callback');
+    (global.fetch as jest.Mock).mockResolvedValue({
+      ok: true,
+      json: async () => baseAuthResponse,
+    });
+
+    await AuthService.exchangeFastLoginCode('code');
+
+    const body = new URLSearchParams(
+      (global.fetch as jest.Mock).mock.calls[0][1].body as string,
+    );
+    expect(body.get('redirect_uri')).toBe('https://example.com/callback');
+  });
+
+  it('throws parsed error message when token endpoint returns error', async () => {
+    sessionStorage.setItem('fast_login_redirect_uri', 'http://localhost:3000/auth/callback');
+    (global.fetch as jest.Mock).mockResolvedValue({
+      ok: false,
+      status: 400,
+      statusText: 'Bad Request',
+      text: async () => JSON.stringify({ error_description: 'Code expired' }),
+    });
+
+    await expect(AuthService.exchangeFastLoginCode('bad-code')).rejects.toThrow('Code expired');
+  });
+
+  it('throws when token endpoint error body is empty (falls back to statusText)', async () => {
+    sessionStorage.setItem('fast_login_redirect_uri', 'http://localhost:3000/auth/callback');
+    (global.fetch as jest.Mock).mockResolvedValue({
+      ok: false,
+      status: 400,
+      statusText: 'Bad Request',
+      text: async () => '',
+    });
+
+    // extractErrorMessage returns statusText when body is empty,
+    // so the thrown message will be "Bad Request" (not the fallback string).
+    await expect(AuthService.exchangeFastLoginCode('bad-code')).rejects.toThrow();
+  });
+});
