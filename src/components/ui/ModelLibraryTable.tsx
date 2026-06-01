@@ -549,7 +549,7 @@ export const ModelLibraryTable: React.FC<ModelLibraryTableProps> = ({ onModelOpe
   // Derive unique domain values for the Typ filter
   const typOptions = [
     { value: 'all', label: 'All types' },
-    ...Array.from(new Set(models.map(m => m.domain).filter(Boolean))).sort().map(d => ({ value: d, label: d })),
+    ...Array.from(new Set(models.map(m => m.domain).filter(Boolean))).sort((a, b) => a!.localeCompare(b!)).map(d => ({ value: d, label: d })),
   ];
 
   const filtered = models.filter(m => typFilter === 'all' || m.domain === typFilter);

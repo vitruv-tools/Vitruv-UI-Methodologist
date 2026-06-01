@@ -822,7 +822,7 @@ function useCreateModelForm({ isOpen, onClose, onSuccess }: CreateModelModalProp
   const switchFileMode = (kind: FileKind, mode: 'file' | 'url') => {
     const prevId = uploadedFileIds[FILE_KIND_CONFIG[kind].fileIdKey];
     if (prevId > 0) {
-      apiService.deleteFile(prevId).catch(e => console.warn(`Failed to delete ${kind} file on mode switch:`, e));
+      apiService.deleteFile(prevId).catch(() => console.warn('Failed to delete file on mode switch'));
     }
     updateKind(kind, { inputMode: mode, urlFileName: '', localFileName: '', uploadError: '' });
     setUploadedFileIds(prev => ({ ...prev, [FILE_KIND_CONFIG[kind].fileIdKey]: 0 }));
@@ -834,7 +834,7 @@ function useCreateModelForm({ isOpen, onClose, onSuccess }: CreateModelModalProp
     // (prevId will be 0 on subsequent keystrokes, so this fires only once per upload)
     const prevId = uploadedFileIds[FILE_KIND_CONFIG[kind].fileIdKey];
     if (prevId > 0) {
-      apiService.deleteFile(prevId).catch(e => console.warn(`Failed to delete ${kind} file on URL change:`, e));
+      apiService.deleteFile(prevId).catch(() => console.warn('Failed to delete file on URL change'));
     }
     updateKind(kind, { url, urlFileName: '', localFileName: '', uploadError: '' });
     setUploadedFileIds(prev => ({ ...prev, [FILE_KIND_CONFIG[kind].fileIdKey]: 0 }));
@@ -927,7 +927,7 @@ function useCreateModelForm({ isOpen, onClose, onSuccess }: CreateModelModalProp
     const filesToDelete = [uploadedFileIds.ecoreFileId, uploadedFileIds.genModelFileId].filter(id => id > 0);
     await Promise.all(
       filesToDelete.map(fileId =>
-        apiService.deleteFile(fileId).catch(err => console.error(`Failed to delete file ${fileId}:`, err))
+        apiService.deleteFile(fileId).catch(() => console.error('Failed to delete file'))
       )
     );
   };
@@ -942,7 +942,7 @@ function useCreateModelForm({ isOpen, onClose, onSuccess }: CreateModelModalProp
     const { fileIdKey } = FILE_KIND_CONFIG[kind];
     const id = uploadedFileIds[fileIdKey];
     if (id > 0) {
-      await apiService.deleteFile(id).catch(err => console.warn(`Failed to delete ${kind} file:`, err));
+      await apiService.deleteFile(id).catch(() => console.warn('Failed to delete file'));
     }
     setUploadedFileIds(prev => ({ ...prev, [fileIdKey]: 0 }));
     updateKind(kind, { urlFileName: '', localFileName: '', uploadError: '' });
@@ -985,7 +985,7 @@ function useCreateModelForm({ isOpen, onClose, onSuccess }: CreateModelModalProp
     try {
       if (currentFileId > 0) {
         await apiService.deleteFile(currentFileId)
-          .catch(e => console.warn(`Failed to delete previous ${ext} file:`, e));
+          .catch(() => console.warn('Failed to delete previous file'));
       }
       startProgressSimulation(kind);
       const response = await apiService.uploadFile(file, apiType);
@@ -1037,7 +1037,7 @@ function useCreateModelForm({ isOpen, onClose, onSuccess }: CreateModelModalProp
     try {
       if (currentFileId > 0) {
         await apiService.deleteFile(currentFileId)
-          .catch(e => console.warn(`Failed to delete previous ${ext} file:`, e));
+          .catch(() => console.warn('Failed to delete previous file'));
       }
       startProgressSimulation(kind);
       const fetchResponse = await fetch(rawUrl);

@@ -86,7 +86,7 @@ export const ModelDrawer: React.FC<ModelDrawerProps> = ({
 
   const domains = Array.from(
     new Set(rawLib.filter(m => !addedModelIds.has(m.id) && m.domain).map(m => m.domain!))
-  ).sort();
+  ).sort((a, b) => a.localeCompare(b));
 
   const fromLibrary = rawLib
     .filter(m => !addedModelIds.has(m.id))
