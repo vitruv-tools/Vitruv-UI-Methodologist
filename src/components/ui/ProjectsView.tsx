@@ -351,7 +351,7 @@ export const ProjectsView: React.FC = () => {
           onClick={() => setShowCreate(true)}
           style={{ display: 'flex', alignItems: 'center', gap: 7, padding: '9px 18px', background: '#0B1720', color: '#fff', border: 'none', borderRadius: 9, fontSize: 14, fontWeight: 600, cursor: 'pointer', boxShadow: '0 1px 4px rgba(37,99,235,0.25)', transition: 'background 0.15s' }}
           onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.background = '#0B1720'; }}
-          onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.background = '#049484'; }}
+          onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.background = '#1e293b'; }}
         >
           <span style={{ fontSize: 18, lineHeight: 1 }}>+</span>
           <span>New project</span>

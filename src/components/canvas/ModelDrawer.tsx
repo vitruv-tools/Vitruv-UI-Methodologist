@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { UMLDiagram, UMLDiagramHandle } from './UMLDiagram';
 
 const FONT = 'ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, sans-serif';
-const DARK = '#049484';
+const DARK = '#1e293b';
 
 export interface DrawerModel {
   id: number;
@@ -436,7 +436,7 @@ const DetailView: React.FC<DetailViewProps> = ({ model, onFetchFile, onAddModel,
                   cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
                   transition: 'background 0.15s', fontFamily: FONT,
                 }}
-                onMouseEnter={e => (e.currentTarget.style.background = '#049484')}
+                onMouseEnter={e => (e.currentTarget.style.background = '#1e293b')}
                 onMouseLeave={e => (e.currentTarget.style.background = DARK)}
               >
                 <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
@@ -581,7 +581,7 @@ const ModelCard: React.FC<ModelCardProps> = ({ model, onCanvas, onAdd, onOpenDet
         </div>
 
         {/* Name — fixed left column */}
-        <div style={{ flex: '0 0 30%', minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontSize: 12, fontWeight: 700, color: '#049484' }}>
+        <div style={{ flex: '0 0 30%', minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontSize: 12, fontWeight: 700, color: '#1e293b' }}>
           {model.name}
         </div>
 
@@ -637,7 +637,7 @@ const ModelCard: React.FC<ModelCardProps> = ({ model, onCanvas, onAdd, onOpenDet
       </div>
 
       {/* Name */}
-      <div style={{ flex: '0 0 30%', minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontSize: 12, fontWeight: 700, color: '#049484' }}>
+      <div style={{ flex: '0 0 30%', minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontSize: 12, fontWeight: 700, color: '#1e293b' }}>
         {model.name}
       </div>
 

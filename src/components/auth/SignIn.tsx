@@ -218,7 +218,7 @@ export function SignIn({ onSignInSuccess, onSwitchToSignUp }: Readonly<SignInPro
           display: block;
           font-size: 13px;
           font-weight: 600;
-          color: #049484;
+          color: #1e293b;
           margin-bottom: 6px;
         }
 
@@ -228,7 +228,7 @@ export function SignIn({ onSignInSuccess, onSwitchToSignUp }: Readonly<SignInPro
           border: 1px solid #cbd5e1;
           border-radius: 8px;
           font-size: 14px;
-          color: #049484;
+          color: #1e293b;
           background-color: #ffffff;
           box-sizing: border-box;
           transition: border-color 0.2s;
@@ -265,7 +265,7 @@ export function SignIn({ onSignInSuccess, onSwitchToSignUp }: Readonly<SignInPro
         .mock-forgot-link {
           background: none;
           border: none;
-          color: #049484;
+          color: #1e293b;
           font-weight: 600;
           cursor: pointer;
           font-size: 14px;
@@ -366,7 +366,7 @@ export function SignIn({ onSignInSuccess, onSwitchToSignUp }: Readonly<SignInPro
           {/* Logo */}
           <div className="mock-logo-container">
             <img
-              src={`${process.env.PUBLIC_URL}/assets/logo_new.png`}
+              src={`${process.env.PUBLIC_URL}/assets/vitruvius1.png`}
               alt=""
               onError={(e) => {
                 e.currentTarget.style.display = 'none';

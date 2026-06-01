@@ -86,6 +86,10 @@ jest.mock('../../../components/flow/ConnectionLine', () => ({
   ConnectionLine: () => <svg data-testid="connection-line" />,
 }));
 
+jest.mock('../../../components/flow/canvas/CircleOverlay', () => ({
+  CircleOverlay: () => <div data-testid="circle-overlay" />,
+}));
+
 jest.mock('../../../components/flow/CodeEditorModal', () => ({
   CodeEditorModal: () => <div data-testid="code-editor-modal">Code Editor</div>,
 }));
@@ -103,11 +107,10 @@ describe('FlowCanvas', () => {
     jest.clearAllMocks();
   });
 
-  it('renders ReactFlow, minimap, and background', () => {
+  it('renders ReactFlow and background', () => {
     const ref = createRef<any>();
     render(<FlowCanvas ref={ref} />);
     expect(screen.getByTestId('react-flow')).toBeInTheDocument();
-    expect(screen.getByTestId('minimap')).toBeInTheDocument();
     expect(screen.getByTestId('background')).toBeInTheDocument();
   });
 
@@ -852,24 +855,22 @@ describe('handleEdgeDoubleClick logic', () => {
     it('renders CircleOverlay when umlModalOpen is false', () => {
       const ref = createRef<any>();
       render(<FlowCanvas ref={ref} umlModalOpen={false} />);
-      // CircleOverlay renders an SVG — check it exists
-      expect(document.querySelector('svg')).toBeInTheDocument();
+      expect(screen.getByTestId('circle-overlay')).toBeInTheDocument();
     });
 
     it('does not render CircleOverlay when umlModalOpen is true', () => {
       const ref = createRef<any>();
       render(<FlowCanvas ref={ref} umlModalOpen={true} />);
-      // CircleOverlay SVG should not be present
-      expect(document.querySelector('svg')).not.toBeInTheDocument();
+      expect(screen.queryByTestId('circle-overlay')).not.toBeInTheDocument();
     });
 
     it('does not render CircleOverlay when umlModalOpen is true even if circleVisible would be true', () => {
       const ref = createRef<any>();
       const { rerender } = render(<FlowCanvas ref={ref} umlModalOpen={false} />);
-      expect(document.querySelector('svg')).toBeInTheDocument();
+      expect(screen.getByTestId('circle-overlay')).toBeInTheDocument();
 
       rerender(<FlowCanvas ref={ref} umlModalOpen={true} />);
-      expect(document.querySelector('svg')).not.toBeInTheDocument();
+      expect(screen.queryByTestId('circle-overlay')).not.toBeInTheDocument();
     });
 
     it('renders ReactFlow regardless of umlModalOpen', () => {
@@ -881,7 +882,7 @@ describe('handleEdgeDoubleClick logic', () => {
     it('umlModalOpen defaults to undefined and CircleOverlay is shown', () => {
       const ref = createRef<any>();
       render(<FlowCanvas ref={ref} />);
-      expect(document.querySelector('svg')).toBeInTheDocument();
+      expect(screen.getByTestId('circle-overlay')).toBeInTheDocument();
     });
   });
 });

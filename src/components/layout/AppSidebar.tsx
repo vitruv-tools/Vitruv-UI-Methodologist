@@ -224,7 +224,7 @@ export const AppSidebar: React.FC<AppSidebarProps> = ({
       {/* Logo */}
       <div style={{ padding: '20px 16px 16px', borderBottom: '1px solid rgba(255,255,255,0.06)', flexShrink: 0 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-          <img src="/assets/logo_new.png" alt="Vitruvius" style={{ width: 32, height: 32, borderRadius: 8, flexShrink: 0 }} />
+          <img src="/assets/vitruvius1.png" alt="Vitruvius" style={{ width: 32, height: 32, borderRadius: 8, flexShrink: 0 }} />
           <span style={{
             color: '#ffffff', fontWeight: 700, fontSize: 18,
             letterSpacing: '-0.01em', marginTop: 3,

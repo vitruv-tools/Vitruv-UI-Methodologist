@@ -39,13 +39,3 @@ export interface ApiResponse<T> {
 }
 
 
-
-export interface VsumViewAssignedModel {
-  sourceId: number;
-}
-
-export interface VsumView {
-  id: number;
-  fileStorageId?: number | null;
-  assignedModels?: VsumViewAssignedModel[];
-}

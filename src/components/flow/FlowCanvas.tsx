@@ -206,12 +206,12 @@ const CustomMinimap: React.FC<CustomMinimapProps> = ({
   // The minimap always tracks the viewport center, so it shows exactly what the user sees,
   // scaled down proportionally to minimap size.
   const mmScale = Math.max(0.03, Math.min(2, Math.min(
-    (width * 0.80) / Math.max(visW, 50),
+    (width  * 0.80) / Math.max(visW, 50),
     (height * 0.80) / Math.max(visH, 50),
   )));
 
   // Flow → SVG coordinate helpers (centered on current viewport center)
-  const toX = (fx: number) => (fx - flowCX) * mmScale + width / 2;
+  const toX = (fx: number) => (fx - flowCX) * mmScale + width  / 2;
   const toY = (fy: number) => (fy - flowCY) * mmScale + height / 2;
 
   const nodeMap = new Map(ecoreNodes.map(n => [n.id, n]));
@@ -2450,7 +2450,7 @@ export const FlowCanvas = forwardRef<{
         >
           <Background />
         </ReactFlow>
-        {circleVisible && (
+        {circleVisible && !umlModalOpen && (
           <CircleOverlay
             circle={circle}
             viewport={viewport}
@@ -2508,8 +2508,8 @@ export const FlowCanvas = forwardRef<{
           fontFamily: 'ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, sans-serif',
         }}>
           {([
-            { label: 'Modeling', icon: <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" /><line x1="3" y1="9" x2="21" y2="9" /><line x1="9" y1="21" x2="9" y2="9" /></svg>, active: !circleVisible },
-            { label: 'View Types', icon: <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="9" /><line x1="12" y1="3" x2="12" y2="21" /><line x1="3" y1="12" x2="21" y2="12" /></svg>, active: circleVisible },
+            { label: 'Modeling',   icon: <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="9" y1="21" x2="9" y2="9"/></svg>, active: !circleVisible },
+            { label: 'View Types', icon: <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="9"/><line x1="12" y1="3" x2="12" y2="21"/><line x1="3" y1="12" x2="21" y2="12"/></svg>, active: circleVisible },
           ] as const).map(({ label, icon, active }) => (
             <button
               key={label}
@@ -2533,7 +2533,7 @@ export const FlowCanvas = forwardRef<{
                 whiteSpace: 'nowrap',
                 fontFamily: 'inherit',
               }}
-              onMouseEnter={e => { if (!active) { (e.currentTarget as HTMLButtonElement).style.background = '#f1f5f9'; (e.currentTarget as HTMLButtonElement).style.color = '#049484'; } }}
+              onMouseEnter={e => { if (!active) { (e.currentTarget as HTMLButtonElement).style.background = '#f1f5f9'; (e.currentTarget as HTMLButtonElement).style.color = '#1e293b'; } }}
               onMouseLeave={e => { if (!active) { (e.currentTarget as HTMLButtonElement).style.background = 'transparent'; (e.currentTarget as HTMLButtonElement).style.color = '#64748b'; } }}
             >
               {icon}

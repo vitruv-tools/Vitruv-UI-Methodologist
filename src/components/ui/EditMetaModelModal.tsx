@@ -19,7 +19,7 @@ export const EditMetaModelModal: React.FC<EditMetaModelModalProps> = ({
 }) => {
   const [form, setForm] = useState({ name: '', description: '', domain: '', keywords: [] as string[] });
   const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState('');
+  const [error, setError]   = useState('');
   const [success, setSuccess] = useState('');
 
   useEffect(() => {
@@ -138,7 +138,7 @@ export const EditMetaModelModal: React.FC<EditMetaModelModalProps> = ({
             <KeywordTagsInput keywords={form.keywords} onChange={kws => setForm(f => ({ ...f, keywords: kws }))} />
           </Field>
 
-          {error && <Msg type="error">{error}</Msg>}
+          {error   && <Msg type="error">{error}</Msg>}
           {success && <Msg type="success">{success}</Msg>}
         </form>
 
@@ -155,7 +155,7 @@ export const EditMetaModelModal: React.FC<EditMetaModelModalProps> = ({
             onClick={handleSubmit as any}
             disabled={disabled}
             style={{ flex: 1, padding: '9px 0', border: 'none', borderRadius: 8, background: disabled ? '#94a3b8' : DARK, color: '#fff', fontSize: 13, fontWeight: 600, cursor: disabled ? 'not-allowed' : 'pointer', fontFamily: FONT, transition: 'background 0.15s' }}
-            onMouseEnter={e => { if (!disabled) (e.currentTarget.style.background = '#049484'); }}
+            onMouseEnter={e => { if (!disabled) (e.currentTarget.style.background = '#1e293b'); }}
             onMouseLeave={e => { if (!disabled) (e.currentTarget.style.background = DARK); }}
           >{isLoading ? 'Saving…' : 'Save changes'}</button>
         </div>

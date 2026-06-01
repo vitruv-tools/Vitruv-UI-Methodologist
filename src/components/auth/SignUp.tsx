@@ -354,7 +354,7 @@ export function SignUp({ onSignUpSuccess, onSwitchToSignIn }: Readonly<SignUpPro
           display: block;
           font-size: 13px;
           font-weight: 600;
-          color: #049484;
+          color: #1e293b;
           margin-bottom: 6px;
         }
 
@@ -364,7 +364,7 @@ export function SignUp({ onSignUpSuccess, onSwitchToSignIn }: Readonly<SignUpPro
           border: 1px solid #cbd5e1;
           border-radius: 8px;
           font-size: 14px;
-          color: #049484;
+          color: #1e293b;
           background-color: #ffffff;
           box-sizing: border-box;
           transition: border-color 0.2s;
@@ -481,7 +481,7 @@ export function SignUp({ onSignUpSuccess, onSwitchToSignIn }: Readonly<SignUpPro
           {/* Logo */}
           <div className="mock-logo-container">
             <img
-              src={`${process.env.PUBLIC_URL}/assets/logo_new.png`}
+              src={`${process.env.PUBLIC_URL}/assets/vitruvius1.png`}
               alt=""
               onError={(e) => {
                 e.currentTarget.style.display = 'none';

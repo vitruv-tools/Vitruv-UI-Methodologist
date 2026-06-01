@@ -282,7 +282,7 @@ const tokenizeQuery = (query: string): string[] => {
   const tokens: string[] = [];
   let current = '';
   let inQuotes = false;
-
+  
   for (const ch of query) {
     if (ch === '"') {
       inQuotes = !inQuotes;
@@ -296,7 +296,7 @@ const tokenizeQuery = (query: string): string[] => {
       current += ch;
     }
   }
-
+  
   if (current.trim()) tokens.push(current);
   return tokens;
 };
@@ -319,7 +319,7 @@ const parseDateValue = (dateStr: string): string => {
 
 const parseDateRangeFilter = (value: string): { from?: string; to?: string } => {
   const v = String(value);
-
+  
   if (v.includes('after:')) {
     return { from: parseDateValue(v.replace('after:', '')) };
   }
@@ -368,7 +368,7 @@ export const ToolsPanel: React.FC<ToolsPanelProps> = ({ onEcoreFileUpload, onEco
   const [metaModelDeleteConfirmOpen, setMetaModelDeleteConfirmOpen] = useState(false);
   const [metaModelDeleting, setMetaModelDeleting] = useState(false);
   const [metaModelDeleteError, setMetaModelDeleteError] = useState<string>('');
-
+  
   // Edit form state
   const [editFormData, setEditFormData] = useState({
     name: '',
@@ -509,12 +509,12 @@ export const ToolsPanel: React.FC<ToolsPanelProps> = ({ onEcoreFileUpload, onEco
   const buildApiFiltersFromParsedFilters = useCallback((filtersParsed: any[], includeLegacyDate = true) => {
     const filters: any = {};
     filters.ownedByUser = !showAllModels;
-
+    
     filtersParsed.forEach(filter => applyFilterToResult(filters, filter));
 
     const shouldApplyLegacyDate = includeLegacyDate && dateFilter !== 'all';
     const hasDateFilters = filters.createdFrom || filters.createdTo || filters.updatedFrom || filters.updatedTo;
-
+    
     if (shouldApplyLegacyDate && !hasDateFilters) {
       const now = new Date();
       filters.createdFrom = getLegacyDateFrom(dateFilter).toISOString();
@@ -570,10 +570,10 @@ export const ToolsPanel: React.FC<ToolsPanelProps> = ({ onEcoreFileUpload, onEco
     const fetchData = async () => {
       setIsLoadingModels(true);
       setApiError('');
-
+      
       try {
         const filters = buildApiFiltersFromParsedFilters(parsedFilters, true);
-
+        
         const response = await apiService.findMetaModels(filters);
         setApiModels(response.data || []);
         setCurrentPage(1);
@@ -584,13 +584,13 @@ export const ToolsPanel: React.FC<ToolsPanelProps> = ({ onEcoreFileUpload, onEco
         setIsLoadingModels(false);
       }
     };
-
+    
     fetchData();
   }, [parsedFilters, dateFilter, suppressApi, showAllModels, buildApiFiltersFromParsedFilters]);
 
   const sortedModels = [...apiModels].sort((a, b) => {
     let comparison = 0;
-
+    
     switch (sortBy) {
       case 'name':
         comparison = a.name.localeCompare(b.name);
@@ -602,7 +602,7 @@ export const ToolsPanel: React.FC<ToolsPanelProps> = ({ onEcoreFileUpload, onEco
         comparison = (a.domain || '').localeCompare(b.domain || '');
         break;
     }
-
+    
     return sortOrder === 'asc' ? comparison : -comparison;
   });
 
@@ -672,7 +672,7 @@ export const ToolsPanel: React.FC<ToolsPanelProps> = ({ onEcoreFileUpload, onEco
   const handleEditSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!viewModel?.id) return;
-
+    
     setIsEditLoading(true);
     setEditError('');
     setEditSuccess('');
@@ -688,12 +688,12 @@ export const ToolsPanel: React.FC<ToolsPanelProps> = ({ onEcoreFileUpload, onEco
       });
 
       setEditSuccess('Meta model updated successfully!');
-
+      
       // Refresh the models list and update viewModel
       const filters = buildApiFiltersFromParsedFilters(parsedFilters, true);
       const listResponse = await apiService.findMetaModels(filters);
       setApiModels(listResponse.data || []);
-
+      
       // Update viewModel with fresh data
       try {
         const modelResponse = await apiService.getMetaModel(String(viewModel.id));
@@ -707,7 +707,7 @@ export const ToolsPanel: React.FC<ToolsPanelProps> = ({ onEcoreFileUpload, onEco
           setViewModel(updatedModel);
         }
       }
-
+      
       // Switch back to details tab after successful save
       setTimeout(() => {
         setMetaModelModalTab('details');
@@ -760,504 +760,504 @@ export const ToolsPanel: React.FC<ToolsPanelProps> = ({ onEcoreFileUpload, onEco
     const activeFilterLabel = `${parsedFilters.length} filter${parsedFilters.length > 1 ? 's' : ''} active`;
 
     return (
-      <div style={panelStyle}>
-        <div style={titleStyle}>
-          {title}
+    <div style={panelStyle}>
+      <div style={titleStyle}>
+        {title}
+      </div>
+      
+      {uploadMessage && (
+        <div style={uploadMessageStyle}>
+          {uploadMessage}
         </div>
+      )}
+      
+      <button 
+        style={createButtonStyle}
+        onClick={handleButtonClick}
+        disabled={isProcessing}
+        onMouseEnter={(e) => !isProcessing && Object.assign(e.currentTarget.style, createButtonHoverStyle)}
+        onMouseLeave={(e) => !isProcessing && Object.assign(e.currentTarget.style, createButtonStyle)}
+      >
+        {createButtonLabel}
+      </button>
 
-        {uploadMessage && (
-          <div style={uploadMessageStyle}>
-            {uploadMessage}
+      {!suppressApi && (
+        <>
+          {/* View Toggle Tabs */}
+          <div style={{ 
+            display: 'flex', 
+            gap: 0, 
+            marginBottom: 16,
+            borderBottom: '2px solid #e5e7eb',
+          }}>
+            <button
+              onClick={() => setShowAllModels(false)}
+              style={myModelsTabStyle}
+              onMouseEnter={(e) => {
+                if (!myModelsActive) e.currentTarget.style.background = '#f9fafb';
+              }}
+              onMouseLeave={(e) => {
+                if (!myModelsActive) e.currentTarget.style.background = 'transparent';
+              }}
+            >
+              My Models
+            </button>
+            <button
+              onClick={() => setShowAllModels(true)}
+              style={allModelsTabStyle}
+              onMouseEnter={(e) => {
+                if (!allModelsActive) e.currentTarget.style.background = '#f9fafb';
+              }}
+              onMouseLeave={(e) => {
+                if (!allModelsActive) e.currentTarget.style.background = 'transparent';
+              }}
+            >
+              All Models
+            </button>
           </div>
-        )}
 
-        <button
-          style={createButtonStyle}
-          onClick={handleButtonClick}
-          disabled={isProcessing}
-          onMouseEnter={(e) => !isProcessing && Object.assign(e.currentTarget.style, createButtonHoverStyle)}
-          onMouseLeave={(e) => !isProcessing && Object.assign(e.currentTarget.style, createButtonStyle)}
-        >
-          {createButtonLabel}
-        </button>
+          {/* Search Bar */}
+          <div style={{ position: 'relative', marginBottom: 12 }}>
+            <svg 
+              style={{ position: 'absolute', left: 14, top: '50%', transform: 'translateY(-50%)', color: '#9ca3af' }}
+              width="16" 
+              height="16" 
+              viewBox="0 0 24 24" 
+              fill="none" 
+              stroke="currentColor" 
+              strokeWidth="2"
+            >
+              <circle cx="11" cy="11" r="8"/>
+              <path d="m21 21-4.35-4.35"/>
+            </svg>
+            <input
+              type="text"
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  e.preventDefault();
+                  // Immediately trigger search by updating debounced term
+                  const currentTerm = searchTerm.trim();
+                  const finalTerm = currentTerm && !currentTerm.includes(':') ? `name:${currentTerm}` : currentTerm;
+                  setDebouncedSearchTerm(finalTerm);
+                }
+              }}
+              placeholder="Search models by name..."
+              style={{
+                width: '100%',
+                padding: '12px 14px 12px 42px',
+                borderRadius: '8px',
+                border: '2px solid #e5e7eb',
+                fontSize: 14,
+                outline: 'none',
+                transition: 'all 0.2s ease',
+                boxSizing: 'border-box',
+              }}
+              onFocus={(e) => {
+                e.currentTarget.style.borderColor = '#049484';
+                e.currentTarget.style.boxShadow = '0 0 0 3px rgba(4, 148, 132, 0.1)';
+              }}
+              onBlur={(e) => {
+                e.currentTarget.style.borderColor = '#e5e7eb';
+                e.currentTarget.style.boxShadow = 'none';
+              }}
+            />
+          </div>
 
-        {!suppressApi && (
-          <>
-            {/* View Toggle Tabs */}
+          {/* Filter Actions Row */}
+          <div style={{ 
+            display: 'flex', 
+            gap: 8, 
+            marginBottom: 12, 
+            alignItems: 'center',
+            flexWrap: 'wrap',
+          }}>
+            <select
+              value={`${sortBy}-${sortOrder}`}
+              onChange={(e) => {
+                const [newSortBy, newSortOrder] = e.target.value.split('-') as ['name' | 'date' | 'domain', 'asc' | 'desc'];
+                setSortBy(newSortBy);
+                setSortOrder(newSortOrder);
+              }}
+              style={{
+                ...standardButtonStyle,
+                flex: 1,
+                minWidth: 140,
+              }}
+              onMouseEnter={(e) => Object.assign(e.currentTarget.style, standardButtonHoverStyle)}
+              onMouseLeave={(e) => Object.assign(e.currentTarget.style, standardButtonStyle)}
+            >
+              <option value="date-desc">Newest First</option>
+              <option value="date-asc">Oldest First</option>
+              <option value="name-asc">Name A-Z</option>
+              <option value="name-desc">Name Z-A</option>
+              <option value="domain-asc">Domain A-Z</option>
+              <option value="domain-desc">Domain Z-A</option>
+            </select>
+            
+            <button
+              onClick={() => setShowFilters(!showFilters)}
+              style={{
+                ...standardButtonStyle,
+                background: showFilters ? '#049484' : '#ffffff',
+                color: showFilters ? '#ffffff' : '#374151',
+                borderColor: showFilters ? '#049484' : '#e5e7eb',
+              }}
+              onMouseEnter={(e) => {
+                if (showFilters) {
+                  return;
+                }
+                Object.assign(e.currentTarget.style, standardButtonHoverStyle);
+              }}
+              onMouseLeave={(e) => {
+                if (showFilters) {
+                  e.currentTarget.style.background = '#049484';
+                  e.currentTarget.style.borderColor = '#049484';
+                } else {
+                  e.currentTarget.style.background = '#ffffff';
+                  e.currentTarget.style.borderColor = '#e5e7eb';
+                }
+              }}
+            >
+              Advanced Filters
+            </button>
+          </div>
+
+          {/* Active Filter Count Badge */}
+          {parsedFilters.length > 0 && (
             <div style={{
+              padding: '8px 12px',
+              marginBottom: 12,
+              background: '#f0f9ff',
+              border: '1px solid #bae6fd',
+              borderRadius: 8,
+              fontSize: 12,
+              color: '#0369a1',
               display: 'flex',
-              gap: 0,
-              marginBottom: 16,
-              borderBottom: '2px solid #e5e7eb',
+              alignItems: 'center',
+              gap: 8,
             }}>
+              <span style={{ fontWeight: 600 }}>{activeFilterLabel}</span>
               <button
-                onClick={() => setShowAllModels(false)}
-                style={myModelsTabStyle}
-                onMouseEnter={(e) => {
-                  if (!myModelsActive) e.currentTarget.style.background = '#f9fafb';
+                onClick={() => setSearchTerm('')}
+                style={{
+                  marginLeft: 'auto',
+                  padding: '4px 8px',
+                  background: '#ffffff',
+                  border: '1px solid #bae6fd',
+                  borderRadius: 6,
+                  fontSize: 11,
+                  cursor: 'pointer',
+                  fontWeight: 600,
+                  color: '#0369a1',
                 }}
-                onMouseLeave={(e) => {
-                  if (!myModelsActive) e.currentTarget.style.background = 'transparent';
-                }}
+                onMouseEnter={(e) => e.currentTarget.style.background = '#f0f9ff'}
+                onMouseLeave={(e) => e.currentTarget.style.background = '#ffffff'}
               >
-                My Models
-              </button>
-              <button
-                onClick={() => setShowAllModels(true)}
-                style={allModelsTabStyle}
-                onMouseEnter={(e) => {
-                  if (!allModelsActive) e.currentTarget.style.background = '#f9fafb';
-                }}
-                onMouseLeave={(e) => {
-                  if (!allModelsActive) e.currentTarget.style.background = 'transparent';
-                }}
-              >
-                All Models
+                Clear All
               </button>
             </div>
+          )}
+        </>
+      )}
 
-            {/* Search Bar */}
-            <div style={{ position: 'relative', marginBottom: 12 }}>
-              <svg
-                style={{ position: 'absolute', left: 14, top: '50%', transform: 'translateY(-50%)', color: '#9ca3af' }}
-                width="16"
-                height="16"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-              >
-                <circle cx="11" cy="11" r="8" />
-                <path d="m21 21-4.35-4.35" />
-              </svg>
+      {showFilters && (
+        <div style={filterContainerStyle}>
+          <button
+            aria-label="Close filters"
+            title="Close"
+            style={filterCloseButtonStyle}
+            onClick={() => setShowFilters(false)}
+            onMouseEnter={(e) => { e.currentTarget.style.background = '#f1f3f5'; e.currentTarget.style.color = '#495057'; }}
+            onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = '#6c757d'; }}
+          >
+            ×
+          </button>
+          <div style={{ fontSize: '12px', fontWeight: '600', color: '#495057', marginBottom: '8px' }}>
+            Advanced Search
+          </div>
+          
+          {parsedFilters.length > 0 && (
+            <div style={filterTagsContainerStyle}>
+              {parsedFilters.map((filter) => (
+                <div key={`${filter.key}-${filter.value}`} style={filterTagStyle}>
+                  {filter.display}
+                </div>
+              ))}
+            </div>
+          )}
+          
+          <div style={filterRowStyle}>
+            <span style={filterLabelStyle}>Search:</span>
+            <input
+              type="text"
+              placeholder="name:test domain:engineering time:beforenow created:after:2023-01-01"
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              style={enhancedSearchInputStyle}
+              onKeyDown={handleSearchKeyDown}
+            />
+          </div>
+          
+          <div style={{ fontSize: '10px', color: '#6a737d', marginTop: '4px', fontStyle: 'italic' }}>
+            Use GitHub-style syntax: name:test domain:engineering time:beforenow created:after:2023-01-01
+          </div>
+          
+          <div style={filterRowStyle}>
+            <span style={filterLabelStyle}>Date:</span>
+            <select
+              value={dateFilter}
+              onChange={(e) => setDateFilter(e.target.value)}
+              style={filterSelectStyle}
+            >
+              <option value="all">All time</option>
+              <option value="today">Today</option>
+              <option value="week">This week</option>
+              <option value="month">This month</option>
+              <option value="year">This year</option>
+            </select>
+          </div>
+          
+          <div style={{ marginTop: '12px', paddingTop: '12px', borderTop: '1px solid #e9ecef' }}>
+            <div style={{ fontSize: '12px', fontWeight: '600', color: '#495057', marginBottom: '8px' }}>
+              Quick Filters
+            </div>
+            
+            <div style={filterRowStyle}>
+              <span style={filterLabelStyle}>Name:</span>
               <input
                 type="text"
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
+                placeholder="Filter by name..."
+                style={filterInputStyle}
                 onKeyDown={(e) => {
                   if (e.key === 'Enter') {
-                    e.preventDefault();
-                    // Immediately trigger search by updating debounced term
-                    const currentTerm = searchTerm.trim();
-                    const finalTerm = currentTerm && !currentTerm.includes(':') ? `name:${currentTerm}` : currentTerm;
-                    setDebouncedSearchTerm(finalTerm);
+                    const value = e.currentTarget.value.trim();
+                    if (value) {
+                      setSearchTerm(prev => prev ? `${prev} name:${value}` : `name:${value}`);
+                      e.currentTarget.value = '';
+                    }
                   }
-                }}
-                placeholder="Search models by name..."
-                style={{
-                  width: '100%',
-                  padding: '12px 14px 12px 42px',
-                  borderRadius: '8px',
-                  border: '2px solid #e5e7eb',
-                  fontSize: 14,
-                  outline: 'none',
-                  transition: 'all 0.2s ease',
-                  boxSizing: 'border-box',
-                }}
-                onFocus={(e) => {
-                  e.currentTarget.style.borderColor = '#049484';
-                  e.currentTarget.style.boxShadow = '0 0 0 3px rgba(4, 148, 132, 0.1)';
-                }}
-                onBlur={(e) => {
-                  e.currentTarget.style.borderColor = '#e5e7eb';
-                  e.currentTarget.style.boxShadow = 'none';
                 }}
               />
             </div>
-
-            {/* Filter Actions Row */}
-            <div style={{
-              display: 'flex',
-              gap: 8,
-              marginBottom: 12,
-              alignItems: 'center',
-              flexWrap: 'wrap',
-            }}>
-              <select
-                value={`${sortBy}-${sortOrder}`}
-                onChange={(e) => {
-                  const [newSortBy, newSortOrder] = e.target.value.split('-') as ['name' | 'date' | 'domain', 'asc' | 'desc'];
-                  setSortBy(newSortBy);
-                  setSortOrder(newSortOrder);
-                }}
-                style={{
-                  ...standardButtonStyle,
-                  flex: 1,
-                  minWidth: 140,
-                }}
-                onMouseEnter={(e) => Object.assign(e.currentTarget.style, standardButtonHoverStyle)}
-                onMouseLeave={(e) => Object.assign(e.currentTarget.style, standardButtonStyle)}
-              >
-                <option value="date-desc">Newest First</option>
-                <option value="date-asc">Oldest First</option>
-                <option value="name-asc">Name A-Z</option>
-                <option value="name-desc">Name Z-A</option>
-                <option value="domain-asc">Domain A-Z</option>
-                <option value="domain-desc">Domain Z-A</option>
-              </select>
-
-              <button
-                onClick={() => setShowFilters(!showFilters)}
-                style={{
-                  ...standardButtonStyle,
-                  background: showFilters ? '#049484' : '#ffffff',
-                  color: showFilters ? '#ffffff' : '#374151',
-                  borderColor: showFilters ? '#049484' : '#e5e7eb',
-                }}
-                onMouseEnter={(e) => {
-                  if (showFilters) {
-                    return;
-                  }
-                  Object.assign(e.currentTarget.style, standardButtonHoverStyle);
-                }}
-                onMouseLeave={(e) => {
-                  if (showFilters) {
-                    e.currentTarget.style.background = '#049484';
-                    e.currentTarget.style.borderColor = '#049484';
-                  } else {
-                    e.currentTarget.style.background = '#ffffff';
-                    e.currentTarget.style.borderColor = '#e5e7eb';
-                  }
-                }}
-              >
-                Advanced Filters
-              </button>
-            </div>
-
-            {/* Active Filter Count Badge */}
-            {parsedFilters.length > 0 && (
-              <div style={{
-                padding: '8px 12px',
-                marginBottom: 12,
-                background: '#f0f9ff',
-                border: '1px solid #bae6fd',
-                borderRadius: 8,
-                fontSize: 12,
-                color: '#0369a1',
-                display: 'flex',
-                alignItems: 'center',
-                gap: 8,
-              }}>
-                <span style={{ fontWeight: 600 }}>{activeFilterLabel}</span>
-                <button
-                  onClick={() => setSearchTerm('')}
-                  style={{
-                    marginLeft: 'auto',
-                    padding: '4px 8px',
-                    background: '#ffffff',
-                    border: '1px solid #bae6fd',
-                    borderRadius: 6,
-                    fontSize: 11,
-                    cursor: 'pointer',
-                    fontWeight: 600,
-                    color: '#0369a1',
-                  }}
-                  onMouseEnter={(e) => e.currentTarget.style.background = '#f0f9ff'}
-                  onMouseLeave={(e) => e.currentTarget.style.background = '#ffffff'}
-                >
-                  Clear All
-                </button>
-              </div>
-            )}
-          </>
-        )}
-
-        {showFilters && (
-          <div style={filterContainerStyle}>
-            <button
-              aria-label="Close filters"
-              title="Close"
-              style={filterCloseButtonStyle}
-              onClick={() => setShowFilters(false)}
-              onMouseEnter={(e) => { e.currentTarget.style.background = '#f1f3f5'; e.currentTarget.style.color = '#495057'; }}
-              onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = '#6c757d'; }}
-            >
-              ×
-            </button>
-            <div style={{ fontSize: '12px', fontWeight: '600', color: '#495057', marginBottom: '8px' }}>
-              Advanced Search
-            </div>
-
-            {parsedFilters.length > 0 && (
-              <div style={filterTagsContainerStyle}>
-                {parsedFilters.map((filter) => (
-                  <div key={`${filter.key}-${filter.value}`} style={filterTagStyle}>
-                    {filter.display}
-                  </div>
-                ))}
-              </div>
-            )}
-
+            
             <div style={filterRowStyle}>
-              <span style={filterLabelStyle}>Search:</span>
+              <span style={filterLabelStyle}>Domain:</span>
               <input
                 type="text"
-                placeholder="name:test domain:engineering time:beforenow created:after:2023-01-01"
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                style={enhancedSearchInputStyle}
-                onKeyDown={handleSearchKeyDown}
+                placeholder="Filter by domain..."
+                style={filterInputStyle}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    const domainValue = e.currentTarget.value.trim();
+                    if (domainValue) {
+                      setSearchTerm(prev => prev ? `${prev} domain:${domainValue}` : `domain:${domainValue}`);
+                      e.currentTarget.value = '';
+                    }
+                  }
+                }}
               />
             </div>
-
-            <div style={{ fontSize: '10px', color: '#6a737d', marginTop: '4px', fontStyle: 'italic' }}>
-              Use GitHub-style syntax: name:test domain:engineering time:beforenow created:after:2023-01-01
+            
+            <div style={filterRowStyle}>
+              <span style={filterLabelStyle}>Keywords:</span>
+              <input
+                type="text"
+                placeholder="Filter by keywords..."
+                style={filterInputStyle}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    const keywordValue = e.currentTarget.value.trim();
+                    if (keywordValue) {
+                      setSearchTerm(prev => prev ? `${prev} keywords:${keywordValue}` : `keywords:${keywordValue}`);
+                      e.currentTarget.value = '';
+                    }
+                  }
+                }}
+              />
             </div>
-
+            
             <div style={filterRowStyle}>
               <span style={filterLabelStyle}>Date:</span>
-              <select
-                value={dateFilter}
-                onChange={(e) => setDateFilter(e.target.value)}
-                style={filterSelectStyle}
-              >
-                <option value="all">All time</option>
-                <option value="today">Today</option>
-                <option value="week">This week</option>
-                <option value="month">This month</option>
-                <option value="year">This year</option>
-              </select>
-            </div>
-
-            <div style={{ marginTop: '12px', paddingTop: '12px', borderTop: '1px solid #e9ecef' }}>
-              <div style={{ fontSize: '12px', fontWeight: '600', color: '#495057', marginBottom: '8px' }}>
-                Quick Filters
-              </div>
-
-              <div style={filterRowStyle}>
-                <span style={filterLabelStyle}>Name:</span>
-                <input
-                  type="text"
-                  placeholder="Filter by name..."
-                  style={filterInputStyle}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter') {
-                      const value = e.currentTarget.value.trim();
-                      if (value) {
-                        setSearchTerm(prev => prev ? `${prev} name:${value}` : `name:${value}`);
-                        e.currentTarget.value = '';
-                      }
-                    }
-                  }}
-                />
-              </div>
-
-              <div style={filterRowStyle}>
-                <span style={filterLabelStyle}>Domain:</span>
-                <input
-                  type="text"
-                  placeholder="Filter by domain..."
-                  style={filterInputStyle}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter') {
-                      const domainValue = e.currentTarget.value.trim();
-                      if (domainValue) {
-                        setSearchTerm(prev => prev ? `${prev} domain:${domainValue}` : `domain:${domainValue}`);
-                        e.currentTarget.value = '';
-                      }
-                    }
-                  }}
-                />
-              </div>
-
-              <div style={filterRowStyle}>
-                <span style={filterLabelStyle}>Keywords:</span>
-                <input
-                  type="text"
-                  placeholder="Filter by keywords..."
-                  style={filterInputStyle}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter') {
-                      const keywordValue = e.currentTarget.value.trim();
-                      if (keywordValue) {
-                        setSearchTerm(prev => prev ? `${prev} keywords:${keywordValue}` : `keywords:${keywordValue}`);
-                        e.currentTarget.value = '';
-                      }
-                    }
-                  }}
-                />
-              </div>
-
-              <div style={filterRowStyle}>
-                <span style={filterLabelStyle}>Date:</span>
-                <input
-                  type="date"
-                  style={filterInputStyle}
-                  onChange={(e) => {
-                    const dateValue = e.target.value;
-                    if (dateValue) {
-                      setSearchTerm(prev => prev ? `${prev} created:${dateValue}` : `created:${dateValue}`);
-                    }
-                  }}
-                />
-              </div>
+              <input
+                type="date"
+                style={filterInputStyle}
+                onChange={(e) => {
+                  const dateValue = e.target.value;
+                  if (dateValue) {
+                    setSearchTerm(prev => prev ? `${prev} created:${dateValue}` : `created:${dateValue}`);
+                  }
+                }}
+              />
             </div>
           </div>
-        )}
+        </div>
+      )}
 
-        {!suppressApi && apiError && (
+      {!suppressApi && apiError && (
+        <div style={{
+          padding: '10px 14px',
+          margin: '8px 0',
+          borderRadius: '8px',
+          fontSize: '13px',
+          fontWeight: '500',
+          backgroundColor: '#f8d7da',
+          color: '#721c24',
+          border: '1px solid #f5c6cb',
+        }}>
+          {apiError}
+        </div>
+      )}
+
+      {!suppressApi && isLoadingModels && (
+        <div style={{
+          padding: '32px 16px',
+          textAlign: 'center',
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          gap: 12,
+        }}>
           <div style={{
-            padding: '10px 14px',
-            margin: '8px 0',
-            borderRadius: '8px',
-            fontSize: '13px',
-            fontWeight: '500',
-            backgroundColor: '#f8d7da',
-            color: '#721c24',
-            border: '1px solid #f5c6cb',
+            width: 40,
+            height: 40,
+            border: '4px solid #e5e7eb',
+            borderTop: '4px solid #049484',
+            borderRadius: '50%',
+            animation: 'spin 1s linear infinite',
+          }} />
+          <div style={{
+            fontSize: '14px',
+            color: '#6b7280',
+            fontWeight: 500,
           }}>
-            {apiError}
+            Loading models...
           </div>
-        )}
-
-        {!suppressApi && isLoadingModels && (
-          <div style={{
-            padding: '32px 16px',
-            textAlign: 'center',
-            display: 'flex',
-            flexDirection: 'column',
-            alignItems: 'center',
-            gap: 12,
-          }}>
-            <div style={{
-              width: 40,
-              height: 40,
-              border: '4px solid #e5e7eb',
-              borderTop: '4px solid #049484',
-              borderRadius: '50%',
-              animation: 'spin 1s linear infinite',
-            }} />
-            <div style={{
-              fontSize: '14px',
-              color: '#6b7280',
-              fontWeight: 500,
-            }}>
-              Loading models...
-            </div>
-            <style>{`
+          <style>{`
             @keyframes spin {
               0% { transform: rotate(0deg); }
               100% { transform: rotate(360deg); }
             }
           `}</style>
-          </div>
-        )}
+        </div>
+      )}
 
-        {!suppressApi && (
-          <div style={{
-            height: 'calc(100vh - 311px)',
-            overflowY: 'auto',
-            width: '100%',
-            maxWidth: '100%',
-            boxSizing: 'border-box'
-          }}>
-            {!suppressApi && currentPageItems.map(model => (
-              <article
-                key={model.id}
-                aria-label={`Meta model: ${model.name}`}
-                style={fileCardStyle}
-                onMouseEnter={(e) => Object.assign(e.currentTarget.style, fileCardHoverStyle)}
-                onMouseLeave={(e) => Object.assign(e.currentTarget.style, fileCardStyle)}
-              >
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12 }}>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 6, flex: 1 }}>
-                    <div style={{
-                      fontWeight: 700,
-                      color: '#1f2937',
-                      fontSize: 16,
-                      fontFamily: 'Georgia, serif',
-                    }}>
-                      {model.name}
-                    </div>
-                    {model.domain && (
-                      <div style={{
-                        fontSize: 12,
-                        color: '#6b7280',
-                        fontWeight: 500,
-                      }}>
-                        Domain: <span style={{ color: '#049484', fontWeight: 600 }}>{model.domain}</span>
-                      </div>
-                    )}
-                    <div style={{
-                      fontSize: 12,
-                      color: '#9ca3af',
-                    }}>
-                      Created: {(() => {
-                        const d = new Date(model.createdAt);
-                        return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
-                      })()}
-                    </div>
+      {!suppressApi && (
+      <div style={{ 
+        height: 'calc(100vh - 311px)', 
+        overflowY: 'auto',
+        width: '100%',
+        maxWidth: '100%',
+        boxSizing: 'border-box'
+      }}>
+        {!suppressApi && currentPageItems.map(model => (
+          <article
+            key={model.id}
+            aria-label={`Meta model: ${model.name}`}
+            style={fileCardStyle}
+            onMouseEnter={(e) => Object.assign(e.currentTarget.style, fileCardHoverStyle)}
+            onMouseLeave={(e) => Object.assign(e.currentTarget.style, fileCardStyle)}
+          >
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12 }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6, flex: 1 }}>
+                <div style={{ 
+                  fontWeight: 700, 
+                  color: '#1f2937', 
+                  fontSize: 16,
+                  fontFamily: 'Georgia, serif',
+                }}>
+                  {model.name}
+                </div>
+                {model.domain && (
+                  <div style={{ 
+                    fontSize: 12, 
+                    color: '#6b7280',
+                    fontWeight: 500,
+                  }}>
+                    Domain: <span style={{ color: '#049484', fontWeight: 600 }}>{model.domain}</span>
                   </div>
-
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setViewModel(model);
-                    }}
-                    style={{
-                      padding: '8px 16px',
-                      border: '1px solid #049484',
-                      borderRadius: 8,
-                      background: '#ffffff',
-                      cursor: 'pointer',
-                      fontWeight: 600,
-                      fontSize: 13,
-                      color: '#049484',
-                      transition: 'all 0.2s ease',
-                      whiteSpace: 'nowrap',
-                    }}
-                    onMouseEnter={(e) => {
-                      e.currentTarget.style.background = '#049484';
-                      e.currentTarget.style.color = '#ffffff';
-                    }}
-                    onMouseLeave={(e) => {
-                      e.currentTarget.style.background = '#ffffff';
-                      e.currentTarget.style.color = '#049484';
-                    }}
-                  >
-                    View Details
-                  </button>
-                </div>
-              </article>
-            ))}
-            {!suppressApi && !isLoadingModels && sortedModels.length === 0 && !apiError && (
-              <div style={emptyStateStyle}>
-                <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="#cbd5e1" strokeWidth="1.5">
-                  <path d="M9 13h6m-3-3v6m5 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                </svg>
-                <div style={{ fontWeight: 600, fontSize: 16, color: '#374151' }}>
-                  No Meta Models Found
-                </div>
-                <div style={{ fontSize: 13, color: '#9ca3af', maxWidth: 280 }}>
-                  {showAllModels
-                    ? "No models exist yet. Import your first meta model to get started."
-                    : "You haven't created any models yet. Try switching to 'All Models' or import a new one."}
+                )}
+                <div style={{ 
+                  fontSize: 12, 
+                  color: '#9ca3af',
+                }}>
+                  Created: {(() => {
+                    const d = new Date(model.createdAt);
+                    return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+                  })()}
                 </div>
               </div>
-            )}
+
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setViewModel(model);
+                }}
+                style={{
+                  padding: '8px 16px',
+                  border: '1px solid #049484',
+                  borderRadius: 8,
+                  background: '#ffffff',
+                  cursor: 'pointer',
+                  fontWeight: 600,
+                  fontSize: 13,
+                  color: '#049484',
+                  transition: 'all 0.2s ease',
+                  whiteSpace: 'nowrap',
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.background = '#049484';
+                  e.currentTarget.style.color = '#ffffff';
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.background = '#ffffff';
+                  e.currentTarget.style.color = '#049484';
+                }}
+              >
+                View Details
+              </button>
+            </div>
+          </article>
+        ))}
+        {!suppressApi && !isLoadingModels && sortedModels.length === 0 && !apiError && (
+          <div style={emptyStateStyle}>
+            <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="#cbd5e1" strokeWidth="1.5">
+              <path d="M9 13h6m-3-3v6m5 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+            </svg>
+            <div style={{ fontWeight: 600, fontSize: 16, color: '#374151' }}>
+              No Meta Models Found
+            </div>
+            <div style={{ fontSize: 13, color: '#9ca3af', maxWidth: 280 }}>
+              {showAllModels 
+                ? "No models exist yet. Import your first meta model to get started."
+                : "You haven't created any models yet. Try switching to 'All Models' or import a new one."}
+            </div>
           </div>
         )}
+      </div>
+      )}
 
-        {viewModel && (
+      {viewModel && (
           <dialog
-            open
-            style={{
-              position: 'fixed',
-              top: 0,
-              left: 0,
-              right: 0,
-              bottom: 0,
-              width: '100%',
-              height: '100%',
-              margin: 0,
-              padding: 0,
-              border: 'none',
-              background: 'transparent',
-              zIndex: 9998,
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-            }}
+              open
+              style={{
+                position: 'fixed',
+                top: 0,
+                left: 0,
+                right: 0,
+                bottom: 0,
+                width: '100%',
+                height: '100%',
+                margin: 0,
+                padding: 0,
+                border: 'none',
+                background: 'transparent',
+                zIndex: 9998,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+              }}
           >
             <button
               type="button"
@@ -1280,19 +1280,19 @@ export const ToolsPanel: React.FC<ToolsPanelProps> = ({ onEcoreFileUpload, onEco
               }}
             />
             <div
-              style={{
-                position: 'relative',
-                width: 'min(800px, 92vw)',
-                height: 'min(640px, 88vh)',
-                background: '#ffffff',
-                borderRadius: 10,
-                boxShadow: '0 24px 64px rgba(0,0,0,0.22), 0 4px 16px rgba(0,0,0,0.10)',
-                overflow: 'hidden',
-                display: 'flex',
-                flexDirection: 'column',
-                fontFamily: 'ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, sans-serif',
-                border: '1px solid #e2e8f0',
-              }}
+                style={{
+                  position: 'relative',
+                  width: 'min(800px, 92vw)',
+                  height: 'min(640px, 88vh)',
+                  background: '#ffffff',
+                  borderRadius: 10,
+                  boxShadow: '0 24px 64px rgba(0,0,0,0.22), 0 4px 16px rgba(0,0,0,0.10)',
+                  overflow: 'hidden',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  fontFamily: 'ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, sans-serif',
+                  border: '1px solid #e2e8f0',
+                }}
             >
               {/* ── Header ── */}
               <div style={{ padding: '14px 20px', background: '#ffffff', borderBottom: '1px solid #f1f5f9', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
@@ -1371,7 +1371,7 @@ export const ToolsPanel: React.FC<ToolsPanelProps> = ({ onEcoreFileUpload, onEco
                         </button>
                         <button type="button" disabled={isEditSubmitDisabled} onClick={handleEditSubmit as any}
                           style={{ flex: 1, padding: '8px 0', background: isEditSubmitDisabled ? '#94a3b8' : '#0B1720', color: '#fff', border: 'none', borderRadius: 8, fontSize: 12, fontWeight: 600, cursor: isEditSubmitDisabled ? 'not-allowed' : 'pointer' }}
-                          onMouseEnter={e => { if (!isEditSubmitDisabled) (e.currentTarget as HTMLButtonElement).style.background = '#049484'; }}
+                          onMouseEnter={e => { if (!isEditSubmitDisabled) (e.currentTarget as HTMLButtonElement).style.background = '#1e293b'; }}
                           onMouseLeave={e => { if (!isEditSubmitDisabled) (e.currentTarget as HTMLButtonElement).style.background = '#0B1720'; }}>
                           {isEditLoading ? 'Saving…' : 'Save'}
                         </button>
@@ -1424,9 +1424,9 @@ export const ToolsPanel: React.FC<ToolsPanelProps> = ({ onEcoreFileUpload, onEco
                     {umlContent && (
                       <div style={{ display: 'flex', gap: 4 }}>
                         {[
-                          { title: 'Zoom in', icon: <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" /></svg>, fn: () => diagramRef.current?.zoomIn() },
-                          { title: 'Zoom out', icon: <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><line x1="5" y1="12" x2="19" y2="12" /></svg>, fn: () => diagramRef.current?.zoomOut() },
-                          { title: 'Fit to view', icon: <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M8 3H5a2 2 0 0 0-2 2v3" /><path d="M21 8V5a2 2 0 0 0-2-2h-3" /><path d="M3 16v3a2 2 0 0 0 2 2h3" /><path d="M16 21h3a2 2 0 0 0 2-2v-3" /></svg>, fn: () => diagramRef.current?.fitToView() },
+                          { title: 'Zoom in', icon: <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>, fn: () => diagramRef.current?.zoomIn() },
+                          { title: 'Zoom out', icon: <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><line x1="5" y1="12" x2="19" y2="12"/></svg>, fn: () => diagramRef.current?.zoomOut() },
+                          { title: 'Fit to view', icon: <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M8 3H5a2 2 0 0 0-2 2v3"/><path d="M21 8V5a2 2 0 0 0-2-2h-3"/><path d="M3 16v3a2 2 0 0 0 2 2h3"/><path d="M16 21h3a2 2 0 0 0 2-2v-3"/></svg>, fn: () => diagramRef.current?.fitToView() },
                         ].map(({ title, icon, fn }) => (
                           <button key={title} title={title} onClick={fn}
                             style={{ width: 24, height: 24, border: '1px solid #e2e8f0', borderRadius: 6, background: '#fff', color: '#64748b', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
@@ -1459,29 +1459,29 @@ export const ToolsPanel: React.FC<ToolsPanelProps> = ({ onEcoreFileUpload, onEco
               </div>
             </div>
           </dialog>
-        )}
+      )}
 
-        {/* Meta Model Delete Confirmation */}
-        {metaModelDeleteConfirmOpen && viewModel && (
+      {/* Meta Model Delete Confirmation */}
+      {metaModelDeleteConfirmOpen && viewModel && (
           <dialog
-            open
-            style={{
-              position: 'fixed',
-              top: 0,
-              left: 0,
-              right: 0,
-              bottom: 0,
-              width: '100%',
-              height: '100%',
-              margin: 0,
-              padding: 0,
-              border: 'none',
-              background: 'transparent',
-              zIndex: 10000,
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-            }}
+              open
+              style={{
+                position: 'fixed',
+                top: 0,
+                left: 0,
+                right: 0,
+                bottom: 0,
+                width: '100%',
+                height: '100%',
+                margin: 0,
+                padding: 0,
+                border: 'none',
+                background: 'transparent',
+                zIndex: 10000,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+              }}
           >
             <button
               type="button"
@@ -1507,27 +1507,27 @@ export const ToolsPanel: React.FC<ToolsPanelProps> = ({ onEcoreFileUpload, onEco
               disabled={metaModelDeleting}
             />
             <div
-              style={{
-                position: 'relative',
-                width: 500,
-                maxWidth: '90vw',
-                background: '#fff',
-                borderRadius: 12,
-                boxShadow: '0 20px 60px rgba(220, 38, 38, 0.15), 0 10px 30px rgba(0, 0, 0, 0.1)',
-                overflow: 'hidden',
-                fontFamily: 'Georgia, serif',
-                border: '1px solid #fee2e2',
-              }}
+                style={{
+                  position: 'relative',
+                  width: 500,
+                  maxWidth: '90vw',
+                  background: '#fff',
+                  borderRadius: 12,
+                  boxShadow: '0 20px 60px rgba(220, 38, 38, 0.15), 0 10px 30px rgba(0, 0, 0, 0.1)',
+                  overflow: 'hidden',
+                  fontFamily: 'Georgia, serif',
+                  border: '1px solid #fee2e2',
+                }}
             >
-              <div style={{
-                padding: '20px 24px',
+              <div style={{ 
+                padding: '20px 24px', 
                 borderBottom: '2px solid #dc2626',
                 background: 'linear-gradient(135deg, #fff5f5 0%, #fef2f2 100%)'
               }}>
-                <h2 id="delete-dialog-title" style={{
-                  fontWeight: 700,
-                  color: '#2c3e50',
-                  margin: 0,
+                <h2 id="delete-dialog-title" style={{ 
+                  fontWeight: 700, 
+                  color: '#2c3e50', 
+                  margin: 0, 
                   fontSize: 20,
                   fontFamily: 'Georgia, serif',
                   display: 'flex',
@@ -1541,9 +1541,9 @@ export const ToolsPanel: React.FC<ToolsPanelProps> = ({ onEcoreFileUpload, onEco
                 </h2>
               </div>
 
-              <div style={{
-                padding: '24px',
-                color: '#374151',
+              <div style={{ 
+                padding: '24px', 
+                color: '#374151', 
                 fontSize: 15,
                 lineHeight: 1.6,
                 fontFamily: 'Georgia, serif'
@@ -1570,335 +1570,335 @@ export const ToolsPanel: React.FC<ToolsPanelProps> = ({ onEcoreFileUpload, onEco
                   </p>
                 </div>
                 {metaModelDeleteError && (
-                  <div
-                    style={{
-                      marginTop: 16,
-                      padding: 14,
-                      border: '2px solid #fca5a5',
-                      background: 'linear-gradient(135deg, #fff5f5 0%, #fee 100%)',
-                      color: '#991b1b',
-                      borderRadius: 8,
-                      fontSize: 14,
-                      boxShadow: '0 2px 8px rgba(220, 38, 38, 0.1)',
-                    }}
-                  >
-                    {metaModelDeleteError}
-                  </div>
+                    <div
+                        style={{
+                          marginTop: 16,
+                          padding: 14,
+                          border: '2px solid #fca5a5',
+                          background: 'linear-gradient(135deg, #fff5f5 0%, #fee 100%)',
+                          color: '#991b1b',
+                          borderRadius: 8,
+                          fontSize: 14,
+                          boxShadow: '0 2px 8px rgba(220, 38, 38, 0.1)',
+                        }}
+                    >
+                      {metaModelDeleteError}
+                    </div>
                 )}
               </div>
 
-              <div style={{
-                padding: '16px 24px',
+              <div style={{ 
+                padding: '16px 24px', 
                 borderTop: '1px solid #e9ecef',
-                display: 'flex',
-                justifyContent: 'flex-end',
+                display: 'flex', 
+                justifyContent: 'flex-end', 
                 gap: 12,
                 background: '#f8f9fa'
               }}>
                 <button
-                  onClick={() => {
-                    setMetaModelDeleteConfirmOpen(false);
-                    setMetaModelDeleteError('');
-                  }}
-                  disabled={metaModelDeleting}
-                  style={{
-                    padding: '10px 20px',
-                    borderRadius: 8,
-                    border: '1px solid #dee2e6',
-                    background: '#fff',
-                    color: '#495057',
-                    fontWeight: 600,
-                    cursor: metaModelDeleting ? 'not-allowed' : 'pointer',
-                    fontSize: 14,
-                    fontFamily: 'Georgia, serif',
-                    transition: 'all 0.2s ease',
-                  }}
-                  onMouseEnter={(e) => {
-                    if (!metaModelDeleting) {
-                      e.currentTarget.style.background = '#f8f9fa';
-                      e.currentTarget.style.borderColor = '#adb5bd';
-                    }
-                  }}
-                  onMouseLeave={(e) => {
-                    e.currentTarget.style.background = '#fff';
-                    e.currentTarget.style.borderColor = '#dee2e6';
-                  }}
+                    onClick={() => {
+                      setMetaModelDeleteConfirmOpen(false);
+                      setMetaModelDeleteError('');
+                    }}
+                    disabled={metaModelDeleting}
+                    style={{
+                      padding: '10px 20px',
+                      borderRadius: 8,
+                      border: '1px solid #dee2e6',
+                      background: '#fff',
+                      color: '#495057',
+                      fontWeight: 600,
+                      cursor: metaModelDeleting ? 'not-allowed' : 'pointer',
+                      fontSize: 14,
+                      fontFamily: 'Georgia, serif',
+                      transition: 'all 0.2s ease',
+                    }}
+                    onMouseEnter={(e) => {
+                      if (!metaModelDeleting) {
+                        e.currentTarget.style.background = '#f8f9fa';
+                        e.currentTarget.style.borderColor = '#adb5bd';
+                      }
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.background = '#fff';
+                      e.currentTarget.style.borderColor = '#dee2e6';
+                    }}
                 >
                   Cancel
                 </button>
 
                 <button
-                  onClick={async () => {
-                    if (!viewModel?.id) return;
-                    setMetaModelDeleteError('');
-                    setMetaModelDeleting(true);
-                    try {
-                      await apiService.deleteMetaModel(viewModel.id);
-                      setMetaModelDeleteConfirmOpen(false);
-                      setViewModel(null);
-                      setUploadMessage('Meta Model deleted successfully!');
-                      setUploadMessageType('success');
-                      const filters = buildApiFiltersFromParsedFilters(parsedFilters, true);
-                      const response = await apiService.findMetaModels(filters);
-                      setApiModels(response.data || []);
-                      setTimeout(() => setUploadMessage(''), 3000);
-                    } catch (error: any) {
-                      let msg = 'Failed to delete meta model';
-                      if (error?.response?.data?.message) {
-                        msg = error.response.data.message;
-                      } else if (error?.message) {
-                        msg = error.message;
+                    onClick={async () => {
+                      if (!viewModel?.id) return;
+                      setMetaModelDeleteError('');
+                      setMetaModelDeleting(true);
+                      try {
+                        await apiService.deleteMetaModel(viewModel.id);
+                        setMetaModelDeleteConfirmOpen(false);
+                        setViewModel(null);
+                        setUploadMessage('Meta Model deleted successfully!');
+                        setUploadMessageType('success');
+                        const filters = buildApiFiltersFromParsedFilters(parsedFilters, true);
+                        const response = await apiService.findMetaModels(filters);
+                        setApiModels(response.data || []);
+                        setTimeout(() => setUploadMessage(''), 3000);
+                      } catch (error: any) {
+                        let msg = 'Failed to delete meta model';
+                        if (error?.response?.data?.message) {
+                          msg = error.response.data.message;
+                        } else if (error?.message) {
+                          msg = error.message;
+                        }
+                        setMetaModelDeleteError(msg);
+                      } finally {
+                        setMetaModelDeleting(false);
                       }
-                      setMetaModelDeleteError(msg);
-                    } finally {
-                      setMetaModelDeleting(false);
-                    }
-                  }}
-                  disabled={metaModelDeleting}
-                  style={{
-                    padding: '10px 24px',
-                    borderRadius: 8,
-                    border: 'none',
-                    background: metaModelDeleting ? '#fca5a5' : 'linear-gradient(135deg, #dc2626 0%, #b91c1c 100%)',
-                    color: '#fff',
-                    fontWeight: 600,
-                    cursor: metaModelDeleting ? 'not-allowed' : 'pointer',
-                    fontSize: 14,
-                    fontFamily: 'Georgia, serif',
-                    transition: 'all 0.2s ease',
-                    boxShadow: metaModelDeleting ? 'none' : '0 4px 12px rgba(220, 38, 38, 0.3)',
-                  }}
-                  onMouseEnter={(e) => {
-                    if (!metaModelDeleting) {
-                      e.currentTarget.style.transform = 'translateY(-1px)';
-                      e.currentTarget.style.boxShadow = '0 6px 16px rgba(220, 38, 38, 0.4)';
-                    }
-                  }}
-                  onMouseLeave={(e) => {
-                    e.currentTarget.style.transform = 'translateY(0)';
-                    e.currentTarget.style.boxShadow = metaModelDeleting ? 'none' : '0 4px 12px rgba(220, 38, 38, 0.3)';
-                  }}
+                    }}
+                    disabled={metaModelDeleting}
+                    style={{
+                      padding: '10px 24px',
+                      borderRadius: 8,
+                      border: 'none',
+                      background: metaModelDeleting ? '#fca5a5' : 'linear-gradient(135deg, #dc2626 0%, #b91c1c 100%)',
+                      color: '#fff',
+                      fontWeight: 600,
+                      cursor: metaModelDeleting ? 'not-allowed' : 'pointer',
+                      fontSize: 14,
+                      fontFamily: 'Georgia, serif',
+                      transition: 'all 0.2s ease',
+                      boxShadow: metaModelDeleting ? 'none' : '0 4px 12px rgba(220, 38, 38, 0.3)',
+                    }}
+                    onMouseEnter={(e) => {
+                      if (!metaModelDeleting) {
+                        e.currentTarget.style.transform = 'translateY(-1px)';
+                        e.currentTarget.style.boxShadow = '0 6px 16px rgba(220, 38, 38, 0.4)';
+                      }
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.transform = 'translateY(0)';
+                      e.currentTarget.style.boxShadow = metaModelDeleting ? 'none' : '0 4px 12px rgba(220, 38, 38, 0.3)';
+                    }}
                 >
                   {metaModelDeleting ? 'Deleting…' : 'Delete Permanently'}
                 </button>
               </div>
             </div>
           </dialog>
-        )}
+      )}
 
-        {!suppressApi && totalPages > 1 && (
-          <div style={paginationContainerStyle}>
-            <div style={paginationInfoStyle}>
-              Showing {startIndex + 1}-{Math.min(endIndex, totalItems)} of {totalItems} models
-            </div>
-            <div style={paginationControlsStyle}>
-              <button
-                style={{
-                  ...paginationButtonStyle,
-                  ...(currentPage === 1 ? paginationButtonDisabledStyle : {})
-                }}
-                onClick={goToPreviousPage}
-                disabled={currentPage === 1}
-                onMouseEnter={(e) => {
-                  if (currentPage > 1) {
-                    Object.assign(e.currentTarget.style, paginationButtonHoverStyle);
-                  }
-                }}
-                onMouseLeave={(e) => {
-                  if (currentPage > 1) {
-                    Object.assign(e.currentTarget.style, paginationButtonStyle);
-                  }
-                }}
-              >
-                ‹
-              </button>
-
-              {Array.from({ length: totalPages }, (_, i) => i + 1).map(page => {
-                const shouldShow =
-                  page === 1 ||
-                  page === totalPages ||
-                  Math.abs(page - currentPage) <= 1;
-
-                if (!shouldShow) {
-                  if (page === 2 && currentPage > 4) {
-                    return <span key={`ellipsis-${page}`} style={{ padding: '0 4px', color: '#6c757d' }}>...</span>;
-                  }
-                  if (page === totalPages - 1 && currentPage < totalPages - 3) {
-                    return <span key={`ellipsis-${page}`} style={{ padding: '0 4px', color: '#6c757d' }}>...</span>;
-                  }
-                  return null;
+      {!suppressApi && totalPages > 1 && (
+        <div style={paginationContainerStyle}>
+          <div style={paginationInfoStyle}>
+            Showing {startIndex + 1}-{Math.min(endIndex, totalItems)} of {totalItems} models
+          </div>
+          <div style={paginationControlsStyle}>
+            <button
+              style={{
+                ...paginationButtonStyle,
+                ...(currentPage === 1 ? paginationButtonDisabledStyle : {})
+              }}
+              onClick={goToPreviousPage}
+              disabled={currentPage === 1}
+              onMouseEnter={(e) => {
+                if (currentPage > 1) {
+                  Object.assign(e.currentTarget.style, paginationButtonHoverStyle);
                 }
+              }}
+              onMouseLeave={(e) => {
+                if (currentPage > 1) {
+                  Object.assign(e.currentTarget.style, paginationButtonStyle);
+                }
+              }}
+            >
+              ‹
+            </button>
+            
+            {Array.from({ length: totalPages }, (_, i) => i + 1).map(page => {
+              const shouldShow = 
+                page === 1 || 
+                page === totalPages || 
+                Math.abs(page - currentPage) <= 1;
+              
+              if (!shouldShow) {
+                if (page === 2 && currentPage > 4) {
+                  return <span key={`ellipsis-${page}`} style={{ padding: '0 4px', color: '#6c757d' }}>...</span>;
+                }
+                if (page === totalPages - 1 && currentPage < totalPages - 3) {
+                  return <span key={`ellipsis-${page}`} style={{ padding: '0 4px', color: '#6c757d' }}>...</span>;
+                }
+                return null;
+              }
+              
+              return (
+                <button
+                  key={page}
+                  style={{
+                    ...paginationButtonStyle,
+                    ...(page === currentPage ? paginationButtonActiveStyle : {})
+                  }}
+                  onClick={() => goToPage(page)}
+                  onMouseEnter={(e) => {
+                    if (page !== currentPage) {
+                      Object.assign(e.currentTarget.style, paginationButtonHoverStyle);
+                    }
+                  }}
+                  onMouseLeave={(e) => {
+                    if (page !== currentPage) {
+                      Object.assign(e.currentTarget.style, paginationButtonStyle);
+                    }
+                  }}
+                >
+                  {page}
+                </button>
+              );
+            })}
+            
+            <button
+              style={{
+                ...paginationButtonStyle,
+                ...(currentPage === totalPages ? paginationButtonDisabledStyle : {})
+              }}
+              onClick={goToNextPage}
+              disabled={currentPage === totalPages}
+              onMouseEnter={(e) => {
+                if (currentPage < totalPages) {
+                  Object.assign(e.currentTarget.style, paginationButtonHoverStyle);
+                }
+              }}
+              onMouseLeave={(e) => {
+                if (currentPage < totalPages) {
+                  Object.assign(e.currentTarget.style, paginationButtonStyle);
+                }
+              }}
+            >
+              ›
+            </button>
+          </div>
+        </div>
+      )}
+      
+      <CreateModelModal
+        isOpen={showCreateModal}
+        onClose={() => setShowCreateModal(false)}
+        onSuccess={(modelData) => {
+          setUploadMessage('Meta Model created successfully!');
+          setUploadMessageType('success');
+          setTimeout(() => setUploadMessage(''), 3000);
+          const fetchData = async () => {
+            setIsLoadingModels(true);
+            setApiError('');
+            try {
+              const filters = buildApiFiltersFromParsedFilters(parsedFilters, true);
+              const response = await apiService.findMetaModels(filters);
+              setApiModels(response.data || []);
+            } catch (error) {
+              setApiError(error instanceof Error ? error.message : 'Failed to fetch meta models');
+            } finally {
+              setIsLoadingModels(false);
+            }
+          };
+          fetchData();
+        }}
+      />
 
-                return (
-                  <button
-                    key={page}
-                    style={{
-                      ...paginationButtonStyle,
-                      ...(page === currentPage ? paginationButtonActiveStyle : {})
-                    }}
-                    onClick={() => goToPage(page)}
-                    onMouseEnter={(e) => {
-                      if (page !== currentPage) {
-                        Object.assign(e.currentTarget.style, paginationButtonHoverStyle);
-                      }
-                    }}
-                    onMouseLeave={(e) => {
-                      if (page !== currentPage) {
-                        Object.assign(e.currentTarget.style, paginationButtonStyle);
-                      }
-                    }}
-                  >
-                    {page}
-                  </button>
-                );
-              })}
-
+      {deleteConfirmOpen && (
+        <div style={{
+          position: 'fixed',
+          top: 0, left: 0, right: 0, bottom: 0,
+          background: 'rgba(0,0,0,0.35)',
+          zIndex: 9999,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center'
+        }}>
+          <div style={{
+            background: '#fff',
+            borderRadius: 10,
+            boxShadow: '0 10px 40px rgba(0,0,0,0.25)',
+            padding: '28px 24px',
+            minWidth: 420,
+            maxWidth: '90vw',
+            fontFamily: 'Georgia, serif'
+          }}>
+            <div style={{ fontSize: 18, fontWeight: 700, marginBottom: 12, color: '#dc2626', display: 'flex', alignItems: 'center', gap: 10 }}>
+              <span style={{ fontSize: 24 }}>⚠️</span>
+              {' '}
+              Are you sure?
+            </div>
+            <div style={{ fontSize: 14, color: '#4b5563', marginBottom: 20, lineHeight: 1.6 }}>
+              Are you sure you want to delete this meta model from your workspace?
+            </div>
+            <div style={{
+              padding: '16px',
+              background: '#fff8ed',
+              borderLeft: '4px solid #f59e0b',
+              borderRadius: 6,
+              fontSize: 13,
+              color: '#92400e',
+              lineHeight: 1.7,
+              marginBottom: 20
+            }}>
+              <strong style={{ display: 'block', marginBottom: 8, color: '#b45309' }}>⚠️ Warning:</strong>
+              <ul style={{ margin: 0, paddingLeft: 20 }}>
+                <li style={{ marginBottom: 6 }}>All reactions related to this meta model will be permanently deleted</li>
+                <li>Any edits and changes made to this meta model will be lost</li>
+              </ul>
+              <p style={{ margin: '12px 0 0 0', fontStyle: 'italic', fontSize: 12 }}>
+                This action cannot be undone.
+              </p>
+            </div>
+            {deleteError && (
+              <div style={{
+                color: '#991b1b',
+                background: '#fee2e2',
+                border: '1px solid #fca5a5',
+                borderRadius: 6,
+                padding: '10px 12px',
+                marginBottom: '16px',
+                fontSize: 13,
+                fontWeight: 500,
+              }}>
+                {deleteError}
+              </div>
+            )}
+            <div style={{ display: 'flex', gap: 12, justifyContent: 'flex-end' }}>
               <button
                 style={{
-                  ...paginationButtonStyle,
-                  ...(currentPage === totalPages ? paginationButtonDisabledStyle : {})
+                  padding: '10px 20px',
+                  borderRadius: 6,
+                  border: '1px solid #dee2e6',
+                  background: '#fff',
+                  color: '#495057',
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                  fontSize: 14
                 }}
-                onClick={goToNextPage}
-                disabled={currentPage === totalPages}
-                onMouseEnter={(e) => {
-                  if (currentPage < totalPages) {
-                    Object.assign(e.currentTarget.style, paginationButtonHoverStyle);
-                  }
-                }}
-                onMouseLeave={(e) => {
-                  if (currentPage < totalPages) {
-                    Object.assign(e.currentTarget.style, paginationButtonStyle);
-                  }
-                }}
+                onClick={() => { setDeleteConfirmOpen(false); setDeletingId(null); setDeleteError(''); }}
               >
-                ›
+                Cancel
+              </button>
+              <button
+                style={{
+                  padding: '10px 20px',
+                  borderRadius: 6,
+                  border: 'none',
+                  background: '#dc2626',
+                  color: '#fff',
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                  fontSize: 14
+                }}
+                onClick={handleConfirmDelete}
+              >
+                Delete Permanently
               </button>
             </div>
           </div>
-        )}
+        </div>
+      )}
 
-        <CreateModelModal
-          isOpen={showCreateModal}
-          onClose={() => setShowCreateModal(false)}
-          onSuccess={(modelData) => {
-            setUploadMessage('Meta Model created successfully!');
-            setUploadMessageType('success');
-            setTimeout(() => setUploadMessage(''), 3000);
-            const fetchData = async () => {
-              setIsLoadingModels(true);
-              setApiError('');
-              try {
-                const filters = buildApiFiltersFromParsedFilters(parsedFilters, true);
-                const response = await apiService.findMetaModels(filters);
-                setApiModels(response.data || []);
-              } catch (error) {
-                setApiError(error instanceof Error ? error.message : 'Failed to fetch meta models');
-              } finally {
-                setIsLoadingModels(false);
-              }
-            };
-            fetchData();
-          }}
-        />
-
-        {deleteConfirmOpen && (
-          <div style={{
-            position: 'fixed',
-            top: 0, left: 0, right: 0, bottom: 0,
-            background: 'rgba(0,0,0,0.35)',
-            zIndex: 9999,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center'
-          }}>
-            <div style={{
-              background: '#fff',
-              borderRadius: 10,
-              boxShadow: '0 10px 40px rgba(0,0,0,0.25)',
-              padding: '28px 24px',
-              minWidth: 420,
-              maxWidth: '90vw',
-              fontFamily: 'Georgia, serif'
-            }}>
-              <div style={{ fontSize: 18, fontWeight: 700, marginBottom: 12, color: '#dc2626', display: 'flex', alignItems: 'center', gap: 10 }}>
-                <span style={{ fontSize: 24 }}>⚠️</span>
-                {' '}
-                Are you sure?
-              </div>
-              <div style={{ fontSize: 14, color: '#4b5563', marginBottom: 20, lineHeight: 1.6 }}>
-                Are you sure you want to delete this meta model from your workspace?
-              </div>
-              <div style={{
-                padding: '16px',
-                background: '#fff8ed',
-                borderLeft: '4px solid #f59e0b',
-                borderRadius: 6,
-                fontSize: 13,
-                color: '#92400e',
-                lineHeight: 1.7,
-                marginBottom: 20
-              }}>
-                <strong style={{ display: 'block', marginBottom: 8, color: '#b45309' }}>⚠️ Warning:</strong>
-                <ul style={{ margin: 0, paddingLeft: 20 }}>
-                  <li style={{ marginBottom: 6 }}>All reactions related to this meta model will be permanently deleted</li>
-                  <li>Any edits and changes made to this meta model will be lost</li>
-                </ul>
-                <p style={{ margin: '12px 0 0 0', fontStyle: 'italic', fontSize: 12 }}>
-                  This action cannot be undone.
-                </p>
-              </div>
-              {deleteError && (
-                <div style={{
-                  color: '#991b1b',
-                  background: '#fee2e2',
-                  border: '1px solid #fca5a5',
-                  borderRadius: 6,
-                  padding: '10px 12px',
-                  marginBottom: '16px',
-                  fontSize: 13,
-                  fontWeight: 500,
-                }}>
-                  {deleteError}
-                </div>
-              )}
-              <div style={{ display: 'flex', gap: 12, justifyContent: 'flex-end' }}>
-                <button
-                  style={{
-                    padding: '10px 20px',
-                    borderRadius: 6,
-                    border: '1px solid #dee2e6',
-                    background: '#fff',
-                    color: '#495057',
-                    fontWeight: 600,
-                    cursor: 'pointer',
-                    fontSize: 14
-                  }}
-                  onClick={() => { setDeleteConfirmOpen(false); setDeletingId(null); setDeleteError(''); }}
-                >
-                  Cancel
-                </button>
-                <button
-                  style={{
-                    padding: '10px 20px',
-                    borderRadius: 6,
-                    border: 'none',
-                    background: '#dc2626',
-                    color: '#fff',
-                    fontWeight: 600,
-                    cursor: 'pointer',
-                    fontSize: 14
-                  }}
-                  onClick={handleConfirmDelete}
-                >
-                  Delete Permanently
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
-
-      </div>
-    );
+    </div>
+  );
   };
 
   const renderMainPanelContentLayout = () => renderMainPanelContentMarkup();
