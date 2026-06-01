@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { SignInCredentials } from '../../services/auth';
+import { AuthService, SignInCredentials } from '../../services/auth';
 import { useAuth } from '../../contexts/AuthContext';
 import { apiService } from '../../services/api';
 
@@ -99,6 +99,16 @@ export function SignIn({ onSignInSuccess, onSwitchToSignUp }: Readonly<SignInPro
       setResetError(error instanceof Error ? error.message : 'Failed to send reset email');
     } finally {
       setIsSendingReset(false);
+    }
+  };
+
+  const handleFastLogin = () => {
+    try {
+      setError(null);
+      const authorizationUrl = AuthService.getFastLoginAuthorizationUrl();
+      globalThis.location.assign(authorizationUrl);
+    } catch (err: any) {
+      setError(err?.message || 'Unable to start Fast Login. Please try again.');
     }
   };
 
