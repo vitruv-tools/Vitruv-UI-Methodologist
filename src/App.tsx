@@ -1,6 +1,6 @@
 import React from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
-import { AuthPage, KeycloakRedirect } from './components/auth';
+import { AuthPage, FastLoginCallback, KeycloakRedirect } from './components/auth';
 import { HomePage } from './pages/HomePage';
 import { ProjectPage } from './pages/ProjectPage';
 import { EditorTest } from './pages/EditorTest';  // <- NEU
@@ -102,6 +102,7 @@ function App() {
         <Routes>
           <Route path="/login" element={<AuthPage />} />
           <Route path="/auth" element={<KeycloakRedirect />} />
+          <Route path="/auth/callback" element={<FastLoginCallback />} />
           <Route path="/verify-otp" element={<OtpVerificationPage />} />
           <Route path="/" element={
             <ProtectedRoute>

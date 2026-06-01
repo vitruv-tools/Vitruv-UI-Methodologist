@@ -9,6 +9,7 @@ interface AuthContextType {
     isAuthenticated: boolean;
     isLoading: boolean;
     signIn: (username: string, password: string) => Promise<User>;
+    fastLoginWithCode: (authorizationCode: string) => Promise<User>;
     signUp: (userData: SignUpCredentials) => Promise<void>;
     signOut: () => Promise<void>;
     refreshToken: () => Promise<any>;
@@ -174,6 +175,58 @@ export function AuthProvider({ children }: Readonly<AuthProviderProps>) {
         }
     }, []);
 
+    const fastLoginWithCode = useCallback(async (authorizationCode: string): Promise<User> => {
+        try {
+            const authResponse = await AuthService.exchangeFastLoginCode(authorizationCode);
+
+            try {
+                const { data } = await apiService.getUserInfo();
+                const mapped: User = {
+                    id: String(data.id),
+                    username: data.email?.split('@')[0] || 'user',
+                    email: data.email,
+                    name: `${data.firstName ?? ''} ${data.lastName ?? ''}`.trim() || data.email || 'user',
+                    givenName: data.firstName,
+                    familyName: data.lastName,
+                    emailVerified: resolveVerifiedFlag(data),
+                };
+                AuthService.setCurrentUser(mapped);
+                setUser(mapped);
+                return mapped;
+            } catch {
+                const tokenData = parseJwtToken(authResponse.access_token);
+                let newUser: User;
+                if (tokenData) {
+                    const extractedUser = extractUserFromToken(tokenData);
+                    newUser = {
+                        id: Date.now().toString(),
+                        username: extractedUser.username || 'user',
+                        email: extractedUser.email,
+                        name: extractedUser.name,
+                        givenName: extractedUser.givenName,
+                        familyName: extractedUser.familyName,
+                        // Trust external IDP authentication — consider verified.
+                        emailVerified: true,
+                        scope: extractedUser.scope,
+                    };
+                } else {
+                    newUser = {
+                        id: Date.now().toString(),
+                        username: 'user',
+                        // Authenticated via external IDP — treat as verified.
+                        emailVerified: true,
+                    };
+                }
+                AuthService.setCurrentUser(newUser);
+                setUser(newUser);
+                return newUser;
+            }
+        } catch (error) {
+            console.error('Fast login error:', error);
+            throw error;
+        }
+    }, []);
+
     // 🔐 SIGN UP with:
     // - Username required and length ≥ 4
     // - Password detailed validation (with explicit allowed symbols)
@@ -273,11 +326,12 @@ export function AuthProvider({ children }: Readonly<AuthProviderProps>) {
         isAuthenticated: !!user && AuthService.isAuthenticated(),
         isLoading,
         signIn,
+        fastLoginWithCode,
         signUp,
         signOut,
         refreshToken: handleRefreshToken,
         refreshCurrentUser,
-    }), [user, isLoading, signIn, signUp, signOut, handleRefreshToken, refreshCurrentUser]);
+    }), [user, isLoading, signIn, fastLoginWithCode, signUp, signOut, handleRefreshToken, refreshCurrentUser]);
 
     return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }

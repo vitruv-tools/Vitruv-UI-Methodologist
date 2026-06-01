@@ -280,3 +280,73 @@ describe('SignIn – forgot password dialog', () => {
     expect(mockOnSwitchToSignUp).toHaveBeenCalled();
   });
 });
+
+// ── Fast Login button ─────────────────────────────────────────────────────────
+
+import { AuthService } from '../../../services/auth';
+
+describe('SignIn – Fast Login button', () => {
+  // JSDOM marks location.assign as read-only; replace globalThis.location with
+  // a plain object so we can intercept the redirect call.
+  const assignMock = jest.fn();
+  const originalLocation = globalThis.location;
+
+  let fastLoginSpy: jest.SpyInstance;
+
+  beforeAll(() => {
+    // @ts-ignore — intentional JSDOM workaround
+    delete globalThis.location;
+    (globalThis as any).location = { ...originalLocation, assign: assignMock };
+  });
+
+  afterAll(() => {
+    (globalThis as any).location = originalLocation;
+  });
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    assignMock.mockReset();
+    fastLoginSpy = jest
+      .spyOn(AuthService, 'getFastLoginAuthorizationUrl')
+      .mockReturnValue('https://keycloak.example.com/auth?code');
+  });
+
+  afterEach(() => {
+    fastLoginSpy.mockRestore();
+  });
+
+  const renderFastLoginSignIn = () =>
+    render(
+      <SignIn
+        onSignInSuccess={mockOnSignInSuccess}
+        onSwitchToSignUp={mockOnSwitchToSignUp}
+      />,
+    );
+
+  it('renders the Fast Login button', () => {
+    renderFastLoginSignIn();
+    expect(
+      screen.getByRole('button', { name: /Fast Login \(KIT\/FeLS\)/i }),
+    ).toBeInTheDocument();
+  });
+
+  it('calls getFastLoginAuthorizationUrl and redirects on click', async () => {
+    renderFastLoginSignIn();
+    await userEvent.click(
+      screen.getByRole('button', { name: /Fast Login \(KIT\/FeLS\)/i }),
+    );
+    expect(fastLoginSpy).toHaveBeenCalled();
+    expect(assignMock).toHaveBeenCalledWith('https://keycloak.example.com/auth?code');
+  });
+
+  it('shows an error message when getFastLoginAuthorizationUrl throws', async () => {
+    fastLoginSpy.mockImplementationOnce(() => {
+      throw new Error('Config error');
+    });
+    renderFastLoginSignIn();
+    await userEvent.click(
+      screen.getByRole('button', { name: /Fast Login \(KIT\/FeLS\)/i }),
+    );
+    expect(await screen.findByText(/Config error/i)).toBeInTheDocument();
+  });
+});
