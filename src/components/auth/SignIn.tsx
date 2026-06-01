@@ -465,6 +465,19 @@ export function SignIn({ onSignInSuccess, onSwitchToSignUp }: Readonly<SignInPro
             </button>
           </form>
 
+          {/* Fast Login */}
+          <div className="mock-auth-footer" style={{ marginTop: '8px' }}>
+            <button
+              type="button"
+              className="mock-submit-button"
+              onClick={handleFastLogin}
+              disabled={isLoading}
+              style={{ width: '100%' }}
+            >
+              Fast Login (KIT/FeLS)
+            </button>
+          </div>
+
           {/* Footer Switching Link */}
           <div className="mock-auth-footer">
             <p>
