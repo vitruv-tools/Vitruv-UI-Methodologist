@@ -1393,7 +1393,7 @@ export const FlowCanvas = forwardRef<{
       }
 
       onEcoreFileExpand?.(fileName, fileContent);
-    }, [nodes, setNodes, onEcoreFileExpand]);
+    }, [nodes, onEcoreFileExpand]);
 
     const resetExpandedFile = useCallback(() => {
       setExpandedFileId(null);
@@ -1447,7 +1447,7 @@ export const FlowCanvas = forwardRef<{
       if (onEcoreFileSelect) {
         onEcoreFileSelect(fileName);
       }
-    }, [nodes, addNode, handleEcoreFileExpand, handleEcoreFileSelect, onEcoreFileSelect, onEcoreFileDelete, onEcoreFileRename, handleRequestDelete]);
+    }, [nodes, addNode, handleEcoreFileExpand, handleEcoreFileSelect, onEcoreFileSelect, onEcoreFileDelete, onEcoreFileRename, handleRequestDelete, handleShowDetails]);
 
     useEffect(() => {
       const handleCreateReactionEdge = (e: Event) => {
@@ -1953,7 +1953,7 @@ export const FlowCanvas = forwardRef<{
         pendingFitToCircle.current = true;   // signal the useEffect to fit after commit
         setCircle(newCircle);
       }, 50);
-    }, [nodes, edges, setNodes, setEdges, buildAdjacencyMap, findConnectedComponents, layoutComponent, optimizeEdgeHandles, setCircle, fitViewToCircle]);
+    }, [nodes, edges, setNodes, setEdges, buildAdjacencyMap, findConnectedComponents, layoutComponent, optimizeEdgeHandles, setCircle]);
 
     // Listen for auto-layout trigger
     useEffect(() => {

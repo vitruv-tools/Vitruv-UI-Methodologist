@@ -211,6 +211,7 @@ export const AppSidebar: React.FC<AppSidebarProps> = ({
       {/* Sidebar background image */}
       <img
         src="/assets/sidebar-bg - Kopie.png"
+        alt=""
         aria-hidden
         style={{
           position: 'absolute', top: 160, left: '50%',

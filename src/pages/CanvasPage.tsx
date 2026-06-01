@@ -52,8 +52,6 @@ export const CanvasPage: React.FC = () => {
   const [popup, setPopup] = useState<{ message: string; type: 'success' | 'error' | 'info' } | null>(null);
 
   const [canvasKey] = useState(`canvas-${id}-${Date.now()}`);
-  const nextPanelOffset = useRef(0);
-
   // Add-reaction mode
   const [addReactionMode, setAddReactionMode] = useState(false);
 
@@ -1015,49 +1013,6 @@ const Divider = () => (
   <div style={{ width: 1, height: 26, background: '#e2e8f0', margin: '0 6px', flexShrink: 0 }} />
 );
 
-interface ActionBtnProps {
-  onClick: () => void;
-  disabled: boolean;
-  loading: boolean;
-  color: string;
-  colorHover: string;
-  colorDisabled: string;
-  title: string;
-  label: string;
-  loadingLabel: string;
-  icon: React.ReactNode;
-}
-
-const ActionBtn: React.FC<ActionBtnProps> = ({
-  onClick, disabled, loading, color, colorHover, colorDisabled, title, label, loadingLabel, icon,
-}) => {
-  const [hov, setHov] = useState(false);
-  const textColor = disabled ? '#94a3b8' : color;
-  const borderColor = disabled ? '#cbd5e1' : color;
-  const bg = disabled ? '#f8fafc' : hov ? colorHover : '#ffffff';
-  return (
-    <button
-      onClick={onClick}
-      disabled={disabled}
-      title={title}
-      onMouseEnter={() => setHov(true)}
-      onMouseLeave={() => setHov(false)}
-      style={{
-        height: 34, padding: '0 12px', border: `1px solid ${borderColor}`, borderRadius: 6,
-        background: bg, color: textColor, fontSize: 13, fontWeight: 600,
-        cursor: disabled ? 'not-allowed' : 'pointer',
-        display: 'flex', alignItems: 'center', gap: 5,
-        whiteSpace: 'nowrap', transition: 'background 0.15s', flexShrink: 0,
-      }}
-    >
-      <span style={loading ? { animation: 'spin 0.9s linear infinite', display: 'flex' } : undefined}>
-        {icon}
-      </span>
-      {loading ? loadingLabel : label}
-    </button>
-  );
-};
-
 interface PillBtnProps {
   onClick: () => void;
   title: string;
@@ -1091,11 +1046,6 @@ const PillBtn: React.FC<PillBtnProps> = ({ onClick, title, children, active, spi
 
 // ── SVG icons ─────────────────────────────────────────────────────────────────
 
-const ChevronLeft = () => (
-  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-    <polyline points="15 18 9 12 15 6" />
-  </svg>
-);
 const RefreshIcon = () => (
   <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
     <polyline points="23 4 23 10 17 10" /><polyline points="1 20 1 14 7 14" />
@@ -1167,10 +1117,4 @@ const SaveIcon = () => (
     <rect x="7" y="13" width="10" height="8" />
   </svg>
 );
-const LayersIcon = () => (
-  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
-    <polygon points="12 2 2 7 12 12 22 7 12 2" />
-    <polyline points="2 17 12 22 22 17" />
-    <polyline points="2 12 12 17 22 12" />
-  </svg>
-);
+

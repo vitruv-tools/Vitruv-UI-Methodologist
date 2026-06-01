@@ -25,7 +25,7 @@ interface EcoreFileBoxData {
   createdAt?: string;
 }
 
-type HandlePosition = 'top' | 'bottom' | 'left' | 'right';
+
 
 // ── domain → card color ───────────────────────────────────────────────────────
 
@@ -62,53 +62,6 @@ export function darken(hex: string, amount = 30): string {
 
 const removeExt = (name: string) => name.replace(/\.ecore$/i, '');
 
-const formatDate = (s: string) => {
-  try { return new Date(s).toLocaleDateString('de-DE'); } catch { return s; }
-};
-
-// ── ModalContent ──────────────────────────────────────────────────────────────
-
-const ModalContent: React.FC<{
-  fileName: string; content: string; title: string; createdAt?: string; onClose: () => void;
-}> = ({ fileName, content, title, createdAt, onClose }) => (
-  <dialog
-    open
-    onClose={onClose}
-    onCancel={onClose}
-    style={{
-      position: 'fixed', inset: 0, width: '100%', height: '100%',
-      background: 'rgba(0,0,0,0.4)', display: 'flex', alignItems: 'center',
-      justifyContent: 'center', zIndex: 1000, backdropFilter: 'blur(4px)', border: 'none', padding: 0, margin: 0,
-    }}
-  >
-    <button type="button" aria-hidden tabIndex={-1} onClick={onClose}
-      style={{ position: 'absolute', inset: 0, border: 'none', background: 'transparent', cursor: 'default', width: '100%', height: '100%' }}
-    />
-    <div style={{
-      position: 'relative', zIndex: 1, background: '#fff', borderRadius: 16, padding: 32,
-      maxWidth: 600, width: '90%', maxHeight: '80vh', overflow: 'auto',
-      boxShadow: '0 20px 60px rgba(0,0,0,0.15)',
-    }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20, borderBottom: '1px solid #e2e8f0', paddingBottom: 16 }}>
-        <h2 style={{ margin: 0, fontSize: 20, fontWeight: 700, color: '#0f172a' }}>
-          {removeExt(fileName)} – {title}
-        </h2>
-        <button onClick={onClose} style={{ border: 'none', background: '#f1f5f9', borderRadius: 8, width: 32, height: 32, cursor: 'pointer', fontSize: 16, color: '#64748b' }}>
-          ×
-        </button>
-      </div>
-      <div style={{ fontSize: 14, color: '#475569', lineHeight: 1.8, whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
-        {content}
-      </div>
-      {createdAt && (
-        <div style={{ marginTop: 20, paddingTop: 16, borderTop: '1px solid #e2e8f0', fontSize: 12, color: '#94a3b8' }}>
-          Created: {formatDate(createdAt)}
-        </div>
-      )}
-    </div>
-  </dialog>
-);
-
 // ── EcoreFileBox ──────────────────────────────────────────────────────────────
 
 export const EcoreFileBox: React.FC<NodeProps<EcoreFileBoxData>> = ({ id, data, selected = false }) => {
@@ -120,7 +73,7 @@ export const EcoreFileBox: React.FC<NodeProps<EcoreFileBoxData>> = ({ id, data, 
 
   const {
     fileName, fileContent, onExpand, onSelect, onRequestDelete, onRename,
-    onConnectionStart, isExpanded = false, isConnectionActive = false,
+    onConnectionStart, isConnectionActive = false,
     description, keywords, createdAt, domain, onShowDetails, metaModelId,
     isReactionSource = false,
   } = data;

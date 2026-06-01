@@ -1,5 +1,5 @@
 import React, { useState, useRef, useCallback, useEffect, forwardRef, useImperativeHandle } from 'react';
-import { ecoreToUml, UMLAttribute, UMLClass, UMLRelType } from '../../utils/ecoreToUml';
+import { ecoreToUml, UMLAttribute, UMLRelType } from '../../utils/ecoreToUml';
 
 // ── constants ────────────────────────────────────────────────────────────────
 
@@ -78,6 +78,20 @@ export const UMLDiagram = forwardRef<UMLDiagramHandle, UMLDiagramProps>(({ ecore
   const viewRef = useRef({ x: 16, y: 16, scale: 1 });
   const containerRef = useRef<HTMLDivElement>(null);
 
+  const applyZoom = useCallback((factor: number) => {
+    const el = containerRef.current;
+    if (!el) return;
+    const { x, y, scale } = viewRef.current;
+    const cx = el.clientWidth / 2;
+    const cy = el.clientHeight / 2;
+    const ns = Math.max(0.12, Math.min(5, scale * factor));
+    const ratio = ns / scale;
+    const nx = cx - ratio * (cx - x);
+    const ny = cy - ratio * (cy - y);
+    viewRef.current = { x: nx, y: ny, scale: ns };
+    setVx(nx); setVy(ny); setVscale(ns);
+  }, []);
+
   // ── imperative zoom controls ───────────────────────────────────────────────
   useImperativeHandle(ref, () => ({
     zoomIn: () => applyZoom(1.3),
@@ -103,21 +117,7 @@ export const UMLDiagram = forwardRef<UMLDiagramHandle, UMLDiagramProps>(({ ecore
       viewRef.current = { x: nx, y: ny, scale };
       setVx(nx); setVy(ny); setVscale(scale);
     },
-  }), [classes]);
-
-  const applyZoom = useCallback((factor: number) => {
-    const el = containerRef.current;
-    if (!el) return;
-    const { x, y, scale } = viewRef.current;
-    const cx = el.clientWidth / 2;
-    const cy = el.clientHeight / 2;
-    const ns = Math.max(0.12, Math.min(5, scale * factor));
-    const ratio = ns / scale;
-    const nx = cx - ratio * (cx - x);
-    const ny = cy - ratio * (cy - y);
-    viewRef.current = { x: nx, y: ny, scale: ns };
-    setVx(nx); setVy(ny); setVscale(ns);
-  }, []);
+  }), [applyZoom, classes]);
 
   useEffect(() => { viewRef.current = { x: vx, y: vy, scale: vscale }; }, [vx, vy, vscale]);
 
