@@ -320,17 +320,20 @@ describe('SignIn – Fast Login button', () => {
       />,
     );
 
-  it('renders the Fast Login button', () => {
+  it('renders the KIT Fast Login button', () => {
     renderFastLoginSignIn();
     expect(
-      screen.getByRole('button', { name: /Fast Login \(KIT\/FeLS\)/i }),
+      screen.getByRole('button', { name: /Log in with KIT account/i }),
     ).toBeInTheDocument();
+    expect(
+      screen.queryByRole('button', { name: /Log in with FeLS account/i }),
+    ).not.toBeInTheDocument();
   });
 
   it('calls getFastLoginAuthorizationUrl and redirects on click', async () => {
     renderFastLoginSignIn();
     await userEvent.click(
-      screen.getByRole('button', { name: /Fast Login \(KIT\/FeLS\)/i }),
+      screen.getByRole('button', { name: /Log in with KIT account/i }),
     );
     expect(fastLoginSpy).toHaveBeenCalled();
     expect(assignMock).toHaveBeenCalledWith('https://keycloak.example.com/auth?code');
@@ -342,7 +345,7 @@ describe('SignIn – Fast Login button', () => {
     });
     renderFastLoginSignIn();
     await userEvent.click(
-      screen.getByRole('button', { name: /Fast Login \(KIT\/FeLS\)/i }),
+      screen.getByRole('button', { name: /Log in with KIT account/i }),
     );
     expect(await screen.findByText(/Config error/i)).toBeInTheDocument();
   });

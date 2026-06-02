@@ -6,6 +6,7 @@ import {
   getSavedFastLoginRedirectUri,
   FAST_LOGIN_REDIRECT_STORAGE_KEY,
   getFastLoginRedirectUri,
+  type FastLoginIdp,
 } from '../config/fastLogin';
 
 export interface AuthResponse {
@@ -300,8 +301,8 @@ export class AuthService {
     return getFastLoginRedirectUri();
   }
 
-  static getFastLoginAuthorizationUrl(): string {
-    return buildFastLoginAuthorizationUrl();
+  static getFastLoginAuthorizationUrl(idpHint?: FastLoginIdp): string {
+    return buildFastLoginAuthorizationUrl(idpHint);
   }
 
   static async exchangeFastLoginCode(code: string): Promise<AuthResponse> {
