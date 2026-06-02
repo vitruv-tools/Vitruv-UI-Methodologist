@@ -210,7 +210,7 @@ export const AppSidebar: React.FC<AppSidebarProps> = ({
     }}>
       {/* Sidebar background image */}
       <img
-        src="/assets/sidebar-bg - Kopie.png"
+        src="/assets/sidebar-bg.png"
         alt=""
         aria-hidden
         style={{

@@ -25,8 +25,9 @@ const AUTH_STYLES = `
     object-fit: cover;
     z-index: 1;
     pointer-events: none;
-    filter: blur(3px);
-    transform: scale(1.12) translateY(32px);
+    filter: blur(2px);
+    transform: scale(1.05);
+    transform-origin: bottom center;
   }
 
   .auth-left-image-area {
@@ -393,7 +394,7 @@ export function AuthLayout({ children }: Readonly<AuthLayoutProps>) {
 
       {/* Background video */}
       <video className="auth-bg-video" autoPlay loop muted playsInline>
-        <source src={`${process.env.PUBLIC_URL}/assets/Video Project 6.mp4`} type="video/mp4" />
+        <source src={`${process.env.PUBLIC_URL}/assets/signInBackground.mp4`} type="video/mp4" />
       </video>
 
       {/* Left decorative image */}
