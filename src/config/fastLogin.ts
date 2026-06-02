@@ -2,7 +2,13 @@ import { config } from './environment';
 
 const REALM = 'methodologist';
 const CLIENT_ID = 'normal-customer-mobile-app';
-const IDP_HINT = 'kit';
+
+export const FAST_LOGIN_IDP = {
+  KIT: 'kit',
+  FELS: 'fels',
+} as const;
+
+export type FastLoginIdp = (typeof FAST_LOGIN_IDP)[keyof typeof FAST_LOGIN_IDP];
 export const FAST_LOGIN_REDIRECT_STORAGE_KEY = 'fast_login_redirect_uri';
 
 /** Frontend route that receives the OAuth authorization code from Keycloak. */
@@ -49,7 +55,9 @@ export function getSavedFastLoginRedirectUri(): string | null {
   }
 }
 
-export function getFastLoginAuthorizationUrl(): string {
+export function getFastLoginAuthorizationUrl(
+  idpHint: FastLoginIdp = FAST_LOGIN_IDP.KIT,
+): string {
   const baseUrl = getKeycloakBaseUrl();
   const redirectUri = getFastLoginRedirectUri();
   saveFastLoginRedirectUri(redirectUri);
@@ -59,7 +67,7 @@ export function getFastLoginAuthorizationUrl(): string {
     response_type: 'code',
     scope: 'openid',
     redirect_uri: redirectUri,
-    kc_idp_hint: IDP_HINT,
+    kc_idp_hint: idpHint,
   });
 
   const url = `${baseUrl}/auth/realms/${REALM}/protocol/openid-connect/auth?${params.toString()}`;
@@ -68,6 +76,7 @@ export function getFastLoginAuthorizationUrl(): string {
     redirectUri,
     realm: REALM,
     clientId: CLIENT_ID,
+    idpHint,
   });
   return url;
 }
@@ -82,5 +91,5 @@ export function getFastLoginTokenUrl(): string {
 export const fastLoginConstants = {
   realm: REALM,
   clientId: CLIENT_ID,
-  idpHint: IDP_HINT,
+  idpHints: FAST_LOGIN_IDP,
 } as const;

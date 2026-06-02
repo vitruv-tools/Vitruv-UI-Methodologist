@@ -182,28 +182,96 @@ const AUTH_STYLES = `
 
   .mock-forgot-link:hover { color: #1f9f92; }
 
-  .mock-submit-button {
+  .mock-action-button {
     width: 100%;
-    padding: 14px;
+    min-height: 48px;
+    padding: 12px 16px;
     border: none;
-    border-radius: 30px;
-    background: linear-gradient(90deg, #1f9f92 0%, #037368 100%);
-    color: white;
+    border-radius: 4px;
+    background: #00876c;
+    color: #ffffff;
     font-size: 16px;
-    font-weight: 600;
+    font-weight: 700;
     cursor: pointer;
-    box-shadow: 0 4px 14px rgba(3, 115, 104, 0.3);
-    transition: opacity 0.2s;
+    transition: background-color 0.2s, opacity 0.2s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
     margin-top: 8px;
   }
 
-  .mock-submit-button:hover:not(:disabled) { opacity: 0.95; }
+  .mock-action-button:hover:not(:disabled) {
+    background: #00755d;
+  }
+
+  .mock-action-button:disabled {
+    opacity: 0.7;
+    cursor: not-allowed;
+  }
+
+  /* Legacy alias used by SignUp */
+  .mock-submit-button {
+    width: 100%;
+    min-height: 48px;
+    padding: 12px 16px;
+    border: none;
+    border-radius: 4px;
+    background: #00876c;
+    color: #ffffff;
+    font-size: 16px;
+    font-weight: 700;
+    cursor: pointer;
+    transition: background-color 0.2s, opacity 0.2s;
+    margin-top: 8px;
+  }
+
+  .mock-submit-button:hover:not(:disabled) { background: #00755d; }
 
   .mock-submit-button:disabled {
-    background: #cbd5e1;
-    color: #94a3b8;
-    box-shadow: none;
+    opacity: 0.7;
     cursor: not-allowed;
+  }
+
+  .mock-auth-divider {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin: 18px 0 14px;
+    color: #94a3b8;
+    font-size: 13px;
+    font-weight: 600;
+    text-transform: lowercase;
+  }
+
+  .mock-auth-divider::before,
+  .mock-auth-divider::after {
+    content: '';
+    flex: 1;
+    height: 1px;
+    background: #e2e8f0;
+  }
+
+  .mock-fast-login-button {
+    display: flex;
+    align-items: center;
+    padding: 13px 16px;
+    position: relative;
+  }
+
+  .mock-fast-login-icon {
+    flex-shrink: 0;
+    width: 24px;
+    height: 24px;
+    display: block;
+    object-fit: contain;
+  }
+
+  .mock-fast-login-label {
+    flex: 1;
+    text-align: center;
+    padding-right: 24px;
+    line-height: 1.2;
+    letter-spacing: 0.01em;
   }
 
   .mock-auth-footer {

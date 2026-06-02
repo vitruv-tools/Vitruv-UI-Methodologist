@@ -56,6 +56,11 @@ describe('fastLogin config', () => {
     expect(url.searchParams.get('redirect_uri')).toBeTruthy();
   });
 
+  it('uses the provided idp hint when building authorization URL', () => {
+    const url = new URL(getFastLoginAuthorizationUrl('fels'));
+    expect(url.searchParams.get('kc_idp_hint')).toBe('fels');
+  });
+
   it('saves redirect_uri to sessionStorage when building authorization URL', () => {
     getFastLoginAuthorizationUrl();
     expect(sessionStorage.getItem(FAST_LOGIN_REDIRECT_STORAGE_KEY)).toBeTruthy();

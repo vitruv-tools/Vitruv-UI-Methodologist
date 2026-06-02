@@ -3,6 +3,7 @@ import { AuthService, SignInCredentials } from '../../services/auth';
 import { useAuth } from '../../contexts/AuthContext';
 import { apiService } from '../../services/api';
 import { AuthLayout, AuthErrorBanner } from './AuthLayout';
+import { KitLogoIcon } from './KitLogoIcon';
 
 interface SignInProps {
   onSignInSuccess: (user: any) => void;
@@ -44,15 +45,43 @@ export function SignIn({ onSignInSuccess, onSwitchToSignUp }: Readonly<SignInPro
     return () => globalThis.removeEventListener('keydown', onKeyDown);
   }, [isForgotPasswordOpen, isSendingReset]);
 
+  // Browser autofill does not fire onChange — sync DOM values into state.
+  useEffect(() => {
+    const syncAutofill = () => {
+      const usernameEl = document.getElementById('username') as HTMLInputElement | null;
+      const passwordEl = document.getElementById('password') as HTMLInputElement | null;
+      const username = usernameEl?.value ?? '';
+      const password = passwordEl?.value ?? '';
+      if (!username && !password) return;
+      setCredentials(prev => ({
+        username: username || prev.username,
+        password: password || prev.password,
+      }));
+    };
+
+    syncAutofill();
+    const t1 = globalThis.setTimeout(syncAutofill, 100);
+    const t2 = globalThis.setTimeout(syncAutofill, 500);
+    return () => {
+      globalThis.clearTimeout(t1);
+      globalThis.clearTimeout(t2);
+    };
+  }, []);
+
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
     setCredentials(prev => ({ ...prev, [name]: value }));
     if (error) setError(null);
   };
 
+  const syncFieldValue = (e: React.FormEvent<HTMLInputElement>) => {
+    const { name, value } = e.currentTarget;
+    setCredentials(prev => ({ ...prev, [name]: value }));
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!credentials.username || !credentials.password) {
+    if (!credentials.username.trim() || !credentials.password) {
       setError('Please fill in all fields');
       return;
     }
@@ -120,6 +149,8 @@ export function SignIn({ onSignInSuccess, onSwitchToSignUp }: Readonly<SignInPro
             type="text"
             value={credentials.username}
             onChange={handleInputChange}
+            onInput={syncFieldValue}
+            autoComplete="username"
             placeholder="Enter your username or email"
             disabled={isLoading}
             required
@@ -134,6 +165,8 @@ export function SignIn({ onSignInSuccess, onSwitchToSignUp }: Readonly<SignInPro
             type="password"
             value={credentials.password}
             onChange={handleInputChange}
+            onInput={syncFieldValue}
+            autoComplete="current-password"
             placeholder="Enter your password"
             disabled={isLoading}
             required
@@ -162,25 +195,26 @@ export function SignIn({ onSignInSuccess, onSwitchToSignUp }: Readonly<SignInPro
 
         <button
           type="submit"
-          className="mock-submit-button"
-          disabled={isLoading || !credentials.username || !credentials.password}
+          className="mock-action-button"
+          disabled={isLoading}
         >
           {isLoading ? 'Signing In...' : 'Sign In'}
         </button>
       </form>
 
-      {/* Fast Login */}
-      <div className="mock-auth-footer" style={{ marginTop: '8px' }}>
-        <button
-          type="button"
-          className="mock-submit-button"
-          onClick={handleFastLogin}
-          disabled={isLoading}
-          style={{ width: '100%' }}
-        >
-          Fast Login (KIT/FeLS)
-        </button>
+      <div className="mock-auth-divider">
+        <span>or</span>
       </div>
+
+      <button
+        type="button"
+        className="mock-action-button mock-fast-login-button"
+        onClick={handleFastLogin}
+        disabled={isLoading}
+      >
+        <KitLogoIcon className="mock-fast-login-icon" />
+        <span className="mock-fast-login-label">Log in with KIT account</span>
+      </button>
 
       {/* Switch to Sign Up */}
       <div className="mock-auth-footer">
