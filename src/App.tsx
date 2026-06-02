@@ -2,15 +2,12 @@ import React from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthPage, FastLoginCallback, KeycloakRedirect } from './components/auth';
 import { HomePage } from './pages/HomePage';
-import { ProjectPage } from './pages/ProjectPage';
-import { EditorTest } from './pages/EditorTest';  // <- NEU
+import { EditorTest } from './pages/EditorTest';
 import { OtpVerificationPage } from './pages/OtpVerificationPage';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
-import { apiService } from './services/api';
-import { exportFlowData } from './utils';
-import { Node, Edge } from 'reactflow';
+// useAuth is used in ProtectedRoute
+import { CanvasPage } from './pages/CanvasPage';
 import './App.css';
-import { SidebarTabs, MainLayout } from './components';
 
 function ProtectedRoute({ children }: Readonly<{ children: React.ReactNode }>) {
   const { isAuthenticated, isLoading, user } = useAuth();
@@ -42,58 +39,6 @@ function ProtectedRoute({ children }: Readonly<{ children: React.ReactNode }>) {
   return <>{children}</>;
 }
 
-function AppContent() {
-  const { user, signOut } = useAuth();
-
-  const handleDeploy = async (nodes: Node[], edges: Edge[]) => {
-    try {
-      const flowData = exportFlowData(nodes, edges);
-      const result = await apiService.deployFlow(flowData);
-
-      if (result.success) {
-        alert('Flow deployed successfully!');
-      } else {
-        alert(`Deployment failed: ${result.message}`);
-      }
-    } catch (error) {
-      console.error('Deployment error:', error);
-      alert('Deployment failed. Check console for details.');
-    }
-  };
-
-  const handleSave = () => {
-    console.log('Save functionality to be implemented');
-  };
-
-  const handleLoad = () => {
-    console.log('Load functionality to be implemented');
-  };
-
-  const handleNew = () => {
-    console.log('New flow functionality to be implemented');
-  };
-
-  const handleLogout = async () => {
-    try {
-      await signOut();
-    } catch (error) {
-      console.error('Logout error:', error);
-    }
-  };
-
-  return (
-    <MainLayout
-      onDeploy={handleDeploy}
-      onSave={handleSave}
-      onLoad={handleLoad}
-      onNew={handleNew}
-      user={user}
-      onLogout={handleLogout}
-      leftSidebar={<SidebarTabs width={350} />}
-      leftSidebarWidth={350}
-    />
-  );
-}
 
 function App() {
   return (
@@ -109,16 +54,13 @@ function App() {
               <HomePage />
             </ProtectedRoute>
           } />
-          <Route path="/mml" element={
+          <Route path="/canvas/:id" element={
             <ProtectedRoute>
-              <AppContent />
+              <CanvasPage />
             </ProtectedRoute>
           } />
-          <Route path="/project" element={
-            <ProtectedRoute>
-              <ProjectPage />
-            </ProtectedRoute>
-          } />
+          <Route path="/mml" element={<Navigate to="/" replace />} />
+          <Route path="/project" element={<Navigate to="/" replace />} />
           {/*Editor Test Route*/}
           <Route path="/editor-test" element={<EditorTest />} />
         </Routes>

@@ -1,8 +1,8 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { CreateModelModal } from './CreateModelModal';
 import { KeywordTagsInput } from './KeywordTagsInput';
 import { apiService } from '../../services/api';
-import { useMetaModelExportContextMenu } from '../../hooks/useMetaModelExportContextMenu';
+import { UMLDiagram, UMLDiagramHandle } from '../canvas/UMLDiagram';
 
 interface ToolsPanelProps {
   onEcoreFileUpload?: (fileContent: string, meta?: { fileName?: string; uploadId?: string; description?: string; keywords?: string; domain?: string; createdAt?: string }) => void;
@@ -386,13 +386,34 @@ export const ToolsPanel: React.FC<ToolsPanelProps> = ({ onEcoreFileUpload, onEco
     !editFormData.domain.trim() ||
     editFormData.keywords.length === 0;
 
-  const { handleContextMenu, contextMenu } = useMetaModelExportContextMenu();
+  // UML preview state for model detail modal
+  const diagramRef = useRef<UMLDiagramHandle>(null);
+  const [umlContent, setUmlContent] = useState<string | null>(null);
+  const [umlFetching, setUmlFetching] = useState(false);
+  const [umlError, setUmlError] = useState(false);
+
+  useEffect(() => {
+    if (!viewModel?.ecoreFileId) { setUmlContent(null); setUmlError(false); return; }
+    setUmlFetching(true); setUmlContent(null); setUmlError(false);
+    apiService.getFile(viewModel.ecoreFileId)
+      .then(c => setUmlContent(c))
+      .catch(() => setUmlError(true))
+      .finally(() => setUmlFetching(false));
+  }, [viewModel?.ecoreFileId]);
+
+  useEffect(() => {
+    if (!umlContent) return;
+    const t = setTimeout(() => diagramRef.current?.fitToView(), 150);
+    return () => clearTimeout(t);
+  }, [umlContent]);
 
   const resetMetaModelModalState = () => {
     setViewModel(null);
     setMetaModelModalTab('details');
     setEditError('');
     setEditSuccess('');
+    setUmlContent(null);
+    setUmlError(false);
   };
 
   const handleSearchKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
@@ -1135,7 +1156,6 @@ export const ToolsPanel: React.FC<ToolsPanelProps> = ({ onEcoreFileUpload, onEco
             key={model.id}
             aria-label={`Meta model: ${model.name}`}
             style={fileCardStyle}
-            onContextMenu={(e) => handleContextMenu(e, model)}
             onMouseEnter={(e) => Object.assign(e.currentTarget.style, fileCardHoverStyle)}
             onMouseLeave={(e) => Object.assign(e.currentTarget.style, fileCardStyle)}
           >
@@ -1262,617 +1282,180 @@ export const ToolsPanel: React.FC<ToolsPanelProps> = ({ onEcoreFileUpload, onEco
             <div
                 style={{
                   position: 'relative',
-                  width: 900,
-                  maxWidth: '95vw',
-                  maxHeight: '90vh',
+                  width: 'min(800px, 92vw)',
+                  height: 'min(640px, 88vh)',
                   background: '#ffffff',
-                  borderRadius: 12,
-                  boxShadow: '0 20px 60px rgba(4, 148, 132, 0.15), 0 10px 30px rgba(0, 0, 0, 0.1)',
+                  borderRadius: 10,
+                  boxShadow: '0 24px 64px rgba(0,0,0,0.22), 0 4px 16px rgba(0,0,0,0.10)',
                   overflow: 'hidden',
                   display: 'flex',
                   flexDirection: 'column',
-                  fontFamily: 'Georgia, serif',
-                  border: '1px solid #e3f2fd',
+                  fontFamily: 'ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, sans-serif',
+                  border: '1px solid #e2e8f0',
                 }}
             >
-              <div style={{ 
-                padding: '20px 24px', 
-                borderBottom: '2px solid #049484', 
-                display: 'flex', 
-                alignItems: 'center', 
-                justifyContent: 'space-between',
-                background: 'linear-gradient(135deg, #f8fcff 0%, #e8f4f8 100%)'
-              }}>
-                <h3 id="dialog-title" style={{ 
-                  margin: 0, 
-                  fontSize: 20, 
-                  fontWeight: 700, 
-                  color: '#2c3e50',
-                  fontFamily: 'Georgia, serif',
-                  letterSpacing: '0.01em'
-                }}>
-                  {viewModel.name ?? 'Meta Model Details'}
-                </h3>
-
-                <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+              {/* ── Header ── */}
+              <div style={{ padding: '14px 20px', background: '#ffffff', borderBottom: '1px solid #f1f5f9', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0, overflow: 'hidden' }}>
+                  <svg width="28" height="28" viewBox="0 0 32 32" fill="none" style={{ flexShrink: 0 }}>
+                    <path d="M16 5L27 11V21L16 27L5 21V11L16 5Z" stroke="#049484" strokeWidth="1.6" fill="#04948422" strokeLinejoin="round" />
+                    <path d="M16 5V27" stroke="#049484" strokeWidth="1.3" strokeLinecap="round" />
+                    <path d="M5 11L27 11" stroke="#049484" strokeWidth="1.3" strokeLinecap="round" />
+                    <path d="M16 5L5 11L16 17L27 11L16 5Z" stroke="#049484" strokeWidth="1.3" fill="#04948418" strokeLinejoin="round" />
+                  </svg>
+                  <div style={{ fontSize: 16, fontWeight: 700, color: '#0f172a', letterSpacing: '-0.01em', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                    Modell-Vorschau: <span style={{ color: '#374151', fontWeight: 600 }}>{viewModel.name}</span>
+                  </div>
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
+                  {metaModelModalTab === 'details' && (
+                    <button
+                      onClick={() => { setMetaModelModalTab('edit'); setEditError(''); setEditSuccess(''); }}
+                      style={{ height: 30, padding: '0 12px', border: '1px solid #e2e8f0', borderRadius: 7, background: '#f8fafc', color: '#374151', fontSize: 12, fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 5, transition: 'all 0.12s' }}
+                      onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.background = '#0B1720'; (e.currentTarget as HTMLButtonElement).style.color = '#fff'; (e.currentTarget as HTMLButtonElement).style.borderColor = '#0B1720'; }}
+                      onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.background = '#f8fafc'; (e.currentTarget as HTMLButtonElement).style.color = '#374151'; (e.currentTarget as HTMLButtonElement).style.borderColor = '#e2e8f0'; }}
+                    >
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+                        <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
+                      </svg>
+                      Edit
+                    </button>
+                  )}
                   <button
-                      onClick={() => {
-                        setMetaModelModalTab('details');
-                        setEditError('');
-                        setEditSuccess('');
-                      }}
-                      style={{
-                        border: metaModelModalTab === 'details' ? 'none' : '1px solid #dee2e6',
-                        background: metaModelModalTab === 'details' ? '#049484' : '#fff',
-                        color: metaModelModalTab === 'details' ? '#fff' : '#495057',
-                        borderRadius: 8,
-                        padding: '8px 16px',
-                        cursor: 'pointer',
-                        fontWeight: 600,
-                        fontSize: 14,
-                        fontFamily: 'Georgia, serif',
-                        transition: 'all 0.2s ease',
-                        boxShadow: metaModelModalTab === 'details' ? '0 2px 8px rgba(4, 148, 132, 0.3)' : 'none',
-                      }}
-                  >
-                    Details
-                  </button>
-                  
-                  <button
-                      onClick={() => {
-                        setMetaModelModalTab('edit');
-                        setEditError('');
-                        setEditSuccess('');
-                      }}
-                      style={{
-                        border: metaModelModalTab === 'edit' ? 'none' : '1px solid #dee2e6',
-                        background: metaModelModalTab === 'edit' ? '#049484' : '#fff',
-                        color: metaModelModalTab === 'edit' ? '#fff' : '#495057',
-                        borderRadius: 8,
-                        padding: '8px 16px',
-                        cursor: 'pointer',
-                        fontWeight: 600,
-                        fontSize: 14,
-                        fontFamily: 'Georgia, serif',
-                        transition: 'all 0.2s ease',
-                        boxShadow: metaModelModalTab === 'edit' ? '0 2px 8px rgba(4, 148, 132, 0.3)' : 'none',
-                      }}
-                  >
-                    Edit
-                  </button>
-
-                  <button 
-                    aria-label="Close" 
-                    style={{ 
-                      border: 'none', 
-                      background: 'transparent', 
-                      fontSize: 28, 
-                      cursor: 'pointer', 
-                      color: '#999',
-                      padding: '4px 8px',
-                      lineHeight: 1,
-                      transition: 'color 0.2s ease',
-                    }} 
-                    onClick={() => {
-                      resetMetaModelModalState();
-                    }}
-                    onMouseEnter={(e) => e.currentTarget.style.color = '#333'}
-                    onMouseLeave={(e) => e.currentTarget.style.color = '#999'}
-                  >
-                    ×
-                  </button>
+                    onClick={() => resetMetaModelModalState()}
+                    style={{ border: 'none', background: 'transparent', cursor: 'pointer', color: '#94a3b8', fontSize: 16, width: 30, height: 30, borderRadius: 6, display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 0.1s' }}
+                    onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.background = '#f1f5f9'; (e.currentTarget as HTMLButtonElement).style.color = '#374151'; }}
+                    onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.background = 'transparent'; (e.currentTarget as HTMLButtonElement).style.color = '#94a3b8'; }}
+                  >✕</button>
                 </div>
               </div>
 
-              <div style={{ padding: 16, overflowY: 'auto', flex: 1 }}>
-                {metaModelModalTab === 'edit' && (
-                    <div style={{ fontFamily: 'Georgia, serif' }}>
-                      {editError && (
-                        <div style={{
-                          marginBottom: 12,
-                          padding: 12,
-                          border: '2px solid #f5c6cb',
-                          background: 'linear-gradient(135deg, #fff5f5 0%, #fee 100%)',
-                          color: '#991b1b',
-                          borderRadius: 8,
-                          fontSize: 13,
-                          fontFamily: 'Georgia, serif',
-                          display: 'flex',
-                          alignItems: 'center',
-                          gap: 10,
-                          boxShadow: '0 2px 8px rgba(220, 38, 38, 0.1)',
-                        }}>
-                          <span style={{ fontSize: 18 }}>⚠️</span>
-                          <span>{editError}</span>
-                        </div>
-                      )}
-                      
-                      {editSuccess && (
-                        <div style={{
-                          marginBottom: 12,
-                          padding: 12,
-                          border: '2px solid #86efac',
-                          background: 'linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%)',
-                          color: '#14532d',
-                          borderRadius: 8,
-                          fontSize: 13,
-                          fontFamily: 'Georgia, serif',
-                          display: 'flex',
-                          alignItems: 'center',
-                          gap: 10,
-                          boxShadow: '0 2px 8px rgba(34, 197, 94, 0.1)',
-                        }}>
-                          <span style={{ fontSize: 18 }}>✓</span>
-                          <span>{editSuccess}</span>
-                        </div>
-                      )}
+              {/* ── Two-column body ── */}
+              <style>{`@keyframes tpspin{0%{transform:rotate(0deg)}100%{transform:rotate(360deg)}}`}</style>
+              <div style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
 
-                      <div style={{ marginBottom: 14 }}>
-                        <label htmlFor="metamodel-name" style={{ 
-                          display: 'block', 
-                          fontSize: 12, 
-                          fontWeight: 700, 
-                          color: '#495057', 
-                          marginBottom: 6,
-                          textTransform: 'uppercase',
-                          letterSpacing: '0.5px',
-                          fontFamily: 'Georgia, serif'
-                        }}>
-                          Name *
-                        </label>
-                        <input
-                          id="metamodel-name"
-                          type="text"
-                          value={editFormData.name}
-                          onChange={(e) => setEditFormData({ ...editFormData, name: e.target.value })}
-                          style={{
-                            width: '100%',
-                            padding: '10px 12px',
-                            border: '2px solid #e9ecef',
-                            borderRadius: 6,
-                            fontSize: 14,
-                            boxSizing: 'border-box',
-                            fontFamily: 'Georgia, serif',
-                            transition: 'all 0.2s ease',
-                          }}
-                          onFocus={(e) => {
-                            e.currentTarget.style.borderColor = '#049484';
-                            e.currentTarget.style.boxShadow = '0 0 0 3px rgba(4, 148, 132, 0.1)';
-                          }}
-                          onBlur={(e) => {
-                            e.currentTarget.style.borderColor = '#e9ecef';
-                            e.currentTarget.style.boxShadow = 'none';
-                          }}
-                          required
-                        />
+                {/* Left — fields */}
+                <div style={{ width: 280, flexShrink: 0, borderRight: '1px solid #f1f5f9', overflowY: 'auto', padding: '20px 22px', display: 'flex', flexDirection: 'column', gap: 20 }}>
+                  {metaModelModalTab === 'edit' ? (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 14, flex: 1 }}>
+                      {editError && <div style={{ padding: '8px 12px', background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 8, fontSize: 12, color: '#dc2626' }}>{editError}</div>}
+                      {editSuccess && <div style={{ padding: '8px 12px', background: '#f0fdf4', border: '1px solid #86efac', borderRadius: 8, fontSize: 12, color: '#15803d' }}>{editSuccess}</div>}
+                      <div>
+                        <label style={{ display: 'block', fontSize: 11, fontWeight: 700, color: '#374151', marginBottom: 5 }}>Name</label>
+                        <input value={editFormData.name} onChange={e => setEditFormData({ ...editFormData, name: e.target.value })}
+                          style={{ width: '100%', padding: '9px 12px', border: '1.5px solid #e2e8f0', borderRadius: 8, fontSize: 13, color: '#0f172a', background: '#f8fafc', boxSizing: 'border-box', outline: 'none' }}
+                          onFocus={e => (e.currentTarget.style.borderColor = '#049484')} onBlur={e => (e.currentTarget.style.borderColor = '#e2e8f0')} />
                       </div>
-
-                      <div style={{ marginBottom: 14 }}>
-                        <label htmlFor="metamodel-description" style={{ 
-                          display: 'block', 
-                          fontSize: 12, 
-                          fontWeight: 700, 
-                          color: '#495057', 
-                          marginBottom: 6,
-                          textTransform: 'uppercase',
-                          letterSpacing: '0.5px',
-                          fontFamily: 'Georgia, serif'
-                        }}>
-                          Description *
-                        </label>
-                        <textarea
-                          id="metamodel-description"
-                          value={editFormData.description}
-                          onChange={(e) => setEditFormData({ ...editFormData, description: e.target.value })}
-                          style={{
-                            width: '100%',
-                            padding: '10px 12px',
-                            border: '2px solid #e9ecef',
-                            borderRadius: 6,
-                            fontSize: 14,
-                            minHeight: 80,
-                            resize: 'vertical',
-                            boxSizing: 'border-box',
-                            fontFamily: 'Georgia, serif',
-                            lineHeight: 1.5,
-                            transition: 'all 0.2s ease',
-                          }}
-                          onFocus={(e) => {
-                            e.currentTarget.style.borderColor = '#049484';
-                            e.currentTarget.style.boxShadow = '0 0 0 3px rgba(4, 148, 132, 0.1)';
-                          }}
-                          onBlur={(e) => {
-                            e.currentTarget.style.borderColor = '#e9ecef';
-                            e.currentTarget.style.boxShadow = 'none';
-                          }}
-                          required
-                        />
+                      <div>
+                        <label style={{ display: 'block', fontSize: 11, fontWeight: 700, color: '#374151', marginBottom: 5 }}>Description</label>
+                        <textarea value={editFormData.description} onChange={e => setEditFormData({ ...editFormData, description: e.target.value })} rows={3}
+                          style={{ width: '100%', padding: '9px 12px', border: '1.5px solid #e2e8f0', borderRadius: 8, fontSize: 13, color: '#0f172a', background: '#f8fafc', boxSizing: 'border-box', outline: 'none', resize: 'vertical', minHeight: 72 }}
+                          onFocus={e => (e.currentTarget.style.borderColor = '#049484')} onBlur={e => (e.currentTarget.style.borderColor = '#e2e8f0')} />
                       </div>
-
-                      <div style={{ marginBottom: 14 }}>
-                        <label htmlFor="metamodel-domain" style={{ 
-                          display: 'block', 
-                          fontSize: 12, 
-                          fontWeight: 700, 
-                          color: '#495057', 
-                          marginBottom: 6,
-                          textTransform: 'uppercase',
-                          letterSpacing: '0.5px',
-                          fontFamily: 'Georgia, serif'
-                        }}>
-                          Domain *
-                        </label>
-                        <input
-                          id="metamodel-domain"
-                          type="text"
-                          value={editFormData.domain}
-                          onChange={(e) => setEditFormData({ ...editFormData, domain: e.target.value })}
-                          style={{
-                            width: '100%',
-                            padding: '10px 12px',
-                            border: '2px solid #e9ecef',
-                            borderRadius: 6,
-                            fontSize: 14,
-                            boxSizing: 'border-box',
-                            fontFamily: 'Georgia, serif',
-                            transition: 'all 0.2s ease',
-                          }}
-                          onFocus={(e) => {
-                            e.currentTarget.style.borderColor = '#049484';
-                            e.currentTarget.style.boxShadow = '0 0 0 3px rgba(4, 148, 132, 0.1)';
-                          }}
-                          onBlur={(e) => {
-                            e.currentTarget.style.borderColor = '#e9ecef';
-                            e.currentTarget.style.boxShadow = 'none';
-                          }}
-                          required
-                        />
+                      <div>
+                        <label style={{ display: 'block', fontSize: 11, fontWeight: 700, color: '#374151', marginBottom: 5 }}>Domain</label>
+                        <input value={editFormData.domain} onChange={e => setEditFormData({ ...editFormData, domain: e.target.value })}
+                          style={{ width: '100%', padding: '9px 12px', border: '1.5px solid #e2e8f0', borderRadius: 8, fontSize: 13, color: '#0f172a', background: '#f8fafc', boxSizing: 'border-box', outline: 'none' }}
+                          onFocus={e => (e.currentTarget.style.borderColor = '#049484')} onBlur={e => (e.currentTarget.style.borderColor = '#e2e8f0')} />
                       </div>
-
-                      <div style={{ marginBottom: 14 }}>
-                        <label htmlFor="metamodel-keywords" style={{ 
-                          display: 'block', 
-                          fontSize: 12, 
-                          fontWeight: 700, 
-                          color: '#495057', 
-                          marginBottom: 6,
-                          textTransform: 'uppercase',
-                          letterSpacing: '0.5px',
-                          fontFamily: 'Georgia, serif'
-                        }}>
-                          Keywords *
-                        </label>
-                        <KeywordTagsInput
-                          id="metamodel-keywords"
-                          keywords={editFormData.keywords}
-                          onChange={(keywords) => setEditFormData({ ...editFormData, keywords })}
-                          placeholder="Type keywords separated by commas or press Enter..."
-                        />
+                      <div>
+                        <label style={{ display: 'block', fontSize: 11, fontWeight: 700, color: '#374151', marginBottom: 5 }}>Keywords</label>
+                        <KeywordTagsInput keywords={editFormData.keywords} onChange={keywords => setEditFormData({ ...editFormData, keywords })} />
+                      </div>
+                      <div style={{ marginTop: 'auto', paddingTop: 8, display: 'flex', gap: 8 }}>
+                        <button type="button" onClick={() => setMetaModelModalTab('details')}
+                          style={{ flex: 1, padding: '8px 0', border: '1px solid #e2e8f0', borderRadius: 8, background: '#fff', color: '#374151', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}
+                          onMouseEnter={e => (e.currentTarget.style.background = '#f8fafc')} onMouseLeave={e => (e.currentTarget.style.background = '#fff')}>
+                          Cancel
+                        </button>
+                        <button type="button" disabled={isEditSubmitDisabled} onClick={handleEditSubmit as any}
+                          style={{ flex: 1, padding: '8px 0', background: isEditSubmitDisabled ? '#94a3b8' : '#0B1720', color: '#fff', border: 'none', borderRadius: 8, fontSize: 12, fontWeight: 600, cursor: isEditSubmitDisabled ? 'not-allowed' : 'pointer' }}
+                          onMouseEnter={e => { if (!isEditSubmitDisabled) (e.currentTarget as HTMLButtonElement).style.background = '#1e293b'; }}
+                          onMouseLeave={e => { if (!isEditSubmitDisabled) (e.currentTarget as HTMLButtonElement).style.background = '#0B1720'; }}>
+                          {isEditLoading ? 'Saving…' : 'Save'}
+                        </button>
                       </div>
                     </div>
-                )}
-                {metaModelModalTab === 'details' && (
-                    <div style={{ fontFamily: 'Georgia, serif' }}>
-                      {/* Name Section */}
-                      <div style={{ 
-                        marginBottom: 12,
-                        padding: 12,
-                        background: '#f8f9fa',
-                        borderRadius: 6,
-                        border: '1px solid #e9ecef'
-                      }}>
-                        <div style={{ 
-                          fontSize: 12, 
-                          fontWeight: 700, 
-                          color: '#495057', 
-                          marginBottom: 6,
-                          textTransform: 'uppercase',
-                          letterSpacing: '0.5px',
-                          fontFamily: 'Georgia, serif'
-                        }}>
-                          Name
+                  ) : (
+                    <>
+                      <div>
+                        <div style={{ fontSize: 11, fontWeight: 700, color: '#374151', marginBottom: 5, letterSpacing: '0.01em' }}>Name</div>
+                        <div style={{ fontSize: 14, fontWeight: 600, color: '#0f172a', lineHeight: 1.4 }}>{viewModel.name}</div>
+                      </div>
+                      {viewModel.keyword?.length > 0 && (
+                        <div>
+                          <div style={{ fontSize: 11, fontWeight: 700, color: '#374151', marginBottom: 5, letterSpacing: '0.01em' }}>Keywords</div>
+                          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5 }}>
+                            {viewModel.keyword.map((kw: string) => (
+                              <span key={kw} style={{ padding: '3px 10px', borderRadius: 20, background: '#e0e7ff', color: '#4338ca', fontSize: 11, fontWeight: 600 }}>{kw}</span>
+                            ))}
+                          </div>
                         </div>
-                        <div style={{ 
-                          fontSize: 15, 
-                          color: '#212529', 
-                          fontWeight: 600,
-                          fontFamily: 'Georgia, serif'
-                        }}>
-                          {viewModel.name}
+                      )}
+                      <div style={{ flex: 1 }}>
+                        <div style={{ fontSize: 11, fontWeight: 700, color: '#374151', marginBottom: 5, letterSpacing: '0.01em' }}>Beschreibung</div>
+                        <div style={{ fontSize: 13, color: '#374151', lineHeight: 1.7 }}>
+                          {viewModel.description || <span style={{ color: '#cbd5e1' }}>—</span>}
                         </div>
                       </div>
-
-                      {/* Description Section */}
-                      <div style={{ 
-                        marginBottom: 12,
-                        padding: 12,
-                        background: '#f8f9fa',
-                        borderRadius: 6,
-                        border: '1px solid #e9ecef'
-                      }}>
-                        <div style={{ 
-                          fontSize: 12, 
-                          fontWeight: 700, 
-                          color: '#495057', 
-                          marginBottom: 6,
-                          textTransform: 'uppercase',
-                          letterSpacing: '0.5px',
-                          fontFamily: 'Georgia, serif'
-                        }}>
-                          Description
-                        </div>
-                        <div style={{ 
-                          fontSize: 14, 
-                          color: '#212529', 
-                          lineHeight: 1.5,
-                          fontFamily: 'Georgia, serif'
-                        }}>
-                          {viewModel.description || <span style={{ fontStyle: 'italic', color: '#6c757d' }}>No description provided</span>}
-                        </div>
-                      </div>
-
-                      {/* Domain & Keywords Grid */}
-                      <div style={{ 
-                        display: 'grid', 
-                        gridTemplateColumns: '1fr 1fr', 
-                        gap: 12,
-                        marginBottom: 12
-                      }}>
-                        {/* Domain */}
-                        <div style={{ 
-                          padding: 12,
-                          background: '#f8f9fa',
-                          borderRadius: 6,
-                          border: '1px solid #e9ecef'
-                        }}>
-                          <div style={{ 
-                            fontSize: 12, 
-                            fontWeight: 700, 
-                            color: '#495057', 
-                            marginBottom: 6,
-                            textTransform: 'uppercase',
-                            letterSpacing: '0.5px',
-                            fontFamily: 'Georgia, serif'
-                          }}>
-                            Domain
-                          </div>
-                          <div style={{ 
-                            fontSize: 14, 
-                            color: '#212529',
-                            fontFamily: 'Georgia, serif'
-                          }}>
-                            {viewModel.domain || '—'}
-                          </div>
-                        </div>
-
-                        {/* Keywords */}
-                        <div style={{ 
-                          padding: 12,
-                          background: '#f8f9fa',
-                          borderRadius: 6,
-                          border: '1px solid #e9ecef'
-                        }}>
-                          <div style={{ 
-                            fontSize: 12, 
-                            fontWeight: 700, 
-                            color: '#495057', 
-                            marginBottom: 6,
-                            textTransform: 'uppercase',
-                            letterSpacing: '0.5px',
-                            fontFamily: 'Georgia, serif'
-                          }}>
-                            Keywords
-                          </div>
-                          <div style={{
-                            fontSize: 14,
-                            fontFamily: 'Georgia, serif',
-                            display: 'flex',
-                            flexWrap: 'wrap',
-                            gap: 4,
-                            alignItems: 'center'
-                          }}>
-                            {viewModel.keyword && viewModel.keyword.length > 0 ? (
-                              viewModel.keyword.map((keyword: string, index: number) => {
-                                // Color palette for keywords
-                                const colors = [
-                                  '#d32f2f', // Dark Red
-                                  '#1976d2', // Dark Blue
-                                  '#388e3c', // Dark Green
-                                  '#f57c00', // Dark Orange
-                                  '#7b1fa2', // Dark Purple
-                                  '#00796b', // Dark Teal
-                                  '#c2185b', // Dark Pink
-                                  '#5d4037', // Dark Brown
-                                  '#303f9f', // Indigo
-                                  '#e64a19', // Deep Orange
-                                ];
-                                const color = colors[index % colors.length];
-                                
-                                return (
-                                  <React.Fragment key={keyword}>
-                                    <span style={{ color, fontWeight: 600 }}>
-                                      {keyword}
-                                    </span>
-                                    {index < viewModel.keyword.length - 1 && (
-                                      <span style={{ color: '#2c3e50' }}>,</span>
-                                    )}
-                                  </React.Fragment>
-                                );
-                              })
-                            ) : (
-                              <span style={{ color: '#2c3e50' }}>—</span>
-                            )}
-                          </div>
-                        </div>
-                      </div>
-
-                      {/* Timestamps Grid */}
-                      <div style={{ 
-                        display: 'grid', 
-                        gridTemplateColumns: '1fr 1fr', 
-                        gap: 12
-                      }}>
-                        {/* Created At */}
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginTop: 'auto', paddingTop: 8, borderTop: '1px solid #f1f5f9' }}>
                         {viewModel.createdAt && (
-                          <div style={{ 
-                            padding: 12,
-                            background: '#e8f5e9',
-                            borderRadius: 6,
-                            border: '1px solid #c8e6c9'
-                          }}>
-                            <div style={{ 
-                              fontSize: 12, 
-                              fontWeight: 700, 
-                              color: '#2e7d32', 
-                              marginBottom: 6,
-                              textTransform: 'uppercase',
-                              letterSpacing: '0.5px',
-                              fontFamily: 'Georgia, serif'
-                            }}>
-                              Created
-                            </div>
-                            <div style={{ 
-                              fontSize: 14, 
-                              color: '#1b5e20',
-                              fontFamily: 'Georgia, serif'
-                            }}>
-                              {formatRelativeTime(viewModel.createdAt)}
-                            </div>
+                          <div>
+                            <div style={{ fontSize: 11, fontWeight: 700, color: '#374151', marginBottom: 5, letterSpacing: '0.01em' }}>Created</div>
+                            <div style={{ fontSize: 13, color: '#64748b' }}>{new Date(viewModel.createdAt).toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' })}</div>
                           </div>
                         )}
-
-                        {/* Updated At */}
                         {viewModel.updatedAt && (
-                          <div style={{ 
-                            padding: 12,
-                            background: '#e3f2fd',
-                            borderRadius: 6,
-                            border: '1px solid #bbdefb'
-                          }}>
-                            <div style={{ 
-                              fontSize: 12, 
-                              fontWeight: 700, 
-                              color: '#1976d2', 
-                              marginBottom: 6,
-                              textTransform: 'uppercase',
-                              letterSpacing: '0.5px',
-                              fontFamily: 'Georgia, serif'
-                            }}>
-                              Updated
-                            </div>
-                            <div style={{ 
-                              fontSize: 14, 
-                              color: '#0d47a1',
-                              fontFamily: 'Georgia, serif'
-                            }}>
-                              {formatRelativeTime(viewModel.updatedAt)}
-                            </div>
+                          <div>
+                            <div style={{ fontSize: 11, fontWeight: 700, color: '#374151', marginBottom: 5, letterSpacing: '0.01em' }}>Updated</div>
+                            <div style={{ fontSize: 13, color: '#64748b' }}>{new Date(viewModel.updatedAt).toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' })}</div>
                           </div>
                         )}
                       </div>
+                    </>
+                  )}
+                </div>
+
+                {/* Right — UML preview */}
+                <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', background: '#ffffff' }}>
+                  <div style={{ padding: '14px 18px 10px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexShrink: 0 }}>
+                    <span style={{ fontSize: 13, fontWeight: 600, color: '#374151' }}>UML-Preview</span>
+                    {umlContent && (
+                      <div style={{ display: 'flex', gap: 4 }}>
+                        {[
+                          { title: 'Zoom in', icon: <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>, fn: () => diagramRef.current?.zoomIn() },
+                          { title: 'Zoom out', icon: <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><line x1="5" y1="12" x2="19" y2="12"/></svg>, fn: () => diagramRef.current?.zoomOut() },
+                          { title: 'Fit to view', icon: <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M8 3H5a2 2 0 0 0-2 2v3"/><path d="M21 8V5a2 2 0 0 0-2-2h-3"/><path d="M3 16v3a2 2 0 0 0 2 2h3"/><path d="M16 21h3a2 2 0 0 0 2-2v-3"/></svg>, fn: () => diagramRef.current?.fitToView() },
+                        ].map(({ title, icon, fn }) => (
+                          <button key={title} title={title} onClick={fn}
+                            style={{ width: 24, height: 24, border: '1px solid #e2e8f0', borderRadius: 6, background: '#fff', color: '#64748b', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                            onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.background = '#f1f5f9'; (e.currentTarget as HTMLButtonElement).style.color = '#0f172a'; }}
+                            onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.background = '#fff'; (e.currentTarget as HTMLButtonElement).style.color = '#64748b'; }}>
+                            {icon}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                  <div style={{ flex: 1, padding: '0 18px 18px', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+                    <div style={{ flex: 1, position: 'relative', background: '#ffffff', borderRadius: 10, border: '1px solid #e2e8f0', overflow: 'hidden', boxShadow: '0 1px 4px rgba(0,0,0,0.04)' }}>
+                      {umlFetching && (
+                        <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 10, color: '#94a3b8' }}>
+                          <div style={{ width: 24, height: 24, border: '2.5px solid #e2e8f0', borderTop: '2.5px solid #049484', borderRadius: '50%', animation: 'tpspin 0.8s linear infinite' }} />
+                          <span style={{ fontSize: 12 }}>Loading preview…</span>
+                        </div>
+                      )}
+                      {!umlFetching && umlError && (
+                        <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#cbd5e1', fontSize: 12 }}>Could not load UML preview</div>
+                      )}
+                      {!umlFetching && !umlError && !umlContent && (
+                        <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#cbd5e1', fontSize: 12 }}>No diagram available</div>
+                      )}
+                      {umlContent && <UMLDiagram ref={diagramRef} ecoreContent={umlContent} />}
                     </div>
-                )}
-              </div>
-
-              <div style={{ 
-                padding: '16px 24px', 
-                borderTop: '1px solid #e9ecef', 
-                display: 'flex', 
-                justifyContent: 'space-between', 
-                alignItems: 'center',
-                gap: 12,
-                background: '#f8f9fa'
-              }}>
-                <button
-                    style={{
-                      padding: '10px 20px',
-                      borderRadius: 8,
-                      border: '1px solid #dee2e6',
-                      background: '#fff',
-                      color: '#495057',
-                      fontWeight: 600,
-                      cursor: 'pointer',
-                      fontSize: 14,
-                      fontFamily: 'Georgia, serif',
-                      transition: 'all 0.2s ease',
-                    }}
-                    onClick={() => {
-                      resetMetaModelModalState();
-                    }}
-                    onMouseEnter={(e) => {
-                      e.currentTarget.style.background = '#f8f9fa';
-                      e.currentTarget.style.borderColor = '#adb5bd';
-                    }}
-                    onMouseLeave={(e) => {
-                      e.currentTarget.style.background = '#fff';
-                      e.currentTarget.style.borderColor = '#dee2e6';
-                    }}
-                >
-                  Close
-                </button>
-
-                {metaModelModalTab === 'details' ? (
-                  <button
-                      style={{
-                        padding: '10px 24px',
-                        borderRadius: 8,
-                        border: 'none',
-                        background: 'linear-gradient(135deg, #dc2626 0%, #b91c1c 100%)',
-                        color: '#fff',
-                        fontWeight: 600,
-                        cursor: 'pointer',
-                        fontSize: 14,
-                        fontFamily: 'Georgia, serif',
-                        transition: 'all 0.2s ease',
-                        boxShadow: '0 2px 8px rgba(220, 38, 38, 0.3)',
-                      }}
-                      onClick={() => setMetaModelDeleteConfirmOpen(true)}
-                      onMouseEnter={(e) => {
-                        e.currentTarget.style.transform = 'translateY(-1px)';
-                        e.currentTarget.style.boxShadow = '0 4px 12px rgba(220, 38, 38, 0.4)';
-                      }}
-                      onMouseLeave={(e) => {
-                        e.currentTarget.style.transform = 'translateY(0)';
-                        e.currentTarget.style.boxShadow = '0 2px 8px rgba(220, 38, 38, 0.3)';
-                      }}
-                  >
-                    Delete
-                  </button>
-                ) : (
-                  <button
-                      type="button"
-                      onClick={(e) => {
-                        e.preventDefault();
-                        handleEditSubmit(e);
-                      }}
-                      disabled={isEditSubmitDisabled}
-                      style={{
-                        padding: '10px 24px',
-                        borderRadius: 8,
-                        border: 'none',
-                        background: isEditSubmitDisabled ? '#a5d6d3' : 'linear-gradient(135deg, #049484 0%, #037368 100%)',
-                        color: '#fff',
-                        fontWeight: 600,
-                        cursor: isEditSubmitDisabled ? 'not-allowed' : 'pointer',
-                        fontSize: 14,
-                        fontFamily: 'Georgia, serif',
-                        transition: 'all 0.2s ease',
-                        boxShadow: isEditSubmitDisabled ? 'none' : '0 2px 8px rgba(4, 148, 132, 0.3)',
-                      }}
-                      onMouseEnter={(e) => {
-                        if (!isEditSubmitDisabled) {
-                          e.currentTarget.style.transform = 'translateY(-1px)';
-                          e.currentTarget.style.boxShadow = '0 6px 16px rgba(4, 148, 132, 0.4)';
-                        }
-                      }}
-                      onMouseLeave={(e) => {
-                        e.currentTarget.style.transform = 'translateY(0)';
-                        e.currentTarget.style.boxShadow = isEditSubmitDisabled ? 'none' : '0 4px 12px rgba(4, 148, 132, 0.3)';
-                      }}
-                  >
-                    {isEditLoading ? 'Saving...' : 'Save Changes'}
-                  </button>
-                )}
+                  </div>
+                </div>
               </div>
             </div>
           </dialog>
@@ -2313,8 +1896,6 @@ export const ToolsPanel: React.FC<ToolsPanelProps> = ({ onEcoreFileUpload, onEco
           </div>
         </div>
       )}
-
-      {contextMenu}
 
     </div>
   );

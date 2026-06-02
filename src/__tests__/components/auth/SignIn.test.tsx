@@ -1,5 +1,5 @@
 import React from 'react';
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, fireEvent } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { SignIn } from '../../../components/auth/SignIn';
 
@@ -49,7 +49,7 @@ describe('SignIn component', () => {
       />,
     );
 
-    await userEvent.click(screen.getByRole('button', { name: /Sign In/i }));
+    fireEvent.submit(document.querySelector('form')!);
 
     expect(
       await screen.findByText(/Please fill in all fields/i),
@@ -119,12 +119,12 @@ describe('SignIn component', () => {
     );
 
     await userEvent.click(
-      screen.getByRole('button', { name: /Forgot your password\?/i }),
+      screen.getByRole('button', { name: /Forgot Password\?/i }),
     );
 
-    const emailInput = await screen.findByLabelText(/Registered Email Address/i);
+    const emailInput = await screen.findByPlaceholderText(/Email address/i);
     const submitButton = screen.getByRole('button', {
-      name: /Submit Request/i,
+      name: /Send Reset Link/i,
     });
 
     // Invalid email
@@ -164,41 +164,38 @@ describe('SignIn – forgot password dialog', () => {
       />,
     );
 
-  it('opens forgot password dialog when "Forgot your password?" is clicked', async () => {
+  it('opens forgot password dialog when "Forgot Password?" is clicked', async () => {
     renderSignIn();
     await userEvent.click(
-      screen.getByRole('button', { name: /Forgot your password\?/i }),
+      screen.getByRole('button', { name: /Forgot Password\?/i }),
     );
-    expect(await screen.findByRole('dialog')).toBeInTheDocument();
-    expect(
-      screen.getByText(/Password Recovery/i),
-    ).toBeInTheDocument();
+    expect(await screen.findByText(/Reset Password/i)).toBeInTheDocument();
   });
 
   it('closes dialog when Cancel button is clicked', async () => {
     renderSignIn();
     await userEvent.click(
-      screen.getByRole('button', { name: /Forgot your password\?/i }),
+      screen.getByRole('button', { name: /Forgot Password\?/i }),
     );
-    await screen.findByRole('dialog');
+    await screen.findByText(/Reset Password/i);
 
     await userEvent.click(screen.getByRole('button', { name: /Cancel/i }));
 
     await waitFor(() => {
-      expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+      expect(screen.queryByText(/Reset Password/i)).not.toBeInTheDocument();
     });
   });
 
   it('shows error for invalid email in forgot password dialog', async () => {
     renderSignIn();
     await userEvent.click(
-      screen.getByRole('button', { name: /Forgot your password\?/i }),
+      screen.getByRole('button', { name: /Forgot Password\?/i }),
     );
 
-    const emailInput = await screen.findByLabelText(/Registered Email Address/i);
+    const emailInput = await screen.findByPlaceholderText(/Email address/i);
     await userEvent.type(emailInput, 'not-an-email');
     await userEvent.click(
-      screen.getByRole('button', { name: /Submit Request/i }),
+      screen.getByRole('button', { name: /Send Reset Link/i }),
     );
 
     expect(
@@ -215,13 +212,13 @@ describe('SignIn – forgot password dialog', () => {
 
     renderSignIn();
     await userEvent.click(
-      screen.getByRole('button', { name: /Forgot your password\?/i }),
+      screen.getByRole('button', { name: /Forgot Password\?/i }),
     );
 
-    const emailInput = await screen.findByLabelText(/Registered Email Address/i);
+    const emailInput = await screen.findByPlaceholderText(/Email address/i);
     await userEvent.type(emailInput, 'user@example.com');
     await userEvent.click(
-      screen.getByRole('button', { name: /Submit Request/i }),
+      screen.getByRole('button', { name: /Send Reset Link/i }),
     );
 
     await waitFor(() => {
@@ -237,13 +234,13 @@ describe('SignIn – forgot password dialog', () => {
 
     renderSignIn();
     await userEvent.click(
-      screen.getByRole('button', { name: /Forgot your password\?/i }),
+      screen.getByRole('button', { name: /Forgot Password\?/i }),
     );
 
-    const emailInput = await screen.findByLabelText(/Registered Email Address/i);
+    const emailInput = await screen.findByPlaceholderText(/Email address/i);
     await userEvent.type(emailInput, 'user@example.com');
     await userEvent.click(
-      screen.getByRole('button', { name: /Submit Request/i }),
+      screen.getByRole('button', { name: /Send Reset Link/i }),
     );
 
     expect(await screen.findByText(/Email not found/i)).toBeInTheDocument();

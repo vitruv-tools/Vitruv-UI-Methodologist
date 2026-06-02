@@ -9,14 +9,11 @@ interface ViewTypeDeletionMenuProps {
     onClose: () => void;
 }
 
-const PRIMARY = '#049484';
-const FONT = 'Georgia, serif';
-
 const BACKDROP_STYLE: React.CSSProperties = {
     position: 'fixed',
     inset: 0,
     zIndex: 999,
-    background: 'rgba(0, 0, 0, 0.2)',
+    background: 'transparent',
     border: 'none',
     cursor: 'default',
     padding: 0,
@@ -26,26 +23,21 @@ const MENU_STYLE: React.CSSProperties = {
     position: 'fixed',
     margin: 0,
     zIndex: 1000,
-    background: '#ffffff',
-    border: '1px solid #e3f2fd',
+    background: 'white',
+    border: '1px solid #e5e7eb',
     borderRadius: 10,
-    boxShadow: '0 12px 40px rgba(4, 148, 132, 0.12), 0 6px 16px rgba(0, 0, 0, 0.08)',
-    padding: '4px',
+    boxShadow: '0 4px 20px rgba(0,0,0,0.15)',
+    padding: '8px',
     display: 'flex',
     flexDirection: 'column',
-    gap: 2,
-    minWidth: 180,
-    fontFamily: FONT,
-    overflow: 'hidden',
+    gap: 4,
+    minWidth: 140,
 };
 
 const LABEL_STYLE: React.CSSProperties = {
     fontSize: 12,
-    fontWeight: 600,
-    color: PRIMARY,
-    padding: '8px 12px',
-    borderBottom: '1px solid #e8f4f8',
-    background: 'linear-gradient(135deg, #f8fcff 0%, #e8f4f8 100%)',
+    color: '#6b7280',
+    padding: '4px 8px',
 };
 
 const DELETE_BUTTON_STYLE: React.CSSProperties = {
@@ -53,13 +45,11 @@ const DELETE_BUTTON_STYLE: React.CSSProperties = {
     border: 'none',
     color: '#dc2626',
     fontSize: 13,
-    fontWeight: 600,
-    fontFamily: FONT,
-    padding: '8px 12px',
+    fontWeight: 500,
+    padding: '6px 8px',
     borderRadius: 6,
     cursor: 'pointer',
     textAlign: 'left',
-    transition: 'background 0.2s ease',
 };
 
 export const ViewTypeDeletionMenu: React.FC<ViewTypeDeletionMenuProps> = ({

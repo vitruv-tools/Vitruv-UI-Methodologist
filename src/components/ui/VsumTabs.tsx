@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { VsumDetails } from '../../types';
 import { apiService, MetaModelRelationRequest } from '../../services/api';
 import { WorkspaceSnapshot } from '../../types/workspace';
@@ -120,13 +120,7 @@ export const VsumTabs: React.FC<VsumTabsProps> = ({
                 return `${r.sourceId}->${r.targetId}#${safeId}`;
             })
             .sort((a, b) => a.localeCompare(b));
-        const views = [...(snapshot?.viewRequests ?? [])]
-            .map(view => {
-                const viewMetaIds = [...(view.metaModelIds ?? [])].sort((a, b) => a - b);
-                return `${viewMetaIds.join(',')}#${view.fileStorageId ?? 0}`;
-            })
-            .sort((a, b) => a.localeCompare(b));
-        return { ids, rels, views };
+        return { ids, rels };
     };
 
     const backendToSnapshot = (backend: VsumDetails): WorkspaceSnapshot => {
@@ -140,15 +134,7 @@ export const VsumTabs: React.FC<VsumTabsProps> = ({
                 targetId: r.targetId,
                 reactionFileId: normalizeReactionFileId(r.reactionFileId ?? r.reactionFileStorageId),
             }));
-        const viewRequests =
-            (backend.views ?? []).map(view => ({
-                metaModelIds: (view.assignedModels ?? [])
-                    .map(m => m.sourceId)
-                    .filter((x): x is number => typeof x === 'number')
-                    .sort((a, b) => a - b),
-                fileStorageId: view.fileStorageId ?? 0,
-            }));
-        return { metaModelIds, metaModelRelationRequests, viewRequests };
+        return { metaModelIds, metaModelRelationRequests };
     };
 
     const snapshotsEqual = (a: WorkspaceSnapshot | null | undefined, b: WorkspaceSnapshot | null | undefined): boolean => {
@@ -158,10 +144,6 @@ export const VsumTabs: React.FC<VsumTabsProps> = ({
         if (ca.rels.length !== cb.rels.length) return false;
         for (let i = 0; i < ca.rels.length; i++) {
             if (ca.rels[i] !== cb.rels[i]) return false;
-        }
-        if (ca.views.length !== cb.views.length) return false;
-        for (let i = 0; i < ca.views.length; i++) {
-            if (ca.views[i] !== cb.views[i]) return false;
         }
         return true;
     };
@@ -245,7 +227,7 @@ export const VsumTabs: React.FC<VsumTabsProps> = ({
                 console.warn('Failed to refresh workspace snapshot before save', e);
             }
         }
-        return snap ?? { metaModelIds: [], metaModelRelationRequests: [], viewRequests: [] };
+        return snap ?? { metaModelIds: [], metaModelRelationRequests: [] };
     };
 
     const getBackendMessage = (response: any): string =>
@@ -263,14 +245,12 @@ export const VsumTabs: React.FC<VsumTabsProps> = ({
         id: number,
         metaModelIds: number[],
         sanitizedRelations: MetaModelRelationRequest[],
-        viewRequests: WorkspaceSnapshot['viewRequests'],
         applySuccessfulSave: (savedRelations: MetaModelRelationRequest[], successMessage: string) => Promise<void>
     ): Promise<void> => {
         try {
             const response: any = await apiService.updateVsumSyncChanges(id, {
                 metaModelIds,
                 metaModelRelationRequests: sanitizedRelations.length > 0 ? sanitizedRelations : null,
-                viewRequests,
             });
             await applySuccessfulSave(sanitizedRelations, getBackendMessage(response));
             return;
@@ -299,7 +279,6 @@ export const VsumTabs: React.FC<VsumTabsProps> = ({
             const retryResponse: any = await apiService.updateVsumSyncChanges(id, {
                 metaModelIds,
                 metaModelRelationRequests: fallbackRelations,
-                viewRequests,
             });
             await applySuccessfulSave(
                 fallbackRelations,
@@ -315,7 +294,7 @@ export const VsumTabs: React.FC<VsumTabsProps> = ({
         }
     };
 
-    const saveById = async (id: number, options?: { silent?: boolean }) => {
+    const saveById = async (id: number) => {
         const backend = detailsById[id];
         if (!backend) return;
 
@@ -329,7 +308,6 @@ export const VsumTabs: React.FC<VsumTabsProps> = ({
                 .filter((x): x is number => typeof x === 'number');
 
         const snapshotIds = snap.metaModelIds ?? [];
-        const viewRequests = snap.viewRequests ?? [];
 
         // Use snapshot if available, otherwise fall back to backend data
         // Important: If snapshot exists but is empty, user intentionally removed all MetaModels
@@ -392,40 +370,32 @@ export const VsumTabs: React.FC<VsumTabsProps> = ({
 
         setSaving(true);
         setError('');
-        if (!options?.silent) {
-            setPopup(null);
-        }
+        setPopup(null);
         const applySuccessfulSave = async (savedRelations: MetaModelRelationRequest[], successMessage: string) => {
-            if (!options?.silent) {
-                setPopup({ message: successMessage, type: 'success' });
-            }
+            setPopup({ message: successMessage, type: 'success' });
 
             const res = await apiService.getVsumDetails(id);
             setDetailsById(prev => ({ ...prev, [id]: res.data }));
             setWorkspaceSnapshot({
                 metaModelIds,
                 metaModelRelationRequests: savedRelations,
-                viewRequests,
             });
             setSavedWorkspaceById(prev => ({
                 ...prev,
                 [id]: {
                     metaModelIds,
                     metaModelRelationRequests: savedRelations,
-                    viewRequests,
                 },
             }));
 
             globalThis.dispatchEvent(new CustomEvent('vitruv.refreshVsums'));
         };
         try {
-            await trySaveWithReactionFallback(id, metaModelIds, sanitizedRelations, viewRequests, applySuccessfulSave);
+            await trySaveWithReactionFallback(id, metaModelIds, sanitizedRelations, applySuccessfulSave);
         } catch (error_: any) {
             const message = typeof error_ === 'string' ? error_ : 'Failed to save VSUM';
             setError(message);
-            if (!options?.silent) {
-                setPopup({ message, type: 'error' });
-            }
+            setPopup({ message, type: 'error' });
         } finally {
             setSaving(false);
         }
@@ -445,23 +415,6 @@ export const VsumTabs: React.FC<VsumTabsProps> = ({
             });
         }
     };
-
-    const saveByIdRef = useRef(saveById);
-    saveByIdRef.current = saveById;
-
-    useEffect(() => {
-        const handleSyncViewTypeChanges = async () => {
-            const active = openTabs.find(t => t.instanceId === activeInstanceId);
-            const id = active?.id;
-            if (!id || saving) return;
-            await saveByIdRef.current(id, { silent: true });
-        };
-
-        globalThis.addEventListener('vitruv.syncActiveVsumChanges', handleSyncViewTypeChanges);
-        return () => {
-            globalThis.removeEventListener('vitruv.syncActiveVsumChanges', handleSyncViewTypeChanges);
-        };
-    }, [openTabs, activeInstanceId, saving]);
 
     // ---- download artifact -------------------------------------
     const onDownloadArtifact = async () => {
@@ -577,11 +530,11 @@ export const VsumTabs: React.FC<VsumTabsProps> = ({
                     position: 'sticky',
                     top: 0,
                     zIndex: 20,
-                    boxShadow: 'inset 0 -1px 0 #e5e7eb',
+                    boxShadow: '0 1px 4px rgba(0,0,0,0.06)',
                     cursor: saving ? 'progress' : 'default',
                 }}
             >
-                <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 10px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 12px' }}>
                     <div
                         style={{
                             display: 'flex',
@@ -605,13 +558,13 @@ export const VsumTabs: React.FC<VsumTabsProps> = ({
                                         display: 'flex',
                                         alignItems: 'center',
                                         gap: 8,
-                                        padding: '6px 12px',
-                                        border: isActive ? '1px solid #bfdbfe' : '1px solid #e5e7eb',
-                                        borderBottom: isActive ? '2px solid #3b82f6' : '1px solid #e5e7eb',
-                                        borderRadius: 8,
-                                        background: isActive ? '#f0f7ff' : '#ffffff',
+                                        padding: '7px 14px',
+                                        border: isActive ? '1px solid #cbd5e1' : '1px solid #e5e7eb',
+                                        borderBottom: isActive ? '2px solid #1e293b' : '1px solid #e5e7eb',
+                                        borderRadius: 6,
+                                        background: isActive ? '#f8fafc' : '#ffffff',
                                         cursor: 'pointer',
-                                        boxShadow: isActive ? '0 1px 2px rgba(0,0,0,0.04)' : 'none',
+                                        boxShadow: isActive ? '0 1px 4px rgba(0,0,0,0.07)' : 'none',
                                     }}
                                     onClick={() => onActivate(tab.instanceId)}
                                     onKeyDown={e => {
@@ -638,9 +591,9 @@ export const VsumTabs: React.FC<VsumTabsProps> = ({
                                     )}
                                     <span
                                         style={{
-                                            fontWeight: 700,
-                                            color: '#1f2937',
-                                            fontSize: 12,
+                                            fontWeight: 600,
+                                            color: '#1e293b',
+                                            fontSize: 13,
                                             whiteSpace: 'nowrap',
                                         }}
                                     >
@@ -658,17 +611,18 @@ export const VsumTabs: React.FC<VsumTabsProps> = ({
                                             }
                                         }}
                                         style={{
-                                            border: '1px solid transparent',
+                                            border: 'none',
                                             background: 'transparent',
-                                            color: '#64748b',
+                                            color: '#94a3b8',
                                             cursor: 'pointer',
                                             borderRadius: 4,
                                             lineHeight: 1,
-                                            width: 16,
-                                            height: 16,
+                                            width: 18,
+                                            height: 18,
                                             display: 'inline-flex',
                                             alignItems: 'center',
                                             justifyContent: 'center',
+                                            fontSize: 15,
                                         }}
                                         aria-label={`Close ${name}`}
                                         title="Close"
@@ -722,14 +676,15 @@ export const VsumTabs: React.FC<VsumTabsProps> = ({
                                 onClick={onCheckBuild}
                                 disabled={checkingBuild || saving}
                                 style={{
-                                    padding: '6px 10px',
-                                    borderRadius: 8,
+                                    padding: '0 14px',
+                                    height: 34,
+                                    borderRadius: 6,
                                     border: '1px solid #16a34a',
                                     background: checkingBuild ? '#bbf7d0' : '#22c55e',
                                     color: '#ffffff',
                                     fontWeight: 700,
                                     cursor: checkingBuild || saving ? 'not-allowed' : 'pointer',
-                                    fontSize: 12,
+                                    fontSize: 13,
                                 }}
                             >
                                 {checkingBuild ? 'Checking…' : 'Check build'}
@@ -739,27 +694,24 @@ export const VsumTabs: React.FC<VsumTabsProps> = ({
                                 onClick={onDownloadArtifact}
                                 disabled={downloadingArtifact || saving}
                                 style={{
-                                    padding: '6px 10px',
-                                    borderRadius: 8,
-                                    border: '1px solid #037368',
-                                    background: downloadingArtifact ? '#a5d6d3' : '#049484',
-                                    color: '#ffffff',
+                                    padding: '0 14px',
+                                    height: 34,
+                                    borderRadius: 6,
+                                    border: '1px solid #049484',
+                                    background: downloadingArtifact ? '#f0fdfc' : '#ffffff',
+                                    color: '#049484',
                                     fontWeight: 700,
                                     cursor: downloadingArtifact || saving ? 'not-allowed' : 'pointer',
-                                    fontSize: 12,
+                                    fontSize: 13,
                                     display: 'flex',
                                     alignItems: 'center',
-                                    gap: 4,
+                                    gap: 5,
                                 }}
                                 onMouseEnter={(e) => {
-                                    if (!downloadingArtifact && !saving) {
-                                        e.currentTarget.style.background = '#037368';
-                                    }
+                                    if (!downloadingArtifact && !saving) e.currentTarget.style.background = '#f0fdfc';
                                 }}
                                 onMouseLeave={(e) => {
-                                    if (!downloadingArtifact && !saving) {
-                                        e.currentTarget.style.background = '#049484';
-                                    }
+                                    if (!downloadingArtifact && !saving) e.currentTarget.style.background = '#ffffff';
                                 }}
                             >
                                 <span>{downloadingArtifact ? '⏳' : ''}</span>
@@ -771,24 +723,21 @@ export const VsumTabs: React.FC<VsumTabsProps> = ({
                                     onClick={onSave}
                                     disabled={saving}
                                     style={{
-                                        padding: '6px 10px',
-                                        border: '1px solid #037368',
-                                        borderRadius: 8,
-                                        background: saving ? '#a5d6d3' : '#049484',
-                                        color: '#ffffff',
+                                        padding: '0 14px',
+                                        height: 34,
+                                        border: '1px solid #049484',
+                                        borderRadius: 6,
+                                        background: saving ? '#f0fdfc' : '#ffffff',
+                                        color: '#049484',
                                         fontWeight: 700,
                                         cursor: saving ? 'not-allowed' : 'pointer',
-                                        fontSize: 12,
+                                        fontSize: 13,
                                     }}
                                     onMouseEnter={(e) => {
-                                        if (!saving) {
-                                            e.currentTarget.style.background = '#037368';
-                                        }
+                                        if (!saving) e.currentTarget.style.background = '#f0fdfc';
                                     }}
                                     onMouseLeave={(e) => {
-                                        if (!saving) {
-                                            e.currentTarget.style.background = '#049484';
-                                        }
+                                        if (!saving) e.currentTarget.style.background = '#ffffff';
                                     }}
                                 >
                                     {saving ? 'Saving…' : 'Save changes'}
@@ -804,22 +753,26 @@ export const VsumTabs: React.FC<VsumTabsProps> = ({
                     style={{
                         position: 'absolute',
                         right: 16,
-                        top: 56,
-                        background: '#049484',
-                        color: '#ffffff',
-                        border: '1px solid #037368',
+                        top: 60,
+                        background: '#ffffff',
+                        color: '#049484',
+                        border: '1px solid #049484',
                         borderRadius: 6,
-                        padding: '8px 12px',
+                        padding: '0 14px',
+                        height: 34,
                         fontWeight: 700,
                         cursor: 'pointer',
                         zIndex: 21,
+                        fontSize: 13,
+                        display: 'flex',
+                        alignItems: 'center',
                     }}
                     onClick={onAddMetaModels}
                     onMouseEnter={(e) => {
-                        e.currentTarget.style.background = '#037368';
+                        e.currentTarget.style.background = '#f0fdfc';
                     }}
                     onMouseLeave={(e) => {
-                        e.currentTarget.style.background = '#049484';
+                        e.currentTarget.style.background = '#ffffff';
                     }}
                 >
                     + ADD META MODELS

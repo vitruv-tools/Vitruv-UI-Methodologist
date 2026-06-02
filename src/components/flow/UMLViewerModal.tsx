@@ -25,8 +25,8 @@ export const UMLViewerModal: React.FC<UMLViewerModalProps> = ({ isOpen, title, e
   useEffect(() => {
     if (!isOpen) return;
     const { nodes: umlNodes, edges: umlEdges } = generateUMLFromEcore(ecoreContent);
-    setNodes(umlNodes);
-    setEdges(umlEdges);
+    setNodes(umlNodes as unknown as Node[]);
+    setEdges(umlEdges as unknown as Edge[]);
     setReady(true);
   }, [isOpen, ecoreContent]);
 

@@ -23,8 +23,20 @@ const daysAgo = (n: number): string =>
   new Date(Date.now() - n * 24 * 60 * 60 * 1000).toISOString();
 
 // ─── getDaysLeft ──────────────────────────────────────────────────────────────
+// Use fake timers so Date.now() is frozen: daysAgo() and getDaysLeft() see the
+// exact same millisecond and there is no floating-point jitter from real elapsed
+// time between the two calls.
 
 describe('getDaysLeft', () => {
+  beforeEach(() => {
+    jest.useFakeTimers();
+    jest.setSystemTime(new Date('2024-06-15T12:00:00.000Z'));
+  });
+
+  afterEach(() => {
+    jest.useRealTimers();
+  });
+
   it('returns 30 when removedAt is null', () => {
     expect(getDaysLeft(null)).toBe(30);
   });
@@ -33,10 +45,8 @@ describe('getDaysLeft', () => {
     expect(getDaysLeft(undefined)).toBe(30);
   });
 
-  it('returns 29 or 30 when deleted just now', () => {
-    const result = getDaysLeft(new Date().toISOString());
-    expect(result).toBeGreaterThanOrEqual(29);
-    expect(result).toBeLessThanOrEqual(30);
+  it('returns 30 when deleted just now', () => {
+    expect(getDaysLeft(new Date().toISOString())).toBe(30);
   });
 
   it('returns 20 when deleted 10 days ago', () => {

@@ -114,19 +114,19 @@ describe('CreateModelModal', () => {
 
   it('renders .ecore and .genmodel file type badges', () => {
     render(<CreateModelModal isOpen onClose={jest.fn()} />);
-    expect(screen.getByText('.ecore')).toBeInTheDocument();
-    expect(screen.getByText('.genmodel')).toBeInTheDocument();
+    expect(screen.getAllByText('.ecore').length).toBeGreaterThanOrEqual(1);
+    expect(screen.getAllByText('.genmodel').length).toBeGreaterThanOrEqual(1);
   });
 
-  it('renders ⬆ Computer and 🔗 URL toggles for both file cards', () => {
+  it('renders File and URL toggles for both file cards', () => {
     render(<CreateModelModal isOpen onClose={jest.fn()} />);
-    expect(screen.getAllByText('⬆ Computer')).toHaveLength(2);
-    expect(screen.getAllByText('🔗 URL')).toHaveLength(2);
+    expect(screen.getAllByText('File')).toHaveLength(2);
+    expect(screen.getAllByText('URL')).toHaveLength(2);
   });
 
-  it('shows "Click to browse file" drop-zones by default (file mode)', () => {
+  it('shows drop-zones by default (file mode)', () => {
     render(<CreateModelModal isOpen onClose={jest.fn()} />);
-    expect(screen.getAllByText(/Click to browse file/i)).toHaveLength(2);
+    expect(screen.getAllByText(/Click to select file/i)).toHaveLength(2);
   });
 
   it('calls onClose when Cancel is clicked', async () => {
@@ -198,7 +198,7 @@ describe('CreateModelModal', () => {
         fireEvent.change(ecoreInput, { target: { files: [file] } });
       });
       await waitFor(() => {
-        expect(screen.getByText(/✓ Ready/)).toBeInTheDocument();
+        expect(screen.getByText(/Ready/)).toBeInTheDocument();
       });
     });
 
@@ -226,33 +226,33 @@ describe('CreateModelModal', () => {
   describe('URL import mode', () => {
     it('shows a URL input when switching .ecore card to URL mode', () => {
       render(<CreateModelModal isOpen onClose={jest.fn()} />);
-      fireEvent.click(screen.getAllByText('🔗 URL')[0]);
+      fireEvent.click(screen.getAllByText('URL')[0]);
       expect(screen.getByPlaceholderText(/model\.ecore/i)).toBeInTheDocument();
     });
 
     it('shows a URL input when switching .genmodel card to URL mode', () => {
       render(<CreateModelModal isOpen onClose={jest.fn()} />);
-      fireEvent.click(screen.getAllByText('🔗 URL')[1]);
+      fireEvent.click(screen.getAllByText('URL')[1]);
       expect(screen.getByPlaceholderText(/model\.genmodel/i)).toBeInTheDocument();
     });
 
     it('Import button is disabled when .ecore URL is empty', () => {
       render(<CreateModelModal isOpen onClose={jest.fn()} />);
-      fireEvent.click(screen.getAllByText('🔗 URL')[0]);
+      fireEvent.click(screen.getAllByText('URL')[0]);
       const importBtn = screen.getByText('Import').closest('button')!;
       expect(importBtn).toBeDisabled();
     });
 
     it('Import button is disabled when .genmodel URL is empty', () => {
       render(<CreateModelModal isOpen onClose={jest.fn()} />);
-      fireEvent.click(screen.getAllByText('🔗 URL')[1]);
+      fireEvent.click(screen.getAllByText('URL')[1]);
       const importBtn = screen.getByText('Import').closest('button')!;
       expect(importBtn).toBeDisabled();
     });
 
     it('shows an error when .ecore URL has the wrong extension', async () => {
       render(<CreateModelModal isOpen onClose={jest.fn()} />);
-      fireEvent.click(screen.getAllByText('🔗 URL')[0]);
+      fireEvent.click(screen.getAllByText('URL')[0]);
       fireEvent.change(screen.getByPlaceholderText(/model\.ecore/i), {
         target: { value: 'https://example.com/model.txt' },
       });
@@ -264,7 +264,7 @@ describe('CreateModelModal', () => {
 
     it('shows an error when .genmodel URL has the wrong extension', async () => {
       render(<CreateModelModal isOpen onClose={jest.fn()} />);
-      fireEvent.click(screen.getAllByText('🔗 URL')[1]);
+      fireEvent.click(screen.getAllByText('URL')[1]);
       fireEvent.change(screen.getByPlaceholderText(/model\.genmodel/i), {
         target: { value: 'https://example.com/model.xml' },
       });
@@ -277,7 +277,7 @@ describe('CreateModelModal', () => {
     it('imports a .ecore file from a valid URL and calls uploadFile with ECORE type', async () => {
       mockFetchOk('<ecore/>');
       render(<CreateModelModal isOpen onClose={jest.fn()} />);
-      fireEvent.click(screen.getAllByText('🔗 URL')[0]);
+      fireEvent.click(screen.getAllByText('URL')[0]);
       fireEvent.change(screen.getByPlaceholderText(/model\.ecore/i), {
         target: { value: 'https://raw.githubusercontent.com/org/repo/main/model.ecore' },
       });
@@ -292,7 +292,7 @@ describe('CreateModelModal', () => {
     it('imports a .genmodel file from a valid URL and calls uploadFile with GEN_MODEL type', async () => {
       mockFetchOk('<genmodel/>');
       render(<CreateModelModal isOpen onClose={jest.fn()} />);
-      fireEvent.click(screen.getAllByText('🔗 URL')[1]);
+      fireEvent.click(screen.getAllByText('URL')[1]);
       fireEvent.change(screen.getByPlaceholderText(/model\.genmodel/i), {
         target: { value: 'https://raw.githubusercontent.com/org/repo/main/model.genmodel' },
       });
@@ -307,7 +307,7 @@ describe('CreateModelModal', () => {
     it('shows ✓ Ready badge after a successful .ecore URL import', async () => {
       mockFetchOk('<ecore/>');
       render(<CreateModelModal isOpen onClose={jest.fn()} />);
-      fireEvent.click(screen.getAllByText('🔗 URL')[0]);
+      fireEvent.click(screen.getAllByText('URL')[0]);
       fireEvent.change(screen.getByPlaceholderText(/model\.ecore/i), {
         target: { value: 'https://raw.githubusercontent.com/org/repo/main/model.ecore' },
       });
@@ -315,14 +315,14 @@ describe('CreateModelModal', () => {
         fireEvent.click(screen.getByText('Import'));
       });
       await waitFor(() => {
-        expect(screen.getByText(/✓ Ready/)).toBeInTheDocument();
+        expect(screen.getByText(/Ready/)).toBeInTheDocument();
       });
     });
 
     it('shows an error when the .ecore URL fetch returns a non-OK response', async () => {
       mockFetchFail(404, 'Not Found');
       render(<CreateModelModal isOpen onClose={jest.fn()} />);
-      fireEvent.click(screen.getAllByText('🔗 URL')[0]);
+      fireEvent.click(screen.getAllByText('URL')[0]);
       fireEvent.change(screen.getByPlaceholderText(/model\.ecore/i), {
         target: { value: 'https://example.com/missing.ecore' },
       });
@@ -337,7 +337,7 @@ describe('CreateModelModal', () => {
     it('shows an error when the .genmodel URL fetch returns a non-OK response', async () => {
       mockFetchFail(500, 'Server Error');
       render(<CreateModelModal isOpen onClose={jest.fn()} />);
-      fireEvent.click(screen.getAllByText('🔗 URL')[1]);
+      fireEvent.click(screen.getAllByText('URL')[1]);
       fireEvent.change(screen.getByPlaceholderText(/model\.genmodel/i), {
         target: { value: 'https://example.com/missing.genmodel' },
       });
@@ -351,10 +351,10 @@ describe('CreateModelModal', () => {
 
     it('switching back to file mode hides the URL input', () => {
       render(<CreateModelModal isOpen onClose={jest.fn()} />);
-      fireEvent.click(screen.getAllByText('🔗 URL')[0]);
+      fireEvent.click(screen.getAllByText('URL')[0]);
       expect(screen.getByPlaceholderText(/model\.ecore/i)).toBeInTheDocument();
 
-      fireEvent.click(screen.getAllByText('⬆ Computer')[0]);
+      fireEvent.click(screen.getAllByText('File')[0]);
       expect(screen.queryByPlaceholderText(/model\.ecore/i)).not.toBeInTheDocument();
     });
   });
@@ -409,7 +409,7 @@ describe('CreateModelModal', () => {
       fillRequiredFields();
 
       // Import .ecore via URL
-      fireEvent.click(screen.getAllByText('🔗 URL')[0]);
+      fireEvent.click(screen.getAllByText('URL')[0]);
       fireEvent.change(screen.getByPlaceholderText(/model\.ecore/i), {
         target: { value: 'https://example.com/model.ecore' },
       });
@@ -417,7 +417,7 @@ describe('CreateModelModal', () => {
       await waitFor(() => expect(apiService.uploadFile).toHaveBeenCalledTimes(1));
 
       // Import .genmodel via URL
-      fireEvent.click(screen.getAllByText('🔗 URL')[1]);
+      fireEvent.click(screen.getAllByText('URL')[1]);
       fireEvent.change(screen.getByPlaceholderText(/model\.genmodel/i), {
         target: { value: 'https://example.com/model.genmodel' },
       });

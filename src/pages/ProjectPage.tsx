@@ -92,9 +92,8 @@ export const ProjectPage: React.FC = () => {
   useEffect(() => {
     const handler = async (e: Event) => {
       const custom = e as CustomEvent<{ id: number; forceNew?: boolean }>;
-      const rawId = custom.detail?.id;
-      const id = typeof rawId === 'number' ? rawId : Number(rawId);
-      if (!Number.isFinite(id)) return;
+      const id = custom.detail?.id;
+      if (typeof id !== 'number') return;
       const existing = openTabs.find(t => t.id === id);
       if (existing && !custom.detail?.forceNew) {
         // Project already open, just navigate to it
@@ -109,14 +108,14 @@ export const ProjectPage: React.FC = () => {
         showInfo(error instanceof Error ? error.message : 'Failed to open project');
       }
     };
-    globalThis.addEventListener('vitruv.openVsum', handler);
-    return () => globalThis.removeEventListener('vitruv.openVsum', handler);
+    globalThis.addEventListener('vitruv.openVsum', handler as EventListener);
+    return () => globalThis.removeEventListener('vitruv.openVsum', handler as EventListener);
   }, [openTabs, openVsumById, showInfo, setActiveInstanceId]);
 
   // Close active workspace tab when canvas becomes empty (no boxes)
   useEffect(() => {
-    globalThis.addEventListener('vitruv.closeActiveWorkspace', closeActiveWorkspaceTab);
-    return () => globalThis.removeEventListener('vitruv.closeActiveWorkspace', closeActiveWorkspaceTab);
+    globalThis.addEventListener('vitruv.closeActiveWorkspace', closeActiveWorkspaceTab as EventListener);
+    return () => globalThis.removeEventListener('vitruv.closeActiveWorkspace', closeActiveWorkspaceTab as EventListener);
   }, [closeActiveWorkspaceTab]);
 
   // Reload workspace when returning from expanded metamodel view
@@ -138,8 +137,8 @@ export const ProjectPage: React.FC = () => {
       }
     };
 
-    globalThis.addEventListener('vitruv.reloadWorkspace', handleReloadWorkspace);
-    return () => globalThis.removeEventListener('vitruv.reloadWorkspace', handleReloadWorkspace);
+    globalThis.addEventListener('vitruv.reloadWorkspace', handleReloadWorkspace as EventListener);
+    return () => globalThis.removeEventListener('vitruv.reloadWorkspace', handleReloadWorkspace as EventListener);
   }, [activeInstanceId, openTabs]);
 
   // Ensure "Add Meta Models" sidebar is hidden when no VSUM tabs are open
@@ -185,8 +184,8 @@ export const ProjectPage: React.FC = () => {
 
   // Handle VSUM deletion - close any open tabs for the deleted VSUM
   useEffect(() => {
-    globalThis.addEventListener('vitruv.vsumDeleted', handleVsumDeleted);
-    return () => globalThis.removeEventListener('vitruv.vsumDeleted', handleVsumDeleted);
+    globalThis.addEventListener('vitruv.vsumDeleted', handleVsumDeleted as EventListener);
+    return () => globalThis.removeEventListener('vitruv.vsumDeleted', handleVsumDeleted as EventListener);
   }, [handleVsumDeleted]);
 
   // Handle VSUM version restoration - reload workspace if VSUM is open
@@ -209,8 +208,8 @@ export const ProjectPage: React.FC = () => {
       }
     };
 
-    globalThis.addEventListener('vitruv.vsumRestored', handleVsumRestored);
-    return () => globalThis.removeEventListener('vitruv.vsumRestored', handleVsumRestored);
+    globalThis.addEventListener('vitruv.vsumRestored', handleVsumRestored as EventListener);
+    return () => globalThis.removeEventListener('vitruv.vsumRestored', handleVsumRestored as EventListener);
   }, [openTabs, showInfo]);
 
 
@@ -300,7 +299,6 @@ async function fetchAndLoadProjectBoxes(id: number, skipReset: boolean = false) 
     console.log('📊 VSUM details received:', {
       metaModelCount: details.metaModels?.length || 0,
       relationCount: details.metaModelsRelation?.length || 0,
-      viewCount: details.views?.length || 0,
     });
 
     // Load all metamodel boxes
@@ -341,12 +339,6 @@ async function fetchAndLoadProjectBoxes(id: number, skipReset: boolean = false) 
         // This allows backend relations to be loaded even if there are existing edges
         globalThis.dispatchEvent(new CustomEvent('vitruv.loadMetaModelRelations', {
           detail: { relations, preserveExisting: false }
-        }));
-      }
-
-      if (details.views && details.views.length > 0) {
-        globalThis.dispatchEvent(new CustomEvent('vitruv.loadVsumViews', {
-          detail: { views: details.views },
         }));
       }
 

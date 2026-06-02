@@ -310,8 +310,8 @@ export function MainLayout({
             }
         };
 
-        globalThis.addEventListener('vitruv.addFileToWorkspace', handleAddFileToWorkspace);
-        globalThis.addEventListener('vitruv.resetWorkspace', handleResetWorkspace);
+        globalThis.addEventListener('vitruv.addFileToWorkspace', handleAddFileToWorkspace as EventListener);
+        globalThis.addEventListener('vitruv.resetWorkspace', handleResetWorkspace as EventListener);
         const handleExpandFileInWorkspace = (e: Event) => {
             try {
                 const customEvent = e as CustomEvent<{ fileName: string; fileContent: string }>;
@@ -322,11 +322,11 @@ export function MainLayout({
                 console.error('Error handling expandFileInWorkspace event:', error);
             }
         };
-        globalThis.addEventListener('vitruv.expandFileInWorkspace', handleExpandFileInWorkspace);
+        globalThis.addEventListener('vitruv.expandFileInWorkspace', handleExpandFileInWorkspace as EventListener);
         return () => {
-            globalThis.removeEventListener('vitruv.addFileToWorkspace', handleAddFileToWorkspace);
-            globalThis.removeEventListener('vitruv.expandFileInWorkspace', handleExpandFileInWorkspace);
-            globalThis.removeEventListener('vitruv.resetWorkspace', handleResetWorkspace);
+            globalThis.removeEventListener('vitruv.addFileToWorkspace', handleAddFileToWorkspace as EventListener);
+            globalThis.removeEventListener('vitruv.expandFileInWorkspace', handleExpandFileInWorkspace as EventListener);
+            globalThis.removeEventListener('vitruv.resetWorkspace', handleResetWorkspace as EventListener);
         };
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
@@ -350,13 +350,12 @@ export function MainLayout({
                 flowCanvasRef.current?.getWorkspaceSnapshot?.() ?? {
                     metaModelIds: [],
                     metaModelRelationRequests: [],
-                    viewRequests: [],
                 };
             detail.resolve(snapshot);
         };
 
-        globalThis.addEventListener('vitruv.requestWorkspaceSnapshot', handleWorkspaceSnapshotRequest);
-        return () => globalThis.removeEventListener('vitruv.requestWorkspaceSnapshot', handleWorkspaceSnapshotRequest);
+        globalThis.addEventListener('vitruv.requestWorkspaceSnapshot', handleWorkspaceSnapshotRequest as EventListener);
+        return () => globalThis.removeEventListener('vitruv.requestWorkspaceSnapshot', handleWorkspaceSnapshotRequest as EventListener);
     }, [expandedMetaModelName, cachedWorkspaceSnapshot]);
 
     const handleEcoreFileSelect = useCallback((fileName: string) => {
@@ -412,7 +411,6 @@ export function MainLayout({
         const currentSnapshot = flowCanvasRef.current?.getWorkspaceSnapshot?.() ?? {
             metaModelIds: [],
             metaModelRelationRequests: [],
-            viewRequests: [],
         };
         setCachedWorkspaceSnapshot(currentSnapshot);
         console.log('📸 Cached workspace snapshot before UML view:', currentSnapshot);
@@ -713,9 +711,9 @@ export function MainLayout({
                                     position: 'absolute',
                                     left: 16,
                                     top: 56,
-                                    background: '#049484',
-                                    color: '#ffffff',
-                                    border: '1px solid #037368',
+                                    background: '#ffffff',
+                                    color: '#049484',
+                                    border: '1px solid #049484',
                                     borderRadius: 6,
                                     padding: '8px 12px',
                                     fontWeight: 700,
@@ -726,10 +724,10 @@ export function MainLayout({
                                     gap: 6,
                                 }}
                                 onMouseEnter={(e) => {
-                                    e.currentTarget.style.background = '#037368';
+                                    e.currentTarget.style.background = '#f0fdfc';
                                 }}
                                 onMouseLeave={(e) => {
-                                    e.currentTarget.style.background = '#049484';
+                                    e.currentTarget.style.background = '#ffffff';
                                 }}
                                 title={`Back to workspace from ${expandedMetaModelName}`}
                             >

@@ -1,7 +1,9 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { NodeProps } from 'reactflow';
-import { ConfirmDialog } from '../ui/ConfirmDialog';
 import { ConnectionHandle } from './ConnectionHandle';
+
+// ── types ─────────────────────────────────────────────────────────────────────
 
 interface EcoreFileBoxData {
   fileName: string;
@@ -9,560 +11,342 @@ interface EcoreFileBoxData {
   onExpand: (fileName: string, fileContent: string) => void;
   onSelect: (fileName: string) => void;
   onDelete?: (id: string) => void;
+  onRequestDelete?: (id: string) => void;
   onRename?: (id: string, newFileName: string) => void;
+  onShowDetails?: (modelObj: any, fileContent: string) => void;
+  metaModelId?: number;
   onConnectionStart?: (nodeId: string, handle: 'top' | 'bottom' | 'left' | 'right', tipScreenPos: { x: number; y: number }) => void;
   isExpanded?: boolean;
   isConnectionActive?: boolean;
+  isReactionSource?: boolean;
   description?: string;
   keywords?: string;
   domain?: string;
   createdAt?: string;
 }
 
-type HandlePosition = 'top' | 'bottom' | 'left' | 'right';
-
-// Font Families
-const FONT_SERIF = '"Georgia", "Times New Roman", serif';
-const FONT_SANS = '"Segoe UI", "Roboto", "Helvetica Neue", Arial, sans-serif';
-
-// Common Styles
-const gradientBackground = (color1: string, color2: string) =>
-  `linear-gradient(145deg, ${color1} 0%, ${color2} 100%)`;
 
 
-const createModalStyle = (): React.CSSProperties => ({
-  background: gradientBackground('#ffffff', '#f8f9fa'),
-  border: '2px solid #dee2e6',
-  borderRadius: '16px',
-  padding: '32px',
-  maxWidth: '600px',
-  width: '90%',
-  maxHeight: '80vh',
-  overflow: 'auto',
-  boxShadow: '0 20px 60px rgba(0,0,0,0.15), 0 8px 32px rgba(0,0,0,0.1)',
-  position: 'relative',
-  fontFamily: FONT_SANS,
-});
+// ── domain → card color ───────────────────────────────────────────────────────
 
-const createButtonStyle = (
-  bgStart: string,
-  bgEnd: string,
-  size: { width: number | string; height: number },
-  fontSize: number = 16
-): React.CSSProperties => ({
-  background: gradientBackground(bgStart, bgEnd),
-  color: 'white',
-  border: 'none',
-  borderRadius: '8px',
-  width: size.width,
-  height: size.height,
-  cursor: 'pointer',
-  display: 'flex',
-  alignItems: 'center',
-  justifyContent: 'center',
-  fontSize: `${fontSize}px`,
-  fontWeight: '600',
-  transition: 'all 0.2s ease',
-  fontFamily: FONT_SANS,
-});
-
-const createTextStyle = (
-  fontSize: number,
-  color: string,
-  additionalStyles?: React.CSSProperties
-): React.CSSProperties => ({
-  fontSize: `${fontSize}px`,
-  color,
-  fontFamily: FONT_SERIF,
-  ...additionalStyles,
-});
-
-// Modal Styles
-const modalOverlayStyle: React.CSSProperties = {
-  position: 'fixed',
-  top: 0,
-  left: 0,
-  right: 0,
-  bottom: 0,
-  width: '100%',
-  height: '100%',
-  background: 'rgba(0, 0, 0, 0.4)',
-  display: 'flex',
-  alignItems: 'center',
-  justifyContent: 'center',
-  zIndex: 1000,
-  backdropFilter: 'blur(6px)',
-  WebkitBackdropFilter: 'blur(6px)',
-  margin: 0,
-  padding: 0,
-  border: 'none',
+const CARD_COLORS: Record<string, string> = {
+  default:  '#bfdbfe',
+  computer: '#93c5fd',
+  target:   '#86efac',
+  modell:   '#d8b4fe',
+  model:    '#d8b4fe',
+  pcm:      '#fca5a5',
+  source:   '#fca5a5',
 };
 
-const modalHeaderStyle: React.CSSProperties = {
-  display: 'flex',
-  justifyContent: 'space-between',
-  alignItems: 'center',
-  marginBottom: '24px',
-  paddingBottom: '16px',
-  borderBottom: '2px solid #e9ecef',
-};
+const FALLBACK_PALETTE = ['#fca5a5', '#fde68a', '#6ee7b7', '#a5b4fc', '#f9a8d4', '#67e8f9', '#fb923c', '#c4b5fd'];
 
-const modalFooterStyle: React.CSSProperties = {
-  marginTop: '24px',
-  paddingTop: '16px',
-  borderTop: '2px solid #e9ecef',
-  display: 'flex',
-  justifyContent: 'space-between',
-  alignItems: 'center',
-  fontSize: '14px',
-  color: '#6c757d',
-  fontStyle: 'italic',
-};
+export function cardColor(domain?: string): string {
+  const key = domain?.toLowerCase().trim() || 'default';
+  if (CARD_COLORS[key]) return CARD_COLORS[key];
+  let h = 0;
+  for (let i = 0; i < key.length; i++) h = key.charCodeAt(i) + ((h << 5) - h);
+  return FALLBACK_PALETTE[Math.abs(h) % FALLBACK_PALETTE.length];
+}
 
-// Box Styles
-const boxStyle: React.CSSProperties = {
-  background: gradientBackground('#ffffff', '#f8f9fa'),
-  border: '2px solid #dee2e6',
-  borderRadius: '0',
-  padding: '14px 16px',
-  width: '220px',
-  cursor: 'pointer',
-  boxShadow: '0 4px 16px rgba(0,0,0,0.08), 0 2px 8px rgba(0,0,0,0.04)',
-  transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
-  userSelect: 'none',
-  fontFamily: FONT_SANS,
-  display: 'flex',
-  flexDirection: 'column',
-  justifyContent: 'space-between',
-  boxSizing: 'border-box',
-};
-
-const boxVariantStyles = {
-  hover: {
-    border: '2px solid #6c757d',
-    boxShadow: '0 8px 32px rgba(108, 117, 125, 0.15)',
-    transform: 'translateY(-2px) scale(1.01)',
-    background: gradientBackground('#ffffff', '#f1f3f4'),
-  },
-  selected: {
-    border: '2px solid #495057',
-    boxShadow: '0 8px 32px rgba(73, 80, 87, 0.2)',
-    transform: 'scale(1.02)',
-    background: gradientBackground('#ffffff', '#e9ecef'),
-  },
-};
-
-const tooltipStyle: React.CSSProperties = {
-  position: 'absolute',
-  bottom: 'calc(100% + 12px)',
-  left: '50%',
-  transform: 'translateX(-50%)',
-  background: '#495057',
-  color: 'white',
-  padding: '16px',
-  borderRadius: '10px',
-  fontSize: '12px',
-  maxWidth: '320px',
-  wordBreak: 'break-word',
-  boxShadow: '0 8px 32px rgba(73, 80, 87, 0.3)',
-  zIndex: 1000,
-  pointerEvents: 'none',
-  opacity: 0,
-  transition: 'opacity 0.3s ease',
-  border: '1px solid #6c757d',
-  fontFamily: FONT_SANS,
-};
-
-// Utility Functions
-const truncateText = (text: string, maxLength: number) => {
-  if (text.length <= maxLength) {
-    return { text, isTruncated: false };
-  }
-  return { text: text.substring(0, maxLength) + '...', isTruncated: true };
-};
-
-const formatDate = (dateString: string) => {
+export function darken(hex: string, amount = 30): string {
   try {
-    return new Date(dateString).toLocaleDateString();
-  } catch {
-    return 'Unknown Date';
-  }
-};
+    const r = Math.max(0, parseInt(hex.slice(1, 3), 16) - amount);
+    const g = Math.max(0, parseInt(hex.slice(3, 5), 16) - amount);
+    const b = Math.max(0, parseInt(hex.slice(5, 7), 16) - amount);
+    return `#${r.toString(16).padStart(2, '0')}${g.toString(16).padStart(2, '0')}${b.toString(16).padStart(2, '0')}`;
+  } catch { return hex; }
+}
 
-const removeEcoreExtension = (fileName: string) => fileName.replace(/\.ecore$/i, '');
+// ── helpers ───────────────────────────────────────────────────────────────────
 
-// Sub-Components
-const SeeMoreButton: React.FC<{ onClick: (e: React.MouseEvent) => void }> = ({ onClick }) => (
-  <button
-    onClick={onClick}
-    style={{
-      background: 'none',
-      border: 'none',
-      color: '#3498db',
-      fontSize: '10px',
-      cursor: 'pointer',
-      marginLeft: '6px',
-      textDecoration: 'underline',
-      fontFamily: FONT_SERIF,
-      padding: '0',
-      lineHeight: '1',
-    }}
-  >
-    See more
-  </button>
-);
+const removeExt = (name: string) => name.replace(/\.ecore$/i, '');
 
-const ModalContent: React.FC<{
-  fileName: string;
-  content: string;
-  title: string;
-  createdAt?: string;
-  onClose: () => void;
-}> = ({ fileName, content, title, createdAt, onClose }) => {
-  const [isCloseHovered, setIsCloseHovered] = useState(false);
+// ── EcoreFileBox ──────────────────────────────────────────────────────────────
 
-  return (
-    <dialog
-      open
-      style={modalOverlayStyle}
-      onClose={onClose}
-      onCancel={onClose}
-    >
-      <button
-        type="button"
-        aria-hidden="true"
-        tabIndex={-1}
-        onClick={onClose}
-        style={{
-          position: 'absolute',
-          inset: 0,
-          backgroundColor: modalOverlayStyle.backgroundColor || 'rgba(0, 0, 0, 0.5)',
-          border: 'none',
-          padding: 0,
-          margin: 0,
-          width: '100%',
-          height: '100%',
-          cursor: 'default',
-        }}
-      />
-      <div style={{ ...createModalStyle(), position: 'relative', zIndex: 1 }}>
-        <div style={modalHeaderStyle}>
-          <h2 style={createTextStyle(24, '#212529', { fontWeight: '700', margin: 0 })}>
-            {removeEcoreExtension(fileName)} - {title}
-          </h2>
-          <button
-            style={{
-              ...createButtonStyle('#6c757d', '#495057', { width: 32, height: 32 }),
-              ...(isCloseHovered && {
-                background: gradientBackground('#495057', '#343a40'),
-                transform: 'scale(1.05)',
-                boxShadow: '0 6px 16px rgba(108, 117, 125, 0.4)',
-              }),
-            }}
-            onClick={onClose}
-            onMouseEnter={() => setIsCloseHovered(true)}
-            onMouseLeave={() => setIsCloseHovered(false)}
-            title="Close"
-          >
-            ×
-          </button>
-        </div>
-
-        <div style={createTextStyle(16, '#495057', {
-          lineHeight: '1.8',
-          textAlign: 'justify',
-          whiteSpace: 'pre-wrap',
-          wordBreak: 'break-word',
-        })}>
-          {content}
-        </div>
-
-        <div style={modalFooterStyle}>
-          <span>Model: {removeEcoreExtension(fileName)}</span>
-          <span>Created: {createdAt ? formatDate(createdAt) : 'Unknown Date'}</span>
-        </div>
-      </div>
-    </dialog>
-  );
-};
-
-const InfoSection: React.FC<{
-  label: string;
-  content: string;
-  maxLength: number;
-  onShowMore: (e: React.MouseEvent) => void;
-  additionalStyles?: React.CSSProperties;
-}> = ({ label, content, maxLength, onShowMore, additionalStyles }) => {
-  const { text, isTruncated } = truncateText(content, maxLength);
-
-  return (
-    <div style={{
-      fontSize: '10px',
-      color: '#6c757d',
-      textAlign: 'center',
-      marginTop: '6px',
-      fontStyle: 'italic',
-      lineHeight: '1.4',
-      fontFamily: FONT_SERIF,
-      wordBreak: 'break-word',
-      overflowWrap: 'break-word',
-      ...additionalStyles,
-    }}>
-      <span style={{ fontWeight: '600', color: '#495057' }}>{label}: </span>
-      {text}
-      {isTruncated && <SeeMoreButton onClick={onShowMore} />}
-    </div>
-  );
-};
-
-export const EcoreFileBox: React.FC<NodeProps<EcoreFileBoxData>> = ({
-  id,
-  data,
-  selected = false,
-}) => {
+export const EcoreFileBox: React.FC<NodeProps<EcoreFileBoxData>> = ({ id, data, selected = false }) => {
   const [isHovered, setIsHovered] = useState(false);
-  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
-  const [showDescriptionModal, setShowDescriptionModal] = useState(false);
-  const [showKeywordsModal, setShowKeywordsModal] = useState(false);
+  const [showMenu, setShowMenu] = useState(false);
+  const [menuPos, setMenuPos] = useState({ x: 0, y: 0 });
+  const [renaming, setRenaming] = useState(false);
+  const [renameVal, setRenameVal] = useState('');
 
   const {
-    fileName,
-    fileContent,
-    onExpand,
-    onSelect,
-    onDelete,
-    onConnectionStart,
-    isExpanded = false,
-    isConnectionActive = false,
-    description,
-    keywords,
-    createdAt,
+    fileName, fileContent, onExpand, onSelect, onRequestDelete, onRename,
+    onConnectionStart, isConnectionActive = false,
+    description, keywords, createdAt, domain, onShowDetails, metaModelId,
+    isReactionSource = false,
   } = data;
 
-  const boxRef = useRef<HTMLButtonElement>(null);
+  const boxRef = useRef<HTMLDivElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
 
-  // Event Handlers
-  const handleClick = (e: React.MouseEvent) => {
+  // Close menu on any left-click outside
+  useEffect(() => {
+    if (!showMenu) return;
+    const handler = (e: MouseEvent) => {
+      if (
+        menuRef.current && !menuRef.current.contains(e.target as HTMLElement) &&
+        boxRef.current && !boxRef.current.contains(e.target as HTMLElement)
+      ) {
+        setShowMenu(false);
+      }
+    };
+    window.addEventListener('mousedown', handler);
+    return () => window.removeEventListener('mousedown', handler);
+  }, [showMenu]);
+
+  const bg = cardColor(domain);
+  const borderColor = darken(bg, 25);
+
+  const handleClick = (e: React.MouseEvent) => { e.stopPropagation(); onSelect(fileName); };
+  const handleDoubleClick = (e: React.MouseEvent) => { e.stopPropagation(); onExpand(fileName, fileContent); };
+  const handleContextMenu = (e: React.MouseEvent) => {
+    e.preventDefault();
     e.stopPropagation();
-    onSelect(fileName);
+    if (boxRef.current) {
+      const rect = boxRef.current.getBoundingClientRect();
+      setMenuPos({ x: rect.right + 8, y: rect.top + rect.height / 2 });
+    }
+    setShowMenu(v => !v);
   };
 
-  const handleDoubleClick = (e: React.MouseEvent) => {
-    e.stopPropagation();
-    onExpand(fileName, fileContent);
+  const startRename = () => {
+    setRenameVal(removeExt(fileName));
+    setRenaming(true);
+  };
+  const saveRename = () => {
+    const trimmed = renameVal.trim();
+    if (trimmed) onRename?.(id, trimmed + '.ecore');
+    setRenaming(false);
   };
 
-  const handleDeleteClick = (e: React.MouseEvent) => {
-    e.stopPropagation();
-    setShowDeleteConfirm(true);
-  };
-
-  const handleModalClose = (setter: React.Dispatch<React.SetStateAction<boolean>>) => () => {
-    setter(false);
-  };
-
-  const confirmDelete = () => {
-    onDelete?.(id);
-    setShowDeleteConfirm(false);
-  };
-
-  // Forward position + DOM-measured arrow tip screen position to FlowCanvas
-  const handleConnectionStartWrapper = (position: HandlePosition, tipScreenPos: { x: number; y: number }) => {
-    onConnectionStart?.(id, position, tipScreenPos);
-  };
-
-  // Render Connection Handles
-  const connectionHandles = (['top', 'bottom', 'left', 'right'] as const).map(position => (
+  const connectionHandles = (['top', 'bottom', 'left', 'right'] as const).map(pos => (
     <ConnectionHandle
-      key={position}
-      position={position}
+      key={pos}
+      position={pos}
       isVisible={selected || isConnectionActive}
-      onConnectionStart={(pos, tipScreenPos) => handleConnectionStartWrapper(pos, tipScreenPos)}
+      onConnectionStart={(p, tip) => onConnectionStart?.(id, p, tip)}
       offsetIndex={0}
       totalHandles={1}
     />
   ));
 
-  const handleBoxKeyDown = (e: React.KeyboardEvent<HTMLButtonElement>) => {
-    if (e.key === 'Enter') {
-      e.preventDefault();
-      onSelect(fileName);
-    } else if (e.key === ' ') {
-      e.preventDefault();
-      onExpand(fileName, fileContent);
-    }
-  };
-
   return (
     <>
-      <button
-        type="button"
+      <div
         ref={boxRef}
-        style={{
-          ...boxStyle,
-          ...(selected && boxVariantStyles.selected),
-          ...(isHovered && boxVariantStyles.hover),
-          display: isExpanded ? 'none' : 'block',
-          position: 'relative',
-          // Reset button defaults so it behaves like the old <div>
-          border: 'none',
-          background: 'transparent',
-          padding: 0,
-          width: '100%',
-          textAlign: 'left',
-          font: 'inherit',
-        }}
-        onClick={handleClick}
-        onDoubleClick={handleDoubleClick}
-        onKeyDown={handleBoxKeyDown}
-        onMouseEnter={() => setIsHovered(true)}
-        onMouseLeave={() => setIsHovered(false)}
-        aria-label={`${removeEcoreExtension(fileName)} file. Press Enter to select, Space to expand.`}
-        title={`Click to select, double-click to expand\n${fileName}`}
+        style={{ position: 'relative', display: 'inline-block' }}
       >
-        {connectionHandles}
-
-        <div style={createTextStyle(14, '#212529', {
-          fontWeight: '700',
-          textAlign: 'center',
-          wordBreak: 'break-word',
-          lineHeight: '1.3',
-          marginBottom: '6px',
-        })}>
-          <span>{removeEcoreExtension(fileName)}</span>
-        </div>
-
-        {description && (
-          <InfoSection
-            label="Description"
-            content={description}
-            maxLength={70}
-            onShowMore={(e) => {
-              e.stopPropagation();
-              setShowDescriptionModal(true);
-            }}
-          />
-        )}
-
-        {keywords && (
-          <InfoSection
-            label="Keywords"
-            content={keywords}
-            maxLength={40}
-            onShowMore={(e) => {
-              e.stopPropagation();
-              setShowKeywordsModal(true);
-            }}
-            additionalStyles={{ marginTop: '4px', fontWeight: '500', color: '#495057' }}
-          />
-        )}
-
-        <button
+        {/* ── Card ── */}
+        <div
+          onClick={handleClick}
+          onDoubleClick={handleDoubleClick}
+          onContextMenu={handleContextMenu}
+          onMouseEnter={() => setIsHovered(true)}
+          onMouseLeave={() => setIsHovered(false)}
+          title="Double-click to open · Right-click for menu"
           style={{
-            ...createButtonStyle('#dc3545', '#c82333', { width: 'auto', height: 24 }, 10),
-            position: 'absolute',
-            top: '-8px',
-            left: '-8px',
-            padding: '0 8px',
-            textTransform: 'uppercase',
-            letterSpacing: '0.5px',
-            border: '1px solid #ffffff',
-            boxShadow: '0 2px 8px rgba(220, 53, 69, 0.3)',
-            ...(isHovered && {
-              background: gradientBackground('#c82333', '#a71e2a'),
-              transform: 'scale(1.05)',
-              boxShadow: '0 4px 12px rgba(220, 53, 69, 0.4)',
-            }),
+            width: 118,
+            height: 126,
+            borderRadius: 16,
+            background: bg,
+            border: `2px solid ${isReactionSource ? '#1e293b' : selected ? darken(bg, 45) : isHovered ? darken(bg, 35) : borderColor}`,
+            boxShadow: isReactionSource
+              ? '0 0 0 4px #1e293b33, 0 8px 24px rgba(0,0,0,0.15)'
+              : selected
+              ? `0 0 0 3px ${darken(bg, 45)}55, 0 8px 24px rgba(0,0,0,0.15)`
+              : isHovered
+              ? '0 8px 24px rgba(0,0,0,0.12)'
+              : '0 3px 10px rgba(0,0,0,0.08)',
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: 10,
+            cursor: 'pointer',
+            userSelect: 'none',
+            transition: 'all 0.15s',
+            transform: selected ? 'scale(1.04)' : isHovered ? 'scale(1.02)' : 'scale(1)',
+            position: 'relative',
           }}
-          onClick={handleDeleteClick}
-          title="Delete file"
         >
-          Delete
-        </button>
-      </button>
+          {connectionHandles}
 
-      <ConfirmDialog
-        isOpen={showDeleteConfirm}
-        title="Delete Meta Model from Workspace"
-        message={
-          <>
-            <div style={{ marginBottom: '16px' }}>
-              Are you sure you want to delete <strong style={{ color: '#dc2626' }}>"{fileName}"</strong> from your workspace?
-            </div>
-            <div style={{
-              padding: '16px',
-              background: '#fff8ed',
-              borderLeft: '4px solid #f59e0b',
-              borderRadius: 6,
-              fontSize: 13,
-              color: '#92400e',
-              lineHeight: 1.7
+          {/* 3D box icon */}
+          <CardIcon />
+
+          {/* Model name */}
+          {renaming ? (
+            <input
+              autoFocus
+              value={renameVal}
+              onChange={e => setRenameVal(e.target.value)}
+              onKeyDown={e => { if (e.key === 'Enter') saveRename(); if (e.key === 'Escape') setRenaming(false); }}
+              onBlur={saveRename}
+              onClick={e => e.stopPropagation()}
+              style={{
+                width: 110, textAlign: 'center', fontSize: 12, fontWeight: 700,
+                border: '1.5px solid rgba(0,0,0,0.3)', borderRadius: 6,
+                background: 'rgba(255,255,255,0.7)', padding: '2px 6px', outline: 'none',
+              }}
+            />
+          ) : (
+            <span style={{
+              fontSize: 12,
+              fontWeight: 700,
+              color: 'rgba(0,0,0,0.72)',
+              textAlign: 'center',
+              padding: '0 10px',
+              wordBreak: 'break-word',
+              lineHeight: 1.3,
+              maxWidth: '100%',
             }}>
-              <strong style={{ display: 'block', marginBottom: 8, color: '#b45309' }}>⚠️ Warning:</strong>
-              <ul style={{ margin: 0, paddingLeft: 20 }}>
-                <li style={{ marginBottom: 6 }}>All reactions related to this meta model will be permanently deleted</li>
-                <li>Any edits and changes made to this meta model will be lost</li>
-              </ul>
-              <p style={{ margin: '12px 0 0 0', fontStyle: 'italic', fontSize: 12 }}>
-                This action cannot be undone.
-              </p>
-            </div>
-          </>
-        }
-        confirmText="Delete Permanently"
-        cancelText="Cancel"
-        onConfirm={confirmDelete}
-        onCancel={() => setShowDeleteConfirm(false)}
-      />
-
-      {isHovered && (
-        <div style={{ ...tooltipStyle, opacity: 1 }}>
-          <div style={{ fontWeight: '700', marginBottom: '10px', fontSize: '13px' }}>
-            {fileName}
-          </div>
-          <div style={{
-            fontSize: '11px',
-            lineHeight: '1.5',
-            maxHeight: '120px',
-            overflow: 'hidden',
-            textOverflow: 'ellipsis',
-            color: '#e9ecef'
-          }}>
-            {fileContent.length > 200 ? `${fileContent.substring(0, 200)}...` : fileContent}
-          </div>
-          <div style={{
-            position: 'absolute',
-            top: '100%',
-            left: '50%',
-            transform: 'translateX(-50%)',
-            width: 0,
-            height: 0,
-            borderLeft: '8px solid transparent',
-            borderRight: '8px solid transparent',
-            borderTop: '8px solid #495057',
-          }} />
+              {removeExt(fileName)}
+            </span>
+          )}
         </div>
+
+      </div>
+
+      {/* ── Context menu portal (always on top of everything) ── */}
+      {showMenu && !renaming && createPortal(
+        <ContextMenu
+          menuRef={menuRef}
+          pos={menuPos}
+          fileName={fileName}
+          onOpenUML={() => { setShowMenu(false); onExpand(fileName, fileContent); }}
+          onConnect={() => { setShowMenu(false); onConnectionStart?.(id, 'right', { x: 0, y: 0 }); }}
+          onRename={() => { setShowMenu(false); startRename(); }}
+          onDelete={() => { setShowMenu(false); onRequestDelete?.(id); }}
+          onShowDetails={onShowDetails ? () => {
+            setShowMenu(false);
+            const kwArray = keywords ? keywords.split(/[,;]+/).map((s: string) => s.trim()).filter(Boolean) : [];
+            onShowDetails({
+              id: metaModelId,
+              name: removeExt(fileName),
+              description: description || '',
+              domain: domain || '',
+              keyword: kwArray,
+              createdAt,
+            }, fileContent);
+          } : undefined}
+        />,
+        document.body,
       )}
 
-      {showDescriptionModal && description && (
-        <ModalContent
-          fileName={fileName}
-          content={description}
-          title="Description"
-          createdAt={createdAt}
-          onClose={handleModalClose(setShowDescriptionModal)}
-        />
-      )}
-
-      {showKeywordsModal && keywords && (
-        <ModalContent
-          fileName={fileName}
-          content={keywords}
-          title="Keywords"
-          createdAt={createdAt}
-          onClose={handleModalClose(setShowKeywordsModal)}
-        />
-      )}
+      {/* ── Dialogs (legacy simple modals kept for fallback) ── */}
     </>
   );
 };
+
+// ── ContextMenu ───────────────────────────────────────────────────────────────
+
+interface ContextMenuProps {
+  menuRef: React.RefObject<HTMLDivElement | null>;
+  pos: { x: number; y: number };
+  fileName: string;
+  onOpenUML: () => void;
+  onConnect: () => void;
+  onRename: () => void;
+  onDelete: () => void;
+  onShowDetails?: () => void;
+}
+
+const ContextMenu: React.FC<ContextMenuProps> = ({
+  menuRef, pos, fileName, onOpenUML, onConnect, onRename, onDelete, onShowDetails,
+}) => (
+  <div
+    ref={menuRef}
+    style={{
+      position: 'fixed',
+      left: pos.x,
+      top: pos.y,
+      transform: 'translateY(-50%)',
+      background: '#ffffff',
+      borderRadius: 10,
+      boxShadow: '0 4px 20px rgba(0,0,0,0.14), 0 0 0 1px rgba(0,0,0,0.07)',
+      padding: 5,
+      minWidth: 178,
+      zIndex: 99999,
+    }}
+    onMouseDown={e => e.stopPropagation()}
+    onClick={e => e.stopPropagation()}
+  >
+    {/* Header */}
+    <div style={{ padding: '5px 9px 7px', borderBottom: '1px solid #f1f5f9', marginBottom: 3 }}>
+      <span style={{ fontSize: 12, fontWeight: 700, color: '#0f172a' }}>{removeExt(fileName)}</span>
+    </div>
+
+    <CMItem icon={<UMLIcon />}     label="Open UML"        onClick={onOpenUML} />
+    <CMItem icon={<ConnectIcon />} label="Add connection"  onClick={onConnect} />
+    <CMItem icon={<EditIcon />}    label="Rename"          onClick={onRename} />
+    {onShowDetails && <CMItem icon={<InfoIcon />} label="Details" onClick={onShowDetails} />}
+
+    <div style={{ height: 1, background: '#f1f5f9', margin: '4px 2px' }} />
+    <CMItem icon={<TrashIcon />}   label="Remove"          onClick={onDelete} danger />
+  </div>
+);
+
+const CMItem: React.FC<{ icon: React.ReactNode; label: string; onClick: () => void; danger?: boolean }> = ({ icon, label, onClick, danger }) => {
+  const [hov, setHov] = useState(false);
+  return (
+    <button
+      onClick={e => { e.stopPropagation(); onClick(); }}
+      onMouseEnter={() => setHov(true)}
+      onMouseLeave={() => setHov(false)}
+      style={{
+        display: 'flex', alignItems: 'center', gap: 8,
+        width: '100%', padding: '6px 9px', border: 'none', borderRadius: 7,
+        background: hov ? (danger ? '#fef2f2' : '#f8fafc') : 'transparent',
+        color: danger ? (hov ? '#dc2626' : '#ef4444') : '#475569',
+        cursor: 'pointer', fontSize: 12, textAlign: 'left', transition: 'all 0.1s',
+      }}
+    >
+      {icon}
+      {label}
+    </button>
+  );
+};
+
+// ── card icon ─────────────────────────────────────────────────────────────────
+
+const CardIcon = () => (
+  <svg width="46" height="46" viewBox="0 0 32 32" fill="none">
+    <path d="M16 5L27 11V21L16 27L5 21V11L16 5Z"
+      stroke="rgba(0,0,0,0.38)" strokeWidth="1.4" fill="rgba(255,255,255,0.55)" strokeLinejoin="round" />
+    <path d="M16 5V27" stroke="rgba(0,0,0,0.28)" strokeWidth="1.2" strokeLinecap="round" />
+    <path d="M5 11L27 11" stroke="rgba(0,0,0,0.28)" strokeWidth="1.2" strokeLinecap="round" />
+    <path d="M16 5L5 11L16 17L27 11L16 5Z"
+      stroke="rgba(0,0,0,0.3)" strokeWidth="1.2" fill="rgba(255,255,255,0.35)" strokeLinejoin="round" />
+  </svg>
+);
+
+// ── small icons ───────────────────────────────────────────────────────────────
+
+const UMLIcon = () => (
+  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <rect x="3" y="3" width="18" height="18" rx="2" /><line x1="3" y1="9" x2="21" y2="9" /><line x1="9" y1="21" x2="9" y2="9" />
+  </svg>
+);
+const ConnectIcon = () => (
+  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01" />
+  </svg>
+);
+const EditIcon = () => (
+  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+    <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4z" />
+  </svg>
+);
+const InfoIcon = () => (
+  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <circle cx="12" cy="12" r="10" /><line x1="12" y1="8" x2="12" y2="12" /><line x1="12" y1="16" x2="12.01" y2="16" />
+  </svg>
+);
+const TrashIcon = () => (
+  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <polyline points="3 6 5 6 21 6" /><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" /><path d="M10 11v6M14 11v6" /><path d="M9 6V4h6v2" />
+  </svg>
+);

@@ -21,23 +21,25 @@ export const formGroupStyle: React.CSSProperties = { marginBottom: '20px' };
 
 export const labelStyle: React.CSSProperties = {
   display: 'block',
-  fontSize: '14px',
+  fontSize: '13px',
   fontWeight: 600,
-  color: '#2c3e50',
-  marginBottom: '8px',
-  fontFamily: 'Georgia, serif',
+  color: '#374151',
+  marginBottom: '6px',
+  fontFamily: 'ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, sans-serif',
+  letterSpacing: '0.01em',
 };
 
 export const inputStyle: React.CSSProperties = {
   width: '100%',
-  padding: '12px 14px',
-  border: '2px solid #d1ecf1',
+  padding: '10px 12px',
+  border: '1.5px solid #e2e8f0',
   borderRadius: '8px',
   fontSize: '14px',
   boxSizing: 'border-box',
-  transition: 'all 0.3s ease',
-  background: '#f8f9fa',
-  fontFamily: 'Georgia, serif',
+  transition: 'all 0.2s ease',
+  background: '#f8fafc',
+  color: '#0f172a',
+  fontFamily: 'ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, sans-serif',
 };
 
 export const errorMessageStyle: React.CSSProperties = {

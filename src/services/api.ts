@@ -75,15 +75,7 @@ class ApiService {
     context: string
   ): Promise<never> {
     const errorText = await this.getResponseText(response);
-    const errorMessage = this.extractErrorMessage(errorText);
-    console.error(context, {
-      url,
-      method,
-      status: response.status,
-      statusText: response.statusText,
-      message: errorMessage,
-      body: errorText,
-    });
+    console.error(context, { status: response.status });
     throw this.createApiError(errorText, `${method} ${url} failed`);
   }
 
@@ -115,8 +107,8 @@ class ApiService {
       }
 
       return await retryResponse.json();
-    } catch (refreshError) {
-      console.error('Token refresh failed during request:', refreshError);
+    } catch {
+      console.error('Token refresh failed during request');
       return null;
     }
   }
@@ -147,7 +139,10 @@ class ApiService {
     });
 
     if (response.ok) {
-      return await response.json();
+      // 204 No Content or empty body (common for DELETE) — skip JSON parsing
+      if (response.status === 204) return null as T;
+      const text = await response.text();
+      return text ? JSON.parse(text) as T : null as T;
     }
 
     const isOtpEndpoint = endpoint.includes('/verify-otp') || endpoint.includes('/resend-otp');
@@ -187,19 +182,7 @@ class ApiService {
       try {
         errorText = await response.text();
       } catch { }
-      let errorMessage = errorText;
-      try {
-        const parsed = JSON.parse(errorText);
-        errorMessage = parsed?.message || parsed?.error || errorText;
-      } catch { }
-      console.error('Public request failed', {
-        url,
-        method: options.method || 'GET',
-        status: response.status,
-        statusText: response.statusText,
-        message: errorMessage,
-        body: errorText,
-      });
+      console.error('Public request failed', { status: response.status });
       throw this.createApiError(errorText, `Public request failed (${response.status})`);
     }
 
@@ -337,8 +320,8 @@ class ApiService {
 
             return await retryResponse.text();
           }
-        } catch (refreshError) {
-          console.error('Token refresh failed during file fetch:', refreshError);
+        } catch {
+          console.error('Token refresh failed during file fetch');
         }
       }
       throw new Error(`Failed to fetch file: ${response.statusText}`);
@@ -360,16 +343,8 @@ class ApiService {
     context: string
   ): Promise<never> {
     const errorText = await this.getResponseText(response);
-    const errorMessage = this.extractErrorMessage(errorText);
-    console.error(context, {
-      url,
-      type,
-      status: response.status,
-      statusText: response.statusText,
-      message: errorMessage,
-      body: errorText,
-    });
-    throw new Error(errorMessage);
+    console.error(context, { status: response.status });
+    throw new Error(this.extractErrorMessage(errorText));
   }
 
   /**
@@ -399,11 +374,9 @@ class ApiService {
         await this.handleFailedUpload(retryResponse, url, type, 'Upload failed after token refresh');
       }
 
-      const result = await retryResponse.json();
-      console.log(`Successful upload for type ${type}:`, result);
-      return result;
-    } catch (refreshError) {
-      console.error('Token refresh failed during upload:', refreshError);
+      return await retryResponse.json();
+    } catch {
+      console.error('Token refresh failed during upload');
       return null;
     }
   }
@@ -426,12 +399,8 @@ class ApiService {
       body: formData,
     });
 
-    console.log(`Response status: ${response.status} for upload type ${type}`);
-
     if (response.ok) {
-      const result = await response.json();
-      console.log(`Successful upload for type ${type}:`, result);
-      return result;
+      return await response.json();
     }
 
     if (response.status === 401) {
@@ -502,21 +471,10 @@ class ApiService {
 
     const endpoint = `/api/v1/meta-models/find-all?${queryParams.toString()}`;
 
-    console.log('findMetaModels request:', {
-      endpoint,
-      filters,
-      pageNumber,
-      pageSize,
-    });
-
-    const result = await this.authenticatedRequest<{ data: any[]; message: string }>(endpoint, {
+    return this.authenticatedRequest<{ data: any[]; message: string }>(endpoint, {
       method: 'POST',
       body: JSON.stringify(filters),
     });
-
-    console.log('findMetaModels response:', result);
-
-    return result;
   }
 
   /**
@@ -646,19 +604,13 @@ class ApiService {
 
           return await retryResponse.blob();
         }
-      } catch (refreshError) {
-        console.error('Token refresh failed during artifact download:', refreshError);
+      } catch {
+        console.error('Token refresh failed during artifact download');
       }
     }
 
     const errorText = await this.getResponseText(response);
-    const errorMessage = this.extractErrorMessage(errorText);
-    console.error('Artifact download failed', {
-      url,
-      status: response.status,
-      statusText: response.statusText,
-      message: errorMessage,
-    });
+    console.error('Artifact download failed', { status: response.status });
     throw this.createApiError(errorText, 'Artifact download failed');
   }
 
@@ -839,21 +791,12 @@ class ApiService {
           errorMessage = parsed?.message || parsed?.error || errorText;
         } catch { }
 
-        console.error('Update reaction file failed', {
-          url,
-          fileId,
-          status: response.status,
-          statusText: response.statusText,
-          message: errorMessage,
-          body: errorText,
-        });
+        console.error('Update reaction file failed', { status: response.status });
 
         throw new Error(errorMessage);
       }
 
-      const result = await response.json();
-      console.log(`Successful reaction file update for id ${fileId}:`, result);
-      return result as { data: string; message: string };
+      return await response.json() as { data: string; message: string };
     };
 
     try {
@@ -868,8 +811,8 @@ class ApiService {
           if (newToken) {
             return await doRequest(`Bearer ${newToken}`);
           }
-        } catch (refreshError) {
-          console.error('Token refresh failed during updateReactionFile:', refreshError);
+        } catch {
+          console.error('Token refresh failed during updateReactionFile');
         }
       }
       throw err;
@@ -921,8 +864,4 @@ export interface MetaModelRelationRequest {
 export interface VsumSyncChangesPutRequest {
   metaModelIds: number[];
   metaModelRelationRequests: MetaModelRelationRequest[] | null; // you said null for now
-  viewRequests?: Array<{
-    metaModelIds: number[];
-    fileStorageId: number;
-  }>;
 }
