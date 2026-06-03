@@ -13,6 +13,7 @@ import { CanvasProjectTabs } from '../components/canvas/CanvasProjectTabs';
 import { ProjectPickerMenu } from '../components/canvas/ProjectPickerMenu';
 import { UnsavedTabCloseDialog } from '../components/canvas/UnsavedTabCloseDialog';
 import { CanvasTabSession, CanvasUmlPanelState, OpenCanvasTab } from '../types/canvasTab';
+import { createCanvasTabInstanceId } from '../utils/canvasTabId';
 import { waitForMetaModelsOnCanvas } from '../utils/canvasLoadUtils';
 import {
   cloneWorkspaceSnapshot,
@@ -76,7 +77,7 @@ export const CanvasPage: React.FC = () => {
   const [dirtyRevision, setDirtyRevision] = useState(0);
 
   const createInstanceId = useCallback(
-    (projectId: number) => `${projectId}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+    (projectId: number) => createCanvasTabInstanceId(projectId),
     [],
   );
 

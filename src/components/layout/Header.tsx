@@ -1,8 +1,10 @@
 import React, { useEffect, useRef, useState, useMemo, useCallback } from 'react';
 import { User } from '../../services/auth';
 import { apiService } from '../../services/api';
-import { ChangePasswordModal } from '../ui/ChangePasswordModal';
+import { BoundChangePasswordModal } from '../ui/BoundChangePasswordModal';
 import { useChangePassword } from '../../hooks/useChangePassword';
+import { useDismissOnOutsideClick } from '../../hooks/useDismissOnOutsideClick';
+import { getUserInitials } from '../../utils/userInitials';
 
 interface HeaderProps {
   title?: string;
@@ -140,23 +142,6 @@ const ActionButton: React.FC<ActionButtonProps> = ({ onClick, icon, label, varia
   );
 };
 
-// Helper functions
-const getInitials = (fullName?: string, email?: string): string => {
-  if (fullName && fullName.trim().length > 0) {
-    const parts = fullName.trim().split(/\s+/);
-    const first = parts[0]?.[0] ?? '';
-    const last = parts.length > 1 ? parts.at(-1)?.[0] ?? '' : '';
-    return (first + last).toUpperCase() || 'U';
-  }
-  if (email) {
-    const namePart = email.split('@')[0] ?? '';
-    const first = namePart[0] ?? '';
-    const last = namePart.at(-1) ?? '';
-    return (first + last).toUpperCase() || 'U';
-  }
-  return 'U';
-};
-
 export function Header({ title = 'Methodologist Dashboard', user, onLogout }: Readonly<HeaderProps>) {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [apiUser, setApiUser] = useState<ApiUserData | null>(null);
@@ -178,9 +163,9 @@ export function Header({ title = 'Methodologist Dashboard', user, onLogout }: Re
 
   const displayInitials = useMemo(() => {
     if (apiUser) {
-      return getInitials(`${apiUser.firstName} ${apiUser.lastName}`, apiUser.email);
+      return getUserInitials(`${apiUser.firstName} ${apiUser.lastName}`, apiUser.email);
     }
-    return getInitials(user?.name, user?.email);
+    return getUserInitials(user?.name, user?.email);
   }, [apiUser, user]);
 
   const handleLogout = useCallback(() => {
@@ -210,19 +195,7 @@ export function Header({ title = 'Methodologist Dashboard', user, onLogout }: Re
     fetchUserInfo();
   }, []);
 
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
-        setIsMenuOpen(false);
-      }
-    };
-    if (isMenuOpen) {
-      document.addEventListener('mousedown', handleClickOutside);
-    }
-    return () => {
-      document.removeEventListener('mousedown', handleClickOutside);
-    };
-  }, [isMenuOpen]);
+  useDismissOnOutsideClick(menuRef, isMenuOpen, () => setIsMenuOpen(false));
 
   return (
     <header className="header-responsive" style={{
@@ -307,21 +280,7 @@ export function Header({ title = 'Methodologist Dashboard', user, onLogout }: Re
         </div>
       </div>
 
-      <ChangePasswordModal
-        isOpen={changePassword.isOpen}
-        onClose={changePassword.close}
-        newPassword={changePassword.newPassword}
-        confirmPassword={changePassword.confirmPassword}
-        onNewPasswordChange={changePassword.setNewPassword}
-        onConfirmPasswordChange={changePassword.setConfirmPassword}
-        validation={changePassword.validation}
-        isConfirmValid={changePassword.isConfirmValid}
-        isChanging={changePassword.isChanging}
-        error={changePassword.error}
-        success={changePassword.success}
-        onSubmit={changePassword.handleSubmit}
-        canSubmit={changePassword.canSubmit}
-      />
+      <BoundChangePasswordModal controller={changePassword} />
     </header>
   );
 }

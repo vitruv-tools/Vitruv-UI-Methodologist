@@ -1,5 +1,4 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import ReactDOM from 'react-dom';
 import { apiService } from '../../services/api';
 import { CreateModelModal } from './CreateModelModal';
 import { ConfirmDialog } from './ConfirmDialog';
@@ -11,6 +10,7 @@ import {
   METAMODEL_PREVIEW_LAYOUT_SCOPE,
   metaModelPreviewLayoutFileName,
 } from '../../utils/metaModelPreview';
+import { PortalRowActionsMenu } from './PortalRowActionsMenu';
 
 interface ModelLibraryTableProps {
   onModelOpen?: (model: any) => void;
@@ -36,12 +36,6 @@ const SearchIcon = () => (
   <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
     <circle cx="11" cy="11" r="8" />
     <line x1="21" y1="21" x2="16.65" y2="16.65" />
-  </svg>
-);
-
-const DotsIcon = () => (
-  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <circle cx="12" cy="5" r="1" /><circle cx="12" cy="12" r="1" /><circle cx="12" cy="19" r="1" />
   </svg>
 );
 
@@ -132,123 +126,6 @@ const DropdownFilter: React.FC<DropdownFilterProps> = ({ label, options, value, 
         </div>
       )}
     </div>
-  );
-};
-
-// ── RowActionsMenu ──────────────────────────────────────────────────────────
-
-interface RowActionsMenuProps {
-  model: any;
-  onView: () => void;
-  onDelete: () => void;
-}
-
-const ACTIONS_MENU_Z_INDEX = 10500;
-
-const RowActionsMenu: React.FC<RowActionsMenuProps> = ({ model, onView, onDelete }) => {
-  const [open, setOpen] = useState(false);
-  const [menuPos, setMenuPos] = useState({ top: 0, left: 0 });
-  const buttonRef = useRef<HTMLButtonElement>(null);
-  const menuRef = useRef<HTMLDivElement>(null);
-
-  const updateMenuPosition = useCallback(() => {
-    if (!buttonRef.current) return;
-    const rect = buttonRef.current.getBoundingClientRect();
-    setMenuPos({ top: rect.bottom + 4, left: rect.right });
-  }, []);
-
-  useEffect(() => {
-    if (!open) return;
-    const handler = (e: MouseEvent) => {
-      const target = e.target as Node;
-      if (buttonRef.current?.contains(target) || menuRef.current?.contains(target)) return;
-      setOpen(false);
-    };
-    document.addEventListener('mousedown', handler);
-    return () => document.removeEventListener('mousedown', handler);
-  }, [open]);
-
-  useEffect(() => {
-    if (!open) return;
-    const closeOnScroll = () => setOpen(false);
-    window.addEventListener('scroll', closeOnScroll, true);
-    window.addEventListener('resize', closeOnScroll);
-    return () => {
-      window.removeEventListener('scroll', closeOnScroll, true);
-      window.removeEventListener('resize', closeOnScroll);
-    };
-  }, [open]);
-
-  const toggleMenu = (e: React.MouseEvent) => {
-    e.stopPropagation();
-    setOpen(prev => {
-      if (!prev) updateMenuPosition();
-      return !prev;
-    });
-  };
-
-  const menu = open ? (
-    <div
-      ref={menuRef}
-      style={{
-        position: 'fixed',
-        top: menuPos.top,
-        left: menuPos.left,
-        transform: 'translateX(-100%)',
-        background: '#ffffff',
-        border: '1px solid #e5e7eb',
-        borderRadius: 10,
-        boxShadow: '0 8px 24px rgba(0,0,0,0.12)',
-        zIndex: ACTIONS_MENU_Z_INDEX,
-        minWidth: 140,
-        overflow: 'hidden',
-      }}
-      onMouseDown={e => e.stopPropagation()}
-      onClick={e => e.stopPropagation()}
-    >
-      <button
-        onClick={() => { onView(); setOpen(false); }}
-        style={{ display: 'block', width: '100%', padding: '9px 14px', border: 'none', background: 'transparent', fontSize: 13, color: '#374151', cursor: 'pointer', textAlign: 'left' }}
-        onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.background = '#f9fafb'; }}
-        onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.background = 'transparent'; }}
-      >
-        View details
-      </button>
-      <div style={{ height: 1, background: '#f3f4f6', margin: '2px 0' }} />
-      <button
-        onClick={() => { onDelete(); setOpen(false); }}
-        style={{ display: 'block', width: '100%', padding: '9px 14px', border: 'none', background: 'transparent', fontSize: 13, color: '#dc2626', cursor: 'pointer', textAlign: 'left' }}
-        onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.background = '#fef2f2'; }}
-        onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.background = 'transparent'; }}
-      >
-        Delete
-      </button>
-    </div>
-  ) : null;
-
-  return (
-    <>
-      <button
-        ref={buttonRef}
-        onClick={toggleMenu}
-        style={{
-          padding: '4px 8px',
-          border: '1px solid #e5e7eb',
-          borderRadius: 6,
-          background: '#ffffff',
-          cursor: 'pointer',
-          color: '#6b7280',
-          display: 'flex',
-          alignItems: 'center',
-          transition: 'all 0.15s',
-        }}
-        onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.background = '#f9fafb'; (e.currentTarget as HTMLButtonElement).style.borderColor = '#d1d5db'; }}
-        onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.background = '#ffffff'; (e.currentTarget as HTMLButtonElement).style.borderColor = '#e5e7eb'; }}
-      >
-        <DotsIcon />
-      </button>
-      {menu && ReactDOM.createPortal(menu, document.body)}
-    </>
   );
 };
 
@@ -850,7 +727,13 @@ const TableRow: React.FC<TableRowProps> = ({ model, onView, onDelete }) => {
         )}
       </td>
       <td style={{ padding: '13px 16px' }} onClick={e => e.stopPropagation()}>
-        <RowActionsMenu model={model} onView={onView} onDelete={onDelete} />
+        <PortalRowActionsMenu
+          minWidth={140}
+          actions={[
+            { label: 'View details', onClick: onView },
+            { label: 'Delete', onClick: onDelete, danger: true, dividerBefore: true },
+          ]}
+        />
       </td>
     </tr>
   );

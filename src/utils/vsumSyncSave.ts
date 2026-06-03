@@ -1,20 +1,9 @@
 import { apiService, MetaModelRelationRequest } from '../services/api';
+import { extractApiErrorMessage } from './apiErrorMessage';
 
 export function isReactionFilesNotFoundError(message: string): boolean {
   return message.toLowerCase().includes('reaction files not found');
 }
-
-const extractErrorMessage = (error: unknown, fallback: string): string => {
-  const err = error as { response?: { data?: { message?: string } }; message?: string };
-  const data = err?.response?.data;
-  if (data && typeof data === 'object' && typeof data.message === 'string' && data.message.trim()) {
-    return data.message;
-  }
-  if (typeof err?.message === 'string' && err.message.trim()) {
-    return err.message;
-  }
-  return fallback;
-};
 
 export interface VsumSyncSavePayload {
   metaModelIds: number[];
@@ -51,7 +40,7 @@ export async function syncVsumWorkspaceChanges(
   try {
     return await attempt(relations);
   } catch (error) {
-    const detail = extractErrorMessage(error, 'Save failed');
+    const detail = extractApiErrorMessage(error, 'Save failed');
     if (!isReactionFilesNotFoundError(detail) || relations.length === 0) {
       throw new Error(detail);
     }
@@ -65,6 +54,6 @@ export async function syncVsumWorkspaceChanges(
       savedRelations: fallbackRelations,
     };
   } catch (retryError) {
-    throw new Error(extractErrorMessage(retryError, 'Save failed'));
+    throw new Error(extractApiErrorMessage(retryError, 'Save failed'));
   }
 }

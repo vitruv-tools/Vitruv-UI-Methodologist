@@ -11,6 +11,7 @@ import {
   WorkspaceSnapshot,
   WorkspaceSnapshotRequest,
 } from '../types/workspace';
+import { createCanvasTabInstanceId } from '../utils/canvasTabId';
 import { captureEditorSession, restoreEditorSession } from '../utils/projectTabSession';
 
 interface OpenTabInstance {
@@ -33,7 +34,7 @@ export const ProjectPage: React.FC = () => {
   const sessionsRef = useRef<Map<string, ProjectEditorSession>>(new Map());
   const prevActiveInstanceIdRef = useRef<string | null>(null);
 
-  const createInstanceId = useCallback((id: number) => `${id}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`, []);
+  const createInstanceId = useCallback((id: number) => createCanvasTabInstanceId(id), []);
 
   const removeSessionForInstance = useCallback((instanceId: string) => {
     sessionsRef.current.delete(instanceId);

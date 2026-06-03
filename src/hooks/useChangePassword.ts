@@ -1,18 +1,7 @@
 import { useCallback, useMemo, useState } from 'react';
 import { apiService } from '../services/api';
 import { validatePassword } from '../components/ui/ChangePasswordModal';
-
-const extractErrorMessage = (error: unknown, fallback: string): string => {
-  const err = error as { response?: { data?: { message?: string } }; message?: string };
-  const data = err?.response?.data;
-  if (data && typeof data === 'object' && typeof data.message === 'string' && data.message.trim()) {
-    return data.message;
-  }
-  if (typeof err?.message === 'string' && err.message.trim()) {
-    return err.message;
-  }
-  return fallback;
-};
+import { extractApiErrorMessage } from '../utils/apiErrorMessage';
 
 export function useChangePassword() {
   const [isOpen, setIsOpen] = useState(false);
@@ -68,7 +57,7 @@ export function useChangePassword() {
       setConfirmPassword('');
       setTimeout(() => close(), 2000);
     } catch (err) {
-      setError(extractErrorMessage(err, 'Failed to change password'));
+      setError(extractApiErrorMessage(err, 'Failed to change password'));
     } finally {
       setIsChanging(false);
     }
