@@ -1,6 +1,7 @@
 import React, { createRef } from 'react';
 import { render, screen, fireEvent, act } from '@testing-library/react';
 import { UMLDiagram, UMLDiagramHandle } from '../../../components/canvas/UMLDiagram';
+import { loadUmlLayout, saveUmlLayout } from '../../../utils/umlLayoutStorage';
 
 const SIMPLE_ECORE = `<?xml version="1.0" encoding="UTF-8"?>
 <ecore:EPackage xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
@@ -12,6 +13,22 @@ const SIMPLE_ECORE = `<?xml version="1.0" encoding="UTF-8"?>
 </ecore:EPackage>`;
 
 const EMPTY_ECORE = `<?xml version="1.0"?><ecore:EPackage xmlns:ecore="http://www.eclipse.org/emf/2002/Ecore" name="empty"/>`;
+
+const REF_ECORE = `<?xml version="1.0" encoding="UTF-8"?>
+<ecore:EPackage xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                xmlns:ecore="http://www.eclipse.org/emf/2002/Ecore" name="test">
+  <eClassifiers xsi:type="ecore:EClass" name="Order">
+    <eStructuralFeatures xsi:type="ecore:EReference" name="lines" eType="#//LineItem" lowerBound="0" upperBound="-1"/>
+  </eClassifiers>
+  <eClassifiers xsi:type="ecore:EClass" name="LineItem"/>
+</ecore:EPackage>`;
+
+const scopeId = 'uml-diagram-test';
+const fileName = 'simple.ecore';
+
+beforeEach(() => {
+  localStorage.clear();
+});
 
 describe('UMLDiagram real component', () => {
   it('empty ecore shows "No UML content found." message', () => {
@@ -84,5 +101,70 @@ describe('UMLDiagram real component', () => {
   it('renders attribute name from ecore', () => {
     render(<UMLDiagram ecoreContent={SIMPLE_ECORE} />);
     expect(screen.getByText('name')).toBeInTheDocument();
+  });
+
+  it('restores saved class positions when fileName and layoutScopeId are provided', () => {
+    saveUmlLayout(scopeId, fileName, { Person: { x: 420, y: 310 } });
+    const { container } = render(
+      <UMLDiagram
+        ecoreContent={SIMPLE_ECORE}
+        fileName={fileName}
+        layoutScopeId={scopeId}
+      />,
+    );
+    const personBox = Array.from(container.querySelectorAll('[data-classbox]')).find(el =>
+      el.textContent?.includes('Person'),
+    ) as HTMLElement;
+    expect(personBox).toBeTruthy();
+    expect(parseFloat(personBox.style.left)).toBeGreaterThan(400);
+  });
+
+  it('persists layout to localStorage on unmount', () => {
+    const { unmount } = render(
+      <UMLDiagram
+        ecoreContent={SIMPLE_ECORE}
+        fileName={fileName}
+        layoutScopeId={scopeId}
+      />,
+    );
+    unmount();
+    const saved = loadUmlLayout(scopeId, fileName);
+    expect(saved).not.toBeNull();
+    expect(saved?.Person).toBeDefined();
+  });
+
+  it('keeps negative coordinates in saved layout (no clamp to zero)', () => {
+    saveUmlLayout(scopeId, fileName, { Person: { x: -120, y: -90 }, Employee: { x: 200, y: 100 } });
+    const { unmount } = render(
+      <UMLDiagram
+        ecoreContent={SIMPLE_ECORE}
+        fileName={fileName}
+        layoutScopeId={scopeId}
+      />,
+    );
+    unmount();
+    expect(loadUmlLayout(scopeId, fileName)?.Person).toEqual({ x: -120, y: -90 });
+  });
+
+  it('highlights relationship line when clicked', async () => {
+    const { container } = render(<UMLDiagram ecoreContent={SIMPLE_ECORE} />);
+    const relGroup = container.querySelector('[data-rel-line]') as SVGGElement;
+    expect(relGroup).not.toBeNull();
+    await act(async () => {
+      fireEvent.click(relGroup);
+    });
+    const strokeLine = relGroup.querySelectorAll('line')[2];
+    expect(strokeLine?.getAttribute('stroke')).toBe('#ef4444');
+  });
+
+  it('renders multiplicity badges on association edges', () => {
+    render(<UMLDiagram ecoreContent={REF_ECORE} />);
+    expect(screen.getByText('0..*')).toBeInTheDocument();
+    expect(screen.getByText('1')).toBeInTheDocument();
+  });
+
+  it('renders a minimap overview in the bottom-right corner', () => {
+    const { container } = render(<UMLDiagram ecoreContent={SIMPLE_ECORE} />);
+    expect(container.querySelector('[title="Diagram overview — click or drag to pan"]')).not.toBeNull();
   });
 });

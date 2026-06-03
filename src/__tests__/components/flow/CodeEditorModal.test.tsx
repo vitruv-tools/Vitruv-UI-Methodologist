@@ -87,7 +87,7 @@ describe('CodeEditorModal', () => {
       />,
     );
 
-    fireEvent.click(screen.getByRole('button', { name: /💾 Save/i }));
+    fireEvent.click(screen.getByRole('button', { name: /^Save$/i }));
 
     await waitFor(() => {
       expect(onSave).toHaveBeenCalledWith('initial code');
@@ -106,7 +106,7 @@ describe('CodeEditorModal', () => {
       />,
     );
 
-    fireEvent.click(screen.getByRole('button', { name: /💾 Save/i }));
+    fireEvent.click(screen.getByRole('button', { name: /^Save$/i }));
 
     expect(await screen.findByTestId('confirm-Unable to save file')).toBeInTheDocument();
   });
@@ -219,7 +219,7 @@ describe('CodeEditorModal', () => {
     expect(screen.getByText(/Unsaved changes/i)).toBeInTheDocument();
 
     // Save
-    fireEvent.click(screen.getByRole('button', { name: /💾 Save/i }));
+    fireEvent.click(screen.getByRole('button', { name: /^Save$/i }));
 
     await waitFor(() => {
       expect(screen.queryByText(/Unsaved changes/i)).not.toBeInTheDocument();
@@ -441,13 +441,13 @@ describe('CodeEditorModal – additional tests', () => {
 
     fireEvent.click(screen.getByTitle(/Save \(Ctrl\+S\)/i));
 
-    expect(await screen.findByText(/✓ Saved/i)).toBeInTheDocument();
+    expect(await screen.findByText(/^Saved$/i)).toBeInTheDocument();
   });
 
   it('displays line and character count in status bar', () => {
     render(<CodeEditorModal {...defaultProps} initialCode={'line1\nline2'} />);
-    expect(screen.getByText(/2 Lines/i)).toBeInTheDocument();
-    expect(screen.getByText(/Characters/i)).toBeInTheDocument();
+    expect(screen.getByText(/2 lines/i)).toBeInTheDocument();
+    expect(screen.getByText(/characters/i)).toBeInTheDocument();
   });
 
   it('displays edge ID in status bar', () => {

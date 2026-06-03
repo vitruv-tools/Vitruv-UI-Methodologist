@@ -3,6 +3,7 @@ import { VsumDetails } from '../../types';
 import { apiService, MetaModelRelationRequest } from '../../services/api';
 import { WorkspaceSnapshot } from '../../types/workspace';
 import { ConfirmDialog } from './ConfirmDialog';
+import { downloadBlobAsFile } from '../../utils/downloadFile';
 
 const POPUP_STYLES = {
     success: { background: '#ecfdf3', border: '1px solid #bbf7d0', color: '#166534', icon: '✅' },
@@ -23,6 +24,8 @@ interface VsumTabsProps {
     onAddMetaModels?: () => void;
     showAddButton?: boolean;
     requestWorkspaceSnapshot?: () => Promise<WorkspaceSnapshot | null>;
+    /** Last-known workspace snapshots for inactive tabs (used for unsaved indicators). */
+    sessionSnapshotsByInstanceId?: Record<string, WorkspaceSnapshot | null>;
 }
 
 const extractBackendError = (
@@ -82,6 +85,7 @@ export const VsumTabs: React.FC<VsumTabsProps> = ({
                                                       onAddMetaModels,
                                                       showAddButton,
                                                       requestWorkspaceSnapshot,
+                                                      sessionSnapshotsByInstanceId = {},
                                                   }) => {
     const [detailsById, setDetailsById] = useState<Record<number, VsumDetails | undefined>>({});
     const [error, setError] = useState<string>('');
@@ -161,13 +165,9 @@ export const VsumTabs: React.FC<VsumTabsProps> = ({
         return !snapshotsEqual(backendToSnapshot(backend), snapshot);
     };
 
-    // ---- load VSUM details for active tab --------------------------
+    // ---- load VSUM details for every open tab (tab titles) ---------
 
     useEffect(() => {
-        const active = openTabs.find(t => t.instanceId === activeInstanceId);
-        const activeId = active?.id;
-        if (!activeId || detailsById[activeId]) return;
-
         const fetchDetails = async (id: number) => {
             setError('');
             try {
@@ -183,8 +183,12 @@ export const VsumTabs: React.FC<VsumTabsProps> = ({
             }
         };
 
-        fetchDetails(activeId);
-    }, [activeInstanceId, openTabs, detailsById]);
+        openTabs.forEach(tab => {
+            if (!detailsById[tab.id]) {
+                fetchDetails(tab.id);
+            }
+        });
+    }, [openTabs, detailsById]);
 
     // ---- keep workspace snapshot in sync (polling) -----------------
 
@@ -439,16 +443,7 @@ export const VsumTabs: React.FC<VsumTabsProps> = ({
         setError('');
         try {
             const blob = await apiService.downloadVsumArtifact(active.id);
-            
-            // Create a download link and trigger it
-            const url = globalThis.URL.createObjectURL(blob);
-            const link = globalThis.document.createElement('a');
-            link.href = url;
-            link.download = `vsum-${active.id}-artifact.zip`;
-            globalThis.document.body.appendChild(link);
-            link.click();
-            link.remove();
-            globalThis.URL.revokeObjectURL(url);
+            downloadBlobAsFile(blob, `vsum-${active.id}-artifact.zip`);
             
             setPopup({ message: 'Artifact downloaded successfully!', type: 'success' });
             setTimeout(() => setPopup(null), 3000);
@@ -547,7 +542,10 @@ export const VsumTabs: React.FC<VsumTabsProps> = ({
                         {openTabs.map(tab => {
                             const isActive = tab.instanceId === activeInstanceId;
                             const name = detailsById[tab.id]?.name || `VSUM #${tab.id}`;
-                            const isTabDirty = computeDirty(detailsById[tab.id], workspaceSnapshot, tab.id);
+                            const snapshotForTab = isActive
+                                ? workspaceSnapshot
+                                : sessionSnapshotsByInstanceId[tab.instanceId] ?? null;
+                            const isTabDirty = computeDirty(detailsById[tab.id], snapshotForTab, tab.id);
 
                             return (
                                 <div

@@ -1,10 +1,13 @@
 import React, { useEffect, useRef } from 'react';
 import ReactDOM from 'react-dom';
+import { MODAL_Z_INDEX, modalBackdropStyle, useModalBodyLock } from '../ui/modalUtils';
 import { UMLDiagram, UMLDiagramHandle } from './UMLDiagram';
 
 interface FloatingUMLPanelProps {
   id: string;
   title: string;
+  fileName: string;
+  layoutScopeId: string;
   ecoreContent: string;
   /** Legacy props — no longer used, kept for call-site compatibility */
   initialTop?: number;
@@ -17,28 +20,28 @@ interface FloatingUMLPanelProps {
 }
 
 export const FloatingUMLPanel: React.FC<FloatingUMLPanelProps> = ({
-  id, title, ecoreContent, zIndex, onClose,
+  id, title, fileName, layoutScopeId, ecoreContent, zIndex = MODAL_Z_INDEX, onClose,
 }) => {
   const diagramRef = useRef<UMLDiagramHandle>(null);
+  const backdropZ = zIndex < MODAL_Z_INDEX ? MODAL_Z_INDEX : zIndex;
 
-  // Auto fit-to-view on first open
+  useModalBodyLock(true);
+
+  // Focus viewport on the main cluster of boxes when the panel opens
   useEffect(() => {
     const t = setTimeout(() => diagramRef.current?.fitToView(), 150);
     return () => clearTimeout(t);
-  }, []);
+  }, [layoutScopeId, fileName, ecoreContent]);
 
   return ReactDOM.createPortal(
     <>
       {/* ── Backdrop ── */}
-      <div
+      <button
+        type="button"
+        aria-hidden="true"
+        tabIndex={-1}
         onClick={() => onClose(id)}
-        style={{
-          position: 'fixed', inset: 0,
-          background: 'rgba(0,0,0,0.45)',
-          backdropFilter: 'blur(3px)',
-          WebkitBackdropFilter: 'blur(3px)',
-          zIndex,
-        }}
+        style={{ ...modalBackdropStyle, zIndex: backdropZ }}
       />
 
       {/* ── Panel ── */}
@@ -47,7 +50,8 @@ export const FloatingUMLPanel: React.FC<FloatingUMLPanelProps> = ({
         top: '50%', left: '50%',
         transform: 'translate(-50%, -50%)',
         width: '80vw', height: '80vh',
-        zIndex: zIndex + 1,
+        zIndex: backdropZ + 1,
+        pointerEvents: 'auto',
         background: '#ffffff',
         borderRadius: 10,
         boxShadow: '0 24px 64px rgba(0,0,0,0.28), 0 4px 16px rgba(0,0,0,0.10)',
@@ -102,7 +106,12 @@ export const FloatingUMLPanel: React.FC<FloatingUMLPanelProps> = ({
 
         {/* ── Diagram ── */}
         <div style={{ flex: 1, overflow: 'hidden', position: 'relative' }}>
-          <UMLDiagram ref={diagramRef} ecoreContent={ecoreContent} />
+          <UMLDiagram
+            ref={diagramRef}
+            ecoreContent={ecoreContent}
+            fileName={fileName}
+            layoutScopeId={layoutScopeId}
+          />
 
           {/* ── Zoom controls (floating bottom-right) ── */}
           <div style={{

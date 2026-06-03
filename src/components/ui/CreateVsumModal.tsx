@@ -1,13 +1,15 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import ReactDOM from 'react-dom';
 import { apiService } from '../../services/api';
 import { useToast } from './ToastProvider';
 import {
   modalOverlayStyle,
+  modalBackdropButtonStyle,
   labelStyle,
   inputStyle,
   errorMessageStyle,
 } from './sharedStyles';
+import { useModalBodyLock } from './modalUtils';
 
 interface CreateVsumModalProps {
   isOpen: boolean;
@@ -93,14 +95,7 @@ export const CreateVsumModal: React.FC<CreateVsumModalProps> = ({ isOpen, onClos
   const [error, setError] = useState('');
   const { showSuccess, showError } = useToast();
 
-  useEffect(() => {
-    if (!isOpen) return;
-    const prev = document.body.style.overflow;
-    document.body.style.overflow = 'hidden';
-    return () => {
-      document.body.style.overflow = prev;
-    };
-  }, [isOpen]);
+  useModalBodyLock(isOpen);
 
   if (!isOpen) return null;
 
@@ -162,19 +157,7 @@ export const CreateVsumModal: React.FC<CreateVsumModalProps> = ({ isOpen, onClos
         aria-hidden="true"
         tabIndex={-1}
         onClick={handleClose}
-        style={{
-          position: 'absolute',
-          inset: 0,
-          backgroundColor: 'rgba(0, 0, 0, 0.5)',
-          backdropFilter: 'blur(6px)',
-          WebkitBackdropFilter: 'blur(6px)',
-          border: 'none',
-          padding: 0,
-          margin: 0,
-          width: '100%',
-          height: '100%',
-          cursor: 'default',
-        }}
+        style={modalBackdropButtonStyle}
       />
       <div style={{ ...modalStyle, position: 'relative', zIndex: 1 }}>
         <div style={headerStyle}>

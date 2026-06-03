@@ -3,6 +3,7 @@ import ReactDOM from 'react-dom';
 import { apiService } from '../../services/api';
 import { VsumDetails } from '../../types';
 import { VsumUsersTab } from './VsumUsersTab';
+import { useModalBodyLock } from './modalUtils';
 
 interface Props {
   isOpen: boolean;
@@ -699,6 +700,8 @@ export const VsumDetailsModal: React.FC<Props> = ({ isOpen, vsumId, onClose, onS
       setDeleteError(e?.response?.data?.message || e?.message || 'Delete failed');
     }
   };
+
+  useModalBodyLock(isOpen);
 
   if (!isOpen) return null;
 

@@ -1,9 +1,20 @@
-import React, { useState, useRef, useCallback, useEffect, forwardRef, useImperativeHandle } from 'react';
-import { ecoreToUml, UMLAttribute, UMLRelType } from '../../utils/ecoreToUml';
+import React, { useState, useRef, useCallback, useEffect, useMemo, forwardRef, useImperativeHandle } from 'react';
+import { ecoreToUml, UMLAttribute, UMLRelationship } from '../../utils/ecoreToUml';
+import {
+  applyLayoutToUmlClasses,
+  positionsFromUmlClasses,
+  saveUmlLayout,
+} from '../../utils/umlLayoutStorage';
+import { assignParallelRelMeta, computeUmlFocusRect } from '../../utils/umlClassLayout';
+import { UMLDiagramMinimap } from './UMLDiagramMinimap';
 
 // ── constants ────────────────────────────────────────────────────────────────
 
 const BW = 190;         // box width
+const CANVAS_PAD = 480; // free space around diagram (all sides; allows negative coords)
+const MIN_READABLE_ZOOM = 0.55;
+const MAX_ZOOM = 3;
+const MIN_ZOOM = 0.35;
 const NAME_H = 36;      // name-section height (no stereotype)
 const STEREO_H = 54;    // name-section height (with stereotype)
 const ATTR_ROW = 22;    // height per attribute row
@@ -17,6 +28,35 @@ function boxH(c: CLS): number {
   const nh = c.isAbstract || c.isInterface ? STEREO_H : NAME_H;
   const ah = c.attributes.length * ATTR_ROW + ATTR_PAD + ADD_BTN_H;
   return nh + 1 + ah + 1 + METH_H;
+}
+
+function getLayoutMetrics(classes: CLS[]) {
+  if (classes.length === 0) {
+    return {
+      totalW: 1200,
+      totalH: 900,
+      offsetX: CANVAS_PAD,
+      offsetY: CANVAS_PAD,
+      minX: 0,
+      minY: 0,
+      maxX: 700,
+      maxY: 400,
+    };
+  }
+  const minX = Math.min(...classes.map(c => c.x));
+  const minY = Math.min(...classes.map(c => c.y));
+  const maxX = Math.max(...classes.map(c => c.x + BW));
+  const maxY = Math.max(...classes.map(c => c.y + boxH(c)));
+  return {
+    totalW: maxX - minX + CANVAS_PAD * 2,
+    totalH: maxY - minY + CANVAS_PAD * 2,
+    offsetX: CANVAS_PAD - minX,
+    offsetY: CANVAS_PAD - minY,
+    minX,
+    minY,
+    maxX,
+    maxY,
+  };
 }
 
 function edgePt(bx: number, by: number, h: number, tx: number, ty: number) {
@@ -40,12 +80,30 @@ interface CLS {
   y: number;
 }
 
-interface REL {
-  id: string;
-  sourceId: string;
-  targetId: string;
-  type: UMLRelType;
-  label?: string;
+type DiagramRel = UMLRelationship & { parallelIndex?: number; parallelCount?: number };
+
+const EDGE_DEFAULT = '#0c436e';
+const EDGE_HOVER = '#f87171';
+const EDGE_SELECT = '#ef4444';
+
+function multiplicityPosition(
+  x1: number, y1: number, x2: number, y2: number,
+  end: 'start' | 'end',
+): { x: number; y: number } {
+  const dx = x2 - x1;
+  const dy = y2 - y1;
+  const len = Math.max(Math.hypot(dx, dy), 0.0001);
+  const ux = dx / len;
+  const uy = dy / len;
+  const nx = -uy;
+  const ny = ux;
+  const along = end === 'start' ? 26 : -26;
+  const baseX = end === 'start' ? x1 : x2;
+  const baseY = end === 'start' ? y1 : y2;
+  return {
+    x: baseX + ux * along + nx * 20,
+    y: baseY + uy * along + ny * 20,
+  };
 }
 
 type EditState =
@@ -62,21 +120,89 @@ export interface UMLDiagramHandle {
 
 interface UMLDiagramProps {
   ecoreContent: string;
+  fileName?: string;
+  layoutScopeId?: string;
 }
 
-export const UMLDiagram = forwardRef<UMLDiagramHandle, UMLDiagramProps>(({ ecoreContent }, ref) => {
-  const parsed = ecoreToUml(ecoreContent);
-  const [classes, setClasses] = useState<CLS[]>(parsed.classes);
-  const [rels] = useState<REL[]>(parsed.relationships);
+export const UMLDiagram = forwardRef<UMLDiagramHandle, UMLDiagramProps>(({
+  ecoreContent,
+  fileName,
+  layoutScopeId = 'default',
+}, ref) => {
+  const parsed = useMemo(() => ecoreToUml(ecoreContent), [ecoreContent]);
+  const [classes, setClasses] = useState<CLS[]>(() =>
+    fileName ? applyLayoutToUmlClasses(layoutScopeId, fileName, parsed.classes) : parsed.classes,
+  );
+  const rels = useMemo(
+    () => assignParallelRelMeta(parsed.relationships) as DiagramRel[],
+    [parsed.relationships],
+  );
   const [edit, setEdit] = useState<EditState | null>(null);
+  const [selectedRelId, setSelectedRelId] = useState<string | null>(null);
+  const [hoveredRelId, setHoveredRelId] = useState<string | null>(null);
+  const classesRef = useRef(classes);
+  classesRef.current = classes;
+
+  // Re-apply saved layout when ecore content or file changes
+  useEffect(() => {
+    const base = fileName
+      ? applyLayoutToUmlClasses(layoutScopeId, fileName, parsed.classes)
+      : parsed.classes;
+    setClasses(base);
+  }, [ecoreContent, fileName, layoutScopeId, parsed.classes]);
+
+  // Auto-save box positions while dragging and on unmount
+  useEffect(() => {
+    if (!fileName) return;
+    const timer = setTimeout(() => {
+      saveUmlLayout(layoutScopeId, fileName, positionsFromUmlClasses(classes));
+    }, 250);
+    return () => clearTimeout(timer);
+  }, [classes, fileName, layoutScopeId]);
+
+  useEffect(() => {
+    if (!fileName) return;
+    return () => {
+      const snapshot = classesRef.current;
+      if (snapshot.length > 0) {
+        saveUmlLayout(layoutScopeId, fileName, positionsFromUmlClasses(snapshot));
+      }
+    };
+  }, [fileName, layoutScopeId]);
+
+  const diagramRef = useRef<UMLDiagramHandle>(null);
+  const didInitialFit = useRef(false);
+
+  useEffect(() => {
+    didInitialFit.current = false;
+  }, [ecoreContent, fileName]);
+
+  // Fit once on open — focus viewport on the densest cluster of boxes
+  useEffect(() => {
+    if (didInitialFit.current || classes.length === 0) return;
+    const t = setTimeout(() => {
+      diagramRef.current?.fitToView?.();
+      didInitialFit.current = true;
+    }, 120);
+    return () => clearTimeout(t);
+  }, [classes.length, fileName, layoutScopeId]);
 
   // ── viewport (pan + zoom) ──────────────────────────────────────────────────
-  const [vx, setVx] = useState(16);
-  const [vy, setVy] = useState(16);
+  const [vx, setVx] = useState(0);
+  const [vy, setVy] = useState(0);
   const [vscale, setVscale] = useState(1);
   const [panning, setPanning] = useState(false);
-  const viewRef = useRef({ x: 16, y: 16, scale: 1 });
+  const viewRef = useRef({ x: 0, y: 0, scale: 1 });
+
+  const layout = useMemo(() => getLayoutMetrics(classes), [classes]);
+  const { totalW, totalH, offsetX, offsetY } = layout;
   const containerRef = useRef<HTMLDivElement>(null);
+
+  const handleMinimapPan = useCallback((nx: number, ny: number) => {
+    viewRef.current = { ...viewRef.current, x: nx, y: ny };
+    setVx(nx);
+    setVy(ny);
+  }, []);
 
   const applyZoom = useCallback((factor: number) => {
     const el = containerRef.current;
@@ -84,7 +210,7 @@ export const UMLDiagram = forwardRef<UMLDiagramHandle, UMLDiagramProps>(({ ecore
     const { x, y, scale } = viewRef.current;
     const cx = el.clientWidth / 2;
     const cy = el.clientHeight / 2;
-    const ns = Math.max(0.12, Math.min(5, scale * factor));
+    const ns = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, scale * factor));
     const ratio = ns / scale;
     const nx = cx - ratio * (cx - x);
     const ny = cy - ratio * (cy - y);
@@ -93,31 +219,39 @@ export const UMLDiagram = forwardRef<UMLDiagramHandle, UMLDiagramProps>(({ ecore
   }, []);
 
   // ── imperative zoom controls ───────────────────────────────────────────────
-  useImperativeHandle(ref, () => ({
+  useImperativeHandle(ref, () => {
+    const handle: UMLDiagramHandle = {
     zoomIn: () => applyZoom(1.3),
     zoomOut: () => applyZoom(1 / 1.3),
     fitToView: () => {
       const el = containerRef.current;
       if (!el || classes.length === 0) return;
-      const PAD = 40;
-      const minX = Math.min(...classes.map(c => c.x));
-      const minY = Math.min(...classes.map(c => c.y));
-      const maxX = Math.max(...classes.map(c => c.x + BW));
-      const maxY = Math.max(...classes.map(c => c.y + boxH(c)));
-      const contentW = maxX - minX;
-      const contentH = maxY - minY;
+      const PAD = 48;
+      const focus = computeUmlFocusRect(classes, {
+        boxWidth: BW,
+        boxHeight: c => boxH(c),
+        padding: PAD,
+      });
+      const contentW = focus.maxX - focus.minX;
+      const contentH = focus.maxY - focus.minY;
       const { clientWidth: cw, clientHeight: ch } = el;
-      const scale = Math.min(
-        (cw - PAD * 2) / contentW,
-        (ch - PAD * 2) / contentH,
-        2,
+      const fitScale = Math.min(
+        (cw - PAD * 2) / Math.max(contentW, 1),
+        (ch - PAD * 2) / Math.max(contentH, 1),
+        1.15,
       );
-      const nx = (cw - contentW * scale) / 2 - minX * scale;
-      const ny = (ch - contentH * scale) / 2 - minY * scale;
+      const scale = Math.max(MIN_READABLE_ZOOM, fitScale);
+      const dispMinX = focus.minX + offsetX;
+      const dispMinY = focus.minY + offsetY;
+      const nx = (cw - contentW * scale) / 2 - dispMinX * scale;
+      const ny = (ch - contentH * scale) / 2 - dispMinY * scale;
       viewRef.current = { x: nx, y: ny, scale };
       setVx(nx); setVy(ny); setVscale(scale);
     },
-  }), [applyZoom, classes]);
+    };
+    diagramRef.current = handle;
+    return handle;
+  }, [applyZoom, classes, offsetX, offsetY]);
 
   useEffect(() => { viewRef.current = { x: vx, y: vy, scale: vscale }; }, [vx, vy, vscale]);
 
@@ -132,7 +266,7 @@ export const UMLDiagram = forwardRef<UMLDiagramHandle, UMLDiagramProps>(({ ecore
       const mx = e.clientX - rect.left;
       const my = e.clientY - rect.top;
       const factor = e.deltaY > 0 ? 0.88 : 1 / 0.88;
-      const ns = Math.max(0.12, Math.min(5, scale * factor));
+      const ns = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, scale * factor));
       const ratio = ns / scale;
       const nx = mx - ratio * (mx - x);
       const ny = my - ratio * (my - y);
@@ -147,6 +281,7 @@ export const UMLDiagram = forwardRef<UMLDiagramHandle, UMLDiagramProps>(({ ecore
 
   const handlePanStart = useCallback((e: React.MouseEvent) => {
     if ((e.target as HTMLElement).closest('[data-classbox]')) return;
+    if ((e.target as HTMLElement).closest('[data-rel-line]')) return;
     e.preventDefault();
     setPanning(true);
     const { x, y } = viewRef.current;
@@ -167,11 +302,8 @@ export const UMLDiagram = forwardRef<UMLDiagramHandle, UMLDiagramProps>(({ ecore
     window.addEventListener('mouseup', onUp);
   }, []);
 
-  const totalW = Math.max(700, ...classes.map(c => c.x + BW + 60));
-  const totalH = Math.max(400, ...classes.map(c => c.y + boxH(c) + 60));
-
   const moveClass = useCallback((id: string, x: number, y: number) => {
-    setClasses(prev => prev.map(c => c.id === id ? { ...c, x: Math.max(0, x), y: Math.max(0, y) } : c));
+    setClasses(prev => prev.map(c => (c.id === id ? { ...c, x, y } : c)));
   }, []);
 
   const saveName = useCallback((id: string, name: string) => {
@@ -227,20 +359,36 @@ export const UMLDiagram = forwardRef<UMLDiagramHandle, UMLDiagramProps>(({ ecore
     {/* SVG: relationship lines */}
     <div style={{ position: 'relative', width: totalW, height: totalH }}>
       <svg
-        style={{ position: 'absolute', top: 0, left: 0, width: totalW, height: totalH, pointerEvents: 'none', overflow: 'visible' }}
+        style={{ position: 'absolute', top: 0, left: 0, width: totalW, height: totalH, overflow: 'visible' }}
+        onClick={() => setSelectedRelId(null)}
       >
         <defs>
           <marker id="uml-inherit" viewBox="0 0 14 14" refX="13" refY="7" markerWidth="11" markerHeight="11" orient="auto">
-            <polygon points="0,0 13,7 0,14" fill="white" stroke="#475569" strokeWidth="1.5" />
+            <polygon points="0,0 13,7 0,14" fill="white" stroke={EDGE_DEFAULT} strokeWidth="1.5" />
+          </marker>
+          <marker id="uml-inherit-hov" viewBox="0 0 14 14" refX="13" refY="7" markerWidth="11" markerHeight="11" orient="auto">
+            <polygon points="0,0 13,7 0,14" fill="white" stroke={EDGE_HOVER} strokeWidth="1.5" />
+          </marker>
+          <marker id="uml-inherit-sel" viewBox="0 0 14 14" refX="13" refY="7" markerWidth="11" markerHeight="11" orient="auto">
+            <polygon points="0,0 13,7 0,14" fill="white" stroke={EDGE_SELECT} strokeWidth="1.5" />
           </marker>
           <marker id="uml-assoc" viewBox="0 0 13 13" refX="12" refY="6.5" markerWidth="10" markerHeight="10" orient="auto">
-            <path d="M0,0 L12,6.5 L0,13" fill="none" stroke="#475569" strokeWidth="1.5" />
+            <path d="M0,0 L12,6.5 L0,13" fill="none" stroke={EDGE_DEFAULT} strokeWidth="1.5" />
+          </marker>
+          <marker id="uml-assoc-hov" viewBox="0 0 13 13" refX="12" refY="6.5" markerWidth="10" markerHeight="10" orient="auto">
+            <path d="M0,0 L12,6.5 L0,13" fill="none" stroke={EDGE_HOVER} strokeWidth="1.5" />
+          </marker>
+          <marker id="uml-assoc-sel" viewBox="0 0 13 13" refX="12" refY="6.5" markerWidth="10" markerHeight="10" orient="auto">
+            <path d="M0,0 L12,6.5 L0,13" fill="none" stroke={EDGE_SELECT} strokeWidth="1.5" />
           </marker>
           <marker id="uml-compose" viewBox="0 0 18 12" refX="0" refY="6" markerWidth="13" markerHeight="9" orient="auto">
-            <polygon points="0,6 8,0 16,6 8,12" fill="#475569" />
+            <polygon points="0,6 8,0 16,6 8,12" fill={EDGE_DEFAULT} />
           </marker>
-          <marker id="uml-agg" viewBox="0 0 18 12" refX="0" refY="6" markerWidth="13" markerHeight="9" orient="auto">
-            <polygon points="0,6 8,0 16,6 8,12" fill="white" stroke="#475569" strokeWidth="1.5" />
+          <marker id="uml-compose-hov" viewBox="0 0 18 12" refX="0" refY="6" markerWidth="13" markerHeight="9" orient="auto">
+            <polygon points="0,6 8,0 16,6 8,12" fill={EDGE_HOVER} />
+          </marker>
+          <marker id="uml-compose-sel" viewBox="0 0 18 12" refX="0" refY="6" markerWidth="13" markerHeight="9" orient="auto">
+            <polygon points="0,6 8,0 16,6 8,12" fill={EDGE_SELECT} />
           </marker>
         </defs>
 
@@ -250,28 +398,123 @@ export const UMLDiagram = forwardRef<UMLDiagramHandle, UMLDiagramProps>(({ ecore
           if (!src || !tgt) return null;
 
           const sh = boxH(src), th = boxH(tgt);
-          const scx = src.x + BW / 2, scy = src.y + sh / 2;
-          const tcx = tgt.x + BW / 2, tcy = tgt.y + th / 2;
-          const p1 = edgePt(src.x, src.y, sh, tcx, tcy);
-          const p2 = edgePt(tgt.x, tgt.y, th, scx, scy);
+          const sx = src.x + offsetX;
+          const sy = src.y + offsetY;
+          const tx = tgt.x + offsetX;
+          const ty = tgt.y + offsetY;
+          const scx = sx + BW / 2, scy = sy + sh / 2;
+          const tcx = tx + BW / 2, tcy = ty + th / 2;
+          let p1 = edgePt(sx, sy, sh, tcx, tcy);
+          let p2 = edgePt(tx, ty, th, scx, scy);
 
-          const mEnd = rel.type === 'inheritance' ? 'url(#uml-inherit)' : rel.type === 'association' ? 'url(#uml-assoc)' : undefined;
-          const mStart = rel.type === 'composition' ? 'url(#uml-compose)' : undefined;
+          const parallelCount = rel.parallelCount ?? 1;
+          const parallelIndex = rel.parallelIndex ?? 0;
+          if (parallelCount > 1) {
+            const lineLen = Math.max(Math.hypot(p2.x - p1.x, p2.y - p1.y), 0.0001);
+            const sep = 14;
+            const off = (parallelIndex - (parallelCount - 1) / 2) * sep;
+            const nx = -(p2.y - p1.y) / lineLen;
+            const ny = (p2.x - p1.x) / lineLen;
+            p1 = { x: p1.x + nx * off, y: p1.y + ny * off };
+            p2 = { x: p2.x + nx * off, y: p2.y + ny * off };
+          }
+
+          const isSelected = selectedRelId === rel.id;
+          const isHovered = hoveredRelId === rel.id;
+          const strokeColor = isSelected ? EDGE_SELECT : isHovered ? EDGE_HOVER : EDGE_DEFAULT;
+          const strokeWidth = isSelected ? 3 : isHovered ? 2.5 : 1.5;
+
+          const mEnd = rel.type === 'inheritance'
+            ? (isSelected ? 'url(#uml-inherit-sel)' : isHovered ? 'url(#uml-inherit-hov)' : 'url(#uml-inherit)')
+            : rel.type === 'association'
+              ? (isSelected ? 'url(#uml-assoc-sel)' : isHovered ? 'url(#uml-assoc-hov)' : 'url(#uml-assoc)')
+              : undefined;
+          const mStart = rel.type === 'composition'
+            ? (isSelected ? 'url(#uml-compose-sel)' : isHovered ? 'url(#uml-compose-hov)' : 'url(#uml-compose)')
+            : undefined;
+
           const mx = (p1.x + p2.x) / 2;
           const my = (p1.y + p2.y) / 2;
+          const srcMultPos = rel.sourceMultiplicity
+            ? multiplicityPosition(p1.x, p1.y, p2.x, p2.y, 'start')
+            : null;
+          const tgtMultPos = rel.targetMultiplicity
+            ? multiplicityPosition(p1.x, p1.y, p2.x, p2.y, 'end')
+            : null;
+
+          const handleRelClick = (e: React.MouseEvent) => {
+            e.stopPropagation();
+            setSelectedRelId(prev => (prev === rel.id ? null : rel.id));
+          };
 
           return (
-            <g key={rel.id}>
-              <line x1={p1.x} y1={p1.y} x2={p2.x} y2={p2.y}
-                stroke="#475569" strokeWidth="1.5"
+            <g
+              key={rel.id}
+              data-rel-line
+              style={{ cursor: 'pointer' }}
+              onClick={handleRelClick}
+              onMouseEnter={() => setHoveredRelId(rel.id)}
+              onMouseLeave={() => setHoveredRelId(null)}
+            >
+              <line
+                x1={p1.x} y1={p1.y} x2={p2.x} y2={p2.y}
+                stroke="#ffffff" strokeWidth={strokeWidth + 4}
+                strokeLinecap="round"
+              />
+              <line
+                x1={p1.x} y1={p1.y} x2={p2.x} y2={p2.y}
+                stroke="transparent" strokeWidth={20}
+              />
+              <line
+                x1={p1.x} y1={p1.y} x2={p2.x} y2={p2.y}
+                stroke={strokeColor} strokeWidth={strokeWidth}
                 markerEnd={mEnd} markerStart={mStart}
+                strokeLinecap="round"
               />
               {rel.label && (
-                <text x={mx} y={my - 5} textAnchor="middle" fontSize="10" fill="#64748b"
-                  fontFamily="ui-sans-serif, system-ui, sans-serif">
+                <text
+                  x={mx} y={my - 5}
+                  textAnchor="middle"
+                  fontSize="10"
+                  fill={strokeColor}
+                  stroke="#ffffff"
+                  strokeWidth={3}
+                  paintOrder="stroke fill"
+                  fontFamily="ui-sans-serif, system-ui, sans-serif"
+                  pointerEvents="none"
+                >
                   {rel.label}
                 </text>
               )}
+              {[srcMultPos, tgtMultPos].map((pos, idx) => {
+                if (!pos) return null;
+                const mult = idx === 0 ? rel.sourceMultiplicity : rel.targetMultiplicity;
+                return (
+                  <g key={idx === 0 ? 'src-mult' : 'tgt-mult'} pointerEvents="none">
+                    <rect
+                      x={pos.x - 18}
+                      y={pos.y - 12}
+                      width={36}
+                      height={24}
+                      rx={4}
+                      fill="#ffffff"
+                      stroke={strokeColor}
+                      strokeWidth={1.5}
+                    />
+                    <text
+                      x={pos.x}
+                      y={pos.y + 4}
+                      textAnchor="middle"
+                      fontSize="13"
+                      fontWeight={700}
+                      fill={strokeColor}
+                      fontFamily="ui-monospace, Consolas, monospace"
+                    >
+                      {mult}
+                    </text>
+                  </g>
+                );
+              })}
             </g>
           );
         })}
@@ -282,6 +525,8 @@ export const UMLDiagram = forwardRef<UMLDiagramHandle, UMLDiagramProps>(({ ecore
         <ClassBox
           key={cls.id}
           cls={cls}
+          offsetX={offsetX}
+          offsetY={offsetY}
           scale={vscale}
           edit={edit?.classId === cls.id ? edit : null}
           onMove={moveClass}
@@ -300,6 +545,16 @@ export const UMLDiagram = forwardRef<UMLDiagramHandle, UMLDiagramProps>(({ ecore
       ))}
     </div>
     </div>
+      <UMLDiagramMinimap
+        classes={classes}
+        offsetX={offsetX}
+        offsetY={offsetY}
+        vx={vx}
+        vy={vy}
+        vscale={vscale}
+        containerRef={containerRef}
+        onViewportChange={handleMinimapPan}
+      />
     </div>
   );
 });
@@ -310,6 +565,8 @@ UMLDiagram.displayName = 'UMLDiagram';
 
 interface ClassBoxProps {
   cls: CLS;
+  offsetX: number;
+  offsetY: number;
   scale: number;
   edit: EditState | null;
   onMove: (id: string, x: number, y: number) => void;
@@ -324,7 +581,7 @@ interface ClassBoxProps {
 }
 
 const ClassBox: React.FC<ClassBoxProps> = ({
-  cls, scale, edit, onMove, onStartEditName, onSaveName,
+  cls, offsetX, offsetY, scale, edit, onMove, onStartEditName, onSaveName,
   onStartEditAttr, onSaveAttr, onCancelEdit, onAddAttr, onDeleteAttr, onEditChange,
 }) => {
   const dragRef = useRef<{ sx: number; sy: number; ox: number; oy: number } | null>(null);
@@ -359,8 +616,8 @@ const ClassBox: React.FC<ClassBoxProps> = ({
       data-classbox
       style={{
         position: 'absolute',
-        left: cls.x,
-        top: cls.y,
+        left: cls.x + offsetX,
+        top: cls.y + offsetY,
         width: BW,
         border: '1.5px solid #000000',
         borderRadius: 0,

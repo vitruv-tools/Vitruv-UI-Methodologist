@@ -1,8 +1,15 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
+import ReactDOM from 'react-dom';
 import { CreateModelModal } from './CreateModelModal';
 import { KeywordTagsInput } from './KeywordTagsInput';
 import { apiService } from '../../services/api';
 import { UMLDiagram, UMLDiagramHandle } from '../canvas/UMLDiagram';
+import { MetaModelFileDownloads } from './MetaModelFileDownloads';
+import { MODAL_Z_INDEX, modalBackdropStyle, modalDialogShellStyle, useModalBodyLock } from './modalUtils';
+import {
+  METAMODEL_PREVIEW_LAYOUT_SCOPE,
+  metaModelPreviewLayoutFileName,
+} from '../../utils/metaModelPreview';
 
 interface ToolsPanelProps {
   onEcoreFileUpload?: (fileContent: string, meta?: { fileName?: string; uploadId?: string; description?: string; keywords?: string; domain?: string; createdAt?: string }) => void;
@@ -402,10 +409,12 @@ export const ToolsPanel: React.FC<ToolsPanelProps> = ({ onEcoreFileUpload, onEco
   }, [viewModel?.ecoreFileId]);
 
   useEffect(() => {
-    if (!umlContent) return;
+    if (!umlContent || !viewModel) return;
     const t = setTimeout(() => diagramRef.current?.fitToView(), 150);
     return () => clearTimeout(t);
-  }, [umlContent]);
+  }, [umlContent, viewModel?.id, viewModel?.name]);
+
+  useModalBodyLock(!!viewModel || metaModelDeleteConfirmOpen || deleteConfirmOpen);
 
   const resetMetaModelModalState = () => {
     setViewModel(null);
@@ -628,13 +637,6 @@ export const ToolsPanel: React.FC<ToolsPanelProps> = ({ onEcoreFileUpload, onEco
     if (currentPage < totalPages) {
       setCurrentPage(currentPage + 1);
     }
-  };
-
-  const formatRelativeTime = (isoDate: string) => {
-    const date = new Date(isoDate);
-    const dateStr = date.toLocaleDateString();
-    const timeStr = date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-    return `${dateStr} at ${timeStr}`;
   };
 
   const handleButtonClick = () => {
@@ -1238,22 +1240,11 @@ export const ToolsPanel: React.FC<ToolsPanelProps> = ({ onEcoreFileUpload, onEco
       </div>
       )}
 
-      {viewModel && (
+      {viewModel && ReactDOM.createPortal(
           <dialog
               open
               style={{
-                position: 'fixed',
-                top: 0,
-                left: 0,
-                right: 0,
-                bottom: 0,
-                width: '100%',
-                height: '100%',
-                margin: 0,
-                padding: 0,
-                border: 'none',
-                background: 'transparent',
-                zIndex: 9998,
+                ...modalDialogShellStyle,
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
@@ -1262,19 +1253,7 @@ export const ToolsPanel: React.FC<ToolsPanelProps> = ({ onEcoreFileUpload, onEco
             <button
               type="button"
               aria-label="Close meta model details"
-              style={{
-                position: 'fixed',
-                top: 0,
-                left: 0,
-                right: 0,
-                bottom: 0,
-                width: '100%',
-                height: '100%',
-                background: 'rgba(0,0,0,0.5)',
-                backdropFilter: 'blur(8px)',
-                WebkitBackdropFilter: 'blur(8px)',
-                zIndex: -1,
-              }}
+              style={{ ...modalBackdropStyle, position: 'absolute' }}
               onClick={() => {
                 resetMetaModelModalState();
               }}
@@ -1282,6 +1261,7 @@ export const ToolsPanel: React.FC<ToolsPanelProps> = ({ onEcoreFileUpload, onEco
             <div
                 style={{
                   position: 'relative',
+                  zIndex: 1,
                   width: 'min(800px, 92vw)',
                   height: 'min(640px, 88vh)',
                   background: '#ffffff',
@@ -1400,6 +1380,11 @@ export const ToolsPanel: React.FC<ToolsPanelProps> = ({ onEcoreFileUpload, onEco
                         </div>
                       </div>
                       <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginTop: 'auto', paddingTop: 8, borderTop: '1px solid #f1f5f9' }}>
+                        <MetaModelFileDownloads
+                          modelName={viewModel.name}
+                          ecoreFileId={viewModel.ecoreFileId}
+                          genModelFileId={viewModel.genModelFileId}
+                        />
                         {viewModel.createdAt && (
                           <div>
                             <div style={{ fontSize: 11, fontWeight: 700, color: '#374151', marginBottom: 5, letterSpacing: '0.01em' }}>Created</div>
@@ -1452,32 +1437,29 @@ export const ToolsPanel: React.FC<ToolsPanelProps> = ({ onEcoreFileUpload, onEco
                       {!umlFetching && !umlError && !umlContent && (
                         <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#cbd5e1', fontSize: 12 }}>No diagram available</div>
                       )}
-                      {umlContent && <UMLDiagram ref={diagramRef} ecoreContent={umlContent} />}
+                      {umlContent && viewModel && (
+                        <UMLDiagram
+                          ref={diagramRef}
+                          ecoreContent={umlContent}
+                          fileName={metaModelPreviewLayoutFileName(viewModel.id, viewModel.name)}
+                          layoutScopeId={METAMODEL_PREVIEW_LAYOUT_SCOPE}
+                        />
+                      )}
                     </div>
                   </div>
                 </div>
               </div>
             </div>
-          </dialog>
-      )}
+          </dialog>,
+      document.body)}
 
       {/* Meta Model Delete Confirmation */}
-      {metaModelDeleteConfirmOpen && viewModel && (
+      {metaModelDeleteConfirmOpen && viewModel && ReactDOM.createPortal(
           <dialog
               open
               style={{
-                position: 'fixed',
-                top: 0,
-                left: 0,
-                right: 0,
-                bottom: 0,
-                width: '100%',
-                height: '100%',
-                margin: 0,
-                padding: 0,
-                border: 'none',
-                background: 'transparent',
-                zIndex: 10000,
+                ...modalDialogShellStyle,
+                zIndex: MODAL_Z_INDEX + 1,
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
@@ -1486,29 +1468,14 @@ export const ToolsPanel: React.FC<ToolsPanelProps> = ({ onEcoreFileUpload, onEco
             <button
               type="button"
               aria-label="Close delete confirmation"
-              style={{
-                position: 'fixed',
-                top: 0,
-                left: 0,
-                right: 0,
-                bottom: 0,
-                width: '100%',
-                height: '100%',
-                background: 'rgba(0,0,0,0.6)',
-                backdropFilter: 'blur(8px)',
-                WebkitBackdropFilter: 'blur(8px)',
-                zIndex: -1,
-                border: 'none',
-                padding: 0,
-                margin: 0,
-                cursor: 'default',
-              }}
+              style={{ ...modalBackdropStyle, position: 'absolute' }}
               onClick={() => { if (!metaModelDeleting) setMetaModelDeleteConfirmOpen(false); }}
               disabled={metaModelDeleting}
             />
             <div
                 style={{
                   position: 'relative',
+                  zIndex: 1,
                   width: 500,
                   maxWidth: '90vw',
                   background: '#fff',
@@ -1683,8 +1650,8 @@ export const ToolsPanel: React.FC<ToolsPanelProps> = ({ onEcoreFileUpload, onEco
                 </button>
               </div>
             </div>
-          </dialog>
-      )}
+          </dialog>,
+      document.body)}
 
       {!suppressApi && totalPages > 1 && (
         <div style={paginationContainerStyle}>
@@ -1801,17 +1768,26 @@ export const ToolsPanel: React.FC<ToolsPanelProps> = ({ onEcoreFileUpload, onEco
         }}
       />
 
-      {deleteConfirmOpen && (
-        <div style={{
-          position: 'fixed',
-          top: 0, left: 0, right: 0, bottom: 0,
-          background: 'rgba(0,0,0,0.35)',
-          zIndex: 9999,
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center'
-        }}>
+      {deleteConfirmOpen && ReactDOM.createPortal(
+        <>
+          <button
+            type="button"
+            aria-hidden="true"
+            tabIndex={-1}
+            onClick={() => { setDeleteConfirmOpen(false); setDeletingId(null); setDeleteError(''); }}
+            style={{ ...modalBackdropStyle, zIndex: MODAL_Z_INDEX }}
+          />
           <div style={{
+            position: 'fixed',
+            inset: 0,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: MODAL_Z_INDEX + 1,
+            pointerEvents: 'none',
+          }}>
+          <div style={{
+            pointerEvents: 'auto',
             background: '#fff',
             borderRadius: 10,
             boxShadow: '0 10px 40px rgba(0,0,0,0.25)',
@@ -1894,8 +1870,9 @@ export const ToolsPanel: React.FC<ToolsPanelProps> = ({ onEcoreFileUpload, onEco
               </button>
             </div>
           </div>
-        </div>
-      )}
+          </div>
+        </>,
+      document.body)}
 
     </div>
   );

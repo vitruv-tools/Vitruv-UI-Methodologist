@@ -1,10 +1,19 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
+import ReactDOM from 'react-dom';
 import { useNavigate } from 'react-router-dom';
 import { apiService } from '../../services/api';
 import { Vsum } from '../../types';
 import { CreateVsumModal } from './CreateVsumModal';
 import { VsumDetailsModal } from './VsumDetailsModal';
 import { ConfirmDialog } from './ConfirmDialog';
+import {
+  DELETED_PROJECT_RETENTION_DAYS,
+  DELETION_URGENCY_STYLES,
+  filterRestorableDeletedVsums,
+  formatDaysRemainingLabel,
+  getDaysUntilPermanentDelete,
+  getDeletionUrgency,
+} from '../../utils/deletedProjectUtils';
 
 // ── Icons ──────────────────────────────────────────────────────────────────
 
@@ -33,28 +42,6 @@ const formatDate = (iso: string) => {
   return new Date(iso).toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' });
 };
 
-const getDaysLeft = (removedAt: string | null | undefined) => {
-  if (!removedAt) return 30;
-  const elapsed = (Date.now() - new Date(removedAt).getTime()) / (1000 * 60 * 60 * 24);
-  return Math.max(0, Math.floor(30 - elapsed));
-};
-
-type Urgency = 'critical' | 'warning' | 'caution' | 'safe';
-
-const getUrgency = (days: number): Urgency => {
-  if (days <= 3) return 'critical';
-  if (days <= 7) return 'warning';
-  if (days <= 14) return 'caution';
-  return 'safe';
-};
-
-const URGENCY = {
-  critical: { bg: '#fef2f2', text: '#991b1b', border: '#fca5a5', dot: '#ef4444' },
-  warning: { bg: '#fff7ed', text: '#c2410c', border: '#fdba74', dot: '#f97316' },
-  caution: { bg: '#fefce8', text: '#854d0e', border: '#fde68a', dot: '#eab308' },
-  safe: { bg: '#f0fdf4', text: '#166534', border: '#bbf7d0', dot: '#22c55e' },
-};
-
 // ── RowActionsMenu ──────────────────────────────────────────────────────────
 
 interface RowActionsMenuProps {
@@ -65,35 +52,89 @@ interface RowActionsMenuProps {
   onOpen: () => void;
 }
 
+const ACTIONS_MENU_Z_INDEX = 10500;
+
 const RowActionsMenu: React.FC<RowActionsMenuProps> = ({ item, canManage, onDetails, onDelete, onOpen }) => {
   const [open, setOpen] = useState(false);
-  const ref = useRef<HTMLDivElement>(null);
+  const [menuPos, setMenuPos] = useState({ top: 0, left: 0 });
+  const buttonRef = useRef<HTMLButtonElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
 
-  useEffect(() => {
-    const h = (e: MouseEvent) => { if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false); };
-    document.addEventListener('mousedown', h);
-    return () => document.removeEventListener('mousedown', h);
+  const updateMenuPosition = useCallback(() => {
+    if (!buttonRef.current) return;
+    const rect = buttonRef.current.getBoundingClientRect();
+    setMenuPos({ top: rect.bottom + 4, left: rect.right });
   }, []);
 
+  useEffect(() => {
+    if (!open) return;
+    const closeOnOutside = (e: MouseEvent) => {
+      const target = e.target as Node;
+      if (buttonRef.current?.contains(target) || menuRef.current?.contains(target)) return;
+      setOpen(false);
+    };
+    document.addEventListener('mousedown', closeOnOutside);
+    return () => document.removeEventListener('mousedown', closeOnOutside);
+  }, [open]);
+
+  useEffect(() => {
+    if (!open) return;
+    const closeOnScroll = () => setOpen(false);
+    window.addEventListener('scroll', closeOnScroll, true);
+    window.addEventListener('resize', closeOnScroll);
+    return () => {
+      window.removeEventListener('scroll', closeOnScroll, true);
+      window.removeEventListener('resize', closeOnScroll);
+    };
+  }, [open]);
+
+  const toggleMenu = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    setOpen(prev => {
+      if (!prev) updateMenuPosition();
+      return !prev;
+    });
+  };
+
+  const menu = open ? (
+    <div
+      ref={menuRef}
+      style={{
+        position: 'fixed',
+        top: menuPos.top,
+        left: menuPos.left,
+        transform: 'translateX(-100%)',
+        background: '#fff',
+        border: '1px solid #e5e7eb',
+        borderRadius: 10,
+        boxShadow: '0 8px 24px rgba(0,0,0,0.12)',
+        zIndex: ACTIONS_MENU_Z_INDEX,
+        minWidth: 160,
+        overflow: 'hidden',
+      }}
+      onMouseDown={e => e.stopPropagation()}
+      onClick={e => e.stopPropagation()}
+    >
+      <MenuItem label="Open" onClick={() => { onOpen(); setOpen(false); }} />
+      {canManage && <MenuItem label="Details" onClick={() => { onDetails(); setOpen(false); }} />}
+      {canManage && <div style={{ height: 1, background: '#f3f4f6', margin: '2px 0' }} />}
+      {canManage && <MenuItem label="Delete" onClick={() => { onDelete(); setOpen(false); }} danger />}
+    </div>
+  ) : null;
+
   return (
-    <div ref={ref} style={{ position: 'relative', display: 'inline-block' }}>
+    <>
       <button
-        onClick={e => { e.stopPropagation(); setOpen(o => !o); }}
+        ref={buttonRef}
+        onClick={toggleMenu}
         style={{ padding: '4px 8px', border: '1px solid #e5e7eb', borderRadius: 6, background: '#fff', cursor: 'pointer', color: '#6b7280', display: 'flex', alignItems: 'center', transition: 'all 0.15s' }}
         onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.background = '#f9fafb'; (e.currentTarget as HTMLButtonElement).style.borderColor = '#d1d5db'; }}
         onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.background = '#fff'; (e.currentTarget as HTMLButtonElement).style.borderColor = '#e5e7eb'; }}
       >
         <DotsIcon />
       </button>
-      {open && (
-        <div style={{ position: 'absolute', top: 'calc(100% + 4px)', right: 0, background: '#fff', border: '1px solid #e5e7eb', borderRadius: 10, boxShadow: '0 8px 24px rgba(0,0,0,0.12)', zIndex: 300, minWidth: 160, overflow: 'hidden' }}>
-          <MenuItem label="Open" onClick={() => { onOpen(); setOpen(false); }} />
-          {canManage && <MenuItem label="Details" onClick={() => { onDetails(); setOpen(false); }} />}
-          {canManage && <div style={{ height: 1, background: '#f3f4f6', margin: '2px 0' }} />}
-          {canManage && <MenuItem label="Delete" onClick={() => { onDelete(); setOpen(false); }} danger />}
-        </div>
-      )}
-    </div>
+      {menu && ReactDOM.createPortal(menu, document.body)}
+    </>
   );
 };
 
@@ -162,19 +203,22 @@ const ProjectRow: React.FC<ProjectRowProps> = ({ item, showDeleted, onDetails, o
       {/* Status */}
       <td style={{ padding: '13px 16px' }}>
         {showDeleted ? (() => {
-          const days = getDaysLeft(item.removedAt);
-          const u = getUrgency(days);
-          const c = URGENCY[u];
+          const days = getDaysUntilPermanentDelete(item.removedAt);
+          const u = getDeletionUrgency(days);
+          const c = DELETION_URGENCY_STYLES[u];
           return (
-            <span style={{
-              display: 'inline-flex', alignItems: 'center', gap: 5,
-              padding: '3px 9px', borderRadius: 20,
-              background: c.bg, border: `1px solid ${c.border}`,
-              fontSize: 12, fontWeight: 600, color: c.text,
-              animation: u === 'critical' ? 'pulseBadge 1.4s ease-in-out infinite' : 'none',
-            }}>
+            <span
+              title={`Permanent deletion in ${formatDaysRemainingLabel(days)} (${DELETED_PROJECT_RETENTION_DAYS}-day policy)`}
+              style={{
+                display: 'inline-flex', alignItems: 'center', gap: 5,
+                padding: '3px 9px', borderRadius: 20,
+                background: c.bg, border: `1px solid ${c.border}`,
+                fontSize: 12, fontWeight: 600, color: c.text,
+                animation: u === 'critical' ? 'pulseBadge 1.4s ease-in-out infinite' : 'none',
+              }}
+            >
               <span style={{ width: 6, height: 6, borderRadius: '50%', background: c.dot, flexShrink: 0 }} />
-              {days === 0 ? 'Deleting soon' : `${days} day${days === 1 ? '' : 's'} left`}
+              {formatDaysRemainingLabel(days)}
             </span>
           );
         })() : (
@@ -246,10 +290,11 @@ export const ProjectsView: React.FC = () => {
         ? await apiService.getRemovedVsumsPaginated(0, PAGE_SIZE)
         : await apiService.getVsumsPaginated(search, 0, PAGE_SIZE);
       if (mySeq !== requestSeq.current) return;
-      const data: Vsum[] = res.data || [];
+      const raw: Vsum[] = res.data || [];
+      const data = showDeleted ? filterRestorableDeletedVsums(raw) : raw;
       setItems(data);
       setPage(1);
-      setHasMore(data.length === PAGE_SIZE);
+      setHasMore(raw.length === PAGE_SIZE);
     } catch (e) {
       if (mySeq !== requestSeq.current) return;
       setError(e instanceof Error ? e.message : 'Failed to load');
@@ -267,10 +312,11 @@ export const ProjectsView: React.FC = () => {
         ? await apiService.getRemovedVsumsPaginated(page, PAGE_SIZE)
         : await apiService.getVsumsPaginated(search, page, PAGE_SIZE);
       if (mySeq !== requestSeq.current) return;
-      const data: Vsum[] = res.data || [];
+      const raw: Vsum[] = res.data || [];
+      const data = showDeleted ? filterRestorableDeletedVsums(raw) : raw;
       setItems(prev => [...prev, ...data]);
       setPage(prev => prev + 1);
-      setHasMore(data.length === PAGE_SIZE);
+      setHasMore(raw.length === PAGE_SIZE);
     } catch (e) {
       if (mySeq !== requestSeq.current) return;
       setError(e instanceof Error ? e.message : 'Failed to load');
@@ -327,7 +373,7 @@ export const ProjectsView: React.FC = () => {
 
   // sorted list
   const sorted = [...items]
-    .filter(i => showDeleted ? !!i.removedAt : !i.removedAt)
+    .filter(i => (showDeleted ? getDaysUntilPermanentDelete(i.removedAt) > 0 : !i.removedAt))
     .sort((a, b) => {
       const t = (i: Vsum) => showDeleted
         ? new Date(i.removedAt || i.updatedAt).getTime()
@@ -402,7 +448,7 @@ export const ProjectsView: React.FC = () => {
       {showDeleted && (
         <div style={{ margin: '12px 40px 0', display: 'flex', alignItems: 'flex-start', gap: 10, padding: '10px 14px', borderRadius: 8, background: '#f0fdf9', border: '1px solid #99e6da', fontSize: 13, color: '#065f46', flexShrink: 0 }}>
           <svg style={{ flexShrink: 0, marginTop: 1 }} width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#049484" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10" /><polyline points="12 6 12 12 16 14" /></svg>
-          <span>Deleted projects will be permanently removed after <strong style={{ color: '#049484' }}>30 days</strong>. Restore them before they expire.</span>
+          <span>Deleted projects are permanently removed after <strong style={{ color: '#049484' }}>{DELETED_PROJECT_RETENTION_DAYS} days</strong>. The status column shows how many days remain. Projects already purged from the database are not listed.</span>
         </div>
       )}
 

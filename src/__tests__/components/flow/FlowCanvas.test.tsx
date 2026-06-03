@@ -123,6 +123,13 @@ describe('FlowCanvas', () => {
     expect(typeof ref.current.getNodes).toBe('function');
     expect(typeof ref.current.getEdges).toBe('function');
     expect(typeof ref.current.addEcoreFile).toBe('function');
+    expect(typeof ref.current.fitUmlView).toBe('function');
+  });
+
+  it('fitUmlView does not throw when called without a React Flow instance', () => {
+    const ref = createRef<any>();
+    render(<FlowCanvas ref={ref} umlModalOpen />);
+    expect(() => ref.current.fitUmlView()).not.toThrow();
   });
 
   it('exposes getReactionEdges and getWorkspaceSnapshot via ref', () => {

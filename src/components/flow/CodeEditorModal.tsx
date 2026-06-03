@@ -3,6 +3,18 @@ import Editor, { OnMount, Monaco } from '@monaco-editor/react';
 import { reactionsMonarch, reactionsTheme, reactionsLanguageConfig } from './ReactionsMonarchGrammar';
 import * as monaco from 'monaco-editor';
 import { ConfirmDialog } from '../ui/ConfirmDialog';
+import { ActionButton } from '../ui/ActionButton';
+import {
+  APP_FONT,
+  BRAND_COLOR,
+  DANGER_COLOR,
+  largeModalPanelStyle,
+  modalCloseButtonStyle,
+  modalPanelFooterStyle,
+  modalPanelHeaderStyle,
+  modalPanelToolbarStyle,
+} from '../ui/sharedStyles';
+import { modalBackdropStyle, modalDialogShellStyle, useModalBodyLock } from '../ui/modalUtils';
 
 interface CodeEditorModalProps {
   readonly isOpen: boolean;
@@ -25,25 +37,13 @@ interface CodeEditorModalProps {
   readonly title?: string;
 }
 
-const buttonBaseStyles = {
-  padding: '6px 12px',
-  border: 'none',
-  borderRadius: '4px',
-  fontSize: '13px',
-  fontWeight: 500,
-  cursor: 'pointer',
-} as const;
-
-const createButtonStyles = (
-  backgroundColor: string,
-  color: string = '#fff',
-  disabled: boolean = false
-) => ({
-  ...buttonBaseStyles,
-  backgroundColor: disabled ? '#333' : backgroundColor,
-  color: disabled ? '#666' : color,
-  cursor: disabled ? 'not-allowed' : 'pointer',
-});
+const toolbarDividerStyle: React.CSSProperties = {
+  width: '1px',
+  height: '24px',
+  backgroundColor: '#e2e8f0',
+  margin: '0 4px',
+  flexShrink: 0,
+};
 
 const extractSaveErrorMessage = (err: unknown): string => {
   if (err instanceof Error && err.message.trim()) {
@@ -520,37 +520,67 @@ export function CodeEditorModal({
   };
 
   const renderLspStatus = () => {
+    let label = 'LSP Offline';
+    let bg = '#f1f5f9';
+    let color = '#64748b';
+    let dot = '#94a3b8';
+    let title = 'Language Server not connected';
+
     if (lspConnected) {
-      return (
-        <span
-          style={{ marginLeft: '12px', color: lspReady ? '#0e7a0d' : '#ff9800', fontSize: '14px', cursor: 'default' }}
-          title={lspReady
-            ? 'Language Server is ready — completions and validation active'
-            : 'Language Server is initializing — completions not yet available'}
-        >
-          ● {lspReady ? 'LSP Ready' : 'LSP Initializing...'}
-        </span>
-      );
+      if (lspReady) {
+        label = 'LSP Ready';
+        bg = '#f0fdf4';
+        color = '#15803d';
+        dot = BRAND_COLOR;
+        title = 'Language Server is ready — completions and validation active';
+      } else {
+        label = 'LSP Initializing';
+        bg = '#fffbeb';
+        color = '#b45309';
+        dot = '#f59e0b';
+        title = 'Language Server is initializing — completions not yet available';
+      }
+    } else if (lspError) {
+      label = 'LSP Error';
+      bg = '#fef2f2';
+      color = DANGER_COLOR;
+      dot = DANGER_COLOR;
+      title = `${lspError} — Syntax highlighting still works`;
     }
-    if (lspError) {
-      return (
-        <span
-          style={{ marginLeft: '12px', color: '#f44747', fontSize: '14px', cursor: 'default' }}
-          title={`${lspError} — Syntax highlighting still works`}
-        >
-          ● LSP Error
-        </span>
-      );
-    }
+
     return (
       <span
-        style={{ marginLeft: '12px', color: '#555', fontSize: '14px', cursor: 'default' }}
-        title="Language Server not connected"
+        style={{
+          display: 'inline-flex',
+          alignItems: 'center',
+          gap: '6px',
+          marginLeft: '10px',
+          padding: '3px 10px',
+          borderRadius: '999px',
+          fontSize: '12px',
+          fontWeight: 600,
+          background: bg,
+          color,
+          verticalAlign: 'middle',
+          cursor: 'default',
+        }}
+        title={title}
       >
-        ● LSP Offline
+        <span
+          style={{
+            width: '7px',
+            height: '7px',
+            borderRadius: '50%',
+            background: dot,
+            flexShrink: 0,
+          }}
+        />
+        {label}
       </span>
     );
   };
+
+  useModalBodyLock(isOpen);
 
   if (!isOpen) return null;
 
@@ -558,20 +588,9 @@ export function CodeEditorModal({
     <dialog
       open
       style={{
-        position: 'fixed',
-        inset: 0,
-        backgroundColor: 'transparent',
+        ...modalDialogShellStyle,
         display: 'grid',
         placeItems: 'center',
-        zIndex: 9999,
-        backdropFilter: 'none',
-        border: 'none',
-        padding: 0,
-        margin: 0,
-        width: '100%',
-        height: '100%',
-        maxWidth: '100%',
-        maxHeight: '100%',
       }}
       onClose={handleClose}
       onCancel={handleClose}
@@ -581,107 +600,122 @@ export function CodeEditorModal({
         aria-hidden="true"
         tabIndex={-1}
         onClick={handleClose}
-        style={{
-          position: 'absolute',
-          inset: 0,
-          backgroundColor: 'rgba(0, 0, 0, 0.5)',
-          backdropFilter: 'blur(4px)',
-          border: 'none',
-          padding: 0,
-          margin: 0,
-          width: '100%',
-          height: '100%',
-          cursor: 'default',
-        }}
+        style={{ ...modalBackdropStyle, position: 'absolute' }}
       />
-      <div
-        aria-labelledby="code-editor-title"
-        style={{
-          backgroundColor: '#1e1e1e',
-          borderRadius: '12px',
-          width: '90%',
-          maxWidth: '1200px',
-          height: '85vh',
-          maxHeight: '900px',
-          display: 'flex',
-          flexDirection: 'column',
-          boxShadow: '0 20px 60px rgba(0, 0, 0, 0.4)',
-          overflow: 'hidden',
-          position: 'relative',
-          zIndex: 1,
-        }}
-      >
+      <div aria-labelledby="code-editor-title" style={largeModalPanelStyle}>
         {/* Header */}
-        <div style={{
-          padding: '16px 24px',
-          borderBottom: '1px solid #333',
-          backgroundColor: '#252526',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-        }}>
-          <div>
-            <h3 id="code-editor-title" style={{ margin: 0, color: '#fff', fontSize: '18px', fontWeight: 600 }}>
-              {title}
+        <div style={modalPanelHeaderStyle}>
+          <div style={{ minWidth: 0 }}>
+            <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: '4px' }}>
+              <h3
+                id="code-editor-title"
+                style={{
+                  margin: 0,
+                  color: '#0f172a',
+                  fontSize: '16px',
+                  fontWeight: 700,
+                  letterSpacing: '-0.01em',
+                  fontFamily: APP_FONT,
+                }}
+              >
+                {title}
+              </h3>
               {renderLspStatus()}
-            </h3>
+            </div>
             {sourceFileName && targetFileName && (
-              <p style={{ margin: '4px 0 0 0', color: '#888', fontSize: '16px' }}>
+              <p
+                style={{
+                  margin: '4px 0 0',
+                  color: '#94a3b8',
+                  fontSize: '13px',
+                  fontFamily: APP_FONT,
+                }}
+              >
                 {sourceFileName} ↔ {targetFileName}
               </p>
             )}
           </div>
           <button
+            type="button"
             onClick={handleClose}
-            style={{ background: 'transparent', border: 'none', color: '#888', fontSize: '24px', cursor: 'pointer', padding: '4px 8px', lineHeight: 1 }}
+            style={modalCloseButtonStyle}
             title="Close (Esc)"
+            aria-label="Close editor"
+            onMouseEnter={(e) => {
+              e.currentTarget.style.background = '#f1f5f9';
+              e.currentTarget.style.color = '#374151';
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.background = 'transparent';
+              e.currentTarget.style.color = '#94a3b8';
+            }}
           >
-            ×
+            ✕
           </button>
         </div>
 
         {/* Toolbar */}
-        <div style={{
-          padding: '12px 24px',
-          borderBottom: '1px solid #333',
-          backgroundColor: '#2d2d2d',
-          display: 'flex',
-          gap: '8px',
-          flexWrap: 'wrap',
-          alignItems: 'center',
-        }}>
-          <button onClick={handleUndo} style={createButtonStyles('#0e639c')} title="Undo (Ctrl+Z)">↶ Undo</button>
-          <button onClick={handleRedo} style={createButtonStyles('#0e639c')} title="Redo (Ctrl+Shift+Z)">↷ Redo</button>
-          <div style={{ width: '1px', backgroundColor: '#444', margin: '0 4px' }} />
-          <button onClick={handleFormat} style={createButtonStyles('#0e639c')} title="Format code">Format</button>
-          <button onClick={handleClear} style={createButtonStyles('#c72e2e')} title="Clear all code">🗑 Clear</button>
+        <div style={modalPanelToolbarStyle}>
+          <ActionButton variant="ghost" size="sm" onClick={handleUndo} title="Undo (Ctrl+Z)">
+            Undo
+          </ActionButton>
+          <ActionButton variant="ghost" size="sm" onClick={handleRedo} title="Redo (Ctrl+Shift+Z)">
+            Redo
+          </ActionButton>
+          <div style={toolbarDividerStyle} aria-hidden="true" />
+          <ActionButton variant="ghost" size="sm" onClick={handleFormat} title="Format code">
+            Format
+          </ActionButton>
+          <ActionButton variant="dangerOutline" size="sm" onClick={handleClear} title="Clear all code">
+            Clear
+          </ActionButton>
           <div style={{ flex: 1 }} />
 
           {saveSuccess && (
-            <span style={{ color: '#0e7a0d', fontSize: '13px', fontWeight: 500 }}>✓ Saved</span>
+            <span
+              style={{
+                color: '#15803d',
+                fontSize: '13px',
+                fontWeight: 600,
+                fontFamily: APP_FONT,
+              }}
+            >
+              Saved
+            </span>
           )}
 
           {onDelete && (
-            <button
+            <ActionButton
+              variant="dangerOutline"
+              size="sm"
               onClick={handleDelete}
-              style={{ ...buttonBaseStyles, padding: '6px 20px', backgroundColor: '#8b0000', color: '#fff', fontWeight: 600 }}
               title="Delete relation"
             >
-              🗑️ Delete Relation
-            </button>
+              Delete Relation
+            </ActionButton>
           )}
-          <button
+          <ActionButton
+            variant="primary"
+            size="sm"
             onClick={handleSave}
             disabled={saving}
-            style={{ ...buttonBaseStyles, padding: '6px 20px', backgroundColor: saving ? '#0b5e0b' : '#0e7a0d', color: '#fff', fontWeight: 600 }}
             title="Save (Ctrl+S)"
           >
-            {saving ? 'Saving…' : '💾 Save'}
-          </button>
+            {saving ? 'Saving…' : 'Save'}
+          </ActionButton>
         </div>
 
         {/* Editor */}
-        <div style={{ flex: 1, overflow: 'hidden' }}>
+        <div
+          style={{
+            flex: 1,
+            overflow: 'hidden',
+            margin: '0 16px 12px',
+            borderRadius: '8px',
+            border: '1px solid #e2e8f0',
+            background: '#1e1e1e',
+          }}
+        >
           <Editor
             height="100%"
             language={languageId}
@@ -727,21 +761,30 @@ export function CodeEditorModal({
         </div>
 
         {/* Status bar */}
-        <div style={{
-          padding: '12px 24px',
-          borderTop: '1px solid #333',
-          backgroundColor: '#252526',
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'center',
-        }}>
-          <div style={{ color: '#888', fontSize: '12px' }}>
-            {code.split('\n').length} Lines · {code.length} Characters
+        <div style={modalPanelFooterStyle}>
+          <div
+            style={{
+              color: '#64748b',
+              fontSize: '12px',
+              fontFamily: APP_FONT,
+            }}
+          >
+            {code.split('\n').length} lines · {code.length} characters
             {hasUnsavedChanges && (
-              <span style={{ marginLeft: '10px', color: '#ff9800' }}>● Unsaved changes</span>
+              <span style={{ marginLeft: '12px', color: '#b45309', fontWeight: 600 }}>
+                Unsaved changes
+              </span>
             )}
           </div>
-          <div style={{ color: '#888', fontSize: '12px' }}>Edge ID: {edgeId}</div>
+          <div
+            style={{
+              color: '#94a3b8',
+              fontSize: '12px',
+              fontFamily: APP_FONT,
+            }}
+          >
+            Edge ID: {edgeId}
+          </div>
         </div>
       </div>
 

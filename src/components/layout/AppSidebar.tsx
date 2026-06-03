@@ -1,4 +1,6 @@
 import React, { useEffect, useRef } from 'react';
+import { ChangePasswordModal } from '../ui/ChangePasswordModal';
+import { useChangePassword } from '../../hooks/useChangePassword';
 
 export type SidebarView = 'library' | 'projects' | 'settings';
 
@@ -187,6 +189,7 @@ export const AppSidebar: React.FC<AppSidebarProps> = ({
   const [menuOpen, setMenuOpen] = React.useState(false);
   const [userHovered, setUserHovered] = React.useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
+  const changePassword = useChangePassword();
 
   // Close on outside click
   useEffect(() => {
@@ -288,7 +291,7 @@ export const AppSidebar: React.FC<AppSidebarProps> = ({
 
             {/* Account actions */}
             <MenuItem icon={<UserIcon />} label="My Profile" sublabel="View & edit your profile" onClick={() => { setMenuOpen(false); }} />
-            <MenuItem icon={<LockIcon />} label="Change Password" onClick={() => { setMenuOpen(false); }} />
+            <MenuItem icon={<LockIcon />} label="Change Password" onClick={() => { setMenuOpen(false); changePassword.open(); }} />
             <MenuItem icon={<BellIcon />} label="Notifications" sublabel="Manage alerts" onClick={() => { setMenuOpen(false); }} />
 
             <MenuDivider />
@@ -341,6 +344,22 @@ export const AppSidebar: React.FC<AppSidebarProps> = ({
           </button>
         </div>
       </div>
+
+      <ChangePasswordModal
+        isOpen={changePassword.isOpen}
+        onClose={changePassword.close}
+        newPassword={changePassword.newPassword}
+        confirmPassword={changePassword.confirmPassword}
+        onNewPasswordChange={changePassword.setNewPassword}
+        onConfirmPasswordChange={changePassword.setConfirmPassword}
+        validation={changePassword.validation}
+        isConfirmValid={changePassword.isConfirmValid}
+        isChanging={changePassword.isChanging}
+        error={changePassword.error}
+        success={changePassword.success}
+        onSubmit={changePassword.handleSubmit}
+        canSubmit={changePassword.canSubmit}
+      />
     </aside>
   );
 };

@@ -79,31 +79,28 @@ describe('ecoreToUml – multiplicity edge cases', () => {
   });
 });
 
-// ── large model – grid layout wraps correctly ─────────────────────────────────
+// ── large model – intelligent layout ───────────────────────────────────────────
 
-describe('ecoreToUml – grid layout with many classes', () => {
-  it('places classes in 3 columns', () => {
+describe('ecoreToUml – layout with many classes', () => {
+  it('separates many isolated classes spatially', () => {
     const names = ['A', 'B', 'C', 'D', 'E', 'F', 'G'];
     const xml = wrap(names.map(n => eClass(n)).join(''));
     const { classes } = ecoreToUml(xml);
 
-    // column 0 → x = 40
-    const col0 = classes.filter(c => c.x === 40);
-    expect(col0.length).toBeGreaterThanOrEqual(1);
+    const xs = new Set(classes.map(c => c.x));
+    expect(xs.size).toBeGreaterThan(1);
 
-    // class at index 3 should be in column 0 of row 1 → larger y
     const classD = classes.find(c => c.name === 'D')!;
     const classA = classes.find(c => c.name === 'A')!;
-    expect(classD.y).toBeGreaterThan(classA.y);
-    expect(classD.x).toBe(classA.x);
+    expect(Math.hypot(classD.x - classA.x, classD.y - classA.y)).toBeGreaterThan(50);
   });
 
-  it('column 1 has larger x than column 0', () => {
+  it('connected classes are not placed on top of each other', () => {
     const xml = wrap(eClass('A') + eClass('B'));
     const { classes } = ecoreToUml(xml);
     const a = classes.find(c => c.name === 'A')!;
     const b = classes.find(c => c.name === 'B')!;
-    expect(b.x).toBeGreaterThan(a.x);
+    expect(Math.hypot(b.x - a.x, b.y - a.y)).toBeGreaterThan(50);
   });
 });
 

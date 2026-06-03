@@ -7,10 +7,13 @@ import { FloatingUMLPanel } from '../../../components/canvas/FloatingUMLPanel';
 // UMLDiagram is a complex canvas component — stub it out.
 // Note: jest.mock factories are hoisted and cannot reference out-of-scope
 // variables, so we use require() inside the factory.
+let lastDiagramProps: Record<string, unknown> = {};
+
 jest.mock('../../../components/canvas/UMLDiagram', () => {
   const { forwardRef, useImperativeHandle, createElement } = require('react');
   return {
-    UMLDiagram: forwardRef((_props: any, ref: any) => {
+    UMLDiagram: forwardRef((props: any, ref: any) => {
+      lastDiagramProps = props;
       useImperativeHandle(ref, () => ({
         zoomIn: jest.fn(),
         zoomOut: jest.fn(),
@@ -20,6 +23,10 @@ jest.mock('../../../components/canvas/UMLDiagram', () => {
     }),
   };
 });
+
+jest.mock('../../../utils/umlLayoutStorage', () => ({
+  hasSavedUmlLayout: jest.fn(() => false),
+}));
 
 // createPortal renders directly into the document body during tests
 jest.mock('react-dom', () => ({
@@ -32,6 +39,8 @@ jest.mock('react-dom', () => ({
 const defaultProps = {
   id: 'panel-1',
   title: 'My Ecore Model',
+  fileName: 'MyModel.ecore',
+  layoutScopeId: 'project-1',
   ecoreContent: '<xml/>',
   zIndex: 100,
   onFocus: jest.fn(),
@@ -41,7 +50,10 @@ const defaultProps = {
 // ── tests ─────────────────────────────────────────────────────────────────────
 
 describe('FloatingUMLPanel', () => {
-  beforeEach(() => jest.clearAllMocks());
+  beforeEach(() => {
+    jest.clearAllMocks();
+    lastDiagramProps = {};
+  });
 
   it('renders the panel title', () => {
     render(<FloatingUMLPanel {...defaultProps} />);
@@ -51,6 +63,13 @@ describe('FloatingUMLPanel', () => {
   it('renders the UMLDiagram', () => {
     render(<FloatingUMLPanel {...defaultProps} />);
     expect(screen.getByTestId('uml-diagram')).toBeInTheDocument();
+  });
+
+  it('passes fileName and layoutScopeId to UMLDiagram for layout persistence', () => {
+    render(<FloatingUMLPanel {...defaultProps} />);
+    expect(lastDiagramProps.fileName).toBe('MyModel.ecore');
+    expect(lastDiagramProps.layoutScopeId).toBe('project-1');
+    expect(lastDiagramProps.ecoreContent).toBe('<xml/>');
   });
 
   it('calls onClose with the panel id when the close button is clicked', () => {

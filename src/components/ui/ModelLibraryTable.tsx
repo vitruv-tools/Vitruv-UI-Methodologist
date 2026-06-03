@@ -1,9 +1,16 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
+import ReactDOM from 'react-dom';
 import { apiService } from '../../services/api';
 import { CreateModelModal } from './CreateModelModal';
 import { ConfirmDialog } from './ConfirmDialog';
 import { KeywordTagsInput } from './KeywordTagsInput';
 import { UMLDiagram, UMLDiagramHandle } from '../canvas/UMLDiagram';
+import { MetaModelFileDownloads } from './MetaModelFileDownloads';
+import { useModalBodyLock } from './modalUtils';
+import {
+  METAMODEL_PREVIEW_LAYOUT_SCOPE,
+  metaModelPreviewLayoutFileName,
+} from '../../utils/metaModelPreview';
 
 interface ModelLibraryTableProps {
   onModelOpen?: (model: any) => void;
@@ -136,22 +143,94 @@ interface RowActionsMenuProps {
   onDelete: () => void;
 }
 
+const ACTIONS_MENU_Z_INDEX = 10500;
+
 const RowActionsMenu: React.FC<RowActionsMenuProps> = ({ model, onView, onDelete }) => {
   const [open, setOpen] = useState(false);
-  const ref = useRef<HTMLDivElement>(null);
+  const [menuPos, setMenuPos] = useState({ top: 0, left: 0 });
+  const buttonRef = useRef<HTMLButtonElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
+
+  const updateMenuPosition = useCallback(() => {
+    if (!buttonRef.current) return;
+    const rect = buttonRef.current.getBoundingClientRect();
+    setMenuPos({ top: rect.bottom + 4, left: rect.right });
+  }, []);
 
   useEffect(() => {
+    if (!open) return;
     const handler = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+      const target = e.target as Node;
+      if (buttonRef.current?.contains(target) || menuRef.current?.contains(target)) return;
+      setOpen(false);
     };
     document.addEventListener('mousedown', handler);
     return () => document.removeEventListener('mousedown', handler);
-  }, []);
+  }, [open]);
+
+  useEffect(() => {
+    if (!open) return;
+    const closeOnScroll = () => setOpen(false);
+    window.addEventListener('scroll', closeOnScroll, true);
+    window.addEventListener('resize', closeOnScroll);
+    return () => {
+      window.removeEventListener('scroll', closeOnScroll, true);
+      window.removeEventListener('resize', closeOnScroll);
+    };
+  }, [open]);
+
+  const toggleMenu = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    setOpen(prev => {
+      if (!prev) updateMenuPosition();
+      return !prev;
+    });
+  };
+
+  const menu = open ? (
+    <div
+      ref={menuRef}
+      style={{
+        position: 'fixed',
+        top: menuPos.top,
+        left: menuPos.left,
+        transform: 'translateX(-100%)',
+        background: '#ffffff',
+        border: '1px solid #e5e7eb',
+        borderRadius: 10,
+        boxShadow: '0 8px 24px rgba(0,0,0,0.12)',
+        zIndex: ACTIONS_MENU_Z_INDEX,
+        minWidth: 140,
+        overflow: 'hidden',
+      }}
+      onMouseDown={e => e.stopPropagation()}
+      onClick={e => e.stopPropagation()}
+    >
+      <button
+        onClick={() => { onView(); setOpen(false); }}
+        style={{ display: 'block', width: '100%', padding: '9px 14px', border: 'none', background: 'transparent', fontSize: 13, color: '#374151', cursor: 'pointer', textAlign: 'left' }}
+        onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.background = '#f9fafb'; }}
+        onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.background = 'transparent'; }}
+      >
+        View details
+      </button>
+      <div style={{ height: 1, background: '#f3f4f6', margin: '2px 0' }} />
+      <button
+        onClick={() => { onDelete(); setOpen(false); }}
+        style={{ display: 'block', width: '100%', padding: '9px 14px', border: 'none', background: 'transparent', fontSize: 13, color: '#dc2626', cursor: 'pointer', textAlign: 'left' }}
+        onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.background = '#fef2f2'; }}
+        onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.background = 'transparent'; }}
+      >
+        Delete
+      </button>
+    </div>
+  ) : null;
 
   return (
-    <div ref={ref} style={{ position: 'relative', display: 'inline-block' }}>
+    <>
       <button
-        onClick={e => { e.stopPropagation(); setOpen(o => !o); }}
+        ref={buttonRef}
+        onClick={toggleMenu}
         style={{
           padding: '4px 8px',
           border: '1px solid #e5e7eb',
@@ -168,39 +247,8 @@ const RowActionsMenu: React.FC<RowActionsMenuProps> = ({ model, onView, onDelete
       >
         <DotsIcon />
       </button>
-      {open && (
-        <div style={{
-          position: 'absolute',
-          top: 'calc(100% + 4px)',
-          right: 0,
-          background: '#ffffff',
-          border: '1px solid #e5e7eb',
-          borderRadius: 10,
-          boxShadow: '0 8px 24px rgba(0,0,0,0.12)',
-          zIndex: 300,
-          minWidth: 140,
-          overflow: 'hidden',
-        }}>
-          <button
-            onClick={() => { onView(); setOpen(false); }}
-            style={{ display: 'block', width: '100%', padding: '9px 14px', border: 'none', background: 'transparent', fontSize: 13, color: '#374151', cursor: 'pointer', textAlign: 'left' }}
-            onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.background = '#f9fafb'; }}
-            onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.background = 'transparent'; }}
-          >
-            View details
-          </button>
-          <div style={{ height: 1, background: '#f3f4f6', margin: '2px 0' }} />
-          <button
-            onClick={() => { onDelete(); setOpen(false); }}
-            style={{ display: 'block', width: '100%', padding: '9px 14px', border: 'none', background: 'transparent', fontSize: 13, color: '#dc2626', cursor: 'pointer', textAlign: 'left' }}
-            onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.background = '#fef2f2'; }}
-            onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.background = 'transparent'; }}
-          >
-            Delete
-          </button>
-        </div>
-      )}
-    </div>
+      {menu && ReactDOM.createPortal(menu, document.body)}
+    </>
   );
 };
 
@@ -212,6 +260,8 @@ interface ModelDetailModalProps {
   onUpdated: () => void;
   /** Pass raw ecore XML to skip the API fetch (used when content is already in memory) */
   ecoreContent?: string;
+  /** When true, only render the panel (backdrop is provided by the parent). */
+  embedded?: boolean;
 }
 
 const FONT = 'ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, sans-serif';
@@ -263,7 +313,9 @@ const DPreviewBtn: React.FC<{ title: string; onClick: () => void; children: Reac
   );
 };
 
-export const ModelDetailModal: React.FC<ModelDetailModalProps> = ({ model, onClose, onUpdated, ecoreContent: ecoreContentProp }) => {
+export const ModelDetailModal: React.FC<ModelDetailModalProps> = ({
+  model, onClose, onUpdated, ecoreContent: ecoreContentProp, embedded = false,
+}) => {
   const [editing, setEditing] = useState(false);
   const [form, setForm] = useState({ name: model.name || '', description: model.description || '', domain: model.domain || '', keywords: model.keyword || [] as string[] });
   const [saving, setSaving] = useState(false);
@@ -285,11 +337,15 @@ export const ModelDetailModal: React.FC<ModelDetailModalProps> = ({ model, onClo
       .finally(() => setFetchingUml(false));
   }, [model.ecoreFileId, ecoreContentProp]);
 
+  const previewLayoutFile = metaModelPreviewLayoutFileName(model.id, model.name);
+
   useEffect(() => {
     if (!ecoreContent) return;
     const t = setTimeout(() => diagramRef.current?.fitToView(), 150);
     return () => clearTimeout(t);
-  }, [ecoreContent]);
+  }, [ecoreContent, model.id, model.name]);
+
+  useModalBodyLock(true);
 
   const canSave = !!(form.name.trim() && form.description.trim() && form.domain.trim() && form.keywords.length > 0 && !saving);
 
@@ -308,15 +364,11 @@ export const ModelDetailModal: React.FC<ModelDetailModalProps> = ({ model, onClo
     }
   };
 
-  return (
-    <div
-      style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', backdropFilter: 'blur(3px)', WebkitBackdropFilter: 'blur(3px)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: FONT }}
-      onClick={onClose}
-    >
-      <style>{`@keyframes spin{0%{transform:rotate(0deg)}100%{transform:rotate(360deg)}}`}</style>
+  const panel = (
       <div
-        style={{ background: '#fff', borderRadius: 10, width: 'min(800px, 92vw)', height: 'min(640px, 88vh)', overflow: 'hidden', display: 'flex', flexDirection: 'column', boxShadow: '0 24px 64px rgba(0,0,0,0.22), 0 4px 16px rgba(0,0,0,0.10)', border: '1px solid #e2e8f0' }}
-        onClick={e => e.stopPropagation()}
+        data-model-detail-modal
+        style={{ background: '#fff', borderRadius: 10, width: 'min(800px, 92vw)', height: 'min(640px, 88vh)', overflow: 'hidden', display: 'flex', flexDirection: 'column', boxShadow: '0 24px 64px rgba(0,0,0,0.22), 0 4px 16px rgba(0,0,0,0.10)', border: '1px solid #e2e8f0', fontFamily: FONT }}
+        onMouseDown={e => e.stopPropagation()}
       >
         {/* ── Header ── */}
         <div style={{ padding: '14px 20px', background: '#ffffff', borderBottom: '1px solid #f1f5f9', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
@@ -419,6 +471,12 @@ export const ModelDetailModal: React.FC<ModelDetailModalProps> = ({ model, onClo
                   </div>
                 </div>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginTop: 'auto', paddingTop: 8, borderTop: '1px solid #f1f5f9' }}>
+                  <MetaModelFileDownloads
+                    modelName={model.name}
+                    ecoreFileId={model.ecoreFileId}
+                    genModelFileId={model.genModelFileId}
+                    labelStyle={{ fontSize: 11, fontWeight: 700, color: '#374151', marginBottom: 5, letterSpacing: '0.01em', fontFamily: FONT }}
+                  />
                   {model.createdAt && (
                     <div>
                       <DFieldLabel>Created</DFieldLabel>
@@ -475,12 +533,41 @@ export const ModelDetailModal: React.FC<ModelDetailModalProps> = ({ model, onClo
                 {!fetchingUml && !fetchError && !ecoreContent && (
                   <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#cbd5e1', fontSize: 12, fontFamily: FONT }}>No diagram available</div>
                 )}
-                {ecoreContent && <UMLDiagram ref={diagramRef} ecoreContent={ecoreContent} />}
+                {ecoreContent && (
+                  <UMLDiagram
+                    ref={diagramRef}
+                    ecoreContent={ecoreContent}
+                    fileName={previewLayoutFile}
+                    layoutScopeId={METAMODEL_PREVIEW_LAYOUT_SCOPE}
+                  />
+                )}
               </div>
             </div>
           </div>
         </div>
       </div>
+  );
+
+  if (embedded) {
+    return (
+      <>
+        <style>{`@keyframes spin{0%{transform:rotate(0deg)}100%{transform:rotate(360deg)}}`}</style>
+        {panel}
+      </>
+    );
+  }
+
+  return (
+    <div
+      role="presentation"
+      data-model-detail-backdrop
+      style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', backdropFilter: 'blur(8px)', WebkitBackdropFilter: 'blur(8px)', zIndex: 10000, display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: FONT }}
+      onMouseDown={(e) => {
+        if (!(e.target as HTMLElement).closest('[data-model-detail-modal]')) onClose();
+      }}
+    >
+      <style>{`@keyframes spin{0%{transform:rotate(0deg)}100%{transform:rotate(360deg)}}`}</style>
+      {panel}
     </div>
   );
 };

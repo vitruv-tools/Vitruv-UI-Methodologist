@@ -1,5 +1,5 @@
 import React from 'react';
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import { UMLRelationship } from '../../../components/flow/UMLRelationship';
 
 jest.mock('reactflow', () => ({
@@ -86,6 +86,89 @@ describe('UMLRelationship', () => {
     // No badge text should appear
     expect(screen.queryByText('1')).toBeNull();
     expect(screen.queryByText('1..*')).toBeNull();
+  });
+
+  it('uses red stroke when selected', () => {
+    const { container } = render(
+      <svg>
+        <UMLRelationship
+          id="edge-sel"
+          source="s1"
+          target="t1"
+          sourceX={0}
+          sourceY={0}
+          targetX={120}
+          targetY={0}
+          data={{ relationshipType: 'association' }}
+          selected
+          style={{}}
+        />
+      </svg>,
+    );
+
+    const path = container.querySelector('path#edge-sel') as SVGPathElement;
+    expect(path?.style.stroke).toBe('#ef4444');
+  });
+
+  it('dispatches edge-clicked when the edge is clicked', () => {
+    const dispatchSpy = jest.spyOn(globalThis, 'dispatchEvent');
+    const { container } = render(
+      <svg>
+        <UMLRelationship
+          id="edge-click"
+          source="s1"
+          target="t1"
+          sourceX={10}
+          sourceY={10}
+          targetX={110}
+          targetY={10}
+          data={{ relationshipType: 'association' }}
+          selected={false}
+          style={{}}
+        />
+      </svg>,
+    );
+
+    const clickArea = container.querySelector('path#edge-click-clickarea');
+    fireEvent.click(clickArea!);
+
+    expect(dispatchSpy).toHaveBeenCalled();
+    const event = dispatchSpy.mock.calls.find(
+      c => c[0] instanceof CustomEvent && (c[0] as CustomEvent).type === 'edge-clicked',
+    )?.[0] as CustomEvent;
+    expect(event.detail).toEqual({ edgeId: 'edge-click', currentlySelected: false });
+    dispatchSpy.mockRestore();
+  });
+
+  it('offsets parallel edges so paths differ', () => {
+    const base = {
+      source: 's1',
+      target: 't1',
+      sourceX: 0,
+      sourceY: 0,
+      targetX: 200,
+      targetY: 0,
+      selected: false,
+      style: {},
+      data: { relationshipType: 'association' as const },
+    };
+
+    const { container: c0 } = render(
+      <svg>
+        <UMLRelationship {...base} id="p0" data={{ ...base.data, parallelIndex: 0, parallelCount: 2 }} />
+      </svg>,
+    );
+    const { container: c1 } = render(
+      <svg>
+        <UMLRelationship {...base} id="p1" data={{ ...base.data, parallelIndex: 1, parallelCount: 2 }} />
+      </svg>,
+    );
+
+    const d0 = c0.querySelector('path#p0')?.getAttribute('d');
+    const d1 = c1.querySelector('path#p1')?.getAttribute('d');
+    expect(d0).toBeTruthy();
+    expect(d1).toBeTruthy();
+    expect(d0).not.toBe(d1);
   });
 });
 
