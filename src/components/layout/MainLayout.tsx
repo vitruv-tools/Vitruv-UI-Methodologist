@@ -6,6 +6,11 @@ import { ToolsPanel } from '../ui/ToolsPanel';
 import { parseEcoreFile, createSimpleEcoreDiagram } from '../../utils/ecoreParser';
 import { generateUMLFromEcore } from '../../utils/umlGenerator';
 import {
+    applyLayoutToFlowNodes,
+    positionsFromFlowNodes,
+    saveUmlLayout,
+} from '../../utils/umlLayoutStorage';
+import {
     generateFlowId,
     saveDocumentMeta,
     saveDocumentData,
@@ -13,7 +18,12 @@ import {
 } from '../../utils/flowUtils';
 import { Node, Edge } from 'reactflow';
 import { User } from '../../services/auth';
-import { WorkspaceSnapshot, WorkspaceSnapshotRequest } from '../../types/workspace';
+import {
+    CaptureEditorSessionRequest,
+    ProjectEditorSession,
+    WorkspaceSnapshot,
+    WorkspaceSnapshotRequest,
+} from '../../types/workspace';
 
 const ENABLE_RESIZE = false;   // <- keep false to prevent any user resizing
 const HEADER_HEIGHT = 48;
@@ -37,7 +47,11 @@ interface MainLayoutProps {
     welcomeTitle?: string;
     welcomeSubtitle?: string;
     workspaceKey?: string;
-    vsumId?: string,
+    vsumId?: string;
+    /** When true, do not clear the canvas on mount (multi-project tabs restore sessions). */
+    preserveWorkspaceOnMount?: boolean;
+    /** Stable React key for FlowCanvas; avoid remounting on tab switch. */
+    flowCanvasKey?: string;
 }
 
 export function MainLayout({
@@ -60,6 +74,8 @@ export function MainLayout({
     welcomeSubtitle,
     workspaceKey,
     vsumId,
+    preserveWorkspaceOnMount = false,
+    flowCanvasKey = 'project-workspace',
 }: Readonly<MainLayoutProps>) {
     const location = useLocation();
     const isMMLRoute = location.pathname.startsWith('/mml');
@@ -89,8 +105,22 @@ export function MainLayout({
     // This ensures we can save relations even when viewing UML
     const [cachedWorkspaceSnapshot, setCachedWorkspaceSnapshot] = useState<WorkspaceSnapshot | null>(null);
 
-    // Start with an empty workspace
+    const umlLayoutScopeId = vsumId ?? 'default';
+
+    const saveUmlPositions = useCallback((fileName: string, nodes: Node[]) => {
+        const posMap = positionsFromFlowNodes(nodes);
+        if (Object.keys(posMap).length > 0) {
+            saveUmlLayout(umlLayoutScopeId, fileName, posMap);
+        }
+    }, [umlLayoutScopeId]);
+
+    const restoreUmlPositions = useCallback(<T extends Node>(fileName: string, nodes: T[]): T[] => {
+        return applyLayoutToFlowNodes(umlLayoutScopeId, fileName, nodes);
+    }, [umlLayoutScopeId]);
+
+    // Start with an empty workspace (skipped when parent restores tab sessions)
     useEffect(() => {
+        if (preserveWorkspaceOnMount) return;
         if (flowCanvasRef.current?.loadDiagramData) {
             flowCanvasRef.current.loadDiagramData([], []);
         }
@@ -102,7 +132,7 @@ export function MainLayout({
             });
         } catch { }
         // run once on mount
-    }, []);
+    }, [preserveWorkspaceOnMount]);
 
     // (Disabled when ENABLE_RESIZE === false)
     useEffect(() => {
@@ -225,6 +255,10 @@ export function MainLayout({
 
     // Function to return to workspace from expanded metamodel view
     const handleBackToWorkspace = useCallback(() => {
+        if (expandedMetaModelName) {
+            const nodes = flowCanvasRef.current?.getNodes?.() ?? [];
+            saveUmlPositions(expandedMetaModelName, nodes);
+        }
         setExpandedMetaModelName(null);
 
         // Clear the cached workspace snapshot since we're returning to workspace view
@@ -256,7 +290,7 @@ export function MainLayout({
         setTimeout(() => {
             globalThis.dispatchEvent(new CustomEvent('vitruv.reloadWorkspace'));
         }, 400);
-    }, []);
+    }, [expandedMetaModelName, saveUmlPositions]);
 
     // Listen for workspace events
     useEffect(() => {
@@ -358,6 +392,55 @@ export function MainLayout({
         return () => globalThis.removeEventListener('vitruv.requestWorkspaceSnapshot', handleWorkspaceSnapshotRequest as EventListener);
     }, [expandedMetaModelName, cachedWorkspaceSnapshot]);
 
+    // Capture / restore full editor state when switching project tabs
+    useEffect(() => {
+        const handleCapture = (event: Event) => {
+            const detail = (event as CustomEvent<CaptureEditorSessionRequest>).detail;
+            if (!detail || typeof detail.resolve !== 'function') return;
+
+            const session: ProjectEditorSession = {
+                nodes: flowCanvasRef.current?.getNodes?.() ?? [],
+                edges: flowCanvasRef.current?.getEdges?.() ?? [],
+                expandedMetaModelName,
+                cachedWorkspaceSnapshot,
+                documents: [...documents],
+                selectedFileBoxId,
+            };
+            detail.resolve(session);
+        };
+
+        const handleRestore = (event: Event) => {
+            const session = (event as CustomEvent<ProjectEditorSession>).detail;
+            if (!session) return;
+
+            setExpandedMetaModelName(session.expandedMetaModelName);
+            setCachedWorkspaceSnapshot(session.cachedWorkspaceSnapshot);
+            setDocuments(session.documents);
+            setSelectedFileBoxId(session.selectedFileBoxId);
+
+            const load = () => {
+                flowCanvasRef.current?.loadDiagramData?.(session.nodes, session.edges);
+                if (session.expandedMetaModelName) {
+                    flowCanvasRef.current?.setInteractive?.(false);
+                    flowCanvasRef.current?.setDraggable?.(true);
+                } else {
+                    flowCanvasRef.current?.setInteractive?.(true);
+                    flowCanvasRef.current?.resetExpandedFile?.();
+                }
+            };
+
+            load();
+            setTimeout(load, 50);
+        };
+
+        globalThis.addEventListener('vitruv.captureEditorSession', handleCapture as EventListener);
+        globalThis.addEventListener('vitruv.restoreEditorSession', handleRestore as EventListener);
+        return () => {
+            globalThis.removeEventListener('vitruv.captureEditorSession', handleCapture as EventListener);
+            globalThis.removeEventListener('vitruv.restoreEditorSession', handleRestore as EventListener);
+        };
+    }, [expandedMetaModelName, cachedWorkspaceSnapshot, documents, selectedFileBoxId]);
+
     const handleEcoreFileSelect = useCallback((fileName: string) => {
         const nodes = flowCanvasRef.current?.getNodes?.() || [];
         const ecoreNode = nodes.find(
@@ -367,43 +450,6 @@ export function MainLayout({
             setSelectedFileBoxId(ecoreNode.id);
         }
     }, []);
-
-    // ── UML position persistence (localStorage, no backend needed) ──────────
-    // Key is per-file so different ecore files have independent saved layouts.
-    const getUmlPosKey = useCallback(
-        (fileName: string) => `vitruv.uml.positions.v1.${vsumId ?? 'default'}.${fileName}`,
-        [vsumId]
-    );
-
-    const saveUmlPositions = useCallback((fileName: string, nodes: Node[]) => {
-        try {
-            const posMap: Record<string, { x: number; y: number }> = {};
-            nodes.forEach(n => {
-                if (n.type === 'editable') posMap[n.id] = { x: n.position.x, y: n.position.y };
-            });
-            // Only write to localStorage if there are actual UML boxes to save.
-            // An empty posMap means the canvas was cleared (e.g. transition between views)
-            // and we must NOT overwrite previously saved user positions.
-            if (Object.keys(posMap).length > 0) {
-                localStorage.setItem(getUmlPosKey(fileName), JSON.stringify(posMap));
-            }
-        } catch { /* storage quota / private browsing — silently ignore */ }
-    }, [getUmlPosKey]);
-
-    const restoreUmlPositions = useCallback(<T extends { id: string; position: { x: number; y: number } }>(
-        fileName: string, nodes: T[]
-    ): T[] => {
-        try {
-            const raw = localStorage.getItem(getUmlPosKey(fileName));
-            if (!raw) return nodes;
-            const posMap = JSON.parse(raw) as Record<string, { x: number; y: number }>;
-            return nodes.map(n => {
-                const saved = posMap[n.id];
-                return saved ? { ...n, position: saved } : n;
-            });
-        } catch { return nodes; }
-    }, [getUmlPosKey]);
-    // ────────────────────────────────────────────────────────────────────────
 
     const handleEcoreFileExpand = useCallback((fileName: string, fileContent: string) => {
         // Cache the current workspace snapshot before switching to UML view
@@ -462,9 +508,7 @@ export function MainLayout({
 
             // Load parsed UML diagram (ONLY UML boxes, no metamodel boxes)
             flowCanvasRef.current?.loadDiagramData?.(restoredNodes, diagramData.edges);
-            // Make generated UML read-only by default, but allow moving boxes
-            flowCanvasRef.current?.setInteractive?.(false);
-            flowCanvasRef.current?.setDraggable?.(true);
+            setTimeout(() => flowCanvasRef.current?.fitUmlView?.(), 80);
             saveDocumentData(newId, { nodes: restoredNodes as any, edges: diagramData.edges as any });
             setIsDirty(false);
         }, 100);
@@ -688,7 +732,7 @@ export function MainLayout({
                             </div>
                         ) : (
                             <FlowCanvas
-                                key={`${workspaceKey || 'default-workspace'}-${canvasKey}`}
+                                key={`${flowCanvasKey}-${canvasKey}`}
                                 onDeploy={onDeploy}
                                 vsumId={vsumId}
                                 onDiagramChange={handleDiagramChange}

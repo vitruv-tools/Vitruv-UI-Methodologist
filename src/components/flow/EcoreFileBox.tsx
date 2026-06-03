@@ -1,6 +1,8 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { NodeProps } from 'reactflow';
+import { apiService } from '../../services/api';
+import { downloadTextAsFile } from '../../utils/downloadFile';
 import { ConnectionHandle } from './ConnectionHandle';
 
 // ── types ─────────────────────────────────────────────────────────────────────
@@ -15,6 +17,8 @@ interface EcoreFileBoxData {
   onRename?: (id: string, newFileName: string) => void;
   onShowDetails?: (modelObj: any, fileContent: string) => void;
   metaModelId?: number;
+  ecoreFileId?: number;
+  genModelFileId?: number;
   onConnectionStart?: (nodeId: string, handle: 'top' | 'bottom' | 'left' | 'right', tipScreenPos: { x: number; y: number }) => void;
   isExpanded?: boolean;
   isConnectionActive?: boolean;
@@ -62,19 +66,40 @@ export function darken(hex: string, amount = 30): string {
 
 const removeExt = (name: string) => name.replace(/\.ecore$/i, '');
 
+/** Screen position of a connection-handle tip (matches ConnectionHandle). */
+export function handleTipFromRect(
+  rect: DOMRect,
+  handle: 'top' | 'bottom' | 'left' | 'right',
+): { x: number; y: number } {
+  switch (handle) {
+    case 'top':
+      return { x: rect.left + rect.width / 2, y: rect.top };
+    case 'bottom':
+      return { x: rect.left + rect.width / 2, y: rect.bottom };
+    case 'left':
+      return { x: rect.left, y: rect.top + rect.height / 2 };
+    case 'right':
+      return { x: rect.right, y: rect.top + rect.height / 2 };
+  }
+}
+
 // ── EcoreFileBox ──────────────────────────────────────────────────────────────
 
-export const EcoreFileBox: React.FC<NodeProps<EcoreFileBoxData>> = ({ id, data, selected = false }) => {
+export const EcoreFileBox: React.FC<NodeProps<EcoreFileBoxData>> = ({
+  id, data, selected = false, dragging = false,
+}) => {
   const [isHovered, setIsHovered] = useState(false);
   const [showMenu, setShowMenu] = useState(false);
   const [menuPos, setMenuPos] = useState({ x: 0, y: 0 });
   const [renaming, setRenaming] = useState(false);
   const [renameVal, setRenameVal] = useState('');
+  const [downloadingFile, setDownloadingFile] = useState<'ecore' | 'genmodel' | null>(null);
 
   const {
     fileName, fileContent, onExpand, onSelect, onRequestDelete, onRename,
     onConnectionStart, isConnectionActive = false,
     description, keywords, createdAt, domain, onShowDetails, metaModelId,
+    ecoreFileId, genModelFileId,
     isReactionSource = false,
   } = data;
 
@@ -92,9 +117,20 @@ export const EcoreFileBox: React.FC<NodeProps<EcoreFileBoxData>> = ({ id, data, 
         setShowMenu(false);
       }
     };
-    window.addEventListener('mousedown', handler);
-    return () => window.removeEventListener('mousedown', handler);
+    window.addEventListener('mousedown', handler, true);
+    return () => window.removeEventListener('mousedown', handler, true);
   }, [showMenu]);
+
+  // Close context menu when this box is dragged
+  useEffect(() => {
+    if (dragging && showMenu) setShowMenu(false);
+  }, [dragging, showMenu]);
+
+  const startConnectionFromHandle = (handle: 'top' | 'bottom' | 'left' | 'right') => {
+    if (!boxRef.current || !onConnectionStart) return;
+    const tip = handleTipFromRect(boxRef.current.getBoundingClientRect(), handle);
+    onConnectionStart(id, handle, tip);
+  };
 
   const bg = cardColor(domain);
   const borderColor = darken(bg, 25);
@@ -119,6 +155,26 @@ export const EcoreFileBox: React.FC<NodeProps<EcoreFileBoxData>> = ({ id, data, 
     const trimmed = renameVal.trim();
     if (trimmed) onRename?.(id, trimmed + '.ecore');
     setRenaming(false);
+  };
+
+  const baseName = removeExt(fileName);
+
+  const downloadMetaModelFile = async (
+    kind: 'ecore' | 'genmodel',
+    fileId: number | undefined,
+    extension: '.ecore' | '.genmodel',
+  ) => {
+    if (!fileId) return;
+    setDownloadingFile(kind);
+    try {
+      const content = await apiService.getFile(fileId);
+      downloadTextAsFile(content, `${baseName}${extension}`);
+    } catch (err) {
+      console.error(`Failed to download ${extension}:`, err);
+    } finally {
+      setDownloadingFile(null);
+      setShowMenu(false);
+    }
   };
 
   const connectionHandles = (['top', 'bottom', 'left', 'right'] as const).map(pos => (
@@ -215,8 +271,16 @@ export const EcoreFileBox: React.FC<NodeProps<EcoreFileBoxData>> = ({ id, data, 
           menuRef={menuRef}
           pos={menuPos}
           fileName={fileName}
+          downloadingFile={downloadingFile}
+          canDownloadEcore={!!ecoreFileId}
+          canDownloadGenModel={!!genModelFileId}
+          onDownloadEcore={() => downloadMetaModelFile('ecore', ecoreFileId, '.ecore')}
+          onDownloadGenModel={() => downloadMetaModelFile('genmodel', genModelFileId, '.genmodel')}
           onOpenUML={() => { setShowMenu(false); onExpand(fileName, fileContent); }}
-          onConnect={() => { setShowMenu(false); onConnectionStart?.(id, 'right', { x: 0, y: 0 }); }}
+          onConnect={() => {
+            setShowMenu(false);
+            startConnectionFromHandle('right');
+          }}
           onRename={() => { setShowMenu(false); startRename(); }}
           onDelete={() => { setShowMenu(false); onRequestDelete?.(id); }}
           onShowDetails={onShowDetails ? () => {
@@ -246,6 +310,11 @@ interface ContextMenuProps {
   menuRef: React.RefObject<HTMLDivElement | null>;
   pos: { x: number; y: number };
   fileName: string;
+  canDownloadEcore: boolean;
+  canDownloadGenModel: boolean;
+  downloadingFile: 'ecore' | 'genmodel' | null;
+  onDownloadEcore: () => void;
+  onDownloadGenModel: () => void;
   onOpenUML: () => void;
   onConnect: () => void;
   onRename: () => void;
@@ -254,7 +323,10 @@ interface ContextMenuProps {
 }
 
 const ContextMenu: React.FC<ContextMenuProps> = ({
-  menuRef, pos, fileName, onOpenUML, onConnect, onRename, onDelete, onShowDetails,
+  menuRef, pos, fileName,
+  canDownloadEcore, canDownloadGenModel, downloadingFile,
+  onDownloadEcore, onDownloadGenModel,
+  onOpenUML, onConnect, onRename, onDelete, onShowDetails,
 }) => (
   <div
     ref={menuRef}
@@ -284,23 +356,44 @@ const ContextMenu: React.FC<ContextMenuProps> = ({
     {onShowDetails && <CMItem icon={<InfoIcon />} label="Details" onClick={onShowDetails} />}
 
     <div style={{ height: 1, background: '#f1f5f9', margin: '4px 2px' }} />
+    <CMItem
+      icon={<DownloadIcon />}
+      label={downloadingFile === 'ecore' ? 'Downloading…' : 'Download .ecore'}
+      onClick={onDownloadEcore}
+      disabled={!canDownloadEcore || downloadingFile !== null}
+    />
+    <CMItem
+      icon={<DownloadIcon />}
+      label={downloadingFile === 'genmodel' ? 'Downloading…' : 'Download .genmodel'}
+      onClick={onDownloadGenModel}
+      disabled={!canDownloadGenModel || downloadingFile !== null}
+    />
+
+    <div style={{ height: 1, background: '#f1f5f9', margin: '4px 2px' }} />
     <CMItem icon={<TrashIcon />}   label="Remove"          onClick={onDelete} danger />
   </div>
 );
 
-const CMItem: React.FC<{ icon: React.ReactNode; label: string; onClick: () => void; danger?: boolean }> = ({ icon, label, onClick, danger }) => {
+const CMItem: React.FC<{
+  icon: React.ReactNode;
+  label: string;
+  onClick: () => void;
+  danger?: boolean;
+  disabled?: boolean;
+}> = ({ icon, label, onClick, danger, disabled }) => {
   const [hov, setHov] = useState(false);
   return (
     <button
-      onClick={e => { e.stopPropagation(); onClick(); }}
+      disabled={disabled}
+      onClick={e => { e.stopPropagation(); if (!disabled) onClick(); }}
       onMouseEnter={() => setHov(true)}
       onMouseLeave={() => setHov(false)}
       style={{
         display: 'flex', alignItems: 'center', gap: 8,
         width: '100%', padding: '6px 9px', border: 'none', borderRadius: 7,
-        background: hov ? (danger ? '#fef2f2' : '#f8fafc') : 'transparent',
-        color: danger ? (hov ? '#dc2626' : '#ef4444') : '#475569',
-        cursor: 'pointer', fontSize: 12, textAlign: 'left', transition: 'all 0.1s',
+        background: hov && !disabled ? (danger ? '#fef2f2' : '#f8fafc') : 'transparent',
+        color: disabled ? '#cbd5e1' : danger ? (hov ? '#dc2626' : '#ef4444') : '#475569',
+        cursor: disabled ? 'not-allowed' : 'pointer', fontSize: 12, textAlign: 'left', transition: 'all 0.1s',
       }}
     >
       {icon}
@@ -348,5 +441,12 @@ const InfoIcon = () => (
 const TrashIcon = () => (
   <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
     <polyline points="3 6 5 6 21 6" /><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" /><path d="M10 11v6M14 11v6" /><path d="M9 6V4h6v2" />
+  </svg>
+);
+const DownloadIcon = () => (
+  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+    <polyline points="7 10 12 15 17 10" />
+    <line x1="12" y1="15" x2="12" y2="3" />
   </svg>
 );

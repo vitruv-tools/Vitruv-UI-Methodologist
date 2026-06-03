@@ -55,6 +55,35 @@ class ApiService {
   }
 
   /**
+   * Ensure a successful artifact response is a ZIP blob (not JSON error text).
+   */
+  private async parseArtifactBlob(response: Response): Promise<Blob> {
+    const contentType = response.headers.get('Content-Type')?.toLowerCase() ?? '';
+    if (contentType.includes('json')) {
+      const errorText = await response.text();
+      throw this.createApiError(errorText, 'Artifact download failed');
+    }
+
+    const blob = await response.blob();
+
+    if (blob.type?.toLowerCase().includes('json')) {
+      throw this.createApiError(await blob.text(), 'Artifact download failed');
+    }
+
+    if (!blob.size) {
+      throw this.createApiError('', 'Artifact download returned an empty file');
+    }
+
+    const header = new Uint8Array(await new Response(blob.slice(0, 4)).arrayBuffer());
+    if (header[0] !== 0x50 || header[1] !== 0x4b) {
+      const preview = await blob.slice(0, 512).text();
+      throw this.createApiError(preview, 'Artifact download did not return a valid ZIP file');
+    }
+
+    return blob;
+  }
+
+  /**
    * Safely read response text
    */
   private async getResponseText(response: Response): Promise<string> {
@@ -573,45 +602,41 @@ class ApiService {
 
     const url = `${this.baseURL}/api/v1/vsums/${id}/build/artifact`;
     const headers: Record<string, string> = {
-      'Authorization': `Bearer ${token}`,
+      Authorization: `Bearer ${token}`,
+      Accept: 'application/zip, application/octet-stream, */*',
     };
 
-    const response = await fetch(url, {
+    let response = await fetch(url, {
       method: 'GET',
       headers,
     });
 
-    if (response.ok) {
-      return await response.blob();
-    }
-
     if (response.status === 401) {
       try {
         await AuthService.refreshToken();
-        const newToken = await AuthService.ensureValidToken();
-        if (newToken) {
-          const retryResponse = await fetch(url, {
-            method: 'GET',
-            headers: {
-              'Authorization': `Bearer ${newToken}`,
-            },
-          });
-
-          if (!retryResponse.ok) {
-            const errorText = await this.getResponseText(retryResponse);
-            throw this.createApiError(errorText, 'Artifact download failed after token refresh');
-          }
-
-          return await retryResponse.blob();
-        }
       } catch {
         console.error('Token refresh failed during artifact download');
       }
+
+      const newToken = await AuthService.ensureValidToken();
+      if (newToken) {
+        response = await fetch(url, {
+          method: 'GET',
+          headers: {
+            ...headers,
+            Authorization: `Bearer ${newToken}`,
+          },
+        });
+      }
     }
 
-    const errorText = await this.getResponseText(response);
-    console.error('Artifact download failed', { status: response.status });
-    throw this.createApiError(errorText, 'Artifact download failed');
+    if (!response.ok) {
+      const errorText = await this.getResponseText(response);
+      console.error('Artifact download failed', { status: response.status });
+      throw this.createApiError(errorText, 'Artifact download failed');
+    }
+
+    return this.parseArtifactBlob(response);
   }
 
   /**
@@ -648,14 +673,10 @@ class ApiService {
   /**
    * vSUMS: Sync changes with relationship data
    */
-  async syncVsumChanges(id: number | string, data: {
-    metaModelIds: number[];
-    metaModelRelationRequests: Array<{
-      sourceId: number;
-      targetId: number;
-      reactionFileId: number;
-    }>;
-  }): Promise<ApiResponse<any>> {
+  async syncVsumChanges(
+    id: number | string,
+    data: VsumSyncChangesPutRequest,
+  ): Promise<ApiResponse<any>> {
     return this.updateVsumSyncChanges(id, data);
   }
 

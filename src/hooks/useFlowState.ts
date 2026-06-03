@@ -209,17 +209,23 @@ export function useFlowState(props?: UseFlowStateProps) {
     setEdges((eds) => eds.filter((edge) => edge.source !== id && edge.target !== id));
   }, [setNodes, setEdges]);
 
-  const addEdge = useCallback((edge: Omit<Edge, 'id'>) => {
+  const normalizeHandleId = (handle?: string | null): string | undefined => {
+    if (!handle) return undefined;
+    return handle.replace(/-source$/, '').replace(/-target$/, '');
+  };
+
+  const addEdge = useCallback((edge: Edge | Omit<Edge, 'id'>) => {
     // If handles not provided, choose based on relative positions
     const findNode = (id?: string) => nodes.find(n => n.id === id);
     const src = findNode(edge.source);
     const tgt = findNode(edge.target);
     const auto = chooseHandlesForPair(src, tgt, edge.sourceHandle, edge.targetHandle);
+    const explicitId = 'id' in edge && typeof edge.id === 'string' ? edge.id : undefined;
     const newEdge: Edge = {
       ...edge,
-      id: `edge-${getId()}`,
-      sourceHandle: edge.sourceHandle ?? auto.s,
-      targetHandle: edge.targetHandle ?? auto.t,
+      id: explicitId ?? `edge-${getId()}`,
+      sourceHandle: normalizeHandleId(edge.sourceHandle) ?? normalizeHandleId(auto.s) ?? 'right',
+      targetHandle: normalizeHandleId(edge.targetHandle) ?? normalizeHandleId(auto.t) ?? 'left',
     };
     console.log('useFlowState.addEdge called with:', edge);
     console.log('Created newEdge:', newEdge);

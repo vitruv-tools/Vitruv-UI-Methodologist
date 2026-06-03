@@ -1,4 +1,8 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useRef } from 'react';
+import { BoundChangePasswordModal } from '../ui/BoundChangePasswordModal';
+import { useChangePassword } from '../../hooks/useChangePassword';
+import { useDismissOnOutsideClick } from '../../hooks/useDismissOnOutsideClick';
+import { getUserInitials } from '../../utils/userInitials';
 
 export type SidebarView = 'library' | 'projects' | 'settings';
 
@@ -171,12 +175,6 @@ const MenuItem: React.FC<MenuItemProps> = ({ icon, label, sublabel, danger = fal
   );
 };
 
-// ── getInitials ───────────────────────────────────────────────────────────────
-
-function getInitials(name: string): string {
-  return name.split(' ').map(p => p[0]).join('').toUpperCase().slice(0, 2);
-}
-
 // ── AppSidebar ────────────────────────────────────────────────────────────────
 
 export const AppSidebar: React.FC<AppSidebarProps> = ({
@@ -187,18 +185,9 @@ export const AppSidebar: React.FC<AppSidebarProps> = ({
   const [menuOpen, setMenuOpen] = React.useState(false);
   const [userHovered, setUserHovered] = React.useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
+  const changePassword = useChangePassword();
 
-  // Close on outside click
-  useEffect(() => {
-    if (!menuOpen) return;
-    const handler = (e: MouseEvent) => {
-      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
-        setMenuOpen(false);
-      }
-    };
-    document.addEventListener('mousedown', handler);
-    return () => document.removeEventListener('mousedown', handler);
-  }, [menuOpen]);
+  useDismissOnOutsideClick(menuRef, menuOpen, () => setMenuOpen(false));
 
   return (
     <aside style={{
@@ -271,7 +260,7 @@ export const AppSidebar: React.FC<AppSidebarProps> = ({
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
                 fontSize: 13, fontWeight: 700, color: '#fff', flexShrink: 0,
               }}>
-                {getInitials(userName)}
+                {getUserInitials(userName, userEmail)}
               </div>
               <div style={{ minWidth: 0 }}>
                 <div style={{ fontSize: 13, fontWeight: 600, color: '#fff', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
@@ -288,7 +277,7 @@ export const AppSidebar: React.FC<AppSidebarProps> = ({
 
             {/* Account actions */}
             <MenuItem icon={<UserIcon />} label="My Profile" sublabel="View & edit your profile" onClick={() => { setMenuOpen(false); }} />
-            <MenuItem icon={<LockIcon />} label="Change Password" onClick={() => { setMenuOpen(false); }} />
+            <MenuItem icon={<LockIcon />} label="Change Password" onClick={() => { setMenuOpen(false); changePassword.open(); }} />
             <MenuItem icon={<BellIcon />} label="Notifications" sublabel="Manage alerts" onClick={() => { setMenuOpen(false); }} />
 
             <MenuDivider />
@@ -325,7 +314,7 @@ export const AppSidebar: React.FC<AppSidebarProps> = ({
               display: 'flex', alignItems: 'center', justifyContent: 'center',
               fontSize: 13, fontWeight: 700, color: '#fff', flexShrink: 0,
             }}>
-              {getInitials(userName)}
+              {getUserInitials(userName, userEmail)}
             </div>
             <div style={{ flex: 1, minWidth: 0 }}>
               <div style={{ fontSize: 13, fontWeight: 600, color: '#fff', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
@@ -341,6 +330,8 @@ export const AppSidebar: React.FC<AppSidebarProps> = ({
           </button>
         </div>
       </div>
+
+      <BoundChangePasswordModal controller={changePassword} />
     </aside>
   );
 };

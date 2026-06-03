@@ -4,6 +4,10 @@ import 'reactflow/dist/style.css';
 import { EditableNode } from './EditableNode';
 import { UMLRelationship } from './UMLRelationship';
 import { generateUMLFromEcore } from '../../utils/umlGenerator';
+import { pickFocusUmlFlowNodes } from '../../utils/umlClassLayout';
+import { ActionButton } from '../ui/ActionButton';
+import { APP_FONT, largeModalPanelStyle, modalCloseButtonStyle, modalPanelHeaderStyle } from '../ui/sharedStyles';
+import { modalBackdropStyle, modalDialogShellStyle, useModalBodyLock } from '../ui/modalUtils';
 
 interface UMLViewerModalProps {
   isOpen: boolean;
@@ -30,22 +34,52 @@ export const UMLViewerModal: React.FC<UMLViewerModalProps> = ({ isOpen, title, e
     setReady(true);
   }, [isOpen, ecoreContent]);
 
+  const fitFocusedUmlView = useCallback((inst: ReactFlowInstance, nodeList: Node[]) => {
+    const editable = nodeList.filter(n => n.type === 'editable');
+    const focusNodes = pickFocusUmlFlowNodes(editable);
+    inst.fitView({
+      padding: 0.2,
+      nodes: focusNodes.length > 0 ? focusNodes : editable,
+    });
+  }, []);
+
   useEffect(() => {
     if (ready && rfRef.current) {
-      // Delay to ensure layout mounts
       const t = setTimeout(() => {
         try {
-          rfRef.current?.fitView?.({ padding: 0.2 });
-        } catch { }
+          if (rfRef.current) fitFocusedUmlView(rfRef.current, nodes);
+        } catch { /* layout not ready */ }
       }, 0);
       return () => clearTimeout(t);
     }
-  }, [ready, nodes, edges]);
+  }, [ready, nodes, edges, fitFocusedUmlView]);
 
   const handleInit = useCallback((inst: ReactFlowInstance) => {
     rfRef.current = inst;
-    requestAnimationFrame(() => inst.fitView?.({ padding: 0.2 }));
+    requestAnimationFrame(() => fitFocusedUmlView(inst, nodes));
+  }, [nodes, fitFocusedUmlView]);
+
+  // Toggle edge selection when a UML relationship is clicked
+  useEffect(() => {
+    if (!isOpen) return;
+
+    const handleEdgeClick = (e: Event) => {
+      const { edgeId, currentlySelected } = (e as CustomEvent<{ edgeId: string; currentlySelected: boolean }>).detail;
+      setEdges(prev =>
+        prev.map(edge => ({ ...edge, selected: edge.id === edgeId ? !currentlySelected : false })),
+      );
+      setNodes(prev => prev.map(node => ({ ...node, selected: false })));
+    };
+
+    globalThis.addEventListener('edge-clicked', handleEdgeClick as EventListener);
+    return () => globalThis.removeEventListener('edge-clicked', handleEdgeClick as EventListener);
+  }, [isOpen]);
+
+  const handlePaneClick = useCallback(() => {
+    setEdges(prev => prev.map(edge => ({ ...edge, selected: false })));
   }, []);
+
+  useModalBodyLock(isOpen);
 
   if (!isOpen) return null;
 
@@ -53,19 +87,9 @@ export const UMLViewerModal: React.FC<UMLViewerModalProps> = ({ isOpen, title, e
     <dialog
       open
       style={{
-        position: 'fixed',
-        inset: 0,
-        background: 'transparent',
-        zIndex: 10000,
+        ...modalDialogShellStyle,
         display: 'grid',
         placeItems: 'center',
-        border: 'none',
-        padding: 0,
-        margin: 0,
-        width: '100%',
-        height: '100%',
-        maxWidth: '100%',
-        maxHeight: '100%',
       }}
       onClose={onClose}
       onCancel={onClose}
@@ -75,57 +99,53 @@ export const UMLViewerModal: React.FC<UMLViewerModalProps> = ({ isOpen, title, e
         aria-hidden="true"
         tabIndex={-1}
         onClick={onClose}
-        style={{
-          position: 'absolute',
-          inset: 0,
-          background: 'rgba(0,0,0,0.6)',
-          border: 'none',
-          padding: 0,
-          margin: 0,
-          width: '100%',
-          height: '100%',
-          cursor: 'default',
-        }}
+        style={{ ...modalBackdropStyle, position: 'absolute' }}
       />
       <div
         style={{
+          ...largeModalPanelStyle,
           width: '92vw',
           height: '88vh',
-          background: '#fff',
-          borderRadius: 12,
-          boxShadow: '0 20px 60px rgba(0,0,0,0.25)',
-          display: 'flex',
-          flexDirection: 'column',
-          overflow: 'hidden',
-          position: 'relative',
-          zIndex: 1,
+          maxHeight: 'none',
         }}
       >
-        <div
-          style={{
-            padding: '10px 14px',
-            borderBottom: '1px solid #e5e7eb',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            background: '#fafafa',
-          }}
-        >
-          <div style={{ fontWeight: 700, color: '#111827' }}>
+        <div style={modalPanelHeaderStyle}>
+          <div
+            style={{
+              fontWeight: 700,
+              color: '#0f172a',
+              fontSize: '16px',
+              fontFamily: APP_FONT,
+              letterSpacing: '-0.01em',
+            }}
+          >
             {title || 'UML Diagram'}
           </div>
-          <div style={{ display: 'flex', gap: 8 }}>
-            <button
-              onClick={() => rfRef.current?.fitView?.({ padding: 0.2 })}
-              style={{ border: '1px solid #e5e7eb', background: '#fff', padding: '6px 10px', borderRadius: 6, cursor: 'pointer' }}
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+            <ActionButton
+              variant="ghost"
+              size="sm"
+              onClick={() => {
+                if (rfRef.current) fitFocusedUmlView(rfRef.current, nodes);
+              }}
               title="Fit view"
             >
-              ⛶
-            </button>
+              Fit view
+            </ActionButton>
             <button
+              type="button"
               onClick={onClose}
-              style={{ border: '1px solid #e5e7eb', background: '#fff', padding: '6px 10px', borderRadius: 6, cursor: 'pointer' }}
+              style={modalCloseButtonStyle}
               title="Close"
+              aria-label="Close viewer"
+              onMouseEnter={(e) => {
+                e.currentTarget.style.background = '#f1f5f9';
+                e.currentTarget.style.color = '#374151';
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.background = 'transparent';
+                e.currentTarget.style.color = '#94a3b8';
+              }}
             >
               ✕
             </button>
@@ -138,8 +158,9 @@ export const UMLViewerModal: React.FC<UMLViewerModalProps> = ({ isOpen, title, e
             nodeTypes={nodeTypes}
             edgeTypes={edgeTypes}
             onInit={handleInit}
-            fitView
+            onPaneClick={handlePaneClick}
             elementsSelectable
+            edgesFocusable
             panOnDrag
             panOnScroll
             zoomOnScroll
@@ -153,5 +174,3 @@ export const UMLViewerModal: React.FC<UMLViewerModalProps> = ({ isOpen, title, e
     </dialog>
   );
 };
-
-

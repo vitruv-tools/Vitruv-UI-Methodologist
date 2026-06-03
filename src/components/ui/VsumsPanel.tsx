@@ -4,6 +4,14 @@ import { Vsum } from '../../types';
 import { CreateVsumModal } from './CreateVsumModal';
 import { VsumDetailsModal } from './VsumDetailsModal';
 import { ConfirmDialog } from './ConfirmDialog';
+import {
+    DELETED_PROJECT_RETENTION_DAYS,
+    DELETION_URGENCY_STYLES,
+    filterRestorableDeletedVsums,
+    formatDaysRemainingLabel,
+    getDaysUntilPermanentDelete,
+    getDeletionUrgency,
+} from '../../utils/deletedProjectUtils';
 
 const containerStyle: React.CSSProperties = {
     userSelect: 'none',
@@ -117,29 +125,6 @@ export const VsumsPanel: React.FC = () => {
         return `${d.toLocaleDateString()} ${d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
     };
 
-    // Returns how many days remain before auto-deletion (backend deletes after 30 days).
-    const getDaysLeft = (removedAt: string | null | undefined): number => {
-        if (!removedAt) return 30;
-        const deletedMs = new Date(removedAt).getTime();
-        const elapsedDays = (Date.now() - deletedMs) / (1000 * 60 * 60 * 24);
-        return Math.max(0, Math.floor(30 - elapsedDays));
-    };
-
-    // Returns urgency level: 'critical' | 'warning' | 'caution' | 'safe'
-    const getDaysLeftUrgency = (days: number) => {
-        if (days <= 3)  return 'critical' as const;
-        if (days <= 7)  return 'warning'  as const;
-        if (days <= 14) return 'caution'  as const;
-        return 'safe' as const;
-    };
-
-    const URGENCY_COLORS = {
-        critical: { bg: '#fef2f2', text: '#991b1b', border: '#fca5a5', dot: '#ef4444' },
-        warning:  { bg: '#fff7ed', text: '#c2410c', border: '#fdba74', dot: '#f97316' },
-        caution:  { bg: '#fefce8', text: '#854d0e', border: '#fde68a', dot: '#eab308' },
-        safe:     { bg: '#f0fdf4', text: '#166534', border: '#bbf7d0', dot: '#22c55e' },
-    };
-
     const loadFirstPage = useCallback(async () => {
         const mySeq = ++requestSeq.current;
         setLoading(true);
@@ -154,10 +139,11 @@ export const VsumsPanel: React.FC = () => {
                 ? await apiService.getRemovedVsumsPaginated(0, PAGE_SIZE)
                 : await apiService.getVsumsPaginated(search, 0, PAGE_SIZE);
             if (mySeq !== requestSeq.current) return;
-            const newData: Vsum[] = res.data || [];
+            const raw: Vsum[] = res.data || [];
+            const newData = showDeleted ? filterRestorableDeletedVsums(raw) : raw;
             setItems(newData);
             setPage(1);
-            setHasMore(newData.length === PAGE_SIZE);
+            setHasMore(raw.length === PAGE_SIZE);
         } catch (e) {
             if (mySeq !== requestSeq.current) return;
             setError(e instanceof Error ? e.message : 'Failed to load VSUMs');
@@ -177,10 +163,11 @@ export const VsumsPanel: React.FC = () => {
                 ? await apiService.getRemovedVsumsPaginated(page, PAGE_SIZE)
                 : await apiService.getVsumsPaginated(search, page, PAGE_SIZE);
             if (mySeq !== requestSeq.current) return;
-            const newData: Vsum[] = res.data || [];
+            const raw: Vsum[] = res.data || [];
+            const newData = showDeleted ? filterRestorableDeletedVsums(raw) : raw;
             setItems(prev => [...prev, ...newData]);
             setPage(prev => prev + 1);
-            setHasMore(newData.length === PAGE_SIZE);
+            setHasMore(raw.length === PAGE_SIZE);
         } catch (e) {
             if (mySeq !== requestSeq.current) return;
             setError(e instanceof Error ? e.message : 'Failed to load VSUMs');
@@ -336,7 +323,7 @@ export const VsumsPanel: React.FC = () => {
                         <polyline points="12 6 12 12 16 14"/>
                     </svg>
                     <span>
-                        Deleted projects are <strong style={{ color: '#049484' }}>permanently removed after 30 days</strong>. Restore before time runs out.
+                        Deleted projects are <strong style={{ color: '#049484' }}>permanently removed after {DELETED_PROJECT_RETENTION_DAYS} days</strong>. The badge shows how many days remain. Projects already purged are not listed.
                     </span>
                 </div>
             )}
@@ -387,7 +374,7 @@ export const VsumsPanel: React.FC = () => {
             </div>
 
             {(items
-                .filter(item => showDeleted ? !!item.removedAt : !item.removedAt)
+                .filter(item => (showDeleted ? getDaysUntilPermanentDelete(item.removedAt) > 0 : !item.removedAt))
                 .sort((a, b) => {
                     // Sort by date: newest first (descending order)
                     // For deleted items, use removedAt or updatedAt; for regular items, use createdAt
@@ -405,9 +392,9 @@ export const VsumsPanel: React.FC = () => {
             ).map((item) => {
                 const role = (item as any).role as string | undefined;
                 const canManage = role === 'OWNER';
-                const openVsum = () => {
+                const openVsum = (forceNew = false) => {
                     if (!showDeleted) {
-                        globalThis.dispatchEvent(new CustomEvent('vitruv.openVsum', { detail: { id: item.id } }));
+                        globalThis.dispatchEvent(new CustomEvent('vitruv.openVsum', { detail: { id: item.id, forceNew } }));
                     }
                 };
                 const cardInteractionProps = showDeleted
@@ -415,15 +402,28 @@ export const VsumsPanel: React.FC = () => {
                     : {
                         role: 'button' as const,
                         tabIndex: 0,
-                        onDoubleClick: openVsum,
+                        title: 'Double-click to open. Ctrl+click to open in a new tab.',
+                        onClick: (e: React.MouseEvent) => {
+                            if (e.ctrlKey || e.metaKey) {
+                                e.preventDefault();
+                                openVsum(true);
+                            }
+                        },
+                        onAuxClick: (e: React.MouseEvent) => {
+                            if (e.button === 1) {
+                                e.preventDefault();
+                                openVsum(true);
+                            }
+                        },
+                        onDoubleClick: () => openVsum(false),
                         onTouchEnd: (e: React.TouchEvent<HTMLDivElement>) => {
                             e.preventDefault();
-                            openVsum();
+                            openVsum(false);
                         },
                         onKeyDown: (e: React.KeyboardEvent<HTMLDivElement>) => {
                             if (e.key === 'Enter' || e.key === ' ') {
                                 e.preventDefault();
-                                openVsum();
+                                openVsum(e.ctrlKey || e.metaKey);
                             }
                         },
                         onMouseEnter: (e: React.MouseEvent<HTMLDivElement>) => {
@@ -500,13 +500,9 @@ export const VsumsPanel: React.FC = () => {
 
                                     {/* Days-left countdown — inline with the date, matches project style */}
                                     {showDeleted && (() => {
-                                        const daysLeft = getDaysLeft(item.removedAt);
-                                        const urgency = getDaysLeftUrgency(daysLeft);
-                                        const c = URGENCY_COLORS[urgency];
-                                        const dayWord = daysLeft === 1 ? 'day' : 'days';
-                                        const daysLeftLabel = daysLeft === 0
-                                            ? 'Deleting soon'
-                                            : `${daysLeft} ${dayWord} left`;
+                                        const daysLeft = getDaysUntilPermanentDelete(item.removedAt);
+                                        const urgency = getDeletionUrgency(daysLeft);
+                                        const c = DELETION_URGENCY_STYLES[urgency];
                                         return (
                                             <span
                                                 style={{
@@ -525,9 +521,8 @@ export const VsumsPanel: React.FC = () => {
                                                     fontFamily: `'Segoe UI', system-ui, sans-serif`,
                                                     whiteSpace: 'nowrap',
                                                 }}
-                                                title={`Permanently deleted in ${daysLeft} day${daysLeft === 1 ? '' : 's'} (30-day policy)`}
+                                                title={`Permanent deletion in ${formatDaysRemainingLabel(daysLeft)} (${DELETED_PROJECT_RETENTION_DAYS}-day policy)`}
                                             >
-                                                {/* Coloured dot indicator */}
                                                 <span style={{
                                                     width: 6, height: 6,
                                                     borderRadius: '50%',
@@ -535,7 +530,7 @@ export const VsumsPanel: React.FC = () => {
                                                     flexShrink: 0,
                                                     display: 'inline-block',
                                                 }} />
-                                                {daysLeftLabel}
+                                                {formatDaysRemainingLabel(daysLeft)}
                                             </span>
                                         );
                                     })()}
@@ -614,7 +609,7 @@ export const VsumsPanel: React.FC = () => {
                 );
             })}
 
-            {!loading && items.filter(item => showDeleted ? !!item.removedAt : !item.removedAt).length === 0 && (
+            {!loading && items.filter(item => (showDeleted ? getDaysUntilPermanentDelete(item.removedAt) > 0 : !item.removedAt)).length === 0 && (
                 <div style={{
                     display: 'flex',
                     flexDirection: 'column',

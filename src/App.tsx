@@ -61,6 +61,7 @@ function App() {
           } />
           <Route path="/mml" element={<Navigate to="/" replace />} />
           <Route path="/project" element={<Navigate to="/" replace />} />
+          <Route path="/editor" element={<Navigate to="/" replace />} />
           {/*Editor Test Route*/}
           <Route path="/editor-test" element={<EditorTest />} />
         </Routes>

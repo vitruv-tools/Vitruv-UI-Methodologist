@@ -1,5 +1,6 @@
 import React from 'react';
 import ReactDOM from 'react-dom';
+import { MODAL_Z_INDEX, modalBackdropStyle, useModalBodyLock } from './modalUtils';
 
 const FONT = 'ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, sans-serif';
 
@@ -41,6 +42,8 @@ export const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
   onConfirm,
   onCancel,
 }) => {
+  useModalBodyLock(isOpen);
+
   if (!isOpen) return null;
 
   const themes = {
@@ -65,29 +68,32 @@ export const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
   const theme = themes[variant];
 
   const dialog = (
-    <div
-      style={{
-        position: 'fixed',
-        top: 0,
-        left: 0,
-        width: '100vw',
-        height: '100vh',
-        background: 'rgba(0,0,0,0.5)',
-        backdropFilter: 'blur(8px)',
-        WebkitBackdropFilter: 'blur(8px)',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        zIndex: 9999,
-      }}
-      onClick={(e) => { if (e.target === e.currentTarget) onCancel(); }}
-    >
+    <>
+      <button
+        type="button"
+        aria-hidden="true"
+        tabIndex={-1}
+        onClick={onCancel}
+        style={{ ...modalBackdropStyle, zIndex: MODAL_Z_INDEX }}
+      />
+      <div
+        style={{
+          position: 'fixed',
+          inset: 0,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: MODAL_Z_INDEX + 1,
+          pointerEvents: 'none',
+        }}
+      >
       <div
         role="alertdialog"
         aria-modal="true"
         aria-labelledby="confirm-title"
         aria-describedby="confirm-message"
         style={{
+          pointerEvents: 'auto',
           background: '#ffffff',
           borderRadius: '14px',
           boxShadow: '0 24px 60px rgba(0,0,0,0.22), 0 4px 16px rgba(0,0,0,0.08)',
@@ -233,7 +239,8 @@ export const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
           </button>
         </div>
       </div>
-    </div>
+      </div>
+    </>
   );
 
   return ReactDOM.createPortal(dialog, document.body);

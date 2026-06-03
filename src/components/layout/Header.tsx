@@ -1,6 +1,10 @@
 import React, { useEffect, useRef, useState, useMemo, useCallback } from 'react';
 import { User } from '../../services/auth';
 import { apiService } from '../../services/api';
+import { BoundChangePasswordModal } from '../ui/BoundChangePasswordModal';
+import { useChangePassword } from '../../hooks/useChangePassword';
+import { useDismissOnOutsideClick } from '../../hooks/useDismissOnOutsideClick';
+import { getUserInitials } from '../../utils/userInitials';
 
 interface HeaderProps {
   title?: string;
@@ -14,79 +18,6 @@ interface ApiUserData {
   firstName: string;
   lastName: string;
 }
-
-interface PasswordValidation {
-  hasMinLength: boolean;
-  hasUppercase: boolean;
-  hasLowercase: boolean;
-  hasNumber: boolean;
-  hasSymbol: boolean;
-  isPasswordValid: boolean;
-}
-
-// Sub-components for reduced complexity
-
-interface ValidationItemProps {
-  isValid: boolean;
-  text: string;
-}
-
-const ValidationItem: React.FC<ValidationItemProps> = ({ isValid, text }) => (
-  <li style={{
-    display: 'flex',
-    alignItems: 'center',
-    gap: 6,
-    color: isValid ? '#16a34a' : '#dc2626',
-  }}>
-    <span style={{ fontWeight: 700, fontSize: 16, minWidth: 16 }}>
-      {isValid ? '✓' : '×'}
-    </span>
-    <span>{text}</span>
-  </li>
-);
-
-interface PasswordRequirementsProps {
-  validation: PasswordValidation;
-  showRequirements: boolean;
-}
-
-const PasswordRequirements: React.FC<PasswordRequirementsProps> = ({ validation, showRequirements }) => {
-  if (!showRequirements) return null;
-
-  return (
-    <div style={{
-      marginTop: 12,
-      padding: '12px',
-      background: '#f9fafb',
-      border: '1px solid #e5e7eb',
-      borderRadius: 8,
-    }}>
-      <div style={{
-        fontSize: 12,
-        fontWeight: 600,
-        color: '#374151',
-        marginBottom: 8,
-      }}>
-        Password must:
-      </div>
-      <ul style={{
-        listStyle: 'none',
-        padding: 0,
-        margin: 0,
-        fontSize: 12,
-        display: 'flex',
-        flexDirection: 'column',
-        gap: 4,
-      }}>
-        <ValidationItem isValid={validation.hasMinLength} text="Be at least 8 characters long" />
-        <ValidationItem isValid={validation.hasLowercase} text="Have at least one lowercase letter" />
-        <ValidationItem isValid={validation.hasUppercase} text="Have at least one uppercase letter" />
-        <ValidationItem isValid={validation.hasNumber} text="Have at least one number" />
-        <ValidationItem isValid={validation.hasSymbol} text="Have at least one special character" />
-      </ul>
-    </div>
-  );
-};
 
 interface UserAvatarProps {
   initials: string;
@@ -211,423 +142,11 @@ const ActionButton: React.FC<ActionButtonProps> = ({ onClick, icon, label, varia
   );
 };
 
-interface PasswordInputProps {
-  label: string;
-  value: string;
-  onChange: (value: string) => void;
-  placeholder: string;
-  disabled?: boolean;
-  showError?: boolean;
-  errorMessage?: string;
-  successMessage?: string;
-  onKeyDown?: (e: React.KeyboardEvent) => void;
-}
-
-const PasswordInput: React.FC<PasswordInputProps> = ({
-  label,
-  value,
-  onChange,
-  placeholder,
-  disabled,
-  showError,
-  errorMessage,
-  successMessage,
-  onKeyDown,
-}) => {
-  const [isFocused, setIsFocused] = useState(false);
-  const inputId = React.useId();
-
-  const inputStyle = {
-    width: '100%',
-    padding: '12px 14px',
-    border: showError ? '2px solid #dc2626' : '2px solid #e5e7eb',
-    borderRadius: 8,
-    fontSize: 14,
-    boxSizing: 'border-box' as const,
-    outline: 'none',
-    transition: 'all 0.2s ease',
-    background: isFocused ? '#ffffff' : '#f9fafb',
-    boxShadow: isFocused ? '0 0 0 3px rgba(4, 148, 132, 0.1)' : 'none',
-  };
-
-  return (
-    <div style={{ marginBottom: 20 }}>
-      <label htmlFor={inputId} style={{
-        display: 'block',
-        marginBottom: 10,
-        fontSize: 14,
-        fontWeight: 600,
-        color: '#1f2937',
-        letterSpacing: '0.2px',
-      }}>
-        {label}
-      </label>
-      <input
-        id={inputId}
-        type="password"
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        placeholder={placeholder}
-        disabled={disabled}
-        style={inputStyle}
-        onFocus={() => setIsFocused(true)}
-        onBlur={() => setIsFocused(false)}
-        onKeyDown={onKeyDown}
-      />
-      {errorMessage && (
-        <div style={{
-          marginTop: 6,
-          fontSize: 12,
-          color: '#dc2626',
-          display: 'flex',
-          alignItems: 'center',
-          gap: 4,
-          fontWeight: 500,
-        }}>
-          <span style={{ fontSize: 16, fontWeight: 700 }}>×</span>
-          <span>{errorMessage}</span>
-        </div>
-      )}
-      {successMessage && (
-        <div style={{
-          marginTop: 6,
-          fontSize: 12,
-          color: '#16a34a',
-          display: 'flex',
-          alignItems: 'center',
-          gap: 4,
-          fontWeight: 500,
-        }}>
-          <span style={{ fontSize: 16, fontWeight: 700 }}>✓</span>
-          <span>{successMessage}</span>
-        </div>
-      )}
-    </div>
-  );
-};
-
-interface MessageBoxProps {
-  message: string;
-  type: 'error' | 'success';
-}
-
-const MessageBox: React.FC<MessageBoxProps> = ({ message, type }) => {
-  const isError = type === 'error';
-  const style = {
-    padding: '14px 16px',
-    background: isError ? '#fef2f2' : '#d5f4e6',
-    border: `2px solid ${isError ? '#fecaca' : '#a9dfbf'}`,
-    borderRadius: 8,
-    color: isError ? '#991b1b' : '#166534',
-    fontSize: 13,
-    marginBottom: 20,
-    fontWeight: 500,
-    lineHeight: 1.5,
-  };
-
-  return <div style={style}>{message}</div>;
-};
-
-interface ModalButtonProps {
-  onClick: () => void;
-  label: string;
-  variant: 'cancel' | 'submit';
-  disabled?: boolean;
-  isLoading?: boolean;
-  loadingLabel?: string;
-}
-
-const getModalButtonStyle = (isCancel: boolean, isDisabled: boolean, isHovered: boolean) => {
-  let background = 'linear-gradient(135deg, #049484 0%, #037368 100%)';
-  if (isCancel) {
-    background = '#ffffff';
-  } else if (isDisabled) {
-    background = '#95a5a6';
-  }
-  const boxShadow = !isCancel && !isDisabled ? '0 2px 8px rgba(4, 148, 132, 0.25)' : 'none';
-  let opacity = 1;
-  if (isDisabled) {
-    opacity = isCancel ? 0.5 : 0.6;
-  }
-  const transform = !isCancel && isHovered && !isDisabled ? 'translateY(-1px)' : 'translateY(0)';
-
-  return {
-    padding: isCancel ? '12px 24px' : '12px 28px',
-    borderRadius: 8,
-    border: isCancel ? '2px solid #e5e7eb' : '2px solid #037368',
-    background,
-    color: isCancel ? '#374151' : '#ffffff',
-    cursor: isDisabled ? 'not-allowed' : 'pointer',
-    fontWeight: isCancel ? 600 : 700,
-    fontSize: 14,
-    transition: 'all 0.2s ease',
-    boxShadow,
-    opacity,
-    transform,
-  };
-};
-
-const ModalButton: React.FC<ModalButtonProps> = ({
-  onClick,
-  label,
-  variant,
-  disabled,
-  isLoading,
-  loadingLabel,
-}) => {
-  const [isHovered, setIsHovered] = useState(false);
-  const isDisabled = Boolean(disabled || isLoading);
-  const isCancel = variant === 'cancel';
-  const baseStyle = getModalButtonStyle(Boolean(isCancel), Boolean(isDisabled), Boolean(isHovered));
-
-  const handleMouseEnter = () => {
-    setIsHovered(!isDisabled);
-  };
-
-  const handleMouseLeave = () => {
-    setIsHovered(false);
-  };
-
-  return (
-    <button
-      onClick={onClick}
-      disabled={isDisabled}
-      style={baseStyle}
-      onMouseEnter={handleMouseEnter}
-      onMouseLeave={handleMouseLeave}
-    >
-      {isLoading ? loadingLabel : label}
-    </button>
-  );
-};
-
-interface ChangePasswordModalProps {
-  isOpen: boolean;
-  onClose: () => void;
-  newPassword: string;
-  confirmPassword: string;
-  onNewPasswordChange: (value: string) => void;
-  onConfirmPasswordChange: (value: string) => void;
-  validation: PasswordValidation;
-  isConfirmValid: boolean;
-  isChanging: boolean;
-  error: string;
-  success: string;
-  onSubmit: () => void;
-  canSubmit: boolean;
-}
-
-const ChangePasswordModal: React.FC<ChangePasswordModalProps> = ({
-  isOpen,
-  onClose,
-  newPassword,
-  confirmPassword,
-  onNewPasswordChange,
-  onConfirmPasswordChange,
-  validation,
-  isConfirmValid,
-  isChanging,
-  error,
-  success,
-  onSubmit,
-  canSubmit,
-}) => {
-  useEffect(() => {
-    if (!isOpen) return;
-    const onKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape' && !isChanging) onClose();
-    };
-    globalThis.addEventListener('keydown', onKeyDown);
-    return () => globalThis.removeEventListener('keydown', onKeyDown);
-  }, [isOpen, isChanging, onClose]);
-
-  if (!isOpen) return null;
-
-  return (
-    <div
-      style={{
-        position: 'fixed',
-        top: 0,
-        left: 0,
-        right: 0,
-        bottom: 0,
-        background: 'transparent',
-        display: 'grid',
-        placeItems: 'center',
-        zIndex: 10000,
-        animation: 'fadeIn 0.2s ease-out',
-      }}
-    >
-      <button
-        type="button"
-        aria-hidden="true"
-        tabIndex={-1}
-        onClick={() => { if (!isChanging) onClose(); }}
-        style={{
-          position: 'absolute',
-          inset: 0,
-          background: 'rgba(0, 0, 0, 0.65)',
-          backdropFilter: 'blur(12px)',
-          WebkitBackdropFilter: 'blur(12px)',
-          border: 'none',
-          padding: 0,
-          margin: 0,
-          width: '100%',
-          height: '100%',
-          cursor: isChanging ? 'default' : 'pointer',
-        }}
-      />
-      <dialog
-        open
-        aria-labelledby="change-password-title"
-        style={{
-          background: '#ffffff',
-          borderRadius: 16,
-          padding: 0,
-          width: '90%',
-          maxWidth: 480,
-          boxShadow: '0 24px 72px rgba(0, 0, 0, 0.3), 0 8px 24px rgba(0, 0, 0, 0.2)',
-          overflow: 'hidden',
-          animation: 'slideUp 0.3s ease-out',
-          position: 'relative',
-          zIndex: 1,
-        }}
-      >
-        {/* Header with gradient */}
-        <div style={{
-          background: 'linear-gradient(135deg, #049484 0%, #037368 100%)',
-          padding: '28px 32px',
-          color: '#ffffff',
-          borderBottom: '3px solid #037368',
-        }}>
-          <h2 id="change-password-title" style={{
-            margin: 0,
-            fontSize: 26,
-            fontWeight: 700,
-            letterSpacing: '-0.5px',
-            lineHeight: 1.3,
-          }}>
-            Change Password
-          </h2>
-          <p style={{
-            margin: '10px 0 0 0',
-            fontSize: 14,
-            opacity: 0.95,
-            fontWeight: 400,
-            lineHeight: 1.5,
-          }}>
-            Please create a strong password that meets all security requirements to protect your account.
-          </p>
-        </div>
-
-        {/* Form Content */}
-        <div style={{ padding: '32px' }}>
-          <PasswordInput
-            label="New Password"
-            value={newPassword}
-            onChange={onNewPasswordChange}
-            placeholder="Enter new password"
-            disabled={isChanging}
-          />
-          <PasswordRequirements
-            validation={validation}
-            showRequirements={!!newPassword && !validation.isPasswordValid}
-          />
-
-          <PasswordInput
-            label="Confirm Password"
-            value={confirmPassword}
-            onChange={onConfirmPasswordChange}
-            placeholder="Re-enter new password"
-            disabled={isChanging}
-            showError={!!confirmPassword && !isConfirmValid}
-            errorMessage={confirmPassword && !isConfirmValid ? 'Passwords do not match' : undefined}
-            successMessage={confirmPassword && isConfirmValid ? 'Passwords match' : undefined}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter' && canSubmit) {
-                onSubmit();
-              }
-            }}
-          />
-
-          {error && <MessageBox message={error} type="error" />}
-          {success && <MessageBox message={success} type="success" />}
-
-          <div style={{
-            display: 'flex',
-            gap: 12,
-            justifyContent: 'flex-end',
-            paddingTop: 4,
-          }}>
-            <ModalButton
-              onClick={onClose}
-              label="Cancel"
-              variant="cancel"
-              disabled={isChanging}
-            />
-            <ModalButton
-              onClick={onSubmit}
-              label="Change Password"
-              variant="submit"
-              disabled={!canSubmit}
-              isLoading={isChanging}
-              loadingLabel="Changing Password..."
-            />
-          </div>
-        </div>
-      </dialog>
-    </div>
-  );
-};
-
-// Helper functions
-const getInitials = (fullName?: string, email?: string): string => {
-  if (fullName && fullName.trim().length > 0) {
-    const parts = fullName.trim().split(/\s+/);
-    const first = parts[0]?.[0] ?? '';
-    const last = parts.length > 1 ? parts.at(-1)?.[0] ?? '' : '';
-    return (first + last).toUpperCase() || 'U';
-  }
-  if (email) {
-    const namePart = email.split('@')[0] ?? '';
-    const first = namePart[0] ?? '';
-    const last = namePart.at(-1) ?? '';
-    return (first + last).toUpperCase() || 'U';
-  }
-  return 'U';
-};
-
-const validatePassword = (password: string): PasswordValidation => {
-  // Backend regex: ^(?=.{8,256}$)(?=.*\p{Ll})(?=.*\p{Lu})(?=.*\p{Nd})(?=.*[^\p{L}\p{Nd}\s]).*$
-  const hasMinLength = password.length >= 8 && password.length <= 256;
-  const hasUppercase = /\p{Lu}/u.test(password);
-  const hasLowercase = /\p{Ll}/u.test(password);
-  const hasNumber = /\p{Nd}/u.test(password);
-  const hasSymbol = /[^\p{L}\p{Nd}\s]/u.test(password);
-  
-  const isPasswordValid = hasMinLength && hasUppercase && hasLowercase && 
-    hasNumber && hasSymbol;
-
-  return {
-    hasMinLength,
-    hasUppercase,
-    hasLowercase,
-    hasNumber,
-    hasSymbol,
-    isPasswordValid,
-  };
-};
-
 export function Header({ title = 'Methodologist Dashboard', user, onLogout }: Readonly<HeaderProps>) {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [apiUser, setApiUser] = useState<ApiUserData | null>(null);
   const [isLoadingUser, setIsLoadingUser] = useState(false);
-  const [isChangePasswordOpen, setIsChangePasswordOpen] = useState(false);
-  const [newPassword, setNewPassword] = useState('');
-  const [confirmPassword, setConfirmPassword] = useState('');
-  const [isChangingPassword, setIsChangingPassword] = useState(false);
-  const [passwordError, setPasswordError] = useState('');
-  const [passwordSuccess, setPasswordSuccess] = useState('');
+  const changePassword = useChangePassword();
   const menuRef = useRef<HTMLDivElement | null>(null);
 
   // Computed values with useMemo
@@ -644,59 +163,10 @@ export function Header({ title = 'Methodologist Dashboard', user, onLogout }: Re
 
   const displayInitials = useMemo(() => {
     if (apiUser) {
-      return getInitials(`${apiUser.firstName} ${apiUser.lastName}`, apiUser.email);
+      return getUserInitials(`${apiUser.firstName} ${apiUser.lastName}`, apiUser.email);
     }
-    return getInitials(user?.name, user?.email);
+    return getUserInitials(user?.name, user?.email);
   }, [apiUser, user]);
-
-  const passwordValidation = useMemo(() => validatePassword(newPassword), [newPassword]);
-  const isConfirmValid = useMemo(() => 
-    !!confirmPassword && confirmPassword === newPassword, 
-    [confirmPassword, newPassword]
-  );
-  const canSubmitPassword = useMemo(() => 
-    !isChangingPassword && passwordValidation.isPasswordValid && isConfirmValid,
-    [isChangingPassword, passwordValidation.isPasswordValid, isConfirmValid]
-  );
-
-  // Callbacks with useCallback
-  const resetPasswordModal = useCallback(() => {
-    setIsChangePasswordOpen(false);
-    setPasswordError('');
-    setPasswordSuccess('');
-    setNewPassword('');
-    setConfirmPassword('');
-  }, []);
-
-  const handleChangePassword = useCallback(async () => {
-    setPasswordError('');
-    setPasswordSuccess('');
-
-    if (!passwordValidation.isPasswordValid) {
-      setPasswordError('The password needs to be at least 8 characters long.');
-      return;
-    }
-
-    if (!isConfirmValid) {
-      setPasswordError('Passwords do not match');
-      return;
-    }
-
-    setIsChangingPassword(true);
-    try {
-      const response = await apiService.changePassword(newPassword);
-      setPasswordSuccess(response.message || 'Password changed successfully!');
-      setNewPassword('');
-      setConfirmPassword('');
-      setTimeout(() => {
-        resetPasswordModal();
-      }, 2000);
-    } catch (error) {
-      setPasswordError(error instanceof Error ? error.message : 'Failed to change password');
-    } finally {
-      setIsChangingPassword(false);
-    }
-  }, [newPassword, passwordValidation.isPasswordValid, isConfirmValid, resetPasswordModal]);
 
   const handleLogout = useCallback(() => {
     setIsMenuOpen(false);
@@ -705,8 +175,8 @@ export function Header({ title = 'Methodologist Dashboard', user, onLogout }: Re
 
   const openChangePassword = useCallback(() => {
     setIsMenuOpen(false);
-    setIsChangePasswordOpen(true);
-  }, []);
+    changePassword.open();
+  }, [changePassword.open]);
 
   // Fetch user info from API
   useEffect(() => {
@@ -725,19 +195,7 @@ export function Header({ title = 'Methodologist Dashboard', user, onLogout }: Re
     fetchUserInfo();
   }, []);
 
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
-        setIsMenuOpen(false);
-      }
-    };
-    if (isMenuOpen) {
-      document.addEventListener('mousedown', handleClickOutside);
-    }
-    return () => {
-      document.removeEventListener('mousedown', handleClickOutside);
-    };
-  }, [isMenuOpen]);
+  useDismissOnOutsideClick(menuRef, isMenuOpen, () => setIsMenuOpen(false));
 
   return (
     <header className="header-responsive" style={{
@@ -822,27 +280,7 @@ export function Header({ title = 'Methodologist Dashboard', user, onLogout }: Re
         </div>
       </div>
 
-      <ChangePasswordModal
-        isOpen={isChangePasswordOpen}
-        onClose={resetPasswordModal}
-        newPassword={newPassword}
-        confirmPassword={confirmPassword}
-        onNewPasswordChange={(value) => {
-          setNewPassword(value);
-          setPasswordError('');
-        }}
-        onConfirmPasswordChange={(value) => {
-          setConfirmPassword(value);
-          setPasswordError('');
-        }}
-        validation={passwordValidation}
-        isConfirmValid={isConfirmValid}
-        isChanging={isChangingPassword}
-        error={passwordError}
-        success={passwordSuccess}
-        onSubmit={handleChangePassword}
-        canSubmit={canSubmitPassword}
-      />
+      <BoundChangePasswordModal controller={changePassword} />
     </header>
   );
 }

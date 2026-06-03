@@ -12,7 +12,15 @@ jest.mock('reactflow', () => ({
 jest.mock('../../../utils/umlGenerator', () => ({
   generateUMLFromEcore: () => ({
     nodes: [{ id: 'n1', position: { x: 0, y: 0 }, data: { label: 'Class1' }, type: 'editable' }],
-    edges: [],
+    edges: [
+      {
+        id: 'uml-edge-1',
+        source: 'n1',
+        target: 'n1',
+        type: 'uml',
+        data: { relationshipType: 'association' },
+      },
+    ],
   }),
 }));
 
@@ -93,5 +101,34 @@ describe('UMLViewerModal – additional tests', () => {
       <UMLViewerModal isOpen ecoreContent="<ecore/>" onClose={jest.fn()} />,
     );
     expect(container.querySelector('dialog')).not.toBeNull();
+  });
+
+  it('registers edge-clicked listener while open', () => {
+    const addSpy = jest.spyOn(globalThis, 'addEventListener');
+    const { unmount } = render(
+      <UMLViewerModal isOpen ecoreContent="<ecore/>" onClose={jest.fn()} />,
+    );
+    expect(addSpy).toHaveBeenCalledWith('edge-clicked', expect.any(Function));
+    unmount();
+    addSpy.mockRestore();
+  });
+
+  it('toggles edge selection when edge-clicked is dispatched', async () => {
+    render(<UMLViewerModal isOpen ecoreContent="<ecore/>" onClose={jest.fn()} />);
+
+    await new Promise(r => setTimeout(r, 0));
+
+    globalThis.dispatchEvent(
+      new CustomEvent('edge-clicked', {
+        detail: { edgeId: 'uml-edge-1', currentlySelected: false },
+      }),
+    );
+
+    // Re-dispatch should not throw; selection state is internal
+    globalThis.dispatchEvent(
+      new CustomEvent('edge-clicked', {
+        detail: { edgeId: 'uml-edge-1', currentlySelected: true },
+      }),
+    );
   });
 });

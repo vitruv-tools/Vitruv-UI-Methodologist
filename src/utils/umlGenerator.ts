@@ -1,4 +1,5 @@
 import { FlowEdge, FlowNode } from '../types/flow';
+import { umlClassNodeId, umlPackageNodeId } from './umlLayoutStorage';
 
 // Layout constants — calibrated to actual rendered node sizes.
 // NODE_WIDTH matches the CSS minWidth (240 px).  NODE_HEIGHT is the base
@@ -10,6 +11,24 @@ const HORIZONTAL_SPACING = 80;
 const VERTICAL_SPACING = 130;
 const START_X = 80;
 const START_Y = 60;
+
+/** Format Ecore lower/upper bounds as UML cardinality (e.g. `1`, `0..*`). */
+export function formatEcoreMultiplicity(
+  lower: string | null,
+  upper: string | null,
+): string | undefined {
+  const normalizeUpper = (u: string | null) => {
+    if (u === null) return undefined;
+    if (u === '*' || u === '-1') return '*';
+    return u;
+  };
+  const normLower = lower ?? undefined;
+  const normUpper = normalizeUpper(upper);
+  if (normLower === undefined && normUpper === undefined) return undefined;
+  const lo = normLower ?? '1';
+  const hi = normUpper ?? '1';
+  return lo === hi ? lo : `${lo}..${hi}`;
+}
 
 // Helper function to find a node by ID
 const findNodeById = (nodes: FlowNode[], nodeId: string): FlowNode | undefined => {
@@ -467,7 +486,7 @@ export const generateUMLFromEcore = (ecoreContent: string): { nodes: FlowNode[];
       }
 
       const node: FlowNode = {
-        id: `uml-class-${nodeId++}`,
+        id: umlClassNodeId(className),
         type: 'editable',
         position: { x: 0, y: 0 }, // Will be calculated later
         data: {
@@ -541,20 +560,8 @@ export const generateUMLFromEcore = (ecoreContent: string): { nodes: FlowNode[];
           relationshipType = 'composition';
         }
 
-        // Normalize multiplicity per UML (place at target end only)
-        const normalizeUpper = (u: string | null) => {
-          if (u === null) return undefined;
-          if (u === '*' || u === '-1') return '*';
-          return u;
-        };
-        const normLower = lower ?? undefined;
-        const normUpper = normalizeUpper(upper);
-        let multiplicity: string | undefined = undefined;
-        if (normLower !== undefined || normUpper !== undefined) {
-          const lo = normLower ?? '1';
-          const hi = normUpper ?? '1';
-          multiplicity = lo === hi ? lo : `${lo}..${hi}`;
-        }
+        const targetMultiplicity = formatEcoreMultiplicity(lower, upper);
+        const sourceMultiplicity = targetMultiplicity !== undefined ? '1' : undefined;
 
         const handles = chooseHandles(sourceId, targetId);
         edges.push({
@@ -564,7 +571,8 @@ export const generateUMLFromEcore = (ecoreContent: string): { nodes: FlowNode[];
           type: 'uml',
           data: {
             relationshipType: relationshipType,
-            targetMultiplicity: multiplicity,
+            sourceMultiplicity,
+            targetMultiplicity,
           },
           sourceHandle: handles.sourceHandle,
           targetHandle: handles.targetHandle,
@@ -623,7 +631,7 @@ export const generateUMLFromEcore = (ecoreContent: string): { nodes: FlowNode[];
     // Optional package node
     if (nodes.length > 0) {
       const pkgNode: FlowNode = {
-        id: `uml-pkg-${nodeId++}`,
+        id: umlPackageNodeId(packageName),
         type: 'editable',
         position: { x: 80, y: 40 },
         data: {

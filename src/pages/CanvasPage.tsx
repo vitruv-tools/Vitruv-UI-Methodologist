@@ -8,18 +8,30 @@ import { ModelDrawer, DrawerModel } from '../components/canvas/ModelDrawer';
 import { apiService } from '../services/api';
 import { VsumDetails } from '../types';
 import { WorkspaceSnapshot, WorkspaceSnapshotRequest } from '../types/workspace';
+import { MODAL_Z_INDEX, modalBackdropStyle, useModalBodyLock } from '../components/ui/modalUtils';
+import { CanvasProjectTabs } from '../components/canvas/CanvasProjectTabs';
+import { ProjectPickerMenu } from '../components/canvas/ProjectPickerMenu';
+import { UnsavedTabCloseDialog } from '../components/canvas/UnsavedTabCloseDialog';
+import { CanvasTabSession, CanvasUmlPanelState, OpenCanvasTab } from '../types/canvasTab';
+import { createCanvasTabInstanceId } from '../utils/canvasTabId';
+import { waitForMetaModelsOnCanvas } from '../utils/canvasLoadUtils';
+import {
+  cloneWorkspaceSnapshot,
+  emptyWorkspaceSnapshot,
+  mapRelationsForCanvasLoad,
+  prepareSnapshotForSyncSave,
+  workspaceSnapshotFromVsumDetails,
+  workspaceSnapshotsEqual,
+} from '../utils/workspaceSnapshotUtils';
+import { downloadBlobAsFile } from '../utils/downloadFile';
+import { syncVsumWorkspaceChanges } from '../utils/vsumSyncSave';
 
-// ── types ────────────────────────────────────────────────────────────────────
+const MODE_TOGGLE_TOP = 14;
+const MODE_TOGGLE_HEIGHT = 52;
+const PROJECT_TABS_HEIGHT = 32;
+const CENTER_STACK_BOTTOM = MODE_TOGGLE_TOP + MODE_TOGGLE_HEIGHT + 4 + PROJECT_TABS_HEIGHT;
 
-interface UMLPanel {
-  id: string;
-  title: string;
-  ecoreContent: string;
-  top: number;
-  right: number;
-  width: number;
-  height: number;
-}
+type UMLPanel = CanvasUmlPanelState;
 
 // ── CanvasPage ────────────────────────────────────────────────────────────────
 
@@ -43,7 +55,9 @@ export const CanvasPage: React.FC = () => {
 
   const [umlPanels, setUmlPanels] = useState<UMLPanel[]>([]);
   const [topPanelId, setTopPanelId] = useState<string | null>(null);
-  const panelZBase = 200;
+  const panelZBase = MODAL_Z_INDEX;
+
+  useModalBodyLock(umlPanels.length > 0 || showDrawer);
 
   // check / download / save
   const [checkingBuild, setCheckingBuild] = useState(false);
@@ -51,7 +65,25 @@ export const CanvasPage: React.FC = () => {
   const [savingChanges, setSavingChanges] = useState(false);
   const [popup, setPopup] = useState<{ message: string; type: 'success' | 'error' | 'info' } | null>(null);
 
-  const [canvasKey] = useState(`canvas-${id}-${Date.now()}`);
+  const [openTabs, setOpenTabs] = useState<OpenCanvasTab[]>([]);
+  const [activeInstanceId, setActiveInstanceId] = useState<string | null>(null);
+  const sessionsRef = useRef<Map<string, CanvasTabSession>>(new Map());
+  const savedBaselinesRef = useRef<Map<string, WorkspaceSnapshot>>(new Map());
+  const prevActiveInstanceIdRef = useRef<string | null>(null);
+  const openTabsRef = useRef(openTabs);
+  openTabsRef.current = openTabs;
+  const [closeConfirmInstanceId, setCloseConfirmInstanceId] = useState<string | null>(null);
+  const [closeConfirmSaving, setCloseConfirmSaving] = useState(false);
+  const [dirtyRevision, setDirtyRevision] = useState(0);
+
+  const createInstanceId = useCallback(
+    (projectId: number) => createCanvasTabInstanceId(projectId),
+    [],
+  );
+
+  const activeTab = openTabs.find(t => t.instanceId === activeInstanceId);
+  const activeProjectId = activeTab?.projectId ?? (id ? Number(id) : undefined);
+
   // Add-reaction mode
   const [addReactionMode, setAddReactionMode] = useState(false);
 
@@ -59,25 +91,198 @@ export const CanvasPage: React.FC = () => {
   const [canUndo, setCanUndo] = useState(false);
   const [canRedo, setCanRedo] = useState(false);
 
-  // ── Load VSUM ─────────────────────────────────────────────────────────────
+  const getLiveSnapshot = useCallback((): WorkspaceSnapshot => {
+    return flowCanvasRef.current?.getWorkspaceSnapshot?.() ?? emptyWorkspaceSnapshot();
+  }, []);
+
+  const setBaselineForInstance = useCallback((instanceId: string, snapshot?: WorkspaceSnapshot) => {
+    const snap = snapshot ?? getLiveSnapshot();
+    savedBaselinesRef.current.set(instanceId, cloneWorkspaceSnapshot(snap));
+  }, [getLiveSnapshot]);
+
+  const captureCurrentTabSession = useCallback((): CanvasTabSession => ({
+    nodes: flowCanvasRef.current?.getNodes?.() ?? [],
+    edges: flowCanvasRef.current?.getEdges?.() ?? [],
+    vsumName,
+    drawerModels,
+    myLibraryModels,
+    publicLibraryModels,
+    addedModelIds: Array.from(addedModelIds),
+    umlPanels,
+    topPanelId,
+    workspaceSnapshot: getLiveSnapshot(),
+  }), [vsumName, drawerModels, myLibraryModels, publicLibraryModels, addedModelIds, umlPanels, topPanelId, getLiveSnapshot]);
+
+  const isInstanceDirty = useCallback((instanceId: string): boolean => {
+    const baseline = savedBaselinesRef.current.get(instanceId);
+    if (!baseline) return false;
+    if (instanceId === activeInstanceId) {
+      return !workspaceSnapshotsEqual(baseline, getLiveSnapshot());
+    }
+    const session = sessionsRef.current.get(instanceId);
+    if (!session) return false;
+    return !workspaceSnapshotsEqual(baseline, session.workspaceSnapshot);
+  }, [activeInstanceId, getLiveSnapshot]);
+
+  const applyTabSession = useCallback((session: CanvasTabSession) => {
+    setVsumName(session.vsumName);
+    setDrawerModels(session.drawerModels);
+    setMyLibraryModels(session.myLibraryModels);
+    setPublicLibraryModels(session.publicLibraryModels);
+    setAddedModelIds(new Set(session.addedModelIds));
+    setUmlPanels(session.umlPanels);
+    setTopPanelId(session.topPanelId);
+    setShowDrawer(false);
+    setEditingName(false);
+    setLoadingProject(false);
+
+    const load = () => {
+      flowCanvasRef.current?.loadDiagramData?.(session.nodes, session.edges);
+    };
+    load();
+    setTimeout(load, 50);
+  }, []);
+
+  const captureRef = useRef(captureCurrentTabSession);
+  captureRef.current = captureCurrentTabSession;
+  const applyRef = useRef(applyTabSession);
+  applyRef.current = applyTabSession;
+
+  const updateTabName = useCallback((projectId: number, name: string) => {
+    setOpenTabs(prev => prev.map(t => (t.projectId === projectId ? { ...t, name } : t)));
+  }, []);
+
+  const switchToTab = useCallback((instanceId: string) => {
+    const tab = openTabsRef.current.find(t => t.instanceId === instanceId);
+    if (!tab || activeInstanceId === instanceId) return;
+    setActiveInstanceId(instanceId);
+    if (String(tab.projectId) !== id) {
+      navigate(`/canvas/${tab.projectId}`, { replace: true });
+    }
+  }, [navigate, id, activeInstanceId]);
+
+  const handleSelectProject = useCallback((projectId: number, name: string) => {
+    const existing = openTabsRef.current.find(t => t.projectId === projectId);
+    if (existing) {
+      switchToTab(existing.instanceId);
+      return;
+    }
+    const instanceId = createInstanceId(projectId);
+    setOpenTabs(prev => [...prev, { instanceId, projectId, name }]);
+    setActiveInstanceId(instanceId);
+    navigate(`/canvas/${projectId}`);
+  }, [createInstanceId, navigate, switchToTab]);
+
+  const performCloseTab = useCallback((instanceId: string) => {
+    sessionsRef.current.delete(instanceId);
+    savedBaselinesRef.current.delete(instanceId);
+    setOpenTabs(prev => {
+      const filtered = prev.filter(t => t.instanceId !== instanceId);
+      setActiveInstanceId(current => {
+        if (current !== instanceId) return current;
+        const next = filtered.at(-1);
+        if (next) navigate(`/canvas/${next.projectId}`, { replace: true });
+        else navigate('/');
+        return next?.instanceId ?? null;
+      });
+      return filtered;
+    });
+  }, [navigate]);
+
+  const requestCloseTab = useCallback((instanceId: string) => {
+    if (isInstanceDirty(instanceId)) {
+      setCloseConfirmInstanceId(instanceId);
+      return;
+    }
+    performCloseTab(instanceId);
+  }, [isInstanceDirty, performCloseTab]);
+
+  const saveTabInstance = useCallback(async (instanceId: string): Promise<boolean> => {
+    const tab = openTabsRef.current.find(t => t.instanceId === instanceId);
+    if (!tab) return false;
+
+    const snapshot =
+      instanceId === activeInstanceId
+        ? getLiveSnapshot()
+        : sessionsRef.current.get(instanceId)?.workspaceSnapshot ?? emptyWorkspaceSnapshot();
+
+    try {
+      const payload = prepareSnapshotForSyncSave(snapshot);
+      const { savedRelations } = await syncVsumWorkspaceChanges(tab.projectId, payload);
+      const savedSnapshot: WorkspaceSnapshot = {
+        metaModelIds: payload.metaModelIds,
+        metaModelRelationRequests: savedRelations,
+      };
+      setBaselineForInstance(instanceId, savedSnapshot);
+      const session = sessionsRef.current.get(instanceId);
+      if (session) {
+        sessionsRef.current.set(instanceId, {
+          ...session,
+          workspaceSnapshot: cloneWorkspaceSnapshot(savedSnapshot),
+        });
+      }
+      return true;
+    } catch (e) {
+      console.error('Failed to save tab:', e);
+      return false;
+    }
+  }, [activeInstanceId, getLiveSnapshot, setBaselineForInstance]);
+
+  const dirtyInstanceIds = React.useMemo(() => {
+    void dirtyRevision; // poll tick — re-run when live snapshot may have changed
+    const ids = new Set<string>();
+    for (const tab of openTabs) {
+      if (isInstanceDirty(tab.instanceId)) ids.add(tab.instanceId);
+    }
+    return ids;
+  }, [openTabs, dirtyRevision, isInstanceDirty]);
 
   useEffect(() => {
-    if (!id) return;
-    loadVsum(Number(id));
-  }, [id]); // eslint-disable-line react-hooks/exhaustive-deps
+    const timer = globalThis.setInterval(() => setDirtyRevision(r => r + 1), 700);
+    return () => globalThis.clearInterval(timer);
+  }, []);
 
-  const loadVsum = async (vsumId: number) => {
+  // Ensure route project is represented as a tab
+  useEffect(() => {
+    if (!id) return;
+    const projectId = Number(id);
+    if (!Number.isFinite(projectId)) return;
+
+    setOpenTabs(prev => {
+      const existing = prev.find(t => t.projectId === projectId);
+      if (existing) {
+        setActiveInstanceId(existing.instanceId);
+        return prev;
+      }
+      const instanceId = createInstanceId(projectId);
+      setActiveInstanceId(instanceId);
+      return [...prev, { instanceId, projectId, name: '' }];
+    });
+  }, [id, createInstanceId]);
+
+  const loadVsum = useCallback(async (vsumId: number) => {
     setLoadingProject(true);
+
+    // Drop cached tab session so reopen/refresh always reloads from the server.
+    for (const tab of openTabsRef.current) {
+      if (tab.projectId === vsumId) {
+        sessionsRef.current.delete(tab.instanceId);
+      }
+    }
+
     try {
       const response = await apiService.getVsumDetails(vsumId);
       const details: VsumDetails = response.data;
       setVsumName(details.name);
+      updateTabName(vsumId, details.name);
 
       const projectModels: DrawerModel[] = (details.metaModels || []).map((m: any) => ({
         id: m.id,
         name: m.name,
+        sourceId: m.sourceId ?? m.id,
         domain: m.domain,
         ecoreFileId: m.ecoreFileId,
+        genModelFileId: m.genModelFileId,
         inProject: true,
         description: m.description,
         keyword: m.keyword,
@@ -88,8 +293,16 @@ export const CanvasPage: React.FC = () => {
       // Fetch both library tabs in parallel — include ALL models so removing from
       // canvas makes them reappear; the drawer's addedModelIds filter handles hiding.
       const toDrawer = (m: any): DrawerModel => ({
-        id: m.id, name: m.name, domain: m.domain, ecoreFileId: m.ecoreFileId, inProject: false,
-        description: m.description, keyword: m.keyword, createdAt: m.createdAt,
+        id: m.id,
+        name: m.name,
+        sourceId: m.sourceId ?? m.id,
+        domain: m.domain,
+        ecoreFileId: m.ecoreFileId,
+        genModelFileId: m.genModelFileId,
+        inProject: false,
+        description: m.description,
+        keyword: m.keyword,
+        createdAt: m.createdAt,
       });
 
       const [myRes, pubRes] = await Promise.allSettled([
@@ -120,30 +333,77 @@ export const CanvasPage: React.FC = () => {
                 createdAt: model.createdAt,
                 metaModelId: model.id,
                 metaModelSourceId: model.sourceId ?? model.id,
+                ecoreFileId: model.ecoreFileId,
+                genModelFileId: model.genModelFileId,
               },
             }));
+            await new Promise(r => setTimeout(r, 50));
           } catch {
             // model without ecore file – skip canvas box
           }
         }
       }
 
+      await waitForMetaModelsOnCanvas(
+        () => flowCanvasRef.current?.getNodes?.() ?? [],
+        details.metaModels ?? [],
+      );
+
       if (details.metaModelsRelation?.length) {
-        await new Promise(r => setTimeout(r, 600));
-        const relations = details.metaModelsRelation.map((rel: any) => ({
-          sourceMetaModelId: rel.sourceId,
-          targetMetaModelId: rel.targetId,
-          reactionFileId: rel.reactionFileId ?? null,
-          reactionFileStorageId: rel.reactionFileStorageId ?? null,
+        globalThis.dispatchEvent(new CustomEvent('vitruv.loadMetaModelRelations', {
+          detail: {
+            relations: mapRelationsForCanvasLoad(details.metaModelsRelation),
+            preserveExisting: false,
+          },
         }));
-        globalThis.dispatchEvent(new CustomEvent('vitruv.loadRelations', { detail: { relations } }));
+        await new Promise(r => setTimeout(r, 150));
+      }
+
+      const tab = openTabsRef.current.find(t => t.projectId === vsumId);
+      if (tab) {
+        setBaselineForInstance(tab.instanceId, workspaceSnapshotFromVsumDetails(details));
       }
     } catch (e) {
       console.error('Failed to load VSUM:', e);
     } finally {
       setLoadingProject(false);
     }
-  };
+  }, [setBaselineForInstance, updateTabName]);
+
+  // Switch tabs: capture leaving tab, restore or load active tab
+  useEffect(() => {
+    let cancelled = false;
+
+    const run = async () => {
+      const previousId = prevActiveInstanceIdRef.current;
+      const nextId = activeInstanceId;
+
+      if (previousId && previousId !== nextId) {
+        const session = captureRef.current();
+        const tabStillOpen = openTabsRef.current.some(t => t.instanceId === previousId);
+        if (!cancelled && tabStillOpen) {
+          sessionsRef.current.set(previousId, session);
+        }
+      }
+
+      prevActiveInstanceIdRef.current = nextId;
+      if (!nextId) return;
+
+      const cached = sessionsRef.current.get(nextId);
+      if (cached) {
+        applyRef.current(cached);
+        return;
+      }
+
+      const tab = openTabsRef.current.find(t => t.instanceId === nextId);
+      if (tab) {
+        await loadVsum(tab.projectId);
+      }
+    };
+
+    run();
+    return () => { cancelled = true; };
+  }, [activeInstanceId, loadVsum]);
 
   // ── Rename VSUM ───────────────────────────────────────────────────────────
 
@@ -154,18 +414,19 @@ export const CanvasPage: React.FC = () => {
 
   const confirmRename = useCallback(async () => {
     const trimmed = nameInput.trim();
-    if (!trimmed || !id || trimmed === vsumName) { setEditingName(false); return; }
+    if (!trimmed || !activeProjectId || trimmed === vsumName) { setEditingName(false); return; }
     setSavingName(true);
     try {
-      await apiService.renameVsum(id, { name: trimmed });
+      await apiService.renameVsum(activeProjectId, { name: trimmed });
       setVsumName(trimmed);
+      updateTabName(activeProjectId, trimmed);
     } catch (e) {
       console.error('Rename failed:', e);
     } finally {
       setSavingName(false);
       setEditingName(false);
     }
-  }, [nameInput, id, vsumName]);
+  }, [nameInput, activeProjectId, vsumName, updateTabName]);
 
   const cancelRename = useCallback(() => setEditingName(false), []);
 
@@ -181,7 +442,9 @@ export const CanvasPage: React.FC = () => {
           fileName: model.name + '.ecore',
           domain: model.domain,
           metaModelId: model.id,
-          metaModelSourceId: model.id,
+          metaModelSourceId: model.sourceId ?? model.id,
+          ecoreFileId: model.ecoreFileId,
+          genModelFileId: model.genModelFileId,
         },
       }));
     } catch (e) {
@@ -192,14 +455,14 @@ export const CanvasPage: React.FC = () => {
   // ── UML expand → floating panel ───────────────────────────────────────────
 
   const handleEcoreFileExpand = useCallback((fileName: string, fileContent: string) => {
-    // Use CSS right:16 — same as zoom buttons, no JS viewport math needed
-    const PANEL_TOP = 62;          // pill top(14) + pill height(40) + gap(8)
+    const PANEL_TOP = openTabs.length > 0 ? CENTER_STACK_BOTTOM + 8 : MODE_TOGGLE_TOP + MODE_TOGGLE_HEIGHT + 8;
     const PANEL_BOTTOM_USED = 228; // bottom margin(16) + minimap(204) + gap(8)
     const panelH = Math.max(200, document.documentElement.clientHeight - PANEL_TOP - PANEL_BOTTOM_USED);
 
     const newPanel: UMLPanel = {
       id: `panel-${Date.now()}`,
       title: fileName.replace(/\.ecore$/, ''),
+      fileName,
       ecoreContent: fileContent,
       top: PANEL_TOP,
       right: 16,
@@ -208,7 +471,7 @@ export const CanvasPage: React.FC = () => {
     };
     setUmlPanels(prev => [...prev, newPanel]);
     setTopPanelId(newPanel.id);
-  }, []);
+  }, [openTabs.length]);
 
   useEffect(() => {
     const handler = (e: Event) => {
@@ -261,11 +524,11 @@ export const CanvasPage: React.FC = () => {
   // ── Check build ───────────────────────────────────────────────────────────
 
   const handleCheckBuild = useCallback(async () => {
-    if (!id) return;
+    if (!activeProjectId) return;
     setCheckingBuild(true);
     setPopup({ message: 'Checking whether this VSUM can be built…', type: 'info' });
     try {
-      const res = await apiService.buildVsum(id);
+      const res = await apiService.buildVsum(activeProjectId);
       const msg = (res as any)?.message || 'This VSUM can be built successfully.';
       setPopup({ message: msg, type: 'success' });
     } catch (e: any) {
@@ -278,24 +541,17 @@ export const CanvasPage: React.FC = () => {
       setCheckingBuild(false);
       setTimeout(() => setPopup(null), 5000);
     }
-  }, [id]);
+  }, [activeProjectId]);
 
   // ── Download artifact ─────────────────────────────────────────────────────
 
   const handleDownloadArtifact = useCallback(async () => {
-    if (!id) return;
+    if (!activeProjectId) return;
     setDownloadingArtifact(true);
     setPopup({ message: 'Downloading artifact…', type: 'info' });
     try {
-      const blob = await apiService.downloadVsumArtifact(id);
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = `vsum-${id}-artifact.zip`;
-      document.body.appendChild(link);
-      link.click();
-      link.remove();
-      URL.revokeObjectURL(url);
+      const blob = await apiService.downloadVsumArtifact(activeProjectId);
+      downloadBlobAsFile(blob, `vsum-${activeProjectId}-artifact.zip`);
       setPopup({ message: 'Artifact downloaded successfully!', type: 'success' });
     } catch (e: any) {
       const data = e?.response?.data;
@@ -307,22 +563,34 @@ export const CanvasPage: React.FC = () => {
       setDownloadingArtifact(false);
       setTimeout(() => setPopup(null), 5000);
     }
-  }, [id]);
+  }, [activeProjectId]);
 
   // ── Save changes ──────────────────────────────────────────────────────────
 
   const handleSaveChanges = useCallback(async () => {
-    if (!id) return;
+    if (!activeProjectId) return;
     setSavingChanges(true);
     setPopup({ message: 'Saving changes…', type: 'info' });
     try {
       const snapshot: WorkspaceSnapshot =
-        flowCanvasRef.current?.getWorkspaceSnapshot?.() ?? { metaModelIds: [], metaModelRelationRequests: [] };
-      await apiService.syncVsumChanges(id, {
-        metaModelIds: snapshot.metaModelIds,
-        metaModelRelationRequests: snapshot.metaModelRelationRequests ?? [],
-      });
-      setPopup({ message: 'Changes saved successfully!', type: 'success' });
+        flowCanvasRef.current?.getWorkspaceSnapshot?.() ?? emptyWorkspaceSnapshot();
+      const payload = prepareSnapshotForSyncSave(snapshot);
+      const { message, savedRelations } = await syncVsumWorkspaceChanges(activeProjectId, payload);
+      const savedSnapshot: WorkspaceSnapshot = {
+        metaModelIds: payload.metaModelIds,
+        metaModelRelationRequests: savedRelations,
+      };
+      if (activeInstanceId) {
+        setBaselineForInstance(activeInstanceId, savedSnapshot);
+        const session = sessionsRef.current.get(activeInstanceId);
+        if (session) {
+          sessionsRef.current.set(activeInstanceId, {
+            ...session,
+            workspaceSnapshot: cloneWorkspaceSnapshot(savedSnapshot),
+          });
+        }
+      }
+      setPopup({ message, type: 'success' as const });
     } catch (e: any) {
       const data = e?.response?.data;
       const detail = (typeof data?.message === 'string' && data.message) ||
@@ -333,7 +601,7 @@ export const CanvasPage: React.FC = () => {
       setSavingChanges(false);
       setTimeout(() => setPopup(null), 5000);
     }
-  }, [id]);
+  }, [activeProjectId, activeInstanceId, setBaselineForInstance]);
 
   const closePanel = useCallback((panelId: string) => {
     setUmlPanels(prev => prev.filter(p => p.id !== panelId));
@@ -359,15 +627,30 @@ export const CanvasPage: React.FC = () => {
       <style>{`@keyframes spin{0%{transform:rotate(0deg)}100%{transform:rotate(360deg)}}`}</style>
 
       <FlowCanvas
-        key={canvasKey}
+        key="canvas-workspace"
         ref={flowCanvasRef}
-        vsumId={id}
+        vsumId={activeProjectId?.toString()}
         onDiagramChange={handleDiagramChange}
         onEcoreFileExpand={handleEcoreFileExpand}
         umlModalOpen={umlPanels.length > 0}
         addReactionMode={addReactionMode}
         onReactionModeEnd={() => setAddReactionMode(false)}
         onHistoryChange={(u, r) => { setCanUndo(u); setCanRedo(r); }}
+        projectTabsBelowModeToggle={
+          openTabs.length > 0 ? (
+            <CanvasProjectTabs
+              tabs={openTabs}
+              activeInstanceId={activeInstanceId}
+              activeProjectId={activeProjectId}
+              openProjectIds={openTabs.map(t => t.projectId)}
+              dirtyInstanceIds={dirtyInstanceIds}
+              loading={loadingProject}
+              onActivate={switchToTab}
+              onRequestClose={requestCloseTab}
+              onSelectProject={handleSelectProject}
+            />
+          ) : null
+        }
       />
 
       {umlPanels.map((panel, idx) => (
@@ -375,6 +658,8 @@ export const CanvasPage: React.FC = () => {
           key={panel.id}
           id={panel.id}
           title={panel.title}
+          fileName={panel.fileName}
+          layoutScopeId={activeProjectId != null ? String(activeProjectId) : 'default'}
           ecoreContent={panel.ecoreContent}
           initialTop={panel.top}
           initialRight={panel.right}
@@ -390,15 +675,12 @@ export const CanvasPage: React.FC = () => {
       {showDrawer && ReactDOM.createPortal(
         <>
           {/* Backdrop */}
-          <div
+          <button
+            type="button"
+            aria-hidden="true"
+            tabIndex={-1}
             onClick={() => setShowDrawer(false)}
-            style={{
-              position: 'fixed', inset: 0,
-              background: 'rgba(0,0,0,0.45)',
-              backdropFilter: 'blur(3px)',
-              WebkitBackdropFilter: 'blur(3px)',
-              zIndex: 300,
-            }}
+            style={{ ...modalBackdropStyle, zIndex: MODAL_Z_INDEX }}
           />
           {/* Panel */}
           <div style={{
@@ -407,7 +689,8 @@ export const CanvasPage: React.FC = () => {
             transform: 'translate(-50%, -50%)',
             width: 'min(800px, 92vw)',
             height: 'min(700px, 88vh)',
-            zIndex: 301,
+            zIndex: MODAL_Z_INDEX + 1,
+            pointerEvents: 'auto',
             background: '#ffffff',
             borderRadius: 10,
             boxShadow: '0 24px 64px rgba(0,0,0,0.28), 0 4px 16px rgba(0,0,0,0.10)',
@@ -446,14 +729,16 @@ export const CanvasPage: React.FC = () => {
         checkingBuild={checkingBuild}
       />
 
-      {/* Left pill */}
       <LeftPill
         projectName={vsumName || (loadingProject ? 'Loading…' : 'Project')}
+        projectId={activeProjectId}
+        openProjectIds={openTabs.map(t => t.projectId)}
         editingName={editingName}
         nameInput={nameInput}
         savingName={savingName}
         onBack={() => navigate('/')}
-        onRefresh={() => id && loadVsum(Number(id))}
+        onRefresh={() => activeProjectId && loadVsum(activeProjectId)}
+        onSelectProject={handleSelectProject}
         onStartRename={startRename}
         onNameInputChange={setNameInput}
         onConfirmRename={confirmRename}
@@ -461,12 +746,36 @@ export const CanvasPage: React.FC = () => {
         loading={loadingProject}
       />
 
-      {/* Right pill */}
-      <RightPill
-        showDrawer={showDrawer}
-        onToggleDrawer={() => setShowDrawer(d => !d)}
-        modelCount={drawerModels.length}
+      <UnsavedTabCloseDialog
+        isOpen={closeConfirmInstanceId !== null}
+        projectName={openTabs.find(t => t.instanceId === closeConfirmInstanceId)?.name}
+        saving={closeConfirmSaving}
+        onSave={async () => {
+          if (!closeConfirmInstanceId) return;
+          setCloseConfirmSaving(true);
+          const ok = await saveTabInstance(closeConfirmInstanceId);
+          setCloseConfirmSaving(false);
+          if (ok) {
+            const id = closeConfirmInstanceId;
+            setCloseConfirmInstanceId(null);
+            performCloseTab(id);
+            setPopup({ message: 'Changes saved.', type: 'success' });
+            setTimeout(() => setPopup(null), 3000);
+          } else {
+            setPopup({ message: 'Failed to save changes.', type: 'error' });
+            setTimeout(() => setPopup(null), 4000);
+          }
+        }}
+        onCloseWithoutSaving={() => {
+          if (closeConfirmInstanceId) {
+            performCloseTab(closeConfirmInstanceId);
+            setCloseConfirmInstanceId(null);
+          }
+        }}
+        onCancel={() => setCloseConfirmInstanceId(null)}
       />
+
+      <RightPill />
       {/* (showDrawer/onToggleDrawer/modelCount kept for future use) */}
 
       {/* Popup notification */}
@@ -491,11 +800,14 @@ export const CanvasPage: React.FC = () => {
 
 interface LeftPillProps {
   projectName: string;
+  projectId?: number;
+  openProjectIds: number[];
   editingName: boolean;
   nameInput: string;
   savingName: boolean;
   onBack: () => void;
   onRefresh: () => void;
+  onSelectProject: (projectId: number, name: string) => void;
   onStartRename: () => void;
   onNameInputChange: (v: string) => void;
   onConfirmRename: () => void;
@@ -504,8 +816,8 @@ interface LeftPillProps {
 }
 
 const LeftPill: React.FC<LeftPillProps> = ({
-  projectName, editingName, nameInput, savingName,
-  onBack, onRefresh, onStartRename, onNameInputChange, onConfirmRename, onCancelRename, loading,
+  projectName, projectId, openProjectIds, editingName, nameInput, savingName,
+  onBack, onRefresh, onSelectProject, onStartRename, onNameInputChange, onConfirmRename, onCancelRename, loading,
 }) => (
   <div style={pillStyle('left')}>
     {/* Logo — click to go back */}
@@ -549,14 +861,14 @@ const LeftPill: React.FC<LeftPillProps> = ({
       </>
     ) : (
       <>
-        <span style={{
-          fontSize: 14, fontWeight: 600, color: '#0f172a',
-          padding: '0 4px', letterSpacing: '-0.01em',
-          whiteSpace: 'nowrap', maxWidth: 200,
-          overflow: 'hidden', textOverflow: 'ellipsis',
-        }}>
-          {projectName}
-        </span>
+        <ProjectPickerMenu
+          currentProjectId={projectId}
+          activeProjectId={projectId}
+          openProjectIds={openProjectIds}
+          currentProjectName={projectName}
+          disabled={loading}
+          onSelectProject={p => onSelectProject(p.id, p.name)}
+        />
         <PillBtn onClick={onStartRename} title="Edit project name">
           <PencilIcon />
         </PillBtn>
@@ -610,13 +922,7 @@ const UserAvatar: React.FC<AvatarProps> = ({ initials, bg, size = 30, ring, titl
 
 // ── RightPill ─────────────────────────────────────────────────────────────────
 
-interface RightPillProps {
-  showDrawer: boolean;
-  onToggleDrawer: () => void;
-  modelCount: number;
-}
-
-const RightPill: React.FC<RightPillProps> = () => {
+const RightPill: React.FC = () => {
   const [showAccounts, setShowAccounts] = useState(false);
   const [showProfileMenu, setShowProfileMenu] = useState(false);
   const wrapRef = useRef<HTMLDivElement>(null);

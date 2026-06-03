@@ -5,18 +5,21 @@ import { Vsum } from '../../types';
 import { CreateVsumModal } from './CreateVsumModal';
 import { VsumDetailsModal } from './VsumDetailsModal';
 import { ConfirmDialog } from './ConfirmDialog';
+import {
+  DELETED_PROJECT_RETENTION_DAYS,
+  DELETION_URGENCY_STYLES,
+  filterRestorableDeletedVsums,
+  formatDaysRemainingLabel,
+  getDaysUntilPermanentDelete,
+  getDeletionUrgency,
+} from '../../utils/deletedProjectUtils';
+import { PortalRowActionsMenu } from './PortalRowActionsMenu';
 
 // ── Icons ──────────────────────────────────────────────────────────────────
 
 const SearchIcon = () => (
   <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
     <circle cx="11" cy="11" r="8" /><line x1="21" y1="21" x2="16.65" y2="16.65" />
-  </svg>
-);
-
-const DotsIcon = () => (
-  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <circle cx="12" cy="5" r="1" /><circle cx="12" cy="12" r="1" /><circle cx="12" cy="19" r="1" />
   </svg>
 );
 
@@ -32,81 +35,6 @@ const formatDate = (iso: string) => {
   if (!iso) return '--';
   return new Date(iso).toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' });
 };
-
-const getDaysLeft = (removedAt: string | null | undefined) => {
-  if (!removedAt) return 30;
-  const elapsed = (Date.now() - new Date(removedAt).getTime()) / (1000 * 60 * 60 * 24);
-  return Math.max(0, Math.floor(30 - elapsed));
-};
-
-type Urgency = 'critical' | 'warning' | 'caution' | 'safe';
-
-const getUrgency = (days: number): Urgency => {
-  if (days <= 3) return 'critical';
-  if (days <= 7) return 'warning';
-  if (days <= 14) return 'caution';
-  return 'safe';
-};
-
-const URGENCY = {
-  critical: { bg: '#fef2f2', text: '#991b1b', border: '#fca5a5', dot: '#ef4444' },
-  warning: { bg: '#fff7ed', text: '#c2410c', border: '#fdba74', dot: '#f97316' },
-  caution: { bg: '#fefce8', text: '#854d0e', border: '#fde68a', dot: '#eab308' },
-  safe: { bg: '#f0fdf4', text: '#166534', border: '#bbf7d0', dot: '#22c55e' },
-};
-
-// ── RowActionsMenu ──────────────────────────────────────────────────────────
-
-interface RowActionsMenuProps {
-  item: Vsum;
-  canManage: boolean;
-  onDetails: () => void;
-  onDelete: () => void;
-  onOpen: () => void;
-}
-
-const RowActionsMenu: React.FC<RowActionsMenuProps> = ({ item, canManage, onDetails, onDelete, onOpen }) => {
-  const [open, setOpen] = useState(false);
-  const ref = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    const h = (e: MouseEvent) => { if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false); };
-    document.addEventListener('mousedown', h);
-    return () => document.removeEventListener('mousedown', h);
-  }, []);
-
-  return (
-    <div ref={ref} style={{ position: 'relative', display: 'inline-block' }}>
-      <button
-        onClick={e => { e.stopPropagation(); setOpen(o => !o); }}
-        style={{ padding: '4px 8px', border: '1px solid #e5e7eb', borderRadius: 6, background: '#fff', cursor: 'pointer', color: '#6b7280', display: 'flex', alignItems: 'center', transition: 'all 0.15s' }}
-        onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.background = '#f9fafb'; (e.currentTarget as HTMLButtonElement).style.borderColor = '#d1d5db'; }}
-        onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.background = '#fff'; (e.currentTarget as HTMLButtonElement).style.borderColor = '#e5e7eb'; }}
-      >
-        <DotsIcon />
-      </button>
-      {open && (
-        <div style={{ position: 'absolute', top: 'calc(100% + 4px)', right: 0, background: '#fff', border: '1px solid #e5e7eb', borderRadius: 10, boxShadow: '0 8px 24px rgba(0,0,0,0.12)', zIndex: 300, minWidth: 160, overflow: 'hidden' }}>
-          <MenuItem label="Open" onClick={() => { onOpen(); setOpen(false); }} />
-          {canManage && <MenuItem label="Details" onClick={() => { onDetails(); setOpen(false); }} />}
-          {canManage && <div style={{ height: 1, background: '#f3f4f6', margin: '2px 0' }} />}
-          {canManage && <MenuItem label="Delete" onClick={() => { onDelete(); setOpen(false); }} danger />}
-        </div>
-      )}
-    </div>
-  );
-};
-
-const MenuItem: React.FC<{ label: string; onClick: () => void; danger?: boolean }> = ({ label, onClick, danger }) => (
-  <button
-    onClick={onClick}
-    style={{ display: 'block', width: '100%', padding: '9px 14px', border: 'none', background: 'transparent', fontSize: 13, color: danger ? '#dc2626' : '#374151', cursor: 'pointer', textAlign: 'left' }}
-    onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.background = danger ? '#fef2f2' : '#f9fafb'; }}
-    onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.background = 'transparent'; }}
-  >
-    {label}
-  </button>
-);
 
 // ── ProjectRow ─────────────────────────────────────────────────────────────
 
@@ -162,19 +90,22 @@ const ProjectRow: React.FC<ProjectRowProps> = ({ item, showDeleted, onDetails, o
       {/* Status */}
       <td style={{ padding: '13px 16px' }}>
         {showDeleted ? (() => {
-          const days = getDaysLeft(item.removedAt);
-          const u = getUrgency(days);
-          const c = URGENCY[u];
+          const days = getDaysUntilPermanentDelete(item.removedAt);
+          const u = getDeletionUrgency(days);
+          const c = DELETION_URGENCY_STYLES[u];
           return (
-            <span style={{
-              display: 'inline-flex', alignItems: 'center', gap: 5,
-              padding: '3px 9px', borderRadius: 20,
-              background: c.bg, border: `1px solid ${c.border}`,
-              fontSize: 12, fontWeight: 600, color: c.text,
-              animation: u === 'critical' ? 'pulseBadge 1.4s ease-in-out infinite' : 'none',
-            }}>
+            <span
+              title={`Permanent deletion in ${formatDaysRemainingLabel(days)} (${DELETED_PROJECT_RETENTION_DAYS}-day policy)`}
+              style={{
+                display: 'inline-flex', alignItems: 'center', gap: 5,
+                padding: '3px 9px', borderRadius: 20,
+                background: c.bg, border: `1px solid ${c.border}`,
+                fontSize: 12, fontWeight: 600, color: c.text,
+                animation: u === 'critical' ? 'pulseBadge 1.4s ease-in-out infinite' : 'none',
+              }}
+            >
               <span style={{ width: 6, height: 6, borderRadius: '50%', background: c.dot, flexShrink: 0 }} />
-              {days === 0 ? 'Deleting soon' : `${days} day${days === 1 ? '' : 's'} left`}
+              {formatDaysRemainingLabel(days)}
             </span>
           );
         })() : (
@@ -197,12 +128,16 @@ const ProjectRow: React.FC<ProjectRowProps> = ({ item, showDeleted, onDetails, o
             Restore
           </button>
         ) : (
-          <RowActionsMenu
-            item={item}
-            canManage={canManage}
-            onOpen={openVsum}
-            onDetails={onDetails}
-            onDelete={onDelete}
+          <PortalRowActionsMenu
+            actions={[
+              { label: 'Open', onClick: openVsum },
+              ...(canManage
+                ? [
+                    { label: 'Details', onClick: onDetails },
+                    { label: 'Delete', onClick: onDelete, danger: true, dividerBefore: true },
+                  ]
+                : []),
+            ]}
           />
         )}
       </td>
@@ -246,10 +181,11 @@ export const ProjectsView: React.FC = () => {
         ? await apiService.getRemovedVsumsPaginated(0, PAGE_SIZE)
         : await apiService.getVsumsPaginated(search, 0, PAGE_SIZE);
       if (mySeq !== requestSeq.current) return;
-      const data: Vsum[] = res.data || [];
+      const raw: Vsum[] = res.data || [];
+      const data = showDeleted ? filterRestorableDeletedVsums(raw) : raw;
       setItems(data);
       setPage(1);
-      setHasMore(data.length === PAGE_SIZE);
+      setHasMore(raw.length === PAGE_SIZE);
     } catch (e) {
       if (mySeq !== requestSeq.current) return;
       setError(e instanceof Error ? e.message : 'Failed to load');
@@ -267,10 +203,11 @@ export const ProjectsView: React.FC = () => {
         ? await apiService.getRemovedVsumsPaginated(page, PAGE_SIZE)
         : await apiService.getVsumsPaginated(search, page, PAGE_SIZE);
       if (mySeq !== requestSeq.current) return;
-      const data: Vsum[] = res.data || [];
+      const raw: Vsum[] = res.data || [];
+      const data = showDeleted ? filterRestorableDeletedVsums(raw) : raw;
       setItems(prev => [...prev, ...data]);
       setPage(prev => prev + 1);
-      setHasMore(data.length === PAGE_SIZE);
+      setHasMore(raw.length === PAGE_SIZE);
     } catch (e) {
       if (mySeq !== requestSeq.current) return;
       setError(e instanceof Error ? e.message : 'Failed to load');
@@ -327,7 +264,7 @@ export const ProjectsView: React.FC = () => {
 
   // sorted list
   const sorted = [...items]
-    .filter(i => showDeleted ? !!i.removedAt : !i.removedAt)
+    .filter(i => (showDeleted ? getDaysUntilPermanentDelete(i.removedAt) > 0 : !i.removedAt))
     .sort((a, b) => {
       const t = (i: Vsum) => showDeleted
         ? new Date(i.removedAt || i.updatedAt).getTime()
@@ -402,7 +339,7 @@ export const ProjectsView: React.FC = () => {
       {showDeleted && (
         <div style={{ margin: '12px 40px 0', display: 'flex', alignItems: 'flex-start', gap: 10, padding: '10px 14px', borderRadius: 8, background: '#f0fdf9', border: '1px solid #99e6da', fontSize: 13, color: '#065f46', flexShrink: 0 }}>
           <svg style={{ flexShrink: 0, marginTop: 1 }} width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#049484" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10" /><polyline points="12 6 12 12 16 14" /></svg>
-          <span>Deleted projects will be permanently removed after <strong style={{ color: '#049484' }}>30 days</strong>. Restore them before they expire.</span>
+          <span>Deleted projects are permanently removed after <strong style={{ color: '#049484' }}>{DELETED_PROJECT_RETENTION_DAYS} days</strong>. The status column shows how many days remain. Projects already purged from the database are not listed.</span>
         </div>
       )}
 

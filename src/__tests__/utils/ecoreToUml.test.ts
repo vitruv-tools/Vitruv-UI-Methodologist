@@ -15,8 +15,14 @@ const eClass = (name: string, body = '', extra = '') =>
 const eAttr = (name: string, eType = '//EString', lower = '0', upper = '1') =>
   `<eStructuralFeatures xsi:type="ecore:EAttribute" name="${name}" eType="${eType}" lowerBound="${lower}" upperBound="${upper}"/>`;
 
-const eRef = (name: string, targetName: string, containment = false) =>
-  `<eStructuralFeatures xsi:type="ecore:EReference" name="${name}" eType="#//${targetName}" containment="${containment}"/>`;
+const eRef = (
+  name: string,
+  targetName: string,
+  containment = false,
+  lower = '1',
+  upper = '1',
+) =>
+  `<eStructuralFeatures xsi:type="ecore:EReference" name="${name}" eType="#//${targetName}" containment="${containment}" lowerBound="${lower}" upperBound="${upper}"/>`;
 
 // ── invalid / empty input ─────────────────────────────────────────────────────
 
@@ -80,23 +86,24 @@ describe('ecoreToUml – class parsing', () => {
   });
 });
 
-// ── grid layout ───────────────────────────────────────────────────────────────
+// ── intelligent layout ────────────────────────────────────────────────────────
 
-describe('ecoreToUml – grid layout', () => {
-  it('places the first class at (40, 40)', () => {
-    const xml = wrap(eClass('A'));
+describe('ecoreToUml – intelligent layout', () => {
+  it('assigns non-overlapping positions to isolated classes', () => {
+    const xml = wrap(eClass('A') + eClass('B'));
     const { classes } = ecoreToUml(xml);
-    expect(classes[0].x).toBe(40);
-    expect(classes[0].y).toBe(40);
+    const dist = Math.hypot(classes[1].x - classes[0].x, classes[1].y - classes[0].y);
+    expect(dist).toBeGreaterThan(50);
   });
 
-  it('places the fourth class on a new row', () => {
-    // 3 classes per row → index 3 is row 1
-    const xml = wrap(eClass('A') + eClass('B') + eClass('C') + eClass('D'));
+  it('places subclass below superclass for inheritance', () => {
+    const xml = wrap(
+      eClass('Parent') + eClass('Child', '', 'eSuperTypes="#//Parent"'),
+    );
     const { classes } = ecoreToUml(xml);
-    const classD = classes.find(c => c.name === 'D')!;
-    expect(classD.y).toBeGreaterThan(40);  // row 1
-    expect(classD.x).toBe(40);             // column 0
+    const parent = classes.find(c => c.name === 'Parent')!;
+    const child = classes.find(c => c.name === 'Child')!;
+    expect(parent.y).toBeLessThan(child.y);
   });
 });
 
@@ -205,6 +212,20 @@ describe('ecoreToUml – references', () => {
       targetId: 'Customer',
       type: 'association',
       label: 'customer',
+      sourceMultiplicity: '1',
+      targetMultiplicity: '1',
+    });
+  });
+
+  it('maps EReference bounds to source and target multiplicity', () => {
+    const xml = wrap(
+      eClass('Order', eRef('lines', 'LineItem', false, '0', '-1')) +
+      eClass('LineItem'),
+    );
+    const { relationships } = ecoreToUml(xml);
+    expect(relationships[0]).toMatchObject({
+      sourceMultiplicity: '1',
+      targetMultiplicity: '0..*',
     });
   });
 

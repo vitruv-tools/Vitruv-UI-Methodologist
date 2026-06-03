@@ -229,3 +229,70 @@ describe('ApiService – deleteFile', () => {
     await expect(apiService.deleteFile(999)).rejects.toThrow();
   });
 });
+
+// ── downloadVsumArtifact ───────────────────────────────────────────────────────
+
+describe('ApiService – downloadVsumArtifact', () => {
+  const { AuthService } = require('../../services/auth') as {
+    AuthService: { ensureValidToken: jest.Mock; refreshToken: jest.Mock };
+  };
+
+  const zipBytes = new Uint8Array([0x50, 0x4b, 0x03, 0x04, 0x00]);
+
+  const mockZipFetch = (status = 200) => {
+    jest.spyOn(global, 'fetch').mockResolvedValueOnce({
+      ok: status >= 200 && status < 300,
+      status,
+      statusText: status === 200 ? 'OK' : 'Error',
+      headers: {
+        get: (name: string) =>
+          name.toLowerCase() === 'content-type' ? 'application/zip' : null,
+      },
+      text: async () => '',
+      blob: async () => new Blob([zipBytes], { type: 'application/zip' }),
+    } as unknown as Response);
+  };
+
+  beforeEach(() => {
+    AuthService.ensureValidToken.mockResolvedValue('mock-token');
+  });
+  afterEach(() => jest.restoreAllMocks());
+
+  it('returns a ZIP blob on success', async () => {
+    mockZipFetch();
+    const blob = await apiService.downloadVsumArtifact(42);
+    expect(blob.size).toBeGreaterThan(0);
+    const header = new Uint8Array(await new Response(blob.slice(0, 2)).arrayBuffer());
+    expect(header[0]).toBe(0x50);
+    expect(header[1]).toBe(0x4b);
+  });
+
+  it('throws when the response body is JSON instead of a ZIP', async () => {
+    jest.spyOn(global, 'fetch').mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      statusText: 'OK',
+      headers: {
+        get: (name: string) =>
+          name.toLowerCase() === 'content-type' ? 'application/json' : null,
+      },
+      text: async () => '{"message":"Build failed"}',
+      blob: async () => new Blob(['{"message":"Build failed"}'], { type: 'application/json' }),
+    } as unknown as Response);
+
+    await expect(apiService.downloadVsumArtifact(42)).rejects.toThrow('Build failed');
+  });
+
+  it('throws on non-ok status', async () => {
+    jest.spyOn(global, 'fetch').mockResolvedValueOnce({
+      ok: false,
+      status: 500,
+      statusText: 'Error',
+      headers: { get: () => null },
+      text: async () => '{"message":"Server error"}',
+      blob: async () => new Blob([]),
+    } as unknown as Response);
+
+    await expect(apiService.downloadVsumArtifact(42)).rejects.toThrow('Server error');
+  });
+});

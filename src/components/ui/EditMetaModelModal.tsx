@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import ReactDOM from 'react-dom';
 import { apiService } from '../../services/api';
 import { KeywordTagsInput } from './KeywordTagsInput';
+import { MODAL_Z_INDEX, modalBackdropStyle, useModalBodyLock } from './modalUtils';
 
 const FONT = 'ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, sans-serif';
 const DARK = '#0B1720';
@@ -55,20 +56,28 @@ export const EditMetaModelModal: React.FC<EditMetaModelModalProps> = ({
     }
   };
 
+  useModalBodyLock(isOpen);
+
   if (!isOpen) return null;
 
   const disabled = isLoading || !form.name.trim() || !form.description.trim() || !form.domain.trim() || form.keywords.length === 0;
 
   return ReactDOM.createPortal(
-    <div
+    <>
+      <button
+        type="button"
+        aria-hidden="true"
+        tabIndex={-1}
+        onClick={onClose}
+        style={{ ...modalBackdropStyle, zIndex: MODAL_Z_INDEX }}
+      />
+      <div
       style={{
         position: 'fixed', inset: 0,
-        background: 'rgba(0,0,0,0.45)',
-        backdropFilter: 'blur(3px)', WebkitBackdropFilter: 'blur(3px)',
         display: 'flex', alignItems: 'center', justifyContent: 'center',
-        zIndex: 10000, fontFamily: FONT,
+        zIndex: MODAL_Z_INDEX + 1, fontFamily: FONT,
+        pointerEvents: 'none',
       }}
-      onClick={onClose}
     >
       <div
         style={{
@@ -76,8 +85,8 @@ export const EditMetaModelModal: React.FC<EditMetaModelModalProps> = ({
           maxHeight: '88vh', overflow: 'hidden', display: 'flex', flexDirection: 'column',
           boxShadow: '0 24px 64px rgba(0,0,0,0.22), 0 4px 16px rgba(0,0,0,0.10)',
           border: '1px solid #e2e8f0',
+          pointerEvents: 'auto',
         }}
-        onClick={e => e.stopPropagation()}
       >
         {/* Header */}
         <div style={{
@@ -160,7 +169,8 @@ export const EditMetaModelModal: React.FC<EditMetaModelModalProps> = ({
           >{isLoading ? 'Saving…' : 'Save changes'}</button>
         </div>
       </div>
-    </div>,
+    </div>
+    </>,
     document.body
   );
 };

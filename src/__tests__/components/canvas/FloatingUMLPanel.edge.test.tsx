@@ -32,6 +32,8 @@ jest.mock('react-dom', () => ({
 const mkProps = (overrides: Partial<React.ComponentProps<typeof FloatingUMLPanel>> = {}) => ({
   id: 'p1',
   title: 'Test Panel',
+  fileName: 'Test.ecore',
+  layoutScopeId: 'scope-1',
   ecoreContent: '<xml/>',
   zIndex: 10,
   onFocus: jest.fn(),

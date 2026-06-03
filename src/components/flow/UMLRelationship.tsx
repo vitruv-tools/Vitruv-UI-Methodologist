@@ -63,17 +63,27 @@ function calculateControlPointPath(params: PathParams): PathResult {
   };
 }
 
-// Helper: Pure straight line (default — jjodel style)
-function calculateStraightPath(params: PathParams): PathResult {
-  const { sourceX, sourceY, targetX, targetY, dx, dy } = params;
+// Helper: Pure straight line (default — jjodel style), with optional parallel offset
+function calculateStraightPath(params: PathParams & { parallelIndex?: number; parallelCount?: number; separation?: number }): PathResult {
+  const { sourceX, sourceY, targetX, targetY, dx, dy, parallelIndex = 0, parallelCount = 1, separation = 14 } = params;
+  const len = Math.max(Math.hypot(dx, dy), 0.0001);
+  const nx = -dy / len;
+  const ny = dx / len;
+  const off = parallelCount > 1
+    ? (parallelIndex - (parallelCount - 1) / 2) * separation
+    : 0;
+  const sx = sourceX + nx * off;
+  const sy = sourceY + ny * off;
+  const tx = targetX + nx * off;
+  const ty = targetY + ny * off;
   return {
-    edgePath: `M ${sourceX},${sourceY} L ${targetX},${targetY}`,
-    labelX: (sourceX + targetX) / 2,
-    labelY: (sourceY + targetY) / 2,
-    startSegDx: dx,
-    startSegDy: dy,
-    endSegDx: dx,
-    endSegDy: dy,
+    edgePath: `M ${sx},${sy} L ${tx},${ty}`,
+    labelX: (sx + tx) / 2,
+    labelY: (sy + ty) / 2,
+    startSegDx: tx - sx,
+    startSegDy: ty - sy,
+    endSegDx: tx - sx,
+    endSegDy: ty - sy,
   };
 }
 
@@ -267,8 +277,11 @@ export function UMLRelationship({
       tgtAbsY: tgt?.positionAbsolute?.y ?? targetY,
       tgtW:    tgt?.width  ?? 190,
       tgtH:    tgt?.height ?? 80,
+      // Changing this key forces edge re-render when nodes move
+      posKey: `${src?.positionAbsolute?.x ?? 0},${src?.positionAbsolute?.y ?? 0},${tgt?.positionAbsolute?.x ?? 0},${tgt?.positionAbsolute?.y ?? 0},${src?.width ?? 0},${src?.height ?? 0},${tgt?.width ?? 0},${tgt?.height ?? 0}`,
     };
   });
+  void nodeBounds.posKey;
 
   const srcCx = nodeBounds.srcAbsX + nodeBounds.srcW / 2;
   const srcCy = nodeBounds.srcAbsY + nodeBounds.srcH / 2;
@@ -308,6 +321,9 @@ export function UMLRelationship({
         targetX: finalTargetX, targetY: finalTargetY,
         dx, dy, px, py, distance,
         count, id,
+        parallelIndex: data?.parallelIndex ?? 0,
+        parallelCount: data?.parallelCount ?? count,
+        separation: data?.separation ?? 16,
       });
   
   const { edgePath, labelX, labelY, startSegDx, startSegDy, endSegDx, endSegDy } = pathResult;
@@ -437,12 +453,13 @@ export function UMLRelationship({
         style={{
           fontSize: '11px',
           fontWeight: 600,
-          fill: EDGE_DEFAULT,
+          fill: getHighlightColor(isHighlighted, isHovered),
           stroke: '#ffffff',
           strokeWidth: 3,
           paintOrder: 'stroke fill',
           pointerEvents: 'none',
           fontFamily: `'Segoe UI', system-ui, sans-serif`,
+          transition: 'fill 0.2s ease',
         }}
       >
         {getRelationshipLabel()}

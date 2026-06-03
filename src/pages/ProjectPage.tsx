@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { MainLayout } from '../components/layout/MainLayout';
 import { MetaModelsPanel } from '../components/ui/MetaModelsPanel';
 import { SidebarTabs } from '../components';
@@ -6,7 +6,13 @@ import { useAuth } from '../contexts/AuthContext';
 import { VsumTabs } from '../components/ui/VsumTabs';
 import { apiService } from '../services/api';
 import { useToast } from '../components/ui/ToastProvider';
-import { WorkspaceSnapshot, WorkspaceSnapshotRequest } from '../types/workspace';
+import {
+  ProjectEditorSession,
+  WorkspaceSnapshot,
+  WorkspaceSnapshotRequest,
+} from '../types/workspace';
+import { createCanvasTabInstanceId } from '../utils/canvasTabId';
+import { captureEditorSession, restoreEditorSession } from '../utils/projectTabSession';
 
 interface OpenTabInstance {
   instanceId: string;
@@ -18,17 +24,41 @@ export const ProjectPage: React.FC = () => {
   const [showRight, setShowRight] = useState(false);
   const [openTabs, setOpenTabs] = useState<OpenTabInstance[]>([]);
   const [activeInstanceId, setActiveInstanceId] = useState<string | null>(null);
+  const [sessionSnapshotsByInstanceId, setSessionSnapshotsByInstanceId] = useState<
+    Record<string, WorkspaceSnapshot | null>
+  >({});
   const { showInfo } = useToast();
 
-  const createInstanceId = useCallback((id: number) => `${id}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`, []);
+  const openTabsRef = useRef(openTabs);
+  openTabsRef.current = openTabs;
+  const sessionsRef = useRef<Map<string, ProjectEditorSession>>(new Map());
+  const prevActiveInstanceIdRef = useRef<string | null>(null);
 
-  // Helper to add a metamodel to the active workspace
+  const createInstanceId = useCallback((id: number) => createCanvasTabInstanceId(id), []);
+
+  const removeSessionForInstance = useCallback((instanceId: string) => {
+    sessionsRef.current.delete(instanceId);
+    setSessionSnapshotsByInstanceId(prev => {
+      if (!(instanceId in prev)) return prev;
+      const next = { ...prev };
+      delete next[instanceId];
+      return next;
+    });
+  }, []);
+
+  const removeSessionsForProject = useCallback((projectId: number) => {
+    for (const tab of openTabsRef.current) {
+      if (tab.id === projectId) {
+        removeSessionForInstance(tab.instanceId);
+      }
+    }
+  }, [removeSessionForInstance]);
+
   const addMetaModelToWorkspace = useCallback(async (model: any) => {
     try {
       if (model.ecoreFileId) {
         const fileContent = await apiService.getFile(model.ecoreFileId);
 
-        // Dispatch event to add file to workspace
         globalThis.dispatchEvent(new CustomEvent('vitruv.addFileToWorkspace', {
           detail: {
             fileContent: fileContent,
@@ -43,11 +73,9 @@ export const ProjectPage: React.FC = () => {
         }));
       }
 
-      // Also dispatch the event to add meta model to VSUM
       globalThis.dispatchEvent(new CustomEvent('vitruv.addMetaModelToActiveVsum', { detail: { id: model.id, sourceId: model.sourceId ?? model.id } }));
     } catch (error) {
       console.error('Failed to fetch file:', error);
-      // Still dispatch the add event even if file fetch fails
       globalThis.dispatchEvent(new CustomEvent('vitruv.addMetaModelToActiveVsum', { detail: { id: model.id, sourceId: model.sourceId ?? model.id } }));
     }
   }, []);
@@ -65,8 +93,20 @@ export const ProjectPage: React.FC = () => {
     });
   }, []);
 
+  const handleCloseTab = useCallback((instanceId: string) => {
+    removeSessionForInstance(instanceId);
+    setOpenTabs(prev => {
+      const filtered = prev.filter(x => x.instanceId !== instanceId);
+      setActiveInstanceId(current =>
+        current === instanceId ? (filtered.at(-1)?.instanceId ?? null) : current,
+      );
+      return filtered;
+    });
+  }, [removeSessionForInstance]);
+
   const closeActiveWorkspaceTab = useCallback(() => {
     if (!activeInstanceId) return;
+    removeSessionForInstance(activeInstanceId);
     setOpenTabs(prev => {
       const filtered = prev.filter(x => x.instanceId !== activeInstanceId);
       const nextActive = filtered.length > 0 ? filtered.at(-1)!.instanceId : null;
@@ -75,7 +115,7 @@ export const ProjectPage: React.FC = () => {
     });
     setShowRight(false);
     globalThis.dispatchEvent(new CustomEvent('vitruv.resetWorkspace'));
-  }, [activeInstanceId]);
+  }, [activeInstanceId, removeSessionForInstance]);
 
   const openVsumById = useCallback(async (id: number, { forceNew }: { forceNew?: boolean } = {}) => {
     let instanceId = forceNew ? undefined : openTabs.find(t => t.id === id)?.instanceId;
@@ -86,7 +126,6 @@ export const ProjectPage: React.FC = () => {
       setOpenTabs(prev => [...prev, { instanceId: instanceId!, id }]);
     }
     setActiveInstanceId(instanceId);
-    // Note: fetchAndLoadProjectBoxes is now handled by the useEffect watching activeInstanceId
   }, [openTabs, createInstanceId, showInfo]);
 
   useEffect(() => {
@@ -96,7 +135,6 @@ export const ProjectPage: React.FC = () => {
       if (typeof id !== 'number') return;
       const existing = openTabs.find(t => t.id === id);
       if (existing && !custom.detail?.forceNew) {
-        // Project already open, just navigate to it
         setActiveInstanceId(existing.instanceId);
         showInfo('This project is already open. Switched to it.');
         return;
@@ -110,27 +148,21 @@ export const ProjectPage: React.FC = () => {
     };
     globalThis.addEventListener('vitruv.openVsum', handler as EventListener);
     return () => globalThis.removeEventListener('vitruv.openVsum', handler as EventListener);
-  }, [openTabs, openVsumById, showInfo, setActiveInstanceId]);
+  }, [openTabs, openVsumById, showInfo]);
 
-  // Close active workspace tab when canvas becomes empty (no boxes)
   useEffect(() => {
     globalThis.addEventListener('vitruv.closeActiveWorkspace', closeActiveWorkspaceTab as EventListener);
     return () => globalThis.removeEventListener('vitruv.closeActiveWorkspace', closeActiveWorkspaceTab as EventListener);
   }, [closeActiveWorkspaceTab]);
 
-  // Reload workspace when returning from expanded metamodel view
   useEffect(() => {
     const handleReloadWorkspace = async () => {
       if (!activeInstanceId) return;
 
-      const activeTab = openTabs.find(t => t.instanceId === activeInstanceId);
+      const activeTab = openTabsRef.current.find(t => t.instanceId === activeInstanceId);
       if (!activeTab) return;
 
-      console.log('🔃 Reloading workspace for VSUM:', activeTab.id);
-
       try {
-        // Reload the project boxes for the active tab
-        // skipReset = true because the reset is already done in handleBackToWorkspace
         await fetchAndLoadProjectBoxes(activeTab.id, true);
       } catch (error) {
         console.error('Failed to reload workspace:', error);
@@ -139,66 +171,102 @@ export const ProjectPage: React.FC = () => {
 
     globalThis.addEventListener('vitruv.reloadWorkspace', handleReloadWorkspace as EventListener);
     return () => globalThis.removeEventListener('vitruv.reloadWorkspace', handleReloadWorkspace as EventListener);
-  }, [activeInstanceId, openTabs]);
+  }, [activeInstanceId]);
 
-  // Ensure "Add Meta Models" sidebar is hidden when no VSUM tabs are open
   useEffect(() => {
     if (openTabs.length === 0 && showRight) {
       setShowRight(false);
     }
   }, [openTabs.length, showRight]);
 
-  // Reload workspace content when switching between tabs
+  // Switch tabs: save leaving tab state, restore or load the active tab
   useEffect(() => {
-    if (!activeInstanceId) return;
+    let cancelled = false;
 
-    const activeTab = openTabs.find(t => t.instanceId === activeInstanceId);
-    if (!activeTab) return;
+    const applyTabSwitch = async () => {
+      const previousId = prevActiveInstanceIdRef.current;
+      const nextId = activeInstanceId;
 
-    // Load the project boxes for the newly active tab
-    fetchAndLoadProjectBoxes(activeTab.id);
-  }, [activeInstanceId, openTabs]);
+      if (previousId && previousId !== nextId) {
+        try {
+          const session = await captureEditorSession();
+          const tabStillOpen = openTabsRef.current.some(t => t.instanceId === previousId);
+          if (!cancelled && tabStillOpen) {
+            sessionsRef.current.set(previousId, session);
+            setSessionSnapshotsByInstanceId(prev => ({
+              ...prev,
+              [previousId]: session.cachedWorkspaceSnapshot,
+            }));
+          }
+        } catch (error) {
+          console.warn('Failed to capture editor session when leaving tab', error);
+        }
+      }
 
-  // Handler for VSUM deletion - extracted to reduce nesting
+      prevActiveInstanceIdRef.current = nextId;
+
+      if (!nextId) {
+        if (previousId !== nextId) {
+          globalThis.dispatchEvent(new CustomEvent('vitruv.resetWorkspace'));
+        }
+        return;
+      }
+
+      const cached = sessionsRef.current.get(nextId);
+      if (cached) {
+        restoreEditorSession(cached);
+        return;
+      }
+
+      const activeTab = openTabsRef.current.find(t => t.instanceId === nextId);
+      if (activeTab) {
+        await fetchAndLoadProjectBoxes(activeTab.id);
+      }
+    };
+
+    applyTabSwitch();
+    return () => { cancelled = true; };
+  }, [activeInstanceId]);
+
   const handleVsumDeleted = useCallback((e: Event) => {
     const custom = e as CustomEvent<{ id: number }>;
     const deletedId = custom.detail?.id;
     if (typeof deletedId !== 'number') return;
-    
-    // Close all tabs with this VSUM ID
-    const tabsToClose = openTabs.filter(t => t.id === deletedId);
-    if (tabsToClose.length === 0) return;
-    
-    setOpenTabs(prev => prev.filter(t => t.id !== deletedId));
-    
-    // Check if active tab was deleted
-    const wasActiveTabDeleted = activeInstanceId && tabsToClose.some(t => t.instanceId === activeInstanceId);
-    if (wasActiveTabDeleted) {
-      const remainingTabs = openTabs.filter(t => t.id !== deletedId);
-      const nextActiveInstanceId = remainingTabs.length > 0 ? remainingTabs.at(-1)!.instanceId : null;
-      setActiveInstanceId(nextActiveInstanceId);
-    }
-    
-    showInfo('The deleted project has been closed.');
-  }, [openTabs, activeInstanceId, showInfo]);
 
-  // Handle VSUM deletion - close any open tabs for the deleted VSUM
+    const tabsToClose = openTabsRef.current.filter(t => t.id === deletedId);
+    if (tabsToClose.length === 0) return;
+
+    tabsToClose.forEach(t => removeSessionForInstance(t.instanceId));
+
+    setOpenTabs(prev => {
+      const filtered = prev.filter(t => t.id !== deletedId);
+      setActiveInstanceId(current => {
+        if (!current || !tabsToClose.some(t => t.instanceId === current)) return current;
+        return filtered.length > 0 ? filtered.at(-1)!.instanceId : null;
+      });
+      return filtered;
+    });
+
+    showInfo('The deleted project has been closed.');
+  }, [removeSessionForInstance, showInfo]);
+
   useEffect(() => {
     globalThis.addEventListener('vitruv.vsumDeleted', handleVsumDeleted as EventListener);
     return () => globalThis.removeEventListener('vitruv.vsumDeleted', handleVsumDeleted as EventListener);
   }, [handleVsumDeleted]);
 
-  // Handle VSUM version restoration - reload workspace if VSUM is open
   useEffect(() => {
     const handleVsumRestored = async (e: Event) => {
       const custom = e as CustomEvent<{ id: number }>;
       const restoredId = custom.detail?.id;
       if (typeof restoredId !== 'number') return;
-      
-      // Check if this VSUM has any open tabs
-      const openTab = openTabs.find(t => t.id === restoredId);
-      if (openTab) {
-        // Reload the workspace for this tab
+
+      removeSessionsForProject(restoredId);
+
+      const activeTab = openTabsRef.current.find(
+        t => t.id === restoredId && t.instanceId === prevActiveInstanceIdRef.current,
+      );
+      if (activeTab) {
         try {
           await fetchAndLoadProjectBoxes(restoredId);
           showInfo('Project workspace has been reloaded with the restored version.');
@@ -210,8 +278,7 @@ export const ProjectPage: React.FC = () => {
 
     globalThis.addEventListener('vitruv.vsumRestored', handleVsumRestored as EventListener);
     return () => globalThis.removeEventListener('vitruv.vsumRestored', handleVsumRestored as EventListener);
-  }, [openTabs, showInfo]);
-
+  }, [removeSessionsForProject, showInfo]);
 
   return (
     <MainLayout
@@ -225,6 +292,7 @@ export const ProjectPage: React.FC = () => {
       showWelcomeScreen={openTabs.length === 0}
       welcomeTitle="Methodological Dashboard"
       workspaceKey={activeInstanceId || undefined}
+      preserveWorkspaceOnMount={openTabs.length > 0}
       rightSidebar={(showRight && openTabs.length > 0) ? (
         <div style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
           <div style={{
@@ -265,14 +333,12 @@ export const ProjectPage: React.FC = () => {
         <VsumTabs
           openTabs={openTabs}
           activeInstanceId={activeInstanceId}
-          onActivate={(instanceId) => setActiveInstanceId(instanceId)}
-          onClose={(instanceId) => {
-            setOpenTabs(prev => prev.filter(x => x.instanceId !== instanceId));
-            setActiveInstanceId(prev => (prev === instanceId ? (openTabs.find(x => x.instanceId !== instanceId)?.instanceId ?? null) : prev));
-          }}
+          onActivate={setActiveInstanceId}
+          onClose={handleCloseTab}
           showAddButton={!showRight}
           onAddMetaModels={() => setShowRight(true)}
           requestWorkspaceSnapshot={requestWorkspaceSnapshot}
+          sessionSnapshotsByInstanceId={sessionSnapshotsByInstanceId}
         />
       ) : null}
       showWorkspaceInfo={false}
@@ -280,15 +346,8 @@ export const ProjectPage: React.FC = () => {
   );
 };
 
-// Render the choice dialog via portal at the end of the component
-// helper to fetch and load boxes for a vsum id
 async function fetchAndLoadProjectBoxes(id: number, skipReset: boolean = false) {
-  console.log('📥 Fetching VSUM details for ID:', id, 'skipReset:', skipReset);
-
-  // Only reset workspace if not already done (e.g., when loading a new project)
-  // When returning from UML view, the reset is already done in handleBackToWorkspace
   if (!skipReset) {
-    console.log('🔄 Triggering workspace reset');
     globalThis.dispatchEvent(new CustomEvent('vitruv.resetWorkspace'));
   }
 
@@ -296,12 +355,6 @@ async function fetchAndLoadProjectBoxes(id: number, skipReset: boolean = false) 
     const response = await apiService.getVsumDetails(id);
     const details = response.data;
 
-    console.log('📊 VSUM details received:', {
-      metaModelCount: details.metaModels?.length || 0,
-      relationCount: details.metaModelsRelation?.length || 0,
-    });
-
-    // Load all metamodel boxes
     for (const metaModel of details.metaModels || []) {
       if (metaModel.ecoreFileId) {
         try {
@@ -324,9 +377,7 @@ async function fetchAndLoadProjectBoxes(id: number, skipReset: boolean = false) 
       }
     }
 
-    // Wait for all metamodel boxes to be fully rendered
     setTimeout(() => {
-      // Load connections between metamodels
       if (details.metaModelsRelation && details.metaModelsRelation.length > 0) {
         const relations = details.metaModelsRelation.map((relation: any) => ({
           id: relation.id,
@@ -335,17 +386,12 @@ async function fetchAndLoadProjectBoxes(id: number, skipReset: boolean = false) 
           reactionFileId: relation.reactionFileId ?? relation.reactionFileStorageId ?? null,
         }));
 
-        // Set preserveExisting to false when loading from backend (full reload)
-        // This allows backend relations to be loaded even if there are existing edges
         globalThis.dispatchEvent(new CustomEvent('vitruv.loadMetaModelRelations', {
           detail: { relations, preserveExisting: false }
         }));
       }
 
-      // Trigger auto-layout to organize the boxes in a grid
-      // Wait a bit more to ensure edges are loaded first
       setTimeout(() => {
-        console.log('🎨 Triggering auto-layout for workspace');
         globalThis.dispatchEvent(new CustomEvent('vitruv.autoLayoutWorkspace'));
       }, 100);
     }, 400);
@@ -353,5 +399,3 @@ async function fetchAndLoadProjectBoxes(id: number, skipReset: boolean = false) 
     console.error('Failed to fetch vsum details:', error);
   }
 }
-
-

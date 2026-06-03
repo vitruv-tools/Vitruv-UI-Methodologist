@@ -1,3 +1,6 @@
+import { formatEcoreMultiplicity } from './umlGenerator';
+import { applyUmlDiagramLayout } from './umlClassLayout';
+
 export interface UMLAttribute {
   id: string;
   name: string;
@@ -24,17 +27,14 @@ export interface UMLRelationship {
   targetId: string;
   type: UMLRelType;
   label?: string;
+  sourceMultiplicity?: string;
+  targetMultiplicity?: string;
 }
 
 export interface UMLModel {
   classes: UMLClass[];
   relationships: UMLRelationship[];
 }
-
-const BOX_W = 190;
-const COLS = 3;
-const COL_GAP = 70;
-const ROW_H_EST = 210;
 
 function sanitize(name: string) {
   return name.replace(/[^a-zA-Z0-9_]/g, '_');
@@ -64,11 +64,9 @@ export function ecoreToUml(ecoreContent: string): UMLModel {
 
     const classMap = new Map<string, UMLClass>();
 
-    classElems.forEach((cls, idx) => {
+    classElems.forEach((cls) => {
       const rawName = cls.getAttribute('name') || 'Unknown';
       const id = sanitize(rawName);
-      const col = idx % COLS;
-      const row = Math.floor(idx / COLS);
 
       const attributes: UMLAttribute[] = [];
       let attrIdx = 0;
@@ -101,8 +99,8 @@ export function ecoreToUml(ecoreContent: string): UMLModel {
         isAbstract: cls.getAttribute('abstract') === 'true',
         isInterface: cls.getAttribute('interface') === 'true',
         attributes,
-        x: 40 + col * (BOX_W + COL_GAP),
-        y: 40 + row * ROW_H_EST,
+        x: 0,
+        y: 0,
       });
     });
 
@@ -134,18 +132,27 @@ export function ecoreToUml(ecoreContent: string): UMLModel {
         const eType = feat.getAttribute('eType') || '';
         const targetId = sanitize(parseTypeName(eType));
         if (targetId && targetId !== id && classMap.has(targetId)) {
+          const lower = feat.getAttribute('lowerBound');
+          const upper = feat.getAttribute('upperBound');
+          const targetMultiplicity = formatEcoreMultiplicity(lower, upper);
+          const sourceMultiplicity = targetMultiplicity !== undefined ? '1' : undefined;
           relationships.push({
             id: `rel-${relIdx++}`,
             sourceId: id,
             targetId,
             type: feat.getAttribute('containment') === 'true' ? 'composition' : 'association',
             label: refName || undefined,
+            sourceMultiplicity,
+            targetMultiplicity,
           });
         }
       }
     }
 
-    return { classes: Array.from(classMap.values()), relationships };
+    const classes = Array.from(classMap.values());
+    applyUmlDiagramLayout(classes, relationships);
+
+    return { classes, relationships };
   } catch {
     return { classes: [], relationships: [] };
   }

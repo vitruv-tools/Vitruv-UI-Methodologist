@@ -1,5 +1,10 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { UMLDiagram, UMLDiagramHandle } from './UMLDiagram';
+import { MetaModelFileDownloads } from '../ui/MetaModelFileDownloads';
+import {
+  METAMODEL_PREVIEW_LAYOUT_SCOPE,
+  metaModelPreviewLayoutFileName,
+} from '../../utils/metaModelPreview';
 
 const FONT = 'ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, sans-serif';
 const DARK = '#1e293b';
@@ -7,8 +12,10 @@ const DARK = '#1e293b';
 export interface DrawerModel {
   id: number;
   name: string;
+  sourceId?: number;
   domain?: string;
   ecoreFileId?: number;
+  genModelFileId?: number;
   ecoreContent?: string;
   inProject?: boolean;
   description?: string;
@@ -337,12 +344,11 @@ const DetailView: React.FC<DetailViewProps> = ({ model, onFetchFile, onAddModel,
       .finally(() => setFetchingUml(false));
   }, [model.ecoreFileId, ecoreContent, onFetchFile]);
 
-  // Auto fit-to-view once content is ready
   useEffect(() => {
     if (!ecoreContent) return;
     const t = setTimeout(() => diagramRef.current?.fitToView(), 150);
     return () => clearTimeout(t);
-  }, [ecoreContent]);
+  }, [ecoreContent, model.id, model.name]);
 
   return (
     <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
@@ -403,6 +409,16 @@ const DetailView: React.FC<DetailViewProps> = ({ model, onFetchFile, onAddModel,
               {model.description || <span style={{ color: '#cbd5e1' }}>—</span>}
             </div>
           </div>
+
+          <MetaModelFileDownloads
+            modelName={model.name}
+            ecoreFileId={model.ecoreFileId}
+            genModelFileId={model.genModelFileId}
+            labelStyle={{
+              fontSize: 11, fontWeight: 700, color: '#374151',
+              marginBottom: 5, letterSpacing: '0.01em', fontFamily: FONT,
+            }}
+          />
 
           {/* Created */}
           {model.createdAt && (
@@ -495,7 +511,14 @@ const DetailView: React.FC<DetailViewProps> = ({ model, onFetchFile, onAddModel,
                   No diagram available
                 </div>
               )}
-              {ecoreContent && <UMLDiagram ref={diagramRef} ecoreContent={ecoreContent} />}
+              {ecoreContent && (
+                <UMLDiagram
+                  ref={diagramRef}
+                  ecoreContent={ecoreContent}
+                  fileName={metaModelPreviewLayoutFileName(model.id, model.name)}
+                  layoutScopeId={METAMODEL_PREVIEW_LAYOUT_SCOPE}
+                />
+              )}
             </div>
           </div>
         </div>

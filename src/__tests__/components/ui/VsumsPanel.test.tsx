@@ -2,32 +2,23 @@ import React from 'react';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { Vsum } from '../../../types';
 
-// ─── Helpers mirroring VsumsPanel internals ───────────────────────────────────
-
-const getDaysLeft = (removedAt: string | null | undefined): number => {
-  if (!removedAt) return 30;
-  const deletedMs = new Date(removedAt).getTime();
-  const elapsedDays = (Date.now() - deletedMs) / (1000 * 60 * 60 * 24);
-  return Math.max(0, Math.floor(30 - elapsedDays));
-};
-
-type Urgency = 'critical' | 'warning' | 'caution' | 'safe';
-const getDaysLeftUrgency = (days: number): Urgency => {
-  if (days <= 3) return 'critical';
-  if (days <= 7) return 'warning';
-  if (days <= 14) return 'caution';
-  return 'safe';
-};
+import {
+  DELETED_PROJECT_RETENTION_DAYS,
+  formatDaysRemainingLabel,
+  getDaysUntilPermanentDelete,
+  getDeletionUrgency,
+  isRestorableDeletedVsum,
+} from '../../../utils/deletedProjectUtils';
 
 const daysAgo = (n: number): string =>
   new Date(Date.now() - n * 24 * 60 * 60 * 1000).toISOString();
 
-// ─── getDaysLeft ──────────────────────────────────────────────────────────────
+// ─── getDaysUntilPermanentDelete ──────────────────────────────────────────────
 // Use fake timers so Date.now() is frozen: daysAgo() and getDaysLeft() see the
 // exact same millisecond and there is no floating-point jitter from real elapsed
 // time between the two calls.
 
-describe('getDaysLeft', () => {
+describe('getDaysUntilPermanentDelete', () => {
   beforeEach(() => {
     jest.useFakeTimers();
     jest.setSystemTime(new Date('2024-06-15T12:00:00.000Z'));
@@ -37,64 +28,56 @@ describe('getDaysLeft', () => {
     jest.useRealTimers();
   });
 
-  it('returns 30 when removedAt is null', () => {
-    expect(getDaysLeft(null)).toBe(30);
+  it('returns 0 when removedAt is null or undefined', () => {
+    expect(getDaysUntilPermanentDelete(null)).toBe(0);
+    expect(getDaysUntilPermanentDelete(undefined)).toBe(0);
   });
 
-  it('returns 30 when removedAt is undefined', () => {
-    expect(getDaysLeft(undefined)).toBe(30);
-  });
-
-  it('returns 30 when deleted just now', () => {
-    expect(getDaysLeft(new Date().toISOString())).toBe(30);
+  it('returns full window when deleted just now', () => {
+    expect(getDaysUntilPermanentDelete(new Date().toISOString())).toBe(DELETED_PROJECT_RETENTION_DAYS);
   });
 
   it('returns 20 when deleted 10 days ago', () => {
-    expect(getDaysLeft(daysAgo(10))).toBe(20);
+    expect(getDaysUntilPermanentDelete(daysAgo(10))).toBe(20);
   });
 
   it('returns 1 when deleted 29 days ago', () => {
-    expect(getDaysLeft(daysAgo(29))).toBe(1);
+    expect(getDaysUntilPermanentDelete(daysAgo(29))).toBe(1);
   });
 
   it('returns 0 when deleted 30 or more days ago', () => {
-    expect(getDaysLeft(daysAgo(30))).toBe(0);
-    expect(getDaysLeft(daysAgo(35))).toBe(0);
+    expect(getDaysUntilPermanentDelete(daysAgo(30))).toBe(0);
+    expect(getDaysUntilPermanentDelete(daysAgo(35))).toBe(0);
   });
 });
 
-// ─── getDaysLeftUrgency ───────────────────────────────────────────────────────
+// ─── getDeletionUrgency ───────────────────────────────────────────────────────
 
-describe('getDaysLeftUrgency', () => {
-  it('critical for 0 days', () => expect(getDaysLeftUrgency(0)).toBe('critical'));
-  it('critical for 3 days', () => expect(getDaysLeftUrgency(3)).toBe('critical'));
-  it('warning for 4 days', () => expect(getDaysLeftUrgency(4)).toBe('warning'));
-  it('warning for 7 days', () => expect(getDaysLeftUrgency(7)).toBe('warning'));
-  it('caution for 8 days', () => expect(getDaysLeftUrgency(8)).toBe('caution'));
-  it('caution for 14 days', () => expect(getDaysLeftUrgency(14)).toBe('caution'));
-  it('safe for 15 days', () => expect(getDaysLeftUrgency(15)).toBe('safe'));
-  it('safe for 30 days', () => expect(getDaysLeftUrgency(30)).toBe('safe'));
+describe('getDeletionUrgency', () => {
+  it('critical for 0 days', () => expect(getDeletionUrgency(0)).toBe('critical'));
+  it('critical for 3 days', () => expect(getDeletionUrgency(3)).toBe('critical'));
+  it('warning for 4 days', () => expect(getDeletionUrgency(4)).toBe('warning'));
+  it('warning for 7 days', () => expect(getDeletionUrgency(7)).toBe('warning'));
+  it('caution for 8 days', () => expect(getDeletionUrgency(8)).toBe('caution'));
+  it('caution for 14 days', () => expect(getDeletionUrgency(14)).toBe('caution'));
+  it('safe for 15 days', () => expect(getDeletionUrgency(15)).toBe('safe'));
+  it('safe for 30 days', () => expect(getDeletionUrgency(30)).toBe('safe'));
 });
 
 // ─── Countdown badge label format ─────────────────────────────────────────────
 
-describe('countdown badge text', () => {
-  const badgeText = (daysLeft: number) =>
-    daysLeft === 0
-      ? 'Deleting soon'
-      : `${daysLeft} day${daysLeft !== 1 ? 's' : ''} left`;
-
-  it('shows "Deleting soon" at 0 days', () => {
-    expect(badgeText(0)).toBe('Deleting soon');
+describe('formatDaysRemainingLabel', () => {
+  it('shows explicit day count at 0 days', () => {
+    expect(formatDaysRemainingLabel(0)).toBe('0 days left');
   });
 
   it('uses singular "day" at exactly 1 day left', () => {
-    expect(badgeText(1)).toBe('1 day left');
+    expect(formatDaysRemainingLabel(1)).toBe('1 day left');
   });
 
   it('uses plural "days" at 2+ days left', () => {
-    expect(badgeText(2)).toBe('2 days left');
-    expect(badgeText(29)).toBe('29 days left');
+    expect(formatDaysRemainingLabel(2)).toBe('2 days left');
+    expect(formatDaysRemainingLabel(29)).toBe('29 days left');
   });
 });
 
@@ -110,9 +93,10 @@ describe('Vsum type contract', () => {
       removedAt: daysAgo(5),
     };
     expect(withRemoved.removedAt).toBeDefined();
-    const days = getDaysLeft(withRemoved.removedAt);
+    const days = getDaysUntilPermanentDelete(withRemoved.removedAt);
     expect(days).toBeGreaterThanOrEqual(24);
     expect(days).toBeLessThanOrEqual(25);
+    expect(isRestorableDeletedVsum(withRemoved)).toBe(true);
   });
 
   it('allows removedAt to be absent (active project)', () => {
@@ -123,7 +107,7 @@ describe('Vsum type contract', () => {
       updatedAt: new Date().toISOString(),
     };
     expect(active.removedAt).toBeUndefined();
-    expect(getDaysLeft(active.removedAt)).toBe(30);
+    expect(isRestorableDeletedVsum(active)).toBe(false);
   });
 });
 

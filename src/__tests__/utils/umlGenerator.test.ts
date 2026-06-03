@@ -1,6 +1,21 @@
-import { generateUMLFromEcore } from '../../utils/umlGenerator';
+import { formatEcoreMultiplicity, generateUMLFromEcore } from '../../utils/umlGenerator';
+import { umlClassNodeId } from '../../utils/umlLayoutStorage';
 
 const getData = (node: any) => node?.data as any;
+
+describe('formatEcoreMultiplicity', () => {
+  it('formats equal bounds as a single value', () => {
+    expect(formatEcoreMultiplicity('1', '1')).toBe('1');
+  });
+
+  it('formats a range with .. separator', () => {
+    expect(formatEcoreMultiplicity('0', '-1')).toBe('0..*');
+  });
+
+  it('returns undefined when no bounds provided', () => {
+    expect(formatEcoreMultiplicity(null, null)).toBeUndefined();
+  });
+});
 
 describe('generateUMLFromEcore', () => {
 
@@ -35,6 +50,7 @@ describe('generateUMLFromEcore', () => {
       const { nodes } = generateUMLFromEcore(singleClassEcore);
       const classNode = nodes.find(n => getData(n).label === 'Person');
       expect(classNode).toBeDefined();
+      expect(classNode?.id).toBe(umlClassNodeId('Person'));
     });
 
     it('should create a package node', () => {
@@ -146,6 +162,7 @@ describe('generateUMLFromEcore', () => {
       const { edges } = generateUMLFromEcore(associationEcore);
       const assocEdge = edges.find(e => e.data?.relationshipType === 'association');
       expect(assocEdge?.data?.targetMultiplicity).toBe('0..*');
+      expect(assocEdge?.data?.sourceMultiplicity).toBe('1');
     });
 
     it('should not add EReference as attribute', () => {
