@@ -226,6 +226,16 @@ class ApiService {
   }
 
   /**
+   * Update user name — PUT /api/v1/users/{id}
+   */
+  async updateUserName(userId: string, firstName: string, lastName: string): Promise<{ message: string }> {
+    return this.authenticatedRequest(`/api/v1/users/${userId}`, {
+      method: 'PUT',
+      body: JSON.stringify({ firstName, lastName }),
+    });
+  }
+
+  /**
    * Change user password
    */
   async changePassword(password: string): Promise<{ data: any; message: string }> {

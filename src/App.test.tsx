@@ -14,6 +14,6 @@ afterEach(() => {
 
 test('renders Vitruvius Modeler title', () => {
   render(<App />);
-  const logoImage = screen.getByAltText(/Vitruvius/i);
-  expect(logoImage).toBeInTheDocument();
+  const logoImages = screen.getAllByAltText(/Vitruvius/i);
+  expect(logoImages.length).toBeGreaterThan(0);
 });

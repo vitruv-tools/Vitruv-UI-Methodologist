@@ -83,6 +83,41 @@ export function handleTipFromRect(
   }
 }
 
+// ── card visual helpers ───────────────────────────────────────────────────────
+
+function resolveCardBorder(bg: string, isReactionSource: boolean, selected: boolean, isHovered: boolean, borderColor: string): string {
+  if (isReactionSource) return '#1e293b';
+  if (selected)         return darken(bg, 45);
+  if (isHovered)        return darken(bg, 35);
+  return borderColor;
+}
+
+function resolveCardShadow(bg: string, isReactionSource: boolean, selected: boolean, isHovered: boolean): string {
+  if (isReactionSource) return '0 0 0 4px #1e293b33, 0 8px 24px rgba(0,0,0,0.15)';
+  if (selected)         return `0 0 0 3px ${darken(bg, 45)}55, 0 8px 24px rgba(0,0,0,0.15)`;
+  if (isHovered)        return '0 8px 24px rgba(0,0,0,0.12)';
+  return '0 3px 10px rgba(0,0,0,0.08)';
+}
+
+function buildShowDetailsHandler(
+  onShowDetails: ((modelObj: any, fileContent: string) => void) | undefined,
+  setShowMenu: (v: boolean) => void,
+  keywords: string | undefined,
+  metaModelId: number | undefined,
+  fileName: string,
+  description: string | undefined,
+  domain: string | undefined,
+  createdAt: string | undefined,
+  fileContent: string,
+): (() => void) | undefined {
+  if (!onShowDetails) return undefined;
+  return () => {
+    setShowMenu(false);
+    const kwArray = keywords ? keywords.split(/[,;]+/).map((s: string) => s.trim()).filter(Boolean) : [];
+    onShowDetails({ id: metaModelId, name: removeExt(fileName), description: description || '', domain: domain || '', keyword: kwArray, createdAt }, fileContent);
+  };
+}
+
 // ── EcoreFileBox ──────────────────────────────────────────────────────────────
 
 export const EcoreFileBox: React.FC<NodeProps<EcoreFileBoxData>> = ({
@@ -132,8 +167,14 @@ export const EcoreFileBox: React.FC<NodeProps<EcoreFileBoxData>> = ({
     onConnectionStart(id, handle, tip);
   };
 
-  const bg = cardColor(domain);
+  const bg          = cardColor(domain);
   const borderColor = darken(bg, 25);
+  const cardBorder  = resolveCardBorder(bg, isReactionSource, selected, isHovered, borderColor);
+  const cardShadow  = resolveCardShadow(bg, isReactionSource, selected, isHovered);
+  const cardTransform = selected ? 'scale(1.04)' : isHovered ? 'scale(1.02)' : 'scale(1)';
+  const handleShowDetails = buildShowDetailsHandler(
+    onShowDetails, setShowMenu, keywords, metaModelId, fileName, description, domain, createdAt, fileContent,
+  );
 
   const handleClick = (e: React.MouseEvent) => { e.stopPropagation(); onSelect(fileName); };
   const handleDoubleClick = (e: React.MouseEvent) => { e.stopPropagation(); onExpand(fileName, fileContent); };
@@ -207,14 +248,8 @@ export const EcoreFileBox: React.FC<NodeProps<EcoreFileBoxData>> = ({
             height: 126,
             borderRadius: 16,
             background: bg,
-            border: `2px solid ${isReactionSource ? '#1e293b' : selected ? darken(bg, 45) : isHovered ? darken(bg, 35) : borderColor}`,
-            boxShadow: isReactionSource
-              ? '0 0 0 4px #1e293b33, 0 8px 24px rgba(0,0,0,0.15)'
-              : selected
-              ? `0 0 0 3px ${darken(bg, 45)}55, 0 8px 24px rgba(0,0,0,0.15)`
-              : isHovered
-              ? '0 8px 24px rgba(0,0,0,0.12)'
-              : '0 3px 10px rgba(0,0,0,0.08)',
+            border: `2px solid ${cardBorder}`,
+            boxShadow: cardShadow,
             display: 'flex',
             flexDirection: 'column',
             alignItems: 'center',
@@ -223,7 +258,7 @@ export const EcoreFileBox: React.FC<NodeProps<EcoreFileBoxData>> = ({
             cursor: 'pointer',
             userSelect: 'none',
             transition: 'all 0.15s',
-            transform: selected ? 'scale(1.04)' : isHovered ? 'scale(1.02)' : 'scale(1)',
+            transform: cardTransform,
             position: 'relative',
           }}
         >
@@ -283,18 +318,7 @@ export const EcoreFileBox: React.FC<NodeProps<EcoreFileBoxData>> = ({
           }}
           onRename={() => { setShowMenu(false); startRename(); }}
           onDelete={() => { setShowMenu(false); onRequestDelete?.(id); }}
-          onShowDetails={onShowDetails ? () => {
-            setShowMenu(false);
-            const kwArray = keywords ? keywords.split(/[,;]+/).map((s: string) => s.trim()).filter(Boolean) : [];
-            onShowDetails({
-              id: metaModelId,
-              name: removeExt(fileName),
-              description: description || '',
-              domain: domain || '',
-              keyword: kwArray,
-              createdAt,
-            }, fileContent);
-          } : undefined}
+          onShowDetails={handleShowDetails}
         />,
         document.body,
       )}

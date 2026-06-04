@@ -1,25 +1,24 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { AppSidebar, SidebarView } from '../components/layout/AppSidebar';
 import { ModelLibraryTable } from '../components/ui/ModelLibraryTable';
 import { ProjectsView } from '../components/ui/ProjectsView';
+import { LandingView } from '../components/ui/LandingView';
+import { ProfileView } from '../components/ui/ProfileView';
+import { useAuth } from '../contexts/AuthContext';
 import { AuthService } from '../services/auth';
 
-const ComingSoon: React.FC<{ title: string }> = ({ title }) => (
-  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', color: '#9ca3af', gap: 12 }}>
-    <div style={{ fontSize: 36 }}>⚙️</div>
-    <div style={{ fontSize: 20, fontWeight: 600, color: '#374151' }}>{title}</div>
-    <div style={{ fontSize: 14 }}>Dieser Bereich wird noch entwickelt.</div>
-  </div>
-);
-
 export const HomePage: React.FC = () => {
-  const [activeView, setActiveView] = useState<SidebarView>('library');
+  const [activeView, setActiveView] = useState<SidebarView>('home');
+  const { user, refreshCurrentUser } = useAuth();
 
-  const currentUser = AuthService.getCurrentUser();
-  const userName = currentUser
-    ? [currentUser.givenName, currentUser.familyName].filter(Boolean).join(' ') || currentUser.username
+  // Always fetch fresh profile data from the backend on mount so the sidebar
+  // shows the correct name (not stale localStorage cache).
+  useEffect(() => { refreshCurrentUser(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const userName = user
+    ? [user.givenName, user.familyName].filter(Boolean).join(' ') || user.username
     : 'User';
-  const userEmail = currentUser?.email;
+  const userEmail = user?.email;
 
   return (
     <div style={{ width: '100vw', height: '100vh', display: 'flex', overflow: 'hidden', background: '#f7f8fa' }}>
@@ -29,7 +28,6 @@ export const HomePage: React.FC = () => {
         userName={userName}
         userRole="Methodologist"
         userEmail={userEmail}
-        onSettings={() => setActiveView('settings')}
         onLogout={() => AuthService.signOut().then(() => window.location.href = '/login')}
       />
       <main style={{
@@ -39,9 +37,10 @@ export const HomePage: React.FC = () => {
         backgroundSize: '20px 20px',
       }}>
         <div style={{ position: 'relative', flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+          {activeView === 'home'     && <LandingView userName={userName} onNavigate={setActiveView} />}
           {activeView === 'library'  && <ModelLibraryTable />}
           {activeView === 'projects' && <ProjectsView />}
-          {activeView === 'settings' && <ComingSoon title="Einstellungen" />}
+          {activeView === 'profile'  && <ProfileView user={user} userRole="Methodologist" onNameSaved={refreshCurrentUser} />}
         </div>
       </main>
     </div>

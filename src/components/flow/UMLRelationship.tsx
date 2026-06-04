@@ -281,8 +281,6 @@ export function UMLRelationship({
       posKey: `${src?.positionAbsolute?.x ?? 0},${src?.positionAbsolute?.y ?? 0},${tgt?.positionAbsolute?.x ?? 0},${tgt?.positionAbsolute?.y ?? 0},${src?.width ?? 0},${src?.height ?? 0},${tgt?.width ?? 0},${tgt?.height ?? 0}`,
     };
   });
-  void nodeBounds.posKey;
-
   const srcCx = nodeBounds.srcAbsX + nodeBounds.srcW / 2;
   const srcCy = nodeBounds.srcAbsY + nodeBounds.srcH / 2;
   const tgtCx = nodeBounds.tgtAbsX + nodeBounds.tgtW / 2;

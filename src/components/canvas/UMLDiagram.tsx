@@ -106,6 +106,107 @@ function multiplicityPosition(
   };
 }
 
+// ── relation-line helpers ─────────────────────────────────────────────────────
+
+type EdgeState = 'default' | 'hovered' | 'selected';
+
+function edgeState(isSelected: boolean, isHovered: boolean): EdgeState {
+  if (isSelected) return 'selected';
+  if (isHovered)  return 'hovered';
+  return 'default';
+}
+
+const EDGE_COLOR: Record<EdgeState, string> = {
+  default:  EDGE_DEFAULT,
+  hovered:  EDGE_HOVER,
+  selected: EDGE_SELECT,
+};
+
+const EDGE_WIDTH: Record<EdgeState, number> = {
+  default: 1.5,
+  hovered: 2.5,
+  selected: 3,
+};
+
+function markerUrl(id: string, state: EdgeState): string {
+  return `url(#${id}-${state === 'default' ? '' : state === 'hovered' ? 'hov' : 'sel'})`
+    .replace('--', '-');
+}
+
+function resolveMarkers(type: UMLRelationship['type'], state: EdgeState) {
+  if (type === 'inheritance') return { mEnd: markerUrl('uml-inherit', state), mStart: undefined };
+  if (type === 'association')  return { mEnd: markerUrl('uml-assoc',   state), mStart: undefined };
+  if (type === 'composition')  return { mEnd: undefined, mStart: markerUrl('uml-compose', state) };
+  return { mEnd: undefined, mStart: undefined };
+}
+
+function applyParallelOffset(
+  p1: { x: number; y: number },
+  p2: { x: number; y: number },
+  parallelIndex: number,
+  parallelCount: number,
+) {
+  if (parallelCount <= 1) return { p1, p2 };
+  const lineLen = Math.max(Math.hypot(p2.x - p1.x, p2.y - p1.y), 0.0001);
+  const sep = 14;
+  const off = (parallelIndex - (parallelCount - 1) / 2) * sep;
+  const nx = -(p2.y - p1.y) / lineLen;
+  const ny =  (p2.x - p1.x) / lineLen;
+  return {
+    p1: { x: p1.x + nx * off, y: p1.y + ny * off },
+    p2: { x: p2.x + nx * off, y: p2.y + ny * off },
+  };
+}
+
+// ── RelationLine ──────────────────────────────────────────────────────────────
+
+interface RelationLineProps {
+  rel: UMLRelationship;
+  p1: { x: number; y: number };
+  p2: { x: number; y: number };
+  state: EdgeState;
+  onRelClick: (e: React.MouseEvent) => void;
+  onMouseEnter: () => void;
+  onMouseLeave: () => void;
+}
+
+const RelationLine: React.FC<RelationLineProps> = ({ rel, p1, p2, state, onRelClick, onMouseEnter, onMouseLeave }) => {
+  const strokeColor = EDGE_COLOR[state];
+  const strokeWidth = EDGE_WIDTH[state];
+  const { mEnd, mStart } = resolveMarkers(rel.type, state);
+  const mx = (p1.x + p2.x) / 2;
+  const my = (p1.y + p2.y) / 2;
+  const srcMultPos = rel.sourceMultiplicity ? multiplicityPosition(p1.x, p1.y, p2.x, p2.y, 'start') : null;
+  const tgtMultPos = rel.targetMultiplicity ? multiplicityPosition(p1.x, p1.y, p2.x, p2.y, 'end')   : null;
+
+  return (
+    <g data-rel-line style={{ cursor: 'pointer' }} onClick={onRelClick} onMouseEnter={onMouseEnter} onMouseLeave={onMouseLeave}>
+      <line x1={p1.x} y1={p1.y} x2={p2.x} y2={p2.y} stroke="#ffffff" strokeWidth={strokeWidth + 4} strokeLinecap="round" />
+      <line x1={p1.x} y1={p1.y} x2={p2.x} y2={p2.y} stroke="transparent" strokeWidth={20} />
+      <line x1={p1.x} y1={p1.y} x2={p2.x} y2={p2.y} stroke={strokeColor} strokeWidth={strokeWidth} markerEnd={mEnd} markerStart={mStart} strokeLinecap="round" />
+      {rel.label && (
+        <text x={mx} y={my - 5} textAnchor="middle" fontSize="10" fill={strokeColor}
+          stroke="#ffffff" strokeWidth={3} paintOrder="stroke fill"
+          fontFamily="ui-sans-serif, system-ui, sans-serif" pointerEvents="none">
+          {rel.label}
+        </text>
+      )}
+      {[srcMultPos, tgtMultPos].map((pos, idx) => {
+        if (!pos) return null;
+        const mult = idx === 0 ? rel.sourceMultiplicity : rel.targetMultiplicity;
+        return (
+          <g key={idx === 0 ? 'src-mult' : 'tgt-mult'} pointerEvents="none">
+            <rect x={pos.x - 18} y={pos.y - 12} width={36} height={24} rx={4} fill="#ffffff" stroke={strokeColor} strokeWidth={1.5} />
+            <text x={pos.x} y={pos.y + 4} textAnchor="middle" fontSize="13" fontWeight={700} fill={strokeColor} fontFamily="ui-monospace, Consolas, monospace">
+              {mult}
+            </text>
+          </g>
+        );
+      })}
+    </g>
+  );
+};
+
 type EditState =
   | { classId: string; kind: 'name'; val: string }
   | { classId: string; kind: 'attr'; attrId: string; name: string; type: string };
@@ -398,124 +499,25 @@ export const UMLDiagram = forwardRef<UMLDiagramHandle, UMLDiagramProps>(({
           if (!src || !tgt) return null;
 
           const sh = boxH(src), th = boxH(tgt);
-          const sx = src.x + offsetX;
-          const sy = src.y + offsetY;
-          const tx = tgt.x + offsetX;
-          const ty = tgt.y + offsetY;
-          const scx = sx + BW / 2, scy = sy + sh / 2;
-          const tcx = tx + BW / 2, tcy = ty + th / 2;
-          let p1 = edgePt(sx, sy, sh, tcx, tcy);
-          let p2 = edgePt(tx, ty, th, scx, scy);
+          const sx = src.x + offsetX, sy = src.y + offsetY;
+          const tx = tgt.x + offsetX, ty = tgt.y + offsetY;
+          const rawP1 = edgePt(sx, sy, sh, tx + BW / 2, ty + th / 2);
+          const rawP2 = edgePt(tx, ty, th, sx + BW / 2, sy + sh / 2);
+          const { p1, p2 } = applyParallelOffset(rawP1, rawP2, rel.parallelIndex ?? 0, rel.parallelCount ?? 1);
 
-          const parallelCount = rel.parallelCount ?? 1;
-          const parallelIndex = rel.parallelIndex ?? 0;
-          if (parallelCount > 1) {
-            const lineLen = Math.max(Math.hypot(p2.x - p1.x, p2.y - p1.y), 0.0001);
-            const sep = 14;
-            const off = (parallelIndex - (parallelCount - 1) / 2) * sep;
-            const nx = -(p2.y - p1.y) / lineLen;
-            const ny = (p2.x - p1.x) / lineLen;
-            p1 = { x: p1.x + nx * off, y: p1.y + ny * off };
-            p2 = { x: p2.x + nx * off, y: p2.y + ny * off };
-          }
-
-          const isSelected = selectedRelId === rel.id;
-          const isHovered = hoveredRelId === rel.id;
-          const strokeColor = isSelected ? EDGE_SELECT : isHovered ? EDGE_HOVER : EDGE_DEFAULT;
-          const strokeWidth = isSelected ? 3 : isHovered ? 2.5 : 1.5;
-
-          const mEnd = rel.type === 'inheritance'
-            ? (isSelected ? 'url(#uml-inherit-sel)' : isHovered ? 'url(#uml-inherit-hov)' : 'url(#uml-inherit)')
-            : rel.type === 'association'
-              ? (isSelected ? 'url(#uml-assoc-sel)' : isHovered ? 'url(#uml-assoc-hov)' : 'url(#uml-assoc)')
-              : undefined;
-          const mStart = rel.type === 'composition'
-            ? (isSelected ? 'url(#uml-compose-sel)' : isHovered ? 'url(#uml-compose-hov)' : 'url(#uml-compose)')
-            : undefined;
-
-          const mx = (p1.x + p2.x) / 2;
-          const my = (p1.y + p2.y) / 2;
-          const srcMultPos = rel.sourceMultiplicity
-            ? multiplicityPosition(p1.x, p1.y, p2.x, p2.y, 'start')
-            : null;
-          const tgtMultPos = rel.targetMultiplicity
-            ? multiplicityPosition(p1.x, p1.y, p2.x, p2.y, 'end')
-            : null;
-
-          const handleRelClick = (e: React.MouseEvent) => {
-            e.stopPropagation();
-            setSelectedRelId(prev => (prev === rel.id ? null : rel.id));
-          };
+          const state = edgeState(selectedRelId === rel.id, hoveredRelId === rel.id);
+          const handleRelClick = (e: React.MouseEvent) => { e.stopPropagation(); setSelectedRelId(prev => (prev === rel.id ? null : rel.id)); };
 
           return (
-            <g
+            <RelationLine
               key={rel.id}
-              data-rel-line
-              style={{ cursor: 'pointer' }}
-              onClick={handleRelClick}
+              rel={rel}
+              p1={p1} p2={p2}
+              state={state}
+              onRelClick={handleRelClick}
               onMouseEnter={() => setHoveredRelId(rel.id)}
               onMouseLeave={() => setHoveredRelId(null)}
-            >
-              <line
-                x1={p1.x} y1={p1.y} x2={p2.x} y2={p2.y}
-                stroke="#ffffff" strokeWidth={strokeWidth + 4}
-                strokeLinecap="round"
-              />
-              <line
-                x1={p1.x} y1={p1.y} x2={p2.x} y2={p2.y}
-                stroke="transparent" strokeWidth={20}
-              />
-              <line
-                x1={p1.x} y1={p1.y} x2={p2.x} y2={p2.y}
-                stroke={strokeColor} strokeWidth={strokeWidth}
-                markerEnd={mEnd} markerStart={mStart}
-                strokeLinecap="round"
-              />
-              {rel.label && (
-                <text
-                  x={mx} y={my - 5}
-                  textAnchor="middle"
-                  fontSize="10"
-                  fill={strokeColor}
-                  stroke="#ffffff"
-                  strokeWidth={3}
-                  paintOrder="stroke fill"
-                  fontFamily="ui-sans-serif, system-ui, sans-serif"
-                  pointerEvents="none"
-                >
-                  {rel.label}
-                </text>
-              )}
-              {[srcMultPos, tgtMultPos].map((pos, idx) => {
-                if (!pos) return null;
-                const mult = idx === 0 ? rel.sourceMultiplicity : rel.targetMultiplicity;
-                return (
-                  <g key={idx === 0 ? 'src-mult' : 'tgt-mult'} pointerEvents="none">
-                    <rect
-                      x={pos.x - 18}
-                      y={pos.y - 12}
-                      width={36}
-                      height={24}
-                      rx={4}
-                      fill="#ffffff"
-                      stroke={strokeColor}
-                      strokeWidth={1.5}
-                    />
-                    <text
-                      x={pos.x}
-                      y={pos.y + 4}
-                      textAnchor="middle"
-                      fontSize="13"
-                      fontWeight={700}
-                      fill={strokeColor}
-                      fontFamily="ui-monospace, Consolas, monospace"
-                    >
-                      {mult}
-                    </text>
-                  </g>
-                );
-              })}
-            </g>
+            />
           );
         })}
       </svg>

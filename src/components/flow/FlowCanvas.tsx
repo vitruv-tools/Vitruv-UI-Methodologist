@@ -1041,7 +1041,7 @@ export const FlowCanvas = forwardRef<{
     ): Node | null => {
       const nodeEl = document.elementFromPoint(clientX, clientY)?.closest('.react-flow__node');
       if (nodeEl) {
-        const id = nodeEl.getAttribute('data-id');
+        const id = (nodeEl as HTMLElement).dataset['id'];
         if (id && id !== sourceNodeId) {
           const hit = nodes.find(n => n.id === id && n.type === 'ecoreFile');
           if (hit) return hit;
