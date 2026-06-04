@@ -238,10 +238,12 @@ export const ProjectPage: React.FC = () => {
 
     tabsToClose.forEach(t => removeSessionForInstance(t.instanceId));
 
+    const isClosedTab = (instanceId: string) => tabsToClose.some(t => t.instanceId === instanceId);
+
     setOpenTabs(prev => {
       const filtered = prev.filter(t => t.id !== deletedId);
       setActiveInstanceId(current => {
-        if (!current || !tabsToClose.some(t => t.instanceId === current)) return current;
+        if (!current || !isClosedTab(current)) return current;
         return filtered.length > 0 ? filtered.at(-1)!.instanceId : null;
       });
       return filtered;

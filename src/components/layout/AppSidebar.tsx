@@ -4,7 +4,7 @@ import { useChangePassword } from '../../hooks/useChangePassword';
 import { useDismissOnOutsideClick } from '../../hooks/useDismissOnOutsideClick';
 import { getUserInitials } from '../../utils/userInitials';
 
-export type SidebarView = 'library' | 'projects' | 'settings';
+export type SidebarView = 'home' | 'library' | 'projects' | 'profile';
 
 interface AppSidebarProps {
   activeView: SidebarView;
@@ -12,8 +12,8 @@ interface AppSidebarProps {
   userName?: string;
   userRole?: string;
   userEmail?: string;
-  onHelp?: () => void;
-  onSettings?: () => void;
+
+
   onLogout?: () => void;
 }
 
@@ -33,12 +33,6 @@ const LibraryIcon = () => (
   </svg>
 );
 
-const SettingsIcon = () => (
-  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <circle cx="12" cy="12" r="3" />
-    <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
-  </svg>
-);
 
 const UserIcon = () => (
   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -54,26 +48,6 @@ const LockIcon = () => (
   </svg>
 );
 
-const BellIcon = () => (
-  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" />
-    <path d="M13.73 21a2 2 0 0 1-3.46 0" />
-  </svg>
-);
-
-const HelpIcon = () => (
-  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <circle cx="12" cy="12" r="10" />
-    <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3" />
-    <line x1="12" y1="17" x2="12.01" y2="17" />
-  </svg>
-);
-
-const ShieldIcon = () => (
-  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
-  </svg>
-);
 
 const LogoutIcon = () => (
   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -180,7 +154,7 @@ const MenuItem: React.FC<MenuItemProps> = ({ icon, label, sublabel, danger = fal
 export const AppSidebar: React.FC<AppSidebarProps> = ({
   activeView, onViewChange,
   userName = 'User', userRole = 'Methodologist', userEmail,
-  onHelp, onSettings, onLogout,
+  onLogout,
 }) => {
   const [menuOpen, setMenuOpen] = React.useState(false);
   const [userHovered, setUserHovered] = React.useState(false);
@@ -213,7 +187,14 @@ export const AppSidebar: React.FC<AppSidebarProps> = ({
 
       {/* Logo */}
       <div style={{ padding: '20px 16px 16px', borderBottom: '1px solid rgba(255,255,255,0.06)', flexShrink: 0 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+        <button
+          onClick={() => onViewChange('home')}
+          style={{
+            display: 'flex', alignItems: 'center', gap: 6,
+            background: 'none', border: 'none', cursor: 'pointer', padding: 0,
+          }}
+          title="Back to home"
+        >
           <img src="/assets/vitruvius1.png" alt="Vitruvius" style={{ width: 32, height: 32, borderRadius: 8, flexShrink: 0 }} />
           <span style={{
             color: '#ffffff', fontWeight: 700, fontSize: 18,
@@ -222,13 +203,13 @@ export const AppSidebar: React.FC<AppSidebarProps> = ({
           }}>
             Vitruvius
           </span>
-        </div>
+        </button>
       </div>
 
       {/* Navigation */}
       <nav style={{ padding: '12px 8px', flex: 1, display: 'flex', flexDirection: 'column', gap: 2 }}>
-        <NavItem icon={<HomeIcon />} label="Dashboard / Projects" active={activeView === 'projects'} onClick={() => onViewChange('projects')} />
-        <NavItem icon={<LibraryIcon />} label="Model library" active={activeView === 'library'} onClick={() => onViewChange('library')} />
+        <NavItem icon={<HomeIcon />} label="Projects" active={activeView === 'projects'} onClick={() => onViewChange('projects')} />
+        <NavItem icon={<LibraryIcon />} label="Model Library" active={activeView === 'library'} onClick={() => onViewChange('library')} />
       </nav>
 
       {/* ── Bottom section ── */}
@@ -276,15 +257,10 @@ export const AppSidebar: React.FC<AppSidebarProps> = ({
             </div>
 
             {/* Account actions */}
-            <MenuItem icon={<UserIcon />} label="My Profile" sublabel="View & edit your profile" onClick={() => { setMenuOpen(false); }} />
+            <MenuItem icon={<UserIcon />} label="My Profile" sublabel="View & edit your profile" onClick={() => { setMenuOpen(false); onViewChange('profile'); }} />
             <MenuItem icon={<LockIcon />} label="Change Password" onClick={() => { setMenuOpen(false); changePassword.open(); }} />
-            <MenuItem icon={<BellIcon />} label="Notifications" sublabel="Manage alerts" onClick={() => { setMenuOpen(false); }} />
 
             <MenuDivider />
-
-            <MenuItem icon={<SettingsIcon />} label="Settings" sublabel="App preferences" onClick={() => { setMenuOpen(false); onSettings?.(); }} />
-            <MenuItem icon={<HelpIcon />} label="Help & Support" onClick={() => { setMenuOpen(false); onHelp?.(); }} />
-            <MenuItem icon={<ShieldIcon />} label="Privacy & Security" onClick={() => { setMenuOpen(false); }} />
 
             <MenuDivider />
 

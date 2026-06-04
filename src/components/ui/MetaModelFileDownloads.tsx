@@ -23,6 +23,33 @@ const btnBase: React.CSSProperties = {
   transition: 'background 0.12s, border-color 0.12s',
 };
 
+// ── DownloadButton ────────────────────────────────────────────────────────────
+
+interface DownloadButtonProps {
+  kind: 'ecore' | 'genmodel';
+  downloading: 'ecore' | 'genmodel' | null;
+  onDownload: () => void;
+}
+
+const DownloadButton: React.FC<DownloadButtonProps> = ({ kind, downloading, onDownload }) => (
+  <button
+    type="button"
+    disabled={!!downloading}
+    onClick={onDownload}
+    style={{
+      ...btnBase,
+      border: '1px solid #e2e8f0',
+      background: downloading === kind ? '#f8fafc' : '#fff',
+      color: '#374151',
+      cursor: downloading ? 'wait' : 'pointer',
+    }}
+  >
+    {downloading === kind ? 'Downloading…' : `Download .${kind}`}
+  </button>
+);
+
+// ── MetaModelFileDownloads ────────────────────────────────────────────────────
+
 export const MetaModelFileDownloads: React.FC<MetaModelFileDownloadsProps> = ({
   modelName,
   ecoreFileId,
@@ -60,36 +87,10 @@ export const MetaModelFileDownloads: React.FC<MetaModelFileDownloadsProps> = ({
       <div style={label}>Downloads</div>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
         {ecoreFileId ? (
-          <button
-            type="button"
-            disabled={!!downloading}
-            onClick={() => handleDownload('ecore', ecoreFileId)}
-            style={{
-              ...btnBase,
-              border: '1px solid #e2e8f0',
-              background: downloading === 'ecore' ? '#f8fafc' : '#fff',
-              color: '#374151',
-              cursor: downloading ? 'wait' : 'pointer',
-            }}
-          >
-            {downloading === 'ecore' ? 'Downloading…' : 'Download .ecore'}
-          </button>
+          <DownloadButton kind="ecore" downloading={downloading} onDownload={() => handleDownload('ecore', ecoreFileId)} />
         ) : null}
         {genModelFileId ? (
-          <button
-            type="button"
-            disabled={!!downloading}
-            onClick={() => handleDownload('genmodel', genModelFileId)}
-            style={{
-              ...btnBase,
-              border: '1px solid #e2e8f0',
-              background: downloading === 'genmodel' ? '#f8fafc' : '#fff',
-              color: '#374151',
-              cursor: downloading ? 'wait' : 'pointer',
-            }}
-          >
-            {downloading === 'genmodel' ? 'Downloading…' : 'Download .genmodel'}
-          </button>
+          <DownloadButton kind="genmodel" downloading={downloading} onDownload={() => handleDownload('genmodel', genModelFileId)} />
         ) : null}
       </div>
       {error ? (

@@ -296,3 +296,35 @@ describe('ApiService – downloadVsumArtifact', () => {
     await expect(apiService.downloadVsumArtifact(42)).rejects.toThrow('Server error');
   });
 });
+
+// ── updateUserName ────────────────────────────────────────────────────────────
+
+describe('ApiService – updateUserName', () => {
+  const { AuthService } = require('../../services/auth') as { AuthService: { ensureValidToken: jest.Mock } };
+  beforeEach(() => { AuthService.ensureValidToken.mockResolvedValue('mock-token'); });
+  afterEach(() => jest.restoreAllMocks());
+
+  it('calls PUT /api/v1/users/{id} with firstName and lastName in body', async () => {
+    mockFetch({ message: 'User updated successfully' });
+    const fetchSpy = jest.spyOn(global, 'fetch');
+
+    await apiService.updateUserName('42', 'Max', 'Oesterle');
+
+    const [url, options] = fetchSpy.mock.calls[0] as [string, RequestInit];
+    expect(url).toContain('/api/v1/users/42');
+    expect(options.method).toBe('PUT');
+    expect(JSON.parse(options.body as string)).toEqual({ firstName: 'Max', lastName: 'Oesterle' });
+  });
+
+  it('returns the server response on success', async () => {
+    mockFetch({ message: 'User updated successfully' });
+    const result = await apiService.updateUserName('42', 'Max', 'Oesterle');
+    expect(result).toMatchObject({ message: expect.any(String) });
+  });
+
+  it('throws on non-2xx response', async () => {
+    mockFetch({ message: 'Not found' }, 404);
+    await expect(apiService.updateUserName('99', 'A', 'B')).rejects.toThrow();
+  });
+});
+

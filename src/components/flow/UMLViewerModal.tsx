@@ -19,6 +19,16 @@ interface UMLViewerModalProps {
 const nodeTypes = { editable: EditableNode };
 const edgeTypes = { uml: UMLRelationship };
 
+// ── pure edge-state updaters (extracted to avoid deep nesting) ────────────────
+
+function toggleEdgeSelection(edges: Edge[], edgeId: string, currentlySelected: boolean): Edge[] {
+  return edges.map(edge => ({ ...edge, selected: edge.id === edgeId ? !currentlySelected : false }));
+}
+
+function deselectAllNodes(nodes: Node[]): Node[] {
+  return nodes.map(node => ({ ...node, selected: false }));
+}
+
 export const UMLViewerModal: React.FC<UMLViewerModalProps> = ({ isOpen, title, ecoreContent, onClose }) => {
   const [nodes, setNodes] = useState<Node[]>([]);
   const [edges, setEdges] = useState<Edge[]>([]);
@@ -65,10 +75,8 @@ export const UMLViewerModal: React.FC<UMLViewerModalProps> = ({ isOpen, title, e
 
     const handleEdgeClick = (e: Event) => {
       const { edgeId, currentlySelected } = (e as CustomEvent<{ edgeId: string; currentlySelected: boolean }>).detail;
-      setEdges(prev =>
-        prev.map(edge => ({ ...edge, selected: edge.id === edgeId ? !currentlySelected : false })),
-      );
-      setNodes(prev => prev.map(node => ({ ...node, selected: false })));
+      setEdges(prev => toggleEdgeSelection(prev, edgeId, currentlySelected));
+      setNodes(prev => deselectAllNodes(prev));
     };
 
     globalThis.addEventListener('edge-clicked', handleEdgeClick as EventListener);

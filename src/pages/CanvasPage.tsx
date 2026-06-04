@@ -1,4 +1,8 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { useAuth } from '../contexts/AuthContext';
+import { AuthService } from '../services/auth';
+import { getUserInitials } from '../utils/userInitials';
+import { ProfileView } from '../components/ui/ProfileView';
 import ReactDOM from 'react-dom';
 import { useNavigate, useParams } from 'react-router-dom';
 import { Node, Edge } from 'reactflow';
@@ -229,12 +233,12 @@ export const CanvasPage: React.FC = () => {
   }, [activeInstanceId, getLiveSnapshot, setBaselineForInstance]);
 
   const dirtyInstanceIds = React.useMemo(() => {
-    void dirtyRevision; // poll tick — re-run when live snapshot may have changed
     const ids = new Set<string>();
     for (const tab of openTabs) {
       if (isInstanceDirty(tab.instanceId)) ids.add(tab.instanceId);
     }
     return ids;
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- dirtyRevision intentionally forces re-evaluation on every 700 ms poll tick
   }, [openTabs, dirtyRevision, isInstanceDirty]);
 
   useEffect(() => {
@@ -889,7 +893,6 @@ interface Collaborator { id: string; initials: string; name: string; color: stri
 
 // Mock data – replace with real API data later
 const MOCK_COLLABORATORS: Collaborator[] = [];
-const MY_ACCOUNT = { id: 'me', initials: 'MO', name: 'Max Oesterle (You)', color: '#1e293b', ringColor: '#049484' };
 
 interface AvatarProps {
   initials: string;
@@ -925,7 +928,24 @@ const UserAvatar: React.FC<AvatarProps> = ({ initials, bg, size = 30, ring, titl
 const RightPill: React.FC = () => {
   const [showAccounts, setShowAccounts] = useState(false);
   const [showProfileMenu, setShowProfileMenu] = useState(false);
+  const [showProfileModal, setShowProfileModal] = useState(false);
   const wrapRef = useRef<HTMLDivElement>(null);
+  const { user, refreshCurrentUser } = useAuth();
+
+
+  // Derive display values from real user
+  const displayName = user
+    ? [user.givenName, user.familyName].filter(Boolean).join(' ') || user.username
+    : 'Me';
+  const initials = getUserInitials(displayName, user?.email);
+
+  const myAccount = {
+    id: 'me',
+    initials,
+    name: displayName,
+    color: 'linear-gradient(135deg, #049484, #06b89e)',
+    ringColor: '#049484',
+  };
 
   // Close both panels on outside click
   useEffect(() => {
@@ -941,7 +961,7 @@ const RightPill: React.FC = () => {
   }, [showAccounts, showProfileMenu]);
 
   // All members for the scrollable panel
-  const allMembers = [...MOCK_COLLABORATORS, MY_ACCOUNT];
+  const allMembers = [...MOCK_COLLABORATORS, myAccount];
   const stackAvatars = allMembers.slice(0, 3);
   const overflowCount = allMembers.length > 3 ? allMembers.length - 3 : 0;
 
@@ -960,7 +980,7 @@ const RightPill: React.FC = () => {
               initials={c.initials}
               bg={c.color}
               size={30}
-              ring={'ringColor' in c ? (c as typeof MY_ACCOUNT).ringColor : undefined}
+              ring={'ringColor' in c ? (c as typeof myAccount).ringColor : undefined}
             />
           </div>
         ))}
@@ -989,10 +1009,10 @@ const RightPill: React.FC = () => {
           style={{ cursor: 'pointer', display: 'flex' }}
         >
           <UserAvatar
-            initials={MY_ACCOUNT.initials}
-            bg={MY_ACCOUNT.color}
+            initials={myAccount.initials}
+            bg={myAccount.color}
             size={32}
-            ring={MY_ACCOUNT.ringColor}
+            ring={myAccount.ringColor}
           />
         </div>
 
@@ -1016,22 +1036,27 @@ const RightPill: React.FC = () => {
               borderBottom: '1px solid #f1f5f9',
               marginBottom: 4,
             }}>
-              <UserAvatar initials={MY_ACCOUNT.initials} bg={MY_ACCOUNT.color} size={36} ring={MY_ACCOUNT.ringColor} />
+              <UserAvatar initials={myAccount.initials} bg={myAccount.color} size={36} ring={myAccount.ringColor} />
               <div>
                 <div style={{ fontSize: 13, fontWeight: 600, color: '#0f172a', whiteSpace: 'nowrap' }}>
-                  {MY_ACCOUNT.name.replace(' (You)', '')}
+                  {myAccount.name}
                 </div>
-                <div style={{ fontSize: 11, color: '#94a3b8', marginTop: 1 }}>My Account</div>
+                <div style={{ fontSize: 11, color: '#049484', fontWeight: 600, marginTop: 1 }}>Methodologist</div>
               </div>
             </div>
 
             {/* Menu items */}
-            {[
-              { label: 'Manage Profile', icon: '👤' },
-              { label: 'Log out', icon: '→', danger: true },
-            ].map(item => (
-              <ProfileMenuItem key={item.label} label={item.label} icon={item.icon} danger={item.danger} />
-            ))}
+            <ProfileMenuItem
+              label="Manage Profile"
+              icon="👤"
+              onClick={() => { setShowProfileMenu(false); setShowProfileModal(true); }}
+            />
+            <ProfileMenuItem
+              label="Log out"
+              icon="→"
+              danger
+              onClick={() => { setShowProfileMenu(false); AuthService.signOut().then(() => { window.location.href = '/login'; }); }}
+            />
           </div>
         )}
       </div>
@@ -1076,7 +1101,7 @@ const RightPill: React.FC = () => {
                   initials={m.initials}
                   bg={m.color}
                   size={34}
-                  ring={'ringColor' in m ? (m as typeof MY_ACCOUNT).ringColor : undefined}
+                  ring={'ringColor' in m ? (m as typeof myAccount).ringColor : undefined}
                   title={m.name}
                 />
                 <span style={{
@@ -1090,14 +1115,76 @@ const RightPill: React.FC = () => {
           </div>
         </div>
       )}
+
+      {/* ── Profile modal ── */}
+      {showProfileModal && ReactDOM.createPortal(
+        <div
+          onClick={() => setShowProfileModal(false)}
+          style={{
+            position: 'fixed', inset: 0, zIndex: 2000,
+            background: 'rgba(0,0,0,0.25)',
+            backdropFilter: 'blur(8px)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+          }}
+        >
+          <div
+            onClick={e => e.stopPropagation()}
+            style={{
+              width: 'min(760px, 94vw)',
+              maxHeight: '88vh',
+              background: '#ffffff',
+              borderRadius: 12,
+              boxShadow: '0 8px 40px rgba(0,0,0,0.18), 0 0 0 1px rgba(0,0,0,0.07)',
+              display: 'flex',
+              flexDirection: 'column',
+              overflow: 'hidden',
+              position: 'relative',
+            }}
+          >
+            {/* Close button */}
+            <button
+              onClick={() => setShowProfileModal(false)}
+              style={{
+                position: 'absolute', top: 12, right: 12, zIndex: 10,
+                width: 30, height: 30, borderRadius: 6,
+                background: 'transparent',
+                border: '1.5px solid rgba(0,0,0,0.10)',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                cursor: 'pointer', fontSize: 13, color: '#64748b',
+                transition: 'all 0.12s',
+              }}
+              onMouseEnter={e => {
+                e.currentTarget.style.background = '#f1f5f9';
+                e.currentTarget.style.borderColor = 'rgba(0,0,0,0.18)';
+              }}
+              onMouseLeave={e => {
+                e.currentTarget.style.background = 'transparent';
+                e.currentTarget.style.borderColor = 'rgba(0,0,0,0.10)';
+              }}
+              title="Close"
+            >
+              ✕
+            </button>
+            <div style={{ overflowY: 'auto', flex: 1, background: '#f8fafc' }}>
+              <ProfileView
+                user={user}
+                userRole="Methodologist"
+                onNameSaved={refreshCurrentUser}
+              />
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
     </div>
   );
 };
 
-const ProfileMenuItem: React.FC<{ label: string; icon: string; danger?: boolean }> = ({ label, icon, danger }) => {
+const ProfileMenuItem: React.FC<{ label: string; icon: string; danger?: boolean; onClick?: () => void }> = ({ label, icon, danger, onClick }) => {
   const [hov, setHov] = useState(false);
   return (
     <button
+      onClick={onClick}
       onMouseEnter={() => setHov(true)}
       onMouseLeave={() => setHov(false)}
       style={{

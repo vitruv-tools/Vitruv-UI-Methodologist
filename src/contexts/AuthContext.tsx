@@ -62,6 +62,19 @@ function getUserFromAccessToken(): User | null {
     };
 }
 
+/**
+ * Reads preferred_username from the current JWT token.
+ * Falls back to the email-prefix if the token is unavailable.
+ */
+function getUsernameFromToken(fallbackEmail?: string): string {
+    const token = AuthService.getAccessToken();
+    if (token) {
+        const parsed = parseJwtToken(token);
+        if (parsed?.preferred_username) return parsed.preferred_username;
+    }
+    return fallbackEmail?.split('@')[0] || 'user';
+}
+
 function resolveVerifiedFlag(data: any): boolean {
     if (data?.emailVerified === true || data?.verified === true) {
         return true;
@@ -79,7 +92,7 @@ export function AuthProvider({ children }: Readonly<AuthProviderProps>) {
             const { data } = await apiService.getUserInfo();
             return {
                 id: String(data.id),
-                username: data.email?.split('@')[0] || 'user',
+                username: getUsernameFromToken(data.email),
                 email: data.email,
                 name: `${data.firstName ?? ''} ${data.lastName ?? ''}`.trim() || data.email,
                 givenName: data.firstName,
@@ -131,7 +144,7 @@ export function AuthProvider({ children }: Readonly<AuthProviderProps>) {
                 const { data } = await apiService.getUserInfo();
                 const mapped: User = {
                     id: String(data.id),
-                    username: data.email?.split('@')[0] || username,
+                    username: getUsernameFromToken(data.email) || username,
                     email: data.email,
                     name: `${data.firstName ?? ''} ${data.lastName ?? ''}`.trim() || data.email || username,
                     givenName: data.firstName,
@@ -183,7 +196,7 @@ export function AuthProvider({ children }: Readonly<AuthProviderProps>) {
                 const { data } = await apiService.getUserInfo();
                 const mapped: User = {
                     id: String(data.id),
-                    username: data.email?.split('@')[0] || 'user',
+                    username: getUsernameFromToken(data.email),
                     email: data.email,
                     name: `${data.firstName ?? ''} ${data.lastName ?? ''}`.trim() || data.email || 'user',
                     givenName: data.firstName,
