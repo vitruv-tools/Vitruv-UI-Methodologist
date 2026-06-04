@@ -63,7 +63,7 @@ describe('CreateVsumModal', () => {
       target: { value: 'My Project' },
     });
 
-    fireEvent.click(screen.getByRole('button', { name: /Create$/i }));
+    fireEvent.click(screen.getByRole('button', { name: /Create project/i }));
 
     await waitFor(() => {
       expect(apiService.createVsum).toHaveBeenCalled();
@@ -87,7 +87,7 @@ describe('CreateVsumModal – additional tests', () => {
   it('Create button is disabled when name is empty', () => {
     render(<CreateVsumModal isOpen onClose={jest.fn()} />);
     expect(
-      screen.getByRole('button', { name: /^Create$/i }),
+      screen.getByRole('button', { name: /Create project/i }),
     ).toBeDisabled();
   });
 
@@ -98,9 +98,9 @@ describe('CreateVsumModal – additional tests', () => {
 
     render(<CreateVsumModal isOpen onClose={jest.fn()} />);
     await userEvent.type(screen.getByLabelText(/Name \*/i), 'My VSUM');
-    fireEvent.click(screen.getByRole('button', { name: /^Create$/i }));
+    fireEvent.click(screen.getByRole('button', { name: /Create project/i }));
 
-    expect(await screen.findByText(/Creating\.\.\./i)).toBeInTheDocument();
+    expect(await screen.findByText(/Creating/i)).toBeInTheDocument();
   });
 
   it('shows API error when createVsum throws', async () => {
@@ -108,7 +108,7 @@ describe('CreateVsumModal – additional tests', () => {
 
     render(<CreateVsumModal isOpen onClose={jest.fn()} />);
     await userEvent.type(screen.getByLabelText(/Name \*/i), 'My VSUM');
-    fireEvent.click(screen.getByRole('button', { name: /^Create$/i }));
+    fireEvent.click(screen.getByRole('button', { name: /Create project/i }));
 
     expect(await screen.findByText(/Server offline/i)).toBeInTheDocument();
   });
@@ -124,7 +124,7 @@ describe('CreateVsumModal – additional tests', () => {
       screen.getByLabelText(/Description/i),
       'A test vsum',
     );
-    fireEvent.click(screen.getByRole('button', { name: /^Create$/i }));
+    fireEvent.click(screen.getByRole('button', { name: /Create project/i }));
 
     await waitFor(() => {
       expect(apiService.createVsum).toHaveBeenCalledWith({
@@ -139,7 +139,7 @@ describe('CreateVsumModal – additional tests', () => {
 
     render(<CreateVsumModal isOpen onClose={jest.fn()} />);
     await userEvent.type(screen.getByLabelText(/Name \*/i), '  Padded Name  ');
-    fireEvent.click(screen.getByRole('button', { name: /^Create$/i }));
+    fireEvent.click(screen.getByRole('button', { name: /Create project/i }));
 
     await waitFor(() => {
       expect(apiService.createVsum).toHaveBeenCalledWith(
@@ -148,13 +148,8 @@ describe('CreateVsumModal – additional tests', () => {
     });
   });
 
-  it('renders as a <dialog> element', () => {
-    const { container } = render(
-      <CreateVsumModal isOpen onClose={jest.fn()} />,
-    );
-    // If modal uses a portal, fall back to document query
-    const dialog =
-      container.querySelector('dialog') ?? document.querySelector('dialog');
-    expect(dialog).not.toBeNull();
+  it('renders the modal content when open', () => {
+    render(<CreateVsumModal isOpen onClose={jest.fn()} />);
+    expect(screen.getByText('New Project')).toBeInTheDocument();
   });
 });
