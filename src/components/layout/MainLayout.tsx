@@ -737,7 +737,7 @@ export function MainLayout({
                                 vsumId={vsumId}
                                 onDiagramChange={handleDiagramChange}
                                 ref={flowCanvasRef}
-                                // ecoreFiles prop entfernt - Nodes sind jetzt Teil von FlowCanvas State
+                                // ecoreFiles prop removed — nodes are now part of FlowCanvas state
                                 onEcoreFileSelect={handleEcoreFileSelect}
                                 onEcoreFileExpand={handleEcoreFileExpand}
                                 // onEcoreFilePositionChange removed - ReactFlow handles position

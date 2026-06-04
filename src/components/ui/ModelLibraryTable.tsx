@@ -258,7 +258,7 @@ export const ModelDetailModal: React.FC<ModelDetailModalProps> = ({
               <path d="M16 5L5 11L16 17L27 11L16 5Z" stroke="#049484" strokeWidth="1.3" fill="#04948418" strokeLinejoin="round" />
             </svg>
             <div style={{ fontSize: 16, fontWeight: 700, color: '#0f172a', letterSpacing: '-0.01em', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-              Modell-Vorschau: <span style={{ color: '#374151', fontWeight: 600 }}>{model.name}</span>
+              Model Preview: <span style={{ color: '#374151', fontWeight: 600 }}>{model.name}</span>
             </div>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
@@ -342,7 +342,7 @@ export const ModelDetailModal: React.FC<ModelDetailModalProps> = ({
                   </div>
                 )}
                 <div style={{ flex: 1 }}>
-                  <DFieldLabel>Beschreibung</DFieldLabel>
+                  <DFieldLabel>Description</DFieldLabel>
                   <div style={{ fontSize: 13, color: '#374151', fontFamily: FONT, lineHeight: 1.7 }}>
                     {model.description || <span style={{ color: '#cbd5e1' }}>—</span>}
                   </div>
@@ -376,7 +376,7 @@ export const ModelDetailModal: React.FC<ModelDetailModalProps> = ({
           <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', background: '#ffffff' }}>
             {/* Label + zoom controls */}
             <div style={{ padding: '14px 18px 10px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexShrink: 0 }}>
-              <span style={{ fontSize: 13, fontWeight: 600, color: '#374151', fontFamily: FONT }}>UML-Preview</span>
+              <span style={{ fontSize: 13, fontWeight: 600, color: '#374151', fontFamily: FONT }}>UML Preview</span>
               {ecoreContent && (
                 <div style={{ display: 'flex', gap: 4 }}>
                   <DPreviewBtn title="Zoom in" onClick={() => diagramRef.current?.zoomIn()}>

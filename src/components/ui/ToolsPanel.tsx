@@ -1284,7 +1284,7 @@ export const ToolsPanel: React.FC<ToolsPanelProps> = ({ onEcoreFileUpload, onEco
                     <path d="M16 5L5 11L16 17L27 11L16 5Z" stroke="#049484" strokeWidth="1.3" fill="#04948418" strokeLinejoin="round" />
                   </svg>
                   <div style={{ fontSize: 16, fontWeight: 700, color: '#0f172a', letterSpacing: '-0.01em', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                    Modell-Vorschau: <span style={{ color: '#374151', fontWeight: 600 }}>{viewModel.name}</span>
+                    Model Preview: <span style={{ color: '#374151', fontWeight: 600 }}>{viewModel.name}</span>
                   </div>
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
@@ -1374,7 +1374,7 @@ export const ToolsPanel: React.FC<ToolsPanelProps> = ({ onEcoreFileUpload, onEco
                         </div>
                       )}
                       <div style={{ flex: 1 }}>
-                        <div style={{ fontSize: 11, fontWeight: 700, color: '#374151', marginBottom: 5, letterSpacing: '0.01em' }}>Beschreibung</div>
+                        <div style={{ fontSize: 11, fontWeight: 700, color: '#374151', marginBottom: 5, letterSpacing: '0.01em' }}>Description</div>
                         <div style={{ fontSize: 13, color: '#374151', lineHeight: 1.7 }}>
                           {viewModel.description || <span style={{ color: '#cbd5e1' }}>—</span>}
                         </div>
@@ -1405,7 +1405,7 @@ export const ToolsPanel: React.FC<ToolsPanelProps> = ({ onEcoreFileUpload, onEco
                 {/* Right — UML preview */}
                 <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', background: '#ffffff' }}>
                   <div style={{ padding: '14px 18px 10px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexShrink: 0 }}>
-                    <span style={{ fontSize: 13, fontWeight: 600, color: '#374151' }}>UML-Preview</span>
+                    <span style={{ fontSize: 13, fontWeight: 600, color: '#374151' }}>UML Preview</span>
                     {umlContent && (
                       <div style={{ display: 'flex', gap: 4 }}>
                         {[
