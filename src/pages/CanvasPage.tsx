@@ -29,6 +29,7 @@ import {
 } from '../utils/workspaceSnapshotUtils';
 import { downloadBlobAsFile } from '../utils/downloadFile';
 import { syncVsumWorkspaceChanges } from '../utils/vsumSyncSave';
+import { USER_PROFILE_DESCRIPTION, USER_PROFILE_LABEL } from '../constants/accountLabels';
 
 const MODE_TOGGLE_TOP = 14;
 const MODE_TOGGLE_HEIGHT = 52;
@@ -1047,13 +1048,14 @@ const RightPill: React.FC = () => {
 
             {/* Menu items */}
             <ProfileMenuItem
-              label="Manage Profile"
-              icon="👤"
+              label={USER_PROFILE_LABEL}
+              sublabel={USER_PROFILE_DESCRIPTION}
+              icon={<UserProfileIcon />}
               onClick={() => { setShowProfileMenu(false); setShowProfileModal(true); }}
             />
             <ProfileMenuItem
               label="Log out"
-              icon="→"
+              icon={<LogoutIcon />}
               danger
               onClick={() => { setShowProfileMenu(false); AuthService.signOut().then(() => { window.location.href = '/login'; }); }}
             />
@@ -1180,7 +1182,7 @@ const RightPill: React.FC = () => {
   );
 };
 
-const ProfileMenuItem: React.FC<{ label: string; icon: string; danger?: boolean; onClick?: () => void }> = ({ label, icon, danger, onClick }) => {
+const ProfileMenuItem: React.FC<{ label: string; sublabel?: string; icon: React.ReactNode; danger?: boolean; onClick?: () => void }> = ({ label, sublabel, icon, danger, onClick }) => {
   const [hov, setHov] = useState(false);
   return (
     <button
@@ -1196,8 +1198,13 @@ const ProfileMenuItem: React.FC<{ label: string; icon: string; danger?: boolean;
         transition: 'background 0.1s',
       }}
     >
-      <span style={{ fontSize: 14 }}>{icon}</span>
-      {label}
+      <span style={{ display: 'flex', flexShrink: 0, color: danger ? 'inherit' : '#475569' }}>{icon}</span>
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div>{label}</div>
+        {sublabel && (
+          <div style={{ fontSize: 11, color: '#64748b', fontWeight: 400, marginTop: 1 }}>{sublabel}</div>
+        )}
+      </div>
     </button>
   );
 };
@@ -1477,6 +1484,19 @@ const ReactionIcon = () => (
   <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
     <line x1="5" y1="19" x2="19" y2="5" />
     <polyline points="9 5 19 5 19 15" />
+  </svg>
+);
+const UserProfileIcon = () => (
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
+    <circle cx="12" cy="7" r="4" />
+  </svg>
+);
+const LogoutIcon = () => (
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
+    <polyline points="16 17 21 12 16 7" />
+    <line x1="21" y1="12" x2="9" y2="12" />
   </svg>
 );
 const UndoIcon = () => (

@@ -56,6 +56,8 @@ jest.mock('../../../hooks/useFlowState', () => ({
     canUndo: false,
     canRedo: false,
     updateEdgeCode: jest.fn(),
+    setHistoryPaused: jest.fn(),
+    establishBaseline: jest.fn(),
   }),
 }));
 

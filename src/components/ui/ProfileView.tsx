@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { User } from '../../services/auth';
 import { apiService } from '../../services/api';
+import { USER_PROFILE_LABEL, USER_PROFILE_PAGE_SUBTITLE } from '../../constants/accountLabels';
 import { getUserInitials } from '../../utils/userInitials';
 import { BoundChangePasswordModal } from './BoundChangePasswordModal';
 import { useChangePassword } from '../../hooks/useChangePassword';
@@ -172,10 +173,10 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ user, userRole = 'Meth
             Account
           </div>
           <h1 style={{ margin: 0, fontSize: 28, fontWeight: 800, color: '#0f172a', letterSpacing: '-0.02em', lineHeight: 1.2 }}>
-            My Profile
+            {USER_PROFILE_LABEL}
           </h1>
           <p style={{ margin: '8px 0 0', fontSize: 14, color: '#6b7280' }}>
-            Your account information for the Vitruvius Modeler.
+            {USER_PROFILE_PAGE_SUBTITLE}
           </p>
           {loadError && (
             <div style={{

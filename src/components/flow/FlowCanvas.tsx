@@ -527,6 +527,8 @@ export const FlowCanvas = forwardRef<{
       canUndo,
       canRedo,
       updateEdgeCode,
+      setHistoryPaused,
+      establishBaseline,
     } = useFlowState();
     const [circle, setCircle] = useCircleContainment(nodes);
     const { viewTypes, addViewType, deleteViewType, updateAngle, unlinkNode } = useViewTypes(vsumId);
@@ -634,6 +636,15 @@ export const FlowCanvas = forwardRef<{
         return { ...change, position: pos };
       });
 
+      const isDragging = clampedChanges.some(
+        (c: any) => c.type === 'position' && c.dragging === true,
+      );
+      const dragEnded = clampedChanges.some(
+        (c: any) => c.type === 'position' && c.dragging === false,
+      );
+      if (isDragging) setHistoryPaused(true);
+      if (dragEnded) setHistoryPaused(false);
+
       originalOnNodesChange(clampedChanges);
 
       // Close model detail panel when its box is moved
@@ -671,7 +682,7 @@ export const FlowCanvas = forwardRef<{
           );
         }
       }
-    }, [originalOnNodesChange, recalculateEdgeHandles, circle, circleVisible, umlModalOpen, nodes, detailModel, setEdges]);
+    }, [originalOnNodesChange, recalculateEdgeHandles, circle, circleVisible, umlModalOpen, nodes, detailModel, setEdges, setHistoryPaused]);
 
 
     const edgeColorMapRef = useRef<Map<string, string>>(new Map());
@@ -1332,14 +1343,23 @@ export const FlowCanvas = forwardRef<{
         edgesWithUniqueIds.map(e => e.id)
       );
 
+      setHistoryPaused(true);
       setNodes([]);
       setEdges([]);
-
       if (nodesWithIds.length > 0) setNodes(nodesWithIds);
       if (edgesWithUniqueIds.length > 0) setEdges(edgesWithUniqueIds);
 
+      // Reset undo baseline to the loaded diagram (not the pre-load empty state).
+      requestAnimationFrame(() => {
+        establishBaseline({
+          nodes: nodesWithIds,
+          edges: edgesWithUniqueIds,
+        });
+        setHistoryPaused(false);
+      });
+
       console.log('Diagram data loaded successfully');
-    }, [setNodes, setEdges]);
+    }, [setNodes, setEdges, setHistoryPaused, establishBaseline]);
 
 
     const handleDragOver = useCallback((event: React.DragEvent) => {

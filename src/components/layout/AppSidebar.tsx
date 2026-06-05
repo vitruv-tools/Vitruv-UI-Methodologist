@@ -3,6 +3,7 @@ import { BoundChangePasswordModal } from '../ui/BoundChangePasswordModal';
 import { useChangePassword } from '../../hooks/useChangePassword';
 import { useDismissOnOutsideClick } from '../../hooks/useDismissOnOutsideClick';
 import { getUserInitials } from '../../utils/userInitials';
+import { USER_PROFILE_DESCRIPTION, USER_PROFILE_LABEL } from '../../constants/accountLabels';
 
 export type SidebarView = 'home' | 'library' | 'projects' | 'profile';
 
@@ -142,7 +143,7 @@ const MenuItem: React.FC<MenuItemProps> = ({ icon, label, sublabel, danger = fal
       <div style={{ flex: 1, minWidth: 0 }}>
         <div style={{ fontSize: 13, fontWeight: 500 }}>{label}</div>
         {sublabel && (
-          <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.35)', marginTop: 1 }}>{sublabel}</div>
+          <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.58)', marginTop: 1 }}>{sublabel}</div>
         )}
       </div>
     </button>
@@ -257,7 +258,7 @@ export const AppSidebar: React.FC<AppSidebarProps> = ({
             </div>
 
             {/* Account actions */}
-            <MenuItem icon={<UserIcon />} label="My Profile" sublabel="View & edit your profile" onClick={() => { setMenuOpen(false); onViewChange('profile'); }} />
+            <MenuItem icon={<UserIcon />} label={USER_PROFILE_LABEL} sublabel={USER_PROFILE_DESCRIPTION} onClick={() => { setMenuOpen(false); onViewChange('profile'); }} />
             <MenuItem icon={<LockIcon />} label="Change Password" onClick={() => { setMenuOpen(false); changePassword.open(); }} />
 
             <MenuDivider />

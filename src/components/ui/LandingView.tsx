@@ -36,10 +36,10 @@ const FeaturePill: React.FC<{ icon: React.ReactNode; label: string }> = ({ icon,
   <div style={{
     display: 'flex', alignItems: 'center', gap: 7,
     padding: '7px 14px',
-    background: 'rgba(255,255,255,0.75)',
-    border: '1px solid rgba(0,0,0,0.08)',
+    background: '#ffffff',
+    border: '1px solid rgba(0,0,0,0.10)',
     borderRadius: 20,
-    fontSize: 13, color: '#374151',
+    fontSize: 13, fontWeight: 500, color: '#1f2937',
   }}>
     <span style={{ color: '#049484', display: 'flex' }}>{icon}</span>
     {label}
@@ -302,22 +302,22 @@ export const LandingView: React.FC<LandingViewProps> = ({ userName, onNavigate }
       {/* ── About strip ───────────────────────────────────────────────────── */}
       <div style={{
         marginTop: 28,
-        background: 'rgba(255,255,255,0.6)',
-        border: '1px solid rgba(0,0,0,0.07)',
+        background: '#ffffff',
+        border: '1px solid rgba(0,0,0,0.08)',
         borderRadius: 14,
         padding: '22px 28px',
         maxWidth: 1200,
-        backdropFilter: 'blur(8px)',
+        boxShadow: '0 1px 4px rgba(0,0,0,0.05)',
       }}>
         <div style={{
-          fontSize: 11, fontWeight: 700, color: '#9ca3af',
+          fontSize: 11, fontWeight: 700, color: '#6b7280',
           letterSpacing: '0.08em', marginBottom: 10, textTransform: 'uppercase',
         }}>
           About the Framework
         </div>
-        <p style={{ margin: 0, fontSize: 13, color: '#4b5563', lineHeight: 1.75 }}>
+        <p style={{ margin: 0, fontSize: 14, color: '#1e293b', lineHeight: 1.8 }}>
           Vitruvius is developed at the{' '}
-          <strong style={{ color: '#111827' }}>Dependability of Software-intensive Systems (DSiS)</strong> group
+          <strong style={{ color: '#0f172a' }}>Dependability of Software-intensive Systems (DSiS)</strong> group
           at KIT. It is built on the idea of a Virtual Single Underlying Model (V-SUM) which behaves like a
           consistent SUM without being free of redundancies — instead, explicit consistency rules propagate changes
           between heterogeneous models automatically whenever a view is modified.

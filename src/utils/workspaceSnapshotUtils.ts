@@ -73,7 +73,7 @@ export const mapRelationsForCanvasLoad = (relations: VsumMetaModelRelation[]) =>
     reactionFileId: normalizeReactionFileId(r.reactionFileId ?? r.reactionFileStorageId),
   }));
 
-/** Aligns canvas save payload with VsumTabs / backend expectations. */
+/** Aligns canvas save payload with backend expectations. */
 export const prepareSnapshotForSyncSave = (
   snapshot: WorkspaceSnapshot,
 ): {
