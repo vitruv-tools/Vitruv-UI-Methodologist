@@ -63,9 +63,9 @@ describe('ProfileView', () => {
 
   afterEach(() => jest.clearAllMocks());
 
-  it('renders My Profile heading', async () => {
+  it('renders User Profile heading', async () => {
     render(<ProfileView user={mockUser} />);
-    expect(screen.getByText('My Profile')).toBeInTheDocument();
+    expect(screen.getByText('User Profile')).toBeInTheDocument();
   });
 
   it('fetches profile from backend on mount', async () => {

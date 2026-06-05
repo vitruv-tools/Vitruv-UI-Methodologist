@@ -85,14 +85,14 @@ describe('AppSidebar', () => {
     // The user card button (bottom of sidebar)
     const userCard = screen.getByRole('button', { name: /Max Oesterle/i });
     fireEvent.click(userCard);
-    expect(screen.getByText('My Profile')).toBeInTheDocument();
+    expect(screen.getByText('User Profile')).toBeInTheDocument();
   });
 
-  it('calls onViewChange with "profile" when My Profile is clicked', () => {
+  it('calls onViewChange with "profile" when User Profile is clicked', () => {
     const onViewChange = jest.fn();
     render(<AppSidebar {...defaultProps} onViewChange={onViewChange} />);
     fireEvent.click(screen.getByRole('button', { name: /Max Oesterle/i }));
-    fireEvent.click(screen.getByText('My Profile'));
+    fireEvent.click(screen.getByText('User Profile'));
     expect(onViewChange).toHaveBeenCalledWith('profile');
   });
 

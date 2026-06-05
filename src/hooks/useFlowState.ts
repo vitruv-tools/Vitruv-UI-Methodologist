@@ -1,4 +1,4 @@
-import { useCallback, useState, useEffect } from 'react';
+import { useCallback, useState, useEffect, useRef } from 'react';
 import { useNodesState, useEdgesState, Connection, Edge, Node } from 'reactflow';
 import { useUndoRedo } from './useUndoRedo';
 
@@ -68,6 +68,8 @@ export function useFlowState(props?: UseFlowStateProps) {
   // Initialize undo/redo with current state
   const {
     saveState,
+    seedHistory,
+    historyIsEmpty,
     undo,
     redo,
     canUndo,
@@ -78,6 +80,8 @@ export function useFlowState(props?: UseFlowStateProps) {
     edges: [],
     idCounter: 1
   });
+
+  const pauseHistoryRef = useRef(false);
 
   // Reset state when user/project changes
   useEffect(() => {
@@ -94,7 +98,7 @@ export function useFlowState(props?: UseFlowStateProps) {
   }, [userId, projectId, setNodes, setEdges, clearHistory]);
 
   useEffect(() => {
-    if (isApplyingState) return;
+    if (isApplyingState || pauseHistoryRef.current) return;
 
     const currentDiagramState = {
       nodes,
@@ -135,10 +139,14 @@ export function useFlowState(props?: UseFlowStateProps) {
         edgesAfter: edges.length
       });
 
+      if (historyIsEmpty()) {
+        seedHistory(lastSavedState, 'Initial state');
+      }
+
       saveState(currentDiagramState, actionDescription);
       setLastSavedState(currentDiagramState);
     }
-  }, [nodes, edges, idCounter, saveState, isApplyingState, lastSavedState]);
+  }, [nodes, edges, idCounter, saveState, seedHistory, historyIsEmpty, isApplyingState, lastSavedState]);
 
   const applyState = useCallback((state: { nodes: Node[]; edges: Edge[]; idCounter: number }) => {
     setIsApplyingState(true);
@@ -290,6 +298,20 @@ export function useFlowState(props?: UseFlowStateProps) {
     }
   }, [redo, applyState]);
 
+  const setHistoryPaused = useCallback((paused: boolean) => {
+    pauseHistoryRef.current = paused;
+  }, []);
+
+  const establishBaseline = useCallback((state?: { nodes: Node[]; edges: Edge[]; idCounter?: number }) => {
+    const baseline = {
+      nodes: state?.nodes ?? nodes,
+      edges: state?.edges ?? edges,
+      idCounter: state?.idCounter ?? idCounter,
+    };
+    seedHistory(baseline, 'Baseline');
+    setLastSavedState(baseline);
+  }, [nodes, edges, idCounter, seedHistory]);
+
   return {
     nodes,
     edges,
@@ -310,5 +332,7 @@ export function useFlowState(props?: UseFlowStateProps) {
     canUndo,
     canRedo,
     updateEdgeCode,
+    setHistoryPaused,
+    establishBaseline,
   };
 }
