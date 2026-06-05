@@ -32,9 +32,9 @@ export const HomePage: React.FC = () => {
       />
       <main style={{
         flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', position: 'relative',
-        backgroundColor: '#f1f2f4',
-        backgroundImage: 'radial-gradient(circle, #b0b7c3 1px, transparent 1px)',
-        backgroundSize: '20px 20px',
+        backgroundColor: '#f3f4f6',
+        backgroundImage: 'radial-gradient(circle, #d1d5db 0.75px, transparent 0.75px)',
+        backgroundSize: '24px 24px',
       }}>
         <div style={{ position: 'relative', flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
           {activeView === 'home'     && <LandingView userName={userName} onNavigate={setActiveView} />}

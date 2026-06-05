@@ -157,7 +157,7 @@ export const UMLDiagramMinimap: React.FC<UMLDiagramMinimapProps> = ({
       onMouseDown={onMouseDown}
       style={{
         position: 'absolute',
-        right: 10,
+        left: 10,
         bottom: 10,
         width: MAP_W,
         height: MAP_H,
@@ -166,7 +166,7 @@ export const UMLDiagramMinimap: React.FC<UMLDiagramMinimapProps> = ({
         borderRadius: 8,
         boxShadow: '0 2px 10px rgba(0,0,0,0.08)',
         overflow: 'hidden',
-        zIndex: 20,
+        zIndex: 5,
         cursor: 'crosshair',
         pointerEvents: 'auto',
       }}

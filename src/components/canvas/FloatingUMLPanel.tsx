@@ -121,7 +121,7 @@ export const FloatingUMLPanel: React.FC<FloatingUMLPanelProps> = ({
             display: 'flex',
             flexDirection: 'column',
             gap: 4,
-            zIndex: 10,
+            zIndex: 30,
           }}>
             <ZoomButton title="Zoom in" onClick={() => diagramRef.current?.zoomIn()}>
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round">
