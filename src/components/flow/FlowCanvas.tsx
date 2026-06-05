@@ -682,7 +682,7 @@ export const FlowCanvas = forwardRef<{
           );
         }
       }
-    }, [originalOnNodesChange, recalculateEdgeHandles, circle, circleVisible, umlModalOpen, nodes, detailModel, setEdges]);
+    }, [originalOnNodesChange, recalculateEdgeHandles, circle, circleVisible, umlModalOpen, nodes, detailModel, setEdges, setHistoryPaused]);
 
 
     const edgeColorMapRef = useRef<Map<string, string>>(new Map());
