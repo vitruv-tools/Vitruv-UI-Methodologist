@@ -322,7 +322,7 @@ export const ProjectPickerMenu: React.FC<ProjectPickerMenuProps> = ({
           gap: 6,
           maxWidth: isCompact ? undefined : 220,
           padding: isCompact ? '0 12px' : '2px 8px',
-          height: isCompact ? 34 : 34,
+          height: 34,
           border: isCompact ? '1px solid transparent' : 'none',
           borderRadius: 6,
           background: open ? '#f0fdfc' : 'transparent',
