@@ -23,6 +23,21 @@ const REF_ECORE = `<?xml version="1.0" encoding="UTF-8"?>
   <eClassifiers xsi:type="ecore:EClass" name="LineItem"/>
 </ecore:EPackage>`;
 
+const MULTI_REF_ECORE = `<?xml version="1.0" encoding="UTF-8"?>
+<ecore:EPackage xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                xmlns:ecore="http://www.eclipse.org/emf/2002/Ecore" name="test">
+  <eClassifiers xsi:type="ecore:EClass" name="Hub"/>
+  <eClassifiers xsi:type="ecore:EClass" name="Alpha">
+    <eStructuralFeatures xsi:type="ecore:EReference" name="hub" eType="#//Hub" lowerBound="1" upperBound="1"/>
+  </eClassifiers>
+  <eClassifiers xsi:type="ecore:EClass" name="Beta">
+    <eStructuralFeatures xsi:type="ecore:EReference" name="hub" eType="#//Hub" lowerBound="1" upperBound="1"/>
+  </eClassifiers>
+  <eClassifiers xsi:type="ecore:EClass" name="Gamma">
+    <eStructuralFeatures xsi:type="ecore:EReference" name="hub" eType="#//Hub" lowerBound="1" upperBound="1"/>
+  </eClassifiers>
+</ecore:EPackage>`;
+
 const scopeId = 'uml-diagram-test';
 const fileName = 'simple.ecore';
 
@@ -153,7 +168,7 @@ describe('UMLDiagram real component', () => {
     await act(async () => {
       fireEvent.click(relGroup);
     });
-    const strokeLine = relGroup.querySelectorAll('line')[2];
+    const strokeLine = relGroup.querySelectorAll('path')[2];
     expect(strokeLine?.getAttribute('stroke')).toBe('#ef4444');
   });
 
@@ -161,6 +176,26 @@ describe('UMLDiagram real component', () => {
     render(<UMLDiagram ecoreContent={REF_ECORE} />);
     expect(screen.getByText('0..*')).toBeInTheDocument();
     expect(screen.getByText('1')).toBeInTheDocument();
+  });
+
+  it('renders every cardinality badge even when values repeat at the same class', () => {
+    const { container } = render(<UMLDiagram ecoreContent={MULTI_REF_ECORE} />);
+    expect(screen.getAllByText('1').length).toBeGreaterThanOrEqual(3);
+    expect(container.querySelectorAll('[data-mult-badge]').length).toBeGreaterThanOrEqual(3);
+  });
+
+  it('renders relationship lines as SVG paths for bridge support', () => {
+    const { container } = render(<UMLDiagram ecoreContent={REF_ECORE} />);
+    expect(container.querySelectorAll('[data-rel-line] path').length).toBeGreaterThan(0);
+  });
+
+  it('renders direction markers by default without hovering', () => {
+    const { container } = render(<UMLDiagram ecoreContent={REF_ECORE} />);
+    const markers = container.querySelectorAll('[data-rel-direction-marker]');
+    expect(markers.length).toBeGreaterThan(0);
+    markers.forEach(marker => {
+      expect(marker.querySelector('path, polygon')).not.toBeNull();
+    });
   });
 
   it('renders a minimap overview in the bottom-right corner', () => {

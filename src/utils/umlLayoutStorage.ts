@@ -2,6 +2,13 @@ import { Node } from 'reactflow';
 
 export const UML_LAYOUT_KEY_PREFIX = 'vitruv.uml.positions.v2';
 export const UML_PACKAGE_LAYOUT_KEY = '__package__';
+export const UML_VIEWPORT_KEY = '__viewport__';
+
+export interface UmlViewport {
+  x: number;
+  y: number;
+  scale: number;
+}
 
 /** Stable id segment for a UML class (matches ecoreToUml / layout map keys). */
 export function sanitizeUmlClassId(className: string): string {
@@ -61,8 +68,31 @@ function readRawPositionMap(scopeId: string, fileName: string): UmlPositionMap |
   }
 }
 
+function hasClassLayoutKeys(map: UmlPositionMap): boolean {
+  return Object.keys(map).some(k => k !== UML_VIEWPORT_KEY);
+}
+
+export function loadUmlViewport(scopeId: string, fileName: string): UmlViewport | null {
+  const map = readRawPositionMap(scopeId, fileName);
+  if (!map) return null;
+  const vp = map[UML_VIEWPORT_KEY] as UmlViewport | undefined;
+  if (!vp || typeof vp.x !== 'number' || typeof vp.y !== 'number' || typeof vp.scale !== 'number') {
+    return null;
+  }
+  return vp;
+}
+
+export function buildUmlLayoutPayload(
+  classes: Array<{ id: string; x: number; y: number }>,
+  viewport?: UmlViewport | null,
+): UmlPositionMap {
+  const payload = positionsFromUmlClasses(classes);
+  if (viewport) payload[UML_VIEWPORT_KEY] = viewport;
+  return payload;
+}
+
 export function saveUmlLayout(scopeId: string, fileName: string, positions: UmlPositionMap): void {
-  if (!fileName || Object.keys(positions).length === 0) return;
+  if (!fileName || !hasClassLayoutKeys(positions)) return;
   try {
     localStorage.setItem(umlLayoutStorageKey(scopeId, fileName), JSON.stringify(positions));
   } catch {
@@ -72,7 +102,7 @@ export function saveUmlLayout(scopeId: string, fileName: string, positions: UmlP
 
 export function hasSavedUmlLayout(scopeId: string, fileName: string): boolean {
   const map = readRawPositionMap(scopeId, fileName);
-  return map !== null && Object.keys(map).length > 0;
+  return map !== null && hasClassLayoutKeys(map);
 }
 
 export function loadUmlLayout(scopeId: string, fileName: string): UmlPositionMap | null {

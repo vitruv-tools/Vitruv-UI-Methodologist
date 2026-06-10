@@ -92,6 +92,10 @@ function calculateStraightPath(params: PathParams & { parallelIndex?: number; pa
 const EDGE_DEFAULT = '#0c436e';
 const EDGE_SELECT  = '#ef4444';
 const EDGE_SELECT_HOVER = '#f87171';
+// Shorten the drawn line so endpoint markers sit on the visible segment (not under HTML nodes).
+const EDGE_ENDPOINT_INSET = 8;
+const MULT_ALONG_OFFSET = 28;
+const MULT_PERP_OFFSET = 30;
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Border-intersection: given a node's center + dimensions and the direction
@@ -130,21 +134,84 @@ function getStrokeWidth(isHighlighted: boolean, isHovered: boolean): string {
   return '1.5px';
 }
 
-// Helper: Get marker suffix based on state
-function getMarkerSuffix(isHighlighted: boolean, isHovered: boolean): string {
-  if (isHighlighted) return '-selected';
-  if (isHovered) return '-hover';
-  return '';
+type DirectionMarkerSide = 'start' | 'end';
+
+function getDirectionMarkerSide(relationshipType?: string): DirectionMarkerSide | null {
+  if (relationshipType === 'composition' || relationshipType === 'aggregation') return 'start';
+  if (
+    relationshipType === 'inheritance'
+    || relationshipType === 'realization'
+    || relationshipType === 'association'
+    || relationshipType === 'dependency'
+  ) {
+    return 'end';
+  }
+  return null;
+}
+
+function directionMarkerContent(relationshipType: string, color: string): React.ReactNode {
+  if (relationshipType === 'association') {
+    return <path d="M 0 0 L 12 6 L 0 12 z" fill={color} />;
+  }
+  if (relationshipType === 'inheritance' || relationshipType === 'realization') {
+    return <path d="M 0 0 L 12 6 L 0 12 z" fill="#ffffff" stroke={color} strokeWidth="1.5" />;
+  }
+  if (relationshipType === 'composition') {
+    return <path d="M 7 1 L 13 7 L 7 13 L 1 7 Z" fill={color} />;
+  }
+  if (relationshipType === 'aggregation') {
+    return <path d="M 7 1 L 13 7 L 7 13 L 1 7 Z" fill="#ffffff" stroke={color} strokeWidth="1.5" />;
+  }
+  if (relationshipType === 'dependency') {
+    return (
+      <path
+        d="M 0 1 L 11 6 L 0 11"
+        fill="none"
+        stroke={color}
+        strokeWidth="1.5"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    );
+  }
+  return null;
+}
+
+function directionMarkerViewBox(relationshipType: string): string {
+  if (relationshipType === 'composition' || relationshipType === 'aggregation') {
+    return '0 0 14 14';
+  }
+  return '0 0 12 12';
+}
+
+function directionMarkerSize(relationshipType: string): number {
+  if (relationshipType === 'composition' || relationshipType === 'aggregation') {
+    return 20;
+  }
+  return 18;
+}
+
+function directionMarkerAnchor(
+  anchor: { x: number; y: number },
+  ux: number,
+  uy: number,
+  side: DirectionMarkerSide,
+  markerSize: number,
+): { x: number; y: number } {
+  const nudge = side === 'start' ? markerSize * 0.42 : -markerSize * 0.42;
+  return {
+    x: anchor.x + ux * nudge,
+    y: anchor.y + uy * nudge,
+  };
 }
 
 // Helper: Build relationship style object
 function buildRelationshipStyle(
   strokeColor: string,
   strokeWidth: string,
-  markerSuffix: string,
   relationshipType?: string
 ): Record<string, string> {
-  const baseStyle = {
+  const baseStyle: Record<string, string> = {
     strokeWidth,
     stroke: strokeColor,
     fill: 'none',
@@ -153,28 +220,18 @@ function buildRelationshipStyle(
     transition: 'stroke 0.2s ease, stroke-width 0.2s ease',
   };
 
-  if (relationshipType === 'inheritance') {
-    return { ...baseStyle, markerEnd: `url(#arrowhead-inheritance${markerSuffix})` };
-  }
   if (relationshipType === 'realization') {
-    return { ...baseStyle, strokeDasharray: '10,6', markerEnd: `url(#arrowhead-realization${markerSuffix})` };
-  }
-  if (relationshipType === 'composition') {
-    return { ...baseStyle, markerStart: `url(#diamond-composition${markerSuffix})` };
-  }
-  if (relationshipType === 'aggregation') {
-    return { ...baseStyle, markerStart: `url(#diamond-aggregation${markerSuffix})` };
+    return { ...baseStyle, strokeDasharray: '10,6' };
   }
   if (relationshipType === 'dependency') {
-    return { ...baseStyle, strokeDasharray: '8,5', markerEnd: `url(#arrowhead-open-dependency${markerSuffix})` };
+    return { ...baseStyle, strokeDasharray: '8,5' };
   }
-  
+
   return baseStyle;
 }
 
 // Helper: Calculate multiplicity label position.
-// Labels are placed 26 px along the edge from the endpoint and 20 px
-// perpendicular to it so they never sit on top of the line.
+// Labels are offset along and perpendicular to the edge so they clear the line.
 function calculateMultiplicityPosition(
   baseX: number,
   baseY: number,
@@ -187,11 +244,11 @@ function calculateMultiplicityPosition(
   const uy = segDy / len;
   const nx = -uy;
   const ny = ux;
-  const along = direction === 'start' ? 26 : -26;
+  const along = direction === 'start' ? MULT_ALONG_OFFSET : -MULT_ALONG_OFFSET;
 
   return {
-    x: baseX + ux * along + nx * 20,
-    y: baseY + uy * along + ny * 20,
+    x: baseX + ux * along + nx * MULT_PERP_OFFSET,
+    y: baseY + uy * along + ny * MULT_PERP_OFFSET,
   };
 }
 
@@ -298,10 +355,16 @@ export function UMLRelationship({
   const dx = finalTargetX - finalSourceX;
   const dy = finalTargetY - finalSourceY;
   const length = Math.max(Math.hypot(dx, dy), 0.0001);
+  const ux = dx / length;
   const uy = dy / length;
   const px = -uy;
   const py = dx / length;
   const count = Math.max(1, data?.parallelCount ?? 1);
+  const endpointInset = Math.min(EDGE_ENDPOINT_INSET, Math.max(0, length / 2 - 8));
+  const drawSourceX = finalSourceX + ux * endpointInset;
+  const drawSourceY = finalSourceY + uy * endpointInset;
+  const drawTargetX = finalTargetX - ux * endpointInset;
+  const drawTargetY = finalTargetY - uy * endpointInset;
 
   const controlPoint = data?.customControlPoint;
   const distance = Math.hypot(dx, dy);
@@ -309,14 +372,14 @@ export function UMLRelationship({
   // Routing: bezier when user has dragged a control point, straight line otherwise.
   const pathResult: PathResult = controlPoint
     ? calculateControlPointPath({
-        sourceX: finalSourceX, sourceY: finalSourceY,
-        targetX: finalTargetX, targetY: finalTargetY,
+        sourceX: drawSourceX, sourceY: drawSourceY,
+        targetX: drawTargetX, targetY: drawTargetY,
         dx, dy, px, py, distance, controlPoint,
         count, id,
       })
     : calculateStraightPath({
-        sourceX: finalSourceX, sourceY: finalSourceY,
-        targetX: finalTargetX, targetY: finalTargetY,
+        sourceX: drawSourceX, sourceY: drawSourceY,
+        targetX: drawTargetX, targetY: drawTargetY,
         dx, dy, px, py, distance,
         count, id,
         parallelIndex: data?.parallelIndex ?? 0,
@@ -331,11 +394,33 @@ export function UMLRelationship({
   const getRelationshipStyle = (useHighlight: boolean = isHighlighted) => {
     const strokeColor = getHighlightColor(useHighlight, isHovered);
     const strokeWidth = getStrokeWidth(useHighlight, isHovered);
-    const markerSuffix = getMarkerSuffix(useHighlight, isHovered);
     const relationshipType = data?.relationshipType;
-    
-    return buildRelationshipStyle(strokeColor, strokeWidth, markerSuffix, relationshipType);
+
+    return buildRelationshipStyle(strokeColor, strokeWidth, relationshipType);
   };
+
+  const directionMarkerSide = getDirectionMarkerSide(data?.relationshipType);
+  const directionMarkerColor = getHighlightColor(isHighlighted, isHovered);
+  const directionMarkerAngle = Math.atan2(dy, dx) * (180 / Math.PI);
+  const directionMarkerLineAnchor = directionMarkerSide
+    ? {
+        x: directionMarkerSide === 'start' ? drawSourceX : drawTargetX,
+        y: directionMarkerSide === 'start' ? drawSourceY : drawTargetY,
+      }
+    : null;
+  const directionMarkerPos = directionMarkerSide && directionMarkerLineAnchor && data?.relationshipType
+    ? directionMarkerAnchor(
+        directionMarkerLineAnchor,
+        ux,
+        uy,
+        directionMarkerSide,
+        directionMarkerSize(data.relationshipType),
+      )
+    : null;
+  const directionMarkerRotation = directionMarkerAngle;
+  const directionMarkerGraphic = data?.relationshipType
+    ? directionMarkerContent(data.relationshipType, directionMarkerColor)
+    : null;
 
   const getRelationshipLabel = () => {
     // Use only provided custom label; avoid non-UML icon placeholders
@@ -345,68 +430,6 @@ export function UMLRelationship({
 
   return (
     <>
-      <defs>
-        {/* Inheritance — hollow equilateral triangle, navy default */}
-        <marker id="arrowhead-inheritance" viewBox="0 0 12 12" refX="12" refY="6" markerWidth="13" markerHeight="13" orient="auto">
-          <path d="M 0 0 L 12 6 L 0 12 z" fill="#ffffff" stroke={EDGE_DEFAULT} strokeWidth="1.5" />
-        </marker>
-        <marker id="arrowhead-inheritance-hover" viewBox="0 0 12 12" refX="12" refY="6" markerWidth="13" markerHeight="13" orient="auto">
-          <path d="M 0 0 L 12 6 L 0 12 z" fill="#ffffff" stroke={EDGE_SELECT_HOVER} strokeWidth="1.5" />
-        </marker>
-        <marker id="arrowhead-inheritance-selected" viewBox="0 0 12 12" refX="12" refY="6" markerWidth="13" markerHeight="13" orient="auto">
-          <path d="M 0 0 L 12 6 L 0 12 z" fill="#ffffff" stroke={EDGE_SELECT} strokeWidth="1.5" />
-        </marker>
-
-        {/* Realization — hollow triangle + dashed line */}
-        <marker id="arrowhead-realization" viewBox="0 0 12 12" refX="12" refY="6" markerWidth="13" markerHeight="13" orient="auto">
-          <path d="M 0 0 L 12 6 L 0 12 z" fill="#ffffff" stroke={EDGE_DEFAULT} strokeWidth="1.5" />
-        </marker>
-        <marker id="arrowhead-realization-hover" viewBox="0 0 12 12" refX="12" refY="6" markerWidth="13" markerHeight="13" orient="auto">
-          <path d="M 0 0 L 12 6 L 0 12 z" fill="#ffffff" stroke={EDGE_SELECT_HOVER} strokeWidth="1.5" />
-        </marker>
-        <marker id="arrowhead-realization-selected" viewBox="0 0 12 12" refX="12" refY="6" markerWidth="13" markerHeight="13" orient="auto">
-          <path d="M 0 0 L 12 6 L 0 12 z" fill="#ffffff" stroke={EDGE_SELECT} strokeWidth="1.5" />
-        </marker>
-
-        {/* Aggregation — hollow diamond */}
-        <marker id="diamond-aggregation" viewBox="0 0 14 14" refX="1" refY="7" markerWidth="22" markerHeight="22" orient="auto">
-          <path d="M 7 1 L 13 7 L 7 13 L 1 7 Z" fill="#ffffff" stroke={EDGE_DEFAULT} strokeWidth="1.5" />
-        </marker>
-        <marker id="diamond-aggregation-hover" viewBox="0 0 14 14" refX="1" refY="7" markerWidth="22" markerHeight="22" orient="auto">
-          <path d="M 7 1 L 13 7 L 7 13 L 1 7 Z" fill="#ffffff" stroke={EDGE_SELECT_HOVER} strokeWidth="1.5" />
-        </marker>
-        <marker id="diamond-aggregation-selected" viewBox="0 0 14 14" refX="1" refY="7" markerWidth="22" markerHeight="22" orient="auto">
-          <path d="M 7 1 L 13 7 L 7 13 L 1 7 Z" fill="#ffffff" stroke={EDGE_SELECT} strokeWidth="1.5" />
-        </marker>
-
-        {/* Composition — filled navy diamond */}
-        <marker id="diamond-composition" viewBox="0 0 14 14" refX="1" refY="7" markerWidth="22" markerHeight="22" orient="auto">
-          <path d="M 7 1 L 13 7 L 7 13 L 1 7 Z" fill={EDGE_DEFAULT} stroke={EDGE_DEFAULT} strokeWidth="1" />
-        </marker>
-        <marker id="diamond-composition-hover" viewBox="0 0 14 14" refX="1" refY="7" markerWidth="22" markerHeight="22" orient="auto">
-          <path d="M 7 1 L 13 7 L 7 13 L 1 7 Z" fill={EDGE_SELECT_HOVER} />
-        </marker>
-        <marker id="diamond-composition-selected" viewBox="0 0 14 14" refX="1" refY="7" markerWidth="22" markerHeight="22" orient="auto">
-          <path d="M 7 1 L 13 7 L 7 13 L 1 7 Z" fill={EDGE_SELECT} />
-        </marker>
-
-        {/* Association — filled navy arrowhead */}
-        <marker id="arrowhead-association" viewBox="0 0 12 12" refX="12" refY="6" markerWidth="13" markerHeight="13" orient="auto">
-          <path d="M 0 0 L 12 6 L 0 12 z" fill={EDGE_DEFAULT} />
-        </marker>
-
-        {/* Dependency — open V arrow */}
-        <marker id="arrowhead-open-dependency" viewBox="0 0 12 12" refX="12" refY="6" markerWidth="13" markerHeight="13" orient="auto">
-          <path d="M 0 1 L 11 6 L 0 11" fill="none" stroke={EDGE_DEFAULT} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-        </marker>
-        <marker id="arrowhead-open-dependency-hover" viewBox="0 0 12 12" refX="12" refY="6" markerWidth="13" markerHeight="13" orient="auto">
-          <path d="M 0 1 L 11 6 L 0 11" fill="none" stroke={EDGE_SELECT_HOVER} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-        </marker>
-        <marker id="arrowhead-open-dependency-selected" viewBox="0 0 12 12" refX="12" refY="6" markerWidth="13" markerHeight="13" orient="auto">
-          <path d="M 0 1 L 11 6 L 0 11" fill="none" stroke={EDGE_SELECT} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-        </marker>
-      </defs>
-
       {/* White underlay halo so lines don't bleed into each other at crossings */}
       <path
         id={`${id}-underlay`}
@@ -467,9 +490,37 @@ export function UMLRelationship({
       {/* Multiplicity badges are rendered via EdgeLabelRenderer (below) so they
           always appear above node boxes — nothing to render in the SVG layer here */}
 
-      {/* ── Multiplicity badges — rendered in EdgeLabelRenderer so they are
-          always painted above every node box (React Flow's HTML overlay layer) */}
+      {/* Direction markers are rendered in EdgeLabelRenderer so arrows/diamonds stay
+          visible above HTML node boxes without requiring hover. */}
       <EdgeLabelRenderer>
+        {directionMarkerSide && data?.relationshipType && directionMarkerGraphic && directionMarkerPos && (
+          <div
+            key={`${id}-direction-marker`}
+            data-testid={`${id}-direction-marker`}
+            className="nodrag nopan"
+            style={{
+              position: 'absolute',
+              left: directionMarkerPos.x,
+              top: directionMarkerPos.y,
+              transform: `translate(-50%, -50%) rotate(${directionMarkerRotation}deg)`,
+              pointerEvents: 'none',
+              zIndex: 1001,
+              lineHeight: 0,
+            }}
+          >
+            <svg
+              width={directionMarkerSize(data.relationshipType)}
+              height={directionMarkerSize(data.relationshipType)}
+              viewBox={directionMarkerViewBox(data.relationshipType)}
+              overflow="visible"
+              aria-hidden
+            >
+              {directionMarkerGraphic}
+            </svg>
+          </div>
+        )}
+
+        {/* Multiplicity badges — always painted above every node box */}
         {(data?.sourceMultiplicity !== undefined && data?.sourceMultiplicity !== null && data?.sourceMultiplicity !== '') && (() => {
           const srcMult = String(data.sourceMultiplicity);
           const sp = calculateMultiplicityPosition(finalSourceX, finalSourceY, startSegDx, startSegDy, 'start');
@@ -477,10 +528,13 @@ export function UMLRelationship({
           return (
             <div
               key={`${id}-src-mult`}
+              onMouseEnter={() => setIsHovered(true)}
+              onMouseLeave={() => setIsHovered(false)}
               style={{
                 position: 'absolute',
                 transform: `translate(-50%, -50%) translate(${sp.x}px, ${sp.y}px)`,
-                pointerEvents: 'none',
+                pointerEvents: 'auto',
+                cursor: 'pointer',
                 zIndex: 1000,
                 background: 'white',
                 border: `1.5px solid ${edgeColor}`,
@@ -508,10 +562,13 @@ export function UMLRelationship({
           return (
             <div
               key={`${id}-tgt-mult`}
+              onMouseEnter={() => setIsHovered(true)}
+              onMouseLeave={() => setIsHovered(false)}
               style={{
                 position: 'absolute',
                 transform: `translate(-50%, -50%) translate(${tp.x}px, ${tp.y}px)`,
-                pointerEvents: 'none',
+                pointerEvents: 'auto',
+                cursor: 'pointer',
                 zIndex: 1000,
                 background: 'white',
                 border: `1.5px solid ${edgeColor}`,

@@ -78,4 +78,30 @@ describe('CanvasProjectTabs', () => {
     fireEvent.click(screen.getByText('Add project'));
     expect(onSelectProject).toHaveBeenCalledWith(99, 'New');
   });
+
+  it('enables horizontal scroll and trackpad hint when more than four tabs are open', () => {
+    const manyTabs = Array.from({ length: 5 }, (_, i) => ({
+      instanceId: `inst-${i + 1}`,
+      projectId: i + 1,
+      name: `Project ${i + 1}`,
+    }));
+
+    render(
+      <CanvasProjectTabs
+        tabs={manyTabs}
+        activeInstanceId="inst-1"
+        openProjectIds={manyTabs.map(t => t.projectId)}
+        onActivate={jest.fn()}
+        onRequestClose={jest.fn()}
+        onSelectProject={jest.fn()}
+      />,
+    );
+
+    const tabList = screen.getByRole('tablist');
+    expect(tabList).toHaveStyle({ overflowX: 'scroll' });
+    expect(tabList).toHaveAttribute(
+      'title',
+      'Scroll with two fingers on your trackpad to see more tabs',
+    );
+  });
 });

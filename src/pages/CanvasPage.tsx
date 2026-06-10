@@ -32,8 +32,8 @@ import { syncVsumWorkspaceChanges } from '../utils/vsumSyncSave';
 import { USER_PROFILE_DESCRIPTION, USER_PROFILE_LABEL } from '../constants/accountLabels';
 
 const MODE_TOGGLE_TOP = 14;
-const MODE_TOGGLE_HEIGHT = 52;
-const PROJECT_TABS_HEIGHT = 32;
+const MODE_TOGGLE_HEIGHT = 44;
+const PROJECT_TABS_HEIGHT = 38;
 const CENTER_STACK_BOTTOM = MODE_TOGGLE_TOP + MODE_TOGGLE_HEIGHT + 4 + PROJECT_TABS_HEIGHT;
 
 type UMLPanel = CanvasUmlPanelState;
@@ -77,6 +77,10 @@ export const CanvasPage: React.FC = () => {
   const prevActiveInstanceIdRef = useRef<string | null>(null);
   const openTabsRef = useRef(openTabs);
   openTabsRef.current = openTabs;
+  const activeInstanceIdRef = useRef(activeInstanceId);
+  activeInstanceIdRef.current = activeInstanceId;
+  const loadingTabRef = useRef<string | null>(null);
+  const loadedTabsRef = useRef<Set<string>>(new Set());
   const [closeConfirmInstanceId, setCloseConfirmInstanceId] = useState<string | null>(null);
   const [closeConfirmSaving, setCloseConfirmSaving] = useState(false);
   const [dirtyRevision, setDirtyRevision] = useState(0);
@@ -128,6 +132,18 @@ export const CanvasPage: React.FC = () => {
     if (!session) return false;
     return !workspaceSnapshotsEqual(baseline, session.workspaceSnapshot);
   }, [activeInstanceId, getLiveSnapshot]);
+
+  const clearCanvasWorkspace = useCallback(() => {
+    flowCanvasRef.current?.loadDiagramData?.([], []);
+    setDrawerModels([]);
+    setMyLibraryModels([]);
+    setPublicLibraryModels([]);
+    setAddedModelIds(new Set());
+    setUmlPanels([]);
+    setTopPanelId(null);
+    setShowDrawer(false);
+    setEditingName(false);
+  }, []);
 
   const applyTabSession = useCallback((session: CanvasTabSession) => {
     setVsumName(session.vsumName);
@@ -181,6 +197,7 @@ export const CanvasPage: React.FC = () => {
   const performCloseTab = useCallback((instanceId: string) => {
     sessionsRef.current.delete(instanceId);
     savedBaselinesRef.current.delete(instanceId);
+    loadedTabsRef.current.delete(instanceId);
     setOpenTabs(prev => {
       const filtered = prev.filter(t => t.instanceId !== instanceId);
       setActiveInstanceId(current => {
@@ -265,8 +282,10 @@ export const CanvasPage: React.FC = () => {
     });
   }, [id, createInstanceId]);
 
-  const loadVsum = useCallback(async (vsumId: number) => {
+  const loadVsum = useCallback(async (vsumId: number, forInstanceId?: string) => {
     setLoadingProject(true);
+    clearCanvasWorkspace();
+    globalThis.dispatchEvent(new CustomEvent('vitruv.resetWorkspace'));
 
     // Drop cached tab session so reopen/refresh always reloads from the server.
     for (const tab of openTabsRef.current) {
@@ -274,9 +293,13 @@ export const CanvasPage: React.FC = () => {
         sessionsRef.current.delete(tab.instanceId);
       }
     }
+    if (forInstanceId) {
+      sessionsRef.current.delete(forInstanceId);
+    }
 
     try {
       const response = await apiService.getVsumDetails(vsumId);
+      if (forInstanceId && activeInstanceIdRef.current !== forInstanceId) return;
       const details: VsumDetails = response.data;
       setVsumName(details.name);
       updateTabName(vsumId, details.name);
@@ -321,8 +344,12 @@ export const CanvasPage: React.FC = () => {
         pubRes.status === 'fulfilled' ? (pubRes.value.data || []).map(toDrawer) : [],
       );
 
+      if (forInstanceId && activeInstanceIdRef.current !== forInstanceId) return;
+
       globalThis.dispatchEvent(new CustomEvent('vitruv.resetWorkspace'));
       await new Promise(r => setTimeout(r, 100));
+
+      if (forInstanceId && activeInstanceIdRef.current !== forInstanceId) return;
 
       for (const model of details.metaModels || []) {
         if (model.ecoreFileId) {
@@ -349,10 +376,14 @@ export const CanvasPage: React.FC = () => {
         }
       }
 
+      if (forInstanceId && activeInstanceIdRef.current !== forInstanceId) return;
+
       await waitForMetaModelsOnCanvas(
         () => flowCanvasRef.current?.getNodes?.() ?? [],
         details.metaModels ?? [],
       );
+
+      if (forInstanceId && activeInstanceIdRef.current !== forInstanceId) return;
 
       if (details.metaModelsRelation?.length) {
         globalThis.dispatchEvent(new CustomEvent('vitruv.loadMetaModelRelations', {
@@ -364,16 +395,23 @@ export const CanvasPage: React.FC = () => {
         await new Promise(r => setTimeout(r, 150));
       }
 
+      if (forInstanceId && activeInstanceIdRef.current !== forInstanceId) return;
+
       const tab = openTabsRef.current.find(t => t.projectId === vsumId);
       if (tab) {
         setBaselineForInstance(tab.instanceId, workspaceSnapshotFromVsumDetails(details));
+        if (!forInstanceId || activeInstanceIdRef.current === forInstanceId) {
+          loadedTabsRef.current.add(tab.instanceId);
+        }
       }
     } catch (e) {
       console.error('Failed to load VSUM:', e);
     } finally {
-      setLoadingProject(false);
+      if (!forInstanceId || activeInstanceIdRef.current === forInstanceId) {
+        setLoadingProject(false);
+      }
     }
-  }, [setBaselineForInstance, updateTabName]);
+  }, [clearCanvasWorkspace, setBaselineForInstance, updateTabName]);
 
   // Switch tabs: capture leaving tab, restore or load active tab
   useEffect(() => {
@@ -383,7 +421,7 @@ export const CanvasPage: React.FC = () => {
       const previousId = prevActiveInstanceIdRef.current;
       const nextId = activeInstanceId;
 
-      if (previousId && previousId !== nextId) {
+      if (previousId && previousId !== nextId && loadingTabRef.current !== previousId) {
         const session = captureRef.current();
         const tabStillOpen = openTabsRef.current.some(t => t.instanceId === previousId);
         if (!cancelled && tabStillOpen) {
@@ -395,20 +433,33 @@ export const CanvasPage: React.FC = () => {
       if (!nextId) return;
 
       const cached = sessionsRef.current.get(nextId);
-      if (cached) {
+      if (cached && loadedTabsRef.current.has(nextId)) {
         applyRef.current(cached);
         return;
       }
+      sessionsRef.current.delete(nextId);
 
       const tab = openTabsRef.current.find(t => t.instanceId === nextId);
       if (tab) {
-        await loadVsum(tab.projectId);
+        sessionsRef.current.delete(nextId);
+        if (!cancelled) {
+          loadingTabRef.current = nextId;
+          clearCanvasWorkspace();
+          globalThis.dispatchEvent(new CustomEvent('vitruv.resetWorkspace'));
+        }
+        try {
+          await loadVsum(tab.projectId, nextId);
+        } finally {
+          if (loadingTabRef.current === nextId) {
+            loadingTabRef.current = null;
+          }
+        }
       }
     };
 
     run();
     return () => { cancelled = true; };
-  }, [activeInstanceId, loadVsum]);
+  }, [activeInstanceId, clearCanvasWorkspace, loadVsum]);
 
   // ── Rename VSUM ───────────────────────────────────────────────────────────
 
@@ -492,7 +543,6 @@ export const CanvasPage: React.FC = () => {
   useEffect(() => {
     const handleReset = () => {
       flowCanvasRef.current?.loadDiagramData?.([], []);
-      flowCanvasRef.current?.resetExpandedFile?.();
       // addedModelIds clears automatically via onDiagramChange when nodes become []
     };
     const handleAddFile = (e: Event) => {
@@ -672,6 +722,7 @@ export const CanvasPage: React.FC = () => {
           panelHeight={panel.height}
           onClose={closePanel}
           onFocus={focusPanel}
+          onHome={() => navigate('/')}
           zIndex={panelZBase + (topPanelId === panel.id ? umlPanels.length : idx)}
         />
       ))}
@@ -742,7 +793,7 @@ export const CanvasPage: React.FC = () => {
         nameInput={nameInput}
         savingName={savingName}
         onBack={() => navigate('/')}
-        onRefresh={() => activeProjectId && loadVsum(activeProjectId)}
+        onRefresh={() => activeProjectId && loadVsum(activeProjectId, activeInstanceId ?? undefined)}
         onSelectProject={handleSelectProject}
         onStartRename={startRename}
         onNameInputChange={setNameInput}
@@ -832,7 +883,7 @@ const LeftPill: React.FC<LeftPillProps> = ({
       title="Back to overview"
       onClick={onBack}
       style={{
-        width: 28, height: 28, borderRadius: 6, flexShrink: 0,
+        width: 24, height: 24, borderRadius: 6, flexShrink: 0,
         margin: '0 4px', cursor: 'pointer',
         transition: 'opacity 0.15s',
       }}
@@ -980,7 +1031,7 @@ const RightPill: React.FC = () => {
             <UserAvatar
               initials={c.initials}
               bg={c.color}
-              size={30}
+              size={26}
               ring={'ringColor' in c ? (c as typeof myAccount).ringColor : undefined}
             />
           </div>
@@ -988,7 +1039,7 @@ const RightPill: React.FC = () => {
         {overflowCount > 0 && (
           <div style={{ marginLeft: -8, zIndex: 0 }}>
             <div style={{
-              width: 30, height: 30, borderRadius: '50%',
+              width: 26, height: 26, borderRadius: '50%',
               background: '#e2e8f0', color: '#475569',
               fontSize: 11, fontWeight: 700,
               display: 'flex', alignItems: 'center', justifyContent: 'center',
@@ -1012,7 +1063,7 @@ const RightPill: React.FC = () => {
           <UserAvatar
             initials={myAccount.initials}
             bg={myAccount.color}
-            size={32}
+            size={28}
             ring={myAccount.ringColor}
           />
         </div>
@@ -1219,9 +1270,9 @@ const ShareBtn: React.FC = () => {
       onMouseEnter={() => setHov(true)}
       onMouseLeave={() => setHov(false)}
       style={{
-        height: 34, padding: '0 14px', border: 'none', borderRadius: 6,
+        height: 30, padding: '0 12px', border: 'none', borderRadius: 6,
         background: hov ? '#038472' : '#049484',
-        color: '#ffffff', fontSize: 13, fontWeight: 700,
+        color: '#ffffff', fontSize: 12, fontWeight: 700,
         cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 5,
         whiteSpace: 'nowrap', transition: 'background 0.15s', flexShrink: 0,
       }}
@@ -1404,13 +1455,13 @@ const pillStyle = (side: 'left' | 'right'): React.CSSProperties => ({
   boxShadow: '0 4px 16px rgba(0,0,0,0.13), 0 0 0 1px rgba(0,0,0,0.07)',
   display: 'flex',
   alignItems: 'center',
-  height: 52,
-  padding: '0 8px',
+  height: 44,
+  padding: '0 6px',
   gap: 2,
 });
 
 const Divider = () => (
-  <div style={{ width: 1, height: 26, background: '#e2e8f0', margin: '0 6px', flexShrink: 0 }} />
+  <div style={{ width: 1, height: 22, background: '#e2e8f0', margin: '0 5px', flexShrink: 0 }} />
 );
 
 interface PillBtnProps {
@@ -1430,7 +1481,7 @@ const PillBtn: React.FC<PillBtnProps> = ({ onClick, title, children, active, spi
       onMouseEnter={() => setHov(true)}
       onMouseLeave={() => setHov(false)}
       style={{
-        position: 'relative', width: 40, height: 40, border: 'none', borderRadius: 6,
+        position: 'relative', width: 34, height: 34, border: 'none', borderRadius: 6,
         background: active ? '#049484' : hov ? '#f1f5f9' : 'transparent',
         color: active ? '#ffffff' : hov ? '#1e293b' : '#475569',
         cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
