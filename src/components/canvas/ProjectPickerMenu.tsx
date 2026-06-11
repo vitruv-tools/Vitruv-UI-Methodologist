@@ -4,6 +4,9 @@ import { apiService } from '../../services/api';
 import { Vsum } from '../../types';
 
 const MENU_Z_INDEX = 10500;
+const MAX_VISIBLE_PROJECTS = 4;
+const PROJECT_ROW_HEIGHT = 54;
+const PROJECT_LIST_MAX_HEIGHT = MAX_VISIBLE_PROJECTS * PROJECT_ROW_HEIGHT;
 
 export interface ProjectPickerItem {
   id: number;
@@ -72,6 +75,11 @@ export const ProjectPickerMenu: React.FC<ProjectPickerMenuProps> = ({
     return () => globalThis.clearTimeout(timer);
   }, [open, search, loadProjects]);
 
+  const closeMenu = useCallback(() => {
+    setOpen(false);
+    setSearch('');
+  }, []);
+
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       const target = event.target as Node;
@@ -81,17 +89,25 @@ export const ProjectPickerMenu: React.FC<ProjectPickerMenuProps> = ({
       ) {
         return;
       }
-      setOpen(false);
+      closeMenu();
     };
     if (open) {
-      document.addEventListener('mousedown', handleClickOutside);
+      document.addEventListener('mousedown', handleClickOutside, true);
     }
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, [open]);
+    return () => document.removeEventListener('mousedown', handleClickOutside, true);
+  }, [open, closeMenu]);
+
+  useEffect(() => {
+    if (!open) return;
+    const handleEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') closeMenu();
+    };
+    document.addEventListener('keydown', handleEscape);
+    return () => document.removeEventListener('keydown', handleEscape);
+  }, [open, closeMenu]);
 
   const handleSelect = (project: Vsum) => {
-    setOpen(false);
-    setSearch('');
+    closeMenu();
     onSelectProject({ id: project.id, name: project.name });
   };
 
@@ -120,25 +136,37 @@ export const ProjectPickerMenu: React.FC<ProjectPickerMenuProps> = ({
   }, [open, updateMenuPosition]);
 
   const menu = open ? (
-    <div
-      ref={menuRef}
-      role="listbox"
-      style={{
-        position: 'fixed',
-        top: menuPos.top,
-        left: menuPos.left,
-        width: 320,
-        maxHeight: 360,
-        overflow: 'hidden',
-        display: 'flex',
-        flexDirection: 'column',
-        background: '#ffffff',
-        border: '1px solid #e2e8f0',
-        borderRadius: 10,
-        boxShadow: '0 16px 40px rgba(0,0,0,0.16)',
-        zIndex: MENU_Z_INDEX,
-      }}
-    >
+    <>
+      <div
+        aria-hidden
+        style={{
+          position: 'fixed',
+          inset: 0,
+          zIndex: MENU_Z_INDEX - 1,
+          background: 'transparent',
+        }}
+        onMouseDown={closeMenu}
+      />
+      <div
+        ref={menuRef}
+        role="listbox"
+        onMouseDown={e => e.stopPropagation()}
+        style={{
+          position: 'fixed',
+          top: menuPos.top,
+          left: menuPos.left,
+          width: 320,
+          maxHeight: 360,
+          overflow: 'hidden',
+          display: 'flex',
+          flexDirection: 'column',
+          background: '#ffffff',
+          border: '1px solid #e2e8f0',
+          borderRadius: 10,
+          boxShadow: '0 16px 40px rgba(0,0,0,0.16)',
+          zIndex: MENU_Z_INDEX,
+        }}
+      >
       <div style={{ padding: '10px 12px', borderBottom: '1px solid #f1f5f9' }}>
         <div style={{ fontSize: 11, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 8 }}>
           Your projects
@@ -160,7 +188,18 @@ export const ProjectPickerMenu: React.FC<ProjectPickerMenuProps> = ({
           }}
         />
       </div>
-      <div style={{ overflowY: 'auto', flex: 1, padding: 6 }}>
+      <div
+        className="project-picker-scroll"
+        title={projects.length > MAX_VISIBLE_PROJECTS ? 'Scroll with two fingers on your trackpad to see more projects' : undefined}
+        style={{
+          overflowY: projects.length > MAX_VISIBLE_PROJECTS ? 'scroll' : 'auto',
+          flex: 1,
+          padding: 6,
+          maxHeight: PROJECT_LIST_MAX_HEIGHT,
+          scrollbarWidth: 'thin',
+          overscrollBehavior: 'contain',
+        }}
+      >
         {loading && (
           <div style={{ padding: '14px 12px', fontSize: 13, color: '#64748b' }}>Loading projects…</div>
         )}
@@ -257,7 +296,8 @@ export const ProjectPickerMenu: React.FC<ProjectPickerMenuProps> = ({
           );
         })}
       </div>
-    </div>
+      </div>
+    </>
   ) : null;
 
   return (
@@ -281,8 +321,8 @@ export const ProjectPickerMenu: React.FC<ProjectPickerMenuProps> = ({
           alignItems: 'center',
           gap: 6,
           maxWidth: isCompact ? undefined : 220,
-          padding: isCompact ? '0 12px' : '4px 8px',
-          height: isCompact ? 40 : undefined,
+          padding: isCompact ? '0 12px' : '2px 8px',
+          height: 34,
           border: isCompact ? '1px solid transparent' : 'none',
           borderRadius: 6,
           background: open ? '#f0fdfc' : 'transparent',
@@ -326,6 +366,16 @@ export const ProjectPickerMenu: React.FC<ProjectPickerMenuProps> = ({
           </>
         )}
       </button>
+
+      <style>{`
+        .project-picker-scroll::-webkit-scrollbar { width: 8px; }
+        .project-picker-scroll::-webkit-scrollbar-track { background: #f1f5f9; border-radius: 4px; }
+        .project-picker-scroll::-webkit-scrollbar-thumb {
+          background: #cbd5e1;
+          border-radius: 4px;
+        }
+        .project-picker-scroll::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+      `}</style>
 
       {menu && ReactDOM.createPortal(menu, document.body)}
     </div>

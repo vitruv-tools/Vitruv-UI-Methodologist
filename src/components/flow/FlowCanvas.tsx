@@ -1560,13 +1560,14 @@ export const FlowCanvas = forwardRef<{
 
     const resetExpandedFile = useCallback(() => {
       setExpandedFileId(null);
-      const updatedNodes = nodes.map(n =>
-        n.type === 'ecoreFile'
-          ? { ...n, data: { ...n.data, isExpanded: false } }
-          : n
+      setNodes(current =>
+        current.map(n =>
+          n.type === 'ecoreFile'
+            ? { ...n, data: { ...n.data, isExpanded: false } }
+            : n,
+        ),
       );
-      setNodes(updatedNodes);
-    }, [nodes, setNodes]);
+    }, [setNodes]);
 
     const addEcoreFile = useCallback((fileName: string, fileContent: string, meta?: any) => {
       const ecoreNodes = nodes.filter(n => n.type === 'ecoreFile');
@@ -2660,14 +2661,14 @@ export const FlowCanvas = forwardRef<{
               background: '#ffffff',
               borderRadius: 8,
               boxShadow: '0 4px 16px rgba(0,0,0,0.13), 0 0 0 1px rgba(0,0,0,0.07)',
-              height: 52,
-              padding: '0 5px',
+              height: 44,
+              padding: '0 4px',
               gap: 2,
             }}
           >
             {([
-              { label: 'Modeling',   icon: <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="9" y1="21" x2="9" y2="9"/></svg>, active: !circleVisible },
-              { label: 'View Types', icon: <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="9"/><line x1="12" y1="3" x2="12" y2="21"/><line x1="3" y1="12" x2="21" y2="12"/></svg>, active: circleVisible },
+              { label: 'Modeling',   icon: <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="9" y1="21" x2="9" y2="9"/></svg>, active: !circleVisible },
+              { label: 'View Types', icon: <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="9"/><line x1="12" y1="3" x2="12" y2="21"/><line x1="3" y1="12" x2="21" y2="12"/></svg>, active: circleVisible },
             ] as const).map(({ label, icon, active }) => (
               <button
                 key={label}
@@ -2677,14 +2678,14 @@ export const FlowCanvas = forwardRef<{
                   if (!next && circleSelected) setCircleSelected(false);
                 }}
                 style={{
-                  display: 'flex', alignItems: 'center', gap: 7,
-                  height: 40,
-                  padding: '0 16px',
+                  display: 'flex', alignItems: 'center', gap: 6,
+                  height: 34,
+                  padding: '0 14px',
                   border: active ? '1px solid #049484' : '1px solid transparent',
                   borderRadius: 6,
                   background: active ? '#049484' : 'transparent',
                   color: active ? '#ffffff' : '#64748b',
-                  fontSize: 13,
+                  fontSize: 12,
                   fontWeight: 600,
                   cursor: 'pointer',
                   transition: 'all 0.15s',

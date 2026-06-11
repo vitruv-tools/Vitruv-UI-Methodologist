@@ -88,6 +88,84 @@ describe('UMLRelationship', () => {
     expect(screen.queryByText('1..*')).toBeNull();
   });
 
+  it('renders a direction marker by default for association edges', () => {
+    render(
+      <svg>
+        <UMLRelationship
+          id="edge-arrow"
+          source="s1"
+          target="t1"
+          sourceX={0}
+          sourceY={0}
+          targetX={200}
+          targetY={0}
+          data={{ relationshipType: 'association' }}
+          selected={false}
+          style={{}}
+        />
+      </svg>,
+    );
+
+    const marker = screen.getByTestId('edge-arrow-direction-marker');
+    expect(marker).toBeInTheDocument();
+    const path = marker.querySelector('path');
+    expect(path).not.toBeNull();
+    expect(path?.getAttribute('fill')).toBe('#0c436e');
+  });
+
+  it('renders a direction marker by default for composition edges', () => {
+    render(
+      <svg>
+        <UMLRelationship
+          id="edge-compose"
+          source="s1"
+          target="t1"
+          sourceX={0}
+          sourceY={0}
+          targetX={200}
+          targetY={0}
+          data={{ relationshipType: 'composition' }}
+          selected={false}
+          style={{}}
+        />
+      </svg>,
+    );
+
+    expect(screen.getByTestId('edge-compose-direction-marker')).toBeInTheDocument();
+  });
+
+  it('highlights edge when hovering a multiplicity badge', () => {
+    const { container } = render(
+      <svg>
+        <UMLRelationship
+          id="edge-hover-mult"
+          source="s1"
+          target="t1"
+          sourceX={0}
+          sourceY={0}
+          targetX={200}
+          targetY={0}
+          data={{
+            relationshipType: 'association',
+            sourceMultiplicity: '1',
+            targetMultiplicity: '0..*',
+          }}
+          selected={false}
+          style={{}}
+        />
+      </svg>,
+    );
+
+    const path = container.querySelector('path#edge-hover-mult') as SVGPathElement;
+    expect(path?.style.stroke).toBe('#0c436e');
+
+    fireEvent.mouseEnter(screen.getByText('1'));
+    expect(path?.style.stroke).toBe('#ef4444');
+
+    fireEvent.mouseLeave(screen.getByText('1'));
+    expect(path?.style.stroke).toBe('#0c436e');
+  });
+
   it('uses red stroke when selected', () => {
     const { container } = render(
       <svg>

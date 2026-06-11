@@ -5,6 +5,7 @@ import {
   flowNodeLayoutKey,
   hasSavedUmlLayout,
   loadUmlLayout,
+  loadUmlViewport,
   positionsFromFlowNodes,
   positionsFromUmlClasses,
   saveUmlLayout,
@@ -100,6 +101,15 @@ describe('umlLayoutStorage', () => {
       },
     ] as any[]);
     expect(nodes[0].position).toEqual({ x: 5, y: 6 });
+  });
+
+  it('round-trips viewport pan/zoom with class positions', () => {
+    const classes = [{ id: 'A', x: 100, y: 200 }];
+    saveUmlLayout(scopeId, fileName, {
+      ...positionsFromUmlClasses(classes),
+      __viewport__: { x: -40, y: 60, scale: 1.25 },
+    });
+    expect(loadUmlViewport(scopeId, fileName)).toEqual({ x: -40, y: 60, scale: 1.25 });
   });
 
   it('round-trips UMLDiagram class positions', () => {

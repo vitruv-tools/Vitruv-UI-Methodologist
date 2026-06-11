@@ -18,6 +18,7 @@ jest.mock('../../../components/canvas/UMLDiagram', () => {
         zoomIn: jest.fn(),
         zoomOut: jest.fn(),
         fitToView: jest.fn(),
+        flushLayout: jest.fn(),
       }));
       return createElement('div', { 'data-testid': 'uml-diagram' });
     }),
@@ -72,20 +73,39 @@ describe('FloatingUMLPanel', () => {
     expect(lastDiagramProps.ecoreContent).toBe('<xml/>');
   });
 
-  it('calls onClose with the panel id when the close button is clicked', () => {
+  it('calls onClose with the panel id when the back button is clicked', () => {
     const onClose = jest.fn();
     render(<FloatingUMLPanel {...defaultProps} onClose={onClose} />);
-    fireEvent.click(screen.getByTitle('Close'));
+    fireEvent.click(screen.getByTitle('Back to canvas'));
     expect(onClose).toHaveBeenCalledWith('panel-1');
   });
 
-  it('calls onClose with the panel id when the backdrop is clicked', () => {
+  it('calls onHome when the logo is clicked', () => {
     const onClose = jest.fn();
-    const { container } = render(<FloatingUMLPanel {...defaultProps} onClose={onClose} />);
-    // createPortal is mocked to render inline: the fragment's first child is the backdrop.
-    // JSDOM serialises rgba() with spaces, so we target the element by position.
-    const backdrop = container.children[0] as HTMLElement;
-    fireEvent.click(backdrop);
+    const onHome = jest.fn();
+    render(<FloatingUMLPanel {...defaultProps} onClose={onClose} onHome={onHome} />);
+    fireEvent.click(screen.getByTitle('Back to overview'));
+    expect(onClose).toHaveBeenCalledWith('panel-1');
+    expect(onHome).toHaveBeenCalled();
+  });
+
+  it('shows Vitruvius logo, UML badge, and model title in the toolbar', () => {
+    render(<FloatingUMLPanel {...defaultProps} />);
+    expect(screen.getByTitle('Back to overview')).toBeInTheDocument();
+    expect(screen.getByText('UML')).toBeInTheDocument();
+    expect(screen.getByText('My Ecore Model')).toBeInTheDocument();
+    expect(screen.getByTestId('uml-page-toolbar')).toBeInTheDocument();
+  });
+
+  it('renders as a fullscreen page overlay', () => {
+    render(<FloatingUMLPanel {...defaultProps} />);
+    expect(screen.getByTestId('uml-fullscreen-page')).toBeInTheDocument();
+  });
+
+  it('calls onClose with the panel id when Escape is pressed', () => {
+    const onClose = jest.fn();
+    render(<FloatingUMLPanel {...defaultProps} onClose={onClose} />);
+    fireEvent.keyDown(window, { key: 'Escape' });
     expect(onClose).toHaveBeenCalledWith('panel-1');
   });
 

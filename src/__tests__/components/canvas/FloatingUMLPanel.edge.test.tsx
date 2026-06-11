@@ -16,6 +16,7 @@ jest.mock('../../../components/canvas/UMLDiagram', () => {
         zoomIn: jest.fn(),
         zoomOut: jest.fn(),
         fitToView: jest.fn(),
+        flushLayout: jest.fn(),
       }));
       return createElement('div', { 'data-testid': 'uml-diagram' });
     }),
@@ -58,10 +59,10 @@ describe('FloatingUMLPanel – title', () => {
 
 // ── close button hover ────────────────────────────────────────────────────────
 
-describe('FloatingUMLPanel – close button hover', () => {
-  it('does not throw on mouseEnter and mouseLeave of close button', () => {
+describe('FloatingUMLPanel – back button hover', () => {
+  it('does not throw on mouseEnter and mouseLeave of back button', () => {
     render(<FloatingUMLPanel {...mkProps()} />);
-    const closeBtn = screen.getByTitle('Close');
+    const closeBtn = screen.getByTitle('Back to canvas');
     expect(() => {
       fireEvent.mouseEnter(closeBtn);
       fireEvent.mouseLeave(closeBtn);
@@ -107,7 +108,7 @@ describe('FloatingUMLPanel – multiple instances', () => {
       </>,
     );
 
-    const closeBtns = getAllByTitle('Close');
+    const closeBtns = getAllByTitle('Back to canvas');
     fireEvent.click(closeBtns[0]);
     expect(onClose1).toHaveBeenCalledWith('a');
     expect(onClose2).not.toHaveBeenCalled();
