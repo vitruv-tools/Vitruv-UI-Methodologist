@@ -31,8 +31,8 @@ describe('fastLogin config', () => {
   // ── saveFastLoginRedirectUri / getSavedFastLoginRedirectUri ──────────────
 
   it('saves and retrieves redirect URI from sessionStorage', () => {
-    saveFastLoginRedirectUri('http://localhost:3000/auth/callback');
-    expect(getSavedFastLoginRedirectUri()).toBe('http://localhost:3000/auth/callback');
+    saveFastLoginRedirectUri('http://localhost:3000/login/callback');
+    expect(getSavedFastLoginRedirectUri()).toBe('http://localhost:3000/login/callback');
   });
 
   it('returns null when nothing is saved', () => {

@@ -47,7 +47,7 @@ function App() {
         <Routes>
           <Route path="/login" element={<AuthPage />} />
           <Route path="/auth" element={<KeycloakRedirect />} />
-          <Route path="/auth/callback" element={<FastLoginCallback />} />
+          <Route path="/login/callback" element={<FastLoginCallback />} />
           <Route path="/verify-otp" element={<OtpVerificationPage />} />
           <Route path="/" element={
             <ProtectedRoute>

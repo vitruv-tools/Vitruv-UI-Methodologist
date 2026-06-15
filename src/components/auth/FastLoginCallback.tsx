@@ -4,7 +4,7 @@ import { useFastLoginCallback } from '../../hooks/useFastLoginCallback';
 import './Auth.css';
 
 /**
- * OAuth callback page for Fast Login (/auth/callback?code=...).
+ * OAuth callback page for Fast Login (/login/callback?code=...).
  */
 export function FastLoginCallback() {
   const { isProcessing, error } = useFastLoginCallback();
