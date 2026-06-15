@@ -9,6 +9,7 @@ import {
   positionsFromFlowNodes,
   positionsFromUmlClasses,
   saveUmlLayout,
+  sanitizeUmlPositionMap,
   umlClassNodeId,
   umlLayoutStorageKey,
 } from '../../utils/umlLayoutStorage';
@@ -124,5 +125,24 @@ describe('umlLayoutStorage', () => {
     ] as any);
     expect(restored[0]).toMatchObject({ x: 100, y: 200 });
     expect(restored[1]).toMatchObject({ x: 300, y: 400 });
+  });
+
+  it('sanitizes unsafe layout keys and non-finite coordinates before save', () => {
+    saveUmlLayout(scopeId, fileName, {
+      Person: { x: 10, y: 20 },
+      '<script>': { x: 1, y: 2 },
+      Bad: { x: Number.NaN, y: 0 },
+    } as any);
+
+    const stored = loadUmlLayout(scopeId, fileName);
+    expect(stored).toEqual({ Person: { x: 10, y: 20 } });
+  });
+
+  it('sanitizeUmlPositionMap keeps only finite coordinates and safe keys', () => {
+    expect(sanitizeUmlPositionMap({
+      Order: { x: 1, y: 2 },
+      'evil key!': { x: 3, y: 4 },
+      Broken: { x: Infinity, y: 1 },
+    })).toEqual({ Order: { x: 1, y: 2 } });
   });
 });

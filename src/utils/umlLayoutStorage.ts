@@ -24,10 +24,45 @@ export function umlPackageNodeId(packageName: string): string {
 }
 
 export function umlLayoutStorageKey(scopeId: string, fileName: string): string {
-  return `${UML_LAYOUT_KEY_PREFIX}.${scopeId || 'default'}.${fileName}`;
+  const safeScope = sanitizeStorageSegment(scopeId || 'default', 'default');
+  const safeFile = sanitizeStorageSegment(fileName, 'diagram');
+  return `${UML_LAYOUT_KEY_PREFIX}.${safeScope}.${safeFile}`;
 }
 
-export type UmlPositionMap = Record<string, { x: number; y: number }>;
+export type UmlClassPosition = { x: number; y: number };
+export type UmlLayoutEntry = UmlClassPosition | UmlViewport;
+export type UmlPositionMap = Record<string, UmlLayoutEntry>;
+
+const SAFE_LAYOUT_KEY = /^[a-zA-Z0-9_.-]{1,128}$/;
+const SAFE_STORAGE_SEGMENT = /^[a-zA-Z0-9_.-]{1,200}$/;
+
+function sanitizeStorageSegment(value: string, fallback: string): string {
+  const trimmed = value.trim().slice(0, 200);
+  return SAFE_STORAGE_SEGMENT.test(trimmed) ? trimmed : fallback;
+}
+
+function isFiniteCoord(n: unknown): n is number {
+  return typeof n === 'number' && Number.isFinite(n);
+}
+
+/** Strip unexpected keys/values before persisting layout to localStorage. */
+export function sanitizeUmlPositionMap(positions: UmlPositionMap): UmlPositionMap {
+  const clean: UmlPositionMap = {};
+  for (const [key, val] of Object.entries(positions)) {
+    if (key === UML_VIEWPORT_KEY) {
+      const vp = val as unknown as UmlViewport;
+      if (isFiniteCoord(vp?.x) && isFiniteCoord(vp?.y) && isFiniteCoord(vp?.scale)) {
+        clean[UML_VIEWPORT_KEY] = { x: vp.x, y: vp.y, scale: vp.scale };
+      }
+      continue;
+    }
+    if (!SAFE_LAYOUT_KEY.test(key)) continue;
+    if (!val || !isFiniteCoord(val.x) || !isFiniteCoord(val.y)) continue;
+    if ('scale' in val && isFiniteCoord(val.scale)) continue;
+    clean[key] = { x: val.x, y: val.y };
+  }
+  return clean;
+}
 
 export function flowNodeLayoutKey(node: Node): string | null {
   if (node.type !== 'editable') return null;
@@ -62,7 +97,8 @@ function readRawPositionMap(scopeId: string, fileName: string): UmlPositionMap |
     const raw = localStorage.getItem(umlLayoutStorageKey(scopeId, fileName));
     if (!raw) return null;
     const parsed = JSON.parse(raw) as UmlPositionMap;
-    return parsed && typeof parsed === 'object' ? parsed : null;
+    if (!parsed || typeof parsed !== 'object') return null;
+    return sanitizeUmlPositionMap(parsed);
   } catch {
     return null;
   }
@@ -92,9 +128,13 @@ export function buildUmlLayoutPayload(
 }
 
 export function saveUmlLayout(scopeId: string, fileName: string, positions: UmlPositionMap): void {
-  if (!fileName || !hasClassLayoutKeys(positions)) return;
+  const sanitized = sanitizeUmlPositionMap(positions);
+  if (!fileName || !hasClassLayoutKeys(sanitized)) return;
   try {
-    localStorage.setItem(umlLayoutStorageKey(scopeId, fileName), JSON.stringify(positions));
+    localStorage.setItem(
+      umlLayoutStorageKey(scopeId, fileName),
+      JSON.stringify(sanitized),
+    );
   } catch {
     /* quota / private browsing */
   }
@@ -117,7 +157,7 @@ export function applyLayoutToFlowNodes<T extends Node>(scopeId: string, fileName
     const byKey = key ? posMap[key] : undefined;
     const byId = posMap[n.id];
     const saved = byKey ?? byId;
-    return saved ? { ...n, position: saved } : n;
+    return saved ? { ...n, position: { x: saved.x, y: saved.y } } : n;
   });
 }
 

@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import ReactDOM from 'react-dom';
-import { MODAL_Z_INDEX, useModalBodyLock } from '../ui/modalUtils';
+import { MODAL_Z_INDEX, getAppPortalRoot, useModalBodyLock } from '../ui/modalUtils';
 import { ConfirmDialog } from '../ui/ConfirmDialog';
 import { UMLDiagram, UMLDiagramHandle, UmlDiagramSaveContext, WORKSPACE_DOT_BACKGROUND } from './UMLDiagram';
 
@@ -182,6 +182,7 @@ export const FloatingUMLPanel: React.FC<FloatingUMLPanelProps> = ({
   }, [handleBack]);
 
   const showSpinner = refreshing || isRefreshing;
+  const appPortalRoot = getAppPortalRoot();
 
   return ReactDOM.createPortal(
     <div
@@ -415,7 +416,7 @@ export const FloatingUMLPanel: React.FC<FloatingUMLPanelProps> = ({
         }}
       />
     </div>,
-    document.body,
+    appPortalRoot,
   );
 };
 

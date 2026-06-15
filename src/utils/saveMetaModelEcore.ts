@@ -2,6 +2,7 @@ import { apiService } from '../services/api';
 
 import { UMLModel } from './ecoreToUml';
 
+import { randomUniqueSuffix } from './secureRandom';
 import { umlToEcore } from './umlToEcore';
 
 function parseUploadedFileId(data: unknown): number | null {
@@ -138,7 +139,7 @@ async function relinkMetaModelEcoreFile(
 async function uploadEcoreRevision(ecoreContent: string, ecoreFileId: number): Promise<number> {
   let lastError: unknown;
   for (let attempt = 0; attempt < 5; attempt++) {
-    const revisionName = `ecore-${ecoreFileId}-${Date.now()}-${Math.random().toString(36).slice(2, 10)}.ecore`;
+    const revisionName = `ecore-${ecoreFileId}-${Date.now()}-${randomUniqueSuffix()}.ecore`;
     try {
       const uploadResult = await apiService.uploadFile(
         buildEcoreFile(ecoreContent, revisionName),

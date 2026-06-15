@@ -4,10 +4,11 @@ import {
   UMLModel,
   UMLRelationship,
 } from './ecoreToUml';
+import { ECORE_XML_NAMESPACE, XSI_XML_NAMESPACE } from './ecoreXmlNamespaces';
 import { parseMultiplicity } from './umlMultiplicity';
 
-const ECORE_NS = 'http://www.eclipse.org/emf/2002/Ecore';
-const XSI_NS = 'http://www.w3.org/2001/XMLSchema-instance';
+const ECORE_NS = ECORE_XML_NAMESPACE;
+const XSI_NS = XSI_XML_NAMESPACE;
 
 const PRIMITIVE_ETYPE: Record<string, string> = {
   EString: '//EString',
