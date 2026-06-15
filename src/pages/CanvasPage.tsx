@@ -5,9 +5,10 @@ import { getUserInitials } from '../utils/userInitials';
 import { ProfileView } from '../components/ui/ProfileView';
 import ReactDOM from 'react-dom';
 import { useNavigate, useParams } from 'react-router-dom';
-import { Node, Edge } from 'reactflow';
+import { Node as FlowNode, Edge } from 'reactflow';
 import { FlowCanvas } from '../components/flow/FlowCanvas';
 import { FloatingUMLPanel } from '../components/canvas/FloatingUMLPanel';
+import { UmlDiagramSaveContext } from '../components/canvas/UMLDiagram';
 import { ModelDrawer, DrawerModel } from '../components/canvas/ModelDrawer';
 import { apiService } from '../services/api';
 import { VsumDetails } from '../types';
@@ -16,7 +17,8 @@ import { MODAL_Z_INDEX, modalBackdropStyle, useModalBodyLock } from '../componen
 import { CanvasProjectTabs } from '../components/canvas/CanvasProjectTabs';
 import { ProjectPickerMenu } from '../components/canvas/ProjectPickerMenu';
 import { UnsavedTabCloseDialog } from '../components/canvas/UnsavedTabCloseDialog';
-import { CanvasTabSession, CanvasUmlPanelState, OpenCanvasTab } from '../types/canvasTab';
+import { CanvasTabSession, CanvasUmlPanelState, EcoreFileExpandMeta, OpenCanvasTab } from '../types/canvasTab';
+import { canvasUmlLayoutFileName, canvasUmlLayoutScope } from '../utils/metaModelPreview';
 import { createCanvasTabInstanceId } from '../utils/canvasTabId';
 import { waitForMetaModelsOnCanvas } from '../utils/canvasLoadUtils';
 import {
@@ -508,18 +510,77 @@ export const CanvasPage: React.FC = () => {
     }
   }, []);
 
+  const handleDeleteModel = useCallback(async (model: DrawerModel) => {
+    await apiService.deleteMetaModel(String(model.id));
+    const sourceId = model.sourceId ?? model.id;
+    const nodes = flowCanvasRef.current?.getNodes?.() ?? [];
+    const edges = flowCanvasRef.current?.getEdges?.() ?? [];
+    const removeIds = new Set(
+      nodes
+        .filter((n: FlowNode) => {
+          if (n.type !== 'ecoreFile') return false;
+          const mmId = n.data?.metaModelId;
+          const mmSourceId = n.data?.metaModelSourceId;
+          return mmId === model.id || mmId === sourceId || mmSourceId === model.id || mmSourceId === sourceId;
+        })
+        .map((n: FlowNode) => n.id),
+    );
+    if (removeIds.size > 0) {
+      flowCanvasRef.current?.loadDiagramData?.(
+        nodes.filter((n: FlowNode) => !removeIds.has(n.id)),
+        edges.filter((e: Edge) => !removeIds.has(e.source) && !removeIds.has(e.target)),
+      );
+    }
+    setMyLibraryModels(prev => prev.filter(m => m.id !== model.id));
+    setPublicLibraryModels(prev => prev.filter(m => m.id !== model.id));
+    setDrawerModels(prev => prev.filter(m => m.id !== model.id && m.sourceId !== model.id && m.sourceId !== sourceId));
+    setUmlPanels(prev => prev.filter(
+      p => p.metaModelId !== model.id && p.metaModelSourceId !== sourceId && p.metaModelId !== sourceId,
+    ));
+  }, []);
+
   // ── UML expand → floating panel ───────────────────────────────────────────
 
-  const handleEcoreFileExpand = useCallback((fileName: string, fileContent: string) => {
+  const handleEcoreFileExpand = useCallback((
+    fileName: string,
+    fileContent: string,
+    meta?: EcoreFileExpandMeta,
+  ) => {
     const PANEL_TOP = openTabs.length > 0 ? CENTER_STACK_BOTTOM + 8 : MODE_TOGGLE_TOP + MODE_TOGGLE_HEIGHT + 8;
     const PANEL_BOTTOM_USED = 228; // bottom margin(16) + minimap(204) + gap(8)
     const panelH = Math.max(200, document.documentElement.clientHeight - PANEL_TOP - PANEL_BOTTOM_USED);
+
+    let metaModelId = meta?.metaModelId;
+    let metaModelSourceId = meta?.metaModelSourceId;
+    let ecoreFileId = meta?.ecoreFileId;
+
+    if (ecoreFileId == null || metaModelId == null) {
+      const node = flowCanvasRef.current?.getNodes?.().find(
+        (n: FlowNode) => n.type === 'ecoreFile' && n.data.fileName === fileName,
+      );
+      if (node?.data) {
+        metaModelId = metaModelId ?? (typeof node.data.metaModelId === 'number' ? node.data.metaModelId : undefined);
+        metaModelSourceId = metaModelSourceId ?? (
+          typeof node.data.metaModelSourceId === 'number' ? node.data.metaModelSourceId : undefined
+        );
+        ecoreFileId = ecoreFileId ?? (typeof node.data.ecoreFileId === 'number' ? node.data.ecoreFileId : undefined);
+      }
+    }
 
     const newPanel: UMLPanel = {
       id: `panel-${Date.now()}`,
       title: fileName.replace(/\.ecore$/, ''),
       fileName,
       ecoreContent: fileContent,
+      metaModelId,
+      metaModelSourceId,
+      ecoreFileId,
+      layoutScopeId: canvasUmlLayoutScope(activeProjectId),
+      layoutStorageKey: canvasUmlLayoutFileName({
+        fileName,
+        metaModelSourceId,
+        metaModelId,
+      }),
       top: PANEL_TOP,
       right: 16,
       width: 200,
@@ -527,7 +588,7 @@ export const CanvasPage: React.FC = () => {
     };
     setUmlPanels(prev => [...prev, newPanel]);
     setTopPanelId(newPanel.id);
-  }, [openTabs.length]);
+  }, [openTabs.length, activeProjectId]);
 
   useEffect(() => {
     const handler = (e: Event) => {
@@ -663,8 +724,34 @@ export const CanvasPage: React.FC = () => {
     setTopPanelId(prev => (prev === panelId ? null : prev));
   }, []);
 
+  const handleUmlPanelSaved = useCallback((
+    panelId: string,
+    fileName: string,
+    result: { ecoreContent: string },
+  ) => {
+    setUmlPanels(prev => prev.map(p =>
+      p.id === panelId
+        ? { ...p, ecoreContent: result.ecoreContent }
+        : p,
+    ));
+    // Workspace-only: update the canvas copy, not the library metamodel file on the server.
+    flowCanvasRef.current?.updateEcoreFileData?.(fileName, result.ecoreContent);
+  }, []);
+
+  const buildUmlSaveContext = useCallback((panel: UMLPanel): UmlDiagramSaveContext | undefined => {
+    if (!panel.ecoreFileId) return undefined;
+    const libraryMetaModelId = panel.metaModelSourceId ?? panel.metaModelId;
+    return {
+      metaModelId: libraryMetaModelId ? String(libraryMetaModelId) : '',
+      ecoreFileId: panel.ecoreFileId,
+      modelName: panel.title,
+      saveTarget: 'workspace',
+      onSaved: result => handleUmlPanelSaved(panel.id, panel.fileName, result),
+    };
+  }, [handleUmlPanelSaved]);
+
   const focusPanel = useCallback((panelId: string) => setTopPanelId(panelId), []);
-  const handleDiagramChange = useCallback((_nodes: Node[], _edges: Edge[]) => {
+  const handleDiagramChange = useCallback((_nodes: FlowNode[], _edges: Edge[]) => {
     const ids = new Set<number>();
     for (const n of _nodes) {
       if (n.type !== 'ecoreFile') continue;
@@ -712,10 +799,11 @@ export const CanvasPage: React.FC = () => {
         <FloatingUMLPanel
           key={panel.id}
           id={panel.id}
-          title={panel.title}
-          fileName={panel.fileName}
-          layoutScopeId={activeProjectId != null ? String(activeProjectId) : 'default'}
+          title={vsumName || panel.title}
+          fileName={panel.layoutStorageKey ?? canvasUmlLayoutFileName(panel)}
+          layoutScopeId={panel.layoutScopeId ?? canvasUmlLayoutScope(activeProjectId)}
           ecoreContent={panel.ecoreContent}
+          saveContext={buildUmlSaveContext(panel)}
           initialTop={panel.top}
           initialRight={panel.right}
           panelWidth={panel.width}
@@ -723,6 +811,13 @@ export const CanvasPage: React.FC = () => {
           onClose={closePanel}
           onFocus={focusPanel}
           onHome={() => navigate('/')}
+          ecoreFileId={panel.ecoreFileId}
+          fetchEcoreFile={(fileId) => apiService.getFile(fileId)}
+          onEcoreContentUpdated={(content) => {
+            setUmlPanels(prev => prev.map(p =>
+              p.id === panel.id ? { ...p, ecoreContent: content } : p,
+            ));
+          }}
           zIndex={panelZBase + (topPanelId === panel.id ? umlPanels.length : idx)}
         />
       ))}
@@ -759,6 +854,7 @@ export const CanvasPage: React.FC = () => {
               loading={loadingProject}
               onClose={() => setShowDrawer(false)}
               onAddModel={handleAddModel}
+              onDeleteModel={handleDeleteModel}
               myLibraryModels={myLibraryModels}
               publicLibraryModels={publicLibraryModels}
               onFetchFile={(fileId) => apiService.getFile(fileId)}

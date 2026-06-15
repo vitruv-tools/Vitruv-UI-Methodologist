@@ -51,3 +51,16 @@ export function useModalBodyLock(active: boolean): void {
     };
   }, [active]);
 }
+
+const APP_PORTAL_ROOT_ID = 'vitruv-app-portal';
+
+/** Dedicated mount node for fullscreen overlays (avoids ad-hoc document.body portals). */
+export function getAppPortalRoot(): HTMLElement {
+  let root = document.getElementById(APP_PORTAL_ROOT_ID);
+  if (!root) {
+    root = document.createElement('div');
+    root.id = APP_PORTAL_ROOT_ID;
+    document.body.appendChild(root);
+  }
+  return root;
+}

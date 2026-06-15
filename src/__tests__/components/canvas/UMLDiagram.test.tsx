@@ -3,6 +3,12 @@ import { render, screen, fireEvent, act } from '@testing-library/react';
 import { UMLDiagram, UMLDiagramHandle } from '../../../components/canvas/UMLDiagram';
 import { loadUmlLayout, saveUmlLayout } from '../../../utils/umlLayoutStorage';
 
+jest.mock('../../../utils/saveMetaModelEcore', () => ({
+  saveMetaModelEcore: jest.fn(),
+}));
+
+import { saveMetaModelEcore } from '../../../utils/saveMetaModelEcore';
+
 const SIMPLE_ECORE = `<?xml version="1.0" encoding="UTF-8"?>
 <ecore:EPackage xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
                 xmlns:ecore="http://www.eclipse.org/emf/2002/Ecore" name="test">
@@ -43,6 +49,7 @@ const fileName = 'simple.ecore';
 
 beforeEach(() => {
   localStorage.clear();
+  jest.clearAllMocks();
 });
 
 describe('UMLDiagram real component', () => {
@@ -163,12 +170,13 @@ describe('UMLDiagram real component', () => {
 
   it('highlights relationship line when clicked', async () => {
     const { container } = render(<UMLDiagram ecoreContent={SIMPLE_ECORE} />);
-    const relGroup = container.querySelector('[data-rel-line]') as SVGGElement;
-    expect(relGroup).not.toBeNull();
+    const hitLine = container.querySelector('[data-rel-hit-line]');
+    expect(hitLine).not.toBeNull();
     await act(async () => {
-      fireEvent.click(relGroup);
+      fireEvent.click(hitLine!);
     });
-    const strokeLine = relGroup.querySelectorAll('path')[2];
+    const relGroup = container.querySelector('[data-rel-line]') as SVGGElement;
+    const strokeLine = relGroup?.querySelectorAll('path')[1];
     expect(strokeLine?.getAttribute('stroke')).toBe('#ef4444');
   });
 
@@ -201,5 +209,88 @@ describe('UMLDiagram real component', () => {
   it('renders a minimap overview in the bottom-right corner', () => {
     const { container } = render(<UMLDiagram ecoreContent={SIMPLE_ECORE} />);
     expect(container.querySelector('[title="Diagram overview — click or drag to pan"]')).not.toBeNull();
+  });
+
+  it('shows add-class toolbar button when interactive', () => {
+    render(<UMLDiagram ecoreContent={SIMPLE_ECORE} />);
+    expect(screen.getByTitle('Add class')).toBeInTheDocument();
+  });
+
+  it('adds a new class when toolbar add button is clicked', async () => {
+    render(<UMLDiagram ecoreContent={SIMPLE_ECORE} />);
+    await act(async () => {
+      fireEvent.click(screen.getByTitle('Add class'));
+    });
+    expect(screen.getByDisplayValue('NewClass')).toBeInTheDocument();
+  });
+
+  it('deletes selected class with toolbar delete button', async () => {
+    render(<UMLDiagram ecoreContent={SIMPLE_ECORE} />);
+    await act(async () => {
+      fireEvent.click(screen.getByText('Person'));
+    });
+    await act(async () => {
+      fireEvent.click(screen.getByTitle('Delete selected class or connection'));
+    });
+    expect(screen.queryByText('Person')).not.toBeInTheDocument();
+  });
+
+  it('selects relationship via hit layer and opens edit panel', async () => {
+    const { container } = render(<UMLDiagram ecoreContent={REF_ECORE} />);
+    const hitLine = container.querySelector('[data-rel-hit-line]');
+    expect(hitLine).not.toBeNull();
+    await act(async () => {
+      fireEvent.click(hitLine!);
+    });
+    expect(screen.getByText('Edit relationship')).toBeInTheDocument();
+  });
+
+  it('creates association when connect mode links two classes', async () => {
+    const { container } = render(<UMLDiagram ecoreContent={SIMPLE_ECORE} />);
+    const relCountBefore = container.querySelectorAll('[data-rel-hit-line]').length;
+    await act(async () => {
+      fireEvent.click(screen.getByTitle('Connect two classes'));
+    });
+    const classBoxes = container.querySelectorAll('[data-classbox]');
+    await act(async () => {
+      fireEvent.click(classBoxes[0]);
+    });
+    await act(async () => {
+      fireEvent.click(classBoxes[1]);
+    });
+    expect(container.querySelectorAll('[data-rel-hit-line]').length).toBeGreaterThan(relCountBefore);
+  });
+
+  it('workspace save updates project copy without calling library API', async () => {
+    const ref = createRef<UMLDiagramHandle>();
+    const onSaved = jest.fn();
+    render(
+      <UMLDiagram
+        ref={ref}
+        ecoreContent={SIMPLE_ECORE}
+        interactive
+        saveContext={{
+          metaModelId: '1',
+          ecoreFileId: 42,
+          modelName: 'simple',
+          saveTarget: 'workspace',
+          onSaved,
+        }}
+      />,
+    );
+    await act(async () => {
+      fireEvent.click(screen.getByTitle('Connect two classes'));
+    });
+    const classBoxes = document.querySelectorAll('[data-classbox]');
+    await act(async () => {
+      fireEvent.click(classBoxes[0]);
+      fireEvent.click(classBoxes[1]);
+    });
+    await act(async () => {
+      await ref.current?.save();
+    });
+    expect(saveMetaModelEcore).not.toHaveBeenCalled();
+    expect(onSaved).toHaveBeenCalledWith(expect.objectContaining({ ecoreFileId: 42 }));
+    expect(screen.getByText('Saved to project')).toBeInTheDocument();
   });
 });
