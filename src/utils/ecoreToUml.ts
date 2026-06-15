@@ -36,6 +36,51 @@ export interface UMLModel {
   relationships: UMLRelationship[];
 }
 
+/** Primitive attribute types shown in the UML editor dropdown. */
+export const UML_PRIMITIVE_ATTRIBUTE_TYPES = [
+  'String',
+  'Int',
+  'Boolean',
+  'Float',
+  'Double',
+  'Long',
+  'Short',
+  'Char',
+  'Byte',
+  'Date',
+] as const;
+
+const ETYPE_TO_DISPLAY: Record<string, string> = {
+  EString: 'String',
+  EInt: 'Int',
+  EBoolean: 'Boolean',
+  EFloat: 'Float',
+  EDouble: 'Double',
+  ELong: 'Long',
+  EShort: 'Short',
+  EChar: 'Char',
+  EByte: 'Byte',
+  EDate: 'Date',
+};
+
+/** Map ecore type names (EString) to editor labels (String). */
+export function normalizeAttributeTypeDisplay(type: string): string {
+  return ETYPE_TO_DISPLAY[type] ?? type;
+}
+
+export function buildAttributeTypeOptions(
+  classNames: string[],
+  currentClassName: string,
+  currentType?: string,
+): string[] {
+  const options = new Set<string>(UML_PRIMITIVE_ATTRIBUTE_TYPES);
+  for (const name of classNames) {
+    if (name !== currentClassName) options.add(name);
+  }
+  if (currentType) options.add(normalizeAttributeTypeDisplay(currentType));
+  return Array.from(options);
+}
+
 function sanitize(name: string) {
   return name.replace(/[^a-zA-Z0-9_]/g, '_');
 }

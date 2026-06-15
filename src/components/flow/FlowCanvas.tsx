@@ -158,7 +158,11 @@ interface FlowCanvasProps {
   onToolClick?: (toolType: string, toolName: string, diagramType?: string) => void;
   onDiagramChange?: (nodes: Node[], edges: Edge[]) => void;
   onEcoreFileSelect?: (fileName: string) => void;
-  onEcoreFileExpand?: (fileName: string, fileContent: string) => void;
+  onEcoreFileExpand?: (fileName: string, fileContent: string, meta?: {
+    metaModelId?: number;
+    metaModelSourceId?: number;
+    ecoreFileId?: number;
+  }) => void;
   onEcoreFileDelete?: (id: string) => void;
   onEcoreFileRename?: (id: string, newFileName: string) => void;
   userId?: string;
@@ -412,6 +416,7 @@ export const FlowCanvas = forwardRef<{
   getNodes: () => Node[];
   getEdges: () => Edge[];
   addEcoreFile: (fileName: string, fileContent: string, meta?: any) => void;
+  updateEcoreFileData: (fileName: string, fileContent: string, ecoreFileId?: number) => void;
   resetExpandedFile: () => void;
   undo: () => void;
   redo: () => void;
@@ -955,12 +960,12 @@ export const FlowCanvas = forwardRef<{
         if (isDeleteKey && handleDeleteKey(event)) return;
 
         const hasModifier = event.ctrlKey || event.metaKey;
-        if (hasModifier) handleUndoRedo(event);
+        if (hasModifier && !umlModalOpen) handleUndoRedo(event);
       };
 
       document.addEventListener('keydown', handleKeyDown);
       return () => document.removeEventListener('keydown', handleKeyDown);
-    }, [undo, redo, canUndo, canRedo, nodes, edges, selectedFileId, onEcoreFileDelete, setPendingDelete]);
+    }, [undo, redo, canUndo, canRedo, nodes, edges, selectedFileId, onEcoreFileDelete, setPendingDelete, umlModalOpen]);
 
 
     const buildInitialReactionCode = useCallback((sourceNodeId: string, targetNodeId: string): string => {
@@ -1555,8 +1560,34 @@ export const FlowCanvas = forwardRef<{
         setSelectedFileId(ecoreNode.id);
       }
 
-      onEcoreFileExpand?.(fileName, fileContent);
+      const data = ecoreNode?.data;
+      onEcoreFileExpand?.(fileName, fileContent, {
+        metaModelId: typeof data?.metaModelId === 'number' ? data.metaModelId : undefined,
+        metaModelSourceId: typeof data?.metaModelSourceId === 'number' ? data.metaModelSourceId : undefined,
+        ecoreFileId: typeof data?.ecoreFileId === 'number' ? data.ecoreFileId : undefined,
+      });
     }, [nodes, onEcoreFileExpand]);
+
+    const updateEcoreFileData = useCallback((
+      fileName: string,
+      fileContent: string,
+      ecoreFileId?: number,
+    ) => {
+      setNodes(current =>
+        current.map(n =>
+          n.type === 'ecoreFile' && n.data.fileName === fileName
+            ? {
+                ...n,
+                data: {
+                  ...n.data,
+                  fileContent,
+                  ...(ecoreFileId != null ? { ecoreFileId } : {}),
+                },
+              }
+            : n,
+        ),
+      );
+    }, [setNodes]);
 
     const resetExpandedFile = useCallback(() => {
       setExpandedFileId(null);
@@ -2174,6 +2205,7 @@ export const FlowCanvas = forwardRef<{
       getNodes: () => nodes,
       getEdges: () => edges,
       addEcoreFile,
+      updateEcoreFileData,
       resetExpandedFile,
       undo,
       redo,
@@ -2183,7 +2215,7 @@ export const FlowCanvas = forwardRef<{
       getWorkspaceSnapshot: buildWorkspaceSnapshot,
       autoLayoutEcoreBoxes,
       fitUmlView,
-    }), [handleToolClick, loadDiagramData, nodes, edges, addEcoreFile, resetExpandedFile, undo, redo, canUndo, canRedo, getReactionEdges, buildWorkspaceSnapshot, autoLayoutEcoreBoxes, fitUmlView]);
+    }), [handleToolClick, loadDiagramData, nodes, edges, addEcoreFile, updateEcoreFileData, resetExpandedFile, undo, redo, canUndo, canRedo, getReactionEdges, buildWorkspaceSnapshot, autoLayoutEcoreBoxes, fitUmlView]);
 
     const mappedNodes = nodes.map(node => {
       if (node.type === 'editable') {

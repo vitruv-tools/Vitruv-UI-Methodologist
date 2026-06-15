@@ -1,9 +1,9 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { apiService } from '../../services/api';
 import { CreateModelModal } from './CreateModelModal';
-import { ConfirmDialog } from './ConfirmDialog';
 import { KeywordTagsInput } from './KeywordTagsInput';
-import { UMLDiagram, UMLDiagramHandle } from '../canvas/UMLDiagram';
+import { UMLDiagram, UMLDiagramHandle, UmlDiagramSaveContext } from '../canvas/UMLDiagram';
+import { FloatingUMLPanel } from '../canvas/FloatingUMLPanel';
 import { MetaModelFileDownloads } from './MetaModelFileDownloads';
 import { useModalBodyLock } from './modalUtils';
 import {
@@ -199,8 +199,10 @@ export const ModelDetailModal: React.FC<ModelDetailModalProps> = ({
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [ecoreContent, setEcoreContent] = useState<string | null>(ecoreContentProp ?? null);
+  const [ecoreFileId, setEcoreFileId] = useState<number | undefined>(model.ecoreFileId);
   const [fetchingUml, setFetchingUml] = useState(false);
   const [fetchError, setFetchError] = useState(false);
+  const [umlExpanded, setUmlExpanded] = useState(false);
   const diagramRef = useRef<UMLDiagramHandle>(null);
   const theme = getDTheme(model.domain);
 
@@ -215,6 +217,27 @@ export const ModelDetailModal: React.FC<ModelDetailModalProps> = ({
   }, [model.ecoreFileId, ecoreContentProp]);
 
   const previewLayoutFile = metaModelPreviewLayoutFileName(model.id, model.name);
+
+  const umlSaveContext: UmlDiagramSaveContext | undefined =
+    model.id && ecoreFileId
+      ? {
+          metaModelId: String(model.id),
+          ecoreFileId,
+          modelName: model.name,
+          saveTarget: 'library',
+          metaModelMetadata: {
+            description: model.description || '',
+            domain: model.domain || '',
+            keyword: model.keyword || [],
+            genModelFileId: model.genModelFileId,
+          },
+          onSaved: ({ ecoreContent: saved, ecoreFileId: newFileId }) => {
+            setEcoreContent(saved);
+            setEcoreFileId(newFileId);
+            onUpdated();
+          },
+        }
+      : undefined;
 
   useEffect(() => {
     if (!ecoreContent) return;
@@ -376,9 +399,15 @@ export const ModelDetailModal: React.FC<ModelDetailModalProps> = ({
           <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', background: '#ffffff' }}>
             {/* Label + zoom controls */}
             <div style={{ padding: '14px 18px 10px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexShrink: 0 }}>
-              <span style={{ fontSize: 13, fontWeight: 600, color: '#374151', fontFamily: FONT }}>UML Preview</span>
+              <span style={{ fontSize: 13, fontWeight: 600, color: '#374151', fontFamily: FONT }}>UML</span>
               {ecoreContent && (
                 <div style={{ display: 'flex', gap: 4 }}>
+                  <DPreviewBtn title="Open full-screen UML editor" onClick={() => setUmlExpanded(true)}>
+                    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <polyline points="15 3 21 3 21 9" /><polyline points="9 21 3 21 3 15" />
+                      <line x1="21" y1="3" x2="14" y2="10" /><line x1="3" y1="21" x2="10" y2="14" />
+                    </svg>
+                  </DPreviewBtn>
                   <DPreviewBtn title="Zoom in" onClick={() => diagramRef.current?.zoomIn()}>
                     <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
                   </DPreviewBtn>
@@ -416,6 +445,7 @@ export const ModelDetailModal: React.FC<ModelDetailModalProps> = ({
                     ecoreContent={ecoreContent}
                     fileName={previewLayoutFile}
                     layoutScopeId={METAMODEL_PREVIEW_LAYOUT_SCOPE}
+                    saveContext={umlSaveContext}
                   />
                 )}
               </div>
@@ -430,6 +460,22 @@ export const ModelDetailModal: React.FC<ModelDetailModalProps> = ({
       <>
         <style>{`@keyframes spin{0%{transform:rotate(0deg)}100%{transform:rotate(360deg)}}`}</style>
         {panel}
+        {umlExpanded && ecoreContent && (
+          <FloatingUMLPanel
+            id={`metamodel-detail-${model.id}`}
+            title={model.name}
+            fileName={previewLayoutFile}
+            layoutScopeId={METAMODEL_PREVIEW_LAYOUT_SCOPE}
+            ecoreContent={ecoreContent}
+            saveContext={umlSaveContext}
+            onClose={() => setUmlExpanded(false)}
+            onFocus={() => {}}
+            ecoreFileId={model.ecoreFileId}
+            fetchEcoreFile={(fileId) => apiService.getFile(fileId)}
+            onEcoreContentUpdated={(content) => setEcoreContent(content)}
+            zIndex={10001}
+          />
+        )}
       </>
     );
   }
@@ -445,6 +491,22 @@ export const ModelDetailModal: React.FC<ModelDetailModalProps> = ({
     >
       <style>{`@keyframes spin{0%{transform:rotate(0deg)}100%{transform:rotate(360deg)}}`}</style>
       {panel}
+      {umlExpanded && ecoreContent && (
+        <FloatingUMLPanel
+          id={`metamodel-detail-${model.id}`}
+          title={model.name}
+          fileName={previewLayoutFile}
+          layoutScopeId={METAMODEL_PREVIEW_LAYOUT_SCOPE}
+          ecoreContent={ecoreContent}
+          saveContext={umlSaveContext}
+          onClose={() => setUmlExpanded(false)}
+          onFocus={() => {}}
+          ecoreFileId={model.ecoreFileId}
+          fetchEcoreFile={(fileId) => apiService.getFile(fileId)}
+          onEcoreContentUpdated={(content) => setEcoreContent(content)}
+          zIndex={10001}
+        />
+      )}
     </div>
   );
 };
@@ -469,8 +531,6 @@ export const ModelLibraryTable: React.FC<ModelLibraryTableProps> = ({ onModelOpe
   const [dateFilter, setDateFilter] = useState('all');
   const [showCreate, setShowCreate] = useState(false);
   const [viewModel, setViewModel] = useState<any>(null);
-  const [deletingId, setDeletingId] = useState<string | null>(null);
-  const [deleteError, setDeleteError] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 10;
 
@@ -519,18 +579,6 @@ export const ModelLibraryTable: React.FC<ModelLibraryTableProps> = ({ onModelOpe
   const filtered = models.filter(m => typFilter === 'all' || m.domain === typFilter);
   const totalPages = Math.ceil(filtered.length / itemsPerPage);
   const page = filtered.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
-
-  const handleDelete = async () => {
-    if (!deletingId) return;
-    try {
-      await apiService.deleteMetaModel(deletingId);
-      setDeletingId(null);
-      setDeleteError('');
-      fetchModels();
-    } catch (e: any) {
-      setDeleteError(e?.message || 'Failed to delete');
-    }
-  };
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
@@ -632,7 +680,6 @@ export const ModelLibraryTable: React.FC<ModelLibraryTableProps> = ({ onModelOpe
                     key={model.id ?? idx}
                     model={model}
                     onView={() => setViewModel(model)}
-                    onDelete={() => setDeletingId(String(model.id))}
                   />
                 ))
               )}
@@ -681,16 +728,6 @@ export const ModelLibraryTable: React.FC<ModelLibraryTableProps> = ({ onModelOpe
           onUpdated={() => { fetchModels(); }}
         />
       )}
-      <ConfirmDialog
-        isOpen={!!deletingId}
-        title="Delete model"
-        message={deleteError ? `${deleteError}` : "Do you really want to delete this model? This action cannot be undone."}
-        confirmText="Delete"
-        cancelText="Cancel"
-        variant="danger"
-        onConfirm={handleDelete}
-        onCancel={() => { setDeletingId(null); setDeleteError(''); }}
-      />
     </div>
   );
 };
@@ -700,10 +737,9 @@ export const ModelLibraryTable: React.FC<ModelLibraryTableProps> = ({ onModelOpe
 interface TableRowProps {
   model: any;
   onView: () => void;
-  onDelete: () => void;
 }
 
-const TableRow: React.FC<TableRowProps> = ({ model, onView, onDelete }) => {
+const TableRow: React.FC<TableRowProps> = ({ model, onView }) => {
   const [hovered, setHovered] = useState(false);
   const hasProjects = model.vsums?.length > 0 || model.projects?.length > 0;
 
@@ -731,7 +767,6 @@ const TableRow: React.FC<TableRowProps> = ({ model, onView, onDelete }) => {
           minWidth={140}
           actions={[
             { label: 'View details', onClick: onView },
-            { label: 'Delete', onClick: onDelete, danger: true, dividerBefore: true },
           ]}
         />
       </td>

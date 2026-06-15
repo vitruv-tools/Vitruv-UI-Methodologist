@@ -62,7 +62,7 @@ describe('FloatingUMLPanel – title', () => {
 describe('FloatingUMLPanel – back button hover', () => {
   it('does not throw on mouseEnter and mouseLeave of back button', () => {
     render(<FloatingUMLPanel {...mkProps()} />);
-    const closeBtn = screen.getByTitle('Back to canvas');
+    const closeBtn = screen.getByTitle('Back');
     expect(() => {
       fireEvent.mouseEnter(closeBtn);
       fireEvent.mouseLeave(closeBtn);
@@ -108,7 +108,7 @@ describe('FloatingUMLPanel – multiple instances', () => {
       </>,
     );
 
-    const closeBtns = getAllByTitle('Back to canvas');
+    const closeBtns = getAllByTitle('Back');
     fireEvent.click(closeBtns[0]);
     expect(onClose1).toHaveBeenCalledWith('a');
     expect(onClose2).not.toHaveBeenCalled();

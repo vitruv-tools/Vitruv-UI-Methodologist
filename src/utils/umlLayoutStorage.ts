@@ -121,7 +121,7 @@ export function applyLayoutToFlowNodes<T extends Node>(scopeId: string, fileName
   });
 }
 
-export function applyLayoutToUmlClasses<T extends { id: string; x: number; y: number }>(
+export function applyLayoutToUmlClasses<T extends { id: string; name?: string; x: number; y: number }>(
   scopeId: string,
   fileName: string,
   classes: T[],
@@ -129,7 +129,8 @@ export function applyLayoutToUmlClasses<T extends { id: string; x: number; y: nu
   const posMap = loadUmlLayout(scopeId, fileName);
   if (!posMap) return classes;
   return classes.map(c => {
-    const saved = posMap[c.id];
+    const saved = posMap[c.id]
+      ?? (c.name ? posMap[sanitizeUmlClassId(c.name)] : undefined);
     return saved ? { ...c, x: saved.x, y: saved.y } : c;
   });
 }
