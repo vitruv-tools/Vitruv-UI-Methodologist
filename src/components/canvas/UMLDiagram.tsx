@@ -1685,7 +1685,12 @@ const ClassBox: React.FC<ClassBoxProps> = ({
         onDoubleClick={e => { e.stopPropagation(); onStartEditName(); }}
         onClick={e => {
           e.stopPropagation();
-          if (interactive && selected && edit?.classId !== cls.id) {
+          if (!interactive) return;
+          if (!selected) {
+            onSelect();
+            return;
+          }
+          if (edit?.classId !== cls.id) {
             onStartEditName();
           }
         }}
