@@ -71,7 +71,6 @@ const ChevronDownIcon = () => (
 );
 
 // ── NavItem ───────────────────────────────────────────────────────────────────
-
 interface NavItemProps {
   icon: React.ReactNode;
   label: string;
@@ -81,6 +80,20 @@ interface NavItemProps {
 
 const NavItem: React.FC<NavItemProps> = ({ icon, label, active, onClick }) => {
   const [hovered, setHovered] = React.useState(false);
+  let backgroundColor = 'transparent';
+  if (active) {
+  backgroundColor = 'rgba(4,148,132,0.15)';
+} else if (hovered) {
+  backgroundColor = 'rgba(255,255,255,0.05)';
+}
+
+let textColor = 'rgba(255,255,255,0.55)';
+
+if (active) {
+  textColor = '#ffffff';
+} else if (hovered) {
+  textColor = 'rgba(255,255,255,0.85)';
+}
   return (
     <button
       onClick={onClick}
@@ -89,8 +102,8 @@ const NavItem: React.FC<NavItemProps> = ({ icon, label, active, onClick }) => {
       style={{
         display: 'flex', alignItems: 'center', gap: 10,
         width: '100%', padding: '9px 12px', borderRadius: 8, border: 'none',
-        background: active ? 'rgba(4,148,132,0.15)' : hovered ? 'rgba(255,255,255,0.05)' : 'transparent',
-        color: active ? '#ffffff' : hovered ? 'rgba(255,255,255,0.85)' : 'rgba(255,255,255,0.55)',
+        background: backgroundColor,
+        color: textColor,
         fontSize: 14, fontWeight: active ? 600 : 400,
         cursor: 'pointer', textAlign: 'left',
         transition: 'all 0.15s ease', letterSpacing: '0.01em',
@@ -120,6 +133,27 @@ interface MenuItemProps {
 
 const MenuItem: React.FC<MenuItemProps> = ({ icon, label, sublabel, danger = false, onClick }) => {
   const [hov, setHov] = React.useState(false);
+  let backgroundColor = 'transparent';
+
+if (hov) {
+  if (danger) {
+    backgroundColor = 'rgba(239,68,68,0.12)';
+  } else {
+    backgroundColor = 'rgba(255,255,255,0.07)';
+  }
+}
+
+let textColor = 'rgba(255,255,255,0.7)';
+
+if (danger) {
+  if (hov) {
+    textColor = '#f87171';
+  } else {
+    textColor = 'rgba(248,113,113,0.75)';
+  }
+} else if (hov) {
+  textColor = '#ffffff';
+}
   return (
     <button
       onClick={onClick}
@@ -129,12 +163,8 @@ const MenuItem: React.FC<MenuItemProps> = ({ icon, label, sublabel, danger = fal
         display: 'flex', alignItems: 'center', gap: 10,
         width: '100%', padding: '8px 12px',
         border: 'none', borderRadius: 6,
-        background: hov
-          ? danger ? 'rgba(239,68,68,0.12)' : 'rgba(255,255,255,0.07)'
-          : 'transparent',
-        color: danger
-          ? hov ? '#f87171' : 'rgba(248,113,113,0.75)'
-          : hov ? '#ffffff' : 'rgba(255,255,255,0.7)',
+        background: backgroundColor,
+        color: textColor,
         cursor: 'pointer', textAlign: 'left',
         transition: 'all 0.12s ease',
       }}
@@ -161,6 +191,11 @@ export const AppSidebar: React.FC<AppSidebarProps> = ({
   const [userHovered, setUserHovered] = React.useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
   const changePassword = useChangePassword();
+  const userCardBackground = menuOpen
+  ? 'rgba(4,148,132,0.12)'
+  : userHovered
+    ? 'rgba(255,255,255,0.06)'
+    : 'transparent';
 
   useDismissOnOutsideClick(menuRef, menuOpen, () => setMenuOpen(false));
 
@@ -279,9 +314,7 @@ export const AppSidebar: React.FC<AppSidebarProps> = ({
             style={{
               display: 'flex', alignItems: 'center', gap: 10,
               width: '100%', padding: '8px 6px', borderRadius: 8, border: 'none',
-              background: menuOpen
-                ? 'rgba(4,148,132,0.12)'
-                : userHovered ? 'rgba(255,255,255,0.06)' : 'transparent',
+              background: userCardBackground,
               cursor: 'pointer', transition: 'background 0.15s ease', textAlign: 'left',
             }}
           >
