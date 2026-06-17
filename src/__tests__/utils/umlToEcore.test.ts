@@ -36,6 +36,7 @@ describe('umlToEcore', () => {
       isAbstract: false,
       isInterface: false,
       attributes: [],
+      operations: [],
       x: 0,
       y: 0,
     });
@@ -65,5 +66,15 @@ describe('umlToEcore', () => {
     model.classes[0].x = 999;
     const b = umlSemanticSnapshot(model);
     expect(a).toBe(b);
+  });
+
+  it('serializes non-public attribute visibility as eAnnotations', () => {
+    const model = ecoreToUml(SAMPLE);
+    model.classes[0].attributes[0].visibility = '#';
+    const xml = umlToEcore(model, SAMPLE);
+    expect(xml).toContain('source="uml.visibility"');
+    expect(xml).toContain('value="#"');
+    const roundTrip = ecoreToUml(xml);
+    expect(roundTrip.classes.find(c => c.name === 'Person')!.attributes[0].visibility).toBe('#');
   });
 });

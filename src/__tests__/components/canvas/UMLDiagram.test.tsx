@@ -82,6 +82,44 @@ describe('UMLDiagram real component', () => {
     expect(screen.getAllByRole('textbox').length).toBeGreaterThan(0);
   });
 
+  it('saves a new attribute when clicking empty canvas after typing', async () => {
+    const { container } = render(<UMLDiagram ecoreContent={SIMPLE_ECORE} />);
+    fireEvent.click(screen.getByText('Person'));
+    fireEvent.click(screen.getAllByText('Add attribute')[0]);
+    const input = screen.getAllByRole('textbox')[0];
+    fireEvent.change(input, { target: { value: 'age' } });
+    const diagramRoot = container.firstChild as HTMLElement;
+    await act(async () => {
+      fireEvent.mouseDown(diagramRoot);
+    });
+    expect(screen.getByText('age')).toBeInTheDocument();
+  });
+
+  it('saves attribute visibility when changed in the dropdown', async () => {
+    render(<UMLDiagram ecoreContent={SIMPLE_ECORE} />);
+    fireEvent.click(screen.getByText('Person'));
+    fireEvent.click(screen.getAllByText('Add attribute')[0]);
+    const visSelect = screen.getAllByRole('combobox')[0];
+    await act(async () => {
+      fireEvent.change(visSelect, { target: { value: '-' } });
+    });
+    expect(screen.getAllByText('-').length).toBeGreaterThan(0);
+  });
+
+  it('double-clicking empty canvas closes class selection and edit panel', async () => {
+    const { container } = render(<UMLDiagram ecoreContent={SIMPLE_ECORE} />);
+    await act(async () => {
+      fireEvent.click(screen.getByText('Person'));
+    });
+    expect(screen.getByText('Edit class')).toBeInTheDocument();
+
+    const diagramRoot = container.firstChild as HTMLElement;
+    await act(async () => {
+      fireEvent.doubleClick(diagramRoot);
+    });
+    expect(screen.queryByText('Edit class')).not.toBeInTheDocument();
+  });
+
   it('double-clicking the class name enters name-edit mode — an input appears', async () => {
     render(<UMLDiagram ecoreContent={SIMPLE_ECORE} />);
     const personName = screen.getByText('Person');
@@ -221,6 +259,7 @@ describe('UMLDiagram real component', () => {
     await act(async () => {
       fireEvent.click(screen.getByTitle('Add class'));
     });
+    expect(screen.getByText('Edit class')).toBeInTheDocument();
     expect(screen.getByDisplayValue('NewClass')).toBeInTheDocument();
   });
 
@@ -243,6 +282,26 @@ describe('UMLDiagram real component', () => {
       fireEvent.click(hitLine!);
     });
     expect(screen.getByText('Edit relationship')).toBeInTheDocument();
+  });
+
+  it('keeps connection editor open until the close button is clicked', async () => {
+    const { container } = render(<UMLDiagram ecoreContent={REF_ECORE} />);
+    const hitLine = container.querySelector('[data-rel-hit-line]');
+    await act(async () => {
+      fireEvent.click(hitLine!);
+    });
+    expect(screen.getByText('Edit relationship')).toBeInTheDocument();
+
+    const svg = container.querySelector('svg');
+    await act(async () => {
+      fireEvent.click(svg!);
+    });
+    expect(screen.getByText('Edit relationship')).toBeInTheDocument();
+
+    await act(async () => {
+      fireEvent.click(screen.getByTitle('Close panel'));
+    });
+    expect(screen.queryByText('Edit relationship')).not.toBeInTheDocument();
   });
 
   it('creates association when connect mode links two classes', async () => {

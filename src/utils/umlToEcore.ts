@@ -1,8 +1,14 @@
 import {
+  isPrimitiveAttributeType,
+  normalizeAttributeTypeDisplay,
+  normalizeOperationReturnType,
+  UML_VISIBILITY_ANNOTATION,
   UMLAttribute,
   UMLClass,
   UMLModel,
+  UMLOperation,
   UMLRelationship,
+  UMLVisibility,
 } from './ecoreToUml';
 import { ECORE_XML_NAMESPACE, XSI_XML_NAMESPACE } from './ecoreXmlNamespaces';
 import { parseMultiplicity } from './umlMultiplicity';
@@ -34,6 +40,8 @@ const PRIMITIVE_ETYPE: Record<string, string> = {
   EBigDecimal: '//EBigDecimal',
   EBigInteger: '//EBigInteger',
   EObject: '//EObject',
+  EVoid: '//EVoid',
+  Void: '//EVoid',
 };
 
 function escapeXml(value: string): string {
@@ -44,10 +52,11 @@ function escapeXml(value: string): string {
     .replace(/"/g, '&quot;');
 }
 
-function attributeEType(typeName: string, classNames: Set<string>): string {
+function attributeEType(typeName: string): string {
+  const normalized = normalizeAttributeTypeDisplay(typeName);
+  if (PRIMITIVE_ETYPE[normalized]) return PRIMITIVE_ETYPE[normalized];
   if (PRIMITIVE_ETYPE[typeName]) return PRIMITIVE_ETYPE[typeName];
-  if (classNames.has(typeName)) return `#//${typeName}`;
-  return `#//${typeName}`;
+  return '//EString';
 }
 
 function extractPackageOpening(originalEcore?: string): {
@@ -69,13 +78,44 @@ function extractPackageOpening(originalEcore?: string): {
   };
 }
 
-function renderAttribute(attr: UMLAttribute, classNames: Set<string>): string {
-  const { lower, upper } = parseMultiplicity(attr.multiplicity ?? '0..1');
-  const eType = attributeEType(attr.type, classNames);
+function renderVisibilityAnnotation(visibility: UMLVisibility): string {
+  if (visibility === '+') return '';
   return (
-    `    <eStructuralFeatures xsi:type="ecore:EAttribute" name="${escapeXml(attr.name)}"` +
-    ` eType="${escapeXml(eType)}" lowerBound="${lower}" upperBound="${upper}"/>`
+    `\n      <eAnnotations source="${UML_VISIBILITY_ANNOTATION}">` +
+    `\n        <details key="symbol" value="${escapeXml(visibility)}"/>` +
+    `\n      </eAnnotations>`
   );
+}
+
+function renderAttribute(attr: UMLAttribute): string {
+  const typeName = normalizeAttributeTypeDisplay(attr.type);
+  if (!isPrimitiveAttributeType(typeName)) return '';
+  const eType = attributeEType(typeName);
+  const visibilityAnn = renderVisibilityAnnotation(attr.visibility);
+  const openTag =
+    `    <eStructuralFeatures xsi:type="ecore:EAttribute" name="${escapeXml(attr.name)}"` +
+    ` eType="${escapeXml(eType)}" lowerBound="0" upperBound="1"`;
+  // UML attributes are scalar; Ecore stores them as optional single values.
+  if (!visibilityAnn) {
+    return `${openTag}/>`;
+  }
+  return `${openTag}>${visibilityAnn}\n    </eStructuralFeatures>`;
+}
+
+function operationEType(typeName: string): string {
+  const normalized = normalizeOperationReturnType(typeName);
+  if (PRIMITIVE_ETYPE[normalized]) return PRIMITIVE_ETYPE[normalized];
+  return '//EVoid';
+}
+
+function renderOperation(op: UMLOperation): string {
+  const eType = operationEType(op.returnType);
+  const visibilityAnn = renderVisibilityAnnotation(op.visibility);
+  const openTag = `    <eOperations name="${escapeXml(op.name)}" eType="${escapeXml(eType)}"`;
+  if (!visibilityAnn) {
+    return `${openTag}/>`;
+  }
+  return `${openTag}>${visibilityAnn}\n    </eOperations>`;
 }
 
 function renderReference(
@@ -106,13 +146,14 @@ function renderClass(
     attrs.push(`eSuperTypes="${inheritanceTargets.map(t => `#//${t}`).join(' ')}"`);
   }
 
-  const attrLines = cls.attributes.map(a => renderAttribute(a, classNames));
+  const attrLines = cls.attributes.map(a => renderAttribute(a)).filter(Boolean);
+  const opLines = (cls.operations ?? []).map(o => renderOperation(o));
   const refLines = outgoingRefs.map(rel => {
     const target = classById.get(rel.targetId);
     return target ? renderReference(rel, target.name) : '';
   }).filter(Boolean);
 
-  const body = [...attrLines, ...refLines].join('\n');
+  const body = [...attrLines, ...opLines, ...refLines].join('\n');
   const attrStr = attrs.length > 0 ? ` ${attrs.join(' ')}` : '';
 
   if (body) {

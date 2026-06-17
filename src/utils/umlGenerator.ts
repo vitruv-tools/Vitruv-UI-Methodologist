@@ -1,8 +1,9 @@
 import { FlowEdge, FlowNode } from '../types/flow';
+import { isPrimitiveAttributeType, normalizeAttributeTypeDisplay } from './ecoreToUml';
+import { formatEcoreMultiplicity } from './umlMultiplicity';
 import { umlClassNodeId, umlPackageNodeId } from './umlLayoutStorage';
 
 // Layout constants — calibrated to actual rendered node sizes.
-// NODE_WIDTH matches the CSS minWidth (240 px).  NODE_HEIGHT is the base
 // height; attribute-heavy nodes can be 120–180 px tall, so VERTICAL_SPACING
 // is generous to prevent overlaps.
 const NODE_WIDTH = 380;
@@ -11,24 +12,6 @@ const HORIZONTAL_SPACING = 80;
 const VERTICAL_SPACING = 130;
 const START_X = 80;
 const START_Y = 60;
-
-/** Format Ecore lower/upper bounds as UML cardinality (e.g. `1`, `0..*`). */
-export function formatEcoreMultiplicity(
-  lower: string | null,
-  upper: string | null,
-): string | undefined {
-  const normalizeUpper = (u: string | null) => {
-    if (u === null) return undefined;
-    if (u === '*' || u === '-1') return '*';
-    return u;
-  };
-  const normLower = lower ?? undefined;
-  const normUpper = normalizeUpper(upper);
-  if (normLower === undefined && normUpper === undefined) return undefined;
-  const lo = normLower ?? '1';
-  const hi = normUpper ?? '1';
-  return lo === hi ? lo : `${lo}..${hi}`;
-}
 
 // Helper function to find a node by ID
 const findNodeById = (nodes: FlowNode[], nodeId: string): FlowNode | undefined => {
@@ -458,23 +441,11 @@ export const generateUMLFromEcore = (ecoreContent: string): { nodes: FlowNode[];
         const attrName = attr.getAttribute('name') || `attr${aIdx + 1}`;
         const eType = attr.getAttribute('eType') || attr.getAttribute('type') || 'EString';
         
-        // Parse type reference - remove the # prefix if present
         let typeName = eType.split('#').pop() || eType;
-        // Remove any // prefix that might exist
-        typeName = typeName.replace(/^\/\//, '');
+        typeName = typeName.replace(/^\/\//, '').split('/').pop() || typeName;
+        if (!isPrimitiveAttributeType(typeName)) return;
         
-        const lower = attr.getAttribute('lowerBound');
-        const upper = attr.getAttribute('upperBound');
-        
-        // Format multiplicity - if we have bounds, use them
-        let mult = '';
-        if (lower !== null && upper !== null) {
-          mult = ` [${lower}..${upper}]`;
-        } else if (lower !== null || upper !== null) {
-          mult = ` [${lower || '1'}..${upper || '*'}]`;
-        }
-        
-        attributes.push(`+ ${attrName}: ${typeName}${mult}`);
+        attributes.push(`+ ${attrName}: ${normalizeAttributeTypeDisplay(typeName)}`);
       });
 
       // Determine tool name based on class type

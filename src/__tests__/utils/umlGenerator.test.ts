@@ -1,4 +1,5 @@
-import { formatEcoreMultiplicity, generateUMLFromEcore } from '../../utils/umlGenerator';
+import { formatEcoreMultiplicity } from '../../utils/umlMultiplicity';
+import { generateUMLFromEcore } from '../../utils/umlGenerator';
 import { umlClassNodeId } from '../../utils/umlLayoutStorage';
 
 const getData = (node: any) => node?.data as any;
@@ -60,11 +61,11 @@ describe('generateUMLFromEcore', () => {
       expect(getData(pkgNode).label).toBe('testpackage');
     });
 
-    it('should parse attributes correctly', () => {
+    it('should parse primitive attributes without multiplicity', () => {
       const { nodes } = generateUMLFromEcore(singleClassEcore);
       const classNode = nodes.find(n => getData(n).label === 'Person');
-      expect(getData(classNode).attributes).toContain('+ name: EString');
-      expect(getData(classNode).attributes).toContain('+ age: EInt');
+      expect(getData(classNode).attributes).toContain('+ name: String');
+      expect(getData(classNode).attributes).toContain('+ age: Int');
     });
 
     it('should set toolType to element', () => {

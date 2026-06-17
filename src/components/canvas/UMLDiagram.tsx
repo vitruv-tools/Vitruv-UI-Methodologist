@@ -1,7 +1,13 @@
 import React, { useState, useRef, useCallback, useEffect, useMemo, forwardRef, useImperativeHandle } from 'react';
-import { ecoreToUml, UMLAttribute, UMLRelationship, UMLRelType, UMLModel, buildAttributeTypeOptions, normalizeAttributeTypeDisplay } from '../../utils/ecoreToUml';
+import { ecoreToUml, UMLAttribute, UMLRelationship, UMLRelType, UMLModel, UMLVisibility, UMLOperation, buildAttributeTypeOptions, buildOperationReturnTypeOptions, normalizeAttributeTypeDisplay, normalizeOperationReturnType, nextUniqueAttributeName, nextUniqueOperationName, UML_VISIBILITY_OPTIONS } from '../../utils/ecoreToUml';
 import { saveMetaModelEcore, MetaModelSaveMetadata } from '../../utils/saveMetaModelEcore';
 import { umlSemanticSnapshot, umlToEcore } from '../../utils/umlToEcore';
+import {
+  normalizeMultiplicityDisplay,
+  relationshipMultiplicitySelectOptions,
+  UML_RELATIONSHIP_MULTIPLICITY_LABELS,
+} from '../../utils/umlMultiplicity';
+import { validateUmlModel } from '../../utils/umlValidation';
 import { useUmlEditHistory, UmlEditSnapshot } from '../../hooks/useUmlEditHistory';
 import {
   applyLayoutToUmlClasses,
@@ -81,7 +87,13 @@ export const WORKSPACE_DOT_BACKGROUND: React.CSSProperties = {
 function boxH(c: CLS): number {
   const nh = c.isAbstract || c.isInterface ? STEREO_H : NAME_H;
   const ah = c.attributes.length * ATTR_ROW + ATTR_PAD + ADD_BTN_H;
-  return nh + 1 + ah + 1 + METH_H;
+  const oh = c.operations.length * ATTR_ROW + (c.operations.length > 0 ? ATTR_PAD : 0) + ADD_BTN_H;
+  const mh = Math.max(METH_H, oh);
+  return nh + 1 + ah + 1 + mh;
+}
+
+function getInheritanceParentId(relationships: UMLRelationship[], classId: string): string | null {
+  return relationships.find(r => r.type === 'inheritance' && r.sourceId === classId)?.targetId ?? null;
 }
 
 function getLayoutMetrics(
@@ -139,6 +151,7 @@ interface CLS {
   isAbstract: boolean;
   isInterface: boolean;
   attributes: UMLAttribute[];
+  operations: UMLOperation[];
   x: number;
   y: number;
 }
@@ -426,9 +439,21 @@ const RelationDirectionMarker: React.FC<RelationDirectionMarkerProps> = ({
   );
 };
 
+function isEmptyCanvasTarget(target: HTMLElement): boolean {
+  return !target.closest('[data-classbox]')
+    && !target.closest('[data-rel-hit-line]')
+    && !target.closest('[data-rel-direction-marker]')
+    && !target.closest('[data-uml-toolbar]')
+    && !target.closest('[data-rel-edit-panel]')
+    && !target.closest('[data-class-edit-panel]')
+    && !target.closest('[data-uml-connect-banner]')
+    && !target.closest('[data-uml-validation]');
+}
+
 type EditState =
   | { classId: string; kind: 'name'; val: string }
-  | { classId: string; kind: 'attr'; attrId: string; name: string; type: string; multiplicity: string };
+  | { classId: string; kind: 'attr'; attrId: string; name: string; type: string; visibility: UMLVisibility }
+  | { classId: string; kind: 'op'; opId: string; name: string; returnType: string; visibility: UMLVisibility };
 
 /** `library` persists to the metamodel library API; `workspace` only updates the open project/session copy. */
 export type UmlDiagramSaveTarget = 'library' | 'workspace';
@@ -505,10 +530,17 @@ export const UMLDiagram = forwardRef<UMLDiagramHandle, UMLDiagramProps>(({
   saveContext,
   onHistoryChange,
 }, ref) => {
-  const parsed = useMemo(() => ecoreToUml(ecoreContent), [ecoreContent]);
-  const [classes, setClasses] = useState<CLS[]>(() =>
-    fileName ? applyLayoutToUmlClasses(layoutScopeId, fileName, parsed.classes) : parsed.classes,
-  );
+  const parsed = useMemo(() => {
+    const model = ecoreToUml(ecoreContent);
+    return {
+      ...model,
+      classes: model.classes.map(c => ({ ...c, operations: c.operations ?? [] })),
+    };
+  }, [ecoreContent]);
+  const [classes, setClasses] = useState<CLS[]>(() => {
+    const base = fileName ? applyLayoutToUmlClasses(layoutScopeId, fileName, parsed.classes) : parsed.classes;
+    return base.map(c => ({ ...c, operations: c.operations ?? [] }));
+  });
   const [relationships, setRelationships] = useState<UMLRelationship[]>(() => parsed.relationships);
   const [originalEcore, setOriginalEcore] = useState(ecoreContent);
   const [saving, setSaving] = useState(false);
@@ -520,6 +552,8 @@ export const UMLDiagram = forwardRef<UMLDiagramHandle, UMLDiagramProps>(({
     [relationships],
   );
   const [edit, setEdit] = useState<EditState | null>(null);
+  const editRef = useRef<EditState | null>(null);
+  editRef.current = edit;
   const [selectedClassId, setSelectedClassId] = useState<string | null>(null);
   const [selectedRelId, setSelectedRelId] = useState<string | null>(null);
   const [hoveredRelId, setHoveredRelId] = useState<string | null>(null);
@@ -603,7 +637,7 @@ export const UMLDiagram = forwardRef<UMLDiagramHandle, UMLDiagramProps>(({
       });
     }
     setOriginalEcore(content);
-    setClasses(baseClasses);
+    setClasses(baseClasses.map(c => ({ ...c, operations: c.operations ?? [] })));
     setRelationships(next.relationships);
     setSelectedClassId(null);
     setSelectedRelId(null);
@@ -776,33 +810,6 @@ export const UMLDiagram = forwardRef<UMLDiagramHandle, UMLDiagramProps>(({
     return () => el.removeEventListener('wheel', onWheel);
   }, [scheduleDebouncedLayoutSave]);
 
-  const handlePanStart = useCallback((e: React.MouseEvent) => {
-    if ((e.target as HTMLElement).closest('[data-classbox]')) return;
-    if ((e.target as HTMLElement).closest('[data-rel-hit-line]')) return;
-    if ((e.target as HTMLElement).closest('[data-rel-direction-marker]')) return;
-    if ((e.target as HTMLElement).closest('[data-uml-toolbar]')) return;
-    if ((e.target as HTMLElement).closest('[data-rel-edit-panel]')) return;
-    e.preventDefault();
-    setPanning(true);
-    const { x, y } = viewRef.current;
-    const sx = e.clientX, sy = e.clientY;
-    const onMove = (ev: MouseEvent) => {
-      const nx = x + ev.clientX - sx;
-      const ny = y + ev.clientY - sy;
-      viewRef.current = { ...viewRef.current, x: nx, y: ny };
-      setVx(nx);
-      setVy(ny);
-    };
-    const onUp = () => {
-      setPanning(false);
-      scheduleLayoutSave();
-      window.removeEventListener('mousemove', onMove);
-      window.removeEventListener('mouseup', onUp);
-    };
-    window.addEventListener('mousemove', onMove);
-    window.addEventListener('mouseup', onUp);
-  }, [scheduleLayoutSave]);
-
   const moveClass = useCallback((id: string, x: number, y: number) => {
     if (!dragHistorySavedRef.current) {
       recordChange();
@@ -832,6 +839,7 @@ export const UMLDiagram = forwardRef<UMLDiagramHandle, UMLDiagramProps>(({
         id: newId,
         name: trimmed,
         attributes: c.attributes.map((a, idx) => ({ ...a, id: `${newId}-${idx}` })),
+        operations: c.operations.map((o, idx) => ({ ...o, id: `${newId}-op-${idx}` })),
       };
     }));
     setRelationships(prev => prev.map(r => ({
@@ -844,33 +852,149 @@ export const UMLDiagram = forwardRef<UMLDiagramHandle, UMLDiagramProps>(({
     setEdit(null);
   }, [recordChange]);
 
-  const saveAttr = useCallback((classId: string, attrId: string, name: string, type: string, multiplicity: string) => {
+  const saveAttr = useCallback((classId: string, attrId: string, name: string, type: string, visibility: UMLVisibility) => {
     recordChange();
     setClasses(prev => prev.map(c => {
       if (c.id !== classId) return c;
+      const current = c.attributes.find(a => a.id === attrId);
+      if (!current) return c;
+      const otherNames = c.attributes.filter(a => a.id !== attrId).map(a => a.name);
+      const trimmed = name.trim();
+      const resolvedName = trimmed
+        ? nextUniqueAttributeName(otherNames, trimmed)
+        : current.name;
       return {
         ...c,
         attributes: c.attributes.map(a => a.id !== attrId ? a : {
           ...a,
-          name: name.trim() || a.name,
-          type: type.trim() || a.type,
-          multiplicity: multiplicity.trim() || undefined,
+          name: resolvedName,
+          type: normalizeAttributeTypeDisplay(type.trim() || a.type),
+          visibility,
         }),
       };
     }));
     setEdit(null);
   }, [recordChange]);
 
-  const addAttr = useCallback((classId: string) => {
+  const saveOp = useCallback((classId: string, opId: string, name: string, returnType: string, visibility: UMLVisibility) => {
     recordChange();
-    const newAttr: UMLAttribute = { id: `${classId}-${Date.now()}`, name: 'attribute', type: 'String', visibility: '+', multiplicity: '0..1' };
-    setClasses(prev => prev.map(c => c.id !== classId ? c : { ...c, attributes: [...c.attributes, newAttr] }));
-    setEdit({ classId, kind: 'attr', attrId: newAttr.id, name: newAttr.name, type: newAttr.type, multiplicity: newAttr.multiplicity ?? '0..1' });
+    setClasses(prev => prev.map(c => {
+      if (c.id !== classId) return c;
+      const current = c.operations.find(o => o.id === opId);
+      if (!current) return c;
+      const otherNames = c.operations.filter(o => o.id !== opId).map(o => o.name);
+      const trimmed = name.trim();
+      const resolvedName = trimmed
+        ? nextUniqueOperationName(otherNames, trimmed)
+        : current.name;
+      return {
+        ...c,
+        operations: c.operations.map(o => o.id !== opId ? o : {
+          ...o,
+          name: resolvedName,
+          returnType: normalizeOperationReturnType(returnType.trim() || o.returnType),
+          visibility,
+        }),
+      };
+    }));
+    setEdit(null);
   }, [recordChange]);
+
+  const flushPendingEdit = useCallback(() => {
+    const pending = editRef.current;
+    if (!pending) return;
+
+    const active = document.activeElement as HTMLElement | null;
+    if (active && (active.tagName === 'INPUT' || active.tagName === 'SELECT' || active.tagName === 'TEXTAREA')) {
+      active.blur();
+      return;
+    }
+
+    if (pending.kind === 'attr') {
+      saveAttr(pending.classId, pending.attrId, pending.name, pending.type, pending.visibility);
+    } else if (pending.kind === 'op') {
+      saveOp(pending.classId, pending.opId, pending.name, pending.returnType, pending.visibility);
+    } else if (pending.kind === 'name') {
+      saveName(pending.classId, pending.val);
+    }
+  }, [saveAttr, saveOp, saveName]);
+
+  const dismissClassSelection = useCallback(() => {
+    flushPendingEdit();
+    setSelectedClassId(null);
+    setEdit(null);
+  }, [flushPendingEdit]);
+
+  const handleCanvasDoubleClick = useCallback((e: React.MouseEvent) => {
+    if (!interactive) return;
+    if (!isEmptyCanvasTarget(e.target as HTMLElement)) return;
+    e.preventDefault();
+    e.stopPropagation();
+    dismissClassSelection();
+  }, [interactive, dismissClassSelection]);
+
+  const handlePanStart = useCallback((e: React.MouseEvent) => {
+    flushPendingEdit();
+    if (!isEmptyCanvasTarget(e.target as HTMLElement)) return;
+    e.preventDefault();
+    setPanning(true);
+    const { x, y } = viewRef.current;
+    const sx = e.clientX, sy = e.clientY;
+    const onMove = (ev: MouseEvent) => {
+      const nx = x + ev.clientX - sx;
+      const ny = y + ev.clientY - sy;
+      viewRef.current = { ...viewRef.current, x: nx, y: ny };
+      setVx(nx);
+      setVy(ny);
+    };
+    const onUp = () => {
+      setPanning(false);
+      scheduleLayoutSave();
+      window.removeEventListener('mousemove', onMove);
+      window.removeEventListener('mouseup', onUp);
+    };
+    window.addEventListener('mousemove', onMove);
+    window.addEventListener('mouseup', onUp);
+  }, [scheduleLayoutSave, flushPendingEdit]);
+
+  const addAttr = useCallback((classId: string) => {
+    flushPendingEdit();
+    recordChange();
+    const cls = classesRef.current.find(c => c.id === classId);
+    const uniqueName = nextUniqueAttributeName(cls?.attributes.map(a => a.name) ?? []);
+    const newAttr: UMLAttribute = {
+      id: `${classId}-${Date.now()}`,
+      name: uniqueName,
+      type: 'String',
+      visibility: '+',
+    };
+    setClasses(prev => prev.map(c => c.id !== classId ? c : { ...c, attributes: [...c.attributes, newAttr] }));
+    setEdit({ classId, kind: 'attr', attrId: newAttr.id, name: newAttr.name, type: newAttr.type, visibility: '+' });
+  }, [recordChange, flushPendingEdit]);
+
+  const addOp = useCallback((classId: string) => {
+    flushPendingEdit();
+    recordChange();
+    const cls = classesRef.current.find(c => c.id === classId);
+    const uniqueName = nextUniqueOperationName(cls?.operations.map(o => o.name) ?? []);
+    const newOp: UMLOperation = {
+      id: `${classId}-op-${Date.now()}`,
+      name: uniqueName,
+      returnType: 'Void',
+      visibility: '+',
+    };
+    setClasses(prev => prev.map(c => c.id !== classId ? c : { ...c, operations: [...c.operations, newOp] }));
+    setEdit({ classId, kind: 'op', opId: newOp.id, name: newOp.name, returnType: newOp.returnType, visibility: '+' });
+  }, [recordChange, flushPendingEdit]);
 
   const deleteAttr = useCallback((classId: string, attrId: string) => {
     recordChange();
     setClasses(prev => prev.map(c => c.id !== classId ? c : { ...c, attributes: c.attributes.filter(a => a.id !== attrId) }));
+  }, [recordChange]);
+
+  const deleteOp = useCallback((classId: string, opId: string) => {
+    recordChange();
+    setClasses(prev => prev.map(c => c.id !== classId ? c : { ...c, operations: c.operations.filter(o => o.id !== opId) }));
   }, [recordChange]);
 
   const deleteClass = useCallback((classId: string) => {
@@ -903,13 +1027,12 @@ export const UMLDiagram = forwardRef<UMLDiagramHandle, UMLDiagramProps>(({
       isAbstract: false,
       isInterface: false,
       attributes: [],
+      operations: [],
       x: cx,
       y: cy,
     };
     setClasses(prev => [...prev, newClass]);
     setSelectedClassId(id);
-    setSelectedRelId(null);
-    setEdit({ classId: id, kind: 'name', val: name });
   }, [recordChange]);
 
   const addRelationship = useCallback((sourceId: string, targetId: string) => {
@@ -919,14 +1042,16 @@ export const UMLDiagram = forwardRef<UMLDiagramHandle, UMLDiagramProps>(({
     );
     if (exists) return;
     recordChange();
+    const newRelId = `rel-${Date.now()}`;
     setRelationships(prev => [...prev, {
-      id: `rel-${Date.now()}`,
+      id: newRelId,
       sourceId,
       targetId,
       type: 'association' as UMLRelType,
       targetMultiplicity: '0..1',
       sourceMultiplicity: '1',
     }]);
+    setSelectedRelId(newRelId);
   }, [recordChange]);
 
   const deleteRelationship = useCallback((relId: string) => {
@@ -957,23 +1082,15 @@ export const UMLDiagram = forwardRef<UMLDiagramHandle, UMLDiagramProps>(({
       setEdit(null);
       return true;
     }
-    if (selectedRelId || selectedClassId) {
-      setSelectedRelId(null);
-      setSelectedClassId(null);
-      return true;
-    }
     return false;
-  }, [connectMode, edit, selectedRelId, selectedClassId]);
+  }, [connectMode, edit]);
 
   const handleRelationshipClick = useCallback((relId: string, e: React.MouseEvent) => {
     e.stopPropagation();
-    setSelectedClassId(null);
     if (e.detail >= 2 && interactive) {
       cycleRelationshipType(relId);
-      setSelectedRelId(relId);
-      return;
     }
-    setSelectedRelId(prev => (prev === relId ? null : relId));
+    setSelectedRelId(relId);
   }, [interactive, cycleRelationshipType]);
 
   const isDirty = useCallback(() => {
@@ -1079,7 +1196,7 @@ export const UMLDiagram = forwardRef<UMLDiagramHandle, UMLDiagramProps>(({
 
   const handleClassSelect = useCallback((classId: string) => {
     if (!interactive) return;
-    setSelectedRelId(null);
+    flushPendingEdit();
     if (connectMode) {
       if (!connectSourceId) {
         setConnectSourceId(classId);
@@ -1094,8 +1211,50 @@ export const UMLDiagram = forwardRef<UMLDiagramHandle, UMLDiagramProps>(({
       setSelectedClassId(classId);
       return;
     }
-    setSelectedClassId(prev => (prev === classId ? null : classId));
-  }, [interactive, connectMode, connectSourceId, addRelationship]);
+    setSelectedClassId(classId);
+  }, [interactive, connectMode, connectSourceId, addRelationship, flushPendingEdit]);
+
+  const updateClass = useCallback((classId: string, patch: Partial<Pick<CLS, 'name' | 'isAbstract' | 'isInterface'>>) => {
+    recordChange();
+    if (patch.name !== undefined) {
+      const trimmed = patch.name.trim();
+      if (!trimmed) return;
+      const newId = sanitizeUmlClassId(trimmed);
+      setClasses(prev => prev.map(c => {
+        if (c.id !== classId) return c;
+        return {
+          ...c,
+          id: newId,
+          name: trimmed,
+          attributes: c.attributes.map((a, idx) => ({ ...a, id: `${newId}-${idx}` })),
+          operations: c.operations.map((o, idx) => ({ ...o, id: `${newId}-op-${idx}` })),
+        };
+      }));
+      setRelationships(prev => prev.map(r => ({
+        ...r,
+        sourceId: r.sourceId === classId ? newId : r.sourceId,
+        targetId: r.targetId === classId ? newId : r.targetId,
+      })));
+      setSelectedClassId(prev => (prev === classId ? newId : prev));
+      setConnectSourceId(prev => (prev === classId ? newId : prev));
+      return;
+    }
+    setClasses(prev => prev.map(c => (c.id !== classId ? c : { ...c, ...patch })));
+  }, [recordChange]);
+
+  const setInheritanceParent = useCallback((classId: string, parentId: string | null) => {
+    recordChange();
+    setRelationships(prev => {
+      const filtered = prev.filter(r => !(r.type === 'inheritance' && r.sourceId === classId));
+      if (!parentId || parentId === classId) return filtered;
+      return [...filtered, {
+        id: `rel-${Date.now()}`,
+        sourceId: classId,
+        targetId: parentId,
+        type: 'inheritance' as UMLRelType,
+      }];
+    });
+  }, [recordChange]);
 
   const handleDeleteSelected = useCallback(() => {
     if (selectedRelId) {
@@ -1200,6 +1359,11 @@ export const UMLDiagram = forwardRef<UMLDiagramHandle, UMLDiagramProps>(({
     return optimizeMultiplicityBadges(raw);
   }, [edgeLayouts]);
 
+  const validationIssues = useMemo(
+    () => validateUmlModel({ classes, relationships }),
+    [classes, relationships],
+  );
+
   if (classes.length === 0) {
     return (
       <div style={{
@@ -1226,6 +1390,7 @@ export const UMLDiagram = forwardRef<UMLDiagramHandle, UMLDiagramProps>(({
 
   const canDelete = !!(selectedRelId || selectedClassId);
   const selectedRel = selectedRelId ? relationships.find(r => r.id === selectedRelId) : null;
+  const selectedClass = selectedClassId ? classes.find(c => c.id === selectedClassId) : null;
   const hasUnsavedChanges = isDirty();
   const saveMessageIsSuccess = saveMessage === 'Saved' || saveMessage === 'Saved to project';
 
@@ -1233,6 +1398,7 @@ export const UMLDiagram = forwardRef<UMLDiagramHandle, UMLDiagramProps>(({
     <div
       ref={containerRef}
       onMouseDown={handlePanStart}
+      onDoubleClick={handleCanvasDoubleClick}
       style={{
         width: '100%', height: '100%',
         overflow: 'hidden', position: 'relative',
@@ -1253,8 +1419,6 @@ export const UMLDiagram = forwardRef<UMLDiagramHandle, UMLDiagramProps>(({
       <svg
         style={{ position: 'absolute', top: 0, left: 0, width: totalW, height: totalH, overflow: 'visible' }}
         onClick={() => {
-          setSelectedRelId(null);
-          setSelectedClassId(null);
           if (connectMode) {
             setConnectMode(false);
             setConnectSourceId(null);
@@ -1295,7 +1459,6 @@ export const UMLDiagram = forwardRef<UMLDiagramHandle, UMLDiagramProps>(({
         <ClassBox
           key={cls.id}
           cls={cls}
-          diagramClassNames={classes.map(c => c.name)}
           offsetX={offsetX}
           offsetY={offsetY}
           scale={vscale}
@@ -1307,10 +1470,15 @@ export const UMLDiagram = forwardRef<UMLDiagramHandle, UMLDiagramProps>(({
           onDragStart={() => { dragHistorySavedRef.current = false; }}
           onMove={moveClass}
           onDragEnd={finishClassDrag}
-          onStartEditName={() => interactive && setEdit({ classId: cls.id, kind: 'name', val: cls.name })}
+          onStartEditName={() => {
+            if (!interactive) return;
+            flushPendingEdit();
+            setEdit({ classId: cls.id, kind: 'name', val: cls.name });
+          }}
           onSaveName={name => saveName(cls.id, name)}
           onStartEditAttr={attrId => {
             if (!interactive) return;
+            flushPendingEdit();
             const a = cls.attributes.find(x => x.id === attrId)!;
             setEdit({
               classId: cls.id,
@@ -1318,13 +1486,29 @@ export const UMLDiagram = forwardRef<UMLDiagramHandle, UMLDiagramProps>(({
               attrId,
               name: a.name,
               type: normalizeAttributeTypeDisplay(a.type),
-              multiplicity: a.multiplicity ?? '0..1',
+              visibility: a.visibility,
             });
           }}
-          onSaveAttr={(attrId, n, t, m) => saveAttr(cls.id, attrId, n, t, m)}
+          onSaveAttr={(attrId, n, t, v) => saveAttr(cls.id, attrId, n, t, v)}
           onCancelEdit={() => setEdit(null)}
           onAddAttr={() => interactive && addAttr(cls.id)}
           onDeleteAttr={attrId => deleteAttr(cls.id, attrId)}
+          onStartEditOp={opId => {
+            if (!interactive) return;
+            flushPendingEdit();
+            const o = cls.operations.find(x => x.id === opId)!;
+            setEdit({
+              classId: cls.id,
+              kind: 'op',
+              opId,
+              name: o.name,
+              returnType: normalizeOperationReturnType(o.returnType),
+              visibility: o.visibility,
+            });
+          }}
+          onSaveOp={(opId, n, rt, v) => saveOp(cls.id, opId, n, rt, v)}
+          onAddOp={() => interactive && addOp(cls.id)}
+          onDeleteOp={opId => deleteOp(cls.id, opId)}
           onDelete={() => deleteClass(cls.id)}
           onEditChange={setEdit}
         />
@@ -1451,7 +1635,6 @@ export const UMLDiagram = forwardRef<UMLDiagramHandle, UMLDiagramProps>(({
             onClick={() => {
               setConnectMode(v => !v);
               setConnectSourceId(null);
-              setSelectedRelId(null);
             }}
             label="Connect"
           >
@@ -1504,6 +1687,50 @@ export const UMLDiagram = forwardRef<UMLDiagramHandle, UMLDiagramProps>(({
           {saveMessage}
         </div>
       )}
+      {interactive && validationIssues.length > 0 && (
+        <div
+          data-uml-validation
+          style={{
+            position: 'absolute',
+            top: DIAGRAM_HINT_TOP,
+            left: selectedClass ? 288 : 12,
+            right: selectedRel ? 288 : 12,
+            zIndex: 31,
+            padding: '8px 12px',
+            borderRadius: 8,
+            background: '#fffbeb',
+            border: '1px solid #fcd34d',
+            color: '#92400e',
+            fontSize: 11,
+            fontFamily: UML.fontSans,
+            lineHeight: 1.45,
+            maxHeight: 72,
+            overflowY: 'auto',
+          }}
+        >
+          {validationIssues.slice(0, 4).map((issue, idx) => (
+            <div key={`${issue.message}-${idx}`}>
+              {issue.severity === 'error' ? '⛔' : '⚠'} {issue.message}
+            </div>
+          ))}
+          {validationIssues.length > 4 && (
+            <div style={{ marginTop: 4, fontStyle: 'italic' }}>
+              +{validationIssues.length - 4} more issue(s)
+            </div>
+          )}
+        </div>
+      )}
+      {interactive && selectedClass && (
+        <ClassEditPanel
+          cls={selectedClass}
+          classes={classes}
+          parentId={getInheritanceParentId(relationships, selectedClass.id)}
+          onUpdate={patch => updateClass(selectedClass.id, patch)}
+          onSetParent={parentId => setInheritanceParent(selectedClass.id, parentId)}
+          onDelete={() => deleteClass(selectedClass.id)}
+          onClose={() => setSelectedClassId(null)}
+        />
+      )}
       {interactive && selectedRel && (
         <RelationshipEditPanel
           rel={selectedRel}
@@ -1538,7 +1765,6 @@ UMLDiagram.displayName = 'UMLDiagram';
 
 interface ClassBoxProps {
   cls: CLS;
-  diagramClassNames: string[];
   offsetX: number;
   offsetY: number;
   scale: number;
@@ -1553,29 +1779,39 @@ interface ClassBoxProps {
   onStartEditName: () => void;
   onSaveName: (name: string) => void;
   onStartEditAttr: (attrId: string) => void;
-  onSaveAttr: (attrId: string, name: string, type: string, multiplicity: string) => void;
+  onSaveAttr: (attrId: string, name: string, type: string, visibility: UMLVisibility) => void;
   onCancelEdit: () => void;
   onAddAttr: () => void;
   onDeleteAttr: (attrId: string) => void;
+  onStartEditOp: (opId: string) => void;
+  onSaveOp: (opId: string, name: string, returnType: string, visibility: UMLVisibility) => void;
+  onAddOp: () => void;
+  onDeleteOp: (opId: string) => void;
   onDelete: () => void;
   onEditChange: (e: EditState) => void;
 }
 
 const ClassBox: React.FC<ClassBoxProps> = ({
-  cls, diagramClassNames, offsetX, offsetY, scale, selected, connectSource, interactive, edit, onSelect, onDragStart, onMove, onDragEnd, onStartEditName, onSaveName,
-  onStartEditAttr, onSaveAttr, onCancelEdit, onAddAttr, onDeleteAttr, onDelete, onEditChange,
+  cls, offsetX, offsetY, scale, selected, connectSource, interactive, edit, onSelect, onDragStart, onMove, onDragEnd, onStartEditName, onSaveName,
+  onStartEditAttr, onSaveAttr, onCancelEdit, onAddAttr, onDeleteAttr, onStartEditOp, onSaveOp, onAddOp, onDeleteOp, onDelete, onEditChange,
 }) => {
   const dragRef = useRef<{ sx: number; sy: number; ox: number; oy: number } | null>(null);
   const didDragRef = useRef(false);
   const [hoveredAttr, setHoveredAttr] = useState<string | null>(null);
+  const [hoveredOp, setHoveredOp] = useState<string | null>(null);
 
   const attrTypeOptions = useMemo(
     () => buildAttributeTypeOptions(
-      diagramClassNames,
-      cls.name,
       edit?.kind === 'attr' ? edit.type : undefined,
     ),
-    [diagramClassNames, cls.name, edit],
+    [edit],
+  );
+
+  const opReturnOptions = useMemo(
+    () => buildOperationReturnTypeOptions(
+      edit?.kind === 'op' ? edit.returnType : undefined,
+    ),
+    [edit],
   );
 
   const onBoxMouseDown = (e: React.MouseEvent) => {
@@ -1608,7 +1844,7 @@ const ClassBox: React.FC<ClassBoxProps> = ({
 
   const isAbstractOrIface = cls.isAbstract || cls.isInterface;
   const nameH = isAbstractOrIface ? STEREO_H : NAME_H;
-  const isEditingBox = edit?.classId === cls.id && (edit.kind === 'name' || edit.kind === 'attr');
+  const isEditingBox = edit?.classId === cls.id && (edit.kind === 'name' || edit.kind === 'attr' || edit.kind === 'op');
   const isEditingName = isEditingBox && edit.kind === 'name';
   const displayW = isEditingBox ? EDIT_BW : BW;
   const nameSectionH = isEditingName
@@ -1769,17 +2005,42 @@ const ClassBox: React.FC<ClassBoxProps> = ({
             onMouseEnter={() => setHoveredAttr(attr.id)}
             onMouseLeave={() => setHoveredAttr(null)}
             onDoubleClick={() => onStartEditAttr(attr.id)}
-            onSave={(n, t, m) => onSaveAttr(attr.id, n, t, m)}
+            onSave={(n, t, v) => onSaveAttr(attr.id, n, t, v)}
             onCancel={onCancelEdit}
             onDelete={() => onDeleteAttr(attr.id)}
-            onEditChange={(n, t, m) => onEditChange({ classId: cls.id, kind: 'attr', attrId: attr.id, name: n, type: t, multiplicity: m })}
+            onEditChange={(n, t, v) => onEditChange({ classId: cls.id, kind: 'attr', attrId: attr.id, name: n, type: t, visibility: v })}
           />
         ))}
         {interactive && <AddAttrRow onClick={onAddAttr} />}
       </div>
 
-      {/* ── Methods section (empty placeholder) ── */}
-      <div style={{ height: METH_H, background: '#ffffff' }} />
+      {/* ── Operations section ── */}
+      <div style={{
+        padding: isEditingBox ? '6px 0 4px' : '3px 0 2px',
+        background: '#ffffff',
+        minHeight: METH_H,
+        transition: 'padding 0.22s ease',
+      }}>
+        {cls.operations.map(op => (
+          <OpRow
+            key={op.id}
+            op={op}
+            returnOptions={opReturnOptions}
+            expanded={isEditingBox}
+            editing={edit?.kind === 'op' && edit.opId === op.id ? edit : null}
+            hovered={hoveredOp === op.id}
+            showDelete={interactive && selected}
+            onMouseEnter={() => setHoveredOp(op.id)}
+            onMouseLeave={() => setHoveredOp(null)}
+            onDoubleClick={() => onStartEditOp(op.id)}
+            onSave={(n, rt, v) => onSaveOp(op.id, n, rt, v)}
+            onCancel={onCancelEdit}
+            onDelete={() => onDeleteOp(op.id)}
+            onEditChange={(n, rt, v) => onEditChange({ classId: cls.id, kind: 'op', opId: op.id, name: n, returnType: rt, visibility: v })}
+          />
+        ))}
+        {interactive && <AddOpRow onClick={onAddOp} />}
+      </div>
     </div>
   );
 };
@@ -1796,24 +2057,10 @@ interface AttrRowProps {
   onMouseEnter: () => void;
   onMouseLeave: () => void;
   onDoubleClick: () => void;
-  onSave: (name: string, type: string, multiplicity: string) => void;
+  onSave: (name: string, type: string, visibility: UMLVisibility) => void;
   onCancel: () => void;
   onDelete: () => void;
-  onEditChange: (name: string, type: string, multiplicity: string) => void;
-}
-
-const MULTIPLICITY_OPTIONS = ['0..1', '1', '0..*', '1..*', '*'] as const;
-
-function normalizeMultiplicityOption(value: string): string {
-  return value.replace(/^\[|\]$/g, '').trim() || '0..1';
-}
-
-function multiplicitySelectOptions(current: string): string[] {
-  const normalized = normalizeMultiplicityOption(current);
-  if (MULTIPLICITY_OPTIONS.includes(normalized as typeof MULTIPLICITY_OPTIONS[number])) {
-    return [...MULTIPLICITY_OPTIONS];
-  }
-  return [...MULTIPLICITY_OPTIONS, normalized];
+  onEditChange: (name: string, type: string, visibility: UMLVisibility) => void;
 }
 
 const AttrRow: React.FC<AttrRowProps> = ({
@@ -1844,44 +2091,50 @@ const AttrRow: React.FC<AttrRowProps> = ({
         minHeight: expanded ? EDIT_ATTR_ROW : ATTR_ROW,
         flexWrap: 'nowrap',
       }}>
-        <span style={{ color: '#64748b', flexShrink: 0, fontSize: expanded ? 13 : 12 }}>+</span>
+        <select
+          value={editing.visibility}
+          onMouseDown={e => e.preventDefault()}
+          onChange={e => {
+            const visibility = e.target.value as UMLVisibility;
+            const name = (e.currentTarget.closest('div')?.querySelector('input') as HTMLInputElement | null)?.value ?? editing.name;
+            onEditChange(name, editing.type, visibility);
+            onSave(name, editing.type, visibility);
+          }}
+          style={{ ...editFieldStyle, width: expanded ? 42 : 34, flexShrink: 0, padding: '2px 2px' }}
+          title="Visibility"
+        >
+          {UML_VISIBILITY_OPTIONS.map(v => (
+            <option key={v} value={v}>{v}</option>
+          ))}
+        </select>
         <input
           autoFocus
           value={editing.name}
-          onChange={e => onEditChange(e.target.value, editing.type, editing.multiplicity)}
-          onKeyDown={e => { if (e.key === 'Enter') onSave(editing.name, editing.type, editing.multiplicity); if (e.key === 'Escape') onCancel(); }}
+          onChange={e => onEditChange(e.target.value, editing.type, editing.visibility)}
+          onBlur={e => onSave(e.currentTarget.value, editing.type, editing.visibility)}
+          onKeyDown={e => { if (e.key === 'Enter') onSave(editing.name, editing.type, editing.visibility); if (e.key === 'Escape') onCancel(); }}
           style={{ ...editFieldStyle, flex: 1, minWidth: expanded ? 72 : 40 }}
         />
         <span style={{ color: UML.textMuted, flexShrink: 0 }}>:</span>
         <select
           value={selectValue}
-          onChange={e => onEditChange(editing.name, e.target.value, editing.multiplicity)}
+          onMouseDown={e => e.preventDefault()}
+          onChange={e => {
+            const type = e.target.value;
+            const name = (e.currentTarget.closest('div')?.querySelector('input') as HTMLInputElement | null)?.value ?? editing.name;
+            onEditChange(name, type, editing.visibility);
+            onSave(name, type, editing.visibility);
+          }}
           onKeyDown={e => {
             const v = e.currentTarget.value;
-            if (e.key === 'Enter') onSave(editing.name, v, editing.multiplicity);
+            if (e.key === 'Enter') onSave(editing.name, v, editing.visibility);
             if (e.key === 'Escape') onCancel();
           }}
-          title="Attribute type"
+          title="Attribute type (primitive only)"
           style={{ ...editFieldStyle, width: expanded ? 96 : 76, color: UML.primary, fontWeight: 600 }}
         >
           {typeOptions.map(t => (
             <option key={t} value={t}>{t}</option>
-          ))}
-        </select>
-        <select
-          value={normalizeMultiplicityOption(editing.multiplicity)}
-          onChange={e => onEditChange(editing.name, editing.type, e.target.value)}
-          onKeyDown={e => {
-            const v = e.currentTarget.value;
-            if (e.key === 'Enter') onSave(editing.name, editing.type, v);
-            if (e.key === 'Escape') onCancel();
-          }}
-          onBlur={() => onSave(editing.name, editing.type, normalizeMultiplicityOption(editing.multiplicity))}
-          title="Multiplicity"
-          style={{ ...editFieldStyle, width: expanded ? 68 : 54, fontSize: expanded ? 12 : 10, color: UML.textMuted }}
-        >
-          {multiplicitySelectOptions(editing.multiplicity).map(m => (
-            <option key={m} value={m}>{m}</option>
           ))}
         </select>
       </div>
@@ -1903,17 +2156,12 @@ const AttrRow: React.FC<AttrRowProps> = ({
         gap: 3,
       }}
     >
-      <span style={{ color: '#64748b', flexShrink: 0 }}>{attr.visibility}</span>
+      <span style={{ color: '#64748b', flexShrink: 0 }}>{attr.visibility ?? '+'}</span>
       <span style={{ color: '#1e293b', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
         {attr.name}
       </span>
       <span style={{ color: '#94a3b8', flexShrink: 0 }}>:</span>
       <span style={{ color: UML.primary, flexShrink: 0, fontWeight: 600 }}>{normalizeAttributeTypeDisplay(attr.type)}</span>
-      {attr.multiplicity && (
-        <span style={{ color: '#94a3b8', fontSize: 10, flexShrink: 0 }}>
-          {normalizeMultiplicityOption(attr.multiplicity)}
-        </span>
-      )}
       {showDelete && (
         <button
           type="button"
@@ -1972,6 +2220,198 @@ const AddAttrRow: React.FC<{ onClick: () => void }> = ({ onClick }) => {
     </div>
   );
 };
+
+// ── OpRow ─────────────────────────────────────────────────────────────────────
+
+interface OpRowProps {
+  op: UMLOperation;
+  returnOptions: string[];
+  expanded?: boolean;
+  editing: EditState | null;
+  hovered: boolean;
+  showDelete?: boolean;
+  onMouseEnter: () => void;
+  onMouseLeave: () => void;
+  onDoubleClick: () => void;
+  onSave: (name: string, returnType: string, visibility: UMLVisibility) => void;
+  onCancel: () => void;
+  onDelete: () => void;
+  onEditChange: (name: string, returnType: string, visibility: UMLVisibility) => void;
+}
+
+const OpRow: React.FC<OpRowProps> = ({
+  op, returnOptions, expanded = false, editing, hovered, showDelete = false,
+  onMouseEnter, onMouseLeave, onDoubleClick, onSave, onCancel, onDelete, onEditChange,
+}) => {
+  const editFieldStyle: React.CSSProperties = expanded
+    ? { ...attrFieldStyle, fontSize: 13, padding: '4px 6px', borderRadius: 5, border: `2px solid ${UML.primaryBorder}` }
+    : attrFieldStyle;
+
+  if (editing && editing.kind === 'op') {
+    const selectValue = returnOptions.includes(editing.returnType)
+      ? editing.returnType
+      : (returnOptions[0] ?? 'Void');
+    return (
+      <div style={{
+        display: 'flex', alignItems: 'center', gap: expanded ? 6 : 2,
+        padding: expanded ? '6px 12px' : '1px 6px',
+        minHeight: expanded ? EDIT_ATTR_ROW : ATTR_ROW, flexWrap: 'nowrap',
+      }}>
+        <select
+          value={editing.visibility}
+          onMouseDown={e => e.preventDefault()}
+          onChange={e => {
+            const visibility = e.target.value as UMLVisibility;
+            const name = (e.currentTarget.closest('div')?.querySelector('input') as HTMLInputElement | null)?.value ?? editing.name;
+            onEditChange(name, editing.returnType, visibility);
+            onSave(name, editing.returnType, visibility);
+          }}
+          style={{ ...editFieldStyle, width: expanded ? 42 : 34, flexShrink: 0 }}
+        >
+          {UML_VISIBILITY_OPTIONS.map(v => <option key={v} value={v}>{v}</option>)}
+        </select>
+        <input
+          autoFocus
+          value={editing.name}
+          onChange={e => onEditChange(e.target.value, editing.returnType, editing.visibility)}
+          onBlur={e => onSave(e.currentTarget.value, editing.returnType, editing.visibility)}
+          onKeyDown={e => { if (e.key === 'Enter') onSave(editing.name, editing.returnType, editing.visibility); if (e.key === 'Escape') onCancel(); }}
+          style={{ ...editFieldStyle, flex: 1, minWidth: expanded ? 72 : 40 }}
+        />
+        <span style={{ color: UML.textMuted, flexShrink: 0 }}>() :</span>
+        <select
+          value={selectValue}
+          onMouseDown={e => e.preventDefault()}
+          onChange={e => {
+            const returnType = e.target.value;
+            const name = (e.currentTarget.closest('div')?.querySelector('input') as HTMLInputElement | null)?.value ?? editing.name;
+            onEditChange(name, returnType, editing.visibility);
+            onSave(name, returnType, editing.visibility);
+          }}
+          style={{ ...editFieldStyle, width: expanded ? 86 : 68, color: UML.primary, fontWeight: 600 }}
+        >
+          {returnOptions.map(t => <option key={t} value={t}>{t}</option>)}
+        </select>
+      </div>
+    );
+  }
+
+  return (
+    <div
+      onMouseEnter={onMouseEnter}
+      onMouseLeave={onMouseLeave}
+      onDoubleClick={onDoubleClick}
+      style={{
+        display: 'flex', alignItems: 'center', padding: '0 6px', height: ATTR_ROW,
+        background: hovered ? '#f8fafc' : 'transparent', cursor: 'default', gap: 3,
+      }}
+    >
+      <span style={{ color: '#64748b', flexShrink: 0 }}>{op.visibility ?? '+'}</span>
+      <span style={{ color: '#1e293b', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+        {op.name}()
+      </span>
+      <span style={{ color: '#94a3b8', flexShrink: 0 }}>:</span>
+      <span style={{ color: UML.primary, flexShrink: 0, fontWeight: 600 }}>{normalizeOperationReturnType(op.returnType)}</span>
+      {showDelete && (
+        <button type="button" data-no-drag onClick={e => { e.stopPropagation(); onDelete(); }}
+          title="Delete operation"
+          style={{
+            flexShrink: 0, width: 18, height: 18, border: 'none', borderRadius: 4,
+            background: hovered ? '#fee2e2' : '#fef2f2', cursor: 'pointer', color: '#dc2626',
+            fontSize: 11, padding: 0, marginLeft: 'auto',
+          }}>✕</button>
+      )}
+    </div>
+  );
+};
+
+const AddOpRow: React.FC<{ onClick: () => void }> = ({ onClick }) => {
+  const [hov, setHov] = useState(false);
+  return (
+    <div data-no-drag onClick={onClick} onMouseEnter={() => setHov(true)} onMouseLeave={() => setHov(false)}
+      style={{
+        height: ADD_BTN_H, display: 'flex', alignItems: 'center', padding: '0 8px', gap: 4,
+        cursor: 'pointer', color: hov ? UML.primary : UML.textMuted, fontFamily: UML.fontSans,
+      }}>
+      <span style={{ fontSize: 14, lineHeight: 1 }}>+</span>
+      <span style={{ fontSize: 10 }}>Add operation</span>
+    </div>
+  );
+};
+
+const ClassEditPanel: React.FC<{
+  cls: CLS;
+  classes: CLS[];
+  parentId: string | null;
+  onUpdate: (patch: Partial<Pick<CLS, 'name' | 'isAbstract' | 'isInterface'>>) => void;
+  onSetParent: (parentId: string | null) => void;
+  onDelete: () => void;
+  onClose: () => void;
+}> = ({ cls, classes, parentId, onUpdate, onSetParent, onDelete, onClose }) => (
+  <div
+    data-class-edit-panel
+    style={{
+      position: 'absolute', top: DIAGRAM_HINT_TOP, left: 12, bottom: 12, zIndex: 35,
+      width: 268, background: UML.surface, border: `1px solid ${UML.primaryBorder}`,
+      borderRadius: 10, boxShadow: `0 8px 24px ${UML.primaryRing}`,
+      display: 'flex', flexDirection: 'column', overflow: 'hidden', fontFamily: UML.fontSans,
+    }}
+    onClick={e => e.stopPropagation()}
+    onMouseDown={e => e.stopPropagation()}
+  >
+    <div style={{
+      padding: '10px 14px', borderBottom: `1px solid ${UML.border}`,
+      display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8,
+      background: `linear-gradient(180deg, ${UML.primarySoft} 0%, ${UML.surface} 100%)`,
+    }}>
+      <div>
+        <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.06em', color: UML.primary, textTransform: 'uppercase' }}>Class</div>
+        <div style={{ fontSize: 12, fontWeight: 600, color: UML.ink, marginTop: 3 }}>Edit class</div>
+      </div>
+      <button type="button" onClick={onClose} title="Close panel" style={{ border: 'none', background: 'transparent', cursor: 'pointer', color: UML.textMuted, fontSize: 14 }}>✕</button>
+    </div>
+    <div style={{ flex: 1, overflowY: 'auto', padding: '12px 14px' }}>
+      <label style={panelLabelStyle}>Class name</label>
+      <input
+        value={cls.name}
+        onChange={e => onUpdate({ name: e.target.value })}
+        style={{ ...panelInputStyle, marginBottom: 14 }}
+      />
+      <label style={{ ...panelLabelStyle, display: 'flex', alignItems: 'center', gap: 8, textTransform: 'none', fontSize: 12 }}>
+        <input type="checkbox" checked={cls.isAbstract} onChange={e => onUpdate({ isAbstract: e.target.checked })} />
+        Abstract class
+      </label>
+      <label style={{ ...panelLabelStyle, display: 'flex', alignItems: 'center', gap: 8, textTransform: 'none', fontSize: 12, marginBottom: 14 }}>
+        <input type="checkbox" checked={cls.isInterface} onChange={e => onUpdate({ isInterface: e.target.checked })} />
+        Interface
+      </label>
+      <label style={panelLabelStyle}>Superclass (inheritance)</label>
+      <select
+        value={parentId ?? ''}
+        onChange={e => onSetParent(e.target.value || null)}
+        style={{ ...panelInputStyle, marginBottom: 14 }}
+      >
+        <option value="">(none)</option>
+        {classes.filter(c => c.id !== cls.id).map(c => (
+          <option key={c.id} value={c.id}>{c.name}</option>
+        ))}
+      </select>
+      <button
+        type="button"
+        onClick={onDelete}
+        style={{
+          width: '100%', padding: '8px 10px', borderRadius: 8, border: '1px solid #fecaca',
+          background: '#fef2f2', color: '#dc2626', fontSize: 12, fontWeight: 600, cursor: 'pointer',
+        }}
+      >
+        Delete class
+      </button>
+    </div>
+    <div style={{ padding: '8px 14px', borderTop: `1px solid ${UML.border}`, fontSize: 10, color: UML.textMuted, lineHeight: 1.45 }}>
+      Edit attributes and operations on the class box · Close with ✕
+    </div>
+  </div>
+);
 
 const DiagramToolButton: React.FC<{
   title: string;
@@ -2203,25 +2643,39 @@ const RelationshipEditPanel: React.FC<{
         {rel.type !== 'inheritance' && (
           <>
             <label style={panelLabelStyle}>Source multiplicity</label>
-            <input
-              value={rel.sourceMultiplicity ?? ''}
-              onChange={e => onUpdate({ sourceMultiplicity: e.target.value || undefined })}
-              placeholder="1"
+            <select
+              value={normalizeMultiplicityDisplay(rel.sourceMultiplicity)}
+              onChange={e => onUpdate({
+                sourceMultiplicity: e.target.value ? e.target.value : undefined,
+              })}
               style={{ ...panelInputStyle, marginBottom: 14 }}
-            />
+            >
+              {relationshipMultiplicitySelectOptions(rel.sourceMultiplicity).map(m => (
+                <option key={`src-${m || 'none'}`} value={m}>
+                  {UML_RELATIONSHIP_MULTIPLICITY_LABELS[m] ?? m}
+                </option>
+              ))}
+            </select>
             <label style={panelLabelStyle}>Target multiplicity</label>
-            <input
-              value={rel.targetMultiplicity ?? ''}
-              onChange={e => onUpdate({ targetMultiplicity: e.target.value || undefined })}
-              placeholder="0..*"
+            <select
+              value={normalizeMultiplicityDisplay(rel.targetMultiplicity)}
+              onChange={e => onUpdate({
+                targetMultiplicity: e.target.value ? e.target.value : undefined,
+              })}
               style={panelInputStyle}
-            />
+            >
+              {relationshipMultiplicitySelectOptions(rel.targetMultiplicity).map(m => (
+                <option key={`tgt-${m || 'none'}`} value={m}>
+                  {UML_RELATIONSHIP_MULTIPLICITY_LABELS[m] ?? m}
+                </option>
+              ))}
+            </select>
           </>
         )}
       </div>
 
       <div style={{ padding: '8px 14px', borderTop: `1px solid ${UML.border}`, fontSize: 10, color: UML.textMuted, lineHeight: 1.45 }}>
-        Double-click a line to cycle type · Delete key removes selection
+        Double-click a line to cycle type · Delete key removes selection · Close with ✕
       </div>
     </div>
   );
