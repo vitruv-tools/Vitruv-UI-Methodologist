@@ -2,7 +2,7 @@ import { renderHook, act } from '@testing-library/react';
 import { useUmlEditHistory } from '../../hooks/useUmlEditHistory';
 
 const snap = (id: string) => ({
-  classes: [{ id, name: id, isAbstract: false, isInterface: false, attributes: [], x: 0, y: 0 }],
+  classes: [{ id, name: id, isAbstract: false, isInterface: false, attributes: [], operations: [], x: 0, y: 0 }],
   relationships: [],
 });
 

@@ -1,4 +1,8 @@
-import { parseMultiplicity, formatMultiplicity } from '../../utils/umlMultiplicity';
+import {
+  formatMultiplicity,
+  parseMultiplicity,
+  relationshipMultiplicitySelectOptions,
+} from '../../utils/umlMultiplicity';
 
 describe('umlMultiplicity', () => {
   it('parses single value', () => {
@@ -23,5 +27,13 @@ describe('umlMultiplicity', () => {
 
   it('formats range with star', () => {
     expect(formatMultiplicity('0', '-1')).toBe('0..*');
+  });
+
+  it('lists standard relationship multiplicity options', () => {
+    expect(relationshipMultiplicitySelectOptions('1')).toEqual(['', '1', '0..1', '0..*', '1..*', '*']);
+  });
+
+  it('preserves custom multiplicity in select options', () => {
+    expect(relationshipMultiplicitySelectOptions('2..5')).toContain('2..5');
   });
 });
