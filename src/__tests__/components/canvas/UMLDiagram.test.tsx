@@ -176,7 +176,8 @@ describe('UMLDiagram real component', () => {
       el.textContent?.includes('Person'),
     ) as HTMLElement;
     expect(personBox).toBeTruthy();
-    expect(parseFloat(personBox.style.left)).toBeGreaterThan(400);
+    const personBoxPosition = personBox.parentElement as HTMLElement;
+    expect(parseFloat(personBoxPosition.style.left)).toBeGreaterThan(400);
   });
 
   it('persists layout to localStorage on unmount', () => {
@@ -246,7 +247,7 @@ describe('UMLDiagram real component', () => {
 
   it('renders a minimap overview in the bottom-right corner', () => {
     const { container } = render(<UMLDiagram ecoreContent={SIMPLE_ECORE} />);
-    expect(container.querySelector('[title="Diagram overview — click or drag to pan"]')).not.toBeNull();
+    expect(container.querySelector('[aria-label="Diagram overview — click or drag to pan"]')).not.toBeNull();
   });
 
   it('shows add-class toolbar button when interactive', () => {
