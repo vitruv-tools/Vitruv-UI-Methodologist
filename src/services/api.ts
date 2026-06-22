@@ -787,9 +787,11 @@ class ApiService {
     return this.authenticatedRequest(`/api/v1/users/search?pageNumber=${pageNumber}&pageSize=${pageSize}`);
   }
 
-  async updateReactionFile(
+  private async updateUploadedFile(
     fileId: number | string,
-    file: File
+    file: File,
+    endpointSuffix: 'update-reaction' | 'update-ecore',
+    logLabel: string,
   ): Promise<{ data: string; message: string }> {
     const token = await AuthService.ensureValidToken();
 
@@ -800,7 +802,7 @@ class ApiService {
     const formData = new FormData();
     formData.append('file', file);
 
-    const url = `${this.baseURL}/api/upload/${fileId}/update-reaction`;
+    const url = `${this.baseURL}/api/upload/${fileId}/${endpointSuffix}`;
 
     const doRequest = async (authHeader: string) => {
       const response = await fetch(url, {
@@ -815,26 +817,26 @@ class ApiService {
         let errorText = '';
         try {
           errorText = await response.text();
-        } catch { }
+        } catch { /* ignore */ }
         let errorMessage = errorText;
         try {
           const parsed = JSON.parse(errorText);
           errorMessage = parsed?.message || parsed?.error || errorText;
-        } catch { }
+        } catch { /* ignore */ }
 
-        console.error('Update reaction file failed', { status: response.status });
+        console.error(`${logLabel} failed`, { status: response.status });
 
-        throw new Error(errorMessage);
+        const err = new Error(errorMessage || `Request failed with status ${response.status}`) as Error & { status?: number };
+        err.status = response.status;
+        throw err;
       }
 
       return await response.json() as { data: string; message: string };
     };
 
     try {
-      // first try with current token
       return await doRequest(`Bearer ${token}`);
-    } catch (err: any) {
-      // if it was 401, try refresh like in uploadFile
+    } catch (err: unknown) {
       if (err instanceof Error && /401/.test(err.message)) {
         try {
           await AuthService.refreshToken();
@@ -843,11 +845,25 @@ class ApiService {
             return await doRequest(`Bearer ${newToken}`);
           }
         } catch {
-          console.error('Token refresh failed during updateReactionFile');
+          console.error(`Token refresh failed during ${logLabel}`);
         }
       }
       throw err;
     }
+  }
+
+  async updateReactionFile(
+    fileId: number | string,
+    file: File,
+  ): Promise<{ data: string; message: string }> {
+    return this.updateUploadedFile(fileId, file, 'update-reaction', 'Update reaction file');
+  }
+
+  async updateEcoreFile(
+    fileId: number | string,
+    file: File,
+  ): Promise<{ data: string; message: string }> {
+    return this.updateUploadedFile(fileId, file, 'update-ecore', 'Update ecore file');
   }
 
   // Removed unused getBaseURL and setBaseURL helpers

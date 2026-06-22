@@ -2,12 +2,10 @@ import React from 'react';
 import { render, screen, fireEvent } from '@testing-library/react';
 import { FloatingUMLPanel } from '../../../components/canvas/FloatingUMLPanel';
 
-// ── mocks ─────────────────────────────────────────────────────────────────────
-
-// UMLDiagram is a complex canvas component — stub it out.
-// Note: jest.mock factories are hoisted and cannot reference out-of-scope
-// variables, so we use require() inside the factory.
 let lastDiagramProps: Record<string, unknown> = {};
+const mockIsDirty = jest.fn(() => false);
+const mockTryEscape = jest.fn(() => false);
+const mockReload = jest.fn();
 
 jest.mock('../../../components/canvas/UMLDiagram', () => {
   const { forwardRef, useImperativeHandle, createElement } = require('react');
@@ -19,6 +17,13 @@ jest.mock('../../../components/canvas/UMLDiagram', () => {
         zoomOut: jest.fn(),
         fitToView: jest.fn(),
         flushLayout: jest.fn(),
+        reload: mockReload,
+        undo: jest.fn(),
+        redo: jest.fn(),
+        canUndo: jest.fn(() => false),
+        canRedo: jest.fn(() => false),
+        isDirty: mockIsDirty,
+        tryEscape: mockTryEscape,
       }));
       return createElement('div', { 'data-testid': 'uml-diagram' });
     }),
@@ -29,13 +34,10 @@ jest.mock('../../../utils/umlLayoutStorage', () => ({
   hasSavedUmlLayout: jest.fn(() => false),
 }));
 
-// createPortal renders directly into the document body during tests
 jest.mock('react-dom', () => ({
   ...jest.requireActual('react-dom'),
   createPortal: (node: React.ReactNode) => node,
 }));
-
-// ── shared props ──────────────────────────────────────────────────────────────
 
 const defaultProps = {
   id: 'panel-1',
@@ -48,17 +50,13 @@ const defaultProps = {
   onClose: jest.fn(),
 };
 
-// ── tests ─────────────────────────────────────────────────────────────────────
-
 describe('FloatingUMLPanel', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     lastDiagramProps = {};
-  });
-
-  it('renders the panel title', () => {
-    render(<FloatingUMLPanel {...defaultProps} />);
-    expect(screen.getByText('My Ecore Model')).toBeInTheDocument();
+    mockIsDirty.mockReturnValue(false);
+    mockTryEscape.mockReturnValue(false);
+    mockReload.mockClear();
   });
 
   it('renders the UMLDiagram', () => {
@@ -76,25 +74,17 @@ describe('FloatingUMLPanel', () => {
   it('calls onClose with the panel id when the back button is clicked', () => {
     const onClose = jest.fn();
     render(<FloatingUMLPanel {...defaultProps} onClose={onClose} />);
-    fireEvent.click(screen.getByTitle('Back to canvas'));
+    fireEvent.click(screen.getByTestId('uml-page-back'));
     expect(onClose).toHaveBeenCalledWith('panel-1');
   });
 
-  it('calls onHome when the logo is clicked', () => {
-    const onClose = jest.fn();
-    const onHome = jest.fn();
-    render(<FloatingUMLPanel {...defaultProps} onClose={onClose} onHome={onHome} />);
-    fireEvent.click(screen.getByTitle('Back to overview'));
-    expect(onClose).toHaveBeenCalledWith('panel-1');
-    expect(onHome).toHaveBeenCalled();
-  });
-
-  it('shows Vitruvius logo, UML badge, and model title in the toolbar', () => {
+  it('renders the Vitruv toolbar with logo, UML badge, and title', () => {
     render(<FloatingUMLPanel {...defaultProps} />);
-    expect(screen.getByTitle('Back to overview')).toBeInTheDocument();
-    expect(screen.getByText('UML')).toBeInTheDocument();
-    expect(screen.getByText('My Ecore Model')).toBeInTheDocument();
     expect(screen.getByTestId('uml-page-toolbar')).toBeInTheDocument();
+    expect(screen.getByTestId('uml-toolbar-logo')).toBeInTheDocument();
+    expect(screen.getByTestId('uml-toolbar-badge')).toHaveTextContent('UML');
+    expect(screen.getByText('My Ecore Model')).toBeInTheDocument();
+    expect(screen.getByTestId('uml-toolbar-reload')).toBeInTheDocument();
   });
 
   it('renders as a fullscreen page overlay', () => {
@@ -109,6 +99,24 @@ describe('FloatingUMLPanel', () => {
     expect(onClose).toHaveBeenCalledWith('panel-1');
   });
 
+  it('shows unsaved changes dialog when closing with dirty diagram', () => {
+    mockIsDirty.mockReturnValue(true);
+    const onClose = jest.fn();
+    render(<FloatingUMLPanel {...defaultProps} onClose={onClose} />);
+    fireEvent.click(screen.getByTestId('uml-page-back'));
+    expect(screen.getByText('Unsaved Changes')).toBeInTheDocument();
+    expect(onClose).not.toHaveBeenCalled();
+  });
+
+  it('closes without saving when unsaved dialog is confirmed', () => {
+    mockIsDirty.mockReturnValue(true);
+    const onClose = jest.fn();
+    render(<FloatingUMLPanel {...defaultProps} onClose={onClose} />);
+    fireEvent.click(screen.getByTestId('uml-page-back'));
+    fireEvent.click(screen.getByText('Close without saving'));
+    expect(onClose).toHaveBeenCalledWith('panel-1');
+  });
+
   it('renders zoom-in, zoom-out and fit-to-view buttons', () => {
     render(<FloatingUMLPanel {...defaultProps} />);
     expect(screen.getByTitle('Zoom in')).toBeInTheDocument();
@@ -116,12 +124,24 @@ describe('FloatingUMLPanel', () => {
     expect(screen.getByTitle('Fit to view')).toBeInTheDocument();
   });
 
-  it('does not throw when zoom buttons are clicked', () => {
-    render(<FloatingUMLPanel {...defaultProps} />);
-    expect(() => {
-      fireEvent.click(screen.getByTitle('Zoom in'));
-      fireEvent.click(screen.getByTitle('Zoom out'));
-      fireEvent.click(screen.getByTitle('Fit to view'));
-    }).not.toThrow();
+  it('fetches ecore and reloads the diagram when reload is clicked', async () => {
+    const fetchEcoreFile = jest.fn().mockResolvedValue('<ecore>fresh</ecore>');
+    const onEcoreContentUpdated = jest.fn();
+    render(
+      <FloatingUMLPanel
+        {...defaultProps}
+        ecoreFileId={42}
+        fetchEcoreFile={fetchEcoreFile}
+        onEcoreContentUpdated={onEcoreContentUpdated}
+      />,
+    );
+
+    fireEvent.click(screen.getByTestId('uml-toolbar-reload'));
+
+    await screen.findByTestId('uml-reload-message');
+    expect(fetchEcoreFile).toHaveBeenCalledWith(42);
+    expect(onEcoreContentUpdated).toHaveBeenCalledWith('<ecore>fresh</ecore>');
+    expect(mockReload).toHaveBeenCalledWith('<ecore>fresh</ecore>');
+    expect(screen.getByTestId('uml-reload-message')).toHaveTextContent('Reloaded');
   });
 });

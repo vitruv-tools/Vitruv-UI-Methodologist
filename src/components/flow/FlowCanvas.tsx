@@ -94,6 +94,46 @@ function ecoreRectsOverlap(ax: number, ay: number, bx: number, by: number): bool
   );
 }
 
+function isEcorePositionFree(
+  x: number,
+  y: number,
+  existingNodes: { position: { x: number; y: number } }[],
+): boolean {
+  return !existingNodes.some(n => ecoreRectsOverlap(x, y, n.position.x, n.position.y));
+}
+
+function findFreePositionOnSpiralRing(
+  startX: number,
+  startY: number,
+  step: number,
+  ring: number,
+  existingNodes: { position: { x: number; y: number } }[],
+): { x: number; y: number } | null {
+  for (let dx = -ring; dx <= ring; dx++) {
+    for (let dy = -ring; dy <= ring; dy++) {
+      if (Math.abs(dx) !== ring && Math.abs(dy) !== ring) continue;
+      const x = startX + dx * step;
+      const y = startY + dy * step;
+      if (x < 0 || y < 0) continue;
+      if (isEcorePositionFree(x, y, existingNodes)) return { x, y };
+    }
+  }
+  return null;
+}
+
+function findFreePositionInSpiral(
+  startX: number,
+  startY: number,
+  step: number,
+  existingNodes: { position: { x: number; y: number } }[],
+): { x: number; y: number } | null {
+  for (let ring = 1; ring < 30; ring++) {
+    const position = findFreePositionOnSpiralRing(startX, startY, step, ring, existingNodes);
+    if (position) return position;
+  }
+  return null;
+}
+
 function findFreeEcorePosition(
   existingNodes: { position: { x: number; y: number } }[],
   preferred?: { x: number; y: number },
@@ -102,24 +142,43 @@ function findFreeEcorePosition(
   const startX = preferred?.x ?? 60;
   const startY = preferred?.y ?? 60;
 
-  const isFree = (x: number, y: number) =>
-    !existingNodes.some(n => ecoreRectsOverlap(x, y, n.position.x, n.position.y));
-
-  if (isFree(startX, startY)) return { x: startX, y: startY };
-
-  // Spiral outward from the preferred position until a free cell is found
-  for (let ring = 1; ring < 30; ring++) {
-    for (let dx = -ring; dx <= ring; dx++) {
-      for (let dy = -ring; dy <= ring; dy++) {
-        if (Math.abs(dx) !== ring && Math.abs(dy) !== ring) continue;
-        const x = startX + dx * step;
-        const y = startY + dy * step;
-        if (x < 0 || y < 0) continue;
-        if (isFree(x, y)) return { x, y };
-      }
-    }
+  if (isEcorePositionFree(startX, startY, existingNodes)) {
+    return { x: startX, y: startY };
   }
+
+  const spiralPosition = findFreePositionInSpiral(startX, startY, step, existingNodes);
+  if (spiralPosition) return spiralPosition;
+
   return { x: startX, y: startY + existingNodes.length * (ECORE_H + ECORE_GAP) };
+}
+
+function getReactionModeCursor(
+  addReactionMode: boolean | undefined,
+  reactionSourceId: string | null,
+): React.CSSProperties['cursor'] {
+  if (!addReactionMode) return undefined;
+  if (reactionSourceId) return 'crosshair';
+  return 'cell';
+}
+
+type PendingDeleteState = { nodeIds: string[]; edgeIds: string[]; fileId: string | null };
+
+function getPendingDeleteConfirmMessage(pendingDelete: PendingDeleteState | null): string {
+  if (!pendingDelete) {
+    return 'Do you really want to remove this element from the canvas?';
+  }
+
+  const hasFile = Boolean(pendingDelete.fileId);
+  const hasEdges = pendingDelete.edgeIds.length > 0;
+  const hasOtherNodes = pendingDelete.nodeIds.length > 0;
+
+  if (hasFile && (hasEdges || hasOtherNodes)) {
+    return 'Remove the selected connection(s) and the meta model from the canvas?';
+  }
+  if (hasEdges) {
+    return 'Remove the selected connection from the canvas?';
+  }
+  return 'Do you really want to remove this element from the canvas?';
 }
 
 // Layout constants for auto-layout algorithm (defined outside component for stable references)
@@ -160,7 +219,11 @@ interface FlowCanvasProps {
   onToolClick?: (toolType: string, toolName: string, diagramType?: string) => void;
   onDiagramChange?: (nodes: Node[], edges: Edge[]) => void;
   onEcoreFileSelect?: (fileName: string) => void;
-  onEcoreFileExpand?: (fileName: string, fileContent: string) => void;
+  onEcoreFileExpand?: (fileName: string, fileContent: string, meta?: {
+    metaModelId?: number;
+    metaModelSourceId?: number;
+    ecoreFileId?: number;
+  }) => void;
   onEcoreFileDelete?: (id: string) => void;
   onEcoreFileRename?: (id: string, newFileName: string) => void;
   userId?: string;
@@ -222,7 +285,7 @@ function edgeIndicatorPos(
   if (dx < 0) t = Math.min(t, (M - cx) / dx);
   if (dy > 0) t = Math.min(t, (h - M - cy) / dy);
   if (dy < 0) t = Math.min(t, (M - cy) / dy);
-  if (!isFinite(t) || t <= 0) return null;
+  if (!Number.isFinite(t) || t <= 0) return null;
   return {
     x: Math.max(M, Math.min(w - M, cx + dx * t)),
     y: Math.max(M, Math.min(h - M, cy + dy * t)),
@@ -255,8 +318,8 @@ const CustomMinimap: React.FC<CustomMinimapProps> = ({
   // The minimap always tracks the viewport center, so it shows exactly what the user sees,
   // scaled down proportionally to minimap size.
   const mmScale = Math.max(0.03, Math.min(2, Math.min(
-    (width  * 0.80) / Math.max(visW, 50),
-    (height * 0.80) / Math.max(visH, 50),
+    (width  * 0.8) / Math.max(visW, 50),
+    (height * 0.8) / Math.max(visH, 50),
   )));
 
   // Flow → SVG coordinate helpers (centered on current viewport center)
@@ -272,17 +335,17 @@ const CustomMinimap: React.FC<CustomMinimapProps> = ({
   const vpH = visH * mmScale;
 
   // Off-screen indicators: colored dots at minimap border pointing toward off-screen items
-  const indicators: { x: number; y: number; color: string }[] = [];
+  const indicators: { id: string; x: number; y: number; color: string }[] = [];
   ecoreNodes.forEach(node => {
     const sx = toX(node.position.x + MINI_NODE_W / 2);
     const sy = toY(node.position.y + MINI_NODE_H / 2);
     const ind = edgeIndicatorPos(sx, sy, width, height);
-    if (ind) indicators.push({ ...ind, color: cardColor(node.data?.domain) });
+    if (ind) indicators.push({ id: node.id, ...ind, color: cardColor(node.data?.domain) });
   });
   if (circle && circle.r > 0) {
     const sx = toX(circle.cx), sy = toY(circle.cy);
     const ind = edgeIndicatorPos(sx, sy, width, height);
-    if (ind) indicators.push({ ...ind, color: 'rgba(4,148,132,0.85)' });
+    if (ind) indicators.push({ id: 'circle-overlay', ...ind, color: 'rgba(4,148,132,0.85)' });
   }
 
   return (
@@ -342,8 +405,8 @@ const CustomMinimap: React.FC<CustomMinimapProps> = ({
         />
 
         {/* Off-screen edge indicators */}
-        {indicators.map((ind, i) => (
-          <circle key={i} cx={ind.x} cy={ind.y} r={4.5}
+        {indicators.map(ind => (
+          <circle key={ind.id} cx={ind.x} cy={ind.y} r={4.5}
             fill={ind.color} stroke="white" strokeWidth={1.2}
           />
         ))}
@@ -422,6 +485,7 @@ export const FlowCanvas = forwardRef<{
   getNodes: () => Node[];
   getEdges: () => Edge[];
   addEcoreFile: (fileName: string, fileContent: string, meta?: any) => void;
+  updateEcoreFileData: (fileName: string, fileContent: string, ecoreFileId?: number) => void;
   resetExpandedFile: () => void;
   undo: () => void;
   redo: () => void;
@@ -916,7 +980,7 @@ export const FlowCanvas = forwardRef<{
       const handleDeleteKey = (event: KeyboardEvent): boolean => {
         const selectedNodes = nodes.filter(n => n.selected);
         const selectedEdges = edges.filter(e => e.selected);
-        const ecoreNodes = selectedNodes.filter(n => n.type === 'ecoreFile');
+        const selectedEcoreNode = selectedNodes.find(n => n.type === 'ecoreFile');
         const otherNodes = selectedNodes.filter(n => n.type !== 'ecoreFile');
 
         // Any selected connection → remove only edges (never a meta-model box)
@@ -930,7 +994,7 @@ export const FlowCanvas = forwardRef<{
           return true;
         }
 
-        const ecoreTargetId = ecoreNodes[0]?.id ?? selectedFileId;
+        const ecoreTargetId = selectedEcoreNode?.id ?? selectedFileId;
         if (ecoreTargetId) {
           event.preventDefault();
           setPendingDelete({
@@ -970,12 +1034,12 @@ export const FlowCanvas = forwardRef<{
         if (isDeleteKey && handleDeleteKey(event)) return;
 
         const hasModifier = event.ctrlKey || event.metaKey;
-        if (hasModifier) handleUndoRedo(event);
+        if (hasModifier && !umlModalOpen) handleUndoRedo(event);
       };
 
       document.addEventListener('keydown', handleKeyDown);
       return () => document.removeEventListener('keydown', handleKeyDown);
-    }, [undo, redo, canUndo, canRedo, nodes, edges, selectedFileId, onEcoreFileDelete, setPendingDelete]);
+    }, [undo, redo, canUndo, canRedo, nodes, edges, selectedFileId, onEcoreFileDelete, setPendingDelete, umlModalOpen]);
 
 
     const buildInitialReactionCode = useCallback((sourceNodeId: string, targetNodeId: string): string => {
@@ -1086,7 +1150,7 @@ export const FlowCanvas = forwardRef<{
         if (exists) return prev;
         return [...prev, newEdge];
       });
-      window.setTimeout(() => recalculateEdgeHandles(), 0);
+      globalThis.setTimeout(() => recalculateEdgeHandles(), 0);
     }, [setEdges, recalculateEdgeHandles]);
 
     const handleConnectionEnd = useCallback(async (e: MouseEvent) => {
@@ -1576,8 +1640,34 @@ export const FlowCanvas = forwardRef<{
         setSelectedFileId(ecoreNode.id);
       }
 
-      onEcoreFileExpand?.(fileName, fileContent);
+      const data = ecoreNode?.data;
+      onEcoreFileExpand?.(fileName, fileContent, {
+        metaModelId: typeof data?.metaModelId === 'number' ? data.metaModelId : undefined,
+        metaModelSourceId: typeof data?.metaModelSourceId === 'number' ? data.metaModelSourceId : undefined,
+        ecoreFileId: typeof data?.ecoreFileId === 'number' ? data.ecoreFileId : undefined,
+      });
     }, [nodes, onEcoreFileExpand]);
+
+    const updateEcoreFileData = useCallback((
+      fileName: string,
+      fileContent: string,
+      ecoreFileId?: number,
+    ) => {
+      setNodes(current =>
+        current.map(n =>
+          n.type === 'ecoreFile' && n.data.fileName === fileName
+            ? {
+                ...n,
+                data: {
+                  ...n.data,
+                  fileContent,
+                  ...(ecoreFileId == null ? {} : { ecoreFileId }),
+                },
+              }
+            : n,
+        ),
+      );
+    }, [setNodes]);
 
     const resetExpandedFile = useCallback(() => {
       setExpandedFileId(null);
@@ -1789,11 +1879,11 @@ export const FlowCanvas = forwardRef<{
         relations.forEach(relation => processRelation(relation, preserveExisting));
       };
 
-      globalThis.addEventListener('vitruv.loadMetaModelRelations', handleLoadMetaModelRelations as EventListener);
-      globalThis.addEventListener('vitruv.loadRelations', handleLoadMetaModelRelations as EventListener);
+      globalThis.addEventListener('vitruv.loadMetaModelRelations', handleLoadMetaModelRelations);
+      globalThis.addEventListener('vitruv.loadRelations', handleLoadMetaModelRelations);
       return () => {
-        globalThis.removeEventListener('vitruv.loadMetaModelRelations', handleLoadMetaModelRelations as EventListener);
-        globalThis.removeEventListener('vitruv.loadRelations', handleLoadMetaModelRelations as EventListener);
+        globalThis.removeEventListener('vitruv.loadMetaModelRelations', handleLoadMetaModelRelations);
+        globalThis.removeEventListener('vitruv.loadRelations', handleLoadMetaModelRelations);
       };
     }, [processRelation, reactFlowInstance, fitViewToCircle, circle]);
 
@@ -2195,6 +2285,7 @@ export const FlowCanvas = forwardRef<{
       getNodes: () => nodes,
       getEdges: () => edges,
       addEcoreFile,
+      updateEcoreFileData,
       resetExpandedFile,
       undo,
       redo,
@@ -2204,7 +2295,7 @@ export const FlowCanvas = forwardRef<{
       getWorkspaceSnapshot: buildWorkspaceSnapshot,
       autoLayoutEcoreBoxes,
       fitUmlView,
-    }), [handleToolClick, loadDiagramData, nodes, edges, addEcoreFile, resetExpandedFile, undo, redo, canUndo, canRedo, getReactionEdges, buildWorkspaceSnapshot, autoLayoutEcoreBoxes, fitUmlView]);
+    }), [handleToolClick, loadDiagramData, nodes, edges, addEcoreFile, updateEcoreFileData, resetExpandedFile, undo, redo, canUndo, canRedo, getReactionEdges, buildWorkspaceSnapshot, autoLayoutEcoreBoxes, fitUmlView]);
 
     const mappedNodes = nodes.map(node => {
       if (node.type === 'editable') {
@@ -2568,6 +2659,7 @@ export const FlowCanvas = forwardRef<{
 
     const connectionLinePositions = getConnectionLinePositions();
     const umlViewActive = !!umlModalOpen;
+    const reactionModeCursor = getReactionModeCursor(addReactionMode, reactionSourceId);
 
     return (
       <div
@@ -2578,7 +2670,7 @@ export const FlowCanvas = forwardRef<{
           position: 'relative',
           border: isDragOver ? '3px dashed #3498db' : 'none',
           transition: 'border 0.2s ease',
-          cursor: addReactionMode ? (reactionSourceId ? 'crosshair' : 'cell') : undefined,
+          cursor: reactionModeCursor,
         }}
       >
         <ReactFlow
@@ -2721,8 +2813,16 @@ export const FlowCanvas = forwardRef<{
                   whiteSpace: 'nowrap',
                   fontFamily: 'inherit',
                 }}
-                onMouseEnter={e => { if (activeCanvasMode !== mode) { (e.currentTarget as HTMLButtonElement).style.background = '#f1f5f9'; (e.currentTarget as HTMLButtonElement).style.color = '#1e293b'; } }}
-                onMouseLeave={e => { if (activeCanvasMode !== mode) { (e.currentTarget as HTMLButtonElement).style.background = 'transparent'; (e.currentTarget as HTMLButtonElement).style.color = '#64748b'; } }}
+                onMouseEnter={e => {
+                  if (active) return;
+                  e.currentTarget.style.background = '#f1f5f9';
+                  e.currentTarget.style.color = '#1e293b';
+                }}
+                onMouseLeave={e => {
+                  if (active) return;
+                  e.currentTarget.style.background = 'transparent';
+                  e.currentTarget.style.color = '#64748b';
+                }}
               >
                 {icon}
                 {label}
@@ -2796,13 +2896,7 @@ export const FlowCanvas = forwardRef<{
         <ConfirmDialog
           isOpen={pendingDelete !== null}
           title="Remove from canvas"
-          message={
-            pendingDelete?.fileId && (pendingDelete.edgeIds.length > 0 || pendingDelete.nodeIds.length > 0)
-              ? 'Remove the selected connection(s) and the meta model from the canvas?'
-              : pendingDelete?.edgeIds.length
-                ? 'Remove the selected connection from the canvas?'
-                : 'Do you really want to remove this element from the canvas?'
-          }
+          message={getPendingDeleteConfirmMessage(pendingDelete)}
           confirmText="Remove"
           cancelText="Cancel"
           variant="danger"
@@ -2823,7 +2917,7 @@ export const FlowCanvas = forwardRef<{
         {detailModel && ReactDOM.createPortal(
           <>
             <div
-              role="presentation"
+              aria-hidden="true"
               data-model-detail-dismiss
               style={{
                 position: 'fixed',

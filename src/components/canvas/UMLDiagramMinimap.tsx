@@ -141,11 +141,24 @@ export const UMLDiagramMinimap: React.FC<UMLDiagramMinimapProps> = ({
     handlePointer(e.clientX, e.clientY);
     const onMove = (ev: MouseEvent) => handlePointer(ev.clientX, ev.clientY);
     const onUp = () => {
-      window.removeEventListener('mousemove', onMove);
-      window.removeEventListener('mouseup', onUp);
+      globalThis.removeEventListener('mousemove', onMove);
+      globalThis.removeEventListener('mouseup', onUp);
     };
-    window.addEventListener('mousemove', onMove);
-    window.addEventListener('mouseup', onUp);
+    globalThis.addEventListener('mousemove', onMove);
+    globalThis.addEventListener('mouseup', onUp);
+  };
+
+  const onKeyDown = (e: React.KeyboardEvent) => {
+    e.stopPropagation();
+    let dx = 0;
+    let dy = 0;
+    if (e.key === 'ArrowLeft') dx = 32;
+    if (e.key === 'ArrowRight') dx = -32;
+    if (e.key === 'ArrowUp') dy = 32;
+    if (e.key === 'ArrowDown') dy = -32;
+    if (!dx && !dy) return;
+    e.preventDefault();
+    onViewportChange(vx + dx, vy + dy);
   };
 
   if (classes.length === 0) return null;
@@ -153,8 +166,11 @@ export const UMLDiagramMinimap: React.FC<UMLDiagramMinimapProps> = ({
   return (
     <div
       ref={mapRef}
-      role="presentation"
+      role="group"
+      aria-label="Diagram overview — click or drag to pan"
+      tabIndex={0}
       onMouseDown={onMouseDown}
+      onKeyDown={onKeyDown}
       style={{
         position: 'absolute',
         left: 10,
@@ -170,9 +186,8 @@ export const UMLDiagramMinimap: React.FC<UMLDiagramMinimapProps> = ({
         cursor: 'crosshair',
         pointerEvents: 'auto',
       }}
-      title="Diagram overview — click or drag to pan"
     >
-      <svg width={MAP_W} height={MAP_H} style={{ display: 'block' }}>
+      <svg width={MAP_W} height={MAP_H} style={{ display: 'block' }} aria-hidden="true">
         {classes.map(c => {
           const left = c.x + offsetX;
           const top = c.y + offsetY;

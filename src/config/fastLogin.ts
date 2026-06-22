@@ -12,7 +12,7 @@ export type FastLoginIdp = (typeof FAST_LOGIN_IDP)[keyof typeof FAST_LOGIN_IDP];
 export const FAST_LOGIN_REDIRECT_STORAGE_KEY = 'fast_login_redirect_uri';
 
 /** Frontend route that receives the OAuth authorization code from Keycloak. */
-export const FAST_LOGIN_CALLBACK_PATH = '/auth/callback';
+export const FAST_LOGIN_CALLBACK_PATH = '/login/callback';
 
 /**
  * Keycloak / OIDC base URL (no trailing slash).

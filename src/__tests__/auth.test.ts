@@ -378,7 +378,7 @@ describe('AuthService.exchangeFastLoginCode', () => {
   });
 
   it('stores all tokens in localStorage on success', async () => {
-    sessionStorage.setItem('fast_login_redirect_uri', 'http://localhost:3000/auth/callback');
+    sessionStorage.setItem('fast_login_redirect_uri', 'http://localhost:3000/login/callback');
     (global.fetch as jest.Mock).mockResolvedValue({
       ok: true,
       json: async () => baseAuthResponse,
@@ -396,7 +396,7 @@ describe('AuthService.exchangeFastLoginCode', () => {
   });
 
   it('POSTs to the token endpoint with correct form fields', async () => {
-    sessionStorage.setItem('fast_login_redirect_uri', 'http://localhost:3000/auth/callback');
+    sessionStorage.setItem('fast_login_redirect_uri', 'http://localhost:3000/login/callback');
     (global.fetch as jest.Mock).mockResolvedValue({
       ok: true,
       json: async () => baseAuthResponse,
@@ -412,11 +412,11 @@ describe('AuthService.exchangeFastLoginCode', () => {
     expect(body.get('grant_type')).toBe('authorization_code');
     expect(body.get('client_id')).toBe('normal-customer-mobile-app');
     expect(body.get('code')).toBe('my-code');
-    expect(body.get('redirect_uri')).toBe('http://localhost:3000/auth/callback');
+    expect(body.get('redirect_uri')).toBe('http://localhost:3000/login/callback');
   });
 
   it('clears the saved redirect_uri from sessionStorage after success', async () => {
-    sessionStorage.setItem('fast_login_redirect_uri', 'http://localhost:3000/auth/callback');
+    sessionStorage.setItem('fast_login_redirect_uri', 'http://localhost:3000/login/callback');
     (global.fetch as jest.Mock).mockResolvedValue({
       ok: true,
       json: async () => baseAuthResponse,
@@ -443,7 +443,7 @@ describe('AuthService.exchangeFastLoginCode', () => {
   });
 
   it('throws parsed error message when token endpoint returns error', async () => {
-    sessionStorage.setItem('fast_login_redirect_uri', 'http://localhost:3000/auth/callback');
+    sessionStorage.setItem('fast_login_redirect_uri', 'http://localhost:3000/login/callback');
     (global.fetch as jest.Mock).mockResolvedValue({
       ok: false,
       status: 400,
@@ -455,7 +455,7 @@ describe('AuthService.exchangeFastLoginCode', () => {
   });
 
   it('throws when token endpoint error body is empty (falls back to statusText)', async () => {
-    sessionStorage.setItem('fast_login_redirect_uri', 'http://localhost:3000/auth/callback');
+    sessionStorage.setItem('fast_login_redirect_uri', 'http://localhost:3000/login/callback');
     (global.fetch as jest.Mock).mockResolvedValue({
       ok: false,
       status: 400,

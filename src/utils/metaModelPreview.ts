@@ -16,6 +16,27 @@ export function metaModelPreviewLayoutFileName(
   return `metamodel-${id}-${safe}`;
 }
 
+/** Scope for UML layouts on a VSUM canvas workspace. */
+export function canvasUmlLayoutScope(vsumProjectId: number | undefined | null): string {
+  if (vsumProjectId != null && Number.isFinite(vsumProjectId)) {
+    return `vsum-${vsumProjectId}`;
+  }
+  return 'default';
+}
+
+/** Stable layout file key for a metamodel open on the canvas. */
+export function canvasUmlLayoutFileName(opts: {
+  fileName: string;
+  metaModelSourceId?: number;
+  metaModelId?: number;
+}): string {
+  const libraryId = opts.metaModelSourceId ?? opts.metaModelId;
+  if (libraryId != null) {
+    return metaModelPreviewLayoutFileName(libraryId, opts.fileName);
+  }
+  return opts.fileName;
+}
+
 export function shouldFitMetaModelPreview(
   modelId: number | string,
   modelName?: string,

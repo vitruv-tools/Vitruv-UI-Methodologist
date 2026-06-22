@@ -20,7 +20,7 @@ jest.mock('../../contexts/AuthContext', () => ({
 function setSearch(search: string) {
   Object.defineProperty(globalThis, 'location', {
     configurable: true,
-    value: { ...globalThis.location, search, pathname: '/auth/callback' },
+    value: { ...globalThis.location, search, pathname: '/login/callback' },
   });
 }
 

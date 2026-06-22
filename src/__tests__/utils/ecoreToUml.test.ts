@@ -1,4 +1,4 @@
-import { ecoreToUml } from '../../utils/ecoreToUml';
+import { ecoreToUml, nextUniqueAttributeName } from '../../utils/ecoreToUml';
 
 // ── helpers ───────────────────────────────────────────────────────────────────
 
@@ -25,6 +25,21 @@ const eRef = (
   `<eStructuralFeatures xsi:type="ecore:EReference" name="${name}" eType="#//${targetName}" containment="${containment}" lowerBound="${lower}" upperBound="${upper}"/>`;
 
 // ── invalid / empty input ─────────────────────────────────────────────────────
+
+describe('nextUniqueAttributeName', () => {
+  it('returns the base name when unused', () => {
+    expect(nextUniqueAttributeName(['other'], 'attribute')).toBe('attribute');
+  });
+
+  it('suffixes when the base name is taken', () => {
+    expect(nextUniqueAttributeName(['attribute'], 'attribute')).toBe('attribute2');
+    expect(nextUniqueAttributeName(['attribute', 'attribute2'], 'attribute')).toBe('attribute3');
+  });
+
+  it('is case-insensitive', () => {
+    expect(nextUniqueAttributeName(['Name'], 'name')).toBe('name2');
+  });
+});
 
 describe('ecoreToUml – invalid / empty input', () => {
   it('returns empty model for malformed XML', () => {
@@ -110,29 +125,46 @@ describe('ecoreToUml – intelligent layout', () => {
 // ── attributes ────────────────────────────────────────────────────────────────
 
 describe('ecoreToUml – attributes', () => {
-  it('parses an EAttribute into a UMLAttribute', () => {
+  it('parses an EAttribute into a UMLAttribute with primitive display type', () => {
     const xml = wrap(eClass('Person', eAttr('name', '//EString', '1', '1')));
     const { classes } = ecoreToUml(xml);
     const attr = classes[0].attributes[0];
     expect(attr.name).toBe('name');
-    expect(attr.type).toBe('EString');
+    expect(attr.type).toBe('String');
     expect(attr.visibility).toBe('+');
   });
 
-  it('includes multiplicity when bounds are present', () => {
-    const xml = wrap(eClass('Team', eAttr('scores', '//EInt', '0', '-1')));
+  it('parses attribute visibility from uml.visibility annotation', () => {
+    const attrXml =
+      '<eStructuralFeatures xsi:type="ecore:EAttribute" name="secret" eType="//EString" lowerBound="0" upperBound="1">' +
+      '<eAnnotations source="uml.visibility"><details key="symbol" value="-"/></eAnnotations>' +
+      '</eStructuralFeatures>';
+    const xml = wrap(eClass('Person', attrXml));
     const { classes } = ecoreToUml(xml);
-    expect(classes[0].attributes[0].multiplicity).toBe('[0..*]');
+    expect(classes[0].attributes[0].visibility).toBe('-');
   });
 
-  it('sets multiplicity to undefined when bounds are absent', () => {
-    const xml = wrap(
-      `<eClassifiers xsi:type="ecore:EClass" name="Bare">
-         <eStructuralFeatures xsi:type="ecore:EAttribute" name="val" eType="//EString"/>
-       </eClassifiers>`,
-    );
+  it('does not include multiplicity on attributes', () => {
+    const xml = wrap(eClass('Team', eAttr('scores', '//EInt', '0', '-1')));
     const { classes } = ecoreToUml(xml);
-    expect(classes[0].attributes[0].multiplicity).toBeUndefined();
+    expect(classes[0].attributes[0]).not.toHaveProperty('multiplicity');
+    expect(classes[0].attributes[0].type).toBe('Int');
+  });
+
+  it('converts class-typed EAttribute into an association', () => {
+    const xml = wrap(
+      eClass('Order', eAttr('customer', '#//Customer', '1', '1')) +
+      eClass('Customer'),
+    );
+    const { classes, relationships } = ecoreToUml(xml);
+    const order = classes.find(c => c.name === 'Order')!;
+    expect(order.attributes).toHaveLength(0);
+    expect(relationships).toContainEqual(expect.objectContaining({
+      sourceId: 'Order',
+      targetId: 'Customer',
+      type: 'association',
+      label: 'customer',
+    }));
   });
 
   it('does NOT include EReference elements as attributes', () => {
@@ -152,6 +184,15 @@ describe('ecoreToUml – attributes', () => {
     const { classes } = ecoreToUml(xml);
     const ids = classes[0].attributes.map(a => a.id);
     expect(ids).toEqual(['X-0', 'X-1', 'X-2']);
+  });
+
+  it('ensures attribute names are unique within a class', () => {
+    const xml = wrap(
+      eClass('X', eAttr('name') + eAttr('name') + eAttr('name')),
+    );
+    const { classes } = ecoreToUml(xml);
+    const names = classes[0].attributes.map(a => a.name);
+    expect(names).toEqual(['name', 'name2', 'name3']);
   });
 });
 

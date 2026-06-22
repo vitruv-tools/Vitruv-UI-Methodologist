@@ -1,6 +1,8 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { UMLDiagram, UMLDiagramHandle } from './UMLDiagram';
+import { UMLDiagram, UMLDiagramHandle, UmlDiagramSaveContext } from './UMLDiagram';
+import { FloatingUMLPanel } from './FloatingUMLPanel';
 import { MetaModelFileDownloads } from '../ui/MetaModelFileDownloads';
+import { ConfirmDialog } from '../ui/ConfirmDialog';
 import {
   METAMODEL_PREVIEW_LAYOUT_SCOPE,
   metaModelPreviewLayoutFileName,
@@ -33,6 +35,8 @@ interface ModelDrawerProps {
   publicLibraryModels?: DrawerModel[];
   /** Callback to fetch raw ecore content by file id */
   onFetchFile?: (fileId: number) => Promise<string>;
+  /** Delete a metamodel from the user's library (My Library tab only) */
+  onDeleteModel?: (model: DrawerModel) => Promise<void>;
 }
 
 // ── color scheme per domain ───────────────────────────────────────────────────
@@ -66,7 +70,9 @@ function getTheme(domain?: string): DomainTheme {
   const key = domain?.toLowerCase().trim() || 'default';
   if (THEMES[key]) return THEMES[key];
   let h = 0;
-  for (let i = 0; i < key.length; i++) h = key.charCodeAt(i) + ((h << 5) - h);
+  for (const char of key) {
+    h = (char.codePointAt(0) ?? 0) + ((h << 5) - h);
+  }
   return FALLBACK_PALETTE[Math.abs(h) % FALLBACK_PALETTE.length];
 }
 
@@ -81,12 +87,14 @@ const formatDate = (iso?: string) => {
 
 export const ModelDrawer: React.FC<ModelDrawerProps> = ({
   models, addedModelIds = new Set(), loading, onClose, onAddModel,
-  myLibraryModels = [], publicLibraryModels = [], onFetchFile,
+  myLibraryModels = [], publicLibraryModels = [], onFetchFile, onDeleteModel,
 }) => {
   const [libTab, setLibTab] = useState<'my' | 'public'>('my');
   const [search, setSearch] = useState('');
-  const [domainFilter, setDomain] = useState<string | null>(null);
-  const [detailModel, setDetail] = useState<DrawerModel | null>(null);
+  const [domainFilter, setDomainFilter] = useState<string | null>(null);
+  const [detailModel, setDetailModel] = useState<DrawerModel | null>(null);
+  const [deletingModel, setDeletingModel] = useState<DrawerModel | null>(null);
+  const [deleteError, setDeleteError] = useState('');
 
   const onCanvas = models.filter(m => addedModelIds.has(m.id));
   const rawLib = libTab === 'my' ? myLibraryModels : publicLibraryModels;
@@ -103,11 +111,23 @@ export const ModelDrawer: React.FC<ModelDrawerProps> = ({
   const switchTab = (tab: 'my' | 'public') => {
     setLibTab(tab);
     setSearch('');
-    setDomain(null);
+    setDomainFilter(null);
   };
 
-  const openDetail = (model: DrawerModel) => setDetail(model);
-  const closeDetail = () => setDetail(null);
+  const openDetail = (model: DrawerModel) => setDetailModel(model);
+  const closeDetail = () => setDetailModel(null);
+
+  const handleConfirmDelete = async () => {
+    if (!deletingModel || !onDeleteModel) return;
+    try {
+      await onDeleteModel(deletingModel);
+      setDeletingModel(null);
+      setDeleteError('');
+      closeDetail();
+    } catch (e: any) {
+      setDeleteError(e?.message || 'Failed to delete');
+    }
+  };
 
   return (
     <div style={{ width: '100%', height: '100%', background: '#ffffff', display: 'flex', flexDirection: 'column', fontFamily: FONT }}>
@@ -149,8 +169,16 @@ export const ModelDrawer: React.FC<ModelDrawerProps> = ({
             color: '#94a3b8', fontSize: 14, lineHeight: 1, padding: '3px 5px',
             borderRadius: 5, transition: 'all 0.1s', marginLeft: 'auto',
           }}
-          onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.background = '#f1f5f9'; (e.currentTarget as HTMLButtonElement).style.color = '#475569'; }}
-          onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.background = 'transparent'; (e.currentTarget as HTMLButtonElement).style.color = '#94a3b8'; }}
+          onMouseEnter={e => {
+            const button = e.currentTarget;
+            button.style.background = '#f1f5f9';
+            button.style.color = '#475569';
+          }}
+          onMouseLeave={e => {
+            const button = e.currentTarget;
+            button.style.background = 'transparent';
+            button.style.color = '#94a3b8';
+          }}
           title="Close"
         >
           ✕
@@ -160,7 +188,13 @@ export const ModelDrawer: React.FC<ModelDrawerProps> = ({
       {/* ── Body ── */}
       <div style={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
         {detailModel ? (
-          <DetailView model={detailModel} onFetchFile={onFetchFile} onAddModel={onAddModel} addedModelIds={addedModelIds} />
+          <DetailView
+            model={detailModel}
+            onFetchFile={onFetchFile}
+            onAddModel={onAddModel}
+            addedModelIds={addedModelIds}
+            onDelete={libTab === 'my' && onDeleteModel ? () => setDeletingModel(detailModel) : undefined}
+          />
         ) : (
           <LibraryView
             loading={!!loading}
@@ -171,13 +205,24 @@ export const ModelDrawer: React.FC<ModelDrawerProps> = ({
             setSearch={setSearch}
             domains={domains}
             domainFilter={domainFilter}
-            setDomain={setDomain}
+            setDomainFilter={setDomainFilter}
             fromLibrary={fromLibrary}
             onAddModel={onAddModel}
             onOpenDetail={openDetail}
           />
         )}
       </div>
+
+      <ConfirmDialog
+        isOpen={!!deletingModel}
+        title="Delete model"
+        message={deleteError || `Do you really want to delete "${deletingModel?.name}"? This action cannot be undone.`}
+        confirmText="Delete"
+        cancelText="Cancel"
+        variant="danger"
+        onConfirm={handleConfirmDelete}
+        onCancel={() => { setDeletingModel(null); setDeleteError(''); }}
+      />
     </div>
   );
 };
@@ -193,7 +238,7 @@ interface LibraryViewProps {
   setSearch: (v: string) => void;
   domains: string[];
   domainFilter: string | null;
-  setDomain: (d: string | null) => void;
+  setDomainFilter: (d: string | null) => void;
   fromLibrary: DrawerModel[];
   onAddModel: (m: DrawerModel) => void;
   onOpenDetail: (m: DrawerModel) => void;
@@ -201,7 +246,7 @@ interface LibraryViewProps {
 
 const LibraryView: React.FC<LibraryViewProps> = ({
   loading, onCanvas, libTab, switchTab, search, setSearch,
-  domains, domainFilter, setDomain, fromLibrary, onAddModel, onOpenDetail,
+  domains, domainFilter, setDomainFilter, fromLibrary, onAddModel, onOpenDetail,
 }) => (
   <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column' }}>
     {loading ? (
@@ -282,7 +327,7 @@ const LibraryView: React.FC<LibraryViewProps> = ({
                   const active = domainFilter === domain;
                   const theme = getTheme(domain);
                   return (
-                    <button key={domain} onClick={() => setDomain(active ? null : domain)} style={{
+                    <button key={domain} onClick={() => setDomainFilter(active ? null : domain)} style={{
                       padding: '3px 9px', border: 'none', borderRadius: 20,
                       fontSize: 10, fontWeight: 600, cursor: 'pointer', letterSpacing: '0.03em',
                       background: active ? theme.badge : '#f1f5f9',
@@ -325,15 +370,38 @@ interface DetailViewProps {
   onFetchFile?: (fileId: number) => Promise<string>;
   onAddModel: (m: DrawerModel) => void;
   addedModelIds: Set<number>;
+  onDelete?: () => void;
 }
 
-const DetailView: React.FC<DetailViewProps> = ({ model, onFetchFile, onAddModel, addedModelIds }) => {
+const DetailView: React.FC<DetailViewProps> = ({ model, onFetchFile, onAddModel, addedModelIds, onDelete }) => {
   const [ecoreContent, setEcoreContent] = useState<string | null>(model.ecoreContent ?? null);
+  const [ecoreFileId, setEcoreFileId] = useState<number | undefined>(model.ecoreFileId);
   const [fetchError, setFetchError] = useState(false);
   const [fetchingUml, setFetchingUml] = useState(false);
+  const [umlExpanded, setUmlExpanded] = useState(false);
   const diagramRef = useRef<UMLDiagramHandle>(null);
   const theme = getTheme(model.domain);
   const isOnCanvas = addedModelIds.has(model.id);
+
+  const umlSaveContext: UmlDiagramSaveContext | undefined =
+    model.id && ecoreFileId
+      ? {
+          metaModelId: String(model.id),
+          ecoreFileId,
+          modelName: model.name,
+          saveTarget: 'library',
+          metaModelMetadata: {
+            description: model.description || '',
+            domain: model.domain || '',
+            keyword: model.keyword || [],
+            genModelFileId: model.genModelFileId,
+          },
+          onSaved: ({ ecoreContent: saved, ecoreFileId: newFileId }) => {
+            setEcoreContent(saved);
+            setEcoreFileId(newFileId);
+          },
+        }
+      : undefined;
 
   useEffect(() => {
     if (ecoreContent || !model.ecoreFileId || !onFetchFile) return;
@@ -428,8 +496,8 @@ const DetailView: React.FC<DetailViewProps> = ({ model, onFetchFile, onAddModel,
             </div>
           )}
 
-          {/* Add / on canvas button */}
-          <div style={{ paddingTop: model.createdAt ? 0 : 8 }}>
+          {/* Add / on canvas / delete */}
+          <div style={{ paddingTop: model.createdAt ? 0 : 8, display: 'flex', flexDirection: 'column', gap: 8 }}>
             {isOnCanvas ? (
               <div style={{
                 padding: '9px 0', borderRadius: 8,
@@ -461,6 +529,26 @@ const DetailView: React.FC<DetailViewProps> = ({ model, onFetchFile, onAddModel,
                 Add to canvas
               </button>
             )}
+            {onDelete && (
+              <button
+                onClick={onDelete}
+                title="Delete meta-model"
+                style={{
+                  width: '100%', padding: '9px 0', border: '1px solid #fecaca', borderRadius: 8,
+                  background: '#fff', color: '#dc2626', fontSize: 12, fontWeight: 600,
+                  cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+                  transition: 'background 0.15s', fontFamily: FONT,
+                }}
+                onMouseEnter={e => (e.currentTarget.style.background = '#fef2f2')}
+                onMouseLeave={e => (e.currentTarget.style.background = '#fff')}
+              >
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <polyline points="3 6 5 6 21 6" />
+                  <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+                </svg>
+                Delete model
+              </button>
+            )}
           </div>
         </div>
 
@@ -469,9 +557,15 @@ const DetailView: React.FC<DetailViewProps> = ({ model, onFetchFile, onAddModel,
         <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', background: '#ffffff' }}>
           {/* Label + zoom controls */}
           <div style={{ padding: '14px 18px 10px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexShrink: 0 }}>
-            <span style={{ fontSize: 13, fontWeight: 600, color: '#374151', fontFamily: FONT }}>UML Preview</span>
+            <span style={{ fontSize: 13, fontWeight: 600, color: '#374151', fontFamily: FONT }}>UML</span>
             {ecoreContent && (
               <div style={{ display: 'flex', gap: 4 }}>
+                <PreviewBtn title="Open full-screen UML editor" onClick={() => setUmlExpanded(true)}>
+                  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <polyline points="15 3 21 3 21 9" /><polyline points="9 21 3 21 3 15" />
+                    <line x1="21" y1="3" x2="14" y2="10" /><line x1="3" y1="21" x2="10" y2="14" />
+                  </svg>
+                </PreviewBtn>
                 <PreviewBtn title="Zoom in" onClick={() => diagramRef.current?.zoomIn()}>
                   <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
                     <line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" />
@@ -517,12 +611,29 @@ const DetailView: React.FC<DetailViewProps> = ({ model, onFetchFile, onAddModel,
                   ecoreContent={ecoreContent}
                   fileName={metaModelPreviewLayoutFileName(model.id, model.name)}
                   layoutScopeId={METAMODEL_PREVIEW_LAYOUT_SCOPE}
+                  saveContext={umlSaveContext}
                 />
               )}
             </div>
           </div>
         </div>
       </div>
+      {umlExpanded && ecoreContent && (
+        <FloatingUMLPanel
+          id={`metamodel-drawer-${model.id}`}
+          title={model.name}
+          fileName={metaModelPreviewLayoutFileName(model.id, model.name)}
+          layoutScopeId={METAMODEL_PREVIEW_LAYOUT_SCOPE}
+          ecoreContent={ecoreContent}
+          saveContext={umlSaveContext}
+          onClose={() => setUmlExpanded(false)}
+          onFocus={() => {}}
+          ecoreFileId={ecoreFileId}
+          fetchEcoreFile={onFetchFile}
+          onEcoreContentUpdated={(content) => setEcoreContent(content)}
+          zIndex={10001}
+        />
+      )}
     </div>
   );
 };
@@ -586,16 +697,27 @@ const ModelCard: React.FC<ModelCardProps> = ({ model, onCanvas, onAdd, onOpenDet
     onOpenDetail(model);
   };
 
+  const openDetailsFromKeyboard = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault();
+      onOpenDetail(model);
+    }
+  };
+
   if (onCanvas) {
     return (
-      <div
+      <button
+        type="button"
         title="Right-click for details"
+        aria-label={`View details for ${model.name}`}
         onContextMenu={handleContextMenu}
+        onKeyDown={openDetailsFromKeyboard}
         style={{
           display: 'flex', flexDirection: 'row', alignItems: 'center',
           gap: 10, padding: '7px 10px', borderRadius: 8,
           background: '#f8fafc', border: '1.5px solid #e2e8f0',
           width: '100%', boxSizing: 'border-box', cursor: 'context-menu',
+          fontFamily: 'inherit', textAlign: 'left',
         }}
       >
         {/* Same BoxIcon as library cards, muted */}
@@ -634,7 +756,7 @@ const ModelCard: React.FC<ModelCardProps> = ({ model, onCanvas, onAdd, onOpenDet
           <circle cx="8" cy="8" r="7" fill="#dcfce7" stroke="#86efac" strokeWidth="1.2" />
           <polyline points="5,8.5 7,10.5 11,6" stroke="#16a34a" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" fill="none" />
         </svg>
-      </div>
+      </button>
     );
   }
 
@@ -705,9 +827,9 @@ const BoxIcon: React.FC<{ color: string; size?: number }> = ({ color, size = 38 
 
 function shadeDown(hex: string): string {
   try {
-    const r = parseInt(hex.slice(1, 3), 16);
-    const g = parseInt(hex.slice(3, 5), 16);
-    const b = parseInt(hex.slice(5, 7), 16);
+    const r = Number.parseInt(hex.slice(1, 3), 16);
+    const g = Number.parseInt(hex.slice(3, 5), 16);
+    const b = Number.parseInt(hex.slice(5, 7), 16);
     const d = (v: number) => Math.max(0, v - 12).toString(16).padStart(2, '0');
     return `#${d(r)}${d(g)}${d(b)}`;
   } catch { return hex; }

@@ -47,35 +47,25 @@ describe('ecoreToUml – EClass without xsi:type attribute', () => {
   });
 });
 
-// ── attribute multiplicity edge cases ────────────────────────────────────────
+// ── attribute UML rules ───────────────────────────────────────────────────────
 
-describe('ecoreToUml – multiplicity edge cases', () => {
-  it('renders [0..1] for lowerBound=0 upperBound=1', () => {
+describe('ecoreToUml – attribute UML rules', () => {
+  it('imports primitive attributes without multiplicity', () => {
     const xml = wrap(eClass('A', eAttr('x', '//EInt', '0', '1')));
     const { classes } = ecoreToUml(xml);
-    expect(classes[0].attributes[0].multiplicity).toBe('[0..1]');
+    expect(classes[0].attributes[0]).toMatchObject({ name: 'x', type: 'Int' });
+    expect(classes[0].attributes[0]).not.toHaveProperty('multiplicity');
   });
 
-  it('renders [1..1] for lowerBound=1 upperBound=1', () => {
-    const xml = wrap(eClass('A', eAttr('x', '//EInt', '1', '1')));
-    const { classes } = ecoreToUml(xml);
-    expect(classes[0].attributes[0].multiplicity).toBe('[1..1]');
-  });
-
-  it('renders [0..*] for upperBound=-1', () => {
-    const xml = wrap(eClass('A', eAttr('x', '//EString', '0', '-1')));
-    const { classes } = ecoreToUml(xml);
-    expect(classes[0].attributes[0].multiplicity).toBe('[0..*]');
-  });
-
-  it('leaves multiplicity undefined when only lowerBound is present', () => {
+  it('skips non-primitive attribute types that are not class references', () => {
     const xml = wrap(
       `<eClassifiers xsi:type="ecore:EClass" name="A">
-         <eStructuralFeatures xsi:type="ecore:EAttribute" name="v" eType="//EString" lowerBound="1"/>
+         <eStructuralFeatures xsi:type="ecore:EAttribute" name="v"
+           eType="#//sub/NestedType" lowerBound="0" upperBound="1"/>
        </eClassifiers>`,
     );
     const { classes } = ecoreToUml(xml);
-    expect(classes[0].attributes[0].multiplicity).toBeUndefined();
+    expect(classes[0].attributes).toHaveLength(0);
   });
 });
 
@@ -122,7 +112,7 @@ describe('ecoreToUml – relationship id stability', () => {
 // ── type name parsing edge cases ──────────────────────────────────────────────
 
 describe('ecoreToUml – type name parsing', () => {
-  it('extracts type name from ecore: prefixed eType', () => {
+  it('extracts primitive type name from ecore: prefixed eType', () => {
     const xml = wrap(
       `<eClassifiers xsi:type="ecore:EClass" name="A">
          <eStructuralFeatures xsi:type="ecore:EAttribute" name="v"
@@ -130,10 +120,10 @@ describe('ecoreToUml – type name parsing', () => {
        </eClassifiers>`,
     );
     const { classes } = ecoreToUml(xml);
-    expect(classes[0].attributes[0].type).toBe('EString');
+    expect(classes[0].attributes[0].type).toBe('String');
   });
 
-  it('handles deeply nested #// type path', () => {
+  it('skips class-like eType paths when target class is absent', () => {
     const xml = wrap(
       `<eClassifiers xsi:type="ecore:EClass" name="A">
          <eStructuralFeatures xsi:type="ecore:EAttribute" name="v"
@@ -141,7 +131,7 @@ describe('ecoreToUml – type name parsing', () => {
        </eClassifiers>`,
     );
     const { classes } = ecoreToUml(xml);
-    expect(classes[0].attributes[0].type).toBe('NestedType');
+    expect(classes[0].attributes).toHaveLength(0);
   });
 });
 
