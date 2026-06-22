@@ -23,6 +23,8 @@ interface EcoreFileBoxData {
   isExpanded?: boolean;
   isConnectionActive?: boolean;
   isReactionSource?: boolean;
+  isConstraintContext?: boolean;
+  isConstraintFilter?: boolean;
   description?: string;
   keywords?: string;
   domain?: string;
@@ -85,17 +87,21 @@ export function handleTipFromRect(
 
 // ── card visual helpers ───────────────────────────────────────────────────────
 
-function resolveCardBorder(bg: string, isReactionSource: boolean, selected: boolean, isHovered: boolean, borderColor: string): string {
-  if (isReactionSource) return '#1e293b';
-  if (selected)         return darken(bg, 45);
-  if (isHovered)        return darken(bg, 35);
+function resolveCardBorder(bg: string, isReactionSource: boolean, isConstraintContext: boolean, isConstraintFilter: boolean, selected: boolean, isHovered: boolean, borderColor: string): string {
+  if (isReactionSource)    return '#1e293b';
+  if (isConstraintFilter)  return '#049484';
+  if (isConstraintContext) return '#049484';
+  if (selected)            return darken(bg, 45);
+  if (isHovered)           return darken(bg, 35);
   return borderColor;
 }
 
-function resolveCardShadow(bg: string, isReactionSource: boolean, selected: boolean, isHovered: boolean): string {
-  if (isReactionSource) return '0 0 0 4px #1e293b33, 0 8px 24px rgba(0,0,0,0.15)';
-  if (selected)         return `0 0 0 3px ${darken(bg, 45)}55, 0 8px 24px rgba(0,0,0,0.15)`;
-  if (isHovered)        return '0 8px 24px rgba(0,0,0,0.12)';
+function resolveCardShadow(bg: string, isReactionSource: boolean, isConstraintContext: boolean, isConstraintFilter: boolean, selected: boolean, isHovered: boolean): string {
+  if (isReactionSource)    return '0 0 0 4px #1e293b33, 0 8px 24px rgba(0,0,0,0.15)';
+  if (isConstraintFilter)  return '0 0 0 3px #04948488, 0 8px 28px rgba(4,148,132,0.28)';
+  if (isConstraintContext) return '0 0 0 3px #04948455, 0 8px 24px rgba(4,148,132,0.18)';
+  if (selected)            return `0 0 0 3px ${darken(bg, 45)}55, 0 8px 24px rgba(0,0,0,0.15)`;
+  if (isHovered)           return '0 8px 24px rgba(0,0,0,0.12)';
   return '0 3px 10px rgba(0,0,0,0.08)';
 }
 
@@ -136,6 +142,8 @@ export const EcoreFileBox: React.FC<NodeProps<EcoreFileBoxData>> = ({
     description, keywords, createdAt, domain, onShowDetails, metaModelId,
     ecoreFileId, genModelFileId,
     isReactionSource = false,
+    isConstraintContext = false,
+    isConstraintFilter = false,
   } = data;
 
   const boxRef = useRef<HTMLDivElement>(null);
@@ -169,8 +177,8 @@ export const EcoreFileBox: React.FC<NodeProps<EcoreFileBoxData>> = ({
 
   const bg          = cardColor(domain);
   const borderColor = darken(bg, 25);
-  const cardBorder  = resolveCardBorder(bg, isReactionSource, selected, isHovered, borderColor);
-  const cardShadow  = resolveCardShadow(bg, isReactionSource, selected, isHovered);
+  const cardBorder  = resolveCardBorder(bg, isReactionSource, isConstraintContext, isConstraintFilter, selected, isHovered, borderColor);
+  const cardShadow  = resolveCardShadow(bg, isReactionSource, isConstraintContext, isConstraintFilter, selected, isHovered);
   const cardTransform = selected ? 'scale(1.04)' : isHovered ? 'scale(1.02)' : 'scale(1)';
   const handleShowDetails = buildShowDetailsHandler(
     onShowDetails, setShowMenu, keywords, metaModelId, fileName, description, domain, createdAt, fileContent,

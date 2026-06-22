@@ -110,6 +110,7 @@ export function CodeEditorModal({
   const workspaceRootUri = useRef<string | null>(null);
   const versionCounter = useRef(1);
   const pendingCloseRef = useRef(false);
+  const completionProviderRef = useRef<monaco.IDisposable | null>(null);
 
   // FIX: Centralized pending request map instead of addEventListener
   const pendingRequests = useRef<Map<number, (msg: any) => void>>(new Map());
@@ -162,7 +163,11 @@ export function CodeEditorModal({
   }, [isOpen]);
 
   useEffect(() => {
-    return () => { closeWebSocket(); };
+    return () => {
+      closeWebSocket();
+      completionProviderRef.current?.dispose();
+      completionProviderRef.current = null;
+    };
   }, [closeWebSocket]);
 
   useEffect(() => {
@@ -321,7 +326,8 @@ export function CodeEditorModal({
     monacoInstance.editor.defineTheme(themeName, editorTheme);
     monacoInstance.editor.setTheme(themeName);
 
-    monacoInstance.languages.registerCompletionItemProvider(languageId, {
+    completionProviderRef.current?.dispose();
+    completionProviderRef.current = monacoInstance.languages.registerCompletionItemProvider(languageId, {
       triggerCharacters: ['.', ' ', '\n', ':'],
       provideCompletionItems: async (model, position) =>
         requestCompletionFromLsp(model, position, monacoInstance),
@@ -594,6 +600,7 @@ export function CodeEditorModal({
       }}
       onClose={handleClose}
       onCancel={handleClose}
+      onKeyDown={e => e.stopPropagation()}
     >
       <button
         type="button"
