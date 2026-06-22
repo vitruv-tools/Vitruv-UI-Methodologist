@@ -70,7 +70,9 @@ function getTheme(domain?: string): DomainTheme {
   const key = domain?.toLowerCase().trim() || 'default';
   if (THEMES[key]) return THEMES[key];
   let h = 0;
-  for (let i = 0; i < key.length; i++) h = key.charCodeAt(i) + ((h << 5) - h);
+  for (const char of key) {
+    h = (char.codePointAt(0) ?? 0) + ((h << 5) - h);
+  }
   return FALLBACK_PALETTE[Math.abs(h) % FALLBACK_PALETTE.length];
 }
 
@@ -89,8 +91,8 @@ export const ModelDrawer: React.FC<ModelDrawerProps> = ({
 }) => {
   const [libTab, setLibTab] = useState<'my' | 'public'>('my');
   const [search, setSearch] = useState('');
-  const [domainFilter, setDomain] = useState<string | null>(null);
-  const [detailModel, setDetail] = useState<DrawerModel | null>(null);
+  const [domainFilter, setDomainFilter] = useState<string | null>(null);
+  const [detailModel, setDetailModel] = useState<DrawerModel | null>(null);
   const [deletingModel, setDeletingModel] = useState<DrawerModel | null>(null);
   const [deleteError, setDeleteError] = useState('');
 
@@ -109,11 +111,11 @@ export const ModelDrawer: React.FC<ModelDrawerProps> = ({
   const switchTab = (tab: 'my' | 'public') => {
     setLibTab(tab);
     setSearch('');
-    setDomain(null);
+    setDomainFilter(null);
   };
 
-  const openDetail = (model: DrawerModel) => setDetail(model);
-  const closeDetail = () => setDetail(null);
+  const openDetail = (model: DrawerModel) => setDetailModel(model);
+  const closeDetail = () => setDetailModel(null);
 
   const handleConfirmDelete = async () => {
     if (!deletingModel || !onDeleteModel) return;
@@ -167,8 +169,16 @@ export const ModelDrawer: React.FC<ModelDrawerProps> = ({
             color: '#94a3b8', fontSize: 14, lineHeight: 1, padding: '3px 5px',
             borderRadius: 5, transition: 'all 0.1s', marginLeft: 'auto',
           }}
-          onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.background = '#f1f5f9'; (e.currentTarget as HTMLButtonElement).style.color = '#475569'; }}
-          onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.background = 'transparent'; (e.currentTarget as HTMLButtonElement).style.color = '#94a3b8'; }}
+          onMouseEnter={e => {
+            const button = e.currentTarget;
+            button.style.background = '#f1f5f9';
+            button.style.color = '#475569';
+          }}
+          onMouseLeave={e => {
+            const button = e.currentTarget;
+            button.style.background = 'transparent';
+            button.style.color = '#94a3b8';
+          }}
           title="Close"
         >
           ✕
@@ -195,7 +205,7 @@ export const ModelDrawer: React.FC<ModelDrawerProps> = ({
             setSearch={setSearch}
             domains={domains}
             domainFilter={domainFilter}
-            setDomain={setDomain}
+            setDomainFilter={setDomainFilter}
             fromLibrary={fromLibrary}
             onAddModel={onAddModel}
             onOpenDetail={openDetail}
@@ -228,7 +238,7 @@ interface LibraryViewProps {
   setSearch: (v: string) => void;
   domains: string[];
   domainFilter: string | null;
-  setDomain: (d: string | null) => void;
+  setDomainFilter: (d: string | null) => void;
   fromLibrary: DrawerModel[];
   onAddModel: (m: DrawerModel) => void;
   onOpenDetail: (m: DrawerModel) => void;
@@ -236,7 +246,7 @@ interface LibraryViewProps {
 
 const LibraryView: React.FC<LibraryViewProps> = ({
   loading, onCanvas, libTab, switchTab, search, setSearch,
-  domains, domainFilter, setDomain, fromLibrary, onAddModel, onOpenDetail,
+  domains, domainFilter, setDomainFilter, fromLibrary, onAddModel, onOpenDetail,
 }) => (
   <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column' }}>
     {loading ? (
@@ -317,7 +327,7 @@ const LibraryView: React.FC<LibraryViewProps> = ({
                   const active = domainFilter === domain;
                   const theme = getTheme(domain);
                   return (
-                    <button key={domain} onClick={() => setDomain(active ? null : domain)} style={{
+                    <button key={domain} onClick={() => setDomainFilter(active ? null : domain)} style={{
                       padding: '3px 9px', border: 'none', borderRadius: 20,
                       fontSize: 10, fontWeight: 600, cursor: 'pointer', letterSpacing: '0.03em',
                       background: active ? theme.badge : '#f1f5f9',
@@ -687,16 +697,27 @@ const ModelCard: React.FC<ModelCardProps> = ({ model, onCanvas, onAdd, onOpenDet
     onOpenDetail(model);
   };
 
+  const openDetailsFromKeyboard = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault();
+      onOpenDetail(model);
+    }
+  };
+
   if (onCanvas) {
     return (
-      <div
+      <button
+        type="button"
         title="Right-click for details"
+        aria-label={`View details for ${model.name}`}
         onContextMenu={handleContextMenu}
+        onKeyDown={openDetailsFromKeyboard}
         style={{
           display: 'flex', flexDirection: 'row', alignItems: 'center',
           gap: 10, padding: '7px 10px', borderRadius: 8,
           background: '#f8fafc', border: '1.5px solid #e2e8f0',
           width: '100%', boxSizing: 'border-box', cursor: 'context-menu',
+          fontFamily: 'inherit', textAlign: 'left',
         }}
       >
         {/* Same BoxIcon as library cards, muted */}
@@ -735,7 +756,7 @@ const ModelCard: React.FC<ModelCardProps> = ({ model, onCanvas, onAdd, onOpenDet
           <circle cx="8" cy="8" r="7" fill="#dcfce7" stroke="#86efac" strokeWidth="1.2" />
           <polyline points="5,8.5 7,10.5 11,6" stroke="#16a34a" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" fill="none" />
         </svg>
-      </div>
+      </button>
     );
   }
 
@@ -806,9 +827,9 @@ const BoxIcon: React.FC<{ color: string; size?: number }> = ({ color, size = 38 
 
 function shadeDown(hex: string): string {
   try {
-    const r = parseInt(hex.slice(1, 3), 16);
-    const g = parseInt(hex.slice(3, 5), 16);
-    const b = parseInt(hex.slice(5, 7), 16);
+    const r = Number.parseInt(hex.slice(1, 3), 16);
+    const g = Number.parseInt(hex.slice(3, 5), 16);
+    const b = Number.parseInt(hex.slice(5, 7), 16);
     const d = (v: number) => Math.max(0, v - 12).toString(16).padStart(2, '0');
     return `#${d(r)}${d(g)}${d(b)}`;
   } catch { return hex; }

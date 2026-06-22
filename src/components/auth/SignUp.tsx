@@ -156,9 +156,12 @@ export function SignUp({ onSignUpSuccess, onSwitchToSignIn }: Readonly<SignUpPro
     }
   };
 
-  const submitLabel: React.ReactNode = isSuccess
-    ? <span style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}><span>Redirecting...</span></span>
-    : isLoading ? 'Creating Account...' : 'Create Account';
+  let submitLabel: React.ReactNode = 'Create Account';
+  if (isSuccess) {
+    submitLabel = <span style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}><span>Redirecting...</span></span>;
+  } else if (isLoading) {
+    submitLabel = 'Creating Account...';
+  }
 
   return (
     <AuthLayout>

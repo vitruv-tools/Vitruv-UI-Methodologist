@@ -74,7 +74,7 @@ export const FloatingUMLPanel: React.FC<FloatingUMLPanelProps> = ({
   ecoreContentRef.current = ecoreContent;
   const ecoreFileIdRef = useRef(ecoreFileId);
   ecoreFileIdRef.current = ecoreFileId;
-  const panelZ = zIndex < MODAL_Z_INDEX ? MODAL_Z_INDEX : zIndex;
+  const panelZ = Math.max(zIndex, MODAL_Z_INDEX);
   const [showUnsavedDialog, setShowUnsavedDialog] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [refreshMessage, setRefreshMessage] = useState('');
@@ -177,8 +177,8 @@ export const FloatingUMLPanel: React.FC<FloatingUMLPanelProps> = ({
         handleBack();
       }
     };
-    window.addEventListener('keydown', onKeyDown);
-    return () => window.removeEventListener('keydown', onKeyDown);
+    globalThis.addEventListener('keydown', onKeyDown);
+    return () => globalThis.removeEventListener('keydown', onKeyDown);
   }, [handleBack]);
 
   const showSpinner = refreshing || isRefreshing;
@@ -221,35 +221,65 @@ export const FloatingUMLPanel: React.FC<FloatingUMLPanelProps> = ({
           maxWidth: 'calc(100vw - 28px)',
         }}
       >
-        <img
-          src="/assets/vitruvius1.png"
-          alt="Vitruvius"
-          title={onHome ? 'Back to overview' : 'Vitruvius'}
-          data-testid="uml-toolbar-logo"
-          onClick={onHome ? handleLogoClick : undefined}
-          style={{
-            width: 26,
-            height: 26,
-            borderRadius: 7,
-            flexShrink: 0,
-            margin: '0 2px',
-            cursor: onHome ? 'pointer' : 'default',
-            transition: 'opacity 0.15s, transform 0.15s',
-            opacity: onHome ? 1 : 0.95,
-          }}
-          onMouseEnter={e => {
-            if (onHome) {
-              (e.currentTarget as HTMLImageElement).style.opacity = '0.8';
-              (e.currentTarget as HTMLImageElement).style.transform = 'scale(1.04)';
-            }
-          }}
-          onMouseLeave={e => {
-            if (onHome) {
-              (e.currentTarget as HTMLImageElement).style.opacity = '1';
-              (e.currentTarget as HTMLImageElement).style.transform = 'scale(1)';
-            }
-          }}
-        />
+        {onHome ? (
+          <button
+            type="button"
+            data-testid="uml-toolbar-logo"
+            title="Back to overview"
+            aria-label="Back to overview"
+            onClick={handleLogoClick}
+            style={{
+              border: 'none',
+              background: 'transparent',
+              padding: 0,
+              margin: '0 2px',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              flexShrink: 0,
+              transition: 'opacity 0.15s, transform 0.15s',
+              opacity: 1,
+            }}
+            onMouseEnter={e => {
+              const button = e.currentTarget;
+              button.style.opacity = '0.8';
+              button.style.transform = 'scale(1.04)';
+            }}
+            onMouseLeave={e => {
+              const button = e.currentTarget;
+              button.style.opacity = '1';
+              button.style.transform = 'scale(1)';
+            }}
+          >
+            <img
+              src="/assets/vitruvius1.png"
+              alt=""
+              aria-hidden="true"
+              style={{
+                width: 26,
+                height: 26,
+                borderRadius: 7,
+                display: 'block',
+              }}
+            />
+          </button>
+        ) : (
+          <img
+            src="/assets/vitruvius1.png"
+            alt="Vitruvius"
+            title="Vitruvius"
+            data-testid="uml-toolbar-logo"
+            style={{
+              width: 26,
+              height: 26,
+              borderRadius: 7,
+              flexShrink: 0,
+              margin: '0 2px',
+              cursor: 'default',
+              opacity: 0.95,
+            }}
+          />
+        )}
 
         <ToolbarDivider />
 
@@ -273,13 +303,13 @@ export const FloatingUMLPanel: React.FC<FloatingUMLPanelProps> = ({
             transition: 'all 0.12s',
           }}
           onMouseEnter={e => {
-            const b = e.currentTarget as HTMLButtonElement;
+            const b = e.currentTarget;
             b.style.background = V.surfaceHover;
             b.style.borderColor = V.primaryBorder;
             b.style.color = V.primary;
           }}
           onMouseLeave={e => {
-            const b = e.currentTarget as HTMLButtonElement;
+            const b = e.currentTarget;
             b.style.background = V.surface;
             b.style.borderColor = V.border;
             b.style.color = V.ink;
@@ -420,6 +450,79 @@ export const FloatingUMLPanel: React.FC<FloatingUMLPanelProps> = ({
   );
 };
 
+const getToolbarBtnStyle = (
+  disabled: boolean,
+  hov: boolean,
+  label?: string,
+): React.CSSProperties => {
+  let borderColor: string = V.border;
+  if (!disabled && hov) {
+    borderColor = V.primaryBorder;
+  }
+
+  let background: string = V.surface;
+  if (disabled) {
+    background = '#f8fafc';
+  } else if (hov) {
+    background = V.surfaceHover;
+  }
+
+  let color: string = V.ink;
+  if (disabled) {
+    color = '#cbd5e1';
+  } else if (hov) {
+    color = V.primary;
+  }
+
+  return {
+    height: 34,
+    minWidth: label ? 88 : 34,
+    padding: label ? '0 10px' : 0,
+    border: `1px solid ${borderColor}`,
+    borderRadius: 8,
+    background,
+    color,
+    cursor: disabled ? 'default' : 'pointer',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    fontSize: 11,
+    fontWeight: 600,
+    transition: 'all 0.12s',
+    flexShrink: 0,
+    opacity: disabled ? 0.55 : 1,
+    boxShadow: hov && !disabled ? `0 0 0 2px ${V.primaryRing}` : 'none',
+  };
+};
+
+const renderToolbarBtnContent = (
+  spinning: boolean | undefined,
+  children: React.ReactNode,
+  label?: string,
+): React.ReactNode => {
+  if (spinning) {
+    return (
+      <span style={{
+        width: 14,
+        height: 14,
+        border: '2px solid #e2e8f0',
+        borderTopColor: V.primary,
+        borderRadius: '50%',
+        animation: 'uml-spin 0.7s linear infinite',
+        display: 'inline-block',
+      }} />
+    );
+  }
+
+  return (
+    <>
+      {children}
+      {label ? <span>{label}</span> : null}
+    </>
+  );
+};
+
 const ToolbarBtn: React.FC<{
   title: string;
   label?: string;
@@ -439,43 +542,9 @@ const ToolbarBtn: React.FC<{
       disabled={disabled}
       onMouseEnter={() => setHov(true)}
       onMouseLeave={() => setHov(false)}
-      style={{
-        height: 34,
-        minWidth: label ? 88 : 34,
-        padding: label ? '0 10px' : 0,
-        border: `1px solid ${disabled ? V.border : hov ? V.primaryBorder : V.border}`,
-        borderRadius: 8,
-        background: disabled ? '#f8fafc' : hov ? V.surfaceHover : V.surface,
-        color: disabled ? '#cbd5e1' : hov ? V.primary : V.ink,
-        cursor: disabled ? 'default' : 'pointer',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        gap: 6,
-        fontSize: 11,
-        fontWeight: 600,
-        transition: 'all 0.12s',
-        flexShrink: 0,
-        opacity: disabled ? 0.55 : 1,
-        boxShadow: hov && !disabled ? `0 0 0 2px ${V.primaryRing}` : 'none',
-      }}
+      style={getToolbarBtnStyle(disabled, hov, label)}
     >
-      {spinning ? (
-        <span style={{
-          width: 14,
-          height: 14,
-          border: '2px solid #e2e8f0',
-          borderTopColor: V.primary,
-          borderRadius: '50%',
-          animation: 'uml-spin 0.7s linear infinite',
-          display: 'inline-block',
-        }} />
-      ) : (
-        <>
-          {children}
-          {label && <span>{label}</span>}
-        </>
-      )}
+      {renderToolbarBtnContent(spinning, children, label)}
     </button>
   );
 };
