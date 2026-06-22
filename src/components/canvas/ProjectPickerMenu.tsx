@@ -149,7 +149,9 @@ export const ProjectPickerMenu: React.FC<ProjectPickerMenuProps> = ({
       />
       <div
         ref={menuRef}
-        role="listbox"
+        id="project-picker-menu"
+        role="dialog"
+        aria-label="Your projects"
         onMouseDown={e => e.stopPropagation()}
         style={{
           position: 'fixed',
@@ -211,12 +213,18 @@ export const ProjectPickerMenu: React.FC<ProjectPickerMenuProps> = ({
           const isOpen = openProjectIds.includes(project.id);
           const isCurrentInPill = project.id === currentProjectId && !isCompact;
 
+          let statusDotColor = '#e2e8f0';
+          if (isActive) {
+            statusDotColor = '#049484';
+          } else if (isOpen) {
+            statusDotColor = '#94a3b8';
+          }
+
           return (
             <button
               key={project.id}
               type="button"
-              role="option"
-              aria-selected={isActive}
+              aria-current={isActive ? 'true' : undefined}
               onClick={() => handleSelect(project)}
               style={{
                 width: '100%',
@@ -244,7 +252,7 @@ export const ProjectPickerMenu: React.FC<ProjectPickerMenuProps> = ({
                   height: 8,
                   borderRadius: '50%',
                   flexShrink: 0,
-                  background: isActive ? '#049484' : isOpen ? '#94a3b8' : '#e2e8f0',
+                  background: statusDotColor,
                 }}
               />
               <span style={{ flex: 1, minWidth: 0 }}>
@@ -306,6 +314,9 @@ export const ProjectPickerMenu: React.FC<ProjectPickerMenuProps> = ({
         ref={buttonRef}
         type="button"
         disabled={disabled}
+        aria-expanded={open}
+        aria-haspopup="dialog"
+        aria-controls="project-picker-menu"
         onClick={() => {
           setOpen(v => {
             const next = !v;

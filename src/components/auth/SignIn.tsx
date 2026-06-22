@@ -34,6 +34,20 @@ export function SignIn({ onSignInSuccess, onSwitchToSignUp }: Readonly<SignInPro
     setForgotPasswordEmail('');
   };
 
+  const handleForgotPasswordBackdropClick = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (e.target === e.currentTarget) {
+      closeForgotPasswordModal();
+    }
+  };
+
+  const handleForgotPasswordBackdropKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
+    if (e.target !== e.currentTarget || isSendingReset) return;
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault();
+      closeForgotPasswordModal();
+    }
+  };
+
   useEffect(() => {
     if (!isForgotPasswordOpen) return;
     const onKeyDown = (e: KeyboardEvent) => {
@@ -228,11 +242,18 @@ export function SignIn({ onSignInSuccess, onSwitchToSignUp }: Readonly<SignInPro
 
       {/* Forgot Password Modal */}
       {isForgotPasswordOpen && (
-        <div className="modal-backdrop" onClick={closeForgotPasswordModal}>
-          <div className="modal-dialog" onClick={(e) => e.stopPropagation()}>
+        <div
+          className="modal-backdrop"
+          onClick={handleForgotPasswordBackdropClick}
+          onKeyDown={handleForgotPasswordBackdropKeyDown}
+          role="button"
+          tabIndex={isSendingReset ? -1 : 0}
+          aria-label="Close reset password dialog"
+        >
+          <div className="modal-dialog" role="dialog" aria-modal="true" aria-labelledby="forgot-password-title" aria-describedby="forgot-password-description">
             <div className="modal-header">
-              <h2>Reset Password</h2>
-              <p>Enter your email address and we'll send you instructions to reset your password.</p>
+              <h2 id="forgot-password-title">Reset Password</h2>
+              <p id="forgot-password-description">Enter your email address and we'll send you instructions to reset your password.</p>
             </div>
 
             {resetError && (

@@ -4,6 +4,7 @@ import { NodeProps } from 'reactflow';
 import { apiService } from '../../services/api';
 import { downloadTextAsFile } from '../../utils/downloadFile';
 import { ConnectionHandle } from './ConnectionHandle';
+import { HandlePosition } from './connectionHandleLayout';
 
 // ── types ─────────────────────────────────────────────────────────────────────
 
@@ -19,7 +20,7 @@ interface EcoreFileBoxData {
   metaModelId?: number;
   ecoreFileId?: number;
   genModelFileId?: number;
-  onConnectionStart?: (nodeId: string, handle: 'top' | 'bottom' | 'left' | 'right', tipScreenPos: { x: number; y: number }) => void;
+  onConnectionStart?: (nodeId: string, handle: HandlePosition, tipScreenPos: { x: number; y: number }) => void;
   isExpanded?: boolean;
   isConnectionActive?: boolean;
   isReactionSource?: boolean;
@@ -49,15 +50,15 @@ export function cardColor(domain?: string): string {
   const key = domain?.toLowerCase().trim() || 'default';
   if (CARD_COLORS[key]) return CARD_COLORS[key];
   let h = 0;
-  for (let i = 0; i < key.length; i++) h = key.charCodeAt(i) + ((h << 5) - h);
+  for (const char of key) h = (char.codePointAt(0) ?? 0) + ((h << 5) - h);
   return FALLBACK_PALETTE[Math.abs(h) % FALLBACK_PALETTE.length];
 }
 
 export function darken(hex: string, amount = 30): string {
   try {
-    const r = Math.max(0, parseInt(hex.slice(1, 3), 16) - amount);
-    const g = Math.max(0, parseInt(hex.slice(3, 5), 16) - amount);
-    const b = Math.max(0, parseInt(hex.slice(5, 7), 16) - amount);
+    const r = Math.max(0, Number.parseInt(hex.slice(1, 3), 16) - amount);
+    const g = Math.max(0, Number.parseInt(hex.slice(3, 5), 16) - amount);
+    const b = Math.max(0, Number.parseInt(hex.slice(5, 7), 16) - amount);
     return `#${r.toString(16).padStart(2, '0')}${g.toString(16).padStart(2, '0')}${b.toString(16).padStart(2, '0')}`;
   } catch { return hex; }
 }
@@ -69,7 +70,7 @@ const removeExt = (name: string) => name.replace(/\.ecore$/i, '');
 /** Screen position of a connection-handle tip (matches ConnectionHandle). */
 export function handleTipFromRect(
   rect: DOMRect,
-  handle: 'top' | 'bottom' | 'left' | 'right',
+  handle: HandlePosition,
 ): { x: number; y: number } {
   switch (handle) {
     case 'top':
@@ -99,22 +100,41 @@ function resolveCardShadow(bg: string, isReactionSource: boolean, selected: bool
   return '0 3px 10px rgba(0,0,0,0.08)';
 }
 
+function resolveCardTransform(selected: boolean, isHovered: boolean): string {
+  if (selected) return 'scale(1.04)';
+  if (isHovered) return 'scale(1.02)';
+  return 'scale(1)';
+}
+
+type ShowDetailsModelContext = {
+  keywords?: string;
+  metaModelId?: number;
+  fileName: string;
+  description?: string;
+  domain?: string;
+  createdAt?: string;
+  fileContent: string;
+};
+
 function buildShowDetailsHandler(
   onShowDetails: ((modelObj: any, fileContent: string) => void) | undefined,
   setShowMenu: (v: boolean) => void,
-  keywords: string | undefined,
-  metaModelId: number | undefined,
-  fileName: string,
-  description: string | undefined,
-  domain: string | undefined,
-  createdAt: string | undefined,
-  fileContent: string,
+  context: ShowDetailsModelContext,
 ): (() => void) | undefined {
   if (!onShowDetails) return undefined;
   return () => {
     setShowMenu(false);
-    const kwArray = keywords ? keywords.split(/[,;]+/).map((s: string) => s.trim()).filter(Boolean) : [];
-    onShowDetails({ id: metaModelId, name: removeExt(fileName), description: description || '', domain: domain || '', keyword: kwArray, createdAt }, fileContent);
+    const kwArray = context.keywords
+      ? context.keywords.split(/[,;]+/).map((s: string) => s.trim()).filter(Boolean)
+      : [];
+    onShowDetails({
+      id: context.metaModelId,
+      name: removeExt(context.fileName),
+      description: context.description || '',
+      domain: context.domain || '',
+      keyword: kwArray,
+      createdAt: context.createdAt,
+    }, context.fileContent);
   };
 }
 
@@ -152,8 +172,8 @@ export const EcoreFileBox: React.FC<NodeProps<EcoreFileBoxData>> = ({
         setShowMenu(false);
       }
     };
-    window.addEventListener('mousedown', handler, true);
-    return () => window.removeEventListener('mousedown', handler, true);
+    globalThis.addEventListener('mousedown', handler, true);
+    return () => globalThis.removeEventListener('mousedown', handler, true);
   }, [showMenu]);
 
   // Close context menu when this box is dragged
@@ -161,7 +181,7 @@ export const EcoreFileBox: React.FC<NodeProps<EcoreFileBoxData>> = ({
     if (dragging && showMenu) setShowMenu(false);
   }, [dragging, showMenu]);
 
-  const startConnectionFromHandle = (handle: 'top' | 'bottom' | 'left' | 'right') => {
+  const startConnectionFromHandle = (handle: HandlePosition) => {
     if (!boxRef.current || !onConnectionStart) return;
     const tip = handleTipFromRect(boxRef.current.getBoundingClientRect(), handle);
     onConnectionStart(id, handle, tip);
@@ -171,21 +191,37 @@ export const EcoreFileBox: React.FC<NodeProps<EcoreFileBoxData>> = ({
   const borderColor = darken(bg, 25);
   const cardBorder  = resolveCardBorder(bg, isReactionSource, selected, isHovered, borderColor);
   const cardShadow  = resolveCardShadow(bg, isReactionSource, selected, isHovered);
-  const cardTransform = selected ? 'scale(1.04)' : isHovered ? 'scale(1.02)' : 'scale(1)';
-  const handleShowDetails = buildShowDetailsHandler(
-    onShowDetails, setShowMenu, keywords, metaModelId, fileName, description, domain, createdAt, fileContent,
-  );
+  const cardTransform = resolveCardTransform(selected, isHovered);
+  const handleShowDetails = buildShowDetailsHandler(onShowDetails, setShowMenu, {
+    keywords, metaModelId, fileName, description, domain, createdAt, fileContent,
+  });
 
   const handleClick = (e: React.MouseEvent) => { e.stopPropagation(); onSelect(fileName); };
   const handleDoubleClick = (e: React.MouseEvent) => { e.stopPropagation(); onExpand(fileName, fileContent); };
-  const handleContextMenu = (e: React.MouseEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
+  const openContextMenu = () => {
     if (boxRef.current) {
       const rect = boxRef.current.getBoundingClientRect();
       setMenuPos({ x: rect.right + 8, y: rect.top + rect.height / 2 });
     }
     setShowMenu(v => !v);
+  };
+  const handleContextMenu = (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    openContextMenu();
+  };
+  const handleCardKeyDown = (e: React.KeyboardEvent) => {
+    e.stopPropagation();
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      onExpand(fileName, fileContent);
+    } else if (e.key === ' ') {
+      e.preventDefault();
+      onSelect(fileName);
+    } else if (e.key === 'F10' && e.shiftKey) {
+      e.preventDefault();
+      openContextMenu();
+    }
   };
 
   const startRename = () => {
@@ -197,8 +233,18 @@ export const EcoreFileBox: React.FC<NodeProps<EcoreFileBoxData>> = ({
     if (trimmed) onRename?.(id, trimmed + '.ecore');
     setRenaming(false);
   };
+  const handleRenameKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter') {
+      saveRename();
+      return;
+    }
+    if (e.key === 'Escape') {
+      setRenaming(false);
+    }
+  };
 
   const baseName = removeExt(fileName);
+  const cardAriaLabel = `${baseName} metamodel. Enter to open, Space to select, Shift+F10 for menu.`;
 
   const downloadMetaModelFile = async (
     kind: 'ecore' | 'genmodel',
@@ -237,12 +283,16 @@ export const EcoreFileBox: React.FC<NodeProps<EcoreFileBoxData>> = ({
       >
         {/* ── Card ── */}
         <div
+          role="button"
+          tabIndex={0}
+          aria-label={cardAriaLabel}
+          aria-pressed={selected}
           onClick={handleClick}
           onDoubleClick={handleDoubleClick}
           onContextMenu={handleContextMenu}
+          onKeyDown={handleCardKeyDown}
           onMouseEnter={() => setIsHovered(true)}
           onMouseLeave={() => setIsHovered(false)}
-          title="Double-click to open · Right-click for menu"
           style={{
             width: 118,
             height: 126,
@@ -273,7 +323,7 @@ export const EcoreFileBox: React.FC<NodeProps<EcoreFileBoxData>> = ({
               autoFocus
               value={renameVal}
               onChange={e => setRenameVal(e.target.value)}
-              onKeyDown={e => { if (e.key === 'Enter') saveRename(); if (e.key === 'Escape') setRenaming(false); }}
+              onKeyDown={handleRenameKeyDown}
               onBlur={saveRename}
               onClick={e => e.stopPropagation()}
               style={{
@@ -306,6 +356,7 @@ export const EcoreFileBox: React.FC<NodeProps<EcoreFileBoxData>> = ({
           menuRef={menuRef}
           pos={menuPos}
           fileName={fileName}
+          onClose={() => setShowMenu(false)}
           downloadingFile={downloadingFile}
           canDownloadEcore={!!ecoreFileId}
           canDownloadGenModel={!!genModelFileId}
@@ -334,6 +385,7 @@ interface ContextMenuProps {
   menuRef: React.RefObject<HTMLDivElement | null>;
   pos: { x: number; y: number };
   fileName: string;
+  onClose: () => void;
   canDownloadEcore: boolean;
   canDownloadGenModel: boolean;
   downloadingFile: 'ecore' | 'genmodel' | null;
@@ -347,13 +399,30 @@ interface ContextMenuProps {
 }
 
 const ContextMenu: React.FC<ContextMenuProps> = ({
-  menuRef, pos, fileName,
+  menuRef, pos, fileName, onClose,
   canDownloadEcore, canDownloadGenModel, downloadingFile,
   onDownloadEcore, onDownloadGenModel,
   onOpenUML, onConnect, onRename, onDelete, onShowDetails,
-}) => (
+}) => {
+  useEffect(() => {
+    menuRef.current?.focus();
+  }, [menuRef]);
+
+  const stopMenuEventBubble = (e: React.SyntheticEvent) => {
+    e.stopPropagation();
+  };
+
+  const handleMenuKeyDown = (e: React.KeyboardEvent) => {
+    e.stopPropagation();
+    if (e.key === 'Escape') onClose();
+  };
+
+  return (
   <div
     ref={menuRef}
+    role="menu"
+    aria-label={`Actions for ${removeExt(fileName)}`}
+    tabIndex={0}
     style={{
       position: 'fixed',
       left: pos.x,
@@ -366,8 +435,10 @@ const ContextMenu: React.FC<ContextMenuProps> = ({
       minWidth: 178,
       zIndex: 99999,
     }}
-    onMouseDown={e => e.stopPropagation()}
-    onClick={e => e.stopPropagation()}
+    onMouseDown={stopMenuEventBubble}
+    onClick={stopMenuEventBubble}
+    onKeyDown={handleMenuKeyDown}
+    onKeyUp={stopMenuEventBubble}
   >
     {/* Header */}
     <div style={{ padding: '5px 9px 7px', borderBottom: '1px solid #f1f5f9', marginBottom: 3 }}>
@@ -396,7 +467,23 @@ const ContextMenu: React.FC<ContextMenuProps> = ({
     <div style={{ height: 1, background: '#f1f5f9', margin: '4px 2px' }} />
     <CMItem icon={<TrashIcon />}   label="Remove"          onClick={onDelete} danger />
   </div>
-);
+  );
+};
+
+function getCMItemBackground(hovered: boolean, disabled: boolean | undefined, danger: boolean | undefined): string {
+  if (!hovered || disabled) return 'transparent';
+  if (danger) return '#fef2f2';
+  return '#f8fafc';
+}
+
+function getCMItemColor(disabled: boolean | undefined, danger: boolean | undefined, hovered: boolean): string {
+  if (disabled) return '#cbd5e1';
+  if (danger) {
+    if (hovered) return '#dc2626';
+    return '#ef4444';
+  }
+  return '#475569';
+}
 
 const CMItem: React.FC<{
   icon: React.ReactNode;
@@ -406,8 +493,13 @@ const CMItem: React.FC<{
   disabled?: boolean;
 }> = ({ icon, label, onClick, danger, disabled }) => {
   const [hov, setHov] = useState(false);
+  const background = getCMItemBackground(hov, disabled, danger);
+  const color = getCMItemColor(disabled, danger, hov);
+
   return (
     <button
+      type="button"
+      role="menuitem"
       disabled={disabled}
       onClick={e => { e.stopPropagation(); if (!disabled) onClick(); }}
       onMouseEnter={() => setHov(true)}
@@ -415,8 +507,8 @@ const CMItem: React.FC<{
       style={{
         display: 'flex', alignItems: 'center', gap: 8,
         width: '100%', padding: '6px 9px', border: 'none', borderRadius: 7,
-        background: hov && !disabled ? (danger ? '#fef2f2' : '#f8fafc') : 'transparent',
-        color: disabled ? '#cbd5e1' : danger ? (hov ? '#dc2626' : '#ef4444') : '#475569',
+        background,
+        color,
         cursor: disabled ? 'not-allowed' : 'pointer', fontSize: 12, textAlign: 'left', transition: 'all 0.1s',
       }}
     >
