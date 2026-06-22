@@ -551,17 +551,17 @@ export const CanvasPage: React.FC = () => {
     const edges = flowCanvasRef.current?.getEdges?.() ?? [];
     const removeIds = new Set(
       nodes
-        .filter((n: FlowNode) => {
+        .filter((n: Node) => {
           if (n.type !== 'ecoreFile') return false;
           const mmId = n.data?.metaModelId;
           const mmSourceId = n.data?.metaModelSourceId;
           return mmId === model.id || mmId === sourceId || mmSourceId === model.id || mmSourceId === sourceId;
         })
-        .map((n: FlowNode) => n.id),
+        .map((n: Node) => n.id),
     );
     if (removeIds.size > 0) {
       flowCanvasRef.current?.loadDiagramData?.(
-        nodes.filter((n: FlowNode) => !removeIds.has(n.id)),
+        nodes.filter((n: Node) => !removeIds.has(n.id)),
         edges.filter((e: Edge) => !removeIds.has(e.source) && !removeIds.has(e.target)),
       );
     }
@@ -590,7 +590,7 @@ export const CanvasPage: React.FC = () => {
 
     if (ecoreFileId == null || metaModelId == null) {
       const node = flowCanvasRef.current?.getNodes?.().find(
-        (n: FlowNode) => n.type === 'ecoreFile' && n.data.fileName === fileName,
+        (n: Node) => n.type === 'ecoreFile' && n.data.fileName === fileName,
       );
       if (node?.data) {
         metaModelId = metaModelId ?? (typeof node.data.metaModelId === 'number' ? node.data.metaModelId : undefined);
@@ -785,7 +785,7 @@ export const CanvasPage: React.FC = () => {
   }, [handleUmlPanelSaved]);
 
   const focusPanel = useCallback((panelId: string) => setTopPanelId(panelId), []);
-  const handleDiagramChange = useCallback((_nodes: FlowNode[], _edges: Edge[]) => {
+  const handleDiagramChange = useCallback((_nodes: Node[], _edges: Edge[]) => {
     const ids = new Set<number>();
     for (const n of _nodes) {
       if (n.type !== 'ecoreFile') continue;

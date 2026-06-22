@@ -2814,12 +2814,12 @@ export const FlowCanvas = forwardRef<{
                   fontFamily: 'inherit',
                 }}
                 onMouseEnter={e => {
-                  if (active) return;
+                  if (activeCanvasMode === mode) return;
                   e.currentTarget.style.background = '#f1f5f9';
                   e.currentTarget.style.color = '#1e293b';
                 }}
                 onMouseLeave={e => {
-                  if (active) return;
+                  if (activeCanvasMode === mode) return;
                   e.currentTarget.style.background = 'transparent';
                   e.currentTarget.style.color = '#64748b';
                 }}

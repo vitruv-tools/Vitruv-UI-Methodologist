@@ -106,11 +106,6 @@ function resolveCardShadow(bg: string, isReactionSource: boolean, isConstraintCo
   return '0 3px 10px rgba(0,0,0,0.08)';
 }
 
-function resolveCardTransform(selected: boolean, isHovered: boolean): string {
-  if (selected) return 'scale(1.04)';
-  if (isHovered) return 'scale(1.02)';
-  return 'scale(1)';
-}
 
 type ShowDetailsModelContext = {
   keywords?: string;
@@ -201,7 +196,7 @@ export const EcoreFileBox: React.FC<NodeProps<EcoreFileBoxData>> = ({
   const cardShadow  = resolveCardShadow(bg, isReactionSource, isConstraintContext, isConstraintFilter, selected, isHovered);
   const cardTransform = selected ? 'scale(1.04)' : isHovered ? 'scale(1.02)' : 'scale(1)';
   const handleShowDetails = buildShowDetailsHandler(
-    onShowDetails, setShowMenu, keywords, metaModelId, fileName, description, domain, createdAt, fileContent,
+    onShowDetails, setShowMenu, { keywords, metaModelId, fileName, description, domain, createdAt, fileContent },
   );
 
   const handleClick = (e: React.MouseEvent) => { e.stopPropagation(); onSelect(fileName); };
