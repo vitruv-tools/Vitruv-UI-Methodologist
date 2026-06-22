@@ -112,7 +112,12 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ user, userRole = 'Meth
   const [saving,    setSaving]    = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [saved,     setSaved]     = useState(false);
-
+  const verificationStatus =
+  verified === true
+    ? '✓ Verified'
+    : verified === false
+      ? '✗ Not verified'
+      : undefined;
   // Load fresh data from backend on mount
   useEffect(() => {
     apiService.getUserInfo()
@@ -242,12 +247,12 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ user, userRole = 'Meth
                   cursor: 'pointer', transition: 'all 0.15s',
                 }}
                 onMouseEnter={e => {
-                  (e.currentTarget as HTMLButtonElement).style.borderColor = '#049484';
-                  (e.currentTarget as HTMLButtonElement).style.color = '#049484';
+                  e.currentTarget.style.borderColor = '#049484';
+                  e.currentTarget.style.color = '#049484';
                 }}
                 onMouseLeave={e => {
-                  (e.currentTarget as HTMLButtonElement).style.borderColor = 'rgba(0,0,0,0.10)';
-                  (e.currentTarget as HTMLButtonElement).style.color = '#374151';
+                  e.currentTarget.style.borderColor = 'rgba(0,0,0,0.10)';
+                  e.currentTarget.style.color = '#374151';
                 }}
               >
                 <EditIcon /> Edit name
@@ -315,7 +320,7 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ user, userRole = 'Meth
             <ReadField label="Role"    value={userRole} />
             <ReadField
               label="Email Verified"
-              value={verified === true ? '✓ Verified' : verified === false ? '✗ Not verified' : undefined}
+              value={verificationStatus}
               placeholder="Unknown"
             />
           </div>
@@ -361,12 +366,12 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ user, userRole = 'Meth
               cursor: 'pointer', flexShrink: 0, transition: 'all 0.15s',
             }}
             onMouseEnter={e => {
-              (e.currentTarget as HTMLButtonElement).style.borderColor = '#049484';
-              (e.currentTarget as HTMLButtonElement).style.color = '#049484';
+              e.currentTarget.style.borderColor = '#049484';
+              e.currentTarget.style.color = '#049484';
             }}
             onMouseLeave={e => {
-              (e.currentTarget as HTMLButtonElement).style.borderColor = 'rgba(0,0,0,0.10)';
-              (e.currentTarget as HTMLButtonElement).style.color = '#374151';
+              e.currentTarget.style.borderColor = 'rgba(0,0,0,0.10)';
+              e.currentTarget.style.color = '#374151';
             }}
           >
             <LockIcon /> Change password
