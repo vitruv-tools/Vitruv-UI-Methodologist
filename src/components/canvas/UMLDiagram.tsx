@@ -3113,7 +3113,10 @@ function stopDiagramEventBubble(e: { stopPropagation(): void }): void {
   e.stopPropagation();
 }
 
-function handleDiagramEditPanelKeyDown(e: KeyboardEvent, onClose: () => void): void {
+function handleDiagramEditPanelKeyDown(
+  e: React.KeyboardEvent<HTMLDialogElement>,
+  onClose: () => void,
+): void {
   e.stopPropagation();
   if (e.key === 'Escape') onClose();
 }
@@ -3131,22 +3134,6 @@ const DiagramEditPanelShell: React.FC<{
     panelRef.current?.focus();
   }, []);
 
-  useEffect(() => {
-    const el = panelRef.current;
-    if (!el) return;
-    const onKeyDown = (e: KeyboardEvent) => handleDiagramEditPanelKeyDown(e, onClose);
-    el.addEventListener('click', stopDiagramEventBubble);
-    el.addEventListener('mousedown', stopDiagramEventBubble);
-    el.addEventListener('keydown', onKeyDown);
-    el.addEventListener('keyup', stopDiagramEventBubble);
-    return () => {
-      el.removeEventListener('click', stopDiagramEventBubble);
-      el.removeEventListener('mousedown', stopDiagramEventBubble);
-      el.removeEventListener('keydown', onKeyDown);
-      el.removeEventListener('keyup', stopDiagramEventBubble);
-    };
-  }, [onClose]);
-
   const panelDataAttribute =
     panelDataAttr === 'class'
       ? { 'data-class-edit-panel': true as const }
@@ -3159,6 +3146,10 @@ const DiagramEditPanelShell: React.FC<{
       open
       aria-label={ariaLabel}
       style={{ ...style, margin: 0, padding: 0 }}
+      onClick={stopDiagramEventBubble}
+      onMouseDown={stopDiagramEventBubble}
+      onKeyDown={e => handleDiagramEditPanelKeyDown(e, onClose)}
+      onKeyUp={stopDiagramEventBubble}
     >
       {children}
     </dialog>
