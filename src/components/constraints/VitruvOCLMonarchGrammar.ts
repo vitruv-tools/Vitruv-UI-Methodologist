@@ -32,12 +32,12 @@ export const vitruvOCLMonarch: monaco.languages.IMonarchLanguage = {
   tokenizer: {
     root: [
       // Comments
-      [/--.*$/, 'comment'],
+      [/--[^\r\n]*/, 'comment'],
       [/\/\*/, { token: 'comment.block', next: '@blockComment' }],
 
       // Annotations
-      [/[@]severity/, { token: 'annotation', next: '@severityValue' }],
-      [/[@]message\b/, 'annotation'],
+      [/@severity/, { token: 'annotation', next: '@severityValue' }],
+      [/@message\b/, 'annotation'],
 
       // Structural keywords
       [/\b(package|endpackage)\b/, 'keyword.package'],

@@ -252,7 +252,7 @@ const KIT_RULE_SETS: RuleSet[] = [
 
 /** Splits combined OCL file content into individual ConstraintRule objects. */
 function parseRulesFromOcl(oclContent: string, ruleSetId: string): ConstraintRule[] {
-  const blocks = oclContent.split(/(?=^\s*context\s)/m).map(b => b.trim()).filter(Boolean);
+  const blocks = oclContent.split(/^(?=context[ \t])/m).map(b => b.trim()).filter(Boolean);
   return blocks.map((ocl, i) => ({
     id: `r_${ruleSetId}_${i}_${Date.now()}`,
     ruleSetId,
@@ -375,6 +375,20 @@ function useResizablePanel() {
   return { height, onHandleMouseDown };
 }
 
+// ── RuleSet update helpers ────────────────────────────────────────────────────
+
+function replaceRule(ruleSets: RuleSet[], updated: ConstraintRule): RuleSet[] {
+  return ruleSets.map(rs => ({ ...rs, rules: rs.rules.map(r => r.id === updated.id ? updated : r) }));
+}
+
+function findSetContainingRule(ruleSets: RuleSet[], ruleId: string): RuleSet | undefined {
+  return ruleSets.find(rs => rs.rules.some(r => r.id === ruleId));
+}
+
+function updateBackendId(prev: RuleSet[], rsId: string, backendId: number): RuleSet[] {
+  return prev.map(r => r.id === rsId ? { ...r, backendId } : r);
+}
+
 // ── Sub-components ────────────────────────────────────────────────────────────
 
 const RuleRow: React.FC<{ rule: ConstraintRule; selected: boolean; onClick: () => void; onDelete: () => void }> = ({ rule, selected, onClick, onDelete }) => {
@@ -391,32 +405,39 @@ const RuleRow: React.FC<{ rule: ConstraintRule; selected: boolean; onClick: () =
     return () => document.removeEventListener('mousedown', close);
   }, [menuOpen]);
 
-  const rowBackground = selected ? '#f0fdf9' : hov ? '#f8fafc' : 'transparent';
+  let rowBackground: string;
+  if (selected) { rowBackground = '#f0fdf9'; }
+  else if (hov) { rowBackground = '#f8fafc'; }
+  else { rowBackground = 'transparent'; }
 
   return (
     <div
-      role="button"
-      tabIndex={0}
-      onClick={onClick}
-      onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') onClick(); }}
       onMouseEnter={() => setHov(true)}
       onMouseLeave={() => setHov(false)}
       style={{
-        display: 'flex', alignItems: 'center', gap: 8,
-        padding: '7px 12px 7px 28px',
+        position: 'relative',
         background: rowBackground,
         borderLeft: selected ? '2px solid #049484' : '2px solid transparent',
-        cursor: 'pointer', borderRadius: 0,
-        transition: 'background 0.1s', position: 'relative',
+        transition: 'background 0.1s',
       }}
     >
-      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke={selected ? '#049484' : '#94a3b8'} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
-        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14,2 14,8 20,8"/>
-      </svg>
-      <span style={{ fontSize: 12.5, color: selected ? '#049484' : '#334155', fontWeight: selected ? 600 : 400, flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-        {rule.name}
-      </span>
-      <div ref={menuRef} style={{ position: 'relative' }}>
+      <button
+        onClick={onClick}
+        style={{
+          display: 'flex', alignItems: 'center', gap: 8, width: '100%',
+          padding: '7px 40px 7px 28px',
+          background: 'transparent', border: 'none', cursor: 'pointer',
+          textAlign: 'left', borderRadius: 0,
+        }}
+      >
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke={selected ? '#049484' : '#94a3b8'} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
+          <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14,2 14,8 20,8"/>
+        </svg>
+        <span style={{ fontSize: 12.5, color: selected ? '#049484' : '#334155', fontWeight: selected ? 600 : 400, flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+          {rule.name}
+        </span>
+      </button>
+      <div ref={menuRef} style={{ position: 'absolute', right: 12, top: '50%', transform: 'translateY(-50%)' }}>
         <button
           onClick={e => { e.stopPropagation(); setMenuOpen(o => !o); }}
           style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 2, color: '#94a3b8', borderRadius: 4, display: 'flex', alignItems: 'center' }}
@@ -470,53 +491,60 @@ interface RuleSetSectionProps {
 const RuleSetSection: React.FC<RuleSetSectionProps> = ({ ruleSet, selectedRuleId, selectedRuleSetId, onRuleClick, onRuleSetClick, onToggleCollapse, onAddRule, onDeleteRule }) => {
   const [hov, setHov] = useState(false);
   const isSelected = selectedRuleSetId === ruleSet.id;
-  const headerBackground = isSelected ? '#f0fdf9' : hov ? '#f8fafc' : 'transparent';
+  let headerBackground: string;
+  if (isSelected) { headerBackground = '#f0fdf9'; }
+  else if (hov) { headerBackground = '#f8fafc'; }
+  else { headerBackground = 'transparent'; }
   return (
     <div>
       <div
-        role="button"
-        tabIndex={0}
-        onClick={() => onRuleSetClick(ruleSet)}
-        onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') onRuleSetClick(ruleSet); }}
         onMouseEnter={() => setHov(true)}
         onMouseLeave={() => setHov(false)}
         style={{
-          display: 'flex', alignItems: 'center', gap: 8,
-          padding: '8px 12px', cursor: 'pointer',
+          display: 'flex', alignItems: 'center',
           background: headerBackground,
           borderLeft: isSelected ? `2px solid ${ruleSet.color}` : '2px solid transparent',
           borderBottom: '1px solid #f1f5f9',
-          userSelect: 'none',
         }}
       >
-        <div style={{ width: 10, height: 10, borderRadius: 2, background: ruleSet.color, flexShrink: 0 }} />
-        <span style={{ fontSize: 12.5, fontWeight: 600, color: '#1e293b', flex: 1 }}>{ruleSet.name}</span>
-        <span style={{ fontSize: 11, color: '#94a3b8', fontWeight: 500 }}>{ruleSet.rules.length} rules</span>
-        <svg
-          onClick={e => { e.stopPropagation(); onToggleCollapse(ruleSet.id); }}
-          width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" strokeWidth="2.5" strokeLinecap="round"
-          style={{ transform: ruleSet.collapsed ? 'rotate(-90deg)' : 'rotate(0deg)', transition: 'transform 0.15s', flexShrink: 0, cursor: 'pointer', padding: 2 }}
+        <button
+          onClick={() => onRuleSetClick(ruleSet)}
+          style={{
+            display: 'flex', alignItems: 'center', gap: 8, flex: 1,
+            padding: '8px 4px 8px 12px', background: 'none', border: 'none',
+            cursor: 'pointer', userSelect: 'none', textAlign: 'left',
+          }}
         >
-          <polyline points="6,9 12,15 18,9"/>
-        </svg>
+          <div style={{ width: 10, height: 10, borderRadius: 2, background: ruleSet.color, flexShrink: 0 }} />
+          <span style={{ fontSize: 12.5, fontWeight: 600, color: '#1e293b', flex: 1 }}>{ruleSet.name}</span>
+          <span style={{ fontSize: 11, color: '#94a3b8', fontWeight: 500 }}>{ruleSet.rules.length} rules</span>
+        </button>
+        <button
+          onClick={() => onToggleCollapse(ruleSet.id)}
+          style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '8px 12px 8px 4px', display: 'flex', alignItems: 'center' }}
+        >
+          <svg
+            width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" strokeWidth="2.5" strokeLinecap="round"
+            style={{ transform: ruleSet.collapsed ? 'rotate(-90deg)' : 'rotate(0deg)', transition: 'transform 0.15s', flexShrink: 0 }}
+          >
+            <polyline points="6,9 12,15 18,9"/>
+          </svg>
+        </button>
       </div>
       {!ruleSet.collapsed && (
         <div>
           {ruleSet.rules.map(rule => (
             <RuleRow key={rule.id} rule={rule} selected={selectedRuleId === rule.id} onClick={() => onRuleClick(rule)} onDelete={() => onDeleteRule(rule.id)} />
           ))}
-          <div
-            role="button"
-            tabIndex={0}
+          <button
             onClick={() => onAddRule(ruleSet.id)}
-            onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') onAddRule(ruleSet.id); }}
-            style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 12px 6px 28px', cursor: 'pointer', color: '#94a3b8', fontSize: 12 }}
+            style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 12px 6px 28px', cursor: 'pointer', color: '#94a3b8', fontSize: 12, background: 'none', border: 'none', width: '100%', textAlign: 'left' }}
             onMouseEnter={e => (e.currentTarget.style.color = '#049484')}
             onMouseLeave={e => (e.currentTarget.style.color = '#94a3b8')}
           >
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
             Add rule
-          </div>
+          </button>
         </div>
       )}
     </div>
@@ -624,18 +652,15 @@ const ContextClassPicker: React.FC<{
 
   return (
     <div ref={containerRef} style={{ position: 'relative' }}>
-      <div
-        role="button"
-        tabIndex={0}
+      <button
         style={{ ...inputBase, display: 'flex', alignItems: 'center', justifyContent: 'space-between', userSelect: 'none' }}
         onClick={() => { setOpen(o => !o); setQuery(''); }}
-        onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { setOpen(o => !o); setQuery(''); } }}
       >
         <span style={{ color: value ? '#0f172a' : '#94a3b8' }}>{value || 'Select context class…'}</span>
         <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" strokeWidth="2.5" strokeLinecap="round" style={{ transform: open ? 'rotate(180deg)' : 'none', transition: 'transform 0.15s', flexShrink: 0 }}>
           <polyline points="6,9 12,15 18,9" />
         </svg>
-      </div>
+      </button>
 
       {open && (
         <div style={{
@@ -656,40 +681,42 @@ const ContextClassPicker: React.FC<{
           </div>
 
           {/* Options */}
-          <div style={{ maxHeight: 220, overflowY: 'auto' }}>
+          <ul role="listbox" style={{ maxHeight: 220, overflowY: 'auto', listStyle: 'none', margin: 0, padding: 0 }}>
             {Object.keys(groups).length === 0 && (
-              <div style={{ padding: '10px 12px', fontSize: 12, color: '#94a3b8', fontFamily: APP_FONT }}>No classes found</div>
+              <li style={{ padding: '10px 12px', fontSize: 12, color: '#94a3b8', fontFamily: APP_FONT }}>No classes found</li>
             )}
             {Object.entries(groups).map(([mm, classes]) => (
-              <div key={mm}>
+              <li key={mm}>
                 <div style={{ padding: '5px 12px 3px', fontSize: 10.5, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.06em', background: '#f8fafc', borderBottom: '1px solid #f1f5f9' }}>
                   {mm}
                 </div>
-                {classes.map(c => (
-                  <div
-                    key={c.label}
-                    role="option"
-                    tabIndex={0}
-                    aria-selected={c.label === value}
-                    onClick={() => { onChange(c.label); setOpen(false); setQuery(''); }}
-                    onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { onChange(c.label); setOpen(false); setQuery(''); } }}
-                    style={{
-                      padding: '7px 12px 7px 20px', fontSize: 12.5, cursor: 'pointer',
-                      color: c.label === value ? '#049484' : '#0f172a',
-                      fontWeight: c.label === value ? 600 : 400,
-                      background: c.label === value ? '#f0fdf9' : 'transparent',
-                      fontFamily: 'monospace',
-                    }}
-                    onMouseEnter={e => { if (c.label !== value) e.currentTarget.style.background = '#f8fafc'; }}
-                    onMouseLeave={e => { if (c.label !== value) e.currentTarget.style.background = 'transparent'; }}
-                  >
-                    {c.className}
-                    <span style={{ marginLeft: 6, fontSize: 11, color: '#94a3b8', fontFamily: APP_FONT }}>{c.metamodel}::</span>
-                  </div>
-                ))}
-              </div>
+                <ul role="group" style={{ listStyle: 'none', margin: 0, padding: 0 }}>
+                  {classes.map(c => (
+                    <li
+                      key={c.label}
+                      role="option"
+                      tabIndex={0}
+                      aria-selected={c.label === value}
+                      onClick={() => { onChange(c.label); setOpen(false); setQuery(''); }}
+                      onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { onChange(c.label); setOpen(false); setQuery(''); } }}
+                      style={{
+                        padding: '7px 12px 7px 20px', fontSize: 12.5, cursor: 'pointer',
+                        color: c.label === value ? '#049484' : '#0f172a',
+                        fontWeight: c.label === value ? 600 : 400,
+                        background: c.label === value ? '#f0fdf9' : 'transparent',
+                        fontFamily: 'monospace',
+                      }}
+                      onMouseEnter={e => { if (c.label !== value) e.currentTarget.style.background = '#f8fafc'; }}
+                      onMouseLeave={e => { if (c.label !== value) e.currentTarget.style.background = 'transparent'; }}
+                    >
+                      {c.className}
+                      <span style={{ marginLeft: 6, fontSize: 11, color: '#94a3b8', fontFamily: APP_FONT }}>{c.metamodel}::</span>
+                    </li>
+                  ))}
+                </ul>
+              </li>
             ))}
-          </div>
+          </ul>
         </div>
       )}
     </div>
@@ -718,13 +745,23 @@ const SaveChangesButton: React.FC<{ onSave: () => void }> = ({ onSave }) => {
       setTimeout(() => setSaved(false), 2000);
     }, 650);
   };
+  let btnBackground: string;
+  if (saving) { btnBackground = '#7fc4bc'; }
+  else if (saved) { btnBackground = '#15803d'; }
+  else { btnBackground = '#049484'; }
+
+  let btnLabel: string;
+  if (saving) { btnLabel = 'Saving…'; }
+  else if (saved) { btnLabel = 'Saved ✓'; }
+  else { btnLabel = 'Save Changes'; }
+
   return (
     <button
       onClick={handleClick}
       disabled={saving}
       style={{
         width: '100%', marginTop: 12, padding: '8px 0',
-        background: saving ? '#7fc4bc' : saved ? '#15803d' : '#049484',
+        background: btnBackground,
         color: '#fff', border: 'none', borderRadius: 6, fontSize: 12, fontWeight: 600,
         cursor: saving ? 'default' : 'pointer',
         display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7,
@@ -732,7 +769,7 @@ const SaveChangesButton: React.FC<{ onSave: () => void }> = ({ onSave }) => {
       }}
     >
       {saving && <SpinnerIcon />}
-      {saving ? 'Saving…' : saved ? 'Saved ✓' : 'Save Changes'}
+      {btnLabel}
     </button>
   );
 };
@@ -829,7 +866,7 @@ const EditorPanel: React.FC<EditorPanelProps> = ({ rule, ruleSets, colorMap, met
         onSave={ocl => { handleOclChange(ocl); }}
         initialCode={draft.oclDefinition}
         edgeId={draft.id}
-        vsumId={vsumId != null ? String(vsumId) : undefined}
+        vsumId={vsumId === null || vsumId === undefined ? undefined : String(vsumId)}
         lspEndpoint="/ocl-lsp"
         languageId={vitruvOCLLanguageId}
         fileExtension=".ocl"
@@ -847,6 +884,8 @@ const EditorPanel: React.FC<EditorPanelProps> = ({ rule, ruleSets, colorMap, met
       }}>
         {/* Resize handle */}
         <div
+          role="separator"
+          aria-orientation="horizontal"
           onMouseDown={onHandleMouseDown}
           style={{
             position: 'absolute', top: 0, left: 0, right: 0, height: 6,
@@ -1126,7 +1165,7 @@ const DetailedMetricsModal: React.FC<{ ruleSets: RuleSet[]; colorMap: Record<str
       open
       style={{ position: 'fixed', inset: 0, width: '100%', height: '100%', background: 'none', border: 'none', padding: 0, margin: 0, zIndex: 2000, display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}
     >
-      <div role="button" tabIndex={0} onClick={onClose} onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') onClose(); }} style={{ position: 'absolute', inset: 0, background: 'rgba(15,23,42,0.35)' }} />
+      <button onClick={onClose} aria-label="Close" style={{ position: 'absolute', inset: 0, background: 'rgba(15,23,42,0.35)', border: 'none', cursor: 'default', padding: 0 }} />
       <div style={{
         position: 'relative', zIndex: 1,
         background: '#fff', borderRadius: 14, width: '88%', maxWidth: 1040,
@@ -1161,7 +1200,7 @@ const DetailedMetricsModal: React.FC<{ ruleSets: RuleSet[]; colorMap: Record<str
                 <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '14px 18px', background: '#f8fafc', borderBottom: '1px solid #f1f5f9' }}>
                   <div style={{ width: 11, height: 11, borderRadius: 3, background: rs.color, flexShrink: 0 }} />
                   <span style={{ fontSize: 13, fontWeight: 700, color: '#0f172a', flex: 1 }}>{rs.name}</span>
-                  <span style={{ fontSize: 12, color: '#94a3b8' }}>{total} rule{total !== 1 ? 's' : ''}</span>
+                  <span style={{ fontSize: 12, color: '#94a3b8' }}>{total} rule{total === 1 ? '' : 's'}</span>
                 </div>
 
                 {/* Card body */}
@@ -1547,13 +1586,13 @@ export const ConstraintsView: React.FC<ConstraintsViewProps> = ({ vsumId: _vsumI
   const syncRuleSet = useCallback((rs: RuleSet) => {
     if (vsumId == null) return;
     const body = { name: rs.name, color: rs.color, description: rs.description, oclContent: ruleSetToOcl(rs) };
-    if (rs.backendId != null) {
+    if (rs.backendId === null || rs.backendId === undefined) {
+      apiService.createRuleSet(vsumId, body).then(created => {
+        setRuleSets(prev => updateBackendId(prev, rs.id, created.id));
+      }).catch(err => console.error('Failed to create RuleSet:', err));
+    } else {
       apiService.updateRuleSet(vsumId, rs.backendId, body).catch(err =>
         console.error('Failed to sync RuleSet:', err));
-    } else {
-      apiService.createRuleSet(vsumId, body).then(created => {
-        setRuleSets(prev => prev.map(r => r.id === rs.id ? { ...r, backendId: created.id } : r));
-      }).catch(err => console.error('Failed to create RuleSet:', err));
     }
   }, [vsumId]);
 
@@ -1592,8 +1631,8 @@ export const ConstraintsView: React.FC<ConstraintsViewProps> = ({ vsumId: _vsumI
   const handleDeleteRule = useCallback((ruleId: string) => {
     setRuleSets(prev => {
       const next = prev.map(rs => ({ ...rs, rules: rs.rules.filter(r => r.id !== ruleId) }));
-      // sync the affected ruleset
-      const affected = next.find(rs => prev.find(p => p.id === rs.id)?.rules.some(r => r.id === ruleId));
+      const affectedId = prev.find(rs => rs.rules.some(r => r.id === ruleId))?.id;
+      const affected = next.find(rs => rs.id === affectedId);
       if (affected) syncRuleSet(affected);
       return next;
     });
@@ -1630,7 +1669,7 @@ export const ConstraintsView: React.FC<ConstraintsViewProps> = ({ vsumId: _vsumI
   const handleDeleteRuleSet = useCallback((ruleSetId: string) => {
     setRuleSets(prev => {
       const rs = prev.find(r => r.id === ruleSetId);
-      if (rs?.backendId != null && vsumId != null) {
+      if (rs?.backendId !== null && rs?.backendId !== undefined && vsumId !== null && vsumId !== undefined) {
         apiService.deleteRuleSet(vsumId, rs.backendId).catch(err => console.error('Failed to delete RuleSet:', err));
       }
       return prev.filter(r => r.id !== ruleSetId);
@@ -1640,8 +1679,8 @@ export const ConstraintsView: React.FC<ConstraintsViewProps> = ({ vsumId: _vsumI
 
   const handleSaveRule = useCallback((updated: ConstraintRule) => {
     setRuleSets(prev => {
-      const next = prev.map(rs => ({ ...rs, rules: rs.rules.map(r => r.id === updated.id ? updated : r) }));
-      const affected = next.find(rs => rs.rules.some(r => r.id === updated.id));
+      const next = replaceRule(prev, updated);
+      const affected = findSetContainingRule(next, updated.id);
       if (affected) syncRuleSet(affected);
       return next;
     });
@@ -1680,7 +1719,7 @@ export const ConstraintsView: React.FC<ConstraintsViewProps> = ({ vsumId: _vsumI
 
       {/* Bottom editor — floats over the center canvas, re-enables pointer events */}
       {selectedRule && (
-        <div style={{ position: 'absolute', bottom: 0, left: 260, right: 300, pointerEvents: 'auto', display: 'flex', flexDirection: 'column' }} onKeyDown={e => e.stopPropagation()}>
+        <div role="region" aria-label="Rule editor" style={{ position: 'absolute', bottom: 0, left: 260, right: 300, pointerEvents: 'auto', display: 'flex', flexDirection: 'column' }} onKeyDown={e => e.stopPropagation()}>
           <EditorPanel
             rule={selectedRule}
             ruleSets={ruleSets}
