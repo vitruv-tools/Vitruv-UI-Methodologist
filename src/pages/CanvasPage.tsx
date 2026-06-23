@@ -5,8 +5,9 @@ import { getUserInitials } from '../utils/userInitials';
 import { ProfileView } from '../components/ui/ProfileView';
 import ReactDOM from 'react-dom';
 import { useNavigate, useParams } from 'react-router-dom';
-import { Node as FlowNode, Edge } from 'reactflow';
-import { FlowCanvas } from '../components/flow/FlowCanvas';
+import { Node, Edge } from 'reactflow';
+import { CanvasMode, FlowCanvas } from '../components/flow/FlowCanvas';
+import { ConstraintsView } from '../components/constraints/ConstraintsView';
 import { FloatingUMLPanel } from '../components/canvas/FloatingUMLPanel';
 import { UmlDiagramSaveContext } from '../components/canvas/UMLDiagram';
 import { ModelDrawer, DrawerModel } from '../components/canvas/ModelDrawer';
@@ -95,6 +96,25 @@ export const CanvasPage: React.FC = () => {
   const activeTab = openTabs.find(t => t.instanceId === activeInstanceId);
   const activeProjectId = activeTab?.projectId ?? (id ? Number(id) : undefined);
 
+  // Canvas mode (Modeling / Constraints / Views)
+  const [canvasMode, setCanvasMode] = useState<CanvasMode>('modeling');
+  const canvasModeRef = useRef<CanvasMode>('modeling');
+  const [constraintsNodes, setConstraintsNodes] = useState<Node[]>([]);
+  const [constraintHighlightNodeId, setConstraintHighlightNodeId] = useState<string | null>(null);
+  const [constraintFilterNodeId, setConstraintFilterNodeId] = useState<string | null>(null);
+
+  const handleCanvasModeChange = useCallback((mode: CanvasMode) => {
+    if (mode === 'constraints') {
+      setConstraintsNodes(flowCanvasRef.current?.getNodes?.() ?? []);
+    } else {
+      setConstraintHighlightNodeId(null);
+      setConstraintFilterNodeId(null);
+    }
+    canvasModeRef.current = mode;
+    setCanvasMode(mode);
+  }, []);
+
+
   // Add-reaction mode
   const [addReactionMode, setAddReactionMode] = useState(false);
 
@@ -158,6 +178,10 @@ export const CanvasPage: React.FC = () => {
     setShowDrawer(false);
     setEditingName(false);
     setLoadingProject(false);
+
+    if (canvasModeRef.current === 'constraints') {
+      setConstraintsNodes(session.nodes);
+    }
 
     const load = () => {
       flowCanvasRef.current?.loadDiagramData?.(session.nodes, session.edges);
@@ -387,6 +411,11 @@ export const CanvasPage: React.FC = () => {
 
       if (forInstanceId && activeInstanceIdRef.current !== forInstanceId) return;
 
+      // If the user is in constraints mode, re-snapshot now that the new project's nodes are ready.
+      if (canvasModeRef.current === 'constraints') {
+        setConstraintsNodes(flowCanvasRef.current?.getNodes?.() ?? []);
+      }
+
       if (details.metaModelsRelation?.length) {
         globalThis.dispatchEvent(new CustomEvent('vitruv.loadMetaModelRelations', {
           detail: {
@@ -433,6 +462,11 @@ export const CanvasPage: React.FC = () => {
 
       prevActiveInstanceIdRef.current = nextId;
       if (!nextId) return;
+
+      // Clear stale nodes so the new ConstraintsView instance mounts with a blank slate.
+      if (canvasModeRef.current === 'constraints') {
+        setConstraintsNodes([]);
+      }
 
       const cached = sessionsRef.current.get(nextId);
       if (cached && loadedTabsRef.current.has(nextId)) {
@@ -517,17 +551,17 @@ export const CanvasPage: React.FC = () => {
     const edges = flowCanvasRef.current?.getEdges?.() ?? [];
     const removeIds = new Set(
       nodes
-        .filter((n: FlowNode) => {
+        .filter((n: Node) => {
           if (n.type !== 'ecoreFile') return false;
           const mmId = n.data?.metaModelId;
           const mmSourceId = n.data?.metaModelSourceId;
           return mmId === model.id || mmId === sourceId || mmSourceId === model.id || mmSourceId === sourceId;
         })
-        .map((n: FlowNode) => n.id),
+        .map((n: Node) => n.id),
     );
     if (removeIds.size > 0) {
       flowCanvasRef.current?.loadDiagramData?.(
-        nodes.filter((n: FlowNode) => !removeIds.has(n.id)),
+        nodes.filter((n: Node) => !removeIds.has(n.id)),
         edges.filter((e: Edge) => !removeIds.has(e.source) && !removeIds.has(e.target)),
       );
     }
@@ -556,7 +590,7 @@ export const CanvasPage: React.FC = () => {
 
     if (ecoreFileId == null || metaModelId == null) {
       const node = flowCanvasRef.current?.getNodes?.().find(
-        (n: FlowNode) => n.type === 'ecoreFile' && n.data.fileName === fileName,
+        (n: Node) => n.type === 'ecoreFile' && n.data.fileName === fileName,
       );
       if (node?.data) {
         metaModelId = metaModelId ?? (typeof node.data.metaModelId === 'number' ? node.data.metaModelId : undefined);
@@ -751,7 +785,7 @@ export const CanvasPage: React.FC = () => {
   }, [handleUmlPanelSaved]);
 
   const focusPanel = useCallback((panelId: string) => setTopPanelId(panelId), []);
-  const handleDiagramChange = useCallback((_nodes: FlowNode[], _edges: Edge[]) => {
+  const handleDiagramChange = useCallback((_nodes: Node[], _edges: Edge[]) => {
     const ids = new Set<number>();
     for (const n of _nodes) {
       if (n.type !== 'ecoreFile') continue;
@@ -778,6 +812,10 @@ export const CanvasPage: React.FC = () => {
         addReactionMode={addReactionMode}
         onReactionModeEnd={() => setAddReactionMode(false)}
         onHistoryChange={(u, r) => { setCanUndo(u); setCanRedo(r); }}
+        onCanvasModeChange={handleCanvasModeChange}
+        constraintHighlightNodeId={constraintHighlightNodeId}
+        constraintFilterNodeId={constraintFilterNodeId}
+        onConstraintNodeFilter={setConstraintFilterNodeId}
         projectTabsBelowModeToggle={
           openTabs.length > 0 ? (
             <CanvasProjectTabs
@@ -864,8 +902,19 @@ export const CanvasPage: React.FC = () => {
         document.body
       )}
 
+      {/* Constraints overlay — always mounted to preserve state (edits, deletions).
+          Visibility toggled via display so the FlowCanvas mode-toggle remains
+          clickable through the transparent center gap when hidden. */}
+      <div style={{
+        position: 'absolute', top: 72, left: 0, right: 0, bottom: 0,
+        display: canvasMode === 'constraints' ? 'flex' : 'none',
+        zIndex: 100, pointerEvents: 'none',
+      }}>
+        <ConstraintsView key={activeProjectId ?? 'default'} vsumId={activeProjectId?.toString()} canvasNodes={constraintsNodes} onHighlightNode={setConstraintHighlightNodeId} filterNodeId={constraintFilterNodeId} />
+      </div>
+
       {/* Left sidebar toolbar */}
-      <LeftSidebar
+      {canvasMode !== 'constraints' && <LeftSidebar
         addReactionMode={addReactionMode}
         onToggleReactionMode={() => setAddReactionMode(v => !v)}
         onToggleModelDrawer={() => setShowDrawer(d => !d)}
@@ -879,7 +928,7 @@ export const CanvasPage: React.FC = () => {
         downloadingArtifact={downloadingArtifact}
         savingChanges={savingChanges}
         checkingBuild={checkingBuild}
-      />
+      />}
 
       <LeftPill
         projectName={vsumName || (loadingProject ? 'Loading…' : 'Project')}

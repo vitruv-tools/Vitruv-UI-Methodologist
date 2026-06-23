@@ -38,6 +38,11 @@
     "test": "react-scripts test",
     "eject": "react-scripts eject"
   },
+  "jest": {
+    "moduleNameMapper": {
+      "monaco-editor": "<rootDir>/src/__mocks__/monaco-editor.ts"
+    }
+  },
   "eslintConfig": {
     "extends": [
       "react-app",

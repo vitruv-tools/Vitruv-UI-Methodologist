@@ -867,10 +867,63 @@ class ApiService {
   }
 
   // Removed unused getBaseURL and setBaseURL helpers
+
+  // ── Constraint Rule Sets ──────────────────────────────────────────────────
+
+  getRuleSets(vsumId: number): Promise<RuleSetResponse[]> {
+    return this.authenticatedRequest(`/api/v1/vsums/${vsumId}/rule-sets`);
+  }
+
+  createRuleSet(vsumId: number, body: RuleSetPostRequest): Promise<RuleSetResponse> {
+    return this.authenticatedRequest(`/api/v1/vsums/${vsumId}/rule-sets`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+  }
+
+  updateRuleSet(vsumId: number, ruleSetId: number, body: RuleSetPutRequest): Promise<RuleSetResponse> {
+    return this.authenticatedRequest(`/api/v1/vsums/${vsumId}/rule-sets/${ruleSetId}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+  }
+
+  deleteRuleSet(vsumId: number, ruleSetId: number): Promise<void> {
+    return this.authenticatedRequest(`/api/v1/vsums/${vsumId}/rule-sets/${ruleSetId}`, {
+      method: 'DELETE',
+    });
+  }
 }
 
 // Export a singleton instance
 export const apiService = new ApiService();
+
+export interface RuleSetResponse {
+  id: number;
+  vsumId: number;
+  name: string;
+  color: string;
+  description: string | null;
+  oclContent: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface RuleSetPostRequest {
+  name: string;
+  color?: string;
+  description?: string;
+  oclContent?: string;
+}
+
+export interface RuleSetPutRequest {
+  name: string;
+  color?: string;
+  description?: string;
+  oclContent?: string;
+}
 
 // Example API methods using the authenticated service
 // Removed unused userApi and projectApi helpers

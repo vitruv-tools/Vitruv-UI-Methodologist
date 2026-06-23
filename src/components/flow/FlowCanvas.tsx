@@ -212,6 +212,8 @@ const getLocalStorageKey = (userId?: string, vsumId?: string) => {
   return 'flow_edge_color_map_v1';
 };
 
+export type CanvasMode = 'modeling' | 'constraints' | 'views';
+
 interface FlowCanvasProps {
   onDeploy?: (nodes: Node[], edges: Edge[]) => void;
   onToolClick?: (toolType: string, toolName: string, diagramType?: string) => void;
@@ -232,6 +234,14 @@ interface FlowCanvasProps {
   onHistoryChange?: (canUndo: boolean, canRedo: boolean) => void;
   /** Rendered directly under the Modeling / View Types toggle (e.g. project tabs). */
   projectTabsBelowModeToggle?: React.ReactNode;
+  /** Called when the user switches between Modeling / Constraints / Views tabs. */
+  onCanvasModeChange?: (mode: CanvasMode) => void;
+  /** Node ID to highlight as the active constraint context (teal glow). */
+  constraintHighlightNodeId?: string | null;
+  /** Node ID currently selected as a constraint filter (stronger teal border). */
+  constraintFilterNodeId?: string | null;
+  /** Called when a node is clicked in constraints mode to toggle the filter. */
+  onConstraintNodeFilter?: (nodeId: string | null) => void;
 }
 
 interface ConnectionDragState {
@@ -500,6 +510,10 @@ export const FlowCanvas = forwardRef<{
     onReactionModeEnd,
     onHistoryChange,
     projectTabsBelowModeToggle,
+    onCanvasModeChange,
+    constraintHighlightNodeId,
+    constraintFilterNodeId,
+    onConstraintNodeFilter,
   }, ref) => {
 
     const reactFlowWrapper = useRef<HTMLDivElement>(null);
@@ -547,6 +561,7 @@ export const FlowCanvas = forwardRef<{
     // Canvas center in flow coordinates — fixed at origin, ReactFlow's default fitView center
     const [circleSelected, setCircleSelected] = useState(false);
     const [circleVisible, setCircleVisible] = useState(true);
+    const [activeCanvasMode, setActiveCanvasMode] = useState<CanvasMode>('modeling');
 
     // Ref flag: set to true just before setCircle() in autoLayoutEcoreBoxes so the
     // useEffect below can call fitViewToCircle once React has committed the new circle.
@@ -1594,10 +1609,16 @@ export const FlowCanvas = forwardRef<{
         return; // don't do normal select in reaction mode
       }
 
+      // ── Constraints mode: toggle filter ────────────────────────────────────
+      if (activeCanvasMode === 'constraints') {
+        onConstraintNodeFilter?.(constraintFilterNodeId === ecoreNode.id ? null : ecoreNode.id);
+        return;
+      }
+
       // ── Normal select ───────────────────────────────────────────────────────
       setSelectedFileId(ecoreNode.id);
       onEcoreFileSelect?.(fileName);
-    }, [nodes, onEcoreFileSelect, addReactionMode, reactionSourceId, getColorForPair, calculateOptimalHandles, commitReactionEdge, onReactionModeEnd]);
+    }, [nodes, onEcoreFileSelect, addReactionMode, reactionSourceId, getColorForPair, calculateOptimalHandles, commitReactionEdge, onReactionModeEnd, activeCanvasMode, onConstraintNodeFilter, constraintFilterNodeId]);
 
     // Clear reaction source when mode is toggled off
     useEffect(() => {
@@ -2304,6 +2325,8 @@ export const FlowCanvas = forwardRef<{
             isConnectionActive: connectionDragState?.isActive || false,
             edgeDistribution: edgeDistributionMap.get(node.id),
             isReactionSource: reactionSourceId === node.id,
+            isConstraintContext: constraintHighlightNodeId === node.id,
+            isConstraintFilter: constraintFilterNodeId === node.id,
           },
           selected: selectedFileId === node.id,
           draggable: !connectionDragState?.isActive && !addReactionMode,
@@ -2759,24 +2782,30 @@ export const FlowCanvas = forwardRef<{
             }}
           >
             {([
-              { label: 'Modeling',   icon: <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="9" y1="21" x2="9" y2="9"/></svg>, active: !circleVisible },
-              { label: 'View Types', icon: <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="9"/><line x1="12" y1="3" x2="12" y2="21"/><line x1="3" y1="12" x2="21" y2="12"/></svg>, active: circleVisible },
-            ] as const).map(({ label, icon, active }) => (
+              { label: 'Modeling',     mode: 'modeling'     as CanvasMode, icon: <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="9" y1="21" x2="9" y2="9"/></svg> },
+              { label: 'Constraints',  mode: 'constraints'  as CanvasMode, icon: <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg> },
+              { label: 'Views',        mode: 'views'        as CanvasMode, icon: <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="9"/><line x1="12" y1="3" x2="12" y2="21"/><line x1="3" y1="12" x2="21" y2="12"/></svg> },
+            ]).map(({ label, mode, icon }) => (
               <button
                 key={label}
                 onClick={() => {
-                  const next = label === 'View Types';
-                  setCircleVisible(next);
-                  if (!next && circleSelected) setCircleSelected(false);
+                  setActiveCanvasMode(mode);
+                  onCanvasModeChange?.(mode);
+                  if (mode === 'views') {
+                    setCircleVisible(true);
+                  } else {
+                    setCircleVisible(false);
+                    if (circleSelected) setCircleSelected(false);
+                  }
                 }}
                 style={{
                   display: 'flex', alignItems: 'center', gap: 6,
                   height: 34,
                   padding: '0 14px',
-                  border: active ? '1px solid #049484' : '1px solid transparent',
+                  border: activeCanvasMode === mode ? '1px solid #049484' : '1px solid transparent',
                   borderRadius: 6,
-                  background: active ? '#049484' : 'transparent',
-                  color: active ? '#ffffff' : '#64748b',
+                  background: activeCanvasMode === mode ? '#049484' : 'transparent',
+                  color: activeCanvasMode === mode ? '#ffffff' : '#64748b',
                   fontSize: 12,
                   fontWeight: 600,
                   cursor: 'pointer',
@@ -2785,12 +2814,12 @@ export const FlowCanvas = forwardRef<{
                   fontFamily: 'inherit',
                 }}
                 onMouseEnter={e => {
-                  if (active) return;
+                  if (activeCanvasMode === mode) return;
                   e.currentTarget.style.background = '#f1f5f9';
                   e.currentTarget.style.color = '#1e293b';
                 }}
                 onMouseLeave={e => {
-                  if (active) return;
+                  if (activeCanvasMode === mode) return;
                   e.currentTarget.style.background = 'transparent';
                   e.currentTarget.style.color = '#64748b';
                 }}
