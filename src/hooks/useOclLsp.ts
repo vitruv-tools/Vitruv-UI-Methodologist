@@ -2,6 +2,12 @@ import { useRef, useEffect, useCallback } from 'react';
 import { Monaco } from '@monaco-editor/react';
 import * as monaco from 'monaco-editor';
 
+let _lspRequestId = 2; // start at 2 — id 1 is reserved for LSP initialize
+function nextLspRequestId(): number {
+  _lspRequestId = (_lspRequestId % 2_147_483_646) + 1;
+  return _lspRequestId;
+}
+
 function markerSeverity(lspSeverity: number, monacoInstance: Monaco): monaco.MarkerSeverity {
   if (lspSeverity === 1) return monacoInstance.MarkerSeverity.Error;
   if (lspSeverity === 2) return monacoInstance.MarkerSeverity.Warning;
@@ -148,7 +154,7 @@ export function useOclLsp({ vsumId, documentId, languageId, getCode }: UseOclLsp
         }
         const wordInfo = model.getWordUntilPosition(position);
         const range = { startLineNumber: position.lineNumber, endLineNumber: position.lineNumber, startColumn: wordInfo.startColumn, endColumn: wordInfo.endColumn };
-        const id = crypto.getRandomValues(new Uint32Array(1))[0] % 2147483647;
+        const id = nextLspRequestId();
         const timeout = setTimeout(() => { pendingRequests.current.delete(id); resolve({ suggestions: [] }); }, 2000);
         pendingRequests.current.set(id, (msg) => { clearTimeout(timeout); resolve(buildCompletionItems(msg, range, monacoInstance)); });
         sendLsp({ jsonrpc: '2.0', id, method: 'textDocument/completion',
