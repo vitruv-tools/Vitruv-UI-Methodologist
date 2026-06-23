@@ -1,4 +1,5 @@
-import React, { useRef, useEffect, useCallback } from 'react';
+import { useRef, useEffect, useCallback } from 'react';
+import type { RefObject } from 'react';
 import { Monaco } from '@monaco-editor/react';
 import * as monaco from 'monaco-editor';
 
@@ -14,17 +15,21 @@ function markerSeverity(lspSeverity: number, monacoInstance: Monaco): monaco.Mar
   return monacoInstance.MarkerSeverity.Info;
 }
 
+interface CompletionCtx {
+  initialized: RefObject<boolean>;
+  wsRef: RefObject<WebSocket | null>;
+  pendingRequests: RefObject<Map<number, (msg: any) => void>>;
+  sendLsp: (msg: object) => void;
+  getDocUri: () => string | null;
+}
+
 function resolveCompletionItems(
   monacoInstance: Monaco,
-  initialized: React.MutableRefObject<boolean>,
-  wsRef: React.MutableRefObject<WebSocket | null>,
-  pendingRequests: React.MutableRefObject<Map<number, (msg: any) => void>>,
-  sendLsp: (msg: object) => void,
-  getDocUri: () => string | null,
+  ctx: CompletionCtx,
   model: monaco.editor.ITextModel,
   position: monaco.Position,
 ): Promise<monaco.languages.CompletionList> {
-  if (!initialized.current || wsRef.current?.readyState !== WebSocket.OPEN) {
+  if (!ctx.initialized.current || ctx.wsRef.current?.readyState !== WebSocket.OPEN) {
     return Promise.resolve({ suggestions: [] });
   }
   return new Promise(resolve => {
@@ -34,10 +39,10 @@ function resolveCompletionItems(
       startColumn: wordInfo.startColumn, endColumn: wordInfo.endColumn,
     };
     const id = nextLspRequestId();
-    const timeout = setTimeout(() => { pendingRequests.current.delete(id); resolve({ suggestions: [] }); }, 2000);
-    pendingRequests.current.set(id, msg => { clearTimeout(timeout); resolve(buildCompletionItems(msg, range, monacoInstance)); });
-    sendLsp({ jsonrpc: '2.0', id, method: 'textDocument/completion',
-      params: { textDocument: { uri: getDocUri() }, position: { line: position.lineNumber - 1, character: position.column - 1 } } });
+    const timeout = setTimeout(() => { ctx.pendingRequests.current.delete(id); resolve({ suggestions: [] }); }, 2000);
+    ctx.pendingRequests.current.set(id, msg => { clearTimeout(timeout); resolve(buildCompletionItems(msg, range, monacoInstance)); });
+    ctx.sendLsp({ jsonrpc: '2.0', id, method: 'textDocument/completion',
+      params: { textDocument: { uri: ctx.getDocUri() }, position: { line: position.lineNumber - 1, character: position.column - 1 } } });
   });
 }
 
@@ -176,7 +181,7 @@ export function useOclLsp({ vsumId, documentId, languageId, getCode }: UseOclLsp
     completionDisposable.current = monacoInstance.languages.registerCompletionItemProvider(languageId, {
       triggerCharacters: ['.', ' ', ':'],
       provideCompletionItems: (model, position) =>
-        resolveCompletionItems(monacoInstance, initialized, wsRef, pendingRequests, sendLsp, getDocUri, model, position),
+        resolveCompletionItems(monacoInstance, { initialized, wsRef, pendingRequests, sendLsp, getDocUri }, model, position),
     });
   }, [vsumId, languageId, getDocUri, getCode, sendLsp, disconnect]);
 

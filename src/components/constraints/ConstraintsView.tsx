@@ -381,6 +381,10 @@ function replaceRule(ruleSets: RuleSet[], updated: ConstraintRule): RuleSet[] {
   return ruleSets.map(rs => ({ ...rs, rules: rs.rules.map(r => r.id === updated.id ? updated : r) }));
 }
 
+function deleteRuleFromSets(ruleSets: RuleSet[], ruleId: string): RuleSet[] {
+  return ruleSets.map(rs => ({ ...rs, rules: rs.rules.filter(r => r.id !== ruleId) }));
+}
+
 function findSetContainingRule(ruleSets: RuleSet[], ruleId: string): RuleSet | undefined {
   return ruleSets.find(rs => rs.rules.some(r => r.id === ruleId));
 }
@@ -447,7 +451,9 @@ const RuleRow: React.FC<{ rule: ConstraintRule; selected: boolean; onClick: () =
         </button>
         {menuOpen && (
           <div
+            tabIndex={-1}
             onClick={e => e.stopPropagation()}
+            onKeyDown={e => e.stopPropagation()}
             style={{
               position: 'absolute', right: 0, top: '100%', zIndex: 50,
               background: '#ffffff', border: '1px solid #e2e8f0',
@@ -681,7 +687,7 @@ const ContextClassPicker: React.FC<{
           </div>
 
           {/* Options */}
-          <ul role="listbox" style={{ maxHeight: 220, overflowY: 'auto', listStyle: 'none', margin: 0, padding: 0 }}>
+          <ul role="menu" style={{ maxHeight: 220, overflowY: 'auto', listStyle: 'none', margin: 0, padding: 0 }}>
             {Object.keys(groups).length === 0 && (
               <li style={{ padding: '10px 12px', fontSize: 12, color: '#94a3b8', fontFamily: APP_FONT }}>No classes found</li>
             )}
@@ -690,13 +696,13 @@ const ContextClassPicker: React.FC<{
                 <div style={{ padding: '5px 12px 3px', fontSize: 10.5, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.06em', background: '#f8fafc', borderBottom: '1px solid #f1f5f9' }}>
                   {mm}
                 </div>
-                <ul role="group" style={{ listStyle: 'none', margin: 0, padding: 0 }}>
+                <ul style={{ listStyle: 'none', margin: 0, padding: 0 }}>
                   {classes.map(c => (
                     <li
                       key={c.label}
-                      role="option"
+                      role="menuitemradio"
                       tabIndex={0}
-                      aria-selected={c.label === value}
+                      aria-checked={c.label === value}
                       onClick={() => { onChange(c.label); setOpen(false); setQuery(''); }}
                       onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { onChange(c.label); setOpen(false); setQuery(''); } }}
                       style={{
@@ -837,8 +843,8 @@ const EditorPanel: React.FC<EditorPanelProps> = ({ rule, ruleSets, colorMap, met
 
   // ── OCL → form fields ───────────────────────────────────────────────────────
 
-  const handleOclChange = (v: string | undefined) => {
-    const ocl = v ?? '';
+  const handleOclChange = (v: string = '') => {
+    const ocl = v;
     notifyChange(ocl);
     if (updatingFromRef.current === 'form') return;
     updatingFromRef.current = 'code';
@@ -884,9 +890,15 @@ const EditorPanel: React.FC<EditorPanelProps> = ({ rule, ruleSets, colorMap, met
       }}>
         {/* Resize handle */}
         <div
-          role="separator"
-          aria-orientation="horizontal"
+          role="slider"
+          aria-label="Resize panel"
+          aria-orientation="vertical"
+          aria-valuenow={height}
+          aria-valuemin={EDITOR_PANEL_MIN_H}
+          aria-valuemax={EDITOR_PANEL_MAX_H}
+          tabIndex={0}
           onMouseDown={onHandleMouseDown}
+          onKeyDown={() => { /* keyboard resize not implemented */ }}
           style={{
             position: 'absolute', top: 0, left: 0, right: 0, height: 6,
             cursor: 'ns-resize', zIndex: 10,
@@ -1630,10 +1642,10 @@ export const ConstraintsView: React.FC<ConstraintsViewProps> = ({ vsumId: _vsumI
 
   const handleDeleteRule = useCallback((ruleId: string) => {
     setRuleSets(prev => {
-      const next = prev.map(rs => ({ ...rs, rules: rs.rules.filter(r => r.id !== ruleId) }));
-      const affectedId = prev.find(rs => rs.rules.some(r => r.id === ruleId))?.id;
-      const affected = next.find(rs => rs.id === affectedId);
-      if (affected) syncRuleSet(affected);
+      const next = deleteRuleFromSets(prev, ruleId);
+      const affected = findSetContainingRule(prev, ruleId);
+      const syncTarget = next.find(rs => rs.id === affected?.id);
+      if (syncTarget) syncRuleSet(syncTarget);
       return next;
     });
     setSelectedRule(prev => prev?.id === ruleId ? null : prev);
@@ -1719,7 +1731,7 @@ export const ConstraintsView: React.FC<ConstraintsViewProps> = ({ vsumId: _vsumI
 
       {/* Bottom editor — floats over the center canvas, re-enables pointer events */}
       {selectedRule && (
-        <div role="region" aria-label="Rule editor" style={{ position: 'absolute', bottom: 0, left: 260, right: 300, pointerEvents: 'auto', display: 'flex', flexDirection: 'column' }} onKeyDown={e => e.stopPropagation()}>
+        <section aria-label="Rule editor" tabIndex={-1} style={{ position: 'absolute', bottom: 0, left: 260, right: 300, pointerEvents: 'auto', display: 'flex', flexDirection: 'column' }} onKeyDown={e => e.stopPropagation()}>
           <EditorPanel
             rule={selectedRule}
             ruleSets={ruleSets}
@@ -1731,7 +1743,7 @@ export const ConstraintsView: React.FC<ConstraintsViewProps> = ({ vsumId: _vsumI
             onHighlightNode={onHighlightNode}
             canvasNodes={canvasNodes}
           />
-        </div>
+        </section>
       )}
       {selectedRuleSet && !selectedRule && (
         <div style={{ position: 'absolute', bottom: 0, left: 260, right: 300, pointerEvents: 'auto', maxHeight: '42%', display: 'flex', flexDirection: 'column' }}>
