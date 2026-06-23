@@ -76,6 +76,13 @@ export const ActionButton: React.FC<ActionButtonProps> = ({
 }) => {
   const [hovered, setHovered] = useState(false);
 
+  let variantStateStyles: React.CSSProperties = {};
+  if (disabled) {
+    variantStateStyles = VARIANT_DISABLED[variant];
+  } else if (hovered) {
+    variantStateStyles = VARIANT_HOVER[variant];
+  }
+
   const base: React.CSSProperties = {
     ...SIZE_STYLES[size],
     ...VARIANT_BASE[variant],
@@ -89,7 +96,7 @@ export const ActionButton: React.FC<ActionButtonProps> = ({
     gap: '6px',
     lineHeight: 1.2,
     whiteSpace: 'nowrap',
-    ...(disabled ? VARIANT_DISABLED[variant] : hovered ? VARIANT_HOVER[variant] : {}),
+    ...variantStateStyles,
     ...style,
   };
 

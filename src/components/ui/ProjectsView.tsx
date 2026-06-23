@@ -36,6 +36,26 @@ const formatDate = (iso: string) => {
   return new Date(iso).toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' });
 };
 
+const DeletedProjectStatusBadge: React.FC<{ removedAt?: string | null }> = ({ removedAt }) => {
+  const days = getDaysUntilPermanentDelete(removedAt);
+  const urgency = getDeletionUrgency(days);
+  const colors = DELETION_URGENCY_STYLES[urgency];
+  return (
+    <span
+      title={`Permanent deletion in ${formatDaysRemainingLabel(days)} (${DELETED_PROJECT_RETENTION_DAYS}-day policy)`}
+      style={{
+        display: 'inline-flex', alignItems: 'center', gap: 5,
+        padding: '3px 9px', borderRadius: 20,
+        background: colors.bg, border: `1px solid ${colors.border}`,
+        fontSize: 12, fontWeight: 600, color: colors.text,
+        animation: urgency === 'critical' ? 'pulseBadge 1.4s ease-in-out infinite' : 'none',
+      }}
+    >
+      <span style={{ width: 6, height: 6, borderRadius: '50%', background: colors.dot, flexShrink: 0 }} />{formatDaysRemainingLabel(days)}
+    </span>
+  );
+};
+
 // ── ProjectRow ─────────────────────────────────────────────────────────────
 
 interface ProjectRowProps {
@@ -52,15 +72,15 @@ const ProjectRow: React.FC<ProjectRowProps> = ({ item, showDeleted, onDetails, o
   const canManage = role === 'OWNER';
 
   const navigate = useNavigate();
-  const openVsum = () => {
-    if (!showDeleted) navigate(`/canvas/${item.id}`);
-  };
+  const openVsum = () => navigate(`/canvas/${item.id}`);
+  const handleMouseEnter = () => setHovered(true);
+  const handleMouseLeave = () => setHovered(false);
 
   return (
     <tr
-      onMouseEnter={() => setHovered(true)}
-      onMouseLeave={() => setHovered(false)}
-      onDoubleClick={!showDeleted ? openVsum : undefined}
+      onMouseEnter={handleMouseEnter}
+      onMouseLeave={handleMouseLeave}
+      onDoubleClick={showDeleted ? undefined : openVsum}
       style={{ borderBottom: '1px solid #f9fafb', background: hovered ? '#fafafa' : '#fff', transition: 'background 0.1s', cursor: showDeleted ? 'default' : 'pointer' }}
     >
       {/* Name */}
@@ -89,29 +109,11 @@ const ProjectRow: React.FC<ProjectRowProps> = ({ item, showDeleted, onDetails, o
 
       {/* Status */}
       <td style={{ padding: '13px 16px' }}>
-        {showDeleted ? (() => {
-          const days = getDaysUntilPermanentDelete(item.removedAt);
-          const u = getDeletionUrgency(days);
-          const c = DELETION_URGENCY_STYLES[u];
-          return (
-            <span
-              title={`Permanent deletion in ${formatDaysRemainingLabel(days)} (${DELETED_PROJECT_RETENTION_DAYS}-day policy)`}
-              style={{
-                display: 'inline-flex', alignItems: 'center', gap: 5,
-                padding: '3px 9px', borderRadius: 20,
-                background: c.bg, border: `1px solid ${c.border}`,
-                fontSize: 12, fontWeight: 600, color: c.text,
-                animation: u === 'critical' ? 'pulseBadge 1.4s ease-in-out infinite' : 'none',
-              }}
-            >
-              <span style={{ width: 6, height: 6, borderRadius: '50%', background: c.dot, flexShrink: 0 }} />
-              {formatDaysRemainingLabel(days)}
-            </span>
-          );
-        })() : (
+        {showDeleted ? (
+          <DeletedProjectStatusBadge removedAt={item.removedAt} />
+        ) : (
           <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, padding: '3px 9px', borderRadius: 20, background: '#f0fdf4', border: '1px solid #bbf7d0', fontSize: 12, fontWeight: 600, color: '#166534' }}>
-            <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#22c55e', flexShrink: 0 }} />
-            Active
+            <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#22c55e', flexShrink: 0 }} />{'Active'}
           </span>
         )}
       </td>
@@ -392,8 +394,7 @@ export const ProjectsView: React.FC = () => {
                 <tr>
                   <td colSpan={4} style={{ padding: '24px 16px', textAlign: 'center' }}>
                     <div style={{ display: 'inline-flex', alignItems: 'center', gap: 10, color: '#6b7280', fontSize: 13 }}>
-                      <div style={{ width: 18, height: 18, border: '2px solid #e5e7eb', borderTop: '2px solid #049484', borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
-                      Loading...
+                      <div style={{ width: 18, height: 18, border: '2px solid #e5e7eb', borderTop: '2px solid #049484', borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />{'Loading...'}
                     </div>
                   </td>
                 </tr>
@@ -428,7 +429,7 @@ export const ProjectsView: React.FC = () => {
       <ConfirmDialog
         isOpen={recoverConfirmId !== null}
         title="Restore project"
-        message={recoveringId !== null ? 'Restoring...' : 'Should this project be restored? It will be moved back to your active projects.'}
+        message={recoveringId === null ? 'Should this project be restored? It will be moved back to your active projects.' : 'Restoring...'}
         confirmText="Restore"
         cancelText="Cancel"
         variant="success"

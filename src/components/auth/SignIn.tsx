@@ -250,7 +250,19 @@ export function SignIn({ onSignInSuccess, onSwitchToSignUp }: Readonly<SignInPro
           tabIndex={isSendingReset ? -1 : 0}
           aria-label="Close reset password dialog"
         >
-          <div className="modal-dialog" role="dialog" aria-modal="true" aria-labelledby="forgot-password-title" aria-describedby="forgot-password-description">
+          <dialog
+            className="modal-dialog"
+            open
+            aria-labelledby="forgot-password-title"
+            aria-describedby="forgot-password-description"
+            onCancel={(e) => {
+              if (isSendingReset) {
+                e.preventDefault();
+                return;
+              }
+              closeForgotPasswordModal();
+            }}
+          >
             <div className="modal-header">
               <h2 id="forgot-password-title">Reset Password</h2>
               <p id="forgot-password-description">Enter your email address and we'll send you instructions to reset your password.</p>
@@ -284,7 +296,7 @@ export function SignIn({ onSignInSuccess, onSwitchToSignUp }: Readonly<SignInPro
                 {isSendingReset ? 'Sending...' : 'Send Reset Link'}
               </button>
             </div>
-          </div>
+          </dialog>
         </div>
       )}
     </AuthLayout>

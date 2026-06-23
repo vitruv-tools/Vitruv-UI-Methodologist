@@ -106,10 +106,10 @@ const ProjectCard: React.FC<ProjectCardProps> = ({ title, subtitle, items, cta, 
           >
             {/* Placeholder diagram lines */}
             <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-              {[60, 90, 50, 70].map((w, i) => (
-                <div key={i} style={{
+              {[60, 90, 50, 70].map((w) => (
+                <div key={w} style={{
                   height: 5, borderRadius: 3,
-                  background: i === 0 ? `${accent}55` : 'rgba(0,0,0,0.08)',
+                  background: w === 60 ? `${accent}55` : 'rgba(0,0,0,0.08)',
                   width: `${w}%`,
                 }} />
               ))}
@@ -185,8 +185,8 @@ export const LandingView: React.FC<LandingViewProps> = ({ userName, onNavigate }
               background: '#049484',
               boxShadow: '0 0 0 3px rgba(4,148,132,0.25)',
               display: 'inline-block',
-            }} />
-            VITRUVIUS MODELER · KIT DSiS
+            }} aria-hidden="true" />
+            <span>VITRUVIUS MODELER · KIT DSiS</span>
           </div>
 
           {/* Title */}
@@ -212,16 +212,7 @@ export const LandingView: React.FC<LandingViewProps> = ({ userName, onNavigate }
           </p>
 
           <p style={{ margin: 0, fontSize: 14, color: '#4b5563', lineHeight: 1.75 }}>
-            The name stands for <strong style={{ color: '#111827' }}>VI</strong>ew-cen
-            <strong style={{ color: '#111827' }}>TR</strong>ic engineering Us
-            <strong style={{ color: '#111827' }}>I</strong>ng a{' '}
-            <strong style={{ color: '#111827' }}>V</strong>irtual{' '}
-            <strong style={{ color: '#111827' }}>U</strong>nderlying{' '}
-            <strong style={{ color: '#111827' }}>S</strong>ingle model. Developed at the{' '}
-            <strong style={{ color: '#111827' }}>Dependability of Software-intensive Systems (DSiS)</strong> at the{' '}
-            <strong style={{ color: '#111827' }}>Karlsruhe Institute of Technology (KIT)</strong>. V-SUM extends
-            the classical Single Underlying Model concept by tolerating redundancy across models and enforcing
-            consistency through explicit propagation rules rather than a single shared representation.
+            The name stands for <strong style={{ color: '#111827' }}>VI</strong>ew-cen<strong style={{ color: '#111827' }}>TR</strong>ic engineering Us<strong style={{ color: '#111827' }}>I</strong>ng a <strong style={{ color: '#111827' }}>V</strong>irtual <strong style={{ color: '#111827' }}>U</strong>nderlying <strong style={{ color: '#111827' }}>S</strong>ingle model. Developed at the <strong style={{ color: '#111827' }}>Dependability of Software-intensive Systems (DSiS)</strong> at the <strong style={{ color: '#111827' }}>Karlsruhe Institute of Technology (KIT)</strong>. V-SUM extends the classical Single Underlying Model concept by tolerating redundancy across models and enforcing consistency through explicit propagation rules rather than a single shared representation.
           </p>
 
           {/* Feature pills */}

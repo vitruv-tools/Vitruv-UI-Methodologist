@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import ReactDOM from 'react-dom';
 import { apiService } from '../../services/api';
 import { useToast } from './ToastProvider';
-import { useModalBodyLock } from './modalUtils';
+import { useModalBodyLock, modalBackdropStyle, modalDialogShellStyle } from './modalUtils';
 
 interface CreateVsumModalProps {
   isOpen: boolean;
@@ -44,6 +44,12 @@ const CancelButton: React.FC<{ onClick: () => void; disabled: boolean }> = ({ on
 
 const SubmitButton: React.FC<{ onClick: () => void; disabled: boolean; loading: boolean }> = ({ onClick, disabled, loading }) => {
   const [hov, setHov] = React.useState(false);
+  let background = '#049484';
+  if (disabled) {
+    background = '#9ca3af';
+  } else if (hov) {
+    background = '#038472';
+  }
   return (
     <button
       type="button"
@@ -55,7 +61,7 @@ const SubmitButton: React.FC<{ onClick: () => void; disabled: boolean; loading: 
         padding: '9px 22px',
         border: 'none',
         borderRadius: 9,
-        background: disabled ? '#9ca3af' : hov ? '#038472' : '#049484',
+        background,
         color: '#ffffff',
         fontSize: 13,
         fontWeight: 700,
@@ -126,18 +132,42 @@ export const CreateVsumModal: React.FC<CreateVsumModalProps> = ({ isOpen, onClos
   };
 
   return ReactDOM.createPortal(
-    <div
-      onClick={handleClose}
+    <dialog
+      open
+      aria-labelledby="create-vsum-title"
+      onCancel={e => {
+        if (loading) {
+          e.preventDefault();
+          return;
+        }
+        handleClose();
+      }}
       style={{
-        position: 'fixed', inset: 0, zIndex: 2000,
-        background: 'rgba(0,0,0,0.25)',
-        backdropFilter: 'blur(6px)',
-        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        ...modalDialogShellStyle,
+        zIndex: 2000,
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
       }}
     >
-      <div
-        onClick={e => e.stopPropagation()}
+      <button
+        type="button"
+        aria-hidden="true"
+        tabIndex={-1}
+        onClick={handleClose}
         style={{
+          ...modalBackdropStyle,
+          position: 'absolute',
+          backgroundColor: 'rgba(0,0,0,0.25)',
+          backdropFilter: 'blur(6px)',
+          WebkitBackdropFilter: 'blur(6px)',
+          cursor: loading ? 'default' : 'pointer',
+        }}
+      />
+      <div
+        style={{
+          position: 'relative',
+          zIndex: 1,
           width: 'min(480px, 94vw)',
           background: '#ffffff',
           borderRadius: 14,
@@ -153,15 +183,17 @@ export const CreateVsumModal: React.FC<CreateVsumModalProps> = ({ isOpen, onClos
           borderBottom: '1px solid rgba(0,0,0,0.07)',
         }}>
           <div>
-            <div style={{ fontSize: 16, fontWeight: 700, color: '#0f172a', letterSpacing: '-0.01em' }}>
+            <h2 id="create-vsum-title" style={{ margin: 0, fontSize: 16, fontWeight: 700, color: '#0f172a', letterSpacing: '-0.01em' }}>
               New Project
-            </div>
+            </h2>
             <div style={{ fontSize: 13, color: '#6b7280', marginTop: 2 }}>
               Create a new V-SUM workspace
             </div>
           </div>
           <button
+            type="button"
             onClick={handleClose}
+            aria-label="Close"
             style={{
               width: 30, height: 30, borderRadius: 6,
               background: 'transparent',
@@ -236,7 +268,7 @@ export const CreateVsumModal: React.FC<CreateVsumModalProps> = ({ isOpen, onClos
           <SubmitButton onClick={handleSubmit} disabled={loading || !name.trim()} loading={loading} />
         </div>
       </div>
-    </div>,
+    </dialog>,
     document.body
   );
 };

@@ -131,61 +131,76 @@ export function bridgedLinePathD(drawP1: Point, drawP2: Point, bridges: LineBrid
   return d;
 }
 
-/** Keep every badge on its own line; only nudge along that line when labels collide. */
-export function optimizeMultiplicityBadges(badges: MultiplicityBadge[]): MultiplicityBadge[] {
-  const result = badges.map(b => ({ ...b }));
+function groupBadgeIndices(badges: MultiplicityBadge[]): Map<string, number[]> {
   const groups = new Map<string, number[]>();
-
-  result.forEach((badge, index) => {
+  badges.forEach((badge, index) => {
     const key = `${badge.end}:${badge.anchorClassId}`;
     const list = groups.get(key) ?? [];
     list.push(index);
     groups.set(key, list);
   });
+  return groups;
+}
 
-  for (const indices of groups.values()) {
-    if (indices.length <= 1) continue;
+function separateBadgesIfNeeded(
+  a: MultiplicityBadge,
+  b: MultiplicityBadge,
+  extraPush: number,
+): boolean {
+  const dist = Math.hypot(b.x - a.x, b.y - a.y);
+  if (dist >= MULT_MIN_GAP) return false;
 
-    indices.sort((ia, ib) => edgeSortCoord(result[ia]) - edgeSortCoord(result[ib]));
+  const push = (MULT_MIN_GAP - dist) / 2 + extraPush;
+  pushAlongLine(a, -push);
+  pushAlongLine(b, push);
+  return true;
+}
 
-    for (let pass = 0; pass < 8; pass++) {
-      let moved = false;
-      for (let k = 0; k < indices.length - 1; k++) {
-        const a = result[indices[k]];
-        const b = result[indices[k + 1]];
-        const dx = b.x - a.x;
-        const dy = b.y - a.y;
-        const dist = Math.hypot(dx, dy);
-        if (dist >= MULT_MIN_GAP) continue;
+function runIndexedSeparationPasses(
+  indices: number[],
+  result: MultiplicityBadge[],
+  maxPasses: number,
+  extraPush: number,
+): void {
+  if (indices.length <= 1) return;
 
-        const push = (MULT_MIN_GAP - dist) / 2 + 2;
-        pushAlongLine(a, -push);
-        pushAlongLine(b, push);
-        moved = true;
-      }
-      if (!moved) break;
-    }
-  }
-
-  for (let pass = 0; pass < 6; pass++) {
+  indices.sort((ia, ib) => edgeSortCoord(result[ia]) - edgeSortCoord(result[ib]));
+  for (let pass = 0; pass < maxPasses; pass++) {
     let moved = false;
-    for (let i = 0; i < result.length; i++) {
-      for (let j = i + 1; j < result.length; j++) {
-        const a = result[i];
-        const b = result[j];
-        const dx = b.x - a.x;
-        const dy = b.y - a.y;
-        const dist = Math.hypot(dx, dy);
-        if (dist >= MULT_MIN_GAP) continue;
-
-        const push = (MULT_MIN_GAP - dist) / 2 + 1;
-        pushAlongLine(a, -push);
-        pushAlongLine(b, push);
+    for (let k = 0; k < indices.length - 1; k++) {
+      if (separateBadgesIfNeeded(result[indices[k]], result[indices[k + 1]], extraPush)) {
         moved = true;
       }
     }
     if (!moved) break;
   }
+}
 
+function separateGroupedBadges(result: MultiplicityBadge[], groups: Map<string, number[]>): void {
+  for (const indices of groups.values()) {
+    runIndexedSeparationPasses(indices, result, 8, 2);
+  }
+}
+
+function separateAllBadgePairs(result: MultiplicityBadge[]): void {
+  for (let pass = 0; pass < 6; pass++) {
+    let moved = false;
+    for (let i = 0; i < result.length; i++) {
+      for (let j = i + 1; j < result.length; j++) {
+        if (separateBadgesIfNeeded(result[i], result[j], 1)) {
+          moved = true;
+        }
+      }
+    }
+    if (!moved) break;
+  }
+}
+
+/** Keep every badge on its own line; only nudge along that line when labels collide. */
+export function optimizeMultiplicityBadges(badges: MultiplicityBadge[]): MultiplicityBadge[] {
+  const result = badges.map(b => ({ ...b }));
+  const groups = groupBadgeIndices(result);
+  separateGroupedBadges(result, groups);
+  separateAllBadgePairs(result);
   return result;
 }

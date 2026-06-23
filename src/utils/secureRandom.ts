@@ -1,8 +1,8 @@
 /** Cryptographically strong suffix for non-security-critical unique filenames. */
 export function randomUniqueSuffix(): string {
-  const webCrypto = typeof globalThis !== 'undefined'
-    ? (globalThis as { crypto?: Crypto }).crypto
-    : undefined;
+  const webCrypto = globalThis === undefined
+    ? undefined
+    : (globalThis as { crypto?: Crypto }).crypto;
 
   if (webCrypto?.randomUUID) {
     return webCrypto.randomUUID();

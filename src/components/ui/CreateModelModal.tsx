@@ -392,6 +392,37 @@ const FileDropZone: React.FC<FileDropZoneProps> = ({
   isUploaded, isUploading, ext, accentColor, label, uploadedFileName, onClick,
 }) => {
   const [hov, setHov] = React.useState(false);
+  let borderColor = '#e5e7eb';
+  if (isUploaded) borderColor = '#bbf7d0';
+  else if (hov) borderColor = '#94a3b8';
+
+  let backgroundColor = '#fafafa';
+  if (isUploaded) backgroundColor = '#f0fdf4';
+  else if (hov) backgroundColor = '#f9fafb';
+
+  let icon;
+  if (isUploaded) {
+    icon = (
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#16a34a" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <polyline points="20 6 9 17 4 12" />
+      </svg>
+    );
+  } else if (isUploading) {
+    icon = (
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ animation: 'spin 1s linear infinite' }}>
+        <path d="M21 12a9 9 0 1 1-6.219-8.56" />
+      </svg>
+    );
+  } else {
+    icon = (
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={hov ? accentColor : '#9ca3af'} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+        <polyline points="17 8 12 3 7 8" />
+        <line x1="12" y1="3" x2="12" y2="15" />
+      </svg>
+    );
+  }
+
   return (
     <button
       type="button"
@@ -401,30 +432,16 @@ const FileDropZone: React.FC<FileDropZoneProps> = ({
       onMouseLeave={() => setHov(false)}
       style={{
         width: '100%', padding: '16px 14px',
-        border: `1px solid ${isUploaded ? '#bbf7d0' : hov ? '#94a3b8' : '#e5e7eb'}`,
+        border: `1px solid ${borderColor}`,
         borderRadius: 6,
-        background: isUploaded ? '#f0fdf4' : hov ? '#f9fafb' : '#fafafa',
+        background: backgroundColor,
         cursor: isUploading ? 'wait' : 'pointer',
         textAlign: 'center', transition: 'all 0.15s', fontFamily: FONT,
         display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6,
       }}
     >
       {/* Icon */}
-      {isUploaded ? (
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#16a34a" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-          <polyline points="20 6 9 17 4 12" />
-        </svg>
-      ) : isUploading ? (
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ animation: 'spin 1s linear infinite' }}>
-          <path d="M21 12a9 9 0 1 1-6.219-8.56" />
-        </svg>
-      ) : (
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={hov ? accentColor : '#9ca3af'} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-          <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-          <polyline points="17 8 12 3 7 8" />
-          <line x1="12" y1="3" x2="12" y2="15" />
-        </svg>
-      )}
+      {icon}
       <div style={{ fontSize: 13, fontWeight: 500, color: isUploaded ? '#15803d' : '#374151' }}>{label}</div>
       {isUploaded && uploadedFileName && (
         <div title={uploadedFileName} style={{

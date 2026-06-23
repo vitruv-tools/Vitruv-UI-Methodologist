@@ -42,12 +42,16 @@ function cloneStateForHistory(state: DiagramState): DiagramState {
 
 export function useUndoRedo(initialState: DiagramState) {
   const [currentState, setCurrentState] = useState<DiagramState>(initialState);
-  const [historyTick, setHistoryTick] = useState(0);
+  const [canUndo, setCanUndo] = useState(false);
+  const [canRedo, setCanRedo] = useState(false);
   const history = useRef<HistoryEntry[]>([]);
   const currentIndex = useRef<number>(-1);
   const maxHistorySize = 50; // Limit history to prevent memory issues
 
-  const bumpHistory = useCallback(() => setHistoryTick(t => t + 1), []);
+  const syncHistoryFlags = useCallback(() => {
+    setCanUndo(currentIndex.current > 0);
+    setCanRedo(currentIndex.current < history.current.length - 1);
+  }, []);
 
   const seedHistory = useCallback((state: DiagramState, description = 'Baseline') => {
     history.current = [{
@@ -57,8 +61,8 @@ export function useUndoRedo(initialState: DiagramState) {
     }];
     currentIndex.current = 0;
     setCurrentState(state);
-    bumpHistory();
-  }, [bumpHistory]);
+    syncHistoryFlags();
+  }, [syncHistoryFlags]);
 
   const saveState = useCallback((state: DiagramState, description: string) => {
     const newEntry: HistoryEntry = {
@@ -90,13 +94,8 @@ export function useUndoRedo(initialState: DiagramState) {
     });
 
     setCurrentState(state);
-    bumpHistory();
-  }, [bumpHistory]);
-
-  // historyTick keeps canUndo/canRedo in sync with ref updates
-  void historyTick;
-  const canUndo = currentIndex.current > 0;
-  const canRedo = currentIndex.current < history.current.length - 1;
+    syncHistoryFlags();
+  }, [syncHistoryFlags]);
 
   const undo = useCallback(() => {
     if (currentIndex.current <= 0) return null;
@@ -113,9 +112,9 @@ export function useUndoRedo(initialState: DiagramState) {
     });
 
     setCurrentState(previousState);
-    bumpHistory();
+    syncHistoryFlags();
     return previousState;
-  }, [bumpHistory]);
+  }, [syncHistoryFlags]);
 
   const redo = useCallback(() => {
     if (currentIndex.current >= history.current.length - 1) return null;
@@ -123,9 +122,9 @@ export function useUndoRedo(initialState: DiagramState) {
     currentIndex.current++;
     const nextState = history.current[currentIndex.current].state;
     setCurrentState(nextState);
-    bumpHistory();
+    syncHistoryFlags();
     return nextState;
-  }, [bumpHistory]);
+  }, [syncHistoryFlags]);
 
   const getCurrentState = useCallback(() => currentState, [currentState]);
 
@@ -133,8 +132,8 @@ export function useUndoRedo(initialState: DiagramState) {
     history.current = [];
     currentIndex.current = -1;
     setCurrentState(prev => ({ ...prev }));
-    bumpHistory();
-  }, [bumpHistory]);
+    syncHistoryFlags();
+  }, [syncHistoryFlags]);
 
   const historyIsEmpty = useCallback(() => history.current.length === 0, []);
 

@@ -4,87 +4,15 @@
  */
 export const ecoreToMermaid = (ecoreContent: string): string => {
   try {
-    const parser = new DOMParser();
-    const xmlDoc = parser.parseFromString(ecoreContent, 'text/xml');
+    const xmlDoc = parseEcoreDocument(ecoreContent);
+    if (!xmlDoc) return 'classDiagram\n  class ParseError';
 
-    if (xmlDoc.getElementsByTagName('parsererror').length > 0) {
-      return 'classDiagram\n  class ParseError';
-    }
+    const classElems = collectClassElements(xmlDoc);
+    if (classElems.length === 0) return 'classDiagram\n  class EmptyModel';
 
     const lines: string[] = ['classDiagram'];
-
-    // Collect EClass elements
-    const allClassifiers = Array.from(xmlDoc.querySelectorAll('eClassifiers'));
-    const classElems = allClassifiers.filter(el => {
-      const t = el.getAttribute('xsi:type') || el.getAttribute('type') || '';
-      return t.includes('EClass') || (!t && el.querySelectorAll('eStructuralFeatures').length > 0);
-    });
-
-    if (classElems.length === 0) {
-      return 'classDiagram\n  class EmptyModel';
-    }
-
-    // First pass: class bodies
-    for (const cls of classElems) {
-      const name = sanitizeName(cls.getAttribute('name') || 'Unknown');
-      const isAbstract = cls.getAttribute('abstract') === 'true';
-      const isInterface = cls.getAttribute('interface') === 'true';
-
-      lines.push(`  class ${name} {`);
-      if (isAbstract) lines.push(`    <<abstract>>`);
-      if (isInterface) lines.push(`    <<interface>>`);
-
-      const features = cls.querySelectorAll('eStructuralFeatures');
-      for (const feat of features) {
-        const fType = feat.getAttribute('xsi:type') || feat.getAttribute('type') || '';
-        const isRef = fType.includes('EReference');
-        if (isRef) continue; // references become edges, not fields
-
-        const attrName = feat.getAttribute('name') || 'attr';
-        const eType = feat.getAttribute('eType') || 'EString';
-        const typeName = parseTypeName(eType);
-        const lower = feat.getAttribute('lowerBound');
-        const upper = feat.getAttribute('upperBound');
-        const mult = lower !== null && upper !== null ? ` [${lower}..${upper === '-1' ? '*' : upper}]` : '';
-
-        lines.push(`    +${attrName} ${typeName}${mult}`);
-      }
-      lines.push(`  }`);
-    }
-
-    // Second pass: relationships
-    for (const cls of classElems) {
-      const name = sanitizeName(cls.getAttribute('name') || 'Unknown');
-
-      // Inheritance via eSuperTypes
-      const superTypes = cls.getAttribute('eSuperTypes');
-      if (superTypes) {
-        for (const st of superTypes.trim().split(/\s+/)) {
-          const parentName = parseTypeName(st);
-          if (parentName && parentName !== name) {
-            lines.push(`  ${parentName} <|-- ${name}`);
-          }
-        }
-      }
-
-      // EReference → associations
-      const features = cls.querySelectorAll('eStructuralFeatures');
-      for (const feat of features) {
-        const fType = feat.getAttribute('xsi:type') || feat.getAttribute('type') || '';
-        if (!fType.includes('EReference')) continue;
-
-        const refName = feat.getAttribute('name') || '';
-        const eType = feat.getAttribute('eType') || '';
-        const targetName = parseTypeName(eType);
-        const containment = feat.getAttribute('containment') === 'true';
-
-        if (targetName && targetName !== name) {
-          const arrow = containment ? '*--' : '-->';
-          lines.push(`  ${name} ${arrow} ${targetName} : ${refName}`);
-        }
-      }
-    }
-
+    appendClassBodies(lines, classElems);
+    appendRelationships(lines, classElems);
     return lines.join('\n');
   } catch {
     return 'classDiagram\n  class Error';
@@ -92,11 +20,108 @@ export const ecoreToMermaid = (ecoreContent: string): string => {
 };
 
 const sanitizeName = (name: string) =>
-  name.replace(/[^a-zA-Z0-9_]/g, '_');
+  name.replace(/\W/g, '_');
 
 const parseTypeName = (eType: string): string => {
   // Handles formats: "ecore:EDataType #//ClassName"  "//ClassName"  "#//ClassName"
   const cleaned = eType.split('#').pop() || eType;
   const parts = cleaned.replace(/^\/\//, '').split('/');
-  return sanitizeName(parts[parts.length - 1] || 'Unknown');
+  return sanitizeName(parts.at(-1) || 'Unknown');
 };
+
+function parseEcoreDocument(ecoreContent: string): Document | null {
+  const parser = new DOMParser();
+  const xmlDoc = parser.parseFromString(ecoreContent, 'text/xml');
+  if (xmlDoc.getElementsByTagName('parsererror').length > 0) return null;
+  return xmlDoc;
+}
+
+function getElementType(el: Element): string {
+  return el.getAttribute('xsi:type') || el.getAttribute('type') || '';
+}
+
+function isEClassElement(el: Element): boolean {
+  const type = getElementType(el);
+  return type.includes('EClass') || (!type && el.querySelectorAll('eStructuralFeatures').length > 0);
+}
+
+function collectClassElements(xmlDoc: Document): Element[] {
+  return Array.from(xmlDoc.querySelectorAll('eClassifiers')).filter(isEClassElement);
+}
+
+function getClassName(cls: Element): string {
+  return sanitizeName(cls.getAttribute('name') || 'Unknown');
+}
+
+function formatUpperBound(upper: string): string {
+  if (upper === '-1') return '*';
+  return upper;
+}
+
+function formatMultiplicity(lower: string | null, upper: string | null): string {
+  if (lower === null || upper === null) return '';
+  return ` [${lower}..${formatUpperBound(upper)}]`;
+}
+
+function isReferenceFeature(feat: Element): boolean {
+  return getElementType(feat).includes('EReference');
+}
+
+function appendStereotypes(lines: string[], cls: Element): void {
+  if (cls.getAttribute('abstract') === 'true') lines.push('    <<abstract>>');
+  if (cls.getAttribute('interface') === 'true') lines.push('    <<interface>>');
+}
+
+function appendAttributeLine(lines: string[], feat: Element): void {
+  if (isReferenceFeature(feat)) return;
+
+  const attrName = feat.getAttribute('name') || 'attr';
+  const typeName = parseTypeName(feat.getAttribute('eType') || 'EString');
+  const mult = formatMultiplicity(feat.getAttribute('lowerBound'), feat.getAttribute('upperBound'));
+  lines.push(`    +${attrName} ${typeName}${mult}`);
+}
+
+function appendClassBody(lines: string[], cls: Element): void {
+  const name = getClassName(cls);
+  lines.push(`  class ${name} {`);
+  appendStereotypes(lines, cls);
+  cls.querySelectorAll('eStructuralFeatures').forEach(feat => appendAttributeLine(lines, feat));
+  lines.push('  }');
+}
+
+function appendClassBodies(lines: string[], classElems: Element[]): void {
+  classElems.forEach(cls => appendClassBody(lines, cls));
+}
+
+function appendInheritanceLines(lines: string[], cls: Element, name: string): void {
+  const superTypes = cls.getAttribute('eSuperTypes');
+  if (!superTypes) return;
+
+  for (const superType of superTypes.trim().split(/\s+/)) {
+    const parentName = parseTypeName(superType);
+    if (parentName && parentName !== name) {
+      lines.push(`  ${parentName} <|-- ${name}`);
+    }
+  }
+}
+
+function appendReferenceLine(lines: string[], name: string, feat: Element): void {
+  if (!isReferenceFeature(feat)) return;
+
+  const refName = feat.getAttribute('name') || '';
+  const targetName = parseTypeName(feat.getAttribute('eType') || '');
+  if (!targetName || targetName === name) return;
+
+  const arrow = feat.getAttribute('containment') === 'true' ? '*--' : '-->';
+  lines.push(`  ${name} ${arrow} ${targetName} : ${refName}`);
+}
+
+function appendRelationshipLines(lines: string[], cls: Element): void {
+  const name = getClassName(cls);
+  appendInheritanceLines(lines, cls, name);
+  cls.querySelectorAll('eStructuralFeatures').forEach(feat => appendReferenceLine(lines, name, feat));
+}
+
+function appendRelationships(lines: string[], classElems: Element[]): void {
+  classElems.forEach(cls => appendRelationshipLines(lines, cls));
+}

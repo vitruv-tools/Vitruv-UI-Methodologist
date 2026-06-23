@@ -33,7 +33,7 @@ export function getFastLoginRedirectUri(): string {
   if (configured) {
     return configured;
   }
-  if (typeof globalThis.location !== 'undefined') {
+  if (globalThis.location !== undefined) {
     return `${globalThis.location.origin}${FAST_LOGIN_CALLBACK_PATH}`;
   }
   return `http://localhost:3000${FAST_LOGIN_CALLBACK_PATH}`;

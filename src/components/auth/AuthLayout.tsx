@@ -305,6 +305,7 @@ const AUTH_STYLES = `
     padding: 24px; max-width: 400px; width: 90%;
     box-shadow: 0 20px 25px rgba(0,0,0,0.1);
     font-family: inherit;
+    margin: 0;
   }
   .modal-header h2 { margin: 0 0 8px 0; font-size: 20px; color: #0f172a; }
   .modal-header p  { margin: 0 0 16px 0; color: #64748b; font-size: 14px; }

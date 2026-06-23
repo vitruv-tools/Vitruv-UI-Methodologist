@@ -159,13 +159,13 @@ export function nextUniqueOperationName(
 }
 
 function sanitize(name: string) {
-  return name.replace(/[^a-zA-Z0-9_]/g, '_');
+  return name.replace(/\W/g, '_');
 }
 
 function parseTypeName(eType: string): string {
   const cleaned = eType.split('#').pop() || eType;
   const parts = cleaned.replace(/^\/\//, '').split('/');
-  return parts[parts.length - 1] || 'Unknown';
+  return parts.at(-1) || 'Unknown';
 }
 
 function isClassTypeReference(eType: string, classIds: Set<string>): boolean {
@@ -182,163 +182,252 @@ interface DeferredClassRef {
   upper: string | null;
 }
 
+const EMPTY_UML_MODEL: UMLModel = { classes: [], relationships: [] };
+
+function parseEcoreDocument(ecoreContent: string): Document | null {
+  const parser = new DOMParser();
+  const xmlDoc = parser.parseFromString(ecoreContent, 'text/xml');
+  if (xmlDoc.getElementsByTagName('parsererror').length > 0) return null;
+  return xmlDoc;
+}
+
+function getElementType(el: Element): string {
+  return el.getAttribute('xsi:type') || el.getAttribute('type') || '';
+}
+
+function isEClassElement(el: Element): boolean {
+  const type = getElementType(el);
+  return type.includes('EClass') || (!type && el.querySelectorAll('eStructuralFeatures').length > 0);
+}
+
+function collectClassElements(xmlDoc: Document): Element[] {
+  return Array.from(xmlDoc.querySelectorAll('eClassifiers')).filter(isEClassElement);
+}
+
+function buildClassIdSet(classElems: Element[]): Set<string> {
+  return new Set(classElems.map(cls => sanitize(cls.getAttribute('name') || 'Unknown')));
+}
+
+function parseClassAttributes(
+  cls: Element,
+  id: string,
+  classIds: Set<string>,
+  deferredClassRefs: DeferredClassRef[],
+): UMLAttribute[] {
+  const attributes: UMLAttribute[] = [];
+  let attrIdx = 0;
+
+  for (const feat of cls.querySelectorAll('eStructuralFeatures')) {
+    if (getElementType(feat).includes('EReference')) continue;
+
+    const attrName = feat.getAttribute('name') || 'attr';
+    const eType = feat.getAttribute('eType') || 'EString';
+    const typeName = parseTypeName(eType);
+
+    if (isClassTypeReference(eType, classIds)) {
+      deferredClassRefs.push({
+        sourceId: id,
+        targetId: sanitize(typeName),
+        name: attrName,
+        lower: feat.getAttribute('lowerBound'),
+        upper: feat.getAttribute('upperBound'),
+      });
+      continue;
+    }
+
+    if (!isPrimitiveAttributeType(typeName)) continue;
+
+    attributes.push({
+      id: `${id}-${attrIdx++}`,
+      name: nextUniqueAttributeName(attributes.map(a => a.name), attrName),
+      type: normalizeAttributeTypeDisplay(typeName),
+      visibility: parseUmlVisibility(feat),
+    });
+  }
+
+  return attributes;
+}
+
+function parseClassOperations(cls: Element, id: string): UMLOperation[] {
+  const operations: UMLOperation[] = [];
+  let opIdx = 0;
+
+  for (const op of cls.querySelectorAll('eOperations')) {
+    const opName = op.getAttribute('name') || 'operation';
+    const typeName = parseTypeName(op.getAttribute('eType') || '//EVoid');
+    operations.push({
+      id: `${id}-op-${opIdx++}`,
+      name: nextUniqueOperationName(operations.map(o => o.name), opName),
+      returnType: normalizeOperationReturnType(typeName),
+      visibility: parseUmlVisibility(op),
+    });
+  }
+
+  return operations;
+}
+
+function buildUmlClass(
+  cls: Element,
+  classIds: Set<string>,
+  deferredClassRefs: DeferredClassRef[],
+): UMLClass {
+  const rawName = cls.getAttribute('name') || 'Unknown';
+  const id = sanitize(rawName);
+
+  return {
+    id,
+    name: rawName,
+    isAbstract: cls.getAttribute('abstract') === 'true',
+    isInterface: cls.getAttribute('interface') === 'true',
+    attributes: parseClassAttributes(cls, id, classIds, deferredClassRefs),
+    operations: parseClassOperations(cls, id),
+    x: 0,
+    y: 0,
+  };
+}
+
+function buildClassMap(
+  classElems: Element[],
+  classIds: Set<string>,
+): { classMap: Map<string, UMLClass>; deferredClassRefs: DeferredClassRef[] } {
+  const classMap = new Map<string, UMLClass>();
+  const deferredClassRefs: DeferredClassRef[] = [];
+
+  classElems.forEach(cls => {
+    const umlClass = buildUmlClass(cls, classIds, deferredClassRefs);
+    classMap.set(umlClass.id, umlClass);
+  });
+
+  return { classMap, deferredClassRefs };
+}
+
+function buildReferenceMultiplicities(lower: string | null, upper: string | null): {
+  sourceMultiplicity?: string;
+  targetMultiplicity?: string;
+} {
+  const targetMultiplicity = formatEcoreMultiplicity(lower, upper);
+  return {
+    sourceMultiplicity: targetMultiplicity === undefined ? undefined : '1',
+    targetMultiplicity,
+  };
+}
+
+function isValidRelationshipTarget(
+  sourceId: string,
+  targetId: string,
+  classMap: Map<string, UMLClass>,
+): boolean {
+  return Boolean(targetId && targetId !== sourceId && classMap.has(targetId));
+}
+
+function appendInheritanceRelationships(
+  relationships: UMLRelationship[],
+  relIdx: { value: number },
+  cls: Element,
+  sourceId: string,
+  classMap: Map<string, UMLClass>,
+): void {
+  const superTypes = cls.getAttribute('eSuperTypes');
+  if (!superTypes) return;
+
+  for (const superType of superTypes.trim().split(/\s+/)) {
+    const parentId = sanitize(parseTypeName(superType));
+    if (!isValidRelationshipTarget(sourceId, parentId, classMap)) continue;
+
+    relationships.push({
+      id: `rel-${relIdx.value++}`,
+      sourceId,
+      targetId: parentId,
+      type: 'inheritance',
+    });
+  }
+}
+
+function appendReferenceRelationships(
+  relationships: UMLRelationship[],
+  relIdx: { value: number },
+  cls: Element,
+  sourceId: string,
+  classMap: Map<string, UMLClass>,
+): void {
+  for (const feat of cls.querySelectorAll('eStructuralFeatures')) {
+    if (!getElementType(feat).includes('EReference')) continue;
+
+    const targetId = sanitize(parseTypeName(feat.getAttribute('eType') || ''));
+    if (!isValidRelationshipTarget(sourceId, targetId, classMap)) continue;
+
+    const multiplicities = buildReferenceMultiplicities(
+      feat.getAttribute('lowerBound'),
+      feat.getAttribute('upperBound'),
+    );
+
+    relationships.push({
+      id: `rel-${relIdx.value++}`,
+      sourceId,
+      targetId,
+      type: feat.getAttribute('containment') === 'true' ? 'composition' : 'association',
+      label: feat.getAttribute('name') || undefined,
+      ...multiplicities,
+    });
+  }
+}
+
+function appendDeferredRelationships(
+  relationships: UMLRelationship[],
+  relIdx: { value: number },
+  deferredClassRefs: DeferredClassRef[],
+  classMap: Map<string, UMLClass>,
+): void {
+  for (const ref of deferredClassRefs) {
+    if (!classMap.has(ref.sourceId) || !classMap.has(ref.targetId)) continue;
+    if (ref.sourceId === ref.targetId) continue;
+
+    const multiplicities = buildReferenceMultiplicities(ref.lower, ref.upper);
+    relationships.push({
+      id: `rel-${relIdx.value++}`,
+      sourceId: ref.sourceId,
+      targetId: ref.targetId,
+      type: 'association',
+      label: ref.name || undefined,
+      ...multiplicities,
+    });
+  }
+}
+
+function buildRelationships(
+  classElems: Element[],
+  classMap: Map<string, UMLClass>,
+  deferredClassRefs: DeferredClassRef[],
+): UMLRelationship[] {
+  const relationships: UMLRelationship[] = [];
+  const relIdx = { value: 0 };
+
+  classElems.forEach(cls => {
+    const sourceId = sanitize(cls.getAttribute('name') || 'Unknown');
+    appendInheritanceRelationships(relationships, relIdx, cls, sourceId, classMap);
+    appendReferenceRelationships(relationships, relIdx, cls, sourceId, classMap);
+  });
+
+  appendDeferredRelationships(relationships, relIdx, deferredClassRefs, classMap);
+  return relationships;
+}
+
 export function ecoreToUml(ecoreContent: string): UMLModel {
   try {
-    const parser = new DOMParser();
-    const xmlDoc = parser.parseFromString(ecoreContent, 'text/xml');
+    const xmlDoc = parseEcoreDocument(ecoreContent);
+    if (!xmlDoc) return EMPTY_UML_MODEL;
 
-    if (xmlDoc.getElementsByTagName('parsererror').length > 0) {
-      return { classes: [], relationships: [] };
-    }
+    const classElems = collectClassElements(xmlDoc);
+    if (classElems.length === 0) return EMPTY_UML_MODEL;
 
-    const classElems = Array.from(xmlDoc.querySelectorAll('eClassifiers')).filter(el => {
-      const t = el.getAttribute('xsi:type') || el.getAttribute('type') || '';
-      return t.includes('EClass') || (!t && el.querySelectorAll('eStructuralFeatures').length > 0);
-    });
-
-    if (classElems.length === 0) return { classes: [], relationships: [] };
-
-    const classIds = new Set(
-      classElems.map(cls => sanitize(cls.getAttribute('name') || 'Unknown')),
-    );
-    const classMap = new Map<string, UMLClass>();
-    const deferredClassRefs: DeferredClassRef[] = [];
-
-    classElems.forEach((cls) => {
-      const rawName = cls.getAttribute('name') || 'Unknown';
-      const id = sanitize(rawName);
-
-      const attributes: UMLAttribute[] = [];
-      let attrIdx = 0;
-      for (const feat of cls.querySelectorAll('eStructuralFeatures')) {
-        const fType = feat.getAttribute('xsi:type') || feat.getAttribute('type') || '';
-        if (fType.includes('EReference')) continue;
-
-        const attrName = feat.getAttribute('name') || 'attr';
-        const eType = feat.getAttribute('eType') || 'EString';
-        const typeName = parseTypeName(eType);
-
-        if (isClassTypeReference(eType, classIds)) {
-          deferredClassRefs.push({
-            sourceId: id,
-            targetId: sanitize(typeName),
-            name: attrName,
-            lower: feat.getAttribute('lowerBound'),
-            upper: feat.getAttribute('upperBound'),
-          });
-          continue;
-        }
-
-        if (!isPrimitiveAttributeType(typeName)) continue;
-
-        const uniqueName = nextUniqueAttributeName(
-          attributes.map(a => a.name),
-          attrName,
-        );
-
-        attributes.push({
-          id: `${id}-${attrIdx++}`,
-          name: uniqueName,
-          type: normalizeAttributeTypeDisplay(typeName),
-          visibility: parseUmlVisibility(feat),
-        });
-      }
-
-      const operations: UMLOperation[] = [];
-      let opIdx = 0;
-      for (const op of cls.querySelectorAll('eOperations')) {
-        const opName = op.getAttribute('name') || 'operation';
-        const eType = op.getAttribute('eType') || '//EVoid';
-        const typeName = parseTypeName(eType);
-        const uniqueOpName = nextUniqueOperationName(
-          operations.map(o => o.name),
-          opName,
-        );
-        operations.push({
-          id: `${id}-op-${opIdx++}`,
-          name: uniqueOpName,
-          returnType: normalizeOperationReturnType(typeName),
-          visibility: parseUmlVisibility(op),
-        });
-      }
-
-      classMap.set(id, {
-        id,
-        name: rawName,
-        isAbstract: cls.getAttribute('abstract') === 'true',
-        isInterface: cls.getAttribute('interface') === 'true',
-        attributes,
-        operations,
-        x: 0,
-        y: 0,
-      });
-    });
-
-    const relationships: UMLRelationship[] = [];
-    let relIdx = 0;
-
-    for (const cls of classElems) {
-      const id = sanitize(cls.getAttribute('name') || 'Unknown');
-
-      const superTypes = cls.getAttribute('eSuperTypes');
-      if (superTypes) {
-        for (const st of superTypes.trim().split(/\s+/)) {
-          const parentId = sanitize(parseTypeName(st));
-          if (parentId && parentId !== id && classMap.has(parentId)) {
-            relationships.push({
-              id: `rel-${relIdx++}`,
-              sourceId: id,
-              targetId: parentId,
-              type: 'inheritance',
-            });
-          }
-        }
-      }
-
-      for (const feat of cls.querySelectorAll('eStructuralFeatures')) {
-        const fType = feat.getAttribute('xsi:type') || feat.getAttribute('type') || '';
-        if (!fType.includes('EReference')) continue;
-        const refName = feat.getAttribute('name') || '';
-        const eType = feat.getAttribute('eType') || '';
-        const targetId = sanitize(parseTypeName(eType));
-        if (targetId && targetId !== id && classMap.has(targetId)) {
-          const lower = feat.getAttribute('lowerBound');
-          const upper = feat.getAttribute('upperBound');
-          const targetMultiplicity = formatEcoreMultiplicity(lower, upper);
-          const sourceMultiplicity = targetMultiplicity !== undefined ? '1' : undefined;
-          relationships.push({
-            id: `rel-${relIdx++}`,
-            sourceId: id,
-            targetId,
-            type: feat.getAttribute('containment') === 'true' ? 'composition' : 'association',
-            label: refName || undefined,
-            sourceMultiplicity,
-            targetMultiplicity,
-          });
-        }
-      }
-    }
-
-    for (const ref of deferredClassRefs) {
-      if (!classMap.has(ref.sourceId) || !classMap.has(ref.targetId)) continue;
-      if (ref.sourceId === ref.targetId) continue;
-      const targetMultiplicity = formatEcoreMultiplicity(ref.lower, ref.upper);
-      relationships.push({
-        id: `rel-${relIdx++}`,
-        sourceId: ref.sourceId,
-        targetId: ref.targetId,
-        type: 'association',
-        label: ref.name || undefined,
-        sourceMultiplicity: targetMultiplicity !== undefined ? '1' : undefined,
-        targetMultiplicity,
-      });
-    }
-
+    const classIds = buildClassIdSet(classElems);
+    const { classMap, deferredClassRefs } = buildClassMap(classElems, classIds);
+    const relationships = buildRelationships(classElems, classMap, deferredClassRefs);
     const classes = Array.from(classMap.values());
-    applyUmlDiagramLayout(classes, relationships);
 
+    applyUmlDiagramLayout(classes, relationships);
     return { classes, relationships };
   } catch {
-    return { classes: [], relationships: [] };
+    return EMPTY_UML_MODEL;
   }
 }
