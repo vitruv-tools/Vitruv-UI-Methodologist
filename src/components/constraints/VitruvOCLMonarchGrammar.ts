@@ -2,6 +2,10 @@ import * as monaco from 'monaco-editor';
 
 export const vitruvOCLLanguageId = 'vitruvocl';
 
+function popState(pattern: RegExp, token: string): monaco.languages.IMonarchLanguageRule[] {
+  return [[/\s+/, ''], [pattern, token, '@pop'], [/./, { token: '', next: '@pop' }]];
+}
+
 export const vitruvOCLMonarch: monaco.languages.IMonarchLanguage = {
   keywords: ['if', 'then', 'else', 'endif', 'let', 'in', 'and', 'or', 'not', 'implies', 'xor'],
   typeKeywords: [
@@ -58,8 +62,10 @@ export const vitruvOCLMonarch: monaco.languages.IMonarchLanguage = {
       [/\b(Integer|Real|String|Boolean|UnlimitedNatural|OclAny|OclVoid)\b/, 'type.primitive'],
       [/\b(Set|Sequence|Bag|OrderedSet|Collection|Optional|Singleton)\b/, 'type.collection'],
 
-      // OCL operations
-      [/\b(isEmpty|notEmpty|includes|excludes|includesAll|excludesAll|sum|count|min|max|first|last|at|union|intersection|append|prepend|insertAt|subSequence|flatten|asSet|asOrderedSet|asSequence|asBag|reverse|size|concat|substring|indexOf|toUpperCase|toLowerCase|toInteger|toReal|trim|matches|tokenize|allInstances|oclIsKindOf|oclIsTypeOf|oclAsType|oclIsNew|oclIsUndefined|oclIsInvalid|abs|floor|ceiling|round|sqrt|log|exp|mod|div)\b/, 'support.function.ocl'],
+      // OCL operations (split to keep regex complexity below threshold)
+      [/\b(isEmpty|notEmpty|includes|excludes|includesAll|excludesAll|sum|count|min|max|first|last|at|union|intersection|size)\b/, 'support.function.ocl'],
+      [/\b(append|prepend|insertAt|subSequence|flatten|asSet|asOrderedSet|asSequence|asBag|reverse|concat|substring|indexOf|toUpperCase|toLowerCase|toInteger|toReal|trim|matches|tokenize)\b/, 'support.function.ocl'],
+      [/\b(allInstances|oclIsKindOf|oclIsTypeOf|oclAsType|oclIsNew|oclIsUndefined|oclIsInvalid|abs|floor|ceiling|round|sqrt|log|exp|mod|div)\b/, 'support.function.ocl'],
 
       // Strings
       [/"([^"\\]|\\.)*$/, 'string.invalid'],
@@ -90,27 +96,12 @@ export const vitruvOCLMonarch: monaco.languages.IMonarchLanguage = {
 
     contextType: [
       [/\s+/, ''],
-      [/[A-Za-z_][A-Za-z0-9_]*(?:::[A-Za-z_][A-Za-z0-9_]*)?/, 'type.class', '@pop'],
+      [/[A-Za-z_]\w*(?:::[A-Za-z_]\w*)?/, 'type.class', '@pop'],
       [/./, { token: '', next: '@pop' }],
     ],
-
-    invName: [
-      [/\s+/, ''],
-      [/[A-Za-z_][A-Za-z0-9_]*/, 'entity.name.label', '@pop'],
-      [/./, { token: '', next: '@pop' }],
-    ],
-
-    letVar: [
-      [/\s+/, ''],
-      [/[A-Za-z_][A-Za-z0-9_]*/, 'variable.let', '@pop'],
-      [/./, { token: '', next: '@pop' }],
-    ],
-
-    severityValue: [
-      [/\s+/, ''],
-      [/[A-Z]+/, 'annotation.value', '@pop'],
-      [/./, { token: '', next: '@pop' }],
-    ],
+    invName:       popState(/[A-Za-z_]\w*/, 'entity.name.label'),
+    letVar:        popState(/[A-Za-z_]\w*/, 'variable.let'),
+    severityValue: popState(/[A-Z]+/, 'annotation.value'),
 
     dstring: [
       [/[^\\"]+/, 'string'],
@@ -125,9 +116,9 @@ export const vitruvOCLMonarch: monaco.languages.IMonarchLanguage = {
     ],
 
     blockComment: [
-      [/[^/*]+/, 'comment.block'],
+      [/[^*/]+/, 'comment.block'],
       [/\*\//, { token: 'comment.block', next: '@pop' }],
-      [/[/*]/, 'comment.block'],
+      [/[*/]/, 'comment.block'],
     ],
   },
 };

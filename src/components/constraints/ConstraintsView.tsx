@@ -49,60 +49,60 @@ export interface ConstraintRule {
 
 // Extracts the inv identifier (no spaces) from OCL text.
 function oclGetName(ocl: string): string {
-  return ocl.match(/\binv\s+(\w+)\s*:/m)?.[1] ?? '';
+  return /\binv[ \t]+(\w+)[ \t]*:/m.exec(ocl)?.[1] ?? '';
 }
 
 // Extracts @severity value; falls back to WARNING.
 function oclGetSeverity(ocl: string): SeverityLevel {
-  const v = ocl.match(/^\s*@severity\s+(\w+)/m)?.[1]?.toUpperCase();
+  const v = /^[ \t]*@severity[ \t]+(\w+)/m.exec(ocl)?.[1]?.toUpperCase();
   return (['INFO', 'WARNING', 'MINOR', 'MAJOR', 'CRITICAL'].includes(v ?? '') ? v : 'WARNING') as SeverityLevel;
 }
 
 // Extracts the @message string.
 function oclGetMessage(ocl: string): string {
-  return ocl.match(/^\s*@message\s+"([^"]*)"/m)?.[1] ?? '';
+  return /^[ \t]*@message[ \t]+"([^"]*)"/m.exec(ocl)?.[1] ?? '';
 }
 
 // Replaces the inv identifier in-place.
 function oclSetName(ocl: string, name: string): string {
-  const id = name.replace(/\s+/g, '');
+  const id = name.replace(/[ \t]+/g, '');
   if (!id) return ocl;
-  return /\binv\s+\w+\s*:/m.test(ocl)
-    ? ocl.replace(/\binv\s+\w+\s*:/m, `inv ${id}:`)
+  return /\binv[ \t]+\w+[ \t]*:/m.test(ocl)
+    ? ocl.replace(/\binv[ \t]+\w+[ \t]*:/m, `inv ${id}:`)
     : ocl;
 }
 
 // Replaces or inserts @severity.
 function oclSetSeverity(ocl: string, severity: SeverityLevel): string {
-  if (/^\s*@severity\s+\w+/m.test(ocl)) {
-    return ocl.replace(/^(\s*)@severity\s+\w+/m, `$1@severity ${severity}`);
+  if (/^[ \t]*@severity[ \t]+\w+/m.test(ocl)) {
+    return ocl.replace(/^([ \t]*)@severity[ \t]+\w+/m, `$1@severity ${severity}`);
   }
   // insert right after `inv X:` line
-  return ocl.replace(/(\binv\s+\w+\s*:\n?)/m, `$1  @severity ${severity}\n`);
+  return ocl.replace(/(\binv[ \t]+\w+[ \t]*:\n?)/m, `$1  @severity ${severity}\n`);
 }
 
 // Replaces or inserts @message.
 function oclSetMessage(ocl: string, message: string): string {
-  const escaped = message.replace(/"/g, '\\"');
-  if (/^\s*@message\s+"[^"]*"/m.test(ocl)) {
-    return ocl.replace(/^(\s*)@message\s+"[^"]*"/m, `$1@message "${escaped}"`);
+  const escaped = message.replaceAll('"', String.raw`\"`);
+  if (/^[ \t]*@message[ \t]+"[^"]*"/m.test(ocl)) {
+    return ocl.replace(/^([ \t]*)@message[ \t]+"[^"]*"/m, `$1@message "${escaped}"`);
   }
   // insert after @severity or after inv line
-  if (/^\s*@severity\s+\w+/m.test(ocl)) {
-    return ocl.replace(/(^\s*@severity\s+\w+)/m, `$1\n  @message "${escaped}"`);
+  if (/^[ \t]*@severity[ \t]+\w+/m.test(ocl)) {
+    return ocl.replace(/(^[ \t]*@severity[ \t]+\w+)/m, `$1\n  @message "${escaped}"`);
   }
-  return ocl.replace(/(\binv\s+\w+\s*:\n?)/m, `$1  @message "${escaped}"\n`);
+  return ocl.replace(/(\binv[ \t]+\w+[ \t]*:\n?)/m, `$1  @message "${escaped}"\n`);
 }
 
 // Extracts the context type (e.g. "MM::ClassName") from the first context line.
 function oclGetContextType(ocl: string): string {
-  return ocl.match(/^\s*context\s+([\w:]+)/m)?.[1] ?? '';
+  return /^[ \t]*context[ \t]+([\w:]+)/m.exec(ocl)?.[1] ?? '';
 }
 
 // Replaces the context type in the first context line.
 function oclSetContextType(ocl: string, contextType: string): string {
-  if (/^\s*context\s+[\w:]+/m.test(ocl)) {
-    return ocl.replace(/^(\s*context\s+)[\w:]+/m, `$1${contextType}`);
+  if (/^[ \t]*context[ \t]+[\w:]+/m.test(ocl)) {
+    return ocl.replace(/^([ \t]*context[ \t]+)[\w:]+/m, `$1${contextType}`);
   }
   return `context ${contextType} inv NewInvariant:\n` + ocl;
 }
@@ -113,17 +113,17 @@ function parseEcoreClasses(fileName: string, xml: string): { metamodel: string; 
   const mmName = fileName.replace(/\.ecore$/i, '');
   const results: { metamodel: string; className: string }[] = [];
   // Package name from nsPrefix or name attribute on root EPackage
-  const pkgMatch = xml.match(/<(?:\w+:)?EPackage[^>]+\bname\s*=\s*"([^"]+)"/);
+  const pkgMatch = /<(?:\w+:)?EPackage[^>]+\bname[ \t]*=[ \t]*"([^"]+)"/.exec(xml);
   const pkg = pkgMatch?.[1] ?? mmName;
   // All EClass entries (may be nested sub-packages)
-  const classRe = /xsi:type="ecore:EClass"[^>]+\bname\s*=\s*"([^"]+)"/g;
+  const classRe = /xsi:type="ecore:EClass"[^>]+\bname[ \t]*=[ \t]*"([^"]+)"/g;
   let m: RegExpExecArray | null;
   while ((m = classRe.exec(xml)) !== null) {
     results.push({ metamodel: pkg, className: m[1] });
   }
   // Fallback: <eClassifiers ... name="X" (without xsi:type attr visible before name)
   if (results.length === 0) {
-    const alt = /eClassifiers[^>]+\bname\s*=\s*"([^"]+)"/g;
+    const alt = /eClassifiers[^>]+\bname[ \t]*=[ \t]*"([^"]+)"/g;
     while ((m = alt.exec(xml)) !== null) {
       results.push({ metamodel: pkg, className: m[1] });
     }
@@ -133,10 +133,10 @@ function parseEcoreClasses(fileName: string, xml: string): { metamodel: string; 
 
 // Extracts unique metamodel names from all MM::Class patterns in the OCL.
 function oclGetScope(ocl: string): string[] {
-  const matches = [...ocl.matchAll(/\b([A-Za-z][A-Za-z0-9_]*)::([A-Za-z][A-Za-z0-9_]*)/g)];
+  const matches = [...ocl.matchAll(/\b([A-Za-z]\w*)::([A-Za-z]\w*)/g)];
   const seen = new Set<string>();
   matches.forEach(m => seen.add(m[1]));
-  return [...seen].sort();
+  return [...seen].sort((a, b) => a.localeCompare(b));
 }
 
 // ── McCabe's Cyclomatic Complexity ────────────────────────────────────────────
@@ -177,60 +177,47 @@ export interface RuleSet {
 
 // ── Default data ─────────────────────────────────────────────────────────────
 
+function defaultRule(
+  id: string,
+  name: string,
+  severity: ConstraintRule['severity'],
+  description: string,
+  ruleSetId: string,
+  oclDefinition: string,
+  linesOfCode: number,
+): ConstraintRule {
+  return {
+    id, name, severity, description, ruleSetId, oclDefinition,
+    scope: [], type: 'Single-Metamodel',
+    createdAt: 'Jun 12, 2026', modifiedAt: 'Jun 12, 2026',
+    invariantCount: 1, contextCount: 1, linesOfCode, linkedReactions: 0,
+  };
+}
+
 const PFAND_RULE_SETS: RuleSet[] = [
   {
     id: 'crate-rules', name: 'Crate Rules', color: '#3b82f6', description: '', collapsed: false,
     rules: [
-      {
-        id: 'p1', name: 'CrateContainsExactly16Bottles', severity: 'CRITICAL',
-        description: 'A crate must always contain exactly 16 bottles.',
-        ruleSetId: 'crate-rules',
-        oclDefinition: 'context pfand::Kasten inv CrateContainsExactly16Bottles:\n  @severity CRITICAL\n  @message "A crate must contain exactly 16 bottles."\n  self.enthält->size() = 16',
-        scope: [], type: 'Single-Metamodel',
-        createdAt: 'Jun 12, 2026', modifiedAt: 'Jun 12, 2026',
-        invariantCount: 1, contextCount: 1, linesOfCode: 5, linkedReactions: 0,
-      },
-      {
-        id: 'p2', name: 'CrateBottlesAreUnique', severity: 'MAJOR',
-        description: 'All bottles inside a crate must be distinct — no duplicates allowed.',
-        ruleSetId: 'crate-rules',
-        oclDefinition: 'context pfand::Kasten inv CrateBottlesAreUnique:\n  @severity MAJOR\n  @message "All bottles in a crate must be unique."\n  self.enthält->isUnique(f | f)',
-        scope: [], type: 'Single-Metamodel',
-        createdAt: 'Jun 12, 2026', modifiedAt: 'Jun 12, 2026',
-        invariantCount: 1, contextCount: 1, linesOfCode: 5, linkedReactions: 0,
-      },
+      defaultRule('p1', 'CrateContainsExactly16Bottles', 'CRITICAL',
+        'A crate must always contain exactly 16 bottles.', 'crate-rules',
+        'context pfand::Kasten inv CrateContainsExactly16Bottles:\n  @severity CRITICAL\n  @message "A crate must contain exactly 16 bottles."\n  self.enthält->size() = 16', 5),
+      defaultRule('p2', 'CrateBottlesAreUnique', 'MAJOR',
+        'All bottles inside a crate must be distinct — no duplicates allowed.', 'crate-rules',
+        'context pfand::Kasten inv CrateBottlesAreUnique:\n  @severity MAJOR\n  @message "All bottles in a crate must be unique."\n  self.enthält->isUnique(f | f)', 5),
     ],
   },
   {
     id: 'deposit-item-rules', name: 'Deposit Item Rules', color: '#10b981', description: '', collapsed: false,
     rules: [
-      {
-        id: 'p3', name: 'DepositItemNotEmpty', severity: 'WARNING',
-        description: 'A deposit item must reference at least one element (can, crate, or bottle).',
-        ruleSetId: 'deposit-item-rules',
-        oclDefinition: 'context pfand::Pfandelement inv DepositItemNotEmpty:\n  @severity WARNING\n  @message "A deposit item must contain at least one element (can, crate, or bottle)."\n  self.isPfandelement1 != null or self.isPfandelement2 != null or self.isPfandelement3 != null',
-        scope: [], type: 'Single-Metamodel',
-        createdAt: 'Jun 12, 2026', modifiedAt: 'Jun 12, 2026',
-        invariantCount: 1, contextCount: 1, linesOfCode: 5, linkedReactions: 0,
-      },
-      {
-        id: 'p4', name: 'DepositItemHasExactlyOneType', severity: 'MAJOR',
-        description: 'A deposit item must reference exactly one type — can, crate, or bottle, never multiple at once.',
-        ruleSetId: 'deposit-item-rules',
-        oclDefinition: 'context pfand::Pfandelement inv DepositItemHasExactlyOneType:\n  @severity MAJOR\n  @message "A deposit item must contain exactly one type (can, crate, or bottle)."\n  let count =\n    (if self.isPfandelement1 != null then 1 else 0 endif)\n    + (if self.isPfandelement2 != null then 1 else 0 endif)\n    + (if self.isPfandelement3 != null then 1 else 0 endif)\n  in count = 1',
-        scope: [], type: 'Single-Metamodel',
-        createdAt: 'Jun 12, 2026', modifiedAt: 'Jun 12, 2026',
-        invariantCount: 1, contextCount: 1, linesOfCode: 9, linkedReactions: 0,
-      },
-      {
-        id: 'p5', name: 'DepositItemCrateIsFull', severity: 'MAJOR',
-        description: 'When a deposit item contains a crate, that crate must hold exactly 16 bottles.',
-        ruleSetId: 'deposit-item-rules',
-        oclDefinition: 'context pfand::Pfandelement inv DepositItemCrateIsFull:\n  @severity MAJOR\n  @message "A deposit item\'s crate must contain exactly 16 bottles."\n  self.isPfandelement2 != null implies self.isPfandelement2.enthält->size() = 16',
-        scope: [], type: 'Single-Metamodel',
-        createdAt: 'Jun 12, 2026', modifiedAt: 'Jun 12, 2026',
-        invariantCount: 1, contextCount: 1, linesOfCode: 5, linkedReactions: 0,
-      },
+      defaultRule('p3', 'DepositItemNotEmpty', 'WARNING',
+        'A deposit item must reference at least one element (can, crate, or bottle).', 'deposit-item-rules',
+        'context pfand::Pfandelement inv DepositItemNotEmpty:\n  @severity WARNING\n  @message "A deposit item must contain at least one element (can, crate, or bottle)."\n  self.isPfandelement1 != null or self.isPfandelement2 != null or self.isPfandelement3 != null', 5),
+      defaultRule('p4', 'DepositItemHasExactlyOneType', 'MAJOR',
+        'A deposit item must reference exactly one type — can, crate, or bottle, never multiple at once.', 'deposit-item-rules',
+        'context pfand::Pfandelement inv DepositItemHasExactlyOneType:\n  @severity MAJOR\n  @message "A deposit item must contain exactly one type (can, crate, or bottle)."\n  let count =\n    (if self.isPfandelement1 != null then 1 else 0 endif)\n    + (if self.isPfandelement2 != null then 1 else 0 endif)\n    + (if self.isPfandelement3 != null then 1 else 0 endif)\n  in count = 1', 9),
+      defaultRule('p5', 'DepositItemCrateIsFull', 'MAJOR',
+        'When a deposit item contains a crate, that crate must hold exactly 16 bottles.', 'deposit-item-rules',
+        'context pfand::Pfandelement inv DepositItemCrateIsFull:\n  @severity MAJOR\n  @message "A deposit item\'s crate must contain exactly 16 bottles."\n  self.isPfandelement2 != null implies self.isPfandelement2.enthält->size() = 16', 5),
     ],
   },
 ];
@@ -239,56 +226,26 @@ const KIT_RULE_SETS: RuleSet[] = [
   {
     id: 'professor-rules', name: 'Professor Rules', color: '#3b82f6', description: '', collapsed: false,
     rules: [
-      {
-        id: 'k1', name: 'ProfessorHoldsAtLeastOneLecture', severity: 'MAJOR',
-        description: 'A professor must hold at least one lecture.',
-        ruleSetId: 'professor-rules',
-        oclDefinition: 'context kit::professor inv ProfessorHoldsAtLeastOneLecture:\n  @severity MAJOR\n  @message "A professor must hold at least one lecture."\n  self.holds->size() >= 1',
-        scope: [], type: 'Single-Metamodel',
-        createdAt: 'Jun 12, 2026', modifiedAt: 'Jun 12, 2026',
-        invariantCount: 1, contextCount: 1, linesOfCode: 4, linkedReactions: 0,
-      },
-      {
-        id: 'k2', name: 'ProfessorCreatesAtLeastOneExam', severity: 'MAJOR',
-        description: 'A professor must create at least one exam.',
-        ruleSetId: 'professor-rules',
-        oclDefinition: 'context kit::professor inv ProfessorCreatesAtLeastOneExam:\n  @severity MAJOR\n  @message "A professor must create at least one exam."\n  self.creates->size() >= 1',
-        scope: [], type: 'Single-Metamodel',
-        createdAt: 'Jun 12, 2026', modifiedAt: 'Jun 12, 2026',
-        invariantCount: 1, contextCount: 1, linesOfCode: 4, linkedReactions: 0,
-      },
+      defaultRule('k1', 'ProfessorHoldsAtLeastOneLecture', 'MAJOR',
+        'A professor must hold at least one lecture.', 'professor-rules',
+        'context kit::professor inv ProfessorHoldsAtLeastOneLecture:\n  @severity MAJOR\n  @message "A professor must hold at least one lecture."\n  self.holds->size() >= 1', 4),
+      defaultRule('k2', 'ProfessorCreatesAtLeastOneExam', 'MAJOR',
+        'A professor must create at least one exam.', 'professor-rules',
+        'context kit::professor inv ProfessorCreatesAtLeastOneExam:\n  @severity MAJOR\n  @message "A professor must create at least one exam."\n  self.creates->size() >= 1', 4),
     ],
   },
   {
     id: 'student-lecture-rules', name: 'Student & Lecture Rules', color: '#f59e0b', description: '', collapsed: false,
     rules: [
-      {
-        id: 'k3', name: 'StudentAttendsAtLeastOneLecture', severity: 'WARNING',
-        description: 'A student must attend at least one lecture.',
-        ruleSetId: 'student-lecture-rules',
-        oclDefinition: 'context kit::student inv StudentAttendsAtLeastOneLecture:\n  @severity WARNING\n  @message "A student must attend at least one lecture."\n  self.attends->size() >= 1',
-        scope: [], type: 'Single-Metamodel',
-        createdAt: 'Jun 12, 2026', modifiedAt: 'Jun 12, 2026',
-        invariantCount: 1, contextCount: 1, linesOfCode: 4, linkedReactions: 0,
-      },
-      {
-        id: 'k4', name: 'StudentAttendsAtMostSixLectures', severity: 'WARNING',
-        description: 'A student may not attend more than six lectures.',
-        ruleSetId: 'student-lecture-rules',
-        oclDefinition: 'context kit::student inv StudentAttendsAtMostSixLectures:\n  @severity WARNING\n  @message "A student may not attend more than six lectures."\n  self.attends->size() <= 6',
-        scope: [], type: 'Single-Metamodel',
-        createdAt: 'Jun 12, 2026', modifiedAt: 'Jun 12, 2026',
-        invariantCount: 1, contextCount: 1, linesOfCode: 4, linkedReactions: 0,
-      },
-      {
-        id: 'k5', name: 'LectureHasExam', severity: 'CRITICAL',
-        description: 'Every lecture must have an associated exam.',
-        ruleSetId: 'student-lecture-rules',
-        oclDefinition: 'context kit::lecture inv LectureHasExam:\n  @severity CRITICAL\n  @message "Every lecture must have an associated exam."\n  self.asAN != null',
-        scope: [], type: 'Single-Metamodel',
-        createdAt: 'Jun 12, 2026', modifiedAt: 'Jun 12, 2026',
-        invariantCount: 1, contextCount: 1, linesOfCode: 4, linkedReactions: 0,
-      },
+      defaultRule('k3', 'StudentAttendsAtLeastOneLecture', 'WARNING',
+        'A student must attend at least one lecture.', 'student-lecture-rules',
+        'context kit::student inv StudentAttendsAtLeastOneLecture:\n  @severity WARNING\n  @message "A student must attend at least one lecture."\n  self.attends->size() >= 1', 4),
+      defaultRule('k4', 'StudentAttendsAtMostSixLectures', 'WARNING',
+        'A student may not attend more than six lectures.', 'student-lecture-rules',
+        'context kit::student inv StudentAttendsAtMostSixLectures:\n  @severity WARNING\n  @message "A student may not attend more than six lectures."\n  self.attends->size() <= 6', 4),
+      defaultRule('k5', 'LectureHasExam', 'CRITICAL',
+        'Every lecture must have an associated exam.', 'student-lecture-rules',
+        'context kit::lecture inv LectureHasExam:\n  @severity CRITICAL\n  @message "Every lecture must have an associated exam."\n  self.asAN != null', 4),
     ],
   },
 ];
@@ -366,9 +323,9 @@ function scopeBg(name: string, colorMap: Record<string, string>): string {
 /** Lightens a hex color for use as chip text (darken the bg, use it as border/text accent). */
 function darkenHex(hex: string, amt = 60): string {
   try {
-    const r = Math.max(0, parseInt(hex.slice(1, 3), 16) - amt);
-    const g = Math.max(0, parseInt(hex.slice(3, 5), 16) - amt);
-    const b = Math.max(0, parseInt(hex.slice(5, 7), 16) - amt);
+    const r = Math.max(0, Number.parseInt(hex.slice(1, 3), 16) - amt);
+    const g = Math.max(0, Number.parseInt(hex.slice(3, 5), 16) - amt);
+    const b = Math.max(0, Number.parseInt(hex.slice(5, 7), 16) - amt);
     return `#${r.toString(16).padStart(2, '0')}${g.toString(16).padStart(2, '0')}${b.toString(16).padStart(2, '0')}`;
   } catch { return '#334155'; }
 }
@@ -381,9 +338,9 @@ const EDITOR_PANEL_DEFAULT_H = 280;
 const EDITOR_PANEL_STORAGE_KEY = 'constraintEditorPanelHeight';
 
 function useResizablePanel() {
-  const stored = parseInt(localStorage.getItem(EDITOR_PANEL_STORAGE_KEY) ?? '', 10);
+  const stored = Number.parseInt(localStorage.getItem(EDITOR_PANEL_STORAGE_KEY) ?? '', 10);
   const [height, setHeight] = useState<number>(
-    !isNaN(stored) ? Math.min(Math.max(stored, EDITOR_PANEL_MIN_H), EDITOR_PANEL_MAX_H) : EDITOR_PANEL_DEFAULT_H
+    Number.isNaN(stored) ? EDITOR_PANEL_DEFAULT_H : Math.min(Math.max(stored, EDITOR_PANEL_MIN_H), EDITOR_PANEL_MAX_H)
   );
   const dragging = useRef(false);
   const startY = useRef(0);
@@ -407,12 +364,12 @@ function useResizablePanel() {
       const delta = startY.current - ev.clientY;
       const next = Math.min(Math.max(startH.current + delta, EDITOR_PANEL_MIN_H), EDITOR_PANEL_MAX_H);
       localStorage.setItem(EDITOR_PANEL_STORAGE_KEY, String(next));
-      window.removeEventListener('mousemove', onMove);
-      window.removeEventListener('mouseup', onUp);
+      (globalThis as unknown as Window).removeEventListener('mousemove', onMove);
+      (globalThis as unknown as Window).removeEventListener('mouseup', onUp);
     };
 
-    window.addEventListener('mousemove', onMove);
-    window.addEventListener('mouseup', onUp);
+    (globalThis as unknown as Window).addEventListener('mousemove', onMove);
+    (globalThis as unknown as Window).addEventListener('mouseup', onUp);
   }, [height]);
 
   return { height, onHandleMouseDown };
@@ -434,15 +391,20 @@ const RuleRow: React.FC<{ rule: ConstraintRule; selected: boolean; onClick: () =
     return () => document.removeEventListener('mousedown', close);
   }, [menuOpen]);
 
+  const rowBackground = selected ? '#f0fdf9' : hov ? '#f8fafc' : 'transparent';
+
   return (
     <div
+      role="button"
+      tabIndex={0}
       onClick={onClick}
+      onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') onClick(); }}
       onMouseEnter={() => setHov(true)}
       onMouseLeave={() => setHov(false)}
       style={{
         display: 'flex', alignItems: 'center', gap: 8,
         padding: '7px 12px 7px 28px',
-        background: selected ? '#f0fdf9' : hov ? '#f8fafc' : 'transparent',
+        background: rowBackground,
         borderLeft: selected ? '2px solid #049484' : '2px solid transparent',
         cursor: 'pointer', borderRadius: 0,
         transition: 'background 0.1s', position: 'relative',
@@ -508,16 +470,20 @@ interface RuleSetSectionProps {
 const RuleSetSection: React.FC<RuleSetSectionProps> = ({ ruleSet, selectedRuleId, selectedRuleSetId, onRuleClick, onRuleSetClick, onToggleCollapse, onAddRule, onDeleteRule }) => {
   const [hov, setHov] = useState(false);
   const isSelected = selectedRuleSetId === ruleSet.id;
+  const headerBackground = isSelected ? '#f0fdf9' : hov ? '#f8fafc' : 'transparent';
   return (
     <div>
       <div
+        role="button"
+        tabIndex={0}
         onClick={() => onRuleSetClick(ruleSet)}
+        onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') onRuleSetClick(ruleSet); }}
         onMouseEnter={() => setHov(true)}
         onMouseLeave={() => setHov(false)}
         style={{
           display: 'flex', alignItems: 'center', gap: 8,
           padding: '8px 12px', cursor: 'pointer',
-          background: isSelected ? '#f0fdf9' : hov ? '#f8fafc' : 'transparent',
+          background: headerBackground,
           borderLeft: isSelected ? `2px solid ${ruleSet.color}` : '2px solid transparent',
           borderBottom: '1px solid #f1f5f9',
           userSelect: 'none',
@@ -540,7 +506,10 @@ const RuleSetSection: React.FC<RuleSetSectionProps> = ({ ruleSet, selectedRuleId
             <RuleRow key={rule.id} rule={rule} selected={selectedRuleId === rule.id} onClick={() => onRuleClick(rule)} onDelete={() => onDeleteRule(rule.id)} />
           ))}
           <div
+            role="button"
+            tabIndex={0}
             onClick={() => onAddRule(ruleSet.id)}
+            onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') onAddRule(ruleSet.id); }}
             style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 12px 6px 28px', cursor: 'pointer', color: '#94a3b8', fontSize: 12 }}
             onMouseEnter={e => (e.currentTarget.style.color = '#049484')}
             onMouseLeave={e => (e.currentTarget.style.color = '#94a3b8')}
@@ -641,7 +610,11 @@ const ContextClassPicker: React.FC<{
 
   // Group by metamodel
   const groups: Record<string, MetaClass[]> = {};
-  filtered.forEach(o => { (groups[o.metamodel] ??= []).push(o); });
+  filtered.forEach(o => {
+    const key = o.metamodel;
+    if (!groups[key]) groups[key] = [];
+    groups[key].push(o);
+  });
 
   const inputBase: React.CSSProperties = {
     width: '100%', padding: '6px 10px', border: '1.5px solid #e2e8f0', borderRadius: 7,
@@ -652,8 +625,11 @@ const ContextClassPicker: React.FC<{
   return (
     <div ref={containerRef} style={{ position: 'relative' }}>
       <div
+        role="button"
+        tabIndex={0}
         style={{ ...inputBase, display: 'flex', alignItems: 'center', justifyContent: 'space-between', userSelect: 'none' }}
         onClick={() => { setOpen(o => !o); setQuery(''); }}
+        onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { setOpen(o => !o); setQuery(''); } }}
       >
         <span style={{ color: value ? '#0f172a' : '#94a3b8' }}>{value || 'Select context class…'}</span>
         <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" strokeWidth="2.5" strokeLinecap="round" style={{ transform: open ? 'rotate(180deg)' : 'none', transition: 'transform 0.15s', flexShrink: 0 }}>
@@ -692,7 +668,11 @@ const ContextClassPicker: React.FC<{
                 {classes.map(c => (
                   <div
                     key={c.label}
+                    role="option"
+                    tabIndex={0}
+                    aria-selected={c.label === value}
                     onClick={() => { onChange(c.label); setOpen(false); setQuery(''); }}
+                    onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { onChange(c.label); setOpen(false); setQuery(''); } }}
                     style={{
                       padding: '7px 12px 7px 20px', fontSize: 12.5, cursor: 'pointer',
                       color: c.label === value ? '#049484' : '#0f172a',
@@ -896,20 +876,23 @@ const EditorPanel: React.FC<EditorPanelProps> = ({ rule, ruleSets, colorMap, met
 
             {/* Context class */}
             <div>
-              <label style={{ fontSize: 11, fontWeight: 600, color: '#64748b', display: 'block', marginBottom: 4 }}>Context Class</label>
-              <ContextClassPicker
-                value={oclGetContextType(draft.oclDefinition)}
-                options={metaClasses}
-                onChange={handleContextTypeChange}
-              />
+              <label htmlFor="ep-context-class" style={{ fontSize: 11, fontWeight: 600, color: '#64748b', display: 'block', marginBottom: 4 }}>Context Class</label>
+              <div id="ep-context-class">
+                <ContextClassPicker
+                  value={oclGetContextType(draft.oclDefinition)}
+                  options={metaClasses}
+                  onChange={handleContextTypeChange}
+                />
+              </div>
             </div>
 
             {/* Name — no spaces */}
             <div>
-              <label style={{ fontSize: 11, fontWeight: 600, color: '#64748b', display: 'block', marginBottom: 4 }}>
+              <label htmlFor="ep-inv-name" style={{ fontSize: 11, fontWeight: 600, color: '#64748b', display: 'block', marginBottom: 4 }}>
                 Name <span style={{ fontWeight: 400, color: '#94a3b8' }}>(no spaces)</span>
               </label>
               <input
+                id="ep-inv-name"
                 value={draft.name}
                 onChange={e => handleNameChange(e.target.value)}
                 placeholder="InvariantName"
@@ -919,8 +902,8 @@ const EditorPanel: React.FC<EditorPanelProps> = ({ rule, ruleSets, colorMap, met
 
             {/* Severity */}
             <div>
-              <label style={{ fontSize: 11, fontWeight: 600, color: '#64748b', display: 'block', marginBottom: 6 }}>Severity</label>
-              <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
+              <label htmlFor="ep-severity" style={{ fontSize: 11, fontWeight: 600, color: '#64748b', display: 'block', marginBottom: 6 }}>Severity</label>
+              <div id="ep-severity" style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
                 {SEVERITY_OPTIONS.map(opt => {
                   const active = draft.severity === opt.value;
                   return (
@@ -938,27 +921,27 @@ const EditorPanel: React.FC<EditorPanelProps> = ({ rule, ruleSets, colorMap, met
 
             {/* Message */}
             <div>
-              <label style={{ fontSize: 11, fontWeight: 600, color: '#64748b', display: 'block', marginBottom: 4 }}>Message</label>
-              <textarea value={draft.description} onChange={e => handleDescriptionChange(e.target.value)} rows={3} style={{ width: '100%', border: '1px solid #e2e8f0', borderRadius: 6, padding: '6px 8px', fontSize: 12, resize: 'none', outline: 'none', boxSizing: 'border-box', color: '#334155', lineHeight: 1.5 }} />
+              <label htmlFor="ep-message" style={{ fontSize: 11, fontWeight: 600, color: '#64748b', display: 'block', marginBottom: 4 }}>Message</label>
+              <textarea id="ep-message" value={draft.description} onChange={e => handleDescriptionChange(e.target.value)} rows={3} style={{ width: '100%', border: '1px solid #e2e8f0', borderRadius: 6, padding: '6px 8px', fontSize: 12, resize: 'none', outline: 'none', boxSizing: 'border-box', color: '#334155', lineHeight: 1.5 }} />
             </div>
 
             {/* Rule Set */}
             <div>
-              <label style={{ fontSize: 11, fontWeight: 600, color: '#64748b', display: 'block', marginBottom: 4 }}>Rule Set</label>
-              <select value={draft.ruleSetId} onChange={e => setDraft(d => ({ ...d, ruleSetId: e.target.value }))} style={{ width: '100%', border: '1px solid #e2e8f0', borderRadius: 6, padding: '6px 8px', fontSize: 12.5, background: '#fff', color: '#0f172a', outline: 'none', boxSizing: 'border-box' }}>
+              <label htmlFor="ep-rule-set" style={{ fontSize: 11, fontWeight: 600, color: '#64748b', display: 'block', marginBottom: 4 }}>Rule Set</label>
+              <select id="ep-rule-set" value={draft.ruleSetId} onChange={e => setDraft(d => ({ ...d, ruleSetId: e.target.value }))} style={{ width: '100%', border: '1px solid #e2e8f0', borderRadius: 6, padding: '6px 8px', fontSize: 12.5, background: '#fff', color: '#0f172a', outline: 'none', boxSizing: 'border-box' }}>
                 {ruleSets.map(rs => <option key={rs.id} value={rs.id}>{rs.name}</option>)}
               </select>
             </div>
 
             {/* Metamodels */}
             <div>
-              <label style={{ fontSize: 11, fontWeight: 600, color: '#64748b', display: 'block', marginBottom: 2 }}>
+              <label htmlFor="ep-metamodels" style={{ fontSize: 11, fontWeight: 600, color: '#64748b', display: 'block', marginBottom: 2 }}>
                 Metamodels <span style={{ fontWeight: 400, color: '#94a3b8', marginLeft: 4 }}>auto</span>
               </label>
               <p style={{ fontSize: 10.5, color: '#94a3b8', margin: '0 0 6px' }}>
                 Derived from <code style={{ fontSize: 10 }}>MM::Class</code> patterns in the OCL
               </p>
-              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+              <div id="ep-metamodels" style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
                 {draft.scope.length > 0 ? draft.scope.map(s => {
                   const bg = scopeBg(s, colorMap);
                   const text = darkenHex(bg, 70);
@@ -1143,7 +1126,7 @@ const DetailedMetricsModal: React.FC<{ ruleSets: RuleSet[]; colorMap: Record<str
       open
       style={{ position: 'fixed', inset: 0, width: '100%', height: '100%', background: 'none', border: 'none', padding: 0, margin: 0, zIndex: 2000, display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}
     >
-      <div onClick={onClose} style={{ position: 'absolute', inset: 0, background: 'rgba(15,23,42,0.35)' }} />
+      <div role="button" tabIndex={0} onClick={onClose} onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') onClose(); }} style={{ position: 'absolute', inset: 0, background: 'rgba(15,23,42,0.35)' }} />
       <div style={{
         position: 'relative', zIndex: 1,
         background: '#fff', borderRadius: 14, width: '88%', maxWidth: 1040,
@@ -1317,14 +1300,15 @@ const RuleSetPanel: React.FC<{
       <div style={{ flex: 1, overflowY: 'auto', padding: '14px 16px', display: 'flex', flexDirection: 'column', gap: 14 }}>
         {/* Name */}
         <div>
-          <label style={labelStyle}>Name</label>
-          <input value={draft.name} onChange={e => setDraft(d => ({ ...d, name: e.target.value }))} style={inputBase} />
+          <label htmlFor="rsp-name" style={labelStyle}>Name</label>
+          <input id="rsp-name" value={draft.name} onChange={e => setDraft(d => ({ ...d, name: e.target.value }))} style={inputBase} />
         </div>
 
         {/* Description */}
         <div>
-          <label style={labelStyle}>Description</label>
+          <label htmlFor="rsp-description" style={labelStyle}>Description</label>
           <textarea
+            id="rsp-description"
             value={draft.description}
             onChange={e => setDraft(d => ({ ...d, description: e.target.value }))}
             rows={2}
@@ -1335,7 +1319,7 @@ const RuleSetPanel: React.FC<{
 
         {/* Color */}
         <div>
-          <label style={labelStyle}>Color</label>
+          <label htmlFor="rsp-color" style={labelStyle}>Color</label>
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, alignItems: 'center' }}>
             {PRESET_COLORS.map(c => (
               <button
@@ -1352,7 +1336,7 @@ const RuleSetPanel: React.FC<{
                 onMouseLeave={e => (e.currentTarget.style.transform = 'scale(1)')}
               />
             ))}
-            <input type="color" value={draft.color} onChange={e => setDraft(d => ({ ...d, color: e.target.value }))} title="Custom color"
+            <input id="rsp-color" type="color" value={draft.color} onChange={e => setDraft(d => ({ ...d, color: e.target.value }))} title="Custom color"
               style={{ width: 22, height: 22, borderRadius: 5, border: '1.5px solid #e2e8f0', cursor: 'pointer', padding: 1, background: 'none' }} />
           </div>
         </div>
@@ -1592,11 +1576,12 @@ export const ConstraintsView: React.FC<ConstraintsViewProps> = ({ vsumId: _vsumI
   const handleRuleClick = useCallback((rule: ConstraintRule) => {
     setSelectedRuleSet(null);
     setSelectedRule(prev => {
-      const next: ConstraintRule | null = (prev && prev.id !== rule.id) ? rule : (prev?.id === rule.id ? null : rule);
+      const isToggle = prev?.id === rule.id;
+      const next: ConstraintRule | null = isToggle ? null : rule;
       const metamodel = next ? oclGetContextType(next.oclDefinition).split('::')[0] : null;
-      onHighlightNode?.(metamodel ? findNodeIdForMetamodel(canvasNodes, metamodel) : null);
-      if (prev && prev.id !== rule.id) return rule;
-      return prev?.id === rule.id ? null : rule;
+      const nodeId = metamodel ? findNodeIdForMetamodel(canvasNodes, metamodel) : null;
+      onHighlightNode?.(nodeId);
+      return next;
     });
   }, [canvasNodes, onHighlightNode]);
 

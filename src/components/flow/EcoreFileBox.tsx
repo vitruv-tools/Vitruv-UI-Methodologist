@@ -194,7 +194,9 @@ export const EcoreFileBox: React.FC<NodeProps<EcoreFileBoxData>> = ({
   const borderColor = darken(bg, 25);
   const cardBorder  = resolveCardBorder(bg, isReactionSource, isConstraintContext, isConstraintFilter, selected, isHovered, borderColor);
   const cardShadow  = resolveCardShadow(bg, isReactionSource, isConstraintContext, isConstraintFilter, selected, isHovered);
-  const cardTransform = selected ? 'scale(1.04)' : isHovered ? 'scale(1.02)' : 'scale(1)';
+  let cardTransform = 'scale(1)';
+  if (selected) cardTransform = 'scale(1.04)';
+  else if (isHovered) cardTransform = 'scale(1.02)';
   const handleShowDetails = buildShowDetailsHandler(
     onShowDetails, setShowMenu, { keywords, metaModelId, fileName, description, domain, createdAt, fileContent },
   );

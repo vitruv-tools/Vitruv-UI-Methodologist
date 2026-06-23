@@ -2,6 +2,26 @@ import { useRef, useEffect, useCallback } from 'react';
 import { Monaco } from '@monaco-editor/react';
 import * as monaco from 'monaco-editor';
 
+function markerSeverity(lspSeverity: number, monacoInstance: Monaco): monaco.MarkerSeverity {
+  if (lspSeverity === 1) return monacoInstance.MarkerSeverity.Error;
+  if (lspSeverity === 2) return monacoInstance.MarkerSeverity.Warning;
+  return monacoInstance.MarkerSeverity.Info;
+}
+
+function buildCompletionItems(
+  msg: any,
+  range: { startLineNumber: number; endLineNumber: number; startColumn: number; endColumn: number },
+  monacoInstance: Monaco,
+) {
+  const items = Array.isArray(msg.result) ? msg.result : (msg.result?.items ?? []);
+  return { suggestions: items.map((item: any) => ({
+    label: item.label,
+    kind: item.kind ?? monacoInstance.languages.CompletionItemKind.Text,
+    insertText: item.insertText ?? item.label,
+    range,
+  }))};
+}
+
 interface UseOclLspOptions {
   vsumId?: number;
   documentId: string;
@@ -104,9 +124,7 @@ export function useOclLsp({ vsumId, documentId, languageId, getCode }: UseOclLsp
           const model = editorRef.current?.getModel();
           if (!model) return;
           const markers = (msg.params.diagnostics || []).map((d: any) => ({
-            severity: d.severity === 1 ? monacoInstance.MarkerSeverity.Error
-                    : d.severity === 2 ? monacoInstance.MarkerSeverity.Warning
-                    : monacoInstance.MarkerSeverity.Info,
+            severity: markerSeverity(d.severity, monacoInstance),
             startLineNumber: d.range.start.line + 1,
             startColumn: d.range.start.character + 1,
             endLineNumber: d.range.end.line + 1,
@@ -130,18 +148,9 @@ export function useOclLsp({ vsumId, documentId, languageId, getCode }: UseOclLsp
         }
         const wordInfo = model.getWordUntilPosition(position);
         const range = { startLineNumber: position.lineNumber, endLineNumber: position.lineNumber, startColumn: wordInfo.startColumn, endColumn: wordInfo.endColumn };
-        const id = Math.floor(Math.random() * 2147483647);
+        const id = crypto.getRandomValues(new Uint32Array(1))[0] % 2147483647;
         const timeout = setTimeout(() => { pendingRequests.current.delete(id); resolve({ suggestions: [] }); }, 2000);
-        pendingRequests.current.set(id, (msg) => {
-          clearTimeout(timeout);
-          const items = Array.isArray(msg.result) ? msg.result : (msg.result?.items ?? []);
-          resolve({ suggestions: items.map((item: any) => ({
-            label: item.label,
-            kind: item.kind ?? monacoInstance.languages.CompletionItemKind.Text,
-            insertText: item.insertText ?? item.label,
-            range,
-          }))});
-        });
+        pendingRequests.current.set(id, (msg) => { clearTimeout(timeout); resolve(buildCompletionItems(msg, range, monacoInstance)); });
         sendLsp({ jsonrpc: '2.0', id, method: 'textDocument/completion',
           params: { textDocument: { uri: getDocUri() }, position: { line: position.lineNumber - 1, character: position.column - 1 } } });
       }),
