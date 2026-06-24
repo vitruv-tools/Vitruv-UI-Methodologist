@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { AuthService } from '../services/auth';
 import { getUserInitials } from '../utils/userInitials';
-import { ProfileView } from '../components/ui/ProfileView';
+import { ProfileModal } from '../components/ui/ProfileModal';
 import ReactDOM from 'react-dom';
 import { useNavigate, useParams } from 'react-router-dom';
 import { Node, Edge } from 'reactflow';
@@ -13,6 +13,7 @@ import { UmlDiagramSaveContext } from '../components/canvas/UMLDiagram';
 import { ModelDrawer, DrawerModel } from '../components/canvas/ModelDrawer';
 import { apiService } from '../services/api';
 import { VsumDetails } from '../types';
+import { VsumMetaModelRef } from '../types/vsum';
 import { WorkspaceSnapshot, WorkspaceSnapshotRequest } from '../types/workspace';
 import { MODAL_Z_INDEX, modalBackdropStyle, useModalBodyLock } from '../components/ui/modalUtils';
 import { CanvasProjectTabs } from '../components/canvas/CanvasProjectTabs';
@@ -40,6 +41,265 @@ const PROJECT_TABS_HEIGHT = 38;
 const CENTER_STACK_BOTTOM = MODE_TOGGLE_TOP + MODE_TOGGLE_HEIGHT + 4 + PROJECT_TABS_HEIGHT;
 
 type UMLPanel = CanvasUmlPanelState;
+
+function isStaleTabLoad(forInstanceId: string | undefined, activeInstanceId: string | null): boolean {
+  return Boolean(forInstanceId && activeInstanceId !== forInstanceId);
+}
+
+function clearVsumTabSessions(
+  tabs: OpenCanvasTab[],
+  sessions: Map<string, CanvasTabSession>,
+  vsumId: number,
+  forInstanceId?: string,
+): void {
+  for (const tab of tabs) {
+    if (tab.projectId === vsumId) {
+      sessions.delete(tab.instanceId);
+    }
+  }
+  if (forInstanceId) {
+    sessions.delete(forInstanceId);
+  }
+}
+
+function metaModelToDrawerModel(m: VsumMetaModelRef, inProject: boolean): DrawerModel {
+  return {
+    id: m.id,
+    name: m.name,
+    sourceId: m.sourceId ?? m.id,
+    domain: m.domain,
+    ecoreFileId: m.ecoreFileId,
+    genModelFileId: m.genModelFileId,
+    inProject,
+    description: m.description,
+    keyword: m.keyword,
+    createdAt: m.createdAt,
+  };
+}
+
+async function fetchLibraryDrawerModels(): Promise<{ myModels: DrawerModel[]; publicModels: DrawerModel[] }> {
+  const toDrawer = (m: VsumMetaModelRef) => metaModelToDrawerModel(m, false);
+  const [myRes, pubRes] = await Promise.allSettled([
+    apiService.findMetaModels({ ownedByUser: true }),
+    apiService.findMetaModels({ ownedByUser: false }),
+  ]);
+  return {
+    myModels: myRes.status === 'fulfilled' ? (myRes.value.data || []).map(toDrawer) : [],
+    publicModels: pubRes.status === 'fulfilled' ? (pubRes.value.data || []).map(toDrawer) : [],
+  };
+}
+
+async function dispatchWorkspaceMetaModels(metaModels: VsumMetaModelRef[]): Promise<void> {
+  for (const model of metaModels) {
+    if (!model.ecoreFileId) continue;
+    try {
+      const fileContent = await apiService.getFile(model.ecoreFileId);
+      globalThis.dispatchEvent(new CustomEvent('vitruv.addFileToWorkspace', {
+        detail: {
+          fileContent,
+          fileName: `${model.name}.ecore`,
+          description: model.description,
+          keywords: model.keyword?.join(', '),
+          domain: model.domain,
+          createdAt: model.createdAt,
+          metaModelId: model.id,
+          metaModelSourceId: model.sourceId ?? model.id,
+          ecoreFileId: model.ecoreFileId,
+          genModelFileId: model.genModelFileId,
+        },
+      }));
+      await new Promise(r => setTimeout(r, 50));
+    } catch {
+      // model without readable ecore file – skip canvas box
+    }
+  }
+}
+
+async function dispatchMetaModelRelations(
+  relations: VsumDetails['metaModelsRelation'],
+): Promise<void> {
+  if (!relations?.length) return;
+  globalThis.dispatchEvent(new CustomEvent('vitruv.loadMetaModelRelations', {
+    detail: {
+      relations: mapRelationsForCanvasLoad(relations),
+      preserveExisting: false,
+    },
+  }));
+  await new Promise(r => setTimeout(r, 150));
+}
+
+function finalizeVsumTabBaseline(
+  tabs: OpenCanvasTab[],
+  vsumId: number,
+  details: VsumDetails,
+  forInstanceId: string | undefined,
+  activeInstanceId: string | null,
+  setBaselineForInstance: (instanceId: string, snapshot: WorkspaceSnapshot) => void,
+  loadedTabs: Set<string>,
+): void {
+  const tab = tabs.find(t => t.projectId === vsumId);
+  if (!tab) return;
+  setBaselineForInstance(tab.instanceId, workspaceSnapshotFromVsumDetails(details));
+  if (!forInstanceId || activeInstanceId === forInstanceId) {
+    loadedTabs.add(tab.instanceId);
+  }
+}
+
+const fetchEcoreFileById = (fileId: number) => apiService.getFile(fileId);
+
+type PopupNotificationType = 'success' | 'error' | 'info';
+
+function getPopupNotificationStyles(type: PopupNotificationType) {
+  if (type === 'success') {
+    return { background: '#f0fdf4', border: '1px solid #86efac', color: '#15803d' };
+  }
+  if (type === 'error') {
+    return { background: '#fef2f2', border: '1px solid #fca5a5', color: '#dc2626' };
+  }
+  return { background: '#eff6ff', border: '1px solid #bfdbfe', color: '#1d4ed8' };
+}
+
+const CanvasPopupNotification: React.FC<{ message: string; type: PopupNotificationType }> = ({
+  message,
+  type,
+}) => {
+  const popupStyles = getPopupNotificationStyles(type);
+  return (
+    <div style={{
+      position: 'fixed', bottom: 24, left: '50%', transform: 'translateX(-50%)',
+      zIndex: 9999, maxWidth: 480, width: 'max-content',
+      background: popupStyles.background,
+      border: popupStyles.border,
+      color: popupStyles.color,
+      borderRadius: 10, padding: '10px 16px', fontSize: 13, fontWeight: 500,
+      boxShadow: '0 4px 16px rgba(0,0,0,0.12)',
+    }}>
+      {message}
+    </div>
+  );
+};
+
+function updatePanelEcoreContent(panels: UMLPanel[], panelId: string, content: string): UMLPanel[] {
+  return panels.map(p => (p.id === panelId ? { ...p, ecoreContent: content } : p));
+}
+
+function createUmlPanelSavedHandler(
+  panelId: string,
+  fileName: string,
+  onSaved: (panelId: string, fileName: string, result: { ecoreContent: string }) => void,
+): (result: { ecoreContent: string }) => void {
+  return result => onSaved(panelId, fileName, result);
+}
+
+interface CanvasUmlPanelLayerProps {
+  panels: UMLPanel[];
+  vsumName: string;
+  activeProjectId?: number;
+  topPanelId: string | null;
+  panelZBase: number;
+  buildSaveContext: (panel: UMLPanel) => UmlDiagramSaveContext | undefined;
+  onClose: (panelId: string) => void;
+  onFocus: (panelId: string) => void;
+  onHome: () => void;
+  onEcoreContentUpdated: (panelId: string, content: string) => void;
+}
+
+const CanvasUmlPanelLayer: React.FC<CanvasUmlPanelLayerProps> = ({
+  panels,
+  vsumName,
+  activeProjectId,
+  topPanelId,
+  panelZBase,
+  buildSaveContext,
+  onClose,
+  onFocus,
+  onHome,
+  onEcoreContentUpdated,
+}) => (
+  <>
+    {panels.map((panel, idx) => (
+      <FloatingUMLPanel
+        key={panel.id}
+        id={panel.id}
+        title={vsumName || panel.title}
+        fileName={panel.layoutStorageKey ?? canvasUmlLayoutFileName(panel)}
+        layoutScopeId={panel.layoutScopeId ?? canvasUmlLayoutScope(activeProjectId)}
+        ecoreContent={panel.ecoreContent}
+        saveContext={buildSaveContext(panel)}
+        initialTop={panel.top}
+        initialRight={panel.right}
+        panelWidth={panel.width}
+        panelHeight={panel.height}
+        onClose={onClose}
+        onFocus={onFocus}
+        onHome={onHome}
+        ecoreFileId={panel.ecoreFileId}
+        fetchEcoreFile={fetchEcoreFileById}
+        onEcoreContentUpdated={content => onEcoreContentUpdated(panel.id, content)}
+        zIndex={panelZBase + (topPanelId === panel.id ? panels.length : idx)}
+      />
+    ))}
+  </>
+);
+
+interface ModelDrawerModalProps {
+  models: DrawerModel[];
+  addedModelIds: Set<number>;
+  loading: boolean;
+  myLibraryModels: DrawerModel[];
+  publicLibraryModels: DrawerModel[];
+  onClose: () => void;
+  onAddModel: (model: DrawerModel) => void;
+  onDeleteModel?: (model: DrawerModel) => Promise<void>;
+}
+
+const ModelDrawerModal: React.FC<ModelDrawerModalProps> = ({
+  models,
+  addedModelIds,
+  loading,
+  myLibraryModels,
+  publicLibraryModels,
+  onClose,
+  onAddModel,
+  onDeleteModel,
+}) => ReactDOM.createPortal(
+  <>
+    <button
+      type="button"
+      aria-hidden="true"
+      tabIndex={-1}
+      onClick={onClose}
+      style={{ ...modalBackdropStyle, zIndex: MODAL_Z_INDEX }}
+    />
+    <div style={{
+      position: 'fixed',
+      top: '50%', left: '50%',
+      transform: 'translate(-50%, -50%)',
+      width: 'min(800px, 92vw)',
+      height: 'min(700px, 88vh)',
+      zIndex: MODAL_Z_INDEX + 1,
+      pointerEvents: 'auto',
+      background: '#ffffff',
+      borderRadius: 10,
+      boxShadow: '0 24px 64px rgba(0,0,0,0.28), 0 4px 16px rgba(0,0,0,0.10)',
+      border: '1px solid #e2e8f0',
+      overflow: 'hidden',
+    }}>
+      <ModelDrawer
+        models={models}
+        addedModelIds={addedModelIds}
+        loading={loading}
+        onClose={onClose}
+        onAddModel={onAddModel}
+        onDeleteModel={onDeleteModel}
+        myLibraryModels={myLibraryModels}
+        publicLibraryModels={publicLibraryModels}
+        onFetchFile={fetchEcoreFileById}
+      />
+    </div>
+  </>,
+  document.body,
+);
 
 // ── CanvasPage ────────────────────────────────────────────────────────────────
 
@@ -312,129 +572,51 @@ export const CanvasPage: React.FC = () => {
     setLoadingProject(true);
     clearCanvasWorkspace();
     globalThis.dispatchEvent(new CustomEvent('vitruv.resetWorkspace'));
-
-    // Drop cached tab session so reopen/refresh always reloads from the server.
-    for (const tab of openTabsRef.current) {
-      if (tab.projectId === vsumId) {
-        sessionsRef.current.delete(tab.instanceId);
-      }
-    }
-    if (forInstanceId) {
-      sessionsRef.current.delete(forInstanceId);
-    }
+    clearVsumTabSessions(openTabsRef.current, sessionsRef.current, vsumId, forInstanceId);
 
     try {
       const response = await apiService.getVsumDetails(vsumId);
-      if (forInstanceId && activeInstanceIdRef.current !== forInstanceId) return;
+      if (isStaleTabLoad(forInstanceId, activeInstanceIdRef.current)) return;
+
       const details: VsumDetails = response.data;
       setVsumName(details.name);
       updateTabName(vsumId, details.name);
+      setDrawerModels((details.metaModels || []).map(m => metaModelToDrawerModel(m, true)));
 
-      const projectModels: DrawerModel[] = (details.metaModels || []).map((m: any) => ({
-        id: m.id,
-        name: m.name,
-        sourceId: m.sourceId ?? m.id,
-        domain: m.domain,
-        ecoreFileId: m.ecoreFileId,
-        genModelFileId: m.genModelFileId,
-        inProject: true,
-        description: m.description,
-        keyword: m.keyword,
-        createdAt: m.createdAt,
-      }));
-      setDrawerModels(projectModels);
-
-      // Fetch both library tabs in parallel — include ALL models so removing from
-      // canvas makes them reappear; the drawer's addedModelIds filter handles hiding.
-      const toDrawer = (m: any): DrawerModel => ({
-        id: m.id,
-        name: m.name,
-        sourceId: m.sourceId ?? m.id,
-        domain: m.domain,
-        ecoreFileId: m.ecoreFileId,
-        genModelFileId: m.genModelFileId,
-        inProject: false,
-        description: m.description,
-        keyword: m.keyword,
-        createdAt: m.createdAt,
-      });
-
-      const [myRes, pubRes] = await Promise.allSettled([
-        apiService.findMetaModels({ ownedByUser: true }),
-        apiService.findMetaModels({ ownedByUser: false }),
-      ]);
-      setMyLibraryModels(
-        myRes.status === 'fulfilled' ? (myRes.value.data || []).map(toDrawer) : [],
-      );
-      setPublicLibraryModels(
-        pubRes.status === 'fulfilled' ? (pubRes.value.data || []).map(toDrawer) : [],
-      );
-
-      if (forInstanceId && activeInstanceIdRef.current !== forInstanceId) return;
+      const { myModels, publicModels } = await fetchLibraryDrawerModels();
+      setMyLibraryModels(myModels);
+      setPublicLibraryModels(publicModels);
+      if (isStaleTabLoad(forInstanceId, activeInstanceIdRef.current)) return;
 
       globalThis.dispatchEvent(new CustomEvent('vitruv.resetWorkspace'));
       await new Promise(r => setTimeout(r, 100));
+      if (isStaleTabLoad(forInstanceId, activeInstanceIdRef.current)) return;
 
-      if (forInstanceId && activeInstanceIdRef.current !== forInstanceId) return;
-
-      for (const model of details.metaModels || []) {
-        if (model.ecoreFileId) {
-          try {
-            const fileContent = await apiService.getFile(model.ecoreFileId);
-            globalThis.dispatchEvent(new CustomEvent('vitruv.addFileToWorkspace', {
-              detail: {
-                fileContent,
-                fileName: model.name + '.ecore',
-                description: model.description,
-                keywords: model.keyword?.join(', '),
-                domain: model.domain,
-                createdAt: model.createdAt,
-                metaModelId: model.id,
-                metaModelSourceId: model.sourceId ?? model.id,
-                ecoreFileId: model.ecoreFileId,
-                genModelFileId: model.genModelFileId,
-              },
-            }));
-            await new Promise(r => setTimeout(r, 50));
-          } catch {
-            // model without ecore file – skip canvas box
-          }
-        }
-      }
-
-      if (forInstanceId && activeInstanceIdRef.current !== forInstanceId) return;
+      await dispatchWorkspaceMetaModels(details.metaModels || []);
+      if (isStaleTabLoad(forInstanceId, activeInstanceIdRef.current)) return;
 
       await waitForMetaModelsOnCanvas(
         () => flowCanvasRef.current?.getNodes?.() ?? [],
         details.metaModels ?? [],
       );
+      if (isStaleTabLoad(forInstanceId, activeInstanceIdRef.current)) return;
 
-      if (forInstanceId && activeInstanceIdRef.current !== forInstanceId) return;
-
-      // If the user is in constraints mode, re-snapshot now that the new project's nodes are ready.
       if (canvasModeRef.current === 'constraints') {
         setConstraintsNodes(flowCanvasRef.current?.getNodes?.() ?? []);
       }
 
-      if (details.metaModelsRelation?.length) {
-        globalThis.dispatchEvent(new CustomEvent('vitruv.loadMetaModelRelations', {
-          detail: {
-            relations: mapRelationsForCanvasLoad(details.metaModelsRelation),
-            preserveExisting: false,
-          },
-        }));
-        await new Promise(r => setTimeout(r, 150));
-      }
+      await dispatchMetaModelRelations(details.metaModelsRelation);
+      if (isStaleTabLoad(forInstanceId, activeInstanceIdRef.current)) return;
 
-      if (forInstanceId && activeInstanceIdRef.current !== forInstanceId) return;
-
-      const tab = openTabsRef.current.find(t => t.projectId === vsumId);
-      if (tab) {
-        setBaselineForInstance(tab.instanceId, workspaceSnapshotFromVsumDetails(details));
-        if (!forInstanceId || activeInstanceIdRef.current === forInstanceId) {
-          loadedTabsRef.current.add(tab.instanceId);
-        }
-      }
+      finalizeVsumTabBaseline(
+        openTabsRef.current,
+        vsumId,
+        details,
+        forInstanceId,
+        activeInstanceIdRef.current,
+        setBaselineForInstance,
+        loadedTabsRef.current,
+      );
     } catch (e) {
       console.error('Failed to load VSUM:', e);
     } finally {
@@ -645,7 +827,7 @@ export const CanvasPage: React.FC = () => {
       if (!detail) return;
       const existing = flowCanvasRef.current?.getNodes?.() || [];
       // skip placing on canvas if already there (by fileName)
-      if (existing.find((n: any) => n.type === 'ecoreFile' && n.data.fileName === detail.fileName)) return;
+      if (existing.some((n: any) => n.type === 'ecoreFile' && n.data.fileName === detail.fileName)) return;
       flowCanvasRef.current?.addEcoreFile?.(detail.fileName, detail.fileContent, detail);
       // addedModelIds is kept in sync via onDiagramChange — no manual update needed here
     };
@@ -763,13 +945,13 @@ export const CanvasPage: React.FC = () => {
     fileName: string,
     result: { ecoreContent: string },
   ) => {
-    setUmlPanels(prev => prev.map(p =>
-      p.id === panelId
-        ? { ...p, ecoreContent: result.ecoreContent }
-        : p,
-    ));
+    setUmlPanels(prev => updatePanelEcoreContent(prev, panelId, result.ecoreContent));
     // Workspace-only: update the canvas copy, not the library metamodel file on the server.
     flowCanvasRef.current?.updateEcoreFileData?.(fileName, result.ecoreContent);
+  }, []);
+
+  const handleUmlPanelEcoreContentUpdated = useCallback((panelId: string, content: string) => {
+    setUmlPanels(prev => updatePanelEcoreContent(prev, panelId, content));
   }, []);
 
   const buildUmlSaveContext = useCallback((panel: UMLPanel): UmlDiagramSaveContext | undefined => {
@@ -780,11 +962,18 @@ export const CanvasPage: React.FC = () => {
       ecoreFileId: panel.ecoreFileId,
       modelName: panel.title,
       saveTarget: 'workspace',
-      onSaved: result => handleUmlPanelSaved(panel.id, panel.fileName, result),
+      onSaved: createUmlPanelSavedHandler(panel.id, panel.fileName, handleUmlPanelSaved),
     };
   }, [handleUmlPanelSaved]);
 
   const focusPanel = useCallback((panelId: string) => setTopPanelId(panelId), []);
+  const navigateHome = useCallback(() => navigate('/'), [navigate]);
+  const handleReactionModeEnd = useCallback(() => setAddReactionMode(false), []);
+  const handleHistoryChange = useCallback((undoAvailable: boolean, redoAvailable: boolean) => {
+    setCanUndo(undoAvailable);
+    setCanRedo(redoAvailable);
+  }, []);
+  const handleCloseDrawer = useCallback(() => setShowDrawer(false), []);
   const handleDiagramChange = useCallback((_nodes: Node[], _edges: Edge[]) => {
     const ids = new Set<number>();
     for (const n of _nodes) {
@@ -795,6 +984,31 @@ export const CanvasPage: React.FC = () => {
     }
     setAddedModelIds(ids);
   }, []);
+
+  const handleCloseConfirmSave = useCallback(async () => {
+    if (!closeConfirmInstanceId) return;
+    setCloseConfirmSaving(true);
+    const ok = await saveTabInstance(closeConfirmInstanceId);
+    setCloseConfirmSaving(false);
+    if (!ok) {
+      setPopup({ message: 'Failed to save changes.', type: 'error' });
+      setTimeout(() => setPopup(null), 4000);
+      return;
+    }
+    const instanceId = closeConfirmInstanceId;
+    setCloseConfirmInstanceId(null);
+    performCloseTab(instanceId);
+    setPopup({ message: 'Changes saved.', type: 'success' });
+    setTimeout(() => setPopup(null), 3000);
+  }, [closeConfirmInstanceId, saveTabInstance, performCloseTab]);
+
+  const handleCloseWithoutSaving = useCallback(() => {
+    if (!closeConfirmInstanceId) return;
+    performCloseTab(closeConfirmInstanceId);
+    setCloseConfirmInstanceId(null);
+  }, [closeConfirmInstanceId, performCloseTab]);
+
+  const handleCloseConfirmCancel = useCallback(() => setCloseConfirmInstanceId(null), []);
 
   // ── render ────────────────────────────────────────────────────────────────
 
@@ -810,8 +1024,8 @@ export const CanvasPage: React.FC = () => {
         onEcoreFileExpand={handleEcoreFileExpand}
         umlModalOpen={umlPanels.length > 0}
         addReactionMode={addReactionMode}
-        onReactionModeEnd={() => setAddReactionMode(false)}
-        onHistoryChange={(u, r) => { setCanUndo(u); setCanRedo(r); }}
+        onReactionModeEnd={handleReactionModeEnd}
+        onHistoryChange={handleHistoryChange}
         onCanvasModeChange={handleCanvasModeChange}
         constraintHighlightNodeId={constraintHighlightNodeId}
         constraintFilterNodeId={constraintFilterNodeId}
@@ -833,73 +1047,31 @@ export const CanvasPage: React.FC = () => {
         }
       />
 
-      {umlPanels.map((panel, idx) => (
-        <FloatingUMLPanel
-          key={panel.id}
-          id={panel.id}
-          title={vsumName || panel.title}
-          fileName={panel.layoutStorageKey ?? canvasUmlLayoutFileName(panel)}
-          layoutScopeId={panel.layoutScopeId ?? canvasUmlLayoutScope(activeProjectId)}
-          ecoreContent={panel.ecoreContent}
-          saveContext={buildUmlSaveContext(panel)}
-          initialTop={panel.top}
-          initialRight={panel.right}
-          panelWidth={panel.width}
-          panelHeight={panel.height}
-          onClose={closePanel}
-          onFocus={focusPanel}
-          onHome={() => navigate('/')}
-          ecoreFileId={panel.ecoreFileId}
-          fetchEcoreFile={(fileId) => apiService.getFile(fileId)}
-          onEcoreContentUpdated={(content) => {
-            setUmlPanels(prev => prev.map(p =>
-              p.id === panel.id ? { ...p, ecoreContent: content } : p,
-            ));
-          }}
-          zIndex={panelZBase + (topPanelId === panel.id ? umlPanels.length : idx)}
-        />
-      ))}
+      <CanvasUmlPanelLayer
+        panels={umlPanels}
+        vsumName={vsumName}
+        activeProjectId={activeProjectId}
+        topPanelId={topPanelId}
+        panelZBase={panelZBase}
+        buildSaveContext={buildUmlSaveContext}
+        onClose={closePanel}
+        onFocus={focusPanel}
+        onHome={navigateHome}
+        onEcoreContentUpdated={handleUmlPanelEcoreContentUpdated}
+      />
 
       {/* Model drawer modal */}
-      {showDrawer && ReactDOM.createPortal(
-        <>
-          {/* Backdrop */}
-          <button
-            type="button"
-            aria-hidden="true"
-            tabIndex={-1}
-            onClick={() => setShowDrawer(false)}
-            style={{ ...modalBackdropStyle, zIndex: MODAL_Z_INDEX }}
-          />
-          {/* Panel */}
-          <div style={{
-            position: 'fixed',
-            top: '50%', left: '50%',
-            transform: 'translate(-50%, -50%)',
-            width: 'min(800px, 92vw)',
-            height: 'min(700px, 88vh)',
-            zIndex: MODAL_Z_INDEX + 1,
-            pointerEvents: 'auto',
-            background: '#ffffff',
-            borderRadius: 10,
-            boxShadow: '0 24px 64px rgba(0,0,0,0.28), 0 4px 16px rgba(0,0,0,0.10)',
-            border: '1px solid #e2e8f0',
-            overflow: 'hidden',
-          }}>
-            <ModelDrawer
-              models={drawerModels}
-              addedModelIds={addedModelIds}
-              loading={loadingProject}
-              onClose={() => setShowDrawer(false)}
-              onAddModel={handleAddModel}
-              onDeleteModel={handleDeleteModel}
-              myLibraryModels={myLibraryModels}
-              publicLibraryModels={publicLibraryModels}
-              onFetchFile={(fileId) => apiService.getFile(fileId)}
-            />
-          </div>
-        </>,
-        document.body
+      {showDrawer && (
+        <ModelDrawerModal
+          models={drawerModels}
+          addedModelIds={addedModelIds}
+          loading={loadingProject}
+          myLibraryModels={myLibraryModels}
+          publicLibraryModels={publicLibraryModels}
+          onClose={handleCloseDrawer}
+          onAddModel={handleAddModel}
+          onDeleteModel={handleDeleteModel}
+        />
       )}
 
       {/* Constraints overlay — always mounted to preserve state (edits, deletions).
@@ -951,48 +1123,16 @@ export const CanvasPage: React.FC = () => {
         isOpen={closeConfirmInstanceId !== null}
         projectName={openTabs.find(t => t.instanceId === closeConfirmInstanceId)?.name}
         saving={closeConfirmSaving}
-        onSave={async () => {
-          if (!closeConfirmInstanceId) return;
-          setCloseConfirmSaving(true);
-          const ok = await saveTabInstance(closeConfirmInstanceId);
-          setCloseConfirmSaving(false);
-          if (ok) {
-            const id = closeConfirmInstanceId;
-            setCloseConfirmInstanceId(null);
-            performCloseTab(id);
-            setPopup({ message: 'Changes saved.', type: 'success' });
-            setTimeout(() => setPopup(null), 3000);
-          } else {
-            setPopup({ message: 'Failed to save changes.', type: 'error' });
-            setTimeout(() => setPopup(null), 4000);
-          }
-        }}
-        onCloseWithoutSaving={() => {
-          if (closeConfirmInstanceId) {
-            performCloseTab(closeConfirmInstanceId);
-            setCloseConfirmInstanceId(null);
-          }
-        }}
-        onCancel={() => setCloseConfirmInstanceId(null)}
+        onSave={handleCloseConfirmSave}
+        onCloseWithoutSaving={handleCloseWithoutSaving}
+        onCancel={handleCloseConfirmCancel}
       />
 
       <RightPill />
       {/* (showDrawer/onToggleDrawer/modelCount kept for future use) */}
 
       {/* Popup notification */}
-      {popup && (
-        <div style={{
-          position: 'fixed', bottom: 24, left: '50%', transform: 'translateX(-50%)',
-          zIndex: 9999, maxWidth: 480, width: 'max-content',
-          background: popup.type === 'success' ? '#f0fdf4' : popup.type === 'error' ? '#fef2f2' : '#eff6ff',
-          border: `1px solid ${popup.type === 'success' ? '#86efac' : popup.type === 'error' ? '#fca5a5' : '#bfdbfe'}`,
-          color: popup.type === 'success' ? '#15803d' : popup.type === 'error' ? '#dc2626' : '#1d4ed8',
-          borderRadius: 10, padding: '10px 16px', fontSize: 13, fontWeight: 500,
-          boxShadow: '0 4px 16px rgba(0,0,0,0.12)',
-        }}>
-          {popup.message}
-        </div>
-      )}
+      {popup && <CanvasPopupNotification message={popup.message} type={popup.type} />}
     </div>
   );
 };
@@ -1022,19 +1162,36 @@ const LeftPill: React.FC<LeftPillProps> = ({
 }) => (
   <div style={pillStyle('left')}>
     {/* Logo — click to go back */}
-    <img
-      src="/assets/vitruvius1.png"
-      alt="Back to overview"
-      title="Back to overview"
+    <button
+      type="button"
       onClick={onBack}
+      title="Back to overview"
+      aria-label="Back to overview"
       style={{
-        width: 24, height: 24, borderRadius: 6, flexShrink: 0,
-        margin: '0 4px', cursor: 'pointer',
+        padding: 0,
+        border: 'none',
+        background: 'transparent',
+        width: 24,
+        height: 24,
+        borderRadius: 6,
+        flexShrink: 0,
+        margin: '0 4px',
+        cursor: 'pointer',
         transition: 'opacity 0.15s',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
       }}
-      onMouseEnter={e => (e.currentTarget.style.opacity = '0.75')}
-      onMouseLeave={e => (e.currentTarget.style.opacity = '1')}
-    />
+      onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.opacity = '0.75'; }}
+      onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.opacity = '1'; }}
+    >
+      <img
+        src="/assets/vitruvius1.png"
+        alt=""
+        aria-hidden="true"
+        style={{ width: 24, height: 24, borderRadius: 6, display: 'block' }}
+      />
+    </button>
 
     <Divider />
 
@@ -1044,7 +1201,13 @@ const LeftPill: React.FC<LeftPillProps> = ({
           autoFocus
           value={nameInput}
           onChange={e => onNameInputChange(e.target.value)}
-          onKeyDown={e => { if (e.key === 'Enter') onConfirmRename(); if (e.key === 'Escape') onCancelRename(); }}
+          onKeyDown={e => {
+            if (e.key === 'Enter') {
+              onConfirmRename();
+            } else if (e.key === 'Escape') {
+              onCancelRename();
+            }
+          }}
           disabled={savingName}
           style={{
             fontSize: 13, fontWeight: 600, color: '#0f172a',
@@ -1097,27 +1260,123 @@ interface AvatarProps {
   size?: number;
   ring?: string;
   title?: string;
-  onClick?: () => void;
 }
 
-const UserAvatar: React.FC<AvatarProps> = ({ initials, bg, size = 30, ring, title, onClick }) => (
-  <div
+interface AvatarButtonProps extends AvatarProps {
+  onClick: () => void;
+  title: string;
+}
+
+function getAvatarStyle(bg: string, size: number, ring?: string): React.CSSProperties {
+  return {
+    width: size,
+    height: size,
+    borderRadius: '50%',
+    background: bg,
+    color: '#fff',
+    fontSize: Math.round(size * 0.36),
+    fontWeight: 700,
+    letterSpacing: '0.01em',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexShrink: 0,
+    userSelect: 'none',
+    boxShadow: ring
+      ? `0 0 0 2px #fff, 0 0 0 4.5px ${ring}`
+      : '0 0 0 2px #fff',
+  };
+}
+
+const UserAvatar: React.FC<AvatarProps> = ({ initials, bg, size = 30, ring, title }) => (
+  <div title={title} style={{ ...getAvatarStyle(bg, size, ring), cursor: 'default' }}>
+    {initials}
+  </div>
+);
+
+const UserAvatarButton: React.FC<AvatarButtonProps> = ({
+  initials,
+  bg,
+  size = 30,
+  ring,
+  title,
+  onClick,
+}) => (
+  <button
+    type="button"
     title={title}
+    aria-label={title}
     onClick={onClick}
     style={{
-      width: size, height: size, borderRadius: '50%',
-      background: bg, color: '#fff',
-      fontSize: Math.round(size * 0.36), fontWeight: 700, letterSpacing: '0.01em',
-      display: 'flex', alignItems: 'center', justifyContent: 'center',
-      flexShrink: 0, userSelect: 'none',
-      boxShadow: ring
-        ? `0 0 0 2px #fff, 0 0 0 4.5px ${ring}`
-        : '0 0 0 2px #fff',
-      cursor: onClick ? 'pointer' : 'default',
+      ...getAvatarStyle(bg, size, ring),
+      border: 'none',
+      padding: 0,
+      cursor: 'pointer',
     }}
   >
     {initials}
-  </div>
+  </button>
+);
+
+interface CollaboratorStackButtonProps {
+  members: Array<{ id: string; initials: string; color: string; ringColor?: string }>;
+  overflowCount: number;
+  onClick: () => void;
+}
+
+const CollaboratorStackButton: React.FC<CollaboratorStackButtonProps> = ({
+  members,
+  overflowCount,
+  onClick,
+}) => (
+  <button
+    type="button"
+    title="Show all members"
+    aria-label="Show all members"
+    onClick={onClick}
+    style={{
+      display: 'flex',
+      alignItems: 'center',
+      cursor: 'pointer',
+      padding: '0 4px',
+      border: 'none',
+      background: 'transparent',
+    }}
+  >
+    {members.map((member, index) => (
+      <span
+        key={member.id}
+        style={{ marginLeft: index === 0 ? 0 : -8, zIndex: members.length - index, display: 'inline-flex' }}
+      >
+        <UserAvatar
+          initials={member.initials}
+          bg={member.color}
+          size={26}
+          ring={member.ringColor}
+        />
+      </span>
+    ))}
+    {overflowCount > 0 && (
+      <span style={{ marginLeft: -8, zIndex: 0, display: 'inline-flex' }}>
+        <span style={{
+          width: 26,
+          height: 26,
+          borderRadius: '50%',
+          background: '#e2e8f0',
+          color: '#475569',
+          fontSize: 11,
+          fontWeight: 700,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          border: '2px solid #fff',
+          userSelect: 'none',
+        }}>
+          +{overflowCount}
+        </span>
+      </span>
+    )}
+  </button>
 );
 
 // ── RightPill ─────────────────────────────────────────────────────────────────
@@ -1162,56 +1421,43 @@ const RightPill: React.FC = () => {
   const stackAvatars = allMembers.slice(0, 3);
   const overflowCount = allMembers.length > 3 ? allMembers.length - 3 : 0;
 
+  const toggleMembersPanel = useCallback(() => {
+    setShowAccounts(current => !current);
+    setShowProfileMenu(false);
+  }, []);
+
+  const toggleProfileMenu = useCallback(() => {
+    setShowProfileMenu(current => !current);
+    setShowAccounts(false);
+  }, []);
+
   return (
     <div ref={wrapRef} style={{ ...pillStyle('right'), padding: '0 10px', gap: 0, position: 'absolute' }}>
 
       {/* ── Collaborator stack — click to see all members ── */}
-      <div
-        title="Show all members"
-        onClick={() => { setShowAccounts(v => !v); setShowProfileMenu(false); }}
-        style={{ display: 'flex', alignItems: 'center', cursor: 'pointer', padding: '0 4px' }}
-      >
-        {stackAvatars.map((c, i) => (
-          <div key={c.id} style={{ marginLeft: i === 0 ? 0 : -8, zIndex: 3 - i }}>
-            <UserAvatar
-              initials={c.initials}
-              bg={c.color}
-              size={26}
-              ring={'ringColor' in c ? (c as typeof myAccount).ringColor : undefined}
-            />
-          </div>
-        ))}
-        {overflowCount > 0 && (
-          <div style={{ marginLeft: -8, zIndex: 0 }}>
-            <div style={{
-              width: 26, height: 26, borderRadius: '50%',
-              background: '#e2e8f0', color: '#475569',
-              fontSize: 11, fontWeight: 700,
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-              border: '2px solid #fff', userSelect: 'none',
-            }}>
-              +{overflowCount}
-            </div>
-          </div>
-        )}
-      </div>
+      <CollaboratorStackButton
+        members={stackAvatars.map(member => ({
+          id: member.id,
+          initials: member.initials,
+          color: member.color,
+          ringColor: 'ringColor' in member ? (member as typeof myAccount).ringColor : undefined,
+        }))}
+        overflowCount={overflowCount}
+        onClick={toggleMembersPanel}
+      />
 
       <Divider />
 
       {/* ── My account avatar — click for profile menu ── */}
       <div style={{ position: 'relative', padding: '0 4px' }}>
-        <div
+        <UserAvatarButton
+          initials={myAccount.initials}
+          bg={myAccount.color}
+          size={28}
+          ring={myAccount.ringColor}
           title="My account"
-          onClick={() => { setShowProfileMenu(v => !v); setShowAccounts(false); }}
-          style={{ cursor: 'pointer', display: 'flex' }}
-        >
-          <UserAvatar
-            initials={myAccount.initials}
-            bg={myAccount.color}
-            size={28}
-            ring={myAccount.ringColor}
-          />
-        </div>
+          onClick={toggleProfileMenu}
+        />
 
         {/* Profile dropdown */}
         {showProfileMenu && (
@@ -1253,7 +1499,7 @@ const RightPill: React.FC = () => {
               label="Log out"
               icon={<LogoutIcon />}
               danger
-              onClick={() => { setShowProfileMenu(false); AuthService.signOut().then(() => { window.location.href = '/login'; }); }}
+              onClick={() => { setShowProfileMenu(false); AuthService.signOut().then(() => { globalThis.location.href = '/login'; }); }}
             />
           </div>
         )}
@@ -1314,81 +1560,35 @@ const RightPill: React.FC = () => {
         </div>
       )}
 
-      {/* ── Profile modal ── */}
-      {showProfileModal && ReactDOM.createPortal(
-        <div
-          onClick={() => setShowProfileModal(false)}
-          style={{
-            position: 'fixed', inset: 0, zIndex: 2000,
-            background: 'rgba(0,0,0,0.25)',
-            backdropFilter: 'blur(8px)',
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-          }}
-        >
-          <div
-            onClick={e => e.stopPropagation()}
-            style={{
-              width: 'min(760px, 94vw)',
-              maxHeight: '88vh',
-              background: '#ffffff',
-              borderRadius: 12,
-              boxShadow: '0 8px 40px rgba(0,0,0,0.18), 0 0 0 1px rgba(0,0,0,0.07)',
-              display: 'flex',
-              flexDirection: 'column',
-              overflow: 'hidden',
-              position: 'relative',
-            }}
-          >
-            {/* Close button */}
-            <button
-              onClick={() => setShowProfileModal(false)}
-              style={{
-                position: 'absolute', top: 12, right: 12, zIndex: 10,
-                width: 30, height: 30, borderRadius: 6,
-                background: 'transparent',
-                border: '1.5px solid rgba(0,0,0,0.10)',
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                cursor: 'pointer', fontSize: 13, color: '#64748b',
-                transition: 'all 0.12s',
-              }}
-              onMouseEnter={e => {
-                e.currentTarget.style.background = '#f1f5f9';
-                e.currentTarget.style.borderColor = 'rgba(0,0,0,0.18)';
-              }}
-              onMouseLeave={e => {
-                e.currentTarget.style.background = 'transparent';
-                e.currentTarget.style.borderColor = 'rgba(0,0,0,0.10)';
-              }}
-              title="Close"
-            >
-              ✕
-            </button>
-            <div style={{ overflowY: 'auto', flex: 1, background: '#f8fafc' }}>
-              <ProfileView
-                user={user}
-                userRole="Methodologist"
-                onNameSaved={refreshCurrentUser}
-              />
-            </div>
-          </div>
-        </div>,
-        document.body
+      {showProfileModal && (
+        <ProfileModal
+          user={user}
+          onClose={() => setShowProfileModal(false)}
+          onNameSaved={refreshCurrentUser}
+        />
       )}
     </div>
   );
 };
 
+function getProfileMenuItemBackground(hovered: boolean, danger?: boolean): string {
+  if (!hovered) return 'transparent';
+  if (danger) return '#fef2f2';
+  return '#f8fafc';
+}
+
 const ProfileMenuItem: React.FC<{ label: string; sublabel?: string; icon: React.ReactNode; danger?: boolean; onClick?: () => void }> = ({ label, sublabel, icon, danger, onClick }) => {
   const [hov, setHov] = useState(false);
   return (
     <button
+      type="button"
       onClick={onClick}
       onMouseEnter={() => setHov(true)}
       onMouseLeave={() => setHov(false)}
       style={{
         display: 'flex', alignItems: 'center', gap: 8,
         width: '100%', padding: '8px 10px', border: 'none', borderRadius: 6,
-        background: hov ? (danger ? '#fef2f2' : '#f8fafc') : 'transparent',
+        background: getProfileMenuItemBackground(hov, danger),
         color: danger ? '#dc2626' : '#0f172a',
         fontSize: 13, fontWeight: 500, cursor: 'pointer', textAlign: 'left',
         transition: 'background 0.1s',
@@ -1552,17 +1752,30 @@ interface SidebarBtnProps {
   color?: string;
 }
 
+function getSidebarBtnBackground(
+  isFilled: boolean,
+  activeColor: string,
+  hovered: boolean,
+  disabled?: boolean,
+): string {
+  if (isFilled) return activeColor;
+  if (hovered && !disabled) return '#f1f5f9';
+  return 'transparent';
+}
+
+function getSidebarBtnIconColor(disabled: boolean | undefined, isFilled: boolean, hovered: boolean): string {
+  if (disabled) return '#c8d3dd';
+  if (isFilled) return '#ffffff';
+  if (hovered) return '#1e293b';
+  return '#475569';
+}
+
 const SidebarBtn: React.FC<SidebarBtnProps> = ({ title, onClick, children, active, filled, disabled, loading, color }) => {
   const [hov, setHov] = useState(false);
   const activeColor = color || '#049484';
-  const isFilled = filled || active;
-  const bg = isFilled
-    ? activeColor
-    : hov && !disabled ? '#f1f5f9' : 'transparent';
-  const iconColor = disabled
-    ? '#c8d3dd'
-    : isFilled ? '#ffffff'
-    : hov ? '#1e293b' : '#475569';
+  const isFilled = Boolean(filled || active);
+  const bg = getSidebarBtnBackground(isFilled, activeColor, hov, disabled);
+  const iconColor = getSidebarBtnIconColor(disabled, isFilled, hov);
   return (
     <button
       title={title}
@@ -1617,6 +1830,18 @@ interface PillBtnProps {
   spinning?: boolean;
 }
 
+function getPillBtnBackground(active: boolean | undefined, hovered: boolean): string {
+  if (active) return '#049484';
+  if (hovered) return '#f1f5f9';
+  return 'transparent';
+}
+
+function getPillBtnColor(active: boolean | undefined, hovered: boolean): string {
+  if (active) return '#ffffff';
+  if (hovered) return '#1e293b';
+  return '#475569';
+}
+
 const PillBtn: React.FC<PillBtnProps> = ({ onClick, title, children, active, spinning }) => {
   const [hov, setHov] = useState(false);
   return (
@@ -1627,8 +1852,8 @@ const PillBtn: React.FC<PillBtnProps> = ({ onClick, title, children, active, spi
       onMouseLeave={() => setHov(false)}
       style={{
         position: 'relative', width: 34, height: 34, border: 'none', borderRadius: 6,
-        background: active ? '#049484' : hov ? '#f1f5f9' : 'transparent',
-        color: active ? '#ffffff' : hov ? '#1e293b' : '#475569',
+        background: getPillBtnBackground(active, hov),
+        color: getPillBtnColor(active, hov),
         cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
         transition: 'all 0.12s', flexShrink: 0,
       }}

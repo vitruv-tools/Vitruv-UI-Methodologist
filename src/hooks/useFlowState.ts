@@ -7,6 +7,35 @@ interface UseFlowStateProps {
   projectId?: string;
 }
 
+type DiagramState = { nodes: Node[]; edges: Edge[]; idCounter: number };
+
+function hasDiagramStateChanged(lastSaved: DiagramState, current: DiagramState): boolean {
+  return (
+    lastSaved.nodes.length !== current.nodes.length ||
+    lastSaved.edges.length !== current.edges.length ||
+    lastSaved.idCounter !== current.idCounter ||
+    JSON.stringify(lastSaved.nodes) !== JSON.stringify(current.nodes) ||
+    JSON.stringify(lastSaved.edges) !== JSON.stringify(current.edges)
+  );
+}
+
+function hasTrackableDiagramContent(nodes: Node[], edges: Edge[], idCounter: number): boolean {
+  return nodes.length > 0 || edges.length > 0 || idCounter > 1;
+}
+
+function getDiagramActionDescription(lastSaved: DiagramState, current: DiagramState): string {
+  if (lastSaved.nodes.length !== current.nodes.length) {
+    return current.nodes.length > lastSaved.nodes.length ? 'Node added' : 'Node deleted';
+  }
+  if (lastSaved.edges.length !== current.edges.length) {
+    return current.edges.length > lastSaved.edges.length ? 'Connection added' : 'Connection deleted';
+  }
+  if (current.nodes.length > 0) {
+    return 'Node modified';
+  }
+  return 'Diagram change';
+}
+
 export function useFlowState(props?: UseFlowStateProps) {
   const { userId, projectId } = props || {};
 
@@ -100,52 +129,25 @@ export function useFlowState(props?: UseFlowStateProps) {
   useEffect(() => {
     if (isApplyingState || pauseHistoryRef.current) return;
 
-    const currentDiagramState = {
-      nodes,
-      edges,
-      idCounter
-    };
+    const currentDiagramState = { nodes, edges, idCounter };
+    if (!hasDiagramStateChanged(lastSavedState, currentDiagramState)) return;
+    if (!hasTrackableDiagramContent(nodes, edges, idCounter)) return;
 
-    const hasChanged =
-      lastSavedState.nodes.length !== nodes.length ||
-      lastSavedState.edges.length !== edges.length ||
-      lastSavedState.idCounter !== idCounter ||
-      JSON.stringify(lastSavedState.nodes) !== JSON.stringify(nodes) ||
-      JSON.stringify(lastSavedState.edges) !== JSON.stringify(edges);
+    const actionDescription = getDiagramActionDescription(lastSavedState, currentDiagramState);
 
-    if (hasChanged && (nodes.length > 0 || edges.length > 0 || idCounter > 1)) {
-      let actionDescription = 'Diagram change';
+    console.log(`Saving state: ${actionDescription}`, {
+      nodesBefore: lastSavedState.nodes.length,
+      nodesAfter: nodes.length,
+      edgesBefore: lastSavedState.edges.length,
+      edgesAfter: edges.length
+    });
 
-      if (lastSavedState.nodes.length !== nodes.length) {
-        if (nodes.length > lastSavedState.nodes.length) {
-          actionDescription = 'Node added';
-        } else {
-          actionDescription = 'Node deleted';
-        }
-      } else if (lastSavedState.edges.length !== edges.length) {
-        if (edges.length > lastSavedState.edges.length) {
-          actionDescription = 'Connection added';
-        } else {
-          actionDescription = 'Connection deleted';
-        }
-      } else if (nodes.length > 0) {
-        actionDescription = 'Node modified';
-      }
-
-      console.log(`Saving state: ${actionDescription}`, {
-        nodesBefore: lastSavedState.nodes.length,
-        nodesAfter: nodes.length,
-        edgesBefore: lastSavedState.edges.length,
-        edgesAfter: edges.length
-      });
-
-      if (historyIsEmpty()) {
-        seedHistory(lastSavedState, 'Initial state');
-      }
-
-      saveState(currentDiagramState, actionDescription);
-      setLastSavedState(currentDiagramState);
+    if (historyIsEmpty()) {
+      seedHistory(lastSavedState, 'Initial state');
     }
+
+    saveState(currentDiagramState, actionDescription);
+    setLastSavedState(currentDiagramState);
   }, [nodes, edges, idCounter, saveState, seedHistory, historyIsEmpty, isApplyingState, lastSavedState]);
 
   const applyState = useCallback((state: { nodes: Node[]; edges: Edge[]; idCounter: number }) => {

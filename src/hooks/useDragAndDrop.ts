@@ -73,13 +73,8 @@ function handleToolDrop(
 ) {
   try {
     const toolData: ToolData = JSON.parse(toolDataString);
-    console.log('Parsed tool data:', toolData);
-
     const position = calculateDropPosition(event, instance, bounds);
-    console.log('Calculated position:', position);
-
     const label = getToolLabel(toolData);
-    console.log('Created label:', label);
 
     const newNode: Omit<Node, 'id'> = {
       type: 'editable',
@@ -92,9 +87,7 @@ function handleToolDrop(
       }
     };
 
-    console.log('Adding new node:', newNode);
-    const nodeId = addNodeFn(newNode);
-    console.log('Node added with ID:', nodeId);
+    addNodeFn(newNode);
   } catch (error) {
     console.error('Error parsing tool data:', error);
   }
@@ -129,16 +122,13 @@ export function useDragAndDrop({
   const onDrop = useCallback(
     (event: React.DragEvent) => {
       event.preventDefault();
-      console.log('Drop event triggered');
 
       const reactFlowBounds = reactFlowWrapper.current?.getBoundingClientRect();
       if (!reactFlowInstance || !reactFlowBounds) {
-        console.log('No ReactFlow instance or bounds');
         return;
       }
 
       const toolDataString = event.dataTransfer.getData('application/tool');
-      console.log('Tool data string:', toolDataString);
 
       if (toolDataString) {
         handleToolDrop(event, toolDataString, reactFlowInstance, reactFlowBounds, addNode);
@@ -156,7 +146,6 @@ export function useDragAndDrop({
     const toolDataString = event.dataTransfer.getData('application/tool');
     if (toolDataString) {
       event.dataTransfer.dropEffect = 'copy';
-      console.log('Tool drag over detected');
     } else {
       // Disallow dropping unknown payloads (e.g., external links) onto the canvas
       event.dataTransfer.dropEffect = 'none';
@@ -167,4 +156,4 @@ export function useDragAndDrop({
     onDrop,
     onDragOver,
   };
-} 
+}

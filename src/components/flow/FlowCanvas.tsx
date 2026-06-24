@@ -560,8 +560,8 @@ export const FlowCanvas = forwardRef<{
 
     // Canvas center in flow coordinates — fixed at origin, ReactFlow's default fitView center
     const [circleSelected, setCircleSelected] = useState(false);
-    const [circleVisible, setCircleVisible] = useState(true);
     const [activeCanvasMode, setActiveCanvasMode] = useState<CanvasMode>('modeling');
+    const circleVisible = activeCanvasMode === 'views';
 
     // Ref flag: set to true just before setCircle() in autoLayoutEcoreBoxes so the
     // useEffect below can call fitViewToCircle once React has committed the new circle.
@@ -2393,22 +2393,28 @@ export const FlowCanvas = forwardRef<{
       reorderedSourceEdges: Edge[],
       reorderedTargetEdges: Edge[]
     ) => {
+      const sourceIndexById = new Map(
+        reorderedSourceEdges.map((re, index) => [re.id, index] as const),
+      );
+      const targetIndexById = new Map(
+        reorderedTargetEdges.map((re, index) => [re.id, index] as const),
+      );
+
       return prevEdges.map(e => {
-        const sourceIndex = reorderedSourceEdges.findIndex(re => re.id === e.id);
-        const targetIndex = reorderedTargetEdges.findIndex(re => re.id === e.id);
+        const sourceIndex = sourceIndexById.get(e.id);
+        const targetIndex = targetIndexById.get(e.id);
+        const inSource = sourceIndex !== undefined;
+        const inTarget = targetIndex !== undefined;
 
-        const foundInSource = sourceIndex >= 0;
-        const foundInTarget = targetIndex >= 0;
-
-        if (foundInSource || foundInTarget) {
+        if (inSource || inTarget) {
           return {
             ...e,
             data: {
               ...e.data,
-              sourceParallelIndex: foundInSource ? sourceIndex : e.data?.sourceParallelIndex,
-              sourceParallelCount: foundInSource ? reorderedSourceEdges.length : e.data?.sourceParallelCount,
-              targetParallelIndex: foundInTarget ? targetIndex : e.data?.targetParallelIndex,
-              targetParallelCount: foundInTarget ? reorderedTargetEdges.length : e.data?.targetParallelCount,
+              sourceParallelIndex: inSource ? sourceIndex : e.data?.sourceParallelIndex,
+              sourceParallelCount: inSource ? reorderedSourceEdges.length : e.data?.sourceParallelCount,
+              targetParallelIndex: inTarget ? targetIndex : e.data?.targetParallelIndex,
+              targetParallelCount: inTarget ? reorderedTargetEdges.length : e.data?.targetParallelCount,
             }
           };
         }
@@ -2791,11 +2797,8 @@ export const FlowCanvas = forwardRef<{
                 onClick={() => {
                   setActiveCanvasMode(mode);
                   onCanvasModeChange?.(mode);
-                  if (mode === 'views') {
-                    setCircleVisible(true);
-                  } else {
-                    setCircleVisible(false);
-                    if (circleSelected) setCircleSelected(false);
+                  if (mode !== 'views' && circleSelected) {
+                    setCircleSelected(false);
                   }
                 }}
                 style={{

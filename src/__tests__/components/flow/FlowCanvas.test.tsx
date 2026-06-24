@@ -861,21 +861,29 @@ describe('handleEdgeDoubleClick logic', () => {
   });
 
   describe('FlowCanvas – umlModalOpen prop', () => {
-    it('renders CircleOverlay when umlModalOpen is false', () => {
+    const switchToViewsMode = () => {
+      fireEvent.click(screen.getByRole('button', { name: /views/i }));
+    };
+
+    it('renders CircleOverlay in Views mode when umlModalOpen is false', () => {
       const ref = createRef<any>();
       render(<FlowCanvas ref={ref} umlModalOpen={false} />);
+      expect(screen.queryByTestId('circle-overlay')).not.toBeInTheDocument();
+      switchToViewsMode();
       expect(screen.getByTestId('circle-overlay')).toBeInTheDocument();
     });
 
     it('does not render CircleOverlay when umlModalOpen is true', () => {
       const ref = createRef<any>();
       render(<FlowCanvas ref={ref} umlModalOpen={true} />);
+      switchToViewsMode();
       expect(screen.queryByTestId('circle-overlay')).not.toBeInTheDocument();
     });
 
-    it('does not render CircleOverlay when umlModalOpen is true even if circleVisible would be true', () => {
+    it('does not render CircleOverlay when umlModalOpen is true even in Views mode', () => {
       const ref = createRef<any>();
       const { rerender } = render(<FlowCanvas ref={ref} umlModalOpen={false} />);
+      switchToViewsMode();
       expect(screen.getByTestId('circle-overlay')).toBeInTheDocument();
 
       rerender(<FlowCanvas ref={ref} umlModalOpen={true} />);
@@ -888,10 +896,10 @@ describe('handleEdgeDoubleClick logic', () => {
       expect(screen.getByTestId('react-flow')).toBeInTheDocument();
     });
 
-    it('umlModalOpen defaults to undefined and CircleOverlay is shown', () => {
+    it('does not render CircleOverlay in Modeling mode by default', () => {
       const ref = createRef<any>();
       render(<FlowCanvas ref={ref} />);
-      expect(screen.getByTestId('circle-overlay')).toBeInTheDocument();
+      expect(screen.queryByTestId('circle-overlay')).not.toBeInTheDocument();
     });
   });
 });

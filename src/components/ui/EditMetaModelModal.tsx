@@ -12,7 +12,6 @@ interface EditMetaModelModalProps {
   onClose: () => void;
   onSuccess?: () => void;
   metaModel: any;
-  isOwner: boolean;
 }
 
 export const EditMetaModelModal: React.FC<EditMetaModelModalProps> = ({

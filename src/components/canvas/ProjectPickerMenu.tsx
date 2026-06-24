@@ -55,7 +55,7 @@ export const ProjectPickerMenu: React.FC<ProjectPickerMenuProps> = ({
   const [menuPos, setMenuPos] = useState({ top: 0, left: 0 });
   const wrapRef = useRef<HTMLDivElement>(null);
   const buttonRef = useRef<HTMLButtonElement>(null);
-  const menuRef = useRef<HTMLDivElement>(null);
+  const menuRef = useRef<HTMLDialogElement>(null);
 
   const loadProjects = useCallback(async (query: string) => {
     setLoading(true);
@@ -137,24 +137,28 @@ export const ProjectPickerMenu: React.FC<ProjectPickerMenuProps> = ({
 
   const menu = open ? (
     <>
-      <div
-        aria-hidden
+      <button
+        type="button"
+        aria-label="Close project picker"
         style={{
           position: 'fixed',
           inset: 0,
           zIndex: MENU_Z_INDEX - 1,
           background: 'transparent',
+          border: 'none',
+          cursor: 'default',
+          padding: 0,
         }}
-        onMouseDown={closeMenu}
+        onClick={closeMenu}
       />
-      <div
+      <dialog
         ref={menuRef}
         id="project-picker-menu"
-        role="dialog"
+        open
         aria-label="Your projects"
-        onMouseDown={e => e.stopPropagation()}
         style={{
           position: 'fixed',
+          margin: 0,
           top: menuPos.top,
           left: menuPos.left,
           width: 320,
@@ -304,7 +308,7 @@ export const ProjectPickerMenu: React.FC<ProjectPickerMenuProps> = ({
           );
         })}
       </div>
-      </div>
+      </dialog>
     </>
   ) : null;
 

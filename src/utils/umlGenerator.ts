@@ -532,7 +532,7 @@ export const generateUMLFromEcore = (ecoreContent: string): { nodes: FlowNode[];
         }
 
         const targetMultiplicity = formatEcoreMultiplicity(lower, upper);
-        const sourceMultiplicity = targetMultiplicity !== undefined ? '1' : undefined;
+        const sourceMultiplicity = targetMultiplicity === undefined ? undefined : '1';
 
         const handles = chooseHandles(sourceId, targetId);
         edges.push({

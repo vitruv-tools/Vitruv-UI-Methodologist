@@ -46,10 +46,10 @@ const PRIMITIVE_ETYPE: Record<string, string> = {
 
 function escapeXml(value: string): string {
   return value
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;');
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;');
 }
 
 function attributeEType(typeName: string): string {
@@ -67,9 +67,9 @@ function extractPackageOpening(originalEcore?: string): {
   const fallback = { name: 'model' };
   if (!originalEcore?.trim()) return fallback;
 
-  const nameMatch = originalEcore.match(/<(?:ecore:)?EPackage[^>]*\bname="([^"]+)"/i);
-  const nsUriMatch = originalEcore.match(/\bnsURI="([^"]+)"/);
-  const nsPrefixMatch = originalEcore.match(/\bnsPrefix="([^"]+)"/);
+  const nameMatch = /<(?:ecore:)?EPackage[^>]*\bname="([^"]+)"/i.exec(originalEcore);
+  const nsUriMatch = /\bnsURI="([^"]+)"/.exec(originalEcore);
+  const nsPrefixMatch = /\bnsPrefix="([^"]+)"/.exec(originalEcore);
 
   return {
     name: nameMatch?.[1] || fallback.name,
@@ -143,7 +143,8 @@ function renderClass(
   if (cls.isAbstract) attrs.push('abstract="true"');
   if (cls.isInterface) attrs.push('interface="true"');
   if (inheritanceTargets.length > 0) {
-    attrs.push(`eSuperTypes="${inheritanceTargets.map(t => `#//${t}`).join(' ')}"`);
+    const superTypeRefs = inheritanceTargets.map(t => '#//' + t).join(' ');
+    attrs.push(`eSuperTypes="${superTypeRefs}"`);
   }
 
   const attrLines = cls.attributes.map(a => renderAttribute(a)).filter(Boolean);

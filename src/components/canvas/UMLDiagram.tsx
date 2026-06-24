@@ -1,4 +1,4 @@
-import React, { useState, useRef, useCallback, useEffect, useMemo, forwardRef, useImperativeHandle } from 'react';
+import React, { useState, useRef, useCallback, useEffect, useMemo, forwardRef, useImperativeHandle, type RefObject } from 'react';
 import { ecoreToUml, UMLAttribute, UMLRelationship, UMLRelType, UMLModel, UMLVisibility, UMLOperation, buildAttributeTypeOptions, buildOperationReturnTypeOptions, normalizeAttributeTypeDisplay, normalizeOperationReturnType, nextUniqueAttributeName, nextUniqueOperationName, UML_VISIBILITY_OPTIONS } from '../../utils/ecoreToUml';
 import { saveMetaModelEcore, MetaModelSaveMetadata } from '../../utils/saveMetaModelEcore';
 import { umlSemanticSnapshot, umlToEcore } from '../../utils/umlToEcore';
@@ -1091,7 +1091,7 @@ export const UMLDiagram = forwardRef<UMLDiagramHandle, UMLDiagramProps>(({
     return getLayoutMetrics(classes, layoutOffsetRef.current);
   }, [classes]);
   const { totalW, totalH, offsetX, offsetY } = layout;
-  const containerRef = useRef<HTMLDivElement>(null);
+  const containerRef = useRef<HTMLElement>(null);
 
   const handleMinimapPan = useCallback((nx: number, ny: number) => {
     viewRef.current = { ...viewRef.current, x: nx, y: ny };
@@ -1208,7 +1208,7 @@ export const UMLDiagram = forwardRef<UMLDiagramHandle, UMLDiagramProps>(({
     setEdit(null);
   }, [flushPendingEdit]);
 
-  const handleCanvasDoubleClick = useCallback((e: React.MouseEvent) => {
+  const handleCanvasDoubleClick = useCallback((e: MouseEvent) => {
     if (!interactive) return;
     if (!isEmptyCanvasTarget(e.target as HTMLElement)) return;
     e.preventDefault();
@@ -1216,7 +1216,7 @@ export const UMLDiagram = forwardRef<UMLDiagramHandle, UMLDiagramProps>(({
     dismissClassSelection();
   }, [interactive, dismissClassSelection]);
 
-  const handlePanStart = useCallback((e: React.MouseEvent) => {
+  const handlePanStart = useCallback((e: MouseEvent) => {
     flushPendingEdit();
     if (!isEmptyCanvasTarget(e.target as HTMLElement)) return;
     e.preventDefault();
@@ -1239,6 +1239,17 @@ export const UMLDiagram = forwardRef<UMLDiagramHandle, UMLDiagramProps>(({
     globalThis.addEventListener('mousemove', onMove);
     globalThis.addEventListener('mouseup', onUp);
   }, [scheduleLayoutSave, flushPendingEdit]);
+
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+    el.addEventListener('mousedown', handlePanStart);
+    el.addEventListener('dblclick', handleCanvasDoubleClick);
+    return () => {
+      el.removeEventListener('mousedown', handlePanStart);
+      el.removeEventListener('dblclick', handleCanvasDoubleClick);
+    };
+  }, [handlePanStart, handleCanvasDoubleClick, classes.length]);
 
   const addAttr = useCallback((classId: string) => {
     flushPendingEdit();
@@ -1371,8 +1382,16 @@ export const UMLDiagram = forwardRef<UMLDiagramHandle, UMLDiagramProps>(({
       setEdit(null);
       return true;
     }
+    if (selectedRelId) {
+      setSelectedRelId(null);
+      return true;
+    }
+    if (selectedClassId) {
+      dismissClassSelection();
+      return true;
+    }
     return false;
-  }, [connectMode, edit]);
+  }, [connectMode, edit, selectedRelId, selectedClassId, dismissClassSelection]);
 
   const handleRelationshipClick = useCallback((relId: string, e: React.MouseEvent) => {
     e.stopPropagation();
@@ -1627,20 +1646,9 @@ export const UMLDiagram = forwardRef<UMLDiagramHandle, UMLDiagramProps>(({
     : '';
 
   return (
-    <div
+    <section
       ref={containerRef}
-      role="application"
       aria-label="UML diagram canvas"
-      tabIndex={interactive ? 0 : -1}
-      onMouseDown={handlePanStart}
-      onDoubleClick={handleCanvasDoubleClick}
-      onKeyDown={(e) => {
-        if (!interactive || e.target !== e.currentTarget) return;
-        if (e.key === 'Enter' || e.key === ' ') {
-          e.preventDefault();
-          dismissClassSelection();
-        }
-      }}
       style={{
         width: '100%', height: '100%',
         overflow: 'hidden', position: 'relative',
@@ -1972,13 +1980,16 @@ export const UMLDiagram = forwardRef<UMLDiagramHandle, UMLDiagramProps>(({
         containerRef={containerRef}
         onViewportChange={handleMinimapPan}
       />
-    </div>
+    </section>
   );
 });
 
 UMLDiagram.displayName = 'UMLDiagram';
 
 // ── ClassBox helpers ─────────────────────────────────────────────────────────
+
+type ClassBoxDragPointRef = RefObject<{ sx: number; sy: number; ox: number; oy: number } | null>;
+type ClassBoxDidDragRef = RefObject<boolean>;
 
 function getEditAttrType(edit: EditState | null): string | undefined {
   if (edit?.kind !== 'attr') return undefined;
@@ -1991,8 +2002,7 @@ function getEditOpReturnType(edit: EditState | null): string | undefined {
 }
 
 function isClassBoxEditing(edit: EditState | null, classId: string): boolean {
-  if (!edit || edit.classId !== classId) return false;
-  return edit.kind === 'name' || edit.kind === 'attr' || edit.kind === 'op';
+  return edit?.classId === classId && (edit.kind === 'name' || edit.kind === 'attr' || edit.kind === 'op');
 }
 
 function isClassEditingName(edit: EditState | null, classId: string): boolean {
@@ -2118,7 +2128,7 @@ function getClassBoxInteractionProps(params: {
   interactive: boolean;
   selected: boolean;
   boxAriaLabel: string;
-  didDragRef: React.MutableRefObject<boolean>;
+  didDragRef: ClassBoxDidDragRef;
   onBoxMouseDown: (e: React.MouseEvent) => void;
   onSelect: () => void;
 }): Pick<
@@ -2227,16 +2237,25 @@ function getClassBoxNameSectionInteractionProps(params: {
   };
 }
 
-function startClassBoxDrag(
-  e: React.MouseEvent,
-  cls: CLS,
-  scale: number,
-  dragRef: React.MutableRefObject<{ sx: number; sy: number; ox: number; oy: number } | null>,
-  didDragRef: React.MutableRefObject<boolean>,
-  onDragStart: () => void,
-  onMove: (id: string, x: number, y: number) => void,
-  onDragEnd: () => void,
-): void {
+function startClassBoxDrag({
+  e,
+  cls,
+  scale,
+  dragRef,
+  didDragRef,
+  onDragStart,
+  onMove,
+  onDragEnd,
+}: {
+  e: React.MouseEvent;
+  cls: CLS;
+  scale: number;
+  dragRef: ClassBoxDragPointRef;
+  didDragRef: ClassBoxDidDragRef;
+  onDragStart: () => void;
+  onMove: (id: string, x: number, y: number) => void;
+  onDragEnd: () => void;
+}): void {
   const target = e.target as HTMLElement;
   if (target.closest('input, button, [data-no-drag]')) return;
   e.stopPropagation();
@@ -2266,7 +2285,7 @@ function startClassBoxDrag(
 
 function handleClassBoxSelectClick(
   e: React.MouseEvent,
-  didDragRef: React.MutableRefObject<boolean>,
+  didDragRef: ClassBoxDidDragRef,
   onSelect: () => void,
 ): void {
   e.stopPropagation();
@@ -2350,10 +2369,14 @@ const ClassBoxNameSection: React.FC<ClassBoxNameSectionProps> = ({
 
   if (isEditingThisName && edit?.kind === 'name') {
     return (
-      <div
-        role="group"
+      <fieldset
         aria-label={`Editing class name: ${cls.name}`}
-        style={nameSectionStyle}
+        style={{
+          ...nameSectionStyle,
+          border: 'none',
+          margin: 0,
+          minWidth: 0,
+        }}
       >
         {stereotype}
         <input
@@ -2383,7 +2406,7 @@ const ClassBoxNameSection: React.FC<ClassBoxNameSectionProps> = ({
             boxShadow: `0 0 0 3px ${UML.primaryRing}`,
           }}
         />
-      </div>
+      </fieldset>
     );
   }
 
@@ -2454,8 +2477,8 @@ const ClassBox: React.FC<ClassBoxProps> = ({
   cls, offsetX, offsetY, scale, selected, connectSource, interactive, edit, onSelect, onDragStart, onMove, onDragEnd, onStartEditName, onSaveName,
   onStartEditAttr, onSaveAttr, onCancelEdit, onAddAttr, onDeleteAttr, onStartEditOp, onSaveOp, onAddOp, onDeleteOp, onDelete, onEditChange,
 }) => {
-  const dragRef = useRef<{ sx: number; sy: number; ox: number; oy: number } | null>(null);
-  const didDragRef = useRef(false);
+  const dragRef: ClassBoxDragPointRef = useRef<{ sx: number; sy: number; ox: number; oy: number } | null>(null);
+  const didDragRef: ClassBoxDidDragRef = useRef(false);
   const [hoveredAttr, setHoveredAttr] = useState<string | null>(null);
   const [hoveredOp, setHoveredOp] = useState<string | null>(null);
 
@@ -2483,7 +2506,16 @@ const ClassBox: React.FC<ClassBoxProps> = ({
   const boxAriaLabel = getClassBoxAriaLabel(cls, selected, connectSource);
 
   const onBoxMouseDown = (e: React.MouseEvent) => {
-    startClassBoxDrag(e, cls, scale, dragRef, didDragRef, onDragStart, onMove, onDragEnd);
+    startClassBoxDrag({
+      e,
+      cls,
+      scale,
+      dragRef,
+      didDragRef,
+      onDragStart,
+      onMove,
+      onDragEnd,
+    });
   };
 
   const boxInteractionProps = getClassBoxInteractionProps({
@@ -3063,13 +3095,13 @@ function PanelCheckboxField({
   checked,
   onChange,
   style,
-}: {
+}: Readonly<{
   id: string;
   label: string;
   checked: boolean;
   onChange: (checked: boolean) => void;
   style?: React.CSSProperties;
-}) {
+}>) {
   return (
     <label htmlFor={id} style={style}>
       <input id={id} type="checkbox" checked={checked} onChange={e => onChange(e.target.checked)} /><span>{label}</span>
@@ -3077,11 +3109,14 @@ function PanelCheckboxField({
   );
 }
 
-function stopDiagramEventBubble(e: React.SyntheticEvent): void {
+function stopDiagramEventBubble(e: { stopPropagation(): void }): void {
   e.stopPropagation();
 }
 
-function handleDiagramEditPanelKeyDown(e: React.KeyboardEvent, onClose: () => void): void {
+function handleDiagramEditPanelKeyDown(
+  e: React.KeyboardEvent<HTMLDialogElement>,
+  onClose: () => void,
+): void {
   e.stopPropagation();
   if (e.key === 'Escape') onClose();
 }
@@ -3093,7 +3128,7 @@ const DiagramEditPanelShell: React.FC<{
   style: React.CSSProperties;
   children: React.ReactNode;
 }> = ({ panelDataAttr, ariaLabel, onClose, style, children }) => {
-  const panelRef = useRef<HTMLDivElement>(null);
+  const panelRef = useRef<HTMLDialogElement>(null);
 
   useEffect(() => {
     panelRef.current?.focus();
@@ -3105,21 +3140,19 @@ const DiagramEditPanelShell: React.FC<{
       : { 'data-rel-edit-panel': true as const };
 
   return (
-    <div
+    <dialog
       ref={panelRef}
       {...panelDataAttribute}
-      role="dialog"
+      open
       aria-label={ariaLabel}
-      aria-modal="true"
-      tabIndex={0}
+      style={{ ...style, margin: 0, padding: 0 }}
       onClick={stopDiagramEventBubble}
       onMouseDown={stopDiagramEventBubble}
-      onKeyDown={(e) => handleDiagramEditPanelKeyDown(e, onClose)}
+      onKeyDown={e => handleDiagramEditPanelKeyDown(e, onClose)}
       onKeyUp={stopDiagramEventBubble}
-      style={style}
     >
       {children}
-    </div>
+    </dialog>
   );
 };
 
@@ -3367,6 +3400,11 @@ const panelInputStyle: React.CSSProperties = {
   color: UML.ink,
 };
 
+function getRelationshipEditPanelAriaLabel(rel: UMLRelationship): string {
+  const base = `Edit ${rel.type} connection`;
+  return rel.label ? `${base}: ${rel.label}` : base;
+}
+
 const RelationshipEditPanel: React.FC<{
   rel: UMLRelationship;
   classes: CLS[];
@@ -3377,7 +3415,7 @@ const RelationshipEditPanel: React.FC<{
   return (
     <DiagramEditPanelShell
       panelDataAttr="rel"
-      ariaLabel={`Edit ${rel.type} connection${rel.label ? `: ${rel.label}` : ''}`}
+      ariaLabel={getRelationshipEditPanelAriaLabel(rel)}
       onClose={onClose}
       style={{
         position: 'absolute',

@@ -81,6 +81,21 @@ interface NavItemProps {
 
 const NavItem: React.FC<NavItemProps> = ({ icon, label, active, onClick }) => {
   const [hovered, setHovered] = React.useState(false);
+
+  let background = 'transparent';
+  if (active) {
+    background = 'rgba(4,148,132,0.15)';
+  } else if (hovered) {
+    background = 'rgba(255,255,255,0.05)';
+  }
+
+  let color = 'rgba(255,255,255,0.55)';
+  if (active) {
+    color = '#ffffff';
+  } else if (hovered) {
+    color = 'rgba(255,255,255,0.85)';
+  }
+
   return (
     <button
       onClick={onClick}
@@ -89,8 +104,8 @@ const NavItem: React.FC<NavItemProps> = ({ icon, label, active, onClick }) => {
       style={{
         display: 'flex', alignItems: 'center', gap: 10,
         width: '100%', padding: '9px 12px', borderRadius: 8, border: 'none',
-        background: active ? 'rgba(4,148,132,0.15)' : hovered ? 'rgba(255,255,255,0.05)' : 'transparent',
-        color: active ? '#ffffff' : hovered ? 'rgba(255,255,255,0.85)' : 'rgba(255,255,255,0.55)',
+        background,
+        color,
         fontSize: 14, fontWeight: active ? 600 : 400,
         cursor: 'pointer', textAlign: 'left',
         transition: 'all 0.15s ease', letterSpacing: '0.01em',
@@ -120,6 +135,27 @@ interface MenuItemProps {
 
 const MenuItem: React.FC<MenuItemProps> = ({ icon, label, sublabel, danger = false, onClick }) => {
   const [hov, setHov] = React.useState(false);
+
+  let background = 'transparent';
+  if (hov) {
+    if (danger) {
+      background = 'rgba(239,68,68,0.12)';
+    } else {
+      background = 'rgba(255,255,255,0.07)';
+    }
+  }
+
+  let color = 'rgba(255,255,255,0.7)';
+  if (danger) {
+    if (hov) {
+      color = '#f87171';
+    } else {
+      color = 'rgba(248,113,113,0.75)';
+    }
+  } else if (hov) {
+    color = '#ffffff';
+  }
+
   return (
     <button
       onClick={onClick}
@@ -129,12 +165,8 @@ const MenuItem: React.FC<MenuItemProps> = ({ icon, label, sublabel, danger = fal
         display: 'flex', alignItems: 'center', gap: 10,
         width: '100%', padding: '8px 12px',
         border: 'none', borderRadius: 6,
-        background: hov
-          ? danger ? 'rgba(239,68,68,0.12)' : 'rgba(255,255,255,0.07)'
-          : 'transparent',
-        color: danger
-          ? hov ? '#f87171' : 'rgba(248,113,113,0.75)'
-          : hov ? '#ffffff' : 'rgba(255,255,255,0.7)',
+        background,
+        color,
         cursor: 'pointer', textAlign: 'left',
         transition: 'all 0.12s ease',
       }}
@@ -164,6 +196,13 @@ export const AppSidebar: React.FC<AppSidebarProps> = ({
 
   useDismissOnOutsideClick(menuRef, menuOpen, () => setMenuOpen(false));
 
+  let userCardBackground = 'transparent';
+  if (menuOpen) {
+    userCardBackground = 'rgba(4,148,132,0.12)';
+  } else if (userHovered) {
+    userCardBackground = 'rgba(255,255,255,0.06)';
+  }
+
   return (
     <aside style={{
       width: 220, height: '100vh',
@@ -182,7 +221,7 @@ export const AppSidebar: React.FC<AppSidebarProps> = ({
           transform: 'translateX(-50%)',
           width: '150%', bottom: 52,
           objectFit: 'fill', objectPosition: 'top center',
-          opacity: 0.80, pointerEvents: 'none', userSelect: 'none',
+          opacity: 0.8, pointerEvents: 'none', userSelect: 'none',
         }}
       />
 
@@ -279,9 +318,7 @@ export const AppSidebar: React.FC<AppSidebarProps> = ({
             style={{
               display: 'flex', alignItems: 'center', gap: 10,
               width: '100%', padding: '8px 6px', borderRadius: 8, border: 'none',
-              background: menuOpen
-                ? 'rgba(4,148,132,0.12)'
-                : userHovered ? 'rgba(255,255,255,0.06)' : 'transparent',
+              background: userCardBackground,
               cursor: 'pointer', transition: 'background 0.15s ease', textAlign: 'left',
             }}
           >

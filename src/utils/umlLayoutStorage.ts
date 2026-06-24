@@ -12,7 +12,7 @@ export interface UmlViewport {
 
 /** Stable id segment for a UML class (matches ecoreToUml / layout map keys). */
 export function sanitizeUmlClassId(className: string): string {
-  return className.replace(/[^a-zA-Z0-9_]/g, '_');
+  return className.replace(/\W/g, '_');
 }
 
 export function umlClassNodeId(className: string): string {

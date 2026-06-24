@@ -28,7 +28,12 @@ const PortalMenuItem: React.FC<{ label: string; onClick: () => void; danger?: bo
 }) => (
   <button
     type="button"
-    onClick={onClick}
+    role="menuitem"
+    onMouseDown={e => e.stopPropagation()}
+    onClick={e => {
+      e.stopPropagation();
+      onClick();
+    }}
     style={{
       display: 'block',
       width: '100%',
@@ -88,6 +93,18 @@ export const PortalRowActionsMenu: React.FC<PortalRowActionsMenuProps> = ({
     };
   }, [open]);
 
+  useEffect(() => {
+    if (!open || !menuRef.current) return;
+    const menu = menuRef.current;
+    const stopPropagation = (e: Event) => e.stopPropagation();
+    menu.addEventListener('mousedown', stopPropagation);
+    menu.addEventListener('click', stopPropagation);
+    return () => {
+      menu.removeEventListener('mousedown', stopPropagation);
+      menu.removeEventListener('click', stopPropagation);
+    };
+  }, [open]);
+
   const toggleMenu = (e: React.MouseEvent) => {
     e.stopPropagation();
     setOpen(prev => {
@@ -99,6 +116,7 @@ export const PortalRowActionsMenu: React.FC<PortalRowActionsMenuProps> = ({
   const menu = open ? (
     <div
       ref={menuRef}
+      role="menu"
       style={{
         position: 'fixed',
         top: menuPos.top,
@@ -112,8 +130,6 @@ export const PortalRowActionsMenu: React.FC<PortalRowActionsMenuProps> = ({
         minWidth,
         overflow: 'hidden',
       }}
-      onMouseDown={e => e.stopPropagation()}
-      onClick={e => e.stopPropagation()}
     >
       {actions.map(action => (
         <React.Fragment key={action.label}>
@@ -138,6 +154,8 @@ export const PortalRowActionsMenu: React.FC<PortalRowActionsMenuProps> = ({
       <button
         type="button"
         ref={buttonRef}
+        aria-haspopup="menu"
+        aria-expanded={open}
         onClick={toggleMenu}
         style={{
           padding: '4px 8px',

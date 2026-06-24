@@ -35,7 +35,7 @@ export interface UMLDiagramMinimapProps {
   vx: number;
   vy: number;
   vscale: number;
-  containerRef: React.RefObject<HTMLDivElement | null>;
+  containerRef: React.RefObject<HTMLElement | null>;
   onViewportChange: (vx: number, vy: number) => void;
 }
 
@@ -49,7 +49,7 @@ export const UMLDiagramMinimap: React.FC<UMLDiagramMinimapProps> = ({
   containerRef,
   onViewportChange,
 }) => {
-  const mapRef = useRef<HTMLDivElement>(null);
+  const mapRef = useRef<HTMLButtonElement>(null);
   const [containerSize, setContainerSize] = useState({ width: 0, height: 0 });
 
   useEffect(() => {
@@ -164,11 +164,10 @@ export const UMLDiagramMinimap: React.FC<UMLDiagramMinimapProps> = ({
   if (classes.length === 0) return null;
 
   return (
-    <div
+    <button
       ref={mapRef}
-      role="group"
+      type="button"
       aria-label="Diagram overview — click or drag to pan"
-      tabIndex={0}
       onMouseDown={onMouseDown}
       onKeyDown={onKeyDown}
       style={{
@@ -177,6 +176,9 @@ export const UMLDiagramMinimap: React.FC<UMLDiagramMinimapProps> = ({
         bottom: 10,
         width: MAP_W,
         height: MAP_H,
+        display: 'block',
+        margin: 0,
+        padding: 0,
         background: 'rgba(255,255,255,0.96)',
         border: '1px solid #e2e8f0',
         borderRadius: 8,
@@ -223,6 +225,6 @@ export const UMLDiagramMinimap: React.FC<UMLDiagramMinimapProps> = ({
           />
         )}
       </svg>
-    </div>
+    </button>
   );
 };

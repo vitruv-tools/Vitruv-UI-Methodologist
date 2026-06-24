@@ -95,6 +95,12 @@ const EditInput: React.FC<{
 
 // ── ProfileView ───────────────────────────────────────────────────────────────
 
+function getVerificationStatus(verified: boolean | undefined): string | undefined {
+  if (verified === true) return '✓ Verified';
+  if (verified === false) return '✗ Not verified';
+  return undefined;
+}
+
 export const ProfileView: React.FC<ProfileViewProps> = ({ user, userRole = 'Methodologist', onNameSaved }) => {
   const changePassword = useChangePassword();
 
@@ -112,12 +118,7 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ user, userRole = 'Meth
   const [saving,    setSaving]    = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [saved,     setSaved]     = useState(false);
-  const verificationStatus =
-  verified === true
-    ? '✓ Verified'
-    : verified === false
-      ? '✗ Not verified'
-      : undefined;
+  const verificationStatus = getVerificationStatus(verified);
   // Load fresh data from backend on mount
   useEffect(() => {
     apiService.getUserInfo()

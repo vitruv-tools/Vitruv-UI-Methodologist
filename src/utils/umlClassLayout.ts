@@ -36,16 +36,21 @@ function getTreeWidth(nodeId: string, parentToChildren: Map<string, string[]>): 
   return children.reduce((sum, childId) => sum + getTreeWidth(childId, parentToChildren), 0);
 }
 
+interface TreeLayoutContext {
+  rootTreeWidth: number;
+  startY: number;
+  classes: UmlLayoutClass[];
+  parentToChildren: Map<string, string[]>;
+}
+
 function layoutTreeNode(
   nodeId: string,
   level: number,
   leftBound: number,
   rightBound: number,
-  rootTreeWidth: number,
-  startY: number,
-  classes: UmlLayoutClass[],
-  parentToChildren: Map<string, string[]>,
+  ctx: TreeLayoutContext,
 ): void {
+  const { rootTreeWidth, startY, classes, parentToChildren } = ctx;
   const node = findClass(classes, nodeId);
   if (!node) return;
 
@@ -60,7 +65,7 @@ function layoutTreeNode(
   children.forEach(childId => {
     const childWidth = getTreeWidth(childId, parentToChildren);
     const childSpace = (rightBound - leftBound) * (childWidth / Math.max(rootTreeWidth, 1));
-    layoutTreeNode(childId, level + 1, childX, childX + childSpace, rootTreeWidth, startY, classes, parentToChildren);
+    layoutTreeNode(childId, level + 1, childX, childX + childSpace, ctx);
     childX += childSpace;
   });
 }
@@ -213,7 +218,13 @@ function layoutComponent(
     roots.forEach(rootId => {
       const treeWidth = getTreeWidth(rootId, parentToChildren);
       const treeSpace = treeWidth * (BOX_W + H_SPACING);
-      layoutTreeNode(rootId, 0, currentX, currentX + treeSpace, treeWidth, startY, classes, parentToChildren);
+      const treeLayout: TreeLayoutContext = {
+        rootTreeWidth: treeWidth,
+        startY,
+        classes,
+        parentToChildren,
+      };
+      layoutTreeNode(rootId, 0, currentX, currentX + treeSpace, treeLayout);
       currentX += treeSpace + H_SPACING * 2;
     });
   } else {

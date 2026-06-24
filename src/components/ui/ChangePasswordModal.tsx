@@ -127,6 +127,22 @@ const ModalButton: React.FC<{
   const [hov, setHov] = useState(false);
   const isCancel = variant === 'cancel';
   const isDisabled = Boolean(disabled || isLoading);
+  let background: string;
+  if (isCancel) {
+    background = '#fff';
+  } else if (isDisabled) {
+    background = '#95a5a6';
+  } else {
+    background = 'linear-gradient(135deg, #049484 0%, #037368 100%)';
+  }
+  let opacity: number;
+  if (!isDisabled) {
+    opacity = 1;
+  } else if (isCancel) {
+    opacity = 0.5;
+  } else {
+    opacity = 0.6;
+  }
   return (
     <button
       onClick={onClick}
@@ -137,12 +153,12 @@ const ModalButton: React.FC<{
         padding: isCancel ? '12px 24px' : '12px 28px',
         borderRadius: 8,
         border: isCancel ? '2px solid #e5e7eb' : '2px solid #037368',
-        background: isCancel ? '#fff' : isDisabled ? '#95a5a6' : 'linear-gradient(135deg, #049484 0%, #037368 100%)',
+        background,
         color: isCancel ? '#374151' : '#fff',
         cursor: isDisabled ? 'not-allowed' : 'pointer',
         fontWeight: isCancel ? 600 : 700,
         fontSize: 14,
-        opacity: isDisabled ? (isCancel ? 0.5 : 0.6) : 1,
+        opacity,
         transform: !isCancel && hov && !isDisabled ? 'translateY(-1px)' : 'none',
       }}
     >

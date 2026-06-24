@@ -5,7 +5,7 @@ import { KeywordTagsInput } from './KeywordTagsInput';
 import { UMLDiagram, UMLDiagramHandle, UmlDiagramSaveContext } from '../canvas/UMLDiagram';
 import { FloatingUMLPanel } from '../canvas/FloatingUMLPanel';
 import { MetaModelFileDownloads } from './MetaModelFileDownloads';
-import { useModalBodyLock } from './modalUtils';
+import { useModalBodyLock, modalBackdropStyle } from './modalUtils';
 import {
   METAMODEL_PREVIEW_LAYOUT_SCOPE,
   metaModelPreviewLayoutFileName,
@@ -172,13 +172,19 @@ function getDTheme(domain?: string): DomainTheme {
   const key = domain?.toLowerCase().trim() || 'default';
   if (D_THEMES[key]) return D_THEMES[key];
   let h = 0;
-  for (let i = 0; i < key.length; i++) h = key.charCodeAt(i) + ((h << 5) - h);
+  for (let i = 0; i < key.length; ) {
+    const cp = key.codePointAt(i) ?? 0;
+    h = cp + ((h << 5) - h);
+    i += cp > 0xffff ? 2 : 1;
+  }
   return D_FALLBACK[Math.abs(h) % D_FALLBACK.length];
 }
 
 const DFieldLabel: React.FC<{ children: React.ReactNode }> = ({ children }) => (
   <div style={{ fontSize: 11, fontWeight: 700, color: '#374151', marginBottom: 5, letterSpacing: '0.01em', fontFamily: FONT }}>{children}</div>
 );
+
+const detailFieldLabelSt: React.CSSProperties = { display: 'block', fontSize: 11, fontWeight: 700, color: '#374151', marginBottom: 5, fontFamily: FONT };
 
 const DPreviewBtn: React.FC<{ title: string; onClick: () => void; children: React.ReactNode }> = ({ title, onClick, children }) => {
   const [hov, setHov] = React.useState(false);
@@ -267,8 +273,10 @@ export const ModelDetailModal: React.FC<ModelDetailModalProps> = ({
   const panel = (
       <div
         data-model-detail-modal
-        style={{ background: '#fff', borderRadius: 10, width: 'min(800px, 92vw)', height: 'min(640px, 88vh)', overflow: 'hidden', display: 'flex', flexDirection: 'column', boxShadow: '0 24px 64px rgba(0,0,0,0.22), 0 4px 16px rgba(0,0,0,0.10)', border: '1px solid #e2e8f0', fontFamily: FONT }}
-        onMouseDown={e => e.stopPropagation()}
+        role="dialog"
+        aria-modal="true"
+        aria-label={`Model Preview: ${model.name}`}
+        style={{ background: '#fff', borderRadius: 10, width: 'min(800px, 92vw)', height: 'min(640px, 88vh)', overflow: 'hidden', display: 'flex', flexDirection: 'column', boxShadow: '0 24px 64px rgba(0,0,0,0.22), 0 4px 16px rgba(0,0,0,0.10)', border: '1px solid #e2e8f0', fontFamily: FONT, pointerEvents: 'auto' }}
       >
         {/* ── Header ── */}
         <div style={{ padding: '14px 20px', background: '#ffffff', borderBottom: '1px solid #f1f5f9', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
@@ -317,20 +325,20 @@ export const ModelDetailModal: React.FC<ModelDetailModalProps> = ({
             {editing ? (
               <form onSubmit={handleSave} style={{ display: 'flex', flexDirection: 'column', gap: 14, flex: 1 }}>
                 <div>
-                  <label style={{ display: 'block', fontSize: 11, fontWeight: 700, color: '#374151', marginBottom: 5, fontFamily: FONT }}>Name</label>
-                  <input value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} style={detailInputSt} onFocus={e => (e.currentTarget.style.borderColor = '#049484')} onBlur={e => (e.currentTarget.style.borderColor = '#e2e8f0')} />
+                  <label htmlFor="model-detail-name" style={detailFieldLabelSt}>Name</label>
+                  <input id="model-detail-name" value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} style={detailInputSt} onFocus={e => (e.currentTarget.style.borderColor = '#049484')} onBlur={e => (e.currentTarget.style.borderColor = '#e2e8f0')} />
                 </div>
                 <div>
-                  <label style={{ display: 'block', fontSize: 11, fontWeight: 700, color: '#374151', marginBottom: 5, fontFamily: FONT }}>Description</label>
-                  <textarea value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))} rows={3} style={{ ...detailInputSt, resize: 'vertical', minHeight: 72 }} onFocus={e => (e.currentTarget.style.borderColor = '#049484')} onBlur={e => (e.currentTarget.style.borderColor = '#e2e8f0')} />
+                  <label htmlFor="model-detail-description" style={detailFieldLabelSt}>Description</label>
+                  <textarea id="model-detail-description" value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))} rows={3} style={{ ...detailInputSt, resize: 'vertical', minHeight: 72 }} onFocus={e => (e.currentTarget.style.borderColor = '#049484')} onBlur={e => (e.currentTarget.style.borderColor = '#e2e8f0')} />
                 </div>
                 <div>
-                  <label style={{ display: 'block', fontSize: 11, fontWeight: 700, color: '#374151', marginBottom: 5, fontFamily: FONT }}>Domain</label>
-                  <input value={form.domain} onChange={e => setForm(f => ({ ...f, domain: e.target.value }))} style={detailInputSt} onFocus={e => (e.currentTarget.style.borderColor = '#049484')} onBlur={e => (e.currentTarget.style.borderColor = '#e2e8f0')} />
+                  <label htmlFor="model-detail-domain" style={detailFieldLabelSt}>Domain</label>
+                  <input id="model-detail-domain" value={form.domain} onChange={e => setForm(f => ({ ...f, domain: e.target.value }))} style={detailInputSt} onFocus={e => (e.currentTarget.style.borderColor = '#049484')} onBlur={e => (e.currentTarget.style.borderColor = '#e2e8f0')} />
                 </div>
                 <div>
-                  <label style={{ display: 'block', fontSize: 11, fontWeight: 700, color: '#374151', marginBottom: 5, fontFamily: FONT }}>Keywords</label>
-                  <KeywordTagsInput keywords={form.keywords} onChange={kws => setForm(f => ({ ...f, keywords: kws }))} />
+                  <label htmlFor="model-detail-keywords" style={detailFieldLabelSt}>Keywords</label>
+                  <KeywordTagsInput id="model-detail-keywords" keywords={form.keywords} onChange={kws => setForm(f => ({ ...f, keywords: kws }))} />
                 </div>
                 {error   && <div style={{ padding: '8px 12px', background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 8, fontSize: 12, color: '#dc2626' }}>{error}</div>}
                 {success && <div style={{ padding: '8px 12px', background: '#f0fdf4', border: '1px solid #86efac', borderRadius: 8, fontSize: 12, color: '#15803d' }}>{success}</div>}
@@ -481,33 +489,43 @@ export const ModelDetailModal: React.FC<ModelDetailModalProps> = ({
   }
 
   return (
-    <div
-      role="presentation"
-      data-model-detail-backdrop
-      style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', backdropFilter: 'blur(8px)', WebkitBackdropFilter: 'blur(8px)', zIndex: 10000, display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: FONT }}
-      onMouseDown={(e) => {
-        if (!(e.target as HTMLElement).closest('[data-model-detail-modal]')) onClose();
-      }}
-    >
-      <style>{`@keyframes spin{0%{transform:rotate(0deg)}100%{transform:rotate(360deg)}}`}</style>
-      {panel}
-      {umlExpanded && ecoreContent && (
-        <FloatingUMLPanel
-          id={`metamodel-detail-${model.id}`}
-          title={model.name}
-          fileName={previewLayoutFile}
-          layoutScopeId={METAMODEL_PREVIEW_LAYOUT_SCOPE}
-          ecoreContent={ecoreContent}
-          saveContext={umlSaveContext}
-          onClose={() => setUmlExpanded(false)}
-          onFocus={() => {}}
-          ecoreFileId={model.ecoreFileId}
-          fetchEcoreFile={(fileId) => apiService.getFile(fileId)}
-          onEcoreContentUpdated={(content) => setEcoreContent(content)}
-          zIndex={10001}
-        />
-      )}
-    </div>
+    <>
+      <button
+        type="button"
+        aria-hidden="true"
+        tabIndex={-1}
+        data-model-detail-backdrop
+        onClick={onClose}
+        style={{ ...modalBackdropStyle, zIndex: 10000 }}
+      />
+      <div
+        style={{
+          position: 'fixed', inset: 0,
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          zIndex: 10001, fontFamily: FONT,
+          pointerEvents: 'none',
+        }}
+      >
+        <style>{`@keyframes spin{0%{transform:rotate(0deg)}100%{transform:rotate(360deg)}}`}</style>
+        {panel}
+        {umlExpanded && ecoreContent && (
+          <FloatingUMLPanel
+            id={`metamodel-detail-${model.id}`}
+            title={model.name}
+            fileName={previewLayoutFile}
+            layoutScopeId={METAMODEL_PREVIEW_LAYOUT_SCOPE}
+            ecoreContent={ecoreContent}
+            saveContext={umlSaveContext}
+            onClose={() => setUmlExpanded(false)}
+            onFocus={() => {}}
+            ecoreFileId={model.ecoreFileId}
+            fetchEcoreFile={(fileId) => apiService.getFile(fileId)}
+            onEcoreContentUpdated={(content) => setEcoreContent(content)}
+            zIndex={10002}
+          />
+        )}
+      </div>
+    </>
   );
 };
 
@@ -579,6 +597,32 @@ export const ModelLibraryTable: React.FC<ModelLibraryTableProps> = ({ onModelOpe
   const filtered = models.filter(m => typFilter === 'all' || m.domain === typFilter);
   const totalPages = Math.ceil(filtered.length / itemsPerPage);
   const page = filtered.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
+
+  const emptyRowStyle = { padding: '48px 16px', textAlign: 'center' as const, color: '#9ca3af', fontSize: 14 };
+  let tableBodyRows: React.ReactNode;
+  if (loading) {
+    tableBodyRows = (
+      <tr>
+        <td colSpan={5} style={emptyRowStyle}>Loading...</td>
+      </tr>
+    );
+  } else if (page.length === 0) {
+    tableBodyRows = (
+      <tr>
+        <td colSpan={5} style={emptyRowStyle}>
+          {search ? 'No results for this search.' : 'No models yet.'}
+        </td>
+      </tr>
+    );
+  } else {
+    tableBodyRows = page.map((model, idx) => (
+      <TableRow
+        key={model.id ?? idx}
+        model={model}
+        onView={() => setViewModel(model)}
+      />
+    ));
+  }
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
@@ -662,27 +706,7 @@ export const ModelLibraryTable: React.FC<ModelLibraryTableProps> = ({ onModelOpe
               </tr>
             </thead>
             <tbody>
-              {loading ? (
-                <tr>
-                  <td colSpan={5} style={{ padding: '48px 16px', textAlign: 'center', color: '#9ca3af', fontSize: 14 }}>
-                    Loading...
-                  </td>
-                </tr>
-              ) : page.length === 0 ? (
-                <tr>
-                  <td colSpan={5} style={{ padding: '48px 16px', textAlign: 'center', color: '#9ca3af', fontSize: 14 }}>
-                    {search ? 'No results for this search.' : 'No models yet.'}
-                  </td>
-                </tr>
-              ) : (
-                page.map((model, idx) => (
-                  <TableRow
-                    key={model.id ?? idx}
-                    model={model}
-                    onView={() => setViewModel(model)}
-                  />
-                ))
-              )}
+              {tableBodyRows}
             </tbody>
           </table>
         </div>
@@ -702,9 +726,9 @@ export const ModelLibraryTable: React.FC<ModelLibraryTableProps> = ({ onModelOpe
                   acc.push(p);
                   return acc;
                 }, [])
-                .map((p, i) =>
+                .map((p, i, items) =>
                   p === 'dots'
-                    ? <span key={`dots-${i}`} style={{ padding: '0 4px', color: '#9ca3af', fontSize: 13 }}>…</span>
+                    ? <span key={`dots-${items[i - 1]}-${items[i + 1]}`} style={{ padding: '0 4px', color: '#9ca3af', fontSize: 13 }}>…</span>
                     : <PageBtn key={p} active={p === currentPage} onClick={() => setCurrentPage(p as number)}>{p}</PageBtn>
                 )}
               <PageBtn disabled={currentPage === totalPages} onClick={() => setCurrentPage(p => p + 1)}>→</PageBtn>
@@ -783,7 +807,15 @@ interface PageBtnProps {
   onClick: () => void;
 }
 
-const PageBtn: React.FC<PageBtnProps> = ({ children, active, disabled, onClick }) => (
+const PageBtn: React.FC<PageBtnProps> = ({ children, active, disabled, onClick }) => {
+  let color = '#374151';
+  if (active) {
+    color = '#fff';
+  } else if (disabled) {
+    color = '#d1d5db';
+  }
+
+  return (
   <button
     onClick={onClick}
     disabled={disabled}
@@ -793,7 +825,7 @@ const PageBtn: React.FC<PageBtnProps> = ({ children, active, disabled, onClick }
       borderColor: active ? '#049484' : '#e5e7eb',
       borderRadius: 7,
       background: active ? '#049484' : '#fff',
-      color: active ? '#fff' : disabled ? '#d1d5db' : '#374151',
+      color,
       fontSize: 13,
       fontWeight: active ? 600 : 400,
       cursor: disabled ? 'not-allowed' : 'pointer',
@@ -802,4 +834,5 @@ const PageBtn: React.FC<PageBtnProps> = ({ children, active, disabled, onClick }
   >
     {children}
   </button>
-);
+  );
+};

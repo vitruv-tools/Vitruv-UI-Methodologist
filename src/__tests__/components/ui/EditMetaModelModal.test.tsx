@@ -52,7 +52,6 @@ const renderModal = (props: Partial<React.ComponentProps<typeof EditMetaModelMod
       isOpen
       onClose={jest.fn()}
       metaModel={baseMetaModel}
-      isOwner
       {...props}
     />,
   );
@@ -62,7 +61,7 @@ const renderModal = (props: Partial<React.ComponentProps<typeof EditMetaModelMod
 describe('EditMetaModelModal – visibility', () => {
   it('renders nothing when isOpen is false', () => {
     const { container } = render(
-      <EditMetaModelModal isOpen={false} onClose={jest.fn()} metaModel={baseMetaModel} isOwner />,
+      <EditMetaModelModal isOpen={false} onClose={jest.fn()} metaModel={baseMetaModel} />,
     );
     expect(container).toBeEmptyDOMElement();
   });
@@ -100,7 +99,6 @@ describe('EditMetaModelModal – form population', () => {
         isOpen
         onClose={jest.fn()}
         metaModel={{ ...baseMetaModel, name: 'UpdatedName' }}
-        isOwner
       />,
     );
     expect(screen.getByDisplayValue('UpdatedName')).toBeInTheDocument();

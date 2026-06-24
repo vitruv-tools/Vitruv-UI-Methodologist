@@ -1,23 +1,22 @@
 const { createProxyMiddleware } = require('http-proxy-middleware');
-const path = require('path');
+const path = require('node:path');
 
 // Read .env.local directly because REACT_APP_* vars may not be in
 // process.env at the time setupProxy.js is first executed by CRA.
 function loadEnvVar(name) {
   if (process.env[name]) return process.env[name];
-  try {
-    const fs = require('fs');
-    const envFile = path.resolve(__dirname, '..', '.env.local');
-    const lines = fs.readFileSync(envFile, 'utf8').split('\n');
-    for (const line of lines) {
-      const trimmed = line.trim();
-      if (trimmed.startsWith('#') || !trimmed.includes('=')) continue;
-      const eq = trimmed.indexOf('=');
-      const key = trimmed.slice(0, eq).trim();
-      const val = trimmed.slice(eq + 1).trim();
-      if (key === name) return val;
-    }
-  } catch (_) { /* .env.local missing — ignore */ }
+  const fs = require('node:fs');
+  const envFile = path.resolve(__dirname, '..', '.env.local');
+  if (!fs.existsSync(envFile)) return undefined;
+  const lines = fs.readFileSync(envFile, 'utf8').split('\n');
+  for (const line of lines) {
+    const trimmed = line.trim();
+    if (trimmed.startsWith('#') || !trimmed.includes('=')) continue;
+    const eq = trimmed.indexOf('=');
+    const key = trimmed.slice(0, eq).trim();
+    const val = trimmed.slice(eq + 1).trim();
+    if (key === name) return val;
+  }
   return undefined;
 }
 
