@@ -1625,16 +1625,13 @@ export const ConstraintsView: React.FC<ConstraintsViewProps> = ({ vsumId: _vsumI
   }, [syncRuleSet]);
 
   const handleRuleClick = useCallback((rule: ConstraintRule) => {
+    const next: ConstraintRule | null = selectedRule?.id === rule.id ? null : rule;
+    const metamodel = next ? oclGetContextType(next.oclDefinition).split('::')[0] : null;
+    const nodeId = metamodel ? findNodeIdForMetamodel(canvasNodes, metamodel) : null;
     setSelectedRuleSet(null);
-    setSelectedRule(prev => {
-      const isToggle = prev?.id === rule.id;
-      const next: ConstraintRule | null = isToggle ? null : rule;
-      const metamodel = next ? oclGetContextType(next.oclDefinition).split('::')[0] : null;
-      const nodeId = metamodel ? findNodeIdForMetamodel(canvasNodes, metamodel) : null;
-      onHighlightNode?.(nodeId);
-      return next;
-    });
-  }, [canvasNodes, onHighlightNode]);
+    setSelectedRule(next);
+    onHighlightNode?.(nodeId);
+  }, [selectedRule, canvasNodes, onHighlightNode]);
 
   const handleToggleCollapse = useCallback((id: string) => {
     setRuleSets(prev => prev.map(rs => rs.id === id ? { ...rs, collapsed: !rs.collapsed } : rs));
