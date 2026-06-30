@@ -94,6 +94,11 @@ export const PortalRowActionsMenu: React.FC<PortalRowActionsMenuProps> = ({
 
   useEffect(() => {
     if (!open) return;
+    menuRef.current?.focus();
+  }, [open]);
+
+  useEffect(() => {
+    if (!open) return;
 
     // Ignore the opening click/pointer sequence.
     ignoreOutsideUntilRef.current = Date.now() + 100;
@@ -143,8 +148,8 @@ export const PortalRowActionsMenu: React.FC<PortalRowActionsMenuProps> = ({
     <div
       ref={menuRef}
       role="menu"
-      onMouseDown={e => e.stopPropagation()}
-      onClick={e => e.stopPropagation()}
+      tabIndex={-1}
+      aria-label="Row actions menu"
       style={{
         position: 'fixed',
         top: menuPos.top,

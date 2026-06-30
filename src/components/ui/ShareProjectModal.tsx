@@ -15,7 +15,15 @@ interface ShareProjectModalProps {
   onInvited?: () => void;
 }
 
-const isValidEmail = (email: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim());
+const isValidEmail = (email: string): boolean => {
+  const trimmed = email.trim();
+  if (!trimmed || /\s/.test(trimmed)) return false;
+  const at = trimmed.indexOf('@');
+  if (at <= 0 || at !== trimmed.lastIndexOf('@')) return false;
+  const domain = trimmed.slice(at + 1);
+  const dot = domain.indexOf('.');
+  return dot > 0 && dot < domain.length - 1;
+};
 
 const isOwnerRole = (role?: string, roleEn?: string) =>
   role === 'OWNER' || (!!roleEn && roleEn.toLowerCase().includes('owner'));
@@ -133,7 +141,7 @@ export const ShareProjectModal: React.FC<ShareProjectModalProps> = ({
 
   const removeAccess = async (member: VsumUserResponse) => {
     const label = memberDisplayName(member);
-    const display = label !== 'Member' ? label : (member.email || 'this user');
+    const display = label === 'Member' ? (member.email || 'this user') : label;
 
     try {
       setErr('');
@@ -345,7 +353,7 @@ export const ShareProjectModal: React.FC<ShareProjectModalProps> = ({
   const removeLabel = memberToRemove
     ? (() => {
       const name = memberDisplayName(memberToRemove);
-      return name !== 'Member' ? name : (memberToRemove.email || 'this user');
+      return name === 'Member' ? (memberToRemove.email || 'this user') : name;
     })()
     : '';
 

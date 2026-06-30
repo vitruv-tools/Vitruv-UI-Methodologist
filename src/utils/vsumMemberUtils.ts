@@ -42,6 +42,16 @@ export function clearStoredProjectAccess(projectId: number | undefined): void {
   }
 }
 
+function resolveMergedSharedBy(
+  role: VsumRole | null,
+  patch: Partial<StoredProjectAccess>,
+  existing: StoredProjectAccess | null,
+): SharedByContact | null {
+  if (role === 'OWNER') return null;
+  if (patch.sharedBy === undefined) return existing?.sharedBy ?? null;
+  return patch.sharedBy;
+}
+
 /** Update stored access without dropping an existing shared-by contact. */
 export function mergeStoredProjectAccess(
   projectId: number,
@@ -50,9 +60,7 @@ export function mergeStoredProjectAccess(
   const existing = readStoredProjectAccess(projectId);
   const accessRole = patch.accessRole ?? existing?.accessRole;
   const role = resolveVsumAccessRole(accessRole);
-  const sharedBy = role === 'OWNER'
-    ? null
-    : (patch.sharedBy !== undefined ? patch.sharedBy : existing?.sharedBy ?? null);
+  const sharedBy = resolveMergedSharedBy(role, patch, existing);
   writeStoredProjectAccess(projectId, { accessRole, sharedBy });
 }
 
@@ -190,19 +198,16 @@ function storedOwnerContact(projectId: number): SharedByContact | null {
   return null;
 }
 
-/** Resolve project owner contact for shared viewers (list API, details, or stored access). */
-export async function fetchOwnerContactForVsum(
-  projectId: number,
-  ...hints: Array<Vsum | null | undefined>
-): Promise<SharedByContact | null> {
-  const fromStored = storedOwnerContact(projectId);
-  if (fromStored) return fromStored;
-
+function resolveSharedByFromHints(hints: Array<Vsum | null | undefined>): SharedByContact | null {
   for (const item of hints) {
-    const fromHint = item ? sharedByFromVsum(item) : null;
+    if (!item) continue;
+    const fromHint = sharedByFromVsum(item);
     if (fromHint) return fromHint;
   }
+  return null;
+}
 
+async function fetchOwnerFromMembers(projectId: number): Promise<SharedByContact | null> {
   try {
     const membersRes = await apiService.getVsumMembers(projectId);
     const members = parseVsumMembersResponse(membersRes);
@@ -215,30 +220,59 @@ export async function fetchOwnerContactForVsum(
   } catch {
     // members lookup is best-effort for viewers
   }
+  return null;
+}
 
+async function fetchSharedByFromList(projectId: number): Promise<SharedByContact | null> {
   try {
     const listRes = await apiService.getVsumsPaginated('', 0, 100);
     const listItem = (listRes.data ?? []).find(v => v.id === projectId);
-    const fromList = listItem ? sharedByFromVsum(listItem) : null;
-    if (fromList) return fromList;
+    if (!listItem) return null;
+    return sharedByFromVsum(listItem);
   } catch {
-    // list lookup is best-effort
+    return null;
   }
+}
 
+async function fetchSharedByFromVsum(projectId: number): Promise<SharedByContact | null> {
   try {
     const vsumRes = await apiService.getVsum(projectId);
-    const fromVsum = sharedByFromVsum(vsumRes.data);
-    if (fromVsum) return fromVsum;
+    return sharedByFromVsum(vsumRes.data);
   } catch {
-    // ignore
+    return null;
   }
+}
 
+async function fetchSharedByFromDetails(projectId: number): Promise<SharedByContact | null> {
   try {
     const detailsRes = await apiService.getVsumDetails(projectId);
     return sharedByFromVsum(detailsRes.data);
   } catch {
     return null;
   }
+}
+
+/** Resolve project owner contact for shared viewers (list API, details, or stored access). */
+export async function fetchOwnerContactForVsum(
+  projectId: number,
+  ...hints: Array<Vsum | null | undefined>
+): Promise<SharedByContact | null> {
+  const fromStored = storedOwnerContact(projectId);
+  if (fromStored) return fromStored;
+
+  const fromHints = resolveSharedByFromHints(hints);
+  if (fromHints) return fromHints;
+
+  const fromMembers = await fetchOwnerFromMembers(projectId);
+  if (fromMembers) return fromMembers;
+
+  const fromList = await fetchSharedByFromList(projectId);
+  if (fromList) return fromList;
+
+  const fromVsum = await fetchSharedByFromVsum(projectId);
+  if (fromVsum) return fromVsum;
+
+  return fetchSharedByFromDetails(projectId);
 }
 
 export function sharedByToMember(contact: SharedByContact, vsumId: number): VsumUserResponse {

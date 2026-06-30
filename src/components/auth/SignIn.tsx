@@ -1,9 +1,11 @@
 import React, { useEffect, useState } from 'react';
+import ReactDOM from 'react-dom';
 import { AuthService, SignInCredentials } from '../../services/auth';
 import { useAuth } from '../../contexts/AuthContext';
 import { apiService } from '../../services/api';
 import { AuthLayout, AuthErrorBanner } from './AuthLayout';
 import { KitLogoIcon } from './KitLogoIcon';
+import { MODAL_Z_INDEX, modalBackdropStyle, useModalBodyLock } from '../ui/modalUtils';
 
 interface SignInProps {
   onSignInSuccess: (user: any) => void;
@@ -34,14 +36,13 @@ export function SignIn({ onSignInSuccess, onSwitchToSignUp }: Readonly<SignInPro
     setForgotPasswordEmail('');
   };
 
-  const handleForgotPasswordBackdropClick = (e: React.MouseEvent<HTMLDivElement>) => {
-    if (e.target === e.currentTarget) {
-      closeForgotPasswordModal();
-    }
+  const handleForgotPasswordBackdropClick = () => {
+    if (isSendingReset) return;
+    closeForgotPasswordModal();
   };
 
-  const handleForgotPasswordBackdropKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
-    if (e.target !== e.currentTarget || isSendingReset) return;
+  const handleForgotPasswordBackdropKeyDown = (e: React.KeyboardEvent<HTMLButtonElement>) => {
+    if (isSendingReset) return;
     if (e.key === 'Enter' || e.key === ' ') {
       e.preventDefault();
       closeForgotPasswordModal();
@@ -59,7 +60,7 @@ export function SignIn({ onSignInSuccess, onSwitchToSignUp }: Readonly<SignInPro
     return () => globalThis.removeEventListener('keydown', onKeyDown);
   }, [isForgotPasswordOpen, isSendingReset]);
 
-  // Browser autofill does not fire onChange — sync DOM values into state.
+  useModalBodyLock(isForgotPasswordOpen);
   useEffect(() => {
     const syncAutofill = () => {
       const usernameEl = document.getElementById('username') as HTMLInputElement | null;
@@ -122,7 +123,7 @@ export function SignIn({ onSignInSuccess, onSwitchToSignUp }: Readonly<SignInPro
     setIsSendingReset(true);
     try {
       const response = await apiService.forgotPassword(forgotPasswordEmail);
-      setResetSuccess(response.message || 'Password reset instructions have been sent to your email!');
+      setResetSuccess(response.message || 'Password reset instructions have been sent to your email address.');
       setForgotPasswordEmail('');
       setTimeout(() => {
         setIsForgotPasswordOpen(false);
@@ -240,64 +241,143 @@ export function SignIn({ onSignInSuccess, onSwitchToSignUp }: Readonly<SignInPro
         </p>
       </div>
 
-      {/* Forgot Password Modal */}
-      {isForgotPasswordOpen && (
-        <div
-          className="modal-backdrop"
-          onClick={handleForgotPasswordBackdropClick}
-          onKeyDown={handleForgotPasswordBackdropKeyDown}
-          role="button"
-          tabIndex={isSendingReset ? -1 : 0}
-          aria-label="Close reset password dialog"
-        >
-          <dialog
-            className="modal-dialog"
-            open
-            aria-labelledby="forgot-password-title"
-            aria-describedby="forgot-password-description"
-            onCancel={(e) => {
-              if (isSendingReset) {
-                e.preventDefault();
-                return;
-              }
-              closeForgotPasswordModal();
+      {/* Forgot Password Modal — portaled and viewport-centered */}
+      {isForgotPasswordOpen && ReactDOM.createPortal(
+        <>
+          <button
+            type="button"
+            aria-label="Close password reset dialog"
+            tabIndex={isSendingReset ? -1 : 0}
+            onClick={handleForgotPasswordBackdropClick}
+            onKeyDown={handleForgotPasswordBackdropKeyDown}
+            style={{ ...modalBackdropStyle, zIndex: MODAL_Z_INDEX }}
+          />
+          <div
+            style={{
+              position: 'fixed',
+              inset: 0,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              zIndex: MODAL_Z_INDEX + 1,
+              pointerEvents: 'none',
+              padding: 16,
+              boxSizing: 'border-box',
             }}
           >
-            <div className="modal-header">
-              <h2 id="forgot-password-title">Reset Password</h2>
-              <p id="forgot-password-description">Enter your email address and we'll send you instructions to reset your password.</p>
-            </div>
-
-            {resetError && (
-              <div style={{ backgroundColor: '#fef2f2', color: '#991b1b', padding: '10px', borderRadius: '6px', marginBottom: '12px', fontSize: '13px' }}>
-                ⚠️ {resetError}
+            <div
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="forgot-password-title"
+              aria-describedby="forgot-password-description"
+              style={{
+                pointerEvents: 'auto',
+                background: '#ffffff',
+                borderRadius: 14,
+                padding: '28px 32px 24px',
+                width: '100%',
+                maxWidth: 400,
+                boxShadow: '0 20px 40px rgba(15, 23, 42, 0.14)',
+                textAlign: 'center',
+                boxSizing: 'border-box',
+              }}
+            >
+              <div style={{ marginBottom: 4 }}>
+                <h2
+                  id="forgot-password-title"
+                  style={{
+                    margin: '0 0 10px 0',
+                    fontSize: 20,
+                    fontWeight: 700,
+                    color: '#0f172a',
+                    letterSpacing: '-0.01em',
+                  }}
+                >
+                  Password Reset
+                </h2>
+                <p
+                  id="forgot-password-description"
+                  style={{
+                    margin: '0 0 20px 0',
+                    color: '#64748b',
+                    fontSize: 14,
+                    lineHeight: 1.55,
+                    maxWidth: '20rem',
+                    marginLeft: 'auto',
+                    marginRight: 'auto',
+                  }}
+                >
+                  Enter your registered email address. Password reset instructions will be sent to your inbox.
+                </p>
               </div>
-            )}
-            {resetSuccess && (
-              <div style={{ backgroundColor: '#ecfdf5', color: '#065f46', padding: '10px', borderRadius: '6px', marginBottom: '12px', fontSize: '13px' }}>
-                ✅ {resetSuccess}
+
+              {resetError && (
+                <div style={{
+                  padding: '10px 12px',
+                  borderRadius: 8,
+                  marginBottom: 12,
+                  fontSize: 13,
+                  lineHeight: 1.45,
+                  textAlign: 'center',
+                  background: '#fef2f2',
+                  color: '#991b1b',
+                }}
+                >
+                  {resetError}
+                </div>
+              )}
+              {resetSuccess && (
+                <div style={{
+                  padding: '10px 12px',
+                  borderRadius: 8,
+                  marginBottom: 12,
+                  fontSize: 13,
+                  lineHeight: 1.45,
+                  textAlign: 'center',
+                  background: '#ecfdf5',
+                  color: '#065f46',
+                }}
+                >
+                  {resetSuccess}
+                </div>
+              )}
+
+              <input
+                type="email"
+                className="modal-input"
+                placeholder="Email address"
+                value={forgotPasswordEmail}
+                onChange={(e) => setForgotPasswordEmail(e.target.value)}
+                disabled={isSendingReset}
+                style={{
+                  width: '100%',
+                  padding: '12px 14px',
+                  border: '1px solid #cbd5e1',
+                  borderRadius: 8,
+                  boxSizing: 'border-box',
+                  fontSize: 14,
+                  textAlign: 'left',
+                }}
+              />
+
+              <div style={{
+                display: 'flex',
+                justifyContent: 'center',
+                gap: 10,
+                marginTop: 22,
+              }}
+              >
+                <button type="button" className="btn-secondary" onClick={closeForgotPasswordModal} disabled={isSendingReset}>
+                  Cancel
+                </button>
+                <button type="button" className="btn-primary-gradient" onClick={handleForgotPassword} disabled={isSendingReset}>
+                  {isSendingReset ? 'Sending…' : 'Send instructions'}
+                </button>
               </div>
-            )}
-
-            <input
-              type="email"
-              className="modal-input"
-              placeholder="Email address"
-              value={forgotPasswordEmail}
-              onChange={(e) => setForgotPasswordEmail(e.target.value)}
-              disabled={isSendingReset}
-            />
-
-            <div className="modal-actions">
-              <button type="button" className="btn-secondary" onClick={closeForgotPasswordModal} disabled={isSendingReset}>
-                Cancel
-              </button>
-              <button type="button" className="btn-primary-gradient" onClick={handleForgotPassword} disabled={isSendingReset}>
-                {isSendingReset ? 'Sending...' : 'Send Reset Link'}
-              </button>
             </div>
-          </dialog>
-        </div>
+          </div>
+        </>,
+        document.body,
       )}
     </AuthLayout>
   );

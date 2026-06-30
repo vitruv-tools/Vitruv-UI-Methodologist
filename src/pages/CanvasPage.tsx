@@ -164,6 +164,165 @@ function finalizeVsumTabBaseline(
   }
 }
 
+function applyVsumAccessAfterDetails(
+  vsumId: number,
+  mergedRole: VsumRole | null,
+  loadStoredRole: VsumRole | null,
+  loadNavRole: VsumRole | null,
+  loadInferredRole: VsumRole | null,
+  ownerContact: SharedByContact | null,
+  setProjectSharer: React.Dispatch<React.SetStateAction<VsumUserResponse | null>>,
+): void {
+  if (ownerContact) {
+    setProjectSharer(sharedByToMember(ownerContact, vsumId));
+    mergeStoredProjectAccess(vsumId, {
+      accessRole: mergedRole ?? loadStoredRole ?? loadNavRole ?? 'VIEWER',
+      sharedBy: ownerContact,
+    });
+    return;
+  }
+  const isOwnerAccess = mergedRole === 'OWNER' || (!loadInferredRole && mergedRole !== 'VIEWER');
+  if (isOwnerAccess) {
+    mergeStoredProjectAccess(vsumId, {
+      accessRole: mergedRole ?? 'OWNER',
+      sharedBy: null,
+    });
+    return;
+  }
+  const persistedSharedBy = readStoredProjectAccess(vsumId)?.sharedBy;
+  if (persistedSharedBy) {
+    setProjectSharer(sharedByToMember(persistedSharedBy, vsumId));
+  }
+}
+
+type ApplyProjectMembersFn = (
+  members: VsumUserResponse[],
+  options?: { fallbackRole?: VsumRole | null; sharedBy?: SharedByContact | null; vsumId?: number },
+) => void;
+
+async function loadVsumProjectMembers(
+  vsumId: number,
+  applyProjectMembers: ApplyProjectMembersFn,
+  memberOptions: { fallbackRole?: VsumRole | null; sharedBy?: SharedByContact | null; vsumId?: number },
+): Promise<void> {
+  try {
+    const membersRes = await apiService.getVsumMembers(vsumId);
+    applyProjectMembers(parseVsumMembersResponse(membersRes), memberOptions);
+  } catch {
+    applyProjectMembers([], memberOptions);
+  }
+}
+
+async function syncVsumApiRole(
+  vsumId: number,
+  loadStoredRole: VsumRole | null,
+  loadNavRole: VsumRole | null,
+  loadInferredRole: VsumRole | null,
+  noteApiRole: (projectId: number, role: VsumRole | null) => void,
+): Promise<void> {
+  try {
+    const vsumRes = await apiService.getVsum(vsumId);
+    const apiRole = resolveVsumAccessRole(vsumRes.data?.role, vsumRes.data?.roleEn);
+    const merged = pickMostRestrictiveRole(apiRole, loadStoredRole, loadNavRole, loadInferredRole);
+    if (merged) noteApiRole(vsumId, merged);
+  } catch {
+    // Role may already be set from members list or navigation state.
+  }
+}
+
+interface HydrateCanvasWorkspaceParams {
+  details: VsumDetails;
+  forInstanceId?: string;
+  activeInstanceId: string | null;
+  flowCanvasRef: React.RefObject<{ getNodes?: () => Node[] } | null>;
+  canvasMode: CanvasMode;
+  setConstraintsNodes: React.Dispatch<React.SetStateAction<Node[]>>;
+  setMyLibraryModels: React.Dispatch<React.SetStateAction<DrawerModel[]>>;
+  setPublicLibraryModels: React.Dispatch<React.SetStateAction<DrawerModel[]>>;
+}
+
+async function hydrateCanvasWorkspace(params: HydrateCanvasWorkspaceParams): Promise<boolean> {
+  const {
+    details,
+    forInstanceId,
+    activeInstanceId,
+    flowCanvasRef,
+    canvasMode,
+    setConstraintsNodes,
+    setMyLibraryModels,
+    setPublicLibraryModels,
+  } = params;
+  const isStale = () => isStaleTabLoad(forInstanceId, activeInstanceId);
+
+  const { myModels, publicModels } = await fetchLibraryDrawerModels();
+  setMyLibraryModels(myModels);
+  setPublicLibraryModels(publicModels);
+  if (isStale()) return false;
+
+  await dispatchWorkspaceMetaModels(details.metaModels || []);
+  if (isStale()) return false;
+
+  await waitForMetaModelsOnCanvas(
+    () => flowCanvasRef.current?.getNodes?.() ?? [],
+    details.metaModels ?? [],
+  );
+  if (isStale()) return false;
+
+  if (canvasMode === 'constraints') {
+    setConstraintsNodes(flowCanvasRef.current?.getNodes?.() ?? []);
+  }
+
+  await dispatchMetaModelRelations(details.metaModelsRelation);
+  if (isStale()) return false;
+
+  await new Promise(r => setTimeout(r, 150));
+  if (isStale()) return false;
+
+  globalThis.dispatchEvent(new CustomEvent('vitruv.fitEcoreWorkspace'));
+  return true;
+}
+
+function persistLeavingTabSession(
+  previousId: string | null,
+  nextId: string | null,
+  loadingTabId: string | null,
+  cancelled: boolean,
+  openTabs: OpenCanvasTab[],
+  sessions: Map<string, CanvasTabSession>,
+  captureSession: () => CanvasTabSession,
+): void {
+  if (!previousId || previousId === nextId || loadingTabId === previousId) return;
+  const tabStillOpen = openTabs.some(t => t.instanceId === previousId);
+  if (!cancelled && tabStillOpen) {
+    sessions.set(previousId, captureSession());
+  }
+}
+
+async function loadOpenCanvasTab(
+  nextId: string,
+  cancelled: boolean,
+  openTabs: OpenCanvasTab[],
+  loadingTabRef: React.MutableRefObject<string | null>,
+  clearCanvasWorkspace: () => void,
+  loadVsum: (vsumId: number, forInstanceId?: string) => Promise<void>,
+): Promise<void> {
+  const tab = openTabs.find(t => t.instanceId === nextId);
+  if (!tab) return;
+
+  if (!cancelled) {
+    loadingTabRef.current = nextId;
+    clearCanvasWorkspace();
+    globalThis.dispatchEvent(new CustomEvent('vitruv.resetWorkspace'));
+  }
+  try {
+    await loadVsum(tab.projectId, nextId);
+  } finally {
+    if (loadingTabRef.current === nextId) {
+      loadingTabRef.current = null;
+    }
+  }
+}
+
 const fetchEcoreFileById = (fileId: number) => apiService.getFile(fileId);
 
 type PopupNotificationType = 'success' | 'error' | 'info';
@@ -420,11 +579,10 @@ export const CanvasPage: React.FC = () => {
     bumpProjectRole();
   }, [bumpProjectRole]);
 
-  const effectiveVsumRole = activeProjectId
-    ? resolveProjectAccessRole(activeProjectId, projectApiRolesRef.current.get(activeProjectId))
-    : null;
-  // roleRevision ensures recompute after API role updates land in the ref
-  void roleRevision;
+  const effectiveVsumRole = React.useMemo(() => {
+    if (!activeProjectId || roleRevision < 0) return null;
+    return resolveProjectAccessRole(activeProjectId, projectApiRolesRef.current.get(activeProjectId));
+  }, [activeProjectId, roleRevision]);
 
   const isViewOnly = effectiveVsumRole === 'VIEWER';
   const canShare = effectiveVsumRole === 'OWNER';
@@ -441,7 +599,7 @@ export const CanvasPage: React.FC = () => {
   }, [projectSharer, activeProjectId]);
 
   const isViewOnlyProject = useCallback((projectId: number): boolean => {
-    void roleRevision;
+    if (roleRevision < 0) return false;
     return resolveProjectAccessRole(projectId, projectApiRolesRef.current.get(projectId)) === 'VIEWER';
   }, [roleRevision]);
 
@@ -822,6 +980,11 @@ export const CanvasPage: React.FC = () => {
     const loadStoredRole = resolveVsumAccessRole(stored?.accessRole);
     const loadNavRole = resolveVsumAccessRole(navAccess?.accessRole);
     const loadInferredRole: VsumRole | null = (stored?.sharedBy || navAccess?.sharedBy) ? 'VIEWER' : null;
+    const memberOptions = {
+      fallbackRole: navAccessRole,
+      sharedBy: stored?.sharedBy ?? navAccess?.sharedBy ?? null,
+      vsumId,
+    };
 
     try {
       const response = await apiService.getVsumDetails(vsumId);
@@ -842,78 +1005,31 @@ export const CanvasPage: React.FC = () => {
       if (mergedRole) noteApiRole(vsumId, mergedRole);
 
       const ownerContact = await fetchOwnerContactForVsum(vsumId, details);
-      if (ownerContact) {
-        setProjectSharer(sharedByToMember(ownerContact, vsumId));
-        mergeStoredProjectAccess(vsumId, {
-          accessRole: mergedRole ?? loadStoredRole ?? loadNavRole ?? 'VIEWER',
-          sharedBy: ownerContact,
-        });
-      } else if (mergedRole === 'OWNER' || (!loadInferredRole && mergedRole !== 'VIEWER')) {
-        mergeStoredProjectAccess(vsumId, {
-          accessRole: mergedRole ?? 'OWNER',
-          sharedBy: null,
-        });
-      } else {
-        const persistedSharedBy = readStoredProjectAccess(vsumId)?.sharedBy;
-        if (persistedSharedBy) {
-          setProjectSharer(sharedByToMember(persistedSharedBy, vsumId));
-        }
-      }
+      applyVsumAccessAfterDetails(
+        vsumId,
+        mergedRole,
+        loadStoredRole,
+        loadNavRole,
+        loadInferredRole,
+        ownerContact,
+        setProjectSharer,
+      );
       viewerLastUpdatedRef.current = details.updatedAt ?? null;
 
-      try {
-        const membersRes = await apiService.getVsumMembers(vsumId);
-        applyProjectMembers(parseVsumMembersResponse(membersRes), {
-          fallbackRole: navAccessRole,
-          sharedBy: stored?.sharedBy ?? navAccess?.sharedBy ?? null,
-          vsumId,
-        });
-      } catch {
-        applyProjectMembers([], {
-          fallbackRole: navAccessRole,
-          sharedBy: stored?.sharedBy ?? navAccess?.sharedBy ?? null,
-          vsumId,
-        });
-      }
+      await loadVsumProjectMembers(vsumId, applyProjectMembers, memberOptions);
+      await syncVsumApiRole(vsumId, loadStoredRole, loadNavRole, loadInferredRole, noteApiRole);
 
-      try {
-        const vsumRes = await apiService.getVsum(vsumId);
-        const apiRole = resolveVsumAccessRole(vsumRes.data?.role, vsumRes.data?.roleEn);
-        const merged = pickMostRestrictiveRole(
-          apiRole,
-          loadStoredRole,
-          loadNavRole,
-          loadInferredRole,
-        );
-        if (merged) noteApiRole(vsumId, merged);
-      } catch {
-        // Role may already be set from members list or navigation state.
-      }
-
-      const { myModels, publicModels } = await fetchLibraryDrawerModels();
-      setMyLibraryModels(myModels);
-      setPublicLibraryModels(publicModels);
-      if (isStaleTabLoad(forInstanceId, activeInstanceIdRef.current)) return;
-
-      await dispatchWorkspaceMetaModels(details.metaModels || []);
-      if (isStaleTabLoad(forInstanceId, activeInstanceIdRef.current)) return;
-
-      await waitForMetaModelsOnCanvas(
-        () => flowCanvasRef.current?.getNodes?.() ?? [],
-        details.metaModels ?? [],
-      );
-      if (isStaleTabLoad(forInstanceId, activeInstanceIdRef.current)) return;
-
-      if (canvasModeRef.current === 'constraints') {
-        setConstraintsNodes(flowCanvasRef.current?.getNodes?.() ?? []);
-      }
-
-      await dispatchMetaModelRelations(details.metaModelsRelation);
-      if (isStaleTabLoad(forInstanceId, activeInstanceIdRef.current)) return;
-
-      await new Promise(r => setTimeout(r, 150));
-      if (isStaleTabLoad(forInstanceId, activeInstanceIdRef.current)) return;
-      globalThis.dispatchEvent(new CustomEvent('vitruv.fitEcoreWorkspace'));
+      const hydrated = await hydrateCanvasWorkspace({
+        details,
+        forInstanceId,
+        activeInstanceId: activeInstanceIdRef.current,
+        flowCanvasRef,
+        canvasMode: canvasModeRef.current,
+        setConstraintsNodes,
+        setMyLibraryModels,
+        setPublicLibraryModels,
+      });
+      if (!hydrated) return;
 
       finalizeVsumTabBaseline(
         openTabsRef.current,
@@ -994,13 +1110,15 @@ export const CanvasPage: React.FC = () => {
       const previousId = prevActiveInstanceIdRef.current;
       const nextId = activeInstanceId;
 
-      if (previousId && previousId !== nextId && loadingTabRef.current !== previousId) {
-        const session = captureRef.current();
-        const tabStillOpen = openTabsRef.current.some(t => t.instanceId === previousId);
-        if (!cancelled && tabStillOpen) {
-          sessionsRef.current.set(previousId, session);
-        }
-      }
+      persistLeavingTabSession(
+        previousId,
+        nextId,
+        loadingTabRef.current,
+        cancelled,
+        openTabsRef.current,
+        sessionsRef.current,
+        () => captureRef.current(),
+      );
 
       prevActiveInstanceIdRef.current = nextId;
       if (!nextId) return;
@@ -1012,29 +1130,20 @@ export const CanvasPage: React.FC = () => {
 
       const cached = sessionsRef.current.get(nextId);
       if (cached && loadedTabsRef.current.has(nextId)) {
-        const tab = openTabsRef.current.find(t => t.instanceId === nextId);
-        if (tab) bumpProjectRole();
+        if (openTabsRef.current.some(t => t.instanceId === nextId)) bumpProjectRole();
         applyRef.current(cached);
         return;
       }
       sessionsRef.current.delete(nextId);
 
-      const tab = openTabsRef.current.find(t => t.instanceId === nextId);
-      if (tab) {
-        sessionsRef.current.delete(nextId);
-        if (!cancelled) {
-          loadingTabRef.current = nextId;
-          clearCanvasWorkspace();
-          globalThis.dispatchEvent(new CustomEvent('vitruv.resetWorkspace'));
-        }
-        try {
-          await loadVsum(tab.projectId, nextId);
-        } finally {
-          if (loadingTabRef.current === nextId) {
-            loadingTabRef.current = null;
-          }
-        }
-      }
+      await loadOpenCanvasTab(
+        nextId,
+        cancelled,
+        openTabsRef.current,
+        loadingTabRef,
+        clearCanvasWorkspace,
+        loadVsum,
+      );
     };
 
     run();
@@ -1125,43 +1234,26 @@ export const CanvasPage: React.FC = () => {
     fileContent: string,
     meta?: EcoreFileExpandMeta,
   ) => {
-    const PANEL_TOP = openTabs.length > 0 ? CENTER_STACK_BOTTOM + 8 : MODE_TOGGLE_TOP + MODE_TOGGLE_HEIGHT + 8;
-    const PANEL_BOTTOM_USED = 228; // bottom margin(16) + minimap(204) + gap(8)
-    const panelH = Math.max(200, document.documentElement.clientHeight - PANEL_TOP - PANEL_BOTTOM_USED);
+    const layout = computeUmlPanelLayout(openTabs.length);
+    const resolved = enrichEcoreMetaFromCanvas(
+      fileName,
+      fileContent,
+      meta,
+      () => flowCanvasRef.current?.getNodes?.() ?? [],
+    );
 
-    let metaModelId = meta?.metaModelId;
-    let metaModelSourceId = meta?.metaModelSourceId;
-    let ecoreFileId = meta?.ecoreFileId;
-    let content = fileContent;
-
-    if (ecoreFileId == null || metaModelId == null) {
-      const node = flowCanvasRef.current?.getNodes?.().find(
-        (n: Node) => n.type === 'ecoreFile' && n.data.fileName === fileName,
-      );
-      if (node?.data) {
-        metaModelId = metaModelId ?? (typeof node.data.metaModelId === 'number' ? node.data.metaModelId : undefined);
-        metaModelSourceId = metaModelSourceId ?? (
-          typeof node.data.metaModelSourceId === 'number' ? node.data.metaModelSourceId : undefined
-        );
-        ecoreFileId = ecoreFileId ?? (typeof node.data.ecoreFileId === 'number' ? node.data.ecoreFileId : undefined);
-        if (!content?.trim() && typeof node.data.fileContent === 'string') {
-          content = node.data.fileContent;
-        }
-      }
+    const loadedContent = await loadEcoreFileContent(
+      fileName,
+      resolved.content,
+      resolved.ecoreFileId,
+      flowCanvasRef.current?.updateEcoreFileData,
+    );
+    if (loadedContent === null) {
+      setPopup({ message: 'Could not load UML diagram for this meta-model.', type: 'error' });
+      setTimeout(() => setPopup(null), 4000);
+      return;
     }
-
-    if (!content?.trim() && ecoreFileId != null) {
-      try {
-        content = await apiService.getFile(ecoreFileId);
-        flowCanvasRef.current?.updateEcoreFileData?.(fileName, content, ecoreFileId);
-      } catch {
-        setPopup({ message: 'Could not load UML diagram for this meta-model.', type: 'error' });
-        setTimeout(() => setPopup(null), 4000);
-        return;
-      }
-    }
-
-    if (!content?.trim()) {
+    if (!loadedContent.trim()) {
       setPopup({ message: 'No UML content available for this meta-model.', type: 'error' });
       setTimeout(() => setPopup(null), 4000);
       return;
@@ -1171,20 +1263,20 @@ export const CanvasPage: React.FC = () => {
       id: `panel-${Date.now()}`,
       title: fileName.replace(/\.ecore$/, ''),
       fileName,
-      ecoreContent: content,
-      metaModelId,
-      metaModelSourceId,
-      ecoreFileId,
+      ecoreContent: loadedContent,
+      metaModelId: resolved.metaModelId,
+      metaModelSourceId: resolved.metaModelSourceId,
+      ecoreFileId: resolved.ecoreFileId,
       layoutScopeId: canvasUmlLayoutScope(activeProjectId),
       layoutStorageKey: canvasUmlLayoutFileName({
         fileName,
-        metaModelSourceId,
-        metaModelId,
+        metaModelSourceId: resolved.metaModelSourceId,
+        metaModelId: resolved.metaModelId,
       }),
-      top: PANEL_TOP,
+      top: layout.top,
       right: 16,
       width: 200,
-      height: panelH,
+      height: layout.height,
     };
     setUmlPanels(prev => [...prev, newPanel]);
     setTopPanelId(newPanel.id);
@@ -1814,6 +1906,138 @@ function isPanelMemberPending(m: VsumUserResponse): boolean {
   return m.status === 'PENDING' || m.pending === true;
 }
 
+function formatPeopleCount(count: number): string {
+  if (count === 1) return '1 person';
+  return `${count} people`;
+}
+
+function formatStackMemberLabel(count: number): string {
+  if (count <= 0) return 'People';
+  return formatPeopleCount(count);
+}
+
+function resolveCollaboratorStackTitle(
+  isSharedAccess: boolean,
+  projectSharer: VsumUserResponse | null,
+): string {
+  if (isSharedAccess && projectSharer) {
+    return `Shared by ${panelMemberName(projectSharer)}`;
+  }
+  return 'People with access';
+}
+
+function resolveStackAvatars(
+  isSharedAccess: boolean,
+  projectSharer: VsumUserResponse | null,
+  collaborators: Collaborator[],
+  myAccount: Collaborator,
+): Collaborator[] {
+  if (isSharedAccess && projectSharer) {
+    return membersToCollaborators([projectSharer]).slice(0, 3);
+  }
+  if (collaborators.length > 0) {
+    return collaborators.slice(0, 3);
+  }
+  return [myAccount];
+}
+
+function resolveSharedAccessSubtitle(membersLoading: boolean): string {
+  if (membersLoading) return 'Loading owner details…';
+  return 'Shared with you by the project owner';
+}
+
+function resolveMembersPanelSubtitle(options: {
+  isSharedAccess: boolean;
+  projectSharer: VsumUserResponse | null;
+  membersLoading: boolean;
+  isViewOnly: boolean;
+  memberCount: number;
+}): string {
+  const { isSharedAccess, projectSharer, membersLoading, isViewOnly, memberCount } = options;
+  if (isSharedAccess && projectSharer) {
+    return `Shared by ${panelMemberName(projectSharer)}`;
+  }
+  if (isSharedAccess) {
+    return resolveSharedAccessSubtitle(membersLoading);
+  }
+  if (isViewOnly) {
+    return 'You have view-only access to this project';
+  }
+  if (memberCount > 0) {
+    return `${formatPeopleCount(memberCount)} can access this project`;
+  }
+  return 'No members loaded yet';
+}
+
+function computeUmlPanelLayout(openTabCount: number): { top: number; height: number } {
+  const top = openTabCount > 0 ? CENTER_STACK_BOTTOM + 8 : MODE_TOGGLE_TOP + MODE_TOGGLE_HEIGHT + 8;
+  const bottomUsed = 228;
+  return {
+    top,
+    height: Math.max(200, document.documentElement.clientHeight - top - bottomUsed),
+  };
+}
+
+function numberFromNodeData(value: unknown): number | undefined {
+  return typeof value === 'number' ? value : undefined;
+}
+
+interface ResolvedEcoreMeta {
+  metaModelId?: number;
+  metaModelSourceId?: number;
+  ecoreFileId?: number;
+  content: string;
+}
+
+function enrichEcoreMetaFromCanvas(
+  fileName: string,
+  fileContent: string,
+  meta: EcoreFileExpandMeta | undefined,
+  getNodes: () => Node[],
+): ResolvedEcoreMeta {
+  let metaModelId = meta?.metaModelId;
+  let metaModelSourceId = meta?.metaModelSourceId;
+  let ecoreFileId = meta?.ecoreFileId;
+  let content = fileContent;
+
+  if (ecoreFileId != null && metaModelId != null) {
+    return { metaModelId, metaModelSourceId, ecoreFileId, content };
+  }
+
+  const node = getNodes().find(
+    (n: Node) => n.type === 'ecoreFile' && n.data.fileName === fileName,
+  );
+  if (!node?.data) {
+    return { metaModelId, metaModelSourceId, ecoreFileId, content };
+  }
+
+  metaModelId = metaModelId ?? numberFromNodeData(node.data.metaModelId);
+  metaModelSourceId = metaModelSourceId ?? numberFromNodeData(node.data.metaModelSourceId);
+  ecoreFileId = ecoreFileId ?? numberFromNodeData(node.data.ecoreFileId);
+  if (!content?.trim() && typeof node.data.fileContent === 'string') {
+    content = node.data.fileContent;
+  }
+  return { metaModelId, metaModelSourceId, ecoreFileId, content };
+}
+
+async function loadEcoreFileContent(
+  fileName: string,
+  content: string,
+  ecoreFileId: number | undefined,
+  updateEcoreFileData?: (fileName: string, content: string, ecoreFileId: number) => void,
+): Promise<string | null> {
+  if (content?.trim()) return content;
+  if (ecoreFileId == null) return content;
+
+  try {
+    const loaded = await apiService.getFile(ecoreFileId);
+    updateEcoreFileData?.(fileName, loaded, ecoreFileId);
+    return loaded;
+  } catch {
+    return null;
+  }
+}
+
 interface AvatarProps {
   initials: string;
   bg: string;
@@ -1927,9 +2151,7 @@ const CollaboratorStackButton: React.FC<CollaboratorStackButtonProps> = ({
       ))}
     </span>
     <span style={{ fontSize: 12, fontWeight: 600, color: '#334155', whiteSpace: 'nowrap' }}>
-      {memberCount > 0
-        ? `${memberCount} ${memberCount === 1 ? 'person' : 'people'}`
-        : 'People'}
+      {formatStackMemberLabel(memberCount)}
     </span>
     <svg
       width="12"
@@ -1949,6 +2171,279 @@ const CollaboratorStackButton: React.FC<CollaboratorStackButtonProps> = ({
 );
 
 // ── RightPill ─────────────────────────────────────────────────────────────────
+
+interface PeoplePanelMemberRowProps {
+  member: VsumUserResponse;
+  index: number;
+  projectSharer: VsumUserResponse | null;
+  isSharedAccess: boolean;
+  isViewOnly: boolean;
+  canShare: boolean;
+  currentUserEmail?: string;
+  removingMemberId: number | null;
+  onRemoveMember?: (vsumUserId: number) => void | Promise<void>;
+  onRequestRemove: (member: VsumUserResponse) => void;
+}
+
+const PeoplePanelMemberRow: React.FC<PeoplePanelMemberRowProps> = ({
+  member,
+  index,
+  projectSharer,
+  isSharedAccess,
+  isViewOnly,
+  canShare,
+  currentUserEmail,
+  removingMemberId,
+  onRemoveMember,
+  onRequestRemove,
+}) => {
+  const name = panelMemberName(member);
+  const role = panelMemberRole(member);
+  const pending = isPanelMemberPending(member);
+  const isSelf = currentUserEmail
+    ? member.email?.toLowerCase() === currentUserEmail.toLowerCase()
+    : false;
+  const isSharer = projectSharer?.id === member.id
+    || projectSharer?.email?.toLowerCase() === member.email?.toLowerCase();
+  const color = MEMBER_AVATAR_COLORS[index % MEMBER_AVATAR_COLORS.length];
+
+  return (
+    <div
+      style={{
+        display: 'flex',
+        alignItems: 'center',
+        gap: 12,
+        padding: '8px 8px',
+        borderRadius: 8,
+        background: isSharer && isSharedAccess ? '#f8fafc' : 'transparent',
+      }}
+    >
+      <UserAvatar
+        initials={getUserInitials(name, member.email)}
+        bg={color}
+        size={36}
+        title={name}
+      />
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div
+          title={name}
+          style={{
+            fontSize: 13,
+            fontWeight: 600,
+            color: '#0f172a',
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+            whiteSpace: 'nowrap',
+          }}
+        >
+          {isSelf ? `${name} (you)` : name}
+        </div>
+        <div
+          title={member.email}
+          style={{
+            fontSize: 11,
+            color: '#64748b',
+            marginTop: 1,
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+            whiteSpace: 'nowrap',
+          }}
+        >
+          {isSharer && isSharedAccess ? 'Project owner' : member.email}
+        </div>
+      </div>
+      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 4, flexShrink: 0 }}>
+        <span style={{
+          display: 'inline-block',
+          padding: '2px 8px',
+          borderRadius: 20,
+          fontSize: 10,
+          fontWeight: 700,
+          ...panelRoleChipStyle(role),
+        }}>
+          {isSelf && isViewOnly ? 'Viewer' : role}
+        </span>
+        {pending && (
+          <span style={{
+            fontSize: 10,
+            fontWeight: 700,
+            color: '#c2410c',
+            background: '#fff7ed',
+            border: '1px solid #fed7aa',
+            borderRadius: 20,
+            padding: '1px 7px',
+          }}>
+            Pending
+          </span>
+        )}
+        {canShare && onRemoveMember && role !== 'Owner' && !isSelf && (
+          <button
+            type="button"
+            disabled={removingMemberId === member.id}
+            onClick={() => onRequestRemove(member)}
+            style={{
+              padding: '2px 8px',
+              borderRadius: 6,
+              border: '1px solid #fecaca',
+              background: '#fff5f5',
+              color: '#dc2626',
+              fontSize: 10,
+              fontWeight: 700,
+              cursor: removingMemberId === member.id ? 'wait' : 'pointer',
+              opacity: removingMemberId === member.id ? 0.6 : 1,
+            }}
+          >
+            {removingMemberId === member.id ? 'Removing…' : 'Remove access'}
+          </button>
+        )}
+      </div>
+    </div>
+  );
+};
+
+interface PeopleAccessPanelProps {
+  isSharedAccess: boolean;
+  isViewOnly: boolean;
+  canShare: boolean;
+  membersLoading: boolean;
+  memberCount: number;
+  panelMembers: VsumUserResponse[];
+  projectSharer: VsumUserResponse | null;
+  currentUserEmail?: string;
+  removingMemberId: number | null;
+  onRemoveMember?: (vsumUserId: number) => void | Promise<void>;
+  onRefreshMembers: () => void;
+  onRequestRemove: (member: VsumUserResponse) => void;
+  onShareClick: () => void;
+  onClose: () => void;
+}
+
+const PeopleAccessPanel: React.FC<PeopleAccessPanelProps> = ({
+  isSharedAccess,
+  isViewOnly,
+  canShare,
+  membersLoading,
+  memberCount,
+  panelMembers,
+  projectSharer,
+  currentUserEmail,
+  removingMemberId,
+  onRemoveMember,
+  onRefreshMembers,
+  onRequestRemove,
+  onShareClick,
+  onClose,
+}) => (
+  <div style={{
+    position: 'absolute',
+    top: 'calc(100% + 8px)',
+    right: 0,
+    width: 340,
+    maxWidth: '92vw',
+    background: '#ffffff',
+    borderRadius: 12,
+    boxShadow: '0 12px 40px rgba(0,0,0,0.14), 0 0 0 1px rgba(0,0,0,0.06)',
+    border: '1px solid #e2e8f0',
+    overflow: 'hidden',
+    zIndex: 500,
+  }}>
+    <div style={{ padding: '14px 16px 12px', borderBottom: '1px solid #f1f5f9' }}>
+      <div style={{ fontSize: 15, fontWeight: 700, color: '#0f172a' }}>
+        {isSharedAccess ? 'Shared with you' : 'People with access'}
+      </div>
+      <div style={{ fontSize: 12, color: '#64748b', marginTop: 3, lineHeight: 1.4 }}>
+        {resolveMembersPanelSubtitle({
+          isSharedAccess,
+          projectSharer,
+          membersLoading,
+          isViewOnly,
+          memberCount,
+        })}
+      </div>
+    </div>
+
+    <div style={{
+      padding: '6px 8px',
+      maxHeight: 280,
+      overflowY: 'auto',
+      scrollbarWidth: 'thin',
+    }}>
+      {membersLoading && panelMembers.length === 0 && (
+        <div style={{ padding: '12px 8px', fontSize: 13, color: '#64748b', fontStyle: 'italic' }}>
+          Loading…
+        </div>
+      )}
+      {!membersLoading && panelMembers.map((member, index) => (
+        <PeoplePanelMemberRow
+          key={`${member.id}-${member.email}`}
+          member={member}
+          index={index}
+          projectSharer={projectSharer}
+          isSharedAccess={isSharedAccess}
+          isViewOnly={isViewOnly}
+          canShare={canShare}
+          currentUserEmail={currentUserEmail}
+          removingMemberId={removingMemberId}
+          onRemoveMember={onRemoveMember}
+          onRequestRemove={onRequestRemove}
+        />
+      ))}
+      {!membersLoading && panelMembers.length === 0 && (
+        <div style={{ padding: '12px 8px', display: 'grid', gap: 8 }}>
+          <div style={{ fontSize: 13, color: '#64748b' }}>
+            {isSharedAccess
+              ? 'Member list is not available for viewers. You can still view this project.'
+              : 'Could not load project members.'}
+          </div>
+          <button
+            type="button"
+            onClick={onRefreshMembers}
+            style={{
+              justifySelf: 'start',
+              padding: '6px 12px',
+              borderRadius: 8,
+              border: '1px solid #e2e8f0',
+              background: '#fff',
+              color: '#334155',
+              fontSize: 12,
+              fontWeight: 600,
+              cursor: 'pointer',
+            }}
+          >
+            Retry
+          </button>
+        </div>
+      )}
+    </div>
+
+    {canShare && (
+      <div style={{ padding: '10px 12px 12px', borderTop: '1px solid #f1f5f9' }}>
+        <button
+          type="button"
+          onClick={() => { onClose(); onShareClick(); }}
+          style={{
+            width: '100%',
+            padding: '9px 12px',
+            border: 'none',
+            borderRadius: 8,
+            background: '#049484',
+            color: '#fff',
+            fontSize: 13,
+            fontWeight: 700,
+            cursor: 'pointer',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: 6,
+          }}
+        >
+          <ShareIcon />
+          Invite viewer
+        </button>
+      </div>
+    )}
+  </div>
+);
 
 interface RightPillProps {
   projectMembers: VsumUserResponse[];
@@ -2025,11 +2520,8 @@ const RightPill: React.FC<RightPillProps> = ({
     projectSharer ? [projectSharer, ...projectMembers] : projectMembers,
   );
   const memberCount = panelMembers.length;
-  const stackAvatars = (
-    isSharedAccess && projectSharer
-      ? membersToCollaborators([projectSharer])
-      : collaborators.length > 0 ? collaborators : [myAccount]
-  ).slice(0, 3);
+  const stackAvatars = resolveStackAvatars(isSharedAccess, projectSharer, collaborators, myAccount);
+  const stackTitle = resolveCollaboratorStackTitle(isSharedAccess, projectSharer);
 
   const toggleMembersPanel = useCallback(() => {
     setShowAccounts(current => {
@@ -2059,11 +2551,7 @@ const RightPill: React.FC<RightPillProps> = ({
         memberCount={memberCount}
         open={showAccounts}
         onClick={toggleMembersPanel}
-        title={
-          isSharedAccess && projectSharer
-            ? `Shared by ${panelMemberName(projectSharer)}`
-            : 'People with access'
-        }
+        title={stackTitle}
       />
 
       <Divider />
@@ -2131,206 +2619,22 @@ const RightPill: React.FC<RightPillProps> = ({
 
       {/* ── People panel ── */}
       {showAccounts && (
-        <div style={{
-          position: 'absolute',
-          top: 'calc(100% + 8px)',
-          right: 0,
-          width: 340,
-          maxWidth: '92vw',
-          background: '#ffffff',
-          borderRadius: 12,
-          boxShadow: '0 12px 40px rgba(0,0,0,0.14), 0 0 0 1px rgba(0,0,0,0.06)',
-          border: '1px solid #e2e8f0',
-          overflow: 'hidden',
-          zIndex: 500,
-        }}>
-          <div style={{ padding: '14px 16px 12px', borderBottom: '1px solid #f1f5f9' }}>
-            <div style={{ fontSize: 15, fontWeight: 700, color: '#0f172a' }}>
-              {isSharedAccess ? 'Shared with you' : 'People with access'}
-            </div>
-            <div style={{ fontSize: 12, color: '#64748b', marginTop: 3, lineHeight: 1.4 }}>
-              {isSharedAccess && projectSharer
-                ? `Shared by ${panelMemberName(projectSharer)}`
-                : isSharedAccess
-                  ? (membersLoading ? 'Loading owner details…' : 'Shared with you by the project owner')
-                  : isViewOnly
-                    ? 'You have view-only access to this project'
-                    : memberCount > 0
-                      ? `${memberCount} ${memberCount === 1 ? 'person' : 'people'} can access this project`
-                      : 'No members loaded yet'}
-            </div>
-          </div>
-
-          <div style={{
-            padding: '6px 8px',
-            maxHeight: 280,
-            overflowY: 'auto',
-            scrollbarWidth: 'thin',
-          }}>
-            {membersLoading && panelMembers.length === 0 && (
-              <div style={{ padding: '12px 8px', fontSize: 13, color: '#64748b', fontStyle: 'italic' }}>
-                Loading…
-              </div>
-            )}
-            {!membersLoading && panelMembers.map((m, index) => {
-              const name = panelMemberName(m);
-              const role = panelMemberRole(m);
-              const pending = isPanelMemberPending(m);
-              const isSelf = currentUserEmail
-                ? m.email?.toLowerCase() === currentUserEmail.toLowerCase()
-                : false;
-              const isSharer = projectSharer?.id === m.id
-                || (projectSharer?.email && m.email?.toLowerCase() === projectSharer.email.toLowerCase());
-              const color = MEMBER_AVATAR_COLORS[index % MEMBER_AVATAR_COLORS.length];
-              return (
-                <div
-                  key={`${m.id}-${m.email}`}
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: 12,
-                    padding: '8px 8px',
-                    borderRadius: 8,
-                    background: isSharer && isSharedAccess ? '#f8fafc' : 'transparent',
-                  }}
-                >
-                  <UserAvatar
-                    initials={getUserInitials(name, m.email)}
-                    bg={color}
-                    size={36}
-                    title={name}
-                  />
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <div
-                      title={name}
-                      style={{
-                        fontSize: 13,
-                        fontWeight: 600,
-                        color: '#0f172a',
-                        overflow: 'hidden',
-                        textOverflow: 'ellipsis',
-                        whiteSpace: 'nowrap',
-                      }}
-                    >
-                      {isSelf ? `${name} (you)` : name}
-                    </div>
-                    <div
-                      title={m.email}
-                      style={{
-                        fontSize: 11,
-                        color: '#64748b',
-                        marginTop: 1,
-                        overflow: 'hidden',
-                        textOverflow: 'ellipsis',
-                        whiteSpace: 'nowrap',
-                      }}
-                    >
-                      {isSharer && isSharedAccess ? 'Project owner' : m.email}
-                    </div>
-                  </div>
-                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 4, flexShrink: 0 }}>
-                    <span style={{
-                      display: 'inline-block',
-                      padding: '2px 8px',
-                      borderRadius: 20,
-                      fontSize: 10,
-                      fontWeight: 700,
-                      ...panelRoleChipStyle(role),
-                    }}>
-                      {isSelf && isViewOnly ? 'Viewer' : role}
-                    </span>
-                    {pending && (
-                      <span style={{
-                        fontSize: 10,
-                        fontWeight: 700,
-                        color: '#c2410c',
-                        background: '#fff7ed',
-                        border: '1px solid #fed7aa',
-                        borderRadius: 20,
-                        padding: '1px 7px',
-                      }}>
-                        Pending
-                      </span>
-                    )}
-                    {canShare && onRemoveMember && role !== 'Owner' && !isSelf && (
-                      <button
-                        type="button"
-                        disabled={removingMemberId === m.id}
-                        onClick={() => setRemoveConfirmMember(m)}
-                        style={{
-                          padding: '2px 8px',
-                          borderRadius: 6,
-                          border: '1px solid #fecaca',
-                          background: '#fff5f5',
-                          color: '#dc2626',
-                          fontSize: 10,
-                          fontWeight: 700,
-                          cursor: removingMemberId === m.id ? 'wait' : 'pointer',
-                          opacity: removingMemberId === m.id ? 0.6 : 1,
-                        }}
-                      >
-                        {removingMemberId === m.id ? 'Removing…' : 'Remove access'}
-                      </button>
-                    )}
-                  </div>
-                </div>
-              );
-            })}
-            {!membersLoading && panelMembers.length === 0 && (
-              <div style={{ padding: '12px 8px', display: 'grid', gap: 8 }}>
-                <div style={{ fontSize: 13, color: '#64748b' }}>
-                  {isSharedAccess
-                    ? 'Member list is not available for viewers. You can still view this project.'
-                    : 'Could not load project members.'}
-                </div>
-                <button
-                  type="button"
-                  onClick={onRefreshMembers}
-                  style={{
-                    justifySelf: 'start',
-                    padding: '6px 12px',
-                    borderRadius: 8,
-                    border: '1px solid #e2e8f0',
-                    background: '#fff',
-                    color: '#334155',
-                    fontSize: 12,
-                    fontWeight: 600,
-                    cursor: 'pointer',
-                  }}
-                >
-                  Retry
-                </button>
-              </div>
-            )}
-          </div>
-
-          {canShare && (
-            <div style={{ padding: '10px 12px 12px', borderTop: '1px solid #f1f5f9' }}>
-              <button
-                type="button"
-                onClick={() => { setShowAccounts(false); onShareClick(); }}
-                style={{
-                  width: '100%',
-                  padding: '9px 12px',
-                  border: 'none',
-                  borderRadius: 8,
-                  background: '#049484',
-                  color: '#fff',
-                  fontSize: 13,
-                  fontWeight: 700,
-                  cursor: 'pointer',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  gap: 6,
-                }}
-              >
-                <ShareIcon />
-                Invite viewer
-              </button>
-            </div>
-          )}
-        </div>
+        <PeopleAccessPanel
+          isSharedAccess={isSharedAccess}
+          isViewOnly={isViewOnly}
+          canShare={canShare}
+          membersLoading={membersLoading}
+          memberCount={memberCount}
+          panelMembers={panelMembers}
+          projectSharer={projectSharer}
+          currentUserEmail={currentUserEmail}
+          removingMemberId={removingMemberId}
+          onRemoveMember={onRemoveMember}
+          onRefreshMembers={onRefreshMembers}
+          onRequestRemove={setRemoveConfirmMember}
+          onShareClick={onShareClick}
+          onClose={() => setShowAccounts(false)}
+        />
       )}
 
       {showProfileModal && (

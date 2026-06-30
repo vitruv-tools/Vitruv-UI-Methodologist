@@ -105,7 +105,15 @@ const memberDisplayName = (m: VsumUserResponse) => {
   return '—';
 };
 
-const isValidEmail = (email: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim());
+const isValidEmail = (email: string): boolean => {
+  const trimmed = email.trim();
+  if (!trimmed || /\s/.test(trimmed)) return false;
+  const at = trimmed.indexOf('@');
+  if (at <= 0 || at !== trimmed.lastIndexOf('@')) return false;
+  const domain = trimmed.slice(at + 1);
+  const dot = domain.indexOf('.');
+  return dot > 0 && dot < domain.length - 1;
+};
 
 export const VsumUsersTab: React.FC<Props> = ({ vsumId, onChanged, canManage = true }) => {
   const [members, setMembers] = useState<VsumUserResponse[]>([]);

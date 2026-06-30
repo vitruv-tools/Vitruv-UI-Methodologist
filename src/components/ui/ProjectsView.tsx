@@ -39,6 +39,24 @@ const formatDate = (iso: string) => {
   return new Date(iso).toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' });
 };
 
+const formatAccessRoleLabel = (role: string): string => {
+  if (role === 'VIEWER') return 'Viewer';
+  if (role === 'OWNER') return 'Owner';
+  return 'Member';
+};
+
+const emptyProjectListTitle = (view: ProjectListView): string => {
+  if (view === 'deleted') return 'No deleted projects';
+  if (view === 'shared') return 'No shared projects';
+  return 'No projects yet';
+};
+
+const emptyProjectListHint = (view: ProjectListView): string => {
+  if (view === 'deleted') return 'You have no deleted projects.';
+  if (view === 'shared') return 'Projects shared with you by other owners will appear here.';
+  return 'Create your first project.';
+};
+
 const DeletedProjectStatusBadge: React.FC<{ removedAt?: string | null }> = ({ removedAt }) => {
   const days = getDaysUntilPermanentDelete(removedAt);
   const urgency = getDeletionUrgency(days);
@@ -137,7 +155,7 @@ const ProjectRow: React.FC<ProjectRowProps> = ({
               border: '1px solid',
               ...roleBadgeStyle(role),
             }}>
-              {role === 'VIEWER' ? 'Viewer' : role === 'OWNER' ? 'Owner' : 'Member'}
+              {formatAccessRoleLabel(role)}
             </span>
           )}
         </div>
@@ -378,16 +396,8 @@ export const ProjectsView: React.FC<ProjectsViewProps> = ({
     });
 
   const showDeleted = projectView === 'deleted';
-  const emptyTitle = showDeleted
-    ? 'No deleted projects'
-    : projectView === 'shared'
-      ? 'No shared projects'
-      : 'No projects yet';
-  const emptyHint = showDeleted
-    ? 'You have no deleted projects.'
-    : projectView === 'shared'
-      ? 'Projects shared with you by other owners will appear here.'
-      : 'Create your first project.';
+  const emptyTitle = emptyProjectListTitle(projectView);
+  const emptyHint = emptyProjectListHint(projectView);
 
   // ── render ────────────────────────────────────────────────────────────────
 
