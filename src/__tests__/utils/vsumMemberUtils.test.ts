@@ -80,7 +80,7 @@ describe('vsumMemberUtils', () => {
       createdAt: '',
       updatedAt: '',
       owner: { firstName: 'Nino', lastName: 'Beriashvili', email: 'nino@example.com' },
-    } as Vsum);
+    });
     expect(contact?.email).toBe('nino@example.com');
     expect(contact?.firstName).toBe('Nino');
   });
