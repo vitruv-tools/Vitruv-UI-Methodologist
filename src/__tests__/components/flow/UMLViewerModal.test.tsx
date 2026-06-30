@@ -1,5 +1,5 @@
 import React from 'react';
-import { fireEvent, render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen } from '@testing-library/react';
 import { UMLViewerModal } from '../../../components/flow/UMLViewerModal';
 
 jest.mock('reactflow', () => ({
@@ -113,22 +113,23 @@ describe('UMLViewerModal – additional tests', () => {
     addSpy.mockRestore();
   });
 
-  it('toggles edge selection when edge-clicked is dispatched', async () => {
+  it('toggles edge selection when edge-clicked is dispatched', () => {
     render(<UMLViewerModal isOpen ecoreContent="<ecore/>" onClose={jest.fn()} />);
 
-    await new Promise(r => setTimeout(r, 0));
+    act(() => {
+      globalThis.dispatchEvent(
+        new CustomEvent('edge-clicked', {
+          detail: { edgeId: 'uml-edge-1', currentlySelected: false },
+        }),
+      );
+    });
 
-    globalThis.dispatchEvent(
-      new CustomEvent('edge-clicked', {
-        detail: { edgeId: 'uml-edge-1', currentlySelected: false },
-      }),
-    );
-
-    // Re-dispatch should not throw; selection state is internal
-    globalThis.dispatchEvent(
-      new CustomEvent('edge-clicked', {
-        detail: { edgeId: 'uml-edge-1', currentlySelected: true },
-      }),
-    );
+    act(() => {
+      globalThis.dispatchEvent(
+        new CustomEvent('edge-clicked', {
+          detail: { edgeId: 'uml-edge-1', currentlySelected: true },
+        }),
+      );
+    });
   });
 });

@@ -156,6 +156,9 @@ describe('SignIn – forgot password dialog', () => {
     jest.clearAllMocks();
   });
 
+  const forgotPasswordDialogTitle = () =>
+    screen.findByRole('heading', { name: 'Password Reset' });
+
   const renderSignIn = () =>
     render(
       <SignIn
@@ -169,7 +172,7 @@ describe('SignIn – forgot password dialog', () => {
     await userEvent.click(
       screen.getByRole('button', { name: /Forgot Password\?/i }),
     );
-    expect(await screen.findByText(/Password Reset/i)).toBeInTheDocument();
+    expect(await forgotPasswordDialogTitle()).toBeInTheDocument();
   });
 
   it('closes dialog when Cancel button is clicked', async () => {
@@ -177,12 +180,12 @@ describe('SignIn – forgot password dialog', () => {
     await userEvent.click(
       screen.getByRole('button', { name: /Forgot Password\?/i }),
     );
-    await screen.findByText(/Password Reset/i);
+    await forgotPasswordDialogTitle();
 
     await userEvent.click(screen.getByRole('button', { name: /Cancel/i }));
 
     await waitFor(() => {
-      expect(screen.queryByText(/Password Reset/i)).not.toBeInTheDocument();
+      expect(screen.queryByRole('heading', { name: 'Password Reset' })).not.toBeInTheDocument();
     });
   });
 
