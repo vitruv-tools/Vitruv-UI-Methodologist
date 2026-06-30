@@ -3,13 +3,15 @@ import ReactDOM from 'react-dom';
 import { apiService } from '../../services/api';
 import { VsumDetails } from '../../types';
 import { VsumUsersTab } from './VsumUsersTab';
-import { useModalBodyLock } from './modalUtils';
+import { MODAL_Z_INDEX, useModalBodyLock } from './modalUtils';
 
 interface Props {
   isOpen: boolean;
   vsumId: number | null;
   onClose: () => void;
   onSaved?: () => void;
+  /** When false, details are read-only and user management is hidden. */
+  canManage?: boolean;
 }
 
 // Helper Components
@@ -254,7 +256,7 @@ const overlay: React.CSSProperties = {
   display: 'flex',
   alignItems: 'center',
   justifyContent: 'center',
-  zIndex: 9999,
+  zIndex: MODAL_Z_INDEX,
   margin: 0,
   padding: 0,
   border: 'none',
@@ -319,7 +321,7 @@ const confirmOverlay: React.CSSProperties = {
   display: 'flex',
   alignItems: 'center',
   justifyContent: 'center',
-  zIndex: 10000,
+  zIndex: MODAL_Z_INDEX + 1,
   margin: 0,
   padding: 0,
   border: 'none',
@@ -589,7 +591,7 @@ const VersionCard: React.FC<VersionCardProps> = ({
   );
 };
 
-export const VsumDetailsModal: React.FC<Props> = ({ isOpen, vsumId, onClose, onSaved }) => {
+export const VsumDetailsModal: React.FC<Props> = ({ isOpen, vsumId, onClose, onSaved, canManage = true }) => {
   const [details, setDetails] = useState<VsumDetails | null>(null);
   const [name, setName] = useState('');
   const [error, setError] = useState('');
@@ -725,6 +727,8 @@ export const VsumDetailsModal: React.FC<Props> = ({ isOpen, vsumId, onClose, onS
           style={textInput}
           value={name}
           onChange={(e) => setName(e.target.value)}
+          readOnly={!canManage}
+          disabled={!canManage}
           onFocus={(e) => {
             e.currentTarget.style.borderColor = '#049484';
             e.currentTarget.style.background = '#ffffff';
@@ -786,9 +790,9 @@ export const VsumDetailsModal: React.FC<Props> = ({ isOpen, vsumId, onClose, onS
   };
 
   const renderFooterActions = () => {
-    const showRecover = details?.removedAt;
-    const showDelete = activeTab === 'details' && !details?.removedAt;
-    const showSave = activeTab === 'details';
+    const showRecover = canManage && details?.removedAt;
+    const showDelete = canManage && activeTab === 'details' && !details?.removedAt;
+    const showSave = canManage && activeTab === 'details';
 
     return (
       <>
@@ -952,16 +956,20 @@ export const VsumDetailsModal: React.FC<Props> = ({ isOpen, vsumId, onClose, onS
                   isActive={activeTab === 'details'}
                   onClick={() => setActiveTab('details')}
                 />
-                <TabButton
-                  label="Manage Users"
-                  isActive={activeTab === 'users'}
-                  onClick={() => setActiveTab('users')}
-                />
-                <TabButton
-                  label="Versions"
-                  isActive={activeTab === 'versions'}
-                  onClick={() => setActiveTab('versions')}
-                />
+                {canManage && (
+                  <>
+                    <TabButton
+                      label="Manage Users"
+                      isActive={activeTab === 'users'}
+                      onClick={() => setActiveTab('users')}
+                    />
+                    <TabButton
+                      label="Versions"
+                      isActive={activeTab === 'versions'}
+                      onClick={() => setActiveTab('versions')}
+                    />
+                  </>
+                )}
                 <button aria-label="Close" style={closeBtn} onClick={onClose}>
                   ×
                 </button>
@@ -973,7 +981,9 @@ export const VsumDetailsModal: React.FC<Props> = ({ isOpen, vsumId, onClose, onS
               {recoverError && <ErrorMessage message={recoverError} />}
 
               {activeTab === 'details' && renderDetailsContent()}
-              {activeTab === 'users' && vsumId && <VsumUsersTab vsumId={vsumId} onChanged={onSaved} />}
+              {activeTab === 'users' && vsumId && canManage && (
+                <VsumUsersTab vsumId={vsumId} onChanged={onSaved} canManage={canManage} />
+              )}
               {activeTab === 'versions' && renderVersionsContent()}
             </div>
 

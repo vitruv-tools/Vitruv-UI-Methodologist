@@ -116,6 +116,13 @@ describe('CodeEditorModal', () => {
     expect(screen.queryByText(/Reaction Editor/i)).not.toBeInTheDocument();
   });
 
+  it('hides edit controls in read-only mode', () => {
+    render(<CodeEditorModal {...defaultProps} readOnly />);
+    expect(screen.queryByRole('button', { name: 'Save' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Delete Relation' })).not.toBeInTheDocument();
+    expect(screen.getByText(/changes are not allowed/i)).toBeInTheDocument();
+  });
+
   it('updates code when editor content changes', () => {
     render(<CodeEditorModal {...defaultProps} />);
 

@@ -9,6 +9,7 @@ const AUTH_STYLES = `
     width: 100vw;
     height: 100vh;
     overflow: hidden;
+    min-height: 0;
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
     margin: 0;
     padding: 0;
@@ -54,11 +55,14 @@ const AUTH_STYLES = `
     position: relative;
     z-index: 2;
     flex: 1;
+    min-height: 0;
     display: flex;
-    align-items: center;
+    align-items: flex-start;
     justify-content: center;
-    padding: 40px;
+    padding: 32px 40px;
     box-sizing: border-box;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
   }
 
   @media (max-width: 950px) {
@@ -76,6 +80,8 @@ const AUTH_STYLES = `
     text-align: center;
     box-sizing: border-box;
     transform: translate(-100px, 0px);
+    margin: auto 0;
+    flex-shrink: 0;
   }
 
   .mock-logo-container {

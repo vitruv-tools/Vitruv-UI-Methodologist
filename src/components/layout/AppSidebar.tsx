@@ -13,8 +13,7 @@ interface AppSidebarProps {
   userName?: string;
   userRole?: string;
   userEmail?: string;
-
-
+  sharedProjectsUnreadCount?: number;
   onLogout?: () => void;
 }
 
@@ -77,9 +76,10 @@ interface NavItemProps {
   label: string;
   active: boolean;
   onClick: () => void;
+  badgeCount?: number;
 }
 
-const NavItem: React.FC<NavItemProps> = ({ icon, label, active, onClick }) => {
+const NavItem: React.FC<NavItemProps> = ({ icon, label, active, onClick, badgeCount = 0 }) => {
   const [hovered, setHovered] = React.useState(false);
 
   let background = 'transparent';
@@ -112,7 +112,29 @@ const NavItem: React.FC<NavItemProps> = ({ icon, label, active, onClick }) => {
       }}
     >
       <span style={{ color: active ? '#4ecdc4' : 'inherit', flexShrink: 0 }}>{icon}</span>
-      <span>{label}</span>
+      <span style={{ flex: 1 }}>{label}</span>
+      {badgeCount > 0 && (
+        <span
+          aria-label={`${badgeCount} new shared project${badgeCount === 1 ? '' : 's'}`}
+          style={{
+            minWidth: 18,
+            height: 18,
+            padding: '0 5px',
+            borderRadius: 999,
+            background: '#ef4444',
+            color: '#fff',
+            fontSize: 11,
+            fontWeight: 700,
+            display: 'inline-flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            flexShrink: 0,
+            lineHeight: 1,
+          }}
+        >
+          {badgeCount > 99 ? '99+' : badgeCount}
+        </span>
+      )}
     </button>
   );
 };
@@ -187,6 +209,7 @@ const MenuItem: React.FC<MenuItemProps> = ({ icon, label, sublabel, danger = fal
 export const AppSidebar: React.FC<AppSidebarProps> = ({
   activeView, onViewChange,
   userName = 'User', userRole = 'Methodologist', userEmail,
+  sharedProjectsUnreadCount = 0,
   onLogout,
 }) => {
   const [menuOpen, setMenuOpen] = React.useState(false);
@@ -248,7 +271,13 @@ export const AppSidebar: React.FC<AppSidebarProps> = ({
 
       {/* Navigation */}
       <nav style={{ padding: '12px 8px', flex: 1, display: 'flex', flexDirection: 'column', gap: 2 }}>
-        <NavItem icon={<HomeIcon />} label="Projects" active={activeView === 'projects'} onClick={() => onViewChange('projects')} />
+        <NavItem
+          icon={<HomeIcon />}
+          label="Projects"
+          active={activeView === 'projects'}
+          onClick={() => onViewChange('projects')}
+          badgeCount={sharedProjectsUnreadCount}
+        />
         <NavItem icon={<LibraryIcon />} label="Model Library" active={activeView === 'library'} onClick={() => onViewChange('library')} />
       </nav>
 

@@ -35,6 +35,8 @@ interface CodeEditorModalProps {
   readonly languageConfig?: any;
   readonly theme?: any;
   readonly title?: string;
+  /** When true, code is visible but cannot be edited or saved. */
+  readonly readOnly?: boolean;
 }
 
 const toolbarDividerStyle: React.CSSProperties = {
@@ -90,6 +92,7 @@ export function CodeEditorModal({
   languageConfig,
   theme,
   title = 'Code Editor',
+  readOnly = false,
 }: CodeEditorModalProps) {
   const [code, setCode] = useState(initialCode);
   const [savedCode, setSavedCode] = useState(initialCode);
@@ -126,7 +129,7 @@ export function CodeEditorModal({
     setLspReady(value);
   };
 
-  const hasUnsavedChanges = code !== savedCode;
+  const hasUnsavedChanges = !readOnly && code !== savedCode;
 
   const closeWebSocket = useCallback(() => {
     if (webSocketRef.current) {
@@ -151,7 +154,7 @@ export function CodeEditorModal({
   }, [initialCode, isOpen]);
 
   useEffect(() => {
-    if (isOpen && onInitialize) {
+    if (isOpen && onInitialize && !readOnly) {
       const result = onInitialize(initialCode);
       if (result instanceof Promise) {
         result.catch((err: unknown) => {
@@ -176,9 +179,9 @@ export function CodeEditorModal({
     return () => globalThis.removeEventListener('beforeunload', handleBeforeUnload);
   }, [closeWebSocket]);
 
-  // Ctrl+S shortcut
+  // Ctrl+S shortcut (edit mode only)
   useEffect(() => {
-    if (!isOpen) return;
+    if (!isOpen || readOnly) return;
     const handleKeyDown = (e: KeyboardEvent) => {
       if ((e.ctrlKey || e.metaKey) && e.key === 's') {
         e.preventDefault();
@@ -333,7 +336,9 @@ export function CodeEditorModal({
         requestCompletionFromLsp(model, position, monacoInstance),
     });
 
-    connectToLsp(monacoInstance);
+    if (!readOnly) {
+      connectToLsp(monacoInstance);
+    }
     editor.focus();
   };
 
@@ -625,11 +630,28 @@ export function CodeEditorModal({
                   fontFamily: APP_FONT,
                 }}
               >
-                {title}
+                {readOnly ? `${title} (view only)` : title}
               </h3>
-              {renderLspStatus()}
+              {!readOnly && renderLspStatus()}
             </div>
-            {sourceFileName && targetFileName && (
+            {readOnly && (
+              <p style={{ margin: '4px 0 0', color: '#64748b', fontSize: '12px', fontFamily: APP_FONT }}>
+                View only — changes are not allowed
+              </p>
+            )}
+            {!readOnly && sourceFileName && targetFileName && (
+              <p
+                style={{
+                  margin: '4px 0 0',
+                  color: '#94a3b8',
+                  fontSize: '13px',
+                  fontFamily: APP_FONT,
+                }}
+              >
+                {sourceFileName} ↔ {targetFileName}
+              </p>
+            )}
+            {readOnly && sourceFileName && targetFileName && (
               <p
                 style={{
                   margin: '4px 0 0',
@@ -662,6 +684,7 @@ export function CodeEditorModal({
         </div>
 
         {/* Toolbar */}
+        {!readOnly && (
         <div style={modalPanelToolbarStyle}>
           <ActionButton variant="ghost" size="sm" onClick={handleUndo} title="Undo (Ctrl+Z)">
             Undo
@@ -711,6 +734,7 @@ export function CodeEditorModal({
             {saving ? 'Saving…' : 'Save'}
           </ActionButton>
         </div>
+        )}
 
         {/* Editor */}
         <div
@@ -729,6 +753,7 @@ export function CodeEditorModal({
             theme="vs-dark"
             value={code}
             onChange={(value) => {
+              if (readOnly) return;
               setCode(value || '');
               setSaveSuccess(false);
 
@@ -749,6 +774,7 @@ export function CodeEditorModal({
             }}
             onMount={handleEditorDidMount}
             options={{
+              readOnly,
               minimap: { enabled: true },
               fontSize: 13,
               lineNumbers: 'on',

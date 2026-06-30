@@ -19,20 +19,36 @@ export interface PortalMenuAction {
 interface PortalRowActionsMenuProps {
   actions: PortalMenuAction[];
   minWidth?: number;
+  /** When provided, the menu closes if this scroll container moves. */
+  scrollRootRef?: React.RefObject<HTMLElement | null>;
 }
 
-const PortalMenuItem: React.FC<{ label: string; onClick: () => void; danger?: boolean }> = ({
+function isEventInsideMenu(
+  event: Event,
+  buttonEl: HTMLButtonElement | null,
+  menuEl: HTMLDivElement | null,
+): boolean {
+  const path = typeof event.composedPath === 'function' ? event.composedPath() : [];
+  if (path.length > 0) {
+    if (buttonEl && path.includes(buttonEl)) return true;
+    if (menuEl && path.includes(menuEl)) return true;
+    return false;
+  }
+  const target = event.target as Node | null;
+  return Boolean(target && (buttonEl?.contains(target) || menuEl?.contains(target)));
+}
+
+const PortalMenuItem: React.FC<{ label: string; onSelect: () => void; danger?: boolean }> = ({
   label,
-  onClick,
+  onSelect,
   danger,
 }) => (
   <button
     type="button"
     role="menuitem"
-    onMouseDown={e => e.stopPropagation()}
     onClick={e => {
       e.stopPropagation();
-      onClick();
+      onSelect();
     }}
     style={{
       display: 'block',
@@ -44,6 +60,7 @@ const PortalMenuItem: React.FC<{ label: string; onClick: () => void; danger?: bo
       color: danger ? '#dc2626' : '#374151',
       cursor: 'pointer',
       textAlign: 'left',
+      pointerEvents: 'auto',
     }}
     onMouseEnter={e => {
       (e.currentTarget as HTMLButtonElement).style.background = danger ? '#fef2f2' : '#f9fafb';
@@ -59,11 +76,15 @@ const PortalMenuItem: React.FC<{ label: string; onClick: () => void; danger?: bo
 export const PortalRowActionsMenu: React.FC<PortalRowActionsMenuProps> = ({
   actions,
   minWidth = 160,
+  scrollRootRef,
 }) => {
   const [open, setOpen] = useState(false);
   const [menuPos, setMenuPos] = useState({ top: 0, left: 0 });
   const buttonRef = useRef<HTMLButtonElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
+  const ignoreOutsideUntilRef = useRef(0);
+
+  const closeMenu = useCallback(() => setOpen(false), []);
 
   const updateMenuPosition = useCallback(() => {
     if (!buttonRef.current) return;
@@ -73,37 +94,37 @@ export const PortalRowActionsMenu: React.FC<PortalRowActionsMenuProps> = ({
 
   useEffect(() => {
     if (!open) return;
-    const closeOnOutside = (e: MouseEvent) => {
-      const target = e.target as Node;
-      if (buttonRef.current?.contains(target) || menuRef.current?.contains(target)) return;
-      setOpen(false);
+
+    // Ignore the opening click/pointer sequence.
+    ignoreOutsideUntilRef.current = Date.now() + 100;
+
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') closeMenu();
     };
-    document.addEventListener('mousedown', closeOnOutside);
-    return () => document.removeEventListener('mousedown', closeOnOutside);
-  }, [open]);
+
+    const onPointerDown = (e: PointerEvent) => {
+      if (Date.now() < ignoreOutsideUntilRef.current) return;
+      if (isEventInsideMenu(e, buttonRef.current, menuRef.current)) return;
+      closeMenu();
+    };
+
+    document.addEventListener('keydown', onKeyDown);
+    document.addEventListener('pointerdown', onPointerDown, true);
+
+    return () => {
+      document.removeEventListener('keydown', onKeyDown);
+      document.removeEventListener('pointerdown', onPointerDown, true);
+    };
+  }, [open, closeMenu]);
 
   useEffect(() => {
     if (!open) return;
-    const closeOnScroll = () => setOpen(false);
-    window.addEventListener('scroll', closeOnScroll, true);
-    window.addEventListener('resize', closeOnScroll);
-    return () => {
-      window.removeEventListener('scroll', closeOnScroll, true);
-      window.removeEventListener('resize', closeOnScroll);
-    };
-  }, [open]);
-
-  useEffect(() => {
-    if (!open || !menuRef.current) return;
-    const menu = menuRef.current;
-    const stopPropagation = (e: Event) => e.stopPropagation();
-    menu.addEventListener('mousedown', stopPropagation);
-    menu.addEventListener('click', stopPropagation);
-    return () => {
-      menu.removeEventListener('mousedown', stopPropagation);
-      menu.removeEventListener('click', stopPropagation);
-    };
-  }, [open]);
+    const scrollEl = scrollRootRef?.current;
+    if (!scrollEl) return;
+    const onScroll = () => closeMenu();
+    scrollEl.addEventListener('scroll', onScroll, { passive: true });
+    return () => scrollEl.removeEventListener('scroll', onScroll);
+  }, [open, closeMenu, scrollRootRef]);
 
   const toggleMenu = (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -113,10 +134,17 @@ export const PortalRowActionsMenu: React.FC<PortalRowActionsMenuProps> = ({
     });
   };
 
+  const selectAction = (action: PortalMenuAction) => {
+    action.onClick();
+    closeMenu();
+  };
+
   const menu = open ? (
     <div
       ref={menuRef}
       role="menu"
+      onMouseDown={e => e.stopPropagation()}
+      onClick={e => e.stopPropagation()}
       style={{
         position: 'fixed',
         top: menuPos.top,
@@ -129,6 +157,7 @@ export const PortalRowActionsMenu: React.FC<PortalRowActionsMenuProps> = ({
         zIndex: ACTIONS_MENU_Z_INDEX,
         minWidth,
         overflow: 'hidden',
+        pointerEvents: 'auto',
       }}
     >
       {actions.map(action => (
@@ -139,10 +168,7 @@ export const PortalRowActionsMenu: React.FC<PortalRowActionsMenuProps> = ({
           <PortalMenuItem
             label={action.label}
             danger={action.danger}
-            onClick={() => {
-              action.onClick();
-              setOpen(false);
-            }}
+            onSelect={() => selectAction(action)}
           />
         </React.Fragment>
       ))}
@@ -156,7 +182,9 @@ export const PortalRowActionsMenu: React.FC<PortalRowActionsMenuProps> = ({
         ref={buttonRef}
         aria-haspopup="menu"
         aria-expanded={open}
+        aria-label="Row actions"
         onClick={toggleMenu}
+        onMouseDown={e => e.stopPropagation()}
         style={{
           padding: '4px 8px',
           border: '1px solid #e5e7eb',

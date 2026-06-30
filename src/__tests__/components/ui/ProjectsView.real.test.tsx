@@ -176,13 +176,31 @@ describe('ProjectsView real component', () => {
     });
   });
 
-  it('"Active projects" tab is initially selected (font weight 600)', async () => {
+  it('"My projects" tab is initially selected (font weight 600)', async () => {
     await act(async () => {
       renderView();
     });
-    const activeBtn = screen.getByText('Active projects');
+    const activeBtn = screen.getByRole('button', { name: 'My projects' });
     expect(activeBtn).toBeInTheDocument();
-    // Active tab has fontWeight 600, inactive has 400
     expect(activeBtn).toHaveStyle({ fontWeight: 600 });
+  });
+
+  it('opens details modal when Details is chosen from row menu', async () => {
+    apiService.getVsumsPaginated.mockResolvedValue({
+      data: [{ ...mockVsum, role: 'OWNER' }],
+    });
+    await act(async () => {
+      renderView();
+    });
+    await waitFor(() => {
+      expect(screen.getByText('Test Project')).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Row actions' }));
+    fireEvent.click(await screen.findByRole('menuitem', { name: 'Details' }));
+
+    await waitFor(() => {
+      expect(screen.getByTestId('details-modal')).toBeInTheDocument();
+    });
   });
 });

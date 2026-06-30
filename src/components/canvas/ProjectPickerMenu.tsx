@@ -2,6 +2,8 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import ReactDOM from 'react-dom';
 import { apiService } from '../../services/api';
 import { Vsum } from '../../types';
+import { sharedByFromVsum, resolveVsumAccessRole, mergeStoredProjectAccess } from '../../utils/vsumMemberUtils';
+import { isSharedProject } from '../../utils/vsumProjectList';
 
 const MENU_Z_INDEX = 10500;
 const MAX_VISIBLE_PROJECTS = 4;
@@ -11,6 +13,7 @@ const PROJECT_LIST_MAX_HEIGHT = MAX_VISIBLE_PROJECTS * PROJECT_ROW_HEIGHT;
 export interface ProjectPickerItem {
   id: number;
   name: string;
+  role?: string;
 }
 
 interface ProjectPickerMenuProps {
@@ -38,6 +41,31 @@ const PlusIcon = () => (
     <line x1="5" y1="12" x2="19" y2="12" />
   </svg>
 );
+
+const SharedIcon = () => (
+  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
+    <circle cx="9" cy="7" r="4" />
+    <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
+    <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+  </svg>
+);
+
+function sharedBadgeStyle(): React.CSSProperties {
+  return {
+    fontSize: 10,
+    fontWeight: 700,
+    color: '#1d4ed8',
+    background: '#eff6ff',
+    border: '1px solid #bfdbfe',
+    padding: '2px 8px',
+    borderRadius: 20,
+    flexShrink: 0,
+    display: 'inline-flex',
+    alignItems: 'center',
+    gap: 4,
+  };
+}
 
 export const ProjectPickerMenu: React.FC<ProjectPickerMenuProps> = ({
   currentProjectId,
@@ -108,7 +136,15 @@ export const ProjectPickerMenu: React.FC<ProjectPickerMenuProps> = ({
 
   const handleSelect = (project: Vsum) => {
     closeMenu();
-    onSelectProject({ id: project.id, name: project.name });
+    mergeStoredProjectAccess(project.id, {
+      accessRole: resolveVsumAccessRole(project.role, project.roleEn) ?? project.role,
+      sharedBy: sharedByFromVsum(project),
+    });
+    onSelectProject({
+      id: project.id,
+      name: project.name,
+      role: resolveVsumAccessRole(project.role, project.roleEn) ?? project.role,
+    });
   };
 
   const isCompact = variant === 'compact';
@@ -216,12 +252,24 @@ export const ProjectPickerMenu: React.FC<ProjectPickerMenuProps> = ({
           const isActive = project.id === activeProjectId;
           const isOpen = openProjectIds.includes(project.id);
           const isCurrentInPill = project.id === currentProjectId && !isCompact;
+          const isShared = isSharedProject(project);
 
           let statusDotColor = '#e2e8f0';
           if (isActive) {
             statusDotColor = '#049484';
+          } else if (isShared) {
+            statusDotColor = '#60a5fa';
           } else if (isOpen) {
             statusDotColor = '#94a3b8';
+          }
+
+          let statusLine = 'Click to open';
+          if (isActive) {
+            statusLine = isShared ? 'Active tab · Shared with you' : 'Active tab';
+          } else if (isOpen) {
+            statusLine = isShared ? 'Open — shared project' : 'Open — click to switch';
+          } else if (isShared) {
+            statusLine = 'Shared with you — click to open';
           }
 
           return (
@@ -272,38 +320,44 @@ export const ProjectPickerMenu: React.FC<ProjectPickerMenuProps> = ({
                   {project.name}
                 </span>
                 <span style={{ fontSize: 11, color: '#64748b', marginTop: 2, display: 'block' }}>
-                  {isActive && 'Active tab'}
-                  {!isActive && isOpen && 'Open — click to switch'}
-                  {!isActive && !isOpen && 'Click to open'}
+                  {statusLine}
                   {isCurrentInPill && !isActive && isOpen && ''}
                 </span>
               </span>
-              {isActive && (
-                <span style={{
-                  fontSize: 10,
-                  fontWeight: 700,
-                  color: '#047857',
-                  background: '#d1fae5',
-                  padding: '2px 8px',
-                  borderRadius: 20,
-                  flexShrink: 0,
-                }}>
-                  Active
-                </span>
-              )}
-              {!isActive && isOpen && (
-                <span style={{
-                  fontSize: 10,
-                  fontWeight: 600,
-                  color: '#475569',
-                  background: '#f1f5f9',
-                  padding: '2px 8px',
-                  borderRadius: 20,
-                  flexShrink: 0,
-                }}>
-                  Open
-                </span>
-              )}
+              <span style={{ display: 'flex', alignItems: 'center', gap: 4, flexShrink: 0 }}>
+                {isShared && (
+                  <span style={sharedBadgeStyle()} title="Shared with you">
+                    <SharedIcon />
+                    Shared
+                  </span>
+                )}
+                {isActive && (
+                  <span style={{
+                    fontSize: 10,
+                    fontWeight: 700,
+                    color: '#047857',
+                    background: '#d1fae5',
+                    padding: '2px 8px',
+                    borderRadius: 20,
+                    flexShrink: 0,
+                  }}>
+                    Active
+                  </span>
+                )}
+                {!isActive && isOpen && (
+                  <span style={{
+                    fontSize: 10,
+                    fontWeight: 600,
+                    color: '#475569',
+                    background: '#f1f5f9',
+                    padding: '2px 8px',
+                    borderRadius: 20,
+                    flexShrink: 0,
+                  }}>
+                    Open
+                  </span>
+                )}
+              </span>
             </button>
           );
         })}
