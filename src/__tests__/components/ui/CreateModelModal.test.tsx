@@ -72,6 +72,25 @@ const fillRequiredFields = () => {
   fireEvent.click(screen.getByText('Add KW'));
 };
 
+const uploadBothFilesViaFileMode = async () => {
+  const ecoreInput = document.querySelector('input[accept=".ecore"]') as HTMLInputElement;
+  const genmodelInput = document.querySelector('input[accept=".genmodel"]') as HTMLInputElement;
+
+  await act(async () => {
+    fireEvent.change(ecoreInput, { target: { files: [new File([''], 'a.ecore')] } });
+  });
+  await waitFor(() => expect(apiService.uploadFile).toHaveBeenCalledTimes(1));
+
+  await act(async () => {
+    fireEvent.change(genmodelInput, { target: { files: [new File([''], 'a.genmodel')] } });
+  });
+  await waitFor(() => expect(apiService.uploadFile).toHaveBeenCalledTimes(2));
+};
+
+const metamodelRejectedError = {
+  response: { data: { message: 'Metamodel rejected: invalid GenModel configuration' } },
+};
+
 const mockFetchOk = (content = '<content/>') => {
   const blob = new Blob([content], { type: 'application/octet-stream' });
   (global as any).fetch = jest.fn().mockResolvedValue({
@@ -371,19 +390,7 @@ describe('CreateModelModal', () => {
     it('creates a meta model after both files are uploaded via file mode', async () => {
       render(<CreateModelModal isOpen onClose={jest.fn()} onSuccess={jest.fn()} />);
       fillRequiredFields();
-
-      const ecoreInput = document.querySelector('input[accept=".ecore"]') as HTMLInputElement;
-      const genmodelInput = document.querySelector('input[accept=".genmodel"]') as HTMLInputElement;
-
-      await act(async () => {
-        fireEvent.change(ecoreInput, { target: { files: [new File([''], 'a.ecore')] } });
-      });
-      await waitFor(() => expect(apiService.uploadFile).toHaveBeenCalledTimes(1));
-
-      await act(async () => {
-        fireEvent.change(genmodelInput, { target: { files: [new File([''], 'a.genmodel')] } });
-      });
-      await waitFor(() => expect(apiService.uploadFile).toHaveBeenCalledTimes(2));
+      await uploadBothFilesViaFileMode();
 
       await act(async () => {
         fireEvent.click(screen.getByRole('button', { name: /Import Meta Model/i }));
@@ -435,8 +442,84 @@ describe('CreateModelModal', () => {
             name: 'Test Model',
             ecoreFileId: 10,
             genModelFileId: 10,
+            applyGenModelFixes: false,
           }),
         );
+      });
+    });
+  });
+
+  describe('GenModel rejection flow', () => {
+    it('calls createMetaModel with applyGenModelFixes false and shows the fix prompt on rejection', async () => {
+      apiService.createMetaModel.mockRejectedValueOnce(metamodelRejectedError);
+      render(<CreateModelModal isOpen onClose={jest.fn()} />);
+      fillRequiredFields();
+      await uploadBothFilesViaFileMode();
+
+      await act(async () => {
+        fireEvent.click(screen.getByRole('button', { name: /Import Meta Model/i }));
+      });
+
+      await waitFor(() => {
+        expect(screen.getByText(/We found some issues in your GenModel/i)).toBeInTheDocument();
+        expect(screen.getByText(/Save with automatic GenModel fixes/i)).toBeInTheDocument();
+        expect(screen.getByText(/Cancel scenario/i)).toBeInTheDocument();
+      });
+      expect(apiService.createMetaModel).toHaveBeenCalledWith(
+        expect.objectContaining({ applyGenModelFixes: false }),
+      );
+      expect(apiService.createMetaModel).toHaveBeenCalledTimes(1);
+    });
+
+    it('retries with applyGenModelFixes true when the user approves automatic fixes', async () => {
+      apiService.createMetaModel
+        .mockRejectedValueOnce(metamodelRejectedError)
+        .mockResolvedValueOnce({ data: { id: 2, name: 'MM' }, message: 'Created' });
+
+      render(<CreateModelModal isOpen onClose={jest.fn()} onSuccess={jest.fn()} />);
+      fillRequiredFields();
+      await uploadBothFilesViaFileMode();
+
+      await act(async () => {
+        fireEvent.click(screen.getByRole('button', { name: /Import Meta Model/i }));
+      });
+      await waitFor(() => screen.getByText(/Save with automatic GenModel fixes/i));
+
+      await act(async () => {
+        fireEvent.click(screen.getByText(/Save with automatic GenModel fixes/i));
+      });
+
+      await waitFor(() => {
+        expect(apiService.createMetaModel).toHaveBeenCalledTimes(2);
+        expect(apiService.createMetaModel).toHaveBeenLastCalledWith(
+          expect.objectContaining({
+            applyGenModelFixes: true,
+            name: 'Test Model',
+            ecoreFileId: 10,
+            genModelFileId: 10,
+          }),
+        );
+      });
+    });
+
+    it('closes the modal when the user cancels the GenModel fix scenario', async () => {
+      apiService.createMetaModel.mockRejectedValueOnce(metamodelRejectedError);
+      const onClose = jest.fn();
+      render(<CreateModelModal isOpen onClose={onClose} />);
+      fillRequiredFields();
+      await uploadBothFilesViaFileMode();
+
+      await act(async () => {
+        fireEvent.click(screen.getByRole('button', { name: /Import Meta Model/i }));
+      });
+      await waitFor(() => screen.getByText(/Cancel scenario/i));
+
+      await act(async () => {
+        fireEvent.click(screen.getByText(/Cancel scenario/i));
+      });
+
+      await waitFor(() => {
+        expect(onClose).toHaveBeenCalled();
       });
     });
   });

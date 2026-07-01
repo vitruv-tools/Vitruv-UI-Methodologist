@@ -1,15 +1,30 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
+import ReactDOM from 'react-dom';
 import { apiService } from '../../services/api';
 import { CreateModelModal } from './CreateModelModal';
 import { KeywordTagsInput } from './KeywordTagsInput';
-import { UMLDiagram, UMLDiagramHandle, UmlDiagramSaveContext } from '../canvas/UMLDiagram';
+import { UMLDiagram, UMLDiagramHandle } from '../canvas/UMLDiagram';
 import { FloatingUMLPanel } from '../canvas/FloatingUMLPanel';
 import { MetaModelFileDownloads } from './MetaModelFileDownloads';
 import { useModalBodyLock, modalBackdropStyle } from './modalUtils';
 import {
+  APP_FONT,
+  BRAND_COLOR,
+  inputStyle as sharedInputStyle,
+  modalCloseButtonStyle,
+} from './sharedStyles';
+import {
   METAMODEL_PREVIEW_LAYOUT_SCOPE,
   metaModelPreviewLayoutFileName,
 } from '../../utils/metaModelPreview';
+import {
+  appendMetaModelSearchToken,
+  buildMetaModelFindFilters,
+  completeMetaModelSearchToken,
+  MetaModelDateFilter,
+  parseMetaModelSearchQuery,
+  ParsedMetaModelSearchFilter,
+} from '../../utils/metaModelSearchFilters';
 import { PortalRowActionsMenu } from './PortalRowActionsMenu';
 
 interface ModelLibraryTableProps {
@@ -26,108 +41,12 @@ const formatDate = (iso: string) => {
 
 // ── sub-components ─────────────────────────────────────────────────────────
 
-const ChevronDownIcon = () => (
-  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-    <polyline points="6 9 12 15 18 9" />
-  </svg>
-);
-
 const SearchIcon = () => (
   <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
     <circle cx="11" cy="11" r="8" />
     <line x1="21" y1="21" x2="16.65" y2="16.65" />
   </svg>
 );
-
-// ── DropdownFilter ─────────────────────────────────────────────────────────
-
-interface DropdownFilterProps {
-  label: string;
-  options: { value: string; label: string }[];
-  value: string;
-  onChange: (v: string) => void;
-}
-
-const DropdownFilter: React.FC<DropdownFilterProps> = ({ label, options, value, onChange }) => {
-  const [open, setOpen] = useState(false);
-  const ref = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    const handler = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
-    };
-    document.addEventListener('mousedown', handler);
-    return () => document.removeEventListener('mousedown', handler);
-  }, []);
-
-  const selected = options.find(o => o.value === value);
-  const isFiltered = value !== 'all';
-
-  return (
-    <div ref={ref} style={{ position: 'relative' }}>
-      <button
-        onClick={() => setOpen(o => !o)}
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          gap: 6,
-          padding: '7px 12px',
-          border: '1px solid',
-          borderColor: isFiltered ? '#049484' : '#e5e7eb',
-          borderRadius: 8,
-          background: isFiltered ? '#f0faf8' : '#ffffff',
-          color: isFiltered ? '#049484' : '#374151',
-          fontSize: 13,
-          fontWeight: 500,
-          cursor: 'pointer',
-          whiteSpace: 'nowrap',
-          transition: 'all 0.15s',
-        }}
-      >
-        <span>{isFiltered ? `${label}: ${selected?.label}` : label}</span>
-        <ChevronDownIcon />
-      </button>
-      {open && (
-        <div style={{
-          position: 'absolute',
-          top: 'calc(100% + 4px)',
-          left: 0,
-          background: '#ffffff',
-          border: '1px solid #e5e7eb',
-          borderRadius: 10,
-          boxShadow: '0 8px 24px rgba(0,0,0,0.12)',
-          zIndex: 200,
-          minWidth: 160,
-          overflow: 'hidden',
-        }}>
-          {options.map(opt => (
-            <button
-              key={opt.value}
-              onClick={() => { onChange(opt.value); setOpen(false); }}
-              style={{
-                display: 'block',
-                width: '100%',
-                padding: '9px 14px',
-                border: 'none',
-                background: opt.value === value ? '#f0faf8' : 'transparent',
-                color: opt.value === value ? '#049484' : '#374151',
-                fontSize: 13,
-                fontWeight: opt.value === value ? 600 : 400,
-                cursor: 'pointer',
-                textAlign: 'left',
-                transition: 'background 0.1s',
-              }}
-              onMouseEnter={e => { if (opt.value !== value) (e.currentTarget as HTMLButtonElement).style.background = '#f9fafb'; }}
-              onMouseLeave={e => { if (opt.value !== value) (e.currentTarget as HTMLButtonElement).style.background = 'transparent'; }}
-            >
-              {opt.label}
-            </button>
-          ))}
-        </div>
-      )}
-    </div>
-  );
-};
 
 // ── ModelDetailModal ────────────────────────────────────────────────────────
 
@@ -205,7 +124,6 @@ export const ModelDetailModal: React.FC<ModelDetailModalProps> = ({
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [ecoreContent, setEcoreContent] = useState<string | null>(ecoreContentProp ?? null);
-  const [ecoreFileId, setEcoreFileId] = useState<number | undefined>(model.ecoreFileId);
   const [fetchingUml, setFetchingUml] = useState(false);
   const [fetchError, setFetchError] = useState(false);
   const [umlExpanded, setUmlExpanded] = useState(false);
@@ -223,27 +141,6 @@ export const ModelDetailModal: React.FC<ModelDetailModalProps> = ({
   }, [model.ecoreFileId, ecoreContentProp]);
 
   const previewLayoutFile = metaModelPreviewLayoutFileName(model.id, model.name);
-
-  const umlSaveContext: UmlDiagramSaveContext | undefined =
-    model.id && ecoreFileId
-      ? {
-          metaModelId: String(model.id),
-          ecoreFileId,
-          modelName: model.name,
-          saveTarget: 'library',
-          metaModelMetadata: {
-            description: model.description || '',
-            domain: model.domain || '',
-            keyword: model.keyword || [],
-            genModelFileId: model.genModelFileId,
-          },
-          onSaved: ({ ecoreContent: saved, ecoreFileId: newFileId }) => {
-            setEcoreContent(saved);
-            setEcoreFileId(newFileId);
-            onUpdated();
-          },
-        }
-      : undefined;
 
   useEffect(() => {
     if (!ecoreContent) return;
@@ -263,8 +160,8 @@ export const ModelDetailModal: React.FC<ModelDetailModalProps> = ({
       setSuccess('Saved successfully');
       onUpdated();
       setTimeout(() => { setSuccess(''); setEditing(false); }, 1500);
-    } catch (err: any) {
-      setError(err?.message || 'Failed to save');
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Failed to save');
     } finally {
       setSaving(false);
     }
@@ -403,14 +300,13 @@ export const ModelDetailModal: React.FC<ModelDetailModalProps> = ({
           </div>
 
           {/* Right — UML preview */}
-          {/* Right — UML preview */}
           <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', background: '#ffffff' }}>
             {/* Label + zoom controls */}
             <div style={{ padding: '14px 18px 10px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexShrink: 0 }}>
               <span style={{ fontSize: 13, fontWeight: 600, color: '#374151', fontFamily: FONT }}>UML</span>
               {ecoreContent && (
                 <div style={{ display: 'flex', gap: 4 }}>
-                  <DPreviewBtn title="Open full-screen UML editor" onClick={() => setUmlExpanded(true)}>
+                  <DPreviewBtn title="Open full-screen UML view" onClick={() => setUmlExpanded(true)}>
                     <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                       <polyline points="15 3 21 3 21 9" /><polyline points="9 21 3 21 3 15" />
                       <line x1="21" y1="3" x2="14" y2="10" /><line x1="3" y1="21" x2="10" y2="14" />
@@ -453,7 +349,7 @@ export const ModelDetailModal: React.FC<ModelDetailModalProps> = ({
                     ecoreContent={ecoreContent}
                     fileName={previewLayoutFile}
                     layoutScopeId={METAMODEL_PREVIEW_LAYOUT_SCOPE}
-                    saveContext={umlSaveContext}
+                    interactive={false}
                   />
                 )}
               </div>
@@ -463,27 +359,29 @@ export const ModelDetailModal: React.FC<ModelDetailModalProps> = ({
       </div>
   );
 
+  const expandedUmlPanel = umlExpanded && ecoreContent ? (
+    <FloatingUMLPanel
+      id={`metamodel-detail-${model.id}`}
+      title={model.name}
+      fileName={previewLayoutFile}
+      layoutScopeId={METAMODEL_PREVIEW_LAYOUT_SCOPE}
+      ecoreContent={ecoreContent}
+      viewOnly
+      onClose={() => setUmlExpanded(false)}
+      onFocus={() => undefined}
+      ecoreFileId={model.ecoreFileId}
+      fetchEcoreFile={(fileId) => apiService.getFile(fileId)}
+      onEcoreContentUpdated={(content) => setEcoreContent(content)}
+      zIndex={embedded ? 10001 : 10002}
+    />
+  ) : null;
+
   if (embedded) {
     return (
       <>
         <style>{`@keyframes spin{0%{transform:rotate(0deg)}100%{transform:rotate(360deg)}}`}</style>
         {panel}
-        {umlExpanded && ecoreContent && (
-          <FloatingUMLPanel
-            id={`metamodel-detail-${model.id}`}
-            title={model.name}
-            fileName={previewLayoutFile}
-            layoutScopeId={METAMODEL_PREVIEW_LAYOUT_SCOPE}
-            ecoreContent={ecoreContent}
-            saveContext={umlSaveContext}
-            onClose={() => setUmlExpanded(false)}
-            onFocus={() => {}}
-            ecoreFileId={model.ecoreFileId}
-            fetchEcoreFile={(fileId) => apiService.getFile(fileId)}
-            onEcoreContentUpdated={(content) => setEcoreContent(content)}
-            zIndex={10001}
-          />
-        )}
+        {expandedUmlPanel}
       </>
     );
   }
@@ -508,22 +406,7 @@ export const ModelDetailModal: React.FC<ModelDetailModalProps> = ({
       >
         <style>{`@keyframes spin{0%{transform:rotate(0deg)}100%{transform:rotate(360deg)}}`}</style>
         {panel}
-        {umlExpanded && ecoreContent && (
-          <FloatingUMLPanel
-            id={`metamodel-detail-${model.id}`}
-            title={model.name}
-            fileName={previewLayoutFile}
-            layoutScopeId={METAMODEL_PREVIEW_LAYOUT_SCOPE}
-            ecoreContent={ecoreContent}
-            saveContext={umlSaveContext}
-            onClose={() => setUmlExpanded(false)}
-            onFocus={() => {}}
-            ecoreFileId={model.ecoreFileId}
-            fetchEcoreFile={(fileId) => apiService.getFile(fileId)}
-            onEcoreContentUpdated={(content) => setEcoreContent(content)}
-            zIndex={10002}
-          />
-        )}
+        {expandedUmlPanel}
       </div>
     </>
   );
@@ -531,13 +414,282 @@ export const ModelDetailModal: React.FC<ModelDetailModalProps> = ({
 
 // ── ModelLibraryTable (main export) ────────────────────────────────────────
 
-const DATE_OPTIONS = [
-  { value: 'all', label: 'All dates' },
+const DATE_OPTIONS: { value: MetaModelDateFilter; label: string }[] = [
+  { value: 'all', label: 'All time' },
   { value: 'today', label: 'Today' },
   { value: 'week', label: 'This week' },
   { value: 'month', label: 'This month' },
   { value: 'year', label: 'This year' },
 ];
+
+const SEARCH_SYNTAX_HINT =
+  'Use GitHub-style syntax: name:test domain:engineering time:beforenow created:after:2023-01-01';
+
+const SEARCH_PLACEHOLDER =
+  'name:test domain:engineering time:beforenow created:after:2023-01-01';
+
+const filterRowStyle: React.CSSProperties = {
+  display: 'flex',
+  gap: 10,
+  marginBottom: 10,
+  alignItems: 'center',
+};
+
+const filterLabelStyle: React.CSSProperties = {
+  fontSize: 13,
+  fontWeight: 600,
+  color: '#374151',
+  minWidth: 76,
+  flexShrink: 0,
+  fontFamily: APP_FONT,
+};
+
+const filterFieldStyle: React.CSSProperties = {
+  ...sharedInputStyle,
+  flex: 1,
+  width: 'auto',
+  padding: '9px 12px',
+  fontSize: 13,
+  background: '#ffffff',
+};
+
+const filterTagStyle: React.CSSProperties = {
+  display: 'inline-flex',
+  alignItems: 'center',
+  padding: '4px 10px',
+  borderRadius: 999,
+  background: '#f0faf8',
+  border: `1px solid ${BRAND_COLOR}33`,
+  color: BRAND_COLOR,
+  fontSize: 12,
+  fontWeight: 500,
+  fontFamily: APP_FONT,
+};
+
+interface AdvancedSearchModalProps {
+  isOpen: boolean;
+  onClose: () => void;
+  search: string;
+  onSearchChange: (value: string) => void;
+  dateFilter: MetaModelDateFilter;
+  onDateFilterChange: (value: MetaModelDateFilter) => void;
+  parsedFilters: ParsedMetaModelSearchFilter[];
+  onAppendFilter: (key: 'name' | 'domain' | 'keywords' | 'created', value: string) => void;
+  onSearchKeyDown: (e: React.KeyboardEvent<HTMLInputElement>) => void;
+  searchInputRef: React.RefObject<HTMLInputElement | null>;
+}
+
+const AdvancedSearchModal: React.FC<AdvancedSearchModalProps> = ({
+  isOpen,
+  onClose,
+  search,
+  onSearchChange,
+  dateFilter,
+  onDateFilterChange,
+  parsedFilters,
+  onAppendFilter,
+  onSearchKeyDown,
+  searchInputRef,
+}) => {
+  const panelRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    const handlePointerDown = (event: MouseEvent) => {
+      if (panelRef.current && !panelRef.current.contains(event.target as Node)) {
+        onClose();
+      }
+    };
+    document.addEventListener('mousedown', handlePointerDown);
+    return () => document.removeEventListener('mousedown', handlePointerDown);
+  }, [isOpen, onClose]);
+
+  if (!isOpen) return null;
+
+  const plainNameSearch = search.includes(':') ? '' : search;
+
+  const submitQuickFilter = (
+    key: 'domain' | 'keywords',
+    input: HTMLInputElement | null,
+  ) => {
+    if (!input) return;
+    const value = input.value.trim();
+    if (!value) return;
+    onAppendFilter(key, value);
+    input.value = '';
+  };
+
+  const panel = (
+    <div
+      ref={panelRef}
+      role="dialog"
+      aria-modal="false"
+      aria-labelledby="advanced-search-title"
+      style={{
+        width: 'min(480px, calc(100vw - 48px))',
+        maxHeight: 'min(85vh, 640px)',
+        overflowY: 'auto',
+        background: '#ffffff',
+        borderRadius: 12,
+        border: '1px solid #e2e8f0',
+        boxShadow: '0 20px 50px rgba(11, 23, 32, 0.18), 0 4px 14px rgba(11, 23, 32, 0.08)',
+        fontFamily: APP_FONT,
+        pointerEvents: 'auto',
+      }}
+      onClick={(e) => e.stopPropagation()}
+    >
+      <div style={{
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        padding: '16px 20px',
+        background: 'linear-gradient(135deg, #049484, #037368)',
+        borderRadius: '12px 12px 0 0',
+      }}>
+        <div id="advanced-search-title" style={{ fontSize: 15, fontWeight: 600, color: '#ffffff', letterSpacing: '-0.01em' }}>
+          Advanced Search
+        </div>
+        <button
+          type="button"
+          aria-label="Close advanced search"
+          onClick={onClose}
+          style={{
+            ...modalCloseButtonStyle,
+            color: 'rgba(255,255,255,0.85)',
+          }}
+          onMouseEnter={(e) => {
+            e.currentTarget.style.background = 'rgba(255,255,255,0.15)';
+            e.currentTarget.style.color = '#ffffff';
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.background = 'transparent';
+            e.currentTarget.style.color = 'rgba(255,255,255,0.85)';
+          }}
+        >
+          ×
+        </button>
+      </div>
+
+      <div style={{ padding: '18px 20px 20px' }}>
+        {parsedFilters.length > 0 && (
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 12 }}>
+            {parsedFilters.map((filter) => (
+              <span key={`${filter.key}-${filter.value}`} style={filterTagStyle}>
+                {filter.key}:{filter.value}
+              </span>
+            ))}
+          </div>
+        )}
+
+        <div style={filterRowStyle}>
+          <span style={filterLabelStyle}>Search:</span>
+          <input
+            ref={searchInputRef}
+            type="text"
+            value={search}
+            placeholder={SEARCH_PLACEHOLDER}
+            onChange={(e) => onSearchChange(e.target.value)}
+            onKeyDown={onSearchKeyDown}
+            style={filterFieldStyle}
+            onFocus={(e) => { e.currentTarget.style.borderColor = BRAND_COLOR; }}
+            onBlur={(e) => { e.currentTarget.style.borderColor = '#e2e8f0'; }}
+          />
+        </div>
+        <div style={{ fontSize: 12, color: '#6b7280', margin: '-2px 0 12px 86px', fontStyle: 'italic', lineHeight: 1.45 }}>
+          {SEARCH_SYNTAX_HINT}
+        </div>
+
+        <div style={filterRowStyle}>
+          <span style={filterLabelStyle}>Date:</span>
+          <select
+            value={dateFilter}
+            onChange={(e) => onDateFilterChange(e.target.value as MetaModelDateFilter)}
+            style={filterFieldStyle}
+          >
+            {DATE_OPTIONS.map(opt => (
+              <option key={opt.value} value={opt.value}>{opt.label}</option>
+            ))}
+          </select>
+        </div>
+
+        <div style={{ marginTop: 14, paddingTop: 14, borderTop: '1px solid #f1f5f9' }}>
+          <div style={{ fontSize: 12, fontWeight: 700, color: '#6b7280', marginBottom: 12, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+            Quick Filters
+          </div>
+
+          <div style={filterRowStyle}>
+            <span style={filterLabelStyle}>Name:</span>
+            <input
+              type="text"
+              placeholder="Filter by name..."
+              value={plainNameSearch}
+              onChange={(e) => {
+                if (!e.target.value.includes(':')) {
+                  onSearchChange(e.target.value);
+                }
+              }}
+              style={filterFieldStyle}
+            />
+          </div>
+
+          <div style={filterRowStyle}>
+            <span style={filterLabelStyle}>Domain:</span>
+            <input
+              type="text"
+              placeholder="Filter by domain..."
+              style={filterFieldStyle}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') submitQuickFilter('domain', e.currentTarget);
+              }}
+            />
+          </div>
+
+          <div style={filterRowStyle}>
+            <span style={filterLabelStyle}>Keywords:</span>
+            <input
+              type="text"
+              placeholder="Filter by keywords..."
+              style={filterFieldStyle}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') submitQuickFilter('keywords', e.currentTarget);
+              }}
+            />
+          </div>
+
+          <div style={filterRowStyle}>
+            <span style={filterLabelStyle}>Date:</span>
+            <input
+              type="date"
+              style={filterFieldStyle}
+              onChange={(e) => {
+                const dateValue = e.target.value;
+                if (dateValue) onAppendFilter('created', dateValue);
+              }}
+            />
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+
+  return ReactDOM.createPortal(
+    <div
+      style={{
+        position: 'fixed',
+        inset: 0,
+        zIndex: 10000,
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        padding: 24,
+        pointerEvents: 'none',
+      }}
+    >
+      {panel}
+    </div>,
+    document.body,
+  );
+};
 
 export const ModelLibraryTable: React.FC<ModelLibraryTableProps> = ({ onModelOpen }) => {
   const [models, setModels] = useState<any[]>([]);
@@ -545,12 +697,13 @@ export const ModelLibraryTable: React.FC<ModelLibraryTableProps> = ({ onModelOpe
   const [error, setError] = useState('');
   const [search, setSearch] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
-  const [typFilter, setTypFilter] = useState('all');
-  const [dateFilter, setDateFilter] = useState('all');
+  const [dateFilter, setDateFilter] = useState<MetaModelDateFilter>('all');
+  const [showAdvancedSearch, setShowAdvancedSearch] = useState(false);
   const [showCreate, setShowCreate] = useState(false);
   const [viewModel, setViewModel] = useState<any>(null);
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 10;
+  const searchInputRef = useRef<HTMLInputElement>(null);
 
   // Debounce search
   useEffect(() => {
@@ -558,58 +711,60 @@ export const ModelLibraryTable: React.FC<ModelLibraryTableProps> = ({ onModelOpe
     return () => clearTimeout(t);
   }, [search]);
 
+  const parsedFilters = useMemo(
+    () => (debouncedSearch.trim() ? parseMetaModelSearchQuery(debouncedSearch) : []),
+    [debouncedSearch],
+  );
+
   const fetchModels = useCallback(async () => {
     setLoading(true);
     setError('');
     try {
-      const filters: any = { ownedByUser: false };
-      if (debouncedSearch.trim()) filters.name = debouncedSearch.trim();
-      if (typFilter !== 'all') filters.domain = typFilter;
-      if (dateFilter !== 'all') {
-        const now = new Date();
-        const from: Record<string, Date> = {
-          today: new Date(now.getFullYear(), now.getMonth(), now.getDate()),
-          week: new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000),
-          month: new Date(now.getFullYear(), now.getMonth(), 1),
-          year: new Date(now.getFullYear(), 0, 1),
-        };
-        if (from[dateFilter]) filters.createdFrom = from[dateFilter].toISOString();
-        filters.createdTo = now.toISOString();
-      }
+      const filters = buildMetaModelFindFilters(debouncedSearch, parsedFilters, dateFilter, false);
       const res = await apiService.findMetaModels(filters);
       setModels(res.data || []);
       setCurrentPage(1);
-    } catch (e: any) {
-      setError(e?.message || 'Failed to load');
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : 'Failed to load');
     } finally {
       setLoading(false);
     }
-  }, [debouncedSearch, typFilter, dateFilter]);
+  }, [debouncedSearch, parsedFilters, dateFilter]);
 
   useEffect(() => { fetchModels(); }, [fetchModels]);
 
-  // Derive unique domain values for the Typ filter
-  const typOptions = [
-    { value: 'all', label: 'All types' },
-    ...Array.from(new Set(models.map(m => m.domain).filter(Boolean))).sort((a, b) => a!.localeCompare(b!)).map(d => ({ value: d, label: d })),
-  ];
+  const appendSearchFilter = (key: 'name' | 'domain' | 'keywords' | 'created', value: string) => {
+    setSearch(prev => appendMetaModelSearchToken(prev, key, value));
+  };
 
-  const filtered = models.filter(m => typFilter === 'all' || m.domain === typFilter);
-  const totalPages = Math.ceil(filtered.length / itemsPerPage);
-  const page = filtered.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
+  const hasActiveFilters = search.trim().length > 0 || dateFilter !== 'all';
+
+  const handleSearchKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key !== 'Tab') return;
+    const completion = completeMetaModelSearchToken(e.currentTarget.value, e.currentTarget.selectionStart ?? 0);
+    if (!completion) return;
+    e.preventDefault();
+    setSearch(completion.nextValue);
+    requestAnimationFrame(() => {
+      searchInputRef.current?.setSelectionRange(completion.nextCaret, completion.nextCaret);
+    });
+  };
+
+  const totalPages = Math.ceil(models.length / itemsPerPage);
+  const page = models.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
 
   const emptyRowStyle = { padding: '48px 16px', textAlign: 'center' as const, color: '#9ca3af', fontSize: 14 };
   let tableBodyRows: React.ReactNode;
   if (loading) {
     tableBodyRows = (
       <tr>
-        <td colSpan={5} style={emptyRowStyle}>Loading...</td>
+        <td colSpan={4} style={emptyRowStyle}>Loading...</td>
       </tr>
     );
   } else if (page.length === 0) {
     tableBodyRows = (
       <tr>
-        <td colSpan={5} style={emptyRowStyle}>
+        <td colSpan={4} style={emptyRowStyle}>
           {search ? 'No results for this search.' : 'No models yet.'}
         </td>
       </tr>
@@ -619,7 +774,10 @@ export const ModelLibraryTable: React.FC<ModelLibraryTableProps> = ({ onModelOpe
       <TableRow
         key={model.id ?? idx}
         model={model}
-        onView={() => setViewModel(model)}
+        onView={() => {
+          setViewModel(model);
+          onModelOpen?.(model);
+        }}
       />
     ));
   }
@@ -641,33 +799,88 @@ export const ModelLibraryTable: React.FC<ModelLibraryTableProps> = ({ onModelOpe
       </div>
 
       {/* Toolbar */}
-      <div style={{ padding: '20px 40px 0', display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0, flexWrap: 'wrap' }}>
-        {/* Search */}
-        <div style={{ position: 'relative', flex: '1 1 200px', maxWidth: 320 }}>
-          <span style={{ position: 'absolute', left: 11, top: '50%', transform: 'translateY(-50%)', color: '#9ca3af', pointerEvents: 'none', display: 'flex' }}>
+      <div style={{ padding: '20px 40px 0', flexShrink: 0 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+          <button
+            type="button"
+            onClick={() => setShowAdvancedSearch(true)}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 8,
+              padding: '8px 14px',
+              border: '1px solid',
+              borderColor: hasActiveFilters ? '#049484' : '#e5e7eb',
+              borderRadius: 8,
+              background: hasActiveFilters ? '#f0faf8' : '#ffffff',
+              color: hasActiveFilters ? '#049484' : '#374151',
+              fontSize: 13,
+              fontWeight: 600,
+              cursor: 'pointer',
+              whiteSpace: 'nowrap',
+            }}
+          >
             <SearchIcon />
-          </span>
-          <input
-            value={search}
-            onChange={e => setSearch(e.target.value)}
-            placeholder="Search..."
-            style={{ width: '100%', padding: '8px 12px 8px 34px', border: '1px solid #e5e7eb', borderRadius: 8, fontSize: 13, color: '#374151', outline: 'none', boxSizing: 'border-box', background: '#fff', transition: 'border-color 0.15s' }}
-            onFocus={e => { (e.target as HTMLInputElement).style.borderColor = '#049484'; }}
-            onBlur={e => { (e.target as HTMLInputElement).style.borderColor = '#e5e7eb'; }}
-          />
+            <span>Advanced Search</span>
+            {hasActiveFilters && (
+              <span style={{
+                minWidth: 18,
+                height: 18,
+                padding: '0 5px',
+                borderRadius: 999,
+                background: '#049484',
+                color: '#fff',
+                fontSize: 11,
+                fontWeight: 700,
+                display: 'inline-flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+              }}>
+                {parsedFilters.length || 1}
+              </span>
+            )}
+          </button>
+
+          {hasActiveFilters && (
+            <button
+              type="button"
+              onClick={() => {
+                setSearch('');
+                setDateFilter('all');
+                setCurrentPage(1);
+              }}
+              style={{
+                padding: '8px 12px',
+                border: '1px solid #e5e7eb',
+                borderRadius: 8,
+                background: '#fff',
+                color: '#6b7280',
+                fontSize: 13,
+                cursor: 'pointer',
+              }}
+            >
+              Clear filters
+            </button>
+          )}
+
+          {search.trim() && (
+            <span style={{ fontSize: 13, color: '#6b7280', maxWidth: 420, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              Active: {search.trim()}
+            </span>
+          )}
         </div>
 
-        <DropdownFilter
-          label="Filter: By type"
-          options={typOptions}
-          value={typFilter}
-          onChange={v => { setTypFilter(v); setCurrentPage(1); }}
-        />
-        <DropdownFilter
-          label="Filter: By creation date"
-          options={DATE_OPTIONS}
-          value={dateFilter}
-          onChange={v => { setDateFilter(v); setCurrentPage(1); }}
+        <AdvancedSearchModal
+          isOpen={showAdvancedSearch}
+          onClose={() => setShowAdvancedSearch(false)}
+          search={search}
+          onSearchChange={(value) => { setSearch(value); setCurrentPage(1); }}
+          dateFilter={dateFilter}
+          onDateFilterChange={(value) => { setDateFilter(value); setCurrentPage(1); }}
+          parsedFilters={parsedFilters}
+          onAppendFilter={appendSearchFilter}
+          onSearchKeyDown={handleSearchKeyDown}
+          searchInputRef={searchInputRef}
         />
       </div>
 
@@ -683,7 +896,7 @@ export const ModelLibraryTable: React.FC<ModelLibraryTableProps> = ({ onModelOpe
           <table style={{ width: '100%', borderCollapse: 'collapse' }}>
             <thead>
               <tr style={{ borderBottom: '1px solid #f3f4f6' }}>
-                {['Name', 'Type', 'Created', 'Projects', 'Actions'].map((col, i) => (
+                {['Name', 'Created', 'Projects', 'Actions'].map((col, i) => (
                   <th
                     key={col}
                     style={{
@@ -697,7 +910,7 @@ export const ModelLibraryTable: React.FC<ModelLibraryTableProps> = ({ onModelOpe
                       background: '#fafafa',
                       borderBottom: '1px solid #f3f4f6',
                       whiteSpace: 'nowrap',
-                      width: i === 4 ? 80 : undefined,
+                      width: i === 3 ? 80 : undefined,
                     }}
                   >
                     {col}
@@ -715,7 +928,7 @@ export const ModelLibraryTable: React.FC<ModelLibraryTableProps> = ({ onModelOpe
         {totalPages > 1 && (
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', paddingTop: 14 }}>
             <span style={{ fontSize: 13, color: '#6b7280' }}>
-              {(currentPage - 1) * itemsPerPage + 1}–{Math.min(currentPage * itemsPerPage, filtered.length)} of {filtered.length}
+              {(currentPage - 1) * itemsPerPage + 1}–{Math.min(currentPage * itemsPerPage, models.length)} of {models.length}
             </span>
             <div style={{ display: 'flex', gap: 4 }}>
               <PageBtn disabled={currentPage === 1} onClick={() => setCurrentPage(p => p - 1)}>←</PageBtn>
@@ -775,7 +988,6 @@ const TableRow: React.FC<TableRowProps> = ({ model, onView }) => {
       style={{ borderBottom: '1px solid #f9fafb', background: hovered ? '#fafafa' : '#fff', cursor: 'pointer', transition: 'background 0.1s' }}
     >
       <td style={{ padding: '13px 16px', fontSize: 14, fontWeight: 500, color: '#111827' }}>{model.name}</td>
-      <td style={{ padding: '13px 16px', fontSize: 14, color: '#6b7280' }}>{model.domain || '--'}</td>
       <td style={{ padding: '13px 16px', fontSize: 14, color: '#6b7280' }}>{formatDate(model.createdAt)}</td>
       <td style={{ padding: '13px 16px' }}>
         {hasProjects ? (

@@ -63,12 +63,30 @@ const extractFileId = (response: any): number => {
   return fileId;
 };
 
+type BackendErrorPayload = { message?: string };
+
 const parseBackendError = (err: unknown): { message: string; isMetamodelRejected: boolean } => {
-  const anyError = err as any;
-  const backendPayload = anyError?.response?.data;
+  const backendPayload = (err as { response?: { data?: BackendErrorPayload } })?.response?.data;
   const backendMessage = typeof backendPayload?.message === 'string' ? backendPayload.message : '';
   const message = backendMessage || (err instanceof Error ? err.message : '') || 'Unknown error';
   return { message, isMetamodelRejected: message.toLowerCase().includes('metamodel rejected') };
+};
+
+const applyImportFailureFieldErrors = (
+  message: string,
+  errorPrefix: string,
+  setFieldErrors: React.Dispatch<React.SetStateAction<Record<CreateModelFieldKey, string>>>,
+  setScrollTarget: React.Dispatch<React.SetStateAction<CreateModelFieldKey | null>>,
+) => {
+  const full = `${errorPrefix}${message}`;
+  const inferred = inferFieldKeyFromBackendMessage(message);
+  if (inferred) {
+    setFieldErrors({ ...EMPTY_FIELD_ERRORS, [inferred]: full });
+    setScrollTarget(inferred);
+    return;
+  }
+  setFieldErrors({ ...EMPTY_FIELD_ERRORS, files: full });
+  setScrollTarget('files');
 };
 
 /** Form regions used for inline errors + scroll-into-view */
@@ -808,7 +826,7 @@ function useCreateModelForm({ isOpen, onClose, onSuccess }: CreateModelModalProp
   useLayoutEffect(() => {
     if (!scrollTarget) return;
     const el = fieldSectionRefsRef.current[scrollTarget].current;
-    if (el) {
+    if (el && typeof el.scrollIntoView === 'function') {
       el.scrollIntoView({ behavior: 'smooth', block: 'center' });
     }
     setScrollTarget(null);
@@ -979,6 +997,8 @@ function useCreateModelForm({ isOpen, onClose, onSuccess }: CreateModelModalProp
     setIsLoading(false);
     setUploadProgress({ ecore: { progress: 0, isUploading: false }, genmodel: { progress: 0, isUploading: false } });
     setMetaModelCreatedSuccessfully(false);
+    setShowGenModelFixPrompt(false);
+    setPendingCreateRequest(null);
     setPerKind(EMPTY_PER_KIND);
     onClose();
   };
@@ -1104,6 +1124,14 @@ function useCreateModelForm({ isOpen, onClose, onSuccess }: CreateModelModalProp
     return true;
   };
 
+  const handleImportFailure = async (message: string, errorPrefix: string) => {
+    setIsLoading(false);
+    stopSubmitOverlayWithError();
+    await cleanupUploadedFiles();
+    resetLocalUploadStateAfterImportFailure();
+    applyImportFailureFieldErrors(message, errorPrefix, setFieldErrors, setScrollTarget);
+  };
+
   const handleCreateModel = async () => {
     if (!validateClientFields()) return;
 
@@ -1123,9 +1151,9 @@ function useCreateModelForm({ isOpen, onClose, onSuccess }: CreateModelModalProp
       onSubmitSuccess('Meta Model created successfully!', response.data);
     } catch (err) {
       const { message, isMetamodelRejected } = parseBackendError(err);
-      setIsLoading(false);
-      stopSubmitOverlayWithError();
       if (isMetamodelRejected) {
+        setIsLoading(false);
+        stopSubmitOverlayWithError();
         setFieldErrors({
           ...EMPTY_FIELD_ERRORS,
           files:
@@ -1136,17 +1164,7 @@ function useCreateModelForm({ isOpen, onClose, onSuccess }: CreateModelModalProp
         setShowGenModelFixPrompt(true);
         return;
       }
-      await cleanupUploadedFiles();
-      resetLocalUploadStateAfterImportFailure();
-      const full = `Error creating meta model: ${message}`;
-      const inferred = inferFieldKeyFromBackendMessage(message);
-      if (inferred) {
-        setFieldErrors({ ...EMPTY_FIELD_ERRORS, [inferred]: full });
-        setScrollTarget(inferred);
-      } else {
-        setFieldErrors({ ...EMPTY_FIELD_ERRORS, files: full });
-        setScrollTarget('files');
-      }
+      await handleImportFailure(message, 'Error creating meta model: ');
     }
   };
 
@@ -1159,19 +1177,7 @@ function useCreateModelForm({ isOpen, onClose, onSuccess }: CreateModelModalProp
       onSubmitSuccess('Meta Model created successfully with automatic GenModel fixes.', response.data);
     } catch (err) {
       const { message } = parseBackendError(err);
-      setIsLoading(false);
-      stopSubmitOverlayWithError();
-      await cleanupUploadedFiles();
-      resetLocalUploadStateAfterImportFailure();
-      const full = `Error creating meta model with automatic GenModel fixes: ${message}`;
-      const inferred = inferFieldKeyFromBackendMessage(message);
-      if (inferred) {
-        setFieldErrors({ ...EMPTY_FIELD_ERRORS, [inferred]: full });
-        setScrollTarget(inferred);
-      } else {
-        setFieldErrors({ ...EMPTY_FIELD_ERRORS, files: full });
-        setScrollTarget('files');
-      }
+      await handleImportFailure(message, 'Error creating meta model with automatic GenModel fixes: ');
     }
   };
 
