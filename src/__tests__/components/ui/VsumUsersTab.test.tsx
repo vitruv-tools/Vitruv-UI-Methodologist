@@ -27,6 +27,7 @@ jest.mock('../../../services/api', () => ({
     }),
     addVsumMember: jest.fn().mockResolvedValue({}),
     removeVsumMember: jest.fn().mockResolvedValue({}),
+    inviteVsumViewer: jest.fn().mockResolvedValue({ message: 'Invitation sent' }),
   },
 }));
 
@@ -36,6 +37,7 @@ const { apiService } = require('../../../services/api') as {
     searchUsers: jest.Mock;
     addVsumMember: jest.Mock;
     removeVsumMember: jest.Mock;
+    inviteVsumViewer: jest.Mock;
   };
 };
 
@@ -141,5 +143,57 @@ describe('VsumUsersTab – additional tests', () => {
     apiService.getVsumMembers.mockRejectedValueOnce(new Error('Unauthorized'));
     render(<VsumUsersTab vsumId={1} />);
     expect(await screen.findByText(/Unauthorized/i)).toBeInTheDocument();
+  });
+
+  it('invites a viewer by email', async () => {
+    apiService.inviteVsumViewer.mockResolvedValueOnce({ message: 'Invitation sent to viewer@example.com' });
+    render(<VsumUsersTab vsumId={1} />);
+    await screen.findByText(/No members yet/i);
+
+    fireEvent.change(screen.getByPlaceholderText('viewer@example.com'), {
+      target: { value: 'viewer@example.com' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: /Invite viewer/i }));
+
+    await waitFor(() => {
+      expect(apiService.inviteVsumViewer).toHaveBeenCalledWith(1, { email: 'viewer@example.com' });
+    });
+    expect(await screen.findByText(/Invitation sent/i)).toBeInTheDocument();
+  });
+
+  it('shows pending badge for pending viewer invites', async () => {
+    apiService.getVsumMembers.mockResolvedValueOnce({
+      data: [{
+        id: 20,
+        vsumId: 1,
+        firstName: '',
+        lastName: '',
+        email: 'pending@example.com',
+        role: 'VIEWER',
+        status: 'PENDING',
+      }],
+    });
+    render(<VsumUsersTab vsumId={1} />);
+    expect(await screen.findByText('Pending invite')).toBeInTheDocument();
+    expect(screen.getByText('Pending')).toBeInTheDocument();
+    expect(screen.getByText('Viewer')).toBeInTheDocument();
+  });
+
+  it('hides invite and add controls when canManage is false', async () => {
+    apiService.getVsumMembers.mockResolvedValueOnce({
+      data: [{
+        id: 1,
+        vsumId: 1,
+        firstName: 'Ada',
+        lastName: 'Lovelace',
+        email: 'ada@example.com',
+        role: 'OWNER',
+      }],
+    });
+    render(<VsumUsersTab vsumId={1} canManage={false} />);
+    expect(await screen.findByText('Ada Lovelace')).toBeInTheDocument();
+    expect(screen.queryByText('Invite viewer')).not.toBeInTheDocument();
+    expect(screen.queryByText('Add member')).not.toBeInTheDocument();
+    expect(screen.queryByText('Remove')).not.toBeInTheDocument();
   });
 });

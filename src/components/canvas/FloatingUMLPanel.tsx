@@ -30,6 +30,8 @@ interface FloatingUMLPanelProps {
   /** Called after a successful server fetch so parent state stays in sync. */
   onEcoreContentUpdated?: (content: string) => void;
   refreshing?: boolean;
+  /** When true, UML diagram is view-only (no class/relationship edits). */
+  viewOnly?: boolean;
 }
 
 /** Vitruv toolbar tokens — aligned with UMLDiagram / canvas */
@@ -68,6 +70,7 @@ const RefreshIcon = () => (
 export const FloatingUMLPanel: React.FC<FloatingUMLPanelProps> = ({
   id, title, fileName, layoutScopeId, ecoreContent, saveContext, zIndex = MODAL_Z_INDEX, onClose,
   onHome, onRefresh, ecoreFileId, fetchEcoreFile, onEcoreContentUpdated, refreshing = false,
+  viewOnly = false,
 }) => {
   const diagramRef = useRef<UMLDiagramHandle>(null);
   const ecoreContentRef = useRef(ecoreContent);
@@ -85,6 +88,22 @@ export const FloatingUMLPanel: React.FC<FloatingUMLPanelProps> = ({
   useEffect(() => () => {
     diagramRef.current?.flushLayout?.();
   }, []);
+
+  useEffect(() => {
+    if (ecoreContent?.trim() || ecoreFileId == null || !fetchEcoreFile) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const next = await fetchEcoreFile(ecoreFileId);
+        if (cancelled || !next?.trim()) return;
+        onEcoreContentUpdated?.(next);
+        diagramRef.current?.reload?.(next);
+      } catch {
+        // Parent may show an error when the user opens the panel manually.
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [ecoreContent, ecoreFileId, fetchEcoreFile, onEcoreContentUpdated]);
 
   const doClose = useCallback(() => {
     diagramRef.current?.flushLayout?.();
@@ -393,6 +412,7 @@ export const FloatingUMLPanel: React.FC<FloatingUMLPanelProps> = ({
           fileName={fileName}
           layoutScopeId={layoutScopeId}
           saveContext={saveContext}
+          interactive={!viewOnly}
         />
 
         <div style={{

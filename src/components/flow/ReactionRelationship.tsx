@@ -16,6 +16,7 @@ interface ReactionRelationshipData {
   onEdgeDragEnd?: (edgeId: string, point: { x: number; y: number }) => void;
   onHandleChange?: (edgeId: string, sourceHandle: string, targetHandle: string) => void;
   onReorderRequest?: (edgeId: string, controlPoint: { x: number; y: number }) => void;
+  readOnly?: boolean;
 }
 
 type HandlePosition = 'top' | 'bottom' | 'left' | 'right';
@@ -202,6 +203,7 @@ export function ReactionRelationship({
   const { edgePath, labelX, labelY, arrowX, arrowY, arrowAngle, controlPoint, segments } = pathData;
 
   const handleSegmentDragStart = useCallback((e: React.PointerEvent, segmentIndex: number) => {
+    if (data?.readOnly) return;
     e.stopPropagation();
     e.preventDefault();
 
@@ -315,7 +317,7 @@ export function ReactionRelationship({
   const underlayWidth = isActive ? 8 : 7;
   const mainStrokeWidth = getMainStrokeWidth();
   const controlPointFill = isDraggingSegment ? '#3b82f6' : '#ffffff';
-  const showOrthogonalControls = selected && data?.routingStyle === 'orthogonal';
+  const showOrthogonalControls = selected && data?.routingStyle === 'orthogonal' && !data?.readOnly;
 
   const handleMouseEnter = () => setIsHovered(true);
   const handleMouseLeave = () => setIsHovered(false);

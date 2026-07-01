@@ -1,5 +1,5 @@
 import React from 'react';
-import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
+import { render, screen, fireEvent, act } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { ProjectsView } from '../../../components/ui/ProjectsView';
 
@@ -42,6 +42,12 @@ jest.mock('../../../components/ui/ConfirmDialog', () => ({
 
 const { apiService } = require('../../../services/api');
 
+type VsumListResponse = { data: unknown[] };
+
+let resolveVsums: ((value: VsumListResponse) => void) | undefined;
+let rejectVsums: ((reason?: unknown) => void) | undefined;
+let resolveRemoved: ((value: VsumListResponse) => void) | undefined;
+
 const mockVsum = {
   id: 1,
   name: 'Test Project',
@@ -60,9 +66,37 @@ const mockVsum2 = {
 
 beforeEach(() => {
   jest.clearAllMocks();
-  apiService.getVsumsPaginated.mockResolvedValue({ data: [] });
-  apiService.getRemovedVsumsPaginated.mockResolvedValue({ data: [] });
+  apiService.getVsumsPaginated.mockImplementation(
+    () => new Promise((resolve, reject) => {
+      resolveVsums = resolve;
+      rejectVsums = reject;
+    }),
+  );
+  apiService.getRemovedVsumsPaginated.mockImplementation(
+    () => new Promise(resolve => { resolveRemoved = resolve; }),
+  );
 });
+
+async function settleVsums(data: unknown[] = []) {
+  await act(async () => {
+    resolveVsums?.({ data });
+    await Promise.resolve();
+  });
+}
+
+async function rejectVsumsLoad(error: Error) {
+  await act(async () => {
+    rejectVsums?.(error);
+    await Promise.resolve();
+  });
+}
+
+async function settleRemoved(data: unknown[] = []) {
+  await act(async () => {
+    resolveRemoved?.({ data });
+    await Promise.resolve();
+  });
+}
 
 const renderView = () =>
   render(
@@ -71,42 +105,36 @@ const renderView = () =>
     </MemoryRouter>
   );
 
+async function renderProjectsView() {
+  renderView();
+  await settleVsums();
+  expect(screen.getByText('No projects yet')).toBeInTheDocument();
+}
+
 describe('ProjectsView real component', () => {
   it('renders "Dashboard / Projects" heading', async () => {
-    await act(async () => {
-      renderView();
-    });
+    await renderProjectsView();
     expect(screen.getByText('Dashboard / Projects')).toBeInTheDocument();
   });
 
   it('renders "New project" button', async () => {
-    await act(async () => {
-      renderView();
-    });
+    await renderProjectsView();
     expect(screen.getByText('New project')).toBeInTheDocument();
   });
 
   it('getVsumsPaginated is called on mount', async () => {
-    await act(async () => {
-      renderView();
-    });
-    await waitFor(() => {
-      expect(apiService.getVsumsPaginated).toHaveBeenCalled();
-    });
+    await renderProjectsView();
+    expect(apiService.getVsumsPaginated).toHaveBeenCalled();
   });
 
   it('clicking "New project" opens the CreateVsumModal', async () => {
-    await act(async () => {
-      renderView();
-    });
+    await renderProjectsView();
     fireEvent.click(screen.getByText('New project'));
     expect(screen.getByTestId('create-modal')).toBeInTheDocument();
   });
 
   it('closing the modal hides it', async () => {
-    await act(async () => {
-      renderView();
-    });
+    await renderProjectsView();
     fireEvent.click(screen.getByText('New project'));
     expect(screen.getByTestId('create-modal')).toBeInTheDocument();
     fireEvent.click(screen.getByText('Close modal'));
@@ -114,75 +142,62 @@ describe('ProjectsView real component', () => {
   });
 
   it('search input exists with placeholder "Search projects..."', async () => {
-    await act(async () => {
-      renderView();
-    });
+    await renderProjectsView();
     expect(screen.getByPlaceholderText('Search projects...')).toBeInTheDocument();
   });
 
   it('typing in search input updates the value', async () => {
-    await act(async () => {
-      renderView();
-    });
+    await renderProjectsView();
     const input = screen.getByPlaceholderText('Search projects...') as HTMLInputElement;
     fireEvent.change(input, { target: { value: 'hello' } });
     expect(input.value).toBe('hello');
   });
 
   it('pressing Enter in search input triggers getVsumsPaginated again', async () => {
-    await act(async () => {
-      renderView();
-    });
-    await waitFor(() => {
-      expect(apiService.getVsumsPaginated).toHaveBeenCalledTimes(1);
-    });
+    await renderProjectsView();
+    expect(apiService.getVsumsPaginated).toHaveBeenCalledTimes(1);
     const input = screen.getByPlaceholderText('Search projects...');
-    await act(async () => {
-      fireEvent.keyDown(input, { key: 'Enter' });
-    });
-    await waitFor(() => {
-      expect(apiService.getVsumsPaginated).toHaveBeenCalledTimes(2);
-    });
+    fireEvent.keyDown(input, { key: 'Enter' });
+    await settleVsums();
+    expect(apiService.getVsumsPaginated).toHaveBeenCalledTimes(2);
   });
 
   it('"Deleted projects" button switches view and calls getRemovedVsumsPaginated', async () => {
-    await act(async () => {
-      renderView();
-    });
+    await renderProjectsView();
     fireEvent.click(screen.getByText('Deleted projects'));
-    await waitFor(() => {
-      expect(apiService.getRemovedVsumsPaginated).toHaveBeenCalled();
-    });
+    await settleRemoved();
+    expect(apiService.getRemovedVsumsPaginated).toHaveBeenCalled();
+    expect(screen.getByText('No deleted projects')).toBeInTheDocument();
   });
 
   it('when getVsumsPaginated returns items, they appear in the table', async () => {
-    apiService.getVsumsPaginated.mockResolvedValue({ data: [mockVsum, mockVsum2] });
-    await act(async () => {
-      renderView();
-    });
-    await waitFor(() => {
-      expect(screen.getByText('Test Project')).toBeInTheDocument();
-      expect(screen.getByText('Second Project')).toBeInTheDocument();
-    });
+    renderView();
+    await settleVsums([mockVsum, mockVsum2]);
+    expect(screen.getByText('Test Project')).toBeInTheDocument();
+    expect(screen.getByText('Second Project')).toBeInTheDocument();
   });
 
   it('when getVsumsPaginated rejects, error message is shown', async () => {
-    apiService.getVsumsPaginated.mockRejectedValue(new Error('Server error'));
-    await act(async () => {
-      renderView();
-    });
-    await waitFor(() => {
-      expect(screen.getByText('Server error')).toBeInTheDocument();
-    });
+    renderView();
+    await rejectVsumsLoad(new Error('Server error'));
+    expect(screen.getByText('Server error')).toBeInTheDocument();
   });
 
-  it('"Active projects" tab is initially selected (font weight 600)', async () => {
-    await act(async () => {
-      renderView();
-    });
-    const activeBtn = screen.getByText('Active projects');
+  it('"My projects" tab is initially selected (font weight 600)', async () => {
+    await renderProjectsView();
+    const activeBtn = screen.getByRole('button', { name: 'My projects' });
     expect(activeBtn).toBeInTheDocument();
-    // Active tab has fontWeight 600, inactive has 400
     expect(activeBtn).toHaveStyle({ fontWeight: 600 });
+  });
+
+  it('opens details modal when Details is chosen from row menu', async () => {
+    renderView();
+    await settleVsums([{ ...mockVsum, role: 'OWNER' }]);
+    expect(screen.getByText('Test Project')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Row actions' }));
+    fireEvent.click(await screen.findByRole('menuitem', { name: 'Details' }));
+
+    expect(screen.getByTestId('details-modal')).toBeInTheDocument();
   });
 });

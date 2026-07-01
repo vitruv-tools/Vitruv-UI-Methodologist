@@ -76,7 +76,7 @@ describe('CanvasProjectTabs', () => {
       />,
     );
     fireEvent.click(screen.getByText('Add project'));
-    expect(onSelectProject).toHaveBeenCalledWith(99, 'New');
+    expect(onSelectProject).toHaveBeenCalledWith(99, 'New', undefined);
   });
 
   it('enables horizontal scroll and trackpad hint when more than four tabs are open', () => {

@@ -775,6 +775,25 @@ class ApiService {
   }
 
   /**
+   * VSUM USERS: Invite a viewer by email (read-only access)
+   * POST /api/v1/vsum-users/invite
+   * body: { vsumId, email }
+   */
+  async inviteVsumViewer(
+    vsumId: number | string,
+    payload: { email: string },
+  ): Promise<ApiResponse<Record<string, never>>> {
+    const body: VsumUserInviteRequest = {
+      vsumId: Number(vsumId),
+      email: payload.email.trim(),
+    };
+    return this.authenticatedRequest('/api/v1/vsum-users/invite', {
+      method: 'POST',
+      body: JSON.stringify(body),
+    });
+  }
+
+  /**
    * USERS: Search people to add (🔧 adjust this to your real endpoint)
    * Examples:
    *   GET  /api/v1/users/search?q=...&limit=10
@@ -932,20 +951,30 @@ export interface RuleSetPutRequest {
 export { ApiService };
 
 
+export type VsumRole = 'OWNER' | 'MEMBER' | 'VIEWER';
+
 export interface VsumUserResponse {
   id: number;
   vsumId: number;
   firstName: string;
   lastName: string;
   email: string;
-  role: 'OWNER' | 'MEMBER';
+  role: VsumRole;
   roleEn?: string;
+  /** True when the invitee has not registered yet */
+  pending?: boolean;
+  status?: 'ACTIVE' | 'PENDING';
   createdAt: string;
 }
 
 export interface VsumUserPostRequest {
   vsumId: number;
   userId: number;
+}
+
+export interface VsumUserInviteRequest {
+  vsumId: number;
+  email: string;
 }
 
 export interface UserSearchItem {

@@ -9,6 +9,7 @@ const AUTH_STYLES = `
     width: 100vw;
     height: 100vh;
     overflow: hidden;
+    min-height: 0;
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
     margin: 0;
     padding: 0;
@@ -54,11 +55,14 @@ const AUTH_STYLES = `
     position: relative;
     z-index: 2;
     flex: 1;
+    min-height: 0;
     display: flex;
-    align-items: center;
+    align-items: flex-start;
     justify-content: center;
-    padding: 40px;
+    padding: 32px 40px;
     box-sizing: border-box;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
   }
 
   @media (max-width: 950px) {
@@ -76,6 +80,8 @@ const AUTH_STYLES = `
     text-align: center;
     box-sizing: border-box;
     transform: translate(-100px, 0px);
+    margin: auto 0;
+    flex-shrink: 0;
   }
 
   .mock-logo-container {
@@ -294,27 +300,71 @@ const AUTH_STYLES = `
   /* Forgot-password modal (SignIn) */
   .modal-backdrop {
     position: fixed;
-    top: 0; left: 0; right: 0; bottom: 0;
-    background: rgba(0, 0, 0, 0.4);
+    inset: 0;
+    background: rgba(15, 23, 42, 0.45);
     backdrop-filter: blur(4px);
-    display: flex; align-items: center; justify-content: center;
+    display: flex;
+    align-items: center;
+    justify-content: center;
     z-index: 1000;
+    padding: 16px;
+    box-sizing: border-box;
   }
   .modal-dialog {
-    background: white; border: none; border-radius: 12px;
-    padding: 24px; max-width: 400px; width: 90%;
-    box-shadow: 0 20px 25px rgba(0,0,0,0.1);
+    background: white;
+    border: none;
+    border-radius: 14px;
+    padding: 28px 32px 24px;
+    max-width: 400px;
+    width: 100%;
+    box-shadow: 0 20px 40px rgba(15, 23, 42, 0.14);
     font-family: inherit;
     margin: 0;
+    text-align: center;
   }
-  .modal-header h2 { margin: 0 0 8px 0; font-size: 20px; color: #0f172a; }
-  .modal-header p  { margin: 0 0 16px 0; color: #64748b; font-size: 14px; }
+  .modal-header { margin-bottom: 4px; }
+  .modal-header h2 {
+    margin: 0 0 10px 0;
+    font-size: 20px;
+    font-weight: 700;
+    color: #0f172a;
+    letter-spacing: -0.01em;
+  }
+  .modal-header p {
+    margin: 0 0 20px 0;
+    color: #64748b;
+    font-size: 14px;
+    line-height: 1.55;
+    max-width: 20rem;
+    margin-left: auto;
+    margin-right: auto;
+  }
+  .modal-message {
+    padding: 10px 12px;
+    border-radius: 8px;
+    margin-bottom: 12px;
+    font-size: 13px;
+    line-height: 1.45;
+    text-align: center;
+  }
+  .modal-message-error { background: #fef2f2; color: #991b1b; }
+  .modal-message-success { background: #ecfdf5; color: #065f46; }
   .modal-input {
-    width: 100%; padding: 12px; border: 1px solid #cbd5e1;
-    border-radius: 8px; box-sizing: border-box; margin-top: 8px;
+    width: 100%;
+    padding: 12px 14px;
+    border: 1px solid #cbd5e1;
+    border-radius: 8px;
+    box-sizing: border-box;
+    font-size: 14px;
+    text-align: left;
   }
   .modal-input:focus { outline: none; border-color: #1f9f92; }
-  .modal-actions { display: flex; justify-content: flex-end; gap: 12px; margin-top: 24px; }
+  .modal-actions {
+    display: flex;
+    justify-content: center;
+    gap: 10px;
+    margin-top: 22px;
+  }
   .btn-secondary {
     background: #f1f5f9; border: none; padding: 10px 18px;
     border-radius: 8px; cursor: pointer; font-weight: 600;

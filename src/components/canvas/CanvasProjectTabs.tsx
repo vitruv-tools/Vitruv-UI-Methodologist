@@ -32,7 +32,7 @@ interface CanvasProjectTabsProps {
   loading?: boolean;
   onActivate: (instanceId: string) => void;
   onRequestClose: (instanceId: string) => void;
-  onSelectProject: (projectId: number, name: string) => void;
+  onSelectProject: (projectId: number, name: string, accessRole?: string) => void;
 }
 
 export const CanvasProjectTabs: React.FC<CanvasProjectTabsProps> = ({
@@ -228,7 +228,7 @@ export const CanvasProjectTabs: React.FC<CanvasProjectTabsProps> = ({
         openProjectIds={openProjectIds}
         currentProjectName=""
         disabled={loading}
-        onSelectProject={p => onSelectProject(p.id, p.name)}
+        onSelectProject={p => onSelectProject(p.id, p.name, p.role)}
       />
     </div>
   );

@@ -26,6 +26,7 @@ interface EcoreFileBoxData {
   isReactionSource?: boolean;
   isConstraintContext?: boolean;
   isConstraintFilter?: boolean;
+  readOnly?: boolean;
   description?: string;
   keywords?: string;
   domain?: string;
@@ -159,6 +160,7 @@ export const EcoreFileBox: React.FC<NodeProps<EcoreFileBoxData>> = ({
     isReactionSource = false,
     isConstraintContext = false,
     isConstraintFilter = false,
+    readOnly = false,
   } = data;
 
   const boxRef = useRef<HTMLDivElement>(null);
@@ -202,7 +204,11 @@ export const EcoreFileBox: React.FC<NodeProps<EcoreFileBoxData>> = ({
   );
 
   const handleClick = (e: React.MouseEvent) => { e.stopPropagation(); onSelect(fileName); };
-  const handleDoubleClick = (e: React.MouseEvent) => { e.stopPropagation(); onExpand(fileName, fileContent); };
+  const openUml = (e?: React.SyntheticEvent) => {
+    e?.stopPropagation();
+    onExpand(fileName, fileContent);
+  };
+  const handleDoubleClick = (e: React.MouseEvent) => { e.stopPropagation(); openUml(); };
   const openContextMenu = () => {
     if (boxRef.current) {
       const rect = boxRef.current.getBoundingClientRect();
@@ -219,7 +225,7 @@ export const EcoreFileBox: React.FC<NodeProps<EcoreFileBoxData>> = ({
     e.stopPropagation();
     if (e.key === 'Enter') {
       e.preventDefault();
-      onExpand(fileName, fileContent);
+      openUml();
     } else if (e.key === ' ') {
       e.preventDefault();
       onSelect(fileName);
@@ -230,6 +236,7 @@ export const EcoreFileBox: React.FC<NodeProps<EcoreFileBoxData>> = ({
   };
 
   const startRename = () => {
+    if (readOnly) return;
     setRenameVal(removeExt(fileName));
     setRenaming(true);
   };
@@ -273,8 +280,8 @@ export const EcoreFileBox: React.FC<NodeProps<EcoreFileBoxData>> = ({
     <ConnectionHandle
       key={pos}
       position={pos}
-      isVisible={selected || isConnectionActive}
-      onConnectionStart={(p, tip) => onConnectionStart?.(id, p, tip)}
+      isVisible={!readOnly && (selected || isConnectionActive)}
+      onConnectionStart={readOnly ? undefined : (p, tip) => onConnectionStart?.(id, p, tip)}
       offsetIndex={0}
       totalHandles={1}
     />
@@ -351,6 +358,32 @@ export const EcoreFileBox: React.FC<NodeProps<EcoreFileBoxData>> = ({
               {removeExt(fileName)}
             </span>
           )}
+
+          {readOnly && (
+            <button
+              type="button"
+              title="Open UML diagram"
+              onClick={openUml}
+              style={{
+                position: 'absolute',
+                bottom: 8,
+                left: '50%',
+                transform: 'translateX(-50%)',
+                padding: '3px 8px',
+                borderRadius: 8,
+                border: '1px solid rgba(0,0,0,0.15)',
+                background: 'rgba(255,255,255,0.85)',
+                color: 'rgba(0,0,0,0.75)',
+                fontSize: 10,
+                fontWeight: 700,
+                cursor: 'pointer',
+                lineHeight: 1.2,
+                whiteSpace: 'nowrap',
+              }}
+            >
+              Open UML
+            </button>
+          )}
         </div>
 
       </div>
@@ -367,7 +400,7 @@ export const EcoreFileBox: React.FC<NodeProps<EcoreFileBoxData>> = ({
           canDownloadGenModel={!!genModelFileId}
           onDownloadEcore={() => downloadMetaModelFile('ecore', ecoreFileId, '.ecore')}
           onDownloadGenModel={() => downloadMetaModelFile('genmodel', genModelFileId, '.genmodel')}
-          onOpenUML={() => { setShowMenu(false); onExpand(fileName, fileContent); }}
+          onOpenUML={() => { setShowMenu(false); openUml(); }}
           onConnect={() => {
             setShowMenu(false);
             startConnectionFromHandle('right');
@@ -375,6 +408,7 @@ export const EcoreFileBox: React.FC<NodeProps<EcoreFileBoxData>> = ({
           onRename={() => { setShowMenu(false); startRename(); }}
           onDelete={() => { setShowMenu(false); onRequestDelete?.(id); }}
           onShowDetails={handleShowDetails}
+          readOnly={readOnly}
         />,
         document.body,
       )}
@@ -401,6 +435,7 @@ interface ContextMenuProps {
   onRename: () => void;
   onDelete: () => void;
   onShowDetails?: () => void;
+  readOnly?: boolean;
 }
 
 const ContextMenu: React.FC<ContextMenuProps> = ({
@@ -408,6 +443,7 @@ const ContextMenu: React.FC<ContextMenuProps> = ({
   canDownloadEcore, canDownloadGenModel, downloadingFile,
   onDownloadEcore, onDownloadGenModel,
   onOpenUML, onConnect, onRename, onDelete, onShowDetails,
+  readOnly = false,
 }) => {
   useEffect(() => {
     menuRef.current?.focus();
@@ -451,8 +487,8 @@ const ContextMenu: React.FC<ContextMenuProps> = ({
     </div>
 
     <CMItem icon={<UMLIcon />}     label="Open UML"        onClick={onOpenUML} />
-    <CMItem icon={<ConnectIcon />} label="Add connection"  onClick={onConnect} />
-    <CMItem icon={<EditIcon />}    label="Rename"          onClick={onRename} />
+    {!readOnly && <CMItem icon={<ConnectIcon />} label="Add connection"  onClick={onConnect} />}
+    {!readOnly && <CMItem icon={<EditIcon />}    label="Rename"          onClick={onRename} />}
     {onShowDetails && <CMItem icon={<InfoIcon />} label="Details" onClick={onShowDetails} />}
 
     <div style={{ height: 1, background: '#f1f5f9', margin: '4px 2px' }} />
@@ -469,8 +505,12 @@ const ContextMenu: React.FC<ContextMenuProps> = ({
       disabled={!canDownloadGenModel || downloadingFile !== null}
     />
 
-    <div style={{ height: 1, background: '#f1f5f9', margin: '4px 2px' }} />
-    <CMItem icon={<TrashIcon />}   label="Remove"          onClick={onDelete} danger />
+    {!readOnly && (
+      <>
+        <div style={{ height: 1, background: '#f1f5f9', margin: '4px 2px' }} />
+        <CMItem icon={<TrashIcon />}   label="Remove"          onClick={onDelete} danger />
+      </>
+    )}
   </div>
   );
 };

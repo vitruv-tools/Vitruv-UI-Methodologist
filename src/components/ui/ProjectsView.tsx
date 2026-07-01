@@ -13,6 +13,9 @@ import {
   getDaysUntilPermanentDelete,
   getDeletionUrgency,
 } from '../../utils/deletedProjectUtils';
+import { isSharedProject, matchesProjectListView, ProjectListView } from '../../utils/vsumProjectList';
+import { sharedByFromVsum, resolveVsumAccessRole, mergeStoredProjectAccess } from '../../utils/vsumMemberUtils';
+import { readSeenSharedProjectIds } from '../../utils/sharedProjectNotifications';
 import { PortalRowActionsMenu } from './PortalRowActionsMenu';
 
 // ── Icons ──────────────────────────────────────────────────────────────────
@@ -34,6 +37,24 @@ const FolderIcon = () => (
 const formatDate = (iso: string) => {
   if (!iso) return '--';
   return new Date(iso).toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' });
+};
+
+const formatAccessRoleLabel = (role: string): string => {
+  if (role === 'VIEWER') return 'Viewer';
+  if (role === 'OWNER') return 'Owner';
+  return 'Member';
+};
+
+const emptyProjectListTitle = (view: ProjectListView): string => {
+  if (view === 'deleted') return 'No deleted projects';
+  if (view === 'shared') return 'No shared projects';
+  return 'No projects yet';
+};
+
+const emptyProjectListHint = (view: ProjectListView): string => {
+  if (view === 'deleted') return 'You have no deleted projects.';
+  if (view === 'shared') return 'Projects shared with you by other owners will appear here.';
+  return 'Create your first project.';
 };
 
 const DeletedProjectStatusBadge: React.FC<{ removedAt?: string | null }> = ({ removedAt }) => {
@@ -61,18 +82,47 @@ const DeletedProjectStatusBadge: React.FC<{ removedAt?: string | null }> = ({ re
 interface ProjectRowProps {
   item: Vsum;
   showDeleted: boolean;
+  isUnread?: boolean;
+  scrollRootRef?: React.RefObject<HTMLElement | null>;
   onDetails: () => void;
   onDelete: () => void;
   onRecover: () => void;
+  onOpen?: () => void;
 }
 
-const ProjectRow: React.FC<ProjectRowProps> = ({ item, showDeleted, onDetails, onDelete, onRecover }) => {
+const ProjectRow: React.FC<ProjectRowProps> = ({
+  item, showDeleted, isUnread = false, scrollRootRef, onDetails, onDelete, onRecover, onOpen,
+}) => {
   const [hovered, setHovered] = useState(false);
-  const role = (item as any).role as string | undefined;
-  const canManage = role === 'OWNER';
+  const role = resolveVsumAccessRole(item.role, item.roleEn) ?? item.role;
+  const canManage = (role ?? '').toUpperCase() === 'OWNER';
+
+  const roleBadgeStyle = (r: string): React.CSSProperties => {
+    if (r === 'OWNER') {
+      return { background: '#ecfdf5', color: '#065f46', borderColor: '#a7f3d0' };
+    }
+    if (r === 'VIEWER') {
+      return { background: '#eff6ff', color: '#1d4ed8', borderColor: '#bfdbfe' };
+    }
+    return { background: '#f3f4f6', color: '#374151', borderColor: '#e5e7eb' };
+  };
 
   const navigate = useNavigate();
-  const openVsum = () => navigate(`/canvas/${item.id}`);
+  const openVsum = () => {
+    onOpen?.();
+    const sharedBy = sharedByFromVsum(item);
+    mergeStoredProjectAccess(item.id, {
+      accessRole: resolveVsumAccessRole(item.role, item.roleEn) ?? item.role,
+      sharedBy,
+    });
+    navigate(`/canvas/${item.id}`, {
+      state: {
+        vsumId: item.id,
+        accessRole: resolveVsumAccessRole(item.role, item.roleEn) ?? item.role,
+        sharedBy,
+      },
+    });
+  };
   const handleMouseEnter = () => setHovered(true);
   const handleMouseLeave = () => setHovered(false);
 
@@ -86,15 +136,26 @@ const ProjectRow: React.FC<ProjectRowProps> = ({ item, showDeleted, onDetails, o
       {/* Name */}
       <td style={{ padding: '13px 16px' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          {isUnread && (
+            <span
+              title="New shared project"
+              style={{
+                width: 8,
+                height: 8,
+                borderRadius: '50%',
+                background: '#ef4444',
+                flexShrink: 0,
+              }}
+            />
+          )}
           <span style={{ fontSize: 14, fontWeight: 500, color: '#111827' }}>{item.name}</span>
           {role && (
             <span style={{
               padding: '2px 7px', borderRadius: 5, fontSize: 11, fontWeight: 700,
-              background: role === 'OWNER' ? '#ecfdf5' : '#f3f4f6',
-              color: role === 'OWNER' ? '#065f46' : '#374151',
-              border: '1px solid', borderColor: role === 'OWNER' ? '#a7f3d0' : '#e5e7eb',
+              border: '1px solid',
+              ...roleBadgeStyle(role),
             }}>
-              {role}
+              {formatAccessRoleLabel(role)}
             </span>
           )}
         </div>
@@ -131,6 +192,7 @@ const ProjectRow: React.FC<ProjectRowProps> = ({ item, showDeleted, onDetails, o
           </button>
         ) : (
           <PortalRowActionsMenu
+            scrollRootRef={scrollRootRef}
             actions={[
               { label: 'Open', onClick: openVsum },
               ...(canManage
@@ -149,12 +211,25 @@ const ProjectRow: React.FC<ProjectRowProps> = ({ item, showDeleted, onDetails, o
 
 // ── ProjectsView (main export) ─────────────────────────────────────────────
 
-export const ProjectsView: React.FC = () => {
+interface ProjectsViewProps {
+  userKey?: string | null;
+  /** Unread shared-project count from global notification state */
+  sharedUnreadCount?: number;
+  onSharedProjectOpened?: (projectId: number) => void;
+  onSharedTabOpened?: (sharedProjectIds: number[]) => void;
+}
+
+export const ProjectsView: React.FC<ProjectsViewProps> = ({
+  userKey = null,
+  sharedUnreadCount = 0,
+  onSharedProjectOpened,
+  onSharedTabOpened,
+}) => {
   const [items, setItems] = useState<Vsum[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [search, setSearch] = useState('');
-  const [showDeleted, setShowDeleted] = useState(false);
+  const [projectView, setProjectView] = useState<ProjectListView>('mine');
   const [page, setPage] = useState(0);
   const [hasMore, setHasMore] = useState(true);
   const [showCreate, setShowCreate] = useState(false);
@@ -168,6 +243,13 @@ export const ProjectsView: React.FC = () => {
   const rafRef = useRef<number | null>(null);
   const requestSeq = useRef(0);
   const PAGE_SIZE = 20;
+  const seenSharedIds = readSeenSharedProjectIds(userKey);
+
+  useEffect(() => {
+    if (projectView !== 'shared') return;
+    const sharedIds = items.filter(isSharedProject).map(item => item.id);
+    if (sharedIds.length > 0) onSharedTabOpened?.(sharedIds);
+  }, [projectView, items, onSharedTabOpened]);
 
   // ── data loading ──────────────────────────────────────────────────────────
 
@@ -179,12 +261,14 @@ export const ProjectsView: React.FC = () => {
     setPage(0);
     setHasMore(true);
     try {
-      const res = showDeleted
+      const res = projectView === 'deleted'
         ? await apiService.getRemovedVsumsPaginated(0, PAGE_SIZE)
         : await apiService.getVsumsPaginated(search, 0, PAGE_SIZE);
       if (mySeq !== requestSeq.current) return;
       const raw: Vsum[] = res.data || [];
-      const data = showDeleted ? filterRestorableDeletedVsums(raw) : raw;
+      const data = projectView === 'deleted'
+        ? filterRestorableDeletedVsums(raw)
+        : raw.filter(i => matchesProjectListView(i, projectView));
       setItems(data);
       setPage(1);
       setHasMore(raw.length === PAGE_SIZE);
@@ -194,19 +278,21 @@ export const ProjectsView: React.FC = () => {
     } finally {
       if (mySeq === requestSeq.current) setLoading(false);
     }
-  }, [search, showDeleted]);
+  }, [search, projectView]);
 
   const loadNextPage = useCallback(async () => {
     if (loading || !hasMore) return;
     const mySeq = requestSeq.current;
     setLoading(true);
     try {
-      const res = showDeleted
+      const res = projectView === 'deleted'
         ? await apiService.getRemovedVsumsPaginated(page, PAGE_SIZE)
         : await apiService.getVsumsPaginated(search, page, PAGE_SIZE);
       if (mySeq !== requestSeq.current) return;
       const raw: Vsum[] = res.data || [];
-      const data = showDeleted ? filterRestorableDeletedVsums(raw) : raw;
+      const data = projectView === 'deleted'
+        ? filterRestorableDeletedVsums(raw)
+        : raw.filter(i => matchesProjectListView(i, projectView));
       setItems(prev => [...prev, ...data]);
       setPage(prev => prev + 1);
       setHasMore(raw.length === PAGE_SIZE);
@@ -216,9 +302,40 @@ export const ProjectsView: React.FC = () => {
     } finally {
       if (mySeq === requestSeq.current) setLoading(false);
     }
-  }, [search, page, hasMore, loading, showDeleted]);
+  }, [search, page, hasMore, loading, projectView]);
+
+  const syncListFromApi = useCallback(async () => {
+    const mySeq = ++requestSeq.current;
+    try {
+      const res = projectView === 'deleted'
+        ? await apiService.getRemovedVsumsPaginated(0, PAGE_SIZE)
+        : await apiService.getVsumsPaginated(search, 0, PAGE_SIZE);
+      if (mySeq !== requestSeq.current) return;
+      const raw: Vsum[] = res.data || [];
+      const data = projectView === 'deleted'
+        ? filterRestorableDeletedVsums(raw)
+        : raw.filter(i => matchesProjectListView(i, projectView));
+      setItems(data);
+      setPage(1);
+      setHasMore(raw.length === PAGE_SIZE);
+    } catch {
+      // ignore background refresh errors
+    }
+  }, [search, projectView]);
 
   useEffect(() => { loadFirstPage(); }, [loadFirstPage]);
+
+  useEffect(() => {
+    const onRefresh = () => { void syncListFromApi(); };
+    globalThis.addEventListener('vitruv.refreshVsums', onRefresh);
+    return () => globalThis.removeEventListener('vitruv.refreshVsums', onRefresh);
+  }, [syncListFromApi]);
+
+  useEffect(() => {
+    if (projectView !== 'shared') return;
+    const timer = globalThis.setInterval(() => { void syncListFromApi(); }, 15000);
+    return () => globalThis.clearInterval(timer);
+  }, [projectView, syncListFromApi]);
 
   // infinite scroll on the table container
   useEffect(() => {
@@ -266,21 +383,51 @@ export const ProjectsView: React.FC = () => {
 
   // sorted list
   const sorted = [...items]
-    .filter(i => (showDeleted ? getDaysUntilPermanentDelete(i.removedAt) > 0 : !i.removedAt))
+    .filter(i => (
+      projectView === 'deleted'
+        ? getDaysUntilPermanentDelete(i.removedAt) > 0
+        : matchesProjectListView(i, projectView)
+    ))
     .sort((a, b) => {
-      const t = (i: Vsum) => showDeleted
+      const t = (i: Vsum) => projectView === 'deleted'
         ? new Date(i.removedAt || i.updatedAt).getTime()
         : new Date(i.createdAt).getTime();
       return t(b) - t(a);
     });
 
+  const showDeleted = projectView === 'deleted';
+  const emptyTitle = emptyProjectListTitle(projectView);
+  const emptyHint = emptyProjectListHint(projectView);
+
   // ── render ────────────────────────────────────────────────────────────────
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', minHeight: 0 }}>
       <style>{`
         @keyframes pulseBadge { 0%,100%{opacity:1} 50%{opacity:.55} }
         @keyframes spin { 0%{transform:rotate(0deg)} 100%{transform:rotate(360deg)} }
+        .projects-table-scroll {
+          overflow-y: auto;
+          overflow-x: hidden;
+          scrollbar-gutter: stable;
+          scrollbar-width: thin;
+          scrollbar-color: #cbd5e1 #f1f5f9;
+        }
+        .projects-table-scroll::-webkit-scrollbar {
+          width: 10px;
+        }
+        .projects-table-scroll::-webkit-scrollbar-track {
+          background: #f1f5f9;
+          border-radius: 10px;
+        }
+        .projects-table-scroll::-webkit-scrollbar-thumb {
+          background: #cbd5e1;
+          border-radius: 10px;
+          border: 2px solid #f1f5f9;
+        }
+        .projects-table-scroll::-webkit-scrollbar-thumb:hover {
+          background: #94a3b8;
+        }
       `}</style>
 
       {/* Page header */}
@@ -288,9 +435,16 @@ export const ProjectsView: React.FC = () => {
         <h1 style={{ margin: 0, fontSize: 26, fontWeight: 700, color: '#111827', letterSpacing: '-0.02em' }}>Dashboard / Projects</h1>
         <button
           onClick={() => setShowCreate(true)}
-          style={{ display: 'flex', alignItems: 'center', gap: 7, padding: '9px 18px', background: '#0B1720', color: '#fff', border: 'none', borderRadius: 9, fontSize: 14, fontWeight: 600, cursor: 'pointer', boxShadow: '0 1px 4px rgba(37,99,235,0.25)', transition: 'background 0.15s' }}
-          onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.background = '#0B1720'; }}
-          onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.background = '#1e293b'; }}
+          disabled={projectView === 'shared' || projectView === 'deleted'}
+          style={{
+            display: 'flex', alignItems: 'center', gap: 7, padding: '9px 18px',
+            background: projectView === 'mine' ? '#0B1720' : '#94a3b8',
+            color: '#fff', border: 'none', borderRadius: 9, fontSize: 14, fontWeight: 600,
+            cursor: projectView === 'mine' ? 'pointer' : 'not-allowed',
+            boxShadow: '0 1px 4px rgba(37,99,235,0.25)', transition: 'background 0.15s',
+          }}
+          onMouseEnter={e => { if (projectView === 'mine') (e.currentTarget as HTMLButtonElement).style.background = '#1e293b'; }}
+          onMouseLeave={e => { if (projectView === 'mine') (e.currentTarget as HTMLButtonElement).style.background = '#0B1720'; }}
         >
           <span style={{ fontSize: 18, lineHeight: 1 }}>+</span>
           <span>New project</span>
@@ -316,22 +470,49 @@ export const ProjectsView: React.FC = () => {
         </div>
 
         {/* Active / Deleted tabs */}
-        <div style={{ display: 'flex', gap: 0, border: '1px solid #e5e7eb', borderRadius: 8, overflow: 'hidden', flexShrink: 0 }}>
-          {[
-            { key: false, label: 'Active projects' },
-            { key: true, label: 'Deleted projects' },
-          ].map(({ key, label }) => (
+        <div style={{ display: 'flex', gap: 0, border: '1px solid #e5e7eb', borderRadius: 8, overflow: 'hidden', flexShrink: 0, flexWrap: 'wrap' }}>
+          {([
+            { key: 'mine' as const, label: 'My projects' },
+            { key: 'shared' as const, label: 'Shared with me' },
+            { key: 'deleted' as const, label: 'Deleted projects' },
+          ]).map(({ key, label }) => (
             <button
-              key={String(key)}
-              onClick={() => setShowDeleted(key)}
+              key={key}
+              onClick={() => setProjectView(key)}
               style={{
-                padding: '7px 14px', border: 'none', fontSize: 13, fontWeight: showDeleted === key ? 600 : 400,
-                background: showDeleted === key ? '#f0faf8' : '#fff',
-                color: showDeleted === key ? '#049484' : '#6b7280',
+                padding: '7px 14px', border: 'none', fontSize: 13, fontWeight: projectView === key ? 600 : 400,
+                background: projectView === key ? '#f0faf8' : '#fff',
+                color: projectView === key ? '#049484' : '#6b7280',
                 cursor: 'pointer', transition: 'all 0.15s', whiteSpace: 'nowrap',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 6,
+                position: 'relative',
               }}
             >
-              {label}
+              <span>{label}</span>
+              {key === 'shared' && sharedUnreadCount > 0 && (
+                <span
+                  aria-label={`${sharedUnreadCount} new shared project${sharedUnreadCount === 1 ? '' : 's'}`}
+                  style={{
+                    minWidth: 18,
+                    height: 18,
+                    padding: '0 5px',
+                    borderRadius: 999,
+                    background: '#ef4444',
+                    color: '#fff',
+                    fontSize: 10,
+                    fontWeight: 700,
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    lineHeight: 1,
+                    boxShadow: '0 0 0 2px #fff',
+                  }}
+                >
+                  {sharedUnreadCount > 99 ? '99+' : sharedUnreadCount}
+                </span>
+              )}
             </button>
           ))}
         </div>
@@ -351,7 +532,11 @@ export const ProjectsView: React.FC = () => {
       )}
 
       {/* Table */}
-      <div ref={tableBodyRef} style={{ flex: 1, padding: '16px 40px 24px', overflow: 'auto' }}>
+      <div
+        ref={tableBodyRef}
+        className="projects-table-scroll"
+        style={{ flex: 1, minHeight: 0, padding: '16px 40px 24px' }}
+      >
         <div style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: 12, overflow: 'hidden', boxShadow: '0 1px 4px rgba(0,0,0,0.04)' }}>
           <table style={{ width: '100%', borderCollapse: 'collapse' }}>
             <thead>
@@ -370,10 +555,10 @@ export const ProjectsView: React.FC = () => {
                     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10, color: '#9ca3af' }}>
                       <FolderIcon />
                       <div style={{ fontSize: 15, fontWeight: 600, color: '#374151' }}>
-                        {showDeleted ? 'No deleted projects' : 'No projects yet'}
+                        {emptyTitle}
                       </div>
                       <div style={{ fontSize: 13 }}>
-                        {showDeleted ? 'You have no deleted projects.' : 'Create your first project.'}
+                        {emptyHint}
                       </div>
                     </div>
                   </td>
@@ -384,9 +569,14 @@ export const ProjectsView: React.FC = () => {
                     key={item.id}
                     item={item}
                     showDeleted={showDeleted}
+                    isUnread={isSharedProject(item) && !seenSharedIds.has(item.id)}
+                    scrollRootRef={tableBodyRef}
                     onDetails={() => setDetailsId(item.id)}
                     onDelete={() => setDeletingId(item.id)}
                     onRecover={() => setRecoverConfirmId(item.id)}
+                    onOpen={() => {
+                      if (isSharedProject(item)) onSharedProjectOpened?.(item.id);
+                    }}
                   />
                 ))
               )}

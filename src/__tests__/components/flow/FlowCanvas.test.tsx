@@ -201,6 +201,19 @@ describe('FlowCanvas', () => {
     expect(onEcoreFileSelect).toHaveBeenCalledWith('test.ecore');
   });
 
+  it('allows server-loaded metamodels on a read-only canvas', () => {
+    const ref = createRef<any>();
+    const onEcoreFileSelect = jest.fn();
+    render(<FlowCanvas ref={ref} readOnly onEcoreFileSelect={onEcoreFileSelect} />);
+    act(() => {
+      ref.current.addEcoreFile('shared.ecore', '<ecore:EPackage name="shared"/>', {
+        metaModelId: 2,
+        fromServerLoad: true,
+      });
+    });
+    expect(onEcoreFileSelect).toHaveBeenCalledWith('shared.ecore');
+  });
+
   it('handleToolClick does not crash', () => {
     const ref = createRef<any>();
     render(<FlowCanvas ref={ref} />);

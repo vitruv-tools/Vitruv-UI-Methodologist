@@ -1,5 +1,5 @@
 import React from 'react';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { act, render, screen, fireEvent } from '@testing-library/react';
 import { ProfileView } from '../../../components/ui/ProfileView';
 import { apiService } from '../../../services/api';
 import { User } from '../../../services/auth';
@@ -47,108 +47,149 @@ const mockUser: User = {
   emailVerified: true,
 };
 
-const mockGetUserInfo = () =>
-  (apiService.getUserInfo as jest.Mock).mockResolvedValue({
-    data: { id: 42, email: 'max@kit.edu', firstName: 'Max', lastName: 'Oesterle', verified: true },
-    message: null,
+const profileData = {
+  id: 42,
+  email: 'max@kit.edu',
+  firstName: 'Max',
+  lastName: 'Oesterle',
+  verified: true,
+};
+
+type UserInfoResponse = { data: typeof profileData; message: null };
+
+let resolveUserInfo: ((value: UserInfoResponse) => void) | undefined;
+let rejectUserInfo: ((reason?: unknown) => void) | undefined;
+
+async function settleUserInfo(data: typeof profileData = profileData) {
+  await act(async () => {
+    resolveUserInfo?.({ data, message: null });
+    await Promise.resolve();
   });
+}
+
+async function rejectUserInfoLoad(reason: unknown = new Error('Network error')) {
+  await act(async () => {
+    rejectUserInfo?.(reason);
+    await Promise.resolve();
+  });
+}
+
+async function renderProfileView(
+  user: User | null = mockUser,
+  props: { onNameSaved?: () => void } = {},
+) {
+  render(<ProfileView user={user} {...props} />);
+  await settleUserInfo();
+  if (user) {
+    expect(screen.getAllByText('max@kit.edu').length).toBeGreaterThan(0);
+  }
+}
 
 // ── tests ─────────────────────────────────────────────────────────────────────
 
 describe('ProfileView', () => {
   beforeEach(() => {
-    mockGetUserInfo();
+    (apiService.getUserInfo as jest.Mock).mockImplementation(
+      () => new Promise((resolve, reject) => {
+        resolveUserInfo = resolve;
+        rejectUserInfo = reject;
+      }),
+    );
     (apiService.updateUserName as jest.Mock).mockResolvedValue({ message: 'User updated successfully' });
   });
 
   afterEach(() => jest.clearAllMocks());
 
   it('renders User Profile heading', async () => {
-    render(<ProfileView user={mockUser} />);
+    await renderProfileView();
     expect(screen.getByText('User Profile')).toBeInTheDocument();
   });
 
   it('fetches profile from backend on mount', async () => {
-    render(<ProfileView user={mockUser} />);
-    await waitFor(() => expect(apiService.getUserInfo).toHaveBeenCalledTimes(1));
+    await renderProfileView();
+    expect(apiService.getUserInfo).toHaveBeenCalledTimes(1);
   });
 
   it('displays first and last name from backend', async () => {
-    render(<ProfileView user={mockUser} />);
-    await waitFor(() => {
-      expect(screen.getAllByText('Max').length).toBeGreaterThan(0);
-      expect(screen.getAllByText('Oesterle').length).toBeGreaterThan(0);
-    });
+    await renderProfileView();
+    expect(screen.getAllByText('Max').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('Oesterle').length).toBeGreaterThan(0);
   });
 
   it('displays email', async () => {
-    render(<ProfileView user={mockUser} />);
-    await waitFor(() => expect(screen.getAllByText('max@kit.edu').length).toBeGreaterThan(0));
+    await renderProfileView();
+    expect(screen.getAllByText('max@kit.edu').length).toBeGreaterThan(0);
   });
 
   it('shows Edit name button', async () => {
-    render(<ProfileView user={mockUser} />);
-    await waitFor(() => expect(screen.getByText(/Edit name/i)).toBeInTheDocument());
+    await renderProfileView();
+    expect(screen.getByText(/Edit name/i)).toBeInTheDocument();
   });
 
   it('switches to edit mode when Edit name is clicked', async () => {
-    render(<ProfileView user={mockUser} />);
-    await waitFor(() => fireEvent.click(screen.getByText(/Edit name/i)));
+    await renderProfileView();
+    fireEvent.click(screen.getByText(/Edit name/i));
     expect(screen.getByDisplayValue('Max')).toBeInTheDocument();
     expect(screen.getByDisplayValue('Oesterle')).toBeInTheDocument();
   });
 
   it('calls updateUserName on Save changes', async () => {
-    render(<ProfileView user={mockUser} />);
-    await waitFor(() => fireEvent.click(screen.getByText(/Edit name/i)));
+    await renderProfileView();
+    fireEvent.click(screen.getByText(/Edit name/i));
 
     const firstInput = screen.getByDisplayValue('Max');
     fireEvent.change(firstInput, { target: { value: 'Maximilian' } });
     fireEvent.click(screen.getByText(/Save changes/i));
 
-    await waitFor(() =>
-      expect(apiService.updateUserName).toHaveBeenCalledWith('42', 'Maximilian', 'Oesterle'),
-    );
+    await act(async () => {
+      await Promise.resolve();
+    });
+    expect(apiService.updateUserName).toHaveBeenCalledWith('42', 'Maximilian', 'Oesterle');
   });
 
   it('calls onNameSaved callback after successful save', async () => {
     const onNameSaved = jest.fn();
-    render(<ProfileView user={mockUser} onNameSaved={onNameSaved} />);
-    await waitFor(() => fireEvent.click(screen.getByText(/Edit name/i)));
+    await renderProfileView(mockUser, { onNameSaved });
+    fireEvent.click(screen.getByText(/Edit name/i));
     fireEvent.click(screen.getByText(/Save changes/i));
-    await waitFor(() => expect(onNameSaved).toHaveBeenCalledTimes(1));
+    await act(async () => {
+      await Promise.resolve();
+    });
+    expect(onNameSaved).toHaveBeenCalledTimes(1);
   });
 
   it('cancel button returns to read mode', async () => {
-    render(<ProfileView user={mockUser} />);
-    await waitFor(() => fireEvent.click(screen.getByText(/Edit name/i)));
+    await renderProfileView();
+    fireEvent.click(screen.getByText(/Edit name/i));
     fireEvent.click(screen.getByText(/Cancel/i));
     expect(screen.queryByDisplayValue('Max')).not.toBeInTheDocument();
   });
 
   it('shows error banner when updateUserName fails', async () => {
     (apiService.updateUserName as jest.Mock).mockRejectedValue(new Error('Server error'));
-    render(<ProfileView user={mockUser} />);
-    await waitFor(() => fireEvent.click(screen.getByText(/Edit name/i)));
+    await renderProfileView();
+    fireEvent.click(screen.getByText(/Edit name/i));
     fireEvent.click(screen.getByText(/Save changes/i));
-    await waitFor(() => expect(screen.getByText(/Server error/i)).toBeInTheDocument());
+    await act(async () => {
+      await Promise.resolve();
+    });
+    expect(screen.getByText(/Server error/i)).toBeInTheDocument();
   });
 
   it('shows Change password button', async () => {
-    render(<ProfileView user={mockUser} />);
-    await waitFor(() => expect(screen.getByText(/Change password/i)).toBeInTheDocument());
+    await renderProfileView();
+    expect(screen.getByText(/Change password/i)).toBeInTheDocument();
   });
 
-  it('returns null when user prop is null', () => {
+  it('returns null when user prop is null', async () => {
     const { container } = render(<ProfileView user={null} />);
+    await settleUserInfo();
     expect(container.firstChild).toBeNull();
   });
 
   it('shows load error when getUserInfo fails', async () => {
-    (apiService.getUserInfo as jest.Mock).mockRejectedValue(new Error('Network error'));
     render(<ProfileView user={mockUser} />);
-    await waitFor(() =>
-      expect(screen.getByText(/Could not load profile data/i)).toBeInTheDocument(),
-    );
+    await rejectUserInfoLoad();
+    expect(screen.getByText(/Could not load profile data/i)).toBeInTheDocument();
   });
 });
