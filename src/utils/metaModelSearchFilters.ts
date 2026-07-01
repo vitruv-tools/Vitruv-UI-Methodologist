@@ -89,6 +89,47 @@ function applyDatePreset(
   filters.createdTo = now.toISOString();
 }
 
+type TextMetaModelFilterKey = Extract<MetaModelSearchFilterKey, 'name' | 'description' | 'domain'>;
+
+function isTextMetaModelFilterKey(key: MetaModelSearchFilterKey): key is TextMetaModelFilterKey {
+  return key === 'name' || key === 'domain' || key === 'description';
+}
+
+function applyPlainNameSearch(
+  filters: MetaModelFindFilters,
+  searchQuery: string,
+  parsedFilters: ParsedMetaModelSearchFilter[],
+): void {
+  const trimmed = searchQuery.trim();
+  if (parsedFilters.length === 0 && trimmed && !trimmed.includes(':')) {
+    filters.name = trimmed;
+  }
+}
+
+function applyParsedFilterEntry(
+  filters: MetaModelFindFilters,
+  entry: ParsedMetaModelSearchFilter,
+): void {
+  const value = entry.value.trim();
+  if (!value) return;
+
+  if (isTextMetaModelFilterKey(entry.key)) {
+    filters[entry.key] = value;
+    return;
+  }
+
+  if (entry.key === 'keywords') {
+    filters.keyword = value.split(',').map(part => part.trim()).filter(Boolean);
+    return;
+  }
+
+  if (entry.key === 'created') {
+    const { from, to } = parseDateFilterValue(value);
+    if (from) filters.createdFrom = from;
+    if (to) filters.createdTo = to;
+  }
+}
+
 export function buildMetaModelFindFilters(
   searchQuery: string,
   parsedFilters: ParsedMetaModelSearchFilter[],
@@ -96,32 +137,9 @@ export function buildMetaModelFindFilters(
   ownedByUser = false,
 ): MetaModelFindFilters {
   const filters: MetaModelFindFilters = { ownedByUser };
-  const trimmed = searchQuery.trim();
 
-  if (parsedFilters.length === 0 && trimmed && !trimmed.includes(':')) {
-    filters.name = trimmed;
-  }
-
-  for (const entry of parsedFilters) {
-    const value = entry.value.trim();
-    if (!value) continue;
-
-    if (entry.key === 'name' || entry.key === 'domain' || entry.key === 'description') {
-      filters[entry.key] = value;
-      continue;
-    }
-
-    if (entry.key === 'keywords') {
-      filters.keyword = value.split(',').map(part => part.trim()).filter(Boolean);
-      continue;
-    }
-
-    if (entry.key === 'created') {
-      const { from, to } = parseDateFilterValue(value);
-      if (from) filters.createdFrom = from;
-      if (to) filters.createdTo = to;
-    }
-  }
+  applyPlainNameSearch(filters, searchQuery, parsedFilters);
+  parsedFilters.forEach(entry => applyParsedFilterEntry(filters, entry));
 
   const hasExplicitDateFilter = parsedFilters.some(f => f.key === 'created');
   if (!hasExplicitDateFilter) {

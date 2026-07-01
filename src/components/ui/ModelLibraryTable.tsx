@@ -168,12 +168,13 @@ export const ModelDetailModal: React.FC<ModelDetailModalProps> = ({
   };
 
   const panel = (
-      <div
+      <dialog
+        open
         data-model-detail-modal
-        role="dialog"
-        aria-modal="true"
         aria-label={`Model Preview: ${model.name}`}
-        style={{ background: '#fff', borderRadius: 10, width: 'min(800px, 92vw)', height: 'min(640px, 88vh)', overflow: 'hidden', display: 'flex', flexDirection: 'column', boxShadow: '0 24px 64px rgba(0,0,0,0.22), 0 4px 16px rgba(0,0,0,0.10)', border: '1px solid #e2e8f0', fontFamily: FONT, pointerEvents: 'auto' }}
+        onClose={onClose}
+        onCancel={onClose}
+        style={{ background: '#fff', borderRadius: 10, width: 'min(800px, 92vw)', height: 'min(640px, 88vh)', overflow: 'hidden', display: 'flex', flexDirection: 'column', boxShadow: '0 24px 64px rgba(0,0,0,0.22), 0 4px 16px rgba(0,0,0,0.10)', border: '1px solid #e2e8f0', fontFamily: FONT, pointerEvents: 'auto', margin: 0, padding: 0 }}
       >
         {/* ── Header ── */}
         <div style={{ padding: '14px 20px', background: '#ffffff', borderBottom: '1px solid #f1f5f9', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
@@ -356,7 +357,7 @@ export const ModelDetailModal: React.FC<ModelDetailModalProps> = ({
             </div>
           </div>
         </div>
-      </div>
+      </dialog>
   );
 
   const expandedUmlPanel = umlExpanded && ecoreContent ? (
@@ -368,7 +369,7 @@ export const ModelDetailModal: React.FC<ModelDetailModalProps> = ({
       ecoreContent={ecoreContent}
       viewOnly
       onClose={() => setUmlExpanded(false)}
-      onFocus={() => undefined}
+      onFocus={() => { /* preview panel does not participate in focus stacking */ }}
       ecoreFileId={model.ecoreFileId}
       fetchEcoreFile={(fileId) => apiService.getFile(fileId)}
       onEcoreContentUpdated={(content) => setEcoreContent(content)}
@@ -491,7 +492,7 @@ const AdvancedSearchModal: React.FC<AdvancedSearchModalProps> = ({
   onSearchKeyDown,
   searchInputRef,
 }) => {
-  const panelRef = useRef<HTMLDivElement>(null);
+  const panelRef = useRef<HTMLDialogElement>(null);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -520,23 +521,30 @@ const AdvancedSearchModal: React.FC<AdvancedSearchModalProps> = ({
   };
 
   const panel = (
-    <div
+    <dialog
       ref={panelRef}
-      role="dialog"
-      aria-modal="false"
+      open
       aria-labelledby="advanced-search-title"
+      onClose={onClose}
+      onCancel={onClose}
       style={{
+        position: 'fixed',
+        top: '50%',
+        left: '50%',
+        transform: 'translate(-50%, -50%)',
+        margin: 0,
+        padding: 0,
+        border: '1px solid #e2e8f0',
         width: 'min(480px, calc(100vw - 48px))',
         maxHeight: 'min(85vh, 640px)',
         overflowY: 'auto',
         background: '#ffffff',
         borderRadius: 12,
-        border: '1px solid #e2e8f0',
         boxShadow: '0 20px 50px rgba(11, 23, 32, 0.18), 0 4px 14px rgba(11, 23, 32, 0.08)',
         fontFamily: APP_FONT,
         pointerEvents: 'auto',
+        zIndex: 10001,
       }}
-      onClick={(e) => e.stopPropagation()}
     >
       <div style={{
         display: 'flex',
@@ -669,7 +677,7 @@ const AdvancedSearchModal: React.FC<AdvancedSearchModalProps> = ({
           </div>
         </div>
       </div>
-    </div>
+    </dialog>
   );
 
   return ReactDOM.createPortal(
@@ -678,10 +686,6 @@ const AdvancedSearchModal: React.FC<AdvancedSearchModalProps> = ({
         position: 'fixed',
         inset: 0,
         zIndex: 10000,
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        padding: 24,
         pointerEvents: 'none',
       }}
     >
@@ -985,6 +989,13 @@ const TableRow: React.FC<TableRowProps> = ({ model, onView }) => {
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
       onClick={onView}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          onView();
+        }
+      }}
+      tabIndex={0}
       style={{ borderBottom: '1px solid #f9fafb', background: hovered ? '#fafafa' : '#fff', cursor: 'pointer', transition: 'background 0.1s' }}
     >
       <td style={{ padding: '13px 16px', fontSize: 14, fontWeight: 500, color: '#111827' }}>{model.name}</td>
@@ -998,7 +1009,7 @@ const TableRow: React.FC<TableRowProps> = ({ model, onView }) => {
           <span style={{ color: '#d1d5db', fontSize: 14 }}>--</span>
         )}
       </td>
-      <td style={{ padding: '13px 16px' }} onClick={e => e.stopPropagation()}>
+      <td style={{ padding: '13px 16px' }}>
         <PortalRowActionsMenu
           minWidth={140}
           actions={[
