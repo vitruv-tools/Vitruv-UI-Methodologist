@@ -1,6 +1,8 @@
 import {
   fetchOwnerContactForVsum,
   findVsumOwner,
+  formatProjectMemberStackLabel,
+  mergeSharerWithMembers,
   normalizeVsumRole,
   pickMostRestrictiveRole,
   mergeStoredProjectAccess,
@@ -9,6 +11,7 @@ import {
   resolveVsumAccessRole,
   sharedByFromVsum,
   sharedByToMember,
+  uniqueVsumMembers,
   writeStoredProjectAccess,
 } from '../../utils/vsumMemberUtils';
 
@@ -95,5 +98,31 @@ describe('vsumMemberUtils', () => {
       firstName: 'Ann',
       lastName: 'Owner',
     });
+  });
+
+  it('deduplicates members by email and prefers real membership ids', () => {
+    const owner = {
+      id: 42,
+      vsumId: 1,
+      firstName: 'Tsotne',
+      lastName: 'T',
+      email: 'tsotne@example.com',
+      role: 'OWNER',
+      createdAt: '',
+    };
+    const synthetic = sharedByToMember(
+      { email: 'tsotne@example.com', firstName: 'Tsotne', lastName: 'T' },
+      1,
+    );
+
+    expect(uniqueVsumMembers([owner, synthetic])).toEqual([owner]);
+    expect(mergeSharerWithMembers(synthetic, [owner])).toEqual([owner]);
+    expect(mergeSharerWithMembers(synthetic, [])).toEqual([synthetic]);
+  });
+
+  it('formats solo-owner member stack label', () => {
+    expect(formatProjectMemberStackLabel(1, { isSoloOwner: true })).toBe('Only you');
+    expect(formatProjectMemberStackLabel(1, { isSharedAccess: true })).toBe('1 person');
+    expect(formatProjectMemberStackLabel(3)).toBe('3 people');
   });
 });

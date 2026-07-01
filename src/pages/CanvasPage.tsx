@@ -3,6 +3,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { AuthService } from '../services/auth';
 import { getUserInitials } from '../utils/userInitials';
 import { ShareProjectModal } from '../components/ui/ShareProjectModal';
+import { HoverTooltip } from '../components/ui/HoverTooltip';
 import { ConfirmDialog } from '../components/ui/ConfirmDialog';
 import { ProfileModal } from '../components/ui/ProfileModal';
 import ReactDOM from 'react-dom';
@@ -36,6 +37,8 @@ import {
   resolveVsumAccessRole,
   fetchOwnerContactForVsum,
   mergeStoredProjectAccess,
+  mergeSharerWithMembers,
+  formatProjectMemberStackLabel,
   sharedByToMember,
   uniqueVsumMembers,
   type SharedByContact,
@@ -1911,11 +1914,6 @@ function formatPeopleCount(count: number): string {
   return `${count} people`;
 }
 
-function formatStackMemberLabel(count: number): string {
-  if (count <= 0) return 'People';
-  return formatPeopleCount(count);
-}
-
 function resolveCollaboratorStackTitle(
   isSharedAccess: boolean,
   projectSharer: VsumUserResponse | null,
@@ -1962,6 +1960,9 @@ function resolveMembersPanelSubtitle(options: {
   }
   if (isViewOnly) {
     return 'You have view-only access to this project';
+  }
+  if (memberCount === 1) {
+    return 'You are the only person on this project. Invite viewers to share it.';
   }
   if (memberCount > 0) {
     return `${formatPeopleCount(memberCount)} can access this project`;
@@ -2104,7 +2105,7 @@ const UserAvatarButton: React.FC<AvatarButtonProps> = ({
 
 interface CollaboratorStackButtonProps {
   members: Array<{ id: string; initials: string; color: string; ringColor?: string }>;
-  memberCount: number;
+  stackLabel: string;
   open: boolean;
   onClick: () => void;
   title?: string;
@@ -2112,7 +2113,7 @@ interface CollaboratorStackButtonProps {
 
 const CollaboratorStackButton: React.FC<CollaboratorStackButtonProps> = ({
   members,
-  memberCount,
+  stackLabel,
   open,
   onClick,
   title = 'People with access',
@@ -2151,7 +2152,7 @@ const CollaboratorStackButton: React.FC<CollaboratorStackButtonProps> = ({
       ))}
     </span>
     <span style={{ fontSize: 12, fontWeight: 600, color: '#334155', whiteSpace: 'nowrap' }}>
-      {formatStackMemberLabel(memberCount)}
+      {stackLabel}
     </span>
     <svg
       width="12"
@@ -2362,6 +2363,19 @@ const PeopleAccessPanel: React.FC<PeopleAccessPanelProps> = ({
       </div>
     </div>
 
+    {canShare && memberCount === 1 && !isSharedAccess && !membersLoading && (
+      <div style={{
+        padding: '10px 14px',
+        background: '#f0fdfa',
+        borderBottom: '1px solid #ccfbf1',
+        fontSize: 12,
+        color: '#047857',
+        lineHeight: 1.45,
+      }}>
+        You are working alone. Share this project to invite viewers by email.
+      </div>
+    )}
+
     <div style={{
       padding: '6px 8px',
       maxHeight: 280,
@@ -2517,11 +2531,15 @@ const RightPill: React.FC<RightPillProps> = ({
     currentUserName,
   );
   const collaborators = membersToCollaborators(
-    projectSharer ? [projectSharer, ...projectMembers] : projectMembers,
+    mergeSharerWithMembers(projectSharer, projectMembers),
   );
   const memberCount = panelMembers.length;
   const stackAvatars = resolveStackAvatars(isSharedAccess, projectSharer, collaborators, myAccount);
   const stackTitle = resolveCollaboratorStackTitle(isSharedAccess, projectSharer);
+  const stackLabel = formatProjectMemberStackLabel(memberCount, {
+    isSharedAccess,
+    isSoloOwner: canShare && memberCount === 1,
+  });
 
   const toggleMembersPanel = useCallback(() => {
     setShowAccounts(current => {
@@ -2548,7 +2566,7 @@ const RightPill: React.FC<RightPillProps> = ({
           color: member.color,
           ringColor: 'ringColor' in member ? (member as typeof myAccount).ringColor : undefined,
         }))}
-        memberCount={memberCount}
+        stackLabel={stackLabel}
         open={showAccounts}
         onClick={toggleMembersPanel}
         title={stackTitle}
@@ -2795,27 +2813,51 @@ const LeftSidebar: React.FC<LeftSidebarProps> = ({
       {/* ── Main toolbar ── */}
       <div style={{ ...sidebarCard, position: 'relative', left: 'auto', top: 'auto', zIndex: 'auto' as any }}>
         {/* Pointer / select mode */}
-        <SidebarBtn title="Select (pointer)" active={!addReactionMode} onClick={() => { if (addReactionMode) onToggleReactionMode(); }}>
+        <SidebarBtn
+          label="Select"
+          description="Move and select elements on the canvas"
+          active={!addReactionMode}
+          onClick={() => { if (addReactionMode) onToggleReactionMode(); }}
+        >
           <PointerIcon />
         </SidebarBtn>
 
         <SidebarDivider />
 
         {/* Download ZIP */}
-        <SidebarBtn title="Download ZIP" onClick={onDownloadArtifact} loading={downloadingArtifact} disabled={busy}>
+        <SidebarBtn
+          label="Download"
+          description="Export this project as a ZIP file"
+          onClick={onDownloadArtifact}
+          loading={downloadingArtifact}
+          disabled={busy}
+        >
           <DownloadIcon />
         </SidebarBtn>
 
         {/* Save Changes */}
         {!readOnly && (
-          <SidebarBtn title="Save changes" onClick={onSaveChanges} loading={savingChanges} disabled={busy}>
+          <SidebarBtn
+            label="Save"
+            description="Save changes to this project"
+            onClick={onSaveChanges}
+            loading={savingChanges}
+            disabled={busy}
+          >
             <SaveIcon />
           </SidebarBtn>
         )}
 
         {/* Check Build */}
         {!readOnly && (
-          <SidebarBtn title="Check build" onClick={onCheckBuild} loading={checkingBuild} disabled={busy} color="#049484">
+          <SidebarBtn
+            label="Check build"
+            description="Verify the project compiles successfully"
+            onClick={onCheckBuild}
+            loading={checkingBuild}
+            disabled={busy}
+            color="#049484"
+          >
             <CheckBuildIcon />
           </SidebarBtn>
         )}
@@ -2824,7 +2866,8 @@ const LeftSidebar: React.FC<LeftSidebarProps> = ({
 
         {readOnly ? (
           <SidebarBtn
-            title="View reaction code — select a connection line, then click (or double-click the line)"
+            label="View reaction"
+            description="Select a connection line, then click to open the code"
             onClick={() => onOpenReactionEditor?.()}
           >
             <ReactionIcon />
@@ -2833,7 +2876,10 @@ const LeftSidebar: React.FC<LeftSidebarProps> = ({
           <>
             {/* Add Reaction */}
             <SidebarBtn
-              title={addReactionMode ? 'Cancel (click canvas)' : 'Add reaction — click two models'}
+              label={addReactionMode ? 'Cancel reaction' : 'Add reaction'}
+              description={addReactionMode
+                ? 'Click to exit connection mode'
+                : 'Click two meta-models to connect them'}
               active={addReactionMode}
               onClick={onToggleReactionMode}
             >
@@ -2841,7 +2887,12 @@ const LeftSidebar: React.FC<LeftSidebarProps> = ({
             </SidebarBtn>
 
             {/* Add Meta-models */}
-            <SidebarBtn title="Add meta-models" onClick={onToggleModelDrawer} filled>
+            <SidebarBtn
+              label="Add meta-models"
+              description="Open the model library drawer"
+              onClick={onToggleModelDrawer}
+              filled
+            >
               <PlusBoxIcon />
             </SidebarBtn>
           </>
@@ -2851,10 +2902,20 @@ const LeftSidebar: React.FC<LeftSidebarProps> = ({
       {/* ── Undo / Redo — own card, just below the main one ── */}
       {!readOnly && (
       <div style={{ ...sidebarCard, position: 'relative', left: 'auto', top: 'auto', zIndex: 'auto' as any }}>
-        <SidebarBtn title="Undo" onClick={onUndo} disabled={!canUndo}>
+        <SidebarBtn
+          label="Undo"
+          description={canUndo ? 'Undo the last action' : 'Nothing to undo'}
+          onClick={onUndo}
+          disabled={!canUndo}
+        >
           <UndoIcon />
         </SidebarBtn>
-        <SidebarBtn title="Redo" onClick={onRedo} disabled={!canRedo}>
+        <SidebarBtn
+          label="Redo"
+          description={canRedo ? 'Redo the last undone action' : 'Nothing to redo'}
+          onClick={onRedo}
+          disabled={!canRedo}
+        >
           <RedoIcon />
         </SidebarBtn>
       </div>
@@ -2864,7 +2925,8 @@ const LeftSidebar: React.FC<LeftSidebarProps> = ({
 };
 
 interface SidebarBtnProps {
-  title: string;
+  label: string;
+  description?: string;
   onClick: () => void;
   children: React.ReactNode;
   active?: boolean;
@@ -2892,30 +2954,45 @@ function getSidebarBtnIconColor(disabled: boolean | undefined, isFilled: boolean
   return '#475569';
 }
 
-const SidebarBtn: React.FC<SidebarBtnProps> = ({ title, onClick, children, active, filled, disabled, loading, color }) => {
+const SidebarBtn: React.FC<SidebarBtnProps> = ({
+  label,
+  description,
+  onClick,
+  children,
+  active,
+  filled,
+  disabled,
+  loading,
+  color,
+}) => {
   const [hov, setHov] = useState(false);
   const activeColor = color || '#049484';
   const isFilled = Boolean(filled || active);
   const bg = getSidebarBtnBackground(isFilled, activeColor, hov, disabled);
   const iconColor = getSidebarBtnIconColor(disabled, isFilled, hov);
+  const ariaLabel = description ? `${label}. ${description}` : label;
+
   return (
-    <button
-      title={title}
-      onClick={disabled ? undefined : onClick}
-      onMouseEnter={() => setHov(true)}
-      onMouseLeave={() => setHov(false)}
-      style={{
-        width: 52, height: 52, border: 'none',
-        borderRadius: 6, background: bg, color: iconColor,
-        cursor: disabled ? 'not-allowed' : 'pointer',
-        display: 'flex', alignItems: 'center', justifyContent: 'center',
-        transition: 'all 0.12s', flexShrink: 0,
-      }}
-    >
-      <span style={loading ? { animation: 'spin 0.9s linear infinite', display: 'flex' } : undefined}>
-        {children}
-      </span>
-    </button>
+    <HoverTooltip label={label} description={description}>
+      <button
+        type="button"
+        aria-label={ariaLabel}
+        onClick={disabled ? undefined : onClick}
+        onMouseEnter={() => setHov(true)}
+        onMouseLeave={() => setHov(false)}
+        style={{
+          width: 52, height: 52, border: 'none',
+          borderRadius: 6, background: bg, color: iconColor,
+          cursor: disabled ? 'not-allowed' : 'pointer',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          transition: 'all 0.12s', flexShrink: 0,
+        }}
+      >
+        <span style={loading ? { animation: 'spin 0.9s linear infinite', display: 'flex' } : undefined}>
+          {children}
+        </span>
+      </button>
+    </HoverTooltip>
   );
 };
 

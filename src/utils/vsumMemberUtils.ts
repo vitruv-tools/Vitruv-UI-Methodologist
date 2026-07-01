@@ -74,12 +74,56 @@ export function parseVsumMembersResponse(res: { data?: unknown } | null | undefi
 }
 
 export function uniqueVsumMembers(members: VsumUserResponse[]): VsumUserResponse[] {
-  const seen = new Set<number>();
-  return members.filter(m => {
-    if (seen.has(m.id)) return false;
-    seen.add(m.id);
-    return true;
-  });
+  const seenIds = new Set<number>();
+  const seenEmails = new Set<string>();
+  const result: VsumUserResponse[] = [];
+
+  for (const member of members) {
+    const email = member.email?.toLowerCase();
+    if (email && seenEmails.has(email)) {
+      const existingIndex = result.findIndex(m => m.email?.toLowerCase() === email);
+      if (existingIndex >= 0 && result[existingIndex].id < 0 && member.id > 0) {
+        seenIds.delete(result[existingIndex].id);
+        result[existingIndex] = member;
+        seenIds.add(member.id);
+      }
+      continue;
+    }
+    if (seenIds.has(member.id)) continue;
+
+    seenIds.add(member.id);
+    if (email) seenEmails.add(email);
+    result.push(member);
+  }
+
+  return result;
+}
+
+/** Combine sharer contact with loaded members without duplicate people. */
+export function mergeSharerWithMembers(
+  projectSharer: VsumUserResponse | null,
+  projectMembers: VsumUserResponse[],
+): VsumUserResponse[] {
+  const members = uniqueVsumMembers(projectMembers);
+  if (!projectSharer) return members;
+
+  const sharerEmail = projectSharer.email?.toLowerCase();
+  const alreadyListed = members.some(m =>
+    m.id === projectSharer.id
+    || (sharerEmail && m.email?.toLowerCase() === sharerEmail),
+  );
+  if (alreadyListed) return members;
+  return uniqueVsumMembers([projectSharer, ...members]);
+}
+
+export function formatProjectMemberStackLabel(
+  count: number,
+  options?: { isSharedAccess?: boolean; isSoloOwner?: boolean },
+): string {
+  if (count <= 0) return 'People';
+  if (count === 1 && options?.isSoloOwner && !options?.isSharedAccess) return 'Only you';
+  if (count === 1) return '1 person';
+  return `${count} people`;
 }
 
 export function findVsumOwner(members: VsumUserResponse[]): VsumUserResponse | null {

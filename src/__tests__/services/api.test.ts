@@ -180,6 +180,23 @@ describe('ApiService – createMetaModel', () => {
     expect(body.name).toBe('TestModel');
     expect(body.applyGenModelFixes).toBe(false);
   });
+
+  it('sends applyGenModelFixes true when explicitly requested', async () => {
+    mockFetch({ data: { id: 1 }, message: 'Created' });
+
+    await apiService.createMetaModel({
+      name: 'TestModel',
+      description: 'A test',
+      domain: 'Testing',
+      keyword: ['test'],
+      ecoreFileId: 10,
+      genModelFileId: 20,
+      applyGenModelFixes: true,
+    });
+
+    const [, options] = (global.fetch as jest.Mock).mock.calls[0];
+    expect(JSON.parse(options.body).applyGenModelFixes).toBe(true);
+  });
 });
 
 // ── findMetaModels ────────────────────────────────────────────────────────────
@@ -193,17 +210,17 @@ describe('ApiService – findMetaModels', () => {
     const payload = { data: [{ id: 1, name: 'M1' }], message: 'OK' };
     mockFetch(payload);
 
-    const result = await apiService.findMetaModels({}, 0, 20);
+    const result = await apiService.findMetaModels({ pageNumber: 0, pageSize: 20 });
     expect(result.data).toHaveLength(1);
     expect(result.data[0].name).toBe('M1');
   });
 
   it('passes filters as POST body', async () => {
     mockFetch({ data: [], message: 'OK' });
-    await apiService.findMetaModels({ nameFilter: 'eco' }, 0, 10);
+    await apiService.findMetaModels({ name: 'eco', pageNumber: 0, pageSize: 10 });
 
     const [, options] = (global.fetch as jest.Mock).mock.calls[0];
-    expect(JSON.parse(options.body)).toEqual({ nameFilter: 'eco' });
+    expect(JSON.parse(options.body)).toEqual({ name: 'eco', pageNumber: 0, pageSize: 10 });
   });
 });
 
