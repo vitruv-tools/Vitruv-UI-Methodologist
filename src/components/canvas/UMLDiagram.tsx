@@ -451,7 +451,8 @@ function isEmptyCanvasTarget(target: HTMLElement): boolean {
     && !target.closest('[data-rel-edit-panel]')
     && !target.closest('[data-class-edit-panel]')
     && !target.closest('[data-uml-connect-banner]')
-    && !target.closest('[data-uml-validation]');
+    && !target.closest('[data-uml-validation]')
+    && !target.closest('[data-wrapper-header]');
 }
 
 type EditState =
@@ -706,6 +707,10 @@ interface UMLDiagramProps {
   /** When set, enables persisting semantic UML edits back to the metamodel ecore file. */
   saveContext?: UmlDiagramSaveContext;
   onHistoryChange?: (state: { canUndo: boolean; canRedo: boolean }) => void;
+  /** Additional models to render in the same canvas with colored wrapper groups. */
+  additionalModels?: { id: number; name: string; ecoreContent: string; color: string; fill: string }[];
+  /** When 'reactions', elements show connection indicators. */
+  reactionsMode?: 'uml' | 'reactions';
 }
 
 const REL_TYPE_CYCLE: UMLRelType[] = ['association', 'composition', 'inheritance'];
@@ -860,6 +865,8 @@ export const UMLDiagram = forwardRef<UMLDiagramHandle, UMLDiagramProps>(({
   interactive = true,
   saveContext,
   onHistoryChange,
+  additionalModels = [],
+  reactionsMode = 'uml',
 }, ref) => {
   const parsed = useMemo(() => {
     const model = ecoreToUml(ecoreContent);
@@ -878,9 +885,76 @@ export const UMLDiagram = forwardRef<UMLDiagramHandle, UMLDiagramProps>(({
   const [saveMessage, setSaveMessage] = useState('');
   const initialSnapshotRef = useRef('');
   const skipNextEcoreResetRef = useRef(false);
+
+  // Additional models: parse and track classes per model group
+  const additionalParsed = useMemo(() => {
+    return additionalModels.map((m, i) => {
+      try {
+        const model = ecoreToUml(m.ecoreContent);
+        return {
+          ...m,
+          classes: model.classes.map(c => ({
+            ...c,
+            operations: c.operations ?? [],
+            id: `addl-${m.id}-${c.id}`,
+            x: c.x + (i + 1) * 450,
+            y: c.y,
+          })),
+          relationships: model.relationships.map(r => ({
+            ...r,
+            id: `addl-${m.id}-${r.id}`,
+            sourceId: `addl-${m.id}-${r.sourceId}`,
+            targetId: `addl-${m.id}-${r.targetId}`,
+          })),
+        };
+      } catch { return { ...m, classes: [] as CLS[], relationships: [] as UMLRelationship[] }; }
+    });
+  }, [additionalModels]);
+
+  const [additionalClasses, setAdditionalClasses] = useState<CLS[]>(() =>
+    additionalParsed.flatMap(m => m.classes)
+  );
+  const [additionalRels, setAdditionalRels] = useState<UMLRelationship[]>(() =>
+    additionalParsed.flatMap(m => m.relationships)
+  );
+
+  useEffect(() => {
+    setAdditionalClasses(prev => {
+      const newCls = additionalParsed.flatMap(m => m.classes);
+      // Preserve positions of already-existing classes
+      return newCls.map(nc => {
+        const existing = prev.find(p => p.id === nc.id);
+        return existing ? { ...nc, x: existing.x, y: existing.y } : nc;
+      });
+    });
+    setAdditionalRels(additionalParsed.flatMap(m => m.relationships));
+  }, [additionalParsed]);
+
+  // Map classId -> model color info for wrapper rendering
+  const classModelMap = useMemo(() => {
+    const map = new Map<string, { name: string; color: string; fill: string }>();
+    // Primary model classes
+    for (const cls of classes) {
+      if (additionalModels.length > 0) {
+        map.set(cls.id, { name: fileName?.replace(/\.ecore$/, '') || 'Primary', color: '#2563eb', fill: 'rgba(37,99,235,0.06)' });
+      }
+    }
+    // Additional model classes
+    for (const m of additionalParsed) {
+      for (const cls of m.classes) {
+        map.set(cls.id, { name: m.name, color: m.color, fill: m.fill });
+      }
+    }
+    return map;
+  }, [classes, additionalParsed, additionalModels.length, fileName]);
+
+  // Combined classes and relationships for rendering
+  const allClasses = useMemo(() => [...classes, ...additionalClasses], [classes, additionalClasses]);
+  const allRels = useMemo(() => [...relationships, ...additionalRels], [relationships, additionalRels]);
+
   const rels = useMemo(
-    () => assignParallelRelMeta(relationships) as DiagramRel[],
-    [relationships],
+    () => assignParallelRelMeta(allRels) as DiagramRel[],
+    [allRels],
   );
   const [edit, setEdit] = useState<EditState | null>(null);
   const editRef = useRef<EditState | null>(null);
@@ -1082,13 +1156,13 @@ export const UMLDiagram = forwardRef<UMLDiagramHandle, UMLDiagramProps>(({
   }, [classes.length, fileName, layoutScopeId]);
 
   const layout = useMemo(() => {
-    if (!layoutOffsetRef.current && classes.length > 0) {
-      const initial = getLayoutMetrics(classes);
+    if (!layoutOffsetRef.current && allClasses.length > 0) {
+      const initial = getLayoutMetrics(allClasses);
       layoutOffsetRef.current = { offsetX: initial.offsetX, offsetY: initial.offsetY };
       return initial;
     }
-    return getLayoutMetrics(classes, layoutOffsetRef.current);
-  }, [classes]);
+    return getLayoutMetrics(allClasses, layoutOffsetRef.current);
+  }, [allClasses]);
   const { totalW, totalH, offsetX, offsetY } = layout;
   const containerRef = useRef<HTMLElement>(null);
 
@@ -1154,6 +1228,55 @@ export const UMLDiagram = forwardRef<UMLDiagramHandle, UMLDiagramProps>(({
     dragHistorySavedRef.current = false;
     scheduleLayoutSave();
   }, [scheduleLayoutSave]);
+
+  const wrapperDragOrigins = useRef<Map<string, { x: number; y: number }>>(new Map());
+
+  const handleWrapperDragStart = useCallback((e: React.MouseEvent, groupName: string) => {
+    e.stopPropagation();
+    e.preventDefault();
+    const startX = e.clientX;
+    const startY = e.clientY;
+    const primaryName = fileName?.replace(/\.ecore$/, '') || 'Primary';
+
+    const origins = new Map<string, { x: number; y: number }>();
+    const allCurrent = primaryName === groupName ? classes : additionalClasses;
+    for (const c of allCurrent) {
+      const info = classModelMap.get(c.id);
+      if (info?.name === groupName) {
+        origins.set(c.id, { x: c.x, y: c.y });
+      }
+    }
+    wrapperDragOrigins.current = origins;
+
+    const onMove = (ev: MouseEvent) => {
+      const dx = (ev.clientX - startX) / vscale;
+      const dy = (ev.clientY - startY) / vscale;
+
+      if (groupName === primaryName) {
+        setClasses(prev => prev.map(c => {
+          const orig = wrapperDragOrigins.current.get(c.id);
+          if (!orig) return c;
+          return { ...c, x: orig.x + dx, y: orig.y + dy };
+        }));
+      } else {
+        setAdditionalClasses(prev => prev.map(c => {
+          const orig = wrapperDragOrigins.current.get(c.id);
+          if (!orig) return c;
+          return { ...c, x: orig.x + dx, y: orig.y + dy };
+        }));
+      }
+    };
+
+    const onUp = () => {
+      wrapperDragOrigins.current.clear();
+      scheduleDebouncedLayoutSave();
+      globalThis.removeEventListener('mousemove', onMove);
+      globalThis.removeEventListener('mouseup', onUp);
+    };
+
+    globalThis.addEventListener('mousemove', onMove);
+    globalThis.addEventListener('mouseup', onUp);
+  }, [vscale, fileName, classes, additionalClasses, classModelMap, scheduleDebouncedLayoutSave]);
 
   const saveName = useCallback((oldId: string, name: string) => {
     const trimmed = name.trim();
@@ -1377,6 +1500,10 @@ export const UMLDiagram = forwardRef<UMLDiagramHandle, UMLDiagramProps>(({
       setConnectSourceId(null);
       return true;
     }
+    if (connectSourceId) {
+      setConnectSourceId(null);
+      return true;
+    }
     if (edit) {
       setEdit(null);
       return true;
@@ -1390,7 +1517,7 @@ export const UMLDiagram = forwardRef<UMLDiagramHandle, UMLDiagramProps>(({
       return true;
     }
     return false;
-  }, [connectMode, edit, selectedRelId, selectedClassId, dismissClassSelection]);
+  }, [connectMode, connectSourceId, edit, selectedRelId, selectedClassId, dismissClassSelection]);
 
   const handleRelationshipClick = useCallback((relId: string, e: React.MouseEvent) => {
     e.stopPropagation();
@@ -1575,7 +1702,7 @@ export const UMLDiagram = forwardRef<UMLDiagramHandle, UMLDiagramProps>(({
 
   const edgeLayouts = useMemo(() => {
     const raw = rels.flatMap(rel => {
-      const endpoints = getRelEndpoints(rel, classes, offsetX, offsetY);
+      const endpoints = getRelEndpoints(rel, allClasses, offsetX, offsetY);
       if (!endpoints) return [];
       const { drawP1, drawP2 } = insetLineEndpoints(endpoints.p1, endpoints.p2);
       return [{ rel, p1: endpoints.p1, p2: endpoints.p2, drawP1, drawP2 }];
@@ -1591,7 +1718,7 @@ export const UMLDiagram = forwardRef<UMLDiagramHandle, UMLDiagramProps>(({
       ...r,
       bridges: bridges.get(r.rel.id) ?? [],
     }));
-  }, [rels, classes, offsetX, offsetY]);
+  }, [rels, allClasses, offsetX, offsetY]);
 
   const multiplicityBadges = useMemo(() => {
     const raw: MultiplicityBadge[] = [];
@@ -1626,8 +1753,8 @@ export const UMLDiagram = forwardRef<UMLDiagramHandle, UMLDiagramProps>(({
   }, [edgeLayouts]);
 
   const validationIssues = useMemo(
-    () => validateUmlModel({ classes, relationships }),
-    [classes, relationships],
+    () => validateUmlModel({ classes, relationships }, allClasses),
+    [classes, relationships, allClasses],
   );
 
   if (classes.length === 0) {
@@ -1656,6 +1783,9 @@ export const UMLDiagram = forwardRef<UMLDiagramHandle, UMLDiagramProps>(({
         userSelect: 'none',
       }}
     >
+    {reactionsMode === 'reactions' && (
+      <style>{`@keyframes reactionPulse{0%,100%{opacity:1}50%{opacity:0.6}}`}</style>
+    )}
     <div style={{
       position: 'absolute',
       transform: `translate(${vx}px, ${vy}px) scale(${vscale})`,
@@ -1703,8 +1833,74 @@ export const UMLDiagram = forwardRef<UMLDiagramHandle, UMLDiagramProps>(({
         })}
       </svg>
 
+      {/* Model group wrapper rects */}
+      {additionalModels.length > 0 && (() => {
+        const groups = new Map<string, { cls: CLS[]; color: string; fill: string; name: string }>();
+        for (const cls of allClasses) {
+          const info = classModelMap.get(cls.id);
+          if (!info) continue;
+          if (!groups.has(info.name)) groups.set(info.name, { cls: [], color: info.color, fill: info.fill, name: info.name });
+          groups.get(info.name)!.cls.push(cls);
+        }
+        return Array.from(groups.values()).map(g => {
+          if (g.cls.length === 0) return null;
+          const PAD = 20;
+          const minX = Math.min(...g.cls.map(c => c.x)) - PAD;
+          const minY = Math.min(...g.cls.map(c => c.y)) - PAD - 24;
+          const maxX = Math.max(...g.cls.map(c => c.x + BW)) + PAD;
+          const maxY = Math.max(...g.cls.map(c => c.y + boxH(c))) + PAD;
+          const sx = minX + offsetX;
+          const sy = minY + offsetY;
+          const sw = maxX - minX;
+          const sh = maxY - minY;
+          return (
+            <div
+              key={g.name}
+              style={{
+                position: 'absolute',
+                left: sx,
+                top: sy,
+                width: sw,
+                height: sh,
+                border: `2px solid ${g.color}`,
+                borderRadius: 10,
+                background: g.fill,
+                pointerEvents: 'none',
+                zIndex: 0,
+              }}
+            >
+              <div
+                data-wrapper-header
+                onMouseDown={interactive ? (e) => handleWrapperDragStart(e, g.name) : undefined}
+                style={{
+                  position: 'absolute',
+                  top: 0,
+                  left: 0,
+                  right: 0,
+                  height: 22,
+                  background: g.color,
+                  borderRadius: '8px 8px 0 0',
+                  display: 'flex',
+                  alignItems: 'center',
+                  paddingLeft: 8,
+                  fontSize: 11,
+                  fontWeight: 700,
+                  color: '#fff',
+                  letterSpacing: 0.3,
+                  cursor: interactive ? 'grab' : 'default',
+                  pointerEvents: 'auto',
+                }}>
+                {g.name}
+              </div>
+            </div>
+          );
+        });
+      })()}
+
       {/* Class boxes */}
-      {classes.map(cls => (
+      {allClasses.map(cls => {
+        const isAdditional = cls.id.startsWith('addl-');
+        return (
         <ClassBox
           key={cls.id}
           cls={cls}
@@ -1715,18 +1911,21 @@ export const UMLDiagram = forwardRef<UMLDiagramHandle, UMLDiagramProps>(({
           connectSource={connectSourceId === cls.id}
           interactive={interactive}
           edit={edit?.classId === cls.id ? edit : null}
+          reactionsMode={reactionsMode === 'reactions'}
           onSelect={() => handleClassSelect(cls.id)}
           onDragStart={() => { dragHistorySavedRef.current = false; }}
-          onMove={moveClass}
-          onDragEnd={finishClassDrag}
+          onMove={isAdditional ? (id: string, x: number, y: number) => {
+            setAdditionalClasses(prev => prev.map(c => c.id === id ? { ...c, x, y } : c));
+          } : moveClass}
+          onDragEnd={isAdditional ? () => {} : finishClassDrag}
           onStartEditName={() => {
-            if (!interactive) return;
+            if (!interactive || isAdditional) return;
             flushPendingEdit();
             setEdit({ classId: cls.id, kind: 'name', val: cls.name });
           }}
           onSaveName={name => saveName(cls.id, name)}
           onStartEditAttr={attrId => {
-            if (!interactive) return;
+            if (!interactive || isAdditional) return;
             flushPendingEdit();
             const a = cls.attributes.find(x => x.id === attrId)!;
             setEdit({
@@ -1740,10 +1939,10 @@ export const UMLDiagram = forwardRef<UMLDiagramHandle, UMLDiagramProps>(({
           }}
           onSaveAttr={(attrId, n, t, v) => saveAttr(cls.id, attrId, n, t, v)}
           onCancelEdit={() => setEdit(null)}
-          onAddAttr={() => interactive && addAttr(cls.id)}
+          onAddAttr={() => interactive && !isAdditional && addAttr(cls.id)}
           onDeleteAttr={attrId => deleteAttr(cls.id, attrId)}
           onStartEditOp={opId => {
-            if (!interactive) return;
+            if (!interactive || isAdditional) return;
             flushPendingEdit();
             const o = cls.operations.find(x => x.id === opId)!;
             setEdit({
@@ -1756,12 +1955,13 @@ export const UMLDiagram = forwardRef<UMLDiagramHandle, UMLDiagramProps>(({
             });
           }}
           onSaveOp={(opId, n, rt, v) => saveOp(cls.id, opId, n, rt, v)}
-          onAddOp={() => interactive && addOp(cls.id)}
+          onAddOp={() => interactive && !isAdditional && addOp(cls.id)}
           onDeleteOp={opId => deleteOp(cls.id, opId)}
-          onDelete={() => deleteClass(cls.id)}
+          onDelete={() => !isAdditional && deleteClass(cls.id)}
           onEditChange={setEdit}
         />
-      ))}
+        );
+      })}
 
       {/* Hit targets above class boxes — connections stay clickable */}
       <svg
@@ -2454,6 +2654,7 @@ interface ClassBoxProps {
   connectSource: boolean;
   interactive: boolean;
   edit: EditState | null;
+  reactionsMode: boolean;
   onSelect: () => void;
   onMove: (id: string, x: number, y: number) => void;
   onDragStart: () => void;
@@ -2474,7 +2675,7 @@ interface ClassBoxProps {
 }
 
 const ClassBox: React.FC<ClassBoxProps> = ({
-  cls, offsetX, offsetY, scale, selected, connectSource, interactive, edit, onSelect, onDragStart, onMove, onDragEnd, onStartEditName, onSaveName,
+  cls, offsetX, offsetY, scale, selected, connectSource, interactive, edit, reactionsMode, onSelect, onDragStart, onMove, onDragEnd, onStartEditName, onSaveName,
   onStartEditAttr, onSaveAttr, onCancelEdit, onAddAttr, onDeleteAttr, onStartEditOp, onSaveOp, onAddOp, onDeleteOp, onDelete, onEditChange,
 }) => {
   const dragRef: ClassBoxDragPointRef = useRef<{ sx: number; sy: number; ox: number; oy: number } | null>(null);
@@ -2632,6 +2833,49 @@ const ClassBox: React.FC<ClassBoxProps> = ({
         >
           ✕
         </button>
+      )}
+      {reactionsMode && (
+        <div style={{
+          position: 'absolute',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          pointerEvents: 'none',
+          borderRadius: 6,
+          border: '2px dashed rgba(168,85,247,0.5)',
+          boxShadow: '0 0 8px rgba(168,85,247,0.2)',
+          animation: 'reactionPulse 2s ease-in-out infinite',
+        }}>
+          <div style={{
+            position: 'absolute',
+            top: '50%',
+            right: -7,
+            width: 12,
+            height: 12,
+            borderRadius: '50%',
+            background: '#a855f7',
+            border: '2px solid #fff',
+            transform: 'translateY(-50%)',
+            boxShadow: '0 0 6px rgba(168,85,247,0.6)',
+            pointerEvents: 'auto',
+            cursor: 'crosshair',
+          }} />
+          <div style={{
+            position: 'absolute',
+            top: '50%',
+            left: -7,
+            width: 12,
+            height: 12,
+            borderRadius: '50%',
+            background: '#a855f7',
+            border: '2px solid #fff',
+            transform: 'translateY(-50%)',
+            boxShadow: '0 0 6px rgba(168,85,247,0.6)',
+            pointerEvents: 'auto',
+            cursor: 'crosshair',
+          }} />
+        </div>
       )}
     </div>
   );
