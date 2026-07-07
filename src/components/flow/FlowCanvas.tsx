@@ -47,6 +47,7 @@ import {
   resolveEcoreFileSelectAction,
 } from './flowCanvasEcoreSelect';
 import { pickFocusUmlFlowNodes } from '../../utils/umlClassLayout';
+import { edgeIndicatorPos } from '../../utils/minimapGeometry';
 import {
   applyPendingCanvasDelete,
   computeConnectionLinePositions,
@@ -207,28 +208,6 @@ const pairKey = (a: string, b: string) => (a < b ? `${a}::${b}` : `${b}::${a}`);
 
 const MINI_NODE_W = 118;
 const MINI_NODE_H = 126;
-
-/** Returns the point where the ray from (w/2,h/2) toward (sx,sy) hits the minimap border,
- *  or null if (sx,sy) is already inside. Used for off-screen edge indicators. */
-function edgeIndicatorPos(
-  sx: number, sy: number, w: number, h: number,
-): { x: number; y: number } | null {
-  const M = 9;
-  if (sx >= M && sx <= w - M && sy >= M && sy <= h - M) return null;
-  const cx = w / 2, cy = h / 2;
-  const dx = sx - cx, dy = sy - cy;
-  if (dx === 0 && dy === 0) return null;
-  let t = Infinity;
-  if (dx > 0) t = Math.min(t, (w - M - cx) / dx);
-  if (dx < 0) t = Math.min(t, (M - cx) / dx);
-  if (dy > 0) t = Math.min(t, (h - M - cy) / dy);
-  if (dy < 0) t = Math.min(t, (M - cy) / dy);
-  if (!Number.isFinite(t) || t <= 0) return null;
-  return {
-    x: Math.max(M, Math.min(w - M, cx + dx * t)),
-    y: Math.max(M, Math.min(h - M, cy + dy * t)),
-  };
-}
 
 interface CustomMinimapProps {
   nodes: Node[];

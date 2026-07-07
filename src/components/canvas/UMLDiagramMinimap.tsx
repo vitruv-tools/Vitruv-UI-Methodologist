@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { edgeIndicatorPos } from '../../utils/minimapGeometry';
 
 const BW = 190;
 const NAME_H = 36;
@@ -36,29 +37,6 @@ type MinimapRelationship = UMLDiagramMinimapRelationship;
 function minimapBoxH(c: MinimapClass): number {
   const nh = c.isAbstract || c.isInterface ? STEREO_H : NAME_H;
   return nh + 1 + c.attributes.length * ATTR_ROW + ATTR_PAD + ADD_BTN_H + 1 + METH_H;
-}
-
-/** Point where the ray from the map center toward (sx,sy) crosses the map border,
- *  or null if (sx,sy) is already inside — used for off-screen class indicators.
- *  Same approach as the main canvas's overview map (see FlowCanvas's CustomMinimap). */
-function edgeIndicatorPos(
-  sx: number, sy: number, w: number, h: number,
-): { x: number; y: number } | null {
-  const M = INDICATOR_MARGIN;
-  if (sx >= M && sx <= w - M && sy >= M && sy <= h - M) return null;
-  const cx = w / 2, cy = h / 2;
-  const dx = sx - cx, dy = sy - cy;
-  if (dx === 0 && dy === 0) return null;
-  let t = Infinity;
-  if (dx > 0) t = Math.min(t, (w - M - cx) / dx);
-  if (dx < 0) t = Math.min(t, (M - cx) / dx);
-  if (dy > 0) t = Math.min(t, (h - M - cy) / dy);
-  if (dy < 0) t = Math.min(t, (M - cy) / dy);
-  if (!Number.isFinite(t) || t <= 0) return null;
-  return {
-    x: Math.max(M, Math.min(w - M, cx + dx * t)),
-    y: Math.max(M, Math.min(h - M, cy + dy * t)),
-  };
 }
 
 export interface UMLDiagramMinimapProps {
@@ -192,7 +170,7 @@ export const UMLDiagramMinimap: React.FC<UMLDiagramMinimapProps> = ({
   classes.forEach(c => {
     const cx = toX(c.x + offsetX + BW / 2);
     const cy = toY(c.y + offsetY + minimapBoxH(c) / 2);
-    const ind = edgeIndicatorPos(cx, cy, MAP_W, MAP_H);
+    const ind = edgeIndicatorPos(cx, cy, MAP_W, MAP_H, INDICATOR_MARGIN);
     if (ind) indicators.push({ id: c.id, ...ind });
   });
 
