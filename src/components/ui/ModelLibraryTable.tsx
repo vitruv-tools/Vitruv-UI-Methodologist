@@ -127,8 +127,12 @@ export const ModelDetailModal: React.FC<ModelDetailModalProps> = ({
   const [fetchingUml, setFetchingUml] = useState(false);
   const [fetchError, setFetchError] = useState(false);
   const [umlExpanded, setUmlExpanded] = useState(false);
+  // Local copy of the model used for read-only display — kept in sync with the
+  // last successful save so the view reflects edits immediately, without waiting
+  // for the parent list to refetch and hand back a new `model` prop.
+  const [displayModel, setDisplayModel] = useState(model);
   const diagramRef = useRef<UMLDiagramHandle>(null);
-  const theme = getDTheme(model.domain);
+  const theme = getDTheme(displayModel.domain);
 
   useEffect(() => {
     if (ecoreContentProp) { setEcoreContent(ecoreContentProp); return; }
@@ -156,7 +160,12 @@ export const ModelDetailModal: React.FC<ModelDetailModalProps> = ({
     e.preventDefault();
     setSaving(true); setError(''); setSuccess('');
     try {
-      await apiService.updateMetaModel(String(model.id), { name: form.name, description: form.description, domain: form.domain, keyword: form.keywords });
+      await apiService.updateMetaModel(String(model.id), {
+        name: form.name, description: form.description, domain: form.domain, keyword: form.keywords,
+        ecoreFileId: model.ecoreFileId || 0,
+        genModelFileId: model.genModelFileId || 0,
+      });
+      setDisplayModel((prev: any) => ({ ...prev, name: form.name, description: form.description, domain: form.domain, keyword: form.keywords }));
       setSuccess('Saved successfully');
       onUpdated();
       setTimeout(() => { setSuccess(''); setEditing(false); }, 1500);
@@ -171,10 +180,10 @@ export const ModelDetailModal: React.FC<ModelDetailModalProps> = ({
       <dialog
         open
         data-model-detail-modal
-        aria-label={`Model Preview: ${model.name}`}
+        aria-label={`Model Preview: ${displayModel.name}`}
         onClose={onClose}
         onCancel={onClose}
-        style={{ background: '#fff', borderRadius: 10, width: 'min(800px, 92vw)', height: 'min(640px, 88vh)', overflow: 'hidden', display: 'flex', flexDirection: 'column', boxShadow: '0 24px 64px rgba(0,0,0,0.22), 0 4px 16px rgba(0,0,0,0.10)', border: '1px solid #e2e8f0', fontFamily: FONT, pointerEvents: 'auto', margin: 0, padding: 0 }}
+        style={{ position: 'relative', background: '#fff', borderRadius: 10, width: '80vw', height: '80vh', overflow: 'hidden', display: 'flex', flexDirection: 'column', boxShadow: '0 24px 64px rgba(0,0,0,0.22), 0 4px 16px rgba(0,0,0,0.10)', border: '1px solid #e2e8f0', fontFamily: FONT, pointerEvents: 'auto', margin: 0, padding: 0 }}
       >
         {/* ── Header ── */}
         <div style={{ padding: '14px 20px', background: '#ffffff', borderBottom: '1px solid #f1f5f9', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
@@ -187,13 +196,16 @@ export const ModelDetailModal: React.FC<ModelDetailModalProps> = ({
               <path d="M16 5L5 11L16 17L27 11L16 5Z" stroke="#049484" strokeWidth="1.3" fill="#04948418" strokeLinejoin="round" />
             </svg>
             <div style={{ fontSize: 16, fontWeight: 700, color: '#0f172a', letterSpacing: '-0.01em', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-              Model Preview: <span style={{ color: '#374151', fontWeight: 600 }}>{model.name}</span>
+              Model Preview: <span style={{ color: '#374151', fontWeight: 600 }}>{displayModel.name}</span>
             </div>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
             {!editing && (
               <button
-                onClick={() => setEditing(true)}
+                onClick={() => {
+                  setForm({ name: displayModel.name || '', description: displayModel.description || '', domain: displayModel.domain || '', keywords: displayModel.keyword || [] });
+                  setEditing(true);
+                }}
                 title="Edit meta-model"
                 style={{ height: 30, padding: '0 12px', border: '1px solid #e2e8f0', borderRadius: 7, background: '#f8fafc', color: '#374151', fontSize: 12, fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 5, transition: 'all 0.12s', fontFamily: FONT }}
                 onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.background = DARK; (e.currentTarget as HTMLButtonElement).style.color = '#fff'; (e.currentTarget as HTMLButtonElement).style.borderColor = DARK; }}
@@ -258,13 +270,13 @@ export const ModelDetailModal: React.FC<ModelDetailModalProps> = ({
               <>
                 <div>
                   <DFieldLabel>Name</DFieldLabel>
-                  <div style={{ fontSize: 14, fontWeight: 600, color: '#0f172a', fontFamily: FONT, lineHeight: 1.4 }}>{model.name}</div>
+                  <div style={{ fontSize: 14, fontWeight: 600, color: '#0f172a', fontFamily: FONT, lineHeight: 1.4 }}>{displayModel.name}</div>
                 </div>
-                {model.keyword?.length > 0 && (
+                {displayModel.keyword?.length > 0 && (
                   <div>
                     <DFieldLabel>Keywords</DFieldLabel>
                     <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5 }}>
-                      {model.keyword.map((kw: string) => (
+                      {displayModel.keyword.map((kw: string) => (
                         <span key={kw} style={{ padding: '3px 10px', borderRadius: 20, background: theme.badge, color: theme.badgeText, fontSize: 11, fontWeight: 600, fontFamily: FONT }}>{kw}</span>
                       ))}
                     </div>
@@ -273,14 +285,14 @@ export const ModelDetailModal: React.FC<ModelDetailModalProps> = ({
                 <div style={{ flex: 1 }}>
                   <DFieldLabel>Description</DFieldLabel>
                   <div style={{ fontSize: 13, color: '#374151', fontFamily: FONT, lineHeight: 1.7 }}>
-                    {model.description || <span style={{ color: '#cbd5e1' }}>—</span>}
+                    {displayModel.description || <span style={{ color: '#cbd5e1' }}>—</span>}
                   </div>
                 </div>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginTop: 'auto', paddingTop: 8, borderTop: '1px solid #f1f5f9' }}>
                   <MetaModelFileDownloads
-                    modelName={model.name}
-                    ecoreFileId={model.ecoreFileId}
-                    genModelFileId={model.genModelFileId}
+                    modelName={displayModel.name}
+                    ecoreFileId={displayModel.ecoreFileId}
+                    genModelFileId={displayModel.genModelFileId}
                     labelStyle={{ fontSize: 11, fontWeight: 700, color: '#374151', marginBottom: 5, letterSpacing: '0.01em', fontFamily: FONT }}
                   />
                   {model.createdAt && (

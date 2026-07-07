@@ -1,5 +1,4 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { computeUmlFocusRect } from '../../utils/umlClassLayout';
 
 const BW = 190;
 const NAME_H = 36;
@@ -11,6 +10,10 @@ const METH_H = 26;
 
 const MAP_W = 132;
 const MAP_H = 92;
+const MIN_MM_SCALE = 0.03;
+const MAX_MM_SCALE = 2;
+const VIEWPORT_FILL_RATIO = 0.8;
+const INDICATOR_MARGIN = 6;
 
 export interface UMLDiagramMinimapClass {
   id: string;
@@ -21,15 +24,46 @@ export interface UMLDiagramMinimapClass {
   attributes: ReadonlyArray<unknown>;
 }
 
+export interface UMLDiagramMinimapRelationship {
+  id: string;
+  sourceId: string;
+  targetId: string;
+}
+
 type MinimapClass = UMLDiagramMinimapClass;
+type MinimapRelationship = UMLDiagramMinimapRelationship;
 
 function minimapBoxH(c: MinimapClass): number {
   const nh = c.isAbstract || c.isInterface ? STEREO_H : NAME_H;
   return nh + 1 + c.attributes.length * ATTR_ROW + ATTR_PAD + ADD_BTN_H + 1 + METH_H;
 }
 
+/** Point where the ray from the map center toward (sx,sy) crosses the map border,
+ *  or null if (sx,sy) is already inside — used for off-screen class indicators.
+ *  Same approach as the main canvas's overview map (see FlowCanvas's CustomMinimap). */
+function edgeIndicatorPos(
+  sx: number, sy: number, w: number, h: number,
+): { x: number; y: number } | null {
+  const M = INDICATOR_MARGIN;
+  if (sx >= M && sx <= w - M && sy >= M && sy <= h - M) return null;
+  const cx = w / 2, cy = h / 2;
+  const dx = sx - cx, dy = sy - cy;
+  if (dx === 0 && dy === 0) return null;
+  let t = Infinity;
+  if (dx > 0) t = Math.min(t, (w - M - cx) / dx);
+  if (dx < 0) t = Math.min(t, (M - cx) / dx);
+  if (dy > 0) t = Math.min(t, (h - M - cy) / dy);
+  if (dy < 0) t = Math.min(t, (M - cy) / dy);
+  if (!Number.isFinite(t) || t <= 0) return null;
+  return {
+    x: Math.max(M, Math.min(w - M, cx + dx * t)),
+    y: Math.max(M, Math.min(h - M, cy + dy * t)),
+  };
+}
+
 export interface UMLDiagramMinimapProps {
   classes: MinimapClass[];
+  relationships?: MinimapRelationship[];
   offsetX: number;
   offsetY: number;
   vx: number;
@@ -41,6 +75,7 @@ export interface UMLDiagramMinimapProps {
 
 export const UMLDiagramMinimap: React.FC<UMLDiagramMinimapProps> = ({
   classes,
+  relationships = [],
   offsetX,
   offsetY,
   vx,
@@ -64,52 +99,23 @@ export const UMLDiagramMinimap: React.FC<UMLDiagramMinimapProps> = ({
     return () => ro.disconnect();
   }, [containerRef]);
 
-  const bounds = useMemo(() => {
-    if (classes.length === 0) {
-      return { x0: 0, y0: 0, w: 1, h: 1 };
-    }
-    const focus = computeUmlFocusRect(classes, {
-      boxWidth: BW,
-      boxHeight: c => minimapBoxH(c),
-      padding: 12,
-      focusRatio: 0.92,
-    });
-    return {
-      x0: focus.minX + offsetX,
-      y0: focus.minY + offsetY,
-      w: Math.max(focus.maxX - focus.minX, 1),
-      h: Math.max(focus.maxY - focus.minY, 1),
-    };
-  }, [classes, offsetX, offsetY]);
+  const classById = useMemo(() => new Map(classes.map(c => [c.id, c])), [classes]);
 
-  const mapScale = useMemo(
-    () => Math.min(MAP_W / bounds.w, MAP_H / bounds.h),
-    [bounds.w, bounds.h],
-  );
+  // Viewport center in content (display) coordinates — the minimap always tracks
+  // the current viewport center, same approach as the main canvas's overview map.
+  const flowCX = containerSize.width > 0 ? (-vx + containerSize.width / 2) / vscale : 0;
+  const flowCY = containerSize.height > 0 ? (-vy + containerSize.height / 2) / vscale : 0;
+  const visW = containerSize.width / vscale;
+  const visH = containerSize.height / vscale;
 
-  const toMap = useCallback(
-    (cx: number, cy: number) => ({
-      x: (cx - bounds.x0) * mapScale,
-      y: (cy - bounds.y0) * mapScale,
-    }),
-    [bounds.x0, bounds.y0, mapScale],
-  );
+  // Scale so the current viewport fills ~80% of the minimap — clamped so extreme zooms stay sane.
+  const mmScale = Math.max(MIN_MM_SCALE, Math.min(MAX_MM_SCALE, Math.min(
+    (MAP_W * VIEWPORT_FILL_RATIO) / Math.max(visW, 50),
+    (MAP_H * VIEWPORT_FILL_RATIO) / Math.max(visH, 50),
+  )));
 
-  const viewportRect = useMemo(() => {
-    if (containerSize.width <= 0 || containerSize.height <= 0) return null;
-    const viewL = -vx / vscale;
-    const viewT = -vy / vscale;
-    const viewW = containerSize.width / vscale;
-    const viewH = containerSize.height / vscale;
-    const tl = toMap(viewL, viewT);
-    const br = toMap(viewL + viewW, viewT + viewH);
-    return {
-      x: Math.max(0, tl.x),
-      y: Math.max(0, tl.y),
-      w: Math.min(MAP_W, Math.max(4, br.x - tl.x)),
-      h: Math.min(MAP_H, Math.max(4, br.y - tl.y)),
-    };
-  }, [containerSize, vx, vy, vscale, toMap]);
+  const toX = useCallback((dx: number) => (dx - flowCX) * mmScale + MAP_W / 2, [flowCX, mmScale]);
+  const toY = useCallback((dy: number) => (dy - flowCY) * mmScale + MAP_H / 2, [flowCY, mmScale]);
 
   const panToContentPoint = useCallback(
     (contentX: number, contentY: number) => {
@@ -121,26 +127,34 @@ export const UMLDiagramMinimap: React.FC<UMLDiagramMinimapProps> = ({
     [containerSize, vscale, onViewportChange],
   );
 
+  // Snapshot the current map-to-content mapping at gesture start so a drag stays
+  // predictable — otherwise panning would shift the map itself (flowCX/flowCY move
+  // with vx/vy), and the content under the cursor would slide away mid-drag.
+  const gestureRef = useRef<{ flowCX: number; flowCY: number; mmScale: number } | null>(null);
+
   const handlePointer = useCallback(
     (clientX: number, clientY: number) => {
       const mapEl = mapRef.current;
-      if (!mapEl) return;
+      const snap = gestureRef.current;
+      if (!mapEl || !snap) return;
       const rect = mapEl.getBoundingClientRect();
       const mx = clientX - rect.left;
       const my = clientY - rect.top;
-      const contentX = bounds.x0 + mx / mapScale;
-      const contentY = bounds.y0 + my / mapScale;
+      const contentX = snap.flowCX + (mx - MAP_W / 2) / snap.mmScale;
+      const contentY = snap.flowCY + (my - MAP_H / 2) / snap.mmScale;
       panToContentPoint(contentX, contentY);
     },
-    [bounds, mapScale, panToContentPoint],
+    [panToContentPoint],
   );
 
   const onMouseDown = (e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
+    gestureRef.current = { flowCX, flowCY, mmScale };
     handlePointer(e.clientX, e.clientY);
     const onMove = (ev: MouseEvent) => handlePointer(ev.clientX, ev.clientY);
     const onUp = () => {
+      gestureRef.current = null;
       globalThis.removeEventListener('mousemove', onMove);
       globalThis.removeEventListener('mouseup', onUp);
     };
@@ -162,6 +176,25 @@ export const UMLDiagramMinimap: React.FC<UMLDiagramMinimapProps> = ({
   };
 
   if (classes.length === 0) return null;
+
+  const viewportRect = containerSize.width > 0 && containerSize.height > 0
+    ? {
+        x: toX(flowCX - visW / 2),
+        y: toY(flowCY - visH / 2),
+        w: visW * mmScale,
+        h: visH * mmScale,
+      }
+    : null;
+
+  // Off-screen indicators: small dots at the map border pointing toward classes
+  // that fall outside the minimap's current view.
+  const indicators: { id: string; x: number; y: number }[] = [];
+  classes.forEach(c => {
+    const cx = toX(c.x + offsetX + BW / 2);
+    const cy = toY(c.y + offsetY + minimapBoxH(c) / 2);
+    const ind = edgeIndicatorPos(cx, cy, MAP_W, MAP_H);
+    if (ind) indicators.push({ id: c.id, ...ind });
+  });
 
   return (
     <button
@@ -190,20 +223,36 @@ export const UMLDiagramMinimap: React.FC<UMLDiagramMinimapProps> = ({
       }}
     >
       <svg width={MAP_W} height={MAP_H} style={{ display: 'block' }} aria-hidden="true">
+        {/* Relationships — drawn under the class boxes, like the canvas's edges */}
+        {relationships.map(rel => {
+          const src = classById.get(rel.sourceId);
+          const tgt = classById.get(rel.targetId);
+          if (!src || !tgt) return null;
+          return (
+            <line
+              key={rel.id}
+              x1={toX(src.x + offsetX + BW / 2)} y1={toY(src.y + offsetY + minimapBoxH(src) / 2)}
+              x2={toX(tgt.x + offsetX + BW / 2)} y2={toY(tgt.y + offsetY + minimapBoxH(tgt) / 2)}
+              stroke="#94a3b8"
+              strokeWidth={1}
+            />
+          );
+        })}
+
+        {/* Classes */}
         {classes.map(c => {
-          const left = c.x + offsetX;
-          const top = c.y + offsetY;
-          const h = minimapBoxH(c);
-          const p = toMap(left, top);
-          const pw = BW * mapScale;
-          const ph = h * mapScale;
+          const x = toX(c.x + offsetX);
+          const y = toY(c.y + offsetY);
+          const w = BW * mmScale;
+          const h = minimapBoxH(c) * mmScale;
+          if (x + w < 0 || x > MAP_W || y + h < 0 || y > MAP_H) return null;
           return (
             <rect
               key={c.id}
-              x={p.x}
-              y={p.y}
-              width={Math.max(2, pw)}
-              height={Math.max(2, ph)}
+              x={x}
+              y={y}
+              width={Math.max(2, w)}
+              height={Math.max(2, h)}
               fill="#e0f2fe"
               stroke="#0c436e"
               strokeWidth={0.75}
@@ -211,6 +260,8 @@ export const UMLDiagramMinimap: React.FC<UMLDiagramMinimapProps> = ({
             />
           );
         })}
+
+        {/* Current viewport rectangle */}
         {viewportRect && (
           <rect
             x={viewportRect.x}
@@ -224,6 +275,19 @@ export const UMLDiagramMinimap: React.FC<UMLDiagramMinimapProps> = ({
             pointerEvents="none"
           />
         )}
+
+        {/* Off-screen class indicators */}
+        {indicators.map(ind => (
+          <circle
+            key={ind.id}
+            cx={ind.x}
+            cy={ind.y}
+            r={3.5}
+            fill="#049484"
+            stroke="#ffffff"
+            strokeWidth={1}
+          />
+        ))}
       </svg>
     </button>
   );

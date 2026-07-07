@@ -419,9 +419,8 @@ const RelationDirectionMarker: React.FC<RelationDirectionMarkerProps> = ({
       onMouseLeave={onMouseLeave}
       style={{
         position: 'absolute',
-        left: x,
-        top: y,
-        transform: `translate(-50%, -50%) rotate(${rotation}deg)`,
+        transform: `translate(-50%, -50%) translate(${x}px, ${y}px) rotate(${rotation}deg)`,
+        transition: 'none',
         pointerEvents: 'auto',
         cursor: 'pointer',
         zIndex: 5,
@@ -1972,6 +1971,7 @@ export const UMLDiagram = forwardRef<UMLDiagramHandle, UMLDiagramProps>(({
       )}
       <UMLDiagramMinimap
         classes={classes}
+        relationships={rels}
         offsetX={offsetX}
         offsetY={offsetY}
         vx={vx}
