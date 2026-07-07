@@ -500,9 +500,7 @@ export function UMLRelationship({
             className="nodrag nopan"
             style={{
               position: 'absolute',
-              left: directionMarkerPos.x,
-              top: directionMarkerPos.y,
-              transform: `translate(-50%, -50%) rotate(${directionMarkerRotation}deg)`,
+              transform: `translate(-50%, -50%) translate(${directionMarkerPos.x}px, ${directionMarkerPos.y}px) rotate(${directionMarkerRotation}deg)`,
               pointerEvents: 'none',
               zIndex: 1001,
               lineHeight: 0,
