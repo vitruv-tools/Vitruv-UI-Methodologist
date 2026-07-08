@@ -215,12 +215,20 @@ describe('ApiService – findMetaModels', () => {
     expect(result.data[0].name).toBe('M1');
   });
 
-  it('passes filters as POST body', async () => {
+  it('passes filters as POST body without pagination fields', async () => {
     mockFetch({ data: [], message: 'OK' });
     await apiService.findMetaModels({ name: 'eco', pageNumber: 0, pageSize: 10 });
 
-    const [, options] = (global.fetch as jest.Mock).mock.calls[0];
-    expect(JSON.parse(options.body)).toEqual({ name: 'eco', pageNumber: 0, pageSize: 10 });
+    const [url, options] = (global.fetch as jest.Mock).mock.calls[0];
+    expect(url).toContain('pageNumber=0');
+    expect(url).toContain('pageSize=10');
+    expect(JSON.parse(options.body)).toEqual({ name: 'eco' });
+  });
+
+  it('normalizes paginated content arrays in the response body', async () => {
+    mockFetch({ data: { content: [{ id: 3, name: 'Paged' }] }, message: 'OK' });
+    const result = await apiService.findMetaModels({});
+    expect(result.data).toEqual([{ id: 3, name: 'Paged' }]);
   });
 });
 

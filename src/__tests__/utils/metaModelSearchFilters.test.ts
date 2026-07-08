@@ -16,15 +16,19 @@ describe('metaModelSearchFilters', () => {
 
   it('uses plain search text as a name filter when no key:value syntax is present', () => {
     expect(buildMetaModelFindFilters('MyModel', [], 'all')).toEqual({
-      ownedByUser: false,
       name: 'MyModel',
+    });
+  });
+
+  it('includes ownedByUser only when explicitly requested', () => {
+    expect(buildMetaModelFindFilters('', [], 'all', true)).toEqual({
+      ownedByUser: true,
     });
   });
 
   it('maps parsed filters to backend find-all fields', () => {
     const parsed = parseMetaModelSearchQuery('name:eco domain:Testing keywords:foo,bar');
     expect(buildMetaModelFindFilters('name:eco domain:Testing keywords:foo,bar', parsed, 'all')).toEqual({
-      ownedByUser: false,
       name: 'eco',
       domain: 'Testing',
       keyword: ['foo', 'bar'],

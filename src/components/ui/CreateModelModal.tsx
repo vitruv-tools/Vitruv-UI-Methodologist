@@ -946,12 +946,19 @@ function useCreateModelForm({ isOpen, onClose, onSuccess }: CreateModelModalProp
   };
 
   // Shared happy-path handler after a successful API call
-  const onSubmitSuccess = (message: string, responseData: any) => {
+  const onSubmitSuccess = (
+    message: string,
+    responseData: any,
+    requestData?: CreateModelRequest,
+  ) => {
     setMetaModelCreatedSuccessfully(true);
     finishSubmitOverlay(() => {
       setIsLoading(false);
       setSuccess(message);
-      setTimeout(() => { onSuccess?.(responseData); handleClose(); }, 300);
+      setTimeout(() => {
+        onSuccess?.({ ...requestData, ...(responseData ?? {}), id: responseData?.id });
+        handleClose();
+      }, 300);
     });
   };
 
@@ -1148,7 +1155,7 @@ function useCreateModelForm({ isOpen, onClose, onSuccess }: CreateModelModalProp
       };
       setPendingCreateRequest(requestData);
       const response = await apiService.createMetaModel({ ...requestData, applyGenModelFixes: false });
-      onSubmitSuccess('Meta Model created successfully!', response.data);
+      onSubmitSuccess('Meta Model created successfully!', response.data, requestData);
     } catch (err) {
       const { message, isMetamodelRejected } = parseBackendError(err);
       if (isMetamodelRejected) {
@@ -1174,7 +1181,11 @@ function useCreateModelForm({ isOpen, onClose, onSuccess }: CreateModelModalProp
 
     try {
       const response = await apiService.createMetaModel({ ...pendingCreateRequest, applyGenModelFixes: true });
-      onSubmitSuccess('Meta Model created successfully with automatic GenModel fixes.', response.data);
+      onSubmitSuccess(
+        'Meta Model created successfully with automatic GenModel fixes.',
+        response.data,
+        pendingCreateRequest,
+      );
     } catch (err) {
       const { message } = parseBackendError(err);
       await handleImportFailure(message, 'Error creating meta model with automatic GenModel fixes: ');

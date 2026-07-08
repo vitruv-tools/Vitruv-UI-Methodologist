@@ -25,6 +25,11 @@ import {
   parseMetaModelSearchQuery,
   ParsedMetaModelSearchFilter,
 } from '../../utils/metaModelSearchFilters';
+import {
+  extractCreatePayload,
+  fetchLibraryMetaModels,
+  fetchLibraryMetaModelsAfterCreate,
+} from '../../utils/metaModelList';
 import { PortalRowActionsMenu } from './PortalRowActionsMenu';
 
 interface ModelLibraryTableProps {
@@ -732,22 +737,60 @@ export const ModelLibraryTable: React.FC<ModelLibraryTableProps> = ({ onModelOpe
     [debouncedSearch],
   );
 
-  const fetchModels = useCallback(async () => {
+  const fetchModels = useCallback(async (options?: {
+    searchQuery?: string;
+    date?: MetaModelDateFilter;
+    parsed?: ParsedMetaModelSearchFilter[];
+  }) => {
     setLoading(true);
     setError('');
     try {
-      const filters = buildMetaModelFindFilters(debouncedSearch, parsedFilters, dateFilter, false);
-      const res = await apiService.findMetaModels(filters);
-      setModels(res.data || []);
+      const searchQuery = options?.searchQuery ?? debouncedSearch;
+      const activeParsed = options?.parsed ?? (
+        searchQuery.trim() ? parseMetaModelSearchQuery(searchQuery) : []
+      );
+      const activeDateFilter = options?.date ?? dateFilter;
+      const filters = buildMetaModelFindFilters(searchQuery, activeParsed, activeDateFilter);
+      const models = await fetchLibraryMetaModels(filters);
+      setModels(models);
       setCurrentPage(1);
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : 'Failed to load');
     } finally {
       setLoading(false);
     }
-  }, [debouncedSearch, parsedFilters, dateFilter]);
+  }, [debouncedSearch, dateFilter]);
 
-  useEffect(() => { fetchModels(); }, [fetchModels]);
+  useEffect(() => { void fetchModels(); }, [fetchModels]);
+
+  const clearAllFilters = useCallback(() => {
+    setSearch('');
+    setDebouncedSearch('');
+    setDateFilter('all');
+    setCurrentPage(1);
+  }, []);
+
+  const handleCreateSuccess = useCallback(async (createdPayload?: unknown) => {
+    setShowCreate(false);
+    clearAllFilters();
+    setLoading(true);
+    setError('');
+
+    const payload = extractCreatePayload(createdPayload);
+    const filters = buildMetaModelFindFilters('', [], 'all');
+
+    try {
+      const models = payload
+        ? await fetchLibraryMetaModelsAfterCreate(filters, payload)
+        : await fetchLibraryMetaModels(filters);
+      setModels(models);
+      setCurrentPage(1);
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : 'Failed to load models after create');
+    } finally {
+      setLoading(false);
+    }
+  }, [clearAllFilters]);
 
   const appendSearchFilter = (key: 'name' | 'domain' | 'keywords' | 'created', value: string) => {
     setSearch(prev => appendMetaModelSearchToken(prev, key, value));
@@ -781,7 +824,9 @@ export const ModelLibraryTable: React.FC<ModelLibraryTableProps> = ({ onModelOpe
     tableBodyRows = (
       <tr>
         <td colSpan={4} style={emptyRowStyle}>
-          {search ? 'No results for this search.' : 'No models yet.'}
+          {search.trim()
+            ? `No models match "${search.trim()}". Clear filters to see all models.`
+            : 'No models yet. Upload a .ecore and .genmodel pair to get started.'}
         </td>
       </tr>
     );
@@ -861,9 +906,8 @@ export const ModelLibraryTable: React.FC<ModelLibraryTableProps> = ({ onModelOpe
             <button
               type="button"
               onClick={() => {
-                setSearch('');
-                setDateFilter('all');
-                setCurrentPage(1);
+                clearAllFilters();
+                void fetchModels({ searchQuery: '', date: 'all', parsed: [] });
               }}
               style={{
                 padding: '8px 12px',
@@ -971,7 +1015,7 @@ export const ModelLibraryTable: React.FC<ModelLibraryTableProps> = ({ onModelOpe
         <CreateModelModal
           isOpen={showCreate}
           onClose={() => setShowCreate(false)}
-          onSuccess={() => { setShowCreate(false); fetchModels(); }}
+          onSuccess={handleCreateSuccess}
         />
       )}
       {viewModel && (

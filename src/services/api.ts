@@ -498,11 +498,8 @@ class ApiService {
     pageSize?: number;
     ownedByUser?: boolean;
   }): Promise<{ data: any[]; message: string }> {
-    // Set default values for pagination
-    const pageNumber = filters.pageNumber ?? 0;
-    const pageSize = filters.pageSize ?? 50;
+    const { pageNumber = 0, pageSize = 50, ...filterBody } = filters;
 
-    // Build query parameters
     const queryParams = new URLSearchParams({
       pageNumber: pageNumber.toString(),
       pageSize: pageSize.toString(),
@@ -510,10 +507,19 @@ class ApiService {
 
     const endpoint = `/api/v1/meta-models/find-all?${queryParams.toString()}`;
 
-    return this.authenticatedRequest<{ data: any[]; message: string }>(endpoint, {
+    const result = await this.authenticatedRequest<{ data: unknown; message?: string }>(endpoint, {
       method: 'POST',
-      body: JSON.stringify(filters),
+      body: JSON.stringify(filterBody),
     });
+
+    let data: any[] = [];
+    if (Array.isArray(result?.data)) {
+      data = result.data;
+    } else if (result?.data && typeof result.data === 'object' && Array.isArray((result.data as { content?: unknown[] }).content)) {
+      data = (result.data as { content: any[] }).content;
+    }
+
+    return { data, message: result?.message ?? '' };
   }
 
   /**

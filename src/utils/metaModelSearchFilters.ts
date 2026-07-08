@@ -134,9 +134,12 @@ export function buildMetaModelFindFilters(
   searchQuery: string,
   parsedFilters: ParsedMetaModelSearchFilter[],
   dateFilter: MetaModelDateFilter,
-  ownedByUser = false,
+  ownedByUser?: boolean,
 ): MetaModelFindFilters {
-  const filters: MetaModelFindFilters = { ownedByUser };
+  const filters: MetaModelFindFilters = {};
+  if (ownedByUser !== undefined) {
+    filters.ownedByUser = ownedByUser;
+  }
 
   applyPlainNameSearch(filters, searchQuery, parsedFilters);
   parsedFilters.forEach(entry => applyParsedFilterEntry(filters, entry));
