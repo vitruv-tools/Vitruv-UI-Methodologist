@@ -26,6 +26,55 @@ export interface CreateMetaModelPayload {
 
 const sleep = (ms: number) => new Promise<void>(resolve => { setTimeout(resolve, ms); });
 
+const PENDING_CREATES_STORAGE_KEY = 'vitruv.pendingMetaModelCreates';
+
+export function createPayloadKey(payload: CreateMetaModelPayload): string {
+  return `${payload.name.trim().toLowerCase()}|${payload.ecoreFileId ?? ''}|${payload.genModelFileId ?? ''}`;
+}
+
+export function isSameCreatePayload(a: CreateMetaModelPayload, b: CreateMetaModelPayload): boolean {
+  return createPayloadKey(a) === createPayloadKey(b);
+}
+
+export function readPendingCreates(): CreateMetaModelPayload[] {
+  try {
+    const raw = sessionStorage.getItem(PENDING_CREATES_STORAGE_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw) as unknown;
+    if (!Array.isArray(parsed)) return [];
+    return parsed
+      .map(item => extractCreatePayload(item))
+      .filter((item): item is CreateMetaModelPayload => item != null);
+  } catch {
+    return [];
+  }
+}
+
+export function rememberPendingCreate(payload: CreateMetaModelPayload): void {
+  const pending = readPendingCreates().filter(item => !isSameCreatePayload(item, payload));
+  sessionStorage.setItem(PENDING_CREATES_STORAGE_KEY, JSON.stringify([payload, ...pending]));
+}
+
+export function forgetPendingCreate(payload: CreateMetaModelPayload): void {
+  const pending = readPendingCreates().filter(item => !isSameCreatePayload(item, payload));
+  sessionStorage.setItem(PENDING_CREATES_STORAGE_KEY, JSON.stringify(pending));
+}
+
+export function mergePendingCreates(
+  models: LibraryMetaModel[],
+  pending: CreateMetaModelPayload[],
+): LibraryMetaModel[] {
+  let merged = models;
+  for (const payload of pending) {
+    if (findMatchingCreatedModel(merged, payload)) {
+      forgetPendingCreate(payload);
+      continue;
+    }
+    merged = mergeCreatedMetaModel(merged, buildPendingMetaModelFromCreate(payload));
+  }
+  return merged;
+}
+
 function normalizeMetaModelList(data: unknown): LibraryMetaModel[] {
   if (Array.isArray(data)) return data as LibraryMetaModel[];
   if (data && typeof data === 'object' && Array.isArray((data as { content?: unknown[] }).content)) {
@@ -136,8 +185,8 @@ function stripOwnedByUser(filters: MetaModelFindFilters): Omit<MetaModelFindFilt
 
 /**
  * Load models for the Model Library page.
- * Queries owned, shared, and unscoped lists — backends may place newly created
- * models in different buckets depending on ownership flags.
+ * User uploads appear under ownedByUser=true; we also merge shared/public buckets
+ * so older entries remain visible across backend variants.
  */
 export async function fetchLibraryMetaModels(
   filters: MetaModelFindFilters,
@@ -145,8 +194,8 @@ export async function fetchLibraryMetaModels(
   const baseFilters = stripOwnedByUser(filters);
 
   const requests = [
-    apiService.findMetaModels(baseFilters),
     apiService.findMetaModels({ ...baseFilters, ownedByUser: true }),
+    apiService.findMetaModels(baseFilters),
     apiService.findMetaModels({ ...baseFilters, ownedByUser: false }),
   ];
 
@@ -158,7 +207,8 @@ export async function fetchLibraryMetaModels(
     }
   }
 
-  return mergeMetaModelsById(lists);
+  const merged = mergeMetaModelsById(lists);
+  return mergePendingCreates(merged, readPendingCreates());
 }
 
 /**
@@ -170,17 +220,19 @@ export async function fetchLibraryMetaModelsAfterCreate(
   created: CreateMetaModelPayload,
   options?: { maxAttempts?: number; delayMs?: number },
 ): Promise<LibraryMetaModel[]> {
-  const maxAttempts = options?.maxAttempts ?? 4;
-  const delayMs = options?.delayMs ?? 700;
+  const maxAttempts = options?.maxAttempts ?? 6;
+  const delayMs = options?.delayMs ?? 1000;
 
   let lastModels: LibraryMetaModel[] = [];
   for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
     if (attempt > 0) await sleep(delayMs);
     lastModels = await fetchLibraryMetaModels(filters);
     if (findMatchingCreatedModel(lastModels, created)) {
+      forgetPendingCreate(created);
       return lastModels;
     }
   }
 
+  rememberPendingCreate(created);
   return mergeCreatedMetaModel(lastModels, buildPendingMetaModelFromCreate(created));
 }
