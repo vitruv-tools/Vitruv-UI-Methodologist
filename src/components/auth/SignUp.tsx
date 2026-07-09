@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
 import { SignUpCredentials } from '../../services/auth';
+import { PasswordVisibilityToggle } from './PasswordVisibilityToggle';
 import './Auth.css';
 
 interface SignUpProps {
@@ -151,6 +152,8 @@ export function SignUp({ onSignUpSuccess, onSwitchToSignIn }: Readonly<SignUpPro
   });
 
   const [confirmPassword, setConfirmPassword] = useState('');
+  const [isPasswordVisible, setIsPasswordVisible] = useState(false);
+  const [isConfirmPasswordVisible, setIsConfirmPasswordVisible] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isSuccess, setIsSuccess] = useState(false);
@@ -402,16 +405,25 @@ export function SignUp({ onSignUpSuccess, onSwitchToSignIn }: Readonly<SignUpPro
 
             <div className="form-group">
               <label htmlFor="password">Password *</label>
-              <input
-                  id="password"
-                  name="password"
-                  type="password"
-                  value={formData.password}
-                  onChange={handleInputChange}
-                  placeholder="Create a strong password"
+              <div className="password-input-wrapper">
+                <input
+                    id="password"
+                    name="password"
+                    type={isPasswordVisible ? 'text' : 'password'}
+                    value={formData.password}
+                    onChange={handleInputChange}
+                    placeholder="Create a strong password"
+                    disabled={isLoading || isSuccess}
+                    required
+                />
+                <PasswordVisibilityToggle
+                  inputId="password"
+                  fieldLabel="password"
+                  isVisible={isPasswordVisible}
+                  onToggle={() => setIsPasswordVisible(visible => !visible)}
                   disabled={isLoading || isSuccess}
-                  required
-              />
+                />
+              </div>
 
               {/* PASSWORD STRENGTH METER + REQUIREMENTS */}
               {formData.password && (
@@ -460,19 +472,28 @@ export function SignUp({ onSignUpSuccess, onSwitchToSignIn }: Readonly<SignUpPro
 
             <div className="form-group">
               <label htmlFor="confirmPassword">Confirm Password *</label>
-              <input
-                  id="confirmPassword"
-                  name="confirmPassword"
-                  type="password"
-                  value={confirmPassword}
-                  onChange={e => {
-                    setConfirmPassword(e.target.value);
-                    if (error) setError(null);
-                  }}
-                  placeholder="Confirm your password"
+              <div className="password-input-wrapper">
+                <input
+                    id="confirmPassword"
+                    name="confirmPassword"
+                    type={isConfirmPasswordVisible ? 'text' : 'password'}
+                    value={confirmPassword}
+                    onChange={e => {
+                      setConfirmPassword(e.target.value);
+                      if (error) setError(null);
+                    }}
+                    placeholder="Confirm your password"
+                    disabled={isLoading || isSuccess}
+                    required
+                />
+                <PasswordVisibilityToggle
+                  inputId="confirmPassword"
+                  fieldLabel="confirm password"
+                  isVisible={isConfirmPasswordVisible}
+                  onToggle={() => setIsConfirmPasswordVisible(visible => !visible)}
                   disabled={isLoading || isSuccess}
-                  required
-              />
+                />
+              </div>
             </div>
 
             <button

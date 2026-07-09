@@ -118,6 +118,45 @@
   font-weight: 400;
 }
 
+.password-input-wrapper {
+  position: relative;
+}
+
+.password-input-wrapper input {
+  padding-right: 3.5rem;
+}
+
+.password-visibility-toggle {
+  position: absolute;
+  top: 50%;
+  right: 2px;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: #047857;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transform: translateY(-50%);
+}
+
+.password-visibility-toggle:hover:not(:disabled) {
+  color: #065f46;
+}
+
+.password-visibility-toggle:focus-visible {
+  outline: 2px solid #06b5a0;
+  outline-offset: -2px;
+}
+
+.password-visibility-toggle:disabled {
+  color: #64748b;
+  cursor: not-allowed;
+}
+
 .auth-button {
   width: 100%;
   padding: 14px;
@@ -417,6 +456,10 @@
   .form-group input {
     padding: 11px 13px;
     font-size: 14px;
+  }
+
+  .password-input-wrapper input {
+    padding-right: 3.25rem;
   }
   
   .auth-button {
