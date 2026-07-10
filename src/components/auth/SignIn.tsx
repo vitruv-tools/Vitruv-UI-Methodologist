@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { SignInCredentials } from '../../services/auth';
 import { useAuth } from '../../contexts/AuthContext';
 import { apiService } from '../../services/api';
+import { PasswordVisibilityToggle } from './PasswordVisibilityToggle';
 import './Auth.css';
 
 interface SignInProps {
@@ -17,6 +18,7 @@ export function SignIn({ onSignInSuccess, onSwitchToSignUp }: Readonly<SignInPro
   });
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [isPasswordVisible, setIsPasswordVisible] = useState(false);
   
   // Forgot password states
   const [isForgotPasswordOpen, setIsForgotPasswordOpen] = useState(false);
@@ -125,16 +127,25 @@ export function SignIn({ onSignInSuccess, onSwitchToSignUp }: Readonly<SignInPro
 
           <div className="form-group">
             <label htmlFor="password">Password</label>
-            <input
-              type="password"
-              id="password"
-              name="password"
-              value={credentials.password}
-              onChange={handleInputChange}
-              placeholder="Enter your password"
-              disabled={isLoading}
-              required
-            />
+            <div className="password-input-wrapper">
+              <input
+                type={isPasswordVisible ? 'text' : 'password'}
+                id="password"
+                name="password"
+                value={credentials.password}
+                onChange={handleInputChange}
+                placeholder="Enter your password"
+                disabled={isLoading}
+                required
+              />
+              <PasswordVisibilityToggle
+                inputId="password"
+                fieldLabel="password"
+                isVisible={isPasswordVisible}
+                onToggle={() => setIsPasswordVisible(visible => !visible)}
+                disabled={isLoading}
+              />
+            </div>
           </div>
 
           <div style={{ 

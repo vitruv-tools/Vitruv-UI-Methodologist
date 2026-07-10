@@ -40,6 +40,38 @@ describe('SignUp component', () => {
     ).toBeInTheDocument();
   });
 
+  it('toggles sign-up password fields independently', async () => {
+    render(
+      <SignUp
+        onSignUpSuccess={jest.fn()}
+        onSwitchToSignIn={jest.fn()}
+      />,
+    );
+
+    const passwordInput = screen.getByLabelText(/^Password \*$/i);
+    const confirmPasswordInput = screen.getByLabelText(/^Confirm Password \*$/i);
+
+    expect(passwordInput).toHaveAttribute('type', 'password');
+    expect(confirmPasswordInput).toHaveAttribute('type', 'password');
+
+    await userEvent.click(screen.getByRole('button', { name: 'Show password' }));
+
+    expect(passwordInput).toHaveAttribute('type', 'text');
+    expect(confirmPasswordInput).toHaveAttribute('type', 'password');
+    expect(
+      screen.getByRole('button', { name: 'Hide password' }),
+    ).toBeInTheDocument();
+
+    await userEvent.click(
+      screen.getByRole('button', { name: 'Show confirm password' }),
+    );
+
+    expect(confirmPasswordInput).toHaveAttribute('type', 'text');
+    expect(
+      screen.getByRole('button', { name: 'Hide confirm password' }),
+    ).toBeInTheDocument();
+  });
+
   it('shows validation error for too short first name', async () => {
     render(
       <SignUp
@@ -115,4 +147,3 @@ describe('SignUp component', () => {
     expect(onSignUpSuccess).toHaveBeenCalled();
   });
 });
-
