@@ -49,19 +49,17 @@ describe('SignIn component', () => {
     await userEvent.type(passwordInput, 'password123!');
 
     expect(passwordInput).toHaveAttribute('type', 'password');
-    expect(screen.getByRole('button', { name: 'Show password' })).toHaveAttribute(
-      'aria-pressed',
-      'false',
-    );
+    expect(
+      screen.getByRole('button', { name: 'Show password' }),
+    ).toBeInTheDocument();
 
     await userEvent.click(screen.getByRole('button', { name: 'Show password' }));
 
     expect(passwordInput).toHaveAttribute('type', 'text');
     expect(passwordInput).toHaveValue('password123!');
-    expect(screen.getByRole('button', { name: 'Hide password' })).toHaveAttribute(
-      'aria-pressed',
-      'true',
-    );
+    expect(
+      screen.getByRole('button', { name: 'Hide password' }),
+    ).toBeInTheDocument();
 
     await userEvent.click(screen.getByRole('button', { name: 'Hide password' }));
 

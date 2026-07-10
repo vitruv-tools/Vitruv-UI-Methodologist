@@ -58,10 +58,9 @@ describe('SignUp component', () => {
 
     expect(passwordInput).toHaveAttribute('type', 'text');
     expect(confirmPasswordInput).toHaveAttribute('type', 'password');
-    expect(screen.getByRole('button', { name: 'Hide password' })).toHaveAttribute(
-      'aria-pressed',
-      'true',
-    );
+    expect(
+      screen.getByRole('button', { name: 'Hide password' }),
+    ).toBeInTheDocument();
 
     await userEvent.click(
       screen.getByRole('button', { name: 'Show confirm password' }),
@@ -70,7 +69,7 @@ describe('SignUp component', () => {
     expect(confirmPasswordInput).toHaveAttribute('type', 'text');
     expect(
       screen.getByRole('button', { name: 'Hide confirm password' }),
-    ).toHaveAttribute('aria-pressed', 'true');
+    ).toBeInTheDocument();
   });
 
   it('shows validation error for too short first name', async () => {

@@ -25,7 +25,6 @@ export function PasswordVisibilityToggle({
       className="password-visibility-toggle"
       aria-controls={inputId}
       aria-label={accessibleLabel}
-      aria-pressed={isVisible}
       title={accessibleLabel}
       onClick={onToggle}
       disabled={disabled}
