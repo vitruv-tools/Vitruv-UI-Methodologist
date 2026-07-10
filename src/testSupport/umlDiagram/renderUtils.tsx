@@ -1,7 +1,9 @@
-import React, { Ref } from 'react';
+import React, { ComponentProps, Ref } from 'react';
 import { render, RenderOptions, RenderResult } from '@testing-library/react';
-import { UMLDiagram, UMLDiagramHandle, UMLDiagramProps } from '../../../components/canvas/UMLDiagram';
-import { SIMPLE_ECORE } from './diagramTestFixtures';
+import { UMLDiagram, UMLDiagramHandle } from '../../components/canvas/UMLDiagram';
+import { SIMPLE_ECORE } from './fixtures';
+
+type UMLDiagramProps = ComponentProps<typeof UMLDiagram>;
 
 const STABLE_EMPTY_ADDITIONAL_MODELS: NonNullable<UMLDiagramProps['additionalModels']> = [];
 

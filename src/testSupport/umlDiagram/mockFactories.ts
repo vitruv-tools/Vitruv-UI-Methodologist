@@ -1,5 +1,5 @@
 export function ecoreToUmlMock() {
-  const actual = jest.requireActual('../../../utils/ecoreToUml') as typeof import('../../../utils/ecoreToUml');
+  const actual = jest.requireActual('../../utils/ecoreToUml') as typeof import('../../utils/ecoreToUml');
   const simpleModel = {
     classes: [
       {
@@ -121,7 +121,7 @@ export function umlDiagramGeometryMock() {
 }
 
 export function umlClassLayoutMock() {
-  const actual = jest.requireActual('../../../utils/umlClassLayout');
+  const actual = jest.requireActual('../../utils/umlClassLayout');
   return {
     ...actual,
     assignParallelRelMeta: (rels: unknown[]) => rels,
@@ -130,7 +130,7 @@ export function umlClassLayoutMock() {
 }
 
 export function umlLayoutStorageMock() {
-  const actual = jest.requireActual('../../../utils/umlLayoutStorage');
+  const actual = jest.requireActual('../../utils/umlLayoutStorage');
   return {
     ...actual,
     applyLayoutToUmlClasses: (_scope: string, _file: string, classes: unknown[]) => classes,
