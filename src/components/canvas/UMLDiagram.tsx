@@ -2460,7 +2460,7 @@ export const UMLDiagram = forwardRef<UMLDiagramHandle, UMLDiagramProps>(({
 
       {/* Direction markers above class boxes */}
       {edgeLayouts.map(layout => {
-        const { rel, p1, p2, drawP1, drawP2 } = layout;
+        const { rel, drawP1, drawP2 } = layout;
         const reactionEdge = reactionEdgeById.get(rel.id);
         const state = edgeState(selectedRelId === rel.id, hoveredRelId === rel.id);
         const color = reactionEdge ? REACTION_EDGE_COLOR[state] : EDGE_COLOR[state];
