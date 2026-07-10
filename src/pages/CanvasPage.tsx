@@ -349,11 +349,13 @@ const CanvasPopupNotification: React.FC<{ message: string; type: PopupNotificati
     <div style={{
       position: 'fixed', bottom: 24, left: '50%', transform: 'translateX(-50%)',
       zIndex: 9999, maxWidth: 480, width: 'max-content',
+      maxHeight: '60vh', overflowY: 'auto',
       background: popupStyles.background,
       border: popupStyles.border,
       color: popupStyles.color,
       borderRadius: 10, padding: '10px 16px', fontSize: 13, fontWeight: 500,
       boxShadow: '0 4px 16px rgba(0,0,0,0.12)',
+      whiteSpace: 'pre-wrap', overflowWrap: 'anywhere', boxSizing: 'border-box',
     }}>
       {message}
     </div>
