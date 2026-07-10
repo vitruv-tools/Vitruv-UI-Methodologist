@@ -19,6 +19,9 @@ export interface ReactionEdge {
   targetClassId: string;
   targetClassName: string;
   config: ReactionConfig;
+  /** In-memory reaction source; persisted via reactionFileId when saved. */
+  code?: string;
+  reactionFileId?: number;
 }
 
 export interface ReactionsModel {

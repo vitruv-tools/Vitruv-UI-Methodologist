@@ -424,6 +424,7 @@ const CanvasUmlPanelLayer: React.FC<CanvasUmlPanelLayerProps> = ({
         onEcoreContentUpdated={content => onEcoreContentUpdated(panel.id, content)}
         zIndex={panelZBase + (topPanelId === panel.id ? panels.length : idx)}
         libraryModels={libraryModels}
+        vsumId={activeProjectId?.toString()}
       />
     ))}
   </>

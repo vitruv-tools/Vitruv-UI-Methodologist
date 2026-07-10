@@ -8,6 +8,13 @@ import {
   UML_RELATIONSHIP_MULTIPLICITY_LABELS,
 } from '../../utils/umlMultiplicity';
 import { validateUmlModel } from '../../utils/umlValidation';
+import { extractNsUriFromEcore } from '../../utils/ecoreParser';
+import { ReactionConfigPopup } from './ReactionConfigPopup';
+import { ReactionConfig, ReactionEdge, ReactionsModel } from '../../types/reactions';
+import { ReactionEditorModal } from '../flow/ReactionEditorModal';
+import { CodeEditorState } from '../flow/flowCanvasTypes';
+import { buildInitialReactionCodeFromConfig } from '../../utils/reactionCode';
+import { fetchReactionCode, persistReactionCode } from '../../utils/reactionFile';
 import { useUmlEditHistory, UmlEditSnapshot } from '../../hooks/useUmlEditHistory';
 import {
   applyLayoutToUmlClasses,
@@ -210,6 +217,16 @@ const EDGE_COLOR: Record<EdgeState, string> = {
   selected: EDGE_SELECT,
 };
 
+const REACTION_EDGE_COLOR: Record<EdgeState, string> = {
+  default:  '#a855f7',
+  hovered:  '#9333ea',
+  selected: '#7e22ce',
+};
+
+function reactionArrowSvg(color: string): React.ReactNode {
+  return <path d="M 0 0 L 12 6 L 0 12 z" fill={color} />;
+}
+
 const EDGE_WIDTH: Record<EdgeState, number> = {
   default: 1.5,
   hovered: 2.5,
@@ -269,6 +286,89 @@ function directionMarkerAnchor(
   return anchor;
 }
 
+type ReactionPortSide = 'left' | 'right';
+
+interface ReactionDragState {
+  sourceClassId: string;
+  sourceSide: ReactionPortSide;
+  startX: number;
+  startY: number;
+  cursorX: number;
+  cursorY: number;
+}
+
+function getReactionPortPosition(
+  cls: CLS,
+  offsetX: number,
+  offsetY: number,
+  side: ReactionPortSide,
+): { x: number; y: number } {
+  const h = boxH(cls);
+  return {
+    x: side === 'left' ? cls.x + offsetX : cls.x + offsetX + BW,
+    y: cls.y + offsetY + h / 2,
+  };
+}
+
+interface ReactionClassContext {
+  modelId: number;
+  modelName: string;
+  modelUrl: string;
+  className: string;
+}
+
+function parseAdditionalModelId(classId: string): number | null {
+  const match = /^addl-(\d+)-/.exec(classId);
+  return match ? Number(match[1]) : null;
+}
+
+function resolveReactionClassContext(
+  classId: string,
+  className: string,
+  primaryEcore: string,
+  primaryName: string,
+  primaryModelId: number,
+  reactionModels: ReactionsModel[],
+): ReactionClassContext {
+  const additionalModelId = parseAdditionalModelId(classId);
+  if (additionalModelId != null) {
+    const model = reactionModels.find(m => m.id === additionalModelId);
+    if (model) {
+      return {
+        modelId: model.id,
+        modelName: model.name,
+        modelUrl: extractNsUriFromEcore(model.ecoreContent) ?? `http://vitruv.tools/${model.name}`,
+        className,
+      };
+    }
+  }
+
+  const primaryModel = reactionModels.find(m => m.name === primaryName) ?? reactionModels[0];
+  return {
+    modelId: primaryModel?.id ?? primaryModelId,
+    modelName: primaryName,
+    modelUrl: extractNsUriFromEcore(primaryEcore) ?? `http://vitruv.tools/${primaryName}`,
+    className,
+  };
+}
+
+function buildDefaultReactionConfig(
+  source: ReactionClassContext,
+  target: ReactionClassContext,
+): ReactionConfig {
+  return {
+    bidirectional: false,
+    reactionName: `${source.className}_${target.className}`,
+    model1Url: source.modelUrl,
+    model2Url: target.modelUrl,
+    model1Alias: source.modelName,
+    model2Alias: target.modelName,
+    model1RootType: source.className,
+    model2RootType: target.className,
+    model1RootVal: source.className,
+  };
+}
+
 function getRelEndpoints(
   rel: DiagramRel,
   classes: CLS[],
@@ -318,12 +418,13 @@ interface RelationLineProps {
   drawP2: { x: number; y: number };
   bridges: LineBridge[];
   state: EdgeState;
+  reactionEdge?: ReactionEdge;
 }
 
 const RelationLine: React.FC<RelationLineProps> = ({
-  rel, p1, p2, drawP1, drawP2, bridges, state,
+  rel, p1, p2, drawP1, drawP2, bridges, state, reactionEdge,
 }) => {
-  const strokeColor = EDGE_COLOR[state];
+  const strokeColor = reactionEdge ? REACTION_EDGE_COLOR[state] : EDGE_COLOR[state];
   const strokeWidth = EDGE_WIDTH[state];
   const haloPath = bridgedLinePathD(drawP1, drawP2, bridges);
   const mx = (p1.x + p2.x) / 2;
@@ -390,57 +491,87 @@ interface RelationDirectionMarkerProps {
   lineStart: { x: number; y: number };
   lineEnd: { x: number; y: number };
   color: string;
+  reactionEdge?: ReactionEdge;
   onRelClick: (e: React.MouseEvent) => void;
   onMouseEnter: () => void;
   onMouseLeave: () => void;
 }
 
 const RelationDirectionMarker: React.FC<RelationDirectionMarkerProps> = ({
-  rel, lineStart, lineEnd, color, onRelClick, onMouseEnter, onMouseLeave,
+  rel, lineStart, lineEnd, color, reactionEdge, onRelClick, onMouseEnter, onMouseLeave,
 }) => {
+  const dx = lineEnd.x - lineStart.x;
+  const dy = lineEnd.y - lineStart.y;
+  const baseRotation = Math.atan2(dy, dx) * (180 / Math.PI);
+
+  const renderMarker = (
+    side: DirectionMarkerSide,
+    graphic: React.ReactNode,
+    rotation: number,
+    markerKey: string,
+  ) => {
+    const lineAnchor = side === 'start' ? lineStart : lineEnd;
+    const { x, y } = directionMarkerAnchor(lineAnchor);
+    const markerSize = reactionEdge ? 18 : directionMarkerSize(rel.type);
+    const viewBox = reactionEdge ? '0 0 12 12' : directionMarkerViewBox(rel.type);
+
+    return (
+      <button
+        key={markerKey}
+        type="button"
+        data-rel-direction-marker
+        data-rel-id={rel.id}
+        aria-label={rel.label ? `Select relationship: ${rel.label}` : `Select ${rel.type} relationship`}
+        onClick={onRelClick}
+        onMouseEnter={onMouseEnter}
+        onMouseLeave={onMouseLeave}
+        style={{
+          position: 'absolute',
+          transform: `translate(-50%, -50%) translate(${x}px, ${y}px) rotate(${rotation}deg)`,
+          transition: 'none',
+          pointerEvents: 'auto',
+          cursor: 'pointer',
+          zIndex: 5,
+          lineHeight: 0,
+          border: 'none',
+          background: 'transparent',
+          padding: 0,
+        }}
+      >
+        <svg
+          width={markerSize}
+          height={markerSize}
+          viewBox={viewBox}
+          overflow="visible"
+          aria-hidden="true"
+        >
+          {graphic}
+        </svg>
+      </button>
+    );
+  };
+
+  if (reactionEdge) {
+    const arrow = reactionArrowSvg(color);
+    const markers = reactionEdge.config.bidirectional
+      ? [
+          { side: 'start' as const, rotation: baseRotation + 180, key: 'start' },
+          { side: 'end' as const, rotation: baseRotation, key: 'end' },
+        ]
+      : [{ side: 'end' as const, rotation: baseRotation, key: 'end' }];
+
+    return (
+      <>
+        {markers.map(marker => renderMarker(marker.side, arrow, marker.rotation, `${rel.id}-${marker.key}`))}
+      </>
+    );
+  }
+
   const side = getDirectionMarkerSide(rel.type);
   const graphic = directionMarkerSvg(rel.type, color);
   if (!side || !graphic) return null;
 
-  const dx = lineEnd.x - lineStart.x;
-  const dy = lineEnd.y - lineStart.y;
-  const lineAnchor = side === 'start' ? lineStart : lineEnd;
-  const { x, y } = directionMarkerAnchor(lineAnchor);
-  const rotation = Math.atan2(dy, dx) * (180 / Math.PI);
-
-  return (
-    <button
-      type="button"
-      data-rel-direction-marker
-      data-rel-id={rel.id}
-      aria-label={rel.label ? `Select relationship: ${rel.label}` : `Select ${rel.type} relationship`}
-      onClick={onRelClick}
-      onMouseEnter={onMouseEnter}
-      onMouseLeave={onMouseLeave}
-      style={{
-        position: 'absolute',
-        transform: `translate(-50%, -50%) translate(${x}px, ${y}px) rotate(${rotation}deg)`,
-        transition: 'none',
-        pointerEvents: 'auto',
-        cursor: 'pointer',
-        zIndex: 5,
-        lineHeight: 0,
-        border: 'none',
-        background: 'transparent',
-        padding: 0,
-      }}
-    >
-      <svg
-        width={directionMarkerSize(rel.type)}
-        height={directionMarkerSize(rel.type)}
-        viewBox={directionMarkerViewBox(rel.type)}
-        overflow="visible"
-        aria-hidden="true"
-      >
-        {graphic}
-      </svg>
-    </button>
-  );
+  return renderMarker(side, graphic, baseRotation, rel.id);
 };
 
 function isEmptyCanvasTarget(target: HTMLElement): boolean {
@@ -452,7 +583,9 @@ function isEmptyCanvasTarget(target: HTMLElement): boolean {
     && !target.closest('[data-class-edit-panel]')
     && !target.closest('[data-uml-connect-banner]')
     && !target.closest('[data-uml-validation]')
-    && !target.closest('[data-wrapper-header]');
+    && !target.closest('[data-wrapper-header]')
+    && !target.closest('[data-reaction-port]')
+    && !target.closest('[data-reaction-edit-panel]');
 }
 
 type EditState =
@@ -711,6 +844,10 @@ interface UMLDiagramProps {
   additionalModels?: { id: number; name: string; ecoreContent: string; color: string; fill: string }[];
   /** When 'reactions', elements show connection indicators. */
   reactionsMode?: 'uml' | 'reactions';
+  /** Models available in the reactions view for resolving URLs and aliases. */
+  reactionModels?: ReactionsModel[];
+  /** VSUM project id for Reaction Editor LSP connection. */
+  vsumId?: string;
 }
 
 const REL_TYPE_CYCLE: UMLRelType[] = ['association', 'composition', 'inheritance'];
@@ -788,18 +925,36 @@ function getSaveButtonTitle(hasUnsavedChanges: boolean, saveContext: UmlDiagramS
   return 'Save metamodel changes';
 }
 
-function getConnectModeHint(connectSourceId: string | null): string {
-  if (connectSourceId) return 'Click the target class to create a connection';
-  return 'Click the source class, then the target class';
+function classesShareModel(
+  classIdA: string,
+  classIdB: string,
+  classModelMap: Map<string, { name: string; color: string; fill: string }>,
+): boolean {
+  const modelA = classModelMap.get(classIdA)?.name;
+  const modelB = classModelMap.get(classIdB)?.name;
+  if (!modelA || !modelB) return false;
+  return modelA === modelB;
+}
+
+function getConnectModeHint(connectSourceId: string | null, multiModel: boolean): string {
+  if (connectSourceId) {
+    return multiModel
+      ? 'Click a target class in the same model'
+      : 'Click the target class to create a connection';
+  }
+  return multiModel
+    ? 'Click the source class, then another class in the same model'
+    : 'Click the source class, then the target class';
 }
 
 function getValidationBannerInset(
   selectedClass: CLS | null | undefined,
   selectedRel: UMLRelationship | null | undefined,
+  reactionPanelOpen = false,
 ): { left: number; right: number } {
   return {
     left: selectedClass ? 288 : 12,
-    right: selectedRel ? 288 : 12,
+    right: (selectedRel || reactionPanelOpen) ? 320 : 12,
   };
 }
 
@@ -867,6 +1022,8 @@ export const UMLDiagram = forwardRef<UMLDiagramHandle, UMLDiagramProps>(({
   onHistoryChange,
   additionalModels = [],
   reactionsMode = 'uml',
+  reactionModels = [],
+  vsumId,
 }, ref) => {
   const parsed = useMemo(() => {
     const model = ecoreToUml(ecoreContent);
@@ -964,11 +1121,16 @@ export const UMLDiagram = forwardRef<UMLDiagramHandle, UMLDiagramProps>(({
   const [hoveredRelId, setHoveredRelId] = useState<string | null>(null);
   const [connectMode, setConnectMode] = useState(false);
   const [connectSourceId, setConnectSourceId] = useState<string | null>(null);
+  const [reactionDrag, setReactionDrag] = useState<ReactionDragState | null>(null);
+  const [reactionEdges, setReactionEdges] = useState<ReactionEdge[]>([]);
+  const [editingReactionId, setEditingReactionId] = useState<string | null>(null);
+  const [reactionEditorState, setReactionEditorState] = useState<CodeEditorState | null>(null);
   const classesRef = useRef(classes);
   classesRef.current = classes;
   const relationshipsRef = useRef(relationships);
   relationshipsRef.current = relationships;
   const dragHistorySavedRef = useRef(false);
+  const reactionDragActiveRef = useRef(false);
 
   const {
     canUndo: historyCanUndo,
@@ -1340,6 +1502,7 @@ export const UMLDiagram = forwardRef<UMLDiagramHandle, UMLDiagramProps>(({
 
   const handlePanStart = useCallback((e: MouseEvent) => {
     flushPendingEdit();
+    if (reactionDragActiveRef.current) return;
     if (!isEmptyCanvasTarget(e.target as HTMLElement)) return;
     e.preventDefault();
     setPanning(true);
@@ -1458,11 +1621,14 @@ export const UMLDiagram = forwardRef<UMLDiagramHandle, UMLDiagramProps>(({
   }, [recordChange]);
 
   const addRelationship = useCallback((sourceId: string, targetId: string) => {
-    if (sourceId === targetId) return;
+    if (sourceId === targetId) return false;
+    if (additionalModels.length > 0 && !classesShareModel(sourceId, targetId, classModelMap)) {
+      return false;
+    }
     const exists = relationshipsRef.current.some(
       r => r.sourceId === sourceId && r.targetId === targetId && r.type === 'association',
     );
-    if (exists) return;
+    if (exists) return false;
     recordChange();
     const newRelId = `rel-${Date.now()}`;
     setRelationships(prev => [...prev, {
@@ -1474,7 +1640,216 @@ export const UMLDiagram = forwardRef<UMLDiagramHandle, UMLDiagramProps>(({
       sourceMultiplicity: '1',
     }]);
     setSelectedRelId(newRelId);
-  }, [recordChange]);
+    return true;
+  }, [recordChange, additionalModels.length, classModelMap]);
+
+  const primaryModelName = fileName?.replace(/\.ecore$/, '') || 'Primary';
+  const primaryModelId = reactionModels[0]?.id ?? 0;
+
+  const addReactionConnection = useCallback((sourceClassId: string, targetClassId: string) => {
+    if (sourceClassId === targetClassId) return;
+
+    const sourceClass = allClasses.find(c => c.id === sourceClassId);
+    const targetClass = allClasses.find(c => c.id === targetClassId);
+    if (!sourceClass || !targetClass) return;
+
+    const exists = relationshipsRef.current.some(
+      r => r.sourceId === sourceClassId && r.targetId === targetClassId,
+    );
+    if (exists) {
+      const existing = reactionEdges.find(
+        e => e.sourceClassId === sourceClassId && e.targetClassId === targetClassId,
+      );
+      if (existing) {
+        setEditingReactionId(existing.id);
+        setSelectedRelId(existing.id);
+      }
+      return;
+    }
+
+    recordChange();
+    const newRelId = `reaction-${Date.now()}`;
+    const sourceCtx = resolveReactionClassContext(
+      sourceClassId,
+      sourceClass.name,
+      ecoreContent,
+      primaryModelName,
+      primaryModelId,
+      reactionModels,
+    );
+    const targetCtx = resolveReactionClassContext(
+      targetClassId,
+      targetClass.name,
+      ecoreContent,
+      primaryModelName,
+      primaryModelId,
+      reactionModels,
+    );
+
+    const reactionEdge: ReactionEdge = {
+      id: newRelId,
+      sourceModelId: sourceCtx.modelId,
+      sourceClassId,
+      sourceClassName: sourceClass.name,
+      targetModelId: targetCtx.modelId,
+      targetClassId,
+      targetClassName: targetClass.name,
+      config: buildDefaultReactionConfig(sourceCtx, targetCtx),
+    };
+
+    setRelationships(prev => [...prev, {
+      id: newRelId,
+      sourceId: sourceClassId,
+      targetId: targetClassId,
+      type: 'association',
+      label: reactionEdge.config.reactionName,
+    }]);
+    setReactionEdges(prev => [...prev, reactionEdge]);
+    setSelectedRelId(newRelId);
+    setEditingReactionId(newRelId);
+    setSelectedClassId(null);
+  }, [
+    allClasses,
+    reactionEdges,
+    recordChange,
+    ecoreContent,
+    primaryModelName,
+    primaryModelId,
+    reactionModels,
+  ]);
+
+  const updateReactionConfig = useCallback((reactionId: string, config: ReactionConfig) => {
+    setReactionEdges(prev => prev.map(edge =>
+      edge.id === reactionId ? { ...edge, config } : edge,
+    ));
+    setRelationships(prev => prev.map(rel =>
+      rel.id === reactionId ? { ...rel, label: config.reactionName } : rel,
+    ));
+  }, []);
+
+  const deleteReaction = useCallback((reactionId: string) => {
+    recordChange();
+    setReactionEdges(prev => prev.filter(edge => edge.id !== reactionId));
+    setRelationships(prev => prev.filter(rel => rel.id !== reactionId));
+    if (editingReactionId === reactionId) setEditingReactionId(null);
+    if (selectedRelId === reactionId) setSelectedRelId(null);
+    if (reactionEditorState?.edgeId === reactionId) setReactionEditorState(null);
+  }, [recordChange, editingReactionId, selectedRelId, reactionEditorState?.edgeId]);
+
+  const openReactionEditor = useCallback(async (reactionId: string) => {
+    const edge = reactionEdges.find(e => e.id === reactionId);
+    if (!edge) return;
+
+    const initialCode = await fetchReactionCode(
+      edge.code,
+      edge.reactionFileId,
+      () => buildInitialReactionCodeFromConfig(edge.config),
+    );
+
+    setReactionEditorState({
+      isOpen: true,
+      edgeId: reactionId,
+      initialCode,
+      sourceFileName: edge.config.model1Alias,
+      targetFileName: edge.config.model2Alias,
+      reactionFileId: edge.reactionFileId ?? null,
+    });
+    setSelectedRelId(reactionId);
+    setSelectedClassId(null);
+  }, [reactionEdges]);
+
+  const handleCloseReactionEditor = useCallback(() => {
+    setReactionEditorState(null);
+  }, []);
+
+  const handleSaveReactionCode = useCallback(async (code: string) => {
+    if (!reactionEditorState?.edgeId) return;
+    const reactionId = reactionEditorState.edgeId;
+    try {
+      const reactionFileId = await persistReactionCode(code, reactionEditorState.reactionFileId);
+      setReactionEdges(prev => prev.map(edge =>
+        edge.id === reactionId ? { ...edge, code, reactionFileId } : edge,
+      ));
+      setReactionEditorState(prev =>
+        prev ? { ...prev, reactionFileId } : prev,
+      );
+    } catch (err) {
+      console.error('Failed to save reaction file', err);
+      throw err;
+    }
+  }, [reactionEditorState]);
+
+  const handleDeleteReactionFromEditor = useCallback(() => {
+    if (reactionEditorState?.edgeId) {
+      deleteReaction(reactionEditorState.edgeId);
+    }
+  }, [reactionEditorState, deleteReaction]);
+
+  const clientToDiagram = useCallback((clientX: number, clientY: number) => {
+    const el = containerRef.current;
+    if (!el) return { x: 0, y: 0 };
+    const rect = el.getBoundingClientRect();
+    const { x: viewX, y: viewY, scale } = viewRef.current;
+    return {
+      x: (clientX - rect.left - viewX) / scale,
+      y: (clientY - rect.top - viewY) / scale,
+    };
+  }, []);
+
+  const handleReactionPortMouseDown = useCallback((
+    e: React.MouseEvent,
+    classId: string,
+    side: ReactionPortSide,
+  ) => {
+    if (!interactive || reactionsMode !== 'reactions') return;
+    e.stopPropagation();
+    e.preventDefault();
+    reactionDragActiveRef.current = true;
+
+    const cls = allClasses.find(c => c.id === classId);
+    if (!cls) return;
+
+    const { x: startX, y: startY } = getReactionPortPosition(cls, offsetX, offsetY, side);
+    const cursor = clientToDiagram(e.clientX, e.clientY);
+    setReactionDrag({
+      sourceClassId: classId,
+      sourceSide: side,
+      startX,
+      startY,
+      cursorX: cursor.x,
+      cursorY: cursor.y,
+    });
+
+    const onMove = (ev: MouseEvent) => {
+      ev.preventDefault();
+      const next = clientToDiagram(ev.clientX, ev.clientY);
+      setReactionDrag(prev => prev ? { ...prev, cursorX: next.x, cursorY: next.y } : null);
+    };
+
+    const onUp = (ev: MouseEvent) => {
+      reactionDragActiveRef.current = false;
+      const hit = document.elementFromPoint(ev.clientX, ev.clientY) as HTMLElement | null;
+      const port = hit?.closest('[data-reaction-port]');
+      const targetClassId = port?.getAttribute('data-class-id');
+      if (targetClassId && targetClassId !== classId) {
+        addReactionConnection(classId, targetClassId);
+      }
+      setReactionDrag(null);
+      globalThis.removeEventListener('mousemove', onMove);
+      globalThis.removeEventListener('mouseup', onUp);
+    };
+
+    globalThis.addEventListener('mousemove', onMove);
+    globalThis.addEventListener('mouseup', onUp);
+  }, [
+    interactive,
+    reactionsMode,
+    allClasses,
+    offsetX,
+    offsetY,
+    clientToDiagram,
+    addReactionConnection,
+  ]);
 
   const deleteRelationship = useCallback((relId: string) => {
     recordChange();
@@ -1495,6 +1870,15 @@ export const UMLDiagram = forwardRef<UMLDiagramHandle, UMLDiagramProps>(({
   }, [recordChange]);
 
   const tryEscape = useCallback(() => {
+    if (reactionDrag) {
+      reactionDragActiveRef.current = false;
+      setReactionDrag(null);
+      return true;
+    }
+    if (editingReactionId) {
+      setEditingReactionId(null);
+      return true;
+    }
     if (connectMode) {
       setConnectMode(false);
       setConnectSourceId(null);
@@ -1517,15 +1901,38 @@ export const UMLDiagram = forwardRef<UMLDiagramHandle, UMLDiagramProps>(({
       return true;
     }
     return false;
-  }, [connectMode, connectSourceId, edit, selectedRelId, selectedClassId, dismissClassSelection]);
+  }, [reactionDrag, editingReactionId, connectMode, connectSourceId, edit, selectedRelId, selectedClassId, dismissClassSelection]);
+
+  useEffect(() => {
+    if (reactionsMode === 'reactions') {
+      reactionDragActiveRef.current = false;
+      setReactionDrag(null);
+      setEditingReactionId(null);
+      setConnectMode(false);
+      setConnectSourceId(null);
+    }
+  }, [reactionsMode]);
 
   const handleRelationshipClick = useCallback((relId: string, e: React.MouseEvent) => {
     e.stopPropagation();
-    if (e.detail >= 2 && interactive) {
+    const isReactionEdge = reactionEdges.some(edge => edge.id === relId);
+    if (reactionsMode === 'reactions' && isReactionEdge) {
+      if (e.detail >= 2) {
+        setEditingReactionId(null);
+        void openReactionEditor(relId);
+        return;
+      }
+      setEditingReactionId(relId);
+      setSelectedRelId(relId);
+      setSelectedClassId(null);
+      return;
+    }
+    if (e.detail >= 2 && interactive && reactionsMode !== 'reactions') {
       cycleRelationshipType(relId);
     }
+    setEditingReactionId(null);
     setSelectedRelId(relId);
-  }, [interactive, cycleRelationshipType]);
+  }, [interactive, reactionsMode, reactionEdges, cycleRelationshipType, openReactionEditor]);
 
   const isDirty = useCallback(() => {
     return umlSemanticSnapshot(getModel()) !== initialSnapshotRef.current;
@@ -1631,22 +2038,27 @@ export const UMLDiagram = forwardRef<UMLDiagramHandle, UMLDiagramProps>(({
   const handleClassSelect = useCallback((classId: string) => {
     if (!interactive) return;
     flushPendingEdit();
-    if (connectMode) {
+    if (connectMode && reactionsMode !== 'reactions') {
       if (!connectSourceId) {
         setConnectSourceId(classId);
         setSelectedClassId(classId);
         return;
       }
       if (connectSourceId !== classId) {
-        addRelationship(connectSourceId, classId);
+        const connected = addRelationship(connectSourceId, classId);
+        if (!connected) {
+          setSelectedClassId(classId);
+          return;
+        }
       }
       setConnectMode(false);
       setConnectSourceId(null);
       setSelectedClassId(classId);
       return;
     }
+    setEditingReactionId(null);
     setSelectedClassId(classId);
-  }, [interactive, connectMode, connectSourceId, addRelationship, flushPendingEdit]);
+  }, [interactive, connectMode, reactionsMode, connectSourceId, addRelationship, flushPendingEdit]);
 
   const updateClass = useCallback((classId: string, patch: Partial<Pick<CLS, 'name' | 'isAbstract' | 'isInterface'>>) => {
     recordChange();
@@ -1678,6 +2090,14 @@ export const UMLDiagram = forwardRef<UMLDiagramHandle, UMLDiagramProps>(({
   }, [recordChange]);
 
   const handleDeleteSelected = useCallback(() => {
+    if (editingReactionId) {
+      deleteReaction(editingReactionId);
+      return;
+    }
+    if (selectedRelId && reactionEdges.some(edge => edge.id === selectedRelId)) {
+      deleteReaction(selectedRelId);
+      return;
+    }
     if (selectedRelId) {
       deleteRelationship(selectedRelId);
       return;
@@ -1685,7 +2105,7 @@ export const UMLDiagram = forwardRef<UMLDiagramHandle, UMLDiagramProps>(({
     if (selectedClassId) {
       deleteClass(selectedClassId);
     }
-  }, [selectedRelId, selectedClassId, deleteRelationship, deleteClass]);
+  }, [editingReactionId, selectedRelId, selectedClassId, reactionEdges, deleteReaction, deleteRelationship, deleteClass]);
 
   useEffect(() => {
     if (!interactive) return;
@@ -1721,9 +2141,12 @@ export const UMLDiagram = forwardRef<UMLDiagramHandle, UMLDiagramProps>(({
   }, [rels, allClasses, offsetX, offsetY]);
 
   const multiplicityBadges = useMemo(() => {
+    const reactionRelIds = new Set(reactionEdges.map(edge => edge.id));
     const raw: MultiplicityBadge[] = [];
     for (const layout of edgeLayouts) {
       const { rel, p1, p2 } = layout;
+      if (reactionRelIds.has(rel.id)) continue;
+
       const markerSide = getDirectionMarkerSide(rel.type);
 
       if (rel.sourceMultiplicity) {
@@ -1750,7 +2173,12 @@ export const UMLDiagram = forwardRef<UMLDiagramHandle, UMLDiagramProps>(({
       }
     }
     return optimizeMultiplicityBadges(raw);
-  }, [edgeLayouts]);
+  }, [edgeLayouts, reactionEdges]);
+
+  const reactionEdgeById = useMemo(
+    () => new Map(reactionEdges.map(edge => [edge.id, edge])),
+    [reactionEdges],
+  );
 
   const validationIssues = useMemo(
     () => validateUmlModel({ classes, relationships }, allClasses),
@@ -1763,9 +2191,17 @@ export const UMLDiagram = forwardRef<UMLDiagramHandle, UMLDiagramProps>(({
 
   const canDelete = !!(selectedRelId || selectedClassId);
   const selectedRel = selectedRelId ? relationships.find(r => r.id === selectedRelId) : null;
+  const editingReaction = editingReactionId
+    ? reactionEdges.find(edge => edge.id === editingReactionId) ?? null
+    : null;
+  const selectedRelIsReaction = !!(selectedRelId && reactionEdges.some(edge => edge.id === selectedRelId));
   const selectedClass = selectedClassId ? classes.find(c => c.id === selectedClassId) : null;
   const hasUnsavedChanges = isDirty();
-  const validationInset = getValidationBannerInset(selectedClass, selectedRel);
+  const validationInset = getValidationBannerInset(
+    selectedClass,
+    selectedRel,
+    !!(editingReaction || (reactionsMode === 'reactions' && selectedRelIsReaction)),
+  );
   const diagramCursor = getDiagramCursor(panning, connectMode);
   const saveButtonTitle = saveContext
     ? getSaveButtonTitle(hasUnsavedChanges, saveContext)
@@ -1806,6 +2242,7 @@ export const UMLDiagram = forwardRef<UMLDiagramHandle, UMLDiagramProps>(({
       >
         {edgeLayouts.map(layout => {
           const { rel, p1, p2, drawP1, drawP2, bridges } = layout;
+          const reactionEdge = reactionEdgeById.get(rel.id);
           const state = edgeState(selectedRelId === rel.id, hoveredRelId === rel.id);
 
           return (
@@ -1818,6 +2255,7 @@ export const UMLDiagram = forwardRef<UMLDiagramHandle, UMLDiagramProps>(({
               drawP2={drawP2}
               bridges={bridges}
               state={state}
+              reactionEdge={reactionEdge}
             />
           );
         })}
@@ -1912,6 +2350,7 @@ export const UMLDiagram = forwardRef<UMLDiagramHandle, UMLDiagramProps>(({
           interactive={interactive}
           edit={edit?.classId === cls.id ? edit : null}
           reactionsMode={reactionsMode === 'reactions'}
+          onReactionPortMouseDown={handleReactionPortMouseDown}
           onSelect={() => handleClassSelect(cls.id)}
           onDragStart={() => { dragHistorySavedRef.current = false; }}
           onMove={isAdditional ? (id: string, x: number, y: number) => {
@@ -1963,6 +2402,40 @@ export const UMLDiagram = forwardRef<UMLDiagramHandle, UMLDiagramProps>(({
         );
       })}
 
+      {reactionDrag && (
+        <svg
+          style={{
+            position: 'absolute',
+            top: 0,
+            left: 0,
+            width: totalW,
+            height: totalH,
+            overflow: 'visible',
+            zIndex: 8,
+            pointerEvents: 'none',
+          }}
+        >
+          <line
+            x1={reactionDrag.startX}
+            y1={reactionDrag.startY}
+            x2={reactionDrag.cursorX}
+            y2={reactionDrag.cursorY}
+            stroke="#a855f7"
+            strokeWidth={2.5}
+            strokeDasharray="8 5"
+            opacity={0.9}
+          />
+          <circle
+            cx={reactionDrag.cursorX}
+            cy={reactionDrag.cursorY}
+            r={5}
+            fill="#a855f7"
+            stroke="#fff"
+            strokeWidth={2}
+          />
+        </svg>
+      )}
+
       {/* Hit targets above class boxes — connections stay clickable */}
       <svg
         data-rel-hit-layer
@@ -1986,21 +2459,20 @@ export const UMLDiagram = forwardRef<UMLDiagramHandle, UMLDiagramProps>(({
       </svg>
 
       {/* Direction markers above class boxes */}
-      {rels.map(rel => {
-        const endpoints = getRelEndpoints(rel, classes, offsetX, offsetY);
-        if (!endpoints) return null;
-        const { p1, p2 } = endpoints;
+      {edgeLayouts.map(layout => {
+        const { rel, p1, p2, drawP1, drawP2 } = layout;
+        const reactionEdge = reactionEdgeById.get(rel.id);
         const state = edgeState(selectedRelId === rel.id, hoveredRelId === rel.id);
-
-        const { drawP1, drawP2 } = insetLineEndpoints(p1, p2);
+        const color = reactionEdge ? REACTION_EDGE_COLOR[state] : EDGE_COLOR[state];
 
         return (
           <RelationDirectionMarker
             key={`${rel.id}-direction`}
             rel={rel}
+            reactionEdge={reactionEdge}
             lineStart={drawP1}
             lineEnd={drawP2}
-            color={EDGE_COLOR[state]}
+            color={color}
             onRelClick={e => handleRelationshipClick(rel.id, e)}
             onMouseEnter={() => setHoveredRelId(rel.id)}
             onMouseLeave={() => setHoveredRelId(null)}
@@ -2033,7 +2505,36 @@ export const UMLDiagram = forwardRef<UMLDiagramHandle, UMLDiagramProps>(({
             lineHeight: 1.35,
           }}
         >
-          {getConnectModeHint(connectSourceId)}
+          {getConnectModeHint(connectSourceId, additionalModels.length > 0)}
+        </div>
+      )}
+      {interactive && reactionsMode === 'reactions' && !connectMode && (
+        <div
+          data-uml-connect-banner
+          style={{
+            position: 'absolute',
+            top: DIAGRAM_HINT_TOP,
+            left: '50%',
+            transform: 'translateX(-50%)',
+            zIndex: 32,
+            padding: '6px 14px',
+            borderRadius: 10,
+            background: '#faf5ff',
+            border: '1px solid #e9d5ff',
+            color: '#6b21a8',
+            fontSize: 11,
+            fontWeight: 600,
+            fontFamily: UML.fontSans,
+            boxShadow: '0 4px 14px rgba(168,85,247,0.15)',
+            pointerEvents: 'none',
+            maxWidth: 'min(420px, calc(100vw - 320px))',
+            textAlign: 'center',
+            lineHeight: 1.35,
+          }}
+        >
+          {reactionDrag
+            ? 'Release on another class dot to create a reaction'
+            : 'Drag from a purple dot to connect classes across models'}
         </div>
       )}
       {interactive && (
@@ -2076,17 +2577,19 @@ export const UMLDiagram = forwardRef<UMLDiagramHandle, UMLDiagramProps>(({
           >
             <IconRedo />
           </DiagramToolButton>
-          <DiagramToolButton
-            title={connectMode ? 'Cancel connect mode (Esc)' : 'Connect two classes'}
-            active={connectMode}
-            onClick={() => {
-              setConnectMode(v => !v);
-              setConnectSourceId(null);
-            }}
-            label="Connect"
-          >
-            <IconConnect />
-          </DiagramToolButton>
+          {reactionsMode !== 'reactions' && (
+            <DiagramToolButton
+              title={connectMode ? 'Cancel connect mode (Esc)' : 'Connect two classes in the same model'}
+              active={connectMode}
+              onClick={() => {
+                setConnectMode(v => !v);
+                setConnectSourceId(null);
+              }}
+              label="Connect"
+            >
+              <IconConnect />
+            </DiagramToolButton>
+          )}
           <DiagramToolButton
             title="Delete selected class or connection"
             active={false}
@@ -2155,10 +2658,27 @@ export const UMLDiagram = forwardRef<UMLDiagramHandle, UMLDiagramProps>(({
           onClose={() => setSelectedClassId(null)}
         />
       )}
-      {interactive && selectedRel && (
+      {interactive && editingReaction && (
+        <ReactionConfigPopup
+          edge={editingReaction}
+          onUpdate={config => updateReactionConfig(editingReaction.id, config)}
+          onDelete={() => deleteReaction(editingReaction.id)}
+          onClose={() => setEditingReactionId(null)}
+        />
+      )}
+      {interactive && (
+        <ReactionEditorModal
+          state={reactionEditorState}
+          onClose={handleCloseReactionEditor}
+          onSave={handleSaveReactionCode}
+          onDelete={handleDeleteReactionFromEditor}
+          vsumId={vsumId}
+        />
+      )}
+      {interactive && selectedRel && !selectedRelIsReaction && reactionsMode !== 'reactions' && (
         <RelationshipEditPanel
           rel={selectedRel}
-          classes={classes}
+          classes={allClasses}
           onUpdate={patch => updateRelationship(selectedRel.id, patch)}
           onClose={() => setSelectedRelId(null)}
           onSwapEndpoints={() => updateRelationship(selectedRel.id, {
@@ -2457,7 +2977,7 @@ function startClassBoxDrag({
   onDragEnd: () => void;
 }): void {
   const target = e.target as HTMLElement;
-  if (target.closest('input, button, [data-no-drag]')) return;
+  if (target.closest('input, button, [data-no-drag], [data-reaction-port]')) return;
   e.stopPropagation();
   didDragRef.current = false;
   onDragStart();
@@ -2655,6 +3175,7 @@ interface ClassBoxProps {
   interactive: boolean;
   edit: EditState | null;
   reactionsMode: boolean;
+  onReactionPortMouseDown?: (e: React.MouseEvent, classId: string, side: ReactionPortSide) => void;
   onSelect: () => void;
   onMove: (id: string, x: number, y: number) => void;
   onDragStart: () => void;
@@ -2675,7 +3196,7 @@ interface ClassBoxProps {
 }
 
 const ClassBox: React.FC<ClassBoxProps> = ({
-  cls, offsetX, offsetY, scale, selected, connectSource, interactive, edit, reactionsMode, onSelect, onDragStart, onMove, onDragEnd, onStartEditName, onSaveName,
+  cls, offsetX, offsetY, scale, selected, connectSource, interactive, edit, reactionsMode, onReactionPortMouseDown, onSelect, onDragStart, onMove, onDragEnd, onStartEditName, onSaveName,
   onStartEditAttr, onSaveAttr, onCancelEdit, onAddAttr, onDeleteAttr, onStartEditOp, onSaveOp, onAddOp, onDeleteOp, onDelete, onEditChange,
 }) => {
   const dragRef: ClassBoxDragPointRef = useRef<{ sx: number; sy: number; ox: number; oy: number } | null>(null);
@@ -2847,7 +3368,14 @@ const ClassBox: React.FC<ClassBoxProps> = ({
           boxShadow: '0 0 8px rgba(168,85,247,0.2)',
           animation: 'reactionPulse 2s ease-in-out infinite',
         }}>
-          <div style={{
+          <div
+            data-reaction-port
+            data-class-id={cls.id}
+            data-port-side="right"
+            onMouseDown={onReactionPortMouseDown
+              ? (e) => onReactionPortMouseDown(e, cls.id, 'right')
+              : undefined}
+            style={{
             position: 'absolute',
             top: '50%',
             right: -7,
@@ -2861,7 +3389,14 @@ const ClassBox: React.FC<ClassBoxProps> = ({
             pointerEvents: 'auto',
             cursor: 'crosshair',
           }} />
-          <div style={{
+          <div
+            data-reaction-port
+            data-class-id={cls.id}
+            data-port-side="left"
+            onMouseDown={onReactionPortMouseDown
+              ? (e) => onReactionPortMouseDown(e, cls.id, 'left')
+              : undefined}
+            style={{
             position: 'absolute',
             top: '50%',
             left: -7,

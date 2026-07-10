@@ -22,7 +22,7 @@ import { UMLRelationship } from './UMLRelationship';
 import { ReactionRelationship } from './ReactionRelationship';
 import { EcoreFileBox, cardColor, darken } from './EcoreFileBox';
 import { ConnectionLine } from './ConnectionLine';
-import { CodeEditorModal } from './CodeEditorModal';
+import { ReactionEditorModal } from './ReactionEditorModal';
 import { ConfirmDialog } from '../ui/ConfirmDialog';
 import { ModelDetailModal } from '../ui/ModelLibraryTable';
 import { apiService, MetaModelRelationRequest } from '../../services/api';
@@ -47,6 +47,7 @@ import {
   resolveEcoreFileSelectAction,
 } from './flowCanvasEcoreSelect';
 import { pickFocusUmlFlowNodes } from '../../utils/umlClassLayout';
+import { fetchReactionCode, persistReactionCode, resolveReactionFileId } from '../../utils/reactionFile';
 import { edgeIndicatorPos } from '../../utils/minimapGeometry';
 import {
   applyPendingCanvasDelete,
@@ -906,13 +907,6 @@ export const FlowCanvas = forwardRef<{
       return `import "${sourceUri}" as ${sourcePackageName}\nimport "${targetUri}" as ${targetPackageName}\n\nreactions: ${sourcePackageName}To${targetPackageName}\nin reaction to changes in ${sourcePackageName}\nexecute actions in ${targetPackageName}\n\n`;
     }, [nodes]);
 
-    const resolveReactionFileId = async (raw: any): Promise<number | null> => {
-      if (typeof raw === 'number') return raw;
-      if (typeof raw === 'string') return Number(raw) || null;
-      if (typeof raw?.id === 'number') return raw.id;
-      return null;
-    };
-
     const uploadReactionFile = useCallback(async (
       sourceNodeId: string,
       targetNodeId: string,
@@ -1092,17 +1086,11 @@ export const FlowCanvas = forwardRef<{
       let initialCode = edge.data?.code || '';
       const reactionFileId = edge.data?.reactionFileId;
 
-      if (!initialCode && typeof reactionFileId === 'number') {
-        try {
-          initialCode = await apiService.getFile(reactionFileId);
-        } catch (error) {
-          console.error('Failed to fetch reaction file', error);
-        }
-      }
-
-      if (!initialCode || initialCode.trim() === '') {
-        initialCode = buildInitialReactionCode(edge.source, edge.target);
-      }
+      initialCode = await fetchReactionCode(
+        initialCode,
+        reactionFileId,
+        () => buildInitialReactionCode(edge.source, edge.target),
+      );
 
       setCodeEditorState({
         isOpen: true,
@@ -1132,53 +1120,19 @@ export const FlowCanvas = forwardRef<{
 
       const edgeId = codeEditorState.edgeId;
 
-      const toFiniteNumber = (value: unknown): number | null => {
-        if (typeof value === 'number') return Number.isFinite(value) ? value : null;
-        if (typeof value === 'string') {
-          const parsed = Number(value);
-          return Number.isFinite(parsed) ? parsed : null;
-        }
-        return null;
-      };
-
-      const extractFileId = (data: unknown): number | null => {
-        if (data == null) return null;
-        const direct = toFiniteNumber(data);
-        if (direct !== null) return direct;
-        if (typeof data === 'object' && 'id' in (data as Record<string, unknown>)) {
-          return toFiniteNumber((data as Record<string, unknown>).id);
-        }
-        return null;
-      };
-
       try {
-        const fileName = `reaction-${Date.now()}-${Math.random().toString(36).slice(2)}.reactions`;
-        const file = new File([code], fileName, { type: 'text/plain;charset=utf-8' });
-
-        let reactionFileId = codeEditorState.reactionFileId ?? null;
-
-        if (reactionFileId == null) {
-          const uploadResult = await apiService.uploadFile(file, 'REACTION');
-          reactionFileId = extractFileId(uploadResult?.data);
-          if (reactionFileId == null) {
-            throw new Error('Reaction file upload succeeded but did not return a file ID.');
-          }
-        } else {
-          await apiService.updateReactionFile(reactionFileId, file);
-        }
+        const reactionFileId = await persistReactionCode(code, codeEditorState.reactionFileId);
 
         updateEdgeCode(edgeId, code);
 
-        if (reactionFileId != null) {
-          setCodeEditorState(prev =>
-            prev
-              ? {
-                ...prev,
-                reactionFileId,
-              }
-              : prev
-          );
-        }
+        setCodeEditorState(prev =>
+          prev
+            ? {
+              ...prev,
+              reactionFileId,
+            }
+            : prev
+        );
 
         setEdges(prev =>
           prev.map(edge =>
@@ -2702,20 +2656,12 @@ export const FlowCanvas = forwardRef<{
         )}
 
         {codeEditorState && (
-          <CodeEditorModal
-            isOpen={codeEditorState.isOpen}
+          <ReactionEditorModal
+            state={codeEditorState}
             onClose={handleCloseCodeEditor}
             onSave={readOnly ? async () => {} : handleSaveCode}
             onDelete={readOnly ? undefined : handleDeleteEdge}
-            initialCode={codeEditorState.initialCode}
-            edgeId={codeEditorState.edgeId || ''}
-            sourceFileName={codeEditorState.sourceFileName}
-            targetFileName={codeEditorState.targetFileName}
             vsumId={vsumId}
-            lspEndpoint="/lsp"
-            languageId="reactions"
-            fileExtension=".reactions"
-            title="Reaction Editor"
             readOnly={readOnly}
           />
         )}

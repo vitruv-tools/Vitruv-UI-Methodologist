@@ -37,6 +37,8 @@ interface FloatingUMLPanelProps {
   viewOnly?: boolean;
   /** All library models available for adding to the view. */
   libraryModels?: DrawerModel[];
+  /** VSUM project id for Reaction Editor LSP connection. */
+  vsumId?: string;
 }
 
 /** Vitruv toolbar tokens — aligned with UMLDiagram / canvas */
@@ -84,7 +86,7 @@ const RefreshIcon = () => (
 export const FloatingUMLPanel: React.FC<FloatingUMLPanelProps> = ({
   id, title, fileName, layoutScopeId, ecoreContent, saveContext, zIndex = MODAL_Z_INDEX, onClose,
   onHome, onRefresh, ecoreFileId, fetchEcoreFile, onEcoreContentUpdated, refreshing = false,
-  viewOnly = false, libraryModels = [],
+  viewOnly = false, libraryModels = [], vsumId,
 }) => {
   const diagramRef = useRef<UMLDiagramHandle>(null);
   const ecoreContentRef = useRef(ecoreContent);
@@ -103,11 +105,13 @@ export const FloatingUMLPanel: React.FC<FloatingUMLPanelProps> = ({
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
   const currentModel: ReactionsModel = useMemo(() => ({
-    id: Date.now(),
+    id: saveContext?.metaModelId
+      ? Number(saveContext.metaModelId)
+      : (ecoreFileId ?? 0),
     name: title,
     ecoreContent,
     ecoreFileId,
-  }), [title, ecoreContent, ecoreFileId]);
+  }), [title, ecoreContent, ecoreFileId, saveContext?.metaModelId]);
 
   const allLoadedModels = useMemo(() => {
     if (loadedModels.length === 0) return [currentModel];
@@ -559,6 +563,7 @@ export const FloatingUMLPanel: React.FC<FloatingUMLPanelProps> = ({
           saveContext={saveContext}
           interactive={!viewOnly}
           reactionsMode={reactionsMode}
+          reactionModels={allLoadedModels}
           additionalModels={allLoadedModels.slice(1).map((m, idx) => ({
             id: m.id,
             name: m.name,
@@ -566,6 +571,7 @@ export const FloatingUMLPanel: React.FC<FloatingUMLPanelProps> = ({
             color: MODEL_COLORS[(idx + 1) % MODEL_COLORS.length].border,
             fill: MODEL_COLORS[(idx + 1) % MODEL_COLORS.length].fill,
           }))}
+          vsumId={vsumId}
         />
 
         <div style={{
