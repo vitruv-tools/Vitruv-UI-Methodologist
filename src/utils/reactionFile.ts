@@ -40,7 +40,7 @@ export async function persistReactionCode(
   code: string,
   reactionFileId: number | null | undefined,
 ): Promise<number> {
-  const fileName = `reaction-${Date.now()}-${Math.random().toString(36).slice(2)}.reactions`;
+  const fileName = `reaction-${Date.now()}.reactions`;
   const file = new File([code], fileName, { type: 'text/plain;charset=utf-8' });
 
   if (reactionFileId == null) {

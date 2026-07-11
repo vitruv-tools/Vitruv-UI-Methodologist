@@ -912,14 +912,14 @@ export const FlowCanvas = forwardRef<{
       targetNodeId: string,
       edgeId: string
     ): Promise<number | null> => {
-      const uniquePadding = ' '.repeat(Math.floor(Math.random() * 50) + 1);
+      const uniquePadding = ' '.repeat((Date.now() % 50) + 1);
       const initialContent = buildInitialReactionCode(sourceNodeId, targetNodeId) + uniquePadding;
-      const fileName = `reaction-${Date.now()}-${Math.random().toString(36).slice(2)}.reactions`;
+      const fileName = `reaction-${Date.now()}.reactions`;
       const file = new File([initialContent], fileName, { type: 'text/plain;charset=utf-8' });
 
       try {
         const uploadResult = await apiService.uploadFile(file, 'REACTION');
-        const reactionFileId = await resolveReactionFileId(uploadResult?.data);
+        const reactionFileId = resolveReactionFileId(uploadResult?.data);
         if (reactionFileId == null) {
           console.error('❌ Upload succeeded but no file ID returned');
         } else {

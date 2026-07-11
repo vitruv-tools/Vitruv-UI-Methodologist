@@ -29,10 +29,6 @@ export const ReactionModelSidebar: React.FC<ReactionModelSidebarProps> = ({
   onAddModel,
   onClose,
 }) => {
-  const handleClickOutside = useCallback((e: React.MouseEvent) => {
-    if (e.target === e.currentTarget) onClose();
-  }, [onClose]);
-
   const handleDragStart = useCallback((e: React.DragEvent, model: ReactionsModel) => {
     e.dataTransfer.setData('application/x-reactions-model-id', String(model.id));
     e.dataTransfer.effectAllowed = 'copy';
@@ -42,7 +38,6 @@ export const ReactionModelSidebar: React.FC<ReactionModelSidebarProps> = ({
 
   return (
     <div
-      onClick={handleClickOutside}
       style={{
         position: 'absolute',
         inset: 0,
@@ -50,6 +45,20 @@ export const ReactionModelSidebar: React.FC<ReactionModelSidebarProps> = ({
         pointerEvents: 'auto',
       }}
     >
+      <button
+        type="button"
+        aria-label="Close sidebar"
+        onClick={onClose}
+        style={{
+          position: 'absolute',
+          inset: 0,
+          margin: 0,
+          padding: 0,
+          border: 'none',
+          background: 'transparent',
+          cursor: 'default',
+        }}
+      />
       <div
         style={{
           position: 'absolute',
@@ -57,6 +66,7 @@ export const ReactionModelSidebar: React.FC<ReactionModelSidebarProps> = ({
           right: 0,
           bottom: 0,
           width: 320,
+          zIndex: 1,
           background: V.surface,
           borderLeft: `1px solid ${V.border}`,
           boxShadow: '-4px 0 16px rgba(0,0,0,0.08)',

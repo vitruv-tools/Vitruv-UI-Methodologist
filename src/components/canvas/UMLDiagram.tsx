@@ -812,6 +812,31 @@ function updateClassOperation(
   );
 }
 
+function mergeAdditionalClassesWithPositions(prev: CLS[], newCls: CLS[]): CLS[] {
+  return newCls.map(nc => {
+    const existing = prev.find(p => p.id === nc.id);
+    return existing ? { ...nc, x: existing.x, y: existing.y } : nc;
+  });
+}
+
+function applyWrapperDragToClass(
+  c: CLS,
+  origins: Map<string, { x: number; y: number }>,
+  dx: number,
+  dy: number,
+): CLS {
+  const orig = origins.get(c.id);
+  if (!orig) return c;
+  return { ...c, x: orig.x + dx, y: orig.y + dy };
+}
+
+function getReactionPortTargetClassId(hit: HTMLElement | null, sourceClassId: string): string | null {
+  const port = hit?.closest('[data-reaction-port]') as HTMLElement | null;
+  const targetClassId = port?.dataset.classId;
+  if (!targetClassId || targetClassId === sourceClassId) return null;
+  return targetClassId;
+}
+
 // ── UMLDiagram ────────────────────────────────────────────────────────────────
 
 export interface UMLDiagramHandle {
@@ -1076,14 +1101,8 @@ export const UMLDiagram = forwardRef<UMLDiagramHandle, UMLDiagramProps>(({
   );
 
   useEffect(() => {
-    setAdditionalClasses(prev => {
-      const newCls = additionalParsed.flatMap(m => m.classes);
-      // Preserve positions of already-existing classes
-      return newCls.map(nc => {
-        const existing = prev.find(p => p.id === nc.id);
-        return existing ? { ...nc, x: existing.x, y: existing.y } : nc;
-      });
-    });
+    const newCls = additionalParsed.flatMap(m => m.classes);
+    setAdditionalClasses(prev => mergeAdditionalClassesWithPositions(prev, newCls));
     setAdditionalRels(additionalParsed.flatMap(m => m.relationships));
   }, [additionalParsed]);
 
@@ -1391,6 +1410,10 @@ export const UMLDiagram = forwardRef<UMLDiagramHandle, UMLDiagramProps>(({
     scheduleLayoutSave();
   }, [scheduleLayoutSave]);
 
+  const moveAdditionalClass = useCallback((id: string, x: number, y: number) => {
+    setAdditionalClasses(prev => prev.map(c => (c.id === id ? { ...c, x, y } : c)));
+  }, []);
+
   const wrapperDragOrigins = useRef<Map<string, { x: number; y: number }>>(new Map());
 
   const handleWrapperDragStart = useCallback((e: React.MouseEvent, groupName: string) => {
@@ -1413,19 +1436,13 @@ export const UMLDiagram = forwardRef<UMLDiagramHandle, UMLDiagramProps>(({
     const onMove = (ev: MouseEvent) => {
       const dx = (ev.clientX - startX) / vscale;
       const dy = (ev.clientY - startY) / vscale;
+      const origins = wrapperDragOrigins.current;
+      const applyDrag = (c: CLS) => applyWrapperDragToClass(c, origins, dx, dy);
 
       if (groupName === primaryName) {
-        setClasses(prev => prev.map(c => {
-          const orig = wrapperDragOrigins.current.get(c.id);
-          if (!orig) return c;
-          return { ...c, x: orig.x + dx, y: orig.y + dy };
-        }));
+        setClasses(prev => prev.map(applyDrag));
       } else {
-        setAdditionalClasses(prev => prev.map(c => {
-          const orig = wrapperDragOrigins.current.get(c.id);
-          if (!orig) return c;
-          return { ...c, x: orig.x + dx, y: orig.y + dy };
-        }));
+        setAdditionalClasses(prev => prev.map(applyDrag));
       }
     };
 
@@ -1828,10 +1845,11 @@ export const UMLDiagram = forwardRef<UMLDiagramHandle, UMLDiagramProps>(({
 
     const onUp = (ev: MouseEvent) => {
       reactionDragActiveRef.current = false;
-      const hit = document.elementFromPoint(ev.clientX, ev.clientY) as HTMLElement | null;
-      const port = hit?.closest('[data-reaction-port]');
-      const targetClassId = port?.getAttribute('data-class-id');
-      if (targetClassId && targetClassId !== classId) {
+      const targetClassId = getReactionPortTargetClassId(
+        document.elementFromPoint(ev.clientX, ev.clientY) as HTMLElement | null,
+        classId,
+      );
+      if (targetClassId) {
         addReactionConnection(classId, targetClassId);
       }
       setReactionDrag(null);
@@ -2307,7 +2325,8 @@ export const UMLDiagram = forwardRef<UMLDiagramHandle, UMLDiagramProps>(({
                 zIndex: 0,
               }}
             >
-              <div
+              <button
+                type="button"
                 data-wrapper-header
                 onMouseDown={interactive ? (e) => handleWrapperDragStart(e, g.name) : undefined}
                 style={{
@@ -2327,9 +2346,12 @@ export const UMLDiagram = forwardRef<UMLDiagramHandle, UMLDiagramProps>(({
                   letterSpacing: 0.3,
                   cursor: interactive ? 'grab' : 'default',
                   pointerEvents: 'auto',
+                  border: 'none',
+                  width: '100%',
+                  textAlign: 'left',
                 }}>
                 {g.name}
-              </div>
+              </button>
             </div>
           );
         });
@@ -2353,9 +2375,7 @@ export const UMLDiagram = forwardRef<UMLDiagramHandle, UMLDiagramProps>(({
           onReactionPortMouseDown={handleReactionPortMouseDown}
           onSelect={() => handleClassSelect(cls.id)}
           onDragStart={() => { dragHistorySavedRef.current = false; }}
-          onMove={isAdditional ? (id: string, x: number, y: number) => {
-            setAdditionalClasses(prev => prev.map(c => c.id === id ? { ...c, x, y } : c));
-          } : moveClass}
+          onMove={isAdditional ? moveAdditionalClass : moveClass}
           onDragEnd={isAdditional ? () => {} : finishClassDrag}
           onStartEditName={() => {
             if (!interactive || isAdditional) return;
@@ -3368,7 +3388,9 @@ const ClassBox: React.FC<ClassBoxProps> = ({
           boxShadow: '0 0 8px rgba(168,85,247,0.2)',
           animation: 'reactionPulse 2s ease-in-out infinite',
         }}>
-          <div
+          <button
+            type="button"
+            aria-label={`Right reaction port for ${cls.name}`}
             data-reaction-port
             data-class-id={cls.id}
             data-port-side="right"
@@ -3388,8 +3410,11 @@ const ClassBox: React.FC<ClassBoxProps> = ({
             boxShadow: '0 0 6px rgba(168,85,247,0.6)',
             pointerEvents: 'auto',
             cursor: 'crosshair',
+            padding: 0,
           }} />
-          <div
+          <button
+            type="button"
+            aria-label={`Left reaction port for ${cls.name}`}
             data-reaction-port
             data-class-id={cls.id}
             data-port-side="left"
@@ -3409,6 +3434,7 @@ const ClassBox: React.FC<ClassBoxProps> = ({
             boxShadow: '0 0 6px rgba(168,85,247,0.6)',
             pointerEvents: 'auto',
             cursor: 'crosshair',
+            padding: 0,
           }} />
         </div>
       )}

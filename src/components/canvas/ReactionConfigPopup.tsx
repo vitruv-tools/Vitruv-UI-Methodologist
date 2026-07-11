@@ -1,4 +1,4 @@
-import React, { useCallback } from 'react';
+import React, { useCallback, useEffect } from 'react';
 import { ReactionConfig, ReactionEdge } from '../../types/reactions';
 
 const V = {
@@ -52,7 +52,15 @@ export const ReactionConfigPopup: React.FC<ReactionConfigPopupProps> = ({
     onUpdate({ ...edge.config, [key]: value });
   }, [edge.config, onUpdate]);
 
-  const stopBubble = (e: React.MouseEvent | React.KeyboardEvent) => e.stopPropagation();
+  const stopBubble = (e: React.MouseEvent) => e.stopPropagation();
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+    };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [onClose]);
 
   return (
     <dialog
@@ -77,11 +85,11 @@ export const ReactionConfigPopup: React.FC<ReactionConfigPopupProps> = ({
         overflow: 'hidden',
         fontFamily: 'system-ui, -apple-system, sans-serif',
       }}
-      onClick={stopBubble}
-      onMouseDown={stopBubble}
-      onKeyDown={e => { if (e.key === 'Escape') onClose(); }}
     >
-      <div style={{
+      <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0 }}>
+      <div
+        onMouseDown={stopBubble}
+        style={{
         padding: '10px 14px',
         borderBottom: `1px solid ${V.border}`,
         display: 'flex',
@@ -108,14 +116,14 @@ export const ReactionConfigPopup: React.FC<ReactionConfigPopupProps> = ({
         </button>
       </div>
 
-      <div style={{ flex: 1, overflowY: 'auto', padding: '12px 14px' }}>
+      <div onMouseDown={stopBubble} style={{ flex: 1, overflowY: 'auto', padding: '12px 14px' }}>
         <label style={{ ...labelStyle, display: 'flex', alignItems: 'center', gap: 8, textTransform: 'none', fontSize: 12 }}>
           <input
             type="checkbox"
             checked={edge.config.bidirectional}
             onChange={e => setField('bidirectional', e.target.checked)}
           />
-          Bidirectional
+          <span>Bidirectional</span>
         </label>
 
         <label htmlFor="reaction-name" style={labelStyle}>Reaction name</label>
@@ -183,7 +191,9 @@ export const ReactionConfigPopup: React.FC<ReactionConfigPopupProps> = ({
         />
       </div>
 
-      <div style={{
+      <div
+        onMouseDown={stopBubble}
+        style={{
         padding: '10px 14px',
         borderTop: `1px solid ${V.border}`,
         display: 'flex',
@@ -222,6 +232,7 @@ export const ReactionConfigPopup: React.FC<ReactionConfigPopupProps> = ({
         >
           Done
         </button>
+      </div>
       </div>
     </dialog>
   );
