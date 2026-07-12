@@ -447,6 +447,38 @@ describe('CreateModelModal', () => {
         );
       });
     });
+
+    it('follows up the inspect-only call with a persisting call once the GenModel is clean', async () => {
+      const onSuccess = jest.fn();
+      render(<CreateModelModal isOpen onClose={jest.fn()} onSuccess={onSuccess} />);
+      fillRequiredFields();
+      await uploadBothFilesViaFileMode();
+
+      await act(async () => {
+        fireEvent.click(screen.getByRole('button', { name: /Import Meta Model/i }));
+      });
+
+      // POST /meta-models with applyGenModelFixes:false only inspects the GenModel and
+      // never persists it (see backend MetaModelService.create) — a second call with
+      // applyGenModelFixes:true is required to actually save the meta model.
+      await waitFor(() => {
+        expect(apiService.createMetaModel).toHaveBeenCalledTimes(2);
+      });
+      expect(apiService.createMetaModel).toHaveBeenNthCalledWith(
+        1,
+        expect.objectContaining({ applyGenModelFixes: false }),
+      );
+      expect(apiService.createMetaModel).toHaveBeenNthCalledWith(
+        2,
+        expect.objectContaining({
+          name: 'Test Model',
+          ecoreFileId: 10,
+          genModelFileId: 10,
+          applyGenModelFixes: true,
+        }),
+      );
+      await waitFor(() => expect(onSuccess).toHaveBeenCalled());
+    });
   });
 
   describe('GenModel rejection flow', () => {

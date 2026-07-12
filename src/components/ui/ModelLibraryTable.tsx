@@ -725,6 +725,9 @@ export const ModelLibraryTable: React.FC<ModelLibraryTableProps> = ({ onModelOpe
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 10;
   const searchInputRef = useRef<HTMLInputElement>(null);
+  /** Set right before a filter reset that's already covered by a fetch we just ran,
+   *  so the mount/filter-change effect below doesn't race it with a stale re-fetch. */
+  const skipNextAutoFetchRef = useRef(false);
 
   // Debounce search
   useEffect(() => {
@@ -761,7 +764,13 @@ export const ModelLibraryTable: React.FC<ModelLibraryTableProps> = ({ onModelOpe
     }
   }, [debouncedSearch, dateFilter]);
 
-  useEffect(() => { void fetchModels(); }, [fetchModels]);
+  useEffect(() => {
+    if (skipNextAutoFetchRef.current) {
+      skipNextAutoFetchRef.current = false;
+      return;
+    }
+    void fetchModels();
+  }, [fetchModels]);
 
   const clearAllFilters = useCallback(() => {
     setSearch('');
@@ -772,7 +781,6 @@ export const ModelLibraryTable: React.FC<ModelLibraryTableProps> = ({ onModelOpe
 
   const handleCreateSuccess = useCallback(async (createdPayload?: unknown) => {
     setShowCreate(false);
-    clearAllFilters();
     setLoading(true);
     setError('');
 
@@ -789,6 +797,11 @@ export const ModelLibraryTable: React.FC<ModelLibraryTableProps> = ({ onModelOpe
       setError(e instanceof Error ? e.message : 'Failed to load models after create');
     } finally {
       setLoading(false);
+      // Reset filters after the authoritative post-create fetch has already landed,
+      // so the mount/filter-change effect doesn't race it with a stale re-fetch
+      // that could overwrite the newly created model with pre-creation data.
+      skipNextAutoFetchRef.current = true;
+      clearAllFilters();
     }
   }, [clearAllFilters]);
 
