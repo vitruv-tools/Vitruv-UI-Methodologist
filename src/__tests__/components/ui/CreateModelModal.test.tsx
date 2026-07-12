@@ -479,6 +479,43 @@ describe('CreateModelModal', () => {
       );
       await waitFor(() => expect(onSuccess).toHaveBeenCalled());
     });
+
+    it('shows an error and never attempts the persisting call when the inspect call itself fails', async () => {
+      apiService.createMetaModel.mockRejectedValueOnce(new Error('Setup service unreachable'));
+
+      render(<CreateModelModal isOpen onClose={jest.fn()} onSuccess={jest.fn()} />);
+      fillRequiredFields();
+      await uploadBothFilesViaFileMode();
+
+      await act(async () => {
+        fireEvent.click(screen.getByRole('button', { name: /Import Meta Model/i }));
+      });
+
+      await waitFor(() => {
+        expect(screen.getByText(/Error creating meta model: Setup service unreachable/i)).toBeInTheDocument();
+      });
+      expect(apiService.createMetaModel).toHaveBeenCalledTimes(1);
+    });
+
+    it('shows an error and cleans up uploaded files when the persisting call fails', async () => {
+      apiService.createMetaModel
+        .mockResolvedValueOnce({ data: {}, message: 'GenModel inspected successfully' })
+        .mockRejectedValueOnce(new Error('Network error'));
+
+      render(<CreateModelModal isOpen onClose={jest.fn()} onSuccess={jest.fn()} />);
+      fillRequiredFields();
+      await uploadBothFilesViaFileMode();
+
+      await act(async () => {
+        fireEvent.click(screen.getByRole('button', { name: /Import Meta Model/i }));
+      });
+
+      await waitFor(() => {
+        expect(screen.getByText(/Error creating meta model: Network error/i)).toBeInTheDocument();
+      });
+      expect(apiService.createMetaModel).toHaveBeenCalledTimes(2);
+      expect(apiService.deleteFile).toHaveBeenCalled();
+    });
   });
 
   describe('GenModel rejection flow', () => {
