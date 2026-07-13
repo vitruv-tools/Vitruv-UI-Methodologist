@@ -1144,18 +1144,20 @@ function useCreateModelForm({ isOpen, onClose, onSuccess }: CreateModelModalProp
 
     prepareSubmit();
 
+    const requestData: CreateModelRequest = {
+      name: formData.name.trim(),
+      description: formData.description.trim(),
+      domain: formData.domain.trim(),
+      keyword: formData.keywords,
+      ecoreFileId: uploadedFileIds.ecoreFileId,
+      genModelFileId: uploadedFileIds.genModelFileId,
+    };
+    setPendingCreateRequest(requestData);
+
     try {
-      const requestData: CreateModelRequest = {
-        name: formData.name.trim(),
-        description: formData.description.trim(),
-        domain: formData.domain.trim(),
-        keyword: formData.keywords,
-        ecoreFileId: uploadedFileIds.ecoreFileId,
-        genModelFileId: uploadedFileIds.genModelFileId,
-      };
-      setPendingCreateRequest(requestData);
-      const response = await apiService.createMetaModel({ ...requestData, applyGenModelFixes: false });
-      onSubmitSuccess('Meta Model created successfully!', response.data, requestData);
+      // This call only inspects the GenModel — the backend does not persist
+      // anything until the follow-up call below with applyGenModelFixes: true.
+      await apiService.createMetaModel({ ...requestData, applyGenModelFixes: false });
     } catch (err) {
       const { message, isMetamodelRejected } = parseBackendError(err);
       if (isMetamodelRejected) {
@@ -1171,6 +1173,15 @@ function useCreateModelForm({ isOpen, onClose, onSuccess }: CreateModelModalProp
         setShowGenModelFixPrompt(true);
         return;
       }
+      await handleImportFailure(message, 'Error creating meta model: ');
+      return;
+    }
+
+    try {
+      const response = await apiService.createMetaModel({ ...requestData, applyGenModelFixes: true });
+      onSubmitSuccess('Meta Model created successfully!', response.data, requestData);
+    } catch (err) {
+      const { message } = parseBackendError(err);
       await handleImportFailure(message, 'Error creating meta model: ');
     }
   };
