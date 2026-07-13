@@ -15,12 +15,15 @@ const tabs = [
   { instanceId: 'inst-2', projectId: 2, name: 'Beta' },
 ];
 
+const openProjectIds = (items: typeof tabs) => items.map(t => t.projectId);
+
 describe('CanvasProjectTabs', () => {
   it('returns null when there are no tabs', () => {
     const { container } = render(
       <CanvasProjectTabs
         tabs={[]}
         activeInstanceId={null}
+        openProjectIds={[]}
         onActivate={jest.fn()}
         onRequestClose={jest.fn()}
         onSelectProject={jest.fn()}
@@ -35,6 +38,7 @@ describe('CanvasProjectTabs', () => {
       <CanvasProjectTabs
         tabs={tabs}
         activeInstanceId="inst-1"
+        openProjectIds={openProjectIds(tabs)}
         dirtyInstanceIds={new Set(['inst-2'])}
         onActivate={onActivate}
         onRequestClose={jest.fn()}
@@ -54,6 +58,7 @@ describe('CanvasProjectTabs', () => {
       <CanvasProjectTabs
         tabs={[tabs[0]]}
         activeInstanceId="inst-1"
+        openProjectIds={openProjectIds([tabs[0]])}
         onActivate={jest.fn()}
         onRequestClose={onRequestClose}
         onSelectProject={jest.fn()}
@@ -70,6 +75,7 @@ describe('CanvasProjectTabs', () => {
       <CanvasProjectTabs
         tabs={tabs}
         activeInstanceId="inst-1"
+        openProjectIds={openProjectIds(tabs)}
         onActivate={jest.fn()}
         onRequestClose={jest.fn()}
         onSelectProject={onSelectProject}

@@ -1,8 +1,11 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import ReactDOM from 'react-dom';
 import { MODAL_Z_INDEX, getAppPortalRoot, useModalBodyLock } from '../ui/modalUtils';
 import { ConfirmDialog } from '../ui/ConfirmDialog';
 import { UMLDiagram, UMLDiagramHandle, UmlDiagramSaveContext, WORKSPACE_DOT_BACKGROUND } from './UMLDiagram';
+import { ReactionModelSidebar } from './ReactionModelSidebar';
+import { ReactionsModel } from '../../types/reactions';
+import { DrawerModel } from './ModelDrawer';
 
 interface FloatingUMLPanelProps {
   id: string;
@@ -32,6 +35,10 @@ interface FloatingUMLPanelProps {
   refreshing?: boolean;
   /** When true, UML diagram is view-only (no class/relationship edits). */
   viewOnly?: boolean;
+  /** All library models available for adding to the view. */
+  libraryModels?: DrawerModel[];
+  /** VSUM project id for Reaction Editor LSP connection. */
+  vsumId?: string;
 }
 
 /** Vitruv toolbar tokens — aligned with UMLDiagram / canvas */
@@ -47,6 +54,15 @@ const V = {
   surface: '#ffffff',
   surfaceHover: '#f0fdfa',
 } as const;
+
+const MODEL_COLORS = [
+  { border: '#2563eb', fill: 'rgba(37,99,235,0.06)' },
+  { border: '#dc2626', fill: 'rgba(220,38,38,0.06)' },
+  { border: '#059669', fill: 'rgba(5,150,105,0.06)' },
+  { border: '#d97706', fill: 'rgba(217,119,6,0.06)' },
+  { border: '#7c3aed', fill: 'rgba(124,58,237,0.06)' },
+  { border: '#db2777', fill: 'rgba(219,39,119,0.06)' },
+];
 
 const ToolbarDivider = () => (
   <div style={{ width: 1, height: 22, background: V.border, margin: '0 5px', flexShrink: 0 }} />
@@ -70,7 +86,7 @@ const RefreshIcon = () => (
 export const FloatingUMLPanel: React.FC<FloatingUMLPanelProps> = ({
   id, title, fileName, layoutScopeId, ecoreContent, saveContext, zIndex = MODAL_Z_INDEX, onClose,
   onHome, onRefresh, ecoreFileId, fetchEcoreFile, onEcoreContentUpdated, refreshing = false,
-  viewOnly = false,
+  viewOnly = false, libraryModels = [], vsumId,
 }) => {
   const diagramRef = useRef<UMLDiagramHandle>(null);
   const ecoreContentRef = useRef(ecoreContent);
@@ -82,6 +98,54 @@ export const FloatingUMLPanel: React.FC<FloatingUMLPanelProps> = ({
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [refreshMessage, setRefreshMessage] = useState('');
   const pendingCloseRef = useRef<(() => void) | null>(null);
+
+  // Multi-model state
+  const [reactionsMode, setReactionsMode] = useState<'uml' | 'reactions'>('uml');
+  const [loadedModels, setLoadedModels] = useState<ReactionsModel[]>([]);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+
+  const currentModel: ReactionsModel = useMemo(() => ({
+    id: saveContext?.metaModelId
+      ? Number(saveContext.metaModelId)
+      : (ecoreFileId ?? 0),
+    name: title,
+    ecoreContent,
+    ecoreFileId,
+  }), [title, ecoreContent, ecoreFileId, saveContext?.metaModelId]);
+
+  const allLoadedModels = useMemo(() => {
+    if (loadedModels.length === 0) return [currentModel];
+    const hasCurrentModel = loadedModels.some(m => m.name === currentModel.name);
+    return hasCurrentModel ? loadedModels : [currentModel, ...loadedModels];
+  }, [loadedModels, currentModel]);
+
+  const loadedModelIds = useMemo(() => new Set(allLoadedModels.map(m => m.id)), [allLoadedModels]);
+
+  const sidebarModels: ReactionsModel[] = useMemo(() => {
+    return libraryModels
+      .filter(m => m.ecoreFileId != null)
+      .map(m => ({
+        id: m.id,
+        name: m.name,
+        ecoreContent: '',
+        ecoreFileId: m.ecoreFileId,
+      }));
+  }, [libraryModels]);
+
+  const handleAddModel = useCallback(async (model: ReactionsModel) => {
+    if (!model.ecoreFileId || !fetchEcoreFile) return;
+    try {
+      const content = await fetchEcoreFile(model.ecoreFileId);
+      const fullModel: ReactionsModel = { ...model, ecoreContent: content };
+      setLoadedModels(prev => {
+        const all = prev.length === 0 ? [currentModel] : prev;
+        if (all.some(m => m.id === fullModel.id || m.name === fullModel.name)) return all;
+        return [...all, fullModel];
+      });
+    } catch (e) {
+      console.error('Failed to fetch model content:', e);
+    }
+  }, [currentModel, fetchEcoreFile]);
 
   useModalBodyLock(true);
 
@@ -403,6 +467,91 @@ export const FloatingUMLPanel: React.FC<FloatingUMLPanelProps> = ({
             {refreshMessage}
           </span>
         )}
+        {/* VSUM/Reactions toggle + Add Meta Models */}
+        {libraryModels.length > 0 && (
+          <>
+            <ToolbarDivider />
+            <div style={{
+              display: 'flex',
+              background: '#f1f5f9',
+              borderRadius: 6,
+              padding: 2,
+              gap: 1,
+            }}>
+              <button
+                type="button"
+                onClick={() => setReactionsMode('uml')}
+                style={{
+                  padding: '4px 10px',
+                  fontSize: 11,
+                  fontWeight: 600,
+                  border: 'none',
+                  borderRadius: 5,
+                  cursor: 'pointer',
+                  background: reactionsMode === 'uml' ? V.surface : 'transparent',
+                  color: reactionsMode === 'uml' ? V.ink : V.textMuted,
+                  boxShadow: reactionsMode === 'uml' ? '0 1px 3px rgba(0,0,0,0.1)' : 'none',
+                  transition: 'all 0.15s',
+                }}
+              >
+                VSUM
+              </button>
+              <button
+                type="button"
+                onClick={() => setReactionsMode('reactions')}
+                style={{
+                  padding: '4px 10px',
+                  fontSize: 11,
+                  fontWeight: 600,
+                  border: 'none',
+                  borderRadius: 5,
+                  cursor: 'pointer',
+                  background: reactionsMode === 'reactions' ? V.surface : 'transparent',
+                  color: reactionsMode === 'reactions' ? V.primary : V.textMuted,
+                  boxShadow: reactionsMode === 'reactions' ? '0 1px 3px rgba(0,0,0,0.1)' : 'none',
+                  transition: 'all 0.15s',
+                }}
+              >
+                Reactions
+              </button>
+            </div>
+            <ToolbarDivider />
+            <button
+              type="button"
+              title="Add meta models to this view"
+              onClick={() => setSidebarOpen(true)}
+              style={{
+                height: 32,
+                padding: '0 10px',
+                border: `1px solid ${V.primaryBorder}`,
+                borderRadius: 7,
+                background: V.primarySoft,
+                color: V.primary,
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                gap: 4,
+                fontSize: 11,
+                fontWeight: 600,
+                transition: 'all 0.12s',
+                flexShrink: 0,
+              }}
+              onMouseEnter={e => {
+                e.currentTarget.style.background = V.primary;
+                e.currentTarget.style.color = '#fff';
+              }}
+              onMouseLeave={e => {
+                e.currentTarget.style.background = V.primarySoft;
+                e.currentTarget.style.color = V.primary;
+              }}
+            >
+              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
+                <line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" />
+              </svg>
+              Add Meta Models
+            </button>
+          </>
+        )}
       </div>
 
       <div style={{ flex: 1, overflow: 'hidden', position: 'relative', minHeight: 0 }}>
@@ -413,6 +562,16 @@ export const FloatingUMLPanel: React.FC<FloatingUMLPanelProps> = ({
           layoutScopeId={layoutScopeId}
           saveContext={saveContext}
           interactive={!viewOnly}
+          reactionsMode={reactionsMode}
+          reactionModels={allLoadedModels}
+          additionalModels={allLoadedModels.slice(1).map((m, idx) => ({
+            id: m.id,
+            name: m.name,
+            ecoreContent: m.ecoreContent,
+            color: MODEL_COLORS[(idx + 1) % MODEL_COLORS.length].border,
+            fill: MODEL_COLORS[(idx + 1) % MODEL_COLORS.length].fill,
+          }))}
+          vsumId={vsumId}
         />
 
         <div style={{
@@ -445,6 +604,15 @@ export const FloatingUMLPanel: React.FC<FloatingUMLPanelProps> = ({
             </svg>
           </ZoomButton>
         </div>
+
+        {/* Model sidebar */}
+        <ReactionModelSidebar
+          isOpen={sidebarOpen}
+          allModels={sidebarModels}
+          loadedModelIds={loadedModelIds}
+          onAddModel={handleAddModel}
+          onClose={() => setSidebarOpen(false)}
+        />
       </div>
 
       <ConfirmDialog
@@ -568,6 +736,7 @@ const ToolbarBtn: React.FC<{
     </button>
   );
 };
+
 
 const ZoomButton: React.FC<{ title: string; onClick: () => void; children: React.ReactNode }> = ({
   title, onClick, children,

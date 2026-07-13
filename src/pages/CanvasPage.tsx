@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { AuthService } from '../services/auth';
 import { getUserInitials } from '../utils/userInitials';
@@ -386,6 +386,7 @@ interface CanvasUmlPanelLayerProps {
   onFocus: (panelId: string) => void;
   onHome: () => void;
   onEcoreContentUpdated: (panelId: string, content: string) => void;
+  libraryModels?: DrawerModel[];
 }
 
 const CanvasUmlPanelLayer: React.FC<CanvasUmlPanelLayerProps> = ({
@@ -400,6 +401,7 @@ const CanvasUmlPanelLayer: React.FC<CanvasUmlPanelLayerProps> = ({
   onFocus,
   onHome,
   onEcoreContentUpdated,
+  libraryModels,
 }) => (
   <>
     {panels.map((panel, idx) => (
@@ -423,6 +425,8 @@ const CanvasUmlPanelLayer: React.FC<CanvasUmlPanelLayerProps> = ({
         fetchEcoreFile={fetchEcoreFileById}
         onEcoreContentUpdated={content => onEcoreContentUpdated(panel.id, content)}
         zIndex={panelZBase + (topPanelId === panel.id ? panels.length : idx)}
+        libraryModels={libraryModels}
+        vsumId={activeProjectId?.toString()}
       />
     ))}
   </>
@@ -1473,6 +1477,16 @@ export const CanvasPage: React.FC = () => {
 
   const focusPanel = useCallback((panelId: string) => setTopPanelId(panelId), []);
   const navigateHome = useCallback(() => navigate('/'), [navigate]);
+
+  const allLibraryModels = useMemo(() => {
+    const seen = new Set<number>();
+    return [...drawerModels, ...myLibraryModels, ...publicLibraryModels].filter(m => {
+      if (seen.has(m.id)) return false;
+      seen.add(m.id);
+      return true;
+    });
+  }, [drawerModels, myLibraryModels, publicLibraryModels]);
+
   const handleReactionModeEnd = useCallback(() => setAddReactionMode(false), []);
 
   const handleOpenReactionEditor = useCallback(() => {
@@ -1576,6 +1590,7 @@ export const CanvasPage: React.FC = () => {
         onFocus={focusPanel}
         onHome={navigateHome}
         onEcoreContentUpdated={handleUmlPanelEcoreContentUpdated}
+        libraryModels={allLibraryModels}
       />
 
       {/* Model drawer modal */}

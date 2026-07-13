@@ -105,12 +105,13 @@ function validateRelationship(
   }
 }
 
-export function validateUmlModel(model: UMLModel): UmlValidationIssue[] {
+export function validateUmlModel(model: UMLModel, allClasses?: UMLClass[]): UmlValidationIssue[] {
   const issues: UmlValidationIssue[] = [];
   const classNames = new Map<string, string>();
 
   model.classes.forEach(cls => validateClass(cls, classNames, issues));
-  model.relationships.forEach(rel => validateRelationship(rel, model.classes, issues));
+  const relClasses = allClasses ?? model.classes;
+  model.relationships.forEach(rel => validateRelationship(rel, relClasses, issues));
 
   return issues;
 }
