@@ -306,36 +306,76 @@ export function resolveMultiplicityBadgeCollisions(
   badgeHalfH = 12,
 ): MultiplicityBadge[] {
   const result = badges.map(b => ({ ...b }));
+  clearBadgesFromObstacles(result, obstacles, badgeHalfW, badgeHalfH);
+  settleBadgeCollisions(result, obstacles, badgeHalfW, badgeHalfH);
+  return result;
+}
 
-  const findOverlap = (badge: MultiplicityBadge) => {
-    const bounds = badgeBoundsAt(badge, badgeHalfW, badgeHalfH);
-    return obstacles.find(rect => rectsOverlap(bounds, rect)) ?? null;
-  };
+function findBadgeOverlap(
+  badge: MultiplicityBadge,
+  obstacles: AxisRect[],
+  badgeHalfW: number,
+  badgeHalfH: number,
+): AxisRect | null {
+  const bounds = badgeBoundsAt(badge, badgeHalfW, badgeHalfH);
+  return obstacles.find(rect => rectsOverlap(bounds, rect)) ?? null;
+}
 
-  for (const badge of result) {
+function nudgeBadgeClearOfObstacle(badge: MultiplicityBadge, hit: AxisRect, pass: number): void {
+  const strategy = pass % 3;
+  if (strategy === 0) {
+    pushAwayFromAnchor(badge, 6);
+    return;
+  }
+  if (strategy === 1) {
+    pushBadgePerpendicular(badge, pass % 2 === 0 ? 7 : -7);
+    return;
+  }
+  pushBadgeFromRectCenter(badge, hit);
+}
+
+function clearBadgesFromObstacles(
+  badges: MultiplicityBadge[],
+  obstacles: AxisRect[],
+  badgeHalfW: number,
+  badgeHalfH: number,
+): void {
+  for (const badge of badges) {
     for (let pass = 0; pass < 36; pass++) {
-      const hit = findOverlap(badge);
+      const hit = findBadgeOverlap(badge, obstacles, badgeHalfW, badgeHalfH);
       if (!hit) break;
-      if (pass % 3 === 0) pushAwayFromAnchor(badge, 6);
-      else if (pass % 3 === 1) pushBadgePerpendicular(badge, pass % 2 === 0 ? 7 : -7);
-      else pushBadgeFromRectCenter(badge, hit);
+      nudgeBadgeClearOfObstacle(badge, hit, pass);
     }
   }
+}
 
-  for (let pass = 0; pass < 8; pass++) {
-    let moved = false;
-    for (let i = 0; i < result.length; i++) {
-      for (let j = i + 1; j < result.length; j++) {
-        if (separateBadgesIfNeeded(result[i], result[j], 2)) moved = true;
-      }
-      const hit = findOverlap(result[i]);
-      if (hit) {
-        pushBadgeFromRectCenter(result[i], hit);
-        moved = true;
-      }
+function refineBadgeSpacingPass(
+  badges: MultiplicityBadge[],
+  obstacles: AxisRect[],
+  badgeHalfW: number,
+  badgeHalfH: number,
+): boolean {
+  let moved = false;
+  for (let i = 0; i < badges.length; i++) {
+    for (let j = i + 1; j < badges.length; j++) {
+      if (separateBadgesIfNeeded(badges[i], badges[j], 2)) moved = true;
     }
+    const hit = findBadgeOverlap(badges[i], obstacles, badgeHalfW, badgeHalfH);
+    if (!hit) continue;
+    pushBadgeFromRectCenter(badges[i], hit);
+    moved = true;
+  }
+  return moved;
+}
+
+function settleBadgeCollisions(
+  badges: MultiplicityBadge[],
+  obstacles: AxisRect[],
+  badgeHalfW: number,
+  badgeHalfH: number,
+): void {
+  for (let pass = 0; pass < 8; pass++) {
+    const moved = refineBadgeSpacingPass(badges, obstacles, badgeHalfW, badgeHalfH);
     if (!moved) break;
   }
-
-  return result;
 }

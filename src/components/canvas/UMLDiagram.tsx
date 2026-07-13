@@ -1169,7 +1169,7 @@ export const UMLDiagram = forwardRef<UMLDiagramHandle, UMLDiagramProps>(({
   );
 
   const additionalClassIdKey = useMemo(
-    () => additionalClasses.map(c => c.id).sort().join(','),
+    () => additionalClasses.map(c => c.id).sort((a, b) => a.localeCompare(b)).join(','),
     [additionalClasses],
   );
 
