@@ -37,7 +37,7 @@ describe('SignIn component', () => {
     );
 
     expect(screen.getByLabelText(/Username or Email/i)).toBeInTheDocument();
-    expect(screen.getByLabelText(/Password/i)).toBeInTheDocument();
+    expect(screen.getByLabelText(/^Password \*$/i)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Sign In/i })).toBeInTheDocument();
   });
 
@@ -72,7 +72,7 @@ describe('SignIn component', () => {
       screen.getByLabelText(/Username or Email/i),
       'john@example.com',
     );
-    await userEvent.type(screen.getByLabelText(/Password/i), 'password123!');
+    await userEvent.type(screen.getByLabelText(/^Password \*$/i), 'password123!');
     await userEvent.click(screen.getByRole('button', { name: /Sign In/i }));
 
     await waitFor(() => {
@@ -98,7 +98,7 @@ describe('SignIn component', () => {
       screen.getByLabelText(/Username or Email/i),
       'john@example.com',
     );
-    await userEvent.type(screen.getByLabelText(/Password/i), 'wrong');
+    await userEvent.type(screen.getByLabelText(/^Password \*$/i), 'wrong');
     await userEvent.click(screen.getByRole('button', { name: /Sign In/i }));
 
     expect(
@@ -257,7 +257,7 @@ describe('SignIn – forgot password dialog', () => {
       screen.getByLabelText(/Username or Email/i),
       'user',
     );
-    await userEvent.type(screen.getByLabelText(/Password/i), 'pw');
+    await userEvent.type(screen.getByLabelText(/^Password \*$/i), 'pw');
     await userEvent.click(screen.getByRole('button', { name: /Sign In/i }));
 
     await screen.findByText(/Bad credentials/i);

@@ -28,24 +28,71 @@ export interface MultiplicityBadge {
   anchorY: number;
   lineUx: number;
   lineUy: number;
+  /** Length of the relationship line in diagram coordinates. */
+  lineLength?: number;
+}
+
+export interface AxisRect {
+  left: number;
+  top: number;
+  right: number;
+  bottom: number;
 }
 
 const BRIDGE_GAP_HALF = 10;
 const BRIDGE_BULGE = 10;
-const MULT_MIN_GAP = 38;
+const MULT_MIN_GAP = 40;
+const MULT_GROUP_GAP = 42;
+const SHORT_LINE_THRESHOLD = 120;
+const MIN_ALONG_OFFSET = 26;
+
+function badgeBoundsAt(badge: MultiplicityBadge, halfW: number, halfH: number): AxisRect {
+  return {
+    left: badge.x - halfW,
+    top: badge.y - halfH,
+    right: badge.x + halfW,
+    bottom: badge.y + halfH,
+  };
+}
+
+function rectsOverlap(a: AxisRect, b: AxisRect): boolean {
+  return a.left < b.right && a.right > b.left && a.top < b.bottom && a.bottom > b.top;
+}
+
+function maxAlongForLine(lineLength: number, badgeHalfH: number): number {
+  return Math.max(MIN_ALONG_OFFSET, (lineLength - badgeHalfH * 2 - 10) / 2);
+}
+
+function perpOffsetForLine(basePerp: number, lineLength: number): number {
+  if (lineLength >= SHORT_LINE_THRESHOLD) return basePerp;
+  return basePerp + Math.min(28, (SHORT_LINE_THRESHOLD - lineLength) * 0.35);
+}
 
 function alongSign(end: 'start' | 'end'): number {
   return end === 'start' ? 1 : -1;
 }
 
-function edgeSortCoord(badge: MultiplicityBadge): number {
-  return Math.abs(badge.lineUx) > Math.abs(badge.lineUy) ? badge.anchorY : badge.anchorX;
+/** Move a badge further along its edge, away from the attached class. */
+function pushAwayFromAnchor(badge: MultiplicityBadge, distance: number): void {
+  const sign = alongSign(badge.end);
+  badge.x -= badge.lineUx * distance * sign;
+  badge.y -= badge.lineUy * distance * sign;
 }
 
-function pushAlongLine(badge: MultiplicityBadge, delta: number): void {
+function distanceFromAnchor(badge: MultiplicityBadge): number {
   const sign = alongSign(badge.end);
-  badge.x += badge.lineUx * delta * sign;
-  badge.y += badge.lineUy * delta * sign;
+  return (badge.x - badge.anchorX) * badge.lineUx * sign
+    + (badge.y - badge.anchorY) * badge.lineUy * sign;
+}
+
+function setBadgeAlongOffset(
+  badge: MultiplicityBadge,
+  along: number,
+  perpOffset: number,
+): void {
+  const sign = alongSign(badge.end);
+  badge.x = badge.anchorX + badge.lineUx * along * sign + badge.nx * perpOffset;
+  badge.y = badge.anchorY + badge.lineUy * along * sign + badge.ny * perpOffset;
 }
 
 export function segmentIntersection(
@@ -151,34 +198,76 @@ function separateBadgesIfNeeded(
   if (dist >= MULT_MIN_GAP) return false;
 
   const push = (MULT_MIN_GAP - dist) / 2 + extraPush;
-  pushAlongLine(a, -push);
-  pushAlongLine(b, push);
+  if (a.anchorClassId === b.anchorClassId && a.end === b.end) {
+    const further = distanceFromAnchor(a) >= distanceFromAnchor(b) ? a : b;
+    pushAwayFromAnchor(further, push);
+  } else {
+    pushAwayFromAnchor(a, push);
+    pushAwayFromAnchor(b, push);
+  }
   return true;
 }
 
-function runIndexedSeparationPasses(
-  indices: number[],
-  result: MultiplicityBadge[],
-  maxPasses: number,
-  extraPush: number,
-): void {
-  if (indices.length <= 1) return;
-
-  indices.sort((ia, ib) => edgeSortCoord(result[ia]) - edgeSortCoord(result[ib]));
-  for (let pass = 0; pass < maxPasses; pass++) {
-    let moved = false;
-    for (let k = 0; k < indices.length - 1; k++) {
-      if (separateBadgesIfNeeded(result[indices[k]], result[indices[k + 1]], extraPush)) {
-        moved = true;
-      }
-    }
-    if (!moved) break;
-  }
+function pushBadgePerpendicular(badge: MultiplicityBadge, delta: number): void {
+  badge.x += badge.nx * delta;
+  badge.y += badge.ny * delta;
 }
 
-function separateGroupedBadges(result: MultiplicityBadge[], groups: Map<string, number[]>): void {
+function pushBadgeFromRectCenter(badge: MultiplicityBadge, rect: AxisRect): void {
+  const cx = (rect.left + rect.right) / 2;
+  const cy = (rect.top + rect.bottom) / 2;
+  const dx = badge.x - cx;
+  const dy = badge.y - cy;
+  const dist = Math.max(Math.hypot(dx, dy), 0.0001);
+  badge.x += (dx / dist) * 8;
+  badge.y += (dy / dist) * 8;
+}
+
+function layoutAnchorGroup(
+  indices: number[],
+  result: MultiplicityBadge[],
+  baseAlong: number,
+  perpOffset: number,
+): void {
+  if (indices.length === 0) return;
+
+  const lineLengths = indices.map(i => result[i].lineLength ?? Number.POSITIVE_INFINITY);
+  const minLen = Math.min(...lineLengths);
+  const short = minLen < SHORT_LINE_THRESHOLD;
+  const cappedAlong = Math.min(baseAlong, maxAlongForLine(minLen, 12));
+
+  if (indices.length === 1) {
+    const badge = result[indices[0]];
+    if (badge.lineLength == null) return;
+    setBadgeAlongOffset(
+      badge,
+      Math.min(baseAlong, maxAlongForLine(badge.lineLength, 12)),
+      perpOffsetForLine(perpOffset, badge.lineLength),
+    );
+    return;
+  }
+
+  indices.sort((ia, ib) => distanceFromAnchor(result[ia]) - distanceFromAnchor(result[ib]));
+  indices.forEach((idx, i) => {
+    const len = result[idx].lineLength ?? minLen;
+    const along = short
+      ? Math.min(cappedAlong, maxAlongForLine(len, 12))
+      : cappedAlong + i * MULT_GROUP_GAP;
+    const perp = short
+      ? perpOffsetForLine(perpOffset, len) + (i - (indices.length - 1) / 2) * 26
+      : perpOffset + (i - (indices.length - 1) / 2) * 6;
+    setBadgeAlongOffset(result[idx], along, perp);
+  });
+}
+
+function separateGroupedBadges(
+  result: MultiplicityBadge[],
+  groups: Map<string, number[]>,
+  baseAlong: number,
+  perpOffset: number,
+): void {
   for (const indices of groups.values()) {
-    runIndexedSeparationPasses(indices, result, 8, 2);
+    layoutAnchorGroup(indices, result, baseAlong, perpOffset);
   }
 }
 
@@ -196,11 +285,57 @@ function separateAllBadgePairs(result: MultiplicityBadge[]): void {
   }
 }
 
-/** Keep every badge on its own line; only nudge along that line when labels collide. */
-export function optimizeMultiplicityBadges(badges: MultiplicityBadge[]): MultiplicityBadge[] {
+/** Keep every badge on its own line; spread from anchors and nudge apart when labels collide. */
+export function optimizeMultiplicityBadges(
+  badges: MultiplicityBadge[],
+  baseAlong = 52,
+  perpOffset = 10,
+): MultiplicityBadge[] {
   const result = badges.map(b => ({ ...b }));
   const groups = groupBadgeIndices(result);
-  separateGroupedBadges(result, groups);
+  separateGroupedBadges(result, groups, baseAlong, perpOffset);
   separateAllBadgePairs(result);
+  return result;
+}
+
+/** Push badges away from class boxes and each other until labels are readable. */
+export function resolveMultiplicityBadgeCollisions(
+  badges: MultiplicityBadge[],
+  obstacles: AxisRect[],
+  badgeHalfW = 18,
+  badgeHalfH = 12,
+): MultiplicityBadge[] {
+  const result = badges.map(b => ({ ...b }));
+
+  const findOverlap = (badge: MultiplicityBadge) => {
+    const bounds = badgeBoundsAt(badge, badgeHalfW, badgeHalfH);
+    return obstacles.find(rect => rectsOverlap(bounds, rect)) ?? null;
+  };
+
+  for (const badge of result) {
+    for (let pass = 0; pass < 36; pass++) {
+      const hit = findOverlap(badge);
+      if (!hit) break;
+      if (pass % 3 === 0) pushAwayFromAnchor(badge, 6);
+      else if (pass % 3 === 1) pushBadgePerpendicular(badge, pass % 2 === 0 ? 7 : -7);
+      else pushBadgeFromRectCenter(badge, hit);
+    }
+  }
+
+  for (let pass = 0; pass < 8; pass++) {
+    let moved = false;
+    for (let i = 0; i < result.length; i++) {
+      for (let j = i + 1; j < result.length; j++) {
+        if (separateBadgesIfNeeded(result[i], result[j], 2)) moved = true;
+      }
+      const hit = findOverlap(result[i]);
+      if (hit) {
+        pushBadgeFromRectCenter(result[i], hit);
+        moved = true;
+      }
+    }
+    if (!moved) break;
+  }
+
   return result;
 }

@@ -37,8 +37,8 @@ const AUTH_STYLES = `
     flex: 0 0 50%;
     display: flex;
     align-items: center;
-    justify-content: center;
-    padding: 40px 0 40px 40px;
+    justify-content: flex-start;
+    padding: 40px 0;
     box-sizing: border-box;
     overflow: visible;
   }
@@ -48,7 +48,9 @@ const AUTH_STYLES = `
     height: 100%;
     max-height: 90vh;
     object-fit: contain;
-    transform: scale(2.0) translate(150px, 0px);
+    object-position: left center;
+    transform: scale(2.0);
+    transform-origin: left center;
   }
 
   .auth-right-form-area {
@@ -152,6 +154,43 @@ const AUTH_STYLES = `
   .mock-form-group input:disabled {
     background-color: #f8fafc;
     color: #94a3b8;
+  }
+
+  .mock-password-field {
+    position: relative;
+  }
+
+  .mock-password-field input {
+    padding-right: 44px;
+  }
+
+  .mock-password-toggle {
+    position: absolute;
+    right: 10px;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 32px;
+    height: 32px;
+    border: none;
+    border-radius: 6px;
+    background: transparent;
+    color: #64748b;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    transition: color 0.15s, background-color 0.15s;
+  }
+
+  .mock-password-toggle:hover:not(:disabled) {
+    color: #1f9f92;
+    background: #f0fdfa;
+  }
+
+  .mock-password-toggle:disabled {
+    cursor: not-allowed;
+    opacity: 0.5;
   }
 
   /* Keep-signed-in / forgot-password row (SignIn) */

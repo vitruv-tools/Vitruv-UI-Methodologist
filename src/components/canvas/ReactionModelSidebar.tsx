@@ -18,7 +18,10 @@ interface ReactionModelSidebarProps {
   isOpen: boolean;
   allModels: ReactionsModel[];
   loadedModelIds: Set<number>;
+  /** Primary model cannot be removed from the view. */
+  primaryModelId: number;
   onAddModel: (model: ReactionsModel) => void;
+  onRemoveModel?: (model: ReactionsModel) => void;
   onClose: () => void;
 }
 
@@ -26,7 +29,9 @@ export const ReactionModelSidebar: React.FC<ReactionModelSidebarProps> = ({
   isOpen,
   allModels,
   loadedModelIds,
+  primaryModelId,
   onAddModel,
+  onRemoveModel,
   onClose,
 }) => {
   const handleDragStart = useCallback((e: React.DragEvent, model: ReactionsModel) => {
@@ -141,6 +146,7 @@ export const ReactionModelSidebar: React.FC<ReactionModelSidebarProps> = ({
           )}
           {allModels.map(model => {
             const isAdded = loadedModelIds.has(model.id);
+            const canRemove = isAdded && model.id !== primaryModelId && onRemoveModel;
             return (
               <div
                 key={model.id}
@@ -155,6 +161,7 @@ export const ReactionModelSidebar: React.FC<ReactionModelSidebarProps> = ({
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'space-between',
+                  gap: 8,
                   transition: 'all 0.12s',
                   cursor: isAdded ? 'default' : 'grab',
                 }}
@@ -176,7 +183,34 @@ export const ReactionModelSidebar: React.FC<ReactionModelSidebarProps> = ({
                     </div>
                   )}
                 </div>
-                {isAdded ? (
+                {canRemove ? (
+                  <button
+                    type="button"
+                    onClick={() => onRemoveModel(model)}
+                    style={{
+                      padding: '5px 10px',
+                      fontSize: 12,
+                      fontWeight: 600,
+                      border: '1px solid #fecaca',
+                      borderRadius: 6,
+                      background: '#fef2f2',
+                      color: '#dc2626',
+                      cursor: 'pointer',
+                      flexShrink: 0,
+                      transition: 'all 0.12s',
+                    }}
+                    onMouseEnter={e => {
+                      e.currentTarget.style.background = '#dc2626';
+                      e.currentTarget.style.color = '#fff';
+                    }}
+                    onMouseLeave={e => {
+                      e.currentTarget.style.background = '#fef2f2';
+                      e.currentTarget.style.color = '#dc2626';
+                    }}
+                  >
+                    Remove
+                  </button>
+                ) : isAdded ? (
                   <span style={{
                     fontSize: 11,
                     fontWeight: 600,

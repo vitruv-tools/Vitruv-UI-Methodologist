@@ -117,6 +117,7 @@ export function umlDiagramGeometryMock() {
     bridgedLinePathD: () => 'M0,0 L100,0',
     computeLineBridges: () => new Map(),
     optimizeMultiplicityBadges: (badges: unknown[]) => badges,
+    resolveMultiplicityBadgeCollisions: (badges: unknown[]) => badges,
   };
 }
 

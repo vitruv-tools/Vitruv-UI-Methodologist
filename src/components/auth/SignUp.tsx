@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
 import { SignUpCredentials } from '../../services/auth';
 import { AuthLayout, AuthErrorBanner } from './AuthLayout';
+import { PasswordInput } from './PasswordInput';
 
 interface SignUpProps {
   onSignUpSuccess: (user: any) => void;
@@ -225,9 +226,15 @@ export function SignUp({ onSignUpSuccess, onSwitchToSignIn }: Readonly<SignUpPro
         {/* Password */}
         <div className="mock-form-group">
           <label htmlFor="password">Password *</label>
-          <input id="password" name="password" type="password" value={formData.password}
-            onChange={handleInputChange} placeholder="Create a strong password"
-            disabled={isLoading || isSuccess} required />
+          <PasswordInput
+            id="password"
+            name="password"
+            value={formData.password}
+            onChange={handleInputChange}
+            placeholder="Create a strong password"
+            disabled={isLoading || isSuccess}
+            required
+          />
 
           {formData.password && (
             <div style={{ marginTop: 8 }}>
@@ -249,12 +256,14 @@ export function SignUp({ onSignUpSuccess, onSwitchToSignIn }: Readonly<SignUpPro
         {/* Confirm Password */}
         <div className="mock-form-group">
           <label htmlFor="confirmPassword">Confirm Password *</label>
-          <input
-            id="confirmPassword" name="confirmPassword" type="password"
+          <PasswordInput
+            id="confirmPassword"
+            name="confirmPassword"
             value={confirmPassword}
             onChange={(e) => { setConfirmPassword(e.target.value); if (error) setError(null); }}
             placeholder="Confirm your password"
-            disabled={isLoading || isSuccess} required
+            disabled={isLoading || isSuccess}
+            required
           />
         </div>
 
