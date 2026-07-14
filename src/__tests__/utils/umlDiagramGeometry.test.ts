@@ -2,6 +2,7 @@ import {
   bridgedLinePathD,
   computeLineBridges,
   optimizeMultiplicityBadges,
+  resolveMultiplicityBadgeCollisions,
   segmentIntersection,
   type MultiplicityBadge,
 } from '../../utils/umlDiagramGeometry';
@@ -18,6 +19,11 @@ function mkBadge(overrides: Partial<MultiplicityBadge> & Pick<MultiplicityBadge,
     lineUy: 0,
     ...overrides,
   };
+}
+
+function distanceFromAnchor(b: MultiplicityBadge): number {
+  const sign = b.end === 'start' ? 1 : -1;
+  return (b.x - b.anchorX) * b.lineUx * sign + (b.y - b.anchorY) * b.lineUy * sign;
 }
 
 describe('umlDiagramGeometry', () => {
@@ -74,7 +80,7 @@ describe('umlDiagramGeometry', () => {
     const xs = optimized.map(b => b.x);
     expect(new Set(xs).size).toBe(3);
     optimized.forEach(b => {
-      expect(b.x).toBeLessThan(b.anchorX);
+      expect(distanceFromAnchor(b)).toBeGreaterThanOrEqual(52);
     });
   });
 
@@ -94,5 +100,52 @@ describe('umlDiagramGeometry', () => {
     ];
     const optimized = optimizeMultiplicityBadges(badges);
     expect(optimized).toEqual(badges);
+  });
+
+  it('caps along-offset on short edges so badges stay near their anchor side', () => {
+    const badges: MultiplicityBadge[] = [
+      mkBadge({
+        key: 'r1-tgt',
+        relId: 'r1',
+        end: 'end',
+        anchorClassId: 'Entity',
+        text: '1',
+        lineLength: 48,
+      }),
+    ];
+    const optimized = optimizeMultiplicityBadges(badges);
+    expect(distanceFromAnchor(optimized[0])).toBeLessThanOrEqual(26);
+    expect(distanceFromAnchor(optimized[0])).toBeGreaterThanOrEqual(14);
+  });
+
+  it('pushes badges away from overlapping class boxes', () => {
+    const badges: MultiplicityBadge[] = [
+      mkBadge({
+        key: 'r1-tgt',
+        relId: 'r1',
+        end: 'end',
+        anchorClassId: 'Link',
+        text: '2..*',
+        x: 150,
+        y: 210,
+        anchorX: 150,
+        anchorY: 200,
+        lineUx: 0,
+        lineUy: -1,
+        nx: 1,
+        ny: 0,
+        lineLength: 40,
+      }),
+    ];
+    const obstacles = [{ left: 120, top: 180, right: 320, bottom: 260 }];
+    const resolved = resolveMultiplicityBadgeCollisions(badges, obstacles);
+    const bounds = {
+      left: resolved[0].x - 18,
+      top: resolved[0].y - 12,
+      right: resolved[0].x + 18,
+      bottom: resolved[0].y + 12,
+    };
+    expect(bounds.bottom <= obstacles[0].top || bounds.top >= obstacles[0].bottom
+      || bounds.right <= obstacles[0].left || bounds.left >= obstacles[0].right).toBe(true);
   });
 });

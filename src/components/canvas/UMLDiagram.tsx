@@ -31,10 +31,13 @@ import {
   bridgedLinePathD,
   computeLineBridges,
   optimizeMultiplicityBadges,
+  resolveMultiplicityBadgeCollisions,
+  type AxisRect,
   type LineBridge,
   type MultiplicityBadge,
 } from '../../utils/umlDiagramGeometry';
 import { UMLDiagramMinimap } from './UMLDiagramMinimap';
+import { computeUmlModelGroups } from '../../utils/umlModelGroups';
 
 // ── constants ────────────────────────────────────────────────────────────────
 
@@ -169,15 +172,18 @@ const EDGE_DEFAULT = '#0c436e';
 const EDGE_HOVER = '#f87171';
 const EDGE_SELECT = '#ef4444';
 const EDGE_ENDPOINT_INSET = 10;
-const MULT_ALONG_OFFSET = 44;
+const MULT_ALONG_OFFSET = 52;
 const MULT_PERP_OFFSET = 10;
-const MARKER_MULT_EXTRA_OFFSET = 16;
+const MARKER_MULT_EXTRA_OFFSET = 18;
+const MULT_BADGE_HALF_W = 18;
+const MULT_BADGE_HALF_H = 12;
+const MULT_CLASS_CLEARANCE = 8;
 
 function multiplicityPosition(
   x1: number, y1: number, x2: number, y2: number,
   end: 'start' | 'end',
   hasDirectionMarker = false,
-): { x: number; y: number; anchorX: number; anchorY: number; lineUx: number; lineUy: number; nx: number; ny: number } {
+): { x: number; y: number; anchorX: number; anchorY: number; lineUx: number; lineUy: number; nx: number; ny: number; lineLength: number } {
   const dx = x2 - x1;
   const dy = y2 - y1;
   const len = Math.max(Math.hypot(dx, dy), 0.0001);
@@ -185,10 +191,16 @@ function multiplicityPosition(
   const lineUy = dy / len;
   const nx = -lineUy;
   const ny = lineUx;
-  const alongMag = MULT_ALONG_OFFSET + (hasDirectionMarker ? MARKER_MULT_EXTRA_OFFSET : 0);
+  const markerExtra = hasDirectionMarker ? MARKER_MULT_EXTRA_OFFSET : 0;
+  const idealAlong = MULT_ALONG_OFFSET + markerExtra;
+  const maxAlong = Math.max(26, (len - MULT_BADGE_HALF_H * 2 - 10) / 2);
+  const alongMag = Math.min(idealAlong, maxAlong);
   const along = end === 'start' ? alongMag : -alongMag;
   const anchorX = end === 'start' ? x1 : x2;
   const anchorY = end === 'start' ? y1 : y2;
+  const perp = len < 120
+    ? MULT_PERP_OFFSET + Math.min(28, (120 - len) * 0.35)
+    : MULT_PERP_OFFSET;
   return {
     anchorX,
     anchorY,
@@ -196,9 +208,19 @@ function multiplicityPosition(
     lineUy,
     nx,
     ny,
-    x: anchorX + lineUx * along + nx * MULT_PERP_OFFSET,
-    y: anchorY + lineUy * along + ny * MULT_PERP_OFFSET,
+    lineLength: len,
+    x: anchorX + lineUx * along + nx * perp,
+    y: anchorY + lineUy * along + ny * perp,
   };
+}
+
+function buildClassObstacleRects(classes: CLS[], offsetX: number, offsetY: number): AxisRect[] {
+  return classes.map(cls => ({
+    left: cls.x + offsetX - MULT_CLASS_CLEARANCE,
+    top: cls.y + offsetY - MULT_CLASS_CLEARANCE,
+    right: cls.x + offsetX + BW + MULT_CLASS_CLEARANCE,
+    bottom: cls.y + offsetY + boxH(cls) + MULT_CLASS_CLEARANCE,
+  }));
 }
 
 // ── relation-line helpers ─────────────────────────────────────────────────────
@@ -867,6 +889,8 @@ interface UMLDiagramProps {
   onHistoryChange?: (state: { canUndo: boolean; canRedo: boolean }) => void;
   /** Additional models to render in the same canvas with colored wrapper groups. */
   additionalModels?: { id: number; name: string; ecoreContent: string; color: string; fill: string }[];
+  /** Called when the user removes an added (non-primary) meta model from the view. */
+  onRemoveAdditionalModel?: (modelName: string) => void;
   /** When 'reactions', elements show connection indicators. */
   reactionsMode?: 'uml' | 'reactions';
   /** Models available in the reactions view for resolving URLs and aliases. */
@@ -1046,6 +1070,7 @@ export const UMLDiagram = forwardRef<UMLDiagramHandle, UMLDiagramProps>(({
   saveContext,
   onHistoryChange,
   additionalModels = [],
+  onRemoveAdditionalModel,
   reactionsMode = 'uml',
   reactionModels = [],
   vsumId,
@@ -1132,6 +1157,39 @@ export const UMLDiagram = forwardRef<UMLDiagramHandle, UMLDiagramProps>(({
     () => assignParallelRelMeta(allRels) as DiagramRel[],
     [allRels],
   );
+
+  const modelGroups = useMemo(() => {
+    if (additionalModels.length === 0) return [];
+    return computeUmlModelGroups(allClasses, classModelMap, boxH, BW);
+  }, [additionalModels.length, allClasses, classModelMap]);
+
+  const removableModelNames = useMemo(
+    () => new Set(additionalModels.map(m => m.name)),
+    [additionalModels],
+  );
+
+  const additionalClassIdKey = useMemo(
+    () => additionalClasses.map(c => c.id).sort((a, b) => a.localeCompare(b)).join(','),
+    [additionalClasses],
+  );
+
+  useEffect(() => {
+    const validIds = new Set([
+      ...classes.map(c => c.id),
+      ...additionalClasses.map(c => c.id),
+    ]);
+    setReactionEdges(prev => {
+      const next = prev.filter(e => validIds.has(e.sourceClassId) && validIds.has(e.targetClassId));
+      return next.length === prev.length ? prev : next;
+    });
+    setRelationships(prev => {
+      const next = prev.filter(r => validIds.has(r.sourceId) && validIds.has(r.targetId));
+      return next.length === prev.length ? prev : next;
+    });
+    setSelectedRelId(prev => (prev && validIds.has(prev) ? prev : null));
+    setEditingReactionId(prev => (prev && validIds.has(prev) ? prev : null));
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- prune only when added models change
+  }, [additionalClassIdKey]);
   const [edit, setEdit] = useState<EditState | null>(null);
   const editRef = useRef<EditState | null>(null);
   editRef.current = edit;
@@ -2190,8 +2248,14 @@ export const UMLDiagram = forwardRef<UMLDiagramHandle, UMLDiagramProps>(({
         });
       }
     }
-    return optimizeMultiplicityBadges(raw);
-  }, [edgeLayouts, reactionEdges]);
+    const obstacles = buildClassObstacleRects(allClasses, offsetX, offsetY);
+    return resolveMultiplicityBadgeCollisions(
+      optimizeMultiplicityBadges(raw, MULT_ALONG_OFFSET, MULT_PERP_OFFSET),
+      obstacles,
+      MULT_BADGE_HALF_W,
+      MULT_BADGE_HALF_H,
+    );
+  }, [edgeLayouts, reactionEdges, allClasses, offsetX, offsetY]);
 
   const reactionEdgeById = useMemo(
     () => new Map(reactionEdges.map(edge => [edge.id, edge])),
@@ -2277,85 +2341,104 @@ export const UMLDiagram = forwardRef<UMLDiagramHandle, UMLDiagramProps>(({
             />
           );
         })}
-        {multiplicityBadges.map(badge => {
-          const state = edgeState(selectedRelId === badge.relId, hoveredRelId === badge.relId);
-          return (
-            <MultiplicityBadgeGraphic
-              key={badge.key}
-              badge={badge}
-              strokeColor={EDGE_COLOR[state]}
-            />
-          );
-        })}
       </svg>
 
       {/* Model group wrapper rects */}
-      {additionalModels.length > 0 && (() => {
-        const groups = new Map<string, { cls: CLS[]; color: string; fill: string; name: string }>();
-        for (const cls of allClasses) {
-          const info = classModelMap.get(cls.id);
-          if (!info) continue;
-          if (!groups.has(info.name)) groups.set(info.name, { cls: [], color: info.color, fill: info.fill, name: info.name });
-          groups.get(info.name)!.cls.push(cls);
-        }
-        return Array.from(groups.values()).map(g => {
-          if (g.cls.length === 0) return null;
-          const PAD = 20;
-          const minX = Math.min(...g.cls.map(c => c.x)) - PAD;
-          const minY = Math.min(...g.cls.map(c => c.y)) - PAD - 24;
-          const maxX = Math.max(...g.cls.map(c => c.x + BW)) + PAD;
-          const maxY = Math.max(...g.cls.map(c => c.y + boxH(c))) + PAD;
-          const sx = minX + offsetX;
-          const sy = minY + offsetY;
-          const sw = maxX - minX;
-          const sh = maxY - minY;
-          return (
+      {modelGroups.map(g => {
+        const sx = g.minX + offsetX;
+        const sy = g.minY + offsetY;
+        const canRemove = interactive && removableModelNames.has(g.name) && onRemoveAdditionalModel;
+        return (
+          <div
+            key={g.name}
+            style={{
+              position: 'absolute',
+              left: sx,
+              top: sy,
+              width: g.width,
+              height: g.height,
+              border: `2px solid ${g.color}`,
+              borderRadius: 10,
+              background: g.fill,
+              pointerEvents: 'none',
+              zIndex: 0,
+            }}
+          >
             <div
-              key={g.name}
+              data-wrapper-header
               style={{
                 position: 'absolute',
-                left: sx,
-                top: sy,
-                width: sw,
-                height: sh,
-                border: `2px solid ${g.color}`,
-                borderRadius: 10,
-                background: g.fill,
-                pointerEvents: 'none',
-                zIndex: 0,
+                top: 0,
+                left: 0,
+                right: 0,
+                height: 22,
+                background: g.color,
+                borderRadius: '8px 8px 0 0',
+                display: 'flex',
+                alignItems: 'center',
+                paddingLeft: 8,
+                paddingRight: canRemove ? 4 : 8,
+                fontSize: 11,
+                fontWeight: 700,
+                color: '#fff',
+                letterSpacing: 0.3,
+                pointerEvents: 'auto',
               }}
             >
               <button
                 type="button"
-                data-wrapper-header
                 onMouseDown={interactive ? (e) => handleWrapperDragStart(e, g.name) : undefined}
                 style={{
-                  position: 'absolute',
-                  top: 0,
-                  left: 0,
-                  right: 0,
-                  height: 22,
-                  background: g.color,
-                  borderRadius: '8px 8px 0 0',
+                  flex: 1,
+                  minWidth: 0,
+                  height: '100%',
+                  background: 'transparent',
+                  border: 'none',
+                  padding: 0,
                   display: 'flex',
                   alignItems: 'center',
-                  paddingLeft: 8,
                   fontSize: 11,
                   fontWeight: 700,
                   color: '#fff',
                   letterSpacing: 0.3,
                   cursor: interactive ? 'grab' : 'default',
-                  pointerEvents: 'auto',
-                  border: 'none',
-                  width: '100%',
                   textAlign: 'left',
-                }}>
+                }}
+              >
                 {g.name}
               </button>
+              {canRemove && (
+                <button
+                  type="button"
+                  title={`Remove ${g.name}`}
+                  aria-label={`Remove ${g.name}`}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onRemoveAdditionalModel?.(g.name);
+                  }}
+                  style={{
+                    width: 18,
+                    height: 18,
+                    border: 'none',
+                    borderRadius: 4,
+                    background: 'rgba(255,255,255,0.18)',
+                    color: '#fff',
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    fontSize: 14,
+                    lineHeight: 1,
+                    flexShrink: 0,
+                  }}
+                >
+                  &times;
+                </button>
+              )}
             </div>
-          );
-        });
-      })()}
+          </div>
+        );
+      })}
 
       {/* Class boxes */}
       {allClasses.map(cls => {
@@ -2473,6 +2556,23 @@ export const UMLDiagram = forwardRef<UMLDiagramHandle, UMLDiagramProps>(({
               onRelClick={e => handleRelationshipClick(rel.id, e)}
               onMouseEnter={() => setHoveredRelId(rel.id)}
               onMouseLeave={() => setHoveredRelId(null)}
+            />
+          );
+        })}
+      </svg>
+
+      {/* Multiplicity badges above class boxes so labels stay visible */}
+      <svg
+        data-mult-badge-layer
+        style={{ position: 'absolute', top: 0, left: 0, width: totalW, height: totalH, overflow: 'visible', zIndex: 22, pointerEvents: 'none' }}
+      >
+        {multiplicityBadges.map(badge => {
+          const state = edgeState(selectedRelId === badge.relId, hoveredRelId === badge.relId);
+          return (
+            <MultiplicityBadgeGraphic
+              key={badge.key}
+              badge={badge}
+              strokeColor={EDGE_COLOR[state]}
             />
           );
         })}
@@ -2710,8 +2810,9 @@ export const UMLDiagram = forwardRef<UMLDiagramHandle, UMLDiagramProps>(({
         />
       )}
       <UMLDiagramMinimap
-        classes={classes}
+        classes={allClasses}
         relationships={rels}
+        modelGroups={modelGroups}
         offsetX={offsetX}
         offsetY={offsetY}
         vx={vx}

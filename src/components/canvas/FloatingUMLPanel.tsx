@@ -103,6 +103,7 @@ export const FloatingUMLPanel: React.FC<FloatingUMLPanelProps> = ({
   const [reactionsMode, setReactionsMode] = useState<'uml' | 'reactions'>('uml');
   const [loadedModels, setLoadedModels] = useState<ReactionsModel[]>([]);
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [pendingRemoveModel, setPendingRemoveModel] = useState<ReactionsModel | null>(null);
 
   const currentModel: ReactionsModel = useMemo(() => ({
     id: saveContext?.metaModelId
@@ -146,6 +147,28 @@ export const FloatingUMLPanel: React.FC<FloatingUMLPanelProps> = ({
       console.error('Failed to fetch model content:', e);
     }
   }, [currentModel, fetchEcoreFile]);
+
+  const requestRemoveModel = useCallback((model: ReactionsModel) => {
+    if (model.id === currentModel.id) return;
+    setPendingRemoveModel(model);
+  }, [currentModel.id]);
+
+  const requestRemoveModelByName = useCallback((modelName: string) => {
+    const model = allLoadedModels.find(m => m.name === modelName);
+    if (!model || model.id === currentModel.id) return;
+    setPendingRemoveModel(model);
+  }, [allLoadedModels, currentModel.id]);
+
+  const confirmRemoveModel = useCallback(() => {
+    if (!pendingRemoveModel) return;
+    const removeId = pendingRemoveModel.id;
+    setLoadedModels(prev => {
+      const next = prev.filter(m => m.id !== removeId);
+      if (next.length === 1 && next[0].id === currentModel.id) return [];
+      return next;
+    });
+    setPendingRemoveModel(null);
+  }, [pendingRemoveModel, currentModel.id]);
 
   useModalBodyLock(true);
 
@@ -571,6 +594,7 @@ export const FloatingUMLPanel: React.FC<FloatingUMLPanelProps> = ({
             color: MODEL_COLORS[(idx + 1) % MODEL_COLORS.length].border,
             fill: MODEL_COLORS[(idx + 1) % MODEL_COLORS.length].fill,
           }))}
+          onRemoveAdditionalModel={viewOnly ? undefined : requestRemoveModelByName}
           vsumId={vsumId}
         />
 
@@ -610,10 +634,25 @@ export const FloatingUMLPanel: React.FC<FloatingUMLPanelProps> = ({
           isOpen={sidebarOpen}
           allModels={sidebarModels}
           loadedModelIds={loadedModelIds}
+          primaryModelId={currentModel.id}
           onAddModel={handleAddModel}
+          onRemoveModel={viewOnly ? undefined : requestRemoveModel}
           onClose={() => setSidebarOpen(false)}
         />
       </div>
+
+      <ConfirmDialog
+        isOpen={Boolean(pendingRemoveModel)}
+        title="Remove Meta Model"
+        message={pendingRemoveModel
+          ? `Remove "${pendingRemoveModel.name}" from this view? Any connections to it will also be removed.`
+          : undefined}
+        confirmText="Remove"
+        cancelText="Keep"
+        variant="danger"
+        onConfirm={confirmRemoveModel}
+        onCancel={() => setPendingRemoveModel(null)}
+      />
 
       <ConfirmDialog
         isOpen={showUnsavedDialog}

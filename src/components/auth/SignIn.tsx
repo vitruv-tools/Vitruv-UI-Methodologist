@@ -4,6 +4,7 @@ import { AuthService, SignInCredentials } from '../../services/auth';
 import { useAuth } from '../../contexts/AuthContext';
 import { apiService } from '../../services/api';
 import { AuthLayout, AuthErrorBanner } from './AuthLayout';
+import { PasswordInput } from './PasswordInput';
 import { KitLogoIcon } from './KitLogoIcon';
 import { MODAL_Z_INDEX, modalBackdropStyle, useModalBodyLock } from '../ui/modalUtils';
 
@@ -174,10 +175,9 @@ export function SignIn({ onSignInSuccess, onSwitchToSignUp }: Readonly<SignInPro
 
         <div className="mock-form-group">
           <label htmlFor="password">Password *</label>
-          <input
+          <PasswordInput
             id="password"
             name="password"
-            type="password"
             value={credentials.password}
             onChange={handleInputChange}
             onInput={syncFieldValue}
