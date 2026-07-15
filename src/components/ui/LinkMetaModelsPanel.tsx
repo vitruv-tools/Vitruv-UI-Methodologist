@@ -119,8 +119,12 @@ export const LinkMetaModelsPanel: React.FC<Props> = ({
     };
   }, [showForm]);
 
+  // existingMetaModels[].id is the VSUM-scoped clone id created when the metamodel was linked
+  // (see VsumMetaModelService#create on the backend); relations and the catalog (findMetaModels,
+  // the select options below) all speak in terms of the original metamodel's id, exposed here as
+  // sourceId. Matching must go through sourceId, not id.
   const nameFor = (id: number): string =>
-    existingMetaModels.find((m) => m.id === id)?.name ?? `#${id}`;
+    existingMetaModels.find((m) => m.sourceId === id)?.name ?? `#${id}`;
 
   const resetForm = () => {
     setSourceId('');
@@ -157,8 +161,10 @@ export const LinkMetaModelsPanel: React.FC<Props> = ({
         throw new Error('Reaction file upload did not return a valid file id.');
       }
 
+      // sync-changes expects catalog metamodel ids (the same ones the select options above use),
+      // not the VSUM-scoped clone ids in existingMetaModels[].id -- see the note on nameFor above.
       const metaModelIds = Array.from(
-        new Set([...existingMetaModels.map((m) => m.id), sourceId, targetId])
+        new Set([...existingMetaModels.map((m) => m.sourceId), sourceId, targetId])
       );
       const metaModelRelationRequests = [
         ...existingRelations.map((r) => ({
