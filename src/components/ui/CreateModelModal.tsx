@@ -281,7 +281,10 @@ export const CreateModelModal: React.FC<CreateModelModalProps> = ({
     genmodel: { progress: 0, isUploading: false }
   });
   const [submitProgress, setSubmitProgress] = useState({ progress: 0, isSubmitting: false });
-  const [metaModelCreatedSuccessfully, setMetaModelCreatedSuccessfully] = useState(false);
+  // Tracked as a ref (not state) since it's only read inside async callbacks/closures that need
+  // the current value synchronously — state updates aren't visible to already-created closures
+  // until the next render.
+  const metaModelCreatedSuccessfullyRef = useRef(false);
 
   const ecoreFileInputRef = useRef<HTMLInputElement>(null);
   const genmodelFileInputRef = useRef<HTMLInputElement>(null);
@@ -495,7 +498,7 @@ export const CreateModelModal: React.FC<CreateModelModalProps> = ({
 
   const cleanupUploadedFiles = async () => {
     // Only delete files if meta model was not created successfully
-    if (metaModelCreatedSuccessfully) {
+    if (metaModelCreatedSuccessfullyRef.current) {
       return;
     }
 
@@ -565,7 +568,7 @@ export const CreateModelModal: React.FC<CreateModelModalProps> = ({
       const response = await apiService.createMetaModel(requestData);
 
       // If backend responds OK, fill to 100% and then close/reset
-      setMetaModelCreatedSuccessfully(true);
+      metaModelCreatedSuccessfullyRef.current = true;
       finishSubmitOverlay(() => {
         setIsLoading(false);
         setSuccess('Meta Model created successfully!');
@@ -621,7 +624,7 @@ export const CreateModelModal: React.FC<CreateModelModalProps> = ({
       ecore: { progress: 0, isUploading: false },
       genmodel: { progress: 0, isUploading: false }
     });
-    setMetaModelCreatedSuccessfully(false);
+    metaModelCreatedSuccessfullyRef.current = false;
     onClose();
   };
 
