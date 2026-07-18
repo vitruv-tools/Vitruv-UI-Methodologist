@@ -2580,7 +2580,7 @@ export const UMLDiagram = forwardRef<UMLDiagramHandle, UMLDiagramProps>(({
 
       {/* Direction markers above class boxes */}
       {edgeLayouts.map(layout => {
-        const { rel, drawP1, drawP2 } = layout;
+        const { rel, p1, p2 } = layout;
         const reactionEdge = reactionEdgeById.get(rel.id);
         const state = edgeState(selectedRelId === rel.id, hoveredRelId === rel.id);
         const color = reactionEdge ? REACTION_EDGE_COLOR[state] : EDGE_COLOR[state];
@@ -2590,8 +2590,11 @@ export const UMLDiagram = forwardRef<UMLDiagramHandle, UMLDiagramProps>(({
             key={`${rel.id}-direction`}
             rel={rel}
             reactionEdge={reactionEdge}
-            lineStart={drawP1}
-            lineEnd={drawP2}
+            // Anchor at the true class-box edge (p1/p2), not the inset line endpoints
+            // (drawP1/drawP2) used only for the line stroke -- otherwise the marker floats
+            // in the gap left for it instead of touching the box it belongs to.
+            lineStart={p1}
+            lineEnd={p2}
             color={color}
             onRelClick={e => handleRelationshipClick(rel.id, e)}
             onMouseEnter={() => setHoveredRelId(rel.id)}
