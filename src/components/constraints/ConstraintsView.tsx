@@ -375,6 +375,131 @@ function useResizablePanel() {
   return { height, onHandleMouseDown };
 }
 
+// ── Resizable editor columns ──────────────────────────────────────────────────
+
+const EDITOR_LEFT_DEFAULT_W = 280;
+const EDITOR_RIGHT_DEFAULT_W = 220;
+const EDITOR_LEFT_MIN_W = 180;
+const EDITOR_LEFT_MAX_W = 520;
+const EDITOR_RIGHT_MIN_W = 160;
+const EDITOR_RIGHT_MAX_W = 420;
+const EDITOR_CENTER_MIN_W = 200;
+const EDITOR_COLS_STORAGE_KEY = 'constraintEditorPanelColumns';
+
+function clampWidth(value: number, min: number, max: number) {
+  return Math.min(Math.max(value, min), max);
+}
+
+function readStoredColumnWidths(): { left: number; right: number } {
+  try {
+    const raw = localStorage.getItem(EDITOR_COLS_STORAGE_KEY);
+    if (!raw) return { left: EDITOR_LEFT_DEFAULT_W, right: EDITOR_RIGHT_DEFAULT_W };
+    const parsed = JSON.parse(raw) as { left?: unknown; right?: unknown };
+    const left = typeof parsed.left === 'number' ? parsed.left : EDITOR_LEFT_DEFAULT_W;
+    const right = typeof parsed.right === 'number' ? parsed.right : EDITOR_RIGHT_DEFAULT_W;
+    return {
+      left: clampWidth(left, EDITOR_LEFT_MIN_W, EDITOR_LEFT_MAX_W),
+      right: clampWidth(right, EDITOR_RIGHT_MIN_W, EDITOR_RIGHT_MAX_W),
+    };
+  } catch {
+    return { left: EDITOR_LEFT_DEFAULT_W, right: EDITOR_RIGHT_DEFAULT_W };
+  }
+}
+
+function useResizableColumns() {
+  const initial = readStoredColumnWidths();
+  const [leftWidth, setLeftWidth] = useState(initial.left);
+  const [rightWidth, setRightWidth] = useState(initial.right);
+  const bodyRef = useRef<HTMLDivElement>(null);
+  const leftWidthRef = useRef(leftWidth);
+  const rightWidthRef = useRef(rightWidth);
+  leftWidthRef.current = leftWidth;
+  rightWidthRef.current = rightWidth;
+
+  const persist = useCallback((left: number, right: number) => {
+    localStorage.setItem(EDITOR_COLS_STORAGE_KEY, JSON.stringify({ left, right }));
+  }, []);
+
+  const makeColumnHandle = useCallback((side: 'left' | 'right') => (e: ReactMouseEvent) => {
+    e.preventDefault();
+    const startX = e.clientX;
+    const startW = side === 'left' ? leftWidthRef.current : rightWidthRef.current;
+    let latestLeft = leftWidthRef.current;
+    let latestRight = rightWidthRef.current;
+
+    const onMove = (ev: globalThis.MouseEvent) => {
+      const containerW = bodyRef.current?.clientWidth ?? Number.POSITIVE_INFINITY;
+      if (side === 'left') {
+        const delta = ev.clientX - startX;
+        const maxForCenter = containerW - rightWidthRef.current - EDITOR_CENTER_MIN_W;
+        const next = clampWidth(startW + delta, EDITOR_LEFT_MIN_W, Math.min(EDITOR_LEFT_MAX_W, maxForCenter));
+        latestLeft = next;
+        setLeftWidth(next);
+      } else {
+        const delta = startX - ev.clientX; // drag left → wider right panel
+        const maxForCenter = containerW - leftWidthRef.current - EDITOR_CENTER_MIN_W;
+        const next = clampWidth(startW + delta, EDITOR_RIGHT_MIN_W, Math.min(EDITOR_RIGHT_MAX_W, maxForCenter));
+        latestRight = next;
+        setRightWidth(next);
+      }
+    };
+
+    const onUp = () => {
+      persist(latestLeft, latestRight);
+      (globalThis as unknown as Window).removeEventListener('mousemove', onMove);
+      (globalThis as unknown as Window).removeEventListener('mouseup', onUp);
+    };
+
+    (globalThis as unknown as Window).addEventListener('mousemove', onMove);
+    (globalThis as unknown as Window).addEventListener('mouseup', onUp);
+  }, [persist]);
+
+  const onLeftHandleMouseDown = useMemo(() => makeColumnHandle('left'), [makeColumnHandle]);
+  const onRightHandleMouseDown = useMemo(() => makeColumnHandle('right'), [makeColumnHandle]);
+
+  return { leftWidth, rightWidth, bodyRef, onLeftHandleMouseDown, onRightHandleMouseDown };
+}
+
+const ColumnResizeHandle: React.FC<{
+  ariaLabel: string;
+  ariaValueNow: number;
+  ariaValueMin: number;
+  ariaValueMax: number;
+  onMouseDown: (e: ReactMouseEvent) => void;
+}> = ({ ariaLabel, ariaValueNow, ariaValueMin, ariaValueMax, onMouseDown }) => (
+  <div
+    role="slider"
+    aria-label={ariaLabel}
+    aria-orientation="horizontal"
+    aria-valuenow={ariaValueNow}
+    aria-valuemin={ariaValueMin}
+    aria-valuemax={ariaValueMax}
+    tabIndex={0}
+    onMouseDown={onMouseDown}
+    onKeyDown={() => { /* keyboard resize not implemented */ }}
+    style={{
+      width: 6, flexShrink: 0, cursor: 'ew-resize', zIndex: 5,
+      display: 'flex', alignItems: 'center', justifyContent: 'center',
+      background: '#f1f5f9', transition: 'background 0.15s',
+    }}
+    onMouseEnter={e => {
+      e.currentTarget.style.background = '#ccfbf1';
+      const grip = e.currentTarget.querySelector('[data-grip]') as HTMLElement | null;
+      if (grip) grip.style.background = '#049484';
+    }}
+    onMouseLeave={e => {
+      e.currentTarget.style.background = '#f1f5f9';
+      const grip = e.currentTarget.querySelector('[data-grip]') as HTMLElement | null;
+      if (grip) grip.style.background = '#cbd5e1';
+    }}
+  >
+    <div
+      data-grip
+      style={{ width: 3, height: 28, borderRadius: 2, background: '#cbd5e1', transition: 'background 0.15s' }}
+    />
+  </div>
+);
+
 // ── RuleSet update helpers ────────────────────────────────────────────────────
 
 function replaceRule(ruleSets: RuleSet[], updated: ConstraintRule): RuleSet[] {
@@ -784,6 +909,7 @@ const SaveChangesButton: React.FC<{ onSave: () => void }> = ({ onSave }) => {
 
 const EditorPanel: React.FC<EditorPanelProps> = ({ rule, ruleSets, colorMap, metaClasses, onClose, onSave, vsumId, onHighlightNode, canvasNodes }) => {
   const { height, onHandleMouseDown } = useResizablePanel();
+  const { leftWidth, rightWidth, bodyRef, onLeftHandleMouseDown, onRightHandleMouseDown } = useResizableColumns();
   const [draft, setDraft] = useState<ConstraintRule>({ ...rule });
   const [fullEditorOpen, setFullEditorOpen] = useState(false);
   const updatingFromRef = useRef<'form' | 'code' | null>(null);
@@ -921,9 +1047,9 @@ const EditorPanel: React.FC<EditorPanelProps> = ({ rule, ruleSets, colorMap, met
         </div>
 
         {/* Body */}
-        <div style={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
+        <div ref={bodyRef} style={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
           {/* Left: meta */}
-          <div style={{ width: 280, flexShrink: 0, padding: '12px 16px', overflowY: 'auto', borderRight: '1px solid #f1f5f9', display: 'flex', flexDirection: 'column', gap: 10 }}>
+          <div style={{ width: leftWidth, flexShrink: 0, padding: '12px 16px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 10 }}>
 
             {/* Context class */}
             <div>
@@ -1003,8 +1129,16 @@ const EditorPanel: React.FC<EditorPanelProps> = ({ rule, ruleSets, colorMap, met
 
           </div>
 
+          <ColumnResizeHandle
+            ariaLabel="Resize form panel"
+            ariaValueNow={leftWidth}
+            ariaValueMin={EDITOR_LEFT_MIN_W}
+            ariaValueMax={EDITOR_LEFT_MAX_W}
+            onMouseDown={onLeftHandleMouseDown}
+          />
+
           {/* Center: OCL editor */}
-          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0 }}>
+          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: EDITOR_CENTER_MIN_W }}>
             <div style={{ display: 'flex', alignItems: 'center', padding: '6px 12px', background: '#f8fafc', borderBottom: '1px solid #f1f5f9', gap: 6, flexShrink: 0 }}>
               <span style={{ fontSize: 11, fontWeight: 600, color: '#64748b', flex: 1 }}>OCL Definition</span>
               <span style={{ fontSize: 10, padding: '2px 6px', borderRadius: 4, background: '#f1f5f9', color: '#64748b' }}>OCL</span>
@@ -1027,8 +1161,16 @@ const EditorPanel: React.FC<EditorPanelProps> = ({ rule, ruleSets, colorMap, met
             </div>
           </div>
 
+          <ColumnResizeHandle
+            ariaLabel="Resize overview panel"
+            ariaValueNow={rightWidth}
+            ariaValueMin={EDITOR_RIGHT_MIN_W}
+            ariaValueMax={EDITOR_RIGHT_MAX_W}
+            onMouseDown={onRightHandleMouseDown}
+          />
+
           {/* Right: overview */}
-          <div style={{ width: 220, flexShrink: 0, padding: '12px 16px', overflowY: 'auto', borderLeft: '1px solid #f1f5f9' }}>
+          <div style={{ width: rightWidth, flexShrink: 0, padding: '12px 16px', overflowY: 'auto' }}>
             <div style={{ fontSize: 12, fontWeight: 700, color: '#0f172a', marginBottom: 12 }}>Rule Overview</div>
             {([
               ['Type', draft.type],
@@ -1175,15 +1317,24 @@ const DetailedMetricsModal: React.FC<{ ruleSets: RuleSet[]; colorMap: Record<str
   return (
     <dialog
       open
-      style={{ position: 'fixed', inset: 0, width: '100%', height: '100%', background: 'none', border: 'none', padding: 0, margin: 0, zIndex: 2000, display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}
+      style={{
+        position: 'fixed', inset: 0, width: '100%', height: '100%',
+        maxWidth: '100vw', maxHeight: '100vh',
+        background: 'none', border: 'none', padding: 0, margin: 0,
+        zIndex: 2000, display: 'flex', alignItems: 'center', justifyContent: 'center',
+        overflow: 'hidden', boxSizing: 'border-box',
+      }}
     >
       <button type="button" onClick={onClose} aria-label="Close" style={{ position: 'absolute', inset: 0, background: 'rgba(15,23,42,0.35)', border: 'none', cursor: 'default', padding: 0 }} />
       <div style={{
         position: 'relative', zIndex: 1,
-        background: '#fff', borderRadius: 14, width: '88%', maxWidth: 1040,
+        background: '#fff', borderRadius: 14,
+        width: 'min(1040px, calc(100vw - 48px))',
+        maxHeight: 'calc(100vh - 48px)',
         display: 'flex', flexDirection: 'column',
         boxShadow: '0 24px 64px rgba(0,0,0,0.20)',
         border: '1px solid #e2e8f0', fontFamily: APP_FONT,
+        overflow: 'hidden', boxSizing: 'border-box',
       }}>
         {/* Header */}
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '16px 22px', borderBottom: '1px solid #f1f5f9', flexShrink: 0 }}>
@@ -1191,8 +1342,8 @@ const DetailedMetricsModal: React.FC<{ ruleSets: RuleSet[]; colorMap: Record<str
           <button type="button" onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#94a3b8', fontSize: 20, lineHeight: 1 }}>×</button>
         </div>
 
-        {/* Body — fixed height so scroll kicks in after ~2-3 rulesets */}
-        <div style={{ height: 680, overflowY: 'scroll', padding: '22px 26px', display: 'flex', flexDirection: 'column', gap: 20 }}>
+        {/* Body — grows with content, scrolls when it would exceed the viewport */}
+        <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', padding: '18px 22px', display: 'flex', flexDirection: 'column', gap: 16 }}>
           {ruleSets.length === 0 && (
             <div style={{ color: '#94a3b8', fontSize: 13, textAlign: 'center', marginTop: 40 }}>No rule sets yet.</div>
           )}
@@ -1207,7 +1358,7 @@ const DetailedMetricsModal: React.FC<{ ruleSets: RuleSet[]; colorMap: Record<str
             const sevCounts = rules.reduce<Record<string, number>>((m, r) => { m[r.severity] = (m[r.severity] ?? 0) + 1; return m; }, {});
 
             return (
-              <div key={rs.id} style={{ border: '1px solid #e2e8f0', borderRadius: 10, overflow: 'hidden', flexShrink: 0, minHeight: 200 }}>
+              <div key={rs.id} style={{ border: '1px solid #e2e8f0', borderRadius: 10, overflow: 'hidden', flexShrink: 0 }}>
                 {/* Card header */}
                 <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '14px 18px', background: '#f8fafc', borderBottom: '1px solid #f1f5f9' }}>
                   <div style={{ width: 11, height: 11, borderRadius: 3, background: rs.color, flexShrink: 0 }} />
@@ -1216,7 +1367,7 @@ const DetailedMetricsModal: React.FC<{ ruleSets: RuleSet[]; colorMap: Record<str
                 </div>
 
                 {/* Card body */}
-                <div style={{ padding: '16px 18px', display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 14 }}>
+                <div style={{ padding: '16px 18px', display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 12 }}>
                   {/* Avg CC */}
                   <div style={{ background: '#f8fafc', borderRadius: 8, padding: '14px 16px', border: '1px solid #f1f5f9' }}>
                     <div style={{ fontSize: 10.5, color: '#94a3b8', fontWeight: 600, marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Avg. Complexity</div>
@@ -1267,7 +1418,7 @@ const DetailedMetricsModal: React.FC<{ ruleSets: RuleSet[]; colorMap: Record<str
                       const { color, bg } = sev[r.severity];
                       return (
                         <div key={r.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 16px', borderBottom: i < rules.length - 1 ? '1px solid #f8fafc' : 'none', background: i % 2 === 0 ? '#fff' : '#fafafa' }}>
-                          <span style={{ fontSize: 12.5, color: '#334155', flex: 1, fontFamily: 'monospace' }}>{r.name}</span>
+                          <span style={{ fontSize: 12.5, color: '#334155', flex: 1, fontFamily: 'monospace', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.name}</span>
                           <span style={{ fontSize: 11, fontWeight: 600, padding: '1px 7px', borderRadius: 8, background: bg, color, border: `1px solid ${color}`, flexShrink: 0 }}>{r.severity}</span>
                           <span style={{ fontSize: 11, color: '#94a3b8', flexShrink: 0, width: 60, textAlign: 'right' }}>CC {cc} · {ccLabel(cc)}</span>
                           <span style={{ fontSize: 11, color: '#94a3b8', flexShrink: 0, width: 50, textAlign: 'right' }}>{r.linesOfCode} lines</span>
