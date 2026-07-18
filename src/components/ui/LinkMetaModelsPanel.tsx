@@ -158,7 +158,7 @@ export const LinkMetaModelsPanel: React.FC<Props> = ({
           ? Number(rawData.id)
           : Number(rawData);
       if (!Number.isFinite(reactionFileId)) {
-        throw new Error('Reaction file upload did not return a valid file id.');
+        throw new TypeError('Reaction file upload did not return a valid file id.');
       }
 
       // sync-changes expects catalog metamodel ids (the same ones the select options above use),
@@ -208,7 +208,7 @@ export const LinkMetaModelsPanel: React.FC<Props> = ({
       )}
 
       {!showForm && (
-        <button style={addButton} onClick={() => setShowForm(true)}>
+        <button type="button" style={addButton} onClick={() => setShowForm(true)}>
           + Link Meta Models
         </button>
       )}
@@ -260,7 +260,7 @@ export const LinkMetaModelsPanel: React.FC<Props> = ({
             style={{ display: 'none' }}
             onChange={(e) => setReactionFile(e.target.files?.[0] ?? null)}
           />
-          <button style={fileButton} onClick={() => fileInputRef.current?.click()}>
+          <button type="button" style={fileButton} onClick={() => fileInputRef.current?.click()}>
             {reactionFile ? `✓ ${reactionFile.name}` : 'Upload .reactions'}
           </button>
 
@@ -270,6 +270,7 @@ export const LinkMetaModelsPanel: React.FC<Props> = ({
 
           <div style={{ display: 'flex', gap: 8, marginTop: 16 }}>
             <button
+              type="button"
               style={{
                 padding: '10px 20px',
                 borderRadius: 8,
@@ -289,6 +290,7 @@ export const LinkMetaModelsPanel: React.FC<Props> = ({
               {linking ? 'Linking…' : 'Link'}
             </button>
             <button
+              type="button"
               style={{
                 padding: '10px 20px',
                 borderRadius: 8,
