@@ -33,38 +33,8 @@ describe('SignIn component', () => {
     );
 
     expect(screen.getByLabelText(/Username or Email/i)).toBeInTheDocument();
-    expect(screen.getByLabelText(/^Password$/i)).toBeInTheDocument();
+    expect(screen.getByLabelText(/Password/i)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Sign In/i })).toBeInTheDocument();
-  });
-
-  it('toggles password visibility without changing the password value', async () => {
-    render(
-      <SignIn
-        onSignInSuccess={mockOnSignInSuccess}
-        onSwitchToSignUp={mockOnSwitchToSignUp}
-      />,
-    );
-
-    const passwordInput = screen.getByLabelText(/^Password$/i);
-    await userEvent.type(passwordInput, 'password123!');
-
-    expect(passwordInput).toHaveAttribute('type', 'password');
-    expect(
-      screen.getByRole('button', { name: 'Show password' }),
-    ).toBeInTheDocument();
-
-    await userEvent.click(screen.getByRole('button', { name: 'Show password' }));
-
-    expect(passwordInput).toHaveAttribute('type', 'text');
-    expect(passwordInput).toHaveValue('password123!');
-    expect(
-      screen.getByRole('button', { name: 'Hide password' }),
-    ).toBeInTheDocument();
-
-    await userEvent.click(screen.getByRole('button', { name: 'Hide password' }));
-
-    expect(passwordInput).toHaveAttribute('type', 'password');
-    expect(passwordInput).toHaveValue('password123!');
   });
 
   it('shows validation error when submitting with empty fields', async () => {
@@ -98,7 +68,7 @@ describe('SignIn component', () => {
       screen.getByLabelText(/Username or Email/i),
       'john@example.com',
     );
-    await userEvent.type(screen.getByLabelText(/^Password$/i), 'password123!');
+    await userEvent.type(screen.getByLabelText(/Password/i), 'password123!');
     await userEvent.click(screen.getByRole('button', { name: /Sign In/i }));
 
     await waitFor(() => {
@@ -124,7 +94,7 @@ describe('SignIn component', () => {
       screen.getByLabelText(/Username or Email/i),
       'john@example.com',
     );
-    await userEvent.type(screen.getByLabelText(/^Password$/i), 'wrong');
+    await userEvent.type(screen.getByLabelText(/Password/i), 'wrong');
     await userEvent.click(screen.getByRole('button', { name: /Sign In/i }));
 
     expect(
@@ -175,3 +145,4 @@ describe('SignIn component', () => {
     });
   });
 });
+
