@@ -144,7 +144,7 @@ const ModalButton: React.FC<{
     opacity = 0.6;
   }
   return (
-    <button
+    <button type="button"
       onClick={onClick}
       disabled={isDisabled}
       onMouseEnter={() => setHov(true)}

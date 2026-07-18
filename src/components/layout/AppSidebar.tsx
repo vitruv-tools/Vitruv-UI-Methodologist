@@ -97,7 +97,7 @@ const NavItem: React.FC<NavItemProps> = ({ icon, label, active, onClick, badgeCo
   }
 
   return (
-    <button
+    <button type="button"
       onClick={onClick}
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
@@ -179,7 +179,7 @@ const MenuItem: React.FC<MenuItemProps> = ({ icon, label, sublabel, danger = fal
   }
 
   return (
-    <button
+    <button type="button"
       onClick={onClick}
       onMouseEnter={() => setHov(true)}
       onMouseLeave={() => setHov(false)}
@@ -250,7 +250,7 @@ export const AppSidebar: React.FC<AppSidebarProps> = ({
 
       {/* Logo */}
       <div style={{ padding: '20px 16px 16px', borderBottom: '1px solid rgba(255,255,255,0.06)', flexShrink: 0 }}>
-        <button
+        <button type="button"
           onClick={() => onViewChange('home')}
           style={{
             display: 'flex', alignItems: 'center', gap: 6,
@@ -340,7 +340,7 @@ export const AppSidebar: React.FC<AppSidebarProps> = ({
         {/* Border above user card */}
         <div style={{ borderTop: '1px solid rgba(255,255,255,0.07)', padding: '10px 12px 12px' }}>
           {/* User card */}
-          <button
+          <button type="button"
             onClick={() => setMenuOpen(v => !v)}
             onMouseEnter={() => setUserHovered(true)}
             onMouseLeave={() => setUserHovered(false)}

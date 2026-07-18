@@ -62,7 +62,7 @@ const ProjectCard: React.FC<ProjectCardProps> = ({ title, subtitle, items, cta, 
   const [hovered, setHovered] = useState(false);
 
   return (
-    <button
+    <button type="button"
       onClick={onNavigate}
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
