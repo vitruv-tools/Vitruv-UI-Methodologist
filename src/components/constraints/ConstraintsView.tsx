@@ -425,7 +425,7 @@ const RuleRow: React.FC<{ rule: ConstraintRule; selected: boolean; onClick: () =
         transition: 'background 0.1s',
       }}
     >
-      <button
+      <button type="button"
         onClick={onClick}
         style={{
           display: 'flex', alignItems: 'center', gap: 8, width: '100%',
@@ -442,7 +442,7 @@ const RuleRow: React.FC<{ rule: ConstraintRule; selected: boolean; onClick: () =
         </span>
       </button>
       <div ref={menuRef} style={{ position: 'absolute', right: 12, top: '50%', transform: 'translateY(-50%)' }}>
-        <button
+        <button type="button"
           onClick={e => { e.stopPropagation(); setMenuOpen(o => !o); }}
           style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 2, color: '#94a3b8', borderRadius: 4, display: 'flex', alignItems: 'center' }}
           title="Options"
@@ -461,7 +461,7 @@ const RuleRow: React.FC<{ rule: ConstraintRule; selected: boolean; onClick: () =
               minWidth: 140, padding: '4px 0',
             }}
           >
-            <button
+            <button type="button"
               onClick={() => { setMenuOpen(false); onDelete(); }}
               style={{
                 display: 'flex', alignItems: 'center', gap: 8,
@@ -513,7 +513,7 @@ const RuleSetSection: React.FC<RuleSetSectionProps> = ({ ruleSet, selectedRuleId
           borderBottom: '1px solid #f1f5f9',
         }}
       >
-        <button
+        <button type="button"
           onClick={() => onRuleSetClick(ruleSet)}
           style={{
             display: 'flex', alignItems: 'center', gap: 8, flex: 1,
@@ -525,7 +525,7 @@ const RuleSetSection: React.FC<RuleSetSectionProps> = ({ ruleSet, selectedRuleId
           <span style={{ fontSize: 12.5, fontWeight: 600, color: '#1e293b', flex: 1 }}>{ruleSet.name}</span>
           <span style={{ fontSize: 11, color: '#94a3b8', fontWeight: 500 }}>{ruleSet.rules.length} rules</span>
         </button>
-        <button
+        <button type="button"
           onClick={() => onToggleCollapse(ruleSet.id)}
           style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '8px 12px 8px 4px', display: 'flex', alignItems: 'center' }}
         >
@@ -542,7 +542,7 @@ const RuleSetSection: React.FC<RuleSetSectionProps> = ({ ruleSet, selectedRuleId
           {ruleSet.rules.map(rule => (
             <RuleRow key={rule.id} rule={rule} selected={selectedRuleId === rule.id} onClick={() => onRuleClick(rule)} onDelete={() => onDeleteRule(rule.id)} />
           ))}
-          <button
+          <button type="button"
             onClick={() => onAddRule(ruleSet.id)}
             style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 12px 6px 28px', cursor: 'pointer', color: '#94a3b8', fontSize: 12, background: 'none', border: 'none', width: '100%', textAlign: 'left' }}
             onMouseEnter={e => (e.currentTarget.style.color = '#049484')}
@@ -658,7 +658,7 @@ const ContextClassPicker: React.FC<{
 
   return (
     <div ref={containerRef} style={{ position: 'relative' }}>
-      <button
+      <button type="button"
         style={{ ...inputBase, display: 'flex', alignItems: 'center', justifyContent: 'space-between', userSelect: 'none' }}
         onClick={() => { setOpen(o => !o); setQuery(''); }}
       >
@@ -762,7 +762,7 @@ const SaveChangesButton: React.FC<{ onSave: () => void }> = ({ onSave }) => {
   else { btnLabel = 'Save Changes'; }
 
   return (
-    <button
+    <button type="button"
       onClick={handleClick}
       disabled={saving}
       style={{
@@ -915,7 +915,7 @@ const EditorPanel: React.FC<EditorPanelProps> = ({ rule, ruleSets, colorMap, met
           <span style={{ fontSize: 13, fontWeight: 600, color: '#0f172a', flex: 1 }}>
             Editing: {draft.name}
           </span>
-          <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#94a3b8', padding: 4, borderRadius: 4, display: 'flex', alignItems: 'center' }}>
+          <button type="button" onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#94a3b8', padding: 4, borderRadius: 4, display: 'flex', alignItems: 'center' }}>
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
           </button>
         </div>
@@ -958,7 +958,7 @@ const EditorPanel: React.FC<EditorPanelProps> = ({ rule, ruleSets, colorMap, met
                 {SEVERITY_OPTIONS.map(opt => {
                   const active = draft.severity === opt.value;
                   return (
-                    <button key={opt.value} onClick={() => handleSeverityChange(opt.value)} style={{ padding: '3px 10px', borderRadius: 12, fontSize: 11, fontWeight: 600, cursor: 'pointer', border: `1.5px solid ${active ? opt.color : '#e2e8f0'}`, background: active ? opt.bg : '#fff', color: active ? opt.color : '#94a3b8', transition: 'all 0.12s' }}>
+                    <button type="button" key={opt.value} onClick={() => handleSeverityChange(opt.value)} style={{ padding: '3px 10px', borderRadius: 12, fontSize: 11, fontWeight: 600, cursor: 'pointer', border: `1.5px solid ${active ? opt.color : '#e2e8f0'}`, background: active ? opt.bg : '#fff', color: active ? opt.color : '#94a3b8', transition: 'all 0.12s' }}>
                       {opt.label}
                     </button>
                   );
@@ -1053,7 +1053,7 @@ const EditorPanel: React.FC<EditorPanelProps> = ({ rule, ruleSets, colorMap, met
               <span style={{ fontSize: 11, color: '#334155', fontWeight: 500 }}>{draft.linkedReactions ?? 0}</span>
             </div>
             <SaveChangesButton onSave={() => onSave(draft)} />
-            <button onClick={() => setFullEditorOpen(true)} style={{ width: '100%', marginTop: 6, padding: '7px 0', background: 'transparent', color: '#049484', border: '1px solid #049484', borderRadius: 6, fontSize: 12, fontWeight: 500, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
+            <button type="button" onClick={() => setFullEditorOpen(true)} style={{ width: '100%', marginTop: 6, padding: '7px 0', background: 'transparent', color: '#049484', border: '1px solid #049484', borderRadius: 6, fontSize: 12, fontWeight: 500, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
               <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15,3 21,3 21,9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
               Open in Full Editor
             </button>
@@ -1152,7 +1152,7 @@ const MetricsPanel: React.FC<MetricsPanelProps> = ({ ruleSets, colorMap }) => {
           </div>
         ))}
 
-        <button
+        <button type="button"
           onClick={() => setDetailOpen(true)}
           style={{ width: '100%', marginTop: 14, padding: '9px 0', background: 'transparent', color: '#049484', border: '1px solid #049484', borderRadius: 6, fontSize: 12, fontWeight: 500, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}
         >
@@ -1177,7 +1177,7 @@ const DetailedMetricsModal: React.FC<{ ruleSets: RuleSet[]; colorMap: Record<str
       open
       style={{ position: 'fixed', inset: 0, width: '100%', height: '100%', background: 'none', border: 'none', padding: 0, margin: 0, zIndex: 2000, display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}
     >
-      <button onClick={onClose} aria-label="Close" style={{ position: 'absolute', inset: 0, background: 'rgba(15,23,42,0.35)', border: 'none', cursor: 'default', padding: 0 }} />
+      <button type="button" onClick={onClose} aria-label="Close" style={{ position: 'absolute', inset: 0, background: 'rgba(15,23,42,0.35)', border: 'none', cursor: 'default', padding: 0 }} />
       <div style={{
         position: 'relative', zIndex: 1,
         background: '#fff', borderRadius: 14, width: '88%', maxWidth: 1040,
@@ -1188,7 +1188,7 @@ const DetailedMetricsModal: React.FC<{ ruleSets: RuleSet[]; colorMap: Record<str
         {/* Header */}
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '16px 22px', borderBottom: '1px solid #f1f5f9', flexShrink: 0 }}>
           <span style={{ fontSize: 15, fontWeight: 700, color: '#0f172a' }}>Detailed Metrics</span>
-          <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#94a3b8', fontSize: 20, lineHeight: 1 }}>×</button>
+          <button type="button" onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#94a3b8', fontSize: 20, lineHeight: 1 }}>×</button>
         </div>
 
         {/* Body — fixed height so scroll kicks in after ~2-3 rulesets */}
@@ -1335,7 +1335,7 @@ const RuleSetPanel: React.FC<{
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
           {onDelete && (
-            <button
+            <button type="button"
               onClick={() => { onDelete(); onClose(); }}
               style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#ef4444', fontSize: 11.5, fontWeight: 600, padding: '3px 8px', borderRadius: 5, fontFamily: APP_FONT }}
               onMouseEnter={e => (e.currentTarget.style.background = '#fef2f2')}
@@ -1343,7 +1343,7 @@ const RuleSetPanel: React.FC<{
               title="Delete Rule Set"
             >Delete</button>
           )}
-          <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#94a3b8', fontSize: 18, lineHeight: 1 }}>×</button>
+          <button type="button" onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#94a3b8', fontSize: 18, lineHeight: 1 }}>×</button>
         </div>
       </div>
 
@@ -1373,7 +1373,7 @@ const RuleSetPanel: React.FC<{
           <label htmlFor="rsp-color" style={labelStyle}>Color</label>
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, alignItems: 'center' }}>
             {PRESET_COLORS.map(c => (
-              <button
+              <button type="button"
                 key={c}
                 onClick={() => setDraft(d => ({ ...d, color: c }))}
                 style={{
@@ -1395,7 +1395,7 @@ const RuleSetPanel: React.FC<{
 
       {/* Footer with Save */}
       <div style={{ padding: '10px 16px', borderTop: '1px solid #f1f5f9', flexShrink: 0, display: 'flex', justifyContent: 'flex-end' }}>
-        <button
+        <button type="button"
           onClick={handleSave}
           disabled={saving}
           style={{
@@ -1468,7 +1468,7 @@ const LeftPanel: React.FC<LeftPanelProps> = ({
       <div style={{ padding: '14px 14px 10px', borderBottom: '1px solid #f1f5f9', flexShrink: 0 }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
           <span style={{ fontSize: 13, fontWeight: 700, color: '#0f172a' }}>Constraint Sets</span>
-          <button
+          <button type="button"
             onClick={onAddSet}
             style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 11.5, color: '#049484', background: 'none', border: 'none', cursor: 'pointer', fontWeight: 500, padding: '3px 6px', borderRadius: 5 }}
             onMouseEnter={e => (e.currentTarget.style.background = '#f0fdf9')}

@@ -113,7 +113,7 @@ const detailFieldLabelSt: React.CSSProperties = { display: 'block', fontSize: 11
 const DPreviewBtn: React.FC<{ title: string; onClick: () => void; children: React.ReactNode }> = ({ title, onClick, children }) => {
   const [hov, setHov] = React.useState(false);
   return (
-    <button title={title} onClick={onClick} onMouseEnter={() => setHov(true)} onMouseLeave={() => setHov(false)}
+    <button type="button" title={title} onClick={onClick} onMouseEnter={() => setHov(true)} onMouseLeave={() => setHov(false)}
       style={{ width: 24, height: 24, border: '1px solid #e2e8f0', borderRadius: 6, background: hov ? '#f1f5f9' : '#fff', color: hov ? '#0f172a' : '#64748b', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 0.12s' }}>
       {children}
     </button>
@@ -206,7 +206,7 @@ export const ModelDetailModal: React.FC<ModelDetailModalProps> = ({
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
             {!editing && (
-              <button
+              <button type="button"
                 onClick={() => {
                   setForm({ name: displayModel.name || '', description: displayModel.description || '', domain: displayModel.domain || '', keywords: displayModel.keyword || [] });
                   setEditing(true);
@@ -223,7 +223,7 @@ export const ModelDetailModal: React.FC<ModelDetailModalProps> = ({
                 Edit
               </button>
             )}
-            <button
+            <button type="button"
               onClick={onClose}
               style={{ border: 'none', background: 'transparent', cursor: 'pointer', color: '#94a3b8', fontSize: 16, width: 30, height: 30, borderRadius: 6, display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 0.1s' }}
               onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.background = '#f1f5f9'; (e.currentTarget as HTMLButtonElement).style.color = '#374151'; }}
@@ -861,7 +861,7 @@ export const ModelLibraryTable: React.FC<ModelLibraryTableProps> = ({ onModelOpe
       {/* Page header */}
       <div style={{ padding: '32px 40px 0', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexShrink: 0 }}>
         <h1 style={{ margin: 0, fontSize: 26, fontWeight: 700, color: '#111827', letterSpacing: '-0.02em' }}>Model Library</h1>
-        <button
+        <button type="button"
           onClick={() => setShowCreate(true)}
           style={{ display: 'flex', alignItems: 'center', gap: 7, padding: '9px 18px', background: '#0B1720', color: '#fff', border: 'none', borderRadius: 9, fontSize: 14, fontWeight: 600, cursor: 'pointer', boxShadow: '0 1px 4px rgba(11,23,32,0.25)', transition: 'background 0.15s', fontFamily: 'ui-sans-serif, system-ui, sans-serif' }}
           onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.background = '#0B1720'; }}
@@ -1108,7 +1108,7 @@ const PageBtn: React.FC<PageBtnProps> = ({ children, active, disabled, onClick }
   }
 
   return (
-  <button
+  <button type="button"
     onClick={onClick}
     disabled={disabled}
     style={{

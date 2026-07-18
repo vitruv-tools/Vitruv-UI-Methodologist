@@ -143,7 +143,7 @@ export const ModelDrawer: React.FC<ModelDrawerProps> = ({
         gap: 8,
       }}>
         {detailModel ? (
-          <button
+          <button type="button"
             onClick={closeDetail}
             style={{
               display: 'flex', alignItems: 'center', gap: 5,
@@ -162,7 +162,7 @@ export const ModelDrawer: React.FC<ModelDrawerProps> = ({
           </span>
         )}
 
-        <button
+        <button type="button"
           onClick={onClose}
           style={{
             border: 'none', background: 'transparent', cursor: 'pointer',
@@ -278,7 +278,7 @@ const LibraryView: React.FC<LibraryViewProps> = ({
             {/* Tab strip */}
             <div style={{ display: 'flex', borderRadius: 8, overflow: 'hidden', border: '1px solid #e2e8f0', marginBottom: 10 }}>
               {(['my', 'public'] as const).map(tab => (
-                <button key={tab} onClick={() => switchTab(tab)} style={{
+                <button type="button" key={tab} onClick={() => switchTab(tab)} style={{
                   flex: 1, padding: '7px 0', border: 'none', fontSize: 11, fontWeight: 600,
                   cursor: 'pointer', letterSpacing: '0.04em', textTransform: 'uppercase',
                   background: libTab === tab ? DARK : '#f8fafc',
@@ -312,7 +312,7 @@ const LibraryView: React.FC<LibraryViewProps> = ({
                 onBlur={e => (e.currentTarget.style.borderColor = '#e2e8f0')}
               />
               {search && (
-                <button onClick={() => setSearch('')} style={{
+                <button type="button" onClick={() => setSearch('')} style={{
                   position: 'absolute', right: 8, top: '50%', transform: 'translateY(-50%)',
                   border: 'none', background: 'none', cursor: 'pointer',
                   color: '#94a3b8', fontSize: 14, lineHeight: 1, padding: 2,
@@ -327,7 +327,7 @@ const LibraryView: React.FC<LibraryViewProps> = ({
                   const active = domainFilter === domain;
                   const theme = getTheme(domain);
                   return (
-                    <button key={domain} onClick={() => setDomainFilter(active ? null : domain)} style={{
+                    <button type="button" key={domain} onClick={() => setDomainFilter(active ? null : domain)} style={{
                       padding: '3px 9px', border: 'none', borderRadius: 20,
                       fontSize: 10, fontWeight: 600, cursor: 'pointer', letterSpacing: '0.03em',
                       background: active ? theme.badge : '#f1f5f9',
@@ -512,7 +512,7 @@ const DetailView: React.FC<DetailViewProps> = ({ model, onFetchFile, onAddModel,
                 Already on canvas
               </div>
             ) : (
-              <button
+              <button type="button"
                 onClick={() => onAddModel(model)}
                 style={{
                   width: '100%', padding: '9px 0', border: 'none', borderRadius: 8,
@@ -530,7 +530,7 @@ const DetailView: React.FC<DetailViewProps> = ({ model, onFetchFile, onAddModel,
               </button>
             )}
             {onDelete && (
-              <button
+              <button type="button"
                 onClick={onDelete}
                 title="Delete meta-model"
                 style={{
@@ -652,7 +652,7 @@ const FieldLabel: React.FC<{ children: React.ReactNode }> = ({ children }) => (
 const PreviewBtn: React.FC<{ title: string; onClick: () => void; children: React.ReactNode }> = ({ title, onClick, children }) => {
   const [hov, setHov] = React.useState(false);
   return (
-    <button
+    <button type="button"
       title={title} onClick={onClick}
       onMouseEnter={() => setHov(true)} onMouseLeave={() => setHov(false)}
       style={{
@@ -761,7 +761,7 @@ const ModelCard: React.FC<ModelCardProps> = ({ model, onCanvas, onAdd, onOpenDet
   }
 
   return (
-    <button
+    <button type="button"
       onClick={() => onAdd(model)}
       onContextMenu={handleContextMenu}
       onMouseEnter={() => setHovered(true)}

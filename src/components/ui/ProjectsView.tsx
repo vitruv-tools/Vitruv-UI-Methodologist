@@ -182,7 +182,7 @@ const ProjectRow: React.FC<ProjectRowProps> = ({
       {/* Actions */}
       <td style={{ padding: '13px 16px' }} onClick={e => e.stopPropagation()}>
         {showDeleted ? (
-          <button
+          <button type="button"
             onClick={onRecover}
             style={{ padding: '6px 14px', border: 'none', borderRadius: 7, background: '#10b981', color: '#fff', fontSize: 13, fontWeight: 600, cursor: 'pointer', transition: 'background 0.15s' }}
             onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.background = '#059669'; }}
@@ -433,7 +433,7 @@ export const ProjectsView: React.FC<ProjectsViewProps> = ({
       {/* Page header */}
       <div style={{ padding: '32px 40px 0', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexShrink: 0 }}>
         <h1 style={{ margin: 0, fontSize: 26, fontWeight: 700, color: '#111827', letterSpacing: '-0.02em' }}>Dashboard / Projects</h1>
-        <button
+        <button type="button"
           onClick={() => setShowCreate(true)}
           disabled={projectView === 'shared' || projectView === 'deleted'}
           style={{
@@ -476,7 +476,7 @@ export const ProjectsView: React.FC<ProjectsViewProps> = ({
             { key: 'shared' as const, label: 'Shared with me' },
             { key: 'deleted' as const, label: 'Deleted projects' },
           ]).map(({ key, label }) => (
-            <button
+            <button type="button"
               key={key}
               onClick={() => setProjectView(key)}
               style={{
