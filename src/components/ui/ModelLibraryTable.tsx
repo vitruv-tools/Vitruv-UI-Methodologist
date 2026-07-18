@@ -244,16 +244,16 @@ export const ModelDetailModal: React.FC<ModelDetailModalProps> = ({
                   <input id="model-detail-name" value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} style={detailInputSt} onFocus={e => (e.currentTarget.style.borderColor = '#049484')} onBlur={e => (e.currentTarget.style.borderColor = '#e2e8f0')} />
                 </div>
                 <div>
+                  <label htmlFor="model-detail-keywords" style={detailFieldLabelSt}>Keywords</label>
+                  <KeywordTagsInput id="model-detail-keywords" keywords={form.keywords} onChange={kws => setForm(f => ({ ...f, keywords: kws }))} />
+                </div>
+                <div>
                   <label htmlFor="model-detail-description" style={detailFieldLabelSt}>Description</label>
                   <textarea id="model-detail-description" value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))} rows={3} style={{ ...detailInputSt, resize: 'vertical', minHeight: 72 }} onFocus={e => (e.currentTarget.style.borderColor = '#049484')} onBlur={e => (e.currentTarget.style.borderColor = '#e2e8f0')} />
                 </div>
                 <div>
                   <label htmlFor="model-detail-domain" style={detailFieldLabelSt}>Domain</label>
                   <input id="model-detail-domain" value={form.domain} onChange={e => setForm(f => ({ ...f, domain: e.target.value }))} style={detailInputSt} onFocus={e => (e.currentTarget.style.borderColor = '#049484')} onBlur={e => (e.currentTarget.style.borderColor = '#e2e8f0')} />
-                </div>
-                <div>
-                  <label htmlFor="model-detail-keywords" style={detailFieldLabelSt}>Keywords</label>
-                  <KeywordTagsInput id="model-detail-keywords" keywords={form.keywords} onChange={kws => setForm(f => ({ ...f, keywords: kws }))} />
                 </div>
                 {error   && <div style={{ padding: '8px 12px', background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 8, fontSize: 12, color: '#dc2626' }}>{error}</div>}
                 {success && <div style={{ padding: '8px 12px', background: '#f0fdf4', border: '1px solid #86efac', borderRadius: 8, fontSize: 12, color: '#15803d' }}>{success}</div>}
