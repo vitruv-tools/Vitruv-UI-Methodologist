@@ -788,7 +788,10 @@ function useCreateModelForm({ isOpen, onClose, onSuccess }: CreateModelModalProp
     genmodel: { progress: 0, isUploading: false },
   });
   const [submitProgress, setSubmitProgress] = useState({ progress: 0, isSubmitting: false });
-  const [metaModelCreatedSuccessfully, setMetaModelCreatedSuccessfully] = useState(false);
+  // Tracked as a ref (not state) since it's only read inside async callbacks/closures that need
+  // the current value synchronously — state updates aren't visible to already-created closures
+  // until the next render.
+  const metaModelCreatedSuccessfullyRef = useRef(false);
   const [showGenModelFixPrompt, setShowGenModelFixPrompt] = useState(false);
   const [pendingCreateRequest, setPendingCreateRequest] = useState<CreateModelRequest | null>(null);
   const [scrollTarget, setScrollTarget] = useState<CreateModelFieldKey | null>(null);
@@ -951,7 +954,7 @@ function useCreateModelForm({ isOpen, onClose, onSuccess }: CreateModelModalProp
     responseData: any,
     requestData?: CreateModelRequest,
   ) => {
-    setMetaModelCreatedSuccessfully(true);
+    metaModelCreatedSuccessfullyRef.current = true;
     finishSubmitOverlay(() => {
       setIsLoading(false);
       setSuccess(message);
@@ -965,7 +968,7 @@ function useCreateModelForm({ isOpen, onClose, onSuccess }: CreateModelModalProp
   // ── File cleanup ──────────────────────────────────────────────────────────
 
   const cleanupUploadedFiles = async () => {
-    if (metaModelCreatedSuccessfully) return;
+    if (metaModelCreatedSuccessfullyRef.current) return;
     const filesToDelete = [uploadedFileIds.ecoreFileId, uploadedFileIds.genModelFileId].filter(id => id > 0);
     await Promise.all(
       filesToDelete.map(fileId =>
@@ -1003,7 +1006,7 @@ function useCreateModelForm({ isOpen, onClose, onSuccess }: CreateModelModalProp
     setSuccess('');
     setIsLoading(false);
     setUploadProgress({ ecore: { progress: 0, isUploading: false }, genmodel: { progress: 0, isUploading: false } });
-    setMetaModelCreatedSuccessfully(false);
+    metaModelCreatedSuccessfullyRef.current = false;
     setShowGenModelFixPrompt(false);
     setPendingCreateRequest(null);
     setPerKind(EMPTY_PER_KIND);
