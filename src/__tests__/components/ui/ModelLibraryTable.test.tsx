@@ -1,6 +1,6 @@
 import React from 'react';
 import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
-import { ModelLibraryTable } from '../../../components/ui/ModelLibraryTable';
+import { ModelDetailModal, ModelLibraryTable } from '../../../components/ui/ModelLibraryTable';
 
 jest.mock('../../../services/api', () => ({
   apiService: {
@@ -79,5 +79,33 @@ describe('ModelLibraryTable', () => {
     fireEvent.change(screen.getByRole('combobox'), { target: { value: 'month' } });
 
     await waitFor(() => expect(apiService.findMetaModels).toHaveBeenCalledTimes(3));
+  });
+
+  it('keeps shared metadata fields in the same order when editing', () => {
+    render(
+      <ModelDetailModal
+        model={{
+          id: 1,
+          name: 'Existing Model',
+          description: 'A description',
+          domain: 'Testing',
+          keyword: ['uml'],
+        }}
+        onClose={jest.fn()}
+        onUpdated={jest.fn()}
+      />,
+    );
+
+    const name = screen.getByText('Name');
+    const keywords = screen.getByText('Keywords');
+    const description = screen.getByText('Description');
+    expect(name.compareDocumentPosition(keywords) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(keywords.compareDocumentPosition(description) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Edit' }));
+
+    const formLabels = Array.from(document.querySelector('form')!.querySelectorAll('label'))
+      .map((label) => label.textContent);
+    expect(formLabels).toEqual(['Name', 'Keywords', 'Description', 'Domain']);
   });
 });
