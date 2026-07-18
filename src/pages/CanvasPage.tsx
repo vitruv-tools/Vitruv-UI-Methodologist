@@ -3061,7 +3061,7 @@ function getPillBtnColor(active: boolean | undefined, hovered: boolean): string 
 const PillBtn: React.FC<PillBtnProps> = ({ onClick, title, children, active, spinning }) => {
   const [hov, setHov] = useState(false);
   return (
-    <button
+    <button type="button"
       onClick={onClick}
       title={title}
       onMouseEnter={() => setHov(true)}

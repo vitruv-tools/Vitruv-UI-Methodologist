@@ -238,7 +238,7 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ user, userRole = 'Meth
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
             <div style={{ fontSize: 14, fontWeight: 700, color: '#111827' }}>Account Details</div>
             {!editing && (
-              <button
+              <button type="button"
                 onClick={handleEditOpen}
                 style={{
                   display: 'flex', alignItems: 'center', gap: 6,
@@ -280,7 +280,7 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ user, userRole = 'Meth
               )}
 
               <div style={{ display: 'flex', gap: 10 }}>
-                <button
+                <button type="button"
                   onClick={handleSave}
                   disabled={saving}
                   style={{
@@ -293,7 +293,7 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ user, userRole = 'Meth
                 >
                   <CheckIcon /> {saving ? 'Saving…' : 'Save changes'}
                 </button>
-                <button
+                <button type="button"
                   onClick={handleCancel}
                   disabled={saving}
                   style={{
@@ -357,7 +357,7 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ user, userRole = 'Meth
               Min. 8 characters · uppercase · lowercase · digit · special character
             </div>
           </div>
-          <button
+          <button type="button"
             onClick={changePassword.open}
             style={{
               display: 'flex', alignItems: 'center', gap: 7,
