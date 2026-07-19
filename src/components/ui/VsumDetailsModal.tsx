@@ -4,6 +4,7 @@ import { apiService } from '../../services/api';
 import { VsumDetails } from '../../types';
 import { VsumUsersTab } from './VsumUsersTab';
 import { MODAL_Z_INDEX, useModalBodyLock } from './modalUtils';
+import { LinkMetaModelsPanel } from './LinkMetaModelsPanel';
 
 interface Props {
   isOpen: boolean;
@@ -619,23 +620,26 @@ export const VsumDetailsModal: React.FC<Props> = ({ isOpen, vsumId, onClose, onS
     };
   }, [isOpen]);
 
+  const reloadDetails = async () => {
+    if (!vsumId) return;
+    setLoading(true);
+    setError('');
+    try {
+      const res = await apiService.getVsumDetails(vsumId);
+      const d = res.data;
+      setDetails(d);
+      setName(d.name ?? '');
+    } catch (e: any) {
+      setError(e?.message || 'Failed to load details');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   useEffect(() => {
     if (!isOpen || !vsumId) return;
-    const load = async () => {
-      setLoading(true);
-      setError('');
-      try {
-        const res = await apiService.getVsumDetails(vsumId);
-        const d = res.data;
-        setDetails(d);
-        setName(d.name ?? '');
-      } catch (e: any) {
-        setError(e?.message || 'Failed to load details');
-      } finally {
-        setLoading(false);
-      }
-    };
-    load();
+    reloadDetails();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen, vsumId]);
 
   useEffect(() => {
@@ -753,9 +757,18 @@ export const VsumDetailsModal: React.FC<Props> = ({ isOpen, vsumId, onClose, onS
             ))}
           </ul>
         ) : (
-          <div style={{ fontSize: 12, color: '#6c757d', fontStyle: 'italic' }}>
+          <div style={{ fontSize: 12, color: '#6c757d', fontStyle: 'italic', marginBottom: 8 }}>
             No meta models linked.
           </div>
+        )}
+
+        {vsumId && (
+          <LinkMetaModelsPanel
+            vsumId={vsumId}
+            existingMetaModels={details.metaModels ?? []}
+            existingRelations={details.metaModelsRelation ?? []}
+            onLinked={reloadDetails}
+          />
         )}
       </>
     );
