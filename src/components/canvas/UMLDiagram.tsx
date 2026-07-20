@@ -26,7 +26,7 @@ import {
   saveUmlLayout,
   type UmlViewport,
 } from '../../utils/umlLayoutStorage';
-import { assignParallelRelMeta, computeUmlFocusRect } from '../../utils/umlClassLayout';
+import { assignParallelRelMeta } from '../../utils/umlClassLayout';
 import {
   bridgedLinePathD,
   computeLineBridges,
@@ -49,7 +49,6 @@ const EDIT_BW = 288;    // wider while editing class name or attributes
 const EDIT_NAME_H = 52; // taller name row while editing
 const EDIT_ATTR_ROW = 38; // taller attribute row while editing
 const CANVAS_PAD = 480; // free space around diagram (all sides; allows negative coords)
-const MIN_READABLE_ZOOM = 0.55;
 const MAX_ZOOM = 3;
 const MIN_ZOOM = 0.35;
 const NAME_H = 36;      // name-section height (no stereotype)
@@ -2056,22 +2055,31 @@ export const UMLDiagram = forwardRef<UMLDiagramHandle, UMLDiagramProps>(({
       zoomOut: () => applyZoom(1 / 1.3),
       fitToView: () => {
         const el = containerRef.current;
-        if (!el || classes.length === 0) return;
+        if (!el || allClasses.length === 0) return;
         const PAD = 48;
-        const focus = computeUmlFocusRect(classes, {
-          boxWidth: BW,
-          boxHeight: c => boxH(c),
-          padding: PAD,
-        });
+        // True bounding box over every currently visible class (primary + additional
+        // models) — not the outlier-excluding "dense cluster" heuristic from
+        // computeUmlFocusRect. That heuristic is meant only for the very first
+        // auto-fit on open; reusing it here meant a class dragged away from the
+        // rest got excluded, so Fit View re-centered on its old, now-empty
+        // neighborhood instead of the current layout.
+        const focus = {
+          minX: layout.minX - PAD,
+          minY: layout.minY - PAD,
+          maxX: layout.maxX + PAD,
+          maxY: layout.maxY + PAD,
+        };
         const contentW = focus.maxX - focus.minX;
         const contentH = focus.maxY - focus.minY;
         const { clientWidth: cw, clientHeight: ch } = el;
-        const fitScale = Math.min(
+        // No lower clamp here (unlike manual zoom's MIN_ZOOM): Fit View's whole point is
+        // to show every currently visible class, however far apart they've been dragged —
+        // clamping to a "readable" floor previously cut off distant classes off-screen.
+        const scale = Math.min(
           (cw - PAD * 2) / Math.max(contentW, 1),
           (ch - PAD * 2) / Math.max(contentH, 1),
           1.15,
         );
-        const scale = Math.max(MIN_READABLE_ZOOM, fitScale);
         const dispMinX = focus.minX + offsetX;
         const dispMinY = focus.minY + offsetY;
         const nx = (cw - contentW * scale) / 2 - dispMinX * scale;
@@ -2109,7 +2117,7 @@ export const UMLDiagram = forwardRef<UMLDiagramHandle, UMLDiagramProps>(({
     };
     diagramRef.current = handle;
     return handle;
-  }, [applyZoom, classes, offsetX, offsetY, fileName, layoutScopeId, persistLayout, scheduleLayoutSave, getModel, isDirty, handleSave, resetFromEcore, tryEscape, handleUndo, handleRedo, historyCanUndo, historyCanRedo]);
+  }, [applyZoom, allClasses, layout, offsetX, offsetY, fileName, layoutScopeId, persistLayout, scheduleLayoutSave, getModel, isDirty, handleSave, resetFromEcore, tryEscape, handleUndo, handleRedo, historyCanUndo, historyCanRedo]);
 
   const handleClassSelect = useCallback((classId: string) => {
     if (!interactive) return;
