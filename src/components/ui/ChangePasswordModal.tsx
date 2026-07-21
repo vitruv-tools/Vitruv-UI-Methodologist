@@ -46,6 +46,22 @@ const PasswordRequirements: React.FC<{ validation: PasswordValidation; showRequi
   );
 };
 
+const EyeIcon = () => (
+  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+    <circle cx="12" cy="12" r="3" />
+  </svg>
+);
+
+const EyeOffIcon = () => (
+  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94" />
+    <path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19" />
+    <path d="M1 1l22 22" />
+    <path d="M14.12 14.12a3 3 0 1 1-4.24-4.24" />
+  </svg>
+);
+
 const PasswordInput: React.FC<{
   label: string;
   value: string;
@@ -58,30 +74,63 @@ const PasswordInput: React.FC<{
   onKeyDown?: (e: React.KeyboardEvent) => void;
 }> = ({ label, value, onChange, placeholder, disabled, showError, errorMessage, successMessage, onKeyDown }) => {
   const [isFocused, setIsFocused] = useState(false);
+  const [isToggleHovered, setIsToggleHovered] = useState(false);
+  const [isVisible, setIsVisible] = useState(false);
   const inputId = React.useId();
   return (
     <div style={{ marginBottom: 20 }}>
       <label htmlFor={inputId} style={{ display: 'block', marginBottom: 10, fontSize: 14, fontWeight: 600, color: '#1f2937' }}>
         {label}
       </label>
-      <input
-        id={inputId}
-        type="password"
-        value={value}
-        onChange={e => onChange(e.target.value)}
-        placeholder={placeholder}
-        disabled={disabled}
-        style={{
-          width: '100%', padding: '12px 14px',
-          border: showError ? '2px solid #dc2626' : '2px solid #e5e7eb',
-          borderRadius: 8, fontSize: 14, boxSizing: 'border-box', outline: 'none',
-          background: isFocused ? '#ffffff' : '#f9fafb',
-          boxShadow: isFocused ? '0 0 0 3px rgba(4, 148, 132, 0.1)' : 'none',
-        }}
-        onFocus={() => setIsFocused(true)}
-        onBlur={() => setIsFocused(false)}
-        onKeyDown={onKeyDown}
-      />
+      <div style={{ position: 'relative' }}>
+        <input
+          id={inputId}
+          type={isVisible ? 'text' : 'password'}
+          value={value}
+          onChange={event => onChange(event.target.value)}
+          placeholder={placeholder}
+          disabled={disabled}
+          style={{
+            width: '100%', padding: '12px 48px 12px 14px',
+            border: showError ? '2px solid #dc2626' : '2px solid #e5e7eb',
+            borderRadius: 8, fontSize: 14, boxSizing: 'border-box', outline: 'none',
+            background: isFocused ? '#ffffff' : '#f9fafb',
+            boxShadow: isFocused ? '0 0 0 3px rgba(4, 148, 132, 0.1)' : 'none',
+          }}
+          onFocus={() => setIsFocused(true)}
+          onBlur={() => setIsFocused(false)}
+          onKeyDown={onKeyDown}
+        />
+        <button
+          type="button"
+          onClick={() => setIsVisible(prev => !prev)}
+          onMouseEnter={() => setIsToggleHovered(true)}
+          onMouseLeave={() => setIsToggleHovered(false)}
+          disabled={disabled}
+          aria-label={isVisible ? 'Hide password' : 'Show password'}
+          aria-pressed={isVisible}
+          style={{
+            position: 'absolute',
+            right: 10,
+            top: '50%',
+            transform: 'translateY(-50%)',
+            width: 32,
+            height: 32,
+            border: 'none',
+            borderRadius: 6,
+            background: isToggleHovered && !disabled ? '#f0fdfa' : 'transparent',
+            color: isToggleHovered && !disabled ? '#1f9f92' : '#64748b',
+            cursor: disabled ? 'not-allowed' : 'pointer',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: 0,
+            opacity: disabled ? 0.5 : 1,
+          }}
+        >
+          {isVisible ? <EyeOffIcon /> : <EyeIcon />}
+        </button>
+      </div>
       {errorMessage && (
         <div style={{ marginTop: 6, fontSize: 12, color: '#dc2626', display: 'flex', alignItems: 'center', gap: 4 }}>
           <span style={{ fontWeight: 700 }}>×</span>
