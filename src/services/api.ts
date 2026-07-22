@@ -34,7 +34,7 @@ class ApiService {
   /**
    * Build an Error that keeps backend payload on response.data
    */
-  private createApiError(errorText: string, fallbackMessage: string): Error & { response?: { data: any } } {
+  private createApiError(errorText: string, fallbackMessage: string, status?: number): Error & { status?: number; response?: { status?: number; data: any } } {
     const parsed = this.parseErrorPayload(errorText);
     const message =
       (typeof parsed?.message === 'string' && parsed.message) ||
@@ -42,8 +42,10 @@ class ApiService {
       this.extractErrorMessage(errorText) ||
       fallbackMessage;
 
-    const err = new Error(message) as Error & { response?: { data: any } };
+    const err = new Error(message) as Error & { status?: number; response?: { status?: number; data: any } };
+    err.status = status;
     err.response = {
+      status,
       data: Object.keys(parsed).length > 0
         ? parsed
         : {
@@ -105,7 +107,7 @@ class ApiService {
   ): Promise<never> {
     const errorText = await this.getResponseText(response);
     console.error(context, { status: response.status });
-    throw this.createApiError(errorText, `${method} ${url} failed`);
+    throw this.createApiError(errorText, `${method} ${url} failed`, response.status);
   }
 
   /**

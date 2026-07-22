@@ -94,7 +94,13 @@ describe('ApiService – authenticatedRequest', () => {
 
   it('throws on 4xx error response', async () => {
     mockFetch({ message: 'Forbidden' }, 403);
-    await expect((apiService as any).authenticatedRequest('/forbidden')).rejects.toThrow();
+    await expect((apiService as any).authenticatedRequest('/forbidden')).rejects.toMatchObject({
+      status: 403,
+      response: {
+        status: 403,
+        data: { message: 'Forbidden' },
+      },
+    });
   });
 
   it('retries with refreshed token on 401', async () => {
@@ -352,4 +358,3 @@ describe('ApiService – updateUserName', () => {
     await expect(apiService.updateUserName('99', 'A', 'B')).rejects.toThrow();
   });
 });
-

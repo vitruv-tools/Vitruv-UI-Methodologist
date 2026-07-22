@@ -64,8 +64,55 @@ const CENTER_STACK_BOTTOM = MODE_TOGGLE_TOP + MODE_TOGGLE_HEIGHT + 4 + PROJECT_T
 
 type UMLPanel = CanvasUmlPanelState;
 
+type CanvasProjectLoadStatus = 'loading' | 'hydrating' | 'ready' | 'forbidden' | 'notFound' | 'error';
+
+interface CanvasProjectLoadState {
+  status: CanvasProjectLoadStatus;
+  message?: string;
+}
+
 function isStaleTabLoad(forInstanceId: string | undefined, activeInstanceId: string | null): boolean {
   return Boolean(forInstanceId && activeInstanceId !== forInstanceId);
+}
+
+function getErrorStatus(error: unknown): number | undefined {
+  const apiError = error as {
+    status?: unknown;
+    response?: {
+      status?: unknown;
+      data?: {
+        status?: unknown;
+        statusCode?: unknown;
+      };
+    };
+  };
+  const rawStatus =
+    apiError?.status ??
+    apiError?.response?.status ??
+    apiError?.response?.data?.status ??
+    apiError?.response?.data?.statusCode;
+  const status = typeof rawStatus === 'number' ? rawStatus : Number(rawStatus);
+  return Number.isFinite(status) ? status : undefined;
+}
+
+function getCanvasProjectLoadFailureState(error: unknown): CanvasProjectLoadState {
+  const status = getErrorStatus(error);
+  if (status === 403) {
+    return {
+      status: 'forbidden',
+      message: 'You do not have access to this project.',
+    };
+  }
+  if (status === 404) {
+    return {
+      status: 'notFound',
+      message: 'This project does not exist or may have been deleted.',
+    };
+  }
+  return {
+    status: 'error',
+    message: error instanceof Error && error.message ? error.message : 'Unable to load this project.',
+  };
 }
 
 function clearVsumTabSessions(
@@ -492,6 +539,147 @@ const ModelDrawerModal: React.FC<ModelDrawerModalProps> = ({
   document.body,
 );
 
+interface CanvasProjectLoadStateOverlayProps {
+  state: CanvasProjectLoadState;
+  projectId?: number;
+  onBack: () => void;
+  onRetry: () => void;
+}
+
+const CanvasProjectLoadStateOverlay: React.FC<CanvasProjectLoadStateOverlayProps> = ({
+  state,
+  projectId,
+  onBack,
+  onRetry,
+}) => {
+  const isLoading = state.status === 'loading' || state.status === 'hydrating';
+  const titleByStatus: Record<CanvasProjectLoadStatus, string> = {
+    loading: 'Loading project…',
+    hydrating: 'Opening workspace…',
+    ready: '',
+    forbidden: 'Access denied',
+    notFound: 'Project not found',
+    error: 'Unable to open project',
+  };
+  const defaultMessageByStatus: Record<CanvasProjectLoadStatus, string> = {
+    loading: projectId ? `Checking access for project ${projectId}.` : 'Checking project access.',
+    hydrating: 'Preparing the workspace.',
+    ready: '',
+    forbidden: 'You do not have permission to open this project.',
+    notFound: 'This project does not exist or may have been deleted.',
+    error: 'The project could not be loaded. Please try again.',
+  };
+
+  return (
+    <div
+      role={isLoading ? 'status' : 'alert'}
+      style={{
+        position: 'absolute',
+        inset: 0,
+        zIndex: 5000,
+        display: 'grid',
+        placeItems: 'center',
+        background: '#f8fafc',
+        fontFamily: 'ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, sans-serif',
+      }}
+    >
+      <div style={{
+        width: 'min(420px, calc(100vw - 32px))',
+        padding: '28px 30px',
+        background: '#ffffff',
+        border: '1px solid #e2e8f0',
+        borderRadius: 14,
+        boxShadow: '0 20px 60px rgba(15, 23, 42, 0.12)',
+        textAlign: 'center',
+      }}>
+        <div style={{
+          width: 44,
+          height: 44,
+          margin: '0 auto 16px',
+          borderRadius: 999,
+          display: 'grid',
+          placeItems: 'center',
+          background: isLoading ? '#e6f7f5' : '#fef2f2',
+          color: isLoading ? '#049484' : '#b91c1c',
+          fontSize: 22,
+          fontWeight: 700,
+        }}>
+          {isLoading ? (
+            <span style={{
+              width: 20,
+              height: 20,
+              border: '3px solid rgba(4, 148, 132, 0.22)',
+              borderTopColor: '#049484',
+              borderRadius: '50%',
+              animation: 'spin 0.8s linear infinite',
+            }} />
+          ) : '!' }
+        </div>
+        <h1 style={{
+          margin: '0 0 8px',
+          color: '#0f172a',
+          fontSize: 22,
+          lineHeight: 1.2,
+        }}>
+          {titleByStatus[state.status]}
+        </h1>
+        <p style={{
+          margin: 0,
+          color: '#64748b',
+          fontSize: 14,
+          lineHeight: 1.6,
+        }}>
+          {state.message || defaultMessageByStatus[state.status]}
+        </p>
+        {!isLoading && (
+          <div style={{
+            display: 'flex',
+            justifyContent: 'center',
+            gap: 10,
+            marginTop: 22,
+            flexWrap: 'wrap',
+          }}>
+            <button
+              type="button"
+              onClick={onBack}
+              style={{
+                border: '1px solid #cbd5e1',
+                background: '#ffffff',
+                color: '#334155',
+                borderRadius: 8,
+                padding: '10px 16px',
+                fontSize: 14,
+                fontWeight: 600,
+                cursor: 'pointer',
+              }}
+            >
+              Back to project list
+            </button>
+            {state.status === 'error' && (
+              <button
+                type="button"
+                onClick={onRetry}
+                style={{
+                  border: '1px solid #037368',
+                  background: '#049484',
+                  color: '#ffffff',
+                  borderRadius: 8,
+                  padding: '10px 16px',
+                  fontSize: 14,
+                  fontWeight: 700,
+                  cursor: 'pointer',
+                }}
+              >
+                Try again
+              </button>
+            )}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
+
 // ── CanvasPage ────────────────────────────────────────────────────────────────
 
 export const CanvasPage: React.FC = () => {
@@ -556,6 +744,7 @@ export const CanvasPage: React.FC = () => {
 
   const activeTab = openTabs.find(t => t.instanceId === activeInstanceId);
   const activeProjectId = activeTab?.projectId ?? (id ? Number(id) : undefined);
+  const [projectLoadState, setProjectLoadState] = useState<CanvasProjectLoadState>({ status: 'loading' });
 
   const navAccess = React.useMemo(() => {
     const projectId = activeProjectId ?? (id ? Number(id) : undefined);
@@ -977,7 +1166,13 @@ export const CanvasPage: React.FC = () => {
   useEffect(() => {
     if (!id) return;
     const projectId = Number(id);
-    if (!Number.isFinite(projectId)) return;
+    if (!Number.isFinite(projectId)) {
+      setProjectLoadState({
+        status: 'notFound',
+        message: 'This project URL is invalid.',
+      });
+      return;
+    }
 
     setOpenTabs(prev => {
       const existing = prev.find(t => t.projectId === projectId);
@@ -992,6 +1187,7 @@ export const CanvasPage: React.FC = () => {
   }, [id, createInstanceId]);
 
   const loadVsum = useCallback(async (vsumId: number, forInstanceId?: string) => {
+    setProjectLoadState({ status: 'loading' });
     setLoadingProject(true);
     clearCanvasWorkspace();
     globalThis.dispatchEvent(new CustomEvent('vitruv.resetWorkspace'));
@@ -1010,6 +1206,7 @@ export const CanvasPage: React.FC = () => {
     try {
       const response = await apiService.getVsumDetails(vsumId);
       if (isStaleTabLoad(forInstanceId, activeInstanceIdRef.current)) return;
+      setProjectLoadState({ status: 'hydrating' });
 
       const details: VsumDetails = response.data;
       setVsumName(details.name);
@@ -1061,8 +1258,11 @@ export const CanvasPage: React.FC = () => {
         setBaselineForInstance,
         loadedTabsRef.current,
       );
+      setProjectLoadState({ status: 'ready' });
     } catch (e) {
       console.error('Failed to load VSUM:', e);
+      if (isStaleTabLoad(forInstanceId, activeInstanceIdRef.current)) return;
+      setProjectLoadState(getCanvasProjectLoadFailureState(e));
     } finally {
       if (!forInstanceId || activeInstanceIdRef.current === forInstanceId) {
         setLoadingProject(false);
@@ -1153,6 +1353,7 @@ export const CanvasPage: React.FC = () => {
       if (cached && loadedTabsRef.current.has(nextId)) {
         if (openTabsRef.current.some(t => t.instanceId === nextId)) bumpProjectRole();
         applyRef.current(cached);
+        setProjectLoadState({ status: 'ready' });
         return;
       }
       sessionsRef.current.delete(nextId);
@@ -1552,12 +1753,27 @@ export const CanvasPage: React.FC = () => {
 
   const handleCloseConfirmCancel = useCallback(() => setCloseConfirmInstanceId(null), []);
 
+  const handleRetryProjectLoad = useCallback(() => {
+    if (activeProjectId) void loadVsum(activeProjectId, activeInstanceId ?? undefined);
+  }, [activeProjectId, activeInstanceId, loadVsum]);
+
+  const shouldRenderCanvasShell =
+    projectLoadState.status === 'loading' ||
+    projectLoadState.status === 'hydrating' ||
+    projectLoadState.status === 'ready';
+
   // ── render ────────────────────────────────────────────────────────────────
 
   return (
     <div style={{ width: '100vw', height: '100vh', position: 'relative', overflow: 'hidden' }}>
       <style>{`@keyframes spin{0%{transform:rotate(0deg)}100%{transform:rotate(360deg)}}`}</style>
 
+      {shouldRenderCanvasShell && (
+      <div style={{
+        width: '100%',
+        height: '100%',
+        visibility: projectLoadState.status === 'ready' ? 'visible' : 'hidden',
+      }}>
       <FlowCanvas
         key={activeInstanceId ?? `canvas-${activeProjectId ?? 'new'}`}
         ref={flowCanvasRef}
@@ -1704,6 +1920,17 @@ export const CanvasPage: React.FC = () => {
         onClose={() => setShowShareModal(false)}
         onInvited={refreshProjectMembers}
       />
+      )}
+      </div>
+      )}
+
+      {projectLoadState.status !== 'ready' && (
+        <CanvasProjectLoadStateOverlay
+          state={projectLoadState}
+          projectId={activeProjectId}
+          onBack={() => navigate('/')}
+          onRetry={handleRetryProjectLoad}
+        />
       )}
 
       {/* Popup notification */}
