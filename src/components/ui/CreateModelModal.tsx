@@ -1283,7 +1283,10 @@ export const CreateModelModal: React.FC<CreateModelModalProps> = ({
           placeItems: 'center',
         }}
         onClose={form.handleClose}
-        onCancel={form.handleClose}
+        onCancel={(event) => {
+          if (event.target !== event.currentTarget) return;
+          void form.handleClose();
+        }}
       >
         <button
           type="button"

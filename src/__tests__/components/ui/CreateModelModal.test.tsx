@@ -162,6 +162,26 @@ describe('CreateModelModal', () => {
     expect(onClose).toHaveBeenCalledTimes(1);
   });
 
+  it('keeps the modal open when the .ecore file picker is canceled', () => {
+    const onClose = jest.fn();
+    render(<CreateModelModal isOpen onClose={onClose} />);
+    const ecoreInput = document.querySelector('input[accept=".ecore"]') as HTMLInputElement;
+
+    fireEvent(ecoreInput, new Event('cancel', { bubbles: true, cancelable: true }));
+
+    expect(onClose).not.toHaveBeenCalled();
+  });
+
+  it('keeps the modal open when the .genmodel file picker is canceled', () => {
+    const onClose = jest.fn();
+    render(<CreateModelModal isOpen onClose={onClose} />);
+    const genmodelInput = document.querySelector('input[accept=".genmodel"]') as HTMLInputElement;
+
+    fireEvent(genmodelInput, new Event('cancel', { bubbles: true, cancelable: true }));
+
+    expect(onClose).not.toHaveBeenCalled();
+  });
+
   // ── file upload mode ─────────────────────────────────────────────────────────
 
   describe('file upload mode', () => {
