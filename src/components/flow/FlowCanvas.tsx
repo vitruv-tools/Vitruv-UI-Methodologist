@@ -189,6 +189,7 @@ interface FlowCanvasProps {
   projectTabsBelowModeToggle?: React.ReactNode;
   /** Called when the user switches between Modeling / Constraints / Views tabs. */
   onCanvasModeChange?: (mode: CanvasMode) => void;
+  canvasMode?: CanvasMode;
   /** Node ID to highlight as the active constraint context (teal glow). */
   constraintHighlightNodeId?: string | null;
   /** Node ID currently selected as a constraint filter (stronger teal border). */
@@ -431,6 +432,7 @@ export const FlowCanvas = forwardRef<{
     onHistoryChange,
     projectTabsBelowModeToggle,
     onCanvasModeChange,
+    canvasMode: canvasModeProp = 'modeling',
     constraintHighlightNodeId,
     constraintFilterNodeId,
     onConstraintNodeFilter,
@@ -489,8 +491,13 @@ export const FlowCanvas = forwardRef<{
 
     // Canvas center in flow coordinates — fixed at origin, ReactFlow's default fitView center
     const [circleSelected, setCircleSelected] = useState(false);
-    const [activeCanvasMode, setActiveCanvasMode] = useState<CanvasMode>('modeling');
+    const [activeCanvasMode, setActiveCanvasMode] = useState<CanvasMode>(canvasModeProp);
     const circleVisible = activeCanvasMode === 'views';
+
+    useEffect(() => {
+      setActiveCanvasMode(canvasModeProp);
+      if (canvasModeProp !== 'views') setCircleSelected(false);
+    }, [canvasModeProp]);
 
     useEffect(() => {
       if (readOnly && activeCanvasMode === 'constraints') {

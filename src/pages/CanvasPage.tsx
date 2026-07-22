@@ -52,6 +52,7 @@ import {
   workspaceSnapshotFromVsumDetails,
   workspaceSnapshotsEqual,
 } from '../utils/workspaceSnapshotUtils';
+import { readStoredCanvasMode, writeStoredCanvasMode } from '../utils/canvasModeStorage';
 import { downloadBlobAsFile } from '../utils/downloadFile';
 import { syncVsumWorkspaceChanges } from '../utils/vsumSyncSave';
 import { USER_PROFILE_DESCRIPTION, USER_PROFILE_LABEL } from '../constants/accountLabels';
@@ -737,8 +738,8 @@ export const CanvasPage: React.FC = () => {
   }, [activeProjectId, isSharedAccess]);
 
   // Canvas mode (Modeling / Constraints / Views)
-  const [canvasMode, setCanvasMode] = useState<CanvasMode>('modeling');
-  const canvasModeRef = useRef<CanvasMode>('modeling');
+  const [canvasMode, setCanvasMode] = useState<CanvasMode>(() => readStoredCanvasMode(activeProjectId));
+  const canvasModeRef = useRef<CanvasMode>(canvasMode);
   const [constraintsNodes, setConstraintsNodes] = useState<Node[]>([]);
   useEffect(() => {
     if (isViewOnly) setAddReactionMode(false);
@@ -751,8 +752,18 @@ export const CanvasPage: React.FC = () => {
     if (isViewOnly && canvasMode === 'constraints') {
       setCanvasMode('modeling');
       canvasModeRef.current = 'modeling';
+      writeStoredCanvasMode(activeProjectId, 'modeling');
     }
-  }, [isViewOnly, canvasMode]);
+  }, [activeProjectId, isViewOnly, canvasMode]);
+
+  useEffect(() => {
+    if (!activeProjectId) return;
+    const storedMode = readStoredCanvasMode(activeProjectId);
+    const nextMode = isViewOnly && storedMode === 'constraints' ? 'modeling' : storedMode;
+    canvasModeRef.current = nextMode;
+    setCanvasMode(nextMode);
+    if (nextMode !== storedMode) writeStoredCanvasMode(activeProjectId, nextMode);
+  }, [activeProjectId, isViewOnly]);
 
   const handleCanvasModeChange = useCallback((mode: CanvasMode) => {
     if (mode === 'constraints' && isViewOnly) return;
@@ -764,7 +775,8 @@ export const CanvasPage: React.FC = () => {
     }
     canvasModeRef.current = mode;
     setCanvasMode(mode);
-  }, [isViewOnly]);
+    writeStoredCanvasMode(activeProjectId, mode);
+  }, [activeProjectId, isViewOnly]);
 
 
   // Add-reaction mode
@@ -1551,6 +1563,7 @@ export const CanvasPage: React.FC = () => {
         ref={flowCanvasRef}
         vsumId={activeProjectId?.toString()}
         readOnly={isViewOnly}
+        canvasMode={canvasMode}
         onDiagramChange={handleDiagramChange}
         onEcoreFileExpand={handleEcoreFileExpand}
         umlModalOpen={umlPanels.length > 0}
@@ -3167,4 +3180,3 @@ const SaveIcon = () => (
     <rect x="7" y="13" width="10" height="8" />
   </svg>
 );
-
