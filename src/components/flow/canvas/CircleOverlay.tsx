@@ -1,4 +1,4 @@
-import React, { useCallback, useRef, useState } from 'react';
+import React, { useCallback, useMemo, useRef, useState } from 'react';
 import { Circle } from '../../../hooks/useCircleContainment';
 import { ViewType, ViewTypeScope } from '../../../hooks/useViewTypes';
 import { Node } from 'reactflow';
@@ -61,6 +61,42 @@ const computeBestAngle = (existingAngles: number[]): number => {
     return bestAngle;
 };
 
+// Preferred add-point slots: top, right, bottom, left.
+const CARDINAL_ANGLES = [-Math.PI / 2, 0, Math.PI / 2, Math.PI];
+const ADD_POINT_OCCUPIED_THRESHOLD = 0.2; // radians — how close a VT must be to "claim" a cardinal slot
+const ADD_POINT_RADIUS = 7;
+const ADD_POINT_HIT_RADIUS = 14;
+
+const angularDistance = (a: number, b: number): number => {
+    const diff = Math.abs(a - b) % (2 * Math.PI);
+    return diff > Math.PI ? 2 * Math.PI - diff : diff;
+};
+
+// Hover add-points: one per free cardinal slot; once a cardinal slot is occupied
+// by a VT bubble, its add-point relocates to the next best gap — same algorithm
+// used to place new VT bubbles — so add-points never overlap existing bubbles.
+const computeAddPointAngles = (existingAngles: number[]): number[] => {
+    const occupied = [...existingAngles];
+    const addPoints: number[] = [];
+
+    for (const cardinal of CARDINAL_ANGLES) {
+        const isFree = occupied.every(a => angularDistance(a, cardinal) > ADD_POINT_OCCUPIED_THRESHOLD);
+        if (isFree) {
+            addPoints.push(cardinal);
+            occupied.push(cardinal);
+        }
+    }
+
+    const missing = CARDINAL_ANGLES.length - addPoints.length;
+    for (let i = 0; i < missing; i++) {
+        const angle = computeBestAngle(occupied);
+        addPoints.push(angle);
+        occupied.push(angle);
+    }
+
+    return addPoints;
+};
+
 export const CircleOverlay: React.FC<CircleOverlayProps> = ({
     circle,
     viewport,
@@ -79,6 +115,8 @@ export const CircleOverlay: React.FC<CircleOverlayProps> = ({
 }) => {
     const [previewR, setPreviewR] = useState<number | null>(null);
     const [contextMenu, setContextMenu] = useState<{ x: number; y: number } | null>(null);
+    const [pendingAngle, setPendingAngle] = useState<number | null>(null);
+    const [isHovered, setIsHovered] = useState(false);
     const [deletionMenu, setDeletionMenu] = useState<{
         x: number; y: number; id: string; label: string;
     } | null>(null);
@@ -159,9 +197,21 @@ export const CircleOverlay: React.FC<CircleOverlayProps> = ({
     }, [getContainerOffset]);
 
     const handleAddViewType = useCallback((label: string, scope: ViewTypeScope, linkedNodeIds: string[], editable: boolean) => {
-        const angle = computeBestAngle(viewTypes.map(vt => vt.angle));
+        const angle = pendingAngle ?? computeBestAngle(viewTypes.map(vt => vt.angle));
         onAddViewType(label, scope, linkedNodeIds, angle, editable);
-    }, [viewTypes, onAddViewType]);
+        setPendingAngle(null);
+    }, [pendingAngle, viewTypes, onAddViewType]);
+
+    const handleAddPointClick = useCallback((angle: number, e: React.MouseEvent) => {
+        e.stopPropagation();
+        setPendingAngle(angle);
+        setContextMenu({ x: e.clientX, y: e.clientY });
+    }, []);
+
+    const addPointAngles = useMemo(
+        () => computeAddPointAngles(viewTypes.map(vt => vt.angle)),
+        [viewTypes]
+    );
 
     if (circle.r === 0) return null;
 
@@ -242,19 +292,34 @@ export const CircleOverlay: React.FC<CircleOverlayProps> = ({
                     pointerEvents="none"
                 />
 
-                {/* Circle hitbox — stroke only */}
-                <circle
-                    cx={screenCx} cy={screenCy} r={screenR}
-                    fill="none" stroke="transparent" strokeWidth={20}
-                    pointerEvents="stroke"
-                    style={{ cursor: 'pointer' }}
-                    onClick={(e) => { e.stopPropagation(); onSelect(); }}
-                    onContextMenu={(e) => {
-                        e.preventDefault();
-                        e.stopPropagation();
-                        setContextMenu({ x: e.clientX, y: e.clientY });
-                    }}
-                />
+                {/* Circle hitbox + hover add-points */}
+                <g
+                    pointerEvents="all"
+                    onMouseEnter={() => setIsHovered(true)}
+                    onMouseLeave={() => setIsHovered(false)}
+                >
+                    <circle
+                        cx={screenCx} cy={screenCy} r={screenR}
+                        fill="none" stroke="transparent" strokeWidth={20}
+                        pointerEvents="stroke"
+                        style={{ cursor: 'pointer' }}
+                        onClick={(e) => { e.stopPropagation(); onSelect(); }}
+                    />
+
+                    {isHovered && !contextMenu && addPointAngles.map((angle, i) => {
+                        const pos = getBubbleScreenPos(angle);
+                        return (
+                            <g
+                                key={`add-point-${i}`}
+                                style={{ cursor: 'pointer' }}
+                                onClick={(e) => handleAddPointClick(angle, e)}
+                            >
+                                <circle cx={pos.x} cy={pos.y} r={ADD_POINT_HIT_RADIUS} fill="transparent" />
+                                <circle cx={pos.x} cy={pos.y} r={ADD_POINT_RADIUS} fill="#ef4444" stroke="none" />
+                            </g>
+                        );
+                    })}
+                </g>
 
                 {/* Bubbles */}
                 {viewTypes.map(vt => {
@@ -305,7 +370,7 @@ export const CircleOverlay: React.FC<CircleOverlayProps> = ({
                     y={contextMenu.y}
                     ecoreNodes={ecoreNodes}
                     onAdd={handleAddViewType}
-                    onClose={() => setContextMenu(null)}
+                    onClose={() => { setContextMenu(null); setPendingAngle(null); }}
                 />
             )}
 
