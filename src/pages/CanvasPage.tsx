@@ -569,20 +569,17 @@ const CanvasProjectLoadStateOverlay: React.FC<CanvasProjectLoadStateOverlayProps
     notFound: 'This project does not exist or may have been deleted.',
     error: 'The project could not be loaded. Please try again.',
   };
+  const overlayStyle: React.CSSProperties = {
+    position: 'absolute',
+    inset: 0,
+    zIndex: 5000,
+    display: 'grid',
+    placeItems: 'center',
+    background: '#f8fafc',
+    fontFamily: 'ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, sans-serif',
+  };
 
-  return (
-    <div
-      role={isLoading ? 'status' : 'alert'}
-      style={{
-        position: 'absolute',
-        inset: 0,
-        zIndex: 5000,
-        display: 'grid',
-        placeItems: 'center',
-        background: '#f8fafc',
-        fontFamily: 'ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, sans-serif',
-      }}
-    >
+  const content = (
       <div style={{
         width: 'min(420px, calc(100vw - 32px))',
         padding: '28px 30px',
@@ -676,6 +673,15 @@ const CanvasProjectLoadStateOverlay: React.FC<CanvasProjectLoadStateOverlayProps
           </div>
         )}
       </div>
+  );
+
+  if (isLoading) {
+    return <output style={overlayStyle}>{content}</output>;
+  }
+
+  return (
+    <div role="alert" style={overlayStyle}>
+      {content}
     </div>
   );
 };
