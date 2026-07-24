@@ -13,6 +13,13 @@ export interface LibraryMetaModel {
   genModelFileId?: number;
   vsums?: unknown[];
   projects?: unknown[];
+  /** True when the current user owns this model (derived from the `ownedByUser: true` fetch bucket). */
+  isOwnedByCurrentUser?: boolean;
+}
+
+/** True when a model is referenced by at least one project in any V-SUM. */
+export function isModelReferencedByProjects(model: LibraryMetaModel): boolean {
+  return (model.vsums?.length ?? 0) > 0 || (model.projects?.length ?? 0) > 0;
 }
 
 export interface CreateMetaModelPayload {
@@ -65,6 +72,7 @@ export function normalizeCreatedMetaModel(data: unknown): LibraryMetaModel | nul
         createdAt: typeof (data as Record<string, unknown>).createdAt === 'string'
           ? (data as Record<string, unknown>).createdAt as string
           : new Date().toISOString(),
+        isOwnedByCurrentUser: true,
       };
     }
   }
@@ -82,6 +90,8 @@ export function buildPendingMetaModelFromCreate(payload: CreateMetaModelPayload)
     createdAt: new Date().toISOString(),
     ecoreFileId: payload.ecoreFileId,
     genModelFileId: payload.genModelFileId,
+    // The current user always owns a model they just created.
+    isOwnedByCurrentUser: true,
   };
 }
 
@@ -144,21 +154,29 @@ export async function fetchLibraryMetaModels(
 ): Promise<LibraryMetaModel[]> {
   const baseFilters = stripOwnedByUser(filters);
 
-  const requests = [
+  const [unscopedResult, ownedResult, sharedResult] = await Promise.allSettled([
     apiService.findMetaModels(baseFilters),
     apiService.findMetaModels({ ...baseFilters, ownedByUser: true }),
     apiService.findMetaModels({ ...baseFilters, ownedByUser: false }),
-  ];
+  ]);
 
-  const results = await Promise.allSettled(requests);
   const lists: LibraryMetaModel[][] = [];
-  for (const result of results) {
+  for (const result of [unscopedResult, ownedResult, sharedResult]) {
     if (result.status === 'fulfilled') {
       lists.push(normalizeMetaModelList(result.value.data));
     }
   }
 
-  return mergeMetaModelsById(lists);
+  const ownedIds = new Set(
+    ownedResult.status === 'fulfilled'
+      ? normalizeMetaModelList(ownedResult.value.data).map(m => m.id)
+      : [],
+  );
+
+  return mergeMetaModelsById(lists).map(model => ({
+    ...model,
+    isOwnedByCurrentUser: ownedIds.has(model.id),
+  }));
 }
 
 /**

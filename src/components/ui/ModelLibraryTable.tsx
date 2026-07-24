@@ -29,8 +29,11 @@ import {
   extractCreatePayload,
   fetchLibraryMetaModels,
   fetchLibraryMetaModelsAfterCreate,
+  isModelReferencedByProjects,
+  LibraryMetaModel,
 } from '../../utils/metaModelList';
 import { PortalRowActionsMenu } from './PortalRowActionsMenu';
+import { ConfirmDialog } from './ConfirmDialog';
 
 interface ModelLibraryTableProps {
   onModelOpen?: (model: any) => void;
@@ -722,6 +725,8 @@ export const ModelLibraryTable: React.FC<ModelLibraryTableProps> = ({ onModelOpe
   const [showAdvancedSearch, setShowAdvancedSearch] = useState(false);
   const [showCreate, setShowCreate] = useState(false);
   const [viewModel, setViewModel] = useState<any>(null);
+  const [deletingModel, setDeletingModel] = useState<LibraryMetaModel | null>(null);
+  const [deleteError, setDeleteError] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 10;
   const searchInputRef = useRef<HTMLInputElement>(null);
@@ -805,6 +810,43 @@ export const ModelLibraryTable: React.FC<ModelLibraryTableProps> = ({ onModelOpe
     }
   }, [clearAllFilters]);
 
+  const requestDeleteModel = useCallback((model: LibraryMetaModel) => {
+    // Both rules are checked up front so a model that's already known to be
+    // blocked never shows a "Delete" action at all — only the reason + Cancel.
+    if (!model.isOwnedByCurrentUser) {
+      setDeleteError('Only the owner of this model can delete it.');
+    } else if (isModelReferencedByProjects(model)) {
+      setDeleteError('This model is used by one or more projects and cannot be deleted.');
+    } else {
+      setDeleteError('');
+    }
+    setDeletingModel(model);
+  }, []);
+
+  const cancelDeleteModel = useCallback(() => {
+    setDeletingModel(null);
+    setDeleteError('');
+  }, []);
+
+  const performDelete = useCallback(async () => {
+    if (!deletingModel) return;
+    try {
+      await apiService.deleteMetaModel(String(deletingModel.id));
+      setModels(prev => prev.filter(m => m.id !== deletingModel.id));
+      setDeletingModel(null);
+      setDeleteError('');
+      if (viewModel?.id === deletingModel.id) setViewModel(null);
+    } catch (e: unknown) {
+      // "Referenced by a project" can only be fully known by the backend (it
+      // spans every V-SUM, not just ones visible to this user) — if it rejects
+      // the request for either rule, switch to the same reason-only + Cancel
+      // state instead of leaving an actionable "Delete" button up.
+      setDeleteError(e instanceof Error ? e.message : 'Failed to delete model');
+    }
+  }, [deletingModel, viewModel]);
+
+  const isDeleteBlocked = !!deleteError;
+
   const appendSearchFilter = (key: 'name' | 'domain' | 'keywords' | 'created', value: string) => {
     setSearch(prev => appendMetaModelSearchToken(prev, key, value));
   };
@@ -852,6 +894,7 @@ export const ModelLibraryTable: React.FC<ModelLibraryTableProps> = ({ onModelOpe
           setViewModel(model);
           onModelOpen?.(model);
         }}
+        onDelete={() => requestDeleteModel(model)}
       />
     ));
   }
@@ -1038,6 +1081,18 @@ export const ModelLibraryTable: React.FC<ModelLibraryTableProps> = ({ onModelOpe
           onUpdated={() => { fetchModels(); }}
         />
       )}
+
+      <ConfirmDialog
+        isOpen={!!deletingModel}
+        title="Delete model"
+        message={deleteError || `Do you really want to delete "${deletingModel?.name}"? This action cannot be undone.`}
+        confirmText={isDeleteBlocked ? 'Cancel' : 'Delete'}
+        cancelText="Cancel"
+        singleAction={isDeleteBlocked}
+        variant="danger"
+        onConfirm={isDeleteBlocked ? cancelDeleteModel : performDelete}
+        onCancel={cancelDeleteModel}
+      />
     </div>
   );
 };
@@ -1047,11 +1102,12 @@ export const ModelLibraryTable: React.FC<ModelLibraryTableProps> = ({ onModelOpe
 interface TableRowProps {
   model: any;
   onView: () => void;
+  onDelete: () => void;
 }
 
-const TableRow: React.FC<TableRowProps> = ({ model, onView }) => {
+const TableRow: React.FC<TableRowProps> = ({ model, onView, onDelete }) => {
   const [hovered, setHovered] = useState(false);
-  const hasProjects = model.vsums?.length > 0 || model.projects?.length > 0;
+  const hasProjects = isModelReferencedByProjects(model);
 
   return (
     <tr
@@ -1083,6 +1139,9 @@ const TableRow: React.FC<TableRowProps> = ({ model, onView }) => {
           minWidth={140}
           actions={[
             { label: 'View details', onClick: onView },
+            ...(model.isOwnedByCurrentUser
+              ? [{ label: 'Delete', onClick: onDelete, danger: true, dividerBefore: true }]
+              : []),
           ]}
         />
       </td>

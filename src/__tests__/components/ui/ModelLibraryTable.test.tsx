@@ -5,6 +5,7 @@ import { ModelDetailModal, ModelLibraryTable } from '../../../components/ui/Mode
 jest.mock('../../../services/api', () => ({
   apiService: {
     findMetaModels: jest.fn(),
+    deleteMetaModel: jest.fn(),
   },
 }));
 
@@ -24,15 +25,26 @@ jest.mock('../../../components/ui/CreateModelModal', () => ({
 }));
 
 const { apiService } = require('../../../services/api') as {
-  apiService: { findMetaModels: jest.Mock };
+  apiService: { findMetaModels: jest.Mock; deleteMetaModel: jest.Mock };
 };
 
 const existingModel = { id: 1, name: 'Existing Model', createdAt: new Date().toISOString(), ecoreFileId: 1, genModelFileId: 1 };
 const newModel = { id: 2, name: 'New Model', createdAt: new Date().toISOString(), ecoreFileId: 5, genModelFileId: 6 };
 
+/** Mocks the 3 parallel find-all buckets fetchLibraryMetaModels issues: unscoped, owned, shared. */
+const mockLibraryFetch = (options: { owned?: any[]; notOwned?: any[] }) => {
+  const owned = options.owned ?? [];
+  const notOwned = options.notOwned ?? [];
+  apiService.findMetaModels
+    .mockResolvedValueOnce({ data: [...owned, ...notOwned] })
+    .mockResolvedValueOnce({ data: owned })
+    .mockResolvedValueOnce({ data: notOwned });
+};
+
 describe('ModelLibraryTable', () => {
   beforeEach(() => {
     apiService.findMetaModels.mockReset();
+    apiService.deleteMetaModel.mockReset();
     apiService.findMetaModels.mockResolvedValue({ data: [existingModel] });
   });
 
@@ -107,5 +119,84 @@ describe('ModelLibraryTable', () => {
     const formLabels = Array.from(document.querySelector('form')!.querySelectorAll('label'))
       .map((label) => label.textContent);
     expect(formLabels).toEqual(['Name', 'Keywords', 'Description', 'Domain']);
+  });
+
+  describe('delete model', () => {
+    it('lets the owner delete a model that is not referenced by any project', async () => {
+      apiService.findMetaModels.mockReset();
+      mockLibraryFetch({ owned: [existingModel] });
+      apiService.deleteMetaModel.mockResolvedValue({ data: null, message: '' });
+
+      render(<ModelLibraryTable />);
+      await waitFor(() => expect(screen.getByText('Existing Model')).toBeInTheDocument());
+
+      fireEvent.click(screen.getByLabelText('Row actions'));
+      fireEvent.click(screen.getByRole('menuitem', { name: 'Delete' }));
+      expect(screen.getByText('Delete model')).toBeInTheDocument();
+
+      await act(async () => {
+        fireEvent.click(screen.getByRole('button', { name: 'Delete' }));
+      });
+
+      expect(apiService.deleteMetaModel).toHaveBeenCalledWith('1');
+      await waitFor(() => expect(screen.queryByText('Existing Model')).not.toBeInTheDocument());
+    });
+
+    it('does not offer a delete action for models the current user does not own', async () => {
+      apiService.findMetaModels.mockReset();
+      mockLibraryFetch({ notOwned: [existingModel] });
+
+      render(<ModelLibraryTable />);
+      await waitFor(() => expect(screen.getByText('Existing Model')).toBeInTheDocument());
+
+      fireEvent.click(screen.getByLabelText('Row actions'));
+      expect(screen.queryByRole('menuitem', { name: 'Delete' })).not.toBeInTheDocument();
+      expect(screen.getByRole('menuitem', { name: 'View details' })).toBeInTheDocument();
+    });
+
+    it('blocks deletion up front for a model referenced by a project — only the reason and Cancel are shown', async () => {
+      const referencedModel = { ...existingModel, vsums: [{ id: 99 }] };
+      apiService.findMetaModels.mockReset();
+      mockLibraryFetch({ owned: [referencedModel] });
+
+      render(<ModelLibraryTable />);
+      await waitFor(() => expect(screen.getByText('Existing Model')).toBeInTheDocument());
+
+      fireEvent.click(screen.getByLabelText('Row actions'));
+      fireEvent.click(screen.getByRole('menuitem', { name: 'Delete' }));
+
+      // No API call and no way to confirm — the dialog opens already blocked.
+      expect(screen.getByText('This model is used by one or more projects and cannot be deleted.')).toBeInTheDocument();
+      expect(apiService.deleteMetaModel).not.toHaveBeenCalled();
+      expect(screen.queryByRole('button', { name: 'Delete' })).not.toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Cancel' })).toBeInTheDocument();
+
+      fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+      expect(screen.queryByText('Delete model')).not.toBeInTheDocument();
+      expect(screen.getByText('Existing Model')).toBeInTheDocument();
+    });
+
+    it('falls back to the same reason-only + Cancel state when the backend rejects the deletion', async () => {
+      apiService.findMetaModels.mockReset();
+      mockLibraryFetch({ owned: [existingModel] });
+      apiService.deleteMetaModel.mockRejectedValue(new Error('Model is still referenced by a project.'));
+
+      render(<ModelLibraryTable />);
+      await waitFor(() => expect(screen.getByText('Existing Model')).toBeInTheDocument());
+
+      fireEvent.click(screen.getByLabelText('Row actions'));
+      fireEvent.click(screen.getByRole('menuitem', { name: 'Delete' }));
+      expect(screen.getByRole('button', { name: 'Delete' })).toBeInTheDocument();
+
+      await act(async () => {
+        fireEvent.click(screen.getByRole('button', { name: 'Delete' }));
+      });
+
+      expect(screen.getByText('Model is still referenced by a project.')).toBeInTheDocument();
+      expect(screen.getByText('Existing Model')).toBeInTheDocument();
+      // The dialog no longer offers a "Delete" retry — only acknowledge and close.
+      expect(screen.queryByRole('button', { name: 'Delete' })).not.toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Cancel' })).toBeInTheDocument();
+    });
   });
 });
