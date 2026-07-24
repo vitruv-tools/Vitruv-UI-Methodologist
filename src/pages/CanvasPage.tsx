@@ -24,6 +24,10 @@ import {
   CanvasProjectLoadState,
   CanvasProjectLoadStateOverlay,
 } from '../components/canvas/CanvasProjectLoadStateOverlay';
+import {
+  CanvasPopupNotification,
+  type CanvasPopupNotificationType,
+} from '../components/canvas/CanvasPopupNotification';
 import { ProjectPickerMenu } from '../components/canvas/ProjectPickerMenu';
 import { UnsavedTabCloseDialog } from '../components/canvas/UnsavedTabCloseDialog';
 import { CanvasTabSession, CanvasUmlPanelState, EcoreFileExpandMeta, OpenCanvasTab } from '../types/canvasTab';
@@ -379,40 +383,6 @@ async function loadOpenCanvasTab(
 
 const fetchEcoreFileById = (fileId: number) => apiService.getFile(fileId);
 
-type PopupNotificationType = 'success' | 'error' | 'info';
-
-function getPopupNotificationStyles(type: PopupNotificationType) {
-  if (type === 'success') {
-    return { background: '#f0fdf4', border: '1px solid #86efac', color: '#15803d' };
-  }
-  if (type === 'error') {
-    return { background: '#fef2f2', border: '1px solid #fca5a5', color: '#dc2626' };
-  }
-  return { background: '#eff6ff', border: '1px solid #bfdbfe', color: '#1d4ed8' };
-}
-
-const CanvasPopupNotification: React.FC<{ message: string; type: PopupNotificationType }> = ({
-  message,
-  type,
-}) => {
-  const popupStyles = getPopupNotificationStyles(type);
-  return (
-    <div style={{
-      position: 'fixed', bottom: 24, left: '50%', transform: 'translateX(-50%)',
-      zIndex: 9999, maxWidth: 480, width: 'max-content',
-      maxHeight: '60vh', overflowY: 'auto',
-      background: popupStyles.background,
-      border: popupStyles.border,
-      color: popupStyles.color,
-      borderRadius: 10, padding: '10px 16px', fontSize: 13, fontWeight: 500,
-      boxShadow: '0 4px 16px rgba(0,0,0,0.12)',
-      whiteSpace: 'pre-wrap', overflowWrap: 'anywhere', boxSizing: 'border-box',
-    }}>
-      {message}
-    </div>
-  );
-};
-
 function updatePanelEcoreContent(panels: UMLPanel[], panelId: string, content: string): UMLPanel[] {
   return panels.map(p => (p.id === panelId ? { ...p, ecoreContent: content } : p));
 }
@@ -577,7 +547,7 @@ export const CanvasPage: React.FC = () => {
   const [checkingBuild, setCheckingBuild] = useState(false);
   const [downloadingArtifact, setDownloadingArtifact] = useState(false);
   const [savingChanges, setSavingChanges] = useState(false);
-  const [popup, setPopup] = useState<{ message: string; type: 'success' | 'error' | 'info' } | null>(null);
+  const [popup, setPopup] = useState<{ message: string; type: CanvasPopupNotificationType } | null>(null);
 
   const [openTabs, setOpenTabs] = useState<OpenCanvasTab[]>([]);
   const [activeInstanceId, setActiveInstanceId] = useState<string | null>(null);
