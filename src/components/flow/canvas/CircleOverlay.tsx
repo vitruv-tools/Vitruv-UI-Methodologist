@@ -306,11 +306,11 @@ export const CircleOverlay: React.FC<CircleOverlayProps> = ({
                         onClick={(e) => { e.stopPropagation(); onSelect(); }}
                     />
 
-                    {isHovered && !contextMenu && addPointAngles.map((angle, i) => {
+                    {isHovered && !contextMenu && addPointAngles.map((angle) => {
                         const pos = getBubbleScreenPos(angle);
                         return (
                             <g
-                                key={`add-point-${i}`}
+                                key={`add-point-${angle.toFixed(5)}`}
                                 style={{ cursor: 'pointer' }}
                                 onClick={(e) => handleAddPointClick(angle, e)}
                             >
