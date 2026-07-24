@@ -6,19 +6,19 @@ import { ShareProjectModal } from '../components/ui/ShareProjectModal';
 import { HoverTooltip } from '../components/ui/HoverTooltip';
 import { ConfirmDialog } from '../components/ui/ConfirmDialog';
 import { ProfileModal } from '../components/ui/ProfileModal';
-import ReactDOM from 'react-dom';
 import { useNavigate, useParams, useLocation } from 'react-router-dom';
 import { Node, Edge } from 'reactflow';
 import { CanvasMode, FlowCanvas } from '../components/flow/FlowCanvas';
 import { ConstraintsView } from '../components/constraints/ConstraintsView';
 import { FloatingUMLPanel } from '../components/canvas/FloatingUMLPanel';
 import { UmlDiagramSaveContext } from '../components/canvas/UMLDiagram';
-import { ModelDrawer, DrawerModel } from '../components/canvas/ModelDrawer';
+import { DrawerModel } from '../components/canvas/ModelDrawer';
+import { ModelDrawerModal } from '../components/canvas/ModelDrawerModal';
 import { apiService, VsumRole, VsumUserResponse } from '../services/api';
 import { VsumDetails } from '../types';
 import { VsumMetaModelRef } from '../types/vsum';
 import { WorkspaceSnapshot, WorkspaceSnapshotRequest } from '../types/workspace';
-import { MODAL_Z_INDEX, modalBackdropStyle, useModalBodyLock } from '../components/ui/modalUtils';
+import { MODAL_Z_INDEX, useModalBodyLock } from '../components/ui/modalUtils';
 import { CanvasProjectTabs } from '../components/canvas/CanvasProjectTabs';
 import {
   CanvasProjectLoadState,
@@ -451,65 +451,6 @@ const CanvasUmlPanelLayer: React.FC<CanvasUmlPanelLayerProps> = ({
       />
     ))}
   </>
-);
-
-interface ModelDrawerModalProps {
-  models: DrawerModel[];
-  addedModelIds: Set<number>;
-  loading: boolean;
-  myLibraryModels: DrawerModel[];
-  publicLibraryModels: DrawerModel[];
-  onClose: () => void;
-  onAddModel: (model: DrawerModel) => void;
-  onDeleteModel?: (model: DrawerModel) => Promise<void>;
-}
-
-const ModelDrawerModal: React.FC<ModelDrawerModalProps> = ({
-  models,
-  addedModelIds,
-  loading,
-  myLibraryModels,
-  publicLibraryModels,
-  onClose,
-  onAddModel,
-  onDeleteModel,
-}) => ReactDOM.createPortal(
-  <>
-    <button
-      type="button"
-      aria-hidden="true"
-      tabIndex={-1}
-      onClick={onClose}
-      style={{ ...modalBackdropStyle, zIndex: MODAL_Z_INDEX }}
-    />
-    <div style={{
-      position: 'fixed',
-      top: '50%', left: '50%',
-      transform: 'translate(-50%, -50%)',
-      width: 'min(800px, 92vw)',
-      height: 'min(700px, 88vh)',
-      zIndex: MODAL_Z_INDEX + 1,
-      pointerEvents: 'auto',
-      background: '#ffffff',
-      borderRadius: 10,
-      boxShadow: '0 24px 64px rgba(0,0,0,0.28), 0 4px 16px rgba(0,0,0,0.10)',
-      border: '1px solid #e2e8f0',
-      overflow: 'hidden',
-    }}>
-      <ModelDrawer
-        models={models}
-        addedModelIds={addedModelIds}
-        loading={loading}
-        onClose={onClose}
-        onAddModel={onAddModel}
-        onDeleteModel={onDeleteModel}
-        myLibraryModels={myLibraryModels}
-        publicLibraryModels={publicLibraryModels}
-        onFetchFile={fetchEcoreFileById}
-      />
-    </div>
-  </>,
-  document.body,
 );
 
 // ── CanvasPage ────────────────────────────────────────────────────────────────
@@ -1665,6 +1606,7 @@ export const CanvasPage: React.FC = () => {
           onClose={handleCloseDrawer}
           onAddModel={handleAddModel}
           onDeleteModel={handleDeleteModel}
+          onFetchFile={fetchEcoreFileById}
         />
       )}
 
