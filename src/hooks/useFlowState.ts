@@ -9,13 +9,40 @@ interface UseFlowStateProps {
 
 type DiagramState = { nodes: Node[]; edges: Edge[]; idCounter: number };
 
+// React Flow manages these fields internally — width/height/positionAbsolute come from
+// its own post-render measurement of the DOM node, dragging/selected are transient
+// interaction UI state. None of them are user-intentional diagram edits, so they must be
+// excluded when deciding whether a new undo/redo history entry is warranted. Otherwise,
+// applying an older history state (e.g. one saved before a node was first measured)
+// causes React Flow to immediately re-measure and re-populate width/height, which the
+// diff would treat as a fresh "change" and auto-save right back — silently undoing the
+// user's undo.
+const NODE_FIELDS_IGNORED_FOR_HISTORY = ['width', 'height', 'positionAbsolute', 'dragging', 'selected', 'resizing'] as const;
+const EDGE_FIELDS_IGNORED_FOR_HISTORY = ['selected'] as const;
+
+function omitFields<T extends object>(obj: T, fields: readonly string[]): T {
+  const clone: any = { ...obj };
+  fields.forEach(f => delete clone[f]);
+  return clone;
+}
+
+function normalizeForHistoryComparison(state: DiagramState): DiagramState {
+  return {
+    nodes: state.nodes.map(n => omitFields(n, NODE_FIELDS_IGNORED_FOR_HISTORY)),
+    edges: state.edges.map(e => omitFields(e, EDGE_FIELDS_IGNORED_FOR_HISTORY)),
+    idCounter: state.idCounter,
+  };
+}
+
 function hasDiagramStateChanged(lastSaved: DiagramState, current: DiagramState): boolean {
+  const a = normalizeForHistoryComparison(lastSaved);
+  const b = normalizeForHistoryComparison(current);
   return (
-    lastSaved.nodes.length !== current.nodes.length ||
-    lastSaved.edges.length !== current.edges.length ||
-    lastSaved.idCounter !== current.idCounter ||
-    JSON.stringify(lastSaved.nodes) !== JSON.stringify(current.nodes) ||
-    JSON.stringify(lastSaved.edges) !== JSON.stringify(current.edges)
+    a.nodes.length !== b.nodes.length ||
+    a.edges.length !== b.edges.length ||
+    a.idCounter !== b.idCounter ||
+    JSON.stringify(a.nodes) !== JSON.stringify(b.nodes) ||
+    JSON.stringify(a.edges) !== JSON.stringify(b.edges)
   );
 }
 
@@ -189,18 +216,12 @@ export function useFlowState(props?: UseFlowStateProps) {
     [getId, setEdges, nodes, chooseHandlesForPair]
   );
 
-  const addNode = useCallback((node: Omit<Node, 'id'>) => {
+  const addNode = useCallback((node: (Omit<Node, 'id'> & { id?: string })) => {
     const newNode: Node = {
       ...node,
-      id: getId(),
+      id: node.id ?? getId(),
     };
-    console.log('useFlowState.addNode called with:', node);
-    console.log('Created newNode:', newNode);
-    setNodes((nds) => {
-      const newNodes = nds.concat(newNode);
-      console.log('Updated nodes array:', newNodes);
-      return newNodes;
-    });
+    setNodes((nds) => nds.concat(newNode));
     return newNode.id;
   }, [getId, setNodes]);
 
