@@ -898,17 +898,11 @@ interface UMLDiagramProps {
   vsumId?: string;
 }
 
-const REL_TYPE_CYCLE: UMLRelType[] = ['association', 'composition', 'inheritance'];
 const REL_TYPE_LABELS: Record<UMLRelType, string> = {
   association: 'Association',
   composition: 'Composition',
   inheritance: 'Inheritance',
 };
-
-function nextRelType(current: UMLRelType): UMLRelType {
-  const idx = REL_TYPE_CYCLE.indexOf(current);
-  return REL_TYPE_CYCLE[(idx + 1) % REL_TYPE_CYCLE.length];
-}
 
 function isKeyboardInputField(target: EventTarget | null): boolean {
   const tag = (target as HTMLElement | null)?.tagName;
@@ -1932,13 +1926,6 @@ export const UMLDiagram = forwardRef<UMLDiagramHandle, UMLDiagramProps>(({
     setSelectedRelId(prev => (prev === relId ? null : prev));
   }, [recordChange]);
 
-  const cycleRelationshipType = useCallback((relId: string) => {
-    recordChange();
-    setRelationships(prev => prev.map(r =>
-      r.id === relId ? { ...r, type: nextRelType(r.type) } : r,
-    ));
-  }, [recordChange]);
-
   const updateRelationship = useCallback((relId: string, patch: Partial<UMLRelationship>) => {
     recordChange();
     setRelationships(prev => prev.map(r => (r.id === relId ? { ...r, ...patch } : r)));
@@ -2002,12 +1989,9 @@ export const UMLDiagram = forwardRef<UMLDiagramHandle, UMLDiagramProps>(({
       setSelectedClassId(null);
       return;
     }
-    if (e.detail >= 2 && interactive && reactionsMode !== 'reactions') {
-      cycleRelationshipType(relId);
-    }
     setEditingReactionId(null);
     setSelectedRelId(relId);
-  }, [interactive, reactionsMode, reactionEdges, cycleRelationshipType, openReactionEditor]);
+  }, [reactionsMode, reactionEdges, openReactionEditor]);
 
   const isDirty = useCallback(() => {
     return umlSemanticSnapshot(getModel()) !== initialSnapshotRef.current;
@@ -3060,6 +3044,7 @@ function getClassBoxNameSectionInteractionProps(params: {
   selected: boolean;
   edit: EditState | null;
   classId: string;
+  didDragRef: ClassBoxDidDragRef;
   onSelect: () => void;
   onStartEditName: () => void;
 }): Pick<React.ButtonHTMLAttributes<HTMLButtonElement>, 'onDoubleClick' | 'onClick' | 'onKeyDown'> {
@@ -3074,6 +3059,7 @@ function getClassBoxNameSectionInteractionProps(params: {
       params.selected,
       params.edit,
       params.classId,
+      params.didDragRef,
       params.onSelect,
       params.onStartEditName,
     ),
@@ -3109,7 +3095,8 @@ function startClassBoxDrag({
   onDragEnd: () => void;
 }): void {
   const target = e.target as HTMLElement;
-  if (target.closest('input, button, [data-no-drag], [data-reaction-port]')) return;
+  // Allow drag from a11y <button> surfaces (name / members). Keep true controls non-draggable.
+  if (target.closest('input, select, textarea, [data-no-drag], [data-reaction-port]')) return;
   e.stopPropagation();
   didDragRef.current = false;
   onDragStart();
@@ -3154,10 +3141,15 @@ function handleClassBoxNameSectionClick(
   selected: boolean,
   edit: EditState | null,
   classId: string,
+  didDragRef: ClassBoxDidDragRef,
   onSelect: () => void,
   onStartEditName: () => void,
 ): void {
   e.stopPropagation();
+  if (didDragRef.current) {
+    didDragRef.current = false;
+    return;
+  }
   if (!interactive) return;
   if (!selected) {
     onSelect();
@@ -3185,6 +3177,7 @@ interface ClassBoxNameSectionProps {
   selected: boolean;
   isEditingName: boolean;
   nameSectionH: number;
+  didDragRef: ClassBoxDidDragRef;
   onSelect: () => void;
   onStartEditName: () => void;
   onSaveName: (name: string) => void;
@@ -3193,7 +3186,7 @@ interface ClassBoxNameSectionProps {
 }
 
 const ClassBoxNameSection: React.FC<ClassBoxNameSectionProps> = ({
-  cls, edit, interactive, selected, isEditingName, nameSectionH,
+  cls, edit, interactive, selected, isEditingName, nameSectionH, didDragRef,
   onSelect, onStartEditName, onSaveName, onCancelEdit, onEditChange,
 }) => {
   const isAbstractOrIface = cls.isAbstract || cls.isInterface;
@@ -3209,6 +3202,7 @@ const ClassBoxNameSection: React.FC<ClassBoxNameSectionProps> = ({
     selected,
     edit,
     classId: cls.id,
+    didDragRef,
     onSelect,
     onStartEditName,
   });
@@ -3274,7 +3268,7 @@ const ClassBoxNameSection: React.FC<ClassBoxNameSectionProps> = ({
         margin: 0,
         width: '100%',
         boxSizing: 'border-box',
-        cursor: interactive ? 'pointer' : 'default',
+        cursor: interactive ? 'grab' : 'default',
         font: 'inherit',
         textAlign: 'center',
       }}
@@ -3395,6 +3389,7 @@ const ClassBox: React.FC<ClassBoxProps> = ({
         selected={selected}
         isEditingName={isEditingName}
         nameSectionH={nameSectionH}
+        didDragRef={didDragRef}
         onSelect={onSelect}
         onStartEditName={onStartEditName}
         onSaveName={onSaveName}
@@ -4480,7 +4475,7 @@ const RelationshipEditPanel: React.FC<{
       </div>
 
       <div style={{ padding: '8px 14px', borderTop: `1px solid ${UML.border}`, fontSize: 10, color: UML.textMuted, lineHeight: 1.45 }}>
-        Double-click a line to cycle type · Delete key removes selection · Close with ✕
+        Change type in this panel · Delete key removes selection · Close with ✕
       </div>
     </DiagramEditPanelShell>
   );

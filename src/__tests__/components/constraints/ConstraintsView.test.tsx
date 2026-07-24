@@ -91,8 +91,8 @@ jest.mock('../../../components/ui/sharedStyles', () => ({
 }));
 
 jest.mock('../../../components/ui/modalUtils', () => ({
-  modalBackdropStyle: {},
-  modalDialogShellStyle: {},
+  ...jest.requireActual('../../../components/ui/modalUtils'),
+  useModalBodyLock: jest.fn(),
 }));
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -503,6 +503,7 @@ describe('ConstraintsView', () => {
       await waitFor(() => {
         expect(screen.getByText('Detailed Metrics')).toBeInTheDocument();
       });
+      expect(document.querySelector('dialog[open]')).toBeTruthy();
     });
   });
 
