@@ -47,6 +47,25 @@ describe('useFlowState', () => {
             expect(labels).toContain('Node 1');
             expect(labels).toContain('Node 2');
         });
+
+        it('should use a caller-provided id instead of overwriting it, when one is given', () => {
+            // Mirrors FlowCanvas.addEcoreFile, which builds a semantic id (e.g. "ecore-42")
+            // up front and relies on it being the id actually stored in state.
+            const { result } = renderHook(() => useFlowState());
+
+            let nodeId: string = '';
+            act(() => {
+                nodeId = result.current.addNode({
+                    id: 'ecore-42',
+                    position: { x: 0, y: 0 },
+                    data: { label: 'Metamodel' },
+                } as any);
+            });
+
+            expect(nodeId).toBe('ecore-42');
+            expect(result.current.nodes).toHaveLength(1);
+            expect(result.current.nodes[0].id).toBe('ecore-42');
+        });
     });
 
     describe('removeNode', () => {
@@ -213,6 +232,83 @@ describe('useFlowState', () => {
 
             expect(result.current.nodes).toHaveLength(0);
             expect(result.current.edges).toHaveLength(0);
+        });
+    });
+
+    describe('undo integration', () => {
+        it('removes a newly added node when undo is called', () => {
+            const { result } = renderHook(() => useFlowState());
+
+            act(() => {
+                result.current.addNode({ position: { x: 0, y: 0 }, data: { label: 'Node 1' } });
+            });
+            expect(result.current.nodes).toHaveLength(1);
+            expect(result.current.canUndo).toBe(true);
+
+            act(() => {
+                result.current.undo();
+            });
+            expect(result.current.nodes).toHaveLength(0);
+        });
+
+        it('a single undo fully removes an added node even after ReactFlow re-measures it (width/height/selected/dragging)', () => {
+            // Reproduces the real bug: ReactFlow measures a node's DOM size after it first
+            // renders and writes width/height back via setNodes — a React-Flow-internal
+            // bookkeeping update, not a user edit. Before the fix, that measurement was
+            // treated as a real "Node modified" history entry, so a single Undo only
+            // stripped the measurement back off and left the node itself in place.
+            const { result } = renderHook(() => useFlowState());
+
+            act(() => {
+                result.current.addNode({ position: { x: 0, y: 0 }, data: { label: 'New Metamodel' } });
+            });
+            expect(result.current.nodes).toHaveLength(1);
+
+            act(() => {
+                result.current.setNodes(nds => nds.map(n => ({
+                    ...n,
+                    width: 118,
+                    height: 126,
+                    positionAbsolute: n.position,
+                    selected: false,
+                    dragging: false,
+                })));
+            });
+            expect(result.current.nodes[0]).toMatchObject({ width: 118, height: 126 });
+
+            act(() => {
+                result.current.undo();
+            });
+            expect(result.current.nodes).toHaveLength(0);
+        });
+
+        it('establishBaseline resets canUndo to false and undo no longer reverts prior nodes', () => {
+            // Mirrors hydrateCanvasWorkspace loading a project's existing metamodels
+            // (several addNode calls), after which establishBaseline() marks that
+            // loaded state as the undo floor — so it is not itself undoable.
+            const { result } = renderHook(() => useFlowState());
+
+            act(() => {
+                result.current.addNode({ position: { x: 0, y: 0 }, data: { label: 'Existing Metamodel' } });
+            });
+            act(() => {
+                result.current.establishBaseline();
+            });
+            expect(result.current.canUndo).toBe(false);
+            expect(result.current.nodes).toHaveLength(1);
+
+            act(() => {
+                result.current.addNode({ position: { x: 100, y: 0 }, data: { label: 'New Metamodel' } });
+            });
+            expect(result.current.nodes).toHaveLength(2);
+            expect(result.current.canUndo).toBe(true);
+
+            act(() => {
+                result.current.undo();
+            });
+            expect(result.current.nodes).toHaveLength(1);
+            expect(result.current.nodes[0].data.label).toBe('Existing Metamodel');
+            expect(result.current.canUndo).toBe(false);
         });
     });
 

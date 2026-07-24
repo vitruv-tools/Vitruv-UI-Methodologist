@@ -413,6 +413,7 @@ export const FlowCanvas = forwardRef<{
   getWorkspaceSnapshot: () => WorkspaceSnapshot;
   fitUmlView: () => void;
   openSelectedReactionEditor: () => boolean;
+  establishBaseline: () => void;
 }, FlowCanvasProps>(
   function FlowCanvasComponent(
   {
@@ -2131,7 +2132,8 @@ export const FlowCanvas = forwardRef<{
       autoLayoutEcoreBoxes,
       fitUmlView,
       openSelectedReactionEditor,
-    }), [handleToolClick, loadDiagramData, nodes, edges, addEcoreFile, updateEcoreFileData, resetExpandedFile, undo, redo, canUndo, canRedo, getReactionEdges, buildWorkspaceSnapshot, autoLayoutEcoreBoxes, fitUmlView, openSelectedReactionEditor]);
+      establishBaseline,
+    }), [handleToolClick, loadDiagramData, nodes, edges, addEcoreFile, updateEcoreFileData, resetExpandedFile, undo, redo, canUndo, canRedo, getReactionEdges, buildWorkspaceSnapshot, autoLayoutEcoreBoxes, fitUmlView, openSelectedReactionEditor, establishBaseline]);
 
     const mappedNodes = nodes.map(node => {
       if (node.type === 'editable') {

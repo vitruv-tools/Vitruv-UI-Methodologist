@@ -3,6 +3,7 @@ import {
   fetchLibraryMetaModels,
   fetchLibraryMetaModelsAfterCreate,
   findMatchingCreatedModel,
+  isModelReferencedByProjects,
   mergeCreatedMetaModel,
   normalizeCreatedMetaModel,
 } from '../../utils/metaModelList';
@@ -36,6 +37,34 @@ describe('fetchLibraryMetaModels', () => {
   it('returns empty array when all requests fail', async () => {
     findMetaModels.mockRejectedValue(new Error('network'));
     await expect(fetchLibraryMetaModels({})).resolves.toEqual([]);
+  });
+
+  it('marks models returned by the ownedByUser:true bucket as owned by the current user', async () => {
+    findMetaModels
+      .mockResolvedValueOnce({ data: [{ id: 1, name: 'Mine' }, { id: 2, name: 'Not mine' }] })
+      .mockResolvedValueOnce({ data: [{ id: 1, name: 'Mine' }] })
+      .mockResolvedValueOnce({ data: [{ id: 2, name: 'Not mine' }] });
+
+    const models = await fetchLibraryMetaModels({});
+
+    const mine = models.find(m => m.id === 1);
+    const notMine = models.find(m => m.id === 2);
+    expect(mine?.isOwnedByCurrentUser).toBe(true);
+    expect(notMine?.isOwnedByCurrentUser).toBe(false);
+  });
+});
+
+describe('isModelReferencedByProjects', () => {
+  it('is false when neither vsums nor projects are populated', () => {
+    expect(isModelReferencedByProjects({ id: 1, name: 'Eco' })).toBe(false);
+  });
+
+  it('is true when the model has at least one vsum reference', () => {
+    expect(isModelReferencedByProjects({ id: 1, name: 'Eco', vsums: [{ id: 1 }] })).toBe(true);
+  });
+
+  it('is true when the model has at least one project reference', () => {
+    expect(isModelReferencedByProjects({ id: 1, name: 'Eco', projects: [{ id: 1 }] })).toBe(true);
   });
 });
 

@@ -237,7 +237,7 @@ interface HydrateCanvasWorkspaceParams {
   details: VsumDetails;
   forInstanceId?: string;
   activeInstanceId: string | null;
-  flowCanvasRef: React.RefObject<{ getNodes?: () => Node[] } | null>;
+  flowCanvasRef: React.RefObject<{ getNodes?: () => Node[]; establishBaseline?: () => void } | null>;
   canvasMode: CanvasMode;
   setConstraintsNodes: React.Dispatch<React.SetStateAction<Node[]>>;
   setMyLibraryModels: React.Dispatch<React.SetStateAction<DrawerModel[]>>;
@@ -280,6 +280,12 @@ async function hydrateCanvasWorkspace(params: HydrateCanvasWorkspaceParams): Pro
 
   await new Promise(r => setTimeout(r, 150));
   if (isStale()) return false;
+
+  // The project's existing metamodels/relations just loaded via a sequence of
+  // canvas mutations (one per file, one per relation) — none of that should be
+  // undoable by the user. Establish it as the undo baseline, mirroring how
+  // loadDiagramData() resets the baseline for every other bulk-load path.
+  flowCanvasRef.current?.establishBaseline?.();
 
   globalThis.dispatchEvent(new CustomEvent('vitruv.fitEcoreWorkspace'));
   return true;

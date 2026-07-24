@@ -184,31 +184,56 @@ describe('CircleOverlay', () => {
         expect(screen.queryByText('⤡')).toBeNull();
     });
 
-    // Context menu
+    // Hover add-points + context menu
 
-    it('shows context menu on right-click of circle hitbox', () => {
-        const { container } = render(<CircleOverlay {...defaultProps()} />);
+    const hoverCircle = (container: HTMLElement) => {
         // The hitbox is the transparent stroke circle — find it by stroke attr
         const hitbox = container.querySelectorAll('circle')[1]; // visible + hitbox
-        fireEvent.contextMenu(hitbox);
+        fireEvent.mouseEnter(hitbox.parentElement as Element);
+        return hitbox;
+    };
+
+    it('does not show add-points before hovering the circle', () => {
+        const { container } = render(<CircleOverlay {...defaultProps()} />);
+        // add-points render as extra <g> children inside the hitbox group; none should exist yet
+        expect(container.querySelectorAll('circle')).toHaveLength(2); // visible + hitbox only
+    });
+
+    it('shows add-points on hover and hides them on mouse leave', () => {
+        const { container } = render(<CircleOverlay {...defaultProps()} />);
+        const hitbox = hoverCircle(container);
+        // 2 circles per add-point (hit area + visible dot) × 4 cardinal slots
+        expect(container.querySelectorAll('circle')).toHaveLength(2 + 4 * 2);
+
+        fireEvent.mouseLeave(hitbox.parentElement as Element);
+        expect(container.querySelectorAll('circle')).toHaveLength(2);
+    });
+
+    it('opens the context menu when an add-point is clicked', () => {
+        const { container } = render(<CircleOverlay {...defaultProps()} />);
+        hoverCircle(container);
+        const addPointDot = container.querySelectorAll('circle')[3]; // first add-point's visible dot
+        fireEvent.click(addPointDot);
         expect(screen.getByTestId('context-menu')).toBeInTheDocument();
     });
 
     it('closes context menu when onClose is called', () => {
         const { container } = render(<CircleOverlay {...defaultProps()} />);
-        const hitbox = container.querySelectorAll('circle')[1];
-        fireEvent.contextMenu(hitbox);
+        hoverCircle(container);
+        const addPointDot = container.querySelectorAll('circle')[3];
+        fireEvent.click(addPointDot);
         fireEvent.click(screen.getByTestId('context-menu-close'));
         expect(screen.queryByTestId('context-menu')).toBeNull();
     });
 
-    it('calls onAddViewType with computed angle when context menu adds a view type', () => {
+    it('calls onAddViewType with the clicked add-point angle when context menu adds a view type', () => {
         const onAddViewType = jest.fn();
         const { container } = render(
             <CircleOverlay {...defaultProps()} onAddViewType={onAddViewType} />
         );
-        const hitbox = container.querySelectorAll('circle')[1];
-        fireEvent.contextMenu(hitbox);
+        hoverCircle(container);
+        const addPointDot = container.querySelectorAll('circle')[3];
+        fireEvent.click(addPointDot);
         fireEvent.click(screen.getByTestId('context-menu-add'));
         expect(onAddViewType).toHaveBeenCalledWith(
             'VT1', 'single', ['node-1'],
@@ -283,31 +308,37 @@ describe('CircleOverlay', () => {
 
     // Angle computation
 
-    it('places first bubble at -π/2 (top) when no existing viewTypes', () => {
+    it('offers an add-point at -π/2 (top) when no existing viewTypes, and spawns the VT there', () => {
         const onAddViewType = jest.fn();
         const { container } = render(
             <CircleOverlay {...defaultProps()} onAddViewType={onAddViewType} viewTypes={[]} />
         );
-        const hitbox = container.querySelectorAll('circle')[1];
-        fireEvent.contextMenu(hitbox);
+        hoverCircle(container);
+        const topAddPointDot = container.querySelectorAll('circle')[3]; // first cardinal slot: top
+        fireEvent.click(topAddPointDot);
         fireEvent.click(screen.getByTestId('context-menu-add'));
         const angle = onAddViewType.mock.calls[0][3];
         expect(angle).toBeCloseTo(-Math.PI / 2);
     });
 
-    it('places second bubble in the largest gap between existing bubbles', () => {
+    it('relocates the top add-point into the largest gap once the top slot is occupied', () => {
         const onAddViewType = jest.fn();
         const props = {
             ...defaultProps(),
-            viewTypes: [makeViewType({ angle: -Math.PI / 2 })], // top
+            viewTypes: [makeViewType({ angle: -Math.PI / 2 })], // top is now occupied
             onAddViewType,
         };
         const { container } = render(<CircleOverlay {...props} />);
-        const hitbox = container.querySelectorAll('circle')[1];
-        fireEvent.contextMenu(hitbox);
+        hoverCircle(container);
+        // Cardinal order is top/right/bottom/left; top is occupied so right/bottom/left
+        // stay as add-points (reserved so the relocated point can't land on them too),
+        // and the 4th (relocated) add-point is computed via the same gap algorithm used
+        // for new VT bubbles — here the largest tied gap is between right (0) and
+        // bottom (π/2), so it lands at their midpoint, π/4. Rendered last.
+        const relocatedAddPointDot = container.querySelectorAll('circle')[9];
+        fireEvent.click(relocatedAddPointDot);
         fireEvent.click(screen.getByTestId('context-menu-add'));
         const angle = onAddViewType.mock.calls[0][3];
-        // Largest gap is the lower half → best angle ≈ π/2 (bottom)
-        expect(angle).toBeCloseTo(Math.PI / 2, 1);
+        expect(angle).toBeCloseTo(Math.PI / 4, 1);
     });
 });
