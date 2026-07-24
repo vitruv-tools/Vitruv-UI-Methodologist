@@ -914,5 +914,20 @@ describe('handleEdgeDoubleClick logic', () => {
       render(<FlowCanvas ref={ref} />);
       expect(screen.queryByTestId('circle-overlay')).not.toBeInTheDocument();
     });
+
+    it('renders CircleOverlay when canvasMode is restored as Views', () => {
+      const ref = createRef<any>();
+      render(<FlowCanvas ref={ref} canvasMode="views" />);
+      expect(screen.getByTestId('circle-overlay')).toBeInTheDocument();
+    });
+
+    it('syncs CircleOverlay when canvasMode changes', () => {
+      const ref = createRef<any>();
+      const { rerender } = render(<FlowCanvas ref={ref} canvasMode="views" />);
+      expect(screen.getByTestId('circle-overlay')).toBeInTheDocument();
+
+      rerender(<FlowCanvas ref={ref} canvasMode="modeling" />);
+      expect(screen.queryByTestId('circle-overlay')).not.toBeInTheDocument();
+    });
   });
 });
