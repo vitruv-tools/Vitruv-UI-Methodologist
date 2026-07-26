@@ -76,9 +76,9 @@ export function computeParallelEdgeReorder(
   const edge = prevEdges.find(e => e.id === edgeId);
   if (edge?.type !== 'reactions') return prevEdges;
 
-  const sourceNode = nodes.find(n => n.id === edge.source);
-  const targetNode = nodes.find(n => n.id === edge.target);
-  if (!sourceNode || !targetNode) return prevEdges;
+  const hasBothEndpoints = nodes.some(n => n.id === edge.source)
+    && nodes.some(n => n.id === edge.target);
+  if (!hasBothEndpoints) return prevEdges;
 
   const sameSourceEdges = prevEdges.filter(
     e => e.type === 'reactions' && e.source === edge.source && e.sourceHandle === edge.sourceHandle,

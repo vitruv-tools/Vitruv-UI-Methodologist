@@ -140,8 +140,6 @@ export interface FlowCanvasHandle {
 }
 
 interface FlowCanvasProps {
-  onDeploy?: (nodes: Node[], edges: Edge[]) => void;
-  onToolClick?: (toolType: string, toolName: string, diagramType?: string) => void;
   onDiagramChange?: (nodes: Node[], edges: Edge[]) => void;
   onEcoreFileSelect?: (fileName: string) => void;
   onEcoreFileExpand?: (fileName: string, fileContent: string, meta?: {

@@ -12,6 +12,19 @@ interface EdgeSelectionEventOptions {
   setSelectedFileId: (id: string | null) => void;
 }
 
+/** Toggles the named edge's selection and clears every other edge. */
+export function selectOnlyEdge(edges: Edge[], edgeId: string, currentlySelected: boolean): Edge[] {
+  return edges.map(edge => ({
+    ...edge,
+    selected: edge.id === edgeId ? !currentlySelected : false,
+  }));
+}
+
+/** Clears the selection flag on every node. */
+export function deselectAllNodes(nodes: Node[]): Node[] {
+  return nodes.map(node => ({ ...node, selected: false }));
+}
+
 /**
  * Selecting an edge is exclusive: it clears every other edge, all nodes, and
  * the selected-file highlight.
@@ -28,11 +41,8 @@ export function useEdgeSelectionEvents({
         currentlySelected: boolean;
       }>).detail;
 
-      setEdges(prev => prev.map(edge => ({
-        ...edge,
-        selected: edge.id === edgeId ? !currentlySelected : false,
-      })));
-      setNodes(prev => prev.map(node => ({ ...node, selected: false })));
+      setEdges(prev => selectOnlyEdge(prev, edgeId, currentlySelected));
+      setNodes(deselectAllNodes);
       setSelectedFileId(null);
     };
 
