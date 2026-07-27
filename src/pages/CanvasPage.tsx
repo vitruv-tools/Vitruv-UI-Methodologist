@@ -10,10 +10,10 @@ import { useNavigate, useParams, useLocation } from 'react-router-dom';
 import { Node, Edge } from 'reactflow';
 import { CanvasMode, FlowCanvas } from '../components/flow/FlowCanvas';
 import { ConstraintsView } from '../components/constraints/ConstraintsView';
-import { FloatingUMLPanel } from '../components/canvas/FloatingUMLPanel';
 import { UmlDiagramSaveContext } from '../components/canvas/UMLDiagram';
 import { DrawerModel } from '../components/canvas/ModelDrawer';
 import { ModelDrawerModal } from '../components/canvas/ModelDrawerModal';
+import { CanvasUmlPanelLayer } from '../components/canvas/CanvasUmlPanelLayer';
 import { apiService, VsumRole, VsumUserResponse } from '../services/api';
 import { VsumDetails } from '../types';
 import { VsumMetaModelRef } from '../types/vsum';
@@ -394,64 +394,6 @@ function createUmlPanelSavedHandler(
 ): (result: { ecoreContent: string }) => void {
   return result => onSaved(panelId, fileName, result);
 }
-
-interface CanvasUmlPanelLayerProps {
-  panels: UMLPanel[];
-  vsumName: string;
-  activeProjectId?: number;
-  topPanelId: string | null;
-  panelZBase: number;
-  viewOnly?: boolean;
-  buildSaveContext: (panel: UMLPanel) => UmlDiagramSaveContext | undefined;
-  onClose: (panelId: string) => void;
-  onFocus: (panelId: string) => void;
-  onHome: () => void;
-  onEcoreContentUpdated: (panelId: string, content: string) => void;
-  libraryModels?: DrawerModel[];
-}
-
-const CanvasUmlPanelLayer: React.FC<CanvasUmlPanelLayerProps> = ({
-  panels,
-  vsumName,
-  activeProjectId,
-  topPanelId,
-  panelZBase,
-  viewOnly = false,
-  buildSaveContext,
-  onClose,
-  onFocus,
-  onHome,
-  onEcoreContentUpdated,
-  libraryModels,
-}) => (
-  <>
-    {panels.map((panel, idx) => (
-      <FloatingUMLPanel
-        key={panel.id}
-        id={panel.id}
-        title={vsumName || panel.title}
-        fileName={panel.layoutStorageKey ?? canvasUmlLayoutFileName(panel)}
-        layoutScopeId={panel.layoutScopeId ?? canvasUmlLayoutScope(activeProjectId)}
-        ecoreContent={panel.ecoreContent}
-        saveContext={buildSaveContext(panel)}
-        viewOnly={viewOnly}
-        initialTop={panel.top}
-        initialRight={panel.right}
-        panelWidth={panel.width}
-        panelHeight={panel.height}
-        onClose={onClose}
-        onFocus={onFocus}
-        onHome={onHome}
-        ecoreFileId={panel.ecoreFileId}
-        fetchEcoreFile={fetchEcoreFileById}
-        onEcoreContentUpdated={content => onEcoreContentUpdated(panel.id, content)}
-        zIndex={panelZBase + (topPanelId === panel.id ? panels.length : idx)}
-        libraryModels={libraryModels}
-        vsumId={activeProjectId?.toString()}
-      />
-    ))}
-  </>
-);
 
 // ── CanvasPage ────────────────────────────────────────────────────────────────
 
@@ -1593,6 +1535,7 @@ export const CanvasPage: React.FC = () => {
         onHome={navigateHome}
         onEcoreContentUpdated={handleUmlPanelEcoreContentUpdated}
         libraryModels={allLibraryModels}
+        fetchEcoreFile={fetchEcoreFileById}
       />
 
       {/* Model drawer modal */}
