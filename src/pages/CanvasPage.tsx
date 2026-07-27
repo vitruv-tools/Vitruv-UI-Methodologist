@@ -1,10 +1,8 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
-import { AuthService } from '../services/auth';
 import { getUserInitials } from '../utils/userInitials';
 import { ShareProjectModal } from '../components/ui/ShareProjectModal';
 import { ConfirmDialog } from '../components/ui/ConfirmDialog';
-import { ProfileModal } from '../components/ui/ProfileModal';
 import { useNavigate, useParams, useLocation } from 'react-router-dom';
 import { Node, Edge } from 'reactflow';
 import { CanvasMode, FlowCanvas } from '../components/flow/FlowCanvas';
@@ -29,7 +27,11 @@ import {
 } from '../components/canvas/CanvasPopupNotification';
 import { CanvasProjectControls } from '../components/canvas/CanvasProjectControls';
 import { CanvasSidebarToolbar } from '../components/canvas/CanvasSidebarToolbar';
-import { CanvasUserAvatar, CanvasUserAvatarButton } from '../components/canvas/CanvasUserAvatar';
+import {
+  CanvasAccountMenu,
+  type CanvasAccountDisplay,
+} from '../components/canvas/CanvasAccountMenu';
+import { CanvasUserAvatar } from '../components/canvas/CanvasUserAvatar';
 import { UnsavedTabCloseDialog } from '../components/canvas/UnsavedTabCloseDialog';
 import { CanvasTabSession, CanvasUmlPanelState, EcoreFileExpandMeta, OpenCanvasTab } from '../types/canvasTab';
 import { canvasUmlLayoutFileName, canvasUmlLayoutScope } from '../utils/metaModelPreview';
@@ -64,7 +66,6 @@ import {
 import { readStoredCanvasMode, writeStoredCanvasMode } from '../utils/canvasModeStorage';
 import { downloadBlobAsFile } from '../utils/downloadFile';
 import { syncVsumWorkspaceChanges } from '../utils/vsumSyncSave';
-import { USER_PROFILE_DESCRIPTION, USER_PROFILE_LABEL } from '../constants/accountLabels';
 
 const MODE_TOGGLE_TOP = 14;
 const MODE_TOGGLE_HEIGHT = 44;
@@ -2261,17 +2262,12 @@ const RightPill: React.FC<RightPillProps> = ({
   const [showAccounts, setShowAccounts] = useState(false);
   const [removingMemberId, setRemovingMemberId] = useState<number | null>(null);
   const [removeConfirmMember, setRemoveConfirmMember] = useState<VsumUserResponse | null>(null);
-  const [showProfileMenu, setShowProfileMenu] = useState(false);
-  const [showProfileModal, setShowProfileModal] = useState(false);
   const wrapRef = useRef<HTMLDivElement>(null);
-  const { user, refreshCurrentUser } = useAuth();
 
 
   // Derive display values from real user
-  const displayName = user
-    ? [user.givenName, user.familyName].filter(Boolean).join(' ') || user.username
-    : 'Me';
-  const initials = getUserInitials(displayName, user?.email);
+  const displayName = currentUserName ?? 'Me';
+  const initials = getUserInitials(displayName, currentUserEmail);
 
   const myAccount = {
     id: 'me',
@@ -2280,19 +2276,12 @@ const RightPill: React.FC<RightPillProps> = ({
     color: 'linear-gradient(135deg, #049484, #06b89e)',
     ringColor: '#049484',
   };
-
-  // Close both panels on outside click
-  useEffect(() => {
-    if (!showAccounts && !showProfileMenu) return;
-    const handler = (e: MouseEvent) => {
-      if (wrapRef.current && !wrapRef.current.contains(e.target as unknown as HTMLElement)) {
-        setShowAccounts(false);
-        setShowProfileMenu(false);
-      }
-    };
-    document.addEventListener('mousedown', handler);
-    return () => document.removeEventListener('mousedown', handler);
-  }, [showAccounts, showProfileMenu]);
+  const accountDisplay: CanvasAccountDisplay = {
+    initials: myAccount.initials,
+    displayName: myAccount.name,
+    avatarBackground: myAccount.color,
+    ringColor: myAccount.ringColor,
+  };
 
   // Project members for the people panel
   const panelMembers = buildPanelMembers(
@@ -2319,13 +2308,9 @@ const RightPill: React.FC<RightPillProps> = ({
       if (next) onRefreshMembers();
       return next;
     });
-    setShowProfileMenu(false);
   }, [onRefreshMembers]);
 
-  const toggleProfileMenu = useCallback(() => {
-    setShowProfileMenu(current => !current);
-    setShowAccounts(false);
-  }, []);
+  const closeMembersPanel = useCallback(() => setShowAccounts(false), []);
 
   return (
     <div ref={wrapRef} style={{ ...rightPillStyle, padding: '0 10px', gap: 0, position: 'absolute' }}>
@@ -2346,62 +2331,12 @@ const RightPill: React.FC<RightPillProps> = ({
 
       <Divider />
 
-      {/* ── My account avatar — click for profile menu ── */}
-      <div style={{ position: 'relative', padding: '0 4px' }}>
-        <CanvasUserAvatarButton
-          initials={myAccount.initials}
-          bg={myAccount.color}
-          size={28}
-          ring={myAccount.ringColor}
-          title="My account"
-          onClick={toggleProfileMenu}
-        />
-
-        {/* Profile dropdown */}
-        {showProfileMenu && (
-          <div style={{
-            position: 'absolute',
-            top: 'calc(100% + 8px)',
-            right: 0,
-            background: '#ffffff',
-            borderRadius: 10,
-            boxShadow: '0 8px 32px rgba(0,0,0,0.16), 0 0 0 1px rgba(0,0,0,0.07)',
-            padding: '6px',
-            zIndex: 500,
-            minWidth: 180,
-          }}>
-            {/* Account info header */}
-            <div style={{
-              display: 'flex', alignItems: 'center', gap: 10,
-              padding: '8px 10px 12px',
-              borderBottom: '1px solid #f1f5f9',
-              marginBottom: 4,
-            }}>
-              <CanvasUserAvatar initials={myAccount.initials} bg={myAccount.color} size={36} ring={myAccount.ringColor} />
-              <div>
-                <div style={{ fontSize: 13, fontWeight: 600, color: '#0f172a', whiteSpace: 'nowrap' }}>
-                  {myAccount.name}
-                </div>
-                <div style={{ fontSize: 11, color: '#049484', fontWeight: 600, marginTop: 1 }}>Methodologist</div>
-              </div>
-            </div>
-
-            {/* Menu items */}
-            <ProfileMenuItem
-              label={USER_PROFILE_LABEL}
-              sublabel={USER_PROFILE_DESCRIPTION}
-              icon={<UserProfileIcon />}
-              onClick={() => { setShowProfileMenu(false); setShowProfileModal(true); }}
-            />
-            <ProfileMenuItem
-              label="Log out"
-              icon={<LogoutIcon />}
-              danger
-              onClick={() => { setShowProfileMenu(false); AuthService.signOut().then(() => { globalThis.location.href = '/login'; }); }}
-            />
-          </div>
-        )}
-      </div>
+      <CanvasAccountMenu
+        account={accountDisplay}
+        dismissalBoundaryRef={wrapRef}
+        siblingMenuOpen={showAccounts}
+        onCloseSiblingMenu={closeMembersPanel}
+      />
 
       <Divider />
 
@@ -2423,15 +2358,7 @@ const RightPill: React.FC<RightPillProps> = ({
           onRefreshMembers={onRefreshMembers}
           onRequestRemove={setRemoveConfirmMember}
           onShareClick={onShareClick}
-          onClose={() => setShowAccounts(false)}
-        />
-      )}
-
-      {showProfileModal && (
-        <ProfileModal
-          user={user}
-          onClose={() => setShowProfileModal(false)}
-          onNameSaved={refreshCurrentUser}
+          onClose={closeMembersPanel}
         />
       )}
 
@@ -2458,40 +2385,6 @@ const RightPill: React.FC<RightPillProps> = ({
         onCancel={() => setRemoveConfirmMember(null)}
       />
     </div>
-  );
-};
-
-function getProfileMenuItemBackground(hovered: boolean, danger?: boolean): string {
-  if (!hovered) return 'transparent';
-  if (danger) return '#fef2f2';
-  return '#f8fafc';
-}
-
-const ProfileMenuItem: React.FC<{ label: string; sublabel?: string; icon: React.ReactNode; danger?: boolean; onClick?: () => void }> = ({ label, sublabel, icon, danger, onClick }) => {
-  const [hov, setHov] = useState(false);
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      onMouseEnter={() => setHov(true)}
-      onMouseLeave={() => setHov(false)}
-      style={{
-        display: 'flex', alignItems: 'center', gap: 8,
-        width: '100%', padding: '8px 10px', border: 'none', borderRadius: 6,
-        background: getProfileMenuItemBackground(hov, danger),
-        color: danger ? '#dc2626' : '#0f172a',
-        fontSize: 13, fontWeight: 500, cursor: 'pointer', textAlign: 'left',
-        transition: 'background 0.1s',
-      }}
-    >
-      <span style={{ display: 'flex', flexShrink: 0, color: danger ? 'inherit' : '#475569' }}>{icon}</span>
-      <div style={{ flex: 1, minWidth: 0 }}>
-        <div>{label}</div>
-        {sublabel && (
-          <div style={{ fontSize: 11, color: '#64748b', fontWeight: 400, marginTop: 1 }}>{sublabel}</div>
-        )}
-      </div>
-    </button>
   );
 };
 
@@ -2547,18 +2440,5 @@ const ShareIcon = () => (
   <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
     <circle cx="18" cy="5" r="3" /><circle cx="6" cy="12" r="3" /><circle cx="18" cy="19" r="3" />
     <line x1="8.59" y1="13.51" x2="15.42" y2="17.49" /><line x1="15.41" y1="6.51" x2="8.59" y2="10.49" />
-  </svg>
-);
-const UserProfileIcon = () => (
-  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
-    <circle cx="12" cy="7" r="4" />
-  </svg>
-);
-const LogoutIcon = () => (
-  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
-    <polyline points="16 17 21 12 16 7" />
-    <line x1="21" y1="12" x2="9" y2="12" />
   </svg>
 );
