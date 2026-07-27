@@ -3,7 +3,6 @@ import { useAuth } from '../contexts/AuthContext';
 import { AuthService } from '../services/auth';
 import { getUserInitials } from '../utils/userInitials';
 import { ShareProjectModal } from '../components/ui/ShareProjectModal';
-import { HoverTooltip } from '../components/ui/HoverTooltip';
 import { ConfirmDialog } from '../components/ui/ConfirmDialog';
 import { ProfileModal } from '../components/ui/ProfileModal';
 import { useNavigate, useParams, useLocation } from 'react-router-dom';
@@ -29,6 +28,7 @@ import {
   type CanvasPopupNotificationType,
 } from '../components/canvas/CanvasPopupNotification';
 import { CanvasProjectControls } from '../components/canvas/CanvasProjectControls';
+import { CanvasSidebarToolbar } from '../components/canvas/CanvasSidebarToolbar';
 import { UnsavedTabCloseDialog } from '../components/canvas/UnsavedTabCloseDialog';
 import { CanvasTabSession, CanvasUmlPanelState, EcoreFileExpandMeta, OpenCanvasTab } from '../types/canvasTab';
 import { canvasUmlLayoutFileName, canvasUmlLayoutScope } from '../utils/metaModelPreview';
@@ -1565,7 +1565,7 @@ export const CanvasPage: React.FC = () => {
       </div>
 
       {/* Left sidebar toolbar */}
-      {canvasMode !== 'constraints' && <LeftSidebar
+      {canvasMode !== 'constraints' && <CanvasSidebarToolbar
         readOnly={isViewOnly}
         addReactionMode={addReactionMode}
         onToggleReactionMode={() => setAddReactionMode(v => !v)}
@@ -2583,258 +2583,6 @@ const ShareBtn: React.FC<{ onClick: () => void }> = ({ onClick }) => {
   );
 };
 
-const PlusBoxIcon = () => (
-  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
-    <line x1="12" y1="7" x2="12" y2="17" />
-    <line x1="7" y1="12" x2="17" y2="12" />
-  </svg>
-);
-
-// ── LeftSidebar ───────────────────────────────────────────────────────────────
-
-interface LeftSidebarProps {
-  readOnly?: boolean;
-  addReactionMode: boolean;
-  onToggleReactionMode: () => void;
-  onOpenReactionEditor?: () => void;
-  onToggleModelDrawer: () => void;
-  onDownloadArtifact: () => void;
-  onSaveChanges: () => void;
-  onCheckBuild: () => void;
-  onUndo: () => void;
-  onRedo: () => void;
-  canUndo: boolean;
-  canRedo: boolean;
-  downloadingArtifact: boolean;
-  savingChanges: boolean;
-  checkingBuild: boolean;
-}
-
-const LeftSidebar: React.FC<LeftSidebarProps> = ({
-  readOnly = false,
-  addReactionMode, onToggleReactionMode, onOpenReactionEditor, onToggleModelDrawer,
-  onDownloadArtifact, onSaveChanges, onCheckBuild,
-  onUndo, onRedo, canUndo, canRedo,
-  downloadingArtifact, savingChanges, checkingBuild,
-}) => {
-  const busy = downloadingArtifact || savingChanges || checkingBuild;
-  const sidebarCard: React.CSSProperties = {
-    position: 'fixed',
-    left: 14,
-    zIndex: 400,
-    background: '#ffffff',
-    borderRadius: 8,
-    boxShadow: '0 4px 16px rgba(0,0,0,0.13), 0 0 0 1px rgba(0,0,0,0.07)',
-    display: 'flex',
-    flexDirection: 'column',
-    alignItems: 'center',
-    width: 64,
-    padding: '6px 0',
-    gap: 1,
-  };
-
-  return (
-    <div style={{
-      position: 'fixed',
-      left: 14,
-      top: '50%',
-      transform: 'translateY(-50%)',
-      zIndex: 400,
-      display: 'flex',
-      flexDirection: 'column',
-      alignItems: 'center',
-      gap: 8,
-    }}>
-      {/* ── Main toolbar ── */}
-      <div style={{ ...sidebarCard, position: 'relative', left: 'auto', top: 'auto', zIndex: 'auto' as any }}>
-        {/* Pointer / select mode */}
-        <SidebarBtn
-          label="Select"
-          description="Move and select elements on the canvas"
-          active={!addReactionMode}
-          onClick={() => { if (addReactionMode) onToggleReactionMode(); }}
-        >
-          <PointerIcon />
-        </SidebarBtn>
-
-        <SidebarDivider />
-
-        {/* Download ZIP */}
-        <SidebarBtn
-          label="Download"
-          description="Export this project as a ZIP file"
-          onClick={onDownloadArtifact}
-          loading={downloadingArtifact}
-          disabled={busy}
-        >
-          <DownloadIcon />
-        </SidebarBtn>
-
-        {/* Save Changes */}
-        {!readOnly && (
-          <SidebarBtn
-            label="Save"
-            description="Save changes to this project"
-            onClick={onSaveChanges}
-            loading={savingChanges}
-            disabled={busy}
-          >
-            <SaveIcon />
-          </SidebarBtn>
-        )}
-
-        {/* Check Build */}
-        {!readOnly && (
-          <SidebarBtn
-            label="Check build"
-            description="Verify the project compiles successfully"
-            onClick={onCheckBuild}
-            loading={checkingBuild}
-            disabled={busy}
-            color="#049484"
-          >
-            <CheckBuildIcon />
-          </SidebarBtn>
-        )}
-
-        {!readOnly && <SidebarDivider />}
-
-        {readOnly ? (
-          <SidebarBtn
-            label="View reaction"
-            description="Select a connection line, then click to open the code"
-            onClick={() => onOpenReactionEditor?.()}
-          >
-            <ReactionIcon />
-          </SidebarBtn>
-        ) : (
-          <>
-            {/* Add Reaction */}
-            <SidebarBtn
-              label={addReactionMode ? 'Cancel reaction' : 'Add reaction'}
-              description={addReactionMode
-                ? 'Click to exit connection mode'
-                : 'Click two meta-models to connect them'}
-              active={addReactionMode}
-              onClick={onToggleReactionMode}
-            >
-              <ReactionIcon />
-            </SidebarBtn>
-
-            {/* Add Meta-models */}
-            <SidebarBtn
-              label="Add meta-models"
-              description="Open the model library drawer"
-              onClick={onToggleModelDrawer}
-              filled
-            >
-              <PlusBoxIcon />
-            </SidebarBtn>
-          </>
-        )}
-      </div>
-
-      {/* ── Undo / Redo — own card, just below the main one ── */}
-      {!readOnly && (
-      <div style={{ ...sidebarCard, position: 'relative', left: 'auto', top: 'auto', zIndex: 'auto' as any }}>
-        <SidebarBtn
-          label="Undo"
-          description={canUndo ? 'Undo the last action' : 'Nothing to undo'}
-          onClick={onUndo}
-          disabled={!canUndo}
-        >
-          <UndoIcon />
-        </SidebarBtn>
-        <SidebarBtn
-          label="Redo"
-          description={canRedo ? 'Redo the last undone action' : 'Nothing to redo'}
-          onClick={onRedo}
-          disabled={!canRedo}
-        >
-          <RedoIcon />
-        </SidebarBtn>
-      </div>
-      )}
-    </div>
-  );
-};
-
-interface SidebarBtnProps {
-  label: string;
-  description?: string;
-  onClick: () => void;
-  children: React.ReactNode;
-  active?: boolean;
-  filled?: boolean;
-  disabled?: boolean;
-  loading?: boolean;
-  color?: string;
-}
-
-function getSidebarBtnBackground(
-  isFilled: boolean,
-  activeColor: string,
-  hovered: boolean,
-  disabled?: boolean,
-): string {
-  if (isFilled) return activeColor;
-  if (hovered && !disabled) return '#f1f5f9';
-  return 'transparent';
-}
-
-function getSidebarBtnIconColor(disabled: boolean | undefined, isFilled: boolean, hovered: boolean): string {
-  if (disabled) return '#c8d3dd';
-  if (isFilled) return '#ffffff';
-  if (hovered) return '#1e293b';
-  return '#475569';
-}
-
-const SidebarBtn: React.FC<SidebarBtnProps> = ({
-  label,
-  description,
-  onClick,
-  children,
-  active,
-  filled,
-  disabled,
-  loading,
-  color,
-}) => {
-  const [hov, setHov] = useState(false);
-  const activeColor = color || '#049484';
-  const isFilled = Boolean(filled || active);
-  const bg = getSidebarBtnBackground(isFilled, activeColor, hov, disabled);
-  const iconColor = getSidebarBtnIconColor(disabled, isFilled, hov);
-  const ariaLabel = description ? `${label}. ${description}` : label;
-
-  return (
-    <HoverTooltip label={label} description={description}>
-      <button
-        type="button"
-        aria-label={ariaLabel}
-        onClick={disabled ? undefined : onClick}
-        onMouseEnter={() => setHov(true)}
-        onMouseLeave={() => setHov(false)}
-        style={{
-          width: 52, height: 52, border: 'none',
-          borderRadius: 6, background: bg, color: iconColor,
-          cursor: disabled ? 'not-allowed' : 'pointer',
-          display: 'flex', alignItems: 'center', justifyContent: 'center',
-          transition: 'all 0.12s', flexShrink: 0,
-        }}
-      >
-        <span style={loading ? { animation: 'spin 0.9s linear infinite', display: 'flex' } : undefined}>
-          {children}
-        </span>
-      </button>
-    </HoverTooltip>
-  );
-};
-
-const SidebarDivider = () => (
-  <div style={{ width: 44, height: 1, background: '#e2e8f0', margin: '3px 0', flexShrink: 0 }} />
-);
-
 // ── right pill UI helpers ─────────────────────────────────────────────────────
 
 const rightPillStyle: React.CSSProperties = {
@@ -2864,18 +2612,6 @@ const ShareIcon = () => (
     <line x1="8.59" y1="13.51" x2="15.42" y2="17.49" /><line x1="15.41" y1="6.51" x2="8.59" y2="10.49" />
   </svg>
 );
-/* ── Sidebar icons — simple, 20 px, strokeWidth 2.5 ── */
-const PointerIcon = () => (
-  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M4 4l7 18 3-7 7-3z" />
-  </svg>
-);
-const ReactionIcon = () => (
-  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
-    <line x1="5" y1="19" x2="19" y2="5" />
-    <polyline points="9 5 19 5 19 15" />
-  </svg>
-);
 const UserProfileIcon = () => (
   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
     <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
@@ -2887,36 +2623,5 @@ const LogoutIcon = () => (
     <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
     <polyline points="16 17 21 12 16 7" />
     <line x1="21" y1="12" x2="9" y2="12" />
-  </svg>
-);
-const UndoIcon = () => (
-  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M3 7h11a5 5 0 0 1 0 10H3" />
-    <polyline points="7 3 3 7 7 11" />
-  </svg>
-);
-const RedoIcon = () => (
-  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M21 7H10a5 5 0 0 0 0 10h11" />
-    <polyline points="17 3 21 7 17 11" />
-  </svg>
-);
-const CheckBuildIcon = () => (
-  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
-    <polyline points="4 12 9 17 20 6" />
-  </svg>
-);
-const DownloadIcon = () => (
-  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
-    <line x1="12" y1="3" x2="12" y2="15" />
-    <polyline points="7 10 12 15 17 10" />
-    <line x1="4" y1="20" x2="20" y2="20" />
-  </svg>
-);
-const SaveIcon = () => (
-  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
-    <rect x="3" y="3" width="18" height="18" rx="2" />
-    <rect x="8" y="3" width="8" height="6" />
-    <rect x="7" y="13" width="10" height="8" />
   </svg>
 );
