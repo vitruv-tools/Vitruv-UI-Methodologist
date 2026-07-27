@@ -29,6 +29,7 @@ import {
 } from '../components/canvas/CanvasPopupNotification';
 import { CanvasProjectControls } from '../components/canvas/CanvasProjectControls';
 import { CanvasSidebarToolbar } from '../components/canvas/CanvasSidebarToolbar';
+import { CanvasUserAvatar, CanvasUserAvatarButton } from '../components/canvas/CanvasUserAvatar';
 import { UnsavedTabCloseDialog } from '../components/canvas/UnsavedTabCloseDialog';
 import { CanvasTabSession, CanvasUmlPanelState, EcoreFileExpandMeta, OpenCanvasTab } from '../types/canvasTab';
 import { canvasUmlLayoutFileName, canvasUmlLayoutScope } from '../utils/metaModelPreview';
@@ -1874,70 +1875,6 @@ async function loadEcoreFileContent(
   }
 }
 
-interface AvatarProps {
-  initials: string;
-  bg: string;
-  size?: number;
-  ring?: string;
-  title?: string;
-}
-
-interface AvatarButtonProps extends AvatarProps {
-  onClick: () => void;
-  title: string;
-}
-
-function getAvatarStyle(bg: string, size: number, ring?: string): React.CSSProperties {
-  return {
-    width: size,
-    height: size,
-    borderRadius: '50%',
-    background: bg,
-    color: '#fff',
-    fontSize: Math.round(size * 0.36),
-    fontWeight: 700,
-    letterSpacing: '0.01em',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    flexShrink: 0,
-    userSelect: 'none',
-    boxShadow: ring
-      ? `0 0 0 2px #fff, 0 0 0 4.5px ${ring}`
-      : '0 0 0 2px #fff',
-  };
-}
-
-const UserAvatar: React.FC<AvatarProps> = ({ initials, bg, size = 30, ring, title }) => (
-  <div title={title} style={{ ...getAvatarStyle(bg, size, ring), cursor: 'default' }}>
-    {initials}
-  </div>
-);
-
-const UserAvatarButton: React.FC<AvatarButtonProps> = ({
-  initials,
-  bg,
-  size = 30,
-  ring,
-  title,
-  onClick,
-}) => (
-  <button
-    type="button"
-    title={title}
-    aria-label={title}
-    onClick={onClick}
-    style={{
-      ...getAvatarStyle(bg, size, ring),
-      border: 'none',
-      padding: 0,
-      cursor: 'pointer',
-    }}
-  >
-    {initials}
-  </button>
-);
-
 interface CollaboratorStackButtonProps {
   members: Array<{ id: string; initials: string; color: string; ringColor?: string }>;
   stackLabel: string;
@@ -1977,7 +1914,7 @@ const CollaboratorStackButton: React.FC<CollaboratorStackButtonProps> = ({
           key={member.id}
           style={{ marginLeft: index === 0 ? 0 : -7, zIndex: members.length - index, display: 'inline-flex' }}
         >
-          <UserAvatar
+          <CanvasUserAvatar
             initials={member.initials}
             bg={member.color}
             size={24}
@@ -2054,7 +1991,7 @@ const PeoplePanelMemberRow: React.FC<PeoplePanelMemberRowProps> = ({
         background: isSharer && isSharedAccess ? '#f8fafc' : 'transparent',
       }}
     >
-      <UserAvatar
+      <CanvasUserAvatar
         initials={getUserInitials(name, member.email)}
         bg={color}
         size={36}
@@ -2411,7 +2348,7 @@ const RightPill: React.FC<RightPillProps> = ({
 
       {/* ── My account avatar — click for profile menu ── */}
       <div style={{ position: 'relative', padding: '0 4px' }}>
-        <UserAvatarButton
+        <CanvasUserAvatarButton
           initials={myAccount.initials}
           bg={myAccount.color}
           size={28}
@@ -2440,7 +2377,7 @@ const RightPill: React.FC<RightPillProps> = ({
               borderBottom: '1px solid #f1f5f9',
               marginBottom: 4,
             }}>
-              <UserAvatar initials={myAccount.initials} bg={myAccount.color} size={36} ring={myAccount.ringColor} />
+              <CanvasUserAvatar initials={myAccount.initials} bg={myAccount.color} size={36} ring={myAccount.ringColor} />
               <div>
                 <div style={{ fontSize: 13, fontWeight: 600, color: '#0f172a', whiteSpace: 'nowrap' }}>
                   {myAccount.name}
