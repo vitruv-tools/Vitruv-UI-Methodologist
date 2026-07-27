@@ -32,6 +32,19 @@ import {
   type CanvasAccountDisplay,
 } from '../components/canvas/CanvasAccountMenu';
 import { CanvasUserAvatar } from '../components/canvas/CanvasUserAvatar';
+import {
+  CANVAS_MEMBER_AVATAR_COLORS,
+  buildCanvasCollaborators,
+  buildCanvasPanelMembers,
+  getCanvasCollaboratorStackTitle,
+  getCanvasMembersPanelSubtitle,
+  getCanvasPanelMemberName,
+  getCanvasPanelMemberRole,
+  getCanvasPanelRoleChipStyle,
+  isCanvasPanelMemberPending,
+  selectCanvasStackAvatars,
+  type CanvasCollaborator,
+} from '../components/canvas/canvasMemberPresentation';
 import { UnsavedTabCloseDialog } from '../components/canvas/UnsavedTabCloseDialog';
 import { CanvasTabSession, CanvasUmlPanelState, EcoreFileExpandMeta, OpenCanvasTab } from '../types/canvasTab';
 import { canvasUmlLayoutFileName, canvasUmlLayoutScope } from '../utils/metaModelPreview';
@@ -39,7 +52,6 @@ import { createCanvasTabInstanceId } from '../utils/canvasTabId';
 import {
   findMembershipForEmail,
   findVsumOwner,
-  memberDisplayName,
   parseVsumMembersResponse,
   pickMostRestrictiveRole,
   readStoredProjectAccess,
@@ -1589,7 +1601,7 @@ export const CanvasPage: React.FC = () => {
         readOnly={isViewOnly}
         sharedByLabel={
           isSharedAccess && displayProjectSharer
-            ? panelMemberName(displayProjectSharer)
+            ? getCanvasPanelMemberName(displayProjectSharer)
             : undefined
         }
         projectName={vsumName || (loadingProject ? 'Loading…' : 'Project')}
@@ -1657,155 +1669,6 @@ export const CanvasPage: React.FC = () => {
     </div>
   );
 };
-
-// ── Avatar helpers ────────────────────────────────────────────────────────────
-
-interface Collaborator { id: string; initials: string; name: string; color: string; ringColor?: string; }
-
-const MEMBER_AVATAR_COLORS = [
-  'linear-gradient(135deg, #049484, #06b89e)',
-  'linear-gradient(135deg, #3b82f6, #60a5fa)',
-  'linear-gradient(135deg, #8b5cf6, #a78bfa)',
-  'linear-gradient(135deg, #f59e0b, #fbbf24)',
-  'linear-gradient(135deg, #ec4899, #f472b6)',
-];
-
-function buildPanelMembers(
-  projectMembers: VsumUserResponse[],
-  projectSharer: VsumUserResponse | null,
-  isSharedAccess: boolean,
-  currentUserEmail?: string,
-  currentUserName?: string,
-): VsumUserResponse[] {
-  const unique = uniqueVsumMembers(projectMembers);
-  if (!isSharedAccess) return unique;
-
-  const entries: VsumUserResponse[] = [];
-  if (projectSharer) entries.push(projectSharer);
-
-  const selfInList = findMembershipForEmail(unique, currentUserEmail);
-  if (selfInList && !entries.some(e => e.id === selfInList.id)) {
-    entries.push(selfInList);
-  } else if (currentUserEmail && !entries.some(e =>
-    e.email?.toLowerCase() === currentUserEmail.toLowerCase(),
-  )) {
-    const nameParts = (currentUserName ?? '').trim().split(/\s+/);
-    entries.push({
-      id: -2,
-      vsumId: projectSharer?.vsumId ?? 0,
-      firstName: nameParts[0] ?? '',
-      lastName: nameParts.slice(1).join(' '),
-      email: currentUserEmail,
-      role: 'VIEWER',
-      createdAt: '',
-    });
-  }
-
-  unique.forEach(m => {
-    if (!entries.some(e => e.id === m.id)) entries.push(m);
-  });
-
-  return entries;
-}
-
-function membersToCollaborators(members: VsumUserResponse[]): Collaborator[] {
-  return uniqueVsumMembers(members).map((member, index) => {
-    const name = memberDisplayName(member);
-    return {
-      id: String(member.id),
-      initials: getUserInitials(name, member.email),
-      name,
-      color: MEMBER_AVATAR_COLORS[index % MEMBER_AVATAR_COLORS.length],
-    };
-  });
-}
-
-type PanelMemberRole = 'Owner' | 'Member' | 'Viewer';
-
-function panelMemberName(m: VsumUserResponse): string {
-  const full = memberDisplayName(m);
-  if (full !== 'Member') return full;
-  if (m.status === 'PENDING' || m.pending) return 'Pending invite';
-  return m.email || 'Member';
-}
-
-function panelMemberRole(m: VsumUserResponse): PanelMemberRole {
-  const r = (m.role ?? '').toUpperCase();
-  if (r === 'OWNER') return 'Owner';
-  if (r === 'VIEWER') return 'Viewer';
-  return 'Member';
-}
-
-function panelRoleChipStyle(role: PanelMemberRole): React.CSSProperties {
-  if (role === 'Owner') return { background: '#ecfdf5', color: '#065f46', border: '1px solid #a7f3d0' };
-  if (role === 'Viewer') return { background: '#eff6ff', color: '#1d4ed8', border: '1px solid #bfdbfe' };
-  return { background: '#f3f4f6', color: '#374151', border: '1px solid #e5e7eb' };
-}
-
-function isPanelMemberPending(m: VsumUserResponse): boolean {
-  return m.status === 'PENDING' || m.pending === true;
-}
-
-function formatPeopleCount(count: number): string {
-  if (count === 1) return '1 person';
-  return `${count} people`;
-}
-
-function resolveCollaboratorStackTitle(
-  isSharedAccess: boolean,
-  projectSharer: VsumUserResponse | null,
-): string {
-  if (isSharedAccess && projectSharer) {
-    return `Shared by ${panelMemberName(projectSharer)}`;
-  }
-  return 'People with access';
-}
-
-function resolveStackAvatars(
-  isSharedAccess: boolean,
-  projectSharer: VsumUserResponse | null,
-  collaborators: Collaborator[],
-  myAccount: Collaborator,
-): Collaborator[] {
-  if (isSharedAccess && projectSharer) {
-    return membersToCollaborators([projectSharer]).slice(0, 3);
-  }
-  if (collaborators.length > 0) {
-    return collaborators.slice(0, 3);
-  }
-  return [myAccount];
-}
-
-function resolveSharedAccessSubtitle(membersLoading: boolean): string {
-  if (membersLoading) return 'Loading owner details…';
-  return 'Shared with you by the project owner';
-}
-
-function resolveMembersPanelSubtitle(options: {
-  isSharedAccess: boolean;
-  projectSharer: VsumUserResponse | null;
-  membersLoading: boolean;
-  isViewOnly: boolean;
-  memberCount: number;
-}): string {
-  const { isSharedAccess, projectSharer, membersLoading, isViewOnly, memberCount } = options;
-  if (isSharedAccess && projectSharer) {
-    return `Shared by ${panelMemberName(projectSharer)}`;
-  }
-  if (isSharedAccess) {
-    return resolveSharedAccessSubtitle(membersLoading);
-  }
-  if (isViewOnly) {
-    return 'You have view-only access to this project';
-  }
-  if (memberCount === 1) {
-    return 'You are the only person on this project. Invite viewers to share it.';
-  }
-  if (memberCount > 0) {
-    return `${formatPeopleCount(memberCount)} can access this project`;
-  }
-  return 'No members loaded yet';
-}
 
 function computeUmlPanelLayout(openTabCount: number): { top: number; height: number } {
   const top = openTabCount > 0 ? CENTER_STACK_BOTTOM + 8 : MODE_TOGGLE_TOP + MODE_TOGGLE_HEIGHT + 8;
@@ -1971,15 +1834,15 @@ const PeoplePanelMemberRow: React.FC<PeoplePanelMemberRowProps> = ({
   onRemoveMember,
   onRequestRemove,
 }) => {
-  const name = panelMemberName(member);
-  const role = panelMemberRole(member);
-  const pending = isPanelMemberPending(member);
+  const name = getCanvasPanelMemberName(member);
+  const role = getCanvasPanelMemberRole(member);
+  const pending = isCanvasPanelMemberPending(member);
   const isSelf = currentUserEmail
     ? member.email?.toLowerCase() === currentUserEmail.toLowerCase()
     : false;
   const isSharer = projectSharer?.id === member.id
     || projectSharer?.email?.toLowerCase() === member.email?.toLowerCase();
-  const color = MEMBER_AVATAR_COLORS[index % MEMBER_AVATAR_COLORS.length];
+  const color = CANVAS_MEMBER_AVATAR_COLORS[index % CANVAS_MEMBER_AVATAR_COLORS.length];
 
   return (
     <div
@@ -2033,7 +1896,7 @@ const PeoplePanelMemberRow: React.FC<PeoplePanelMemberRowProps> = ({
           borderRadius: 20,
           fontSize: 10,
           fontWeight: 700,
-          ...panelRoleChipStyle(role),
+          ...getCanvasPanelRoleChipStyle(role),
         }}>
           {isSelf && isViewOnly ? 'Viewer' : role}
         </span>
@@ -2126,7 +1989,7 @@ const PeopleAccessPanel: React.FC<PeopleAccessPanelProps> = ({
         {isSharedAccess ? 'Shared with you' : 'People with access'}
       </div>
       <div style={{ fontSize: 12, color: '#64748b', marginTop: 3, lineHeight: 1.4 }}>
-        {resolveMembersPanelSubtitle({
+        {getCanvasMembersPanelSubtitle({
           isSharedAccess,
           projectSharer,
           membersLoading,
@@ -2269,7 +2132,7 @@ const RightPill: React.FC<RightPillProps> = ({
   const displayName = currentUserName ?? 'Me';
   const initials = getUserInitials(displayName, currentUserEmail);
 
-  const myAccount = {
+  const myAccount: CanvasCollaborator = {
     id: 'me',
     initials,
     name: displayName,
@@ -2284,19 +2147,19 @@ const RightPill: React.FC<RightPillProps> = ({
   };
 
   // Project members for the people panel
-  const panelMembers = buildPanelMembers(
+  const panelMembers = buildCanvasPanelMembers(
     projectMembers,
     projectSharer,
     isSharedAccess,
     currentUserEmail,
     currentUserName,
   );
-  const collaborators = membersToCollaborators(
+  const collaborators = buildCanvasCollaborators(
     mergeSharerWithMembers(projectSharer, projectMembers),
   );
   const memberCount = panelMembers.length;
-  const stackAvatars = resolveStackAvatars(isSharedAccess, projectSharer, collaborators, myAccount);
-  const stackTitle = resolveCollaboratorStackTitle(isSharedAccess, projectSharer);
+  const stackAvatars = selectCanvasStackAvatars(isSharedAccess, projectSharer, collaborators, myAccount);
+  const stackTitle = getCanvasCollaboratorStackTitle(isSharedAccess, projectSharer);
   const stackLabel = formatProjectMemberStackLabel(memberCount, {
     isSharedAccess,
     isSoloOwner: canShare && memberCount === 1,
@@ -2366,7 +2229,7 @@ const RightPill: React.FC<RightPillProps> = ({
         isOpen={removeConfirmMember !== null}
         title="Remove access"
         message={removeConfirmMember
-          ? `Remove access for ${panelMemberName(removeConfirmMember)}? They will no longer be able to open this project.`
+          ? `Remove access for ${getCanvasPanelMemberName(removeConfirmMember)}? They will no longer be able to open this project.`
           : 'Remove this person\'s access to the project?'}
         confirmText="Remove access"
         cancelText="Cancel"
