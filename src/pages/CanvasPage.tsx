@@ -13,10 +13,7 @@ import { VsumMetaModelRef } from '../types/vsum';
 import { WorkspaceSnapshot, WorkspaceSnapshotRequest } from '../types/workspace';
 import { MODAL_Z_INDEX, useModalBodyLock } from '../components/ui/modalUtils';
 import { CanvasProjectTabs } from '../components/canvas/CanvasProjectTabs';
-import {
-  CanvasProjectLoadState,
-  CanvasProjectLoadStateOverlay,
-} from '../components/canvas/CanvasProjectLoadStateOverlay';
+import { CanvasProjectLoadStateOverlay } from '../components/canvas/CanvasProjectLoadStateOverlay';
 import {
   CanvasPopupNotification,
   type CanvasPopupNotificationType,
@@ -61,49 +58,13 @@ import {
 } from '../utils/workspaceSnapshotUtils';
 import { downloadBlobAsFile } from '../utils/downloadFile';
 import { syncVsumWorkspaceChanges } from '../utils/vsumSyncSave';
+import {
+  getCanvasProjectLoadFailureState,
+  type CanvasProjectLoadState,
+} from '../utils/canvasProjectLoadState';
 
 function isStaleTabLoad(forInstanceId: string | undefined, activeInstanceId: string | null): boolean {
   return Boolean(forInstanceId && activeInstanceId !== forInstanceId);
-}
-
-function getErrorStatus(error: unknown): number | undefined {
-  const apiError = error as {
-    status?: unknown;
-    response?: {
-      status?: unknown;
-      data?: {
-        status?: unknown;
-        statusCode?: unknown;
-      };
-    };
-  };
-  const rawStatus =
-    apiError?.status ??
-    apiError?.response?.status ??
-    apiError?.response?.data?.status ??
-    apiError?.response?.data?.statusCode;
-  const status = typeof rawStatus === 'number' ? rawStatus : Number(rawStatus);
-  return Number.isFinite(status) ? status : undefined;
-}
-
-function getCanvasProjectLoadFailureState(error: unknown): CanvasProjectLoadState {
-  const status = getErrorStatus(error);
-  if (status === 403) {
-    return {
-      status: 'forbidden',
-      message: 'You do not have access to this project.',
-    };
-  }
-  if (status === 404) {
-    return {
-      status: 'notFound',
-      message: 'This project does not exist or may have been deleted.',
-    };
-  }
-  return {
-    status: 'error',
-    message: error instanceof Error && error.message ? error.message : 'Unable to load this project.',
-  };
 }
 
 function clearVsumTabSessions(

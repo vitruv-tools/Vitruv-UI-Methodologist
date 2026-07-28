@@ -1,17 +1,8 @@
 import React from 'react';
-
-export type CanvasProjectLoadStatus =
-  | 'loading'
-  | 'hydrating'
-  | 'ready'
-  | 'forbidden'
-  | 'notFound'
-  | 'error';
-
-export interface CanvasProjectLoadState {
-  status: CanvasProjectLoadStatus;
-  message?: string;
-}
+import type {
+  CanvasProjectLoadState,
+  CanvasProjectLoadStatus,
+} from '../../utils/canvasProjectLoadState';
 
 interface CanvasProjectLoadStateOverlayProps {
   state: CanvasProjectLoadState;
