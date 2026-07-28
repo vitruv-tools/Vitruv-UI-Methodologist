@@ -4,7 +4,6 @@ import { ShareProjectModal } from '../components/ui/ShareProjectModal';
 import { useNavigate, useParams, useLocation } from 'react-router-dom';
 import { Node, Edge } from 'reactflow';
 import { CanvasMode, FlowCanvas } from '../components/flow/FlowCanvas';
-import { ConstraintsView } from '../components/constraints/ConstraintsView';
 import { UmlDiagramSaveContext } from '../components/canvas/UMLDiagram';
 import { DrawerModel } from '../components/canvas/ModelDrawer';
 import { ModelDrawerModal } from '../components/canvas/ModelDrawerModal';
@@ -26,7 +25,13 @@ import {
 import { CanvasProjectControls } from '../components/canvas/CanvasProjectControls';
 import { CanvasSidebarToolbar } from '../components/canvas/CanvasSidebarToolbar';
 import { CanvasProjectAccessControls } from '../components/canvas/CanvasProjectAccessControls';
+import { CanvasConstraintsOverlay } from '../components/canvas/CanvasConstraintsOverlay';
 import { getCanvasPanelMemberName } from '../components/canvas/canvasMemberPresentation';
+import {
+  computeUmlPanelLayout,
+  enrichEcoreMetaFromCanvas,
+  loadEcoreFileContent,
+} from '../components/canvas/canvasUmlPanelUtils';
 import { UnsavedTabCloseDialog } from '../components/canvas/UnsavedTabCloseDialog';
 import { CanvasTabSession, CanvasUmlPanelState, EcoreFileExpandMeta, OpenCanvasTab } from '../types/canvasTab';
 import { canvasUmlLayoutFileName, canvasUmlLayoutScope } from '../utils/metaModelPreview';
@@ -58,11 +63,6 @@ import {
 import { readStoredCanvasMode, writeStoredCanvasMode } from '../utils/canvasModeStorage';
 import { downloadBlobAsFile } from '../utils/downloadFile';
 import { syncVsumWorkspaceChanges } from '../utils/vsumSyncSave';
-
-const MODE_TOGGLE_TOP = 14;
-const MODE_TOGGLE_HEIGHT = 44;
-const PROJECT_TABS_HEIGHT = 38;
-const CENTER_STACK_BOTTOM = MODE_TOGGLE_TOP + MODE_TOGGLE_HEIGHT + 4 + PROJECT_TABS_HEIGHT;
 
 type UMLPanel = CanvasUmlPanelState;
 
@@ -1177,6 +1177,7 @@ export const CanvasPage: React.FC = () => {
       fileName,
       resolved.content,
       resolved.ecoreFileId,
+      fetchEcoreFileById,
       flowCanvasRef.current?.updateEcoreFileData,
     );
     if (loadedContent === null) {
@@ -1547,16 +1548,13 @@ export const CanvasPage: React.FC = () => {
         />
       )}
 
-      {/* Constraints overlay — always mounted to preserve state (edits, deletions).
-          Visibility toggled via display so the FlowCanvas mode-toggle remains
-          clickable through the transparent center gap when hidden. */}
-      <div style={{
-        position: 'absolute', top: 72, left: 0, right: 0, bottom: 0,
-        display: canvasMode === 'constraints' && !isViewOnly ? 'flex' : 'none',
-        zIndex: 100, pointerEvents: 'none',
-      }}>
-        <ConstraintsView key={activeProjectId ?? 'default'} vsumId={activeProjectId?.toString()} canvasNodes={constraintsNodes} onHighlightNode={setConstraintHighlightNodeId} filterNodeId={constraintFilterNodeId} />
-      </div>
+      <CanvasConstraintsOverlay
+        projectId={activeProjectId}
+        visible={canvasMode === 'constraints' && !isViewOnly}
+        canvasNodes={constraintsNodes}
+        onHighlightNode={setConstraintHighlightNodeId}
+        filterNodeId={constraintFilterNodeId}
+      />
 
       {/* Left sidebar toolbar */}
       {canvasMode !== 'constraints' && <CanvasSidebarToolbar
@@ -1649,72 +1647,3 @@ export const CanvasPage: React.FC = () => {
     </div>
   );
 };
-
-function computeUmlPanelLayout(openTabCount: number): { top: number; height: number } {
-  const top = openTabCount > 0 ? CENTER_STACK_BOTTOM + 8 : MODE_TOGGLE_TOP + MODE_TOGGLE_HEIGHT + 8;
-  const bottomUsed = 228;
-  return {
-    top,
-    height: Math.max(200, document.documentElement.clientHeight - top - bottomUsed),
-  };
-}
-
-function numberFromNodeData(value: unknown): number | undefined {
-  return typeof value === 'number' ? value : undefined;
-}
-
-interface ResolvedEcoreMeta {
-  metaModelId?: number;
-  metaModelSourceId?: number;
-  ecoreFileId?: number;
-  content: string;
-}
-
-function enrichEcoreMetaFromCanvas(
-  fileName: string,
-  fileContent: string,
-  meta: EcoreFileExpandMeta | undefined,
-  getNodes: () => Node[],
-): ResolvedEcoreMeta {
-  let metaModelId = meta?.metaModelId;
-  let metaModelSourceId = meta?.metaModelSourceId;
-  let ecoreFileId = meta?.ecoreFileId;
-  let content = fileContent;
-
-  if (ecoreFileId != null && metaModelId != null) {
-    return { metaModelId, metaModelSourceId, ecoreFileId, content };
-  }
-
-  const node = getNodes().find(
-    (n: Node) => n.type === 'ecoreFile' && n.data.fileName === fileName,
-  );
-  if (!node?.data) {
-    return { metaModelId, metaModelSourceId, ecoreFileId, content };
-  }
-
-  metaModelId = metaModelId ?? numberFromNodeData(node.data.metaModelId);
-  metaModelSourceId = metaModelSourceId ?? numberFromNodeData(node.data.metaModelSourceId);
-  ecoreFileId = ecoreFileId ?? numberFromNodeData(node.data.ecoreFileId);
-  if (!content?.trim() && typeof node.data.fileContent === 'string') {
-    content = node.data.fileContent;
-  }
-  return { metaModelId, metaModelSourceId, ecoreFileId, content };
-}
-
-async function loadEcoreFileContent(
-  fileName: string,
-  content: string,
-  ecoreFileId: number | undefined,
-  updateEcoreFileData?: (fileName: string, content: string, ecoreFileId: number) => void,
-): Promise<string | null> {
-  if (content?.trim()) return content;
-  if (ecoreFileId == null) return content;
-
-  try {
-    const loaded = await apiService.getFile(ecoreFileId);
-    updateEcoreFileData?.(fileName, loaded, ecoreFileId);
-    return loaded;
-  } catch {
-    return null;
-  }
-}
