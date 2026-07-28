@@ -1,6 +1,6 @@
 import { Edge, Node } from 'reactflow';
-
-type CanvasMode = 'modeling' | 'constraints' | 'views';
+import { CanvasMode } from './flowCanvasTypes';
+import { buildReactionEdge } from './flowCanvasEdgeFactory';
 
 export type EcoreSelectAction =
   | { kind: 'handled' }
@@ -44,32 +44,21 @@ export function resolveEcoreFileSelectAction(params: ResolveEcoreSelectParams): 
   return { kind: 'select', nodeId: ecoreNode.id, fileName };
 }
 
+/** Edge created by picking a source and then a target in add-reaction mode. */
 export function buildReactionEdgeFromNodes(
   sourceNode: Node,
   targetNode: Node,
   color: string,
-  calculateOptimalHandles: (source: Node, target: Node) => { sourceHandle: string; targetHandle: string },
 ): Edge {
-  const handles = calculateOptimalHandles(sourceNode, targetNode);
-  const cleanSrc = handles.sourceHandle.replace('-source', '').replace('-target', '');
-  const cleanTgt = handles.targetHandle.replace('-target', '').replace('-source', '');
-
-  return {
+  return buildReactionEdge({
     id: `edge-reaction-${Date.now()}`,
-    source: sourceNode.id,
-    target: targetNode.id,
-    type: 'reactions',
-    sourceHandle: cleanSrc,
-    targetHandle: cleanTgt,
+    sourceNode,
+    targetNode,
+    color,
     data: {
       code: '',
       backendRelationId: null,
       reactionFileId: null,
-      sourceMetaModelId: sourceNode.data?.metaModelId ?? sourceNode.data?.metaModelSourceId,
-      targetMetaModelId: targetNode.data?.metaModelId ?? targetNode.data?.metaModelSourceId,
-      sourceMetaModelSourceId: sourceNode.data?.metaModelSourceId ?? sourceNode.data?.metaModelId,
-      targetMetaModelSourceId: targetNode.data?.metaModelSourceId ?? targetNode.data?.metaModelId,
     },
-    style: { stroke: color, strokeWidth: 2 },
-  };
+  });
 }
