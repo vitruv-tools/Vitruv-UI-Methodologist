@@ -1,12 +1,7 @@
 import React, { useState, useRef, useCallback, useEffect, useMemo, forwardRef, useImperativeHandle, type RefObject } from 'react';
-import { ecoreToUml, UMLAttribute, UMLRelationship, UMLRelType, UMLModel, UMLVisibility, UMLOperation, buildAttributeTypeOptions, buildOperationReturnTypeOptions, normalizeAttributeTypeDisplay, normalizeOperationReturnType, nextUniqueAttributeName, nextUniqueOperationName, UML_VISIBILITY_OPTIONS } from '../../utils/ecoreToUml';
+import { ecoreToUml, UMLAttribute, UMLRelationship, UMLModel, UMLVisibility, UMLOperation, buildAttributeTypeOptions, buildOperationReturnTypeOptions, normalizeAttributeTypeDisplay, normalizeOperationReturnType, nextUniqueAttributeName, nextUniqueOperationName, UML_VISIBILITY_OPTIONS } from '../../utils/ecoreToUml';
 import { saveMetaModelEcore, MetaModelSaveMetadata } from '../../utils/saveMetaModelEcore';
 import { umlSemanticSnapshot, umlToEcore } from '../../utils/umlToEcore';
-import {
-  normalizeMultiplicityDisplay,
-  relationshipMultiplicitySelectOptions,
-  UML_RELATIONSHIP_MULTIPLICITY_LABELS,
-} from '../../utils/umlMultiplicity';
 import { validateUmlModel } from '../../utils/umlValidation';
 import { extractNsUriFromEcore } from '../../utils/ecoreParser';
 import { ReactionConfigPopup } from './ReactionConfigPopup';
@@ -48,6 +43,8 @@ import {
   UML_REACTION_EDGE_COLORS,
   UML_RELATION_EDGE_COLORS,
 } from './UMLRelationVisuals';
+import { ClassEditPanel, RelationshipEditPanel } from './UMLDiagramEditPanels';
+import type { UmlDiagramClass } from './umlDiagramTypes';
 
 // ── constants ────────────────────────────────────────────────────────────────
 
@@ -84,7 +81,7 @@ export const WORKSPACE_DOT_BACKGROUND: React.CSSProperties = {
 
 // ── helpers ──────────────────────────────────────────────────────────────────
 
-function boxH(c: CLS): number {
+function boxH(c: UmlDiagramClass): number {
   const nh = c.isAbstract || c.isInterface ? STEREO_H : NAME_H;
   const ah = c.attributes.length * ATTR_ROW + ATTR_PAD + ADD_BTN_H;
   const oh = c.operations.length * ATTR_ROW + (c.operations.length > 0 ? ATTR_PAD : 0) + ADD_BTN_H;
@@ -97,7 +94,7 @@ function getInheritanceParentId(relationships: UMLRelationship[], classId: strin
 }
 
 function getLayoutMetrics(
-  classes: CLS[],
+  classes: UmlDiagramClass[],
   frozenOffset?: { offsetX: number; offsetY: number } | null,
 ) {
   if (classes.length === 0) {
@@ -141,19 +138,6 @@ function edgePt(bx: number, by: number, h: number, tx: number, ty: number) {
   const hw = BW / 2, hh = h / 2;
   const t = Math.abs(dx) * hh > Math.abs(dy) * hw ? hw / Math.abs(dx) : hh / Math.abs(dy);
   return { x: cx + dx * t, y: cy + dy * t };
-}
-
-// ── types ────────────────────────────────────────────────────────────────────
-
-interface CLS {
-  id: string;
-  name: string;
-  isAbstract: boolean;
-  isInterface: boolean;
-  attributes: UMLAttribute[];
-  operations: UMLOperation[];
-  x: number;
-  y: number;
 }
 
 type DiagramRel = UMLRelationship & { parallelIndex?: number; parallelCount?: number };
@@ -201,7 +185,7 @@ function multiplicityPosition(
   };
 }
 
-function buildClassObstacleRects(classes: CLS[], offsetX: number, offsetY: number): AxisRect[] {
+function buildClassObstacleRects(classes: UmlDiagramClass[], offsetX: number, offsetY: number): AxisRect[] {
   return classes.map(cls => ({
     left: cls.x + offsetX - MULT_CLASS_CLEARANCE,
     top: cls.y + offsetY - MULT_CLASS_CLEARANCE,
@@ -240,7 +224,7 @@ interface ReactionDragState {
 }
 
 function getReactionPortPosition(
-  cls: CLS,
+  cls: UmlDiagramClass,
   offsetX: number,
   offsetY: number,
   side: ReactionPortSide,
@@ -313,7 +297,7 @@ function buildDefaultReactionConfig(
 
 function getRelEndpoints(
   rel: DiagramRel,
-  classes: CLS[],
+  classes: UmlDiagramClass[],
   offsetX: number,
   offsetY: number,
 ) {
@@ -409,11 +393,11 @@ function remapOperationIds(operations: UMLOperation[], classId: string): UMLOper
 }
 
 function renameClassInList(
-  classes: CLS[],
+  classes: UmlDiagramClass[],
   oldId: string,
   newId: string,
   trimmedName: string,
-): CLS[] {
+): UmlDiagramClass[] {
   return classes.map(classItem => {
     if (classItem.id !== oldId) return classItem;
     return {
@@ -439,23 +423,23 @@ function renameClassInRelationships(
 }
 
 function updateClassById(
-  classes: CLS[],
+  classes: UmlDiagramClass[],
   classId: string,
-  updater: (classItem: CLS) => CLS,
-): CLS[] {
+  updater: (classItem: UmlDiagramClass) => UmlDiagramClass,
+): UmlDiagramClass[] {
   return classes.map(classItem =>
     (classItem.id === classId ? updater(classItem) : classItem),
   );
 }
 
-function removeAttributeFromClass(classItem: CLS, attrId: string): CLS {
+function removeAttributeFromClass(classItem: UmlDiagramClass, attrId: string): UmlDiagramClass {
   return {
     ...classItem,
     attributes: classItem.attributes.filter(attribute => attribute.id !== attrId),
   };
 }
 
-function removeOperationFromClass(classItem: CLS, opId: string): CLS {
+function removeOperationFromClass(classItem: UmlDiagramClass, opId: string): UmlDiagramClass {
   return {
     ...classItem,
     operations: classItem.operations.filter(operation => operation.id !== opId),
@@ -489,13 +473,13 @@ function getOtherAttributeNames(attributes: UMLAttribute[], attrId: string): str
 }
 
 function applyAttributeSaveToClass(
-  classItem: CLS,
+  classItem: UmlDiagramClass,
   classId: string,
   attrId: string,
   name: string,
   type: string,
   visibility: UMLVisibility,
-): CLS {
+): UmlDiagramClass {
   if (classItem.id !== classId) return classItem;
   const current = classItem.attributes.find(attribute => attribute.id === attrId);
   if (!current) return classItem;
@@ -513,13 +497,13 @@ function applyAttributeSaveToClass(
 }
 
 function updateClassAttribute(
-  classes: CLS[],
+  classes: UmlDiagramClass[],
   classId: string,
   attrId: string,
   name: string,
   type: string,
   visibility: UMLVisibility,
-): CLS[] {
+): UmlDiagramClass[] {
   return classes.map(classItem =>
     applyAttributeSaveToClass(classItem, classId, attrId, name, type, visibility),
   );
@@ -552,13 +536,13 @@ function getOtherOperationNames(operations: UMLOperation[], opId: string): strin
 }
 
 function applyOperationSaveToClass(
-  classItem: CLS,
+  classItem: UmlDiagramClass,
   classId: string,
   opId: string,
   name: string,
   returnType: string,
   visibility: UMLVisibility,
-): CLS {
+): UmlDiagramClass {
   if (classItem.id !== classId) return classItem;
   const current = classItem.operations.find(operation => operation.id === opId);
   if (!current) return classItem;
@@ -576,19 +560,22 @@ function applyOperationSaveToClass(
 }
 
 function updateClassOperation(
-  classes: CLS[],
+  classes: UmlDiagramClass[],
   classId: string,
   opId: string,
   name: string,
   returnType: string,
   visibility: UMLVisibility,
-): CLS[] {
+): UmlDiagramClass[] {
   return classes.map(classItem =>
     applyOperationSaveToClass(classItem, classId, opId, name, returnType, visibility),
   );
 }
 
-function mergeAdditionalClassesWithPositions(prev: CLS[], newCls: CLS[]): CLS[] {
+function mergeAdditionalClassesWithPositions(
+  prev: UmlDiagramClass[],
+  newCls: UmlDiagramClass[],
+): UmlDiagramClass[] {
   return newCls.map(nc => {
     const existing = prev.find(p => p.id === nc.id);
     return existing ? { ...nc, x: existing.x, y: existing.y } : nc;
@@ -596,11 +583,11 @@ function mergeAdditionalClassesWithPositions(prev: CLS[], newCls: CLS[]): CLS[] 
 }
 
 function applyWrapperDragToClass(
-  c: CLS,
+  c: UmlDiagramClass,
   origins: Map<string, { x: number; y: number }>,
   dx: number,
   dy: number,
-): CLS {
+): UmlDiagramClass {
   const orig = origins.get(c.id);
   if (!orig) return c;
   return { ...c, x: orig.x + dx, y: orig.y + dy };
@@ -652,12 +639,6 @@ interface UMLDiagramProps {
   /** VSUM project id for Reaction Editor LSP connection. */
   vsumId?: string;
 }
-
-const REL_TYPE_LABELS: Record<UMLRelType, string> = {
-  association: 'Association',
-  composition: 'Composition',
-  inheritance: 'Inheritance',
-};
 
 function isKeyboardInputField(target: EventTarget | null): boolean {
   const tag = (target as HTMLElement | null)?.tagName;
@@ -745,7 +726,7 @@ function getConnectModeHint(connectSourceId: string | null, multiModel: boolean)
 }
 
 function getValidationBannerInset(
-  selectedClass: CLS | null | undefined,
+  selectedClass: UmlDiagramClass | null | undefined,
   selectedRel: UMLRelationship | null | undefined,
   reactionPanelOpen = false,
 ): { left: number; right: number } {
@@ -830,7 +811,7 @@ export const UMLDiagram = forwardRef<UMLDiagramHandle, UMLDiagramProps>(({
       classes: model.classes.map(c => ({ ...c, operations: c.operations ?? [] })),
     };
   }, [ecoreContent]);
-  const [classes, setClasses] = useState<CLS[]>(() => {
+  const [classes, setClasses] = useState<UmlDiagramClass[]>(() => {
     const base = fileName ? applyLayoutToUmlClasses(layoutScopeId, fileName, parsed.classes) : parsed.classes;
     return base.map(c => ({ ...c, operations: c.operations ?? [] }));
   });
@@ -862,11 +843,11 @@ export const UMLDiagram = forwardRef<UMLDiagramHandle, UMLDiagramProps>(({
             targetId: `addl-${m.id}-${r.targetId}`,
           })),
         };
-      } catch { return { ...m, classes: [] as CLS[], relationships: [] as UMLRelationship[] }; }
+      } catch { return { ...m, classes: [] as UmlDiagramClass[], relationships: [] as UMLRelationship[] }; }
     });
   }, [additionalModels]);
 
-  const [additionalClasses, setAdditionalClasses] = useState<CLS[]>(() =>
+  const [additionalClasses, setAdditionalClasses] = useState<UmlDiagramClass[]>(() =>
     additionalParsed.flatMap(m => m.classes)
   );
   const [additionalRels, setAdditionalRels] = useState<UMLRelationship[]>(() =>
@@ -1248,7 +1229,7 @@ export const UMLDiagram = forwardRef<UMLDiagramHandle, UMLDiagramProps>(({
       const dx = (ev.clientX - startX) / vscale;
       const dy = (ev.clientY - startY) / vscale;
       const origins = wrapperDragOrigins.current;
-      const applyDrag = (c: CLS) => applyWrapperDragToClass(c, origins, dx, dy);
+      const applyDrag = (c: UmlDiagramClass) => applyWrapperDragToClass(c, origins, dx, dy);
 
       if (groupName === primaryName) {
         setClasses(prev => prev.map(applyDrag));
@@ -1434,7 +1415,7 @@ export const UMLDiagram = forwardRef<UMLDiagramHandle, UMLDiagramProps>(({
     const name = nextUniqueClassName(classesRef.current.map(c => c.name));
     const id = sanitizeUmlClassId(name);
 
-    const newClass: CLS = {
+    const newClass: UmlDiagramClass = {
       id,
       name,
       isAbstract: false,
@@ -1888,7 +1869,7 @@ export const UMLDiagram = forwardRef<UMLDiagramHandle, UMLDiagramProps>(({
     setSelectedClassId(classId);
   }, [interactive, connectMode, reactionsMode, connectSourceId, addRelationship, flushPendingEdit]);
 
-  const updateClass = useCallback((classId: string, patch: Partial<Pick<CLS, 'name' | 'isAbstract' | 'isInterface'>>) => {
+  const updateClass = useCallback((classId: string, patch: Partial<Pick<UmlDiagramClass, 'name' | 'isAbstract' | 'isInterface'>>) => {
     recordChange();
     if (patch.name !== undefined) {
       const trimmed = patch.name.trim();
@@ -2559,7 +2540,7 @@ function isClassEditingName(edit: EditState | null, classId: string): boolean {
   return edit?.classId === classId && edit.kind === 'name';
 }
 
-function getClassBoxNameSectionHeight(cls: CLS, isEditingName: boolean): number {
+function getClassBoxNameSectionHeight(cls: UmlDiagramClass, isEditingName: boolean): number {
   const isAbstractOrIface = cls.isAbstract || cls.isInterface;
   if (!isEditingName) {
     if (isAbstractOrIface) return STEREO_H;
@@ -2617,7 +2598,7 @@ function getClassBoxOuterStyle(params: {
 }
 
 function getClassBoxWrapperStyle(params: {
-  cls: CLS;
+  cls: UmlDiagramClass;
   offsetX: number;
   offsetY: number;
   displayW: number;
@@ -2630,7 +2611,7 @@ function getClassBoxWrapperStyle(params: {
   };
 }
 
-function getClassBoxAriaLabel(cls: CLS, selected: boolean, connectSource: boolean): string {
+function getClassBoxAriaLabel(cls: UmlDiagramClass, selected: boolean, connectSource: boolean): string {
   let kind = 'class';
   if (cls.isInterface) kind = 'interface';
   else if (cls.isAbstract) kind = 'abstract class';
@@ -2725,7 +2706,7 @@ function getClassBoxNameSectionStyle(
   };
 }
 
-function getClassBoxNameSectionAriaLabel(cls: CLS, selected: boolean): string {
+function getClassBoxNameSectionAriaLabel(cls: UmlDiagramClass, selected: boolean): string {
   if (selected) return `Class name: ${cls.name}. Press Enter to edit.`;
   return `Class name: ${cls.name}. Press Enter to select.`;
 }
@@ -2800,7 +2781,7 @@ function startClassBoxDrag({
   onDragEnd,
 }: {
   e: React.MouseEvent;
-  cls: CLS;
+  cls: UmlDiagramClass;
   scale: number;
   dragRef: ClassBoxDragPointRef;
   didDragRef: ClassBoxDidDragRef;
@@ -2885,7 +2866,7 @@ function getOpRowEdit(edit: EditState | null, opId: string): EditState | null {
 }
 
 interface ClassBoxNameSectionProps {
-  cls: CLS;
+  cls: UmlDiagramClass;
   edit: EditState | null;
   interactive: boolean;
   selected: boolean;
@@ -3006,7 +2987,7 @@ const ClassBoxNameSection: React.FC<ClassBoxNameSectionProps> = ({
 // ── ClassBox ─────────────────────────────────────────────────────────────────
 
 interface ClassBoxProps {
-  cls: CLS;
+  cls: UmlDiagramClass;
   offsetX: number;
   offsetY: number;
   scale: number;
@@ -3714,342 +3695,3 @@ const OpRow: React.FC<OpRowProps> = ({
 const AddOpRow: React.FC<{ onClick: () => void }> = ({ onClick }) => (
   <UmlAddMemberRow label="Add operation" onClick={onClick} />
 );
-
-function PanelCheckboxField({
-  id,
-  label,
-  checked,
-  onChange,
-  style,
-}: Readonly<{
-  id: string;
-  label: string;
-  checked: boolean;
-  onChange: (checked: boolean) => void;
-  style?: React.CSSProperties;
-}>) {
-  return (
-    <label htmlFor={id} style={style}>
-      <input id={id} type="checkbox" checked={checked} onChange={e => onChange(e.target.checked)} /><span>{label}</span>
-    </label>
-  );
-}
-
-function stopDiagramEventBubble(e: { stopPropagation(): void }): void {
-  e.stopPropagation();
-}
-
-function handleDiagramEditPanelKeyDown(
-  e: React.KeyboardEvent<HTMLDialogElement>,
-  onClose: () => void,
-): void {
-  e.stopPropagation();
-  if (e.key === 'Escape') onClose();
-}
-
-const DiagramEditPanelShell: React.FC<{
-  panelDataAttr: 'class' | 'rel';
-  ariaLabel: string;
-  onClose: () => void;
-  style: React.CSSProperties;
-  children: React.ReactNode;
-}> = ({ panelDataAttr, ariaLabel, onClose, style, children }) => {
-  const panelRef = useRef<HTMLDialogElement>(null);
-
-  useEffect(() => {
-    panelRef.current?.focus();
-  }, []);
-
-  const panelDataAttribute =
-    panelDataAttr === 'class'
-      ? { 'data-class-edit-panel': true as const }
-      : { 'data-rel-edit-panel': true as const };
-
-  return (
-    <dialog
-      ref={panelRef}
-      {...panelDataAttribute}
-      open
-      aria-label={ariaLabel}
-      style={{ ...style, margin: 0, padding: 0 }}
-      onClick={stopDiagramEventBubble}
-      onMouseDown={stopDiagramEventBubble}
-      onKeyDown={e => handleDiagramEditPanelKeyDown(e, onClose)}
-      onKeyUp={stopDiagramEventBubble}
-    >
-      {children}
-    </dialog>
-  );
-};
-
-const ClassEditPanel: React.FC<{
-  cls: CLS;
-  classes: CLS[];
-  parentId: string | null;
-  onUpdate: (patch: Partial<Pick<CLS, 'name' | 'isAbstract' | 'isInterface'>>) => void;
-  onSetParent: (parentId: string | null) => void;
-  onDelete: () => void;
-  onClose: () => void;
-}> = ({ cls, classes, parentId, onUpdate, onSetParent, onDelete, onClose }) => (
-  <DiagramEditPanelShell
-    panelDataAttr="class"
-    ariaLabel={`Edit class ${cls.name}`}
-    onClose={onClose}
-    style={{
-      position: 'absolute', top: DIAGRAM_HINT_TOP, left: 12, bottom: 12, zIndex: 35,
-      width: 268, background: UML.surface, border: `1px solid ${UML.primaryBorder}`,
-      borderRadius: 10, boxShadow: `0 8px 24px ${UML.primaryRing}`,
-      display: 'flex', flexDirection: 'column', overflow: 'hidden', fontFamily: UML.fontSans,
-    }}
-  >
-    <div style={{
-      padding: '10px 14px', borderBottom: `1px solid ${UML.border}`,
-      display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8,
-      background: `linear-gradient(180deg, ${UML.primarySoft} 0%, ${UML.surface} 100%)`,
-    }}>
-      <div>
-        <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.06em', color: UML.primary, textTransform: 'uppercase' }}>Class</div>
-        <div style={{ fontSize: 12, fontWeight: 600, color: UML.ink, marginTop: 3 }}>Edit class</div>
-      </div>
-      <button type="button" onClick={onClose} title="Close panel" style={{ border: 'none', background: 'transparent', cursor: 'pointer', color: UML.textMuted, fontSize: 14 }}>✕</button>
-    </div>
-    <div style={{ flex: 1, overflowY: 'auto', padding: '12px 14px' }}>
-      <label htmlFor={`class-edit-name-${cls.id}`} style={panelLabelStyle}>Class name</label>
-      <input
-        id={`class-edit-name-${cls.id}`}
-        value={cls.name}
-        onChange={e => onUpdate({ name: e.target.value })}
-        style={{ ...panelInputStyle, marginBottom: 14 }}
-      />
-      <PanelCheckboxField
-        id={`class-edit-abstract-${cls.id}`}
-        label="Abstract class"
-        checked={cls.isAbstract}
-        onChange={checked => onUpdate({ isAbstract: checked })}
-        style={{ ...panelLabelStyle, display: 'flex', alignItems: 'center', gap: 8, textTransform: 'none', fontSize: 12 }}
-      />
-      <PanelCheckboxField
-        id={`class-edit-interface-${cls.id}`}
-        label="Interface"
-        checked={cls.isInterface}
-        onChange={checked => onUpdate({ isInterface: checked })}
-        style={{ ...panelLabelStyle, display: 'flex', alignItems: 'center', gap: 8, textTransform: 'none', fontSize: 12, marginBottom: 14 }}
-      />
-      <label htmlFor={`class-edit-parent-${cls.id}`} style={panelLabelStyle}>Superclass (inheritance)</label>
-      <select
-        id={`class-edit-parent-${cls.id}`}
-        value={parentId ?? ''}
-        onChange={e => onSetParent(e.target.value || null)}
-        style={{ ...panelInputStyle, marginBottom: 14 }}
-      >
-        <option value="">(none)</option>
-        {classes.filter(c => c.id !== cls.id).map(c => (
-          <option key={c.id} value={c.id}>{c.name}</option>
-        ))}
-      </select>
-      <button
-        type="button"
-        onClick={onDelete}
-        style={{
-          width: '100%', padding: '8px 10px', borderRadius: 8, border: '1px solid #fecaca',
-          background: '#fef2f2', color: '#dc2626', fontSize: 12, fontWeight: 600, cursor: 'pointer',
-        }}
-      >
-        Delete class
-      </button>
-    </div>
-    <div style={{ padding: '8px 14px', borderTop: `1px solid ${UML.border}`, fontSize: 10, color: UML.textMuted, lineHeight: 1.45 }}>
-      Edit attributes and operations on the class box · Close with ✕
-    </div>
-  </DiagramEditPanelShell>
-);
-
-const panelInputStyle: React.CSSProperties = {
-  width: '100%',
-  fontSize: 12,
-  border: `1px solid ${UML.border}`,
-  borderRadius: 8,
-  padding: '6px 9px',
-  boxSizing: 'border-box',
-  fontFamily: UML.fontSans,
-  color: UML.ink,
-};
-
-function getRelationshipEditPanelAriaLabel(rel: UMLRelationship): string {
-  const base = `Edit ${rel.type} connection`;
-  return rel.label ? `${base}: ${rel.label}` : base;
-}
-
-const RelationshipEditPanel: React.FC<{
-  rel: UMLRelationship;
-  classes: CLS[];
-  onUpdate: (patch: Partial<UMLRelationship>) => void;
-  onSwapEndpoints: () => void;
-  onClose: () => void;
-}> = ({ rel, classes, onUpdate, onSwapEndpoints, onClose }) => {
-  return (
-    <DiagramEditPanelShell
-      panelDataAttr="rel"
-      ariaLabel={getRelationshipEditPanelAriaLabel(rel)}
-      onClose={onClose}
-      style={{
-        position: 'absolute',
-        top: DIAGRAM_HINT_TOP,
-        right: 12,
-        bottom: 12,
-        zIndex: 35,
-        width: 268,
-        background: UML.surface,
-        border: `1px solid ${UML.primaryBorder}`,
-        borderRadius: 10,
-        boxShadow: `0 8px 24px ${UML.primaryRing}, 0 0 0 1px rgba(4,148,132,0.05)`,
-        display: 'flex',
-        flexDirection: 'column',
-        overflow: 'hidden',
-        fontFamily: UML.fontSans,
-      }}
-    >
-      <div style={{
-        padding: '10px 14px',
-        borderBottom: `1px solid ${UML.border}`,
-        display: 'flex',
-        justifyContent: 'space-between',
-        alignItems: 'flex-start',
-        gap: 8,
-        background: `linear-gradient(180deg, ${UML.primarySoft} 0%, ${UML.surface} 100%)`,
-      }}>
-        <div>
-          <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.06em', color: UML.primary, textTransform: 'uppercase' }}>
-            Connection
-          </div>
-          <div style={{ fontSize: 12, fontWeight: 600, color: UML.ink, marginTop: 3 }}>
-            Edit relationship
-          </div>
-        </div>
-        <button type="button" onClick={onClose} title="Close panel" style={{ border: 'none', background: 'transparent', cursor: 'pointer', color: UML.textMuted, padding: 2, fontSize: 14, lineHeight: 1 }}>✕</button>
-      </div>
-
-      <div style={{ flex: 1, overflowY: 'auto', padding: '12px 14px' }}>
-        <label htmlFor={`rel-edit-source-${rel.id}`} style={panelLabelStyle}>From class</label>
-        <select
-          id={`rel-edit-source-${rel.id}`}
-          value={rel.sourceId}
-          onChange={e => {
-            const next = e.target.value;
-            if (next !== rel.targetId) onUpdate({ sourceId: next });
-          }}
-          style={{ ...panelInputStyle, marginBottom: 8 }}
-        >
-          {classes.map(c => (
-            <option key={c.id} value={c.id} disabled={c.id === rel.targetId}>{c.name}</option>
-          ))}
-        </select>
-
-        <div style={{ display: 'flex', justifyContent: 'center', margin: '4px 0 10px' }}>
-          <button
-            type="button"
-            onClick={onSwapEndpoints}
-            title="Swap direction"
-            style={{
-              border: `1px solid ${UML.primaryBorder}`,
-              borderRadius: 8,
-              background: UML.primarySoft,
-              color: UML.primary,
-              fontSize: 11,
-              fontWeight: 600,
-              padding: '5px 12px',
-              cursor: 'pointer',
-            }}
-          >
-            ⇄ Swap direction
-          </button>
-        </div>
-
-        <label htmlFor={`rel-edit-target-${rel.id}`} style={panelLabelStyle}>To class</label>
-        <select
-          id={`rel-edit-target-${rel.id}`}
-          value={rel.targetId}
-          onChange={e => {
-            const next = e.target.value;
-            if (next !== rel.sourceId) onUpdate({ targetId: next });
-          }}
-          style={{ ...panelInputStyle, marginBottom: 14 }}
-        >
-          {classes.map(c => (
-            <option key={c.id} value={c.id} disabled={c.id === rel.sourceId}>{c.name}</option>
-          ))}
-        </select>
-
-        <label htmlFor={`rel-edit-label-${rel.id}`} style={panelLabelStyle}>Connection name</label>
-        <input
-          id={`rel-edit-label-${rel.id}`}
-          value={rel.label ?? ''}
-          onChange={e => onUpdate({ label: e.target.value })}
-          placeholder="e.g. manages, contains"
-          style={{ ...panelInputStyle, marginBottom: 14 }}
-        />
-
-        <label htmlFor={`rel-edit-type-${rel.id}`} style={panelLabelStyle}>Type</label>
-        <select
-          id={`rel-edit-type-${rel.id}`}
-          value={rel.type}
-          onChange={e => onUpdate({ type: e.target.value as UMLRelType })}
-          style={{ ...panelInputStyle, marginBottom: 14 }}
-        >
-          {(Object.keys(REL_TYPE_LABELS) as UMLRelType[]).map(t => (
-            <option key={t} value={t}>{REL_TYPE_LABELS[t]}</option>
-          ))}
-        </select>
-
-        {rel.type !== 'inheritance' && (
-          <>
-            <label htmlFor={`rel-edit-source-mult-${rel.id}`} style={panelLabelStyle}>Source multiplicity</label>
-            <select
-              id={`rel-edit-source-mult-${rel.id}`}
-              value={normalizeMultiplicityDisplay(rel.sourceMultiplicity)}
-              onChange={e => onUpdate({
-                sourceMultiplicity: e.target.value ? e.target.value : undefined,
-              })}
-              style={{ ...panelInputStyle, marginBottom: 14 }}
-            >
-              {relationshipMultiplicitySelectOptions(rel.sourceMultiplicity).map(m => (
-                <option key={`src-${m || 'none'}`} value={m}>
-                  {UML_RELATIONSHIP_MULTIPLICITY_LABELS[m] ?? m}
-                </option>
-              ))}
-            </select>
-            <label htmlFor={`rel-edit-target-mult-${rel.id}`} style={panelLabelStyle}>Target multiplicity</label>
-            <select
-              id={`rel-edit-target-mult-${rel.id}`}
-              value={normalizeMultiplicityDisplay(rel.targetMultiplicity)}
-              onChange={e => onUpdate({
-                targetMultiplicity: e.target.value ? e.target.value : undefined,
-              })}
-              style={panelInputStyle}
-            >
-              {relationshipMultiplicitySelectOptions(rel.targetMultiplicity).map(m => (
-                <option key={`tgt-${m || 'none'}`} value={m}>
-                  {UML_RELATIONSHIP_MULTIPLICITY_LABELS[m] ?? m}
-                </option>
-              ))}
-            </select>
-          </>
-        )}
-      </div>
-
-      <div style={{ padding: '8px 14px', borderTop: `1px solid ${UML.border}`, fontSize: 10, color: UML.textMuted, lineHeight: 1.45 }}>
-        Change type in this panel · Delete key removes selection · Close with ✕
-      </div>
-    </DiagramEditPanelShell>
-  );
-};
-
-const panelLabelStyle: React.CSSProperties = {
-  display: 'block',
-  fontSize: 10,
-  fontWeight: 700,
-  letterSpacing: '0.04em',
-  textTransform: 'uppercase',
-  color: UML.textMuted,
-  marginBottom: 5,
-};
