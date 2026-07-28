@@ -27,6 +27,7 @@ import { CanvasSidebarToolbar } from '../components/canvas/CanvasSidebarToolbar'
 import { CanvasProjectAccessControls } from '../components/canvas/CanvasProjectAccessControls';
 import { CanvasConstraintsOverlay } from '../components/canvas/CanvasConstraintsOverlay';
 import { getCanvasPanelMemberName } from '../components/canvas/canvasMemberPresentation';
+import { useCanvasModeState } from '../hooks/useCanvasModeState';
 import {
   computeUmlPanelLayout,
   enrichEcoreMetaFromCanvas,
@@ -60,7 +61,6 @@ import {
   workspaceSnapshotFromVsumDetails,
   workspaceSnapshotsEqual,
 } from '../utils/workspaceSnapshotUtils';
-import { readStoredCanvasMode, writeStoredCanvasMode } from '../utils/canvasModeStorage';
 import { downloadBlobAsFile } from '../utils/downloadFile';
 import { syncVsumWorkspaceChanges } from '../utils/vsumSyncSave';
 
@@ -635,50 +635,32 @@ export const CanvasPage: React.FC = () => {
     return () => { cancelled = true; };
   }, [activeProjectId, isSharedAccess]);
 
-  // Canvas mode (Modeling / Constraints / Views)
-  const [canvasMode, setCanvasMode] = useState<CanvasMode>(() => readStoredCanvasMode(activeProjectId));
-  const canvasModeRef = useRef<CanvasMode>(canvasMode);
-  const [constraintsNodes, setConstraintsNodes] = useState<Node[]>([]);
+  // Add-reaction mode
+  const [addReactionMode, setAddReactionMode] = useState(false);
   useEffect(() => {
     if (isViewOnly) setAddReactionMode(false);
   }, [isViewOnly]);
 
-  const [constraintHighlightNodeId, setConstraintHighlightNodeId] = useState<string | null>(null);
-  const [constraintFilterNodeId, setConstraintFilterNodeId] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (isViewOnly && canvasMode === 'constraints') {
-      setCanvasMode('modeling');
-      canvasModeRef.current = 'modeling';
-      writeStoredCanvasMode(activeProjectId, 'modeling');
-    }
-  }, [activeProjectId, isViewOnly, canvasMode]);
-
-  useEffect(() => {
-    if (!activeProjectId) return;
-    const storedMode = readStoredCanvasMode(activeProjectId);
-    const nextMode = isViewOnly && storedMode === 'constraints' ? 'modeling' : storedMode;
-    canvasModeRef.current = nextMode;
-    setCanvasMode(nextMode);
-    if (nextMode !== storedMode) writeStoredCanvasMode(activeProjectId, nextMode);
-  }, [activeProjectId, isViewOnly]);
-
-  const handleCanvasModeChange = useCallback((mode: CanvasMode) => {
-    if (mode === 'constraints' && isViewOnly) return;
-    if (mode === 'constraints') {
-      setConstraintsNodes(flowCanvasRef.current?.getNodes?.() ?? []);
-    } else {
-      setConstraintHighlightNodeId(null);
-      setConstraintFilterNodeId(null);
-    }
-    canvasModeRef.current = mode;
-    setCanvasMode(mode);
-    writeStoredCanvasMode(activeProjectId, mode);
-  }, [activeProjectId, isViewOnly]);
-
-
-  // Add-reaction mode
-  const [addReactionMode, setAddReactionMode] = useState(false);
+  // Canvas mode (Modeling / Constraints / Views)
+  const getCanvasNodes = useCallback(
+    (): Node[] => flowCanvasRef.current?.getNodes?.() ?? [],
+    [],
+  );
+  const {
+    canvasMode,
+    canvasModeRef,
+    constraintsNodes,
+    setConstraintsNodes,
+    constraintHighlightNodeId,
+    setConstraintHighlightNodeId,
+    constraintFilterNodeId,
+    setConstraintFilterNodeId,
+    handleCanvasModeChange,
+  } = useCanvasModeState({
+    projectId: activeProjectId,
+    isViewOnly,
+    getCanvasNodes,
+  });
 
   // Undo/redo availability (driven by FlowCanvas callback)
   const [canUndo, setCanUndo] = useState(false);
@@ -752,7 +734,7 @@ export const CanvasPage: React.FC = () => {
     };
     load();
     setTimeout(load, 50);
-  }, []);
+  }, [canvasModeRef, setConstraintsNodes]);
 
   const captureRef = useRef(captureCurrentTabSession);
   captureRef.current = captureCurrentTabSession;
@@ -977,7 +959,7 @@ export const CanvasPage: React.FC = () => {
         setLoadingProject(false);
       }
     }
-  }, [clearCanvasWorkspace, setBaselineForInstance, updateTabName, applyProjectMembers, navAccess, navAccessRole, noteApiRole]);
+  }, [clearCanvasWorkspace, setBaselineForInstance, updateTabName, applyProjectMembers, navAccess, navAccessRole, noteApiRole, canvasModeRef, setConstraintsNodes]);
 
   // Viewers: reload when the owner saves changes; detect when access is revoked.
   useEffect(() => {
@@ -1079,7 +1061,7 @@ export const CanvasPage: React.FC = () => {
 
     run();
     return () => { cancelled = true; };
-  }, [activeInstanceId, clearCanvasWorkspace, loadVsum, bumpProjectRole]);
+  }, [activeInstanceId, clearCanvasWorkspace, loadVsum, bumpProjectRole, canvasModeRef, setConstraintsNodes]);
 
   // ── Rename VSUM ───────────────────────────────────────────────────────────
 
