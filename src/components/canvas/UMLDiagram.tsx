@@ -28,18 +28,26 @@ import {
 } from '../../utils/umlLayoutStorage';
 import { assignParallelRelMeta } from '../../utils/umlClassLayout';
 import {
-  bridgedLinePathD,
   computeLineBridges,
   optimizeMultiplicityBadges,
   resolveMultiplicityBadgeCollisions,
   type AxisRect,
-  type LineBridge,
   type MultiplicityBadge,
 } from '../../utils/umlDiagramGeometry';
 import { UMLDiagramMinimap } from './UMLDiagramMinimap';
 import { computeUmlModelGroups } from '../../utils/umlModelGroups';
 import { UMLDiagramToolbar } from './UMLDiagramToolbar';
 import { DIAGRAM_HINT_TOP, UML } from './umlDiagramTheme';
+import {
+  getUmlRelationDirectionMarkerSide,
+  getUmlRelationEdgeState,
+  UMLMultiplicityBadge,
+  UMLRelationDirectionMarker,
+  UMLRelationHitTarget,
+  UMLRelationLine,
+  UML_REACTION_EDGE_COLORS,
+  UML_RELATION_EDGE_COLORS,
+} from './UMLRelationVisuals';
 
 // ── constants ────────────────────────────────────────────────────────────────
 
@@ -150,9 +158,6 @@ interface CLS {
 
 type DiagramRel = UMLRelationship & { parallelIndex?: number; parallelCount?: number };
 
-const EDGE_DEFAULT = '#0c436e';
-const EDGE_HOVER = '#f87171';
-const EDGE_SELECT = '#ef4444';
 const EDGE_ENDPOINT_INSET = 10;
 const MULT_ALONG_OFFSET = 52;
 const MULT_PERP_OFFSET = 10;
@@ -205,46 +210,6 @@ function buildClassObstacleRects(classes: CLS[], offsetX: number, offsetY: numbe
   }));
 }
 
-// ── relation-line helpers ─────────────────────────────────────────────────────
-
-type EdgeState = 'default' | 'hovered' | 'selected';
-
-function edgeState(isSelected: boolean, isHovered: boolean): EdgeState {
-  if (isSelected) return 'selected';
-  if (isHovered)  return 'hovered';
-  return 'default';
-}
-
-const EDGE_COLOR: Record<EdgeState, string> = {
-  default:  EDGE_DEFAULT,
-  hovered:  EDGE_HOVER,
-  selected: EDGE_SELECT,
-};
-
-const REACTION_EDGE_COLOR: Record<EdgeState, string> = {
-  default:  '#a855f7',
-  hovered:  '#9333ea',
-  selected: '#7e22ce',
-};
-
-function reactionArrowSvg(color: string): React.ReactNode {
-  return <path d="M 0 0 L 12 6 L 0 12 z" fill={color} />;
-}
-
-const EDGE_WIDTH: Record<EdgeState, number> = {
-  default: 1.5,
-  hovered: 2.5,
-  selected: 3,
-};
-
-type DirectionMarkerSide = 'start' | 'end';
-
-function getDirectionMarkerSide(type: UMLRelationship['type']): DirectionMarkerSide | null {
-  if (type === 'composition') return 'start';
-  if (type === 'inheritance' || type === 'association') return 'end';
-  return null;
-}
-
 function insetLineEndpoints(
   p1: { x: number; y: number },
   p2: { x: number; y: number },
@@ -261,33 +226,6 @@ function insetLineEndpoints(
     ux,
     uy,
   };
-}
-
-function directionMarkerSvg(type: UMLRelationship['type'], color: string): React.ReactNode {
-  if (type === 'association') {
-    return <path d="M 0 0 L 12 6 L 0 12 z" fill={color} />;
-  }
-  if (type === 'inheritance') {
-    return <path d="M 0 0 L 12 6 L 0 12 z" fill="#ffffff" stroke={color} strokeWidth="1.5" />;
-  }
-  if (type === 'composition') {
-    return <path d="M 7 1 L 13 7 L 7 13 L 1 7 Z" fill={color} />;
-  }
-  return null;
-}
-
-function directionMarkerViewBox(type: UMLRelationship['type']): string {
-  return type === 'composition' ? '0 0 14 14' : '0 0 12 12';
-}
-
-function directionMarkerSize(type: UMLRelationship['type']): number {
-  return type === 'composition' ? 20 : 18;
-}
-
-function directionMarkerAnchor(
-  anchor: { x: number; y: number },
-): { x: number; y: number } {
-  return anchor;
 }
 
 type ReactionPortSide = 'left' | 'right';
@@ -411,172 +349,6 @@ function applyParallelOffset(
     p2: { x: p2.x + nx * off, y: p2.y + ny * off },
   };
 }
-
-// ── RelationLine ──────────────────────────────────────────────────────────────
-
-interface RelationLineProps {
-  rel: UMLRelationship;
-  p1: { x: number; y: number };
-  p2: { x: number; y: number };
-  drawP1: { x: number; y: number };
-  drawP2: { x: number; y: number };
-  bridges: LineBridge[];
-  state: EdgeState;
-  reactionEdge?: ReactionEdge;
-}
-
-const RelationLine: React.FC<RelationLineProps> = ({
-  rel, p1, p2, drawP1, drawP2, bridges, state, reactionEdge,
-}) => {
-  const strokeColor = reactionEdge ? REACTION_EDGE_COLOR[state] : EDGE_COLOR[state];
-  const strokeWidth = EDGE_WIDTH[state];
-  const haloPath = bridgedLinePathD(drawP1, drawP2, bridges);
-  const mx = (p1.x + p2.x) / 2;
-  const my = (p1.y + p2.y) / 2;
-
-  return (
-    <g data-rel-line style={{ pointerEvents: 'none' }}>
-      <path d={haloPath} fill="none" stroke="#ffffff" strokeWidth={strokeWidth + 4} strokeLinecap="round" strokeLinejoin="round" />
-      <path d={haloPath} fill="none" stroke={strokeColor} strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round" />
-      {rel.label && (
-        <text x={mx} y={my - 5} textAnchor="middle" fontSize="10" fill={strokeColor}
-          stroke="#ffffff" strokeWidth={3} paintOrder="stroke fill"
-          fontFamily="ui-sans-serif, system-ui, sans-serif" pointerEvents="none">
-          {rel.label}
-        </text>
-      )}
-    </g>
-  );
-};
-
-/** Wide invisible stroke above class boxes — fixes clicks blocked by class z-order. */
-const RelationHitTarget: React.FC<{
-  relId: string;
-  drawP1: { x: number; y: number };
-  drawP2: { x: number; y: number };
-  bridges: LineBridge[];
-  onRelClick: (e: React.MouseEvent) => void;
-  onMouseEnter: () => void;
-  onMouseLeave: () => void;
-}> = ({ relId, drawP1, drawP2, bridges, onRelClick, onMouseEnter, onMouseLeave }) => {
-  const path = bridgedLinePathD(drawP1, drawP2, bridges);
-  return (
-    <path
-      data-rel-hit-line
-      data-rel-id={relId}
-      d={path}
-      fill="none"
-      stroke="transparent"
-      strokeWidth={28}
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      style={{ cursor: 'pointer', pointerEvents: 'stroke' }}
-      onClick={onRelClick}
-      onMouseEnter={onMouseEnter}
-      onMouseLeave={onMouseLeave}
-    />
-  );
-};
-
-const MultiplicityBadgeGraphic: React.FC<{
-  badge: MultiplicityBadge;
-  strokeColor: string;
-}> = ({ badge, strokeColor }) => (
-  <g data-mult-badge pointerEvents="none">
-    <rect x={badge.x - 18} y={badge.y - 12} width={36} height={24} rx={4} fill="#ffffff" stroke={strokeColor} strokeWidth={1.5} />
-    <text x={badge.x} y={badge.y + 4} textAnchor="middle" fontSize="13" fontWeight={700} fill={strokeColor} fontFamily="ui-monospace, Consolas, monospace">
-      {badge.text}
-    </text>
-  </g>
-);
-
-interface RelationDirectionMarkerProps {
-  rel: UMLRelationship;
-  lineStart: { x: number; y: number };
-  lineEnd: { x: number; y: number };
-  color: string;
-  reactionEdge?: ReactionEdge;
-  onRelClick: (e: React.MouseEvent) => void;
-  onMouseEnter: () => void;
-  onMouseLeave: () => void;
-}
-
-const RelationDirectionMarker: React.FC<RelationDirectionMarkerProps> = ({
-  rel, lineStart, lineEnd, color, reactionEdge, onRelClick, onMouseEnter, onMouseLeave,
-}) => {
-  const dx = lineEnd.x - lineStart.x;
-  const dy = lineEnd.y - lineStart.y;
-  const baseRotation = Math.atan2(dy, dx) * (180 / Math.PI);
-
-  const renderMarker = (
-    side: DirectionMarkerSide,
-    graphic: React.ReactNode,
-    rotation: number,
-    markerKey: string,
-  ) => {
-    const lineAnchor = side === 'start' ? lineStart : lineEnd;
-    const { x, y } = directionMarkerAnchor(lineAnchor);
-    const markerSize = reactionEdge ? 18 : directionMarkerSize(rel.type);
-    const viewBox = reactionEdge ? '0 0 12 12' : directionMarkerViewBox(rel.type);
-
-    return (
-      <button
-        key={markerKey}
-        type="button"
-        data-rel-direction-marker
-        data-rel-id={rel.id}
-        aria-label={rel.label ? `Select relationship: ${rel.label}` : `Select ${rel.type} relationship`}
-        onClick={onRelClick}
-        onMouseEnter={onMouseEnter}
-        onMouseLeave={onMouseLeave}
-        style={{
-          position: 'absolute',
-          transform: `translate(-50%, -50%) translate(${x}px, ${y}px) rotate(${rotation}deg)`,
-          transition: 'none',
-          pointerEvents: 'auto',
-          cursor: 'pointer',
-          zIndex: 5,
-          lineHeight: 0,
-          border: 'none',
-          background: 'transparent',
-          padding: 0,
-        }}
-      >
-        <svg
-          width={markerSize}
-          height={markerSize}
-          viewBox={viewBox}
-          overflow="visible"
-          aria-hidden="true"
-        >
-          {graphic}
-        </svg>
-      </button>
-    );
-  };
-
-  if (reactionEdge) {
-    const arrow = reactionArrowSvg(color);
-    const markers = reactionEdge.config.bidirectional
-      ? [
-          { side: 'start' as const, rotation: baseRotation + 180, key: 'start' },
-          { side: 'end' as const, rotation: baseRotation, key: 'end' },
-        ]
-      : [{ side: 'end' as const, rotation: baseRotation, key: 'end' }];
-
-    return (
-      <>
-        {markers.map(marker => renderMarker(marker.side, arrow, marker.rotation, `${rel.id}-${marker.key}`))}
-      </>
-    );
-  }
-
-  const side = getDirectionMarkerSide(rel.type);
-  const graphic = directionMarkerSvg(rel.type, color);
-  if (!side || !graphic) return null;
-
-  return renderMarker(side, graphic, baseRotation, rel.id);
-};
 
 function isEmptyCanvasTarget(target: HTMLElement): boolean {
   return !target.closest('[data-classbox]')
@@ -2203,7 +1975,7 @@ export const UMLDiagram = forwardRef<UMLDiagramHandle, UMLDiagramProps>(({
       const { rel, p1, p2 } = layout;
       if (reactionRelIds.has(rel.id)) continue;
 
-      const markerSide = getDirectionMarkerSide(rel.type);
+      const markerSide = getUmlRelationDirectionMarkerSide(rel.type);
 
       if (rel.sourceMultiplicity) {
         const pos = multiplicityPosition(p1.x, p1.y, p2.x, p2.y, 'start', markerSide === 'start');
@@ -2305,10 +2077,13 @@ export const UMLDiagram = forwardRef<UMLDiagramHandle, UMLDiagramProps>(({
         {edgeLayouts.map(layout => {
           const { rel, p1, p2, drawP1, drawP2, bridges } = layout;
           const reactionEdge = reactionEdgeById.get(rel.id);
-          const state = edgeState(selectedRelId === rel.id, hoveredRelId === rel.id);
+          const state = getUmlRelationEdgeState(
+            selectedRelId === rel.id,
+            hoveredRelId === rel.id,
+          );
 
           return (
-            <RelationLine
+            <UMLRelationLine
               key={rel.id}
               rel={rel}
               p1={p1}
@@ -2527,7 +2302,7 @@ export const UMLDiagram = forwardRef<UMLDiagramHandle, UMLDiagramProps>(({
         {edgeLayouts.map(layout => {
           const { rel, drawP1, drawP2, bridges } = layout;
           return (
-            <RelationHitTarget
+            <UMLRelationHitTarget
               key={`hit-${rel.id}`}
               relId={rel.id}
               drawP1={drawP1}
@@ -2547,12 +2322,15 @@ export const UMLDiagram = forwardRef<UMLDiagramHandle, UMLDiagramProps>(({
         style={{ position: 'absolute', top: 0, left: 0, width: totalW, height: totalH, overflow: 'visible', zIndex: 22, pointerEvents: 'none' }}
       >
         {multiplicityBadges.map(badge => {
-          const state = edgeState(selectedRelId === badge.relId, hoveredRelId === badge.relId);
+          const state = getUmlRelationEdgeState(
+            selectedRelId === badge.relId,
+            hoveredRelId === badge.relId,
+          );
           return (
-            <MultiplicityBadgeGraphic
+            <UMLMultiplicityBadge
               key={badge.key}
               badge={badge}
-              strokeColor={EDGE_COLOR[state]}
+              strokeColor={UML_RELATION_EDGE_COLORS[state]}
             />
           );
         })}
@@ -2562,11 +2340,16 @@ export const UMLDiagram = forwardRef<UMLDiagramHandle, UMLDiagramProps>(({
       {edgeLayouts.map(layout => {
         const { rel, p1, p2 } = layout;
         const reactionEdge = reactionEdgeById.get(rel.id);
-        const state = edgeState(selectedRelId === rel.id, hoveredRelId === rel.id);
-        const color = reactionEdge ? REACTION_EDGE_COLOR[state] : EDGE_COLOR[state];
+        const state = getUmlRelationEdgeState(
+          selectedRelId === rel.id,
+          hoveredRelId === rel.id,
+        );
+        const color = reactionEdge
+          ? UML_REACTION_EDGE_COLORS[state]
+          : UML_RELATION_EDGE_COLORS[state];
 
         return (
-          <RelationDirectionMarker
+          <UMLRelationDirectionMarker
             key={`${rel.id}-direction`}
             rel={rel}
             reactionEdge={reactionEdge}
