@@ -4,7 +4,6 @@ import { ShareProjectModal } from '../components/ui/ShareProjectModal';
 import { useNavigate, useParams, useLocation } from 'react-router-dom';
 import { Node, Edge } from 'reactflow';
 import { CanvasMode, FlowCanvas } from '../components/flow/FlowCanvas';
-import { UmlDiagramSaveContext } from '../components/canvas/UMLDiagram';
 import { DrawerModel } from '../components/canvas/ModelDrawer';
 import { ModelDrawerModal } from '../components/canvas/ModelDrawerModal';
 import { CanvasUmlPanelLayer } from '../components/canvas/CanvasUmlPanelLayer';
@@ -29,13 +28,11 @@ import { CanvasConstraintsOverlay } from '../components/canvas/CanvasConstraints
 import { getCanvasPanelMemberName } from '../components/canvas/canvasMemberPresentation';
 import { useCanvasModeState } from '../hooks/useCanvasModeState';
 import {
-  computeUmlPanelLayout,
-  enrichEcoreMetaFromCanvas,
-  loadEcoreFileContent,
-} from '../components/canvas/canvasUmlPanelUtils';
+  useCanvasUmlPanels,
+  type CanvasUmlPanelLoadErrorMessage,
+} from '../hooks/useCanvasUmlPanels';
 import { UnsavedTabCloseDialog } from '../components/canvas/UnsavedTabCloseDialog';
-import { CanvasTabSession, CanvasUmlPanelState, EcoreFileExpandMeta, OpenCanvasTab } from '../types/canvasTab';
-import { canvasUmlLayoutFileName, canvasUmlLayoutScope } from '../utils/metaModelPreview';
+import { CanvasTabSession, OpenCanvasTab } from '../types/canvasTab';
 import { createCanvasTabInstanceId } from '../utils/canvasTabId';
 import {
   findMembershipForEmail,
@@ -63,8 +60,6 @@ import {
 } from '../utils/workspaceSnapshotUtils';
 import { downloadBlobAsFile } from '../utils/downloadFile';
 import { syncVsumWorkspaceChanges } from '../utils/vsumSyncSave';
-
-type UMLPanel = CanvasUmlPanelState;
 
 function isStaleTabLoad(forInstanceId: string | undefined, activeInstanceId: string | null): boolean {
   return Boolean(forInstanceId && activeInstanceId !== forInstanceId);
@@ -377,18 +372,6 @@ async function loadOpenCanvasTab(
 
 const fetchEcoreFileById = (fileId: number) => apiService.getFile(fileId);
 
-function updatePanelEcoreContent(panels: UMLPanel[], panelId: string, content: string): UMLPanel[] {
-  return panels.map(p => (p.id === panelId ? { ...p, ecoreContent: content } : p));
-}
-
-function createUmlPanelSavedHandler(
-  panelId: string,
-  fileName: string,
-  onSaved: (panelId: string, fileName: string, result: { ecoreContent: string }) => void,
-): (result: { ecoreContent: string }) => void {
-  return result => onSaved(panelId, fileName, result);
-}
-
 // ── CanvasPage ────────────────────────────────────────────────────────────────
 
 export const CanvasPage: React.FC = () => {
@@ -414,17 +397,17 @@ export const CanvasPage: React.FC = () => {
   const [nameInput, setNameInput] = useState('');
   const [savingName, setSavingName] = useState(false);
 
-  const [umlPanels, setUmlPanels] = useState<UMLPanel[]>([]);
-  const [topPanelId, setTopPanelId] = useState<string | null>(null);
   const panelZBase = MODAL_Z_INDEX;
-
-  useModalBodyLock(umlPanels.length > 0 || showDrawer);
 
   // check / download / save
   const [checkingBuild, setCheckingBuild] = useState(false);
   const [downloadingArtifact, setDownloadingArtifact] = useState(false);
   const [savingChanges, setSavingChanges] = useState(false);
   const [popup, setPopup] = useState<{ message: string; type: CanvasPopupNotificationType } | null>(null);
+  const notifyUmlPanelLoadError = useCallback((message: CanvasUmlPanelLoadErrorMessage) => {
+    setPopup({ message, type: 'error' });
+    setTimeout(() => setPopup(null), 4000);
+  }, []);
 
   const [openTabs, setOpenTabs] = useState<OpenCanvasTab[]>([]);
   const [activeInstanceId, setActiveInstanceId] = useState<string | null>(null);
@@ -661,6 +644,39 @@ export const CanvasPage: React.FC = () => {
     isViewOnly,
     getCanvasNodes,
   });
+  const updateCanvasEcoreFileData = useCallback((
+    fileName: string,
+    content: string,
+    ecoreFileId?: number,
+  ) => {
+    if (ecoreFileId === undefined) {
+      flowCanvasRef.current?.updateEcoreFileData?.(fileName, content);
+      return;
+    }
+    flowCanvasRef.current?.updateEcoreFileData?.(fileName, content, ecoreFileId);
+  }, []);
+  const {
+    umlPanels,
+    topPanelId,
+    handleEcoreFileExpand,
+    closePanel,
+    focusPanel,
+    handleUmlPanelEcoreContentUpdated,
+    buildUmlSaveContext,
+    clearPanels,
+    restorePanels,
+    removePanelsForDeletedModel,
+  } = useCanvasUmlPanels({
+    activeProjectId,
+    openTabCount: openTabs.length,
+    isViewOnly,
+    getCanvasNodes,
+    fetchEcoreFile: fetchEcoreFileById,
+    updateEcoreFileData: updateCanvasEcoreFileData,
+    onLoadError: notifyUmlPanelLoadError,
+  });
+
+  useModalBodyLock(umlPanels.length > 0 || showDrawer);
 
   // Undo/redo availability (driven by FlowCanvas callback)
   const [canUndo, setCanUndo] = useState(false);
@@ -707,11 +723,10 @@ export const CanvasPage: React.FC = () => {
     setMyLibraryModels([]);
     setPublicLibraryModels([]);
     setAddedModelIds(new Set());
-    setUmlPanels([]);
-    setTopPanelId(null);
+    clearPanels();
     setShowDrawer(false);
     setEditingName(false);
-  }, []);
+  }, [clearPanels]);
 
   const applyTabSession = useCallback((session: CanvasTabSession) => {
     setVsumName(session.vsumName);
@@ -719,8 +734,7 @@ export const CanvasPage: React.FC = () => {
     setMyLibraryModels(session.myLibraryModels);
     setPublicLibraryModels(session.publicLibraryModels);
     setAddedModelIds(new Set(session.addedModelIds));
-    setUmlPanels(session.umlPanels);
-    setTopPanelId(session.topPanelId);
+    restorePanels(session.umlPanels, session.topPanelId);
     setShowDrawer(false);
     setEditingName(false);
     setLoadingProject(false);
@@ -734,7 +748,7 @@ export const CanvasPage: React.FC = () => {
     };
     load();
     setTimeout(load, 50);
-  }, [canvasModeRef, setConstraintsNodes]);
+  }, [canvasModeRef, restorePanels, setConstraintsNodes]);
 
   const captureRef = useRef(captureCurrentTabSession);
   captureRef.current = captureCurrentTabSession;
@@ -1137,64 +1151,8 @@ export const CanvasPage: React.FC = () => {
     setMyLibraryModels(prev => prev.filter(m => m.id !== model.id));
     setPublicLibraryModels(prev => prev.filter(m => m.id !== model.id));
     setDrawerModels(prev => prev.filter(m => m.id !== model.id && m.sourceId !== model.id && m.sourceId !== sourceId));
-    setUmlPanels(prev => prev.filter(
-      p => p.metaModelId !== model.id && p.metaModelSourceId !== sourceId && p.metaModelId !== sourceId,
-    ));
-  }, [isViewOnly]);
-
-  const handleEcoreFileExpand = useCallback(async (
-    fileName: string,
-    fileContent: string,
-    meta?: EcoreFileExpandMeta,
-  ) => {
-    const layout = computeUmlPanelLayout(openTabs.length);
-    const resolved = enrichEcoreMetaFromCanvas(
-      fileName,
-      fileContent,
-      meta,
-      () => flowCanvasRef.current?.getNodes?.() ?? [],
-    );
-
-    const loadedContent = await loadEcoreFileContent(
-      fileName,
-      resolved.content,
-      resolved.ecoreFileId,
-      fetchEcoreFileById,
-      flowCanvasRef.current?.updateEcoreFileData,
-    );
-    if (loadedContent === null) {
-      setPopup({ message: 'Could not load UML diagram for this meta-model.', type: 'error' });
-      setTimeout(() => setPopup(null), 4000);
-      return;
-    }
-    if (!loadedContent.trim()) {
-      setPopup({ message: 'No UML content available for this meta-model.', type: 'error' });
-      setTimeout(() => setPopup(null), 4000);
-      return;
-    }
-
-    const newPanel: UMLPanel = {
-      id: `panel-${Date.now()}`,
-      title: fileName.replace(/\.ecore$/, ''),
-      fileName,
-      ecoreContent: loadedContent,
-      metaModelId: resolved.metaModelId,
-      metaModelSourceId: resolved.metaModelSourceId,
-      ecoreFileId: resolved.ecoreFileId,
-      layoutScopeId: canvasUmlLayoutScope(activeProjectId),
-      layoutStorageKey: canvasUmlLayoutFileName({
-        fileName,
-        metaModelSourceId: resolved.metaModelSourceId,
-        metaModelId: resolved.metaModelId,
-      }),
-      top: layout.top,
-      right: 16,
-      width: 200,
-      height: layout.height,
-    };
-    setUmlPanels(prev => [...prev, newPanel]);
-    setTopPanelId(newPanel.id);
-  }, [openTabs.length, activeProjectId]);
+    removePanelsForDeletedModel(model.id, sourceId);
+  }, [isViewOnly, removePanelsForDeletedModel]);
 
   useEffect(() => {
     const handler = (e: Event) => {
@@ -1349,38 +1307,6 @@ export const CanvasPage: React.FC = () => {
     }
   }, [activeProjectId, activeInstanceId, setBaselineForInstance, isViewOnly]);
 
-  const closePanel = useCallback((panelId: string) => {
-    setUmlPanels(prev => prev.filter(p => p.id !== panelId));
-    setTopPanelId(prev => (prev === panelId ? null : prev));
-  }, []);
-
-  const handleUmlPanelSaved = useCallback((
-    panelId: string,
-    fileName: string,
-    result: { ecoreContent: string },
-  ) => {
-    setUmlPanels(prev => updatePanelEcoreContent(prev, panelId, result.ecoreContent));
-    // Workspace-only: update the canvas copy, not the library metamodel file on the server.
-    flowCanvasRef.current?.updateEcoreFileData?.(fileName, result.ecoreContent);
-  }, []);
-
-  const handleUmlPanelEcoreContentUpdated = useCallback((panelId: string, content: string) => {
-    setUmlPanels(prev => updatePanelEcoreContent(prev, panelId, content));
-  }, []);
-
-  const buildUmlSaveContext = useCallback((panel: UMLPanel): UmlDiagramSaveContext | undefined => {
-    if (isViewOnly || !panel.ecoreFileId) return undefined;
-    const libraryMetaModelId = panel.metaModelSourceId ?? panel.metaModelId;
-    return {
-      metaModelId: libraryMetaModelId ? String(libraryMetaModelId) : '',
-      ecoreFileId: panel.ecoreFileId,
-      modelName: panel.title,
-      saveTarget: 'workspace',
-      onSaved: createUmlPanelSavedHandler(panel.id, panel.fileName, handleUmlPanelSaved),
-    };
-  }, [handleUmlPanelSaved, isViewOnly]);
-
-  const focusPanel = useCallback((panelId: string) => setTopPanelId(panelId), []);
   const navigateHome = useCallback(() => navigate('/'), [navigate]);
 
   const allLibraryModels = useMemo(() => {
