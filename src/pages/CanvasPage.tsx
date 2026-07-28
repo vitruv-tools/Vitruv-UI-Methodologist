@@ -62,6 +62,11 @@ import {
   getCanvasProjectLoadFailureState,
   type CanvasProjectLoadState,
 } from '../utils/canvasProjectLoadState';
+import {
+  fetchEcoreFileById,
+  fetchLibraryDrawerModels,
+  metaModelToDrawerModel,
+} from '../utils/canvasModelLibrary';
 
 function isStaleTabLoad(forInstanceId: string | undefined, activeInstanceId: string | null): boolean {
   return Boolean(forInstanceId && activeInstanceId !== forInstanceId);
@@ -81,33 +86,6 @@ function clearVsumTabSessions(
   if (forInstanceId) {
     sessions.delete(forInstanceId);
   }
-}
-
-function metaModelToDrawerModel(m: VsumMetaModelRef, inProject: boolean): DrawerModel {
-  return {
-    id: m.id,
-    name: m.name,
-    sourceId: m.sourceId ?? m.id,
-    domain: m.domain,
-    ecoreFileId: m.ecoreFileId,
-    genModelFileId: m.genModelFileId,
-    inProject,
-    description: m.description,
-    keyword: m.keyword,
-    createdAt: m.createdAt,
-  };
-}
-
-async function fetchLibraryDrawerModels(): Promise<{ myModels: DrawerModel[]; publicModels: DrawerModel[] }> {
-  const toDrawer = (m: VsumMetaModelRef) => metaModelToDrawerModel(m, false);
-  const [myRes, pubRes] = await Promise.allSettled([
-    apiService.findMetaModels({ ownedByUser: true }),
-    apiService.findMetaModels({ ownedByUser: false }),
-  ]);
-  return {
-    myModels: myRes.status === 'fulfilled' ? (myRes.value.data || []).map(toDrawer) : [],
-    publicModels: pubRes.status === 'fulfilled' ? (pubRes.value.data || []).map(toDrawer) : [],
-  };
 }
 
 async function dispatchWorkspaceMetaModels(metaModels: VsumMetaModelRef[]): Promise<void> {
@@ -331,8 +309,6 @@ async function loadOpenCanvasTab(
     }
   }
 }
-
-const fetchEcoreFileById = (fileId: number) => apiService.getFile(fileId);
 
 // ── CanvasPage ────────────────────────────────────────────────────────────────
 
