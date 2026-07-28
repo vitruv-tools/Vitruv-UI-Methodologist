@@ -27,6 +27,7 @@ import { CanvasProjectAccessControls } from '../components/canvas/CanvasProjectA
 import { CanvasConstraintsOverlay } from '../components/canvas/CanvasConstraintsOverlay';
 import { getCanvasPanelMemberName } from '../components/canvas/canvasMemberPresentation';
 import { useCanvasModeState } from '../hooks/useCanvasModeState';
+import { useCanvasProjectRename } from '../hooks/useCanvasProjectRename';
 import {
   useCanvasUmlPanels,
   type CanvasUmlPanelLoadErrorMessage,
@@ -392,11 +393,6 @@ export const CanvasPage: React.FC = () => {
   const [loadingProject, setLoadingProject] = useState(true);
   const [showDrawer, setShowDrawer] = useState(false);
 
-  // project-name editing
-  const [editingName, setEditingName] = useState(false);
-  const [nameInput, setNameInput] = useState('');
-  const [savingName, setSavingName] = useState(false);
-
   const panelZBase = MODAL_Z_INDEX;
 
   // check / download / save
@@ -717,6 +713,35 @@ export const CanvasPage: React.FC = () => {
     return !workspaceSnapshotsEqual(baseline, session.workspaceSnapshot);
   }, [activeInstanceId, getLiveSnapshot, isViewOnlyProject]);
 
+  const updateTabName = useCallback((projectId: number, name: string) => {
+    setOpenTabs(prev => prev.map(t => (t.projectId === projectId ? { ...t, name } : t)));
+  }, []);
+
+  const renameProject = useCallback((projectId: number, name: string): Promise<unknown> => {
+    return apiService.renameVsum(projectId, { name });
+  }, []);
+
+  const handleProjectRenamed = useCallback((name: string) => {
+    setVsumName(name);
+    if (activeProjectId) updateTabName(activeProjectId, name);
+  }, [activeProjectId, updateTabName]);
+
+  const {
+    editingName,
+    nameInput,
+    savingName,
+    setNameInput,
+    startRename,
+    confirmRename,
+    cancelRename,
+  } = useCanvasProjectRename({
+    projectId: activeProjectId,
+    projectName: vsumName,
+    isViewOnly,
+    renameProject,
+    onRenamed: handleProjectRenamed,
+  });
+
   const clearCanvasWorkspace = useCallback(() => {
     flowCanvasRef.current?.loadDiagramData?.([], []);
     setDrawerModels([]);
@@ -725,8 +750,8 @@ export const CanvasPage: React.FC = () => {
     setAddedModelIds(new Set());
     clearPanels();
     setShowDrawer(false);
-    setEditingName(false);
-  }, [clearPanels]);
+    cancelRename();
+  }, [cancelRename, clearPanels]);
 
   const applyTabSession = useCallback((session: CanvasTabSession) => {
     setVsumName(session.vsumName);
@@ -736,7 +761,7 @@ export const CanvasPage: React.FC = () => {
     setAddedModelIds(new Set(session.addedModelIds));
     restorePanels(session.umlPanels, session.topPanelId);
     setShowDrawer(false);
-    setEditingName(false);
+    cancelRename();
     setLoadingProject(false);
 
     if (canvasModeRef.current === 'constraints') {
@@ -748,16 +773,12 @@ export const CanvasPage: React.FC = () => {
     };
     load();
     setTimeout(load, 50);
-  }, [canvasModeRef, restorePanels, setConstraintsNodes]);
+  }, [cancelRename, canvasModeRef, restorePanels, setConstraintsNodes]);
 
   const captureRef = useRef(captureCurrentTabSession);
   captureRef.current = captureCurrentTabSession;
   const applyRef = useRef(applyTabSession);
   applyRef.current = applyTabSession;
-
-  const updateTabName = useCallback((projectId: number, name: string) => {
-    setOpenTabs(prev => prev.map(t => (t.projectId === projectId ? { ...t, name } : t)));
-  }, []);
 
   const switchToTab = useCallback((instanceId: string) => {
     const tab = openTabsRef.current.find(t => t.instanceId === instanceId);
@@ -1076,32 +1097,6 @@ export const CanvasPage: React.FC = () => {
     run();
     return () => { cancelled = true; };
   }, [activeInstanceId, clearCanvasWorkspace, loadVsum, bumpProjectRole, canvasModeRef, setConstraintsNodes]);
-
-  // ── Rename VSUM ───────────────────────────────────────────────────────────
-
-  const startRename = useCallback(() => {
-    setNameInput(vsumName);
-    setEditingName(true);
-  }, [vsumName]);
-
-  const confirmRename = useCallback(async () => {
-    if (isViewOnly) return;
-    const trimmed = nameInput.trim();
-    if (!trimmed || !activeProjectId || trimmed === vsumName) { setEditingName(false); return; }
-    setSavingName(true);
-    try {
-      await apiService.renameVsum(activeProjectId, { name: trimmed });
-      setVsumName(trimmed);
-      updateTabName(activeProjectId, trimmed);
-    } catch (e) {
-      console.error('Rename failed:', e);
-    } finally {
-      setSavingName(false);
-      setEditingName(false);
-    }
-  }, [nameInput, activeProjectId, vsumName, updateTabName, isViewOnly]);
-
-  const cancelRename = useCallback(() => setEditingName(false), []);
 
   // ── Add model from drawer ─────────────────────────────────────────────────
 
