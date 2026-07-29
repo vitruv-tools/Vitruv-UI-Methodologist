@@ -238,11 +238,12 @@ export const ProjectPickerMenu: React.FC<ProjectPickerMenuProps> = ({
         title={projects.length > MAX_VISIBLE_PROJECTS ? 'Scroll with two fingers on your trackpad to see more projects' : undefined}
         style={{
           overflowY: projects.length > MAX_VISIBLE_PROJECTS ? 'scroll' : 'auto',
+          // `flex: 1` means `flex-basis: 0%`, which Safari resolves to 0 inside this
+          // auto-height column — the list then collapses because an auto-height flex
+          // container has no free space for `flex-grow` to hand back. An `auto` basis
+          // sizes to the rows in every browser; maxHeight still caps it.
           flex: '1 1 auto',
-          minHeight: Math.min(
-            PROJECT_LIST_MAX_HEIGHT,
-            Math.max(PROJECT_ROW_HEIGHT, (loading || projects.length === 0 ? 1 : projects.length) * PROJECT_ROW_HEIGHT),
-          ),
+          minHeight: 0,
           padding: 6,
           maxHeight: PROJECT_LIST_MAX_HEIGHT,
           scrollbarWidth: 'thin',
