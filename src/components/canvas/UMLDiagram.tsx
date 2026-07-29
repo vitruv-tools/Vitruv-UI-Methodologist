@@ -59,6 +59,18 @@ import type {
   UmlDiagramClass,
   UmlDiagramEditState,
 } from './umlDiagramTypes';
+import {
+  applyWrapperDragToClass,
+  mergeAdditionalClassesWithPositions,
+  nextUniqueClassName,
+  removeAttributeFromClass,
+  removeOperationFromClass,
+  renameClassInList,
+  renameClassInRelationships,
+  updateClassAttribute,
+  updateClassById,
+  updateClassOperation,
+} from './umlDiagramClassTransforms';
 
 // ── constants ────────────────────────────────────────────────────────────────
 
@@ -377,231 +389,6 @@ export interface UmlDiagramSaveContext {
   metaModelMetadata?: MetaModelSaveMetadata;
   onSaved?: (result: { ecoreContent: string; ecoreFileId: number }) => void;
   onError?: (message: string) => void;
-}
-
-function nextUniqueClassName(existingNames: Iterable<string>): string {
-  const taken = existingNames instanceof Set ? existingNames : new Set(existingNames);
-  let candidate = 'NewClass';
-  let suffix = 1;
-  while (taken.has(candidate)) {
-    candidate = `NewClass${suffix++}`;
-  }
-  return candidate;
-}
-
-function remapAttributeIds(attributes: UMLAttribute[], classId: string): UMLAttribute[] {
-  return attributes.map((attribute, index) => ({
-    ...attribute,
-    id: `${classId}-${index}`,
-  }));
-}
-
-function remapOperationIds(operations: UMLOperation[], classId: string): UMLOperation[] {
-  return operations.map((operation, index) => ({
-    ...operation,
-    id: `${classId}-op-${index}`,
-  }));
-}
-
-function renameClassInList(
-  classes: UmlDiagramClass[],
-  oldId: string,
-  newId: string,
-  trimmedName: string,
-): UmlDiagramClass[] {
-  return classes.map(classItem => {
-    if (classItem.id !== oldId) return classItem;
-    return {
-      ...classItem,
-      id: newId,
-      name: trimmedName,
-      attributes: remapAttributeIds(classItem.attributes, newId),
-      operations: remapOperationIds(classItem.operations, newId),
-    };
-  });
-}
-
-function renameClassInRelationships(
-  relationships: UMLRelationship[],
-  oldId: string,
-  newId: string,
-): UMLRelationship[] {
-  return relationships.map(relationship => ({
-    ...relationship,
-    sourceId: relationship.sourceId === oldId ? newId : relationship.sourceId,
-    targetId: relationship.targetId === oldId ? newId : relationship.targetId,
-  }));
-}
-
-function updateClassById(
-  classes: UmlDiagramClass[],
-  classId: string,
-  updater: (classItem: UmlDiagramClass) => UmlDiagramClass,
-): UmlDiagramClass[] {
-  return classes.map(classItem =>
-    (classItem.id === classId ? updater(classItem) : classItem),
-  );
-}
-
-function removeAttributeFromClass(classItem: UmlDiagramClass, attrId: string): UmlDiagramClass {
-  return {
-    ...classItem,
-    attributes: classItem.attributes.filter(attribute => attribute.id !== attrId),
-  };
-}
-
-function removeOperationFromClass(classItem: UmlDiagramClass, opId: string): UmlDiagramClass {
-  return {
-    ...classItem,
-    operations: classItem.operations.filter(operation => operation.id !== opId),
-  };
-}
-
-function patchAttribute(
-  attribute: UMLAttribute,
-  attrId: string,
-  resolvedName: string,
-  type: string,
-  visibility: UMLVisibility,
-): UMLAttribute {
-  if (attribute.id === attrId) {
-    return {
-      ...attribute,
-      name: resolvedName,
-      type: normalizeAttributeTypeDisplay(type.trim() || attribute.type),
-      visibility,
-    };
-  }
-  return attribute;
-}
-
-function getOtherAttributeNames(attributes: UMLAttribute[], attrId: string): string[] {
-  const otherNames: string[] = [];
-  for (const attribute of attributes) {
-    if (attribute.id !== attrId) otherNames.push(attribute.name);
-  }
-  return otherNames;
-}
-
-function applyAttributeSaveToClass(
-  classItem: UmlDiagramClass,
-  classId: string,
-  attrId: string,
-  name: string,
-  type: string,
-  visibility: UMLVisibility,
-): UmlDiagramClass {
-  if (classItem.id !== classId) return classItem;
-  const current = classItem.attributes.find(attribute => attribute.id === attrId);
-  if (!current) return classItem;
-  const otherNames = getOtherAttributeNames(classItem.attributes, attrId);
-  const trimmed = name.trim();
-  const resolvedName = trimmed
-    ? nextUniqueAttributeName(otherNames, trimmed)
-    : current.name;
-  return {
-    ...classItem,
-    attributes: classItem.attributes.map(attribute =>
-      patchAttribute(attribute, attrId, resolvedName, type, visibility),
-    ),
-  };
-}
-
-function updateClassAttribute(
-  classes: UmlDiagramClass[],
-  classId: string,
-  attrId: string,
-  name: string,
-  type: string,
-  visibility: UMLVisibility,
-): UmlDiagramClass[] {
-  return classes.map(classItem =>
-    applyAttributeSaveToClass(classItem, classId, attrId, name, type, visibility),
-  );
-}
-
-function patchOperation(
-  operation: UMLOperation,
-  opId: string,
-  resolvedName: string,
-  returnType: string,
-  visibility: UMLVisibility,
-): UMLOperation {
-  if (operation.id === opId) {
-    return {
-      ...operation,
-      name: resolvedName,
-      returnType: normalizeOperationReturnType(returnType.trim() || operation.returnType),
-      visibility,
-    };
-  }
-  return operation;
-}
-
-function getOtherOperationNames(operations: UMLOperation[], opId: string): string[] {
-  const otherNames: string[] = [];
-  for (const operation of operations) {
-    if (operation.id !== opId) otherNames.push(operation.name);
-  }
-  return otherNames;
-}
-
-function applyOperationSaveToClass(
-  classItem: UmlDiagramClass,
-  classId: string,
-  opId: string,
-  name: string,
-  returnType: string,
-  visibility: UMLVisibility,
-): UmlDiagramClass {
-  if (classItem.id !== classId) return classItem;
-  const current = classItem.operations.find(operation => operation.id === opId);
-  if (!current) return classItem;
-  const otherNames = getOtherOperationNames(classItem.operations, opId);
-  const trimmed = name.trim();
-  const resolvedName = trimmed
-    ? nextUniqueOperationName(otherNames, trimmed)
-    : current.name;
-  return {
-    ...classItem,
-    operations: classItem.operations.map(operation =>
-      patchOperation(operation, opId, resolvedName, returnType, visibility),
-    ),
-  };
-}
-
-function updateClassOperation(
-  classes: UmlDiagramClass[],
-  classId: string,
-  opId: string,
-  name: string,
-  returnType: string,
-  visibility: UMLVisibility,
-): UmlDiagramClass[] {
-  return classes.map(classItem =>
-    applyOperationSaveToClass(classItem, classId, opId, name, returnType, visibility),
-  );
-}
-
-function mergeAdditionalClassesWithPositions(
-  prev: UmlDiagramClass[],
-  newCls: UmlDiagramClass[],
-): UmlDiagramClass[] {
-  return newCls.map(nc => {
-    const existing = prev.find(p => p.id === nc.id);
-    return existing ? { ...nc, x: existing.x, y: existing.y } : nc;
-  });
-}
-
-function applyWrapperDragToClass(
-  c: UmlDiagramClass,
-  origins: Map<string, { x: number; y: number }>,
-  dx: number,
-  dy: number,
-): UmlDiagramClass {
-  const orig = origins.get(c.id);
-  if (!orig) return c;
-  return { ...c, x: orig.x + dx, y: orig.y + dy };
 }
 
 function getReactionPortTargetClassId(hit: HTMLElement | null, sourceClassId: string): string | null {
