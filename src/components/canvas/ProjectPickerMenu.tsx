@@ -83,7 +83,7 @@ export const ProjectPickerMenu: React.FC<ProjectPickerMenuProps> = ({
   const [menuPos, setMenuPos] = useState({ top: 0, left: 0 });
   const wrapRef = useRef<HTMLDivElement>(null);
   const buttonRef = useRef<HTMLButtonElement>(null);
-  const menuRef = useRef<HTMLDialogElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
 
   const loadProjects = useCallback(async (query: string) => {
     setLoading(true);
@@ -187,14 +187,16 @@ export const ProjectPickerMenu: React.FC<ProjectPickerMenuProps> = ({
         }}
         onClick={closeMenu}
       />
-      <dialog
+      <div
         ref={menuRef}
         id="project-picker-menu"
-        open
+        role="dialog"
+        aria-modal="false"
         aria-label="Your projects"
         style={{
           position: 'fixed',
           margin: 0,
+          padding: 0,
           top: menuPos.top,
           left: menuPos.left,
           width: 320,
@@ -207,6 +209,7 @@ export const ProjectPickerMenu: React.FC<ProjectPickerMenuProps> = ({
           borderRadius: 10,
           boxShadow: '0 16px 40px rgba(0,0,0,0.16)',
           zIndex: MENU_Z_INDEX,
+          boxSizing: 'border-box',
         }}
       >
       <div style={{ flexShrink: 0, padding: '10px 12px', borderBottom: '1px solid #f1f5f9' }}>
@@ -245,6 +248,7 @@ export const ProjectPickerMenu: React.FC<ProjectPickerMenuProps> = ({
           maxHeight: PROJECT_LIST_MAX_HEIGHT,
           scrollbarWidth: 'thin',
           overscrollBehavior: 'contain',
+          boxSizing: 'border-box',
         }}
       >
         {loading && (
@@ -367,7 +371,7 @@ export const ProjectPickerMenu: React.FC<ProjectPickerMenuProps> = ({
           );
         })}
       </div>
-      </dialog>
+      </div>
     </>
   ) : null;
 
