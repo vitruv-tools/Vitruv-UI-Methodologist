@@ -82,16 +82,6 @@ export function getUmlClassBoxHeight(
     + methodSectionHeight;
 }
 
-export function getUmlInheritanceParentId(
-  relationships: readonly UMLRelationship[],
-  classId: string,
-): string | null {
-  return relationships.find(
-    relationship => relationship.type === 'inheritance'
-      && relationship.sourceId === classId,
-  )?.targetId ?? null;
-}
-
 export function getUmlDiagramLayoutMetrics(
   classes: readonly UmlDiagramClass[],
   frozenOffset?: { offsetX: number; offsetY: number } | null,

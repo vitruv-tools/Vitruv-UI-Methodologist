@@ -1,9 +1,7 @@
-import type { UMLRelationship } from '../../../utils/ecoreToUml';
 import {
   buildUmlClassObstacleRects,
   getUmlClassBoxHeight,
   getUmlDiagramLayoutMetrics,
-  getUmlInheritanceParentId,
   getUmlMultiplicityPosition,
   getUmlRelationshipEndpoints,
   insetUmlRelationshipEndpoints,
@@ -253,29 +251,4 @@ describe('umlDiagramLayoutGeometry', () => {
     ]);
   });
 
-  it('finds the inheritance parent and ignores unrelated relationships', () => {
-    const relationships: UMLRelationship[] = [
-      {
-        id: 'association',
-        sourceId: 'source',
-        targetId: 'other',
-        type: 'association',
-      },
-      {
-        id: 'inheritance',
-        sourceId: 'source',
-        targetId: 'parent',
-        type: 'inheritance',
-      },
-    ];
-
-    expect(getUmlInheritanceParentId(
-      relationships,
-      'source',
-    )).toBe('parent');
-    expect(getUmlInheritanceParentId(
-      relationships,
-      'missing',
-    )).toBeNull();
-  });
 });

@@ -68,7 +68,6 @@ import {
   buildUmlClassObstacleRects,
   getUmlClassBoxHeight,
   getUmlDiagramLayoutMetrics,
-  getUmlInheritanceParentId,
   getUmlMultiplicityPosition,
   getUmlRelationshipEndpoints,
   insetUmlRelationshipEndpoints,
@@ -93,6 +92,16 @@ export const WORKSPACE_DOT_BACKGROUND: React.CSSProperties = {
 };
 
 // ── helpers ──────────────────────────────────────────────────────────────────
+
+function getInheritanceParentId(
+  relationships: UMLRelationship[],
+  classId: string,
+): string | null {
+  return relationships.find(
+    relationship => relationship.type === 'inheritance'
+      && relationship.sourceId === classId,
+  )?.targetId ?? null;
+}
 
 type ReactionPortSide = 'left' | 'right';
 
@@ -2120,7 +2129,7 @@ export const UMLDiagram = forwardRef<UMLDiagramHandle, UMLDiagramProps>(({
         <ClassEditPanel
           cls={selectedClass}
           classes={classes}
-          parentId={getUmlInheritanceParentId(
+          parentId={getInheritanceParentId(
             relationships,
             selectedClass.id,
           )}
