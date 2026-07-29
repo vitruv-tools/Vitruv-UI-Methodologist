@@ -120,7 +120,7 @@ export function CodeEditorModal({
 
   // FIX: Single source of truth for document URI
   const getDocumentUri = useCallback(
-    () => `${workspaceRootUri.current}reaction-${edgeId}${fileExtension}`,
+    () => `${workspaceRootUri.current}${edgeId}${fileExtension}`,
     [edgeId, fileExtension]
   );
 
@@ -272,8 +272,12 @@ export function CodeEditorModal({
     monacoInstance: Monaco
   ): Promise<{ suggestions: any[] }> => {
     return new Promise((resolve) => {
-      if (!lspReadyRef.current) { resolve({ suggestions: [] }); return; }
+      if (!lspReadyRef.current) {
+        console.warn('🧩 Completion skipped: LSP not ready yet');
+        resolve({ suggestions: [] }); return;
+      }
       if (webSocketRef.current?.readyState !== WebSocket.OPEN) {
+        console.warn('🧩 Completion skipped: WebSocket not open');
         resolve({ suggestions: [] }); return;
       }
 
@@ -300,6 +304,7 @@ export function CodeEditorModal({
       const timeoutId = setTimeout(() => {
         if (pendingRequests.current.has(requestId)) {
           pendingRequests.current.delete(requestId);
+          console.warn(`🧩 Completion request ${requestId} timed out after 2s — using fallback keywords. uri=${getDocumentUri()}`);
           resolve({ suggestions: getFallbackSuggestions(wordInfo, range, monacoInstance) });
         }
       }, 2000);
@@ -307,9 +312,11 @@ export function CodeEditorModal({
       pendingRequests.current.set(requestId, (message) => {
         clearTimeout(timeoutId);
         const suggestions = processCompletionResponse(message, range, monacoInstance);
+        console.log(`🧩 Completion response for request ${requestId}:`, message.result, '→', suggestions.length, 'suggestions');
         resolve({ suggestions });
       });
 
+      console.log(`🧩 Sending completion request ${requestId} for uri=${getDocumentUri()}`);
       webSocketRef.current.send(JSON.stringify(request));
     });
   };
