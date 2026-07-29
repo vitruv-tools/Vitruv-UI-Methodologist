@@ -25,6 +25,7 @@ import type {
   UmlDiagramClass,
   UmlDiagramEditState,
 } from './umlDiagramTypes';
+import type { UmlReactionPortSide } from './umlDiagramReactionUtils';
 
 type ClassBoxDragPointRef = RefObject<{
   sx: number;
@@ -33,7 +34,6 @@ type ClassBoxDragPointRef = RefObject<{
   oy: number;
 } | null>;
 type ClassBoxDidDragRef = RefObject<boolean>;
-type ReactionPortSide = 'left' | 'right';
 
 function isClassBoxEditing(
   edit: UmlDiagramEditState | null,
@@ -585,7 +585,7 @@ export interface UMLClassBoxProps {
   onReactionPortMouseDown?: (
     event: React.MouseEvent,
     classId: string,
-    side: ReactionPortSide,
+    side: UmlReactionPortSide,
   ) => void;
   onSelect: () => void;
   onMove: (id: string, x: number, y: number) => void;

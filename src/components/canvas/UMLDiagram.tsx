@@ -3,13 +3,9 @@ import { ecoreToUml, UMLAttribute, UMLRelationship, UMLModel, UMLVisibility, UML
 import { saveMetaModelEcore, MetaModelSaveMetadata } from '../../utils/saveMetaModelEcore';
 import { umlSemanticSnapshot, umlToEcore } from '../../utils/umlToEcore';
 import { validateUmlModel } from '../../utils/umlValidation';
-import { extractNsUriFromEcore } from '../../utils/ecoreParser';
 import { ReactionConfigPopup } from './ReactionConfigPopup';
-import { ReactionConfig, ReactionEdge, ReactionsModel } from '../../types/reactions';
+import type { ReactionsModel } from '../../types/reactions';
 import { ReactionEditorModal } from '../flow/ReactionEditorModal';
-import { CodeEditorState } from '../flow/flowCanvasTypes';
-import { buildInitialReactionCodeFromConfig } from '../../utils/reactionCode';
-import { fetchReactionCode, persistReactionCode } from '../../utils/reactionFile';
 import { useUmlEditHistory, UmlEditSnapshot } from '../../hooks/useUmlEditHistory';
 import {
   applyLayoutToUmlClasses,
@@ -53,6 +49,7 @@ import {
 } from './umlDiagramLayoutGeometry';
 import { useUmlDiagramViewport } from '../../hooks/useUmlDiagramViewport';
 import { useUmlRelationshipLayers } from '../../hooks/useUmlRelationshipLayers';
+import { useUmlDiagramReactions } from '../../hooks/useUmlDiagramReactions';
 
 // ── constants ────────────────────────────────────────────────────────────────
 
@@ -73,91 +70,6 @@ function getInheritanceParentId(
     relationship => relationship.type === 'inheritance'
       && relationship.sourceId === classId,
   )?.targetId ?? null;
-}
-
-type ReactionPortSide = 'left' | 'right';
-
-interface ReactionDragState {
-  sourceClassId: string;
-  sourceSide: ReactionPortSide;
-  startX: number;
-  startY: number;
-  cursorX: number;
-  cursorY: number;
-}
-
-function getReactionPortPosition(
-  cls: UmlDiagramClass,
-  offsetX: number,
-  offsetY: number,
-  side: ReactionPortSide,
-): { x: number; y: number } {
-  const h = getUmlClassBoxHeight(cls);
-  return {
-    x: side === 'left'
-      ? cls.x + offsetX
-      : cls.x + offsetX + UML_CLASS_BOX_WIDTH,
-    y: cls.y + offsetY + h / 2,
-  };
-}
-
-interface ReactionClassContext {
-  modelId: number;
-  modelName: string;
-  modelUrl: string;
-  className: string;
-}
-
-function parseAdditionalModelId(classId: string): number | null {
-  const match = /^addl-(\d+)-/.exec(classId);
-  return match ? Number(match[1]) : null;
-}
-
-function resolveReactionClassContext(
-  classId: string,
-  className: string,
-  primaryEcore: string,
-  primaryName: string,
-  primaryModelId: number,
-  reactionModels: ReactionsModel[],
-): ReactionClassContext {
-  const additionalModelId = parseAdditionalModelId(classId);
-  if (additionalModelId != null) {
-    const model = reactionModels.find(m => m.id === additionalModelId);
-    if (model) {
-      return {
-        modelId: model.id,
-        modelName: model.name,
-        modelUrl: extractNsUriFromEcore(model.ecoreContent) ?? `http://vitruv.tools/${model.name}`,
-        className,
-      };
-    }
-  }
-
-  const primaryModel = reactionModels.find(m => m.name === primaryName) ?? reactionModels[0];
-  return {
-    modelId: primaryModel?.id ?? primaryModelId,
-    modelName: primaryName,
-    modelUrl: extractNsUriFromEcore(primaryEcore) ?? `http://vitruv.tools/${primaryName}`,
-    className,
-  };
-}
-
-function buildDefaultReactionConfig(
-  source: ReactionClassContext,
-  target: ReactionClassContext,
-): ReactionConfig {
-  return {
-    bidirectional: false,
-    reactionName: `${source.className}_${target.className}`,
-    model1Url: source.modelUrl,
-    model2Url: target.modelUrl,
-    model1Alias: source.modelName,
-    model2Alias: target.modelName,
-    model1RootType: source.className,
-    model2RootType: target.className,
-    model1RootVal: source.className,
-  };
 }
 
 function isEmptyCanvasTarget(target: HTMLElement): boolean {
@@ -189,13 +101,6 @@ export interface UmlDiagramSaveContext {
   metaModelMetadata?: MetaModelSaveMetadata;
   onSaved?: (result: { ecoreContent: string; ecoreFileId: number }) => void;
   onError?: (message: string) => void;
-}
-
-function getReactionPortTargetClassId(hit: HTMLElement | null, sourceClassId: string): string | null {
-  const port = hit?.closest('[data-reaction-port]') as HTMLElement | null;
-  const targetClassId = port?.dataset.classId;
-  if (!targetClassId || targetClassId === sourceClassId) return null;
-  return targetClassId;
 }
 
 // ── UMLDiagram ────────────────────────────────────────────────────────────────
@@ -499,28 +404,6 @@ export const UMLDiagram = forwardRef<UMLDiagramHandle, UMLDiagramProps>(({
     [additionalModels],
   );
 
-  const additionalClassIdKey = useMemo(
-    () => additionalClasses.map(c => c.id).sort((a, b) => a.localeCompare(b)).join(','),
-    [additionalClasses],
-  );
-
-  useEffect(() => {
-    const validIds = new Set([
-      ...classes.map(c => c.id),
-      ...additionalClasses.map(c => c.id),
-    ]);
-    setReactionEdges(prev => {
-      const next = prev.filter(e => validIds.has(e.sourceClassId) && validIds.has(e.targetClassId));
-      return next.length === prev.length ? prev : next;
-    });
-    setRelationships(prev => {
-      const next = prev.filter(r => validIds.has(r.sourceId) && validIds.has(r.targetId));
-      return next.length === prev.length ? prev : next;
-    });
-    setSelectedRelId(prev => (prev && validIds.has(prev) ? prev : null));
-    setEditingReactionId(prev => (prev && validIds.has(prev) ? prev : null));
-  // eslint-disable-next-line react-hooks/exhaustive-deps -- prune only when added models change
-  }, [additionalClassIdKey]);
   const [edit, setEdit] = useState<EditState | null>(null);
   const editRef = useRef<EditState | null>(null);
   editRef.current = edit;
@@ -528,16 +411,12 @@ export const UMLDiagram = forwardRef<UMLDiagramHandle, UMLDiagramProps>(({
   const [selectedRelId, setSelectedRelId] = useState<string | null>(null);
   const [connectMode, setConnectMode] = useState(false);
   const [connectSourceId, setConnectSourceId] = useState<string | null>(null);
-  const [reactionDrag, setReactionDrag] = useState<ReactionDragState | null>(null);
-  const [reactionEdges, setReactionEdges] = useState<ReactionEdge[]>([]);
-  const [editingReactionId, setEditingReactionId] = useState<string | null>(null);
-  const [reactionEditorState, setReactionEditorState] = useState<CodeEditorState | null>(null);
   const classesRef = useRef(classes);
   classesRef.current = classes;
   const relationshipsRef = useRef(relationships);
   relationshipsRef.current = relationships;
   const dragHistorySavedRef = useRef(false);
-  const reactionDragActiveRef = useRef(false);
+  const reactionPanBlockRef = useRef<() => boolean>(() => false);
   const flushPendingEditRef = useRef<() => void>(() => {});
   const persistViewportLayoutRef = useRef<
     (classesOverride?: UmlDiagramClass[]) => void
@@ -652,7 +531,7 @@ export const UMLDiagram = forwardRef<UMLDiagramHandle, UMLDiagramProps>(({
     flushPendingEditRef.current();
   }, []);
   const isCanvasPanBlocked = useCallback(
-    () => reactionDragActiveRef.current,
+    () => reactionPanBlockRef.current(),
     [],
   );
   const isCanvasPanTarget = useCallback(
@@ -688,6 +567,74 @@ export const UMLDiagram = forwardRef<UMLDiagramHandle, UMLDiagramProps>(({
     isPanTarget: isCanvasPanTarget,
   });
   persistViewportLayoutRef.current = persistLayout;
+
+  const appendReactionRelationship = useCallback((
+    relationship: UMLRelationship,
+  ) => {
+    setRelationships(current => [...current, relationship]);
+  }, []);
+  const updateReactionRelationship = useCallback((
+    relationshipId: string,
+    patch: Partial<UMLRelationship>,
+  ) => {
+    setRelationships(current => current.map(relationship => (
+      relationship.id === relationshipId
+        ? { ...relationship, ...patch }
+        : relationship
+    )));
+  }, []);
+  const removeReactionRelationship = useCallback((
+    relationshipId: string,
+  ) => {
+    setRelationships(current => current.filter(
+      relationship => relationship.id !== relationshipId,
+    ));
+  }, []);
+  const resetReactionConnectionMode = useCallback(() => {
+    setConnectMode(false);
+    setConnectSourceId(null);
+  }, []);
+  const primaryModelName = fileName?.replace(/\.ecore$/, '') || 'Primary';
+  const primaryModelId = reactionModels[0]?.id ?? 0;
+  const {
+    reactionEdges,
+    reactionDrag,
+    editingReactionId,
+    reactionEditorState,
+    editingReaction,
+    selectedRelationshipIsReaction: selectedRelIsReaction,
+    updateReactionConfig,
+    deleteReaction,
+    closeReactionEditor,
+    saveReactionCode,
+    deleteReactionFromEditor,
+    closeReactionConfiguration,
+    handleReactionPortMouseDown,
+    handleReactionRelationshipClick,
+    cancelReactionInteraction,
+    isReactionDragActive,
+  } = useUmlDiagramReactions({
+    classes: allClasses,
+    relationships,
+    primaryEcore: ecoreContent,
+    primaryModelName,
+    primaryModelId,
+    reactionModels,
+    interactive,
+    reactionsMode,
+    selectedRelationshipId: selectedRelId,
+    offsetX,
+    offsetY,
+    clientToDiagram,
+    onRecordChange: recordChange,
+    onAppendRenderedRelationship: appendReactionRelationship,
+    onUpdateRenderedRelationship: updateReactionRelationship,
+    onRemoveRenderedRelationship: removeReactionRelationship,
+    onSelectRelationship: setSelectedRelId,
+    onSelectClass: setSelectedClassId,
+    onResetConnectionMode: resetReactionConnectionMode,
+  });
+  reactionPanBlockRef.current = isReactionDragActive;
 
   const moveClass = useCallback((id: string, x: number, y: number) => {
     if (!dragHistorySavedRef.current) {
@@ -934,204 +881,6 @@ export const UMLDiagram = forwardRef<UMLDiagramHandle, UMLDiagramProps>(({
     return true;
   }, [recordChange, additionalModels.length, classModelMap]);
 
-  const primaryModelName = fileName?.replace(/\.ecore$/, '') || 'Primary';
-  const primaryModelId = reactionModels[0]?.id ?? 0;
-
-  const addReactionConnection = useCallback((sourceClassId: string, targetClassId: string) => {
-    if (sourceClassId === targetClassId) return;
-
-    const sourceClass = allClasses.find(c => c.id === sourceClassId);
-    const targetClass = allClasses.find(c => c.id === targetClassId);
-    if (!sourceClass || !targetClass) return;
-
-    const exists = relationshipsRef.current.some(
-      r => r.sourceId === sourceClassId && r.targetId === targetClassId,
-    );
-    if (exists) {
-      const existing = reactionEdges.find(
-        e => e.sourceClassId === sourceClassId && e.targetClassId === targetClassId,
-      );
-      if (existing) {
-        setEditingReactionId(existing.id);
-        setSelectedRelId(existing.id);
-      }
-      return;
-    }
-
-    recordChange();
-    const newRelId = `reaction-${Date.now()}`;
-    const sourceCtx = resolveReactionClassContext(
-      sourceClassId,
-      sourceClass.name,
-      ecoreContent,
-      primaryModelName,
-      primaryModelId,
-      reactionModels,
-    );
-    const targetCtx = resolveReactionClassContext(
-      targetClassId,
-      targetClass.name,
-      ecoreContent,
-      primaryModelName,
-      primaryModelId,
-      reactionModels,
-    );
-
-    const reactionEdge: ReactionEdge = {
-      id: newRelId,
-      sourceModelId: sourceCtx.modelId,
-      sourceClassId,
-      sourceClassName: sourceClass.name,
-      targetModelId: targetCtx.modelId,
-      targetClassId,
-      targetClassName: targetClass.name,
-      config: buildDefaultReactionConfig(sourceCtx, targetCtx),
-    };
-
-    setRelationships(prev => [...prev, {
-      id: newRelId,
-      sourceId: sourceClassId,
-      targetId: targetClassId,
-      type: 'association',
-      label: reactionEdge.config.reactionName,
-    }]);
-    setReactionEdges(prev => [...prev, reactionEdge]);
-    setSelectedRelId(newRelId);
-    setEditingReactionId(newRelId);
-    setSelectedClassId(null);
-  }, [
-    allClasses,
-    reactionEdges,
-    recordChange,
-    ecoreContent,
-    primaryModelName,
-    primaryModelId,
-    reactionModels,
-  ]);
-
-  const updateReactionConfig = useCallback((reactionId: string, config: ReactionConfig) => {
-    setReactionEdges(prev => prev.map(edge =>
-      edge.id === reactionId ? { ...edge, config } : edge,
-    ));
-    setRelationships(prev => prev.map(rel =>
-      rel.id === reactionId ? { ...rel, label: config.reactionName } : rel,
-    ));
-  }, []);
-
-  const deleteReaction = useCallback((reactionId: string) => {
-    recordChange();
-    setReactionEdges(prev => prev.filter(edge => edge.id !== reactionId));
-    setRelationships(prev => prev.filter(rel => rel.id !== reactionId));
-    if (editingReactionId === reactionId) setEditingReactionId(null);
-    if (selectedRelId === reactionId) setSelectedRelId(null);
-    if (reactionEditorState?.edgeId === reactionId) setReactionEditorState(null);
-  }, [recordChange, editingReactionId, selectedRelId, reactionEditorState?.edgeId]);
-
-  const openReactionEditor = useCallback(async (reactionId: string) => {
-    const edge = reactionEdges.find(e => e.id === reactionId);
-    if (!edge) return;
-
-    const initialCode = await fetchReactionCode(
-      edge.code,
-      edge.reactionFileId,
-      () => buildInitialReactionCodeFromConfig(edge.config),
-    );
-
-    setReactionEditorState({
-      isOpen: true,
-      edgeId: reactionId,
-      initialCode,
-      sourceFileName: edge.config.model1Alias,
-      targetFileName: edge.config.model2Alias,
-      reactionFileId: edge.reactionFileId ?? null,
-    });
-    setSelectedRelId(reactionId);
-    setSelectedClassId(null);
-  }, [reactionEdges]);
-
-  const handleCloseReactionEditor = useCallback(() => {
-    setReactionEditorState(null);
-  }, []);
-
-  const handleSaveReactionCode = useCallback(async (code: string) => {
-    if (!reactionEditorState?.edgeId) return;
-    const reactionId = reactionEditorState.edgeId;
-    try {
-      const reactionFileId = await persistReactionCode(code, reactionEditorState.reactionFileId);
-      setReactionEdges(prev => prev.map(edge =>
-        edge.id === reactionId ? { ...edge, code, reactionFileId } : edge,
-      ));
-      setReactionEditorState(prev =>
-        prev ? { ...prev, reactionFileId } : prev,
-      );
-    } catch (err) {
-      console.error('Failed to save reaction file', err);
-      throw err;
-    }
-  }, [reactionEditorState]);
-
-  const handleDeleteReactionFromEditor = useCallback(() => {
-    if (reactionEditorState?.edgeId) {
-      deleteReaction(reactionEditorState.edgeId);
-    }
-  }, [reactionEditorState, deleteReaction]);
-
-  const handleReactionPortMouseDown = useCallback((
-    e: React.MouseEvent,
-    classId: string,
-    side: ReactionPortSide,
-  ) => {
-    if (!interactive || reactionsMode !== 'reactions') return;
-    e.stopPropagation();
-    e.preventDefault();
-    reactionDragActiveRef.current = true;
-
-    const cls = allClasses.find(c => c.id === classId);
-    if (!cls) return;
-
-    const { x: startX, y: startY } = getReactionPortPosition(cls, offsetX, offsetY, side);
-    const cursor = clientToDiagram(e.clientX, e.clientY);
-    setReactionDrag({
-      sourceClassId: classId,
-      sourceSide: side,
-      startX,
-      startY,
-      cursorX: cursor.x,
-      cursorY: cursor.y,
-    });
-
-    const onMove = (ev: MouseEvent) => {
-      ev.preventDefault();
-      const next = clientToDiagram(ev.clientX, ev.clientY);
-      setReactionDrag(prev => prev ? { ...prev, cursorX: next.x, cursorY: next.y } : null);
-    };
-
-    const onUp = (ev: MouseEvent) => {
-      reactionDragActiveRef.current = false;
-      const targetClassId = getReactionPortTargetClassId(
-        document.elementFromPoint(ev.clientX, ev.clientY) as HTMLElement | null,
-        classId,
-      );
-      if (targetClassId) {
-        addReactionConnection(classId, targetClassId);
-      }
-      setReactionDrag(null);
-      globalThis.removeEventListener('mousemove', onMove);
-      globalThis.removeEventListener('mouseup', onUp);
-    };
-
-    globalThis.addEventListener('mousemove', onMove);
-    globalThis.addEventListener('mouseup', onUp);
-  }, [
-    interactive,
-    reactionsMode,
-    allClasses,
-    offsetX,
-    offsetY,
-    clientToDiagram,
-    addReactionConnection,
-  ]);
-
   const deleteRelationship = useCallback((relId: string) => {
     recordChange();
     setRelationships(prev => prev.filter(r => r.id !== relId));
@@ -1144,15 +893,7 @@ export const UMLDiagram = forwardRef<UMLDiagramHandle, UMLDiagramProps>(({
   }, [recordChange]);
 
   const tryEscape = useCallback(() => {
-    if (reactionDrag) {
-      reactionDragActiveRef.current = false;
-      setReactionDrag(null);
-      return true;
-    }
-    if (editingReactionId) {
-      setEditingReactionId(null);
-      return true;
-    }
+    if (cancelReactionInteraction()) return true;
     if (connectMode) {
       setConnectMode(false);
       setConnectSourceId(null);
@@ -1175,35 +916,13 @@ export const UMLDiagram = forwardRef<UMLDiagramHandle, UMLDiagramProps>(({
       return true;
     }
     return false;
-  }, [reactionDrag, editingReactionId, connectMode, connectSourceId, edit, selectedRelId, selectedClassId, dismissClassSelection]);
-
-  useEffect(() => {
-    if (reactionsMode === 'reactions') {
-      reactionDragActiveRef.current = false;
-      setReactionDrag(null);
-      setEditingReactionId(null);
-      setConnectMode(false);
-      setConnectSourceId(null);
-    }
-  }, [reactionsMode]);
+  }, [cancelReactionInteraction, connectMode, connectSourceId, edit, selectedRelId, selectedClassId, dismissClassSelection]);
 
   const handleRelationshipClick = useCallback((relId: string, e: React.MouseEvent) => {
     e.stopPropagation();
-    const isReactionEdge = reactionEdges.some(edge => edge.id === relId);
-    if (reactionsMode === 'reactions' && isReactionEdge) {
-      if (e.detail >= 2) {
-        setEditingReactionId(null);
-        void openReactionEditor(relId);
-        return;
-      }
-      setEditingReactionId(relId);
-      setSelectedRelId(relId);
-      setSelectedClassId(null);
-      return;
-    }
-    setEditingReactionId(null);
+    if (handleReactionRelationshipClick(relId, e.detail)) return;
     setSelectedRelId(relId);
-  }, [reactionsMode, reactionEdges, openReactionEditor]);
+  }, [handleReactionRelationshipClick]);
 
   const isDirty = useCallback(() => {
     return umlSemanticSnapshot(getModel()) !== initialSnapshotRef.current;
@@ -1303,9 +1022,9 @@ export const UMLDiagram = forwardRef<UMLDiagramHandle, UMLDiagramProps>(({
       setSelectedClassId(classId);
       return;
     }
-    setEditingReactionId(null);
+    closeReactionConfiguration();
     setSelectedClassId(classId);
-  }, [interactive, connectMode, reactionsMode, connectSourceId, addRelationship, flushPendingEdit]);
+  }, [interactive, connectMode, reactionsMode, connectSourceId, addRelationship, flushPendingEdit, closeReactionConfiguration]);
 
   const updateClass = useCallback((classId: string, patch: Partial<Pick<UmlDiagramClass, 'name' | 'isAbstract' | 'isInterface'>>) => {
     recordChange();
@@ -1400,10 +1119,6 @@ export const UMLDiagram = forwardRef<UMLDiagramHandle, UMLDiagramProps>(({
 
   const canDelete = !!(selectedRelId || selectedClassId);
   const selectedRel = selectedRelId ? relationships.find(r => r.id === selectedRelId) : null;
-  const editingReaction = editingReactionId
-    ? reactionEdges.find(edge => edge.id === editingReactionId) ?? null
-    : null;
-  const selectedRelIsReaction = !!(selectedRelId && reactionEdges.some(edge => edge.id === selectedRelId));
   const selectedClass = selectedClassId ? classes.find(c => c.id === selectedClassId) : null;
   const hasUnsavedChanges = isDirty();
   const validationInset = getValidationBannerInset(
@@ -1788,15 +1503,15 @@ export const UMLDiagram = forwardRef<UMLDiagramHandle, UMLDiagramProps>(({
           edge={editingReaction}
           onUpdate={config => updateReactionConfig(editingReaction.id, config)}
           onDelete={() => deleteReaction(editingReaction.id)}
-          onClose={() => setEditingReactionId(null)}
+          onClose={closeReactionConfiguration}
         />
       )}
       {interactive && (
         <ReactionEditorModal
           state={reactionEditorState}
-          onClose={handleCloseReactionEditor}
-          onSave={handleSaveReactionCode}
-          onDelete={handleDeleteReactionFromEditor}
+          onClose={closeReactionEditor}
+          onSave={saveReactionCode}
+          onDelete={deleteReactionFromEditor}
           vsumId={vsumId}
         />
       )}
