@@ -2500,7 +2500,7 @@ const ClassBoxNameSection: React.FC<ClassBoxNameSectionProps> = ({
         margin: 0,
         width: '100%',
         boxSizing: 'border-box',
-        cursor: interactive ? 'pointer' : 'default',
+        cursor: interactive ? 'grab' : 'default',
         font: 'inherit',
         textAlign: 'center',
       }}
@@ -3646,7 +3646,7 @@ const RelationshipEditPanel: React.FC<{
       </div>
 
       <div style={{ padding: '8px 14px', borderTop: `1px solid ${UML.border}`, fontSize: 10, color: UML.textMuted, lineHeight: 1.45 }}>
-        Double-click a line to cycle type · Delete key removes selection · Close with ✕
+        Change type in this panel · Delete key removes selection · Close with ✕
       </div>
     </DiagramEditPanelShell>
   );
