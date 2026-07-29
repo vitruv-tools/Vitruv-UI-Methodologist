@@ -212,7 +212,7 @@ export const ProjectPickerMenu: React.FC<ProjectPickerMenuProps> = ({
           boxSizing: 'border-box',
         }}
       >
-      <div style={{ padding: '10px 12px', borderBottom: '1px solid #f1f5f9', flexShrink: 0 }}>
+      <div style={{ flexShrink: 0, padding: '10px 12px', borderBottom: '1px solid #f1f5f9' }}>
         <div style={{ fontSize: 11, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 8 }}>
           Your projects
         </div>

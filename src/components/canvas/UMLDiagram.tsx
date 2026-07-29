@@ -2276,6 +2276,7 @@ function getClassBoxNameSectionInteractionProps(params: {
   selected: boolean;
   edit: EditState | null;
   classId: string;
+  didDragRef: ClassBoxDidDragRef;
   onSelect: () => void;
   onStartEditName: () => void;
 }): Pick<React.ButtonHTMLAttributes<HTMLButtonElement>, 'onDoubleClick' | 'onClick' | 'onKeyDown'> {
@@ -2290,6 +2291,7 @@ function getClassBoxNameSectionInteractionProps(params: {
       params.selected,
       params.edit,
       params.classId,
+      params.didDragRef,
       params.onSelect,
       params.onStartEditName,
     ),
@@ -2325,7 +2327,8 @@ function startClassBoxDrag({
   onDragEnd: () => void;
 }): void {
   const target = e.target as HTMLElement;
-  if (target.closest('input, button, [data-no-drag]')) return;
+  // Allow drag from a11y <button> surfaces (name / members). Keep true controls non-draggable.
+  if (target.closest('input, select, textarea, [data-no-drag]')) return;
   e.stopPropagation();
   didDragRef.current = false;
   onDragStart();
@@ -2370,10 +2373,15 @@ function handleClassBoxNameSectionClick(
   selected: boolean,
   edit: EditState | null,
   classId: string,
+  didDragRef: ClassBoxDidDragRef,
   onSelect: () => void,
   onStartEditName: () => void,
 ): void {
   e.stopPropagation();
+  if (didDragRef.current) {
+    didDragRef.current = false;
+    return;
+  }
   if (!interactive) return;
   if (!selected) {
     onSelect();
@@ -2401,6 +2409,7 @@ interface ClassBoxNameSectionProps {
   selected: boolean;
   isEditingName: boolean;
   nameSectionH: number;
+  didDragRef: ClassBoxDidDragRef;
   onSelect: () => void;
   onStartEditName: () => void;
   onSaveName: (name: string) => void;
@@ -2409,7 +2418,7 @@ interface ClassBoxNameSectionProps {
 }
 
 const ClassBoxNameSection: React.FC<ClassBoxNameSectionProps> = ({
-  cls, edit, interactive, selected, isEditingName, nameSectionH,
+  cls, edit, interactive, selected, isEditingName, nameSectionH, didDragRef,
   onSelect, onStartEditName, onSaveName, onCancelEdit, onEditChange,
 }) => {
   const isAbstractOrIface = cls.isAbstract || cls.isInterface;
@@ -2425,6 +2434,7 @@ const ClassBoxNameSection: React.FC<ClassBoxNameSectionProps> = ({
     selected,
     edit,
     classId: cls.id,
+    didDragRef,
     onSelect,
     onStartEditName,
   });
@@ -2609,6 +2619,7 @@ const ClassBox: React.FC<ClassBoxProps> = ({
         selected={selected}
         isEditingName={isEditingName}
         nameSectionH={nameSectionH}
+        didDragRef={didDragRef}
         onSelect={onSelect}
         onStartEditName={onStartEditName}
         onSaveName={onSaveName}
