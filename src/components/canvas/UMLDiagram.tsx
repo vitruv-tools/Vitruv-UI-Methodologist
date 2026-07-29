@@ -13,13 +13,8 @@ import { fetchReactionCode, persistReactionCode } from '../../utils/reactionFile
 import { useUmlEditHistory, UmlEditSnapshot } from '../../hooks/useUmlEditHistory';
 import {
   applyLayoutToUmlClasses,
-  buildUmlLayoutPayload,
-  hasSavedUmlLayout,
-  loadUmlViewport,
   positionsFromUmlClasses,
   sanitizeUmlClassId,
-  saveUmlLayout,
-  type UmlViewport,
 } from '../../utils/umlLayoutStorage';
 import { assignParallelRelMeta } from '../../utils/umlClassLayout';
 import {
@@ -67,22 +62,18 @@ import {
 import {
   buildUmlClassObstacleRects,
   getUmlClassBoxHeight,
-  getUmlDiagramLayoutMetrics,
   getUmlMultiplicityPosition,
   getUmlRelationshipEndpoints,
   insetUmlRelationshipEndpoints,
-  UML_DIAGRAM_CANVAS_PADDING,
   UML_MULTIPLICITY_ALONG_OFFSET,
   UML_MULTIPLICITY_BADGE_HALF_HEIGHT,
   UML_MULTIPLICITY_BADGE_HALF_WIDTH,
   UML_MULTIPLICITY_PERPENDICULAR_OFFSET,
   type UmlDiagramRelationshipLayout,
 } from './umlDiagramLayoutGeometry';
+import { useUmlDiagramViewport } from '../../hooks/useUmlDiagramViewport';
 
 // ── constants ────────────────────────────────────────────────────────────────
-
-const MAX_ZOOM = 3;
-const MIN_ZOOM = 0.35;
 
 /** Dotted workspace background — matches canvas / HomePage grid */
 export const WORKSPACE_DOT_BACKGROUND: React.CSSProperties = {
@@ -567,6 +558,10 @@ export const UMLDiagram = forwardRef<UMLDiagramHandle, UMLDiagramProps>(({
   relationshipsRef.current = relationships;
   const dragHistorySavedRef = useRef(false);
   const reactionDragActiveRef = useRef(false);
+  const flushPendingEditRef = useRef<() => void>(() => {});
+  const persistViewportLayoutRef = useRef<
+    (classesOverride?: UmlDiagramClass[]) => void
+  >(() => {});
 
   const {
     canUndo: historyCanUndo,
@@ -658,12 +653,7 @@ export const UMLDiagram = forwardRef<UMLDiagramHandle, UMLDiagramProps>(({
     });
     setSaveMessage('');
     if (preserveLivePositions && fileName) {
-      const viewport: UmlViewport = {
-        x: viewRef.current.x,
-        y: viewRef.current.y,
-        scale: viewRef.current.scale,
-      };
-      saveUmlLayout(layoutScopeId, fileName, buildUmlLayoutPayload(baseClasses, viewport));
+      persistViewportLayoutRef.current(baseClasses);
     }
     clearHistory();
   }, [fileName, layoutScopeId, clearHistory]);
@@ -677,149 +667,47 @@ export const UMLDiagram = forwardRef<UMLDiagramHandle, UMLDiagramProps>(({
     resetFromEcore(ecoreContent);
   }, [ecoreContent, fileName, layoutScopeId, resetFromEcore]);
 
-  const diagramRef = useRef<UMLDiagramHandle>(null);
-  const didInitialFit = useRef(false);
-  const layoutOffsetRef = useRef<{ offsetX: number; offsetY: number } | null>(null);
-
-  useEffect(() => {
-    didInitialFit.current = false;
-    layoutOffsetRef.current = null;
-  }, [ecoreContent, fileName, layoutScopeId]);
-
   // ── viewport (pan + zoom) ──────────────────────────────────────────────────
-  const [vx, setVx] = useState(0);
-  const [vy, setVy] = useState(0);
-  const [vscale, setVscale] = useState(1);
-  const [panning, setPanning] = useState(false);
-  const viewRef = useRef({ x: 0, y: 0, scale: 1 });
-
-  const persistLayout = useCallback(() => {
-    if (!fileName || classesRef.current.length === 0) return;
-    const viewport: UmlViewport = {
-      x: viewRef.current.x,
-      y: viewRef.current.y,
-      scale: viewRef.current.scale,
-    };
-    saveUmlLayout(layoutScopeId, fileName, buildUmlLayoutPayload(classesRef.current, viewport));
-  }, [fileName, layoutScopeId]);
-
-  const scheduleLayoutSave = useCallback(() => {
-    if (!fileName) return;
-    persistLayout();
-  }, [fileName, persistLayout]);
-
-  const layoutSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const scheduleDebouncedLayoutSave = useCallback(() => {
-    if (!fileName) return;
-    if (layoutSaveTimerRef.current) clearTimeout(layoutSaveTimerRef.current);
-    layoutSaveTimerRef.current = setTimeout(() => {
-      layoutSaveTimerRef.current = null;
-      persistLayout();
-    }, 300);
-  }, [fileName, persistLayout]);
-
-  // Restore saved pan/zoom when reopening a diagram
-  useEffect(() => {
-    if (!fileName) return;
-    const saved = loadUmlViewport(layoutScopeId, fileName);
-    if (!saved) return;
-    viewRef.current = saved;
-    setVx(saved.x);
-    setVy(saved.y);
-    setVscale(saved.scale);
-  }, [ecoreContent, fileName, layoutScopeId]);
-
-  // Auto-save box positions while editing
-  useEffect(() => {
-    if (!fileName) return;
-    const timer = setTimeout(persistLayout, 250);
-    return () => {
-      clearTimeout(timer);
-      persistLayout();
-    };
-  }, [classes, fileName, layoutScopeId, persistLayout]);
-
-  useEffect(() => {
-    if (!fileName) return;
-    return () => {
-      if (layoutSaveTimerRef.current) clearTimeout(layoutSaveTimerRef.current);
-      persistLayout();
-    };
-  }, [fileName, layoutScopeId, persistLayout]);
-
-  // Fit once on first open only when no saved layout exists
-  useEffect(() => {
-    if (didInitialFit.current || classes.length === 0) return;
-    const t = setTimeout(() => {
-      const hasSaved = fileName ? hasSavedUmlLayout(layoutScopeId, fileName) : false;
-      if (!hasSaved) diagramRef.current?.fitToView?.();
-      didInitialFit.current = true;
-    }, 120);
-    return () => clearTimeout(t);
-  }, [classes.length, fileName, layoutScopeId]);
-
-  const layout = useMemo(() => {
-    if (!layoutOffsetRef.current && allClasses.length > 0) {
-      const initial = getUmlDiagramLayoutMetrics(allClasses);
-      layoutOffsetRef.current = { offsetX: initial.offsetX, offsetY: initial.offsetY };
-      return initial;
-    }
-    return getUmlDiagramLayoutMetrics(
-      allClasses,
-      layoutOffsetRef.current,
-    );
-  }, [allClasses]);
-  const { totalW, totalH, offsetX, offsetY } = layout;
-  const containerRef = useRef<HTMLElement>(null);
-
-  const handleMinimapPan = useCallback((nx: number, ny: number) => {
-    viewRef.current = { ...viewRef.current, x: nx, y: ny };
-    setVx(nx);
-    setVy(ny);
-    scheduleDebouncedLayoutSave();
-  }, [scheduleDebouncedLayoutSave]);
-
-  const applyZoom = useCallback((factor: number) => {
-    const el = containerRef.current;
-    if (!el) return;
-    const { x, y, scale } = viewRef.current;
-    const cx = el.clientWidth / 2;
-    const cy = el.clientHeight / 2;
-    const ns = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, scale * factor));
-    const ratio = ns / scale;
-    const nx = cx - ratio * (cx - x);
-    const ny = cy - ratio * (cy - y);
-    viewRef.current = { x: nx, y: ny, scale: ns };
-    setVx(nx); setVy(ny); setVscale(ns);
-    scheduleDebouncedLayoutSave();
-  }, [scheduleDebouncedLayoutSave]);
-
-  useEffect(() => { viewRef.current = { x: vx, y: vy, scale: vscale }; }, [vx, vy, vscale]);
-
-  // non-passive wheel so we can preventDefault and stop page scroll
-  useEffect(() => {
-    const el = containerRef.current;
-    if (!el) return;
-    const onWheel = (e: WheelEvent) => {
-      e.preventDefault();
-      const rect = el.getBoundingClientRect();
-      const { x, y, scale } = viewRef.current;
-      const mx = e.clientX - rect.left;
-      const my = e.clientY - rect.top;
-      const factor = e.deltaY > 0 ? 0.88 : 1 / 0.88;
-      const ns = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, scale * factor));
-      const ratio = ns / scale;
-      const nx = mx - ratio * (mx - x);
-      const ny = my - ratio * (my - y);
-      viewRef.current = { x: nx, y: ny, scale: ns };
-      setVscale(ns);
-      setVx(nx);
-      setVy(ny);
-      scheduleDebouncedLayoutSave();
-    };
-    el.addEventListener('wheel', onWheel, { passive: false });
-    return () => el.removeEventListener('wheel', onWheel);
-  }, [scheduleDebouncedLayoutSave]);
+  const handleBeforeCanvasPan = useCallback(() => {
+    flushPendingEditRef.current();
+  }, []);
+  const isCanvasPanBlocked = useCallback(
+    () => reactionDragActiveRef.current,
+    [],
+  );
+  const isCanvasPanTarget = useCallback(
+    (target: EventTarget | null) => isEmptyCanvasTarget(target as HTMLElement),
+    [],
+  );
+  const {
+    containerRef,
+    vx,
+    vy,
+    vscale,
+    panning,
+    layout: { totalW, totalH, offsetX, offsetY },
+    zoomIn,
+    zoomOut,
+    fitToView,
+    clientToDiagram,
+    handleMinimapPan,
+    persistLayout,
+    scheduleLayoutSave,
+    scheduleDebouncedLayoutSave,
+    getCurrentViewport,
+    restoreViewportAfterReload,
+    getCurrentLayoutOffset,
+  } = useUmlDiagramViewport({
+    classes,
+    allClasses,
+    diagramIdentity: ecoreContent,
+    fileName,
+    layoutScopeId,
+    onBeforePan: handleBeforeCanvasPan,
+    isPanBlocked: isCanvasPanBlocked,
+    isPanTarget: isCanvasPanTarget,
+  });
+  persistViewportLayoutRef.current = persistLayout;
 
   const moveClass = useCallback((id: string, x: number, y: number) => {
     if (!dragHistorySavedRef.current) {
@@ -927,6 +815,7 @@ export const UMLDiagram = forwardRef<UMLDiagramHandle, UMLDiagramProps>(({
       saveName(pending.classId, pending.val);
     }
   }, [saveAttr, saveOp, saveName]);
+  flushPendingEditRef.current = flushPendingEdit;
 
   const dismissClassSelection = useCallback(() => {
     flushPendingEdit();
@@ -942,41 +831,14 @@ export const UMLDiagram = forwardRef<UMLDiagramHandle, UMLDiagramProps>(({
     dismissClassSelection();
   }, [interactive, dismissClassSelection]);
 
-  const handlePanStart = useCallback((e: MouseEvent) => {
-    flushPendingEdit();
-    if (reactionDragActiveRef.current) return;
-    if (!isEmptyCanvasTarget(e.target as HTMLElement)) return;
-    e.preventDefault();
-    setPanning(true);
-    const { x, y } = viewRef.current;
-    const sx = e.clientX, sy = e.clientY;
-    const onMove = (ev: MouseEvent) => {
-      const nx = x + ev.clientX - sx;
-      const ny = y + ev.clientY - sy;
-      viewRef.current = { ...viewRef.current, x: nx, y: ny };
-      setVx(nx);
-      setVy(ny);
-    };
-    const onUp = () => {
-      setPanning(false);
-      scheduleLayoutSave();
-      globalThis.removeEventListener('mousemove', onMove);
-      globalThis.removeEventListener('mouseup', onUp);
-    };
-    globalThis.addEventListener('mousemove', onMove);
-    globalThis.addEventListener('mouseup', onUp);
-  }, [scheduleLayoutSave, flushPendingEdit]);
-
   useEffect(() => {
     const el = containerRef.current;
     if (!el) return;
-    el.addEventListener('mousedown', handlePanStart);
     el.addEventListener('dblclick', handleCanvasDoubleClick);
     return () => {
-      el.removeEventListener('mousedown', handlePanStart);
       el.removeEventListener('dblclick', handleCanvasDoubleClick);
     };
-  }, [handlePanStart, handleCanvasDoubleClick, classes.length]);
+  }, [handleCanvasDoubleClick, classes.length, containerRef]);
 
   const addAttr = useCallback((classId: string) => {
     flushPendingEdit();
@@ -1036,11 +898,8 @@ export const UMLDiagram = forwardRef<UMLDiagramHandle, UMLDiagramProps>(({
   const addClass = useCallback(() => {
     recordChange();
     const el = containerRef.current;
-    const { x: vx0, y: vy0, scale } = viewRef.current;
-    const offset = layoutOffsetRef.current ?? {
-      offsetX: UML_DIAGRAM_CANVAS_PADDING,
-      offsetY: UML_DIAGRAM_CANVAS_PADDING,
-    };
+    const { x: vx0, y: vy0, scale } = getCurrentViewport();
+    const offset = getCurrentLayoutOffset();
     let cx = 200;
     let cy = 120;
     if (el) {
@@ -1065,7 +924,12 @@ export const UMLDiagram = forwardRef<UMLDiagramHandle, UMLDiagramProps>(({
     };
     setClasses(prev => [...prev, newClass]);
     setSelectedClassId(id);
-  }, [recordChange]);
+  }, [
+    containerRef,
+    getCurrentLayoutOffset,
+    getCurrentViewport,
+    recordChange,
+  ]);
 
   const addRelationship = useCallback((sourceId: string, targetId: string) => {
     if (sourceId === targetId) return false;
@@ -1231,17 +1095,6 @@ export const UMLDiagram = forwardRef<UMLDiagramHandle, UMLDiagramProps>(({
       deleteReaction(reactionEditorState.edgeId);
     }
   }, [reactionEditorState, deleteReaction]);
-
-  const clientToDiagram = useCallback((clientX: number, clientY: number) => {
-    const el = containerRef.current;
-    if (!el) return { x: 0, y: 0 };
-    const rect = el.getBoundingClientRect();
-    const { x: viewX, y: viewY, scale } = viewRef.current;
-    return {
-      x: (clientX - rect.left - viewX) / scale,
-      y: (clientY - rect.top - viewY) / scale,
-    };
-  }, []);
 
   const handleReactionPortMouseDown = useCallback((
     e: React.MouseEvent,
@@ -1413,64 +1266,18 @@ export const UMLDiagram = forwardRef<UMLDiagramHandle, UMLDiagramProps>(({
 
   // ── imperative handle ──────────────────────────────────────────────────────
   useImperativeHandle(ref, () => {
-    const handle: UMLDiagramHandle = {
-      zoomIn: () => applyZoom(1.3),
-      zoomOut: () => applyZoom(1 / 1.3),
-      fitToView: () => {
-        const el = containerRef.current;
-        if (!el || allClasses.length === 0) return;
-        const PAD = 48;
-        // True bounding box over every currently visible class (primary + additional
-        // models) — not the outlier-excluding "dense cluster" heuristic from
-        // computeUmlFocusRect. That heuristic is meant only for the very first
-        // auto-fit on open; reusing it here meant a class dragged away from the
-        // rest got excluded, so Fit View re-centered on its old, now-empty
-        // neighborhood instead of the current layout.
-        const focus = {
-          minX: layout.minX - PAD,
-          minY: layout.minY - PAD,
-          maxX: layout.maxX + PAD,
-          maxY: layout.maxY + PAD,
-        };
-        const contentW = focus.maxX - focus.minX;
-        const contentH = focus.maxY - focus.minY;
-        const { clientWidth: cw, clientHeight: ch } = el;
-        // No lower clamp here (unlike manual zoom's MIN_ZOOM): Fit View's whole point is
-        // to show every currently visible class, however far apart they've been dragged —
-        // clamping to a "readable" floor previously cut off distant classes off-screen.
-        const scale = Math.min(
-          (cw - PAD * 2) / Math.max(contentW, 1),
-          (ch - PAD * 2) / Math.max(contentH, 1),
-          1.15,
-        );
-        const dispMinX = focus.minX + offsetX;
-        const dispMinY = focus.minY + offsetY;
-        const nx = (cw - contentW * scale) / 2 - dispMinX * scale;
-        const ny = (ch - contentH * scale) / 2 - dispMinY * scale;
-        viewRef.current = { x: nx, y: ny, scale };
-        setVx(nx); setVy(ny); setVscale(scale);
-        scheduleLayoutSave();
-      },
-      flushLayout: () => persistLayout(),
+    return {
+      zoomIn,
+      zoomOut,
+      fitToView,
+      flushLayout: persistLayout,
       getModel,
       isDirty,
       save: handleSave,
       reload: (content: string) => {
         skipNextEcoreResetRef.current = true;
         resetFromEcore(content, false);
-        setTimeout(() => {
-          if (fileName) {
-            const saved = loadUmlViewport(layoutScopeId, fileName);
-            if (saved) {
-              viewRef.current = saved;
-              setVx(saved.x);
-              setVy(saved.y);
-              setVscale(saved.scale);
-              return;
-            }
-          }
-          diagramRef.current?.fitToView?.();
-        }, 120);
+        restoreViewportAfterReload();
       },
       undo: handleUndo,
       redo: handleRedo,
@@ -1478,9 +1285,22 @@ export const UMLDiagram = forwardRef<UMLDiagramHandle, UMLDiagramProps>(({
       canRedo: () => historyCanRedo,
       tryEscape,
     };
-    diagramRef.current = handle;
-    return handle;
-  }, [applyZoom, allClasses, layout, offsetX, offsetY, fileName, layoutScopeId, persistLayout, scheduleLayoutSave, getModel, isDirty, handleSave, resetFromEcore, tryEscape, handleUndo, handleRedo, historyCanUndo, historyCanRedo]);
+  }, [
+    fitToView,
+    getModel,
+    handleRedo,
+    handleSave,
+    handleUndo,
+    historyCanRedo,
+    historyCanUndo,
+    isDirty,
+    persistLayout,
+    resetFromEcore,
+    restoreViewportAfterReload,
+    tryEscape,
+    zoomIn,
+    zoomOut,
+  ]);
 
   const handleClassSelect = useCallback((classId: string) => {
     if (!interactive) return;
