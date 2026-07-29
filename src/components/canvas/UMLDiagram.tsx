@@ -1,5 +1,5 @@
 import React, { useState, useRef, useCallback, useEffect, useMemo, forwardRef, useImperativeHandle, type RefObject } from 'react';
-import { ecoreToUml, UMLAttribute, UMLRelationship, UMLModel, UMLVisibility, UMLOperation, buildAttributeTypeOptions, buildOperationReturnTypeOptions, normalizeAttributeTypeDisplay, normalizeOperationReturnType, nextUniqueAttributeName, nextUniqueOperationName, UML_VISIBILITY_OPTIONS } from '../../utils/ecoreToUml';
+import { ecoreToUml, UMLAttribute, UMLRelationship, UMLModel, UMLVisibility, UMLOperation, normalizeAttributeTypeDisplay, normalizeOperationReturnType, nextUniqueAttributeName, nextUniqueOperationName } from '../../utils/ecoreToUml';
 import { saveMetaModelEcore, MetaModelSaveMetadata } from '../../utils/saveMetaModelEcore';
 import { umlSemanticSnapshot, umlToEcore } from '../../utils/umlToEcore';
 import { validateUmlModel } from '../../utils/umlValidation';
@@ -44,33 +44,34 @@ import {
   UML_RELATION_EDGE_COLORS,
 } from './UMLRelationVisuals';
 import { ClassEditPanel, RelationshipEditPanel } from './UMLDiagramEditPanels';
-import type { UmlDiagramClass } from './umlDiagramTypes';
+import {
+  UmlAddAttributeRow,
+  UmlAddOperationRow,
+  UmlAttributeRow,
+  UmlOperationRow,
+} from './UMLClassMemberRows';
+import {
+  UML_CLASS_ADD_MEMBER_ROW_HEIGHT,
+  UML_CLASS_MEMBER_ROW_HEIGHT,
+} from './umlDiagramClassMetrics';
+import { handleUmlInlineEditKeyDown } from './umlDiagramKeyboardUtils';
+import type {
+  UmlDiagramClass,
+  UmlDiagramEditState,
+} from './umlDiagramTypes';
 
 // ── constants ────────────────────────────────────────────────────────────────
 
 const BW = 190;         // box width (normal)
 const EDIT_BW = 288;    // wider while editing class name or attributes
 const EDIT_NAME_H = 52; // taller name row while editing
-const EDIT_ATTR_ROW = 38; // taller attribute row while editing
 const CANVAS_PAD = 480; // free space around diagram (all sides; allows negative coords)
 const MAX_ZOOM = 3;
 const MIN_ZOOM = 0.35;
 const NAME_H = 36;      // name-section height (no stereotype)
 const STEREO_H = 54;    // name-section height (with stereotype)
-const ATTR_ROW = 22;    // height per attribute row
 const ATTR_PAD = 10;    // top+bottom padding inside attr section
-const ADD_BTN_H = 22;   // "+ Add attribute" row
 const METH_H = 26;      // empty methods section
-
-const attrFieldStyle: React.CSSProperties = {
-  fontSize: 11,
-  border: `1px solid ${UML.primaryBorder}`,
-  borderRadius: 4,
-  padding: '1px 4px',
-  background: UML.surface,
-  color: UML.ink,
-  fontFamily: UML.fontSans,
-};
 
 /** Dotted workspace background — matches canvas / HomePage grid */
 export const WORKSPACE_DOT_BACKGROUND: React.CSSProperties = {
@@ -83,8 +84,12 @@ export const WORKSPACE_DOT_BACKGROUND: React.CSSProperties = {
 
 function boxH(c: UmlDiagramClass): number {
   const nh = c.isAbstract || c.isInterface ? STEREO_H : NAME_H;
-  const ah = c.attributes.length * ATTR_ROW + ATTR_PAD + ADD_BTN_H;
-  const oh = c.operations.length * ATTR_ROW + (c.operations.length > 0 ? ATTR_PAD : 0) + ADD_BTN_H;
+  const ah = c.attributes.length * UML_CLASS_MEMBER_ROW_HEIGHT
+    + ATTR_PAD
+    + UML_CLASS_ADD_MEMBER_ROW_HEIGHT;
+  const oh = c.operations.length * UML_CLASS_MEMBER_ROW_HEIGHT
+    + (c.operations.length > 0 ? ATTR_PAD : 0)
+    + UML_CLASS_ADD_MEMBER_ROW_HEIGHT;
   const mh = Math.max(METH_H, oh);
   return nh + 1 + ah + 1 + mh;
 }
@@ -348,10 +353,7 @@ function isEmptyCanvasTarget(target: HTMLElement): boolean {
     && !target.closest('[data-reaction-edit-panel]');
 }
 
-type EditState =
-  | { classId: string; kind: 'name'; val: string }
-  | { classId: string; kind: 'attr'; attrId: string; name: string; type: string; visibility: UMLVisibility }
-  | { classId: string; kind: 'op'; opId: string; name: string; returnType: string; visibility: UMLVisibility };
+type EditState = UmlDiagramEditState;
 
 /** `library` persists to the metamodel library API; `workspace` only updates the open project/session copy. */
 export type UmlDiagramSaveTarget = 'library' | 'workspace';
@@ -790,7 +792,6 @@ const UmlSaveMessageBanner: React.FC<{ message: string }> = ({ message }) => {
     </div>
   );
 };
-
 export const UMLDiagram = forwardRef<UMLDiagramHandle, UMLDiagramProps>(({
   ecoreContent,
   fileName,
@@ -2522,16 +2523,6 @@ UMLDiagram.displayName = 'UMLDiagram';
 type ClassBoxDragPointRef = RefObject<{ sx: number; sy: number; ox: number; oy: number } | null>;
 type ClassBoxDidDragRef = RefObject<boolean>;
 
-function getEditAttrType(edit: EditState | null): string | undefined {
-  if (edit?.kind !== 'attr') return undefined;
-  return edit.type;
-}
-
-function getEditOpReturnType(edit: EditState | null): string | undefined {
-  if (edit?.kind !== 'op') return undefined;
-  return edit.returnType;
-}
-
 function isClassBoxEditing(edit: EditState | null, classId: string): boolean {
   return edit?.classId === classId && (edit.kind === 'name' || edit.kind === 'attr' || edit.kind === 'op');
 }
@@ -2627,20 +2618,6 @@ function shouldIgnoreClassBoxKeyboardEvent(e: React.KeyboardEvent): boolean {
   const target = e.target as HTMLElement;
   return target !== e.currentTarget
     && Boolean(target.closest('input, button, select, textarea'));
-}
-
-function handleInlineEditKeyDown(
-  e: React.KeyboardEvent,
-  onEnter: () => void,
-  onEscape: () => void,
-): void {
-  if (e.key === 'Enter') {
-    onEnter();
-    return;
-  }
-  if (e.key === 'Escape') {
-    onEscape();
-  }
 }
 
 function handleClassBoxKeyDown(
@@ -2855,16 +2832,6 @@ function handleClassBoxNameSectionClick(
   }
 }
 
-function getAttrRowEdit(edit: EditState | null, attrId: string): EditState | null {
-  if (edit?.kind !== 'attr' || edit.attrId !== attrId) return null;
-  return edit;
-}
-
-function getOpRowEdit(edit: EditState | null, opId: string): EditState | null {
-  if (edit?.kind !== 'op' || edit.opId !== opId) return null;
-  return edit;
-}
-
 interface ClassBoxNameSectionProps {
   cls: UmlDiagramClass;
   edit: EditState | null;
@@ -2924,7 +2891,7 @@ const ClassBoxNameSection: React.FC<ClassBoxNameSectionProps> = ({
           autoFocus
           value={edit.val}
           onChange={e => onEditChange({ ...edit, val: e.target.value })}
-          onKeyDown={e => handleInlineEditKeyDown(
+          onKeyDown={e => handleUmlInlineEditKeyDown(
             e,
             () => onSaveName(edit.val),
             onCancelEdit,
@@ -3025,16 +2992,6 @@ const ClassBox: React.FC<ClassBoxProps> = ({
   const [hoveredAttr, setHoveredAttr] = useState<string | null>(null);
   const [hoveredOp, setHoveredOp] = useState<string | null>(null);
 
-  const attrTypeOptions = useMemo(
-    () => buildAttributeTypeOptions(getEditAttrType(edit)),
-    [edit],
-  );
-
-  const opReturnOptions = useMemo(
-    () => buildOperationReturnTypeOptions(getEditOpReturnType(edit)),
-    [edit],
-  );
-
   const isEditingBox = isClassBoxEditing(edit, cls.id);
   const isEditingName = isClassEditingName(edit, cls.id);
   const displayW = isEditingBox ? EDIT_BW : BW;
@@ -3100,12 +3057,11 @@ const ClassBox: React.FC<ClassBoxProps> = ({
         transition: 'padding 0.22s ease',
       }}>
         {cls.attributes.map(attr => (
-          <AttrRow
+          <UmlAttributeRow
             key={attr.id}
             attr={attr}
-            typeOptions={attrTypeOptions}
             expanded={isEditingBox}
-            editing={getAttrRowEdit(edit, attr.id)}
+            editing={edit}
             hovered={hoveredAttr === attr.id}
             showDelete={interactive && selected}
             onMouseEnter={() => setHoveredAttr(attr.id)}
@@ -3117,7 +3073,7 @@ const ClassBox: React.FC<ClassBoxProps> = ({
             onEditChange={(n, t, v) => onEditChange({ classId: cls.id, kind: 'attr', attrId: attr.id, name: n, type: t, visibility: v })}
           />
         ))}
-        {interactive && <AddAttrRow onClick={onAddAttr} />}
+        {interactive && <UmlAddAttributeRow onClick={onAddAttr} />}
       </div>
 
       {/* ── Operations section ── */}
@@ -3128,12 +3084,11 @@ const ClassBox: React.FC<ClassBoxProps> = ({
         transition: 'padding 0.22s ease',
       }}>
         {cls.operations.map(op => (
-          <OpRow
+          <UmlOperationRow
             key={op.id}
             op={op}
-            returnOptions={opReturnOptions}
             expanded={isEditingBox}
-            editing={getOpRowEdit(edit, op.id)}
+            editing={edit}
             hovered={hoveredOp === op.id}
             showDelete={interactive && selected}
             onMouseEnter={() => setHoveredOp(op.id)}
@@ -3145,7 +3100,7 @@ const ClassBox: React.FC<ClassBoxProps> = ({
             onEditChange={(n, rt, v) => onEditChange({ classId: cls.id, kind: 'op', opId: op.id, name: n, returnType: rt, visibility: v })}
           />
         ))}
-        {interactive && <AddOpRow onClick={onAddOp} />}
+        {interactive && <UmlAddOperationRow onClick={onAddOp} />}
       </div>
       </div>
       {interactive && selected && (
@@ -3243,455 +3198,3 @@ const ClassBox: React.FC<ClassBoxProps> = ({
     </div>
   );
 };
-
-// ── AttrRow ───────────────────────────────────────────────────────────────────
-
-function getUmlEditFieldStyle(expanded: boolean): React.CSSProperties {
-  if (!expanded) return attrFieldStyle;
-  return {
-    ...attrFieldStyle,
-    fontSize: 13,
-    padding: '4px 6px',
-    borderRadius: 5,
-    border: `2px solid ${UML.primaryBorder}`,
-  };
-}
-
-function getUmlEditRowStyle(expanded: boolean): React.CSSProperties {
-  return {
-    display: 'flex',
-    alignItems: 'center',
-    gap: expanded ? 6 : 2,
-    padding: expanded ? '6px 12px' : '1px 6px',
-    minHeight: expanded ? EDIT_ATTR_ROW : ATTR_ROW,
-    flexWrap: 'nowrap',
-  };
-}
-
-function getEditSelectValue(options: string[], current: string, fallback: string): string {
-  if (options.includes(current)) return current;
-  return options[0] ?? fallback;
-}
-
-function getEditRowInputName(element: HTMLElement, fallback: string): string {
-  const input = element.closest('div')?.querySelector('input') as HTMLInputElement | null;
-  return input?.value ?? fallback;
-}
-
-function getUmlRowContainerStyle(hovered: boolean): React.CSSProperties {
-  return {
-    display: 'flex',
-    alignItems: 'center',
-    padding: '0 6px',
-    height: ATTR_ROW,
-    background: hovered ? '#f8fafc' : 'transparent',
-    gap: 3,
-  };
-}
-
-function getUmlRowEditButtonStyle(): React.CSSProperties {
-  return {
-    display: 'flex',
-    alignItems: 'center',
-    flex: 1,
-    gap: 3,
-    minWidth: 0,
-    border: 'none',
-    margin: 0,
-    padding: 0,
-    background: 'transparent',
-    cursor: 'default',
-    font: 'inherit',
-    textAlign: 'left',
-  };
-}
-
-function getUmlRowDeleteButtonStyle(hovered: boolean): React.CSSProperties {
-  return {
-    flexShrink: 0,
-    width: 18,
-    height: 18,
-    border: 'none',
-    borderRadius: 4,
-    background: hovered ? '#fee2e2' : '#fef2f2',
-    cursor: 'pointer',
-    color: '#dc2626',
-    fontSize: 11,
-    padding: 0,
-    lineHeight: 1,
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginLeft: 'auto',
-  };
-}
-
-function handleUmlRowEditKeyDown(e: React.KeyboardEvent, onEdit: () => void): void {
-  if (e.key !== 'Enter' && e.key !== 'F2') return;
-  if (shouldIgnoreClassBoxKeyboardEvent(e)) return;
-  e.preventDefault();
-  onEdit();
-}
-
-interface UmlMemberRowDisplayProps {
-  ariaLabel: string;
-  hovered: boolean;
-  showDelete: boolean;
-  deleteTitle: string;
-  onMouseEnter: () => void;
-  onMouseLeave: () => void;
-  onDoubleClick: () => void;
-  onDelete: () => void;
-  children: React.ReactNode;
-}
-
-const UmlMemberRowDisplay: React.FC<UmlMemberRowDisplayProps> = ({
-  ariaLabel, hovered, showDelete, deleteTitle,
-  onMouseEnter, onMouseLeave, onDoubleClick, onDelete, children,
-}) => (
-  <div style={getUmlRowContainerStyle(hovered)}>
-    <button
-      type="button"
-      aria-label={ariaLabel}
-      onMouseEnter={onMouseEnter}
-      onMouseLeave={onMouseLeave}
-      onDoubleClick={(e) => { e.stopPropagation(); onDoubleClick(); }}
-      onKeyDown={(e) => handleUmlRowEditKeyDown(e, onDoubleClick)}
-      style={getUmlRowEditButtonStyle()}
-    >
-      {children}
-    </button>
-    {showDelete && (
-      <button
-        type="button"
-        data-no-drag
-        onClick={(e) => { e.stopPropagation(); onDelete(); }}
-        title={deleteTitle}
-        aria-label={deleteTitle}
-        style={getUmlRowDeleteButtonStyle(hovered)}
-      >
-        ✕
-      </button>
-    )}
-  </div>
-);
-
-type AttrEditState = Extract<EditState, { kind: 'attr' }>;
-
-interface AttrRowEditorProps {
-  editing: AttrEditState;
-  typeOptions: string[];
-  expanded: boolean;
-  onSave: (name: string, type: string, visibility: UMLVisibility) => void;
-  onCancel: () => void;
-  onEditChange: (name: string, type: string, visibility: UMLVisibility) => void;
-}
-
-const AttrRowEditor: React.FC<AttrRowEditorProps> = ({
-  editing, typeOptions, expanded, onSave, onCancel, onEditChange,
-}) => {
-  const editFieldStyle = getUmlEditFieldStyle(expanded);
-  const rowStyle = getUmlEditRowStyle(expanded);
-  const selectValue = getEditSelectValue(typeOptions, editing.type, 'String');
-  const visibilitySelectWidth = expanded ? 42 : 34;
-  const nameInputMinWidth = expanded ? 72 : 40;
-  const typeSelectWidth = expanded ? 96 : 76;
-
-  const commitEdit = (name: string, type: string, visibility: UMLVisibility) => {
-    onEditChange(name, type, visibility);
-    onSave(name, type, visibility);
-  };
-
-  const handleVisibilityChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
-    const visibility = e.target.value as UMLVisibility;
-    const name = getEditRowInputName(e.currentTarget, editing.name);
-    commitEdit(name, editing.type, visibility);
-  };
-
-  const handleTypeChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
-    const type = e.target.value;
-    const name = getEditRowInputName(e.currentTarget, editing.name);
-    commitEdit(name, type, editing.visibility);
-  };
-
-  return (
-    <div style={rowStyle}>
-      <select
-        value={editing.visibility}
-        onMouseDown={e => e.preventDefault()}
-        onChange={handleVisibilityChange}
-        style={{ ...editFieldStyle, width: visibilitySelectWidth, flexShrink: 0, padding: '2px 2px' }}
-        title="Visibility"
-      >
-        {UML_VISIBILITY_OPTIONS.map(v => (
-          <option key={v} value={v}>{v}</option>
-        ))}
-      </select>
-      <input
-        autoFocus
-        value={editing.name}
-        onChange={e => onEditChange(e.target.value, editing.type, editing.visibility)}
-        onBlur={e => onSave(e.currentTarget.value, editing.type, editing.visibility)}
-        onKeyDown={e => handleInlineEditKeyDown(
-          e,
-          () => onSave(editing.name, editing.type, editing.visibility),
-          onCancel,
-        )}
-        style={{ ...editFieldStyle, flex: 1, minWidth: nameInputMinWidth }}
-      />
-      <span style={{ color: UML.textMuted, flexShrink: 0 }}>:</span>
-      <select
-        value={selectValue}
-        onMouseDown={e => e.preventDefault()}
-        onChange={handleTypeChange}
-        onKeyDown={e => handleInlineEditKeyDown(
-          e,
-          () => onSave(editing.name, e.currentTarget.value, editing.visibility),
-          onCancel,
-        )}
-        title="Attribute type (primitive only)"
-        style={{ ...editFieldStyle, width: typeSelectWidth, color: UML.primary, fontWeight: 600 }}
-      >
-        {typeOptions.map(t => (
-          <option key={t} value={t}>{t}</option>
-        ))}
-      </select>
-    </div>
-  );
-};
-
-interface AttrRowProps {
-  attr: UMLAttribute;
-  typeOptions: string[];
-  expanded?: boolean;
-  editing: EditState | null;
-  hovered: boolean;
-  showDelete?: boolean;
-  onMouseEnter: () => void;
-  onMouseLeave: () => void;
-  onDoubleClick: () => void;
-  onSave: (name: string, type: string, visibility: UMLVisibility) => void;
-  onCancel: () => void;
-  onDelete: () => void;
-  onEditChange: (name: string, type: string, visibility: UMLVisibility) => void;
-}
-
-const AttrRow: React.FC<AttrRowProps> = ({
-  attr, typeOptions, expanded = false, editing, hovered, showDelete = false, onMouseEnter, onMouseLeave,
-  onDoubleClick, onSave, onCancel, onDelete, onEditChange,
-}) => {
-  if (editing?.kind === 'attr') {
-    return (
-      <AttrRowEditor
-        editing={editing}
-        typeOptions={typeOptions}
-        expanded={expanded}
-        onSave={onSave}
-        onCancel={onCancel}
-        onEditChange={onEditChange}
-      />
-    );
-  }
-
-  return (
-    <UmlMemberRowDisplay
-      ariaLabel={`Attribute ${attr.name}: ${normalizeAttributeTypeDisplay(attr.type)}. Press Enter to edit.`}
-      hovered={hovered}
-      showDelete={!!showDelete}
-      deleteTitle="Delete attribute"
-      onMouseEnter={onMouseEnter}
-      onMouseLeave={onMouseLeave}
-      onDoubleClick={onDoubleClick}
-      onDelete={onDelete}
-    >
-      <span style={{ color: '#64748b', flexShrink: 0 }}>{attr.visibility ?? '+'}</span>
-      <span style={{ color: '#1e293b', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-        {attr.name}
-      </span>
-      <span style={{ color: '#94a3b8', flexShrink: 0 }}>:</span>
-      <span style={{ color: UML.primary, flexShrink: 0, fontWeight: 600 }}>{normalizeAttributeTypeDisplay(attr.type)}</span>
-    </UmlMemberRowDisplay>
-  );
-};
-
-// ── AddAttrRow ────────────────────────────────────────────────────────────────
-
-function getUmlAddMemberRowStyle(hovered: boolean): React.CSSProperties {
-  return {
-    height: ADD_BTN_H,
-    display: 'flex',
-    alignItems: 'center',
-    padding: '0 8px',
-    gap: 4,
-    cursor: 'pointer',
-    color: hovered ? UML.primary : UML.textMuted,
-    transition: 'color 0.1s',
-    fontFamily: UML.fontSans,
-    border: 'none',
-    margin: 0,
-    width: '100%',
-    background: 'transparent',
-    font: 'inherit',
-    textAlign: 'left',
-  };
-}
-
-const UmlAddMemberRow: React.FC<{ label: string; onClick: () => void }> = ({ label, onClick }) => {
-  const [hov, setHov] = useState(false);
-  return (
-    <button
-      type="button"
-      data-no-drag
-      aria-label={label}
-      onClick={onClick}
-      onMouseEnter={() => setHov(true)}
-      onMouseLeave={() => setHov(false)}
-      style={getUmlAddMemberRowStyle(hov)}
-    >
-      <span style={{ fontSize: 14, lineHeight: 1 }}>+</span>
-      <span style={{ fontSize: 10 }}>{label}</span>
-    </button>
-  );
-};
-
-const AddAttrRow: React.FC<{ onClick: () => void }> = ({ onClick }) => (
-  <UmlAddMemberRow label="Add attribute" onClick={onClick} />
-);
-
-// ── OpRow ─────────────────────────────────────────────────────────────────────
-
-type OpEditState = Extract<EditState, { kind: 'op' }>;
-
-interface OpRowEditorProps {
-  editing: OpEditState;
-  returnOptions: string[];
-  expanded: boolean;
-  onSave: (name: string, returnType: string, visibility: UMLVisibility) => void;
-  onCancel: () => void;
-  onEditChange: (name: string, returnType: string, visibility: UMLVisibility) => void;
-}
-
-const OpRowEditor: React.FC<OpRowEditorProps> = ({
-  editing, returnOptions, expanded, onSave, onCancel, onEditChange,
-}) => {
-  const editFieldStyle = getUmlEditFieldStyle(expanded);
-  const rowStyle = getUmlEditRowStyle(expanded);
-  const selectValue = getEditSelectValue(returnOptions, editing.returnType, 'Void');
-  const visibilitySelectWidth = expanded ? 42 : 34;
-  const nameInputMinWidth = expanded ? 72 : 40;
-  const returnTypeSelectWidth = expanded ? 86 : 68;
-
-  const commitEdit = (name: string, returnType: string, visibility: UMLVisibility) => {
-    onEditChange(name, returnType, visibility);
-    onSave(name, returnType, visibility);
-  };
-
-  const handleVisibilityChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
-    const visibility = e.target.value as UMLVisibility;
-    const name = getEditRowInputName(e.currentTarget, editing.name);
-    commitEdit(name, editing.returnType, visibility);
-  };
-
-  const handleReturnTypeChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
-    const returnType = e.target.value;
-    const name = getEditRowInputName(e.currentTarget, editing.name);
-    commitEdit(name, returnType, editing.visibility);
-  };
-
-  return (
-    <div style={rowStyle}>
-      <select
-        value={editing.visibility}
-        onMouseDown={e => e.preventDefault()}
-        onChange={handleVisibilityChange}
-        style={{ ...editFieldStyle, width: visibilitySelectWidth, flexShrink: 0 }}
-      >
-        {UML_VISIBILITY_OPTIONS.map(v => <option key={v} value={v}>{v}</option>)}
-      </select>
-      <input
-        autoFocus
-        value={editing.name}
-        onChange={e => onEditChange(e.target.value, editing.returnType, editing.visibility)}
-        onBlur={e => onSave(e.currentTarget.value, editing.returnType, editing.visibility)}
-        onKeyDown={e => handleInlineEditKeyDown(
-          e,
-          () => onSave(editing.name, editing.returnType, editing.visibility),
-          onCancel,
-        )}
-        style={{ ...editFieldStyle, flex: 1, minWidth: nameInputMinWidth }}
-      />
-      <span style={{ color: UML.textMuted, flexShrink: 0 }}>() :</span>
-      <select
-        value={selectValue}
-        onMouseDown={e => e.preventDefault()}
-        onChange={handleReturnTypeChange}
-        onKeyDown={e => handleInlineEditKeyDown(
-          e,
-          () => onSave(editing.name, e.currentTarget.value, editing.visibility),
-          onCancel,
-        )}
-        style={{ ...editFieldStyle, width: returnTypeSelectWidth, color: UML.primary, fontWeight: 600 }}
-      >
-        {returnOptions.map(t => <option key={t} value={t}>{t}</option>)}
-      </select>
-    </div>
-  );
-};
-
-interface OpRowProps {
-  op: UMLOperation;
-  returnOptions: string[];
-  expanded?: boolean;
-  editing: EditState | null;
-  hovered: boolean;
-  showDelete?: boolean;
-  onMouseEnter: () => void;
-  onMouseLeave: () => void;
-  onDoubleClick: () => void;
-  onSave: (name: string, returnType: string, visibility: UMLVisibility) => void;
-  onCancel: () => void;
-  onDelete: () => void;
-  onEditChange: (name: string, returnType: string, visibility: UMLVisibility) => void;
-}
-
-const OpRow: React.FC<OpRowProps> = ({
-  op, returnOptions, expanded = false, editing, hovered, showDelete = false,
-  onMouseEnter, onMouseLeave, onDoubleClick, onSave, onCancel, onDelete, onEditChange,
-}) => {
-  if (editing?.kind === 'op') {
-    return (
-      <OpRowEditor
-        editing={editing}
-        returnOptions={returnOptions}
-        expanded={expanded}
-        onSave={onSave}
-        onCancel={onCancel}
-        onEditChange={onEditChange}
-      />
-    );
-  }
-
-  return (
-    <UmlMemberRowDisplay
-      ariaLabel={`Operation ${op.name}: ${normalizeOperationReturnType(op.returnType)}. Press Enter to edit.`}
-      hovered={hovered}
-      showDelete={!!showDelete}
-      deleteTitle="Delete operation"
-      onMouseEnter={onMouseEnter}
-      onMouseLeave={onMouseLeave}
-      onDoubleClick={onDoubleClick}
-      onDelete={onDelete}
-    >
-      <span style={{ color: '#64748b', flexShrink: 0 }}>{op.visibility ?? '+'}</span>
-      <span style={{ color: '#1e293b', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-        {op.name}()
-      </span>
-      <span style={{ color: '#94a3b8', flexShrink: 0 }}>:</span>
-      <span style={{ color: UML.primary, flexShrink: 0, fontWeight: 600 }}>{normalizeOperationReturnType(op.returnType)}</span>
-    </UmlMemberRowDisplay>
-  );
-};
-
-const AddOpRow: React.FC<{ onClick: () => void }> = ({ onClick }) => (
-  <UmlAddMemberRow label="Add operation" onClick={onClick} />
-);
