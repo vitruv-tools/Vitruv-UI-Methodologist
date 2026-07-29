@@ -17,28 +17,16 @@ import {
   sanitizeUmlClassId,
 } from '../../utils/umlLayoutStorage';
 import { assignParallelRelMeta } from '../../utils/umlClassLayout';
-import {
-  computeLineBridges,
-  optimizeMultiplicityBadges,
-  resolveMultiplicityBadgeCollisions,
-  type MultiplicityBadge,
-} from '../../utils/umlDiagramGeometry';
 import { UMLDiagramMinimap } from './UMLDiagramMinimap';
 import { computeUmlModelGroups } from '../../utils/umlModelGroups';
 import { UMLDiagramToolbar } from './UMLDiagramToolbar';
 import { DIAGRAM_HINT_TOP, UML } from './umlDiagramTheme';
-import {
-  getUmlRelationDirectionMarkerSide,
-  getUmlRelationEdgeState,
-  UMLMultiplicityBadge,
-  UMLRelationDirectionMarker,
-  UMLRelationHitTarget,
-  UMLRelationLine,
-  UML_REACTION_EDGE_COLORS,
-  UML_RELATION_EDGE_COLORS,
-} from './UMLRelationVisuals';
 import { ClassEditPanel, RelationshipEditPanel } from './UMLDiagramEditPanels';
 import { UMLClassBox } from './UMLClassBox';
+import {
+  UMLRelationshipBaseLayer,
+  UMLRelationshipOverlayLayers,
+} from './UMLRelationshipLayers';
 import {
   UML_CLASS_BOX_EDIT_WIDTH,
   UML_CLASS_BOX_WIDTH,
@@ -60,18 +48,11 @@ import {
   updateClassOperation,
 } from './umlDiagramClassTransforms';
 import {
-  buildUmlClassObstacleRects,
   getUmlClassBoxHeight,
-  getUmlMultiplicityPosition,
-  getUmlRelationshipEndpoints,
-  insetUmlRelationshipEndpoints,
-  UML_MULTIPLICITY_ALONG_OFFSET,
-  UML_MULTIPLICITY_BADGE_HALF_HEIGHT,
-  UML_MULTIPLICITY_BADGE_HALF_WIDTH,
-  UML_MULTIPLICITY_PERPENDICULAR_OFFSET,
   type UmlDiagramRelationshipLayout,
 } from './umlDiagramLayoutGeometry';
 import { useUmlDiagramViewport } from '../../hooks/useUmlDiagramViewport';
+import { useUmlRelationshipLayers } from '../../hooks/useUmlRelationshipLayers';
 
 // ── constants ────────────────────────────────────────────────────────────────
 
@@ -545,7 +526,6 @@ export const UMLDiagram = forwardRef<UMLDiagramHandle, UMLDiagramProps>(({
   editRef.current = edit;
   const [selectedClassId, setSelectedClassId] = useState<string | null>(null);
   const [selectedRelId, setSelectedRelId] = useState<string | null>(null);
-  const [hoveredRelId, setHoveredRelId] = useState<string | null>(null);
   const [connectMode, setConnectMode] = useState(false);
   const [connectSourceId, setConnectSourceId] = useState<string | null>(null);
   const [reactionDrag, setReactionDrag] = useState<ReactionDragState | null>(null);
@@ -1387,101 +1367,27 @@ export const UMLDiagram = forwardRef<UMLDiagramHandle, UMLDiagramProps>(({
     return () => globalThis.removeEventListener('keydown', onKeyDown);
   }, [interactive, selectedRelId, selectedClassId, handleDeleteSelected, tryEscape, handleUndo, handleRedo]);
 
-  const edgeLayouts = useMemo(() => {
-    const raw = rels.flatMap(rel => {
-      const endpoints = getUmlRelationshipEndpoints(
-        rel,
-        allClasses,
-        offsetX,
-        offsetY,
-      );
-      if (!endpoints) return [];
-      const { drawP1, drawP2 } = insetUmlRelationshipEndpoints(
-        endpoints.p1,
-        endpoints.p2,
-      );
-      return [{ rel, p1: endpoints.p1, p2: endpoints.p2, drawP1, drawP2 }];
-    });
-
-    const bridges = computeLineBridges(raw.map(r => ({
-      id: r.rel.id,
-      drawP1: r.drawP1,
-      drawP2: r.drawP2,
-    })));
-
-    return raw.map(r => ({
-      ...r,
-      bridges: bridges.get(r.rel.id) ?? [],
-    }));
-  }, [rels, allClasses, offsetX, offsetY]);
-
-  const multiplicityBadges = useMemo(() => {
-    const reactionRelIds = new Set(reactionEdges.map(edge => edge.id));
-    const raw: MultiplicityBadge[] = [];
-    for (const layout of edgeLayouts) {
-      const { rel, p1, p2 } = layout;
-      if (reactionRelIds.has(rel.id)) continue;
-
-      const markerSide = getUmlRelationDirectionMarkerSide(rel.type);
-
-      if (rel.sourceMultiplicity) {
-        const pos = getUmlMultiplicityPosition(
-          p1.x,
-          p1.y,
-          p2.x,
-          p2.y,
-          'start',
-          markerSide === 'start',
-        );
-        raw.push({
-          key: `${rel.id}-src`,
-          relId: rel.id,
-          end: 'start',
-          anchorClassId: rel.sourceId,
-          text: rel.sourceMultiplicity,
-          ...pos,
-        });
-      }
-      if (rel.targetMultiplicity) {
-        const pos = getUmlMultiplicityPosition(
-          p1.x,
-          p1.y,
-          p2.x,
-          p2.y,
-          'end',
-          markerSide === 'end',
-        );
-        raw.push({
-          key: `${rel.id}-tgt`,
-          relId: rel.id,
-          end: 'end',
-          anchorClassId: rel.targetId,
-          text: rel.targetMultiplicity,
-          ...pos,
-        });
-      }
+  const handleRelationshipBackgroundClick = useCallback(() => {
+    if (connectMode) {
+      setConnectMode(false);
+      setConnectSourceId(null);
     }
-    const obstacles = buildUmlClassObstacleRects(
-      allClasses,
-      offsetX,
-      offsetY,
-    );
-    return resolveMultiplicityBadgeCollisions(
-      optimizeMultiplicityBadges(
-        raw,
-        UML_MULTIPLICITY_ALONG_OFFSET,
-        UML_MULTIPLICITY_PERPENDICULAR_OFFSET,
-      ),
-      obstacles,
-      UML_MULTIPLICITY_BADGE_HALF_WIDTH,
-      UML_MULTIPLICITY_BADGE_HALF_HEIGHT,
-    );
-  }, [edgeLayouts, reactionEdges, allClasses, offsetX, offsetY]);
+  }, [connectMode]);
 
-  const reactionEdgeById = useMemo(
-    () => new Map(reactionEdges.map(edge => [edge.id, edge])),
-    [reactionEdges],
-  );
+  const {
+    edgeLayouts,
+    multiplicityBadges,
+    reactionEdgeById,
+    hoveredRelationshipId,
+    handleRelationshipMouseEnter,
+    handleRelationshipMouseLeave,
+  } = useUmlRelationshipLayers({
+    parallelRelationships: rels,
+    classes: allClasses,
+    reactionEdges,
+    offsetX,
+    offsetY,
+  });
 
   const validationIssues = useMemo(
     () => validateUmlModel({ classes, relationships }, allClasses),
@@ -1534,38 +1440,15 @@ export const UMLDiagram = forwardRef<UMLDiagramHandle, UMLDiagramProps>(({
     }}>
     {/* SVG: relationship lines */}
     <div style={{ position: 'relative', width: totalW, height: totalH }}>
-      <svg
-        style={{ position: 'absolute', top: 0, left: 0, width: totalW, height: totalH, overflow: 'visible' }}
-        onClick={() => {
-          if (connectMode) {
-            setConnectMode(false);
-            setConnectSourceId(null);
-          }
-        }}
-      >
-        {edgeLayouts.map(layout => {
-          const { rel, p1, p2, drawP1, drawP2, bridges } = layout;
-          const reactionEdge = reactionEdgeById.get(rel.id);
-          const state = getUmlRelationEdgeState(
-            selectedRelId === rel.id,
-            hoveredRelId === rel.id,
-          );
-
-          return (
-            <UMLRelationLine
-              key={rel.id}
-              rel={rel}
-              p1={p1}
-              p2={p2}
-              drawP1={drawP1}
-              drawP2={drawP2}
-              bridges={bridges}
-              state={state}
-              reactionEdge={reactionEdge}
-            />
-          );
-        })}
-      </svg>
+      <UMLRelationshipBaseLayer
+        totalWidth={totalW}
+        totalHeight={totalH}
+        edgeLayouts={edgeLayouts}
+        reactionEdgeById={reactionEdgeById}
+        selectedRelationshipId={selectedRelId}
+        hoveredRelationshipId={hoveredRelationshipId}
+        onBackgroundClick={handleRelationshipBackgroundClick}
+      />
 
       {/* Model group wrapper rects */}
       {modelGroups.map(g => {
@@ -1763,77 +1646,18 @@ export const UMLDiagram = forwardRef<UMLDiagramHandle, UMLDiagramProps>(({
         </svg>
       )}
 
-      {/* Hit targets above class boxes — connections stay clickable */}
-      <svg
-        data-rel-hit-layer
-        style={{ position: 'absolute', top: 0, left: 0, width: totalW, height: totalH, overflow: 'visible', zIndex: 6, pointerEvents: 'none' }}
-      >
-        {edgeLayouts.map(layout => {
-          const { rel, drawP1, drawP2, bridges } = layout;
-          return (
-            <UMLRelationHitTarget
-              key={`hit-${rel.id}`}
-              relId={rel.id}
-              drawP1={drawP1}
-              drawP2={drawP2}
-              bridges={bridges}
-              onRelClick={e => handleRelationshipClick(rel.id, e)}
-              onMouseEnter={() => setHoveredRelId(rel.id)}
-              onMouseLeave={() => setHoveredRelId(null)}
-            />
-          );
-        })}
-      </svg>
-
-      {/* Multiplicity badges above class boxes so labels stay visible */}
-      <svg
-        data-mult-badge-layer
-        style={{ position: 'absolute', top: 0, left: 0, width: totalW, height: totalH, overflow: 'visible', zIndex: 22, pointerEvents: 'none' }}
-      >
-        {multiplicityBadges.map(badge => {
-          const state = getUmlRelationEdgeState(
-            selectedRelId === badge.relId,
-            hoveredRelId === badge.relId,
-          );
-          return (
-            <UMLMultiplicityBadge
-              key={badge.key}
-              badge={badge}
-              strokeColor={UML_RELATION_EDGE_COLORS[state]}
-            />
-          );
-        })}
-      </svg>
-
-      {/* Direction markers above class boxes */}
-      {edgeLayouts.map(layout => {
-        const { rel, p1, p2 } = layout;
-        const reactionEdge = reactionEdgeById.get(rel.id);
-        const state = getUmlRelationEdgeState(
-          selectedRelId === rel.id,
-          hoveredRelId === rel.id,
-        );
-        const color = reactionEdge
-          ? UML_REACTION_EDGE_COLORS[state]
-          : UML_RELATION_EDGE_COLORS[state];
-
-        return (
-          <UMLRelationDirectionMarker
-            key={`${rel.id}-direction`}
-            rel={rel}
-            reactionEdge={reactionEdge}
-            // Anchor at the true class-box edge (p1/p2), not the inset line endpoints
-            // (drawP1/drawP2) used only for the line stroke -- otherwise the marker floats
-            // in the gap left for it instead of touching the box it belongs to.
-            lineStart={p1}
-            lineEnd={p2}
-            color={color}
-            onRelClick={e => handleRelationshipClick(rel.id, e)}
-            onMouseEnter={() => setHoveredRelId(rel.id)}
-            onMouseLeave={() => setHoveredRelId(null)}
-          />
-        );
-      })}
+      <UMLRelationshipOverlayLayers
+        totalWidth={totalW}
+        totalHeight={totalH}
+        edgeLayouts={edgeLayouts}
+        multiplicityBadges={multiplicityBadges}
+        reactionEdgeById={reactionEdgeById}
+        selectedRelationshipId={selectedRelId}
+        hoveredRelationshipId={hoveredRelationshipId}
+        onRelationshipClick={handleRelationshipClick}
+        onRelationshipMouseEnter={handleRelationshipMouseEnter}
+        onRelationshipMouseLeave={handleRelationshipMouseLeave}
+      />
     </div>
     </div>
       {interactive && connectMode && (
