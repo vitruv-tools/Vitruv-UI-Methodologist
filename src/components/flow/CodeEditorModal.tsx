@@ -407,6 +407,7 @@ export function CodeEditorModal({
       webSocketRef.current = webSocket;
 
       webSocket.onopen = () => {
+        console.log('✅ LSP WebSocket open:', wsUrl);
         setLspConnected(true);
         setLspError(null);
       };
@@ -427,6 +428,7 @@ export function CodeEditorModal({
 
           if (message.type === 'workspaceReady') {
             const rootUri = message.rootUri;
+            console.log('📁 workspaceReady received, rootUri:', rootUri);
             if (!rootUri) {
               console.error('❌ workspaceReady message contains no rootUri');
               return;
@@ -453,6 +455,7 @@ export function CodeEditorModal({
           }
 
           if (message.id === 1 && message.result) {
+            console.log('🚀 LSP initialize response received, sending initialized + didOpen');
             lspInitialized.current = true;
             webSocket.send(JSON.stringify({ jsonrpc: '2.0', method: 'initialized', params: {} }));
 
@@ -480,13 +483,15 @@ export function CodeEditorModal({
         }
       };
 
-      webSocket.onerror = () => {
+      webSocket.onerror = (event) => {
+        console.error('💥 LSP WebSocket error for', wsUrl, event);
         setLspConnected(false);
         setLspReadyBoth(false);
         setLspError('LSP connection failed — completions and validation unavailable');
       };
 
       webSocket.onclose = (event) => {
+        console.warn(`🔌 LSP WebSocket closed: code=${event.code} reason="${event.reason}" wasClean=${event.wasClean}`);
         setLspConnected(false);
         setLspReadyBoth(false);
         lspInitialized.current = false;
