@@ -84,14 +84,6 @@ export function umlValidationMock() {
   };
 }
 
-export function reactionFileMock() {
-  return {
-    fetchReactionCode: async (_code: string, _id: unknown, buildDefault: () => string) => buildDefault(),
-    persistReactionCode: async () => 1,
-    resolveReactionFileId: () => 1,
-  };
-}
-
 export function umlDiagramMinimapMock() {
   return {
     UMLDiagramMinimap: () => {
@@ -102,14 +94,6 @@ export function umlDiagramMinimapMock() {
       });
     },
   };
-}
-
-export function reactionEditorModalMock() {
-  return { ReactionEditorModal: () => null };
-}
-
-export function reactionConfigPopupMock() {
-  return { ReactionConfigPopup: () => null };
 }
 
 export function umlDiagramGeometryMock() {

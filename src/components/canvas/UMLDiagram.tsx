@@ -8,13 +8,6 @@ import {
   UML_RELATIONSHIP_MULTIPLICITY_LABELS,
 } from '../../utils/umlMultiplicity';
 import { validateUmlModel } from '../../utils/umlValidation';
-import { extractNsUriFromEcore } from '../../utils/ecoreParser';
-import { ReactionConfigPopup } from './ReactionConfigPopup';
-import { ReactionConfig, ReactionEdge, ReactionsModel } from '../../types/reactions';
-import { ReactionEditorModal } from '../flow/ReactionEditorModal';
-import { CodeEditorState } from '../flow/flowCanvasTypes';
-import { buildInitialReactionCodeFromConfig } from '../../utils/reactionCode';
-import { fetchReactionCode, persistReactionCode } from '../../utils/reactionFile';
 import { useUmlEditHistory, UmlEditSnapshot } from '../../hooks/useUmlEditHistory';
 import {
   applyLayoutToUmlClasses,
@@ -37,7 +30,6 @@ import {
   type MultiplicityBadge,
 } from '../../utils/umlDiagramGeometry';
 import { UMLDiagramMinimap } from './UMLDiagramMinimap';
-import { computeUmlModelGroups } from '../../utils/umlModelGroups';
 
 // ── constants ────────────────────────────────────────────────────────────────
 
@@ -238,16 +230,6 @@ const EDGE_COLOR: Record<EdgeState, string> = {
   selected: EDGE_SELECT,
 };
 
-const REACTION_EDGE_COLOR: Record<EdgeState, string> = {
-  default:  '#a855f7',
-  hovered:  '#9333ea',
-  selected: '#7e22ce',
-};
-
-function reactionArrowSvg(color: string): React.ReactNode {
-  return <path d="M 0 0 L 12 6 L 0 12 z" fill={color} />;
-}
-
 const EDGE_WIDTH: Record<EdgeState, number> = {
   default: 1.5,
   hovered: 2.5,
@@ -307,89 +289,6 @@ function directionMarkerAnchor(
   return anchor;
 }
 
-type ReactionPortSide = 'left' | 'right';
-
-interface ReactionDragState {
-  sourceClassId: string;
-  sourceSide: ReactionPortSide;
-  startX: number;
-  startY: number;
-  cursorX: number;
-  cursorY: number;
-}
-
-function getReactionPortPosition(
-  cls: CLS,
-  offsetX: number,
-  offsetY: number,
-  side: ReactionPortSide,
-): { x: number; y: number } {
-  const h = boxH(cls);
-  return {
-    x: side === 'left' ? cls.x + offsetX : cls.x + offsetX + BW,
-    y: cls.y + offsetY + h / 2,
-  };
-}
-
-interface ReactionClassContext {
-  modelId: number;
-  modelName: string;
-  modelUrl: string;
-  className: string;
-}
-
-function parseAdditionalModelId(classId: string): number | null {
-  const match = /^addl-(\d+)-/.exec(classId);
-  return match ? Number(match[1]) : null;
-}
-
-function resolveReactionClassContext(
-  classId: string,
-  className: string,
-  primaryEcore: string,
-  primaryName: string,
-  primaryModelId: number,
-  reactionModels: ReactionsModel[],
-): ReactionClassContext {
-  const additionalModelId = parseAdditionalModelId(classId);
-  if (additionalModelId != null) {
-    const model = reactionModels.find(m => m.id === additionalModelId);
-    if (model) {
-      return {
-        modelId: model.id,
-        modelName: model.name,
-        modelUrl: extractNsUriFromEcore(model.ecoreContent) ?? `http://vitruv.tools/${model.name}`,
-        className,
-      };
-    }
-  }
-
-  const primaryModel = reactionModels.find(m => m.name === primaryName) ?? reactionModels[0];
-  return {
-    modelId: primaryModel?.id ?? primaryModelId,
-    modelName: primaryName,
-    modelUrl: extractNsUriFromEcore(primaryEcore) ?? `http://vitruv.tools/${primaryName}`,
-    className,
-  };
-}
-
-function buildDefaultReactionConfig(
-  source: ReactionClassContext,
-  target: ReactionClassContext,
-): ReactionConfig {
-  return {
-    bidirectional: false,
-    reactionName: `${source.className}_${target.className}`,
-    model1Url: source.modelUrl,
-    model2Url: target.modelUrl,
-    model1Alias: source.modelName,
-    model2Alias: target.modelName,
-    model1RootType: source.className,
-    model2RootType: target.className,
-    model1RootVal: source.className,
-  };
-}
-
 function getRelEndpoints(
   rel: DiagramRel,
   classes: CLS[],
@@ -439,13 +338,12 @@ interface RelationLineProps {
   drawP2: { x: number; y: number };
   bridges: LineBridge[];
   state: EdgeState;
-  reactionEdge?: ReactionEdge;
 }
 
 const RelationLine: React.FC<RelationLineProps> = ({
-  rel, p1, p2, drawP1, drawP2, bridges, state, reactionEdge,
+  rel, p1, p2, drawP1, drawP2, bridges, state,
 }) => {
-  const strokeColor = reactionEdge ? REACTION_EDGE_COLOR[state] : EDGE_COLOR[state];
+  const strokeColor = EDGE_COLOR[state];
   const strokeWidth = EDGE_WIDTH[state];
   const haloPath = bridgedLinePathD(drawP1, drawP2, bridges);
   const mx = (p1.x + p2.x) / 2;
@@ -512,14 +410,13 @@ interface RelationDirectionMarkerProps {
   lineStart: { x: number; y: number };
   lineEnd: { x: number; y: number };
   color: string;
-  reactionEdge?: ReactionEdge;
   onRelClick: (e: React.MouseEvent) => void;
   onMouseEnter: () => void;
   onMouseLeave: () => void;
 }
 
 const RelationDirectionMarker: React.FC<RelationDirectionMarkerProps> = ({
-  rel, lineStart, lineEnd, color, reactionEdge, onRelClick, onMouseEnter, onMouseLeave,
+  rel, lineStart, lineEnd, color, onRelClick, onMouseEnter, onMouseLeave,
 }) => {
   const dx = lineEnd.x - lineStart.x;
   const dy = lineEnd.y - lineStart.y;
@@ -533,8 +430,8 @@ const RelationDirectionMarker: React.FC<RelationDirectionMarkerProps> = ({
   ) => {
     const lineAnchor = side === 'start' ? lineStart : lineEnd;
     const { x, y } = directionMarkerAnchor(lineAnchor);
-    const markerSize = reactionEdge ? 18 : directionMarkerSize(rel.type);
-    const viewBox = reactionEdge ? '0 0 12 12' : directionMarkerViewBox(rel.type);
+    const markerSize = directionMarkerSize(rel.type);
+    const viewBox = directionMarkerViewBox(rel.type);
 
     return (
       <button
@@ -572,22 +469,6 @@ const RelationDirectionMarker: React.FC<RelationDirectionMarkerProps> = ({
     );
   };
 
-  if (reactionEdge) {
-    const arrow = reactionArrowSvg(color);
-    const markers = reactionEdge.config.bidirectional
-      ? [
-          { side: 'start' as const, rotation: baseRotation + 180, key: 'start' },
-          { side: 'end' as const, rotation: baseRotation, key: 'end' },
-        ]
-      : [{ side: 'end' as const, rotation: baseRotation, key: 'end' }];
-
-    return (
-      <>
-        {markers.map(marker => renderMarker(marker.side, arrow, marker.rotation, `${rel.id}-${marker.key}`))}
-      </>
-    );
-  }
-
   const side = getDirectionMarkerSide(rel.type);
   const graphic = directionMarkerSvg(rel.type, color);
   if (!side || !graphic) return null;
@@ -603,10 +484,7 @@ function isEmptyCanvasTarget(target: HTMLElement): boolean {
     && !target.closest('[data-rel-edit-panel]')
     && !target.closest('[data-class-edit-panel]')
     && !target.closest('[data-uml-connect-banner]')
-    && !target.closest('[data-uml-validation]')
-    && !target.closest('[data-wrapper-header]')
-    && !target.closest('[data-reaction-port]')
-    && !target.closest('[data-reaction-edit-panel]');
+    && !target.closest('[data-uml-validation]');
 }
 
 type EditState =
@@ -833,31 +711,6 @@ function updateClassOperation(
   );
 }
 
-function mergeAdditionalClassesWithPositions(prev: CLS[], newCls: CLS[]): CLS[] {
-  return newCls.map(nc => {
-    const existing = prev.find(p => p.id === nc.id);
-    return existing ? { ...nc, x: existing.x, y: existing.y } : nc;
-  });
-}
-
-function applyWrapperDragToClass(
-  c: CLS,
-  origins: Map<string, { x: number; y: number }>,
-  dx: number,
-  dy: number,
-): CLS {
-  const orig = origins.get(c.id);
-  if (!orig) return c;
-  return { ...c, x: orig.x + dx, y: orig.y + dy };
-}
-
-function getReactionPortTargetClassId(hit: HTMLElement | null, sourceClassId: string): string | null {
-  const port = hit?.closest('[data-reaction-port]') as HTMLElement | null;
-  const targetClassId = port?.dataset.classId;
-  if (!targetClassId || targetClassId === sourceClassId) return null;
-  return targetClassId;
-}
-
 // ── UMLDiagram ────────────────────────────────────────────────────────────────
 
 export interface UMLDiagramHandle {
@@ -886,16 +739,6 @@ interface UMLDiagramProps {
   /** When set, enables persisting semantic UML edits back to the metamodel ecore file. */
   saveContext?: UmlDiagramSaveContext;
   onHistoryChange?: (state: { canUndo: boolean; canRedo: boolean }) => void;
-  /** Additional models to render in the same canvas with colored wrapper groups. */
-  additionalModels?: { id: number; name: string; ecoreContent: string; color: string; fill: string }[];
-  /** Called when the user removes an added (non-primary) meta model from the view. */
-  onRemoveAdditionalModel?: (modelName: string) => void;
-  /** When 'reactions', elements show connection indicators. */
-  reactionsMode?: 'uml' | 'reactions';
-  /** Models available in the reactions view for resolving URLs and aliases. */
-  reactionModels?: ReactionsModel[];
-  /** VSUM project id for Reaction Editor LSP connection. */
-  vsumId?: string;
 }
 
 const REL_TYPE_CYCLE: UMLRelType[] = ['association', 'composition', 'inheritance'];
@@ -973,36 +816,20 @@ function getSaveButtonTitle(hasUnsavedChanges: boolean, saveContext: UmlDiagramS
   return 'Save metamodel changes';
 }
 
-function classesShareModel(
-  classIdA: string,
-  classIdB: string,
-  classModelMap: Map<string, { name: string; color: string; fill: string }>,
-): boolean {
-  const modelA = classModelMap.get(classIdA)?.name;
-  const modelB = classModelMap.get(classIdB)?.name;
-  if (!modelA || !modelB) return false;
-  return modelA === modelB;
-}
-
-function getConnectModeHint(connectSourceId: string | null, multiModel: boolean): string {
+function getConnectModeHint(connectSourceId: string | null): string {
   if (connectSourceId) {
-    return multiModel
-      ? 'Click a target class in the same model'
-      : 'Click the target class to create a connection';
+    return 'Click the target class to create a connection';
   }
-  return multiModel
-    ? 'Click the source class, then another class in the same model'
-    : 'Click the source class, then the target class';
+  return 'Click the source class, then the target class';
 }
 
 function getValidationBannerInset(
   selectedClass: CLS | null | undefined,
   selectedRel: UMLRelationship | null | undefined,
-  reactionPanelOpen = false,
 ): { left: number; right: number } {
   return {
     left: selectedClass ? 288 : 12,
-    right: (selectedRel || reactionPanelOpen) ? 320 : 12,
+    right: selectedRel ? 320 : 12,
   };
 }
 
@@ -1068,11 +895,6 @@ export const UMLDiagram = forwardRef<UMLDiagramHandle, UMLDiagramProps>(({
   interactive = true,
   saveContext,
   onHistoryChange,
-  additionalModels = [],
-  onRemoveAdditionalModel,
-  reactionsMode = 'uml',
-  reactionModels = [],
-  vsumId,
 }, ref) => {
   const parsed = useMemo(() => {
     const model = ecoreToUml(ecoreContent);
@@ -1092,103 +914,10 @@ export const UMLDiagram = forwardRef<UMLDiagramHandle, UMLDiagramProps>(({
   const initialSnapshotRef = useRef('');
   const skipNextEcoreResetRef = useRef(false);
 
-  // Additional models: parse and track classes per model group
-  const additionalParsed = useMemo(() => {
-    return additionalModels.map((m, i) => {
-      try {
-        const model = ecoreToUml(m.ecoreContent);
-        return {
-          ...m,
-          classes: model.classes.map(c => ({
-            ...c,
-            operations: c.operations ?? [],
-            id: `addl-${m.id}-${c.id}`,
-            x: c.x + (i + 1) * 450,
-            y: c.y,
-          })),
-          relationships: model.relationships.map(r => ({
-            ...r,
-            id: `addl-${m.id}-${r.id}`,
-            sourceId: `addl-${m.id}-${r.sourceId}`,
-            targetId: `addl-${m.id}-${r.targetId}`,
-          })),
-        };
-      } catch { return { ...m, classes: [] as CLS[], relationships: [] as UMLRelationship[] }; }
-    });
-  }, [additionalModels]);
-
-  const [additionalClasses, setAdditionalClasses] = useState<CLS[]>(() =>
-    additionalParsed.flatMap(m => m.classes)
-  );
-  const [additionalRels, setAdditionalRels] = useState<UMLRelationship[]>(() =>
-    additionalParsed.flatMap(m => m.relationships)
-  );
-
-  useEffect(() => {
-    const newCls = additionalParsed.flatMap(m => m.classes);
-    setAdditionalClasses(prev => mergeAdditionalClassesWithPositions(prev, newCls));
-    setAdditionalRels(additionalParsed.flatMap(m => m.relationships));
-  }, [additionalParsed]);
-
-  // Map classId -> model color info for wrapper rendering
-  const classModelMap = useMemo(() => {
-    const map = new Map<string, { name: string; color: string; fill: string }>();
-    // Primary model classes
-    for (const cls of classes) {
-      if (additionalModels.length > 0) {
-        map.set(cls.id, { name: fileName?.replace(/\.ecore$/, '') || 'Primary', color: '#2563eb', fill: 'rgba(37,99,235,0.06)' });
-      }
-    }
-    // Additional model classes
-    for (const m of additionalParsed) {
-      for (const cls of m.classes) {
-        map.set(cls.id, { name: m.name, color: m.color, fill: m.fill });
-      }
-    }
-    return map;
-  }, [classes, additionalParsed, additionalModels.length, fileName]);
-
-  // Combined classes and relationships for rendering
-  const allClasses = useMemo(() => [...classes, ...additionalClasses], [classes, additionalClasses]);
-  const allRels = useMemo(() => [...relationships, ...additionalRels], [relationships, additionalRels]);
-
   const rels = useMemo(
-    () => assignParallelRelMeta(allRels) as DiagramRel[],
-    [allRels],
+    () => assignParallelRelMeta(relationships) as DiagramRel[],
+    [relationships],
   );
-
-  const modelGroups = useMemo(() => {
-    if (additionalModels.length === 0) return [];
-    return computeUmlModelGroups(allClasses, classModelMap, boxH, BW);
-  }, [additionalModels.length, allClasses, classModelMap]);
-
-  const removableModelNames = useMemo(
-    () => new Set(additionalModels.map(m => m.name)),
-    [additionalModels],
-  );
-
-  const additionalClassIdKey = useMemo(
-    () => additionalClasses.map(c => c.id).sort((a, b) => a.localeCompare(b)).join(','),
-    [additionalClasses],
-  );
-
-  useEffect(() => {
-    const validIds = new Set([
-      ...classes.map(c => c.id),
-      ...additionalClasses.map(c => c.id),
-    ]);
-    setReactionEdges(prev => {
-      const next = prev.filter(e => validIds.has(e.sourceClassId) && validIds.has(e.targetClassId));
-      return next.length === prev.length ? prev : next;
-    });
-    setRelationships(prev => {
-      const next = prev.filter(r => validIds.has(r.sourceId) && validIds.has(r.targetId));
-      return next.length === prev.length ? prev : next;
-    });
-    setSelectedRelId(prev => (prev && validIds.has(prev) ? prev : null));
-    setEditingReactionId(prev => (prev && validIds.has(prev) ? prev : null));
-  // eslint-disable-next-line react-hooks/exhaustive-deps -- prune only when added models change
-  }, [additionalClassIdKey]);
   const [edit, setEdit] = useState<EditState | null>(null);
   const editRef = useRef<EditState | null>(null);
   editRef.current = edit;
@@ -1197,16 +926,11 @@ export const UMLDiagram = forwardRef<UMLDiagramHandle, UMLDiagramProps>(({
   const [hoveredRelId, setHoveredRelId] = useState<string | null>(null);
   const [connectMode, setConnectMode] = useState(false);
   const [connectSourceId, setConnectSourceId] = useState<string | null>(null);
-  const [reactionDrag, setReactionDrag] = useState<ReactionDragState | null>(null);
-  const [reactionEdges, setReactionEdges] = useState<ReactionEdge[]>([]);
-  const [editingReactionId, setEditingReactionId] = useState<string | null>(null);
-  const [reactionEditorState, setReactionEditorState] = useState<CodeEditorState | null>(null);
   const classesRef = useRef(classes);
   classesRef.current = classes;
   const relationshipsRef = useRef(relationships);
   relationshipsRef.current = relationships;
   const dragHistorySavedRef = useRef(false);
-  const reactionDragActiveRef = useRef(false);
 
   const {
     canUndo: historyCanUndo,
@@ -1394,13 +1118,13 @@ export const UMLDiagram = forwardRef<UMLDiagramHandle, UMLDiagramProps>(({
   }, [classes.length, fileName, layoutScopeId]);
 
   const layout = useMemo(() => {
-    if (!layoutOffsetRef.current && allClasses.length > 0) {
-      const initial = getLayoutMetrics(allClasses);
+    if (!layoutOffsetRef.current && classes.length > 0) {
+      const initial = getLayoutMetrics(classes);
       layoutOffsetRef.current = { offsetX: initial.offsetX, offsetY: initial.offsetY };
       return initial;
     }
-    return getLayoutMetrics(allClasses, layoutOffsetRef.current);
-  }, [allClasses]);
+    return getLayoutMetrics(classes, layoutOffsetRef.current);
+  }, [classes]);
   const { totalW, totalH, offsetX, offsetY } = layout;
   const containerRef = useRef<HTMLElement>(null);
 
@@ -1467,53 +1191,6 @@ export const UMLDiagram = forwardRef<UMLDiagramHandle, UMLDiagramProps>(({
     scheduleLayoutSave();
   }, [scheduleLayoutSave]);
 
-  const moveAdditionalClass = useCallback((id: string, x: number, y: number) => {
-    setAdditionalClasses(prev => prev.map(c => (c.id === id ? { ...c, x, y } : c)));
-  }, []);
-
-  const wrapperDragOrigins = useRef<Map<string, { x: number; y: number }>>(new Map());
-
-  const handleWrapperDragStart = useCallback((e: React.MouseEvent, groupName: string) => {
-    e.stopPropagation();
-    e.preventDefault();
-    const startX = e.clientX;
-    const startY = e.clientY;
-    const primaryName = fileName?.replace(/\.ecore$/, '') || 'Primary';
-
-    const origins = new Map<string, { x: number; y: number }>();
-    const allCurrent = primaryName === groupName ? classes : additionalClasses;
-    for (const c of allCurrent) {
-      const info = classModelMap.get(c.id);
-      if (info?.name === groupName) {
-        origins.set(c.id, { x: c.x, y: c.y });
-      }
-    }
-    wrapperDragOrigins.current = origins;
-
-    const onMove = (ev: MouseEvent) => {
-      const dx = (ev.clientX - startX) / vscale;
-      const dy = (ev.clientY - startY) / vscale;
-      const origins = wrapperDragOrigins.current;
-      const applyDrag = (c: CLS) => applyWrapperDragToClass(c, origins, dx, dy);
-
-      if (groupName === primaryName) {
-        setClasses(prev => prev.map(applyDrag));
-      } else {
-        setAdditionalClasses(prev => prev.map(applyDrag));
-      }
-    };
-
-    const onUp = () => {
-      wrapperDragOrigins.current.clear();
-      scheduleDebouncedLayoutSave();
-      globalThis.removeEventListener('mousemove', onMove);
-      globalThis.removeEventListener('mouseup', onUp);
-    };
-
-    globalThis.addEventListener('mousemove', onMove);
-    globalThis.addEventListener('mouseup', onUp);
-  }, [vscale, fileName, classes, additionalClasses, classModelMap, scheduleDebouncedLayoutSave]);
-
   const saveName = useCallback((oldId: string, name: string) => {
     const trimmed = name.trim();
     if (!trimmed) {
@@ -1576,7 +1253,6 @@ export const UMLDiagram = forwardRef<UMLDiagramHandle, UMLDiagramProps>(({
 
   const handlePanStart = useCallback((e: MouseEvent) => {
     flushPendingEdit();
-    if (reactionDragActiveRef.current) return;
     if (!isEmptyCanvasTarget(e.target as HTMLElement)) return;
     e.preventDefault();
     setPanning(true);
@@ -1696,9 +1372,6 @@ export const UMLDiagram = forwardRef<UMLDiagramHandle, UMLDiagramProps>(({
 
   const addRelationship = useCallback((sourceId: string, targetId: string) => {
     if (sourceId === targetId) return false;
-    if (additionalModels.length > 0 && !classesShareModel(sourceId, targetId, classModelMap)) {
-      return false;
-    }
     const exists = relationshipsRef.current.some(
       r => r.sourceId === sourceId && r.targetId === targetId && r.type === 'association',
     );
@@ -1715,216 +1388,7 @@ export const UMLDiagram = forwardRef<UMLDiagramHandle, UMLDiagramProps>(({
     }]);
     setSelectedRelId(newRelId);
     return true;
-  }, [recordChange, additionalModels.length, classModelMap]);
-
-  const primaryModelName = fileName?.replace(/\.ecore$/, '') || 'Primary';
-  const primaryModelId = reactionModels[0]?.id ?? 0;
-
-  const addReactionConnection = useCallback((sourceClassId: string, targetClassId: string) => {
-    if (sourceClassId === targetClassId) return;
-
-    const sourceClass = allClasses.find(c => c.id === sourceClassId);
-    const targetClass = allClasses.find(c => c.id === targetClassId);
-    if (!sourceClass || !targetClass) return;
-
-    const exists = relationshipsRef.current.some(
-      r => r.sourceId === sourceClassId && r.targetId === targetClassId,
-    );
-    if (exists) {
-      const existing = reactionEdges.find(
-        e => e.sourceClassId === sourceClassId && e.targetClassId === targetClassId,
-      );
-      if (existing) {
-        setEditingReactionId(existing.id);
-        setSelectedRelId(existing.id);
-      }
-      return;
-    }
-
-    recordChange();
-    const newRelId = `reaction-${Date.now()}`;
-    const sourceCtx = resolveReactionClassContext(
-      sourceClassId,
-      sourceClass.name,
-      ecoreContent,
-      primaryModelName,
-      primaryModelId,
-      reactionModels,
-    );
-    const targetCtx = resolveReactionClassContext(
-      targetClassId,
-      targetClass.name,
-      ecoreContent,
-      primaryModelName,
-      primaryModelId,
-      reactionModels,
-    );
-
-    const reactionEdge: ReactionEdge = {
-      id: newRelId,
-      sourceModelId: sourceCtx.modelId,
-      sourceClassId,
-      sourceClassName: sourceClass.name,
-      targetModelId: targetCtx.modelId,
-      targetClassId,
-      targetClassName: targetClass.name,
-      config: buildDefaultReactionConfig(sourceCtx, targetCtx),
-    };
-
-    setRelationships(prev => [...prev, {
-      id: newRelId,
-      sourceId: sourceClassId,
-      targetId: targetClassId,
-      type: 'association',
-      label: reactionEdge.config.reactionName,
-    }]);
-    setReactionEdges(prev => [...prev, reactionEdge]);
-    setSelectedRelId(newRelId);
-    setEditingReactionId(newRelId);
-    setSelectedClassId(null);
-  }, [
-    allClasses,
-    reactionEdges,
-    recordChange,
-    ecoreContent,
-    primaryModelName,
-    primaryModelId,
-    reactionModels,
-  ]);
-
-  const updateReactionConfig = useCallback((reactionId: string, config: ReactionConfig) => {
-    setReactionEdges(prev => prev.map(edge =>
-      edge.id === reactionId ? { ...edge, config } : edge,
-    ));
-    setRelationships(prev => prev.map(rel =>
-      rel.id === reactionId ? { ...rel, label: config.reactionName } : rel,
-    ));
-  }, []);
-
-  const deleteReaction = useCallback((reactionId: string) => {
-    recordChange();
-    setReactionEdges(prev => prev.filter(edge => edge.id !== reactionId));
-    setRelationships(prev => prev.filter(rel => rel.id !== reactionId));
-    if (editingReactionId === reactionId) setEditingReactionId(null);
-    if (selectedRelId === reactionId) setSelectedRelId(null);
-    if (reactionEditorState?.edgeId === reactionId) setReactionEditorState(null);
-  }, [recordChange, editingReactionId, selectedRelId, reactionEditorState?.edgeId]);
-
-  const openReactionEditor = useCallback(async (reactionId: string) => {
-    const edge = reactionEdges.find(e => e.id === reactionId);
-    if (!edge) return;
-
-    const initialCode = await fetchReactionCode(
-      edge.code,
-      edge.reactionFileId,
-      () => buildInitialReactionCodeFromConfig(edge.config),
-    );
-
-    setReactionEditorState({
-      isOpen: true,
-      edgeId: reactionId,
-      initialCode,
-      sourceFileName: edge.config.model1Alias,
-      targetFileName: edge.config.model2Alias,
-      reactionFileId: edge.reactionFileId ?? null,
-    });
-    setSelectedRelId(reactionId);
-    setSelectedClassId(null);
-  }, [reactionEdges]);
-
-  const handleCloseReactionEditor = useCallback(() => {
-    setReactionEditorState(null);
-  }, []);
-
-  const handleSaveReactionCode = useCallback(async (code: string) => {
-    if (!reactionEditorState?.edgeId) return;
-    const reactionId = reactionEditorState.edgeId;
-    try {
-      const reactionFileId = await persistReactionCode(code, reactionEditorState.reactionFileId);
-      setReactionEdges(prev => prev.map(edge =>
-        edge.id === reactionId ? { ...edge, code, reactionFileId } : edge,
-      ));
-      setReactionEditorState(prev =>
-        prev ? { ...prev, reactionFileId } : prev,
-      );
-    } catch (err) {
-      console.error('Failed to save reaction file', err);
-      throw err;
-    }
-  }, [reactionEditorState]);
-
-  const handleDeleteReactionFromEditor = useCallback(() => {
-    if (reactionEditorState?.edgeId) {
-      deleteReaction(reactionEditorState.edgeId);
-    }
-  }, [reactionEditorState, deleteReaction]);
-
-  const clientToDiagram = useCallback((clientX: number, clientY: number) => {
-    const el = containerRef.current;
-    if (!el) return { x: 0, y: 0 };
-    const rect = el.getBoundingClientRect();
-    const { x: viewX, y: viewY, scale } = viewRef.current;
-    return {
-      x: (clientX - rect.left - viewX) / scale,
-      y: (clientY - rect.top - viewY) / scale,
-    };
-  }, []);
-
-  const handleReactionPortMouseDown = useCallback((
-    e: React.MouseEvent,
-    classId: string,
-    side: ReactionPortSide,
-  ) => {
-    if (!interactive || reactionsMode !== 'reactions') return;
-    e.stopPropagation();
-    e.preventDefault();
-    reactionDragActiveRef.current = true;
-
-    const cls = allClasses.find(c => c.id === classId);
-    if (!cls) return;
-
-    const { x: startX, y: startY } = getReactionPortPosition(cls, offsetX, offsetY, side);
-    const cursor = clientToDiagram(e.clientX, e.clientY);
-    setReactionDrag({
-      sourceClassId: classId,
-      sourceSide: side,
-      startX,
-      startY,
-      cursorX: cursor.x,
-      cursorY: cursor.y,
-    });
-
-    const onMove = (ev: MouseEvent) => {
-      ev.preventDefault();
-      const next = clientToDiagram(ev.clientX, ev.clientY);
-      setReactionDrag(prev => prev ? { ...prev, cursorX: next.x, cursorY: next.y } : null);
-    };
-
-    const onUp = (ev: MouseEvent) => {
-      reactionDragActiveRef.current = false;
-      const targetClassId = getReactionPortTargetClassId(
-        document.elementFromPoint(ev.clientX, ev.clientY) as HTMLElement | null,
-        classId,
-      );
-      if (targetClassId) {
-        addReactionConnection(classId, targetClassId);
-      }
-      setReactionDrag(null);
-      globalThis.removeEventListener('mousemove', onMove);
-      globalThis.removeEventListener('mouseup', onUp);
-    };
-
-    globalThis.addEventListener('mousemove', onMove);
-    globalThis.addEventListener('mouseup', onUp);
-  }, [
-    interactive,
-    reactionsMode,
-    allClasses,
-    offsetX,
-    offsetY,
-    clientToDiagram,
-    addReactionConnection,
-  ]);
+  }, [recordChange]);
 
   const deleteRelationship = useCallback((relId: string) => {
     recordChange();
@@ -1945,15 +1409,6 @@ export const UMLDiagram = forwardRef<UMLDiagramHandle, UMLDiagramProps>(({
   }, [recordChange]);
 
   const tryEscape = useCallback(() => {
-    if (reactionDrag) {
-      reactionDragActiveRef.current = false;
-      setReactionDrag(null);
-      return true;
-    }
-    if (editingReactionId) {
-      setEditingReactionId(null);
-      return true;
-    }
     if (connectMode) {
       setConnectMode(false);
       setConnectSourceId(null);
@@ -1976,38 +1431,15 @@ export const UMLDiagram = forwardRef<UMLDiagramHandle, UMLDiagramProps>(({
       return true;
     }
     return false;
-  }, [reactionDrag, editingReactionId, connectMode, connectSourceId, edit, selectedRelId, selectedClassId, dismissClassSelection]);
-
-  useEffect(() => {
-    if (reactionsMode === 'reactions') {
-      reactionDragActiveRef.current = false;
-      setReactionDrag(null);
-      setEditingReactionId(null);
-      setConnectMode(false);
-      setConnectSourceId(null);
-    }
-  }, [reactionsMode]);
+  }, [connectMode, connectSourceId, edit, selectedRelId, selectedClassId, dismissClassSelection]);
 
   const handleRelationshipClick = useCallback((relId: string, e: React.MouseEvent) => {
     e.stopPropagation();
-    const isReactionEdge = reactionEdges.some(edge => edge.id === relId);
-    if (reactionsMode === 'reactions' && isReactionEdge) {
-      if (e.detail >= 2) {
-        setEditingReactionId(null);
-        void openReactionEditor(relId);
-        return;
-      }
-      setEditingReactionId(relId);
-      setSelectedRelId(relId);
-      setSelectedClassId(null);
-      return;
-    }
-    if (e.detail >= 2 && interactive && reactionsMode !== 'reactions') {
+    if (e.detail >= 2 && interactive) {
       cycleRelationshipType(relId);
     }
-    setEditingReactionId(null);
     setSelectedRelId(relId);
-  }, [interactive, reactionsMode, reactionEdges, cycleRelationshipType, openReactionEditor]);
+  }, [interactive, cycleRelationshipType]);
 
   const isDirty = useCallback(() => {
     return umlSemanticSnapshot(getModel()) !== initialSnapshotRef.current;
@@ -2055,14 +1487,14 @@ export const UMLDiagram = forwardRef<UMLDiagramHandle, UMLDiagramProps>(({
       zoomOut: () => applyZoom(1 / 1.3),
       fitToView: () => {
         const el = containerRef.current;
-        if (!el || allClasses.length === 0) return;
+        if (!el || classes.length === 0) return;
         const PAD = 48;
-        // True bounding box over every currently visible class (primary + additional
-        // models) — not the outlier-excluding "dense cluster" heuristic from
-        // computeUmlFocusRect. That heuristic is meant only for the very first
-        // auto-fit on open; reusing it here meant a class dragged away from the
-        // rest got excluded, so Fit View re-centered on its old, now-empty
-        // neighborhood instead of the current layout.
+        // True bounding box over every currently visible class — not the
+        // outlier-excluding "dense cluster" heuristic from computeUmlFocusRect.
+        // That heuristic is meant only for the very first auto-fit on open;
+        // reusing it here meant a class dragged away from the rest got excluded,
+        // so Fit View re-centered on its old, now-empty neighborhood instead of
+        // the current layout.
         const focus = {
           minX: layout.minX - PAD,
           minY: layout.minY - PAD,
@@ -2117,12 +1549,12 @@ export const UMLDiagram = forwardRef<UMLDiagramHandle, UMLDiagramProps>(({
     };
     diagramRef.current = handle;
     return handle;
-  }, [applyZoom, allClasses, layout, offsetX, offsetY, fileName, layoutScopeId, persistLayout, scheduleLayoutSave, getModel, isDirty, handleSave, resetFromEcore, tryEscape, handleUndo, handleRedo, historyCanUndo, historyCanRedo]);
+  }, [applyZoom, classes, layout, offsetX, offsetY, fileName, layoutScopeId, persistLayout, scheduleLayoutSave, getModel, isDirty, handleSave, resetFromEcore, tryEscape, handleUndo, handleRedo, historyCanUndo, historyCanRedo]);
 
   const handleClassSelect = useCallback((classId: string) => {
     if (!interactive) return;
     flushPendingEdit();
-    if (connectMode && reactionsMode !== 'reactions') {
+    if (connectMode) {
       if (!connectSourceId) {
         setConnectSourceId(classId);
         setSelectedClassId(classId);
@@ -2140,9 +1572,8 @@ export const UMLDiagram = forwardRef<UMLDiagramHandle, UMLDiagramProps>(({
       setSelectedClassId(classId);
       return;
     }
-    setEditingReactionId(null);
     setSelectedClassId(classId);
-  }, [interactive, connectMode, reactionsMode, connectSourceId, addRelationship, flushPendingEdit]);
+  }, [interactive, connectMode, connectSourceId, addRelationship, flushPendingEdit]);
 
   const updateClass = useCallback((classId: string, patch: Partial<Pick<CLS, 'name' | 'isAbstract' | 'isInterface'>>) => {
     recordChange();
@@ -2174,14 +1605,6 @@ export const UMLDiagram = forwardRef<UMLDiagramHandle, UMLDiagramProps>(({
   }, [recordChange]);
 
   const handleDeleteSelected = useCallback(() => {
-    if (editingReactionId) {
-      deleteReaction(editingReactionId);
-      return;
-    }
-    if (selectedRelId && reactionEdges.some(edge => edge.id === selectedRelId)) {
-      deleteReaction(selectedRelId);
-      return;
-    }
     if (selectedRelId) {
       deleteRelationship(selectedRelId);
       return;
@@ -2189,7 +1612,7 @@ export const UMLDiagram = forwardRef<UMLDiagramHandle, UMLDiagramProps>(({
     if (selectedClassId) {
       deleteClass(selectedClassId);
     }
-  }, [editingReactionId, selectedRelId, selectedClassId, reactionEdges, deleteReaction, deleteRelationship, deleteClass]);
+  }, [selectedRelId, selectedClassId, deleteRelationship, deleteClass]);
 
   useEffect(() => {
     if (!interactive) return;
@@ -2206,7 +1629,7 @@ export const UMLDiagram = forwardRef<UMLDiagramHandle, UMLDiagramProps>(({
 
   const edgeLayouts = useMemo(() => {
     const raw = rels.flatMap(rel => {
-      const endpoints = getRelEndpoints(rel, allClasses, offsetX, offsetY);
+      const endpoints = getRelEndpoints(rel, classes, offsetX, offsetY);
       if (!endpoints) return [];
       const { drawP1, drawP2 } = insetLineEndpoints(endpoints.p1, endpoints.p2);
       return [{ rel, p1: endpoints.p1, p2: endpoints.p2, drawP1, drawP2 }];
@@ -2222,14 +1645,12 @@ export const UMLDiagram = forwardRef<UMLDiagramHandle, UMLDiagramProps>(({
       ...r,
       bridges: bridges.get(r.rel.id) ?? [],
     }));
-  }, [rels, allClasses, offsetX, offsetY]);
+  }, [rels, classes, offsetX, offsetY]);
 
   const multiplicityBadges = useMemo(() => {
-    const reactionRelIds = new Set(reactionEdges.map(edge => edge.id));
     const raw: MultiplicityBadge[] = [];
     for (const layout of edgeLayouts) {
       const { rel, p1, p2 } = layout;
-      if (reactionRelIds.has(rel.id)) continue;
 
       const markerSide = getDirectionMarkerSide(rel.type);
 
@@ -2256,23 +1677,18 @@ export const UMLDiagram = forwardRef<UMLDiagramHandle, UMLDiagramProps>(({
         });
       }
     }
-    const obstacles = buildClassObstacleRects(allClasses, offsetX, offsetY);
+    const obstacles = buildClassObstacleRects(classes, offsetX, offsetY);
     return resolveMultiplicityBadgeCollisions(
       optimizeMultiplicityBadges(raw, MULT_ALONG_OFFSET, MULT_PERP_OFFSET),
       obstacles,
       MULT_BADGE_HALF_W,
       MULT_BADGE_HALF_H,
     );
-  }, [edgeLayouts, reactionEdges, allClasses, offsetX, offsetY]);
-
-  const reactionEdgeById = useMemo(
-    () => new Map(reactionEdges.map(edge => [edge.id, edge])),
-    [reactionEdges],
-  );
+  }, [edgeLayouts, classes, offsetX, offsetY]);
 
   const validationIssues = useMemo(
-    () => validateUmlModel({ classes, relationships }, allClasses),
-    [classes, relationships, allClasses],
+    () => validateUmlModel({ classes, relationships }),
+    [classes, relationships],
   );
 
   if (classes.length === 0) {
@@ -2281,17 +1697,9 @@ export const UMLDiagram = forwardRef<UMLDiagramHandle, UMLDiagramProps>(({
 
   const canDelete = !!(selectedRelId || selectedClassId);
   const selectedRel = selectedRelId ? relationships.find(r => r.id === selectedRelId) : null;
-  const editingReaction = editingReactionId
-    ? reactionEdges.find(edge => edge.id === editingReactionId) ?? null
-    : null;
-  const selectedRelIsReaction = !!(selectedRelId && reactionEdges.some(edge => edge.id === selectedRelId));
   const selectedClass = selectedClassId ? classes.find(c => c.id === selectedClassId) : null;
   const hasUnsavedChanges = isDirty();
-  const validationInset = getValidationBannerInset(
-    selectedClass,
-    selectedRel,
-    !!(editingReaction || (reactionsMode === 'reactions' && selectedRelIsReaction)),
-  );
+  const validationInset = getValidationBannerInset(selectedClass, selectedRel);
   const diagramCursor = getDiagramCursor(panning, connectMode);
   const saveButtonTitle = saveContext
     ? getSaveButtonTitle(hasUnsavedChanges, saveContext)
@@ -2309,9 +1717,6 @@ export const UMLDiagram = forwardRef<UMLDiagramHandle, UMLDiagramProps>(({
         userSelect: 'none',
       }}
     >
-    {reactionsMode === 'reactions' && (
-      <style>{`@keyframes reactionPulse{0%,100%{opacity:1}50%{opacity:0.6}}`}</style>
-    )}
     <div style={{
       position: 'absolute',
       transform: `translate(${vx}px, ${vy}px) scale(${vscale})`,
@@ -2332,7 +1737,6 @@ export const UMLDiagram = forwardRef<UMLDiagramHandle, UMLDiagramProps>(({
       >
         {edgeLayouts.map(layout => {
           const { rel, p1, p2, drawP1, drawP2, bridges } = layout;
-          const reactionEdge = reactionEdgeById.get(rel.id);
           const state = edgeState(selectedRelId === rel.id, hoveredRelId === rel.id);
 
           return (
@@ -2345,113 +1749,13 @@ export const UMLDiagram = forwardRef<UMLDiagramHandle, UMLDiagramProps>(({
               drawP2={drawP2}
               bridges={bridges}
               state={state}
-              reactionEdge={reactionEdge}
             />
           );
         })}
       </svg>
 
-      {/* Model group wrapper rects */}
-      {modelGroups.map(g => {
-        const sx = g.minX + offsetX;
-        const sy = g.minY + offsetY;
-        const canRemove = interactive && removableModelNames.has(g.name) && onRemoveAdditionalModel;
-        return (
-          <div
-            key={g.name}
-            style={{
-              position: 'absolute',
-              left: sx,
-              top: sy,
-              width: g.width,
-              height: g.height,
-              border: `2px solid ${g.color}`,
-              borderRadius: 10,
-              background: g.fill,
-              pointerEvents: 'none',
-              zIndex: 0,
-            }}
-          >
-            <div
-              data-wrapper-header
-              style={{
-                position: 'absolute',
-                top: 0,
-                left: 0,
-                right: 0,
-                height: 22,
-                background: g.color,
-                borderRadius: '8px 8px 0 0',
-                display: 'flex',
-                alignItems: 'center',
-                paddingLeft: 8,
-                paddingRight: canRemove ? 4 : 8,
-                fontSize: 11,
-                fontWeight: 700,
-                color: '#fff',
-                letterSpacing: 0.3,
-                pointerEvents: 'auto',
-              }}
-            >
-              <button
-                type="button"
-                onMouseDown={interactive ? (e) => handleWrapperDragStart(e, g.name) : undefined}
-                style={{
-                  flex: 1,
-                  minWidth: 0,
-                  height: '100%',
-                  background: 'transparent',
-                  border: 'none',
-                  padding: 0,
-                  display: 'flex',
-                  alignItems: 'center',
-                  fontSize: 11,
-                  fontWeight: 700,
-                  color: '#fff',
-                  letterSpacing: 0.3,
-                  cursor: interactive ? 'grab' : 'default',
-                  textAlign: 'left',
-                }}
-              >
-                {g.name}
-              </button>
-              {canRemove && (
-                <button
-                  type="button"
-                  title={`Remove ${g.name}`}
-                  aria-label={`Remove ${g.name}`}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onRemoveAdditionalModel?.(g.name);
-                  }}
-                  style={{
-                    width: 18,
-                    height: 18,
-                    border: 'none',
-                    borderRadius: 4,
-                    background: 'rgba(255,255,255,0.18)',
-                    color: '#fff',
-                    cursor: 'pointer',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    fontSize: 14,
-                    lineHeight: 1,
-                    flexShrink: 0,
-                  }}
-                >
-                  &times;
-                </button>
-              )}
-            </div>
-          </div>
-        );
-      })}
-
       {/* Class boxes */}
-      {allClasses.map(cls => {
-        const isAdditional = cls.id.startsWith('addl-');
-        return (
+      {classes.map(cls => (
         <ClassBox
           key={cls.id}
           cls={cls}
@@ -2462,20 +1766,18 @@ export const UMLDiagram = forwardRef<UMLDiagramHandle, UMLDiagramProps>(({
           connectSource={connectSourceId === cls.id}
           interactive={interactive}
           edit={edit?.classId === cls.id ? edit : null}
-          reactionsMode={reactionsMode === 'reactions'}
-          onReactionPortMouseDown={handleReactionPortMouseDown}
           onSelect={() => handleClassSelect(cls.id)}
           onDragStart={() => { dragHistorySavedRef.current = false; }}
-          onMove={isAdditional ? moveAdditionalClass : moveClass}
-          onDragEnd={isAdditional ? () => {} : finishClassDrag}
+          onMove={moveClass}
+          onDragEnd={finishClassDrag}
           onStartEditName={() => {
-            if (!interactive || isAdditional) return;
+            if (!interactive) return;
             flushPendingEdit();
             setEdit({ classId: cls.id, kind: 'name', val: cls.name });
           }}
           onSaveName={name => saveName(cls.id, name)}
           onStartEditAttr={attrId => {
-            if (!interactive || isAdditional) return;
+            if (!interactive) return;
             flushPendingEdit();
             const a = cls.attributes.find(x => x.id === attrId)!;
             setEdit({
@@ -2489,10 +1791,10 @@ export const UMLDiagram = forwardRef<UMLDiagramHandle, UMLDiagramProps>(({
           }}
           onSaveAttr={(attrId, n, t, v) => saveAttr(cls.id, attrId, n, t, v)}
           onCancelEdit={() => setEdit(null)}
-          onAddAttr={() => interactive && !isAdditional && addAttr(cls.id)}
+          onAddAttr={() => interactive && addAttr(cls.id)}
           onDeleteAttr={attrId => deleteAttr(cls.id, attrId)}
           onStartEditOp={opId => {
-            if (!interactive || isAdditional) return;
+            if (!interactive) return;
             flushPendingEdit();
             const o = cls.operations.find(x => x.id === opId)!;
             setEdit({
@@ -2505,47 +1807,12 @@ export const UMLDiagram = forwardRef<UMLDiagramHandle, UMLDiagramProps>(({
             });
           }}
           onSaveOp={(opId, n, rt, v) => saveOp(cls.id, opId, n, rt, v)}
-          onAddOp={() => interactive && !isAdditional && addOp(cls.id)}
+          onAddOp={() => interactive && addOp(cls.id)}
           onDeleteOp={opId => deleteOp(cls.id, opId)}
-          onDelete={() => !isAdditional && deleteClass(cls.id)}
+          onDelete={() => deleteClass(cls.id)}
           onEditChange={setEdit}
         />
-        );
-      })}
-
-      {reactionDrag && (
-        <svg
-          style={{
-            position: 'absolute',
-            top: 0,
-            left: 0,
-            width: totalW,
-            height: totalH,
-            overflow: 'visible',
-            zIndex: 8,
-            pointerEvents: 'none',
-          }}
-        >
-          <line
-            x1={reactionDrag.startX}
-            y1={reactionDrag.startY}
-            x2={reactionDrag.cursorX}
-            y2={reactionDrag.cursorY}
-            stroke="#a855f7"
-            strokeWidth={2.5}
-            strokeDasharray="8 5"
-            opacity={0.9}
-          />
-          <circle
-            cx={reactionDrag.cursorX}
-            cy={reactionDrag.cursorY}
-            r={5}
-            fill="#a855f7"
-            stroke="#fff"
-            strokeWidth={2}
-          />
-        </svg>
-      )}
+      ))}
 
       {/* Hit targets above class boxes — connections stay clickable */}
       <svg
@@ -2589,15 +1856,13 @@ export const UMLDiagram = forwardRef<UMLDiagramHandle, UMLDiagramProps>(({
       {/* Direction markers above class boxes */}
       {edgeLayouts.map(layout => {
         const { rel, p1, p2 } = layout;
-        const reactionEdge = reactionEdgeById.get(rel.id);
         const state = edgeState(selectedRelId === rel.id, hoveredRelId === rel.id);
-        const color = reactionEdge ? REACTION_EDGE_COLOR[state] : EDGE_COLOR[state];
+        const color = EDGE_COLOR[state];
 
         return (
           <RelationDirectionMarker
             key={`${rel.id}-direction`}
             rel={rel}
-            reactionEdge={reactionEdge}
             // Anchor at the true class-box edge (p1/p2), not the inset line endpoints
             // (drawP1/drawP2) used only for the line stroke -- otherwise the marker floats
             // in the gap left for it instead of touching the box it belongs to.
@@ -2636,36 +1901,7 @@ export const UMLDiagram = forwardRef<UMLDiagramHandle, UMLDiagramProps>(({
             lineHeight: 1.35,
           }}
         >
-          {getConnectModeHint(connectSourceId, additionalModels.length > 0)}
-        </div>
-      )}
-      {interactive && reactionsMode === 'reactions' && !connectMode && (
-        <div
-          data-uml-connect-banner
-          style={{
-            position: 'absolute',
-            top: DIAGRAM_HINT_TOP,
-            left: '50%',
-            transform: 'translateX(-50%)',
-            zIndex: 32,
-            padding: '6px 14px',
-            borderRadius: 10,
-            background: '#faf5ff',
-            border: '1px solid #e9d5ff',
-            color: '#6b21a8',
-            fontSize: 11,
-            fontWeight: 600,
-            fontFamily: UML.fontSans,
-            boxShadow: '0 4px 14px rgba(168,85,247,0.15)',
-            pointerEvents: 'none',
-            maxWidth: 'min(420px, calc(100vw - 320px))',
-            textAlign: 'center',
-            lineHeight: 1.35,
-          }}
-        >
-          {reactionDrag
-            ? 'Release on another class dot to create a reaction'
-            : 'Drag from a purple dot to connect classes across models'}
+          {getConnectModeHint(connectSourceId)}
         </div>
       )}
       {interactive && (
@@ -2708,19 +1944,17 @@ export const UMLDiagram = forwardRef<UMLDiagramHandle, UMLDiagramProps>(({
           >
             <IconRedo />
           </DiagramToolButton>
-          {reactionsMode !== 'reactions' && (
-            <DiagramToolButton
-              title={connectMode ? 'Cancel connect mode (Esc)' : 'Connect two classes in the same model'}
-              active={connectMode}
-              onClick={() => {
-                setConnectMode(v => !v);
-                setConnectSourceId(null);
-              }}
-              label="Connect"
-            >
-              <IconConnect />
-            </DiagramToolButton>
-          )}
+          <DiagramToolButton
+            title={connectMode ? 'Cancel connect mode (Esc)' : 'Connect two classes'}
+            active={connectMode}
+            onClick={() => {
+              setConnectMode(v => !v);
+              setConnectSourceId(null);
+            }}
+            label="Connect"
+          >
+            <IconConnect />
+          </DiagramToolButton>
           <DiagramToolButton
             title="Delete selected class or connection"
             active={false}
@@ -2789,27 +2023,10 @@ export const UMLDiagram = forwardRef<UMLDiagramHandle, UMLDiagramProps>(({
           onClose={() => setSelectedClassId(null)}
         />
       )}
-      {interactive && editingReaction && (
-        <ReactionConfigPopup
-          edge={editingReaction}
-          onUpdate={config => updateReactionConfig(editingReaction.id, config)}
-          onDelete={() => deleteReaction(editingReaction.id)}
-          onClose={() => setEditingReactionId(null)}
-        />
-      )}
-      {interactive && (
-        <ReactionEditorModal
-          state={reactionEditorState}
-          onClose={handleCloseReactionEditor}
-          onSave={handleSaveReactionCode}
-          onDelete={handleDeleteReactionFromEditor}
-          vsumId={vsumId}
-        />
-      )}
-      {interactive && selectedRel && !selectedRelIsReaction && reactionsMode !== 'reactions' && (
+      {interactive && selectedRel && (
         <RelationshipEditPanel
           rel={selectedRel}
-          classes={allClasses}
+          classes={classes}
           onUpdate={patch => updateRelationship(selectedRel.id, patch)}
           onClose={() => setSelectedRelId(null)}
           onSwapEndpoints={() => updateRelationship(selectedRel.id, {
@@ -2821,9 +2038,8 @@ export const UMLDiagram = forwardRef<UMLDiagramHandle, UMLDiagramProps>(({
         />
       )}
       <UMLDiagramMinimap
-        classes={allClasses}
+        classes={classes}
         relationships={rels}
-        modelGroups={modelGroups}
         offsetX={offsetX}
         offsetY={offsetY}
         vx={vx}
@@ -3109,7 +2325,7 @@ function startClassBoxDrag({
   onDragEnd: () => void;
 }): void {
   const target = e.target as HTMLElement;
-  if (target.closest('input, button, [data-no-drag], [data-reaction-port]')) return;
+  if (target.closest('input, button, [data-no-drag]')) return;
   e.stopPropagation();
   didDragRef.current = false;
   onDragStart();
@@ -3306,8 +2522,6 @@ interface ClassBoxProps {
   connectSource: boolean;
   interactive: boolean;
   edit: EditState | null;
-  reactionsMode: boolean;
-  onReactionPortMouseDown?: (e: React.MouseEvent, classId: string, side: ReactionPortSide) => void;
   onSelect: () => void;
   onMove: (id: string, x: number, y: number) => void;
   onDragStart: () => void;
@@ -3328,7 +2542,7 @@ interface ClassBoxProps {
 }
 
 const ClassBox: React.FC<ClassBoxProps> = ({
-  cls, offsetX, offsetY, scale, selected, connectSource, interactive, edit, reactionsMode, onReactionPortMouseDown, onSelect, onDragStart, onMove, onDragEnd, onStartEditName, onSaveName,
+  cls, offsetX, offsetY, scale, selected, connectSource, interactive, edit, onSelect, onDragStart, onMove, onDragEnd, onStartEditName, onSaveName,
   onStartEditAttr, onSaveAttr, onCancelEdit, onAddAttr, onDeleteAttr, onStartEditOp, onSaveOp, onAddOp, onDeleteOp, onDelete, onEditChange,
 }) => {
   const dragRef: ClassBoxDragPointRef = useRef<{ sx: number; sy: number; ox: number; oy: number } | null>(null);
@@ -3486,69 +2700,6 @@ const ClassBox: React.FC<ClassBoxProps> = ({
         >
           ✕
         </button>
-      )}
-      {reactionsMode && (
-        <div style={{
-          position: 'absolute',
-          top: 0,
-          left: 0,
-          right: 0,
-          bottom: 0,
-          pointerEvents: 'none',
-          borderRadius: 6,
-          border: '2px dashed rgba(168,85,247,0.5)',
-          boxShadow: '0 0 8px rgba(168,85,247,0.2)',
-          animation: 'reactionPulse 2s ease-in-out infinite',
-        }}>
-          <button
-            type="button"
-            aria-label={`Right reaction port for ${cls.name}`}
-            data-reaction-port
-            data-class-id={cls.id}
-            data-port-side="right"
-            onMouseDown={onReactionPortMouseDown
-              ? (e) => onReactionPortMouseDown(e, cls.id, 'right')
-              : undefined}
-            style={{
-            position: 'absolute',
-            top: '50%',
-            right: -7,
-            width: 12,
-            height: 12,
-            borderRadius: '50%',
-            background: '#a855f7',
-            border: '2px solid #fff',
-            transform: 'translateY(-50%)',
-            boxShadow: '0 0 6px rgba(168,85,247,0.6)',
-            pointerEvents: 'auto',
-            cursor: 'crosshair',
-            padding: 0,
-          }} />
-          <button
-            type="button"
-            aria-label={`Left reaction port for ${cls.name}`}
-            data-reaction-port
-            data-class-id={cls.id}
-            data-port-side="left"
-            onMouseDown={onReactionPortMouseDown
-              ? (e) => onReactionPortMouseDown(e, cls.id, 'left')
-              : undefined}
-            style={{
-            position: 'absolute',
-            top: '50%',
-            left: -7,
-            width: 12,
-            height: 12,
-            borderRadius: '50%',
-            background: '#a855f7',
-            border: '2px solid #fff',
-            transform: 'translateY(-50%)',
-            boxShadow: '0 0 6px rgba(168,85,247,0.6)',
-            pointerEvents: 'auto',
-            cursor: 'crosshair',
-            padding: 0,
-          }} />
-        </div>
       )}
     </div>
   );
@@ -4031,7 +3182,7 @@ function stopDiagramEventBubble(e: { stopPropagation(): void }): void {
 }
 
 function handleDiagramEditPanelKeyDown(
-  e: React.KeyboardEvent<HTMLDialogElement>,
+  e: React.KeyboardEvent<HTMLDivElement>,
   onClose: () => void,
 ): void {
   e.stopPropagation();
@@ -4045,7 +3196,7 @@ const DiagramEditPanelShell: React.FC<{
   style: React.CSSProperties;
   children: React.ReactNode;
 }> = ({ panelDataAttr, ariaLabel, onClose, style, children }) => {
-  const panelRef = useRef<HTMLDialogElement>(null);
+  const panelRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     panelRef.current?.focus();
@@ -4057,19 +3208,21 @@ const DiagramEditPanelShell: React.FC<{
       : { 'data-rel-edit-panel': true as const };
 
   return (
-    <dialog
+    <div
       ref={panelRef}
       {...panelDataAttribute}
-      open
+      role="dialog"
+      aria-modal="false"
       aria-label={ariaLabel}
-      style={{ ...style, margin: 0, padding: 0 }}
+      tabIndex={-1}
+      style={{ ...style, margin: 0, padding: 0, boxSizing: 'border-box' }}
       onClick={stopDiagramEventBubble}
       onMouseDown={stopDiagramEventBubble}
       onKeyDown={e => handleDiagramEditPanelKeyDown(e, onClose)}
       onKeyUp={stopDiagramEventBubble}
     >
       {children}
-    </dialog>
+    </div>
   );
 };
 
@@ -4091,6 +3244,7 @@ const ClassEditPanel: React.FC<{
       width: 268, background: UML.surface, border: `1px solid ${UML.primaryBorder}`,
       borderRadius: 10, boxShadow: `0 8px 24px ${UML.primaryRing}`,
       display: 'flex', flexDirection: 'column', overflow: 'hidden', fontFamily: UML.fontSans,
+      minHeight: 0,
     }}
   >
     <div style={{
@@ -4104,7 +3258,7 @@ const ClassEditPanel: React.FC<{
       </div>
       <button type="button" onClick={onClose} title="Close panel" style={{ border: 'none', background: 'transparent', cursor: 'pointer', color: UML.textMuted, fontSize: 14 }}>✕</button>
     </div>
-    <div style={{ flex: 1, overflowY: 'auto', padding: '12px 14px' }}>
+    <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', padding: '12px 14px' }}>
       <label htmlFor={`class-edit-name-${cls.id}`} style={panelLabelStyle}>Class name</label>
       <input
         id={`class-edit-name-${cls.id}`}
@@ -4349,6 +3503,7 @@ const RelationshipEditPanel: React.FC<{
         flexDirection: 'column',
         overflow: 'hidden',
         fontFamily: UML.fontSans,
+        minHeight: 0,
       }}
     >
       <div style={{
@@ -4371,7 +3526,7 @@ const RelationshipEditPanel: React.FC<{
         <button type="button" onClick={onClose} title="Close panel" style={{ border: 'none', background: 'transparent', cursor: 'pointer', color: UML.textMuted, padding: 2, fontSize: 14, lineHeight: 1 }}>✕</button>
       </div>
 
-      <div style={{ flex: 1, overflowY: 'auto', padding: '12px 14px' }}>
+      <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', padding: '12px 14px' }}>
         <label htmlFor={`rel-edit-source-${rel.id}`} style={panelLabelStyle}>From class</label>
         <select
           id={`rel-edit-source-${rel.id}`}
