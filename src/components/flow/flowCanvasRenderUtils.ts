@@ -1,8 +1,38 @@
 import React from 'react';
 import { Edge, Node, ReactFlowInstance } from 'reactflow';
-import { ConnectionDragState } from './flowCanvasTypes';
+import { ConnectionDragState, HandlePosition, PendingDeleteState } from './flowCanvasTypes';
 
-type HandlePosition = 'top' | 'bottom' | 'left' | 'right';
+/**
+ * Cursor communicating add-reaction mode: `cell` while waiting for the source
+ * box, `crosshair` once a source is picked and a target is expected.
+ */
+export function getReactionModeCursor(
+  addReactionMode: boolean | undefined,
+  reactionSourceId: string | null,
+): React.CSSProperties['cursor'] {
+  if (!addReactionMode) return undefined;
+  if (reactionSourceId) return 'crosshair';
+  return 'cell';
+}
+
+/** Wording for the delete confirmation, matched to what is actually selected. */
+export function getPendingDeleteConfirmMessage(pendingDelete: PendingDeleteState | null): string {
+  if (!pendingDelete) {
+    return 'Do you really want to remove this element from the canvas?';
+  }
+
+  const hasFile = Boolean(pendingDelete.fileId);
+  const hasEdges = pendingDelete.edgeIds.length > 0;
+  const hasOtherNodes = pendingDelete.nodeIds.length > 0;
+
+  if (hasFile && (hasEdges || hasOtherNodes)) {
+    return 'Remove the selected connection(s) and the meta model from the canvas?';
+  }
+  if (hasEdges) {
+    return 'Remove the selected connection from the canvas?';
+  }
+  return 'Do you really want to remove this element from the canvas?';
+}
 
 export interface EdgeDistributionSlot {
   edgeId: string;
@@ -172,7 +202,7 @@ export function computeConnectionLinePositions(
 }
 
 export function applyPendingCanvasDelete(
-  pendingDelete: { nodeIds: string[]; edgeIds: string[]; fileId: string | null },
+  pendingDelete: PendingDeleteState,
   removeEdge: (id: string) => void,
   removeNode: (id: string) => void,
   onEcoreFileDelete: ((id: string) => void) | undefined,

@@ -741,17 +741,11 @@ interface UMLDiagramProps {
   onHistoryChange?: (state: { canUndo: boolean; canRedo: boolean }) => void;
 }
 
-const REL_TYPE_CYCLE: UMLRelType[] = ['association', 'composition', 'inheritance'];
 const REL_TYPE_LABELS: Record<UMLRelType, string> = {
   association: 'Association',
   composition: 'Composition',
   inheritance: 'Inheritance',
 };
-
-function nextRelType(current: UMLRelType): UMLRelType {
-  const idx = REL_TYPE_CYCLE.indexOf(current);
-  return REL_TYPE_CYCLE[(idx + 1) % REL_TYPE_CYCLE.length];
-}
 
 function isKeyboardInputField(target: EventTarget | null): boolean {
   const tag = (target as HTMLElement | null)?.tagName;
@@ -1394,13 +1388,6 @@ export const UMLDiagram = forwardRef<UMLDiagramHandle, UMLDiagramProps>(({
     recordChange();
     setRelationships(prev => prev.filter(r => r.id !== relId));
     setSelectedRelId(prev => (prev === relId ? null : prev));
-  }, [recordChange]);
-
-  const cycleRelationshipType = useCallback((relId: string) => {
-    recordChange();
-    setRelationships(prev => prev.map(r =>
-      r.id === relId ? { ...r, type: nextRelType(r.type) } : r,
-    ));
   }, [recordChange]);
 
   const updateRelationship = useCallback((relId: string, patch: Partial<UMLRelationship>) => {
@@ -2500,7 +2487,7 @@ const ClassBoxNameSection: React.FC<ClassBoxNameSectionProps> = ({
         margin: 0,
         width: '100%',
         boxSizing: 'border-box',
-        cursor: interactive ? 'pointer' : 'default',
+        cursor: interactive ? 'grab' : 'default',
         font: 'inherit',
         textAlign: 'center',
       }}
@@ -3646,7 +3633,7 @@ const RelationshipEditPanel: React.FC<{
       </div>
 
       <div style={{ padding: '8px 14px', borderTop: `1px solid ${UML.border}`, fontSize: 10, color: UML.textMuted, lineHeight: 1.45 }}>
-        Double-click a line to cycle type · Delete key removes selection · Close with ✕
+        Change type in this panel · Delete key removes selection · Close with ✕
       </div>
     </DiagramEditPanelShell>
   );

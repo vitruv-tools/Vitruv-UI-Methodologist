@@ -41,4 +41,19 @@ describe('UMLDiagram render', () => {
 
     expect(wrapper.style.left).not.toBe(beforeLeft);
   });
+
+  it('allows dragging a class box from its name button', () => {
+    const { container } = renderDiagram();
+    const box = container.querySelector('[data-classbox]') as HTMLElement;
+    expect(box).toBeTruthy();
+    const wrapper = box.parentElement as HTMLElement;
+    const beforeLeft = wrapper.style.left;
+
+    const nameBtn = screen.getByRole('button', { name: /Class name: Person/i });
+    fireEvent.mouseDown(nameBtn, { clientX: 100, clientY: 100 });
+    fireEvent.mouseMove(window, { clientX: 160, clientY: 140 });
+    fireEvent.mouseUp(window);
+
+    expect(wrapper.style.left).not.toBe(beforeLeft);
+  });
 });
