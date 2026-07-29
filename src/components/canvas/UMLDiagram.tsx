@@ -26,7 +26,6 @@ import {
   computeLineBridges,
   optimizeMultiplicityBadges,
   resolveMultiplicityBadgeCollisions,
-  type AxisRect,
   type MultiplicityBadge,
 } from '../../utils/umlDiagramGeometry';
 import { UMLDiagramMinimap } from './UMLDiagramMinimap';
@@ -46,14 +45,8 @@ import {
 import { ClassEditPanel, RelationshipEditPanel } from './UMLDiagramEditPanels';
 import { UMLClassBox } from './UMLClassBox';
 import {
-  UML_CLASS_ADD_MEMBER_ROW_HEIGHT,
   UML_CLASS_BOX_EDIT_WIDTH,
   UML_CLASS_BOX_WIDTH,
-  UML_CLASS_EMPTY_OPERATION_SECTION_HEIGHT,
-  UML_CLASS_MEMBER_SECTION_PADDING,
-  UML_CLASS_MEMBER_ROW_HEIGHT,
-  UML_CLASS_NAME_SECTION_HEIGHT,
-  UML_CLASS_STEREOTYPE_SECTION_HEIGHT,
 } from './umlDiagramClassMetrics';
 import type {
   UmlDiagramClass,
@@ -71,10 +64,24 @@ import {
   updateClassById,
   updateClassOperation,
 } from './umlDiagramClassTransforms';
+import {
+  buildUmlClassObstacleRects,
+  getUmlClassBoxHeight,
+  getUmlDiagramLayoutMetrics,
+  getUmlInheritanceParentId,
+  getUmlMultiplicityPosition,
+  getUmlRelationshipEndpoints,
+  insetUmlRelationshipEndpoints,
+  UML_DIAGRAM_CANVAS_PADDING,
+  UML_MULTIPLICITY_ALONG_OFFSET,
+  UML_MULTIPLICITY_BADGE_HALF_HEIGHT,
+  UML_MULTIPLICITY_BADGE_HALF_WIDTH,
+  UML_MULTIPLICITY_PERPENDICULAR_OFFSET,
+  type UmlDiagramRelationshipLayout,
+} from './umlDiagramLayoutGeometry';
 
 // ── constants ────────────────────────────────────────────────────────────────
 
-const CANVAS_PAD = 480; // free space around diagram (all sides; allows negative coords)
 const MAX_ZOOM = 3;
 const MIN_ZOOM = 0.35;
 
@@ -86,143 +93,6 @@ export const WORKSPACE_DOT_BACKGROUND: React.CSSProperties = {
 };
 
 // ── helpers ──────────────────────────────────────────────────────────────────
-
-function boxH(c: UmlDiagramClass): number {
-  const nh = c.isAbstract || c.isInterface
-    ? UML_CLASS_STEREOTYPE_SECTION_HEIGHT
-    : UML_CLASS_NAME_SECTION_HEIGHT;
-  const ah = c.attributes.length * UML_CLASS_MEMBER_ROW_HEIGHT
-    + UML_CLASS_MEMBER_SECTION_PADDING
-    + UML_CLASS_ADD_MEMBER_ROW_HEIGHT;
-  const oh = c.operations.length * UML_CLASS_MEMBER_ROW_HEIGHT
-    + (c.operations.length > 0 ? UML_CLASS_MEMBER_SECTION_PADDING : 0)
-    + UML_CLASS_ADD_MEMBER_ROW_HEIGHT;
-  const mh = Math.max(UML_CLASS_EMPTY_OPERATION_SECTION_HEIGHT, oh);
-  return nh + 1 + ah + 1 + mh;
-}
-
-function getInheritanceParentId(relationships: UMLRelationship[], classId: string): string | null {
-  return relationships.find(r => r.type === 'inheritance' && r.sourceId === classId)?.targetId ?? null;
-}
-
-function getLayoutMetrics(
-  classes: UmlDiagramClass[],
-  frozenOffset?: { offsetX: number; offsetY: number } | null,
-) {
-  if (classes.length === 0) {
-    return {
-      totalW: 1200,
-      totalH: 900,
-      offsetX: CANVAS_PAD,
-      offsetY: CANVAS_PAD,
-      minX: 0,
-      minY: 0,
-      maxX: 700,
-      maxY: 400,
-    };
-  }
-  const minX = Math.min(...classes.map(c => c.x));
-  const minY = Math.min(...classes.map(c => c.y));
-  const maxX = Math.max(...classes.map(c => c.x + UML_CLASS_BOX_WIDTH));
-  const maxY = Math.max(...classes.map(c => c.y + boxH(c)));
-  const offsetX = frozenOffset?.offsetX ?? CANVAS_PAD - minX;
-  const offsetY = frozenOffset?.offsetY ?? CANVAS_PAD - minY;
-  const dispMinX = minX + offsetX;
-  const dispMinY = minY + offsetY;
-  const dispMaxX = maxX + offsetX;
-  const dispMaxY = maxY + offsetY;
-  return {
-    totalW: Math.max(dispMaxX + CANVAS_PAD, dispMaxX - dispMinX + CANVAS_PAD * 2),
-    totalH: Math.max(dispMaxY + CANVAS_PAD, dispMaxY - dispMinY + CANVAS_PAD * 2),
-    offsetX,
-    offsetY,
-    minX,
-    minY,
-    maxX,
-    maxY,
-  };
-}
-
-function edgePt(bx: number, by: number, h: number, tx: number, ty: number) {
-  const cx = bx + UML_CLASS_BOX_WIDTH / 2, cy = by + h / 2;
-  const dx = tx - cx, dy = ty - cy;
-  if (!dx && !dy) return { x: cx, y: cy };
-  const hw = UML_CLASS_BOX_WIDTH / 2, hh = h / 2;
-  const t = Math.abs(dx) * hh > Math.abs(dy) * hw ? hw / Math.abs(dx) : hh / Math.abs(dy);
-  return { x: cx + dx * t, y: cy + dy * t };
-}
-
-type DiagramRel = UMLRelationship & { parallelIndex?: number; parallelCount?: number };
-
-const EDGE_ENDPOINT_INSET = 10;
-const MULT_ALONG_OFFSET = 52;
-const MULT_PERP_OFFSET = 10;
-const MARKER_MULT_EXTRA_OFFSET = 18;
-const MULT_BADGE_HALF_W = 18;
-const MULT_BADGE_HALF_H = 12;
-const MULT_CLASS_CLEARANCE = 8;
-
-function multiplicityPosition(
-  x1: number, y1: number, x2: number, y2: number,
-  end: 'start' | 'end',
-  hasDirectionMarker = false,
-): { x: number; y: number; anchorX: number; anchorY: number; lineUx: number; lineUy: number; nx: number; ny: number; lineLength: number } {
-  const dx = x2 - x1;
-  const dy = y2 - y1;
-  const len = Math.max(Math.hypot(dx, dy), 0.0001);
-  const lineUx = dx / len;
-  const lineUy = dy / len;
-  const nx = -lineUy;
-  const ny = lineUx;
-  const markerExtra = hasDirectionMarker ? MARKER_MULT_EXTRA_OFFSET : 0;
-  const idealAlong = MULT_ALONG_OFFSET + markerExtra;
-  const maxAlong = Math.max(26, (len - MULT_BADGE_HALF_H * 2 - 10) / 2);
-  const alongMag = Math.min(idealAlong, maxAlong);
-  const along = end === 'start' ? alongMag : -alongMag;
-  const anchorX = end === 'start' ? x1 : x2;
-  const anchorY = end === 'start' ? y1 : y2;
-  const perp = len < 120
-    ? MULT_PERP_OFFSET + Math.min(28, (120 - len) * 0.35)
-    : MULT_PERP_OFFSET;
-  return {
-    anchorX,
-    anchorY,
-    lineUx,
-    lineUy,
-    nx,
-    ny,
-    lineLength: len,
-    x: anchorX + lineUx * along + nx * perp,
-    y: anchorY + lineUy * along + ny * perp,
-  };
-}
-
-function buildClassObstacleRects(classes: UmlDiagramClass[], offsetX: number, offsetY: number): AxisRect[] {
-  return classes.map(cls => ({
-    left: cls.x + offsetX - MULT_CLASS_CLEARANCE,
-    top: cls.y + offsetY - MULT_CLASS_CLEARANCE,
-    right: cls.x + offsetX + UML_CLASS_BOX_WIDTH + MULT_CLASS_CLEARANCE,
-    bottom: cls.y + offsetY + boxH(cls) + MULT_CLASS_CLEARANCE,
-  }));
-}
-
-function insetLineEndpoints(
-  p1: { x: number; y: number },
-  p2: { x: number; y: number },
-) {
-  const dx = p2.x - p1.x;
-  const dy = p2.y - p1.y;
-  const len = Math.max(Math.hypot(dx, dy), 0.0001);
-  const ux = dx / len;
-  const uy = dy / len;
-  const inset = Math.min(EDGE_ENDPOINT_INSET, Math.max(0, len / 2 - 8));
-  return {
-    drawP1: { x: p1.x + ux * inset, y: p1.y + uy * inset },
-    drawP2: { x: p2.x - ux * inset, y: p2.y - uy * inset },
-    ux,
-    uy,
-  };
-}
 
 type ReactionPortSide = 'left' | 'right';
 
@@ -241,7 +111,7 @@ function getReactionPortPosition(
   offsetY: number,
   side: ReactionPortSide,
 ): { x: number; y: number } {
-  const h = boxH(cls);
+  const h = getUmlClassBoxHeight(cls);
   return {
     x: side === 'left'
       ? cls.x + offsetX
@@ -306,57 +176,6 @@ function buildDefaultReactionConfig(
     model1RootType: source.className,
     model2RootType: target.className,
     model1RootVal: source.className,
-  };
-}
-
-function getRelEndpoints(
-  rel: DiagramRel,
-  classes: UmlDiagramClass[],
-  offsetX: number,
-  offsetY: number,
-) {
-  const src = classes.find(c => c.id === rel.sourceId);
-  const tgt = classes.find(c => c.id === rel.targetId);
-  if (!src || !tgt) return null;
-
-  const sh = boxH(src);
-  const th = boxH(tgt);
-  const sx = src.x + offsetX;
-  const sy = src.y + offsetY;
-  const tx = tgt.x + offsetX;
-  const ty = tgt.y + offsetY;
-  const rawP1 = edgePt(
-    sx,
-    sy,
-    sh,
-    tx + UML_CLASS_BOX_WIDTH / 2,
-    ty + th / 2,
-  );
-  const rawP2 = edgePt(
-    tx,
-    ty,
-    th,
-    sx + UML_CLASS_BOX_WIDTH / 2,
-    sy + sh / 2,
-  );
-  return applyParallelOffset(rawP1, rawP2, rel.parallelIndex ?? 0, rel.parallelCount ?? 1);
-}
-
-function applyParallelOffset(
-  p1: { x: number; y: number },
-  p2: { x: number; y: number },
-  parallelIndex: number,
-  parallelCount: number,
-) {
-  if (parallelCount <= 1) return { p1, p2 };
-  const lineLen = Math.max(Math.hypot(p2.x - p1.x, p2.y - p1.y), 0.0001);
-  const sep = 14;
-  const off = (parallelIndex - (parallelCount - 1) / 2) * sep;
-  const nx = -(p2.y - p1.y) / lineLen;
-  const ny =  (p2.x - p1.x) / lineLen;
-  return {
-    p1: { x: p1.x + nx * off, y: p1.y + ny * off },
-    p2: { x: p2.x + nx * off, y: p2.y + ny * off },
   };
 }
 
@@ -680,7 +499,7 @@ export const UMLDiagram = forwardRef<UMLDiagramHandle, UMLDiagramProps>(({
   const allRels = useMemo(() => [...relationships, ...additionalRels], [relationships, additionalRels]);
 
   const rels = useMemo(
-    () => assignParallelRelMeta(allRels) as DiagramRel[],
+    () => assignParallelRelMeta(allRels) as UmlDiagramRelationshipLayout[],
     [allRels],
   );
 
@@ -689,7 +508,7 @@ export const UMLDiagram = forwardRef<UMLDiagramHandle, UMLDiagramProps>(({
     return computeUmlModelGroups(
       allClasses,
       classModelMap,
-      boxH,
+      getUmlClassBoxHeight,
       UML_CLASS_BOX_WIDTH,
     );
   }, [additionalModels.length, allClasses, classModelMap]);
@@ -932,11 +751,14 @@ export const UMLDiagram = forwardRef<UMLDiagramHandle, UMLDiagramProps>(({
 
   const layout = useMemo(() => {
     if (!layoutOffsetRef.current && allClasses.length > 0) {
-      const initial = getLayoutMetrics(allClasses);
+      const initial = getUmlDiagramLayoutMetrics(allClasses);
       layoutOffsetRef.current = { offsetX: initial.offsetX, offsetY: initial.offsetY };
       return initial;
     }
-    return getLayoutMetrics(allClasses, layoutOffsetRef.current);
+    return getUmlDiagramLayoutMetrics(
+      allClasses,
+      layoutOffsetRef.current,
+    );
   }, [allClasses]);
   const { totalW, totalH, offsetX, offsetY } = layout;
   const containerRef = useRef<HTMLElement>(null);
@@ -1206,7 +1028,10 @@ export const UMLDiagram = forwardRef<UMLDiagramHandle, UMLDiagramProps>(({
     recordChange();
     const el = containerRef.current;
     const { x: vx0, y: vy0, scale } = viewRef.current;
-    const offset = layoutOffsetRef.current ?? { offsetX: CANVAS_PAD, offsetY: CANVAS_PAD };
+    const offset = layoutOffsetRef.current ?? {
+      offsetX: UML_DIAGRAM_CANVAS_PADDING,
+      offsetY: UML_DIAGRAM_CANVAS_PADDING,
+    };
     let cx = 200;
     let cy = 120;
     if (el) {
@@ -1735,9 +1560,17 @@ export const UMLDiagram = forwardRef<UMLDiagramHandle, UMLDiagramProps>(({
 
   const edgeLayouts = useMemo(() => {
     const raw = rels.flatMap(rel => {
-      const endpoints = getRelEndpoints(rel, allClasses, offsetX, offsetY);
+      const endpoints = getUmlRelationshipEndpoints(
+        rel,
+        allClasses,
+        offsetX,
+        offsetY,
+      );
       if (!endpoints) return [];
-      const { drawP1, drawP2 } = insetLineEndpoints(endpoints.p1, endpoints.p2);
+      const { drawP1, drawP2 } = insetUmlRelationshipEndpoints(
+        endpoints.p1,
+        endpoints.p2,
+      );
       return [{ rel, p1: endpoints.p1, p2: endpoints.p2, drawP1, drawP2 }];
     });
 
@@ -1763,7 +1596,14 @@ export const UMLDiagram = forwardRef<UMLDiagramHandle, UMLDiagramProps>(({
       const markerSide = getUmlRelationDirectionMarkerSide(rel.type);
 
       if (rel.sourceMultiplicity) {
-        const pos = multiplicityPosition(p1.x, p1.y, p2.x, p2.y, 'start', markerSide === 'start');
+        const pos = getUmlMultiplicityPosition(
+          p1.x,
+          p1.y,
+          p2.x,
+          p2.y,
+          'start',
+          markerSide === 'start',
+        );
         raw.push({
           key: `${rel.id}-src`,
           relId: rel.id,
@@ -1774,7 +1614,14 @@ export const UMLDiagram = forwardRef<UMLDiagramHandle, UMLDiagramProps>(({
         });
       }
       if (rel.targetMultiplicity) {
-        const pos = multiplicityPosition(p1.x, p1.y, p2.x, p2.y, 'end', markerSide === 'end');
+        const pos = getUmlMultiplicityPosition(
+          p1.x,
+          p1.y,
+          p2.x,
+          p2.y,
+          'end',
+          markerSide === 'end',
+        );
         raw.push({
           key: `${rel.id}-tgt`,
           relId: rel.id,
@@ -1785,12 +1632,20 @@ export const UMLDiagram = forwardRef<UMLDiagramHandle, UMLDiagramProps>(({
         });
       }
     }
-    const obstacles = buildClassObstacleRects(allClasses, offsetX, offsetY);
+    const obstacles = buildUmlClassObstacleRects(
+      allClasses,
+      offsetX,
+      offsetY,
+    );
     return resolveMultiplicityBadgeCollisions(
-      optimizeMultiplicityBadges(raw, MULT_ALONG_OFFSET, MULT_PERP_OFFSET),
+      optimizeMultiplicityBadges(
+        raw,
+        UML_MULTIPLICITY_ALONG_OFFSET,
+        UML_MULTIPLICITY_PERPENDICULAR_OFFSET,
+      ),
       obstacles,
-      MULT_BADGE_HALF_W,
-      MULT_BADGE_HALF_H,
+      UML_MULTIPLICITY_BADGE_HALF_WIDTH,
+      UML_MULTIPLICITY_BADGE_HALF_HEIGHT,
     );
   }, [edgeLayouts, reactionEdges, allClasses, offsetX, offsetY]);
 
@@ -2265,7 +2120,10 @@ export const UMLDiagram = forwardRef<UMLDiagramHandle, UMLDiagramProps>(({
         <ClassEditPanel
           cls={selectedClass}
           classes={classes}
-          parentId={getInheritanceParentId(relationships, selectedClass.id)}
+          parentId={getUmlInheritanceParentId(
+            relationships,
+            selectedClass.id,
+          )}
           onUpdate={patch => updateClass(selectedClass.id, patch)}
           onSetParent={parentId => setInheritanceParent(selectedClass.id, parentId)}
           onDelete={() => deleteClass(selectedClass.id)}
