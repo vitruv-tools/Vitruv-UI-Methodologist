@@ -1,5 +1,5 @@
 import React, { useState, useRef, useCallback, useEffect, useMemo, forwardRef, useImperativeHandle } from 'react';
-import { ecoreToUml, UMLAttribute, UMLRelationship, UMLModel, UMLVisibility, UMLOperation, normalizeAttributeTypeDisplay, normalizeOperationReturnType, nextUniqueAttributeName, nextUniqueOperationName } from '../../utils/ecoreToUml';
+import { ecoreToUml, UMLRelationship, UMLModel } from '../../utils/ecoreToUml';
 import { saveMetaModelEcore, MetaModelSaveMetadata } from '../../utils/saveMetaModelEcore';
 import { umlSemanticSnapshot, umlToEcore } from '../../utils/umlToEcore';
 import { validateUmlModel } from '../../utils/umlValidation';
@@ -23,23 +23,7 @@ import {
   UMLRelationshipBaseLayer,
   UMLRelationshipOverlayLayers,
 } from './UMLRelationshipLayers';
-import {
-  UML_CLASS_BOX_EDIT_WIDTH,
-} from './umlDiagramClassMetrics';
-import type {
-  UmlDiagramClass,
-  UmlDiagramEditState,
-} from './umlDiagramTypes';
-import {
-  nextUniqueClassName,
-  removeAttributeFromClass,
-  removeOperationFromClass,
-  renameClassInList,
-  renameClassInRelationships,
-  updateClassAttribute,
-  updateClassById,
-  updateClassOperation,
-} from './umlDiagramClassTransforms';
+import type { UmlDiagramClass } from './umlDiagramTypes';
 import {
   type UmlDiagramRelationshipLayout,
 } from './umlDiagramLayoutGeometry';
@@ -50,6 +34,7 @@ import {
   useUmlDiagramModelGroups,
   type UmlDiagramAdditionalModel,
 } from '../../hooks/useUmlDiagramModelGroups';
+import { useUmlDiagramPrimaryEditing } from '../../hooks/useUmlDiagramPrimaryEditing';
 
 // ── constants ────────────────────────────────────────────────────────────────
 
@@ -64,16 +49,6 @@ const EMPTY_ADDITIONAL_MODELS: UmlDiagramAdditionalModel[] = [];
 
 // ── helpers ──────────────────────────────────────────────────────────────────
 
-function getInheritanceParentId(
-  relationships: UMLRelationship[],
-  classId: string,
-): string | null {
-  return relationships.find(
-    relationship => relationship.type === 'inheritance'
-      && relationship.sourceId === classId,
-  )?.targetId ?? null;
-}
-
 function isEmptyCanvasTarget(target: HTMLElement): boolean {
   return !target.closest('[data-classbox]')
     && !target.closest('[data-rel-hit-line]')
@@ -87,8 +62,6 @@ function isEmptyCanvasTarget(target: HTMLElement): boolean {
     && !target.closest('[data-reaction-port]')
     && !target.closest('[data-reaction-edit-panel]');
 }
-
-type EditState = UmlDiagramEditState;
 
 /** `library` persists to the metamodel library API; `workspace` only updates the open project/session copy. */
 export type UmlDiagramSaveTarget = 'library' | 'workspace';
@@ -338,9 +311,6 @@ export const UMLDiagram = forwardRef<UMLDiagramHandle, UMLDiagramProps>(({
     [allRelationships],
   );
 
-  const [edit, setEdit] = useState<EditState | null>(null);
-  const editRef = useRef<EditState | null>(null);
-  editRef.current = edit;
   const [selectedClassId, setSelectedClassId] = useState<string | null>(null);
   const [selectedRelId, setSelectedRelId] = useState<string | null>(null);
   const [connectMode, setConnectMode] = useState(false);
@@ -349,9 +319,9 @@ export const UMLDiagram = forwardRef<UMLDiagramHandle, UMLDiagramProps>(({
   classesRef.current = classes;
   const relationshipsRef = useRef(relationships);
   relationshipsRef.current = relationships;
-  const dragHistorySavedRef = useRef(false);
   const reactionPanBlockRef = useRef<() => boolean>(() => false);
   const flushPendingEditRef = useRef<() => void>(() => {});
+  const cancelPrimaryEditRef = useRef<() => void>(() => {});
   const persistViewportLayoutRef = useRef<
     (classesOverride?: UmlDiagramClass[]) => void
   >(() => {});
@@ -373,7 +343,7 @@ export const UMLDiagram = forwardRef<UMLDiagramHandle, UMLDiagramProps>(({
   const applySnapshot = useCallback((snapshot: UmlEditSnapshot) => {
     setClasses(snapshot.classes);
     setRelationships(snapshot.relationships);
-    setEdit(null);
+    cancelPrimaryEditRef.current();
     setSelectedClassId(null);
     setSelectedRelId(null);
     setConnectMode(false);
@@ -439,7 +409,7 @@ export const UMLDiagram = forwardRef<UMLDiagramHandle, UMLDiagramProps>(({
     setSelectedRelId(null);
     setConnectMode(false);
     setConnectSourceId(null);
-    setEdit(null);
+    cancelPrimaryEditRef.current();
     initialSnapshotRef.current = umlSemanticSnapshot({
       classes: baseClasses,
       relationships: next.relationships,
@@ -569,72 +539,57 @@ export const UMLDiagram = forwardRef<UMLDiagramHandle, UMLDiagramProps>(({
   });
   reactionPanBlockRef.current = isReactionDragActive;
 
-  const moveClass = useCallback((id: string, x: number, y: number) => {
-    if (!dragHistorySavedRef.current) {
-      recordChange();
-      dragHistorySavedRef.current = true;
-    }
-    setClasses(prev => prev.map(c => (c.id === id ? { ...c, x, y } : c)));
-    scheduleDebouncedLayoutSave();
-  }, [recordChange, scheduleDebouncedLayoutSave]);
-
-  const finishClassDrag = useCallback(() => {
-    dragHistorySavedRef.current = false;
-    scheduleLayoutSave();
-  }, [scheduleLayoutSave]);
-
-  const saveName = useCallback((oldId: string, name: string) => {
-    const trimmed = name.trim();
-    if (!trimmed) {
-      setEdit(null);
-      return;
-    }
-    recordChange();
-    const newId = sanitizeUmlClassId(trimmed);
-    setClasses(prev => renameClassInList(prev, oldId, newId, trimmed));
-    setRelationships(prev => renameClassInRelationships(prev, oldId, newId));
-    setSelectedClassId(prev => (prev === oldId ? newId : prev));
-    setConnectSourceId(prev => (prev === oldId ? newId : prev));
-    setEdit(null);
-  }, [recordChange]);
-
-  const saveAttr = useCallback((classId: string, attrId: string, name: string, type: string, visibility: UMLVisibility) => {
-    recordChange();
-    setClasses(prev => updateClassAttribute(prev, classId, attrId, name, type, visibility));
-    setEdit(null);
-  }, [recordChange]);
-
-  const saveOp = useCallback((classId: string, opId: string, name: string, returnType: string, visibility: UMLVisibility) => {
-    recordChange();
-    setClasses(prev => updateClassOperation(prev, classId, opId, name, returnType, visibility));
-    setEdit(null);
-  }, [recordChange]);
-
-  const flushPendingEdit = useCallback(() => {
-    const pending = editRef.current;
-    if (!pending) return;
-
-    const active = document.activeElement as HTMLElement | null;
-    if (active && (active.tagName === 'INPUT' || active.tagName === 'SELECT' || active.tagName === 'TEXTAREA')) {
-      active.blur();
-      return;
-    }
-
-    if (pending.kind === 'attr') {
-      saveAttr(pending.classId, pending.attrId, pending.name, pending.type, pending.visibility);
-    } else if (pending.kind === 'op') {
-      saveOp(pending.classId, pending.opId, pending.name, pending.returnType, pending.visibility);
-    } else if (pending.kind === 'name') {
-      saveName(pending.classId, pending.val);
-    }
-  }, [saveAttr, saveOp, saveName]);
+  const {
+    edit,
+    startNameEdit,
+    startAttributeEdit,
+    startOperationEdit,
+    changeEdit,
+    cancelEdit,
+    flushPendingEdit,
+    saveName,
+    saveAttribute: saveAttr,
+    saveOperation: saveOp,
+    addAttribute: addAttr,
+    deleteAttribute: deleteAttr,
+    addOperation: addOp,
+    deleteOperation: deleteOp,
+    addClass,
+    deleteClass,
+    updateClass,
+    getInheritanceParentId,
+    setInheritanceParent,
+    beginClassDrag,
+    moveClass,
+    finishClassDrag,
+    addRelationship,
+    deleteRelationship,
+    updateRelationship,
+  } = useUmlDiagramPrimaryEditing({
+    classes,
+    relationships,
+    setClasses,
+    setRelationships,
+    setSelectedClassId,
+    setSelectedRelationshipId: setSelectedRelId,
+    setConnectSourceId,
+    recordChange,
+    hasAdditionalModels: additionalModels.length > 0,
+    areClassesInSameModel,
+    containerRef,
+    getCurrentViewport,
+    getCurrentLayoutOffset,
+    scheduleDebouncedLayoutSave,
+    scheduleLayoutSave,
+  });
   flushPendingEditRef.current = flushPendingEdit;
+  cancelPrimaryEditRef.current = cancelEdit;
 
   const dismissClassSelection = useCallback(() => {
     flushPendingEdit();
     setSelectedClassId(null);
-    setEdit(null);
-  }, [flushPendingEdit]);
+    cancelEdit();
+  }, [cancelEdit, flushPendingEdit]);
 
   const handleCanvasDoubleClick = useCallback((e: MouseEvent) => {
     if (!interactive) return;
@@ -653,131 +608,6 @@ export const UMLDiagram = forwardRef<UMLDiagramHandle, UMLDiagramProps>(({
     };
   }, [handleCanvasDoubleClick, classes.length, containerRef]);
 
-  const addAttr = useCallback((classId: string) => {
-    flushPendingEdit();
-    recordChange();
-    const cls = classesRef.current.find(c => c.id === classId);
-    const uniqueName = nextUniqueAttributeName(cls?.attributes.map(a => a.name) ?? []);
-    const newAttr: UMLAttribute = {
-      id: `${classId}-${Date.now()}`,
-      name: uniqueName,
-      type: 'String',
-      visibility: '+',
-    };
-    setClasses(prev => updateClassById(prev, classId, classItem => ({
-      ...classItem,
-      attributes: [...classItem.attributes, newAttr],
-    })));
-    setEdit({ classId, kind: 'attr', attrId: newAttr.id, name: newAttr.name, type: newAttr.type, visibility: '+' });
-  }, [recordChange, flushPendingEdit]);
-
-  const addOp = useCallback((classId: string) => {
-    flushPendingEdit();
-    recordChange();
-    const cls = classesRef.current.find(c => c.id === classId);
-    const uniqueName = nextUniqueOperationName(cls?.operations.map(o => o.name) ?? []);
-    const newOp: UMLOperation = {
-      id: `${classId}-op-${Date.now()}`,
-      name: uniqueName,
-      returnType: 'Void',
-      visibility: '+',
-    };
-    setClasses(prev => updateClassById(prev, classId, classItem => ({
-      ...classItem,
-      operations: [...classItem.operations, newOp],
-    })));
-    setEdit({ classId, kind: 'op', opId: newOp.id, name: newOp.name, returnType: newOp.returnType, visibility: '+' });
-  }, [recordChange, flushPendingEdit]);
-
-  const deleteAttr = useCallback((classId: string, attrId: string) => {
-    recordChange();
-    setClasses(prev => updateClassById(prev, classId, classItem => removeAttributeFromClass(classItem, attrId)));
-  }, [recordChange]);
-
-  const deleteOp = useCallback((classId: string, opId: string) => {
-    recordChange();
-    setClasses(prev => updateClassById(prev, classId, classItem => removeOperationFromClass(classItem, opId)));
-  }, [recordChange]);
-
-  const deleteClass = useCallback((classId: string) => {
-    recordChange();
-    setClasses(prev => prev.filter(c => c.id !== classId));
-    setRelationships(prev => prev.filter(r => r.sourceId !== classId && r.targetId !== classId));
-    setSelectedClassId(prev => (prev === classId ? null : prev));
-    setConnectSourceId(prev => (prev === classId ? null : prev));
-    setEdit(prev => (prev?.classId === classId ? null : prev));
-  }, [recordChange]);
-
-  const addClass = useCallback(() => {
-    recordChange();
-    const el = containerRef.current;
-    const { x: vx0, y: vy0, scale } = getCurrentViewport();
-    const offset = getCurrentLayoutOffset();
-    let cx = 200;
-    let cy = 120;
-    if (el) {
-      cx = (el.clientWidth / 2 - vx0) / scale
-        - offset.offsetX
-        - UML_CLASS_BOX_EDIT_WIDTH / 2;
-      cy = (el.clientHeight / 2 - vy0) / scale - offset.offsetY - 72;
-    }
-
-    const name = nextUniqueClassName(classesRef.current.map(c => c.name));
-    const id = sanitizeUmlClassId(name);
-
-    const newClass: UmlDiagramClass = {
-      id,
-      name,
-      isAbstract: false,
-      isInterface: false,
-      attributes: [],
-      operations: [],
-      x: cx,
-      y: cy,
-    };
-    setClasses(prev => [...prev, newClass]);
-    setSelectedClassId(id);
-  }, [
-    containerRef,
-    getCurrentLayoutOffset,
-    getCurrentViewport,
-    recordChange,
-  ]);
-
-  const addRelationship = useCallback((sourceId: string, targetId: string) => {
-    if (sourceId === targetId) return false;
-    if (additionalModels.length > 0 && !areClassesInSameModel(sourceId, targetId)) {
-      return false;
-    }
-    const exists = relationshipsRef.current.some(
-      r => r.sourceId === sourceId && r.targetId === targetId && r.type === 'association',
-    );
-    if (exists) return false;
-    recordChange();
-    const newRelId = `rel-${Date.now()}`;
-    setRelationships(prev => [...prev, {
-      id: newRelId,
-      sourceId,
-      targetId,
-      type: 'association',
-      targetMultiplicity: '0..1',
-      sourceMultiplicity: '1',
-    }]);
-    setSelectedRelId(newRelId);
-    return true;
-  }, [recordChange, additionalModels.length, areClassesInSameModel]);
-
-  const deleteRelationship = useCallback((relId: string) => {
-    recordChange();
-    setRelationships(prev => prev.filter(r => r.id !== relId));
-    setSelectedRelId(prev => (prev === relId ? null : prev));
-  }, [recordChange]);
-
-  const updateRelationship = useCallback((relId: string, patch: Partial<UMLRelationship>) => {
-    recordChange();
-    setRelationships(prev => prev.map(r => (r.id === relId ? { ...r, ...patch } : r)));
-  }, [recordChange]);
-
   const tryEscape = useCallback(() => {
     if (cancelReactionInteraction()) return true;
     if (connectMode) {
@@ -790,7 +620,7 @@ export const UMLDiagram = forwardRef<UMLDiagramHandle, UMLDiagramProps>(({
       return true;
     }
     if (edit) {
-      setEdit(null);
+      cancelEdit();
       return true;
     }
     if (selectedRelId) {
@@ -802,7 +632,7 @@ export const UMLDiagram = forwardRef<UMLDiagramHandle, UMLDiagramProps>(({
       return true;
     }
     return false;
-  }, [cancelReactionInteraction, connectMode, connectSourceId, edit, selectedRelId, selectedClassId, dismissClassSelection]);
+  }, [cancelEdit, cancelReactionInteraction, connectMode, connectSourceId, edit, selectedRelId, selectedClassId, dismissClassSelection]);
 
   const handleRelationshipClick = useCallback((relId: string, e: React.MouseEvent) => {
     e.stopPropagation();
@@ -911,35 +741,6 @@ export const UMLDiagram = forwardRef<UMLDiagramHandle, UMLDiagramProps>(({
     closeReactionConfiguration();
     setSelectedClassId(classId);
   }, [interactive, connectMode, reactionsMode, connectSourceId, addRelationship, flushPendingEdit, closeReactionConfiguration]);
-
-  const updateClass = useCallback((classId: string, patch: Partial<Pick<UmlDiagramClass, 'name' | 'isAbstract' | 'isInterface'>>) => {
-    recordChange();
-    if (patch.name !== undefined) {
-      const trimmed = patch.name.trim();
-      if (!trimmed) return;
-      const newId = sanitizeUmlClassId(trimmed);
-      setClasses(prev => renameClassInList(prev, classId, newId, trimmed));
-      setRelationships(prev => renameClassInRelationships(prev, classId, newId));
-      setSelectedClassId(prev => (prev === classId ? newId : prev));
-      setConnectSourceId(prev => (prev === classId ? newId : prev));
-      return;
-    }
-    setClasses(prev => updateClassById(prev, classId, classItem => ({ ...classItem, ...patch })));
-  }, [recordChange]);
-
-  const setInheritanceParent = useCallback((classId: string, parentId: string | null) => {
-    recordChange();
-    setRelationships(prev => {
-      const filtered = prev.filter(r => !(r.type === 'inheritance' && r.sourceId === classId));
-      if (!parentId || parentId === classId) return filtered;
-      return [...filtered, {
-        id: `rel-${Date.now()}`,
-        sourceId: classId,
-        targetId: parentId,
-        type: 'inheritance',
-      }];
-    });
-  }, [recordChange]);
 
   const handleDeleteSelected = useCallback(() => {
     if (editingReactionId) {
@@ -1082,50 +883,31 @@ export const UMLDiagram = forwardRef<UMLDiagramHandle, UMLDiagramProps>(({
           reactionsMode={reactionsMode === 'reactions'}
           onReactionPortMouseDown={handleReactionPortMouseDown}
           onSelect={() => handleClassSelect(cls.id)}
-          onDragStart={() => { dragHistorySavedRef.current = false; }}
+          onDragStart={beginClassDrag}
           onMove={isAdditional ? moveAdditionalClass : moveClass}
           onDragEnd={isAdditional ? () => {} : finishClassDrag}
           onStartEditName={() => {
             if (!interactive || isAdditional) return;
-            flushPendingEdit();
-            setEdit({ classId: cls.id, kind: 'name', val: cls.name });
+            startNameEdit(cls.id);
           }}
           onSaveName={name => saveName(cls.id, name)}
           onStartEditAttr={attrId => {
             if (!interactive || isAdditional) return;
-            flushPendingEdit();
-            const a = cls.attributes.find(x => x.id === attrId)!;
-            setEdit({
-              classId: cls.id,
-              kind: 'attr',
-              attrId,
-              name: a.name,
-              type: normalizeAttributeTypeDisplay(a.type),
-              visibility: a.visibility,
-            });
+            startAttributeEdit(cls.id, attrId);
           }}
           onSaveAttr={(attrId, n, t, v) => saveAttr(cls.id, attrId, n, t, v)}
-          onCancelEdit={() => setEdit(null)}
+          onCancelEdit={cancelEdit}
           onAddAttr={() => interactive && !isAdditional && addAttr(cls.id)}
           onDeleteAttr={attrId => deleteAttr(cls.id, attrId)}
           onStartEditOp={opId => {
             if (!interactive || isAdditional) return;
-            flushPendingEdit();
-            const o = cls.operations.find(x => x.id === opId)!;
-            setEdit({
-              classId: cls.id,
-              kind: 'op',
-              opId,
-              name: o.name,
-              returnType: normalizeOperationReturnType(o.returnType),
-              visibility: o.visibility,
-            });
+            startOperationEdit(cls.id, opId);
           }}
           onSaveOp={(opId, n, rt, v) => saveOp(cls.id, opId, n, rt, v)}
           onAddOp={() => interactive && !isAdditional && addOp(cls.id)}
           onDeleteOp={opId => deleteOp(cls.id, opId)}
           onDelete={() => !isAdditional && deleteClass(cls.id)}
-          onEditChange={setEdit}
+          onEditChange={changeEdit}
         />
         );
       })}
@@ -1291,10 +1073,7 @@ export const UMLDiagram = forwardRef<UMLDiagramHandle, UMLDiagramProps>(({
         <ClassEditPanel
           cls={selectedClass}
           classes={classes}
-          parentId={getInheritanceParentId(
-            relationships,
-            selectedClass.id,
-          )}
+          parentId={getInheritanceParentId(selectedClass.id)}
           onUpdate={patch => updateClass(selectedClass.id, patch)}
           onSetParent={parentId => setInheritanceParent(selectedClass.id, parentId)}
           onDelete={() => deleteClass(selectedClass.id)}
