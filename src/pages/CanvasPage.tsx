@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { ShareProjectModal } from '../components/ui/ShareProjectModal';
 import { useNavigate, useParams, useLocation } from 'react-router-dom';
@@ -1240,15 +1240,6 @@ export const CanvasPage: React.FC = () => {
   }, [activeProjectId, activeInstanceId, setBaselineForInstance, isViewOnly]);
 
   const navigateHome = useCallback(() => navigate('/'), [navigate]);
-
-  const allLibraryModels = useMemo(() => {
-    const seen = new Set<number>();
-    return [...drawerModels, ...myLibraryModels, ...publicLibraryModels].filter(m => {
-      if (seen.has(m.id)) return false;
-      seen.add(m.id);
-      return true;
-    });
-  }, [drawerModels, myLibraryModels, publicLibraryModels]);
 
   const handleReactionModeEnd = useCallback(() => setAddReactionMode(false), []);
 

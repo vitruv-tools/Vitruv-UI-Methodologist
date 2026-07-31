@@ -1,4 +1,5 @@
 import React, { useState, useCallback, useRef, useMemo, useEffect, MouseEvent as ReactMouseEvent } from 'react';
+import ReactDOM from 'react-dom';
 import Editor, { OnMount } from '@monaco-editor/react';
 import { Node } from 'reactflow';
 import { cardColor } from '../flow/EcoreFileBox';
@@ -6,6 +7,7 @@ import { APP_FONT } from '../ui/sharedStyles';
 import { apiService } from '../../services/api';
 import { CodeEditorModal } from '../flow/CodeEditorModal';
 import { useOclLsp } from '../../hooks/useOclLsp';
+import { MODAL_Z_INDEX, getAppPortalRoot, useModalBodyLock } from '../ui/modalUtils';
 import {
   vitruvOCLLanguageId,
   vitruvOCLMonarch,
@@ -1313,16 +1315,17 @@ const MetricsPanel: React.FC<MetricsPanelProps> = ({ ruleSets, colorMap }) => {
 
 const DetailedMetricsModal: React.FC<{ ruleSets: RuleSet[]; colorMap: Record<string, string>; onClose: () => void }> = ({ ruleSets, colorMap, onClose }) => {
   const sev = SEVERITY_OPTIONS.reduce<Record<string, { color: string; bg: string }>>((m, o) => { m[o.value] = { color: o.color, bg: o.bg }; return m; }, {});
+  useModalBodyLock(true);
 
-  return (
+  return ReactDOM.createPortal(
     <dialog
       open
       style={{
         position: 'fixed', inset: 0, width: '100%', height: '100%',
         maxWidth: '100vw', maxHeight: '100vh',
         background: 'none', border: 'none', padding: 0, margin: 0,
-        zIndex: 2000, display: 'flex', alignItems: 'center', justifyContent: 'center',
-        overflow: 'hidden', boxSizing: 'border-box',
+        zIndex: MODAL_Z_INDEX, display: 'flex', alignItems: 'center', justifyContent: 'center',
+        overflow: 'hidden', boxSizing: 'border-box', pointerEvents: 'auto',
       }}
     >
       <button type="button" onClick={onClose} aria-label="Close" style={{ position: 'absolute', inset: 0, background: 'rgba(15,23,42,0.35)', border: 'none', cursor: 'default', padding: 0 }} />
@@ -1432,7 +1435,8 @@ const DetailedMetricsModal: React.FC<{ ruleSets: RuleSet[]; colorMap: Record<str
           })}
         </div>
       </div>
-    </dialog>
+    </dialog>,
+    getAppPortalRoot(),
   );
 };
 
