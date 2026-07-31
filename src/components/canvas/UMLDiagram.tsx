@@ -14,8 +14,8 @@ import {
 } from '../../utils/umlLayoutStorage';
 import { assignParallelRelMeta } from '../../utils/umlClassLayout';
 import { UMLDiagramMinimap } from './UMLDiagramMinimap';
-import { computeUmlModelGroups } from '../../utils/umlModelGroups';
 import { UMLDiagramToolbar } from './UMLDiagramToolbar';
+import { UMLModelGroupWrappers } from './UMLModelGroupWrappers';
 import { DIAGRAM_HINT_TOP, UML } from './umlDiagramTheme';
 import { ClassEditPanel, RelationshipEditPanel } from './UMLDiagramEditPanels';
 import { UMLClassBox } from './UMLClassBox';
@@ -25,15 +25,12 @@ import {
 } from './UMLRelationshipLayers';
 import {
   UML_CLASS_BOX_EDIT_WIDTH,
-  UML_CLASS_BOX_WIDTH,
 } from './umlDiagramClassMetrics';
 import type {
   UmlDiagramClass,
   UmlDiagramEditState,
 } from './umlDiagramTypes';
 import {
-  applyWrapperDragToClass,
-  mergeAdditionalClassesWithPositions,
   nextUniqueClassName,
   removeAttributeFromClass,
   removeOperationFromClass,
@@ -44,12 +41,15 @@ import {
   updateClassOperation,
 } from './umlDiagramClassTransforms';
 import {
-  getUmlClassBoxHeight,
   type UmlDiagramRelationshipLayout,
 } from './umlDiagramLayoutGeometry';
 import { useUmlDiagramViewport } from '../../hooks/useUmlDiagramViewport';
 import { useUmlRelationshipLayers } from '../../hooks/useUmlRelationshipLayers';
 import { useUmlDiagramReactions } from '../../hooks/useUmlDiagramReactions';
+import {
+  useUmlDiagramModelGroups,
+  type UmlDiagramAdditionalModel,
+} from '../../hooks/useUmlDiagramModelGroups';
 
 // ── constants ────────────────────────────────────────────────────────────────
 
@@ -59,6 +59,8 @@ export const WORKSPACE_DOT_BACKGROUND: React.CSSProperties = {
   backgroundImage: 'radial-gradient(circle, #d1d5db 0.75px, transparent 0.75px)',
   backgroundSize: '24px 24px',
 };
+
+const EMPTY_ADDITIONAL_MODELS: UmlDiagramAdditionalModel[] = [];
 
 // ── helpers ──────────────────────────────────────────────────────────────────
 
@@ -132,7 +134,7 @@ interface UMLDiagramProps {
   saveContext?: UmlDiagramSaveContext;
   onHistoryChange?: (state: { canUndo: boolean; canRedo: boolean }) => void;
   /** Additional models to render in the same canvas with colored wrapper groups. */
-  additionalModels?: { id: number; name: string; ecoreContent: string; color: string; fill: string }[];
+  additionalModels?: UmlDiagramAdditionalModel[];
   /** Called when the user removes an added (non-primary) meta model from the view. */
   onRemoveAdditionalModel?: (modelName: string) => void;
   /** When 'reactions', elements show connection indicators. */
@@ -204,17 +206,6 @@ function getSaveButtonTitle(hasUnsavedChanges: boolean, saveContext: UmlDiagramS
   if (!hasUnsavedChanges) return 'No unsaved changes';
   if (saveContext.saveTarget === 'workspace') return 'Save changes to project';
   return 'Save metamodel changes';
-}
-
-function classesShareModel(
-  classIdA: string,
-  classIdB: string,
-  classModelMap: Map<string, { name: string; color: string; fill: string }>,
-): boolean {
-  const modelA = classModelMap.get(classIdA)?.name;
-  const modelB = classModelMap.get(classIdB)?.name;
-  if (!modelA || !modelB) return false;
-  return modelA === modelB;
 }
 
 function getConnectModeHint(connectSourceId: string | null, multiModel: boolean): string {
@@ -300,7 +291,7 @@ export const UMLDiagram = forwardRef<UMLDiagramHandle, UMLDiagramProps>(({
   interactive = true,
   saveContext,
   onHistoryChange,
-  additionalModels = [],
+  additionalModels = EMPTY_ADDITIONAL_MODELS,
   onRemoveAdditionalModel,
   reactionsMode = 'uml',
   reactionModels = [],
@@ -323,85 +314,28 @@ export const UMLDiagram = forwardRef<UMLDiagramHandle, UMLDiagramProps>(({
   const [saveMessage, setSaveMessage] = useState('');
   const initialSnapshotRef = useRef('');
   const skipNextEcoreResetRef = useRef(false);
-
-  // Additional models: parse and track classes per model group
-  const additionalParsed = useMemo(() => {
-    return additionalModels.map((m, i) => {
-      try {
-        const model = ecoreToUml(m.ecoreContent);
-        return {
-          ...m,
-          classes: model.classes.map(c => ({
-            ...c,
-            operations: c.operations ?? [],
-            id: `addl-${m.id}-${c.id}`,
-            x: c.x + (i + 1) * 450,
-            y: c.y,
-          })),
-          relationships: model.relationships.map(r => ({
-            ...r,
-            id: `addl-${m.id}-${r.id}`,
-            sourceId: `addl-${m.id}-${r.sourceId}`,
-            targetId: `addl-${m.id}-${r.targetId}`,
-          })),
-        };
-      } catch { return { ...m, classes: [] as UmlDiagramClass[], relationships: [] as UMLRelationship[] }; }
-    });
-  }, [additionalModels]);
-
-  const [additionalClasses, setAdditionalClasses] = useState<UmlDiagramClass[]>(() =>
-    additionalParsed.flatMap(m => m.classes)
-  );
-  const [additionalRels, setAdditionalRels] = useState<UMLRelationship[]>(() =>
-    additionalParsed.flatMap(m => m.relationships)
-  );
-
-  useEffect(() => {
-    const newCls = additionalParsed.flatMap(m => m.classes);
-    setAdditionalClasses(prev => mergeAdditionalClassesWithPositions(prev, newCls));
-    setAdditionalRels(additionalParsed.flatMap(m => m.relationships));
-  }, [additionalParsed]);
-
-  // Map classId -> model color info for wrapper rendering
-  const classModelMap = useMemo(() => {
-    const map = new Map<string, { name: string; color: string; fill: string }>();
-    // Primary model classes
-    for (const cls of classes) {
-      if (additionalModels.length > 0) {
-        map.set(cls.id, { name: fileName?.replace(/\.ecore$/, '') || 'Primary', color: '#2563eb', fill: 'rgba(37,99,235,0.06)' });
-      }
-    }
-    // Additional model classes
-    for (const m of additionalParsed) {
-      for (const cls of m.classes) {
-        map.set(cls.id, { name: m.name, color: m.color, fill: m.fill });
-      }
-    }
-    return map;
-  }, [classes, additionalParsed, additionalModels.length, fileName]);
-
-  // Combined classes and relationships for rendering
-  const allClasses = useMemo(() => [...classes, ...additionalClasses], [classes, additionalClasses]);
-  const allRels = useMemo(() => [...relationships, ...additionalRels], [relationships, additionalRels]);
+  const primaryModelName = fileName?.replace(/\.ecore$/, '') || 'Primary';
+  const {
+    allClasses,
+    allRelationships,
+    modelGroups,
+    removableModelNames,
+    moveAdditionalClass,
+    areClassesInSameModel,
+    beginGroupDrag,
+    moveGroupDrag,
+    endGroupDrag,
+  } = useUmlDiagramModelGroups({
+    primaryClasses: classes,
+    primaryRelationships: relationships,
+    setPrimaryClasses: setClasses,
+    primaryModelName,
+    additionalModels,
+  });
 
   const rels = useMemo(
-    () => assignParallelRelMeta(allRels) as UmlDiagramRelationshipLayout[],
-    [allRels],
-  );
-
-  const modelGroups = useMemo(() => {
-    if (additionalModels.length === 0) return [];
-    return computeUmlModelGroups(
-      allClasses,
-      classModelMap,
-      getUmlClassBoxHeight,
-      UML_CLASS_BOX_WIDTH,
-    );
-  }, [additionalModels.length, allClasses, classModelMap]);
-
-  const removableModelNames = useMemo(
-    () => new Set(additionalModels.map(m => m.name)),
-    [additionalModels],
+    () => assignParallelRelMeta(allRelationships) as UmlDiagramRelationshipLayout[],
+    [allRelationships],
   );
 
   const [edit, setEdit] = useState<EditState | null>(null);
@@ -594,7 +528,6 @@ export const UMLDiagram = forwardRef<UMLDiagramHandle, UMLDiagramProps>(({
     setConnectMode(false);
     setConnectSourceId(null);
   }, []);
-  const primaryModelName = fileName?.replace(/\.ecore$/, '') || 'Primary';
   const primaryModelId = reactionModels[0]?.id ?? 0;
   const {
     reactionEdges,
@@ -649,53 +582,6 @@ export const UMLDiagram = forwardRef<UMLDiagramHandle, UMLDiagramProps>(({
     dragHistorySavedRef.current = false;
     scheduleLayoutSave();
   }, [scheduleLayoutSave]);
-
-  const moveAdditionalClass = useCallback((id: string, x: number, y: number) => {
-    setAdditionalClasses(prev => prev.map(c => (c.id === id ? { ...c, x, y } : c)));
-  }, []);
-
-  const wrapperDragOrigins = useRef<Map<string, { x: number; y: number }>>(new Map());
-
-  const handleWrapperDragStart = useCallback((e: React.MouseEvent, groupName: string) => {
-    e.stopPropagation();
-    e.preventDefault();
-    const startX = e.clientX;
-    const startY = e.clientY;
-    const primaryName = fileName?.replace(/\.ecore$/, '') || 'Primary';
-
-    const origins = new Map<string, { x: number; y: number }>();
-    const allCurrent = primaryName === groupName ? classes : additionalClasses;
-    for (const c of allCurrent) {
-      const info = classModelMap.get(c.id);
-      if (info?.name === groupName) {
-        origins.set(c.id, { x: c.x, y: c.y });
-      }
-    }
-    wrapperDragOrigins.current = origins;
-
-    const onMove = (ev: MouseEvent) => {
-      const dx = (ev.clientX - startX) / vscale;
-      const dy = (ev.clientY - startY) / vscale;
-      const origins = wrapperDragOrigins.current;
-      const applyDrag = (c: UmlDiagramClass) => applyWrapperDragToClass(c, origins, dx, dy);
-
-      if (groupName === primaryName) {
-        setClasses(prev => prev.map(applyDrag));
-      } else {
-        setAdditionalClasses(prev => prev.map(applyDrag));
-      }
-    };
-
-    const onUp = () => {
-      wrapperDragOrigins.current.clear();
-      scheduleDebouncedLayoutSave();
-      globalThis.removeEventListener('mousemove', onMove);
-      globalThis.removeEventListener('mouseup', onUp);
-    };
-
-    globalThis.addEventListener('mousemove', onMove);
-    globalThis.addEventListener('mouseup', onUp);
-  }, [vscale, fileName, classes, additionalClasses, classModelMap, scheduleDebouncedLayoutSave]);
 
   const saveName = useCallback((oldId: string, name: string) => {
     const trimmed = name.trim();
@@ -860,7 +746,7 @@ export const UMLDiagram = forwardRef<UMLDiagramHandle, UMLDiagramProps>(({
 
   const addRelationship = useCallback((sourceId: string, targetId: string) => {
     if (sourceId === targetId) return false;
-    if (additionalModels.length > 0 && !classesShareModel(sourceId, targetId, classModelMap)) {
+    if (additionalModels.length > 0 && !areClassesInSameModel(sourceId, targetId)) {
       return false;
     }
     const exists = relationshipsRef.current.some(
@@ -879,7 +765,7 @@ export const UMLDiagram = forwardRef<UMLDiagramHandle, UMLDiagramProps>(({
     }]);
     setSelectedRelId(newRelId);
     return true;
-  }, [recordChange, additionalModels.length, classModelMap]);
+  }, [recordChange, additionalModels.length, areClassesInSameModel]);
 
   const deleteRelationship = useCallback((relId: string) => {
     recordChange();
@@ -1165,102 +1051,19 @@ export const UMLDiagram = forwardRef<UMLDiagramHandle, UMLDiagramProps>(({
         onBackgroundClick={handleRelationshipBackgroundClick}
       />
 
-      {/* Model group wrapper rects */}
-      {modelGroups.map(g => {
-        const sx = g.minX + offsetX;
-        const sy = g.minY + offsetY;
-        const canRemove = interactive && removableModelNames.has(g.name) && onRemoveAdditionalModel;
-        return (
-          <div
-            key={g.name}
-            style={{
-              position: 'absolute',
-              left: sx,
-              top: sy,
-              width: g.width,
-              height: g.height,
-              border: `2px solid ${g.color}`,
-              borderRadius: 10,
-              background: g.fill,
-              pointerEvents: 'none',
-              zIndex: 0,
-            }}
-          >
-            <div
-              data-wrapper-header
-              style={{
-                position: 'absolute',
-                top: 0,
-                left: 0,
-                right: 0,
-                height: 22,
-                background: g.color,
-                borderRadius: '8px 8px 0 0',
-                display: 'flex',
-                alignItems: 'center',
-                paddingLeft: 8,
-                paddingRight: canRemove ? 4 : 8,
-                fontSize: 11,
-                fontWeight: 700,
-                color: '#fff',
-                letterSpacing: 0.3,
-                pointerEvents: 'auto',
-              }}
-            >
-              <button
-                type="button"
-                onMouseDown={interactive ? (e) => handleWrapperDragStart(e, g.name) : undefined}
-                style={{
-                  flex: 1,
-                  minWidth: 0,
-                  height: '100%',
-                  background: 'transparent',
-                  border: 'none',
-                  padding: 0,
-                  display: 'flex',
-                  alignItems: 'center',
-                  fontSize: 11,
-                  fontWeight: 700,
-                  color: '#fff',
-                  letterSpacing: 0.3,
-                  cursor: interactive ? 'grab' : 'default',
-                  textAlign: 'left',
-                }}
-              >
-                {g.name}
-              </button>
-              {canRemove && (
-                <button
-                  type="button"
-                  title={`Remove ${g.name}`}
-                  aria-label={`Remove ${g.name}`}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onRemoveAdditionalModel?.(g.name);
-                  }}
-                  style={{
-                    width: 18,
-                    height: 18,
-                    border: 'none',
-                    borderRadius: 4,
-                    background: 'rgba(255,255,255,0.18)',
-                    color: '#fff',
-                    cursor: 'pointer',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    fontSize: 14,
-                    lineHeight: 1,
-                    flexShrink: 0,
-                  }}
-                >
-                  &times;
-                </button>
-              )}
-            </div>
-          </div>
-        );
-      })}
+      <UMLModelGroupWrappers
+        modelGroups={modelGroups}
+        offsetX={offsetX}
+        offsetY={offsetY}
+        vscale={vscale}
+        interactive={interactive}
+        removableModelNames={removableModelNames}
+        onRemoveAdditionalModel={onRemoveAdditionalModel}
+        beginGroupDrag={beginGroupDrag}
+        moveGroupDrag={moveGroupDrag}
+        endGroupDrag={endGroupDrag}
+        onGroupDragComplete={scheduleDebouncedLayoutSave}
+      />
 
       {/* Class boxes */}
       {allClasses.map(cls => {
