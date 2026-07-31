@@ -1,7 +1,6 @@
 import React from 'react';
 import { FloatingUMLPanel } from './FloatingUMLPanel';
 import type { UmlDiagramSaveContext } from './UMLDiagram';
-import type { DrawerModel } from './ModelDrawer';
 import type { CanvasUmlPanelState } from '../../types/canvasTab';
 import { canvasUmlLayoutFileName, canvasUmlLayoutScope } from '../../utils/metaModelPreview';
 
@@ -17,7 +16,6 @@ interface CanvasUmlPanelLayerProps {
   onFocus: (panelId: string) => void;
   onHome: () => void;
   onEcoreContentUpdated: (panelId: string, content: string) => void;
-  libraryModels?: DrawerModel[];
   fetchEcoreFile: (fileId: number) => Promise<string>;
 }
 
@@ -33,7 +31,6 @@ export const CanvasUmlPanelLayer: React.FC<CanvasUmlPanelLayerProps> = ({
   onFocus,
   onHome,
   onEcoreContentUpdated,
-  libraryModels,
   fetchEcoreFile,
 }) => (
   <>
@@ -58,8 +55,6 @@ export const CanvasUmlPanelLayer: React.FC<CanvasUmlPanelLayerProps> = ({
         fetchEcoreFile={fetchEcoreFile}
         onEcoreContentUpdated={content => onEcoreContentUpdated(panel.id, content)}
         zIndex={panelZBase + (topPanelId === panel.id ? panels.length : idx)}
-        libraryModels={libraryModels}
-        vsumId={activeProjectId?.toString()}
       />
     ))}
   </>

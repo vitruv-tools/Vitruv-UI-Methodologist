@@ -1,6 +1,5 @@
 import React from 'react';
 import { render } from '@testing-library/react';
-import type { DrawerModel } from '../../../components/canvas/ModelDrawer';
 import type { UmlDiagramSaveContext } from '../../../components/canvas/UMLDiagram';
 import { CanvasUmlPanelLayer } from '../../../components/canvas/CanvasUmlPanelLayer';
 import type { CanvasUmlPanelState } from '../../../types/canvasTab';
@@ -24,8 +23,6 @@ interface MockFloatingUMLPanelProps {
   fetchEcoreFile: (fileId: number) => Promise<string>;
   onEcoreContentUpdated: (content: string) => void;
   zIndex: number;
-  libraryModels?: DrawerModel[];
-  vsumId?: string;
 }
 
 const mockFloatingUMLPanel = jest.fn((_props: MockFloatingUMLPanelProps) => null);
@@ -64,8 +61,6 @@ const panels: CanvasUmlPanelState[] = [
   },
 ];
 
-const libraryModels: DrawerModel[] = [{ id: 31, name: 'Library model' }];
-
 const createProps = () => ({
   panels,
   vsumName: '',
@@ -84,7 +79,6 @@ const createProps = () => ({
   onFocus: jest.fn(),
   onHome: jest.fn(),
   onEcoreContentUpdated: jest.fn(),
-  libraryModels,
   fetchEcoreFile: jest.fn().mockResolvedValue('<fresh />'),
 });
 
@@ -124,8 +118,6 @@ describe('CanvasUmlPanelLayer', () => {
       ecoreFileId: 101,
       fetchEcoreFile: props.fetchEcoreFile,
       zIndex: 2000,
-      libraryModels,
-      vsumId: '42',
     });
     expect(secondPanelProps).toMatchObject({
       id: 'panel-2',

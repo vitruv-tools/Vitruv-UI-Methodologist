@@ -1360,7 +1360,6 @@ export const CanvasPage: React.FC = () => {
         onFocus={focusPanel}
         onHome={navigateHome}
         onEcoreContentUpdated={handleUmlPanelEcoreContentUpdated}
-        libraryModels={allLibraryModels}
         fetchEcoreFile={fetchEcoreFileById}
       />
 
