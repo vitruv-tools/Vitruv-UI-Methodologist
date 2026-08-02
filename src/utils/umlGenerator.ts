@@ -1,12 +1,17 @@
 import { FlowEdge, FlowNode } from '../types/flow';
+import { isPrimitiveAttributeType, normalizeAttributeTypeDisplay } from './ecoreToUml';
+import { formatEcoreMultiplicity } from './umlMultiplicity';
+import { umlClassNodeId, umlPackageNodeId } from './umlLayoutStorage';
 
-// Layout constants
-const NODE_WIDTH = 280;
-const NODE_HEIGHT = 220;
-const HORIZONTAL_SPACING = 30;  // Very tight - boxes almost touching on X
-const VERTICAL_SPACING = 280;   // Large vertical spacing for big Y differences
-const START_X = 150;
-const START_Y = 150;
+// Layout constants — calibrated to actual rendered node sizes.
+// height; attribute-heavy nodes can be 120–180 px tall, so VERTICAL_SPACING
+// is generous to prevent overlaps.
+const NODE_WIDTH = 380;
+const NODE_HEIGHT = 85;
+const HORIZONTAL_SPACING = 80;
+const VERTICAL_SPACING = 130;
+const START_X = 80;
+const START_Y = 60;
 
 // Helper function to find a node by ID
 const findNodeById = (nodes: FlowNode[], nodeId: string): FlowNode | undefined => {
@@ -29,7 +34,9 @@ interface TreeLayoutContext {
   parentToChildren: Map<string, string[]>;
 }
 
-// Layout a single tree node and its children recursively
+// Layout a single tree node and its children recursively.
+// Deterministic: no random jitter. Strict level-based Y so all nodes at the
+// same inheritance depth share the same horizontal band (jjodel style).
 const layoutTreeNode = (
   nodeId: string,
   level: number,
@@ -41,11 +48,11 @@ const layoutTreeNode = (
 ): void => {
   const node = findNodeById(ctx.nodes, nodeId);
   if (!node) return;
-  
+
   const centerX = (leftBound + rightBound) / 2;
-  const verticalJitter = (Math.random() - 0.5) * 160; // ±80px variation
-  const yPos = startY + level * (NODE_HEIGHT + VERTICAL_SPACING) + verticalJitter;
-  node.position = { x: centerX, y: yPos };
+  const yPos = startY + level * (NODE_HEIGHT + VERTICAL_SPACING);
+  // Offset so the node box is centered in its allocated band
+  node.position = { x: centerX - NODE_WIDTH / 2, y: yPos };
 
   const children = ctx.parentToChildren.get(nodeId) || [];
   if (children.length === 0) return;
@@ -71,8 +78,7 @@ const layoutComponent = (
   if (componentNodes.length === 1) {
     const node = findNodeById(nodes, componentNodes[0]);
     if (!node) return;
-    const verticalJitter = (Math.random() - 0.5) * 180;
-    node.position = { x: startX, y: startY + verticalJitter };
+    node.position = { x: startX, y: startY };
     return;
   }
 
@@ -108,7 +114,9 @@ const layoutComponent = (
   }
 };
 
-// Force-directed layout for non-hierarchical components
+// Force-directed layout for non-hierarchical (association-only) components.
+// Uses circular initial placement so connected nodes naturally converge near
+// each other, and equal X/Y repulsion to avoid the previous tall-column look.
 const layoutForceDirected = (
   componentNodes: string[],
   startX: number,
@@ -117,33 +125,48 @@ const layoutForceDirected = (
   adjacencyMap: Map<string, Set<string>>
 ): void => {
   const positions = new Map<string, { x: number; y: number }>();
-  
-  const gridSize = Math.min(Math.max(1, Math.ceil(componentNodes.length / 4)), 2);
-  componentNodes.forEach((nodeId, idx) => {
-    const row = Math.floor(idx / gridSize);
-    const col = idx % gridSize;
-    const verticalJitter = (Math.random() - 0.5) * 200;
+  const n = componentNodes.length;
+
+  // Place the highest-degree node at the center of the ring so hub-and-spoke
+  // topologies (e.g. many classes pointing to one "System" node) converge with
+  // that hub in the middle rather than far to one side.
+  const sortedByDegree = [...componentNodes].sort(
+    (a, b) => (adjacencyMap.get(b)?.size ?? 0) - (adjacencyMap.get(a)?.size ?? 0)
+  );
+  const hubNode = sortedByDegree[0];
+  const otherNodes = sortedByDegree.slice(1);
+
+  // Tighter initial ring — use a smaller slot so nodes start closer together
+  const SLOT = NODE_WIDTH + HORIZONTAL_SPACING / 2;
+  const radius = n <= 2 ? SLOT * 0.8 : (SLOT * n) / (2.8 * Math.PI);
+  const cx = startX + radius;
+  const cy = startY + radius;
+
+  // Hub at center, others evenly on a ring
+  positions.set(hubNode, { x: cx, y: cy });
+  otherNodes.forEach((nodeId, idx) => {
+    const angle = (2 * Math.PI * idx) / Math.max(otherNodes.length, 1) - Math.PI / 2;
     positions.set(nodeId, {
-      x: startX + col * (NODE_WIDTH + HORIZONTAL_SPACING),
-      y: startY + row * (NODE_HEIGHT + VERTICAL_SPACING) + verticalJitter
+      x: cx + radius * Math.cos(angle),
+      y: cy + radius * Math.sin(angle),
     });
   });
 
-  const ITERATIONS = 150;
-  const IDEAL_DISTANCE = NODE_WIDTH + HORIZONTAL_SPACING * 0.4;
-  const REPULSION = 28000;
-  const ATTRACTION = 0.65;
-  const DAMPING = 0.85;
-  const VERTICAL_BIAS = 2;
+  const ITERATIONS = 200;
+  const IDEAL_DISTANCE = NODE_WIDTH + HORIZONTAL_SPACING * 0.6;
+  const REPULSION = 9000;
+  const ATTRACTION = 0.5;
+  const DAMPING = 0.75;
 
   for (let iter = 0; iter < ITERATIONS; iter++) {
     const forces = new Map<string, { x: number; y: number }>();
     componentNodes.forEach(id => forces.set(id, { x: 0, y: 0 }));
 
-    applyRepulsionForces(componentNodes, positions, forces, REPULSION, VERTICAL_BIAS);
+    // Equal vertical/horizontal repulsion (VERTICAL_BIAS = 1)
+    applyRepulsionForces(componentNodes, positions, forces, REPULSION, 1);
     applyAttractionForces(componentNodes, positions, forces, adjacencyMap, ATTRACTION, IDEAL_DISTANCE);
 
-    const coolingFactor = 1 - (iter / ITERATIONS) * 0.3;
+    const coolingFactor = 1 - (iter / ITERATIONS) * 0.6;
     componentNodes.forEach(nodeId => {
       const pos = positions.get(nodeId)!;
       const force = forces.get(nodeId)!;
@@ -217,7 +240,11 @@ const applyAttractionForces = (
   });
 };
 
-// Normalize positions and apply to nodes
+// Normalize positions, compress if too spread out, then apply to nodes.
+// MAX_SPAN limits how wide/tall a single component's bounding box can be so
+// that fitView doesn't need to zoom out too far.
+const MAX_SPAN = 1100;
+
 const normalizeAndApplyPositions = (
   componentNodes: string[],
   positions: Map<string, { x: number; y: number }>,
@@ -225,19 +252,25 @@ const normalizeAndApplyPositions = (
   startY: number,
   nodes: FlowNode[]
 ): void => {
-  let minX = Infinity, minY = Infinity;
+  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
   positions.forEach(pos => {
     minX = Math.min(minX, pos.x);
     minY = Math.min(minY, pos.y);
+    maxX = Math.max(maxX, pos.x + NODE_WIDTH);
+    maxY = Math.max(maxY, pos.y + NODE_HEIGHT);
   });
+
+  const spanX = maxX - minX;
+  const spanY = maxY - minY;
+  const scale = Math.min(1, MAX_SPAN / Math.max(spanX, spanY, 1));
 
   componentNodes.forEach(nodeId => {
     const node = findNodeById(nodes, nodeId);
     const pos = positions.get(nodeId);
     if (!node || !pos) return;
     node.position = {
-      x: pos.x - minX + startX,
-      y: pos.y - minY + startY
+      x: (pos.x - minX) * scale + startX,
+      y: (pos.y - minY) * scale + startY,
     };
   });
 };
@@ -310,37 +343,35 @@ function applyIntelligentLayout(nodes: FlowNode[], edges: FlowEdge[]): void {
       maxY = Math.max(maxY, node.position.y);
     });
     
-    // Add moderate vertical spacing between components like the picture
-    currentY = maxY + NODE_HEIGHT + VERTICAL_SPACING * 1.5;
+    // Leave a clear gap between disconnected components
+    currentY = maxY + NODE_HEIGHT + VERTICAL_SPACING * 2;
   });
 
-  // Layout isolated nodes in very narrow columns (1-2 columns) with large Y variation
+  // Layout isolated nodes in a clean grid — no jitter
   if (isolatedNodes.length > 0) {
-    const itemsPerRow = Math.min(Math.max(1, Math.ceil(isolatedNodes.length / 3)), 2); // 1-2 columns only
+    const cols = Math.ceil(Math.sqrt(isolatedNodes.length));
     isolatedNodes.forEach((nodeId, idx) => {
       const node = findNodeById(nodes, nodeId);
       if (!node) return;
-      const row = Math.floor(idx / itemsPerRow);
-      const col = idx % itemsPerRow;
-      // Add large random Y offset for big vertical differences
-      const verticalJitter = (Math.random() - 0.5) * 180; // ±90px variation
+      const row = Math.floor(idx / cols);
+      const col = idx % cols;
       node.position = {
-        x: START_X + col * (NODE_WIDTH + HORIZONTAL_SPACING), // Same X for column
-        y: currentY + row * (NODE_HEIGHT + VERTICAL_SPACING) + verticalJitter // Large Y variation
+        x: START_X + col * (NODE_WIDTH + HORIZONTAL_SPACING),
+        y: currentY + row * (NODE_HEIGHT + VERTICAL_SPACING),
       };
     });
   }
 
-  // Post-process: Remove overlaps - keep columns, large Y separation
-  const MIN_DISTANCE = Math.min(HORIZONTAL_SPACING, VERTICAL_SPACING) * 0.4;
-  const VERTICAL_PUSH_BIAS = 2.2; // Strong vertical bias for large Y differences
+  // Post-process: resolve any remaining box overlaps with equal X/Y push.
+  // Use a generous radius so even tall attribute-heavy boxes don't overlap.
+  const MIN_BOX_DIST = NODE_WIDTH * 0.75;
   let hasOverlap = true;
-  let iterations = 0;
-  const MAX_OVERLAP_ITERATIONS = 25; // Fewer iterations to preserve structure
+  let overlapIter = 0;
+  const MAX_OVERLAP_ITERATIONS = 30;
 
-  while (hasOverlap && iterations < MAX_OVERLAP_ITERATIONS) {
+  while (hasOverlap && overlapIter < MAX_OVERLAP_ITERATIONS) {
     hasOverlap = false;
-    iterations++;
+    overlapIter++;
 
     for (let i = 0; i < nodes.length; i++) {
       for (let j = i + 1; j < nodes.length; j++) {
@@ -351,19 +382,15 @@ function applyIntelligentLayout(nodes: FlowNode[], edges: FlowEdge[]): void {
         const dy = nodeB.position.y - nodeA.position.y;
         const distance = Math.hypot(dx, dy);
 
-        if (distance < MIN_DISTANCE) {
+        if (distance < MIN_BOX_DIST && distance > 0.001) {
           hasOverlap = true;
-          // Push nodes apart - keep same X column, large Y separation
-          const pushDistance = (MIN_DISTANCE - distance) / 2 + 5;
-          const angle = Math.atan2(dy, dx);
-          
-          const pushX = Math.cos(angle) * pushDistance * 0.2; // Very weak horizontal - stay in column
-          const pushY = Math.sin(angle) * pushDistance * VERTICAL_PUSH_BIAS; // Strong vertical - large Y diff
-          
-          nodeA.position.x -= pushX;
-          nodeA.position.y -= pushY;
-          nodeB.position.x += pushX;
-          nodeB.position.y += pushY;
+          const push = (MIN_BOX_DIST - distance) / 2 + 4;
+          const nx = dx / distance;
+          const ny = dy / distance;
+          nodeA.position.x -= nx * push;
+          nodeA.position.y -= ny * push;
+          nodeB.position.x += nx * push;
+          nodeB.position.y += ny * push;
         }
       }
     }
@@ -414,23 +441,11 @@ export const generateUMLFromEcore = (ecoreContent: string): { nodes: FlowNode[];
         const attrName = attr.getAttribute('name') || `attr${aIdx + 1}`;
         const eType = attr.getAttribute('eType') || attr.getAttribute('type') || 'EString';
         
-        // Parse type reference - remove the # prefix if present
         let typeName = eType.split('#').pop() || eType;
-        // Remove any // prefix that might exist
-        typeName = typeName.replace(/^\/\//, '');
+        typeName = typeName.replace(/^\/\//, '').split('/').pop() || typeName;
+        if (!isPrimitiveAttributeType(typeName)) return;
         
-        const lower = attr.getAttribute('lowerBound');
-        const upper = attr.getAttribute('upperBound');
-        
-        // Format multiplicity - if we have bounds, use them
-        let mult = '';
-        if (lower !== null && upper !== null) {
-          mult = ` [${lower}..${upper}]`;
-        } else if (lower !== null || upper !== null) {
-          mult = ` [${lower || '1'}..${upper || '*'}]`;
-        }
-        
-        attributes.push(`+ ${attrName}: ${typeName}${mult}`);
+        attributes.push(`+ ${attrName}: ${normalizeAttributeTypeDisplay(typeName)}`);
       });
 
       // Determine tool name based on class type
@@ -442,7 +457,7 @@ export const generateUMLFromEcore = (ecoreContent: string): { nodes: FlowNode[];
       }
 
       const node: FlowNode = {
-        id: `uml-class-${nodeId++}`,
+        id: umlClassNodeId(className),
         type: 'editable',
         position: { x: 0, y: 0 }, // Will be calculated later
         data: {
@@ -516,20 +531,8 @@ export const generateUMLFromEcore = (ecoreContent: string): { nodes: FlowNode[];
           relationshipType = 'composition';
         }
 
-        // Normalize multiplicity per UML (place at target end only)
-        const normalizeUpper = (u: string | null) => {
-          if (u === null) return undefined;
-          if (u === '*' || u === '-1') return '*';
-          return u;
-        };
-        const normLower = lower ?? undefined;
-        const normUpper = normalizeUpper(upper);
-        let multiplicity: string | undefined = undefined;
-        if (normLower !== undefined || normUpper !== undefined) {
-          const lo = normLower ?? '1';
-          const hi = normUpper ?? '1';
-          multiplicity = lo === hi ? lo : `${lo}..${hi}`;
-        }
+        const targetMultiplicity = formatEcoreMultiplicity(lower, upper);
+        const sourceMultiplicity = targetMultiplicity === undefined ? undefined : '1';
 
         const handles = chooseHandles(sourceId, targetId);
         edges.push({
@@ -539,7 +542,8 @@ export const generateUMLFromEcore = (ecoreContent: string): { nodes: FlowNode[];
           type: 'uml',
           data: {
             relationshipType: relationshipType,
-            targetMultiplicity: multiplicity,
+            sourceMultiplicity,
+            targetMultiplicity,
           },
           sourceHandle: handles.sourceHandle,
           targetHandle: handles.targetHandle,
@@ -572,6 +576,19 @@ export const generateUMLFromEcore = (ecoreContent: string): { nodes: FlowNode[];
       });
     });
 
+    // Collect EEnum names defined in this model — these are valid attribute
+    // types alongside ECore primitives, but class names are NOT (those are
+    // expressed as EReferences / edges, not attribute types).
+    const enumElems = Array.from(xmlDoc.querySelectorAll('eClassifiers')).filter((el: Element) => {
+      const t = el.getAttribute('xsi:type') || el.getAttribute('type') || '';
+      return t.includes('EEnum') || el.tagName.toLowerCase().includes('eenum');
+    });
+    const modelEnumNames = enumElems
+      .map(e => e.getAttribute('name'))
+      .filter((n): n is string => Boolean(n));
+
+    nodes.forEach(n => { (n.data as any).availableEnumTypes = modelEnumNames; });
+
     // Apply intelligent layout algorithm
     applyIntelligentLayout(nodes, edges);
 
@@ -585,7 +602,7 @@ export const generateUMLFromEcore = (ecoreContent: string): { nodes: FlowNode[];
     // Optional package node
     if (nodes.length > 0) {
       const pkgNode: FlowNode = {
-        id: `uml-pkg-${nodeId++}`,
+        id: umlPackageNodeId(packageName),
         type: 'editable',
         position: { x: 80, y: 40 },
         data: {

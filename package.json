@@ -12,6 +12,7 @@
     "@types/node": "^16.18.126",
     "@types/react": "^19.1.8",
     "@types/react-dom": "^19.1.6",
+    "mermaid": "^11.15.0",
     "monaco-editor": "^0.55.1",
     "monaco-languageclient": "^10.5.0",
     "react": "^19.1.0",
@@ -36,6 +37,11 @@
     "build:production": "env-cmd -f .env.production react-scripts build",
     "test": "react-scripts test",
     "eject": "react-scripts eject"
+  },
+  "jest": {
+    "moduleNameMapper": {
+      "monaco-editor": "<rootDir>/src/__mocks__/monaco-editor.ts"
+    }
   },
   "eslintConfig": {
     "extends": [

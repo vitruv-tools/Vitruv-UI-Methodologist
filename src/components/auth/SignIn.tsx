@@ -1,8 +1,12 @@
-import React, { useState } from 'react';
-import { SignInCredentials } from '../../services/auth';
+import React, { useEffect, useState } from 'react';
+import ReactDOM from 'react-dom';
+import { AuthService, SignInCredentials } from '../../services/auth';
 import { useAuth } from '../../contexts/AuthContext';
 import { apiService } from '../../services/api';
-import './Auth.css';
+import { AuthLayout, AuthErrorBanner } from './AuthLayout';
+import { PasswordInput } from './PasswordInput';
+import { KitLogoIcon } from './KitLogoIcon';
+import { MODAL_Z_INDEX, modalBackdropStyle, useModalBodyLock } from '../ui/modalUtils';
 
 interface SignInProps {
   onSignInSuccess: (user: any) => void;
@@ -17,39 +21,90 @@ export function SignIn({ onSignInSuccess, onSwitchToSignUp }: Readonly<SignInPro
   });
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  
-  // Forgot password states
+  const [keepSignedIn, setKeepSignedIn] = useState(true);
+
+  // Forgot password state
   const [isForgotPasswordOpen, setIsForgotPasswordOpen] = useState(false);
   const [forgotPasswordEmail, setForgotPasswordEmail] = useState('');
   const [isSendingReset, setIsSendingReset] = useState(false);
   const [resetSuccess, setResetSuccess] = useState('');
   const [resetError, setResetError] = useState('');
 
+  const closeForgotPasswordModal = () => {
+    setIsForgotPasswordOpen(false);
+    setResetError('');
+    setResetSuccess('');
+    setForgotPasswordEmail('');
+  };
+
+  const handleForgotPasswordBackdropClick = () => {
+    if (isSendingReset) return;
+    closeForgotPasswordModal();
+  };
+
+  const handleForgotPasswordBackdropKeyDown = (e: React.KeyboardEvent<HTMLButtonElement>) => {
+    if (isSendingReset) return;
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault();
+      closeForgotPasswordModal();
+    }
+  };
+
+  useEffect(() => {
+    if (!isForgotPasswordOpen) return;
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape' || isSendingReset) return;
+      e.preventDefault();
+      closeForgotPasswordModal();
+    };
+    globalThis.addEventListener('keydown', onKeyDown);
+    return () => globalThis.removeEventListener('keydown', onKeyDown);
+  }, [isForgotPasswordOpen, isSendingReset]);
+
+  useModalBodyLock(isForgotPasswordOpen);
+  useEffect(() => {
+    const syncAutofill = () => {
+      const usernameEl = document.getElementById('username') as HTMLInputElement | null;
+      const passwordEl = document.getElementById('password') as HTMLInputElement | null;
+      const username = usernameEl?.value ?? '';
+      const password = passwordEl?.value ?? '';
+      if (!username && !password) return;
+      setCredentials(prev => ({
+        username: username || prev.username,
+        password: password || prev.password,
+      }));
+    };
+
+    syncAutofill();
+    const t1 = globalThis.setTimeout(syncAutofill, 100);
+    const t2 = globalThis.setTimeout(syncAutofill, 500);
+    return () => {
+      globalThis.clearTimeout(t1);
+      globalThis.clearTimeout(t2);
+    };
+  }, []);
+
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
-    setCredentials(prev => ({
-      ...prev,
-      [name]: value,
-    }));
-    // Clear error when user starts typing
+    setCredentials(prev => ({ ...prev, [name]: value }));
     if (error) setError(null);
+  };
+
+  const syncFieldValue = (e: React.FormEvent<HTMLInputElement>) => {
+    const { name, value } = e.currentTarget;
+    setCredentials(prev => ({ ...prev, [name]: value }));
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
-    if (!credentials.username || !credentials.password) {
+    if (!credentials.username.trim() || !credentials.password) {
       setError('Please fill in all fields');
       return;
     }
-
     setIsLoading(true);
     setError(null);
-
     try {
       const userInfo = await signIn(credentials.username, credentials.password);
-      
-      // Call success callback with user info including emailVerified status
       onSignInSuccess(userInfo);
     } catch (err: any) {
       console.error('Sign in error:', err);
@@ -62,382 +117,268 @@ export function SignIn({ onSignInSuccess, onSwitchToSignUp }: Readonly<SignInPro
   const handleForgotPassword = async () => {
     setResetError('');
     setResetSuccess('');
-
     if (!forgotPasswordEmail?.includes('@')) {
       setResetError('Please enter a valid email address');
       return;
     }
-
     setIsSendingReset(true);
     try {
       const response = await apiService.forgotPassword(forgotPasswordEmail);
-      setResetSuccess(response.message || 'Password reset instructions have been sent to your email!');
+      setResetSuccess(response.message || 'Password reset instructions have been sent to your email address.');
       setForgotPasswordEmail('');
       setTimeout(() => {
         setIsForgotPasswordOpen(false);
         setResetSuccess('');
       }, 3000);
-    } catch (error) {
-      setResetError(error instanceof Error ? error.message : 'Failed to send reset email');
+    } catch (err) {
+      setResetError(err instanceof Error ? err.message : 'Failed to send reset email');
     } finally {
       setIsSendingReset(false);
     }
   };
 
+  const handleFastLogin = () => {
+    try {
+      setError(null);
+      const authorizationUrl = AuthService.getFastLoginAuthorizationUrl();
+      globalThis.location.assign(authorizationUrl);
+    } catch (err: any) {
+      setError(err?.message || 'Unable to start Fast Login. Please try again.');
+    }
+  };
+
   return (
-    <div 
-      className="auth-container"
-      style={{
-        backgroundImage: `url(${process.env.PUBLIC_URL}/assets/vitruvius1.png)`,
-        backgroundSize: 'contain',
-        backgroundPosition: 'center center',
-        backgroundRepeat: 'no-repeat',
-        backgroundColor: '#f0f0f0'
-      }}
-    >
-      <div className="auth-card">
-        <div className="auth-header">
-          <h1>Welcome Back</h1>
-          <p>Sign in to your Vitruv account</p>
-        </div>
-
-        <form onSubmit={handleSubmit} className="auth-form">
-          {error && (
-            <div className="error-message">
-              <span className="error-icon">⚠️</span>
-              {error}
-            </div>
-          )}
-
-          <div className="form-group">
-            <label htmlFor="username">Username or Email</label>
-            <input
-              type="text"
-              id="username"
-              name="username"
-              value={credentials.username}
-              onChange={handleInputChange}
-              placeholder="Enter your username or email"
-              disabled={isLoading}
-              required
-            />
-          </div>
-
-          <div className="form-group">
-            <label htmlFor="password">Password</label>
-            <input
-              type="password"
-              id="password"
-              name="password"
-              value={credentials.password}
-              onChange={handleInputChange}
-              placeholder="Enter your password"
-              disabled={isLoading}
-              required
-            />
-          </div>
-
-          <div style={{ 
-            textAlign: 'right', 
-            marginBottom: '16px',
-            marginTop: '-8px'
-          }}>
-            <button
-              type="button"
-              className="link-button"
-              onClick={() => setIsForgotPasswordOpen(true)}
-              disabled={isLoading}
-              style={{
-                fontSize: '13px',
-                color: '#049484',
-                fontWeight: 500,
-              }}
-            >
-              Forgot your password?
-            </button>
-          </div>
-
-          <button
-            type="submit"
-            className="auth-button primary"
-            disabled={isLoading}
-          >
-            {isLoading ? (
-              <span className="loading-spinner">
-                <div className="spinner"></div>
-                Signing In...
-              </span>
-            ) : (
-              'Sign In'
-            )}
-          </button>
-        </form>
-
-        <div className="auth-footer">
-          <p>
-            Don't have an account?{' '}
-            <button
-              type="button"
-              className="link-button"
-              onClick={onSwitchToSignUp}
-              disabled={isLoading}
-            >
-              Sign Up
-            </button>
-          </p>
-        </div>
+    <AuthLayout>
+      <div className="mock-auth-header">
+        <h1>Welcome Back</h1>
+        <p>Log in to your Vitruv account</p>
       </div>
 
-      {/* Forgot Password Modal */}
-      {isForgotPasswordOpen && (
-        <div
-          role="button"
-          tabIndex={0}
-          style={{
-            position: 'fixed',
-            top: 0,
-            left: 0,
-            right: 0,
-            bottom: 0,
-            background: 'rgba(0, 0, 0, 0.65)',
-            backdropFilter: 'blur(12px)',
-            WebkitBackdropFilter: 'blur(12px)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            zIndex: 10000,
-            animation: 'fadeIn 0.2s ease-out',
-            cursor: 'default',
-          }}
-          onClick={(e) => {
-            // Only close if clicking directly on the backdrop, not its children
-            if (e.target === e.currentTarget && !isSendingReset) {
-              setIsForgotPasswordOpen(false);
-              setResetError('');
-              setResetSuccess('');
-              setForgotPasswordEmail('');
-            }
-          }}
-          onKeyDown={(e) => {
-            if ((e.key === 'Escape' || e.key === 'Enter' || e.key === ' ') && !isSendingReset) {
-              e.preventDefault();
-              setIsForgotPasswordOpen(false);
-              setResetError('');
-              setResetSuccess('');
-              setForgotPasswordEmail('');
-            }
-          }}
-          aria-label="Close modal"
+      <form onSubmit={handleSubmit} className="mock-auth-form">
+        <AuthErrorBanner message={error} />
+
+        <div className="mock-form-group">
+          <label htmlFor="username">Username or Email *</label>
+          <input
+            id="username"
+            name="username"
+            type="text"
+            value={credentials.username}
+            onChange={handleInputChange}
+            onInput={syncFieldValue}
+            autoComplete="username"
+            placeholder="Enter your username or email"
+            disabled={isLoading}
+            required
+          />
+        </div>
+
+        <div className="mock-form-group">
+          <label htmlFor="password">Password *</label>
+          <PasswordInput
+            id="password"
+            name="password"
+            value={credentials.password}
+            onChange={handleInputChange}
+            onInput={syncFieldValue}
+            autoComplete="current-password"
+            placeholder="Enter your password"
+            disabled={isLoading}
+            required
+          />
+        </div>
+
+        <div className="mock-form-options">
+          <label className="mock-checkbox-container">
+            <input
+              type="checkbox"
+              checked={keepSignedIn}
+              onChange={(e) => setKeepSignedIn(e.target.checked)}
+              disabled={isLoading}
+            />
+            <span>Keep me signed in</span>
+          </label>
+          <button
+            type="button"
+            className="mock-forgot-link"
+            onClick={() => setIsForgotPasswordOpen(true)}
+            disabled={isLoading}
+          >
+            Forgot Password?
+          </button>
+        </div>
+
+        <button
+          type="submit"
+          className="mock-action-button"
+          disabled={isLoading}
         >
+          {isLoading ? 'Signing In...' : 'Sign In'}
+        </button>
+      </form>
+
+      <div className="mock-auth-divider">
+        <span>or</span>
+      </div>
+
+      <button
+        type="button"
+        className="mock-action-button mock-fast-login-button"
+        onClick={handleFastLogin}
+        disabled={isLoading}
+      >
+        <KitLogoIcon className="mock-fast-login-icon" />
+        <span className="mock-fast-login-label">Log in with KIT account</span>
+      </button>
+
+      {/* Switch to Sign Up */}
+      <div className="mock-auth-footer">
+        <p>
+          Don't have an account yet?{' '}
+          <button type="button" className="mock-signup-link" onClick={onSwitchToSignUp} disabled={isLoading}>
+            Sign Up
+          </button>
+        </p>
+      </div>
+
+      {/* Forgot Password Modal — portaled and viewport-centered */}
+      {isForgotPasswordOpen && ReactDOM.createPortal(
+        <>
+          <button
+            type="button"
+            aria-label="Close password reset dialog"
+            tabIndex={isSendingReset ? -1 : 0}
+            onClick={handleForgotPasswordBackdropClick}
+            onKeyDown={handleForgotPasswordBackdropKeyDown}
+            style={{ ...modalBackdropStyle, zIndex: MODAL_Z_INDEX }}
+          />
           <div
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="forgot-password-title"
             style={{
-              background: '#ffffff',
-              borderRadius: 16,
-              padding: 0,
-              width: '90%',
-              maxWidth: 480,
-              boxShadow: '0 24px 72px rgba(0, 0, 0, 0.3), 0 8px 24px rgba(0, 0, 0, 0.2)',
-              overflow: 'hidden',
-              animation: 'slideUp 0.3s ease-out',
+              position: 'fixed',
+              inset: 0,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              zIndex: MODAL_Z_INDEX + 1,
+              pointerEvents: 'none',
+              padding: 16,
+              boxSizing: 'border-box',
             }}
           >
-            {/* Header with gradient */}
-            <div style={{
-              background: 'linear-gradient(135deg, #049484 0%, #037368 100%)',
-              padding: '28px 32px',
-              color: '#ffffff',
-              borderBottom: '3px solid #037368',
-            }}>
-              <h2
-                id="forgot-password-title"
-                style={{
-                  margin: 0,
-                  fontSize: 26,
-                  fontWeight: 700,
-                  letterSpacing: '-0.5px',
-                  lineHeight: 1.3,
-                }}
-              >
-                Password Recovery
-              </h2>
-              <p style={{
-                margin: '10px 0 0 0',
-                fontSize: 14,
-                opacity: 0.95,
-                fontWeight: 400,
-                lineHeight: 1.5,
-              }}>
-                Please provide your registered email address. We will send a new password to your inbox for account recovery.
-              </p>
-            </div>
-
-            {/* Form Content */}
-            <div style={{ padding: '32px' }}>
-              <div style={{ marginBottom: 24 }}>
-                <label
-                  htmlFor="forgot-password-email"
+            <div
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="forgot-password-title"
+              aria-describedby="forgot-password-description"
+              style={{
+                pointerEvents: 'auto',
+                background: '#ffffff',
+                borderRadius: 14,
+                padding: '28px 32px 24px',
+                width: '100%',
+                maxWidth: 400,
+                boxShadow: '0 20px 40px rgba(15, 23, 42, 0.14)',
+                textAlign: 'center',
+                boxSizing: 'border-box',
+              }}
+            >
+              <div style={{ marginBottom: 4 }}>
+                <h2
+                  id="forgot-password-title"
                   style={{
-                    display: 'block',
-                    marginBottom: 10,
-                    fontSize: 14,
-                    fontWeight: 600,
-                    color: '#1f2937',
-                    letterSpacing: '0.2px',
+                    margin: '0 0 10px 0',
+                    fontSize: 20,
+                    fontWeight: 700,
+                    color: '#0f172a',
+                    letterSpacing: '-0.01em',
                   }}
                 >
-                  Registered Email Address
-                </label>
-                <input
-                  id="forgot-password-email"
-                  type="email"
-                  value={forgotPasswordEmail}
-                  onChange={(e) => {
-                    setForgotPasswordEmail(e.target.value);
-                    setResetError('');
-                  }}
-                  placeholder="your.email@example.com"
-                  disabled={isSendingReset}
+                  Password Reset
+                </h2>
+                <p
+                  id="forgot-password-description"
                   style={{
-                    width: '100%',
-                    padding: '12px 14px',
-                    border: '2px solid #e5e7eb',
-                    borderRadius: 8,
+                    margin: '0 0 20px 0',
+                    color: '#64748b',
                     fontSize: 14,
-                    boxSizing: 'border-box',
-                    outline: 'none',
-                    transition: 'all 0.2s ease',
-                    background: '#f9fafb',
+                    lineHeight: 1.55,
+                    maxWidth: '20rem',
+                    marginLeft: 'auto',
+                    marginRight: 'auto',
                   }}
-                  onFocus={(e) => {
-                    e.currentTarget.style.borderColor = '#049484';
-                    e.currentTarget.style.background = '#ffffff';
-                    e.currentTarget.style.boxShadow = '0 0 0 3px rgba(4, 148, 132, 0.1)';
-                  }}
-                  onBlur={(e) => {
-                    e.currentTarget.style.borderColor = '#e5e7eb';
-                    e.currentTarget.style.background = '#f9fafb';
-                    e.currentTarget.style.boxShadow = 'none';
-                  }}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter' && !isSendingReset && forgotPasswordEmail) {
-                      handleForgotPassword();
-                    }
-                  }}
-                />
+                >
+                  Enter your registered email address. Password reset instructions will be sent to your inbox.
+                </p>
               </div>
 
               {resetError && (
                 <div style={{
-                  padding: '14px 16px',
-                  background: '#fef2f2',
-                  border: '2px solid #fecaca',
+                  padding: '10px 12px',
                   borderRadius: 8,
-                  color: '#991b1b',
+                  marginBottom: 12,
                   fontSize: 13,
-                  marginBottom: 20,
-                  fontWeight: 500,
-                  lineHeight: 1.5,
-                }}>
+                  lineHeight: 1.45,
+                  textAlign: 'center',
+                  background: '#fef2f2',
+                  color: '#991b1b',
+                }}
+                >
                   {resetError}
                 </div>
               )}
-
               {resetSuccess && (
                 <div style={{
-                  padding: '14px 16px',
-                  background: '#d5f4e6',
-                  border: '2px solid #a9dfbf',
+                  padding: '10px 12px',
                   borderRadius: 8,
-                  color: '#166534',
+                  marginBottom: 12,
                   fontSize: 13,
-                  marginBottom: 20,
-                  fontWeight: 500,
-                  lineHeight: 1.5,
-                }}>
+                  lineHeight: 1.45,
+                  textAlign: 'center',
+                  background: '#ecfdf5',
+                  color: '#065f46',
+                }}
+                >
                   {resetSuccess}
                 </div>
               )}
 
+              <input
+                type="email"
+                className="modal-input"
+                placeholder="Email address"
+                value={forgotPasswordEmail}
+                onChange={(e) => setForgotPasswordEmail(e.target.value)}
+                disabled={isSendingReset}
+                style={{
+                  width: '100%',
+                  padding: '12px 14px',
+                  border: '1px solid #cbd5e1',
+                  borderRadius: 8,
+                  boxSizing: 'border-box',
+                  fontSize: 14,
+                  textAlign: 'left',
+                }}
+              />
+
               <div style={{
                 display: 'flex',
-                gap: 12,
-                justifyContent: 'flex-end',
-                paddingTop: 4,
-              }}>
-                <button
-                  onClick={() => {
-                    setIsForgotPasswordOpen(false);
-                    setResetError('');
-                    setResetSuccess('');
-                    setForgotPasswordEmail('');
-                  }}
-                  disabled={isSendingReset}
-                  style={{
-                    padding: '12px 24px',
-                    borderRadius: 8,
-                    border: '2px solid #e5e7eb',
-                    background: '#ffffff',
-                    color: '#374151',
-                    cursor: isSendingReset ? 'not-allowed' : 'pointer',
-                    fontWeight: 600,
-                    fontSize: 14,
-                    transition: 'all 0.2s ease',
-                    opacity: isSendingReset ? 0.5 : 1,
-                  }}
-                  onMouseEnter={(e) => {
-                    if (!isSendingReset) {
-                      e.currentTarget.style.background = '#f9fafb';
-                      e.currentTarget.style.borderColor = '#d1d5db';
-                    }
-                  }}
-                  onMouseLeave={(e) => {
-                    if (!isSendingReset) {
-                      e.currentTarget.style.background = '#ffffff';
-                      e.currentTarget.style.borderColor = '#e5e7eb';
-                    }
-                  }}
-                >
+                justifyContent: 'center',
+                gap: 10,
+                marginTop: 22,
+              }}
+              >
+                <button type="button" className="btn-secondary" onClick={closeForgotPasswordModal} disabled={isSendingReset}>
                   Cancel
                 </button>
-                <button
-                  onClick={handleForgotPassword}
-                  disabled={isSendingReset || !forgotPasswordEmail}
-                  style={{
-                    padding: '12px 28px',
-                    borderRadius: 8,
-                    border: '2px solid #037368',
-                    background: (isSendingReset || !forgotPasswordEmail) ? '#95a5a6' : 'linear-gradient(135deg, #049484 0%, #037368 100%)',
-                    color: '#ffffff',
-                    cursor: (isSendingReset || !forgotPasswordEmail) ? 'not-allowed' : 'pointer',
-                    fontWeight: 700,
-                    fontSize: 14,
-                    transition: 'all 0.2s ease',
-                    boxShadow: (isSendingReset || !forgotPasswordEmail) ? 'none' : '0 2px 8px rgba(4, 148, 132, 0.25)',
-                    opacity: (isSendingReset || !forgotPasswordEmail) ? 0.6 : 1,
-                  }}
-                  onMouseEnter={(e) => {
-                    if (!isSendingReset && forgotPasswordEmail) {
-                      e.currentTarget.style.transform = 'translateY(-1px)';
-                      e.currentTarget.style.boxShadow = '0 4px 12px rgba(4, 148, 132, 0.35)';
-                    }
-                  }}
-                  onMouseLeave={(e) => {
-                    if (!isSendingReset && forgotPasswordEmail) {
-                      e.currentTarget.style.transform = 'translateY(0)';
-                      e.currentTarget.style.boxShadow = '0 2px 8px rgba(4, 148, 132, 0.25)';
-                    }
-                  }}
-                >
-                  {isSendingReset ? 'Processing Request...' : 'Submit Request'}
+                <button type="button" className="btn-primary-gradient" onClick={handleForgotPassword} disabled={isSendingReset}>
+                  {isSendingReset ? 'Sending…' : 'Send instructions'}
                 </button>
               </div>
             </div>
           </div>
-        </div>
+        </>,
+        document.body,
       )}
-    </div>
+    </AuthLayout>
   );
 }

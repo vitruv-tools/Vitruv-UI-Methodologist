@@ -1,5 +1,5 @@
 import React from 'react';
-import { EdgeProps, useStore } from 'reactflow';
+import { EdgeProps, EdgeLabelRenderer, useStore } from 'reactflow';
 
 interface UMLRelationshipData {
   label?: string;
@@ -22,7 +22,6 @@ interface UMLRelationshipData {
 
 interface PathResult {
   edgePath: string;
-  sharedSegmentPath: string;
   labelX: number;
   labelY: number;
   startSegDx: number;
@@ -49,42 +48,12 @@ interface PathParams {
   id: string;
 }
 
-// Helper: Calculate path for merged edges
-function calculateMergedPath(params: PathParams): PathResult {
-  const { sourceX, sourceY, targetX, targetY, mergePoint, isFirstInMergeGroup, id } = params;
-  
-  const edgePath = `M ${sourceX},${sourceY} L ${mergePoint!.x},${mergePoint!.y}`;
-  let sharedSegmentPath = '';
-  
-  console.log(`🔷 Edge ${id}: hasMerge=true, isFirst=${isFirstInMergeGroup}`);
-  
-  if (isFirstInMergeGroup === true) {
-    sharedSegmentPath = `M ${mergePoint!.x},${mergePoint!.y} L ${targetX},${targetY}`;
-    console.log(`✅ Drawing shared segment (edge: ${id})`);
-  } else {
-    console.log(`❌ NOT drawing shared segment (edge: ${id})`);
-  }
-  
-  return {
-    edgePath,
-    sharedSegmentPath,
-    labelX: mergePoint!.x,
-    labelY: mergePoint!.y,
-    startSegDx: mergePoint!.x - sourceX,
-    startSegDy: mergePoint!.y - sourceY,
-    endSegDx: targetX - mergePoint!.x,
-    endSegDy: targetY - mergePoint!.y,
-  };
-}
-
-// Helper: Calculate path with custom control point
+// Helper: Quadratic bezier when user has manually dragged the control point
 function calculateControlPointPath(params: PathParams): PathResult {
   const { sourceX, sourceY, targetX, targetY, controlPoint } = params;
   const cp = controlPoint!;
-  
   return {
     edgePath: `M ${sourceX},${sourceY} Q ${cp.x},${cp.y} ${targetX},${targetY}`,
-    sharedSegmentPath: '',
     labelX: cp.x,
     labelY: cp.y,
     startSegDx: cp.x - sourceX,
@@ -94,137 +63,155 @@ function calculateControlPointPath(params: PathParams): PathResult {
   };
 }
 
-// Helper: Calculate straight line path
-function calculateStraightPath(params: PathParams): PathResult {
-  const { sourceX, sourceY, targetX, targetY, dx, dy } = params;
-  
+// Helper: Pure straight line (default — jjodel style), with optional parallel offset
+function calculateStraightPath(params: PathParams & { parallelIndex?: number; parallelCount?: number; separation?: number }): PathResult {
+  const { sourceX, sourceY, targetX, targetY, dx, dy, parallelIndex = 0, parallelCount = 1, separation = 14 } = params;
+  const len = Math.max(Math.hypot(dx, dy), 0.0001);
+  const nx = -dy / len;
+  const ny = dx / len;
+  const off = parallelCount > 1
+    ? (parallelIndex - (parallelCount - 1) / 2) * separation
+    : 0;
+  const sx = sourceX + nx * off;
+  const sy = sourceY + ny * off;
+  const tx = targetX + nx * off;
+  const ty = targetY + ny * off;
   return {
-    edgePath: `M ${sourceX},${sourceY} L ${targetX},${targetY}`,
-    sharedSegmentPath: '',
-    labelX: (sourceX + targetX) / 2,
-    labelY: (sourceY + targetY) / 2,
-    startSegDx: dx,
-    startSegDy: dy,
-    endSegDx: dx,
-    endSegDy: dy,
+    edgePath: `M ${sx},${sy} L ${tx},${ty}`,
+    labelX: (sx + tx) / 2,
+    labelY: (sy + ty) / 2,
+    startSegDx: tx - sx,
+    startSegDy: ty - sy,
+    endSegDx: tx - sx,
+    endSegDy: ty - sy,
   };
 }
 
-// Helper: Calculate smooth curve path
-function calculateCurvePath(params: PathParams): PathResult {
-  const { sourceX, sourceY, targetX, targetY, px, py, distance } = params;
-  const curveFactor = Math.min(distance * 0.25, 120);
-  const cpX = (sourceX + targetX) / 2 + px * curveFactor;
-  const cpY = (sourceY + targetY) / 2 + py * curveFactor;
-  
-  return {
-    edgePath: `M ${sourceX},${sourceY} Q ${cpX},${cpY} ${targetX},${targetY}`,
-    sharedSegmentPath: '',
-    labelX: cpX,
-    labelY: cpY,
-    startSegDx: cpX - sourceX,
-    startSegDy: cpY - sourceY,
-    endSegDx: targetX - cpX,
-    endSegDy: targetY - cpY,
-  };
+
+// jjodel-style navy blue as the default edge color
+const EDGE_DEFAULT = '#0c436e';
+const EDGE_SELECT  = '#ef4444';
+const EDGE_SELECT_HOVER = '#f87171';
+// Shorten the drawn line so endpoint markers sit on the visible segment (not under HTML nodes).
+const EDGE_ENDPOINT_INSET = 8;
+const MULT_ALONG_OFFSET = 28;
+const MULT_PERP_OFFSET = 30;
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Border-intersection: given a node's center + dimensions and the direction
+// toward the other endpoint, returns the exact point on the box boundary.
+// This is what makes connections spread across the border (like jjodel) instead
+// of all converging at a single fixed handle.
+// ─────────────────────────────────────────────────────────────────────────────
+function getBorderPoint(
+  cx: number, cy: number,
+  nodeW: number, nodeH: number,
+  towardX: number, towardY: number
+): { x: number; y: number } {
+  const hw = nodeW / 2;
+  const hh = nodeH / 2;
+  const dx = towardX - cx;
+  const dy = towardY - cy;
+  if (Math.abs(dx) < 0.001 && Math.abs(dy) < 0.001) return { x: cx + hw, y: cy };
+  const scaleX = Math.abs(dx) > 0.001 ? hw / Math.abs(dx) : Infinity;
+  const scaleY = Math.abs(dy) > 0.001 ? hh / Math.abs(dy) : Infinity;
+  const scale = Math.min(scaleX, scaleY);
+  return { x: cx + dx * scale, y: cy + dy * scale };
 }
 
-// Helper: Calculate orthogonal (angled) path
-function calculateOrthogonalPath(params: PathParams): PathResult {
-  const { sourceX, sourceY, targetX, targetY, dx, dy } = params;
-  const preferHorizontalFirst = Math.abs(dx) >= Math.abs(dy);
-  
-  if (preferHorizontalFirst) {
-    const bendX = sourceX + dx * 0.6;
-    const bendY = sourceY;
-    return {
-      edgePath: `M ${sourceX},${sourceY} L ${bendX},${bendY} L ${bendX},${targetY} L ${targetX},${targetY}`,
-      sharedSegmentPath: '',
-      labelX: (sourceX + targetX) / 2,
-      labelY: (sourceY + targetY) / 2,
-      startSegDx: bendX - sourceX,
-      startSegDy: 0,
-      endSegDx: 0,
-      endSegDy: targetY - bendY,
-    };
-  }
-  
-  const bendX = sourceX;
-  const bendY = sourceY + dy * 0.6;
-  return {
-    edgePath: `M ${sourceX},${sourceY} L ${bendX},${bendY} L ${targetX},${bendY} L ${targetX},${targetY}`,
-    sharedSegmentPath: '',
-    labelX: (sourceX + targetX) / 2,
-    labelY: (sourceY + targetY) / 2,
-    startSegDx: 0,
-    startSegDy: bendY - sourceY,
-    endSegDx: targetX - bendX,
-    endSegDy: 0,
-  };
-}
-
-// Main path calculation function
-function calculateEdgePath(params: PathParams): PathResult {
-  const { controlPoint, hasMerge, mergePoint, count, distance, dx, dy } = params;
-  
-  // PRIORITY 0: Use merge point if edges are merged
-  if (hasMerge && mergePoint) {
-    return calculateMergedPath(params);
-  }
-  
-  // PRIORITY 1: Custom control point
-  if (controlPoint) {
-    return calculateControlPointPath(params);
-  }
-  
-  // PRIORITY 2: Straight line (strongly preferred)
-  const isAlignedHorizontally = Math.abs(dy) < 150;
-  const isAlignedVertically = Math.abs(dx) < 150;
-  const isReasonableDistance = distance < 800;
-  const useStraightLine = count === 1 && (isAlignedHorizontally || isAlignedVertically || isReasonableDistance);
-  
-  if (useStraightLine) {
-    return calculateStraightPath(params);
-  }
-  
-  // PRIORITY 3: Smooth curve for very long distances
-  if (count === 1 && distance > 500) {
-    return calculateCurvePath(params);
-  }
-  
-  // FALLBACK: Orthogonal path
-  return calculateOrthogonalPath(params);
-}
 
 // Helper: Get highlight color based on state
 function getHighlightColor(isHighlighted: boolean, isHovered: boolean): string {
-  if (isHighlighted) return '#ef4444';
-  if (isHovered) return '#f87171';
-  return '#374151';
+  if (isHighlighted) return EDGE_SELECT;
+  if (isHovered) return EDGE_SELECT_HOVER;
+  return EDGE_DEFAULT;
 }
 
 // Helper: Get stroke width based on state
 function getStrokeWidth(isHighlighted: boolean, isHovered: boolean): string {
-  if (isHighlighted) return '3.5px';
-  if (isHovered) return '3px';
-  return '2.5px';
+  if (isHighlighted) return '3px';
+  if (isHovered) return '2.5px';
+  return '1.5px';
 }
 
-// Helper: Get marker suffix based on state
-function getMarkerSuffix(isHighlighted: boolean, isHovered: boolean): string {
-  if (isHighlighted) return '-selected';
-  if (isHovered) return '-hover';
-  return '';
+type DirectionMarkerSide = 'start' | 'end';
+
+function getDirectionMarkerSide(relationshipType?: string): DirectionMarkerSide | null {
+  if (relationshipType === 'composition' || relationshipType === 'aggregation') return 'start';
+  if (
+    relationshipType === 'inheritance'
+    || relationshipType === 'realization'
+    || relationshipType === 'association'
+    || relationshipType === 'dependency'
+  ) {
+    return 'end';
+  }
+  return null;
+}
+
+function directionMarkerContent(relationshipType: string, color: string): React.ReactNode {
+  if (relationshipType === 'association') {
+    return <path d="M 0 0 L 12 6 L 0 12 z" fill={color} />;
+  }
+  if (relationshipType === 'inheritance' || relationshipType === 'realization') {
+    return <path d="M 0 0 L 12 6 L 0 12 z" fill="#ffffff" stroke={color} strokeWidth="1.5" />;
+  }
+  if (relationshipType === 'composition') {
+    return <path d="M 7 1 L 13 7 L 7 13 L 1 7 Z" fill={color} />;
+  }
+  if (relationshipType === 'aggregation') {
+    return <path d="M 7 1 L 13 7 L 7 13 L 1 7 Z" fill="#ffffff" stroke={color} strokeWidth="1.5" />;
+  }
+  if (relationshipType === 'dependency') {
+    return (
+      <path
+        d="M 0 1 L 11 6 L 0 11"
+        fill="none"
+        stroke={color}
+        strokeWidth="1.5"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    );
+  }
+  return null;
+}
+
+function directionMarkerViewBox(relationshipType: string): string {
+  if (relationshipType === 'composition' || relationshipType === 'aggregation') {
+    return '0 0 14 14';
+  }
+  return '0 0 12 12';
+}
+
+function directionMarkerSize(relationshipType: string): number {
+  if (relationshipType === 'composition' || relationshipType === 'aggregation') {
+    return 20;
+  }
+  return 18;
+}
+
+function directionMarkerAnchor(
+  anchor: { x: number; y: number },
+  ux: number,
+  uy: number,
+  side: DirectionMarkerSide,
+  markerSize: number,
+): { x: number; y: number } {
+  const nudge = side === 'start' ? markerSize * 0.42 : -markerSize * 0.42;
+  return {
+    x: anchor.x + ux * nudge,
+    y: anchor.y + uy * nudge,
+  };
 }
 
 // Helper: Build relationship style object
 function buildRelationshipStyle(
   strokeColor: string,
   strokeWidth: string,
-  markerSuffix: string,
   relationshipType?: string
 ): Record<string, string> {
-  const baseStyle = {
+  const baseStyle: Record<string, string> = {
     strokeWidth,
     stroke: strokeColor,
     fill: 'none',
@@ -233,26 +220,18 @@ function buildRelationshipStyle(
     transition: 'stroke 0.2s ease, stroke-width 0.2s ease',
   };
 
-  if (relationshipType === 'inheritance') {
-    return { ...baseStyle, markerEnd: `url(#arrowhead-inheritance${markerSuffix})` };
-  }
   if (relationshipType === 'realization') {
-    return { ...baseStyle, strokeDasharray: '10,6', markerEnd: `url(#arrowhead-realization${markerSuffix})` };
-  }
-  if (relationshipType === 'composition') {
-    return { ...baseStyle, markerStart: `url(#diamond-composition${markerSuffix})` };
-  }
-  if (relationshipType === 'aggregation') {
-    return { ...baseStyle, markerStart: `url(#diamond-aggregation${markerSuffix})` };
+    return { ...baseStyle, strokeDasharray: '10,6' };
   }
   if (relationshipType === 'dependency') {
-    return { ...baseStyle, strokeDasharray: '8,5', markerEnd: `url(#arrowhead-open-dependency${markerSuffix})` };
+    return { ...baseStyle, strokeDasharray: '8,5' };
   }
-  
+
   return baseStyle;
 }
 
-// Helper: Calculate multiplicity label position
+// Helper: Calculate multiplicity label position.
+// Labels are offset along and perpendicular to the edge so they clear the line.
 function calculateMultiplicityPosition(
   baseX: number,
   baseY: number,
@@ -265,11 +244,11 @@ function calculateMultiplicityPosition(
   const uy = segDy / len;
   const nx = -uy;
   const ny = ux;
-  const offset = direction === 'start' ? 18 : -18;
-  
+  const along = direction === 'start' ? MULT_ALONG_OFFSET : -MULT_ALONG_OFFSET;
+
   return {
-    x: baseX + ux * offset + nx * 16,
-    y: baseY + uy * offset + ny * 16,
+    x: baseX + ux * along + nx * MULT_PERP_OFFSET,
+    y: baseY + uy * along + ny * MULT_PERP_OFFSET,
   };
 }
 
@@ -288,62 +267,9 @@ export function UMLRelationship({
   const [isHovered, setIsHovered] = React.useState(false);
   const [isDragging, setIsDragging] = React.useState(false);
   const [isControlHovered, setIsControlHovered] = React.useState(false);
-  
-  // Subscribe to node selection changes using useStore
-  // This ensures the edge re-renders when any node's selection state changes
-  const mergeGroupSourceNodes = data?.mergeGroupSourceNodes || [];
-  const nodeSelectionState = useStore((store) => {
-    const nodes = Array.from(store.nodeInternals.values());
-    const sourceNode = nodes.find(n => n.id === source);
-    const targetNode = nodes.find(n => n.id === target);
-    const mergeGroupNodes = mergeGroupSourceNodes.map(nodeId => 
-      nodes.find(n => n.id === nodeId)
-    );
-    
-    return {
-      isSourceSelected: sourceNode?.selected || false,
-      isTargetSelected: targetNode?.selected || false,
-      isMergeGroupNodeSelected: mergeGroupNodes.some(n => n?.selected || false)
-    };
-  });
-  
-  const { isSourceSelected, isTargetSelected, isMergeGroupNodeSelected } = nodeSelectionState;
-  
-  // Check if this edge's merge group is currently being hovered
-  const mergeGroupId = data?.mergePoint?.mergeGroupId;
-  const isMergeGroupHovered = !!(mergeGroupId && data?.hoveredMergeGroup === mergeGroupId);
-  
-  // Logic for highlighting:
-  // 1. Individual edge (source to merge point) is red ONLY if:
-  //    - this edge is selected OR this edge is hovered.
-  //    Node selection alone no longer turns every incident edge red.
-  const isIndividualEdgeHighlighted: boolean = !!(selected || isHovered);
-  
-  // 2. MERGE DOT LOGIC: Merge dot is red when any edge in the merge group
-  //    is highlighted (selected/hovered) OR when the merge group itself is hovered.
-  const isMergeDotRed: boolean = data?.hasMerge
-    ? !!(isIndividualEdgeHighlighted || isMergeGroupHovered)
-    : isIndividualEdgeHighlighted;
-  
-  // 3. SHARED SEGMENT LOGIC: Shared segment is red only when merge dot is red.
-  const isSharedSegmentHighlighted: boolean = isMergeDotRed;
-  
-  // For the main edge path (source to merge), use individual edge highlighting.
-  const isHighlighted: boolean = isIndividualEdgeHighlighted;
-  
-  // Debug logging for merged edges
-  if (data?.hasMerge) {
-    console.log(`🔍 Edge ${id.slice(-8)} (source: ${source.slice(-6)}, target: ${target.slice(-6)}):`, {
-      isFirstInMergeGroup: data?.isFirstInMergeGroup,
-      mergeGroupSourceNodes,
-      isSourceSelected,
-      isTargetSelected,
-      isMergeGroupNodeSelected,
-      '→ isMergeDotRed': isMergeDotRed,
-      '→ isSharedSegmentHighlighted': isSharedSegmentHighlighted,
-      '→ isIndividualEdgeHighlighted': isIndividualEdgeHighlighted
-    });
-  }
+
+  // Edge is highlighted when selected or hovered — simple, no merge state
+  const isHighlighted: boolean = !!(selected || isHovered);
   
   const handleClick = (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -393,254 +319,152 @@ export function UMLRelationship({
     globalThis.dispatchEvent(event);
   };
   
-  // Compute orthogonal (Manhattan) path with a bend and parallel offset
-  const dx = targetX - sourceX;
-  const dy = targetY - sourceY;
+  // ── Border-intersection connection points ────────────────────────────────
+  // Read actual node bounding boxes so each edge attaches at the exact point
+  // where the center-to-center line crosses the box border (jjodel style).
+  const nodeBounds = useStore((store) => {
+    const src = store.nodeInternals.get(source);
+    const tgt = store.nodeInternals.get(target);
+    return {
+      srcAbsX: src?.positionAbsolute?.x ?? sourceX,
+      srcAbsY: src?.positionAbsolute?.y ?? sourceY,
+      srcW:    src?.width  ?? 190,
+      srcH:    src?.height ?? 80,
+      tgtAbsX: tgt?.positionAbsolute?.x ?? targetX,
+      tgtAbsY: tgt?.positionAbsolute?.y ?? targetY,
+      tgtW:    tgt?.width  ?? 190,
+      tgtH:    tgt?.height ?? 80,
+      // Changing this key forces edge re-render when nodes move
+      posKey: `${src?.positionAbsolute?.x ?? 0},${src?.positionAbsolute?.y ?? 0},${tgt?.positionAbsolute?.x ?? 0},${tgt?.positionAbsolute?.y ?? 0},${src?.width ?? 0},${src?.height ?? 0},${tgt?.width ?? 0},${tgt?.height ?? 0}`,
+    };
+  });
+  const srcCx = nodeBounds.srcAbsX + nodeBounds.srcW / 2;
+  const srcCy = nodeBounds.srcAbsY + nodeBounds.srcH / 2;
+  const tgtCx = nodeBounds.tgtAbsX + nodeBounds.tgtW / 2;
+  const tgtCy = nodeBounds.tgtAbsY + nodeBounds.tgtH / 2;
+
+  // ── Connection points: exact border intersection (jjodel style) ──────────
+  const srcBorder = getBorderPoint(srcCx, srcCy, nodeBounds.srcW, nodeBounds.srcH, tgtCx, tgtCy);
+  const tgtBorder = getBorderPoint(tgtCx, tgtCy, nodeBounds.tgtW, nodeBounds.tgtH, srcCx, srcCy);
+  const finalSourceX = srcBorder.x;
+  const finalSourceY = srcBorder.y;
+  const finalTargetX = tgtBorder.x;
+  const finalTargetY = tgtBorder.y;
+  // ─────────────────────────────────────────────────────────────────────────
+
+  const dx = finalTargetX - finalSourceX;
+  const dy = finalTargetY - finalSourceY;
   const length = Math.max(Math.hypot(dx, dy), 0.0001);
+  const ux = dx / length;
   const uy = dy / length;
-  // Perpendicular to the overall direction
   const px = -uy;
   const py = dx / length;
   const count = Math.max(1, data?.parallelCount ?? 1);
-  
-  // Use custom control point if set
+  const endpointInset = Math.min(EDGE_ENDPOINT_INSET, Math.max(0, length / 2 - 8));
+  const drawSourceX = finalSourceX + ux * endpointInset;
+  const drawSourceY = finalSourceY + uy * endpointInset;
+  const drawTargetX = finalTargetX - ux * endpointInset;
+  const drawTargetY = finalTargetY - uy * endpointInset;
+
   const controlPoint = data?.customControlPoint;
-  const mergePoint = data?.mergePoint;
-  const hasMerge = data?.hasMerge;
-  const isFirstInMergeGroup = data?.isFirstInMergeGroup;
-  
   const distance = Math.hypot(dx, dy);
+
+  // Routing: bezier when user has dragged a control point, straight line otherwise.
+  const pathResult: PathResult = controlPoint
+    ? calculateControlPointPath({
+        sourceX: drawSourceX, sourceY: drawSourceY,
+        targetX: drawTargetX, targetY: drawTargetY,
+        dx, dy, px, py, distance, controlPoint,
+        count, id,
+      })
+    : calculateStraightPath({
+        sourceX: drawSourceX, sourceY: drawSourceY,
+        targetX: drawTargetX, targetY: drawTargetY,
+        dx, dy, px, py, distance,
+        count, id,
+        parallelIndex: data?.parallelIndex ?? 0,
+        parallelCount: data?.parallelCount ?? count,
+        separation: data?.separation ?? 16,
+      });
   
-  // Calculate path using helper function
-  const pathResult = calculateEdgePath({
-    sourceX, sourceY, targetX, targetY,
-    dx, dy, px, py, distance,
-    controlPoint, mergePoint, hasMerge, isFirstInMergeGroup,
-    count, id,
-  });
-  
-  const { edgePath, sharedSegmentPath, labelX, labelY, startSegDx, startSegDy, endSegDx, endSegDy } = pathResult;
+  const { edgePath, labelX, labelY, startSegDx, startSegDy, endSegDx, endSegDy } = pathResult;
 
   // marker types are described via ids in <defs> below
 
   const getRelationshipStyle = (useHighlight: boolean = isHighlighted) => {
     const strokeColor = getHighlightColor(useHighlight, isHovered);
     const strokeWidth = getStrokeWidth(useHighlight, isHovered);
-    const markerSuffix = getMarkerSuffix(useHighlight, isHovered);
     const relationshipType = data?.relationshipType;
-    
-    return buildRelationshipStyle(strokeColor, strokeWidth, markerSuffix, relationshipType);
+
+    return buildRelationshipStyle(strokeColor, strokeWidth, relationshipType);
   };
+
+  const directionMarkerSide = getDirectionMarkerSide(data?.relationshipType);
+  const directionMarkerColor = getHighlightColor(isHighlighted, isHovered);
+  const directionMarkerAngle = Math.atan2(dy, dx) * (180 / Math.PI);
+  const directionMarkerLineAnchor = directionMarkerSide
+    ? {
+        x: directionMarkerSide === 'start' ? drawSourceX : drawTargetX,
+        y: directionMarkerSide === 'start' ? drawSourceY : drawTargetY,
+      }
+    : null;
+  const directionMarkerPos = directionMarkerSide && directionMarkerLineAnchor && data?.relationshipType
+    ? directionMarkerAnchor(
+        directionMarkerLineAnchor,
+        ux,
+        uy,
+        directionMarkerSide,
+        directionMarkerSize(data.relationshipType),
+      )
+    : null;
+  const directionMarkerRotation = directionMarkerAngle;
+  const directionMarkerGraphic = data?.relationshipType
+    ? directionMarkerContent(data.relationshipType, directionMarkerColor)
+    : null;
 
   const getRelationshipLabel = () => {
     // Use only provided custom label; avoid non-UML icon placeholders
     return data?.label || '';
   };
 
-  const connectionCount = Math.max(1, data?.parallelCount ?? 1);
 
   return (
     <>
-      <defs>
-        {/* Normal markers */}
-        <marker id="arrowhead-inheritance" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto">
-          <path d="M 0 0 L 10 5 L 0 10 z" fill="#ffffff" stroke="#374151" strokeWidth="2" />
-        </marker>
-        <marker id="arrowhead-inheritance-hover" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto">
-          <path d="M 0 0 L 10 5 L 0 10 z" fill="#ffffff" stroke="#f87171" strokeWidth="2" />
-        </marker>
-        <marker id="arrowhead-inheritance-selected" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto">
-          <path d="M 0 0 L 10 5 L 0 10 z" fill="#ffffff" stroke="#ef4444" strokeWidth="2" />
-        </marker>
-        
-        <marker id="arrowhead-realization" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto">
-          <path d="M 0 0 L 10 5 L 0 10 z" fill="#ffffff" stroke="#374151" strokeWidth="2" />
-        </marker>
-        <marker id="arrowhead-realization-hover" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto">
-          <path d="M 0 0 L 10 5 L 0 10 z" fill="#ffffff" stroke="#f87171" strokeWidth="2" />
-        </marker>
-        <marker id="arrowhead-realization-selected" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto">
-          <path d="M 0 0 L 10 5 L 0 10 z" fill="#ffffff" stroke="#ef4444" strokeWidth="2" />
-        </marker>
-        
-        {/* Diamonds for aggregation/composition at source side */}
-        <marker id="diamond-aggregation" viewBox="0 0 12 12" refX="1" refY="6" markerWidth="12" markerHeight="12" orient="auto">
-          <path d="M 6 0 L 12 6 L 6 12 L 0 6 Z" fill="#ffffff" stroke="#374151" strokeWidth="2" />
-        </marker>
-        <marker id="diamond-aggregation-hover" viewBox="0 0 12 12" refX="1" refY="6" markerWidth="12" markerHeight="12" orient="auto">
-          <path d="M 6 0 L 12 6 L 6 12 L 0 6 Z" fill="#ffffff" stroke="#f87171" strokeWidth="2" />
-        </marker>
-        <marker id="diamond-aggregation-selected" viewBox="0 0 12 12" refX="1" refY="6" markerWidth="12" markerHeight="12" orient="auto">
-          <path d="M 6 0 L 12 6 L 6 12 L 0 6 Z" fill="#ffffff" stroke="#ef4444" strokeWidth="2" />
-        </marker>
-        
-        <marker id="diamond-composition" viewBox="0 0 12 12" refX="1" refY="6" markerWidth="12" markerHeight="12" orient="auto">
-          <path d="M 6 0 L 12 6 L 6 12 L 0 6 Z" fill="#374151" />
-        </marker>
-        <marker id="diamond-composition-hover" viewBox="0 0 12 12" refX="1" refY="6" markerWidth="12" markerHeight="12" orient="auto">
-          <path d="M 6 0 L 12 6 L 6 12 L 0 6 Z" fill="#f87171" />
-        </marker>
-        <marker id="diamond-composition-selected" viewBox="0 0 12 12" refX="1" refY="6" markerWidth="12" markerHeight="12" orient="auto">
-          <path d="M 6 0 L 12 6 L 6 12 L 0 6 Z" fill="#ef4444" />
-        </marker>
-        
-        <marker id="arrowhead-association" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto">
-          <path d="M 0 0 L 10 5 L 0 10 z" fill="#374151" />
-        </marker>
-        
-        {/* Open arrow for dependency */}
-        <marker id="arrowhead-open-dependency" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto">
-          <path d="M 0 0 L 10 5 L 0 10" fill="none" stroke="#374151" strokeWidth="2" />
-        </marker>
-        <marker id="arrowhead-open-dependency-hover" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto">
-          <path d="M 0 0 L 10 5 L 0 10" fill="none" stroke="#f87171" strokeWidth="2" />
-        </marker>
-        <marker id="arrowhead-open-dependency-selected" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto">
-          <path d="M 0 0 L 10 5 L 0 10" fill="none" stroke="#ef4444" strokeWidth="2" />
-        </marker>
-      </defs>
-
-      {/* Underlay halo to improve visibility at crossings */}
+      {/* White underlay halo so lines don't bleed into each other at crossings */}
       <path
         id={`${id}-underlay`}
         d={edgePath}
         className="react-flow__edge-path"
         style={{
           stroke: '#ffffff',
-          strokeWidth: (isHighlighted || isHovered) ? 8 : 7,
-          opacity: 0.95,
+          strokeWidth: (isHighlighted || isHovered) ? 6 : 5,
+          opacity: 0.92,
           fill: 'none',
-          strokeLinecap: 'butt',
-          strokeLinejoin: 'miter',
-          transition: 'stroke-width 0.2s ease',
+          strokeLinecap: 'round',
+          strokeLinejoin: 'round',
+          transition: 'stroke-width 0.15s ease',
         }}
       />
 
-      {/* Transparent click area for better selection */}
+      {/* Transparent wide click / hover area */}
       <path
         id={`${id}-clickarea`}
         d={edgePath}
-        style={{
-          strokeWidth: '25px',
-          stroke: 'transparent',
-          fill: 'none',
-          cursor: 'pointer',
-        }}
+        style={{ strokeWidth: '20px', stroke: 'transparent', fill: 'none', cursor: 'pointer' }}
         onClick={handleClick}
-        onMouseEnter={() => {
-          setIsHovered(true);
-          // If this edge is part of a merge group, notify parent to highlight entire group
-          if (mergeGroupId && data?.onMergeGroupHover) {
-            data.onMergeGroupHover(mergeGroupId);
-          }
-        }}
-        onMouseLeave={() => {
-          setIsHovered(false);
-          // Clear merge group hover
-          if (mergeGroupId && data?.onMergeGroupHover) {
-            data.onMergeGroupHover(null);
-          }
-        }}
+        onMouseEnter={() => setIsHovered(true)}
+        onMouseLeave={() => setIsHovered(false)}
       />
 
-      {/* Main edge stroke */}
+      {/* Main edge stroke — pure straight line, jjodel style */}
       <path
         id={id}
-        style={{
-          ...getRelationshipStyle(),
-          strokeLinecap: 'butt',
-          strokeLinejoin: 'miter',
-          // For merged edges we suppress markers only for relationships
-          // that use arrowheads at the target side (inheritance/realization/dependency).
-          // For compositions/aggregations we KEEP the diamond on the owning
-          // side (source class) to preserve correct UML semantics.
-          ...(hasMerge &&
-            data?.relationshipType !== 'composition' &&
-            data?.relationshipType !== 'aggregation' && {
-              markerEnd: 'none',
-              markerStart: 'none',
-            })
-        }}
+        style={{ ...getRelationshipStyle(), strokeLinecap: 'round', strokeLinejoin: 'round' }}
         d={edgePath}
         onClick={handleClick}
-        onMouseEnter={() => {
-          setIsHovered(true);
-          // If this edge is part of a merge group, notify parent to highlight entire group
-          if (mergeGroupId && data?.onMergeGroupHover) {
-            data.onMergeGroupHover(mergeGroupId);
-          }
-        }}
-        onMouseLeave={() => {
-          setIsHovered(false);
-          // Clear merge group hover
-          if (mergeGroupId && data?.onMergeGroupHover) {
-            data.onMergeGroupHover(null);
-          }
-        }}
+        onMouseEnter={() => setIsHovered(true)}
+        onMouseLeave={() => setIsHovered(false)}
       />
-
-      {/* Shared segment for merged edges (ONLY rendered by first edge) */}
-      {(sharedSegmentPath && isFirstInMergeGroup === true) && (
-        <>
-          {console.log(`🎨 RENDERING SHARED SEGMENT for edge ${id.slice(-8)}:`, {
-            isMergeDotRed,
-            isSharedSegmentHighlighted,
-            color: isSharedSegmentHighlighted ? 'RED (#ef4444)' : 'BLACK (#374151)'
-          })}
-          {/* Underlay for shared segment */}
-          <path
-            id={`${id}-shared-underlay`}
-            d={sharedSegmentPath}
-            style={{
-              stroke: '#ffffff',
-              strokeWidth: (isSharedSegmentHighlighted || isHovered) ? 8 : 7,
-              opacity: 0.95,
-              fill: 'none',
-              strokeLinecap: 'butt',
-              strokeLinejoin: 'miter',
-              transition: 'stroke-width 0.2s ease',
-            }}
-          />
-          
-          {/* Shared segment main stroke with marker - use shared segment highlighting */}
-          <path
-            id={`${id}-shared`}
-            d={sharedSegmentPath}
-            style={{
-              // On the shared segment we never want the composition/
-              // aggregation diamond to appear at the merge point – it
-              // must stay attached to the owning class at the start of
-              // each branch. Therefore we explicitly clear markerStart
-              // for these relationship types while still allowing
-              // arrowheads for inheritance/realization/dependency.
-              ...(data?.relationshipType === 'composition' ||
-              data?.relationshipType === 'aggregation'
-                ? {
-                    ...getRelationshipStyle(isSharedSegmentHighlighted),
-                    markerStart: 'none',
-                  }
-                : getRelationshipStyle(isSharedSegmentHighlighted)),
-              strokeLinecap: 'butt',
-              strokeLinejoin: 'miter',
-            }}
-            onClick={handleClick}
-            onMouseEnter={() => {
-              setIsHovered(true);
-              // If this edge is part of a merge group, notify parent to highlight entire group
-              if (mergeGroupId && data?.onMergeGroupHover) {
-                data.onMergeGroupHover(mergeGroupId);
-              }
-            }}
-            onMouseLeave={() => {
-              setIsHovered(false);
-              // Clear merge group hover
-              if (mergeGroupId && data?.onMergeGroupHover) {
-                data.onMergeGroupHover(null);
-              }
-            }}
-          />
-        </>
-      )}
 
       <text
         x={labelX}
@@ -648,97 +472,121 @@ export function UMLRelationship({
         textAnchor="middle"
         dominantBaseline="middle"
         style={{
-          fontSize: '12px',
-          fontWeight: 700,
-          fill: '#1f2937',
+          fontSize: '11px',
+          fontWeight: 600,
+          fill: getHighlightColor(isHighlighted, isHovered),
           stroke: '#ffffff',
-          strokeWidth: 3.5,
+          strokeWidth: 3,
           paintOrder: 'stroke fill',
           pointerEvents: 'none',
+          fontFamily: `'Segoe UI', system-ui, sans-serif`,
+          transition: 'fill 0.2s ease',
         }}
       >
         {getRelationshipLabel()}
       </text>
 
-      {/* Connection count badge - changes color when hovering/selecting the line */}
-      {connectionCount > 1 && (
-        <g>
-          <rect
-            x={labelX - 12}
-            y={labelY - 24}
-            rx={6}
-            ry={6}
-            width={24}
-            height={16}
-            fill={getHighlightColor(isMergeDotRed, isHovered)}
-            stroke="#ffffff"
-            strokeWidth={2}
+
+      {/* Multiplicity badges are rendered via EdgeLabelRenderer (below) so they
+          always appear above node boxes — nothing to render in the SVG layer here */}
+
+      {/* Direction markers are rendered in EdgeLabelRenderer so arrows/diamonds stay
+          visible above HTML node boxes without requiring hover. */}
+      <EdgeLabelRenderer>
+        {directionMarkerSide && data?.relationshipType && directionMarkerGraphic && directionMarkerPos && (
+          <div
+            key={`${id}-direction-marker`}
+            data-testid={`${id}-direction-marker`}
+            className="nodrag nopan"
             style={{
-              transition: 'fill 0.2s ease',
-            }}
-          />
-          <text
-            x={labelX}
-            y={labelY - 16}
-            textAnchor="middle"
-            dominantBaseline="middle"
-            style={{
-              fontSize: '10px',
-              fontWeight: 800,
-              fill: '#ffffff',
+              position: 'absolute',
+              transform: `translate(-50%, -50%) translate(${directionMarkerPos.x}px, ${directionMarkerPos.y}px) rotate(${directionMarkerRotation}deg)`,
               pointerEvents: 'none',
+              zIndex: 1001,
+              lineHeight: 0,
             }}
           >
-            {String(connectionCount)}
-          </text>
-        </g>
-      )}
+            <svg
+              width={directionMarkerSize(data.relationshipType)}
+              height={directionMarkerSize(data.relationshipType)}
+              viewBox={directionMarkerViewBox(data.relationshipType)}
+              overflow="visible"
+              aria-hidden
+            >
+              {directionMarkerGraphic}
+            </svg>
+          </div>
+        )}
 
-      {(data?.sourceMultiplicity !== undefined && data?.sourceMultiplicity !== null && data?.sourceMultiplicity !== '') && (
-        <text
-          x={calculateMultiplicityPosition(sourceX, sourceY, startSegDx, startSegDy, 'start').x}
-          y={calculateMultiplicityPosition(sourceX, sourceY, startSegDx, startSegDy, 'start').y}
-          className="react-flow__edge-text"
-          textAnchor="middle"
-          dominantBaseline="middle"
-          style={{
-            fontSize: '13px',
-            fontWeight: 800,
-            fill: getHighlightColor(isHighlighted, isHovered),
-            stroke: '#ffffff',
-            strokeWidth: 4,
-            paintOrder: 'stroke fill',
-            pointerEvents: 'none',
-            fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace',
-            transition: 'fill 0.2s ease',
-          }}
-        >
-          {String(data.sourceMultiplicity)}
-        </text>
-      )}
+        {/* Multiplicity badges — always painted above every node box */}
+        {(data?.sourceMultiplicity !== undefined && data?.sourceMultiplicity !== null && data?.sourceMultiplicity !== '') && (() => {
+          const srcMult = String(data.sourceMultiplicity);
+          const sp = calculateMultiplicityPosition(finalSourceX, finalSourceY, startSegDx, startSegDy, 'start');
+          const edgeColor = getHighlightColor(isHighlighted, isHovered);
+          return (
+            <div
+              key={`${id}-src-mult`}
+              onMouseEnter={() => setIsHovered(true)}
+              onMouseLeave={() => setIsHovered(false)}
+              style={{
+                position: 'absolute',
+                transform: `translate(-50%, -50%) translate(${sp.x}px, ${sp.y}px)`,
+                pointerEvents: 'auto',
+                cursor: 'pointer',
+                zIndex: 1000,
+                background: 'white',
+                border: `1.5px solid ${edgeColor}`,
+                borderRadius: '4px',
+                padding: '1px 6px',
+                fontSize: '14px',
+                fontWeight: 700,
+                color: edgeColor,
+                fontFamily: 'ui-monospace, Consolas, "Courier New", monospace',
+                whiteSpace: 'nowrap',
+                lineHeight: '20px',
+                boxShadow: '0 1px 3px rgba(0,0,0,0.15)',
+                transition: 'color 0.2s ease, border-color 0.2s ease',
+              }}
+            >
+              {srcMult}
+            </div>
+          );
+        })()}
 
-      {(data?.targetMultiplicity !== undefined && data?.targetMultiplicity !== null && data?.targetMultiplicity !== '') && (
-        <text
-          x={calculateMultiplicityPosition(targetX, targetY, endSegDx, endSegDy, 'end').x}
-          y={calculateMultiplicityPosition(targetX, targetY, endSegDx, endSegDy, 'end').y}
-          className="react-flow__edge-text"
-          textAnchor="middle"
-          dominantBaseline="middle"
-          style={{
-            fontSize: '13px',
-            fontWeight: 800,
-            fill: getHighlightColor(isHighlighted, isHovered),
-            stroke: '#ffffff',
-            strokeWidth: 4,
-            paintOrder: 'stroke fill',
-            pointerEvents: 'none',
-            fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace',
-            transition: 'fill 0.2s ease',
-          }}
-        >
-          {String(data.targetMultiplicity)}
-        </text>
-      )}
+        {(data?.targetMultiplicity !== undefined && data?.targetMultiplicity !== null && data?.targetMultiplicity !== '') && (() => {
+          const tgtMult = String(data.targetMultiplicity);
+          const tp = calculateMultiplicityPosition(finalTargetX, finalTargetY, endSegDx, endSegDy, 'end');
+          const edgeColor = getHighlightColor(isHighlighted, isHovered);
+          return (
+            <div
+              key={`${id}-tgt-mult`}
+              onMouseEnter={() => setIsHovered(true)}
+              onMouseLeave={() => setIsHovered(false)}
+              style={{
+                position: 'absolute',
+                transform: `translate(-50%, -50%) translate(${tp.x}px, ${tp.y}px)`,
+                pointerEvents: 'auto',
+                cursor: 'pointer',
+                zIndex: 1000,
+                background: 'white',
+                border: `1.5px solid ${edgeColor}`,
+                borderRadius: '4px',
+                padding: '1px 6px',
+                fontSize: '14px',
+                fontWeight: 700,
+                color: edgeColor,
+                fontFamily: 'ui-monospace, Consolas, "Courier New", monospace',
+                whiteSpace: 'nowrap',
+                lineHeight: '20px',
+                boxShadow: '0 1px 3px rgba(0,0,0,0.15)',
+                transition: 'color 0.2s ease, border-color 0.2s ease',
+              }}
+            >
+              {tgtMult}
+            </div>
+          );
+        })()}
+      </EdgeLabelRenderer>
 
       {/* Draggable control point handle when selected */}
       {selected && (
@@ -752,8 +600,8 @@ export function UMLRelationship({
               <>
                 {/* Guide lines showing the curve */}
                 <line
-                  x1={sourceX}
-                  y1={sourceY}
+                  x1={finalSourceX}
+                  y1={finalSourceY}
                   x2={cpX}
                   y2={cpY}
                   stroke="#94a3b8"
@@ -765,8 +613,8 @@ export function UMLRelationship({
                 <line
                   x1={cpX}
                   y1={cpY}
-                  x2={targetX}
-                  y2={targetY}
+                  x2={finalTargetX}
+                  y2={finalTargetY}
                   stroke="#94a3b8"
                   strokeWidth="1"
                   strokeDasharray="5,5"
@@ -841,48 +689,6 @@ export function UMLRelationship({
         </g>
       )}
 
-      {/* Merge point indicator */}
-      {hasMerge && mergePoint && (
-        <g>
-          {/* Larger invisible hit area for merge point */}
-          <circle
-            cx={mergePoint.x}
-            cy={mergePoint.y}
-            r="15"
-            fill="transparent"
-            style={{
-              cursor: 'pointer',
-            }}
-            onMouseEnter={() => {
-              setIsHovered(true);
-              // Highlight entire merge group when hovering over merge point
-              if (mergeGroupId && data?.onMergeGroupHover) {
-                data.onMergeGroupHover(mergeGroupId);
-              }
-            }}
-            onMouseLeave={() => {
-              setIsHovered(false);
-              // Clear merge group hover
-              if (mergeGroupId && data?.onMergeGroupHover) {
-                data.onMergeGroupHover(null);
-              }
-            }}
-          />
-          {/* Visual merge point dot */}
-          <circle
-            cx={mergePoint.x}
-            cy={mergePoint.y}
-            r="5"
-            fill={getHighlightColor(isMergeDotRed, isHovered)}
-            stroke="#ffffff"
-            strokeWidth="2"
-            style={{
-              transition: 'fill 0.2s ease',
-              pointerEvents: 'none',
-            }}
-          />
-        </g>
-      )}
     </>
   );
 }

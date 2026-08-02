@@ -34,7 +34,7 @@ class ApiService {
   /**
    * Build an Error that keeps backend payload on response.data
    */
-  private createApiError(errorText: string, fallbackMessage: string): Error & { response?: { data: any } } {
+  private createApiError(errorText: string, fallbackMessage: string, status?: number): Error & { status?: number; response?: { status?: number; data: any } } {
     const parsed = this.parseErrorPayload(errorText);
     const message =
       (typeof parsed?.message === 'string' && parsed.message) ||
@@ -42,8 +42,10 @@ class ApiService {
       this.extractErrorMessage(errorText) ||
       fallbackMessage;
 
-    const err = new Error(message) as Error & { response?: { data: any } };
+    const err = new Error(message) as Error & { status?: number; response?: { status?: number; data: any } };
+    err.status = status;
     err.response = {
+      status,
       data: Object.keys(parsed).length > 0
         ? parsed
         : {
@@ -52,6 +54,35 @@ class ApiService {
         },
     };
     return err;
+  }
+
+  /**
+   * Ensure a successful artifact response is a ZIP blob (not JSON error text).
+   */
+  private async parseArtifactBlob(response: Response): Promise<Blob> {
+    const contentType = response.headers.get('Content-Type')?.toLowerCase() ?? '';
+    if (contentType.includes('json')) {
+      const errorText = await response.text();
+      throw this.createApiError(errorText, 'Artifact download failed');
+    }
+
+    const blob = await response.blob();
+
+    if (blob.type?.toLowerCase().includes('json')) {
+      throw this.createApiError(await blob.text(), 'Artifact download failed');
+    }
+
+    if (!blob.size) {
+      throw this.createApiError('', 'Artifact download returned an empty file');
+    }
+
+    const header = new Uint8Array(await new Response(blob.slice(0, 4)).arrayBuffer());
+    if (header[0] !== 0x50 || header[1] !== 0x4b) {
+      const preview = await blob.slice(0, 512).text();
+      throw this.createApiError(preview, 'Artifact download did not return a valid ZIP file');
+    }
+
+    return blob;
   }
 
   /**
@@ -75,16 +106,8 @@ class ApiService {
     context: string
   ): Promise<never> {
     const errorText = await this.getResponseText(response);
-    const errorMessage = this.extractErrorMessage(errorText);
-    console.error(context, {
-      url,
-      method,
-      status: response.status,
-      statusText: response.statusText,
-      message: errorMessage,
-      body: errorText,
-    });
-    throw this.createApiError(errorText, `${method} ${url} failed`);
+    console.error(context, { status: response.status });
+    throw this.createApiError(errorText, `${method} ${url} failed`, response.status);
   }
 
   /**
@@ -115,8 +138,8 @@ class ApiService {
       }
 
       return await retryResponse.json();
-    } catch (refreshError) {
-      console.error('Token refresh failed during request:', refreshError);
+    } catch {
+      console.error('Token refresh failed during request');
       return null;
     }
   }
@@ -147,7 +170,10 @@ class ApiService {
     });
 
     if (response.ok) {
-      return await response.json();
+      // 204 No Content or empty body (common for DELETE) — skip JSON parsing
+      if (response.status === 204) return null as T;
+      const text = await response.text();
+      return text ? JSON.parse(text) as T : null as T;
     }
 
     const isOtpEndpoint = endpoint.includes('/verify-otp') || endpoint.includes('/resend-otp');
@@ -187,19 +213,7 @@ class ApiService {
       try {
         errorText = await response.text();
       } catch { }
-      let errorMessage = errorText;
-      try {
-        const parsed = JSON.parse(errorText);
-        errorMessage = parsed?.message || parsed?.error || errorText;
-      } catch { }
-      console.error('Public request failed', {
-        url,
-        method: options.method || 'GET',
-        status: response.status,
-        statusText: response.statusText,
-        message: errorMessage,
-        body: errorText,
-      });
+      console.error('Public request failed', { status: response.status });
       throw this.createApiError(errorText, `Public request failed (${response.status})`);
     }
 
@@ -211,6 +225,16 @@ class ApiService {
    */
   async getUserInfo(): Promise<{ data: { id: number; email: string; firstName: string; lastName: string; emailVerified?: boolean; verified?: boolean }; message: string | null }> {
     return this.authenticatedRequest('/api/v1/users');
+  }
+
+  /**
+   * Update user name — PUT /api/v1/users/{id}
+   */
+  async updateUserName(userId: string, firstName: string, lastName: string): Promise<{ message: string }> {
+    return this.authenticatedRequest(`/api/v1/users/${userId}`, {
+      method: 'PUT',
+      body: JSON.stringify({ firstName, lastName }),
+    });
   }
 
   /**
@@ -337,8 +361,8 @@ class ApiService {
 
             return await retryResponse.text();
           }
-        } catch (refreshError) {
-          console.error('Token refresh failed during file fetch:', refreshError);
+        } catch {
+          console.error('Token refresh failed during file fetch');
         }
       }
       throw new Error(`Failed to fetch file: ${response.statusText}`);
@@ -360,16 +384,8 @@ class ApiService {
     context: string
   ): Promise<never> {
     const errorText = await this.getResponseText(response);
-    const errorMessage = this.extractErrorMessage(errorText);
-    console.error(context, {
-      url,
-      type,
-      status: response.status,
-      statusText: response.statusText,
-      message: errorMessage,
-      body: errorText,
-    });
-    throw new Error(errorMessage);
+    console.error(context, { status: response.status });
+    throw new Error(this.extractErrorMessage(errorText));
   }
 
   /**
@@ -399,11 +415,9 @@ class ApiService {
         await this.handleFailedUpload(retryResponse, url, type, 'Upload failed after token refresh');
       }
 
-      const result = await retryResponse.json();
-      console.log(`Successful upload for type ${type}:`, result);
-      return result;
-    } catch (refreshError) {
-      console.error('Token refresh failed during upload:', refreshError);
+      return await retryResponse.json();
+    } catch {
+      console.error('Token refresh failed during upload');
       return null;
     }
   }
@@ -426,12 +440,8 @@ class ApiService {
       body: formData,
     });
 
-    console.log(`Response status: ${response.status} for upload type ${type}`);
-
     if (response.ok) {
-      const result = await response.json();
-      console.log(`Successful upload for type ${type}:`, result);
-      return result;
+      return await response.json();
     }
 
     if (response.status === 401) {
@@ -446,6 +456,7 @@ class ApiService {
 
   /**
    * Create a meta model
+   * Backend expects a JSON body: { name, description, domain, keyword, ecoreFileId, genModelFileId, applyGenModelFixes }
    */
   async createMetaModel(data: {
     name: string;
@@ -454,10 +465,15 @@ class ApiService {
     keyword: string[];
     ecoreFileId: number;
     genModelFileId: number;
+    applyGenModelFixes?: boolean;
   }): Promise<{ data: any; message: string }> {
+    const body = {
+      ...data,
+      applyGenModelFixes: data.applyGenModelFixes ?? false,
+    };
     return this.authenticatedRequest('/api/v1/meta-models', {
       method: 'POST',
-      body: JSON.stringify(data),
+      body: JSON.stringify(body),
     });
   }
 
@@ -484,11 +500,8 @@ class ApiService {
     pageSize?: number;
     ownedByUser?: boolean;
   }): Promise<{ data: any[]; message: string }> {
-    // Set default values for pagination
-    const pageNumber = filters.pageNumber ?? 0;
-    const pageSize = filters.pageSize ?? 50;
+    const { pageNumber = 0, pageSize = 50, ...filterBody } = filters;
 
-    // Build query parameters
     const queryParams = new URLSearchParams({
       pageNumber: pageNumber.toString(),
       pageSize: pageSize.toString(),
@@ -496,21 +509,19 @@ class ApiService {
 
     const endpoint = `/api/v1/meta-models/find-all?${queryParams.toString()}`;
 
-    console.log('findMetaModels request:', {
-      endpoint,
-      filters,
-      pageNumber,
-      pageSize,
-    });
-
-    const result = await this.authenticatedRequest<{ data: any[]; message: string }>(endpoint, {
+    const result = await this.authenticatedRequest<{ data: unknown; message?: string }>(endpoint, {
       method: 'POST',
-      body: JSON.stringify(filters),
+      body: JSON.stringify(filterBody),
     });
 
-    console.log('findMetaModels response:', result);
+    let data: any[] = [];
+    if (Array.isArray(result?.data)) {
+      data = result.data;
+    } else if (result?.data && typeof result.data === 'object' && Array.isArray((result.data as { content?: unknown[] }).content)) {
+      data = (result.data as { content: any[] }).content;
+    }
 
-    return result;
+    return { data, message: result?.message ?? '' };
   }
 
   /**
@@ -609,51 +620,41 @@ class ApiService {
 
     const url = `${this.baseURL}/api/v1/vsums/${id}/build/artifact`;
     const headers: Record<string, string> = {
-      'Authorization': `Bearer ${token}`,
+      Authorization: `Bearer ${token}`,
+      Accept: 'application/zip, application/octet-stream, */*',
     };
 
-    const response = await fetch(url, {
+    let response = await fetch(url, {
       method: 'GET',
       headers,
     });
 
-    if (response.ok) {
-      return await response.blob();
-    }
-
     if (response.status === 401) {
       try {
         await AuthService.refreshToken();
-        const newToken = await AuthService.ensureValidToken();
-        if (newToken) {
-          const retryResponse = await fetch(url, {
-            method: 'GET',
-            headers: {
-              'Authorization': `Bearer ${newToken}`,
-            },
-          });
+      } catch {
+        console.error('Token refresh failed during artifact download');
+      }
 
-          if (!retryResponse.ok) {
-            const errorText = await this.getResponseText(retryResponse);
-            throw this.createApiError(errorText, 'Artifact download failed after token refresh');
-          }
-
-          return await retryResponse.blob();
-        }
-      } catch (refreshError) {
-        console.error('Token refresh failed during artifact download:', refreshError);
+      const newToken = await AuthService.ensureValidToken();
+      if (newToken) {
+        response = await fetch(url, {
+          method: 'GET',
+          headers: {
+            ...headers,
+            Authorization: `Bearer ${newToken}`,
+          },
+        });
       }
     }
 
-    const errorText = await this.getResponseText(response);
-    const errorMessage = this.extractErrorMessage(errorText);
-    console.error('Artifact download failed', {
-      url,
-      status: response.status,
-      statusText: response.statusText,
-      message: errorMessage,
-    });
-    throw this.createApiError(errorText, 'Artifact download failed');
+    if (!response.ok) {
+      const errorText = await this.getResponseText(response);
+      console.error('Artifact download failed', { status: response.status });
+      throw this.createApiError(errorText, 'Artifact download failed');
+    }
+
+    return this.parseArtifactBlob(response);
   }
 
   /**
@@ -690,14 +691,10 @@ class ApiService {
   /**
    * vSUMS: Sync changes with relationship data
    */
-  async syncVsumChanges(id: number | string, data: {
-    metaModelIds: number[];
-    metaModelRelationRequests: Array<{
-      sourceId: number;
-      targetId: number;
-      reactionFileId: number;
-    }>;
-  }): Promise<ApiResponse<any>> {
+  async syncVsumChanges(
+    id: number | string,
+    data: VsumSyncChangesPutRequest,
+  ): Promise<ApiResponse<any>> {
     return this.updateVsumSyncChanges(id, data);
   }
 
@@ -786,6 +783,25 @@ class ApiService {
   }
 
   /**
+   * VSUM USERS: Invite a viewer by email (read-only access)
+   * POST /api/v1/vsum-users/invite
+   * body: { vsumId, email }
+   */
+  async inviteVsumViewer(
+    vsumId: number | string,
+    payload: { email: string },
+  ): Promise<ApiResponse<Record<string, never>>> {
+    const body: VsumUserInviteRequest = {
+      vsumId: Number(vsumId),
+      email: payload.email.trim(),
+    };
+    return this.authenticatedRequest('/api/v1/vsum-users/invite', {
+      method: 'POST',
+      body: JSON.stringify(body),
+    });
+  }
+
+  /**
    * USERS: Search people to add (🔧 adjust this to your real endpoint)
    * Examples:
    *   GET  /api/v1/users/search?q=...&limit=10
@@ -798,9 +814,11 @@ class ApiService {
     return this.authenticatedRequest(`/api/v1/users/search?pageNumber=${pageNumber}&pageSize=${pageSize}`);
   }
 
-  async updateReactionFile(
+  private async updateUploadedFile(
     fileId: number | string,
-    file: File
+    file: File,
+    endpointSuffix: 'update-reaction' | 'update-ecore',
+    logLabel: string,
   ): Promise<{ data: string; message: string }> {
     const token = await AuthService.ensureValidToken();
 
@@ -811,7 +829,7 @@ class ApiService {
     const formData = new FormData();
     formData.append('file', file);
 
-    const url = `${this.baseURL}/api/upload/${fileId}/update-reaction`;
+    const url = `${this.baseURL}/api/upload/${fileId}/${endpointSuffix}`;
 
     const doRequest = async (authHeader: string) => {
       const response = await fetch(url, {
@@ -826,35 +844,26 @@ class ApiService {
         let errorText = '';
         try {
           errorText = await response.text();
-        } catch { }
+        } catch { /* ignore */ }
         let errorMessage = errorText;
         try {
           const parsed = JSON.parse(errorText);
           errorMessage = parsed?.message || parsed?.error || errorText;
-        } catch { }
+        } catch { /* ignore */ }
 
-        console.error('Update reaction file failed', {
-          url,
-          fileId,
-          status: response.status,
-          statusText: response.statusText,
-          message: errorMessage,
-          body: errorText,
-        });
+        console.error(`${logLabel} failed`, { status: response.status });
 
-        throw new Error(errorMessage);
+        const err = new Error(errorMessage || `Request failed with status ${response.status}`) as Error & { status?: number };
+        err.status = response.status;
+        throw err;
       }
 
-      const result = await response.json();
-      console.log(`Successful reaction file update for id ${fileId}:`, result);
-      return result as { data: string; message: string };
+      return await response.json() as { data: string; message: string };
     };
 
     try {
-      // first try with current token
       return await doRequest(`Bearer ${token}`);
-    } catch (err: any) {
-      // if it was 401, try refresh like in uploadFile
+    } catch (err: unknown) {
       if (err instanceof Error && /401/.test(err.message)) {
         try {
           await AuthService.refreshToken();
@@ -862,19 +871,86 @@ class ApiService {
           if (newToken) {
             return await doRequest(`Bearer ${newToken}`);
           }
-        } catch (refreshError) {
-          console.error('Token refresh failed during updateReactionFile:', refreshError);
+        } catch {
+          console.error(`Token refresh failed during ${logLabel}`);
         }
       }
       throw err;
     }
   }
 
+  async updateReactionFile(
+    fileId: number | string,
+    file: File,
+  ): Promise<{ data: string; message: string }> {
+    return this.updateUploadedFile(fileId, file, 'update-reaction', 'Update reaction file');
+  }
+
+  async updateEcoreFile(
+    fileId: number | string,
+    file: File,
+  ): Promise<{ data: string; message: string }> {
+    return this.updateUploadedFile(fileId, file, 'update-ecore', 'Update ecore file');
+  }
+
   // Removed unused getBaseURL and setBaseURL helpers
+
+  // ── Constraint Rule Sets ──────────────────────────────────────────────────
+
+  getRuleSets(vsumId: number): Promise<RuleSetResponse[]> {
+    return this.authenticatedRequest(`/api/v1/vsums/${vsumId}/rule-sets`);
+  }
+
+  createRuleSet(vsumId: number, body: RuleSetPostRequest): Promise<RuleSetResponse> {
+    return this.authenticatedRequest(`/api/v1/vsums/${vsumId}/rule-sets`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+  }
+
+  updateRuleSet(vsumId: number, ruleSetId: number, body: RuleSetPutRequest): Promise<RuleSetResponse> {
+    return this.authenticatedRequest(`/api/v1/vsums/${vsumId}/rule-sets/${ruleSetId}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+  }
+
+  deleteRuleSet(vsumId: number, ruleSetId: number): Promise<void> {
+    return this.authenticatedRequest(`/api/v1/vsums/${vsumId}/rule-sets/${ruleSetId}`, {
+      method: 'DELETE',
+    });
+  }
 }
 
 // Export a singleton instance
 export const apiService = new ApiService();
+
+export interface RuleSetResponse {
+  id: number;
+  vsumId: number;
+  name: string;
+  color: string;
+  description: string | null;
+  oclContent: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface RuleSetPostRequest {
+  name: string;
+  color?: string;
+  description?: string;
+  oclContent?: string;
+}
+
+export interface RuleSetPutRequest {
+  name: string;
+  color?: string;
+  description?: string;
+  oclContent?: string;
+}
 
 // Example API methods using the authenticated service
 // Removed unused userApi and projectApi helpers
@@ -883,20 +959,30 @@ export const apiService = new ApiService();
 export { ApiService };
 
 
+export type VsumRole = 'OWNER' | 'MEMBER' | 'VIEWER';
+
 export interface VsumUserResponse {
   id: number;
   vsumId: number;
   firstName: string;
   lastName: string;
   email: string;
-  role: 'OWNER' | 'MEMBER';
+  role: VsumRole;
   roleEn?: string;
+  /** True when the invitee has not registered yet */
+  pending?: boolean;
+  status?: 'ACTIVE' | 'PENDING';
   createdAt: string;
 }
 
 export interface VsumUserPostRequest {
   vsumId: number;
   userId: number;
+}
+
+export interface VsumUserInviteRequest {
+  vsumId: number;
+  email: string;
 }
 
 export interface UserSearchItem {

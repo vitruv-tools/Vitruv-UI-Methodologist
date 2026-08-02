@@ -6,13 +6,6 @@ import React, { useEffect } from 'react';
  */
 export function KeycloakRedirect() {
   useEffect(() => {
-    // TODO: Implement Keycloak redirect logic
-    // This will redirect admins to the Keycloak authentication server
-    // Example implementation:
-    // const keycloakUrl = process.env.REACT_APP_KEYCLOAK_URL;
-    // const clientId = process.env.REACT_APP_KEYCLOAK_CLIENT_ID;
-    // const redirectUri = encodeURIComponent(window.location.origin + '/auth/callback');
-    // window.location.href = `${keycloakUrl}/auth/realms/master/protocol/openid-connect/auth?client_id=${clientId}&redirect_uri=${redirectUri}&response_type=code`;
   }, []);
 
   return (

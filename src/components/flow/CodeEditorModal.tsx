@@ -3,39 +3,49 @@ import Editor, { OnMount, Monaco } from '@monaco-editor/react';
 import { reactionsMonarch, reactionsTheme, reactionsLanguageConfig } from './ReactionsMonarchGrammar';
 import * as monaco from 'monaco-editor';
 import { ConfirmDialog } from '../ui/ConfirmDialog';
+import { ActionButton } from '../ui/ActionButton';
+import {
+  APP_FONT,
+  BRAND_COLOR,
+  DANGER_COLOR,
+  largeModalPanelStyle,
+  modalCloseButtonStyle,
+  modalPanelFooterStyle,
+  modalPanelHeaderStyle,
+  modalPanelToolbarStyle,
+} from '../ui/sharedStyles';
+import { modalBackdropStyle, modalDialogShellStyle, useModalBodyLock } from '../ui/modalUtils';
 
 interface CodeEditorModalProps {
   readonly isOpen: boolean;
   readonly onClose: () => void;
   readonly onSave: (code: string) => Promise<void> | void;
-  readonly onInitialize?: (code: string) => Promise<void> | void; // Called on open to create the file before any save attempt
+  readonly onInitialize?: (code: string) => Promise<void> | void;
   readonly onDelete?: () => void;
   readonly initialCode?: string;
   readonly edgeId: string;
   readonly sourceFileName?: string;
   readonly targetFileName?: string;
   readonly vsumId?: string;
+  // Generic LSP / language props
+  readonly lspEndpoint?: string;
+  readonly languageId?: string;
+  readonly fileExtension?: string;
+  readonly monarchGrammar?: any;
+  readonly languageConfig?: any;
+  readonly theme?: any;
+  readonly title?: string;
+  /** When true, code is visible but cannot be edited or saved. */
+  readonly readOnly?: boolean;
 }
 
-const buttonBaseStyles = {
-  padding: '6px 12px',
-  border: 'none',
-  borderRadius: '4px',
-  fontSize: '13px',
-  fontWeight: 500,
-  cursor: 'pointer',
-} as const;
-
-const createButtonStyles = (
-  backgroundColor: string,
-  color: string = '#fff',
-  disabled: boolean = false
-) => ({
-  ...buttonBaseStyles,
-  backgroundColor: disabled ? '#333' : backgroundColor,
-  color: disabled ? '#666' : color,
-  cursor: disabled ? 'not-allowed' : 'pointer',
-});
+const toolbarDividerStyle: React.CSSProperties = {
+  width: '1px',
+  height: '24px',
+  backgroundColor: '#e2e8f0',
+  margin: '0 4px',
+  flexShrink: 0,
+};
 
 const extractSaveErrorMessage = (err: unknown): string => {
   if (err instanceof Error && err.message.trim()) {
@@ -53,13 +63,13 @@ const extractSaveErrorMessage = (err: unknown): string => {
     }
   }
 
-  return 'Failed to save reaction file';
+  return 'Failed to save file';
 };
 
 const buildSaveErrorDialogMessage = (rawMessage: string): string => {
   const message = rawMessage.trim();
   if (!message) {
-    return 'Failed to save reaction file. No changes were saved.';
+    return 'Failed to save file. No changes were saved.';
   }
   return `${message} No changes were saved.`;
 };
@@ -75,39 +85,54 @@ export function CodeEditorModal({
   sourceFileName,
   targetFileName,
   vsumId,
+  lspEndpoint = '/lsp',
+  languageId = 'reactions',
+  fileExtension = '.reactions',
+  monarchGrammar,
+  languageConfig,
+  theme,
+  title = 'Code Editor',
+  readOnly = false,
 }: CodeEditorModalProps) {
   const [code, setCode] = useState(initialCode);
   const [savedCode, setSavedCode] = useState(initialCode);
   const [saving, setSaving] = useState(false);
-  const [saveSuccess, setSaveSuccess] = useState(false);          // ← NEU
+  const [saveSuccess, setSaveSuccess] = useState(false);
   const [lspConnected, setLspConnected] = useState(false);
-  const [lspReady, setLspReady] = useState(false);               // ← war useRef
-  const [lspError, setLspError] = useState<string | null>(null); // ← NEU
+  const [lspReady, setLspReady] = useState(false);
+  const [lspError, setLspError] = useState<string | null>(null);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [showClearDialog, setShowClearDialog] = useState(false);
-  const [showUnsavedDialog, setShowUnsavedDialog] = useState(false); // ← NEU
+  const [showUnsavedDialog, setShowUnsavedDialog] = useState(false);
   const [saveErrorMessage, setSaveErrorMessage] = useState<string | null>(null);
 
   const editorRef = useRef<monaco.editor.IStandaloneCodeEditor | null>(null);
   const webSocketRef = useRef<WebSocket | null>(null);
   const lspInitialized = useRef(false);
-  const lspReadyRef = useRef(false);          // ← Ref für async callbacks
+  const lspReadyRef = useRef(false);
   const workspaceRootUri = useRef<string | null>(null);
   const versionCounter = useRef(1);
-  const pendingCloseRef = useRef(false);      // ← NEU: für Unsaved-Dialog
+  const pendingCloseRef = useRef(false);
+  const completionProviderRef = useRef<monaco.IDisposable | null>(null);
 
-  // Keep lspReady state and ref in sync
+  // FIX: Centralized pending request map instead of addEventListener
+  const pendingRequests = useRef<Map<number, (msg: any) => void>>(new Map());
+
+  // FIX: Single source of truth for document URI
+  const getDocumentUri = useCallback(
+    () => `${workspaceRootUri.current}${edgeId}${fileExtension}`,
+    [edgeId, fileExtension]
+  );
+
   const setLspReadyBoth = (value: boolean) => {
     lspReadyRef.current = value;
     setLspReady(value);
   };
 
-  // Derived: whether the editor has unsaved changes
-  const hasUnsavedChanges = code !== savedCode;
+  const hasUnsavedChanges = !readOnly && code !== savedCode;
 
   const closeWebSocket = useCallback(() => {
     if (webSocketRef.current) {
-      console.log('🧹 Component unmounting - closing WebSocket cleanly');
       if (
         webSocketRef.current.readyState === WebSocket.OPEN ||
         webSocketRef.current.readyState === WebSocket.CONNECTING
@@ -118,6 +143,7 @@ export function CodeEditorModal({
     }
     setLspReadyBoth(false);
     lspInitialized.current = false;
+    pendingRequests.current.clear();
     setLspConnected(false);
   }, []);
 
@@ -127,23 +153,23 @@ export function CodeEditorModal({
     setSaveSuccess(false);
   }, [initialCode, isOpen]);
 
-  // Store reaction file immediately on open to ensure a valid ID exists before saving
   useEffect(() => {
-    if (isOpen && onInitialize) {
+    if (isOpen && onInitialize && !readOnly) {
       const result = onInitialize(initialCode);
       if (result instanceof Promise) {
         result.catch((err: unknown) => {
-          console.error('Failed to initialize reaction file:', err);
+          console.error('Failed to initialize file:', err);
         });
       }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isOpen]); // Only on open, not on every initialCode change
+  }, [isOpen]);
 
-  // Cleanup on unmount
   useEffect(() => {
     return () => {
       closeWebSocket();
+      completionProviderRef.current?.dispose();
+      completionProviderRef.current = null;
     };
   }, [closeWebSocket]);
 
@@ -153,9 +179,9 @@ export function CodeEditorModal({
     return () => globalThis.removeEventListener('beforeunload', handleBeforeUnload);
   }, [closeWebSocket]);
 
-  // ── Ctrl+S Shortcut ────────────────────────────────────────────────────────
+  // Ctrl+S shortcut (edit mode only)
   useEffect(() => {
-    if (!isOpen) return;
+    if (!isOpen || readOnly) return;
     const handleKeyDown = (e: KeyboardEvent) => {
       if ((e.ctrlKey || e.metaKey) && e.key === 's') {
         e.preventDefault();
@@ -167,7 +193,6 @@ export function CodeEditorModal({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen, code, saving]);
 
-  // Close with unsaved-changes guard
   const handleClose = useCallback(() => {
     if (hasUnsavedChanges) {
       pendingCloseRef.current = true;
@@ -189,12 +214,10 @@ export function CodeEditorModal({
   // Process LSP completion response
   const processCompletionResponse = (
     message: any,
-    requestId: number,
     range: any,
     monacoInstance: Monaco
-  ): any[] | null => {
-    if (message.id !== requestId) return null;
-    if (!message.result) return null;
+  ): any[] => {
+    if (!message.result) return [];
 
     const items = Array.isArray(message.result)
       ? message.result
@@ -230,7 +253,8 @@ export function CodeEditorModal({
   };
 
   const getFallbackSuggestions = (wordInfo: any, range: any, monacoInstance: Monaco) => {
-    const keywords = reactionsMonarch.keywords || [];
+    const grammar = monarchGrammar || reactionsMonarch;
+    const keywords = grammar.keywords || [];
     const typedText = wordInfo.word.toLowerCase();
     return keywords
       .filter((keyword: string) => keyword.toLowerCase().startsWith(typedText))
@@ -238,41 +262,8 @@ export function CodeEditorModal({
         label: keyword,
         kind: monacoInstance.languages.CompletionItemKind.Keyword,
         insertText: keyword,
-        range
+        range,
       }));
-  };
-
-  const handleCompletionTimeout = (
-    messageHandler: (event: MessageEvent) => void,
-    wordInfo: any,
-    range: any,
-    monacoInstance: Monaco,
-    resolve: (value: { suggestions: any[] }) => void
-  ) => {
-    console.log('⏰ TIMEOUT reached after 2000ms');
-    webSocketRef.current?.removeEventListener('message', messageHandler);
-    resolve({ suggestions: getFallbackSuggestions(wordInfo, range, monacoInstance) });
-  };
-
-  const createCompletionMessageHandler = (
-    requestId: number,
-    monacoInstance: Monaco,
-    range: any,
-    resolve: (value: { suggestions: any[] }) => void
-  ) => {
-    const messageHandler = (event: MessageEvent) => {
-      try {
-        const message = JSON.parse(event.data);
-        const suggestions = processCompletionResponse(message, requestId, range, monacoInstance);
-        if (suggestions) {
-          webSocketRef.current?.removeEventListener('message', messageHandler);
-          resolve({ suggestions });
-        }
-      } catch (err) {
-        console.error('💥 [messageHandler] Parse error:', err);
-      }
-    };
-    return messageHandler;
   };
 
   const requestCompletionFromLsp = (
@@ -281,19 +272,21 @@ export function CodeEditorModal({
     monacoInstance: Monaco
   ): Promise<{ suggestions: any[] }> => {
     return new Promise((resolve) => {
-      if (!lspReadyRef.current) { resolve({ suggestions: [] }); return; }
-      if (!webSocketRef.current || webSocketRef.current.readyState !== WebSocket.OPEN) {
-        console.log('❌ WebSocket not open, state:', webSocketRef.current?.readyState);
+      if (!lspReadyRef.current) {
+        console.warn('🧩 Completion skipped: LSP not ready yet');
         resolve({ suggestions: [] }); return;
       }
-      console.log('✅ WebSocket is open and LSP is ready');
+      if (webSocketRef.current?.readyState !== WebSocket.OPEN) {
+        console.warn('🧩 Completion skipped: WebSocket not open');
+        resolve({ suggestions: [] }); return;
+      }
 
       const wordInfo = model.getWordUntilPosition(position);
       const range = {
         startLineNumber: position.lineNumber,
         endLineNumber: position.lineNumber,
         startColumn: wordInfo.startColumn,
-        endColumn: wordInfo.endColumn
+        endColumn: wordInfo.endColumn,
       };
 
       const requestId = Math.floor(Math.random() * 2147483647);
@@ -302,44 +295,58 @@ export function CodeEditorModal({
         id: requestId,
         method: 'textDocument/completion',
         params: {
-          textDocument: { uri: `${workspaceRootUri.current}reaction-${edgeId}.reactions` },
+          textDocument: { uri: getDocumentUri() },
           position: { line: position.lineNumber - 1, character: position.column - 1 },
-          context: { triggerKind: 1 }
-        }
+          context: { triggerKind: 1 },
+        },
       };
 
-      console.log('📤 Sending completion request:', request);
-      const messageHandler = createCompletionMessageHandler(requestId, monacoInstance, range, resolve);
-      webSocketRef.current.addEventListener('message', messageHandler);
-      console.log('📤 Actually sending to WebSocket now...');
+      const timeoutId = setTimeout(() => {
+        if (pendingRequests.current.has(requestId)) {
+          pendingRequests.current.delete(requestId);
+          console.warn(`🧩 Completion request ${requestId} timed out after 2s — using fallback keywords. uri=${getDocumentUri()}`);
+          resolve({ suggestions: getFallbackSuggestions(wordInfo, range, monacoInstance) });
+        }
+      }, 2000);
+
+      pendingRequests.current.set(requestId, (message) => {
+        clearTimeout(timeoutId);
+        const suggestions = processCompletionResponse(message, range, monacoInstance);
+        console.log(`🧩 Completion response for request ${requestId}:`, message.result, '→', suggestions.length, 'suggestions');
+        resolve({ suggestions });
+      });
+
+      console.log(`🧩 Sending completion request ${requestId} for uri=${getDocumentUri()}`);
       webSocketRef.current.send(JSON.stringify(request));
-      console.log('✅ Sent!');
-      setTimeout(
-        () => handleCompletionTimeout(messageHandler, wordInfo, range, monacoInstance, resolve),
-        2000
-      );
     });
   };
 
   const handleEditorDidMount: OnMount = (editor, monacoInstance) => {
+    console.log('🎯 handleEditorDidMount called');
     editorRef.current = editor;
 
-    monacoInstance.languages.register({ id: 'reactions' });
-    monacoInstance.languages.setLanguageConfiguration('reactions', reactionsLanguageConfig);
-    monacoInstance.languages.setMonarchTokensProvider('reactions', reactionsMonarch);
-    monacoInstance.editor.defineTheme('reactions-theme', reactionsTheme);
-    monacoInstance.editor.setTheme('reactions-theme');
+    const grammar = monarchGrammar || reactionsMonarch;
+    const config = languageConfig || reactionsLanguageConfig;
+    const editorTheme = theme || reactionsTheme;
+    const themeName = `${languageId}-theme`;
 
-    monacoInstance.languages.registerCompletionItemProvider('reactions', {
+    monacoInstance.languages.register({ id: languageId });
+    monacoInstance.languages.setLanguageConfiguration(languageId, config);
+    monacoInstance.languages.setMonarchTokensProvider(languageId, grammar);
+    monacoInstance.editor.defineTheme(themeName, editorTheme);
+    monacoInstance.editor.setTheme(themeName);
+
+    completionProviderRef.current?.dispose();
+    completionProviderRef.current = monacoInstance.languages.registerCompletionItemProvider(languageId, {
       triggerCharacters: ['.', ' ', '\n', ':'],
       provideCompletionItems: async (model, position) =>
-        requestCompletionFromLsp(model, position, monacoInstance)
+        requestCompletionFromLsp(model, position, monacoInstance),
     });
 
-    console.log('✅ Completion provider registered');
-    connectToLsp(monacoInstance);
+    if (!readOnly) {
+      connectToLsp(monacoInstance);
+    }
     editor.focus();
-    console.log('✅ Editor setup complete');
   };
 
   const sendInitialize = (rootUri: string, webSocket: WebSocket) => {
@@ -356,16 +363,16 @@ export function CodeEditorModal({
           textDocument: {
             completion: {
               completionItem: { snippetSupport: true, documentationFormat: ['markdown', 'plaintext'] },
-              contextSupport: true
+              contextSupport: true,
             },
             hover: { contentFormat: ['markdown', 'plaintext'] },
             signatureHelp: {},
             definition: {},
             references: {},
             documentSymbol: {},
-          }
-        }
-      }
+          },
+        },
+      },
     }));
   };
 
@@ -376,45 +383,52 @@ export function CodeEditorModal({
   };
 
   const connectToLsp = (monacoInstance: Monaco) => {
-    console.log('🔌 connectToLsp called');
     try {
       const rawUser = localStorage.getItem('auth.user');
       const userId = rawUser ? JSON.parse(rawUser).id : null;
+      console.log('🔑 rawUser:', rawUser);
+      console.log('🔑 vsumId:', vsumId);
       if (!userId) {
         console.error('❌ No userId available – aborting LSP connection');
         return;
       }
-
       if (!vsumId) {
         console.error('❌ No vsumId available – aborting LSP connection');
         return;
       }
 
-
       const apiBaseUrl = process.env.REACT_APP_API_BASE_URL || 'http://localhost:9811';
       const wsBaseUrl = apiBaseUrl.replace('https://', 'wss://').replace('http://', 'ws://');
-      const wsUrl = `${wsBaseUrl}/lsp?userId=${encodeURIComponent(userId)}&vsumId=${encodeURIComponent(vsumId)}`;
+      const wsUrl = `${wsBaseUrl}${lspEndpoint}?userId=${encodeURIComponent(userId)}&vsumId=${encodeURIComponent(vsumId)}`;
 
       console.log('🔌 Connecting to LSP at:', wsUrl);
+
       const webSocket = new WebSocket(wsUrl);
       webSocketRef.current = webSocket;
 
-      console.log('🔌 WebSocket created, initial readyState:', webSocket.readyState);
-
       webSocket.onopen = () => {
-        console.log('✅ WebSocket OPENED! readyState:', webSocket.readyState);
+        console.log('✅ LSP WebSocket open:', wsUrl);
         setLspConnected(true);
         setLspError(null);
       };
 
+      // Single onmessage with centralized routing via pendingRequests map
       webSocket.onmessage = (event) => {
-        console.log('📩 WebSocket message received:', event.data);
         try {
           const message = JSON.parse(event.data);
 
+          // Route to pending request handler (completion, hover, etc.)
+          // id === 1 is reserved for initialize, handled separately below
+          if (message.id !== undefined && message.id !== 1 && pendingRequests.current.has(message.id)) {
+            const handler = pendingRequests.current.get(message.id)!;
+            pendingRequests.current.delete(message.id);
+            handler(message);
+            return;
+          }
+
           if (message.type === 'workspaceReady') {
-            console.log('✅ workspaceReady received, rootUri:', message.rootUri);
             const rootUri = message.rootUri;
+            console.log('📁 workspaceReady received, rootUri:', rootUri);
             if (!rootUri) {
               console.error('❌ workspaceReady message contains no rootUri');
               return;
@@ -425,7 +439,6 @@ export function CodeEditorModal({
           }
 
           if (message.method === 'textDocument/publishDiagnostics') {
-            console.log('📊 Diagnostics received');
             const diagnostics = message.params.diagnostics || [];
             const markers = diagnostics.map((diag: any) => ({
               severity: getDiagnosticSeverity(diag.severity, monacoInstance),
@@ -434,65 +447,55 @@ export function CodeEditorModal({
               endLineNumber: diag.range.end.line + 1,
               endColumn: diag.range.end.character + 1,
               message: diag.message,
-              code: diag.code
+              code: diag.code,
             }));
             const model = editorRef.current?.getModel();
-            if (model) monacoInstance.editor.setModelMarkers(model, 'reactions', markers);
+            if (model) monacoInstance.editor.setModelMarkers(model, languageId, markers);
+            return;
           }
 
           if (message.id === 1 && message.result) {
-            console.log('✅ Initialize response received');
+            console.log('🚀 LSP initialize response received, sending initialized + didOpen');
             lspInitialized.current = true;
             webSocket.send(JSON.stringify({ jsonrpc: '2.0', method: 'initialized', params: {} }));
-            console.log('📤 Sent initialized notification');
 
             if (editorRef.current) {
-              console.log('📤 Sending didOpen notification');
               webSocket.send(JSON.stringify({
                 jsonrpc: '2.0',
                 method: 'textDocument/didOpen',
                 params: {
                   textDocument: {
-                    uri: `${workspaceRootUri.current}reaction-${edgeId}.reactions`,
-                    languageId: 'reactions',
+                    uri: getDocumentUri(),
+                    languageId,
                     version: 1,
-                    text: code
-                  }
-                }
+                    // Use current editor value to avoid stale closure
+                    text: editorRef.current.getValue(),
+                  },
+                },
               }));
               setLspReadyBoth(true);
-              console.log('✅ LSP is now READY');
             } else {
               console.error('❌ editorRef.current is null!');
             }
           }
-          if (message.result && (message.result.items || Array.isArray(message.result))) {
-            console.log('🎯 Got completion items in onmessage:', message.result);
-          }
-
         } catch (err) {
           console.error('💥 Failed to parse LSP message:', err);
         }
       };
 
-      webSocket.onerror = (error) => {
-        console.error('❌ LSP WebSocket ERROR:', error);
-        console.error('WebSocket state at error:', webSocket.readyState);
-        console.error('WebSocket URL was:', wsUrl);
+      webSocket.onerror = (event) => {
+        console.error('💥 LSP WebSocket error for', wsUrl, event);
         setLspConnected(false);
         setLspReadyBoth(false);
         setLspError('LSP connection failed — completions and validation unavailable');
       };
 
       webSocket.onclose = (event) => {
-        console.error('❌ WebSocket CLOSED:', {
-          code: event.code,
-          reason: event.reason,
-          wasClean: event.wasClean
-        });
+        console.warn(`🔌 LSP WebSocket closed: code=${event.code} reason="${event.reason}" wasClean=${event.wasClean}`);
         setLspConnected(false);
         setLspReadyBoth(false);
         lspInitialized.current = false;
+        pendingRequests.current.clear();
         if (event.code !== 1000) {
           setLspError(`LSP disconnected (code ${event.code}) — try reopening the editor`);
         }
@@ -504,7 +507,6 @@ export function CodeEditorModal({
   };
 
   const handleSave = async () => {
-    console.log('💾 Save clicked');
     if (saving) return;
     try {
       setSaving(true);
@@ -512,10 +514,9 @@ export function CodeEditorModal({
       await onSave(code);
       setSavedCode(code);
       setSaveSuccess(true);
-      // Show success feedback briefly, then hide
       setTimeout(() => setSaveSuccess(false), 2500);
     } catch (err) {
-      console.error('Failed to save reaction', err);
+      console.error('Failed to save file', err);
       const message = extractSaveErrorMessage(err);
       setSaveErrorMessage(buildSaveErrorDialogMessage(message));
     } finally {
@@ -523,15 +524,10 @@ export function CodeEditorModal({
     }
   };
 
-  const handleDelete = () => {
-    console.log('🗑️ Delete clicked');
-    setShowDeleteDialog(true);
-  };
+  const handleDelete = () => setShowDeleteDialog(true);
   const handleUndo = () => editorRef.current?.trigger('keyboard', 'undo', null);
   const handleRedo = () => editorRef.current?.trigger('keyboard', 'redo', null);
   const handleFormat = () => editorRef.current?.getAction('editor.action.formatDocument')?.run();
-
-  // Clear via editor API so undo history is preserved
   const handleClear = () => setShowClearDialog(true);
 
   const executeClear = () => {
@@ -546,39 +542,68 @@ export function CodeEditorModal({
     setShowClearDialog(false);
   };
 
-  // LSP status badge─────────────────────────────────────────────────────
   const renderLspStatus = () => {
+    let label = 'LSP Offline';
+    let bg = '#f1f5f9';
+    let color = '#64748b';
+    let dot = '#94a3b8';
+    let title = 'Language Server not connected';
+
     if (lspConnected) {
-      return (
-        <span
-          style={{ marginLeft: '12px', color: lspReady ? '#0e7a0d' : '#ff9800', fontSize: '14px', cursor: 'default' }}
-          title={lspReady
-            ? 'Language Server is ready — completions and validation active'
-            : 'Language Server is initializing — completions not yet available'}
-        >
-          ● {lspReady ? 'LSP Ready' : 'LSP Initializing...'}
-        </span>
-      );
+      if (lspReady) {
+        label = 'LSP Ready';
+        bg = '#f0fdf4';
+        color = '#15803d';
+        dot = BRAND_COLOR;
+        title = 'Language Server is ready — completions and validation active';
+      } else {
+        label = 'LSP Initializing';
+        bg = '#fffbeb';
+        color = '#b45309';
+        dot = '#f59e0b';
+        title = 'Language Server is initializing — completions not yet available';
+      }
+    } else if (lspError) {
+      label = 'LSP Error';
+      bg = '#fef2f2';
+      color = DANGER_COLOR;
+      dot = DANGER_COLOR;
+      title = `${lspError} — Syntax highlighting still works`;
     }
-    if (lspError) {
-      return (
-        <span
-          style={{ marginLeft: '12px', color: '#f44747', fontSize: '14px', cursor: 'default' }}
-          title={`${lspError} — Syntax highlighting still works`}
-        >
-          ● LSP Error
-        </span>
-      );
-    }
+
     return (
       <span
-        style={{ marginLeft: '12px', color: '#555', fontSize: '14px', cursor: 'default' }}
-        title="Language Server not connected"
+        style={{
+          display: 'inline-flex',
+          alignItems: 'center',
+          gap: '6px',
+          marginLeft: '10px',
+          padding: '3px 10px',
+          borderRadius: '999px',
+          fontSize: '12px',
+          fontWeight: 600,
+          background: bg,
+          color,
+          verticalAlign: 'middle',
+          cursor: 'default',
+        }}
+        title={title}
       >
-        ● LSP Offline
+        <span
+          style={{
+            width: '7px',
+            height: '7px',
+            borderRadius: '50%',
+            background: dot,
+            flexShrink: 0,
+          }}
+        />
+        {label}
       </span>
     );
   };
+
+  useModalBodyLock(isOpen);
 
   if (!isOpen) return null;
 
@@ -586,124 +611,163 @@ export function CodeEditorModal({
     <dialog
       open
       style={{
-        position: 'fixed',
-        inset: 0,
-        backgroundColor: 'rgba(0, 0, 0, 0.5)',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        zIndex: 9999,
-        backdropFilter: 'blur(4px)',
-        border: 'none',
-        padding: 0,
-        margin: 0,
-        width: '100%',
-        height: '100%',
-        maxWidth: '100%',
-        maxHeight: '100%',
+        ...modalDialogShellStyle,
+        display: 'grid',
+        placeItems: 'center',
       }}
       onClose={handleClose}
       onCancel={handleClose}
-      onClick={(e) => { if (e.target === e.currentTarget) handleClose(); }}
+      onKeyDown={e => e.stopPropagation()}
     >
-      <div
-        aria-labelledby="code-editor-title"
-        style={{
-          backgroundColor: '#1e1e1e',
-          borderRadius: '12px',
-          width: '90%',
-          maxWidth: '1200px',
-          height: '85vh',
-          maxHeight: '900px',
-          display: 'flex',
-          flexDirection: 'column',
-          boxShadow: '0 20px 60px rgba(0, 0, 0, 0.4)',
-          overflow: 'hidden',
-        }}
-        onKeyDown={(e) => e.stopPropagation()}
-      >
-        {/* ── Header ── */}
-        <div style={{
-          padding: '16px 24px',
-          borderBottom: '1px solid #333',
-          backgroundColor: '#252526',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-        }}>
-          <div>
-            <h3 id="code-editor-title" style={{ margin: 0, color: '#fff', fontSize: '18px', fontWeight: 600 }}>
-              Reaction Editor
-              {renderLspStatus()}
-            </h3>
-            {sourceFileName && targetFileName && (
-              <p style={{ margin: '4px 0 0 0', color: '#888', fontSize: '16px' }}>
+      <button
+        type="button"
+        aria-hidden="true"
+        tabIndex={-1}
+        onClick={handleClose}
+        style={{ ...modalBackdropStyle, position: 'absolute' }}
+      />
+      <div aria-labelledby="code-editor-title" style={largeModalPanelStyle}>
+        {/* Header */}
+        <div style={modalPanelHeaderStyle}>
+          <div style={{ minWidth: 0 }}>
+            <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: '4px' }}>
+              <h3
+                id="code-editor-title"
+                style={{
+                  margin: 0,
+                  color: '#0f172a',
+                  fontSize: '16px',
+                  fontWeight: 700,
+                  letterSpacing: '-0.01em',
+                  fontFamily: APP_FONT,
+                }}
+              >
+                {readOnly ? `${title} (view only)` : title}
+              </h3>
+              {!readOnly && renderLspStatus()}
+            </div>
+            {readOnly && (
+              <p style={{ margin: '4px 0 0', color: '#64748b', fontSize: '12px', fontFamily: APP_FONT }}>
+                View only — changes are not allowed
+              </p>
+            )}
+            {!readOnly && sourceFileName && targetFileName && (
+              <p
+                style={{
+                  margin: '4px 0 0',
+                  color: '#94a3b8',
+                  fontSize: '13px',
+                  fontFamily: APP_FONT,
+                }}
+              >
+                {sourceFileName} ↔ {targetFileName}
+              </p>
+            )}
+            {readOnly && sourceFileName && targetFileName && (
+              <p
+                style={{
+                  margin: '4px 0 0',
+                  color: '#94a3b8',
+                  fontSize: '13px',
+                  fontFamily: APP_FONT,
+                }}
+              >
                 {sourceFileName} ↔ {targetFileName}
               </p>
             )}
           </div>
           <button
+            type="button"
             onClick={handleClose}
-            style={{ background: 'transparent', border: 'none', color: '#888', fontSize: '24px', cursor: 'pointer', padding: '4px 8px', lineHeight: 1 }}
+            style={modalCloseButtonStyle}
             title="Close (Esc)"
+            aria-label="Close editor"
+            onMouseEnter={(e) => {
+              e.currentTarget.style.background = '#f1f5f9';
+              e.currentTarget.style.color = '#374151';
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.background = 'transparent';
+              e.currentTarget.style.color = '#94a3b8';
+            }}
           >
-            ×
+            ✕
           </button>
         </div>
 
-        {/* ── Toolbar ── */}
-        <div style={{
-          padding: '12px 24px',
-          borderBottom: '1px solid #333',
-          backgroundColor: '#2d2d2d',
-          display: 'flex',
-          gap: '8px',
-          flexWrap: 'wrap',
-          alignItems: 'center',
-        }}>
-          <button onClick={handleUndo} style={createButtonStyles('#0e639c')} title="Undo (Ctrl+Z)">↶ Undo</button>
-          <button onClick={handleRedo} style={createButtonStyles('#0e639c')} title="Redo (Ctrl+Shift+Z)">↷ Redo</button>
-          <div style={{ width: '1px', backgroundColor: '#444', margin: '0 4px' }} />
-          <button onClick={handleFormat} style={createButtonStyles('#0e639c')} title="Format code">Format</button>
-          <button onClick={handleClear} style={createButtonStyles('#c72e2e')} title="Clear all code">🗑 Clear</button>
+        {/* Toolbar */}
+        {!readOnly && (
+        <div style={modalPanelToolbarStyle}>
+          <ActionButton variant="ghost" size="sm" onClick={handleUndo} title="Undo (Ctrl+Z)">
+            Undo
+          </ActionButton>
+          <ActionButton variant="ghost" size="sm" onClick={handleRedo} title="Redo (Ctrl+Shift+Z)">
+            Redo
+          </ActionButton>
+          <div style={toolbarDividerStyle} aria-hidden="true" />
+          <ActionButton variant="ghost" size="sm" onClick={handleFormat} title="Format code">
+            Format
+          </ActionButton>
+          <ActionButton variant="dangerOutline" size="sm" onClick={handleClear} title="Clear all code">
+            Clear
+          </ActionButton>
           <div style={{ flex: 1 }} />
 
-          {/* ── Save success feedback ── */}
           {saveSuccess && (
-            <span style={{ color: '#0e7a0d', fontSize: '13px', fontWeight: 500 }}>
-              ✓ Saved
+            <span
+              style={{
+                color: '#15803d',
+                fontSize: '13px',
+                fontWeight: 600,
+                fontFamily: APP_FONT,
+              }}
+            >
+              Saved
             </span>
           )}
 
           {onDelete && (
-            <button
+            <ActionButton
+              variant="dangerOutline"
+              size="sm"
               onClick={handleDelete}
-              style={{ ...buttonBaseStyles, padding: '6px 20px', backgroundColor: '#8b0000', color: '#fff', fontWeight: 600 }}
               title="Delete relation"
             >
-              🗑️ Delete Relation
-            </button>
+              Delete Relation
+            </ActionButton>
           )}
-          <button
+          <ActionButton
+            variant="primary"
+            size="sm"
             onClick={handleSave}
             disabled={saving}
-            style={{ ...buttonBaseStyles, padding: '6px 20px', backgroundColor: saving ? '#0b5e0b' : '#0e7a0d', color: '#fff', fontWeight: 600 }}
             title="Save (Ctrl+S)"
           >
-            {saving ? 'Saving…' : '💾 Save'}
-          </button>
+            {saving ? 'Saving…' : 'Save'}
+          </ActionButton>
         </div>
+        )}
 
-        {/* ── Editor ── */}
-        <div style={{ flex: 1, overflow: 'hidden' }}>
+        {/* Editor */}
+        <div
+          style={{
+            flex: 1,
+            overflow: 'hidden',
+            margin: '0 16px 12px',
+            borderRadius: '8px',
+            border: '1px solid #e2e8f0',
+            background: '#1e1e1e',
+          }}
+        >
           <Editor
             height="100%"
-            language="reactions"
+            language={languageId}
             theme="vs-dark"
             value={code}
             onChange={(value) => {
+              if (readOnly) return;
               setCode(value || '');
-              setSaveSuccess(false); // Reset success badge on edit
+              setSaveSuccess(false);
 
               if (webSocketRef.current?.readyState === WebSocket.OPEN && lspInitialized.current) {
                 versionCounter.current++;
@@ -712,16 +776,17 @@ export function CodeEditorModal({
                   method: 'textDocument/didChange',
                   params: {
                     textDocument: {
-                      uri: `${workspaceRootUri.current}reaction-${edgeId}.reactions`,
-                      version: versionCounter.current
+                      uri: getDocumentUri(),
+                      version: versionCounter.current,
                     },
-                    contentChanges: [{ text: value || '' }]
-                  }
+                    contentChanges: [{ text: value || '' }],
+                  },
                 }));
               }
             }}
             onMount={handleEditorDidMount}
             options={{
+              readOnly,
               minimap: { enabled: true },
               fontSize: 13,
               lineNumbers: 'on',
@@ -740,26 +805,35 @@ export function CodeEditorModal({
           />
         </div>
 
-        {/* ── Status bar ── */}
-        <div style={{
-          padding: '12px 24px',
-          borderTop: '1px solid #333',
-          backgroundColor: '#252526',
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'center',
-        }}>
-          <div style={{ color: '#888', fontSize: '12px' }}>
-            {code.split('\n').length} Lines · {code.length} Characters
+        {/* Status bar */}
+        <div style={modalPanelFooterStyle}>
+          <div
+            style={{
+              color: '#64748b',
+              fontSize: '12px',
+              fontFamily: APP_FONT,
+            }}
+          >
+            {code.split('\n').length} lines · {code.length} characters
             {hasUnsavedChanges && (
-              <span style={{ marginLeft: '10px', color: '#ff9800' }}>● Unsaved changes</span>
+              <span style={{ marginLeft: '12px', color: '#b45309', fontWeight: 600 }}>
+                Unsaved changes
+              </span>
             )}
           </div>
-          <div style={{ color: '#888', fontSize: '12px' }}>Edge ID: {edgeId}</div>
+          <div
+            style={{
+              color: '#94a3b8',
+              fontSize: '12px',
+              fontFamily: APP_FONT,
+            }}
+          >
+            Edge ID: {edgeId}
+          </div>
         </div>
       </div>
 
-      {/* ── Dialogs ── */}
+      {/* Dialogs */}
       <ConfirmDialog
         isOpen={showDeleteDialog}
         title="Delete Relation"
@@ -786,7 +860,6 @@ export function CodeEditorModal({
         onCancel={() => setShowClearDialog(false)}
       />
 
-      {/* ── Unsaved Changes Dialog ── */}
       <ConfirmDialog
         isOpen={showUnsavedDialog}
         title="Unsaved Changes"

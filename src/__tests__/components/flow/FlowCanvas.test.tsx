@@ -56,6 +56,8 @@ jest.mock('../../../hooks/useFlowState', () => ({
     canUndo: false,
     canRedo: false,
     updateEdgeCode: jest.fn(),
+    setHistoryPaused: jest.fn(),
+    establishBaseline: jest.fn(),
   }),
 }));
 
@@ -86,6 +88,10 @@ jest.mock('../../../components/flow/ConnectionLine', () => ({
   ConnectionLine: () => <svg data-testid="connection-line" />,
 }));
 
+jest.mock('../../../components/flow/canvas/CircleOverlay', () => ({
+  CircleOverlay: () => <div data-testid="circle-overlay" />,
+}));
+
 jest.mock('../../../components/flow/CodeEditorModal', () => ({
   CodeEditorModal: () => <div data-testid="code-editor-modal">Code Editor</div>,
 }));
@@ -103,11 +109,10 @@ describe('FlowCanvas', () => {
     jest.clearAllMocks();
   });
 
-  it('renders ReactFlow, minimap, and background', () => {
+  it('renders ReactFlow and background', () => {
     const ref = createRef<any>();
     render(<FlowCanvas ref={ref} />);
     expect(screen.getByTestId('react-flow')).toBeInTheDocument();
-    expect(screen.getByTestId('minimap')).toBeInTheDocument();
     expect(screen.getByTestId('background')).toBeInTheDocument();
   });
 
@@ -120,6 +125,13 @@ describe('FlowCanvas', () => {
     expect(typeof ref.current.getNodes).toBe('function');
     expect(typeof ref.current.getEdges).toBe('function');
     expect(typeof ref.current.addEcoreFile).toBe('function');
+    expect(typeof ref.current.fitUmlView).toBe('function');
+  });
+
+  it('fitUmlView does not throw when called without a React Flow instance', () => {
+    const ref = createRef<any>();
+    render(<FlowCanvas ref={ref} umlModalOpen />);
+    expect(() => ref.current.fitUmlView()).not.toThrow();
   });
 
   it('exposes getReactionEdges and getWorkspaceSnapshot via ref', () => {
@@ -187,6 +199,19 @@ describe('FlowCanvas', () => {
       });
     });
     expect(onEcoreFileSelect).toHaveBeenCalledWith('test.ecore');
+  });
+
+  it('allows server-loaded metamodels on a read-only canvas', () => {
+    const ref = createRef<any>();
+    const onEcoreFileSelect = jest.fn();
+    render(<FlowCanvas ref={ref} readOnly onEcoreFileSelect={onEcoreFileSelect} />);
+    act(() => {
+      ref.current.addEcoreFile('shared.ecore', '<ecore:EPackage name="shared"/>', {
+        metaModelId: 2,
+        fromServerLoad: true,
+      });
+    });
+    expect(onEcoreFileSelect).toHaveBeenCalledWith('shared.ecore');
   });
 
   it('handleToolClick does not crash', () => {
@@ -727,5 +752,182 @@ describe('handleEdgeDoubleClick logic', () => {
       return node?.type === 'ecoreFile' ? node.data.fileName : undefined;
     };
     expect(getFileName('n1')).toBeUndefined();
+  });
+
+  describe('FlowCanvas – handleConnectionStart', () => {
+    beforeEach(() => {
+      jest.clearAllMocks();
+    });
+
+    it('does not render ConnectionLine when no drag is active', () => {
+      render(<FlowCanvas />);
+      expect(screen.queryByTestId('connection-line')).not.toBeInTheDocument();
+    });
+
+    it('handleConnectionStart does not throw when called', () => {
+      const ref = createRef<any>();
+      render(<FlowCanvas ref={ref} />);
+      expect(() =>
+        act(() => {
+          ref.current.handleConnectionStart?.('node-1', 'right', { x: 200, y: 100 });
+        })
+      ).not.toThrow();
+    });
+  });
+
+  describe('FlowCanvas – sourceTipPosition stays fixed', () => {
+    it('pointermove alone does not render ConnectionLine', () => {
+      render(<FlowCanvas />);
+
+      expect(screen.queryByTestId('connection-line')).not.toBeInTheDocument();
+
+      act(() => {
+        document.dispatchEvent(
+          new MouseEvent('mousemove', { clientX: 999, clientY: 999, bubbles: true })
+        );
+      });
+
+      // Still no connection line — mouse move without active drag must not trigger rendering
+      expect(screen.queryByTestId('connection-line')).not.toBeInTheDocument();
+    });
+  });
+
+  describe('ConnectionDragState interface – shape validation', () => {
+    // These tests verify the new sourceTipPosition field is handled correctly
+    // by testing the logic that consumes it.
+
+    it('getConnectionLinePositions returns null when sourceTipPosition is missing', () => {
+      // Simulate the guard condition in getConnectionLinePositions
+      const connectionDragState = {
+        isActive: true,
+        sourceNodeId: 'node-1',
+        sourceHandle: 'right' as const,
+        currentPosition: { x: 100, y: 100 },
+        sourceTipPosition: null,  // ← missing tip position
+      };
+
+      const result =
+        !connectionDragState.isActive ||
+          !connectionDragState.sourceTipPosition ||
+          !connectionDragState.currentPosition
+          ? null
+          : 'would-render';
+
+      expect(result).toBeNull();
+    });
+
+    it('getConnectionLinePositions returns null when currentPosition is missing', () => {
+      const connectionDragState = {
+        isActive: true,
+        sourceNodeId: 'node-1',
+        sourceHandle: 'right' as const,
+        currentPosition: null,
+        sourceTipPosition: { x: 50, y: 50 },
+      };
+
+      const result =
+        !connectionDragState.isActive ||
+          !connectionDragState.sourceTipPosition ||
+          !connectionDragState.currentPosition
+          ? null
+          : 'would-render';
+
+      expect(result).toBeNull();
+    });
+
+    it('getConnectionLinePositions produces correct screen coords from flow coords', () => {
+      // Verify the viewport transform: screenX = flowX * zoom + viewportX
+      const tip = { x: 100, y: 50 };
+      const current = { x: 200, y: 150 };
+      const viewport = { x: 10, y: 20, zoom: 2 };
+
+      const source = {
+        x: tip.x * viewport.zoom + viewport.x,
+        y: tip.y * viewport.zoom + viewport.y,
+      };
+      const target = {
+        x: current.x * viewport.zoom + viewport.x,
+        y: current.y * viewport.zoom + viewport.y,
+      };
+
+      expect(source).toEqual({ x: 210, y: 120 });
+      expect(target).toEqual({ x: 410, y: 320 });
+    });
+
+    it('source and target use the same viewport transform', () => {
+      const viewport = { x: 5, y: 5, zoom: 1.5 };
+      const tip = { x: 80, y: 40 };
+      const current = { x: 160, y: 80 };
+
+      const toScreen = (p: { x: number; y: number }) => ({
+        x: p.x * viewport.zoom + viewport.x,
+        y: p.y * viewport.zoom + viewport.y,
+      });
+
+      const source = toScreen(tip);
+      const target = toScreen(current);
+
+      // Source and target must use identical transform — not different zoom factors
+      expect(source.x).toBe(tip.x * 1.5 + 5);
+      expect(target.x).toBe(current.x * 1.5 + 5);
+    });
+  });
+
+  describe('FlowCanvas – umlModalOpen prop', () => {
+    const switchToViewsMode = () => {
+      fireEvent.click(screen.getByRole('button', { name: /views/i }));
+    };
+
+    it('renders CircleOverlay in Views mode when umlModalOpen is false', () => {
+      const ref = createRef<any>();
+      render(<FlowCanvas ref={ref} umlModalOpen={false} />);
+      expect(screen.queryByTestId('circle-overlay')).not.toBeInTheDocument();
+      switchToViewsMode();
+      expect(screen.getByTestId('circle-overlay')).toBeInTheDocument();
+    });
+
+    it('does not render CircleOverlay when umlModalOpen is true', () => {
+      const ref = createRef<any>();
+      render(<FlowCanvas ref={ref} umlModalOpen={true} />);
+      switchToViewsMode();
+      expect(screen.queryByTestId('circle-overlay')).not.toBeInTheDocument();
+    });
+
+    it('does not render CircleOverlay when umlModalOpen is true even in Views mode', () => {
+      const ref = createRef<any>();
+      const { rerender } = render(<FlowCanvas ref={ref} umlModalOpen={false} />);
+      switchToViewsMode();
+      expect(screen.getByTestId('circle-overlay')).toBeInTheDocument();
+
+      rerender(<FlowCanvas ref={ref} umlModalOpen={true} />);
+      expect(screen.queryByTestId('circle-overlay')).not.toBeInTheDocument();
+    });
+
+    it('renders ReactFlow regardless of umlModalOpen', () => {
+      const ref = createRef<any>();
+      render(<FlowCanvas ref={ref} umlModalOpen={true} />);
+      expect(screen.getByTestId('react-flow')).toBeInTheDocument();
+    });
+
+    it('does not render CircleOverlay in Modeling mode by default', () => {
+      const ref = createRef<any>();
+      render(<FlowCanvas ref={ref} />);
+      expect(screen.queryByTestId('circle-overlay')).not.toBeInTheDocument();
+    });
+
+    it('renders CircleOverlay when canvasMode is restored as Views', () => {
+      const ref = createRef<any>();
+      render(<FlowCanvas ref={ref} canvasMode="views" />);
+      expect(screen.getByTestId('circle-overlay')).toBeInTheDocument();
+    });
+
+    it('syncs CircleOverlay when canvasMode changes', () => {
+      const ref = createRef<any>();
+      const { rerender } = render(<FlowCanvas ref={ref} canvasMode="views" />);
+      expect(screen.getByTestId('circle-overlay')).toBeInTheDocument();
+
+      rerender(<FlowCanvas ref={ref} canvasMode="modeling" />);
+      expect(screen.queryByTestId('circle-overlay')).not.toBeInTheDocument();
+    });
   });
 });

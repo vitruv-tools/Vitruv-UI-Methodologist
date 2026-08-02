@@ -4,6 +4,13 @@ export interface Vsum {
   createdAt: string;
   updatedAt: string;
   removedAt?: string | null;
+  /** Current user's access role when returned from list APIs */
+  role?: string;
+  roleEn?: string;
+  /** Project owner (may be returned on shared-project list items) */
+  ownerFirstName?: string;
+  ownerLastName?: string;
+  ownerEmail?: string;
 }
 
 export interface VsumMetaModelRef {

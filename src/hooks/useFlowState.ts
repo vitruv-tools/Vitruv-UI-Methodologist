@@ -1,10 +1,66 @@
-import { useCallback, useState, useEffect } from 'react';
+import { useCallback, useState, useEffect, useRef } from 'react';
 import { useNodesState, useEdgesState, Connection, Edge, Node } from 'reactflow';
 import { useUndoRedo } from './useUndoRedo';
 
 interface UseFlowStateProps {
   userId?: string;
   projectId?: string;
+}
+
+type DiagramState = { nodes: Node[]; edges: Edge[]; idCounter: number };
+
+// React Flow manages these fields internally — width/height/positionAbsolute come from
+// its own post-render measurement of the DOM node, dragging/selected are transient
+// interaction UI state. None of them are user-intentional diagram edits, so they must be
+// excluded when deciding whether a new undo/redo history entry is warranted. Otherwise,
+// applying an older history state (e.g. one saved before a node was first measured)
+// causes React Flow to immediately re-measure and re-populate width/height, which the
+// diff would treat as a fresh "change" and auto-save right back — silently undoing the
+// user's undo.
+const NODE_FIELDS_IGNORED_FOR_HISTORY = ['width', 'height', 'positionAbsolute', 'dragging', 'selected', 'resizing'] as const;
+const EDGE_FIELDS_IGNORED_FOR_HISTORY = ['selected'] as const;
+
+function omitFields<T extends object>(obj: T, fields: readonly string[]): T {
+  const clone: any = { ...obj };
+  fields.forEach(f => delete clone[f]);
+  return clone;
+}
+
+function normalizeForHistoryComparison(state: DiagramState): DiagramState {
+  return {
+    nodes: state.nodes.map(n => omitFields(n, NODE_FIELDS_IGNORED_FOR_HISTORY)),
+    edges: state.edges.map(e => omitFields(e, EDGE_FIELDS_IGNORED_FOR_HISTORY)),
+    idCounter: state.idCounter,
+  };
+}
+
+function hasDiagramStateChanged(lastSaved: DiagramState, current: DiagramState): boolean {
+  const a = normalizeForHistoryComparison(lastSaved);
+  const b = normalizeForHistoryComparison(current);
+  return (
+    a.nodes.length !== b.nodes.length ||
+    a.edges.length !== b.edges.length ||
+    a.idCounter !== b.idCounter ||
+    JSON.stringify(a.nodes) !== JSON.stringify(b.nodes) ||
+    JSON.stringify(a.edges) !== JSON.stringify(b.edges)
+  );
+}
+
+function hasTrackableDiagramContent(nodes: Node[], edges: Edge[], idCounter: number): boolean {
+  return nodes.length > 0 || edges.length > 0 || idCounter > 1;
+}
+
+function getDiagramActionDescription(lastSaved: DiagramState, current: DiagramState): string {
+  if (lastSaved.nodes.length !== current.nodes.length) {
+    return current.nodes.length > lastSaved.nodes.length ? 'Node added' : 'Node deleted';
+  }
+  if (lastSaved.edges.length !== current.edges.length) {
+    return current.edges.length > lastSaved.edges.length ? 'Connection added' : 'Connection deleted';
+  }
+  if (current.nodes.length > 0) {
+    return 'Node modified';
+  }
+  return 'Diagram change';
 }
 
 export function useFlowState(props?: UseFlowStateProps) {
@@ -68,6 +124,8 @@ export function useFlowState(props?: UseFlowStateProps) {
   // Initialize undo/redo with current state
   const {
     saveState,
+    seedHistory,
+    historyIsEmpty,
     undo,
     redo,
     canUndo,
@@ -78,6 +136,8 @@ export function useFlowState(props?: UseFlowStateProps) {
     edges: [],
     idCounter: 1
   });
+
+  const pauseHistoryRef = useRef(false);
 
   // Reset state when user/project changes
   useEffect(() => {
@@ -94,51 +154,28 @@ export function useFlowState(props?: UseFlowStateProps) {
   }, [userId, projectId, setNodes, setEdges, clearHistory]);
 
   useEffect(() => {
-    if (isApplyingState) return;
+    if (isApplyingState || pauseHistoryRef.current) return;
 
-    const currentDiagramState = {
-      nodes,
-      edges,
-      idCounter
-    };
+    const currentDiagramState = { nodes, edges, idCounter };
+    if (!hasDiagramStateChanged(lastSavedState, currentDiagramState)) return;
+    if (!hasTrackableDiagramContent(nodes, edges, idCounter)) return;
 
-    const hasChanged =
-      lastSavedState.nodes.length !== nodes.length ||
-      lastSavedState.edges.length !== edges.length ||
-      lastSavedState.idCounter !== idCounter ||
-      JSON.stringify(lastSavedState.nodes) !== JSON.stringify(nodes) ||
-      JSON.stringify(lastSavedState.edges) !== JSON.stringify(edges);
+    const actionDescription = getDiagramActionDescription(lastSavedState, currentDiagramState);
 
-    if (hasChanged && (nodes.length > 0 || edges.length > 0 || idCounter > 1)) {
-      let actionDescription = 'Diagram change';
+    console.log(`Saving state: ${actionDescription}`, {
+      nodesBefore: lastSavedState.nodes.length,
+      nodesAfter: nodes.length,
+      edgesBefore: lastSavedState.edges.length,
+      edgesAfter: edges.length
+    });
 
-      if (lastSavedState.nodes.length !== nodes.length) {
-        if (nodes.length > lastSavedState.nodes.length) {
-          actionDescription = 'Node added';
-        } else {
-          actionDescription = 'Node deleted';
-        }
-      } else if (lastSavedState.edges.length !== edges.length) {
-        if (edges.length > lastSavedState.edges.length) {
-          actionDescription = 'Connection added';
-        } else {
-          actionDescription = 'Connection deleted';
-        }
-      } else if (nodes.length > 0) {
-        actionDescription = 'Node modified';
-      }
-
-      console.log(`Saving state: ${actionDescription}`, {
-        nodesBefore: lastSavedState.nodes.length,
-        nodesAfter: nodes.length,
-        edgesBefore: lastSavedState.edges.length,
-        edgesAfter: edges.length
-      });
-
-      saveState(currentDiagramState, actionDescription);
-      setLastSavedState(currentDiagramState);
+    if (historyIsEmpty()) {
+      seedHistory(lastSavedState, 'Initial state');
     }
-  }, [nodes, edges, idCounter, saveState, isApplyingState, lastSavedState]);
+
+    saveState(currentDiagramState, actionDescription);
+    setLastSavedState(currentDiagramState);
+  }, [nodes, edges, idCounter, saveState, seedHistory, historyIsEmpty, isApplyingState, lastSavedState]);
 
   const applyState = useCallback((state: { nodes: Node[]; edges: Edge[]; idCounter: number }) => {
     setIsApplyingState(true);
@@ -179,18 +216,12 @@ export function useFlowState(props?: UseFlowStateProps) {
     [getId, setEdges, nodes, chooseHandlesForPair]
   );
 
-  const addNode = useCallback((node: Omit<Node, 'id'>) => {
+  const addNode = useCallback((node: (Omit<Node, 'id'> & { id?: string })) => {
     const newNode: Node = {
       ...node,
-      id: getId(),
+      id: node.id ?? getId(),
     };
-    console.log('useFlowState.addNode called with:', node);
-    console.log('Created newNode:', newNode);
-    setNodes((nds) => {
-      const newNodes = nds.concat(newNode);
-      console.log('Updated nodes array:', newNodes);
-      return newNodes;
-    });
+    setNodes((nds) => nds.concat(newNode));
     return newNode.id;
   }, [getId, setNodes]);
 
@@ -209,17 +240,23 @@ export function useFlowState(props?: UseFlowStateProps) {
     setEdges((eds) => eds.filter((edge) => edge.source !== id && edge.target !== id));
   }, [setNodes, setEdges]);
 
-  const addEdge = useCallback((edge: Omit<Edge, 'id'>) => {
+  const normalizeHandleId = (handle?: string | null): string | undefined => {
+    if (!handle) return undefined;
+    return handle.replace(/-source$/, '').replace(/-target$/, '');
+  };
+
+  const addEdge = useCallback((edge: Edge | Omit<Edge, 'id'>) => {
     // If handles not provided, choose based on relative positions
     const findNode = (id?: string) => nodes.find(n => n.id === id);
     const src = findNode(edge.source);
     const tgt = findNode(edge.target);
     const auto = chooseHandlesForPair(src, tgt, edge.sourceHandle, edge.targetHandle);
+    const explicitId = 'id' in edge && typeof edge.id === 'string' ? edge.id : undefined;
     const newEdge: Edge = {
       ...edge,
-      id: `edge-${getId()}`,
-      sourceHandle: edge.sourceHandle ?? auto.s,
-      targetHandle: edge.targetHandle ?? auto.t,
+      id: explicitId ?? `edge-${getId()}`,
+      sourceHandle: normalizeHandleId(edge.sourceHandle) ?? normalizeHandleId(auto.s) ?? 'right',
+      targetHandle: normalizeHandleId(edge.targetHandle) ?? normalizeHandleId(auto.t) ?? 'left',
     };
     console.log('useFlowState.addEdge called with:', edge);
     console.log('Created newEdge:', newEdge);
@@ -284,6 +321,20 @@ export function useFlowState(props?: UseFlowStateProps) {
     }
   }, [redo, applyState]);
 
+  const setHistoryPaused = useCallback((paused: boolean) => {
+    pauseHistoryRef.current = paused;
+  }, []);
+
+  const establishBaseline = useCallback((state?: { nodes: Node[]; edges: Edge[]; idCounter?: number }) => {
+    const baseline = {
+      nodes: state?.nodes ?? nodes,
+      edges: state?.edges ?? edges,
+      idCounter: state?.idCounter ?? idCounter,
+    };
+    seedHistory(baseline, 'Baseline');
+    setLastSavedState(baseline);
+  }, [nodes, edges, idCounter, seedHistory]);
+
   return {
     nodes,
     edges,
@@ -304,5 +355,7 @@ export function useFlowState(props?: UseFlowStateProps) {
     canUndo,
     canRedo,
     updateEdgeCode,
+    setHistoryPaused,
+    establishBaseline,
   };
 }

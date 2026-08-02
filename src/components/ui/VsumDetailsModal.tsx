@@ -3,12 +3,16 @@ import ReactDOM from 'react-dom';
 import { apiService } from '../../services/api';
 import { VsumDetails } from '../../types';
 import { VsumUsersTab } from './VsumUsersTab';
+import { MODAL_Z_INDEX, useModalBodyLock } from './modalUtils';
+import { LinkMetaModelsPanel } from './LinkMetaModelsPanel';
 
 interface Props {
   isOpen: boolean;
   vsumId: number | null;
   onClose: () => void;
   onSaved?: () => void;
+  /** When false, details are read-only and user management is hidden. */
+  canManage?: boolean;
 }
 
 // Helper Components
@@ -158,19 +162,25 @@ interface ConfirmButtonProps {
   onClick: () => void;
   variant: 'confirm' | 'cancel';
   disabled?: boolean;
+  accent: {
+    disabledBg: string;
+    gradient: string;
+    shadow: string;
+    shadowHover: string;
+  };
 }
 
-const ConfirmButton: React.FC<ConfirmButtonProps> = ({ label, onClick, variant, disabled = false }) => {
+const ConfirmButton: React.FC<ConfirmButtonProps> = ({ label, onClick, variant, disabled = false, accent }) => {
   const isConfirm = variant === 'confirm';
   
   const getBackgroundColor = () => {
     if (!isConfirm) return '#fff';
-    return disabled ? '#fca5a5' : 'linear-gradient(135deg, #dc2626 0%, #b91c1c 100%)';
+    return disabled ? accent.disabledBg : accent.gradient;
   };
 
   const getBoxShadow = () => {
     if (!isConfirm) return 'none';
-    return disabled ? 'none' : '0 2px 8px rgba(220, 38, 38, 0.3)';
+    return disabled ? 'none' : accent.shadow;
   };
 
   const style: React.CSSProperties = {
@@ -191,7 +201,7 @@ const ConfirmButton: React.FC<ConfirmButtonProps> = ({ label, onClick, variant, 
     if (disabled) return;
     if (isConfirm) {
       e.currentTarget.style.transform = 'translateY(-1px)';
-      e.currentTarget.style.boxShadow = '0 4px 12px rgba(220, 38, 38, 0.4)';
+      e.currentTarget.style.boxShadow = accent.shadowHover;
     } else {
       e.currentTarget.style.background = '#f8f9fa';
     }
@@ -200,7 +210,7 @@ const ConfirmButton: React.FC<ConfirmButtonProps> = ({ label, onClick, variant, 
   const handleMouseLeave = (e: React.MouseEvent<HTMLButtonElement>) => {
     if (isConfirm) {
       e.currentTarget.style.transform = 'translateY(0)';
-      e.currentTarget.style.boxShadow = '0 2px 8px rgba(220, 38, 38, 0.3)';
+      e.currentTarget.style.boxShadow = accent.shadow;
     } else {
       e.currentTarget.style.background = '#fff';
     }
@@ -219,70 +229,18 @@ const ConfirmButton: React.FC<ConfirmButtonProps> = ({ label, onClick, variant, 
   );
 };
 
-interface RestoreConfirmButtonProps {
-  label: string;
-  onClick: () => void;
-  variant: 'confirm' | 'cancel';
-  disabled?: boolean;
-}
+const dangerAccent = {
+  disabledBg: '#fca5a5',
+  gradient: 'linear-gradient(135deg, #dc2626 0%, #b91c1c 100%)',
+  shadow: '0 2px 8px rgba(220, 38, 38, 0.3)',
+  shadowHover: '0 4px 12px rgba(220, 38, 38, 0.4)',
+};
 
-const RestoreConfirmButton: React.FC<RestoreConfirmButtonProps> = ({ label, onClick, variant, disabled = false }) => {
-  const isConfirm = variant === 'confirm';
-  
-  const getBackgroundColor = () => {
-    if (!isConfirm) return '#fff';
-    return disabled ? '#a5d6d3' : 'linear-gradient(135deg, #049484 0%, #037368 100%)';
-  };
-
-  const getBoxShadow = () => {
-    if (!isConfirm) return 'none';
-    return disabled ? 'none' : '0 2px 8px rgba(4, 148, 132, 0.3)';
-  };
-
-  const style: React.CSSProperties = {
-    padding: '10px 24px',
-    borderRadius: 8,
-    border: isConfirm ? 'none' : '1px solid #dee2e6',
-    background: getBackgroundColor(),
-    color: isConfirm ? '#fff' : '#495057',
-    fontWeight: 600,
-    cursor: disabled ? 'not-allowed' : 'pointer',
-    fontSize: 14,
-    fontFamily: 'Georgia, serif',
-    transition: 'all 0.2s ease',
-    boxShadow: getBoxShadow(),
-  };
-
-  const handleMouseEnter = (e: React.MouseEvent<HTMLButtonElement>) => {
-    if (disabled) return;
-    if (isConfirm) {
-      e.currentTarget.style.transform = 'translateY(-1px)';
-      e.currentTarget.style.boxShadow = '0 4px 12px rgba(4, 148, 132, 0.4)';
-    } else {
-      e.currentTarget.style.background = '#f8f9fa';
-    }
-  };
-
-  const handleMouseLeave = (e: React.MouseEvent<HTMLButtonElement>) => {
-    if (isConfirm) {
-      e.currentTarget.style.transform = 'translateY(0)';
-      e.currentTarget.style.boxShadow = '0 2px 8px rgba(4, 148, 132, 0.3)';
-    } else {
-      e.currentTarget.style.background = '#fff';
-    }
-  };
-
-  return (
-    <button
-      onClick={onClick}
-      disabled={disabled}
-      style={style}
-      onMouseEnter={handleMouseEnter}
-      onMouseLeave={handleMouseLeave}
-    >
-      {label}
-    </button>
-  );
+const successAccent = {
+  disabledBg: '#a5d6d3',
+  gradient: 'linear-gradient(135deg, #049484 0%, #037368 100%)',
+  shadow: '0 2px 8px rgba(4, 148, 132, 0.3)',
+  shadowHover: '0 4px 12px rgba(4, 148, 132, 0.4)',
 };
 
 const overlay: React.CSSProperties = {
@@ -299,7 +257,7 @@ const overlay: React.CSSProperties = {
   display: 'flex',
   alignItems: 'center',
   justifyContent: 'center',
-  zIndex: 9999,
+  zIndex: MODAL_Z_INDEX,
   margin: 0,
   padding: 0,
   border: 'none',
@@ -364,7 +322,7 @@ const confirmOverlay: React.CSSProperties = {
   display: 'flex',
   alignItems: 'center',
   justifyContent: 'center',
-  zIndex: 10000,
+  zIndex: MODAL_Z_INDEX + 1,
   margin: 0,
   padding: 0,
   border: 'none',
@@ -634,7 +592,7 @@ const VersionCard: React.FC<VersionCardProps> = ({
   );
 };
 
-export const VsumDetailsModal: React.FC<Props> = ({ isOpen, vsumId, onClose, onSaved }) => {
+export const VsumDetailsModal: React.FC<Props> = ({ isOpen, vsumId, onClose, onSaved, canManage = true }) => {
   const [details, setDetails] = useState<VsumDetails | null>(null);
   const [name, setName] = useState('');
   const [error, setError] = useState('');
@@ -662,23 +620,26 @@ export const VsumDetailsModal: React.FC<Props> = ({ isOpen, vsumId, onClose, onS
     };
   }, [isOpen]);
 
+  const reloadDetails = async () => {
+    if (!vsumId) return;
+    setLoading(true);
+    setError('');
+    try {
+      const res = await apiService.getVsumDetails(vsumId);
+      const d = res.data;
+      setDetails(d);
+      setName(d.name ?? '');
+    } catch (e: any) {
+      setError(e?.message || 'Failed to load details');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   useEffect(() => {
     if (!isOpen || !vsumId) return;
-    const load = async () => {
-      setLoading(true);
-      setError('');
-      try {
-        const res = await apiService.getVsumDetails(vsumId);
-        const d = res.data;
-        setDetails(d);
-        setName(d.name ?? '');
-      } catch (e: any) {
-        setError(e?.message || 'Failed to load details');
-      } finally {
-        setLoading(false);
-      }
-    };
-    load();
+    reloadDetails();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen, vsumId]);
 
   useEffect(() => {
@@ -746,6 +707,8 @@ export const VsumDetailsModal: React.FC<Props> = ({ isOpen, vsumId, onClose, onS
     }
   };
 
+  useModalBodyLock(isOpen);
+
   if (!isOpen) return null;
 
   const updatedDateOnly = details?.updatedAt
@@ -768,6 +731,8 @@ export const VsumDetailsModal: React.FC<Props> = ({ isOpen, vsumId, onClose, onS
           style={textInput}
           value={name}
           onChange={(e) => setName(e.target.value)}
+          readOnly={!canManage}
+          disabled={!canManage}
           onFocus={(e) => {
             e.currentTarget.style.borderColor = '#049484';
             e.currentTarget.style.background = '#ffffff';
@@ -792,9 +757,18 @@ export const VsumDetailsModal: React.FC<Props> = ({ isOpen, vsumId, onClose, onS
             ))}
           </ul>
         ) : (
-          <div style={{ fontSize: 12, color: '#6c757d', fontStyle: 'italic' }}>
+          <div style={{ fontSize: 12, color: '#6c757d', fontStyle: 'italic', marginBottom: 8 }}>
             No meta models linked.
           </div>
+        )}
+
+        {vsumId && (
+          <LinkMetaModelsPanel
+            vsumId={vsumId}
+            existingMetaModels={details.metaModels ?? []}
+            existingRelations={details.metaModelsRelation ?? []}
+            onLinked={reloadDetails}
+          />
         )}
       </>
     );
@@ -829,9 +803,9 @@ export const VsumDetailsModal: React.FC<Props> = ({ isOpen, vsumId, onClose, onS
   };
 
   const renderFooterActions = () => {
-    const showRecover = details?.removedAt;
-    const showDelete = activeTab === 'details' && !details?.removedAt;
-    const showSave = activeTab === 'details';
+    const showRecover = canManage && details?.removedAt;
+    const showDelete = canManage && activeTab === 'details' && !details?.removedAt;
+    const showSave = canManage && activeTab === 'details';
 
     return (
       <>
@@ -985,7 +959,7 @@ export const VsumDetailsModal: React.FC<Props> = ({ isOpen, vsumId, onClose, onS
               zIndex: 0,
             }}
           />
-          <div style={{ ...dialog, position: 'relative', zIndex: 1 }} onClick={(e) => e.stopPropagation()}>
+          <div style={{ ...dialog, position: 'relative', zIndex: 1 }}>
             <div style={header}>
               <h3 style={title}>{details?.name ?? 'VSUM Details'}</h3>
 
@@ -995,16 +969,20 @@ export const VsumDetailsModal: React.FC<Props> = ({ isOpen, vsumId, onClose, onS
                   isActive={activeTab === 'details'}
                   onClick={() => setActiveTab('details')}
                 />
-                <TabButton
-                  label="Manage Users"
-                  isActive={activeTab === 'users'}
-                  onClick={() => setActiveTab('users')}
-                />
-                <TabButton
-                  label="Versions"
-                  isActive={activeTab === 'versions'}
-                  onClick={() => setActiveTab('versions')}
-                />
+                {canManage && (
+                  <>
+                    <TabButton
+                      label="Manage Users"
+                      isActive={activeTab === 'users'}
+                      onClick={() => setActiveTab('users')}
+                    />
+                    <TabButton
+                      label="Versions"
+                      isActive={activeTab === 'versions'}
+                      onClick={() => setActiveTab('versions')}
+                    />
+                  </>
+                )}
                 <button aria-label="Close" style={closeBtn} onClick={onClose}>
                   ×
                 </button>
@@ -1016,7 +994,9 @@ export const VsumDetailsModal: React.FC<Props> = ({ isOpen, vsumId, onClose, onS
               {recoverError && <ErrorMessage message={recoverError} />}
 
               {activeTab === 'details' && renderDetailsContent()}
-              {activeTab === 'users' && vsumId && <VsumUsersTab vsumId={vsumId} onChanged={onSaved} />}
+              {activeTab === 'users' && vsumId && canManage && (
+                <VsumUsersTab vsumId={vsumId} onChanged={onSaved} canManage={canManage} />
+              )}
               {activeTab === 'versions' && renderVersionsContent()}
             </div>
 
@@ -1054,7 +1034,7 @@ export const VsumDetailsModal: React.FC<Props> = ({ isOpen, vsumId, onClose, onS
                   zIndex: 0,
                 }}
               />
-              <div style={{ ...confirmBox, position: 'relative', zIndex: 1 }} onClick={(e) => e.stopPropagation()}>
+              <div style={{ ...confirmBox, position: 'relative', zIndex: 1 }}>
                 <div style={confirmHeader}>Are you sure?</div>
                 <div style={confirmBody}>
                   This action will permanently delete this VSUM and cannot be undone.
@@ -1066,12 +1046,14 @@ export const VsumDetailsModal: React.FC<Props> = ({ isOpen, vsumId, onClose, onS
                     onClick={() => setConfirmOpen(false)}
                     variant="cancel"
                     disabled={deleting}
+                    accent={dangerAccent}
                   />
                   <ConfirmButton
                     label={deleting ? 'Deleting…' : 'Delete'}
                     onClick={confirmDelete}
                     variant="confirm"
                     disabled={deleting}
+                    accent={dangerAccent}
                   />
                 </div>
               </div>
@@ -1099,14 +1081,14 @@ export const VsumDetailsModal: React.FC<Props> = ({ isOpen, vsumId, onClose, onS
                   zIndex: 0,
                 }}
               />
-              <div style={{ ...confirmBox, position: 'relative', zIndex: 1 }} onClick={(e) => e.stopPropagation()}>
+              <div style={{ ...confirmBox, position: 'relative', zIndex: 1 }}>
                 <div style={confirmHeader}>Restore to this version?</div>
                 <div style={confirmBody}>
                   This will restore the VSUM to the selected version. The current version will be saved as a new version in the history.
                   {restoreError && <ErrorMessage message={restoreError} />}
                 </div>
                 <div style={confirmFooter}>
-                  <RestoreConfirmButton
+                  <ConfirmButton
                     label="Cancel"
                     onClick={() => {
                       setRestoreConfirmOpen(null);
@@ -1114,12 +1096,14 @@ export const VsumDetailsModal: React.FC<Props> = ({ isOpen, vsumId, onClose, onS
                     }}
                     variant="cancel"
                     disabled={restoringVersionId !== null}
+                    accent={successAccent}
                   />
-                  <RestoreConfirmButton
+                  <ConfirmButton
                     label={restoringVersionId === restoreConfirmOpen ? 'Restoring…' : 'Restore'}
                     onClick={() => handleRestoreVersion(restoreConfirmOpen)}
                     variant="confirm"
                     disabled={restoringVersionId !== null}
+                    accent={successAccent}
                   />
                 </div>
               </div>
