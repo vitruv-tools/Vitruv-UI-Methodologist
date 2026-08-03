@@ -1,34 +1,40 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
-import { AuthService } from '../services/auth';
-import { getUserInitials } from '../utils/userInitials';
 import { ShareProjectModal } from '../components/ui/ShareProjectModal';
-import { HoverTooltip } from '../components/ui/HoverTooltip';
-import { ConfirmDialog } from '../components/ui/ConfirmDialog';
-import { ProfileModal } from '../components/ui/ProfileModal';
-import ReactDOM from 'react-dom';
 import { useNavigate, useParams, useLocation } from 'react-router-dom';
 import { Node, Edge } from 'reactflow';
 import { CanvasMode, FlowCanvas } from '../components/flow/FlowCanvas';
-import { ConstraintsView } from '../components/constraints/ConstraintsView';
-import { FloatingUMLPanel } from '../components/canvas/FloatingUMLPanel';
-import { UmlDiagramSaveContext } from '../components/canvas/UMLDiagram';
-import { ModelDrawer, DrawerModel } from '../components/canvas/ModelDrawer';
+import { DrawerModel } from '../components/canvas/ModelDrawer';
+import { ModelDrawerModal } from '../components/canvas/ModelDrawerModal';
+import { CanvasUmlPanelLayer } from '../components/canvas/CanvasUmlPanelLayer';
 import { apiService, VsumRole, VsumUserResponse } from '../services/api';
 import { VsumDetails } from '../types';
 import { VsumMetaModelRef } from '../types/vsum';
 import { WorkspaceSnapshot, WorkspaceSnapshotRequest } from '../types/workspace';
-import { MODAL_Z_INDEX, modalBackdropStyle, useModalBodyLock } from '../components/ui/modalUtils';
+import { MODAL_Z_INDEX, useModalBodyLock } from '../components/ui/modalUtils';
 import { CanvasProjectTabs } from '../components/canvas/CanvasProjectTabs';
-import { ProjectPickerMenu } from '../components/canvas/ProjectPickerMenu';
+import { CanvasProjectLoadStateOverlay } from '../components/canvas/CanvasProjectLoadStateOverlay';
+import {
+  CanvasPopupNotification,
+  type CanvasPopupNotificationType,
+} from '../components/canvas/CanvasPopupNotification';
+import { CanvasProjectControls } from '../components/canvas/CanvasProjectControls';
+import { CanvasSidebarToolbar } from '../components/canvas/CanvasSidebarToolbar';
+import { CanvasProjectAccessControls } from '../components/canvas/CanvasProjectAccessControls';
+import { CanvasConstraintsOverlay } from '../components/canvas/CanvasConstraintsOverlay';
+import { getCanvasPanelMemberName } from '../components/canvas/canvasMemberPresentation';
+import { useCanvasModeState } from '../hooks/useCanvasModeState';
+import { useCanvasProjectRename } from '../hooks/useCanvasProjectRename';
+import {
+  useCanvasUmlPanels,
+  type CanvasUmlPanelLoadErrorMessage,
+} from '../hooks/useCanvasUmlPanels';
 import { UnsavedTabCloseDialog } from '../components/canvas/UnsavedTabCloseDialog';
-import { CanvasTabSession, CanvasUmlPanelState, EcoreFileExpandMeta, OpenCanvasTab } from '../types/canvasTab';
-import { canvasUmlLayoutFileName, canvasUmlLayoutScope } from '../utils/metaModelPreview';
+import { CanvasTabSession, OpenCanvasTab } from '../types/canvasTab';
 import { createCanvasTabInstanceId } from '../utils/canvasTabId';
 import {
   findMembershipForEmail,
   findVsumOwner,
-  memberDisplayName,
   parseVsumMembersResponse,
   pickMostRestrictiveRole,
   readStoredProjectAccess,
@@ -37,8 +43,6 @@ import {
   resolveVsumAccessRole,
   fetchOwnerContactForVsum,
   mergeStoredProjectAccess,
-  mergeSharerWithMembers,
-  formatProjectMemberStackLabel,
   sharedByToMember,
   uniqueVsumMembers,
   type SharedByContact,
@@ -52,67 +56,20 @@ import {
   workspaceSnapshotFromVsumDetails,
   workspaceSnapshotsEqual,
 } from '../utils/workspaceSnapshotUtils';
-import { readStoredCanvasMode, writeStoredCanvasMode } from '../utils/canvasModeStorage';
 import { downloadBlobAsFile } from '../utils/downloadFile';
 import { syncVsumWorkspaceChanges } from '../utils/vsumSyncSave';
-import { USER_PROFILE_DESCRIPTION, USER_PROFILE_LABEL } from '../constants/accountLabels';
-
-const MODE_TOGGLE_TOP = 14;
-const MODE_TOGGLE_HEIGHT = 44;
-const PROJECT_TABS_HEIGHT = 38;
-const CENTER_STACK_BOTTOM = MODE_TOGGLE_TOP + MODE_TOGGLE_HEIGHT + 4 + PROJECT_TABS_HEIGHT;
-
-type UMLPanel = CanvasUmlPanelState;
-
-type CanvasProjectLoadStatus = 'loading' | 'hydrating' | 'ready' | 'forbidden' | 'notFound' | 'error';
-
-interface CanvasProjectLoadState {
-  status: CanvasProjectLoadStatus;
-  message?: string;
-}
+import {
+  getCanvasProjectLoadFailureState,
+  type CanvasProjectLoadState,
+} from '../utils/canvasProjectLoadState';
+import {
+  fetchEcoreFileById,
+  fetchLibraryDrawerModels,
+  metaModelToDrawerModel,
+} from '../utils/canvasModelLibrary';
 
 function isStaleTabLoad(forInstanceId: string | undefined, activeInstanceId: string | null): boolean {
   return Boolean(forInstanceId && activeInstanceId !== forInstanceId);
-}
-
-function getErrorStatus(error: unknown): number | undefined {
-  const apiError = error as {
-    status?: unknown;
-    response?: {
-      status?: unknown;
-      data?: {
-        status?: unknown;
-        statusCode?: unknown;
-      };
-    };
-  };
-  const rawStatus =
-    apiError?.status ??
-    apiError?.response?.status ??
-    apiError?.response?.data?.status ??
-    apiError?.response?.data?.statusCode;
-  const status = typeof rawStatus === 'number' ? rawStatus : Number(rawStatus);
-  return Number.isFinite(status) ? status : undefined;
-}
-
-function getCanvasProjectLoadFailureState(error: unknown): CanvasProjectLoadState {
-  const status = getErrorStatus(error);
-  if (status === 403) {
-    return {
-      status: 'forbidden',
-      message: 'You do not have access to this project.',
-    };
-  }
-  if (status === 404) {
-    return {
-      status: 'notFound',
-      message: 'This project does not exist or may have been deleted.',
-    };
-  }
-  return {
-    status: 'error',
-    message: error instanceof Error && error.message ? error.message : 'Unable to load this project.',
-  };
 }
 
 function clearVsumTabSessions(
@@ -129,33 +86,6 @@ function clearVsumTabSessions(
   if (forInstanceId) {
     sessions.delete(forInstanceId);
   }
-}
-
-function metaModelToDrawerModel(m: VsumMetaModelRef, inProject: boolean): DrawerModel {
-  return {
-    id: m.id,
-    name: m.name,
-    sourceId: m.sourceId ?? m.id,
-    domain: m.domain,
-    ecoreFileId: m.ecoreFileId,
-    genModelFileId: m.genModelFileId,
-    inProject,
-    description: m.description,
-    keyword: m.keyword,
-    createdAt: m.createdAt,
-  };
-}
-
-async function fetchLibraryDrawerModels(): Promise<{ myModels: DrawerModel[]; publicModels: DrawerModel[] }> {
-  const toDrawer = (m: VsumMetaModelRef) => metaModelToDrawerModel(m, false);
-  const [myRes, pubRes] = await Promise.allSettled([
-    apiService.findMetaModels({ ownedByUser: true }),
-    apiService.findMetaModels({ ownedByUser: false }),
-  ]);
-  return {
-    myModels: myRes.status === 'fulfilled' ? (myRes.value.data || []).map(toDrawer) : [],
-    publicModels: pubRes.status === 'fulfilled' ? (pubRes.value.data || []).map(toDrawer) : [],
-  };
 }
 
 async function dispatchWorkspaceMetaModels(metaModels: VsumMetaModelRef[]): Promise<void> {
@@ -380,314 +310,6 @@ async function loadOpenCanvasTab(
   }
 }
 
-const fetchEcoreFileById = (fileId: number) => apiService.getFile(fileId);
-
-type PopupNotificationType = 'success' | 'error' | 'info';
-
-function getPopupNotificationStyles(type: PopupNotificationType) {
-  if (type === 'success') {
-    return { background: '#f0fdf4', border: '1px solid #86efac', color: '#15803d' };
-  }
-  if (type === 'error') {
-    return { background: '#fef2f2', border: '1px solid #fca5a5', color: '#dc2626' };
-  }
-  return { background: '#eff6ff', border: '1px solid #bfdbfe', color: '#1d4ed8' };
-}
-
-const CanvasPopupNotification: React.FC<{ message: string; type: PopupNotificationType }> = ({
-  message,
-  type,
-}) => {
-  const popupStyles = getPopupNotificationStyles(type);
-  return (
-    <div style={{
-      position: 'fixed', bottom: 24, left: '50%', transform: 'translateX(-50%)',
-      zIndex: 9999, maxWidth: 480, width: 'max-content',
-      maxHeight: '60vh', overflowY: 'auto',
-      background: popupStyles.background,
-      border: popupStyles.border,
-      color: popupStyles.color,
-      borderRadius: 10, padding: '10px 16px', fontSize: 13, fontWeight: 500,
-      boxShadow: '0 4px 16px rgba(0,0,0,0.12)',
-      whiteSpace: 'pre-wrap', overflowWrap: 'anywhere', boxSizing: 'border-box',
-    }}>
-      {message}
-    </div>
-  );
-};
-
-function updatePanelEcoreContent(panels: UMLPanel[], panelId: string, content: string): UMLPanel[] {
-  return panels.map(p => (p.id === panelId ? { ...p, ecoreContent: content } : p));
-}
-
-function createUmlPanelSavedHandler(
-  panelId: string,
-  fileName: string,
-  onSaved: (panelId: string, fileName: string, result: { ecoreContent: string }) => void,
-): (result: { ecoreContent: string }) => void {
-  return result => onSaved(panelId, fileName, result);
-}
-
-interface CanvasUmlPanelLayerProps {
-  panels: UMLPanel[];
-  vsumName: string;
-  activeProjectId?: number;
-  topPanelId: string | null;
-  panelZBase: number;
-  viewOnly?: boolean;
-  buildSaveContext: (panel: UMLPanel) => UmlDiagramSaveContext | undefined;
-  onClose: (panelId: string) => void;
-  onFocus: (panelId: string) => void;
-  onHome: () => void;
-  onEcoreContentUpdated: (panelId: string, content: string) => void;
-}
-
-const CanvasUmlPanelLayer: React.FC<CanvasUmlPanelLayerProps> = ({
-  panels,
-  vsumName,
-  activeProjectId,
-  topPanelId,
-  panelZBase,
-  viewOnly = false,
-  buildSaveContext,
-  onClose,
-  onFocus,
-  onHome,
-  onEcoreContentUpdated,
-}) => (
-  <>
-    {panels.map((panel, idx) => (
-      <FloatingUMLPanel
-        key={panel.id}
-        id={panel.id}
-        title={vsumName || panel.title}
-        fileName={panel.layoutStorageKey ?? canvasUmlLayoutFileName(panel)}
-        layoutScopeId={panel.layoutScopeId ?? canvasUmlLayoutScope(activeProjectId)}
-        ecoreContent={panel.ecoreContent}
-        saveContext={buildSaveContext(panel)}
-        viewOnly={viewOnly}
-        initialTop={panel.top}
-        initialRight={panel.right}
-        panelWidth={panel.width}
-        panelHeight={panel.height}
-        onClose={onClose}
-        onFocus={onFocus}
-        onHome={onHome}
-        ecoreFileId={panel.ecoreFileId}
-        fetchEcoreFile={fetchEcoreFileById}
-        onEcoreContentUpdated={content => onEcoreContentUpdated(panel.id, content)}
-        zIndex={panelZBase + (topPanelId === panel.id ? panels.length : idx)}
-      />
-    ))}
-  </>
-);
-
-interface ModelDrawerModalProps {
-  models: DrawerModel[];
-  addedModelIds: Set<number>;
-  loading: boolean;
-  myLibraryModels: DrawerModel[];
-  publicLibraryModels: DrawerModel[];
-  onClose: () => void;
-  onAddModel: (model: DrawerModel) => void;
-  onDeleteModel?: (model: DrawerModel) => Promise<void>;
-}
-
-const ModelDrawerModal: React.FC<ModelDrawerModalProps> = ({
-  models,
-  addedModelIds,
-  loading,
-  myLibraryModels,
-  publicLibraryModels,
-  onClose,
-  onAddModel,
-  onDeleteModel,
-}) => ReactDOM.createPortal(
-  <>
-    <button
-      type="button"
-      aria-hidden="true"
-      tabIndex={-1}
-      onClick={onClose}
-      style={{ ...modalBackdropStyle, zIndex: MODAL_Z_INDEX }}
-    />
-    <div style={{
-      position: 'fixed',
-      top: '50%', left: '50%',
-      transform: 'translate(-50%, -50%)',
-      width: 'min(800px, 92vw)',
-      height: 'min(700px, 88vh)',
-      zIndex: MODAL_Z_INDEX + 1,
-      pointerEvents: 'auto',
-      background: '#ffffff',
-      borderRadius: 10,
-      boxShadow: '0 24px 64px rgba(0,0,0,0.28), 0 4px 16px rgba(0,0,0,0.10)',
-      border: '1px solid #e2e8f0',
-      overflow: 'hidden',
-    }}>
-      <ModelDrawer
-        models={models}
-        addedModelIds={addedModelIds}
-        loading={loading}
-        onClose={onClose}
-        onAddModel={onAddModel}
-        onDeleteModel={onDeleteModel}
-        myLibraryModels={myLibraryModels}
-        publicLibraryModels={publicLibraryModels}
-        onFetchFile={fetchEcoreFileById}
-      />
-    </div>
-  </>,
-  document.body,
-);
-
-interface CanvasProjectLoadStateOverlayProps {
-  state: CanvasProjectLoadState;
-  projectId?: number;
-  onBack: () => void;
-  onRetry: () => void;
-}
-
-const CanvasProjectLoadStateOverlay: React.FC<CanvasProjectLoadStateOverlayProps> = ({
-  state,
-  projectId,
-  onBack,
-  onRetry,
-}) => {
-  const isLoading = state.status === 'loading' || state.status === 'hydrating';
-  const titleByStatus: Record<CanvasProjectLoadStatus, string> = {
-    loading: 'Loading project…',
-    hydrating: 'Opening workspace…',
-    ready: '',
-    forbidden: 'Access denied',
-    notFound: 'Project not found',
-    error: 'Unable to open project',
-  };
-  const defaultMessageByStatus: Record<CanvasProjectLoadStatus, string> = {
-    loading: projectId ? `Checking access for project ${projectId}.` : 'Checking project access.',
-    hydrating: 'Preparing the workspace.',
-    ready: '',
-    forbidden: 'You do not have permission to open this project.',
-    notFound: 'This project does not exist or may have been deleted.',
-    error: 'The project could not be loaded. Please try again.',
-  };
-  const overlayStyle: React.CSSProperties = {
-    position: 'absolute',
-    inset: 0,
-    zIndex: 5000,
-    display: 'grid',
-    placeItems: 'center',
-    background: '#f8fafc',
-    fontFamily: 'ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, sans-serif',
-  };
-
-  const content = (
-      <div style={{
-        width: 'min(420px, calc(100vw - 32px))',
-        padding: '28px 30px',
-        background: '#ffffff',
-        border: '1px solid #e2e8f0',
-        borderRadius: 14,
-        boxShadow: '0 20px 60px rgba(15, 23, 42, 0.12)',
-        textAlign: 'center',
-      }}>
-        <div style={{
-          width: 44,
-          height: 44,
-          margin: '0 auto 16px',
-          borderRadius: 999,
-          display: 'grid',
-          placeItems: 'center',
-          background: isLoading ? '#e6f7f5' : '#fef2f2',
-          color: isLoading ? '#049484' : '#b91c1c',
-          fontSize: 22,
-          fontWeight: 700,
-        }}>
-          {isLoading ? (
-            <span style={{
-              width: 20,
-              height: 20,
-              border: '3px solid rgba(4, 148, 132, 0.22)',
-              borderTopColor: '#049484',
-              borderRadius: '50%',
-              animation: 'spin 0.8s linear infinite',
-            }} />
-          ) : '!' }
-        </div>
-        <h1 style={{
-          margin: '0 0 8px',
-          color: '#0f172a',
-          fontSize: 22,
-          lineHeight: 1.2,
-        }}>
-          {titleByStatus[state.status]}
-        </h1>
-        <p style={{
-          margin: 0,
-          color: '#64748b',
-          fontSize: 14,
-          lineHeight: 1.6,
-        }}>
-          {state.message || defaultMessageByStatus[state.status]}
-        </p>
-        {!isLoading && (
-          <div style={{
-            display: 'flex',
-            justifyContent: 'center',
-            gap: 10,
-            marginTop: 22,
-            flexWrap: 'wrap',
-          }}>
-            <button
-              type="button"
-              onClick={onBack}
-              style={{
-                border: '1px solid #cbd5e1',
-                background: '#ffffff',
-                color: '#334155',
-                borderRadius: 8,
-                padding: '10px 16px',
-                fontSize: 14,
-                fontWeight: 600,
-                cursor: 'pointer',
-              }}
-            >
-              Back to project list
-            </button>
-            {state.status === 'error' && (
-              <button
-                type="button"
-                onClick={onRetry}
-                style={{
-                  border: '1px solid #037368',
-                  background: '#049484',
-                  color: '#ffffff',
-                  borderRadius: 8,
-                  padding: '10px 16px',
-                  fontSize: 14,
-                  fontWeight: 700,
-                  cursor: 'pointer',
-                }}
-              >
-                Try again
-              </button>
-            )}
-          </div>
-        )}
-      </div>
-  );
-
-  if (isLoading) {
-    return <output style={overlayStyle}>{content}</output>;
-  }
-
-  return (
-    <div role="alert" style={overlayStyle}>
-      {content}
-    </div>
-  );
-};
-
 // ── CanvasPage ────────────────────────────────────────────────────────────────
 
 export const CanvasPage: React.FC = () => {
@@ -708,22 +330,17 @@ export const CanvasPage: React.FC = () => {
   const [loadingProject, setLoadingProject] = useState(true);
   const [showDrawer, setShowDrawer] = useState(false);
 
-  // project-name editing
-  const [editingName, setEditingName] = useState(false);
-  const [nameInput, setNameInput] = useState('');
-  const [savingName, setSavingName] = useState(false);
-
-  const [umlPanels, setUmlPanels] = useState<UMLPanel[]>([]);
-  const [topPanelId, setTopPanelId] = useState<string | null>(null);
   const panelZBase = MODAL_Z_INDEX;
-
-  useModalBodyLock(umlPanels.length > 0 || showDrawer);
 
   // check / download / save
   const [checkingBuild, setCheckingBuild] = useState(false);
   const [downloadingArtifact, setDownloadingArtifact] = useState(false);
   const [savingChanges, setSavingChanges] = useState(false);
-  const [popup, setPopup] = useState<{ message: string; type: 'success' | 'error' | 'info' } | null>(null);
+  const [popup, setPopup] = useState<{ message: string; type: CanvasPopupNotificationType } | null>(null);
+  const notifyUmlPanelLoadError = useCallback((message: CanvasUmlPanelLoadErrorMessage) => {
+    setPopup({ message, type: 'error' });
+    setTimeout(() => setPopup(null), 4000);
+  }, []);
 
   const [openTabs, setOpenTabs] = useState<OpenCanvasTab[]>([]);
   const [activeInstanceId, setActiveInstanceId] = useState<string | null>(null);
@@ -934,50 +551,65 @@ export const CanvasPage: React.FC = () => {
     return () => { cancelled = true; };
   }, [activeProjectId, isSharedAccess]);
 
-  // Canvas mode (Modeling / Constraints / Views)
-  const [canvasMode, setCanvasMode] = useState<CanvasMode>(() => readStoredCanvasMode(activeProjectId));
-  const canvasModeRef = useRef<CanvasMode>(canvasMode);
-  const [constraintsNodes, setConstraintsNodes] = useState<Node[]>([]);
+  // Add-reaction mode
+  const [addReactionMode, setAddReactionMode] = useState(false);
   useEffect(() => {
     if (isViewOnly) setAddReactionMode(false);
   }, [isViewOnly]);
 
-  const [constraintHighlightNodeId, setConstraintHighlightNodeId] = useState<string | null>(null);
-  const [constraintFilterNodeId, setConstraintFilterNodeId] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (isViewOnly && canvasMode === 'constraints') {
-      setCanvasMode('modeling');
-      canvasModeRef.current = 'modeling';
-      writeStoredCanvasMode(activeProjectId, 'modeling');
+  // Canvas mode (Modeling / Constraints / Views)
+  const getCanvasNodes = useCallback(
+    (): Node[] => flowCanvasRef.current?.getNodes?.() ?? [],
+    [],
+  );
+  const {
+    canvasMode,
+    canvasModeRef,
+    constraintsNodes,
+    setConstraintsNodes,
+    constraintHighlightNodeId,
+    setConstraintHighlightNodeId,
+    constraintFilterNodeId,
+    setConstraintFilterNodeId,
+    handleCanvasModeChange,
+  } = useCanvasModeState({
+    projectId: activeProjectId,
+    isViewOnly,
+    getCanvasNodes,
+  });
+  const updateCanvasEcoreFileData = useCallback((
+    fileName: string,
+    content: string,
+    ecoreFileId?: number,
+  ) => {
+    if (ecoreFileId === undefined) {
+      flowCanvasRef.current?.updateEcoreFileData?.(fileName, content);
+      return;
     }
-  }, [activeProjectId, isViewOnly, canvasMode]);
+    flowCanvasRef.current?.updateEcoreFileData?.(fileName, content, ecoreFileId);
+  }, []);
+  const {
+    umlPanels,
+    topPanelId,
+    handleEcoreFileExpand,
+    closePanel,
+    focusPanel,
+    handleUmlPanelEcoreContentUpdated,
+    buildUmlSaveContext,
+    clearPanels,
+    restorePanels,
+    removePanelsForDeletedModel,
+  } = useCanvasUmlPanels({
+    activeProjectId,
+    openTabCount: openTabs.length,
+    isViewOnly,
+    getCanvasNodes,
+    fetchEcoreFile: fetchEcoreFileById,
+    updateEcoreFileData: updateCanvasEcoreFileData,
+    onLoadError: notifyUmlPanelLoadError,
+  });
 
-  useEffect(() => {
-    if (!activeProjectId) return;
-    const storedMode = readStoredCanvasMode(activeProjectId);
-    const nextMode = isViewOnly && storedMode === 'constraints' ? 'modeling' : storedMode;
-    canvasModeRef.current = nextMode;
-    setCanvasMode(nextMode);
-    if (nextMode !== storedMode) writeStoredCanvasMode(activeProjectId, nextMode);
-  }, [activeProjectId, isViewOnly]);
-
-  const handleCanvasModeChange = useCallback((mode: CanvasMode) => {
-    if (mode === 'constraints' && isViewOnly) return;
-    if (mode === 'constraints') {
-      setConstraintsNodes(flowCanvasRef.current?.getNodes?.() ?? []);
-    } else {
-      setConstraintHighlightNodeId(null);
-      setConstraintFilterNodeId(null);
-    }
-    canvasModeRef.current = mode;
-    setCanvasMode(mode);
-    writeStoredCanvasMode(activeProjectId, mode);
-  }, [activeProjectId, isViewOnly]);
-
-
-  // Add-reaction mode
-  const [addReactionMode, setAddReactionMode] = useState(false);
+  useModalBodyLock(umlPanels.length > 0 || showDrawer);
 
   // Undo/redo availability (driven by FlowCanvas callback)
   const [canUndo, setCanUndo] = useState(false);
@@ -1018,17 +650,45 @@ export const CanvasPage: React.FC = () => {
     return !workspaceSnapshotsEqual(baseline, session.workspaceSnapshot);
   }, [activeInstanceId, getLiveSnapshot, isViewOnlyProject]);
 
+  const updateTabName = useCallback((projectId: number, name: string) => {
+    setOpenTabs(prev => prev.map(t => (t.projectId === projectId ? { ...t, name } : t)));
+  }, []);
+
+  const renameProject = useCallback((projectId: number, name: string): Promise<unknown> => {
+    return apiService.renameVsum(projectId, { name });
+  }, []);
+
+  const handleProjectRenamed = useCallback((name: string) => {
+    setVsumName(name);
+    if (activeProjectId) updateTabName(activeProjectId, name);
+  }, [activeProjectId, updateTabName]);
+
+  const {
+    editingName,
+    nameInput,
+    savingName,
+    setNameInput,
+    startRename,
+    confirmRename,
+    cancelRename,
+  } = useCanvasProjectRename({
+    projectId: activeProjectId,
+    projectName: vsumName,
+    isViewOnly,
+    renameProject,
+    onRenamed: handleProjectRenamed,
+  });
+
   const clearCanvasWorkspace = useCallback(() => {
     flowCanvasRef.current?.loadDiagramData?.([], []);
     setDrawerModels([]);
     setMyLibraryModels([]);
     setPublicLibraryModels([]);
     setAddedModelIds(new Set());
-    setUmlPanels([]);
-    setTopPanelId(null);
+    clearPanels();
     setShowDrawer(false);
-    setEditingName(false);
-  }, []);
+    cancelRename();
+  }, [cancelRename, clearPanels]);
 
   const applyTabSession = useCallback((session: CanvasTabSession) => {
     setVsumName(session.vsumName);
@@ -1036,10 +696,9 @@ export const CanvasPage: React.FC = () => {
     setMyLibraryModels(session.myLibraryModels);
     setPublicLibraryModels(session.publicLibraryModels);
     setAddedModelIds(new Set(session.addedModelIds));
-    setUmlPanels(session.umlPanels);
-    setTopPanelId(session.topPanelId);
+    restorePanels(session.umlPanels, session.topPanelId);
     setShowDrawer(false);
-    setEditingName(false);
+    cancelRename();
     setLoadingProject(false);
 
     if (canvasModeRef.current === 'constraints') {
@@ -1051,16 +710,12 @@ export const CanvasPage: React.FC = () => {
     };
     load();
     setTimeout(load, 50);
-  }, []);
+  }, [cancelRename, canvasModeRef, restorePanels, setConstraintsNodes]);
 
   const captureRef = useRef(captureCurrentTabSession);
   captureRef.current = captureCurrentTabSession;
   const applyRef = useRef(applyTabSession);
   applyRef.current = applyTabSession;
-
-  const updateTabName = useCallback((projectId: number, name: string) => {
-    setOpenTabs(prev => prev.map(t => (t.projectId === projectId ? { ...t, name } : t)));
-  }, []);
 
   const switchToTab = useCallback((instanceId: string) => {
     const tab = openTabsRef.current.find(t => t.instanceId === instanceId);
@@ -1276,7 +931,7 @@ export const CanvasPage: React.FC = () => {
         setLoadingProject(false);
       }
     }
-  }, [clearCanvasWorkspace, setBaselineForInstance, updateTabName, applyProjectMembers, navAccess, navAccessRole, noteApiRole]);
+  }, [clearCanvasWorkspace, setBaselineForInstance, updateTabName, applyProjectMembers, navAccess, navAccessRole, noteApiRole, canvasModeRef, setConstraintsNodes]);
 
   // Viewers: reload when the owner saves changes; detect when access is revoked.
   useEffect(() => {
@@ -1378,33 +1033,7 @@ export const CanvasPage: React.FC = () => {
 
     run();
     return () => { cancelled = true; };
-  }, [activeInstanceId, clearCanvasWorkspace, loadVsum, bumpProjectRole]);
-
-  // ── Rename VSUM ───────────────────────────────────────────────────────────
-
-  const startRename = useCallback(() => {
-    setNameInput(vsumName);
-    setEditingName(true);
-  }, [vsumName]);
-
-  const confirmRename = useCallback(async () => {
-    if (isViewOnly) return;
-    const trimmed = nameInput.trim();
-    if (!trimmed || !activeProjectId || trimmed === vsumName) { setEditingName(false); return; }
-    setSavingName(true);
-    try {
-      await apiService.renameVsum(activeProjectId, { name: trimmed });
-      setVsumName(trimmed);
-      updateTabName(activeProjectId, trimmed);
-    } catch (e) {
-      console.error('Rename failed:', e);
-    } finally {
-      setSavingName(false);
-      setEditingName(false);
-    }
-  }, [nameInput, activeProjectId, vsumName, updateTabName, isViewOnly]);
-
-  const cancelRename = useCallback(() => setEditingName(false), []);
+  }, [activeInstanceId, clearCanvasWorkspace, loadVsum, bumpProjectRole, canvasModeRef, setConstraintsNodes]);
 
   // ── Add model from drawer ─────────────────────────────────────────────────
 
@@ -1454,63 +1083,8 @@ export const CanvasPage: React.FC = () => {
     setMyLibraryModels(prev => prev.filter(m => m.id !== model.id));
     setPublicLibraryModels(prev => prev.filter(m => m.id !== model.id));
     setDrawerModels(prev => prev.filter(m => m.id !== model.id && m.sourceId !== model.id && m.sourceId !== sourceId));
-    setUmlPanels(prev => prev.filter(
-      p => p.metaModelId !== model.id && p.metaModelSourceId !== sourceId && p.metaModelId !== sourceId,
-    ));
-  }, [isViewOnly]);
-
-  const handleEcoreFileExpand = useCallback(async (
-    fileName: string,
-    fileContent: string,
-    meta?: EcoreFileExpandMeta,
-  ) => {
-    const layout = computeUmlPanelLayout(openTabs.length);
-    const resolved = enrichEcoreMetaFromCanvas(
-      fileName,
-      fileContent,
-      meta,
-      () => flowCanvasRef.current?.getNodes?.() ?? [],
-    );
-
-    const loadedContent = await loadEcoreFileContent(
-      fileName,
-      resolved.content,
-      resolved.ecoreFileId,
-      flowCanvasRef.current?.updateEcoreFileData,
-    );
-    if (loadedContent === null) {
-      setPopup({ message: 'Could not load UML diagram for this meta-model.', type: 'error' });
-      setTimeout(() => setPopup(null), 4000);
-      return;
-    }
-    if (!loadedContent.trim()) {
-      setPopup({ message: 'No UML content available for this meta-model.', type: 'error' });
-      setTimeout(() => setPopup(null), 4000);
-      return;
-    }
-
-    const newPanel: UMLPanel = {
-      id: `panel-${Date.now()}`,
-      title: fileName.replace(/\.ecore$/, ''),
-      fileName,
-      ecoreContent: loadedContent,
-      metaModelId: resolved.metaModelId,
-      metaModelSourceId: resolved.metaModelSourceId,
-      ecoreFileId: resolved.ecoreFileId,
-      layoutScopeId: canvasUmlLayoutScope(activeProjectId),
-      layoutStorageKey: canvasUmlLayoutFileName({
-        fileName,
-        metaModelSourceId: resolved.metaModelSourceId,
-        metaModelId: resolved.metaModelId,
-      }),
-      top: layout.top,
-      right: 16,
-      width: 200,
-      height: layout.height,
-    };
-    setUmlPanels(prev => [...prev, newPanel]);
-    setTopPanelId(newPanel.id);
-  }, [openTabs.length, activeProjectId]);
+    removePanelsForDeletedModel(model.id, sourceId);
+  }, [isViewOnly, removePanelsForDeletedModel]);
 
   useEffect(() => {
     const handler = (e: Event) => {
@@ -1665,38 +1239,6 @@ export const CanvasPage: React.FC = () => {
     }
   }, [activeProjectId, activeInstanceId, setBaselineForInstance, isViewOnly]);
 
-  const closePanel = useCallback((panelId: string) => {
-    setUmlPanels(prev => prev.filter(p => p.id !== panelId));
-    setTopPanelId(prev => (prev === panelId ? null : prev));
-  }, []);
-
-  const handleUmlPanelSaved = useCallback((
-    panelId: string,
-    fileName: string,
-    result: { ecoreContent: string },
-  ) => {
-    setUmlPanels(prev => updatePanelEcoreContent(prev, panelId, result.ecoreContent));
-    // Workspace-only: update the canvas copy, not the library metamodel file on the server.
-    flowCanvasRef.current?.updateEcoreFileData?.(fileName, result.ecoreContent);
-  }, []);
-
-  const handleUmlPanelEcoreContentUpdated = useCallback((panelId: string, content: string) => {
-    setUmlPanels(prev => updatePanelEcoreContent(prev, panelId, content));
-  }, []);
-
-  const buildUmlSaveContext = useCallback((panel: UMLPanel): UmlDiagramSaveContext | undefined => {
-    if (isViewOnly || !panel.ecoreFileId) return undefined;
-    const libraryMetaModelId = panel.metaModelSourceId ?? panel.metaModelId;
-    return {
-      metaModelId: libraryMetaModelId ? String(libraryMetaModelId) : '',
-      ecoreFileId: panel.ecoreFileId,
-      modelName: panel.title,
-      saveTarget: 'workspace',
-      onSaved: createUmlPanelSavedHandler(panel.id, panel.fileName, handleUmlPanelSaved),
-    };
-  }, [handleUmlPanelSaved, isViewOnly]);
-
-  const focusPanel = useCallback((panelId: string) => setTopPanelId(panelId), []);
   const navigateHome = useCallback(() => navigate('/'), [navigate]);
 
   const handleReactionModeEnd = useCallback(() => setAddReactionMode(false), []);
@@ -1818,6 +1360,7 @@ export const CanvasPage: React.FC = () => {
         onFocus={focusPanel}
         onHome={navigateHome}
         onEcoreContentUpdated={handleUmlPanelEcoreContentUpdated}
+        fetchEcoreFile={fetchEcoreFileById}
       />
 
       {/* Model drawer modal */}
@@ -1831,22 +1374,20 @@ export const CanvasPage: React.FC = () => {
           onClose={handleCloseDrawer}
           onAddModel={handleAddModel}
           onDeleteModel={handleDeleteModel}
+          onFetchFile={fetchEcoreFileById}
         />
       )}
 
-      {/* Constraints overlay — always mounted to preserve state (edits, deletions).
-          Visibility toggled via display so the FlowCanvas mode-toggle remains
-          clickable through the transparent center gap when hidden. */}
-      <div style={{
-        position: 'absolute', top: 72, left: 0, right: 0, bottom: 0,
-        display: canvasMode === 'constraints' && !isViewOnly ? 'flex' : 'none',
-        zIndex: 100, pointerEvents: 'none',
-      }}>
-        <ConstraintsView key={activeProjectId ?? 'default'} vsumId={activeProjectId?.toString()} canvasNodes={constraintsNodes} onHighlightNode={setConstraintHighlightNodeId} filterNodeId={constraintFilterNodeId} />
-      </div>
+      <CanvasConstraintsOverlay
+        projectId={activeProjectId}
+        visible={canvasMode === 'constraints' && !isViewOnly}
+        canvasNodes={constraintsNodes}
+        onHighlightNode={setConstraintHighlightNodeId}
+        filterNodeId={constraintFilterNodeId}
+      />
 
       {/* Left sidebar toolbar */}
-      {canvasMode !== 'constraints' && <LeftSidebar
+      {canvasMode !== 'constraints' && <CanvasSidebarToolbar
         readOnly={isViewOnly}
         addReactionMode={addReactionMode}
         onToggleReactionMode={() => setAddReactionMode(v => !v)}
@@ -1864,11 +1405,11 @@ export const CanvasPage: React.FC = () => {
         checkingBuild={checkingBuild}
       />}
 
-      <LeftPill
+      <CanvasProjectControls
         readOnly={isViewOnly}
         sharedByLabel={
           isSharedAccess && displayProjectSharer
-            ? panelMemberName(displayProjectSharer)
+            ? getCanvasPanelMemberName(displayProjectSharer)
             : undefined
         }
         projectName={vsumName || (loadingProject ? 'Loading…' : 'Project')}
@@ -1896,7 +1437,7 @@ export const CanvasPage: React.FC = () => {
         onCancel={handleCloseConfirmCancel}
       />
 
-      <RightPill
+      <CanvasProjectAccessControls
         projectMembers={projectMembers}
         projectSharer={displayProjectSharer}
         canShare={canShare}
@@ -1936,1472 +1477,3 @@ export const CanvasPage: React.FC = () => {
     </div>
   );
 };
-
-// ── LeftPill ──────────────────────────────────────────────────────────────────
-
-interface LeftPillProps {
-  readOnly?: boolean;
-  sharedByLabel?: string;
-  projectName: string;
-  projectId?: number;
-  openProjectIds: number[];
-  editingName: boolean;
-  nameInput: string;
-  savingName: boolean;
-  onBack: () => void;
-  onRefresh: () => void;
-  onSelectProject: (projectId: number, name: string, accessRole?: string) => void;
-  onStartRename: () => void;
-  onNameInputChange: (v: string) => void;
-  onConfirmRename: () => void;
-  onCancelRename: () => void;
-  loading: boolean;
-}
-
-const LeftPill: React.FC<LeftPillProps> = ({
-  readOnly = false,
-  sharedByLabel,
-  projectName, projectId, openProjectIds, editingName, nameInput, savingName,
-  onBack, onRefresh, onSelectProject, onStartRename, onNameInputChange, onConfirmRename, onCancelRename, loading,
-}) => (
-  <div style={pillStyle('left')}>
-    {/* Logo — click to go back */}
-    <button
-      type="button"
-      onClick={onBack}
-      title="Back to overview"
-      aria-label="Back to overview"
-      style={{
-        padding: 0,
-        border: 'none',
-        background: 'transparent',
-        width: 24,
-        height: 24,
-        borderRadius: 6,
-        flexShrink: 0,
-        margin: '0 4px',
-        cursor: 'pointer',
-        transition: 'opacity 0.15s',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-      }}
-      onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.opacity = '0.75'; }}
-      onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.opacity = '1'; }}
-    >
-      <img
-        src="/assets/vitruvius1.png"
-        alt=""
-        aria-hidden="true"
-        style={{ width: 24, height: 24, borderRadius: 6, display: 'block' }}
-      />
-    </button>
-
-    <Divider />
-
-    {editingName ? (
-      <>
-        <input
-          autoFocus
-          value={nameInput}
-          onChange={e => onNameInputChange(e.target.value)}
-          onKeyDown={e => {
-            if (e.key === 'Enter') {
-              onConfirmRename();
-            } else if (e.key === 'Escape') {
-              onCancelRename();
-            }
-          }}
-          disabled={savingName}
-          style={{
-            fontSize: 13, fontWeight: 600, color: '#0f172a',
-            border: '1.5px solid #93c5fd', borderRadius: 6,
-            padding: '2px 8px', outline: 'none', width: 170,
-            background: '#fff',
-          }}
-        />
-        <PillBtn onClick={onConfirmRename} title="Save" active spinning={savingName}>
-          <CheckIcon />
-        </PillBtn>
-        <PillBtn onClick={onCancelRename} title="Cancel">
-          <XIcon />
-        </PillBtn>
-      </>
-    ) : (
-      <>
-        <ProjectPickerMenu
-          currentProjectId={projectId}
-          activeProjectId={projectId}
-          openProjectIds={openProjectIds}
-          currentProjectName={projectName}
-          disabled={loading}
-          onSelectProject={p => onSelectProject(p.id, p.name, p.role)}
-        />
-        {!readOnly && (
-          <PillBtn onClick={onStartRename} title="Edit project name">
-            <PencilIcon />
-          </PillBtn>
-        )}
-        {readOnly && (
-          <span
-            title={sharedByLabel
-              ? `View-only access — shared by ${sharedByLabel}`
-              : 'You have view-only access to this project'}
-            style={{
-              marginLeft: 4,
-              padding: '2px 8px',
-              borderRadius: 6,
-              fontSize: 10,
-              fontWeight: 700,
-              background: '#eff6ff',
-              color: '#1d4ed8',
-              border: '1px solid #bfdbfe',
-              whiteSpace: 'nowrap',
-              maxWidth: 200,
-              overflow: 'hidden',
-              textOverflow: 'ellipsis',
-            }}
-          >
-            {sharedByLabel ? `Shared by ${sharedByLabel}` : 'View only'}
-          </span>
-        )}
-      </>
-    )}
-
-    <Divider />
-
-    <PillBtn onClick={onRefresh} title={readOnly ? 'Reload latest changes from owner' : 'Reload'} spinning={loading && !editingName}>
-      <RefreshIcon />
-    </PillBtn>
-  </div>
-);
-
-// ── Avatar helpers ────────────────────────────────────────────────────────────
-
-interface Collaborator { id: string; initials: string; name: string; color: string; ringColor?: string; }
-
-const MEMBER_AVATAR_COLORS = [
-  'linear-gradient(135deg, #049484, #06b89e)',
-  'linear-gradient(135deg, #3b82f6, #60a5fa)',
-  'linear-gradient(135deg, #8b5cf6, #a78bfa)',
-  'linear-gradient(135deg, #f59e0b, #fbbf24)',
-  'linear-gradient(135deg, #ec4899, #f472b6)',
-];
-
-function buildPanelMembers(
-  projectMembers: VsumUserResponse[],
-  projectSharer: VsumUserResponse | null,
-  isSharedAccess: boolean,
-  currentUserEmail?: string,
-  currentUserName?: string,
-): VsumUserResponse[] {
-  const unique = uniqueVsumMembers(projectMembers);
-  if (!isSharedAccess) return unique;
-
-  const entries: VsumUserResponse[] = [];
-  if (projectSharer) entries.push(projectSharer);
-
-  const selfInList = findMembershipForEmail(unique, currentUserEmail);
-  if (selfInList && !entries.some(e => e.id === selfInList.id)) {
-    entries.push(selfInList);
-  } else if (currentUserEmail && !entries.some(e =>
-    e.email?.toLowerCase() === currentUserEmail.toLowerCase(),
-  )) {
-    const nameParts = (currentUserName ?? '').trim().split(/\s+/);
-    entries.push({
-      id: -2,
-      vsumId: projectSharer?.vsumId ?? 0,
-      firstName: nameParts[0] ?? '',
-      lastName: nameParts.slice(1).join(' '),
-      email: currentUserEmail,
-      role: 'VIEWER',
-      createdAt: '',
-    });
-  }
-
-  unique.forEach(m => {
-    if (!entries.some(e => e.id === m.id)) entries.push(m);
-  });
-
-  return entries;
-}
-
-function membersToCollaborators(members: VsumUserResponse[]): Collaborator[] {
-  return uniqueVsumMembers(members).map((member, index) => {
-    const name = memberDisplayName(member);
-    return {
-      id: String(member.id),
-      initials: getUserInitials(name, member.email),
-      name,
-      color: MEMBER_AVATAR_COLORS[index % MEMBER_AVATAR_COLORS.length],
-    };
-  });
-}
-
-type PanelMemberRole = 'Owner' | 'Member' | 'Viewer';
-
-function panelMemberName(m: VsumUserResponse): string {
-  const full = memberDisplayName(m);
-  if (full !== 'Member') return full;
-  if (m.status === 'PENDING' || m.pending) return 'Pending invite';
-  return m.email || 'Member';
-}
-
-function panelMemberRole(m: VsumUserResponse): PanelMemberRole {
-  const r = (m.role ?? '').toUpperCase();
-  if (r === 'OWNER') return 'Owner';
-  if (r === 'VIEWER') return 'Viewer';
-  return 'Member';
-}
-
-function panelRoleChipStyle(role: PanelMemberRole): React.CSSProperties {
-  if (role === 'Owner') return { background: '#ecfdf5', color: '#065f46', border: '1px solid #a7f3d0' };
-  if (role === 'Viewer') return { background: '#eff6ff', color: '#1d4ed8', border: '1px solid #bfdbfe' };
-  return { background: '#f3f4f6', color: '#374151', border: '1px solid #e5e7eb' };
-}
-
-function isPanelMemberPending(m: VsumUserResponse): boolean {
-  return m.status === 'PENDING' || m.pending === true;
-}
-
-function formatPeopleCount(count: number): string {
-  if (count === 1) return '1 person';
-  return `${count} people`;
-}
-
-function resolveCollaboratorStackTitle(
-  isSharedAccess: boolean,
-  projectSharer: VsumUserResponse | null,
-): string {
-  if (isSharedAccess && projectSharer) {
-    return `Shared by ${panelMemberName(projectSharer)}`;
-  }
-  return 'People with access';
-}
-
-function resolveStackAvatars(
-  isSharedAccess: boolean,
-  projectSharer: VsumUserResponse | null,
-  collaborators: Collaborator[],
-  myAccount: Collaborator,
-): Collaborator[] {
-  if (isSharedAccess && projectSharer) {
-    return membersToCollaborators([projectSharer]).slice(0, 3);
-  }
-  if (collaborators.length > 0) {
-    return collaborators.slice(0, 3);
-  }
-  return [myAccount];
-}
-
-function resolveSharedAccessSubtitle(membersLoading: boolean): string {
-  if (membersLoading) return 'Loading owner details…';
-  return 'Shared with you by the project owner';
-}
-
-function resolveMembersPanelSubtitle(options: {
-  isSharedAccess: boolean;
-  projectSharer: VsumUserResponse | null;
-  membersLoading: boolean;
-  isViewOnly: boolean;
-  memberCount: number;
-}): string {
-  const { isSharedAccess, projectSharer, membersLoading, isViewOnly, memberCount } = options;
-  if (isSharedAccess && projectSharer) {
-    return `Shared by ${panelMemberName(projectSharer)}`;
-  }
-  if (isSharedAccess) {
-    return resolveSharedAccessSubtitle(membersLoading);
-  }
-  if (isViewOnly) {
-    return 'You have view-only access to this project';
-  }
-  if (memberCount === 1) {
-    return 'You are the only person on this project. Invite viewers to share it.';
-  }
-  if (memberCount > 0) {
-    return `${formatPeopleCount(memberCount)} can access this project`;
-  }
-  return 'No members loaded yet';
-}
-
-function computeUmlPanelLayout(openTabCount: number): { top: number; height: number } {
-  const top = openTabCount > 0 ? CENTER_STACK_BOTTOM + 8 : MODE_TOGGLE_TOP + MODE_TOGGLE_HEIGHT + 8;
-  const bottomUsed = 228;
-  return {
-    top,
-    height: Math.max(200, document.documentElement.clientHeight - top - bottomUsed),
-  };
-}
-
-function numberFromNodeData(value: unknown): number | undefined {
-  return typeof value === 'number' ? value : undefined;
-}
-
-interface ResolvedEcoreMeta {
-  metaModelId?: number;
-  metaModelSourceId?: number;
-  ecoreFileId?: number;
-  content: string;
-}
-
-function enrichEcoreMetaFromCanvas(
-  fileName: string,
-  fileContent: string,
-  meta: EcoreFileExpandMeta | undefined,
-  getNodes: () => Node[],
-): ResolvedEcoreMeta {
-  let metaModelId = meta?.metaModelId;
-  let metaModelSourceId = meta?.metaModelSourceId;
-  let ecoreFileId = meta?.ecoreFileId;
-  let content = fileContent;
-
-  if (ecoreFileId != null && metaModelId != null) {
-    return { metaModelId, metaModelSourceId, ecoreFileId, content };
-  }
-
-  const node = getNodes().find(
-    (n: Node) => n.type === 'ecoreFile' && n.data.fileName === fileName,
-  );
-  if (!node?.data) {
-    return { metaModelId, metaModelSourceId, ecoreFileId, content };
-  }
-
-  metaModelId = metaModelId ?? numberFromNodeData(node.data.metaModelId);
-  metaModelSourceId = metaModelSourceId ?? numberFromNodeData(node.data.metaModelSourceId);
-  ecoreFileId = ecoreFileId ?? numberFromNodeData(node.data.ecoreFileId);
-  if (!content?.trim() && typeof node.data.fileContent === 'string') {
-    content = node.data.fileContent;
-  }
-  return { metaModelId, metaModelSourceId, ecoreFileId, content };
-}
-
-async function loadEcoreFileContent(
-  fileName: string,
-  content: string,
-  ecoreFileId: number | undefined,
-  updateEcoreFileData?: (fileName: string, content: string, ecoreFileId: number) => void,
-): Promise<string | null> {
-  if (content?.trim()) return content;
-  if (ecoreFileId == null) return content;
-
-  try {
-    const loaded = await apiService.getFile(ecoreFileId);
-    updateEcoreFileData?.(fileName, loaded, ecoreFileId);
-    return loaded;
-  } catch {
-    return null;
-  }
-}
-
-interface AvatarProps {
-  initials: string;
-  bg: string;
-  size?: number;
-  ring?: string;
-  title?: string;
-}
-
-interface AvatarButtonProps extends AvatarProps {
-  onClick: () => void;
-  title: string;
-}
-
-function getAvatarStyle(bg: string, size: number, ring?: string): React.CSSProperties {
-  return {
-    width: size,
-    height: size,
-    borderRadius: '50%',
-    background: bg,
-    color: '#fff',
-    fontSize: Math.round(size * 0.36),
-    fontWeight: 700,
-    letterSpacing: '0.01em',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    flexShrink: 0,
-    userSelect: 'none',
-    boxShadow: ring
-      ? `0 0 0 2px #fff, 0 0 0 4.5px ${ring}`
-      : '0 0 0 2px #fff',
-  };
-}
-
-const UserAvatar: React.FC<AvatarProps> = ({ initials, bg, size = 30, ring, title }) => (
-  <div title={title} style={{ ...getAvatarStyle(bg, size, ring), cursor: 'default' }}>
-    {initials}
-  </div>
-);
-
-const UserAvatarButton: React.FC<AvatarButtonProps> = ({
-  initials,
-  bg,
-  size = 30,
-  ring,
-  title,
-  onClick,
-}) => (
-  <button
-    type="button"
-    title={title}
-    aria-label={title}
-    onClick={onClick}
-    style={{
-      ...getAvatarStyle(bg, size, ring),
-      border: 'none',
-      padding: 0,
-      cursor: 'pointer',
-    }}
-  >
-    {initials}
-  </button>
-);
-
-interface CollaboratorStackButtonProps {
-  members: Array<{ id: string; initials: string; color: string; ringColor?: string }>;
-  stackLabel: string;
-  open: boolean;
-  onClick: () => void;
-  title?: string;
-}
-
-const CollaboratorStackButton: React.FC<CollaboratorStackButtonProps> = ({
-  members,
-  stackLabel,
-  open,
-  onClick,
-  title = 'People with access',
-}) => (
-  <button
-    type="button"
-    title={title}
-    aria-label={title}
-    aria-expanded={open}
-    onClick={onClick}
-    style={{
-      display: 'flex',
-      alignItems: 'center',
-      gap: 8,
-      cursor: 'pointer',
-      padding: '4px 10px 4px 6px',
-      border: 'none',
-      borderRadius: 8,
-      background: open ? '#f1f5f9' : 'transparent',
-      transition: 'background 0.15s',
-    }}
-  >
-    <span style={{ display: 'flex', alignItems: 'center' }}>
-      {members.map((member, index) => (
-        <span
-          key={member.id}
-          style={{ marginLeft: index === 0 ? 0 : -7, zIndex: members.length - index, display: 'inline-flex' }}
-        >
-          <UserAvatar
-            initials={member.initials}
-            bg={member.color}
-            size={24}
-            ring={member.ringColor}
-          />
-        </span>
-      ))}
-    </span>
-    <span style={{ fontSize: 12, fontWeight: 600, color: '#334155', whiteSpace: 'nowrap' }}>
-      {stackLabel}
-    </span>
-    <svg
-      width="12"
-      height="12"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="#64748b"
-      strokeWidth="2.5"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      style={{ transform: open ? 'rotate(180deg)' : 'none', transition: 'transform 0.15s', flexShrink: 0 }}
-      aria-hidden
-    >
-      <polyline points="6 9 12 15 18 9" />
-    </svg>
-  </button>
-);
-
-// ── RightPill ─────────────────────────────────────────────────────────────────
-
-interface PeoplePanelMemberRowProps {
-  member: VsumUserResponse;
-  index: number;
-  projectSharer: VsumUserResponse | null;
-  isSharedAccess: boolean;
-  isViewOnly: boolean;
-  canShare: boolean;
-  currentUserEmail?: string;
-  removingMemberId: number | null;
-  onRemoveMember?: (vsumUserId: number) => void | Promise<void>;
-  onRequestRemove: (member: VsumUserResponse) => void;
-}
-
-const PeoplePanelMemberRow: React.FC<PeoplePanelMemberRowProps> = ({
-  member,
-  index,
-  projectSharer,
-  isSharedAccess,
-  isViewOnly,
-  canShare,
-  currentUserEmail,
-  removingMemberId,
-  onRemoveMember,
-  onRequestRemove,
-}) => {
-  const name = panelMemberName(member);
-  const role = panelMemberRole(member);
-  const pending = isPanelMemberPending(member);
-  const isSelf = currentUserEmail
-    ? member.email?.toLowerCase() === currentUserEmail.toLowerCase()
-    : false;
-  const isSharer = projectSharer?.id === member.id
-    || projectSharer?.email?.toLowerCase() === member.email?.toLowerCase();
-  const color = MEMBER_AVATAR_COLORS[index % MEMBER_AVATAR_COLORS.length];
-
-  return (
-    <div
-      style={{
-        display: 'flex',
-        alignItems: 'center',
-        gap: 12,
-        padding: '8px 8px',
-        borderRadius: 8,
-        background: isSharer && isSharedAccess ? '#f8fafc' : 'transparent',
-      }}
-    >
-      <UserAvatar
-        initials={getUserInitials(name, member.email)}
-        bg={color}
-        size={36}
-        title={name}
-      />
-      <div style={{ flex: 1, minWidth: 0 }}>
-        <div
-          title={name}
-          style={{
-            fontSize: 13,
-            fontWeight: 600,
-            color: '#0f172a',
-            overflow: 'hidden',
-            textOverflow: 'ellipsis',
-            whiteSpace: 'nowrap',
-          }}
-        >
-          {isSelf ? `${name} (you)` : name}
-        </div>
-        <div
-          title={member.email}
-          style={{
-            fontSize: 11,
-            color: '#64748b',
-            marginTop: 1,
-            overflow: 'hidden',
-            textOverflow: 'ellipsis',
-            whiteSpace: 'nowrap',
-          }}
-        >
-          {isSharer && isSharedAccess ? 'Project owner' : member.email}
-        </div>
-      </div>
-      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 4, flexShrink: 0 }}>
-        <span style={{
-          display: 'inline-block',
-          padding: '2px 8px',
-          borderRadius: 20,
-          fontSize: 10,
-          fontWeight: 700,
-          ...panelRoleChipStyle(role),
-        }}>
-          {isSelf && isViewOnly ? 'Viewer' : role}
-        </span>
-        {pending && (
-          <span style={{
-            fontSize: 10,
-            fontWeight: 700,
-            color: '#c2410c',
-            background: '#fff7ed',
-            border: '1px solid #fed7aa',
-            borderRadius: 20,
-            padding: '1px 7px',
-          }}>
-            Pending
-          </span>
-        )}
-        {canShare && onRemoveMember && role !== 'Owner' && !isSelf && (
-          <button
-            type="button"
-            disabled={removingMemberId === member.id}
-            onClick={() => onRequestRemove(member)}
-            style={{
-              padding: '2px 8px',
-              borderRadius: 6,
-              border: '1px solid #fecaca',
-              background: '#fff5f5',
-              color: '#dc2626',
-              fontSize: 10,
-              fontWeight: 700,
-              cursor: removingMemberId === member.id ? 'wait' : 'pointer',
-              opacity: removingMemberId === member.id ? 0.6 : 1,
-            }}
-          >
-            {removingMemberId === member.id ? 'Removing…' : 'Remove access'}
-          </button>
-        )}
-      </div>
-    </div>
-  );
-};
-
-interface PeopleAccessPanelProps {
-  isSharedAccess: boolean;
-  isViewOnly: boolean;
-  canShare: boolean;
-  membersLoading: boolean;
-  memberCount: number;
-  panelMembers: VsumUserResponse[];
-  projectSharer: VsumUserResponse | null;
-  currentUserEmail?: string;
-  removingMemberId: number | null;
-  onRemoveMember?: (vsumUserId: number) => void | Promise<void>;
-  onRefreshMembers: () => void;
-  onRequestRemove: (member: VsumUserResponse) => void;
-  onShareClick: () => void;
-  onClose: () => void;
-}
-
-const PeopleAccessPanel: React.FC<PeopleAccessPanelProps> = ({
-  isSharedAccess,
-  isViewOnly,
-  canShare,
-  membersLoading,
-  memberCount,
-  panelMembers,
-  projectSharer,
-  currentUserEmail,
-  removingMemberId,
-  onRemoveMember,
-  onRefreshMembers,
-  onRequestRemove,
-  onShareClick,
-  onClose,
-}) => (
-  <div style={{
-    position: 'absolute',
-    top: 'calc(100% + 8px)',
-    right: 0,
-    width: 340,
-    maxWidth: '92vw',
-    background: '#ffffff',
-    borderRadius: 12,
-    boxShadow: '0 12px 40px rgba(0,0,0,0.14), 0 0 0 1px rgba(0,0,0,0.06)',
-    border: '1px solid #e2e8f0',
-    overflow: 'hidden',
-    zIndex: 500,
-  }}>
-    <div style={{ padding: '14px 16px 12px', borderBottom: '1px solid #f1f5f9' }}>
-      <div style={{ fontSize: 15, fontWeight: 700, color: '#0f172a' }}>
-        {isSharedAccess ? 'Shared with you' : 'People with access'}
-      </div>
-      <div style={{ fontSize: 12, color: '#64748b', marginTop: 3, lineHeight: 1.4 }}>
-        {resolveMembersPanelSubtitle({
-          isSharedAccess,
-          projectSharer,
-          membersLoading,
-          isViewOnly,
-          memberCount,
-        })}
-      </div>
-    </div>
-
-    {canShare && memberCount === 1 && !isSharedAccess && !membersLoading && (
-      <div style={{
-        padding: '10px 14px',
-        background: '#f0fdfa',
-        borderBottom: '1px solid #ccfbf1',
-        fontSize: 12,
-        color: '#047857',
-        lineHeight: 1.45,
-      }}>
-        You are working alone. Share this project to invite viewers by email.
-      </div>
-    )}
-
-    <div style={{
-      padding: '6px 8px',
-      maxHeight: 280,
-      overflowY: 'auto',
-      scrollbarWidth: 'thin',
-    }}>
-      {membersLoading && panelMembers.length === 0 && (
-        <div style={{ padding: '12px 8px', fontSize: 13, color: '#64748b', fontStyle: 'italic' }}>
-          Loading…
-        </div>
-      )}
-      {!membersLoading && panelMembers.map((member, index) => (
-        <PeoplePanelMemberRow
-          key={`${member.id}-${member.email}`}
-          member={member}
-          index={index}
-          projectSharer={projectSharer}
-          isSharedAccess={isSharedAccess}
-          isViewOnly={isViewOnly}
-          canShare={canShare}
-          currentUserEmail={currentUserEmail}
-          removingMemberId={removingMemberId}
-          onRemoveMember={onRemoveMember}
-          onRequestRemove={onRequestRemove}
-        />
-      ))}
-      {!membersLoading && panelMembers.length === 0 && (
-        <div style={{ padding: '12px 8px', display: 'grid', gap: 8 }}>
-          <div style={{ fontSize: 13, color: '#64748b' }}>
-            {isSharedAccess
-              ? 'Member list is not available for viewers. You can still view this project.'
-              : 'Could not load project members.'}
-          </div>
-          <button
-            type="button"
-            onClick={onRefreshMembers}
-            style={{
-              justifySelf: 'start',
-              padding: '6px 12px',
-              borderRadius: 8,
-              border: '1px solid #e2e8f0',
-              background: '#fff',
-              color: '#334155',
-              fontSize: 12,
-              fontWeight: 600,
-              cursor: 'pointer',
-            }}
-          >
-            Retry
-          </button>
-        </div>
-      )}
-    </div>
-
-    {canShare && (
-      <div style={{ padding: '10px 12px 12px', borderTop: '1px solid #f1f5f9' }}>
-        <button
-          type="button"
-          onClick={() => { onClose(); onShareClick(); }}
-          style={{
-            width: '100%',
-            padding: '9px 12px',
-            border: 'none',
-            borderRadius: 8,
-            background: '#049484',
-            color: '#fff',
-            fontSize: 13,
-            fontWeight: 700,
-            cursor: 'pointer',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            gap: 6,
-          }}
-        >
-          <ShareIcon />
-          Invite viewer
-        </button>
-      </div>
-    )}
-  </div>
-);
-
-interface RightPillProps {
-  projectMembers: VsumUserResponse[];
-  projectSharer: VsumUserResponse | null;
-  canShare: boolean;
-  isViewOnly?: boolean;
-  isSharedAccess?: boolean;
-  membersLoading?: boolean;
-  currentUserEmail?: string;
-  currentUserName?: string;
-  onRefreshMembers: () => void;
-  onRemoveMember?: (vsumUserId: number) => void | Promise<void>;
-  onShareClick: () => void;
-}
-
-const RightPill: React.FC<RightPillProps> = ({
-  projectMembers,
-  projectSharer,
-  canShare,
-  isViewOnly = false,
-  isSharedAccess = false,
-  membersLoading = false,
-  currentUserEmail,
-  currentUserName,
-  onRefreshMembers,
-  onRemoveMember,
-  onShareClick,
-}) => {
-  const [showAccounts, setShowAccounts] = useState(false);
-  const [removingMemberId, setRemovingMemberId] = useState<number | null>(null);
-  const [removeConfirmMember, setRemoveConfirmMember] = useState<VsumUserResponse | null>(null);
-  const [showProfileMenu, setShowProfileMenu] = useState(false);
-  const [showProfileModal, setShowProfileModal] = useState(false);
-  const wrapRef = useRef<HTMLDivElement>(null);
-  const { user, refreshCurrentUser } = useAuth();
-
-
-  // Derive display values from real user
-  const displayName = user
-    ? [user.givenName, user.familyName].filter(Boolean).join(' ') || user.username
-    : 'Me';
-  const initials = getUserInitials(displayName, user?.email);
-
-  const myAccount = {
-    id: 'me',
-    initials,
-    name: displayName,
-    color: 'linear-gradient(135deg, #049484, #06b89e)',
-    ringColor: '#049484',
-  };
-
-  // Close both panels on outside click
-  useEffect(() => {
-    if (!showAccounts && !showProfileMenu) return;
-    const handler = (e: MouseEvent) => {
-      if (wrapRef.current && !wrapRef.current.contains(e.target as unknown as HTMLElement)) {
-        setShowAccounts(false);
-        setShowProfileMenu(false);
-      }
-    };
-    document.addEventListener('mousedown', handler);
-    return () => document.removeEventListener('mousedown', handler);
-  }, [showAccounts, showProfileMenu]);
-
-  // Project members for the people panel
-  const panelMembers = buildPanelMembers(
-    projectMembers,
-    projectSharer,
-    isSharedAccess,
-    currentUserEmail,
-    currentUserName,
-  );
-  const collaborators = membersToCollaborators(
-    mergeSharerWithMembers(projectSharer, projectMembers),
-  );
-  const memberCount = panelMembers.length;
-  const stackAvatars = resolveStackAvatars(isSharedAccess, projectSharer, collaborators, myAccount);
-  const stackTitle = resolveCollaboratorStackTitle(isSharedAccess, projectSharer);
-  const stackLabel = formatProjectMemberStackLabel(memberCount, {
-    isSharedAccess,
-    isSoloOwner: canShare && memberCount === 1,
-  });
-
-  const toggleMembersPanel = useCallback(() => {
-    setShowAccounts(current => {
-      const next = !current;
-      if (next) onRefreshMembers();
-      return next;
-    });
-    setShowProfileMenu(false);
-  }, [onRefreshMembers]);
-
-  const toggleProfileMenu = useCallback(() => {
-    setShowProfileMenu(current => !current);
-    setShowAccounts(false);
-  }, []);
-
-  return (
-    <div ref={wrapRef} style={{ ...pillStyle('right'), padding: '0 10px', gap: 0, position: 'absolute' }}>
-
-      {/* ── People with access ── */}
-      <CollaboratorStackButton
-        members={stackAvatars.map(member => ({
-          id: member.id,
-          initials: member.initials,
-          color: member.color,
-          ringColor: 'ringColor' in member ? (member as typeof myAccount).ringColor : undefined,
-        }))}
-        stackLabel={stackLabel}
-        open={showAccounts}
-        onClick={toggleMembersPanel}
-        title={stackTitle}
-      />
-
-      <Divider />
-
-      {/* ── My account avatar — click for profile menu ── */}
-      <div style={{ position: 'relative', padding: '0 4px' }}>
-        <UserAvatarButton
-          initials={myAccount.initials}
-          bg={myAccount.color}
-          size={28}
-          ring={myAccount.ringColor}
-          title="My account"
-          onClick={toggleProfileMenu}
-        />
-
-        {/* Profile dropdown */}
-        {showProfileMenu && (
-          <div style={{
-            position: 'absolute',
-            top: 'calc(100% + 8px)',
-            right: 0,
-            background: '#ffffff',
-            borderRadius: 10,
-            boxShadow: '0 8px 32px rgba(0,0,0,0.16), 0 0 0 1px rgba(0,0,0,0.07)',
-            padding: '6px',
-            zIndex: 500,
-            minWidth: 180,
-          }}>
-            {/* Account info header */}
-            <div style={{
-              display: 'flex', alignItems: 'center', gap: 10,
-              padding: '8px 10px 12px',
-              borderBottom: '1px solid #f1f5f9',
-              marginBottom: 4,
-            }}>
-              <UserAvatar initials={myAccount.initials} bg={myAccount.color} size={36} ring={myAccount.ringColor} />
-              <div>
-                <div style={{ fontSize: 13, fontWeight: 600, color: '#0f172a', whiteSpace: 'nowrap' }}>
-                  {myAccount.name}
-                </div>
-                <div style={{ fontSize: 11, color: '#049484', fontWeight: 600, marginTop: 1 }}>Methodologist</div>
-              </div>
-            </div>
-
-            {/* Menu items */}
-            <ProfileMenuItem
-              label={USER_PROFILE_LABEL}
-              sublabel={USER_PROFILE_DESCRIPTION}
-              icon={<UserProfileIcon />}
-              onClick={() => { setShowProfileMenu(false); setShowProfileModal(true); }}
-            />
-            <ProfileMenuItem
-              label="Log out"
-              icon={<LogoutIcon />}
-              danger
-              onClick={() => { setShowProfileMenu(false); AuthService.signOut().then(() => { globalThis.location.href = '/login'; }); }}
-            />
-          </div>
-        )}
-      </div>
-
-      <Divider />
-
-      {canShare && <ShareBtn onClick={onShareClick} />}
-
-      {/* ── People panel ── */}
-      {showAccounts && (
-        <PeopleAccessPanel
-          isSharedAccess={isSharedAccess}
-          isViewOnly={isViewOnly}
-          canShare={canShare}
-          membersLoading={membersLoading}
-          memberCount={memberCount}
-          panelMembers={panelMembers}
-          projectSharer={projectSharer}
-          currentUserEmail={currentUserEmail}
-          removingMemberId={removingMemberId}
-          onRemoveMember={onRemoveMember}
-          onRefreshMembers={onRefreshMembers}
-          onRequestRemove={setRemoveConfirmMember}
-          onShareClick={onShareClick}
-          onClose={() => setShowAccounts(false)}
-        />
-      )}
-
-      {showProfileModal && (
-        <ProfileModal
-          user={user}
-          onClose={() => setShowProfileModal(false)}
-          onNameSaved={refreshCurrentUser}
-        />
-      )}
-
-      <ConfirmDialog
-        isOpen={removeConfirmMember !== null}
-        title="Remove access"
-        message={removeConfirmMember
-          ? `Remove access for ${panelMemberName(removeConfirmMember)}? They will no longer be able to open this project.`
-          : 'Remove this person\'s access to the project?'}
-        confirmText="Remove access"
-        cancelText="Cancel"
-        variant="danger"
-        onConfirm={async () => {
-          if (!removeConfirmMember || !onRemoveMember) return;
-          const id = removeConfirmMember.id;
-          setRemoveConfirmMember(null);
-          setRemovingMemberId(id);
-          try {
-            await onRemoveMember(id);
-          } finally {
-            setRemovingMemberId(null);
-          }
-        }}
-        onCancel={() => setRemoveConfirmMember(null)}
-      />
-    </div>
-  );
-};
-
-function getProfileMenuItemBackground(hovered: boolean, danger?: boolean): string {
-  if (!hovered) return 'transparent';
-  if (danger) return '#fef2f2';
-  return '#f8fafc';
-}
-
-const ProfileMenuItem: React.FC<{ label: string; sublabel?: string; icon: React.ReactNode; danger?: boolean; onClick?: () => void }> = ({ label, sublabel, icon, danger, onClick }) => {
-  const [hov, setHov] = useState(false);
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      onMouseEnter={() => setHov(true)}
-      onMouseLeave={() => setHov(false)}
-      style={{
-        display: 'flex', alignItems: 'center', gap: 8,
-        width: '100%', padding: '8px 10px', border: 'none', borderRadius: 6,
-        background: getProfileMenuItemBackground(hov, danger),
-        color: danger ? '#dc2626' : '#0f172a',
-        fontSize: 13, fontWeight: 500, cursor: 'pointer', textAlign: 'left',
-        transition: 'background 0.1s',
-      }}
-    >
-      <span style={{ display: 'flex', flexShrink: 0, color: danger ? 'inherit' : '#475569' }}>{icon}</span>
-      <div style={{ flex: 1, minWidth: 0 }}>
-        <div>{label}</div>
-        {sublabel && (
-          <div style={{ fontSize: 11, color: '#64748b', fontWeight: 400, marginTop: 1 }}>{sublabel}</div>
-        )}
-      </div>
-    </button>
-  );
-};
-
-// ── ShareBtn ──────────────────────────────────────────────────────────────────
-
-const ShareBtn: React.FC<{ onClick: () => void }> = ({ onClick }) => {
-  const [hov, setHov] = useState(false);
-  return (
-    <button
-      type="button"
-      title="Share project — invite viewers by email"
-      onClick={onClick}
-      onMouseEnter={() => setHov(true)}
-      onMouseLeave={() => setHov(false)}
-      style={{
-        height: 30, padding: '0 12px', border: 'none', borderRadius: 6,
-        background: hov ? '#038472' : '#049484',
-        color: '#ffffff', fontSize: 12, fontWeight: 700,
-        cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 5,
-        whiteSpace: 'nowrap', transition: 'background 0.15s', flexShrink: 0,
-      }}
-    >
-      <ShareIcon />
-      Share
-    </button>
-  );
-};
-
-const PlusBoxIcon = () => (
-  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
-    <line x1="12" y1="7" x2="12" y2="17" />
-    <line x1="7" y1="12" x2="17" y2="12" />
-  </svg>
-);
-
-// ── LeftSidebar ───────────────────────────────────────────────────────────────
-
-interface LeftSidebarProps {
-  readOnly?: boolean;
-  addReactionMode: boolean;
-  onToggleReactionMode: () => void;
-  onOpenReactionEditor?: () => void;
-  onToggleModelDrawer: () => void;
-  onDownloadArtifact: () => void;
-  onSaveChanges: () => void;
-  onCheckBuild: () => void;
-  onUndo: () => void;
-  onRedo: () => void;
-  canUndo: boolean;
-  canRedo: boolean;
-  downloadingArtifact: boolean;
-  savingChanges: boolean;
-  checkingBuild: boolean;
-}
-
-const LeftSidebar: React.FC<LeftSidebarProps> = ({
-  readOnly = false,
-  addReactionMode, onToggleReactionMode, onOpenReactionEditor, onToggleModelDrawer,
-  onDownloadArtifact, onSaveChanges, onCheckBuild,
-  onUndo, onRedo, canUndo, canRedo,
-  downloadingArtifact, savingChanges, checkingBuild,
-}) => {
-  const busy = downloadingArtifact || savingChanges || checkingBuild;
-  const sidebarCard: React.CSSProperties = {
-    position: 'fixed',
-    left: 14,
-    zIndex: 400,
-    background: '#ffffff',
-    borderRadius: 8,
-    boxShadow: '0 4px 16px rgba(0,0,0,0.13), 0 0 0 1px rgba(0,0,0,0.07)',
-    display: 'flex',
-    flexDirection: 'column',
-    alignItems: 'center',
-    width: 64,
-    padding: '6px 0',
-    gap: 1,
-  };
-
-  return (
-    <div style={{
-      position: 'fixed',
-      left: 14,
-      top: '50%',
-      transform: 'translateY(-50%)',
-      zIndex: 400,
-      display: 'flex',
-      flexDirection: 'column',
-      alignItems: 'center',
-      gap: 8,
-    }}>
-      {/* ── Main toolbar ── */}
-      <div style={{ ...sidebarCard, position: 'relative', left: 'auto', top: 'auto', zIndex: 'auto' as any }}>
-        {/* Pointer / select mode */}
-        <SidebarBtn
-          label="Select"
-          description="Move and select elements on the canvas"
-          active={!addReactionMode}
-          onClick={() => { if (addReactionMode) onToggleReactionMode(); }}
-        >
-          <PointerIcon />
-        </SidebarBtn>
-
-        <SidebarDivider />
-
-        {/* Download ZIP */}
-        <SidebarBtn
-          label="Download"
-          description="Export this project as a ZIP file"
-          onClick={onDownloadArtifact}
-          loading={downloadingArtifact}
-          disabled={busy}
-        >
-          <DownloadIcon />
-        </SidebarBtn>
-
-        {/* Save Changes */}
-        {!readOnly && (
-          <SidebarBtn
-            label="Save"
-            description="Save changes to this project"
-            onClick={onSaveChanges}
-            loading={savingChanges}
-            disabled={busy}
-          >
-            <SaveIcon />
-          </SidebarBtn>
-        )}
-
-        {/* Check Build */}
-        {!readOnly && (
-          <SidebarBtn
-            label="Check build"
-            description="Verify the project compiles successfully"
-            onClick={onCheckBuild}
-            loading={checkingBuild}
-            disabled={busy}
-            color="#049484"
-          >
-            <CheckBuildIcon />
-          </SidebarBtn>
-        )}
-
-        {!readOnly && <SidebarDivider />}
-
-        {readOnly ? (
-          <SidebarBtn
-            label="View reaction"
-            description="Select a connection line, then click to open the code"
-            onClick={() => onOpenReactionEditor?.()}
-          >
-            <ReactionIcon />
-          </SidebarBtn>
-        ) : (
-          <>
-            {/* Add Reaction */}
-            <SidebarBtn
-              label={addReactionMode ? 'Cancel reaction' : 'Add reaction'}
-              description={addReactionMode
-                ? 'Click to exit connection mode'
-                : 'Click two meta-models to connect them'}
-              active={addReactionMode}
-              onClick={onToggleReactionMode}
-            >
-              <ReactionIcon />
-            </SidebarBtn>
-
-            {/* Add Meta-models */}
-            <SidebarBtn
-              label="Add meta-models"
-              description="Open the model library drawer"
-              onClick={onToggleModelDrawer}
-              filled
-            >
-              <PlusBoxIcon />
-            </SidebarBtn>
-          </>
-        )}
-      </div>
-
-      {/* ── Undo / Redo — own card, just below the main one ── */}
-      {!readOnly && (
-      <div style={{ ...sidebarCard, position: 'relative', left: 'auto', top: 'auto', zIndex: 'auto' as any }}>
-        <SidebarBtn
-          label="Undo"
-          description={canUndo ? 'Undo the last action' : 'Nothing to undo'}
-          onClick={onUndo}
-          disabled={!canUndo}
-        >
-          <UndoIcon />
-        </SidebarBtn>
-        <SidebarBtn
-          label="Redo"
-          description={canRedo ? 'Redo the last undone action' : 'Nothing to redo'}
-          onClick={onRedo}
-          disabled={!canRedo}
-        >
-          <RedoIcon />
-        </SidebarBtn>
-      </div>
-      )}
-    </div>
-  );
-};
-
-interface SidebarBtnProps {
-  label: string;
-  description?: string;
-  onClick: () => void;
-  children: React.ReactNode;
-  active?: boolean;
-  filled?: boolean;
-  disabled?: boolean;
-  loading?: boolean;
-  color?: string;
-}
-
-function getSidebarBtnBackground(
-  isFilled: boolean,
-  activeColor: string,
-  hovered: boolean,
-  disabled?: boolean,
-): string {
-  if (isFilled) return activeColor;
-  if (hovered && !disabled) return '#f1f5f9';
-  return 'transparent';
-}
-
-function getSidebarBtnIconColor(disabled: boolean | undefined, isFilled: boolean, hovered: boolean): string {
-  if (disabled) return '#c8d3dd';
-  if (isFilled) return '#ffffff';
-  if (hovered) return '#1e293b';
-  return '#475569';
-}
-
-const SidebarBtn: React.FC<SidebarBtnProps> = ({
-  label,
-  description,
-  onClick,
-  children,
-  active,
-  filled,
-  disabled,
-  loading,
-  color,
-}) => {
-  const [hov, setHov] = useState(false);
-  const activeColor = color || '#049484';
-  const isFilled = Boolean(filled || active);
-  const bg = getSidebarBtnBackground(isFilled, activeColor, hov, disabled);
-  const iconColor = getSidebarBtnIconColor(disabled, isFilled, hov);
-  const ariaLabel = description ? `${label}. ${description}` : label;
-
-  return (
-    <HoverTooltip label={label} description={description}>
-      <button
-        type="button"
-        aria-label={ariaLabel}
-        onClick={disabled ? undefined : onClick}
-        onMouseEnter={() => setHov(true)}
-        onMouseLeave={() => setHov(false)}
-        style={{
-          width: 52, height: 52, border: 'none',
-          borderRadius: 6, background: bg, color: iconColor,
-          cursor: disabled ? 'not-allowed' : 'pointer',
-          display: 'flex', alignItems: 'center', justifyContent: 'center',
-          transition: 'all 0.12s', flexShrink: 0,
-        }}
-      >
-        <span style={loading ? { animation: 'spin 0.9s linear infinite', display: 'flex' } : undefined}>
-          {children}
-        </span>
-      </button>
-    </HoverTooltip>
-  );
-};
-
-const SidebarDivider = () => (
-  <div style={{ width: 44, height: 1, background: '#e2e8f0', margin: '3px 0', flexShrink: 0 }} />
-);
-
-// ── shared pill UI helpers ────────────────────────────────────────────────────
-
-const pillStyle = (side: 'left' | 'right'): React.CSSProperties => ({
-  position: 'absolute',
-  ...(side === 'left'
-    ? { top: 14, left: 14, borderRadius: 8 }
-    : { top: 14, right: 14, borderRadius: 8 }),
-  zIndex: 400,
-  background: '#ffffff',
-  boxShadow: '0 4px 16px rgba(0,0,0,0.13), 0 0 0 1px rgba(0,0,0,0.07)',
-  display: 'flex',
-  alignItems: 'center',
-  height: 44,
-  padding: '0 6px',
-  gap: 2,
-});
-
-const Divider = () => (
-  <div style={{ width: 1, height: 22, background: '#e2e8f0', margin: '0 5px', flexShrink: 0 }} />
-);
-
-interface PillBtnProps {
-  onClick: () => void;
-  title: string;
-  children: React.ReactNode;
-  active?: boolean;
-  spinning?: boolean;
-}
-
-function getPillBtnBackground(active: boolean | undefined, hovered: boolean): string {
-  if (active) return '#049484';
-  if (hovered) return '#f1f5f9';
-  return 'transparent';
-}
-
-function getPillBtnColor(active: boolean | undefined, hovered: boolean): string {
-  if (active) return '#ffffff';
-  if (hovered) return '#1e293b';
-  return '#475569';
-}
-
-const PillBtn: React.FC<PillBtnProps> = ({ onClick, title, children, active, spinning }) => {
-  const [hov, setHov] = useState(false);
-  return (
-    <button type="button"
-      onClick={onClick}
-      title={title}
-      onMouseEnter={() => setHov(true)}
-      onMouseLeave={() => setHov(false)}
-      style={{
-        position: 'relative', width: 34, height: 34, border: 'none', borderRadius: 6,
-        background: getPillBtnBackground(active, hov),
-        color: getPillBtnColor(active, hov),
-        cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
-        transition: 'all 0.12s', flexShrink: 0,
-      }}
-    >
-      <span style={spinning ? { animation: 'spin 0.9s linear infinite', display: 'flex' } : undefined}>
-        {children}
-      </span>
-    </button>
-  );
-};
-
-// ── SVG icons ─────────────────────────────────────────────────────────────────
-
-const RefreshIcon = () => (
-  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-    <polyline points="23 4 23 10 17 10" /><polyline points="1 20 1 14 7 14" />
-    <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15" />
-  </svg>
-);
-const PencilIcon = () => (
-  <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
-    <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
-  </svg>
-);
-const CheckIcon = () => (
-  <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-    <polyline points="20 6 9 17 4 12" />
-  </svg>
-);
-const XIcon = () => (
-  <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-    <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
-  </svg>
-);
-const ShareIcon = () => (
-  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-    <circle cx="18" cy="5" r="3" /><circle cx="6" cy="12" r="3" /><circle cx="18" cy="19" r="3" />
-    <line x1="8.59" y1="13.51" x2="15.42" y2="17.49" /><line x1="15.41" y1="6.51" x2="8.59" y2="10.49" />
-  </svg>
-);
-/* ── Sidebar icons — simple, 20 px, strokeWidth 2.5 ── */
-const PointerIcon = () => (
-  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M4 4l7 18 3-7 7-3z" />
-  </svg>
-);
-const ReactionIcon = () => (
-  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
-    <line x1="5" y1="19" x2="19" y2="5" />
-    <polyline points="9 5 19 5 19 15" />
-  </svg>
-);
-const UserProfileIcon = () => (
-  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
-    <circle cx="12" cy="7" r="4" />
-  </svg>
-);
-const LogoutIcon = () => (
-  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
-    <polyline points="16 17 21 12 16 7" />
-    <line x1="21" y1="12" x2="9" y2="12" />
-  </svg>
-);
-const UndoIcon = () => (
-  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M3 7h11a5 5 0 0 1 0 10H3" />
-    <polyline points="7 3 3 7 7 11" />
-  </svg>
-);
-const RedoIcon = () => (
-  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M21 7H10a5 5 0 0 0 0 10h11" />
-    <polyline points="17 3 21 7 17 11" />
-  </svg>
-);
-const CheckBuildIcon = () => (
-  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
-    <polyline points="4 12 9 17 20 6" />
-  </svg>
-);
-const DownloadIcon = () => (
-  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
-    <line x1="12" y1="3" x2="12" y2="15" />
-    <polyline points="7 10 12 15 17 10" />
-    <line x1="4" y1="20" x2="20" y2="20" />
-  </svg>
-);
-const SaveIcon = () => (
-  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
-    <rect x="3" y="3" width="18" height="18" rx="2" />
-    <rect x="8" y="3" width="8" height="6" />
-    <rect x="7" y="13" width="10" height="8" />
-  </svg>
-);
