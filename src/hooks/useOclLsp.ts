@@ -39,10 +39,17 @@ function resolveCompletionItems(
       startColumn: wordInfo.startColumn, endColumn: wordInfo.endColumn,
     };
     const id = nextLspRequestId();
-    const timeout = setTimeout(() => { ctx.pendingRequests.current.delete(id); resolve({ suggestions: [] }); }, 2000);
-    ctx.pendingRequests.current.set(id, msg => { clearTimeout(timeout); resolve(buildCompletionItems(msg, range, monacoInstance)); });
+    const uri = ctx.getDocUri();
+    const timeout = setTimeout(() => {
+      ctx.pendingRequests.current.delete(id);
+      resolve({ suggestions: [] });
+    }, 2000);
+    ctx.pendingRequests.current.set(id, msg => {
+      clearTimeout(timeout);
+      resolve(buildCompletionItems(msg, range, monacoInstance));
+    });
     ctx.sendLsp({ jsonrpc: '2.0', id, method: 'textDocument/completion',
-      params: { textDocument: { uri: ctx.getDocUri() }, position: { line: position.lineNumber - 1, character: position.column - 1 } } });
+      params: { textDocument: { uri }, position: { line: position.lineNumber - 1, character: position.column - 1 }, context: { triggerKind: 1 } } });
   });
 }
 
@@ -83,7 +90,7 @@ export function useOclLsp({ vsumId, documentId, languageId, getCode }: UseOclLsp
   const pendingRequests = useRef<Map<number, (msg: any) => void>>(new Map());
 
   const getDocUri = useCallback(
-    () => workspaceUri.current ? `${workspaceUri.current}ocl-${documentId}.ocl` : null,
+    () => workspaceUri.current ? `${workspaceUri.current}${documentId}.ocl` : null,
     [documentId]
   );
 
@@ -139,7 +146,20 @@ export function useOclLsp({ vsumId, documentId, languageId, getCode }: UseOclLsp
               processId: null,
               rootUri: msg.rootUri,
               workspaceFolders: [{ uri: msg.rootUri, name: 'OclProject' }],
-              capabilities: { textDocument: { completion: { completionItem: { snippetSupport: true } }, publishDiagnostics: {} } },
+              capabilities: {
+                textDocument: {
+                  completion: {
+                    completionItem: { snippetSupport: true, documentationFormat: ['markdown', 'plaintext'] },
+                    contextSupport: true,
+                  },
+                  hover: { contentFormat: ['markdown', 'plaintext'] },
+                  signatureHelp: {},
+                  definition: {},
+                  references: {},
+                  documentSymbol: {},
+                  publishDiagnostics: {},
+                },
+              },
             },
           }));
           return;
@@ -179,7 +199,7 @@ export function useOclLsp({ vsumId, documentId, languageId, getCode }: UseOclLsp
     // Register completion provider (dispose old one first)
     completionDisposable.current?.dispose();
     completionDisposable.current = monacoInstance.languages.registerCompletionItemProvider(languageId, {
-      triggerCharacters: ['.', ' ', ':'],
+      triggerCharacters: ['.', ' ', ':', '\n'],
       provideCompletionItems: (model, position) =>
         resolveCompletionItems(monacoInstance, { initialized, wsRef, pendingRequests, sendLsp, getDocUri }, model, position),
     });
