@@ -205,6 +205,8 @@ export function CodeEditorModal({
 
   const doClose = () => {
     closeWebSocket();
+    completionProviderRef.current?.dispose();
+    completionProviderRef.current = null;
     setSaveErrorMessage(null);
     setSaveSuccess(false);
     pendingCloseRef.current = false;
