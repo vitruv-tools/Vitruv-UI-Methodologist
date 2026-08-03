@@ -30,9 +30,6 @@ function resolveCompletionItems(
   position: monaco.Position,
 ): Promise<monaco.languages.CompletionList> {
   if (!ctx.initialized.current || ctx.wsRef.current?.readyState !== WebSocket.OPEN) {
-    console.warn(
-      `🧩 [mini] Completion skipped: initialized=${ctx.initialized.current} wsState=${ctx.wsRef.current?.readyState}`
-    );
     return Promise.resolve({ suggestions: [] });
   }
   return new Promise(resolve => {
@@ -45,16 +42,12 @@ function resolveCompletionItems(
     const uri = ctx.getDocUri();
     const timeout = setTimeout(() => {
       ctx.pendingRequests.current.delete(id);
-      console.warn(`🧩 [mini] Completion request ${id} timed out after 2s. uri=${uri}`);
       resolve({ suggestions: [] });
     }, 2000);
     ctx.pendingRequests.current.set(id, msg => {
       clearTimeout(timeout);
-      const result = buildCompletionItems(msg, range, monacoInstance);
-      console.log(`🧩 [mini] Completion response for request ${id}:`, msg.result, '→', result.suggestions.length, 'suggestions');
-      resolve(result);
+      resolve(buildCompletionItems(msg, range, monacoInstance));
     });
-    console.log(`🧩 [mini] Sending completion request ${id} for uri=${uri}`);
     ctx.sendLsp({ jsonrpc: '2.0', id, method: 'textDocument/completion',
       params: { textDocument: { uri }, position: { line: position.lineNumber - 1, character: position.column - 1 }, context: { triggerKind: 1 } } });
   });
@@ -123,22 +116,17 @@ export function useOclLsp({ vsumId, documentId, languageId, getCode }: UseOclLsp
   }, [getDocUri, sendLsp]);
 
   const connect = useCallback((monacoInstance: Monaco) => {
-    if (!vsumId) { console.error('❌ [mini] No vsumId available – aborting LSP connection'); return; }
+    if (!vsumId) return;
     disconnect();
 
     const rawUser = localStorage.getItem('auth.user');
     const userId = rawUser ? JSON.parse(rawUser).id : null;
-    if (!userId) { console.error('❌ [mini] No userId available – aborting LSP connection'); return; }
+    if (!userId) return;
 
     const apiBase = process.env.REACT_APP_API_BASE_URL || 'http://localhost:9811';
     const wsBase = apiBase.replace('https://', 'wss://').replace('http://', 'ws://');
-    const wsUrl = `${wsBase}/ocl-lsp?userId=${encodeURIComponent(userId)}&vsumId=${encodeURIComponent(vsumId)}`;
-    console.log('🔌 [mini] Connecting to LSP at:', wsUrl);
-    const ws = new WebSocket(wsUrl);
+    const ws = new WebSocket(`${wsBase}/ocl-lsp?userId=${encodeURIComponent(userId)}&vsumId=${encodeURIComponent(vsumId)}`);
     wsRef.current = ws;
-
-    ws.onopen = () => console.log('✅ [mini] LSP WebSocket open:', wsUrl);
-    ws.onerror = (event) => console.error('💥 [mini] LSP WebSocket error for', wsUrl, event);
 
     ws.onmessage = (event) => {
       try {
@@ -151,7 +139,6 @@ export function useOclLsp({ vsumId, documentId, languageId, getCode }: UseOclLsp
         }
 
         if (msg.type === 'workspaceReady') {
-          console.log('📁 [mini] workspaceReady received, rootUri:', msg.rootUri);
           workspaceUri.current = msg.rootUri;
           ws.send(JSON.stringify({
             jsonrpc: '2.0', id: 1, method: 'initialize',
@@ -179,7 +166,6 @@ export function useOclLsp({ vsumId, documentId, languageId, getCode }: UseOclLsp
         }
 
         if (msg.id === 1 && msg.result) {
-          console.log('🚀 [mini] LSP initialize response received, sending initialized + didOpen');
           ws.send(JSON.stringify({ jsonrpc: '2.0', method: 'initialized', params: {} }));
           initialized.current = true;
           const uri = getDocUri();
@@ -188,8 +174,6 @@ export function useOclLsp({ vsumId, documentId, languageId, getCode }: UseOclLsp
               jsonrpc: '2.0', method: 'textDocument/didOpen',
               params: { textDocument: { uri, languageId, version: 1, text: getCode() } },
             }));
-          } else {
-            console.error('❌ [mini] getDocUri() returned null at didOpen time');
           }
           return;
         }
