@@ -4,7 +4,7 @@ import {
   useRef,
   useState,
   type Dispatch,
-  type MutableRefObject,
+  type RefObject,
   type SetStateAction,
 } from 'react';
 import type { Node } from 'reactflow';
@@ -19,7 +19,7 @@ interface UseCanvasModeStateOptions {
 
 interface UseCanvasModeStateResult {
   canvasMode: CanvasMode;
-  canvasModeRef: MutableRefObject<CanvasMode>;
+  canvasModeRef: RefObject<CanvasMode>;
   constraintsNodes: Node[];
   setConstraintsNodes: Dispatch<SetStateAction<Node[]>>;
   constraintHighlightNodeId: string | null;
