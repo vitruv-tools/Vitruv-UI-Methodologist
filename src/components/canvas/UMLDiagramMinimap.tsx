@@ -31,16 +31,6 @@ export interface UMLDiagramMinimapRelationship {
   targetId: string;
 }
 
-export interface UMLDiagramMinimapModelGroup {
-  name: string;
-  color: string;
-  fill: string;
-  minX: number;
-  minY: number;
-  width: number;
-  height: number;
-}
-
 type MinimapClass = UMLDiagramMinimapClass;
 type MinimapRelationship = UMLDiagramMinimapRelationship;
 
@@ -52,7 +42,6 @@ function minimapBoxH(c: MinimapClass): number {
 export interface UMLDiagramMinimapProps {
   classes: MinimapClass[];
   relationships?: MinimapRelationship[];
-  modelGroups?: UMLDiagramMinimapModelGroup[];
   offsetX: number;
   offsetY: number;
   vx: number;
@@ -65,7 +54,6 @@ export interface UMLDiagramMinimapProps {
 export const UMLDiagramMinimap: React.FC<UMLDiagramMinimapProps> = ({
   classes,
   relationships = [],
-  modelGroups = [],
   offsetX,
   offsetY,
   vx,
@@ -213,37 +201,6 @@ export const UMLDiagramMinimap: React.FC<UMLDiagramMinimapProps> = ({
       }}
     >
       <svg width={MAP_W} height={MAP_H} style={{ display: 'block' }} aria-hidden="true">
-        {/* Model group wrappers — colored boxes like the main canvas */}
-        {modelGroups.map(group => {
-          const x = toX(group.minX + offsetX);
-          const y = toY(group.minY + offsetY);
-          const w = group.width * mmScale;
-          const h = group.height * mmScale;
-          if (x + w < 0 || x > MAP_W || y + h < 0 || y > MAP_H) return null;
-          return (
-            <g key={group.name}>
-              <rect
-                x={x}
-                y={y}
-                width={Math.max(4, w)}
-                height={Math.max(4, h)}
-                fill={group.fill}
-                stroke={group.color}
-                strokeWidth={1.25}
-                rx={Math.max(2, 4 * mmScale)}
-              />
-              <rect
-                x={x}
-                y={y}
-                width={Math.max(4, w)}
-                height={Math.max(3, 4 * mmScale)}
-                fill={group.color}
-                rx={Math.max(2, 4 * mmScale)}
-              />
-            </g>
-          );
-        })}
-
         {/* Relationships — drawn under the class boxes, like the canvas's edges */}
         {relationships.map(rel => {
           const src = classById.get(rel.sourceId);

@@ -3,9 +3,6 @@ import { ecoreToUml, UMLRelationship, UMLModel } from '../../utils/ecoreToUml';
 import { saveMetaModelEcore, MetaModelSaveMetadata } from '../../utils/saveMetaModelEcore';
 import { umlSemanticSnapshot, umlToEcore } from '../../utils/umlToEcore';
 import { validateUmlModel } from '../../utils/umlValidation';
-import { ReactionConfigPopup } from './ReactionConfigPopup';
-import type { ReactionsModel } from '../../types/reactions';
-import { ReactionEditorModal } from '../flow/ReactionEditorModal';
 import { useUmlEditHistory, UmlEditSnapshot } from '../../hooks/useUmlEditHistory';
 import {
   applyLayoutToUmlClasses,
@@ -15,7 +12,6 @@ import {
 import { assignParallelRelMeta } from '../../utils/umlClassLayout';
 import { UMLDiagramMinimap } from './UMLDiagramMinimap';
 import { UMLDiagramToolbar } from './UMLDiagramToolbar';
-import { UMLModelGroupWrappers } from './UMLModelGroupWrappers';
 import { DIAGRAM_HINT_TOP, UML } from './umlDiagramTheme';
 import { ClassEditPanel, RelationshipEditPanel } from './UMLDiagramEditPanels';
 import { UMLClassBox } from './UMLClassBox';
@@ -29,11 +25,6 @@ import {
 } from './umlDiagramLayoutGeometry';
 import { useUmlDiagramViewport } from '../../hooks/useUmlDiagramViewport';
 import { useUmlRelationshipLayers } from '../../hooks/useUmlRelationshipLayers';
-import { useUmlDiagramReactions } from '../../hooks/useUmlDiagramReactions';
-import {
-  useUmlDiagramModelGroups,
-  type UmlDiagramAdditionalModel,
-} from '../../hooks/useUmlDiagramModelGroups';
 import { useUmlDiagramPrimaryEditing } from '../../hooks/useUmlDiagramPrimaryEditing';
 
 // ── constants ────────────────────────────────────────────────────────────────
@@ -45,8 +36,6 @@ export const WORKSPACE_DOT_BACKGROUND: React.CSSProperties = {
   backgroundSize: '24px 24px',
 };
 
-const EMPTY_ADDITIONAL_MODELS: UmlDiagramAdditionalModel[] = [];
-
 // ── helpers ──────────────────────────────────────────────────────────────────
 
 function isEmptyCanvasTarget(target: HTMLElement): boolean {
@@ -57,10 +46,7 @@ function isEmptyCanvasTarget(target: HTMLElement): boolean {
     && !target.closest('[data-rel-edit-panel]')
     && !target.closest('[data-class-edit-panel]')
     && !target.closest('[data-uml-connect-banner]')
-    && !target.closest('[data-uml-validation]')
-    && !target.closest('[data-wrapper-header]')
-    && !target.closest('[data-reaction-port]')
-    && !target.closest('[data-reaction-edit-panel]');
+    && !target.closest('[data-uml-validation]');
 }
 
 /** `library` persists to the metamodel library API; `workspace` only updates the open project/session copy. */
@@ -106,18 +92,19 @@ interface UMLDiagramProps {
   /** When set, enables persisting semantic UML edits back to the metamodel ecore file. */
   saveContext?: UmlDiagramSaveContext;
   onHistoryChange?: (state: { canUndo: boolean; canRedo: boolean }) => void;
-  /** Additional models to render in the same canvas with colored wrapper groups. */
-  additionalModels?: UmlDiagramAdditionalModel[];
-  /** Called when the user removes an added (non-primary) meta model from the view. */
-  onRemoveAdditionalModel?: (modelName: string) => void;
-  /** When 'reactions', elements show connection indicators. */
-  reactionsMode?: 'uml' | 'reactions';
-  /** Models available in the reactions view for resolving URLs and aliases. */
-  reactionModels?: ReactionsModel[];
-  /** VSUM project id for Reaction Editor LSP connection. */
-  vsumId?: string;
 }
+const REL_TYPE_CYCLE: UMLRelationship['type'][] = [
+  'association',
+  'composition',
+  'inheritance',
+];
 
+function nextRelationshipType(
+  current: UMLRelationship['type'],
+): UMLRelationship['type'] {
+  const index = REL_TYPE_CYCLE.indexOf(current);
+  return REL_TYPE_CYCLE[(index + 1) % REL_TYPE_CYCLE.length];
+}
 function isKeyboardInputField(target: EventTarget | null): boolean {
   const tag = (target as HTMLElement | null)?.tagName;
   return tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT';
@@ -181,25 +168,20 @@ function getSaveButtonTitle(hasUnsavedChanges: boolean, saveContext: UmlDiagramS
   return 'Save metamodel changes';
 }
 
-function getConnectModeHint(connectSourceId: string | null, multiModel: boolean): string {
+function getConnectModeHint(connectSourceId: string | null): string {
   if (connectSourceId) {
-    return multiModel
-      ? 'Click a target class in the same model'
-      : 'Click the target class to create a connection';
+    return 'Click the target class to create a connection';
   }
-  return multiModel
-    ? 'Click the source class, then another class in the same model'
-    : 'Click the source class, then the target class';
+  return 'Click the source class, then the target class';
 }
 
 function getValidationBannerInset(
   selectedClass: UmlDiagramClass | null | undefined,
   selectedRel: UMLRelationship | null | undefined,
-  reactionPanelOpen = false,
 ): { left: number; right: number } {
   return {
     left: selectedClass ? 288 : 12,
-    right: (selectedRel || reactionPanelOpen) ? 320 : 12,
+    right: selectedRel ? 320 : 12,
   };
 }
 
@@ -264,11 +246,6 @@ export const UMLDiagram = forwardRef<UMLDiagramHandle, UMLDiagramProps>(({
   interactive = true,
   saveContext,
   onHistoryChange,
-  additionalModels = EMPTY_ADDITIONAL_MODELS,
-  onRemoveAdditionalModel,
-  reactionsMode = 'uml',
-  reactionModels = [],
-  vsumId,
 }, ref) => {
   const parsed = useMemo(() => {
     const model = ecoreToUml(ecoreContent);
@@ -287,30 +264,10 @@ export const UMLDiagram = forwardRef<UMLDiagramHandle, UMLDiagramProps>(({
   const [saveMessage, setSaveMessage] = useState('');
   const initialSnapshotRef = useRef('');
   const skipNextEcoreResetRef = useRef(false);
-  const primaryModelName = fileName?.replace(/\.ecore$/, '') || 'Primary';
-  const {
-    allClasses,
-    allRelationships,
-    modelGroups,
-    removableModelNames,
-    moveAdditionalClass,
-    areClassesInSameModel,
-    beginGroupDrag,
-    moveGroupDrag,
-    endGroupDrag,
-  } = useUmlDiagramModelGroups({
-    primaryClasses: classes,
-    primaryRelationships: relationships,
-    setPrimaryClasses: setClasses,
-    primaryModelName,
-    additionalModels,
-  });
-
-  const rels = useMemo(
-    () => assignParallelRelMeta(allRelationships) as UmlDiagramRelationshipLayout[],
-    [allRelationships],
-  );
-
+const rels = useMemo(
+  () => assignParallelRelMeta(relationships) as UmlDiagramRelationshipLayout[],
+  [relationships],
+);
   const [selectedClassId, setSelectedClassId] = useState<string | null>(null);
   const [selectedRelId, setSelectedRelId] = useState<string | null>(null);
   const [connectMode, setConnectMode] = useState(false);
@@ -319,11 +276,10 @@ export const UMLDiagram = forwardRef<UMLDiagramHandle, UMLDiagramProps>(({
   classesRef.current = classes;
   const relationshipsRef = useRef(relationships);
   relationshipsRef.current = relationships;
-  const reactionPanBlockRef = useRef<() => boolean>(() => false);
   const flushPendingEditRef = useRef<() => void>(() => {});
   const cancelPrimaryEditRef = useRef<() => void>(() => {});
   const persistViewportLayoutRef = useRef<
-    (classesOverride?: UmlDiagramClass[]) => void
+  (classesOverride?: UmlDiagramClass[]) => void
   >(() => {});
 
   const {
@@ -435,7 +391,7 @@ export const UMLDiagram = forwardRef<UMLDiagramHandle, UMLDiagramProps>(({
     flushPendingEditRef.current();
   }, []);
   const isCanvasPanBlocked = useCallback(
-    () => reactionPanBlockRef.current(),
+    () => false,
     [],
   );
   const isCanvasPanTarget = useCallback(
@@ -452,7 +408,6 @@ export const UMLDiagram = forwardRef<UMLDiagramHandle, UMLDiagramProps>(({
     zoomIn,
     zoomOut,
     fitToView,
-    clientToDiagram,
     handleMinimapPan,
     persistLayout,
     scheduleLayoutSave,
@@ -462,7 +417,7 @@ export const UMLDiagram = forwardRef<UMLDiagramHandle, UMLDiagramProps>(({
     getCurrentLayoutOffset,
   } = useUmlDiagramViewport({
     classes,
-    allClasses,
+    allClasses: classes,
     diagramIdentity: ecoreContent,
     fileName,
     layoutScopeId,
@@ -471,73 +426,6 @@ export const UMLDiagram = forwardRef<UMLDiagramHandle, UMLDiagramProps>(({
     isPanTarget: isCanvasPanTarget,
   });
   persistViewportLayoutRef.current = persistLayout;
-
-  const appendReactionRelationship = useCallback((
-    relationship: UMLRelationship,
-  ) => {
-    setRelationships(current => [...current, relationship]);
-  }, []);
-  const updateReactionRelationship = useCallback((
-    relationshipId: string,
-    patch: Partial<UMLRelationship>,
-  ) => {
-    setRelationships(current => current.map(relationship => (
-      relationship.id === relationshipId
-        ? { ...relationship, ...patch }
-        : relationship
-    )));
-  }, []);
-  const removeReactionRelationship = useCallback((
-    relationshipId: string,
-  ) => {
-    setRelationships(current => current.filter(
-      relationship => relationship.id !== relationshipId,
-    ));
-  }, []);
-  const resetReactionConnectionMode = useCallback(() => {
-    setConnectMode(false);
-    setConnectSourceId(null);
-  }, []);
-  const primaryModelId = reactionModels[0]?.id ?? 0;
-  const {
-    reactionEdges,
-    reactionDrag,
-    editingReactionId,
-    reactionEditorState,
-    editingReaction,
-    selectedRelationshipIsReaction: selectedRelIsReaction,
-    updateReactionConfig,
-    deleteReaction,
-    closeReactionEditor,
-    saveReactionCode,
-    deleteReactionFromEditor,
-    closeReactionConfiguration,
-    handleReactionPortMouseDown,
-    handleReactionRelationshipClick,
-    cancelReactionInteraction,
-    isReactionDragActive,
-  } = useUmlDiagramReactions({
-    classes: allClasses,
-    relationships,
-    primaryEcore: ecoreContent,
-    primaryModelName,
-    primaryModelId,
-    reactionModels,
-    interactive,
-    reactionsMode,
-    selectedRelationshipId: selectedRelId,
-    offsetX,
-    offsetY,
-    clientToDiagram,
-    onRecordChange: recordChange,
-    onAppendRenderedRelationship: appendReactionRelationship,
-    onUpdateRenderedRelationship: updateReactionRelationship,
-    onRemoveRenderedRelationship: removeReactionRelationship,
-    onSelectRelationship: setSelectedRelId,
-    onSelectClass: setSelectedClassId,
-    onResetConnectionMode: resetReactionConnectionMode,
-  });
-  reactionPanBlockRef.current = isReactionDragActive;
 
   const {
     edit,
@@ -574,8 +462,8 @@ export const UMLDiagram = forwardRef<UMLDiagramHandle, UMLDiagramProps>(({
     setSelectedRelationshipId: setSelectedRelId,
     setConnectSourceId,
     recordChange,
-    hasAdditionalModels: additionalModels.length > 0,
-    areClassesInSameModel,
+    hasAdditionalModels: false,
+    areClassesInSameModel: () => true,
     containerRef,
     getCurrentViewport,
     getCurrentLayoutOffset,
@@ -584,6 +472,16 @@ export const UMLDiagram = forwardRef<UMLDiagramHandle, UMLDiagramProps>(({
   });
   flushPendingEditRef.current = flushPendingEdit;
   cancelPrimaryEditRef.current = cancelEdit;
+
+  const cycleRelationshipType = useCallback((relationshipId: string) => {
+    const relationship = relationshipsRef.current.find(
+      candidate => candidate.id === relationshipId,
+    );
+    if (!relationship) return;
+    updateRelationship(relationshipId, {
+      type: nextRelationshipType(relationship.type),
+    });
+  }, [updateRelationship]);
 
   const dismissClassSelection = useCallback(() => {
     flushPendingEdit();
@@ -609,7 +507,6 @@ export const UMLDiagram = forwardRef<UMLDiagramHandle, UMLDiagramProps>(({
   }, [handleCanvasDoubleClick, classes.length, containerRef]);
 
   const tryEscape = useCallback(() => {
-    if (cancelReactionInteraction()) return true;
     if (connectMode) {
       setConnectMode(false);
       setConnectSourceId(null);
@@ -632,13 +529,15 @@ export const UMLDiagram = forwardRef<UMLDiagramHandle, UMLDiagramProps>(({
       return true;
     }
     return false;
-  }, [cancelEdit, cancelReactionInteraction, connectMode, connectSourceId, edit, selectedRelId, selectedClassId, dismissClassSelection]);
+  }, [cancelEdit, connectMode, connectSourceId, edit, selectedRelId, selectedClassId, dismissClassSelection]);
 
   const handleRelationshipClick = useCallback((relId: string, e: React.MouseEvent) => {
     e.stopPropagation();
-    if (handleReactionRelationshipClick(relId, e.detail)) return;
+    if (e.detail >= 2 && interactive) {
+      cycleRelationshipType(relId);
+    }
     setSelectedRelId(relId);
-  }, [handleReactionRelationshipClick]);
+  }, [interactive, cycleRelationshipType]);
 
   const isDirty = useCallback(() => {
     return umlSemanticSnapshot(getModel()) !== initialSnapshotRef.current;
@@ -720,7 +619,7 @@ export const UMLDiagram = forwardRef<UMLDiagramHandle, UMLDiagramProps>(({
   const handleClassSelect = useCallback((classId: string) => {
     if (!interactive) return;
     flushPendingEdit();
-    if (connectMode && reactionsMode !== 'reactions') {
+    if (connectMode) {
       if (!connectSourceId) {
         setConnectSourceId(classId);
         setSelectedClassId(classId);
@@ -738,19 +637,10 @@ export const UMLDiagram = forwardRef<UMLDiagramHandle, UMLDiagramProps>(({
       setSelectedClassId(classId);
       return;
     }
-    closeReactionConfiguration();
     setSelectedClassId(classId);
-  }, [interactive, connectMode, reactionsMode, connectSourceId, addRelationship, flushPendingEdit, closeReactionConfiguration]);
+  }, [interactive, connectMode, connectSourceId, addRelationship, flushPendingEdit]);
 
   const handleDeleteSelected = useCallback(() => {
-    if (editingReactionId) {
-      deleteReaction(editingReactionId);
-      return;
-    }
-    if (selectedRelId && reactionEdges.some(edge => edge.id === selectedRelId)) {
-      deleteReaction(selectedRelId);
-      return;
-    }
     if (selectedRelId) {
       deleteRelationship(selectedRelId);
       return;
@@ -758,7 +648,7 @@ export const UMLDiagram = forwardRef<UMLDiagramHandle, UMLDiagramProps>(({
     if (selectedClassId) {
       deleteClass(selectedClassId);
     }
-  }, [editingReactionId, selectedRelId, selectedClassId, reactionEdges, deleteReaction, deleteRelationship, deleteClass]);
+  }, [selectedRelId, selectedClassId, deleteRelationship, deleteClass]);
 
   useEffect(() => {
     if (!interactive) return;
@@ -789,15 +679,15 @@ export const UMLDiagram = forwardRef<UMLDiagramHandle, UMLDiagramProps>(({
     handleRelationshipMouseLeave,
   } = useUmlRelationshipLayers({
     parallelRelationships: rels,
-    classes: allClasses,
-    reactionEdges,
+    classes,
+    reactionEdges: [],
     offsetX,
     offsetY,
   });
 
   const validationIssues = useMemo(
-    () => validateUmlModel({ classes, relationships }, allClasses),
-    [classes, relationships, allClasses],
+    () => validateUmlModel({ classes, relationships }),
+    [classes, relationships],
   );
 
   if (classes.length === 0) {
@@ -808,11 +698,7 @@ export const UMLDiagram = forwardRef<UMLDiagramHandle, UMLDiagramProps>(({
   const selectedRel = selectedRelId ? relationships.find(r => r.id === selectedRelId) : null;
   const selectedClass = selectedClassId ? classes.find(c => c.id === selectedClassId) : null;
   const hasUnsavedChanges = isDirty();
-  const validationInset = getValidationBannerInset(
-    selectedClass,
-    selectedRel,
-    !!(editingReaction || (reactionsMode === 'reactions' && selectedRelIsReaction)),
-  );
+  const validationInset = getValidationBannerInset(selectedClass, selectedRel);
   const diagramCursor = getDiagramCursor(panning, connectMode);
   const saveButtonTitle = saveContext
     ? getSaveButtonTitle(hasUnsavedChanges, saveContext)
@@ -830,9 +716,6 @@ export const UMLDiagram = forwardRef<UMLDiagramHandle, UMLDiagramProps>(({
         userSelect: 'none',
       }}
     >
-    {reactionsMode === 'reactions' && (
-      <style>{`@keyframes reactionPulse{0%,100%{opacity:1}50%{opacity:0.6}}`}</style>
-    )}
     <div style={{
       position: 'absolute',
       transform: `translate(${vx}px, ${vy}px) scale(${vscale})`,
@@ -852,24 +735,8 @@ export const UMLDiagram = forwardRef<UMLDiagramHandle, UMLDiagramProps>(({
         onBackgroundClick={handleRelationshipBackgroundClick}
       />
 
-      <UMLModelGroupWrappers
-        modelGroups={modelGroups}
-        offsetX={offsetX}
-        offsetY={offsetY}
-        vscale={vscale}
-        interactive={interactive}
-        removableModelNames={removableModelNames}
-        onRemoveAdditionalModel={onRemoveAdditionalModel}
-        beginGroupDrag={beginGroupDrag}
-        moveGroupDrag={moveGroupDrag}
-        endGroupDrag={endGroupDrag}
-        onGroupDragComplete={scheduleDebouncedLayoutSave}
-      />
-
       {/* Class boxes */}
-      {allClasses.map(cls => {
-        const isAdditional = cls.id.startsWith('addl-');
-        return (
+      {classes.map(cls => (
         <UMLClassBox
           key={cls.id}
           cls={cls}
@@ -880,71 +747,35 @@ export const UMLDiagram = forwardRef<UMLDiagramHandle, UMLDiagramProps>(({
           connectSource={connectSourceId === cls.id}
           interactive={interactive}
           edit={edit?.classId === cls.id ? edit : null}
-          reactionsMode={reactionsMode === 'reactions'}
-          onReactionPortMouseDown={handleReactionPortMouseDown}
+          reactionsMode={false}
           onSelect={() => handleClassSelect(cls.id)}
           onDragStart={beginClassDrag}
-          onMove={isAdditional ? moveAdditionalClass : moveClass}
-          onDragEnd={isAdditional ? () => {} : finishClassDrag}
+          onMove={moveClass}
+          onDragEnd={finishClassDrag}
           onStartEditName={() => {
-            if (!interactive || isAdditional) return;
+            if (!interactive) return;
             startNameEdit(cls.id);
           }}
           onSaveName={name => saveName(cls.id, name)}
           onStartEditAttr={attrId => {
-            if (!interactive || isAdditional) return;
+            if (!interactive) return;
             startAttributeEdit(cls.id, attrId);
           }}
           onSaveAttr={(attrId, n, t, v) => saveAttr(cls.id, attrId, n, t, v)}
           onCancelEdit={cancelEdit}
-          onAddAttr={() => interactive && !isAdditional && addAttr(cls.id)}
+          onAddAttr={() => interactive && addAttr(cls.id)}
           onDeleteAttr={attrId => deleteAttr(cls.id, attrId)}
           onStartEditOp={opId => {
-            if (!interactive || isAdditional) return;
+            if (!interactive) return;
             startOperationEdit(cls.id, opId);
           }}
           onSaveOp={(opId, n, rt, v) => saveOp(cls.id, opId, n, rt, v)}
-          onAddOp={() => interactive && !isAdditional && addOp(cls.id)}
+          onAddOp={() => interactive && addOp(cls.id)}
           onDeleteOp={opId => deleteOp(cls.id, opId)}
-          onDelete={() => !isAdditional && deleteClass(cls.id)}
+          onDelete={() => deleteClass(cls.id)}
           onEditChange={changeEdit}
         />
-        );
-      })}
-
-      {reactionDrag && (
-        <svg
-          style={{
-            position: 'absolute',
-            top: 0,
-            left: 0,
-            width: totalW,
-            height: totalH,
-            overflow: 'visible',
-            zIndex: 8,
-            pointerEvents: 'none',
-          }}
-        >
-          <line
-            x1={reactionDrag.startX}
-            y1={reactionDrag.startY}
-            x2={reactionDrag.cursorX}
-            y2={reactionDrag.cursorY}
-            stroke="#a855f7"
-            strokeWidth={2.5}
-            strokeDasharray="8 5"
-            opacity={0.9}
-          />
-          <circle
-            cx={reactionDrag.cursorX}
-            cy={reactionDrag.cursorY}
-            r={5}
-            fill="#a855f7"
-            stroke="#fff"
-            strokeWidth={2}
-          />
-        </svg>
-      )}
+      ))}
 
       <UMLRelationshipOverlayLayers
         totalWidth={totalW}
@@ -984,41 +815,12 @@ export const UMLDiagram = forwardRef<UMLDiagramHandle, UMLDiagramProps>(({
             lineHeight: 1.35,
           }}
         >
-          {getConnectModeHint(connectSourceId, additionalModels.length > 0)}
-        </div>
-      )}
-      {interactive && reactionsMode === 'reactions' && !connectMode && (
-        <div
-          data-uml-connect-banner
-          style={{
-            position: 'absolute',
-            top: DIAGRAM_HINT_TOP,
-            left: '50%',
-            transform: 'translateX(-50%)',
-            zIndex: 32,
-            padding: '6px 14px',
-            borderRadius: 10,
-            background: '#faf5ff',
-            border: '1px solid #e9d5ff',
-            color: '#6b21a8',
-            fontSize: 11,
-            fontWeight: 600,
-            fontFamily: UML.fontSans,
-            boxShadow: '0 4px 14px rgba(168,85,247,0.15)',
-            pointerEvents: 'none',
-            maxWidth: 'min(420px, calc(100vw - 320px))',
-            textAlign: 'center',
-            lineHeight: 1.35,
-          }}
-        >
-          {reactionDrag
-            ? 'Release on another class dot to create a reaction'
-            : 'Drag from a purple dot to connect classes across models'}
+          {getConnectModeHint(connectSourceId)}
         </div>
       )}
       {interactive && (
         <UMLDiagramToolbar
-          reactionsMode={reactionsMode}
+          reactionsMode="uml"
           connectMode={connectMode}
           canUndo={historyCanUndo}
           canRedo={historyCanRedo}
@@ -1080,27 +882,10 @@ export const UMLDiagram = forwardRef<UMLDiagramHandle, UMLDiagramProps>(({
           onClose={() => setSelectedClassId(null)}
         />
       )}
-      {interactive && editingReaction && (
-        <ReactionConfigPopup
-          edge={editingReaction}
-          onUpdate={config => updateReactionConfig(editingReaction.id, config)}
-          onDelete={() => deleteReaction(editingReaction.id)}
-          onClose={closeReactionConfiguration}
-        />
-      )}
-      {interactive && (
-        <ReactionEditorModal
-          state={reactionEditorState}
-          onClose={closeReactionEditor}
-          onSave={saveReactionCode}
-          onDelete={deleteReactionFromEditor}
-          vsumId={vsumId}
-        />
-      )}
-      {interactive && selectedRel && !selectedRelIsReaction && reactionsMode !== 'reactions' && (
+      {interactive && selectedRel && (
         <RelationshipEditPanel
           rel={selectedRel}
-          classes={allClasses}
+          classes={classes}
           onUpdate={patch => updateRelationship(selectedRel.id, patch)}
           onClose={() => setSelectedRelId(null)}
           onSwapEndpoints={() => updateRelationship(selectedRel.id, {
@@ -1112,9 +897,8 @@ export const UMLDiagram = forwardRef<UMLDiagramHandle, UMLDiagramProps>(({
         />
       )}
       <UMLDiagramMinimap
-        classes={allClasses}
+        classes={classes}
         relationships={rels}
-        modelGroups={modelGroups}
         offsetX={offsetX}
         offsetY={offsetY}
         vx={vx}
