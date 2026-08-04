@@ -2,10 +2,14 @@ import { Node } from 'reactflow';
 import { Circle, clampToCircle } from '../../hooks/useCircleContainment';
 import { ecoreRectsOverlap } from './flowCanvasLayoutUtils';
 
-export function isReadOnlyBlockedNodeChange(change: { type?: string; dragging?: boolean }): boolean {
-  if (change.type === 'remove') return true;
-  if (change.type === 'position' && change.dragging) return true;
-  return false;
+/**
+ * Viewers may reposition nodes to read a large model, so `position` changes are
+ * allowed through; only structural edits are blocked. Positions are never part
+ * of the workspace snapshot, so moving a node cannot reach the backend or mark
+ * the project dirty.
+ */
+export function isReadOnlyBlockedNodeChange(change: { type?: string }): boolean {
+  return change.type === 'remove';
 }
 
 export function isReadOnlyBlockedEdgeChange(change: { type?: string }): boolean {

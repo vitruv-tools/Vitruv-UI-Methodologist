@@ -225,7 +225,9 @@ export function mapEditableFlowNode(
 ): Node {
   return {
     ...node,
-    draggable: !readOnly,
+    // Draggable for viewers too, matching the ecore boxes — the label and
+    // delete affordances below stay gated on readOnly.
+    draggable: true,
     data: {
       ...node.data,
       onLabelChange: readOnly ? undefined : handleLabelChange,
@@ -298,6 +300,9 @@ export function mapEcoreFlowNode(
       isConstraintFilter: constraintFilterNodeId === node.id,
     },
     selected: selectedFileId === node.id,
-    draggable: !readOnly && !connectionDragState?.isActive && !addReactionMode,
+    // Draggable for viewers too — repositioning is local-only (see
+    // isReadOnlyBlockedNodeChange). Still frozen mid-connection and in
+    // add-reaction mode, where a drag would fight the click-to-target gesture.
+    draggable: !connectionDragState?.isActive && !addReactionMode,
   };
 }

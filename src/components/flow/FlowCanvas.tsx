@@ -1187,6 +1187,9 @@ export const FlowCanvas = forwardRef<FlowCanvasHandle, FlowCanvasProps>(
     const connectionLinePositions = computeConnectionLinePositions(connectionDragState, reactFlowInstance);
     const umlViewActive = !!umlModalOpen;
     const interactionsAllowed = umlViewActive || readOnly || isInteractive;
+    // Viewers can reposition nodes to read a large model; they still cannot
+    // create, delete, connect, rename, or save anything.
+    const nodesMovable = umlViewActive || readOnly || (editable && !connectionDragState?.isActive);
 
     const handleSelectCanvasMode = useCallback((mode: CanvasMode) => {
       setActiveCanvasMode(mode);
@@ -1223,7 +1226,7 @@ export const FlowCanvas = forwardRef<FlowCanvasHandle, FlowCanvasProps>(
             setViewport(instance.getViewport());
           }}
           onMove={(_event, vp) => setViewport(vp)}
-          nodesDraggable={umlViewActive || (editable && !connectionDragState?.isActive)}
+          nodesDraggable={nodesMovable}
           nodesConnectable={!umlViewActive && editable}
           elementsSelectable={interactionsAllowed}
           edgesUpdatable={false}
