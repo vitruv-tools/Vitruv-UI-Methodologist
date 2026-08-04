@@ -9,6 +9,7 @@ import {
   readStoredProjectAccess,
   resolveProjectAccessRole,
   resolveVsumAccessRole,
+  sharedByFromOwner,
   sharedByFromVsum,
   sharedByToMember,
   uniqueVsumMembers,
@@ -25,6 +26,65 @@ describe('vsumMemberUtils', () => {
       { id: 2, vsumId: 9, firstName: 'Bob', lastName: 'Viewer', email: 'bob@example.com', role: 'VIEWER', createdAt: '' },
     ]);
     expect(owner?.email).toBe('ada@example.com');
+  });
+
+  describe('sharedByFromOwner', () => {
+    const owner = {
+      id: 1, vsumId: 9, firstName: 'Ada', lastName: 'Lovelace',
+      email: 'ada@example.com', role: 'OWNER' as const, createdAt: '',
+    };
+
+    it('returns the owner contact when someone else owns the project', () => {
+      expect(sharedByFromOwner(owner, 'bob@example.com')).toEqual({
+        firstName: 'Ada', lastName: 'Lovelace', email: 'ada@example.com',
+      });
+    });
+
+    it('returns null when the owner is the current user', () => {
+      expect(sharedByFromOwner(owner, 'ada@example.com')).toBeNull();
+    });
+
+    it('compares e-mail addresses case-insensitively', () => {
+      expect(sharedByFromOwner(owner, 'ADA@Example.COM')).toBeNull();
+    });
+
+    it('returns null without an owner', () => {
+      expect(sharedByFromOwner(null, 'ada@example.com')).toBeNull();
+    });
+
+    it('still returns the contact when the current user is unknown', () => {
+      expect(sharedByFromOwner(owner, undefined)?.email).toBe('ada@example.com');
+    });
+  });
+
+  it('keeps an owner as OWNER after their own member list loads', () => {
+    // Regression: the member list always contains an OWNER, and recording that
+    // owner as `sharedBy` made resolveProjectAccessRole infer shared access and
+    // downgrade the owner to VIEWER on their own project.
+    const members = [
+      { id: 1, vsumId: 5, firstName: 'Ada', lastName: 'L', email: 'ada@example.com', role: 'OWNER' as const, createdAt: '' },
+    ];
+    const me = 'ada@example.com';
+
+    mergeStoredProjectAccess(5, { accessRole: 'OWNER' });
+    const sharedBy = sharedByFromOwner(findVsumOwner(members), me);
+    if (sharedBy) mergeStoredProjectAccess(5, { sharedBy });
+
+    expect(sharedBy).toBeNull();
+    expect(readStoredProjectAccess(5)?.sharedBy ?? null).toBeNull();
+    expect(resolveProjectAccessRole(5, 'OWNER')).toBe('OWNER');
+  });
+
+  it('still downgrades to VIEWER when the project really was shared', () => {
+    const members = [
+      { id: 1, vsumId: 6, firstName: 'Ada', lastName: 'L', email: 'ada@example.com', role: 'OWNER' as const, createdAt: '' },
+    ];
+
+    const sharedBy = sharedByFromOwner(findVsumOwner(members), 'bob@example.com');
+    if (sharedBy) mergeStoredProjectAccess(6, { sharedBy });
+
+    expect(sharedBy?.email).toBe('ada@example.com');
+    expect(resolveProjectAccessRole(6, 'OWNER')).toBe('VIEWER');
   });
 
   it('normalizes access roles', () => {
