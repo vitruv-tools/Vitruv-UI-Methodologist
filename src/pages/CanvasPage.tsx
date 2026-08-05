@@ -35,6 +35,7 @@ import { createCanvasTabInstanceId } from '../utils/canvasTabId';
 import {
   findMembershipForEmail,
   findVsumOwner,
+  sharedByFromOwner,
   parseVsumMembersResponse,
   pickMostRestrictiveRole,
   readStoredProjectAccess,
@@ -442,14 +443,13 @@ export const CanvasPage: React.FC = () => {
     const owner = findVsumOwner(unique);
     if (owner) {
       setProjectSharer(owner);
-      if (options?.vsumId) {
-        mergeStoredProjectAccess(options.vsumId, {
-          sharedBy: {
-            firstName: owner.firstName,
-            lastName: owner.lastName,
-            email: owner.email,
-          },
-        });
+      const ownerSharedBy = sharedByFromOwner(owner, user?.email);
+      if (options?.vsumId && ownerSharedBy) {
+        mergeStoredProjectAccess(options.vsumId, { sharedBy: ownerSharedBy });
+      } else if (options?.vsumId) {
+        // We own this project. Record that explicitly and drop any stale
+        // shared-by, otherwise the owner is read back as a viewer.
+        mergeStoredProjectAccess(options.vsumId, { accessRole: 'OWNER', sharedBy: null });
       }
     } else if (sharedBy && options?.vsumId) {
       setProjectSharer(sharedByToMember(sharedBy, options.vsumId));
