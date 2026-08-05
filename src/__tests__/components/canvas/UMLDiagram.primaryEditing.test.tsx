@@ -8,10 +8,7 @@ const mockGetCurrentLayoutOffset = jest.fn(() => ({ offsetX: 100, offsetY: 80 })
 jest.mock('../../../utils/ecoreToUml', () => require('../../../testSupport/umlDiagram/mockFactories').ecoreToUmlMock());
 jest.mock('../../../utils/saveMetaModelEcore', () => require('../../../testSupport/umlDiagram/mockFactories').saveMetaModelEcoreMock());
 jest.mock('../../../utils/umlValidation', () => require('../../../testSupport/umlDiagram/mockFactories').umlValidationMock());
-jest.mock('../../../utils/reactionFile', () => require('../../../testSupport/umlDiagram/mockFactories').reactionFileMock());
 jest.mock('../../../components/canvas/UMLDiagramMinimap', () => require('../../../testSupport/umlDiagram/mockFactories').umlDiagramMinimapMock());
-jest.mock('../../../components/flow/ReactionEditorModal', () => require('../../../testSupport/umlDiagram/mockFactories').reactionEditorModalMock());
-jest.mock('../../../components/canvas/ReactionConfigPopup', () => require('../../../testSupport/umlDiagram/mockFactories').reactionConfigPopupMock());
 jest.mock('../../../utils/umlDiagramGeometry', () => require('../../../testSupport/umlDiagram/mockFactories').umlDiagramGeometryMock());
 jest.mock('../../../utils/umlClassLayout', () => require('../../../testSupport/umlDiagram/mockFactories').umlClassLayoutMock());
 jest.mock('../../../utils/umlLayoutStorage', () => require('../../../testSupport/umlDiagram/mockFactories').umlLayoutStorageMock());
@@ -55,13 +52,7 @@ import React, { createRef } from 'react';
 import { act, fireEvent, screen, within, type RenderResult } from '@testing-library/react';
 import type { UMLDiagramHandle } from '../../../components/canvas/UMLDiagram';
 import type { UMLModel } from '../../../utils/ecoreToUml';
-import { REF_ECORE } from '../../../testSupport/umlDiagram/fixtures';
 import { renderDiagram } from '../../../testSupport/umlDiagram/renderUtils';
-
-const ADDITIONAL_MODEL = {
-  id: 2, name: 'Reference', ecoreContent: REF_ECORE,
-  color: '#dc2626', fill: 'rgba(220,38,38,0.06)',
-};
 
 type DiagramRef = React.RefObject<UMLDiagramHandle | null>;
 
@@ -134,7 +125,7 @@ function redo(diagramRef: DiagramRef): void {
 }
 
 function connectClasses(source: string, target: string): void {
-  clickToolbar('Connect two classes in the same model');
+  clickToolbar('Connect two classes');
   selectClass(source);
   selectClass(target);
 }
@@ -329,7 +320,7 @@ describe('UMLDiagram primary editing', () => {
     jest.spyOn(Date, 'now').mockReturnValue(3001);
     const { diagramRef } = renderEditingDiagram();
 
-    clickToolbar('Connect two classes in the same model');
+    clickToolbar('Connect two classes');
     selectClass('Person');
     changeValue(screen.getByLabelText('Class name'), '  Human Being  ');
 
@@ -512,31 +503,6 @@ describe('UMLDiagram primary editing', () => {
     undo(diagramRef);
     expect(relationships(diagramRef)).toContainEqual(
       expect.objectContaining({ id: 'rel-5001', label: 'manages' }),
-    );
-  });
-
-  it('allows same-model connections and rejects cross-model connections', () => {
-    jest.spyOn(Date, 'now').mockReturnValueOnce(6001).mockReturnValueOnce(6002);
-    const { diagramRef } = renderEditingDiagram({ additionalModels: [ADDITIONAL_MODEL] });
-
-    connectClasses('Order', 'LineItem');
-    expect(relationships(diagramRef)).toContainEqual(
-      expect.objectContaining({
-        id: 'rel-6001',
-        sourceId: 'addl-2-Order',
-        targetId: 'addl-2-LineItem',
-        type: 'association',
-      }),
-    );
-
-    const relationshipCount = relationships(diagramRef).length;
-    connectClasses('Person', 'Order');
-    expect(relationships(diagramRef)).toHaveLength(relationshipCount);
-    expect(relationships(diagramRef)).not.toContainEqual(
-      expect.objectContaining({
-        sourceId: 'Person',
-        targetId: 'addl-2-Order',
-      }),
     );
   });
 

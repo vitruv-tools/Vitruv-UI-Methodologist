@@ -8,7 +8,6 @@ function createProps(
   overrides: Partial<UMLDiagramToolbarProps> = {},
 ): UMLDiagramToolbarProps {
   return {
-    reactionsMode: 'uml',
     connectMode: false,
     canUndo: true,
     canRedo: true,
@@ -52,7 +51,7 @@ describe('UMLDiagramToolbar', () => {
     expect(addButton).toHaveAttribute('title', 'Add class');
     expect(undoButton).toHaveAttribute('title', 'Undo (Ctrl+Z)');
     expect(redoButton).toHaveAttribute('title', 'Redo (Ctrl+Shift+Z)');
-    expect(connectButton).toHaveAttribute('title', 'Connect two classes in the same model');
+    expect(connectButton).toHaveAttribute('title', 'Connect two classes');
     expect(deleteButton).toHaveAttribute('title', 'Delete selected class or connection');
     expect(saveButton).toHaveAttribute('title', 'Save metamodel changes');
 
@@ -69,16 +68,6 @@ describe('UMLDiagramToolbar', () => {
     expect(props.onToggleConnect).toHaveBeenCalledTimes(1);
     expect(props.onDelete).toHaveBeenCalledTimes(1);
     expect(props.onSave).toHaveBeenCalledTimes(1);
-  });
-
-  it('hides Connect in reactions mode', () => {
-    render(
-      <UMLDiagramToolbar
-        {...createProps({ reactionsMode: 'reactions' })}
-      />,
-    );
-
-    expect(screen.queryByRole('button', { name: 'Connect' })).not.toBeInTheDocument();
   });
 
   it('does not invoke disabled undo, redo, or delete callbacks', () => {

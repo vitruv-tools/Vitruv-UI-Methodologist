@@ -1,5 +1,4 @@
 import { useCallback, useMemo, useState } from 'react';
-import type { ReactionEdge } from '../types/reactions';
 import {
   computeLineBridges,
   optimizeMultiplicityBadges,
@@ -46,7 +45,6 @@ interface UmlRelationshipEdgeGeometry {
 export interface UseUmlRelationshipLayersOptions {
   parallelRelationships: UmlDiagramRelationshipLayout[];
   classes: UmlDiagramClass[];
-  reactionEdges: ReactionEdge[];
   offsetX: number;
   offsetY: number;
 }
@@ -54,7 +52,6 @@ export interface UseUmlRelationshipLayersOptions {
 export interface UseUmlRelationshipLayersResult {
   edgeLayouts: UmlRelationshipEdgeLayout[];
   multiplicityBadges: MultiplicityBadge[];
-  reactionEdgeById: Map<string, ReactionEdge>;
   hoveredRelationshipId: string | null;
   handleRelationshipMouseEnter: (relationshipId: string) => void;
   handleRelationshipMouseLeave: () => void;
@@ -63,7 +60,6 @@ export interface UseUmlRelationshipLayersResult {
 export function useUmlRelationshipLayers({
   parallelRelationships,
   classes,
-  reactionEdges,
   offsetX,
   offsetY,
 }: UseUmlRelationshipLayersOptions): UseUmlRelationshipLayersResult {
@@ -108,13 +104,9 @@ export function useUmlRelationshipLayers({
   }, [parallelRelationships, classes, offsetX, offsetY]);
 
   const multiplicityBadges = useMemo(() => {
-    const reactionRelationshipIds = new Set(
-      reactionEdges.map(edge => edge.id),
-    );
     const raw: MultiplicityBadge[] = [];
     for (const layout of edgeLayouts) {
       const { rel, p1, p2 } = layout;
-      if (reactionRelationshipIds.has(rel.id)) continue;
 
       const markerSide = getUmlRelationDirectionMarkerSide(rel.type);
 
@@ -170,12 +162,7 @@ export function useUmlRelationshipLayers({
       UML_MULTIPLICITY_BADGE_HALF_WIDTH,
       UML_MULTIPLICITY_BADGE_HALF_HEIGHT,
     );
-  }, [edgeLayouts, reactionEdges, classes, offsetX, offsetY]);
-
-  const reactionEdgeById = useMemo(
-    () => new Map(reactionEdges.map(edge => [edge.id, edge])),
-    [reactionEdges],
-  );
+  }, [edgeLayouts, classes, offsetX, offsetY]);
 
   const handleRelationshipMouseEnter = useCallback(
     (relationshipId: string) => {
@@ -191,7 +178,6 @@ export function useUmlRelationshipLayers({
   return {
     edgeLayouts,
     multiplicityBadges,
-    reactionEdgeById,
     hoveredRelationshipId,
     handleRelationshipMouseEnter,
     handleRelationshipMouseLeave,

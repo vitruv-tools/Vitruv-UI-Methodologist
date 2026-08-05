@@ -1,5 +1,4 @@
 import type { MouseEvent as ReactMouseEvent, ReactNode } from 'react';
-import type { ReactionEdge } from '../../types/reactions';
 import type { UMLRelationship } from '../../utils/ecoreToUml';
 import {
   bridgedLinePathD,
@@ -25,12 +24,6 @@ export const UML_RELATION_EDGE_COLORS: Record<UmlRelationEdgeState, string> = {
   selected: '#ef4444',
 };
 
-export const UML_REACTION_EDGE_COLORS: Record<UmlRelationEdgeState, string> = {
-  default: '#a855f7',
-  hovered: '#9333ea',
-  selected: '#7e22ce',
-};
-
 export const UML_RELATION_EDGE_WIDTHS: Record<UmlRelationEdgeState, number> = {
   default: 1.5,
   hovered: 2.5,
@@ -45,10 +38,6 @@ export function getUmlRelationDirectionMarkerSide(
   if (type === 'composition') return 'start';
   if (type === 'inheritance' || type === 'association') return 'end';
   return null;
-}
-
-function getReactionArrowSvg(color: string): ReactNode {
-  return <path d="M 0 0 L 12 6 L 0 12 z" fill={color} />;
 }
 
 function getDirectionMarkerSvg(
@@ -94,7 +83,6 @@ export interface UMLRelationLineProps {
   drawP2: Point;
   bridges: LineBridge[];
   state: UmlRelationEdgeState;
-  reactionEdge?: ReactionEdge;
 }
 
 export const UMLRelationLine = ({
@@ -105,11 +93,8 @@ export const UMLRelationLine = ({
   drawP2,
   bridges,
   state,
-  reactionEdge,
 }: UMLRelationLineProps) => {
-  const strokeColor = reactionEdge
-    ? UML_REACTION_EDGE_COLORS[state]
-    : UML_RELATION_EDGE_COLORS[state];
+  const strokeColor = UML_RELATION_EDGE_COLORS[state];
   const strokeWidth = UML_RELATION_EDGE_WIDTHS[state];
   const haloPath = bridgedLinePathD(drawP1, drawP2, bridges);
   const midpointX = (p1.x + p2.x) / 2;
@@ -233,7 +218,6 @@ export interface UMLRelationDirectionMarkerProps {
   lineStart: Point;
   lineEnd: Point;
   color: string;
-  reactionEdge?: ReactionEdge;
   onRelClick: (event: ReactMouseEvent) => void;
   onMouseEnter: () => void;
   onMouseLeave: () => void;
@@ -244,7 +228,6 @@ export const UMLRelationDirectionMarker = ({
   lineStart,
   lineEnd,
   color,
-  reactionEdge,
   onRelClick,
   onMouseEnter,
   onMouseLeave,
@@ -261,8 +244,8 @@ export const UMLRelationDirectionMarker = ({
   ) => {
     const lineAnchor = side === 'start' ? lineStart : lineEnd;
     const { x, y } = getDirectionMarkerAnchor(lineAnchor);
-    const markerSize = reactionEdge ? 18 : getDirectionMarkerSize(rel.type);
-    const viewBox = reactionEdge ? '0 0 12 12' : getDirectionMarkerViewBox(rel.type);
+    const markerSize = getDirectionMarkerSize(rel.type);
+    const viewBox = getDirectionMarkerViewBox(rel.type);
 
     return (
       <button
@@ -299,24 +282,6 @@ export const UMLRelationDirectionMarker = ({
       </button>
     );
   };
-
-  if (reactionEdge) {
-    const arrow = getReactionArrowSvg(color);
-    const markers = reactionEdge.config.bidirectional
-      ? [
-          { side: 'start' as const, rotation: baseRotation + 180, key: 'start' },
-          { side: 'end' as const, rotation: baseRotation, key: 'end' },
-        ]
-      : [{ side: 'end' as const, rotation: baseRotation, key: 'end' }];
-
-    return (
-      <>
-        {markers.map(marker =>
-          renderMarker(marker.side, arrow, marker.rotation, `${rel.id}-${marker.key}`),
-        )}
-      </>
-    );
-  }
 
   const side = getUmlRelationDirectionMarkerSide(rel.type);
   const graphic = getDirectionMarkerSvg(rel.type, color);

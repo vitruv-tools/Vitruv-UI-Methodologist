@@ -1,5 +1,4 @@
 import type { MouseEvent as ReactMouseEvent } from 'react';
-import type { ReactionEdge } from '../../types/reactions';
 import type { MultiplicityBadge } from '../../utils/umlDiagramGeometry';
 import type {
   UmlRelationshipEdgeLayout,
@@ -10,7 +9,6 @@ import {
   UMLRelationDirectionMarker,
   UMLRelationHitTarget,
   UMLRelationLine,
-  UML_REACTION_EDGE_COLORS,
   UML_RELATION_EDGE_COLORS,
 } from './UMLRelationVisuals';
 
@@ -18,7 +16,6 @@ export interface UMLRelationshipBaseLayerProps {
   totalWidth: number;
   totalHeight: number;
   edgeLayouts: UmlRelationshipEdgeLayout[];
-  reactionEdgeById: Map<string, ReactionEdge>;
   selectedRelationshipId: string | null;
   hoveredRelationshipId: string | null;
   onBackgroundClick: () => void;
@@ -28,7 +25,6 @@ export const UMLRelationshipBaseLayer = ({
   totalWidth,
   totalHeight,
   edgeLayouts,
-  reactionEdgeById,
   selectedRelationshipId,
   hoveredRelationshipId,
   onBackgroundClick,
@@ -47,7 +43,6 @@ export const UMLRelationshipBaseLayer = ({
   >
     {edgeLayouts.map(layout => {
       const { rel, p1, p2, drawP1, drawP2, bridges } = layout;
-      const reactionEdge = reactionEdgeById.get(rel.id);
       const state = getUmlRelationEdgeState(
         selectedRelationshipId === rel.id,
         hoveredRelationshipId === rel.id,
@@ -63,7 +58,6 @@ export const UMLRelationshipBaseLayer = ({
           drawP2={drawP2}
           bridges={bridges}
           state={state}
-          reactionEdge={reactionEdge}
         />
       );
     })}
@@ -75,7 +69,6 @@ export interface UMLRelationshipOverlayLayersProps {
   totalHeight: number;
   edgeLayouts: UmlRelationshipEdgeLayout[];
   multiplicityBadges: MultiplicityBadge[];
-  reactionEdgeById: Map<string, ReactionEdge>;
   selectedRelationshipId: string | null;
   hoveredRelationshipId: string | null;
   onRelationshipClick: (
@@ -91,7 +84,6 @@ export const UMLRelationshipOverlayLayers = ({
   totalHeight,
   edgeLayouts,
   multiplicityBadges,
-  reactionEdgeById,
   selectedRelationshipId,
   hoveredRelationshipId,
   onRelationshipClick,
@@ -161,20 +153,16 @@ export const UMLRelationshipOverlayLayers = ({
 
     {edgeLayouts.map(layout => {
       const { rel, p1, p2 } = layout;
-      const reactionEdge = reactionEdgeById.get(rel.id);
       const state = getUmlRelationEdgeState(
         selectedRelationshipId === rel.id,
         hoveredRelationshipId === rel.id,
       );
-      const color = reactionEdge
-        ? UML_REACTION_EDGE_COLORS[state]
-        : UML_RELATION_EDGE_COLORS[state];
+      const color = UML_RELATION_EDGE_COLORS[state];
 
       return (
         <UMLRelationDirectionMarker
           key={`${rel.id}-direction`}
           rel={rel}
-          reactionEdge={reactionEdge}
           lineStart={p1}
           lineEnd={p2}
           color={color}

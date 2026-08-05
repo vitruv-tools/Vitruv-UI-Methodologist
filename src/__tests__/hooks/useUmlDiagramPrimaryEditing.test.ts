@@ -92,8 +92,6 @@ function usePrimaryEditingHarness(options: HarnessOptions) {
       recordSnapshotsRef.current.push(structuredClone({ classes, relationships }));
       options.recordChange();
     },
-    hasAdditionalModels: options.hasAdditionalModels,
-    areClassesInSameModel: options.areClassesInSameModel,
     containerRef: options.containerRef,
     getCurrentViewport: options.getCurrentViewport,
     getCurrentLayoutOffset: options.getCurrentLayoutOffset,
@@ -117,8 +115,6 @@ function makeOptions(
     initialSelectedRelationshipId: null,
     initialConnectSourceId: null,
     recordChange: jest.fn(),
-    hasAdditionalModels: false,
-    areClassesInSameModel: jest.fn(() => true),
     containerRef: { current: null },
     getCurrentViewport: jest.fn(() => ({ x: 0, y: 0, scale: 1 })),
     getCurrentLayoutOffset: jest.fn(() => ({ offsetX: 0, offsetY: 0 })),
@@ -561,50 +557,23 @@ describe('useUmlDiagramPrimaryEditing', () => {
     expect(options.scheduleLayoutSave).toHaveBeenCalledTimes(2);
   });
 
-  it('rejects self, duplicate, and cross-model relationships without history', () => {
-    const {
-      result: selfAndDuplicateResult,
-      options: selfAndDuplicateOptions,
-      unmount: unmountSelfAndDuplicate,
-    } = renderPrimaryEditing({
-      hasAdditionalModels: true,
-      areClassesInSameModel: jest.fn(() => true),
-    });
-    expect(perform(() => selfAndDuplicateResult.current.addRelationship(
+  it('rejects self and duplicate relationships without history', () => {
+    const { result, options } = renderPrimaryEditing();
+    expect(perform(() => result.current.addRelationship(
       'employee',
       'employee',
     ))).toBe(false);
-    expect(selfAndDuplicateOptions.areClassesInSameModel).not.toHaveBeenCalled();
-    expect(perform(() => selfAndDuplicateResult.current.addRelationship(
+    expect(perform(() => result.current.addRelationship(
       'employee',
       'department',
     ))).toBe(false);
-    expect(selfAndDuplicateOptions.recordChange).not.toHaveBeenCalled();
-    unmountSelfAndDuplicate();
-
-    const {
-      result: crossModelResult,
-      options: crossModelOptions,
-    } = renderPrimaryEditing({
-      initialRelationships: [],
-      hasAdditionalModels: true,
-      areClassesInSameModel: jest.fn(() => false),
-    });
-    expect(perform(() => crossModelResult.current.addRelationship(
-      'employee',
-      'department',
-    ))).toBe(false);
-    expect(crossModelOptions.areClassesInSameModel)
-      .toHaveBeenCalledWith('employee', 'department');
-    expect(crossModelOptions.recordChange).not.toHaveBeenCalled();
+    expect(options.recordChange).not.toHaveBeenCalled();
   });
 
-  it('creates a same-model relationship with exact defaults and selection', () => {
+  it('creates a relationship with exact defaults and selection', () => {
     jest.spyOn(Date, 'now').mockReturnValue(4001);
     const { result, options } = renderPrimaryEditing({
       initialRelationships: [],
-      hasAdditionalModels: true,
-      areClassesInSameModel: jest.fn(() => true),
     });
     expect(perform(() => result.current.addRelationship('employee', 'department')))
       .toBe(true);
@@ -616,13 +585,9 @@ describe('useUmlDiagramPrimaryEditing', () => {
 
   it('allows reverse associations and ignores other edge types when checking duplicates', () => {
     jest.spyOn(Date, 'now').mockReturnValue(4002);
-    const areClassesInSameModel = jest.fn(() => false);
-    const { result, options } = renderPrimaryEditing({
-      areClassesInSameModel,
-    });
+    const { result, options } = renderPrimaryEditing();
     expect(perform(() => result.current.addRelationship('department', 'employee')))
       .toBe(true);
-    expect(areClassesInSameModel).not.toHaveBeenCalled();
     expect(result.current.relationships).toContainEqual(
       expectedAssociation('rel-4002', 'department', 'employee'),
     );

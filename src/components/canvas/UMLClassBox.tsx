@@ -25,7 +25,6 @@ import type {
   UmlDiagramClass,
   UmlDiagramEditState,
 } from './umlDiagramTypes';
-import type { UmlReactionPortSide } from './umlDiagramReactionUtils';
 
 type ClassBoxDragPointRef = RefObject<{
   sx: number;
@@ -376,7 +375,7 @@ function startClassBoxDrag({
   const target = event.target as HTMLElement;
   if (
     target.closest(
-      'input, select, textarea, [data-no-drag], [data-reaction-port]',
+      'input, select, textarea, [data-no-drag]',
     )
   ) {
     return null;
@@ -581,12 +580,6 @@ export interface UMLClassBoxProps {
   connectSource: boolean;
   interactive: boolean;
   edit: UmlDiagramEditState | null;
-  reactionsMode: boolean;
-  onReactionPortMouseDown?: (
-    event: React.MouseEvent,
-    classId: string,
-    side: UmlReactionPortSide,
-  ) => void;
   onSelect: () => void;
   onMove: (id: string, x: number, y: number) => void;
   onDragStart: () => void;
@@ -625,8 +618,6 @@ export const UMLClassBox = ({
   connectSource,
   interactive,
   edit,
-  reactionsMode,
-  onReactionPortMouseDown,
   onSelect,
   onDragStart,
   onMove,
@@ -848,73 +839,6 @@ export const UMLClassBox = ({
         </button>
       )}
 
-      {reactionsMode && (
-        <div
-          style={{
-            position: 'absolute',
-            top: 0,
-            left: 0,
-            right: 0,
-            bottom: 0,
-            pointerEvents: 'none',
-            borderRadius: 6,
-            border: '2px dashed rgba(168,85,247,0.5)',
-            boxShadow: '0 0 8px rgba(168,85,247,0.2)',
-            animation: 'reactionPulse 2s ease-in-out infinite',
-          }}
-        >
-          <button
-            type="button"
-            aria-label={`Right reaction port for ${cls.name}`}
-            data-reaction-port
-            data-class-id={cls.id}
-            data-port-side="right"
-            onMouseDown={onReactionPortMouseDown
-              ? event => onReactionPortMouseDown(event, cls.id, 'right')
-              : undefined}
-            style={{
-              position: 'absolute',
-              top: '50%',
-              right: -7,
-              width: 12,
-              height: 12,
-              borderRadius: '50%',
-              background: '#a855f7',
-              border: '2px solid #fff',
-              transform: 'translateY(-50%)',
-              boxShadow: '0 0 6px rgba(168,85,247,0.6)',
-              pointerEvents: 'auto',
-              cursor: 'crosshair',
-              padding: 0,
-            }}
-          />
-          <button
-            type="button"
-            aria-label={`Left reaction port for ${cls.name}`}
-            data-reaction-port
-            data-class-id={cls.id}
-            data-port-side="left"
-            onMouseDown={onReactionPortMouseDown
-              ? event => onReactionPortMouseDown(event, cls.id, 'left')
-              : undefined}
-            style={{
-              position: 'absolute',
-              top: '50%',
-              left: -7,
-              width: 12,
-              height: 12,
-              borderRadius: '50%',
-              background: '#a855f7',
-              border: '2px solid #fff',
-              transform: 'translateY(-50%)',
-              boxShadow: '0 0 6px rgba(168,85,247,0.6)',
-              pointerEvents: 'auto',
-              cursor: 'crosshair',
-              padding: 0,
-            }}
-          />
-        </div>
-      )}
     </div>
   );
 };

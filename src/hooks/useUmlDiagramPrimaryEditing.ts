@@ -47,8 +47,6 @@ export interface UseUmlDiagramPrimaryEditingOptions {
   setSelectedRelationshipId: Dispatch<SetStateAction<string | null>>;
   setConnectSourceId: Dispatch<SetStateAction<string | null>>;
   recordChange: () => void;
-  hasAdditionalModels: boolean;
-  areClassesInSameModel: (classIdA: string, classIdB: string) => boolean;
   containerRef: RefObject<HTMLElement | null>;
   getCurrentViewport: () => UmlViewport;
   getCurrentLayoutOffset: () => { offsetX: number; offsetY: number };
@@ -115,8 +113,6 @@ export function useUmlDiagramPrimaryEditing(
     setSelectedRelationshipId,
     setConnectSourceId,
     recordChange,
-    hasAdditionalModels,
-    areClassesInSameModel,
     containerRef,
     getCurrentViewport,
     getCurrentLayoutOffset,
@@ -562,12 +558,6 @@ export function useUmlDiagramPrimaryEditing(
     targetId: string,
   ): boolean => {
     if (sourceId === targetId) return false;
-    if (
-      hasAdditionalModels
-      && !areClassesInSameModel(sourceId, targetId)
-    ) {
-      return false;
-    }
     const exists = relationshipsRef.current.some(relationship => (
       relationship.sourceId === sourceId
         && relationship.targetId === targetId
@@ -587,8 +577,6 @@ export function useUmlDiagramPrimaryEditing(
     setSelectedRelationshipId(relationshipId);
     return true;
   }, [
-    areClassesInSameModel,
-    hasAdditionalModels,
     recordChange,
     setRelationships,
     setSelectedRelationshipId,

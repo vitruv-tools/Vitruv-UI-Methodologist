@@ -2,7 +2,6 @@ import { useState, type CSSProperties, type ReactNode } from 'react';
 import { DIAGRAM_TOOLBAR_TOP, UML } from './umlDiagramTheme';
 
 export interface UMLDiagramToolbarProps {
-  reactionsMode: 'uml' | 'reactions';
   connectMode: boolean;
   canUndo: boolean;
   canRedo: boolean;
@@ -185,7 +184,6 @@ const IconSave = () => (
 );
 
 export const UMLDiagramToolbar = ({
-  reactionsMode,
   connectMode,
   canUndo,
   canRedo,
@@ -240,16 +238,14 @@ export const UMLDiagramToolbar = ({
     >
       <IconRedo />
     </DiagramToolButton>
-    {reactionsMode !== 'reactions' && (
-      <DiagramToolButton
-        title={connectMode ? 'Cancel connect mode (Esc)' : 'Connect two classes in the same model'}
-        active={connectMode}
-        onClick={onToggleConnect}
-        label="Connect"
-      >
-        <IconConnect />
-      </DiagramToolButton>
-    )}
+    <DiagramToolButton
+      title={connectMode ? 'Cancel connect mode (Esc)' : 'Connect two classes'}
+      active={connectMode}
+      onClick={onToggleConnect}
+      label="Connect"
+    >
+      <IconConnect />
+    </DiagramToolButton>
     <DiagramToolButton
       title="Delete selected class or connection"
       active={false}

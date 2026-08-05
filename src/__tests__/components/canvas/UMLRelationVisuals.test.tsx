@@ -1,5 +1,4 @@
 import { fireEvent, render, screen } from '@testing-library/react';
-import type { ReactionEdge } from '../../../types/reactions';
 import type { UMLRelationship, UMLRelType } from '../../../utils/ecoreToUml';
 import type { MultiplicityBadge } from '../../../utils/umlDiagramGeometry';
 import {
@@ -9,7 +8,6 @@ import {
   UMLRelationDirectionMarker,
   UMLRelationHitTarget,
   UMLRelationLine,
-  UML_REACTION_EDGE_COLORS,
   UML_RELATION_EDGE_COLORS,
   UML_RELATION_EDGE_WIDTHS,
 } from '../../../components/canvas/UMLRelationVisuals';
@@ -34,31 +32,8 @@ function createRelationship(
   };
 }
 
-function createReactionEdge(bidirectional: boolean): ReactionEdge {
-  return {
-    id: 'reaction-1',
-    sourceModelId: 1,
-    sourceClassId: 'source',
-    sourceClassName: 'Source',
-    targetModelId: 2,
-    targetClassId: 'target',
-    targetClassName: 'Target',
-    config: {
-      bidirectional,
-      reactionName: 'Source_Target',
-      model1Url: 'https://example.test/source',
-      model2Url: 'https://example.test/target',
-      model1Alias: 'SourceModel',
-      model2Alias: 'TargetModel',
-      model1RootType: 'Source',
-      model2RootType: 'Target',
-      model1RootVal: 'Source',
-    },
-  };
-}
-
 describe('UMLRelationVisuals', () => {
-  it('renders normal and reaction relationship lines with labels', () => {
+  it('renders relationship lines with labels and selected styling', () => {
     const relation = createRelationship('association', { label: 'assignedTo' });
     const { rerender } = render(
       <svg>
@@ -83,14 +58,13 @@ describe('UMLRelationVisuals', () => {
           {...POINTS}
           bridges={[]}
           state="selected"
-          reactionEdge={createReactionEdge(false)}
         />
       </svg>,
     );
 
     relationLine = screen.getByTestId('uml-relation-line');
-    expect(relationLine).toContainHTML('stroke="#7e22ce" stroke-width="3"');
-    expect(screen.getByText('assignedTo')).toHaveAttribute('fill', '#7e22ce');
+    expect(relationLine).toContainHTML('stroke="#ef4444" stroke-width="3"');
+    expect(screen.getByText('assignedTo')).toHaveAttribute('fill', '#ef4444');
   });
 
   it('forwards hit-target click and hover callbacks with the existing hit styling', () => {
@@ -219,48 +193,6 @@ describe('UMLRelationVisuals', () => {
     },
   );
 
-  it('renders single-direction and bidirectional reaction markers', () => {
-    const relation = createRelationship('association', { label: 'synchronizes' });
-    const props = {
-      rel: relation,
-      lineStart: POINTS.p1,
-      lineEnd: POINTS.p2,
-      color: '#a855f7',
-      onRelClick: jest.fn(),
-      onMouseEnter: jest.fn(),
-      onMouseLeave: jest.fn(),
-    };
-    const { rerender } = render(
-      <UMLRelationDirectionMarker
-        {...props}
-        reactionEdge={createReactionEdge(false)}
-      />,
-    );
-
-    let markers = screen.getAllByRole('button', {
-      name: 'Select relationship: synchronizes',
-    });
-    expect(markers).toHaveLength(1);
-    expect(markers[0].style.transform).toContain('translate(110px, 20px)');
-    expect(markers[0]).toContainHTML('fill="#a855f7"');
-
-    rerender(
-      <UMLRelationDirectionMarker
-        {...props}
-        reactionEdge={createReactionEdge(true)}
-      />,
-    );
-
-    markers = screen.getAllByRole('button', {
-      name: 'Select relationship: synchronizes',
-    });
-    expect(markers).toHaveLength(2);
-    expect(markers[0].style.transform).toContain('translate(10px, 20px)');
-    expect(markers[0].style.transform).toContain('rotate(180deg)');
-    expect(markers[1].style.transform).toContain('translate(110px, 20px)');
-    expect(markers[1].style.transform).toContain('rotate(0deg)');
-  });
-
   it('selects edge states, colors, and widths without visual drift', () => {
     expect(getUmlRelationEdgeState(false, false)).toBe('default');
     expect(getUmlRelationEdgeState(false, true)).toBe('hovered');
@@ -270,11 +202,6 @@ describe('UMLRelationVisuals', () => {
       default: '#0c436e',
       hovered: '#f87171',
       selected: '#ef4444',
-    });
-    expect(UML_REACTION_EDGE_COLORS).toEqual({
-      default: '#a855f7',
-      hovered: '#9333ea',
-      selected: '#7e22ce',
     });
     expect(UML_RELATION_EDGE_WIDTHS).toEqual({
       default: 1.5,

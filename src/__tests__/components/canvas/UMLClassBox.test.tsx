@@ -45,8 +45,6 @@ function createProps(
     connectSource: false,
     interactive: true,
     edit: null,
-    reactionsMode: false,
-    onReactionPortMouseDown: jest.fn(),
     onSelect: jest.fn(),
     onMove: jest.fn(),
     onDragStart: jest.fn(),
@@ -203,40 +201,5 @@ describe('UMLClassBox', () => {
     expect(screen.queryByRole('button', {
       name: 'Delete class Employee',
     })).not.toBeInTheDocument();
-  });
-
-  it('preserves reaction-port attributes and forwards both port callbacks', () => {
-    const props = createProps({ reactionsMode: true });
-    render(<UMLClassBox {...props} />);
-
-    const rightPort = screen.getByRole('button', {
-      name: 'Right reaction port for Employee',
-    });
-    const leftPort = screen.getByRole('button', {
-      name: 'Left reaction port for Employee',
-    });
-
-    expect(rightPort).toHaveAttribute('data-reaction-port');
-    expect(rightPort).toHaveAttribute('data-class-id', 'employee');
-    expect(rightPort).toHaveAttribute('data-port-side', 'right');
-    expect(leftPort).toHaveAttribute('data-reaction-port');
-    expect(leftPort).toHaveAttribute('data-class-id', 'employee');
-    expect(leftPort).toHaveAttribute('data-port-side', 'left');
-
-    fireEvent.mouseDown(rightPort);
-    fireEvent.mouseDown(leftPort);
-
-    expect(props.onReactionPortMouseDown).toHaveBeenNthCalledWith(
-      1,
-      expect.any(Object),
-      'employee',
-      'right',
-    );
-    expect(props.onReactionPortMouseDown).toHaveBeenNthCalledWith(
-      2,
-      expect.any(Object),
-      'employee',
-      'left',
-    );
   });
 });

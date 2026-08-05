@@ -1,5 +1,4 @@
 import { act, renderHook } from '@testing-library/react';
-import type { ReactionEdge } from '../../types/reactions';
 import {
   getUmlMultiplicityPosition,
   type UmlDiagramRelationshipLayout,
@@ -59,29 +58,6 @@ function createRelationship(
   };
 }
 
-function createReactionEdge(id = 'reaction-1'): ReactionEdge {
-  return {
-    id,
-    sourceModelId: 1,
-    sourceClassId: 'A',
-    sourceClassName: 'A',
-    targetModelId: 2,
-    targetClassId: 'B',
-    targetClassName: 'B',
-    config: {
-      bidirectional: false,
-      reactionName: 'A_B',
-      model1Url: 'https://example.test/a',
-      model2Url: 'https://example.test/b',
-      model1Alias: 'A',
-      model2Alias: 'B',
-      model1RootType: 'A',
-      model2RootType: 'B',
-      model1RootVal: 'A',
-    },
-  };
-}
-
 describe('useUmlRelationshipLayers', () => {
   beforeEach(() => {
     jest.clearAllMocks();
@@ -103,7 +79,6 @@ describe('useUmlRelationshipLayers', () => {
     const { result } = renderHook(() => useUmlRelationshipLayers({
       parallelRelationships: relationships,
       classes,
-      reactionEdges: [],
       offsetX: 0,
       offsetY: 0,
     }));
@@ -141,7 +116,6 @@ describe('useUmlRelationshipLayers', () => {
     const { result } = renderHook(() => useUmlRelationshipLayers({
       parallelRelationships: relationships,
       classes,
-      reactionEdges: [],
       offsetX: 0,
       offsetY: 0,
     }));
@@ -154,7 +128,7 @@ describe('useUmlRelationshipLayers', () => {
       - result.current.edgeLayouts[0].p2.y).toBe(14);
   });
 
-  it('creates normal multiplicities with marker offsets and excludes reactions', () => {
+  it('creates multiplicities with marker offsets', () => {
     const classes = [
       createClass('A', 0, 0),
       createClass('B', 400, 0),
@@ -164,17 +138,11 @@ describe('useUmlRelationshipLayers', () => {
         sourceMultiplicity: '1',
         targetMultiplicity: '0..*',
       }),
-      createRelationship('reaction-1', 'A', 'B', {
-        sourceMultiplicity: '1',
-        targetMultiplicity: '1',
-      }),
     ];
-    const reactionEdge = createReactionEdge();
 
     const { result } = renderHook(() => useUmlRelationshipLayers({
       parallelRelationships: relationships,
       classes,
-      reactionEdges: [reactionEdge],
       offsetX: 0,
       offsetY: 0,
     }));
@@ -192,16 +160,12 @@ describe('useUmlRelationshipLayers', () => {
     expect(mockedGetUmlMultiplicityPosition.mock.calls[0][5]).toBe(false);
     expect(mockedGetUmlMultiplicityPosition.mock.calls[1][4]).toBe('end');
     expect(mockedGetUmlMultiplicityPosition.mock.calls[1][5]).toBe(true);
-    expect(result.current.reactionEdgeById.get('reaction-1')).toBe(
-      reactionEdge,
-    );
   });
 
   it('tracks focused relationship hover state', () => {
     const { result } = renderHook(() => useUmlRelationshipLayers({
       parallelRelationships: [],
       classes: [],
-      reactionEdges: [],
       offsetX: 0,
       offsetY: 0,
     }));

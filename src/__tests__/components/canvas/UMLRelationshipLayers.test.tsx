@@ -1,5 +1,4 @@
 import { fireEvent, render, screen } from '@testing-library/react';
-import type { ReactionEdge } from '../../../types/reactions';
 import type { UMLRelationship } from '../../../utils/ecoreToUml';
 import type { MultiplicityBadge } from '../../../utils/umlDiagramGeometry';
 import type {
@@ -38,29 +37,6 @@ function createLayout(
   };
 }
 
-function createReactionEdge(id = 'reaction-1'): ReactionEdge {
-  return {
-    id,
-    sourceModelId: 1,
-    sourceClassId: 'source',
-    sourceClassName: 'Source',
-    targetModelId: 2,
-    targetClassId: 'target',
-    targetClassName: 'Target',
-    config: {
-      bidirectional: false,
-      reactionName: 'Source_Target',
-      model1Url: 'https://example.test/source',
-      model2Url: 'https://example.test/target',
-      model1Alias: 'Source',
-      model2Alias: 'Target',
-      model1RootType: 'Source',
-      model2RootType: 'Target',
-      model1RootVal: 'Source',
-    },
-  };
-}
-
 const BADGE: MultiplicityBadge = {
   key: 'rel-1-target',
   relId: 'rel-1',
@@ -81,8 +57,7 @@ const BADGE: MultiplicityBadge = {
 describe('UMLRelationshipLayers', () => {
   it('renders selected and hovered base lines with bridge paths', () => {
     const selectedRelationship = createRelationship('rel-1');
-    const reactionRelationship = createRelationship('reaction-1');
-    const reactionEdge = createReactionEdge();
+    const hoveredRelationship = createRelationship('rel-2');
     const onBackgroundClick = jest.fn();
     render(
       <UMLRelationshipBaseLayer
@@ -92,11 +67,10 @@ describe('UMLRelationshipLayers', () => {
           createLayout(selectedRelationship, {
             bridges: [{ t: 0.5, bulgeSign: 1 }],
           }),
-          createLayout(reactionRelationship),
+          createLayout(hoveredRelationship),
         ]}
-        reactionEdgeById={new Map([['reaction-1', reactionEdge]])}
         selectedRelationshipId="rel-1"
-        hoveredRelationshipId="reaction-1"
+        hoveredRelationshipId="rel-2"
         onBackgroundClick={onBackgroundClick}
       />,
     );
@@ -115,7 +89,7 @@ describe('UMLRelationshipLayers', () => {
     );
     expect(relationLines[0]).toContainHTML(' Q ');
     expect(relationLines[1]).toContainHTML(
-      'stroke="#9333ea" stroke-width="2.5"',
+      'stroke="#f87171" stroke-width="2.5"',
     );
 
     fireEvent.click(svg);
@@ -138,7 +112,6 @@ describe('UMLRelationshipLayers', () => {
         totalHeight={900}
         edgeLayouts={[layout]}
         multiplicityBadges={[BADGE]}
-        reactionEdgeById={new Map()}
         selectedRelationshipId="rel-1"
         hoveredRelationshipId={null}
         onRelationshipClick={onRelationshipClick}

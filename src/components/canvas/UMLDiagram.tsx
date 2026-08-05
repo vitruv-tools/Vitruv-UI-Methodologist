@@ -462,8 +462,6 @@ const rels = useMemo(
     setSelectedRelationshipId: setSelectedRelId,
     setConnectSourceId,
     recordChange,
-    hasAdditionalModels: false,
-    areClassesInSameModel: () => true,
     containerRef,
     getCurrentViewport,
     getCurrentLayoutOffset,
@@ -673,14 +671,12 @@ const rels = useMemo(
   const {
     edgeLayouts,
     multiplicityBadges,
-    reactionEdgeById,
     hoveredRelationshipId,
     handleRelationshipMouseEnter,
     handleRelationshipMouseLeave,
   } = useUmlRelationshipLayers({
     parallelRelationships: rels,
     classes,
-    reactionEdges: [],
     offsetX,
     offsetY,
   });
@@ -729,7 +725,6 @@ const rels = useMemo(
         totalWidth={totalW}
         totalHeight={totalH}
         edgeLayouts={edgeLayouts}
-        reactionEdgeById={reactionEdgeById}
         selectedRelationshipId={selectedRelId}
         hoveredRelationshipId={hoveredRelationshipId}
         onBackgroundClick={handleRelationshipBackgroundClick}
@@ -747,7 +742,6 @@ const rels = useMemo(
           connectSource={connectSourceId === cls.id}
           interactive={interactive}
           edit={edit?.classId === cls.id ? edit : null}
-          reactionsMode={false}
           onSelect={() => handleClassSelect(cls.id)}
           onDragStart={beginClassDrag}
           onMove={moveClass}
@@ -782,7 +776,6 @@ const rels = useMemo(
         totalHeight={totalH}
         edgeLayouts={edgeLayouts}
         multiplicityBadges={multiplicityBadges}
-        reactionEdgeById={reactionEdgeById}
         selectedRelationshipId={selectedRelId}
         hoveredRelationshipId={hoveredRelationshipId}
         onRelationshipClick={handleRelationshipClick}
@@ -820,7 +813,6 @@ const rels = useMemo(
       )}
       {interactive && (
         <UMLDiagramToolbar
-          reactionsMode="uml"
           connectMode={connectMode}
           canUndo={historyCanUndo}
           canRedo={historyCanRedo}
