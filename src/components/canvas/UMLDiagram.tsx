@@ -12,7 +12,13 @@ import {
 import { assignParallelRelMeta } from '../../utils/umlClassLayout';
 import { UMLDiagramMinimap } from './UMLDiagramMinimap';
 import { UMLDiagramToolbar } from './UMLDiagramToolbar';
-import { DIAGRAM_HINT_TOP, UML } from './umlDiagramTheme';
+import { WORKSPACE_DOT_BACKGROUND } from './umlDiagramTheme';
+import {
+  UMLDiagramConnectBanner,
+  UMLDiagramEmptyState,
+  UMLDiagramSaveMessageBanner,
+  UMLDiagramValidationBanner,
+} from './UMLDiagramStatusOverlays';
 import { ClassEditPanel, RelationshipEditPanel } from './UMLDiagramEditPanels';
 import { UMLClassBox } from './UMLClassBox';
 import {
@@ -27,14 +33,7 @@ import { useUmlDiagramViewport } from '../../hooks/useUmlDiagramViewport';
 import { useUmlRelationshipLayers } from '../../hooks/useUmlRelationshipLayers';
 import { useUmlDiagramPrimaryEditing } from '../../hooks/useUmlDiagramPrimaryEditing';
 
-// ── constants ────────────────────────────────────────────────────────────────
-
-/** Dotted workspace background — matches canvas / HomePage grid */
-export const WORKSPACE_DOT_BACKGROUND: React.CSSProperties = {
-  backgroundColor: '#f3f4f6',
-  backgroundImage: 'radial-gradient(circle, #d1d5db 0.75px, transparent 0.75px)',
-  backgroundSize: '24px 24px',
-};
+export { WORKSPACE_DOT_BACKGROUND };
 
 // ── helpers ──────────────────────────────────────────────────────────────────
 
@@ -168,77 +167,6 @@ function getSaveButtonTitle(hasUnsavedChanges: boolean, saveContext: UmlDiagramS
   return 'Save metamodel changes';
 }
 
-function getConnectModeHint(connectSourceId: string | null): string {
-  if (connectSourceId) {
-    return 'Click the target class to create a connection';
-  }
-  return 'Click the source class, then the target class';
-}
-
-function getValidationBannerInset(
-  selectedClass: UmlDiagramClass | null | undefined,
-  selectedRel: UMLRelationship | null | undefined,
-): { left: number; right: number } {
-  return {
-    left: selectedClass ? 288 : 12,
-    right: selectedRel ? 320 : 12,
-  };
-}
-
-function isSaveMessageSuccess(message: string): boolean {
-  return message === 'Saved' || message === 'Saved to project';
-}
-
-const UmlEmptyDiagram: React.FC<{ interactive: boolean; onAddClass: () => void }> = ({
-  interactive,
-  onAddClass,
-}) => (
-  <div style={{
-    display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
-    height: '100%', color: '#9ca3af', fontSize: 13, gap: 12,
-    ...WORKSPACE_DOT_BACKGROUND,
-  }}>
-    <span>No UML content found.</span>
-    {interactive && (
-      <button
-        type="button"
-        onClick={onAddClass}
-        style={{
-          padding: '8px 14px', border: '1px solid #e2e8f0', borderRadius: 8,
-          background: '#fff', color: '#374151', fontSize: 12, fontWeight: 600, cursor: 'pointer',
-        }}
-      >
-        + Add class
-      </button>
-    )}
-  </div>
-);
-
-const UmlSaveMessageBanner: React.FC<{ message: string }> = ({ message }) => {
-  const success = isSaveMessageSuccess(message);
-  return (
-    <div style={{
-      position: 'absolute',
-      top: 14,
-      left: '50%',
-      transform: 'translateX(-50%)',
-      zIndex: 50,
-      padding: '8px 16px',
-      borderRadius: 8,
-      background: success ? '#ecfdf5' : '#fef2f2',
-      border: `1px solid ${success ? '#86efac' : '#fecaca'}`,
-      color: success ? '#15803d' : '#dc2626',
-      fontSize: 13,
-      fontWeight: 600,
-      boxShadow: '0 4px 16px rgba(0,0,0,0.1)',
-      maxWidth: 'min(480px, 90vw)',
-      textAlign: 'center',
-      pointerEvents: 'none',
-    }}>
-      {message}
-    </div>
-  );
-};
 export const UMLDiagram = forwardRef<UMLDiagramHandle, UMLDiagramProps>(({
   ecoreContent,
   fileName,
@@ -687,14 +615,13 @@ const rels = useMemo(
   );
 
   if (classes.length === 0) {
-    return <UmlEmptyDiagram interactive={interactive} onAddClass={addClass} />;
+    return <UMLDiagramEmptyState interactive={interactive} onAddClass={addClass} />;
   }
 
   const canDelete = !!(selectedRelId || selectedClassId);
   const selectedRel = selectedRelId ? relationships.find(r => r.id === selectedRelId) : null;
   const selectedClass = selectedClassId ? classes.find(c => c.id === selectedClassId) : null;
   const hasUnsavedChanges = isDirty();
-  const validationInset = getValidationBannerInset(selectedClass, selectedRel);
   const diagramCursor = getDiagramCursor(panning, connectMode);
   const saveButtonTitle = saveContext
     ? getSaveButtonTitle(hasUnsavedChanges, saveContext)
@@ -785,31 +712,7 @@ const rels = useMemo(
     </div>
     </div>
       {interactive && connectMode && (
-        <div
-          data-uml-connect-banner
-          style={{
-            position: 'absolute',
-            top: DIAGRAM_HINT_TOP,
-            left: '50%',
-            transform: 'translateX(-50%)',
-            zIndex: 32,
-            padding: '6px 14px',
-            borderRadius: 10,
-            background: UML.surface,
-            border: `1px solid ${UML.primaryBorder}`,
-            color: UML.ink,
-            fontSize: 11,
-            fontWeight: 600,
-            fontFamily: UML.fontSans,
-            boxShadow: `0 4px 14px ${UML.primaryRing}`,
-            pointerEvents: 'none',
-            maxWidth: 'min(420px, calc(100vw - 320px))',
-            textAlign: 'center',
-            lineHeight: 1.35,
-          }}
-        >
-          {getConnectModeHint(connectSourceId)}
-        </div>
+        <UMLDiagramConnectBanner connectSourceId={connectSourceId} />
       )}
       {interactive && (
         <UMLDiagramToolbar
@@ -829,39 +732,13 @@ const rels = useMemo(
           onSave={() => { void handleSave(); }}
         />
       )}
-      {saveMessage && <UmlSaveMessageBanner message={saveMessage} />}
+      {saveMessage && <UMLDiagramSaveMessageBanner message={saveMessage} />}
       {interactive && validationIssues.length > 0 && (
-        <div
-          data-uml-validation
-          style={{
-            position: 'absolute',
-            top: DIAGRAM_HINT_TOP,
-            left: validationInset.left,
-            right: validationInset.right,
-            zIndex: 31,
-            padding: '8px 12px',
-            borderRadius: 8,
-            background: '#fffbeb',
-            border: '1px solid #fcd34d',
-            color: '#92400e',
-            fontSize: 11,
-            fontFamily: UML.fontSans,
-            lineHeight: 1.45,
-            maxHeight: 72,
-            overflowY: 'auto',
-          }}
-        >
-          {validationIssues.slice(0, 4).map((issue, idx) => (
-            <div key={`${issue.message}-${idx}`}>
-              {issue.severity === 'error' ? '⛔' : '⚠'} {issue.message}
-            </div>
-          ))}
-          {validationIssues.length > 4 && (
-            <div style={{ marginTop: 4, fontStyle: 'italic' }}>
-              +{validationIssues.length - 4} more issue(s)
-            </div>
-          )}
-        </div>
+        <UMLDiagramValidationBanner
+          issues={validationIssues}
+          classPanelOpen={Boolean(selectedClass)}
+          relationshipPanelOpen={Boolean(selectedRel)}
+        />
       )}
       {interactive && selectedClass && (
         <ClassEditPanel

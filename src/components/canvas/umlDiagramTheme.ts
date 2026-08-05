@@ -1,6 +1,15 @@
+import type { CSSProperties } from 'react';
+
 export const DIAGRAM_TOOLBAR_TOP = 10;
 export const DIAGRAM_TOOLBAR_HEIGHT = 46;
 export const DIAGRAM_HINT_TOP = DIAGRAM_TOOLBAR_TOP + DIAGRAM_TOOLBAR_HEIGHT + 8;
+
+/** Dotted workspace background — matches canvas / HomePage grid */
+export const WORKSPACE_DOT_BACKGROUND: CSSProperties = {
+  backgroundColor: '#f3f4f6',
+  backgroundImage: 'radial-gradient(circle, #d1d5db 0.75px, transparent 0.75px)',
+  backgroundSize: '24px 24px',
+};
 
 /** Vitruv design tokens — aligned with Model Library / canvas UI */
 export const UML = {
