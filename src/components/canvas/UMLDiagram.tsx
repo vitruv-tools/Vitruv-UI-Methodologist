@@ -32,6 +32,7 @@ import {
 import { useUmlDiagramViewport } from '../../hooks/useUmlDiagramViewport';
 import { useUmlRelationshipLayers } from '../../hooks/useUmlRelationshipLayers';
 import { useUmlDiagramPrimaryEditing } from '../../hooks/useUmlDiagramPrimaryEditing';
+import { useUmlDiagramInteraction } from '../../hooks/useUmlDiagramInteraction';
 
 export { WORKSPACE_DOT_BACKGROUND };
 
@@ -92,68 +93,6 @@ interface UMLDiagramProps {
   saveContext?: UmlDiagramSaveContext;
   onHistoryChange?: (state: { canUndo: boolean; canRedo: boolean }) => void;
 }
-const REL_TYPE_CYCLE: UMLRelationship['type'][] = [
-  'association',
-  'composition',
-  'inheritance',
-];
-
-function nextRelationshipType(
-  current: UMLRelationship['type'],
-): UMLRelationship['type'] {
-  const index = REL_TYPE_CYCLE.indexOf(current);
-  return REL_TYPE_CYCLE[(index + 1) % REL_TYPE_CYCLE.length];
-}
-function isKeyboardInputField(target: EventTarget | null): boolean {
-  const tag = (target as HTMLElement | null)?.tagName;
-  return tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT';
-}
-
-function tryHandleUndoRedoShortcut(
-  e: KeyboardEvent,
-  inField: boolean,
-  handleUndo: () => void,
-  handleRedo: () => void,
-): boolean {
-  if (!((e.ctrlKey || e.metaKey) && !inField)) return false;
-  const key = e.key.toLowerCase();
-  if (key === 'z') {
-    e.preventDefault();
-    e.stopPropagation();
-    if (e.shiftKey) handleRedo();
-    else handleUndo();
-    return true;
-  }
-  if (key === 'y') {
-    e.preventDefault();
-    e.stopPropagation();
-    handleRedo();
-    return true;
-  }
-  return false;
-}
-
-function tryHandleEscapeShortcut(e: KeyboardEvent, tryEscape: () => boolean): void {
-  if (e.key !== 'Escape') return;
-  if (tryEscape()) {
-    e.preventDefault();
-    e.stopPropagation();
-  }
-}
-
-function tryHandleDeleteShortcut(
-  e: KeyboardEvent,
-  inField: boolean,
-  selectedRelId: string | null,
-  selectedClassId: string | null,
-  handleDeleteSelected: () => void,
-): void {
-  if (e.key !== 'Delete' && e.key !== 'Backspace') return;
-  if (inField) return;
-  if (!selectedRelId && !selectedClassId) return;
-  e.preventDefault();
-  handleDeleteSelected();
-}
 
 function getDiagramCursor(panning: boolean, connectMode: boolean): React.CSSProperties['cursor'] {
   if (panning) return 'grabbing';
@@ -200,6 +139,12 @@ const rels = useMemo(
   const [selectedRelId, setSelectedRelId] = useState<string | null>(null);
   const [connectMode, setConnectMode] = useState(false);
   const [connectSourceId, setConnectSourceId] = useState<string | null>(null);
+  const resetInteractionState = useCallback(() => {
+    setSelectedClassId(null);
+    setSelectedRelId(null);
+    setConnectMode(false);
+    setConnectSourceId(null);
+  }, []);
   const classesRef = useRef(classes);
   classesRef.current = classes;
   const relationshipsRef = useRef(relationships);
@@ -228,11 +173,8 @@ const rels = useMemo(
     setClasses(snapshot.classes);
     setRelationships(snapshot.relationships);
     cancelPrimaryEditRef.current();
-    setSelectedClassId(null);
-    setSelectedRelId(null);
-    setConnectMode(false);
-    setConnectSourceId(null);
-  }, []);
+    resetInteractionState();
+  }, [resetInteractionState]);
 
   const notifyHistoryChange = useCallback(() => {
     onHistoryChange?.({
@@ -262,11 +204,6 @@ const rels = useMemo(
     if (restored) applySnapshot(restored);
   }, [interactive, historyCanRedo, redoHistory, takeSnapshot, applySnapshot]);
 
-  const handleToggleConnect = useCallback(() => {
-    setConnectMode(value => !value);
-    setConnectSourceId(null);
-  }, []);
-
   const getModel = useCallback((): UMLModel => ({
     classes: classesRef.current,
     relationships: relationshipsRef.current,
@@ -289,10 +226,7 @@ const rels = useMemo(
     setOriginalEcore(content);
     setClasses(baseClasses.map(c => ({ ...c, operations: c.operations ?? [] })));
     setRelationships(next.relationships);
-    setSelectedClassId(null);
-    setSelectedRelId(null);
-    setConnectMode(false);
-    setConnectSourceId(null);
+    resetInteractionState();
     cancelPrimaryEditRef.current();
     initialSnapshotRef.current = umlSemanticSnapshot({
       classes: baseClasses,
@@ -303,7 +237,7 @@ const rels = useMemo(
       persistViewportLayoutRef.current(baseClasses);
     }
     clearHistory();
-  }, [fileName, layoutScopeId, clearHistory]);
+  }, [fileName, layoutScopeId, clearHistory, resetInteractionState]);
 
   // Re-apply saved layout when ecore content or file changes
   useEffect(() => {
@@ -399,71 +333,37 @@ const rels = useMemo(
   flushPendingEditRef.current = flushPendingEdit;
   cancelPrimaryEditRef.current = cancelEdit;
 
-  const cycleRelationshipType = useCallback((relationshipId: string) => {
-    const relationship = relationshipsRef.current.find(
-      candidate => candidate.id === relationshipId,
-    );
-    if (!relationship) return;
-    updateRelationship(relationshipId, {
-      type: nextRelationshipType(relationship.type),
-    });
-  }, [updateRelationship]);
-
-  const dismissClassSelection = useCallback(() => {
-    flushPendingEdit();
-    setSelectedClassId(null);
-    cancelEdit();
-  }, [cancelEdit, flushPendingEdit]);
-
-  const handleCanvasDoubleClick = useCallback((e: MouseEvent) => {
-    if (!interactive) return;
-    if (!isEmptyCanvasTarget(e.target as HTMLElement)) return;
-    e.preventDefault();
-    e.stopPropagation();
-    dismissClassSelection();
-  }, [interactive, dismissClassSelection]);
-
-  useEffect(() => {
-    const el = containerRef.current;
-    if (!el) return;
-    el.addEventListener('dblclick', handleCanvasDoubleClick);
-    return () => {
-      el.removeEventListener('dblclick', handleCanvasDoubleClick);
-    };
-  }, [handleCanvasDoubleClick, classes.length, containerRef]);
-
-  const tryEscape = useCallback(() => {
-    if (connectMode) {
-      setConnectMode(false);
-      setConnectSourceId(null);
-      return true;
-    }
-    if (connectSourceId) {
-      setConnectSourceId(null);
-      return true;
-    }
-    if (edit) {
-      cancelEdit();
-      return true;
-    }
-    if (selectedRelId) {
-      setSelectedRelId(null);
-      return true;
-    }
-    if (selectedClassId) {
-      dismissClassSelection();
-      return true;
-    }
-    return false;
-  }, [cancelEdit, connectMode, connectSourceId, edit, selectedRelId, selectedClassId, dismissClassSelection]);
-
-  const handleRelationshipClick = useCallback((relId: string, e: React.MouseEvent) => {
-    e.stopPropagation();
-    if (e.detail >= 2 && interactive) {
-      cycleRelationshipType(relId);
-    }
-    setSelectedRelId(relId);
-  }, [interactive, cycleRelationshipType]);
+  const {
+    handleToggleConnect,
+    handleClassSelect,
+    handleRelationshipClick,
+    handleDeleteSelected,
+    handleRelationshipBackgroundClick,
+    tryEscape,
+  } = useUmlDiagramInteraction({
+    interactive,
+    classCount: classes.length,
+    containerRef,
+    isEmptyCanvasTarget,
+    relationships,
+    selectedClassId,
+    setSelectedClassId,
+    selectedRelationshipId: selectedRelId,
+    setSelectedRelationshipId: setSelectedRelId,
+    connectMode,
+    setConnectMode,
+    connectSourceId,
+    setConnectSourceId,
+    editActive: Boolean(edit),
+    flushPendingEdit,
+    cancelEdit,
+    addRelationship,
+    updateRelationship,
+    deleteRelationship,
+    deleteClass,
+    handleUndo,
+    handleRedo,
+  });
 
   const isDirty = useCallback(() => {
     return umlSemanticSnapshot(getModel()) !== initialSnapshotRef.current;
@@ -541,60 +441,6 @@ const rels = useMemo(
     zoomIn,
     zoomOut,
   ]);
-
-  const handleClassSelect = useCallback((classId: string) => {
-    if (!interactive) return;
-    flushPendingEdit();
-    if (connectMode) {
-      if (!connectSourceId) {
-        setConnectSourceId(classId);
-        setSelectedClassId(classId);
-        return;
-      }
-      if (connectSourceId !== classId) {
-        const connected = addRelationship(connectSourceId, classId);
-        if (!connected) {
-          setSelectedClassId(classId);
-          return;
-        }
-      }
-      setConnectMode(false);
-      setConnectSourceId(null);
-      setSelectedClassId(classId);
-      return;
-    }
-    setSelectedClassId(classId);
-  }, [interactive, connectMode, connectSourceId, addRelationship, flushPendingEdit]);
-
-  const handleDeleteSelected = useCallback(() => {
-    if (selectedRelId) {
-      deleteRelationship(selectedRelId);
-      return;
-    }
-    if (selectedClassId) {
-      deleteClass(selectedClassId);
-    }
-  }, [selectedRelId, selectedClassId, deleteRelationship, deleteClass]);
-
-  useEffect(() => {
-    if (!interactive) return;
-    const onKeyDown = (e: KeyboardEvent) => {
-      const inField = isKeyboardInputField(e.target);
-      if (tryHandleUndoRedoShortcut(e, inField, handleUndo, handleRedo)) return;
-      tryHandleEscapeShortcut(e, tryEscape);
-      if (e.key === 'Escape') return;
-      tryHandleDeleteShortcut(e, inField, selectedRelId, selectedClassId, handleDeleteSelected);
-    };
-    globalThis.addEventListener('keydown', onKeyDown);
-    return () => globalThis.removeEventListener('keydown', onKeyDown);
-  }, [interactive, selectedRelId, selectedClassId, handleDeleteSelected, tryEscape, handleUndo, handleRedo]);
-
-  const handleRelationshipBackgroundClick = useCallback(() => {
-    if (connectMode) {
-      setConnectMode(false);
-      setConnectSourceId(null);
-    }
-  }, [connectMode]);
 
   const {
     edgeLayouts,
