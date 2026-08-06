@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { apiService } from '../services/api';
 import { useAuth } from '../contexts/AuthContext';
-import '../components/auth/Auth.css';
+import { AuthErrorBanner, AuthLayout } from '../components/auth/AuthLayout';
 
 const OTP_DURATION = 5 * 60; // 5 minutes in seconds
 
@@ -214,217 +214,95 @@ export function OtpVerificationPage() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [location.state, navigate]);
 
+  const verifyDisabled = isVerifying || !otpCode || failedAttempts >= MAX_ATTEMPTS;
+  const attemptsLeft = MAX_ATTEMPTS - failedAttempts;
+
   return (
-    <div 
-      className="auth-container"
-      style={{
-        backgroundImage: `url(${process.env.PUBLIC_URL}/assets/vitruvius1.png)`,
-        backgroundSize: 'contain',
-        backgroundPosition: 'center center',
-        backgroundRepeat: 'no-repeat',
-        backgroundColor: '#f0f0f0'
-      }}
-    >
-      <div className="auth-card" style={{ maxWidth: 480 }}>
-        <div className="auth-header">
-          <h1>Email Verification</h1>
-          <p>Please enter the latest verification code sent to your email</p>
-          <p style={{ marginTop: 6, fontSize: 12, color: '#6b7280' }}>
-            If a new code is sent, all previous codes become invalid.
-          </p>
-        </div>
+    <AuthLayout>
+      <div className="mock-auth-header">
+        <h1>Email Verification</h1>
+        <p>Enter the latest verification code sent to your email</p>
+      </div>
 
-        <form onSubmit={handleVerifyOtp} className="auth-form">
-          {error && (
-            <div className="error-message" style={{ display: 'block' }}>
-              <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8 }}>
-                <span className="error-icon">⚠️</span>
-                <div style={{ flex: 1 }}>
-                  {error}
-                  {error.includes('session expired') && (
-                    <div style={{ marginTop: 12 }}>
-                      <button
-                        type="button"
-                        onClick={() => navigate('/login')}
-                        style={{
-                          padding: '8px 16px',
-                          background: '#049484',
-                          color: 'white',
-                          border: 'none',
-                          borderRadius: 6,
-                          fontWeight: 600,
-                          cursor: 'pointer',
-                          fontSize: 13,
-                        }}
-                      >
-                        Go to Sign In
-                      </button>
-                    </div>
-                  )}
-                </div>
-              </div>
-            </div>
-          )}
+      <form onSubmit={handleVerifyOtp} className="mock-auth-form">
+        <AuthErrorBanner message={error} />
 
-          {success && (
-            <div style={{
-              padding: '14px 16px',
-              background: '#d5f4e6',
-              border: '2px solid #a9dfbf',
-              borderRadius: 8,
-              color: '#166534',
-              fontSize: 14,
-              marginBottom: 20,
-              fontWeight: 500,
-              lineHeight: 1.5,
-            }}>
-              {success}
-            </div>
-          )}
-
-          {/* Show attempts warning after first failure */}
-          {failedAttempts > 0 && failedAttempts < MAX_ATTEMPTS && !error && (
-            <div style={{
-              padding: '12px 14px',
-              background: '#fff3cd',
-              border: '2px solid #ffc107',
-              borderRadius: 8,
-              color: '#856404',
-              fontSize: 13,
-              marginBottom: 16,
-              fontWeight: 500,
-              lineHeight: 1.5,
-              display: 'flex',
-              alignItems: 'center',
-              gap: 8,
-            }}>
-              <span style={{ fontSize: 16 }}>⚠️</span>
-              <div>
-                <strong>Verification attempts:</strong> {failedAttempts}/{MAX_ATTEMPTS} used
-                <br />
-                <span style={{ fontSize: 12 }}>
-                  {MAX_ATTEMPTS - failedAttempts} attempts remaining before requiring sign-in
-                </span>
-              </div>
-            </div>
-          )}
-
-          <div className="form-group">
-            <label htmlFor="otpCode">Verification Code</label>
-            <input
-              type="text"
-              id="otpCode"
-              name="otpCode"
-              value={otpCode}
-              onChange={(e) => {
-                setOtpCode(e.target.value);
-                setError(null);
-              }}
-              placeholder="Enter OTP code"
-              disabled={isVerifying}
-              required
-              style={{
-                fontSize: 18,
-                letterSpacing: '0.5em',
-                textAlign: 'center',
-                fontWeight: 600,
-              }}
-            />
-          </div>
-
-          {/* Timer Display */}
-          <div style={{
-            textAlign: 'center',
-            marginBottom: 20,
-            padding: '12px',
-            background: timeLeft <= 60 ? '#fef2f2' : '#f0f7ff',
-            border: `2px solid ${timeLeft <= 60 ? '#fecaca' : '#bfdbfe'}`,
-            borderRadius: 8,
-          }}>
-            <div style={{
-              fontSize: 13,
-              color: '#6b7280',
-              marginBottom: 4,
-              fontWeight: 500,
-            }}>
-              Time Remaining
-            </div>
-            <div style={{
-              fontSize: 28,
-              fontWeight: 700,
-              color: timeLeft <= 60 ? '#dc2626' : '#049484',
-              fontFamily: 'monospace',
-            }}>
-              {formatTime(timeLeft)}
-            </div>
-          </div>
-
-          <button
-            type="submit"
-            className="auth-button primary"
-            disabled={isVerifying || !otpCode || failedAttempts >= MAX_ATTEMPTS}
-            style={{
-              background: (isVerifying || !otpCode || failedAttempts >= MAX_ATTEMPTS) ? '#95a5a6' : 'linear-gradient(135deg, #049484 0%, #037368 100%)',
-              opacity: (isVerifying || !otpCode || failedAttempts >= MAX_ATTEMPTS) ? 0.6 : 1,
-            }}
-          >
-            {isVerifying ? (
-              <span className="loading-spinner">
-                <div className="spinner"></div>
-                Verifying...
-              </span>
-            ) : (
-              'Verify Email'
-            )}
-          </button>
-
-          {/* Resend OTP Link */}
-          {canResend && (
-            <div style={{
-              textAlign: 'center',
-              marginTop: 20,
-              padding: '12px',
-              background: '#f9fafb',
-              border: '1px solid #e5e7eb',
-              borderRadius: 8,
-            }}>
-              <p style={{ margin: '0 0 8px 0', fontSize: 13, color: '#6b7280' }}>
-                Didn't receive the code?
-              </p>
-              <button
-                type="button"
-                className="link-button"
-                onClick={handleResendOtp}
-                disabled={isResending}
-                style={{
-                  fontSize: 14,
-                  color: '#049484',
-                  fontWeight: 600,
-                  cursor: isResending ? 'not-allowed' : 'pointer',
-                  opacity: isResending ? 0.6 : 1,
-                }}
-              >
-                {isResending ? 'Sending...' : 'Resend Verification Code'}
-              </button>
-            </div>
-          )}
-        </form>
-
-        <div className="auth-footer">
-          <p style={{ fontSize: 12, color: '#6b7280', lineHeight: 1.5 }}>
-            Please check your inbox and spam folder for the verification code. 
-            The code is valid for 5 minutes.
-          </p>
+        {error?.includes('session expired') && (
           <button
             type="button"
-            className="link-button"
+            className="mock-action-button"
             onClick={() => navigate('/login')}
-            style={{ marginTop: 12 }}
+            style={{ marginBottom: 16 }}
           >
             Go to Sign In
           </button>
+        )}
+
+        {success && <div className="otp-status otp-status-success">{success}</div>}
+
+        {/* Attempts warning after the first failure, unless an error already says so */}
+        {failedAttempts > 0 && failedAttempts < MAX_ATTEMPTS && !error && (
+          <div className="otp-status otp-status-warning">
+            <strong>Verification attempts:</strong> {failedAttempts}/{MAX_ATTEMPTS} used —{' '}
+            {attemptsLeft} {attemptsLeft === 1 ? 'attempt' : 'attempts'} remaining.
+          </div>
+        )}
+
+        <div className="mock-form-group">
+          <label htmlFor="otpCode">Verification Code</label>
+          <input
+            className="otp-code-input"
+            type="text"
+            id="otpCode"
+            name="otpCode"
+            value={otpCode}
+            onChange={(e) => {
+              setOtpCode(e.target.value);
+              setError(null);
+            }}
+            placeholder="000000"
+            inputMode="numeric"
+            autoComplete="one-time-code"
+            disabled={isVerifying}
+            required
+          />
         </div>
+
+        <div className="otp-timer">
+          <span>Code expires in</span>
+          <span className={`otp-timer-value${timeLeft <= 60 ? ' is-expiring' : ''}`}>
+            {formatTime(timeLeft)}
+          </span>
+        </div>
+
+        <button type="submit" className="mock-action-button" disabled={verifyDisabled}>
+          {isVerifying ? 'Verifying...' : 'Verify Email'}
+        </button>
+
+        {canResend && (
+          <div className="otp-resend">
+            Didn&apos;t receive the code?{' '}
+            <button
+              type="button"
+              className="otp-resend-button"
+              onClick={handleResendOtp}
+              disabled={isResending}
+            >
+              {isResending ? 'Sending...' : 'Resend code'}
+            </button>
+          </div>
+        )}
+      </form>
+
+      <div className="mock-auth-footer">
+        <p className="otp-help">
+          Check your inbox and spam folder. The code is valid for 5 minutes, and sending a
+          new one invalidates any previous code.
+        </p>
+        <button type="button" className="mock-signup-link" onClick={() => navigate('/login')}>
+          Back to Sign In
+        </button>
       </div>
-    </div>
+    </AuthLayout>
   );
 }
