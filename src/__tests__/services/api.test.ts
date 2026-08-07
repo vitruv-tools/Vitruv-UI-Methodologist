@@ -126,6 +126,26 @@ describe('ApiService – authenticatedRequest', () => {
   });
 });
 
+describe('ApiService – changePassword', () => {
+  const { AuthService } = require('../../services/auth') as { AuthService: { ensureValidToken: jest.Mock } };
+
+  beforeEach(() => { AuthService.ensureValidToken.mockResolvedValue('mock-token'); });
+  afterEach(() => jest.restoreAllMocks());
+
+  it('sends the current and new passwords to the change-password endpoint', async () => {
+    const payload = { data: null, message: 'Password updated' };
+    mockFetch(payload);
+
+    const result = await apiService.changePassword('Current1!', 'Secure1!');
+
+    expect(result).toEqual(payload);
+    const [url, options] = (global.fetch as jest.Mock).mock.calls[0];
+    expect(url).toContain('/api/v1/users/change-password');
+    expect(options.method).toBe('PUT');
+    expect(JSON.parse(options.body)).toEqual({ currentPassword: 'Current1!', password: 'Secure1!' });
+  });
+});
+
 // ── uploadFile ────────────────────────────────────────────────────────────────
 
 describe('ApiService – uploadFile', () => {

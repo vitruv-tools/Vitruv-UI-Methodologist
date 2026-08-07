@@ -6,7 +6,9 @@ import { AppSidebar } from '../../../components/layout/AppSidebar';
 jest.mock('../../../hooks/useChangePassword', () => ({
   useChangePassword: () => ({
     isOpen: false, open: jest.fn(), close: jest.fn(),
+    currentPassword: '',
     newPassword: '', confirmPassword: '',
+    setCurrentPassword: jest.fn(),
     setNewPassword: jest.fn(), setConfirmPassword: jest.fn(),
     validation: null, isConfirmValid: true,
     isChanging: false, error: null, success: false,

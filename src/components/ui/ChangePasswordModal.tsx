@@ -204,8 +204,10 @@ const ModalButton: React.FC<{
 export interface ChangePasswordModalProps {
   isOpen: boolean;
   onClose: () => void;
+  currentPassword: string;
   newPassword: string;
   confirmPassword: string;
+  onCurrentPasswordChange: (value: string) => void;
   onNewPasswordChange: (value: string) => void;
   onConfirmPasswordChange: (value: string) => void;
   validation: PasswordValidation;
@@ -220,8 +222,10 @@ export interface ChangePasswordModalProps {
 export const ChangePasswordModal: React.FC<ChangePasswordModalProps> = ({
   isOpen,
   onClose,
+  currentPassword,
   newPassword,
   confirmPassword,
+  onCurrentPasswordChange,
   onNewPasswordChange,
   onConfirmPasswordChange,
   validation,
@@ -274,6 +278,7 @@ export const ChangePasswordModal: React.FC<ChangePasswordModalProps> = ({
           </p>
         </div>
         <div style={{ padding: 32 }}>
+          <PasswordInput label="Current Password" value={currentPassword} onChange={onCurrentPasswordChange} placeholder="Enter current password" disabled={isChanging} />
           <PasswordInput label="New Password" value={newPassword} onChange={onNewPasswordChange} placeholder="Enter new password" disabled={isChanging} />
           <PasswordRequirements validation={validation} showRequirements={!!newPassword && !validation.isPasswordValid} />
           <PasswordInput
