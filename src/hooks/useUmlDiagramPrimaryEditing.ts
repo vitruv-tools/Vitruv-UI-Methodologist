@@ -21,17 +21,15 @@ import type {
   UmlDiagramClass,
   UmlDiagramEditState,
 } from '../components/canvas/umlDiagramTypes';
-import type {
-  UMLAttribute,
-  UMLOperation,
-  UMLVisibility,
-} from '../utils/ecoreToUml';
 import {
+  type UMLAttribute,
+  type UMLOperation,
+  type UMLRelationship,
+  type UMLVisibility,
   nextUniqueAttributeName,
   nextUniqueOperationName,
   normalizeAttributeTypeDisplay,
   normalizeOperationReturnType,
-  type UMLRelationship,
 } from '../utils/ecoreToUml';
 import {
   sanitizeUmlClassId,

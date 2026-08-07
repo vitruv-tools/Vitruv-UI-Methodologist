@@ -125,9 +125,12 @@ export function useUmlDiagramViewport({
   }, [fileName, persistLayout]);
 
   const restoreViewport = useCallback((viewport?: UmlViewport | null): boolean => {
-    const saved = viewport === undefined
-      ? (fileName ? loadUmlViewport(layoutScopeId, fileName) : null)
-      : viewport;
+    let saved: UmlViewport | null;
+    if (viewport === undefined) {
+      saved = fileName ? loadUmlViewport(layoutScopeId, fileName) : null;
+    } else {
+      saved = viewport;
+    }
     if (!saved) return false;
     applyViewport(saved);
     return true;

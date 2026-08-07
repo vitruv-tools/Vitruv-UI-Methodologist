@@ -289,26 +289,28 @@ function handleClassBoxNameSectionKeyDown(
 
 function handleClassBoxNameSectionClick(
   event: React.MouseEvent,
-  interactive: boolean,
-  selected: boolean,
-  edit: UmlDiagramEditState | null,
-  classId: string,
-  didDragRef: ClassBoxDidDragRef,
-  onSelect: () => void,
-  onStartEditName: () => void,
+  params: {
+    interactive: boolean;
+    selected: boolean;
+    edit: UmlDiagramEditState | null;
+    classId: string;
+    didDragRef: ClassBoxDidDragRef;
+    onSelect: () => void;
+    onStartEditName: () => void;
+  },
 ): void {
   event.stopPropagation();
-  if (didDragRef.current) {
-    didDragRef.current = false;
+  if (params.didDragRef.current) {
+    params.didDragRef.current = false;
     return;
   }
-  if (!interactive) return;
-  if (!selected) {
-    onSelect();
+  if (!params.interactive) return;
+  if (!params.selected) {
+    params.onSelect();
     return;
   }
-  if (edit?.classId !== classId) {
-    onStartEditName();
+  if (params.edit?.classId !== params.classId) {
+    params.onStartEditName();
   }
 }
 
@@ -329,16 +331,7 @@ function getClassBoxNameSectionInteractionProps(params: {
       event.stopPropagation();
       params.onStartEditName();
     },
-    onClick: event => handleClassBoxNameSectionClick(
-      event,
-      params.interactive,
-      params.selected,
-      params.edit,
-      params.classId,
-      params.didDragRef,
-      params.onSelect,
-      params.onStartEditName,
-    ),
+    onClick: event => handleClassBoxNameSectionClick(event, params),
     onKeyDown: event => handleClassBoxNameSectionKeyDown(
       event,
       params.interactive,

@@ -2,7 +2,6 @@ import {
   useEffect,
   useRef,
   type CSSProperties,
-  type KeyboardEvent as ReactKeyboardEvent,
   type ReactNode,
 } from 'react';
 import type {
@@ -67,22 +66,9 @@ function PanelCheckboxField({
   );
 }
 
-function stopDiagramEventBubble(event: { stopPropagation(): void }): void {
-  event.stopPropagation();
-}
-
-function handleDiagramEditPanelKeyDown(
-  event: ReactKeyboardEvent<HTMLDialogElement>,
-  onClose: () => void,
-): void {
-  event.stopPropagation();
-  if (event.key === 'Escape') onClose();
-}
-
 interface DiagramEditPanelShellProps {
   panelDataAttr: 'class' | 'rel';
   ariaLabel: string;
-  onClose: () => void;
   style: CSSProperties;
   children: ReactNode;
 }
@@ -90,7 +76,6 @@ interface DiagramEditPanelShellProps {
 const DiagramEditPanelShell = ({
   panelDataAttr,
   ariaLabel,
-  onClose,
   style,
   children,
 }: DiagramEditPanelShellProps) => {
@@ -112,10 +97,6 @@ const DiagramEditPanelShell = ({
       open
       aria-label={ariaLabel}
       style={{ ...style, margin: 0, padding: 0 }}
-      onClick={stopDiagramEventBubble}
-      onMouseDown={stopDiagramEventBubble}
-      onKeyDown={event => handleDiagramEditPanelKeyDown(event, onClose)}
-      onKeyUp={stopDiagramEventBubble}
     >
       {children}
     </dialog>
@@ -146,7 +127,6 @@ export const ClassEditPanel = ({
   <DiagramEditPanelShell
     panelDataAttr="class"
     ariaLabel={`Edit class ${cls.name}`}
-    onClose={onClose}
     style={{
       position: 'absolute', top: DIAGRAM_HINT_TOP, left: 12, bottom: 12, zIndex: 35,
       width: 268, background: UML.surface, border: `1px solid ${UML.primaryBorder}`,
@@ -239,7 +219,6 @@ export const RelationshipEditPanel = ({
   <DiagramEditPanelShell
     panelDataAttr="rel"
     ariaLabel={getRelationshipEditPanelAriaLabel(rel)}
-    onClose={onClose}
     style={{
       position: 'absolute',
       top: DIAGRAM_HINT_TOP,
