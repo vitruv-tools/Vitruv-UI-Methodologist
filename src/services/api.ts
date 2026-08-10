@@ -240,10 +240,10 @@ class ApiService {
   /**
    * Change user password
    */
-  async changePassword(password: string): Promise<{ data: any; message: string }> {
+  async changePassword(currentPassword: string, password: string): Promise<{ data: any; message: string }> {
     return this.authenticatedRequest('/api/v1/users/change-password', {
       method: 'PUT',
-      body: JSON.stringify({ password }),
+      body: JSON.stringify({ currentPassword, password }),
     });
   }
 

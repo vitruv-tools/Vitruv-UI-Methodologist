@@ -5,6 +5,7 @@ import { extractApiErrorMessage } from '../utils/apiErrorMessage';
 
 export function useChangePassword() {
   const [isOpen, setIsOpen] = useState(false);
+  const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [isChanging, setIsChanging] = useState(false);
@@ -16,15 +17,17 @@ export function useChangePassword() {
     () => !!confirmPassword && confirmPassword === newPassword,
     [confirmPassword, newPassword],
   );
+  const isCurrentPasswordValid = useMemo(() => currentPassword.trim().length > 0, [currentPassword]);
   const canSubmit = useMemo(
-    () => !isChanging && validation.isPasswordValid && isConfirmValid,
-    [isChanging, validation.isPasswordValid, isConfirmValid],
+    () => !isChanging && isCurrentPasswordValid && validation.isPasswordValid && isConfirmValid,
+    [isChanging, isCurrentPasswordValid, validation.isPasswordValid, isConfirmValid],
   );
 
   const close = useCallback(() => {
     setIsOpen(false);
     setError('');
     setSuccess('');
+    setCurrentPassword('');
     setNewPassword('');
     setConfirmPassword('');
   }, []);
@@ -39,6 +42,11 @@ export function useChangePassword() {
     setError('');
     setSuccess('');
 
+    if (!isCurrentPasswordValid) {
+      setError('Current password is required');
+      return;
+    }
+
     if (!validation.isPasswordValid) {
       setError('The password does not meet all security requirements.');
       return;
@@ -51,8 +59,9 @@ export function useChangePassword() {
 
     setIsChanging(true);
     try {
-      const response = await apiService.changePassword(newPassword);
+      const response = await apiService.changePassword(currentPassword, newPassword);
       setSuccess(response?.message || 'Password changed successfully!');
+      setCurrentPassword('');
       setNewPassword('');
       setConfirmPassword('');
       setTimeout(() => close(), 2000);
@@ -61,14 +70,19 @@ export function useChangePassword() {
     } finally {
       setIsChanging(false);
     }
-  }, [newPassword, validation.isPasswordValid, isConfirmValid, close]);
+  }, [currentPassword, isCurrentPasswordValid, newPassword, validation.isPasswordValid, isConfirmValid, close]);
 
   return {
     isOpen,
     open,
     close,
+    currentPassword,
     newPassword,
     confirmPassword,
+    setCurrentPassword: (value: string) => {
+      setCurrentPassword(value);
+      setError('');
+    },
     setNewPassword: (value: string) => {
       setNewPassword(value);
       setError('');

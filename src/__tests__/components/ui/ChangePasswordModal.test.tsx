@@ -29,8 +29,10 @@ describe('ChangePasswordModal', () => {
       <ChangePasswordModal
         isOpen
         onClose={jest.fn()}
+        currentPassword="Current1!"
         newPassword="Secure1!"
         confirmPassword="Secure1!"
+        onCurrentPasswordChange={jest.fn()}
         onNewPasswordChange={jest.fn()}
         onConfirmPasswordChange={jest.fn()}
         validation={validatePassword('Secure1!')}
@@ -43,14 +45,16 @@ describe('ChangePasswordModal', () => {
       />,
     );
 
+    const currentPasswordInput = screen.getByLabelText('Current Password');
     const newPasswordInput = screen.getByLabelText('New Password');
     const confirmPasswordInput = screen.getByLabelText('Confirm Password');
     const showPasswordButtons = screen.getAllByRole('button', { name: 'Show password' });
 
     expect(newPasswordInput).toHaveAttribute('type', 'password');
+    expect(currentPasswordInput).toHaveAttribute('type', 'password');
     expect(confirmPasswordInput).toHaveAttribute('type', 'password');
 
-    await userEvent.click(showPasswordButtons[0]);
+    await userEvent.click(showPasswordButtons[1]);
 
     expect(newPasswordInput).toHaveAttribute('type', 'text');
     expect(confirmPasswordInput).toHaveAttribute('type', 'password');
