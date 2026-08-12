@@ -542,4 +542,135 @@ None — Phase 3 is entirely new utility files.
 
 ## Next Phase
 
-**Phase 4 — UI components**: GhostNode, LowCodeReactionEditor, LowCodeReactionEdgeValidator, DragablePanel, FieldRenderer, EdgeValidator.
+**Phase 5 — Wire into FlowCanvas + CanvasPage**: Register node/edge types, connect handlers, mode sync.
+
+---
+---
+
+# Phase 4 — Completed
+
+**Date:** 2026-08-12
+**Reference:** [README.md](./README.md) § Phase 4 — UI components
+
+---
+
+## What Was Done
+
+Phase 4 creates all six UI components required by the Low Code integration. These are the visual building blocks wired together in Phase 5.
+
+### 1. GhostNode.tsx
+
+**File:** `src/components/flow/lowcode/GhostNode.tsx`
+
+Invisible 1×1px React Flow node with source/target handles. Used as a mid-edge routing anchor between meta-model bounding boxes for fine-granular reaction edges. Memoized for performance.
+
+### 2. LowCodeReactionEdgeValidator.tsx
+
+**File:** `src/components/flow/lowcode/LowCodeReactionEdgeValidator.tsx`
+
+Connection validation for fine-granular reaction edges. Rules:
+
+1. Must be in reactions mode (`useProjectStore.mode === 'reactions'`)
+2. Both handles must resolve to EObject FQ ids via `getProperEObjectIdFromHandle`
+3. Source and target must belong to different meta-models
+4. Self-connections are not allowed
+
+Also exports `isReactionHandleConnection` to detect reaction handle connections.
+
+### 3. FieldRenderer.tsx
+
+**File:** `src/components/flow/FieldRenderer.tsx`
+
+Renders a single metadata field using MUI components:
+
+| Field type | UI control |
+|------------|------------|
+| Boolean | `Checkbox` |
+| Enum (`allowableValues`) | `Select` dropdown |
+| Integer/Long/Short | Number `TextField` with step=1 |
+| Float/Double | Decimal `TextField` with step=any |
+| String | `TextField` |
+| Character | Single-char `TextField` (maxLength=1) |
+| array / map | Multiline `TextField` (JSON) |
+
+Integrates validation from `FieldUtils.validateFieldValue`.
+
+### 4. DragablePanel.tsx
+
+**File:** `src/components/flow/DragablePanel.tsx`
+
+Draggable, minimizable host panel floating above the React Flow canvas via `<Panel>`. Features:
+
+- Drag-to-move via title bar
+- Minimize/expand toggle
+- Save button with pulse animation when `saveHighlighted`
+- Optional Delete button (red)
+- Close button
+- Scrollable content area (max-height 500px)
+
+### 5. LowCodeReactionEditor.tsx
+
+**File:** `src/components/flow/lowcode/LowCodeReactionEditor.tsx`
+
+The core metadata-driven form editor. Key behaviors:
+
+- Fetches reaction templates from `/api/lowcode-metadata` on mount
+- Template selector (`<Select>`) filters out `hide: true` templates
+- Dynamic field rendering via `FieldRenderer` for visible fields
+- Restores saved form values from store on open
+- Builds `LowCodeReactionFieldVariables` from the selected edge's ecore data
+- Connection info displayed as subtitle
+
+Imperative API via `forwardRef`:
+- `save()` — writes `fieldValues` to VsumDetails store via `temporarilySaveLowCodeReactionConfig`
+- `undo()` — reverts to last saved values
+- `delete()` — delegates to `onDeleteRequest` callback
+- `isDirty()` — compares current values to last saved
+
+### 6. EdgeValidator.tsx
+
+**File:** `src/components/flow/EdgeValidator.tsx`
+
+Thin shared validator wrapper for use as React Flow's `isValidConnection`. Delegates reaction-handle connections to `LowCodeReactionEdgeValidator`; passes through all non-reaction connections.
+
+---
+
+## Key Decisions
+
+**MUI for Low Code components:** Per Phase 0 decision, the Low Code editor uses MUI (`@mui/material`, `@mui/icons-material`). These are scoped to the Low Code panel and do not affect the rest of the develop UI.
+
+**`forwardRef` imperative API:** The editor exposes `save`/`undo`/`delete`/`isDirty` via ref so `DragablePanel` and parent components can trigger these without prop drilling form state.
+
+**Store-first save, no backend endpoint:** `save()` writes to the VsumDetails Zustand store immediately. Backend persistence happens during VSUM sync (Phase 6).
+
+**Template metadata fetched on mount:** Each time the editor opens, it fetches fresh metadata from `/api/lowcode-metadata`. Values are cached in component state for the duration of the editor session.
+
+---
+
+## Files Created
+
+| File | Content |
+|------|---------|
+| `src/components/flow/lowcode/GhostNode.tsx` | Invisible routing anchor node |
+| `src/components/flow/lowcode/LowCodeReactionEdgeValidator.tsx` | Fine-granular connection validation |
+| `src/components/flow/lowcode/LowCodeReactionEditor.tsx` | Metadata-driven form editor |
+| `src/components/flow/FieldRenderer.tsx` | Single metadata field renderer |
+| `src/components/flow/DragablePanel.tsx` | Draggable/minimizable host panel |
+| `src/components/flow/EdgeValidator.tsx` | Shared connection validator wrapper |
+
+## Files Modified
+
+None — Phase 4 is entirely new component files.
+
+---
+
+## Verification Checklist
+
+- [x] `npx tsc --noEmit` produces no new errors in any component file
+- [x] No linter errors in any created file
+- [x] `GhostNode` is memoized and invisible (opacity: 0)
+- [x] `LowCodeReactionEdgeValidator` checks mode, EObject id resolution, and cross-model requirement
+- [x] `FieldRenderer` covers all 8 field types from metadata spec
+- [x] `DragablePanel` supports drag, minimize, save highlight, and optional delete
+- [x] `LowCodeReactionEditor` fetches metadata, renders template selector + dynamic fields, exposes imperative API
+- [x] `EdgeValidator` delegates reaction connections without breaking existing UML/coarse validation
