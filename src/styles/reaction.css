@@ -1,0 +1,37 @@
+/*
+ * CSS variable–driven visibility for reaction handles and edges.
+ *
+ * These custom properties are toggled by enableReactionHandles() /
+ * disableReactionHandles() (and corresponding edge helpers) in
+ * FineGranularReactionUtils.ts.
+ *
+ * Default: hidden (pointer-events: none, opacity: 0).
+ * Reactions mode: visible (pointer-events: auto, opacity: 1).
+ */
+
+/* ── Source handles ─────────────────────────────────────────────── */
+.react-flow .react-flow__handle.reaction-handle[data-handlepos="left"][data-handleid^="reaction"][data-handleid*="source"] {
+  pointer-events: var(--reaction-handle-pointer-events-source, none);
+  opacity: var(--reaction-handle-opacity-source, 0);
+}
+
+.react-flow .react-flow__handle.reaction-handle[data-handlepos="right"][data-handleid^="reaction"][data-handleid*="source"] {
+  pointer-events: var(--reaction-handle-pointer-events-source, none);
+  opacity: var(--reaction-handle-opacity-source, 0);
+}
+
+/* ── Target handles ─────────────────────────────────────────────── */
+.react-flow .react-flow__handle.reaction-handle[data-handlepos="left"][data-handleid^="reaction"][data-handleid*="target"] {
+  pointer-events: var(--reaction-handle-pointer-events-target, none);
+  opacity: var(--reaction-handle-opacity-target, 0);
+}
+
+.react-flow .react-flow__handle.reaction-handle[data-handlepos="right"][data-handleid^="reaction"][data-handleid*="target"] {
+  pointer-events: var(--reaction-handle-pointer-events-target, none);
+  opacity: var(--reaction-handle-opacity-target, 0);
+}
+
+/* ── Fine-granular reaction edges ───────────────────────────────── */
+.react-flow__edge.react-flow__edge-fine-granular-reaction {
+  opacity: var(--reaction-edge-opacity, 0);
+}
