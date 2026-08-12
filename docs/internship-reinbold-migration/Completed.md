@@ -150,4 +150,124 @@ Per the README's "Do not copy" list:
 
 ## Next Phase
 
-**Phase 1 — Types + API surface**: Create Low Code type definitions (`LowCodeReactionFieldMetadata`, `EditableVsumDetails`, etc.) and extend `src/services/api.ts` with the metadata endpoint.
+**Phase 2 — Zustand stores**: Create project-mode, VSUM details, and selected-edge stores.
+
+---
+---
+
+# Phase 1 — Completed
+
+**Date:** 2026-08-12
+**Reference:** [README.md](./README.md) § Phase 1 — Types + API surface
+
+---
+
+## What Was Done
+
+Phase 1 establishes all Low Code type definitions and extends the API surface to support fine-granular reactions. Nine new type files were created and the barrel `index.ts` was updated to re-export them. The API service, existing flow types, and snapshot utilities were extended.
+
+### 1. Low Code metadata types (4 files)
+
+| File | Type exported |
+|------|---------------|
+| `src/types/LowCodeReactionFieldMetadata.ts` | `LowCodeReactionFieldMetadata` — full field descriptor (name, type, constraints, display defaults) matching the backend `/api/lowcode-metadata` response |
+| `src/types/LowCodeReactionMetadata.ts` | `LowCodeReactionMetadata` — one reaction template entry (name, description, hide flag, field array) |
+| `src/types/LowCodeReactionMetadataResponse.ts` | `LowCodeReactionMetadataResponse` — top-level response wrapper (`reactionMetadataMap` keyed by reaction name) |
+| `src/types/LowCodeReactionFieldVariables.ts` | `LowCodeReactionFieldVariables` — template variable context for default-value interpolation (source/target model/element URIs and aliases) |
+
+### 2. Fine-granular and editable types (5 files)
+
+| File | Type(s) exported |
+|------|------------------|
+| `src/types/FineGranularMetaModelRelation.ts` | `EditableFineGranularMetaModelRelation` — persisted fine relation (`id`, `sourceId`, `targetId`, `reactionFileStorageId`, `lowCodeReactionRequestBase`) |
+| `src/types/FlowFineGranularMetaModelRelationData.ts` | `FlowFineGranularMetaModelRelationData` — React Flow edge data for fine-granular reaction edges (`ecore.eObjectSourceId/TargetId`, `fromModel`, `toModel`) |
+| `src/types/FlowMetaModelRelationData.ts` | `FlowMetaModelRelationData` — React Flow edge data for coarse-grained reaction edges |
+| `src/types/EditableVsumDetails.ts` | `EditableVsumDetails`, `EditableVsumMetaModelRef`, `EditableVsumMetaModelRelation` — mutable VSUM details for Zustand store with `fineGranularMetaModelRelationSet` |
+| `src/types/EdgeEventHandlers.ts` | `OnEdgeClickParams`, `OnEdgeDeleteParams`, `OnEdgeDoubleClickParams` — typed callback parameter shapes |
+
+### 3. Extended `src/types/flow.ts`
+
+Added additive fields to support the expanded canvas mode and fine-granular edges:
+
+| Addition | Purpose |
+|----------|---------|
+| `FlowNodeECoreData` type | Ecore identity data for expanded EObject nodes (`model`, `eObjectId`, attribute/reference/operation IDs) |
+| `FlowNode.data.ecore?` | Optional Ecore data on any flow node |
+| `FlowNode.data.isBoundingBox?` | Identifies bounding-box grouping nodes |
+| `FlowNode.data.group?` | Group key for bounding-box membership |
+| `UMLNode` type | Flow node with `backendMetaModelId` in data |
+| `FlowEdgeData` type | Explicit edge data type (`relationshipType`, `sourceMultiplicity`, `targetMultiplicity`, `labelX`, `labelY`) |
+| `FlowEdge` | Changed from `Edge` to `Edge<FlowEdgeData>` |
+| `FlowEcoreEdge` | Edge with both `FlowEdgeData` and `FlowFineGranularMetaModelRelationData` |
+
+### 4. Extended `src/services/api.ts`
+
+| Change | Detail |
+|--------|--------|
+| New method `getLowCodeReactionsMetadata()` | `GET /api/lowcode-metadata` → returns `LowCodeReactionMetadataResponse` |
+| Extended `MetaModelRelationRequest` | Added optional `fineGranularMetaModelRelationSet?: EditableFineGranularMetaModelRelation[]` |
+
+### 5. Extended snapshot utilities
+
+| File | Change |
+|------|--------|
+| `src/utils/workspaceSnapshotUtils.ts` | `cloneWorkspaceSnapshot` deep-clones `fineGranularMetaModelRelationSet`. `prepareSnapshotForSyncSave` preserves the fine set when present. |
+| `src/components/flow/flowCanvasSnapshot.ts` | `buildWorkspaceSnapshot` collects fine-granular reaction edges (`type: 'fine-granular-reaction'`), groups them by parent coarse relation key, and attaches them as `fineGranularMetaModelRelationSet` on the matching `MetaModelRelationRequest`. |
+
+### 6. Updated barrel export
+
+`src/types/index.ts` re-exports all 9 new type modules for convenient single-import access.
+
+---
+
+## Key Decisions
+
+**Canonical payload field name:** `lowCodeReactionRequestBase` — as specified in the README. The earlier `lowCodeReactionTemplate` + `lowCodeReactionTemplateParams` split from earlier old-branch commits was not revived.
+
+**`FlowEdge` now generic:** Changed from bare `Edge` to `Edge<FlowEdgeData>` to enable typed access to edge data throughout the codebase. `FlowEcoreEdge` layers fine-granular data on top.
+
+**Fine-edge snapshot grouping:** Fine-granular edges on the canvas use `ecore.fromModel` / `ecore.toModel` (meta-model source IDs as strings) as the grouping key, matching them to coarse relation entries by `sourceId->targetId`.
+
+---
+
+## Files Created
+
+| File | Content |
+|------|---------|
+| `src/types/LowCodeReactionFieldMetadata.ts` | Field metadata type |
+| `src/types/LowCodeReactionMetadata.ts` | Reaction metadata type |
+| `src/types/LowCodeReactionMetadataResponse.ts` | API response wrapper type |
+| `src/types/LowCodeReactionFieldVariables.ts` | Template variables type |
+| `src/types/FineGranularMetaModelRelation.ts` | Editable fine relation type |
+| `src/types/FlowFineGranularMetaModelRelationData.ts` | React Flow edge data type |
+| `src/types/FlowMetaModelRelationData.ts` | Coarse edge data type |
+| `src/types/EditableVsumDetails.ts` | Editable VSUM details types |
+| `src/types/EdgeEventHandlers.ts` | Edge event callback param types |
+
+## Files Modified
+
+| File | Change |
+|------|--------|
+| `src/types/flow.ts` | Added `FlowNodeECoreData`, `UMLNode`, `FlowEdgeData`, `FlowEcoreEdge`; extended `FlowNode.data` |
+| `src/types/index.ts` | Added barrel re-exports for all 9 new type modules |
+| `src/services/api.ts` | Added `getLowCodeReactionsMetadata()` method; extended `MetaModelRelationRequest` |
+| `src/utils/workspaceSnapshotUtils.ts` | Deep-clone and preserve fine set in snapshot clone/save |
+| `src/components/flow/flowCanvasSnapshot.ts` | Collect fine-granular edges and attach to parent coarse relations |
+
+---
+
+## Verification Checklist
+
+- [x] `npx tsc --noEmit` produces no new errors in any modified or created file
+- [x] All type exports resolve correctly through barrel `src/types/index.ts`
+- [x] `getLowCodeReactionsMetadata()` follows existing `authenticatedRequest` pattern
+- [x] `MetaModelRelationRequest.fineGranularMetaModelRelationSet` is optional (backward compatible)
+- [x] Snapshot utilities correctly deep-clone and serialize fine-granular data
+- [x] `FlowEdge` type change is additive (existing `Edge` usages remain compatible)
+- [x] Linter reports no errors in any modified file
+
+---
+
+## Next Phase
+
+**Phase 2 — Zustand stores**: Create project-mode, VSUM details, and selected-edge stores.

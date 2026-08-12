@@ -42,7 +42,12 @@ export const workspaceSnapshotsEqual = (
 export const cloneWorkspaceSnapshot = (snapshot: WorkspaceSnapshot): WorkspaceSnapshot => ({
   metaModelIds: [...snapshot.metaModelIds],
   metaModelRelationRequests: (snapshot.metaModelRelationRequests ?? []).map(
-    (r: MetaModelRelationRequest) => ({ ...r }),
+    (r: MetaModelRelationRequest) => ({
+      ...r,
+      fineGranularMetaModelRelationSet: r.fineGranularMetaModelRelationSet
+        ? r.fineGranularMetaModelRelationSet.map(fg => ({ ...fg }))
+        : undefined,
+    }),
   ),
 });
 
@@ -90,6 +95,9 @@ export const prepareSnapshotForSyncSave = (
       sourceId: rel.sourceId,
       targetId: rel.targetId,
       reactionFileId: normalizeReactionFileId(rel.reactionFileId),
+      ...(rel.fineGranularMetaModelRelationSet?.length
+        ? { fineGranularMetaModelRelationSet: rel.fineGranularMetaModelRelationSet }
+        : {}),
     }));
 
   return {
