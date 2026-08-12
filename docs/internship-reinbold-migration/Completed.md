@@ -155,6 +155,13 @@ Per the README's "Do not copy" list:
 ---
 ---
 
+# Phase 0.5 — Note
+
+Phases are documented in reverse chronological order below (newest first).
+
+---
+---
+
 # Phase 1 — Completed
 
 **Date:** 2026-08-12
@@ -397,3 +404,142 @@ In `loadVsum`, after `getVsumDetails` returns:
 - [x] `createVsumDetailsStore` is called after `getVsumDetails` in `loadVsum`
 - [x] Fine-granular relation set is seeded as empty array on load
 - [x] AuthContext is untouched (per README: "Do not remove AuthContext")
+
+---
+---
+
+# Phase 3 — Completed
+
+**Date:** 2026-08-12
+**Reference:** [README.md](./README.md) § Phase 3 — Utils (behavior without UI)
+
+---
+
+## What Was Done
+
+Phase 3 implements all five utility modules that provide Low Code behavior logic without any UI. These modules sit between the Zustand stores (Phase 2) and the UI components (Phase 4).
+
+### 1. EcoreIdentifiers.ts
+
+**File:** `src/utils/EcoreIdentifiers.ts`
+
+Extracted identifier/separator helpers from the old branch's `UMLFromEcoreTS.ts`. Does **not** replace develop's `ecoreToUml.ts` or `umlGenerator.ts`.
+
+| Export | Purpose |
+|--------|---------|
+| `PACKAGE_SEPARATOR`, `FRAGMENT_SEPARATOR`, `FEATURE_SEPARATOR` | Constants for `/`, `#`, `.` separators (includes fix `21b6f7a0` `/` support) |
+| `buildEObjectId(nsUri, className)` | Build FQ id like `"http://example.org/model#Person"` |
+| `buildEObjectFeatureId(nsUri, className, featureName)` | Build FQ feature id |
+| `parseEObjectId(fqId)` | Split FQ id into `{ modelNsUri, elementPath }` |
+| `extractModelFromEObjectId(fqId)` | Get model nsURI part |
+| `extractElementFromEObjectId(fqId)` | Get element path part |
+| `extractClassFromElementPath(elementPath)` | Strip feature suffix |
+| `deriveModelAlias(nsUri)` | Short alias from nsURI (last segment) |
+| `deriveElementAlias(fqId)` | Short alias from FQ id |
+| `getProperEObjectIdFromHandle(handleId)` | Parse `reaction-{source|target}-{eObjectId}` handle convention |
+| `extractNsUriFromEcore(ecoreContent)` | Regex nsURI extraction from raw XML |
+
+### 2. FieldUtils.ts
+
+**File:** `src/utils/FieldUtils.ts`
+
+Field type predicates, template evaluation, default value resolution, and validation.
+
+| Category | Key exports |
+|----------|-------------|
+| Type predicates | `isStringField`, `isBooleanField`, `isIntegerField`, `isDecimalField`, `isNumericField`, `isCharacterField`, `isEnumField`, `isArrayField`, `isMapField`, `isHidden` |
+| Template evaluation | `evaluateTemplate` (safe `{{var}}` substitution), `evaluateTemplateWithExpressionSupport` (also handles `${var}` for backward compat) |
+| Defaults | `getFieldDefaultValue(field, variables?)`, `buildInitialFieldValues(fields, variables?)` |
+| Validation | `validateNumericConstraints`, `validateStringConstraints`, `validateFieldValue` |
+
+**Security:** Template evaluation uses constrained regex substitution, NOT `new Function`. Only allowlisted variable names from `LowCodeReactionFieldVariables` are resolved. Unknown placeholders are left as-is.
+
+### 3. LowCodeReactionUtils.ts
+
+**File:** `src/utils/LowCodeReactionUtils.ts`
+
+Store-first Low Code form persistence. No backend endpoint — data lives in the VsumDetails store until VSUM sync.
+
+| Export | Purpose |
+|--------|---------|
+| `hasLowCodeReactionConfig(edge)` | Check if a fine edge has stored Low Code form data |
+| `temporarilySaveLowCodeReactionConfig(fieldValues, edge)` | Save form values to store (creates parent coarse relation if needed) |
+| `getLowCodeReactionConfig(edge)` | Retrieve stored form values for a fine edge |
+
+### 4. FineGranularReactionUtils.ts
+
+**File:** `src/utils/FineGranularReactionUtils.ts`
+
+The largest utility — covers fine edge lifecycle, ghost nodes, CSS visibility, and event handlers.
+
+| Category | Key exports |
+|----------|-------------|
+| Type guards | `isFlowFineGranularMetaModelRelationData`, `isFineGranularReactionEdge` |
+| Edge creation | `createFineGranularReactionEdge` (new edge + store push), `createExistingFineGranularReactionEdge` (loaded edge, no store push) |
+| Edge deletion | `deleteFineGranularReactionEdgeFromVsumDetails` (store removal + selected edge clear) |
+| Edge loading | `loadFineGranularEdgesFromStore(nodeResolver, idToModel)` |
+| Ghost nodes | `isGhostNode`, `ghostNodeId`, `detectRequiredGhostNodes`, `createGhostNode` |
+| CSS helpers | `enableReactionHandles`, `disableReactionHandles`, `enableReactionEdges`, `disableReactionEdges` |
+| Handle IDs | `reactionSourceHandleId`, `reactionTargetHandleId` |
+| Event handlers | `onFineGranularEdgeClick`, `onFineGranularEdgeDelete` |
+
+### 5. ReactionUtils.ts
+
+**File:** `src/utils/ReactionUtils.ts`
+
+Coarse-grained relation helpers and reaction file inference.
+
+| Export | Purpose |
+|--------|---------|
+| `registerReactionFilesFromRelations(relations, idToModel)` | Populate `useProjectStore.reactionFiles` from loaded coarse relations |
+| `tryInferReactionFileIdForFineGranularReactionEdge(edge)` | 3-tier lookup: edge data → store relation → project file registry |
+| `ensureCoarseRelation(fromModel, toModel)` | Create parent coarse relation if needed, returns backend ids |
+| `buildBackendIdToModelMap(identifiersToBackendId)` | Reverse map: backend numeric id → model nsURI |
+
+---
+
+## Key Decisions
+
+**Constrained template substitution over `new Function`:** The old branch used `new Function` with backtick interpolation for template defaults. This was replaced with a safe regex-based `{{var}}` / `${var}` substitution. Only variable names from the allowlisted `LowCodeReactionFieldVariables` type are resolved. This eliminates the code injection risk while maintaining full backward compatibility with backend metadata.
+
+**EcoreIdentifiers scoped to identity only:** The utility extracts only identifier/separator helpers from the old `UMLFromEcoreTS.ts`. It does not touch develop's UML generation pipeline (`ecoreToUml.ts`, `umlGenerator.ts`, `ecoreParser.ts`).
+
+**Three-tier reaction file inference:** `tryInferReactionFileIdForFineGranularReactionEdge` checks edge data first, then the VsumDetails store, then the project-level reaction file registry. This matches the end-state of the old branch after commits `6f425dd6` and `c599c0a6`.
+
+**Ghost nodes as invisible anchors:** Ghost nodes are created with `opacity: 0` and `pointerEvents: 'none'`. They serve as mid-edge routing anchors between bounding boxes for cleaner visual connections.
+
+---
+
+## Files Created
+
+| File | Content |
+|------|---------|
+| `src/utils/EcoreIdentifiers.ts` | FQ id helpers, separator constants, handle parsing, nsURI extraction |
+| `src/utils/FieldUtils.ts` | Field predicates, template evaluation, defaults, validation |
+| `src/utils/LowCodeReactionUtils.ts` | Store-first Low Code form persistence |
+| `src/utils/FineGranularReactionUtils.ts` | Fine edge lifecycle, ghost nodes, CSS helpers, event handlers |
+| `src/utils/ReactionUtils.ts` | Coarse relation helpers, reaction file inference |
+
+## Files Modified
+
+None — Phase 3 is entirely new utility files.
+
+---
+
+## Verification Checklist
+
+- [x] `npx tsc --noEmit` produces no new errors in any utility file
+- [x] No linter errors in any created file
+- [x] Template evaluation uses safe regex substitution, not `new Function`
+- [x] `EcoreIdentifiers.ts` includes `/` package separator (fix `21b6f7a0`)
+- [x] `getProperEObjectIdFromHandle` parses `reaction-{source|target}-{id}` convention
+- [x] Fine edge creation pushes to store; existing edge loading does not
+- [x] CSS helpers toggle the same variables defined in `reaction.css`
+- [x] Reaction file inference follows 3-tier lookup (edge → store → registry)
+- [x] All utils import from Phase 1 types and Phase 2 stores correctly
+
+---
+
+## Next Phase
+
+**Phase 4 — UI components**: GhostNode, LowCodeReactionEditor, LowCodeReactionEdgeValidator, DragablePanel, FieldRenderer, EdgeValidator.
