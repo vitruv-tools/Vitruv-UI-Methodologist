@@ -10,6 +10,9 @@ import { CanvasUmlPanelLayer } from '../components/canvas/CanvasUmlPanelLayer';
 import { apiService, VsumRole, VsumUserResponse } from '../services/api';
 import { VsumDetails } from '../types';
 import { VsumMetaModelRef } from '../types/vsum';
+import { useProjectStore } from '../store/Project';
+import { createVsumDetailsStore } from '../store/VsumDetails';
+import type { EditableVsumDetails } from '../types/EditableVsumDetails';
 import { WorkspaceSnapshot, WorkspaceSnapshotRequest } from '../types/workspace';
 import { MODAL_Z_INDEX, useModalBodyLock } from '../components/ui/modalUtils';
 import { CanvasProjectTabs } from '../components/canvas/CanvasProjectTabs';
@@ -915,6 +918,23 @@ export const CanvasPage: React.FC = () => {
       setVsumName(details.name);
       updateTabName(vsumId, details.name);
       setDrawerModels((details.metaModels || []).map(m => metaModelToDrawerModel(m, true)));
+
+      // ── Low Code store initialization ───────────────────────────────
+      useProjectStore.getState().setActiveId(vsumId);
+
+      const editableDetails: EditableVsumDetails = {
+        metaModels: (details.metaModels || []).map((mm) => ({ ...mm })),
+        metaModelsRelation: (details.metaModelsRelation || []).map((r) => ({
+          id: r.id,
+          sourceId: r.sourceId,
+          targetId: r.targetId,
+          reactionFileId: r.reactionFileId ?? null,
+          reactionFileStorageId: r.reactionFileStorageId ?? null,
+          fineGranularMetaModelRelationSet: [],
+        })),
+      };
+      createVsumDetailsStore(vsumId, editableDetails);
+      // ────────────────────────────────────────────────────────────────
 
       const detailsRole = resolveVsumAccessRole(details.role, details.roleEn);
       const mergedRole = pickMostRestrictiveRole(

@@ -150,7 +150,7 @@ Per the README's "Do not copy" list:
 
 ## Next Phase
 
-**Phase 2 — Zustand stores**: Create project-mode, VSUM details, and selected-edge stores.
+**Phase 1 — Types + API surface**
 
 ---
 ---
@@ -270,4 +270,130 @@ Added additive fields to support the expanded canvas mode and fine-granular edge
 
 ## Next Phase
 
-**Phase 2 — Zustand stores**: Create project-mode, VSUM details, and selected-edge stores.
+**Phase 3 — Utils (behavior without UI)**: Port/rewrite FieldUtils, LowCodeReactionUtils, FineGranularReactionUtils, ReactionUtils, EcoreIdentifiers.
+
+---
+---
+
+# Phase 2 — Completed
+
+**Date:** 2026-08-12
+**Reference:** [README.md](./README.md) § Phase 2 — Zustand stores
+
+---
+
+## What Was Done
+
+Phase 2 creates the entire Zustand store backbone for the Low Code integration. Seven store/error files plus one utility file were created. The store is initialized at VSUM load time in `CanvasPage.tsx`.
+
+### 1. DeepClone utility
+
+**File:** `src/utils/DeepClone.ts`
+
+Store-safe cloning for `Map`, `Set`, `Date`, arrays, and plain objects. Used by `VsumDetailsHelper.get()` and `saveToStore()` to ensure callers never hold a reference to store-internal state.
+
+### 2. Error classes (3 files)
+
+| File | Class | Thrown when |
+|------|-------|------------|
+| `src/store/NoActiveVsumError.ts` | `NoActiveVsumError` | `ActiveVsumDetails` instantiated with no `activeId` in project store |
+| `src/store/NoVsumDetailsStoreError.ts` | `NoVsumDetailsStoreError` | `getVsumDetailsStore(id)` called before `createVsumDetailsStore(id, …)` |
+| `src/store/EditableVsumMetaModelRefConversionError.ts` | `EditableVsumMetaModelRefConversionError` | Converting backend refs to editable form fails validation |
+
+### 3. Project store
+
+**File:** `src/store/Project.ts`
+
+| Field | Type | Purpose |
+|-------|------|---------|
+| `activeId` | `number \| null` | Currently loaded VSUM id |
+| `mode` | `'workspace' \| 'expanded' \| 'reactions'` | Three-way canvas mode for Low Code |
+| `reactionFiles` | `Set<ReactionFile>` | Known reaction files (`{ fromModel, toModel, id }`) |
+| `expandedMetaModels` | `Set<number> \| null` | Meta-model source IDs currently expanded on canvas |
+
+`setActiveId()` resets `mode` to `'workspace'` and clears `reactionFiles` and `expandedMetaModels` to prevent stale cross-project state.
+
+### 4. VsumDetails store
+
+**File:** `src/store/VsumDetails.ts`
+
+Per-VSUM store registry backed by `zustand/vanilla` (`createStore`). Key concepts:
+
+- **Registry:** `createVsumDetailsStore(vsumId, initial)` / `getVsumDetailsStore(vsumId)` / `hasVsumDetailsStore(vsumId)` / `deleteVsumDetailsStore(vsumId)`
+- **VsumDetailsHelper** — CRUD on a deep-cloned working copy:
+  - `getMetaModelRelation(query)` / `addMetaModelRelation(rel)` / `removeMetaModelRelation(src, tgt)`
+  - `getFineGranularMetaModelRelation(…)` / `addFineGranularMetaModelRelation(…)` / `removeFineGranularMetaModelRelation(…)` / `getAllFineGranularMetaModelRelations()`
+  - `setIdentifiersToBackendMetaModelId(map)` / `getBackendMetaModelId(identifier)`
+  - `getAsWorkspaceSnapshot()` — produces develop-compatible `WorkspaceSnapshot` including fine sets
+  - `saveToStore()` — commits the working copy back to the Zustand store
+
+### 5. ActiveVsumDetails helper
+
+**File:** `src/store/ActiveVsumDetails.ts`
+
+Convenience `VsumDetailsHelper` subclass that reads `useProjectStore.activeId` on construction. Also exports `getActiveVsumDetailsStore()` and `hasActiveVsumDetailsStore()`.
+
+### 6. SelectedEdge store
+
+**File:** `src/store/SelectedEdge.ts`
+
+Simple store holding the currently selected `FlowEcoreEdge | null`. Set by `FlowCanvas` on edge click, consumed by the Low Code editor panel.
+
+### 7. CanvasPage integration
+
+**File:** `src/pages/CanvasPage.tsx`
+
+In `loadVsum`, after `getVsumDetails` returns:
+
+1. Calls `useProjectStore.getState().setActiveId(vsumId)` — resets mode and clears stale state
+2. Maps `VsumDetails` → `EditableVsumDetails`:
+   - Meta-models are shallow-cloned
+   - Relations are mapped with `fineGranularMetaModelRelationSet: []` (seeded empty until backend support)
+   - `reactionFileId` / `reactionFileStorageId` are normalized to `null` when absent
+3. Calls `createVsumDetailsStore(vsumId, editableDetails)` — registers the per-VSUM store
+
+---
+
+## Key Decisions
+
+**Per-VSUM store map vs global store:** Each VSUM gets its own Zustand store instance. This avoids state conflicts when switching between projects/tabs. The `storeMap` is a plain `Map<number, StoreApi>` module singleton.
+
+**Deep clone on read and write:** `VsumDetailsHelper.get()` returns a deep clone; `saveToStore()` deep-clones before writing. This prevents accidental reference sharing between helper working copies and the store.
+
+**`setActiveId` auto-reset:** Changing the active VSUM resets mode to `'workspace'` and clears reaction files / expanded models. This matches the old branch behavior and prevents stale Low Code state from bleeding across projects.
+
+**Fine set seeded empty:** `fineGranularMetaModelRelationSet: []` is seeded on load. The backend does not yet return fine relations — they are client-authored and stored until the next VSUM sync round-trip.
+
+---
+
+## Files Created
+
+| File | Content |
+|------|---------|
+| `src/utils/DeepClone.ts` | `deepClone()`, `deepCloneArray()` |
+| `src/store/NoActiveVsumError.ts` | Error class |
+| `src/store/NoVsumDetailsStoreError.ts` | Error class |
+| `src/store/EditableVsumMetaModelRefConversionError.ts` | Error class |
+| `src/store/Project.ts` | `useProjectStore` (Zustand) |
+| `src/store/VsumDetails.ts` | Per-VSUM store registry + `VsumDetailsHelper` |
+| `src/store/ActiveVsumDetails.ts` | `ActiveVsumDetails` helper + convenience functions |
+| `src/store/SelectedEdge.ts` | `useSelectedEdgeStore` (Zustand) |
+
+## Files Modified
+
+| File | Change |
+|------|--------|
+| `src/pages/CanvasPage.tsx` | Added imports for stores/types; added store initialization block in `loadVsum` |
+
+---
+
+## Verification Checklist
+
+- [x] `npx tsc --noEmit` produces no new errors in any store or utility file
+- [x] No linter errors in any created or modified file
+- [x] `useProjectStore.setActiveId()` resets mode and clears reaction state
+- [x] `VsumDetailsHelper` CRUD methods mutate working copy, not store directly
+- [x] `saveToStore()` deep-clones before writing to Zustand
+- [x] `createVsumDetailsStore` is called after `getVsumDetails` in `loadVsum`
+- [x] Fine-granular relation set is seeded as empty array on load
+- [x] AuthContext is untouched (per README: "Do not remove AuthContext")
