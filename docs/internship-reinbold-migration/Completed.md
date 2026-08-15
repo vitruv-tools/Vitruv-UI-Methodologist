@@ -793,6 +793,97 @@ All Low Code reaction data is stored **frontend-only** in the Zustand VsumDetail
 
 ---
 
+# Phase 6 — Save / delete / confirm / dirty state
+
+**Status:** COMPLETE
+
+## Objective
+
+Implement store-first save behaviors, dirty state tracking with visual feedback, confirmation dialogs for destructive and potentially conflicting actions, orphan cleanup, and consistent reaction file id normalization.
+
+---
+
+## What Was Done
+
+### 1. Reactive Dirty State Tracking
+
+- Added `onDirtyChange` callback prop to `LowCodeReactionEditor`
+- Editor fires `onDirtyChange(dirty: boolean)` whenever `fieldValues` or `lastSaved` change
+- FlowCanvas holds `lowCodeEditorDirty` state, updated via the callback
+- `DragablePanel.saveHighlighted` is now driven by the reactive `lowCodeEditorDirty` state instead of the static `!hasLowCodeReactionConfig(edge)` check
+- New fine reactions start dirty immediately (empty `lastSaved` vs initial field values)
+
+### 2. Save Flow
+
+Complete save pipeline:
+1. User clicks Save button in `DragablePanel`
+2. Calls `lowCodeEditorRef.current.save()`
+3. `LowCodeReactionEditor.save()` calls `temporarilySaveLowCodeReactionConfig(fieldValues, edge)`
+4. Store is updated via `ActiveVsumDetails.saveToStore()`
+5. `setLastSaved({ ...fieldValues })` resets baseline
+6. `onSaveComplete()` callback fires → `setLowCodeEditorDirty(false)`
+7. Save button animation stops (no longer highlighted)
+
+### 3. Confirm Dialog: Delete Fine Reaction
+
+- Delete button in `DragablePanel` and `onDeleteRequest` in editor now open a `ConfirmDialog` instead of immediately deleting
+- Dialog: "Are you sure you want to delete this fine-granular reaction? This action cannot be undone."
+- On confirm: removes fine relation from store, removes edge from canvas
+- **Orphan cleanup**: if the deleted fine relation was the last one under its parent coarse relation AND the coarse relation has no `reactionFileStorageId`, the parent coarse relation and its canvas edge are also removed
+
+### 4. Confirm Dialog: Existing Reaction File
+
+- When a user connects two reaction handles and the parent coarse relation already has a reaction file (inferred via `tryInferReactionFileIdForFineGranularReactionEdge`):
+  - Connection is paused, edge stored in `pendingFineConnection` state
+  - `ConfirmDialog` variant "success" asks the user to confirm adding a Low Code reaction alongside the existing file
+  - On confirm: edge is added to canvas
+  - On cancel: connection is discarded
+
+### 5. Consistent Reaction File ID Normalization
+
+- Imported `normalizeReactionFileId` into `FineGranularReactionUtils.ts`
+- `createFineGranularReactionEdge`: normalizes `reactionFileId` before embedding in edge data
+- `createExistingFineGranularReactionEdge`: normalizes `reactionFileStorageId` before embedding
+- Null/undefined file ids remain as `undefined` (not normalized to `0`)
+
+---
+
+## Key Decisions
+
+**Reactive dirty over imperative polling:** Instead of having FlowCanvas call `lowCodeEditorRef.current.isDirty()` on interval, the editor proactively notifies via `onDirtyChange`. This is more React-idiomatic and avoids unnecessary re-renders.
+
+**Orphan cleanup is store-only:** The orphan coarse relation removal happens in the frontend Zustand store. Backend sync is deferred to the workspace save operation (already covered by `prepareSnapshotForSyncSave`).
+
+**ConfirmDialog reuse:** Both confirm dialogs reuse the existing `ConfirmDialog` component from `src/components/ui/`. No new UI primitives needed.
+
+**Null-safe normalization:** `normalizeReactionFileId` returns `0` for invalid inputs, so we guard with `!= null` checks before calling it to avoid assigning `0` to edges that genuinely have no associated file.
+
+---
+
+## Files Modified
+
+| File | Changes |
+|------|---------|
+| `src/components/flow/lowcode/LowCodeReactionEditor.tsx` | Added `onDirtyChange` prop. Added `useEffect` to fire dirty notifications on field/save state changes. |
+| `src/components/flow/FlowCanvas.tsx` | Added `ActiveVsumDetails` import. Added `lowCodeEditorDirty`, `confirmDeleteOpen`, `pendingFineConnection` state. Wired `onDirtyChange`/`onSaveComplete` callbacks. Replaced direct delete with confirm dialog + orphan cleanup. Added reaction-file-exists confirm dialog in `guardedOnConnect`. |
+| `src/utils/FineGranularReactionUtils.ts` | Added `normalizeReactionFileId` import. Applied normalization in `createFineGranularReactionEdge` and `createExistingFineGranularReactionEdge`. |
+
+---
+
+## Verification Checklist
+
+- [x] `npx tsc --noEmit` produces no new errors
+- [x] No linter errors in modified files
+- [x] `onDirtyChange` fires when form fields change after last save
+- [x] Save button highlights when dirty, stops when saved
+- [x] New fine edge starts dirty (no previous config = different from empty lastSaved)
+- [x] Delete opens confirm dialog; orphan cleanup triggers when appropriate
+- [x] Existing reaction file triggers confirm before adding fine edge
+- [x] `normalizeReactionFileId` applied consistently in both edge creation paths
+- [x] Frontend-only storage principle maintained; backend deferred
+
+---
+
 ## Next Phase
 
-**Phase 6 — Save / delete / confirm / dirty state**: Store-first save, dirty highlighting, confirm dialogs, orphan cleanup.
+**Phase 7 — Tests**: Field utils / template evaluation, store CRUD, fine edge factory, Low Code editor behavior, API client method.

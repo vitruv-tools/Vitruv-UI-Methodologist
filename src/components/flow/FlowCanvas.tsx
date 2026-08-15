@@ -113,6 +113,7 @@ import LowCodeReactionEditor, {
 import DragablePanel from './DragablePanel';
 import { useProjectStore } from '../../store/Project';
 import { useSelectedEdgeStore } from '../../store/SelectedEdge';
+import { ActiveVsumDetails } from '../../store/ActiveVsumDetails';
 import type { FlowEcoreEdge } from '../../types/flow';
 import {
   createFineGranularReactionEdge,
@@ -260,6 +261,12 @@ export const FlowCanvas = forwardRef<FlowCanvasHandle, FlowCanvasProps>(
 
     // Low Code reaction editor panel
     const [lowCodeEditorOpen, setLowCodeEditorOpen] = useState(false);
+    const [lowCodeEditorDirty, setLowCodeEditorDirty] = useState(false);
+    const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
+    const [pendingFineConnection, setPendingFineConnection] = useState<{
+      fineEdge: FlowEcoreEdge;
+      existingFileId: number;
+    } | null>(null);
     const lowCodeEditorRef = useRef<LowCodeReactionEditorHandle>(null);
     const selectedEdge = useSelectedEdgeStore((s) => s.selectedEdge);
 
@@ -413,6 +420,14 @@ export const FlowCanvas = forwardRef<FlowCanvasHandle, FlowCanvasProps>(
           fromModel,
           toModel,
         });
+
+        // Check if parent coarse relation already has a reaction file
+        const inferredFileId = tryInferReactionFileIdForFineGranularReactionEdge(fineEdge);
+        if (inferredFileId && inferredFileId > 0) {
+          setPendingFineConnection({ fineEdge, existingFileId: inferredFileId });
+          return;
+        }
+
         addEdge(fineEdge);
         return;
       }
@@ -1482,41 +1497,89 @@ export const FlowCanvas = forwardRef<FlowCanvasHandle, FlowCanvasProps>(
             title="Low Code Reaction"
             onClose={() => {
               setLowCodeEditorOpen(false);
+              setLowCodeEditorDirty(false);
               useSelectedEdgeStore.getState().clearSelectedEdge();
             }}
             onSave={() => lowCodeEditorRef.current?.save()}
-            onDelete={() => {
-              if (!selectedEdge) return;
-              const removed = deleteFineGranularReactionEdgeFromVsumDetails(selectedEdge);
-              if (removed) {
-                removeEdge(selectedEdge.id);
-              }
-              setLowCodeEditorOpen(false);
-              useSelectedEdgeStore.getState().clearSelectedEdge();
-            }}
-            saveHighlighted={
-              selectedEdge ? !hasLowCodeReactionConfig(selectedEdge) : false
-            }
+            onDelete={() => setConfirmDeleteOpen(true)}
+            saveHighlighted={lowCodeEditorDirty}
             showDelete
           >
             <LowCodeReactionEditor
               ref={lowCodeEditorRef}
               edge={selectedEdge}
+              onDirtyChange={setLowCodeEditorDirty}
               onSaveComplete={() => {
-                // TODO [Phase 6]: dirty state refresh
+                setLowCodeEditorDirty(false);
               }}
-              onDeleteRequest={() => {
-                if (!selectedEdge) return;
-                const removed = deleteFineGranularReactionEdgeFromVsumDetails(selectedEdge);
-                if (removed) {
-                  removeEdge(selectedEdge.id);
-                }
-                setLowCodeEditorOpen(false);
-                useSelectedEdgeStore.getState().clearSelectedEdge();
-              }}
+              onDeleteRequest={() => setConfirmDeleteOpen(true)}
             />
           </DragablePanel>
         )}
+
+        {/* Confirm delete fine-granular reaction */}
+        <ConfirmDialog
+          isOpen={confirmDeleteOpen}
+          title="Delete Reaction"
+          message="Are you sure you want to delete this fine-granular reaction? This action cannot be undone."
+          confirmText="Delete"
+          cancelText="Cancel"
+          variant="danger"
+          onCancel={() => setConfirmDeleteOpen(false)}
+          onConfirm={() => {
+            setConfirmDeleteOpen(false);
+            if (!selectedEdge) return;
+            const removed = deleteFineGranularReactionEdgeFromVsumDetails(selectedEdge);
+            if (removed) {
+              removeEdge(selectedEdge.id);
+              // Orphan cleanup: if last fine relation under a coarse relation
+              // with no reaction file storage id, remove the parent coarse relation too
+              try {
+                const active = new ActiveVsumDetails();
+                const ecore = selectedEdge.data?.ecore;
+                if (ecore) {
+                  const srcId = active.getBackendMetaModelId(ecore.fromModel);
+                  const tgtId = active.getBackendMetaModelId(ecore.toModel);
+                  if (srcId !== undefined && tgtId !== undefined) {
+                    const coarse = active.getMetaModelRelation({ sourceId: srcId, targetId: tgtId });
+                    if (
+                      coarse &&
+                      coarse.fineGranularMetaModelRelationSet.length === 0 &&
+                      !coarse.reactionFileStorageId
+                    ) {
+                      active.removeMetaModelRelation(srcId, tgtId);
+                      active.saveToStore();
+                      const coarseEdge = edges.find(
+                        (e) => e.type === 'reactions' && e.data?.sourceId === srcId && e.data?.targetId === tgtId,
+                      );
+                      if (coarseEdge) removeEdge(coarseEdge.id);
+                    }
+                  }
+                }
+              } catch { /* store not ready — skip orphan cleanup */ }
+            }
+            setLowCodeEditorOpen(false);
+            setLowCodeEditorDirty(false);
+            useSelectedEdgeStore.getState().clearSelectedEdge();
+          }}
+        />
+
+        {/* Confirm adding fine reaction when coarse relation already has a reaction file */}
+        <ConfirmDialog
+          isOpen={pendingFineConnection !== null}
+          title="Existing Reaction File"
+          message={`This model pair already has a reaction file (ID: ${pendingFineConnection?.existingFileId ?? ''}). Adding a Low Code reaction will create an additional fine-granular configuration alongside the existing file. Continue?`}
+          confirmText="Continue"
+          cancelText="Cancel"
+          variant="success"
+          onCancel={() => setPendingFineConnection(null)}
+          onConfirm={() => {
+            if (pendingFineConnection) {
+              addEdge(pendingFineConnection.fineEdge);
+            }
+            setPendingFineConnection(null);
+          }}
+        />
       </div>
     );
   });

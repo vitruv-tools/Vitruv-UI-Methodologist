@@ -11,6 +11,7 @@ import type { FlowEcoreEdge } from '../types/flow';
 import type { EditableFineGranularMetaModelRelation } from '../types/FineGranularMetaModelRelation';
 import { ActiveVsumDetails } from '../store/ActiveVsumDetails';
 import { useSelectedEdgeStore } from '../store/SelectedEdge';
+import { normalizeReactionFileId } from './workspaceSnapshotUtils';
 
 // ── Type guards ─────────────────────────────────────────────────────────
 
@@ -66,6 +67,9 @@ export function createFineGranularReactionEdge(params: {
   } = params;
 
   const edgeId = `fine-reaction-${fineEdgeCounter++}-${Date.now()}`;
+  const normalizedFileId = reactionFileId != null
+    ? normalizeReactionFileId(reactionFileId)
+    : undefined;
 
   const edge: FlowEcoreEdge = {
     id: edgeId,
@@ -83,7 +87,7 @@ export function createFineGranularReactionEdge(params: {
         fromModel,
         toModel,
       },
-      reactionFileId,
+      reactionFileId: normalizedFileId,
     },
   };
 
@@ -120,6 +124,9 @@ export function createExistingFineGranularReactionEdge(
   targetNodeId: string,
 ): FlowEcoreEdge {
   const edgeId = `fine-reaction-existing-${fineEdgeCounter++}`;
+  const normalizedFileId = relation.reactionFileStorageId != null
+    ? normalizeReactionFileId(relation.reactionFileStorageId)
+    : undefined;
 
   return {
     id: edgeId,
@@ -135,7 +142,7 @@ export function createExistingFineGranularReactionEdge(
         fromModel,
         toModel,
       },
-      reactionFileId: relation.reactionFileStorageId,
+      reactionFileId: normalizedFileId,
     },
   };
 }

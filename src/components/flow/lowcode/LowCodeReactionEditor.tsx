@@ -48,6 +48,7 @@ interface LowCodeReactionEditorProps {
   edge: FlowEcoreEdge;
   onSaveComplete?: () => void;
   onDeleteRequest?: () => void;
+  onDirtyChange?: (dirty: boolean) => void;
 }
 
 /**
@@ -60,7 +61,7 @@ interface LowCodeReactionEditorProps {
 const LowCodeReactionEditor = forwardRef<
   LowCodeReactionEditorHandle,
   LowCodeReactionEditorProps
->(({ edge, onSaveComplete, onDeleteRequest }, ref) => {
+>(({ edge, onSaveComplete, onDeleteRequest, onDirtyChange }, ref) => {
   const [metadata, setMetadata] = useState<LowCodeReactionMetadataResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -156,6 +157,11 @@ const LowCodeReactionEditor = forwardRef<
   const isDirty = useCallback(() => {
     return JSON.stringify(fieldValues) !== JSON.stringify(lastSaved);
   }, [fieldValues, lastSaved]);
+
+  // Notify parent of dirty state changes
+  useEffect(() => {
+    onDirtyChange?.(isDirty());
+  }, [fieldValues, lastSaved, isDirty, onDirtyChange]);
 
   // ── Imperative API ──────────────────────────────────────────────────
 
