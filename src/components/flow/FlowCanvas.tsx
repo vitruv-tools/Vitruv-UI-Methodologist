@@ -102,16 +102,48 @@ import {
   HandlePosition,
   PendingDeleteState,
 } from './flowCanvasTypes';
+import GhostNode from './lowcode/GhostNode';
+import {
+  isReactionHandleConnection,
+  validateFineGranularConnection,
+} from './lowcode/LowCodeReactionEdgeValidator';
+import LowCodeReactionEditor, {
+  type LowCodeReactionEditorHandle,
+} from './lowcode/LowCodeReactionEditor';
+import DragablePanel from './DragablePanel';
+import { useProjectStore } from '../../store/Project';
+import { useSelectedEdgeStore } from '../../store/SelectedEdge';
+import type { FlowEcoreEdge } from '../../types/flow';
+import {
+  createFineGranularReactionEdge,
+  isFineGranularReactionEdge,
+  deleteFineGranularReactionEdgeFromVsumDetails,
+  enableReactionHandles,
+  enableReactionEdges,
+  disableReactionHandles,
+  disableReactionEdges,
+  onFineGranularEdgeClick,
+  loadFineGranularEdgesFromStore,
+} from '../../utils/FineGranularReactionUtils';
+import { getProperEObjectIdFromHandle } from '../../utils/EcoreIdentifiers';
+import {
+  hasLowCodeReactionConfig,
+} from '../../utils/LowCodeReactionUtils';
+import {
+  tryInferReactionFileIdForFineGranularReactionEdge,
+} from '../../utils/ReactionUtils';
 
 export type { CanvasMode } from './flowCanvasTypes';
 
 const nodeTypes = {
   editable: EditableNode,
   ecoreFile: EcoreFileBox,
+  ghost: GhostNode,
 };
 const edgeTypes = {
   uml: UMLRelationship,
   reactions: ReactionRelationship,
+  'fine-granular-reaction': ReactionRelationship,
 };
 
 /** Smallest radius the Views circle can be dragged down to. */
@@ -225,6 +257,11 @@ export const FlowCanvas = forwardRef<FlowCanvasHandle, FlowCanvasProps>(
     const [activeCanvasMode, setActiveCanvasMode] = useState<CanvasMode>(canvasModeProp);
     // Add-reaction mode: first clicked node becomes source, second creates the edge
     const [reactionSourceId, setReactionSourceId] = useState<string | null>(null);
+
+    // Low Code reaction editor panel
+    const [lowCodeEditorOpen, setLowCodeEditorOpen] = useState(false);
+    const lowCodeEditorRef = useRef<LowCodeReactionEditorHandle>(null);
+    const selectedEdge = useSelectedEdgeStore((s) => s.selectedEdge);
 
     const circleVisible = activeCanvasMode === 'views';
 
@@ -352,8 +389,36 @@ export const FlowCanvas = forwardRef<FlowCanvasHandle, FlowCanvasProps>(
 
     const guardedOnConnect = useCallback((connection: any) => {
       if (readOnly) return;
+
+      if (isReactionHandleConnection(connection)) {
+        if (!validateFineGranularConnection(connection, nodes)) return;
+
+        const sourceEObjectId = getProperEObjectIdFromHandle(connection.sourceHandle ?? '');
+        const targetEObjectId = getProperEObjectIdFromHandle(connection.targetHandle ?? '');
+        if (!sourceEObjectId || !targetEObjectId) return;
+
+        const sourceNode = nodes.find(n => n.id === connection.source);
+        const targetNode = nodes.find(n => n.id === connection.target);
+        const fromModel = sourceNode?.data?.ecore?.model ?? '';
+        const toModel = targetNode?.data?.ecore?.model ?? '';
+        if (!fromModel || !toModel) return;
+
+        const fineEdge = createFineGranularReactionEdge({
+          sourceNodeId: connection.source!,
+          targetNodeId: connection.target!,
+          sourceHandleId: connection.sourceHandle ?? '',
+          targetHandleId: connection.targetHandle ?? '',
+          eObjectSourceId: sourceEObjectId,
+          eObjectTargetId: targetEObjectId,
+          fromModel,
+          toModel,
+        });
+        addEdge(fineEdge);
+        return;
+      }
+
       onConnect(connection);
-    }, [onConnect, readOnly]);
+    }, [onConnect, readOnly, nodes, addEdge]);
 
     const edgeDistributionMap = useMemo(
       () => buildEdgeDistributionMap(nodes, edges),
@@ -591,6 +656,22 @@ export const FlowCanvas = forwardRef<FlowCanvasHandle, FlowCanvasProps>(
       const edge = edges.find(e => e.id === edgeId);
       if (!edge) return;
 
+      // Fine-granular reaction edges open the Low Code editor
+      if (isFineGranularReactionEdge(edge)) {
+        // Infer reaction file id from parent coarse relation if missing (commit 004 / c599c0a6)
+        const fineEdge = edge as FlowEcoreEdge;
+        if (!fineEdge.data?.reactionFileId) {
+          const inferredId = tryInferReactionFileIdForFineGranularReactionEdge(fineEdge);
+          if (inferredId !== undefined && fineEdge.data) {
+            fineEdge.data.reactionFileId = inferredId;
+          }
+        }
+        onFineGranularEdgeClick(fineEdge);
+        setLowCodeEditorOpen(true);
+        return;
+      }
+
+      // Coarse reaction edges open the Monaco editor
       const getFileName = (nodeId: string) => {
         const node = nodes.find(n => n.id === nodeId);
         return node?.type === 'ecoreFile' ? node.data.fileName : undefined;
@@ -698,6 +779,26 @@ export const FlowCanvas = forwardRef<FlowCanvasHandle, FlowCanvasProps>(
       setEdges([]);
       if (nodesWithIds.length > 0) setNodes(nodesWithIds);
       if (edgesWithUniqueIds.length > 0) setEdges(edgesWithUniqueIds);
+
+      // Hydrate fine-granular reaction edges from store (if any exist)
+      // TODO [Future]: once backend returns fine relations in VSUM details,
+      // this will populate fine edges on canvas load.
+      try {
+        const fineEdges = loadFineGranularEdgesFromStore(
+          (eObjectId, model) => {
+            const node = nodesWithIds.find(
+              (n: any) => n.data?.ecore?.eObjectId === eObjectId && n.data?.ecore?.model === model,
+            );
+            return node?.id ?? null;
+          },
+          new Map(),
+        );
+        if (fineEdges.length > 0) {
+          setEdges((eds) => [...eds, ...fineEdges]);
+        }
+      } catch {
+        // Store may not be initialized yet — skip hydration
+      }
 
       // Reset undo baseline to the loaded diagram (not the pre-load empty state).
       requestAnimationFrame(() => {
@@ -911,6 +1012,27 @@ export const FlowCanvas = forwardRef<FlowCanvasHandle, FlowCanvasProps>(
     useEffect(() => {
       if (!addReactionMode) setReactionSourceId(null);
     }, [addReactionMode]);
+
+    // Sync addReactionMode with project store mode + CSS toggle
+    useEffect(() => {
+      if (addReactionMode) {
+        useProjectStore.getState().setMode('reactions');
+        enableReactionHandles();
+        enableReactionEdges();
+      } else {
+        const current = useProjectStore.getState().mode;
+        if (current === 'reactions') {
+          useProjectStore.getState().setMode('workspace');
+        }
+        disableReactionHandles();
+        disableReactionEdges();
+      }
+    }, [addReactionMode]);
+
+    // Close Low Code editor when selected edge is cleared
+    useEffect(() => {
+      if (!selectedEdge) setLowCodeEditorOpen(false);
+    }, [selectedEdge]);
 
     // Notify parent whenever undo/redo availability changes
     useEffect(() => {
@@ -1352,6 +1474,48 @@ export const FlowCanvas = forwardRef<FlowCanvasHandle, FlowCanvasProps>(
             ecoreContent={detailModel.ecoreContent}
             onClose={handleCloseDetails}
           />
+        )}
+
+        {/* Low Code reaction editor panel */}
+        {lowCodeEditorOpen && selectedEdge && (
+          <DragablePanel
+            title="Low Code Reaction"
+            onClose={() => {
+              setLowCodeEditorOpen(false);
+              useSelectedEdgeStore.getState().clearSelectedEdge();
+            }}
+            onSave={() => lowCodeEditorRef.current?.save()}
+            onDelete={() => {
+              if (!selectedEdge) return;
+              const removed = deleteFineGranularReactionEdgeFromVsumDetails(selectedEdge);
+              if (removed) {
+                removeEdge(selectedEdge.id);
+              }
+              setLowCodeEditorOpen(false);
+              useSelectedEdgeStore.getState().clearSelectedEdge();
+            }}
+            saveHighlighted={
+              selectedEdge ? !hasLowCodeReactionConfig(selectedEdge) : false
+            }
+            showDelete
+          >
+            <LowCodeReactionEditor
+              ref={lowCodeEditorRef}
+              edge={selectedEdge}
+              onSaveComplete={() => {
+                // TODO [Phase 6]: dirty state refresh
+              }}
+              onDeleteRequest={() => {
+                if (!selectedEdge) return;
+                const removed = deleteFineGranularReactionEdgeFromVsumDetails(selectedEdge);
+                if (removed) {
+                  removeEdge(selectedEdge.id);
+                }
+                setLowCodeEditorOpen(false);
+                useSelectedEdgeStore.getState().clearSelectedEdge();
+              }}
+            />
+          </DragablePanel>
         )}
       </div>
     );

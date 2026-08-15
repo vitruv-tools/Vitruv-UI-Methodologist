@@ -674,3 +674,125 @@ None — Phase 4 is entirely new component files.
 - [x] `DragablePanel` supports drag, minimize, save highlight, and optional delete
 - [x] `LowCodeReactionEditor` fetches metadata, renders template selector + dynamic fields, exposes imperative API
 - [x] `EdgeValidator` delegates reaction connections without breaking existing UML/coarse validation
+
+---
+---
+
+# Phase 5 — Completed
+
+**Date:** 2026-08-12
+**Reference:** [README.md](./README.md) § Phase 5 — Wire into FlowCanvas + CanvasPage
+
+---
+
+## What Was Done
+
+Phase 5 wires all Phase 1–4 artifacts into the two main application files (`FlowCanvas.tsx` and `CanvasPage.tsx`), making the Low Code integration functional end-to-end on the frontend.
+
+### FlowCanvas.tsx modifications
+
+#### 1. Node/edge type registration
+
+Registered `ghost` (GhostNode) in `nodeTypes` and `fine-granular-reaction` (reusing `ReactionRelationship` renderer) in `edgeTypes`.
+
+#### 2. Fine-granular connection handling
+
+Modified `guardedOnConnect` to detect reaction-handle connections via `isReactionHandleConnection`. When a reaction connection is made:
+- Validates via `validateFineGranularConnection` (mode check, cross-model, EObject id resolution)
+- Extracts source/target EObject ids from handles via `getProperEObjectIdFromHandle`
+- Resolves model identifiers from node ecore data
+- Creates the fine edge via `createFineGranularReactionEdge` (store + UI edge)
+- Falls through to normal `onConnect` for non-reaction connections
+
+#### 3. Edge double-click routing
+
+Modified `handleEdgeDoubleClick` to route based on edge type:
+- **Fine-granular reaction edges** → select in `useSelectedEdgeStore` + open `DragablePanel` with `LowCodeReactionEditor`
+- **Coarse reaction edges** → existing Monaco `ReactionEditorModal` (unchanged)
+
+#### 4. Mode sync + CSS toggle
+
+Added `useEffect` that syncs `addReactionMode` with `useProjectStore.mode`:
+- `addReactionMode=true` → `setMode('reactions')` + `enableReactionHandles()` + `enableReactionEdges()`
+- `addReactionMode=false` → `setMode('workspace')` + `disableReactionHandles()` + `disableReactionEdges()`
+
+#### 5. Low Code editor panel
+
+Added state: `lowCodeEditorOpen`, `lowCodeEditorRef`, `selectedEdge` (from `useSelectedEdgeStore`).
+
+Renders `DragablePanel` + `LowCodeReactionEditor` when both `lowCodeEditorOpen` and `selectedEdge` are truthy. Panel actions:
+- **Close** → clear selected edge + close panel
+- **Save** → delegates to editor's imperative `save()`
+- **Delete** → removes fine edge from store via `deleteFineGranularReactionEdgeFromVsumDetails`, removes React Flow edge, clears selection
+- **Save highlighted** → pulses when edge has no Low Code config yet (`!hasLowCodeReactionConfig`)
+
+Auto-closes when `selectedEdge` is cleared.
+
+### CanvasPage.tsx
+
+**No additional modifications needed.** Phase 2 already added:
+- Store initialization (`setActiveId`, `createVsumDetailsStore`) in `loadVsum`
+- The existing `addReactionMode` toggle and sidebar button continue to work
+
+Phase 1 already wired:
+- `buildWorkspaceSnapshot` includes `fineGranularMetaModelRelationSet`
+- `prepareSnapshotForSyncSave` preserves fine sets
+- Save path (`handleSaveChanges`) already flows through these functions
+
+### Frontend-only storage (marked for future)
+
+All Low Code reaction data is stored **frontend-only** in the Zustand VsumDetails store. Backend persistence of fine-granular relations is deferred:
+
+- `fineGranularMetaModelRelationSet` is included in `MetaModelRelationRequest` payloads but backend support is not yet confirmed
+- `lowCodeReactionRequestBase` form data lives in the store until VSUM sync
+- `getLowCodeReactionsMetadata()` API endpoint is wired but may need backend implementation
+- **TODO [Future]:** Confirm backend `/api/lowcode-metadata` exists and returns expected shape
+- **TODO [Future]:** Confirm VSUM sync accepts `fineGranularMetaModelRelationSet`
+- **TODO [Future]:** Confirm whether VSUM details GET returns fine relations or they are client-only until sync
+
+---
+
+## Key Decisions
+
+**Reuse `ReactionRelationship` for fine edges:** The `fine-granular-reaction` edge type reuses the existing `ReactionRelationship` renderer rather than creating a new edge component. This gives fine edges the same visual style as coarse reaction edges.
+
+**Store sync in FlowCanvas, not CanvasPage:** The `addReactionMode → useProjectStore.mode` sync lives in FlowCanvas because that's where the mode has behavioral effect (CSS toggles, connection validation). CanvasPage just toggles the boolean.
+
+**Frontend-only storage:** Per user instruction, all Low Code data is stored in the frontend Zustand store. The save path includes fine-granular data in the request payload, but actual backend persistence is deferred and marked with TODO comments.
+
+---
+
+## Files Modified
+
+| File | Changes |
+|------|---------|
+| `src/components/flow/FlowCanvas.tsx` | Added 12 imports (GhostNode, LowCode components, stores, utils). Registered `ghost` + `fine-granular-reaction` types. Modified `guardedOnConnect` for fine edge creation. Modified `handleEdgeDoubleClick` for edge type routing (with coarse-file inference). Added mode sync effect. Added Low Code editor panel state + rendering. Added fine-edge hydration from store in `loadDiagramData`. |
+
+## Files Not Modified (already complete from prior phases)
+
+| File | Status |
+|------|--------|
+| `src/pages/CanvasPage.tsx` | Store init already wired (Phase 2); snapshot already includes fine sets (Phase 1) |
+
+---
+
+## Verification Checklist
+
+- [x] `npx tsc --noEmit` produces no new errors
+- [x] No linter errors in modified files
+- [x] `ghost` node type registered in `nodeTypes`
+- [x] `fine-granular-reaction` edge type registered in `edgeTypes`
+- [x] Reaction-handle connections create fine edges (store + UI)
+- [x] Fine edge double-click opens Low Code editor; coarse edge double-click opens Monaco
+- [x] `addReactionMode` syncs with `useProjectStore.mode` and CSS variables
+- [x] `DragablePanel` renders with save/delete/close when fine edge is selected
+- [x] Save path includes `fineGranularMetaModelRelationSet` in payloads
+- [x] All Low Code data stored frontend-only; backend endpoints marked as TODO
+- [x] Fine edges hydrated from store on `loadDiagramData` (item 5)
+- [x] Coarse-file inference via `tryInferReactionFileIdForFineGranularReactionEdge` on double-click (item 9)
+
+---
+
+## Next Phase
+
+**Phase 6 — Save / delete / confirm / dirty state**: Store-first save, dirty highlighting, confirm dialogs, orphan cleanup.
