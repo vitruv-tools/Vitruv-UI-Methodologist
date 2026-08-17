@@ -8,6 +8,7 @@
 
 import type { FlowEcoreEdge } from '../types/flow';
 import { ActiveVsumDetails } from '../store/ActiveVsumDetails';
+import { toWireLowCodeReactionRequestBase } from './lowCodeReactionPayload';
 
 /**
  * Check whether a fine-granular reaction edge already has Low Code
@@ -75,14 +76,16 @@ export function temporarilySaveLowCodeReactionConfig(
     eObjectTargetId,
   );
 
+  const payload = toWireLowCodeReactionRequestBase(fieldValues) ?? { ...fieldValues };
+
   if (fine) {
-    fine.lowCodeReactionRequestBase = { ...fieldValues };
+    fine.lowCodeReactionRequestBase = payload;
   } else {
     active.addFineGranularMetaModelRelation(sourceBackendId, targetBackendId, {
       id: null,
       sourceId: eObjectSourceId,
       targetId: eObjectTargetId,
-      lowCodeReactionRequestBase: { ...fieldValues },
+      lowCodeReactionRequestBase: payload,
     });
   }
 

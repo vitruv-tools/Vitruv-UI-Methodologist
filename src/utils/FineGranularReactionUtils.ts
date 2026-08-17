@@ -11,7 +11,8 @@ import type { FlowEcoreEdge } from '../types/flow';
 import type { EditableFineGranularMetaModelRelation } from '../types/FineGranularMetaModelRelation';
 import { ActiveVsumDetails } from '../store/ActiveVsumDetails';
 import { useSelectedEdgeStore } from '../store/SelectedEdge';
-import { normalizeReactionFileId } from './workspaceSnapshotUtils';
+import { extractModelFromEObjectId } from './EcoreIdentifiers';
+import { toWireReactionFileId } from './workspaceSnapshotUtils';
 
 // ── Type guards ─────────────────────────────────────────────────────────
 
@@ -52,6 +53,8 @@ export function createFineGranularReactionEdge(params: {
   eObjectTargetId: string;
   fromModel: string;
   toModel: string;
+  fromModelAlias?: string;
+  toModelAlias?: string;
   reactionFileId?: number;
 }): FlowEcoreEdge {
   const {
@@ -63,13 +66,13 @@ export function createFineGranularReactionEdge(params: {
     eObjectTargetId,
     fromModel,
     toModel,
+    fromModelAlias,
+    toModelAlias,
     reactionFileId,
   } = params;
 
   const edgeId = `fine-reaction-${fineEdgeCounter++}-${Date.now()}`;
-  const normalizedFileId = reactionFileId != null
-    ? normalizeReactionFileId(reactionFileId)
-    : undefined;
+  const normalizedFileId = toWireReactionFileId(reactionFileId);
 
   const edge: FlowEcoreEdge = {
     id: edgeId,
@@ -86,8 +89,10 @@ export function createFineGranularReactionEdge(params: {
         eObjectTargetId,
         fromModel,
         toModel,
+        fromModelAlias,
+        toModelAlias,
       },
-      reactionFileId: normalizedFileId,
+      reactionFileId: normalizedFileId ?? undefined,
     },
   };
 
@@ -101,7 +106,9 @@ export function createFineGranularReactionEdge(params: {
         id: null,
         sourceId: eObjectSourceId,
         targetId: eObjectTargetId,
-        reactionFileStorageId: reactionFileId,
+        ...(normalizedFileId && normalizedFileId > 0
+          ? { reactionFileStorageId: normalizedFileId }
+          : {}),
       });
       active.saveToStore();
     }
@@ -124,14 +131,14 @@ export function createExistingFineGranularReactionEdge(
   targetNodeId: string,
 ): FlowEcoreEdge {
   const edgeId = `fine-reaction-existing-${fineEdgeCounter++}`;
-  const normalizedFileId = relation.reactionFileStorageId != null
-    ? normalizeReactionFileId(relation.reactionFileStorageId)
-    : undefined;
+  const normalizedFileId = toWireReactionFileId(relation.reactionFileStorageId);
 
   return {
     id: edgeId,
     source: sourceNodeId,
     target: targetNodeId,
+    sourceHandle: reactionSourceHandleId(relation.sourceId),
+    targetHandle: reactionTargetHandleId(relation.targetId),
     type: 'fine-granular-reaction',
     animated: true,
     data: {
@@ -142,7 +149,7 @@ export function createExistingFineGranularReactionEdge(
         fromModel,
         toModel,
       },
-      reactionFileId: normalizedFileId,
+      reactionFileId: normalizedFileId ?? undefined,
     },
   };
 }
@@ -189,6 +196,54 @@ export function deleteFineGranularReactionEdgeFromVsumDetails(
 // ── Load fine edges from store ──────────────────────────────────────────
 
 /**
+ * Resolve an EObject (class or attribute) FQ id to the React Flow node that
+ * owns it. Attribute ids match the parent class node via `eAttributeIds` or
+ * an `eObjectId.` prefix.
+ */
+export function resolveFineGranularEndpointNodeId(
+  nodes: Node[],
+  eObjectId: string,
+  model: string,
+): string | null {
+  if (!eObjectId) return null;
+
+  const matches = (requireModel: boolean): string | null => {
+    for (const node of nodes) {
+      if (node.type !== 'eobject') continue;
+      const ecore = node.data?.ecore;
+      if (!ecore) continue;
+      if (requireModel && model && ecore.model && ecore.model !== model) continue;
+      if (ecore.eObjectId === eObjectId) return node.id;
+      if (Array.isArray(ecore.eAttributeIds) && ecore.eAttributeIds.includes(eObjectId)) {
+        return node.id;
+      }
+      if (typeof ecore.eObjectId === 'string' && eObjectId.startsWith(`${ecore.eObjectId}.`)) {
+        return node.id;
+      }
+    }
+    return null;
+  };
+
+  return matches(true) ?? matches(false);
+}
+
+export function fineGranularEdgePairKey(edge: Edge): string {
+  const ecore = edge.data?.ecore;
+  if (!ecore) return edge.id;
+  return `${ecore.eObjectSourceId}|${ecore.eObjectTargetId}|${ecore.fromModel}|${ecore.toModel}`;
+}
+
+/** Append incoming fine edges, skipping pairs already present. */
+export function mergeFineGranularEdges(existing: Edge[], incoming: FlowEcoreEdge[]): Edge[] {
+  if (incoming.length === 0) return existing;
+  const keys = new Set(
+    existing.filter(isFineGranularReactionEdge).map(fineGranularEdgePairKey),
+  );
+  const add = incoming.filter(e => !keys.has(fineGranularEdgePairKey(e)));
+  return add.length > 0 ? [...existing, ...add] : existing;
+}
+
+/**
  * Load all fine-granular reaction edges from the store for the active VSUM.
  *
  * `nodeResolver` maps an EObject FQ id to a React Flow node id.
@@ -196,7 +251,7 @@ export function deleteFineGranularReactionEdgeFromVsumDetails(
  */
 export function loadFineGranularEdgesFromStore(
   nodeResolver: (eObjectId: string, model: string) => string | null,
-  identifierToModel: Map<string, string>,
+  identifierToModel?: Map<string, string>,
 ): FlowEcoreEdge[] {
   try {
     const active = new ActiveVsumDetails();
@@ -204,17 +259,19 @@ export function loadFineGranularEdgesFromStore(
     const edges: FlowEcoreEdge[] = [];
 
     for (const relation of state.metaModelsRelation) {
-      const fromModel = findModelIdentifier(
-        state.identifiersToBackendMetaModelId,
-        relation.sourceId,
-      );
-      const toModel = findModelIdentifier(
-        state.identifiersToBackendMetaModelId,
-        relation.targetId,
-      );
-      if (!fromModel || !toModel) continue;
-
       for (const fine of relation.fineGranularMetaModelRelationSet) {
+        const fromModel =
+          findPreferredModelIdentifier(state.identifiersToBackendMetaModelId, relation.sourceId)
+          ?? identifierToModel?.get(String(relation.sourceId))
+          ?? extractModelFromEObjectId(fine.sourceId)
+          ?? null;
+        const toModel =
+          findPreferredModelIdentifier(state.identifiersToBackendMetaModelId, relation.targetId)
+          ?? identifierToModel?.get(String(relation.targetId))
+          ?? extractModelFromEObjectId(fine.targetId)
+          ?? null;
+        if (!fromModel || !toModel) continue;
+
         const sourceNodeId = nodeResolver(fine.sourceId, fromModel);
         const targetNodeId = nodeResolver(fine.targetId, toModel);
         if (!sourceNodeId || !targetNodeId) continue;
@@ -237,14 +294,40 @@ export function loadFineGranularEdgesFromStore(
   }
 }
 
-function findModelIdentifier(
+/**
+ * Recreate canvas fine-granular edges from the VsumDetails store, attaching
+ * them to currently expanded EObject nodes.
+ */
+export function hydrateFineGranularReactionEdges(
+  eObjectNodes: Node[],
+  ecoreFileNodes?: Node[],
+): FlowEcoreEdge[] {
+  const identifierToModel = new Map<string, string>();
+  for (const node of ecoreFileNodes ?? []) {
+    if (node.type !== 'ecoreFile') continue;
+    const backendId = node.data?.metaModelSourceId ?? node.data?.metaModelId;
+    const nsUri = typeof node.data?.nsUri === 'string' ? node.data.nsUri : undefined;
+    if (typeof backendId === 'number' && nsUri) {
+      identifierToModel.set(String(backendId), nsUri);
+    }
+  }
+  return loadFineGranularEdgesFromStore(
+    (eObjectId, model) => resolveFineGranularEndpointNodeId(eObjectNodes, eObjectId, model),
+    identifierToModel,
+  );
+}
+
+/** Prefer an nsURI key when several identifiers map to the same backend id. */
+function findPreferredModelIdentifier(
   idMap: Map<string, number>,
   backendId: number,
 ): string | null {
+  const keys: string[] = [];
   for (const [key, value] of idMap) {
-    if (value === backendId) return key;
+    if (value === backendId) keys.push(key);
   }
-  return null;
+  if (keys.length === 0) return null;
+  return keys.find(k => k.includes('://') || k.includes('#')) ?? keys[0];
 }
 
 // ── Ghost nodes ─────────────────────────────────────────────────────────

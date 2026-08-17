@@ -40,10 +40,10 @@ describe('buildWorkspaceSnapshot', () => {
     ]);
   });
 
-  it('defaults a missing reaction file id to zero', () => {
+  it('defaults a missing reaction file id to null', () => {
     const edges = [reaction('e', 'a', 'b')];
 
-    expect(buildWorkspaceSnapshot(nodes, edges).metaModelRelationRequests[0].reactionFileId).toBe(0);
+    expect(buildWorkspaceSnapshot(nodes, edges).metaModelRelationRequests[0].reactionFileId).toBeNull();
   });
 
   it('ignores non-reaction edges', () => {
@@ -57,5 +57,128 @@ describe('buildWorkspaceSnapshot', () => {
     const edges = [reaction('e', 'a', 'c')];
 
     expect(buildWorkspaceSnapshot(withUnmapped, edges).metaModelRelationRequests).toEqual([]);
+  });
+
+  it('attaches fine-granular edges to the parent coarse relation by backend ids', () => {
+    const withNs = [
+      ecore('a', { metaModelSourceId: 1, nsUri: 'http://families' }),
+      ecore('b', { metaModelSourceId: 2, nsUri: 'http://persons' }),
+    ];
+    const edges: Edge[] = [
+      reaction('e', 'a', 'b', { reactionFileId: 7 }),
+      {
+        id: 'f',
+        source: 'eobj-a',
+        target: 'eobj-b',
+        type: 'fine-granular-reaction',
+        data: {
+          ecore: {
+            eObjectSourceId: 'http://families#Member',
+            eObjectTargetId: 'http://persons#Person',
+            fromModel: 'http://families',
+            toModel: 'http://persons',
+          },
+          reactionFileId: 7,
+        },
+      } as Edge,
+    ];
+
+    expect(buildWorkspaceSnapshot(withNs, edges).metaModelRelationRequests).toEqual([
+      {
+        sourceId: 1,
+        targetId: 2,
+        reactionFileId: 7,
+        fineGranularMetaModelRelationSet: [
+          {
+            id: null,
+            sourceId: 'http://families#Member',
+            targetId: 'http://persons#Person',
+            reactionFileStorageId: 7,
+          },
+        ],
+      },
+    ]);
+  });
+
+  it('emits a coarse request for fine-only pairs that have no reactions edge', () => {
+    const withNs = [
+      ecore('a', { metaModelSourceId: 1, nsUri: 'http://families' }),
+      ecore('b', { metaModelSourceId: 2, nsUri: 'http://persons' }),
+    ];
+    const edges: Edge[] = [
+      {
+        id: 'f',
+        source: 'eobj-a',
+        target: 'eobj-b',
+        type: 'fine-granular-reaction',
+        data: {
+          ecore: {
+            eObjectSourceId: 'http://families#Member',
+            eObjectTargetId: 'http://persons#Person',
+            fromModel: 'http://families',
+            toModel: 'http://persons',
+          },
+        },
+      } as Edge,
+    ];
+
+    expect(buildWorkspaceSnapshot(withNs, edges).metaModelRelationRequests).toEqual([
+      {
+        sourceId: 1,
+        targetId: 2,
+        reactionFileId: null,
+        fineGranularMetaModelRelationSet: [
+          {
+            id: null,
+            sourceId: 'http://families#Member',
+            targetId: 'http://persons#Person',
+          },
+        ],
+      },
+    ]);
+  });
+
+  it('overlays Low Code form data from the store snapshot', () => {
+    const withNs = [
+      ecore('a', { metaModelSourceId: 1, nsUri: 'http://families' }),
+      ecore('b', { metaModelSourceId: 2, nsUri: 'http://persons' }),
+    ];
+    const edges = [reaction('e', 'a', 'b', { reactionFileId: 7 })];
+    const storeSnapshot = {
+      metaModelIds: [1, 2],
+      metaModelRelationRequests: [
+        {
+          sourceId: 1,
+          targetId: 2,
+          reactionFileId: 7,
+          fineGranularMetaModelRelationSet: [
+            {
+              id: 9,
+              sourceId: 'http://families#Member',
+              targetId: 'http://persons#Person',
+              reactionFileStorageId: 7,
+              lowCodeReactionRequestBase: { routine: 'sync' },
+            },
+          ],
+        },
+      ],
+    };
+
+    expect(buildWorkspaceSnapshot(withNs, edges, storeSnapshot).metaModelRelationRequests).toEqual([
+      {
+        sourceId: 1,
+        targetId: 2,
+        reactionFileId: 7,
+        fineGranularMetaModelRelationSet: [
+          {
+            id: 9,
+            sourceId: 'http://families#Member',
+            targetId: 'http://persons#Person',
+            reactionFileStorageId: 7,
+            lowCodeReactionRequestBase: { routine: 'sync' },
+          },
+        ],
+      },
+    ]);
   });
 });

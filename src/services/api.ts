@@ -1019,7 +1019,8 @@ export interface UserSearchItem {
 export interface MetaModelRelationRequest {
   sourceId: number;
   targetId: number;
-  reactionFileId: number;  // Use 0 when there's no reaction file
+  /** Stored REACTION file id, or `null` when there is no uploaded `.reactions` file. */
+  reactionFileId: number | null;
   fineGranularMetaModelRelationSet?: import('../types/FineGranularMetaModelRelation').EditableFineGranularMetaModelRelation[];
 }
 

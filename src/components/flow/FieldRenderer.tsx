@@ -46,7 +46,7 @@ const FieldRenderer: React.FC<FieldRendererProps> = ({
   onChange,
   disabled = false,
 }) => {
-  const label = field.displayName ?? field.name;
+  const label = field.displayName || field.name;
   const description = field.displayDescription ?? undefined;
   const required = field.required === true;
   const error = validateFieldValue(field, value);

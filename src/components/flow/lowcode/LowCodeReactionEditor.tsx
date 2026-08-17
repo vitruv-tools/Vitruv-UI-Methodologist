@@ -20,15 +20,18 @@ import type { LowCodeReactionFieldVariables } from '../../../types/LowCodeReacti
 import { apiService } from '../../../services/api';
 import {
   buildInitialFieldValues,
+  buildLowCodeFieldVariables,
   isHidden,
 } from '../../../utils/FieldUtils';
 import {
   temporarilySaveLowCodeReactionConfig,
   getLowCodeReactionConfig,
-  hasLowCodeReactionConfig,
 } from '../../../utils/LowCodeReactionUtils';
 import {
-  extractModelFromEObjectId,
+  LOW_CODE_TEMPLATE_KEY,
+  resolveLowCodeReactionDiscriminator,
+} from '../../../utils/lowCodeReactionPayload';
+import {
   extractElementFromEObjectId,
   deriveModelAlias,
   deriveElementAlias,
@@ -72,16 +75,18 @@ const LowCodeReactionEditor = forwardRef<
   const variables = useMemo<LowCodeReactionFieldVariables | undefined>(() => {
     const ecore = edge.data?.ecore;
     if (!ecore) return undefined;
-    return {
+    const sourceAlias = deriveElementAlias(ecore.eObjectSourceId);
+    const targetAlias = deriveElementAlias(ecore.eObjectTargetId);
+    return buildLowCodeFieldVariables({
       sourceModelUri: ecore.fromModel,
-      sourceModelAlias: deriveModelAlias(ecore.fromModel),
+      sourceModelAlias: ecore.fromModelAlias || deriveModelAlias(ecore.fromModel),
       sourceUri: ecore.eObjectSourceId,
-      sourceAlias: deriveElementAlias(ecore.eObjectSourceId),
+      sourceAlias,
       targetModelUri: ecore.toModel,
-      targetModelAlias: deriveModelAlias(ecore.toModel),
+      targetModelAlias: ecore.toModelAlias || deriveModelAlias(ecore.toModel),
       targetUri: ecore.eObjectTargetId,
-      targetAlias: deriveElementAlias(ecore.eObjectTargetId),
-    };
+      targetAlias,
+    });
   }, [edge]);
 
   // Fetch metadata on mount
@@ -101,7 +106,7 @@ const LowCodeReactionEditor = forwardRef<
         if (saved) {
           setFieldValues(saved);
           setLastSaved(saved);
-          const savedTemplate = saved._reactionTemplate as string | undefined;
+          const savedTemplate = resolveLowCodeReactionDiscriminator(saved);
           if (savedTemplate) setSelectedTemplate(savedTemplate);
         }
       })
@@ -144,7 +149,8 @@ const LowCodeReactionEditor = forwardRef<
       if (!template) return;
 
       const initial = buildInitialFieldValues(template.fields, variables);
-      initial._reactionTemplate = name;
+      initial[LOW_CODE_TEMPLATE_KEY] = name;
+      initial.name = name;
       setFieldValues(initial);
     },
     [metadata, variables],
@@ -167,13 +173,19 @@ const LowCodeReactionEditor = forwardRef<
 
   useImperativeHandle(ref, () => ({
     save: () => {
-      temporarilySaveLowCodeReactionConfig(fieldValues, edge);
-      setLastSaved({ ...fieldValues });
+      const payload = {
+        ...fieldValues,
+        ...(selectedTemplate
+          ? { [LOW_CODE_TEMPLATE_KEY]: selectedTemplate, name: selectedTemplate }
+          : {}),
+      };
+      temporarilySaveLowCodeReactionConfig(payload, edge);
+      setLastSaved({ ...payload });
       onSaveComplete?.();
     },
     undo: () => {
       setFieldValues({ ...lastSaved });
-      const savedTemplate = lastSaved._reactionTemplate as string | undefined;
+      const savedTemplate = resolveLowCodeReactionDiscriminator(lastSaved);
       if (savedTemplate) setSelectedTemplate(savedTemplate);
     },
     delete: () => {
@@ -207,9 +219,9 @@ const LowCodeReactionEditor = forwardRef<
       {/* Connection info */}
       {ecore && (
         <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1.5 }}>
-          {deriveModelAlias(ecore.fromModel)}.{extractElementFromEObjectId(ecore.eObjectSourceId)}
+          {variables?.sourceModelAlias}.{extractElementFromEObjectId(ecore.eObjectSourceId)}
           {' → '}
-          {deriveModelAlias(ecore.toModel)}.{extractElementFromEObjectId(ecore.eObjectTargetId)}
+          {variables?.targetModelAlias}.{extractElementFromEObjectId(ecore.eObjectTargetId)}
         </Typography>
       )}
 

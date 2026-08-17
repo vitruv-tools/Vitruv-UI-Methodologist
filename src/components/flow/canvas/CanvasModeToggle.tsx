@@ -128,6 +128,7 @@ export const CanvasModeToggle: React.FC<CanvasModeToggleProps> = ({
           );
         })}
       </div>
+
       {projectTabsBelowModeToggle}
     </div>
   );

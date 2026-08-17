@@ -18,6 +18,8 @@ interface CanvasProjectControlsProps {
   onConfirmRename: () => void;
   onCancelRename: () => void;
   loading: boolean;
+  addReactionMode?: boolean;
+  onToggleReactionMode?: () => void;
 }
 
 const projectControlsStyle: React.CSSProperties = {
@@ -138,6 +140,8 @@ export const CanvasProjectControls: React.FC<CanvasProjectControlsProps> = ({
   onConfirmRename,
   onCancelRename,
   loading,
+  addReactionMode = false,
+  onToggleReactionMode,
 }) => (
   <div style={projectControlsStyle}>
     <button
@@ -251,5 +255,51 @@ export const CanvasProjectControls: React.FC<CanvasProjectControlsProps> = ({
     >
       <RefreshIcon />
     </ProjectControlButton>
+
+    {onToggleReactionMode && (
+      <>
+        <ProjectControlsDivider />
+        <div style={{ display: 'flex', alignItems: 'center', gap: 2, padding: '0 4px' }}>
+          <button
+            type="button"
+            onClick={() => { if (addReactionMode) onToggleReactionMode(); }}
+            style={{
+              height: 24,
+              padding: '0 8px',
+              border: 'none',
+              borderRadius: 4,
+              fontSize: 10,
+              fontWeight: 700,
+              cursor: 'pointer',
+              background: !addReactionMode ? '#e3f2fd' : 'transparent',
+              color: !addReactionMode ? '#1565c0' : '#999',
+              transition: 'all 0.15s',
+              fontFamily: 'inherit',
+            }}
+          >
+            VSUM
+          </button>
+          <button
+            type="button"
+            onClick={() => { if (!addReactionMode) onToggleReactionMode(); }}
+            style={{
+              height: 24,
+              padding: '0 8px',
+              border: 'none',
+              borderRadius: 4,
+              fontSize: 10,
+              fontWeight: 700,
+              cursor: 'pointer',
+              background: addReactionMode ? '#e8f5e9' : 'transparent',
+              color: addReactionMode ? '#2e7d32' : '#999',
+              transition: 'all 0.15s',
+              fontFamily: 'inherit',
+            }}
+          >
+            Reactions
+          </button>
+        </div>
+      </>
+    )}
   </div>
 );

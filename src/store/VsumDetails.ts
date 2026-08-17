@@ -5,7 +5,7 @@ import type {
 } from '../types/EditableVsumDetails';
 import type { EditableFineGranularMetaModelRelation } from '../types/FineGranularMetaModelRelation';
 import type { WorkspaceSnapshot } from '../types/workspace';
-import { normalizeReactionFileId } from '../utils/workspaceSnapshotUtils';
+import { toWireReactionFileId } from '../utils/workspaceSnapshotUtils';
 import { deepClone, deepCloneArray } from '../utils/DeepClone';
 import { NoVsumDetailsStoreError } from './NoVsumDetailsStoreError';
 
@@ -182,7 +182,7 @@ export class VsumDetailsHelper {
     const metaModelRelationRequests = this.state.metaModelsRelation.map((r) => ({
       sourceId: r.sourceId,
       targetId: r.targetId,
-      reactionFileId: normalizeReactionFileId(
+      reactionFileId: toWireReactionFileId(
         r.reactionFileId ?? r.reactionFileStorageId,
       ),
       ...(r.fineGranularMetaModelRelationSet.length

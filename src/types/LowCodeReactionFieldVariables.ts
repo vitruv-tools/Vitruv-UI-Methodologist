@@ -13,4 +13,13 @@ export type LowCodeReactionFieldVariables = {
   targetModelAlias: string;
   targetUri: string;
   targetAlias: string;
+  /** Backend templates often use model1/model2 field names. */
+  model1Uri: string;
+  model2Uri: string;
+  model1Alias: string;
+  model2Alias: string;
+  model1RootType: string;
+  model2RootType: string;
+  model1RootVar: string;
+  model2RootVar: string;
 };

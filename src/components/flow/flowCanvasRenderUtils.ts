@@ -98,6 +98,7 @@ export function mapFlowCanvasEdge(edge: Edge, ctx: MapFlowEdgeContext): Edge {
     mergeGroupSourceNodes,
   } = ctx.getUmlMerge(edge);
   const isReaction = edge.type === 'reactions';
+  const isFineReaction = edge.type === 'fine-granular-reaction';
   const isUml = edge.type === 'uml';
   const reactionEditable = isReaction && !ctx.readOnly;
 
@@ -111,7 +112,7 @@ export function mapFlowCanvasEdge(edge: Edge, ctx: MapFlowEdgeContext): Edge {
       mergeGroupSourceNodes,
       hoveredMergeGroup: ctx.hoveredMergeGroup,
       onMergeGroupHover: isUml ? ctx.handleMergeGroupHover : undefined,
-      onDoubleClick: isReaction ? () => ctx.handleEdgeDoubleClick(edge.id) : undefined,
+      onDoubleClick: (isReaction || isFineReaction) ? () => ctx.handleEdgeDoubleClick(edge.id) : undefined,
       readOnly: isReaction ? ctx.readOnly : undefined,
       routingStyle: ctx.routingStyle,
       separation: 36,

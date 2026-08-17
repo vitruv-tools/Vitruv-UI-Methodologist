@@ -9,29 +9,34 @@
  * Reactions mode: visible (pointer-events: auto, opacity: 1).
  */
 
-/* ── Source handles ─────────────────────────────────────────────── */
-.react-flow .react-flow__handle.reaction-handle[data-handlepos="left"][data-handleid^="reaction"][data-handleid*="source"] {
+/* ── Source handles (right side) ───────────────────────────────── */
+.react-flow .react-flow__handle.reaction-handle-source {
   pointer-events: var(--reaction-handle-pointer-events-source, none);
   opacity: var(--reaction-handle-opacity-source, 0);
+  transition: opacity 0.2s ease;
 }
 
-.react-flow .react-flow__handle.reaction-handle[data-handlepos="right"][data-handleid^="reaction"][data-handleid*="source"] {
-  pointer-events: var(--reaction-handle-pointer-events-source, none);
-  opacity: var(--reaction-handle-opacity-source, 0);
-}
-
-/* ── Target handles ─────────────────────────────────────────────── */
-.react-flow .react-flow__handle.reaction-handle[data-handlepos="left"][data-handleid^="reaction"][data-handleid*="target"] {
+/* ── Target handles (left side) ────────────────────────────────── */
+.react-flow .react-flow__handle.reaction-handle-target {
   pointer-events: var(--reaction-handle-pointer-events-target, none);
   opacity: var(--reaction-handle-opacity-target, 0);
+  transition: opacity 0.2s ease;
 }
 
-.react-flow .react-flow__handle.reaction-handle[data-handlepos="right"][data-handleid^="reaction"][data-handleid*="target"] {
-  pointer-events: var(--reaction-handle-pointer-events-target, none);
-  opacity: var(--reaction-handle-opacity-target, 0);
-}
-
-/* ── Fine-granular reaction edges ───────────────────────────────── */
+/* ── Fine-granular reaction edges ──────────────────────────────── */
 .react-flow__edge.react-flow__edge-fine-granular-reaction {
   opacity: var(--reaction-edge-opacity, 0);
+  transition: opacity 0.2s ease;
+}
+
+/* ── Bounding box node (non-interactive background) ────────────── */
+.react-flow__node-boundingBox {
+  overflow: visible;
+  cursor: grab;
+}
+.react-flow__node-boundingBox:active {
+  cursor: grabbing;
+}
+.react-flow__node-eobject {
+  z-index: 1 !important;
 }

@@ -10,6 +10,8 @@ export type FlowFineGranularMetaModelRelationData = {
     eObjectTargetId: string;
     fromModel: string;
     toModel: string;
+    fromModelAlias?: string;
+    toModelAlias?: string;
   };
   reactionFileId?: number;
 };

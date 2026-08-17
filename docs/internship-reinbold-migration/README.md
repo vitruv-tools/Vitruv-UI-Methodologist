@@ -229,6 +229,16 @@ Implement behaviors from commits 009, 013, 014 and supporting fixes:
 - Delete fine relation; if last fine relation and no reaction file storage id, also remove parent coarse relation (old end-state behavior — confirm against current backend contract before copying blindly)
 - Normalize reaction file ids consistently with develop (`normalizeReactionFileId` in `workspaceSnapshotUtils.ts` already exists — extend rather than fork)
 
+### Expanded Mode Phase — EObject Node Expansion + Bounding Boxes
+
+Visual entry point that makes Phases 0–6 usable end-to-end:
+
+1. **EObjectNode** — a new React Flow node type (`eobject`) rendering individual EClasses with class name, attributes list, and reaction handles (left=target, right=source)
+2. **BoundingBoxNode** — a group node type (`boundingBox`) wrapping all EObject nodes from one meta-model with a dashed border and label
+3. **expandMetaModelToNodes** utility — parses `.ecore` XML via `ecoreToUml`, creates `EObjectNode` + `BoundingBoxNode` with proper `FlowNodeECoreData` (model nsURI, eObjectId, eAttributeIds)
+4. **Expansion trigger** — toggling into reaction mode (`addReactionMode`) auto-expands all `ecoreFile` boxes into their EObject children; toggling out collapses them back
+5. **CSS** — reaction handles are hidden by default, shown when in reaction mode via CSS custom properties
+
 ### Phase 7 — Tests
 
 Add tests mirroring develop style:

@@ -123,9 +123,34 @@ export function getProperEObjectIdFromHandle(handleId: string): string | null {
 /**
  * Extract the nsURI from raw ecore XML content.
  *
- * Lightweight regex extraction — does not parse full XML.
+ * Prefers the root `EPackage nsURI` so imported/referenced packages
+ * elsewhere in the file are not picked up as this model's identity.
  */
 export function extractNsUriFromEcore(ecoreContent: string): string | null {
-  const match = ecoreContent.match(/nsURI="([^"]+)"/);
-  return match ? match[1] : null;
+  const ePackageOpen = ecoreContent.match(/<(?:\w+:)?EPackage\b[^>]*>/i);
+  if (ePackageOpen) {
+    const ns = ePackageOpen[0].match(/\bnsURI="([^"]+)"/i);
+    if (ns?.[1]) return ns[1];
+  }
+  const matches = [...ecoreContent.matchAll(/\bnsURI="([^"]+)"/g)].map((m) => m[1]);
+  const preferred = matches.find((uri) => !/eclipse\.org|omg\.org/i.test(uri));
+  return preferred ?? matches[0] ?? null;
+}
+
+/**
+ * Extract the EPackage `name` from raw ecore XML (e.g. `"model1"`).
+ */
+export function extractEPackageNameFromEcore(ecoreContent: string): string | null {
+  const ePackageOpen = ecoreContent.match(/<(?:\w+:)?EPackage\b[^>]*>/i);
+  if (!ePackageOpen) return null;
+  const name = ePackageOpen[0].match(/\bname="([^"]+)"/i);
+  return name?.[1] ?? null;
+}
+
+/**
+ * Alias from a canvas/file label: `"Model 1"` → `"model1"`.
+ */
+export function deriveDisplayModelAlias(label?: string | null): string {
+  if (!label) return '';
+  return label.replace(/\.ecore$/i, '').replace(/\s+/g, '').toLowerCase();
 }

@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { apiService } from '../../services/api';
 import { VsumMetaModelRef, VsumMetaModelRelation } from '../../types';
+import { toWireReactionFileId } from '../../utils/workspaceSnapshotUtils';
 
 interface MetaModelOption {
   id: number;
@@ -172,7 +173,7 @@ export const LinkMetaModelsPanel: React.FC<Props> = ({
         ...existingRelations.map((r) => ({
           sourceId: r.sourceId,
           targetId: r.targetId,
-          reactionFileId: (r.reactionFileId ?? r.reactionFileStorageId) as number,
+          reactionFileId: toWireReactionFileId(r.reactionFileId ?? r.reactionFileStorageId),
         })),
         { sourceId, targetId, reactionFileId },
       ];

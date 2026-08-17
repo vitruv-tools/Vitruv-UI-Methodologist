@@ -1,5 +1,4 @@
 import React, { useState, useRef, useCallback, useEffect } from 'react';
-import { Panel } from 'reactflow';
 import IconButton from '@mui/material/IconButton';
 import CloseIcon from '@mui/icons-material/Close';
 import MinimizeIcon from '@mui/icons-material/Minimize';
@@ -71,7 +70,7 @@ const DragablePanel: React.FC<DragablePanelProps> = ({
   }, []);
 
   return (
-    <Panel position="top-left" style={{ margin: 0, pointerEvents: 'none' }}>
+    <div style={{ position: 'fixed', top: 0, left: 0, width: 0, height: 0, pointerEvents: 'none', zIndex: 1000 }}>
       <div
         ref={dragRef}
         style={{
@@ -157,7 +156,7 @@ const DragablePanel: React.FC<DragablePanelProps> = ({
           </div>
         )}
       </div>
-    </Panel>
+    </div>
   );
 };
 

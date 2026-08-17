@@ -6,8 +6,10 @@
  * fine-granular edges.
  */
 
+import type { Node } from 'reactflow';
 import { useProjectStore, type ReactionFile } from '../store/Project';
 import { ActiveVsumDetails, hasActiveVsumDetailsStore } from '../store/ActiveVsumDetails';
+import { extractNsUriFromEcore } from './EcoreIdentifiers';
 
 /**
  * Register reaction files from loaded coarse relations into the
@@ -147,4 +149,51 @@ export function buildBackendIdToModelMap(
     }
   }
   return result;
+}
+
+/**
+ * Build nsURI / file-name → backend meta-model sourceId from canvas ecoreFile nodes.
+ */
+export function collectIdentifierMapFromCanvasNodes(nodes: Node[]): Map<string, number> {
+  const map = new Map<string, number>();
+  for (const node of nodes) {
+    if (node.type !== 'ecoreFile') continue;
+    const sourceId = node.data?.metaModelSourceId ?? node.data?.metaModelId;
+    if (typeof sourceId !== 'number') continue;
+
+    const nsUri: string | undefined =
+      (typeof node.data?.nsUri === 'string' && node.data.nsUri) ||
+      (typeof node.data?.fileContent === 'string'
+        ? extractNsUriFromEcore(node.data.fileContent) ?? undefined
+        : undefined);
+    if (nsUri) map.set(nsUri, sourceId);
+
+    const fileName = typeof node.data?.fileName === 'string' ? node.data.fileName : undefined;
+    if (fileName) {
+      map.set(fileName, sourceId);
+      const withoutExt = fileName.replace(/\.ecore$/i, '');
+      if (withoutExt && withoutExt !== fileName) map.set(withoutExt, sourceId);
+    }
+  }
+  return map;
+}
+
+/**
+ * Merge canvas-derived identifiers into the active VsumDetails store.
+ * No-op when no VSUM store is initialized.
+ */
+export function syncIdentifierMapFromCanvasNodes(nodes: Node[]): void {
+  if (!hasActiveVsumDetailsStore()) return;
+  try {
+    const incoming = collectIdentifierMapFromCanvasNodes(nodes);
+    if (incoming.size === 0) return;
+
+    const active = new ActiveVsumDetails();
+    const merged = new Map(active.get().identifiersToBackendMetaModelId);
+    for (const [key, value] of incoming) merged.set(key, value);
+    active.setIdentifiersToBackendMetaModelId(merged);
+    active.saveToStore();
+  } catch {
+    // store may not be ready
+  }
 }

@@ -58,7 +58,9 @@ import {
   cloneWorkspaceSnapshot,
   emptyWorkspaceSnapshot,
   mapRelationsForCanvasLoad,
+  mapVsumDetailsToEditable,
   prepareSnapshotForSyncSave,
+  relationsFromVsumDetails,
   workspaceSnapshotFromVsumDetails,
   workspaceSnapshotsEqual,
 } from '../utils/workspaceSnapshotUtils';
@@ -270,7 +272,7 @@ async function hydrateCanvasWorkspace(params: HydrateCanvasWorkspaceParams): Pro
     setConstraintsNodes(flowCanvasRef.current?.getNodes?.() ?? []);
   }
 
-  await dispatchMetaModelRelations(details.metaModelsRelation);
+  await dispatchMetaModelRelations(relationsFromVsumDetails(details));
   if (isStale()) return false;
 
   await new Promise(r => setTimeout(r, 150));
@@ -922,17 +924,7 @@ export const CanvasPage: React.FC = () => {
       // ── Low Code store initialization ───────────────────────────────
       useProjectStore.getState().setActiveId(vsumId);
 
-      const editableDetails: EditableVsumDetails = {
-        metaModels: (details.metaModels || []).map((mm) => ({ ...mm })),
-        metaModelsRelation: (details.metaModelsRelation || []).map((r) => ({
-          id: r.id,
-          sourceId: r.sourceId,
-          targetId: r.targetId,
-          reactionFileId: r.reactionFileId ?? null,
-          reactionFileStorageId: r.reactionFileStorageId ?? null,
-          fineGranularMetaModelRelationSet: [],
-        })),
-      };
+      const editableDetails: EditableVsumDetails = mapVsumDetailsToEditable(details);
       createVsumDetailsStore(vsumId, editableDetails);
       // ────────────────────────────────────────────────────────────────
 
@@ -1403,6 +1395,7 @@ export const CanvasPage: React.FC = () => {
         height: '100%',
         visibility: projectLoadState.status === 'ready' ? 'visible' : 'hidden',
       }}>
+
       <FlowCanvas
         key={activeInstanceId ?? `canvas-${activeProjectId ?? 'new'}`}
         ref={flowCanvasRef}
@@ -1414,6 +1407,7 @@ export const CanvasPage: React.FC = () => {
         umlModalOpen={umlPanels.length > 0}
         addReactionMode={addReactionMode}
         onReactionModeEnd={handleReactionModeEnd}
+        onToggleReactionMode={() => setAddReactionMode(v => !v)}
         onHistoryChange={handleHistoryChange}
         onCanvasModeChange={handleCanvasModeChange}
         constraintHighlightNodeId={constraintHighlightNodeId}
@@ -1526,6 +1520,8 @@ export const CanvasPage: React.FC = () => {
         onConfirmRename={confirmRename}
         onCancelRename={cancelRename}
         loading={loadingProject}
+        addReactionMode={addReactionMode}
+        onToggleReactionMode={() => setAddReactionMode(v => !v)}
       />
 
       <UnsavedTabCloseDialog

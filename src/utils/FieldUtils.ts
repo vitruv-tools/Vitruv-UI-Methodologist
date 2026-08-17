@@ -78,27 +78,59 @@ export function evaluateTemplate(
   });
 }
 
+function capitalizeFirst(value: string): string {
+  return value ? value.charAt(0).toUpperCase() + value.slice(1) : value;
+}
+
 /**
  * Extended template evaluation that also supports `${expression}` syntax
  * for backward compatibility with old-branch metadata.
  *
  * **Trust boundary:** Only call this with backend-provided metadata strings.
  * The implementation uses constrained substitution (NOT `new Function`).
- * Expressions that are simple variable names are resolved; complex
- * expressions are left as-is.
+ * Supported expressions:
+ *   `${var}` / `{{var}}`
+ *   `${var.toLowerCase()}` / `${var.toUpperCase()}`
+ *   `${capitalizeFirst(var)}`
  */
 export function evaluateTemplateWithExpressionSupport(
   template: string,
   variables: LowCodeReactionFieldVariables,
 ): string {
   const vars = variables as Record<string, string>;
+  const resolve = (key: string): string | undefined =>
+    key in vars ? vars[key] : undefined;
 
   let result = template.replace(TEMPLATE_PATTERN, (match, key: string) => {
-    return key in vars ? vars[key] : match;
+    return resolve(key) ?? match;
   });
 
+  result = result.replace(
+    /\$\{capitalizeFirst\((\w+)\)\}/g,
+    (match, key: string) => {
+      const value = resolve(key);
+      return value === undefined ? match : capitalizeFirst(value);
+    },
+  );
+
+  result = result.replace(
+    /\$\{(\w+)\.toLowerCase\(\)\}/g,
+    (match, key: string) => {
+      const value = resolve(key);
+      return value === undefined ? match : value.toLowerCase();
+    },
+  );
+
+  result = result.replace(
+    /\$\{(\w+)\.toUpperCase\(\)\}/g,
+    (match, key: string) => {
+      const value = resolve(key);
+      return value === undefined ? match : value.toUpperCase();
+    },
+  );
+
   result = result.replace(/\$\{(\w+)\}/g, (match, key: string) => {
-    return key in vars ? vars[key] : match;
+    return resolve(key) ?? match;
   });
 
   return result;
@@ -158,7 +190,72 @@ export function buildInitialFieldValues(
       values[field.name] = getFieldDefaultValue(field, variables);
     }
   }
-  return values;
+  return variables ? overlayConnectionFieldValues(values, variables) : values;
+}
+
+/**
+ * Build template variables from a selected fine-granular edge.
+ *
+ * Includes both the canonical source/target names and the model1/model2
+ * aliases used by backend reaction metadata defaults.
+ */
+export function buildLowCodeFieldVariables(vars: {
+  sourceModelUri: string;
+  sourceModelAlias: string;
+  sourceUri: string;
+  sourceAlias: string;
+  targetModelUri: string;
+  targetModelAlias: string;
+  targetUri: string;
+  targetAlias: string;
+}): LowCodeReactionFieldVariables {
+  return {
+    ...vars,
+    model1Uri: vars.sourceModelUri,
+    model2Uri: vars.targetModelUri,
+    model1Alias: vars.sourceModelAlias,
+    model2Alias: vars.targetModelAlias,
+    model1RootType: vars.sourceAlias,
+    model2RootType: vars.targetAlias,
+    model1RootVar: vars.sourceAlias.toLowerCase(),
+    model2RootVar: vars.targetAlias.toLowerCase(),
+  };
+}
+
+/**
+ * Force identity fields to the connected models even when the backend
+ * default string is a hardcoded example (e.g. `http://.../model2`).
+ */
+export function overlayConnectionFieldValues(
+  values: Record<string, unknown>,
+  variables: LowCodeReactionFieldVariables,
+): Record<string, unknown> {
+  const byFieldName: Record<string, string> = {
+    model1Uri: variables.model1Uri,
+    model2Uri: variables.model2Uri,
+    model1Alias: variables.model1Alias,
+    model2Alias: variables.model2Alias,
+    model1RootType: variables.model1RootType,
+    model2RootType: variables.model2RootType,
+    model1RootVar: variables.model1RootVar,
+    model2RootVar: variables.model2RootVar,
+    sourceModelUri: variables.sourceModelUri,
+    targetModelUri: variables.targetModelUri,
+    sourceModelAlias: variables.sourceModelAlias,
+    targetModelAlias: variables.targetModelAlias,
+    sourceAlias: variables.sourceAlias,
+    targetAlias: variables.targetAlias,
+    sourceUri: variables.sourceUri,
+    targetUri: variables.targetUri,
+  };
+
+  const next = { ...values };
+  for (const [name, value] of Object.entries(byFieldName)) {
+    if (name in next && value) {
+      next[name] = value;
+    }
+  }
+  return next;
 }
 
 // ── Validation helpers ──────────────────────────────────────────────────

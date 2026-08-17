@@ -365,7 +365,7 @@ export const CanvasSidebarToolbar: React.FC<CanvasSidebarToolbarProps> = ({
 
         {!readOnly && <SidebarDivider />}
 
-        {readOnly ? (
+        {readOnly && (
           <SidebarButton
             label="View reaction"
             description="Select a connection line, then click to open the code"
@@ -373,28 +373,18 @@ export const CanvasSidebarToolbar: React.FC<CanvasSidebarToolbarProps> = ({
           >
             <ReactionIcon />
           </SidebarButton>
-        ) : (
-          <>
-            <SidebarButton
-              label={addReactionMode ? 'Cancel reaction' : 'Add reaction'}
-              description={addReactionMode
-                ? 'Click to exit connection mode'
-                : 'Click two meta-models to connect them'}
-              active={addReactionMode}
-              onClick={onToggleReactionMode}
-            >
-              <ReactionIcon />
-            </SidebarButton>
+        )}
 
-            <SidebarButton
-              label="Add meta-models"
-              description="Open the model library drawer"
-              onClick={onToggleModelDrawer}
-              filled
-            >
-              <PlusBoxIcon />
-            </SidebarButton>
-          </>
+        {!readOnly && <SidebarDivider />}
+
+        {!readOnly && (
+          <SidebarButton
+            label="Add meta-models"
+            description="Open the meta-model drawer to add models to the canvas"
+            onClick={onToggleModelDrawer}
+          >
+            <PlusBoxIcon />
+          </SidebarButton>
         )}
       </div>
 

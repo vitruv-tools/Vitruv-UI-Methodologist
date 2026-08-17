@@ -19,7 +19,7 @@ import { useDragAndDrop } from '../../hooks/useDragAndDrop';
 import { EditableNode } from './EditableNode';
 import { UMLRelationship } from './UMLRelationship';
 import { ReactionRelationship } from './ReactionRelationship';
-import { EcoreFileBox } from './EcoreFileBox';
+import { EcoreFileBox, cardColor } from './EcoreFileBox';
 import { ConnectionLine } from './ConnectionLine';
 import { ReactionEditorModal } from './ReactionEditorModal';
 import { ConfirmDialog } from '../ui/ConfirmDialog';
@@ -113,7 +113,7 @@ import LowCodeReactionEditor, {
 import DragablePanel from './DragablePanel';
 import { useProjectStore } from '../../store/Project';
 import { useSelectedEdgeStore } from '../../store/SelectedEdge';
-import { ActiveVsumDetails } from '../../store/ActiveVsumDetails';
+import { ActiveVsumDetails, hasActiveVsumDetailsStore } from '../../store/ActiveVsumDetails';
 import type { FlowEcoreEdge } from '../../types/flow';
 import {
   createFineGranularReactionEdge,
@@ -124,15 +124,31 @@ import {
   disableReactionHandles,
   disableReactionEdges,
   onFineGranularEdgeClick,
-  loadFineGranularEdgesFromStore,
+  hydrateFineGranularReactionEdges,
+  mergeFineGranularEdges,
 } from '../../utils/FineGranularReactionUtils';
-import { getProperEObjectIdFromHandle } from '../../utils/EcoreIdentifiers';
+import {
+  getProperEObjectIdFromHandle,
+  extractModelFromEObjectId,
+  deriveDisplayModelAlias,
+  deriveModelAlias,
+} from '../../utils/EcoreIdentifiers';
 import {
   hasLowCodeReactionConfig,
 } from '../../utils/LowCodeReactionUtils';
 import {
   tryInferReactionFileIdForFineGranularReactionEdge,
+  syncIdentifierMapFromCanvasNodes,
 } from '../../utils/ReactionUtils';
+import {
+  expandMetaModelToNodes,
+  nextBoundingBoxOrigin,
+  resetModelColorIndex,
+  computeBoundingBoxRect,
+} from '../../utils/expandMetaModel';
+
+import EObjectNode from './lowcode/EObjectNode';
+import BoundingBoxNode from './lowcode/BoundingBoxNode';
 
 export type { CanvasMode } from './flowCanvasTypes';
 
@@ -140,6 +156,8 @@ const nodeTypes = {
   editable: EditableNode,
   ecoreFile: EcoreFileBox,
   ghost: GhostNode,
+  eobject: EObjectNode,
+  boundingBox: BoundingBoxNode,
 };
 const edgeTypes = {
   uml: UMLRelationship,
@@ -188,6 +206,7 @@ interface FlowCanvasProps {
   umlModalOpen?: boolean;
   addReactionMode?: boolean;
   onReactionModeEnd?: () => void;
+  onToggleReactionMode?: () => void;
   onHistoryChange?: (canUndo: boolean, canRedo: boolean) => void;
   /** Rendered directly under the Modeling / View Types toggle (e.g. project tabs). */
   projectTabsBelowModeToggle?: React.ReactNode;
@@ -225,6 +244,7 @@ export const FlowCanvas = forwardRef<FlowCanvasHandle, FlowCanvasProps>(
       umlModalOpen,
       addReactionMode,
       onReactionModeEnd,
+      onToggleReactionMode,
       onHistoryChange,
       projectTabsBelowModeToggle,
       onCanvasModeChange,
@@ -355,27 +375,97 @@ export const FlowCanvas = forwardRef<FlowCanvasHandle, FlowCanvasProps>(
       setEdges(currentEdges => currentEdges.map(edge => updateEdgeHandles(edge, currentNodes)));
     }, [reactFlowInstance, setEdges]);
 
+    const bboxDraggingIdsRef = useRef<Set<string>>(new Set());
+
     const onNodesChange = useCallback((changes: any) => {
       if (readOnly && changes.some(isReadOnlyBlockedNodeChange)) return;
 
+      const liveNodes = nodesRef.current;
       const clampedChanges = clampNodeChanges(changes, {
         circleVisible,
         umlModalOpen,
         circle,
-        nodes,
+        nodes: liveNodes,
       });
 
       const { isDragging, dragEnded } = getNodeDragFlags(clampedChanges);
       if (isDragging) setHistoryPaused(true);
       if (dragEnded) setHistoryPaused(false);
 
-      originalOnNodesChange(clampedChanges);
+      for (const c of clampedChanges) {
+        if (c.type !== 'position' || !c.id?.startsWith('bbox-')) continue;
+        if (c.dragging === true) bboxDraggingIdsRef.current.add(c.id);
+        if (c.dragging === false) bboxDraggingIdsRef.current.delete(c.id);
+      }
 
-      if (shouldCloseDetailOnBoxDrag(clampedChanges, detailModel, nodes)) {
+      const extraChanges: any[] = [];
+      const bboxUserDrag = bboxDraggingIdsRef.current.size > 0;
+
+      if (bboxUserDrag) {
+        for (const c of clampedChanges) {
+          if (c.type !== 'position' || !c.position || c.dragging !== true) continue;
+          if (!c.id?.startsWith('bbox-')) continue;
+          const currentNode = liveNodes.find((n: any) => n.id === c.id);
+          if (!currentNode) continue;
+          const dx = c.position.x - currentNode.position.x;
+          const dy = c.position.y - currentNode.position.y;
+          if (Math.abs(dx) < 0.01 && Math.abs(dy) < 0.01) continue;
+          for (const n of liveNodes) {
+            if (n.type !== 'eobject' || n.data?.group !== c.id) continue;
+            extraChanges.push({
+              type: 'position',
+              id: n.id,
+              position: { x: n.position.x + dx, y: n.position.y + dy },
+              dragging: true,
+            });
+          }
+        }
+      } else {
+        const predicted = new Map(liveNodes.map((n) => [n.id, n] as const));
+        for (const c of clampedChanges) {
+          if (c.type !== 'position' || !c.position) continue;
+          const existing = predicted.get(c.id);
+          if (existing) predicted.set(c.id, { ...existing, position: c.position });
+        }
+
+        const groups = new Set<string>();
+        for (const c of clampedChanges) {
+          if (c.type !== 'position' || !c.position) continue;
+          const node = liveNodes.find((n) => n.id === c.id);
+          if (node?.type === 'eobject' && node.data?.group) groups.add(node.data.group);
+        }
+
+        for (const groupId of groups) {
+          const children = [...predicted.values()].filter(
+            (n) => n.type === 'eobject' && n.data?.group === groupId,
+          );
+          const rect = computeBoundingBoxRect(children);
+          if (!rect) continue;
+          extraChanges.push({
+            type: 'position',
+            id: groupId,
+            position: { x: rect.x, y: rect.y },
+            dragging: false,
+          });
+          extraChanges.push({
+            type: 'dimensions',
+            id: groupId,
+            dimensions: { width: rect.width, height: rect.height },
+            updateStyle: true,
+          });
+        }
+      }
+
+      originalOnNodesChange(
+        extraChanges.length > 0 ? [...clampedChanges, ...extraChanges] : clampedChanges,
+      );
+
+      if (shouldCloseDetailOnBoxDrag(clampedChanges, detailModel, liveNodes)) {
         setDetailModel(null);
       }
 
       if (dragEnded) {
+        bboxDraggingIdsRef.current.clear();
         setTimeout(recalculateEdgeHandles, 100);
         if (umlModalOpen) {
           setEdges(eds =>
@@ -387,7 +477,7 @@ export const FlowCanvas = forwardRef<FlowCanvasHandle, FlowCanvasProps>(
           );
         }
       }
-    }, [originalOnNodesChange, recalculateEdgeHandles, circle, circleVisible, umlModalOpen, nodes, detailModel, setEdges, setHistoryPaused, readOnly]);
+    }, [originalOnNodesChange, recalculateEdgeHandles, circle, circleVisible, umlModalOpen, detailModel, setEdges, setHistoryPaused, readOnly]);
 
     const guardedOnEdgesChange = useCallback((changes: any) => {
       if (readOnly && changes.some(isReadOnlyBlockedEdgeChange)) return;
@@ -406,9 +496,26 @@ export const FlowCanvas = forwardRef<FlowCanvasHandle, FlowCanvasProps>(
 
         const sourceNode = nodes.find(n => n.id === connection.source);
         const targetNode = nodes.find(n => n.id === connection.target);
-        const fromModel = sourceNode?.data?.ecore?.model ?? '';
-        const toModel = targetNode?.data?.ecore?.model ?? '';
+        const fromModel =
+          extractModelFromEObjectId(sourceEObjectId)
+          || sourceNode?.data?.ecore?.model
+          || '';
+        const toModel =
+          extractModelFromEObjectId(targetEObjectId)
+          || targetNode?.data?.ecore?.model
+          || '';
         if (!fromModel || !toModel) return;
+
+        syncIdentifierMapFromCanvasNodes(nodes);
+
+        const fromModelAlias =
+          sourceNode?.data?.modelAlias
+          || deriveDisplayModelAlias(sourceNode?.data?.label)
+          || deriveModelAlias(fromModel);
+        const toModelAlias =
+          targetNode?.data?.modelAlias
+          || deriveDisplayModelAlias(targetNode?.data?.label)
+          || deriveModelAlias(toModel);
 
         const fineEdge = createFineGranularReactionEdge({
           sourceNodeId: connection.source!,
@@ -419,6 +526,8 @@ export const FlowCanvas = forwardRef<FlowCanvasHandle, FlowCanvasProps>(
           eObjectTargetId: targetEObjectId,
           fromModel,
           toModel,
+          fromModelAlias,
+          toModelAlias,
         });
 
         // Check if parent coarse relation already has a reaction file
@@ -795,21 +904,13 @@ export const FlowCanvas = forwardRef<FlowCanvasHandle, FlowCanvasProps>(
       if (nodesWithIds.length > 0) setNodes(nodesWithIds);
       if (edgesWithUniqueIds.length > 0) setEdges(edgesWithUniqueIds);
 
-      // Hydrate fine-granular reaction edges from store (if any exist)
-      // TODO [Future]: once backend returns fine relations in VSUM details,
-      // this will populate fine edges on canvas load.
+      // Hydrate fine-granular reaction edges from store (if EObject nodes are present)
       try {
-        const fineEdges = loadFineGranularEdgesFromStore(
-          (eObjectId, model) => {
-            const node = nodesWithIds.find(
-              (n: any) => n.data?.ecore?.eObjectId === eObjectId && n.data?.ecore?.model === model,
-            );
-            return node?.id ?? null;
-          },
-          new Map(),
-        );
+        const eobjectNodes = nodesWithIds.filter((n: { type?: string }) => n.type === 'eobject');
+        const ecoreFiles = nodesWithIds.filter((n: { type?: string }) => n.type === 'ecoreFile');
+        const fineEdges = hydrateFineGranularReactionEdges(eobjectNodes, ecoreFiles);
         if (fineEdges.length > 0) {
-          setEdges((eds) => [...eds, ...fineEdges]);
+          setEdges((eds) => mergeFineGranularEdges(eds, fineEdges));
         }
       } catch {
         // Store may not be initialized yet — skip hydration
@@ -828,7 +929,18 @@ export const FlowCanvas = forwardRef<FlowCanvasHandle, FlowCanvasProps>(
     );
 
     const getWorkspaceSnapshot = useCallback(
-      (): WorkspaceSnapshot => buildWorkspaceSnapshot(nodes, edges),
+      (): WorkspaceSnapshot => {
+        syncIdentifierMapFromCanvasNodes(nodes);
+        let storeSnapshot: WorkspaceSnapshot | null = null;
+        if (hasActiveVsumDetailsStore()) {
+          try {
+            storeSnapshot = new ActiveVsumDetails().getAsWorkspaceSnapshot();
+          } catch {
+            storeSnapshot = null;
+          }
+        }
+        return buildWorkspaceSnapshot(nodes, edges, storeSnapshot);
+      },
       [nodes, edges],
     );
 
@@ -1028,12 +1140,116 @@ export const FlowCanvas = forwardRef<FlowCanvasHandle, FlowCanvasProps>(
       if (!addReactionMode) setReactionSourceId(null);
     }, [addReactionMode]);
 
-    // Sync addReactionMode with project store mode + CSS toggle
+    const ecoreIdentifierKey = useMemo(
+      () =>
+        nodes
+          .filter(n => n.type === 'ecoreFile')
+          .map(n => `${n.data?.nsUri ?? ''}:${n.data?.metaModelSourceId ?? n.data?.metaModelId ?? ''}`)
+          .join('|'),
+      [nodes],
+    );
+
+    useEffect(() => {
+      syncIdentifierMapFromCanvasNodes(nodesRef.current);
+    }, [ecoreIdentifierKey]);
+
+    // Sync addReactionMode with project store mode + CSS toggle + node expansion
+    const vsumPositionsRef = useRef<Map<string, { x: number; y: number }>>(new Map());
+    // offset = reactionPosition - vsumPosition (per bbox id)
+    const reactionOffsetsRef = useRef<Map<string, { dx: number; dy: number }>>(new Map());
     useEffect(() => {
       if (addReactionMode) {
         useProjectStore.getState().setMode('reactions');
         enableReactionHandles();
         enableReactionEdges();
+
+        // Expand all ecoreFile nodes into EObject nodes with bounding boxes
+        const ecoreNodes = nodes.filter((n) => n.type === 'ecoreFile');
+        const alreadyExpanded = nodes.some((n) => n.type === 'boundingBox');
+        if (ecoreNodes.length > 0 && !alreadyExpanded) {
+          // Remember VSUM positions
+          for (const ecoreNode of ecoreNodes) {
+            vsumPositionsRef.current.set(ecoreNode.id, { ...ecoreNode.position });
+          }
+
+          const newNodes: any[] = [];
+
+          // First pass: expand each model at its ecoreFile position
+          const expandResults: Array<{ ecoreId: string; result: any }> = [];
+          for (const ecoreNode of ecoreNodes) {
+            const fileContent = ecoreNode.data?.fileContent;
+            const fileName = ecoreNode.data?.fileName;
+            if (!fileContent || !fileName) continue;
+
+            const origin = { x: ecoreNode.position.x, y: ecoreNode.position.y };
+            const result = expandMetaModelToNodes(
+              fileContent,
+              fileName,
+              origin,
+              ecoreNode.data?.domain,
+              cardColor(ecoreNode.data?.domain),
+            );
+            if (!result) continue;
+            expandResults.push({ ecoreId: ecoreNode.id, result });
+          }
+
+          // Second pass: resolve overlaps — only shift minimally
+          for (let i = 1; i < expandResults.length; i++) {
+            const cur = expandResults[i].result.boundingBox;
+            const curW = (cur.style?.width as number) ?? 400;
+            const curH = (cur.style?.height as number) ?? 300;
+
+            for (let j = 0; j < i; j++) {
+              const prev = expandResults[j].result.boundingBox;
+              const prevW = (prev.style?.width as number) ?? 400;
+              const prevH = (prev.style?.height as number) ?? 300;
+
+              const overlapX = cur.position.x < prev.position.x + prevW + 20
+                && cur.position.x + curW > prev.position.x - 20;
+              const overlapY = cur.position.y < prev.position.y + prevH + 20
+                && cur.position.y + curH > prev.position.y - 20;
+
+              if (overlapX && overlapY) {
+                const shiftX = (prev.position.x + prevW + 30) - cur.position.x;
+                cur.position = { x: cur.position.x + shiftX, y: cur.position.y };
+                for (const eNode of expandResults[i].result.eObjectNodes) {
+                  eNode.position = { x: eNode.position.x + shiftX, y: eNode.position.y };
+                }
+              }
+            }
+          }
+
+          // Store offsets: offset = bboxPosition - vsumPosition
+          reactionOffsetsRef.current.clear();
+          for (const { ecoreId, result } of expandResults) {
+            const vsumPos = vsumPositionsRef.current.get(ecoreId);
+            if (vsumPos) {
+              reactionOffsetsRef.current.set(result.boundingBox.id, {
+                dx: result.boundingBox.position.x - vsumPos.x,
+                dy: result.boundingBox.position.y - vsumPos.y,
+              });
+            }
+          }
+
+          for (const { result } of expandResults) {
+            newNodes.push(result.boundingBox);
+            newNodes.push(...result.eObjectNodes);
+          }
+
+          if (newNodes.length > 0) {
+            setNodes((nds) => [
+              ...nds.map((n) => n.type === 'ecoreFile' ? { ...n, hidden: true } : n),
+              ...newNodes,
+            ]);
+            syncIdentifierMapFromCanvasNodes(nodes);
+            const eobjectNodes = newNodes.filter((n) => n.type === 'eobject');
+            const ecoreFiles = nodes.filter((n) => n.type === 'ecoreFile');
+            const fineEdges = hydrateFineGranularReactionEdges(eobjectNodes, ecoreFiles);
+            if (fineEdges.length > 0) {
+              setEdges((eds) => mergeFineGranularEdges(eds, fineEdges));
+            }
+          }
+        }
       } else {
         const current = useProjectStore.getState().mode;
         if (current === 'reactions') {
@@ -1041,8 +1257,42 @@ export const FlowCanvas = forwardRef<FlowCanvasHandle, FlowCanvasProps>(
         }
         disableReactionHandles();
         disableReactionEdges();
+
+        // Collapse: convert reaction positions back to VSUM positions using offset
+        resetModelColorIndex();
+        setEdges((eds) => eds.filter((e) => e.type !== 'fine-granular-reaction'));
+        setNodes((nds) => {
+          // Get current bbox positions to derive updated VSUM positions
+          const bboxPositions = new Map<string, { x: number; y: number }>();
+          for (const n of nds) {
+            if (n.type === 'boundingBox') {
+              bboxPositions.set(n.id, n.position);
+            }
+          }
+
+          return nds
+            .filter((n) => n.type !== 'eobject' && n.type !== 'boundingBox')
+            .map((n) => {
+              if (n.type !== 'ecoreFile') return n;
+              const nsUri = n.data?.nsUri;
+              const bboxId = nsUri ? `bbox-${nsUri}` : null;
+              const bboxPos = bboxId ? bboxPositions.get(bboxId) : null;
+              const offset = bboxId ? reactionOffsetsRef.current.get(bboxId) : null;
+
+              let newPos = n.position;
+              if (bboxPos && offset) {
+                // vsumPosition = reactionPosition - offset
+                newPos = { x: bboxPos.x - offset.dx, y: bboxPos.y - offset.dy };
+              }
+
+              // Also update the saved vsum position for next toggle
+              vsumPositionsRef.current.set(n.id, newPos);
+
+              return { ...n, hidden: false, position: newPos };
+            });
+        });
       }
-    }, [addReactionMode]);
+    }, [addReactionMode]); // eslint-disable-line react-hooks/exhaustive-deps
 
     // Close Low Code editor when selected edge is cleared
     useEffect(() => {
@@ -1146,7 +1396,29 @@ export const FlowCanvas = forwardRef<FlowCanvasHandle, FlowCanvasProps>(
       addNode(newEcoreNode);
       setSelectedFileId(newEcoreNode.id);
       onEcoreFileSelect?.(fileName);
-    }, [addNode, handleEcoreFileExpand, handleEcoreFileSelect, onEcoreFileSelect, onEcoreFileDelete, onEcoreFileRename, handleRequestDelete, handleShowDetails, readOnly]);
+
+      // If in reaction mode, immediately expand into eobject + boundingBox nodes
+      if (addReactionMode && fileContent) {
+        const origin = nextBoundingBoxOrigin(nodesRef.current);
+        const result = expandMetaModelToNodes(fileContent, fileName, origin, meta?.domain, cardColor(meta?.domain));
+        if (result) {
+          setNodes((nds) => {
+            const hidden = nds.map((n) =>
+              n.id === newEcoreNode.id ? { ...n, hidden: true } : n,
+            );
+            return [...hidden, result.boundingBox, ...result.eObjectNodes];
+          });
+          syncIdentifierMapFromCanvasNodes([...nodesRef.current, newEcoreNode]);
+          const fineEdges = hydrateFineGranularReactionEdges(
+            result.eObjectNodes,
+            [...nodesRef.current, newEcoreNode],
+          );
+          if (fineEdges.length > 0) {
+            setEdges((eds) => mergeFineGranularEdges(eds, fineEdges));
+          }
+        }
+      }
+    }, [addNode, handleEcoreFileExpand, handleEcoreFileSelect, onEcoreFileSelect, onEcoreFileDelete, onEcoreFileRename, handleRequestDelete, handleShowDetails, readOnly, addReactionMode, setNodes]);
 
     // ── Edge hygiene ──────────────────────────────────────────────────────────
 
@@ -1386,7 +1658,6 @@ export const FlowCanvas = forwardRef<FlowCanvasHandle, FlowCanvasProps>(
             setEdges(eds => eds.map(e => ({ ...e, selected: false })));
             if (addReactionMode) {
               setReactionSourceId(null);
-              onReactionModeEnd?.();
             }
           }}
         >

@@ -884,6 +884,241 @@ Complete save pipeline:
 
 ---
 
+# Expanded Mode Phase — EObject Node Expansion + Bounding Boxes
+
+**Status:** COMPLETE
+
+## Objective
+
+Provide the visual entry point that makes Phases 0–6 usable end-to-end. When users toggle "reaction mode," meta-model boxes expand into individual EClass nodes (with attributes displayed) grouped inside bounding boxes. Reaction handles appear on each class node, enabling users to draw fine-granular reaction edges across different models.
+
+---
+
+## What Was Done
+
+### 1. EObjectNode Component
+
+- **File:** `src/components/flow/lowcode/EObjectNode.tsx`
+- Renders a UML-class-like card: header (stereotype + class name), attributes list, model label
+- Has two reaction handles: left (target, red) and right (source, blue) with IDs `reaction-target-{eObjectFqId}` and `reaction-source-{eObjectFqId}`
+- Includes standard top/bottom handles for future relationship edges
+- Colors inherit from the parent meta-model's domain color
+- Properly sets `data.ecore` (`FlowNodeECoreData`) with `model`, `eObjectId`, `eAttributeIds`
+
+### 2. BoundingBoxNode Component
+
+- **File:** `src/components/flow/lowcode/BoundingBoxNode.tsx`
+- Dashed-border group node with dynamic width/height
+- Shows model name in a floating label at top-left
+- Non-interactive by default (CSS `pointer-events: none` on the background)
+
+### 3. expandMetaModelToNodes Utility
+
+- **File:** `src/utils/expandMetaModel.ts`
+- Takes `.ecore` content, file name, origin position, and optional domain
+- Uses `ecoreToUml()` to parse EClasses and their attributes
+- Uses `extractNsUriFromEcore()` for the model nsURI
+- Uses `buildEObjectId()` for fully-qualified EObject IDs
+- Lays out nodes in a grid (3 columns) inside the bounding box
+- Returns `{ boundingBox, eObjectNodes, modelNsUri }`
+- Also exports `nextBoundingBoxOrigin()` for positioning multiple expanded models side-by-side
+
+### 4. Expansion Trigger in FlowCanvas
+
+- Modified the `addReactionMode` sync effect in `FlowCanvas.tsx`
+- When reaction mode is enabled:
+  - All `ecoreFile` nodes are hidden
+  - Each is expanded into EObject nodes + bounding box via `expandMetaModelToNodes`
+  - New nodes are added to the canvas
+- When reaction mode is disabled:
+  - Expanded nodes (type `eobject`, `boundingBox`) are removed
+  - `ecoreFile` nodes are shown again
+- Guard prevents double-expansion if bounding boxes already exist
+
+### 5. Node Type Registration
+
+- Added `eobject: EObjectNode` and `boundingBox: BoundingBoxNode` to the `nodeTypes` constant in `FlowCanvas.tsx`
+
+### 6. CSS Updates
+
+- Simplified reaction handle selectors to use class-based matching (`.reaction-handle-source`, `.reaction-handle-target`) instead of complex attribute selectors
+- Added smooth `opacity` transitions (0.2s ease)
+- Added `.react-flow__node-boundingBox` pointer-events rule
+
+---
+
+## Key Decisions
+
+**Reuse `ecoreToUml` for parsing:** Rather than duplicating XML parsing logic, we pipe through the existing (tested) `ecoreToUml()` function which already handles all EClass extraction, attribute parsing, and type normalization.
+
+**Auto-expand on mode toggle:** The expansion happens automatically when the user activates reaction mode via the existing toolbar toggle. No separate "expand" button needed — entering reaction mode implies needing EObject-level nodes.
+
+**Hide vs. delete compact boxes:** On expand, `ecoreFile` nodes are hidden (not removed) so that toggling back preserves their positions and data without re-fetching.
+
+**parentNode for child nodes:** EObject nodes set `parentNode` to the bounding box ID and `extent: 'parent'` so React Flow constrains their dragging within the bounding box.
+
+**CSS class-based selectors:** Simplified from complex `[data-handlepos][data-handleid^=...]` attribute chains to straightforward `.reaction-handle-source` / `.reaction-handle-target` classes applied directly in the component.
+
+---
+
+## Files Created
+
+| File | Purpose |
+|------|---------|
+| `src/components/flow/lowcode/EObjectNode.tsx` | EClass visual node with reaction handles |
+| `src/components/flow/lowcode/BoundingBoxNode.tsx` | Group node wrapping expanded meta-model |
+| `src/utils/expandMetaModel.ts` | Expansion utility (ecore → nodes) |
+
+## Files Modified
+
+| File | Changes |
+|------|---------|
+| `src/components/flow/FlowCanvas.tsx` | Imported new components + utility. Registered `eobject` and `boundingBox` in `nodeTypes`. Extended mode-sync effect with expansion/collapse logic. |
+| `src/styles/reaction.css` | Simplified selectors, added transitions, added boundingBox pointer-events rule. |
+| `docs/internship-reinbold-migration/README.md` | Added Expanded Mode phase to plan. |
+
+---
+
+## How to Use
+
+1. Load a project with meta-models on the canvas (ecoreFile boxes visible)
+2. Click the "Add Reaction" toggle in the canvas toolbar
+3. Meta-model boxes hide; expanded EClass nodes appear inside bounding boxes
+4. Reaction handles (red/blue dots) appear on each class node
+5. Drag from a source handle (blue, right side) on one model to a target handle (red, left side) on another model
+6. A fine-granular reaction edge is created
+7. Double-click the edge to open the Low Code Reaction Editor
+8. Click the "Add Reaction" toggle again to exit → expanded nodes collapse back to compact boxes
+
+---
+
+## Verification Checklist
+
+- [x] `npx tsc --noEmit` produces no new errors
+- [x] No linter errors in created/modified files
+- [x] `eobject` and `boundingBox` registered in `nodeTypes`
+- [x] Entering reaction mode expands ecoreFile nodes into EObject children
+- [x] Exiting reaction mode collapses back to compact boxes
+- [x] Reaction handles have correct IDs (`reaction-source-{fqId}`, `reaction-target-{fqId}`)
+- [x] Handle IDs resolve via `getProperEObjectIdFromHandle`
+- [x] CSS shows/hides handles based on mode (CSS custom properties)
+- [x] `expandMetaModelToNodes` reuses `ecoreToUml` and `EcoreIdentifiers`
+
+---
+
+# Reference Alignment — Per-Attribute Handles + Visual Parity
+
+**Status:** COMPLETE
+
+## Objective
+
+Align the expanded mode implementation with the old branch reference screenshots. Key differences addressed:
+1. Each attribute row has its own reaction handles (not just class-level)
+2. Bounding boxes have colored model headers like the old UI
+3. A prominent "VSUM | Reactions" toggle is centered at the top of the canvas
+
+---
+
+## What Was Done
+
+### 1. EObjectNode Rewrite
+
+- **Class-level handles**: Left/right dots on the class header row
+- **Attribute-level handles**: Left/right dots on EACH attribute row
+- Handle ID convention:
+  - Class: `reaction-source-{nsUri}#{ClassName}` / `reaction-target-{nsUri}#{ClassName}`
+  - Attribute: `reaction-source-{nsUri}#{ClassName}.{attrName}` / `reaction-target-{nsUri}#{ClassName}.{attrName}`
+- Visual style: gray circles with dark borders (matching reference)
+- Shows multiplicity per attribute (e.g., `[1..1]`)
+
+### 2. BoundingBoxNode Visual Update
+
+- Colored model header bar with dot-name-dot pattern (matching reference)
+- "Contents" subtitle below model name
+- Dashed border using the model's assigned color
+- Model colors cycle through a palette for visual distinction
+
+### 3. VSUM / Reactions Toggle
+
+- Positioned at top-center of canvas (z-index 100)
+- Two buttons: "VSUM" (blue when active) and "Reactions" (green when active)
+- Directly toggles `addReactionMode` state
+- Visible regardless of sidebar state
+
+### 4. expandMetaModel Updates
+
+- Uses cycling color palette for distinct model identification
+- Includes multiplicity data in attribute output
+- Exports `resetModelColorIndex()` for cleanup on collapse
+
+### 5. Handle ID Compatibility
+
+- `getProperEObjectIdFromHandle` already supports attribute-level IDs (strips `reaction-source-` or `reaction-target-` prefix, returns full FQ path including `.attrName`)
+- `extractModelFromEObjectId` extracts nsURI (everything before `#`) regardless of class/attribute depth
+
+---
+
+## Files Modified
+
+| File | Changes |
+|------|---------|
+| `src/components/flow/lowcode/EObjectNode.tsx` | Complete rewrite: per-attribute handles, visual parity with reference |
+| `src/components/flow/lowcode/BoundingBoxNode.tsx` | Colored header, model name, contents subtitle |
+| `src/utils/expandMetaModel.ts` | Color cycling, multiplicity, `resetModelColorIndex` export |
+| `src/components/flow/FlowCanvas.tsx` | Import `resetModelColorIndex`, call on collapse |
+| `src/pages/CanvasPage.tsx` | Added VSUM/Reactions toggle bar at top-center |
+
+---
+
+## Verification Checklist
+
+- [x] `npx tsc --noEmit` produces no new errors
+- [x] No linter errors
+- [x] Each attribute row has left + right reaction handles
+- [x] Handle IDs encode class AND attribute for fine-granular connections
+- [x] Bounding box has colored header with model name
+- [x] VSUM/Reactions toggle visible at top of canvas
+- [x] Attribute-level handle IDs resolve correctly via `getProperEObjectIdFromHandle`
+- [x] `extractModelFromEObjectId` works for both class and attribute FQ IDs
+
+---
+
 ## Next Phase
 
+**Persistence of fine-granular / Low Code reactions** — see section below.
+
 **Phase 7 — Tests**: Field utils / template evaluation, store CRUD, fine edge factory, Low Code editor behavior, API client method.
+
+---
+
+# Persistence — Fine-granular relations + Low Code form data
+
+**Status:** COMPLETE
+**Date:** 2026-08-16
+
+Fine-granular reactions and Low Code form values now round-trip through VSUM details GET and `PUT /sync-changes`.
+
+## What Was Done
+
+1. **Load:** `mapVsumDetailsToEditable` parses `fineGranularMetaModelRelationSet` (and the `fineGranularMetaModelRelations` alias, plus `eObjectSourceId` / `lowCodeReaction` field aliases) into the Zustand store instead of seeding `[]`.
+2. **Identifier map:** `syncIdentifierMapFromCanvasNodes` fills `nsURI → backend sourceId` from `ecoreFile` nodes so store saves and snapshot grouping resolve.
+3. **Save snapshot:** `buildWorkspaceSnapshot` groups fine edges by backend ids (not nsURIs), overlays store Low Code configs, and emits a coarse request with `reactionFileId: 0` for fine-only pairs.
+4. **Dirty compare:** `workspaceSnapshotsEqual` includes a stable serialization of each relation’s fine set / `lowCodeReactionRequestBase`.
+5. **Hydration:** entering Reactions mode (and adding a meta-model while already in that mode) recreates fine edges on expanded EObject nodes, including attribute-level endpoints and reaction handles. Collapsing strips canvas fine edges; the store remains the source of truth for save.
+
+## Files Modified
+
+| File | Change |
+|------|--------|
+| `src/types/vsum.ts` | Optional fine-set fields on `VsumMetaModelRelation` |
+| `src/utils/workspaceSnapshotUtils.ts` | Parse / map / clone / compare / prepare fine sets |
+| `src/utils/ReactionUtils.ts` | `collectIdentifierMapFromCanvasNodes`, `syncIdentifierMapFromCanvasNodes` |
+| `src/components/flow/flowCanvasSnapshot.ts` | Backend-id grouping + store overlay |
+| `src/utils/FineGranularReactionUtils.ts` | Handles on existing edges, attribute resolver, hydrate/merge helpers |
+| `src/pages/CanvasPage.tsx` | Seed store from GET fine relations |
+| `src/components/flow/FlowCanvas.tsx` | Sync id map; hydrate after expand; include store in snapshot |
+
+## Remaining (backend contract)
+
+- Confirm GET `/vsum/{id}` actually returns the fine set after a successful sync
+- Confirm PUT `/sync-changes` persists `fineGranularMetaModelRelationSet` / `lowCodeReactionRequestBase`
