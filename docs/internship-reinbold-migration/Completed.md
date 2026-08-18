@@ -1122,3 +1122,27 @@ Fine-granular reactions and Low Code form values now round-trip through VSUM det
 
 - Confirm GET `/vsum/{id}` actually returns the fine set after a successful sync
 - Confirm PUT `/sync-changes` persists `fineGranularMetaModelRelationSet` / `lowCodeReactionRequestBase`
+
+---
+
+# Phase 7 — Tests
+
+**Status:** COMPLETE
+**Date:** 2026-08-18
+
+## Objective
+
+Cover Low Code behavior with colocated tests, matching develop style. Do not port old-branch tests that target MainLayout/MainContext.
+
+## What Was Done
+
+| Area | File |
+|------|------|
+| Field utils / template evaluation | `src/__tests__/utils/FieldUtils.test.ts` |
+| Store CRUD + snapshot serialization | `src/__tests__/store/VsumDetails.test.ts`, `src/__tests__/store/Project.test.ts` |
+| Store-first Low Code save | `src/__tests__/utils/LowCodeReactionUtils.test.ts` |
+| Fine edge factory / hydration | `src/__tests__/utils/FineGranularReactionUtils.test.ts` |
+| Editor dirty / save / undo / delete | `src/__tests__/components/flow/lowcode/LowCodeReactionEditor.test.tsx` |
+| Metadata API client | `src/__tests__/services/api.test.ts` (`getLowCodeReactionsMetadata`) |
+
+Persistence snapshot tests were already in `workspaceSnapshotUtils.test.ts` / `flowCanvasSnapshot.test.ts` / `vsumSyncSave.test.ts`.

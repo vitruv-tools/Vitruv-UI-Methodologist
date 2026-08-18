@@ -450,3 +450,31 @@ describe('ApiService – updateUserName', () => {
     await expect(apiService.updateUserName('99', 'A', 'B')).rejects.toThrow();
   });
 });
+
+describe('ApiService – getLowCodeReactionsMetadata', () => {
+  const { AuthService } = require('../../services/auth') as { AuthService: { ensureValidToken: jest.Mock } };
+  beforeEach(() => { AuthService.ensureValidToken.mockResolvedValue('mock-token'); });
+  afterEach(() => jest.restoreAllMocks());
+
+  it('GETs /api/lowcode-metadata', async () => {
+    const payload = {
+      data: {
+        reactionMetadataMap: {
+          create_corresponding_root_on_insert_root: {
+            name: 'Create Corresponding Root',
+            hide: false,
+            fields: [],
+          },
+        },
+      },
+      message: 'ok',
+    };
+    mockFetch(payload);
+
+    const result = await apiService.getLowCodeReactionsMetadata();
+    expect(result).toEqual(payload);
+    const [url, options] = (global.fetch as jest.Mock).mock.calls[0] as [string, RequestInit];
+    expect(url).toContain('/api/lowcode-metadata');
+    expect(options.method ?? 'GET').toBe('GET');
+  });
+});
