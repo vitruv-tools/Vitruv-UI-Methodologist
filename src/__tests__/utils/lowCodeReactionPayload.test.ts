@@ -61,6 +61,22 @@ describe('toWireLowCodeReactionRequestBase', () => {
     });
   });
 
+  it('forces regenerate: true when requested for an in-place update', () => {
+    expect(
+      toWireLowCodeReactionRequestBase(
+        {
+          _reactionTemplate: 'create_corresponding_root_on_insert_root',
+          reactionName: 'updated_name',
+        },
+        { regenerate: true },
+      ),
+    ).toEqual({
+      name: 'create_corresponding_root_on_insert_root',
+      reactionName: 'updated_name',
+      regenerate: true,
+    });
+  });
+
   it('returns undefined for empty input', () => {
     expect(toWireLowCodeReactionRequestBase(undefined)).toBeUndefined();
     expect(toWireLowCodeReactionRequestBase({})).toBeUndefined();

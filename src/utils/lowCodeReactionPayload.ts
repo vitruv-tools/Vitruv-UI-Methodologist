@@ -32,12 +32,22 @@ export function resolveLowCodeReactionDiscriminator(
   );
 }
 
+export type WireLowCodeReactionOptions = {
+  /**
+   * In-place update of an existing generated reaction file.
+   * Current backend `equals()` treats `regenerate: true` as always different,
+   * so `createOrUpdate` calls `updateFile` instead of `storeFile`.
+   */
+  regenerate?: boolean;
+};
+
 /**
  * Shape sent inside each fine relation's `lowCodeReactionRequestBase`.
  * Strips the UI-only template key and sets `name` to the Jackson discriminator.
  */
 export function toWireLowCodeReactionRequestBase(
   fieldValues: Record<string, unknown> | undefined,
+  options?: WireLowCodeReactionOptions,
 ): { [key: string]: unknown } | undefined {
   if (!fieldValues) return undefined;
 
@@ -45,6 +55,7 @@ export function toWireLowCodeReactionRequestBase(
   const name = resolveLowCodeReactionDiscriminator(fieldValues);
   const payload: { [key: string]: unknown } = { ...rest };
   if (name) payload.name = name;
+  if (options?.regenerate === true) payload.regenerate = true;
 
   return Object.keys(payload).length > 0 ? payload : undefined;
 }

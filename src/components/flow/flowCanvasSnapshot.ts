@@ -127,16 +127,18 @@ export function buildWorkspaceSnapshot(
     const sourceId = resolveModelToSourceId(nodes, ecore.fromModel as string);
     const targetId = resolveModelToSourceId(nodes, ecore.toModel as string);
     if (typeof sourceId !== 'number' || typeof targetId !== 'number') continue;
-    const reactionFileId = toWireReactionFileId(edge.data?.reactionFileId);
+    const persistedFgId = toWireReactionFileId(edge.data?.fineRelationId);
+    const generatedFileId = toWireReactionFileId(edge.data?.reactionFileId);
     upsertRelation(byKey, {
       sourceId,
       targetId,
-      reactionFileId,
+      // Generated Low Code files live on the fine row, not the parent coarse relation.
+      reactionFileId: null,
       fineGranularMetaModelRelationSet: [{
-        id: null,
+        id: persistedFgId,
         sourceId: ecore.eObjectSourceId,
         targetId: ecore.eObjectTargetId,
-        ...(reactionFileId != null ? { reactionFileStorageId: reactionFileId } : {}),
+        ...(generatedFileId != null ? { reactionFileStorageId: generatedFileId } : {}),
         ...(edge.data?.lowCodeReactionRequestBase
           ? { lowCodeReactionRequestBase: edge.data.lowCodeReactionRequestBase }
           : {}),

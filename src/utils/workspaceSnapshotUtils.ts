@@ -1,5 +1,5 @@
 import { MetaModelRelationRequest } from '../services/api';
-import type { EditableVsumDetails } from '../types/EditableVsumDetails';
+import type { EditableVsumDetails, EditableVsumMetaModelRelation } from '../types/EditableVsumDetails';
 import type { EditableFineGranularMetaModelRelation } from '../types/FineGranularMetaModelRelation';
 import { VsumDetails, VsumMetaModelRelation } from '../types/vsum';
 import { WorkspaceSnapshot } from '../types/workspace';
@@ -108,10 +108,15 @@ export const parseFineGranularRelationSet = (
     );
     if (!sourceId || !targetId) continue;
 
-    const parsedId = asFiniteNumber(item.id);
+    const parsedId = asPositiveNumber(
+      item.id ?? item.fineGranularMetaModelRelationId,
+    );
     const id = parsedId !== undefined ? parsedId : null;
     const reactionFileStorageId = asPositiveNumber(
-      item.reactionFileStorageId ?? item.reactionFileId,
+      item.reactionFileStorageId
+      ?? item.reactionFileId
+      ?? item.fileStorageId
+      ?? item.storageId,
     );
     const lowCodeRaw = item.lowCodeReactionRequestBase ?? item.lowCodeReaction ?? item.params;
     const lowCodeReactionRequestBase = isPlainObject(lowCodeRaw)
@@ -253,17 +258,54 @@ export const mapRelationsForCanvasLoad = (relations: VsumMetaModelRelation[]) =>
   }));
 
 /**
+ * Copy GET-assigned fine ids / generated-file ids onto the in-memory store
+ * rows after a successful save, so the next edit can send an in-place update.
+ */
+export const mergePersistedFineRelationIds = (
+  local: EditableVsumMetaModelRelation[],
+  remote: EditableVsumMetaModelRelation[],
+): EditableVsumMetaModelRelation[] => {
+  const remoteByCoarse = new Map(
+    remote.map(r => [`${r.sourceId}->${r.targetId}`, r] as const),
+  );
+  return local.map(rel => {
+    const remoteRel = remoteByCoarse.get(`${rel.sourceId}->${rel.targetId}`);
+    if (!remoteRel) return rel;
+    return {
+      ...rel,
+      id: rel.id > 0 ? rel.id : remoteRel.id,
+      fineGranularMetaModelRelationSet: rel.fineGranularMetaModelRelationSet.map(fg => {
+        const match = remoteRel.fineGranularMetaModelRelationSet.find(
+          r => r.sourceId === fg.sourceId && r.targetId === fg.targetId,
+        );
+        if (!match) return fg;
+        return {
+          ...fg,
+          id: toWireReactionFileId(match.id) ?? fg.id,
+          reactionFileStorageId:
+            toWireReactionFileId(match.reactionFileStorageId) ?? fg.reactionFileStorageId,
+        };
+      }),
+    };
+  });
+};
+
+/**
  * Wire shape for a fine relation: drop `id: null` and storage-id `0` so the
  * backend does not look up a missing reaction file / entity.
+ *
+ * Updates (persisted FG id and/or generated file id) must send `regenerate: true`
+ * so the backend overwrites that FileStorage row via `updateFile`, not `storeFile`.
  */
 export const toWireFineGranularRelation = (
   fg: EditableFineGranularMetaModelRelation,
 ): EditableFineGranularMetaModelRelation => {
   const storageId = normalizeReactionFileId(fg.reactionFileStorageId);
-  const persistedId = typeof fg.id === 'number' && Number.isFinite(fg.id) && fg.id > 0
-    ? fg.id
-    : null;
-  const lowCode = toWireLowCodeReactionRequestBase(fg.lowCodeReactionRequestBase);
+  const persistedId = toWireReactionFileId(fg.id);
+  const isUpdate = persistedId != null || storageId > 0;
+  const lowCode = toWireLowCodeReactionRequestBase(fg.lowCodeReactionRequestBase, {
+    regenerate: isUpdate,
+  });
   return {
     id: persistedId,
     sourceId: fg.sourceId,

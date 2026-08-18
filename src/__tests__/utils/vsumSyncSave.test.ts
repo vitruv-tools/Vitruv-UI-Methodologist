@@ -45,7 +45,7 @@ describe('syncVsumWorkspaceChanges', () => {
     expect(result.message).toContain('unlinked automatically');
   });
 
-  it('retries a 404 by unlinking coarse and fine reaction file ids', async () => {
+  it('retries a 404 by unlinking only the coarse reaction file id', async () => {
     (apiService.syncVsumChanges as jest.Mock)
       .mockRejectedValueOnce(Object.assign(new Error('Not Found'), { status: 404 }))
       .mockResolvedValueOnce({ message: 'VSUM successfully updated' });
@@ -59,11 +59,11 @@ describe('syncVsumWorkspaceChanges', () => {
           reactionFileId: 99,
           fineGranularMetaModelRelationSet: [
             {
-              id: null,
+              id: 42,
               sourceId: 'http://a#A',
               targetId: 'http://b#B',
-              reactionFileStorageId: 99,
-              lowCodeReactionRequestBase: { routine: 'sync' },
+              reactionFileStorageId: 88,
+              lowCodeReactionRequestBase: { routine: 'sync', regenerate: true },
             },
           ],
         },
@@ -80,18 +80,52 @@ describe('syncVsumWorkspaceChanges', () => {
           reactionFileId: null,
           fineGranularMetaModelRelationSet: [
             {
-              id: null,
+              id: 42,
               sourceId: 'http://a#A',
               targetId: 'http://b#B',
-              lowCodeReactionRequestBase: { routine: 'sync' },
+              reactionFileStorageId: 88,
+              lowCodeReactionRequestBase: { routine: 'sync', regenerate: true },
             },
           ],
         },
       ],
     });
     expect(result.savedRelations[0].reactionFileId).toBeNull();
-    expect(result.savedRelations[0].fineGranularMetaModelRelationSet?.[0].reactionFileStorageId)
-      .toBeUndefined();
+    expect(result.savedRelations[0].fineGranularMetaModelRelationSet?.[0]).toEqual({
+      id: 42,
+      sourceId: 'http://a#A',
+      targetId: 'http://b#B',
+      reactionFileStorageId: 88,
+      lowCodeReactionRequestBase: { routine: 'sync', regenerate: true },
+    });
+  });
+
+  it('does not retry a 404 when only a generated Low Code file id is present', async () => {
+    (apiService.syncVsumChanges as jest.Mock).mockRejectedValueOnce(
+      Object.assign(new Error('Not Found'), { status: 404 }),
+    );
+
+    await expect(
+      syncVsumWorkspaceChanges(5, {
+        metaModelIds: [1, 2],
+        metaModelRelationRequests: [
+          {
+            sourceId: 1,
+            targetId: 2,
+            reactionFileId: null,
+            fineGranularMetaModelRelationSet: [
+              {
+                id: 42,
+                sourceId: 'http://a#A',
+                targetId: 'http://b#B',
+                reactionFileStorageId: 88,
+              },
+            ],
+          },
+        ],
+      }),
+    ).rejects.toThrow('Not Found');
+    expect(apiService.syncVsumChanges).toHaveBeenCalledTimes(1);
   });
 
   it('does not retry a 404 when no reaction file ids were sent', async () => {

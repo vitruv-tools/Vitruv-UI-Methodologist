@@ -11,7 +11,7 @@ import { apiService, VsumRole, VsumUserResponse } from '../services/api';
 import { VsumDetails } from '../types';
 import { VsumMetaModelRef } from '../types/vsum';
 import { useProjectStore } from '../store/Project';
-import { createVsumDetailsStore } from '../store/VsumDetails';
+import { createVsumDetailsStore, getVsumDetailsStore, hasVsumDetailsStore } from '../store/VsumDetails';
 import type { EditableVsumDetails } from '../types/EditableVsumDetails';
 import { WorkspaceSnapshot, WorkspaceSnapshotRequest } from '../types/workspace';
 import { MODAL_Z_INDEX, useModalBodyLock } from '../components/ui/modalUtils';
@@ -59,6 +59,7 @@ import {
   emptyWorkspaceSnapshot,
   mapRelationsForCanvasLoad,
   mapVsumDetailsToEditable,
+  mergePersistedFineRelationIds,
   prepareSnapshotForSyncSave,
   relationsFromVsumDetails,
   workspaceSnapshotFromVsumDetails,
@@ -1292,10 +1293,33 @@ export const CanvasPage: React.FC = () => {
         flowCanvasRef.current?.getWorkspaceSnapshot?.() ?? emptyWorkspaceSnapshot();
       const payload = prepareSnapshotForSyncSave(snapshot);
       const { message, savedRelations } = await syncVsumWorkspaceChanges(activeProjectId, payload);
-      const savedSnapshot: WorkspaceSnapshot = {
+      let savedSnapshot: WorkspaceSnapshot = {
         metaModelIds: payload.metaModelIds,
         metaModelRelationRequests: savedRelations,
       };
+      if (hasVsumDetailsStore(activeProjectId)) {
+        try {
+          const detailsRes = await apiService.getVsumDetails(activeProjectId);
+          const remote = mapVsumDetailsToEditable(detailsRes.data);
+          const store = getVsumDetailsStore(activeProjectId);
+          store.setState({
+            metaModelsRelation: mergePersistedFineRelationIds(
+              store.getState().metaModelsRelation,
+              remote.metaModelsRelation,
+            ),
+          });
+          const refreshed = flowCanvasRef.current?.getWorkspaceSnapshot?.();
+          if (refreshed) {
+            const prepared = prepareSnapshotForSyncSave(refreshed);
+            savedSnapshot = {
+              metaModelIds: prepared.metaModelIds,
+              metaModelRelationRequests: prepared.metaModelRelationRequests ?? [],
+            };
+          }
+        } catch {
+          // Save already succeeded; ids will be picked up on the next full reload.
+        }
+      }
       if (activeInstanceId) {
         setBaselineForInstance(activeInstanceId, savedSnapshot);
         const session = sessionsRef.current.get(activeInstanceId);
@@ -1413,6 +1437,7 @@ export const CanvasPage: React.FC = () => {
         constraintHighlightNodeId={constraintHighlightNodeId}
         constraintFilterNodeId={constraintFilterNodeId}
         onConstraintNodeFilter={setConstraintFilterNodeId}
+        onSaveChanges={handleSaveChanges}
         projectTabsBelowModeToggle={
           openTabs.length > 0 ? (
             <CanvasProjectTabs

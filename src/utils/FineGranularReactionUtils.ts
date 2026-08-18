@@ -149,6 +149,7 @@ export function createExistingFineGranularReactionEdge(
         fromModel,
         toModel,
       },
+      fineRelationId: toWireReactionFileId(relation.id) ?? undefined,
       reactionFileId: normalizedFileId ?? undefined,
     },
   };

@@ -219,6 +219,12 @@ interface FlowCanvasProps {
   constraintFilterNodeId?: string | null;
   /** Called when a node is clicked in constraints mode to toggle the filter. */
   onConstraintNodeFilter?: (nodeId: string | null) => void;
+  /**
+   * Persist the workspace (PUT /sync-changes). Used by the Low Code panel Save
+   * after the form has been written to the store, so a reaction edit does not
+   * require a second click on the toolbar floppy.
+   */
+  onSaveChanges?: () => void;
   /** When true, canvas is view-only (no edits, drag, connect, or delete). */
   readOnly?: boolean;
 }
@@ -252,6 +258,7 @@ export const FlowCanvas = forwardRef<FlowCanvasHandle, FlowCanvasProps>(
       constraintHighlightNodeId,
       constraintFilterNodeId,
       onConstraintNodeFilter,
+      onSaveChanges,
       readOnly = false,
     },
     ref,
@@ -1782,6 +1789,7 @@ export const FlowCanvas = forwardRef<FlowCanvasHandle, FlowCanvasProps>(
               onDirtyChange={setLowCodeEditorDirty}
               onSaveComplete={() => {
                 setLowCodeEditorDirty(false);
+                if (!readOnly) onSaveChanges?.();
               }}
               onDeleteRequest={() => setConfirmDeleteOpen(true)}
             />

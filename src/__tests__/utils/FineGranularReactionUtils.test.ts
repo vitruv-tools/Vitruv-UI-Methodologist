@@ -65,6 +65,23 @@ describe('createExistingFineGranularReactionEdge', () => {
     expect(edge.sourceHandle).toBe('reaction-source-http://a#A');
     expect(edge.targetHandle).toBe('reaction-target-http://b#B.x');
   });
+
+  it('embeds the persisted FG id and generated file id on the edge', () => {
+    const edge = createExistingFineGranularReactionEdge(
+      {
+        id: 42,
+        sourceId: 'http://a#A',
+        targetId: 'http://b#B',
+        reactionFileStorageId: 88,
+      },
+      'http://a',
+      'http://b',
+      'node-a',
+      'node-b',
+    );
+    expect(edge.data?.fineRelationId).toBe(42);
+    expect(edge.data?.reactionFileId).toBe(88);
+  });
 });
 
 describe('mergeFineGranularEdges', () => {

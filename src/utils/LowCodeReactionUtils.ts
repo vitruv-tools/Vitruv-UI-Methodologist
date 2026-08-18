@@ -47,7 +47,8 @@ export function hasLowCodeReactionConfig(edge: FlowEcoreEdge): boolean {
  * the given fine-granular reaction edge.
  *
  * Creates the parent coarse relation if it doesn't exist yet.
- * Calls `saveToStore()` to commit the change.
+ * Calls `saveToStore()` to commit the change. Backend persistence is
+ * triggered by the canvas `onSaveChanges` callback after this returns.
  */
 export function temporarilySaveLowCodeReactionConfig(
   fieldValues: Record<string, unknown>,
@@ -76,7 +77,12 @@ export function temporarilySaveLowCodeReactionConfig(
     eObjectTargetId,
   );
 
-  const payload = toWireLowCodeReactionRequestBase(fieldValues) ?? { ...fieldValues };
+  const isUpdate =
+    (typeof fine?.id === 'number' && fine.id > 0)
+    || (typeof fine?.reactionFileStorageId === 'number' && fine.reactionFileStorageId > 0);
+  const payload = toWireLowCodeReactionRequestBase(fieldValues, { regenerate: isUpdate })
+    ?? { ...fieldValues };
+  if (isUpdate) payload.regenerate = true;
 
   if (fine) {
     fine.lowCodeReactionRequestBase = payload;

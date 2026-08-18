@@ -18,6 +18,12 @@ export function isReactionFilesNotFoundError(message: string, error?: unknown): 
   return false;
 }
 
+/**
+ * Drop only the parent coarse `.reactions` file id. Fine-granular
+ * `reactionFileStorageId` must stay: that is the in-place update path
+ * (`updateFile`). Stripping it turns an edit into `storeFile` and 400s on
+ * duplicate hash.
+ */
 export function unlinkReactionFileIds(
   relations: MetaModelRelationRequest[],
 ): MetaModelRelationRequest[] {
@@ -28,27 +34,16 @@ export function unlinkReactionFileIds(
     ...(rel.fineGranularMetaModelRelationSet?.length
       ? {
           fineGranularMetaModelRelationSet: rel.fineGranularMetaModelRelationSet.map(fg => ({
-            id: fg.id,
-            sourceId: fg.sourceId,
-            targetId: fg.targetId,
-            ...(fg.lowCodeReactionRequestBase
-              ? { lowCodeReactionRequestBase: fg.lowCodeReactionRequestBase }
-              : {}),
+            ...fg,
           })),
         }
       : {}),
   }));
 }
 
+/** True when a parent relation still points at an uploaded coarse reaction file. */
 export function hasLinkedReactionFiles(relations: MetaModelRelationRequest[]): boolean {
-  return relations.some(rel =>
-    normalizeReactionFileId(rel.reactionFileId) > 0
-    || Boolean(
-      rel.fineGranularMetaModelRelationSet?.some(
-        fg => normalizeReactionFileId(fg.reactionFileStorageId) > 0,
-      ),
-    ),
-  );
+  return relations.some(rel => normalizeReactionFileId(rel.reactionFileId) > 0);
 }
 
 export interface VsumSyncSavePayload {

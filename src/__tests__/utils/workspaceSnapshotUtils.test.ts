@@ -4,6 +4,7 @@ import {
   fineSetFromVsumRelation,
   mapRelationsForCanvasLoad,
   mapVsumDetailsToEditable,
+  mergePersistedFineRelationIds,
   normalizeReactionFileId,
   parseFineGranularRelationSet,
   prepareSnapshotForSyncSave,
@@ -311,7 +312,14 @@ describe('prepareSnapshotForSyncSave', () => {
         sourceId: 1,
         targetId: 2,
         reactionFileId: 5,
-        fineGranularMetaModelRelationSet: fine,
+        fineGranularMetaModelRelationSet: [
+          {
+            id: 1,
+            sourceId: 'http://a#A',
+            targetId: 'http://b#B',
+            lowCodeReactionRequestBase: { routine: 'sync', regenerate: true },
+          },
+        ],
       },
     ]);
     result.metaModelRelationRequests![0].fineGranularMetaModelRelationSet![0]
@@ -342,6 +350,78 @@ describe('prepareSnapshotForSyncSave', () => {
     expect(result.metaModelRelationRequests?.[0].fineGranularMetaModelRelationSet).toEqual([
       { id: null, sourceId: 'http://a#A', targetId: 'http://b#B' },
     ]);
+  });
+
+  it('sends persisted FG id, reactionFileStorageId, and regenerate: true on update', () => {
+    const result = prepareSnapshotForSyncSave({
+      metaModelIds: [19, 20],
+      metaModelRelationRequests: [
+        {
+          sourceId: 19,
+          targetId: 20,
+          reactionFileId: null,
+          fineGranularMetaModelRelationSet: [
+            {
+              id: 42,
+              sourceId: 'Component',
+              targetId: 'Class',
+              reactionFileStorageId: 88,
+              lowCodeReactionRequestBase: {
+                _reactionTemplate: 'create_corresponding_root_on_insert_root',
+                name: 'Create Corresponding Root',
+                model1Uri: 'http://families',
+                reactionName: 'updated_name',
+              },
+            },
+          ],
+        },
+      ],
+    });
+    expect(result.metaModelRelationRequests?.[0].fineGranularMetaModelRelationSet).toEqual([
+      {
+        id: 42,
+        sourceId: 'Component',
+        targetId: 'Class',
+        reactionFileStorageId: 88,
+        lowCodeReactionRequestBase: {
+          name: 'create_corresponding_root_on_insert_root',
+          regenerate: true,
+          model1Uri: 'http://families',
+          reactionName: 'updated_name',
+        },
+      },
+    ]);
+  });
+
+  it('does not force regenerate on first create (no FG id, no file id)', () => {
+    const result = prepareSnapshotForSyncSave({
+      metaModelIds: [1, 2],
+      metaModelRelationRequests: [
+        {
+          sourceId: 1,
+          targetId: 2,
+          reactionFileId: null,
+          fineGranularMetaModelRelationSet: [
+            {
+              id: null,
+              sourceId: 'http://a#A',
+              targetId: 'http://b#B',
+              lowCodeReactionRequestBase: {
+                name: 'create_corresponding_root_on_insert_root',
+                reactionName: 'first_save',
+              },
+            },
+          ],
+        },
+      ],
+    });
+    expect(
+      result.metaModelRelationRequests?.[0].fineGranularMetaModelRelationSet?.[0]
+        .lowCodeReactionRequestBase,
+    ).toEqual({
+      name: 'create_corresponding_root_on_insert_root',
+      reactionName: 'first_save',
+    });
   });
 });
 
@@ -378,6 +458,26 @@ describe('parseFineGranularRelationSet', () => {
         },
       ]),
     ).toEqual([{ id: 1, sourceId: 'http://a#A', targetId: 'http://b#B' }]);
+  });
+
+  it('reads fileStorageId as the generated reaction file id', () => {
+    expect(
+      parseFineGranularRelationSet([
+        {
+          fineGranularMetaModelRelationId: 42,
+          sourceId: 'http://a#A',
+          targetId: 'http://b#B',
+          fileStorageId: 88,
+        },
+      ]),
+    ).toEqual([
+      {
+        id: 42,
+        sourceId: 'http://a#A',
+        targetId: 'http://b#B',
+        reactionFileStorageId: 88,
+      },
+    ]);
   });
 });
 
@@ -435,6 +535,64 @@ describe('mapVsumDetailsToEditable', () => {
 
     expect(mapVsumDetailsToEditable(details).metaModelsRelation[0].fineGranularMetaModelRelationSet).toEqual([
       { id: 4, sourceId: 'http://a#A', targetId: 'http://b#B' },
+    ]);
+  });
+});
+
+describe('mergePersistedFineRelationIds', () => {
+  it('copies GET-assigned FG id and generated file id onto local create rows', () => {
+    const local = [
+      {
+        id: 0,
+        sourceId: 19,
+        targetId: 20,
+        reactionFileId: null,
+        reactionFileStorageId: null,
+        fineGranularMetaModelRelationSet: [
+          {
+            id: null,
+            sourceId: 'Component',
+            targetId: 'Class',
+            lowCodeReactionRequestBase: { reactionName: 'updated_name' },
+          },
+        ],
+      },
+    ];
+    const remote = [
+      {
+        id: 5,
+        sourceId: 19,
+        targetId: 20,
+        reactionFileId: null,
+        reactionFileStorageId: null,
+        fineGranularMetaModelRelationSet: [
+          {
+            id: 42,
+            sourceId: 'Component',
+            targetId: 'Class',
+            reactionFileStorageId: 88,
+          },
+        ],
+      },
+    ];
+
+    expect(mergePersistedFineRelationIds(local, remote)).toEqual([
+      {
+        id: 5,
+        sourceId: 19,
+        targetId: 20,
+        reactionFileId: null,
+        reactionFileStorageId: null,
+        fineGranularMetaModelRelationSet: [
+          {
+            id: 42,
+            sourceId: 'Component',
+            targetId: 'Class',
+            reactionFileStorageId: 88,
+            lowCodeReactionRequestBase: { reactionName: 'updated_name' },
+          },
+        ],
+      },
     ]);
   });
 });

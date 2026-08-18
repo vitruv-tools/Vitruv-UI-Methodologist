@@ -138,7 +138,48 @@ describe('buildWorkspaceSnapshot', () => {
     ]);
   });
 
-  it('overlays Low Code form data from the store snapshot', () => {
+  it('sends persisted FG id and generated file id from the fine edge without copying the file onto the parent', () => {
+    const withNs = [
+      ecore('a', { metaModelSourceId: 1, nsUri: 'http://families' }),
+      ecore('b', { metaModelSourceId: 2, nsUri: 'http://persons' }),
+    ];
+    const edges: Edge[] = [
+      {
+        id: 'f',
+        source: 'eobj-a',
+        target: 'eobj-b',
+        type: 'fine-granular-reaction',
+        data: {
+          ecore: {
+            eObjectSourceId: 'http://families#Member',
+            eObjectTargetId: 'http://persons#Person',
+            fromModel: 'http://families',
+            toModel: 'http://persons',
+          },
+          fineRelationId: 42,
+          reactionFileId: 88,
+        },
+      } as Edge,
+    ];
+
+    expect(buildWorkspaceSnapshot(withNs, edges).metaModelRelationRequests).toEqual([
+      {
+        sourceId: 1,
+        targetId: 2,
+        reactionFileId: null,
+        fineGranularMetaModelRelationSet: [
+          {
+            id: 42,
+            sourceId: 'http://families#Member',
+            targetId: 'http://persons#Person',
+            reactionFileStorageId: 88,
+          },
+        ],
+      },
+    ]);
+  });
+
+  it('keeps store FG id and file id when the canvas edge has none', () => {
     const withNs = [
       ecore('a', { metaModelSourceId: 1, nsUri: 'http://families' }),
       ecore('b', { metaModelSourceId: 2, nsUri: 'http://persons' }),
@@ -176,6 +217,65 @@ describe('buildWorkspaceSnapshot', () => {
             targetId: 'http://persons#Person',
             reactionFileStorageId: 7,
             lowCodeReactionRequestBase: { routine: 'sync' },
+          },
+        ],
+      },
+    ]);
+  });
+
+  it('does not let a canvas id of null replace store-persisted FG and file ids', () => {
+    const withNs = [
+      ecore('a', { metaModelSourceId: 1, nsUri: 'http://families' }),
+      ecore('b', { metaModelSourceId: 2, nsUri: 'http://persons' }),
+    ];
+    const edges: Edge[] = [
+      {
+        id: 'f',
+        source: 'eobj-a',
+        target: 'eobj-b',
+        type: 'fine-granular-reaction',
+        data: {
+          ecore: {
+            eObjectSourceId: 'http://families#Member',
+            eObjectTargetId: 'http://persons#Person',
+            fromModel: 'http://families',
+            toModel: 'http://persons',
+          },
+        },
+      } as Edge,
+    ];
+    const storeSnapshot = {
+      metaModelIds: [1, 2],
+      metaModelRelationRequests: [
+        {
+          sourceId: 1,
+          targetId: 2,
+          reactionFileId: null,
+          fineGranularMetaModelRelationSet: [
+            {
+              id: 42,
+              sourceId: 'http://families#Member',
+              targetId: 'http://persons#Person',
+              reactionFileStorageId: 88,
+              lowCodeReactionRequestBase: { reactionName: 'updated_name' },
+            },
+          ],
+        },
+      ],
+    };
+
+    expect(buildWorkspaceSnapshot(withNs, edges, storeSnapshot).metaModelRelationRequests).toEqual([
+      {
+        sourceId: 1,
+        targetId: 2,
+        reactionFileId: null,
+        fineGranularMetaModelRelationSet: [
+          {
+            id: 42,
+            sourceId: 'http://families#Member',
+            targetId: 'http://persons#Person',
+            reactionFileStorageId: 88,
+            lowCodeReactionRequestBase: { reactionName: 'updated_name' },
           },
         ],
       },

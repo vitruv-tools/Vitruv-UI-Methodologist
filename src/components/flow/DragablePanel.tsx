@@ -111,7 +111,7 @@ const DragablePanel: React.FC<DragablePanelProps> = ({
               <IconButton
                 size="small"
                 onClick={onSave}
-                title="Save"
+                title="Save reaction and project"
                 sx={{
                   color: saveHighlighted ? '#1976d2' : '#888',
                   animation: saveHighlighted ? 'pulse 1.5s ease-in-out infinite' : 'none',

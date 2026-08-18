@@ -13,5 +13,8 @@ export type FlowFineGranularMetaModelRelationData = {
     fromModelAlias?: string;
     toModelAlias?: string;
   };
+  /** Persisted fine-granular relation id from GET / previous save. */
+  fineRelationId?: number;
+  /** Generated reaction file id (`reactionFileStorageId` on the wire). */
   reactionFileId?: number;
 };
