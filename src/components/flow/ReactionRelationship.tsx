@@ -1,11 +1,23 @@
 import React, { useState, useCallback, useEffect, useMemo } from 'react';
-import { EdgeProps, Position, useReactFlow, useStore } from 'reactflow';
+import { EdgeLabelRenderer, EdgeProps, Position, useReactFlow, useStore } from 'reactflow';
+import {
+  EOBJECT_DEFAULT_WIDTH,
+  FINE_REACTION_SEPARATION,
+  fineReactionPathD,
+  layoutFineReactionChord,
+} from '../../utils/reactionEdgeGeometry';
 
 interface ReactionRelationshipData {
   label?: string;
   code?: string;
   onDoubleClick?: (edgeId: string) => void;
   routingStyle?: 'curved' | 'orthogonal';
+  fineGranular?: boolean;
+  sourceHandleId?: string | null;
+  targetHandleId?: string | null;
+  parallelIndex?: number;
+  parallelCount?: number;
+  separation?: number;
   sourceParallelIndex?: number;
   sourceParallelCount?: number;
   targetParallelIndex?: number;
@@ -51,20 +63,28 @@ export function ReactionRelationship({
   const [draggedSegmentIndex, setDraggedSegmentIndex] = useState<number | null>(null);
   const [tempControlPoint, setTempControlPoint] = useState<{ x: number; y: number } | null>(null);
 
-  // Subscribe to node selection changes using useStore
-  // This ensures the edge re-renders when any node's selection state changes
-  const nodeSelectionState = useStore((store) => {
-    const nodes = Array.from(store.nodeInternals.values());
-    const sourceNode = nodes.find(n => n.id === source);
-    const targetNode = nodes.find(n => n.id === target);
-    
+  const isFineGranular = data?.fineGranular === true;
+  const sourceHandle = data?.sourceHandleId;
+  const targetHandle = data?.targetHandleId;
+
+  const live = useStore((store) => {
+    const sourceNode = store.nodeInternals.get(source);
+    const targetNode = store.nodeInternals.get(target);
     return {
       isSourceSelected: sourceNode?.selected || false,
-      isTargetSelected: targetNode?.selected || false
+      isTargetSelected: targetNode?.selected || false,
+      srcAbsX: sourceNode?.positionAbsolute?.x ?? sourceNode?.position?.x ?? sourceX,
+      srcAbsY: sourceNode?.positionAbsolute?.y ?? sourceNode?.position?.y ?? sourceY,
+      srcW: sourceNode?.width ?? EOBJECT_DEFAULT_WIDTH,
+      srcAttrs: sourceNode?.data?.attributes,
+      tgtAbsX: targetNode?.positionAbsolute?.x ?? targetNode?.position?.x ?? targetX,
+      tgtAbsY: targetNode?.positionAbsolute?.y ?? targetNode?.position?.y ?? targetY,
+      tgtW: targetNode?.width ?? EOBJECT_DEFAULT_WIDTH,
+      tgtAttrs: targetNode?.data?.attributes,
     };
   });
-  
-  const { isSourceSelected, isTargetSelected } = nodeSelectionState;
+
+  const { isSourceSelected, isTargetSelected } = live;
   const isNodeSelected = isSourceSelected || isTargetSelected;
   
   // Edge should be highlighted if either the edge itself is selected OR any connected node is selected
@@ -134,6 +154,40 @@ export function ReactionRelationship({
 
   // Memoize path calculations
   const pathData = useMemo(() => {
+    if (isFineGranular) {
+      const chord = layoutFineReactionChord({
+        source: {
+          x: live.srcAbsX,
+          y: live.srcAbsY,
+          width: live.srcW,
+          attributes: live.srcAttrs,
+        },
+        target: {
+          x: live.tgtAbsX,
+          y: live.tgtAbsY,
+          width: live.tgtW,
+          attributes: live.tgtAttrs,
+        },
+        sourceHandle,
+        targetHandle,
+        parallelIndex: data?.parallelIndex ?? 0,
+        parallelCount: data?.parallelCount ?? 1,
+        separation: data?.separation ?? FINE_REACTION_SEPARATION,
+      });
+      return {
+        edgePath: fineReactionPathD(chord),
+        labelX: (chord.drawP1.x + chord.drawP2.x) / 2,
+        labelY: (chord.drawP1.y + chord.drawP2.y) / 2,
+        arrowX: chord.p2.x,
+        arrowY: chord.p2.y,
+        arrowAngle: chord.arrowAngle,
+        controlPoint: null,
+        segments: [] as PathSegment[],
+        overlayArrow: true,
+        routing: 'chord' as const,
+      };
+    }
+
     const centerX = tempControlPoint?.x ?? data?.customControlPoint?.x ?? (actualSourceX + actualTargetX) / 2;
     const centerY = tempControlPoint?.y ?? data?.customControlPoint?.y ?? (actualSourceY + actualTargetY) / 2;
     const dx = actualTargetX - actualSourceX;
@@ -174,6 +228,8 @@ export function ReactionRelationship({
         arrowAngle: arrowAngles[targetPosition] ?? 0,
         controlPoint: { x: centerX, y: centerY },
         segments,
+        overlayArrow: false,
+        routing: 'orthogonal' as const,
       };
     }
 
@@ -187,8 +243,24 @@ export function ReactionRelationship({
       arrowAngle: Math.atan2(dy, dx) * (180 / Math.PI),
       controlPoint: null,
       segments: [],
+      overlayArrow: false,
+      routing: 'straight' as const,
     };
   }, [
+    isFineGranular,
+    live.srcAbsX,
+    live.srcAbsY,
+    live.srcW,
+    live.srcAttrs,
+    live.tgtAbsX,
+    live.tgtAbsY,
+    live.tgtW,
+    live.tgtAttrs,
+    sourceHandle,
+    targetHandle,
+    data?.parallelIndex,
+    data?.parallelCount,
+    data?.separation,
     actualSourceX,
     actualSourceY,
     actualTargetX,
@@ -200,7 +272,7 @@ export function ReactionRelationship({
     targetPosition,
   ]);
 
-  const { edgePath, labelX, labelY, arrowX, arrowY, arrowAngle, controlPoint, segments } = pathData;
+  const { edgePath, labelX, labelY, arrowX, arrowY, arrowAngle, controlPoint, segments, overlayArrow, routing } = pathData;
 
   const handleSegmentDragStart = useCallback((e: React.PointerEvent, segmentIndex: number) => {
     if (data?.readOnly) return;
@@ -356,6 +428,7 @@ export function ReactionRelationship({
 
       <path
         id={id}
+        data-routing={routing}
         style={{
           strokeWidth: mainStrokeWidth,
           stroke: activeColor,
@@ -372,6 +445,7 @@ export function ReactionRelationship({
         onMouseLeave={handleMouseLeave}
       />
 
+      {!overlayArrow && (
       <g transform={`translate(${arrowX}, ${arrowY}) rotate(${arrowAngle})`}>
         <polygon
           points="-10,-6 0,0 -10,6"
@@ -388,6 +462,36 @@ export function ReactionRelationship({
           onMouseLeave={handleMouseLeave}
         />
       </g>
+      )}
+
+      {overlayArrow && (
+        <EdgeLabelRenderer>
+          <div
+            className="nodrag nopan"
+            data-testid={`${id}-arrow`}
+            style={{
+              position: 'absolute',
+              left: 0,
+              top: 0,
+              transform: `translate(${arrowX}px, ${arrowY}px) rotate(${arrowAngle}deg)`,
+              transformOrigin: '0 0',
+              pointerEvents: 'none',
+              zIndex: 1001,
+              lineHeight: 0,
+            }}
+          >
+            <svg
+              width="1"
+              height="1"
+              overflow="visible"
+              aria-hidden
+              style={{ display: 'block', overflow: 'visible' }}
+            >
+              <polygon points="-10,-5 0,0 -10,5" fill={activeColor} stroke={activeColor} strokeWidth="1" />
+            </svg>
+          </div>
+        </EdgeLabelRenderer>
+      )}
 
       {data?.label && (
         <text

@@ -79,6 +79,9 @@ import { buildEdgeDistributionMap } from './flowCanvasEdgeDistribution';
 import { buildReactionEdge } from './flowCanvasEdgeFactory';
 import { computeParallelEdgeReorder } from './flowCanvasEdgeReorder';
 import {
+  indexFineReactionParallels,
+} from '../../utils/reactionEdgeGeometry';
+import {
   dedupeEdgeIds,
   removeOrphanEdges,
   uniquifyLoadedEdgeIds,
@@ -134,9 +137,6 @@ import {
   deriveDisplayModelAlias,
   deriveModelAlias,
 } from '../../utils/EcoreIdentifiers';
-import {
-  hasLowCodeReactionConfig,
-} from '../../utils/LowCodeReactionUtils';
 import {
   tryInferReactionFileIdForFineGranularReactionEdge,
   syncIdentifierMapFromCanvasNodes,
@@ -1430,7 +1430,7 @@ export const FlowCanvas = forwardRef<FlowCanvasHandle, FlowCanvasProps>(
           }
         }
       }
-    }, [addNode, handleEcoreFileExpand, handleEcoreFileSelect, onEcoreFileSelect, onEcoreFileDelete, onEcoreFileRename, handleRequestDelete, handleShowDetails, readOnly, addReactionMode, setNodes]);
+    }, [addNode, handleEcoreFileExpand, handleEcoreFileSelect, onEcoreFileSelect, onEcoreFileDelete, onEcoreFileRename, handleRequestDelete, handleShowDetails, readOnly, addReactionMode, setNodes, setEdges]);
 
     // ── Edge hygiene ──────────────────────────────────────────────────────────
 
@@ -1573,6 +1573,16 @@ export const FlowCanvas = forwardRef<FlowCanvasHandle, FlowCanvasProps>(
       [umlMergeData],
     );
 
+    const fineParallelMap = useMemo(
+      () => indexFineReactionParallels(uniqueEdges),
+      [uniqueEdges],
+    );
+
+    const resolveFineParallel = useCallback(
+      (edge: Edge) => fineParallelMap.get(edge.id),
+      [fineParallelMap],
+    );
+
     const edgeMapContext = useMemo(() => ({
       readOnly,
       routingStyle,
@@ -1586,6 +1596,7 @@ export const FlowCanvas = forwardRef<FlowCanvasHandle, FlowCanvasProps>(
       handleEdgeDragEnd,
       handleEdgeHandleChange,
       handleEdgeReorderRequest,
+      getFineParallel: resolveFineParallel,
     }), [
       readOnly,
       routingStyle,
@@ -1599,6 +1610,7 @@ export const FlowCanvas = forwardRef<FlowCanvasHandle, FlowCanvasProps>(
       handleEdgeDragEnd,
       handleEdgeHandleChange,
       handleEdgeReorderRequest,
+      resolveFineParallel,
     ]);
 
     const mappedEdges = useMemo(

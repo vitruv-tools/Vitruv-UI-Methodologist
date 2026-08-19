@@ -1,6 +1,10 @@
 import React, { memo } from 'react';
 import { Handle, Position, type NodeProps } from 'reactflow';
 import type { FlowNodeECoreData } from '../../../types/flow';
+import {
+  EOBJECT_ATTR_ROW_HEIGHT,
+  EOBJECT_HEADER_HEIGHT,
+} from '../../../utils/reactionEdgeGeometry';
 
 export interface EObjectNodeData {
   label: string;
@@ -15,8 +19,8 @@ export interface EObjectNodeData {
 }
 
 const HANDLE_SIZE = 8;
-const ATTR_ROW_HEIGHT = 24;
-const HEADER_HEIGHT = 32;
+const ATTR_ROW_HEIGHT = EOBJECT_ATTR_ROW_HEIGHT;
+const HEADER_HEIGHT = EOBJECT_HEADER_HEIGHT;
 
 /**
  * EObject node for the expanded reaction canvas.
@@ -110,7 +114,6 @@ const EObjectNode: React.FC<NodeProps<EObjectNodeData>> = ({ data, selected }) =
       {/* Attribute rows — each with its own handles */}
       {attributes.map((attr, idx) => {
         const attrHandleId = `${ecore.eObjectId}.${attr.name}`;
-        const topOffset = HEADER_HEIGHT + idx * ATTR_ROW_HEIGHT + ATTR_ROW_HEIGHT / 2 - HANDLE_SIZE / 2;
 
         return (
           <div

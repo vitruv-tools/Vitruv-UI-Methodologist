@@ -1,5 +1,6 @@
 import React from 'react';
 import { EdgeProps, EdgeLabelRenderer, useStore } from 'reactflow';
+import { getBorderPoint } from '../../utils/reactionEdgeGeometry';
 
 interface UMLRelationshipData {
   label?: string;
@@ -96,29 +97,6 @@ const EDGE_SELECT_HOVER = '#f87171';
 const EDGE_ENDPOINT_INSET = 8;
 const MULT_ALONG_OFFSET = 28;
 const MULT_PERP_OFFSET = 30;
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Border-intersection: given a node's center + dimensions and the direction
-// toward the other endpoint, returns the exact point on the box boundary.
-// This is what makes connections spread across the border (like jjodel) instead
-// of all converging at a single fixed handle.
-// ─────────────────────────────────────────────────────────────────────────────
-function getBorderPoint(
-  cx: number, cy: number,
-  nodeW: number, nodeH: number,
-  towardX: number, towardY: number
-): { x: number; y: number } {
-  const hw = nodeW / 2;
-  const hh = nodeH / 2;
-  const dx = towardX - cx;
-  const dy = towardY - cy;
-  if (Math.abs(dx) < 0.001 && Math.abs(dy) < 0.001) return { x: cx + hw, y: cy };
-  const scaleX = Math.abs(dx) > 0.001 ? hw / Math.abs(dx) : Infinity;
-  const scaleY = Math.abs(dy) > 0.001 ? hh / Math.abs(dy) : Infinity;
-  const scale = Math.min(scaleX, scaleY);
-  return { x: cx + dx * scale, y: cy + dy * scale };
-}
-
 
 // Helper: Get highlight color based on state
 function getHighlightColor(isHighlighted: boolean, isHovered: boolean): string {

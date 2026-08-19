@@ -1,8 +1,11 @@
-import { Node } from 'reactflow';
+import { Edge, Node } from 'reactflow';
 import {
   mapEcoreFlowNode,
   mapEditableFlowNode,
+  mapFlowCanvasEdge,
+  type MapFlowEdgeContext,
 } from '../../../components/flow/flowCanvasRenderUtils';
+import { FINE_REACTION_SEPARATION } from '../../../utils/reactionEdgeGeometry';
 
 const ecoreNode = (id = 'ecore-1'): Node =>
   ({ id, position: { x: 0, y: 0 }, data: { fileName: 'A.ecore' }, type: 'ecoreFile' } as Node);
@@ -101,5 +104,55 @@ describe('mapEditableFlowNode', () => {
 
     expect(mapped.data.onLabelChange).toBe(labelChange);
     expect(mapped.data.onDelete).toBe(removeNode);
+  });
+});
+
+const emptyMerge = {
+  mergePoint: undefined,
+  hasMerge: false,
+  isFirstInMergeGroup: false,
+  mergeGroupSourceNodes: [] as string[],
+};
+
+function mapContext(overrides: Partial<MapFlowEdgeContext> = {}): MapFlowEdgeContext {
+  return {
+    readOnly: false,
+    routingStyle: 'orthogonal',
+    hoveredMergeGroup: null,
+    getDistribution: () => ({}),
+    getUmlMerge: () => emptyMerge,
+    handleMergeGroupHover: jest.fn(),
+    handleEdgeDoubleClick: jest.fn(),
+    handleEdgeDragStart: jest.fn(),
+    handleEdgeDrag: jest.fn(),
+    handleEdgeDragEnd: jest.fn(),
+    handleEdgeHandleChange: jest.fn(),
+    handleEdgeReorderRequest: jest.fn(),
+    ...overrides,
+  };
+}
+
+describe('mapFlowCanvasEdge fine-granular parallel meta', () => {
+  it('stamps parallelCount from the fine-edge indexer', () => {
+    const edge = {
+      id: 'fg-1',
+      source: 'a',
+      target: 'b',
+      type: 'fine-granular-reaction',
+      sourceHandle: 'reaction-source-http://a#A',
+      targetHandle: 'reaction-target-http://b#B',
+    } as Edge;
+
+    const mapped = mapFlowCanvasEdge(edge, mapContext({
+      getFineParallel: () => ({ index: 1, total: 2 }),
+    }));
+
+    expect(mapped.data.fineGranular).toBe(true);
+    expect(mapped.data.sourceHandleId).toBe('reaction-source-http://a#A');
+    expect(mapped.data.targetHandleId).toBe('reaction-target-http://b#B');
+    expect(mapped.data.parallelIndex).toBe(1);
+    expect(mapped.data.parallelCount).toBe(2);
+    expect(mapped.data.separation).toBe(FINE_REACTION_SEPARATION);
+    expect(mapped.data.routingStyle).toBe('curved');
   });
 });

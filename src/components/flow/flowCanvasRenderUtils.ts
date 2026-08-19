@@ -1,6 +1,7 @@
 import React from 'react';
 import { Edge, Node, ReactFlowInstance } from 'reactflow';
 import { ConnectionDragState, HandlePosition, PendingDeleteState } from './flowCanvasTypes';
+import { FINE_REACTION_SEPARATION } from '../../utils/reactionEdgeGeometry';
 
 /**
  * Cursor communicating add-reaction mode: `cell` while waiting for the source
@@ -63,6 +64,7 @@ export interface MapFlowEdgeContext {
   handleEdgeDragEnd: (edgeId: string, point: { x: number; y: number }) => void;
   handleEdgeHandleChange: (edgeId: string, newSourceHandle: string, newTargetHandle: string) => void;
   handleEdgeReorderRequest: (edgeId: string, controlPoint: { x: number; y: number }) => void;
+  getFineParallel?: (edge: Edge) => { index: number; total: number } | undefined;
 }
 
 function reactionEdgeInteractionHandlers(
@@ -101,6 +103,7 @@ export function mapFlowCanvasEdge(edge: Edge, ctx: MapFlowEdgeContext): Edge {
   const isFineReaction = edge.type === 'fine-granular-reaction';
   const isUml = edge.type === 'uml';
   const reactionEditable = isReaction && !ctx.readOnly;
+  const fineParallel = ctx.getFineParallel?.(edge);
 
   return {
     ...edge,
@@ -114,13 +117,18 @@ export function mapFlowCanvasEdge(edge: Edge, ctx: MapFlowEdgeContext): Edge {
       onMergeGroupHover: isUml ? ctx.handleMergeGroupHover : undefined,
       onDoubleClick: (isReaction || isFineReaction) ? () => ctx.handleEdgeDoubleClick(edge.id) : undefined,
       readOnly: isReaction ? ctx.readOnly : undefined,
-      routingStyle: ctx.routingStyle,
-      separation: 36,
+      routingStyle: isFineReaction ? 'curved' : ctx.routingStyle,
+      fineGranular: isFineReaction,
+      sourceHandleId: isFineReaction ? edge.sourceHandle : undefined,
+      targetHandleId: isFineReaction ? edge.targetHandle : undefined,
+      parallelIndex: fineParallel?.index,
+      parallelCount: fineParallel?.total,
+      separation: isFineReaction ? FINE_REACTION_SEPARATION : 36,
       sourceParallelIndex: sourceData?.index,
       sourceParallelCount: sourceData?.total,
       targetParallelIndex: targetData?.index,
       targetParallelCount: targetData?.total,
-      customControlPoint: edge.data?.customControlPoint,
+      customControlPoint: isFineReaction ? undefined : edge.data?.customControlPoint,
       ...reactionEdgeInteractionHandlers(edge.id, reactionEditable, ctx),
     },
     style: {
