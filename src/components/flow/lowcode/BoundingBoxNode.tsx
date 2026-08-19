@@ -4,6 +4,8 @@ import { type NodeProps } from 'reactflow';
 export interface BoundingBoxNodeData {
   label: string;
   color?: string;
+  domain?: string;
+  nsUri?: string;
   isBoundingBox: true;
   width?: number;
   height?: number;
@@ -16,7 +18,7 @@ export interface BoundingBoxNodeData {
  * bar with model name, "Contents - Drag classes here..." placeholder area.
  */
 const BoundingBoxNode: React.FC<NodeProps<BoundingBoxNodeData>> = ({ data, selected }) => {
-  const { label, color = '#f0a030' } = data;
+  const { label, color = '#bfdbfe' } = data;
   const borderColor = selected ? '#1976d2' : color;
 
   return (

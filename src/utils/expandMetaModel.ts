@@ -20,6 +20,7 @@ import type { EObjectNodeData } from '../components/flow/lowcode/EObjectNode';
 import type { BoundingBoxNodeData } from '../components/flow/lowcode/BoundingBoxNode';
 import type { FlowNodeECoreData } from '../types/flow';
 import { normalizeAttributeTypeDisplay } from './ecoreToUml';
+import { metaModelDisplayColor } from './metaModelColors';
 
 export interface ExpandedMetaModelResult {
   boundingBox: Node<BoundingBoxNodeData>;
@@ -37,15 +38,6 @@ const BBOX_PADDING_SIDE = 50;
 const BBOX_PADDING_BOTTOM = 40;
 const COLUMNS = 3;
 
-const MODEL_COLORS = ['#f0a030', '#4caf50', '#2196f3', '#9c27b0', '#e91e63', '#00bcd4', '#ff5722'];
-
-let colorIndex = 0;
-function nextModelColor(): string {
-  const c = MODEL_COLORS[colorIndex % MODEL_COLORS.length];
-  colorIndex++;
-  return c;
-}
-
 /**
  * Expand a meta-model (.ecore file) into React Flow nodes for the canvas.
  */
@@ -53,7 +45,7 @@ export function expandMetaModelToNodes(
   ecoreContent: string,
   fileName: string,
   origin: { x: number; y: number },
-  _domain?: string,
+  domain?: string,
   explicitColor?: string,
 ): ExpandedMetaModelResult | null {
   const umlModel = ecoreToUml(ecoreContent);
@@ -65,7 +57,7 @@ export function expandMetaModelToNodes(
     extractEPackageNameFromEcore(ecoreContent)
     || deriveDisplayModelAlias(modelLabel)
     || deriveModelAlias(nsUri);
-  const color = explicitColor || nextModelColor();
+  const color = explicitColor || metaModelDisplayColor(domain, fileName);
 
   const eObjectNodes: Node<EObjectNodeData>[] = [];
   let maxX = 0;
@@ -130,6 +122,8 @@ export function expandMetaModelToNodes(
     data: {
       label: modelLabel,
       color,
+      domain,
+      nsUri,
       isBoundingBox: true,
       width: bboxWidth,
       height: bboxHeight,
@@ -196,9 +190,3 @@ export function computeBoundingBoxRect(
   };
 }
 
-/**
- * Reset the model color counter (call when exiting reaction mode).
- */
-export function resetModelColorIndex(): void {
-  colorIndex = 0;
-}

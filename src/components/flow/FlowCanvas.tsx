@@ -19,7 +19,8 @@ import { useDragAndDrop } from '../../hooks/useDragAndDrop';
 import { EditableNode } from './EditableNode';
 import { UMLRelationship } from './UMLRelationship';
 import { ReactionRelationship } from './ReactionRelationship';
-import { EcoreFileBox, cardColor } from './EcoreFileBox';
+import { EcoreFileBox } from './EcoreFileBox';
+import { metaModelDisplayColor } from '../../utils/metaModelColors';
 import { ConnectionLine } from './ConnectionLine';
 import { ReactionEditorModal } from './ReactionEditorModal';
 import { ConfirmDialog } from '../ui/ConfirmDialog';
@@ -143,7 +144,6 @@ import {
 import {
   expandMetaModelToNodes,
   nextBoundingBoxOrigin,
-  resetModelColorIndex,
   computeBoundingBoxRect,
 } from '../../utils/expandMetaModel';
 
@@ -1194,7 +1194,7 @@ export const FlowCanvas = forwardRef<FlowCanvasHandle, FlowCanvasProps>(
               fileName,
               origin,
               ecoreNode.data?.domain,
-              cardColor(ecoreNode.data?.domain),
+              metaModelDisplayColor(ecoreNode.data?.domain, fileName),
             );
             if (!result) continue;
             expandResults.push({ ecoreId: ecoreNode.id, result });
@@ -1266,7 +1266,6 @@ export const FlowCanvas = forwardRef<FlowCanvasHandle, FlowCanvasProps>(
         disableReactionEdges();
 
         // Collapse: convert reaction positions back to VSUM positions using offset
-        resetModelColorIndex();
         setEdges((eds) => eds.filter((e) => e.type !== 'fine-granular-reaction'));
         setNodes((nds) => {
           // Get current bbox positions to derive updated VSUM positions
@@ -1407,7 +1406,13 @@ export const FlowCanvas = forwardRef<FlowCanvasHandle, FlowCanvasProps>(
       // If in reaction mode, immediately expand into eobject + boundingBox nodes
       if (addReactionMode && fileContent) {
         const origin = nextBoundingBoxOrigin(nodesRef.current);
-        const result = expandMetaModelToNodes(fileContent, fileName, origin, meta?.domain, cardColor(meta?.domain));
+        const result = expandMetaModelToNodes(
+          fileContent,
+          fileName,
+          origin,
+          meta?.domain,
+          metaModelDisplayColor(meta?.domain, fileName),
+        );
         if (result) {
           setNodes((nds) => {
             const hidden = nds.map((n) =>
