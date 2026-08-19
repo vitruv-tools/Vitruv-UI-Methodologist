@@ -443,6 +443,72 @@ const AUTH_STYLES = `
   .password-requirement.ok   { color: #1f9f92; }
   .password-requirement.fail { color: #94a3b8; }
   .password-requirement-icon { font-size: 10px; }
+
+  /* OTP verification */
+  /* Scoped under .mock-form-group so it outranks the shared input rule above,
+     which would otherwise keep the code at the standard 14px field size. */
+  .mock-form-group input.otp-code-input {
+    text-align: center;
+    font-size: 22px;
+    font-weight: 700;
+    letter-spacing: 0.4em;
+    /* Offsets the trailing letter-spacing so the digits sit optically centred. */
+    text-indent: 0.4em;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .otp-status {
+    padding: 10px 12px;
+    border-radius: 8px;
+    margin-bottom: 16px;
+    font-size: 13px;
+    line-height: 1.45;
+    white-space: pre-line;
+  }
+  .otp-status-success { background: #ecfdf5; color: #065f46; }
+  .otp-status-warning { background: #fffbeb; color: #92400e; }
+
+  .otp-timer {
+    display: flex;
+    align-items: baseline;
+    justify-content: center;
+    gap: 8px;
+    margin: 2px 0 18px;
+    font-size: 13px;
+    color: #64748b;
+  }
+  .otp-timer-value {
+    font-size: 18px;
+    font-weight: 700;
+    color: #1f9f92;
+    font-variant-numeric: tabular-nums;
+  }
+  .otp-timer-value.is-expiring { color: #dc2626; }
+
+  .otp-resend {
+    margin-top: 18px;
+    text-align: center;
+    font-size: 14px;
+    color: #475569;
+  }
+  .otp-resend-button {
+    background: none;
+    border: none;
+    color: #00876c;
+    font-weight: 700;
+    font-size: 14px;
+    cursor: pointer;
+    padding: 0;
+  }
+  .otp-resend-button:hover:not(:disabled) { color: #00755d; text-decoration: underline; }
+  .otp-resend-button:disabled { color: #94a3b8; cursor: not-allowed; }
+
+  .otp-help {
+    margin: 0 0 10px 0;
+    font-size: 12px;
+    color: #64748b;
+    line-height: 1.55;
+  }
 `;
 
 // ── AuthErrorBanner ────────────────────────────────────────────────────────────
