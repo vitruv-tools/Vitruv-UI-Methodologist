@@ -128,7 +128,9 @@ export function mapFlowCanvasEdge(edge: Edge, ctx: MapFlowEdgeContext): Edge {
       sourceParallelCount: sourceData?.total,
       targetParallelIndex: targetData?.index,
       targetParallelCount: targetData?.total,
-      customControlPoint: isFineReaction ? undefined : edge.data?.customControlPoint,
+      customControlPoint: (isFineReaction || edge.data?.expandedIntraModel)
+        ? undefined
+        : edge.data?.customControlPoint,
       ...reactionEdgeInteractionHandlers(edge.id, reactionEditable, ctx),
     },
     style: {

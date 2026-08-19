@@ -274,5 +274,32 @@ describe('UMLRelationship', () => {
     expect(screen.getByTestId('edge-ghost-label-association-name')).toHaveTextContent('members');
     expect(container.querySelector('text')).toBeNull();
   });
+
+  it('does not show a curve handle on selected expanded associations', () => {
+    render(
+      <svg>
+        <UMLRelationship
+          id="edge-no-curve"
+          source="s1"
+          target="t1"
+          sourceX={0}
+          sourceY={0}
+          targetX={200}
+          targetY={0}
+          data={{
+            label: 'members',
+            relationshipType: 'association',
+            expandedIntraModel: true,
+            customControlPoint: { x: 100, y: 40 },
+          }}
+          selected
+          style={{}}
+        />
+      </svg>,
+    );
+
+    expect(screen.queryByText(/Double-click to reset/i)).toBeNull();
+    expect(screen.queryByText(/DRAG HERE/i)).toBeNull();
+  });
 });
 

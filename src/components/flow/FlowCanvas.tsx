@@ -151,6 +151,11 @@ import {
   nextBoundingBoxOrigin,
   computeBoundingBoxRect,
 } from '../../utils/expandMetaModel';
+import {
+  applyReactionLayout,
+  loadReactionLayout,
+  persistReactionLayoutFromNodes,
+} from '../../utils/reactionLayoutStorage';
 
 import EObjectNode from './lowcode/EObjectNode';
 import BoundingBoxNode from './lowcode/BoundingBoxNode';
@@ -511,6 +516,27 @@ export const FlowCanvas = forwardRef<FlowCanvasHandle, FlowCanvasProps>(
       if (dragEnded) {
         bboxDraggingIdsRef.current.clear();
         setTimeout(recalculateEdgeHandles, 100);
+        if (addReactionMode) {
+          const snapshot = new Map(liveNodes.map((n) => [n.id, n] as const));
+          for (const c of [...clampedChanges, ...extraChanges]) {
+            const existing = snapshot.get(c.id);
+            if (!existing) continue;
+            if (c.type === 'position' && c.position) {
+              snapshot.set(c.id, { ...existing, position: c.position });
+            }
+            if (c.type === 'dimensions' && c.dimensions) {
+              snapshot.set(c.id, {
+                ...existing,
+                width: c.dimensions.width,
+                height: c.dimensions.height,
+              });
+            }
+          }
+          persistReactionLayoutFromNodes(
+            useProjectStore.getState().activeId,
+            [...snapshot.values()],
+          );
+        }
         if (umlModalOpen) {
           setEdges(eds =>
             eds.map(e =>
@@ -521,7 +547,7 @@ export const FlowCanvas = forwardRef<FlowCanvasHandle, FlowCanvasProps>(
           );
         }
       }
-    }, [originalOnNodesChange, recalculateEdgeHandles, circle, circleVisible, umlModalOpen, detailModel, setEdges, setHistoryPaused, readOnly, edges]);
+    }, [originalOnNodesChange, recalculateEdgeHandles, circle, circleVisible, umlModalOpen, detailModel, setEdges, setHistoryPaused, readOnly, edges, addReactionMode]);
 
     const guardedOnEdgesChange = useCallback((changes: any) => {
       if (readOnly && changes.some(isReadOnlyBlockedEdgeChange)) return;
@@ -1222,7 +1248,8 @@ export const FlowCanvas = forwardRef<FlowCanvasHandle, FlowCanvasProps>(
           const newNodes: any[] = [];
 
           // First pass: expand each model at its ecoreFile position
-          const expandResults: Array<{ ecoreId: string; result: any }> = [];
+          const expandResults: Array<{ ecoreId: string; result: any; restored: boolean }> = [];
+          const savedLayout = loadReactionLayout(useProjectStore.getState().activeId);
           for (const ecoreNode of ecoreNodes) {
             const fileContent = ecoreNode.data?.fileContent;
             const fileName = ecoreNode.data?.fileName;
@@ -1237,11 +1264,13 @@ export const FlowCanvas = forwardRef<FlowCanvasHandle, FlowCanvasProps>(
               metaModelDisplayColor(ecoreNode.data?.domain, fileName),
             );
             if (!result) continue;
-            expandResults.push({ ecoreId: ecoreNode.id, result });
+            const restored = applyReactionLayout(result, savedLayout[result.modelNsUri]);
+            expandResults.push({ ecoreId: ecoreNode.id, result, restored });
           }
 
-          // Second pass: resolve overlaps — only shift minimally
+          // Second pass: resolve overlaps — only shift models without a saved layout
           for (let i = 1; i < expandResults.length; i++) {
+            if (expandResults[i].restored) continue;
             const cur = expandResults[i].result.boundingBox;
             const curW = (cur.style?.width as number) ?? 400;
             const curH = (cur.style?.height as number) ?? 300;
@@ -1319,6 +1348,7 @@ export const FlowCanvas = forwardRef<FlowCanvasHandle, FlowCanvasProps>(
           (e) => e.type !== 'fine-granular-reaction' && !isIntraModelUmlEdge(e),
         ));
         setNodes((nds) => {
+          persistReactionLayoutFromNodes(useProjectStore.getState().activeId, nds);
           // Get current bbox positions to derive updated VSUM positions
           const bboxPositions = new Map<string, { x: number; y: number }>();
           for (const n of nds) {
@@ -1465,6 +1495,10 @@ export const FlowCanvas = forwardRef<FlowCanvasHandle, FlowCanvasProps>(
           metaModelDisplayColor(meta?.domain, fileName),
         );
         if (result) {
+          applyReactionLayout(
+            result,
+            loadReactionLayout(useProjectStore.getState().activeId)[result.modelNsUri],
+          );
           setNodes((nds) => {
             const hidden = nds.map((n) =>
               n.id === newEcoreNode.id ? { ...n, hidden: true } : n,

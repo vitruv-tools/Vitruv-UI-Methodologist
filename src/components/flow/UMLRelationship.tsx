@@ -364,7 +364,7 @@ export function UMLRelationship({
   const drawTargetX = finalTargetX - ux * endpointInset;
   const drawTargetY = finalTargetY - uy * endpointInset;
 
-  const controlPoint = data?.customControlPoint;
+  const controlPoint = data?.expandedIntraModel ? undefined : data?.customControlPoint;
   const distance = Math.hypot(dx, dy);
 
   // Routing: bezier when user has dragged a control point, straight line otherwise.
@@ -620,8 +620,9 @@ export function UMLRelationship({
         })()}
       </EdgeLabelRenderer>
 
-      {/* Draggable control point handle when selected */}
-      {selected && (
+      {/* Draggable control point handle when selected — not used on expanded
+          intra-model associations in Reactions mode (those stay straight). */}
+      {selected && !data?.expandedIntraModel && (
         <g>
           {/* Control point position - use existing or calculate default */}
           {(() => {

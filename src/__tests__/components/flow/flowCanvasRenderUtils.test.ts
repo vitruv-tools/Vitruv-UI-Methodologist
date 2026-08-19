@@ -155,4 +155,20 @@ describe('mapFlowCanvasEdge fine-granular parallel meta', () => {
     expect(mapped.data.separation).toBe(FINE_REACTION_SEPARATION);
     expect(mapped.data.routingStyle).toBe('curved');
   });
+
+  it('drops custom control points on expanded intra-model associations', () => {
+    const edge = {
+      id: 'uml-1',
+      source: 'a',
+      target: 'b',
+      type: 'uml',
+      data: {
+        expandedIntraModel: true,
+        customControlPoint: { x: 10, y: 20 },
+      },
+    } as Edge;
+
+    const mapped = mapFlowCanvasEdge(edge, mapContext());
+    expect(mapped.data.customControlPoint).toBeUndefined();
+  });
 });
