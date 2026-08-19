@@ -6,6 +6,7 @@ import type { Point } from './umlDiagramGeometry';
 export const EOBJECT_HEADER_HEIGHT = 32;
 export const EOBJECT_ATTR_ROW_HEIGHT = 24;
 export const EOBJECT_DEFAULT_WIDTH = 200;
+export const GHOST_NODE_SIZE = 12;
 
 export const FINE_REACTION_SEPARATION = 16;
 export const FINE_REACTION_ENDPOINT_INSET = 8;
@@ -23,7 +24,9 @@ export interface ReactionNodeBounds {
   x: number;
   y: number;
   width: number;
+  height?: number;
   attributes?: Array<{ name: string }>;
+  isGhost?: boolean;
 }
 
 export interface AxisRect {
@@ -155,6 +158,36 @@ export function insetLineEndpoints(
   };
 }
 
+function ghostBoxSize(node: ReactionNodeBounds): { w: number; h: number } {
+  return {
+    w: node.width > 0 ? node.width : GHOST_NODE_SIZE,
+    h: node.height && node.height > 0 ? node.height : GHOST_NODE_SIZE,
+  };
+}
+
+export function isGhostReactionNode(node: ReactionNodeBounds): boolean {
+  if (node.isGhost) return true;
+  const { w, h } = ghostBoxSize(node);
+  return w <= GHOST_NODE_SIZE + 6 && h <= GHOST_NODE_SIZE + 6;
+}
+
+export function ghostCenter(node: ReactionNodeBounds): Point {
+  const { w, h } = ghostBoxSize(node);
+  return { x: node.x + w / 2, y: node.y + h / 2 };
+}
+
+/** Intersection of the line from the ghost center toward `toward` with the ghost circle. */
+export function ghostRimPoint(node: ReactionNodeBounds, toward: Point): Point {
+  const c = ghostCenter(node);
+  const { w, h } = ghostBoxSize(node);
+  const radius = Math.min(w, h) / 2;
+  const dx = toward.x - c.x;
+  const dy = toward.y - c.y;
+  const len = Math.hypot(dx, dy);
+  if (len < 0.001) return { x: c.x + radius, y: c.y };
+  return { x: c.x + (dx / len) * radius, y: c.y + (dy / len) * radius };
+}
+
 export function layoutFineReactionChord(options: {
   source: ReactionNodeBounds;
   target: ReactionNodeBounds;
@@ -164,21 +197,29 @@ export function layoutFineReactionChord(options: {
   parallelCount?: number;
   separation?: number;
 }): FineReactionChord {
+  const srcGhost = isGhostReactionNode(options.source);
+  const tgtGhost = isGhostReactionNode(options.target);
   const srcRow = reactionRowRect(options.source, options.sourceHandle);
   const tgtRow = reactionRowRect(options.target, options.targetHandle);
   const srcCx = srcRow.x + srcRow.width / 2;
   const srcCy = srcRow.y + srcRow.height / 2;
   const tgtCx = tgtRow.x + tgtRow.width / 2;
   const tgtCy = tgtRow.y + tgtRow.height / 2;
-  const srcAttr = isAttributeHandle(options.sourceHandle);
-  const tgtAttr = isAttributeHandle(options.targetHandle);
+  const srcAttr = !srcGhost && isAttributeHandle(options.sourceHandle);
+  const tgtAttr = !tgtGhost && isAttributeHandle(options.targetHandle);
+  const srcAim = srcGhost ? ghostCenter(options.source) : { x: srcCx, y: srcCy };
+  const tgtAim = tgtGhost ? ghostCenter(options.target) : { x: tgtCx, y: tgtCy };
 
-  let p1 = srcAttr
-    ? reactionHandleAnchor(options.source, options.sourceHandle, 'source')
-    : getBorderPoint(srcCx, srcCy, srcRow.width, srcRow.height, tgtCx, tgtCy);
-  let p2 = tgtAttr
-    ? reactionHandleAnchor(options.target, options.targetHandle, 'target')
-    : getBorderPoint(tgtCx, tgtCy, tgtRow.width, tgtRow.height, srcCx, srcCy);
+  let p1 = srcGhost
+    ? srcAim
+    : srcAttr
+      ? reactionHandleAnchor(options.source, options.sourceHandle, 'source')
+      : getBorderPoint(srcCx, srcCy, srcRow.width, srcRow.height, tgtAim.x, tgtAim.y);
+  let p2 = tgtGhost
+    ? tgtAim
+    : tgtAttr
+      ? reactionHandleAnchor(options.target, options.targetHandle, 'target')
+      : getBorderPoint(tgtCx, tgtCy, tgtRow.width, tgtRow.height, srcAim.x, srcAim.y);
 
   if (!srcAttr || !tgtAttr) {
     const offset = applyPerpendicularOffset(
@@ -188,9 +229,12 @@ export function layoutFineReactionChord(options: {
       options.parallelCount ?? 1,
       options.separation ?? FINE_REACTION_SEPARATION,
     );
-    if (!srcAttr) p1 = offset.p1;
-    if (!tgtAttr) p2 = offset.p2;
+    if (!srcAttr && !srcGhost) p1 = offset.p1;
+    if (!tgtAttr && !tgtGhost) p2 = offset.p2;
   }
+
+  if (srcGhost) p1 = ghostRimPoint(options.source, p2);
+  if (tgtGhost) p2 = ghostRimPoint(options.target, p1);
 
   const dx = p2.x - p1.x;
   const dy = p2.y - p1.y;

@@ -3,6 +3,7 @@ import { EdgeLabelRenderer, EdgeProps, Position, useReactFlow, useStore } from '
 import {
   EOBJECT_DEFAULT_WIDTH,
   FINE_REACTION_SEPARATION,
+  GHOST_NODE_SIZE,
   fineReactionPathD,
   layoutFineReactionChord,
 } from '../../utils/reactionEdgeGeometry';
@@ -75,11 +76,23 @@ export function ReactionRelationship({
       isTargetSelected: targetNode?.selected || false,
       srcAbsX: sourceNode?.positionAbsolute?.x ?? sourceNode?.position?.x ?? sourceX,
       srcAbsY: sourceNode?.positionAbsolute?.y ?? sourceNode?.position?.y ?? sourceY,
-      srcW: sourceNode?.width ?? EOBJECT_DEFAULT_WIDTH,
+      srcW: sourceNode?.type === 'ghost'
+        ? (sourceNode.width ?? GHOST_NODE_SIZE)
+        : (sourceNode?.width ?? EOBJECT_DEFAULT_WIDTH),
+      srcH: sourceNode?.type === 'ghost'
+        ? (sourceNode.height ?? GHOST_NODE_SIZE)
+        : (sourceNode?.height ?? undefined),
+      srcGhost: sourceNode?.type === 'ghost',
       srcAttrs: sourceNode?.data?.attributes,
       tgtAbsX: targetNode?.positionAbsolute?.x ?? targetNode?.position?.x ?? targetX,
       tgtAbsY: targetNode?.positionAbsolute?.y ?? targetNode?.position?.y ?? targetY,
-      tgtW: targetNode?.width ?? EOBJECT_DEFAULT_WIDTH,
+      tgtW: targetNode?.type === 'ghost'
+        ? (targetNode.width ?? GHOST_NODE_SIZE)
+        : (targetNode?.width ?? EOBJECT_DEFAULT_WIDTH),
+      tgtH: targetNode?.type === 'ghost'
+        ? (targetNode.height ?? GHOST_NODE_SIZE)
+        : (targetNode?.height ?? undefined),
+      tgtGhost: targetNode?.type === 'ghost',
       tgtAttrs: targetNode?.data?.attributes,
     };
   });
@@ -160,13 +173,17 @@ export function ReactionRelationship({
           x: live.srcAbsX,
           y: live.srcAbsY,
           width: live.srcW,
+          height: live.srcH,
           attributes: live.srcAttrs,
+          isGhost: live.srcGhost,
         },
         target: {
           x: live.tgtAbsX,
           y: live.tgtAbsY,
           width: live.tgtW,
+          height: live.tgtH,
           attributes: live.tgtAttrs,
+          isGhost: live.tgtGhost,
         },
         sourceHandle,
         targetHandle,
@@ -251,10 +268,14 @@ export function ReactionRelationship({
     live.srcAbsX,
     live.srcAbsY,
     live.srcW,
+    live.srcH,
+    live.srcGhost,
     live.srcAttrs,
     live.tgtAbsX,
     live.tgtAbsY,
     live.tgtW,
+    live.tgtH,
+    live.tgtGhost,
     live.tgtAttrs,
     sourceHandle,
     targetHandle,

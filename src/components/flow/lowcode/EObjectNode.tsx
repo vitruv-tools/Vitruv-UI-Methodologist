@@ -52,6 +52,28 @@ const EObjectNode: React.FC<NodeProps<EObjectNodeData>> = ({ data, selected }) =
         position: 'relative',
       }}
     >
+      {(['top', 'right', 'bottom', 'left'] as const).map((side) => {
+        const position =
+          side === 'top' ? Position.Top
+            : side === 'right' ? Position.Right
+              : side === 'bottom' ? Position.Bottom
+                : Position.Left;
+        const hidden = {
+          width: 6,
+          height: 6,
+          opacity: 0,
+          pointerEvents: 'none' as const,
+          border: 'none',
+          background: 'transparent',
+        };
+        return (
+          <React.Fragment key={side}>
+            <Handle type="source" position={position} id={`${side}-source`} style={hidden} />
+            <Handle type="target" position={position} id={`${side}-target`} style={hidden} />
+          </React.Fragment>
+        );
+      })}
+
       {/* Class header */}
       <div
         style={{

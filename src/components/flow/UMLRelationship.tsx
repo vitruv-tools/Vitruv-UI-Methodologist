@@ -18,6 +18,7 @@ interface UMLRelationshipData {
   isFirstInMergeGroup?: boolean;
   mergeGroupSourceNodes?: string[];
   hoveredMergeGroup?: string | null;
+  expandedIntraModel?: boolean;
   onMergeGroupHover?: (groupId: string | null) => void;
 }
 
@@ -230,6 +231,25 @@ function calculateMultiplicityPosition(
   };
 }
 
+const MIDPOINT_GHOST_LABEL_CLEARANCE = 18;
+
+/** Shift a midpoint name off the association ghost, preferring above the line. */
+function offsetLabelAwayFromGhost(
+  labelX: number,
+  labelY: number,
+  px: number,
+  py: number,
+  clearance = MIDPOINT_GHOST_LABEL_CLEARANCE,
+): { x: number; y: number } {
+  let nx = px;
+  let ny = py;
+  if (ny > 0.01 || (Math.abs(ny) <= 0.01 && nx > 0)) {
+    nx = -px;
+    ny = -py;
+  }
+  return { x: labelX + nx * clearance, y: labelY + ny * clearance };
+}
+
 export function UMLRelationship({
   id,
   source,
@@ -405,6 +425,14 @@ export function UMLRelationship({
     return data?.label || '';
   };
 
+  const relationshipLabel = getRelationshipLabel();
+  const liftNameOffGhost = data?.expandedIntraModel === true
+    && data?.relationshipType !== 'inheritance'
+    && relationshipLabel.length > 0;
+  const namePos = liftNameOffGhost
+    ? offsetLabelAwayFromGhost(labelX, labelY, px, py)
+    : { x: labelX, y: labelY };
+
 
   return (
     <>
@@ -444,9 +472,10 @@ export function UMLRelationship({
         onMouseLeave={() => setIsHovered(false)}
       />
 
+      {!liftNameOffGhost && (
       <text
-        x={labelX}
-        y={labelY}
+        x={namePos.x}
+        y={namePos.y}
         textAnchor="middle"
         dominantBaseline="middle"
         style={{
@@ -461,8 +490,9 @@ export function UMLRelationship({
           transition: 'fill 0.2s ease',
         }}
       >
-        {getRelationshipLabel()}
+        {relationshipLabel}
       </text>
+      )}
 
 
       {/* Multiplicity badges are rendered via EdgeLabelRenderer (below) so they
@@ -471,6 +501,30 @@ export function UMLRelationship({
       {/* Direction markers are rendered in EdgeLabelRenderer so arrows/diamonds stay
           visible above HTML node boxes without requiring hover. */}
       <EdgeLabelRenderer>
+        {liftNameOffGhost && (
+          <div
+            data-testid={`${id}-association-name`}
+            className="nodrag nopan"
+            style={{
+              position: 'absolute',
+              transform: `translate(-50%, -50%) translate(${namePos.x}px, ${namePos.y}px)`,
+              pointerEvents: 'none',
+              zIndex: 1002,
+              background: 'rgba(255,255,255,0.94)',
+              borderRadius: 4,
+              padding: '0 5px',
+              fontSize: 11,
+              fontWeight: 600,
+              color: getHighlightColor(isHighlighted, isHovered),
+              fontFamily: `'Segoe UI', system-ui, sans-serif`,
+              lineHeight: '18px',
+              whiteSpace: 'nowrap',
+              boxShadow: '0 0 0 1px rgba(255,255,255,0.9)',
+            }}
+          >
+            {relationshipLabel}
+          </div>
+        )}
         {directionMarkerSide && data?.relationshipType && directionMarkerGraphic && directionMarkerPos && (
           <div
             key={`${id}-direction-marker`}

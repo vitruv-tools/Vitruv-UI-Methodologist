@@ -9,6 +9,7 @@ import React, {
 } from 'react';
 import ReactFlow, {
   Background,
+  ConnectionMode,
   ReactFlowInstance,
   Node,
   Edge,
@@ -131,6 +132,9 @@ import {
   hydrateFineGranularReactionEdges,
   mergeFineGranularEdges,
   syncFineGranularStoreFromCanvas,
+  ghostPositionChanges,
+  isIntraModelUmlEdge,
+  isGhostNode,
 } from '../../utils/FineGranularReactionUtils';
 import {
   getProperEObjectIdFromHandle,
@@ -429,7 +433,10 @@ export const FlowCanvas = forwardRef<FlowCanvasHandle, FlowCanvasProps>(
           const dy = c.position.y - currentNode.position.y;
           if (Math.abs(dx) < 0.01 && Math.abs(dy) < 0.01) continue;
           for (const n of liveNodes) {
-            if (n.type !== 'eobject' || n.data?.group !== c.id) continue;
+            if (
+              (!isGhostNode(n) && n.type !== 'eobject')
+              || n.data?.group !== c.id
+            ) continue;
             extraChanges.push({
               type: 'position',
               id: n.id,
@@ -474,6 +481,25 @@ export const FlowCanvas = forwardRef<FlowCanvasHandle, FlowCanvasProps>(
         }
       }
 
+      if (!bboxUserDrag) {
+        const predicted = new Map(liveNodes.map((n) => [n.id, n] as const));
+        for (const c of [...clampedChanges, ...extraChanges]) {
+          const existing = predicted.get(c.id);
+          if (!existing) continue;
+          if (c.type === 'position' && c.position) {
+            predicted.set(c.id, { ...existing, position: c.position });
+          }
+          if (c.type === 'dimensions' && c.dimensions) {
+            predicted.set(c.id, {
+              ...existing,
+              width: c.dimensions.width,
+              height: c.dimensions.height,
+            });
+          }
+        }
+        extraChanges.push(...ghostPositionChanges([...predicted.values()], edges));
+      }
+
       originalOnNodesChange(
         extraChanges.length > 0 ? [...clampedChanges, ...extraChanges] : clampedChanges,
       );
@@ -495,7 +521,7 @@ export const FlowCanvas = forwardRef<FlowCanvasHandle, FlowCanvasProps>(
           );
         }
       }
-    }, [originalOnNodesChange, recalculateEdgeHandles, circle, circleVisible, umlModalOpen, detailModel, setEdges, setHistoryPaused, readOnly]);
+    }, [originalOnNodesChange, recalculateEdgeHandles, circle, circleVisible, umlModalOpen, detailModel, setEdges, setHistoryPaused, readOnly, edges]);
 
     const guardedOnEdgesChange = useCallback((changes: any) => {
       if (readOnly && changes.some(isReadOnlyBlockedEdgeChange)) return;
@@ -924,7 +950,9 @@ export const FlowCanvas = forwardRef<FlowCanvasHandle, FlowCanvasProps>(
 
       // Hydrate fine-granular reaction edges from store (if EObject nodes are present)
       try {
-        const eobjectNodes = nodesWithIds.filter((n: { type?: string }) => n.type === 'eobject');
+        const eobjectNodes = nodesWithIds.filter(
+          (n: { type?: string }) => n.type === 'eobject' || n.type === 'ghost',
+        );
         const ecoreFiles = nodesWithIds.filter((n: { type?: string }) => n.type === 'ecoreFile');
         const fineEdges = hydrateFineGranularReactionEdges(eobjectNodes, ecoreFiles);
         if (fineEdges.length > 0) {
@@ -1234,6 +1262,9 @@ export const FlowCanvas = forwardRef<FlowCanvasHandle, FlowCanvasProps>(
                 for (const eNode of expandResults[i].result.eObjectNodes) {
                   eNode.position = { x: eNode.position.x + shiftX, y: eNode.position.y };
                 }
+                for (const ghost of expandResults[i].result.ghostNodes ?? []) {
+                  ghost.position = { x: ghost.position.x + shiftX, y: ghost.position.y };
+                }
               }
             }
           }
@@ -1250,9 +1281,12 @@ export const FlowCanvas = forwardRef<FlowCanvasHandle, FlowCanvasProps>(
             }
           }
 
+          const intraModelEdges: any[] = [];
           for (const { result } of expandResults) {
             newNodes.push(result.boundingBox);
             newNodes.push(...result.eObjectNodes);
+            newNodes.push(...(result.ghostNodes ?? []));
+            intraModelEdges.push(...(result.umlEdges ?? []));
           }
 
           if (newNodes.length > 0) {
@@ -1261,12 +1295,15 @@ export const FlowCanvas = forwardRef<FlowCanvasHandle, FlowCanvasProps>(
               ...newNodes,
             ]);
             syncIdentifierMapFromCanvasNodes(nodes);
-            const eobjectNodes = newNodes.filter((n) => n.type === 'eobject');
+            const endpointNodes = newNodes.filter(
+              (n) => n.type === 'eobject' || n.type === 'ghost',
+            );
             const ecoreFiles = nodes.filter((n) => n.type === 'ecoreFile');
-            const fineEdges = hydrateFineGranularReactionEdges(eobjectNodes, ecoreFiles);
-            if (fineEdges.length > 0) {
-              setEdges((eds) => mergeFineGranularEdges(eds, fineEdges));
-            }
+            const fineEdges = hydrateFineGranularReactionEdges(endpointNodes, ecoreFiles);
+            setEdges((eds) => {
+              const withIntra = intraModelEdges.length > 0 ? [...eds, ...intraModelEdges] : eds;
+              return fineEdges.length > 0 ? mergeFineGranularEdges(withIntra, fineEdges) : withIntra;
+            });
           }
         }
       } else {
@@ -1278,7 +1315,9 @@ export const FlowCanvas = forwardRef<FlowCanvasHandle, FlowCanvasProps>(
         disableReactionEdges();
 
         // Collapse: convert reaction positions back to VSUM positions using offset
-        setEdges((eds) => eds.filter((e) => e.type !== 'fine-granular-reaction'));
+        setEdges((eds) => eds.filter(
+          (e) => e.type !== 'fine-granular-reaction' && !isIntraModelUmlEdge(e),
+        ));
         setNodes((nds) => {
           // Get current bbox positions to derive updated VSUM positions
           const bboxPositions = new Map<string, { x: number; y: number }>();
@@ -1289,7 +1328,7 @@ export const FlowCanvas = forwardRef<FlowCanvasHandle, FlowCanvasProps>(
           }
 
           return nds
-            .filter((n) => n.type !== 'eobject' && n.type !== 'boundingBox')
+            .filter((n) => n.type !== 'eobject' && n.type !== 'boundingBox' && n.type !== 'ghost')
             .map((n) => {
               if (n.type !== 'ecoreFile') return n;
               const nsUri = n.data?.nsUri;
@@ -1430,16 +1469,24 @@ export const FlowCanvas = forwardRef<FlowCanvasHandle, FlowCanvasProps>(
             const hidden = nds.map((n) =>
               n.id === newEcoreNode.id ? { ...n, hidden: true } : n,
             );
-            return [...hidden, result.boundingBox, ...result.eObjectNodes];
+            return [
+              ...hidden,
+              result.boundingBox,
+              ...result.eObjectNodes,
+              ...(result.ghostNodes ?? []),
+            ];
           });
           syncIdentifierMapFromCanvasNodes([...nodesRef.current, newEcoreNode]);
           const fineEdges = hydrateFineGranularReactionEdges(
-            result.eObjectNodes,
+            [...result.eObjectNodes, ...(result.ghostNodes ?? [])],
             [...nodesRef.current, newEcoreNode],
           );
-          if (fineEdges.length > 0) {
-            setEdges((eds) => mergeFineGranularEdges(eds, fineEdges));
-          }
+          setEdges((eds) => {
+            const withIntra = result.umlEdges?.length
+              ? [...eds, ...result.umlEdges]
+              : eds;
+            return fineEdges.length > 0 ? mergeFineGranularEdges(withIntra, fineEdges) : withIntra;
+          });
         }
       }
     }, [addNode, handleEcoreFileExpand, handleEcoreFileSelect, onEcoreFileSelect, onEcoreFileDelete, onEcoreFileRename, handleRequestDelete, handleShowDetails, readOnly, addReactionMode, setNodes, setEdges]);
@@ -1662,6 +1709,8 @@ export const FlowCanvas = forwardRef<FlowCanvasHandle, FlowCanvasProps>(
           onNodesChange={onNodesChange}
           onEdgesChange={guardedOnEdgesChange}
           onConnect={guardedOnConnect}
+          connectionMode={ConnectionMode.Loose}
+          connectionRadius={28}
           onDrop={handleDrop}
           onDragOver={handleDragOver}
           onDragLeave={handleDragLeave}

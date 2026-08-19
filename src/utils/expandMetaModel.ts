@@ -7,10 +7,11 @@
  * reaction handle system expects.
  */
 
-import type { Node } from 'reactflow';
-import { ecoreToUml, type UMLClass } from './ecoreToUml';
+import type { Edge, Node } from 'reactflow';
+import { ecoreToUml, type UMLClass, type UMLRelType } from './ecoreToUml';
 import {
   buildEObjectId,
+  buildEObjectFeatureId,
   extractNsUriFromEcore,
   extractEPackageNameFromEcore,
   deriveDisplayModelAlias,
@@ -21,10 +22,17 @@ import type { BoundingBoxNodeData } from '../components/flow/lowcode/BoundingBox
 import type { FlowNodeECoreData } from '../types/flow';
 import { normalizeAttributeTypeDisplay } from './ecoreToUml';
 import { metaModelDisplayColor } from './metaModelColors';
+import {
+  createGhostNode,
+  ghostNodeId,
+  midpointForEobjectPair,
+} from './FineGranularReactionUtils';
 
 export interface ExpandedMetaModelResult {
   boundingBox: Node<BoundingBoxNodeData>;
   eObjectNodes: Node<EObjectNodeData>[];
+  umlEdges: Edge[];
+  ghostNodes: Node[];
   modelNsUri: string;
 }
 
@@ -37,6 +45,28 @@ const BBOX_PADDING_TOP = 70;
 const BBOX_PADDING_SIDE = 50;
 const BBOX_PADDING_BOTTOM = 40;
 const COLUMNS = 3;
+
+function chooseUmlHandles(
+  source: Node,
+  target: Node,
+): { sourceHandle: string; targetHandle: string } {
+  const dx = target.position.x - source.position.x;
+  const dy = target.position.y - source.position.y;
+  if (Math.abs(dx) >= Math.abs(dy)) {
+    return dx >= 0
+      ? { sourceHandle: 'right-source', targetHandle: 'left-target' }
+      : { sourceHandle: 'left-source', targetHandle: 'right-target' };
+  }
+  return dy >= 0
+    ? { sourceHandle: 'bottom-source', targetHandle: 'top-target' }
+    : { sourceHandle: 'top-source', targetHandle: 'bottom-target' };
+}
+
+function umlRelationshipType(type: UMLRelType): string {
+  if (type === 'composition') return 'composition';
+  if (type === 'inheritance') return 'inheritance';
+  return 'association';
+}
 
 /**
  * Expand a meta-model (.ecore file) into React Flow nodes for the canvas.
@@ -60,6 +90,7 @@ export function expandMetaModelToNodes(
   const color = explicitColor || metaModelDisplayColor(domain, fileName);
 
   const eObjectNodes: Node<EObjectNodeData>[] = [];
+  const nodeByClassId = new Map<string, Node<EObjectNodeData>>();
   let maxX = 0;
   let maxY = 0;
 
@@ -105,6 +136,7 @@ export function expandMetaModelToNodes(
     };
 
     eObjectNodes.push(node);
+    nodeByClassId.set(cls.id, node);
 
     const nodeRight = x + NODE_WIDTH;
     const nodeBottom = y + nodeHeight;
@@ -112,11 +144,82 @@ export function expandMetaModelToNodes(
     if (nodeBottom > maxY) maxY = nodeBottom;
   });
 
+  const classById = new Map(umlModel.classes.map(cls => [cls.id, cls]));
+  const umlEdges: Edge[] = [];
+  const ghostNodes: Node[] = [];
+  const bboxId = `bbox-${nsUri}`;
+
+  for (const rel of umlModel.relationships) {
+    const sourceNode = nodeByClassId.get(rel.sourceId);
+    const targetNode = nodeByClassId.get(rel.targetId);
+    const sourceClass = classById.get(rel.sourceId);
+    if (!sourceNode || !targetNode || !sourceClass) continue;
+
+    const handles = chooseUmlHandles(sourceNode, targetNode);
+    const isReference = rel.type === 'association' || rel.type === 'composition';
+    const eReferenceId = isReference
+      ? buildEObjectFeatureId(nsUri, sourceClass.name, rel.label || rel.id)
+      : undefined;
+
+    if (eReferenceId) {
+      sourceNode.data.ecore.eReferenceIds.push(eReferenceId);
+    }
+
+    umlEdges.push({
+      id: eReferenceId ? `uml-ref-${eReferenceId}` : `uml-${nsUri}-${rel.id}`,
+      source: sourceNode.id,
+      target: targetNode.id,
+      sourceHandle: handles.sourceHandle,
+      targetHandle: handles.targetHandle,
+      type: 'uml',
+      data: {
+        relationshipType: umlRelationshipType(rel.type),
+        label: rel.label,
+        sourceMultiplicity: rel.sourceMultiplicity,
+        targetMultiplicity: rel.targetMultiplicity,
+        expandedIntraModel: true,
+        ...(eReferenceId
+          ? {
+              ecore: {
+                eReferenceId,
+                eObjectSourceId: sourceNode.data.ecore.eObjectId,
+                eObjectTargetId: targetNode.data.ecore.eObjectId,
+                fromModel: nsUri,
+                toModel: nsUri,
+              },
+            }
+          : {}),
+      },
+    });
+
+    if (eReferenceId) {
+      const mid = midpointForEobjectPair(
+        sourceNode,
+        targetNode,
+        handles.sourceHandle,
+        handles.targetHandle,
+      );
+      ghostNodes.push(createGhostNode(ghostNodeId(eReferenceId), mid.x, mid.y, {
+        label: rel.label,
+        group: bboxId,
+        ecore: {
+          model: nsUri,
+          eObjectId: eReferenceId,
+          eAttributeIds: [],
+          eReferenceIds: [],
+          eOperationIds: [],
+          eAnnotationIds: [],
+          eSuperTypeIds: [],
+        },
+      }));
+    }
+  }
+
   const bboxWidth = Math.max(maxX + BBOX_PADDING_SIDE, 350);
   const bboxHeight = Math.max(maxY + BBOX_PADDING_BOTTOM, 250);
 
   const boundingBox: Node<BoundingBoxNodeData> = {
-    id: `bbox-${nsUri}`,
+    id: bboxId,
     type: 'boundingBox',
     position: origin,
     data: {
@@ -133,7 +236,7 @@ export function expandMetaModelToNodes(
     selectable: true,
   };
 
-  return { boundingBox, eObjectNodes, modelNsUri: nsUri };
+  return { boundingBox, eObjectNodes, umlEdges, ghostNodes, modelNsUri: nsUri };
 }
 
 /**

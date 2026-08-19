@@ -2,6 +2,7 @@ import { Edge, Node } from 'reactflow';
 import {
   createExistingFineGranularReactionEdge,
   createFineGranularReactionEdge,
+  ghostPositionChanges,
   hydrateFineGranularReactionEdges,
   isFineGranularReactionEdge,
   isFineReactionGraphVisible,
@@ -57,6 +58,30 @@ describe('resolveFineGranularEndpointNodeId', () => {
   it('returns null when no node owns the id', () => {
     expect(resolveFineGranularEndpointNodeId(nodes, 'http://other#X', 'http://families'))
       .toBeNull();
+  });
+
+  it('prefers an EReference ghost over the parent class node', () => {
+    const withGhost: Node[] = [
+      ...nodes,
+      {
+        id: 'ghost-http://families#Member.family',
+        type: 'ghost',
+        position: { x: 0, y: 0 },
+        data: {
+          ecore: {
+            model: 'http://families',
+            eObjectId: 'http://families#Member.family',
+          },
+        },
+      } as Node,
+    ];
+    expect(
+      resolveFineGranularEndpointNodeId(
+        withGhost,
+        'http://families#Member.family',
+        'http://families',
+      ),
+    ).toBe('ghost-http://families#Member.family');
   });
 });
 
@@ -315,5 +340,61 @@ describe('syncFineGranularStoreFromCanvas', () => {
     syncFineGranularStoreFromCanvas(nodes, []);
 
     expect(new VsumDetailsHelper(1).getAllFineGranularMetaModelRelations()).toHaveLength(1);
+  });
+});
+
+describe('ghostPositionChanges', () => {
+  const source: Node = {
+    id: 'cls-a',
+    type: 'eobject',
+    position: { x: 0, y: 0 },
+    data: { attributes: [] },
+  };
+  const target: Node = {
+    id: 'cls-b',
+    type: 'eobject',
+    position: { x: 200, y: 0 },
+    data: { attributes: [] },
+  };
+  const ghost: Node = {
+    id: 'ghost-http://m#A.ref',
+    type: 'ghost',
+    position: { x: 0, y: 0 },
+    data: { ecore: { eObjectId: 'http://m#A.ref' } },
+  };
+  const umlEdge: Edge = {
+    id: 'uml-1',
+    type: 'uml',
+    source: 'cls-a',
+    target: 'cls-b',
+    sourceHandle: 'right-source',
+    targetHandle: 'left-target',
+    data: {
+      expandedIntraModel: true,
+      ecore: { eReferenceId: 'http://m#A.ref' },
+    },
+  };
+
+  it('moves the ghost onto the UML handle-to-handle midpoint', () => {
+    const changes = ghostPositionChanges([source, target, ghost], [umlEdge]);
+    expect(changes).toHaveLength(1);
+    expect(changes[0].id).toBe('ghost-http://m#A.ref');
+    // right of A (x=200) and left of B (x=200), on the full-box chord (height 36)
+    expect(changes[0].position.x).toBe(194);
+    expect(changes[0].position.y).toBe(12);
+  });
+
+  it('returns nothing when the ghost is already on the midpoint', () => {
+    const placed: Node = { ...ghost, position: { x: 194, y: 12 } };
+    expect(ghostPositionChanges([source, target, placed], [umlEdge])).toEqual([]);
+  });
+
+  it('follows the full class box, not the header row, when a class has attributes', () => {
+    const tall: Node = {
+      ...source,
+      data: { attributes: [{ name: 'a' }, { name: 'b' }] },
+    };
+    const changes = ghostPositionChanges([tall, target, ghost], [umlEdge]);
+    expect(changes[0].position.y).toBeGreaterThan(12);
   });
 });

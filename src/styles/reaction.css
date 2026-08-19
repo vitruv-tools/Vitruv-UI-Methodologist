@@ -40,3 +40,12 @@
 .react-flow__node-eobject {
   z-index: 1 !important;
 }
+.react-flow__node-ghost {
+  z-index: 6 !important;
+}
+
+/* Ghost midpoint handles stay hittable even if the reaction fade vars are off. */
+.react-flow .react-flow__handle.ghost-reaction-handle {
+  pointer-events: auto;
+  opacity: 1;
+}

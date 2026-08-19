@@ -213,3 +213,29 @@ describe('layoutFineReactionChord containment', () => {
     expect(chord.p1.y).toBeLessThanOrEqual(EOBJECT_HEADER_HEIGHT);
   });
 });
+
+describe('layoutFineReactionChord ghost endpoints', () => {
+  const cls = { x: 0, y: 0, width: 200 };
+  const ghost = {
+    x: 394,
+    y: 10,
+    width: 12,
+    height: 12,
+    isGhost: true,
+  };
+
+  it('meets the ghost circle instead of treating an EReference id as an attribute row', () => {
+    const chord = layoutFineReactionChord({
+      source: cls,
+      target: ghost,
+      sourceHandle: 'reaction-source-http://a#A',
+      targetHandle: 'reaction-target-http://b#B.ref',
+    });
+    const cx = 400;
+    const cy = 16;
+    const dist = Math.hypot(chord.p2.x - cx, chord.p2.y - cy);
+    expect(dist).toBeCloseTo(6, 5);
+    expect(chord.p2.x).toBeLessThan(cx);
+    expect(chord.p2.y).toBeCloseTo(cy, 5);
+  });
+});

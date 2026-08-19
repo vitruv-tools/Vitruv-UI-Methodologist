@@ -13,6 +13,13 @@ import { ActiveVsumDetails, hasActiveVsumDetailsStore } from '../store/ActiveVsu
 import { useSelectedEdgeStore } from '../store/SelectedEdge';
 import { extractModelFromEObjectId } from './EcoreIdentifiers';
 import { toWireReactionFileId } from './workspaceSnapshotUtils';
+import {
+  EOBJECT_ATTR_ROW_HEIGHT,
+  EOBJECT_DEFAULT_WIDTH,
+  EOBJECT_HEADER_HEIGHT,
+  GHOST_NODE_SIZE,
+  getBorderPoint,
+} from './reactionEdgeGeometry';
 
 // ── Type guards ─────────────────────────────────────────────────────────
 
@@ -197,9 +204,9 @@ export function deleteFineGranularReactionEdgeFromVsumDetails(
 // ── Load fine edges from store ──────────────────────────────────────────
 
 /**
- * Resolve an EObject (class or attribute) FQ id to the React Flow node that
- * owns it. Attribute ids match the parent class node via `eAttributeIds` or
- * an `eObjectId.` prefix.
+ * Resolve an EObject (class, attribute, or EReference ghost) FQ id to the
+ * React Flow node that owns it. Ghosts (association midpoints) are matched
+ * first so a saved EReference id does not fall through to the parent class.
  */
 export function resolveFineGranularEndpointNodeId(
   nodes: Node[],
@@ -208,7 +215,18 @@ export function resolveFineGranularEndpointNodeId(
 ): string | null {
   if (!eObjectId) return null;
 
-  const matches = (requireModel: boolean): string | null => {
+  const matchesGhost = (requireModel: boolean): string | null => {
+    for (const node of nodes) {
+      if (!isGhostNode(node)) continue;
+      const ecore = node.data?.ecore;
+      if (!ecore) continue;
+      if (requireModel && model && ecore.model && ecore.model !== model) continue;
+      if (ecore.eObjectId === eObjectId) return node.id;
+    }
+    return null;
+  };
+
+  const matchesClass = (requireModel: boolean): string | null => {
     for (const node of nodes) {
       if (node.type !== 'eobject') continue;
       const ecore = node.data?.ecore;
@@ -218,6 +236,9 @@ export function resolveFineGranularEndpointNodeId(
       if (Array.isArray(ecore.eAttributeIds) && ecore.eAttributeIds.includes(eObjectId)) {
         return node.id;
       }
+      if (Array.isArray(ecore.eReferenceIds) && ecore.eReferenceIds.includes(eObjectId)) {
+        return node.id;
+      }
       if (typeof ecore.eObjectId === 'string' && eObjectId.startsWith(`${ecore.eObjectId}.`)) {
         return node.id;
       }
@@ -225,7 +246,10 @@ export function resolveFineGranularEndpointNodeId(
     return null;
   };
 
-  return matches(true) ?? matches(false);
+  return matchesGhost(true)
+    ?? matchesGhost(false)
+    ?? matchesClass(true)
+    ?? matchesClass(false);
 }
 
 export function fineGranularEdgePairKey(edge: Edge): string {
@@ -331,53 +355,134 @@ function findPreferredModelIdentifier(
   return keys.find(k => k.includes('://') || k.includes('#')) ?? keys[0];
 }
 
-// ── Ghost nodes ─────────────────────────────────────────────────────────
+// ── Ghost nodes (EReference midpoints) ──────────────────────────────────
 
 const GHOST_NODE_PREFIX = 'ghost-';
+export { GHOST_NODE_SIZE };
 
 export function isGhostNode(node: Node): boolean {
-  return node.id.startsWith(GHOST_NODE_PREFIX) || node.type === 'ghost';
+  return node.type === 'ghost' || node.id.startsWith(GHOST_NODE_PREFIX);
+}
+
+export function ghostNodeId(eReferenceId: string): string {
+  return `${GHOST_NODE_PREFIX}${eReferenceId}`;
+}
+
+export function isIntraModelUmlEdge(edge: Edge): boolean {
+  return edge.type === 'uml' && edge.data?.expandedIntraModel === true;
+}
+
+function eobjectBox(node: Node): { x: number; y: number; width: number; height: number } {
+  const attrCount = Array.isArray(node.data?.attributes) ? node.data.attributes.length : 0;
+  const width = typeof node.width === 'number' && node.width > 0
+    ? node.width
+    : EOBJECT_DEFAULT_WIDTH;
+  const height = typeof node.height === 'number' && node.height > 0
+    ? node.height
+    : EOBJECT_HEADER_HEIGHT + attrCount * EOBJECT_ATTR_ROW_HEIGHT + 4;
+  return { x: node.position.x, y: node.position.y, width, height };
 }
 
 /**
- * Build a ghost node id for the boundary between two models.
+ * Midpoint of the same class-box chord UMLRelationship draws, so the ghost
+ * sits on the visible association line rather than the header-handle line.
  */
-export function ghostNodeId(fromModel: string, toModel: string): string {
-  return `${GHOST_NODE_PREFIX}${fromModel}-${toModel}`;
+export function midpointForEobjectPair(
+  source: Node,
+  target: Node,
+  _sourceHandle?: string | null,
+  _targetHandle?: string | null,
+): { x: number; y: number } {
+  const a = eobjectBox(source);
+  const b = eobjectBox(target);
+  const acx = a.x + a.width / 2;
+  const acy = a.y + a.height / 2;
+  const bcx = b.x + b.width / 2;
+  const bcy = b.y + b.height / 2;
+  const p1 = getBorderPoint(acx, acy, a.width, a.height, bcx, bcy);
+  const p2 = getBorderPoint(bcx, bcy, b.width, b.height, acx, acy);
+  return {
+    x: (p1.x + p2.x) / 2 - GHOST_NODE_SIZE / 2,
+    y: (p1.y + p2.y) / 2 - GHOST_NODE_SIZE / 2,
+  };
 }
 
-/**
- * Determine which ghost nodes should exist based on fine-granular edges.
- *
- * Returns a Set of ghost node ids that should be present.
- */
-export function detectRequiredGhostNodes(edges: Edge[]): Set<string> {
-  const required = new Set<string>();
-  for (const edge of edges) {
-    if (!isFineGranularReactionEdge(edge) || !edge.data?.ecore) continue;
-    const { fromModel, toModel } = edge.data.ecore;
-    required.add(ghostNodeId(fromModel, toModel));
-  }
-  return required;
-}
-
-/**
- * Create a ghost node at a position between two bounding boxes.
- */
 export function createGhostNode(
   id: string,
   x: number,
   y: number,
+  data?: {
+    label?: string;
+    group?: string;
+    ecore?: {
+      model: string;
+      eObjectId: string;
+      eAttributeIds?: string[];
+      eReferenceIds?: string[];
+      eOperationIds?: string[];
+      eAnnotationIds?: string[];
+      eSuperTypeIds?: string[];
+    };
+  },
 ): Node {
   return {
     id,
     type: 'ghost',
     position: { x, y },
-    data: { label: '' },
-    style: { width: 1, height: 1, opacity: 0, pointerEvents: 'none' as const },
+    data: {
+      label: data?.label ?? '',
+      group: data?.group,
+      ecore: data?.ecore ?? {
+        model: '',
+        eObjectId: id,
+        eAttributeIds: [],
+        eReferenceIds: [],
+        eOperationIds: [],
+        eAnnotationIds: [],
+        eSuperTypeIds: [],
+      },
+    },
+    style: { width: GHOST_NODE_SIZE, height: GHOST_NODE_SIZE, zIndex: 6 },
     selectable: false,
     draggable: false,
+    connectable: true,
   };
+}
+
+/**
+ * Keep association-midpoint ghosts on the chord between their two classes.
+ * Returns extra position updates; does not add or remove ghosts.
+ */
+export function ghostPositionChanges(
+  nodes: Node[],
+  edges: Edge[],
+): Array<{ type: 'position'; id: string; position: { x: number; y: number }; dragging: boolean }> {
+  const byId = new Map(nodes.map(n => [n.id, n]));
+  const changes: Array<{
+    type: 'position';
+    id: string;
+    position: { x: number; y: number };
+    dragging: boolean;
+  }> = [];
+
+  for (const edge of edges) {
+    if (!isIntraModelUmlEdge(edge)) continue;
+    const refId = edge.data?.ecore?.eReferenceId;
+    if (typeof refId !== 'string' || !refId) continue;
+    const ghost = byId.get(ghostNodeId(refId));
+    const source = byId.get(edge.source);
+    const target = byId.get(edge.target);
+    if (!ghost || !source || !target) continue;
+    const next = midpointForEobjectPair(source, target, edge.sourceHandle, edge.targetHandle);
+    if (
+      Math.abs(ghost.position.x - next.x) > 0.5
+      || Math.abs(ghost.position.y - next.y) > 0.5
+    ) {
+      changes.push({ type: 'position', id: ghost.id, position: next, dragging: false });
+    }
+  }
+
+  return changes;
 }
 
 // ── CSS variable toggle helpers ─────────────────────────────────────────
