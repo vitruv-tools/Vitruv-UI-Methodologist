@@ -311,14 +311,18 @@ export function useFlowState(props?: UseFlowStateProps) {
     const previousState = undo();
     if (previousState) {
       applyState(previousState);
+      return previousState;
     }
+    return null;
   }, [undo, applyState]);
 
   const handleRedo = useCallback(() => {
     const nextState = redo();
     if (nextState) {
       applyState(nextState);
+      return nextState;
     }
+    return null;
   }, [redo, applyState]);
 
   const setHistoryPaused = useCallback((paused: boolean) => {

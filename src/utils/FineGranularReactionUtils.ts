@@ -9,7 +9,7 @@ import type { Edge, Node } from 'reactflow';
 import type { FlowFineGranularMetaModelRelationData } from '../types/FlowFineGranularMetaModelRelationData';
 import type { FlowEcoreEdge } from '../types/flow';
 import type { EditableFineGranularMetaModelRelation } from '../types/FineGranularMetaModelRelation';
-import { ActiveVsumDetails } from '../store/ActiveVsumDetails';
+import { ActiveVsumDetails, hasActiveVsumDetailsStore } from '../store/ActiveVsumDetails';
 import { useSelectedEdgeStore } from '../store/SelectedEdge';
 import { extractModelFromEObjectId } from './EcoreIdentifiers';
 import { toWireReactionFileId } from './workspaceSnapshotUtils';
@@ -449,4 +449,118 @@ export function onFineGranularEdgeClick(edge: FlowEcoreEdge): void {
  */
 export function onFineGranularEdgeDelete(edge: FlowEcoreEdge): boolean {
   return deleteFineGranularReactionEdgeFromVsumDetails(edge);
+}
+
+/**
+ * True when Reactions mode is expanded: EObject/bounding-box nodes or fine
+ * edges are on the canvas. Collapsed VSUM cards only have `ecoreFile` nodes.
+ */
+export function isFineReactionGraphVisible(nodes: Node[], edges: Edge[]): boolean {
+  return nodes.some(n => n.type === 'eobject' || n.type === 'boundingBox')
+    || edges.some(isFineGranularReactionEdge);
+}
+
+function canvasFineToStoreRow(edge: Edge): EditableFineGranularMetaModelRelation | null {
+  const ecore = edge.data?.ecore;
+  if (!ecore?.eObjectSourceId || !ecore?.eObjectTargetId) return null;
+  const persistedId = toWireReactionFileId(edge.data?.fineRelationId);
+  const generatedFileId = toWireReactionFileId(edge.data?.reactionFileId);
+  return {
+    id: persistedId ?? null,
+    sourceId: ecore.eObjectSourceId,
+    targetId: ecore.eObjectTargetId,
+    ...(generatedFileId != null && generatedFileId > 0
+      ? { reactionFileStorageId: generatedFileId }
+      : {}),
+    ...(edge.data?.lowCodeReactionRequestBase
+      ? { lowCodeReactionRequestBase: edge.data.lowCodeReactionRequestBase }
+      : {}),
+  };
+}
+
+function isPlaceholderCoarseRelation(relation: {
+  id: number;
+  reactionFileId: number | null;
+  reactionFileStorageId: number | null;
+  fineGranularMetaModelRelationSet: unknown[];
+}): boolean {
+  return relation.id === 0
+    && relation.reactionFileId == null
+    && relation.reactionFileStorageId == null
+    && relation.fineGranularMetaModelRelationSet.length === 0;
+}
+
+/**
+ * Keep the VsumDetails fine-granular set aligned with the canvas while the
+ * fine graph is visible. Undo only restores React Flow nodes/edges, so without
+ * this the store still holds the undone reaction and save / collapse re-injects it.
+ *
+ * No-op when Reactions mode is collapsed (fines live only in the store).
+ */
+export function syncFineGranularStoreFromCanvas(nodes: Node[], edges: Edge[]): void {
+  if (!isFineReactionGraphVisible(nodes, edges)) return;
+  if (!hasActiveVsumDetailsStore()) return;
+
+  try {
+    const active = new ActiveVsumDetails();
+    const liveKeys = new Set<string>();
+    const liveFines: Array<{
+      coarseSourceId: number;
+      coarseTargetId: number;
+      row: EditableFineGranularMetaModelRelation;
+    }> = [];
+
+    for (const edge of edges) {
+      if (!isFineGranularReactionEdge(edge) || !edge.data?.ecore) continue;
+      const { fromModel, toModel } = edge.data.ecore;
+      const coarseSourceId = active.getBackendMetaModelId(fromModel);
+      const coarseTargetId = active.getBackendMetaModelId(toModel);
+      if (coarseSourceId === undefined || coarseTargetId === undefined) continue;
+      const row = canvasFineToStoreRow(edge);
+      if (!row) continue;
+      liveKeys.add(`${coarseSourceId}|${coarseTargetId}|${row.sourceId}|${row.targetId}`);
+      liveFines.push({ coarseSourceId, coarseTargetId, row });
+    }
+
+    let changed = false;
+    const relations = [...active.get().metaModelsRelation];
+    for (const rel of relations) {
+      for (const fg of [...rel.fineGranularMetaModelRelationSet]) {
+        const key = `${rel.sourceId}|${rel.targetId}|${fg.sourceId}|${fg.targetId}`;
+        if (liveKeys.has(key)) continue;
+        active.removeFineGranularMetaModelRelation(
+          rel.sourceId,
+          rel.targetId,
+          fg.sourceId,
+          fg.targetId,
+        );
+        changed = true;
+      }
+
+      const remaining = active.getMetaModelRelation({
+        sourceId: rel.sourceId,
+        targetId: rel.targetId,
+      });
+      if (remaining && isPlaceholderCoarseRelation(remaining)) {
+        active.removeMetaModelRelation(rel.sourceId, rel.targetId);
+        changed = true;
+      }
+    }
+
+    for (const { coarseSourceId, coarseTargetId, row } of liveFines) {
+      const existing = active.getFineGranularMetaModelRelation(
+        coarseSourceId,
+        coarseTargetId,
+        row.sourceId,
+        row.targetId,
+      );
+      if (existing) continue;
+      active.addFineGranularMetaModelRelation(coarseSourceId, coarseTargetId, row);
+      changed = true;
+    }
+
+    if (changed) active.saveToStore();
+  } catch {
+    // store may not be initialized — canvas is still the source of truth for save
+  }
 }

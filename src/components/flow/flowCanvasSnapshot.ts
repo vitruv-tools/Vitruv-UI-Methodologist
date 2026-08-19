@@ -3,6 +3,7 @@ import { MetaModelRelationRequest } from '../../services/api';
 import type { EditableFineGranularMetaModelRelation } from '../../types/FineGranularMetaModelRelation';
 import { WorkspaceSnapshot } from '../../types/workspace';
 import { getMetaModelSourceId } from './flowCanvasNodeLookup';
+import { isFineReactionGraphVisible } from '../../utils/FineGranularReactionUtils';
 import { toWireReactionFileId } from '../../utils/workspaceSnapshotUtils';
 
 const relationKey = (sourceId: number, targetId: number): string =>
@@ -85,6 +86,24 @@ function upsertRelation(
 }
 
 /**
+ * Overlay store ids / Low Code config onto canvas fines that still exist.
+ * Does not introduce store-only pairs (those belong only to collapsed VSUM).
+ */
+function overlayStoreFinesOntoCanvas(
+  canvasFines: EditableFineGranularMetaModelRelation[] | undefined,
+  storeFines: EditableFineGranularMetaModelRelation[] | undefined,
+): EditableFineGranularMetaModelRelation[] | undefined {
+  if (!canvasFines?.length) return undefined;
+  const merged = mergeFineRelations(canvasFines, storeFines);
+  if (!merged?.length) return undefined;
+  const canvasKeys = new Set(
+    canvasFines.map(fg => finePairKey(fg.sourceId, fg.targetId)),
+  );
+  const restricted = merged.filter(fg => canvasKeys.has(finePairKey(fg.sourceId, fg.targetId)));
+  return restricted.length ? restricted : undefined;
+}
+
+/**
  * Reduces the canvas to what the backend persists: the set of metamodels on it
  * and the reaction relations between them. Relations whose endpoints have no
  * resolvable metamodel id are dropped rather than sent as partial records.
@@ -92,8 +111,8 @@ function upsertRelation(
  * Fine-granular reaction edges (`type: 'fine-granular-reaction'`) are grouped
  * by backend source/target ids into the parent coarse relation's
  * `fineGranularMetaModelRelationSet`. Optional `storeSnapshot` overlays Low Code
- * form data and fine-only pairs that are not currently drawn on the canvas
- * (e.g. after collapsing Reactions mode).
+ * form data. Store-only fines are included only when Reactions mode is collapsed
+ * (no EObject / bounding-box / fine edges on the canvas).
  */
 export function buildWorkspaceSnapshot(
   nodes: Node[],
@@ -147,13 +166,23 @@ export function buildWorkspaceSnapshot(
   }
 
   if (storeSnapshot?.metaModelRelationRequests) {
+    const fineGraphVisible = isFineReactionGraphVisible(nodes, edges);
     for (const rel of storeSnapshot.metaModelRelationRequests) {
       const key = relationKey(rel.sourceId, rel.targetId);
       const existing = byKey.get(key);
       const fines = rel.fineGranularMetaModelRelationSet;
       if (existing) {
-        upsertRelation(byKey, rel);
-      } else if (fines?.length) {
+        if (fineGraphVisible) {
+          const overlaid = overlayStoreFinesOntoCanvas(
+            existing.fineGranularMetaModelRelationSet,
+            fines,
+          );
+          if (overlaid?.length) existing.fineGranularMetaModelRelationSet = overlaid;
+          if (rel.reactionFileId) existing.reactionFileId = rel.reactionFileId;
+        } else {
+          upsertRelation(byKey, rel);
+        }
+      } else if (fines?.length && !fineGraphVisible) {
         upsertRelation(byKey, {
           sourceId: rel.sourceId,
           targetId: rel.targetId,

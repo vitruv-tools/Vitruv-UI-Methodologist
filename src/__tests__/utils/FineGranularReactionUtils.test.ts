@@ -1,11 +1,13 @@
-import { Node } from 'reactflow';
+import { Edge, Node } from 'reactflow';
 import {
   createExistingFineGranularReactionEdge,
   createFineGranularReactionEdge,
   hydrateFineGranularReactionEdges,
   isFineGranularReactionEdge,
+  isFineReactionGraphVisible,
   mergeFineGranularEdges,
   resolveFineGranularEndpointNodeId,
+  syncFineGranularStoreFromCanvas,
 } from '../../utils/FineGranularReactionUtils';
 import { createVsumDetailsStore, deleteVsumDetailsStore, VsumDetailsHelper } from '../../store/VsumDetails';
 import { useProjectStore } from '../../store/Project';
@@ -193,5 +195,125 @@ describe('hydrateFineGranularReactionEdges', () => {
     expect(edges[0].target).toBe('n2');
     expect(edges[0].data?.fineRelationId).toBe(42);
     expect(edges[0].data?.reactionFileId).toBe(88);
+  });
+});
+
+describe('isFineReactionGraphVisible', () => {
+  it('is false for collapsed VSUM cards', () => {
+    const nodes: Node[] = [
+      { id: 'a', type: 'ecoreFile', position: { x: 0, y: 0 }, data: {} } as Node,
+    ];
+    expect(isFineReactionGraphVisible(nodes, [])).toBe(false);
+  });
+
+  it('is true when EObject nodes or fine edges are present', () => {
+    expect(isFineReactionGraphVisible(
+      [eobject('n1', 'http://a', 'http://a#A')],
+      [],
+    )).toBe(true);
+    expect(isFineReactionGraphVisible(
+      [],
+      [{ id: 'f', type: 'fine-granular-reaction', source: 'a', target: 'b' } as Edge],
+    )).toBe(true);
+  });
+});
+
+describe('syncFineGranularStoreFromCanvas', () => {
+  afterEach(() => {
+    deleteVsumDetailsStore(1);
+    useProjectStore.getState().setActiveId(null);
+  });
+
+  const seedStoreWithFine = () => {
+    useProjectStore.getState().setActiveId(1);
+    createVsumDetailsStore(1, { metaModels: [], metaModelsRelation: [] });
+    const helper = new VsumDetailsHelper(1);
+    helper.setIdentifiersToBackendMetaModelId(
+      new Map([
+        ['http://families', 10],
+        ['http://persons', 20],
+      ]),
+    );
+    helper.addFineGranularMetaModelRelation(10, 20, {
+      id: null,
+      sourceId: 'http://families#Member',
+      targetId: 'http://persons#Person',
+    });
+    helper.saveToStore();
+    return helper;
+  };
+
+  it('removes an undone fine and its placeholder coarse relation', () => {
+    seedStoreWithFine();
+    const nodes = [
+      eobject('n1', 'http://families', 'http://families#Member'),
+      eobject('n2', 'http://persons', 'http://persons#Person'),
+    ];
+
+    syncFineGranularStoreFromCanvas(nodes, []);
+
+    const persisted = new VsumDetailsHelper(1);
+    expect(persisted.getAllFineGranularMetaModelRelations()).toHaveLength(0);
+    expect(persisted.get().metaModelsRelation).toHaveLength(0);
+  });
+
+  it('re-adds a canvas fine that is missing from the store (redo)', () => {
+    useProjectStore.getState().setActiveId(1);
+    createVsumDetailsStore(1, { metaModels: [], metaModelsRelation: [] });
+    const helper = new VsumDetailsHelper(1);
+    helper.setIdentifiersToBackendMetaModelId(
+      new Map([
+        ['http://families', 10],
+        ['http://persons', 20],
+      ]),
+    );
+    helper.saveToStore();
+
+    const nodes = [
+      eobject('n1', 'http://families', 'http://families#Member'),
+      eobject('n2', 'http://persons', 'http://persons#Person'),
+    ];
+    const edges: Edge[] = [
+      {
+        id: 'f',
+        type: 'fine-granular-reaction',
+        source: 'n1',
+        target: 'n2',
+        data: {
+          ecore: {
+            eObjectSourceId: 'http://families#Member',
+            eObjectTargetId: 'http://persons#Person',
+            fromModel: 'http://families',
+            toModel: 'http://persons',
+          },
+        },
+      } as Edge,
+    ];
+
+    syncFineGranularStoreFromCanvas(nodes, edges);
+
+    const persisted = new VsumDetailsHelper(1);
+    expect(
+      persisted.getFineGranularMetaModelRelation(
+        10,
+        20,
+        'http://families#Member',
+        'http://persons#Person',
+      ),
+    ).toMatchObject({
+      sourceId: 'http://families#Member',
+      targetId: 'http://persons#Person',
+    });
+  });
+
+  it('does not wipe store fines when the canvas is collapsed', () => {
+    seedStoreWithFine();
+    const nodes: Node[] = [
+      { id: 'a', type: 'ecoreFile', position: { x: 0, y: 0 }, data: {} } as Node,
+    ];
+
+    syncFineGranularStoreFromCanvas(nodes, []);
+
+    expect(new VsumDetailsHelper(1).getAllFineGranularMetaModelRelations()).toHaveLength(1);
   });
 });

@@ -130,6 +130,7 @@ import {
   onFineGranularEdgeClick,
   hydrateFineGranularReactionEdges,
   mergeFineGranularEdges,
+  syncFineGranularStoreFromCanvas,
 } from '../../utils/FineGranularReactionUtils';
 import {
   getProperEObjectIdFromHandle,
@@ -312,14 +313,24 @@ export const FlowCanvas = forwardRef<FlowCanvasHandle, FlowCanvasProps>(
       removeEdge,
       setNodes,
       setEdges,
-      undo,
-      redo,
+      undo: undoFlow,
+      redo: redoFlow,
       canUndo,
       canRedo,
       updateEdgeCode,
       setHistoryPaused,
       establishBaseline,
     } = useFlowState();
+
+    const undo = useCallback(() => {
+      const restored = undoFlow();
+      if (restored) syncFineGranularStoreFromCanvas(restored.nodes, restored.edges);
+    }, [undoFlow]);
+
+    const redo = useCallback(() => {
+      const restored = redoFlow();
+      if (restored) syncFineGranularStoreFromCanvas(restored.nodes, restored.edges);
+    }, [redoFlow]);
 
     const nodesRef = useRef(nodes);
     nodesRef.current = nodes;
@@ -938,6 +949,7 @@ export const FlowCanvas = forwardRef<FlowCanvasHandle, FlowCanvasProps>(
     const getWorkspaceSnapshot = useCallback(
       (): WorkspaceSnapshot => {
         syncIdentifierMapFromCanvasNodes(nodes);
+        syncFineGranularStoreFromCanvas(nodes, edges);
         let storeSnapshot: WorkspaceSnapshot | null = null;
         if (hasActiveVsumDetailsStore()) {
           try {

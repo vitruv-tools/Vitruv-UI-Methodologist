@@ -281,4 +281,125 @@ describe('buildWorkspaceSnapshot', () => {
       },
     ]);
   });
+
+  it('does not re-inject store fines after they were undone on the expanded canvas', () => {
+    const withNs = [
+      ecore('a', { metaModelSourceId: 1, nsUri: 'http://families' }),
+      ecore('b', { metaModelSourceId: 2, nsUri: 'http://persons' }),
+      { id: 'eobj-a', type: 'eobject', position: { x: 0, y: 0 }, data: {} } as Node,
+    ];
+    const edges = [reaction('e', 'a', 'b', { reactionFileId: 7 })];
+    const storeSnapshot = {
+      metaModelIds: [1, 2],
+      metaModelRelationRequests: [
+        {
+          sourceId: 1,
+          targetId: 2,
+          reactionFileId: 7,
+          fineGranularMetaModelRelationSet: [
+            {
+              id: null,
+              sourceId: 'http://families#Member',
+              targetId: 'http://persons#Person',
+            },
+          ],
+        },
+      ],
+    };
+
+    expect(buildWorkspaceSnapshot(withNs, edges, storeSnapshot).metaModelRelationRequests).toEqual([
+      { sourceId: 1, targetId: 2, reactionFileId: 7 },
+    ]);
+  });
+
+  it('does not add a store-only relation when the expanded canvas has no matching edge', () => {
+    const withNs = [
+      ecore('a', { metaModelSourceId: 1, nsUri: 'http://families' }),
+      ecore('b', { metaModelSourceId: 2, nsUri: 'http://persons' }),
+      { id: 'eobj-a', type: 'eobject', position: { x: 0, y: 0 }, data: {} } as Node,
+    ];
+    const storeSnapshot = {
+      metaModelIds: [1, 2],
+      metaModelRelationRequests: [
+        {
+          sourceId: 1,
+          targetId: 2,
+          reactionFileId: null,
+          fineGranularMetaModelRelationSet: [
+            {
+              id: null,
+              sourceId: 'http://families#Member',
+              targetId: 'http://persons#Person',
+            },
+          ],
+        },
+      ],
+    };
+
+    expect(buildWorkspaceSnapshot(withNs, [], storeSnapshot).metaModelRelationRequests).toEqual([]);
+  });
+
+  it('keeps store config on canvas fines and drops extra store pairs while expanded', () => {
+    const withNs = [
+      ecore('a', { metaModelSourceId: 1, nsUri: 'http://families' }),
+      ecore('b', { metaModelSourceId: 2, nsUri: 'http://persons' }),
+    ];
+    const edges: Edge[] = [
+      {
+        id: 'f',
+        source: 'eobj-a',
+        target: 'eobj-b',
+        type: 'fine-granular-reaction',
+        data: {
+          ecore: {
+            eObjectSourceId: 'http://families#Member',
+            eObjectTargetId: 'http://persons#Person',
+            fromModel: 'http://families',
+            toModel: 'http://persons',
+          },
+        },
+      } as Edge,
+    ];
+    const storeSnapshot = {
+      metaModelIds: [1, 2],
+      metaModelRelationRequests: [
+        {
+          sourceId: 1,
+          targetId: 2,
+          reactionFileId: null,
+          fineGranularMetaModelRelationSet: [
+            {
+              id: 42,
+              sourceId: 'http://families#Member',
+              targetId: 'http://persons#Person',
+              reactionFileStorageId: 88,
+              lowCodeReactionRequestBase: { reactionName: 'kept' },
+            },
+            {
+              id: null,
+              sourceId: 'http://families#Member',
+              targetId: 'http://persons#Other',
+            },
+          ],
+        },
+      ],
+    };
+
+    expect(buildWorkspaceSnapshot(withNs, edges, storeSnapshot).metaModelRelationRequests).toEqual([
+      {
+        sourceId: 1,
+        targetId: 2,
+        reactionFileId: null,
+        fineGranularMetaModelRelationSet: [
+          {
+            id: 42,
+            sourceId: 'http://families#Member',
+            targetId: 'http://persons#Person',
+            reactionFileStorageId: 88,
+            lowCodeReactionRequestBase: { reactionName: 'kept' },
+          },
+        ],
+      },
+    ]);
+  });
 });
