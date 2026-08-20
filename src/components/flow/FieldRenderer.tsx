@@ -13,7 +13,6 @@ import {
   isEnumField,
   isIntegerField,
   isDecimalField,
-  isStringField,
   isCharacterField,
   isArrayField,
   isMapField,
