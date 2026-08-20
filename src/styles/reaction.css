@@ -49,3 +49,11 @@
   pointer-events: auto;
   opacity: 1;
 }
+
+/* Reaction strokes: dashed (default, including RF animated) or solid via CSS vars. */
+.react-flow .react-flow__edge.animated.react-flow__edge-fine-granular-reaction path,
+.react-flow .react-flow__edge.animated.react-flow__edge-reactions path,
+.react-flow .react-flow__edge .reaction-line {
+  stroke-dasharray: var(--reaction-line-dasharray, 5);
+  animation: var(--reaction-line-animation, dashdraw 0.5s linear infinite);
+}

@@ -99,6 +99,7 @@ describe('ReactionRelationship', () => {
 
     const path = container.querySelector('path#edge-fg');
     expect(path).toHaveAttribute('data-routing', 'chord');
+    expect(path).toHaveAttribute('class', 'reaction-line');
     const d = path?.getAttribute('d') ?? '';
     expect(d).toMatch(/^M /);
     expect(d.split(' L ').length).toBe(2);

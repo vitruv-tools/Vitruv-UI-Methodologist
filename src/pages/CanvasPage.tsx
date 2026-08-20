@@ -31,6 +31,12 @@ import { useCanvasModeState } from '../hooks/useCanvasModeState';
 import type { ViewType } from '../hooks/useViewTypes';
 import { useCanvasProjectRename } from '../hooks/useCanvasProjectRename';
 import {
+  applyReactionLineStyle,
+  readStoredReactionLineStyle,
+  writeStoredReactionLineStyle,
+  type ReactionLineStyle,
+} from '../utils/reactionEdgeStyleStorage';
+import {
   useCanvasUmlPanels,
   type CanvasUmlPanelLoadErrorMessage,
 } from '../hooks/useCanvasUmlPanels';
@@ -579,6 +585,16 @@ export const CanvasPage: React.FC = () => {
 
   // Add-reaction mode
   const [addReactionMode, setAddReactionMode] = useState(false);
+  const [reactionLineStyle, setReactionLineStyle] = useState<ReactionLineStyle>(
+    readStoredReactionLineStyle,
+  );
+  useEffect(() => {
+    applyReactionLineStyle(reactionLineStyle);
+  }, [reactionLineStyle]);
+  const handleReactionLineStyleChange = useCallback((style: ReactionLineStyle) => {
+    setReactionLineStyle(style);
+    writeStoredReactionLineStyle(style);
+  }, []);
   useEffect(() => {
     if (isViewOnly) setAddReactionMode(false);
   }, [isViewOnly]);
@@ -1547,6 +1563,8 @@ export const CanvasPage: React.FC = () => {
         loading={loadingProject}
         addReactionMode={addReactionMode}
         onToggleReactionMode={() => setAddReactionMode(v => !v)}
+        reactionLineStyle={reactionLineStyle}
+        onReactionLineStyleChange={handleReactionLineStyleChange}
       />
 
       <UnsavedTabCloseDialog

@@ -20,6 +20,8 @@ interface CanvasProjectControlsProps {
   loading: boolean;
   addReactionMode?: boolean;
   onToggleReactionMode?: () => void;
+  reactionLineStyle?: 'dashed' | 'solid';
+  onReactionLineStyleChange?: (style: 'dashed' | 'solid') => void;
 }
 
 const projectControlsStyle: React.CSSProperties = {
@@ -142,6 +144,8 @@ export const CanvasProjectControls: React.FC<CanvasProjectControlsProps> = ({
   loading,
   addReactionMode = false,
   onToggleReactionMode,
+  reactionLineStyle = 'dashed',
+  onReactionLineStyleChange,
 }) => (
   <div style={projectControlsStyle}>
     <button
@@ -299,6 +303,50 @@ export const CanvasProjectControls: React.FC<CanvasProjectControlsProps> = ({
             Reactions
           </button>
         </div>
+        {addReactionMode && onReactionLineStyleChange && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 2, padding: '0 4px' }}>
+            <button
+              type="button"
+              aria-pressed={reactionLineStyle === 'dashed'}
+              onClick={() => onReactionLineStyleChange('dashed')}
+              style={{
+                height: 24,
+                padding: '0 8px',
+                border: 'none',
+                borderRadius: 4,
+                fontSize: 10,
+                fontWeight: 700,
+                cursor: 'pointer',
+                background: reactionLineStyle === 'dashed' ? '#e8f5e9' : 'transparent',
+                color: reactionLineStyle === 'dashed' ? '#2e7d32' : '#999',
+                transition: 'all 0.15s',
+                fontFamily: 'inherit',
+              }}
+            >
+              Dashed
+            </button>
+            <button
+              type="button"
+              aria-pressed={reactionLineStyle === 'solid'}
+              onClick={() => onReactionLineStyleChange('solid')}
+              style={{
+                height: 24,
+                padding: '0 8px',
+                border: 'none',
+                borderRadius: 4,
+                fontSize: 10,
+                fontWeight: 700,
+                cursor: 'pointer',
+                background: reactionLineStyle === 'solid' ? '#e8f5e9' : 'transparent',
+                color: reactionLineStyle === 'solid' ? '#2e7d32' : '#999',
+                transition: 'all 0.15s',
+                fontFamily: 'inherit',
+              }}
+            >
+              Solid
+            </button>
+          </div>
+        )}
       </>
     )}
   </div>

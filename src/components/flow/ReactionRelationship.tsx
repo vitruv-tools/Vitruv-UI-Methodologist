@@ -450,6 +450,7 @@ export function ReactionRelationship({
       <path
         id={id}
         data-routing={routing}
+        className="reaction-line"
         style={{
           strokeWidth: mainStrokeWidth,
           stroke: activeColor,
