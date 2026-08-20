@@ -1,7 +1,7 @@
 import type { Connection, Node } from 'reactflow';
-import { getProperEObjectIdFromHandle } from '../../../utils/EcoreIdentifiers';
 import {
   extractModelFromEObjectId,
+  getProperEObjectIdFromHandle,
 } from '../../../utils/EcoreIdentifiers';
 import { useProjectStore } from '../../../store/Project';
 

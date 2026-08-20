@@ -24,7 +24,7 @@ export function deepClone<T>(value: T): T {
   }
 
   if (value instanceof Date) {
-    return new Date(value.getTime()) as unknown as T;
+    return new Date(value) as unknown as T;
   }
 
   const result: Record<string, unknown> = {};

@@ -55,7 +55,7 @@ export function deleteVsumDetailsStore(vsumId: number): void {
 // ---------------------------------------------------------------------------
 
 export class VsumDetailsHelper {
-  private state: VsumDetailsState;
+  private readonly state: VsumDetailsState;
   private readonly store: StoreApi<VsumDetailsState>;
 
   constructor(vsumId: number) {
@@ -134,7 +134,7 @@ export class VsumDetailsHelper {
       };
       this.state.metaModelsRelation.push(relation);
     }
-    const exists = relation.fineGranularMetaModelRelationSet.find(
+    const exists = relation.fineGranularMetaModelRelationSet.some(
       (fg) => fg.sourceId === fine.sourceId && fg.targetId === fine.targetId,
     );
     if (!exists) {

@@ -9,6 +9,7 @@ import {
   mergeFineGranularEdges,
   resolveFineGranularEndpointNodeId,
   syncFineGranularStoreFromCanvas,
+  confirmDeleteFineGranularReaction,
 } from '../../utils/FineGranularReactionUtils';
 import { createVsumDetailsStore, deleteVsumDetailsStore, VsumDetailsHelper } from '../../store/VsumDetails';
 import { useProjectStore } from '../../store/Project';
@@ -340,6 +341,88 @@ describe('syncFineGranularStoreFromCanvas', () => {
     syncFineGranularStoreFromCanvas(nodes, []);
 
     expect(new VsumDetailsHelper(1).getAllFineGranularMetaModelRelations()).toHaveLength(1);
+  });
+});
+
+describe('confirmDeleteFineGranularReaction', () => {
+  afterEach(() => {
+    deleteVsumDetailsStore(1);
+    useProjectStore.getState().setActiveId(null);
+  });
+
+  const fineEdge: Edge = {
+    id: 'f',
+    type: 'fine-granular-reaction',
+    source: 'n1',
+    target: 'n2',
+    data: {
+      ecore: {
+        eObjectSourceId: 'http://families#Member',
+        eObjectTargetId: 'http://persons#Person',
+        fromModel: 'http://families',
+        toModel: 'http://persons',
+      },
+    },
+  };
+
+  const seedLastFine = () => {
+    useProjectStore.getState().setActiveId(1);
+    createVsumDetailsStore(1, { metaModels: [], metaModelsRelation: [] });
+    const helper = new VsumDetailsHelper(1);
+    helper.setIdentifiersToBackendMetaModelId(
+      new Map([
+        ['http://families', 10],
+        ['http://persons', 20],
+      ]),
+    );
+    helper.addFineGranularMetaModelRelation(10, 20, {
+      id: null,
+      sourceId: 'http://families#Member',
+      targetId: 'http://persons#Person',
+    });
+    helper.saveToStore();
+  };
+
+  it('returns false when nothing is selected', () => {
+    expect(confirmDeleteFineGranularReaction(null, [], jest.fn())).toBe(false);
+  });
+
+  it('removes the fine edge and an empty parent coarse reaction', () => {
+    seedLastFine();
+    const removed: string[] = [];
+    const coarse: Edge = {
+      id: 'c',
+      type: 'reactions',
+      source: 'a',
+      target: 'b',
+      data: { sourceId: 10, targetId: 20 },
+    };
+
+    expect(confirmDeleteFineGranularReaction(fineEdge, [fineEdge, coarse], (id) => {
+      removed.push(id);
+    })).toBe(true);
+
+    expect(removed).toEqual(['f', 'c']);
+    expect(new VsumDetailsHelper(1).get().metaModelsRelation).toHaveLength(0);
+  });
+
+  it('keeps a coarse relation that still has a reaction file', () => {
+    seedLastFine();
+    const helper = new VsumDetailsHelper(1);
+    const coarse = helper.getMetaModelRelation({ sourceId: 10, targetId: 20 });
+    if (coarse) coarse.reactionFileStorageId = 99;
+    helper.saveToStore();
+    const removed: string[] = [];
+
+    confirmDeleteFineGranularReaction(
+      fineEdge,
+      [fineEdge, { id: 'c', type: 'reactions', source: 'a', target: 'b', data: { sourceId: 10, targetId: 20 } } as Edge],
+      (id) => removed.push(id),
+    );
+
+    expect(removed).toEqual(['f']);
+    expect(new VsumDetailsHelper(1).getMetaModelRelation({ sourceId: 10, targetId: 20 }))
+      .toMatchObject({ reactionFileStorageId: 99 });
   });
 });
 

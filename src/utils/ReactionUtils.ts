@@ -42,6 +42,43 @@ export function registerReactionFilesFromRelations(
   }
 }
 
+function positiveFileId(value: unknown): number | undefined {
+  if (typeof value !== 'number' || value <= 0) return undefined;
+  return value;
+}
+
+function fileIdFromCoarseRelation(fromModel: string, toModel: string): number | undefined {
+  if (!hasActiveVsumDetailsStore()) return undefined;
+  try {
+    const active = new ActiveVsumDetails();
+    const sourceBackendId = active.getBackendMetaModelId(fromModel);
+    const targetBackendId = active.getBackendMetaModelId(toModel);
+    if (sourceBackendId === undefined || targetBackendId === undefined) return undefined;
+    const rel = active.getMetaModelRelation({
+      sourceId: sourceBackendId,
+      targetId: targetBackendId,
+    });
+    return positiveFileId(rel?.reactionFileId ?? rel?.reactionFileStorageId);
+  } catch {
+    return undefined;
+  }
+}
+
+function fileIdFromReactionRegistry(fromModel: string, toModel: string): number | undefined {
+  for (const rf of useProjectStore.getState().reactionFiles) {
+    if (rf.fromModel === fromModel && rf.toModel === toModel) return rf.id;
+  }
+  return undefined;
+}
+
+function inferReactionFileIdFromModels(
+  ecore?: { fromModel: string; toModel: string },
+): number | undefined {
+  if (!ecore) return undefined;
+  return fileIdFromCoarseRelation(ecore.fromModel, ecore.toModel)
+    ?? fileIdFromReactionRegistry(ecore.fromModel, ecore.toModel);
+}
+
 /**
  * Infer the reaction file id for a fine-granular reaction edge.
  *
@@ -58,41 +95,8 @@ export function tryInferReactionFileIdForFineGranularReactionEdge(edge: {
     ecore?: { fromModel: string; toModel: string };
   };
 }): number | undefined {
-  if (typeof edge.data?.reactionFileId === 'number' && edge.data.reactionFileId > 0) {
-    return edge.data.reactionFileId;
-  }
-
-  const ecore = edge.data?.ecore;
-  if (!ecore) return undefined;
-  const { fromModel, toModel } = ecore;
-
-  if (hasActiveVsumDetailsStore()) {
-    try {
-      const active = new ActiveVsumDetails();
-      const sourceBackendId = active.getBackendMetaModelId(fromModel);
-      const targetBackendId = active.getBackendMetaModelId(toModel);
-
-      if (sourceBackendId !== undefined && targetBackendId !== undefined) {
-        const rel = active.getMetaModelRelation({
-          sourceId: sourceBackendId,
-          targetId: targetBackendId,
-        });
-        const fileId = rel?.reactionFileId ?? rel?.reactionFileStorageId;
-        if (typeof fileId === 'number' && fileId > 0) return fileId;
-      }
-    } catch {
-      // fall through to registry lookup
-    }
-  }
-
-  const { reactionFiles } = useProjectStore.getState();
-  for (const rf of reactionFiles) {
-    if (rf.fromModel === fromModel && rf.toModel === toModel) {
-      return rf.id;
-    }
-  }
-
-  return undefined;
+  return positiveFileId(edge.data?.reactionFileId)
+    ?? inferReactionFileIdFromModels(edge.data?.ecore);
 }
 
 /**
@@ -151,30 +155,58 @@ export function buildBackendIdToModelMap(
   return result;
 }
 
+function nodeBackendSourceId(node: Node): number | undefined {
+  const sourceId = node.data?.metaModelSourceId ?? node.data?.metaModelId;
+  if (typeof sourceId !== 'number') return undefined;
+  return sourceId;
+}
+
+function nodeNsUri(node: Node): string | undefined {
+  if (typeof node.data?.nsUri === 'string' && node.data.nsUri) return node.data.nsUri;
+  if (typeof node.data?.fileContent !== 'string') return undefined;
+  return extractNsUriFromEcore(node.data.fileContent) ?? undefined;
+}
+
+function stripEcoreExtension(fileName: string): string | undefined {
+  const suffix = '.ecore';
+  if (fileName.length <= suffix.length) return undefined;
+  const tail = fileName.slice(-suffix.length);
+  if (tail.toLowerCase() !== suffix) return undefined;
+  return fileName.slice(0, -suffix.length);
+}
+
+function nodeFileName(node: Node): string | undefined {
+  if (typeof node.data?.fileName !== 'string') return undefined;
+  return node.data.fileName;
+}
+
+function addNodeIdentifiers(
+  map: Map<string, number>,
+  node: Node,
+  sourceId: number,
+): void {
+  const nsUri = nodeNsUri(node);
+  if (nsUri) map.set(nsUri, sourceId);
+  const fileName = nodeFileName(node);
+  if (!fileName) return;
+  map.set(fileName, sourceId);
+  const withoutExt = stripEcoreExtension(fileName);
+  if (withoutExt) map.set(withoutExt, sourceId);
+}
+
+function addEcoreFileIdentifiers(map: Map<string, number>, node: Node): void {
+  if (node.type !== 'ecoreFile') return;
+  const sourceId = nodeBackendSourceId(node);
+  if (sourceId === undefined) return;
+  addNodeIdentifiers(map, node, sourceId);
+}
+
 /**
  * Build nsURI / file-name → backend meta-model sourceId from canvas ecoreFile nodes.
  */
 export function collectIdentifierMapFromCanvasNodes(nodes: Node[]): Map<string, number> {
   const map = new Map<string, number>();
-  for (const node of nodes) {
-    if (node.type !== 'ecoreFile') continue;
-    const sourceId = node.data?.metaModelSourceId ?? node.data?.metaModelId;
-    if (typeof sourceId !== 'number') continue;
-
-    const nsUri: string | undefined =
-      (typeof node.data?.nsUri === 'string' && node.data.nsUri) ||
-      (typeof node.data?.fileContent === 'string'
-        ? extractNsUriFromEcore(node.data.fileContent) ?? undefined
-        : undefined);
-    if (nsUri) map.set(nsUri, sourceId);
-
-    const fileName = typeof node.data?.fileName === 'string' ? node.data.fileName : undefined;
-    if (fileName) {
-      map.set(fileName, sourceId);
-      const withoutExt = fileName.replace(/\.ecore$/i, '');
-      if (withoutExt && withoutExt !== fileName) map.set(withoutExt, sourceId);
-    }
-  }
+  for (const node of nodes) addEcoreFileIdentifiers(map, node);
   return map;
 }
 

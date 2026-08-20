@@ -26,6 +26,25 @@ function resolveModelToSourceId(nodes: Node[], model: string): number | undefine
   return getMetaModelSourceId(nodes, node.id);
 }
 
+function hasLowCodeConfig(
+  base: EditableFineGranularMetaModelRelation['lowCodeReactionRequestBase'],
+): boolean {
+  return Boolean(base && Object.keys(base).length > 0);
+}
+
+function mergedLowCodeConfig(
+  existing: EditableFineGranularMetaModelRelation,
+  incoming: EditableFineGranularMetaModelRelation,
+): EditableFineGranularMetaModelRelation['lowCodeReactionRequestBase'] {
+  if (hasLowCodeConfig(incoming.lowCodeReactionRequestBase)) {
+    return { ...existing.lowCodeReactionRequestBase, ...incoming.lowCodeReactionRequestBase };
+  }
+  if (hasLowCodeConfig(existing.lowCodeReactionRequestBase)) {
+    return existing.lowCodeReactionRequestBase;
+  }
+  return incoming.lowCodeReactionRequestBase ?? existing.lowCodeReactionRequestBase;
+}
+
 function mergeFineRelations(
   a: EditableFineGranularMetaModelRelation[] | undefined,
   b: EditableFineGranularMetaModelRelation[] | undefined,
@@ -39,22 +58,12 @@ function mergeFineRelations(
       byPair.set(key, { ...fg });
       continue;
     }
-    const incomingHasConfig = Boolean(
-      fg.lowCodeReactionRequestBase && Object.keys(fg.lowCodeReactionRequestBase).length > 0,
-    );
-    const existingHasConfig = Boolean(
-      existing.lowCodeReactionRequestBase && Object.keys(existing.lowCodeReactionRequestBase).length > 0,
-    );
     byPair.set(key, {
       ...existing,
       ...fg,
       id: fg.id ?? existing.id,
       reactionFileStorageId: fg.reactionFileStorageId ?? existing.reactionFileStorageId,
-      lowCodeReactionRequestBase: incomingHasConfig
-        ? { ...existing.lowCodeReactionRequestBase, ...fg.lowCodeReactionRequestBase }
-        : existingHasConfig
-          ? existing.lowCodeReactionRequestBase
-          : fg.lowCodeReactionRequestBase ?? existing.lowCodeReactionRequestBase,
+      lowCodeReactionRequestBase: mergedLowCodeConfig(existing, fg),
     });
   }
   return Array.from(byPair.values());
@@ -103,6 +112,131 @@ function overlayStoreFinesOntoCanvas(
   return restricted.length ? restricted : undefined;
 }
 
+function collectMetaModelIds(nodes: Node[]): number[] {
+  return Array.from(
+    new Set(
+      nodes
+        .filter(node => node.type === 'ecoreFile')
+        .map(node => getMetaModelSourceId(nodes, node.id))
+        .filter((value): value is number => typeof value === 'number'),
+    ),
+  );
+}
+
+function collectReactionRelations(
+  nodes: Node[],
+  edges: Edge[],
+  byKey: Map<string, MetaModelRelationRequest>,
+): void {
+  for (const edge of edges) {
+    if (edge.type !== 'reactions') continue;
+    const sourceId = getMetaModelSourceId(nodes, edge.source);
+    const targetId = getMetaModelSourceId(nodes, edge.target);
+    if (typeof sourceId !== 'number' || typeof targetId !== 'number') continue;
+    upsertRelation(byKey, {
+      sourceId,
+      targetId,
+      reactionFileId: toWireReactionFileId(edge.data?.reactionFileId),
+    });
+  }
+}
+
+function fineRelationFromEdge(edge: Edge): EditableFineGranularMetaModelRelation {
+  const ecore = edge.data?.ecore;
+  const generatedFileId = toWireReactionFileId(edge.data?.reactionFileId);
+  const fine: EditableFineGranularMetaModelRelation = {
+    id: toWireReactionFileId(edge.data?.fineRelationId),
+    sourceId: ecore.eObjectSourceId,
+    targetId: ecore.eObjectTargetId,
+  };
+  if (generatedFileId != null) fine.reactionFileStorageId = generatedFileId;
+  if (edge.data?.lowCodeReactionRequestBase) {
+    fine.lowCodeReactionRequestBase = edge.data.lowCodeReactionRequestBase;
+  }
+  return fine;
+}
+
+function fineGranularRelationRequest(
+  nodes: Node[],
+  edge: Edge,
+): MetaModelRelationRequest | null {
+  if (edge.type !== 'fine-granular-reaction') return null;
+  const ecore = edge.data?.ecore;
+  if (!ecore) return null;
+  const sourceId = resolveModelToSourceId(nodes, ecore.fromModel as string);
+  const targetId = resolveModelToSourceId(nodes, ecore.toModel as string);
+  if (typeof sourceId !== 'number' || typeof targetId !== 'number') return null;
+  return {
+    sourceId,
+    targetId,
+    // Generated Low Code files live on the fine row, not the parent coarse relation.
+    reactionFileId: null,
+    fineGranularMetaModelRelationSet: [fineRelationFromEdge(edge)],
+  };
+}
+
+function collectFineGranularRelations(
+  nodes: Node[],
+  edges: Edge[],
+  byKey: Map<string, MetaModelRelationRequest>,
+): void {
+  for (const edge of edges) {
+    const request = fineGranularRelationRequest(nodes, edge);
+    if (request) upsertRelation(byKey, request);
+  }
+}
+
+function applyStoreRelationToExisting(
+  existing: MetaModelRelationRequest,
+  rel: MetaModelRelationRequest,
+  fineGraphVisible: boolean,
+  byKey: Map<string, MetaModelRelationRequest>,
+): void {
+  if (!fineGraphVisible) {
+    upsertRelation(byKey, rel);
+    return;
+  }
+  const overlaid = overlayStoreFinesOntoCanvas(
+    existing.fineGranularMetaModelRelationSet,
+    rel.fineGranularMetaModelRelationSet,
+  );
+  if (overlaid?.length) existing.fineGranularMetaModelRelationSet = overlaid;
+  if (rel.reactionFileId) existing.reactionFileId = rel.reactionFileId;
+}
+
+function mergeStoreRelation(
+  byKey: Map<string, MetaModelRelationRequest>,
+  rel: MetaModelRelationRequest,
+  fineGraphVisible: boolean,
+): void {
+  const existing = byKey.get(relationKey(rel.sourceId, rel.targetId));
+  if (existing) {
+    applyStoreRelationToExisting(existing, rel, fineGraphVisible, byKey);
+    return;
+  }
+  if (!rel.fineGranularMetaModelRelationSet?.length || fineGraphVisible) return;
+  upsertRelation(byKey, {
+    sourceId: rel.sourceId,
+    targetId: rel.targetId,
+    reactionFileId: toWireReactionFileId(rel.reactionFileId),
+    fineGranularMetaModelRelationSet: rel.fineGranularMetaModelRelationSet,
+  });
+}
+
+function overlayStoreRelations(
+  nodes: Node[],
+  edges: Edge[],
+  storeSnapshot: WorkspaceSnapshot | null | undefined,
+  byKey: Map<string, MetaModelRelationRequest>,
+): void {
+  const storeRels = storeSnapshot?.metaModelRelationRequests;
+  if (!storeRels) return;
+  const fineGraphVisible = isFineReactionGraphVisible(nodes, edges);
+  for (const rel of storeRels) {
+    mergeStoreRelation(byKey, rel, fineGraphVisible);
+  }
+}
+
 /**
  * Reduces the canvas to what the backend persists: the set of metamodels on it
  * and the reaction relations between them. Relations whose endpoints have no
@@ -119,79 +253,12 @@ export function buildWorkspaceSnapshot(
   edges: Edge[],
   storeSnapshot?: WorkspaceSnapshot | null,
 ): WorkspaceSnapshot {
-  const metaModelIds = Array.from(
-    new Set(
-      nodes
-        .filter(node => node.type === 'ecoreFile')
-        .map(node => getMetaModelSourceId(nodes, node.id))
-        .filter((value): value is number => typeof value === 'number'),
-    ),
-  );
-
   const byKey = new Map<string, MetaModelRelationRequest>();
-
-  for (const edge of edges) {
-    if (edge.type !== 'reactions') continue;
-    const sourceId = getMetaModelSourceId(nodes, edge.source);
-    const targetId = getMetaModelSourceId(nodes, edge.target);
-    if (typeof sourceId !== 'number' || typeof targetId !== 'number') continue;
-    const reactionFileId = toWireReactionFileId(edge.data?.reactionFileId);
-    upsertRelation(byKey, { sourceId, targetId, reactionFileId });
-  }
-
-  for (const edge of edges) {
-    if (edge.type !== 'fine-granular-reaction') continue;
-    const ecore = edge.data?.ecore;
-    if (!ecore) continue;
-    const sourceId = resolveModelToSourceId(nodes, ecore.fromModel as string);
-    const targetId = resolveModelToSourceId(nodes, ecore.toModel as string);
-    if (typeof sourceId !== 'number' || typeof targetId !== 'number') continue;
-    const persistedFgId = toWireReactionFileId(edge.data?.fineRelationId);
-    const generatedFileId = toWireReactionFileId(edge.data?.reactionFileId);
-    upsertRelation(byKey, {
-      sourceId,
-      targetId,
-      // Generated Low Code files live on the fine row, not the parent coarse relation.
-      reactionFileId: null,
-      fineGranularMetaModelRelationSet: [{
-        id: persistedFgId,
-        sourceId: ecore.eObjectSourceId,
-        targetId: ecore.eObjectTargetId,
-        ...(generatedFileId != null ? { reactionFileStorageId: generatedFileId } : {}),
-        ...(edge.data?.lowCodeReactionRequestBase
-          ? { lowCodeReactionRequestBase: edge.data.lowCodeReactionRequestBase }
-          : {}),
-      }],
-    });
-  }
-
-  if (storeSnapshot?.metaModelRelationRequests) {
-    const fineGraphVisible = isFineReactionGraphVisible(nodes, edges);
-    for (const rel of storeSnapshot.metaModelRelationRequests) {
-      const key = relationKey(rel.sourceId, rel.targetId);
-      const existing = byKey.get(key);
-      const fines = rel.fineGranularMetaModelRelationSet;
-      if (existing) {
-        if (fineGraphVisible) {
-          const overlaid = overlayStoreFinesOntoCanvas(
-            existing.fineGranularMetaModelRelationSet,
-            fines,
-          );
-          if (overlaid?.length) existing.fineGranularMetaModelRelationSet = overlaid;
-          if (rel.reactionFileId) existing.reactionFileId = rel.reactionFileId;
-        } else {
-          upsertRelation(byKey, rel);
-        }
-      } else if (fines?.length && !fineGraphVisible) {
-        upsertRelation(byKey, {
-          sourceId: rel.sourceId,
-          targetId: rel.targetId,
-          reactionFileId: toWireReactionFileId(rel.reactionFileId),
-          fineGranularMetaModelRelationSet: fines,
-        });
-      }
-    }
-  }
-
-  return { metaModelIds, metaModelRelationRequests: Array.from(byKey.values()) };
+  collectReactionRelations(nodes, edges, byKey);
+  collectFineGranularRelations(nodes, edges, byKey);
+  overlayStoreRelations(nodes, edges, storeSnapshot, byKey);
+  return {
+    metaModelIds: collectMetaModelIds(nodes),
+    metaModelRelationRequests: Array.from(byKey.values()),
+  };
 }

@@ -21,6 +21,8 @@ export interface ReactionModelLayout {
 /** nsURI → saved bounding box + class positions */
 export type ReactionLayoutMap = Record<string, ReactionModelLayout>;
 
+export type ReactionLayoutProjectId = number | string | null | undefined;
+
 export interface ReactionExpandLayoutTarget {
   boundingBox: Node;
   eObjectNodes: Node[];
@@ -40,7 +42,7 @@ function isFiniteCoord(n: unknown): n is number {
   return typeof n === 'number' && Number.isFinite(n);
 }
 
-export function reactionLayoutStorageKey(projectId: number | string | null | undefined): string {
+export function reactionLayoutStorageKey(projectId: ReactionLayoutProjectId): string {
   const segment = sanitizeStorageSegment(String(projectId ?? 'default'), 'default');
   return `${REACTION_LAYOUT_KEY_PREFIX}.${segment}`;
 }
@@ -58,41 +60,81 @@ function classEObjectId(node: Node): string | null {
   return typeof id === 'string' && id ? id : null;
 }
 
+function fallbackSize(nodeValue: unknown, styleValue: unknown, dataValue: unknown): unknown {
+  if (typeof nodeValue === 'number' && nodeValue > 0) return nodeValue;
+  if (typeof styleValue === 'number') return styleValue;
+  return dataValue;
+}
+
+function finiteSize(value: unknown): number | undefined {
+  if (isFiniteCoord(value)) return value;
+  return undefined;
+}
+
 function nodeBoxSize(node: Node): { width?: number; height?: number } {
   const style = (node.style ?? {}) as { width?: number; height?: number };
-  const width = typeof node.width === 'number' && node.width > 0
-    ? node.width
-    : (typeof style.width === 'number' ? style.width : node.data?.width);
-  const height = typeof node.height === 'number' && node.height > 0
-    ? node.height
-    : (typeof style.height === 'number' ? style.height : node.data?.height);
   return {
-    width: isFiniteCoord(width) ? width : undefined,
-    height: isFiniteCoord(height) ? height : undefined,
+    width: finiteSize(fallbackSize(node.width, style.width, node.data?.width)),
+    height: finiteSize(fallbackSize(node.height, style.height, node.data?.height)),
   };
 }
 
+function asRecord(value: unknown): Record<string, unknown> | null {
+  if (!value || typeof value !== 'object') return null;
+  return value as Record<string, unknown>;
+}
+
+function isSafeLayoutKey(key: string): boolean {
+  return Boolean(key) && key.length <= 512;
+}
+
+function coordFromUnknown(value: unknown): ReactionCoord | null {
+  if (!value || typeof value !== 'object') return null;
+  const pos = value as { x?: unknown; y?: unknown };
+  if (!isFiniteCoord(pos.x) || !isFiniteCoord(pos.y)) return null;
+  return { x: pos.x, y: pos.y };
+}
+
+function sanitizeBbox(rawBbox: unknown): ReactionBboxLayout | null {
+  const coord = coordFromUnknown(rawBbox);
+  if (!coord) return null;
+  const box = rawBbox as { width?: unknown; height?: unknown };
+  const bbox: ReactionBboxLayout = { ...coord };
+  if (isFiniteCoord(box.width)) bbox.width = box.width;
+  if (isFiniteCoord(box.height)) bbox.height = box.height;
+  return bbox;
+}
+
+function sanitizeClasses(raw: unknown): Record<string, ReactionCoord> {
+  const record = asRecord(raw);
+  if (!record) return {};
+  const classes: Record<string, ReactionCoord> = {};
+  for (const [classId, pos] of Object.entries(record)) {
+    if (!isSafeLayoutKey(classId)) continue;
+    const coord = coordFromUnknown(pos);
+    if (!coord) continue;
+    classes[classId] = coord;
+  }
+  return classes;
+}
+
+function sanitizeModelLayout(value: unknown): ReactionModelLayout | null {
+  const entry = asRecord(value);
+  if (!entry) return null;
+  const bbox = sanitizeBbox(entry.bbox);
+  if (!bbox) return null;
+  return { bbox, classes: sanitizeClasses(entry.classes) };
+}
+
 export function sanitizeReactionLayoutMap(raw: unknown): ReactionLayoutMap {
-  if (!raw || typeof raw !== 'object') return {};
+  const record = asRecord(raw);
+  if (!record) return {};
   const clean: ReactionLayoutMap = {};
-  for (const [nsUri, value] of Object.entries(raw as Record<string, unknown>)) {
-    if (!nsUri || typeof nsUri !== 'string' || nsUri.length > 512) continue;
-    if (!value || typeof value !== 'object') continue;
-    const entry = value as Partial<ReactionModelLayout>;
-    const rawBbox = entry.bbox;
-    if (!rawBbox || !isFiniteCoord(rawBbox.x) || !isFiniteCoord(rawBbox.y)) continue;
-    const bbox: ReactionBboxLayout = { x: rawBbox.x, y: rawBbox.y };
-    if (isFiniteCoord(rawBbox.width)) bbox.width = rawBbox.width;
-    if (isFiniteCoord(rawBbox.height)) bbox.height = rawBbox.height;
-    const classes: Record<string, ReactionCoord> = {};
-    if (entry.classes && typeof entry.classes === 'object') {
-      for (const [classId, pos] of Object.entries(entry.classes)) {
-        if (!classId || classId.length > 512) continue;
-        if (!pos || !isFiniteCoord(pos.x) || !isFiniteCoord(pos.y)) continue;
-        classes[classId] = { x: pos.x, y: pos.y };
-      }
-    }
-    clean[nsUri] = { bbox, classes };
+  for (const [nsUri, value] of Object.entries(record)) {
+    if (!isSafeLayoutKey(nsUri)) continue;
+    const layout = sanitizeModelLayout(value);
+    if (!layout) continue;
+    clean[nsUri] = layout;
   }
   return clean;
 }
@@ -142,7 +184,7 @@ export function applyReactionLayout(
   target.boundingBox.position = { x: layout.bbox.x, y: layout.bbox.y };
   if (isFiniteCoord(layout.bbox.width) && isFiniteCoord(layout.bbox.height)) {
     target.boundingBox.style = {
-      ...(target.boundingBox.style ?? {}),
+      ...target.boundingBox.style,
       width: layout.bbox.width,
       height: layout.bbox.height,
     };
@@ -169,7 +211,7 @@ export function applyReactionLayout(
 }
 
 export function loadReactionLayout(
-  projectId: number | string | null | undefined,
+  projectId: ReactionLayoutProjectId,
 ): ReactionLayoutMap {
   try {
     const raw = localStorage.getItem(reactionLayoutStorageKey(projectId));
@@ -181,7 +223,7 @@ export function loadReactionLayout(
 }
 
 export function saveReactionLayout(
-  projectId: number | string | null | undefined,
+  projectId: ReactionLayoutProjectId,
   layout: ReactionLayoutMap,
 ): void {
   const sanitized = sanitizeReactionLayoutMap(layout);
@@ -194,7 +236,7 @@ export function saveReactionLayout(
 }
 
 export function persistReactionLayoutFromNodes(
-  projectId: number | string | null | undefined,
+  projectId: ReactionLayoutProjectId,
   nodes: Node[],
 ): void {
   saveReactionLayout(projectId, captureReactionLayout(nodes));

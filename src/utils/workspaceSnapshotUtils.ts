@@ -52,7 +52,8 @@ const stableStringify = (value: unknown): string => {
   if (Array.isArray(value)) return `[${value.map(stableStringify).join(',')}]`;
   const obj = value as Record<string, unknown>;
   const keys = Object.keys(obj).sort((a, b) => a.localeCompare(b));
-  return `{${keys.map(k => `${JSON.stringify(k)}:${stableStringify(obj[k])}`).join(',')}}`;
+  const entries = keys.map((k) => JSON.stringify(k) + ':' + stableStringify(obj[k]));
+  return '{' + entries.join(',') + '}';
 };
 
 const cloneLowCodeConfig = (
@@ -60,7 +61,7 @@ const cloneLowCodeConfig = (
 ): { [key: string]: unknown } | undefined => {
   if (!value) return undefined;
   try {
-    return JSON.parse(JSON.stringify(value)) as { [key: string]: unknown };
+    return structuredClone(value);
   } catch {
     return { ...value };
   }
@@ -111,7 +112,7 @@ export const parseFineGranularRelationSet = (
     const parsedId = asPositiveNumber(
       item.id ?? item.fineGranularMetaModelRelationId,
     );
-    const id = parsedId !== undefined ? parsedId : null;
+    const id = parsedId ?? null;
     const reactionFileStorageId = asPositiveNumber(
       item.reactionFileStorageId
       ?? item.reactionFileId

@@ -91,6 +91,50 @@ function reactionEdgeInteractionHandlers(
   };
 }
 
+function mappedEdgeDoubleClick(
+  edge: Edge,
+  ctx: MapFlowEdgeContext,
+  isReaction: boolean,
+  isFineReaction: boolean,
+) {
+  if (!isReaction && !isFineReaction) return undefined;
+  return () => ctx.handleEdgeDoubleClick(edge.id);
+}
+
+function mappedCustomControlPoint(edge: Edge, isFineReaction: boolean) {
+  if (isFineReaction) return undefined;
+  if (edge.data?.expandedIntraModel) return undefined;
+  return edge.data?.customControlPoint;
+}
+
+function fineReactionVisuals(
+  edge: Edge,
+  isFineReaction: boolean,
+  routingStyle: MapFlowEdgeContext['routingStyle'],
+  fineParallel: { index: number; total: number } | undefined,
+) {
+  if (!isFineReaction) {
+    return {
+      routingStyle,
+      fineGranular: false,
+      sourceHandleId: undefined,
+      targetHandleId: undefined,
+      parallelIndex: fineParallel?.index,
+      parallelCount: fineParallel?.total,
+      separation: 36,
+    };
+  }
+  return {
+    routingStyle: 'curved' as const,
+    fineGranular: true,
+    sourceHandleId: edge.sourceHandle,
+    targetHandleId: edge.targetHandle,
+    parallelIndex: fineParallel?.index,
+    parallelCount: fineParallel?.total,
+    separation: FINE_REACTION_SEPARATION,
+  };
+}
+
 export function mapFlowCanvasEdge(edge: Edge, ctx: MapFlowEdgeContext): Edge {
   const { sourceData, targetData } = ctx.getDistribution(edge);
   const {
@@ -102,8 +146,6 @@ export function mapFlowCanvasEdge(edge: Edge, ctx: MapFlowEdgeContext): Edge {
   const isReaction = edge.type === 'reactions';
   const isFineReaction = edge.type === 'fine-granular-reaction';
   const isUml = edge.type === 'uml';
-  const reactionEditable = isReaction && !ctx.readOnly;
-  const fineParallel = ctx.getFineParallel?.(edge);
 
   return {
     ...edge,
@@ -115,23 +157,15 @@ export function mapFlowCanvasEdge(edge: Edge, ctx: MapFlowEdgeContext): Edge {
       mergeGroupSourceNodes,
       hoveredMergeGroup: ctx.hoveredMergeGroup,
       onMergeGroupHover: isUml ? ctx.handleMergeGroupHover : undefined,
-      onDoubleClick: (isReaction || isFineReaction) ? () => ctx.handleEdgeDoubleClick(edge.id) : undefined,
+      onDoubleClick: mappedEdgeDoubleClick(edge, ctx, isReaction, isFineReaction),
       readOnly: isReaction ? ctx.readOnly : undefined,
-      routingStyle: isFineReaction ? 'curved' : ctx.routingStyle,
-      fineGranular: isFineReaction,
-      sourceHandleId: isFineReaction ? edge.sourceHandle : undefined,
-      targetHandleId: isFineReaction ? edge.targetHandle : undefined,
-      parallelIndex: fineParallel?.index,
-      parallelCount: fineParallel?.total,
-      separation: isFineReaction ? FINE_REACTION_SEPARATION : 36,
+      ...fineReactionVisuals(edge, isFineReaction, ctx.routingStyle, ctx.getFineParallel?.(edge)),
       sourceParallelIndex: sourceData?.index,
       sourceParallelCount: sourceData?.total,
       targetParallelIndex: targetData?.index,
       targetParallelCount: targetData?.total,
-      customControlPoint: (isFineReaction || edge.data?.expandedIntraModel)
-        ? undefined
-        : edge.data?.customControlPoint,
-      ...reactionEdgeInteractionHandlers(edge.id, reactionEditable, ctx),
+      customControlPoint: mappedCustomControlPoint(edge, isFineReaction),
+      ...reactionEdgeInteractionHandlers(edge.id, isReaction && !ctx.readOnly, ctx),
     },
     style: {
       ...edge.style,

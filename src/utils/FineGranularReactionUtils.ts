@@ -201,7 +201,108 @@ export function deleteFineGranularReactionEdgeFromVsumDetails(
   }
 }
 
+function coarseHasNoFileOrFines(relation: {
+  fineGranularMetaModelRelationSet: unknown[];
+  reactionFileStorageId?: number | null;
+} | undefined): boolean {
+  return relation?.fineGranularMetaModelRelationSet.length === 0
+    && !relation?.reactionFileStorageId;
+}
+
+function takeOrphanCoarseReactionEdgeId(
+  edge: Edge,
+  canvasEdges: Edge[],
+): string | undefined {
+  const ecore = edge.data?.ecore;
+  if (!ecore) return undefined;
+  const active = new ActiveVsumDetails();
+  const srcId = active.getBackendMetaModelId(ecore.fromModel);
+  const tgtId = active.getBackendMetaModelId(ecore.toModel);
+  if (srcId === undefined || tgtId === undefined) return undefined;
+  const coarse = active.getMetaModelRelation({ sourceId: srcId, targetId: tgtId });
+  if (!coarseHasNoFileOrFines(coarse)) return undefined;
+  active.removeMetaModelRelation(srcId, tgtId);
+  active.saveToStore();
+  return canvasEdges.find(
+    (e) => e.type === 'reactions' && e.data?.sourceId === srcId && e.data?.targetId === tgtId,
+  )?.id;
+}
+
+/**
+ * If the last fine relation under a coarse pair is gone and that pair has no
+ * reaction file, drop the placeholder coarse relation and its canvas edge.
+ */
+export function removeOrphanCoarseReactionAfterFineDelete(
+  edge: Edge,
+  canvasEdges: Edge[],
+  removeEdge: (id: string) => void,
+): void {
+  try {
+    const orphanId = takeOrphanCoarseReactionEdgeId(edge, canvasEdges);
+    if (orphanId) removeEdge(orphanId);
+  } catch {
+    /* store not ready — skip orphan cleanup */
+  }
+}
+
+/**
+ * Delete a selected fine-granular reaction from the store and canvas.
+ * Returns `false` when there is no selected edge (caller should abort).
+ */
+export function confirmDeleteFineGranularReaction(
+  selectedEdge: Edge | null | undefined,
+  canvasEdges: Edge[],
+  removeEdge: (id: string) => void,
+): boolean {
+  if (!selectedEdge) return false;
+  const removed = deleteFineGranularReactionEdgeFromVsumDetails(selectedEdge);
+  if (!removed) return true;
+  removeEdge(selectedEdge.id);
+  removeOrphanCoarseReactionAfterFineDelete(selectedEdge, canvasEdges, removeEdge);
+  return true;
+}
+
 // ── Load fine edges from store ──────────────────────────────────────────
+
+function ecoreModelMismatch(
+  ecore: { model?: string },
+  model: string,
+  requireModel: boolean,
+): boolean {
+  if (!requireModel) return false;
+  if (!model || !ecore.model) return false;
+  return ecore.model !== model;
+}
+
+function idListIncludes(ids: unknown, eObjectId: string): boolean {
+  return Array.isArray(ids) && ids.includes(eObjectId);
+}
+
+function eobjectOwnsEObjectId(
+  ecore: { eObjectId?: unknown; eAttributeIds?: unknown; eReferenceIds?: unknown },
+  eObjectId: string,
+): boolean {
+  if (ecore.eObjectId === eObjectId) return true;
+  if (idListIncludes(ecore.eAttributeIds, eObjectId)) return true;
+  if (idListIncludes(ecore.eReferenceIds, eObjectId)) return true;
+  if (typeof ecore.eObjectId !== 'string') return false;
+  return eObjectId.startsWith(`${ecore.eObjectId}.`);
+}
+
+function findMatchingEobjectNode(
+  nodes: Node[],
+  eObjectId: string,
+  model: string,
+  requireModel: boolean,
+): string | null {
+  for (const node of nodes) {
+    if (node.type !== 'eobject') continue;
+    const ecore = node.data?.ecore;
+    if (!ecore || ecoreModelMismatch(ecore, model, requireModel)) continue;
+    if (eobjectOwnsEObjectId(ecore, eObjectId)) return node.id;
+  }
+  return null;
+}
 
 /**
  * Resolve an EObject (class, attribute, or EReference ghost) FQ id to the
@@ -220,31 +321,14 @@ export function resolveFineGranularEndpointNodeId(
       if (!isGhostNode(node)) continue;
       const ecore = node.data?.ecore;
       if (!ecore) continue;
-      if (requireModel && model && ecore.model && ecore.model !== model) continue;
+      if (ecoreModelMismatch(ecore, model, requireModel)) continue;
       if (ecore.eObjectId === eObjectId) return node.id;
     }
     return null;
   };
 
-  const matchesClass = (requireModel: boolean): string | null => {
-    for (const node of nodes) {
-      if (node.type !== 'eobject') continue;
-      const ecore = node.data?.ecore;
-      if (!ecore) continue;
-      if (requireModel && model && ecore.model && ecore.model !== model) continue;
-      if (ecore.eObjectId === eObjectId) return node.id;
-      if (Array.isArray(ecore.eAttributeIds) && ecore.eAttributeIds.includes(eObjectId)) {
-        return node.id;
-      }
-      if (Array.isArray(ecore.eReferenceIds) && ecore.eReferenceIds.includes(eObjectId)) {
-        return node.id;
-      }
-      if (typeof ecore.eObjectId === 'string' && eObjectId.startsWith(`${ecore.eObjectId}.`)) {
-        return node.id;
-      }
-    }
-    return null;
-  };
+  const matchesClass = (requireModel: boolean): string | null =>
+    findMatchingEobjectNode(nodes, eObjectId, model, requireModel);
 
   return matchesGhost(true)
     ?? matchesGhost(false)
@@ -595,6 +679,124 @@ function isPlaceholderCoarseRelation(relation: {
     && relation.fineGranularMetaModelRelationSet.length === 0;
 }
 
+type LiveCanvasFine = {
+  coarseSourceId: number;
+  coarseTargetId: number;
+  row: EditableFineGranularMetaModelRelation;
+};
+
+function fineStorePairKey(
+  coarseSourceId: number,
+  coarseTargetId: number,
+  sourceId: string,
+  targetId: string,
+): string {
+  return `${coarseSourceId}|${coarseTargetId}|${sourceId}|${targetId}`;
+}
+
+function liveFineFromCanvasEdge(
+  edge: Edge,
+  active: ActiveVsumDetails,
+): LiveCanvasFine | null {
+  if (!isFineGranularReactionEdge(edge) || !edge.data?.ecore) return null;
+  const { fromModel, toModel } = edge.data.ecore;
+  const coarseSourceId = active.getBackendMetaModelId(fromModel);
+  const coarseTargetId = active.getBackendMetaModelId(toModel);
+  if (coarseSourceId === undefined || coarseTargetId === undefined) return null;
+  const row = canvasFineToStoreRow(edge);
+  if (!row) return null;
+  return { coarseSourceId, coarseTargetId, row };
+}
+
+function collectLiveCanvasFines(
+  edges: Edge[],
+  active: ActiveVsumDetails,
+): { liveKeys: Set<string>; liveFines: LiveCanvasFine[] } {
+  const liveKeys = new Set<string>();
+  const liveFines: LiveCanvasFine[] = [];
+  for (const edge of edges) {
+    const live = liveFineFromCanvasEdge(edge, active);
+    if (!live) continue;
+    liveKeys.add(fineStorePairKey(
+      live.coarseSourceId,
+      live.coarseTargetId,
+      live.row.sourceId,
+      live.row.targetId,
+    ));
+    liveFines.push(live);
+  }
+  return { liveKeys, liveFines };
+}
+
+function removeStaleFinesOnRelation(
+  active: ActiveVsumDetails,
+  rel: { sourceId: number; targetId: number; fineGranularMetaModelRelationSet: EditableFineGranularMetaModelRelation[] },
+  liveKeys: Set<string>,
+): boolean {
+  let changed = false;
+  for (const fg of rel.fineGranularMetaModelRelationSet) {
+    const key = fineStorePairKey(rel.sourceId, rel.targetId, fg.sourceId, fg.targetId);
+    if (liveKeys.has(key)) continue;
+    active.removeFineGranularMetaModelRelation(
+      rel.sourceId,
+      rel.targetId,
+      fg.sourceId,
+      fg.targetId,
+    );
+    changed = true;
+  }
+  return changed;
+}
+
+function removePlaceholderCoarseIfEmpty(
+  active: ActiveVsumDetails,
+  sourceId: number,
+  targetId: number,
+): boolean {
+  const remaining = active.getMetaModelRelation({ sourceId, targetId });
+  if (!remaining || !isPlaceholderCoarseRelation(remaining)) return false;
+  active.removeMetaModelRelation(sourceId, targetId);
+  return true;
+}
+
+function removeFinesAbsentFromCanvas(
+  active: ActiveVsumDetails,
+  liveKeys: Set<string>,
+): boolean {
+  let changed = false;
+  for (const rel of active.get().metaModelsRelation) {
+    if (removeStaleFinesOnRelation(active, rel, liveKeys)) changed = true;
+    if (removePlaceholderCoarseIfEmpty(active, rel.sourceId, rel.targetId)) changed = true;
+  }
+  return changed;
+}
+
+function addCanvasFinesMissingFromStore(
+  active: ActiveVsumDetails,
+  liveFines: LiveCanvasFine[],
+): boolean {
+  let changed = false;
+  for (const { coarseSourceId, coarseTargetId, row } of liveFines) {
+    const existing = active.getFineGranularMetaModelRelation(
+      coarseSourceId,
+      coarseTargetId,
+      row.sourceId,
+      row.targetId,
+    );
+    if (existing) continue;
+    active.addFineGranularMetaModelRelation(coarseSourceId, coarseTargetId, row);
+    changed = true;
+  }
+  return changed;
+}
+
+function applyCanvasFineSync(active: ActiveVsumDetails, edges: Edge[]): void {
+  const { liveKeys, liveFines } = collectLiveCanvasFines(edges, active);
+  const removed = removeFinesAbsentFromCanvas(active, liveKeys);
+  const added = addCanvasFinesMissingFromStore(active, liveFines);
+  if (removed || added) active.saveToStore();
+}
+
 /**
  * Keep the VsumDetails fine-granular set aligned with the canvas while the
  * fine graph is visible. Undo only restores React Flow nodes/edges, so without
@@ -605,66 +807,8 @@ function isPlaceholderCoarseRelation(relation: {
 export function syncFineGranularStoreFromCanvas(nodes: Node[], edges: Edge[]): void {
   if (!isFineReactionGraphVisible(nodes, edges)) return;
   if (!hasActiveVsumDetailsStore()) return;
-
   try {
-    const active = new ActiveVsumDetails();
-    const liveKeys = new Set<string>();
-    const liveFines: Array<{
-      coarseSourceId: number;
-      coarseTargetId: number;
-      row: EditableFineGranularMetaModelRelation;
-    }> = [];
-
-    for (const edge of edges) {
-      if (!isFineGranularReactionEdge(edge) || !edge.data?.ecore) continue;
-      const { fromModel, toModel } = edge.data.ecore;
-      const coarseSourceId = active.getBackendMetaModelId(fromModel);
-      const coarseTargetId = active.getBackendMetaModelId(toModel);
-      if (coarseSourceId === undefined || coarseTargetId === undefined) continue;
-      const row = canvasFineToStoreRow(edge);
-      if (!row) continue;
-      liveKeys.add(`${coarseSourceId}|${coarseTargetId}|${row.sourceId}|${row.targetId}`);
-      liveFines.push({ coarseSourceId, coarseTargetId, row });
-    }
-
-    let changed = false;
-    const relations = [...active.get().metaModelsRelation];
-    for (const rel of relations) {
-      for (const fg of [...rel.fineGranularMetaModelRelationSet]) {
-        const key = `${rel.sourceId}|${rel.targetId}|${fg.sourceId}|${fg.targetId}`;
-        if (liveKeys.has(key)) continue;
-        active.removeFineGranularMetaModelRelation(
-          rel.sourceId,
-          rel.targetId,
-          fg.sourceId,
-          fg.targetId,
-        );
-        changed = true;
-      }
-
-      const remaining = active.getMetaModelRelation({
-        sourceId: rel.sourceId,
-        targetId: rel.targetId,
-      });
-      if (remaining && isPlaceholderCoarseRelation(remaining)) {
-        active.removeMetaModelRelation(rel.sourceId, rel.targetId);
-        changed = true;
-      }
-    }
-
-    for (const { coarseSourceId, coarseTargetId, row } of liveFines) {
-      const existing = active.getFineGranularMetaModelRelation(
-        coarseSourceId,
-        coarseTargetId,
-        row.sourceId,
-        row.targetId,
-      );
-      if (existing) continue;
-      active.addFineGranularMetaModelRelation(coarseSourceId, coarseTargetId, row);
-      changed = true;
-    }
-
-    if (changed) active.saveToStore();
+    applyCanvasFineSync(new ActiveVsumDetails(), edges);
   } catch {
     // store may not be initialized — canvas is still the source of truth for save
   }

@@ -260,10 +260,7 @@ export function overlayConnectionFieldValues(
 
 // ── Validation helpers ──────────────────────────────────────────────────
 
-/**
- * Check whether a numeric value satisfies the field's min/max constraints.
- */
-export function validateNumericConstraints(
+function integerBoundError(
   field: LowCodeReactionFieldMetadata,
   value: number,
 ): string | null {
@@ -273,23 +270,55 @@ export function validateNumericConstraints(
   if (field.max !== null && value > field.max) {
     return `Value must be at most ${field.max}`;
   }
-  if (field.decimalMin !== null) {
-    const min = Number.parseFloat(field.decimalMin);
-    if (!Number.isNaN(min)) {
-      if (field.decimalMinInclusive ? value < min : value <= min) {
-        return `Value must be ${field.decimalMinInclusive ? '>=' : '>'} ${field.decimalMin}`;
-      }
-    }
-  }
-  if (field.decimalMax !== null) {
-    const max = Number.parseFloat(field.decimalMax);
-    if (!Number.isNaN(max)) {
-      if (field.decimalMaxInclusive ? value > max : value >= max) {
-        return `Value must be ${field.decimalMaxInclusive ? '<=' : '<'} ${field.decimalMax}`;
-      }
-    }
-  }
   return null;
+}
+
+function isBelowDecimalMin(value: number, min: number, inclusive: boolean | null): boolean {
+  if (inclusive) return value < min;
+  return value <= min;
+}
+
+function isAboveDecimalMax(value: number, max: number, inclusive: boolean | null): boolean {
+  if (inclusive) return value > max;
+  return value >= max;
+}
+
+function decimalMinError(
+  field: LowCodeReactionFieldMetadata,
+  value: number,
+): string | null {
+  if (field.decimalMin === null) return null;
+  const min = Number.parseFloat(field.decimalMin);
+  if (Number.isNaN(min) || !isBelowDecimalMin(value, min, field.decimalMinInclusive)) {
+    return null;
+  }
+  const op = field.decimalMinInclusive ? '>=' : '>';
+  return `Value must be ${op} ${field.decimalMin}`;
+}
+
+function decimalMaxError(
+  field: LowCodeReactionFieldMetadata,
+  value: number,
+): string | null {
+  if (field.decimalMax === null) return null;
+  const max = Number.parseFloat(field.decimalMax);
+  if (Number.isNaN(max) || !isAboveDecimalMax(value, max, field.decimalMaxInclusive)) {
+    return null;
+  }
+  const op = field.decimalMaxInclusive ? '<=' : '<';
+  return `Value must be ${op} ${field.decimalMax}`;
+}
+
+/**
+ * Check whether a numeric value satisfies the field's min/max constraints.
+ */
+export function validateNumericConstraints(
+  field: LowCodeReactionFieldMetadata,
+  value: number,
+): string | null {
+  return integerBoundError(field, value)
+    ?? decimalMinError(field, value)
+    ?? decimalMaxError(field, value);
 }
 
 /**

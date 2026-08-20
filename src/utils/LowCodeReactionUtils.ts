@@ -32,11 +32,7 @@ export function hasLowCodeReactionConfig(edge: FlowEcoreEdge): boolean {
       eObjectTargetId,
     );
 
-    return (
-      fine !== undefined &&
-      fine.lowCodeReactionRequestBase !== undefined &&
-      Object.keys(fine.lowCodeReactionRequestBase).length > 0
-    );
+    return Object.keys(fine?.lowCodeReactionRequestBase ?? {}).length > 0;
   } catch {
     return false;
   }

@@ -88,7 +88,11 @@ export function extractClassFromElementPath(elementPath: string): string {
  * Example: `"http://example.org/myModel"` → `"myModel"`
  */
 export function deriveModelAlias(modelNsUri: string): string {
-  const cleaned = modelNsUri.replace(/\/+$/, '');
+  let end = modelNsUri.length;
+  while (end > 0 && modelNsUri.charAt(end - 1) === '/') {
+    end -= 1;
+  }
+  const cleaned = modelNsUri.slice(0, end);
   const lastSlash = cleaned.lastIndexOf('/');
   return lastSlash >= 0 ? cleaned.substring(lastSlash + 1) : cleaned;
 }
@@ -120,6 +124,16 @@ export function getProperEObjectIdFromHandle(handleId: string): string | null {
   return rest.substring(dashIdx + 1);
 }
 
+const E_PACKAGE_OPEN_TAG = /<(?:\w+:)?EPackage\b[^>]*>/i;
+const NS_URI_ATTR = /\bnsURI="([^"]+)"/i;
+const NAME_ATTR = /\bname="([^"]+)"/i;
+const NS_URI_ATTR_GLOBAL = /\bnsURI="([^"]+)"/g;
+const WELL_KNOWN_NS = /eclipse\.org|omg\.org/i;
+
+function ePackageOpenTag(ecoreContent: string): string | null {
+  return E_PACKAGE_OPEN_TAG.exec(ecoreContent)?.[0] ?? null;
+}
+
 /**
  * Extract the nsURI from raw ecore XML content.
  *
@@ -127,13 +141,13 @@ export function getProperEObjectIdFromHandle(handleId: string): string | null {
  * elsewhere in the file are not picked up as this model's identity.
  */
 export function extractNsUriFromEcore(ecoreContent: string): string | null {
-  const ePackageOpen = ecoreContent.match(/<(?:\w+:)?EPackage\b[^>]*>/i);
-  if (ePackageOpen) {
-    const ns = ePackageOpen[0].match(/\bnsURI="([^"]+)"/i);
+  const openTag = ePackageOpenTag(ecoreContent);
+  if (openTag) {
+    const ns = NS_URI_ATTR.exec(openTag);
     if (ns?.[1]) return ns[1];
   }
-  const matches = [...ecoreContent.matchAll(/\bnsURI="([^"]+)"/g)].map((m) => m[1]);
-  const preferred = matches.find((uri) => !/eclipse\.org|omg\.org/i.test(uri));
+  const matches = [...ecoreContent.matchAll(NS_URI_ATTR_GLOBAL)].map((m) => m[1]);
+  const preferred = matches.find((uri) => !WELL_KNOWN_NS.test(uri));
   return preferred ?? matches[0] ?? null;
 }
 
@@ -141,10 +155,9 @@ export function extractNsUriFromEcore(ecoreContent: string): string | null {
  * Extract the EPackage `name` from raw ecore XML (e.g. `"model1"`).
  */
 export function extractEPackageNameFromEcore(ecoreContent: string): string | null {
-  const ePackageOpen = ecoreContent.match(/<(?:\w+:)?EPackage\b[^>]*>/i);
-  if (!ePackageOpen) return null;
-  const name = ePackageOpen[0].match(/\bname="([^"]+)"/i);
-  return name?.[1] ?? null;
+  const openTag = ePackageOpenTag(ecoreContent);
+  if (!openTag) return null;
+  return NAME_ATTR.exec(openTag)?.[1] ?? null;
 }
 
 /**

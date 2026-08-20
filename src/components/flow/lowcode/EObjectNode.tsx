@@ -22,6 +22,15 @@ const HANDLE_SIZE = 8;
 const ATTR_ROW_HEIGHT = EOBJECT_ATTR_ROW_HEIGHT;
 const HEADER_HEIGHT = EOBJECT_HEADER_HEIGHT;
 
+type CardinalSide = 'top' | 'right' | 'bottom' | 'left';
+
+const SIDE_TO_POSITION: Record<CardinalSide, Position> = {
+  top: Position.Top,
+  right: Position.Right,
+  bottom: Position.Bottom,
+  left: Position.Left,
+};
+
 /**
  * EObject node for the expanded reaction canvas.
  *
@@ -53,11 +62,7 @@ const EObjectNode: React.FC<NodeProps<EObjectNodeData>> = ({ data, selected }) =
       }}
     >
       {(['top', 'right', 'bottom', 'left'] as const).map((side) => {
-        const position =
-          side === 'top' ? Position.Top
-            : side === 'right' ? Position.Right
-              : side === 'bottom' ? Position.Bottom
-                : Position.Left;
+        const position = SIDE_TO_POSITION[side];
         const hidden = {
           width: 6,
           height: 6,

@@ -188,6 +188,83 @@ export function ghostRimPoint(node: ReactionNodeBounds, toward: Point): Point {
   return { x: c.x + (dx / len) * radius, y: c.y + (dy / len) * radius };
 }
 
+function rowCenter(row: AxisRect): Point {
+  return { x: row.x + row.width / 2, y: row.y + row.height / 2 };
+}
+
+function chordAim(node: ReactionNodeBounds, row: AxisRect, isGhost: boolean): Point {
+  if (isGhost) return ghostCenter(node);
+  return rowCenter(row);
+}
+
+function chordEndpoint(
+  node: ReactionNodeBounds,
+  handle: string | null | undefined,
+  role: 'source' | 'target',
+  row: AxisRect,
+  toward: Point,
+  isGhost: boolean,
+  isAttr: boolean,
+): Point {
+  if (isGhost) return ghostCenter(node);
+  if (isAttr) return reactionHandleAnchor(node, handle, role);
+  const center = rowCenter(row);
+  return getBorderPoint(center.x, center.y, row.width, row.height, toward.x, toward.y);
+}
+
+function offsetClassChordEnds(
+  p1: Point,
+  p2: Point,
+  srcAttr: boolean,
+  tgtAttr: boolean,
+  srcGhost: boolean,
+  tgtGhost: boolean,
+  options: {
+    parallelIndex?: number;
+    parallelCount?: number;
+    separation?: number;
+  },
+): { p1: Point; p2: Point } {
+  if (srcAttr && tgtAttr) return { p1, p2 };
+  const offset = applyPerpendicularOffset(
+    p1,
+    p2,
+    options.parallelIndex ?? 0,
+    options.parallelCount ?? 1,
+    options.separation ?? FINE_REACTION_SEPARATION,
+  );
+  if (!srcAttr && !srcGhost) p1 = offset.p1;
+  if (!tgtAttr && !tgtGhost) p2 = offset.p2;
+  return { p1, p2 };
+}
+
+function snapGhostChordEnds(
+  source: ReactionNodeBounds,
+  target: ReactionNodeBounds,
+  p1: Point,
+  p2: Point,
+  srcGhost: boolean,
+  tgtGhost: boolean,
+): { p1: Point; p2: Point } {
+  if (srcGhost) p1 = ghostRimPoint(source, p2);
+  if (tgtGhost) p2 = ghostRimPoint(target, p1);
+  return { p1, p2 };
+}
+
+function finishFineReactionChord(p1: Point, p2: Point): FineReactionChord {
+  const dx = p2.x - p1.x;
+  const dy = p2.y - p1.y;
+  const len = Math.max(Math.hypot(dx, dy), 0.0001);
+  const arrowLen = Math.min(FINE_REACTION_ARROW_LENGTH, Math.max(0, len / 2));
+  return {
+    p1,
+    p2,
+    drawP1: p1,
+    drawP2: { x: p2.x - (dx / len) * arrowLen, y: p2.y - (dy / len) * arrowLen },
+    arrowAngle: Math.atan2(dy, dx) * (180 / Math.PI),
+  };
+}
+
 export function layoutFineReactionChord(options: {
   source: ReactionNodeBounds;
   target: ReactionNodeBounds;
@@ -201,55 +278,28 @@ export function layoutFineReactionChord(options: {
   const tgtGhost = isGhostReactionNode(options.target);
   const srcRow = reactionRowRect(options.source, options.sourceHandle);
   const tgtRow = reactionRowRect(options.target, options.targetHandle);
-  const srcCx = srcRow.x + srcRow.width / 2;
-  const srcCy = srcRow.y + srcRow.height / 2;
-  const tgtCx = tgtRow.x + tgtRow.width / 2;
-  const tgtCy = tgtRow.y + tgtRow.height / 2;
   const srcAttr = !srcGhost && isAttributeHandle(options.sourceHandle);
   const tgtAttr = !tgtGhost && isAttributeHandle(options.targetHandle);
-  const srcAim = srcGhost ? ghostCenter(options.source) : { x: srcCx, y: srcCy };
-  const tgtAim = tgtGhost ? ghostCenter(options.target) : { x: tgtCx, y: tgtCy };
+  const srcAim = chordAim(options.source, srcRow, srcGhost);
+  const tgtAim = chordAim(options.target, tgtRow, tgtGhost);
 
-  let p1 = srcGhost
-    ? srcAim
-    : srcAttr
-      ? reactionHandleAnchor(options.source, options.sourceHandle, 'source')
-      : getBorderPoint(srcCx, srcCy, srcRow.width, srcRow.height, tgtAim.x, tgtAim.y);
-  let p2 = tgtGhost
-    ? tgtAim
-    : tgtAttr
-      ? reactionHandleAnchor(options.target, options.targetHandle, 'target')
-      : getBorderPoint(tgtCx, tgtCy, tgtRow.width, tgtRow.height, srcAim.x, srcAim.y);
-
-  if (!srcAttr || !tgtAttr) {
-    const offset = applyPerpendicularOffset(
-      p1,
-      p2,
-      options.parallelIndex ?? 0,
-      options.parallelCount ?? 1,
-      options.separation ?? FINE_REACTION_SEPARATION,
-    );
-    if (!srcAttr && !srcGhost) p1 = offset.p1;
-    if (!tgtAttr && !tgtGhost) p2 = offset.p2;
-  }
-
-  if (srcGhost) p1 = ghostRimPoint(options.source, p2);
-  if (tgtGhost) p2 = ghostRimPoint(options.target, p1);
-
-  const dx = p2.x - p1.x;
-  const dy = p2.y - p1.y;
-  const len = Math.max(Math.hypot(dx, dy), 0.0001);
-  const ux = dx / len;
-  const uy = dy / len;
-  const arrowLen = Math.min(FINE_REACTION_ARROW_LENGTH, Math.max(0, len / 2));
-
-  return {
-    p1,
-    p2,
-    drawP1: p1,
-    drawP2: { x: p2.x - ux * arrowLen, y: p2.y - uy * arrowLen },
-    arrowAngle: Math.atan2(dy, dx) * (180 / Math.PI),
-  };
+  const ends = offsetClassChordEnds(
+    chordEndpoint(
+      options.source, options.sourceHandle, 'source', srcRow, tgtAim, srcGhost, srcAttr,
+    ),
+    chordEndpoint(
+      options.target, options.targetHandle, 'target', tgtRow, srcAim, tgtGhost, tgtAttr,
+    ),
+    srcAttr,
+    tgtAttr,
+    srcGhost,
+    tgtGhost,
+    options,
+  );
+  const snapped = snapGhostChordEnds(
+    options.source, options.target, ends.p1, ends.p2, srcGhost, tgtGhost,
+  );
+  return finishFineReactionChord(snapped.p1, snapped.p2);
 }
 
 export function fineReactionPairKey(edge: Pick<Edge, 'source' | 'target' | 'sourceHandle' | 'targetHandle'>): string {
