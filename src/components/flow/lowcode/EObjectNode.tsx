@@ -24,12 +24,12 @@ const HEADER_HEIGHT = EOBJECT_HEADER_HEIGHT;
 
 type CardinalSide = 'top' | 'right' | 'bottom' | 'left';
 
-const SIDE_TO_POSITION: Record<CardinalSide, Position> = {
-  top: Position.Top,
-  right: Position.Right,
-  bottom: Position.Bottom,
-  left: Position.Left,
-};
+function sideToPosition(side: CardinalSide): Position {
+  if (side === 'top') return Position.Top;
+  if (side === 'right') return Position.Right;
+  if (side === 'bottom') return Position.Bottom;
+  return Position.Left;
+}
 
 /**
  * EObject node for the expanded reaction canvas.
@@ -62,7 +62,7 @@ const EObjectNode: React.FC<NodeProps<EObjectNodeData>> = ({ data, selected }) =
       }}
     >
       {(['top', 'right', 'bottom', 'left'] as const).map((side) => {
-        const position = SIDE_TO_POSITION[side];
+        const position = sideToPosition(side);
         const hidden = {
           width: 6,
           height: 6,
