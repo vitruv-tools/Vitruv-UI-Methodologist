@@ -4,7 +4,7 @@ import { CanvasSidebarToolbar } from '../../../components/canvas/CanvasSidebarTo
 
 const labels = {
   select: 'Select. Move and select elements on the canvas',
-  download: 'Download. Export this project as a ZIP file',
+  download: 'Download. Export this project',
   save: 'Save. Save changes to this project',
   checkBuild: 'Check build. Verify the project compiles successfully',
   addReaction: 'Add reaction. Click two meta-models to connect them',
@@ -23,6 +23,7 @@ const createProps = () => ({
   onOpenReactionEditor: jest.fn(),
   onToggleModelDrawer: jest.fn(),
   onDownloadArtifact: jest.fn(),
+  onDownloadBundle: jest.fn(),
   onSaveChanges: jest.fn(),
   onCheckBuild: jest.fn(),
   onUndo: jest.fn(),
@@ -30,6 +31,7 @@ const createProps = () => ({
   canUndo: true,
   canRedo: true,
   downloadingArtifact: false,
+  downloadingBundle: false,
   savingChanges: false,
   checkingBuild: false,
 });
@@ -55,6 +57,7 @@ describe('CanvasSidebarToolbar', () => {
     ]);
 
     fireEvent.click(screen.getByRole('button', { name: labels.download }));
+    fireEvent.click(screen.getByRole('button', { name: /Project export/ }));
     fireEvent.click(screen.getByRole('button', { name: labels.save }));
     fireEvent.click(screen.getByRole('button', { name: labels.checkBuild }));
     fireEvent.click(screen.getByRole('button', { name: labels.addReaction }));
@@ -137,6 +140,38 @@ describe('CanvasSidebarToolbar', () => {
     expect(redoButton).toHaveStyle({ cursor: 'not-allowed' });
     expect(props.onUndo).not.toHaveBeenCalled();
     expect(props.onRedo).not.toHaveBeenCalled();
+  });
+
+  it('opens a menu offering project export or the easy deploy package', () => {
+    const props = createProps();
+    render(<CanvasSidebarToolbar {...props} />);
+
+    expect(screen.queryByText(/Easy deploy package/)).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: labels.download }));
+
+    expect(screen.getByText('Project export')).toBeInTheDocument();
+    expect(screen.getByText('Easy deploy package')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: /Easy deploy package/ }));
+
+    expect(props.onDownloadBundle).toHaveBeenCalledTimes(1);
+    expect(props.onDownloadArtifact).not.toHaveBeenCalled();
+    expect(screen.queryByText(/Easy deploy package/)).not.toBeInTheDocument();
+  });
+
+  it('closes the download menu on outside click without triggering a download', () => {
+    const props = createProps();
+    render(<CanvasSidebarToolbar {...props} />);
+
+    fireEvent.click(screen.getByRole('button', { name: labels.download }));
+    expect(screen.getByText('Project export')).toBeInTheDocument();
+
+    fireEvent.mouseDown(document.body);
+
+    expect(screen.queryByText('Project export')).not.toBeInTheDocument();
+    expect(props.onDownloadArtifact).not.toHaveBeenCalled();
+    expect(props.onDownloadBundle).not.toHaveBeenCalled();
   });
 
   it('forwards available undo and redo actions', () => {
