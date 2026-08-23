@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { HoverTooltip } from '../ui/HoverTooltip';
 
 interface CanvasSidebarToolbarProps {
@@ -8,6 +8,7 @@ interface CanvasSidebarToolbarProps {
   onOpenReactionEditor?: () => void;
   onToggleModelDrawer: () => void;
   onDownloadArtifact: () => void;
+  onDownloadBundle: () => void;
   onSaveChanges: () => void;
   onCheckBuild: () => void;
   onUndo: () => void;
@@ -15,6 +16,7 @@ interface CanvasSidebarToolbarProps {
   canUndo: boolean;
   canRedo: boolean;
   downloadingArtifact: boolean;
+  downloadingBundle: boolean;
   savingChanges: boolean;
   checkingBuild: boolean;
 }
@@ -175,6 +177,66 @@ const DownloadIcon = () => (
   </svg>
 );
 
+const PackageIcon = () => (
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M21 8v8a2 2 0 0 1-1 1.73l-7 4a2 2 0 0 1-2 0l-7-4A2 2 0 0 1 3 16V8" />
+    <path d="M3.27 6.96 12 12l8.73-5.04" />
+    <path d="M12 22.08V12" />
+    <path d="M12 2 3 7l9 5 9-5-9-5Z" />
+  </svg>
+);
+
+const ZipIcon = () => (
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M16 2H8a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2V4a2 2 0 0 0-2-2Z" />
+    <path d="M12 2v20" strokeDasharray="2 2" />
+  </svg>
+);
+
+function getDownloadMenuItemBackground(hovered: boolean, disabled?: boolean): string {
+  if (disabled) return 'transparent';
+  return hovered ? '#f1f5f9' : 'transparent';
+}
+
+const DownloadMenuItem: React.FC<{
+  label: string;
+  sublabel: string;
+  icon: React.ReactNode;
+  disabled?: boolean;
+  loading?: boolean;
+  onClick: () => void;
+}> = ({ label, sublabel, icon, disabled, loading, onClick }) => {
+  const [hovered, setHovered] = useState(false);
+  return (
+    <button
+      type="button"
+      onClick={disabled ? undefined : onClick}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+      style={{
+        display: 'flex', alignItems: 'center', gap: 10,
+        width: '100%', padding: '8px 10px', border: 'none', borderRadius: 6,
+        background: getDownloadMenuItemBackground(hovered, disabled),
+        color: disabled ? '#94a3b8' : '#0f172a',
+        cursor: disabled ? 'not-allowed' : 'pointer', textAlign: 'left',
+        transition: 'background 0.1s',
+      }}
+    >
+      <span style={{
+        display: 'flex', flexShrink: 0, color: disabled ? '#c8d3dd' : '#049484',
+        animation: loading ? 'spin 0.9s linear infinite' : undefined,
+      }}
+      >
+        {icon}
+      </span>
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ fontSize: 13, fontWeight: 600 }}>{label}</div>
+        <div style={{ fontSize: 11, color: '#64748b', fontWeight: 400, marginTop: 1 }}>{sublabel}</div>
+      </div>
+    </button>
+  );
+};
+
 const SaveIcon = () => (
   <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
     <rect x="3" y="3" width="18" height="18" rx="2" />
@@ -190,6 +252,7 @@ export const CanvasSidebarToolbar: React.FC<CanvasSidebarToolbarProps> = ({
   onOpenReactionEditor,
   onToggleModelDrawer,
   onDownloadArtifact,
+  onDownloadBundle,
   onSaveChanges,
   onCheckBuild,
   onUndo,
@@ -197,10 +260,24 @@ export const CanvasSidebarToolbar: React.FC<CanvasSidebarToolbarProps> = ({
   canUndo,
   canRedo,
   downloadingArtifact,
+  downloadingBundle,
   savingChanges,
   checkingBuild,
 }) => {
-  const busy = downloadingArtifact || savingChanges || checkingBuild;
+  const busy = downloadingArtifact || downloadingBundle || savingChanges || checkingBuild;
+  const [showDownloadMenu, setShowDownloadMenu] = useState(false);
+  const downloadMenuRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!showDownloadMenu) return;
+    const handler = (event: MouseEvent) => {
+      if (downloadMenuRef.current && !downloadMenuRef.current.contains(event.target as unknown as HTMLElement)) {
+        setShowDownloadMenu(false);
+      }
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [showDownloadMenu]);
 
   return (
     <div style={sidebarStackStyle}>
@@ -216,15 +293,50 @@ export const CanvasSidebarToolbar: React.FC<CanvasSidebarToolbarProps> = ({
 
         <SidebarDivider />
 
-        <SidebarButton
-          label="Download"
-          description="Export this project as a ZIP file"
-          onClick={onDownloadArtifact}
-          loading={downloadingArtifact}
-          disabled={busy}
-        >
-          <DownloadIcon />
-        </SidebarButton>
+        <div ref={downloadMenuRef} style={{ position: 'relative' }}>
+          <SidebarButton
+            label="Download"
+            description="Export this project"
+            onClick={() => setShowDownloadMenu(current => !current)}
+            loading={downloadingArtifact || downloadingBundle}
+            disabled={busy}
+            active={showDownloadMenu}
+          >
+            <DownloadIcon />
+          </SidebarButton>
+
+          {showDownloadMenu && (
+            <div style={{
+              position: 'absolute',
+              left: 'calc(100% + 8px)',
+              top: 0,
+              background: '#ffffff',
+              borderRadius: 10,
+              boxShadow: '0 8px 32px rgba(0,0,0,0.16), 0 0 0 1px rgba(0,0,0,0.07)',
+              padding: '6px',
+              zIndex: 500,
+              minWidth: 240,
+            }}
+            >
+              <DownloadMenuItem
+                label="Project export"
+                sublabel="Download the project as a ZIP file"
+                icon={<ZipIcon />}
+                loading={downloadingArtifact}
+                disabled={busy}
+                onClick={() => { setShowDownloadMenu(false); onDownloadArtifact(); }}
+              />
+              <DownloadMenuItem
+                label="Easy deploy package"
+                sublabel="JAR, docs, and scripts ready to run"
+                icon={<PackageIcon />}
+                loading={downloadingBundle}
+                disabled={busy}
+                onClick={() => { setShowDownloadMenu(false); onDownloadBundle(); }}
+              />
+            </div>
+          )}
+        </div>
 
         {!readOnly && (
           <SidebarButton

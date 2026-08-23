@@ -336,6 +336,7 @@ export const CanvasPage: React.FC = () => {
   // check / download / save
   const [checkingBuild, setCheckingBuild] = useState(false);
   const [downloadingArtifact, setDownloadingArtifact] = useState(false);
+  const [downloadingBundle, setDownloadingBundle] = useState(false);
   const [savingChanges, setSavingChanges] = useState(false);
   const [popup, setPopup] = useState<{ message: string; type: CanvasPopupNotificationType } | null>(null);
   const notifyUmlPanelLoadError = useCallback((message: CanvasUmlPanelLoadErrorMessage) => {
@@ -1201,6 +1202,26 @@ export const CanvasPage: React.FC = () => {
     }
   }, [activeProjectId]);
 
+  const handleDownloadBundle = useCallback(async () => {
+    if (!activeProjectId) return;
+    setDownloadingBundle(true);
+    setPopup({ message: 'Downloading easy deploy package…', type: 'info' });
+    try {
+      const blob = await apiService.downloadVsumBundle(activeProjectId);
+      downloadBlobAsFile(blob, `vsum-${activeProjectId}-easy-deploy.zip`);
+      setPopup({ message: 'Easy deploy package downloaded successfully!', type: 'success' });
+    } catch (e: any) {
+      const data = e?.response?.data;
+      const detail = (typeof data?.message === 'string' && data.message) ||
+        (typeof data === 'string' && data) ||
+        e?.message || 'Download failed.';
+      setPopup({ message: detail, type: 'error' });
+    } finally {
+      setDownloadingBundle(false);
+      setTimeout(() => setPopup(null), 5000);
+    }
+  }, [activeProjectId]);
+
   // ── Save changes ──────────────────────────────────────────────────────────
 
   const handleSaveChanges = useCallback(async () => {
@@ -1394,6 +1415,7 @@ export const CanvasPage: React.FC = () => {
         onOpenReactionEditor={handleOpenReactionEditor}
         onToggleModelDrawer={() => setShowDrawer(d => !d)}
         onDownloadArtifact={handleDownloadArtifact}
+        onDownloadBundle={handleDownloadBundle}
         onSaveChanges={handleSaveChanges}
         onCheckBuild={handleCheckBuild}
         onUndo={() => flowCanvasRef.current?.undo?.()}
@@ -1401,6 +1423,7 @@ export const CanvasPage: React.FC = () => {
         canUndo={canUndo}
         canRedo={canRedo}
         downloadingArtifact={downloadingArtifact}
+        downloadingBundle={downloadingBundle}
         savingChanges={savingChanges}
         checkingBuild={checkingBuild}
       />}

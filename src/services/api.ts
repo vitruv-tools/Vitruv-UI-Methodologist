@@ -57,32 +57,82 @@ class ApiService {
   }
 
   /**
-   * Ensure a successful artifact response is a ZIP blob (not JSON error text).
+   * Ensure a successful download response is a ZIP blob (not JSON error text).
    */
-  private async parseArtifactBlob(response: Response): Promise<Blob> {
+  private async parseArtifactBlob(response: Response, label: string = 'Artifact'): Promise<Blob> {
     const contentType = response.headers.get('Content-Type')?.toLowerCase() ?? '';
     if (contentType.includes('json')) {
       const errorText = await response.text();
-      throw this.createApiError(errorText, 'Artifact download failed');
+      throw this.createApiError(errorText, `${label} download failed`);
     }
 
     const blob = await response.blob();
 
     if (blob.type?.toLowerCase().includes('json')) {
-      throw this.createApiError(await blob.text(), 'Artifact download failed');
+      throw this.createApiError(await blob.text(), `${label} download failed`);
     }
 
     if (!blob.size) {
-      throw this.createApiError('', 'Artifact download returned an empty file');
+      throw this.createApiError('', `${label} download returned an empty file`);
     }
 
     const header = new Uint8Array(await new Response(blob.slice(0, 4)).arrayBuffer());
     if (header[0] !== 0x50 || header[1] !== 0x4b) {
       const preview = await blob.slice(0, 512).text();
-      throw this.createApiError(preview, 'Artifact download did not return a valid ZIP file');
+      throw this.createApiError(preview, `${label} download did not return a valid ZIP file`);
     }
 
     return blob;
+  }
+
+  /**
+   * Fetch a ZIP blob from an authenticated vSUM build endpoint, retrying once
+   * on a 401 after a token refresh.
+   */
+  private async downloadVsumZip(path: string, label: string): Promise<Blob> {
+    const token = await AuthService.ensureValidToken();
+
+    if (!token) {
+      throw new Error('No valid authentication token available');
+    }
+
+    const url = `${this.baseURL}${path}`;
+    const headers: Record<string, string> = {
+      Authorization: `Bearer ${token}`,
+      Accept: 'application/zip, application/octet-stream, */*',
+    };
+
+    let response = await fetch(url, {
+      method: 'GET',
+      headers,
+    });
+
+    if (response.status === 401) {
+      try {
+        await AuthService.refreshToken();
+      } catch {
+        console.error(`Token refresh failed during ${label.toLowerCase()} download`);
+      }
+
+      const newToken = await AuthService.ensureValidToken();
+      if (newToken) {
+        response = await fetch(url, {
+          method: 'GET',
+          headers: {
+            ...headers,
+            Authorization: `Bearer ${newToken}`,
+          },
+        });
+      }
+    }
+
+    if (!response.ok) {
+      const errorText = await this.getResponseText(response);
+      console.error(`${label} download failed`, { status: response.status });
+      throw this.createApiError(errorText, `${label} download failed`);
+    }
+
+    return this.parseArtifactBlob(response, label);
   }
 
   /**
@@ -612,49 +662,16 @@ class ApiService {
    * Returns a ZIP file blob containing the build artifact
    */
   async downloadVsumArtifact(id: number | string): Promise<Blob> {
-    const token = await AuthService.ensureValidToken();
+    return this.downloadVsumZip(`/api/v1/vsums/${id}/build/artifact`, 'Artifact');
+  }
 
-    if (!token) {
-      throw new Error('No valid authentication token available');
-    }
-
-    const url = `${this.baseURL}/api/v1/vsums/${id}/build/artifact`;
-    const headers: Record<string, string> = {
-      Authorization: `Bearer ${token}`,
-      Accept: 'application/zip, application/octet-stream, */*',
-    };
-
-    let response = await fetch(url, {
-      method: 'GET',
-      headers,
-    });
-
-    if (response.status === 401) {
-      try {
-        await AuthService.refreshToken();
-      } catch {
-        console.error('Token refresh failed during artifact download');
-      }
-
-      const newToken = await AuthService.ensureValidToken();
-      if (newToken) {
-        response = await fetch(url, {
-          method: 'GET',
-          headers: {
-            ...headers,
-            Authorization: `Bearer ${newToken}`,
-          },
-        });
-      }
-    }
-
-    if (!response.ok) {
-      const errorText = await this.getResponseText(response);
-      console.error('Artifact download failed', { status: response.status });
-      throw this.createApiError(errorText, 'Artifact download failed');
-    }
-
-    return this.parseArtifactBlob(response);
+  /**
+   * vSUMS: Download easy deploy package as ZIP file
+   * GET /api/v1/vsums/{id}/build/bundle
+   * Returns a ZIP file blob containing a JAR, documentation, and scripts
+   */
+  async downloadVsumBundle(id: number | string): Promise<Blob> {
+    return this.downloadVsumZip(`/api/v1/vsums/${id}/build/bundle`, 'Easy deploy package');
   }
 
   /**

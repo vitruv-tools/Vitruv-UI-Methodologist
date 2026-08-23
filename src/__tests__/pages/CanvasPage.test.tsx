@@ -69,6 +69,7 @@ jest.mock('../../services/api', () => ({
     removeVsumMember: jest.fn(),
     buildVsum: jest.fn(),
     downloadVsumArtifact: jest.fn(),
+    downloadVsumBundle: jest.fn(),
     renameVsum: jest.fn(),
     deleteMetaModel: jest.fn(),
   },
