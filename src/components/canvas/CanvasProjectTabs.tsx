@@ -11,7 +11,7 @@ const TRACKPAD_SCROLL_HINT = 'Scroll with two fingers on your trackpad to see mo
 const pillShellBase: React.CSSProperties = {
   display: 'flex',
   alignItems: 'center',
-  background: '#ffffff',
+  background: 'var(--v-chrome-bg)',
   borderRadius: 6,
   boxShadow: '0 2px 10px rgba(0,0,0,0.10), 0 0 0 1px rgba(0,0,0,0.06)',
   height: 38,
@@ -119,16 +119,16 @@ export const CanvasProjectTabs: React.FC<CanvasProjectTabsProps> = ({
                   padding: useCompactTabs ? '0 7px' : '0 10px',
                   height: useCompactTabs ? 26 : 28,
                   borderRadius: 5,
-                  border: isActive ? '1px solid #049484' : '1px solid #e5e7eb',
-                  background: isActive ? '#f0fdfc' : '#fafafa',
+                  border: isActive ? '1px solid #049484' : '1px solid var(--v-border)',
+                  background: isActive ? 'var(--v-uml-primary-soft)' : 'var(--v-surface-hover)',
                   cursor: 'pointer',
                   flexShrink: 0,
                 }}
                 onMouseEnter={e => {
-                  if (!isActive) e.currentTarget.style.background = '#f1f5f9';
+                  if (!isActive) e.currentTarget.style.background = 'var(--v-chrome-hover)';
                 }}
                 onMouseLeave={e => {
-                  if (!isActive) e.currentTarget.style.background = '#fafafa';
+                  if (!isActive) e.currentTarget.style.background = 'var(--v-surface-hover)';
                 }}
               >
                 {isDirty && (
@@ -147,7 +147,7 @@ export const CanvasProjectTabs: React.FC<CanvasProjectTabsProps> = ({
                   style={{
                     fontSize: useCompactTabs ? 11 : 12,
                     fontWeight: isActive ? 700 : 500,
-                    color: isActive ? '#049484' : '#64748b',
+                    color: isActive ? '#049484' : 'var(--v-text-muted)',
                     whiteSpace: 'nowrap',
                     maxWidth: useCompactTabs ? 80 : 120,
                     overflow: 'hidden',
@@ -157,7 +157,7 @@ export const CanvasProjectTabs: React.FC<CanvasProjectTabsProps> = ({
                 >
                   {label}
                   {duplicateCount > 1 && (
-                    <span style={{ marginLeft: 3, fontSize: useCompactTabs ? 8 : 9, color: '#94a3b8' }}>
+                      <span style={{ marginLeft: 3, fontSize: useCompactTabs ? 8 : 9, color: 'var(--v-text-faint)' }}>
                       #{tab.projectId}
                     </span>
                   )}
@@ -172,7 +172,7 @@ export const CanvasProjectTabs: React.FC<CanvasProjectTabsProps> = ({
                   style={{
                     border: 'none',
                     background: 'transparent',
-                    color: '#94a3b8',
+                    color: 'var(--v-text-muted)',
                     cursor: 'pointer',
                     fontSize: useCompactTabs ? 12 : 13,
                     lineHeight: 1,
@@ -185,7 +185,7 @@ export const CanvasProjectTabs: React.FC<CanvasProjectTabsProps> = ({
                     flexShrink: 0,
                   }}
                   onMouseEnter={e => { e.currentTarget.style.color = '#dc2626'; }}
-                  onMouseLeave={e => { e.currentTarget.style.color = '#94a3b8'; }}
+                  onMouseLeave={e => { e.currentTarget.style.color = 'var(--v-text-muted)'; }}
                 >
                   ×
                 </button>
@@ -204,7 +204,7 @@ export const CanvasProjectTabs: React.FC<CanvasProjectTabsProps> = ({
               bottom: 0,
               width: 14,
               pointerEvents: 'none',
-              background: 'linear-gradient(to right, transparent, #ffffff)',
+              background: 'linear-gradient(to right, transparent, var(--v-chrome-bg))',
             }}
           />
         )}
@@ -219,7 +219,7 @@ export const CanvasProjectTabs: React.FC<CanvasProjectTabsProps> = ({
         .canvas-project-tabs-scroll::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
       `}</style>
 
-      <div style={{ width: 1, height: 22, background: '#e2e8f0', flexShrink: 0 }} />
+      <div style={{ width: 1, height: 22, background: 'var(--v-chrome-divider)', flexShrink: 0 }} />
 
       <ProjectPickerMenu
         variant="compact"

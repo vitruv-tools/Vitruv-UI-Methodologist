@@ -140,7 +140,7 @@ const FILE_CARD_DISPLAY_CONFIGS: Array<{
 const FONT = 'ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, sans-serif';
 
 const modalStyle: React.CSSProperties = {
-  background: '#ffffff',
+  background: 'var(--v-surface)',
   borderRadius: 8,
   padding: 0,
   width: '540px',
@@ -150,8 +150,9 @@ const modalStyle: React.CSSProperties = {
   flexDirection: 'column',
   overflow: 'hidden',
   boxShadow: '0 8px 40px rgba(0,0,0,0.18), 0 1px 4px rgba(0,0,0,0.06)',
-  border: '1px solid #e2e8f0',
+  border: '1px solid var(--v-border)',
   fontFamily: FONT,
+  color: 'var(--v-text)',
 };
 
 const modalHeaderStyle: React.CSSProperties = {
@@ -199,19 +200,19 @@ const inputFocusStyle: React.CSSProperties = {
   borderColor: '#049484',
   outline: 'none',
   boxShadow: '0 0 0 3px rgba(4,148,132,0.1)',
-  background: '#ffffff',
+  background: 'var(--v-input-bg)',
 };
 
 const uploadSectionStyle: React.CSSProperties = {
   marginTop: '20px',
   paddingTop: '20px',
-  borderTop: '1px solid #f1f5f9',
+  borderTop: '1px solid var(--v-border-subtle)',
 };
 
 const uploadSectionTitleStyle: React.CSSProperties = {
   fontSize: 12,
   fontWeight: 600,
-  color: '#6b7280',
+  color: 'var(--v-text-muted)',
   marginBottom: 12,
   textTransform: 'uppercase',
   letterSpacing: '0.07em',
@@ -282,10 +283,10 @@ const primaryButtonDisabledStyle: React.CSSProperties = {
 const secondaryButtonStyle: React.CSSProperties = {
   flex: '1',
   padding: '10px 18px',
-  border: '1px solid #e5e7eb',
+  border: '1px solid var(--v-border)',
   borderRadius: 6,
-  background: '#ffffff',
-  color: '#374151',
+  background: 'var(--v-surface)',
+  color: 'var(--v-text-secondary)',
   fontSize: 14,
   fontWeight: 500,
   cursor: 'pointer',
@@ -295,7 +296,7 @@ const secondaryButtonStyle: React.CSSProperties = {
 };
 
 const buttonHoverStyle: React.CSSProperties = {
-  background: '#f9fafb',
+  background: 'var(--v-surface-hover)',
 };
 
 const overlayStyle: React.CSSProperties = {
@@ -320,11 +321,11 @@ const overlayStyle: React.CSSProperties = {
 
 const overlayCardStyle: React.CSSProperties = {
   width: 'min(400px, 90vw)',
-  background: '#fff',
+  background: 'var(--v-surface)',
   borderRadius: 12,
   overflow: 'hidden',
   boxShadow: '0 24px 60px rgba(0,0,0,0.28), 0 4px 16px rgba(0,0,0,0.08)',
-  border: '1px solid #e2e8f0',
+  border: '1px solid var(--v-border)',
 };
 
 const overlayTitleStyle: React.CSSProperties = {
@@ -410,13 +411,13 @@ const FileDropZone: React.FC<FileDropZoneProps> = ({
   isUploaded, isUploading, ext, accentColor, label, uploadedFileName, onClick,
 }) => {
   const [hov, setHov] = React.useState(false);
-  let borderColor = '#e5e7eb';
+  let borderColor = 'var(--v-border)';
   if (isUploaded) borderColor = '#bbf7d0';
-  else if (hov) borderColor = '#94a3b8';
+  else if (hov) borderColor = 'var(--v-text-muted)';
 
-  let backgroundColor = '#fafafa';
-  if (isUploaded) backgroundColor = '#f0fdf4';
-  else if (hov) backgroundColor = '#f9fafb';
+  let backgroundColor = 'var(--v-input-bg)';
+  if (isUploaded) backgroundColor = 'rgba(22, 163, 74, 0.12)';
+  else if (hov) backgroundColor = 'var(--v-surface-hover)';
 
   let icon;
   if (isUploaded) {
@@ -460,10 +461,10 @@ const FileDropZone: React.FC<FileDropZoneProps> = ({
     >
       {/* Icon */}
       {icon}
-      <div style={{ fontSize: 13, fontWeight: 500, color: isUploaded ? '#15803d' : '#374151' }}>{label}</div>
+      <div style={{ fontSize: 13, fontWeight: 500, color: isUploaded ? '#15803d' : 'var(--v-text-secondary)' }}>{label}</div>
       {isUploaded && uploadedFileName && (
         <div title={uploadedFileName} style={{
-          fontSize: 11, color: '#6b7280', maxWidth: '100%',
+          fontSize: 11, color: 'var(--v-text-muted)', maxWidth: '100%',
           overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
           fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
         }}>
@@ -584,8 +585,8 @@ const FileUploadCard: React.FC<FileUploadCardProps> = ({
   const { dropLabel, importLabel } = UPLOAD_STATE_LABELS[uploadState];
 
   const cardStyle: React.CSSProperties = {
-    background: '#ffffff',
-    border: `1px solid ${isUploaded ? '#bbf7d0' : '#e5e7eb'}`,
+    background: 'var(--v-surface-muted)',
+    border: `1px solid ${isUploaded ? '#bbf7d0' : 'var(--v-border)'}`,
     borderRadius: 6,
     marginBottom: 10,
     overflow: 'hidden',
@@ -593,12 +594,12 @@ const FileUploadCard: React.FC<FileUploadCardProps> = ({
   const fileModeStyle: React.CSSProperties = {
     ...modeButtonBaseStyle,
     background: inputMode === 'file' ? '#049484' : 'transparent',
-    color:      inputMode === 'file' ? '#ffffff'  : '#6b7280',
+    color:      inputMode === 'file' ? '#ffffff'  : 'var(--v-text-muted)',
   };
   const urlModeStyle: React.CSSProperties = {
     ...modeButtonBaseStyle,
     background: inputMode === 'url' ? '#049484' : 'transparent',
-    color:      inputMode === 'url' ? '#ffffff'  : '#6b7280',
+    color:      inputMode === 'url' ? '#ffffff'  : 'var(--v-text-muted)',
   };
 
   return (

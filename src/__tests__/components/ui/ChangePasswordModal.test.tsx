@@ -60,4 +60,32 @@ describe('ChangePasswordModal', () => {
     expect(confirmPasswordInput).toHaveAttribute('type', 'password');
     expect(screen.getByRole('button', { name: 'Hide password' })).toHaveAttribute('aria-pressed', 'true');
   });
+
+  it('places the theme toggle in the dialog and uses theme surfaces', () => {
+    render(
+      <ChangePasswordModal
+        isOpen
+        onClose={jest.fn()}
+        currentPassword=""
+        newPassword=""
+        confirmPassword=""
+        onCurrentPasswordChange={jest.fn()}
+        onNewPasswordChange={jest.fn()}
+        onConfirmPasswordChange={jest.fn()}
+        validation={validatePassword('')}
+        isConfirmValid
+        isChanging={false}
+        error=""
+        success=""
+        onSubmit={jest.fn()}
+        canSubmit={false}
+      />,
+    );
+
+    const dialog = screen.getByRole('dialog', { name: 'Change Password' });
+    const toggle = screen.getByRole('button', { name: 'Switch to dark mode' });
+
+    expect(dialog).toContainElement(toggle);
+    expect(dialog).toHaveClass('change-password-dialog');
+  });
 });

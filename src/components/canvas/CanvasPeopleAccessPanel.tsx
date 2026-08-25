@@ -67,7 +67,7 @@ const PeoplePanelMemberRow: React.FC<PeoplePanelMemberRowProps> = ({
           style={{
             fontSize: 13,
             fontWeight: 600,
-            color: '#0f172a',
+            color: 'var(--v-text)',
             overflow: 'hidden',
             textOverflow: 'ellipsis',
             whiteSpace: 'nowrap',
@@ -79,7 +79,7 @@ const PeoplePanelMemberRow: React.FC<PeoplePanelMemberRowProps> = ({
           title={member.email}
           style={{
             fontSize: 11,
-            color: '#64748b',
+            color: 'var(--v-text-muted)',
             marginTop: 1,
             overflow: 'hidden',
             textOverflow: 'ellipsis',
@@ -177,18 +177,18 @@ export const CanvasPeopleAccessPanel: React.FC<CanvasPeopleAccessPanelProps> = (
     right: 0,
     width: 340,
     maxWidth: '92vw',
-    background: '#ffffff',
+    background: 'var(--v-chrome-bg)',
     borderRadius: 12,
     boxShadow: '0 12px 40px rgba(0,0,0,0.14), 0 0 0 1px rgba(0,0,0,0.06)',
-    border: '1px solid #e2e8f0',
+    border: '1px solid var(--v-border)',
     overflow: 'hidden',
     zIndex: 500,
   }}>
     <div style={{ padding: '14px 16px 12px', borderBottom: '1px solid #f1f5f9' }}>
-      <div style={{ fontSize: 15, fontWeight: 700, color: '#0f172a' }}>
+      <div style={{ fontSize: 15, fontWeight: 700, color: 'var(--v-text)' }}>
         {isSharedAccess ? 'Shared with you' : 'People with access'}
       </div>
-      <div style={{ fontSize: 12, color: '#64748b', marginTop: 3, lineHeight: 1.4 }}>
+      <div style={{ fontSize: 12, color: 'var(--v-text-muted)', marginTop: 3, lineHeight: 1.4 }}>
         {getCanvasMembersPanelSubtitle({
           isSharedAccess,
           projectSharer,
@@ -219,7 +219,7 @@ export const CanvasPeopleAccessPanel: React.FC<CanvasPeopleAccessPanelProps> = (
       scrollbarWidth: 'thin',
     }}>
       {membersLoading && panelMembers.length === 0 && (
-        <div style={{ padding: '12px 8px', fontSize: 13, color: '#64748b', fontStyle: 'italic' }}>
+        <div style={{ padding: '12px 8px', fontSize: 13, color: 'var(--v-text-muted)', fontStyle: 'italic' }}>
           Loading…
         </div>
       )}
@@ -239,7 +239,7 @@ export const CanvasPeopleAccessPanel: React.FC<CanvasPeopleAccessPanelProps> = (
       ))}
       {!membersLoading && panelMembers.length === 0 && (
         <div style={{ padding: '12px 8px', display: 'grid', gap: 8 }}>
-          <div style={{ fontSize: 13, color: '#64748b' }}>
+          <div style={{ fontSize: 13, color: 'var(--v-text-muted)' }}>
             {isSharedAccess
               ? 'Member list is not available for viewers. You can still view this project.'
               : 'Could not load project members.'}
@@ -251,9 +251,9 @@ export const CanvasPeopleAccessPanel: React.FC<CanvasPeopleAccessPanelProps> = (
               justifySelf: 'start',
               padding: '6px 12px',
               borderRadius: 8,
-              border: '1px solid #e2e8f0',
-              background: '#fff',
-              color: '#334155',
+              border: '1px solid var(--v-border)',
+              background: 'var(--v-surface)',
+              color: 'var(--v-text-secondary)',
               fontSize: 12,
               fontWeight: 600,
               cursor: 'pointer',

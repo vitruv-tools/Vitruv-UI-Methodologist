@@ -41,6 +41,20 @@ describe('SignIn component', () => {
     expect(screen.getByRole('button', { name: /Sign In/i })).toBeInTheDocument();
   });
 
+  it('places the theme toggle inside the sign-in card', () => {
+    const { container } = render(
+      <SignIn
+        onSignInSuccess={mockOnSignInSuccess}
+        onSwitchToSignUp={mockOnSwitchToSignUp}
+      />,
+    );
+
+    const card = container.querySelector('.mock-auth-card');
+    const toggle = screen.getByRole('button', { name: 'Switch to dark mode' });
+
+    expect(card).toContainElement(toggle);
+  });
+
   it('shows validation error when submitting with empty fields', async () => {
     render(
       <SignIn

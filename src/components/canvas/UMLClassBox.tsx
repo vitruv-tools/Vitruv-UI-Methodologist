@@ -69,7 +69,7 @@ function getClassBoxNameSectionHeight(
 
 function getClassBoxBorder(selected: boolean, connectSource: boolean): string {
   if (connectSource || selected) return `2.5px solid ${UML.primary}`;
-  return `1.5px solid ${UML.border}`;
+  return `1.5px solid ${UML.boxBorder}`;
 }
 
 function isClassBoxHighlighted(
@@ -114,7 +114,7 @@ function getClassBoxOuterStyle(params: {
     width: '100%',
     border: params.boxBorder,
     borderRadius: 8,
-    background: UML.surface,
+    background: UML.boxBg,
     boxShadow: params.boxShadow,
     userSelect: 'none',
     fontFamily: UML.fontMono,
@@ -229,7 +229,7 @@ function getClassBoxNameSectionBackground(
   selected: boolean,
 ): string {
   if (isEditingName || selected) return UML.primarySoft;
-  return UML.surfaceMuted;
+  return UML.boxMuted;
 }
 
 function getClassBoxNameSectionPadding(isEditingName: boolean): string {
@@ -245,7 +245,7 @@ function getClassBoxNameSectionStyle(
   return {
     height: nameSectionH,
     background: nameSectionBackground,
-    borderBottom: `1.5px solid ${UML.border}`,
+    borderBottom: `1.5px solid ${UML.boxBorder}`,
     display: 'flex',
     flexDirection: 'column',
     alignItems: 'center',
@@ -474,7 +474,7 @@ const ClassBoxNameSection = ({
     <span
       style={{
         fontSize: 10,
-        color: '#444444',
+        color: UML.boxTextMuted,
         fontStyle: 'italic',
         fontFamily: 'ui-sans-serif, system-ui, sans-serif',
       }}
@@ -519,8 +519,8 @@ const ClassBoxNameSection = ({
             fontSize: 14,
             fontWeight: 700,
             fontFamily: UML.fontSans,
-            color: UML.ink,
-            background: UML.surface,
+            color: UML.boxText,
+            background: UML.boxBg,
             outline: 'none',
             boxShadow: `0 0 0 3px ${UML.primaryRing}`,
           }}
@@ -551,7 +551,7 @@ const ClassBoxNameSection = ({
         style={{
           fontWeight: 700,
           fontSize: 13,
-          color: '#000000',
+          color: UML.boxText,
           fontFamily: 'ui-sans-serif, system-ui, sans-serif',
           fontStyle: nameFontStyle,
           textAlign: 'center',
@@ -723,9 +723,9 @@ export const UMLClassBox = ({
 
         <div
           style={{
-            borderBottom: `1px solid ${UML.border}`,
+            borderBottom: `1px solid ${UML.boxBorder}`,
             padding: sectionPadding,
-            background: UML.surface,
+            background: UML.boxBg,
             transition: 'padding 0.22s ease',
           }}
         >
@@ -764,7 +764,7 @@ export const UMLClassBox = ({
         <div
           style={{
             padding: sectionPadding,
-            background: '#ffffff',
+            background: UML.boxBg,
             minHeight: UML_CLASS_EMPTY_OPERATION_SECTION_HEIGHT,
             transition: 'padding 0.22s ease',
           }}

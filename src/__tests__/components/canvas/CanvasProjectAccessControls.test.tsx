@@ -290,4 +290,9 @@ describe('CanvasProjectAccessControls', () => {
     expect(accountProps.dismissalBoundaryRef.current).toBeInstanceOf(HTMLDivElement);
     expect(accountProps.onCloseSiblingMenu).toEqual(expect.any(Function));
   });
+
+  it('renders a dark mode toggle next to the account menu', () => {
+    renderControls();
+    expect(screen.getByRole('button', { name: 'Switch to dark mode' })).toBeInTheDocument();
+  });
 });

@@ -18,7 +18,7 @@ export const DANGER_COLOR_HOVER = '#b91c1c';
 
 /** Large modal panel (code editor, UML viewer, etc.) */
 export const largeModalPanelStyle: React.CSSProperties = {
-  backgroundColor: '#ffffff',
+  backgroundColor: 'var(--v-surface)',
   borderRadius: '12px',
   width: '90%',
   maxWidth: '1200px',
@@ -36,8 +36,8 @@ export const largeModalPanelStyle: React.CSSProperties = {
 
 export const modalPanelHeaderStyle: React.CSSProperties = {
   padding: '14px 20px',
-  borderBottom: '1px solid #f1f5f9',
-  background: '#fafafa',
+  borderBottom: '1px solid var(--v-border-subtle)',
+  background: 'var(--v-table-header)',
   display: 'flex',
   alignItems: 'center',
   justifyContent: 'space-between',
@@ -46,8 +46,8 @@ export const modalPanelHeaderStyle: React.CSSProperties = {
 
 export const modalPanelToolbarStyle: React.CSSProperties = {
   padding: '10px 20px',
-  borderBottom: '1px solid #f1f5f9',
-  background: '#ffffff',
+  borderBottom: '1px solid var(--v-border-subtle)',
+  background: 'var(--v-surface)',
   display: 'flex',
   gap: '8px',
   flexWrap: 'wrap',
@@ -57,8 +57,8 @@ export const modalPanelToolbarStyle: React.CSSProperties = {
 
 export const modalPanelFooterStyle: React.CSSProperties = {
   padding: '10px 20px',
-  borderTop: '1px solid #f1f5f9',
-  background: '#f8fafc',
+  borderTop: '1px solid var(--v-border-subtle)',
+  background: 'var(--v-surface-muted)',
   display: 'flex',
   justifyContent: 'space-between',
   alignItems: 'center',
@@ -103,7 +103,7 @@ export const labelStyle: React.CSSProperties = {
   display: 'block',
   fontSize: '13px',
   fontWeight: 600,
-  color: '#374151',
+  color: 'var(--v-text-secondary)',
   marginBottom: '6px',
   fontFamily: 'ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, sans-serif',
   letterSpacing: '0.01em',
@@ -112,13 +112,13 @@ export const labelStyle: React.CSSProperties = {
 export const inputStyle: React.CSSProperties = {
   width: '100%',
   padding: '10px 12px',
-  border: '1.5px solid #e2e8f0',
+  border: '1.5px solid var(--v-border)',
   borderRadius: '8px',
   fontSize: '14px',
   boxSizing: 'border-box',
   transition: 'all 0.2s ease',
-  background: '#f8fafc',
-  color: '#0f172a',
+  background: 'var(--v-surface-muted)',
+  color: 'var(--v-text)',
   fontFamily: 'ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, sans-serif',
 };
 

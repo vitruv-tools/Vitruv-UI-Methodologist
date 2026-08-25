@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import ReactDOM from 'react-dom';
 import { MODAL_Z_INDEX, getAppPortalRoot, useModalBodyLock } from '../ui/modalUtils';
 import { ConfirmDialog } from '../ui/ConfirmDialog';
+import { ThemeToggle } from '../ui/ThemeToggle';
 import { UMLDiagram, UMLDiagramHandle, UmlDiagramSaveContext, WORKSPACE_DOT_BACKGROUND } from './UMLDiagram';
 
 interface FloatingUMLPanelProps {
@@ -37,15 +38,15 @@ interface FloatingUMLPanelProps {
 /** Vitruv toolbar tokens — aligned with UMLDiagram / canvas */
 const V = {
   primary: '#049484',
-  primarySoft: '#ecfdf5',
-  primaryBorder: '#a7f3d0',
+  primarySoft: 'var(--v-uml-primary-soft)',
+  primaryBorder: 'var(--v-uml-primary-border)',
   primaryRing: 'rgba(4,148,132,0.15)',
-  ink: '#0c436e',
-  text: '#374151',
-  textMuted: '#64748b',
-  border: '#e2e8f0',
-  surface: '#ffffff',
-  surfaceHover: '#f0fdfa',
+  ink: 'var(--v-text)',
+  text: 'var(--v-text-secondary)',
+  textMuted: 'var(--v-text-muted)',
+  border: 'var(--v-border)',
+  surface: 'var(--v-surface)',
+  surfaceHover: 'var(--v-surface-hover)',
 } as const;
 
 const ToolbarDivider = () => (
@@ -228,7 +229,7 @@ export const FloatingUMLPanel: React.FC<FloatingUMLPanelProps> = ({
           top: 12,
           left: 12,
           zIndex: 40,
-          background: V.surface,
+          background: 'var(--v-chrome-bg)',
           border: `1px solid ${V.primaryBorder}`,
           boxShadow: `0 4px 14px ${V.primaryRing}, 0 0 0 1px rgba(4,148,132,0.05)`,
           display: 'flex',
@@ -403,6 +404,9 @@ export const FloatingUMLPanel: React.FC<FloatingUMLPanelProps> = ({
             {refreshMessage}
           </span>
         )}
+
+        <ToolbarDivider />
+        <ThemeToggle />
       </div>
 
       <div style={{ flex: 1, overflow: 'hidden', position: 'relative', minHeight: 0 }}>
@@ -482,7 +486,7 @@ const getToolbarBtnStyle = (
 
   let background: string = V.surface;
   if (disabled) {
-    background = '#f8fafc';
+    background = 'var(--v-surface-muted)';
   } else if (hov) {
     background = V.surfaceHover;
   }
@@ -526,7 +530,7 @@ const renderToolbarBtnContent = (
       <span style={{
         width: 14,
         height: 14,
-        border: '2px solid #e2e8f0',
+        border: '2px solid var(--v-border)',
         borderTopColor: V.primary,
         borderRadius: '50%',
         animation: 'uml-spin 0.7s linear infinite',
@@ -582,10 +586,10 @@ const ZoomButton: React.FC<{ title: string; onClick: () => void; children: React
       onMouseLeave={() => setHov(false)}
       style={{
         width: 32, height: 32,
-        border: '1px solid #e2e8f0',
+        border: '1px solid var(--v-border)',
         borderRadius: 8,
-        background: hov ? '#f8fafc' : '#ffffff',
-        color: hov ? '#0f172a' : '#64748b',
+        background: hov ? 'var(--v-chrome-hover)' : 'var(--v-chrome-bg)',
+        color: hov ? 'var(--v-chrome-icon-hover)' : 'var(--v-chrome-icon)',
         boxShadow: '0 1px 4px rgba(0,0,0,0.08)',
         cursor: 'pointer',
         display: 'flex', alignItems: 'center', justifyContent: 'center',

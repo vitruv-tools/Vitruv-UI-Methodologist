@@ -903,7 +903,7 @@ export const ModelLibraryTable: React.FC<ModelLibraryTableProps> = ({ onModelOpe
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
       {/* Page header */}
       <div style={{ padding: '32px 40px 0', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexShrink: 0 }}>
-        <h1 style={{ margin: 0, fontSize: 26, fontWeight: 700, color: '#111827', letterSpacing: '-0.02em' }}>Model Library</h1>
+        <h1 style={{ margin: 0, fontSize: 26, fontWeight: 700, color: 'var(--v-text)', letterSpacing: '-0.02em' }}>Model Library</h1>
         <button type="button"
           onClick={() => setShowCreate(true)}
           style={{ display: 'flex', alignItems: 'center', gap: 7, padding: '9px 18px', background: '#0B1720', color: '#fff', border: 'none', borderRadius: 9, fontSize: 14, fontWeight: 600, cursor: 'pointer', boxShadow: '0 1px 4px rgba(11,23,32,0.25)', transition: 'background 0.15s', fontFamily: 'ui-sans-serif, system-ui, sans-serif' }}
@@ -1008,10 +1008,10 @@ export const ModelLibraryTable: React.FC<ModelLibraryTableProps> = ({ onModelOpe
           </div>
         )}
 
-        <div style={{ flex: 1, background: '#fff', border: '1px solid #e5e7eb', borderRadius: 12, overflow: 'auto', boxShadow: '0 1px 4px rgba(0,0,0,0.04)' }}>
+        <div style={{ flex: 1, background: 'var(--v-surface)', border: '1px solid var(--v-border)', borderRadius: 12, overflow: 'auto', boxShadow: '0 1px 4px rgba(0,0,0,0.04)' }}>
           <table style={{ width: '100%', borderCollapse: 'collapse' }}>
             <thead>
-              <tr style={{ borderBottom: '1px solid #f3f4f6' }}>
+              <tr style={{ borderBottom: '1px solid var(--v-border-subtle)' }}>
                 {['Name', 'Created', 'Projects', 'Actions'].map((col, i) => (
                   <th
                     key={col}
@@ -1020,11 +1020,11 @@ export const ModelLibraryTable: React.FC<ModelLibraryTableProps> = ({ onModelOpe
                       textAlign: 'left',
                       fontSize: 12,
                       fontWeight: 600,
-                      color: '#6b7280',
+                      color: 'var(--v-text-muted)',
                       letterSpacing: '0.04em',
                       textTransform: 'uppercase',
-                      background: '#fafafa',
-                      borderBottom: '1px solid #f3f4f6',
+                      background: 'var(--v-table-header)',
+                      borderBottom: '1px solid var(--v-border-subtle)',
                       whiteSpace: 'nowrap',
                       width: i === 3 ? 80 : undefined,
                     }}
@@ -1043,7 +1043,7 @@ export const ModelLibraryTable: React.FC<ModelLibraryTableProps> = ({ onModelOpe
         {/* Pagination */}
         {totalPages > 1 && (
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', paddingTop: 14 }}>
-            <span style={{ fontSize: 13, color: '#6b7280' }}>
+            <span style={{ fontSize: 13, color: 'var(--v-text-muted)' }}>
               {(currentPage - 1) * itemsPerPage + 1}–{Math.min(currentPage * itemsPerPage, models.length)} of {models.length}
             </span>
             <div style={{ display: 'flex', gap: 4 }}>
@@ -1121,13 +1121,13 @@ const TableRow: React.FC<TableRowProps> = ({ model, onView, onDelete }) => {
         }
       }}
       tabIndex={0}
-      style={{ borderBottom: '1px solid #f9fafb', background: hovered ? '#fafafa' : '#fff', cursor: 'pointer', transition: 'background 0.1s' }}
+      style={{ borderBottom: '1px solid var(--v-border-subtle)', background: hovered ? 'var(--v-surface-hover)' : 'var(--v-surface)', cursor: 'pointer', transition: 'background 0.1s' }}
     >
-      <td style={{ padding: '13px 16px', fontSize: 14, fontWeight: 500, color: '#111827' }}>{model.name}</td>
-      <td style={{ padding: '13px 16px', fontSize: 14, color: '#6b7280' }}>{formatDate(model.createdAt)}</td>
+      <td style={{ padding: '13px 16px', fontSize: 14, fontWeight: 500, color: 'var(--v-text)' }}>{model.name}</td>
+      <td style={{ padding: '13px 16px', fontSize: 14, color: 'var(--v-text-muted)' }}>{formatDate(model.createdAt)}</td>
       <td style={{ padding: '13px 16px' }}>
         {hasProjects ? (
-          <span style={{ padding: '3px 10px', background: '#f3f4f6', border: '1px solid #e5e7eb', borderRadius: 20, fontSize: 12, color: '#374151', fontWeight: 500 }}>
+          <span style={{ padding: '3px 10px', background: 'var(--v-surface-muted)', border: '1px solid var(--v-border)', borderRadius: 20, fontSize: 12, color: 'var(--v-text-secondary)', fontWeight: 500 }}>
             Projects
           </span>
         ) : (
@@ -1159,11 +1159,11 @@ interface PageBtnProps {
 }
 
 const PageBtn: React.FC<PageBtnProps> = ({ children, active, disabled, onClick }) => {
-  let color = '#374151';
+  let color = 'var(--v-text)';
   if (active) {
     color = '#fff';
   } else if (disabled) {
-    color = '#d1d5db';
+    color = 'var(--v-text-faint)';
   }
 
   return (
@@ -1173,9 +1173,9 @@ const PageBtn: React.FC<PageBtnProps> = ({ children, active, disabled, onClick }
     style={{
       padding: '6px 11px',
       border: '1px solid',
-      borderColor: active ? '#049484' : '#e5e7eb',
+      borderColor: active ? '#049484' : 'var(--v-border)',
       borderRadius: 7,
-      background: active ? '#049484' : '#fff',
+      background: active ? '#049484' : 'var(--v-surface)',
       color,
       fontSize: 13,
       fontWeight: active ? 600 : 400,

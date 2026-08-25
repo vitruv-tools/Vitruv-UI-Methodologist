@@ -57,13 +57,13 @@ const PortalMenuItem: React.FC<{ label: string; onSelect: () => void; danger?: b
       border: 'none',
       background: 'transparent',
       fontSize: 13,
-      color: danger ? '#dc2626' : '#374151',
+      color: danger ? '#dc2626' : 'var(--v-text-secondary)',
       cursor: 'pointer',
       textAlign: 'left',
       pointerEvents: 'auto',
     }}
     onMouseEnter={e => {
-      (e.currentTarget as HTMLButtonElement).style.background = danger ? '#fef2f2' : '#f9fafb';
+      (e.currentTarget as HTMLButtonElement).style.background = danger ? '#fef2f2' : 'var(--v-surface-hover)';
     }}
     onMouseLeave={e => {
       (e.currentTarget as HTMLButtonElement).style.background = 'transparent';
@@ -155,8 +155,8 @@ export const PortalRowActionsMenu: React.FC<PortalRowActionsMenuProps> = ({
         top: menuPos.top,
         left: menuPos.left,
         transform: 'translateX(-100%)',
-        background: '#fff',
-        border: '1px solid #e5e7eb',
+        background: 'var(--v-surface)',
+        border: '1px solid var(--v-border)',
         borderRadius: 10,
         boxShadow: '0 8px 24px rgba(0,0,0,0.12)',
         zIndex: ACTIONS_MENU_Z_INDEX,
@@ -168,7 +168,7 @@ export const PortalRowActionsMenu: React.FC<PortalRowActionsMenuProps> = ({
       {actions.map(action => (
         <React.Fragment key={action.label}>
           {action.dividerBefore && (
-            <div style={{ height: 1, background: '#f3f4f6', margin: '2px 0' }} />
+            <div style={{ height: 1, background: 'var(--v-border-subtle)', margin: '2px 0' }} />
           )}
           <PortalMenuItem
             label={action.label}
@@ -192,22 +192,22 @@ export const PortalRowActionsMenu: React.FC<PortalRowActionsMenuProps> = ({
         onMouseDown={e => e.stopPropagation()}
         style={{
           padding: '4px 8px',
-          border: '1px solid #e5e7eb',
+          border: '1px solid var(--v-border)',
           borderRadius: 6,
-          background: '#fff',
+          background: 'var(--v-surface)',
           cursor: 'pointer',
-          color: '#6b7280',
+          color: 'var(--v-text-muted)',
           display: 'flex',
           alignItems: 'center',
           transition: 'all 0.15s',
         }}
         onMouseEnter={e => {
-          (e.currentTarget as HTMLButtonElement).style.background = '#f9fafb';
-          (e.currentTarget as HTMLButtonElement).style.borderColor = '#d1d5db';
+          (e.currentTarget as HTMLButtonElement).style.background = 'var(--v-surface-hover)';
+          (e.currentTarget as HTMLButtonElement).style.borderColor = 'var(--v-text-faint)';
         }}
         onMouseLeave={e => {
-          (e.currentTarget as HTMLButtonElement).style.background = '#fff';
-          (e.currentTarget as HTMLButtonElement).style.borderColor = '#e5e7eb';
+          (e.currentTarget as HTMLButtonElement).style.background = 'var(--v-surface)';
+          (e.currentTarget as HTMLButtonElement).style.borderColor = 'var(--v-border)';
         }}
       >
         <DotsIcon />

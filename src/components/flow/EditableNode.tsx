@@ -46,7 +46,7 @@ const typeSelectStyle: React.CSSProperties = {
   borderRadius: '3px',
   fontSize: '16px',
   fontFamily: `'Consolas', 'Courier New', monospace`,
-  color: '#0c436e',
+  color: 'var(--v-uml-edge, #0c436e)',
   background: '#f4f8fc',
   padding: '2px 5px',
   cursor: 'pointer',
@@ -574,7 +574,7 @@ export function EditableNode({ id, data, selected, isConnectable }: NodeProps<UM
           value={nodeData.className || ''}
           onSave={(newValue) => updateNodeData({ className: newValue })}
           placeholder="ClassName"
-          style={{ fontWeight: 600, fontSize: '13px', color: '#0c436e' }}
+          style={{ fontWeight: 600, fontSize: '13px', color: 'var(--v-uml-edge, #0c436e)' }}
         />
       </div>
       {nodeData.attributes && nodeData.attributes.length > 0 && (
@@ -595,7 +595,7 @@ export function EditableNode({ id, data, selected, isConnectable }: NodeProps<UM
           value={nodeData.className || ''}
           onSave={(newValue) => updateNodeData({ className: newValue })}
           placeholder="ClassName"
-          style={{ fontWeight: 600, fontSize: '13px', color: '#0c436e', fontStyle: 'italic' }}
+          style={{ fontWeight: 600, fontSize: '13px', color: 'var(--v-uml-edge, #0c436e)', fontStyle: 'italic' }}
         />
       </div>
       {nodeData.attributes && nodeData.attributes.length > 0 && (
@@ -616,7 +616,7 @@ export function EditableNode({ id, data, selected, isConnectable }: NodeProps<UM
           value={nodeData.className || ''}
           onSave={(newValue) => updateNodeData({ className: newValue })}
           placeholder="InterfaceName"
-          style={{ fontWeight: 600, fontSize: '13px', color: '#0c436e', fontStyle: 'italic' }}
+          style={{ fontWeight: 600, fontSize: '13px', color: 'var(--v-uml-edge, #0c436e)', fontStyle: 'italic' }}
         />
       </div>
       {nodeData.attributes && nodeData.attributes.length > 0 && (

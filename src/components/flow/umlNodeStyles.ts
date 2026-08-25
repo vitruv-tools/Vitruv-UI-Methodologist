@@ -1,7 +1,7 @@
 import React from 'react';
 
 // jjodel-inspired color palette
-const NAVY = '#0c436e';
+const NAVY = 'var(--v-uml-edge, #0c436e)';
 const TEAL = '#087E8B';
 const MAROON = '#5F0F40';
 const GOLD = '#d4a017';

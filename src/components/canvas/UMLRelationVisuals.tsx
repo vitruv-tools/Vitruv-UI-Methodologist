@@ -6,6 +6,7 @@ import {
   type MultiplicityBadge,
   type Point,
 } from '../../utils/umlDiagramGeometry';
+import { UML } from './umlDiagramTheme';
 
 export type UmlRelationEdgeState = 'default' | 'hovered' | 'selected';
 
@@ -19,7 +20,7 @@ export function getUmlRelationEdgeState(
 }
 
 export const UML_RELATION_EDGE_COLORS: Record<UmlRelationEdgeState, string> = {
-  default: '#0c436e',
+  default: UML.edge,
   hovered: '#f87171',
   selected: '#ef4444',
 };
@@ -105,7 +106,7 @@ export const UMLRelationLine = ({
       <path
         d={haloPath}
         fill="none"
-        stroke="#ffffff"
+        stroke={UML.edgeHalo}
         strokeWidth={strokeWidth + 4}
         strokeLinecap="round"
         strokeLinejoin="round"
@@ -125,7 +126,7 @@ export const UMLRelationLine = ({
           textAnchor="middle"
           fontSize="10"
           fill={strokeColor}
-          stroke="#ffffff"
+          stroke={UML.edgeHalo}
           strokeWidth={3}
           paintOrder="stroke fill"
           fontFamily="ui-sans-serif, system-ui, sans-serif"
@@ -195,7 +196,7 @@ export const UMLMultiplicityBadge = ({
       width={36}
       height={24}
       rx={4}
-      fill="#ffffff"
+      fill={UML.boxBg}
       stroke={strokeColor}
       strokeWidth={1.5}
     />
@@ -205,7 +206,7 @@ export const UMLMultiplicityBadge = ({
       textAnchor="middle"
       fontSize="13"
       fontWeight={700}
-      fill={strokeColor}
+      fill={UML.boxText}
       fontFamily="ui-monospace, Consolas, monospace"
     >
       {badge.text}

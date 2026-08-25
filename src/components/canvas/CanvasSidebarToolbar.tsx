@@ -38,7 +38,7 @@ const sidebarCardStyle: React.CSSProperties = {
   left: 'auto',
   top: 'auto',
   zIndex: 'auto',
-  background: '#ffffff',
+  background: 'var(--v-chrome-bg)',
   borderRadius: 8,
   boxShadow: '0 4px 16px rgba(0,0,0,0.13), 0 0 0 1px rgba(0,0,0,0.07)',
   display: 'flex',
@@ -68,7 +68,7 @@ function getSidebarButtonBackground(
   disabled?: boolean,
 ): string {
   if (isFilled) return activeColor;
-  if (hovered && !disabled) return '#f1f5f9';
+  if (hovered && !disabled) return 'var(--v-chrome-hover)';
   return 'transparent';
 }
 
@@ -79,8 +79,8 @@ function getSidebarButtonIconColor(
 ): string {
   if (disabled) return '#c8d3dd';
   if (isFilled) return '#ffffff';
-  if (hovered) return '#1e293b';
-  return '#475569';
+  if (hovered) return 'var(--v-chrome-icon-hover)';
+  return 'var(--v-chrome-icon)';
 }
 
 const SidebarButton: React.FC<SidebarButtonProps> = ({
@@ -195,7 +195,7 @@ const ZipIcon = () => (
 
 function getDownloadMenuItemBackground(hovered: boolean, disabled?: boolean): string {
   if (disabled) return 'transparent';
-  return hovered ? '#f1f5f9' : 'transparent';
+  return hovered ? 'var(--v-chrome-hover)' : 'transparent';
 }
 
 const DownloadMenuItem: React.FC<{
@@ -217,7 +217,7 @@ const DownloadMenuItem: React.FC<{
         display: 'flex', alignItems: 'center', gap: 10,
         width: '100%', padding: '8px 10px', border: 'none', borderRadius: 6,
         background: getDownloadMenuItemBackground(hovered, disabled),
-        color: disabled ? '#94a3b8' : '#0f172a',
+        color: disabled ? 'var(--v-text-faint)' : 'var(--v-text)',
         cursor: disabled ? 'not-allowed' : 'pointer', textAlign: 'left',
         transition: 'background 0.1s',
       }}
@@ -231,7 +231,7 @@ const DownloadMenuItem: React.FC<{
       </span>
       <div style={{ flex: 1, minWidth: 0 }}>
         <div style={{ fontSize: 13, fontWeight: 600 }}>{label}</div>
-        <div style={{ fontSize: 11, color: '#64748b', fontWeight: 400, marginTop: 1 }}>{sublabel}</div>
+        <div style={{ fontSize: 11, color: 'var(--v-text-muted)', fontWeight: 400, marginTop: 1 }}>{sublabel}</div>
       </div>
     </button>
   );
@@ -310,7 +310,7 @@ export const CanvasSidebarToolbar: React.FC<CanvasSidebarToolbarProps> = ({
               position: 'absolute',
               left: 'calc(100% + 8px)',
               top: 0,
-              background: '#ffffff',
+              background: 'var(--v-chrome-bg)',
               borderRadius: 10,
               boxShadow: '0 8px 32px rgba(0,0,0,0.16), 0 0 0 1px rgba(0,0,0,0.07)',
               padding: '6px',

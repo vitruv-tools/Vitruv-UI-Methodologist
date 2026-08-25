@@ -426,59 +426,57 @@
 }
 
 /* Dark mode support - Keep same design */
-@media (prefers-color-scheme: dark) {
-  .auth-card {
-    background: rgba(40, 40, 40, 0.65);
-    backdrop-filter: blur(25px);
-    color: #ffffff;
-  }
-  
-  .auth-header h1 {
-    background: linear-gradient(135deg, #06b5a0 0%, #05a896 100%);
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
-    background-clip: text;
-  }
-  
-  .auth-header p {
-    color: #f0f0f0;
-  }
-  
-  .form-group label {
-    color: #ffffff;
-  }
-  
-  .form-group input {
-    background: rgba(255, 255, 255, 0.95);
-    border-color: rgba(255, 255, 255, 0.4);
-    color: #1a202c;
-  }
-  
-  .form-group input:focus {
-    background: rgba(255, 255, 255, 1);
-    border-color: #06b5a0;
-  }
-  
-  .form-group input::placeholder {
-    color: rgba(0, 0, 0, 0.4);
-  }
-  
-  .demo-credentials {
-    background: rgba(0, 0, 0, 0.3);
-    border-color: rgba(255, 255, 255, 0.25);
-  }
-  
-  .demo-title {
-    color: #ffffff;
-  }
-  
-  .demo-info p {
-    color: #e0e0e0;
-  }
-  
-  .demo-info strong {
-    color: #ffffff;
-  }
+[data-theme="dark"] .auth-card {
+  background: rgba(40, 40, 40, 0.65);
+  backdrop-filter: blur(25px);
+  color: #ffffff;
+}
+
+[data-theme="dark"] .auth-header h1 {
+  background: linear-gradient(135deg, #06b5a0 0%, #05a896 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+[data-theme="dark"] .auth-header p {
+  color: #f0f0f0;
+}
+
+[data-theme="dark"] .form-group label {
+  color: #ffffff;
+}
+
+[data-theme="dark"] .form-group input {
+  background: rgba(255, 255, 255, 0.95);
+  border-color: rgba(255, 255, 255, 0.4);
+  color: #1a202c;
+}
+
+[data-theme="dark"] .form-group input:focus {
+  background: rgba(255, 255, 255, 1);
+  border-color: #06b5a0;
+}
+
+[data-theme="dark"] .form-group input::placeholder {
+  color: rgba(0, 0, 0, 0.4);
+}
+
+[data-theme="dark"] .demo-credentials {
+  background: rgba(0, 0, 0, 0.3);
+  border-color: rgba(255, 255, 255, 0.25);
+}
+
+[data-theme="dark"] .demo-title {
+  color: #ffffff;
+}
+
+[data-theme="dark"] .demo-info p {
+  color: #e0e0e0;
+}
+
+[data-theme="dark"] .demo-info strong {
+  color: #ffffff;
 }
 
 /* Success message animation */

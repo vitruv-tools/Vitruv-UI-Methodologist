@@ -89,7 +89,7 @@ function calculateStraightPath(params: PathParams & { parallelIndex?: number; pa
 
 
 // jjodel-style navy blue as the default edge color
-const EDGE_DEFAULT = '#0c436e';
+const EDGE_DEFAULT = 'var(--v-uml-edge, #0c436e)';
 const EDGE_SELECT  = '#ef4444';
 const EDGE_SELECT_HOVER = '#f87171';
 // Shorten the drawn line so endpoint markers sit on the visible segment (not under HTML nodes).

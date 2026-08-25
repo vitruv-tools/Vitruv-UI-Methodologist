@@ -183,6 +183,14 @@ describe('ProfileView', () => {
     expect(screen.getByText(/Change password/i)).toBeInTheDocument();
   });
 
+  it('shows an appearance control to stay in light or continue in dark', async () => {
+    await renderProfileView();
+    expect(screen.getByText('Appearance')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Light theme' })).toHaveAttribute('aria-pressed', 'true');
+    fireEvent.click(screen.getByRole('button', { name: 'Dark theme' }));
+    expect(document.documentElement).toHaveAttribute('data-theme', 'dark');
+  });
+
   it('returns null when user prop is null', async () => {
     const { container } = render(<ProfileView user={null} />);
     await settleUserInfo();

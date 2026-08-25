@@ -1,0 +1,131 @@
+:root,
+[data-theme="light"] {
+  color-scheme: light;
+  --v-page-bg: #f7f8fa;
+  --v-workspace-bg: #f3f4f6;
+  --v-workspace-dot: #d1d5db;
+  --v-surface: #ffffff;
+  --v-surface-muted: #f8fafc;
+  --v-surface-hover: #fafafa;
+  --v-text: #0f172a;
+  --v-text-secondary: #4b5563;
+  --v-text-muted: #6b7280;
+  --v-text-faint: #9ca3af;
+  --v-border: #e5e7eb;
+  --v-border-subtle: #f3f4f6;
+  --v-card-border: rgba(0, 0, 0, 0.07);
+  --v-card-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+  --v-overlay: rgba(255, 255, 255, 0.88);
+  --v-chrome-bg: #ffffff;
+  --v-chrome-hover: #f1f5f9;
+  --v-chrome-icon: #475569;
+  --v-chrome-icon-hover: #1e293b;
+  --v-chrome-divider: #e2e8f0;
+  --v-table-header: #fafafa;
+  --v-input-bg: #ffffff;
+  --v-scrollbar-track: #f1f5f9;
+  --v-scrollbar-thumb: #cbd5e1;
+  --v-uml-primary-soft: #ecfdf5;
+  --v-uml-primary-border: #a7f3d0;
+  --v-uml-edge: #0c436e;
+  --v-uml-edge-halo: #ffffff;
+  --v-uml-circle: #0c436e;
+  --v-uml-box-bg: #ffffff;
+  --v-uml-box-muted: #f8fafc;
+  --v-uml-box-hover: #f1f5f9;
+  --v-uml-box-text: #0f172a;
+  --v-uml-box-text-muted: #64748b;
+  --v-uml-box-border: #cbd5e1;
+}
+
+[data-theme="dark"] {
+  color-scheme: dark;
+  --v-page-bg: #0b1220;
+  --v-workspace-bg: #0f172a;
+  --v-workspace-dot: #475569;
+  --v-surface: #1e293b;
+  --v-surface-muted: #162032;
+  --v-surface-hover: #243044;
+  --v-text: #f1f5f9;
+  --v-text-secondary: #cbd5e1;
+  --v-text-muted: #94a3b8;
+  --v-text-faint: #64748b;
+  --v-border: #334155;
+  --v-border-subtle: #1e293b;
+  --v-card-border: rgba(255, 255, 255, 0.08);
+  --v-card-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+  --v-overlay: rgba(30, 41, 59, 0.92);
+  --v-chrome-bg: #1e293b;
+  --v-chrome-hover: #334155;
+  --v-chrome-icon: #cbd5e1;
+  --v-chrome-icon-hover: #f8fafc;
+  --v-chrome-divider: #334155;
+  --v-table-header: #162032;
+  --v-input-bg: #0f172a;
+  --v-scrollbar-track: #1e293b;
+  --v-scrollbar-thumb: #475569;
+  --v-uml-primary-soft: rgba(4, 148, 132, 0.18);
+  --v-uml-primary-border: #0f766e;
+  --v-uml-edge: #5eead4;
+  --v-uml-edge-halo: #0f172a;
+  --v-uml-circle: #5eead4;
+  --v-uml-box-bg: #e8eef6;
+  --v-uml-box-muted: #d7e0ec;
+  --v-uml-box-hover: #c9d4e2;
+  --v-uml-box-text: #0f172a;
+  --v-uml-box-text-muted: #334155;
+  --v-uml-box-border: #94a3b8;
+}
+
+html,
+body,
+#root {
+  background-color: var(--v-page-bg);
+  color: var(--v-text);
+}
+
+.react-flow,
+.react-flow__renderer,
+.react-flow__pane,
+.react-flow__container {
+  background-color: var(--v-workspace-bg) !important;
+}
+
+.react-flow__controls {
+  background: var(--v-chrome-bg) !important;
+  border: 1px solid var(--v-border) !important;
+  box-shadow: var(--v-card-shadow) !important;
+}
+
+.react-flow__controls-button {
+  background: var(--v-chrome-bg) !important;
+  border-bottom: 1px solid var(--v-border) !important;
+  fill: var(--v-chrome-icon) !important;
+}
+
+.react-flow__controls-button:hover {
+  background: var(--v-chrome-hover) !important;
+}
+
+.react-flow__minimap {
+  background: var(--v-surface) !important;
+}
+
+.change-password-dialog {
+  background-color: var(--v-surface);
+  color: var(--v-text);
+  border: 1px solid var(--v-card-border);
+}
+
+.projects-table-scroll {
+  scrollbar-color: var(--v-scrollbar-thumb) var(--v-scrollbar-track);
+}
+
+.projects-table-scroll::-webkit-scrollbar-track {
+  background: var(--v-scrollbar-track) !important;
+}
+
+.projects-table-scroll::-webkit-scrollbar-thumb {
+  background: var(--v-scrollbar-thumb) !important;
+  border-color: var(--v-scrollbar-track) !important;
+}

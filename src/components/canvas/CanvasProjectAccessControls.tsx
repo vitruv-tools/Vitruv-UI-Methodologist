@@ -6,6 +6,7 @@ import {
   mergeSharerWithMembers,
 } from '../../utils/vsumMemberUtils';
 import { ConfirmDialog } from '../ui/ConfirmDialog';
+import { ThemeToggle } from '../ui/ThemeToggle';
 import {
   CanvasAccountMenu,
   type CanvasAccountDisplay,
@@ -50,7 +51,7 @@ const CollaboratorStackButton: React.FC<CollaboratorStackButtonProps> = ({
       padding: '4px 10px 4px 6px',
       border: 'none',
       borderRadius: 8,
-      background: open ? '#f1f5f9' : 'transparent',
+      background: open ? 'var(--v-chrome-hover)' : 'transparent',
       transition: 'background 0.15s',
     }}
   >
@@ -69,7 +70,7 @@ const CollaboratorStackButton: React.FC<CollaboratorStackButtonProps> = ({
         </span>
       ))}
     </span>
-    <span style={{ fontSize: 12, fontWeight: 600, color: '#334155', whiteSpace: 'nowrap' }}>
+    <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--v-text-secondary)', whiteSpace: 'nowrap' }}>
       {stackLabel}
     </span>
     <svg
@@ -77,7 +78,7 @@ const CollaboratorStackButton: React.FC<CollaboratorStackButtonProps> = ({
       height="12"
       viewBox="0 0 24 24"
       fill="none"
-      stroke="#64748b"
+      stroke="var(--v-chrome-icon)"
       strokeWidth="2.5"
       strokeLinecap="round"
       strokeLinejoin="round"
@@ -183,6 +184,10 @@ export const CanvasProjectAccessControls: React.FC<CanvasProjectAccessControlsPr
 
       <Divider />
 
+      <ThemeToggle />
+
+      <Divider />
+
       <CanvasAccountMenu
         account={accountDisplay}
         dismissalBoundaryRef={wrapRef}
@@ -268,7 +273,7 @@ const rightPillStyle: React.CSSProperties = {
   right: 14,
   borderRadius: 8,
   zIndex: 400,
-  background: '#ffffff',
+  background: 'var(--v-chrome-bg)',
   boxShadow: '0 4px 16px rgba(0,0,0,0.13), 0 0 0 1px rgba(0,0,0,0.07)',
   display: 'flex',
   alignItems: 'center',
@@ -278,7 +283,7 @@ const rightPillStyle: React.CSSProperties = {
 };
 
 const Divider = () => (
-  <div style={{ width: 1, height: 22, background: '#e2e8f0', margin: '0 5px', flexShrink: 0 }} />
+  <div style={{ width: 1, height: 22, background: 'var(--v-chrome-divider)', margin: '0 5px', flexShrink: 0 }} />
 );
 
 const ShareIcon = () => (

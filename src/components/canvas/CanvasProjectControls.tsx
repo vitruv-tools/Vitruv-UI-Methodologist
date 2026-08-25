@@ -26,7 +26,7 @@ const projectControlsStyle: React.CSSProperties = {
   left: 14,
   borderRadius: 8,
   zIndex: 400,
-  background: '#ffffff',
+  background: 'var(--v-chrome-bg)',
   boxShadow: '0 4px 16px rgba(0,0,0,0.13), 0 0 0 1px rgba(0,0,0,0.07)',
   display: 'flex',
   alignItems: 'center',
@@ -36,7 +36,7 @@ const projectControlsStyle: React.CSSProperties = {
 };
 
 const ProjectControlsDivider = () => (
-  <div style={{ width: 1, height: 22, background: '#e2e8f0', margin: '0 5px', flexShrink: 0 }} />
+  <div style={{ width: 1, height: 22, background: 'var(--v-chrome-divider)', margin: '0 5px', flexShrink: 0 }} />
 );
 
 interface ProjectControlButtonProps {
@@ -52,7 +52,7 @@ function getProjectControlButtonBackground(
   hovered: boolean,
 ): string {
   if (active) return '#049484';
-  if (hovered) return '#f1f5f9';
+  if (hovered) return 'var(--v-chrome-hover)';
   return 'transparent';
 }
 
@@ -61,8 +61,8 @@ function getProjectControlButtonColor(
   hovered: boolean,
 ): string {
   if (active) return '#ffffff';
-  if (hovered) return '#1e293b';
-  return '#475569';
+  if (hovered) return 'var(--v-chrome-icon-hover)';
+  return 'var(--v-chrome-icon)';
 }
 
 const ProjectControlButton: React.FC<ProjectControlButtonProps> = ({
@@ -188,10 +188,10 @@ export const CanvasProjectControls: React.FC<CanvasProjectControlsProps> = ({
           }}
           disabled={savingName}
           style={{
-            fontSize: 13, fontWeight: 600, color: '#0f172a',
+            fontSize: 13, fontWeight: 600, color: 'var(--v-text)',
             border: '1.5px solid #93c5fd', borderRadius: 6,
             padding: '2px 8px', outline: 'none', width: 170,
-            background: '#fff',
+            background: 'var(--v-input-bg)',
           }}
         />
         <ProjectControlButton onClick={onConfirmRename} title="Save" active spinning={savingName}>
