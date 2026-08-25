@@ -514,8 +514,8 @@ const DetailView: React.FC<DetailViewProps> = ({ model, onFetchFile, onAddModel,
             {isOnCanvas ? (
               <div style={{
                 padding: '9px 0', borderRadius: 8,
-                background: '#f0fdf4', border: '1px solid #bbf7d0',
-                color: '#15803d', fontSize: 12, fontWeight: 600,
+                background: 'var(--v-success-bg)', border: '1px solid var(--v-success-border)',
+                color: 'var(--v-success-text)', fontSize: 12, fontWeight: 600,
                 display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
               }}>
                 <svg width="13" height="13" viewBox="0 0 16 16" fill="none">

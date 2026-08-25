@@ -172,7 +172,7 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ user, userRole = 'Meth
 
   return (
     <div style={{ flex: 1, overflowY: 'auto', padding: '44px 48px 48px' }}>
-      <div style={{ maxWidth: 680 }}>
+      <div style={{ maxWidth: 680, width: '100%', margin: '0 auto' }}>
 
         {/* Header */}
         <div style={{ marginBottom: 32 }}>

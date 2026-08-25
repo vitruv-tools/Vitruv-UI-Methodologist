@@ -27,7 +27,7 @@ export const largeModalPanelStyle: React.CSSProperties = {
   display: 'flex',
   flexDirection: 'column',
   boxShadow: '0 24px 64px rgba(0, 0, 0, 0.22), 0 4px 16px rgba(0, 0, 0, 0.08)',
-  border: '1px solid #e2e8f0',
+  border: '1px solid var(--v-border)',
   overflow: 'hidden',
   position: 'relative',
   zIndex: 1,
@@ -69,7 +69,7 @@ export const modalCloseButtonStyle: React.CSSProperties = {
   border: 'none',
   background: 'transparent',
   cursor: 'pointer',
-  color: '#94a3b8',
+  color: 'var(--v-text-muted)',
   fontSize: '18px',
   width: '32px',
   height: '32px',
@@ -128,9 +128,9 @@ export const errorMessageStyle: React.CSSProperties = {
   borderRadius: '8px',
   fontSize: '13px',
   fontWeight: '500',
-  backgroundColor: '#f8d7da',
-  color: '#721c24',
-  border: '1px solid #f5c6cb',
+  backgroundColor: 'var(--v-danger-bg)',
+  color: 'var(--v-danger-text)',
+  border: '1px solid var(--v-danger-border)',
 };
 
 export const successMessageStyle: React.CSSProperties = {
@@ -139,9 +139,9 @@ export const successMessageStyle: React.CSSProperties = {
   borderRadius: '8px',
   fontSize: '13px',
   fontWeight: '500',
-  backgroundColor: '#d4edda',
-  color: '#155724',
-  border: '1px solid #c3e6cb',
+  backgroundColor: 'var(--v-success-bg)',
+  color: 'var(--v-success-text)',
+  border: '1px solid var(--v-success-border)',
 };
 
 export const fileInputStyle: React.CSSProperties = { display: 'none' };
@@ -149,7 +149,7 @@ export const fileInputStyle: React.CSSProperties = { display: 'none' };
 export const progressBarContainerStyle: React.CSSProperties = {
   width: '100%',
   height: '8px',
-  backgroundColor: '#e0e0e0',
+  backgroundColor: 'var(--v-border)',
   borderRadius: '4px',
   overflow: 'hidden',
 };

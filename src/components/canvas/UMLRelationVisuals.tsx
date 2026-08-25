@@ -52,7 +52,7 @@ function getDirectionMarkerSvg(
     return (
       <path
         d="M 0 0 L 12 6 L 0 12 z"
-        fill="#ffffff"
+        fill={UML.boxBg}
         stroke={color}
         strokeWidth="1.5"
       />

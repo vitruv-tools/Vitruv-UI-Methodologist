@@ -107,6 +107,13 @@ describe('ProfileView', () => {
     expect(screen.getByText('User Profile')).toBeInTheDocument();
   });
 
+  it('centers the profile column in the page', async () => {
+    await renderProfileView();
+    const heading = screen.getByRole('heading', { name: 'User Profile' });
+    const column = heading.parentElement?.parentElement;
+    expect(column).toHaveStyle({ maxWidth: '680px', width: '100%', margin: '0px auto' });
+  });
+
   it('fetches profile from backend on mount', async () => {
     await renderProfileView();
     expect(apiService.getUserInfo).toHaveBeenCalledTimes(1);

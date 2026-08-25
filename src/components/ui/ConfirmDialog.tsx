@@ -49,7 +49,7 @@ export const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
   const themes = {
     danger: {
       accentColor: '#dc2626',
-      iconBg: '#fef2f2',
+      iconBg: 'var(--v-danger-bg)',
       buttonBg: '#dc2626',
       buttonHoverBg: '#b91c1c',
       buttonShadow: 'rgba(220,38,38,0.25)',
@@ -57,7 +57,7 @@ export const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
     },
     success: {
       accentColor: '#059669',
-      iconBg: '#f0fdf4',
+      iconBg: 'var(--v-success-bg)',
       buttonBg: '#059669',
       buttonHoverBg: '#047857',
       buttonShadow: 'rgba(5,150,105,0.25)',

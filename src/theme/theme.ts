@@ -41,6 +41,18 @@ export const themeVars = {
   umlBoxText: 'var(--v-uml-box-text)',
   umlBoxTextMuted: 'var(--v-uml-box-text-muted)',
   umlBoxBorder: 'var(--v-uml-box-border)',
+  dangerBg: 'var(--v-danger-bg)',
+  dangerBorder: 'var(--v-danger-border)',
+  dangerText: 'var(--v-danger-text)',
+  successBg: 'var(--v-success-bg)',
+  successBorder: 'var(--v-success-border)',
+  successText: 'var(--v-success-text)',
+  warningBg: 'var(--v-warning-bg)',
+  warningBorder: 'var(--v-warning-border)',
+  warningText: 'var(--v-warning-text)',
+  disabledBg: 'var(--v-disabled-bg)',
+  disabledText: 'var(--v-disabled-text)',
+  brandSoft: 'var(--v-brand-soft)',
 } as const;
 
 export function isThemeMode(value: unknown): value is ThemeMode {

@@ -1,6 +1,7 @@
 import React from 'react';
 import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
 import { ModelDetailModal, ModelLibraryTable } from '../../../components/ui/ModelLibraryTable';
+import { resetThemeStore, setTheme } from '../../../theme/theme';
 
 jest.mock('../../../services/api', () => ({
   apiService: {
@@ -46,6 +47,10 @@ describe('ModelLibraryTable', () => {
     apiService.findMetaModels.mockReset();
     apiService.deleteMetaModel.mockReset();
     apiService.findMetaModels.mockResolvedValue({ data: [existingModel] });
+  });
+
+  afterEach(() => {
+    resetThemeStore();
   });
 
   it('loads the list once on mount', async () => {
@@ -198,5 +203,25 @@ describe('ModelLibraryTable', () => {
       expect(screen.queryByRole('button', { name: 'Delete' })).not.toBeInTheDocument();
       expect(screen.getByRole('button', { name: 'Cancel' })).toBeInTheDocument();
     });
+  });
+});
+
+describe('ModelDetailModal', () => {
+  afterEach(() => {
+    resetThemeStore();
+  });
+
+  it('uses theme surfaces so the preview sidebar matches dark mode', () => {
+    setTheme('dark');
+    render(
+      <ModelDetailModal
+        model={{ id: 1, name: 'string', description: 'string', keyword: ['string'] }}
+        onClose={jest.fn()}
+        onUpdated={jest.fn()}
+      />,
+    );
+
+    expect(screen.getByRole('dialog', { name: 'Model Preview: string' })).toBeInTheDocument();
+    expect(screen.getByText('UML')).toBeInTheDocument();
   });
 });

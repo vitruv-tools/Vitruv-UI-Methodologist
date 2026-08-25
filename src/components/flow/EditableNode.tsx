@@ -215,8 +215,8 @@ const MenuOverlay: React.FC<{
     position: 'absolute',
     top: '100%',
     left: '0',
-    background: '#fff',
-    border: '1px solid #ddd',
+    background: 'var(--v-surface)',
+    border: '1px solid var(--v-border)',
     borderRadius: '4px',
     padding: '4px',
     boxShadow: '0 2px 8px rgba(0,0,0,0.15)',
@@ -515,11 +515,11 @@ export function EditableNode({ id, data, selected, isConnectable }: NodeProps<UM
       : '0 2px 8px rgba(0,0,0,0.08)';
 
     const elementStyles: Record<string, React.CSSProperties> = {
-      'class': { borderColor, background: '#ffffff' },
-      'abstract-class': { borderColor, background: '#ffffff' },
-      'interface': { borderColor, borderStyle: 'dashed', background: '#ffffff' },
-      'enumeration': { borderColor, background: '#ffffff' },
-      'package': { borderColor, background: '#ffffff' },
+      'class': { borderColor, background: 'var(--v-uml-box-bg)' },
+      'abstract-class': { borderColor, background: 'var(--v-uml-box-bg)' },
+      'interface': { borderColor, borderStyle: 'dashed', background: 'var(--v-uml-box-bg)' },
+      'enumeration': { borderColor, background: 'var(--v-uml-box-bg)' },
+      'package': { borderColor, background: 'var(--v-uml-box-bg)' },
     };
 
     if (nodeData.toolType === 'element' && nodeData.toolName) {
