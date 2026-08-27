@@ -190,10 +190,10 @@ export const UMLDiagramMinimap: React.FC<UMLDiagramMinimapProps> = ({
         display: 'block',
         margin: 0,
         padding: 0,
-        background: 'rgba(255,255,255,0.96)',
-        border: '1px solid #e2e8f0',
+        background: 'var(--v-surface)',
+        border: '1px solid var(--v-border)',
         borderRadius: 8,
-        boxShadow: '0 2px 10px rgba(0,0,0,0.08)',
+        boxShadow: 'var(--v-card-shadow)',
         overflow: 'hidden',
         zIndex: 5,
         cursor: 'crosshair',
@@ -211,7 +211,7 @@ export const UMLDiagramMinimap: React.FC<UMLDiagramMinimapProps> = ({
               key={rel.id}
               x1={toX(src.x + offsetX + BW / 2)} y1={toY(src.y + offsetY + minimapBoxH(src) / 2)}
               x2={toX(tgt.x + offsetX + BW / 2)} y2={toY(tgt.y + offsetY + minimapBoxH(tgt) / 2)}
-              stroke="#94a3b8"
+              stroke="var(--v-text-muted)"
               strokeWidth={1}
             />
           );
@@ -231,8 +231,8 @@ export const UMLDiagramMinimap: React.FC<UMLDiagramMinimapProps> = ({
               y={y}
               width={Math.max(2, w)}
               height={Math.max(2, h)}
-              fill="#e0f2fe"
-              stroke="#0c436e"
+              fill="var(--v-uml-primary-soft)"
+              stroke="var(--v-uml-edge, #0c436e)"
               strokeWidth={0.75}
               rx={1}
             />
@@ -262,7 +262,7 @@ export const UMLDiagramMinimap: React.FC<UMLDiagramMinimapProps> = ({
             cy={ind.y}
             r={3.5}
             fill="#049484"
-            stroke="#ffffff"
+            stroke="var(--v-surface)"
             strokeWidth={1}
           />
         ))}

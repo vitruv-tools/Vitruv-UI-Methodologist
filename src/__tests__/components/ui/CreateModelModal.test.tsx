@@ -1,6 +1,7 @@
 import React from 'react';
 import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
 import { CreateModelModal } from '../../../components/ui/CreateModelModal';
+import { resetThemeStore, setTheme } from '../../../theme/theme';
 
 // ─── environment polyfills ────────────────────────────────────────────────────
 
@@ -119,6 +120,10 @@ describe('CreateModelModal', () => {
     delete (global as any).fetch;
   });
 
+  afterEach(() => {
+    resetThemeStore();
+  });
+
   // ── rendering ───────────────────────────────────────────────────────────────
 
   it('renders the modal title when open', () => {
@@ -146,6 +151,15 @@ describe('CreateModelModal', () => {
   it('shows drop-zones by default (file mode)', () => {
     render(<CreateModelModal isOpen onClose={jest.fn()} />);
     expect(screen.getAllByText(/Click to select file/i)).toHaveLength(2);
+  });
+
+  it('uses theme surfaces so file cards and the disabled submit button match dark mode', () => {
+    setTheme('dark');
+    render(<CreateModelModal isOpen onClose={jest.fn()} />);
+
+    expect(screen.getByRole('button', { name: 'Complete All Fields' })).toBeDisabled();
+    expect(screen.getAllByRole('button', { name: /Click to select file/i })).toHaveLength(2);
+    expect(screen.getByText('Required Meta Model Files')).toBeInTheDocument();
   });
 
   it('calls onClose when Cancel is clicked', async () => {

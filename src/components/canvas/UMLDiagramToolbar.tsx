@@ -27,20 +27,18 @@ function getDiagramToolButtonBackground(
   if (disabled) return UML.surfaceMuted;
   if (active) return UML.primarySoft;
   if (accent && hovered) return UML.primarySoft;
-  if (hovered) return '#f0fdfa';
-  return UML.surface;
+  if (hovered) return UML.surfaceHover;
+  return 'var(--v-chrome-hover)';
 }
 
 function getDiagramToolButtonColor(
   disabled: boolean,
   active: boolean,
   accent: boolean,
-  hovered: boolean,
 ): string {
-  if (disabled) return '#cbd5e1';
+  if (disabled) return UML.textFaint;
   if (active || accent) return UML.primary;
-  if (hovered) return UML.ink;
-  return UML.textMuted;
+  return UML.ink;
 }
 
 function getDiagramToolButtonBoxShadow(
@@ -70,7 +68,6 @@ function getDiagramToolButtonStyle(params: {
     params.disabled,
     params.active,
     params.accent,
-    params.hovered,
   );
   const boxShadow = getDiagramToolButtonBoxShadow(
     params.active,
@@ -212,7 +209,7 @@ export const UMLDiagramToolbar = ({
       zIndex: 30,
       padding: '5px 8px',
       borderRadius: 10,
-      background: UML.surface,
+      background: 'var(--v-chrome-bg)',
       border: `1px solid ${UML.primaryBorder}`,
       boxShadow: `0 4px 14px ${UML.primaryRing}, 0 0 0 1px rgba(4,148,132,0.05)`,
     }}

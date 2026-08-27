@@ -131,8 +131,8 @@ const FILE_CARD_DISPLAY_CONFIGS: Array<{
   badgeColor: string;
   defaultHeaderBg: string;
 }> = [
-  { kind: 'ecore',    accentColor: '#049484', hoverBg: '#f0fdff', badgeBg: '#e6f7f5', badgeBorder: '#b2e4df', badgeColor: '#049484', defaultHeaderBg: '#f8fffe' },
-  { kind: 'genmodel', accentColor: '#0B1720', hoverBg: '#f4f6f8', badgeBg: '#eef0f3', badgeBorder: '#c8cdd6', badgeColor: '#0B1720', defaultHeaderBg: '#f8f9fb' },
+  { kind: 'ecore',    accentColor: '#049484', hoverBg: 'var(--v-surface-hover)', badgeBg: 'var(--v-brand-soft)', badgeBorder: 'var(--v-uml-primary-border)', badgeColor: '#049484', defaultHeaderBg: 'var(--v-surface)' },
+  { kind: 'genmodel', accentColor: 'var(--v-text-secondary)', hoverBg: 'var(--v-surface-hover)', badgeBg: 'var(--v-surface-hover)', badgeBorder: 'var(--v-border)', badgeColor: 'var(--v-text)', defaultHeaderBg: 'var(--v-surface)' },
 ];
 
 // ─── Style constants ──────────────────────────────────────────────────────────
@@ -140,7 +140,7 @@ const FILE_CARD_DISPLAY_CONFIGS: Array<{
 const FONT = 'ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, sans-serif';
 
 const modalStyle: React.CSSProperties = {
-  background: '#ffffff',
+  background: 'var(--v-surface)',
   borderRadius: 8,
   padding: 0,
   width: '540px',
@@ -150,8 +150,9 @@ const modalStyle: React.CSSProperties = {
   flexDirection: 'column',
   overflow: 'hidden',
   boxShadow: '0 8px 40px rgba(0,0,0,0.18), 0 1px 4px rgba(0,0,0,0.06)',
-  border: '1px solid #e2e8f0',
+  border: '1px solid var(--v-border)',
   fontFamily: FONT,
+  color: 'var(--v-text)',
 };
 
 const modalHeaderStyle: React.CSSProperties = {
@@ -199,19 +200,19 @@ const inputFocusStyle: React.CSSProperties = {
   borderColor: '#049484',
   outline: 'none',
   boxShadow: '0 0 0 3px rgba(4,148,132,0.1)',
-  background: '#ffffff',
+  background: 'var(--v-input-bg)',
 };
 
 const uploadSectionStyle: React.CSSProperties = {
   marginTop: '20px',
   paddingTop: '20px',
-  borderTop: '1px solid #f1f5f9',
+  borderTop: '1px solid var(--v-border-subtle)',
 };
 
 const uploadSectionTitleStyle: React.CSSProperties = {
   fontSize: 12,
   fontWeight: 600,
-  color: '#6b7280',
+  color: 'var(--v-text-muted)',
   marginBottom: 12,
   textTransform: 'uppercase',
   letterSpacing: '0.07em',
@@ -222,11 +223,11 @@ const uploadSectionTitleStyle: React.CSSProperties = {
 const metaModelImportErrorBannerStyle: React.CSSProperties = {
   marginBottom: 12,
   padding: '10px 12px',
-  background: '#fef2f2',
-  border: '1px solid #fecaca',
+  background: 'var(--v-danger-bg)',
+  border: '1px solid var(--v-danger-border)',
   borderRadius: 6,
   fontSize: 13,
-  color: '#991b1b',
+  color: 'var(--v-danger-text)',
   lineHeight: 1.5,
   fontFamily: FONT,
 };
@@ -241,12 +242,12 @@ const fieldInlineErrorStyle: React.CSSProperties = {
 
 const inputErrorOutlineStyle: React.CSSProperties = {
   borderColor: '#fca5a5',
-  background: '#fffafa',
+  background: 'var(--v-danger-bg)',
 };
 
 const fileStatusStyle: React.CSSProperties = {
   fontSize: 11,
-  color: '#9ca3af',
+  color: 'var(--v-text-faint)',
   textAlign: 'center',
   marginTop: 10,
   fontFamily: FONT,
@@ -274,18 +275,18 @@ const primaryButtonStyle: React.CSSProperties = {
 };
 
 const primaryButtonDisabledStyle: React.CSSProperties = {
-  background: '#e5e7eb',
-  color: '#9ca3af',
+  background: 'var(--v-disabled-bg)',
+  color: 'var(--v-disabled-text)',
   cursor: 'not-allowed',
 };
 
 const secondaryButtonStyle: React.CSSProperties = {
   flex: '1',
   padding: '10px 18px',
-  border: '1px solid #e5e7eb',
+  border: '1px solid var(--v-border)',
   borderRadius: 6,
-  background: '#ffffff',
-  color: '#374151',
+  background: 'var(--v-surface)',
+  color: 'var(--v-text-secondary)',
   fontSize: 14,
   fontWeight: 500,
   cursor: 'pointer',
@@ -295,7 +296,7 @@ const secondaryButtonStyle: React.CSSProperties = {
 };
 
 const buttonHoverStyle: React.CSSProperties = {
-  background: '#f9fafb',
+  background: 'var(--v-surface-hover)',
 };
 
 const overlayStyle: React.CSSProperties = {
@@ -320,11 +321,11 @@ const overlayStyle: React.CSSProperties = {
 
 const overlayCardStyle: React.CSSProperties = {
   width: 'min(400px, 90vw)',
-  background: '#fff',
+  background: 'var(--v-surface)',
   borderRadius: 12,
   overflow: 'hidden',
   boxShadow: '0 24px 60px rgba(0,0,0,0.28), 0 4px 16px rgba(0,0,0,0.08)',
-  border: '1px solid #e2e8f0',
+  border: '1px solid var(--v-border)',
 };
 
 const overlayTitleStyle: React.CSSProperties = {
@@ -386,7 +387,7 @@ const SubmitProgressOverlay: React.FC<{ progress: number }> = ({ progress }) => 
         <div style={progressBarContainerStyle}>
           <div style={{ ...progressBarStyle, width: `${progress}%` }} />
         </div>
-        <div style={{ fontSize: 12, color: '#6b7280', textAlign: 'center', marginTop: 8, fontFamily: FONT }}>
+        <div style={{ fontSize: 12, color: 'var(--v-text-muted)', textAlign: 'center', marginTop: 8, fontFamily: FONT }}>
           {Math.round(progress)}%
         </div>
       </div>
@@ -410,13 +411,13 @@ const FileDropZone: React.FC<FileDropZoneProps> = ({
   isUploaded, isUploading, ext, accentColor, label, uploadedFileName, onClick,
 }) => {
   const [hov, setHov] = React.useState(false);
-  let borderColor = '#e5e7eb';
+  let borderColor = 'var(--v-border)';
   if (isUploaded) borderColor = '#bbf7d0';
-  else if (hov) borderColor = '#94a3b8';
+  else if (hov) borderColor = 'var(--v-text-muted)';
 
-  let backgroundColor = '#fafafa';
-  if (isUploaded) backgroundColor = '#f0fdf4';
-  else if (hov) backgroundColor = '#f9fafb';
+  let backgroundColor = 'var(--v-input-bg)';
+  if (isUploaded) backgroundColor = 'rgba(22, 163, 74, 0.12)';
+  else if (hov) backgroundColor = 'var(--v-surface-hover)';
 
   let icon;
   if (isUploaded) {
@@ -427,13 +428,13 @@ const FileDropZone: React.FC<FileDropZoneProps> = ({
     );
   } else if (isUploading) {
     icon = (
-      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ animation: 'spin 1s linear infinite' }}>
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--v-text-faint)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ animation: 'spin 1s linear infinite' }}>
         <path d="M21 12a9 9 0 1 1-6.219-8.56" />
       </svg>
     );
   } else {
     icon = (
-      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={hov ? accentColor : '#9ca3af'} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={hov ? accentColor : 'var(--v-text-faint)'} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
         <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
         <polyline points="17 8 12 3 7 8" />
         <line x1="12" y1="3" x2="12" y2="15" />
@@ -460,10 +461,10 @@ const FileDropZone: React.FC<FileDropZoneProps> = ({
     >
       {/* Icon */}
       {icon}
-      <div style={{ fontSize: 13, fontWeight: 500, color: isUploaded ? '#15803d' : '#374151' }}>{label}</div>
+      <div style={{ fontSize: 13, fontWeight: 500, color: isUploaded ? '#15803d' : 'var(--v-text-secondary)' }}>{label}</div>
       {isUploaded && uploadedFileName && (
         <div title={uploadedFileName} style={{
-          fontSize: 11, color: '#6b7280', maxWidth: '100%',
+          fontSize: 11, color: 'var(--v-text-muted)', maxWidth: '100%',
           overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
           fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
         }}>
@@ -471,7 +472,7 @@ const FileDropZone: React.FC<FileDropZoneProps> = ({
         </div>
       )}
       {!isUploaded && !isUploading && (
-        <div style={{ fontSize: 11, color: '#9ca3af' }}>{ext}</div>
+        <div style={{ fontSize: 11, color: 'var(--v-text-faint)' }}>{ext}</div>
       )}
     </button>
   );
@@ -498,9 +499,9 @@ const UrlImportRow: React.FC<UrlImportRowProps> = ({
   const isDisabled = isUploading || !url.trim();
   return (
     <>
-      <div style={{ fontSize: '11px', color: '#64748b', marginBottom: '6px', fontStyle: 'italic' }}>
+      <div style={{ fontSize: '11px', color: 'var(--v-text-muted)', marginBottom: '6px', fontStyle: 'italic' }}>
         Paste a raw public URL pointing to a{' '}
-        <code style={{ background: '#f1f5f9', padding: '1px 4px', borderRadius: '3px' }}>{ext}</code> file
+        <code style={{ background: 'var(--v-surface-hover)', color: 'var(--v-text)', padding: '1px 4px', borderRadius: '3px' }}>{ext}</code> file
       </div>
       <div style={{ display: 'flex', gap: '8px' }}>
         <input
@@ -584,8 +585,8 @@ const FileUploadCard: React.FC<FileUploadCardProps> = ({
   const { dropLabel, importLabel } = UPLOAD_STATE_LABELS[uploadState];
 
   const cardStyle: React.CSSProperties = {
-    background: '#ffffff',
-    border: `1px solid ${isUploaded ? '#bbf7d0' : '#e5e7eb'}`,
+    background: 'var(--v-surface-muted)',
+    border: `1px solid ${isUploaded ? '#bbf7d0' : 'var(--v-border)'}`,
     borderRadius: 6,
     marginBottom: 10,
     overflow: 'hidden',
@@ -593,12 +594,12 @@ const FileUploadCard: React.FC<FileUploadCardProps> = ({
   const fileModeStyle: React.CSSProperties = {
     ...modeButtonBaseStyle,
     background: inputMode === 'file' ? '#049484' : 'transparent',
-    color:      inputMode === 'file' ? '#ffffff'  : '#6b7280',
+    color:      inputMode === 'file' ? '#ffffff'  : 'var(--v-text-muted)',
   };
   const urlModeStyle: React.CSSProperties = {
     ...modeButtonBaseStyle,
     background: inputMode === 'url' ? '#049484' : 'transparent',
-    color:      inputMode === 'url' ? '#ffffff'  : '#6b7280',
+    color:      inputMode === 'url' ? '#ffffff'  : 'var(--v-text-muted)',
   };
 
   return (
@@ -606,7 +607,7 @@ const FileUploadCard: React.FC<FileUploadCardProps> = ({
       {/* card header */}
       <div style={{
         display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-        padding: '8px 12px', background: '#f9fafb', borderBottom: '1px solid #f1f5f9',
+        padding: '8px 12px', background: headerBg, borderBottom: '1px solid var(--v-border-subtle)',
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
           <span style={{
@@ -623,14 +624,14 @@ const FileUploadCard: React.FC<FileUploadCardProps> = ({
           )}
           {isUploaded && (
             <button type="button" onClick={onClearUpload} disabled={removeDisabled} style={{
-              fontSize: 11, fontFamily: FONT, border: '1px solid #e5e7eb', borderRadius: 4,
-              background: '#fff', color: '#6b7280', padding: '1px 7px',
+              fontSize: 11, fontFamily: FONT, border: '1px solid var(--v-border)', borderRadius: 4,
+              background: 'var(--v-surface)', color: 'var(--v-text-muted)', padding: '1px 7px',
               cursor: removeDisabled ? 'not-allowed' : 'pointer', opacity: removeDisabled ? 0.4 : 1,
             }}>Remove</button>
           )}
         </div>
         {/* mode toggle */}
-        <div style={{ display: 'flex', background: '#f1f5f9', borderRadius: 5, padding: 2, gap: 2 }}>
+        <div style={{ display: 'flex', background: 'var(--v-input-bg)', borderRadius: 5, padding: 2, gap: 2 }}>
           <button type="button" onClick={() => onModeChange('file')} style={fileModeStyle}>File</button>
           <button type="button" onClick={() => onModeChange('url')}  style={urlModeStyle}>URL</button>
         </div>
@@ -659,7 +660,7 @@ const FileUploadCard: React.FC<FileUploadCardProps> = ({
             <div style={progressBarContainerStyle}>
               <div style={{ ...progressBarStyle, width: `${uploadProgress.progress}%` }} />
             </div>
-            <div style={{ fontSize: 11, color: '#9ca3af', textAlign: 'center', marginTop: 3 }}>
+            <div style={{ fontSize: 11, color: 'var(--v-text-faint)', textAlign: 'center', marginTop: 3 }}>
               {Math.round(uploadProgress.progress)}%
             </div>
           </div>
@@ -667,8 +668,8 @@ const FileUploadCard: React.FC<FileUploadCardProps> = ({
         {uploadError && (
           <div style={{
             marginTop: 8, padding: '8px 10px',
-            background: '#fef2f2', border: '1px solid #fecaca',
-            borderRadius: 5, fontSize: 12, color: '#b91c1c',
+            background: 'var(--v-danger-bg)', border: '1px solid var(--v-danger-border)',
+            borderRadius: 5, fontSize: 12, color: 'var(--v-danger-text)',
             display: 'flex', alignItems: 'flex-start', gap: 6,
           }}>
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0, marginTop: 1 }}><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
@@ -731,8 +732,8 @@ const GenModelFixPrompt: React.FC<GenModelFixPromptProps> = ({
   return (
     <div style={{
       marginTop: 16, padding: 14, borderRadius: 6,
-      border: '1px solid #fde68a', background: '#fffbeb',
-      fontSize: 13, color: '#78350f', fontFamily: FONT,
+      border: '1px solid var(--v-warning-border)', background: 'var(--v-warning-bg)',
+      fontSize: 13, color: 'var(--v-warning-text)', fontFamily: FONT,
     }}>
       <div style={{ fontWeight: 600, marginBottom: 6 }}>
         We detected issues in your GenModel.
@@ -1463,7 +1464,7 @@ export const CreateModelModal: React.FC<CreateModelModalProps> = ({
                     badgeBg={badgeBg}
                     badgeBorder={badgeBorder}
                     badgeColor={badgeColor}
-                    headerBg={fileId > 0 ? '#f0fdf4' : defaultHeaderBg}
+                    headerBg={fileId > 0 ? 'var(--v-success-bg)' : defaultHeaderBg}
                     fileId={fileId}
                     inputMode={inputMode}
                     uploadProgress={uploadProgress[kind]}

@@ -1,6 +1,8 @@
 import React, { useEffect, useState } from 'react';
+import { useTheme } from '../../theme/theme';
 import { useModalBodyLock } from './modalUtils';
 import { EyeIcon, EyeOffIcon } from './PasswordVisibilityIcons';
+import { ThemeToggle } from './ThemeToggle';
 
 export interface PasswordValidation {
   hasMinLength: boolean;
@@ -34,8 +36,8 @@ const PasswordRequirements: React.FC<{ validation: PasswordValidation; showRequi
 }) => {
   if (!showRequirements) return null;
   return (
-    <div style={{ marginTop: 12, padding: 12, background: '#f9fafb', border: '1px solid #e5e7eb', borderRadius: 8 }}>
-      <div style={{ fontSize: 12, fontWeight: 600, color: '#374151', marginBottom: 8 }}>Password must:</div>
+    <div style={{ marginTop: 12, padding: 12, background: 'var(--v-surface-muted)', border: '1px solid var(--v-border)', borderRadius: 8 }}>
+      <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--v-text)', marginBottom: 8 }}>Password must:</div>
       <ul style={{ listStyle: 'none', padding: 0, margin: 0, fontSize: 12, display: 'flex', flexDirection: 'column', gap: 4 }}>
         <ValidationItem isValid={validation.hasMinLength} text="Be at least 8 characters long" />
         <ValidationItem isValid={validation.hasLowercase} text="Have at least one lowercase letter" />
@@ -64,7 +66,7 @@ const PasswordInput: React.FC<{
   const inputId = React.useId();
   return (
     <div style={{ marginBottom: 20 }}>
-      <label htmlFor={inputId} style={{ display: 'block', marginBottom: 10, fontSize: 14, fontWeight: 600, color: '#1f2937' }}>
+      <label htmlFor={inputId} style={{ display: 'block', marginBottom: 10, fontSize: 14, fontWeight: 600, color: 'var(--v-text)' }}>
         {label}
       </label>
       <div style={{ position: 'relative' }}>
@@ -77,9 +79,10 @@ const PasswordInput: React.FC<{
           disabled={disabled}
           style={{
             width: '100%', padding: '12px 48px 12px 14px',
-            border: showError ? '2px solid #dc2626' : '2px solid #e5e7eb',
+            border: showError ? '2px solid #dc2626' : '2px solid var(--v-border)',
             borderRadius: 8, fontSize: 14, boxSizing: 'border-box', outline: 'none',
-            background: isFocused ? '#ffffff' : '#f9fafb',
+            color: 'var(--v-text)',
+            background: isFocused ? 'var(--v-input-bg)' : 'var(--v-surface-muted)',
             boxShadow: isFocused ? '0 0 0 3px rgba(4, 148, 132, 0.1)' : 'none',
           }}
           onFocus={() => setIsFocused(true)}
@@ -103,8 +106,8 @@ const PasswordInput: React.FC<{
             height: 32,
             border: 'none',
             borderRadius: 6,
-            background: isToggleHovered && !disabled ? '#f0fdfa' : 'transparent',
-            color: isToggleHovered && !disabled ? '#1f9f92' : '#64748b',
+            background: isToggleHovered && !disabled ? 'var(--v-chrome-hover)' : 'transparent',
+            color: isToggleHovered && !disabled ? '#049484' : 'var(--v-chrome-icon)',
             cursor: disabled ? 'not-allowed' : 'pointer',
             display: 'flex',
             alignItems: 'center',
@@ -133,14 +136,27 @@ const PasswordInput: React.FC<{
 };
 
 const MessageBox: React.FC<{ message: string; type: 'error' | 'success' }> = ({ message, type }) => {
+  const { isDark } = useTheme();
   const isError = type === 'error';
+  let background: string;
+  let border: string;
+  let color: string;
+  if (isError) {
+    background = isDark ? '#3f1d1d' : '#fef2f2';
+    border = isDark ? '#7f1d1d' : '#fecaca';
+    color = isDark ? '#fecaca' : '#991b1b';
+  } else {
+    background = isDark ? '#14532d' : '#d5f4e6';
+    border = isDark ? '#166534' : '#a9dfbf';
+    color = isDark ? '#bbf7d0' : '#166534';
+  }
   return (
     <div style={{
       padding: '14px 16px',
-      background: isError ? '#fef2f2' : '#d5f4e6',
-      border: `2px solid ${isError ? '#fecaca' : '#a9dfbf'}`,
+      background,
+      border: `2px solid ${border}`,
       borderRadius: 8,
-      color: isError ? '#991b1b' : '#166534',
+      color,
       fontSize: 13,
       marginBottom: 20,
       fontWeight: 500,
@@ -163,7 +179,7 @@ const ModalButton: React.FC<{
   const isDisabled = Boolean(disabled || isLoading);
   let background: string;
   if (isCancel) {
-    background = '#fff';
+    background = 'var(--v-surface)';
   } else if (isDisabled) {
     background = '#95a5a6';
   } else {
@@ -186,9 +202,9 @@ const ModalButton: React.FC<{
       style={{
         padding: isCancel ? '12px 24px' : '12px 28px',
         borderRadius: 8,
-        border: isCancel ? '2px solid #e5e7eb' : '2px solid #037368',
+        border: isCancel ? '2px solid var(--v-border)' : '2px solid #037368',
         background,
-        color: isCancel ? '#374151' : '#fff',
+        color: isCancel ? 'var(--v-text)' : '#fff',
         cursor: isDisabled ? 'not-allowed' : 'pointer',
         fontWeight: isCancel ? 600 : 700,
         fontSize: 14,
@@ -236,6 +252,7 @@ export const ChangePasswordModal: React.FC<ChangePasswordModalProps> = ({
   onSubmit,
   canSubmit,
 }) => {
+  const { theme } = useTheme();
   useModalBodyLock(isOpen);
 
   useEffect(() => {
@@ -264,16 +281,45 @@ export const ChangePasswordModal: React.FC<ChangePasswordModalProps> = ({
       />
       <dialog
         open
+        className="change-password-dialog"
         aria-labelledby="change-password-title"
         style={{
-          background: '#fff', borderRadius: 16, padding: 0, width: '90%', maxWidth: 480,
-          boxShadow: '0 24px 72px rgba(0,0,0,0.3)', overflow: 'hidden', position: 'relative', zIndex: 1,
-          border: 'none', margin: 0,
+          backgroundColor: 'var(--v-surface)',
+          borderRadius: 16,
+          padding: 0,
+          width: '90%',
+          maxWidth: 480,
+          boxShadow: 'var(--v-card-shadow)',
+          overflow: 'hidden',
+          position: 'relative',
+          zIndex: 1,
+          margin: 0,
+          colorScheme: theme,
         }}
       >
-        <div style={{ background: 'linear-gradient(135deg, #049484 0%, #037368 100%)', padding: '28px 32px', color: '#fff' }}>
-          <h2 id="change-password-title" style={{ margin: 0, fontSize: 26, fontWeight: 700 }}>Change Password</h2>
-          <p style={{ margin: '10px 0 0', fontSize: 14, opacity: 0.95 }}>
+        <div style={{
+          background: 'linear-gradient(135deg, #049484 0%, #037368 100%)',
+          padding: '28px 32px',
+          color: '#fff',
+          position: 'relative',
+        }}>
+          <div
+            style={{
+              position: 'absolute',
+              top: 12,
+              right: 12,
+              background: 'rgba(255,255,255,0.14)',
+              border: '1px solid rgba(255,255,255,0.22)',
+              borderRadius: 10,
+              padding: 2,
+            }}
+          >
+            <ThemeToggle tone="onDark" />
+          </div>
+          <h2 id="change-password-title" style={{ margin: 0, fontSize: 26, fontWeight: 700, paddingRight: 44 }}>
+            Change Password
+          </h2>
+          <p style={{ margin: '10px 0 0', fontSize: 14, opacity: 0.95, paddingRight: 44 }}>
             Please create a strong password that meets all security requirements to protect your account.
           </p>
         </div>

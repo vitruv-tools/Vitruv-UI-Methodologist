@@ -40,7 +40,7 @@ export const CanvasProjectLoadStateOverlay: React.FC<CanvasProjectLoadStateOverl
     zIndex: 5000,
     display: 'grid',
     placeItems: 'center',
-    background: '#f8fafc',
+    background: 'var(--v-page-bg)',
     fontFamily: 'ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, sans-serif',
   };
 
@@ -48,8 +48,8 @@ export const CanvasProjectLoadStateOverlay: React.FC<CanvasProjectLoadStateOverl
       <div style={{
         width: 'min(420px, calc(100vw - 32px))',
         padding: '28px 30px',
-        background: '#ffffff',
-        border: '1px solid #e2e8f0',
+        background: 'var(--v-surface)',
+        border: '1px solid var(--v-border)',
         borderRadius: 14,
         boxShadow: '0 20px 60px rgba(15, 23, 42, 0.12)',
         textAlign: 'center',
@@ -79,7 +79,7 @@ export const CanvasProjectLoadStateOverlay: React.FC<CanvasProjectLoadStateOverl
         </div>
         <h1 style={{
           margin: '0 0 8px',
-          color: '#0f172a',
+          color: 'var(--v-text)',
           fontSize: 22,
           lineHeight: 1.2,
         }}>
@@ -87,7 +87,7 @@ export const CanvasProjectLoadStateOverlay: React.FC<CanvasProjectLoadStateOverl
         </h1>
         <p style={{
           margin: 0,
-          color: '#64748b',
+          color: 'var(--v-text-muted)',
           fontSize: 14,
           lineHeight: 1.6,
         }}>
@@ -105,9 +105,9 @@ export const CanvasProjectLoadStateOverlay: React.FC<CanvasProjectLoadStateOverl
               type="button"
               onClick={onBack}
               style={{
-                border: '1px solid #cbd5e1',
-                background: '#ffffff',
-                color: '#334155',
+                border: '1px solid var(--v-border)',
+                background: 'var(--v-surface)',
+                color: 'var(--v-text-secondary)',
                 borderRadius: 8,
                 padding: '10px 16px',
                 fontSize: 14,

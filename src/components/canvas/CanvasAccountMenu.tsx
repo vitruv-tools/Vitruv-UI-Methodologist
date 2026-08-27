@@ -22,7 +22,7 @@ interface CanvasAccountMenuProps {
 function getProfileMenuItemBackground(hovered: boolean, danger?: boolean): string {
   if (!hovered) return 'transparent';
   if (danger) return '#fef2f2';
-  return '#f8fafc';
+  return 'var(--v-chrome-hover)';
 }
 
 const ProfileMenuItem: React.FC<{
@@ -43,16 +43,16 @@ const ProfileMenuItem: React.FC<{
         display: 'flex', alignItems: 'center', gap: 8,
         width: '100%', padding: '8px 10px', border: 'none', borderRadius: 6,
         background: getProfileMenuItemBackground(hov, danger),
-        color: danger ? '#dc2626' : '#0f172a',
+        color: danger ? '#dc2626' : 'var(--v-text)',
         fontSize: 13, fontWeight: 500, cursor: 'pointer', textAlign: 'left',
         transition: 'background 0.1s',
       }}
     >
-      <span style={{ display: 'flex', flexShrink: 0, color: danger ? 'inherit' : '#475569' }}>{icon}</span>
+      <span style={{ display: 'flex', flexShrink: 0, color: danger ? 'inherit' : 'var(--v-chrome-icon)' }}>{icon}</span>
       <div style={{ flex: 1, minWidth: 0 }}>
         <div>{label}</div>
         {sublabel && (
-          <div style={{ fontSize: 11, color: '#64748b', fontWeight: 400, marginTop: 1 }}>{sublabel}</div>
+          <div style={{ fontSize: 11, color: 'var(--v-text-muted)', fontWeight: 400, marginTop: 1 }}>{sublabel}</div>
         )}
       </div>
     </button>
@@ -126,7 +126,7 @@ export const CanvasAccountMenu: React.FC<CanvasAccountMenuProps> = ({
             position: 'absolute',
             top: 'calc(100% + 8px)',
             right: 0,
-            background: '#ffffff',
+            background: 'var(--v-chrome-bg)',
             borderRadius: 10,
             boxShadow: '0 8px 32px rgba(0,0,0,0.16), 0 0 0 1px rgba(0,0,0,0.07)',
             padding: '6px',
@@ -136,7 +136,7 @@ export const CanvasAccountMenu: React.FC<CanvasAccountMenuProps> = ({
             <div style={{
               display: 'flex', alignItems: 'center', gap: 10,
               padding: '8px 10px 12px',
-              borderBottom: '1px solid #f1f5f9',
+              borderBottom: '1px solid var(--v-border)',
               marginBottom: 4,
             }}>
               <CanvasUserAvatar
@@ -146,7 +146,7 @@ export const CanvasAccountMenu: React.FC<CanvasAccountMenuProps> = ({
                 ring={account.ringColor}
               />
               <div>
-                <div style={{ fontSize: 13, fontWeight: 600, color: '#0f172a', whiteSpace: 'nowrap' }}>
+                <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--v-text)', whiteSpace: 'nowrap' }}>
                   {account.displayName}
                 </div>
                 <div style={{ fontSize: 11, color: '#049484', fontWeight: 600, marginTop: 1 }}>Methodologist</div>

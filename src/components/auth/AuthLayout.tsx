@@ -1,4 +1,5 @@
 import React from 'react';
+import { ThemeToggle } from '../ui/ThemeToggle';
 
 // ── Shared styles ─────────────────────────────────────────────────────────────
 // All auth-page CSS lives here once so SignIn and SignUp stay DRY.
@@ -73,6 +74,7 @@ const AUTH_STYLES = `
   }
 
   .mock-auth-card {
+    position: relative;
     background: #ffffff;
     width: 100%;
     max-width: 460px;
@@ -509,6 +511,67 @@ const AUTH_STYLES = `
     color: #64748b;
     line-height: 1.55;
   }
+
+  .auth-theme-toggle {
+    position: absolute;
+    top: 12px;
+    right: 12px;
+    z-index: 2;
+    background: var(--v-surface-muted);
+    border: 1px solid var(--v-border);
+    border-radius: 10px;
+    padding: 2px;
+  }
+
+  [data-theme="dark"] .mock-auth-card {
+    background: rgba(15, 23, 42, 0.88);
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.35);
+    color: #f1f5f9;
+  }
+  [data-theme="dark"] .mock-auth-header h1 { color: #f8fafc; }
+  [data-theme="dark"] .mock-auth-header p,
+  [data-theme="dark"] .mock-auth-footer,
+  [data-theme="dark"] .otp-help,
+  [data-theme="dark"] .otp-timer { color: #94a3b8; }
+  [data-theme="dark"] .mock-form-group label { color: #e2e8f0; }
+  [data-theme="dark"] .mock-form-group input {
+    background-color: #0f172a;
+    border-color: #334155;
+    color: #f1f5f9;
+  }
+  [data-theme="dark"] .mock-form-group input:disabled {
+    background-color: #162032;
+    color: #64748b;
+  }
+  [data-theme="dark"] .mock-checkbox-container { color: #cbd5e1; }
+  [data-theme="dark"] .mock-forgot-link,
+  [data-theme="dark"] .mock-signup-link { color: #e2e8f0; }
+  [data-theme="dark"] .mock-auth-divider::before,
+  [data-theme="dark"] .mock-auth-divider::after { background: #334155; }
+  [data-theme="dark"] .modal-dialog {
+    background: #1e293b;
+    color: #f1f5f9;
+  }
+  [data-theme="dark"] .modal-header h2 { color: #f8fafc; }
+  [data-theme="dark"] .modal-header p { color: #94a3b8; }
+  [data-theme="dark"] .modal-input {
+    background: #0f172a;
+    border-color: #334155;
+    color: #f1f5f9;
+  }
+  [data-theme="dark"] .btn-secondary {
+    background: #334155;
+    color: #e2e8f0;
+  }
+  [data-theme="dark"] .password-requirements {
+    background-color: #0f172a;
+    border-color: #334155;
+  }
+  [data-theme="dark"] .password-requirements-title { color: #cbd5e1; }
+  [data-theme="dark"] .auth-theme-toggle {
+    background: var(--v-chrome-hover);
+    border-color: var(--v-border);
+  }
 `;
 
 // ── AuthErrorBanner ────────────────────────────────────────────────────────────
@@ -566,6 +629,9 @@ export function AuthLayout({ children }: Readonly<AuthLayoutProps>) {
       {/* Right form card */}
       <div className="auth-right-form-area">
         <div className="mock-auth-card">
+          <div className="auth-theme-toggle">
+            <ThemeToggle />
+          </div>
 
           {/* Logo */}
           <div className="mock-logo-container">

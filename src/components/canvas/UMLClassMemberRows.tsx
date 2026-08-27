@@ -33,8 +33,8 @@ const umlMemberEditFieldStyle: CSSProperties = {
   border: `1px solid ${UML.primaryBorder}`,
   borderRadius: 4,
   padding: '1px 4px',
-  background: UML.surface,
-  color: UML.ink,
+  background: UML.boxBg,
+  color: UML.boxText,
   fontFamily: UML.fontSans,
 };
 
@@ -78,7 +78,7 @@ function getUmlRowContainerStyle(hovered: boolean): CSSProperties {
     alignItems: 'center',
     padding: '0 6px',
     height: UML_CLASS_MEMBER_ROW_HEIGHT,
-    background: hovered ? '#f8fafc' : 'transparent',
+    background: hovered ? UML.boxHover : 'transparent',
     gap: 3,
   };
 }
@@ -279,7 +279,7 @@ const UmlAttributeRowEditor = ({
         )}
         style={{ ...editFieldStyle, flex: 1, minWidth: nameInputMinWidth }}
       />
-      <span style={{ color: UML.textMuted, flexShrink: 0 }}>:</span>
+      <span style={{ color: UML.boxTextMuted, flexShrink: 0 }}>:</span>
       <select
         value={selectValue}
         onMouseDown={event => event.preventDefault()}
@@ -364,9 +364,9 @@ export const UmlAttributeRow = ({
       onDoubleClick={onDoubleClick}
       onDelete={onDelete}
     >
-      <span style={{ color: '#64748b', flexShrink: 0 }}>{attr.visibility ?? '+'}</span>
+      <span style={{ color: UML.boxTextMuted, flexShrink: 0 }}>{attr.visibility ?? '+'}</span>
       <span style={{
-        color: '#1e293b',
+        color: UML.boxText,
         flex: 1,
         overflow: 'hidden',
         textOverflow: 'ellipsis',
@@ -374,7 +374,7 @@ export const UmlAttributeRow = ({
       }}>
         {attr.name}
       </span>
-      <span style={{ color: '#94a3b8', flexShrink: 0 }}>:</span>
+      <span style={{ color: UML.boxTextMuted, flexShrink: 0 }}>:</span>
       <span style={{ color: UML.primary, flexShrink: 0, fontWeight: 600 }}>
         {normalizeAttributeTypeDisplay(attr.type)}
       </span>
@@ -390,7 +390,7 @@ function getUmlAddMemberRowStyle(hovered: boolean): CSSProperties {
     padding: '0 8px',
     gap: 4,
     cursor: 'pointer',
-    color: hovered ? UML.primary : UML.textMuted,
+    color: hovered ? UML.primary : UML.boxTextMuted,
     transition: 'color 0.1s',
     fontFamily: UML.fontSans,
     border: 'none',
@@ -519,7 +519,7 @@ const UmlOperationRowEditor = ({
         )}
         style={{ ...editFieldStyle, flex: 1, minWidth: nameInputMinWidth }}
       />
-      <span style={{ color: UML.textMuted, flexShrink: 0 }}>() :</span>
+      <span style={{ color: UML.boxTextMuted, flexShrink: 0 }}>() :</span>
       <select
         value={selectValue}
         onMouseDown={event => event.preventDefault()}
@@ -603,9 +603,9 @@ export const UmlOperationRow = ({
       onDoubleClick={onDoubleClick}
       onDelete={onDelete}
     >
-      <span style={{ color: '#64748b', flexShrink: 0 }}>{op.visibility ?? '+'}</span>
+      <span style={{ color: UML.boxTextMuted, flexShrink: 0 }}>{op.visibility ?? '+'}</span>
       <span style={{
-        color: '#1e293b',
+        color: UML.boxText,
         flex: 1,
         overflow: 'hidden',
         textOverflow: 'ellipsis',
@@ -613,7 +613,7 @@ export const UmlOperationRow = ({
       }}>
         {op.name}()
       </span>
-      <span style={{ color: '#94a3b8', flexShrink: 0 }}>:</span>
+      <span style={{ color: UML.boxTextMuted, flexShrink: 0 }}>:</span>
       <span style={{ color: UML.primary, flexShrink: 0, fontWeight: 600 }}>
         {normalizeOperationReturnType(op.returnType)}
       </span>

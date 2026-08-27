@@ -10,6 +10,19 @@ import {
 
 const FONT = 'ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, sans-serif';
 const DARK = '#1e293b';
+const T = {
+  text: 'var(--v-text)',
+  secondary: 'var(--v-text-secondary)',
+  muted: 'var(--v-text-muted)',
+  faint: 'var(--v-text-faint)',
+  surface: 'var(--v-surface)',
+  mutedBg: 'var(--v-surface-muted)',
+  hover: 'var(--v-chrome-hover)',
+  border: 'var(--v-border)',
+  borderSubtle: 'var(--v-border-subtle)',
+  inputBg: 'var(--v-input-bg)',
+  workspace: 'var(--v-workspace-bg)',
+};
 
 export interface DrawerModel {
   id: number;
@@ -130,12 +143,12 @@ export const ModelDrawer: React.FC<ModelDrawerProps> = ({
   };
 
   return (
-    <div style={{ width: '100%', height: '100%', background: '#ffffff', display: 'flex', flexDirection: 'column', fontFamily: FONT }}>
+    <div style={{ width: '100%', height: '100%', background: T.surface, display: 'flex', flexDirection: 'column', fontFamily: FONT }}>
 
       {/* ── Header ── */}
       <div style={{
         padding: '12px 14px',
-        borderBottom: '1px solid #f1f5f9',
+        borderBottom: `1px solid ${T.border}`,
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'space-between',
@@ -148,7 +161,7 @@ export const ModelDrawer: React.FC<ModelDrawerProps> = ({
             style={{
               display: 'flex', alignItems: 'center', gap: 5,
               border: 'none', background: 'none', cursor: 'pointer',
-              color: DARK, fontSize: 13, fontWeight: 600, padding: '2px 0',
+              color: T.text, fontSize: 13, fontWeight: 600, padding: '2px 0',
             }}
           >
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
@@ -157,7 +170,7 @@ export const ModelDrawer: React.FC<ModelDrawerProps> = ({
             Back
           </button>
         ) : (
-          <span style={{ fontSize: 13, fontWeight: 700, color: '#0f172a', letterSpacing: '-0.01em' }}>
+          <span style={{ fontSize: 13, fontWeight: 700, color: T.text, letterSpacing: '-0.01em' }}>
             Model Library
           </span>
         )}
@@ -166,18 +179,18 @@ export const ModelDrawer: React.FC<ModelDrawerProps> = ({
           onClick={onClose}
           style={{
             border: 'none', background: 'transparent', cursor: 'pointer',
-            color: '#94a3b8', fontSize: 14, lineHeight: 1, padding: '3px 5px',
+            color: T.muted, fontSize: 14, lineHeight: 1, padding: '3px 5px',
             borderRadius: 5, transition: 'all 0.1s', marginLeft: 'auto',
           }}
           onMouseEnter={e => {
             const button = e.currentTarget;
-            button.style.background = '#f1f5f9';
-            button.style.color = '#475569';
+            button.style.background = T.hover;
+            button.style.color = T.secondary;
           }}
           onMouseLeave={e => {
             const button = e.currentTarget;
             button.style.background = 'transparent';
-            button.style.color = '#94a3b8';
+            button.style.color = T.muted;
           }}
           title="Close"
         >
@@ -250,7 +263,7 @@ const LibraryView: React.FC<LibraryViewProps> = ({
 }) => (
   <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column' }}>
     {loading ? (
-      <div style={{ padding: '32px 0', textAlign: 'center', color: '#94a3b8' }}>
+      <div style={{ padding: '32px 0', textAlign: 'center', color: T.muted }}>
         <div style={{ width: 22, height: 22, border: '2.5px solid #e2e8f0', borderTop: `2.5px solid ${DARK}`, borderRadius: '50%', animation: 'spin 0.8s linear infinite', margin: '0 auto 10px' }} />
         <span style={{ fontSize: 12 }}>Loading...</span>
       </div>
@@ -261,7 +274,7 @@ const LibraryView: React.FC<LibraryViewProps> = ({
           <SectionLabel>On canvas</SectionLabel>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 5, marginBottom: 12 }}>
             {onCanvas.length === 0 ? (
-              <div style={{ padding: '8px 4px', textAlign: 'center', color: '#cbd5e1', fontSize: 11 }}>
+              <div style={{ padding: '8px 4px', textAlign: 'center', color: T.faint, fontSize: 11 }}>
                 No models on canvas
               </div>
             ) : (
@@ -273,16 +286,16 @@ const LibraryView: React.FC<LibraryViewProps> = ({
         </div>
 
         {/* Library */}
-        <div style={{ borderTop: '1px solid #f1f5f9', display: 'flex', flexDirection: 'column', flex: 1 }}>
+        <div style={{ borderTop: `1px solid ${T.border}`, display: 'flex', flexDirection: 'column', flex: 1 }}>
           <div style={{ padding: '10px 14px 0', flexShrink: 0 }}>
             {/* Tab strip */}
-            <div style={{ display: 'flex', borderRadius: 8, overflow: 'hidden', border: '1px solid #e2e8f0', marginBottom: 10 }}>
+            <div style={{ display: 'flex', borderRadius: 8, overflow: 'hidden', border: `1px solid ${T.border}`, marginBottom: 10 }}>
               {(['my', 'public'] as const).map(tab => (
                 <button type="button" key={tab} onClick={() => switchTab(tab)} style={{
                   flex: 1, padding: '7px 0', border: 'none', fontSize: 11, fontWeight: 600,
                   cursor: 'pointer', letterSpacing: '0.04em', textTransform: 'uppercase',
-                  background: libTab === tab ? DARK : '#f8fafc',
-                  color: libTab === tab ? '#fff' : '#94a3b8',
+                  background: libTab === tab ? DARK : T.mutedBg,
+                  color: libTab === tab ? '#fff' : T.muted,
                   transition: 'all 0.15s',
                 }}>
                   {tab === 'my' ? 'My Library' : 'Public Library'}
@@ -292,7 +305,7 @@ const LibraryView: React.FC<LibraryViewProps> = ({
 
             {/* Search */}
             <div style={{ position: 'relative', marginBottom: 8 }}>
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="var(--v-text-muted)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
                 style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none' }}>
                 <circle cx="11" cy="11" r="8" /><line x1="21" y1="21" x2="16.65" y2="16.65" />
               </svg>
@@ -304,18 +317,18 @@ const LibraryView: React.FC<LibraryViewProps> = ({
                 style={{
                   width: '100%', boxSizing: 'border-box',
                   padding: '8px 28px 8px 30px',
-                  border: '1.5px solid #e2e8f0', borderRadius: 8,
-                  fontSize: 12, color: '#0f172a', background: '#f8fafc',
+                  border: `1.5px solid ${T.border}`, borderRadius: 8,
+                  fontSize: 12, color: T.text, background: T.inputBg,
                   outline: 'none', fontFamily: FONT, transition: 'border-color 0.15s',
                 }}
                 onFocus={e => (e.currentTarget.style.borderColor = DARK)}
-                onBlur={e => (e.currentTarget.style.borderColor = '#e2e8f0')}
+                onBlur={e => (e.currentTarget.style.borderColor = T.border)}
               />
               {search && (
                 <button type="button" onClick={() => setSearch('')} style={{
                   position: 'absolute', right: 8, top: '50%', transform: 'translateY(-50%)',
                   border: 'none', background: 'none', cursor: 'pointer',
-                  color: '#94a3b8', fontSize: 14, lineHeight: 1, padding: 2,
+                  color: T.muted, fontSize: 14, lineHeight: 1, padding: 2,
                 }}>✕</button>
               )}
             </div>
@@ -330,8 +343,8 @@ const LibraryView: React.FC<LibraryViewProps> = ({
                     <button type="button" key={domain} onClick={() => setDomainFilter(active ? null : domain)} style={{
                       padding: '3px 9px', border: 'none', borderRadius: 20,
                       fontSize: 10, fontWeight: 600, cursor: 'pointer', letterSpacing: '0.03em',
-                      background: active ? theme.badge : '#f1f5f9',
-                      color: active ? theme.badgeText : '#64748b',
+                      background: active ? theme.badge : T.hover,
+                      color: active ? theme.badgeText : T.muted,
                       transition: 'all 0.12s',
                       outline: active ? `1.5px solid ${theme.icon}40` : 'none',
                     }}>
@@ -346,7 +359,7 @@ const LibraryView: React.FC<LibraryViewProps> = ({
           {/* Results */}
           <div style={{ padding: '0 14px 14px', flex: 1 }}>
             {fromLibrary.length === 0 ? (
-              <div style={{ padding: '24px 4px', textAlign: 'center', color: '#cbd5e1', fontSize: 11 }}>
+              <div style={{ padding: '24px 4px', textAlign: 'center', color: T.faint, fontSize: 11 }}>
                 {search || domainFilter ? 'No models match your filter' : 'No models available'}
               </div>
             ) : (
@@ -422,15 +435,15 @@ const DetailView: React.FC<DetailViewProps> = ({ model, onFetchFile, onAddModel,
     <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
 
       {/* ── Banner ── */}
-      <div style={{ padding: '14px 16px', background: '#ffffff', borderBottom: '1px solid #f1f5f9', flexShrink: 0, display: 'flex', alignItems: 'center', gap: 10, minWidth: 0, overflow: 'hidden' }}>
+      <div style={{ padding: '14px 16px', background: T.surface, borderBottom: `1px solid ${T.border}`, flexShrink: 0, display: 'flex', alignItems: 'center', gap: 10, minWidth: 0, overflow: 'hidden' }}>
         <svg width="28" height="28" viewBox="0 0 32 32" fill="none" style={{ flexShrink: 0 }}>
           <path d="M16 5L27 11V21L16 27L5 21V11L16 5Z" stroke="#049484" strokeWidth="1.6" fill="#04948422" strokeLinejoin="round" />
           <path d="M16 5V27" stroke="#049484" strokeWidth="1.3" strokeLinecap="round" />
           <path d="M5 11L27 11" stroke="#049484" strokeWidth="1.3" strokeLinecap="round" />
           <path d="M16 5L5 11L16 17L27 11L16 5Z" stroke="#049484" strokeWidth="1.3" fill="#04948418" strokeLinejoin="round" />
         </svg>
-        <div style={{ fontSize: 15, fontWeight: 700, color: '#0f172a', letterSpacing: '-0.01em', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', minWidth: 0 }}>
-          Model Preview: <span style={{ color: '#374151', fontWeight: 600 }}>{model.name}</span>
+        <div style={{ fontSize: 15, fontWeight: 700, color: T.text, letterSpacing: '-0.01em', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', minWidth: 0 }}>
+          Model Preview: <span style={{ color: T.secondary, fontWeight: 600 }}>{model.name}</span>
         </div>
       </div>
 
@@ -440,7 +453,7 @@ const DetailView: React.FC<DetailViewProps> = ({ model, onFetchFile, onAddModel,
         {/* Left — fields */}
         <div style={{
           width: 280, flexShrink: 0,
-          borderRight: '1px solid #f1f5f9',
+          borderRight: `1px solid ${T.border}`,
           overflowY: 'auto',
           padding: '20px 22px',
           display: 'flex', flexDirection: 'column', gap: 20,
@@ -449,7 +462,7 @@ const DetailView: React.FC<DetailViewProps> = ({ model, onFetchFile, onAddModel,
           {/* Name */}
           <div>
             <FieldLabel>Name</FieldLabel>
-            <div style={{ fontSize: 14, fontWeight: 600, color: '#0f172a', fontFamily: FONT, lineHeight: 1.4 }}>
+            <div style={{ fontSize: 14, fontWeight: 600, color: T.text, fontFamily: FONT, lineHeight: 1.4 }}>
               {model.name}
             </div>
           </div>
@@ -473,8 +486,8 @@ const DetailView: React.FC<DetailViewProps> = ({ model, onFetchFile, onAddModel,
           {/* Description */}
           <div style={{ flex: 1 }}>
             <FieldLabel>Description</FieldLabel>
-            <div style={{ fontSize: 13, color: '#374151', fontFamily: FONT, lineHeight: 1.7 }}>
-              {model.description || <span style={{ color: '#cbd5e1' }}>—</span>}
+            <div style={{ fontSize: 13, color: T.secondary, fontFamily: FONT, lineHeight: 1.7 }}>
+              {model.description || <span style={{ color: T.faint }}>—</span>}
             </div>
           </div>
 
@@ -483,16 +496,16 @@ const DetailView: React.FC<DetailViewProps> = ({ model, onFetchFile, onAddModel,
             ecoreFileId={model.ecoreFileId}
             genModelFileId={model.genModelFileId}
             labelStyle={{
-              fontSize: 11, fontWeight: 700, color: '#374151',
+              fontSize: 11, fontWeight: 700, color: T.secondary,
               marginBottom: 5, letterSpacing: '0.01em', fontFamily: FONT,
             }}
           />
 
           {/* Created */}
           {model.createdAt && (
-            <div style={{ borderTop: '1px solid #f1f5f9', paddingTop: 12 }}>
+            <div style={{ borderTop: `1px solid ${T.border}`, paddingTop: 12 }}>
               <FieldLabel>Created</FieldLabel>
-              <div style={{ fontSize: 13, color: '#64748b' }}>{formatDate(model.createdAt)}</div>
+              <div style={{ fontSize: 13, color: T.muted }}>{formatDate(model.createdAt)}</div>
             </div>
           )}
 
@@ -501,8 +514,8 @@ const DetailView: React.FC<DetailViewProps> = ({ model, onFetchFile, onAddModel,
             {isOnCanvas ? (
               <div style={{
                 padding: '9px 0', borderRadius: 8,
-                background: '#f0fdf4', border: '1px solid #bbf7d0',
-                color: '#15803d', fontSize: 12, fontWeight: 600,
+                background: 'var(--v-success-bg)', border: '1px solid var(--v-success-border)',
+                color: 'var(--v-success-text)', fontSize: 12, fontWeight: 600,
                 display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
               }}>
                 <svg width="13" height="13" viewBox="0 0 16 16" fill="none">
@@ -535,12 +548,12 @@ const DetailView: React.FC<DetailViewProps> = ({ model, onFetchFile, onAddModel,
                 title="Delete meta-model"
                 style={{
                   width: '100%', padding: '9px 0', border: '1px solid #fecaca', borderRadius: 8,
-                  background: '#fff', color: '#dc2626', fontSize: 12, fontWeight: 600,
+                  background: T.surface, color: '#dc2626', fontSize: 12, fontWeight: 600,
                   cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
                   transition: 'background 0.15s', fontFamily: FONT,
                 }}
                 onMouseEnter={e => (e.currentTarget.style.background = '#fef2f2')}
-                onMouseLeave={e => (e.currentTarget.style.background = '#fff')}
+                onMouseLeave={e => (e.currentTarget.style.background = T.surface)}
               >
                 <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                   <polyline points="3 6 5 6 21 6" />
@@ -554,10 +567,10 @@ const DetailView: React.FC<DetailViewProps> = ({ model, onFetchFile, onAddModel,
 
         {/* Right — UML preview */}
         {/* Right — UML preview */}
-        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', background: '#ffffff' }}>
+        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', background: T.workspace }}>
           {/* Label + zoom controls */}
           <div style={{ padding: '14px 18px 10px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexShrink: 0 }}>
-            <span style={{ fontSize: 13, fontWeight: 600, color: '#374151', fontFamily: FONT }}>UML</span>
+            <span style={{ fontSize: 13, fontWeight: 600, color: T.secondary, fontFamily: FONT }}>UML</span>
             {ecoreContent && (
               <div style={{ display: 'flex', gap: 4 }}>
                 <PreviewBtn title="Open full-screen UML editor" onClick={() => setUmlExpanded(true)}>
@@ -588,20 +601,20 @@ const DetailView: React.FC<DetailViewProps> = ({ model, onFetchFile, onAddModel,
 
           {/* Diagram card */}
           <div style={{ flex: 1, padding: '0 18px 18px', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
-            <div style={{ flex: 1, position: 'relative', background: '#ffffff', borderRadius: 10, border: '1px solid #e2e8f0', overflow: 'hidden', boxShadow: '0 1px 4px rgba(0,0,0,0.04)' }}>
+            <div style={{ flex: 1, position: 'relative', background: T.workspace, borderRadius: 10, border: `1px solid ${T.border}`, overflow: 'hidden', boxShadow: 'var(--v-card-shadow)' }}>
               {fetchingUml && (
-                <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 10, color: '#94a3b8' }}>
-                  <div style={{ width: 24, height: 24, border: '2.5px solid #e2e8f0', borderTop: `2.5px solid ${theme.icon}`, borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
+                <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 10, color: T.muted }}>
+                  <div style={{ width: 24, height: 24, border: `2.5px solid ${T.border}`, borderTop: `2.5px solid ${theme.icon}`, borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
                   <span style={{ fontSize: 12, fontFamily: FONT }}>Loading preview…</span>
                 </div>
               )}
               {!fetchingUml && fetchError && (
-                <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#cbd5e1', fontSize: 12, fontFamily: FONT }}>
+                <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', color: T.faint, fontSize: 12, fontFamily: FONT }}>
                   Could not load UML preview
                 </div>
               )}
               {!fetchingUml && !fetchError && !ecoreContent && (
-                <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#cbd5e1', fontSize: 12, fontFamily: FONT }}>
+                <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', color: T.faint, fontSize: 12, fontFamily: FONT }}>
                   No diagram available
                 </div>
               )}
@@ -642,7 +655,7 @@ const DetailView: React.FC<DetailViewProps> = ({ model, onFetchFile, onAddModel,
 
 const FieldLabel: React.FC<{ children: React.ReactNode }> = ({ children }) => (
   <div style={{
-    fontSize: 11, fontWeight: 700, color: '#374151',
+    fontSize: 11, fontWeight: 700, color: T.secondary,
     marginBottom: 5, letterSpacing: '0.01em', fontFamily: FONT,
   }}>
     {children}
@@ -656,8 +669,8 @@ const PreviewBtn: React.FC<{ title: string; onClick: () => void; children: React
       title={title} onClick={onClick}
       onMouseEnter={() => setHov(true)} onMouseLeave={() => setHov(false)}
       style={{
-        width: 24, height: 24, border: '1px solid #e2e8f0', borderRadius: 6,
-        background: hov ? '#f1f5f9' : '#fff', color: hov ? '#0f172a' : '#64748b',
+        width: 24, height: 24, border: `1px solid ${T.border}`, borderRadius: 6,
+        background: hov ? T.hover : T.surface, color: hov ? T.text : T.muted,
         cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
         transition: 'all 0.12s',
       }}
@@ -671,7 +684,7 @@ const PreviewBtn: React.FC<{ title: string; onClick: () => void; children: React
 
 const SectionLabel: React.FC<{ children: React.ReactNode }> = ({ children }) => (
   <div style={{
-    fontSize: 10, fontWeight: 700, color: '#94a3b8',
+    fontSize: 10, fontWeight: 700, color: T.muted,
     letterSpacing: '0.06em', textTransform: 'uppercase',
     padding: '2px 2px 6px',
   }}>
@@ -715,7 +728,7 @@ const ModelCard: React.FC<ModelCardProps> = ({ model, onCanvas, onAdd, onOpenDet
         style={{
           display: 'flex', flexDirection: 'row', alignItems: 'center',
           gap: 10, padding: '7px 10px', borderRadius: 8,
-          background: '#f8fafc', border: '1.5px solid #e2e8f0',
+          background: T.mutedBg, border: `1.5px solid ${T.border}`,
           width: '100%', boxSizing: 'border-box', cursor: 'context-menu',
           fontFamily: 'inherit', textAlign: 'left',
         }}
@@ -726,7 +739,7 @@ const ModelCard: React.FC<ModelCardProps> = ({ model, onCanvas, onAdd, onOpenDet
         </div>
 
         {/* Name — fixed left column */}
-        <div style={{ flex: '0 0 30%', minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontSize: 12, fontWeight: 700, color: '#1e293b' }}>
+        <div style={{ flex: '0 0 30%', minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontSize: 12, fontWeight: 700, color: T.text }}>
           {model.name}
         </div>
 
@@ -738,16 +751,16 @@ const ModelCard: React.FC<ModelCardProps> = ({ model, onCanvas, onAdd, onOpenDet
               background: theme.badge, color: theme.badgeText,
               fontSize: 9, fontWeight: 700, letterSpacing: '0.03em', textTransform: 'uppercase',
             }}>{model.domain}</span>
-          ) : <span style={{ color: '#e2e8f0' }}>—</span>}
+          ) : <span style={{ color: T.faint }}>—</span>}
         </div>
 
         {/* Date */}
-        <div style={{ flex: '0 0 18%', minWidth: 0, fontSize: 10, color: '#94a3b8', whiteSpace: 'nowrap' }}>
+        <div style={{ flex: '0 0 18%', minWidth: 0, fontSize: 10, color: T.muted, whiteSpace: 'nowrap' }}>
           {formatDate(model.createdAt) ?? '—'}
         </div>
 
         {/* Keywords count */}
-        <div style={{ flex: '0 0 16%', minWidth: 0, fontSize: 10, color: '#94a3b8', whiteSpace: 'nowrap' }}>
+        <div style={{ flex: '0 0 16%', minWidth: 0, fontSize: 10, color: T.muted, whiteSpace: 'nowrap' }}>
           {model.keyword && model.keyword.length > 0 ? `${model.keyword.length} kw` : '—'}
         </div>
 
@@ -794,16 +807,16 @@ const ModelCard: React.FC<ModelCardProps> = ({ model, onCanvas, onAdd, onOpenDet
             background: theme.badge, color: theme.badgeText,
             fontSize: 9, fontWeight: 700, letterSpacing: '0.03em', textTransform: 'uppercase',
           }}>{model.domain}</span>
-        ) : <span style={{ color: '#e2e8f0', fontSize: 10 }}>—</span>}
+        ) : <span style={{ color: T.faint, fontSize: 10 }}>—</span>}
       </div>
 
       {/* Date */}
-      <div style={{ flex: '0 0 18%', minWidth: 0, fontSize: 10, color: '#94a3b8', whiteSpace: 'nowrap' }}>
+      <div style={{ flex: '0 0 18%', minWidth: 0, fontSize: 10, color: '#475569', whiteSpace: 'nowrap' }}>
         {formatDate(model.createdAt) ?? '—'}
       </div>
 
       {/* Keywords count */}
-      <div style={{ flex: '0 0 16%', minWidth: 0, fontSize: 10, color: '#94a3b8', whiteSpace: 'nowrap' }}>
+      <div style={{ flex: '0 0 16%', minWidth: 0, fontSize: 10, color: '#475569', whiteSpace: 'nowrap' }}>
         {model.keyword && model.keyword.length > 0 ? `${model.keyword.length} kw` : '—'}
       </div>
     </button>

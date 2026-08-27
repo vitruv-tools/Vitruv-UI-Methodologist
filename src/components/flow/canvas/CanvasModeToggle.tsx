@@ -70,9 +70,9 @@ export const CanvasModeToggle: React.FC<CanvasModeToggleProps> = ({
         style={{
           display: 'flex',
           alignItems: 'center',
-          background: '#ffffff',
+          background: 'var(--v-chrome-bg)',
           borderRadius: 8,
-          boxShadow: '0 4px 16px rgba(0,0,0,0.13), 0 0 0 1px rgba(0,0,0,0.07)',
+          boxShadow: '0 4px 16px rgba(0,0,0,0.13), 0 0 0 1px var(--v-card-border)',
           height: 44,
           padding: '0 4px',
           gap: 2,
@@ -94,7 +94,7 @@ export const CanvasModeToggle: React.FC<CanvasModeToggleProps> = ({
                 border: isActive ? '1px solid #049484' : '1px solid transparent',
                 borderRadius: 6,
                 background: isActive ? '#049484' : 'transparent',
-                color: isActive ? '#ffffff' : '#64748b',
+                color: isActive ? '#ffffff' : 'var(--v-text-muted)',
                 fontSize: 12,
                 fontWeight: 600,
                 cursor: 'pointer',
@@ -104,13 +104,13 @@ export const CanvasModeToggle: React.FC<CanvasModeToggleProps> = ({
               }}
               onMouseEnter={e => {
                 if (isActive) return;
-                e.currentTarget.style.background = '#f1f5f9';
-                e.currentTarget.style.color = '#1e293b';
+                e.currentTarget.style.background = 'var(--v-chrome-hover)';
+                e.currentTarget.style.color = 'var(--v-text)';
               }}
               onMouseLeave={e => {
                 if (isActive) return;
                 e.currentTarget.style.background = 'transparent';
-                e.currentTarget.style.color = '#64748b';
+                e.currentTarget.style.color = 'var(--v-text-muted)';
               }}
             >
               {icon}

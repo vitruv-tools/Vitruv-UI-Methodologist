@@ -25,10 +25,10 @@ const CancelButton: React.FC<{ onClick: () => void; disabled: boolean }> = ({ on
       onMouseLeave={() => setHov(false)}
       style={{
         padding: '9px 18px',
-        border: '1.5px solid rgba(0,0,0,0.10)',
+        border: '1.5px solid var(--v-border)',
         borderRadius: 9,
-        background: hov ? '#f1f5f9' : '#ffffff',
-        color: '#374151',
+        background: hov ? 'var(--v-surface-hover)' : 'var(--v-surface)',
+        color: 'var(--v-text-secondary)',
         fontSize: 13,
         fontWeight: 600,
         cursor: disabled ? 'not-allowed' : 'pointer',
@@ -120,12 +120,12 @@ export const CreateVsumModal: React.FC<CreateVsumModalProps> = ({ isOpen, onClos
   const inputBase: React.CSSProperties = {
     width: '100%',
     padding: '10px 14px',
-    border: '1.5px solid rgba(0,0,0,0.10)',
+    border: '1.5px solid var(--v-border)',
     borderRadius: 9,
     fontSize: 14,
-    color: '#111827',
+    color: 'var(--v-text)',
     fontFamily: FONT,
-    background: '#ffffff',
+    background: 'var(--v-input-bg)',
     outline: 'none',
     boxSizing: 'border-box',
     transition: 'border-color 0.15s, box-shadow 0.15s',
@@ -169,24 +169,25 @@ export const CreateVsumModal: React.FC<CreateVsumModalProps> = ({ isOpen, onClos
           position: 'relative',
           zIndex: 1,
           width: 'min(480px, 94vw)',
-          background: '#ffffff',
+          background: 'var(--v-surface)',
           borderRadius: 14,
-          boxShadow: '0 8px 40px rgba(0,0,0,0.18), 0 0 0 1px rgba(0,0,0,0.07)',
+          boxShadow: 'var(--v-card-shadow)',
           overflow: 'hidden',
           fontFamily: FONT,
+          color: 'var(--v-text)',
         }}
       >
         {/* Header */}
         <div style={{
           display: 'flex', alignItems: 'center', justifyContent: 'space-between',
           padding: '20px 24px 18px',
-          borderBottom: '1px solid rgba(0,0,0,0.07)',
+          borderBottom: '1px solid var(--v-border)',
         }}>
           <div>
-            <h2 id="create-vsum-title" style={{ margin: 0, fontSize: 16, fontWeight: 700, color: '#0f172a', letterSpacing: '-0.01em' }}>
+            <h2 id="create-vsum-title" style={{ margin: 0, fontSize: 16, fontWeight: 700, color: 'var(--v-text)', letterSpacing: '-0.01em' }}>
               New Project
             </h2>
-            <div style={{ fontSize: 13, color: '#6b7280', marginTop: 2 }}>
+            <div style={{ fontSize: 13, color: 'var(--v-text-muted)', marginTop: 2 }}>
               Create a new V-SUM workspace
             </div>
           </div>
@@ -197,12 +198,12 @@ export const CreateVsumModal: React.FC<CreateVsumModalProps> = ({ isOpen, onClos
             style={{
               width: 30, height: 30, borderRadius: 6,
               background: 'transparent',
-              border: '1.5px solid rgba(0,0,0,0.10)',
+              border: '1.5px solid var(--v-border)',
               display: 'flex', alignItems: 'center', justifyContent: 'center',
-              cursor: 'pointer', fontSize: 13, color: '#64748b',
+              cursor: 'pointer', fontSize: 13, color: 'var(--v-text-muted)',
               transition: 'all 0.12s', fontFamily: FONT,
             }}
-            onMouseEnter={e => { e.currentTarget.style.background = '#f1f5f9'; }}
+            onMouseEnter={e => { e.currentTarget.style.background = 'var(--v-surface-hover)'; }}
             onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; }}
             title="Close"
           >
@@ -216,15 +217,15 @@ export const CreateVsumModal: React.FC<CreateVsumModalProps> = ({ isOpen, onClos
           {error && (
             <div style={{
               padding: '10px 14px', borderRadius: 9,
-              background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.25)',
-              fontSize: 13, color: '#dc2626',
+              background: 'var(--v-danger-bg)', border: '1px solid var(--v-danger-border)',
+              fontSize: 13, color: 'var(--v-danger-text)',
             }}>
               {error}
             </div>
           )}
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-            <label htmlFor="vsum-name-input" style={{ fontSize: 11, fontWeight: 700, color: '#6b7280', letterSpacing: '0.05em', textTransform: 'uppercase' }}>
+            <label htmlFor="vsum-name-input" style={{ fontSize: 11, fontWeight: 700, color: 'var(--v-text-muted)', letterSpacing: '0.05em', textTransform: 'uppercase' }}>
               Name <span style={{ color: '#dc2626' }}>*</span>
             </label>
             <input
@@ -234,7 +235,7 @@ export const CreateVsumModal: React.FC<CreateVsumModalProps> = ({ isOpen, onClos
               onChange={e => setName(e.target.value)}
               onKeyDown={e => { if (e.key === 'Enter' && !loading && name.trim()) handleSubmit(); }}
               onFocus={e => { e.currentTarget.style.borderColor = '#049484'; e.currentTarget.style.boxShadow = '0 0 0 3px rgba(4,148,132,0.12)'; }}
-              onBlur={e => { e.currentTarget.style.borderColor = 'rgba(0,0,0,0.10)'; e.currentTarget.style.boxShadow = 'none'; }}
+              onBlur={e => { e.currentTarget.style.borderColor = 'var(--v-border)'; e.currentTarget.style.boxShadow = 'none'; }}
               style={inputBase}
               disabled={loading}
               autoFocus
@@ -242,8 +243,8 @@ export const CreateVsumModal: React.FC<CreateVsumModalProps> = ({ isOpen, onClos
           </div>
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-            <label htmlFor="vsum-description-input" style={{ fontSize: 11, fontWeight: 700, color: '#6b7280', letterSpacing: '0.05em', textTransform: 'uppercase' }}>
-              Description <span style={{ color: '#9ca3af', fontWeight: 400, textTransform: 'none', letterSpacing: 0 }}>(optional)</span>
+            <label htmlFor="vsum-description-input" style={{ fontSize: 11, fontWeight: 700, color: 'var(--v-text-muted)', letterSpacing: '0.05em', textTransform: 'uppercase' }}>
+              Description <span style={{ color: 'var(--v-text-faint)', fontWeight: 400, textTransform: 'none', letterSpacing: 0 }}>(optional)</span>
             </label>
             <textarea
               id="vsum-description-input"
@@ -251,7 +252,7 @@ export const CreateVsumModal: React.FC<CreateVsumModalProps> = ({ isOpen, onClos
               value={description}
               onChange={e => setDescription(e.target.value)}
               onFocus={e => { e.currentTarget.style.borderColor = '#049484'; e.currentTarget.style.boxShadow = '0 0 0 3px rgba(4,148,132,0.12)'; }}
-              onBlur={e => { e.currentTarget.style.borderColor = 'rgba(0,0,0,0.10)'; e.currentTarget.style.boxShadow = 'none'; }}
+              onBlur={e => { e.currentTarget.style.borderColor = 'var(--v-border)'; e.currentTarget.style.boxShadow = 'none'; }}
               style={{ ...inputBase, minHeight: 80, resize: 'vertical' }}
               disabled={loading}
             />
@@ -262,7 +263,7 @@ export const CreateVsumModal: React.FC<CreateVsumModalProps> = ({ isOpen, onClos
         <div style={{
           display: 'flex', justifyContent: 'flex-end', gap: 10,
           padding: '14px 24px 20px',
-          borderTop: '1px solid rgba(0,0,0,0.07)',
+          borderTop: '1px solid var(--v-border)',
         }}>
           <CancelButton onClick={handleClose} disabled={loading} />
           <SubmitButton onClick={handleSubmit} disabled={loading || !name.trim()} loading={loading} />

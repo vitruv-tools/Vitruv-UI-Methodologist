@@ -20,7 +20,7 @@ function ProtectedRoute({ children }: Readonly<{ children: React.ReactNode }>) {
         alignItems: 'center',
         height: '100vh',
         fontSize: '18px',
-        color: '#666'
+        color: 'var(--v-text-muted)',
       }}>
         Loading...
       </div>

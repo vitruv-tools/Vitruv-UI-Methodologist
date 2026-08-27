@@ -4,6 +4,7 @@ import { apiService } from '../../services/api';
 import { USER_PROFILE_LABEL, USER_PROFILE_PAGE_SUBTITLE } from '../../constants/accountLabels';
 import { getUserInitials } from '../../utils/userInitials';
 import { BoundChangePasswordModal } from './BoundChangePasswordModal';
+import { ThemeToggle } from './ThemeToggle';
 import { useChangePassword } from '../../hooks/useChangePassword';
 
 interface ProfileViewProps {
@@ -44,16 +45,16 @@ const XIcon = () => (
 
 const ReadField: React.FC<{ label: string; value?: string; placeholder?: string }> = ({ label, value, placeholder }) => (
   <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-    <label style={{ fontSize: 11, fontWeight: 700, color: '#6b7280', letterSpacing: '0.05em', textTransform: 'uppercase' }}>
+    <label style={{ fontSize: 11, fontWeight: 700, color: 'var(--v-text-muted)', letterSpacing: '0.05em', textTransform: 'uppercase' }}>
       {label}
     </label>
     <div style={{
       padding: '10px 14px',
-      background: value ? '#ffffff' : '#f9fafb',
-      border: '1.5px solid rgba(0,0,0,0.08)',
+      background: value ? 'var(--v-surface)' : 'var(--v-surface-muted)',
+      border: '1.5px solid var(--v-card-border)',
       borderRadius: 9,
       fontSize: 14,
-      color: value ? '#111827' : '#9ca3af',
+      color: value ? 'var(--v-text)' : 'var(--v-text-faint)',
     }}>
       {value || placeholder || '—'}
     </div>
@@ -69,7 +70,7 @@ const EditInput: React.FC<{
   placeholder?: string;
 }> = ({ label, value, onChange, placeholder }) => (
   <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-    <label style={{ fontSize: 11, fontWeight: 700, color: '#6b7280', letterSpacing: '0.05em', textTransform: 'uppercase' }}>
+    <label style={{ fontSize: 11, fontWeight: 700, color: 'var(--v-text-muted)', letterSpacing: '0.05em', textTransform: 'uppercase' }}>
       {label}
     </label>
     <input
@@ -78,11 +79,11 @@ const EditInput: React.FC<{
       placeholder={placeholder}
       style={{
         padding: '10px 14px',
-        background: '#ffffff',
+        background: 'var(--v-surface)',
         border: '1.5px solid #049484',
         borderRadius: 9,
         fontSize: 14,
-        color: '#111827',
+        color: 'var(--v-text)',
         outline: 'none',
         boxShadow: '0 0 0 3px rgba(4,148,132,0.12)',
         transition: 'border-color 0.15s, box-shadow 0.15s',
@@ -171,17 +172,17 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ user, userRole = 'Meth
 
   return (
     <div style={{ flex: 1, overflowY: 'auto', padding: '44px 48px 48px' }}>
-      <div style={{ maxWidth: 680 }}>
+      <div style={{ maxWidth: 680, width: '100%', margin: '0 auto' }}>
 
         {/* Header */}
         <div style={{ marginBottom: 32 }}>
-          <div style={{ fontSize: 11, fontWeight: 700, color: '#9ca3af', letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: 10 }}>
+          <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--v-text-faint)', letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: 10 }}>
             Account
           </div>
-          <h1 style={{ margin: 0, fontSize: 28, fontWeight: 800, color: '#0f172a', letterSpacing: '-0.02em', lineHeight: 1.2 }}>
+          <h1 style={{ margin: 0, fontSize: 28, fontWeight: 800, color: 'var(--v-text)', letterSpacing: '-0.02em', lineHeight: 1.2 }}>
             {USER_PROFILE_LABEL}
           </h1>
-          <p style={{ margin: '8px 0 0', fontSize: 14, color: '#6b7280' }}>
+          <p style={{ margin: '8px 0 0', fontSize: 14, color: 'var(--v-text-muted)' }}>
             {USER_PROFILE_PAGE_SUBTITLE}
           </p>
           {loadError && (
@@ -197,8 +198,8 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ user, userRole = 'Meth
 
         {/* Avatar card */}
         <div style={{
-          background: 'rgba(255,255,255,0.88)',
-          border: '1.5px solid rgba(0,0,0,0.07)',
+          background: 'var(--v-surface)',
+          border: '1.5px solid var(--v-card-border)',
           borderRadius: 14,
           padding: '24px 28px',
           display: 'flex',
@@ -216,16 +217,16 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ user, userRole = 'Meth
             {initials}
           </div>
           <div style={{ flex: 1 }}>
-            <div style={{ fontSize: 18, fontWeight: 700, color: '#111827' }}>{displayName}</div>
+            <div style={{ fontSize: 18, fontWeight: 700, color: 'var(--v-text)' }}>{displayName}</div>
             <div style={{ fontSize: 13, color: '#049484', fontWeight: 600, marginTop: 2 }}>{userRole}</div>
-            {email && <div style={{ fontSize: 13, color: '#6b7280', marginTop: 2 }}>{email}</div>}
+            {email && <div style={{ fontSize: 13, color: 'var(--v-text-muted)', marginTop: 2 }}>{email}</div>}
           </div>
         </div>
 
         {/* Name edit card */}
         <div style={{
-          background: 'rgba(255,255,255,0.88)',
-          border: '1.5px solid rgba(0,0,0,0.07)',
+          background: 'var(--v-surface)',
+          border: '1.5px solid var(--v-card-border)',
           borderRadius: 14,
           padding: '24px 28px',
           display: 'flex',
@@ -236,15 +237,15 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ user, userRole = 'Meth
         }}>
           {/* Card header row */}
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-            <div style={{ fontSize: 14, fontWeight: 700, color: '#111827' }}>Account Details</div>
+            <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--v-text)' }}>Account Details</div>
             {!editing && (
               <button type="button"
                 onClick={handleEditOpen}
                 style={{
                   display: 'flex', alignItems: 'center', gap: 6,
-                  background: 'none', border: '1.5px solid rgba(0,0,0,0.10)',
+                  background: 'none', border: '1.5px solid var(--v-card-border)',
                   borderRadius: 8, padding: '6px 12px',
-                  fontSize: 13, fontWeight: 600, color: '#374151',
+                  fontSize: 13, fontWeight: 600, color: 'var(--v-text-secondary)',
                   cursor: 'pointer', transition: 'all 0.15s',
                 }}
                 onMouseEnter={e => {
@@ -252,8 +253,8 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ user, userRole = 'Meth
                   e.currentTarget.style.color = '#049484';
                 }}
                 onMouseLeave={e => {
-                  e.currentTarget.style.borderColor = 'rgba(0,0,0,0.10)';
-                  e.currentTarget.style.color = '#374151';
+                  e.currentTarget.style.borderColor = 'var(--v-card-border)';
+                  e.currentTarget.style.color = 'var(--v-text-secondary)';
                 }}
               >
                 <EditIcon /> Edit name
@@ -298,9 +299,9 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ user, userRole = 'Meth
                   disabled={saving}
                   style={{
                     display: 'flex', alignItems: 'center', gap: 6,
-                    background: 'none', border: '1.5px solid rgba(0,0,0,0.10)',
+                    background: 'none', border: '1.5px solid var(--v-border)',
                     borderRadius: 9, padding: '9px 16px',
-                    fontSize: 13, fontWeight: 600, color: '#6b7280',
+                    fontSize: 13, fontWeight: 600, color: 'var(--v-text-muted)',
                     cursor: 'pointer',
                   }}
                 >
@@ -342,8 +343,8 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ user, userRole = 'Meth
 
         {/* Change password card */}
         <div style={{
-          background: 'rgba(255,255,255,0.88)',
-          border: '1.5px solid rgba(0,0,0,0.07)',
+          background: 'var(--v-surface)',
+          border: '1.5px solid var(--v-card-border)',
           borderRadius: 14,
           padding: '20px 28px',
           display: 'flex',
@@ -352,8 +353,8 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ user, userRole = 'Meth
           boxShadow: '0 2px 8px rgba(0,0,0,0.05)',
         }}>
           <div>
-            <div style={{ fontSize: 14, fontWeight: 700, color: '#111827' }}>Password</div>
-            <div style={{ fontSize: 13, color: '#6b7280', marginTop: 2 }}>
+            <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--v-text)' }}>Password</div>
+            <div style={{ fontSize: 13, color: 'var(--v-text-muted)', marginTop: 2 }}>
               Min. 8 characters · uppercase · lowercase · digit · special character
             </div>
           </div>
@@ -361,9 +362,9 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ user, userRole = 'Meth
             onClick={changePassword.open}
             style={{
               display: 'flex', alignItems: 'center', gap: 7,
-              background: 'none', border: '1.5px solid rgba(0,0,0,0.10)',
+              background: 'none', border: '1.5px solid var(--v-card-border)',
               borderRadius: 9, padding: '9px 16px',
-              fontSize: 13, fontWeight: 600, color: '#374151',
+              fontSize: 13, fontWeight: 600, color: 'var(--v-text-secondary)',
               cursor: 'pointer', flexShrink: 0, transition: 'all 0.15s',
             }}
             onMouseEnter={e => {
@@ -371,12 +372,36 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ user, userRole = 'Meth
               e.currentTarget.style.color = '#049484';
             }}
             onMouseLeave={e => {
-              e.currentTarget.style.borderColor = 'rgba(0,0,0,0.10)';
-              e.currentTarget.style.color = '#374151';
+              e.currentTarget.style.borderColor = 'var(--v-card-border)';
+              e.currentTarget.style.color = 'var(--v-text-secondary)';
             }}
           >
             <LockIcon /> Change password
           </button>
+        </div>
+
+        {/* Appearance */}
+        <div style={{
+          background: 'var(--v-surface)',
+          border: '1.5px solid var(--v-card-border)',
+          borderRadius: 14,
+          padding: '20px 28px',
+          marginTop: 16,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          gap: 20,
+          boxShadow: '0 2px 8px rgba(0,0,0,0.05)',
+        }}>
+          <div>
+            <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--v-text)' }}>Appearance</div>
+            <div style={{ fontSize: 13, color: 'var(--v-text-muted)', marginTop: 2 }}>
+              Stay in the current light theme, or continue in dark mode. Your choice is saved on this device.
+            </div>
+          </div>
+          <div style={{ width: 200, flexShrink: 0 }}>
+            <ThemeToggle variant="segmented" />
+          </div>
         </div>
 
       </div>

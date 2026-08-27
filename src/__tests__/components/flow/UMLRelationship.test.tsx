@@ -110,7 +110,7 @@ describe('UMLRelationship', () => {
     expect(marker).toBeInTheDocument();
     const path = marker.querySelector('path');
     expect(path).not.toBeNull();
-    expect(path?.getAttribute('fill')).toBe('#0c436e');
+    expect(path?.getAttribute('fill')).toBe('var(--v-uml-edge, #0c436e)');
   });
 
   it('renders a direction marker by default for composition edges', () => {
@@ -157,13 +157,13 @@ describe('UMLRelationship', () => {
     );
 
     const path = container.querySelector('path#edge-hover-mult') as SVGPathElement;
-    expect(path?.style.stroke).toBe('#0c436e');
+    expect(path?.style.stroke).toBe('var(--v-uml-edge, #0c436e)');
 
     fireEvent.mouseEnter(screen.getByText('1'));
     expect(path?.style.stroke).toBe('#ef4444');
 
     fireEvent.mouseLeave(screen.getByText('1'));
-    expect(path?.style.stroke).toBe('#0c436e');
+    expect(path?.style.stroke).toBe('var(--v-uml-edge, #0c436e)');
   });
 
   it('uses red stroke when selected', () => {

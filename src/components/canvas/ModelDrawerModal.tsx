@@ -42,10 +42,10 @@ export const ModelDrawerModal: React.FC<ModelDrawerModalProps> = ({
       height: 'min(700px, 88vh)',
       zIndex: MODAL_Z_INDEX + 1,
       pointerEvents: 'auto',
-      background: '#ffffff',
+      background: 'var(--v-surface)',
       borderRadius: 10,
-      boxShadow: '0 24px 64px rgba(0,0,0,0.28), 0 4px 16px rgba(0,0,0,0.10)',
-      border: '1px solid #e2e8f0',
+      boxShadow: 'var(--v-card-shadow)',
+      border: '1px solid var(--v-border)',
       overflow: 'hidden',
     }}>
       <ModelDrawer

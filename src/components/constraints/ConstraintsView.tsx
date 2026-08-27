@@ -15,6 +15,21 @@ import {
   vitruvOCLTheme,
 } from './VitruvOCLMonarchGrammar';
 
+const T = {
+  surface: 'var(--v-surface)',
+  mutedBg: 'var(--v-surface-muted)',
+  hover: 'var(--v-surface-hover)',
+  chromeHover: 'var(--v-chrome-hover)',
+  text: 'var(--v-text)',
+  secondary: 'var(--v-text-secondary)',
+  muted: 'var(--v-text-muted)',
+  faint: 'var(--v-text-faint)',
+  border: 'var(--v-border)',
+  borderSubtle: 'var(--v-border-subtle)',
+  inputBg: 'var(--v-input-bg)',
+  primarySoft: 'var(--v-uml-primary-soft)',
+};
+
 const handleVitruvOCLMount: OnMount = (_editor, monacoInstance) => {
   monacoInstance.languages.register({ id: vitruvOCLLanguageId, extensions: ['.ocl'], aliases: ['VitruvOCL'] });
   monacoInstance.languages.setLanguageConfiguration(vitruvOCLLanguageId, vitruvOCLLanguageConfig);
@@ -482,7 +497,7 @@ const ColumnResizeHandle: React.FC<{
     style={{
       width: 6, flexShrink: 0, cursor: 'ew-resize', zIndex: 5,
       display: 'flex', alignItems: 'center', justifyContent: 'center',
-      background: '#f1f5f9', transition: 'background 0.15s',
+      background: T.chromeHover, transition: 'background 0.15s',
     }}
     onMouseEnter={e => {
       e.currentTarget.style.background = '#ccfbf1';
@@ -490,7 +505,7 @@ const ColumnResizeHandle: React.FC<{
       if (grip) grip.style.background = '#049484';
     }}
     onMouseLeave={e => {
-      e.currentTarget.style.background = '#f1f5f9';
+      e.currentTarget.style.background = T.chromeHover;
       const grip = e.currentTarget.querySelector('[data-grip]') as HTMLElement | null;
       if (grip) grip.style.background = '#cbd5e1';
     }}
@@ -537,8 +552,8 @@ const RuleRow: React.FC<{ rule: ConstraintRule; selected: boolean; onClick: () =
   }, [menuOpen]);
 
   let rowBackground: string;
-  if (selected) { rowBackground = '#f0fdf9'; }
-  else if (hov) { rowBackground = '#f8fafc'; }
+  if (selected) { rowBackground = T.primarySoft; }
+  else if (hov) { rowBackground = T.hover; }
   else { rowBackground = 'transparent'; }
 
   return (
@@ -561,17 +576,17 @@ const RuleRow: React.FC<{ rule: ConstraintRule; selected: boolean; onClick: () =
           textAlign: 'left', borderRadius: 0,
         }}
       >
-        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke={selected ? '#049484' : '#94a3b8'} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke={selected ? '#049484' : 'var(--v-text-muted)'} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
           <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14,2 14,8 20,8"/>
         </svg>
-        <span style={{ fontSize: 12.5, color: selected ? '#049484' : '#334155', fontWeight: selected ? 600 : 400, flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+        <span style={{ fontSize: 12.5, color: selected ? '#049484' : T.secondary, fontWeight: selected ? 600 : 400, flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
           {rule.name}
         </span>
       </button>
       <div ref={menuRef} style={{ position: 'absolute', right: 12, top: '50%', transform: 'translateY(-50%)' }}>
         <button type="button"
           onClick={e => { e.stopPropagation(); setMenuOpen(o => !o); }}
-          style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 2, color: '#94a3b8', borderRadius: 4, display: 'flex', alignItems: 'center' }}
+          style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 2, color: T.muted, borderRadius: 4, display: 'flex', alignItems: 'center' }}
           title="Options"
         >
           <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="5" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="12" cy="19" r="1.5"/></svg>
@@ -583,7 +598,7 @@ const RuleRow: React.FC<{ rule: ConstraintRule; selected: boolean; onClick: () =
             onKeyDown={e => e.stopPropagation()}
             style={{
               position: 'absolute', right: 0, top: '100%', zIndex: 50,
-              background: '#ffffff', border: '1px solid #e2e8f0',
+              background: T.surface, border: `1px solid ${T.border}`,
               borderRadius: 8, boxShadow: '0 4px 16px rgba(0,0,0,0.12)',
               minWidth: 140, padding: '4px 0',
             }}
@@ -625,8 +640,8 @@ const RuleSetSection: React.FC<RuleSetSectionProps> = ({ ruleSet, selectedRuleId
   const [hov, setHov] = useState(false);
   const isSelected = selectedRuleSetId === ruleSet.id;
   let headerBackground: string;
-  if (isSelected) { headerBackground = '#f0fdf9'; }
-  else if (hov) { headerBackground = '#f8fafc'; }
+  if (isSelected) { headerBackground = T.primarySoft; }
+  else if (hov) { headerBackground = T.hover; }
   else { headerBackground = 'transparent'; }
   return (
     <div>
@@ -637,7 +652,7 @@ const RuleSetSection: React.FC<RuleSetSectionProps> = ({ ruleSet, selectedRuleId
           display: 'flex', alignItems: 'center',
           background: headerBackground,
           borderLeft: isSelected ? `2px solid ${ruleSet.color}` : '2px solid transparent',
-          borderBottom: '1px solid #f1f5f9',
+          borderBottom: `1px solid ${T.borderSubtle}`,
         }}
       >
         <button type="button"
@@ -649,15 +664,15 @@ const RuleSetSection: React.FC<RuleSetSectionProps> = ({ ruleSet, selectedRuleId
           }}
         >
           <div style={{ width: 10, height: 10, borderRadius: 2, background: ruleSet.color, flexShrink: 0 }} />
-          <span style={{ fontSize: 12.5, fontWeight: 600, color: '#1e293b', flex: 1 }}>{ruleSet.name}</span>
-          <span style={{ fontSize: 11, color: '#94a3b8', fontWeight: 500 }}>{ruleSet.rules.length} rules</span>
+          <span style={{ fontSize: 12.5, fontWeight: 600, color: T.text, flex: 1 }}>{ruleSet.name}</span>
+          <span style={{ fontSize: 11, color: T.muted, fontWeight: 500 }}>{ruleSet.rules.length} rules</span>
         </button>
         <button type="button"
           onClick={() => onToggleCollapse(ruleSet.id)}
           style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '8px 12px 8px 4px', display: 'flex', alignItems: 'center' }}
         >
           <svg
-            width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" strokeWidth="2.5" strokeLinecap="round"
+            width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="var(--v-text-muted)" strokeWidth="2.5" strokeLinecap="round"
             style={{ transform: ruleSet.collapsed ? 'rotate(-90deg)' : 'rotate(0deg)', transition: 'transform 0.15s', flexShrink: 0 }}
           >
             <polyline points="6,9 12,15 18,9"/>
@@ -671,9 +686,9 @@ const RuleSetSection: React.FC<RuleSetSectionProps> = ({ ruleSet, selectedRuleId
           ))}
           <button type="button"
             onClick={() => onAddRule(ruleSet.id)}
-            style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 12px 6px 28px', cursor: 'pointer', color: '#94a3b8', fontSize: 12, background: 'none', border: 'none', width: '100%', textAlign: 'left' }}
+            style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 12px 6px 28px', cursor: 'pointer', color: T.muted, fontSize: 12, background: 'none', border: 'none', width: '100%', textAlign: 'left' }}
             onMouseEnter={e => (e.currentTarget.style.color = '#049484')}
-            onMouseLeave={e => (e.currentTarget.style.color = '#94a3b8')}
+            onMouseLeave={e => (e.currentTarget.style.color = T.muted)}
           >
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
             Add rule
@@ -690,11 +705,11 @@ const MetamodelBar: React.FC<{ label: string; count: number; max: number; colorM
   const bg = scopeBg(label, colorMap);
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
-      <span style={{ fontSize: 11.5, color: '#64748b', width: 90, flexShrink: 0 }}>{label}</span>
-      <div style={{ flex: 1, height: 6, background: '#f1f5f9', borderRadius: 3, overflow: 'hidden' }}>
+      <span style={{ fontSize: 11.5, color: T.muted, width: 90, flexShrink: 0 }}>{label}</span>
+      <div style={{ flex: 1, height: 6, background: T.hover, borderRadius: 3, overflow: 'hidden' }}>
         <div style={{ height: '100%', width: `${(count / max) * 100}%`, background: bg, borderRadius: 3 }} />
       </div>
-      <span style={{ fontSize: 11, color: '#94a3b8', width: 18, textAlign: 'right' }}>{count}</span>
+      <span style={{ fontSize: 11, color: T.muted, width: 18, textAlign: 'right' }}>{count}</span>
     </div>
   );
 };
@@ -703,14 +718,14 @@ const MetamodelBar: React.FC<{ label: string; count: number; max: number; colorM
 
 const InsightCard: React.FC<{ label: string; value: string | number; sub?: React.ReactNode; wide?: boolean }> = ({ label, value, sub, wide }) => (
   <div style={{
-    background: '#f8fafc', borderRadius: 8, border: '1px solid #f1f5f9',
+    background: T.mutedBg, borderRadius: 8, border: `1px solid ${T.borderSubtle}`,
     padding: '12px 14px',
     gridColumn: wide ? 'span 2' : undefined,
     minWidth: 0,
   }}>
-    <div style={{ fontSize: 11, color: '#94a3b8', fontWeight: 500, marginBottom: 4 }}>{label}</div>
-    <div style={{ fontSize: typeof value === 'number' ? 26 : 18, fontWeight: 700, color: '#0f172a', lineHeight: 1.1 }}>{value}</div>
-    {sub && <div style={{ fontSize: 11, color: '#94a3b8', marginTop: 2 }}>{sub}</div>}
+    <div style={{ fontSize: 11, color: T.muted, fontWeight: 500, marginBottom: 4 }}>{label}</div>
+    <div style={{ fontSize: typeof value === 'number' ? 26 : 18, fontWeight: 700, color: T.text, lineHeight: 1.1 }}>{value}</div>
+    {sub && <div style={{ fontSize: 11, color: T.muted, marginTop: 2 }}>{sub}</div>}
   </div>
 );
 
@@ -778,8 +793,8 @@ const ContextClassPicker: React.FC<{
   });
 
   const inputBase: React.CSSProperties = {
-    width: '100%', padding: '6px 10px', border: '1.5px solid #e2e8f0', borderRadius: 7,
-    fontSize: 12.5, background: '#f8fafc', color: '#0f172a', boxSizing: 'border-box',
+    width: '100%', padding: '6px 10px', border: `1.5px solid ${T.border}`, borderRadius: 7,
+    fontSize: 12.5, background: T.inputBg, color: T.text, boxSizing: 'border-box',
     outline: 'none', fontFamily: APP_FONT, cursor: 'pointer',
   };
 
@@ -789,7 +804,7 @@ const ContextClassPicker: React.FC<{
         style={{ ...inputBase, display: 'flex', alignItems: 'center', justifyContent: 'space-between', userSelect: 'none' }}
         onClick={() => { setOpen(o => !o); setQuery(''); }}
       >
-        <span style={{ color: value ? '#0f172a' : '#94a3b8' }}>{value || 'Select context class…'}</span>
+        <span style={{ color: value ? T.text : T.muted }}>{value || 'Select context class…'}</span>
         <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" strokeWidth="2.5" strokeLinecap="round" style={{ transform: open ? 'rotate(180deg)' : 'none', transition: 'transform 0.15s', flexShrink: 0 }}>
           <polyline points="6,9 12,15 18,9" />
         </svg>
@@ -798,7 +813,7 @@ const ContextClassPicker: React.FC<{
       {open && (
         <div style={{
           position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 999,
-          background: '#fff', border: '1.5px solid #e2e8f0', borderRadius: 8,
+          background: T.surface, border: `1.5px solid ${T.border}`, borderRadius: 8,
           boxShadow: '0 8px 24px rgba(0,0,0,0.12)', marginTop: 4, overflow: 'hidden',
         }}>
           {/* Search input */}
@@ -808,7 +823,7 @@ const ContextClassPicker: React.FC<{
               value={query}
               onChange={e => setQuery(e.target.value)}
               placeholder="Filter classes…"
-              style={{ ...inputBase, cursor: 'text', background: '#fff', border: '1px solid #e2e8f0' }}
+              style={{ ...inputBase, cursor: 'text', background: T.inputBg, border: `1px solid ${T.border}` }}
               onKeyDown={e => e.stopPropagation()}
             />
           </div>
@@ -1011,7 +1026,7 @@ const EditorPanel: React.FC<EditorPanelProps> = ({ rule, ruleSets, colorMap, met
       />
 
       <div style={{
-        background: '#ffffff', borderTop: '1px solid #e2e8f0',
+        background: T.surface, borderTop: `1px solid ${T.border}`,
         boxShadow: '0 -4px 24px rgba(0,0,0,0.10)',
         zIndex: 50, display: 'flex', flexDirection: 'column',
         height, overflow: 'hidden', position: 'relative',
@@ -1039,11 +1054,11 @@ const EditorPanel: React.FC<EditorPanelProps> = ({ rule, ruleSets, colorMap, met
           />
         </div>
         {/* Header — top-padding accounts for the 6px resize handle */}
-        <div style={{ display: 'flex', alignItems: 'center', padding: '10px 16px 10px 16px', paddingTop: 12, borderBottom: '1px solid #f1f5f9', flexShrink: 0 }}>
-          <span style={{ fontSize: 13, fontWeight: 600, color: '#0f172a', flex: 1 }}>
+        <div style={{ display: 'flex', alignItems: 'center', padding: '10px 16px 10px 16px', paddingTop: 12, borderBottom: `1px solid ${T.borderSubtle}`, flexShrink: 0 }}>
+          <span style={{ fontSize: 13, fontWeight: 600, color: T.text, flex: 1 }}>
             Editing: {draft.name}
           </span>
-          <button type="button" onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#94a3b8', padding: 4, borderRadius: 4, display: 'flex', alignItems: 'center' }}>
+          <button type="button" onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', color: T.muted, padding: 4, borderRadius: 4, display: 'flex', alignItems: 'center' }}>
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
           </button>
         </div>
@@ -1055,7 +1070,7 @@ const EditorPanel: React.FC<EditorPanelProps> = ({ rule, ruleSets, colorMap, met
 
             {/* Context class */}
             <div>
-              <label htmlFor="ep-context-class" style={{ fontSize: 11, fontWeight: 600, color: '#64748b', display: 'block', marginBottom: 4 }}>Context Class</label>
+              <label htmlFor="ep-context-class" style={{ fontSize: 11, fontWeight: 600, color: T.muted, display: 'block', marginBottom: 4 }}>Context Class</label>
               <div id="ep-context-class">
                 <ContextClassPicker
                   value={oclGetContextType(draft.oclDefinition)}
@@ -1067,26 +1082,26 @@ const EditorPanel: React.FC<EditorPanelProps> = ({ rule, ruleSets, colorMap, met
 
             {/* Name — no spaces */}
             <div>
-              <label htmlFor="ep-inv-name" style={{ fontSize: 11, fontWeight: 600, color: '#64748b', display: 'block', marginBottom: 4 }}>
-                Name <span style={{ fontWeight: 400, color: '#94a3b8' }}>(no spaces)</span>
+              <label htmlFor="ep-inv-name" style={{ fontSize: 11, fontWeight: 600, color: T.muted, display: 'block', marginBottom: 4 }}>
+                Name <span style={{ fontWeight: 400, color: T.muted }}>(no spaces)</span>
               </label>
               <input
                 id="ep-inv-name"
                 value={draft.name}
                 onChange={e => handleNameChange(e.target.value)}
                 placeholder="InvariantName"
-                style={{ width: '100%', border: '1px solid #e2e8f0', borderRadius: 6, padding: '6px 8px', fontSize: 12.5, outline: 'none', boxSizing: 'border-box', color: '#0f172a', fontFamily: 'monospace' }}
+                style={{ width: '100%', border: `1px solid ${T.border}`, borderRadius: 6, padding: '6px 8px', fontSize: 12.5, outline: 'none', boxSizing: 'border-box', color: T.text, fontFamily: 'monospace', background: T.inputBg }}
               />
             </div>
 
             {/* Severity */}
             <div>
-              <label htmlFor="ep-severity" style={{ fontSize: 11, fontWeight: 600, color: '#64748b', display: 'block', marginBottom: 6 }}>Severity</label>
+              <label htmlFor="ep-severity" style={{ fontSize: 11, fontWeight: 600, color: T.muted, display: 'block', marginBottom: 6 }}>Severity</label>
               <div id="ep-severity" style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
                 {SEVERITY_OPTIONS.map(opt => {
                   const active = draft.severity === opt.value;
                   return (
-                    <button type="button" key={opt.value} onClick={() => handleSeverityChange(opt.value)} style={{ padding: '3px 10px', borderRadius: 12, fontSize: 11, fontWeight: 600, cursor: 'pointer', border: `1.5px solid ${active ? opt.color : '#e2e8f0'}`, background: active ? opt.bg : '#fff', color: active ? opt.color : '#94a3b8', transition: 'all 0.12s' }}>
+                    <button type="button" key={opt.value} onClick={() => handleSeverityChange(opt.value)} style={{ padding: '3px 10px', borderRadius: 12, fontSize: 11, fontWeight: 600, cursor: 'pointer', border: `1.5px solid ${active ? opt.color : T.border}`, background: active ? opt.bg : T.surface, color: active ? opt.color : T.muted, transition: 'all 0.12s' }}>
                       {opt.label}
                     </button>
                   );
@@ -1100,24 +1115,24 @@ const EditorPanel: React.FC<EditorPanelProps> = ({ rule, ruleSets, colorMap, met
 
             {/* Message */}
             <div>
-              <label htmlFor="ep-message" style={{ fontSize: 11, fontWeight: 600, color: '#64748b', display: 'block', marginBottom: 4 }}>Message</label>
-              <textarea id="ep-message" value={draft.description} onChange={e => handleDescriptionChange(e.target.value)} rows={3} style={{ width: '100%', border: '1px solid #e2e8f0', borderRadius: 6, padding: '6px 8px', fontSize: 12, resize: 'none', outline: 'none', boxSizing: 'border-box', color: '#334155', lineHeight: 1.5 }} />
+              <label htmlFor="ep-message" style={{ fontSize: 11, fontWeight: 600, color: T.muted, display: 'block', marginBottom: 4 }}>Message</label>
+              <textarea id="ep-message" value={draft.description} onChange={e => handleDescriptionChange(e.target.value)} rows={3} style={{ width: '100%', border: `1px solid ${T.border}`, borderRadius: 6, padding: '6px 8px', fontSize: 12, resize: 'none', outline: 'none', boxSizing: 'border-box', color: T.secondary, lineHeight: 1.5, background: T.inputBg }} />
             </div>
 
             {/* Rule Set */}
             <div>
-              <label htmlFor="ep-rule-set" style={{ fontSize: 11, fontWeight: 600, color: '#64748b', display: 'block', marginBottom: 4 }}>Rule Set</label>
-              <select id="ep-rule-set" value={draft.ruleSetId} onChange={e => setDraft(d => ({ ...d, ruleSetId: e.target.value }))} style={{ width: '100%', border: '1px solid #e2e8f0', borderRadius: 6, padding: '6px 8px', fontSize: 12.5, background: '#fff', color: '#0f172a', outline: 'none', boxSizing: 'border-box' }}>
+              <label htmlFor="ep-rule-set" style={{ fontSize: 11, fontWeight: 600, color: T.muted, display: 'block', marginBottom: 4 }}>Rule Set</label>
+              <select id="ep-rule-set" value={draft.ruleSetId} onChange={e => setDraft(d => ({ ...d, ruleSetId: e.target.value }))} style={{ width: '100%', border: `1px solid ${T.border}`, borderRadius: 6, padding: '6px 8px', fontSize: 12.5, background: T.inputBg, color: T.text, outline: 'none', boxSizing: 'border-box' }}>
                 {ruleSets.map(rs => <option key={rs.id} value={rs.id}>{rs.name}</option>)}
               </select>
             </div>
 
             {/* Metamodels */}
             <div>
-              <label htmlFor="ep-metamodels" style={{ fontSize: 11, fontWeight: 600, color: '#64748b', display: 'block', marginBottom: 2 }}>
-                Metamodels <span style={{ fontWeight: 400, color: '#94a3b8', marginLeft: 4 }}>auto</span>
+              <label htmlFor="ep-metamodels" style={{ fontSize: 11, fontWeight: 600, color: T.muted, display: 'block', marginBottom: 2 }}>
+                Metamodels <span style={{ fontWeight: 400, color: T.muted, marginLeft: 4 }}>auto</span>
               </label>
-              <p style={{ fontSize: 10.5, color: '#94a3b8', margin: '0 0 6px' }}>
+              <p style={{ fontSize: 10.5, color: T.muted, margin: '0 0 6px' }}>
                 Derived from <code style={{ fontSize: 10 }}>MM::Class</code> patterns in the OCL
               </p>
               <div id="ep-metamodels" style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
@@ -1141,9 +1156,9 @@ const EditorPanel: React.FC<EditorPanelProps> = ({ rule, ruleSets, colorMap, met
 
           {/* Center: OCL editor */}
           <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: EDITOR_CENTER_MIN_W }}>
-            <div style={{ display: 'flex', alignItems: 'center', padding: '6px 12px', background: '#f8fafc', borderBottom: '1px solid #f1f5f9', gap: 6, flexShrink: 0 }}>
-              <span style={{ fontSize: 11, fontWeight: 600, color: '#64748b', flex: 1 }}>OCL Definition</span>
-              <span style={{ fontSize: 10, padding: '2px 6px', borderRadius: 4, background: '#f1f5f9', color: '#64748b' }}>OCL</span>
+            <div style={{ display: 'flex', alignItems: 'center', padding: '6px 12px', background: T.mutedBg, borderBottom: `1px solid ${T.borderSubtle}`, gap: 6, flexShrink: 0 }}>
+              <span style={{ fontSize: 11, fontWeight: 600, color: T.muted, flex: 1 }}>OCL Definition</span>
+              <span style={{ fontSize: 10, padding: '2px 6px', borderRadius: 4, background: T.hover, color: T.muted }}>OCL</span>
             </div>
             <div style={{ flex: 1 }}>
               <Editor
@@ -1155,11 +1170,11 @@ const EditorPanel: React.FC<EditorPanelProps> = ({ rule, ruleSets, colorMap, met
                 options={{ minimap: { enabled: false }, fontSize: 13, lineNumbers: 'on', scrollBeyondLastLine: false, wordWrap: 'on', automaticLayout: true, padding: { top: 8, bottom: 8 }, folding: false, lineDecorationsWidth: 0, renderLineHighlight: 'line', overviewRulerLanes: 0 }}
               />
             </div>
-            <div style={{ display: 'flex', alignItems: 'center', padding: '6px 12px', background: '#f8fafc', borderTop: '1px solid #f1f5f9', flexShrink: 0, gap: 8 }}>
+            <div style={{ display: 'flex', alignItems: 'center', padding: '6px 12px', background: T.mutedBg, borderTop: `1px solid ${T.borderSubtle}`, flexShrink: 0, gap: 8 }}>
               <svg width="12" height="12" viewBox="0 0 24 24" fill="#22c55e" stroke="none"><circle cx="12" cy="12" r="10"/><polyline points="9,12 11,14 15,10" fill="none" stroke="#fff" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
-              <span style={{ fontSize: 11, color: '#64748b', flex: 1 }}>No syntax errors</span>
-              <span style={{ fontSize: 10.5, color: '#94a3b8' }}>Spaces: 2</span>
-              <span style={{ fontSize: 10.5, color: '#94a3b8' }}>OCL</span>
+              <span style={{ fontSize: 11, color: T.muted, flex: 1 }}>No syntax errors</span>
+              <span style={{ fontSize: 10.5, color: T.muted }}>Spaces: 2</span>
+              <span style={{ fontSize: 10.5, color: T.muted }}>OCL</span>
             </div>
           </div>
 
@@ -1173,7 +1188,7 @@ const EditorPanel: React.FC<EditorPanelProps> = ({ rule, ruleSets, colorMap, met
 
           {/* Right: overview */}
           <div style={{ width: rightWidth, flexShrink: 0, padding: '12px 16px', overflowY: 'auto' }}>
-            <div style={{ fontSize: 12, fontWeight: 700, color: '#0f172a', marginBottom: 12 }}>Rule Overview</div>
+            <div style={{ fontSize: 12, fontWeight: 700, color: T.text, marginBottom: 12 }}>Rule Overview</div>
             {([
               ['Type', draft.type],
               ['Severity', draft.severity],
@@ -1185,16 +1200,16 @@ const EditorPanel: React.FC<EditorPanelProps> = ({ rule, ruleSets, colorMap, met
               ['Last Modified', draft.modifiedAt],
             ] as [string, string][]).map(([k, v]) => (
               <div key={k} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 8, gap: 6 }}>
-                <span style={{ fontSize: 11, color: '#94a3b8', flexShrink: 0 }}>{k}</span>
+                <span style={{ fontSize: 11, color: T.muted, flexShrink: 0 }}>{k}</span>
                 {k === 'Severity'
                   ? <span style={{ fontSize: 11, fontWeight: 600, color: sev.color }}>{v}</span>
-                  : <span style={{ fontSize: 11, color: '#334155', textAlign: 'right', fontWeight: k === 'Type' ? 500 : 400 }}>{v || '—'}</span>
+                  : <span style={{ fontSize: 11, color: T.secondary, textAlign: 'right', fontWeight: k === 'Type' ? 500 : 400 }}>{v || '—'}</span>
                 }
               </div>
             ))}
-            <div style={{ marginTop: 8, display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 0', borderTop: '1px solid #f1f5f9' }}>
-              <span style={{ fontSize: 11, color: '#94a3b8' }}>Linked Reactions</span>
-              <span style={{ fontSize: 11, color: '#334155', fontWeight: 500 }}>{draft.linkedReactions ?? 0}</span>
+            <div style={{ marginTop: 8, display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 0', borderTop: `1px solid ${T.borderSubtle}` }}>
+              <span style={{ fontSize: 11, color: T.muted }}>Linked Reactions</span>
+              <span style={{ fontSize: 11, color: T.secondary, fontWeight: 500 }}>{draft.linkedReactions ?? 0}</span>
             </div>
             <SaveChangesButton onSave={() => onSave(draft)} />
             <button type="button" onClick={() => setFullEditorOpen(true)} style={{ width: '100%', marginTop: 6, padding: '7px 0', background: 'transparent', color: '#049484', border: '1px solid #049484', borderRadius: 6, fontSize: 12, fontWeight: 500, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
@@ -1242,14 +1257,14 @@ const MetricsPanel: React.FC<MetricsPanelProps> = ({ ruleSets, colorMap }) => {
   return (
     <div style={{
       width: 300, flexShrink: 0, height: '100%',
-      background: '#ffffff', borderLeft: '1px solid #e2e8f0',
+      background: T.surface, borderLeft: `1px solid ${T.border}`,
       borderTopLeftRadius: 10, borderTopRightRadius: 10,
       overflowY: 'auto', display: 'flex', flexDirection: 'column',
     }}>
       {/* Insight cards */}
       <div style={{ padding: '16px 16px 0' }}>
-        <div style={{ fontSize: 13, fontWeight: 700, color: '#0f172a', marginBottom: 2 }}>Constraint Insights</div>
-        <div style={{ fontSize: 11, color: '#94a3b8', marginBottom: 14 }}>Static metrics about your consistency definitions</div>
+        <div style={{ fontSize: 13, fontWeight: 700, color: T.text, marginBottom: 2 }}>Constraint Insights</div>
+        <div style={{ fontSize: 11, color: T.muted, marginBottom: 14 }}>Static metrics about your consistency definitions</div>
 
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 16 }}>
           <InsightCard label="Total Rules" value={total} sub={`Across ${ruleSets.length} Sets`} />
@@ -1263,7 +1278,7 @@ const MetricsPanel: React.FC<MetricsPanelProps> = ({ ruleSets, colorMap }) => {
                 Ø {avgCCStr}{' '}
                 <span
                   title="McCabe's Cyclomatic Complexity — McCabe (1976), IEEE Trans. Softw. Eng."
-                  style={{ cursor: 'help', color: '#94a3b8', fontSize: 10, fontWeight: 400 }}
+                  style={{ cursor: 'help', color: T.muted, fontSize: 10, fontWeight: 400 }}
                 >
                   CC ⓘ
                 </span>
@@ -1274,9 +1289,9 @@ const MetricsPanel: React.FC<MetricsPanelProps> = ({ ruleSets, colorMap }) => {
       </div>
 
       {/* Metamodel involvement */}
-      <div style={{ padding: '0 16px 16px', borderBottom: '1px solid #f1f5f9' }}>
-        <div style={{ fontSize: 12, fontWeight: 700, color: '#0f172a', marginBottom: 2 }}>Metamodel Involvement</div>
-        <div style={{ fontSize: 11, color: '#94a3b8', marginBottom: 12 }}>How many rules reference each metamodel</div>
+      <div style={{ padding: '0 16px 16px', borderBottom: `1px solid ${T.borderSubtle}` }}>
+        <div style={{ fontSize: 12, fontWeight: 700, color: T.text, marginBottom: 2 }}>Metamodel Involvement</div>
+        <div style={{ fontSize: 11, color: T.muted, marginBottom: 12 }}>How many rules reference each metamodel</div>
         {sortedMeta.map(([name, count], i) => (
           <MetamodelBar key={name} label={name} count={count} max={maxMeta} colorMap={colorMap} />
         ))}
@@ -1284,15 +1299,15 @@ const MetricsPanel: React.FC<MetricsPanelProps> = ({ ruleSets, colorMap }) => {
 
       {/* Rule characteristics */}
       <div style={{ padding: '14px 16px' }}>
-        <div style={{ fontSize: 12, fontWeight: 700, color: '#0f172a', marginBottom: 12 }}>Rule Characteristics</div>
+        <div style={{ fontSize: 12, fontWeight: 700, color: T.text, marginBottom: 12 }}>Rule Characteristics</div>
         {([
           ['Total OCL Lines', String(totalLines)],
           ['Avg. Lines per Rule', avgLines],
           ['Max Lines in a Rule', String(maxLines)],
         ] as [string, string][]).map(([k, v]) => (
           <div key={k} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-            <span style={{ fontSize: 11.5, color: '#64748b' }}>{k}</span>
-            <span style={{ fontSize: 12, color: '#0f172a', fontWeight: 500 }}>{v}</span>
+            <span style={{ fontSize: 11.5, color: T.muted }}>{k}</span>
+            <span style={{ fontSize: 12, color: T.text, fontWeight: 500 }}>{v}</span>
           </div>
         ))}
 
@@ -1331,18 +1346,18 @@ const DetailedMetricsModal: React.FC<{ ruleSets: RuleSet[]; colorMap: Record<str
       <button type="button" onClick={onClose} aria-label="Close" style={{ position: 'absolute', inset: 0, background: 'rgba(15,23,42,0.35)', border: 'none', cursor: 'default', padding: 0 }} />
       <div style={{
         position: 'relative', zIndex: 1,
-        background: '#fff', borderRadius: 14,
+        background: T.surface, borderRadius: 14,
         width: 'min(1040px, calc(100vw - 48px))',
         maxHeight: 'calc(100vh - 48px)',
         display: 'flex', flexDirection: 'column',
         boxShadow: '0 24px 64px rgba(0,0,0,0.20)',
-        border: '1px solid #e2e8f0', fontFamily: APP_FONT,
+        border: `1px solid ${T.border}`, fontFamily: APP_FONT,
         overflow: 'hidden', boxSizing: 'border-box',
       }}>
         {/* Header */}
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '16px 22px', borderBottom: '1px solid #f1f5f9', flexShrink: 0 }}>
-          <span style={{ fontSize: 15, fontWeight: 700, color: '#0f172a' }}>Detailed Metrics</span>
-          <button type="button" onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#94a3b8', fontSize: 20, lineHeight: 1 }}>×</button>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '16px 22px', borderBottom: `1px solid ${T.borderSubtle}`, flexShrink: 0 }}>
+          <span style={{ fontSize: 15, fontWeight: 700, color: T.text }}>Detailed Metrics</span>
+          <button type="button" onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', color: T.muted, fontSize: 20, lineHeight: 1 }}>×</button>
         </div>
 
         {/* Body — grows with content, scrolls when it would exceed the viewport */}
@@ -1466,8 +1481,8 @@ const RuleSetPanel: React.FC<{
   };
 
   const inputBase: React.CSSProperties = {
-    width: '100%', padding: '6px 10px', border: '1.5px solid #e2e8f0', borderRadius: 7,
-    fontSize: 12.5, background: '#f8fafc', color: '#0f172a', boxSizing: 'border-box',
+    width: '100%', padding: '6px 10px', border: `1.5px solid ${T.border}`, borderRadius: 7,
+    fontSize: 12.5, background: T.inputBg, color: T.text, boxSizing: 'border-box',
     outline: 'none', fontFamily: APP_FONT,
   };
 
@@ -1478,15 +1493,15 @@ const RuleSetPanel: React.FC<{
 
   return (
     <div style={{
-      background: '#ffffff', borderTop: '1px solid #e2e8f0',
+      background: T.surface, borderTop: `1px solid ${T.border}`,
       boxShadow: '0 -4px 24px rgba(0,0,0,0.10)',
       display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0,
     }}>
       {/* Header */}
-      <div style={{ display: 'flex', alignItems: 'center', padding: '10px 16px', borderBottom: '1px solid #f1f5f9', flexShrink: 0 }}>
+      <div style={{ display: 'flex', alignItems: 'center', padding: '10px 16px', borderBottom: `1px solid ${T.borderSubtle}`, flexShrink: 0 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, flex: 1 }}>
           <div style={{ width: 10, height: 10, borderRadius: 2, background: draft.color, flexShrink: 0 }} />
-          <span style={{ fontSize: 13, fontWeight: 600, color: '#0f172a' }}>Rule Set: {draft.name}</span>
+          <span style={{ fontSize: 13, fontWeight: 600, color: T.text }}>Rule Set: {draft.name}</span>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
           {onDelete && (
@@ -1498,7 +1513,7 @@ const RuleSetPanel: React.FC<{
               title="Delete Rule Set"
             >Delete</button>
           )}
-          <button type="button" onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#94a3b8', fontSize: 18, lineHeight: 1 }}>×</button>
+          <button type="button" onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', color: T.muted, fontSize: 18, lineHeight: 1 }}>×</button>
         </div>
       </div>
 
@@ -1615,18 +1630,18 @@ const LeftPanel: React.FC<LeftPanelProps> = ({
   return (
     <div style={{
       width: 260, flexShrink: 0, height: '100%',
-      background: '#ffffff', borderRight: '1px solid #e2e8f0',
+      background: T.surface, borderRight: `1px solid ${T.border}`,
       borderTopLeftRadius: 10, borderTopRightRadius: 10,
       display: 'flex', flexDirection: 'column', overflow: 'hidden',
     }}>
       {/* Header */}
-      <div style={{ padding: '14px 14px 10px', borderBottom: '1px solid #f1f5f9', flexShrink: 0 }}>
+      <div style={{ padding: '14px 14px 10px', borderBottom: `1px solid ${T.borderSubtle}`, flexShrink: 0 }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
-          <span style={{ fontSize: 13, fontWeight: 700, color: '#0f172a' }}>Constraint Sets</span>
+          <span style={{ fontSize: 13, fontWeight: 700, color: T.text }}>Constraint Sets</span>
           <button type="button"
             onClick={onAddSet}
             style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 11.5, color: '#049484', background: 'none', border: 'none', cursor: 'pointer', fontWeight: 500, padding: '3px 6px', borderRadius: 5 }}
-            onMouseEnter={e => (e.currentTarget.style.background = '#f0fdf9')}
+            onMouseEnter={e => (e.currentTarget.style.background = T.primarySoft)}
             onMouseLeave={e => (e.currentTarget.style.background = 'none')}
           >
             <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
@@ -1634,14 +1649,14 @@ const LeftPanel: React.FC<LeftPanelProps> = ({
           </button>
         </div>
         <div style={{ position: 'relative' }}>
-          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" strokeWidth="2.5" strokeLinecap="round" style={{ position: 'absolute', left: 8, top: '50%', transform: 'translateY(-50%)' }}>
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="var(--v-text-muted)" strokeWidth="2.5" strokeLinecap="round" style={{ position: 'absolute', left: 8, top: '50%', transform: 'translateY(-50%)' }}>
             <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
           </svg>
           <input
             value={searchQuery}
             onChange={e => onSearch(e.target.value)}
             placeholder="Search projects… (Ctrl+K)"
-            style={{ width: '100%', border: '1px solid #e2e8f0', borderRadius: 6, padding: '6px 8px 6px 28px', fontSize: 12, outline: 'none', boxSizing: 'border-box', color: '#334155' }}
+            style={{ width: '100%', border: `1px solid ${T.border}`, borderRadius: 6, padding: '6px 8px 6px 28px', fontSize: 12, outline: 'none', boxSizing: 'border-box', color: T.secondary, background: T.inputBg }}
           />
         </div>
       </div>

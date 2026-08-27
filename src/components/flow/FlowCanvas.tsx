@@ -1251,7 +1251,7 @@ export const FlowCanvas = forwardRef<FlowCanvasHandle, FlowCanvasProps>(
             }
           }}
         >
-          <Background />
+          <Background color="var(--v-workspace-dot)" gap={24} size={0.75} />
         </ReactFlow>
 
         {circleVisible && !umlModalOpen && (

@@ -26,9 +26,9 @@ const TabButton: React.FC<TabButtonProps> = ({ label, isActive, onClick }) => (
   <button
     onClick={onClick}
     style={{
-      border: isActive ? 'none' : '1px solid #dee2e6',
-      background: isActive ? '#049484' : '#fff',
-      color: isActive ? '#fff' : '#495057',
+      background: isActive ? '#049484' : 'var(--v-surface)',
+      color: isActive ? '#fff' : 'var(--v-text-secondary)',
+      border: isActive ? 'none' : '1px solid var(--v-border)',
       borderRadius: 8,
       padding: '8px 16px',
       cursor: 'pointer',
@@ -82,15 +82,15 @@ const ActionButton: React.FC<ActionButtonProps> = ({
       case 'danger':
         return {
           ...baseStyle,
-          border: '1px solid #dc2626',
-          background: '#fef2f2',
-          color: '#dc2626',
+          border: '1px solid var(--v-danger-text)',
+          background: 'var(--v-danger-bg)',
+          color: 'var(--v-danger-text)',
         };
       case 'success':
         return {
           ...baseStyle,
           border: '1px solid #10b981',
-          background: disabled ? '#d1fae5' : 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
+          background: disabled ? 'var(--v-success-bg)' : 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
           color: '#fff',
           boxShadow: disabled ? 'none' : '0 2px 8px rgba(16, 185, 129, 0.3)',
         };
@@ -98,9 +98,9 @@ const ActionButton: React.FC<ActionButtonProps> = ({
       default:
         return {
           ...baseStyle,
-          border: '1px solid #dee2e6',
-          background: '#fff',
-          color: '#495057',
+          border: '1px solid var(--v-border)',
+          background: 'var(--v-surface)',
+          color: 'var(--v-text-secondary)',
         };
     }
   };
@@ -118,8 +118,8 @@ const ActionButton: React.FC<ActionButtonProps> = ({
         e.currentTarget.style.color = '#fff';
         break;
       case 'secondary':
-        e.currentTarget.style.background = '#f8f9fa';
-        e.currentTarget.style.borderColor = '#adb5bd';
+        e.currentTarget.style.background = 'var(--v-surface-hover)';
+        e.currentTarget.style.borderColor = 'var(--v-text-muted)';
         break;
     }
   };
@@ -133,12 +133,12 @@ const ActionButton: React.FC<ActionButtonProps> = ({
         e.currentTarget.style.boxShadow = '0 2px 8px rgba(4, 148, 132, 0.3)';
         break;
       case 'danger':
-        e.currentTarget.style.background = '#fef2f2';
-        e.currentTarget.style.color = '#dc2626';
+        e.currentTarget.style.background = 'var(--v-danger-bg)';
+        e.currentTarget.style.color = 'var(--v-danger-text)';
         break;
       case 'secondary':
-        e.currentTarget.style.background = '#fff';
-        e.currentTarget.style.borderColor = '#dee2e6';
+        e.currentTarget.style.background = 'var(--v-surface)';
+        e.currentTarget.style.borderColor = 'var(--v-border)';
         break;
     }
   };
@@ -174,7 +174,7 @@ const ConfirmButton: React.FC<ConfirmButtonProps> = ({ label, onClick, variant, 
   const isConfirm = variant === 'confirm';
   
   const getBackgroundColor = () => {
-    if (!isConfirm) return '#fff';
+    if (!isConfirm) return 'var(--v-surface)';
     return disabled ? accent.disabledBg : accent.gradient;
   };
 
@@ -186,9 +186,9 @@ const ConfirmButton: React.FC<ConfirmButtonProps> = ({ label, onClick, variant, 
   const style: React.CSSProperties = {
     padding: '10px 24px',
     borderRadius: 8,
-    border: isConfirm ? 'none' : '1px solid #dee2e6',
+    border: isConfirm ? 'none' : '1px solid var(--v-border)',
     background: getBackgroundColor(),
-    color: isConfirm ? '#fff' : '#495057',
+    color: isConfirm ? '#fff' : 'var(--v-text-secondary)',
     fontWeight: 600,
     cursor: disabled ? 'not-allowed' : 'pointer',
     fontSize: 14,
@@ -203,7 +203,7 @@ const ConfirmButton: React.FC<ConfirmButtonProps> = ({ label, onClick, variant, 
       e.currentTarget.style.transform = 'translateY(-1px)';
       e.currentTarget.style.boxShadow = accent.shadowHover;
     } else {
-      e.currentTarget.style.background = '#f8f9fa';
+      e.currentTarget.style.background = 'var(--v-surface-hover)';
     }
   };
 
@@ -212,7 +212,7 @@ const ConfirmButton: React.FC<ConfirmButtonProps> = ({ label, onClick, variant, 
       e.currentTarget.style.transform = 'translateY(0)';
       e.currentTarget.style.boxShadow = accent.shadow;
     } else {
-      e.currentTarget.style.background = '#fff';
+      e.currentTarget.style.background = 'var(--v-surface)';
     }
   };
 
@@ -266,14 +266,15 @@ const dialog: React.CSSProperties = {
   width: 900,
   maxWidth: '95vw',
   maxHeight: '90vh',
-  background: '#fff',
+  background: 'var(--v-surface)',
   borderRadius: 12,
-  boxShadow: '0 20px 60px rgba(4, 148, 132, 0.15), 0 10px 30px rgba(0, 0, 0, 0.1)',
+  boxShadow: 'var(--v-card-shadow)',
   overflow: 'hidden',
   display: 'flex',
   flexDirection: 'column',
   fontFamily: 'Georgia, serif',
-  border: '1px solid #e3f2fd',
+  border: '1px solid var(--v-border)',
+  color: 'var(--v-text)',
 };
 const header: React.CSSProperties = {
   padding: '20px 24px',
@@ -281,16 +282,16 @@ const header: React.CSSProperties = {
   display: 'flex',
   alignItems: 'center',
   justifyContent: 'space-between',
-  background: 'linear-gradient(135deg, #f8fcff 0%, #e8f4f8 100%)',
+  background: 'var(--v-surface-muted)',
 };
-const title: React.CSSProperties = { margin: 0, fontSize: 20, fontWeight: 700, color: '#2c3e50', letterSpacing: '0.01em' };
-const closeBtn: React.CSSProperties = { border: 'none', background: 'transparent', fontSize: 22, cursor: 'pointer', color: '#6c757d' };
-const body: React.CSSProperties = { padding: 20, overflowY: 'auto' };
-const footer: React.CSSProperties = { padding: '12px 20px', borderTop: '1px solid #e9ecef', display: 'flex', justifyContent: 'space-between', gap: 8 };
+const title: React.CSSProperties = { margin: 0, fontSize: 20, fontWeight: 700, color: 'var(--v-text)', letterSpacing: '0.01em' };
+const closeBtn: React.CSSProperties = { border: 'none', background: 'transparent', fontSize: 22, cursor: 'pointer', color: 'var(--v-text-muted)' };
+const body: React.CSSProperties = { padding: 20, overflowY: 'auto', color: 'var(--v-text)' };
+const footer: React.CSSProperties = { padding: '12px 20px', borderTop: '1px solid var(--v-border)', display: 'flex', justifyContent: 'space-between', gap: 8, background: 'var(--v-surface)' };
 const label: React.CSSProperties = { 
   fontSize: 13, 
   fontWeight: 700, 
-  color: '#2c3e50', 
+  color: 'var(--v-text)', 
   marginTop: 16, 
   marginBottom: 8,
   fontFamily: 'Georgia, serif',
@@ -299,13 +300,14 @@ const label: React.CSSProperties = {
 const textInput: React.CSSProperties = { 
   width: '100%', 
   padding: '12px 14px', 
-  border: '2px solid #e9ecef', 
+  border: '2px solid var(--v-border)', 
   borderRadius: 8, 
   fontSize: 14,
   outline: 'none',
   transition: 'all 0.2s ease',
   fontFamily: 'Georgia, serif',
-  background: '#f8f9fa',
+  background: 'var(--v-input-bg)',
+  color: 'var(--v-text)',
 };
 
 const confirmOverlay: React.CSSProperties = {
@@ -330,34 +332,35 @@ const confirmOverlay: React.CSSProperties = {
 const confirmBox: React.CSSProperties = {
   width: 460,
   maxWidth: '90vw',
-  background: '#fff',
+  background: 'var(--v-surface)',
   borderRadius: 12,
-  boxShadow: '0 20px 60px rgba(4, 148, 132, 0.15), 0 10px 30px rgba(0, 0, 0, 0.1)',
+  boxShadow: 'var(--v-card-shadow)',
   overflow: 'hidden',
   fontFamily: 'Georgia, serif',
-  border: '1px solid #e3f2fd',
+  border: '1px solid var(--v-border)',
+  color: 'var(--v-text)',
 };
 const confirmHeader: React.CSSProperties = {
   padding: '16px 20px',
   borderBottom: '2px solid #049484',
   fontWeight: 700,
-  color: '#2c3e50',
+  color: 'var(--v-text)',
   fontSize: 18,
-  background: 'linear-gradient(135deg, #f8fcff 0%, #e8f4f8 100%)',
+  background: 'var(--v-surface-muted)',
 };
 const confirmBody: React.CSSProperties = {
   padding: '20px',
-  color: '#495057',
+  color: 'var(--v-text-secondary)',
   fontSize: 14,
   lineHeight: 1.6,
 };
 const confirmFooter: React.CSSProperties = {
   padding: '16px 20px',
-  borderTop: '1px solid #e9ecef',
+  borderTop: '1px solid var(--v-border)',
   display: 'flex',
   justifyContent: 'flex-end',
   gap: 10,
-  background: '#f8f9fa',
+  background: 'var(--v-surface-muted)',
 };
 
 // Error Message Component
@@ -371,9 +374,9 @@ const ErrorMessage: React.FC<ErrorMessageProps> = ({ message, onDismiss }) => (
     style={{
       marginBottom: 12,
       padding: onDismiss ? 12 : 10,
-      border: '1px solid #f5c6cb',
-      background: '#f8d7da',
-      color: '#721c24',
+      border: '1px solid var(--v-danger-border)',
+      background: 'var(--v-danger-bg)',
+      color: 'var(--v-danger-text)',
       borderRadius: 8,
       fontSize: onDismiss ? 13 : 12,
       display: 'flex',
@@ -390,7 +393,7 @@ const ErrorMessage: React.FC<ErrorMessageProps> = ({ message, onDismiss }) => (
           marginLeft: 'auto',
           border: 'none',
           background: 'transparent',
-          color: '#721c24',
+          color: 'var(--v-danger-text)',
           cursor: 'pointer',
           fontSize: 18,
           lineHeight: 1,
@@ -522,10 +525,10 @@ const VersionCard: React.FC<VersionCardProps> = ({
     <div
       className={isCurrent ? 'version-card-current' : 'version-card-hover'}
       style={{
-        border: isCurrent ? '2px solid #049484' : '1px solid #e9ecef',
+        border: isCurrent ? '2px solid #049484' : '1px solid var(--v-border)',
         borderRadius: 10,
         padding: 16,
-        background: isCurrent ? '#f0f7ff' : '#ffffff',
+        background: isCurrent ? 'var(--v-brand-soft)' : 'var(--v-surface)',
         boxShadow: isCurrent
           ? '0 2px 8px rgba(52, 152, 219, 0.15)'
           : '0 1px 3px rgba(0, 0, 0, 0.08)',
@@ -552,7 +555,7 @@ const VersionCard: React.FC<VersionCardProps> = ({
             </div>
             <div>
               <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
-                <span style={{ fontWeight: 700, fontSize: 15, color: '#2c3e50' }}>
+                <span style={{ fontWeight: 700, fontSize: 15, color: 'var(--v-text)' }}>
                   Version #{version.id}
                 </span>
                 {isCurrent && (
@@ -570,7 +573,7 @@ const VersionCard: React.FC<VersionCardProps> = ({
                   </span>
                 )}
               </div>
-              <div style={{ fontSize: 13, color: '#6c757d', marginBottom: 4 }}>
+              <div style={{ fontSize: 13, color: 'var(--v-text-muted)', marginBottom: 4 }}>
                 {formatRelativeTime(version.createdAt)}
               </div>
               <div style={{ fontSize: 12, color: '#9ca3af', fontFamily: 'monospace' }}>
@@ -717,12 +720,12 @@ export const VsumDetailsModal: React.FC<Props> = ({ isOpen, vsumId, onClose, onS
 
   const renderDetailsContent = (): React.ReactNode => {
     if (loading || !details) {
-      return <div style={{ fontStyle: 'italic', color: '#6c757d' }}>Loading…</div>;
+      return <div style={{ fontStyle: 'italic', color: 'var(--v-text-muted)' }}>Loading…</div>;
     }
 
     return (
       <>
-        <div style={{ fontSize: 12, color: '#6c757d', marginBottom: 10 }}>
+        <div style={{ fontSize: 12, color: 'var(--v-text-muted)', marginBottom: 10 }}>
           <strong>Updated:</strong> {updatedDateOnly}
         </div>
 
@@ -735,12 +738,12 @@ export const VsumDetailsModal: React.FC<Props> = ({ isOpen, vsumId, onClose, onS
           disabled={!canManage}
           onFocus={(e) => {
             e.currentTarget.style.borderColor = '#049484';
-            e.currentTarget.style.background = '#ffffff';
+            e.currentTarget.style.background = 'var(--v-input-bg)';
             e.currentTarget.style.boxShadow = '0 0 0 3px rgba(4, 148, 132, 0.1)';
           }}
           onBlur={(e) => {
-            e.currentTarget.style.borderColor = '#e9ecef';
-            e.currentTarget.style.background = '#f8f9fa';
+            e.currentTarget.style.borderColor = 'var(--v-border)';
+            e.currentTarget.style.background = 'var(--v-input-bg)';
             e.currentTarget.style.boxShadow = 'none';
           }}
         />
@@ -750,14 +753,14 @@ export const VsumDetailsModal: React.FC<Props> = ({ isOpen, vsumId, onClose, onS
           <ul style={{ margin: 0, paddingLeft: 18 }}>
             {details.metaModels.map((mm) => (
               <li key={mm.id} style={{ marginBottom: 6 }}>
-                <span style={{ fontWeight: 700, color: '#2c3e50' }}>
+                <span style={{ fontWeight: 700, color: 'var(--v-text)' }}>
                   {mm.name}
                 </span>
               </li>
             ))}
           </ul>
         ) : (
-          <div style={{ fontSize: 12, color: '#6c757d', fontStyle: 'italic', marginBottom: 8 }}>
+          <div style={{ fontSize: 12, color: 'var(--v-text-muted)', fontStyle: 'italic', marginBottom: 8 }}>
             No meta models linked.
           </div>
         )}
@@ -847,12 +850,12 @@ export const VsumDetailsModal: React.FC<Props> = ({ isOpen, vsumId, onClose, onS
           alignItems: 'center', 
           justifyContent: 'center', 
           padding: '40px 20px',
-          color: '#6c757d' 
+          color: 'var(--v-text-muted)' 
         }}>
           <div style={{ 
             width: 40, 
             height: 40, 
-            border: '3px solid #e9ecef', 
+            border: '3px solid var(--v-border)', 
             borderTop: '3px solid #049484', 
             borderRadius: '50%', 
             animation: 'spin 1s linear infinite',
@@ -875,11 +878,11 @@ export const VsumDetailsModal: React.FC<Props> = ({ isOpen, vsumId, onClose, onS
           alignItems: 'center', 
           justifyContent: 'center', 
           padding: '40px 20px',
-          color: '#6c757d',
+          color: 'var(--v-text-muted)',
           textAlign: 'center'
         }}>
           <div style={{ fontSize: 48, marginBottom: 16, opacity: 0.5 }}>📋</div>
-          <div style={{ fontSize: 16, fontWeight: 600, marginBottom: 8, color: '#495057' }}>No versions found</div>
+          <div style={{ fontSize: 16, fontWeight: 600, marginBottom: 8, color: 'var(--v-text-secondary)' }}>No versions found</div>
           <div style={{ fontSize: 13 }}>Version history will appear here once versions are created.</div>
         </div>
       );
@@ -897,12 +900,12 @@ export const VsumDetailsModal: React.FC<Props> = ({ isOpen, vsumId, onClose, onS
 
         <div style={{ 
           fontSize: 12, 
-          color: '#6c757d', 
+          color: 'var(--v-text-muted)', 
           marginBottom: 8,
           padding: '8px 12px',
-          background: '#f8f9fa',
+          background: 'var(--v-surface-muted)',
           borderRadius: 8,
-          border: '1px solid #e9ecef'
+          border: '1px solid var(--v-border)'
         }}>
           <strong>Total versions:</strong> {versions.length} • <strong>Current:</strong> Version #{currentVersionId}
         </div>

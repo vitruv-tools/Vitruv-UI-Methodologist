@@ -7,6 +7,7 @@ import { ProfileView } from '../components/ui/ProfileView';
 import { useAuth } from '../contexts/AuthContext';
 import { AuthService } from '../services/auth';
 import { useSharedProjectNotifications } from '../hooks/useSharedProjectNotifications';
+import { themeVars } from '../theme/theme';
 
 export const HomePage: React.FC = () => {
   const [activeView, setActiveView] = useState<SidebarView>('home');
@@ -28,7 +29,7 @@ export const HomePage: React.FC = () => {
   const userEmail = user?.email;
 
   return (
-    <div style={{ width: '100vw', height: '100vh', display: 'flex', overflow: 'hidden', background: '#f7f8fa' }}>
+    <div style={{ width: '100vw', height: '100vh', display: 'flex', overflow: 'hidden', background: themeVars.pageBg }}>
       <AppSidebar
         activeView={activeView}
         onViewChange={setActiveView}
@@ -40,8 +41,8 @@ export const HomePage: React.FC = () => {
       />
       <main style={{
         flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', position: 'relative',
-        backgroundColor: '#f3f4f6',
-        backgroundImage: 'radial-gradient(circle, #d1d5db 0.75px, transparent 0.75px)',
+        backgroundColor: themeVars.workspaceBg,
+        backgroundImage: `radial-gradient(circle, ${themeVars.workspaceDot} 0.75px, transparent 0.75px)`,
         backgroundSize: '24px 24px',
       }}>
         <div style={{ position: 'relative', flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>

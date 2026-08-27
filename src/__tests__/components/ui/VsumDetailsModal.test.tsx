@@ -1,5 +1,6 @@
 import React from 'react';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { resetThemeStore, setTheme } from '../../../theme/theme';
 
 // ─── Mocks ────────────────────────────────────────────────────────────────────
 
@@ -78,6 +79,10 @@ describe('VsumDetailsModal – real component tests', () => {
     apiService.getVsumVersions.mockResolvedValue({ data: [] });
   });
 
+  afterEach(() => {
+    resetThemeStore();
+  });
+
   it('returns null when not open', () => {
     const { container } = render(
       <RealModal isOpen={false} vsumId={1} onClose={jest.fn()} />,
@@ -125,5 +130,14 @@ describe('VsumDetailsModal – real component tests', () => {
     await waitFor(() => {
       expect(apiService.renameVsum).toHaveBeenCalledWith(1, { name: 'Test VSUM' });
     });
+  });
+
+  it('uses theme surfaces so the dialog matches dark mode', async () => {
+    setTheme('dark');
+    render(<RealModal isOpen vsumId={1} onClose={jest.fn()} />);
+    const title = await screen.findByText('Test VSUM');
+    expect(title).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Manage Users' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '+ Link Meta Models' })).toBeInTheDocument();
   });
 });

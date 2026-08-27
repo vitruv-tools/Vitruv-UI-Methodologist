@@ -107,6 +107,13 @@ describe('ProfileView', () => {
     expect(screen.getByText('User Profile')).toBeInTheDocument();
   });
 
+  it('centers the profile column in the page', async () => {
+    await renderProfileView();
+    const heading = screen.getByRole('heading', { name: 'User Profile' });
+    const column = heading.parentElement?.parentElement;
+    expect(column).toHaveStyle({ maxWidth: '680px', width: '100%', margin: '0px auto' });
+  });
+
   it('fetches profile from backend on mount', async () => {
     await renderProfileView();
     expect(apiService.getUserInfo).toHaveBeenCalledTimes(1);
@@ -181,6 +188,14 @@ describe('ProfileView', () => {
   it('shows Change password button', async () => {
     await renderProfileView();
     expect(screen.getByText(/Change password/i)).toBeInTheDocument();
+  });
+
+  it('shows an appearance control to stay in light or continue in dark', async () => {
+    await renderProfileView();
+    expect(screen.getByText('Appearance')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Light theme' })).toHaveAttribute('aria-pressed', 'true');
+    fireEvent.click(screen.getByRole('button', { name: 'Dark theme' }));
+    expect(document.documentElement).toHaveAttribute('data-theme', 'dark');
   });
 
   it('returns null when user prop is null', async () => {

@@ -1,16 +1,16 @@
 import React from 'react';
 
 // jjodel-inspired color palette
-const NAVY = '#0c436e';
+const NAVY = 'var(--v-uml-edge, #0c436e)';
 const TEAL = '#087E8B';
 const MAROON = '#5F0F40';
 const GOLD = '#d4a017';
-const SEPARATOR = '#b8d0e2';
+const SEPARATOR = 'var(--v-uml-separator, #b8d0e2)';
 
 // Base node container
 export const getBaseNodeStyle = (selected: boolean): React.CSSProperties => ({
   padding: '0px',
-  background: '#ffffff',
+  background: 'var(--v-uml-box-bg, #ffffff)',
   border: selected ? `2px solid ${TEAL}` : `1.5px solid ${NAVY}`,
   borderRadius: '3px',
   minWidth: '380px',
@@ -32,7 +32,7 @@ export const headerBaseStyle: React.CSSProperties = {
   fontWeight: 700,
   fontSize: '18px',
   color: NAVY,
-  background: '#ffffff',
+  background: 'var(--v-uml-box-bg, #ffffff)',
   flexWrap: 'nowrap' as const,
   letterSpacing: '0.1px',
 };
@@ -68,15 +68,15 @@ export const borderedSectionBodyStyle: React.CSSProperties = {
   borderBottom: `1px solid ${SEPARATOR}`,
   padding: '5px 0',
   fontSize: '16px',
-  color: '#2d4a5e',
-  background: '#ffffff',
+  color: 'var(--v-uml-box-text-muted, #2d4a5e)',
+  background: 'var(--v-uml-box-bg, #ffffff)',
 };
 
 export const sectionBodyStyle: React.CSSProperties = {
   padding: '5px 0',
   fontSize: '16px',
-  color: '#2d4a5e',
-  background: '#ffffff',
+  color: 'var(--v-uml-box-text-muted, #2d4a5e)',
+  background: 'var(--v-uml-box-bg, #ffffff)',
 };
 
 // Monospace list item for attributes / methods / enum values
@@ -87,13 +87,13 @@ export const listItemStyle: React.CSSProperties = {
   display: 'flex',
   alignItems: 'center',
   gap: '4px',
-  color: '#1e3a50',
+  color: 'var(--v-uml-box-text, #1e3a50)',
   lineHeight: '1.4',
 };
 
 // Package header (maroon theme)
 export const packageHeaderStyle: React.CSSProperties = {
-  background: '#f9f4f7',
+  background: 'var(--v-uml-package-bg, #f9f4f7)',
   borderBottom: `2px solid ${MAROON}`,
   padding: '12px 18px',
   textAlign: 'center',
@@ -111,7 +111,7 @@ export const packageHeaderStyle: React.CSSProperties = {
 export const packageContentStyle: React.CSSProperties = {
   padding: '8px 0',
   fontSize: '15px',
-  color: '#666',
+  color: 'var(--v-uml-box-text-muted, #666)',
   minHeight: '50px',
 };
 
@@ -119,7 +119,7 @@ export const packageContentTitleStyle: React.CSSProperties = {
   padding: '5px 10px',
   fontWeight: 'bold',
   color: MAROON,
-  background: '#f9f4f7',
+  background: 'var(--v-uml-package-bg, #f9f4f7)',
   fontSize: '14px',
 };
 
@@ -168,7 +168,7 @@ const handleBase: React.CSSProperties = {
   width: '8px',
   height: '8px',
   borderRadius: '50%',
-  border: '1.5px solid #ffffff',
+  border: '1.5px solid var(--v-uml-box-bg, #ffffff)',
   opacity: 0,
 };
 
