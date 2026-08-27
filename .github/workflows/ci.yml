@@ -72,5 +72,7 @@ jobs:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
         with:
           args: >
+            -Dsonar.projectKey=vitruv-tools_Vitruv-UI-Methodologist
+            -Dsonar.organization=vitruv-tools
             -Dsonar.javascript.internal.js.ts.disabled=true
 
