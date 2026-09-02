@@ -16,12 +16,13 @@ describe('CanvasModeToggle', () => {
     return { onSelectMode };
   };
 
-  it('offers all three modes when editing is allowed', () => {
+  it('offers all four modes when editing is allowed', () => {
     setup();
 
     expect(screen.getByRole('button', { name: /modeling/i })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /constraints/i })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /views/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /metrics/i })).toBeInTheDocument();
   });
 
   it('hides Constraints for read-only viewers', () => {
@@ -30,6 +31,7 @@ describe('CanvasModeToggle', () => {
     expect(screen.queryByRole('button', { name: /constraints/i })).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: /modeling/i })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /views/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /metrics/i })).toBeInTheDocument();
   });
 
   it('reports the selected mode', () => {
@@ -38,6 +40,14 @@ describe('CanvasModeToggle', () => {
     fireEvent.click(screen.getByRole('button', { name: /views/i }));
 
     expect(onSelectMode).toHaveBeenCalledWith('views');
+  });
+
+  it('reports Metrics as the selected mode', () => {
+    const { onSelectMode } = setup();
+
+    fireEvent.click(screen.getByRole('button', { name: /metrics/i }));
+
+    expect(onSelectMode).toHaveBeenCalledWith('metrics');
   });
 
   it('reports a re-click of the already active mode', () => {

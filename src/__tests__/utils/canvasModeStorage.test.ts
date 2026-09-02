@@ -28,8 +28,10 @@ describe('canvasModeStorage', () => {
   it('writes modes per project', () => {
     writeStoredCanvasMode(1, 'constraints');
     writeStoredCanvasMode(2, 'views');
+    writeStoredCanvasMode(3, 'metrics');
 
     expect(readStoredCanvasMode(1)).toBe('constraints');
     expect(readStoredCanvasMode(2)).toBe('views');
+    expect(readStoredCanvasMode(3)).toBe('metrics');
   });
 });

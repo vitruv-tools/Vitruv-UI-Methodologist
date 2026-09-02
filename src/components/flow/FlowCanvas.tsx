@@ -32,7 +32,7 @@ import {
   computeInitialCircle,
   Circle,
 } from '../../hooks/useCircleContainment';
-import { useViewTypes, ViewTypeScope } from '../../hooks/useViewTypes';
+import { useViewTypes, ViewTypeScope, type ViewType } from '../../hooks/useViewTypes';
 import { pickFocusUmlFlowNodes } from '../../utils/umlClassLayout';
 import { fetchReactionCode, persistReactionCode, resolveReactionFileId } from '../../utils/reactionFile';
 
@@ -132,6 +132,7 @@ export interface FlowCanvasHandle {
   canUndo: boolean;
   canRedo: boolean;
   getReactionEdges: () => Edge[];
+  getViewTypes: () => ViewType[];
   getWorkspaceSnapshot: () => WorkspaceSnapshot;
   autoLayoutEcoreBoxes: () => void;
   fitUmlView: () => void;
@@ -157,7 +158,7 @@ interface FlowCanvasProps {
   onHistoryChange?: (canUndo: boolean, canRedo: boolean) => void;
   /** Rendered directly under the Modeling / View Types toggle (e.g. project tabs). */
   projectTabsBelowModeToggle?: React.ReactNode;
-  /** Called when the user switches between Modeling / Constraints / Views tabs. */
+  /** Called when the user switches between Modeling / Constraints / Views / Metrics tabs. */
   onCanvasModeChange?: (mode: CanvasMode) => void;
   canvasMode?: CanvasMode;
   /** Node ID to highlight as the active constraint context (teal glow). */
@@ -1097,12 +1098,13 @@ export const FlowCanvas = forwardRef<FlowCanvasHandle, FlowCanvasProps>(
       canUndo,
       canRedo,
       getReactionEdges,
+      getViewTypes: () => viewTypes,
       getWorkspaceSnapshot,
       autoLayoutEcoreBoxes,
       fitUmlView,
       openSelectedReactionEditor,
       establishBaseline,
-    }), [handleToolClick, loadDiagramData, nodes, edges, addEcoreFile, updateEcoreFileData, resetExpandedFile, undo, redo, canUndo, canRedo, getReactionEdges, getWorkspaceSnapshot, autoLayoutEcoreBoxes, fitUmlView, openSelectedReactionEditor, establishBaseline]);
+    }), [handleToolClick, loadDiagramData, nodes, edges, viewTypes, addEcoreFile, updateEcoreFileData, resetExpandedFile, undo, redo, canUndo, canRedo, getReactionEdges, getWorkspaceSnapshot, autoLayoutEcoreBoxes, fitUmlView, openSelectedReactionEditor, establishBaseline]);
 
     // ── Render mapping ────────────────────────────────────────────────────────
 
