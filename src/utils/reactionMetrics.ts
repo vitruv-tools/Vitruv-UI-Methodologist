@@ -47,7 +47,7 @@ function extractBraceBlock(source: string, openIndex: number): { body: string; e
 
 function collectNamedBlocks(code: string, keyword: 'reaction' | 'routine'): ReactionBlockMetrics[] {
   const blocks: ReactionBlockMetrics[] = [];
-  const re = new RegExp(`\\b${keyword}(?:\\s+([A-Za-z_]\\w*))?\\s*\\{`, 'g');
+  const re = new RegExp(String.raw`\b${keyword}(?:\s+([A-Za-z_]\w*))?\s*\{`, 'g');
   let match: RegExpExecArray | null;
   while ((match = re.exec(code)) !== null) {
     const name = match[1] ?? `${keyword} ${blocks.length + 1}`;
@@ -82,7 +82,7 @@ export function extractMentionedClassNames(code: string | null | undefined): str
   for (const match of stripped.matchAll(/::([A-Za-z_]\w*)/g)) {
     names.add(match[1]);
   }
-  for (const match of stripped.matchAll(/\b([A-Z][A-Za-z0-9_]*)\b/g)) {
+  for (const match of stripped.matchAll(/\b([A-Z]\w*)\b/g)) {
     names.add(match[1]);
   }
   return [...names];

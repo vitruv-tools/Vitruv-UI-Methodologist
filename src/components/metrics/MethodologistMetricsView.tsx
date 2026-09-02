@@ -342,11 +342,34 @@ const CategoryTabs: React.FC<{
     }}
   >
     <div style={{ display: 'flex', flexDirection: 'column', gap: 4, flex: 1, minWidth: 0 }}>
-      <div
-        role="group"
-        aria-label="Metrics categories"
-        style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}
+      <fieldset
+        style={{
+          display: 'flex',
+          flexWrap: 'wrap',
+          gap: 6,
+          border: 'none',
+          margin: 0,
+          padding: 0,
+          minWidth: 0,
+          minInlineSize: 0,
+          position: 'relative',
+        }}
       >
+        <legend
+          style={{
+            position: 'absolute',
+            width: 1,
+            height: 1,
+            padding: 0,
+            margin: -1,
+            overflow: 'hidden',
+            clip: 'rect(0, 0, 0, 0)',
+            whiteSpace: 'nowrap',
+            border: 0,
+          }}
+        >
+          Metrics categories
+        </legend>
         {METRICS_CATEGORIES.map(id => {
           const marked = selected.includes(id);
           return (
@@ -372,7 +395,7 @@ const CategoryTabs: React.FC<{
             </button>
           );
         })}
-      </div>
+      </fieldset>
       <div data-testid="metrics-marked-label" style={{ fontSize: 11, color: T.muted, lineHeight: 1.35 }}>
         {formatSelectedLabel(selected).replace('Selected — ', 'Marked: ')}
       </div>
@@ -567,10 +590,9 @@ export const MethodologistMetricsView: React.FC<MethodologistMetricsViewProps> =
 
   useEffect(() => {
     if (!enabled || vsumId == null) return;
-    const request = apiService.getRuleSets?.(vsumId);
-    if (!request) return;
+    if (typeof apiService.getRuleSets !== 'function') return;
     let cancelled = false;
-    Promise.resolve(request).then(sets => {
+    void Promise.resolve(apiService.getRuleSets(vsumId)).then(sets => {
       if (cancelled) return;
       const fromApi = (sets ?? []).map(s => s.oclContent ?? '').filter(Boolean).join('\n\n');
       if (fromApi.trim()) {

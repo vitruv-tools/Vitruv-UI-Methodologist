@@ -129,7 +129,7 @@ function findRootPackage(xmlDoc: Document): Element | null {
     || xmlDoc.getElementsByTagName('EPackage')[0];
   if (tagged) return tagged;
   for (const el of Array.from(xmlDoc.getElementsByTagName('*'))) {
-    if (isPackageElement(el) && !el.parentElement?.closest?.('ecore\\:EPackage, EPackage, eSubpackages')) {
+    if (isPackageElement(el) && !el.parentElement?.closest?.(String.raw`ecore\:EPackage, EPackage, eSubpackages`)) {
       return el;
     }
   }
@@ -238,6 +238,174 @@ function computeLongestPathDepths(
   return depths;
 }
 
+type ClassElem = { el: Element; pkg: string };
+
+type ClassInfo = {
+  name: string;
+  pkg: string;
+  qualifiedName: string;
+  isAbstract: boolean;
+  isInterface: boolean;
+  attributeCount: number;
+  operationCount: number;
+  supers: string[];
+  containmentTargets: string[];
+  referenceTargets: { name: string; eType: string }[];
+};
+
+function collectClassifiers(
+  packages: Element[],
+  packageName: string,
+): { classElems: ClassElem[]; enumerations: EcoreEnumMetrics[] } {
+  const classElems: ClassElem[] = [];
+  const enumerations: EcoreEnumMetrics[] = [];
+  for (const pkg of packages) {
+    const pkgName = pkg.getAttribute('name') || packageName;
+    for (const classifier of classifierChildren(pkg)) {
+      if (isEEnumElement(classifier)) {
+        enumerations.push({
+          name: classifier.getAttribute('name') || 'Enum',
+          literalCount: classifier.querySelectorAll('eLiterals').length,
+        });
+        continue;
+      }
+      if (isEClassElement(classifier)) {
+        classElems.push({ el: classifier, pkg: pkgName });
+      }
+    }
+  }
+  return { classElems, enumerations };
+}
+
+function toClassInfo(el: Element, pkg: string): ClassInfo {
+  const name = el.getAttribute('name') || 'Unknown';
+  const isInterface = el.getAttribute('interface') === 'true';
+  return {
+    name,
+    pkg,
+    qualifiedName: pkg ? `${pkg}::${name}` : name,
+    isAbstract: el.getAttribute('abstract') === 'true' || isInterface,
+    isInterface,
+    attributeCount: countAttributes(el),
+    operationCount: countOperations(el),
+    supers: superTypeNames(el),
+    containmentTargets: referenceTargets(el, true).map(t => t.name),
+    referenceTargets: referenceTargets(el),
+  };
+}
+
+function countChildrenByParent(classInfos: ClassInfo[]): Map<string, number> {
+  const childCounts = new Map(classInfos.map(c => [c.name, 0]));
+  for (const cls of classInfos) {
+    for (const parent of cls.supers) {
+      if (childCounts.has(parent)) {
+        childCounts.set(parent, (childCounts.get(parent) ?? 0) + 1);
+      }
+    }
+  }
+  return childCounts;
+}
+
+function sumReferences(classElems: ClassElem[]): { containment: number; nonContainment: number } {
+  let containment = 0;
+  let nonContainment = 0;
+  for (const { el } of classElems) {
+    const refs = countReferences(el);
+    containment += refs.containment;
+    nonContainment += refs.nonContainment;
+  }
+  return { containment, nonContainment };
+}
+
+function countCrossPackageReferences(classInfos: ClassInfo[]): number {
+  const classPkg = new Map(classInfos.map(c => [c.name, c.pkg]));
+  let count = 0;
+  for (const cls of classInfos) {
+    for (const target of cls.referenceTargets) {
+      const targetPkg = classPkg.get(target.name);
+      if (targetPkg && targetPkg !== cls.pkg) count += 1;
+    }
+  }
+  return count;
+}
+
+function toClassMetrics(
+  classInfos: ClassInfo[],
+  depths: Map<string, number>,
+  childCounts: Map<string, number>,
+  containmentHeights: Map<string, number>,
+): EcoreClassMetrics[] {
+  return classInfos.map(c => ({
+    name: c.name,
+    qualifiedName: c.qualifiedName,
+    isAbstract: c.isAbstract,
+    isInterface: c.isInterface,
+    attributeCount: c.attributeCount,
+    inheritanceDepth: depths.get(c.name) ?? 0,
+    childCount: childCounts.get(c.name) ?? 0,
+    operationCount: c.operationCount,
+    containmentHeight: containmentHeights.get(c.name) ?? 0,
+  }));
+}
+
+function collectAllAssociations(classElems: ClassElem[]): EcoreAssociationMetrics[] {
+  const associations: EcoreAssociationMetrics[] = [];
+  for (const { el } of classElems) {
+    associations.push(...collectAssociations(el, el.getAttribute('name') || 'Unknown'));
+  }
+  return associations;
+}
+
+function metricsFromParsed(
+  packageName: string,
+  packages: Element[],
+  enumerations: EcoreEnumMetrics[],
+  classElems: ClassElem[],
+  classInfos: ClassInfo[],
+): EcoreMetamodelMetrics {
+  const knownNames = new Set(classInfos.map(c => c.name));
+  const childCounts = countChildrenByParent(classInfos);
+  const depths = computeLongestPathDepths(classInfos.map(c => ({ name: c.name, next: c.supers })));
+  const containmentHeights = computeLongestPathDepths(
+    classInfos.map(c => ({
+      name: c.name,
+      next: c.containmentTargets.filter(t => knownNames.has(t)),
+    })),
+  );
+  const { containment, nonContainment } = sumReferences(classElems);
+  const classes = toClassMetrics(classInfos, depths, childCounts, containmentHeights);
+  const depthValues = classes.map(c => c.inheritanceDepth);
+  const nocValues = classes.map(c => c.childCount);
+  const heightValues = classes.map(c => c.containmentHeight);
+  const abstractClassCount = classes.filter(c => c.isAbstract).length;
+
+  return {
+    name: packageName,
+    packageCount: packages.length,
+    classCount: classes.length,
+    abstractClassCount,
+    concreteClassCount: classes.length - abstractClassCount,
+    attributesTotal: classes.reduce((s, c) => s + c.attributeCount, 0),
+    attributesPerClass: classes.map(c => ({ className: c.name, count: c.attributeCount })),
+    referencesTotal: containment + nonContainment,
+    containmentReferences: containment,
+    nonContainmentReferences: nonContainment,
+    enumCount: enumerations.length,
+    enumLiteralCount: enumerations.reduce((s, e) => s + e.literalCount, 0),
+    enumerations,
+    inheritanceDepthMax: depthValues.length === 0 ? 0 : Math.max(0, ...depthValues),
+    inheritanceDepthAvg: averageOf(depthValues),
+    operationsTotal: classInfos.reduce((s, c) => s + c.operationCount, 0),
+    nocMax: nocValues.length === 0 ? 0 : Math.max(0, ...nocValues),
+    nocAvg: averageOf(nocValues),
+    containmentHeightMax: heightValues.length === 0 ? 0 : Math.max(0, ...heightValues),
+    containmentHeightAvg: averageOf(heightValues),
+    crossPackageReferences: countCrossPackageReferences(classInfos),
+    associations: collectAllAssociations(classElems),
+    classes,
+  };
+}
+
 export function parseEcoreMetamodelMetrics(
   ecoreContent: string,
   fallbackName = '',
@@ -257,128 +425,9 @@ export function parseEcoreMetamodelMetrics(
 
     const packageName = root.getAttribute('name') || fallbackName;
     const packages = collectPackages(root);
-
-    const classElems: { el: Element; pkg: string }[] = [];
-    const enumerations: EcoreEnumMetrics[] = [];
-
-    for (const pkg of packages) {
-      const pkgName = pkg.getAttribute('name') || packageName;
-      for (const classifier of classifierChildren(pkg)) {
-        if (isEEnumElement(classifier)) {
-          enumerations.push({
-            name: classifier.getAttribute('name') || 'Enum',
-            literalCount: classifier.querySelectorAll('eLiterals').length,
-          });
-          continue;
-        }
-        if (isEClassElement(classifier)) {
-          classElems.push({ el: classifier, pkg: pkgName });
-        }
-      }
-    }
-
-    const classInfos = classElems.map(({ el, pkg }) => {
-      const name = el.getAttribute('name') || 'Unknown';
-      const isAbstract = el.getAttribute('abstract') === 'true' || el.getAttribute('interface') === 'true';
-      const isInterface = el.getAttribute('interface') === 'true';
-      return {
-        name,
-        pkg,
-        qualifiedName: pkg ? `${pkg}::${name}` : name,
-        isAbstract,
-        isInterface,
-        attributeCount: countAttributes(el),
-        operationCount: countOperations(el),
-        supers: superTypeNames(el),
-        containmentTargets: referenceTargets(el, true).map(t => t.name),
-        referenceTargets: referenceTargets(el),
-      };
-    });
-
-    const knownNames = new Set(classInfos.map(c => c.name));
-    const classPkg = new Map(classInfos.map(c => [c.name, c.pkg]));
-    const childCounts = new Map(classInfos.map(c => [c.name, 0]));
-    for (const cls of classInfos) {
-      for (const parent of cls.supers) {
-        if (childCounts.has(parent)) {
-          childCounts.set(parent, (childCounts.get(parent) ?? 0) + 1);
-        }
-      }
-    }
-
-    const depths = computeLongestPathDepths(classInfos.map(c => ({ name: c.name, next: c.supers })));
-    const containmentHeights = computeLongestPathDepths(
-      classInfos.map(c => ({
-        name: c.name,
-        next: c.containmentTargets.filter(t => knownNames.has(t)),
-      })),
-    );
-
-    let containment = 0;
-    let nonContainment = 0;
-    for (const { el } of classElems) {
-      const refs = countReferences(el);
-      containment += refs.containment;
-      nonContainment += refs.nonContainment;
-    }
-
-    let crossPackageReferences = 0;
-    for (const cls of classInfos) {
-      for (const target of cls.referenceTargets) {
-        const targetPkg = classPkg.get(target.name);
-        if (targetPkg && targetPkg !== cls.pkg) crossPackageReferences += 1;
-      }
-    }
-
-    const depthValues = classInfos.map(c => depths.get(c.name) ?? 0);
-    const nocValues = classInfos.map(c => childCounts.get(c.name) ?? 0);
-    const heightValues = classInfos.map(c => containmentHeights.get(c.name) ?? 0);
-    const operationsTotal = classInfos.reduce((s, c) => s + c.operationCount, 0);
-
-    const classes: EcoreClassMetrics[] = classInfos.map(c => ({
-      name: c.name,
-      qualifiedName: c.qualifiedName,
-      isAbstract: c.isAbstract,
-      isInterface: c.isInterface,
-      attributeCount: c.attributeCount,
-      inheritanceDepth: depths.get(c.name) ?? 0,
-      childCount: childCounts.get(c.name) ?? 0,
-      operationCount: c.operationCount,
-      containmentHeight: containmentHeights.get(c.name) ?? 0,
-    }));
-
-    const associations: EcoreAssociationMetrics[] = [];
-    for (const { el } of classElems) {
-      associations.push(...collectAssociations(el, el.getAttribute('name') || 'Unknown'));
-    }
-
-    const abstractClassCount = classes.filter(c => c.isAbstract).length;
-
-    return {
-      name: packageName,
-      packageCount: packages.length,
-      classCount: classes.length,
-      abstractClassCount,
-      concreteClassCount: classes.length - abstractClassCount,
-      attributesTotal: classes.reduce((s, c) => s + c.attributeCount, 0),
-      attributesPerClass: classes.map(c => ({ className: c.name, count: c.attributeCount })),
-      referencesTotal: containment + nonContainment,
-      containmentReferences: containment,
-      nonContainmentReferences: nonContainment,
-      enumCount: enumerations.length,
-      enumLiteralCount: enumerations.reduce((s, e) => s + e.literalCount, 0),
-      enumerations,
-      inheritanceDepthMax: depthValues.length === 0 ? 0 : Math.max(0, ...depthValues),
-      inheritanceDepthAvg: averageOf(depthValues),
-      operationsTotal,
-      nocMax: nocValues.length === 0 ? 0 : Math.max(0, ...nocValues),
-      nocAvg: averageOf(nocValues),
-      containmentHeightMax: heightValues.length === 0 ? 0 : Math.max(0, ...heightValues),
-      containmentHeightAvg: averageOf(heightValues),
-      crossPackageReferences,
-      associations,
-      classes,
-    };
+    const { classElems, enumerations } = collectClassifiers(packages, packageName);
+    const classInfos = classElems.map(({ el, pkg }) => toClassInfo(el, pkg));
+    return metricsFromParsed(packageName, packages, enumerations, classElems, classInfos);
   } catch {
     return { ...EMPTY_METRICS, name: fallbackName };
   }

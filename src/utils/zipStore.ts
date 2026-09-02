@@ -12,10 +12,31 @@ const CRC_TABLE = (() => {
 
 export function crc32(bytes: Uint8Array): number {
   let crc = 0xffffffff;
-  for (let i = 0; i < bytes.length; i += 1) {
-    crc = CRC_TABLE[(crc ^ bytes[i]) & 0xff] ^ (crc >>> 8);
+  for (const byte of bytes) {
+    crc = CRC_TABLE[(crc ^ byte) & 0xff] ^ (crc >>> 8);
   }
   return (crc ^ 0xffffffff) >>> 0;
+}
+
+function encodeCodePoint(code: number, bytes: number[]): void {
+  if (code < 0x80) {
+    bytes.push(code);
+    return;
+  }
+  if (code < 0x800) {
+    bytes.push(0xc0 | (code >> 6), 0x80 | (code & 0x3f));
+    return;
+  }
+  if (code < 0x10000) {
+    bytes.push(0xe0 | (code >> 12), 0x80 | ((code >> 6) & 0x3f), 0x80 | (code & 0x3f));
+    return;
+  }
+  bytes.push(
+    0xf0 | (code >> 18),
+    0x80 | ((code >> 12) & 0x3f),
+    0x80 | ((code >> 6) & 0x3f),
+    0x80 | (code & 0x3f),
+  );
 }
 
 export function utf8Encode(text: string): Uint8Array {
@@ -23,27 +44,8 @@ export function utf8Encode(text: string): Uint8Array {
     return new TextEncoder().encode(text);
   }
   const bytes: number[] = [];
-  for (let i = 0; i < text.length; i += 1) {
-    let code = text.charCodeAt(i);
-    if (code >= 0xd800 && code <= 0xdbff && i + 1 < text.length) {
-      const extra = text.charCodeAt(i + 1);
-      if (extra >= 0xdc00 && extra <= 0xdfff) {
-        code = ((code - 0xd800) << 10) + (extra - 0xdc00) + 0x10000;
-        i += 1;
-      }
-    }
-    if (code < 0x80) bytes.push(code);
-    else if (code < 0x800) bytes.push(0xc0 | (code >> 6), 0x80 | (code & 0x3f));
-    else if (code < 0x10000) {
-      bytes.push(0xe0 | (code >> 12), 0x80 | ((code >> 6) & 0x3f), 0x80 | (code & 0x3f));
-    } else {
-      bytes.push(
-        0xf0 | (code >> 18),
-        0x80 | ((code >> 12) & 0x3f),
-        0x80 | ((code >> 6) & 0x3f),
-        0x80 | (code & 0x3f),
-      );
-    }
+  for (const ch of text) {
+    encodeCodePoint(ch.codePointAt(0) ?? 0, bytes);
   }
   return Uint8Array.from(bytes);
 }

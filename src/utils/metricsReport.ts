@@ -24,10 +24,11 @@ export function formatPercent(value: number): string {
 }
 
 export function safeProjectName(projectName?: string | null): string {
+  const illegal = String.raw`<>:"/\|?*`;
   const stripped = Array.from(projectName ?? '')
     .map(ch => {
-      const code = ch.charCodeAt(0);
-      if (code < 32 || '<>:"/\\|?*'.includes(ch)) return ' ';
+      const code = ch.codePointAt(0) ?? 0;
+      if (code < 32 || illegal.includes(ch)) return ' ';
       return ch;
     })
     .join('')
@@ -214,7 +215,9 @@ function reactionRows(metrics: MethodologistMetrics): CsvRow[] {
         `types=${ct.correspondenceTypeCount}`,
         `routines=${ct.routineCount}`,
         `LOC=${ct.linesOfCode}`,
-        ct.reactions.length === 0 ? '' : `LOC per reaction=${ct.reactions.map(r => `${r.name}: ${r.linesOfCode}`).join('; ')}`,
+        ct.reactions.length === 0
+          ? ''
+          : 'LOC per reaction=' + ct.reactions.map(r => r.name + ': ' + r.linesOfCode).join('; '),
       ].filter(Boolean).join('; '),
     });
   }
