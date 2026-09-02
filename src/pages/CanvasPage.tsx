@@ -1456,6 +1456,7 @@ export const CanvasPage: React.FC = () => {
 
       <CanvasMetricsOverlay
         projectId={activeProjectId}
+        projectName={vsumName}
         visible={canvasMode === 'metrics'}
         canvasNodes={metricsNodes}
         canvasEdges={metricsEdges}

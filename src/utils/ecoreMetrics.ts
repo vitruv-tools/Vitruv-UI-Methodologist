@@ -7,6 +7,16 @@ export interface EcoreClassMetrics {
   isInterface: boolean;
   attributeCount: number;
   inheritanceDepth: number;
+  childCount: number;
+  operationCount: number;
+  containmentHeight: number;
+}
+
+export interface EcoreAssociationMetrics {
+  name: string;
+  ownerClass: string;
+  targetClass: string;
+  containment: boolean;
 }
 
 export interface EcoreEnumMetrics {
@@ -30,6 +40,13 @@ export interface EcoreMetamodelMetrics {
   enumerations: EcoreEnumMetrics[];
   inheritanceDepthMax: number;
   inheritanceDepthAvg: number;
+  operationsTotal: number;
+  nocMax: number;
+  nocAvg: number;
+  containmentHeightMax: number;
+  containmentHeightAvg: number;
+  crossPackageReferences: number;
+  associations: EcoreAssociationMetrics[];
   classes: EcoreClassMetrics[];
 }
 
@@ -49,6 +66,13 @@ const EMPTY_METRICS: EcoreMetamodelMetrics = {
   enumerations: [],
   inheritanceDepthMax: 0,
   inheritanceDepthAvg: 0,
+  operationsTotal: 0,
+  nocMax: 0,
+  nocAvg: 0,
+  containmentHeightMax: 0,
+  containmentHeightAvg: 0,
+  crossPackageReferences: 0,
+  associations: [],
   classes: [],
 };
 
@@ -149,10 +173,45 @@ function countReferences(cls: Element): { containment: number; nonContainment: n
   return { containment, nonContainment };
 }
 
-function computeInheritanceDepths(
-  classes: { name: string; supers: string[] }[],
+function collectAssociations(cls: Element, ownerName: string): EcoreAssociationMetrics[] {
+  const associations: EcoreAssociationMetrics[] = [];
+  for (const feat of structuralFeatures(cls)) {
+    if (!xsiType(feat).includes('EReference')) continue;
+    associations.push({
+      name: feat.getAttribute('name') || 'unnamed',
+      ownerClass: ownerName,
+      targetClass: parseTypeName(feat.getAttribute('eType') || ''),
+      containment: feat.getAttribute('containment') === 'true',
+    });
+  }
+  return associations;
+}
+
+function countOperations(cls: Element): number {
+  return Array.from(cls.children).filter(el => localName(el) === 'eOperations').length;
+}
+
+function referenceTargets(cls: Element, containmentOnly = false): { name: string; eType: string }[] {
+  const targets: { name: string; eType: string }[] = [];
+  for (const feat of structuralFeatures(cls)) {
+    if (!xsiType(feat).includes('EReference')) continue;
+    if (containmentOnly && feat.getAttribute('containment') !== 'true') continue;
+    const eType = feat.getAttribute('eType') || '';
+    const name = parseTypeName(eType);
+    if (name) targets.push({ name, eType });
+  }
+  return targets;
+}
+
+function averageOf(values: number[]): number {
+  if (values.length === 0) return 0;
+  return values.reduce((s, v) => s + v, 0) / values.length;
+}
+
+function computeLongestPathDepths(
+  nodes: { name: string; next: string[] }[],
 ): Map<string, number> {
-  const byName = new Map(classes.map(c => [c.name, c]));
+  const byName = new Map(nodes.map(c => [c.name, c]));
   const depths = new Map<string, number>();
   const visiting = new Set<string>();
 
@@ -160,22 +219,22 @@ function computeInheritanceDepths(
     const cached = depths.get(name);
     if (cached !== undefined) return cached;
     if (visiting.has(name)) return 0;
-    const cls = byName.get(name);
-    if (!cls || cls.supers.length === 0) {
+    const node = byName.get(name);
+    if (!node || node.next.length === 0) {
       depths.set(name, 0);
       return 0;
     }
     visiting.add(name);
-    const parentDepths = cls.supers
+    const nextDepths = node.next
       .filter(s => s !== name)
       .map(s => (byName.has(s) ? depthOf(s) : 0));
     visiting.delete(name);
-    const depth = parentDepths.length === 0 ? 0 : 1 + Math.max(...parentDepths);
+    const depth = nextDepths.length === 0 ? 0 : 1 + Math.max(...nextDepths);
     depths.set(name, depth);
     return depth;
   };
 
-  for (const cls of classes) depthOf(cls.name);
+  for (const node of nodes) depthOf(node.name);
   return depths;
 }
 
@@ -224,15 +283,37 @@ export function parseEcoreMetamodelMetrics(
       const isInterface = el.getAttribute('interface') === 'true';
       return {
         name,
+        pkg,
         qualifiedName: pkg ? `${pkg}::${name}` : name,
         isAbstract,
         isInterface,
         attributeCount: countAttributes(el),
+        operationCount: countOperations(el),
         supers: superTypeNames(el),
+        containmentTargets: referenceTargets(el, true).map(t => t.name),
+        referenceTargets: referenceTargets(el),
       };
     });
 
-    const depths = computeInheritanceDepths(classInfos);
+    const knownNames = new Set(classInfos.map(c => c.name));
+    const classPkg = new Map(classInfos.map(c => [c.name, c.pkg]));
+    const childCounts = new Map(classInfos.map(c => [c.name, 0]));
+    for (const cls of classInfos) {
+      for (const parent of cls.supers) {
+        if (childCounts.has(parent)) {
+          childCounts.set(parent, (childCounts.get(parent) ?? 0) + 1);
+        }
+      }
+    }
+
+    const depths = computeLongestPathDepths(classInfos.map(c => ({ name: c.name, next: c.supers })));
+    const containmentHeights = computeLongestPathDepths(
+      classInfos.map(c => ({
+        name: c.name,
+        next: c.containmentTargets.filter(t => knownNames.has(t)),
+      })),
+    );
+
     let containment = 0;
     let nonContainment = 0;
     for (const { el } of classElems) {
@@ -241,11 +322,18 @@ export function parseEcoreMetamodelMetrics(
       nonContainment += refs.nonContainment;
     }
 
+    let crossPackageReferences = 0;
+    for (const cls of classInfos) {
+      for (const target of cls.referenceTargets) {
+        const targetPkg = classPkg.get(target.name);
+        if (targetPkg && targetPkg !== cls.pkg) crossPackageReferences += 1;
+      }
+    }
+
     const depthValues = classInfos.map(c => depths.get(c.name) ?? 0);
-    const inheritanceDepthMax = depthValues.length === 0 ? 0 : Math.max(0, ...depthValues);
-    const inheritanceDepthAvg = depthValues.length === 0
-      ? 0
-      : depthValues.reduce((s, d) => s + d, 0) / depthValues.length;
+    const nocValues = classInfos.map(c => childCounts.get(c.name) ?? 0);
+    const heightValues = classInfos.map(c => containmentHeights.get(c.name) ?? 0);
+    const operationsTotal = classInfos.reduce((s, c) => s + c.operationCount, 0);
 
     const classes: EcoreClassMetrics[] = classInfos.map(c => ({
       name: c.name,
@@ -254,7 +342,15 @@ export function parseEcoreMetamodelMetrics(
       isInterface: c.isInterface,
       attributeCount: c.attributeCount,
       inheritanceDepth: depths.get(c.name) ?? 0,
+      childCount: childCounts.get(c.name) ?? 0,
+      operationCount: c.operationCount,
+      containmentHeight: containmentHeights.get(c.name) ?? 0,
     }));
+
+    const associations: EcoreAssociationMetrics[] = [];
+    for (const { el } of classElems) {
+      associations.push(...collectAssociations(el, el.getAttribute('name') || 'Unknown'));
+    }
 
     const abstractClassCount = classes.filter(c => c.isAbstract).length;
 
@@ -272,8 +368,15 @@ export function parseEcoreMetamodelMetrics(
       enumCount: enumerations.length,
       enumLiteralCount: enumerations.reduce((s, e) => s + e.literalCount, 0),
       enumerations,
-      inheritanceDepthMax,
-      inheritanceDepthAvg,
+      inheritanceDepthMax: depthValues.length === 0 ? 0 : Math.max(0, ...depthValues),
+      inheritanceDepthAvg: averageOf(depthValues),
+      operationsTotal,
+      nocMax: nocValues.length === 0 ? 0 : Math.max(0, ...nocValues),
+      nocAvg: averageOf(nocValues),
+      containmentHeightMax: heightValues.length === 0 ? 0 : Math.max(0, ...heightValues),
+      containmentHeightAvg: averageOf(heightValues),
+      crossPackageReferences,
+      associations,
       classes,
     };
   } catch {

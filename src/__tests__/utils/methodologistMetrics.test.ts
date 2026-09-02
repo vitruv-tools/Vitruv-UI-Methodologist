@@ -1,5 +1,5 @@
 import { parseEcoreMetamodelMetrics, countXmiModelElements } from '../../utils/ecoreMetrics';
-import { countOclConstraints, parseReactionFileMetrics } from '../../utils/reactionMetrics';
+import { countOclConstraints, extractMentionedClassNames, parseOclConstraints, parseReactionFileMetrics } from '../../utils/reactionMetrics';
 import {
   collectMetamodelInputs,
   collectReactionInputs,
@@ -29,6 +29,9 @@ const eEnum = (name: string, literals: string[]) =>
     literals.map(l => `<eLiterals name="${l}"/>`).join('')
   }</eClassifiers>`;
 
+const eOp = (name: string) =>
+  `<eOperations name="${name}" eType="ecore:EDataType http://www.eclipse.org/emf/2002/Ecore#//EBoolean"/>`;
+
 describe('parseEcoreMetamodelMetrics', () => {
   it('returns empty metrics for invalid XML', () => {
     const result = parseEcoreMetamodelMetrics('not xml', 'fallback');
@@ -49,6 +52,10 @@ describe('parseEcoreMetamodelMetrics', () => {
     expect(result.containmentReferences).toBe(1);
     expect(result.nonContainmentReferences).toBe(1);
     expect(result.referencesTotal).toBe(2);
+    expect(result.associations).toEqual(expect.arrayContaining([
+      expect.objectContaining({ name: 'books', ownerClass: 'Library', containment: true }),
+      expect.objectContaining({ name: 'author', ownerClass: 'Book', containment: false }),
+    ]));
     expect(result.attributesPerClass.find(c => c.className === 'Book')?.count).toBe(2);
   });
 
@@ -82,6 +89,27 @@ describe('parseEcoreMetamodelMetrics', () => {
     expect(result.classes.find(c => c.name === 'Employee')?.inheritanceDepth).toBe(2);
     expect(result.classes.find(c => c.name === 'Named')?.inheritanceDepth).toBe(0);
     expect(result.inheritanceDepthAvg).toBeCloseTo((0 + 1 + 2) / 3);
+    expect(result.classes.find(c => c.name === 'Named')?.childCount).toBe(1);
+    expect(result.classes.find(c => c.name === 'Person')?.childCount).toBe(1);
+    expect(result.classes.find(c => c.name === 'Employee')?.childCount).toBe(0);
+    expect(result.nocMax).toBe(1);
+  });
+
+  it('counts operations, containment height, and cross-package references', () => {
+    const xml = wrap(
+      eClass('Library', eRef('books', 'Book', true) + eOp('open'))
+      + eClass('Book', eRef('pages', 'Page', true) + eRef('kind', 'nested/Kind', false))
+      + eClass('Page')
+      + `<eSubpackages name="nested">${eClass('Kind')}</eSubpackages>`,
+    );
+    const result = parseEcoreMetamodelMetrics(xml);
+    expect(result.operationsTotal).toBe(1);
+    expect(result.classes.find(c => c.name === 'Library')?.operationCount).toBe(1);
+    expect(result.classes.find(c => c.name === 'Page')?.containmentHeight).toBe(0);
+    expect(result.classes.find(c => c.name === 'Book')?.containmentHeight).toBe(1);
+    expect(result.classes.find(c => c.name === 'Library')?.containmentHeight).toBe(2);
+    expect(result.containmentHeightMax).toBe(2);
+    expect(result.crossPackageReferences).toBe(1);
   });
 
   it('treats interfaces as abstract', () => {
@@ -163,6 +191,15 @@ routine CreatePersonRoutine {
       linesOfCode: 0,
       reactions: [],
     });
+  });
+
+  it('extracts mentioned class names from qualified and PascalCase tokens', () => {
+    expect(extractMentionedClassNames(familiesToPersons)).toEqual(
+      expect.arrayContaining(['CreatePerson', 'DeletePerson']),
+    );
+    expect(extractMentionedClassNames('retrieve optional Families::Member corresponding to Persons::Person')).toEqual(
+      expect.arrayContaining(['Member', 'Person', 'Families', 'Persons']),
+    );
   });
 });
 
@@ -256,6 +293,87 @@ describe('computeMethodologistMetrics', () => {
     expect(metrics.oclConstraintCount).toBe(1);
     expect(metrics.instanceElementTotal).toBe(2);
     expect(metrics.correspondenceTypes[0].reactions[0].name).toBe('Sync');
+    expect(metrics.orphanMetamodelCount).toBe(0);
+    expect(metrics.linkedMetamodelCount).toBe(2);
+    expect(metrics.metamodelLinks.find(l => l.name === 'library')).toMatchObject({
+      fanOut: 1,
+      fanIn: 0,
+      isOrphan: false,
+    });
+    expect(metrics.metamodelLinks.find(l => l.name === 'persons')).toMatchObject({
+      fanOut: 0,
+      fanIn: 1,
+      isOrphan: false,
+    });
+    expect(metrics.avgLocPerReaction).toBeGreaterThan(0);
+    expect(metrics.attributesPerClass).toBe(1);
+    expect(metrics.referencesPerClass).toBeCloseTo(1 / 3);
+    expect(metrics.containmentRatio).toBe(1);
+    expect(metrics.classesCoveredByViews).toBe(3);
+    expect(metrics.classesCoveredByViewsRatio).toBe(1);
+    expect(metrics.viewClassesAggregated).toBe(7);
+    expect(metrics.viewElementDensity).toBeCloseTo(2 / 3);
+    expect(metrics.reactionsPerCorrespondenceType).toBe(1);
+    expect(metrics.reactionComplexityRatio).toBe(metrics.avgLocPerReaction);
+    expect(metrics.constraintDensity).toBeCloseTo(1 / 3);
+    expect(metrics.metamodelToViewRatio).toBeCloseTo(3 / 7);
+    expect(metrics.viewTypePairCount).toBe(3);
+    expect(metrics.correspondenceToViewPairRatio).toBeCloseTo(metrics.correspondenceTypeCount / 3);
+    expect(metrics.modularizationRatio).toBeCloseTo(1.5);
+    expect(metrics.correspondenceTypes[0].direction).toBe('one-way');
+    expect(metrics.oneWayReactionPairCount).toBe(1);
+    expect(metrics.bidirectionalReactionPairCount).toBe(0);
+    expect(metrics.detectOnlyClassNames).toEqual(['Book']);
+    expect(metrics.unprotectedClassNames).toEqual(expect.arrayContaining(['Library', 'Person']));
+  });
+
+  it('marks isolated metamodels as orphans and computes class coverage', () => {
+    const orphan: Node = {
+      id: 'n3',
+      type: 'ecoreFile',
+      position: { x: 200, y: 0 },
+      data: {
+        fileName: 'inventory.ecore',
+        fileContent: wrap(eClass('Item', eAttr('sku')), 'inventory'),
+      },
+    };
+    const linkedCode = `
+reaction SyncBook {
+  after element of type library::Book created
+  call { create Persons::Person }
+}
+`;
+    const metrics = computeMethodologistMetrics({
+      metamodels: collectMetamodelInputs([libraryNode, personsNode, orphan]),
+      reactions: collectReactionInputs([libraryNode, personsNode, orphan], [{
+        ...reactionEdge,
+        data: { code: linkedCode },
+      }]),
+      viewTypes: [],
+      oclContent: '',
+    });
+
+    expect(metrics.orphanMetamodelCount).toBe(1);
+    expect(metrics.metamodelLinks.find(l => l.name === 'inventory')?.isOrphan).toBe(true);
+    expect(metrics.metamodelLinks.find(l => l.name === 'library')?.uncoveredClassNames).toEqual(['Library']);
+    expect(metrics.metamodelLinks.find(l => l.name === 'library')?.coveredConcreteClassCount).toBe(1);
+    expect(metrics.metamodelLinks.find(l => l.name === 'persons')?.coveredConcreteClassCount).toBe(1);
+    expect(metrics.correspondenceCoveragePercent).toBe(50);
+  });
+
+  it('returns zero derived ratios when denominators are empty', () => {
+    const metrics = computeMethodologistMetrics({
+      metamodels: [],
+      reactions: [],
+      viewTypes: [],
+      oclContent: '',
+    });
+    expect(metrics.attributesPerClass).toBe(0);
+    expect(metrics.containmentRatio).toBe(0);
+    expect(metrics.viewElementDensity).toBe(0);
+    expect(metrics.correspondenceToViewPairRatio).toBe(0);
+    expect(metrics.modularizationRatio).toBe(0);
+    expect(metrics.metamodelToViewRatio).toBe(0);
   });
 
   it('drops duplicate canvas copies of the same metamodel id', () => {
@@ -306,6 +424,52 @@ describe('computeMethodologistMetrics', () => {
     expect(metrics.correspondenceTypes[0]).toMatchObject({
       sourceName: 'string',
       targetName: 'test new meta model',
+    });
+  });
+
+  it('parses OCL contexts and classifies detect vs repair vs unprotected hotspots', () => {
+    const ocl = `
+context library::Book inv HasTitle:
+  self.title <> ''
+context library::Book inv UniqueIsbn:
+  true
+`;
+    const linkedCode = `
+reaction SyncBook {
+  after element of type library::Book created
+  call { create Persons::Person }
+}
+`;
+    const reverseEdge: Edge = {
+      id: 'e2',
+      source: 'n2',
+      target: 'n1',
+      type: 'reactions',
+      data: { code: 'reaction Back { after element Persons::Person created }' },
+    };
+    const metrics = computeMethodologistMetrics({
+      metamodels: collectMetamodelInputs([libraryNode, personsNode]),
+      reactions: collectReactionInputs([libraryNode, personsNode], [
+        { ...reactionEdge, data: { code: linkedCode } },
+        reverseEdge,
+      ]),
+      viewTypes: [],
+      oclContent: ocl,
+    });
+
+    expect(parseOclConstraints(ocl).map(c => c.contextClass)).toEqual(['Book', 'Book']);
+    expect(metrics.detectAndRepairClassNames).toEqual(['Book']);
+    expect(metrics.repairOnlyClassNames).toEqual(['Person']);
+    expect(metrics.detectOnlyClassNames).toEqual([]);
+    expect(metrics.unprotectedClassNames).toEqual(['Library']);
+    expect(metrics.oclRulesWithoutReaction).toHaveLength(0);
+    expect(metrics.bidirectionalReactionPairCount).toBe(1);
+    expect(metrics.correspondenceTypes.every(ct => ct.direction === 'both-ways')).toBe(true);
+    expect(metrics.hotspotClasses[0]).toMatchObject({
+      className: 'Book',
+      oclRuleCount: 2,
+      reactionFileCount: 1,
+      score: 3,
     });
   });
 });

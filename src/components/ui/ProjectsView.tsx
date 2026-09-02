@@ -417,16 +417,16 @@ export const ProjectsView: React.FC<ProjectsViewProps> = ({
           width: 10px;
         }
         .projects-table-scroll::-webkit-scrollbar-track {
-          background: #f1f5f9;
+          background: var(--v-scrollbar-track);
           border-radius: 10px;
         }
         .projects-table-scroll::-webkit-scrollbar-thumb {
-          background: #cbd5e1;
+          background: var(--v-scrollbar-thumb);
           border-radius: 10px;
-          border: 2px solid #f1f5f9;
+          border: 2px solid var(--v-scrollbar-track);
         }
         .projects-table-scroll::-webkit-scrollbar-thumb:hover {
-          background: #94a3b8;
+          background: var(--v-scrollbar-thumb-hover);
         }
       `}</style>
 

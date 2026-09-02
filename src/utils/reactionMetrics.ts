@@ -74,6 +74,20 @@ function collectCorrespondenceTypes(code: string): number {
   return types.size;
 }
 
+/** Class or type names mentioned in a reactions file (qualified ::Type and PascalCase tokens). */
+export function extractMentionedClassNames(code: string | null | undefined): string[] {
+  if (!code?.trim()) return [];
+  const stripped = stripComments(code);
+  const names = new Set<string>();
+  for (const match of stripped.matchAll(/::([A-Za-z_]\w*)/g)) {
+    names.add(match[1]);
+  }
+  for (const match of stripped.matchAll(/\b([A-Z][A-Za-z0-9_]*)\b/g)) {
+    names.add(match[1]);
+  }
+  return [...names];
+}
+
 export function parseReactionFileMetrics(code: string | null | undefined): ReactionFileMetrics {
   if (!code?.trim()) return { ...EMPTY };
 
@@ -91,7 +105,39 @@ export function parseReactionFileMetrics(code: string | null | undefined): React
   };
 }
 
+export function parseOclConstraints(oclContent: string | null | undefined): { name: string; contextClass: string }[] {
+  if (!oclContent?.trim()) return [];
+  const constraints: { name: string; contextClass: string }[] = [];
+  let contextClass = '';
+  for (const line of oclContent.split(/\r?\n/)) {
+    const contextMatch = /^\s*context\s+([\w:]+)/i.exec(line);
+    if (contextMatch) {
+      const qualified = contextMatch[1];
+      contextClass = qualified.split('::').pop() || qualified;
+    }
+    const invMatch = /\binv\s+(\w+)\s*:/.exec(line);
+    if (invMatch) {
+      constraints.push({ name: invMatch[1], contextClass });
+    }
+  }
+  return constraints;
+}
+
+export function extractOclMentionedNames(oclContent: string | null | undefined): string[] {
+  if (!oclContent?.trim()) return [];
+  const names = new Set<string>();
+  for (const constraint of parseOclConstraints(oclContent)) {
+    if (constraint.contextClass) names.add(constraint.contextClass);
+  }
+  for (const match of oclContent.matchAll(/::([A-Za-z_]\w*)/g)) {
+    names.add(match[1]);
+  }
+  for (const match of oclContent.matchAll(/\bself\.([A-Za-z_]\w*)/g)) {
+    names.add(match[1]);
+  }
+  return [...names];
+}
+
 export function countOclConstraints(oclContent: string | null | undefined): number {
-  if (!oclContent?.trim()) return 0;
-  return [...oclContent.matchAll(/\binv\s+\w+\s*:/g)].length;
+  return parseOclConstraints(oclContent).length;
 }

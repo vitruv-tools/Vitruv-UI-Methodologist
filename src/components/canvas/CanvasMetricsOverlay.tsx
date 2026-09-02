@@ -5,6 +5,7 @@ import { MethodologistMetricsView } from '../metrics/MethodologistMetricsView';
 
 export interface CanvasMetricsOverlayProps {
   projectId?: number;
+  projectName?: string | null;
   visible: boolean;
   canvasNodes: Node[];
   canvasEdges: Edge[];
@@ -14,6 +15,7 @@ export interface CanvasMetricsOverlayProps {
 
 export const CanvasMetricsOverlay: React.FC<CanvasMetricsOverlayProps> = ({
   projectId,
+  projectName,
   visible,
   canvasNodes,
   canvasEdges,
@@ -29,7 +31,7 @@ export const CanvasMetricsOverlay: React.FC<CanvasMetricsOverlayProps> = ({
       right: 0,
       bottom: 0,
       display: visible ? 'flex' : 'none',
-      alignItems: 'center',
+      alignItems: 'stretch',
       justifyContent: 'center',
       zIndex: 100,
       pointerEvents: 'none',
@@ -41,9 +43,10 @@ export const CanvasMetricsOverlay: React.FC<CanvasMetricsOverlayProps> = ({
       boxSizing: 'border-box',
     }}
   >
-    <div style={{ position: 'relative', zIndex: 1, maxHeight: '100%', display: 'flex', pointerEvents: 'auto' }}>
+    <div style={{ position: 'relative', zIndex: 1, width: '100%', maxWidth: 1280, height: '100%', display: 'flex', pointerEvents: 'auto', minWidth: 0, minHeight: 0 }}>
       <MethodologistMetricsView
         vsumId={projectId}
+        projectName={projectName}
         nodes={canvasNodes}
         edges={canvasEdges}
         viewTypes={viewTypes}
