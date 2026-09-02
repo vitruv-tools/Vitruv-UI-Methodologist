@@ -1,4 +1,4 @@
-﻿import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import type { Edge, Node } from 'reactflow';
 import { readStoredViewTypes, type ViewType } from '../../hooks/useViewTypes';
 import { apiService } from '../../services/api';
