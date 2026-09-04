@@ -1312,9 +1312,9 @@ export const CreateModelModal: React.FC<CreateModelModalProps> = ({
           {/* ── Scrollbar style injection ── */}
           <style>{`
             .cmm-scroll::-webkit-scrollbar { width: 7px; }
-            .cmm-scroll::-webkit-scrollbar-track { background: #f1f5f9; border-radius: 4px; }
-            .cmm-scroll::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
-            .cmm-scroll::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+            .cmm-scroll::-webkit-scrollbar-track { background: var(--v-scrollbar-track); border-radius: 4px; }
+            .cmm-scroll::-webkit-scrollbar-thumb { background: var(--v-scrollbar-thumb); border-radius: 4px; }
+            .cmm-scroll::-webkit-scrollbar-thumb:hover { background: var(--v-scrollbar-thumb-hover); }
           `}</style>
 
           {/* ── Header ── */}

@@ -23,8 +23,9 @@
   --v-chrome-divider: #e2e8f0;
   --v-table-header: #fafafa;
   --v-input-bg: #ffffff;
-  --v-scrollbar-track: #f1f5f9;
-  --v-scrollbar-thumb: #cbd5e1;
+  --v-scrollbar-track: #e5e7eb;
+  --v-scrollbar-thumb: #64748b;
+  --v-scrollbar-thumb-hover: #334155;
   --v-uml-primary-soft: #ecfdf5;
   --v-uml-primary-border: #a7f3d0;
   --v-uml-edge: #0c436e;
@@ -79,8 +80,9 @@
   --v-chrome-divider: #334155;
   --v-table-header: #162032;
   --v-input-bg: #0f172a;
-  --v-scrollbar-track: #1e293b;
-  --v-scrollbar-thumb: #475569;
+  --v-scrollbar-track: #0f172a;
+  --v-scrollbar-thumb: #64748b;
+  --v-scrollbar-thumb-hover: #94a3b8;
   --v-uml-primary-soft: rgba(4, 148, 132, 0.18);
   --v-uml-primary-border: #0f766e;
   --v-uml-edge: #5eead4;
@@ -116,6 +118,35 @@ body,
 #root {
   background-color: var(--v-page-bg);
   color: var(--v-text);
+  scrollbar-color: var(--v-scrollbar-thumb) var(--v-scrollbar-track);
+  scrollbar-width: thin;
+}
+
+.themed-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: var(--v-scrollbar-thumb) var(--v-scrollbar-track);
+  scrollbar-gutter: stable;
+  overflow-x: hidden;
+}
+
+.themed-scroll::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+.themed-scroll::-webkit-scrollbar-track {
+  background: var(--v-scrollbar-track);
+  border-radius: 8px;
+}
+
+.themed-scroll::-webkit-scrollbar-thumb {
+  background: var(--v-scrollbar-thumb);
+  border-radius: 8px;
+  border: 2px solid var(--v-scrollbar-track);
+}
+
+.themed-scroll::-webkit-scrollbar-thumb:hover {
+  background: var(--v-scrollbar-thumb-hover);
 }
 
 .react-flow,

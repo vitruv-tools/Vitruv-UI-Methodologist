@@ -7,14 +7,17 @@ import {
   type RefObject,
   type SetStateAction,
 } from 'react';
-import type { Node } from 'reactflow';
+import type { Edge, Node } from 'reactflow';
 import type { CanvasMode } from '../components/flow/FlowCanvas';
+import type { ViewType } from './useViewTypes';
 import { readStoredCanvasMode, writeStoredCanvasMode } from '../utils/canvasModeStorage';
 
 interface UseCanvasModeStateOptions {
   projectId?: number;
   isViewOnly: boolean;
   getCanvasNodes: () => Node[];
+  getCanvasEdges?: () => Edge[];
+  getViewTypes?: () => ViewType[];
 }
 
 interface UseCanvasModeStateResult {
@@ -26,19 +29,42 @@ interface UseCanvasModeStateResult {
   setConstraintHighlightNodeId: Dispatch<SetStateAction<string | null>>;
   constraintFilterNodeId: string | null;
   setConstraintFilterNodeId: Dispatch<SetStateAction<string | null>>;
+  metricsNodes: Node[];
+  setMetricsNodes: Dispatch<SetStateAction<Node[]>>;
+  metricsEdges: Edge[];
+  setMetricsEdges: Dispatch<SetStateAction<Edge[]>>;
+  metricsViewTypes: ViewType[];
+  setMetricsViewTypes: Dispatch<SetStateAction<ViewType[]>>;
   handleCanvasModeChange: (mode: CanvasMode) => void;
+}
+
+function snapshotMetricsWorkspace(
+  getCanvasNodes: () => Node[],
+  getCanvasEdges: (() => Edge[]) | undefined,
+  getViewTypes: (() => ViewType[]) | undefined,
+): { nodes: Node[]; edges: Edge[]; viewTypes: ViewType[] } {
+  return {
+    nodes: getCanvasNodes(),
+    edges: getCanvasEdges?.() ?? [],
+    viewTypes: getViewTypes?.() ?? [],
+  };
 }
 
 export function useCanvasModeState({
   projectId,
   isViewOnly,
   getCanvasNodes,
+  getCanvasEdges,
+  getViewTypes,
 }: UseCanvasModeStateOptions): UseCanvasModeStateResult {
   const [canvasMode, setCanvasMode] = useState<CanvasMode>(() => readStoredCanvasMode(projectId));
   const canvasModeRef = useRef<CanvasMode>(canvasMode);
   const [constraintsNodes, setConstraintsNodes] = useState<Node[]>([]);
   const [constraintHighlightNodeId, setConstraintHighlightNodeId] = useState<string | null>(null);
   const [constraintFilterNodeId, setConstraintFilterNodeId] = useState<string | null>(null);
+  const [metricsNodes, setMetricsNodes] = useState<Node[]>([]);
+  const [metricsEdges, setMetricsEdges] = useState<Edge[]>([]);
+  const [metricsViewTypes, setMetricsViewTypes] = useState<ViewType[]>([]);
 
   useEffect(() => {
     if (isViewOnly && canvasMode === 'constraints') {
@@ -61,6 +87,11 @@ export function useCanvasModeState({
     if (mode === 'constraints' && isViewOnly) return;
     if (mode === 'constraints') {
       setConstraintsNodes(getCanvasNodes());
+    } else if (mode === 'metrics') {
+      const snapshot = snapshotMetricsWorkspace(getCanvasNodes, getCanvasEdges, getViewTypes);
+      setMetricsNodes(snapshot.nodes);
+      setMetricsEdges(snapshot.edges);
+      setMetricsViewTypes(snapshot.viewTypes);
     } else {
       setConstraintHighlightNodeId(null);
       setConstraintFilterNodeId(null);
@@ -68,7 +99,7 @@ export function useCanvasModeState({
     canvasModeRef.current = mode;
     setCanvasMode(mode);
     writeStoredCanvasMode(projectId, mode);
-  }, [getCanvasNodes, isViewOnly, projectId]);
+  }, [getCanvasEdges, getCanvasNodes, getViewTypes, isViewOnly, projectId]);
 
   return {
     canvasMode,
@@ -79,6 +110,12 @@ export function useCanvasModeState({
     setConstraintHighlightNodeId,
     constraintFilterNodeId,
     setConstraintFilterNodeId,
+    metricsNodes,
+    setMetricsNodes,
+    metricsEdges,
+    setMetricsEdges,
+    metricsViewTypes,
+    setMetricsViewTypes,
     handleCanvasModeChange,
   };
 }

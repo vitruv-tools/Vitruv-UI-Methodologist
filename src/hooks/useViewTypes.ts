@@ -43,7 +43,7 @@ function unlinkNodeUpdater(viewTypeId: string, nodeId: string) {
     );
 }
 
-function loadViewTypes(vsumId: string): ViewType[] {
+export function readStoredViewTypes(vsumId: string): ViewType[] {
     try {
         const raw = localStorage.getItem(storageKey(vsumId));
         return raw ? JSON.parse(raw) : [];
@@ -72,7 +72,7 @@ export function useViewTypes(vsumId: string | undefined) {
             setIsLoaded(false);
             return;
         }
-        setViewTypes(loadViewTypes(vsumId));
+        setViewTypes(readStoredViewTypes(vsumId));
         setIsLoaded(true);
     }, [vsumId]);
 

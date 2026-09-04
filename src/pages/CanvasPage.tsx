@@ -22,8 +22,10 @@ import { CanvasProjectControls } from '../components/canvas/CanvasProjectControl
 import { CanvasSidebarToolbar } from '../components/canvas/CanvasSidebarToolbar';
 import { CanvasProjectAccessControls } from '../components/canvas/CanvasProjectAccessControls';
 import { CanvasConstraintsOverlay } from '../components/canvas/CanvasConstraintsOverlay';
+import { CanvasMetricsOverlay } from '../components/canvas/CanvasMetricsOverlay';
 import { getCanvasPanelMemberName } from '../components/canvas/canvasMemberPresentation';
 import { useCanvasModeState } from '../hooks/useCanvasModeState';
+import type { ViewType } from '../hooks/useViewTypes';
 import { useCanvasProjectRename } from '../hooks/useCanvasProjectRename';
 import {
   useCanvasUmlPanels,
@@ -216,9 +218,17 @@ interface HydrateCanvasWorkspaceParams {
   details: VsumDetails;
   forInstanceId?: string;
   activeInstanceId: string | null;
-  flowCanvasRef: React.RefObject<{ getNodes?: () => Node[]; establishBaseline?: () => void } | null>;
+  flowCanvasRef: React.RefObject<{
+    getNodes?: () => Node[];
+    getEdges?: () => Edge[];
+    getViewTypes?: () => ViewType[];
+    establishBaseline?: () => void;
+  } | null>;
   canvasMode: CanvasMode;
   setConstraintsNodes: React.Dispatch<React.SetStateAction<Node[]>>;
+  setMetricsNodes: React.Dispatch<React.SetStateAction<Node[]>>;
+  setMetricsEdges: React.Dispatch<React.SetStateAction<Edge[]>>;
+  setMetricsViewTypes: React.Dispatch<React.SetStateAction<ViewType[]>>;
   setMyLibraryModels: React.Dispatch<React.SetStateAction<DrawerModel[]>>;
   setPublicLibraryModels: React.Dispatch<React.SetStateAction<DrawerModel[]>>;
 }
@@ -231,6 +241,9 @@ async function hydrateCanvasWorkspace(params: HydrateCanvasWorkspaceParams): Pro
     flowCanvasRef,
     canvasMode,
     setConstraintsNodes,
+    setMetricsNodes,
+    setMetricsEdges,
+    setMetricsViewTypes,
     setMyLibraryModels,
     setPublicLibraryModels,
   } = params;
@@ -259,6 +272,12 @@ async function hydrateCanvasWorkspace(params: HydrateCanvasWorkspaceParams): Pro
 
   await new Promise(r => setTimeout(r, 150));
   if (isStale()) return false;
+
+  if (canvasMode === 'metrics') {
+    setMetricsNodes(flowCanvasRef.current?.getNodes?.() ?? []);
+    setMetricsEdges(flowCanvasRef.current?.getEdges?.() ?? []);
+    setMetricsViewTypes(flowCanvasRef.current?.getViewTypes?.() ?? []);
+  }
 
   // The project's existing metamodels/relations just loaded via a sequence of
   // canvas mutations (one per file, one per relation) — none of that should be
@@ -558,9 +577,17 @@ export const CanvasPage: React.FC = () => {
     if (isViewOnly) setAddReactionMode(false);
   }, [isViewOnly]);
 
-  // Canvas mode (Modeling / Constraints / Views)
+  // Canvas mode (Modeling / Constraints / Views / Metrics)
   const getCanvasNodes = useCallback(
     (): Node[] => flowCanvasRef.current?.getNodes?.() ?? [],
+    [],
+  );
+  const getCanvasEdges = useCallback(
+    (): Edge[] => flowCanvasRef.current?.getEdges?.() ?? [],
+    [],
+  );
+  const getViewTypes = useCallback(
+    () => flowCanvasRef.current?.getViewTypes?.() ?? [],
     [],
   );
   const {
@@ -572,11 +599,19 @@ export const CanvasPage: React.FC = () => {
     setConstraintHighlightNodeId,
     constraintFilterNodeId,
     setConstraintFilterNodeId,
+    metricsNodes,
+    setMetricsNodes,
+    metricsEdges,
+    setMetricsEdges,
+    metricsViewTypes,
+    setMetricsViewTypes,
     handleCanvasModeChange,
   } = useCanvasModeState({
     projectId: activeProjectId,
     isViewOnly,
     getCanvasNodes,
+    getCanvasEdges,
+    getViewTypes,
   });
   const updateCanvasEcoreFileData = useCallback((
     fileName: string,
@@ -705,13 +740,17 @@ export const CanvasPage: React.FC = () => {
     if (canvasModeRef.current === 'constraints') {
       setConstraintsNodes(session.nodes);
     }
+    if (canvasModeRef.current === 'metrics') {
+      setMetricsNodes(session.nodes);
+      setMetricsEdges(session.edges);
+    }
 
     const load = () => {
       flowCanvasRef.current?.loadDiagramData?.(session.nodes, session.edges);
     };
     load();
     setTimeout(load, 50);
-  }, [cancelRename, canvasModeRef, restorePanels, setConstraintsNodes]);
+  }, [cancelRename, canvasModeRef, restorePanels, setConstraintsNodes, setMetricsEdges, setMetricsNodes]);
 
   const captureRef = useRef(captureCurrentTabSession);
   captureRef.current = captureCurrentTabSession;
@@ -908,6 +947,9 @@ export const CanvasPage: React.FC = () => {
         flowCanvasRef,
         canvasMode: canvasModeRef.current,
         setConstraintsNodes,
+        setMetricsNodes,
+        setMetricsEdges,
+        setMetricsViewTypes,
         setMyLibraryModels,
         setPublicLibraryModels,
       });
@@ -932,7 +974,7 @@ export const CanvasPage: React.FC = () => {
         setLoadingProject(false);
       }
     }
-  }, [clearCanvasWorkspace, setBaselineForInstance, updateTabName, applyProjectMembers, navAccess, navAccessRole, noteApiRole, canvasModeRef, setConstraintsNodes]);
+  }, [clearCanvasWorkspace, setBaselineForInstance, updateTabName, applyProjectMembers, navAccess, navAccessRole, noteApiRole, canvasModeRef, setConstraintsNodes, setMetricsEdges, setMetricsNodes, setMetricsViewTypes]);
 
   // Viewers: reload when the owner saves changes; detect when access is revoked.
   useEffect(() => {
@@ -1012,6 +1054,11 @@ export const CanvasPage: React.FC = () => {
       if (canvasModeRef.current === 'constraints') {
         setConstraintsNodes([]);
       }
+      if (canvasModeRef.current === 'metrics') {
+        setMetricsNodes([]);
+        setMetricsEdges([]);
+        setMetricsViewTypes([]);
+      }
 
       const cached = sessionsRef.current.get(nextId);
       if (cached && loadedTabsRef.current.has(nextId)) {
@@ -1034,7 +1081,7 @@ export const CanvasPage: React.FC = () => {
 
     run();
     return () => { cancelled = true; };
-  }, [activeInstanceId, clearCanvasWorkspace, loadVsum, bumpProjectRole, canvasModeRef, setConstraintsNodes]);
+  }, [activeInstanceId, clearCanvasWorkspace, loadVsum, bumpProjectRole, canvasModeRef, setConstraintsNodes, setMetricsEdges, setMetricsNodes, setMetricsViewTypes]);
 
   // ── Add model from drawer ─────────────────────────────────────────────────
 
@@ -1407,8 +1454,18 @@ export const CanvasPage: React.FC = () => {
         filterNodeId={constraintFilterNodeId}
       />
 
+      <CanvasMetricsOverlay
+        projectId={activeProjectId}
+        projectName={vsumName}
+        visible={canvasMode === 'metrics'}
+        canvasNodes={metricsNodes}
+        canvasEdges={metricsEdges}
+        viewTypes={metricsViewTypes}
+        onClose={() => handleCanvasModeChange('modeling')}
+      />
+
       {/* Left sidebar toolbar */}
-      {canvasMode !== 'constraints' && <CanvasSidebarToolbar
+      {canvasMode !== 'constraints' && canvasMode !== 'metrics' && <CanvasSidebarToolbar
         readOnly={isViewOnly}
         addReactionMode={addReactionMode}
         onToggleReactionMode={() => setAddReactionMode(v => !v)}

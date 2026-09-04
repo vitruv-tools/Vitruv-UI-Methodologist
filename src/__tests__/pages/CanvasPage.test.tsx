@@ -42,6 +42,7 @@ jest.mock('../../components/flow/FlowCanvas', () => {
         canUndo: false,
         canRedo: false,
         getReactionEdges: jest.fn(() => []),
+        getViewTypes: jest.fn(() => []),
         getWorkspaceSnapshot: jest.fn(() => ({
           metaModelIds: [],
           metaModelRelationRequests: [],
@@ -65,6 +66,7 @@ jest.mock('../../services/api', () => ({
     getVsumMembers: jest.fn(),
     getVsumsPaginated: jest.fn(),
     findMetaModels: jest.fn(),
+    getRuleSets: jest.fn().mockResolvedValue([]),
     getFile: jest.fn(),
     removeVsumMember: jest.fn(),
     buildVsum: jest.fn(),

@@ -134,10 +134,11 @@ describe('FlowCanvas', () => {
     expect(() => ref.current.fitUmlView()).not.toThrow();
   });
 
-  it('exposes getReactionEdges and getWorkspaceSnapshot via ref', () => {
+  it('exposes getReactionEdges, getViewTypes and getWorkspaceSnapshot via ref', () => {
     const ref = createRef<any>();
     render(<FlowCanvas ref={ref} />);
     expect(typeof ref.current.getReactionEdges).toBe('function');
+    expect(typeof ref.current.getViewTypes).toBe('function');
     expect(typeof ref.current.getWorkspaceSnapshot).toBe('function');
   });
 
