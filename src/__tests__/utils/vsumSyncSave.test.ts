@@ -24,7 +24,7 @@ describe('syncVsumWorkspaceChanges', () => {
     expect(apiService.syncVsumChanges).toHaveBeenCalledTimes(1);
   });
 
-  it('retries with reactionFileId 0 when reaction files are missing', async () => {
+  it('retries with reactionFileId null when reaction files are missing', async () => {
     (apiService.syncVsumChanges as jest.Mock)
       .mockRejectedValueOnce({
         response: { data: { message: 'Reaction files not found for relation' } },
@@ -39,9 +39,106 @@ describe('syncVsumWorkspaceChanges', () => {
     expect(apiService.syncVsumChanges).toHaveBeenCalledTimes(2);
     expect(apiService.syncVsumChanges).toHaveBeenLastCalledWith(2, {
       metaModelIds: [1, 2],
-      metaModelRelationRequests: [{ sourceId: 1, targetId: 2, reactionFileId: 0 }],
+      metaModelRelationRequests: [{ sourceId: 1, targetId: 2, reactionFileId: null }],
     });
-    expect(result.savedRelations[0].reactionFileId).toBe(0);
+    expect(result.savedRelations[0].reactionFileId).toBeNull();
     expect(result.message).toContain('unlinked automatically');
+  });
+
+  it('retries a 404 by unlinking only the coarse reaction file id', async () => {
+    (apiService.syncVsumChanges as jest.Mock)
+      .mockRejectedValueOnce(Object.assign(new Error('Not Found'), { status: 404 }))
+      .mockResolvedValueOnce({ message: 'VSUM successfully updated' });
+
+    const result = await syncVsumWorkspaceChanges(5, {
+      metaModelIds: [1, 2],
+      metaModelRelationRequests: [
+        {
+          sourceId: 1,
+          targetId: 2,
+          reactionFileId: 99,
+          fineGranularMetaModelRelationSet: [
+            {
+              id: 42,
+              sourceId: 'http://a#A',
+              targetId: 'http://b#B',
+              reactionFileStorageId: 88,
+              lowCodeReactionRequestBase: { routine: 'sync', regenerate: true },
+            },
+          ],
+        },
+      ],
+    });
+
+    expect(apiService.syncVsumChanges).toHaveBeenCalledTimes(2);
+    expect(apiService.syncVsumChanges).toHaveBeenLastCalledWith(5, {
+      metaModelIds: [1, 2],
+      metaModelRelationRequests: [
+        {
+          sourceId: 1,
+          targetId: 2,
+          reactionFileId: null,
+          fineGranularMetaModelRelationSet: [
+            {
+              id: 42,
+              sourceId: 'http://a#A',
+              targetId: 'http://b#B',
+              reactionFileStorageId: 88,
+              lowCodeReactionRequestBase: { routine: 'sync', regenerate: true },
+            },
+          ],
+        },
+      ],
+    });
+    expect(result.savedRelations[0].reactionFileId).toBeNull();
+    expect(result.savedRelations[0].fineGranularMetaModelRelationSet?.[0]).toEqual({
+      id: 42,
+      sourceId: 'http://a#A',
+      targetId: 'http://b#B',
+      reactionFileStorageId: 88,
+      lowCodeReactionRequestBase: { routine: 'sync', regenerate: true },
+    });
+  });
+
+  it('does not retry a 404 when only a generated Low Code file id is present', async () => {
+    (apiService.syncVsumChanges as jest.Mock).mockRejectedValueOnce(
+      Object.assign(new Error('Not Found'), { status: 404 }),
+    );
+
+    await expect(
+      syncVsumWorkspaceChanges(5, {
+        metaModelIds: [1, 2],
+        metaModelRelationRequests: [
+          {
+            sourceId: 1,
+            targetId: 2,
+            reactionFileId: null,
+            fineGranularMetaModelRelationSet: [
+              {
+                id: 42,
+                sourceId: 'http://a#A',
+                targetId: 'http://b#B',
+                reactionFileStorageId: 88,
+              },
+            ],
+          },
+        ],
+      }),
+    ).rejects.toThrow('Not Found');
+    expect(apiService.syncVsumChanges).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not retry a 404 when no reaction file ids were sent', async () => {
+    (apiService.syncVsumChanges as jest.Mock).mockRejectedValueOnce(
+      Object.assign(new Error('Not Found'), { status: 404 }),
+    );
+
+    await expect(
+      syncVsumWorkspaceChanges(5, {
+        metaModelIds: [1, 2],
+        metaModelRelationRequests: [{ sourceId: 1, targetId: 2, reactionFileId: null }],
+      }),
+    ).rejects.toThrow('Not Found');
+    expect(apiService.syncVsumChanges).toHaveBeenCalledTimes(1);
   });
 });

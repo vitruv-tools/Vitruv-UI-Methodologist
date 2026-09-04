@@ -10,6 +10,9 @@ import { CanvasUmlPanelLayer } from '../components/canvas/CanvasUmlPanelLayer';
 import { apiService, VsumRole, VsumUserResponse } from '../services/api';
 import { VsumDetails } from '../types';
 import { VsumMetaModelRef } from '../types/vsum';
+import { useProjectStore } from '../store/Project';
+import { createVsumDetailsStore, getVsumDetailsStore, hasVsumDetailsStore } from '../store/VsumDetails';
+import type { EditableVsumDetails } from '../types/EditableVsumDetails';
 import { WorkspaceSnapshot, WorkspaceSnapshotRequest } from '../types/workspace';
 import { MODAL_Z_INDEX, useModalBodyLock } from '../components/ui/modalUtils';
 import { CanvasProjectTabs } from '../components/canvas/CanvasProjectTabs';
@@ -27,6 +30,12 @@ import { getCanvasPanelMemberName } from '../components/canvas/canvasMemberPrese
 import { useCanvasModeState } from '../hooks/useCanvasModeState';
 import type { ViewType } from '../hooks/useViewTypes';
 import { useCanvasProjectRename } from '../hooks/useCanvasProjectRename';
+import {
+  applyReactionLineStyle,
+  readStoredReactionLineStyle,
+  writeStoredReactionLineStyle,
+  type ReactionLineStyle,
+} from '../utils/reactionEdgeStyleStorage';
 import {
   useCanvasUmlPanels,
   type CanvasUmlPanelLoadErrorMessage,
@@ -55,7 +64,10 @@ import {
   cloneWorkspaceSnapshot,
   emptyWorkspaceSnapshot,
   mapRelationsForCanvasLoad,
+  mapVsumDetailsToEditable,
+  mergePersistedFineRelationIds,
   prepareSnapshotForSyncSave,
+  relationsFromVsumDetails,
   workspaceSnapshotFromVsumDetails,
   workspaceSnapshotsEqual,
 } from '../utils/workspaceSnapshotUtils';
@@ -267,7 +279,7 @@ async function hydrateCanvasWorkspace(params: HydrateCanvasWorkspaceParams): Pro
     setConstraintsNodes(flowCanvasRef.current?.getNodes?.() ?? []);
   }
 
-  await dispatchMetaModelRelations(details.metaModelsRelation);
+  await dispatchMetaModelRelations(relationsFromVsumDetails(details));
   if (isStale()) return false;
 
   await new Promise(r => setTimeout(r, 150));
@@ -573,6 +585,16 @@ export const CanvasPage: React.FC = () => {
 
   // Add-reaction mode
   const [addReactionMode, setAddReactionMode] = useState(false);
+  const [reactionLineStyle, setReactionLineStyle] = useState<ReactionLineStyle>(
+    readStoredReactionLineStyle,
+  );
+  useEffect(() => {
+    applyReactionLineStyle(reactionLineStyle);
+  }, [reactionLineStyle]);
+  const handleReactionLineStyleChange = useCallback((style: ReactionLineStyle) => {
+    setReactionLineStyle(style);
+    writeStoredReactionLineStyle(style);
+  }, []);
   useEffect(() => {
     if (isViewOnly) setAddReactionMode(false);
   }, [isViewOnly]);
@@ -915,6 +937,13 @@ export const CanvasPage: React.FC = () => {
       setVsumName(details.name);
       updateTabName(vsumId, details.name);
       setDrawerModels((details.metaModels || []).map(m => metaModelToDrawerModel(m, true)));
+
+      // ── Low Code store initialization ───────────────────────────────
+      useProjectStore.getState().setActiveId(vsumId);
+
+      const editableDetails: EditableVsumDetails = mapVsumDetailsToEditable(details);
+      createVsumDetailsStore(vsumId, editableDetails);
+      // ────────────────────────────────────────────────────────────────
 
       const detailsRole = resolveVsumAccessRole(details.role, details.roleEn);
       const mergedRole = pickMostRestrictiveRole(
@@ -1280,10 +1309,33 @@ export const CanvasPage: React.FC = () => {
         flowCanvasRef.current?.getWorkspaceSnapshot?.() ?? emptyWorkspaceSnapshot();
       const payload = prepareSnapshotForSyncSave(snapshot);
       const { message, savedRelations } = await syncVsumWorkspaceChanges(activeProjectId, payload);
-      const savedSnapshot: WorkspaceSnapshot = {
+      let savedSnapshot: WorkspaceSnapshot = {
         metaModelIds: payload.metaModelIds,
         metaModelRelationRequests: savedRelations,
       };
+      if (hasVsumDetailsStore(activeProjectId)) {
+        try {
+          const detailsRes = await apiService.getVsumDetails(activeProjectId);
+          const remote = mapVsumDetailsToEditable(detailsRes.data);
+          const store = getVsumDetailsStore(activeProjectId);
+          store.setState({
+            metaModelsRelation: mergePersistedFineRelationIds(
+              store.getState().metaModelsRelation,
+              remote.metaModelsRelation,
+            ),
+          });
+          const refreshed = flowCanvasRef.current?.getWorkspaceSnapshot?.();
+          if (refreshed) {
+            const prepared = prepareSnapshotForSyncSave(refreshed);
+            savedSnapshot = {
+              metaModelIds: prepared.metaModelIds,
+              metaModelRelationRequests: prepared.metaModelRelationRequests ?? [],
+            };
+          }
+        } catch {
+          // Save already succeeded; ids will be picked up on the next full reload.
+        }
+      }
       if (activeInstanceId) {
         setBaselineForInstance(activeInstanceId, savedSnapshot);
         const session = sessionsRef.current.get(activeInstanceId);
@@ -1383,6 +1435,7 @@ export const CanvasPage: React.FC = () => {
         height: '100%',
         visibility: projectLoadState.status === 'ready' ? 'visible' : 'hidden',
       }}>
+
       <FlowCanvas
         key={activeInstanceId ?? `canvas-${activeProjectId ?? 'new'}`}
         ref={flowCanvasRef}
@@ -1394,11 +1447,13 @@ export const CanvasPage: React.FC = () => {
         umlModalOpen={umlPanels.length > 0}
         addReactionMode={addReactionMode}
         onReactionModeEnd={handleReactionModeEnd}
+        onToggleReactionMode={() => setAddReactionMode(v => !v)}
         onHistoryChange={handleHistoryChange}
         onCanvasModeChange={handleCanvasModeChange}
         constraintHighlightNodeId={constraintHighlightNodeId}
         constraintFilterNodeId={constraintFilterNodeId}
         onConstraintNodeFilter={setConstraintFilterNodeId}
+        onSaveChanges={handleSaveChanges}
         projectTabsBelowModeToggle={
           openTabs.length > 0 ? (
             <CanvasProjectTabs
@@ -1506,6 +1561,10 @@ export const CanvasPage: React.FC = () => {
         onConfirmRename={confirmRename}
         onCancelRename={cancelRename}
         loading={loadingProject}
+        addReactionMode={addReactionMode}
+        onToggleReactionMode={() => setAddReactionMode(v => !v)}
+        reactionLineStyle={reactionLineStyle}
+        onReactionLineStyleChange={handleReactionLineStyleChange}
       />
 
       <UnsavedTabCloseDialog

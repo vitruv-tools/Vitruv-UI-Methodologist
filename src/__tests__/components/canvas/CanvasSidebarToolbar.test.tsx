@@ -7,9 +7,7 @@ const labels = {
   download: 'Download. Export this project',
   save: 'Save. Save changes to this project',
   checkBuild: 'Check build. Verify the project compiles successfully',
-  addReaction: 'Add reaction. Click two meta-models to connect them',
-  cancelReaction: 'Cancel reaction. Click to exit connection mode',
-  addMetaModels: 'Add meta-models. Open the model library drawer',
+  addMetaModels: 'Add meta-models. Open the meta-model drawer to add models to the canvas',
   viewReaction: 'View reaction. Select a connection line, then click to open the code',
   undoAvailable: 'Undo. Undo the last action',
   undoUnavailable: 'Undo. Nothing to undo',
@@ -50,7 +48,6 @@ describe('CanvasSidebarToolbar', () => {
       labels.download,
       labels.save,
       labels.checkBuild,
-      labels.addReaction,
       labels.addMetaModels,
       labels.undoAvailable,
       labels.redoAvailable,
@@ -60,13 +57,11 @@ describe('CanvasSidebarToolbar', () => {
     fireEvent.click(screen.getByRole('button', { name: /Project export/ }));
     fireEvent.click(screen.getByRole('button', { name: labels.save }));
     fireEvent.click(screen.getByRole('button', { name: labels.checkBuild }));
-    fireEvent.click(screen.getByRole('button', { name: labels.addReaction }));
     fireEvent.click(screen.getByRole('button', { name: labels.addMetaModels }));
 
     expect(props.onDownloadArtifact).toHaveBeenCalledTimes(1);
     expect(props.onSaveChanges).toHaveBeenCalledTimes(1);
     expect(props.onCheckBuild).toHaveBeenCalledTimes(1);
-    expect(props.onToggleReactionMode).toHaveBeenCalledTimes(1);
     expect(props.onToggleModelDrawer).toHaveBeenCalledTimes(1);
   });
 
@@ -85,13 +80,12 @@ describe('CanvasSidebarToolbar', () => {
     expect(props.onOpenReactionEditor).toHaveBeenCalledTimes(1);
     expect(screen.queryByRole('button', { name: labels.save })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: labels.checkBuild })).not.toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: labels.addReaction })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: labels.addMetaModels })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: labels.undoAvailable })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: labels.redoAvailable })).not.toBeInTheDocument();
   });
 
-  it('changes the reaction action label and Select exits only active reaction mode', () => {
+  it('Select exits only active reaction mode', () => {
     const props = createProps();
     const { rerender } = render(<CanvasSidebarToolbar {...props} />);
 
@@ -100,7 +94,6 @@ describe('CanvasSidebarToolbar', () => {
 
     rerender(<CanvasSidebarToolbar {...props} addReactionMode />);
 
-    expect(screen.getByRole('button', { name: labels.cancelReaction })).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: labels.select }));
 
     expect(props.onToggleReactionMode).toHaveBeenCalledTimes(1);

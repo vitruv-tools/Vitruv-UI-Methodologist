@@ -1,8 +1,49 @@
 import { apiService, MetaModelRelationRequest } from '../services/api';
 import { extractApiErrorMessage } from './apiErrorMessage';
+import { normalizeReactionFileId } from './workspaceSnapshotUtils';
 
-export function isReactionFilesNotFoundError(message: string): boolean {
-  return message.toLowerCase().includes('reaction files not found');
+const getErrorStatus = (error: unknown): number | undefined => {
+  const err = error as { status?: number; response?: { status?: number } };
+  return err?.status ?? err?.response?.status;
+};
+
+/**
+ * Backend reports missing reaction-file ids either as an explicit message or
+ * as HTTP 404 on PUT /sync-changes (empty "Not Found" body).
+ */
+export function isReactionFilesNotFoundError(message: string, error?: unknown): boolean {
+  const msg = message.toLowerCase();
+  if (msg.includes('reaction file') && msg.includes('not found')) return true;
+  if (getErrorStatus(error) === 404) return true;
+  return false;
+}
+
+/**
+ * Drop only the parent coarse `.reactions` file id. Fine-granular
+ * `reactionFileStorageId` must stay: that is the in-place update path
+ * (`updateFile`). Stripping it turns an edit into `storeFile` and 400s on
+ * duplicate hash.
+ */
+export function unlinkReactionFileIds(
+  relations: MetaModelRelationRequest[],
+): MetaModelRelationRequest[] {
+  return relations.map(rel => ({
+    sourceId: rel.sourceId,
+    targetId: rel.targetId,
+    reactionFileId: null,
+    ...(rel.fineGranularMetaModelRelationSet?.length
+      ? {
+          fineGranularMetaModelRelationSet: rel.fineGranularMetaModelRelationSet.map(fg => ({
+            ...fg,
+          })),
+        }
+      : {}),
+  }));
+}
+
+/** True when a parent relation still points at an uploaded coarse reaction file. */
+export function hasLinkedReactionFiles(relations: MetaModelRelationRequest[]): boolean {
+  return relations.some(rel => normalizeReactionFileId(rel.reactionFileId) > 0);
 }
 
 export interface VsumSyncSavePayload {
@@ -41,12 +82,16 @@ export async function syncVsumWorkspaceChanges(
     return await attempt(relations);
   } catch (error) {
     const detail = extractApiErrorMessage(error, 'Save failed');
-    if (!isReactionFilesNotFoundError(detail) || relations.length === 0) {
+    const canUnlink =
+      isReactionFilesNotFoundError(detail, error)
+      && relations.length > 0
+      && hasLinkedReactionFiles(relations);
+    if (!canUnlink) {
       throw new Error(detail);
     }
   }
 
-  const fallbackRelations = relations.map(rel => ({ ...rel, reactionFileId: 0 }));
+  const fallbackRelations = unlinkReactionFileIds(relations);
   try {
     const result = await attempt(fallbackRelations);
     return {

@@ -1,5 +1,6 @@
 import React from 'react';
 import { EdgeProps, EdgeLabelRenderer, useStore } from 'reactflow';
+import { getBorderPoint } from '../../utils/reactionEdgeGeometry';
 
 interface UMLRelationshipData {
   label?: string;
@@ -17,6 +18,7 @@ interface UMLRelationshipData {
   isFirstInMergeGroup?: boolean;
   mergeGroupSourceNodes?: string[];
   hoveredMergeGroup?: string | null;
+  expandedIntraModel?: boolean;
   onMergeGroupHover?: (groupId: string | null) => void;
 }
 
@@ -96,29 +98,6 @@ const EDGE_SELECT_HOVER = '#f87171';
 const EDGE_ENDPOINT_INSET = 8;
 const MULT_ALONG_OFFSET = 28;
 const MULT_PERP_OFFSET = 30;
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Border-intersection: given a node's center + dimensions and the direction
-// toward the other endpoint, returns the exact point on the box boundary.
-// This is what makes connections spread across the border (like jjodel) instead
-// of all converging at a single fixed handle.
-// ─────────────────────────────────────────────────────────────────────────────
-function getBorderPoint(
-  cx: number, cy: number,
-  nodeW: number, nodeH: number,
-  towardX: number, towardY: number
-): { x: number; y: number } {
-  const hw = nodeW / 2;
-  const hh = nodeH / 2;
-  const dx = towardX - cx;
-  const dy = towardY - cy;
-  if (Math.abs(dx) < 0.001 && Math.abs(dy) < 0.001) return { x: cx + hw, y: cy };
-  const scaleX = Math.abs(dx) > 0.001 ? hw / Math.abs(dx) : Infinity;
-  const scaleY = Math.abs(dy) > 0.001 ? hh / Math.abs(dy) : Infinity;
-  const scale = Math.min(scaleX, scaleY);
-  return { x: cx + dx * scale, y: cy + dy * scale };
-}
-
 
 // Helper: Get highlight color based on state
 function getHighlightColor(isHighlighted: boolean, isHovered: boolean): string {
@@ -252,6 +231,25 @@ function calculateMultiplicityPosition(
   };
 }
 
+const MIDPOINT_GHOST_LABEL_CLEARANCE = 18;
+
+/** Shift a midpoint name off the association ghost, preferring above the line. */
+function offsetLabelAwayFromGhost(
+  labelX: number,
+  labelY: number,
+  px: number,
+  py: number,
+  clearance = MIDPOINT_GHOST_LABEL_CLEARANCE,
+): { x: number; y: number } {
+  let nx = px;
+  let ny = py;
+  if (ny > 0.01 || (Math.abs(ny) <= 0.01 && nx > 0)) {
+    nx = -px;
+    ny = -py;
+  }
+  return { x: labelX + nx * clearance, y: labelY + ny * clearance };
+}
+
 export function UMLRelationship({
   id,
   source,
@@ -366,7 +364,7 @@ export function UMLRelationship({
   const drawTargetX = finalTargetX - ux * endpointInset;
   const drawTargetY = finalTargetY - uy * endpointInset;
 
-  const controlPoint = data?.customControlPoint;
+  const controlPoint = data?.expandedIntraModel ? undefined : data?.customControlPoint;
   const distance = Math.hypot(dx, dy);
 
   // Routing: bezier when user has dragged a control point, straight line otherwise.
@@ -427,6 +425,14 @@ export function UMLRelationship({
     return data?.label || '';
   };
 
+  const relationshipLabel = getRelationshipLabel();
+  const liftNameOffGhost = data?.expandedIntraModel === true
+    && data?.relationshipType !== 'inheritance'
+    && relationshipLabel.length > 0;
+  const namePos = liftNameOffGhost
+    ? offsetLabelAwayFromGhost(labelX, labelY, px, py)
+    : { x: labelX, y: labelY };
+
 
   return (
     <>
@@ -466,9 +472,10 @@ export function UMLRelationship({
         onMouseLeave={() => setIsHovered(false)}
       />
 
+      {!liftNameOffGhost && (
       <text
-        x={labelX}
-        y={labelY}
+        x={namePos.x}
+        y={namePos.y}
         textAnchor="middle"
         dominantBaseline="middle"
         style={{
@@ -483,8 +490,9 @@ export function UMLRelationship({
           transition: 'fill 0.2s ease',
         }}
       >
-        {getRelationshipLabel()}
+        {relationshipLabel}
       </text>
+      )}
 
 
       {/* Multiplicity badges are rendered via EdgeLabelRenderer (below) so they
@@ -493,6 +501,30 @@ export function UMLRelationship({
       {/* Direction markers are rendered in EdgeLabelRenderer so arrows/diamonds stay
           visible above HTML node boxes without requiring hover. */}
       <EdgeLabelRenderer>
+        {liftNameOffGhost && (
+          <div
+            data-testid={`${id}-association-name`}
+            className="nodrag nopan"
+            style={{
+              position: 'absolute',
+              transform: `translate(-50%, -50%) translate(${namePos.x}px, ${namePos.y}px)`,
+              pointerEvents: 'none',
+              zIndex: 1002,
+              background: 'var(--v-overlay)',
+              borderRadius: 4,
+              padding: '0 5px',
+              fontSize: 11,
+              fontWeight: 600,
+              color: getHighlightColor(isHighlighted, isHovered),
+              fontFamily: `'Segoe UI', system-ui, sans-serif`,
+              lineHeight: '18px',
+              whiteSpace: 'nowrap',
+              boxShadow: '0 0 0 1px var(--v-card-border)',
+            }}
+          >
+            {relationshipLabel}
+          </div>
+        )}
         {directionMarkerSide && data?.relationshipType && directionMarkerGraphic && directionMarkerPos && (
           <div
             key={`${id}-direction-marker`}
@@ -588,8 +620,9 @@ export function UMLRelationship({
         })()}
       </EdgeLabelRenderer>
 
-      {/* Draggable control point handle when selected */}
-      {selected && (
+      {/* Draggable control point handle when selected — not used on expanded
+          intra-model associations in Reactions mode (those stay straight). */}
+      {selected && !data?.expandedIntraModel && (
         <g>
           {/* Control point position - use existing or calculate default */}
           {(() => {
