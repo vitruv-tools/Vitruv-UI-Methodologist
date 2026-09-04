@@ -69,9 +69,9 @@ export const CanvasMinimap: React.FC<CanvasMinimapProps> = ({
     <div style={{
       position: 'absolute', right: 60, bottom: 16,
       width, height, zIndex: 30,
-      background: '#f0f4f8', borderRadius: 8,
-      border: '1px solid #e2e8f0',
-      boxShadow: '0 2px 8px rgba(0,0,0,0.10)',
+      background: 'var(--v-surface)', borderRadius: 8,
+      border: '1px solid var(--v-border)',
+      boxShadow: 'var(--v-card-shadow)',
       overflow: 'hidden',
     }}>
       <svg width={width} height={height} style={{ display: 'block' }}>
@@ -128,7 +128,7 @@ export const CanvasMinimap: React.FC<CanvasMinimapProps> = ({
               data-kind="eobject"
               x={sx} y={sy} width={nw} height={nh}
               rx={Math.max(1, 3 * mmScale)}
-              fill="#fff"
+              fill="var(--v-uml-box-bg)"
               stroke={darken(item.color, 20)}
               strokeWidth={0.8}
             />
@@ -142,7 +142,7 @@ export const CanvasMinimap: React.FC<CanvasMinimapProps> = ({
 
         {indicators.map(ind => (
           <circle key={ind.id} cx={ind.x} cy={ind.y} r={4.5}
-            fill={ind.color} stroke="white" strokeWidth={1.2}
+            fill={ind.color} stroke="var(--v-surface)" strokeWidth={1.2}
           />
         ))}
       </svg>

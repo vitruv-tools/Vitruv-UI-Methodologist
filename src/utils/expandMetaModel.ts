@@ -231,7 +231,7 @@ export function expandMetaModelToNodes(
       width: bboxWidth,
       height: bboxHeight,
     },
-    style: { width: bboxWidth, height: bboxHeight, zIndex: -1 },
+    style: { width: bboxWidth, height: bboxHeight, zIndex: 0 },
     draggable: true,
     selectable: true,
   };

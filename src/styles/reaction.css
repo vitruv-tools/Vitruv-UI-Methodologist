@@ -29,10 +29,11 @@
   transition: opacity 0.2s ease;
 }
 
-/* ── Bounding box node (non-interactive background) ────────────── */
+/* ── Bounding box node (behind classes, above the pane background) ─ */
 .react-flow__node-boundingBox {
   overflow: visible;
   cursor: grab;
+  z-index: 0 !important;
 }
 .react-flow__node-boundingBox:active {
   cursor: grabbing;

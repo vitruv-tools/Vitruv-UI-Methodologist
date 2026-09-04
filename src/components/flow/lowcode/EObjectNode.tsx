@@ -5,6 +5,7 @@ import {
   EOBJECT_ATTR_ROW_HEIGHT,
   EOBJECT_HEADER_HEIGHT,
 } from '../../../utils/reactionEdgeGeometry';
+import { BRAND_COLOR } from '../../ui/sharedStyles';
 
 export interface EObjectNodeData {
   label: string;
@@ -44,7 +45,7 @@ function sideToPosition(side: CardinalSide): Position {
  */
 const EObjectNode: React.FC<NodeProps<EObjectNodeData>> = ({ data, selected }) => {
   const { className, attributes, isAbstract, isInterface, ecore, color } = data;
-  const borderColor = selected ? '#1976d2' : '#ccc';
+  const borderColor = selected ? BRAND_COLOR : 'var(--v-uml-box-border)';
 
   return (
     <div
@@ -52,10 +53,11 @@ const EObjectNode: React.FC<NodeProps<EObjectNodeData>> = ({ data, selected }) =
         minWidth: 180,
         border: `1.5px solid ${borderColor}`,
         borderRadius: 6,
-        background: '#fff',
+        background: 'var(--v-uml-box-bg)',
+        color: 'var(--v-uml-box-text)',
         boxShadow: selected
-          ? '0 0 0 2px #1976d244, 0 4px 12px rgba(0,0,0,0.1)'
-          : '0 1px 4px rgba(0,0,0,0.06)',
+          ? '0 0 0 2px rgba(4,148,132,0.27), 0 4px 12px rgba(0,0,0,0.18)'
+          : '0 1px 4px rgba(0,0,0,0.08)',
         overflow: 'visible',
         fontSize: 12,
         position: 'relative',
@@ -87,19 +89,19 @@ const EObjectNode: React.FC<NodeProps<EObjectNodeData>> = ({ data, selected }) =
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
-          borderBottom: attributes.length > 0 ? '1px solid #e8e8e8' : 'none',
-          background: color ? `${color}18` : '#f8f9fa',
+          borderBottom: attributes.length > 0 ? '1px solid var(--v-uml-separator)' : 'none',
+          background: color ? `${color}18` : 'var(--v-uml-box-muted)',
           borderRadius: '6px 6px 0 0',
           position: 'relative',
         }}
       >
         {isInterface && (
-          <span style={{ fontSize: 9, color: '#777', marginRight: 4 }}>&laquo;interface&raquo;</span>
+          <span style={{ fontSize: 9, color: 'var(--v-uml-box-text-muted)', marginRight: 4 }}>&laquo;interface&raquo;</span>
         )}
         {isAbstract && !isInterface && (
-          <span style={{ fontSize: 9, color: '#777', marginRight: 4 }}>&laquo;abstract&raquo;</span>
+          <span style={{ fontSize: 9, color: 'var(--v-uml-box-text-muted)', marginRight: 4 }}>&laquo;abstract&raquo;</span>
         )}
-        <span style={{ fontWeight: 600, fontStyle: isAbstract ? 'italic' : 'normal', color: '#222' }}>
+        <span style={{ fontWeight: 600, fontStyle: isAbstract ? 'italic' : 'normal', color: 'var(--v-uml-box-text)' }}>
           {className}
         </span>
 
@@ -115,8 +117,8 @@ const EObjectNode: React.FC<NodeProps<EObjectNodeData>> = ({ data, selected }) =
             top: HEADER_HEIGHT / 2 - HANDLE_SIZE / 2,
             width: HANDLE_SIZE,
             height: HANDLE_SIZE,
-            background: '#888',
-            border: '1.5px solid #555',
+            background: 'var(--v-chrome-icon)',
+            border: '1.5px solid var(--v-uml-box-border)',
             borderRadius: '50%',
           }}
         />
@@ -131,8 +133,8 @@ const EObjectNode: React.FC<NodeProps<EObjectNodeData>> = ({ data, selected }) =
             top: HEADER_HEIGHT / 2 - HANDLE_SIZE / 2,
             width: HANDLE_SIZE,
             height: HANDLE_SIZE,
-            background: '#888',
-            border: '1.5px solid #555',
+            background: 'var(--v-chrome-icon)',
+            border: '1.5px solid var(--v-uml-box-border)',
             borderRadius: '50%',
           }}
         />
@@ -150,15 +152,15 @@ const EObjectNode: React.FC<NodeProps<EObjectNodeData>> = ({ data, selected }) =
               padding: '0 28px',
               display: 'flex',
               alignItems: 'center',
-              borderBottom: idx < attributes.length - 1 ? '1px solid #f2f2f2' : 'none',
+              borderBottom: idx < attributes.length - 1 ? '1px solid var(--v-uml-separator)' : 'none',
               position: 'relative',
               fontSize: 11,
             }}
           >
-            <span style={{ color: '#555' }}>
+            <span style={{ color: 'var(--v-uml-box-text-muted)' }}>
               + {attr.name}: {attr.type}
               {attr.multiplicity && (
-                <span style={{ color: '#999', marginLeft: 4 }}>[{attr.multiplicity}]</span>
+                <span style={{ color: 'var(--v-text-faint)', marginLeft: 4 }}>[{attr.multiplicity}]</span>
               )}
             </span>
 
@@ -174,8 +176,8 @@ const EObjectNode: React.FC<NodeProps<EObjectNodeData>> = ({ data, selected }) =
                 top: ATTR_ROW_HEIGHT / 2 - HANDLE_SIZE / 2,
                 width: HANDLE_SIZE,
                 height: HANDLE_SIZE,
-                background: '#aaa',
-                border: '1.5px solid #777',
+                background: 'var(--v-text-faint)',
+                border: '1.5px solid var(--v-uml-box-border)',
                 borderRadius: '50%',
               }}
             />
@@ -192,8 +194,8 @@ const EObjectNode: React.FC<NodeProps<EObjectNodeData>> = ({ data, selected }) =
                 top: ATTR_ROW_HEIGHT / 2 - HANDLE_SIZE / 2,
                 width: HANDLE_SIZE,
                 height: HANDLE_SIZE,
-                background: '#aaa',
-                border: '1.5px solid #777',
+                background: 'var(--v-text-faint)',
+                border: '1.5px solid var(--v-uml-box-border)',
                 borderRadius: '50%',
               }}
             />

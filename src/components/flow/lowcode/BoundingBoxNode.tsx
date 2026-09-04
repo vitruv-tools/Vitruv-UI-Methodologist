@@ -1,5 +1,6 @@
 import React, { memo } from 'react';
 import { type NodeProps } from 'reactflow';
+import { BRAND_COLOR } from '../../ui/sharedStyles';
 
 export interface BoundingBoxNodeData {
   label: string;
@@ -19,7 +20,7 @@ export interface BoundingBoxNodeData {
  */
 const BoundingBoxNode: React.FC<NodeProps<BoundingBoxNodeData>> = ({ data, selected }) => {
   const { label, color = '#bfdbfe' } = data;
-  const borderColor = selected ? '#1976d2' : color;
+  const borderColor = selected ? BRAND_COLOR : color;
 
   return (
     <div
@@ -52,7 +53,7 @@ const BoundingBoxNode: React.FC<NodeProps<BoundingBoxNodeData>> = ({ data, selec
             width: 8, height: 8, borderRadius: '50%',
             background: color, display: 'inline-block',
           }} />
-          <span style={{ fontWeight: 700, fontSize: 13, color: '#333' }}>
+          <span style={{ fontWeight: 700, fontSize: 13, color: 'var(--v-uml-box-text)' }}>
             {label}
           </span>
           <span style={{
@@ -60,7 +61,7 @@ const BoundingBoxNode: React.FC<NodeProps<BoundingBoxNodeData>> = ({ data, selec
             background: color, display: 'inline-block',
           }} />
         </div>
-        <div style={{ fontSize: 10, color: '#888', fontStyle: 'italic' }}>
+        <div style={{ fontSize: 10, color: 'var(--v-text-muted)', fontStyle: 'italic' }}>
           Contents
         </div>
       </div>

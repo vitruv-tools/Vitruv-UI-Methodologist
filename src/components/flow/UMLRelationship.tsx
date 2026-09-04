@@ -510,7 +510,7 @@ export function UMLRelationship({
               transform: `translate(-50%, -50%) translate(${namePos.x}px, ${namePos.y}px)`,
               pointerEvents: 'none',
               zIndex: 1002,
-              background: 'rgba(255,255,255,0.94)',
+              background: 'var(--v-overlay)',
               borderRadius: 4,
               padding: '0 5px',
               fontSize: 11,
@@ -519,7 +519,7 @@ export function UMLRelationship({
               fontFamily: `'Segoe UI', system-ui, sans-serif`,
               lineHeight: '18px',
               whiteSpace: 'nowrap',
-              boxShadow: '0 0 0 1px rgba(255,255,255,0.9)',
+              boxShadow: '0 0 0 1px var(--v-card-border)',
             }}
           >
             {relationshipLabel}

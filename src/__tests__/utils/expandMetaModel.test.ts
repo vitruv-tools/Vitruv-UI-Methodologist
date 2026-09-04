@@ -18,6 +18,7 @@ describe('expandMetaModelToNodes colors', () => {
     expect(result).not.toBeNull();
     expect(result!.boundingBox.data.color).toBe(expected);
     expect(result!.boundingBox.data.domain).toBe('pcm');
+    expect(result!.boundingBox.style?.zIndex).toBe(0);
     expect(result!.eObjectNodes[0].data.color).toBe(expected);
   });
 

@@ -33,6 +33,7 @@ describe('CanvasMinimap', () => {
     const rect = container.querySelector('rect[data-kind="ecoreFile"]');
     expect(rect).toBeInTheDocument();
     expect(rect).toHaveAttribute('fill', metaModelDisplayColor('pcm', 'pcm.ecore'));
+    expect(container.firstChild).toHaveStyle({ background: 'var(--v-surface)' });
   });
 
   it('renders reaction bounding boxes and EObjects instead of hidden cards', () => {

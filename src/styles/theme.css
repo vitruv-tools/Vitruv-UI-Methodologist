@@ -149,10 +149,7 @@ body,
   background: var(--v-scrollbar-thumb-hover);
 }
 
-.react-flow,
-.react-flow__renderer,
-.react-flow__pane,
-.react-flow__container {
+.react-flow {
   background-color: var(--v-workspace-bg) !important;
 }
 

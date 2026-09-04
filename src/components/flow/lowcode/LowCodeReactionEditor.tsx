@@ -37,6 +37,7 @@ import {
   deriveElementAlias,
 } from '../../../utils/EcoreIdentifiers';
 import FieldRenderer from '../FieldRenderer';
+import { MuiAppThemeProvider } from '../../../theme/MuiAppThemeProvider';
 
 // ── Public imperative API ───────────────────────────────────────────────
 
@@ -196,68 +197,68 @@ const LowCodeReactionEditor = forwardRef<
 
   // ── Render ──────────────────────────────────────────────────────────
 
+  let body: React.ReactNode;
   if (loading) {
-    return (
+    body = (
       <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}>
         <CircularProgress size={28} />
       </Box>
     );
-  }
-
-  if (error) {
-    return (
+  } else if (error) {
+    body = (
       <Typography color="error" variant="body2" sx={{ p: 2 }}>
         {error}
       </Typography>
     );
+  } else {
+    const ecore = edge.data?.ecore;
+    body = (
+      <div>
+        {/* Connection info */}
+        {ecore && (
+          <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1.5 }}>
+            {variables?.sourceModelAlias}.{extractElementFromEObjectId(ecore.eObjectSourceId)}
+            {' → '}
+            {variables?.targetModelAlias}.{extractElementFromEObjectId(ecore.eObjectTargetId)}
+          </Typography>
+        )}
+
+        {/* Template selector */}
+        <FormControl fullWidth size="small" sx={{ mb: 2 }}>
+          <InputLabel>Reaction Template</InputLabel>
+          <Select
+            value={selectedTemplate}
+            label="Reaction Template"
+            onChange={(e) => handleTemplateChange(e.target.value)}
+          >
+            {templateNames.map((name) => (
+              <MenuItem key={name} value={name}>
+                {metadata!.reactionMetadataMap[name].name ?? name}
+              </MenuItem>
+            ))}
+          </Select>
+        </FormControl>
+
+        {/* Dynamic fields */}
+        {visibleFields.map((field) => (
+          <FieldRenderer
+            key={field.name}
+            field={field}
+            value={fieldValues[field.name]}
+            onChange={handleFieldChange}
+          />
+        ))}
+
+        {selectedTemplate && visibleFields.length === 0 && (
+          <Typography variant="body2" color="text.secondary">
+            No configurable fields for this template.
+          </Typography>
+        )}
+      </div>
+    );
   }
 
-  const ecore = edge.data?.ecore;
-
-  return (
-    <div>
-      {/* Connection info */}
-      {ecore && (
-        <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1.5 }}>
-          {variables?.sourceModelAlias}.{extractElementFromEObjectId(ecore.eObjectSourceId)}
-          {' → '}
-          {variables?.targetModelAlias}.{extractElementFromEObjectId(ecore.eObjectTargetId)}
-        </Typography>
-      )}
-
-      {/* Template selector */}
-      <FormControl fullWidth size="small" sx={{ mb: 2 }}>
-        <InputLabel>Reaction Template</InputLabel>
-        <Select
-          value={selectedTemplate}
-          label="Reaction Template"
-          onChange={(e) => handleTemplateChange(e.target.value)}
-        >
-          {templateNames.map((name) => (
-            <MenuItem key={name} value={name}>
-              {metadata!.reactionMetadataMap[name].name ?? name}
-            </MenuItem>
-          ))}
-        </Select>
-      </FormControl>
-
-      {/* Dynamic fields */}
-      {visibleFields.map((field) => (
-        <FieldRenderer
-          key={field.name}
-          field={field}
-          value={fieldValues[field.name]}
-          onChange={handleFieldChange}
-        />
-      ))}
-
-      {selectedTemplate && visibleFields.length === 0 && (
-        <Typography variant="body2" color="text.secondary">
-          No configurable fields for this template.
-        </Typography>
-      )}
-    </div>
-  );
+  return <MuiAppThemeProvider>{body}</MuiAppThemeProvider>;
 });
 
 LowCodeReactionEditor.displayName = 'LowCodeReactionEditor';

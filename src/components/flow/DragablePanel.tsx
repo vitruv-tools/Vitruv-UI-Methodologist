@@ -1,4 +1,5 @@
 import React, { useState, useRef, useCallback } from 'react';
+import { BRAND_COLOR } from '../ui/sharedStyles';
 
 export interface DragablePanelProps {
   title?: string;
@@ -132,10 +133,11 @@ const DragablePanel: React.FC<DragablePanelProps> = ({
           left: position.x,
           top: position.y,
           width: minimized ? 260 : 360,
-          background: '#fff',
+          background: 'var(--v-surface)',
           borderRadius: 8,
-          boxShadow: '0 4px 24px rgba(0,0,0,0.18)',
-          border: '1px solid #ddd',
+          boxShadow: 'var(--v-card-shadow)',
+          border: '1px solid var(--v-border)',
+          color: 'var(--v-text)',
           zIndex: 1000,
           pointerEvents: 'auto',
           display: 'flex',
@@ -150,8 +152,8 @@ const DragablePanel: React.FC<DragablePanelProps> = ({
             alignItems: 'center',
             justifyContent: 'space-between',
             padding: '6px 8px',
-            background: '#f5f5f5',
-            borderBottom: minimized ? 'none' : '1px solid #e0e0e0',
+            background: 'var(--v-surface-muted)',
+            borderBottom: minimized ? 'none' : '1px solid var(--v-border)',
             userSelect: 'none',
           }}
         >
@@ -173,7 +175,7 @@ const DragablePanel: React.FC<DragablePanelProps> = ({
               background: 'transparent',
               fontSize: 13,
               fontWeight: 600,
-              color: '#333',
+              color: 'var(--v-text)',
               textAlign: 'left',
               cursor: 'grab',
               touchAction: 'none',
@@ -186,7 +188,7 @@ const DragablePanel: React.FC<DragablePanelProps> = ({
               <HeaderIconButton
                 title="Save reaction and project"
                 onClick={onSave}
-                color={saveHighlighted ? '#1976d2' : '#888'}
+                color={saveHighlighted ? BRAND_COLOR : 'var(--v-chrome-icon)'}
                 animation={saveHighlighted ? 'dragable-panel-pulse 1.5s ease-in-out infinite' : undefined}
               >
                 <SvgIcon>
@@ -195,7 +197,7 @@ const DragablePanel: React.FC<DragablePanelProps> = ({
               </HeaderIconButton>
             )}
             {showDelete && onDelete && (
-              <HeaderIconButton title="Delete" onClick={onDelete} color="#d32f2f">
+              <HeaderIconButton title="Delete" onClick={onDelete} color="var(--v-danger-text)">
                 <SvgIcon>
                   <path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z" />
                 </SvgIcon>
@@ -204,7 +206,7 @@ const DragablePanel: React.FC<DragablePanelProps> = ({
             <HeaderIconButton
               title={minimized ? 'Expand' : 'Minimize'}
               onClick={() => setMinimized((v) => !v)}
-              color="#888"
+              color="var(--v-chrome-icon)"
             >
               {minimized ? (
                 <SvgIcon>
@@ -216,7 +218,7 @@ const DragablePanel: React.FC<DragablePanelProps> = ({
                 </SvgIcon>
               )}
             </HeaderIconButton>
-            <HeaderIconButton title="Close" onClick={onClose} color="#888">
+            <HeaderIconButton title="Close" onClick={onClose} color="var(--v-chrome-icon)">
               <SvgIcon>
                 <path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z" />
               </SvgIcon>
@@ -227,10 +229,12 @@ const DragablePanel: React.FC<DragablePanelProps> = ({
         {/* Content */}
         {!minimized && (
           <div
+            className="themed-scroll"
             style={{
               padding: 12,
               overflowY: 'auto',
               maxHeight: 500,
+              color: 'var(--v-text)',
             }}
           >
             {children}

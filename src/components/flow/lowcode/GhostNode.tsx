@@ -29,8 +29,8 @@ const GhostNode: React.FC<NodeProps<GhostNodeData>> = memo(({ data }) => {
         width: DOT_SIZE,
         height: DOT_SIZE,
         borderRadius: '50%',
-        background: '#ffffff',
-        border: '2px solid #374151',
+        background: 'var(--v-uml-box-bg)',
+        border: '2px solid var(--v-uml-edge)',
         boxShadow: '0 1px 2px rgba(0,0,0,0.35)',
         position: 'relative',
       }}
