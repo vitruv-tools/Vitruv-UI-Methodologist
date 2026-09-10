@@ -1,5 +1,5 @@
 import { apiService, MetaModelRelationRequest } from '../services/api';
-import { extractApiErrorMessage } from './apiErrorMessage';
+import { extractRawApiErrorMessage } from './apiErrorMessage';
 import { normalizeReactionFileId } from './workspaceSnapshotUtils';
 
 const getErrorStatus = (error: unknown): number | undefined => {
@@ -81,13 +81,13 @@ export async function syncVsumWorkspaceChanges(
   try {
     return await attempt(relations);
   } catch (error) {
-    const detail = extractApiErrorMessage(error, 'Save failed');
+    const detail = extractRawApiErrorMessage(error, 'Save failed');
     const canUnlink =
       isReactionFilesNotFoundError(detail, error)
       && relations.length > 0
       && hasLinkedReactionFiles(relations);
     if (!canUnlink) {
-      throw new Error(detail);
+      throw error;
     }
   }
 
@@ -99,6 +99,6 @@ export async function syncVsumWorkspaceChanges(
       savedRelations: fallbackRelations,
     };
   } catch (retryError) {
-    throw new Error(extractApiErrorMessage(retryError, 'Save failed'));
+    throw retryError;
   }
 }

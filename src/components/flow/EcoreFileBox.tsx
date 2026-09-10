@@ -137,6 +137,7 @@ export const EcoreFileBox: React.FC<NodeProps<EcoreFileBoxData>> = ({
 
   const boxRef = useRef<HTMLDivElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
+  const skipBlurSaveRef = useRef(false);
 
   // Close menu on any left-click outside
   useEffect(() => {
@@ -195,6 +196,7 @@ export const EcoreFileBox: React.FC<NodeProps<EcoreFileBoxData>> = ({
   };
   const handleCardKeyDown = (e: React.KeyboardEvent) => {
     e.stopPropagation();
+    if (renaming) return;
     if (e.key === 'Enter') {
       e.preventDefault();
       openUml();
@@ -209,22 +211,40 @@ export const EcoreFileBox: React.FC<NodeProps<EcoreFileBoxData>> = ({
 
   const startRename = () => {
     if (readOnly) return;
+    skipBlurSaveRef.current = false;
     setRenameVal(removeExt(fileName));
     setRenaming(true);
   };
   const saveRename = () => {
     const trimmed = renameVal.trim();
-    if (trimmed) onRename?.(id, trimmed + '.ecore');
+    if (trimmed) onRename?.(id, `${trimmed}.ecore`);
+    setRenaming(false);
+  };
+  const cancelRename = () => {
+    skipBlurSaveRef.current = true;
     setRenaming(false);
   };
   const handleRenameKeyDown = (e: React.KeyboardEvent) => {
+    e.stopPropagation();
     if (e.key === 'Enter') {
+      e.preventDefault();
       saveRename();
       return;
     }
     if (e.key === 'Escape') {
-      setRenaming(false);
+      e.preventDefault();
+      cancelRename();
     }
+  };
+  const handleRenameBlur = () => {
+    if (skipBlurSaveRef.current) {
+      skipBlurSaveRef.current = false;
+      return;
+    }
+    saveRename();
+  };
+  const stopRenamePointer = (e: React.SyntheticEvent) => {
+    e.stopPropagation();
   };
 
   const baseName = removeExt(fileName);
@@ -305,15 +325,22 @@ export const EcoreFileBox: React.FC<NodeProps<EcoreFileBoxData>> = ({
           {renaming ? (
             <input
               autoFocus
+              className="nodrag nopan"
               value={renameVal}
               onChange={e => setRenameVal(e.target.value)}
               onKeyDown={handleRenameKeyDown}
-              onBlur={saveRename}
-              onClick={e => e.stopPropagation()}
+              onKeyUp={stopRenamePointer}
+              onBlur={handleRenameBlur}
+              onClick={stopRenamePointer}
+              onDoubleClick={stopRenamePointer}
+              onMouseDown={stopRenamePointer}
+              onPointerDown={stopRenamePointer}
+              aria-label="Rename metamodel"
               style={{
                 width: 110, textAlign: 'center', fontSize: 12, fontWeight: 700,
                 border: '1.5px solid rgba(0,0,0,0.3)', borderRadius: 6,
                 background: 'rgba(255,255,255,0.7)', padding: '2px 6px', outline: 'none',
+                userSelect: 'text',
               }}
             />
           ) : (

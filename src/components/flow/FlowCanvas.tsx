@@ -63,6 +63,7 @@ import {
   getNodeDragFlags,
   isReadOnlyBlockedEdgeChange,
   isReadOnlyBlockedNodeChange,
+  renameEcoreFileNode,
   shouldCloseDetailOnBoxDrag,
   syncBboxDraggingIds,
 } from './flowCanvasNodeChangeUtils';
@@ -234,6 +235,35 @@ interface FlowCanvasProps {
   onSaveChanges?: () => void;
   /** When true, canvas is view-only (no edits, drag, connect, or delete). */
   readOnly?: boolean;
+}
+
+function keywordsFromEcoreNodeData(data: { keywords?: unknown } | undefined): string[] {
+  const raw = data?.keywords;
+  if (Array.isArray(raw)) {
+    return raw.filter((k): k is string => typeof k === 'string' && k.trim().length > 0);
+  }
+  if (typeof raw === 'string') {
+    return raw.split(/[,;]+/).map(s => s.trim()).filter(Boolean);
+  }
+  return [];
+}
+
+function persistEcoreFileRename(node: Node | undefined, newFileName: string): void {
+  if (!node) return;
+  const metaModelId = node.data?.metaModelId;
+  if (metaModelId == null) return;
+  const name = newFileName.replace(/\.ecore$/i, '').trim();
+  if (!name) return;
+  void apiService.updateMetaModel(String(metaModelId), {
+    name,
+    description: typeof node.data?.description === 'string' ? node.data.description : '',
+    domain: typeof node.data?.domain === 'string' ? node.data.domain : '',
+    keyword: keywordsFromEcoreNodeData(node.data),
+    ecoreFileId: Number(node.data?.ecoreFileId) || 0,
+    genModelFileId: Number(node.data?.genModelFileId) || 0,
+  }).catch((err) => {
+    console.error('Failed to rename meta model:', err);
+  });
 }
 
 /**
@@ -1104,6 +1134,14 @@ export const FlowCanvas = forwardRef<FlowCanvasHandle, FlowCanvasProps>(
       }
     }, [nodes, onEcoreFileSelect, addReactionMode, reactionSourceId, getColorForPair, commitReactionEdge, onReactionModeEnd, activeCanvasMode, onConstraintNodeFilter, constraintFilterNodeId, readOnly]);
 
+    const handleEcoreFileRename = useCallback((id: string, newFileName: string) => {
+      if (readOnly) return;
+      const node = nodesRef.current.find(n => n.id === id);
+      setNodes(current => renameEcoreFileNode(current, id, newFileName));
+      persistEcoreFileRename(node, newFileName);
+      onEcoreFileRename?.(id, newFileName);
+    }, [readOnly, setNodes, onEcoreFileRename]);
+
     // Clear reaction source when mode is toggled off
     useEffect(() => {
       if (!addReactionMode) setReactionSourceId(null);
@@ -1233,7 +1271,7 @@ export const FlowCanvas = forwardRef<FlowCanvasHandle, FlowCanvasProps>(
           onSelect: handleEcoreFileSelect,
           onDelete: onEcoreFileDelete,
           onRequestDelete: handleRequestDelete,
-          onRename: onEcoreFileRename,
+          onRename: handleEcoreFileRename,
           onShowDetails: handleShowDetails,
           isExpanded: false,
         },
@@ -1283,7 +1321,7 @@ export const FlowCanvas = forwardRef<FlowCanvasHandle, FlowCanvasProps>(
           });
         }
       }
-    }, [addNode, handleEcoreFileExpand, handleEcoreFileSelect, onEcoreFileSelect, onEcoreFileDelete, onEcoreFileRename, handleRequestDelete, handleShowDetails, readOnly, addReactionMode, setNodes, setEdges]);
+    }, [addNode, handleEcoreFileExpand, handleEcoreFileSelect, onEcoreFileSelect, onEcoreFileDelete, handleEcoreFileRename, handleRequestDelete, handleShowDetails, readOnly, addReactionMode, setNodes, setEdges]);
 
     // ── Edge hygiene ──────────────────────────────────────────────────────────
 
@@ -1401,7 +1439,7 @@ export const FlowCanvas = forwardRef<FlowCanvasHandle, FlowCanvasProps>(
           handleEcoreFileSelect,
           onEcoreFileDelete,
           handleRequestDelete,
-          onEcoreFileRename,
+          onEcoreFileRename: handleEcoreFileRename,
           handleShowDetails,
           handleConnectionStart: readOnly ? undefined : handleConnectionStart,
         });

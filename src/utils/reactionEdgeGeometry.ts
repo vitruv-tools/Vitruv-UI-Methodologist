@@ -158,6 +158,19 @@ export function insetLineEndpoints(
   };
 }
 
+/** Pull the segment end back so a triangular arrow can sit on the tip without the stroke overshooting. */
+export function shortenSegmentEnd(start: Point, end: Point, amount: number): Point {
+  const dx = end.x - start.x;
+  const dy = end.y - start.y;
+  const len = Math.max(Math.hypot(dx, dy), 0.0001);
+  const trimmed = Math.min(amount, Math.max(0, len / 2));
+  return { x: end.x - (dx / len) * trimmed, y: end.y - (dy / len) * trimmed };
+}
+
+export function reactionArrowAngleDeg(from: Point, to: Point): number {
+  return Math.atan2(to.y - from.y, to.x - from.x) * (180 / Math.PI);
+}
+
 function ghostBoxSize(node: ReactionNodeBounds): { w: number; h: number } {
   return {
     w: node.width > 0 ? node.width : GHOST_NODE_SIZE,
@@ -252,16 +265,12 @@ function snapGhostChordEnds(
 }
 
 function finishFineReactionChord(p1: Point, p2: Point): FineReactionChord {
-  const dx = p2.x - p1.x;
-  const dy = p2.y - p1.y;
-  const len = Math.max(Math.hypot(dx, dy), 0.0001);
-  const arrowLen = Math.min(FINE_REACTION_ARROW_LENGTH, Math.max(0, len / 2));
   return {
     p1,
     p2,
     drawP1: p1,
-    drawP2: { x: p2.x - (dx / len) * arrowLen, y: p2.y - (dy / len) * arrowLen },
-    arrowAngle: Math.atan2(dy, dx) * (180 / Math.PI),
+    drawP2: shortenSegmentEnd(p1, p2, FINE_REACTION_ARROW_LENGTH),
+    arrowAngle: reactionArrowAngleDeg(p1, p2),
   };
 }
 

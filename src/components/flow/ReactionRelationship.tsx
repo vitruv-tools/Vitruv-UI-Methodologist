@@ -2,10 +2,13 @@ import React, { useState, useCallback, useEffect, useMemo } from 'react';
 import { EdgeLabelRenderer, EdgeProps, Position, useReactFlow, useStore } from 'reactflow';
 import {
   EOBJECT_DEFAULT_WIDTH,
+  FINE_REACTION_ARROW_LENGTH,
   FINE_REACTION_SEPARATION,
   GHOST_NODE_SIZE,
   fineReactionPathD,
   layoutFineReactionChord,
+  reactionArrowAngleDeg,
+  shortenSegmentEnd,
 } from '../../utils/reactionEdgeGeometry';
 
 interface ReactionRelationshipData {
@@ -217,32 +220,35 @@ export function ReactionRelationship({
 
     if (data?.routingStyle === 'orthogonal' && !useStraightLine) {
       const isSourceHorizontal = sourcePosition === Position.Right || sourcePosition === Position.Left;
+      const tip = { x: actualTargetX, y: actualTargetY };
+      const lastStart = isSourceHorizontal
+        ? { x: centerX, y: actualTargetY }
+        : { x: actualTargetX, y: centerY };
+      const lineEnd = shortenSegmentEnd(lastStart, tip, FINE_REACTION_ARROW_LENGTH);
 
       const edgePath = isSourceHorizontal
-        ? `M ${actualSourceX},${actualSourceY} L ${centerX},${actualSourceY} L ${centerX},${actualTargetY} L ${actualTargetX},${actualTargetY}`
-        : `M ${actualSourceX},${actualSourceY} L ${actualSourceX},${centerY} L ${actualTargetX},${centerY} L ${actualTargetX},${actualTargetY}`;
+        ? `M ${actualSourceX},${actualSourceY} L ${centerX},${actualSourceY} L ${centerX},${actualTargetY} L ${lineEnd.x},${lineEnd.y}`
+        : `M ${actualSourceX},${actualSourceY} L ${actualSourceX},${centerY} L ${actualTargetX},${centerY} L ${lineEnd.x},${lineEnd.y}`;
 
       const segments: PathSegment[] = isSourceHorizontal
         ? [
             { start: { x: actualSourceX, y: actualSourceY }, end: { x: centerX, y: actualSourceY }, isHorizontal: true, canDrag: false },
             { start: { x: centerX, y: actualSourceY }, end: { x: centerX, y: actualTargetY }, isHorizontal: false, canDrag: true },
-            { start: { x: centerX, y: actualTargetY }, end: { x: actualTargetX, y: actualTargetY }, isHorizontal: true, canDrag: false }
+            { start: { x: lastStart.x, y: lastStart.y }, end: lineEnd, isHorizontal: true, canDrag: false }
           ]
         : [
             { start: { x: actualSourceX, y: actualSourceY }, end: { x: actualSourceX, y: centerY }, isHorizontal: false, canDrag: false },
             { start: { x: actualSourceX, y: centerY }, end: { x: actualTargetX, y: centerY }, isHorizontal: true, canDrag: true },
-            { start: { x: actualTargetX, y: centerY }, end: { x: actualTargetX, y: actualTargetY }, isHorizontal: false, canDrag: false }
+            { start: { x: lastStart.x, y: lastStart.y }, end: lineEnd, isHorizontal: false, canDrag: false }
           ];
-
-      const arrowAngles = { [Position.Top]: 90, [Position.Bottom]: -90, [Position.Left]: 0, [Position.Right]: 180 };
 
       return {
         edgePath,
         labelX: centerX,
         labelY: centerY,
-        arrowX: actualTargetX,
-        arrowY: actualTargetY,
-        arrowAngle: arrowAngles[targetPosition] ?? 0,
+        arrowX: tip.x,
+        arrowY: tip.y,
+        arrowAngle: reactionArrowAngleDeg(lastStart, tip),
         controlPoint: { x: centerX, y: centerY },
         segments,
         overlayArrow: false,
@@ -251,13 +257,16 @@ export function ReactionRelationship({
     }
 
     // Use straight line when aligned or routing style is 'curved'
+    const tip = { x: actualTargetX, y: actualTargetY };
+    const start = { x: actualSourceX, y: actualSourceY };
+    const lineEnd = shortenSegmentEnd(start, tip, FINE_REACTION_ARROW_LENGTH);
     return {
-      edgePath: `M ${actualSourceX},${actualSourceY} L ${actualTargetX},${actualTargetY}`,
+      edgePath: `M ${actualSourceX},${actualSourceY} L ${lineEnd.x},${lineEnd.y}`,
       labelX: (actualSourceX + actualTargetX) / 2,
       labelY: (actualSourceY + actualTargetY) / 2,
-      arrowX: actualTargetX,
-      arrowY: actualTargetY,
-      arrowAngle: Math.atan2(dy, dx) * (180 / Math.PI),
+      arrowX: tip.x,
+      arrowY: tip.y,
+      arrowAngle: reactionArrowAngleDeg(start, tip),
       controlPoint: null,
       segments: [],
       overlayArrow: false,
@@ -290,7 +299,6 @@ export function ReactionRelationship({
     data?.customControlPoint,
     tempControlPoint,
     sourcePosition,
-    targetPosition,
   ]);
 
   const { edgePath, labelX, labelY, arrowX, arrowY, arrowAngle, controlPoint, segments, overlayArrow, routing } = pathData;

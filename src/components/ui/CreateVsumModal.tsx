@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import ReactDOM from 'react-dom';
 import { apiService } from '../../services/api';
 import { useToast } from './ToastProvider';
+import { extractApiErrorMessage } from '../../utils/apiErrorMessage';
 import { useModalBodyLock, modalBackdropStyle, modalDialogShellStyle } from './modalUtils';
 
 interface CreateVsumModalProps {
@@ -101,7 +102,7 @@ export const CreateVsumModal: React.FC<CreateVsumModalProps> = ({ isOpen, onClos
       setDescription('');
       onClose();
     } catch (e) {
-      const msg = e instanceof Error ? e.message : 'Failed to create project.';
+      const msg = extractApiErrorMessage(e, 'Failed to create project.');
       setError(msg);
       showError(msg);
     } finally {
