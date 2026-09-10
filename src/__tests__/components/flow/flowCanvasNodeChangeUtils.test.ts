@@ -6,6 +6,7 @@ import {
   getNodeDragFlags,
   isReadOnlyBlockedEdgeChange,
   isReadOnlyBlockedNodeChange,
+  renameEcoreFileNode,
   syncBboxDraggingIds,
 } from '../../../components/flow/flowCanvasNodeChangeUtils';
 
@@ -149,5 +150,24 @@ describe('clearUmlCustomControlPoints', () => {
     const [uml, reaction] = clearUmlCustomControlPoints(edges);
     expect(uml.data?.customControlPoint).toBeUndefined();
     expect(reaction.data?.customControlPoint).toEqual({ x: 1, y: 2 });
+  });
+});
+
+describe('renameEcoreFileNode', () => {
+  const nodes = [
+    { id: 'ecore-1', type: 'ecoreFile', position: { x: 0, y: 0 }, data: { fileName: 'Old.ecore' } },
+    { id: 'other', type: 'editable', position: { x: 1, y: 1 }, data: { label: 'Class' } },
+  ] as Node[];
+
+  it('updates the matching ecore file name and keeps the .ecore suffix', () => {
+    const [renamed] = renameEcoreFileNode(nodes, 'ecore-1', 'New Name');
+    expect(renamed.data.fileName).toBe('New Name.ecore');
+    expect(renameEcoreFileNode(nodes, 'ecore-1', 'New Name.ecore')[0].data.fileName).toBe('New Name.ecore');
+  });
+
+  it('leaves nodes unchanged for a blank name or a missing id', () => {
+    expect(renameEcoreFileNode(nodes, 'ecore-1', '   ')).toBe(nodes);
+    expect(renameEcoreFileNode(nodes, 'missing', 'New')[1].data.label).toBe('Class');
+    expect(renameEcoreFileNode(nodes, 'missing', 'New')[0].data.fileName).toBe('Old.ecore');
   });
 });

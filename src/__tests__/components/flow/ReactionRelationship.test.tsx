@@ -106,5 +106,57 @@ describe('ReactionRelationship', () => {
     expect(d).not.toMatch(/L [\d.-]+,[\d.-]+ L [\d.-]+,[\d.-]+ L /);
     expect(screen.getByTestId('edge-fg-arrow')).toBeInTheDocument();
   });
+
+  it('stops a straight modeling reaction at the arrow base so the stroke does not overshoot the tip', () => {
+    const { container } = render(
+      <svg>
+        <ReactionRelationship
+          id="edge-straight"
+          source="s1"
+          target="t1"
+          sourceX={0}
+          sourceY={0}
+          targetX={100}
+          targetY={0}
+          sourcePosition={'right' as any}
+          targetPosition={'left' as any}
+          data={{ label: 'Reaction' }}
+          selected={false}
+          style={{ stroke: '#3b82f6', strokeWidth: 2 }}
+        />
+      </svg>,
+    );
+
+    const path = container.querySelector('path#edge-straight');
+    expect(path).toHaveAttribute('data-routing', 'straight');
+    expect(path?.getAttribute('d')).toBe('M 0,0 L 90,0');
+  });
+
+  it('stops an orthogonal modeling reaction on the last segment, not past the arrow tip', () => {
+    const { container } = render(
+      <svg>
+        <ReactionRelationship
+          id="edge-ortho"
+          source="s1"
+          target="t1"
+          sourceX={0}
+          sourceY={0}
+          targetX={100}
+          targetY={80}
+          sourcePosition={'right' as any}
+          targetPosition={'left' as any}
+          data={{ routingStyle: 'orthogonal' }}
+          selected={false}
+          style={{ stroke: '#3b82f6', strokeWidth: 2 }}
+        />
+      </svg>,
+    );
+
+    const path = container.querySelector('path#edge-ortho');
+    expect(path).toHaveAttribute('data-routing', 'orthogonal');
+    const d = path?.getAttribute('d') ?? '';
+    expect(d).toMatch(/L 90,80$/);
+    expect(d).not.toMatch(/L 100,80$/);
+  });
 });
 

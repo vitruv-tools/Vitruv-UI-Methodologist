@@ -223,3 +223,17 @@ export function clearUmlCustomControlPoints(edges: Edge[]): Edge[] {
     return { ...edge, data: { ...edge.data, customControlPoint: undefined } };
   });
 }
+
+export function normalizeEcoreFileName(name: string): string | null {
+  const trimmed = name.replace(/\.ecore$/i, '').trim();
+  return trimmed ? `${trimmed}.ecore` : null;
+}
+
+export function renameEcoreFileNode(nodes: Node[], id: string, newFileName: string): Node[] {
+  const nextFileName = normalizeEcoreFileName(newFileName);
+  if (!nextFileName) return nodes;
+  return nodes.map((node) => {
+    if (node.id !== id || node.type !== 'ecoreFile') return node;
+    return { ...node, data: { ...node.data, fileName: nextFileName } };
+  });
+}

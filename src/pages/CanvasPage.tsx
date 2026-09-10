@@ -22,6 +22,7 @@ import {
   type CanvasPopupNotificationType,
 } from '../components/canvas/CanvasPopupNotification';
 import { CanvasProjectControls } from '../components/canvas/CanvasProjectControls';
+import { extractApiErrorMessage } from '../utils/apiErrorMessage';
 import { CanvasSidebarToolbar } from '../components/canvas/CanvasSidebarToolbar';
 import { CanvasProjectAccessControls } from '../components/canvas/CanvasProjectAccessControls';
 import { CanvasConstraintsOverlay } from '../components/canvas/CanvasConstraintsOverlay';
@@ -369,11 +370,50 @@ export const CanvasPage: React.FC = () => {
   const [downloadingArtifact, setDownloadingArtifact] = useState(false);
   const [downloadingBundle, setDownloadingBundle] = useState(false);
   const [savingChanges, setSavingChanges] = useState(false);
-  const [popup, setPopup] = useState<{ message: string; type: CanvasPopupNotificationType } | null>(null);
-  const notifyUmlPanelLoadError = useCallback((message: CanvasUmlPanelLoadErrorMessage) => {
-    setPopup({ message, type: 'error' });
-    setTimeout(() => setPopup(null), 4000);
+  const [popup, setPopup] = useState<{
+    message: string;
+    type: CanvasPopupNotificationType;
+    details?: string;
+  } | null>(null);
+  const popupTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const dismissPopup = useCallback(() => {
+    if (popupTimerRef.current) {
+      globalThis.clearTimeout(popupTimerRef.current);
+      popupTimerRef.current = null;
+    }
+    setPopup(null);
   }, []);
+
+  const showPopup = useCallback((
+    message: string,
+    type: CanvasPopupNotificationType,
+    details?: string,
+  ) => {
+    if (popupTimerRef.current) {
+      globalThis.clearTimeout(popupTimerRef.current);
+      popupTimerRef.current = null;
+    }
+    setPopup({ message, type, details });
+    if (type === 'error') return;
+    const ms = type === 'success' ? 4000 : 5000;
+    popupTimerRef.current = globalThis.setTimeout(() => {
+      popupTimerRef.current = null;
+      setPopup(null);
+    }, ms);
+  }, []);
+
+  const showPopupError = useCallback((error: unknown, fallback: string) => {
+    showPopup(extractApiErrorMessage(error, fallback), 'error');
+  }, [showPopup]);
+
+  useEffect(() => () => {
+    if (popupTimerRef.current) globalThis.clearTimeout(popupTimerRef.current);
+  }, []);
+
+  const notifyUmlPanelLoadError = useCallback((message: CanvasUmlPanelLoadErrorMessage) => {
+    showPopup(message, 'error');
+  }, [showPopup]);
 
   const [openTabs, setOpenTabs] = useState<OpenCanvasTab[]>([]);
   const [activeInstanceId, setActiveInstanceId] = useState<string | null>(null);
@@ -536,14 +576,11 @@ export const CanvasPage: React.FC = () => {
       await apiService.removeVsumMember(vsumUserId);
       globalThis.dispatchEvent(new CustomEvent('vitruv.refreshVsums'));
       await refreshProjectMembers();
-      setPopup({ message: 'Access removed.', type: 'success' });
-      setTimeout(() => setPopup(null), 3000);
+      showPopup('Access removed.', 'success');
     } catch (e: unknown) {
-      const message = e instanceof Error ? e.message : 'Failed to remove access';
-      setPopup({ message, type: 'error' });
-      setTimeout(() => setPopup(null), 4000);
+      showPopupError(e, 'Failed to remove access');
     }
-  }, [refreshProjectMembers]);
+  }, [refreshProjectMembers, showPopup, showPopupError]);
 
   useEffect(() => {
     if (!activeProjectId) return;
@@ -1018,7 +1055,7 @@ export const CanvasPage: React.FC = () => {
     const handleAccessRevoked = () => {
       clearStoredProjectAccess(activeProjectId);
       globalThis.dispatchEvent(new CustomEvent('vitruv.refreshVsums'));
-      setPopup({ message: 'You no longer have access to this project.', type: 'error' });
+      showPopup('You no longer have access to this project.', 'error');
       navigate('/');
     };
 
@@ -1056,7 +1093,7 @@ export const CanvasPage: React.FC = () => {
       globalThis.clearInterval(timer);
       document.removeEventListener('visibilitychange', onVisible);
     };
-  }, [isViewOnly, activeProjectId, activeInstanceId, loadVsum, navigate]);
+  }, [isViewOnly, activeProjectId, activeInstanceId, loadVsum, navigate, showPopup]);
 
   // Switch tabs: capture leaving tab, restore or load active tab
   useEffect(() => {
@@ -1239,71 +1276,56 @@ export const CanvasPage: React.FC = () => {
   const handleCheckBuild = useCallback(async () => {
     if (isViewOnly || !activeProjectId) return;
     setCheckingBuild(true);
-    setPopup({ message: 'Checking whether this VSUM can be built…', type: 'info' });
+    showPopup('Checking whether this VSUM can be built…', 'info');
     try {
       const res = await apiService.buildVsum(activeProjectId);
       const msg = (res as any)?.message || 'This VSUM can be built successfully.';
-      setPopup({ message: msg, type: 'success' });
-    } catch (e: any) {
-      const data = e?.response?.data;
-      const detail = (typeof data?.message === 'string' && data.message) ||
-        (typeof data === 'string' && data) ||
-        e?.message || 'Build check failed.';
-      setPopup({ message: detail, type: 'error' });
+      showPopup(msg, 'success');
+    } catch (e: unknown) {
+      showPopupError(e, 'Build check failed.');
     } finally {
       setCheckingBuild(false);
-      setTimeout(() => setPopup(null), 5000);
     }
-  }, [activeProjectId, isViewOnly]);
+  }, [activeProjectId, isViewOnly, showPopup, showPopupError]);
 
   // ── Download artifact ─────────────────────────────────────────────────────
 
   const handleDownloadArtifact = useCallback(async () => {
     if (!activeProjectId) return;
     setDownloadingArtifact(true);
-    setPopup({ message: 'Downloading artifact…', type: 'info' });
+    showPopup('Downloading artifact…', 'info');
     try {
       const blob = await apiService.downloadVsumArtifact(activeProjectId);
       downloadBlobAsFile(blob, `vsum-${activeProjectId}-artifact.zip`);
-      setPopup({ message: 'Artifact downloaded successfully!', type: 'success' });
-    } catch (e: any) {
-      const data = e?.response?.data;
-      const detail = (typeof data?.message === 'string' && data.message) ||
-        (typeof data === 'string' && data) ||
-        e?.message || 'Download failed.';
-      setPopup({ message: detail, type: 'error' });
+      showPopup('Artifact downloaded successfully!', 'success');
+    } catch (e: unknown) {
+      showPopupError(e, 'Download failed.');
     } finally {
       setDownloadingArtifact(false);
-      setTimeout(() => setPopup(null), 5000);
     }
-  }, [activeProjectId]);
+  }, [activeProjectId, showPopup, showPopupError]);
 
   const handleDownloadBundle = useCallback(async () => {
     if (!activeProjectId) return;
     setDownloadingBundle(true);
-    setPopup({ message: 'Downloading easy deploy package…', type: 'info' });
+    showPopup('Downloading easy deploy package…', 'info');
     try {
       const blob = await apiService.downloadVsumBundle(activeProjectId);
       downloadBlobAsFile(blob, `vsum-${activeProjectId}-easy-deploy.zip`);
-      setPopup({ message: 'Easy deploy package downloaded successfully!', type: 'success' });
-    } catch (e: any) {
-      const data = e?.response?.data;
-      const detail = (typeof data?.message === 'string' && data.message) ||
-        (typeof data === 'string' && data) ||
-        e?.message || 'Download failed.';
-      setPopup({ message: detail, type: 'error' });
+      showPopup('Easy deploy package downloaded successfully!', 'success');
+    } catch (e: unknown) {
+      showPopupError(e, 'Download failed.');
     } finally {
       setDownloadingBundle(false);
-      setTimeout(() => setPopup(null), 5000);
     }
-  }, [activeProjectId]);
+  }, [activeProjectId, showPopup, showPopupError]);
 
   // ── Save changes ──────────────────────────────────────────────────────────
 
   const handleSaveChanges = useCallback(async () => {
     if (isViewOnly || !activeProjectId) return;
     setSavingChanges(true);
-    setPopup({ message: 'Saving changes…', type: 'info' });
+    showPopup('Saving changes…', 'info');
     try {
       const snapshot: WorkspaceSnapshot =
         flowCanvasRef.current?.getWorkspaceSnapshot?.() ?? emptyWorkspaceSnapshot();
@@ -1346,18 +1368,13 @@ export const CanvasPage: React.FC = () => {
           });
         }
       }
-      setPopup({ message, type: 'success' as const });
-    } catch (e: any) {
-      const data = e?.response?.data;
-      const detail = (typeof data?.message === 'string' && data.message) ||
-        (typeof data === 'string' && data) ||
-        e?.message || 'Save failed.';
-      setPopup({ message: detail, type: 'error' });
+      showPopup(message, 'success');
+    } catch (e: unknown) {
+      showPopupError(e, 'Save failed.');
     } finally {
       setSavingChanges(false);
-      setTimeout(() => setPopup(null), 5000);
     }
-  }, [activeProjectId, activeInstanceId, setBaselineForInstance, isViewOnly]);
+  }, [activeProjectId, activeInstanceId, setBaselineForInstance, isViewOnly, showPopup, showPopupError]);
 
   const navigateHome = useCallback(() => navigate('/'), [navigate]);
 
@@ -1366,13 +1383,12 @@ export const CanvasPage: React.FC = () => {
   const handleOpenReactionEditor = useCallback(() => {
     const opened = flowCanvasRef.current?.openSelectedReactionEditor?.();
     if (!opened) {
-      setPopup({
-        message: 'Select a reaction connection on the canvas first, or double-click a connection line.',
-        type: 'info',
-      });
-      setTimeout(() => setPopup(null), 4000);
+      showPopup(
+        'Select a reaction connection on the canvas first, or double-click a connection line.',
+        'info',
+      );
     }
-  }, []);
+  }, [showPopup]);
   const handleHistoryChange = useCallback((undoAvailable: boolean, redoAvailable: boolean) => {
     setCanUndo(undoAvailable);
     setCanRedo(redoAvailable);
@@ -1395,16 +1411,14 @@ export const CanvasPage: React.FC = () => {
     const ok = await saveTabInstance(closeConfirmInstanceId);
     setCloseConfirmSaving(false);
     if (!ok) {
-      setPopup({ message: 'Failed to save changes.', type: 'error' });
-      setTimeout(() => setPopup(null), 4000);
+      showPopup('Failed to save changes.', 'error');
       return;
     }
     const instanceId = closeConfirmInstanceId;
     setCloseConfirmInstanceId(null);
     performCloseTab(instanceId);
-    setPopup({ message: 'Changes saved.', type: 'success' });
-    setTimeout(() => setPopup(null), 3000);
-  }, [closeConfirmInstanceId, saveTabInstance, performCloseTab, isViewOnly]);
+    showPopup('Changes saved.', 'success');
+  }, [closeConfirmInstanceId, saveTabInstance, performCloseTab, isViewOnly, showPopup]);
 
   const handleCloseWithoutSaving = useCallback(() => {
     if (!closeConfirmInstanceId) return;
@@ -1612,7 +1626,14 @@ export const CanvasPage: React.FC = () => {
       )}
 
       {/* Popup notification */}
-      {popup && <CanvasPopupNotification message={popup.message} type={popup.type} />}
+      {popup && (
+        <CanvasPopupNotification
+          message={popup.message}
+          type={popup.type}
+          details={popup.details}
+          onClose={dismissPopup}
+        />
+      )}
     </div>
   );
 };

@@ -3,11 +3,14 @@ import {
   applyPerpendicularOffset,
   EOBJECT_ATTR_ROW_HEIGHT,
   EOBJECT_HEADER_HEIGHT,
+  FINE_REACTION_ARROW_LENGTH,
   getBorderPoint,
   indexFineReactionParallels,
   layoutFineReactionChord,
   parseReactionHandle,
+  reactionArrowAngleDeg,
   reactionRowRect,
+  shortenSegmentEnd,
 } from '../../utils/reactionEdgeGeometry';
 
 const sourceNode = {
@@ -151,6 +154,26 @@ describe('applyPerpendicularOffset', () => {
     const p1 = { x: 0, y: 0 };
     const p2 = { x: 10, y: 0 };
     expect(applyPerpendicularOffset(p1, p2, 0, 1)).toEqual({ p1, p2 });
+  });
+});
+
+describe('shortenSegmentEnd', () => {
+  it('stops the stroke at the arrow base instead of the tip', () => {
+    expect(shortenSegmentEnd({ x: 0, y: 0 }, { x: 100, y: 0 }, FINE_REACTION_ARROW_LENGTH))
+      .toEqual({ x: 90, y: 0 });
+  });
+
+  it('does not reverse a very short segment', () => {
+    const end = shortenSegmentEnd({ x: 0, y: 0 }, { x: 6, y: 0 }, FINE_REACTION_ARROW_LENGTH);
+    expect(end.x).toBe(3);
+    expect(end.y).toBe(0);
+  });
+});
+
+describe('reactionArrowAngleDeg', () => {
+  it('points along the last segment, toward the target', () => {
+    expect(reactionArrowAngleDeg({ x: 0, y: 0 }, { x: 10, y: 0 })).toBe(0);
+    expect(reactionArrowAngleDeg({ x: 10, y: 0 }, { x: 0, y: 0 })).toBe(180);
   });
 });
 
