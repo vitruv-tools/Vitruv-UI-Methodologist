@@ -107,6 +107,7 @@ jest.mock('../../../services/api', () => ({
 describe('FlowCanvas', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    localStorage.clear();
   });
 
   it('renders ReactFlow and background', () => {

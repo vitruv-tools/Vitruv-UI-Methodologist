@@ -10,7 +10,15 @@ import {
   reactionArrowAngleDeg,
   shortenSegmentEnd,
 } from '../../utils/reactionEdgeGeometry';
-
+import {
+  buildReactionEndpoint,
+  ecoreFileRect,
+  isRoutableNode,
+  nodeWorldRect,
+  pickSideFromPoint,
+  polylinePathD,
+  routeOrthogonalAStar,
+} from './flowCanvasAStarRouter';
 interface ReactionRelationshipData {
   label?: string;
   code?: string;
@@ -33,11 +41,11 @@ interface ReactionRelationshipData {
   onHandleChange?: (edgeId: string, sourceHandle: string, targetHandle: string) => void;
   onReorderRequest?: (edgeId: string, controlPoint: { x: number; y: number }) => void;
   readOnly?: boolean;
+  routeWaypoints?: Array<{ x: number; y: number }>;
 }
 
 type HandlePosition = 'top' | 'bottom' | 'left' | 'right';
 
-const NODE_DIMENSIONS = { width: 220, height: 180 };
 const EDGE_SPACING = 25;
 
 interface PathSegment {
@@ -74,7 +82,21 @@ export function ReactionRelationship({
   const live = useStore((store) => {
     const sourceNode = store.nodeInternals.get(source);
     const targetNode = store.nodeInternals.get(target);
+    const obstacles: Array<{ x: number; y: number; width: number; height: number }> = [];
+    store.nodeInternals.forEach((node) => {
+      if (node.id === source || node.id === target || !isRoutableNode(node)) return;
+      const rect = nodeWorldRect(node);
+      if (rect) obstacles.push(rect);
+    });
+    const existing: Array<Array<{ x: number; y: number }>> = [];
+    for (const edge of store.edges ?? []) {
+      if (edge.id === id) continue;
+      const points = edge.data?.routeWaypoints;
+      if (Array.isArray(points) && points.length > 1) existing.push(points);
+    }
     return {
+      srcNode: sourceNode ?? null,
+      tgtNode: targetNode ?? null,
       isSourceSelected: sourceNode?.selected || false,
       isTargetSelected: targetNode?.selected || false,
       srcAbsX: sourceNode?.positionAbsolute?.x ?? sourceNode?.position?.x ?? sourceX,
@@ -87,6 +109,8 @@ export function ReactionRelationship({
         : (sourceNode?.height ?? undefined),
       srcGhost: sourceNode?.type === 'ghost',
       srcAttrs: sourceNode?.data?.attributes,
+      srcBox: sourceNode && isRoutableNode(sourceNode) ? nodeWorldRect(sourceNode) : null,
+      srcEcore: sourceNode?.type === 'ecoreFile' ? ecoreFileRect(sourceNode) : null,
       tgtAbsX: targetNode?.positionAbsolute?.x ?? targetNode?.position?.x ?? targetX,
       tgtAbsY: targetNode?.positionAbsolute?.y ?? targetNode?.position?.y ?? targetY,
       tgtW: targetNode?.type === 'ghost'
@@ -97,6 +121,10 @@ export function ReactionRelationship({
         : (targetNode?.height ?? undefined),
       tgtGhost: targetNode?.type === 'ghost',
       tgtAttrs: targetNode?.data?.attributes,
+      tgtBox: targetNode && isRoutableNode(targetNode) ? nodeWorldRect(targetNode) : null,
+      tgtEcore: targetNode?.type === 'ecoreFile' ? ecoreFileRect(targetNode) : null,
+      obstacles,
+      existing,
     };
   });
 
@@ -145,32 +173,76 @@ export function ReactionRelationship({
     const node = reactFlowInstance.getNode(nodeId);
     if (!node) return null;
 
-    const { width, height } = NODE_DIMENSIONS;
-    const handles = {
-      top: { x: node.position.x + width / 2, y: node.position.y },
-      bottom: { x: node.position.x + width / 2, y: node.position.y + height },
-      left: { x: node.position.x, y: node.position.y + height / 2 },
-      right: { x: node.position.x + width, y: node.position.y + height / 2 },
-    };
-
-    let closestHandle: HandlePosition = 'right';
-    let minDistance = Infinity;
-
-    (Object.keys(handles) as HandlePosition[]).forEach(handle => {
-      const handlePos = handles[handle];
-      const distance = Math.hypot(point.x - handlePos.x, point.y - handlePos.y);
-      if (distance < minDistance) {
-        minDistance = distance;
-        closestHandle = handle;
-      }
-    });
-
-    return closestHandle;
+    const box = nodeWorldRect(node) ?? ecoreFileRect(node);
+    return pickSideFromPoint(box, point);
   }, [reactFlowInstance]);
+
+  const buildOrthogonalDraw = (
+    routedPoints: Array<{ x: number; y: number }>,
+  ) => {
+    const points = routedPoints;
+    const tip = points[points.length - 1];
+    const lastStart = points[points.length - 2] ?? tip;
+    const lineEnd = shortenSegmentEnd(lastStart, tip, FINE_REACTION_ARROW_LENGTH);
+    const drawPoints = [...points.slice(0, -1), lineEnd];
+    const elbow = drawPoints[Math.floor(drawPoints.length / 2)];
+    const segments: PathSegment[] = drawPoints.slice(0, -1).map((segStart, index) => {
+      const end = drawPoints[index + 1];
+      return {
+        start: segStart,
+        end,
+        isHorizontal: Math.abs(segStart.y - end.y) < 1.5,
+        canDrag: index > 0 && index < drawPoints.length - 2,
+      };
+    });
+    return {
+      edgePath: polylinePathD(drawPoints),
+      labelX: elbow.x,
+      labelY: elbow.y,
+      arrowX: tip.x,
+      arrowY: tip.y,
+      arrowAngle: reactionArrowAngleDeg(lastStart, tip),
+      controlPoint: { x: elbow.x, y: elbow.y },
+      segments,
+      overlayArrow: false,
+      routing: 'orthogonal' as const,
+    };
+  };
 
   // Memoize path calculations
   const pathData = useMemo(() => {
     if (isFineGranular) {
+      const srcEp = live.srcNode && isRoutableNode(live.srcNode)
+        ? buildReactionEndpoint(live.srcNode, sourceHandle, 'source')
+        : null;
+      const tgtEp = live.tgtNode && isRoutableNode(live.tgtNode)
+        ? buildReactionEndpoint(live.tgtNode, targetHandle, 'target')
+        : null;
+      const fineRoute = (via?: { x: number; y: number }) => {
+        if (!srcEp || !tgtEp) return null;
+        return routeOrthogonalAStar({
+          source: srcEp.rect,
+          target: tgtEp.rect,
+          obstacles: live.obstacles,
+          existing: live.existing,
+          via,
+          cursor: via,
+          lockSourceHandle: srcEp.pin ? srcEp.lockSide : undefined,
+          lockTargetHandle: tgtEp.pin ? tgtEp.lockSide : undefined,
+          sourcePortT: srcEp.portT,
+          targetPortT: tgtEp.portT,
+          sourceAnchor: srcEp.anchor,
+          targetAnchor: tgtEp.anchor,
+        }).points;
+      };
+      const routedPoints = tempControlPoint
+        ? fineRoute(tempControlPoint)
+        : (data?.routeWaypoints && data.routeWaypoints.length > 1
+          ? data.routeWaypoints
+          : fineRoute());
+      if (routedPoints && routedPoints.length > 1) {
+        return buildOrthogonalDraw(routedPoints);
+      }
       const chord = layoutFineReactionChord({
         source: {
           x: live.srcAbsX,
@@ -210,15 +282,22 @@ export function ReactionRelationship({
 
     const centerX = tempControlPoint?.x ?? data?.customControlPoint?.x ?? (actualSourceX + actualTargetX) / 2;
     const centerY = tempControlPoint?.y ?? data?.customControlPoint?.y ?? (actualSourceY + actualTargetY) / 2;
-    const dx = actualTargetX - actualSourceX;
-    const dy = actualTargetY - actualSourceY;
 
-    // Check if nodes are well-aligned for straight line
-    const isAlignedHorizontally = Math.abs(dy) < 30; // Within 30px vertically
-    const isAlignedVertically = Math.abs(dx) < 30; // Within 30px horizontally
-    const useStraightLine = isAlignedHorizontally || isAlignedVertically;
+    if (data?.routingStyle === 'orthogonal') {
+      const routedPoints = tempControlPoint && (live.srcBox || live.srcEcore) && (live.tgtBox || live.tgtEcore)
+        ? routeOrthogonalAStar({
+          source: live.srcBox ?? live.srcEcore!,
+          target: live.tgtBox ?? live.tgtEcore!,
+          obstacles: live.obstacles,
+          existing: live.existing,
+          via: tempControlPoint,
+          cursor: tempControlPoint,
+        }).points
+        : (data.routeWaypoints && data.routeWaypoints.length > 1 ? data.routeWaypoints : null);
 
-    if (data?.routingStyle === 'orthogonal' && !useStraightLine) {
+      if (routedPoints && routedPoints.length > 1) {
+        return buildOrthogonalDraw(routedPoints);
+      }
       const isSourceHorizontal = sourcePosition === Position.Right || sourcePosition === Position.Left;
       const tip = { x: actualTargetX, y: actualTargetY };
       const lastStart = isSourceHorizontal
@@ -286,6 +365,14 @@ export function ReactionRelationship({
     live.tgtH,
     live.tgtGhost,
     live.tgtAttrs,
+    live.srcEcore,
+    live.tgtEcore,
+    live.srcBox,
+    live.tgtBox,
+    live.srcNode,
+    live.tgtNode,
+    live.obstacles,
+    live.existing,
     sourceHandle,
     targetHandle,
     data?.parallelIndex,
@@ -297,6 +384,7 @@ export function ReactionRelationship({
     actualTargetY,
     data?.routingStyle,
     data?.customControlPoint,
+    data?.routeWaypoints,
     tempControlPoint,
     sourcePosition,
   ]);

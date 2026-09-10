@@ -12,6 +12,7 @@ import { darken } from '../../../utils/metaModelColors';
 export interface CanvasMinimapProps {
   nodes: Node[];
   edges: Edge[];
+  reactionRoutes?: Map<string, { points: Array<{ x: number; y: number }> }>;
   circle?: Circle;
   viewport: { x: number; y: number; zoom: number };
   containerW: number;
@@ -26,11 +27,11 @@ export interface CanvasMinimapProps {
  * draws bounding boxes and EObject nodes with the same colors as VSUM cards.
  */
 export const CanvasMinimap: React.FC<CanvasMinimapProps> = ({
-  nodes, edges, circle, viewport, containerW, containerH, width, height,
+  nodes, edges, reactionRoutes, circle, viewport, containerW, containerH, width, height,
 }) => {
   const items = collectCanvasMinimapItems(nodes);
   const endpointIndex = buildMinimapEndpointIndex(nodes, items);
-  const edgeSegs = minimapEdgeSegments(edges, items, endpointIndex);
+  const edgeSegs = minimapEdgeSegments(nodes, edges, items, endpointIndex, reactionRoutes);
 
   const flowCX = (-viewport.x + containerW / 2) / viewport.zoom;
   const flowCY = (-viewport.y + containerH / 2) / viewport.zoom;
@@ -88,13 +89,28 @@ export const CanvasMinimap: React.FC<CanvasMinimapProps> = ({
           );
         })()}
 
-        {edgeSegs.map(seg => (
-          <line key={seg.id}
-            x1={toX(seg.x1)} y1={toY(seg.y1)}
-            x2={toX(seg.x2)} y2={toY(seg.y2)}
-            stroke="#94a3b8" strokeWidth={1.2}
-          />
-        ))}
+        {edgeSegs.map(seg => {
+          const screen = seg.points.map(p => ({ x: toX(p.x), y: toY(p.y) }));
+          const last = screen[screen.length - 1];
+          const prev = screen[screen.length - 2] ?? last;
+          const angle = Math.atan2(last.y - prev.y, last.x - prev.x) * (180 / Math.PI);
+          return (
+            <g key={seg.id}>
+              <polyline
+                data-edge={seg.id}
+                points={screen.map(p => `${p.x},${p.y}`).join(' ')}
+                fill="none"
+                stroke="#94a3b8"
+                strokeWidth={1.2}
+                strokeLinejoin="round"
+                strokeLinecap="round"
+              />
+              <g transform={`translate(${last.x}, ${last.y}) rotate(${angle})`}>
+                <polygon points="-5,-2.5 0,0 -5,2.5" fill="#94a3b8" />
+              </g>
+            </g>
+          );
+        })}
 
         {boxes.map(item => {
           const sx = toX(item.x);

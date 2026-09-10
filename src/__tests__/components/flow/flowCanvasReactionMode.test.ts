@@ -8,6 +8,8 @@ import {
   storeReactionOffsets,
   type ExpandResultEntry,
 } from '../../../components/flow/flowCanvasReactionMode';
+import { useProjectStore } from '../../../store/Project';
+import { loadVsumLayoutPosition } from '../../../utils/vsumLayoutStorage';
 
 const box = (
   id: string,
@@ -106,6 +108,11 @@ describe('storeReactionOffsets', () => {
 });
 
 describe('collapseReactionGraph', () => {
+  beforeEach(() => {
+    localStorage.clear();
+    useProjectStore.getState().setActiveId(3);
+  });
+
   it('drops expanded nodes and restores ecore files using the stored offset', () => {
     const vsum = new Map<string, { x: number; y: number }>();
     const offsets = new Map([['bbox-http://a', { dx: 5, dy: 7 }]]);
@@ -131,5 +138,6 @@ describe('collapseReactionGraph', () => {
       position: { x: 95, y: 73 },
     });
     expect(vsum.get('ecore-a')).toEqual({ x: 95, y: 73 });
+    expect(loadVsumLayoutPosition(3, { nsUri: 'http://a' })).toEqual({ x: 95, y: 73 });
   });
 });

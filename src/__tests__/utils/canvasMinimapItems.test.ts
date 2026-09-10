@@ -155,20 +155,28 @@ describe('minimap edges in reactions mode', () => {
     data: { group: 'bbox-http://b', color: '#86efac', attributes: [] },
   };
 
-  it('draws fine-granular reaction edges between EObject nodes', () => {
+  it('draws fine-granular reaction edges as orthogonal routes between EObject nodes', () => {
     const nodes = [bboxA, bboxB, eobjA, eobjB];
     const items = collectCanvasMinimapItems(nodes);
     const index = buildMinimapEndpointIndex(nodes, items);
     const edges: Edge[] = [
-      { id: 'fg-1', source: 'eobj-a', target: 'eobj-b' },
+      { id: 'fg-1', source: 'eobj-a', target: 'eobj-b', type: 'fine-granular-reaction' },
     ];
-    const segs = minimapEdgeSegments(edges, items, index);
+    const segs = minimapEdgeSegments(nodes, edges, items, index);
     expect(segs).toHaveLength(1);
-    expect(segs[0].x1).toBe(20 + 100);
-    expect(segs[0].x2).toBe(420 + 100);
+    expect(segs[0].points.length).toBeGreaterThan(1);
+    const first = segs[0].points[0];
+    const last = segs[0].points[segs[0].points.length - 1];
+    expect(first.x).toBe(20 + 200);
+    expect(last.x).toBe(420);
+    for (let i = 0; i < segs[0].points.length - 1; i++) {
+      const a = segs[0].points[i];
+      const b = segs[0].points[i + 1];
+      expect(Math.abs(a.x - b.x) < 1 || Math.abs(a.y - b.y) < 1).toBe(true);
+    }
   });
 
-  it('maps coarse ecoreFile reaction edges onto bounding boxes', () => {
+  it('does not draw a straight bbox-to-bbox arrow for a hidden coarse reaction', () => {
     const nodes = [
       bboxA,
       bboxB,
@@ -180,13 +188,88 @@ describe('minimap edges in reactions mode', () => {
     const items = collectCanvasMinimapItems(nodes);
     const index = buildMinimapEndpointIndex(nodes, items);
     const edges: Edge[] = [
-      { id: 'coarse-1', source: 'ecore-a', target: 'ecore-b' },
+      { id: 'coarse-1', source: 'ecore-a', target: 'ecore-b', type: 'reactions' },
     ];
-    const segs = minimapEdgeSegments(edges, items, index);
-    const boxA = items.find(i => i.id === 'bbox-http://a')!;
-    const boxB = items.find(i => i.id === 'bbox-http://b')!;
+    const segs = minimapEdgeSegments(nodes, edges, items, index);
+    expect(segs).toHaveLength(0);
+  });
+
+  it('reuses the canvas waypoints when they are provided', () => {
+    const nodes = [bboxA, bboxB, eobjA, eobjB];
+    const items = collectCanvasMinimapItems(nodes);
+    const index = buildMinimapEndpointIndex(nodes, items);
+    const canvasPoints = [
+      { x: 1, y: 2 },
+      { x: 1, y: 40 },
+      { x: 80, y: 40 },
+    ];
+    const edges: Edge[] = [
+      { id: 'fg-1', source: 'eobj-a', target: 'eobj-b', type: 'fine-granular-reaction' },
+    ];
+    const segs = minimapEdgeSegments(
+      nodes,
+      edges,
+      items,
+      index,
+      new Map([['fg-1', { points: canvasPoints }]]),
+    );
+    expect(segs).toEqual([{ id: 'fg-1', points: canvasPoints }]);
+  });
+
+  it('prefers the canvas edge waypoints over a conflicting route map', () => {
+    const nodes = [bboxA, bboxB, eobjA, eobjB];
+    const items = collectCanvasMinimapItems(nodes);
+    const index = buildMinimapEndpointIndex(nodes, items);
+    const drawn = [
+      { x: 9, y: 9 },
+      { x: 9, y: 50 },
+      { x: 90, y: 50 },
+    ];
+    const edges: Edge[] = [
+      {
+        id: 'fg-1',
+        source: 'eobj-a',
+        target: 'eobj-b',
+        type: 'fine-granular-reaction',
+        data: { routeWaypoints: drawn },
+      },
+    ];
+    const segs = minimapEdgeSegments(
+      nodes,
+      edges,
+      items,
+      index,
+      new Map([['fg-1', { points: [{ x: 0, y: 0 }, { x: 100, y: 0 }] }]]),
+    );
+    expect(segs).toEqual([{ id: 'fg-1', points: drawn }]);
+  });
+});
+
+describe('minimap edges in VSUM mode', () => {
+  it('draws an orthogonal route between ecoreFile cards, not a centre line', () => {
+    const a = ecoreFile('a', 'a.ecore');
+    const b = {
+      ...ecoreFile('b', 'b.ecore'),
+      position: { x: 300, y: 180 },
+    } as Node;
+    const nodes = [a, b];
+    const items = collectCanvasMinimapItems(nodes);
+    const index = buildMinimapEndpointIndex(nodes, items);
+    const edges: Edge[] = [
+      { id: 'r1', source: 'a', target: 'b', type: 'reactions' },
+    ];
+    const segs = minimapEdgeSegments(nodes, edges, items, index);
     expect(segs).toHaveLength(1);
-    expect(segs[0].x1).toBe(boxA.x + boxA.width / 2);
-    expect(segs[0].x2).toBe(boxB.x + boxB.width / 2);
+    expect(segs[0].points.length).toBeGreaterThan(2);
+    const first = segs[0].points[0];
+    const last = segs[0].points[segs[0].points.length - 1];
+    expect(first).toEqual({
+      x: a.position.x + ECORE_FILE_BOX_SIZE.width / 2,
+      y: a.position.y + ECORE_FILE_BOX_SIZE.height,
+    });
+    expect(last).toEqual({
+      x: b.position.x + ECORE_FILE_BOX_SIZE.width / 2,
+      y: b.position.y,
+    });
   });
 });

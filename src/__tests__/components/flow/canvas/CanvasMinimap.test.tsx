@@ -68,4 +68,29 @@ describe('CanvasMinimap', () => {
     expect(bbox).toHaveAttribute('fill', color);
     expect(container.querySelector('rect[data-kind="eobject"]')).toBeInTheDocument();
   });
+
+  it('draws a routed polyline for a VSUM reaction instead of a single line', () => {
+    const { container } = renderMinimap([
+      {
+        id: 'a',
+        type: 'ecoreFile',
+        position: { x: 0, y: 0 },
+        data: { fileName: 'a.ecore' },
+      } as Node,
+      {
+        id: 'b',
+        type: 'ecoreFile',
+        position: { x: 280, y: 200 },
+        data: { fileName: 'b.ecore' },
+      } as Node,
+    ], [
+      { id: 'r1', source: 'a', target: 'b', type: 'reactions' },
+    ]);
+
+    const poly = container.querySelector('polyline[data-edge="r1"]');
+    expect(poly).toBeInTheDocument();
+    expect(container.querySelector('line')).not.toBeInTheDocument();
+    const points = poly?.getAttribute('points') ?? '';
+    expect(points.split(' ').length).toBeGreaterThan(2);
+  });
 });

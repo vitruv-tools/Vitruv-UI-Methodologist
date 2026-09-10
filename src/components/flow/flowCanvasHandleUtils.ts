@@ -1,4 +1,5 @@
 import { Edge, Node } from 'reactflow';
+import { applyAStarReactionHandles } from './flowCanvasAStarRouter';
 
 /**
  * UML handles keep their `-source` / `-target` suffix; reaction handles use the
@@ -48,26 +49,26 @@ export function calculateReactionHandles(sourceNode: Node, targetNode: Node): Op
  * missing, or when the handles are already correct — so callers can map over
  * every edge and rely on reference equality to detect "nothing changed".
  */
-export function updateEdgeHandles(edge: Edge, currentNodes: Node[]): Edge {
-  if (edge.type !== 'reactions' && edge.type !== 'uml') return edge;
+export function updateEdgeHandles(edge: Edge, currentNodes: Node[], allEdges: Edge[] = []): Edge {
+  if (edge.type === 'reactions') {
+    const routed = applyAStarReactionHandles(currentNodes, [edge, ...allEdges.filter(e => e.id !== edge.id)]);
+    return routed.find(e => e.id === edge.id) ?? edge;
+  }
+  if (edge.type !== 'uml') return edge;
 
   const sourceNode = currentNodes.find(n => n.id === edge.source);
   const targetNode = currentNodes.find(n => n.id === edge.target);
   if (!sourceNode || !targetNode) return edge;
 
   const handles = calculateOptimalHandles(sourceNode, targetNode);
-  const newSourceHandle = edge.type === 'uml' ? handles.sourceHandle : cleanHandleId(handles.sourceHandle);
-  const newTargetHandle = edge.type === 'uml' ? handles.targetHandle : cleanHandleId(handles.targetHandle);
-
-  if (edge.sourceHandle === newSourceHandle && edge.targetHandle === newTargetHandle) {
+  if (edge.sourceHandle === handles.sourceHandle && edge.targetHandle === handles.targetHandle) {
     return edge;
   }
 
   return {
     ...edge,
-    sourceHandle: newSourceHandle,
-    targetHandle: newTargetHandle,
-    // Clear the custom control point — the path has to be recalculated.
+    sourceHandle: handles.sourceHandle,
+    targetHandle: handles.targetHandle,
     data: {
       ...edge.data,
       customControlPoint: undefined,
@@ -81,19 +82,11 @@ export function updateEdgeHandles(edge: Edge, currentNodes: Node[]): Edge {
  * control point, because every position changed.
  */
 export function optimizeEdgeHandles(targetNodes: Node[], allEdges: Edge[]): Edge[] {
-  return allEdges.map(edge => {
+  const routed = applyAStarReactionHandles(targetNodes, allEdges);
+  return routed.map(edge => {
     if (edge.type !== 'reactions') return edge;
-
-    const sourceNode = targetNodes.find(n => n.id === edge.source);
-    const targetNode = targetNodes.find(n => n.id === edge.target);
-    if (!sourceNode || !targetNode) return edge;
-
-    const handles = calculateReactionHandles(sourceNode, targetNode);
-
     return {
       ...edge,
-      sourceHandle: handles.sourceHandle,
-      targetHandle: handles.targetHandle,
       data: {
         ...edge.data,
         customControlPoint: undefined,

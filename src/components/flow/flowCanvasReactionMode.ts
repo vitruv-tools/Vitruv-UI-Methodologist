@@ -19,6 +19,7 @@ import {
   loadReactionLayout,
   persistReactionLayoutFromNodes,
 } from '../../utils/reactionLayoutStorage';
+import { persistVsumLayoutFromNodes } from '../../utils/vsumLayoutStorage';
 import { useProjectStore } from '../../store/Project';
 
 export type Point = { x: number; y: number };
@@ -185,6 +186,7 @@ function expandEcoreFilesIfNeeded(ctx: ReactionModeToggleContext): void {
   if (ecoreNodes.length === 0) return;
   if (ctx.nodes.some((n) => n.type === 'boundingBox')) return;
   rememberVsumPositions(ecoreNodes, ctx.vsumPositions);
+  persistVsumLayoutFromNodes(useProjectStore.getState().activeId, ecoreNodes);
   const expandResults = expandAllEcoreNodes(ecoreNodes);
   resolveExpandOverlaps(expandResults);
   storeReactionOffsets(expandResults, ctx.vsumPositions, ctx.reactionOffsets);
@@ -231,9 +233,11 @@ export function collapseReactionGraph(
 ): Node[] {
   persistReactionLayoutFromNodes(useProjectStore.getState().activeId, nds);
   const bboxPositions = collectBboxPositions(nds);
-  return nds
+  const collapsed = nds
     .filter((n) => n.type !== 'eobject' && n.type !== 'boundingBox' && n.type !== 'ghost')
     .map((n) => collapsedEcoreNode(n, bboxPositions, offsets, vsumPositions));
+  persistVsumLayoutFromNodes(useProjectStore.getState().activeId, collapsed);
+  return collapsed;
 }
 
 export function exitReactionMode(ctx: ReactionModeToggleContext): void {
