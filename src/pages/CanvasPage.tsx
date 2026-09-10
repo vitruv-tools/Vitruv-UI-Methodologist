@@ -112,6 +112,7 @@ async function dispatchWorkspaceMetaModels(metaModels: VsumMetaModelRef[]): Prom
         detail: {
           fileContent,
           fileName: `${model.name}.ecore`,
+          displayName: model.name,
           description: model.description,
           keywords: model.keyword?.join(', '),
           domain: model.domain,
@@ -1123,6 +1124,7 @@ export const CanvasPage: React.FC = () => {
         detail: {
           fileContent,
           fileName: model.name + '.ecore',
+          displayName: model.name,
           domain: model.domain,
           metaModelId: model.id,
           metaModelSourceId: model.sourceId ?? model.id,
@@ -1134,6 +1136,19 @@ export const CanvasPage: React.FC = () => {
       console.error('Failed to add model:', e);
     }
   }, [isViewOnly]);
+
+  const handleRenameProjectMetaModel = useCallback(async (model: DrawerModel, name: string) => {
+    if (!activeProjectId) throw new Error('No project is open.');
+    if (isViewOnly) throw new Error('You do not have permission to rename project meta-models.');
+    const sourceId = model.sourceId ?? model.id;
+    await apiService.renameVsumMetaModel(activeProjectId, sourceId, { name });
+    flowCanvasRef.current?.updateEcoreDisplayName?.(sourceId, name);
+    setDrawerModels(prev => prev.map(existing =>
+      (existing.sourceId ?? existing.id) === sourceId
+        ? { ...existing, name }
+        : existing,
+    ));
+  }, [activeProjectId, isViewOnly]);
 
   const handleDeleteModel = useCallback(async (model: DrawerModel) => {
     if (isViewOnly) return;
@@ -1316,6 +1331,7 @@ export const CanvasPage: React.FC = () => {
       if (hasVsumDetailsStore(activeProjectId)) {
         try {
           const detailsRes = await apiService.getVsumDetails(activeProjectId);
+          setDrawerModels((detailsRes.data.metaModels || []).map(m => metaModelToDrawerModel(m, true)));
           const remote = mapVsumDetailsToEditable(detailsRes.data);
           const store = getVsumDetailsStore(activeProjectId);
           store.setState({
@@ -1497,6 +1513,7 @@ export const CanvasPage: React.FC = () => {
           onClose={handleCloseDrawer}
           onAddModel={handleAddModel}
           onDeleteModel={handleDeleteModel}
+          onRenameProjectModel={handleRenameProjectMetaModel}
           onFetchFile={fetchEcoreFileById}
         />
       )}

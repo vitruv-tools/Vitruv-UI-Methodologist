@@ -706,6 +706,21 @@ class ApiService {
   }
 
   /**
+   * Renames a meta model only within one project. `metaModelId` is the model-library/source ID,
+   * not the ID of a cloned project record.
+   */
+  async renameVsumMetaModel(
+    vsumId: number | string,
+    metaModelId: number | string,
+    data: { name: string },
+  ): Promise<ApiResponse<void>> {
+    return this.authenticatedRequest(`/api/v1/vsums/${vsumId}/meta-models/${metaModelId}/name`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    });
+  }
+
+  /**
    * vSUMS: Sync changes with relationship data
    */
   async syncVsumChanges(
