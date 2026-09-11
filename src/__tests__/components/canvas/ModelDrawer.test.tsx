@@ -1,5 +1,5 @@
 import React from 'react';
-import { render, screen, fireEvent, act } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { ModelDrawer, DrawerModel } from '../../../components/canvas/ModelDrawer';
 
 jest.mock('../../../components/canvas/UMLDiagram', () => {
@@ -123,9 +123,39 @@ describe('ModelDrawer real component', () => {
     );
     // Car Model (id=1) is in addedModelIds, should not appear in library
     // It should appear in "On canvas" section instead
-    const libraryItems = screen.queryAllByText('Car Model');
     // Model is in "On canvas" area not library area; it still renders
     // but fromLibrary filter excludes it from library list
     expect(screen.getByText('Person Model')).toBeInTheDocument();
+  });
+
+  it('renames an on-canvas model only through the project rename callback', async () => {
+    const projectModel: DrawerModel = {
+      id: 7,
+      sourceId: 42,
+      name: 'Library name',
+      inProject: true,
+    };
+    const onRenameProjectModel = jest.fn().mockResolvedValue(undefined);
+
+    render(
+      <ModelDrawer
+        {...defaultProps}
+        models={[projectModel]}
+        addedModelIds={new Set([7])}
+        onRenameProjectModel={onRenameProjectModel}
+      />,
+    );
+
+    fireEvent.contextMenu(screen.getByLabelText('View details for Library name'));
+    fireEvent.click(screen.getByText('Rename in this project'));
+    fireEvent.change(screen.getByLabelText('Project meta-model name'), {
+      target: { value: 'Project name' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+
+    await waitFor(() => {
+      expect(screen.getByText('Project name', { selector: 'span' })).toBeInTheDocument();
+    });
+    expect(onRenameProjectModel).toHaveBeenCalledWith(projectModel, 'Project name');
   });
 });
