@@ -217,6 +217,14 @@ export function polylineHitsRects(points: Point[], rects: Rect[]): boolean {
   return false;
 }
 
+function lastPoint(points: Point[]): Point | undefined {
+  return points.at(-1);
+}
+
+function secondLastPoint(points: Point[]): Point | undefined {
+  return points.at(-2);
+}
+
 interface Port {
   cell: { i: number; j: number };
   side: Side;
@@ -287,13 +295,12 @@ function worldBounds(rects: Rect[], paths: Point[][], extra: Point[]): Rect {
   };
 }
 
-function buildGrid(boxes: Rect[], existing: Point[][], extra: Point[]): Grid {
-  const bounds = worldBounds(boxes, existing, extra);
+function emptyGrid(bounds: Rect): Grid {
   const cell = chooseCellSize(bounds.width, bounds.height);
   const cols = Math.max(4, Math.ceil(bounds.width / cell));
   const rows = Math.max(4, Math.ceil(bounds.height / cell));
   const size = cols * rows;
-  const grid: Grid = {
+  return {
     cell,
     originX: bounds.x,
     originY: bounds.y,
@@ -304,61 +311,76 @@ function buildGrid(boxes: Rect[], existing: Point[][], extra: Point[]): Grid {
     nearConn: new Uint8Array(size),
     crossConn: new Uint8Array(size),
   };
+}
 
-  const expanded = boxes.map(box => inflateRect(box, BOX_PADDING));
-  for (let j = 0; j < rows; j++) {
-    for (let i = 0; i < cols; i++) {
+function markBlockedCells(grid: Grid, expanded: Rect[]): void {
+  for (let j = 0; j < grid.rows; j++) {
+    for (let i = 0; i < grid.cols; i++) {
       const center = toWorld(grid, i, j);
-      const idx = cellIndex(grid, i, j);
       if (expanded.some(rect => pointInRect(center, rect))) {
-        grid.blocked[idx] = 1;
+        grid.blocked[cellIndex(grid, i, j)] = 1;
       }
     }
   }
+}
 
-  for (let j = 0; j < rows; j++) {
-    for (let i = 0; i < cols; i++) {
+function hasBlockedNeighbor(grid: Grid, i: number, j: number): boolean {
+  for (const [di, dj] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+    const ni = i + di;
+    const nj = j + dj;
+    if (inBounds(grid, ni, nj) && grid.blocked[cellIndex(grid, ni, nj)]) return true;
+  }
+  return false;
+}
+
+function markNearBoxCells(grid: Grid): void {
+  for (let j = 0; j < grid.rows; j++) {
+    for (let i = 0; i < grid.cols; i++) {
       const idx = cellIndex(grid, i, j);
       if (grid.blocked[idx]) continue;
-      for (const [di, dj] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
-        const ni = i + di;
-        const nj = j + dj;
-        if (inBounds(grid, ni, nj) && grid.blocked[cellIndex(grid, ni, nj)]) {
-          grid.nearBox[idx] = 1;
-          break;
-        }
-      }
+      if (hasBlockedNeighbor(grid, i, j)) grid.nearBox[idx] = 1;
     }
   }
+}
 
+function buildGrid(boxes: Rect[], existing: Point[][], extra: Point[]): Grid {
+  const grid = emptyGrid(worldBounds(boxes, existing, extra));
+  markBlockedCells(grid, boxes.map(box => inflateRect(box, BOX_PADDING)));
+  markNearBoxCells(grid);
   markConnectionCosts(grid, existing);
   return grid;
+}
+
+function markNearConnAround(grid: Grid, i: number, j: number): void {
+  for (let dj = -1; dj <= 1; dj++) {
+    for (let di = -1; di <= 1; di++) {
+      const ni = i + di;
+      const nj = j + dj;
+      if (!inBounds(grid, ni, nj)) continue;
+      const nidx = cellIndex(grid, ni, nj);
+      if (!grid.crossConn[nidx]) grid.nearConn[nidx] = 1;
+    }
+  }
+}
+
+function markPathSegment(grid: Grid, a: Point, b: Point, step: number): void {
+  const len = Math.hypot(b.x - a.x, b.y - a.y);
+  const samples = Math.max(1, Math.ceil(len / step));
+  for (let n = 0; n <= samples; n++) {
+    const t = n / samples;
+    const p = { x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t };
+    const { i, j } = toCell(grid, p.x, p.y);
+    if (!inBounds(grid, i, j)) continue;
+    grid.crossConn[cellIndex(grid, i, j)] = 1;
+    markNearConnAround(grid, i, j);
+  }
 }
 
 function markConnectionCosts(grid: Grid, existing: Point[][]): void {
   const step = grid.cell / 2;
   for (const path of existing) {
     for (let s = 0; s < path.length - 1; s++) {
-      const a = path[s];
-      const b = path[s + 1];
-      const len = Math.hypot(b.x - a.x, b.y - a.y);
-      const samples = Math.max(1, Math.ceil(len / step));
-      for (let n = 0; n <= samples; n++) {
-        const t = n / samples;
-        const p = { x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t };
-        const { i, j } = toCell(grid, p.x, p.y);
-        if (!inBounds(grid, i, j)) continue;
-        grid.crossConn[cellIndex(grid, i, j)] = 1;
-        for (let dj = -1; dj <= 1; dj++) {
-          for (let di = -1; di <= 1; di++) {
-            const ni = i + di;
-            const nj = j + dj;
-            if (!inBounds(grid, ni, nj)) continue;
-            const nidx = cellIndex(grid, ni, nj);
-            if (!grid.crossConn[nidx]) grid.nearConn[nidx] = 1;
-          }
-        }
-      }
+      markPathSegment(grid, path[s], path[s + 1], step);
     }
   }
 }
@@ -370,6 +392,23 @@ function sideOutwardDir(side: Side): number {
     case 'left': return 2;
     case 'top': return 3;
   }
+}
+
+function firstOpenCell(
+  grid: Grid,
+  start: { i: number; j: number },
+  step: Point,
+): { i: number; j: number } | null {
+  let i = start.i;
+  let j = start.j;
+  for (let n = 0; n < 6; n++) {
+    if (!inBounds(grid, i, j)) return null;
+    if (!grid.blocked[cellIndex(grid, i, j)]) return { i, j };
+    i += step.x;
+    j += step.y;
+  }
+  if (!inBounds(grid, i, j) || grid.blocked[cellIndex(grid, i, j)]) return null;
+  return { i, j };
 }
 
 function portsOnBox(grid: Grid, box: Rect, sides: Side[], portT = 0.5): Port[] {
@@ -384,15 +423,9 @@ function portsOnBox(grid: Grid, box: Rect, sides: Side[], portT = 0.5): Port[] {
         x: onBox.x + step.x * grid.cell,
         y: onBox.y + step.y * grid.cell,
       };
-      const cell = toCell(grid, outside.x, outside.y);
-      let i = cell.i;
-      let j = cell.j;
-      for (let n = 0; n < 6 && inBounds(grid, i, j) && grid.blocked[cellIndex(grid, i, j)]; n++) {
-        i += step.x;
-        j += step.y;
-      }
-      if (!inBounds(grid, i, j) || grid.blocked[cellIndex(grid, i, j)]) continue;
-      ports.push({ cell: { i, j }, side, t, dir });
+      const open = firstOpenCell(grid, toCell(grid, outside.x, outside.y), step);
+      if (!open) continue;
+      ports.push({ cell: open, side, t, dir });
     }
   }
   return ports;
@@ -502,33 +535,112 @@ function boxGaps(source: Rect, target: Rect) {
  * One midpoint per side. When the boxes are diagonal, use the closer
  * face-to-face gap so a box below-and-left attaches on its top, not its right.
  */
-export function facingSides(source: Rect, target: Rect): { source: Side; target: Side } {
-  const g = boxGaps(source, target);
-  const horiz = g.east > 0 ? g.east : (g.west > 0 ? g.west : -1);
-  const vert = g.south > 0 ? g.south : (g.north > 0 ? g.north : -1);
-  const preferVertical = vert >= 0 && (horiz < 0 || vert <= horiz);
+function positiveGap(primary: number, secondary: number): number {
+  if (primary > 0) return primary;
+  if (secondary > 0) return secondary;
+  return -1;
+}
 
-  if (preferVertical) {
-    return g.south >= 0 && (g.north < 0 || g.south >= g.north)
-      ? { source: 'bottom', target: 'top' }
-      : { source: 'top', target: 'bottom' };
+function closerVerticalPair(g: ReturnType<typeof boxGaps>): { source: Side; target: Side } {
+  if (g.south >= 0 && (g.north < 0 || g.south >= g.north)) {
+    return { source: 'bottom', target: 'top' };
   }
-  if (horiz >= 0) {
-    return g.east >= 0 && (g.west < 0 || g.east >= g.west)
-      ? { source: 'right', target: 'left' }
-      : { source: 'left', target: 'right' };
-  }
+  return { source: 'top', target: 'bottom' };
+}
 
+function closerHorizontalPair(g: ReturnType<typeof boxGaps>): { source: Side; target: Side } {
+  if (g.east >= 0 && (g.west < 0 || g.east >= g.west)) {
+    return { source: 'right', target: 'left' };
+  }
+  return { source: 'left', target: 'right' };
+}
+
+function pairFromCenterDelta(source: Rect, target: Rect): { source: Side; target: Side } {
   const dx = (target.x + target.width / 2) - (source.x + source.width / 2);
   const dy = (target.y + target.height / 2) - (source.y + source.height / 2);
   if (Math.abs(dy) > Math.abs(dx)) {
-    return dy > 0
-      ? { source: 'bottom', target: 'top' }
-      : { source: 'top', target: 'bottom' };
+    if (dy > 0) return { source: 'bottom', target: 'top' };
+    return { source: 'top', target: 'bottom' };
   }
-  return dx >= 0
-    ? { source: 'right', target: 'left' }
-    : { source: 'left', target: 'right' };
+  if (dx >= 0) return { source: 'right', target: 'left' };
+  return { source: 'left', target: 'right' };
+}
+
+export function facingSides(source: Rect, target: Rect): { source: Side; target: Side } {
+  const g = boxGaps(source, target);
+  const horiz = positiveGap(g.east, g.west);
+  const vert = positiveGap(g.south, g.north);
+  if (vert >= 0 && (horiz < 0 || vert <= horiz)) return closerVerticalPair(g);
+  if (horiz >= 0) return closerHorizontalPair(g);
+  return pairFromCenterDelta(source, target);
+}
+
+interface AStarSearch {
+  grid: Grid;
+  goals: Port[];
+  goalSet: Map<string, Port>;
+  goalCells: Array<{ i: number; j: number }>;
+  open: MinHeap;
+  gScore: Map<number, number>;
+  came: Map<number, number>;
+  startPortOf: Map<number, Port>;
+  preferred?: { source?: Side; target?: Side };
+}
+
+function seedStarts(search: AStarSearch, starts: Port[]): void {
+  for (const port of starts) {
+    const key = stateKey(port.cell.i, port.cell.j, port.dir, search.grid.cols, search.grid.rows);
+    const extra = search.preferred?.source && port.side !== search.preferred.source ? COST_OFF_FACING : 0;
+    search.gScore.set(key, extra);
+    search.startPortOf.set(key, port);
+    search.open.push(extra + manhattan(port.cell, search.goalCells) * COST_MOVE, key);
+  }
+}
+
+function reconstructPath(
+  search: AStarSearch,
+  current: number,
+  starts: Port[],
+  hit: Port,
+): { cells: Array<{ i: number; j: number }>; start: Port; goal: Port } {
+  const cells: Array<{ i: number; j: number }> = [];
+  let walk: number | undefined = current;
+  let startPort = starts[0];
+  while (walk !== undefined) {
+    const node = unpackState(walk, search.grid.cols, search.grid.rows);
+    cells.push({ i: node.i, j: node.j });
+    const prev = search.came.get(walk);
+    if (prev === undefined) {
+      startPort = search.startPortOf.get(walk) ?? startPort;
+    }
+    walk = prev;
+  }
+  cells.reverse();
+  return { cells, start: startPort, goal: hit };
+}
+
+function neighborPenalty(hitNext: Port | undefined, preferred?: { target?: Side }): number {
+  if (hitNext && preferred?.target && hitNext.side !== preferred.target) return COST_OFF_FACING;
+  return 0;
+}
+
+function expandFromState(search: AStarSearch, current: number): void {
+  const cur = unpackState(current, search.grid.cols, search.grid.rows);
+  const currentG = search.gScore.get(current) ?? Infinity;
+  for (let nd = 0; nd < 4; nd++) {
+    const ni = cur.i + DIRS[nd].x;
+    const nj = cur.j + DIRS[nd].y;
+    if (!inBounds(search.grid, ni, nj) || search.grid.blocked[cellIndex(search.grid, ni, nj)]) continue;
+    const next = stateKey(ni, nj, nd, search.grid.cols, search.grid.rows);
+    const hitNext = search.goalSet.get(`${ni},${nj}`);
+    const tentative = currentG
+      + stepCost(search.grid, ni, nj, nd !== cur.dir)
+      + neighborPenalty(hitNext, search.preferred);
+    if (tentative >= (search.gScore.get(next) ?? Infinity)) continue;
+    search.came.set(next, current);
+    search.gScore.set(next, tentative);
+    search.open.push(tentative + manhattan({ i: ni, j: nj }, search.goalCells) * COST_MOVE, next);
+  }
 }
 
 function runAStar(
@@ -540,63 +652,28 @@ function runAStar(
   if (starts.length === 0 || goals.length === 0) return null;
   const goalSet = new Map<string, Port>();
   for (const g of goals) goalSet.set(`${g.cell.i},${g.cell.j}`, g);
-  const goalCells = goals.map(g => g.cell);
-
-  const open = new MinHeap();
-  const gScore = new Map<number, number>();
-  const came = new Map<number, number>();
-  const startPortOf = new Map<number, Port>();
-
-  for (const port of starts) {
-    const key = stateKey(port.cell.i, port.cell.j, port.dir, grid.cols, grid.rows);
-    const extra = preferred?.source && port.side !== preferred.source ? COST_OFF_FACING : 0;
-    gScore.set(key, extra);
-    startPortOf.set(key, port);
-    open.push(extra + manhattan(port.cell, goalCells) * COST_MOVE, key);
-  }
-
+  const search: AStarSearch = {
+    grid,
+    goals,
+    goalSet,
+    goalCells: goals.map(g => g.cell),
+    open: new MinHeap(),
+    gScore: new Map<number, number>(),
+    came: new Map<number, number>(),
+    startPortOf: new Map<number, Port>(),
+    preferred,
+  };
+  seedStarts(search, starts);
   const seen = new Set<number>();
-  while (open.size > 0) {
-    const current = open.pop();
+  while (search.open.size > 0) {
+    const current = search.open.pop();
     if (current === undefined) break;
     if (seen.has(current)) continue;
     seen.add(current);
-
     const cur = unpackState(current, grid.cols, grid.rows);
     const hit = goalSet.get(`${cur.i},${cur.j}`);
-    if (hit) {
-      const cells: Array<{ i: number; j: number }> = [];
-      let walk: number | undefined = current;
-      let startPort = starts[0];
-      while (walk !== undefined) {
-        const node = unpackState(walk, grid.cols, grid.rows);
-        cells.push({ i: node.i, j: node.j });
-        const prev = came.get(walk);
-        if (prev === undefined) {
-          startPort = startPortOf.get(walk) ?? startPort;
-        }
-        walk = prev;
-      }
-      cells.reverse();
-      return { cells, start: startPort, goal: hit };
-    }
-
-    const currentG = gScore.get(current) ?? Infinity;
-    for (let nd = 0; nd < 4; nd++) {
-      const ni = cur.i + DIRS[nd].x;
-      const nj = cur.j + DIRS[nd].y;
-      if (!inBounds(grid, ni, nj) || grid.blocked[cellIndex(grid, ni, nj)]) continue;
-      const next = stateKey(ni, nj, nd, grid.cols, grid.rows);
-      const hitNext = goalSet.get(`${ni},${nj}`);
-      const sidePenalty = hitNext && preferred?.target && hitNext.side !== preferred.target
-        ? COST_OFF_FACING
-        : 0;
-      const tentative = currentG + stepCost(grid, ni, nj, nd !== cur.dir) + sidePenalty;
-      if (tentative >= (gScore.get(next) ?? Infinity)) continue;
-      came.set(next, current);
-      gScore.set(next, tentative);
-      open.push(tentative + manhattan({ i: ni, j: nj }, goalCells) * COST_MOVE, next);
-    }
+    if (hit) return reconstructPath(search, current, starts, hit);
+    expandFromState(search, current);
   }
   return null;
 }
@@ -605,7 +682,8 @@ function simplifyWorld(points: Point[]): Point[] {
   if (points.length < 3) return points;
   const out: Point[] = [points[0]];
   for (let i = 1; i < points.length - 1; i++) {
-    const prev = out[out.length - 1];
+    const prev = lastPoint(out);
+    if (!prev) break;
     const cur = points[i];
     const next = points[i + 1];
     const collinear = (
@@ -614,8 +692,23 @@ function simplifyWorld(points: Point[]): Point[] {
     );
     if (!collinear) out.push(cur);
   }
-  out.push(points[points.length - 1]);
+  const tip = lastPoint(points);
+  if (tip) out.push(tip);
   return out;
+}
+
+function sideTowardPoint(from: Point, to: Point): Side {
+  if (Math.abs(to.x - from.x) >= Math.abs(to.y - from.y)) {
+    return to.x >= from.x ? 'right' : 'left';
+  }
+  return to.y >= from.y ? 'bottom' : 'top';
+}
+
+function oppositeSide(side: Side): Side {
+  if (side === 'right') return 'left';
+  if (side === 'left') return 'right';
+  if (side === 'bottom') return 'top';
+  return 'bottom';
 }
 
 function fallbackPath(
@@ -627,12 +720,8 @@ function fallbackPath(
 ): RoutedPath {
   const sc = { x: source.x + source.width / 2, y: source.y + source.height / 2 };
   const tc = { x: target.x + target.width / 2, y: target.y + target.height / 2 };
-  const sourceHandle = lockSource ?? (Math.abs(tc.x - sc.x) >= Math.abs(tc.y - sc.y)
-    ? (tc.x >= sc.x ? 'right' : 'left')
-    : (tc.y >= sc.y ? 'bottom' : 'top'));
-  const targetHandle = lockTarget ?? (sourceHandle === 'right' ? 'left'
-    : sourceHandle === 'left' ? 'right'
-      : sourceHandle === 'bottom' ? 'top' : 'bottom');
+  const sourceHandle = lockSource ?? sideTowardPoint(sc, tc);
+  const targetHandle = lockTarget ?? oppositeSide(sourceHandle);
   const a = anchors?.start ?? handleAnchor(source, sourceHandle);
   const b = anchors?.end ?? handleAnchor(target, targetHandle);
   return {
@@ -675,8 +764,9 @@ function midwayOrthogonal(from: Point, to: Point, targetSide: Side): Point[] {
 
 function lastSegmentMatchesSide(points: Point[], side: Side): boolean {
   if (points.length < 2) return false;
-  const from = points[points.length - 2];
-  const to = points[points.length - 1];
+  const from = secondLastPoint(points);
+  const to = lastPoint(points);
+  if (!from || !to) return false;
   if (side === 'top') return Math.abs(from.x - to.x) < 1 && from.y < to.y;
   if (side === 'bottom') return Math.abs(from.x - to.x) < 1 && from.y > to.y;
   if (side === 'left') return Math.abs(from.y - to.y) < 1 && from.x < to.x;
@@ -686,13 +776,26 @@ function lastSegmentMatchesSide(points: Point[], side: Side): boolean {
 function trimPortStubs(points: Point[], start: Point, end: Point, cell: number): Point[] {
   const limit = cell * 2;
   const out = points.slice();
-  while (out.length > 0 && Math.hypot(out[0].x - start.x, out[0].y - start.y) < limit) {
+  while (out.length > 0) {
+    const head = out.at(0);
+    if (!head || Math.hypot(head.x - start.x, head.y - start.y) >= limit) break;
     out.shift();
   }
-  while (out.length > 0 && Math.hypot(out[out.length - 1].x - end.x, out[out.length - 1].y - end.y) < limit) {
+  while (out.length > 0) {
+    const tail = lastPoint(out);
+    if (!tail || Math.hypot(tail.x - end.x, tail.y - end.y) >= limit) break;
     out.pop();
   }
   return out;
+}
+
+function joinLeaveAndMid(head: Point[], mid: Point[]): Point[] {
+  const headTip = lastPoint(head);
+  const midStart = mid.at(0);
+  if (headTip && midStart && headTip.x === midStart.x && headTip.y === midStart.y) {
+    return [...head, ...mid.slice(1)];
+  }
+  return [...head, ...mid];
 }
 
 function pathFromSearch(
@@ -710,11 +813,9 @@ function pathFromSearch(
   if (mid.length === 0) {
     points = midwayOrthogonal(startAnchor, endAnchor, search.goal.side);
   } else {
-    const head = orthogonalLeave(startAnchor, mid[0], search.start.side);
-    const body = head[head.length - 1].x === mid[0].x && head[head.length - 1].y === mid[0].y
-      ? [...head, ...mid.slice(1)]
-      : [...head, ...mid];
-    const tail = orthogonalArrive(body[body.length - 1], endAnchor, search.goal.side);
+    const body = joinLeaveAndMid(orthogonalLeave(startAnchor, mid[0], search.start.side), mid);
+    const bodyTip = lastPoint(body) ?? endAnchor;
+    const tail = orthogonalArrive(bodyTip, endAnchor, search.goal.side);
     points = [...body, ...tail.slice(1)];
   }
   return {
@@ -739,6 +840,55 @@ export interface RouteInput {
   via?: Point;
 }
 
+function portSides(lock?: Side, cursorSide?: Side): Side[] {
+  if (lock) return [lock];
+  if (cursorSide) return [cursorSide];
+  return SIDES;
+}
+
+function openViaCell(grid: Grid, via: Point, fallback: { i: number; j: number }): { i: number; j: number } {
+  const cell = toCell(grid, via.x, via.y);
+  if (inBounds(grid, cell.i, cell.j) && !grid.blocked[cellIndex(grid, cell.i, cell.j)]) return cell;
+  return fallback;
+}
+
+function routeViaPoint(
+  grid: Grid,
+  source: Rect,
+  target: Rect,
+  starts: Port[],
+  goals: Port[],
+  preferred: { source?: Side; target?: Side },
+  via: Point,
+  anchors: { start?: Point; end?: Point },
+  obstacles: Rect[],
+): RoutedPath | null {
+  const viaPort: Port = {
+    cell: openViaCell(grid, via, starts[0].cell),
+    side: 'right',
+    t: 0.5,
+    dir: 0,
+  };
+  const first = runAStar(grid, starts, [viaPort], { source: preferred.source });
+  const second = runAStar(
+    grid,
+    [{ ...viaPort, dir: 0 }, { ...viaPort, dir: 1 }, { ...viaPort, dir: 2 }, { ...viaPort, dir: 3 }],
+    goals,
+    { target: preferred.target },
+  );
+  if (!first || !second) return null;
+  return simplifyIfClear(
+    pathFromSearch(grid, source, target, {
+      cells: [...first.cells, ...second.cells.slice(1)],
+      start: first.start,
+      goal: second.goal,
+    }, anchors),
+    source,
+    target,
+    obstacles,
+  );
+}
+
 export function routeOrthogonalAStar(input: RouteInput): RoutedPath {
   const obstacles = input.obstacles ?? [];
   const existing = input.existing ?? [];
@@ -747,11 +897,9 @@ export function routeOrthogonalAStar(input: RouteInput): RoutedPath {
   const grid = buildGrid(boxes, existing, extras);
 
   const facing = facingSides(input.source, input.target);
-  const sourceSides = input.lockSourceHandle ? [input.lockSourceHandle] : SIDES;
+  const sourceSides = portSides(input.lockSourceHandle);
   const cursorSide = input.cursor ? pickSideFromPoint(input.target, input.cursor) : undefined;
-  const targetSides = input.lockTargetHandle
-    ? [input.lockTargetHandle]
-    : (cursorSide ? [cursorSide] : SIDES);
+  const targetSides = portSides(input.lockTargetHandle, cursorSide);
 
   const anchors = { start: input.sourceAnchor, end: input.targetAnchor };
   const starts = portsOnBox(grid, input.source, sourceSides, input.sourcePortT);
@@ -772,30 +920,10 @@ export function routeOrthogonalAStar(input: RouteInput): RoutedPath {
   };
 
   if (input.via) {
-    const viaCell = toCell(grid, input.via.x, input.via.y);
-    const viaPort: Port = {
-      cell: inBounds(grid, viaCell.i, viaCell.j) && !grid.blocked[cellIndex(grid, viaCell.i, viaCell.j)]
-        ? viaCell
-        : starts[0].cell,
-      side: 'right',
-      t: 0.5,
-      dir: 0,
-    };
-    const first = runAStar(grid, starts, [viaPort], { source: preferred.source });
-    const second = runAStar(grid, [{ ...viaPort, dir: 0 }, { ...viaPort, dir: 1 }, { ...viaPort, dir: 2 }, { ...viaPort, dir: 3 }], goals, { target: preferred.target });
-    if (first && second) {
-      const combined = {
-        cells: [...first.cells, ...second.cells.slice(1)],
-        start: first.start,
-        goal: second.goal,
-      };
-      return simplifyIfClear(
-        pathFromSearch(grid, input.source, input.target, combined, anchors),
-        input.source,
-        input.target,
-        obstacles,
-      );
-    }
+    const viaRoute = routeViaPoint(
+      grid, input.source, input.target, starts, goals, preferred, input.via, anchors, obstacles,
+    );
+    if (viaRoute) return viaRoute;
   }
 
   const search = runAStar(grid, starts, goals, preferred);
@@ -816,6 +944,10 @@ export function routeOrthogonalAStar(input: RouteInput): RoutedPath {
   );
 }
 
+function pathClearanceScore(points: Point[], targetHandle: Side): number {
+  return points.length + (lastSegmentMatchesSide(points, targetHandle) ? 0 : 10);
+}
+
 function simplifyIfClear(
   route: RoutedPath,
   source: Rect,
@@ -823,7 +955,7 @@ function simplifyIfClear(
   obstacles: Rect[],
 ): RoutedPath {
   const start = route.points[0];
-  const end = route.points[route.points.length - 1];
+  const end = lastPoint(route.points);
   if (!start || !end) return route;
   const blocked = [source, target, ...obstacles];
   const midway = simplifyWorld(midwayOrthogonal(start, end, route.targetHandle));
@@ -837,21 +969,19 @@ function simplifyIfClear(
     orthogonalArrive(start, end, route.targetHandle),
     orthogonalLeave(start, end, route.sourceHandle),
   ];
-  const score = (points: Point[]) => (
-    points.length + (lastSegmentMatchesSide(points, route.targetHandle) ? 0 : 10)
-  );
   let best = route.points;
-  let bestScore = score(best);
+  let bestScore = pathClearanceScore(best, route.targetHandle);
   for (const points of candidates) {
     const clean = simplifyWorld(points);
     if (polylineHitsRects(clean, blocked)) continue;
-    const nextScore = score(clean);
+    const nextScore = pathClearanceScore(clean, route.targetHandle);
     if (nextScore < bestScore) {
       best = clean;
       bestScore = nextScore;
     }
   }
-  return best === route.points ? route : { ...route, points: best };
+  if (best === route.points) return route;
+  return { ...route, points: best };
 }
 
 export function routeToCursorAStar(
@@ -871,14 +1001,61 @@ export function routeToCursorAStar(
     cursor,
   }).points];
   if (points.length === 0) return [handleAnchor(source, sourceHandle), cursor];
-  points[points.length - 1] = cursor;
+  points.pop();
+  points.push(cursor);
   if (points.length >= 2) {
-    const prev = points[points.length - 2];
-    if (Math.abs(prev.x - cursor.x) >= 1 && Math.abs(prev.y - cursor.y) >= 1) {
-      points.splice(points.length - 1, 0, { x: cursor.x, y: prev.y });
+    const prev = secondLastPoint(points);
+    if (prev && Math.abs(prev.x - cursor.x) >= 1 && Math.abs(prev.y - cursor.y) >= 1) {
+      points.splice(-1, 0, { x: cursor.x, y: prev.y });
     }
   }
   return points;
+}
+
+function reactionEndpoints(
+  edge: Edge,
+  sourceNode: Node,
+  targetNode: Node,
+  byId: Map<string, Node>,
+): { sourceEp: ReactionEndpoint | null; targetEp: ReactionEndpoint | null } {
+  if (edge.type !== 'fine-granular-reaction') return { sourceEp: null, targetEp: null };
+  return {
+    sourceEp: buildReactionEndpoint(sourceNode, edge.sourceHandle, 'source', byId),
+    targetEp: buildReactionEndpoint(targetNode, edge.targetHandle, 'target', byId),
+  };
+}
+
+function routeOneReactionEdge(
+  edge: Edge,
+  byId: Map<string, Node>,
+  routable: Node[],
+  rectById: Map<string, Rect>,
+  placed: Point[][],
+): RoutedPath | null {
+  const sourceNode = byId.get(edge.source);
+  const targetNode = byId.get(edge.target);
+  if (!sourceNode || !targetNode) return null;
+  const { sourceEp, targetEp } = reactionEndpoints(edge, sourceNode, targetNode, byId);
+  const source = sourceEp?.rect ?? rectById.get(edge.source);
+  const target = targetEp?.rect ?? rectById.get(edge.target);
+  if (!source || !target) return null;
+  const obstacles = routable
+    .filter(n => n.id !== edge.source && n.id !== edge.target)
+    .map(n => rectById.get(n.id))
+    .filter((rect): rect is Rect => Boolean(rect));
+  return routeOrthogonalAStar({
+    source,
+    target,
+    obstacles,
+    existing: placed,
+    via: edge.data?.customControlPoint,
+    lockSourceHandle: sourceEp?.pin ? sourceEp.lockSide : undefined,
+    lockTargetHandle: targetEp?.pin ? targetEp.lockSide : undefined,
+    sourcePortT: sourceEp?.portT,
+    targetPortT: targetEp?.portT,
+    sourceAnchor: sourceEp?.anchor,
+    targetAnchor: targetEp?.anchor,
+  });
 }
 
 export function routeAllReactionEdges(nodes: Node[], edges: Edge[]): Map<string, RoutedPath> {
@@ -898,35 +1075,8 @@ export function routeAllReactionEdges(nodes: Node[], edges: Edge[]): Map<string,
   const placed: Point[][] = [];
 
   for (const edge of reactionEdges) {
-    const sourceNode = byId.get(edge.source);
-    const targetNode = byId.get(edge.target);
-    if (!sourceNode || !targetNode) continue;
-    const sourceEp = edge.type === 'fine-granular-reaction'
-      ? buildReactionEndpoint(sourceNode, edge.sourceHandle, 'source', byId)
-      : null;
-    const targetEp = edge.type === 'fine-granular-reaction'
-      ? buildReactionEndpoint(targetNode, edge.targetHandle, 'target', byId)
-      : null;
-    const source = sourceEp?.rect ?? rectById.get(edge.source);
-    const target = targetEp?.rect ?? rectById.get(edge.target);
-    if (!source || !target) continue;
-    const obstacles = routable
-      .filter(n => n.id !== edge.source && n.id !== edge.target)
-      .map(n => rectById.get(n.id))
-      .filter((rect): rect is Rect => Boolean(rect));
-    const route = routeOrthogonalAStar({
-      source,
-      target,
-      obstacles,
-      existing: placed,
-      via: edge.data?.customControlPoint,
-      lockSourceHandle: sourceEp?.pin ? sourceEp.lockSide : undefined,
-      lockTargetHandle: targetEp?.pin ? targetEp.lockSide : undefined,
-      sourcePortT: sourceEp?.portT,
-      targetPortT: targetEp?.portT,
-      sourceAnchor: sourceEp?.anchor,
-      targetAnchor: targetEp?.anchor,
-    });
+    const route = routeOneReactionEdge(edge, byId, routable, rectById, placed);
+    if (!route) continue;
     routes.set(edge.id, route);
     placed.push(route.points);
   }
