@@ -55,6 +55,68 @@ describe('ReactionRelationship', () => {
     expect(onDoubleClick).toHaveBeenCalledWith('edge-r1');
   });
 
+  it('routes a fine-granular reaction around a class sitting between the endpoints', () => {
+    mockInternals.set('s1', {
+      id: 's1',
+      type: 'eobject',
+      selected: false,
+      position: { x: 0, y: 0 },
+      positionAbsolute: { x: 0, y: 0 },
+      width: 200,
+      height: 56,
+      data: { attributes: [{ name: 'name' }] },
+    });
+    mockInternals.set('wall', {
+      id: 'wall',
+      type: 'eobject',
+      selected: false,
+      position: { x: 230, y: -20 },
+      positionAbsolute: { x: 230, y: -20 },
+      width: 80,
+      height: 120,
+      data: {},
+    });
+    mockInternals.set('t1', {
+      id: 't1',
+      type: 'eobject',
+      selected: false,
+      position: { x: 400, y: 0 },
+      positionAbsolute: { x: 400, y: 0 },
+      width: 200,
+      height: 56,
+      data: { attributes: [{ name: 'name' }] },
+    });
+
+    const { container } = render(
+      <svg>
+        <ReactionRelationship
+          id="edge-fg"
+          source="s1"
+          target="t1"
+          sourceX={200}
+          sourceY={16}
+          targetX={400}
+          targetY={16}
+          sourcePosition={'right' as any}
+          targetPosition={'left' as any}
+          data={{
+            fineGranular: true,
+            sourceHandleId: 'reaction-source-http://a#A',
+            targetHandleId: 'reaction-target-http://b#B',
+            label: 'reacts',
+          }}
+          selected={false}
+          style={{ stroke: '#3b82f6', strokeWidth: 2 }}
+        />
+      </svg>,
+    );
+
+    const path = container.querySelector('path#edge-fg');
+    expect(path).toHaveAttribute('data-routing', 'orthogonal');
+    const d = path?.getAttribute('d') ?? '';
+    expect(d.split(' L ').length).toBeGreaterThan(2);
+  });
+
   it('draws a straight chord for a fine-granular reaction, not an orthogonal L-path', () => {
     mockInternals.set('s1', {
       id: 's1',
@@ -157,6 +219,37 @@ describe('ReactionRelationship', () => {
     const d = path?.getAttribute('d') ?? '';
     expect(d).toMatch(/L 90,80$/);
     expect(d).not.toMatch(/L 100,80$/);
+  });
+
+  it('points the arrow along the last routed segment', () => {
+    const { container } = render(
+      <svg>
+        <ReactionRelationship
+          id="edge-arrow"
+          source="s1"
+          target="t1"
+          sourceX={259}
+          sourceY={126}
+          targetX={59}
+          targetY={200}
+          sourcePosition={'bottom' as any}
+          targetPosition={'top' as any}
+          data={{
+            routingStyle: 'orthogonal',
+            routeWaypoints: [
+              { x: 259, y: 126 },
+              { x: 259, y: 200 },
+              { x: 59, y: 200 },
+            ],
+          }}
+          selected={false}
+          style={{ stroke: '#3b82f6', strokeWidth: 2 }}
+        />
+      </svg>,
+    );
+
+    const arrow = container.querySelector('g[transform]');
+    expect(arrow?.getAttribute('transform')).toBe('translate(59, 200) rotate(180)');
   });
 });
 

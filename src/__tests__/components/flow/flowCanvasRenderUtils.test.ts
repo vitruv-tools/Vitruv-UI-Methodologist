@@ -156,6 +156,34 @@ describe('mapFlowCanvasEdge fine-granular parallel meta', () => {
     expect(mapped.data.routingStyle).toBe('curved');
   });
 
+  it('stamps A* waypoints onto fine-granular reaction edges', () => {
+    const edge = {
+      id: 'fg-1',
+      source: 'a',
+      target: 'b',
+      type: 'fine-granular-reaction',
+    } as Edge;
+    const points = [{ x: 0, y: 0 }, { x: 40, y: 80 }];
+    const mapped = mapFlowCanvasEdge(edge, mapContext({
+      getReactionRoute: () => ({ points }),
+    }));
+    expect(mapped.data.routeWaypoints).toEqual(points);
+  });
+
+  it('stamps A* waypoints onto modeling reaction edges', () => {
+    const edge = {
+      id: 'r1',
+      source: 'a',
+      target: 'b',
+      type: 'reactions',
+    } as Edge;
+    const points = [{ x: 0, y: 0 }, { x: 40, y: 0 }, { x: 40, y: 80 }];
+    const mapped = mapFlowCanvasEdge(edge, mapContext({
+      getReactionRoute: () => ({ points }),
+    }));
+    expect(mapped.data.routeWaypoints).toEqual(points);
+  });
+
   it('drops custom control points on expanded intra-model associations', () => {
     const edge = {
       id: 'uml-1',

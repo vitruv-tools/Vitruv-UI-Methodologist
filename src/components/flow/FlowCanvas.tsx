@@ -97,6 +97,18 @@ import {
 } from './flowCanvasEdgeHygiene';
 import { optimizeEdgeHandles, updateEdgeHandles } from './flowCanvasHandleUtils';
 import {
+  applyAStarReactionHandles,
+  ecoreFileRect,
+  flowToScreenPoints,
+  inferHandleSide,
+  isRoutableNode,
+  nodeWorldRect,
+  pointInRect,
+  routeAllReactionEdges,
+  routeOrthogonalAStar,
+  routeToCursorAStar,
+} from './flowCanvasAStarRouter';
+import {
   findNodeByMetaModelId,
   findEcoreTargetAtPosition,
   getBackendMetaModelId,
@@ -154,6 +166,12 @@ import {
   loadReactionLayout,
   persistReactionLayoutFromNodes,
 } from '../../utils/reactionLayoutStorage';
+import {
+  loadVsumLayoutPosition,
+  persistVsumLayoutFromNodes,
+  upsertVsumLayoutPosition,
+  type VsumLayoutIdentity,
+} from '../../utils/vsumLayoutStorage';
 
 import EObjectNode from './lowcode/EObjectNode';
 import BoundingBoxNode from './lowcode/BoundingBoxNode';
@@ -426,7 +444,12 @@ export const FlowCanvas = forwardRef<FlowCanvasHandle, FlowCanvasProps>(
     const recalculateEdgeHandles = useCallback(() => {
       if (!reactFlowInstance) return;
       const currentNodes = reactFlowInstance.getNodes();
-      setEdges(currentEdges => currentEdges.map(edge => updateEdgeHandles(edge, currentNodes)));
+      setEdges(currentEdges => {
+        const routed = applyAStarReactionHandles(currentNodes, currentEdges);
+        return routed.map(edge => (
+          edge.type === 'uml' ? updateEdgeHandles(edge, currentNodes, routed) : edge
+        ));
+      });
     }, [reactFlowInstance, setEdges]);
 
     const bboxDraggingIdsRef = useRef<Set<string>>(new Set());
@@ -466,11 +489,15 @@ export const FlowCanvas = forwardRef<FlowCanvasHandle, FlowCanvasProps>(
 
       draggingIds.clear();
       setTimeout(recalculateEdgeHandles, 100);
+      const nextNodes = applyNodeChangesToSnapshot(
+        liveNodes,
+        [...clampedChanges, ...extraChanges],
+      );
+      const projectId = useProjectStore.getState().activeId;
       if (addReactionMode) {
-        persistReactionLayoutFromNodes(
-          useProjectStore.getState().activeId,
-          applyNodeChangesToSnapshot(liveNodes, [...clampedChanges, ...extraChanges]),
-        );
+        persistReactionLayoutFromNodes(projectId, nextNodes);
+      } else {
+        persistVsumLayoutFromNodes(projectId, nextNodes);
       }
       if (umlModalOpen) setEdges(clearUmlCustomControlPoints);
     }, [originalOnNodesChange, recalculateEdgeHandles, circle, circleVisible, umlModalOpen, detailModel, setEdges, setHistoryPaused, readOnly, edges, addReactionMode]);
@@ -766,7 +793,8 @@ export const FlowCanvas = forwardRef<FlowCanvasHandle, FlowCanvasProps>(
           reactionFileId: relation.reactionFileId ?? null,
         },
       }));
-    }, [nodes, edges, getColorForPair, addEdge]);
+      globalThis.setTimeout(() => recalculateEdgeHandles(), 0);
+    }, [nodes, edges, getColorForPair, addEdge, recalculateEdgeHandles]);
 
     useMetaModelRelationEvents({ processRelation });
 
@@ -1074,6 +1102,7 @@ export const FlowCanvas = forwardRef<FlowCanvasHandle, FlowCanvasProps>(
       const positionMap = computeAutoLayoutPositions(ecoreOnly, edges);
       const updatedNodes = applyAutoLayoutPositions(nodes, positionMap);
       setNodes(updatedNodes);
+      persistVsumLayoutFromNodes(useProjectStore.getState().activeId, updatedNodes);
 
       // Re-point the edges and recentre once the moved nodes have committed.
       // pendingFitToCircle signals the effect above to fit after the circle lands.
@@ -1251,14 +1280,29 @@ export const FlowCanvas = forwardRef<FlowCanvasHandle, FlowCanvasProps>(
       );
       if (alreadyOnCanvas) return;
 
+      const nodeId = `ecore-${meta?.metaModelId ?? meta?.metaModelSourceId ?? Date.now()}`;
+      const nsUri = extractNsUriFromEcore(fileContent);
+      const layoutIdentity: VsumLayoutIdentity = {
+        nodeId,
+        metaModelId,
+        metaModelSourceId,
+        nsUri: nsUri ?? undefined,
+        fileName,
+      };
+      const savedPosition = loadVsumLayoutPosition(
+        useProjectStore.getState().activeId,
+        layoutIdentity,
+      );
+
       const newEcoreNode: Node = {
-        id: `ecore-${meta?.metaModelId ?? meta?.metaModelSourceId ?? Date.now()}`,
+        id: nodeId,
         type: 'ecoreFile',
-        position: findFreeEcorePosition(ecoreNodes, meta?.position ?? { x: 60, y: 60 }),
+        position: savedPosition
+          ?? findFreeEcorePosition(ecoreNodes, meta?.position ?? { x: 60, y: 60 }),
         data: {
           fileName,
           fileContent,
-          nsUri: extractNsUriFromEcore(fileContent),
+          nsUri,
           description: meta?.description,
           keywords: meta?.keywords,
           domain: meta?.domain,
@@ -1279,6 +1323,11 @@ export const FlowCanvas = forwardRef<FlowCanvasHandle, FlowCanvasProps>(
       };
 
       addNode(newEcoreNode);
+      upsertVsumLayoutPosition(
+        useProjectStore.getState().activeId,
+        layoutIdentity,
+        newEcoreNode.position,
+      );
       setSelectedFileId(newEcoreNode.id);
       onEcoreFileSelect?.(fileName);
 
@@ -1369,7 +1418,6 @@ export const FlowCanvas = forwardRef<FlowCanvasHandle, FlowCanvasProps>(
             ...edge,
             sourceHandle: newSourceHandle,
             targetHandle: newTargetHandle,
-            data: { ...edge.data, customControlPoint: undefined },
           }
           : edge,
       ));
@@ -1474,6 +1522,16 @@ export const FlowCanvas = forwardRef<FlowCanvasHandle, FlowCanvasProps>(
       [fineParallelMap],
     );
 
+    const reactionRoutes = useMemo(
+      () => routeAllReactionEdges(nodes, uniqueEdges),
+      [nodes, uniqueEdges],
+    );
+
+    const resolveReactionRoute = useCallback(
+      (edge: Edge) => reactionRoutes.get(edge.id),
+      [reactionRoutes],
+    );
+
     const edgeMapContext = useMemo(() => ({
       readOnly,
       routingStyle,
@@ -1488,6 +1546,7 @@ export const FlowCanvas = forwardRef<FlowCanvasHandle, FlowCanvasProps>(
       handleEdgeHandleChange,
       handleEdgeReorderRequest,
       getFineParallel: resolveFineParallel,
+      getReactionRoute: resolveReactionRoute,
     }), [
       readOnly,
       routingStyle,
@@ -1502,6 +1561,7 @@ export const FlowCanvas = forwardRef<FlowCanvasHandle, FlowCanvasProps>(
       handleEdgeHandleChange,
       handleEdgeReorderRequest,
       resolveFineParallel,
+      resolveReactionRoute,
     ]);
 
     const mappedEdges = useMemo(
@@ -1511,6 +1571,41 @@ export const FlowCanvas = forwardRef<FlowCanvasHandle, FlowCanvasProps>(
 
     const ecoreNodes = nodes.filter(n => n.type === 'ecoreFile');
     const connectionLinePositions = computeConnectionLinePositions(connectionDragState, reactFlowInstance);
+    const connectionPreviewPoints = useMemo(() => {
+      if (!connectionLinePositions || !connectionDragState?.sourceNodeId || !reactFlowInstance) {
+        return undefined;
+      }
+      const sourceNode = nodes.find(n => n.id === connectionDragState.sourceNodeId);
+      if (!sourceNode || !isRoutableNode(sourceNode) || !connectionDragState.currentPosition) {
+        return undefined;
+      }
+      const sourceHandle = inferHandleSide(connectionDragState.sourceHandle) ?? 'right';
+      const cursor = connectionDragState.currentPosition;
+      const sourceRect = nodeWorldRect(sourceNode) ?? ecoreFileRect(sourceNode);
+      const hoverTarget = sourceNode.type === 'ecoreFile'
+        ? findEcoreTargetAtPosition(nodes, cursor, sourceNode.id)
+        : nodes.find((n) => {
+          if (n.id === sourceNode.id || !isRoutableNode(n)) return false;
+          const rect = nodeWorldRect(n);
+          return Boolean(rect && pointInRect(cursor, rect, 0));
+        }) ?? null;
+      const obstacles = nodes
+        .filter(n => isRoutableNode(n) && n.id !== sourceNode.id && n.id !== hoverTarget?.id)
+        .map(n => nodeWorldRect(n))
+        .filter((rect): rect is NonNullable<typeof rect> => Boolean(rect));
+      const existing = Array.from(reactionRoutes.values()).map(route => route.points);
+      const flowPoints = hoverTarget
+        ? routeOrthogonalAStar({
+          source: sourceRect,
+          target: nodeWorldRect(hoverTarget) ?? ecoreFileRect(hoverTarget),
+          obstacles,
+          existing,
+          lockSourceHandle: sourceHandle,
+          cursor,
+        }).points
+        : routeToCursorAStar(sourceRect, sourceHandle, cursor, obstacles, existing);
+      return flowToScreenPoints(flowPoints, reactFlowInstance.getViewport());
+    }, [connectionLinePositions, connectionDragState, nodes, reactFlowInstance, reactionRoutes]);
     const umlViewActive = !!umlModalOpen;
     const interactionsAllowed = umlViewActive || readOnly || isInteractive;
     // Viewers can reposition nodes to read a large model; they still cannot
@@ -1607,12 +1702,14 @@ export const FlowCanvas = forwardRef<FlowCanvasHandle, FlowCanvasProps>(
           <ConnectionLine
             sourcePosition={connectionLinePositions.source}
             targetPosition={connectionLinePositions.target}
+            points={connectionPreviewPoints}
           />
         )}
 
         <CanvasMinimap
           nodes={nodes}
-          edges={edges}
+          edges={mappedEdges}
+          reactionRoutes={reactionRoutes}
           circle={circleVisible ? circle : undefined}
           viewport={viewport}
           containerW={reactFlowWrapper.current?.clientWidth ?? 800}

@@ -2,6 +2,7 @@ import type { Edge, Node } from 'reactflow';
 import { computeBoundingBoxRect } from './expandMetaModel';
 import { metaModelDisplayColor } from './metaModelColors';
 import { ECORE_FILE_BOX_SIZE } from '../components/flow/flowCanvasConstants';
+import { nodeWorldRect, routeAllReactionEdges } from '../components/flow/flowCanvasAStarRouter';
 
 export type CanvasMinimapItem = {
   id: string;
@@ -12,10 +13,6 @@ export type CanvasMinimapItem = {
   color: string;
   kind: 'ecoreFile' | 'boundingBox' | 'eobject';
 };
-
-const EOBJECT_W = 200;
-const EOBJECT_HEADER = 32;
-const EOBJECT_ATTR_H = 24;
 
 function nodeHidden(node: Node): boolean {
   return node.hidden === true;
@@ -53,11 +50,6 @@ function liveBoundingBoxRect(
   return { x: bbox.position.x, y: bbox.position.y, width, height };
 }
 
-function eobjectHeight(node: Node): number {
-  const attrs = Array.isArray(node.data?.attributes) ? node.data.attributes.length : 0;
-  return EOBJECT_HEADER + attrs * EOBJECT_ATTR_H + 4;
-}
-
 function stripEcoreExt(name: string): string {
   return name.replace(/\.ecore$/i, '').toLowerCase();
 }
@@ -85,12 +77,14 @@ export function collectCanvasMinimapItems(nodes: Node[]): CanvasMinimapItem[] {
     });
     for (const node of nodes) {
       if (node.type !== 'eobject' || nodeHidden(node)) continue;
+      const rect = nodeWorldRect(node);
+      if (!rect) continue;
       items.push({
         id: node.id,
-        x: node.position.x,
-        y: node.position.y,
-        width: EOBJECT_W,
-        height: eobjectHeight(node),
+        x: rect.x,
+        y: rect.y,
+        width: rect.width,
+        height: rect.height,
         color: node.data?.color
           || items.find(i => i.id === node.data?.group)?.color
           || metaModelDisplayColor(undefined, node.data?.label),
@@ -145,23 +139,67 @@ export function buildMinimapEndpointIndex(
   return index;
 }
 
+export type MinimapEdgePath = {
+  id: string;
+  points: Array<{ x: number; y: number }>;
+};
+
+function edgeEndpointsVisible(nodes: Node[], edge: Edge): boolean {
+  const byId = new Map(nodes.map(node => [node.id, node]));
+  const source = byId.get(edge.source);
+  const target = byId.get(edge.target);
+  return Boolean(source && target && !nodeHidden(source) && !nodeHidden(target));
+}
+
+function stampedWaypoints(edge: Edge): Array<{ x: number; y: number }> | null {
+  const points = edge.data?.routeWaypoints;
+  return Array.isArray(points) && points.length > 1 ? points : null;
+}
+
+/**
+ * Draw the exact canvas polylines. When FlowCanvas already computed routes,
+ * those points are used verbatim — the minimap must not run a second A*.
+ */
 export function minimapEdgeSegments(
+  nodes: Node[],
   edges: Edge[],
   items: CanvasMinimapItem[],
   endpointIndex: Map<string, CanvasMinimapItem>,
-): Array<{ id: string; x1: number; y1: number; x2: number; y2: number }> {
-  const segments: Array<{ id: string; x1: number; y1: number; x2: number; y2: number }> = [];
-  for (const edge of edges) {
+  canvasRoutes?: Map<string, { points: Array<{ x: number; y: number }> }>,
+): MinimapEdgePath[] {
+  const paths: MinimapEdgePath[] = [];
+  const routed = new Set<string>();
+  const visible = edges.filter(edge => edgeEndpointsVisible(nodes, edge));
+
+  for (const edge of visible) {
+    const stamped = stampedWaypoints(edge);
+    if (!stamped) continue;
+    paths.push({ id: edge.id, points: stamped });
+    routed.add(edge.id);
+  }
+
+  const routes = canvasRoutes ?? routeAllReactionEdges(nodes, visible);
+  for (const edge of visible) {
+    if (routed.has(edge.id)) continue;
+    const route = routes.get(edge.id);
+    if (!route || route.points.length < 2) continue;
+    paths.push({ id: edge.id, points: route.points });
+    routed.add(edge.id);
+  }
+
+  for (const edge of visible) {
+    if (routed.has(edge.id)) continue;
+    if (edge.type === 'reactions' || edge.type === 'fine-granular-reaction') continue;
     const src = endpointIndex.get(edge.source) ?? items.find(i => i.id === edge.source);
     const tgt = endpointIndex.get(edge.target) ?? items.find(i => i.id === edge.target);
     if (!src || !tgt || src.id === tgt.id) continue;
-    segments.push({
+    paths.push({
       id: edge.id,
-      x1: src.x + src.width / 2,
-      y1: src.y + src.height / 2,
-      x2: tgt.x + tgt.width / 2,
-      y2: tgt.y + tgt.height / 2,
+      points: [
+        { x: src.x + src.width / 2, y: src.y + src.height / 2 },
+        { x: tgt.x + tgt.width / 2, y: tgt.y + tgt.height / 2 },
+      ],
     });
   }
-  return segments;
+  return paths;
 }

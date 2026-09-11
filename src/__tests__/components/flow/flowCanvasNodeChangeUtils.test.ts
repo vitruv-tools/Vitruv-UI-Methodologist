@@ -125,6 +125,28 @@ describe('collectNodeFollowChanges', () => {
     ]);
   });
 
+  it('moves grouped children on the bbox drop as well', () => {
+    const extra = collectNodeFollowChanges({
+      clampedChanges: [{
+        type: 'position',
+        id: 'bbox-a',
+        position: { x: 5, y: 8 },
+        dragging: false,
+      }],
+      liveNodes: [bbox, child],
+      edges: [],
+      bboxDraggingIds: new Set(),
+    });
+    expect(extra).toEqual([
+      {
+        type: 'position',
+        id: 'eobj-1',
+        position: { x: 15, y: 18 },
+        dragging: true,
+      },
+    ]);
+  });
+
   it('updates the bbox when a grouped eobject moves', () => {
     const extra = collectNodeFollowChanges({
       clampedChanges: [{

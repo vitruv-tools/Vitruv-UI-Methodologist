@@ -65,6 +65,7 @@ export interface MapFlowEdgeContext {
   handleEdgeHandleChange: (edgeId: string, newSourceHandle: string, newTargetHandle: string) => void;
   handleEdgeReorderRequest: (edgeId: string, controlPoint: { x: number; y: number }) => void;
   getFineParallel?: (edge: Edge) => { index: number; total: number } | undefined;
+  getReactionRoute?: (edge: Edge) => { points: Array<{ x: number; y: number }> } | undefined;
 }
 
 function reactionEdgeInteractionHandlers(
@@ -165,6 +166,7 @@ export function mapFlowCanvasEdge(edge: Edge, ctx: MapFlowEdgeContext): Edge {
       targetParallelIndex: targetData?.index,
       targetParallelCount: targetData?.total,
       customControlPoint: mappedCustomControlPoint(edge, isFineReaction),
+      routeWaypoints: (isReaction || isFineReaction) ? ctx.getReactionRoute?.(edge)?.points : undefined,
       ...reactionEdgeInteractionHandlers(edge.id, isReaction && !ctx.readOnly, ctx),
     },
     style: {

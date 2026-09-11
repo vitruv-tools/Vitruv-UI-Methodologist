@@ -123,7 +123,7 @@ function bboxDragDelta(
   change: any,
   currentNode: Node | undefined,
 ): { dx: number; dy: number } | null {
-  if (change.type !== 'position' || !change.position || change.dragging !== true) return null;
+  if (change.type !== 'position' || !change.position) return null;
   if (!change.id?.startsWith('bbox-') || !currentNode) return null;
   const dx = change.position.x - currentNode.position.x;
   const dy = change.position.y - currentNode.position.y;
@@ -203,8 +203,12 @@ export function collectNodeFollowChanges(args: {
   bboxDraggingIds: Set<string>;
 }): any[] {
   const { clampedChanges, liveNodes, edges, bboxDraggingIds } = args;
-  if (bboxDraggingIds.size > 0) {
-    return buildBboxChildDragChanges(clampedChanges, liveNodes);
+  const bboxMoved = clampedChanges.some(c => (
+    c.type === 'position' && typeof c.id === 'string' && c.id.startsWith('bbox-') && c.position
+  ));
+  if (bboxDraggingIds.size > 0 || bboxMoved) {
+    const childMoves = buildBboxChildDragChanges(clampedChanges, liveNodes);
+    if (childMoves.length > 0) return childMoves;
   }
 
   const extraChanges = buildBboxFollowChanges(clampedChanges, liveNodes);
