@@ -792,7 +792,7 @@ function trimPortStubs(points: Point[], start: Point, end: Point, cell: number):
 function joinLeaveAndMid(head: Point[], mid: Point[]): Point[] {
   const headTip = lastPoint(head);
   const midStart = mid.at(0);
-  if (headTip && midStart && headTip.x === midStart.x && headTip.y === midStart.y) {
+  if (headTip && midStart?.x === headTip.x && midStart?.y === headTip.y) {
     return [...head, ...mid.slice(1)];
   }
   return [...head, ...mid];
@@ -854,15 +854,18 @@ function openViaCell(grid: Grid, via: Point, fallback: { i: number; j: number })
 
 function routeViaPoint(
   grid: Grid,
-  source: Rect,
-  target: Rect,
-  starts: Port[],
-  goals: Port[],
-  preferred: { source?: Side; target?: Side },
   via: Point,
-  anchors: { start?: Point; end?: Point },
-  obstacles: Rect[],
+  options: {
+    source: Rect;
+    target: Rect;
+    starts: Port[];
+    goals: Port[];
+    preferred: { source?: Side; target?: Side };
+    anchors: { start?: Point; end?: Point };
+    obstacles: Rect[];
+  },
 ): RoutedPath | null {
+  const { source, target, starts, goals, preferred, anchors, obstacles } = options;
   const viaPort: Port = {
     cell: openViaCell(grid, via, starts[0].cell),
     side: 'right',
@@ -920,9 +923,15 @@ export function routeOrthogonalAStar(input: RouteInput): RoutedPath {
   };
 
   if (input.via) {
-    const viaRoute = routeViaPoint(
-      grid, input.source, input.target, starts, goals, preferred, input.via, anchors, obstacles,
-    );
+    const viaRoute = routeViaPoint(grid, input.via, {
+      source: input.source,
+      target: input.target,
+      starts,
+      goals,
+      preferred,
+      anchors,
+      obstacles,
+    });
     if (viaRoute) return viaRoute;
   }
 

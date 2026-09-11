@@ -141,10 +141,8 @@ function selectReactionLiveState(
   },
   source: string,
   target: string,
-  sourceX: number,
-  sourceY: number,
-  targetX: number,
-  targetY: number,
+  sourcePos: Point,
+  targetPos: Point,
   id: string,
 ): ReactionLiveState {
   const sourceNode = store.nodeInternals.get(source);
@@ -154,16 +152,16 @@ function selectReactionLiveState(
     tgtNode: targetNode ?? null,
     isSourceSelected: sourceNode?.selected || false,
     isTargetSelected: targetNode?.selected || false,
-    srcAbsX: nodeAbs(sourceNode, 'x', sourceX),
-    srcAbsY: nodeAbs(sourceNode, 'y', sourceY),
+    srcAbsX: nodeAbs(sourceNode, 'x', sourcePos.x),
+    srcAbsY: nodeAbs(sourceNode, 'y', sourcePos.y),
     srcW: ghostOrNodeSize(sourceNode, 'width', EOBJECT_DEFAULT_WIDTH) ?? EOBJECT_DEFAULT_WIDTH,
     srcH: ghostOrNodeSize(sourceNode, 'height', undefined),
     srcGhost: sourceNode?.type === 'ghost',
     srcAttrs: sourceNode?.data?.attributes,
     srcBox: routableRect(sourceNode),
     srcEcore: ecoreRectOf(sourceNode),
-    tgtAbsX: nodeAbs(targetNode, 'x', targetX),
-    tgtAbsY: nodeAbs(targetNode, 'y', targetY),
+    tgtAbsX: nodeAbs(targetNode, 'x', targetPos.x),
+    tgtAbsY: nodeAbs(targetNode, 'y', targetPos.y),
     tgtW: ghostOrNodeSize(targetNode, 'width', EOBJECT_DEFAULT_WIDTH) ?? EOBJECT_DEFAULT_WIDTH,
     tgtH: ghostOrNodeSize(targetNode, 'height', undefined),
     tgtGhost: targetNode?.type === 'ghost',
@@ -384,22 +382,20 @@ function computeOrthogonalPath(
   live: ReactionLiveState,
   data: ReactionRelationshipData | undefined,
   tempControlPoint: Point | null,
-  actualSourceX: number,
-  actualSourceY: number,
-  actualTargetX: number,
-  actualTargetY: number,
+  source: Point,
+  target: Point,
   sourcePosition: Position,
 ) {
   const routedPoints = orthogonalDragPoints(live, tempControlPoint) ?? storedWaypoints(data);
   if (routedPoints && routedPoints.length > 1) return buildOrthogonalDraw(routedPoints);
-  const centerX = tempControlPoint?.x ?? data?.customControlPoint?.x ?? (actualSourceX + actualTargetX) / 2;
-  const centerY = tempControlPoint?.y ?? data?.customControlPoint?.y ?? (actualSourceY + actualTargetY) / 2;
+  const centerX = tempControlPoint?.x ?? data?.customControlPoint?.x ?? (source.x + target.x) / 2;
+  const centerY = tempControlPoint?.y ?? data?.customControlPoint?.y ?? (source.y + target.y) / 2;
   return orthogonalLPath(
     sourcePosition === Position.Right || sourcePosition === Position.Left,
-    actualSourceX,
-    actualSourceY,
-    actualTargetX,
-    actualTargetY,
+    source.x,
+    source.y,
+    target.x,
+    target.y,
     centerX,
     centerY,
   );
@@ -455,10 +451,8 @@ function computeReactionPathData(options: {
       options.live,
       options.data,
       options.tempControlPoint,
-      options.actualSourceX,
-      options.actualSourceY,
-      options.actualTargetX,
-      options.actualTargetY,
+      { x: options.actualSourceX, y: options.actualSourceY },
+      { x: options.actualTargetX, y: options.actualTargetY },
       options.sourcePosition,
     );
   }
@@ -519,7 +513,14 @@ export function ReactionRelationship({
   const targetHandle = data?.targetHandleId;
 
   const live = useStore((store) =>
-    selectReactionLiveState(store, source, target, sourceX, sourceY, targetX, targetY, id),
+    selectReactionLiveState(
+      store,
+      source,
+      target,
+      { x: sourceX, y: sourceY },
+      { x: targetX, y: targetY },
+      id,
+    ),
   );
 
   const { isSourceSelected, isTargetSelected } = live;
