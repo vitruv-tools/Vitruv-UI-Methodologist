@@ -202,6 +202,7 @@ export interface FlowCanvasHandle {
   getNodes: () => Node[];
   getEdges: () => Edge[];
   addEcoreFile: (fileName: string, fileContent: string, meta?: any) => void;
+  updateEcoreDisplayName: (metaModelId: number, displayName: string) => void;
   updateEcoreFileData: (fileName: string, fileContent: string, ecoreFileId?: number) => void;
   resetExpandedFile: () => void;
   undo: () => void;
@@ -1255,6 +1256,16 @@ export const FlowCanvas = forwardRef<FlowCanvasHandle, FlowCanvasProps>(
       );
     }, [setNodes]);
 
+    const updateEcoreDisplayName = useCallback((metaModelId: number, displayName: string) => {
+      setNodes(current => current.map(n => {
+        if (n.type !== 'ecoreFile') return n;
+        const nodeMetaModelId = n.data?.metaModelId;
+        const nodeSourceId = n.data?.metaModelSourceId;
+        if (nodeMetaModelId !== metaModelId && nodeSourceId !== metaModelId) return n;
+        return { ...n, data: { ...n.data, displayName } };
+      }));
+    }, [setNodes]);
+
     const resetExpandedFile = useCallback(() => {
       setExpandedFileId(null);
       setNodes(current =>
@@ -1301,6 +1312,7 @@ export const FlowCanvas = forwardRef<FlowCanvasHandle, FlowCanvasProps>(
           ?? findFreeEcorePosition(ecoreNodes, meta?.position ?? { x: 60, y: 60 }),
         data: {
           fileName,
+          displayName: meta?.displayName ?? fileName.replace(/\.ecore$/i, ''),
           fileContent,
           nsUri,
           description: meta?.description,
@@ -1451,6 +1463,7 @@ export const FlowCanvas = forwardRef<FlowCanvasHandle, FlowCanvasProps>(
       getNodes: () => nodes,
       getEdges: () => edges,
       addEcoreFile,
+      updateEcoreDisplayName,
       updateEcoreFileData,
       resetExpandedFile,
       undo,
@@ -1464,7 +1477,7 @@ export const FlowCanvas = forwardRef<FlowCanvasHandle, FlowCanvasProps>(
       fitUmlView,
       openSelectedReactionEditor,
       establishBaseline,
-    }), [handleToolClick, loadDiagramData, nodes, edges, viewTypes, addEcoreFile, updateEcoreFileData, resetExpandedFile, undo, redo, canUndo, canRedo, getReactionEdges, getWorkspaceSnapshot, autoLayoutEcoreBoxes, fitUmlView, openSelectedReactionEditor, establishBaseline]);
+    }), [handleToolClick, loadDiagramData, nodes, edges, viewTypes, addEcoreFile, updateEcoreDisplayName, updateEcoreFileData, resetExpandedFile, undo, redo, canUndo, canRedo, getReactionEdges, getWorkspaceSnapshot, autoLayoutEcoreBoxes, fitUmlView, openSelectedReactionEditor, establishBaseline]);
 
     // ── Render mapping ────────────────────────────────────────────────────────
 

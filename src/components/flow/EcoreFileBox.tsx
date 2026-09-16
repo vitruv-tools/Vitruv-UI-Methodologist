@@ -13,6 +13,8 @@ export { cardColor, darken, metaModelDisplayColor } from '../../utils/metaModelC
 
 interface EcoreFileBoxData {
   fileName: string;
+  /** Project-facing label; fileName remains the technical canvas identifier. */
+  displayName?: string;
   fileContent: string;
   onExpand: (fileName: string, fileContent: string) => void;
   onSelect: (fileName: string) => void;
@@ -127,7 +129,7 @@ export const EcoreFileBox: React.FC<NodeProps<EcoreFileBoxData>> = ({
   const {
     fileName, fileContent, onExpand, onSelect, onRequestDelete, onRename,
     onConnectionStart, isConnectionActive = false,
-    description, keywords, createdAt, domain, onShowDetails, metaModelId,
+    description, keywords, createdAt, domain, onShowDetails, metaModelId, displayName,
     ecoreFileId, genModelFileId,
     isReactionSource = false,
     isConstraintContext = false,
@@ -247,7 +249,7 @@ export const EcoreFileBox: React.FC<NodeProps<EcoreFileBoxData>> = ({
     e.stopPropagation();
   };
 
-  const baseName = removeExt(fileName);
+  const baseName = displayName || removeExt(fileName);
   const cardAriaLabel = `${baseName} metamodel. Enter to open, Space to select, Shift+F10 for menu.`;
 
   const downloadMetaModelFile = async (
@@ -354,7 +356,7 @@ export const EcoreFileBox: React.FC<NodeProps<EcoreFileBoxData>> = ({
               lineHeight: 1.3,
               maxWidth: '100%',
             }}>
-              {removeExt(fileName)}
+              {baseName}
             </span>
           )}
 

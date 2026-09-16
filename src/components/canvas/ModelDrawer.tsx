@@ -50,6 +50,8 @@ interface ModelDrawerProps {
   onFetchFile?: (fileId: number) => Promise<string>;
   /** Delete a metamodel from the user's library (My Library tab only) */
   onDeleteModel?: (model: DrawerModel) => Promise<void>;
+  /** Rename a meta model only in the currently open project. */
+  onRenameProjectModel?: (model: DrawerModel, name: string) => Promise<void>;
 }
 
 // ── color scheme per domain ───────────────────────────────────────────────────
@@ -100,7 +102,7 @@ const formatDate = (iso?: string) => {
 
 export const ModelDrawer: React.FC<ModelDrawerProps> = ({
   models, addedModelIds = new Set(), loading, onClose, onAddModel,
-  myLibraryModels = [], publicLibraryModels = [], onFetchFile, onDeleteModel,
+  myLibraryModels = [], publicLibraryModels = [], onFetchFile, onDeleteModel, onRenameProjectModel,
 }) => {
   const [libTab, setLibTab] = useState<'my' | 'public'>('my');
   const [search, setSearch] = useState('');
@@ -140,6 +142,12 @@ export const ModelDrawer: React.FC<ModelDrawerProps> = ({
     } catch (e: any) {
       setDeleteError(e?.message || 'Failed to delete');
     }
+  };
+
+  const handleRenameProjectModel = async (model: DrawerModel, name: string) => {
+    if (!onRenameProjectModel) return;
+    await onRenameProjectModel(model, name);
+    setDetailModel(current => current?.id === model.id ? { ...current, name } : current);
   };
 
   return (
@@ -207,6 +215,7 @@ export const ModelDrawer: React.FC<ModelDrawerProps> = ({
             onAddModel={onAddModel}
             addedModelIds={addedModelIds}
             onDelete={libTab === 'my' && onDeleteModel ? () => setDeletingModel(detailModel) : undefined}
+            onRenameProjectModel={onRenameProjectModel ? handleRenameProjectModel : undefined}
           />
         ) : (
           <LibraryView
@@ -384,17 +393,55 @@ interface DetailViewProps {
   onAddModel: (m: DrawerModel) => void;
   addedModelIds: Set<number>;
   onDelete?: () => void;
+  onRenameProjectModel?: (model: DrawerModel, name: string) => Promise<void>;
 }
 
-const DetailView: React.FC<DetailViewProps> = ({ model, onFetchFile, onAddModel, addedModelIds, onDelete }) => {
+const DetailView: React.FC<DetailViewProps> = ({
+  model, onFetchFile, onAddModel, addedModelIds, onDelete, onRenameProjectModel,
+}) => {
   const [ecoreContent, setEcoreContent] = useState<string | null>(model.ecoreContent ?? null);
   const [ecoreFileId, setEcoreFileId] = useState<number | undefined>(model.ecoreFileId);
   const [fetchError, setFetchError] = useState(false);
   const [fetchingUml, setFetchingUml] = useState(false);
   const [umlExpanded, setUmlExpanded] = useState(false);
+  const [editingProjectName, setEditingProjectName] = useState(false);
+  const [projectName, setProjectName] = useState(model.name);
+  const [renameError, setRenameError] = useState('');
+  const [renaming, setRenaming] = useState(false);
   const diagramRef = useRef<UMLDiagramHandle>(null);
   const theme = getTheme(model.domain);
   const isOnCanvas = addedModelIds.has(model.id);
+  const canRenameProjectModel = model.inProject && !!onRenameProjectModel;
+
+  useEffect(() => {
+    setProjectName(model.name);
+    setEditingProjectName(false);
+    setRenameError('');
+  }, [model.id, model.name]);
+
+  const saveProjectName = async () => {
+    const name = projectName.trim();
+    if (!name) {
+      setRenameError('Please enter a name.');
+      return;
+    }
+    if (name === model.name) {
+      setEditingProjectName(false);
+      return;
+    }
+    if (!onRenameProjectModel) return;
+
+    setRenaming(true);
+    setRenameError('');
+    try {
+      await onRenameProjectModel(model, name);
+      setEditingProjectName(false);
+    } catch (error: any) {
+      setRenameError(error?.message || 'Could not rename this project meta-model.');
+    } finally {
+      setRenaming(false);
+    }
+  };
 
   const umlSaveContext: UmlDiagramSaveContext | undefined =
     model.id && ecoreFileId
@@ -461,10 +508,57 @@ const DetailView: React.FC<DetailViewProps> = ({ model, onFetchFile, onAddModel,
 
           {/* Name */}
           <div>
-            <FieldLabel>Name</FieldLabel>
-            <div style={{ fontSize: 14, fontWeight: 600, color: T.text, fontFamily: FONT, lineHeight: 1.4 }}>
-              {model.name}
-            </div>
+            <FieldLabel>{canRenameProjectModel ? 'Project name' : 'Name'}</FieldLabel>
+            {canRenameProjectModel && editingProjectName ? (
+              <>
+                <input
+                  aria-label="Project meta-model name"
+                  value={projectName}
+                  onChange={e => setProjectName(e.target.value)}
+                  onKeyDown={e => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      void saveProjectName();
+                    }
+                    if (e.key === 'Escape') {
+                      e.stopPropagation();
+                      setProjectName(model.name);
+                      setEditingProjectName(false);
+                      setRenameError('');
+                    }
+                  }}
+                  disabled={renaming}
+                  autoFocus
+                  style={{ width: '100%', boxSizing: 'border-box', padding: '7px 8px', borderRadius: 6, border: `1px solid ${T.border}`, background: T.inputBg, color: T.text, fontFamily: FONT, fontSize: 13 }}
+                />
+                {renameError && <div role="alert" style={{ color: '#dc2626', fontSize: 11, marginTop: 5 }}>{renameError}</div>}
+                <div style={{ display: 'flex', gap: 6, marginTop: 7 }}>
+                  <button type="button" onClick={() => void saveProjectName()} disabled={renaming} style={{ border: 'none', borderRadius: 6, padding: '6px 9px', background: DARK, color: '#fff', fontSize: 11, fontWeight: 600, cursor: renaming ? 'wait' : 'pointer' }}>
+                    {renaming ? 'Saving…' : 'Save'}
+                  </button>
+                  <button type="button" onClick={() => { setProjectName(model.name); setEditingProjectName(false); setRenameError(''); }} disabled={renaming} style={{ border: `1px solid ${T.border}`, borderRadius: 6, padding: '6px 9px', background: T.surface, color: T.secondary, fontSize: 11, cursor: 'pointer' }}>
+                    Cancel
+                  </button>
+                </div>
+              </>
+            ) : (
+              <>
+                <div style={{ fontSize: 14, fontWeight: 600, color: T.text, fontFamily: FONT, lineHeight: 1.4 }}>
+                  {model.name}
+                </div>
+                {canRenameProjectModel && (
+                  <button type="button" onClick={() => setEditingProjectName(true)} style={{ border: 'none', background: 'none', padding: '5px 0 0', color: '#049484', fontSize: 11, fontWeight: 600, cursor: 'pointer' }}>
+                    Rename in this project
+                  </button>
+                )}
+              </>
+            )}
+            {canRenameProjectModel && !editingProjectName && (
+              <div style={{ color: T.muted, fontSize: 11, marginTop: 5, lineHeight: 1.4 }}>
+                This does not change the model-library name.
+              </div>
+            )}
           </div>
 
           {/* Keywords */}
