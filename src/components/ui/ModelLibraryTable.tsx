@@ -171,7 +171,6 @@ export const ModelDetailModal: React.FC<ModelDetailModalProps> = ({
       await apiService.updateMetaModel(String(model.id), {
         name: form.name, description: form.description, domain: form.domain, keyword: form.keywords,
         ecoreFileId: model.ecoreFileId || 0,
-        genModelFileId: model.genModelFileId || 0,
       });
       setDisplayModel((prev: any) => ({ ...prev, name: form.name, description: form.description, domain: form.domain, keyword: form.keywords }));
       setSuccess('Saved successfully');
@@ -881,7 +880,7 @@ export const ModelLibraryTable: React.FC<ModelLibraryTableProps> = ({ onModelOpe
         <td colSpan={4} style={emptyRowStyle}>
           {search.trim()
             ? `No models match "${search.trim()}". Clear filters to see all models.`
-            : 'No models yet. Upload a .ecore and .genmodel pair to get started.'}
+            : 'No models yet. Upload a .ecore file to get started.'}
         </td>
       </tr>
     );

@@ -61,9 +61,7 @@ function buildUpdatePayload(
     keyword,
     ecoreFileId: newFileId,
   };
-  if (meta.genModelFileId != null) {
-    payload.genModelFileId = Number(meta.genModelFileId);
-  }
+
   return payload;
 }
 
