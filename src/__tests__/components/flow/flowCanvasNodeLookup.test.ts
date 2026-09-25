@@ -5,6 +5,7 @@ import {
   findNodeByMetaModelId,
   getBackendMetaModelId,
   getMetaModelSourceId,
+  isMetaModelRowOnCanvas,
   isPositionInsideNode,
 } from '../../../components/flow/flowCanvasNodeLookup';
 import { ECORE_FILE_BOX_SIZE } from '../../../components/flow/flowCanvasConstants';
@@ -57,6 +58,15 @@ describe('findNodeByMetaModelId', () => {
 
   it('only considers ecoreFile nodes', () => {
     expect(findNodeByMetaModelId(nodes, 3)).toBeUndefined();
+  });
+
+  it('does not treat another version that shares a source id as the same row', () => {
+    const versionOne = [
+      ecore('v1', 0, 0, { metaModelId: 10, metaModelSourceId: 10, version: '1.0' }),
+    ];
+    expect(findNodeByMetaModelId(versionOne, 11)).toBeUndefined();
+    expect(isMetaModelRowOnCanvas(versionOne, 11)).toBe(false);
+    expect(isMetaModelRowOnCanvas(versionOne, 10)).toBe(true);
   });
 });
 

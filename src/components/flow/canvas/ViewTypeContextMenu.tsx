@@ -219,7 +219,10 @@ export const ViewTypeContextMenu: React.FC<ViewTypeContextMenuProps> = ({
                                     background: isSelected ? '#374151' : '#d1d5db',
                                     flexShrink: 0,
                                 }} />
-                                {node.data?.fileName ?? node.id}
+                                {node.data?.displayName ?? node.data?.fileName ?? node.id}
+                                {typeof node.data?.version === 'string' && node.data.version.trim()
+                                  ? ` (${node.data.version.trim()})`
+                                  : ''}
                             </button>
                         );
                     })}

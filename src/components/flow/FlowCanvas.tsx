@@ -113,6 +113,7 @@ import {
   findEcoreTargetAtPosition,
   getBackendMetaModelId,
   getMetaModelSourceId,
+  isMetaModelRowOnCanvas,
 } from './flowCanvasNodeLookup';
 import { buildInitialReactionCode } from './flowCanvasReactionCode';
 import { buildWorkspaceSnapshot } from './flowCanvasSnapshot';
@@ -1285,9 +1286,7 @@ export const FlowCanvas = forwardRef<FlowCanvasHandle, FlowCanvasProps>(
         ? meta.metaModelSourceId
         : metaModelId;
 
-      const alreadyOnCanvas = metaModelId != null && ecoreNodes.some(
-        n => n.data?.metaModelId === metaModelId || n.data?.metaModelSourceId === metaModelSourceId,
-      );
+      const alreadyOnCanvas = isMetaModelRowOnCanvas(ecoreNodes, metaModelId);
       if (alreadyOnCanvas) return;
 
       const nodeId = `ecore-${meta?.metaModelId ?? meta?.metaModelSourceId ?? Date.now()}`;
@@ -1307,11 +1306,14 @@ export const FlowCanvas = forwardRef<FlowCanvasHandle, FlowCanvasProps>(
       const newEcoreNode: Node = {
         id: nodeId,
         type: 'ecoreFile',
-        position: savedPosition
-          ?? findFreeEcorePosition(ecoreNodes, meta?.position ?? { x: 60, y: 60 }),
+        position: findFreeEcorePosition(
+          ecoreNodes,
+          savedPosition ?? meta?.position ?? { x: 60, y: 60 },
+        ),
         data: {
           fileName,
           displayName: meta?.displayName ?? fileName.replace(/\.ecore$/i, ''),
+          version: typeof meta?.version === 'string' ? meta.version : undefined,
           fileContent,
           nsUri,
           description: meta?.description,

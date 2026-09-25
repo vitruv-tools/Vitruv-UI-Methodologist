@@ -1,9 +1,11 @@
 import { apiService } from '../services/api';
 import { MetaModelFindFilters } from './metaModelSearchFilters';
+import { displayMetaModelVersion } from './metaModelVersion';
 
 export interface LibraryMetaModel {
   id: number;
   name: string;
+  version?: string;
   description?: string;
   domain?: string;
   keyword?: string[];
@@ -24,6 +26,7 @@ export function isModelReferencedByProjects(model: LibraryMetaModel): boolean {
 
 export interface CreateMetaModelPayload {
   name: string;
+  version?: string;
   description?: string;
   domain?: string;
   keyword?: string[];
@@ -47,8 +50,11 @@ export function extractCreatePayload(data: unknown): CreateMetaModelPayload | nu
   const name = typeof obj.name === 'string' ? obj.name.trim() : '';
   if (!name) return null;
 
+  const version = typeof obj.version === 'string' ? obj.version.trim() : '';
+
   return {
     name,
+    version: version || undefined,
     description: typeof obj.description === 'string' ? obj.description : undefined,
     domain: typeof obj.domain === 'string' ? obj.domain : undefined,
     keyword: Array.isArray(obj.keyword)
@@ -84,6 +90,7 @@ export function buildPendingMetaModelFromCreate(payload: CreateMetaModelPayload)
   return {
     id: -Math.abs(Date.now()),
     name: payload.name,
+    version: payload.version,
     description: payload.description,
     domain: payload.domain,
     keyword: payload.keyword,
@@ -102,6 +109,12 @@ export function findMatchingCreatedModel(
   const targetName = payload.name.trim().toLowerCase();
   return models.find((model) => {
     if (model.name.trim().toLowerCase() !== targetName) return false;
+    if (
+      payload.version != null
+      && displayMetaModelVersion(model.version) !== displayMetaModelVersion(payload.version)
+    ) {
+      return false;
+    }
     if (payload.ecoreFileId != null && model.ecoreFileId !== payload.ecoreFileId) return false;
     if (payload.genModelFileId != null && model.genModelFileId !== payload.genModelFileId) return false;
     return model.id > 0;

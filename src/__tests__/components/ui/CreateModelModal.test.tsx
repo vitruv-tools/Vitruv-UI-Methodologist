@@ -330,6 +330,7 @@ describe('CreateModelModal', () => {
   describe('form submission', () => {
     const expectedRequest = {
       name: 'Test Model',
+      version: '1.0',
       description: 'A description',
       domain: 'Testing',
       keyword: ['kw'],
@@ -434,6 +435,43 @@ describe('CreateModelModal', () => {
     expect(apiService.deleteFile).not.toHaveBeenCalled();
   },
 );
+
+    it('sends the version typed on the form', async () => {
+      render(<CreateModelModal isOpen onClose={jest.fn()} onSuccess={jest.fn()} />);
+      fillRequiredFields();
+      fireEvent.change(screen.getByLabelText(/Version/i), { target: { value: '2.0' } });
+      await uploadEcoreViaFileMode();
+
+      await act(async () => {
+        fireEvent.click(screen.getByRole('button', { name: /Import Meta Model/i }));
+      });
+
+      await waitFor(() => {
+        expect(apiService.createMetaModel).toHaveBeenCalledWith(
+          expect.objectContaining({ name: 'Test Model', version: '2.0' }),
+        );
+      });
+    });
+
+    it('requires a non-blank version and does not check semver format', async () => {
+      render(<CreateModelModal isOpen onClose={jest.fn()} onSuccess={jest.fn()} />);
+      fillRequiredFields();
+      fireEvent.change(screen.getByLabelText(/Version/i), { target: { value: '   ' } });
+      await uploadEcoreViaFileMode();
+
+      expect(screen.getByText('Complete All Fields')).toBeDisabled();
+
+      fireEvent.change(screen.getByLabelText(/Version/i), { target: { value: 'beta' } });
+      await act(async () => {
+        fireEvent.click(screen.getByRole('button', { name: /Import Meta Model/i }));
+      });
+
+      await waitFor(() => {
+        expect(apiService.createMetaModel).toHaveBeenCalledWith(
+          expect.objectContaining({ version: 'beta' }),
+        );
+      });
+    });
 
     it.each([
       ['network error', new Error('Network error'), 'Network error'],

@@ -7,6 +7,7 @@ import type { EditableFineGranularMetaModelRelation } from './FineGranularMetaMo
 export type EditableVsumMetaModelRef = {
   id: number;
   name: string;
+  version?: string;
   description: string;
   domain: string;
   sourceId: number;
