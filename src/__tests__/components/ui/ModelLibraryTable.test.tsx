@@ -7,8 +7,34 @@ jest.mock('../../../services/api', () => ({
   apiService: {
     findMetaModels: jest.fn(),
     deleteMetaModel: jest.fn(),
+    getFile: jest.fn(),
+    updateMetaModel: jest.fn(),
   },
 }));
+
+jest.mock('../../../components/canvas/UMLDiagram', () => {
+  const { forwardRef, useImperativeHandle, createElement } = require('react');
+  return {
+    UMLDiagram: forwardRef((props: any, ref: any) => {
+      useImperativeHandle(ref, () => ({
+        zoomIn: jest.fn(),
+        zoomOut: jest.fn(),
+        fitToView: jest.fn(),
+        flushLayout: jest.fn(),
+        reload: jest.fn(),
+        undo: jest.fn(),
+        redo: jest.fn(),
+        canUndo: jest.fn(() => false),
+        canRedo: jest.fn(() => false),
+        isDirty: jest.fn(() => false),
+        tryEscape: jest.fn(() => false),
+        getModel: jest.fn(() => ({ classes: [], relationships: [] })),
+        save: jest.fn(),
+      }));
+      return createElement('div', { 'data-testid': 'uml-diagram', 'data-interactive': String(props.interactive !== false) });
+    }),
+  };
+});
 
 // Stand-in for the real import modal — exposes a single button that fires
 // onSuccess with a create payload, so tests can drive ModelLibraryTable's
@@ -26,7 +52,12 @@ jest.mock('../../../components/ui/CreateModelModal', () => ({
 }));
 
 const { apiService } = require('../../../services/api') as {
-  apiService: { findMetaModels: jest.Mock; deleteMetaModel: jest.Mock };
+  apiService: {
+    findMetaModels: jest.Mock;
+    deleteMetaModel: jest.Mock;
+    getFile: jest.Mock;
+    updateMetaModel: jest.Mock;
+  };
 };
 
 const existingModel = { id: 1, name: 'Existing Model', createdAt: new Date().toISOString(), ecoreFileId: 1, genModelFileId: 1 };
@@ -46,7 +77,10 @@ describe('ModelLibraryTable', () => {
   beforeEach(() => {
     apiService.findMetaModels.mockReset();
     apiService.deleteMetaModel.mockReset();
+    apiService.getFile.mockReset();
+    apiService.updateMetaModel.mockReset();
     apiService.findMetaModels.mockResolvedValue({ data: [existingModel] });
+    apiService.getFile.mockResolvedValue('<ecore/>');
   });
 
   afterEach(() => {
@@ -98,7 +132,7 @@ describe('ModelLibraryTable', () => {
     await waitFor(() => expect(apiService.findMetaModels).toHaveBeenCalledTimes(3));
   });
 
-  it('keeps shared metadata fields in the same order when editing', () => {
+  it('keeps shared metadata fields in the same order when editing details', () => {
     render(
       <ModelDetailModal
         model={{
@@ -107,7 +141,9 @@ describe('ModelLibraryTable', () => {
           description: 'A description',
           domain: 'Testing',
           keyword: ['uml'],
+          ecoreFileId: 1,
         }}
+        ecoreContent="<ecore/>"
         onClose={jest.fn()}
         onUpdated={jest.fn()}
       />,
@@ -119,11 +155,48 @@ describe('ModelLibraryTable', () => {
     expect(name.compareDocumentPosition(keywords) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     expect(keywords.compareDocumentPosition(description) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
 
-    fireEvent.click(screen.getByRole('button', { name: 'Edit' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Edit details' }));
 
     const formLabels = Array.from(document.querySelector('form')!.querySelectorAll('label'))
       .map((label) => label.textContent);
     expect(formLabels).toEqual(['Name', 'Keywords', 'Description', 'Domain']);
+  });
+
+  it('opens the full-screen UML editor when Edit is clicked', () => {
+    render(
+      <ModelDetailModal
+        model={{
+          id: 1,
+          name: 'Existing Model',
+          description: 'A description',
+          domain: 'Testing',
+          keyword: ['uml'],
+          ecoreFileId: 1,
+        }}
+        ecoreContent="<ecore/>"
+        onClose={jest.fn()}
+        onUpdated={jest.fn()}
+      />,
+    );
+
+    expect(screen.queryByTestId('uml-fullscreen-page')).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Edit' }));
+    expect(screen.getByTestId('uml-fullscreen-page')).toBeInTheDocument();
+    const editorDiagrams = screen.getAllByTestId('uml-diagram');
+    expect(editorDiagrams.some(node => node.getAttribute('data-interactive') === 'true')).toBe(true);
+  });
+
+  it('opens the full-screen UML editor from the row Edit action', async () => {
+    apiService.findMetaModels.mockReset();
+    mockLibraryFetch({ owned: [existingModel] });
+
+    render(<ModelLibraryTable />);
+    await waitFor(() => expect(screen.getByText('Existing Model')).toBeInTheDocument());
+
+    fireEvent.click(screen.getByLabelText('Row actions'));
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Edit' }));
+
+    await waitFor(() => expect(screen.getByTestId('uml-fullscreen-page')).toBeInTheDocument());
   });
 
   describe('delete model', () => {
@@ -157,6 +230,7 @@ describe('ModelLibraryTable', () => {
       fireEvent.click(screen.getByLabelText('Row actions'));
       expect(screen.queryByRole('menuitem', { name: 'Delete' })).not.toBeInTheDocument();
       expect(screen.getByRole('menuitem', { name: 'View details' })).toBeInTheDocument();
+      expect(screen.getByRole('menuitem', { name: 'Edit' })).toBeInTheDocument();
     });
 
     it('blocks deletion up front for a model referenced by a project — only the reason and Cancel are shown', async () => {
