@@ -127,10 +127,17 @@ export function buildMinimapEndpointIndex(
     if (node.type === 'ecoreFile') {
       const ns = typeof node.data?.nsUri === 'string' ? node.data.nsUri : '';
       const label = stripEcoreExt(String(node.data?.fileName ?? ''));
-      const match = bboxNodes.find(b =>
-        (ns !== '' && (b.id === `bbox-${ns}` || b.data?.nsUri === ns))
-        || (label !== '' && stripEcoreExt(String(b.data?.label ?? '')) === label),
+      const owned = bboxNodes.find(b =>
+        b.data?.ownerNodeId === node.id || b.id === `bbox-${node.id}`,
       );
+      const legacy = bboxNodes.find(b =>
+        !b.data?.ownerNodeId
+        && (
+          (ns !== '' && (b.id === `bbox-${ns}` || b.data?.nsUri === ns))
+          || (label !== '' && stripEcoreExt(String(b.data?.label ?? '')) === label)
+        ),
+      );
+      const match = owned ?? legacy;
       const item = match ? byId.get(match.id) : undefined;
       if (item) index.set(node.id, item);
     }

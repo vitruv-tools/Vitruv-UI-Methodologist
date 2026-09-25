@@ -434,12 +434,50 @@ describe('CreateModelModal', () => {
         expect(apiService.createMetaModel).toHaveBeenCalledWith(
           expect.objectContaining({
             name: 'Test Model',
+            version: '1.0',
             description: 'A description',
             domain: 'Testing',
             ecoreFileId: 10,
             genModelFileId: 10,
             applyGenModelFixes: false,
           }),
+        );
+      });
+    });
+
+    it('sends the version typed on the form', async () => {
+      render(<CreateModelModal isOpen onClose={jest.fn()} onSuccess={jest.fn()} />);
+      fillRequiredFields();
+      fireEvent.change(screen.getByLabelText(/Version/i), { target: { value: '2.0' } });
+      await uploadBothFilesViaFileMode();
+
+      await act(async () => {
+        fireEvent.click(screen.getByRole('button', { name: /Import Meta Model/i }));
+      });
+
+      await waitFor(() => {
+        expect(apiService.createMetaModel).toHaveBeenCalledWith(
+          expect.objectContaining({ name: 'Test Model', version: '2.0', applyGenModelFixes: false }),
+        );
+      });
+    });
+
+    it('requires a non-blank version and does not check semver format', async () => {
+      render(<CreateModelModal isOpen onClose={jest.fn()} onSuccess={jest.fn()} />);
+      fillRequiredFields();
+      fireEvent.change(screen.getByLabelText(/Version/i), { target: { value: '   ' } });
+      await uploadBothFilesViaFileMode();
+
+      expect(screen.getByText('Complete All Fields')).toBeDisabled();
+
+      fireEvent.change(screen.getByLabelText(/Version/i), { target: { value: 'beta' } });
+      await act(async () => {
+        fireEvent.click(screen.getByRole('button', { name: /Import Meta Model/i }));
+      });
+
+      await waitFor(() => {
+        expect(apiService.createMetaModel).toHaveBeenCalledWith(
+          expect.objectContaining({ version: 'beta' }),
         );
       });
     });

@@ -7,6 +7,7 @@ import {
   METAMODEL_PREVIEW_LAYOUT_SCOPE,
   metaModelPreviewLayoutFileName,
 } from '../../utils/metaModelPreview';
+import { displayMetaModelVersion } from '../../utils/metaModelVersion';
 
 const FONT = 'ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, sans-serif';
 const DARK = '#1e293b';
@@ -27,6 +28,7 @@ const T = {
 export interface DrawerModel {
   id: number;
   name: string;
+  version?: string;
   sourceId?: number;
   domain?: string;
   ecoreFileId?: number;
@@ -120,7 +122,12 @@ export const ModelDrawer: React.FC<ModelDrawerProps> = ({
 
   const fromLibrary = rawLib
     .filter(m => !addedModelIds.has(m.id))
-    .filter(m => !search || m.name.toLowerCase().includes(search.toLowerCase()))
+    .filter(m => {
+      if (!search) return true;
+      const query = search.toLowerCase();
+      return m.name.toLowerCase().includes(query)
+        || displayMetaModelVersion(m.version).toLowerCase().includes(query);
+    })
     .filter(m => !domainFilter || m.domain === domainFilter);
 
   const switchTab = (tab: 'my' | 'public') => {
@@ -287,9 +294,12 @@ const LibraryView: React.FC<LibraryViewProps> = ({
                 No models on canvas
               </div>
             ) : (
-              onCanvas.map(m => (
-                <ModelCard key={m.id} model={m} onCanvas onAdd={onAddModel} onOpenDetail={onOpenDetail} />
-              ))
+              <>
+                <ModelListHeader />
+                {onCanvas.map(m => (
+                  <ModelCard key={m.id} model={m} onCanvas onAdd={onAddModel} onOpenDetail={onOpenDetail} />
+                ))}
+              </>
             )}
           </div>
         </div>
@@ -373,6 +383,7 @@ const LibraryView: React.FC<LibraryViewProps> = ({
               </div>
             ) : (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                <ModelListHeader />
                 {fromLibrary.map(m => (
                   <ModelCard key={m.id} model={m} onCanvas={false} onAdd={onAddModel} onOpenDetail={onOpenDetail} />
                 ))}
@@ -559,6 +570,13 @@ const DetailView: React.FC<DetailViewProps> = ({
                 This does not change the model-library name.
               </div>
             )}
+          </div>
+
+          <div>
+            <FieldLabel>Version</FieldLabel>
+            <div style={{ fontSize: 14, fontWeight: 600, color: T.text, fontFamily: FONT, lineHeight: 1.4 }}>
+              {displayMetaModelVersion(model.version)}
+            </div>
           </div>
 
           {/* Keywords */}
@@ -786,6 +804,43 @@ const SectionLabel: React.FC<{ children: React.ReactNode }> = ({ children }) => 
   </div>
 );
 
+const MODEL_LIST_COLUMNS = {
+  name: { flex: '1 1 0', minWidth: 0 } as React.CSSProperties,
+  version: { flex: '0 0 72px', minWidth: 0 } as React.CSSProperties,
+  domain: { flex: '0 0 110px', minWidth: 0 } as React.CSSProperties,
+  date: { flex: '0 0 76px' } as React.CSSProperties,
+  keywords: { flex: '0 0 48px' } as React.CSSProperties,
+};
+
+const MODEL_LIST_HEADER_COLUMNS = {
+  Name: 'name',
+  Version: 'version',
+  Domain: 'domain',
+  Created: 'date',
+  Keywords: 'keywords',
+} as const;
+
+const ModelListHeader: React.FC = () => (
+  <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '0 10px 2px' }}>
+    <div style={{ width: 26, flexShrink: 0 }} />
+    {(Object.keys(MODEL_LIST_HEADER_COLUMNS) as (keyof typeof MODEL_LIST_HEADER_COLUMNS)[]).map((label) => (
+      <span
+        key={label}
+        style={{
+          ...MODEL_LIST_COLUMNS[MODEL_LIST_HEADER_COLUMNS[label]],
+          fontSize: 10,
+          fontWeight: 700,
+          color: T.muted,
+          letterSpacing: '0.04em',
+          textTransform: 'uppercase',
+        }}
+      >
+        {label}
+      </span>
+    ))}
+  </div>
+);
+
 // ── ModelCard ─────────────────────────────────────────────────────────────────
 
 interface ModelCardProps {
@@ -794,6 +849,44 @@ interface ModelCardProps {
   onAdd: (model: DrawerModel) => void;
   onOpenDetail: (model: DrawerModel) => void;
 }
+
+const cardEllipsis: React.CSSProperties = {
+  overflow: 'hidden',
+  textOverflow: 'ellipsis',
+  whiteSpace: 'nowrap',
+};
+
+const ModelCardFields: React.FC<{ model: DrawerModel; nameColor: string; metaColor: string }> = ({
+  model, nameColor, metaColor,
+}) => {
+  const version = displayMetaModelVersion(model.version);
+  const theme = getTheme(model.domain);
+  return (
+    <>
+      <span title={model.name} style={{ ...MODEL_LIST_COLUMNS.name, ...cardEllipsis, fontSize: 12, fontWeight: 700, color: nameColor }}>
+        {model.name}
+      </span>
+      <span title={version} style={{ ...MODEL_LIST_COLUMNS.version, ...cardEllipsis, fontSize: 12, fontWeight: 700, color: nameColor, fontVariantNumeric: 'tabular-nums' }}>
+        {version}
+      </span>
+      <div style={{ ...MODEL_LIST_COLUMNS.domain, ...cardEllipsis }}>
+        {model.domain ? (
+          <span style={{
+            padding: '2px 7px', borderRadius: 20,
+            background: theme.badge, color: theme.badgeText,
+            fontSize: 9, fontWeight: 700, letterSpacing: '0.03em', textTransform: 'uppercase',
+          }}>{model.domain}</span>
+        ) : <span style={{ color: T.faint, fontSize: 10 }}>—</span>}
+      </div>
+      <div style={{ ...MODEL_LIST_COLUMNS.date, fontSize: 10, color: metaColor, whiteSpace: 'nowrap' }}>
+        {formatDate(model.createdAt) ?? '—'}
+      </div>
+      <div style={{ ...MODEL_LIST_COLUMNS.keywords, fontSize: 10, color: metaColor, whiteSpace: 'nowrap' }}>
+        {model.keyword && model.keyword.length > 0 ? `${model.keyword.length} kw` : '—'}
+      </div>
+    </>
+  );
+};
 
 const ModelCard: React.FC<ModelCardProps> = ({ model, onCanvas, onAdd, onOpenDetail }) => {
   const [hovered, setHovered] = React.useState(false);
@@ -832,31 +925,7 @@ const ModelCard: React.FC<ModelCardProps> = ({ model, onCanvas, onAdd, onOpenDet
           <BoxIcon color={theme.icon} size={26} />
         </div>
 
-        {/* Name — fixed left column */}
-        <div style={{ flex: '0 0 30%', minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontSize: 12, fontWeight: 700, color: T.text }}>
-          {model.name}
-        </div>
-
-        {/* Domain */}
-        <div style={{ flex: '0 0 22%', minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-          {model.domain ? (
-            <span style={{
-              padding: '2px 7px', borderRadius: 20,
-              background: theme.badge, color: theme.badgeText,
-              fontSize: 9, fontWeight: 700, letterSpacing: '0.03em', textTransform: 'uppercase',
-            }}>{model.domain}</span>
-          ) : <span style={{ color: T.faint }}>—</span>}
-        </div>
-
-        {/* Date */}
-        <div style={{ flex: '0 0 18%', minWidth: 0, fontSize: 10, color: T.muted, whiteSpace: 'nowrap' }}>
-          {formatDate(model.createdAt) ?? '—'}
-        </div>
-
-        {/* Keywords count */}
-        <div style={{ flex: '0 0 16%', minWidth: 0, fontSize: 10, color: T.muted, whiteSpace: 'nowrap' }}>
-          {model.keyword && model.keyword.length > 0 ? `${model.keyword.length} kw` : '—'}
-        </div>
+        <ModelCardFields model={model} nameColor={T.text} metaColor={T.muted} />
 
         {/* Checkmark */}
         <svg width="14" height="14" viewBox="0 0 16 16" fill="none" style={{ flexShrink: 0, marginLeft: 'auto' }}>
@@ -888,31 +957,7 @@ const ModelCard: React.FC<ModelCardProps> = ({ model, onCanvas, onAdd, onOpenDet
         <BoxIcon color={theme.icon} size={26} />
       </div>
 
-      {/* Name */}
-      <div style={{ flex: '0 0 30%', minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontSize: 12, fontWeight: 700, color: '#1e293b' }}>
-        {model.name}
-      </div>
-
-      {/* Domain chip */}
-      <div style={{ flex: '0 0 22%', minWidth: 0 }}>
-        {model.domain ? (
-          <span style={{
-            padding: '2px 7px', borderRadius: 20,
-            background: theme.badge, color: theme.badgeText,
-            fontSize: 9, fontWeight: 700, letterSpacing: '0.03em', textTransform: 'uppercase',
-          }}>{model.domain}</span>
-        ) : <span style={{ color: T.faint, fontSize: 10 }}>—</span>}
-      </div>
-
-      {/* Date */}
-      <div style={{ flex: '0 0 18%', minWidth: 0, fontSize: 10, color: '#475569', whiteSpace: 'nowrap' }}>
-        {formatDate(model.createdAt) ?? '—'}
-      </div>
-
-      {/* Keywords count */}
-      <div style={{ flex: '0 0 16%', minWidth: 0, fontSize: 10, color: '#475569', whiteSpace: 'nowrap' }}>
-        {model.keyword && model.keyword.length > 0 ? `${model.keyword.length} kw` : '—'}
-      </div>
+      <ModelCardFields model={model} nameColor="#1e293b" metaColor="#475569" />
     </button>
   );
 };

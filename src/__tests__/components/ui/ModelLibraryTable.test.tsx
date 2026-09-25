@@ -159,7 +159,7 @@ describe('ModelLibraryTable', () => {
 
     const formLabels = Array.from(document.querySelector('form')!.querySelectorAll('label'))
       .map((label) => label.textContent);
-    expect(formLabels).toEqual(['Name', 'Keywords', 'Description', 'Domain']);
+    expect(formLabels).toEqual(['Name', 'Version', 'Keywords', 'Description', 'Domain']);
   });
 
   it('opens the full-screen UML editor when Edit is clicked', () => {

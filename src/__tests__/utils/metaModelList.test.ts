@@ -109,6 +109,25 @@ describe('findMatchingCreatedModel', () => {
     );
     expect(match?.id).toBe(10);
   });
+
+  it('does not treat an older version with the same name as the model just created', () => {
+    const match = findMatchingCreatedModel(
+      [{ id: 10, name: 'Eco', version: '1.0', ecoreFileId: 1, genModelFileId: 2 }],
+      { name: 'Eco', version: '2.0', ecoreFileId: 1, genModelFileId: 2 },
+    );
+    expect(match).toBeNull();
+  });
+
+  it('matches the row whose version was just created', () => {
+    const match = findMatchingCreatedModel(
+      [
+        { id: 10, name: 'Eco', version: '1.0', ecoreFileId: 1, genModelFileId: 2 },
+        { id: 11, name: 'Eco', version: '2.0', ecoreFileId: 1, genModelFileId: 2 },
+      ],
+      { name: 'Eco', version: '2.0', ecoreFileId: 1, genModelFileId: 2 },
+    );
+    expect(match?.id).toBe(11);
+  });
 });
 
 describe('mergeCreatedMetaModel', () => {

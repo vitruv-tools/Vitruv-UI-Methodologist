@@ -10,6 +10,7 @@ import { CanvasUmlPanelLayer } from '../components/canvas/CanvasUmlPanelLayer';
 import { apiService, VsumRole, VsumUserResponse } from '../services/api';
 import { VsumDetails } from '../types';
 import { VsumMetaModelRef } from '../types/vsum';
+import { appendMetaModelVersion } from '../utils/metaModelVersion';
 import { useProjectStore } from '../store/Project';
 import { createVsumDetailsStore, getVsumDetailsStore, hasVsumDetailsStore } from '../store/VsumDetails';
 import type { EditableVsumDetails } from '../types/EditableVsumDetails';
@@ -112,8 +113,9 @@ async function dispatchWorkspaceMetaModels(metaModels: VsumMetaModelRef[]): Prom
       globalThis.dispatchEvent(new CustomEvent('vitruv.addFileToWorkspace', {
         detail: {
           fileContent,
-          fileName: `${model.name}.ecore`,
+          fileName: `${appendMetaModelVersion(model.name, model.version)}.ecore`,
           displayName: model.name,
+          version: model.version,
           description: model.description,
           keywords: model.keyword?.join(', '),
           domain: model.domain,
@@ -1160,10 +1162,12 @@ export const CanvasPage: React.FC = () => {
       globalThis.dispatchEvent(new CustomEvent('vitruv.addFileToWorkspace', {
         detail: {
           fileContent,
-          fileName: model.name + '.ecore',
+          fileName: `${appendMetaModelVersion(model.name, model.version)}.ecore`,
           displayName: model.name,
+          version: model.version,
           domain: model.domain,
           metaModelId: model.id,
+          // sync-changes looks up reaction files by this catalog id.
           metaModelSourceId: model.sourceId ?? model.id,
           ecoreFileId: model.ecoreFileId,
           genModelFileId: model.genModelFileId,
@@ -1297,7 +1301,17 @@ export const CanvasPage: React.FC = () => {
       const msg = (res as any)?.message || 'This VSUM can be built successfully.';
       showPopup(msg, 'success');
     } catch (e: unknown) {
-      showPopupError(e, 'Build check failed.');
+      const detail = extractApiErrorMessage(e, 'Build check failed.');
+      const missingReactionFile = detail.toLowerCase().includes('reaction file')
+        && detail.toLowerCase().includes('not found');
+      if (missingReactionFile) {
+        showPopup(
+          'Check build needs a reaction file between two models. This project has none, so the build stops. Use Save to store the canvas.',
+          'error',
+        );
+      } else {
+        showPopupError(e, 'Build check failed.');
+      }
     } finally {
       setCheckingBuild(false);
     }
