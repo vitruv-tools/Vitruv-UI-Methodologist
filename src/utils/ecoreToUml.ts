@@ -6,6 +6,7 @@ export interface UMLAttribute {
   name: string;
   type: string;
   visibility: '+' | '-' | '#';
+  documentation?: string;
 }
 
 export type UMLVisibility = UMLAttribute['visibility'];
@@ -14,6 +15,25 @@ export const UML_VISIBILITY_OPTIONS: readonly UMLVisibility[] = ['+', '-', '#'];
 
 /** Ecore annotation source for UML visibility (+ / - / #). */
 export const UML_VISIBILITY_ANNOTATION = 'uml.visibility';
+/** Standard Ecore/GenModel annotation source for element documentation. */
+export const ECORE_DOCUMENTATION_ANNOTATION = 'http://www.eclipse.org/emf/2002/GenModel';
+
+function directChildElements(element: Element, tagName: string): Element[] {
+  return Array.from(element.children).filter(child => child.localName === tagName);
+}
+
+/** Read documentation directly attached to this Ecore element. */
+export function parseEcoreDocumentation(element: Element): string | undefined {
+  for (const annotation of directChildElements(element, 'eAnnotations')) {
+    if (annotation.getAttribute('source') !== ECORE_DOCUMENTATION_ANNOTATION) continue;
+    for (const detail of directChildElements(annotation, 'details')) {
+      if (detail.getAttribute('key') === 'documentation') {
+        return detail.getAttribute('value') ?? '';
+      }
+    }
+  }
+  return undefined;
+}
 
 export function parseUmlVisibility(element: Element): UMLVisibility {
   for (const ann of element.querySelectorAll('eAnnotations')) {
@@ -32,6 +52,7 @@ export interface UMLOperation {
   name: string;
   returnType: string;
   visibility: UMLVisibility;
+  documentation?: string;
 }
 
 export interface UMLClass {
@@ -39,6 +60,7 @@ export interface UMLClass {
   name: string;     // display name (editable)
   isAbstract: boolean;
   isInterface: boolean;
+  documentation?: string;
   attributes: UMLAttribute[];
   operations: UMLOperation[];
   x: number;
@@ -55,6 +77,7 @@ export interface UMLRelationship {
   label?: string;
   sourceMultiplicity?: string;
   targetMultiplicity?: string;
+  documentation?: string;
 }
 
 export interface UMLModel {
@@ -180,6 +203,7 @@ interface DeferredClassRef {
   name: string;
   lower: string | null;
   upper: string | null;
+  documentation?: string;
 }
 
 const EMPTY_UML_MODEL: UMLModel = { classes: [], relationships: [] };
@@ -231,6 +255,7 @@ function parseClassAttributes(
         name: attrName,
         lower: feat.getAttribute('lowerBound'),
         upper: feat.getAttribute('upperBound'),
+        documentation: parseEcoreDocumentation(feat),
       });
       continue;
     }
@@ -242,6 +267,7 @@ function parseClassAttributes(
       name: nextUniqueAttributeName(attributes.map(a => a.name), attrName),
       type: normalizeAttributeTypeDisplay(typeName),
       visibility: parseUmlVisibility(feat),
+      documentation: parseEcoreDocumentation(feat),
     });
   }
 
@@ -260,6 +286,7 @@ function parseClassOperations(cls: Element, id: string): UMLOperation[] {
       name: nextUniqueOperationName(operations.map(o => o.name), opName),
       returnType: normalizeOperationReturnType(typeName),
       visibility: parseUmlVisibility(op),
+      documentation: parseEcoreDocumentation(op),
     });
   }
 
@@ -279,6 +306,7 @@ function buildUmlClass(
     name: rawName,
     isAbstract: cls.getAttribute('abstract') === 'true',
     isInterface: cls.getAttribute('interface') === 'true',
+    documentation: parseEcoreDocumentation(cls),
     attributes: parseClassAttributes(cls, id, classIds, deferredClassRefs),
     operations: parseClassOperations(cls, id),
     x: 0,
@@ -367,6 +395,7 @@ function appendReferenceRelationships(
       targetId,
       type: feat.getAttribute('containment') === 'true' ? 'composition' : 'association',
       label: feat.getAttribute('name') || undefined,
+      documentation: parseEcoreDocumentation(feat),
       ...multiplicities,
     });
   }
@@ -389,6 +418,7 @@ function appendDeferredRelationships(
       targetId: ref.targetId,
       type: 'association',
       label: ref.name || undefined,
+      documentation: ref.documentation,
       ...multiplicities,
     });
   }

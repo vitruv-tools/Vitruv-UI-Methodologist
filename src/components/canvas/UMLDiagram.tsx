@@ -528,7 +528,7 @@ const rels = useMemo(
             if (!interactive) return;
             startAttributeEdit(cls.id, attrId);
           }}
-          onSaveAttr={(attrId, n, t, v) => saveAttr(cls.id, attrId, n, t, v)}
+          onSaveAttr={(attrId, n, t, v, documentation) => saveAttr(cls.id, attrId, n, t, v, documentation)}
           onCancelEdit={cancelEdit}
           onAddAttr={() => interactive && addAttr(cls.id)}
           onDeleteAttr={attrId => deleteAttr(cls.id, attrId)}
@@ -536,7 +536,7 @@ const rels = useMemo(
             if (!interactive) return;
             startOperationEdit(cls.id, opId);
           }}
-          onSaveOp={(opId, n, rt, v) => saveOp(cls.id, opId, n, rt, v)}
+          onSaveOp={(opId, n, rt, v, documentation) => saveOp(cls.id, opId, n, rt, v, documentation)}
           onAddOp={() => interactive && addOp(cls.id)}
           onDeleteOp={opId => deleteOp(cls.id, opId)}
           onDelete={() => deleteClass(cls.id)}

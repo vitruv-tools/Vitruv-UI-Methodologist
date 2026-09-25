@@ -118,6 +118,7 @@ function patchAttribute(
   resolvedName: string,
   type: string,
   visibility: UMLVisibility,
+  documentation?: string,
 ): UMLAttribute {
   if (attribute.id === attrId) {
     return {
@@ -125,6 +126,7 @@ function patchAttribute(
       name: resolvedName,
       type: normalizeAttributeTypeDisplay(type.trim() || attribute.type),
       visibility,
+      documentation: documentation ?? attribute.documentation,
     };
   }
   return attribute;
@@ -148,6 +150,7 @@ function applyAttributeSaveToClass(
   name: string,
   type: string,
   visibility: UMLVisibility,
+  documentation?: string,
 ): UmlDiagramClass {
   if (classItem.id !== classId) return classItem;
   const current = classItem.attributes.find(
@@ -168,6 +171,7 @@ function applyAttributeSaveToClass(
         resolvedName,
         type,
         visibility,
+        documentation,
       ),
     ),
   };
@@ -180,6 +184,7 @@ export function updateClassAttribute(
   name: string,
   type: string,
   visibility: UMLVisibility,
+  documentation?: string,
 ): UmlDiagramClass[] {
   return classes.map(classItem =>
     applyAttributeSaveToClass(
@@ -189,6 +194,7 @@ export function updateClassAttribute(
       name,
       type,
       visibility,
+      documentation,
     ),
   );
 }
@@ -199,6 +205,7 @@ function patchOperation(
   resolvedName: string,
   returnType: string,
   visibility: UMLVisibility,
+  documentation?: string,
 ): UMLOperation {
   if (operation.id === opId) {
     return {
@@ -208,6 +215,7 @@ function patchOperation(
         returnType.trim() || operation.returnType,
       ),
       visibility,
+      documentation: documentation ?? operation.documentation,
     };
   }
   return operation;
@@ -231,6 +239,7 @@ function applyOperationSaveToClass(
   name: string,
   returnType: string,
   visibility: UMLVisibility,
+  documentation?: string,
 ): UmlDiagramClass {
   if (classItem.id !== classId) return classItem;
   const current = classItem.operations.find(
@@ -251,6 +260,7 @@ function applyOperationSaveToClass(
         resolvedName,
         returnType,
         visibility,
+        documentation,
       ),
     ),
   };
@@ -263,6 +273,7 @@ export function updateClassOperation(
   name: string,
   returnType: string,
   visibility: UMLVisibility,
+  documentation?: string,
 ): UmlDiagramClass[] {
   return classes.map(classItem =>
     applyOperationSaveToClass(
@@ -272,6 +283,7 @@ export function updateClassOperation(
       name,
       returnType,
       visibility,
+      documentation,
     ),
   );
 }
