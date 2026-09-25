@@ -5,6 +5,7 @@ import { VsumDetails } from '../../types';
 import { VsumUsersTab } from './VsumUsersTab';
 import { MODAL_Z_INDEX, useModalBodyLock } from './modalUtils';
 import { LinkMetaModelsPanel } from './LinkMetaModelsPanel';
+import { displayMetaModelVersion } from '../../utils/metaModelVersion';
 
 interface Props {
   isOpen: boolean;
@@ -755,6 +756,9 @@ export const VsumDetailsModal: React.FC<Props> = ({ isOpen, vsumId, onClose, onS
               <li key={mm.id} style={{ marginBottom: 6 }}>
                 <span style={{ fontWeight: 700, color: 'var(--v-text)' }}>
                   {mm.name}
+                </span>
+                <span style={{ marginLeft: 8, fontSize: 12, fontWeight: 600, color: 'var(--v-text-muted)' }}>
+                  {displayMetaModelVersion(mm.version)}
                 </span>
               </li>
             ))}

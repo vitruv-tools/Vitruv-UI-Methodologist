@@ -344,7 +344,7 @@ export const CanvasSidebarToolbar: React.FC<CanvasSidebarToolbarProps> = ({
             description="Save changes to this project"
             onClick={onSaveChanges}
             loading={savingChanges}
-            disabled={busy}
+            disabled={savingChanges}
           >
             <SaveIcon />
           </SidebarButton>

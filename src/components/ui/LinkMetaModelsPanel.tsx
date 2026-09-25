@@ -2,10 +2,12 @@ import React, { useEffect, useRef, useState } from 'react';
 import { apiService } from '../../services/api';
 import { VsumMetaModelRef, VsumMetaModelRelation } from '../../types';
 import { toWireReactionFileId } from '../../utils/workspaceSnapshotUtils';
+import { displayMetaModelVersion } from '../../utils/metaModelVersion';
 
 interface MetaModelOption {
   id: number;
   name: string;
+  version?: string;
 }
 
 interface Props {
@@ -108,7 +110,11 @@ export const LinkMetaModelsPanel: React.FC<Props> = ({
       try {
         const res = await apiService.findMetaModels({ pageSize: 200 });
         if (!cancelled) {
-          setOptions((res.data || []).map((m: any) => ({ id: m.id, name: m.name })));
+          setOptions((res.data || []).map((m: { id: number; name: string; version?: string }) => ({
+            id: m.id,
+            name: m.name,
+            version: m.version,
+          })));
         }
       } catch (e: any) {
         if (!cancelled) setOptionsError(e?.message || 'Failed to load meta models');
@@ -126,8 +132,12 @@ export const LinkMetaModelsPanel: React.FC<Props> = ({
   // (see VsumMetaModelService#create on the backend); relations and the catalog (findMetaModels,
   // the select options below) all speak in terms of the original metamodel's id, exposed here as
   // sourceId. Matching must go through sourceId, not id.
-  const nameFor = (id: number): string =>
-    existingMetaModels.find((m) => m.sourceId === id)?.name ?? `#${id}`;
+  const modelFor = (id: number): VsumMetaModelRef | undefined =>
+    existingMetaModels.find((m) => m.sourceId === id);
+
+  const nameFor = (id: number): string => modelFor(id)?.name ?? `#${id}`;
+
+  const versionFor = (id: number): string => displayMetaModelVersion(modelFor(id)?.version);
 
   const resetForm = () => {
     setSourceId('');
@@ -198,8 +208,10 @@ export const LinkMetaModelsPanel: React.FC<Props> = ({
           {existingRelations.map((r) => (
             <div key={r.id} style={relationRow}>
               <span style={{ fontWeight: 700, color: 'var(--v-text)' }}>{nameFor(r.sourceId)}</span>
+              <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--v-text-muted)' }}>{versionFor(r.sourceId)}</span>
               <span style={{ color: '#049484' }}>→</span>
               <span style={{ fontWeight: 700, color: 'var(--v-text)' }}>{nameFor(r.targetId)}</span>
+              <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--v-text-muted)' }}>{versionFor(r.targetId)}</span>
               {(r.reactionFileId ?? r.reactionFileStorageId) && (
                 <span style={{ marginLeft: 'auto', color: 'var(--v-text-muted)', fontStyle: 'italic' }}>
                   reactions linked
@@ -236,7 +248,7 @@ export const LinkMetaModelsPanel: React.FC<Props> = ({
             <option value="">Select source meta model…</option>
             {options.map((o) => (
               <option key={o.id} value={o.id}>
-                {o.name}
+                {o.name} ({displayMetaModelVersion(o.version)})
               </option>
             ))}
           </select>
@@ -250,7 +262,7 @@ export const LinkMetaModelsPanel: React.FC<Props> = ({
             <option value="">Select target meta model…</option>
             {options.map((o) => (
               <option key={o.id} value={o.id}>
-                {o.name}
+                {o.name} ({displayMetaModelVersion(o.version)})
               </option>
             ))}
           </select>

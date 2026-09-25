@@ -16,6 +16,8 @@ export interface Vsum {
 export interface VsumMetaModelRef {
   id: number;
   name: string;
+  /** Free-form version string. Each version is its own library row. Defaults to `"1.0"` when omitted on create. */
+  version?: string;
   description: string;
   domain: string;
   sourceId: number;

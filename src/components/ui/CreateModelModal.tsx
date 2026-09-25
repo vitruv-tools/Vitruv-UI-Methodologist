@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect, useLayoutEffect, useCallback } from 'react';
 import ReactDOM from 'react-dom';
 import { apiService } from '../../services/api';
+import { DEFAULT_META_MODEL_VERSION } from '../../utils/metaModelVersion';
 import { KeywordTagsInput } from './KeywordTagsInput';
 import {
   modalOverlayStyle,
@@ -21,6 +22,7 @@ interface CreateModelModalProps {
 
 interface CreateModelRequest {
   name: string;
+  version: string;
   description: string;
   domain: string;
   keyword: string[];
@@ -90,10 +92,19 @@ const applyImportFailureFieldErrors = (
 };
 
 /** Form regions used for inline errors + scroll-into-view */
-export type CreateModelFieldKey = 'name' | 'description' | 'keywords' | 'domain' | 'files';
+export type CreateModelFieldKey = 'name' | 'version' | 'description' | 'keywords' | 'domain' | 'files';
+
+const EMPTY_FORM = {
+  name: '',
+  version: DEFAULT_META_MODEL_VERSION,
+  description: '',
+  domain: '',
+  keywords: [] as string[],
+};
 
 const EMPTY_FIELD_ERRORS: Record<CreateModelFieldKey, string> = {
   name: '',
+  version: '',
   description: '',
   keywords: '',
   domain: '',
@@ -103,6 +114,7 @@ const EMPTY_FIELD_ERRORS: Record<CreateModelFieldKey, string> = {
 /** Best-effort mapping of API messages to a field (otherwise use `files`). */
 function inferFieldKeyFromBackendMessage(message: string): CreateModelFieldKey | null {
   const m = message.toLowerCase();
+  if (/\bversion\b/.test(m)) return 'version';
   if (/\b(keyword|keywords)\b/.test(m)) return 'keywords';
   if (/\bdescription\b/.test(m)) return 'description';
   if (/\bdomain\b/.test(m)) return 'domain';
@@ -777,9 +789,7 @@ const getUploadedDisplayName = (kindState: (typeof EMPTY_PER_KIND)['ecore']): st
 // ─── Custom hook ──────────────────────────────────────────────────────────────
 
 function useCreateModelForm({ isOpen, onClose, onSuccess }: CreateModelModalProps) {
-  const [formData, setFormData] = useState({
-    name: '', description: '', domain: '', keywords: [] as string[],
-  });
+  const [formData, setFormData] = useState({ ...EMPTY_FORM, keywords: [] as string[] });
   const [uploadedFileIds, setUploadedFileIds] = useState({ ecoreFileId: 0, genModelFileId: 0 });
   const [isLoading, setIsLoading] = useState(false);
   const [fieldErrors, setFieldErrors] = useState<Record<CreateModelFieldKey, string>>(() => ({ ...EMPTY_FIELD_ERRORS }));
@@ -801,6 +811,7 @@ function useCreateModelForm({ isOpen, onClose, onSuccess }: CreateModelModalProp
   const [perKind, setPerKind] = useState(EMPTY_PER_KIND);
 
   const nameFieldRef = useRef<HTMLDivElement>(null);
+  const versionFieldRef = useRef<HTMLDivElement>(null);
   const descriptionFieldRef = useRef<HTMLDivElement>(null);
   const keywordsFieldRef = useRef<HTMLDivElement>(null);
   const domainFieldRef = useRef<HTMLDivElement>(null);
@@ -818,6 +829,7 @@ function useCreateModelForm({ isOpen, onClose, onSuccess }: CreateModelModalProp
 
   const fieldSectionRefs: Record<CreateModelFieldKey, React.RefObject<HTMLDivElement | null>> = {
     name: nameFieldRef,
+    version: versionFieldRef,
     description: descriptionFieldRef,
     keywords: keywordsFieldRef,
     domain: domainFieldRef,
@@ -839,6 +851,7 @@ function useCreateModelForm({ isOpen, onClose, onSuccess }: CreateModelModalProp
   const canSave = uploadedFileIds.ecoreFileId > 0 &&
     uploadedFileIds.genModelFileId > 0 &&
     formData.name.trim() &&
+    formData.version.trim() &&
     formData.description.trim() &&
     formData.domain.trim() &&
     formData.keywords.length > 0;
@@ -1001,7 +1014,7 @@ function useCreateModelForm({ isOpen, onClose, onSuccess }: CreateModelModalProp
     await cleanupUploadedFiles();
     clearAllTimers();
     setSubmitProgress({ progress: 0, isSubmitting: false });
-    setFormData({ name: '', description: '', domain: '', keywords: [] });
+    setFormData({ ...EMPTY_FORM, keywords: [] });
     setUploadedFileIds({ ecoreFileId: 0, genModelFileId: 0 });
     setFieldErrors({ ...EMPTY_FIELD_ERRORS });
     setSuccess('');
@@ -1118,13 +1131,14 @@ function useCreateModelForm({ isOpen, onClose, onSuccess }: CreateModelModalProp
   const validateClientFields = (): boolean => {
     const next = { ...EMPTY_FIELD_ERRORS };
     if (!formData.name.trim()) next.name = 'Please enter a name';
+    if (!formData.version.trim()) next.version = 'Please enter a version';
     if (!formData.description.trim()) next.description = 'Please enter a description';
     if (!formData.domain.trim()) next.domain = 'Please enter a domain';
     if (formData.keywords.length === 0) next.keywords = 'Please enter at least one keyword';
     if (!uploadedFileIds.ecoreFileId || !uploadedFileIds.genModelFileId) {
       next.files = 'Please upload both .ecore and .genmodel files';
     }
-    const order: CreateModelFieldKey[] = ['name', 'description', 'keywords', 'domain', 'files'];
+    const order: CreateModelFieldKey[] = ['name', 'version', 'description', 'keywords', 'domain', 'files'];
     const first = order.find(k => next[k]);
     if (first) {
       setFieldErrors(next);
@@ -1150,6 +1164,7 @@ function useCreateModelForm({ isOpen, onClose, onSuccess }: CreateModelModalProp
 
     const requestData: CreateModelRequest = {
       name: formData.name.trim(),
+      version: formData.version.trim(),
       description: formData.description.trim(),
       domain: formData.domain.trim(),
       keyword: formData.keywords,
@@ -1358,6 +1373,31 @@ export const CreateModelModal: React.FC<CreateModelModalProps> = ({
             />
             {form.fieldErrors.name && (
               <div id="model-name-error" role="alert" style={fieldInlineErrorStyle}>{form.fieldErrors.name}</div>
+            )}
+          </div>
+
+          <div ref={form.fieldSectionRefs.version} style={formGroupStyle}>
+            <label htmlFor="model-version-input" style={labelStyle}>Version *</label>
+            <input
+              id="model-version-input"
+              type="text"
+              placeholder="1.0"
+              value={form.formData.version}
+              onChange={(e) => {
+                form.setFormData({ ...form.formData, version: e.target.value });
+                if (form.fieldErrors.version) form.setFieldErrors(prev => ({ ...prev, version: '' }));
+              }}
+              aria-invalid={!!form.fieldErrors.version}
+              aria-describedby={form.fieldErrors.version ? 'model-version-error' : 'model-version-hint'}
+              style={{ ...inputStyle, ...(form.fieldErrors.version ? inputErrorOutlineStyle : {}) }}
+              onFocus={(e) => Object.assign(e.currentTarget.style, { ...inputFocusStyle, ...(form.fieldErrors.version ? inputErrorOutlineStyle : {}) })}
+              onBlur={(e) => Object.assign(e.currentTarget.style, { ...inputStyle, ...(form.fieldErrors.version ? inputErrorOutlineStyle : {}) })}
+            />
+            <div id="model-version-hint" style={{ fontSize: 12, color: 'var(--v-text-muted)', marginTop: 4 }}>
+              Each version is stored as its own model. It cannot be changed after import.
+            </div>
+            {form.fieldErrors.version && (
+              <div id="model-version-error" role="alert" style={fieldInlineErrorStyle}>{form.fieldErrors.version}</div>
             )}
           </div>
 

@@ -505,11 +505,14 @@ class ApiService {
   }
 
   /**
-   * Create a meta model
-   * Backend expects a JSON body: { name, description, domain, keyword, ecoreFileId, genModelFileId, applyGenModelFixes }
+   * Create a meta model.
+   * Backend expects a JSON body: { name, version, description, domain, keyword, ecoreFileId, genModelFileId, applyGenModelFixes }.
+   * `version` is a non-blank free-form string (no semver check). Omit it and the backend stores `"1.0"`.
+   * The create response has no id; reload the list to show the new row. Version cannot be changed later.
    */
   async createMetaModel(data: {
     name: string;
+    version?: string;
     description: string;
     domain: string;
     keyword: string[];
