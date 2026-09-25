@@ -3,7 +3,7 @@ import ReactDOM from 'react-dom';
 import { apiService } from '../../services/api';
 import { CreateModelModal } from './CreateModelModal';
 import { KeywordTagsInput } from './KeywordTagsInput';
-import { UMLDiagram, UMLDiagramHandle } from '../canvas/UMLDiagram';
+import { UMLDiagram, UMLDiagramHandle, UmlDiagramSaveContext } from '../canvas/UMLDiagram';
 import { FloatingUMLPanel } from '../canvas/FloatingUMLPanel';
 import { MetaModelFileDownloads } from './MetaModelFileDownloads';
 import { useModalBodyLock, modalBackdropStyle } from './modalUtils';
@@ -66,6 +66,8 @@ interface ModelDetailModalProps {
   ecoreContent?: string;
   /** When true, only render the panel (backdrop is provided by the parent). */
   embedded?: boolean;
+  /** Open the project-style full-screen UML editor immediately. */
+  initialUmlExpanded?: boolean;
 }
 
 const FONT = 'ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, sans-serif';
@@ -125,6 +127,7 @@ const DPreviewBtn: React.FC<{ title: string; onClick: () => void; children: Reac
 
 export const ModelDetailModal: React.FC<ModelDetailModalProps> = ({
   model, onClose, onUpdated, ecoreContent: ecoreContentProp, embedded = false,
+  initialUmlExpanded = false,
 }) => {
   const [editing, setEditing] = useState(false);
   const [form, setForm] = useState({ name: model.name || '', description: model.description || '', domain: model.domain || '', keywords: model.keyword || [] as string[] });
@@ -132,15 +135,21 @@ export const ModelDetailModal: React.FC<ModelDetailModalProps> = ({
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [ecoreContent, setEcoreContent] = useState<string | null>(ecoreContentProp ?? null);
+  const [ecoreFileId, setEcoreFileId] = useState<number | undefined>(model.ecoreFileId);
   const [fetchingUml, setFetchingUml] = useState(false);
   const [fetchError, setFetchError] = useState(false);
-  const [umlExpanded, setUmlExpanded] = useState(false);
+  const [umlExpanded, setUmlExpanded] = useState(initialUmlExpanded);
+  const diagramEditable = !embedded;
   // Local copy of the model used for read-only display — kept in sync with the
   // last successful save so the view reflects edits immediately, without waiting
   // for the parent list to refetch and hand back a new `model` prop.
   const [displayModel, setDisplayModel] = useState(model);
   const diagramRef = useRef<UMLDiagramHandle>(null);
   const theme = getDTheme(displayModel.domain);
+
+  useEffect(() => {
+    setEcoreFileId(model.ecoreFileId);
+  }, [model.ecoreFileId, model.id]);
 
   useEffect(() => {
     if (ecoreContentProp) { setEcoreContent(ecoreContentProp); return; }
@@ -151,6 +160,37 @@ export const ModelDetailModal: React.FC<ModelDetailModalProps> = ({
       .catch(() => setFetchError(true))
       .finally(() => setFetchingUml(false));
   }, [model.ecoreFileId, ecoreContentProp]);
+
+  const umlSaveContext: UmlDiagramSaveContext | undefined = useMemo(() => {
+    if (!diagramEditable || !model.id || !ecoreFileId) return undefined;
+    return {
+      metaModelId: String(model.id),
+      ecoreFileId,
+      modelName: displayModel.name,
+      saveTarget: 'library',
+      metaModelMetadata: {
+        description: displayModel.description || '',
+        domain: displayModel.domain || '',
+        keyword: displayModel.keyword || [],
+        genModelFileId: displayModel.genModelFileId,
+      },
+      onSaved: ({ ecoreContent: saved, ecoreFileId: newFileId }) => {
+        setEcoreContent(saved);
+        setEcoreFileId(newFileId);
+        onUpdated();
+      },
+    };
+  }, [
+    diagramEditable,
+    model.id,
+    ecoreFileId,
+    displayModel.name,
+    displayModel.description,
+    displayModel.domain,
+    displayModel.keyword,
+    displayModel.genModelFileId,
+    onUpdated,
+  ]);
 
   const previewLayoutFile = metaModelPreviewLayoutFileName(model.id, model.name);
 
@@ -170,8 +210,8 @@ export const ModelDetailModal: React.FC<ModelDetailModalProps> = ({
     try {
       await apiService.updateMetaModel(String(model.id), {
         name: form.name, description: form.description, domain: form.domain, keyword: form.keywords,
-        ecoreFileId: model.ecoreFileId || 0,
-        genModelFileId: model.genModelFileId || 0,
+        ecoreFileId: ecoreFileId || 0,
+        genModelFileId: displayModel.genModelFileId || 0,
       });
       setDisplayModel((prev: any) => ({ ...prev, name: form.name, description: form.description, domain: form.domain, keyword: form.keywords }));
       setSuccess('Saved successfully');
@@ -211,10 +251,14 @@ export const ModelDetailModal: React.FC<ModelDetailModalProps> = ({
             {!editing && (
               <button type="button"
                 onClick={() => {
+                  if (diagramEditable && (ecoreContent || ecoreFileId)) {
+                    setUmlExpanded(true);
+                    return;
+                  }
                   setForm({ name: displayModel.name || '', description: displayModel.description || '', domain: displayModel.domain || '', keywords: displayModel.keyword || [] });
                   setEditing(true);
                 }}
-                title="Edit meta-model"
+                title={diagramEditable ? 'Edit meta-model' : 'Edit meta-model details'}
                 style={{ height: 30, padding: '0 12px', border: '1px solid var(--v-border)', borderRadius: 7, background: 'var(--v-surface-muted)', color: 'var(--v-text-secondary)', fontSize: 12, fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 5, transition: 'all 0.12s', fontFamily: FONT }}
                 onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.background = DARK; (e.currentTarget as HTMLButtonElement).style.color = '#fff'; (e.currentTarget as HTMLButtonElement).style.borderColor = DARK; }}
                 onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.background = 'var(--v-surface-muted)'; (e.currentTarget as HTMLButtonElement).style.color = 'var(--v-text-secondary)'; (e.currentTarget as HTMLButtonElement).style.borderColor = 'var(--v-border)'; }}
@@ -277,7 +321,21 @@ export const ModelDetailModal: React.FC<ModelDetailModalProps> = ({
             ) : (
               <>
                 <div>
-                  <DFieldLabel>Name</DFieldLabel>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+                    <DFieldLabel>Name</DFieldLabel>
+                    {diagramEditable && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setForm({ name: displayModel.name || '', description: displayModel.description || '', domain: displayModel.domain || '', keywords: displayModel.keyword || [] });
+                          setEditing(true);
+                        }}
+                        style={{ border: 'none', background: 'none', padding: 0, color: '#049484', fontSize: 11, fontWeight: 600, cursor: 'pointer', fontFamily: FONT }}
+                      >
+                        Edit details
+                      </button>
+                    )}
+                  </div>
                   <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--v-text)', fontFamily: FONT, lineHeight: 1.4 }}>{displayModel.name}</div>
                 </div>
                 {displayModel.keyword?.length > 0 && (
@@ -327,7 +385,7 @@ export const ModelDetailModal: React.FC<ModelDetailModalProps> = ({
               <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--v-text-secondary)', fontFamily: FONT }}>UML</span>
               {ecoreContent && (
                 <div style={{ display: 'flex', gap: 4 }}>
-                  <DPreviewBtn title="Open full-screen UML view" onClick={() => setUmlExpanded(true)}>
+                  <DPreviewBtn title={diagramEditable ? 'Open full-screen UML editor' : 'Open full-screen UML view'} onClick={() => setUmlExpanded(true)}>
                     <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                       <polyline points="15 3 21 3 21 9" /><polyline points="9 21 3 21 3 15" />
                       <line x1="21" y1="3" x2="14" y2="10" /><line x1="3" y1="21" x2="10" y2="14" />
@@ -380,17 +438,18 @@ export const ModelDetailModal: React.FC<ModelDetailModalProps> = ({
       </dialog>
   );
 
-  const expandedUmlPanel = umlExpanded && ecoreContent ? (
+  const expandedUmlPanel = umlExpanded && (ecoreContent || ecoreFileId) ? (
     <FloatingUMLPanel
       id={`metamodel-detail-${model.id}`}
-      title={model.name}
+      title={displayModel.name}
       fileName={previewLayoutFile}
       layoutScopeId={METAMODEL_PREVIEW_LAYOUT_SCOPE}
-      ecoreContent={ecoreContent}
-      viewOnly
+      ecoreContent={ecoreContent ?? ''}
+      saveContext={umlSaveContext}
+      viewOnly={!diagramEditable}
       onClose={() => setUmlExpanded(false)}
       onFocus={() => { /* preview panel does not participate in focus stacking */ }}
-      ecoreFileId={model.ecoreFileId}
+      ecoreFileId={ecoreFileId}
       fetchEcoreFile={(fileId) => apiService.getFile(fileId)}
       onEcoreContentUpdated={(content) => setEcoreContent(content)}
       zIndex={embedded ? 10001 : 10002}
@@ -725,6 +784,7 @@ export const ModelLibraryTable: React.FC<ModelLibraryTableProps> = ({ onModelOpe
   const [showAdvancedSearch, setShowAdvancedSearch] = useState(false);
   const [showCreate, setShowCreate] = useState(false);
   const [viewModel, setViewModel] = useState<any>(null);
+  const [editModelOpen, setEditModelOpen] = useState(false);
   const [deletingModel, setDeletingModel] = useState<LibraryMetaModel | null>(null);
   const [deleteError, setDeleteError] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
@@ -891,6 +951,12 @@ export const ModelLibraryTable: React.FC<ModelLibraryTableProps> = ({ onModelOpe
         key={model.id ?? idx}
         model={model}
         onView={() => {
+          setEditModelOpen(false);
+          setViewModel(model);
+          onModelOpen?.(model);
+        }}
+        onEdit={() => {
+          setEditModelOpen(true);
           setViewModel(model);
           onModelOpen?.(model);
         }}
@@ -1077,8 +1143,12 @@ export const ModelLibraryTable: React.FC<ModelLibraryTableProps> = ({ onModelOpe
       {viewModel && (
         <ModelDetailModal
           model={viewModel}
-          onClose={() => setViewModel(null)}
+          onClose={() => {
+            setViewModel(null);
+            setEditModelOpen(false);
+          }}
           onUpdated={() => { fetchModels(); }}
+          initialUmlExpanded={editModelOpen}
         />
       )}
 
@@ -1102,10 +1172,11 @@ export const ModelLibraryTable: React.FC<ModelLibraryTableProps> = ({ onModelOpe
 interface TableRowProps {
   model: any;
   onView: () => void;
+  onEdit: () => void;
   onDelete: () => void;
 }
 
-const TableRow: React.FC<TableRowProps> = ({ model, onView, onDelete }) => {
+const TableRow: React.FC<TableRowProps> = ({ model, onView, onEdit, onDelete }) => {
   const [hovered, setHovered] = useState(false);
   const hasProjects = isModelReferencedByProjects(model);
 
@@ -1139,6 +1210,7 @@ const TableRow: React.FC<TableRowProps> = ({ model, onView, onDelete }) => {
           minWidth={140}
           actions={[
             { label: 'View details', onClick: onView },
+            { label: 'Edit', onClick: onEdit },
             ...(model.isOwnedByCurrentUser
               ? [{ label: 'Delete', onClick: onDelete, danger: true, dividerBefore: true }]
               : []),
