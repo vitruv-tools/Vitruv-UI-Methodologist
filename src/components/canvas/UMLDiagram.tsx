@@ -135,13 +135,24 @@ const rels = useMemo(
   () => assignParallelRelMeta(relationships) as UmlDiagramRelationshipLayout[],
   [relationships],
 );
-  const [selectedClassId, setSelectedClassId] = useState<string | null>(null);
-  const [selectedRelId, setSelectedRelId] = useState<string | null>(null);
+  const [selectedClassId, setSelectedClassIdState] = useState<string | null>(null);
+  const [selectedRelId, setSelectedRelIdState] = useState<string | null>(null);
+  // Only one edit panel is open at a time: selecting a class closes the
+  // relationship panel and vice versa. Updater functions only remap or clear
+  // the current selection, so they never close the other panel.
+  const setSelectedClassId = useCallback((next: React.SetStateAction<string | null>) => {
+    setSelectedClassIdState(next);
+    if (typeof next === 'string') setSelectedRelIdState(null);
+  }, []);
+  const setSelectedRelId = useCallback((next: React.SetStateAction<string | null>) => {
+    setSelectedRelIdState(next);
+    if (typeof next === 'string') setSelectedClassIdState(null);
+  }, []);
   const [connectMode, setConnectMode] = useState(false);
   const [connectSourceId, setConnectSourceId] = useState<string | null>(null);
   const resetInteractionState = useCallback(() => {
-    setSelectedClassId(null);
-    setSelectedRelId(null);
+    setSelectedClassIdState(null);
+    setSelectedRelIdState(null);
     setConnectMode(false);
     setConnectSourceId(null);
   }, []);

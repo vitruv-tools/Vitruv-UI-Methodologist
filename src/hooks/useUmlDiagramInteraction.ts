@@ -177,11 +177,12 @@ export function useUmlDiagramInteraction({
     event: ReactMouseEvent,
   ) => {
     event.stopPropagation();
+    if (interactive) flushPendingEdit();
     if (event.detail >= 2 && interactive) {
       cycleRelationshipType(relationshipId);
     }
     setSelectedRelationshipId(relationshipId);
-  }, [interactive, cycleRelationshipType, setSelectedRelationshipId]);
+  }, [interactive, cycleRelationshipType, flushPendingEdit, setSelectedRelationshipId]);
 
   const handleClassSelect = useCallback((classId: string) => {
     if (!interactive) return;
