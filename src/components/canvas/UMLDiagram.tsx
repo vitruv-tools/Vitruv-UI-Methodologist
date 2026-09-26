@@ -137,6 +137,17 @@ const rels = useMemo(
 );
   const [selectedClassId, setSelectedClassId] = useState<string | null>(null);
   const [selectedRelId, setSelectedRelId] = useState<string | null>(null);
+  // Only one edit panel is open at a time: selecting a class closes the
+  // relationship panel and vice versa. Updater functions only remap or clear
+  // the current selection, so they never close the other panel.
+  const selectClass = useCallback((next: React.SetStateAction<string | null>) => {
+    setSelectedClassId(next);
+    if (typeof next === 'string') setSelectedRelId(null);
+  }, []);
+  const selectRelationship = useCallback((next: React.SetStateAction<string | null>) => {
+    setSelectedRelId(next);
+    if (typeof next === 'string') setSelectedClassId(null);
+  }, []);
   const [connectMode, setConnectMode] = useState(false);
   const [connectSourceId, setConnectSourceId] = useState<string | null>(null);
   const resetInteractionState = useCallback(() => {
@@ -320,8 +331,8 @@ const rels = useMemo(
     relationships,
     setClasses,
     setRelationships,
-    setSelectedClassId,
-    setSelectedRelationshipId: setSelectedRelId,
+    setSelectedClassId: selectClass,
+    setSelectedRelationshipId: selectRelationship,
     setConnectSourceId,
     recordChange,
     containerRef,
@@ -347,9 +358,9 @@ const rels = useMemo(
     isEmptyCanvasTarget,
     relationships,
     selectedClassId,
-    setSelectedClassId,
+    setSelectedClassId: selectClass,
     selectedRelationshipId: selectedRelId,
-    setSelectedRelationshipId: setSelectedRelId,
+    setSelectedRelationshipId: selectRelationship,
     connectMode,
     setConnectMode,
     connectSourceId,
@@ -528,7 +539,7 @@ const rels = useMemo(
             if (!interactive) return;
             startAttributeEdit(cls.id, attrId);
           }}
-          onSaveAttr={(attrId, n, t, v) => saveAttr(cls.id, attrId, n, t, v)}
+          onSaveAttr={(attrId, n, t, v, documentation) => saveAttr(cls.id, attrId, n, t, v, documentation)}
           onCancelEdit={cancelEdit}
           onAddAttr={() => interactive && addAttr(cls.id)}
           onDeleteAttr={attrId => deleteAttr(cls.id, attrId)}
@@ -536,7 +547,7 @@ const rels = useMemo(
             if (!interactive) return;
             startOperationEdit(cls.id, opId);
           }}
-          onSaveOp={(opId, n, rt, v) => saveOp(cls.id, opId, n, rt, v)}
+          onSaveOp={(opId, n, rt, v, documentation) => saveOp(cls.id, opId, n, rt, v, documentation)}
           onAddOp={() => interactive && addOp(cls.id)}
           onDeleteOp={opId => deleteOp(cls.id, opId)}
           onDelete={() => deleteClass(cls.id)}

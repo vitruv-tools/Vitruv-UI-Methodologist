@@ -2,6 +2,7 @@ import {
   useState,
   type ChangeEvent,
   type CSSProperties,
+  type FocusEvent,
   type KeyboardEvent,
   type ReactNode,
 } from 'react';
@@ -58,7 +59,7 @@ function getUmlEditRowStyle(expanded: boolean): CSSProperties {
     minHeight: expanded
       ? UML_CLASS_MEMBER_EDIT_ROW_HEIGHT
       : UML_CLASS_MEMBER_ROW_HEIGHT,
-    flexWrap: 'nowrap',
+    flexWrap: expanded ? 'wrap' : 'nowrap',
   };
 }
 
@@ -70,6 +71,55 @@ function getEditSelectValue(options: string[], current: string, fallback: string
 function getEditRowInputName(element: HTMLElement, fallback: string): string {
   const input = element.closest('div')?.querySelector('input') as HTMLInputElement | null;
   return input?.value ?? fallback;
+}
+
+function shouldCommitInlineEditOnBlur(event: FocusEvent<HTMLElement>): boolean {
+  return !event.currentTarget.parentElement?.contains(event.relatedTarget as Node | null);
+}
+
+function handleDocumentationKeyDown(
+  event: KeyboardEvent<HTMLTextAreaElement>,
+  onSave: () => void,
+  onCancel: () => void,
+): void {
+  if (event.key === 'Escape') {
+    event.preventDefault();
+    onCancel();
+  } else if (event.key === 'Enter' && (event.ctrlKey || event.metaKey)) {
+    event.preventDefault();
+    onSave();
+  }
+}
+
+function UmlMemberDocumentationField({
+  memberKind,
+  memberName,
+  documentation,
+  style,
+  onChange,
+  onCommit,
+  onCancel,
+}: Readonly<{
+  memberKind: 'attribute' | 'operation';
+  memberName: string;
+  documentation?: string;
+  style: CSSProperties;
+  onChange: (documentation: string) => void;
+  onCommit: (documentation?: string) => void;
+  onCancel: () => void;
+}>) {
+  return (
+    <textarea
+      aria-label={`Documentation for ${memberKind} ${memberName}`}
+      value={documentation ?? ''}
+      placeholder="Documentation"
+      rows={2}
+      onChange={event => onChange(event.target.value)}
+      onBlur={event => shouldCommitInlineEditOnBlur(event) && onCommit(event.currentTarget.value)}
+      onKeyDown={event => handleDocumentationKeyDown(event, () => onCommit(documentation), onCancel)}
+      style={{ ...style, width: '100%', flexBasis: '100%', resize: 'vertical' }}
+    />
+  );
 }
 
 function getUmlRowContainerStyle(hovered: boolean): CSSProperties {
@@ -204,9 +254,9 @@ interface UmlAttributeRowEditorProps {
   editing: UmlAttributeEditState;
   typeOptions: string[];
   expanded: boolean;
-  onSave: (name: string, type: string, visibility: UMLVisibility) => void;
+  onSave: (name: string, type: string, visibility: UMLVisibility, documentation?: string) => void;
   onCancel: () => void;
-  onEditChange: (name: string, type: string, visibility: UMLVisibility) => void;
+  onEditChange: (name: string, type: string, visibility: UMLVisibility, documentation?: string) => void;
 }
 
 const UmlAttributeRowEditor = ({
@@ -224,9 +274,9 @@ const UmlAttributeRowEditor = ({
   const nameInputMinWidth = expanded ? 72 : 40;
   const typeSelectWidth = expanded ? 96 : 76;
 
-  const commitEdit = (name: string, type: string, visibility: UMLVisibility) => {
-    onEditChange(name, type, visibility);
-    onSave(name, type, visibility);
+  const commitEdit = (name: string, type: string, visibility: UMLVisibility, documentation = editing.documentation) => {
+    onEditChange(name, type, visibility, documentation);
+    onSave(name, type, visibility, documentation);
   };
 
   const handleVisibilityChange = (event: ChangeEvent<HTMLSelectElement>) => {
@@ -266,15 +316,12 @@ const UmlAttributeRowEditor = ({
           event.target.value,
           editing.type,
           editing.visibility,
+          editing.documentation,
         )}
-        onBlur={event => onSave(
-          event.currentTarget.value,
-          editing.type,
-          editing.visibility,
-        )}
+        onBlur={event => shouldCommitInlineEditOnBlur(event) && onSave(event.currentTarget.value, editing.type, editing.visibility, editing.documentation)}
         onKeyDown={event => handleUmlInlineEditKeyDown(
           event,
-          () => onSave(editing.name, editing.type, editing.visibility),
+          () => onSave(editing.name, editing.type, editing.visibility, editing.documentation),
           onCancel,
         )}
         style={{ ...editFieldStyle, flex: 1, minWidth: nameInputMinWidth }}
@@ -290,6 +337,7 @@ const UmlAttributeRowEditor = ({
             editing.name,
             event.currentTarget.value,
             editing.visibility,
+            editing.documentation,
           ),
           onCancel,
         )}
@@ -305,6 +353,15 @@ const UmlAttributeRowEditor = ({
           <option key={type} value={type}>{type}</option>
         ))}
       </select>
+      <UmlMemberDocumentationField
+        memberKind="attribute"
+        memberName={editing.name}
+        documentation={editing.documentation}
+        style={editFieldStyle}
+        onChange={documentation => onEditChange(editing.name, editing.type, editing.visibility, documentation)}
+        onCommit={documentation => onSave(editing.name, editing.type, editing.visibility, documentation)}
+        onCancel={onCancel}
+      />
     </div>
   );
 };
@@ -318,10 +375,10 @@ export interface UmlAttributeRowProps {
   onMouseEnter: () => void;
   onMouseLeave: () => void;
   onDoubleClick: () => void;
-  onSave: (name: string, type: string, visibility: UMLVisibility) => void;
+  onSave: (name: string, type: string, visibility: UMLVisibility, documentation?: string) => void;
   onCancel: () => void;
   onDelete: () => void;
-  onEditChange: (name: string, type: string, visibility: UMLVisibility) => void;
+  onEditChange: (name: string, type: string, visibility: UMLVisibility, documentation?: string) => void;
 }
 
 export const UmlAttributeRow = ({
@@ -442,9 +499,9 @@ interface UmlOperationRowEditorProps {
   editing: UmlOperationEditState;
   returnOptions: string[];
   expanded: boolean;
-  onSave: (name: string, returnType: string, visibility: UMLVisibility) => void;
+  onSave: (name: string, returnType: string, visibility: UMLVisibility, documentation?: string) => void;
   onCancel: () => void;
-  onEditChange: (name: string, returnType: string, visibility: UMLVisibility) => void;
+  onEditChange: (name: string, returnType: string, visibility: UMLVisibility, documentation?: string) => void;
 }
 
 const UmlOperationRowEditor = ({
@@ -466,9 +523,10 @@ const UmlOperationRowEditor = ({
     name: string,
     returnType: string,
     visibility: UMLVisibility,
+    documentation = editing.documentation,
   ) => {
-    onEditChange(name, returnType, visibility);
-    onSave(name, returnType, visibility);
+    onEditChange(name, returnType, visibility, documentation);
+    onSave(name, returnType, visibility, documentation);
   };
 
   const handleVisibilityChange = (event: ChangeEvent<HTMLSelectElement>) => {
@@ -502,18 +560,16 @@ const UmlOperationRowEditor = ({
           event.target.value,
           editing.returnType,
           editing.visibility,
+          editing.documentation,
         )}
-        onBlur={event => onSave(
-          event.currentTarget.value,
-          editing.returnType,
-          editing.visibility,
-        )}
+        onBlur={event => shouldCommitInlineEditOnBlur(event) && onSave(event.currentTarget.value, editing.returnType, editing.visibility, editing.documentation)}
         onKeyDown={event => handleUmlInlineEditKeyDown(
           event,
           () => onSave(
             editing.name,
             editing.returnType,
             editing.visibility,
+            editing.documentation,
           ),
           onCancel,
         )}
@@ -530,6 +586,7 @@ const UmlOperationRowEditor = ({
             editing.name,
             event.currentTarget.value,
             editing.visibility,
+            editing.documentation,
           ),
           onCancel,
         )}
@@ -544,6 +601,15 @@ const UmlOperationRowEditor = ({
           <option key={returnType} value={returnType}>{returnType}</option>
         ))}
       </select>
+      <UmlMemberDocumentationField
+        memberKind="operation"
+        memberName={editing.name}
+        documentation={editing.documentation}
+        style={editFieldStyle}
+        onChange={documentation => onEditChange(editing.name, editing.returnType, editing.visibility, documentation)}
+        onCommit={documentation => onSave(editing.name, editing.returnType, editing.visibility, documentation)}
+        onCancel={onCancel}
+      />
     </div>
   );
 };
@@ -557,10 +623,10 @@ export interface UmlOperationRowProps {
   onMouseEnter: () => void;
   onMouseLeave: () => void;
   onDoubleClick: () => void;
-  onSave: (name: string, returnType: string, visibility: UMLVisibility) => void;
+  onSave: (name: string, returnType: string, visibility: UMLVisibility, documentation?: string) => void;
   onCancel: () => void;
   onDelete: () => void;
-  onEditChange: (name: string, returnType: string, visibility: UMLVisibility) => void;
+  onEditChange: (name: string, returnType: string, visibility: UMLVisibility, documentation?: string) => void;
 }
 
 export const UmlOperationRow = ({

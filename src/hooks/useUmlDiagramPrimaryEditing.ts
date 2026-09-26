@@ -67,6 +67,7 @@ export interface UseUmlDiagramPrimaryEditingResult {
     name: string,
     type: string,
     visibility: UMLVisibility,
+    documentation?: string,
   ) => void;
   saveOperation: (
     classId: string,
@@ -74,6 +75,7 @@ export interface UseUmlDiagramPrimaryEditingResult {
     name: string,
     returnType: string,
     visibility: UMLVisibility,
+    documentation?: string,
   ) => void;
   addAttribute: (classId: string) => void;
   deleteAttribute: (classId: string, attributeId: string) => void;
@@ -85,7 +87,7 @@ export interface UseUmlDiagramPrimaryEditingResult {
     classId: string,
     patch: Partial<Pick<
       UmlDiagramClass,
-      'name' | 'isAbstract' | 'isInterface'
+      'name' | 'isAbstract' | 'isInterface' | 'documentation'
     >>,
   ) => void;
   getInheritanceParentId: (classId: string) => string | null;
@@ -167,6 +169,7 @@ export function useUmlDiagramPrimaryEditing(
     name: string,
     type: string,
     visibility: UMLVisibility,
+    documentation?: string,
   ) => {
     recordChange();
     setClasses(previousClasses => updateClassAttribute(
@@ -176,6 +179,7 @@ export function useUmlDiagramPrimaryEditing(
       name,
       type,
       visibility,
+      documentation,
     ));
     setEdit(null);
   }, [recordChange, setClasses]);
@@ -186,6 +190,7 @@ export function useUmlDiagramPrimaryEditing(
     name: string,
     returnType: string,
     visibility: UMLVisibility,
+    documentation?: string,
   ) => {
     recordChange();
     setClasses(previousClasses => updateClassOperation(
@@ -195,6 +200,7 @@ export function useUmlDiagramPrimaryEditing(
       name,
       returnType,
       visibility,
+      documentation,
     ));
     setEdit(null);
   }, [recordChange, setClasses]);
@@ -223,6 +229,7 @@ export function useUmlDiagramPrimaryEditing(
         pending.name,
         pending.type,
         pending.visibility,
+        pending.documentation,
       );
     } else if (pending.kind === 'op') {
       saveOperation(
@@ -231,6 +238,7 @@ export function useUmlDiagramPrimaryEditing(
         pending.name,
         pending.returnType,
         pending.visibility,
+        pending.documentation,
       );
     } else if (pending.kind === 'name') {
       saveName(pending.classId, pending.val);
@@ -267,6 +275,7 @@ export function useUmlDiagramPrimaryEditing(
       name: attribute.name,
       type: normalizeAttributeTypeDisplay(attribute.type),
       visibility: attribute.visibility,
+      documentation: attribute.documentation,
     });
   }, [flushPendingEdit]);
 
@@ -288,6 +297,7 @@ export function useUmlDiagramPrimaryEditing(
       name: operation.name,
       returnType: normalizeOperationReturnType(operation.returnType),
       visibility: operation.visibility,
+      documentation: operation.documentation,
     });
   }, [flushPendingEdit]);
 
@@ -329,6 +339,7 @@ export function useUmlDiagramPrimaryEditing(
       name: newAttribute.name,
       type: newAttribute.type,
       visibility: '+',
+      documentation: '',
     });
   }, [flushPendingEdit, recordChange, setClasses]);
 
@@ -362,6 +373,7 @@ export function useUmlDiagramPrimaryEditing(
       name: newOperation.name,
       returnType: newOperation.returnType,
       visibility: '+',
+      documentation: '',
     });
   }, [flushPendingEdit, recordChange, setClasses]);
 
@@ -460,7 +472,7 @@ export function useUmlDiagramPrimaryEditing(
     classId: string,
     patch: Partial<Pick<
       UmlDiagramClass,
-      'name' | 'isAbstract' | 'isInterface'
+      'name' | 'isAbstract' | 'isInterface' | 'documentation'
     >>,
   ) => {
     recordChange();

@@ -40,6 +40,30 @@ const panelLabelStyle: CSSProperties = {
   marginBottom: 5,
 };
 
+function DocumentationField({
+  id,
+  value,
+  onChange,
+}: Readonly<{
+  id: string;
+  value?: string;
+  onChange: (documentation: string) => void;
+}>) {
+  return (
+    <>
+      <label htmlFor={id} style={panelLabelStyle}>Documentation</label>
+      <textarea
+        id={id}
+        value={value ?? ''}
+        onChange={event => onChange(event.target.value)}
+        placeholder="Describe this element's purpose…"
+        rows={5}
+        style={{ ...panelInputStyle, resize: 'vertical', lineHeight: 1.4, marginBottom: 14 }}
+      />
+    </>
+  );
+}
+
 function PanelCheckboxField({
   id,
   label,
@@ -108,7 +132,7 @@ export interface ClassEditPanelProps {
   classes: UmlDiagramClass[];
   parentId: string | null;
   onUpdate: (
-    patch: Partial<Pick<UmlDiagramClass, 'name' | 'isAbstract' | 'isInterface'>>,
+    patch: Partial<Pick<UmlDiagramClass, 'name' | 'isAbstract' | 'isInterface' | 'documentation'>>,
   ) => void;
   onSetParent: (parentId: string | null) => void;
   onDelete: () => void;
@@ -179,6 +203,11 @@ export const ClassEditPanel = ({
           <option key={classItem.id} value={classItem.id}>{classItem.name}</option>
         ))}
       </select>
+      <DocumentationField
+        id={`class-edit-documentation-${cls.id}`}
+        value={cls.documentation}
+        onChange={documentation => onUpdate({ documentation })}
+      />
       <button
         type="button"
         onClick={onDelete}
@@ -327,6 +356,14 @@ export const RelationshipEditPanel = ({
         placeholder="e.g. manages, contains"
         style={{ ...panelInputStyle, marginBottom: 14 }}
       />
+
+      {rel.type !== 'inheritance' && (
+        <DocumentationField
+          id={`rel-edit-documentation-${rel.id}`}
+          value={rel.documentation}
+          onChange={documentation => onUpdate({ documentation })}
+        />
+      )}
 
       <label htmlFor={`rel-edit-type-${rel.id}`} style={panelLabelStyle}>Type</label>
       <select

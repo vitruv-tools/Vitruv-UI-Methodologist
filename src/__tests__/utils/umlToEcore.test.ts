@@ -77,4 +77,40 @@ describe('umlToEcore', () => {
     const roundTrip = ecoreToUml(xml);
     expect(roundTrip.classes.find(c => c.name === 'Person')!.attributes[0].visibility).toBe('#');
   });
+
+  it('round-trips documentation for classes, attributes, operations, and references', () => {
+    const model = ecoreToUml(SAMPLE);
+    const person = model.classes.find(c => c.name === 'Person')!;
+    const employee = model.classes.find(c => c.name === 'Employee')!;
+    person.documentation = 'Represents a person & their profile';
+    person.attributes[0].documentation = 'The preferred <display> name';
+    person.operations.push({
+      id: 'Person-op-0',
+      name: 'greet',
+      returnType: 'Void',
+      visibility: '+',
+      documentation: 'Sends a greeting',
+    });
+    model.relationships.push({
+      id: 'rel-docs',
+      sourceId: person.id,
+      targetId: employee.id,
+      type: 'association',
+      label: 'manager',
+      documentation: 'The employee managed by this person',
+    });
+
+    const xml = umlToEcore(model, SAMPLE);
+    expect(xml).toContain('key="documentation"');
+    expect(xml).toContain('profile');
+    expect(xml).toContain('&lt;display&gt;');
+
+    const roundTrip = ecoreToUml(xml);
+    const roundTripPerson = roundTrip.classes.find(c => c.name === 'Person')!;
+    expect(roundTripPerson.documentation).toBe('Represents a person & their profile');
+    expect(roundTripPerson.attributes[0].documentation).toBe('The preferred <display> name');
+    expect(roundTripPerson.operations[0].documentation).toBe('Sends a greeting');
+    expect(roundTrip.relationships.find(r => r.label === 'manager')!.documentation)
+      .toBe('The employee managed by this person');
+  });
 });
