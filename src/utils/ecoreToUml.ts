@@ -1,6 +1,7 @@
 import { formatEcoreMultiplicity } from './umlMultiplicity';
 import { applyUmlDiagramLayout } from './umlClassLayout';
 import { GENMODEL_ANNOTATION_SOURCE } from './ecoreXmlNamespaces';
+import { collectClassElements, getElementType, parseEcoreDocument } from './ecoreDocument';
 
 export interface UMLAttribute {
   id: string;
@@ -152,19 +153,24 @@ export function buildOperationReturnTypeOptions(currentType?: string): string[] 
   return options;
 }
 
+/** Pick a name not already in `existingNames` (case-insensitive), adding 2, 3, … if needed. */
+function nextUniqueName(existingNames: Iterable<string>, base: string, fallback: string): string {
+  const taken = new Set(
+    Array.from(existingNames, n => n.trim().toLowerCase()).filter(Boolean),
+  );
+  const root = base.trim() || fallback;
+  if (!taken.has(root.toLowerCase())) return root;
+  let suffix = 2;
+  while (taken.has(`${root}${suffix}`.toLowerCase())) suffix++;
+  return `${root}${suffix}`;
+}
+
 /** Pick a name that is not already used among class attributes (case-insensitive). */
 export function nextUniqueAttributeName(
   existingNames: Iterable<string>,
   base = 'attribute',
 ): string {
-  const taken = new Set(
-    Array.from(existingNames, n => n.trim().toLowerCase()).filter(Boolean),
-  );
-  const root = base.trim() || 'attribute';
-  if (!taken.has(root.toLowerCase())) return root;
-  let suffix = 2;
-  while (taken.has(`${root}${suffix}`.toLowerCase())) suffix++;
-  return `${root}${suffix}`;
+  return nextUniqueName(existingNames, base, 'attribute');
 }
 
 /** Pick a unique operation name within a class (case-insensitive). */
@@ -172,14 +178,7 @@ export function nextUniqueOperationName(
   existingNames: Iterable<string>,
   base = 'operation',
 ): string {
-  const taken = new Set(
-    Array.from(existingNames, n => n.trim().toLowerCase()).filter(Boolean),
-  );
-  const root = base.trim() || 'operation';
-  if (!taken.has(root.toLowerCase())) return root;
-  let suffix = 2;
-  while (taken.has(`${root}${suffix}`.toLowerCase())) suffix++;
-  return `${root}${suffix}`;
+  return nextUniqueName(existingNames, base, 'operation');
 }
 
 function sanitize(name: string) {
@@ -208,26 +207,6 @@ interface DeferredClassRef {
 }
 
 const EMPTY_UML_MODEL: UMLModel = { classes: [], relationships: [] };
-
-function parseEcoreDocument(ecoreContent: string): Document | null {
-  const parser = new DOMParser();
-  const xmlDoc = parser.parseFromString(ecoreContent, 'text/xml');
-  if (xmlDoc.getElementsByTagName('parsererror').length > 0) return null;
-  return xmlDoc;
-}
-
-function getElementType(el: Element): string {
-  return el.getAttribute('xsi:type') || el.getAttribute('type') || '';
-}
-
-function isEClassElement(el: Element): boolean {
-  const type = getElementType(el);
-  return type.includes('EClass') || (!type && el.querySelectorAll('eStructuralFeatures').length > 0);
-}
-
-function collectClassElements(xmlDoc: Document): Element[] {
-  return Array.from(xmlDoc.querySelectorAll('eClassifiers')).filter(isEClassElement);
-}
 
 function buildClassIdSet(classElems: Element[]): Set<string> {
   return new Set(classElems.map(cls => sanitize(cls.getAttribute('name') || 'Unknown')));

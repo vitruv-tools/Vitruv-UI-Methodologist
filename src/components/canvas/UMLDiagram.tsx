@@ -135,24 +135,24 @@ const rels = useMemo(
   () => assignParallelRelMeta(relationships) as UmlDiagramRelationshipLayout[],
   [relationships],
 );
-  const [selectedClassId, setSelectedClassIdState] = useState<string | null>(null);
-  const [selectedRelId, setSelectedRelIdState] = useState<string | null>(null);
+  const [selectedClassId, setSelectedClassId] = useState<string | null>(null);
+  const [selectedRelId, setSelectedRelId] = useState<string | null>(null);
   // Only one edit panel is open at a time: selecting a class closes the
   // relationship panel and vice versa. Updater functions only remap or clear
   // the current selection, so they never close the other panel.
-  const setSelectedClassId = useCallback((next: React.SetStateAction<string | null>) => {
-    setSelectedClassIdState(next);
-    if (typeof next === 'string') setSelectedRelIdState(null);
+  const selectClass = useCallback((next: React.SetStateAction<string | null>) => {
+    setSelectedClassId(next);
+    if (typeof next === 'string') setSelectedRelId(null);
   }, []);
-  const setSelectedRelId = useCallback((next: React.SetStateAction<string | null>) => {
-    setSelectedRelIdState(next);
-    if (typeof next === 'string') setSelectedClassIdState(null);
+  const selectRelationship = useCallback((next: React.SetStateAction<string | null>) => {
+    setSelectedRelId(next);
+    if (typeof next === 'string') setSelectedClassId(null);
   }, []);
   const [connectMode, setConnectMode] = useState(false);
   const [connectSourceId, setConnectSourceId] = useState<string | null>(null);
   const resetInteractionState = useCallback(() => {
-    setSelectedClassIdState(null);
-    setSelectedRelIdState(null);
+    setSelectedClassId(null);
+    setSelectedRelId(null);
     setConnectMode(false);
     setConnectSourceId(null);
   }, []);
@@ -331,8 +331,8 @@ const rels = useMemo(
     relationships,
     setClasses,
     setRelationships,
-    setSelectedClassId,
-    setSelectedRelationshipId: setSelectedRelId,
+    setSelectedClassId: selectClass,
+    setSelectedRelationshipId: selectRelationship,
     setConnectSourceId,
     recordChange,
     containerRef,
@@ -358,9 +358,9 @@ const rels = useMemo(
     isEmptyCanvasTarget,
     relationships,
     selectedClassId,
-    setSelectedClassId,
+    setSelectedClassId: selectClass,
     selectedRelationshipId: selectedRelId,
-    setSelectedRelationshipId: setSelectedRelId,
+    setSelectedRelationshipId: selectRelationship,
     connectMode,
     setConnectMode,
     connectSourceId,
