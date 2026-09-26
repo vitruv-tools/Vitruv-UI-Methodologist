@@ -1,10 +1,15 @@
-import { ECORE_XML_NAMESPACE, XSI_XML_NAMESPACE } from '../../utils/ecoreXmlNamespaces';
+import {
+  ECORE_XML_NAMESPACE,
+  GENMODEL_ANNOTATION_SOURCE,
+  XSI_XML_NAMESPACE,
+} from '../../utils/ecoreXmlNamespaces';
 import { randomUniqueSuffix } from '../../utils/secureRandom';
 
 describe('ecoreXmlNamespaces', () => {
   it('exports standard EMF/XSD namespace URIs', () => {
     expect(ECORE_XML_NAMESPACE).toBe('http://www.eclipse.org/emf/2002/Ecore');
     expect(XSI_XML_NAMESPACE).toBe('http://www.w3.org/2001/XMLSchema-instance');
+    expect(GENMODEL_ANNOTATION_SOURCE).toBe('http://www.eclipse.org/emf/2002/GenModel');
   });
 });
 

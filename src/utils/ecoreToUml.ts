@@ -1,5 +1,6 @@
 import { formatEcoreMultiplicity } from './umlMultiplicity';
 import { applyUmlDiagramLayout } from './umlClassLayout';
+import { GENMODEL_ANNOTATION_SOURCE } from './ecoreXmlNamespaces';
 
 export interface UMLAttribute {
   id: string;
@@ -16,7 +17,7 @@ export const UML_VISIBILITY_OPTIONS: readonly UMLVisibility[] = ['+', '-', '#'];
 /** Ecore annotation source for UML visibility (+ / - / #). */
 export const UML_VISIBILITY_ANNOTATION = 'uml.visibility';
 /** Standard Ecore/GenModel annotation source for element documentation. */
-export const ECORE_DOCUMENTATION_ANNOTATION = 'http://www.eclipse.org/emf/2002/GenModel';
+export const ECORE_DOCUMENTATION_ANNOTATION = GENMODEL_ANNOTATION_SOURCE;
 
 function directChildElements(element: Element, tagName: string): Element[] {
   return Array.from(element.children).filter(child => child.localName === tagName);

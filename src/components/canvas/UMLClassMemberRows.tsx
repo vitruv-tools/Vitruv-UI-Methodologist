@@ -91,6 +91,37 @@ function handleDocumentationKeyDown(
   }
 }
 
+function UmlMemberDocumentationField({
+  memberKind,
+  memberName,
+  documentation,
+  style,
+  onChange,
+  onCommit,
+  onCancel,
+}: Readonly<{
+  memberKind: 'attribute' | 'operation';
+  memberName: string;
+  documentation?: string;
+  style: CSSProperties;
+  onChange: (documentation: string) => void;
+  onCommit: (documentation?: string) => void;
+  onCancel: () => void;
+}>) {
+  return (
+    <textarea
+      aria-label={`Documentation for ${memberKind} ${memberName}`}
+      value={documentation ?? ''}
+      placeholder="Documentation"
+      rows={2}
+      onChange={event => onChange(event.target.value)}
+      onBlur={event => shouldCommitInlineEditOnBlur(event) && onCommit(event.currentTarget.value)}
+      onKeyDown={event => handleDocumentationKeyDown(event, () => onCommit(documentation), onCancel)}
+      style={{ ...style, width: '100%', flexBasis: '100%', resize: 'vertical' }}
+    />
+  );
+}
+
 function getUmlRowContainerStyle(hovered: boolean): CSSProperties {
   return {
     display: 'flex',
@@ -322,15 +353,14 @@ const UmlAttributeRowEditor = ({
           <option key={type} value={type}>{type}</option>
         ))}
       </select>
-      <textarea
-        aria-label={`Documentation for attribute ${editing.name}`}
-        value={editing.documentation ?? ''}
-        placeholder="Documentation"
-        rows={2}
-        onChange={event => onEditChange(editing.name, editing.type, editing.visibility, event.target.value)}
-        onBlur={event => shouldCommitInlineEditOnBlur(event) && onSave(editing.name, editing.type, editing.visibility, event.currentTarget.value)}
-        onKeyDown={event => handleDocumentationKeyDown(event, () => onSave(editing.name, editing.type, editing.visibility, editing.documentation), onCancel)}
-        style={{ ...editFieldStyle, width: '100%', flexBasis: '100%', resize: 'vertical' }}
+      <UmlMemberDocumentationField
+        memberKind="attribute"
+        memberName={editing.name}
+        documentation={editing.documentation}
+        style={editFieldStyle}
+        onChange={documentation => onEditChange(editing.name, editing.type, editing.visibility, documentation)}
+        onCommit={documentation => onSave(editing.name, editing.type, editing.visibility, documentation)}
+        onCancel={onCancel}
       />
     </div>
   );
@@ -571,15 +601,14 @@ const UmlOperationRowEditor = ({
           <option key={returnType} value={returnType}>{returnType}</option>
         ))}
       </select>
-      <textarea
-        aria-label={`Documentation for operation ${editing.name}`}
-        value={editing.documentation ?? ''}
-        placeholder="Documentation"
-        rows={2}
-        onChange={event => onEditChange(editing.name, editing.returnType, editing.visibility, event.target.value)}
-        onBlur={event => shouldCommitInlineEditOnBlur(event) && onSave(editing.name, editing.returnType, editing.visibility, event.currentTarget.value)}
-        onKeyDown={event => handleDocumentationKeyDown(event, () => onSave(editing.name, editing.returnType, editing.visibility, editing.documentation), onCancel)}
-        style={{ ...editFieldStyle, width: '100%', flexBasis: '100%', resize: 'vertical' }}
+      <UmlMemberDocumentationField
+        memberKind="operation"
+        memberName={editing.name}
+        documentation={editing.documentation}
+        style={editFieldStyle}
+        onChange={documentation => onEditChange(editing.name, editing.returnType, editing.visibility, documentation)}
+        onCommit={documentation => onSave(editing.name, editing.returnType, editing.visibility, documentation)}
+        onCancel={onCancel}
       />
     </div>
   );

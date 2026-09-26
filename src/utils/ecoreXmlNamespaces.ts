@@ -7,5 +7,8 @@ const HTTP_SCHEME = 'http:';
 /** EMF Ecore namespace — required by the Ecore XML schema. */
 export const ECORE_XML_NAMESPACE = `${HTTP_SCHEME}//www.eclipse.org/emf/2002/Ecore`;
 
+/** EMF GenModel annotation source — Eclipse stores element documentation under it. */
+export const GENMODEL_ANNOTATION_SOURCE = `${HTTP_SCHEME}//www.eclipse.org/emf/2002/GenModel`;
+
 /** W3C XML Schema instance namespace. */
 export const XSI_XML_NAMESPACE = `${HTTP_SCHEME}//www.w3.org/2001/XMLSchema-instance`;
