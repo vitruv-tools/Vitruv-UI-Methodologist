@@ -206,7 +206,7 @@ const uploadSectionTitleStyle: React.CSSProperties = {
   fontFamily: FONT,
 };
 
-/** Shown inside the “Required Meta Model Files” box when POST /meta-models fails. */
+/** Shown inside the “Required Meta Model File” box when POST /meta-models fails. */
 const metaModelImportErrorBannerStyle: React.CSSProperties = {
   marginBottom: 12,
   padding: '10px 12px',

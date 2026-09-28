@@ -156,13 +156,12 @@ describe('CreateModelModal', () => {
     expect(screen.getAllByText(/Click to select file/i)).toHaveLength(1);
   });
 
-  it('uses theme surfaces so file cards and the disabled submit button match dark mode', () => {
+  it('uses theme surfaces so the Ecore file card and disabled submit button match dark mode', () => {
     setTheme('dark');
     render(<CreateModelModal isOpen onClose={jest.fn()} />);
 
     expect(screen.getByRole('button', { name: 'Complete All Fields' })).toBeDisabled();
-    expect(screen.getAllByRole('button', { name: /Click to select file/i })).toHaveLength(2);
-    expect(screen.getByText('Required Meta Model Files')).toBeInTheDocument();
+    expect(screen.getAllByRole('button', { name: /Click to select file/i })).toHaveLength(1);
   });
 
   it('calls onClose when Cancel is clicked', async () => {
