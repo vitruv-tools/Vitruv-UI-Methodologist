@@ -73,13 +73,23 @@ const fillRequiredFields = () => {
 };
 
 const uploadEcoreViaFileMode = async () => {
-  const ecoreInput = document.querySelector('input[accept=".ecore"]') as HTMLInputElement;
+  const ecoreInput = document.querySelector(
+    'input[accept=".ecore"]',
+  ) as HTMLInputElement;
+
+  const file = new File(['<ecore/>'], 'a.ecore', {
+    type: 'application/octet-stream',
+  });
 
   await act(async () => {
-    fireEvent.change(ecoreInput, { target: { files: [new File([''], 'a.ecore')] } });
+    fireEvent.change(ecoreInput, {
+      target: { files: [file] },
+    });
   });
-  await waitFor(() => expect(apiService.uploadFile).toHaveBeenCalledTimes(1));
 
+  await waitFor(() => {
+    expect(apiService.uploadFile).toHaveBeenCalledWith(file, 'ECORE');
+  });
 };
 
 const mockFetchOk = (content = '<content/>') => {
@@ -326,37 +336,91 @@ describe('CreateModelModal', () => {
       expect(apiService.createMetaModel).not.toHaveBeenCalled();
     });
 
-    it.each(['file', 'url'])('creates once after an Ecore %s import', async (mode) => {
-      const onSuccess = jest.fn();
-      const onClose = jest.fn();
-      render(<CreateModelModal isOpen onClose={onClose} onSuccess={onSuccess} />);
-      fillRequiredFields();
+  it.each(['file', 'url'])(
+  'creates once after an Ecore %s import',
+  async (mode) => {
+    const onSuccess = jest.fn();
+    const onClose = jest.fn();
 
-      if (mode === 'file') {
-        await uploadEcoreViaFileMode();
-      } else {
-        mockFetchOk('<ecore/>');
-        fireEvent.click(screen.getByText('URL'));
-        fireEvent.change(screen.getByPlaceholderText(/model\.ecore/i), {
-          target: { value: 'https://example.com/model.ecore' },
-        });
-        await act(async () => { fireEvent.click(screen.getByText('Import')); });
-      }
+    render(
+      <CreateModelModal
+        isOpen
+        onClose={onClose}
+        onSuccess={onSuccess}
+      />,
+    );
 
-      const submit = await screen.findByRole('button', { name: /Import Meta Model/i });
-      expect(submit).toBeEnabled();
-      await act(async () => { fireEvent.click(submit); });
+    fillRequiredFields();
 
-      // Wait for the completed success flow before checking the total request count.
-      await waitFor(() => expect(onSuccess).toHaveBeenCalledTimes(1), { timeout: 2000 });
-      expect(apiService.uploadFile).toHaveBeenCalledTimes(1);
-      expect(apiService.uploadFile).toHaveBeenCalledWith(expect.any(File), 'ECORE');
-      expect(apiService.createMetaModel).toHaveBeenCalledTimes(1);
-      expect(apiService.createMetaModel).toHaveBeenCalledWith(expectedRequest);
-      expect(onSuccess).toHaveBeenCalledWith({ ...expectedRequest, id: 1, name: 'MM' });
-      expect(onClose).toHaveBeenCalledTimes(1);
-      expect(apiService.deleteFile).not.toHaveBeenCalled();
+    if (mode === 'file') {
+      await uploadEcoreViaFileMode();
+    } else {
+      mockFetchOk('<ecore/>');
+
+      fireEvent.click(screen.getByText('URL'));
+
+      fireEvent.change(
+        screen.getByPlaceholderText(/model\.ecore/i),
+        {
+          target: {
+            value: 'https://example.com/model.ecore',
+          },
+        },
+      );
+
+      await act(async () => {
+        fireEvent.click(screen.getByText('Import'));
+      });
+
+      await waitFor(() => {
+        expect(apiService.uploadFile).toHaveBeenCalledWith(
+          expect.any(File),
+          'ECORE',
+        );
+      });
+    }
+
+    await waitFor(() => {
+      expect(
+        screen.getByRole('button', {
+          name: /Import Meta Model/i,
+        }),
+      ).toBeEnabled();
     });
+
+    const submitButton = screen.getByRole('button', {
+      name: /Import Meta Model/i,
+    });
+
+    await act(async () => {
+      fireEvent.click(submitButton);
+    });
+
+    await waitFor(() => {
+      expect(onSuccess).toHaveBeenCalledTimes(1);
+    });
+
+    expect(apiService.uploadFile).toHaveBeenCalledTimes(1);
+    expect(apiService.uploadFile).toHaveBeenCalledWith(
+      expect.any(File),
+      'ECORE',
+    );
+
+    expect(apiService.createMetaModel).toHaveBeenCalledTimes(1);
+    expect(apiService.createMetaModel).toHaveBeenCalledWith(
+      expectedRequest,
+    );
+
+    expect(onSuccess).toHaveBeenCalledWith({
+      ...expectedRequest,
+      id: 1,
+      name: 'MM',
+    });
+
+    expect(onClose).toHaveBeenCalledTimes(1);
+    expect(apiService.deleteFile).not.toHaveBeenCalled();
+  },
+);
 
     it.each([
       ['network error', new Error('Network error'), 'Network error'],
