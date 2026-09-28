@@ -44,7 +44,6 @@ export const EditMetaModelModal: React.FC<EditMetaModelModalProps> = ({
         name: form.name.trim(), description: form.description.trim(),
         domain: form.domain.trim(), keyword: form.keywords,
         ecoreFileId: metaModel.ecoreFileId || 0,
-        genModelFileId: metaModel.genModelFileId || 0,
       });
       setSuccess('Saved successfully');
       setTimeout(() => { onSuccess?.(); onClose(); }, 900);

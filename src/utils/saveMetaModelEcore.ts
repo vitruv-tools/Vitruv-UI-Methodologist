@@ -61,9 +61,6 @@ function buildUpdatePayload(
     keyword,
     ecoreFileId: newFileId,
   };
-  if (meta.genModelFileId != null) {
-    payload.genModelFileId = Number(meta.genModelFileId);
-  }
   return payload;
 }
 
@@ -71,7 +68,6 @@ export interface MetaModelSaveMetadata {
   description: string;
   domain: string;
   keyword: string[];
-  genModelFileId?: number;
 }
 
 /** Overwrite ecore content for an existing uploaded file id (no new upload). */
