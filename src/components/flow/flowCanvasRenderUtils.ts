@@ -1,6 +1,7 @@
 import React from 'react';
 import { Edge, Node, ReactFlowInstance } from 'reactflow';
 import { ConnectionDragState, HandlePosition, PendingDeleteState } from './flowCanvasTypes';
+import { FINE_REACTION_SEPARATION } from '../../utils/reactionEdgeGeometry';
 
 /**
  * Cursor communicating add-reaction mode: `cell` while waiting for the source
@@ -63,6 +64,8 @@ export interface MapFlowEdgeContext {
   handleEdgeDragEnd: (edgeId: string, point: { x: number; y: number }) => void;
   handleEdgeHandleChange: (edgeId: string, newSourceHandle: string, newTargetHandle: string) => void;
   handleEdgeReorderRequest: (edgeId: string, controlPoint: { x: number; y: number }) => void;
+  getFineParallel?: (edge: Edge) => { index: number; total: number } | undefined;
+  getReactionRoute?: (edge: Edge) => { points: Array<{ x: number; y: number }> } | undefined;
 }
 
 function reactionEdgeInteractionHandlers(
@@ -89,6 +92,50 @@ function reactionEdgeInteractionHandlers(
   };
 }
 
+function mappedEdgeDoubleClick(
+  edge: Edge,
+  ctx: MapFlowEdgeContext,
+  isReaction: boolean,
+  isFineReaction: boolean,
+) {
+  if (!isReaction && !isFineReaction) return undefined;
+  return () => ctx.handleEdgeDoubleClick(edge.id);
+}
+
+function mappedCustomControlPoint(edge: Edge, isFineReaction: boolean) {
+  if (isFineReaction) return undefined;
+  if (edge.data?.expandedIntraModel) return undefined;
+  return edge.data?.customControlPoint;
+}
+
+function fineReactionVisuals(
+  edge: Edge,
+  isFineReaction: boolean,
+  routingStyle: MapFlowEdgeContext['routingStyle'],
+  fineParallel: { index: number; total: number } | undefined,
+) {
+  if (!isFineReaction) {
+    return {
+      routingStyle,
+      fineGranular: false,
+      sourceHandleId: undefined,
+      targetHandleId: undefined,
+      parallelIndex: fineParallel?.index,
+      parallelCount: fineParallel?.total,
+      separation: 36,
+    };
+  }
+  return {
+    routingStyle: 'curved' as const,
+    fineGranular: true,
+    sourceHandleId: edge.sourceHandle,
+    targetHandleId: edge.targetHandle,
+    parallelIndex: fineParallel?.index,
+    parallelCount: fineParallel?.total,
+    separation: FINE_REACTION_SEPARATION,
+  };
+}
+
 export function mapFlowCanvasEdge(edge: Edge, ctx: MapFlowEdgeContext): Edge {
   const { sourceData, targetData } = ctx.getDistribution(edge);
   const {
@@ -98,8 +145,8 @@ export function mapFlowCanvasEdge(edge: Edge, ctx: MapFlowEdgeContext): Edge {
     mergeGroupSourceNodes,
   } = ctx.getUmlMerge(edge);
   const isReaction = edge.type === 'reactions';
+  const isFineReaction = edge.type === 'fine-granular-reaction';
   const isUml = edge.type === 'uml';
-  const reactionEditable = isReaction && !ctx.readOnly;
 
   return {
     ...edge,
@@ -111,16 +158,16 @@ export function mapFlowCanvasEdge(edge: Edge, ctx: MapFlowEdgeContext): Edge {
       mergeGroupSourceNodes,
       hoveredMergeGroup: ctx.hoveredMergeGroup,
       onMergeGroupHover: isUml ? ctx.handleMergeGroupHover : undefined,
-      onDoubleClick: isReaction ? () => ctx.handleEdgeDoubleClick(edge.id) : undefined,
+      onDoubleClick: mappedEdgeDoubleClick(edge, ctx, isReaction, isFineReaction),
       readOnly: isReaction ? ctx.readOnly : undefined,
-      routingStyle: ctx.routingStyle,
-      separation: 36,
+      ...fineReactionVisuals(edge, isFineReaction, ctx.routingStyle, ctx.getFineParallel?.(edge)),
       sourceParallelIndex: sourceData?.index,
       sourceParallelCount: sourceData?.total,
       targetParallelIndex: targetData?.index,
       targetParallelCount: targetData?.total,
-      customControlPoint: edge.data?.customControlPoint,
-      ...reactionEdgeInteractionHandlers(edge.id, reactionEditable, ctx),
+      customControlPoint: mappedCustomControlPoint(edge, isFineReaction),
+      routeWaypoints: (isReaction || isFineReaction) ? ctx.getReactionRoute?.(edge)?.points : undefined,
+      ...reactionEdgeInteractionHandlers(edge.id, isReaction && !ctx.readOnly, ctx),
     },
     style: {
       ...edge.style,
@@ -225,7 +272,9 @@ export function mapEditableFlowNode(
 ): Node {
   return {
     ...node,
-    draggable: !readOnly,
+    // Draggable for viewers too, matching the ecore boxes — the label and
+    // delete affordances below stay gated on readOnly.
+    draggable: true,
     data: {
       ...node.data,
       onLabelChange: readOnly ? undefined : handleLabelChange,
@@ -298,6 +347,9 @@ export function mapEcoreFlowNode(
       isConstraintFilter: constraintFilterNodeId === node.id,
     },
     selected: selectedFileId === node.id,
-    draggable: !readOnly && !connectionDragState?.isActive && !addReactionMode,
+    // Draggable for viewers too — repositioning is local-only (see
+    // isReadOnlyBlockedNodeChange). Still frozen mid-connection and in
+    // add-reaction mode, where a drag would fight the click-to-target gesture.
+    draggable: !connectionDragState?.isActive && !addReactionMode,
   };
 }

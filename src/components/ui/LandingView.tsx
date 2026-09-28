@@ -36,10 +36,10 @@ const FeaturePill: React.FC<{ icon: React.ReactNode; label: string }> = ({ icon,
   <div style={{
     display: 'flex', alignItems: 'center', gap: 7,
     padding: '7px 14px',
-    background: '#ffffff',
-    border: '1px solid rgba(0,0,0,0.10)',
+    background: 'var(--v-overlay)',
+    border: '1px solid var(--v-card-border)',
     borderRadius: 20,
-    fontSize: 13, fontWeight: 500, color: '#1f2937',
+    fontSize: 13, fontWeight: 500, color: 'var(--v-text)',
   }}>
     <span style={{ color: '#049484', display: 'flex' }}>{icon}</span>
     {label}
@@ -67,8 +67,8 @@ const ProjectCard: React.FC<ProjectCardProps> = ({ title, subtitle, items, cta, 
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
       style={{
-        background: 'rgba(255,255,255,0.88)',
-        border: `1.5px solid ${hovered ? accent : 'rgba(0,0,0,0.07)'}`,
+        background: 'var(--v-overlay)',
+        border: `1.5px solid ${hovered ? accent : 'var(--v-card-border)'}`,
         borderRadius: 14,
         padding: '22px 24px 20px',
         display: 'flex',
@@ -84,8 +84,8 @@ const ProjectCard: React.FC<ProjectCardProps> = ({ title, subtitle, items, cta, 
     >
       {/* Header */}
       <div>
-        <div style={{ fontSize: 15, fontWeight: 700, color: '#111827' }}>{title}</div>
-        <div style={{ fontSize: 12, color: '#9ca3af', marginTop: 2 }}>{subtitle}</div>
+        <div style={{ fontSize: 15, fontWeight: 700, color: 'var(--v-text)' }}>{title}</div>
+        <div style={{ fontSize: 12, color: 'var(--v-text-faint)', marginTop: 2 }}>{subtitle}</div>
       </div>
 
       {/* Preview items */}
@@ -95,8 +95,8 @@ const ProjectCard: React.FC<ProjectCardProps> = ({ title, subtitle, items, cta, 
             key={item.name}
             style={{
               flex: '1 1 140px',
-              background: '#f8f9fb',
-              border: '1px solid rgba(0,0,0,0.06)',
+              background: 'var(--v-surface-muted)',
+              border: '1px solid var(--v-card-border)',
               borderRadius: 10,
               padding: '12px 14px',
               display: 'flex',
@@ -109,14 +109,14 @@ const ProjectCard: React.FC<ProjectCardProps> = ({ title, subtitle, items, cta, 
               {[60, 90, 50, 70].map((w) => (
                 <div key={w} style={{
                   height: 5, borderRadius: 3,
-                  background: w === 60 ? `${accent}55` : 'rgba(0,0,0,0.08)',
+                  background: w === 60 ? `${accent}55` : 'var(--v-border)',
                   width: `${w}%`,
                 }} />
               ))}
             </div>
             <div>
-              <div style={{ fontSize: 12, fontWeight: 600, color: '#374151' }}>{item.name}</div>
-              <div style={{ fontSize: 11, color: '#9ca3af', marginTop: 1 }}>{item.meta}</div>
+              <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--v-text-secondary)' }}>{item.name}</div>
+              <div style={{ fontSize: 11, color: 'var(--v-text-faint)', marginTop: 1 }}>{item.meta}</div>
             </div>
             <div style={{
               display: 'flex', alignItems: 'center', gap: 4,
@@ -194,25 +194,25 @@ export const LandingView: React.FC<LandingViewProps> = ({ userName, onNavigate }
             margin: 0,
             fontSize: 'clamp(24px, 2.6vw, 36px)',
             fontWeight: 800,
-            color: '#0f172a',
+            color: 'var(--v-text)',
             lineHeight: 1.18,
             letterSpacing: '-0.02em',
           }}>
             {firstName ? `Welcome back, ${firstName}:` : 'Welcome to Vitruvius:'}{' '}
-            <span style={{ color: '#0f172a' }}>View-based Software Development</span>
+            <span style={{ color: 'var(--v-text)' }}>View-based Software Development</span>
           </h1>
 
           {/* Description */}
-          <p style={{ margin: 0, fontSize: 14, color: '#4b5563', lineHeight: 1.75 }}>
+          <p style={{ margin: 0, fontSize: 14, color: 'var(--v-text-secondary)', lineHeight: 1.75 }}>
             Vitruvius is a framework for{' '}
-            <strong style={{ color: '#111827', fontWeight: 600 }}>view-based software development</strong>.
+            <strong style={{ color: 'var(--v-text)', fontWeight: 600 }}>view-based software development</strong>.
             It maintains a Virtual Single Underlying Model (V-SUM) — a set of heterogeneous models kept automatically
             consistent through defined consistency rules. Models are never edited directly; all changes flow through
             typed <em>views</em> that project the relevant parts of the V-SUM.
           </p>
 
-          <p style={{ margin: 0, fontSize: 14, color: '#4b5563', lineHeight: 1.75 }}>
-            The name stands for <strong style={{ color: '#111827' }}>VI</strong>ew-cen<strong style={{ color: '#111827' }}>TR</strong>ic engineering Us<strong style={{ color: '#111827' }}>I</strong>ng a <strong style={{ color: '#111827' }}>V</strong>irtual <strong style={{ color: '#111827' }}>U</strong>nderlying <strong style={{ color: '#111827' }}>S</strong>ingle model. Developed at the <strong style={{ color: '#111827' }}>Dependability of Software-intensive Systems (DSiS)</strong> at the <strong style={{ color: '#111827' }}>Karlsruhe Institute of Technology (KIT)</strong>. V-SUM extends the classical Single Underlying Model concept by tolerating redundancy across models and enforcing consistency through explicit propagation rules rather than a single shared representation.
+          <p style={{ margin: 0, fontSize: 14, color: 'var(--v-text-secondary)', lineHeight: 1.75 }}>
+            The name stands for <strong style={{ color: 'var(--v-text)' }}>VI</strong>ew-cen<strong style={{ color: 'var(--v-text)' }}>TR</strong>ic engineering Us<strong style={{ color: 'var(--v-text)' }}>I</strong>ng a <strong style={{ color: 'var(--v-text)' }}>V</strong>irtual <strong style={{ color: 'var(--v-text)' }}>U</strong>nderlying <strong style={{ color: 'var(--v-text)' }}>S</strong>ingle model. Developed at the <strong style={{ color: 'var(--v-text)' }}>Dependability of Software-intensive Systems (DSiS)</strong> at the <strong style={{ color: 'var(--v-text)' }}>Karlsruhe Institute of Technology (KIT)</strong>. V-SUM extends the classical Single Underlying Model concept by tolerating redundancy across models and enforcing consistency through explicit propagation rules rather than a single shared representation.
           </p>
 
           {/* Feature pills */}
@@ -224,8 +224,8 @@ export const LandingView: React.FC<LandingViewProps> = ({ userName, onNavigate }
 
         {/* ── RIGHT / TOP: vitruvius1 image ────────────────────────────── */}
         <div style={{
-          background: 'rgba(255,255,255,0.88)',
-          border: '1.5px solid rgba(0,0,0,0.07)',
+          background: 'var(--v-overlay)',
+          border: '1.5px solid var(--v-card-border)',
           borderRadius: 14,
           overflow: 'hidden',
           boxShadow: '0 2px 8px rgba(0,0,0,0.05)',
@@ -249,7 +249,7 @@ export const LandingView: React.FC<LandingViewProps> = ({ userName, onNavigate }
         {/* ── LEFT / BOTTOM: GET STARTED label + Projects card ─────────── */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
           <div style={{
-            fontSize: 11, fontWeight: 700, color: '#9ca3af',
+            fontSize: 11, fontWeight: 700, color: 'var(--v-text-faint)',
             letterSpacing: '0.08em', textTransform: 'uppercase',
           }}>
             Get Started
@@ -293,22 +293,22 @@ export const LandingView: React.FC<LandingViewProps> = ({ userName, onNavigate }
       {/* ── About strip ───────────────────────────────────────────────────── */}
       <div style={{
         marginTop: 28,
-        background: '#ffffff',
-        border: '1px solid rgba(0,0,0,0.08)',
+        background: 'var(--v-surface)',
+        border: '1px solid var(--v-card-border)',
         borderRadius: 14,
         padding: '22px 28px',
         maxWidth: 1200,
         boxShadow: '0 1px 4px rgba(0,0,0,0.05)',
       }}>
         <div style={{
-          fontSize: 11, fontWeight: 700, color: '#6b7280',
+          fontSize: 11, fontWeight: 700, color: 'var(--v-text-muted)',
           letterSpacing: '0.08em', marginBottom: 10, textTransform: 'uppercase',
         }}>
           About the Framework
         </div>
-        <p style={{ margin: 0, fontSize: 14, color: '#1e293b', lineHeight: 1.8 }}>
+        <p style={{ margin: 0, fontSize: 14, color: 'var(--v-text-secondary)', lineHeight: 1.8 }}>
           Vitruvius is developed at the{' '}
-          <strong style={{ color: '#0f172a' }}>Dependability of Software-intensive Systems (DSiS)</strong> group
+          <strong style={{ color: 'var(--v-text)' }}>Dependability of Software-intensive Systems (DSiS)</strong> group
           at KIT. It is built on the idea of a Virtual Single Underlying Model (V-SUM) which behaves like a
           consistent SUM without being free of redundancies — instead, explicit consistency rules propagate changes
           between heterogeneous models automatically whenever a view is modified.

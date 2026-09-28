@@ -29,7 +29,7 @@ const getHitbox = (container: HTMLElement) =>
     container.querySelector('line[stroke="transparent"]')!;
 
 const getShaft = (container: HTMLElement) =>
-    container.querySelector('line[stroke="#000000"]')!;
+    container.querySelector('line[stroke="var(--v-uml-circle, #0c436e)"]')!;
 
 const getPolygons = (container: HTMLElement) =>
     container.querySelectorAll('polygon');
@@ -54,7 +54,7 @@ describe('ViewTypeArrow', () => {
     it('renders a visible shaft line', () => {
         const { container } = renderArrow();
         expect(getShaft(container)).toBeInTheDocument();
-        expect(getShaft(container).getAttribute('stroke')).toBe('#000000');
+        expect(getShaft(container).getAttribute('stroke')).toBe('var(--v-uml-circle, #0c436e)');
     });
 
     it('renders exactly one arrowhead polygon when not editable', () => {
@@ -174,7 +174,7 @@ describe('ViewTypeArrow', () => {
     it('polygons are filled black', () => {
         const { container } = renderArrow({ editable: true });
         getPolygons(container).forEach(polygon => {
-            expect(polygon.getAttribute('fill')).toBe('#000000');
+            expect(polygon.getAttribute('fill')).toBe('var(--v-uml-circle, #0c436e)');
         });
     });
 

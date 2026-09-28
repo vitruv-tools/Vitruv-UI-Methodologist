@@ -1,0 +1,266 @@
+import React, {
+  forwardRef,
+  useCallback,
+  useEffect,
+  useImperativeHandle,
+  useMemo,
+  useState,
+} from 'react';
+import Select from '@mui/material/Select';
+import MenuItem from '@mui/material/MenuItem';
+import InputLabel from '@mui/material/InputLabel';
+import FormControl from '@mui/material/FormControl';
+import Typography from '@mui/material/Typography';
+import CircularProgress from '@mui/material/CircularProgress';
+import Box from '@mui/material/Box';
+import type { FlowEcoreEdge } from '../../../types/flow';
+import type { LowCodeReactionMetadata } from '../../../types/LowCodeReactionMetadata';
+import type { LowCodeReactionMetadataResponse } from '../../../types/LowCodeReactionMetadataResponse';
+import type { LowCodeReactionFieldVariables } from '../../../types/LowCodeReactionFieldVariables';
+import { apiService } from '../../../services/api';
+import {
+  buildInitialFieldValues,
+  buildLowCodeFieldVariables,
+  isHidden,
+} from '../../../utils/FieldUtils';
+import {
+  temporarilySaveLowCodeReactionConfig,
+  getLowCodeReactionConfig,
+} from '../../../utils/LowCodeReactionUtils';
+import {
+  LOW_CODE_TEMPLATE_KEY,
+  resolveLowCodeReactionDiscriminator,
+} from '../../../utils/lowCodeReactionPayload';
+import {
+  extractElementFromEObjectId,
+  deriveModelAlias,
+  deriveElementAlias,
+} from '../../../utils/EcoreIdentifiers';
+import FieldRenderer from '../FieldRenderer';
+import { MuiAppThemeProvider } from '../../../theme/MuiAppThemeProvider';
+
+// ── Public imperative API ───────────────────────────────────────────────
+
+export interface LowCodeReactionEditorHandle {
+  save: () => void;
+  undo: () => void;
+  delete: () => void;
+  isDirty: () => boolean;
+}
+
+interface LowCodeReactionEditorProps {
+  edge: FlowEcoreEdge;
+  onSaveComplete?: () => void;
+  onDeleteRequest?: () => void;
+  onDirtyChange?: (dirty: boolean) => void;
+}
+
+/**
+ * Metadata-driven form editor for fine-granular reactions.
+ *
+ * Fetches reaction templates from `/api/lowcode-metadata` on mount,
+ * renders a template selector and dynamic fields via FieldRenderer,
+ * and exposes imperative `save` / `undo` / `delete` via ref.
+ */
+const LowCodeReactionEditor = forwardRef<
+  LowCodeReactionEditorHandle,
+  LowCodeReactionEditorProps
+>(({ edge, onSaveComplete, onDeleteRequest, onDirtyChange }, ref) => {
+  const [metadata, setMetadata] = useState<LowCodeReactionMetadataResponse | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [selectedTemplate, setSelectedTemplate] = useState<string>('');
+  const [fieldValues, setFieldValues] = useState<Record<string, unknown>>({});
+  const [lastSaved, setLastSaved] = useState<Record<string, unknown>>({});
+
+  const variables = useMemo<LowCodeReactionFieldVariables | undefined>(() => {
+    const ecore = edge.data?.ecore;
+    if (!ecore) return undefined;
+    const sourceAlias = deriveElementAlias(ecore.eObjectSourceId);
+    const targetAlias = deriveElementAlias(ecore.eObjectTargetId);
+    return buildLowCodeFieldVariables({
+      sourceModelUri: ecore.fromModel,
+      sourceModelAlias: ecore.fromModelAlias || deriveModelAlias(ecore.fromModel),
+      sourceUri: ecore.eObjectSourceId,
+      sourceAlias,
+      targetModelUri: ecore.toModel,
+      targetModelAlias: ecore.toModelAlias || deriveModelAlias(ecore.toModel),
+      targetUri: ecore.eObjectTargetId,
+      targetAlias,
+    });
+  }, [edge]);
+
+  // Fetch metadata on mount
+  useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
+    setError(null);
+
+    apiService
+      .getLowCodeReactionsMetadata()
+      .then((response) => {
+        if (cancelled) return;
+        setMetadata(response.data);
+
+        // Restore saved values if they exist
+        const saved = getLowCodeReactionConfig(edge);
+        if (saved) {
+          setFieldValues(saved);
+          setLastSaved(saved);
+          const savedTemplate = resolveLowCodeReactionDiscriminator(saved);
+          if (savedTemplate) setSelectedTemplate(savedTemplate);
+        }
+      })
+      .catch((err) => {
+        if (cancelled) return;
+        console.warn('[LowCodeReactionEditor] Failed to fetch metadata:', err);
+        setError('Failed to load reaction templates');
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [edge]);
+
+  const currentTemplate: LowCodeReactionMetadata | null = useMemo(() => {
+    if (!metadata || !selectedTemplate) return null;
+    return metadata.reactionMetadataMap[selectedTemplate] ?? null;
+  }, [metadata, selectedTemplate]);
+
+  const visibleFields = useMemo(() => {
+    if (!currentTemplate) return [];
+    return currentTemplate.fields.filter((f) => !isHidden(f));
+  }, [currentTemplate]);
+
+  const templateNames = useMemo(() => {
+    if (!metadata) return [];
+    return Object.entries(metadata.reactionMetadataMap)
+      .filter(([, meta]) => meta.hide !== true)
+      .map(([name]) => name);
+  }, [metadata]);
+
+  // When template changes, initialize field values
+  const handleTemplateChange = useCallback(
+    (name: string) => {
+      setSelectedTemplate(name);
+      const template = metadata?.reactionMetadataMap[name];
+      if (!template) return;
+
+      const initial = buildInitialFieldValues(template.fields, variables);
+      initial[LOW_CODE_TEMPLATE_KEY] = name;
+      initial.name = name;
+      setFieldValues(initial);
+    },
+    [metadata, variables],
+  );
+
+  const handleFieldChange = useCallback((name: string, value: unknown) => {
+    setFieldValues((prev) => ({ ...prev, [name]: value }));
+  }, []);
+
+  const isDirty = useCallback(() => {
+    return JSON.stringify(fieldValues) !== JSON.stringify(lastSaved);
+  }, [fieldValues, lastSaved]);
+
+  // Notify parent of dirty state changes
+  useEffect(() => {
+    onDirtyChange?.(isDirty());
+  }, [fieldValues, lastSaved, isDirty, onDirtyChange]);
+
+  // ── Imperative API ──────────────────────────────────────────────────
+
+  useImperativeHandle(ref, () => ({
+    save: () => {
+      const payload = {
+        ...fieldValues,
+        ...(selectedTemplate
+          ? { [LOW_CODE_TEMPLATE_KEY]: selectedTemplate, name: selectedTemplate }
+          : {}),
+      };
+      temporarilySaveLowCodeReactionConfig(payload, edge);
+      setLastSaved({ ...payload });
+      onSaveComplete?.();
+    },
+    undo: () => {
+      setFieldValues({ ...lastSaved });
+      const savedTemplate = resolveLowCodeReactionDiscriminator(lastSaved);
+      if (savedTemplate) setSelectedTemplate(savedTemplate);
+    },
+    delete: () => {
+      onDeleteRequest?.();
+    },
+    isDirty,
+  }));
+
+  // ── Render ──────────────────────────────────────────────────────────
+
+  let body: React.ReactNode;
+  if (loading) {
+    body = (
+      <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}>
+        <CircularProgress size={28} />
+      </Box>
+    );
+  } else if (error) {
+    body = (
+      <Typography color="error" variant="body2" sx={{ p: 2 }}>
+        {error}
+      </Typography>
+    );
+  } else {
+    const ecore = edge.data?.ecore;
+    body = (
+      <div>
+        {/* Connection info */}
+        {ecore && (
+          <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1.5 }}>
+            {variables?.sourceModelAlias}.{extractElementFromEObjectId(ecore.eObjectSourceId)}
+            {' → '}
+            {variables?.targetModelAlias}.{extractElementFromEObjectId(ecore.eObjectTargetId)}
+          </Typography>
+        )}
+
+        {/* Template selector */}
+        <FormControl fullWidth size="small" sx={{ mb: 2 }}>
+          <InputLabel>Reaction Template</InputLabel>
+          <Select
+            value={selectedTemplate}
+            label="Reaction Template"
+            onChange={(e) => handleTemplateChange(e.target.value)}
+          >
+            {templateNames.map((name) => (
+              <MenuItem key={name} value={name}>
+                {metadata!.reactionMetadataMap[name].name ?? name}
+              </MenuItem>
+            ))}
+          </Select>
+        </FormControl>
+
+        {/* Dynamic fields */}
+        {visibleFields.map((field) => (
+          <FieldRenderer
+            key={field.name}
+            field={field}
+            value={fieldValues[field.name]}
+            onChange={handleFieldChange}
+          />
+        ))}
+
+        {selectedTemplate && visibleFields.length === 0 && (
+          <Typography variant="body2" color="text.secondary">
+            No configurable fields for this template.
+          </Typography>
+        )}
+      </div>
+    );
+  }
+
+  return <MuiAppThemeProvider>{body}</MuiAppThemeProvider>;
+});
+
+LowCodeReactionEditor.displayName = 'LowCodeReactionEditor';
+
+export default LowCodeReactionEditor;

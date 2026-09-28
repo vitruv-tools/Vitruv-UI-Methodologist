@@ -33,6 +33,10 @@ export interface VsumMetaModelRelation {
   targetId: number;
   reactionFileId?: number | null;
   reactionFileStorageId?: number | null;
+  /** Fine-granular (EObject-level) relations returned by VSUM details GET. */
+  fineGranularMetaModelRelationSet?: import('./FineGranularMetaModelRelation').EditableFineGranularMetaModelRelation[];
+  /** Alias some backend responses use instead of `fineGranularMetaModelRelationSet`. */
+  fineGranularMetaModelRelations?: import('./FineGranularMetaModelRelation').EditableFineGranularMetaModelRelation[];
 }
 
 export interface VsumDetails extends Vsum {

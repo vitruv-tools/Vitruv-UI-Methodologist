@@ -5,11 +5,16 @@ import { apiService } from '../../services/api';
 import { downloadTextAsFile } from '../../utils/downloadFile';
 import { ConnectionHandle } from './ConnectionHandle';
 import { HandlePosition } from './connectionHandleLayout';
+import { darken, metaModelDisplayColor } from '../../utils/metaModelColors';
+
+export { cardColor, darken, metaModelDisplayColor } from '../../utils/metaModelColors';
 
 // ── types ─────────────────────────────────────────────────────────────────────
 
 interface EcoreFileBoxData {
   fileName: string;
+  /** Project-facing label; fileName remains the technical canvas identifier. */
+  displayName?: string;
   fileContent: string;
   onExpand: (fileName: string, fileContent: string) => void;
   onSelect: (fileName: string) => void;
@@ -34,37 +39,6 @@ interface EcoreFileBoxData {
 }
 
 
-
-// ── domain → card color ───────────────────────────────────────────────────────
-
-const CARD_COLORS: Record<string, string> = {
-  default:  '#bfdbfe',
-  computer: '#93c5fd',
-  target:   '#86efac',
-  modell:   '#d8b4fe',
-  model:    '#d8b4fe',
-  pcm:      '#fca5a5',
-  source:   '#fca5a5',
-};
-
-const FALLBACK_PALETTE = ['#fca5a5', '#fde68a', '#6ee7b7', '#a5b4fc', '#f9a8d4', '#67e8f9', '#fb923c', '#c4b5fd'];
-
-export function cardColor(domain?: string): string {
-  const key = domain?.toLowerCase().trim() || 'default';
-  if (CARD_COLORS[key]) return CARD_COLORS[key];
-  let h = 0;
-  for (const char of key) h = (char.codePointAt(0) ?? 0) + ((h << 5) - h);
-  return FALLBACK_PALETTE[Math.abs(h) % FALLBACK_PALETTE.length];
-}
-
-export function darken(hex: string, amount = 30): string {
-  try {
-    const r = Math.max(0, Number.parseInt(hex.slice(1, 3), 16) - amount);
-    const g = Math.max(0, Number.parseInt(hex.slice(3, 5), 16) - amount);
-    const b = Math.max(0, Number.parseInt(hex.slice(5, 7), 16) - amount);
-    return `#${r.toString(16).padStart(2, '0')}${g.toString(16).padStart(2, '0')}${b.toString(16).padStart(2, '0')}`;
-  } catch { return hex; }
-}
 
 // ── helpers ───────────────────────────────────────────────────────────────────
 
@@ -155,7 +129,7 @@ export const EcoreFileBox: React.FC<NodeProps<EcoreFileBoxData>> = ({
   const {
     fileName, fileContent, onExpand, onSelect, onRequestDelete, onRename,
     onConnectionStart, isConnectionActive = false,
-    description, keywords, createdAt, domain, onShowDetails, metaModelId,
+    description, keywords, createdAt, domain, onShowDetails, metaModelId, displayName,
     ecoreFileId, genModelFileId,
     isReactionSource = false,
     isConstraintContext = false,
@@ -165,6 +139,7 @@ export const EcoreFileBox: React.FC<NodeProps<EcoreFileBoxData>> = ({
 
   const boxRef = useRef<HTMLDivElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
+  const skipBlurSaveRef = useRef(false);
 
   // Close menu on any left-click outside
   useEffect(() => {
@@ -192,7 +167,7 @@ export const EcoreFileBox: React.FC<NodeProps<EcoreFileBoxData>> = ({
     onConnectionStart(id, handle, tip);
   };
 
-  const bg          = cardColor(domain);
+  const bg          = metaModelDisplayColor(domain, fileName);
   const borderColor = darken(bg, 25);
   const cardBorder  = resolveCardBorder(bg, isReactionSource, isConstraintContext, isConstraintFilter, selected, isHovered, borderColor);
   const cardShadow  = resolveCardShadow(bg, isReactionSource, isConstraintContext, isConstraintFilter, selected, isHovered);
@@ -223,6 +198,7 @@ export const EcoreFileBox: React.FC<NodeProps<EcoreFileBoxData>> = ({
   };
   const handleCardKeyDown = (e: React.KeyboardEvent) => {
     e.stopPropagation();
+    if (renaming) return;
     if (e.key === 'Enter') {
       e.preventDefault();
       openUml();
@@ -237,25 +213,43 @@ export const EcoreFileBox: React.FC<NodeProps<EcoreFileBoxData>> = ({
 
   const startRename = () => {
     if (readOnly) return;
+    skipBlurSaveRef.current = false;
     setRenameVal(removeExt(fileName));
     setRenaming(true);
   };
   const saveRename = () => {
     const trimmed = renameVal.trim();
-    if (trimmed) onRename?.(id, trimmed + '.ecore');
+    if (trimmed) onRename?.(id, `${trimmed}.ecore`);
+    setRenaming(false);
+  };
+  const cancelRename = () => {
+    skipBlurSaveRef.current = true;
     setRenaming(false);
   };
   const handleRenameKeyDown = (e: React.KeyboardEvent) => {
+    e.stopPropagation();
     if (e.key === 'Enter') {
+      e.preventDefault();
       saveRename();
       return;
     }
     if (e.key === 'Escape') {
-      setRenaming(false);
+      e.preventDefault();
+      cancelRename();
     }
   };
+  const handleRenameBlur = () => {
+    if (skipBlurSaveRef.current) {
+      skipBlurSaveRef.current = false;
+      return;
+    }
+    saveRename();
+  };
+  const stopRenamePointer = (e: React.SyntheticEvent) => {
+    e.stopPropagation();
+  };
 
-  const baseName = removeExt(fileName);
+  const baseName = displayName || removeExt(fileName);
   const cardAriaLabel = `${baseName} metamodel. Enter to open, Space to select, Shift+F10 for menu.`;
 
   const downloadMetaModelFile = async (
@@ -333,15 +327,22 @@ export const EcoreFileBox: React.FC<NodeProps<EcoreFileBoxData>> = ({
           {renaming ? (
             <input
               autoFocus
+              className="nodrag nopan"
               value={renameVal}
               onChange={e => setRenameVal(e.target.value)}
               onKeyDown={handleRenameKeyDown}
-              onBlur={saveRename}
-              onClick={e => e.stopPropagation()}
+              onKeyUp={stopRenamePointer}
+              onBlur={handleRenameBlur}
+              onClick={stopRenamePointer}
+              onDoubleClick={stopRenamePointer}
+              onMouseDown={stopRenamePointer}
+              onPointerDown={stopRenamePointer}
+              aria-label="Rename metamodel"
               style={{
                 width: 110, textAlign: 'center', fontSize: 12, fontWeight: 700,
                 border: '1.5px solid rgba(0,0,0,0.3)', borderRadius: 6,
                 background: 'rgba(255,255,255,0.7)', padding: '2px 6px', outline: 'none',
+                userSelect: 'text',
               }}
             />
           ) : (
@@ -355,7 +356,7 @@ export const EcoreFileBox: React.FC<NodeProps<EcoreFileBoxData>> = ({
               lineHeight: 1.3,
               maxWidth: '100%',
             }}>
-              {removeExt(fileName)}
+              {baseName}
             </span>
           )}
 

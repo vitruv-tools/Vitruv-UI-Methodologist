@@ -29,8 +29,10 @@ describe('ChangePasswordModal', () => {
       <ChangePasswordModal
         isOpen
         onClose={jest.fn()}
+        currentPassword="Current1!"
         newPassword="Secure1!"
         confirmPassword="Secure1!"
+        onCurrentPasswordChange={jest.fn()}
         onNewPasswordChange={jest.fn()}
         onConfirmPasswordChange={jest.fn()}
         validation={validatePassword('Secure1!')}
@@ -43,17 +45,47 @@ describe('ChangePasswordModal', () => {
       />,
     );
 
+    const currentPasswordInput = screen.getByLabelText('Current Password');
     const newPasswordInput = screen.getByLabelText('New Password');
     const confirmPasswordInput = screen.getByLabelText('Confirm Password');
     const showPasswordButtons = screen.getAllByRole('button', { name: 'Show password' });
 
     expect(newPasswordInput).toHaveAttribute('type', 'password');
+    expect(currentPasswordInput).toHaveAttribute('type', 'password');
     expect(confirmPasswordInput).toHaveAttribute('type', 'password');
 
-    await userEvent.click(showPasswordButtons[0]);
+    await userEvent.click(showPasswordButtons[1]);
 
     expect(newPasswordInput).toHaveAttribute('type', 'text');
     expect(confirmPasswordInput).toHaveAttribute('type', 'password');
     expect(screen.getByRole('button', { name: 'Hide password' })).toHaveAttribute('aria-pressed', 'true');
+  });
+
+  it('places the theme toggle in the dialog and uses theme surfaces', () => {
+    render(
+      <ChangePasswordModal
+        isOpen
+        onClose={jest.fn()}
+        currentPassword=""
+        newPassword=""
+        confirmPassword=""
+        onCurrentPasswordChange={jest.fn()}
+        onNewPasswordChange={jest.fn()}
+        onConfirmPasswordChange={jest.fn()}
+        validation={validatePassword('')}
+        isConfirmValid
+        isChanging={false}
+        error=""
+        success=""
+        onSubmit={jest.fn()}
+        canSubmit={false}
+      />,
+    );
+
+    const dialog = screen.getByRole('dialog', { name: 'Change Password' });
+    const toggle = screen.getByRole('button', { name: 'Switch to dark mode' });
+
+    expect(dialog).toContainElement(toggle);
+    expect(dialog).toHaveClass('change-password-dialog');
   });
 });

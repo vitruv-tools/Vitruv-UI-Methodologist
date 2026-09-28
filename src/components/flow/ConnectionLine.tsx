@@ -1,17 +1,20 @@
 
 import React from 'react';
+import { polylinePathD } from './flowCanvasAStarRouter';
 
 interface ConnectionLineProps {
   sourcePosition: { x: number; y: number };
   targetPosition: { x: number; y: number };
+  points?: Array<{ x: number; y: number }>;
 }
 
 /**
  * ConnectionLine Component
- * Renders a dashed line between the source node and the cursor
+ * Renders a dashed orthogonal (or straight) line between the source node and the cursor
  */
 export const ConnectionLine: React.FC<ConnectionLineProps> = React.memo(
-  ({ sourcePosition, targetPosition }) => {
+  ({ sourcePosition, targetPosition, points }) => {
+    const hasPolyline = Boolean(points && points.length > 1);
 
     return (
       <svg
@@ -25,17 +28,28 @@ export const ConnectionLine: React.FC<ConnectionLineProps> = React.memo(
           zIndex: 9999, // Ensure the line is on top
         }}
       >
-        {/* Draw dashed line*/}
-        <line
-          x1={sourcePosition.x}
-          y1={sourcePosition.y}
-          x2={targetPosition.x}
-          y2={targetPosition.y}
-          stroke="#95a5a6"
-          strokeWidth="3"
-          strokeDasharray="8,8"
-          strokeLinecap="round"
-        />
+        {hasPolyline ? (
+          <path
+            d={polylinePathD(points!)}
+            fill="none"
+            stroke="#95a5a6"
+            strokeWidth="3"
+            strokeDasharray="8,8"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
+        ) : (
+          <line
+            x1={sourcePosition.x}
+            y1={sourcePosition.y}
+            x2={targetPosition.x}
+            y2={targetPosition.y}
+            stroke="#95a5a6"
+            strokeWidth="3"
+            strokeDasharray="8,8"
+            strokeLinecap="round"
+          />
+        )}
 
         {/* Draw circle at target position */}
         <circle

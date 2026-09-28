@@ -38,7 +38,7 @@ export function formatEcoreMultiplicity(
   const normLower = lower ?? undefined;
   const normUpper = normalizeUpper(upper);
   if (normLower === undefined && normUpper === undefined) return undefined;
-  const lo = normLower ?? '1';
+  const lo = normLower ?? '0';
   const hi = normUpper ?? '1';
   return lo === hi ? lo : `${lo}..${hi}`;
 }

@@ -22,9 +22,10 @@ describe('useChangePassword', () => {
     expect(result.current.isOpen).toBe(false);
   });
 
-  it('canSubmit is false until password rules and confirm match', () => {
+  it('canSubmit is false until current password, password rules, and confirm match are valid', () => {
     const { result } = renderHook(() => useChangePassword());
     act(() => {
+      result.current.setCurrentPassword('Current1!');
       result.current.setNewPassword('Secure1!');
       result.current.setConfirmPassword('Secure1!');
     });
@@ -39,6 +40,7 @@ describe('useChangePassword', () => {
 
     const { result } = renderHook(() => useChangePassword());
     act(() => {
+      result.current.setCurrentPassword('Current1!');
       result.current.setNewPassword('Secure1!');
       result.current.setConfirmPassword('Secure1!');
     });
@@ -47,8 +49,45 @@ describe('useChangePassword', () => {
       await result.current.handleSubmit();
     });
 
-    expect(apiService.changePassword).toHaveBeenCalledWith('Secure1!');
+    expect(apiService.changePassword).toHaveBeenCalledWith('Current1!', 'Secure1!');
     expect(result.current.success).toBe('Password updated');
     jest.useRealTimers();
+  });
+
+  it('does not submit without a current password', async () => {
+    const { result } = renderHook(() => useChangePassword());
+    act(() => {
+      result.current.setNewPassword('Secure1!');
+      result.current.setConfirmPassword('Secure1!');
+    });
+
+    await act(async () => {
+      await result.current.handleSubmit();
+    });
+
+    expect(apiService.changePassword).not.toHaveBeenCalled();
+    expect(result.current.error).toBe('Current password is required');
+  });
+
+  it('displays the backend error when the current password is incorrect', async () => {
+    (apiService.changePassword as jest.Mock).mockRejectedValueOnce({
+      response: { data: { message: 'Current password is incorrect' } },
+    });
+
+    const { result } = renderHook(() => useChangePassword());
+    act(() => {
+      result.current.setCurrentPassword('Wrong1!');
+      result.current.setNewPassword('Secure1!');
+      result.current.setConfirmPassword('Secure1!');
+    });
+
+    await act(async () => {
+      await result.current.handleSubmit();
+    });
+
+    expect(result.current.error).toBe('Current password is incorrect');
+    expect(result.current.success).toBe('');
+    expect(result.current.newPassword).toBe('Secure1!');
+    expect(result.current.confirmPassword).toBe('Secure1!');
   });
 });
