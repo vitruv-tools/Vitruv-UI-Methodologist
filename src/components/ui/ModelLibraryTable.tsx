@@ -172,7 +172,6 @@ export const ModelDetailModal: React.FC<ModelDetailModalProps> = ({
         description: displayModel.description || '',
         domain: displayModel.domain || '',
         keyword: displayModel.keyword || [],
-        genModelFileId: displayModel.genModelFileId,
       },
       onSaved: ({ ecoreContent: saved, ecoreFileId: newFileId }) => {
         setEcoreContent(saved);
@@ -188,7 +187,6 @@ export const ModelDetailModal: React.FC<ModelDetailModalProps> = ({
     displayModel.description,
     displayModel.domain,
     displayModel.keyword,
-    displayModel.genModelFileId,
     onUpdated,
   ]);
 
@@ -211,7 +209,6 @@ export const ModelDetailModal: React.FC<ModelDetailModalProps> = ({
       await apiService.updateMetaModel(String(model.id), {
         name: form.name, description: form.description, domain: form.domain, keyword: form.keywords,
         ecoreFileId: ecoreFileId || 0,
-        genModelFileId: displayModel.genModelFileId || 0,
       });
       setDisplayModel((prev: any) => ({ ...prev, name: form.name, description: form.description, domain: form.domain, keyword: form.keywords }));
       setSuccess('Saved successfully');
@@ -358,7 +355,6 @@ export const ModelDetailModal: React.FC<ModelDetailModalProps> = ({
                   <MetaModelFileDownloads
                     modelName={displayModel.name}
                     ecoreFileId={displayModel.ecoreFileId}
-                    genModelFileId={displayModel.genModelFileId}
                     labelStyle={{ fontSize: 11, fontWeight: 700, color: 'var(--v-text-secondary)', marginBottom: 5, letterSpacing: '0.01em', fontFamily: FONT }}
                   />
                   {model.createdAt && (
@@ -941,7 +937,7 @@ export const ModelLibraryTable: React.FC<ModelLibraryTableProps> = ({ onModelOpe
         <td colSpan={4} style={emptyRowStyle}>
           {search.trim()
             ? `No models match "${search.trim()}". Clear filters to see all models.`
-            : 'No models yet. Upload a .ecore and .genmodel pair to get started.'}
+            : 'No models yet. Upload a .ecore file to get started.'}
         </td>
       </tr>
     );

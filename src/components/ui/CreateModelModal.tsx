@@ -25,20 +25,9 @@ interface CreateModelRequest {
   domain: string;
   keyword: string[];
   ecoreFileId: number;
-  genModelFileId: number;
-  /**
-   * When true, backend will try to automatically fix issues
-   * in the GenModel before saving the meta model.
-   *
-   * Frontend convention:
-   * - First call should always send `false`
-   * - If backend rejects the GenModel with a "Metamodel rejected" error,
-   *   the user can opt in to a second call with this flag set to `true`.
-   */
-  applyGenModelFixes?: boolean;
 }
 
-type FileKind = 'ecore' | 'genmodel';
+type FileKind = 'ecore';
 
 // ─── Module-level helpers ────────────────────────────────────────────────────
 
@@ -106,8 +95,8 @@ function inferFieldKeyFromBackendMessage(message: string): CreateModelFieldKey |
   if (/\b(keyword|keywords)\b/.test(m)) return 'keywords';
   if (/\bdescription\b/.test(m)) return 'description';
   if (/\bdomain\b/.test(m)) return 'domain';
-  if (/\b(ecore|genmodel|gen model|file id|upload|metamodel|precheck)\b/.test(m)) return 'files';
-  if (/\b(name|title)\b/.test(m) && !/\b(genmodel|filename|file name|file\.)\b/.test(m)) return 'name';
+  if (/\b(ecore|file id|upload|metamodel|precheck)\b/.test(m)) return 'files';
+  if (/\b(name|title)\b/.test(m) && !/\b(filename|file name|file\.)\b/.test(m)) return 'name';
   return null;
 }
 
@@ -116,10 +105,9 @@ function inferFieldKeyFromBackendMessage(message: string): CreateModelFieldKey |
 const FILE_KIND_CONFIG: Record<FileKind, {
   ext: string;
   apiType: 'ECORE' | 'GEN_MODEL';
-  fileIdKey: 'ecoreFileId' | 'genModelFileId';
+  fileIdKey: 'ecoreFileId';
 }> = {
   ecore:    { ext: '.ecore',    apiType: 'ECORE',     fileIdKey: 'ecoreFileId' },
-  genmodel: { ext: '.genmodel', apiType: 'GEN_MODEL', fileIdKey: 'genModelFileId' },
 };
 
 const FILE_CARD_DISPLAY_CONFIGS: Array<{
@@ -132,7 +120,6 @@ const FILE_CARD_DISPLAY_CONFIGS: Array<{
   defaultHeaderBg: string;
 }> = [
   { kind: 'ecore',    accentColor: '#049484', hoverBg: 'var(--v-surface-hover)', badgeBg: 'var(--v-brand-soft)', badgeBorder: 'var(--v-uml-primary-border)', badgeColor: '#049484', defaultHeaderBg: 'var(--v-surface)' },
-  { kind: 'genmodel', accentColor: 'var(--v-text-secondary)', hoverBg: 'var(--v-surface-hover)', badgeBg: 'var(--v-surface-hover)', badgeBorder: 'var(--v-border)', badgeColor: 'var(--v-text)', defaultHeaderBg: 'var(--v-surface)' },
 ];
 
 // ─── Style constants ──────────────────────────────────────────────────────────
@@ -718,57 +705,10 @@ const FormActionButtons: React.FC<FormActionButtonsProps> = ({
   );
 };
 
-interface GenModelFixPromptProps {
-  isLoading: boolean;
-  isSubmitting: boolean;
-  onCancel: () => void;
-  onApplyFixes: () => void;
-}
-
-const GenModelFixPrompt: React.FC<GenModelFixPromptProps> = ({
-  isLoading, isSubmitting, onCancel, onApplyFixes,
-}) => {
-  const isDisabled = isLoading || isSubmitting;
-  return (
-    <div style={{
-      marginTop: 16, padding: 14, borderRadius: 6,
-      border: '1px solid var(--v-warning-border)', background: 'var(--v-warning-bg)',
-      fontSize: 13, color: 'var(--v-warning-text)', fontFamily: FONT,
-    }}>
-      <div style={{ fontWeight: 600, marginBottom: 6 }}>
-        We detected issues in your GenModel.
-      </div>
-      <div style={{ marginBottom: 10 }}>
-        Would you like to save the meta model by letting the system automatically modify the GenModel,
-        or cancel this scenario?
-      </div>
-      <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', flexWrap: 'wrap' }}>
-        <button
-          type="button"
-          onClick={onCancel}
-          style={{ ...secondaryButtonStyle, padding: '8px 12px' }}
-          disabled={isDisabled}
-        >
-          Cancel scenario
-        </button>
-        <button
-          type="button"
-          onClick={onApplyFixes}
-          style={{ ...primaryButtonStyle, padding: '8px 12px' }}
-          disabled={isDisabled}
-        >
-          Save with automatic GenModel fixes
-        </button>
-      </div>
-    </div>
-  );
-};
-
 // ─── Per-kind UI state shape ──────────────────────────────────────────────────
 
 const EMPTY_PER_KIND = {
   ecore:    { inputMode: 'file' as 'file' | 'url', url: '', urlFileName: '', localFileName: '', uploadError: '' },
-  genmodel: { inputMode: 'file' as 'file' | 'url', url: '', urlFileName: '', localFileName: '', uploadError: '' },
 };
 
 const getUploadedDisplayName = (kindState: (typeof EMPTY_PER_KIND)['ecore']): string =>
@@ -780,24 +720,22 @@ function useCreateModelForm({ isOpen, onClose, onSuccess }: CreateModelModalProp
   const [formData, setFormData] = useState({
     name: '', description: '', domain: '', keywords: [] as string[],
   });
-  const [uploadedFileIds, setUploadedFileIds] = useState({ ecoreFileId: 0, genModelFileId: 0 });
+  const [uploadedFileIds, setUploadedFileIds] = useState({ ecoreFileId: 0 });
   const [isLoading, setIsLoading] = useState(false);
   const [fieldErrors, setFieldErrors] = useState<Record<CreateModelFieldKey, string>>(() => ({ ...EMPTY_FIELD_ERRORS }));
   const [success, setSuccess] = useState('');
   const [uploadProgress, setUploadProgress] = useState({
     ecore: { progress: 0, isUploading: false },
-    genmodel: { progress: 0, isUploading: false },
   });
   const [submitProgress, setSubmitProgress] = useState({ progress: 0, isSubmitting: false });
   // Tracked as a ref (not state) since it's only read inside async callbacks/closures that need
   // the current value synchronously — state updates aren't visible to already-created closures
   // until the next render.
   const metaModelCreatedSuccessfullyRef = useRef(false);
-  const [showGenModelFixPrompt, setShowGenModelFixPrompt] = useState(false);
   const [pendingCreateRequest, setPendingCreateRequest] = useState<CreateModelRequest | null>(null);
   const [scrollTarget, setScrollTarget] = useState<CreateModelFieldKey | null>(null);
 
-  // Unified per-kind UI state (replaces 6 separate ecoreInputMode / genmodelUrl / … states)
+  // Unified per-kind UI state (replaces 6 separate ecoreInputMode / … states)
   const [perKind, setPerKind] = useState(EMPTY_PER_KIND);
 
   const nameFieldRef = useRef<HTMLDivElement>(null);
@@ -808,10 +746,8 @@ function useCreateModelForm({ isOpen, onClose, onSuccess }: CreateModelModalProp
 
   const fileInputRefs = {
     ecore:    useRef<HTMLInputElement>(null),
-    genmodel: useRef<HTMLInputElement>(null),
   };
   const ecoreProgressIntervalRef    = useRef<ReturnType<typeof setInterval> | null>(null);
-  const genmodelProgressIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const submitProgressIntervalRef   = useRef<ReturnType<typeof setInterval> | null>(null);
   const successTimeoutRef           = useRef<ReturnType<typeof setTimeout>  | null>(null);
   const progressResetTimeoutRef     = useRef<ReturnType<typeof setTimeout>  | null>(null);
@@ -837,7 +773,6 @@ function useCreateModelForm({ isOpen, onClose, onSuccess }: CreateModelModalProp
   }, [scrollTarget]);
 
   const canSave = uploadedFileIds.ecoreFileId > 0 &&
-    uploadedFileIds.genModelFileId > 0 &&
     formData.name.trim() &&
     formData.description.trim() &&
     formData.domain.trim() &&
@@ -845,7 +780,7 @@ function useCreateModelForm({ isOpen, onClose, onSuccess }: CreateModelModalProp
 
   // Stable ref-only cleanup – safe with empty deps
   const clearAllTimers = useCallback(() => {
-    [ecoreProgressIntervalRef, genmodelProgressIntervalRef, submitProgressIntervalRef].forEach(ref => {
+    [ecoreProgressIntervalRef, submitProgressIntervalRef].forEach(ref => {
       if (ref.current) { clearInterval(ref.current); ref.current = null; }
     });
     [successTimeoutRef, progressResetTimeoutRef].forEach(ref => {
@@ -892,8 +827,9 @@ function useCreateModelForm({ isOpen, onClose, onSuccess }: CreateModelModalProp
   };
 
   const startProgressSimulation = (kind: FileKind) => {
-    const ref = kind === 'ecore' ? ecoreProgressIntervalRef : genmodelProgressIntervalRef;
+    const ref = ecoreProgressIntervalRef;
     if (ref.current) clearInterval(ref.current);
+
     ref.current = globalThis.setInterval(() => {
       setUploadProgress(prev => ({
         ...prev,
@@ -903,7 +839,7 @@ function useCreateModelForm({ isOpen, onClose, onSuccess }: CreateModelModalProp
   };
 
   const stopProgressSimulation = (kind: FileKind) => {
-    const ref = kind === 'ecore' ? ecoreProgressIntervalRef : genmodelProgressIntervalRef;
+    const ref = ecoreProgressIntervalRef;
     if (ref.current) { clearInterval(ref.current); ref.current = null; }
   };
 
@@ -945,7 +881,6 @@ function useCreateModelForm({ isOpen, onClose, onSuccess }: CreateModelModalProp
   const prepareSubmit = () => {
     setIsLoading(true);
     setFieldErrors({ ...EMPTY_FIELD_ERRORS });
-    setShowGenModelFixPrompt(false);
     startSubmitOverlay();
   };
 
@@ -970,7 +905,7 @@ function useCreateModelForm({ isOpen, onClose, onSuccess }: CreateModelModalProp
 
   const cleanupUploadedFiles = async () => {
     if (metaModelCreatedSuccessfullyRef.current) return;
-    const filesToDelete = [uploadedFileIds.ecoreFileId, uploadedFileIds.genModelFileId].filter(id => id > 0);
+    const filesToDelete = [uploadedFileIds.ecoreFileId].filter(id => id > 0);
     await Promise.all(
       filesToDelete.map(fileId =>
         apiService.deleteFile(fileId).catch(() => console.error('Failed to delete file'))
@@ -980,7 +915,7 @@ function useCreateModelForm({ isOpen, onClose, onSuccess }: CreateModelModalProp
 
   /** Resets local upload UI after server deletes files (so we do not keep stale “Ready” with dead IDs). */
   const resetLocalUploadStateAfterImportFailure = () => {
-    setUploadedFileIds({ ecoreFileId: 0, genModelFileId: 0 });
+    setUploadedFileIds({ ecoreFileId: 0 });
     setPerKind(EMPTY_PER_KIND);
   };
 
@@ -1002,13 +937,12 @@ function useCreateModelForm({ isOpen, onClose, onSuccess }: CreateModelModalProp
     clearAllTimers();
     setSubmitProgress({ progress: 0, isSubmitting: false });
     setFormData({ name: '', description: '', domain: '', keywords: [] });
-    setUploadedFileIds({ ecoreFileId: 0, genModelFileId: 0 });
+    setUploadedFileIds({ ecoreFileId: 0 });
     setFieldErrors({ ...EMPTY_FIELD_ERRORS });
     setSuccess('');
     setIsLoading(false);
-    setUploadProgress({ ecore: { progress: 0, isUploading: false }, genmodel: { progress: 0, isUploading: false } });
+    setUploadProgress({ ecore: { progress: 0, isUploading: false } });
     metaModelCreatedSuccessfullyRef.current = false;
-    setShowGenModelFixPrompt(false);
     setPendingCreateRequest(null);
     setPerKind(EMPTY_PER_KIND);
     onClose();
@@ -1121,8 +1055,8 @@ function useCreateModelForm({ isOpen, onClose, onSuccess }: CreateModelModalProp
     if (!formData.description.trim()) next.description = 'Please enter a description';
     if (!formData.domain.trim()) next.domain = 'Please enter a domain';
     if (formData.keywords.length === 0) next.keywords = 'Please enter at least one keyword';
-    if (!uploadedFileIds.ecoreFileId || !uploadedFileIds.genModelFileId) {
-      next.files = 'Please upload both .ecore and .genmodel files';
+    if (!uploadedFileIds.ecoreFileId) {
+      next.files = 'Please upload the .ecore file';
     }
     const order: CreateModelFieldKey[] = ['name', 'description', 'keywords', 'domain', 'files'];
     const first = order.find(k => next[k]);
@@ -1154,62 +1088,16 @@ function useCreateModelForm({ isOpen, onClose, onSuccess }: CreateModelModalProp
       domain: formData.domain.trim(),
       keyword: formData.keywords,
       ecoreFileId: uploadedFileIds.ecoreFileId,
-      genModelFileId: uploadedFileIds.genModelFileId,
     };
     setPendingCreateRequest(requestData);
 
     try {
-      // This call only inspects the GenModel — the backend does not persist
-      // anything until the follow-up call below with applyGenModelFixes: true.
-      await apiService.createMetaModel({ ...requestData, applyGenModelFixes: false });
-    } catch (err) {
-      const { message, isMetamodelRejected } = parseBackendError(err);
-      if (isMetamodelRejected) {
-        setIsLoading(false);
-        stopSubmitOverlayWithError();
-        setFieldErrors({
-          ...EMPTY_FIELD_ERRORS,
-          files:
-            `We found some issues in your GenModel: ${message}. ` +
-            'You can let the system modify the GenModel automatically or cancel this operation.',
-        });
-        setScrollTarget('files');
-        setShowGenModelFixPrompt(true);
-        return;
-      }
-      await handleImportFailure(message, 'Error creating meta model: ');
-      return;
-    }
-
-    try {
-      const response = await apiService.createMetaModel({ ...requestData, applyGenModelFixes: true });
+      const response = await apiService.createMetaModel({ ...requestData});
       onSubmitSuccess('Meta Model created successfully!', response.data, requestData);
     } catch (err) {
       const { message } = parseBackendError(err);
       await handleImportFailure(message, 'Error creating meta model: ');
     }
-  };
-
-  const handleApplyGenModelFixes = async () => {
-    if (!pendingCreateRequest) return;
-    prepareSubmit();
-
-    try {
-      const response = await apiService.createMetaModel({ ...pendingCreateRequest, applyGenModelFixes: true });
-      onSubmitSuccess(
-        'Meta Model created successfully with automatic GenModel fixes.',
-        response.data,
-        pendingCreateRequest,
-      );
-    } catch (err) {
-      const { message } = parseBackendError(err);
-      await handleImportFailure(message, 'Error creating meta model with automatic GenModel fixes: ');
-    }
-  };
-
-  const handleCancelGenModelFixScenario = () => {
-    setShowGenModelFixPrompt(false);
-    handleClose();
   };
 
   const getButtonText = (): string => {
@@ -1226,7 +1114,7 @@ function useCreateModelForm({ isOpen, onClose, onSuccess }: CreateModelModalProp
     }
     clearAllTimers();
     setSubmitProgress({ progress: 0, isSubmitting: false });
-    setUploadProgress({ ecore: { progress: 0, isUploading: false }, genmodel: { progress: 0, isUploading: false } });
+    setUploadProgress({ ecore: { progress: 0, isUploading: false }});
     return clearAllTimers;
   }, [isOpen, clearAllTimers]);
 
@@ -1239,13 +1127,11 @@ function useCreateModelForm({ isOpen, onClose, onSuccess }: CreateModelModalProp
     fieldSectionRefs,
     success,
     uploadProgress, submitProgress,
-    showGenModelFixPrompt,
     perKind,
     fileInputRefs,
     canSave,
     handleFileUpload, handleUrlImport,
-    handleCreateModel, handleApplyGenModelFixes,
-    handleCancelGenModelFixScenario, handleClose,
+    handleCreateModel, handleClose,
     switchFileMode, changeFileUrl,
     clearKindUpload,
     getButtonText,
@@ -1322,7 +1208,7 @@ export const CreateModelModal: React.FC<CreateModelModalProps> = ({
             <div>
               <h2 id="modal-title" style={modalTitleStyle}>Import Meta Model</h2>
               <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.72)', marginTop: 3, fontFamily: FONT }}>
-                Upload your .ecore and .genmodel files
+                Upload your .ecore file
               </div>
             </div>
             <button
@@ -1435,15 +1321,6 @@ export const CreateModelModal: React.FC<CreateModelModalProps> = ({
               </div>
             )}
 
-            {form.showGenModelFixPrompt && (
-              <GenModelFixPrompt
-                isLoading={isLoading}
-                isSubmitting={submitProgress.isSubmitting}
-                onCancel={form.handleCancelGenModelFixScenario}
-                onApplyFixes={form.handleApplyGenModelFixes}
-              />
-            )}
-
             {FILE_CARD_DISPLAY_CONFIGS.map(({ kind, accentColor, hoverBg, badgeBg, badgeBorder, badgeColor, defaultHeaderBg }) => {
               const { ext, fileIdKey } = FILE_KIND_CONFIG[kind];
               const fileId = uploadedFileIds[fileIdKey];
@@ -1485,14 +1362,13 @@ export const CreateModelModal: React.FC<CreateModelModalProps> = ({
             })}
 
             <div style={fileStatusStyle}>
-              {uploadedFileIds.ecoreFileId > 0 && uploadedFileIds.genModelFileId > 0
+              {uploadedFileIds.ecoreFileId > 0
                 ? (() => {
                     const nEcore = getUploadedDisplayName(form.perKind.ecore);
-                    const nGen = getUploadedDisplayName(form.perKind.genmodel);
-                    if (nEcore && nGen) return `✅ Both files ready! (${nEcore} · ${nGen})`;
-                    return '✅ Both files ready!';
+                    if (nEcore) return `✅ Ecore file is ready! (${nEcore})`;
+                    return '✅ Ecore file is ready!';
                   })()
-                : 'Upload or import both files to continue'}
+                : 'Upload or import an .ecore file to continue'}
             </div>
           </div>
 

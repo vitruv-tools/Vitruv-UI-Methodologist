@@ -279,7 +279,6 @@ function persistEcoreFileRename(node: Node | undefined, newFileName: string): vo
     domain: typeof node.data?.domain === 'string' ? node.data.domain : '',
     keyword: keywordsFromEcoreNodeData(node.data),
     ecoreFileId: Number(node.data?.ecoreFileId) || 0,
-    genModelFileId: Number(node.data?.genModelFileId) || 0,
   }).catch((err) => {
     console.error('Failed to rename meta model:', err);
   });

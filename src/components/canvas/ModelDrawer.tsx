@@ -454,7 +454,6 @@ const DetailView: React.FC<DetailViewProps> = ({
             description: model.description || '',
             domain: model.domain || '',
             keyword: model.keyword || [],
-            genModelFileId: model.genModelFileId,
           },
           onSaved: ({ ecoreContent: saved, ecoreFileId: newFileId }) => {
             setEcoreContent(saved);
