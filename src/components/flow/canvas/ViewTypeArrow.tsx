@@ -199,19 +199,19 @@ export const ViewTypeArrow: React.FC<ViewTypeArrowProps> = ({
             <line
                 x1={start.x} y1={start.y}
                 x2={end.x} y2={end.y}
-                stroke="#000000"
+                stroke="var(--v-uml-circle, #0c436e)"
                 strokeWidth={1.5}
                 style={{ pointerEvents: 'none' }}
             />
             <polygon
                 points={startArrow}
-                fill="#000000"
+                fill="var(--v-uml-circle, #0c436e)"
                 style={{ pointerEvents: 'none' }}
             />
             {editable && (
                 <polygon
                     points={endArrow}
-                    fill="#000000"
+                    fill="var(--v-uml-circle, #0c436e)"
                     style={{ pointerEvents: 'none' }}
                 />
             )}

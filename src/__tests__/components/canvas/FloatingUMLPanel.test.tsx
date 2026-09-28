@@ -85,6 +85,7 @@ describe('FloatingUMLPanel', () => {
     expect(screen.getByTestId('uml-toolbar-badge')).toHaveTextContent('UML');
     expect(screen.getByText('My Ecore Model')).toBeInTheDocument();
     expect(screen.getByTestId('uml-toolbar-reload')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Switch to (dark|light) mode/ })).toBeInTheDocument();
   });
 
   it('renders as a fullscreen page overlay', () => {

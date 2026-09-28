@@ -46,7 +46,7 @@ const typeSelectStyle: React.CSSProperties = {
   borderRadius: '3px',
   fontSize: '16px',
   fontFamily: `'Consolas', 'Courier New', monospace`,
-  color: '#0c436e',
+  color: 'var(--v-uml-edge, #0c436e)',
   background: '#f4f8fc',
   padding: '2px 5px',
   cursor: 'pointer',
@@ -215,8 +215,8 @@ const MenuOverlay: React.FC<{
     position: 'absolute',
     top: '100%',
     left: '0',
-    background: '#fff',
-    border: '1px solid #ddd',
+    background: 'var(--v-surface)',
+    border: '1px solid var(--v-border)',
     borderRadius: '4px',
     padding: '4px',
     boxShadow: '0 2px 8px rgba(0,0,0,0.15)',
@@ -515,11 +515,11 @@ export function EditableNode({ id, data, selected, isConnectable }: NodeProps<UM
       : '0 2px 8px rgba(0,0,0,0.08)';
 
     const elementStyles: Record<string, React.CSSProperties> = {
-      'class': { borderColor, background: '#ffffff' },
-      'abstract-class': { borderColor, background: '#ffffff' },
-      'interface': { borderColor, borderStyle: 'dashed', background: '#ffffff' },
-      'enumeration': { borderColor, background: '#ffffff' },
-      'package': { borderColor, background: '#ffffff' },
+      'class': { borderColor, background: 'var(--v-uml-box-bg)' },
+      'abstract-class': { borderColor, background: 'var(--v-uml-box-bg)' },
+      'interface': { borderColor, borderStyle: 'dashed', background: 'var(--v-uml-box-bg)' },
+      'enumeration': { borderColor, background: 'var(--v-uml-box-bg)' },
+      'package': { borderColor, background: 'var(--v-uml-box-bg)' },
     };
 
     if (nodeData.toolType === 'element' && nodeData.toolName) {
@@ -574,7 +574,7 @@ export function EditableNode({ id, data, selected, isConnectable }: NodeProps<UM
           value={nodeData.className || ''}
           onSave={(newValue) => updateNodeData({ className: newValue })}
           placeholder="ClassName"
-          style={{ fontWeight: 600, fontSize: '13px', color: '#0c436e' }}
+          style={{ fontWeight: 600, fontSize: '13px', color: 'var(--v-uml-edge, #0c436e)' }}
         />
       </div>
       {nodeData.attributes && nodeData.attributes.length > 0 && (
@@ -595,7 +595,7 @@ export function EditableNode({ id, data, selected, isConnectable }: NodeProps<UM
           value={nodeData.className || ''}
           onSave={(newValue) => updateNodeData({ className: newValue })}
           placeholder="ClassName"
-          style={{ fontWeight: 600, fontSize: '13px', color: '#0c436e', fontStyle: 'italic' }}
+          style={{ fontWeight: 600, fontSize: '13px', color: 'var(--v-uml-edge, #0c436e)', fontStyle: 'italic' }}
         />
       </div>
       {nodeData.attributes && nodeData.attributes.length > 0 && (
@@ -616,7 +616,7 @@ export function EditableNode({ id, data, selected, isConnectable }: NodeProps<UM
           value={nodeData.className || ''}
           onSave={(newValue) => updateNodeData({ className: newValue })}
           placeholder="InterfaceName"
-          style={{ fontWeight: 600, fontSize: '13px', color: '#0c436e', fontStyle: 'italic' }}
+          style={{ fontWeight: 600, fontSize: '13px', color: 'var(--v-uml-edge, #0c436e)', fontStyle: 'italic' }}
         />
       </div>
       {nodeData.attributes && nodeData.attributes.length > 0 && (

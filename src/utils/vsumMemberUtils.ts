@@ -132,6 +132,31 @@ export function findVsumOwner(members: VsumUserResponse[]): VsumUserResponse | n
   ) ?? null;
 }
 
+/**
+ * Contact for the person who shared a project with the current user, derived
+ * from the project's owner.
+ *
+ * Returns null when the owner *is* the current user. Nobody shared the project
+ * with you, and `resolveProjectAccessRole` reads a stored `sharedBy` as proof
+ * of shared access — so recording yourself here downgrades an owner to VIEWER.
+ */
+export function sharedByFromOwner(
+  owner: VsumUserResponse | null | undefined,
+  currentUserEmail?: string,
+): SharedByContact | null {
+  if (!owner) return null;
+
+  const ownerEmail = owner.email?.toLowerCase();
+  const selfEmail = currentUserEmail?.toLowerCase();
+  if (ownerEmail && selfEmail && ownerEmail === selfEmail) return null;
+
+  return {
+    firstName: owner.firstName,
+    lastName: owner.lastName,
+    email: owner.email,
+  };
+}
+
 export function findMembershipForEmail(
   members: VsumUserResponse[],
   email?: string,

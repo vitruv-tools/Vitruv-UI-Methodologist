@@ -57,32 +57,82 @@ class ApiService {
   }
 
   /**
-   * Ensure a successful artifact response is a ZIP blob (not JSON error text).
+   * Ensure a successful download response is a ZIP blob (not JSON error text).
    */
-  private async parseArtifactBlob(response: Response): Promise<Blob> {
+  private async parseArtifactBlob(response: Response, label: string = 'Artifact'): Promise<Blob> {
     const contentType = response.headers.get('Content-Type')?.toLowerCase() ?? '';
     if (contentType.includes('json')) {
       const errorText = await response.text();
-      throw this.createApiError(errorText, 'Artifact download failed');
+      throw this.createApiError(errorText, `${label} download failed`);
     }
 
     const blob = await response.blob();
 
     if (blob.type?.toLowerCase().includes('json')) {
-      throw this.createApiError(await blob.text(), 'Artifact download failed');
+      throw this.createApiError(await blob.text(), `${label} download failed`);
     }
 
     if (!blob.size) {
-      throw this.createApiError('', 'Artifact download returned an empty file');
+      throw this.createApiError('', `${label} download returned an empty file`);
     }
 
     const header = new Uint8Array(await new Response(blob.slice(0, 4)).arrayBuffer());
     if (header[0] !== 0x50 || header[1] !== 0x4b) {
       const preview = await blob.slice(0, 512).text();
-      throw this.createApiError(preview, 'Artifact download did not return a valid ZIP file');
+      throw this.createApiError(preview, `${label} download did not return a valid ZIP file`);
     }
 
     return blob;
+  }
+
+  /**
+   * Fetch a ZIP blob from an authenticated vSUM build endpoint, retrying once
+   * on a 401 after a token refresh.
+   */
+  private async downloadVsumZip(path: string, label: string): Promise<Blob> {
+    const token = await AuthService.ensureValidToken();
+
+    if (!token) {
+      throw new Error('No valid authentication token available');
+    }
+
+    const url = `${this.baseURL}${path}`;
+    const headers: Record<string, string> = {
+      Authorization: `Bearer ${token}`,
+      Accept: 'application/zip, application/octet-stream, */*',
+    };
+
+    let response = await fetch(url, {
+      method: 'GET',
+      headers,
+    });
+
+    if (response.status === 401) {
+      try {
+        await AuthService.refreshToken();
+      } catch {
+        console.error(`Token refresh failed during ${label.toLowerCase()} download`);
+      }
+
+      const newToken = await AuthService.ensureValidToken();
+      if (newToken) {
+        response = await fetch(url, {
+          method: 'GET',
+          headers: {
+            ...headers,
+            Authorization: `Bearer ${newToken}`,
+          },
+        });
+      }
+    }
+
+    if (!response.ok) {
+      const errorText = await this.getResponseText(response);
+      console.error(`${label} download failed`, { status: response.status });
+      throw this.createApiError(errorText, `${label} download failed`);
+    }
+
+    return this.parseArtifactBlob(response, label);
   }
 
   /**
@@ -240,10 +290,10 @@ class ApiService {
   /**
    * Change user password
    */
-  async changePassword(password: string): Promise<{ data: any; message: string }> {
+  async changePassword(currentPassword: string, password: string): Promise<{ data: any; message: string }> {
     return this.authenticatedRequest('/api/v1/users/change-password', {
       method: 'PUT',
-      body: JSON.stringify({ password }),
+      body: JSON.stringify({ currentPassword, password }),
     });
   }
 
@@ -607,49 +657,16 @@ class ApiService {
    * Returns a ZIP file blob containing the build artifact
    */
   async downloadVsumArtifact(id: number | string): Promise<Blob> {
-    const token = await AuthService.ensureValidToken();
+    return this.downloadVsumZip(`/api/v1/vsums/${id}/build/artifact`, 'Artifact');
+  }
 
-    if (!token) {
-      throw new Error('No valid authentication token available');
-    }
-
-    const url = `${this.baseURL}/api/v1/vsums/${id}/build/artifact`;
-    const headers: Record<string, string> = {
-      Authorization: `Bearer ${token}`,
-      Accept: 'application/zip, application/octet-stream, */*',
-    };
-
-    let response = await fetch(url, {
-      method: 'GET',
-      headers,
-    });
-
-    if (response.status === 401) {
-      try {
-        await AuthService.refreshToken();
-      } catch {
-        console.error('Token refresh failed during artifact download');
-      }
-
-      const newToken = await AuthService.ensureValidToken();
-      if (newToken) {
-        response = await fetch(url, {
-          method: 'GET',
-          headers: {
-            ...headers,
-            Authorization: `Bearer ${newToken}`,
-          },
-        });
-      }
-    }
-
-    if (!response.ok) {
-      const errorText = await this.getResponseText(response);
-      console.error('Artifact download failed', { status: response.status });
-      throw this.createApiError(errorText, 'Artifact download failed');
-    }
-
-    return this.parseArtifactBlob(response);
+  /**
+   * vSUMS: Download easy deploy package as ZIP file
+   * GET /api/v1/vsums/{id}/build/bundle
+   * Returns a ZIP file blob containing a JAR, documentation, and scripts
+   */
+  async downloadVsumBundle(id: number | string): Promise<Blob> {
+    return this.downloadVsumZip(`/api/v1/vsums/${id}/build/bundle`, 'Easy deploy package');
   }
 
   /**
@@ -678,6 +695,21 @@ class ApiService {
   // inside ApiService class
   async renameVsum(id: number | string, data: { name: string }): Promise<ApiResponse<any>> {
     return this.authenticatedRequest(`/api/v1/vsums/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    });
+  }
+
+  /**
+   * Renames a meta model only within one project. `metaModelId` is the model-library/source ID,
+   * not the ID of a cloned project record.
+   */
+  async renameVsumMetaModel(
+    vsumId: number | string,
+    metaModelId: number | string,
+    data: { name: string },
+  ): Promise<ApiResponse<void>> {
+    return this.authenticatedRequest(`/api/v1/vsums/${vsumId}/meta-models/${metaModelId}/name`, {
       method: 'PUT',
       body: JSON.stringify(data),
     });
@@ -917,6 +949,13 @@ class ApiService {
       method: 'DELETE',
     });
   }
+
+  /**
+   * Fetch Low Code reaction metadata (field definitions for the form editor).
+   */
+  async getLowCodeReactionsMetadata(): Promise<{ data: import('../types/LowCodeReactionMetadataResponse').LowCodeReactionMetadataResponse; message: string }> {
+    return this.authenticatedRequest('/api/lowcode-metadata');
+  }
 }
 
 // Export a singleton instance
@@ -990,7 +1029,9 @@ export interface UserSearchItem {
 export interface MetaModelRelationRequest {
   sourceId: number;
   targetId: number;
-  reactionFileId: number;  // Use 0 when there's no reaction file
+  /** Stored REACTION file id, or `null` when there is no uploaded `.reactions` file. */
+  reactionFileId: number | null;
+  fineGranularMetaModelRelationSet?: import('../types/FineGranularMetaModelRelation').EditableFineGranularMetaModelRelation[];
 }
 
 export interface VsumSyncChangesPutRequest {

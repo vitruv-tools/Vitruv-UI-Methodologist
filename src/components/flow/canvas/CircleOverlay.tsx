@@ -243,7 +243,7 @@ export const CircleOverlay: React.FC<CircleOverlayProps> = ({
                         markerHeight={8}
                         orient="auto-start-reverse"
                     >
-                        <path d="M0 0L10 5L0 10Z" fill="#000000" />
+                        <path d="M0 0L10 5L0 10Z" fill="var(--v-uml-circle, #0c436e)" />
                     </marker>
                 </defs>
 
@@ -252,7 +252,7 @@ export const CircleOverlay: React.FC<CircleOverlayProps> = ({
                     <circle
                         cx={screenCx} cy={screenCy}
                         r={previewR * viewport.zoom}
-                        fill="none" stroke="#000000" strokeWidth={2}
+                        fill="none" stroke="var(--v-uml-circle, #0c436e)" strokeWidth={2.5}
                         strokeDasharray="8 5" opacity={0.35}
                         pointerEvents="none"
                     />
@@ -286,8 +286,8 @@ export const CircleOverlay: React.FC<CircleOverlayProps> = ({
                 {/* Visible circle — no pointer events */}
                 <circle
                     cx={screenCx} cy={screenCy} r={screenR}
-                    fill="none" stroke="#000000"
-                    strokeWidth={selected ? 2 : 1.5}
+                    fill="none" stroke="var(--v-uml-circle, #0c436e)"
+                    strokeWidth={selected ? 3.5 : 2.5}
                     filter="url(#circle-shadow)"
                     pointerEvents="none"
                 />
@@ -350,7 +350,7 @@ export const CircleOverlay: React.FC<CircleOverlayProps> = ({
                         onPointerUp={handlePointerUp}
                     >
                         <circle cx={handleScreenX} cy={handleScreenY} r={HANDLE_RADIUS + 3} fill="rgba(0,0,0,0.12)" />
-                        <circle cx={handleScreenX} cy={handleScreenY} r={HANDLE_RADIUS} fill="white" stroke="#000000" strokeWidth={1.5} />
+                        <circle cx={handleScreenX} cy={handleScreenY} r={HANDLE_RADIUS} fill="white" stroke="var(--v-uml-circle, #0c436e)" strokeWidth={1.5} />
                         <text
                             x={handleScreenX} y={handleScreenY}
                             textAnchor="middle" dominantBaseline="central"

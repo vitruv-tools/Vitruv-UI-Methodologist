@@ -22,8 +22,8 @@ const CACHE_TTL_MS = 5 * 60 * 1000;
 const wrap: React.CSSProperties = { display: 'grid', gap: 16, fontFamily: APP_FONT };
 const row: React.CSSProperties = { display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' };
 const table: React.CSSProperties = { width: '100%', borderCollapse: 'collapse', userSelect: 'text' };
-const thtdBase: React.CSSProperties = { border: '1px solid #e9ecef', padding: '8px 10px', fontSize: 13 };
-const th: React.CSSProperties = { ...thtdBase, fontWeight: 700, textAlign: 'left', background: '#f8fafc' };
+const thtdBase: React.CSSProperties = { border: '1px solid var(--v-border)', padding: '8px 10px', fontSize: 13, color: 'var(--v-text)' };
+const th: React.CSSProperties = { ...thtdBase, fontWeight: 700, textAlign: 'left', background: 'var(--v-table-header)' };
 const td: React.CSSProperties = { ...thtdBase, userSelect: 'text' };
 const tdCenter: React.CSSProperties = { ...td, textAlign: 'center', userSelect: 'none' };
 const dangerBtn: React.CSSProperties = {
@@ -32,16 +32,16 @@ const dangerBtn: React.CSSProperties = {
   cursor: 'pointer',
   fontWeight: 600,
   fontSize: 12,
-  border: '1.5px solid #fecaca',
-  background: '#fff5f5',
-  color: '#dc2626',
+  border: '1.5px solid var(--v-danger-border)',
+  background: 'var(--v-danger-bg)',
+  color: 'var(--v-danger-text)',
   fontFamily: APP_FONT,
 };
 const sectionCard: React.CSSProperties = {
   padding: 14,
   borderRadius: 10,
-  border: '1px solid #e2e8f0',
-  background: '#fafafa',
+  border: '1px solid var(--v-border)',
+  background: 'var(--v-surface-muted)',
   display: 'grid',
   gap: 10,
 };
@@ -49,12 +49,12 @@ const sectionTitle: React.CSSProperties = {
   margin: 0,
   fontSize: 14,
   fontWeight: 700,
-  color: '#0f172a',
+  color: 'var(--v-text)',
 };
 const sectionHint: React.CSSProperties = {
   margin: 0,
   fontSize: 12,
-  color: '#64748b',
+  color: 'var(--v-text-muted)',
   lineHeight: 1.45,
 };
 const pendingBadge: React.CSSProperties = {
@@ -66,19 +66,19 @@ const pendingBadge: React.CSSProperties = {
   borderRadius: 20,
   fontSize: 10,
   fontWeight: 700,
-  background: '#fff7ed',
-  color: '#c2410c',
-  border: '1px solid #fed7aa',
+  background: 'var(--v-warning-bg)',
+  color: 'var(--v-warning-text)',
+  border: '1px solid var(--v-warning-border)',
   verticalAlign: 'middle',
 };
 const roleBadge = (role: string): React.CSSProperties => {
   if (role === 'Owner') {
-    return { background: '#ecfdf5', color: '#065f46', border: '1px solid #a7f3d0' };
+    return { background: 'var(--v-success-bg)', color: 'var(--v-success-text)', border: '1px solid var(--v-success-border)' };
   }
   if (role === 'Viewer') {
-    return { background: '#eff6ff', color: '#1d4ed8', border: '1px solid #bfdbfe' };
+    return { background: 'var(--v-info-bg)', color: 'var(--v-info-text)', border: '1px solid var(--v-info-border)' };
   }
-  return { background: '#f3f4f6', color: '#374151', border: '1px solid #e5e7eb' };
+  return { background: 'var(--v-surface-hover)', color: 'var(--v-text-secondary)', border: '1px solid var(--v-border)' };
 };
 
 const isOwnerRole = (role?: string, roleEn?: string) =>
@@ -327,12 +327,12 @@ export const VsumUsersTab: React.FC<Props> = ({ vsumId, onChanged, canManage = t
         </div>
 
         {query && (
-          <div style={{ border: '1px solid #e2e8f0', borderRadius: 8, overflow: 'hidden', background: '#fff' }}>
+          <div style={{ border: '1px solid var(--v-border)', borderRadius: 8, overflow: 'hidden', background: 'var(--v-surface)' }}>
             {searching && (
-              <div style={{ padding: 10, fontStyle: 'italic', color: '#64748b', fontSize: 13 }}>Searching…</div>
+              <div style={{ padding: 10, fontStyle: 'italic', color: 'var(--v-text-muted)', fontSize: 13 }}>Searching…</div>
             )}
             {!searching && searchResults.length === 0 && (
-              <div style={{ padding: 10, fontStyle: 'italic', color: '#64748b', fontSize: 13 }}>No users found</div>
+              <div style={{ padding: 10, fontStyle: 'italic', color: 'var(--v-text-muted)', fontSize: 13 }}>No users found</div>
             )}
             {!searching && searchResults.length > 0 && (
               <select
@@ -364,8 +364,8 @@ export const VsumUsersTab: React.FC<Props> = ({ vsumId, onChanged, canManage = t
         )}
 
         {selectedUser && (
-          <div style={{ fontSize: 12, color: '#64748b' }}>
-            Selected: <strong style={{ color: '#0f172a' }}>{userDisplayName(selectedUser)}</strong> ({selectedUser.email})
+          <div style={{ fontSize: 12, color: 'var(--v-text-muted)' }}>
+            Selected: <strong style={{ color: 'var(--v-text)' }}>{userDisplayName(selectedUser)}</strong> ({selectedUser.email})
           </div>
         )}
       </section>}
@@ -384,10 +384,10 @@ export const VsumUsersTab: React.FC<Props> = ({ vsumId, onChanged, canManage = t
           </thead>
           <tbody>
             {loading && (
-              <tr><td colSpan={canManage ? 4 : 3} style={{ ...td, fontStyle: 'italic', color: '#64748b' }}>Loading…</td></tr>
+              <tr><td colSpan={canManage ? 4 : 3} style={{ ...td, fontStyle: 'italic', color: 'var(--v-text-muted)' }}>Loading…</td></tr>
             )}
             {!loading && members.length === 0 && (
-              <tr><td colSpan={canManage ? 4 : 3} style={{ ...td, fontStyle: 'italic', color: '#64748b' }}>No members yet.</td></tr>
+              <tr><td colSpan={canManage ? 4 : 3} style={{ ...td, fontStyle: 'italic', color: 'var(--v-text-muted)' }}>No members yet.</td></tr>
             )}
             {!loading && members.length > 0 && members.map(m => {
               const displayName = memberDisplayName(m);

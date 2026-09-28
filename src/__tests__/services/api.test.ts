@@ -126,6 +126,26 @@ describe('ApiService – authenticatedRequest', () => {
   });
 });
 
+describe('ApiService – changePassword', () => {
+  const { AuthService } = require('../../services/auth') as { AuthService: { ensureValidToken: jest.Mock } };
+
+  beforeEach(() => { AuthService.ensureValidToken.mockResolvedValue('mock-token'); });
+  afterEach(() => jest.restoreAllMocks());
+
+  it('sends the current and new passwords to the change-password endpoint', async () => {
+    const payload = { data: null, message: 'Password updated' };
+    mockFetch(payload);
+
+    const result = await apiService.changePassword('Current1!', 'Secure1!');
+
+    expect(result).toEqual(payload);
+    const [url, options] = (global.fetch as jest.Mock).mock.calls[0];
+    expect(url).toContain('/api/v1/users/change-password');
+    expect(options.method).toBe('PUT');
+    expect(JSON.parse(options.body)).toEqual({ currentPassword: 'Current1!', password: 'Secure1!' });
+  });
+});
+
 // ── uploadFile ────────────────────────────────────────────────────────────────
 
 describe('ApiService – uploadFile', () => {
@@ -311,6 +331,78 @@ describe('ApiService – downloadVsumArtifact', () => {
   });
 });
 
+// ── downloadVsumBundle ────────────────────────────────────────────────────────
+
+describe('ApiService – downloadVsumBundle', () => {
+  const { AuthService } = require('../../services/auth') as {
+    AuthService: { ensureValidToken: jest.Mock; refreshToken: jest.Mock };
+  };
+
+  const zipBytes = new Uint8Array([0x50, 0x4b, 0x03, 0x04, 0x00]);
+
+  const mockZipFetch = (status = 200) => {
+    jest.spyOn(global, 'fetch').mockResolvedValueOnce({
+      ok: status >= 200 && status < 300,
+      status,
+      statusText: status === 200 ? 'OK' : 'Error',
+      headers: {
+        get: (name: string) =>
+          name.toLowerCase() === 'content-type' ? 'application/zip' : null,
+      },
+      text: async () => '',
+      blob: async () => new Blob([zipBytes], { type: 'application/zip' }),
+    } as unknown as Response);
+  };
+
+  beforeEach(() => {
+    AuthService.ensureValidToken.mockResolvedValue('mock-token');
+  });
+  afterEach(() => jest.restoreAllMocks());
+
+  it('requests the build/bundle endpoint and returns a ZIP blob on success', async () => {
+    mockZipFetch();
+    const blob = await apiService.downloadVsumBundle(42);
+
+    expect(global.fetch).toHaveBeenCalledWith(
+      expect.stringContaining('/api/v1/vsums/42/build/bundle'),
+      expect.any(Object),
+    );
+    expect(blob.size).toBeGreaterThan(0);
+    const header = new Uint8Array(await new Response(blob.slice(0, 2)).arrayBuffer());
+    expect(header[0]).toBe(0x50);
+    expect(header[1]).toBe(0x4b);
+  });
+
+  it('throws when the response body is JSON instead of a ZIP', async () => {
+    jest.spyOn(global, 'fetch').mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      statusText: 'OK',
+      headers: {
+        get: (name: string) =>
+          name.toLowerCase() === 'content-type' ? 'application/json' : null,
+      },
+      text: async () => '{"message":"Bundle failed"}',
+      blob: async () => new Blob(['{"message":"Bundle failed"}'], { type: 'application/json' }),
+    } as unknown as Response);
+
+    await expect(apiService.downloadVsumBundle(42)).rejects.toThrow('Bundle failed');
+  });
+
+  it('throws on non-ok status', async () => {
+    jest.spyOn(global, 'fetch').mockResolvedValueOnce({
+      ok: false,
+      status: 500,
+      statusText: 'Error',
+      headers: { get: () => null },
+      text: async () => '{"message":"Server error"}',
+      blob: async () => new Blob([]),
+    } as unknown as Response);
+
+    await expect(apiService.downloadVsumBundle(42)).rejects.toThrow('Server error');
+  });
+});
+
 // ── updateUserName ────────────────────────────────────────────────────────────
 
 describe('ApiService – updateUserName', () => {
@@ -339,5 +431,33 @@ describe('ApiService – updateUserName', () => {
   it('throws on non-2xx response', async () => {
     mockFetch({ message: 'Not found' }, 404);
     await expect(apiService.updateUserName('99', 'A', 'B')).rejects.toThrow();
+  });
+});
+
+describe('ApiService – getLowCodeReactionsMetadata', () => {
+  const { AuthService } = require('../../services/auth') as { AuthService: { ensureValidToken: jest.Mock } };
+  beforeEach(() => { AuthService.ensureValidToken.mockResolvedValue('mock-token'); });
+  afterEach(() => jest.restoreAllMocks());
+
+  it('GETs /api/lowcode-metadata', async () => {
+    const payload = {
+      data: {
+        reactionMetadataMap: {
+          create_corresponding_root_on_insert_root: {
+            name: 'Create Corresponding Root',
+            hide: false,
+            fields: [],
+          },
+        },
+      },
+      message: 'ok',
+    };
+    mockFetch(payload);
+
+    const result = await apiService.getLowCodeReactionsMetadata();
+    expect(result).toEqual(payload);
+    const [url, options] = (global.fetch as jest.Mock).mock.calls[0] as [string, RequestInit];
+    expect(url).toContain('/api/lowcode-metadata');
+    expect(options.method ?? 'GET').toBe('GET');
   });
 });

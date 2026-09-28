@@ -11,7 +11,7 @@ function connectionHandleArrowSvg(
   isHovered: boolean,
   size = 24,
 ): React.ReactNode {
-  const color = isHovered ? '#2c3e50' : '#95a5a6';
+  const color = isHovered ? 'var(--v-chrome-icon-hover)' : 'var(--v-chrome-icon)';
   const svgStyle: React.CSSProperties = {
     transition: 'all 0.2s ease',
     filter: isHovered

@@ -11,10 +11,10 @@ interface KeywordTagsInputProps {
 const containerStyle: React.CSSProperties = {
   width: '100%',
   minHeight: '48px',
-  border: '2px solid #d1ecf1',
+  border: '2px solid var(--v-border)',
   borderRadius: '8px',
   padding: '8px',
-  background: '#f8f9fa',
+  background: 'var(--v-input-bg)',
   display: 'flex',
   flexWrap: 'wrap',
   alignItems: 'center',
@@ -28,7 +28,7 @@ const containerFocusStyle: React.CSSProperties = {
   borderColor: '#049484',
   outline: 'none',
   boxShadow: '0 0 0 3px rgba(4, 148, 132, 0.1)',
-  background: '#ffffff',
+  background: 'var(--v-surface)',
 };
 
 const tagStyle: React.CSSProperties = {
@@ -64,7 +64,7 @@ const inputStyle: React.CSSProperties = {
   flex: '1',
   minWidth: '120px',
   padding: '4px',
-  color: '#333',
+  color: 'var(--v-text)',
 };
 
 export const KeywordTagsInput: React.FC<KeywordTagsInputProps> = ({
