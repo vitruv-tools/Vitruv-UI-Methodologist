@@ -104,10 +104,10 @@ function inferFieldKeyFromBackendMessage(message: string): CreateModelFieldKey |
 
 const FILE_KIND_CONFIG: Record<FileKind, {
   ext: string;
-  apiType: 'ECORE' | 'GEN_MODEL';
+  apiType: 'ECORE';
   fileIdKey: 'ecoreFileId';
 }> = {
-  ecore:    { ext: '.ecore',    apiType: 'ECORE',     fileIdKey: 'ecoreFileId' },
+  ecore:    { ext: '.ecore',    apiType: 'ECORE',     fileIdKey: 'ecoreFileId' }
 };
 
 const FILE_CARD_DISPLAY_CONFIGS: Array<{
@@ -119,7 +119,7 @@ const FILE_CARD_DISPLAY_CONFIGS: Array<{
   badgeColor: string;
   defaultHeaderBg: string;
 }> = [
-  { kind: 'ecore',    accentColor: '#049484', hoverBg: 'var(--v-surface-hover)', badgeBg: 'var(--v-brand-soft)', badgeBorder: 'var(--v-uml-primary-border)', badgeColor: '#049484', defaultHeaderBg: 'var(--v-surface)' },
+  { kind: 'ecore',    accentColor: '#049484', hoverBg: '#f0fdff', badgeBg: '#e6f7f5', badgeBorder: '#b2e4df', badgeColor: '#049484', defaultHeaderBg: '#f8fffe' },
 ];
 
 // ─── Style constants ──────────────────────────────────────────────────────────
@@ -206,7 +206,7 @@ const uploadSectionTitleStyle: React.CSSProperties = {
   fontFamily: FONT,
 };
 
-/** Shown inside the “Required Meta Model Files” box when POST /meta-models fails. */
+/** Shown inside the “Required Meta Model File” box when POST /meta-models fails. */
 const metaModelImportErrorBannerStyle: React.CSSProperties = {
   marginBottom: 12,
   padding: '10px 12px',
@@ -705,6 +705,7 @@ const FormActionButtons: React.FC<FormActionButtonsProps> = ({
   );
 };
 
+
 // ─── Per-kind UI state shape ──────────────────────────────────────────────────
 
 const EMPTY_PER_KIND = {
@@ -732,7 +733,6 @@ function useCreateModelForm({ isOpen, onClose, onSuccess }: CreateModelModalProp
   // the current value synchronously — state updates aren't visible to already-created closures
   // until the next render.
   const metaModelCreatedSuccessfullyRef = useRef(false);
-  const [pendingCreateRequest, setPendingCreateRequest] = useState<CreateModelRequest | null>(null);
   const [scrollTarget, setScrollTarget] = useState<CreateModelFieldKey | null>(null);
 
   // Unified per-kind UI state (replaces 6 separate ecoreInputMode / … states)
@@ -828,19 +828,27 @@ function useCreateModelForm({ isOpen, onClose, onSuccess }: CreateModelModalProp
 
   const startProgressSimulation = (kind: FileKind) => {
     const ref = ecoreProgressIntervalRef;
+
     if (ref.current) clearInterval(ref.current);
 
     ref.current = globalThis.setInterval(() => {
       setUploadProgress(prev => ({
         ...prev,
-        [kind]: { progress: Math.min(prev[kind].progress + 15, 90), isUploading: true },
+        [kind]: {
+          progress: Math.min(prev[kind].progress + 15, 90),
+          isUploading: true,
+        },
       }));
     }, 200);
   };
 
-  const stopProgressSimulation = (kind: FileKind) => {
+  const stopProgressSimulation = (_kind: FileKind) => {
     const ref = ecoreProgressIntervalRef;
-    if (ref.current) { clearInterval(ref.current); ref.current = null; }
+
+    if (ref.current) {
+      clearInterval(ref.current);
+      ref.current = null;
+    }
   };
 
   // ── Submit overlay helpers ────────────────────────────────────────────────
@@ -943,7 +951,6 @@ function useCreateModelForm({ isOpen, onClose, onSuccess }: CreateModelModalProp
     setIsLoading(false);
     setUploadProgress({ ecore: { progress: 0, isUploading: false } });
     metaModelCreatedSuccessfullyRef.current = false;
-    setPendingCreateRequest(null);
     setPerKind(EMPTY_PER_KIND);
     onClose();
   };
@@ -1056,7 +1063,7 @@ function useCreateModelForm({ isOpen, onClose, onSuccess }: CreateModelModalProp
     if (!formData.domain.trim()) next.domain = 'Please enter a domain';
     if (formData.keywords.length === 0) next.keywords = 'Please enter at least one keyword';
     if (!uploadedFileIds.ecoreFileId) {
-      next.files = 'Please upload the .ecore file';
+      next.files = 'Please upload an .ecore file';
     }
     const order: CreateModelFieldKey[] = ['name', 'description', 'keywords', 'domain', 'files'];
     const first = order.find(k => next[k]);
@@ -1089,14 +1096,22 @@ function useCreateModelForm({ isOpen, onClose, onSuccess }: CreateModelModalProp
       keyword: formData.keywords,
       ecoreFileId: uploadedFileIds.ecoreFileId,
     };
-    setPendingCreateRequest(requestData);
 
     try {
-      const response = await apiService.createMetaModel({ ...requestData});
-      onSubmitSuccess('Meta Model created successfully!', response.data, requestData);
+      const response = await apiService.createMetaModel({ ...requestData });
+
+      onSubmitSuccess(
+        'Meta Model created successfully!',
+        response.data,
+        requestData,
+      );
     } catch (err) {
       const { message } = parseBackendError(err);
-      await handleImportFailure(message, 'Error creating meta model: ');
+
+      await handleImportFailure(
+        message,
+        'Error creating meta model: ',
+      );
     }
   };
 
@@ -1114,7 +1129,7 @@ function useCreateModelForm({ isOpen, onClose, onSuccess }: CreateModelModalProp
     }
     clearAllTimers();
     setSubmitProgress({ progress: 0, isSubmitting: false });
-    setUploadProgress({ ecore: { progress: 0, isUploading: false }});
+    setUploadProgress({ ecore: { progress: 0, isUploading: false } });
     return clearAllTimers;
   }, [isOpen, clearAllTimers]);
 
@@ -1310,7 +1325,7 @@ export const CreateModelModal: React.FC<CreateModelModalProps> = ({
 
           {/* File Upload Section */}
           <div ref={form.fieldSectionRefs.files} style={uploadSectionStyle}>
-            <div style={uploadSectionTitleStyle}>Required Meta Model Files</div>
+            <div style={uploadSectionTitleStyle}>Required ECore File</div>
 
             {form.fieldErrors.files && (
               <div
