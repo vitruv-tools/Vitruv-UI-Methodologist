@@ -1,6 +1,7 @@
 import {
   useEffect,
   useRef,
+  useState,
   type CSSProperties,
   type ReactNode,
 } from 'react';
@@ -103,6 +104,54 @@ const DiagramEditPanelShell = ({
   );
 };
 
+/**
+ * Class name input that keeps a local draft and commits on Enter/blur, like the
+ * inline editor on the class box. Committing per keystroke would reject an empty
+ * value (so Cmd+A + Backspace could not clear the field), and would record an undo
+ * step and rename the class id on every character.
+ */
+function ClassNameField({
+  id,
+  name,
+  onCommit,
+}: Readonly<{
+  id: string;
+  name: string;
+  onCommit: (name: string) => void;
+}>) {
+  const [draft, setDraft] = useState(name);
+  const [syncedName, setSyncedName] = useState(name);
+
+  // Follow external changes (other class selected, undo/redo, inline rename).
+  if (name !== syncedName) {
+    setSyncedName(name);
+    setDraft(name);
+  }
+
+  const commit = () => {
+    const trimmed = draft.trim();
+    if (trimmed && trimmed !== name) {
+      onCommit(trimmed);
+      return;
+    }
+    setDraft(name);
+  };
+
+  return (
+    <input
+      id={id}
+      value={draft}
+      onChange={event => setDraft(event.target.value)}
+      onBlur={commit}
+      onKeyDown={event => {
+        if (event.key === 'Enter') commit();
+        else if (event.key === 'Escape') setDraft(name);
+      }}
+      style={{ ...panelInputStyle, marginBottom: 14 }}
+    />
+  );
+}
+
 export interface ClassEditPanelProps {
   cls: UmlDiagramClass;
   classes: UmlDiagramClass[];
@@ -147,11 +196,10 @@ export const ClassEditPanel = ({
     </div>
     <div style={{ flex: 1, overflowY: 'auto', padding: '12px 14px' }}>
       <label htmlFor={`class-edit-name-${cls.id}`} style={panelLabelStyle}>Class name</label>
-      <input
+      <ClassNameField
         id={`class-edit-name-${cls.id}`}
-        value={cls.name}
-        onChange={event => onUpdate({ name: event.target.value })}
-        style={{ ...panelInputStyle, marginBottom: 14 }}
+        name={cls.name}
+        onCommit={name => onUpdate({ name })}
       />
       <PanelCheckboxField
         id={`class-edit-abstract-${cls.id}`}
