@@ -17,7 +17,7 @@ export const HomePage: React.FC = () => {
 
   // Always fetch fresh profile data from the backend on mount so the sidebar
   // shows the correct name (not stale localStorage cache).
-  useEffect(() => { refreshCurrentUser(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { void refreshCurrentUser(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     if (activeView === 'projects') void refresh();

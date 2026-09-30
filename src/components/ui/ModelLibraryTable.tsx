@@ -1143,7 +1143,7 @@ export const ModelLibraryTable: React.FC<ModelLibraryTableProps> = ({ onModelOpe
             setViewModel(null);
             setEditModelOpen(false);
           }}
-          onUpdated={() => { fetchModels(); }}
+          onUpdated={() => { void fetchModels(); }}
           initialUmlExpanded={editModelOpen}
         />
       )}

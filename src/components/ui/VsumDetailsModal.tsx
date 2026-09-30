@@ -641,7 +641,7 @@ export const VsumDetailsModal: React.FC<Props> = ({ isOpen, vsumId, onClose, onS
 
   useEffect(() => {
     if (!isOpen || !vsumId) return;
-    reloadDetails();
+    void reloadDetails();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen, vsumId]);
 
@@ -659,7 +659,7 @@ export const VsumDetailsModal: React.FC<Props> = ({ isOpen, vsumId, onClose, onS
         setVersionsLoading(false);
       }
     };
-    loadVersions();
+    void loadVersions();
   }, [isOpen, vsumId, activeTab]);
 
   const save = async () => {

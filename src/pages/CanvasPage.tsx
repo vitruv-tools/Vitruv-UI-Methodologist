@@ -1146,7 +1146,7 @@ export const CanvasPage: React.FC = () => {
       );
     };
 
-    run();
+    void run();
     return () => { cancelled = true; };
   }, [activeInstanceId, clearCanvasWorkspace, loadVsum, bumpProjectRole, canvasModeRef, setConstraintsNodes, setMetricsEdges, setMetricsNodes, setMetricsViewTypes]);
 
@@ -1218,7 +1218,7 @@ export const CanvasPage: React.FC = () => {
   useEffect(() => {
     const handler = (e: Event) => {
       const { fileName, fileContent } = (e as CustomEvent).detail || {};
-      if (fileName && fileContent) handleEcoreFileExpand(fileName, fileContent);
+      if (fileName && fileContent) void handleEcoreFileExpand(fileName, fileContent);
     };
     globalThis.addEventListener('vitruv.expandFileInWorkspace', handler as EventListener);
     return () => globalThis.removeEventListener('vitruv.expandFileInWorkspace', handler as EventListener);
