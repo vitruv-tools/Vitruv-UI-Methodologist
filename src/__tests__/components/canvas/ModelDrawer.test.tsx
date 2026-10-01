@@ -89,6 +89,22 @@ describe('ModelDrawer real component', () => {
     expect(screen.queryByText('Person Model')).not.toBeInTheDocument();
   });
 
+  it('shows each library model version in its own column', () => {
+    render(
+      <ModelDrawer
+        {...defaultProps}
+        myLibraryModels={[
+          { id: 1, name: 'Car Model', domain: 'automotive', version: '2.3' },
+          { id: 2, name: 'Person Model', domain: 'hr', version: '1.0' },
+        ]}
+      />,
+    );
+
+    expect(screen.getByText('Version')).toBeInTheDocument();
+    expect(screen.getByText('2.3')).toBeInTheDocument();
+    expect(screen.getByText('1.0')).toBeInTheDocument();
+  });
+
   it('clicking a model card calls onAddModel with the model', () => {
     const onAddModel = jest.fn();
     render(<ModelDrawer {...defaultProps} onAddModel={onAddModel} />);

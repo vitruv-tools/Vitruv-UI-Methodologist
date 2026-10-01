@@ -12,15 +12,30 @@ const relationKey = (sourceId: number, targetId: number): string =>
 const finePairKey = (sourceId: string, targetId: string): string =>
   `${sourceId}->${targetId}`;
 
+function ecoreModelKeys(data: Node['data']): string[] {
+  const keys: string[] = [];
+  const push = (value: unknown) => {
+    if (typeof value !== 'string') return;
+    const trimmed = value.trim();
+    if (trimmed) keys.push(trimmed);
+  };
+  push(data?.nsUri);
+  push(data?.displayName);
+  push(data?.fileName);
+  if (typeof data?.fileName === 'string') {
+    const base = data.fileName.replace(/\.ecore$/i, '');
+    push(base);
+    // Canvas file names include the version, e.g. "Families (1.0).ecore".
+    // Reactions still name the model without that suffix.
+    push(base.replace(/ \([^)]*\)$/, ''));
+  }
+  return keys;
+}
+
 function resolveModelToSourceId(nodes: Node[], model: string): number | undefined {
   if (!model) return undefined;
   const node = nodes.find(n =>
-    n.type === 'ecoreFile' && (
-      n.data?.nsUri === model
-      || n.data?.fileName === model
-      || (typeof n.data?.fileName === 'string'
-        && n.data.fileName.replace(/\.ecore$/i, '') === model)
-    ),
+    n.type === 'ecoreFile' && ecoreModelKeys(n.data).includes(model),
   );
   if (!node) return undefined;
   return getMetaModelSourceId(nodes, node.id);

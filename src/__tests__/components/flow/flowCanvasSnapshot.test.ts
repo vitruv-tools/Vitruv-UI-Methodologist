@@ -100,6 +100,52 @@ describe('buildWorkspaceSnapshot', () => {
     ]);
   });
 
+  it('matches a reaction to a versioned canvas file name', () => {
+    const withVersion = [
+      ecore('a', {
+        metaModelSourceId: 1,
+        displayName: 'Families',
+        fileName: 'Families (1.0).ecore',
+      }),
+      ecore('b', {
+        metaModelSourceId: 2,
+        displayName: 'Persons',
+        fileName: 'Persons (2.0).ecore',
+      }),
+    ];
+    const edges: Edge[] = [
+      {
+        id: 'f',
+        source: 'eobj-a',
+        target: 'eobj-b',
+        type: 'fine-granular-reaction',
+        data: {
+          ecore: {
+            eObjectSourceId: 'Families#Member',
+            eObjectTargetId: 'Persons#Person',
+            fromModel: 'Families',
+            toModel: 'Persons',
+          },
+        },
+      } as Edge,
+    ];
+
+    expect(buildWorkspaceSnapshot(withVersion, edges).metaModelRelationRequests).toEqual([
+      {
+        sourceId: 1,
+        targetId: 2,
+        reactionFileId: null,
+        fineGranularMetaModelRelationSet: [
+          {
+            id: null,
+            sourceId: 'Families#Member',
+            targetId: 'Persons#Person',
+          },
+        ],
+      },
+    ]);
+  });
+
   it('emits a coarse request for fine-only pairs that have no reactions edge', () => {
     const withNs = [
       ecore('a', { metaModelSourceId: 1, nsUri: 'http://families' }),

@@ -141,11 +141,16 @@ export function sanitizeReactionLayoutMap(raw: unknown): ReactionLayoutMap {
 
 export function captureReactionLayout(nodes: Node[]): ReactionLayoutMap {
   const map: ReactionLayoutMap = {};
-  for (const node of nodes) {
+  const boxes = nodes.filter(node => node.type === 'boundingBox');
+  const nsCounts = new Map<string, number>();
+  for (const node of boxes) {
     const nsUri = bboxNsUri(node);
     if (!nsUri) continue;
+    nsCounts.set(nsUri, (nsCounts.get(nsUri) ?? 0) + 1);
+  }
+  for (const node of boxes) {
     const size = nodeBoxSize(node);
-    map[nsUri] = {
+    const entry: ReactionModelLayout = {
       bbox: {
         x: node.position.x,
         y: node.position.y,
@@ -153,13 +158,15 @@ export function captureReactionLayout(nodes: Node[]): ReactionLayoutMap {
       },
       classes: {},
     };
+    map[node.id] = entry;
+    const nsUri = bboxNsUri(node);
+    if (nsUri && nsCounts.get(nsUri) === 1) map[nsUri] = entry;
   }
   for (const node of nodes) {
     const classId = classEObjectId(node);
     const group = typeof node.data?.group === 'string' ? node.data.group : '';
-    const nsUri = group.startsWith('bbox-') ? group.slice('bbox-'.length) : null;
-    if (!classId || !nsUri || !map[nsUri]) continue;
-    map[nsUri].classes[classId] = { x: node.position.x, y: node.position.y };
+    if (!classId || !group || !map[group]) continue;
+    map[group].classes[classId] = { x: node.position.x, y: node.position.y };
   }
   return map;
 }

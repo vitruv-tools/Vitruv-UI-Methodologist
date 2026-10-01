@@ -1,6 +1,7 @@
 import type { DrawerModel } from '../components/canvas/ModelDrawer';
 import { apiService } from '../services/api';
 import type { VsumMetaModelRef } from '../types/vsum';
+import { displayMetaModelVersion } from './metaModelVersion';
 
 interface CanvasModelLibraryCollections {
   myModels: DrawerModel[];
@@ -14,6 +15,7 @@ export function metaModelToDrawerModel(
   return {
     id: metaModel.id,
     name: metaModel.name,
+    version: displayMetaModelVersion(metaModel.version),
     sourceId: metaModel.sourceId ?? metaModel.id,
     domain: metaModel.domain,
     ecoreFileId: metaModel.ecoreFileId,
