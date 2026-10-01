@@ -10,6 +10,7 @@ export interface UmlDiagramClass {
   name: string;
   isAbstract: boolean;
   isInterface: boolean;
+  documentation?: string;
   attributes: UMLAttribute[];
   operations: UMLOperation[];
   x: number;
@@ -29,6 +30,7 @@ export interface UmlAttributeEditState {
   name: string;
   type: string;
   visibility: UMLVisibility;
+  documentation?: string;
 }
 
 export interface UmlOperationEditState {
@@ -38,6 +40,7 @@ export interface UmlOperationEditState {
   name: string;
   returnType: string;
   visibility: UMLVisibility;
+  documentation?: string;
 }
 
 export type UmlDiagramEditState =

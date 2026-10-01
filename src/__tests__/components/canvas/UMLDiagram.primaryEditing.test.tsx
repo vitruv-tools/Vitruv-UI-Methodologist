@@ -83,4 +83,24 @@ describe('UMLDiagram primary editing', () => {
       expect.objectContaining({ id: 'rel-5001', label: 'manages' }),
     );
   });
+
+  it('updates documentation from the class and relationship editors', () => {
+    const { container, diagramRef } = renderEditingDiagram();
+
+    fireEvent.click(classBox('Person'));
+    fireEvent.change(screen.getAllByLabelText('Documentation').at(-1)!, {
+      target: { value: 'A person in the organization.' },
+    });
+    expect(currentModel(diagramRef).classes.find(({ id }) => id === 'Person')?.documentation)
+      .toBe('A person in the organization.');
+
+    connectClasses('Person', 'Employee');
+    const relationHitLines = container.querySelectorAll('[data-rel-hit-line]');
+    fireEvent.click(relationHitLines[relationHitLines.length - 1]);
+    fireEvent.change(screen.getAllByLabelText('Documentation').at(-1)!, {
+      target: { value: 'The employee associated with this person.' },
+    });
+    expect(currentModel(diagramRef).relationships.find(({ type }) => type === 'association')?.documentation)
+      .toBe('The employee associated with this person.');
+  });
 });

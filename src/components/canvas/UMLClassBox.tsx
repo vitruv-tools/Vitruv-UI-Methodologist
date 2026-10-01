@@ -585,6 +585,7 @@ export interface UMLClassBoxProps {
     name: string,
     type: string,
     visibility: UMLVisibility,
+    documentation?: string,
   ) => void;
   onCancelEdit: () => void;
   onAddAttr: () => void;
@@ -595,6 +596,7 @@ export interface UMLClassBoxProps {
     name: string,
     returnType: string,
     visibility: UMLVisibility,
+    documentation?: string,
   ) => void;
   onAddOp: () => void;
   onDeleteOp: (opId: string) => void;
@@ -740,21 +742,23 @@ export const UMLClassBox = ({
               onMouseEnter={() => setHoveredAttr(attr.id)}
               onMouseLeave={() => setHoveredAttr(null)}
               onDoubleClick={() => onStartEditAttr(attr.id)}
-              onSave={(name, type, visibility) => onSaveAttr(
+              onSave={(name, type, visibility, documentation) => onSaveAttr(
                 attr.id,
                 name,
                 type,
                 visibility,
+                documentation,
               )}
               onCancel={onCancelEdit}
               onDelete={() => onDeleteAttr(attr.id)}
-              onEditChange={(name, type, visibility) => onEditChange({
+              onEditChange={(name, type, visibility, documentation) => onEditChange({
                 classId: cls.id,
                 kind: 'attr',
                 attrId: attr.id,
                 name,
                 type,
                 visibility,
+                documentation,
               })}
             />
           ))}
@@ -780,21 +784,23 @@ export const UMLClassBox = ({
               onMouseEnter={() => setHoveredOp(op.id)}
               onMouseLeave={() => setHoveredOp(null)}
               onDoubleClick={() => onStartEditOp(op.id)}
-              onSave={(name, returnType, visibility) => onSaveOp(
+              onSave={(name, returnType, visibility, documentation) => onSaveOp(
                 op.id,
                 name,
                 returnType,
                 visibility,
+                documentation,
               )}
               onCancel={onCancelEdit}
               onDelete={() => onDeleteOp(op.id)}
-              onEditChange={(name, returnType, visibility) => onEditChange({
+              onEditChange={(name, returnType, visibility, documentation) => onEditChange({
                 classId: cls.id,
                 kind: 'op',
                 opId: op.id,
                 name,
                 returnType,
                 visibility,
+                documentation,
               })}
             />
           ))}
