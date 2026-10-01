@@ -904,7 +904,7 @@ function useCreateModelForm({ isOpen, onClose, onSuccess }: CreateModelModalProp
       setSuccess(message);
       setTimeout(() => {
         onSuccess?.({ ...requestData, ...(responseData ?? {}), id: responseData?.id });
-        handleClose();
+        void handleClose();
       }, 300);
     });
   };

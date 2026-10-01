@@ -116,7 +116,7 @@ export const LinkMetaModelsPanel: React.FC<Props> = ({
         if (!cancelled) setOptionsLoading(false);
       }
     };
-    load();
+    void load();
     return () => {
       cancelled = true;
     };

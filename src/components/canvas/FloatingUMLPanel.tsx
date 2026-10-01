@@ -93,7 +93,7 @@ export const FloatingUMLPanel: React.FC<FloatingUMLPanelProps> = ({
   useEffect(() => {
     if (ecoreContent?.trim() || ecoreFileId == null || !fetchEcoreFile) return;
     let cancelled = false;
-    (async () => {
+    void (async () => {
       try {
         const next = await fetchEcoreFile(ecoreFileId);
         if (cancelled || !next?.trim()) return;
