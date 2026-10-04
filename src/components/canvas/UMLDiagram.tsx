@@ -111,7 +111,7 @@ const SAVE_MESSAGE_DURATION_MS = 4000;
 function hasMovedClasses(classes: UmlDiagramClass[], savedPositions: UmlPositionMap): boolean {
   return classes.some(classItem => {
     const saved = savedPositions[classItem.id];
-    return !saved || saved.x !== classItem.x || saved.y !== classItem.y;
+    return saved?.x !== classItem.x || saved?.y !== classItem.y;
   });
 }
 
