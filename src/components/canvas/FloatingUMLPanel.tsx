@@ -458,6 +458,7 @@ export const FloatingUMLPanel: React.FC<FloatingUMLPanelProps> = ({
         confirmText="Close without saving"
         cancelText="Keep editing"
         variant="danger"
+        zIndex={panelZ + 1}
         onConfirm={() => {
           setShowUnsavedDialog(false);
           const action = pendingCloseRef.current ?? doClose;

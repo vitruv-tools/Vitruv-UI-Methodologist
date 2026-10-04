@@ -750,7 +750,11 @@ const DetailView: React.FC<DetailViewProps> = ({
           layoutScopeId={METAMODEL_PREVIEW_LAYOUT_SCOPE}
           ecoreContent={ecoreContent}
           saveContext={umlSaveContext}
-          onClose={() => setUmlExpanded(false)}
+          onClose={() => {
+            setUmlExpanded(false);
+            // The preview shares the layout key; pick up classes moved in the full-screen editor.
+            diagramRef.current?.reloadLayout();
+          }}
           onFocus={() => {}}
           ecoreFileId={ecoreFileId}
           fetchEcoreFile={onFetchFile}

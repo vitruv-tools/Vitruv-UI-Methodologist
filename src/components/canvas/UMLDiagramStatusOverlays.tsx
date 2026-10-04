@@ -24,7 +24,7 @@ function getValidationBannerInset(
 }
 
 function isSaveMessageSuccess(message: string): boolean {
-  return message === 'Saved' || message === 'Saved to project';
+  return message === 'Saved' || message === 'Saved to project' || message === 'Layout saved';
 }
 
 export interface UMLDiagramEmptyStateProps {
