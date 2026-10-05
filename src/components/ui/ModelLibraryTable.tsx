@@ -452,7 +452,11 @@ export const ModelDetailModal: React.FC<ModelDetailModalProps> = ({
       ecoreContent={ecoreContent ?? ''}
       saveContext={umlSaveContext}
       viewOnly={!diagramEditable}
-      onClose={() => setUmlExpanded(false)}
+      onClose={() => {
+        setUmlExpanded(false);
+        // The preview shares the layout key; pick up classes moved in the full-screen editor.
+        diagramRef.current?.reloadLayout();
+      }}
       onFocus={() => { /* preview panel does not participate in focus stacking */ }}
       ecoreFileId={ecoreFileId}
       fetchEcoreFile={(fileId) => apiService.getFile(fileId)}

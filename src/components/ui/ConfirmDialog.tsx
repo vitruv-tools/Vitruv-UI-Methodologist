@@ -12,6 +12,8 @@ interface ConfirmDialogProps {
   cancelText?: string;
   singleAction?: boolean;
   variant?: 'danger' | 'success';
+  /** Stacking level of the backdrop (the dialog sits one above). Raise it to open on top of another overlay. */
+  zIndex?: number;
   onConfirm: () => void;
   onCancel: () => void;
 }
@@ -39,6 +41,7 @@ export const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
   cancelText = 'Cancel',
   singleAction = false,
   variant = 'danger',
+  zIndex = MODAL_Z_INDEX,
   onConfirm,
   onCancel,
 }) => {
@@ -74,7 +77,7 @@ export const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
         aria-hidden="true"
         tabIndex={-1}
         onClick={onCancel}
-        style={{ ...modalBackdropStyle, zIndex: MODAL_Z_INDEX }}
+        style={{ ...modalBackdropStyle, zIndex }}
       />
       <div
         style={{
@@ -83,7 +86,7 @@ export const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
-          zIndex: MODAL_Z_INDEX + 1,
+          zIndex: zIndex + 1,
           pointerEvents: 'none',
         }}
       >

@@ -3,11 +3,18 @@ import { Node } from 'reactflow';
 export const UML_LAYOUT_KEY_PREFIX = 'vitruv.uml.positions.v2';
 export const UML_PACKAGE_LAYOUT_KEY = '__package__';
 export const UML_VIEWPORT_KEY = '__viewport__';
+/** Canvas offset the saved viewport belongs to (stored as `{ x: offsetX, y: offsetY }`). */
+export const UML_OFFSET_KEY = '__offset__';
 
 export interface UmlViewport {
   x: number;
   y: number;
   scale: number;
+}
+
+export interface UmlLayoutOffset {
+  offsetX: number;
+  offsetY: number;
 }
 
 /** Stable id segment for a UML class (matches ecoreToUml / layout map keys). */
@@ -105,7 +112,7 @@ function readRawPositionMap(scopeId: string, fileName: string): UmlPositionMap |
 }
 
 function hasClassLayoutKeys(map: UmlPositionMap): boolean {
-  return Object.keys(map).some(k => k !== UML_VIEWPORT_KEY);
+  return Object.keys(map).some(k => k !== UML_VIEWPORT_KEY && k !== UML_OFFSET_KEY);
 }
 
 export function loadUmlViewport(scopeId: string, fileName: string): UmlViewport | null {
@@ -118,12 +125,21 @@ export function loadUmlViewport(scopeId: string, fileName: string): UmlViewport 
   return vp;
 }
 
+export function loadUmlLayoutOffset(scopeId: string, fileName: string): UmlLayoutOffset | null {
+  const map = readRawPositionMap(scopeId, fileName);
+  const saved = map?.[UML_OFFSET_KEY] as UmlClassPosition | undefined;
+  if (!saved) return null;
+  return { offsetX: saved.x, offsetY: saved.y };
+}
+
 export function buildUmlLayoutPayload(
   classes: Array<{ id: string; x: number; y: number }>,
   viewport?: UmlViewport | null,
+  offset?: UmlLayoutOffset | null,
 ): UmlPositionMap {
   const payload = positionsFromUmlClasses(classes);
   if (viewport) payload[UML_VIEWPORT_KEY] = viewport;
+  if (offset) payload[UML_OFFSET_KEY] = { x: offset.offsetX, y: offset.offsetY };
   return payload;
 }
 
@@ -134,6 +150,27 @@ export function saveUmlLayout(scopeId: string, fileName: string, positions: UmlP
     localStorage.setItem(
       umlLayoutStorageKey(scopeId, fileName),
       JSON.stringify(sanitized),
+    );
+  } catch {
+    /* quota / private browsing */
+  }
+}
+
+/** Save only the viewport and canvas offset; saved class positions are kept as they are. */
+export function saveUmlViewport(
+  scopeId: string,
+  fileName: string,
+  viewport: UmlViewport,
+  offset?: UmlLayoutOffset | null,
+): void {
+  if (!fileName) return;
+  const map = readRawPositionMap(scopeId, fileName) ?? {};
+  map[UML_VIEWPORT_KEY] = viewport;
+  if (offset) map[UML_OFFSET_KEY] = { x: offset.offsetX, y: offset.offsetY };
+  try {
+    localStorage.setItem(
+      umlLayoutStorageKey(scopeId, fileName),
+      JSON.stringify(sanitizeUmlPositionMap(map)),
     );
   } catch {
     /* quota / private browsing */

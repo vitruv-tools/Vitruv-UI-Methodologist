@@ -109,6 +109,19 @@ describe('FloatingUMLPanel', () => {
     expect(onClose).not.toHaveBeenCalled();
   });
 
+  it('shows the unsaved changes dialog above the full-screen editor', () => {
+    mockIsDirty.mockReturnValue(true);
+    render(<FloatingUMLPanel {...defaultProps} zIndex={10002} />);
+
+    fireEvent.click(screen.getByTestId('uml-page-back'));
+
+    expect(screen.getByTestId('uml-fullscreen-page')).toHaveStyle({ zIndex: '10002' });
+    const backdrop = screen
+      .getAllByRole('button', { hidden: true })
+      .find(button => button.getAttribute('aria-hidden') === 'true');
+    expect(backdrop).toHaveStyle({ zIndex: '10003' });
+  });
+
   it('closes without saving when unsaved dialog is confirmed', () => {
     mockIsDirty.mockReturnValue(true);
     const onClose = jest.fn();

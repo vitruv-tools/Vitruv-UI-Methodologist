@@ -48,8 +48,6 @@ export interface UseUmlDiagramPrimaryEditingOptions {
   containerRef: RefObject<HTMLElement | null>;
   getCurrentViewport: () => UmlViewport;
   getCurrentLayoutOffset: () => { offsetX: number; offsetY: number };
-  scheduleDebouncedLayoutSave: () => void;
-  scheduleLayoutSave: () => void;
 }
 
 export interface UseUmlDiagramPrimaryEditingResult {
@@ -116,8 +114,6 @@ export function useUmlDiagramPrimaryEditing(
     containerRef,
     getCurrentViewport,
     getCurrentLayoutOffset,
-    scheduleDebouncedLayoutSave,
-    scheduleLayoutSave,
   }: UseUmlDiagramPrimaryEditingOptions,
 ): UseUmlDiagramPrimaryEditingResult {
   const [edit, setEdit] = useState<UmlDiagramEditState | null>(null);
@@ -555,13 +551,11 @@ export function useUmlDiagramPrimaryEditing(
     setClasses(previousClasses => previousClasses.map(classItem => (
       classItem.id === classId ? { ...classItem, x, y } : classItem
     )));
-    scheduleDebouncedLayoutSave();
-  }, [recordChange, scheduleDebouncedLayoutSave, setClasses]);
+  }, [recordChange, setClasses]);
 
   const finishClassDrag = useCallback(() => {
     dragHistorySavedRef.current = false;
-    scheduleLayoutSave();
-  }, [scheduleLayoutSave]);
+  }, []);
 
   const addRelationship = useCallback((
     sourceId: string,
