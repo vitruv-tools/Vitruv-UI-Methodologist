@@ -375,8 +375,14 @@ const modeButtonBaseStyle: React.CSSProperties = {
 };
 
 const creationModeGroupStyle: React.CSSProperties = {
-  display: 'flex', gap: 2, padding: 3, marginBottom: 16,
+  display: 'flex', gap: 2, padding: 3, margin: '0 0 16px', minWidth: 0, position: 'relative',
   background: 'var(--v-input-bg)', border: '1px solid var(--v-border)', borderRadius: 7,
+};
+
+// Keeps the legend available to screen readers without showing it.
+const visuallyHiddenLegendStyle: React.CSSProperties = {
+  position: 'absolute', width: 1, height: 1, padding: 0, margin: -1,
+  overflow: 'hidden', clip: 'rect(0, 0, 0, 0)', whiteSpace: 'nowrap', border: 0,
 };
 
 const creationModeButtonStyle: React.CSSProperties = {
@@ -416,7 +422,8 @@ interface CreationModeToggleProps {
 }
 
 const CreationModeToggle: React.FC<CreationModeToggleProps> = ({ mode, disabled, onChange }) => (
-  <div role="group" aria-label="Meta model source" style={creationModeGroupStyle}>
+  <fieldset style={creationModeGroupStyle}>
+    <legend style={visuallyHiddenLegendStyle}>Meta model source</legend>
     {CREATION_MODE_OPTIONS.map(option => {
       const selected = option.mode === mode;
       return (
@@ -437,7 +444,7 @@ const CreationModeToggle: React.FC<CreationModeToggleProps> = ({ mode, disabled,
         </button>
       );
     })}
-  </div>
+  </fieldset>
 );
 
 const SubmitProgressOverlay: React.FC<{ progress: number }> = ({ progress }) => (

@@ -513,6 +513,7 @@ describe('CreateModelModal', () => {
 
     it('starts in import mode', () => {
       render(<CreateModelModal isOpen onClose={jest.fn()} />);
+      expect(screen.getByRole('group', { name: 'Meta model source' })).toBeInTheDocument();
       expect(screen.getByRole('button', { name: 'Import existing' })).toHaveAttribute('aria-pressed', 'true');
       expect(screen.getByRole('button', { name: 'Create new' })).toHaveAttribute('aria-pressed', 'false');
       expect(screen.getByText('Required ECore File')).toBeInTheDocument();
