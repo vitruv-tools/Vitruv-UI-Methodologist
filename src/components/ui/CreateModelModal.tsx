@@ -2,6 +2,7 @@ import React, { useState, useRef, useEffect, useLayoutEffect, useCallback } from
 import ReactDOM from 'react-dom';
 import { apiService } from '../../services/api';
 import { DEFAULT_META_MODEL_VERSION } from '../../utils/metaModelVersion';
+import { createEmptyEcoreFile, toEPackageName } from '../../utils/emptyEcore';
 import { KeywordTagsInput } from './KeywordTagsInput';
 import {
   modalOverlayStyle,
@@ -31,6 +32,9 @@ interface CreateModelRequest {
 
 type FileKind = 'ecore';
 
+/** Whether the meta model starts from an uploaded .ecore file or from an empty one. */
+type CreationMode = 'import' | 'empty';
+
 // ─── Module-level helpers ────────────────────────────────────────────────────
 
 const getSecureRandomInt = (max: number): number => {
@@ -51,6 +55,16 @@ const extractFileId = (response: any): number => {
     ? Number(rawData.id)
     : Number(rawData);
   if (!Number.isFinite(fileId)) fileId = Date.now() + getSecureRandomInt(1000);
+  return fileId;
+};
+
+/** Like {@link extractFileId}, but fails instead of making up an id when the response has none. */
+const requireFileId = (response: any): number => {
+  const rawData: any = response?.data;
+  const fileId = rawData && typeof rawData === 'object' ? Number(rawData.id) : Number(rawData);
+  if (!Number.isFinite(fileId) || fileId <= 0) {
+    throw new Error('Uploading the empty .ecore file did not return a file id.');
+  }
   return fileId;
 };
 
@@ -360,7 +374,71 @@ const modeButtonBaseStyle: React.CSSProperties = {
   transition: 'all 0.12s', whiteSpace: 'nowrap',
 };
 
+const creationModeGroupStyle: React.CSSProperties = {
+  display: 'flex', gap: 2, padding: 3, marginBottom: 16,
+  background: 'var(--v-input-bg)', border: '1px solid var(--v-border)', borderRadius: 7,
+};
+
+const creationModeButtonStyle: React.CSSProperties = {
+  flex: 1, padding: '7px 12px', border: 'none', borderRadius: 5,
+  background: 'transparent', color: 'var(--v-text-muted)',
+  fontSize: 13, fontWeight: 500, fontFamily: FONT, transition: 'all 0.12s',
+};
+
+const creationModeButtonSelectedStyle: React.CSSProperties = {
+  background: '#049484', color: '#ffffff',
+};
+
+const emptyEcoreNoteStyle: React.CSSProperties = {
+  padding: '10px 12px',
+  background: 'var(--v-surface-muted)',
+  border: '1px solid var(--v-border)',
+  borderRadius: 6,
+  fontSize: 13,
+  color: 'var(--v-text-secondary)',
+  lineHeight: 1.5,
+  fontFamily: FONT,
+};
+
+const CREATION_MODE_OPTIONS: Array<{ mode: CreationMode; label: string }> = [
+  { mode: 'import', label: 'Import existing' },
+  { mode: 'empty', label: 'Create new' },
+];
+
 // ─── Sub-components ───────────────────────────────────────────────────────────
+
+// ── CreationModeToggle: import an .ecore file or start from an empty one ─────
+
+interface CreationModeToggleProps {
+  mode: CreationMode;
+  disabled: boolean;
+  onChange: (mode: CreationMode) => void;
+}
+
+const CreationModeToggle: React.FC<CreationModeToggleProps> = ({ mode, disabled, onChange }) => (
+  <div role="group" aria-label="Meta model source" style={creationModeGroupStyle}>
+    {CREATION_MODE_OPTIONS.map(option => {
+      const selected = option.mode === mode;
+      return (
+        <button
+          key={option.mode}
+          type="button"
+          aria-pressed={selected}
+          disabled={disabled}
+          onClick={() => onChange(option.mode)}
+          style={{
+            ...creationModeButtonStyle,
+            ...(selected ? creationModeButtonSelectedStyle : {}),
+            cursor: disabled ? 'not-allowed' : 'pointer',
+            opacity: disabled && !selected ? 0.5 : 1,
+          }}
+        >
+          {option.label}
+        </button>
+      );
+    })}
+  </div>
+);
 
 const SubmitProgressOverlay: React.FC<{ progress: number }> = ({ progress }) => (
   <dialog
@@ -731,6 +809,7 @@ const getUploadedDisplayName = (kindState: (typeof EMPTY_PER_KIND)['ecore']): st
 
 function useCreateModelForm({ isOpen, onClose, onSuccess }: CreateModelModalProps) {
   const [formData, setFormData] = useState({ ...EMPTY_FORM, keywords: [] as string[] });
+  const [creationMode, setCreationMode] = useState<CreationMode>('import');
   const [uploadedFileIds, setUploadedFileIds] = useState({ ecoreFileId: 0 });
   const [isLoading, setIsLoading] = useState(false);
   const [fieldErrors, setFieldErrors] = useState<Record<CreateModelFieldKey, string>>(() => ({ ...EMPTY_FIELD_ERRORS }));
@@ -784,7 +863,7 @@ function useCreateModelForm({ isOpen, onClose, onSuccess }: CreateModelModalProp
     setScrollTarget(null);
   }, [scrollTarget]);
 
-  const canSave = uploadedFileIds.ecoreFileId > 0 &&
+  const canSave = (creationMode === 'empty' || uploadedFileIds.ecoreFileId > 0) &&
     formData.name.trim() &&
     formData.version.trim() &&
     formData.description.trim() &&
@@ -826,6 +905,22 @@ function useCreateModelForm({ isOpen, onClose, onSuccess }: CreateModelModalProp
     updateKind(kind, { url, urlFileName: '', localFileName: '', uploadError: '' });
     setUploadedFileIds(prev => ({ ...prev, [FILE_KIND_CONFIG[kind].fileIdKey]: 0 }));
     setFieldErrors(prev => ({ ...prev, files: '' }));
+  };
+
+  // Starting from an empty file discards an uploaded one, the same way switching File/URL does,
+  // so a file that is no longer shown cannot linger on the server.
+  const switchCreationMode = (mode: CreationMode) => {
+    if (mode === creationMode) return;
+    if (mode === 'empty') {
+      const prevId = uploadedFileIds.ecoreFileId;
+      if (prevId > 0) {
+        apiService.deleteFile(prevId).catch(() => console.warn('Failed to delete file on mode switch'));
+      }
+      setUploadedFileIds({ ecoreFileId: 0 });
+      setPerKind(EMPTY_PER_KIND);
+    }
+    setFieldErrors(prev => ({ ...prev, files: '' }));
+    setCreationMode(mode);
   };
 
   // ── Progress simulation ───────────────────────────────────────────────────
@@ -958,6 +1053,7 @@ function useCreateModelForm({ isOpen, onClose, onSuccess }: CreateModelModalProp
     clearAllTimers();
     setSubmitProgress({ progress: 0, isSubmitting: false });
     setFormData({ ...EMPTY_FORM, keywords: [] });
+    setCreationMode('import');
     setUploadedFileIds({ ecoreFileId: 0 });
     setFieldErrors({ ...EMPTY_FIELD_ERRORS });
     setSuccess('');
@@ -1076,7 +1172,7 @@ function useCreateModelForm({ isOpen, onClose, onSuccess }: CreateModelModalProp
     if (!formData.description.trim()) next.description = 'Please enter a description';
     if (!formData.domain.trim()) next.domain = 'Please enter a domain';
     if (formData.keywords.length === 0) next.keywords = 'Please enter at least one keyword';
-    if (!uploadedFileIds.ecoreFileId) {
+    if (creationMode === 'import' && !uploadedFileIds.ecoreFileId) {
       next.files = 'Please upload an .ecore file';
     }
     const order: CreateModelFieldKey[] = ['name', 'version', 'description', 'keywords', 'domain', 'files'];
@@ -1103,16 +1199,26 @@ function useCreateModelForm({ isOpen, onClose, onSuccess }: CreateModelModalProp
 
     prepareSubmit();
 
-    const requestData: CreateModelRequest = {
-      name: formData.name.trim(),
-      version: formData.version.trim(),
-      description: formData.description.trim(),
-      domain: formData.domain.trim(),
-      keyword: formData.keywords,
-      ecoreFileId: uploadedFileIds.ecoreFileId,
-    };
+    const name = formData.name.trim();
+    // Only set for a meta model created from scratch; this handler owns that file until the
+    // meta model exists, so it deletes it again if creation fails.
+    let emptyEcoreFileId = 0;
 
     try {
+      if (creationMode === 'empty') {
+        const uploadResponse = await apiService.uploadFile(createEmptyEcoreFile(name), 'ECORE');
+        emptyEcoreFileId = requireFileId(uploadResponse);
+      }
+
+      const requestData: CreateModelRequest = {
+        name,
+        version: formData.version.trim(),
+        description: formData.description.trim(),
+        domain: formData.domain.trim(),
+        keyword: formData.keywords,
+        ecoreFileId: creationMode === 'empty' ? emptyEcoreFileId : uploadedFileIds.ecoreFileId,
+      };
+
       const response = await apiService.createMetaModel({ ...requestData });
 
       onSubmitSuccess(
@@ -1121,6 +1227,9 @@ function useCreateModelForm({ isOpen, onClose, onSuccess }: CreateModelModalProp
         requestData,
       );
     } catch (err) {
+      if (emptyEcoreFileId > 0) {
+        await apiService.deleteFile(emptyEcoreFileId).catch(() => console.error('Failed to delete file'));
+      }
       const { message } = parseBackendError(err);
 
       await handleImportFailure(
@@ -1132,8 +1241,8 @@ function useCreateModelForm({ isOpen, onClose, onSuccess }: CreateModelModalProp
 
   const getButtonText = (): string => {
     if (isLoading) return 'Creating...';
-    if (canSave) return 'Import Meta Model';
-    return 'Complete All Fields';
+    if (!canSave) return 'Complete All Fields';
+    return creationMode === 'empty' ? 'Create Meta Model' : 'Import Meta Model';
   };
 
   useEffect(() => {
@@ -1150,6 +1259,7 @@ function useCreateModelForm({ isOpen, onClose, onSuccess }: CreateModelModalProp
 
   return {
     formData, setFormData,
+    creationMode, switchCreationMode,
     uploadedFileIds,
     isLoading,
     fieldErrors,
@@ -1179,7 +1289,7 @@ export const CreateModelModal: React.FC<CreateModelModalProps> = ({
 
   if (!isOpen) return null;
 
-  const { uploadedFileIds, uploadProgress, submitProgress, isLoading } = form;
+  const { uploadedFileIds, uploadProgress, submitProgress, isLoading, creationMode } = form;
 
   return ReactDOM.createPortal(
     <>
@@ -1236,9 +1346,9 @@ export const CreateModelModal: React.FC<CreateModelModalProps> = ({
           {/* ── Header ── */}
           <div style={modalHeaderStyle}>
             <div>
-              <h2 id="modal-title" style={modalTitleStyle}>Import Meta Model</h2>
+              <h2 id="modal-title" style={modalTitleStyle}>Add Meta Model</h2>
               <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.72)', marginTop: 3, fontFamily: FONT }}>
-                Upload your .ecore file
+                {creationMode === 'empty' ? 'Start from an empty .ecore file' : 'Upload your .ecore file'}
               </div>
             </div>
             <button
@@ -1254,6 +1364,12 @@ export const CreateModelModal: React.FC<CreateModelModalProps> = ({
           {/* ── Scrollable body ── */}
           <div className="cmm-scroll" style={{ flex: 1, overflowY: 'scroll', padding: '16px 24px 24px' }}>
           {form.success && <div style={successMessageStyle}>{form.success}</div>}
+
+          <CreationModeToggle
+            mode={creationMode}
+            disabled={isLoading || submitProgress.isSubmitting || uploadProgress.ecore.isUploading}
+            onChange={form.switchCreationMode}
+          />
 
           <div ref={form.fieldSectionRefs.name} style={formGroupStyle}>
             <label htmlFor="model-name-input" style={labelStyle}>Name *</label>
@@ -1363,9 +1479,9 @@ export const CreateModelModal: React.FC<CreateModelModalProps> = ({
             )}
           </div>
 
-          {/* File Upload Section */}
+          {/* File Upload Section (replaced by a short note for an empty meta model) */}
           <div ref={form.fieldSectionRefs.files} style={uploadSectionStyle}>
-            <div style={uploadSectionTitleStyle}>Required ECore File</div>
+            {creationMode === 'import' && <div style={uploadSectionTitleStyle}>Required ECore File</div>}
 
             {form.fieldErrors.files && (
               <div
@@ -1376,7 +1492,14 @@ export const CreateModelModal: React.FC<CreateModelModalProps> = ({
               </div>
             )}
 
-            {FILE_CARD_DISPLAY_CONFIGS.map(({ kind, accentColor, hoverBg, badgeBg, badgeBorder, badgeColor, defaultHeaderBg }) => {
+            {creationMode === 'empty' && (
+              <div style={emptyEcoreNoteStyle}>
+                An empty <code>{toEPackageName(form.formData.name)}.ecore</code> file is created for
+                this meta model. You can add classes in the editor once it is in your library.
+              </div>
+            )}
+
+            {creationMode === 'import' && FILE_CARD_DISPLAY_CONFIGS.map(({ kind, accentColor, hoverBg, badgeBg, badgeBorder, badgeColor, defaultHeaderBg }) => {
               const { ext, fileIdKey } = FILE_KIND_CONFIG[kind];
               const fileId = uploadedFileIds[fileIdKey];
               const { inputMode, url, urlFileName, localFileName } = form.perKind[kind];
@@ -1416,15 +1539,17 @@ export const CreateModelModal: React.FC<CreateModelModalProps> = ({
               );
             })}
 
-            <div style={fileStatusStyle}>
-              {uploadedFileIds.ecoreFileId > 0
-                ? (() => {
-                    const nEcore = getUploadedDisplayName(form.perKind.ecore);
-                    if (nEcore) return `✅ Ecore file is ready! (${nEcore})`;
-                    return '✅ Ecore file is ready!';
-                  })()
-                : 'Upload or import an .ecore file to continue'}
-            </div>
+            {creationMode === 'import' && (
+              <div style={fileStatusStyle}>
+                {uploadedFileIds.ecoreFileId > 0
+                  ? (() => {
+                      const nEcore = getUploadedDisplayName(form.perKind.ecore);
+                      if (nEcore) return `✅ Ecore file is ready! (${nEcore})`;
+                      return '✅ Ecore file is ready!';
+                    })()
+                  : 'Upload or import an .ecore file to continue'}
+              </div>
+            )}
           </div>
 
           <FormActionButtons

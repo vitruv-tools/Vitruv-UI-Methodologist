@@ -946,7 +946,7 @@ export const ModelLibraryTable: React.FC<ModelLibraryTableProps> = ({ onModelOpe
         <td colSpan={5} style={emptyRowStyle}>
           {search.trim()
             ? `No models match "${search.trim()}". Clear filters to see all models.`
-            : 'No models yet. Upload a .ecore file to get started.'}
+            : 'No models yet. Add a meta model to get started.'}
         </td>
       </tr>
     );
@@ -982,7 +982,7 @@ export const ModelLibraryTable: React.FC<ModelLibraryTableProps> = ({ onModelOpe
           onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.background = '#1e293b'; }}
         >
           <span style={{ fontSize: 18, lineHeight: 1 }}>+</span>
-          <span>Upload model</span>
+          <span>Add model</span>
         </button>
       </div>
 

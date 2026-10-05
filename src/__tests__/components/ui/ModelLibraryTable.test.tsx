@@ -108,7 +108,7 @@ describe('ModelLibraryTable', () => {
     apiService.findMetaModels.mockClear();
     apiService.findMetaModels.mockResolvedValue({ data: [existingModel, newModel] });
 
-    fireEvent.click(screen.getByText('Upload model'));
+    fireEvent.click(screen.getByText('Add model'));
     await act(async () => {
       fireEvent.click(screen.getByText('Simulate import success'));
     });
