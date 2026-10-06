@@ -28,6 +28,26 @@ describe('fastLogin config', () => {
     );
   });
 
+  it.each([
+    ['https://mwa.sdq.kastel.kit.edu'],
+    ['https://[2001:7c0:2313:1:f816:3eff:fe18:4ccf]'],
+    ['http://127.0.0.1:3000'],
+  ])('derives the redirect URI from the current origin %s', (origin) => {
+    const originalLocation = globalThis.location;
+    Object.defineProperty(globalThis, 'location', {
+      configurable: true,
+      value: { origin },
+    });
+    try {
+      expect(getFastLoginRedirectUri()).toBe(`${origin}${FAST_LOGIN_CALLBACK_PATH}`);
+    } finally {
+      Object.defineProperty(globalThis, 'location', {
+        configurable: true,
+        value: originalLocation,
+      });
+    }
+  });
+
   // ── saveFastLoginRedirectUri / getSavedFastLoginRedirectUri ──────────────
 
   it('saves and retrieves redirect URI from sessionStorage', () => {
