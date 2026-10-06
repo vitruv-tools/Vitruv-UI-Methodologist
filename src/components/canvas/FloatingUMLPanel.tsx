@@ -93,7 +93,7 @@ export const FloatingUMLPanel: React.FC<FloatingUMLPanelProps> = ({
   useEffect(() => {
     if (ecoreContent?.trim() || ecoreFileId == null || !fetchEcoreFile) return;
     let cancelled = false;
-    (async () => {
+    void (async () => {
       try {
         const next = await fetchEcoreFile(ecoreFileId);
         if (cancelled || !next?.trim()) return;
@@ -458,6 +458,7 @@ export const FloatingUMLPanel: React.FC<FloatingUMLPanelProps> = ({
         confirmText="Close without saving"
         cancelText="Keep editing"
         variant="danger"
+        zIndex={panelZ + 1}
         onConfirm={() => {
           setShowUnsavedDialog(false);
           const action = pendingCloseRef.current ?? doClose;

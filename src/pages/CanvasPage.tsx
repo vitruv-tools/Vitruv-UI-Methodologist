@@ -10,6 +10,10 @@ import { CanvasUmlPanelLayer } from '../components/canvas/CanvasUmlPanelLayer';
 import { apiService, VsumRole, VsumUserResponse } from '../services/api';
 import { VsumDetails } from '../types';
 import { VsumMetaModelRef } from '../types/vsum';
+import { appendMetaModelVersion } from '../utils/metaModelVersion';
+import { useProjectStore } from '../store/Project';
+import { createVsumDetailsStore, getVsumDetailsStore, hasVsumDetailsStore } from '../store/VsumDetails';
+import type { EditableVsumDetails } from '../types/EditableVsumDetails';
 import { WorkspaceSnapshot, WorkspaceSnapshotRequest } from '../types/workspace';
 import { MODAL_Z_INDEX, useModalBodyLock } from '../components/ui/modalUtils';
 import { CanvasProjectTabs } from '../components/canvas/CanvasProjectTabs';
@@ -19,12 +23,21 @@ import {
   type CanvasPopupNotificationType,
 } from '../components/canvas/CanvasPopupNotification';
 import { CanvasProjectControls } from '../components/canvas/CanvasProjectControls';
+import { extractApiErrorMessage } from '../utils/apiErrorMessage';
 import { CanvasSidebarToolbar } from '../components/canvas/CanvasSidebarToolbar';
 import { CanvasProjectAccessControls } from '../components/canvas/CanvasProjectAccessControls';
 import { CanvasConstraintsOverlay } from '../components/canvas/CanvasConstraintsOverlay';
+import { CanvasMetricsOverlay } from '../components/canvas/CanvasMetricsOverlay';
 import { getCanvasPanelMemberName } from '../components/canvas/canvasMemberPresentation';
 import { useCanvasModeState } from '../hooks/useCanvasModeState';
+import type { ViewType } from '../hooks/useViewTypes';
 import { useCanvasProjectRename } from '../hooks/useCanvasProjectRename';
+import {
+  applyReactionLineStyle,
+  readStoredReactionLineStyle,
+  writeStoredReactionLineStyle,
+  type ReactionLineStyle,
+} from '../utils/reactionEdgeStyleStorage';
 import {
   useCanvasUmlPanels,
   type CanvasUmlPanelLoadErrorMessage,
@@ -53,7 +66,10 @@ import {
   cloneWorkspaceSnapshot,
   emptyWorkspaceSnapshot,
   mapRelationsForCanvasLoad,
+  mapVsumDetailsToEditable,
+  mergePersistedFineRelationIds,
   prepareSnapshotForSyncSave,
+  relationsFromVsumDetails,
   workspaceSnapshotFromVsumDetails,
   workspaceSnapshotsEqual,
 } from '../utils/workspaceSnapshotUtils';
@@ -97,7 +113,9 @@ async function dispatchWorkspaceMetaModels(metaModels: VsumMetaModelRef[]): Prom
       globalThis.dispatchEvent(new CustomEvent('vitruv.addFileToWorkspace', {
         detail: {
           fileContent,
-          fileName: `${model.name}.ecore`,
+          fileName: `${appendMetaModelVersion(model.name, model.version)}.ecore`,
+          displayName: model.name,
+          version: model.version,
           description: model.description,
           keywords: model.keyword?.join(', '),
           domain: model.domain,
@@ -216,9 +234,17 @@ interface HydrateCanvasWorkspaceParams {
   details: VsumDetails;
   forInstanceId?: string;
   activeInstanceId: string | null;
-  flowCanvasRef: React.RefObject<{ getNodes?: () => Node[]; establishBaseline?: () => void } | null>;
+  flowCanvasRef: React.RefObject<{
+    getNodes?: () => Node[];
+    getEdges?: () => Edge[];
+    getViewTypes?: () => ViewType[];
+    establishBaseline?: () => void;
+  } | null>;
   canvasMode: CanvasMode;
   setConstraintsNodes: React.Dispatch<React.SetStateAction<Node[]>>;
+  setMetricsNodes: React.Dispatch<React.SetStateAction<Node[]>>;
+  setMetricsEdges: React.Dispatch<React.SetStateAction<Edge[]>>;
+  setMetricsViewTypes: React.Dispatch<React.SetStateAction<ViewType[]>>;
   setMyLibraryModels: React.Dispatch<React.SetStateAction<DrawerModel[]>>;
   setPublicLibraryModels: React.Dispatch<React.SetStateAction<DrawerModel[]>>;
 }
@@ -231,6 +257,9 @@ async function hydrateCanvasWorkspace(params: HydrateCanvasWorkspaceParams): Pro
     flowCanvasRef,
     canvasMode,
     setConstraintsNodes,
+    setMetricsNodes,
+    setMetricsEdges,
+    setMetricsViewTypes,
     setMyLibraryModels,
     setPublicLibraryModels,
   } = params;
@@ -254,11 +283,17 @@ async function hydrateCanvasWorkspace(params: HydrateCanvasWorkspaceParams): Pro
     setConstraintsNodes(flowCanvasRef.current?.getNodes?.() ?? []);
   }
 
-  await dispatchMetaModelRelations(details.metaModelsRelation);
+  await dispatchMetaModelRelations(relationsFromVsumDetails(details));
   if (isStale()) return false;
 
   await new Promise(r => setTimeout(r, 150));
   if (isStale()) return false;
+
+  if (canvasMode === 'metrics') {
+    setMetricsNodes(flowCanvasRef.current?.getNodes?.() ?? []);
+    setMetricsEdges(flowCanvasRef.current?.getEdges?.() ?? []);
+    setMetricsViewTypes(flowCanvasRef.current?.getViewTypes?.() ?? []);
+  }
 
   // The project's existing metamodels/relations just loaded via a sequence of
   // canvas mutations (one per file, one per relation) — none of that should be
@@ -338,11 +373,50 @@ export const CanvasPage: React.FC = () => {
   const [downloadingArtifact, setDownloadingArtifact] = useState(false);
   const [downloadingBundle, setDownloadingBundle] = useState(false);
   const [savingChanges, setSavingChanges] = useState(false);
-  const [popup, setPopup] = useState<{ message: string; type: CanvasPopupNotificationType } | null>(null);
-  const notifyUmlPanelLoadError = useCallback((message: CanvasUmlPanelLoadErrorMessage) => {
-    setPopup({ message, type: 'error' });
-    setTimeout(() => setPopup(null), 4000);
+  const [popup, setPopup] = useState<{
+    message: string;
+    type: CanvasPopupNotificationType;
+    details?: string;
+  } | null>(null);
+  const popupTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const dismissPopup = useCallback(() => {
+    if (popupTimerRef.current) {
+      globalThis.clearTimeout(popupTimerRef.current);
+      popupTimerRef.current = null;
+    }
+    setPopup(null);
   }, []);
+
+  const showPopup = useCallback((
+    message: string,
+    type: CanvasPopupNotificationType,
+    details?: string,
+  ) => {
+    if (popupTimerRef.current) {
+      globalThis.clearTimeout(popupTimerRef.current);
+      popupTimerRef.current = null;
+    }
+    setPopup({ message, type, details });
+    if (type === 'error') return;
+    const ms = type === 'success' ? 4000 : 5000;
+    popupTimerRef.current = globalThis.setTimeout(() => {
+      popupTimerRef.current = null;
+      setPopup(null);
+    }, ms);
+  }, []);
+
+  const showPopupError = useCallback((error: unknown, fallback: string) => {
+    showPopup(extractApiErrorMessage(error, fallback), 'error');
+  }, [showPopup]);
+
+  useEffect(() => () => {
+    if (popupTimerRef.current) globalThis.clearTimeout(popupTimerRef.current);
+  }, []);
+
+  const notifyUmlPanelLoadError = useCallback((message: CanvasUmlPanelLoadErrorMessage) => {
+    showPopup(message, 'error');
+  }, [showPopup]);
 
   const [openTabs, setOpenTabs] = useState<OpenCanvasTab[]>([]);
   const [activeInstanceId, setActiveInstanceId] = useState<string | null>(null);
@@ -505,14 +579,11 @@ export const CanvasPage: React.FC = () => {
       await apiService.removeVsumMember(vsumUserId);
       globalThis.dispatchEvent(new CustomEvent('vitruv.refreshVsums'));
       await refreshProjectMembers();
-      setPopup({ message: 'Access removed.', type: 'success' });
-      setTimeout(() => setPopup(null), 3000);
+      showPopup('Access removed.', 'success');
     } catch (e: unknown) {
-      const message = e instanceof Error ? e.message : 'Failed to remove access';
-      setPopup({ message, type: 'error' });
-      setTimeout(() => setPopup(null), 4000);
+      showPopupError(e, 'Failed to remove access');
     }
-  }, [refreshProjectMembers]);
+  }, [refreshProjectMembers, showPopup, showPopupError]);
 
   useEffect(() => {
     if (!activeProjectId) return;
@@ -554,13 +625,31 @@ export const CanvasPage: React.FC = () => {
 
   // Add-reaction mode
   const [addReactionMode, setAddReactionMode] = useState(false);
+  const [reactionLineStyle, setReactionLineStyle] = useState<ReactionLineStyle>(
+    readStoredReactionLineStyle,
+  );
+  useEffect(() => {
+    applyReactionLineStyle(reactionLineStyle);
+  }, [reactionLineStyle]);
+  const handleReactionLineStyleChange = useCallback((style: ReactionLineStyle) => {
+    setReactionLineStyle(style);
+    writeStoredReactionLineStyle(style);
+  }, []);
   useEffect(() => {
     if (isViewOnly) setAddReactionMode(false);
   }, [isViewOnly]);
 
-  // Canvas mode (Modeling / Constraints / Views)
+  // Canvas mode (Modeling / Constraints / Views / Metrics)
   const getCanvasNodes = useCallback(
     (): Node[] => flowCanvasRef.current?.getNodes?.() ?? [],
+    [],
+  );
+  const getCanvasEdges = useCallback(
+    (): Edge[] => flowCanvasRef.current?.getEdges?.() ?? [],
+    [],
+  );
+  const getViewTypes = useCallback(
+    () => flowCanvasRef.current?.getViewTypes?.() ?? [],
     [],
   );
   const {
@@ -572,11 +661,19 @@ export const CanvasPage: React.FC = () => {
     setConstraintHighlightNodeId,
     constraintFilterNodeId,
     setConstraintFilterNodeId,
+    metricsNodes,
+    setMetricsNodes,
+    metricsEdges,
+    setMetricsEdges,
+    metricsViewTypes,
+    setMetricsViewTypes,
     handleCanvasModeChange,
   } = useCanvasModeState({
     projectId: activeProjectId,
     isViewOnly,
     getCanvasNodes,
+    getCanvasEdges,
+    getViewTypes,
   });
   const updateCanvasEcoreFileData = useCallback((
     fileName: string,
@@ -705,13 +802,17 @@ export const CanvasPage: React.FC = () => {
     if (canvasModeRef.current === 'constraints') {
       setConstraintsNodes(session.nodes);
     }
+    if (canvasModeRef.current === 'metrics') {
+      setMetricsNodes(session.nodes);
+      setMetricsEdges(session.edges);
+    }
 
     const load = () => {
       flowCanvasRef.current?.loadDiagramData?.(session.nodes, session.edges);
     };
     load();
     setTimeout(load, 50);
-  }, [cancelRename, canvasModeRef, restorePanels, setConstraintsNodes]);
+  }, [cancelRename, canvasModeRef, restorePanels, setConstraintsNodes, setMetricsEdges, setMetricsNodes]);
 
   const captureRef = useRef(captureCurrentTabSession);
   captureRef.current = captureCurrentTabSession;
@@ -877,6 +978,13 @@ export const CanvasPage: React.FC = () => {
       updateTabName(vsumId, details.name);
       setDrawerModels((details.metaModels || []).map(m => metaModelToDrawerModel(m, true)));
 
+      // ── Low Code store initialization ───────────────────────────────
+      useProjectStore.getState().setActiveId(vsumId);
+
+      const editableDetails: EditableVsumDetails = mapVsumDetailsToEditable(details);
+      createVsumDetailsStore(vsumId, editableDetails);
+      // ────────────────────────────────────────────────────────────────
+
       const detailsRole = resolveVsumAccessRole(details.role, details.roleEn);
       const mergedRole = pickMostRestrictiveRole(
         detailsRole,
@@ -908,6 +1016,9 @@ export const CanvasPage: React.FC = () => {
         flowCanvasRef,
         canvasMode: canvasModeRef.current,
         setConstraintsNodes,
+        setMetricsNodes,
+        setMetricsEdges,
+        setMetricsViewTypes,
         setMyLibraryModels,
         setPublicLibraryModels,
       });
@@ -932,7 +1043,7 @@ export const CanvasPage: React.FC = () => {
         setLoadingProject(false);
       }
     }
-  }, [clearCanvasWorkspace, setBaselineForInstance, updateTabName, applyProjectMembers, navAccess, navAccessRole, noteApiRole, canvasModeRef, setConstraintsNodes]);
+  }, [clearCanvasWorkspace, setBaselineForInstance, updateTabName, applyProjectMembers, navAccess, navAccessRole, noteApiRole, canvasModeRef, setConstraintsNodes, setMetricsEdges, setMetricsNodes, setMetricsViewTypes]);
 
   // Viewers: reload when the owner saves changes; detect when access is revoked.
   useEffect(() => {
@@ -947,7 +1058,7 @@ export const CanvasPage: React.FC = () => {
     const handleAccessRevoked = () => {
       clearStoredProjectAccess(activeProjectId);
       globalThis.dispatchEvent(new CustomEvent('vitruv.refreshVsums'));
-      setPopup({ message: 'You no longer have access to this project.', type: 'error' });
+      showPopup('You no longer have access to this project.', 'error');
       navigate('/');
     };
 
@@ -985,7 +1096,7 @@ export const CanvasPage: React.FC = () => {
       globalThis.clearInterval(timer);
       document.removeEventListener('visibilitychange', onVisible);
     };
-  }, [isViewOnly, activeProjectId, activeInstanceId, loadVsum, navigate]);
+  }, [isViewOnly, activeProjectId, activeInstanceId, loadVsum, navigate, showPopup]);
 
   // Switch tabs: capture leaving tab, restore or load active tab
   useEffect(() => {
@@ -1012,6 +1123,11 @@ export const CanvasPage: React.FC = () => {
       if (canvasModeRef.current === 'constraints') {
         setConstraintsNodes([]);
       }
+      if (canvasModeRef.current === 'metrics') {
+        setMetricsNodes([]);
+        setMetricsEdges([]);
+        setMetricsViewTypes([]);
+      }
 
       const cached = sessionsRef.current.get(nextId);
       if (cached && loadedTabsRef.current.has(nextId)) {
@@ -1032,9 +1148,9 @@ export const CanvasPage: React.FC = () => {
       );
     };
 
-    run();
+    void run();
     return () => { cancelled = true; };
-  }, [activeInstanceId, clearCanvasWorkspace, loadVsum, bumpProjectRole, canvasModeRef, setConstraintsNodes]);
+  }, [activeInstanceId, clearCanvasWorkspace, loadVsum, bumpProjectRole, canvasModeRef, setConstraintsNodes, setMetricsEdges, setMetricsNodes, setMetricsViewTypes]);
 
   // ── Add model from drawer ─────────────────────────────────────────────────
 
@@ -1046,9 +1162,12 @@ export const CanvasPage: React.FC = () => {
       globalThis.dispatchEvent(new CustomEvent('vitruv.addFileToWorkspace', {
         detail: {
           fileContent,
-          fileName: model.name + '.ecore',
+          fileName: `${appendMetaModelVersion(model.name, model.version)}.ecore`,
+          displayName: model.name,
+          version: model.version,
           domain: model.domain,
           metaModelId: model.id,
+          // sync-changes looks up reaction files by this catalog id.
           metaModelSourceId: model.sourceId ?? model.id,
           ecoreFileId: model.ecoreFileId,
           genModelFileId: model.genModelFileId,
@@ -1058,6 +1177,19 @@ export const CanvasPage: React.FC = () => {
       console.error('Failed to add model:', e);
     }
   }, [isViewOnly]);
+
+  const handleRenameProjectMetaModel = useCallback(async (model: DrawerModel, name: string) => {
+    if (!activeProjectId) throw new Error('No project is open.');
+    if (isViewOnly) throw new Error('You do not have permission to rename project meta-models.');
+    const sourceId = model.sourceId ?? model.id;
+    await apiService.renameVsumMetaModel(activeProjectId, sourceId, { name });
+    flowCanvasRef.current?.updateEcoreDisplayName?.(sourceId, name);
+    setDrawerModels(prev => prev.map(existing =>
+      (existing.sourceId ?? existing.id) === sourceId
+        ? { ...existing, name }
+        : existing,
+    ));
+  }, [activeProjectId, isViewOnly]);
 
   const handleDeleteModel = useCallback(async (model: DrawerModel) => {
     if (isViewOnly) return;
@@ -1090,7 +1222,7 @@ export const CanvasPage: React.FC = () => {
   useEffect(() => {
     const handler = (e: Event) => {
       const { fileName, fileContent } = (e as CustomEvent).detail || {};
-      if (fileName && fileContent) handleEcoreFileExpand(fileName, fileContent);
+      if (fileName && fileContent) void handleEcoreFileExpand(fileName, fileContent);
     };
     globalThis.addEventListener('vitruv.expandFileInWorkspace', handler as EventListener);
     return () => globalThis.removeEventListener('vitruv.expandFileInWorkspace', handler as EventListener);
@@ -1163,80 +1295,99 @@ export const CanvasPage: React.FC = () => {
   const handleCheckBuild = useCallback(async () => {
     if (isViewOnly || !activeProjectId) return;
     setCheckingBuild(true);
-    setPopup({ message: 'Checking whether this VSUM can be built…', type: 'info' });
+    showPopup('Checking whether this VSUM can be built…', 'info');
     try {
       const res = await apiService.buildVsum(activeProjectId);
       const msg = (res as any)?.message || 'This VSUM can be built successfully.';
-      setPopup({ message: msg, type: 'success' });
-    } catch (e: any) {
-      const data = e?.response?.data;
-      const detail = (typeof data?.message === 'string' && data.message) ||
-        (typeof data === 'string' && data) ||
-        e?.message || 'Build check failed.';
-      setPopup({ message: detail, type: 'error' });
+      showPopup(msg, 'success');
+    } catch (e: unknown) {
+      const detail = extractApiErrorMessage(e, 'Build check failed.');
+      const missingReactionFile = detail.toLowerCase().includes('reaction file')
+        && detail.toLowerCase().includes('not found');
+      if (missingReactionFile) {
+        showPopup(
+          'Check build needs a reaction file between two models. This project has none, so the build stops. Use Save to store the canvas.',
+          'error',
+        );
+      } else {
+        showPopupError(e, 'Build check failed.');
+      }
     } finally {
       setCheckingBuild(false);
-      setTimeout(() => setPopup(null), 5000);
     }
-  }, [activeProjectId, isViewOnly]);
+  }, [activeProjectId, isViewOnly, showPopup, showPopupError]);
 
   // ── Download artifact ─────────────────────────────────────────────────────
 
   const handleDownloadArtifact = useCallback(async () => {
     if (!activeProjectId) return;
     setDownloadingArtifact(true);
-    setPopup({ message: 'Downloading artifact…', type: 'info' });
+    showPopup('Downloading artifact…', 'info');
     try {
       const blob = await apiService.downloadVsumArtifact(activeProjectId);
       downloadBlobAsFile(blob, `vsum-${activeProjectId}-artifact.zip`);
-      setPopup({ message: 'Artifact downloaded successfully!', type: 'success' });
-    } catch (e: any) {
-      const data = e?.response?.data;
-      const detail = (typeof data?.message === 'string' && data.message) ||
-        (typeof data === 'string' && data) ||
-        e?.message || 'Download failed.';
-      setPopup({ message: detail, type: 'error' });
+      showPopup('Artifact downloaded successfully!', 'success');
+    } catch (e: unknown) {
+      showPopupError(e, 'Download failed.');
     } finally {
       setDownloadingArtifact(false);
-      setTimeout(() => setPopup(null), 5000);
     }
-  }, [activeProjectId]);
+  }, [activeProjectId, showPopup, showPopupError]);
 
   const handleDownloadBundle = useCallback(async () => {
     if (!activeProjectId) return;
     setDownloadingBundle(true);
-    setPopup({ message: 'Downloading easy deploy package…', type: 'info' });
+    showPopup('Downloading easy deploy package…', 'info');
     try {
       const blob = await apiService.downloadVsumBundle(activeProjectId);
       downloadBlobAsFile(blob, `vsum-${activeProjectId}-easy-deploy.zip`);
-      setPopup({ message: 'Easy deploy package downloaded successfully!', type: 'success' });
-    } catch (e: any) {
-      const data = e?.response?.data;
-      const detail = (typeof data?.message === 'string' && data.message) ||
-        (typeof data === 'string' && data) ||
-        e?.message || 'Download failed.';
-      setPopup({ message: detail, type: 'error' });
+      showPopup('Easy deploy package downloaded successfully!', 'success');
+    } catch (e: unknown) {
+      showPopupError(e, 'Download failed.');
     } finally {
       setDownloadingBundle(false);
-      setTimeout(() => setPopup(null), 5000);
     }
-  }, [activeProjectId]);
+  }, [activeProjectId, showPopup, showPopupError]);
 
   // ── Save changes ──────────────────────────────────────────────────────────
 
   const handleSaveChanges = useCallback(async () => {
     if (isViewOnly || !activeProjectId) return;
     setSavingChanges(true);
-    setPopup({ message: 'Saving changes…', type: 'info' });
+    showPopup('Saving changes…', 'info');
     try {
       const snapshot: WorkspaceSnapshot =
         flowCanvasRef.current?.getWorkspaceSnapshot?.() ?? emptyWorkspaceSnapshot();
       const payload = prepareSnapshotForSyncSave(snapshot);
       const { message, savedRelations } = await syncVsumWorkspaceChanges(activeProjectId, payload);
-      const savedSnapshot: WorkspaceSnapshot = {
+      let savedSnapshot: WorkspaceSnapshot = {
         metaModelIds: payload.metaModelIds,
         metaModelRelationRequests: savedRelations,
       };
+      if (hasVsumDetailsStore(activeProjectId)) {
+        try {
+          const detailsRes = await apiService.getVsumDetails(activeProjectId);
+          setDrawerModels((detailsRes.data.metaModels || []).map(m => metaModelToDrawerModel(m, true)));
+          const remote = mapVsumDetailsToEditable(detailsRes.data);
+          const store = getVsumDetailsStore(activeProjectId);
+          store.setState({
+            metaModelsRelation: mergePersistedFineRelationIds(
+              store.getState().metaModelsRelation,
+              remote.metaModelsRelation,
+            ),
+          });
+          const refreshed = flowCanvasRef.current?.getWorkspaceSnapshot?.();
+          if (refreshed) {
+            const prepared = prepareSnapshotForSyncSave(refreshed);
+            savedSnapshot = {
+              metaModelIds: prepared.metaModelIds,
+              metaModelRelationRequests: prepared.metaModelRelationRequests ?? [],
+            };
+          }
+        } catch {
+          // Save already succeeded; ids will be picked up on the next full reload.
+        }
+      }
       if (activeInstanceId) {
         setBaselineForInstance(activeInstanceId, savedSnapshot);
         const session = sessionsRef.current.get(activeInstanceId);
@@ -1247,18 +1398,13 @@ export const CanvasPage: React.FC = () => {
           });
         }
       }
-      setPopup({ message, type: 'success' as const });
-    } catch (e: any) {
-      const data = e?.response?.data;
-      const detail = (typeof data?.message === 'string' && data.message) ||
-        (typeof data === 'string' && data) ||
-        e?.message || 'Save failed.';
-      setPopup({ message: detail, type: 'error' });
+      showPopup(message, 'success');
+    } catch (e: unknown) {
+      showPopupError(e, 'Save failed.');
     } finally {
       setSavingChanges(false);
-      setTimeout(() => setPopup(null), 5000);
     }
-  }, [activeProjectId, activeInstanceId, setBaselineForInstance, isViewOnly]);
+  }, [activeProjectId, activeInstanceId, setBaselineForInstance, isViewOnly, showPopup, showPopupError]);
 
   const navigateHome = useCallback(() => navigate('/'), [navigate]);
 
@@ -1267,13 +1413,12 @@ export const CanvasPage: React.FC = () => {
   const handleOpenReactionEditor = useCallback(() => {
     const opened = flowCanvasRef.current?.openSelectedReactionEditor?.();
     if (!opened) {
-      setPopup({
-        message: 'Select a reaction connection on the canvas first, or double-click a connection line.',
-        type: 'info',
-      });
-      setTimeout(() => setPopup(null), 4000);
+      showPopup(
+        'Select a reaction connection on the canvas first, or double-click a connection line.',
+        'info',
+      );
     }
-  }, []);
+  }, [showPopup]);
   const handleHistoryChange = useCallback((undoAvailable: boolean, redoAvailable: boolean) => {
     setCanUndo(undoAvailable);
     setCanRedo(redoAvailable);
@@ -1296,16 +1441,14 @@ export const CanvasPage: React.FC = () => {
     const ok = await saveTabInstance(closeConfirmInstanceId);
     setCloseConfirmSaving(false);
     if (!ok) {
-      setPopup({ message: 'Failed to save changes.', type: 'error' });
-      setTimeout(() => setPopup(null), 4000);
+      showPopup('Failed to save changes.', 'error');
       return;
     }
     const instanceId = closeConfirmInstanceId;
     setCloseConfirmInstanceId(null);
     performCloseTab(instanceId);
-    setPopup({ message: 'Changes saved.', type: 'success' });
-    setTimeout(() => setPopup(null), 3000);
-  }, [closeConfirmInstanceId, saveTabInstance, performCloseTab, isViewOnly]);
+    showPopup('Changes saved.', 'success');
+  }, [closeConfirmInstanceId, saveTabInstance, performCloseTab, isViewOnly, showPopup]);
 
   const handleCloseWithoutSaving = useCallback(() => {
     if (!closeConfirmInstanceId) return;
@@ -1336,6 +1479,7 @@ export const CanvasPage: React.FC = () => {
         height: '100%',
         visibility: projectLoadState.status === 'ready' ? 'visible' : 'hidden',
       }}>
+
       <FlowCanvas
         key={activeInstanceId ?? `canvas-${activeProjectId ?? 'new'}`}
         ref={flowCanvasRef}
@@ -1347,11 +1491,13 @@ export const CanvasPage: React.FC = () => {
         umlModalOpen={umlPanels.length > 0}
         addReactionMode={addReactionMode}
         onReactionModeEnd={handleReactionModeEnd}
+        onToggleReactionMode={() => setAddReactionMode(v => !v)}
         onHistoryChange={handleHistoryChange}
         onCanvasModeChange={handleCanvasModeChange}
         constraintHighlightNodeId={constraintHighlightNodeId}
         constraintFilterNodeId={constraintFilterNodeId}
         onConstraintNodeFilter={setConstraintFilterNodeId}
+        onSaveChanges={handleSaveChanges}
         projectTabsBelowModeToggle={
           openTabs.length > 0 ? (
             <CanvasProjectTabs
@@ -1395,6 +1541,7 @@ export const CanvasPage: React.FC = () => {
           onClose={handleCloseDrawer}
           onAddModel={handleAddModel}
           onDeleteModel={handleDeleteModel}
+          onRenameProjectModel={handleRenameProjectMetaModel}
           onFetchFile={fetchEcoreFileById}
         />
       )}
@@ -1407,8 +1554,18 @@ export const CanvasPage: React.FC = () => {
         filterNodeId={constraintFilterNodeId}
       />
 
+      <CanvasMetricsOverlay
+        projectId={activeProjectId}
+        projectName={vsumName}
+        visible={canvasMode === 'metrics'}
+        canvasNodes={metricsNodes}
+        canvasEdges={metricsEdges}
+        viewTypes={metricsViewTypes}
+        onClose={() => handleCanvasModeChange('modeling')}
+      />
+
       {/* Left sidebar toolbar */}
-      {canvasMode !== 'constraints' && <CanvasSidebarToolbar
+      {canvasMode !== 'constraints' && canvasMode !== 'metrics' && <CanvasSidebarToolbar
         readOnly={isViewOnly}
         addReactionMode={addReactionMode}
         onToggleReactionMode={() => setAddReactionMode(v => !v)}
@@ -1449,6 +1606,10 @@ export const CanvasPage: React.FC = () => {
         onConfirmRename={confirmRename}
         onCancelRename={cancelRename}
         loading={loadingProject}
+        addReactionMode={addReactionMode}
+        onToggleReactionMode={() => setAddReactionMode(v => !v)}
+        reactionLineStyle={reactionLineStyle}
+        onReactionLineStyleChange={handleReactionLineStyleChange}
       />
 
       <UnsavedTabCloseDialog
@@ -1496,7 +1657,14 @@ export const CanvasPage: React.FC = () => {
       )}
 
       {/* Popup notification */}
-      {popup && <CanvasPopupNotification message={popup.message} type={popup.type} />}
+      {popup && (
+        <CanvasPopupNotification
+          message={popup.message}
+          type={popup.type}
+          details={popup.details}
+          onClose={dismissPopup}
+        />
+      )}
     </div>
   );
 };

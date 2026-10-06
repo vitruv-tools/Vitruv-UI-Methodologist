@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import ReactDOM from 'react-dom';
 import { apiService } from '../../services/api';
 import { useToast } from './ToastProvider';
+import { extractApiErrorMessage } from '../../utils/apiErrorMessage';
 import { useModalBodyLock, modalBackdropStyle, modalDialogShellStyle } from './modalUtils';
 
 interface CreateVsumModalProps {
@@ -101,7 +102,7 @@ export const CreateVsumModal: React.FC<CreateVsumModalProps> = ({ isOpen, onClos
       setDescription('');
       onClose();
     } catch (e) {
-      const msg = e instanceof Error ? e.message : 'Failed to create project.';
+      const msg = extractApiErrorMessage(e, 'Failed to create project.');
       setError(msg);
       showError(msg);
     } finally {
@@ -233,7 +234,7 @@ export const CreateVsumModal: React.FC<CreateVsumModalProps> = ({ isOpen, onClos
               placeholder="e.g. My V-SUM"
               value={name}
               onChange={e => setName(e.target.value)}
-              onKeyDown={e => { if (e.key === 'Enter' && !loading && name.trim()) handleSubmit(); }}
+              onKeyDown={e => { if (e.key === 'Enter' && !loading && name.trim()) void handleSubmit(); }}
               onFocus={e => { e.currentTarget.style.borderColor = '#049484'; e.currentTarget.style.boxShadow = '0 0 0 3px rgba(4,148,132,0.12)'; }}
               onBlur={e => { e.currentTarget.style.borderColor = 'var(--v-border)'; e.currentTarget.style.boxShadow = 'none'; }}
               style={inputBase}

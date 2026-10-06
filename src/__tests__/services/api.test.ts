@@ -197,31 +197,14 @@ describe('ApiService – createMetaModel', () => {
       domain: 'Testing',
       keyword: ['test'],
       ecoreFileId: 10,
-      genModelFileId: 20,
     });
 
     expect(result).toEqual(payload);
     const [, options] = (global.fetch as jest.Mock).mock.calls[0];
     const body = JSON.parse(options.body);
     expect(body.name).toBe('TestModel');
-    expect(body.applyGenModelFixes).toBe(false);
-  });
-
-  it('sends applyGenModelFixes true when explicitly requested', async () => {
-    mockFetch({ data: { id: 1 }, message: 'Created' });
-
-    await apiService.createMetaModel({
-      name: 'TestModel',
-      description: 'A test',
-      domain: 'Testing',
-      keyword: ['test'],
-      ecoreFileId: 10,
-      genModelFileId: 20,
-      applyGenModelFixes: true,
-    });
-
-    const [, options] = (global.fetch as jest.Mock).mock.calls[0];
-    expect(JSON.parse(options.body).applyGenModelFixes).toBe(true);
+    expect(body).not.toHaveProperty('applyGenModelFixes');
+    expect(body).not.toHaveProperty('genModelFileId');
   });
 });
 
@@ -448,5 +431,33 @@ describe('ApiService – updateUserName', () => {
   it('throws on non-2xx response', async () => {
     mockFetch({ message: 'Not found' }, 404);
     await expect(apiService.updateUserName('99', 'A', 'B')).rejects.toThrow();
+  });
+});
+
+describe('ApiService – getLowCodeReactionsMetadata', () => {
+  const { AuthService } = require('../../services/auth') as { AuthService: { ensureValidToken: jest.Mock } };
+  beforeEach(() => { AuthService.ensureValidToken.mockResolvedValue('mock-token'); });
+  afterEach(() => jest.restoreAllMocks());
+
+  it('GETs /api/lowcode-metadata', async () => {
+    const payload = {
+      data: {
+        reactionMetadataMap: {
+          create_corresponding_root_on_insert_root: {
+            name: 'Create Corresponding Root',
+            hide: false,
+            fields: [],
+          },
+        },
+      },
+      message: 'ok',
+    };
+    mockFetch(payload);
+
+    const result = await apiService.getLowCodeReactionsMetadata();
+    expect(result).toEqual(payload);
+    const [url, options] = (global.fetch as jest.Mock).mock.calls[0] as [string, RequestInit];
+    expect(url).toContain('/api/lowcode-metadata');
+    expect(options.method ?? 'GET').toBe('GET');
   });
 });

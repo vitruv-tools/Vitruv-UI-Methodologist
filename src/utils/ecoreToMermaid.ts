@@ -1,3 +1,5 @@
+import { collectClassElements, getElementType, parseEcoreDocument } from './ecoreDocument';
+
 /**
  * Converts an Ecore XML string to Mermaid classDiagram syntax.
  * Used by the floating UML panel in the canvas view.
@@ -28,26 +30,6 @@ const parseTypeName = (eType: string): string => {
   const parts = cleaned.replace(/^\/\//, '').split('/');
   return sanitizeName(parts.at(-1) || 'Unknown');
 };
-
-function parseEcoreDocument(ecoreContent: string): Document | null {
-  const parser = new DOMParser();
-  const xmlDoc = parser.parseFromString(ecoreContent, 'text/xml');
-  if (xmlDoc.getElementsByTagName('parsererror').length > 0) return null;
-  return xmlDoc;
-}
-
-function getElementType(el: Element): string {
-  return el.getAttribute('xsi:type') || el.getAttribute('type') || '';
-}
-
-function isEClassElement(el: Element): boolean {
-  const type = getElementType(el);
-  return type.includes('EClass') || (!type && el.querySelectorAll('eStructuralFeatures').length > 0);
-}
-
-function collectClassElements(xmlDoc: Document): Element[] {
-  return Array.from(xmlDoc.querySelectorAll('eClassifiers')).filter(isEClassElement);
-}
 
 function getClassName(cls: Element): string {
   return sanitizeName(cls.getAttribute('name') || 'Unknown');

@@ -1,5 +1,6 @@
 import { Dispatch, SetStateAction, useEffect } from 'react';
 import { Edge, Node, ReactFlowInstance } from 'reactflow';
+import { toWireReactionFileId } from '../../utils/workspaceSnapshotUtils';
 
 /**
  * Child components communicate upward through window events rather than props
@@ -164,7 +165,7 @@ export function normalizeMetaModelRelations(
       id: typeof rel.id === 'number' ? rel.id : 0,
       sourceId: (rel.sourceId ?? rel.sourceMetaModelId) as number,
       targetId: (rel.targetId ?? rel.targetMetaModelId) as number,
-      reactionFileId: (rel.reactionFileId ?? rel.reactionFileStorageId ?? null) as number | null,
+      reactionFileId: toWireReactionFileId(rel.reactionFileId ?? rel.reactionFileStorageId),
     }))
     .filter(rel => typeof rel.sourceId === 'number' && typeof rel.targetId === 'number');
 }

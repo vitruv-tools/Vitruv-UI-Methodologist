@@ -323,7 +323,7 @@ export const ProjectsView: React.FC<ProjectsViewProps> = ({
     }
   }, [search, projectView]);
 
-  useEffect(() => { loadFirstPage(); }, [loadFirstPage]);
+  useEffect(() => { void loadFirstPage(); }, [loadFirstPage]);
 
   useEffect(() => {
     const onRefresh = () => { void syncListFromApi(); };
@@ -345,7 +345,7 @@ export const ProjectsView: React.FC<ProjectsViewProps> = ({
       if (rafRef.current) cancelAnimationFrame(rafRef.current);
       rafRef.current = requestAnimationFrame(() => {
         if (loading || !hasMore) return;
-        if (el.scrollHeight - el.scrollTop - el.clientHeight < 200) loadNextPage();
+        if (el.scrollHeight - el.scrollTop - el.clientHeight < 200) void loadNextPage();
       });
     };
     el.addEventListener('scroll', onScroll);
@@ -360,7 +360,7 @@ export const ProjectsView: React.FC<ProjectsViewProps> = ({
       await apiService.deleteVsum(deletingId);
       setDeletingId(null);
       setDeleteError('');
-      loadFirstPage();
+      void loadFirstPage();
     } catch (e: any) {
       setDeleteError(e?.message || 'Failed to delete');
     }
@@ -373,7 +373,7 @@ export const ProjectsView: React.FC<ProjectsViewProps> = ({
     try {
       await apiService.recoverVsum(recoverConfirmId);
       globalThis.dispatchEvent(new CustomEvent('vitruv.refreshVsums'));
-      loadFirstPage();
+      void loadFirstPage();
     } catch (e: any) {
       setError(e?.message || 'Failed to restore');
     } finally {
@@ -417,16 +417,16 @@ export const ProjectsView: React.FC<ProjectsViewProps> = ({
           width: 10px;
         }
         .projects-table-scroll::-webkit-scrollbar-track {
-          background: #f1f5f9;
+          background: var(--v-scrollbar-track);
           border-radius: 10px;
         }
         .projects-table-scroll::-webkit-scrollbar-thumb {
-          background: #cbd5e1;
+          background: var(--v-scrollbar-thumb);
           border-radius: 10px;
-          border: 2px solid #f1f5f9;
+          border: 2px solid var(--v-scrollbar-track);
         }
         .projects-table-scroll::-webkit-scrollbar-thumb:hover {
-          background: #94a3b8;
+          background: var(--v-scrollbar-thumb-hover);
         }
       `}</style>
 
@@ -461,7 +461,7 @@ export const ProjectsView: React.FC<ProjectsViewProps> = ({
           <input
             value={search}
             onChange={e => setSearch(e.target.value)}
-            onKeyDown={e => { if (e.key === 'Enter') loadFirstPage(); }}
+            onKeyDown={e => { if (e.key === 'Enter') void loadFirstPage(); }}
             placeholder="Search projects..."
             style={{ width: '100%', padding: '8px 12px 8px 34px', border: '1px solid var(--v-border)', borderRadius: 8, fontSize: 13, color: 'var(--v-text-secondary)', outline: 'none', boxSizing: 'border-box', background: 'var(--v-input-bg)', transition: 'border-color 0.15s' }}
             onFocus={e => { (e.target as HTMLInputElement).style.borderColor = '#049484'; }}
@@ -598,7 +598,7 @@ export const ProjectsView: React.FC<ProjectsViewProps> = ({
       <CreateVsumModal
         isOpen={showCreate}
         onClose={() => setShowCreate(false)}
-        onSuccess={() => { setShowCreate(false); loadFirstPage(); }}
+        onSuccess={() => { setShowCreate(false); void loadFirstPage(); }}
       />
       <VsumDetailsModal
         isOpen={detailsId !== null}

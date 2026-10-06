@@ -248,5 +248,58 @@ describe('UMLRelationship', () => {
     expect(d1).toBeTruthy();
     expect(d0).not.toBe(d1);
   });
+
+  it('lifts expanded association names off the midpoint ghost', () => {
+    const { container } = render(
+      <svg>
+        <UMLRelationship
+          id="edge-ghost-label"
+          source="s1"
+          target="t1"
+          sourceX={0}
+          sourceY={40}
+          targetX={200}
+          targetY={40}
+          data={{
+            label: 'members',
+            relationshipType: 'association',
+            expandedIntraModel: true,
+          }}
+          selected={false}
+          style={{}}
+        />
+      </svg>,
+    );
+
+    expect(screen.getByTestId('edge-ghost-label-association-name')).toHaveTextContent('members');
+    expect(container.querySelector('text')).toBeNull();
+  });
+
+  it('does not show a curve handle on selected expanded associations', () => {
+    render(
+      <svg>
+        <UMLRelationship
+          id="edge-no-curve"
+          source="s1"
+          target="t1"
+          sourceX={0}
+          sourceY={0}
+          targetX={200}
+          targetY={0}
+          data={{
+            label: 'members',
+            relationshipType: 'association',
+            expandedIntraModel: true,
+            customControlPoint: { x: 100, y: 40 },
+          }}
+          selected
+          style={{}}
+        />
+      </svg>,
+    );
+
+    expect(screen.queryByText(/Double-click to reset/i)).toBeNull();
+    expect(screen.queryByText(/DRAG HERE/i)).toBeNull();
+  });
 });
 

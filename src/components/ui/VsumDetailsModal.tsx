@@ -5,6 +5,7 @@ import { VsumDetails } from '../../types';
 import { VsumUsersTab } from './VsumUsersTab';
 import { MODAL_Z_INDEX, useModalBodyLock } from './modalUtils';
 import { LinkMetaModelsPanel } from './LinkMetaModelsPanel';
+import { displayMetaModelVersion } from '../../utils/metaModelVersion';
 
 interface Props {
   isOpen: boolean;
@@ -641,7 +642,7 @@ export const VsumDetailsModal: React.FC<Props> = ({ isOpen, vsumId, onClose, onS
 
   useEffect(() => {
     if (!isOpen || !vsumId) return;
-    reloadDetails();
+    void reloadDetails();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen, vsumId]);
 
@@ -659,7 +660,7 @@ export const VsumDetailsModal: React.FC<Props> = ({ isOpen, vsumId, onClose, onS
         setVersionsLoading(false);
       }
     };
-    loadVersions();
+    void loadVersions();
   }, [isOpen, vsumId, activeTab]);
 
   const save = async () => {
@@ -755,6 +756,9 @@ export const VsumDetailsModal: React.FC<Props> = ({ isOpen, vsumId, onClose, onS
               <li key={mm.id} style={{ marginBottom: 6 }}>
                 <span style={{ fontWeight: 700, color: 'var(--v-text)' }}>
                   {mm.name}
+                </span>
+                <span style={{ marginLeft: 8, fontSize: 12, fontWeight: 600, color: 'var(--v-text-muted)' }}>
+                  {displayMetaModelVersion(mm.version)}
                 </span>
               </li>
             ))}

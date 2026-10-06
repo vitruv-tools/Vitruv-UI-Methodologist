@@ -3,6 +3,7 @@ import ReactDOM from 'react-dom';
 import { apiService } from '../../services/api';
 import { KeywordTagsInput } from './KeywordTagsInput';
 import { MODAL_Z_INDEX, modalBackdropStyle, useModalBodyLock } from './modalUtils';
+import { displayMetaModelVersion } from '../../utils/metaModelVersion';
 
 const FONT = 'ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, sans-serif';
 const DARK = '#0B1720';
@@ -44,7 +45,6 @@ export const EditMetaModelModal: React.FC<EditMetaModelModalProps> = ({
         name: form.name.trim(), description: form.description.trim(),
         domain: form.domain.trim(), keyword: form.keywords,
         ecoreFileId: metaModel.ecoreFileId || 0,
-        genModelFileId: metaModel.genModelFileId || 0,
       });
       setSuccess('Saved successfully');
       setTimeout(() => { onSuccess?.(); onClose(); }, 900);
@@ -117,6 +117,15 @@ export const EditMetaModelModal: React.FC<EditMetaModelModalProps> = ({
               onFocus={e => (e.currentTarget.style.borderColor = '#049484')}
               onBlur={e => (e.currentTarget.style.borderColor = 'var(--v-border)')}
               required
+            />
+          </Field>
+          <Field label="Version">
+            <input
+              type="text"
+              value={displayMetaModelVersion(metaModel?.version)}
+              readOnly
+              disabled
+              style={{ ...inputSt, color: 'var(--v-text-muted)' }}
             />
           </Field>
 

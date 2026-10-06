@@ -6,8 +6,10 @@ import { validateUmlModel } from '../../utils/umlValidation';
 import { useUmlEditHistory, UmlEditSnapshot } from '../../hooks/useUmlEditHistory';
 import {
   applyLayoutToUmlClasses,
+  loadUmlLayout,
   positionsFromUmlClasses,
   sanitizeUmlClassId,
+  type UmlPositionMap,
 } from '../../utils/umlLayoutStorage';
 import { assignParallelRelMeta } from '../../utils/umlClassLayout';
 import { UMLDiagramMinimap } from './UMLDiagramMinimap';
@@ -70,7 +72,10 @@ export interface UMLDiagramHandle {
   zoomIn: () => void;
   zoomOut: () => void;
   fitToView: () => void;
+  /** Persist pan/zoom. Class positions are only saved by `save()`. */
   flushLayout: () => void;
+  /** Re-apply saved class positions, e.g. after another view of the same diagram saved them. */
+  reloadLayout: () => void;
   getModel: () => UMLModel;
   isDirty: () => boolean;
   save: () => Promise<void>;
@@ -100,8 +105,23 @@ function getDiagramCursor(panning: boolean, connectMode: boolean): React.CSSProp
   return 'default';
 }
 
-function getSaveButtonTitle(hasUnsavedChanges: boolean, saveContext: UmlDiagramSaveContext): string {
+const SAVE_MESSAGE_DURATION_MS = 4000;
+
+/** True when a class was moved (or added) since the positions were last saved. */
+function hasMovedClasses(classes: UmlDiagramClass[], savedPositions: UmlPositionMap): boolean {
+  return classes.some(classItem => {
+    const saved = savedPositions[classItem.id];
+    return saved?.x !== classItem.x || saved?.y !== classItem.y;
+  });
+}
+
+function getSaveButtonTitle(
+  hasUnsavedChanges: boolean,
+  hasSemanticChanges: boolean,
+  saveContext: UmlDiagramSaveContext,
+): string {
   if (!hasUnsavedChanges) return 'No unsaved changes';
+  if (!hasSemanticChanges) return 'Save class positions';
   if (saveContext.saveTarget === 'workspace') return 'Save changes to project';
   return 'Save metamodel changes';
 }
@@ -130,6 +150,8 @@ export const UMLDiagram = forwardRef<UMLDiagramHandle, UMLDiagramProps>(({
   const [saving, setSaving] = useState(false);
   const [saveMessage, setSaveMessage] = useState('');
   const initialSnapshotRef = useRef('');
+  /** Class positions as last loaded or saved; moving away from them makes the diagram dirty. */
+  const savedPositionsRef = useRef<UmlPositionMap>(positionsFromUmlClasses(classes));
   const skipNextEcoreResetRef = useRef(false);
 const rels = useMemo(
   () => assignParallelRelMeta(relationships) as UmlDiagramRelationshipLayout[],
@@ -137,6 +159,17 @@ const rels = useMemo(
 );
   const [selectedClassId, setSelectedClassId] = useState<string | null>(null);
   const [selectedRelId, setSelectedRelId] = useState<string | null>(null);
+  // Only one edit panel is open at a time: selecting a class closes the
+  // relationship panel and vice versa. Updater functions only remap or clear
+  // the current selection, so they never close the other panel.
+  const selectClass = useCallback((next: React.SetStateAction<string | null>) => {
+    setSelectedClassId(next);
+    if (typeof next === 'string') setSelectedRelId(null);
+  }, []);
+  const selectRelationship = useCallback((next: React.SetStateAction<string | null>) => {
+    setSelectedRelId(next);
+    if (typeof next === 'string') setSelectedClassId(null);
+  }, []);
   const [connectMode, setConnectMode] = useState(false);
   const [connectSourceId, setConnectSourceId] = useState<string | null>(null);
   const resetInteractionState = useCallback(() => {
@@ -232,6 +265,7 @@ const rels = useMemo(
       classes: baseClasses,
       relationships: next.relationships,
     });
+    savedPositionsRef.current = positionsFromUmlClasses(baseClasses);
     setSaveMessage('');
     if (preserveLivePositions && fileName) {
       persistViewportLayoutRef.current(baseClasses);
@@ -272,8 +306,7 @@ const rels = useMemo(
     fitToView,
     handleMinimapPan,
     persistLayout,
-    scheduleLayoutSave,
-    scheduleDebouncedLayoutSave,
+    persistViewport,
     getCurrentViewport,
     restoreViewportAfterReload,
     getCurrentLayoutOffset,
@@ -320,15 +353,13 @@ const rels = useMemo(
     relationships,
     setClasses,
     setRelationships,
-    setSelectedClassId,
-    setSelectedRelationshipId: setSelectedRelId,
+    setSelectedClassId: selectClass,
+    setSelectedRelationshipId: selectRelationship,
     setConnectSourceId,
     recordChange,
     containerRef,
     getCurrentViewport,
     getCurrentLayoutOffset,
-    scheduleDebouncedLayoutSave,
-    scheduleLayoutSave,
   });
   flushPendingEditRef.current = flushPendingEdit;
   cancelPrimaryEditRef.current = cancelEdit;
@@ -347,9 +378,9 @@ const rels = useMemo(
     isEmptyCanvasTarget,
     relationships,
     selectedClassId,
-    setSelectedClassId,
+    setSelectedClassId: selectClass,
     selectedRelationshipId: selectedRelId,
-    setSelectedRelationshipId: setSelectedRelId,
+    setSelectedRelationshipId: selectRelationship,
     connectMode,
     setConnectMode,
     connectSourceId,
@@ -365,16 +396,31 @@ const rels = useMemo(
     handleRedo,
   });
 
-  const isDirty = useCallback(() => {
+  const hasSemanticChanges = useCallback(() => {
     return umlSemanticSnapshot(getModel()) !== initialSnapshotRef.current;
   }, [getModel]);
 
+  const isDirty = useCallback(() => {
+    return hasSemanticChanges()
+      || hasMovedClasses(classesRef.current, savedPositionsRef.current);
+  }, [hasSemanticChanges]);
+
   const handleSave = useCallback(async () => {
     if (!saveContext || saving) return;
+    const onlyClassesMoved = !hasSemanticChanges()
+      && hasMovedClasses(classesRef.current, savedPositionsRef.current);
+    if (onlyClassesMoved) {
+      // Positions are stored locally; the ecore is unchanged, so nothing is sent to the backend.
+      persistLayout();
+      savedPositionsRef.current = positionsFromUmlClasses(classesRef.current);
+      clearHistory();
+      setSaveMessage('Layout saved');
+      setTimeout(() => setSaveMessage(''), SAVE_MESSAGE_DURATION_MS);
+      return;
+    }
     setSaving(true);
     setSaveMessage('');
     try {
-      persistLayout();
       const result =
         saveContext.saveTarget === 'workspace'
           ? {
@@ -400,9 +446,18 @@ const rels = useMemo(
       saveContext.onError?.(message);
     } finally {
       setSaving(false);
-      setTimeout(() => setSaveMessage(''), 4000);
+      setTimeout(() => setSaveMessage(''), SAVE_MESSAGE_DURATION_MS);
     }
-  }, [saveContext, saving, getModel, originalEcore, resetFromEcore, persistLayout, clearHistory]);
+  }, [
+    saveContext,
+    saving,
+    hasSemanticChanges,
+    getModel,
+    originalEcore,
+    resetFromEcore,
+    persistLayout,
+    clearHistory,
+  ]);
 
   // ── imperative handle ──────────────────────────────────────────────────────
   useImperativeHandle(ref, () => {
@@ -410,7 +465,19 @@ const rels = useMemo(
       zoomIn,
       zoomOut,
       fitToView,
-      flushLayout: persistLayout,
+      flushLayout: persistViewport,
+      reloadLayout: () => {
+        if (!fileName) return;
+        savedPositionsRef.current = {
+          ...savedPositionsRef.current,
+          ...loadUmlLayout(layoutScopeId, fileName),
+        };
+        setClasses(previousClasses => applyLayoutToUmlClasses(
+          layoutScopeId,
+          fileName,
+          previousClasses,
+        ));
+      },
       getModel,
       isDirty,
       save: handleSave,
@@ -426,6 +493,7 @@ const rels = useMemo(
       tryEscape,
     };
   }, [
+    fileName,
     fitToView,
     getModel,
     handleRedo,
@@ -434,7 +502,8 @@ const rels = useMemo(
     historyCanRedo,
     historyCanUndo,
     isDirty,
-    persistLayout,
+    layoutScopeId,
+    persistViewport,
     resetFromEcore,
     restoreViewportAfterReload,
     tryEscape,
@@ -470,7 +539,7 @@ const rels = useMemo(
   const hasUnsavedChanges = isDirty();
   const diagramCursor = getDiagramCursor(panning, connectMode);
   const saveButtonTitle = saveContext
-    ? getSaveButtonTitle(hasUnsavedChanges, saveContext)
+    ? getSaveButtonTitle(hasUnsavedChanges, hasSemanticChanges(), saveContext)
     : '';
 
   return (
@@ -528,7 +597,7 @@ const rels = useMemo(
             if (!interactive) return;
             startAttributeEdit(cls.id, attrId);
           }}
-          onSaveAttr={(attrId, n, t, v) => saveAttr(cls.id, attrId, n, t, v)}
+          onSaveAttr={(attrId, n, t, v, documentation) => saveAttr(cls.id, attrId, n, t, v, documentation)}
           onCancelEdit={cancelEdit}
           onAddAttr={() => interactive && addAttr(cls.id)}
           onDeleteAttr={attrId => deleteAttr(cls.id, attrId)}
@@ -536,7 +605,7 @@ const rels = useMemo(
             if (!interactive) return;
             startOperationEdit(cls.id, opId);
           }}
-          onSaveOp={(opId, n, rt, v) => saveOp(cls.id, opId, n, rt, v)}
+          onSaveOp={(opId, n, rt, v, documentation) => saveOp(cls.id, opId, n, rt, v, documentation)}
           onAddOp={() => interactive && addOp(cls.id)}
           onDeleteOp={opId => deleteOp(cls.id, opId)}
           onDelete={() => deleteClass(cls.id)}

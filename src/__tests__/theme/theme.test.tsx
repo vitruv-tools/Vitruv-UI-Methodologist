@@ -1,4 +1,5 @@
-import { fireEvent, render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen } from '@testing-library/react';
+import { useTheme as useMuiTheme } from '@mui/material/styles';
 import {
   getTheme,
   readStoredTheme,
@@ -7,6 +8,7 @@ import {
   THEME_STORAGE_KEY,
   toggleTheme,
 } from '../../theme/theme';
+import { MuiAppThemeProvider } from '../../theme/MuiAppThemeProvider';
 import { ThemeToggle } from '../../components/ui/ThemeToggle';
 
 describe('theme store', () => {
@@ -69,5 +71,26 @@ describe('ThemeToggle', () => {
     fireEvent.click(light);
     expect(light).toHaveAttribute('aria-pressed', 'true');
     expect(getTheme()).toBe('light');
+  });
+});
+
+function MuiModeProbe() {
+  const theme = useMuiTheme();
+  return <span data-testid="mui-mode">{theme.palette.mode}</span>;
+}
+
+describe('MuiAppThemeProvider', () => {
+  it('follows the app dark/light theme for MUI form controls', () => {
+    render(
+      <MuiAppThemeProvider>
+        <MuiModeProbe />
+      </MuiAppThemeProvider>,
+    );
+    expect(screen.getByTestId('mui-mode')).toHaveTextContent('light');
+
+    act(() => {
+      setTheme('dark');
+    });
+    expect(screen.getByTestId('mui-mode')).toHaveTextContent('dark');
   });
 });

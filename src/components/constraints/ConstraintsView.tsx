@@ -5,6 +5,7 @@ import { Node } from 'reactflow';
 import { cardColor } from '../flow/EcoreFileBox';
 import { APP_FONT } from '../ui/sharedStyles';
 import { apiService } from '../../services/api';
+import { writeStoredOcl } from '../../utils/oclStorage';
 import { CodeEditorModal } from '../flow/CodeEditorModal';
 import { useOclLsp } from '../../hooks/useOclLsp';
 import { MODAL_Z_INDEX, getAppPortalRoot, useModalBodyLock } from '../ui/modalUtils';
@@ -1763,6 +1764,11 @@ export const ConstraintsView: React.FC<ConstraintsViewProps> = ({ vsumId: _vsumI
       rules: rs.rules.map(r => ({ ...r, scope: oclGetScope(r.oclDefinition) })),
     })));
   }, [vsumId, canvasNodes]);
+
+  useEffect(() => {
+    if (vsumId == null) return;
+    writeStoredOcl(String(vsumId), ruleSets.map(ruleSetToOcl).join('\n\n'));
+  }, [vsumId, ruleSets]);
 
   /** Sync a single ruleset to the backend (fire-and-forget). */
   const syncRuleSet = useCallback((rs: RuleSet) => {

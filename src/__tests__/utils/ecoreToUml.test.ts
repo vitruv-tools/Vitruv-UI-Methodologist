@@ -99,6 +99,14 @@ describe('ecoreToUml – class parsing', () => {
     expect(classes[0].id).toBe('My_Class');
     expect(classes[0].name).toBe('My-Class');
   });
+
+  it('reads GenModel documentation directly attached to a class', () => {
+    const classXml = eClass(
+      'Documented',
+      '<eAnnotations source="http://www.eclipse.org/emf/2002/GenModel"><details key="documentation" value="Class purpose"/></eAnnotations>',
+    );
+    expect(ecoreToUml(wrap(classXml)).classes[0].documentation).toBe('Class purpose');
+  });
 });
 
 // ── intelligent layout ────────────────────────────────────────────────────────
@@ -142,6 +150,14 @@ describe('ecoreToUml – attributes', () => {
     const xml = wrap(eClass('Person', attrXml));
     const { classes } = ecoreToUml(xml);
     expect(classes[0].attributes[0].visibility).toBe('-');
+  });
+
+  it('reads documentation for attributes and operations', () => {
+    const attrXml = '<eStructuralFeatures xsi:type="ecore:EAttribute" name="name" eType="//EString"><eAnnotations source="http://www.eclipse.org/emf/2002/GenModel"><details key="documentation" value="A display name"/></eAnnotations></eStructuralFeatures>';
+    const operationXml = '<eOperations name="rename" eType="//EVoid"><eAnnotations source="http://www.eclipse.org/emf/2002/GenModel"><details key="documentation" value="Renames this object"/></eAnnotations></eOperations>';
+    const model = ecoreToUml(wrap(eClass('Person', attrXml + operationXml)));
+    expect(model.classes[0].attributes[0].documentation).toBe('A display name');
+    expect(model.classes[0].operations[0].documentation).toBe('Renames this object');
   });
 
   it('does not include multiplicity on attributes', () => {
@@ -280,6 +296,12 @@ describe('ecoreToUml – references', () => {
       type: 'composition',
       label: 'books',
     });
+  });
+
+  it('reads documentation for EReferences', () => {
+    const documentedReference = '<eStructuralFeatures xsi:type="ecore:EReference" name="books" eType="#//Book"><eAnnotations source="http://www.eclipse.org/emf/2002/GenModel"><details key="documentation" value="Books owned by this library"/></eAnnotations></eStructuralFeatures>';
+    const model = ecoreToUml(wrap(eClass('Library', documentedReference) + eClass('Book')));
+    expect(model.relationships[0].documentation).toBe('Books owned by this library');
   });
 
   it('ignores EReference targets not present in the model', () => {

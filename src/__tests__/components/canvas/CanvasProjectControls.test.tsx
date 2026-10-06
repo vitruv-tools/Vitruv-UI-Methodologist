@@ -136,4 +136,31 @@ describe('CanvasProjectControls', () => {
 
     expect(screen.getByRole('textbox')).toBeDisabled();
   });
+
+  it('hides the line-style toggle until Reactions mode is on', () => {
+    render(
+      <CanvasProjectControls
+        {...createProps()}
+        onToggleReactionMode={jest.fn()}
+        onReactionLineStyleChange={jest.fn()}
+      />,
+    );
+    expect(screen.queryByRole('button', { name: 'Dashed' })).not.toBeInTheDocument();
+  });
+
+  it('toggles dashed and solid reaction lines in Reactions mode', () => {
+    const onReactionLineStyleChange = jest.fn();
+    render(
+      <CanvasProjectControls
+        {...createProps()}
+        addReactionMode
+        onToggleReactionMode={jest.fn()}
+        reactionLineStyle="dashed"
+        onReactionLineStyleChange={onReactionLineStyleChange}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Solid' }));
+    expect(onReactionLineStyleChange).toHaveBeenCalledWith('solid');
+  });
 });

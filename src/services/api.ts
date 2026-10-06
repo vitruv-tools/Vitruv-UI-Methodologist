@@ -505,21 +505,21 @@ class ApiService {
   }
 
   /**
-   * Create a meta model
-   * Backend expects a JSON body: { name, description, domain, keyword, ecoreFileId, genModelFileId, applyGenModelFixes }
+   * Create a meta model.
+   * Backend expects a JSON body: { name, version, description, domain, keyword, ecoreFileId }.
+   * `version` is a non-blank free-form string (no semver check). Omit it and the backend stores `"1.0"`.
+   * The create response has no id; reload the list to show the new row. Version cannot be changed later.
    */
   async createMetaModel(data: {
     name: string;
+    version?: string;
     description: string;
     domain: string;
     keyword: string[];
     ecoreFileId: number;
-    genModelFileId: number;
-    applyGenModelFixes?: boolean;
   }): Promise<{ data: any; message: string }> {
     const body = {
       ...data,
-      applyGenModelFixes: data.applyGenModelFixes ?? false,
     };
     return this.authenticatedRequest('/api/v1/meta-models', {
       method: 'POST',
@@ -543,7 +543,6 @@ class ApiService {
     domain?: string;
     keyword?: string[];
     ecoreFileId?: number;
-    genModelFileId?: number;
     createdFrom?: string;
     createdTo?: string;
     pageNumber?: number;
@@ -590,7 +589,6 @@ class ApiService {
     domain?: string;
     keyword?: string[];
     ecoreFileId?: number;
-    genModelFileId?: number;
   }): Promise<{ data: any; message: string }> {
     return this.authenticatedRequest(`/api/v1/meta-models/${id}`, {
       method: 'PUT',
@@ -700,6 +698,21 @@ class ApiService {
   // inside ApiService class
   async renameVsum(id: number | string, data: { name: string }): Promise<ApiResponse<any>> {
     return this.authenticatedRequest(`/api/v1/vsums/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    });
+  }
+
+  /**
+   * Renames a meta model only within one project. `metaModelId` is the model-library/source ID,
+   * not the ID of a cloned project record.
+   */
+  async renameVsumMetaModel(
+    vsumId: number | string,
+    metaModelId: number | string,
+    data: { name: string },
+  ): Promise<ApiResponse<void>> {
+    return this.authenticatedRequest(`/api/v1/vsums/${vsumId}/meta-models/${metaModelId}/name`, {
       method: 'PUT',
       body: JSON.stringify(data),
     });
@@ -939,6 +952,13 @@ class ApiService {
       method: 'DELETE',
     });
   }
+
+  /**
+   * Fetch Low Code reaction metadata (field definitions for the form editor).
+   */
+  async getLowCodeReactionsMetadata(): Promise<{ data: import('../types/LowCodeReactionMetadataResponse').LowCodeReactionMetadataResponse; message: string }> {
+    return this.authenticatedRequest('/api/lowcode-metadata');
+  }
 }
 
 // Export a singleton instance
@@ -1012,7 +1032,9 @@ export interface UserSearchItem {
 export interface MetaModelRelationRequest {
   sourceId: number;
   targetId: number;
-  reactionFileId: number;  // Use 0 when there's no reaction file
+  /** Stored REACTION file id, or `null` when there is no uploaded `.reactions` file. */
+  reactionFileId: number | null;
+  fineGranularMetaModelRelationSet?: import('../types/FineGranularMetaModelRelation').EditableFineGranularMetaModelRelation[];
 }
 
 export interface VsumSyncChangesPutRequest {

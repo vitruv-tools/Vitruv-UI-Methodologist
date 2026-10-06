@@ -95,24 +95,24 @@ code {
   }
 }
 
-/* Scrollbar styles */
+/* Scrollbar styles — theme tokens so the thumb stays visible in light mode */
 ::-webkit-scrollbar {
   width: 8px;
   height: 8px;
 }
 
 ::-webkit-scrollbar-track {
-  background: rgba(255, 255, 255, 0.1);
+  background: var(--v-scrollbar-track);
   border-radius: 4px;
 }
 
 ::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.3);
+  background: var(--v-scrollbar-thumb);
   border-radius: 4px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: rgba(255, 255, 255, 0.5);
+  background: var(--v-scrollbar-thumb-hover);
 }
 
 /* React Flow custom styles — jjodel-inspired */
@@ -165,12 +165,12 @@ code {
 }
 
 .sidebar-scrollbar::-webkit-scrollbar-track {
-  background: rgba(255, 255, 255, 0.1);
+  background: var(--v-scrollbar-track);
   border-radius: 3px;
 }
 
 .sidebar-scrollbar::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.3);
+  background: var(--v-scrollbar-thumb);
   border-radius: 3px;
 }
 

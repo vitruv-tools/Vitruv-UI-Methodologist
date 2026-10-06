@@ -2,6 +2,7 @@ import {
   isPrimitiveAttributeType,
   normalizeAttributeTypeDisplay,
   normalizeOperationReturnType,
+  ECORE_DOCUMENTATION_ANNOTATION,
   UML_VISIBILITY_ANNOTATION,
   UMLAttribute,
   UMLClass,
@@ -78,12 +79,21 @@ function extractPackageOpening(originalEcore?: string): {
   };
 }
 
-function renderVisibilityAnnotation(visibility: UMLVisibility): string {
+function renderVisibilityAnnotation(visibility: UMLVisibility, indent: string): string {
   if (visibility === '+') return '';
   return (
-    `\n      <eAnnotations source="${UML_VISIBILITY_ANNOTATION}">` +
-    `\n        <details key="symbol" value="${escapeXml(visibility)}"/>` +
-    `\n      </eAnnotations>`
+    `${indent}<eAnnotations source="${UML_VISIBILITY_ANNOTATION}">` +
+    `\n${indent}  <details key="symbol" value="${escapeXml(visibility)}"/>` +
+    `\n${indent}</eAnnotations>`
+  );
+}
+
+function renderDocumentationAnnotation(documentation: string | undefined, indent: string): string {
+  if (documentation === undefined || documentation === '') return '';
+  return (
+    `${indent}<eAnnotations source="${ECORE_DOCUMENTATION_ANNOTATION}">` +
+    `\n${indent}  <details key="documentation" value="${escapeXml(documentation)}"/>` +
+    `\n${indent}</eAnnotations>`
   );
 }
 
@@ -91,15 +101,18 @@ function renderAttribute(attr: UMLAttribute): string {
   const typeName = normalizeAttributeTypeDisplay(attr.type);
   if (!isPrimitiveAttributeType(typeName)) return '';
   const eType = attributeEType(typeName);
-  const visibilityAnn = renderVisibilityAnnotation(attr.visibility);
+  const annotations = [
+    renderDocumentationAnnotation(attr.documentation, '      '),
+    renderVisibilityAnnotation(attr.visibility, '      '),
+  ].filter(Boolean).join('\n');
   const openTag =
     `    <eStructuralFeatures xsi:type="ecore:EAttribute" name="${escapeXml(attr.name)}"` +
     ` eType="${escapeXml(eType)}" lowerBound="0" upperBound="1"`;
   // UML attributes are scalar; Ecore stores them as optional single values.
-  if (!visibilityAnn) {
+  if (!annotations) {
     return `${openTag}/>`;
   }
-  return `${openTag}>${visibilityAnn}\n    </eStructuralFeatures>`;
+  return `${openTag}>\n${annotations}\n    </eStructuralFeatures>`;
 }
 
 function operationEType(typeName: string): string {
@@ -110,12 +123,15 @@ function operationEType(typeName: string): string {
 
 function renderOperation(op: UMLOperation): string {
   const eType = operationEType(op.returnType);
-  const visibilityAnn = renderVisibilityAnnotation(op.visibility);
+  const annotations = [
+    renderDocumentationAnnotation(op.documentation, '      '),
+    renderVisibilityAnnotation(op.visibility, '      '),
+  ].filter(Boolean).join('\n');
   const openTag = `    <eOperations name="${escapeXml(op.name)}" eType="${escapeXml(eType)}"`;
-  if (!visibilityAnn) {
+  if (!annotations) {
     return `${openTag}/>`;
   }
-  return `${openTag}>${visibilityAnn}\n    </eOperations>`;
+  return `${openTag}>\n${annotations}\n    </eOperations>`;
 }
 
 function renderReference(
@@ -125,11 +141,14 @@ function renderReference(
   const refName = rel.label?.trim() || `${rel.type}_${targetName}`.toLowerCase();
   const { lower, upper } = parseMultiplicity(rel.targetMultiplicity ?? '0..1');
   const containment = rel.type === 'composition';
-  return (
+  const openTag =
     `    <eStructuralFeatures xsi:type="ecore:EReference" name="${escapeXml(refName)}"` +
     ` eType="#//${escapeXml(targetName)}" containment="${containment}"` +
-    ` lowerBound="${lower}" upperBound="${upper}"/>`
-  );
+    ` lowerBound="${lower}" upperBound="${upper}"`;
+  const documentation = renderDocumentationAnnotation(rel.documentation, '      ');
+  return documentation
+    ? `${openTag}>\n${documentation}\n    </eStructuralFeatures>`
+    : `${openTag}/>`;
 }
 
 function renderClass(
@@ -154,7 +173,12 @@ function renderClass(
     return target ? renderReference(rel, target.name) : '';
   }).filter(Boolean);
 
-  const body = [...attrLines, ...opLines, ...refLines].join('\n');
+  const body = [
+    renderDocumentationAnnotation(cls.documentation, '    '),
+    ...attrLines,
+    ...opLines,
+    ...refLines,
+  ].filter(Boolean).join('\n');
   const attrStr = attrs.length > 0 ? ` ${attrs.join(' ')}` : '';
 
   if (body) {

@@ -156,4 +156,29 @@ describe('useCanvasModeState', () => {
     });
     expect(result.current.canvasModeRef.current).toBe('modeling');
   });
+
+  it('snapshots nodes, edges, and view types when switching to metrics', () => {
+    const getCanvasNodes = jest.fn(() => canvasNodes);
+    const edges = [{ id: 'e1', source: 'a', target: 'b', type: 'reactions' }];
+    const viewTypes = [{ id: 'vt-1', label: 'Architecture', scope: 'multi' as const, angle: 0, linkedNodeIds: ['a'], editable: false }];
+    const getCanvasEdges = jest.fn(() => edges);
+    const getViewTypes = jest.fn(() => viewTypes);
+    const { result } = renderHook(() => useCanvasModeState({
+      projectId: 7,
+      isViewOnly: false,
+      getCanvasNodes,
+      getCanvasEdges,
+      getViewTypes,
+    }));
+
+    act(() => {
+      result.current.handleCanvasModeChange('metrics');
+    });
+
+    expect(result.current.canvasMode).toBe('metrics');
+    expect(result.current.metricsNodes).toEqual(canvasNodes);
+    expect(result.current.metricsEdges).toEqual(edges);
+    expect(result.current.metricsViewTypes).toEqual(viewTypes);
+    expect(mockWriteStoredCanvasMode).toHaveBeenCalledWith(7, 'metrics');
+  });
 });

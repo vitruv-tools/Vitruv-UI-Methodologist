@@ -12,6 +12,7 @@ interface ModelDrawerModalProps {
   onClose: () => void;
   onAddModel: (model: DrawerModel) => void;
   onDeleteModel?: (model: DrawerModel) => Promise<void>;
+  onRenameProjectModel?: (model: DrawerModel, name: string) => Promise<void>;
   onFetchFile: (fileId: number) => Promise<string>;
 }
 
@@ -24,6 +25,7 @@ export const ModelDrawerModal: React.FC<ModelDrawerModalProps> = ({
   onClose,
   onAddModel,
   onDeleteModel,
+  onRenameProjectModel,
   onFetchFile,
 }) => ReactDOM.createPortal(
   <>
@@ -55,6 +57,7 @@ export const ModelDrawerModal: React.FC<ModelDrawerModalProps> = ({
         onClose={onClose}
         onAddModel={onAddModel}
         onDeleteModel={onDeleteModel}
+        onRenameProjectModel={onRenameProjectModel}
         myLibraryModels={myLibraryModels}
         publicLibraryModels={publicLibraryModels}
         onFetchFile={onFetchFile}

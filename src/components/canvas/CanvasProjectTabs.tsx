@@ -6,6 +6,9 @@ const MAX_VISIBLE_TABS = 4;
 const TAB_GAP = 3;
 const TAB_WIDTH_NORMAL = 128;
 const TAB_WIDTH_COMPACT = 96;
+/** Keep tab borders inside the strip; overflow:hidden otherwise clips the right edge. */
+const TAB_STRIP_PAD_X = 3;
+const PILL_CHROME_WIDTH = 118;
 const TRACKPAD_SCROLL_HINT = 'Scroll with two fingers on your trackpad to see more tabs';
 
 const pillShellBase: React.CSSProperties = {
@@ -18,9 +21,8 @@ const pillShellBase: React.CSSProperties = {
   padding: '0 5px',
   gap: 4,
   fontFamily: 'ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, sans-serif',
-  overflow: 'hidden',
+  overflow: 'visible',
   minWidth: 0,
-  maxWidth: 'min(520px, 72vw)',
 };
 
 interface CanvasProjectTabsProps {
@@ -54,7 +56,9 @@ export const CanvasProjectTabs: React.FC<CanvasProjectTabsProps> = ({
   const visibleTabSlots = Math.min(tabs.length, MAX_VISIBLE_TABS);
   const tabWidth = useCompactTabs ? TAB_WIDTH_COMPACT : TAB_WIDTH_NORMAL;
   const scrollAreaMaxWidth =
-    visibleTabSlots * tabWidth + Math.max(0, visibleTabSlots - 1) * TAB_GAP;
+    visibleTabSlots * tabWidth
+    + Math.max(0, visibleTabSlots - 1) * TAB_GAP
+    + TAB_STRIP_PAD_X * 2;
   const isScrollable = tabs.length > MAX_VISIBLE_TABS;
 
   const handleTabStripWheel = (e: React.WheelEvent<HTMLDivElement>) => {
@@ -64,7 +68,12 @@ export const CanvasProjectTabs: React.FC<CanvasProjectTabsProps> = ({
   };
 
   return (
-    <div style={pillShellBase}>
+    <div
+      style={{
+        ...pillShellBase,
+        maxWidth: `min(${scrollAreaMaxWidth + PILL_CHROME_WIDTH}px, 90vw)`,
+      }}
+    >
       <div
         style={{
           position: 'relative',
@@ -84,9 +93,10 @@ export const CanvasProjectTabs: React.FC<CanvasProjectTabsProps> = ({
             display: 'flex',
             alignItems: 'center',
             gap: TAB_GAP,
-            overflowX: isScrollable ? 'scroll' : 'hidden',
-            overflowY: 'hidden',
-            padding: '0 2px',
+            overflowX: isScrollable ? 'scroll' : 'visible',
+            overflowY: 'visible',
+            padding: `0 ${TAB_STRIP_PAD_X}px`,
+            boxSizing: 'border-box',
             minWidth: 0,
             scrollbarWidth: 'thin',
             overscrollBehavior: 'contain',
@@ -117,12 +127,15 @@ export const CanvasProjectTabs: React.FC<CanvasProjectTabsProps> = ({
                   alignItems: 'center',
                   gap: useCompactTabs ? 3 : 4,
                   padding: useCompactTabs ? '0 7px' : '0 10px',
+                  width: tabWidth,
+                  boxSizing: 'border-box',
                   height: useCompactTabs ? 26 : 28,
                   borderRadius: 5,
                   border: isActive ? '1px solid #049484' : '1px solid var(--v-border)',
                   background: isActive ? 'var(--v-uml-primary-soft)' : 'var(--v-surface-hover)',
                   cursor: 'pointer',
                   flexShrink: 0,
+                  minWidth: 0,
                 }}
                 onMouseEnter={e => {
                   if (!isActive) e.currentTarget.style.background = 'var(--v-chrome-hover)';
@@ -149,7 +162,8 @@ export const CanvasProjectTabs: React.FC<CanvasProjectTabsProps> = ({
                     fontWeight: isActive ? 700 : 500,
                     color: isActive ? '#049484' : 'var(--v-text-muted)',
                     whiteSpace: 'nowrap',
-                    maxWidth: useCompactTabs ? 80 : 120,
+                    flex: '1 1 auto',
+                    minWidth: 0,
                     overflow: 'hidden',
                     textOverflow: 'ellipsis',
                   }}
