@@ -91,6 +91,71 @@ export const UMLDiagramConnectBanner: FC<UMLDiagramConnectBannerProps> = ({
   </div>
 );
 
+export interface UMLDiagramSelectionCountBannerProps {
+  count: number;
+}
+
+/** Shown instead of the class edit panel while several classes are selected. */
+export const UMLDiagramSelectionCountBanner: FC<UMLDiagramSelectionCountBannerProps> = ({
+  count,
+}) => (
+  <div
+    data-uml-selection-count
+    role="status"
+    style={{
+      position: 'absolute',
+      bottom: 14,
+      left: '50%',
+      transform: 'translateX(-50%)',
+      zIndex: 32,
+      padding: '6px 14px',
+      borderRadius: 10,
+      background: UML.surface,
+      border: `1px solid ${UML.primaryBorder}`,
+      color: UML.ink,
+      fontSize: 11,
+      fontWeight: 600,
+      fontFamily: UML.fontSans,
+      boxShadow: `0 4px 14px ${UML.primaryRing}`,
+      pointerEvents: 'none',
+      textAlign: 'center',
+    }}
+  >
+    {count} classes selected
+  </div>
+);
+
+export interface UMLDiagramSelectionBoxProps {
+  left: number;
+  top: number;
+  width: number;
+  height: number;
+}
+
+/** Rectangle drawn while dragging on the empty canvas to select classes. */
+export const UMLDiagramSelectionBox: FC<UMLDiagramSelectionBoxProps> = ({
+  left,
+  top,
+  width,
+  height,
+}) => (
+  <div
+    data-uml-selection-box
+    style={{
+      position: 'absolute',
+      left,
+      top,
+      width,
+      height,
+      zIndex: 33,
+      border: `1px solid ${UML.primary}`,
+      background: UML.primaryRing,
+      borderRadius: 2,
+      pointerEvents: 'none',
+    }}
+  />
+);
+
 export interface UMLDiagramSaveMessageBannerProps {
   message: string;
 }

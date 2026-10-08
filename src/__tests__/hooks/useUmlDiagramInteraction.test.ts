@@ -312,6 +312,36 @@ describe('useUmlDiagramInteraction', () => {
     expect(deleteClass).toHaveBeenCalledWith('class-a');
   });
 
+  it('toggles classes with an additive click and deletes several classes at once', () => {
+    const toggleClassSelection = jest.fn();
+    const deleteClass = jest.fn();
+    const deleteClasses = jest.fn();
+    const options = makeOptions({ deleteClass });
+    const { result } = renderHook(() => useUmlDiagramInteraction({
+      ...options,
+      relationships: [],
+      selectedClassId: null,
+      setSelectedClassId: jest.fn(),
+      selectedClassIds: ['class-a', 'class-b'],
+      toggleClassSelection,
+      selectedRelationshipId: null,
+      setSelectedRelationshipId: jest.fn(),
+      connectMode: false,
+      setConnectMode: jest.fn(),
+      connectSourceId: null,
+      setConnectSourceId: jest.fn(),
+      editActive: false,
+      deleteClasses,
+    }));
+
+    act(() => result.current.handleClassSelect('class-c', true));
+    expect(toggleClassSelection).toHaveBeenCalledWith('class-c');
+
+    act(() => result.current.handleDeleteSelected());
+    expect(deleteClasses).toHaveBeenCalledWith(['class-a', 'class-b']);
+    expect(deleteClass).not.toHaveBeenCalled();
+  });
+
   it('clears exactly one Escape layer in priority order', () => {
     const cancelEdit = jest.fn();
     const { result } = renderInteraction({

@@ -25,7 +25,11 @@ import {
 const MAX_ZOOM = 3;
 const MIN_ZOOM = 0.35;
 const TOOLBAR_ZOOM_FACTOR = 1.3;
-const WHEEL_ZOOM_FACTOR = 0.88;
+/** Zoom change per wheel pixel; a trackpad pinch sends many small deltas. */
+const WHEEL_ZOOM_SENSITIVITY = 0.01;
+/** Caps one mouse-wheel notch to roughly the previous 12% zoom step. */
+const MAX_WHEEL_ZOOM_DELTA = 12;
+const WHEEL_LINE_HEIGHT_PX = 16;
 const FIT_VIEW_PADDING = 48;
 const INITIAL_FIT_DELAY_MS = 120;
 const LAYOUT_SAVE_DEBOUNCE_MS = 300;
@@ -37,8 +41,25 @@ export interface UseUmlDiagramViewportOptions {
   fileName?: string;
   layoutScopeId: string;
   onBeforePan: () => void;
-  isPanBlocked: () => boolean;
+  /** Return true when this mouse-down should not pan (e.g. it starts a selection box). */
+  isPanBlocked: (event: MouseEvent) => boolean;
   isPanTarget: (target: EventTarget | null) => boolean;
+  /** Return false for areas that scroll themselves (e.g. edit panels). Defaults to everywhere. */
+  isWheelTarget?: (target: EventTarget | null) => boolean;
+}
+
+/** Wheel delta in pixels; Shift+wheel on a mouse scrolls horizontally. */
+function getWheelDeltaPx(
+  event: WheelEvent,
+  pageHeight: number,
+): { deltaX: number; deltaY: number } {
+  let unit = 1;
+  if (event.deltaMode === 1) unit = WHEEL_LINE_HEIGHT_PX;
+  else if (event.deltaMode === 2) unit = pageHeight;
+  const deltaX = event.deltaX * unit;
+  const deltaY = event.deltaY * unit;
+  if (event.shiftKey && deltaX === 0) return { deltaX: deltaY, deltaY: 0 };
+  return { deltaX, deltaY };
 }
 
 export interface UseUmlDiagramViewportResult {
@@ -74,6 +95,7 @@ export function useUmlDiagramViewport({
   onBeforePan,
   isPanBlocked,
   isPanTarget,
+  isWheelTarget,
 }: UseUmlDiagramViewportOptions): UseUmlDiagramViewportResult {
   const [vx, setVx] = useState(0);
   const [vy, setVy] = useState(0);
@@ -293,18 +315,33 @@ export function useUmlDiagramViewport({
     viewRef.current = { x: vx, y: vy, scale: vscale };
   }, [vx, vy, vscale]);
 
+  // Two-finger scroll / mouse wheel pans; pinch (sent as Ctrl+wheel) and
+  // Cmd/Ctrl+wheel zoom around the pointer, like Figma.
   useEffect(() => {
     const element = containerRef.current;
     if (!element) return;
     const handleWheel = (event: WheelEvent) => {
+      if (isWheelTarget && !isWheelTarget(event.target)) return;
       event.preventDefault();
-      const rect = element.getBoundingClientRect();
+      const { deltaX, deltaY } = getWheelDeltaPx(event, element.clientHeight);
       const { x, y, scale } = viewRef.current;
+      if (!event.ctrlKey && !event.metaKey) {
+        const nextX = x - deltaX;
+        const nextY = y - deltaY;
+        viewRef.current = { x: nextX, y: nextY, scale };
+        setVx(nextX);
+        setVy(nextY);
+        scheduleDebouncedViewportSave();
+        return;
+      }
+      const rect = element.getBoundingClientRect();
       const mouseX = event.clientX - rect.left;
       const mouseY = event.clientY - rect.top;
-      const factor = event.deltaY > 0
-        ? WHEEL_ZOOM_FACTOR
-        : 1 / WHEEL_ZOOM_FACTOR;
+      const zoomDelta = Math.max(
+        -MAX_WHEEL_ZOOM_DELTA,
+        Math.min(MAX_WHEEL_ZOOM_DELTA, deltaY),
+      );
+      const factor = Math.exp(-zoomDelta * WHEEL_ZOOM_SENSITIVITY);
       const nextScale = Math.max(
         MIN_ZOOM,
         Math.min(MAX_ZOOM, scale * factor),
@@ -320,11 +357,13 @@ export function useUmlDiagramViewport({
     };
     element.addEventListener('wheel', handleWheel, { passive: false });
     return () => element.removeEventListener('wheel', handleWheel);
-  }, [scheduleDebouncedViewportSave]);
+    // classes.length: the canvas element only exists once the diagram has
+    // classes, so the listener is attached again when it appears.
+  }, [classes.length, isWheelTarget, scheduleDebouncedViewportSave]);
 
   const handlePanStart = useCallback((event: MouseEvent) => {
     onBeforePan();
-    if (isPanBlocked()) return;
+    if (isPanBlocked(event)) return;
     if (!isPanTarget(event.target)) return;
     event.preventDefault();
     setPanning(true);
