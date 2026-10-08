@@ -12,3 +12,9 @@ export const GENMODEL_ANNOTATION_SOURCE = `${HTTP_SCHEME}//www.eclipse.org/emf/2
 
 /** W3C XML Schema instance namespace. */
 export const XSI_XML_NAMESPACE = `${HTTP_SCHEME}//www.w3.org/2001/XMLSchema-instance`;
+
+/**
+ * Base of the nsURI given to a meta model created from scratch. example.org is reserved for
+ * examples (RFC 2606), so the generated URI cannot clash with a real namespace.
+ */
+export const NEW_META_MODEL_NS_URI_BASE = `${HTTP_SCHEME}//www.example.org/`;

@@ -266,7 +266,7 @@ Exclusive to `/login` and `/verify-otp`. Do not replicate this style elsewhere.
 
 ### Buttons
 
-**`{component.button-cta-dark}`** — Page-level "create" or "upload" action. `background: {colors.cta-dark}` (#0B1720), white text, `border-radius: 9px`, 14px/600, `padding: 9px 18px`. Shadow: `0 1px 4px rgba(11,23,32,0.25)`. Hover: slightly lightens. Use for: "Upload model", "New project", "Add member".
+**`{component.button-cta-dark}`** — Page-level "create" or "upload" action. `background: {colors.cta-dark}` (#0B1720), white text, `border-radius: 9px`, 14px/600, `padding: 9px 18px`. Shadow: `0 1px 4px rgba(11,23,32,0.25)`. Hover: slightly lightens. Use for: "Add model", "New project", "Add member".
 
 **`{component.button-primary-teal}`** — Form-submit and modal confirm. `linear-gradient(135deg, #049484, #037368)`, white text, `border-radius: 8px`, 14px/700, `padding: 12px 28px`. Shadow: `0 2px 8px rgba(4,148,132,0.25)`. Hover: `translateY(-1px)`. Use for: Change Password submit, modal save actions.
 
