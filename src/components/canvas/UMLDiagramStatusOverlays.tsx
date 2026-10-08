@@ -99,9 +99,8 @@ export interface UMLDiagramSelectionCountBannerProps {
 export const UMLDiagramSelectionCountBanner: FC<UMLDiagramSelectionCountBannerProps> = ({
   count,
 }) => (
-  <div
+  <output
     data-uml-selection-count
-    role="status"
     style={{
       position: 'absolute',
       bottom: 14,
@@ -122,7 +121,7 @@ export const UMLDiagramSelectionCountBanner: FC<UMLDiagramSelectionCountBannerPr
     }}
   >
     {count} classes selected
-  </div>
+  </output>
 );
 
 export interface UMLDiagramSelectionBoxProps {
