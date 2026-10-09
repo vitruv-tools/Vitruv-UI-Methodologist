@@ -20,6 +20,7 @@ import {
   UML_CLASS_STEREOTYPE_SECTION_HEIGHT,
 } from './umlDiagramClassMetrics';
 import { handleUmlInlineEditKeyDown } from './umlDiagramKeyboardUtils';
+import { isAdditiveSelectionEvent } from './umlClassSelection';
 import { UML } from './umlDiagramTheme';
 import type {
   UmlDiagramClass,
@@ -33,6 +34,8 @@ type ClassBoxDragPointRef = RefObject<{
   oy: number;
 } | null>;
 type ClassBoxDidDragRef = RefObject<boolean>;
+/** `additive` is true for Shift/Cmd+click, which adds to or removes from the selection. */
+type ClassBoxSelectHandler = (additive?: boolean) => void;
 
 function isClassBoxEditing(
   edit: UmlDiagramEditState | null,
@@ -178,14 +181,14 @@ function handleClassBoxKeyDown(
 function handleClassBoxSelectClick(
   event: React.MouseEvent,
   didDragRef: ClassBoxDidDragRef,
-  onSelect: () => void,
+  onSelect: ClassBoxSelectHandler,
 ): void {
   event.stopPropagation();
   if (didDragRef.current) {
     didDragRef.current = false;
     return;
   }
-  onSelect();
+  onSelect(isAdditiveSelectionEvent(event));
 }
 
 function getClassBoxInteractionProps(params: {
@@ -194,7 +197,7 @@ function getClassBoxInteractionProps(params: {
   boxAriaLabel: string;
   didDragRef: ClassBoxDidDragRef;
   onBoxMouseDown: (event: React.MouseEvent) => void;
-  onSelect: () => void;
+  onSelect: ClassBoxSelectHandler;
 }): Pick<
   React.HTMLAttributes<HTMLDivElement>,
   | 'role'
@@ -295,7 +298,7 @@ function handleClassBoxNameSectionClick(
     edit: UmlDiagramEditState | null;
     classId: string;
     didDragRef: ClassBoxDidDragRef;
-    onSelect: () => void;
+    onSelect: ClassBoxSelectHandler;
     onStartEditName: () => void;
   },
 ): void {
@@ -305,6 +308,10 @@ function handleClassBoxNameSectionClick(
     return;
   }
   if (!params.interactive) return;
+  if (isAdditiveSelectionEvent(event)) {
+    params.onSelect(true);
+    return;
+  }
   if (!params.selected) {
     params.onSelect();
     return;
@@ -320,7 +327,7 @@ function getClassBoxNameSectionInteractionProps(params: {
   edit: UmlDiagramEditState | null;
   classId: string;
   didDragRef: ClassBoxDidDragRef;
-  onSelect: () => void;
+  onSelect: ClassBoxSelectHandler;
   onStartEditName: () => void;
 }): Pick<
   React.ButtonHTMLAttributes<HTMLButtonElement>,
@@ -421,10 +428,11 @@ interface ClassBoxNameSectionProps {
   edit: UmlDiagramEditState | null;
   interactive: boolean;
   selected: boolean;
+  multiSelected: boolean;
   isEditingName: boolean;
   nameSectionH: number;
   didDragRef: ClassBoxDidDragRef;
-  onSelect: () => void;
+  onSelect: ClassBoxSelectHandler;
   onStartEditName: () => void;
   onSaveName: (name: string) => void;
   onCancelEdit: () => void;
@@ -436,6 +444,7 @@ const ClassBoxNameSection = ({
   edit,
   interactive,
   selected,
+  multiSelected,
   isEditingName,
   nameSectionH,
   didDragRef,
@@ -445,6 +454,9 @@ const ClassBoxNameSection = ({
   onCancelEdit,
   onEditChange,
 }: ClassBoxNameSectionProps) => {
+  // Clicking the name of the only selected class edits it; when several
+  // classes are selected, a click first narrows the selection to this class.
+  const nameEditable = selected && !multiSelected;
   const isAbstractOrIface = cls.isAbstract || cls.isInterface;
   const isEditingThisName = edit?.kind === 'name' && edit.classId === cls.id;
   const stereotypeLabel = cls.isInterface ? 'interface' : 'abstract';
@@ -459,10 +471,10 @@ const ClassBoxNameSection = ({
     nameSectionBackground,
     nameSectionPadding,
   );
-  const nameSectionAriaLabel = getClassBoxNameSectionAriaLabel(cls, selected);
+  const nameSectionAriaLabel = getClassBoxNameSectionAriaLabel(cls, nameEditable);
   const nameSectionInteractionProps = getClassBoxNameSectionInteractionProps({
     interactive,
-    selected,
+    selected: nameEditable,
     edit,
     classId: cls.id,
     didDragRef,
@@ -570,10 +582,13 @@ export interface UMLClassBoxProps {
   offsetY: number;
   scale: number;
   selected: boolean;
+  /** True when this class is selected together with other classes. */
+  multiSelected?: boolean;
   connectSource: boolean;
   interactive: boolean;
   edit: UmlDiagramEditState | null;
-  onSelect: () => void;
+  /** `additive` is true for Shift/Cmd+click. */
+  onSelect: (additive?: boolean) => void;
   onMove: (id: string, x: number, y: number) => void;
   onDragStart: () => void;
   onDragEnd: () => void;
@@ -610,6 +625,7 @@ export const UMLClassBox = ({
   offsetY,
   scale,
   selected,
+  multiSelected = false,
   connectSource,
   interactive,
   edit,
@@ -713,6 +729,7 @@ export const UMLClassBox = ({
           edit={edit}
           interactive={interactive}
           selected={selected}
+          multiSelected={multiSelected}
           isEditingName={isEditingName}
           nameSectionH={nameSectionH}
           didDragRef={didDragRef}

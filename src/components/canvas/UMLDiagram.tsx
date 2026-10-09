@@ -19,32 +19,47 @@ import {
   UMLDiagramConnectBanner,
   UMLDiagramEmptyState,
   UMLDiagramSaveMessageBanner,
+  UMLDiagramSelectionBox,
+  UMLDiagramSelectionCountBanner,
   UMLDiagramValidationBanner,
 } from './UMLDiagramStatusOverlays';
 import { ClassEditPanel, RelationshipEditPanel } from './UMLDiagramEditPanels';
 import { UMLClassBox } from './UMLClassBox';
+import { applyClassSelectionUpdate, toggleClassInSelection } from './umlClassSelection';
 import {
   UMLRelationshipBaseLayer,
   UMLRelationshipOverlayLayers,
 } from './UMLRelationshipLayers';
 import type { UmlDiagramClass } from './umlDiagramTypes';
 import {
+  getUmlClassBoxHeight,
   type UmlDiagramRelationshipLayout,
 } from './umlDiagramLayoutGeometry';
+import { UML_CLASS_BOX_WIDTH } from './umlDiagramClassMetrics';
 import { useUmlDiagramViewport } from '../../hooks/useUmlDiagramViewport';
 import { useUmlRelationshipLayers } from '../../hooks/useUmlRelationshipLayers';
 import { useUmlDiagramPrimaryEditing } from '../../hooks/useUmlDiagramPrimaryEditing';
 import { useUmlDiagramInteraction } from '../../hooks/useUmlDiagramInteraction';
+import { useUmlSelectionBox } from '../../hooks/useUmlSelectionBox';
 
 export { WORKSPACE_DOT_BACKGROUND };
 
 // ── helpers ──────────────────────────────────────────────────────────────────
+
+/** Scrolling over an edit panel or banner scrolls it instead of moving the canvas. */
+function isCanvasWheelTarget(target: EventTarget | null): boolean {
+  if (!(target instanceof Element)) return true;
+  return !target.closest(
+    '[data-class-edit-panel], [data-rel-edit-panel], [data-uml-validation], [data-uml-toolbar]',
+  );
+}
 
 function isEmptyCanvasTarget(target: HTMLElement): boolean {
   return !target.closest('[data-classbox]')
     && !target.closest('[data-rel-hit-line]')
     && !target.closest('[data-rel-direction-marker]')
     && !target.closest('[data-uml-toolbar]')
+    && !target.closest('[data-uml-minimap]')
     && !target.closest('[data-rel-edit-panel]')
     && !target.closest('[data-class-edit-panel]')
     && !target.closest('[data-uml-connect-banner]')
@@ -157,23 +172,33 @@ const rels = useMemo(
   () => assignParallelRelMeta(relationships) as UmlDiagramRelationshipLayout[],
   [relationships],
 );
-  const [selectedClassId, setSelectedClassId] = useState<string | null>(null);
+  const [selectedClassIds, setSelectedClassIds] = useState<string[]>([]);
+  const selectedClassIdsRef = useRef(selectedClassIds);
+  selectedClassIdsRef.current = selectedClassIds;
+  // The edit panel and inline editing work on a single class, so they only
+  // see a selected class when exactly one class is selected.
+  const selectedClassId = selectedClassIds.length === 1 ? selectedClassIds[0] : null;
   const [selectedRelId, setSelectedRelId] = useState<string | null>(null);
   // Only one edit panel is open at a time: selecting a class closes the
   // relationship panel and vice versa. Updater functions only remap or clear
   // the current selection, so they never close the other panel.
   const selectClass = useCallback((next: React.SetStateAction<string | null>) => {
-    setSelectedClassId(next);
+    setSelectedClassIds(previousIds => applyClassSelectionUpdate(previousIds, next));
     if (typeof next === 'string') setSelectedRelId(null);
   }, []);
+  const toggleClassSelection = useCallback((classId: string) => {
+    setSelectedClassIds(previousIds => toggleClassInSelection(previousIds, classId));
+    setSelectedRelId(null);
+  }, []);
+  const getSelectedClassIds = useCallback(() => selectedClassIdsRef.current, []);
   const selectRelationship = useCallback((next: React.SetStateAction<string | null>) => {
     setSelectedRelId(next);
-    if (typeof next === 'string') setSelectedClassId(null);
+    if (typeof next === 'string') setSelectedClassIds([]);
   }, []);
   const [connectMode, setConnectMode] = useState(false);
   const [connectSourceId, setConnectSourceId] = useState<string | null>(null);
   const resetInteractionState = useCallback(() => {
-    setSelectedClassId(null);
+    setSelectedClassIds([]);
     setSelectedRelId(null);
     setConnectMode(false);
     setConnectSourceId(null);
@@ -286,8 +311,13 @@ const rels = useMemo(
   const handleBeforeCanvasPan = useCallback(() => {
     flushPendingEditRef.current();
   }, []);
+  // A selection box starts on the same left-button drag, so when editing the
+  // canvas only pans with the middle mouse button (or two-finger scroll).
+  const selectionBoxEnabled = interactive && !connectMode;
+  const selectionBoxEnabledRef = useRef(selectionBoxEnabled);
+  selectionBoxEnabledRef.current = selectionBoxEnabled;
   const isCanvasPanBlocked = useCallback(
-    () => false,
+    (event: MouseEvent) => selectionBoxEnabledRef.current && event.button !== 1,
     [],
   );
   const isCanvasPanTarget = useCallback(
@@ -304,6 +334,7 @@ const rels = useMemo(
     zoomIn,
     zoomOut,
     fitToView,
+    clientToDiagram,
     handleMinimapPan,
     persistLayout,
     persistViewport,
@@ -319,6 +350,7 @@ const rels = useMemo(
     onBeforePan: handleBeforeCanvasPan,
     isPanBlocked: isCanvasPanBlocked,
     isPanTarget: isCanvasPanTarget,
+    isWheelTarget: isCanvasWheelTarget,
   });
   persistViewportLayoutRef.current = persistLayout;
 
@@ -339,6 +371,7 @@ const rels = useMemo(
     deleteOperation: deleteOp,
     addClass,
     deleteClass,
+    deleteClasses,
     updateClass,
     getInheritanceParentId,
     setInheritanceParent,
@@ -360,6 +393,7 @@ const rels = useMemo(
     containerRef,
     getCurrentViewport,
     getCurrentLayoutOffset,
+    getSelectedClassIds,
   });
   flushPendingEditRef.current = flushPendingEdit;
   cancelPrimaryEditRef.current = cancelEdit;
@@ -379,6 +413,8 @@ const rels = useMemo(
     relationships,
     selectedClassId,
     setSelectedClassId: selectClass,
+    selectedClassIds,
+    toggleClassSelection,
     selectedRelationshipId: selectedRelId,
     setSelectedRelationshipId: selectRelationship,
     connectMode,
@@ -392,8 +428,53 @@ const rels = useMemo(
     updateRelationship,
     deleteRelationship,
     deleteClass,
+    deleteClasses,
     handleUndo,
     handleRedo,
+  });
+
+  // ── selection box ──────────────────────────────────────────────────────────
+  const getSelectableClassRects = useCallback(() => {
+    const { offsetX: layoutOffsetX, offsetY: layoutOffsetY } = getCurrentLayoutOffset();
+    return classesRef.current.map(classItem => {
+      const left = classItem.x + layoutOffsetX;
+      const top = classItem.y + layoutOffsetY;
+      return {
+        id: classItem.id,
+        left,
+        top,
+        right: left + UML_CLASS_BOX_WIDTH,
+        bottom: top + getUmlClassBoxHeight(classItem),
+      };
+    });
+  }, [getCurrentLayoutOffset]);
+  const handleSelectionBoxStart = useCallback((additive: boolean) => {
+    flushPendingEdit();
+    if (additive) return;
+    // A press on the empty canvas deselects everything, like in Figma.
+    cancelEdit();
+    setSelectedClassIds([]);
+    setSelectedRelId(null);
+  }, [cancelEdit, flushPendingEdit]);
+  const handleSelectionBoxChange = useCallback((classIds: string[]) => {
+    setSelectedClassIds(previousIds => (
+      previousIds.length === classIds.length
+        && previousIds.every((id, index) => id === classIds[index])
+        ? previousIds
+        : classIds
+    ));
+    if (classIds.length > 0) setSelectedRelId(null);
+  }, []);
+  const { selectionBox } = useUmlSelectionBox({
+    containerRef,
+    enabled: selectionBoxEnabled,
+    classCount: classes.length,
+    isStartTarget: isCanvasPanTarget,
+    clientToDiagram,
+    getClassRects: getSelectableClassRects,
+    getSelectedClassIds,
+    onStart: handleSelectionBoxStart,
+    onSelectionChange: handleSelectionBoxChange,
   });
 
   const hasSemanticChanges = useCallback(() => {
@@ -533,7 +614,8 @@ const rels = useMemo(
     return <UMLDiagramEmptyState interactive={interactive} onAddClass={addClass} />;
   }
 
-  const canDelete = !!(selectedRelId || selectedClassId);
+  const canDelete = Boolean(selectedRelId) || selectedClassIds.length > 0;
+  const multipleClassesSelected = selectedClassIds.length > 1;
   const selectedRel = selectedRelId ? relationships.find(r => r.id === selectedRelId) : null;
   const selectedClass = selectedClassId ? classes.find(c => c.id === selectedClassId) : null;
   const hasUnsavedChanges = isDirty();
@@ -580,11 +662,12 @@ const rels = useMemo(
           offsetX={offsetX}
           offsetY={offsetY}
           scale={vscale}
-          selected={selectedClassId === cls.id}
+          selected={selectedClassIds.includes(cls.id)}
+          multiSelected={multipleClassesSelected && selectedClassIds.includes(cls.id)}
           connectSource={connectSourceId === cls.id}
           interactive={interactive}
           edit={edit?.classId === cls.id ? edit : null}
-          onSelect={() => handleClassSelect(cls.id)}
+          onSelect={additive => handleClassSelect(cls.id, additive)}
           onDragStart={beginClassDrag}
           onMove={moveClass}
           onDragEnd={finishClassDrag}
@@ -647,7 +730,11 @@ const rels = useMemo(
           onSave={() => { void handleSave(); }}
         />
       )}
+      {selectionBox && <UMLDiagramSelectionBox {...selectionBox} />}
       {saveMessage && <UMLDiagramSaveMessageBanner message={saveMessage} />}
+      {interactive && multipleClassesSelected && (
+        <UMLDiagramSelectionCountBanner count={selectedClassIds.length} />
+      )}
       {interactive && validationIssues.length > 0 && (
         <UMLDiagramValidationBanner
           issues={validationIssues}
@@ -663,7 +750,7 @@ const rels = useMemo(
           onUpdate={patch => updateClass(selectedClass.id, patch)}
           onSetParent={parentId => setInheritanceParent(selectedClass.id, parentId)}
           onDelete={() => deleteClass(selectedClass.id)}
-          onClose={() => setSelectedClassId(null)}
+          onClose={() => setSelectedClassIds([])}
         />
       )}
       {interactive && selectedRel && (

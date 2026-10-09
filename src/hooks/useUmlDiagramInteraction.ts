@@ -1,6 +1,7 @@
 import {
   useCallback,
   useEffect,
+  useMemo,
   useRef,
   type Dispatch,
   type MouseEvent as ReactMouseEvent,
@@ -39,6 +40,10 @@ export interface UseUmlDiagramInteractionOptions {
   relationships: UMLRelationship[];
   selectedClassId: string | null;
   setSelectedClassId: NullableIdSetter;
+  /** All selected classes. Defaults to `selectedClassId` when omitted. */
+  selectedClassIds?: string[];
+  /** Adds a class to the selection or removes it (Shift/Cmd+click). */
+  toggleClassSelection?: (classId: string) => void;
   selectedRelationshipId: string | null;
   setSelectedRelationshipId: NullableIdSetter;
   connectMode: boolean;
@@ -55,13 +60,16 @@ export interface UseUmlDiagramInteractionOptions {
   ) => void;
   deleteRelationship: (relationshipId: string) => void;
   deleteClass: (classId: string) => void;
+  /** Deletes several selected classes as one undo step. */
+  deleteClasses?: (classIds: string[]) => void;
   handleUndo: () => void;
   handleRedo: () => void;
 }
 
 export interface UseUmlDiagramInteractionResult {
   handleToggleConnect: () => void;
-  handleClassSelect: (classId: string) => void;
+  /** `additive` (Shift/Cmd+click) adds the class to the selection or removes it. */
+  handleClassSelect: (classId: string, additive?: boolean) => void;
   handleRelationshipClick: (
     relationshipId: string,
     event: ReactMouseEvent,
@@ -79,6 +87,8 @@ export function useUmlDiagramInteraction({
   relationships,
   selectedClassId,
   setSelectedClassId,
+  selectedClassIds,
+  toggleClassSelection,
   selectedRelationshipId,
   setSelectedRelationshipId,
   connectMode,
@@ -92,11 +102,16 @@ export function useUmlDiagramInteraction({
   updateRelationship,
   deleteRelationship,
   deleteClass,
+  deleteClasses,
   handleUndo,
   handleRedo,
 }: UseUmlDiagramInteractionOptions): UseUmlDiagramInteractionResult {
   const relationshipsRef = useRef(relationships);
   relationshipsRef.current = relationships;
+  const selectedIds = useMemo(
+    () => selectedClassIds ?? (selectedClassId ? [selectedClassId] : []),
+    [selectedClassId, selectedClassIds],
+  );
 
   const handleToggleConnect = useCallback(() => {
     setConnectMode(value => !value);
@@ -154,7 +169,7 @@ export function useUmlDiagramInteraction({
       setSelectedRelationshipId(null);
       return true;
     }
-    if (selectedClassId) {
+    if (selectedIds.length > 0) {
       dismissClassSelection();
       return true;
     }
@@ -165,7 +180,7 @@ export function useUmlDiagramInteraction({
     connectSourceId,
     dismissClassSelection,
     editActive,
-    selectedClassId,
+    selectedIds,
     selectedRelationshipId,
     setConnectMode,
     setConnectSourceId,
@@ -184,9 +199,13 @@ export function useUmlDiagramInteraction({
     setSelectedRelationshipId(relationshipId);
   }, [interactive, cycleRelationshipType, flushPendingEdit, setSelectedRelationshipId]);
 
-  const handleClassSelect = useCallback((classId: string) => {
+  const handleClassSelect = useCallback((classId: string, additive = false) => {
     if (!interactive) return;
     flushPendingEdit();
+    if (additive && !connectMode && toggleClassSelection) {
+      toggleClassSelection(classId);
+      return;
+    }
     if (connectMode) {
       if (!connectSourceId) {
         setConnectSourceId(classId);
@@ -215,6 +234,7 @@ export function useUmlDiagramInteraction({
     setConnectMode,
     setConnectSourceId,
     setSelectedClassId,
+    toggleClassSelection,
   ]);
 
   const handleDeleteSelected = useCallback(() => {
@@ -222,13 +242,19 @@ export function useUmlDiagramInteraction({
       deleteRelationship(selectedRelationshipId);
       return;
     }
-    if (selectedClassId) {
-      deleteClass(selectedClassId);
+    if (selectedIds.length === 1) {
+      deleteClass(selectedIds[0]);
+      return;
+    }
+    if (selectedIds.length > 1) {
+      if (deleteClasses) deleteClasses(selectedIds);
+      else selectedIds.forEach(classId => deleteClass(classId));
     }
   }, [
     deleteClass,
+    deleteClasses,
     deleteRelationship,
-    selectedClassId,
+    selectedIds,
     selectedRelationshipId,
   ]);
 
@@ -243,7 +269,7 @@ export function useUmlDiagramInteraction({
         event,
         inField,
         selectedRelationshipId,
-        selectedClassId,
+        selectedIds[0] ?? null,
         handleDeleteSelected,
       );
     };
@@ -254,7 +280,7 @@ export function useUmlDiagramInteraction({
     handleRedo,
     handleUndo,
     interactive,
-    selectedClassId,
+    selectedIds,
     selectedRelationshipId,
     tryEscape,
   ]);
