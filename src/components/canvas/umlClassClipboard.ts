@@ -51,8 +51,13 @@ function isClassNameTaken(
   return takenNames.has(name.toLowerCase()) || takenIds.has(sanitizeUmlClassId(name));
 }
 
+/** Matches the suffix added by {@link nextCopyClassName}: `_copy`, `_copy2`, … */
+const COPY_SUFFIX = /_copy\d*$/;
+
 /**
  * Returns `Person_copy`, `Person_copy2`, … (the first one not taken).
+ * Copying a copy continues the numbering (`Person_copy` → `Person_copy2`)
+ * instead of stacking suffixes (`Person_copy_copy`).
  * Class names are compared case-insensitively, like the diagram validation does.
  */
 export function nextCopyClassName(
@@ -61,7 +66,8 @@ export function nextCopyClassName(
   takenIds: ReadonlySet<string>,
 ): string {
   const isTaken = (candidate: string) => isClassNameTaken(candidate, takenNames, takenIds);
-  return nextFreeName(`${name}_copy`, isTaken);
+  const originalName = name.replace(COPY_SUFFIX, '') || name;
+  return nextFreeName(`${originalName}_copy`, isTaken);
 }
 
 /** `base`, then `base2`, `base3`, … until one is not taken. */

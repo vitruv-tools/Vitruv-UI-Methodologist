@@ -497,7 +497,7 @@ const rels = useMemo(
     const { offsetX: layoutOffsetX, offsetY: layoutOffsetY } = getCurrentLayoutOffset();
     return { x: point.x - layoutOffsetX, y: point.y - layoutOffsetY };
   }, [clientToDiagram, getCurrentLayoutOffset]);
-  const { duplicateSelection } = useUmlClassClipboard({
+  useUmlClassClipboard({
     interactive,
     containerRef,
     classCount: classes.length,
@@ -783,7 +783,6 @@ const rels = useMemo(
           parentId={getInheritanceParentId(selectedClass.id)}
           onUpdate={patch => updateClass(selectedClass.id, patch)}
           onSetParent={parentId => setInheritanceParent(selectedClass.id, parentId)}
-          onDuplicate={() => { duplicateSelection(); }}
           onDelete={() => deleteClass(selectedClass.id)}
           onClose={() => setSelectedClassIds([])}
         />

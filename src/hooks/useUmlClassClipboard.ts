@@ -49,8 +49,8 @@ export interface UseUmlClassClipboardResult {
   /** Pastes the clipboard at the spot last clicked in this diagram. */
   pasteClipboard: () => boolean;
   /**
-   * Copies and pastes the selected classes in one step, slightly offset from
-   * the originals; the clipboard is unchanged.
+   * Copies and pastes the selected classes in one step (Ctrl/Cmd+D), slightly
+   * offset from the originals; the clipboard is unchanged.
    */
   duplicateSelection: () => boolean;
 }
@@ -161,16 +161,15 @@ export function useUmlClassClipboard({
     if (!interactive) return;
     const onKeyDown = (event: KeyboardEvent) => {
       if (!isActiveUmlEditor(editorId)) return;
-      tryHandleClipboardShortcut(
-        event,
-        isKeyboardInputField(event.target),
-        copySelection,
-        pasteClipboard,
-      );
+      tryHandleClipboardShortcut(event, isKeyboardInputField(event.target), {
+        onCopy: copySelection,
+        onPaste: pasteClipboard,
+        onDuplicate: duplicateSelection,
+      });
     };
     globalThis.addEventListener('keydown', onKeyDown);
     return () => globalThis.removeEventListener('keydown', onKeyDown);
-  }, [copySelection, editorId, interactive, pasteClipboard]);
+  }, [copySelection, duplicateSelection, editorId, interactive, pasteClipboard]);
 
   return { copySelection, pasteClipboard, duplicateSelection };
 }

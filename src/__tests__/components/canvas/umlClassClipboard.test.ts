@@ -108,6 +108,19 @@ describe('nextCopyClassName', () => {
     )).toBe('Person_copy3');
   });
 
+  it('continues the numbering when a copy is copied again', () => {
+    expect(nextCopyClassName(
+      'Person_copy',
+      new Set(['person', 'person_copy']),
+      new Set(),
+    )).toBe('Person_copy2');
+    expect(nextCopyClassName(
+      'Person_copy2',
+      new Set(['person', 'person_copy', 'person_copy2']),
+      new Set(),
+    )).toBe('Person_copy3');
+  });
+
   it('compares names case-insensitively', () => {
     expect(nextCopyClassName('Person', new Set(['person_copy']), new Set())).toBe('Person_copy2');
   });

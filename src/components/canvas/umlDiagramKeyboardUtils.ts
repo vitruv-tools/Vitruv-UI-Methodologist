@@ -73,24 +73,38 @@ function hasTextSelection(): boolean {
   return Boolean(selection && !selection.isCollapsed && selection.toString().length > 0);
 }
 
+export interface UmlClipboardShortcutHandlers {
+  /** Returns false if nothing was copied. */
+  onCopy: () => boolean;
+  /** Returns false if nothing was pasted. */
+  onPaste: () => boolean;
+  onDuplicate: () => void;
+}
+
 /**
- * Ctrl/Cmd+C copies the selected classes, Ctrl/Cmd+V pastes them. Ignored
- * while typing in a field or while page text is selected, so normal text copy
- * and paste keep working. `onCopy`/`onPaste` return false if nothing happened.
+ * Ctrl/Cmd+C copies the selected classes, Ctrl/Cmd+V pastes them and
+ * Ctrl/Cmd+D duplicates them. Ignored while typing in a field, and C is
+ * ignored while page text is selected, so normal text copy and paste keep
+ * working. Ctrl/Cmd+D never opens the browser's bookmark dialog here.
  */
 export function tryHandleClipboardShortcut(
   event: KeyboardEvent,
   inField: boolean,
-  onCopy: () => boolean,
-  onPaste: () => boolean,
+  { onCopy, onPaste, onDuplicate }: UmlClipboardShortcutHandlers,
 ): boolean {
   if (!(event.ctrlKey || event.metaKey) || event.shiftKey || event.altKey || inField) {
     return false;
   }
   const key = event.key.toLowerCase();
   let handled = false;
-  if (key === 'c' && !hasTextSelection()) handled = onCopy();
-  else if (key === 'v') handled = onPaste();
+  if (key === 'c' && !hasTextSelection()) {
+    handled = onCopy();
+  } else if (key === 'v') {
+    handled = onPaste();
+  } else if (key === 'd') {
+    onDuplicate();
+    handled = true;
+  }
   if (handled) event.preventDefault();
   return handled;
 }

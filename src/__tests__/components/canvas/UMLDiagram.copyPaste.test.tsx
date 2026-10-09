@@ -40,6 +40,10 @@ function paste(target: Element | Window = win, modifier: 'ctrlKey' | 'metaKey' =
   return fireEvent.keyDown(target, { key: 'v', [modifier]: true });
 }
 
+function duplicate(target: Element | Window = win, modifier: 'ctrlKey' | 'metaKey' = 'ctrlKey'): boolean {
+  return fireEvent.keyDown(target, { key: 'd', [modifier]: true });
+}
+
 /** Clicks an empty spot of the canvas, which sets where Ctrl/Cmd+V pastes. */
 function clickCanvas(clientX: number, clientY: number) {
   const canvas = screen.getByRole('region', { name: 'UML diagram canvas' });
@@ -281,9 +285,11 @@ describe('UMLDiagram copy and paste', () => {
     );
     paste();
 
-    expect(within(readOnlyContainer).getAllByRole('group', { name: /^UML class/ })).toHaveLength(2);
+    fireEvent.mouseDown(classBox('Order', readOnlyContainer));
     fireEvent.click(classBox('Order', readOnlyContainer));
-    expect(within(readOnlyContainer).queryByRole('button', { name: 'Duplicate class' })).not.toBeInTheDocument();
+    duplicate();
+
+    expect(within(readOnlyContainer).getAllByRole('group', { name: /^UML class/ })).toHaveLength(2);
   });
 
   it('pastes only into the editor that was used last', () => {
@@ -302,16 +308,12 @@ describe('UMLDiagram copy and paste', () => {
 });
 
 describe('UMLDiagram duplicate', () => {
-  function duplicateButton(): HTMLElement {
-    return screen.getByRole('button', { name: 'Duplicate class' });
-  }
-
-  it('duplicates a class in one step from the edit panel', () => {
+  it('duplicates a class with Ctrl+D', () => {
     const { model, classIds } = setupDiagram();
     const person = model().classes[0];
 
     fireEvent.click(classBox('Person'));
-    fireEvent.click(duplicateButton());
+    expect(duplicate()).toBe(false);
 
     expect(classIds()).toEqual(['Person', 'Employee', 'Person_copy']);
     expect(model().classes[2]).toEqual(expect.objectContaining({
@@ -327,16 +329,75 @@ describe('UMLDiagram duplicate', () => {
     expect(classIds()).toEqual(['Person', 'Employee']);
   });
 
+  it('numbers repeated duplicates instead of stacking _copy', () => {
+    const { model, classIds } = setupDiagram();
+
+    fireEvent.click(classBox('Person'), { shiftKey: true });
+    fireEvent.click(classBox('Employee'), { shiftKey: true });
+    duplicate();
+    duplicate();
+    duplicate();
+
+    expect(classIds()).toEqual([
+      'Person', 'Employee',
+      'Person_copy', 'Employee_copy',
+      'Person_copy2', 'Employee_copy2',
+      'Person_copy3', 'Employee_copy3',
+    ]);
+    expect(model().relationships.filter(relationship => relationship.sourceId === 'Employee_copy3'))
+      .toEqual([expect.objectContaining({ targetId: 'Person_copy3', type: 'inheritance' })]);
+  });
+
+  it('duplicates several classes and their relationships with Cmd+D', () => {
+    const { model, classIds } = setupDiagram();
+
+    fireEvent.click(classBox('Person'), { shiftKey: true });
+    fireEvent.click(classBox('Employee'), { shiftKey: true });
+    duplicate(win, 'metaKey');
+
+    expect(classIds()).toEqual(['Person', 'Employee', 'Person_copy', 'Employee_copy']);
+    expect(model().relationships.map(relationship => relationship.id)).toEqual(['rel-inherit', 'rel-inherit-copy']);
+    expect(isSelected('Person_copy')).toBe(true);
+    expect(isSelected('Employee_copy')).toBe(true);
+  });
+
   it('does not change what was copied', () => {
     const { classIds } = setupDiagram();
 
     fireEvent.click(classBox('Employee'));
     copy();
     fireEvent.click(classBox('Person'));
-    fireEvent.click(duplicateButton());
+    duplicate();
     paste();
 
     expect(classIds()).toEqual(['Person', 'Employee', 'Person_copy', 'Employee_copy']);
+  });
+
+  it('does nothing without a selection, and does not open the bookmark dialog', () => {
+    const { classIds } = setupDiagram();
+
+    expect(duplicate()).toBe(false);
+
+    expect(classIds()).toEqual(['Person', 'Employee']);
+  });
+
+  it('is ignored while typing in an input field', () => {
+    const { classIds } = setupDiagram();
+
+    fireEvent.click(classBox('Person'));
+    const input = screen.getByLabelText('Class name');
+    input.focus();
+
+    expect(duplicate(input)).toBe(true);
+    expect(classIds()).toEqual(['Person', 'Employee']);
+  });
+
+  it('has no duplicate button in the edit panel', () => {
+    setupDiagram();
+
+    fireEvent.click(classBox('Person'));
+
+    expect(screen.queryByRole('button', { name: /duplicate/i })).not.toBeInTheDocument();
   });
 });
 
