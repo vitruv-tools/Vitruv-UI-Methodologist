@@ -41,6 +41,7 @@ import { useUmlRelationshipLayers } from '../../hooks/useUmlRelationshipLayers';
 import { useUmlDiagramPrimaryEditing } from '../../hooks/useUmlDiagramPrimaryEditing';
 import { useUmlDiagramInteraction } from '../../hooks/useUmlDiagramInteraction';
 import { useUmlSelectionBox } from '../../hooks/useUmlSelectionBox';
+import { useUmlClassClipboard } from '../../hooks/useUmlClassClipboard';
 
 export { WORKSPACE_DOT_BACKGROUND };
 
@@ -64,6 +65,15 @@ function isEmptyCanvasTarget(target: HTMLElement): boolean {
     && !target.closest('[data-class-edit-panel]')
     && !target.closest('[data-uml-connect-banner]')
     && !target.closest('[data-uml-validation]');
+}
+
+/** Clicks on the diagram itself (canvas, classes, connections) set where Ctrl/Cmd+V pastes. */
+function isPastePositionTarget(target: EventTarget | null): boolean {
+  if (!(target instanceof Element)) return false;
+  return !target.closest(
+    '[data-uml-toolbar], [data-uml-minimap], [data-class-edit-panel], [data-rel-edit-panel], '
+      + '[data-uml-connect-banner], [data-uml-validation]',
+  );
 }
 
 /** `library` persists to the metamodel library API; `workspace` only updates the open project/session copy. */
@@ -191,6 +201,10 @@ const rels = useMemo(
     setSelectedRelId(null);
   }, []);
   const getSelectedClassIds = useCallback(() => selectedClassIdsRef.current, []);
+  const selectClasses = useCallback((classIds: string[]) => {
+    setSelectedClassIds(classIds);
+    setSelectedRelId(null);
+  }, []);
   const selectRelationship = useCallback((next: React.SetStateAction<string | null>) => {
     setSelectedRelId(next);
     if (typeof next === 'string') setSelectedClassIds([]);
@@ -477,6 +491,26 @@ const rels = useMemo(
     onSelectionChange: handleSelectionBoxChange,
   });
 
+  // ── copy / paste / duplicate ───────────────────────────────────────────────
+  const clientToClassPosition = useCallback((clientX: number, clientY: number) => {
+    const point = clientToDiagram(clientX, clientY);
+    const { offsetX: layoutOffsetX, offsetY: layoutOffsetY } = getCurrentLayoutOffset();
+    return { x: point.x - layoutOffsetX, y: point.y - layoutOffsetY };
+  }, [clientToDiagram, getCurrentLayoutOffset]);
+  const { duplicateSelection } = useUmlClassClipboard({
+    interactive,
+    containerRef,
+    classCount: classes.length,
+    getModel,
+    getSelectedClassIds,
+    recordChange,
+    setClasses,
+    setRelationships,
+    selectClasses,
+    clientToClassPosition,
+    isPastePositionTarget,
+  });
+
   const hasSemanticChanges = useCallback(() => {
     return umlSemanticSnapshot(getModel()) !== initialSnapshotRef.current;
   }, [getModel]);
@@ -749,6 +783,7 @@ const rels = useMemo(
           parentId={getInheritanceParentId(selectedClass.id)}
           onUpdate={patch => updateClass(selectedClass.id, patch)}
           onSetParent={parentId => setInheritanceParent(selectedClass.id, parentId)}
+          onDuplicate={() => { duplicateSelection(); }}
           onDelete={() => deleteClass(selectedClass.id)}
           onClose={() => setSelectedClassIds([])}
         />

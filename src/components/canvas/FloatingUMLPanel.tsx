@@ -165,29 +165,10 @@ export const FloatingUMLPanel: React.FC<FloatingUMLPanelProps> = ({
     }
   }, [fetchEcoreFile, onRefresh, onEcoreContentUpdated, isRefreshing, refreshing]);
 
+  // Undo/redo shortcuts are handled by UMLDiagram itself; handling them here
+  // too would undo two steps per Ctrl/Cmd+Z.
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
-      const tag = (e.target as HTMLElement)?.tagName;
-      const inField = tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT';
-      const mod = e.ctrlKey || e.metaKey;
-
-      if (mod && !inField) {
-        const key = e.key.toLowerCase();
-        if (key === 'z') {
-          e.preventDefault();
-          e.stopPropagation();
-          if (e.shiftKey) diagramRef.current?.redo?.();
-          else diagramRef.current?.undo?.();
-          return;
-        }
-        if (key === 'y') {
-          e.preventDefault();
-          e.stopPropagation();
-          diagramRef.current?.redo?.();
-          return;
-        }
-      }
-
       if (e.key === 'Escape') {
         if (diagramRef.current?.tryEscape?.()) {
           e.preventDefault();

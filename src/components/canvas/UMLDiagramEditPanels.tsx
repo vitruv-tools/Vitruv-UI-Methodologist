@@ -184,6 +184,8 @@ export interface ClassEditPanelProps {
     patch: Partial<Pick<UmlDiagramClass, 'name' | 'isAbstract' | 'isInterface' | 'documentation'>>,
   ) => void;
   onSetParent: (parentId: string | null) => void;
+  /** Copies and pastes the class in one step. */
+  onDuplicate?: () => void;
   onDelete: () => void;
   onClose: () => void;
 }
@@ -194,6 +196,7 @@ export const ClassEditPanel = ({
   parentId,
   onUpdate,
   onSetParent,
+  onDuplicate,
   onDelete,
   onClose,
 }: ClassEditPanelProps) => (
@@ -256,6 +259,19 @@ export const ClassEditPanel = ({
         value={cls.documentation}
         onChange={documentation => onUpdate({ documentation })}
       />
+      {onDuplicate && (
+        <button
+          type="button"
+          onClick={onDuplicate}
+          style={{
+            width: '100%', padding: '8px 10px', marginBottom: 8, borderRadius: 8,
+            border: `1px solid ${UML.primaryBorder}`, background: UML.primarySoft, color: UML.primary,
+            fontSize: 12, fontWeight: 600, cursor: 'pointer',
+          }}
+        >
+          Duplicate class
+        </button>
+      )}
       <button
         type="button"
         onClick={onDelete}

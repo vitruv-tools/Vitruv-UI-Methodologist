@@ -67,3 +67,30 @@ export function tryHandleDeleteShortcut(
   event.preventDefault();
   handleDeleteSelected();
 }
+
+function hasTextSelection(): boolean {
+  const selection = globalThis.getSelection?.();
+  return Boolean(selection && !selection.isCollapsed && selection.toString().length > 0);
+}
+
+/**
+ * Ctrl/Cmd+C copies the selected classes, Ctrl/Cmd+V pastes them. Ignored
+ * while typing in a field or while page text is selected, so normal text copy
+ * and paste keep working. `onCopy`/`onPaste` return false if nothing happened.
+ */
+export function tryHandleClipboardShortcut(
+  event: KeyboardEvent,
+  inField: boolean,
+  onCopy: () => boolean,
+  onPaste: () => boolean,
+): boolean {
+  if (!(event.ctrlKey || event.metaKey) || event.shiftKey || event.altKey || inField) {
+    return false;
+  }
+  const key = event.key.toLowerCase();
+  let handled = false;
+  if (key === 'c' && !hasTextSelection()) handled = onCopy();
+  else if (key === 'v') handled = onPaste();
+  if (handled) event.preventDefault();
+  return handled;
+}
