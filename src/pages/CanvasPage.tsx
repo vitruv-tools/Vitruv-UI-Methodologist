@@ -46,6 +46,11 @@ import { UnsavedTabCloseDialog } from '../components/canvas/UnsavedTabCloseDialo
 import { CanvasTabSession, OpenCanvasTab } from '../types/canvasTab';
 import { createCanvasTabInstanceId } from '../utils/canvasTabId';
 import {
+  clearStoredCanvasTabs,
+  readStoredCanvasTabs,
+  writeStoredCanvasTabs,
+} from '../utils/canvasTabsStorage';
+import {
   findMembershipForEmail,
   findVsumOwner,
   sharedByFromOwner,
@@ -418,7 +423,14 @@ export const CanvasPage: React.FC = () => {
     showPopup(message, 'error');
   }, [showPopup]);
 
-  const [openTabs, setOpenTabs] = useState<OpenCanvasTab[]>([]);
+  const tabsStorageUserKey = user?.email ?? user?.id ?? null;
+  // Tabs that were open before a page refresh; each one loads when it is opened.
+  const [openTabs, setOpenTabs] = useState<OpenCanvasTab[]>(() => (
+    readStoredCanvasTabs(tabsStorageUserKey).map(tab => ({
+      ...tab,
+      instanceId: createCanvasTabInstanceId(tab.projectId),
+    }))
+  ));
   const [activeInstanceId, setActiveInstanceId] = useState<string | null>(null);
   const sessionsRef = useRef<Map<string, CanvasTabSession>>(new Map());
   const savedBaselinesRef = useRef<Map<string, WorkspaceSnapshot>>(new Map());
@@ -921,6 +933,26 @@ export const CanvasPage: React.FC = () => {
     return ids;
   // eslint-disable-next-line react-hooks/exhaustive-deps -- dirtyRevision intentionally forces re-evaluation on every 700 ms poll tick
   }, [openTabs, dirtyRevision, isInstanceDirty]);
+
+  // Keep the open tabs across a page refresh. Leaving the project page in the
+  // app forgets them, so opening a project later starts with just that project.
+  useEffect(() => {
+    writeStoredCanvasTabs(tabsStorageUserKey, openTabs);
+  }, [openTabs, tabsStorageUserKey]);
+  useEffect(() => () => clearStoredCanvasTabs(tabsStorageUserKey), [tabsStorageUserKey]);
+
+  // A refresh or closing the page loses unsaved changes, so let the browser ask first.
+  const hasUnsavedChanges = dirtyInstanceIds.size > 0;
+  useEffect(() => {
+    if (!hasUnsavedChanges) return;
+    const warnBeforeUnload = (event: BeforeUnloadEvent) => {
+      event.preventDefault();
+      // Some browsers only show the prompt when returnValue is set.
+      event.returnValue = '';
+    };
+    globalThis.addEventListener('beforeunload', warnBeforeUnload);
+    return () => globalThis.removeEventListener('beforeunload', warnBeforeUnload);
+  }, [hasUnsavedChanges]);
 
   useEffect(() => {
     const timer = globalThis.setInterval(() => setDirtyRevision(r => r + 1), 700);
