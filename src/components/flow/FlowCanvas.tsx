@@ -13,6 +13,7 @@ import ReactFlow, {
   ReactFlowInstance,
   Node,
   Edge,
+  Viewport,
 } from 'reactflow';
 import 'reactflow/dist/style.css';
 import { useFlowState } from '../../hooks/useFlowState';
@@ -202,6 +203,8 @@ export interface FlowCanvasHandle {
   loadDiagramData: (nodes: any[], edges: any[]) => void;
   getNodes: () => Node[];
   getEdges: () => Edge[];
+  /** Current pan and zoom; undefined until the canvas is initialized. */
+  getViewport: () => Viewport | undefined;
   addEcoreFile: (fileName: string, fileContent: string, meta?: any) => void;
   updateEcoreDisplayName: (metaModelId: number, displayName: string) => void;
   updateEcoreFileData: (fileName: string, fileContent: string, ecoreFileId?: number) => void;
@@ -238,6 +241,8 @@ interface FlowCanvasProps {
   onHistoryChange?: (canUndo: boolean, canRedo: boolean) => void;
   /** Rendered directly under the Modeling / View Types toggle (e.g. project tabs). */
   projectTabsBelowModeToggle?: React.ReactNode;
+  /** Pan and zoom to start with, e.g. the view a project tab had when the user left it. */
+  initialViewport?: Viewport;
   /** Called when the user switches between Modeling / Constraints / Views / Metrics tabs. */
   onCanvasModeChange?: (mode: CanvasMode) => void;
   canvasMode?: CanvasMode;
@@ -309,6 +314,7 @@ export const FlowCanvas = forwardRef<FlowCanvasHandle, FlowCanvasProps>(
       onToggleReactionMode,
       onHistoryChange,
       projectTabsBelowModeToggle,
+      initialViewport,
       onCanvasModeChange,
       canvasMode: canvasModeProp = 'modeling',
       constraintHighlightNodeId,
@@ -1463,6 +1469,7 @@ export const FlowCanvas = forwardRef<FlowCanvasHandle, FlowCanvasProps>(
       loadDiagramData,
       getNodes: () => nodes,
       getEdges: () => edges,
+      getViewport: () => reactFlowInstanceRef.current?.getViewport(),
       addEcoreFile,
       updateEcoreDisplayName,
       updateEcoreFileData,
@@ -1645,6 +1652,7 @@ export const FlowCanvas = forwardRef<FlowCanvasHandle, FlowCanvasProps>(
         }}
       >
         <ReactFlow
+          defaultViewport={initialViewport}
           nodes={mappedNodes}
           edges={mappedEdges}
           onNodesChange={onNodesChange}
