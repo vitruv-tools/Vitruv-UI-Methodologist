@@ -7,6 +7,7 @@ import { OtpVerificationPage } from './pages/OtpVerificationPage';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 // useAuth is used in ProtectedRoute
 import { CanvasPage } from './pages/CanvasPage';
+import { MODEL_LIBRARY_PATH } from './constants/routes';
 import './App.css';
 
 function ProtectedRoute({ children }: Readonly<{ children: React.ReactNode }>) {
@@ -50,6 +51,11 @@ function App() {
           <Route path="/login/callback" element={<FastLoginCallback />} />
           <Route path="/verify-otp" element={<OtpVerificationPage />} />
           <Route path="/" element={
+            <ProtectedRoute>
+              <HomePage />
+            </ProtectedRoute>
+          } />
+          <Route path={`${MODEL_LIBRARY_PATH}/*`} element={
             <ProtectedRoute>
               <HomePage />
             </ProtectedRoute>

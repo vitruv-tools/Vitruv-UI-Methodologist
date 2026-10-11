@@ -1,11 +1,13 @@
 import React from 'react';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { FloatingUMLPanel } from '../../../components/canvas/FloatingUMLPanel';
+import type { UmlDiagramSaveContext } from '../../../components/canvas/UMLDiagram';
 
 let lastDiagramProps: Record<string, unknown> = {};
 const mockIsDirty = jest.fn(() => false);
 const mockTryEscape = jest.fn(() => false);
 const mockReload = jest.fn();
+const mockSave = jest.fn().mockResolvedValue(undefined);
 
 jest.mock('../../../components/canvas/UMLDiagram', () => {
   const { forwardRef, useImperativeHandle, createElement } = require('react');
@@ -23,6 +25,7 @@ jest.mock('../../../components/canvas/UMLDiagram', () => {
         canUndo: jest.fn(() => false),
         canRedo: jest.fn(() => false),
         isDirty: mockIsDirty,
+        save: mockSave,
         tryEscape: mockTryEscape,
       }));
       return createElement('div', { 'data-testid': 'uml-diagram' });
@@ -49,6 +52,16 @@ const defaultProps = {
   onFocus: jest.fn(),
   onClose: jest.fn(),
 };
+
+const saveContext: UmlDiagramSaveContext = {
+  metaModelId: '1',
+  ecoreFileId: 7,
+  modelName: 'My Ecore Model',
+  saveTarget: 'library',
+};
+
+/** Lets the save that the shortcut schedules on the next tick run. */
+const flushScheduledSave = () => new Promise(resolve => setTimeout(resolve, 0));
 
 describe('FloatingUMLPanel', () => {
   beforeEach(() => {
@@ -144,5 +157,71 @@ describe('FloatingUMLPanel', () => {
     expect(onEcoreContentUpdated).toHaveBeenCalledWith('<ecore>fresh</ecore>');
     expect(mockReload).toHaveBeenCalledWith('<ecore>fresh</ecore>');
     expect(screen.getByTestId('uml-reload-message')).toHaveTextContent('Reloaded');
+  });
+});
+
+describe('FloatingUMLPanel save shortcut', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    mockIsDirty.mockReturnValue(true);
+  });
+
+  it.each([
+    ['Cmd+S', { metaKey: true }],
+    ['Ctrl+S', { ctrlKey: true }],
+  ])('saves the diagram on %s instead of opening the browser save dialog', async (_label, modifier) => {
+    render(<FloatingUMLPanel {...defaultProps} saveContext={saveContext} saveShortcutEnabled />);
+
+    const notPrevented = fireEvent.keyDown(window, { key: 's', ...modifier });
+
+    expect(notPrevented).toBe(false);
+    await waitFor(() => expect(mockSave).toHaveBeenCalledTimes(1));
+  });
+
+  it('commits the focused inline input before saving', async () => {
+    render(<FloatingUMLPanel {...defaultProps} saveContext={saveContext} saveShortcutEnabled />);
+    const input = document.createElement('input');
+    document.body.appendChild(input);
+    input.focus();
+    const onBlur = jest.fn();
+    input.addEventListener('blur', onBlur);
+
+    const notPrevented = fireEvent.keyDown(input, { key: 's', metaKey: true });
+
+    expect(notPrevented).toBe(false);
+    expect(onBlur).toHaveBeenCalledTimes(1);
+    await waitFor(() => expect(mockSave).toHaveBeenCalledTimes(1));
+    input.remove();
+  });
+
+  it('does not save when there are no unsaved changes', async () => {
+    mockIsDirty.mockReturnValue(false);
+    render(<FloatingUMLPanel {...defaultProps} saveContext={saveContext} saveShortcutEnabled />);
+
+    const notPrevented = fireEvent.keyDown(window, { key: 's', metaKey: true });
+    await flushScheduledSave();
+
+    expect(notPrevented).toBe(false);
+    expect(mockSave).not.toHaveBeenCalled();
+  });
+
+  it('only blocks the browser save dialog in view-only mode', async () => {
+    render(<FloatingUMLPanel {...defaultProps} saveContext={saveContext} saveShortcutEnabled viewOnly />);
+
+    const notPrevented = fireEvent.keyDown(window, { key: 's', metaKey: true });
+    await flushScheduledSave();
+
+    expect(notPrevented).toBe(false);
+    expect(mockSave).not.toHaveBeenCalled();
+  });
+
+  it('ignores Cmd+S when the save shortcut is not enabled', async () => {
+    render(<FloatingUMLPanel {...defaultProps} saveContext={saveContext} />);
+
+    const notPrevented = fireEvent.keyDown(window, { key: 's', metaKey: true });
+    await flushScheduledSave();
+
+    expect(notPrevented).toBe(true);
+    expect(mockSave).not.toHaveBeenCalled();
   });
 });

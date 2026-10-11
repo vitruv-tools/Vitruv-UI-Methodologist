@@ -1,10 +1,12 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import ReactDOM from 'react-dom';
+import { useLocation, useMatch, useNavigate } from 'react-router-dom';
 import { apiService } from '../../services/api';
 import { CreateModelModal } from './CreateModelModal';
 import { KeywordTagsInput } from './KeywordTagsInput';
 import { UMLDiagram, UMLDiagramHandle, UmlDiagramSaveContext } from '../canvas/UMLDiagram';
 import { FloatingUMLPanel } from '../canvas/FloatingUMLPanel';
+import { MODEL_LIBRARY_PATH, modelLibraryModelPath, modelLibraryUmlPath } from '../../constants/routes';
 import { MetaModelFileDownloads } from './MetaModelFileDownloads';
 import { useModalBodyLock, modalBackdropStyle } from './modalUtils';
 import {
@@ -37,9 +39,18 @@ import { ConfirmDialog } from './ConfirmDialog';
 
 interface ModelLibraryTableProps {
   onModelOpen?: (model: any) => void;
+  /** Opens the Home view; used by the Vitruvius logo in the full-screen UML editor. */
+  onHome?: () => void;
 }
 
 // ── helpers ────────────────────────────────────────────────────────────────
+
+/** History state of model routes opened from the library, so closing them can simply go back. */
+const OPENED_FROM_LIBRARY_STATE = { openedFromLibrary: true };
+
+function isOpenedFromLibrary(state: unknown): boolean {
+  return (state as { openedFromLibrary?: boolean } | null)?.openedFromLibrary === true;
+}
 
 const formatDate = (iso: string) => {
   if (!iso) return '--';
@@ -66,8 +77,11 @@ interface ModelDetailModalProps {
   ecoreContent?: string;
   /** When true, only render the panel (backdrop is provided by the parent). */
   embedded?: boolean;
-  /** Open the project-style full-screen UML editor immediately. */
-  initialUmlExpanded?: boolean;
+  /** Controls the full-screen UML editor from outside (the Model Library keeps it in the URL). */
+  umlExpanded?: boolean;
+  onUmlExpandedChange?: (expanded: boolean) => void;
+  /** Called by the Vitruvius logo in the full-screen UML editor. Without it the logo is not clickable. */
+  onHome?: () => void;
 }
 
 const FONT = 'ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, sans-serif';
@@ -127,7 +141,7 @@ const DPreviewBtn: React.FC<{ title: string; onClick: () => void; children: Reac
 
 export const ModelDetailModal: React.FC<ModelDetailModalProps> = ({
   model, onClose, onUpdated, ecoreContent: ecoreContentProp, embedded = false,
-  initialUmlExpanded = false,
+  umlExpanded: umlExpandedProp, onUmlExpandedChange, onHome,
 }) => {
   const [editing, setEditing] = useState(false);
   const [form, setForm] = useState({ name: model.name || '', description: model.description || '', domain: model.domain || '', keywords: model.keyword || [] as string[] });
@@ -138,7 +152,9 @@ export const ModelDetailModal: React.FC<ModelDetailModalProps> = ({
   const [ecoreFileId, setEcoreFileId] = useState<number | undefined>(model.ecoreFileId);
   const [fetchingUml, setFetchingUml] = useState(false);
   const [fetchError, setFetchError] = useState(false);
-  const [umlExpanded, setUmlExpanded] = useState(initialUmlExpanded);
+  const [internalUmlExpanded, setInternalUmlExpanded] = useState(false);
+  const umlExpanded = umlExpandedProp ?? internalUmlExpanded;
+  const setUmlExpanded = onUmlExpandedChange ?? setInternalUmlExpanded;
   const diagramEditable = !embedded;
   // Local copy of the model used for read-only display — kept in sync with the
   // last successful save so the view reflects edits immediately, without waiting
@@ -443,6 +459,8 @@ export const ModelDetailModal: React.FC<ModelDetailModalProps> = ({
       ecoreContent={ecoreContent ?? ''}
       saveContext={umlSaveContext}
       viewOnly={!diagramEditable}
+      saveShortcutEnabled={!embedded}
+      onHome={onHome}
       onClose={() => setUmlExpanded(false)}
       onFocus={() => { /* preview panel does not participate in focus stacking */ }}
       ecoreFileId={ecoreFileId}
@@ -770,7 +788,7 @@ const AdvancedSearchModal: React.FC<AdvancedSearchModalProps> = ({
   );
 };
 
-export const ModelLibraryTable: React.FC<ModelLibraryTableProps> = ({ onModelOpen }) => {
+export const ModelLibraryTable: React.FC<ModelLibraryTableProps> = ({ onModelOpen, onHome }) => {
   const [models, setModels] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -779,8 +797,8 @@ export const ModelLibraryTable: React.FC<ModelLibraryTableProps> = ({ onModelOpe
   const [dateFilter, setDateFilter] = useState<MetaModelDateFilter>('all');
   const [showAdvancedSearch, setShowAdvancedSearch] = useState(false);
   const [showCreate, setShowCreate] = useState(false);
+  const [modelsLoaded, setModelsLoaded] = useState(false);
   const [viewModel, setViewModel] = useState<any>(null);
-  const [editModelOpen, setEditModelOpen] = useState(false);
   const [deletingModel, setDeletingModel] = useState<LibraryMetaModel | null>(null);
   const [deleteError, setDeleteError] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
@@ -789,6 +807,22 @@ export const ModelLibraryTable: React.FC<ModelLibraryTableProps> = ({ onModelOpe
   /** Set right before a filter reset that's already covered by a fetch we just ran,
    *  so the mount/filter-change effect below doesn't race it with a stale re-fetch. */
   const skipNextAutoFetchRef = useRef(false);
+
+  // The opened model (preview) and its full-screen UML editor are part of the URL,
+  // so a page refresh or a shared link reopens them.
+  const navigate = useNavigate();
+  const location = useLocation();
+  const selectedModelId = useMatch<'modelId', string>(`${modelLibraryModelPath(':modelId')}/*`)?.params.modelId ?? null;
+  const isUmlEditorRoute = useMatch(modelLibraryUmlPath(':modelId')) !== null;
+
+  const openRoute = useCallback((path: string) => {
+    navigate(path, { state: OPENED_FROM_LIBRARY_STATE });
+  }, [navigate]);
+
+  const closeRoute = useCallback((parentPath: string) => {
+    if (isOpenedFromLibrary(location.state)) navigate(-1);
+    else navigate(parentPath, { replace: true });
+  }, [location.state, navigate]);
 
   // Debounce search
   useEffect(() => {
@@ -822,6 +856,7 @@ export const ModelLibraryTable: React.FC<ModelLibraryTableProps> = ({ onModelOpe
       setError(e instanceof Error ? e.message : 'Failed to load');
     } finally {
       setLoading(false);
+      setModelsLoaded(true);
     }
   }, [debouncedSearch, dateFilter]);
 
@@ -832,6 +867,18 @@ export const ModelLibraryTable: React.FC<ModelLibraryTableProps> = ({ onModelOpe
     }
     void fetchModels();
   }, [fetchModels]);
+
+  // Resolve the model in the URL from the loaded list; unknown ids fall back to the list.
+  useEffect(() => {
+    if (!selectedModelId) {
+      setViewModel(null);
+      return;
+    }
+    if (viewModel && String(viewModel.id) === selectedModelId) return;
+    const model = models.find(m => String(m.id) === selectedModelId);
+    if (model) setViewModel(model);
+    else if (modelsLoaded) navigate(MODEL_LIBRARY_PATH, { replace: true });
+  }, [selectedModelId, viewModel, models, modelsLoaded, navigate]);
 
   const clearAllFilters = useCallback(() => {
     setSearch('');
@@ -891,7 +938,7 @@ export const ModelLibraryTable: React.FC<ModelLibraryTableProps> = ({ onModelOpe
       setModels(prev => prev.filter(m => m.id !== deletingModel.id));
       setDeletingModel(null);
       setDeleteError('');
-      if (viewModel?.id === deletingModel.id) setViewModel(null);
+      if (String(deletingModel.id) === selectedModelId) navigate(MODEL_LIBRARY_PATH, { replace: true });
     } catch (e: unknown) {
       // "Referenced by a project" can only be fully known by the backend (it
       // spans every V-SUM, not just ones visible to this user) — if it rejects
@@ -899,7 +946,7 @@ export const ModelLibraryTable: React.FC<ModelLibraryTableProps> = ({ onModelOpe
       // state instead of leaving an actionable "Delete" button up.
       setDeleteError(e instanceof Error ? e.message : 'Failed to delete model');
     }
-  }, [deletingModel, viewModel]);
+  }, [deletingModel, selectedModelId, navigate]);
 
   const isDeleteBlocked = !!deleteError;
 
@@ -947,13 +994,13 @@ export const ModelLibraryTable: React.FC<ModelLibraryTableProps> = ({ onModelOpe
         key={model.id ?? idx}
         model={model}
         onView={() => {
-          setEditModelOpen(false);
-          setViewModel(model);
+          openRoute(modelLibraryModelPath(model.id));
           onModelOpen?.(model);
         }}
         onEdit={() => {
-          setEditModelOpen(true);
-          setViewModel(model);
+          // Open the preview first so that closing the editor returns to it.
+          openRoute(modelLibraryModelPath(model.id));
+          openRoute(modelLibraryUmlPath(model.id));
           onModelOpen?.(model);
         }}
         onDelete={() => requestDeleteModel(model)}
@@ -1138,13 +1185,15 @@ export const ModelLibraryTable: React.FC<ModelLibraryTableProps> = ({ onModelOpe
       )}
       {viewModel && (
         <ModelDetailModal
+          key={viewModel.id}
           model={viewModel}
-          onClose={() => {
-            setViewModel(null);
-            setEditModelOpen(false);
-          }}
+          onClose={() => closeRoute(MODEL_LIBRARY_PATH)}
           onUpdated={() => { fetchModels(); }}
-          initialUmlExpanded={editModelOpen}
+          umlExpanded={isUmlEditorRoute}
+          onHome={onHome}
+          onUmlExpandedChange={expanded => (expanded
+            ? openRoute(modelLibraryUmlPath(viewModel.id))
+            : closeRoute(modelLibraryModelPath(viewModel.id)))}
         />
       )}
 

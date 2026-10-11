@@ -1,6 +1,8 @@
 import React from 'react';
-import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, act, within } from '@testing-library/react';
+import { MemoryRouter, useLocation } from 'react-router-dom';
 import { ModelDetailModal, ModelLibraryTable } from '../../../components/ui/ModelLibraryTable';
+import { MODEL_LIBRARY_PATH, modelLibraryModelPath, modelLibraryUmlPath } from '../../../constants/routes';
 import { resetThemeStore, setTheme } from '../../../theme/theme';
 
 jest.mock('../../../services/api', () => ({
@@ -73,6 +75,19 @@ const mockLibraryFetch = (options: { owned?: any[]; notOwned?: any[] }) => {
     .mockResolvedValueOnce({ data: notOwned });
 };
 
+const CurrentPath = () => <div data-testid="current-path">{useLocation().pathname}</div>;
+
+/** Renders the library inside a router, starting at the given URL. */
+const renderLibrary = (
+  path = MODEL_LIBRARY_PATH,
+  props: React.ComponentProps<typeof ModelLibraryTable> = {},
+) => render(
+  <MemoryRouter initialEntries={[path]}>
+    <ModelLibraryTable {...props} />
+    <CurrentPath />
+  </MemoryRouter>,
+);
+
 describe('ModelLibraryTable', () => {
   beforeEach(() => {
     apiService.findMetaModels.mockReset();
@@ -88,14 +103,14 @@ describe('ModelLibraryTable', () => {
   });
 
   it('loads the list once on mount', async () => {
-    render(<ModelLibraryTable />);
+    renderLibrary();
     await waitFor(() => expect(screen.getByText('Existing Model')).toBeInTheDocument());
     // fetchLibraryMetaModels issues 3 parallel requests (unscoped/owned/shared)
     expect(apiService.findMetaModels).toHaveBeenCalledTimes(3);
   });
 
   it('does not re-fetch a second time when filters reset right after a successful import', async () => {
-    render(<ModelLibraryTable />);
+    renderLibrary();
     await waitFor(() => expect(screen.getByText('Existing Model')).toBeInTheDocument());
 
     // Apply a non-default filter so the post-create clearAllFilters() below
@@ -122,7 +137,7 @@ describe('ModelLibraryTable', () => {
   });
 
   it('still re-fetches normally for a filter change unrelated to a create', async () => {
-    render(<ModelLibraryTable />);
+    renderLibrary();
     await waitFor(() => expect(screen.getByText('Existing Model')).toBeInTheDocument());
     apiService.findMetaModels.mockClear();
 
@@ -190,13 +205,74 @@ describe('ModelLibraryTable', () => {
     apiService.findMetaModels.mockReset();
     mockLibraryFetch({ owned: [existingModel] });
 
-    render(<ModelLibraryTable />);
+    renderLibrary();
     await waitFor(() => expect(screen.getByText('Existing Model')).toBeInTheDocument());
 
     fireEvent.click(screen.getByLabelText('Row actions'));
     fireEvent.click(screen.getByRole('menuitem', { name: 'Edit' }));
 
     await waitFor(() => expect(screen.getByTestId('uml-fullscreen-page')).toBeInTheDocument());
+    expect(screen.getByTestId('current-path')).toHaveTextContent(modelLibraryUmlPath(1));
+
+    // Closing the editor returns to the model preview, as before.
+    fireEvent.click(screen.getByTestId('uml-page-back'));
+    expect(await screen.findByRole('dialog', { name: 'Model Preview: Existing Model' })).toBeInTheDocument();
+    expect(screen.getByTestId('current-path')).toHaveTextContent(new RegExp(`^${modelLibraryModelPath(1)}$`));
+  });
+
+  describe('model URLs', () => {
+    it('reopens the preview of the model in the URL after a refresh', async () => {
+      renderLibrary(modelLibraryModelPath(1));
+
+      expect(await screen.findByRole('dialog', { name: 'Model Preview: Existing Model' })).toBeInTheDocument();
+      expect(screen.queryByTestId('uml-fullscreen-page')).not.toBeInTheDocument();
+    });
+
+    it('reopens the UML editor of the model in the URL after a refresh', async () => {
+      renderLibrary(modelLibraryUmlPath(1));
+
+      expect(await screen.findByTestId('uml-fullscreen-page')).toBeInTheDocument();
+    });
+
+    it('goes to the home page from the Vitruvius logo in the UML editor', async () => {
+      const onHome = jest.fn();
+      renderLibrary(modelLibraryUmlPath(1), { onHome });
+
+      expect(await screen.findByTestId('uml-fullscreen-page')).toBeInTheDocument();
+      fireEvent.click(screen.getByRole('button', { name: 'Back to overview' }));
+
+      expect(onHome).toHaveBeenCalledTimes(1);
+    });
+
+    it('falls back to the model list for an unknown model id', async () => {
+      renderLibrary(modelLibraryUmlPath(999));
+
+      await waitFor(() => expect(screen.getByTestId('current-path')).toHaveTextContent(new RegExp(`^${MODEL_LIBRARY_PATH}$`)));
+      expect(screen.getByText('Existing Model')).toBeInTheDocument();
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    });
+
+    it('updates the URL when opening and closing the preview and the UML editor', async () => {
+      renderLibrary();
+      expect(await screen.findByText('Existing Model')).toBeInTheDocument();
+
+      fireEvent.click(screen.getByLabelText('Row actions'));
+      fireEvent.click(screen.getByRole('menuitem', { name: 'View details' }));
+      const preview = await screen.findByRole('dialog', { name: 'Model Preview: Existing Model' });
+      expect(screen.getByTestId('current-path')).toHaveTextContent(modelLibraryModelPath(1));
+
+      fireEvent.click(within(preview).getByRole('button', { name: 'Edit' }));
+      expect(await screen.findByTestId('uml-fullscreen-page')).toBeInTheDocument();
+      expect(screen.getByTestId('current-path')).toHaveTextContent(modelLibraryUmlPath(1));
+
+      fireEvent.click(screen.getByTestId('uml-page-back'));
+      await waitFor(() => expect(screen.queryByTestId('uml-fullscreen-page')).not.toBeInTheDocument());
+      expect(screen.getByTestId('current-path')).toHaveTextContent(new RegExp(`^${modelLibraryModelPath(1)}$`));
+
+      fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: '✕' }));
+      await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+      expect(screen.getByTestId('current-path')).toHaveTextContent(new RegExp(`^${MODEL_LIBRARY_PATH}$`));
+    });
   });
 
   describe('delete model', () => {
@@ -205,7 +281,7 @@ describe('ModelLibraryTable', () => {
       mockLibraryFetch({ owned: [existingModel] });
       apiService.deleteMetaModel.mockResolvedValue({ data: null, message: '' });
 
-      render(<ModelLibraryTable />);
+      renderLibrary();
       await waitFor(() => expect(screen.getByText('Existing Model')).toBeInTheDocument());
 
       fireEvent.click(screen.getByLabelText('Row actions'));
@@ -224,7 +300,7 @@ describe('ModelLibraryTable', () => {
       apiService.findMetaModels.mockReset();
       mockLibraryFetch({ notOwned: [existingModel] });
 
-      render(<ModelLibraryTable />);
+      renderLibrary();
       await waitFor(() => expect(screen.getByText('Existing Model')).toBeInTheDocument());
 
       fireEvent.click(screen.getByLabelText('Row actions'));
@@ -238,7 +314,7 @@ describe('ModelLibraryTable', () => {
       apiService.findMetaModels.mockReset();
       mockLibraryFetch({ owned: [referencedModel] });
 
-      render(<ModelLibraryTable />);
+      renderLibrary();
       await waitFor(() => expect(screen.getByText('Existing Model')).toBeInTheDocument());
 
       fireEvent.click(screen.getByLabelText('Row actions'));
@@ -260,7 +336,7 @@ describe('ModelLibraryTable', () => {
       mockLibraryFetch({ owned: [existingModel] });
       apiService.deleteMetaModel.mockRejectedValue(new Error('Model is still referenced by a project.'));
 
-      render(<ModelLibraryTable />);
+      renderLibrary();
       await waitFor(() => expect(screen.getByText('Existing Model')).toBeInTheDocument());
 
       fireEvent.click(screen.getByLabelText('Row actions'));

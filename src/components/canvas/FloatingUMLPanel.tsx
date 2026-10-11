@@ -33,6 +33,8 @@ interface FloatingUMLPanelProps {
   refreshing?: boolean;
   /** When true, UML diagram is view-only (no class/relationship edits). */
   viewOnly?: boolean;
+  /** When true, Cmd/Ctrl+S saves the diagram instead of opening the browser's "Save Page As" dialog. */
+  saveShortcutEnabled?: boolean;
 }
 
 /** Vitruv toolbar tokens — aligned with UMLDiagram / canvas */
@@ -71,7 +73,7 @@ const RefreshIcon = () => (
 export const FloatingUMLPanel: React.FC<FloatingUMLPanelProps> = ({
   id, title, fileName, layoutScopeId, ecoreContent, saveContext, zIndex = MODAL_Z_INDEX, onClose,
   onHome, onRefresh, ecoreFileId, fetchEcoreFile, onEcoreContentUpdated, refreshing = false,
-  viewOnly = false,
+  viewOnly = false, saveShortcutEnabled = false,
 }) => {
   const diagramRef = useRef<UMLDiagramHandle>(null);
   const ecoreContentRef = useRef(ecoreContent);
@@ -165,11 +167,29 @@ export const FloatingUMLPanel: React.FC<FloatingUMLPanelProps> = ({
     }
   }, [fetchEcoreFile, onRefresh, onEcoreContentUpdated, isRefreshing, refreshing]);
 
+  const saveFromShortcut = useCallback((focusedField: HTMLElement | null) => {
+    if (viewOnly || !saveContext) return;
+    // Inline inputs commit their value on blur, just like when the Save button is clicked.
+    focusedField?.blur();
+    // Save on the next tick so that the committed edit is part of the saved model.
+    setTimeout(() => {
+      const diagram = diagramRef.current;
+      if (diagram?.isDirty?.()) void diagram.save?.();
+    }, 0);
+  }, [saveContext, viewOnly]);
+
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
       const tag = (e.target as HTMLElement)?.tagName;
       const inField = tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT';
       const mod = e.ctrlKey || e.metaKey;
+
+      if (saveShortcutEnabled && mod && e.key.toLowerCase() === 's') {
+        e.preventDefault();
+        e.stopPropagation();
+        saveFromShortcut(inField ? e.target as HTMLElement : null);
+        return;
+      }
 
       if (mod && !inField) {
         const key = e.key.toLowerCase();
@@ -199,7 +219,7 @@ export const FloatingUMLPanel: React.FC<FloatingUMLPanelProps> = ({
     };
     globalThis.addEventListener('keydown', onKeyDown);
     return () => globalThis.removeEventListener('keydown', onKeyDown);
-  }, [handleBack]);
+  }, [handleBack, saveFromShortcut, saveShortcutEnabled]);
 
   const showSpinner = refreshing || isRefreshing;
   const appPortalRoot = getAppPortalRoot();
