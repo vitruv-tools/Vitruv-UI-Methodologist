@@ -74,6 +74,7 @@ export const FloatingUMLPanel: React.FC<FloatingUMLPanelProps> = ({
   viewOnly = false,
 }) => {
   const diagramRef = useRef<UMLDiagramHandle>(null);
+  const pageRef = useRef<HTMLDivElement>(null);
   const ecoreContentRef = useRef(ecoreContent);
   ecoreContentRef.current = ecoreContent;
   const ecoreFileIdRef = useRef(ecoreFileId);
@@ -85,6 +86,16 @@ export const FloatingUMLPanel: React.FC<FloatingUMLPanelProps> = ({
   const pendingCloseRef = useRef<(() => void) | null>(null);
 
   useModalBodyLock(true);
+
+  // Move the keyboard focus into the editor when it opens. Otherwise it stays
+  // on whatever opened it, e.g. a model card on the project canvas, which
+  // stops every key, so the editor's shortcuts (copy, paste, undo) never fire.
+  useEffect(() => {
+    const page = pageRef.current;
+    if (page && !page.contains(document.activeElement)) {
+      page.focus({ preventScroll: true });
+    }
+  }, []);
 
   useEffect(() => () => {
     diagramRef.current?.flushLayout?.();
@@ -187,8 +198,11 @@ export const FloatingUMLPanel: React.FC<FloatingUMLPanelProps> = ({
 
   return ReactDOM.createPortal(
     <div
+      ref={pageRef}
+      tabIndex={-1}
       data-testid="uml-fullscreen-page"
       style={{
+        outline: 'none',
         position: 'fixed',
         inset: 0,
         width: '100vw',

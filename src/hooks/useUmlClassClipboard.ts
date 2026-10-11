@@ -64,7 +64,9 @@ export interface UseUmlClassClipboardResult {
  *
  * Several editors can be open at once (e.g. the drawer preview and the
  * full-screen editor), so the keyboard shortcuts only act in the editor the
- * user opened, clicked or focused last.
+ * user opened, clicked or focused last. Opening only counts for editable
+ * editors: a read-only preview that finishes loading behind the full-screen
+ * editor must not take Ctrl/Cmd+V away from it.
  */
 export function useUmlClassClipboard({
   interactive,
@@ -132,12 +134,13 @@ export function useUmlClassClipboard({
     [copySelectedClasses, interactive, pasteSnapshot],
   );
 
-  // The editor opened last is the active one until another one is used.
+  // The editable editor opened last is the active one until another one is
+  // used. A read-only editor only becomes active when it is clicked or focused.
   useEffect(() => {
     const { activateEditor, releaseEditor } = useUmlClassClipboardStore.getState();
-    activateEditor(editorId);
+    if (interactive) activateEditor(editorId);
     return () => releaseEditor(editorId);
-  }, [editorId]);
+  }, [editorId, interactive]);
 
   useEffect(() => {
     const element = containerRef.current;
