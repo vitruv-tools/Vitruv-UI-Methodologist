@@ -178,12 +178,23 @@ function handleClassBoxKeyDown(
   onSelect();
 }
 
+/**
+ * A click in a field of an open inline edit (name, type, documentation, …) must
+ * not select the class: selecting commits and closes that edit.
+ */
+function isClassBoxFieldClick(event: React.MouseEvent): boolean {
+  const target = event.target as HTMLElement;
+  return target !== event.currentTarget
+    && Boolean(target.closest('input, select, textarea'));
+}
+
 function handleClassBoxSelectClick(
   event: React.MouseEvent,
   didDragRef: ClassBoxDidDragRef,
   onSelect: ClassBoxSelectHandler,
 ): void {
   event.stopPropagation();
+  if (isClassBoxFieldClick(event)) return;
   if (didDragRef.current) {
     didDragRef.current = false;
     return;

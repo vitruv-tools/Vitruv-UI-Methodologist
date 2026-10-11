@@ -40,7 +40,8 @@ export interface UseUmlDiagramViewportOptions {
   diagramIdentity: string;
   fileName?: string;
   layoutScopeId: string;
-  onBeforePan: () => void;
+  /** Called on every mouse-down in the diagram, before deciding whether it pans. */
+  onBeforePan: (event: MouseEvent) => void;
   /** Return true when this mouse-down should not pan (e.g. it starts a selection box). */
   isPanBlocked: (event: MouseEvent) => boolean;
   isPanTarget: (target: EventTarget | null) => boolean;
@@ -362,7 +363,7 @@ export function useUmlDiagramViewport({
   }, [classes.length, isWheelTarget, scheduleDebouncedViewportSave]);
 
   const handlePanStart = useCallback((event: MouseEvent) => {
-    onBeforePan();
+    onBeforePan(event);
     if (isPanBlocked(event)) return;
     if (!isPanTarget(event.target)) return;
     event.preventDefault();
