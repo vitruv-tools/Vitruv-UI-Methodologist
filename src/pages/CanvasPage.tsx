@@ -947,8 +947,6 @@ export const CanvasPage: React.FC = () => {
     if (!hasUnsavedChanges) return;
     const warnBeforeUnload = (event: BeforeUnloadEvent) => {
       event.preventDefault();
-      // Some browsers only show the prompt when returnValue is set.
-      event.returnValue = '';
     };
     globalThis.addEventListener('beforeunload', warnBeforeUnload);
     return () => globalThis.removeEventListener('beforeunload', warnBeforeUnload);
