@@ -20,6 +20,28 @@ describe('umlToEcore', () => {
     expect(roundTrip.relationships.some(r => r.type === 'inheritance')).toBe(true);
   });
 
+  it('writes built-in types as references into the Ecore package', () => {
+    const model = ecoreToUml(SAMPLE);
+    model.classes.find(c => c.name === 'Person')!.operations = [
+      { id: 'p-op-0', name: 'age', returnType: 'Int', visibility: '+' },
+      { id: 'p-op-1', name: 'greet', returnType: 'Void', visibility: '+' },
+    ];
+    const xml = umlToEcore(model, SAMPLE);
+
+    expect(xml).toContain(
+      'eType="ecore:EDataType http://www.eclipse.org/emf/2002/Ecore#//EString"',
+    );
+    expect(xml).toContain(
+      '<eOperations name="age" eType="ecore:EDataType http://www.eclipse.org/emf/2002/Ecore#//EInt"',
+    );
+    expect(xml).toContain('<eOperations name="greet"/>');
+    expect(xml).not.toMatch(/eType="\/\/E/);
+
+    const roundTrip = ecoreToUml(xml).classes.find(c => c.name === 'Person')!;
+    expect(roundTrip.attributes[0].type).toBe('String');
+    expect(roundTrip.operations.map(o => o.returnType)).toEqual(['Int', 'Void']);
+  });
+
   it('preserves package metadata from original ecore', () => {
     const model = ecoreToUml(SAMPLE);
     const xml = umlToEcore(model, SAMPLE);
