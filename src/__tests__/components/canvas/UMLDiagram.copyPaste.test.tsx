@@ -283,9 +283,9 @@ describe('UMLDiagram copy and paste', () => {
         onClose={jest.fn()}
       />,
     );
+    fireEvent.mouseDown(classBox('Order', readOnlyContainer));
     paste();
 
-    fireEvent.mouseDown(classBox('Order', readOnlyContainer));
     fireEvent.click(classBox('Order', readOnlyContainer));
     duplicate();
 

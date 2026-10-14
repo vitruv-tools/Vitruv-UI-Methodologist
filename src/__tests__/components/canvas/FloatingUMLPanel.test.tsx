@@ -64,6 +64,15 @@ describe('FloatingUMLPanel', () => {
     expect(screen.getByTestId('uml-diagram')).toBeInTheDocument();
   });
 
+  it('moves the keyboard focus into the editor when it opens', () => {
+    render(<button type="button">Open UML</button>);
+    screen.getByRole('button', { name: 'Open UML' }).focus();
+
+    render(<FloatingUMLPanel {...defaultProps} />);
+
+    expect(screen.getByTestId('uml-fullscreen-page')).toHaveFocus();
+  });
+
   it('passes fileName and layoutScopeId to UMLDiagram for layout persistence', () => {
     render(<FloatingUMLPanel {...defaultProps} />);
     expect(lastDiagramProps.fileName).toBe('MyModel.ecore');
