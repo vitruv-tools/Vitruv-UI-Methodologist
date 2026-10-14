@@ -67,6 +67,17 @@ function isEmptyCanvasTarget(target: HTMLElement): boolean {
     && !target.closest('[data-uml-validation]');
 }
 
+/**
+ * A field of an open inline edit in a class box (name, type, visibility,
+ * documentation), or an "Add attribute" / "Add operation" button. Pressing one
+ * must not save and close the open edit: the button saves it itself on click.
+ */
+function isClassBoxEditControl(target: EventTarget | null): boolean {
+  return target instanceof Element
+    && Boolean(target.closest('[data-classbox]'))
+    && Boolean(target.closest('input, select, textarea, [data-uml-add-member]'));
+}
+
 /** Clicks on the diagram itself (canvas, classes, connections) set where Ctrl/Cmd+V pastes. */
 function isPastePositionTarget(target: EventTarget | null): boolean {
   if (!(target instanceof Element)) return false;
@@ -322,7 +333,10 @@ const rels = useMemo(
   }, [ecoreContent, fileName, layoutScopeId, resetFromEcore]);
 
   // ── viewport (pan + zoom) ──────────────────────────────────────────────────
-  const handleBeforeCanvasPan = useCallback(() => {
+  // A mouse-down on the free canvas (or anywhere else) commits the open inline
+  // edit; one in the edit's own fields or on an add button must keep it open.
+  const handleBeforeCanvasPan = useCallback((event: MouseEvent) => {
+    if (isClassBoxEditControl(event.target)) return;
     flushPendingEditRef.current();
   }, []);
   // A selection box starts on the same left-button drag, so when editing the
@@ -716,14 +730,22 @@ const rels = useMemo(
           }}
           onSaveAttr={(attrId, n, t, v, documentation) => saveAttr(cls.id, attrId, n, t, v, documentation)}
           onCancelEdit={cancelEdit}
-          onAddAttr={() => interactive && addAttr(cls.id)}
+          onAddAttr={() => {
+            if (!interactive) return;
+            selectClass(cls.id);
+            addAttr(cls.id);
+          }}
           onDeleteAttr={attrId => deleteAttr(cls.id, attrId)}
           onStartEditOp={opId => {
             if (!interactive) return;
             startOperationEdit(cls.id, opId);
           }}
           onSaveOp={(opId, n, rt, v, documentation) => saveOp(cls.id, opId, n, rt, v, documentation)}
-          onAddOp={() => interactive && addOp(cls.id)}
+          onAddOp={() => {
+            if (!interactive) return;
+            selectClass(cls.id);
+            addOp(cls.id);
+          }}
           onDeleteOp={opId => deleteOp(cls.id, opId)}
           onDelete={() => deleteClass(cls.id)}
           onEditChange={changeEdit}
