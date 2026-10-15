@@ -8,6 +8,7 @@ jest.mock('../../../utils/umlClassLayout', () => require('../../../testSupport/u
 jest.mock('../../../utils/umlLayoutStorage', () => require('../../../testSupport/umlDiagram/mockFactories').umlLayoutStorageMock());
 
 import { fireEvent, screen } from '@testing-library/react';
+import { REF_ECORE } from '../../../testSupport/umlDiagram/fixtures';
 import { renderDiagram } from '../../../testSupport/umlDiagram/renderUtils';
 
 function classBox(className: string): HTMLElement {
@@ -17,6 +18,22 @@ function classBox(className: string): HTMLElement {
   ));
   if (!box) throw new Error(`Missing class box ${className}`);
   return box;
+}
+
+function relationshipHitLine(container: HTMLElement, relationshipId: string): Element {
+  const line = container.querySelector(
+    `[data-rel-hit-line][data-rel-id="${relationshipId}"]`,
+  );
+  if (!line) throw new Error(`Missing relationship ${relationshipId}`);
+  return line;
+}
+
+function classPanel(container: HTMLElement): Element | null {
+  return container.querySelector('[data-class-edit-panel]');
+}
+
+function relationshipPanel(container: HTMLElement): Element | null {
+  return container.querySelector('[data-rel-edit-panel]');
 }
 
 describe('UMLDiagram interaction', () => {
@@ -35,5 +52,44 @@ describe('UMLDiagram interaction', () => {
 
     expect(container.querySelector('[data-uml-connect-banner]')).not.toBeInTheDocument();
     expect(screen.getByTitle('Connect two classes')).toBeInTheDocument();
+  });
+
+  it('switches from the class panel to the relationship panel and back without losing edits', () => {
+    const { container } = renderDiagram({ ecoreContent: REF_ECORE });
+
+    fireEvent.click(classBox('Order'));
+    expect(classPanel(container)).toBeInTheDocument();
+    fireEvent.change(container.querySelector('#class-edit-documentation-Order')!, {
+      target: { value: 'An order placed by a customer.' },
+    });
+
+    fireEvent.click(relationshipHitLine(container, 'rel-order-lines'));
+    expect(relationshipPanel(container)).toBeInTheDocument();
+    expect(classPanel(container)).not.toBeInTheDocument();
+
+    fireEvent.click(classBox('Order'));
+    expect(classPanel(container)).toBeInTheDocument();
+    expect(relationshipPanel(container)).not.toBeInTheDocument();
+    expect(container.querySelector('#class-edit-documentation-Order'))
+      .toHaveValue('An order placed by a customer.');
+  });
+
+  it('switches from the relationship panel to the class panel and back without losing edits', () => {
+    const { container } = renderDiagram({ ecoreContent: REF_ECORE });
+
+    fireEvent.click(relationshipHitLine(container, 'rel-order-lines'));
+    expect(relationshipPanel(container)).toBeInTheDocument();
+    fireEvent.change(container.querySelector('#rel-edit-label-rel-order-lines')!, {
+      target: { value: 'lines' },
+    });
+
+    fireEvent.click(classBox('LineItem'));
+    expect(classPanel(container)).toBeInTheDocument();
+    expect(relationshipPanel(container)).not.toBeInTheDocument();
+
+    fireEvent.click(relationshipHitLine(container, 'rel-order-lines'));
+    expect(relationshipPanel(container)).toBeInTheDocument();
+    expect(classPanel(container)).not.toBeInTheDocument();
+    expect(container.querySelector('#rel-edit-label-rel-order-lines')).toHaveValue('lines');
   });
 });

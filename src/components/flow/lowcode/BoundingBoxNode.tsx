@@ -7,6 +7,8 @@ export interface BoundingBoxNodeData {
   color?: string;
   domain?: string;
   nsUri?: string;
+  /** Canvas ecoreFile node this box was expanded from. */
+  ownerNodeId?: string;
   isBoundingBox: true;
   width?: number;
   height?: number;

@@ -15,6 +15,7 @@ interface EcoreFileBoxData {
   fileName: string;
   /** Project-facing label; fileName remains the technical canvas identifier. */
   displayName?: string;
+  version?: string;
   fileContent: string;
   onExpand: (fileName: string, fileContent: string) => void;
   onSelect: (fileName: string) => void;
@@ -86,6 +87,7 @@ type ShowDetailsModelContext = {
   keywords?: string;
   metaModelId?: number;
   fileName: string;
+  version?: string;
   description?: string;
   domain?: string;
   createdAt?: string;
@@ -106,6 +108,7 @@ function buildShowDetailsHandler(
     onShowDetails({
       id: context.metaModelId,
       name: removeExt(context.fileName),
+      version: context.version,
       description: context.description || '',
       domain: context.domain || '',
       keyword: kwArray,
@@ -129,7 +132,7 @@ export const EcoreFileBox: React.FC<NodeProps<EcoreFileBoxData>> = ({
   const {
     fileName, fileContent, onExpand, onSelect, onRequestDelete, onRename,
     onConnectionStart, isConnectionActive = false,
-    description, keywords, createdAt, domain, onShowDetails, metaModelId, displayName,
+    description, keywords, createdAt, domain, onShowDetails, metaModelId, displayName, version,
     ecoreFileId, genModelFileId,
     isReactionSource = false,
     isConstraintContext = false,
@@ -175,7 +178,7 @@ export const EcoreFileBox: React.FC<NodeProps<EcoreFileBoxData>> = ({
   if (selected) cardTransform = 'scale(1.04)';
   else if (isHovered) cardTransform = 'scale(1.02)';
   const handleShowDetails = buildShowDetailsHandler(
-    onShowDetails, setShowMenu, { keywords, metaModelId, fileName, description, domain, createdAt, fileContent },
+    onShowDetails, setShowMenu, { keywords, metaModelId, fileName, version, description, domain, createdAt, fileContent },
   );
 
   const handleClick = (e: React.MouseEvent) => { e.stopPropagation(); onSelect(fileName); };
@@ -357,6 +360,11 @@ export const EcoreFileBox: React.FC<NodeProps<EcoreFileBoxData>> = ({
               maxWidth: '100%',
             }}>
               {baseName}
+              {version?.trim() && (
+                <span style={{ display: 'block', fontSize: 10, fontWeight: 600, opacity: 0.7 }}>
+                  {version.trim()}
+                </span>
+              )}
             </span>
           )}
 

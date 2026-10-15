@@ -28,5 +28,20 @@ describe('ConfirmDialog', () => {
     fireEvent.click(screen.getByText('Yes'));
     expect(onConfirm).toHaveBeenCalled();
   });
+  it('stacks on the modal layer by default and above a given z-index when requested', () => {
+    const backdrop = () => screen
+      .getAllByRole('button', { hidden: true })
+      .find(button => button.getAttribute('aria-hidden') === 'true');
+
+    const { rerender } = render(
+      <ConfirmDialog isOpen onConfirm={jest.fn()} onCancel={jest.fn()} />,
+    );
+    expect(backdrop()).toHaveStyle({ zIndex: '10000' });
+
+    rerender(<ConfirmDialog isOpen zIndex={10003} onConfirm={jest.fn()} onCancel={jest.fn()} />);
+    expect(backdrop()).toHaveStyle({ zIndex: '10003' });
+    // eslint-disable-next-line testing-library/no-node-access
+    expect(screen.getByRole('alertdialog').parentElement).toHaveStyle({ zIndex: '10004' });
+  });
 });
 

@@ -2,12 +2,20 @@ import React from 'react';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { ModelDrawer, DrawerModel } from '../../../components/canvas/ModelDrawer';
 
+const mockReloadLayout = jest.fn();
+
 jest.mock('../../../components/canvas/UMLDiagram', () => {
-  const { forwardRef, createElement } = require('react');
+  const { forwardRef, createElement, useImperativeHandle } = require('react');
   return {
-    UMLDiagram: forwardRef((_props: any, _ref: any) =>
-      createElement('div', { 'data-testid': 'uml-diagram' })
-    ),
+    UMLDiagram: forwardRef((_props: any, ref: any) => {
+      useImperativeHandle(ref, () => ({
+        flushLayout: jest.fn(),
+        reloadLayout: mockReloadLayout,
+        isDirty: jest.fn(() => false),
+        tryEscape: jest.fn(() => false),
+      }));
+      return createElement('div', { 'data-testid': 'uml-diagram' });
+    }),
   };
 });
 
@@ -89,6 +97,22 @@ describe('ModelDrawer real component', () => {
     expect(screen.queryByText('Person Model')).not.toBeInTheDocument();
   });
 
+  it('shows each library model version in its own column', () => {
+    render(
+      <ModelDrawer
+        {...defaultProps}
+        myLibraryModels={[
+          { id: 1, name: 'Car Model', domain: 'automotive', version: '2.3' },
+          { id: 2, name: 'Person Model', domain: 'hr', version: '1.0' },
+        ]}
+      />,
+    );
+
+    expect(screen.getByText('Version')).toBeInTheDocument();
+    expect(screen.getByText('2.3')).toBeInTheDocument();
+    expect(screen.getByText('1.0')).toBeInTheDocument();
+  });
+
   it('clicking a model card calls onAddModel with the model', () => {
     const onAddModel = jest.fn();
     render(<ModelDrawer {...defaultProps} onAddModel={onAddModel} />);
@@ -157,5 +181,30 @@ describe('ModelDrawer real component', () => {
       expect(screen.getByText('Project name', { selector: 'span' })).toBeInTheDocument();
     });
     expect(onRenameProjectModel).toHaveBeenCalledWith(projectModel, 'Project name');
+  });
+  it('reloads the preview layout when the full-screen UML editor is closed', () => {
+    const projectModel: DrawerModel = {
+      id: 7,
+      name: 'Shop',
+      ecoreContent: '<ecore/>',
+      inProject: true,
+    };
+    render(
+      <ModelDrawer
+        {...defaultProps}
+        models={[projectModel]}
+        addedModelIds={new Set([7])}
+      />,
+    );
+
+    fireEvent.contextMenu(screen.getByLabelText('View details for Shop'));
+    fireEvent.click(screen.getByTitle('Open full-screen UML editor'));
+    expect(screen.getByTestId('uml-fullscreen-page')).toBeInTheDocument();
+    expect(mockReloadLayout).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByTestId('uml-page-back'));
+
+    expect(screen.queryByTestId('uml-fullscreen-page')).not.toBeInTheDocument();
+    expect(mockReloadLayout).toHaveBeenCalled();
   });
 });

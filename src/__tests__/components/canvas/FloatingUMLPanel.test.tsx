@@ -77,6 +77,15 @@ describe('FloatingUMLPanel', () => {
     expect(screen.getByTestId('uml-diagram')).toBeInTheDocument();
   });
 
+  it('moves the keyboard focus into the editor when it opens', () => {
+    render(<button type="button">Open UML</button>);
+    screen.getByRole('button', { name: 'Open UML' }).focus();
+
+    render(<FloatingUMLPanel {...defaultProps} />);
+
+    expect(screen.getByTestId('uml-fullscreen-page')).toHaveFocus();
+  });
+
   it('passes fileName and layoutScopeId to UMLDiagram for layout persistence', () => {
     render(<FloatingUMLPanel {...defaultProps} />);
     expect(lastDiagramProps.fileName).toBe('MyModel.ecore');
@@ -120,6 +129,19 @@ describe('FloatingUMLPanel', () => {
     fireEvent.click(screen.getByTestId('uml-page-back'));
     expect(screen.getByText('Unsaved Changes')).toBeInTheDocument();
     expect(onClose).not.toHaveBeenCalled();
+  });
+
+  it('shows the unsaved changes dialog above the full-screen editor', () => {
+    mockIsDirty.mockReturnValue(true);
+    render(<FloatingUMLPanel {...defaultProps} zIndex={10002} />);
+
+    fireEvent.click(screen.getByTestId('uml-page-back'));
+
+    expect(screen.getByTestId('uml-fullscreen-page')).toHaveStyle({ zIndex: '10002' });
+    const backdrop = screen
+      .getAllByRole('button', { hidden: true })
+      .find(button => button.getAttribute('aria-hidden') === 'true');
+    expect(backdrop).toHaveStyle({ zIndex: '10003' });
   });
 
   it('closes without saving when unsaved dialog is confirmed', () => {

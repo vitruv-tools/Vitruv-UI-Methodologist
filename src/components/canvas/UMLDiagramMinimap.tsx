@@ -178,6 +178,7 @@ export const UMLDiagramMinimap: React.FC<UMLDiagramMinimapProps> = ({
     <button
       ref={mapRef}
       type="button"
+      data-uml-minimap
       aria-label="Diagram overview — click or drag to pan"
       onMouseDown={onMouseDown}
       onKeyDown={onKeyDown}

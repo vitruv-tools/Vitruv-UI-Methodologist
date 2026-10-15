@@ -14,6 +14,8 @@ jest.mock('../../../services/api', () => ({
   },
 }));
 
+const mockReloadLayout = jest.fn();
+
 jest.mock('../../../components/canvas/UMLDiagram', () => {
   const { forwardRef, useImperativeHandle, createElement } = require('react');
   return {
@@ -23,6 +25,7 @@ jest.mock('../../../components/canvas/UMLDiagram', () => {
         zoomOut: jest.fn(),
         fitToView: jest.fn(),
         flushLayout: jest.fn(),
+        reloadLayout: mockReloadLayout,
         reload: jest.fn(),
         undo: jest.fn(),
         redo: jest.fn(),
@@ -123,7 +126,7 @@ describe('ModelLibraryTable', () => {
     apiService.findMetaModels.mockClear();
     apiService.findMetaModels.mockResolvedValue({ data: [existingModel, newModel] });
 
-    fireEvent.click(screen.getByText('Upload model'));
+    fireEvent.click(screen.getByText('Add model'));
     await act(async () => {
       fireEvent.click(screen.getByText('Simulate import success'));
     });
@@ -174,7 +177,7 @@ describe('ModelLibraryTable', () => {
 
     const formLabels = Array.from(document.querySelector('form')!.querySelectorAll('label'))
       .map((label) => label.textContent);
-    expect(formLabels).toEqual(['Name', 'Keywords', 'Description', 'Domain']);
+    expect(formLabels).toEqual(['Name', 'Version', 'Keywords', 'Description', 'Domain']);
   });
 
   it('opens the full-screen UML editor when Edit is clicked', () => {
@@ -199,6 +202,33 @@ describe('ModelLibraryTable', () => {
     expect(screen.getByTestId('uml-fullscreen-page')).toBeInTheDocument();
     const editorDiagrams = screen.getAllByTestId('uml-diagram');
     expect(editorDiagrams.some(node => node.getAttribute('data-interactive') === 'true')).toBe(true);
+  });
+
+  it('reloads the preview layout when the full-screen UML editor is closed', () => {
+    mockReloadLayout.mockClear();
+    render(
+      <ModelDetailModal
+        model={{
+          id: 1,
+          name: 'Existing Model',
+          description: 'A description',
+          domain: 'Testing',
+          keyword: ['uml'],
+          ecoreFileId: 1,
+        }}
+        ecoreContent="<ecore/>"
+        onClose={jest.fn()}
+        onUpdated={jest.fn()}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Edit' }));
+    expect(mockReloadLayout).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByTestId('uml-page-back'));
+
+    expect(screen.queryByTestId('uml-fullscreen-page')).not.toBeInTheDocument();
+    expect(mockReloadLayout).toHaveBeenCalled();
   });
 
   it('opens the full-screen UML editor from the row Edit action', async () => {

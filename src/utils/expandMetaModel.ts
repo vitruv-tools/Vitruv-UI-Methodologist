@@ -24,7 +24,6 @@ import { normalizeAttributeTypeDisplay } from './ecoreToUml';
 import { metaModelDisplayColor } from './metaModelColors';
 import {
   createGhostNode,
-  ghostNodeId,
   midpointForEobjectPair,
 } from './FineGranularReactionUtils';
 
@@ -77,11 +76,17 @@ export function expandMetaModelToNodes(
   origin: { x: number; y: number },
   domain?: string,
   explicitColor?: string,
+  /**
+   * Canvas node id of the ecore box being expanded. Two versions of one
+   * package share an nsURI, so React Flow ids must use this instead.
+   */
+  instanceKey?: string,
 ): ExpandedMetaModelResult | null {
   const umlModel = ecoreToUml(ecoreContent);
   if (umlModel.classes.length === 0) return null;
 
   const nsUri = extractNsUriFromEcore(ecoreContent) ?? fileName.replace(/\.ecore$/i, '');
+  const canvasKey = instanceKey?.trim() || nsUri;
   const modelLabel = fileName.replace(/\.ecore$/i, '');
   const modelAlias =
     extractEPackageNameFromEcore(ecoreContent)
@@ -114,7 +119,7 @@ export function expandMetaModelToNodes(
     };
 
     const node: Node<EObjectNodeData> = {
-      id: `eobject-${nsUri}-${cls.name}`,
+      id: `eobject-${canvasKey}-${cls.name}`,
       type: 'eobject',
       position: { x: origin.x + x, y: origin.y + y },
       data: {
@@ -128,7 +133,7 @@ export function expandMetaModelToNodes(
         isAbstract: cls.isAbstract,
         isInterface: cls.isInterface,
         ecore: ecoreData,
-        group: `bbox-${nsUri}`,
+        group: `bbox-${canvasKey}`,
         color,
         modelAlias,
       },
@@ -147,7 +152,7 @@ export function expandMetaModelToNodes(
   const classById = new Map(umlModel.classes.map(cls => [cls.id, cls]));
   const umlEdges: Edge[] = [];
   const ghostNodes: Node[] = [];
-  const bboxId = `bbox-${nsUri}`;
+  const bboxId = `bbox-${canvasKey}`;
 
   for (const rel of umlModel.relationships) {
     const sourceNode = nodeByClassId.get(rel.sourceId);
@@ -166,7 +171,7 @@ export function expandMetaModelToNodes(
     }
 
     umlEdges.push({
-      id: eReferenceId ? `uml-ref-${eReferenceId}` : `uml-${nsUri}-${rel.id}`,
+      id: eReferenceId ? `uml-ref-${canvasKey}-${eReferenceId}` : `uml-${canvasKey}-${rel.id}`,
       source: sourceNode.id,
       target: targetNode.id,
       sourceHandle: handles.sourceHandle,
@@ -199,7 +204,7 @@ export function expandMetaModelToNodes(
         handles.sourceHandle,
         handles.targetHandle,
       );
-      ghostNodes.push(createGhostNode(ghostNodeId(eReferenceId), mid.x, mid.y, {
+      ghostNodes.push(createGhostNode(`ghost-${canvasKey}-${eReferenceId}`, mid.x, mid.y, {
         label: rel.label,
         group: bboxId,
         ecore: {
@@ -227,6 +232,7 @@ export function expandMetaModelToNodes(
       color,
       domain,
       nsUri,
+      ownerNodeId: instanceKey?.trim() || undefined,
       isBoundingBox: true,
       width: bboxWidth,
       height: bboxHeight,

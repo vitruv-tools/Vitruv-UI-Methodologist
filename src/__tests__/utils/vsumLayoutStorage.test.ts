@@ -102,6 +102,16 @@ describe('vsumLayoutStorage', () => {
     });
   });
 
+  it('does not let two versions of one package overwrite each other nsURI slot', () => {
+    const layout = captureVsumLayout([
+      ecore('ecore-10', 10, 20, { metaModelId: 10, nsUri: 'http://pcm', fileName: 'pcm (1.0).ecore' }),
+      ecore('ecore-11', 300, 20, { metaModelId: 11, nsUri: 'http://pcm', fileName: 'pcm (2.0).ecore' }),
+    ]);
+    expect(layout['mm:10']).toEqual({ x: 10, y: 20 });
+    expect(layout['mm:11']).toEqual({ x: 300, y: 20 });
+    expect(layout['ns:http://pcm']).toBeUndefined();
+  });
+
   it('builds mm/ns/file/id keys in lookup order', () => {
     expect(vsumLayoutKeys({
       metaModelId: 3,

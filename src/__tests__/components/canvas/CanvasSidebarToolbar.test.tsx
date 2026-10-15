@@ -119,6 +119,15 @@ describe('CanvasSidebarToolbar', () => {
     expect(props.onCheckBuild).not.toHaveBeenCalled();
   });
 
+  it('keeps save available while a build check is running', () => {
+    const props = { ...createProps(), checkingBuild: true };
+    render(<CanvasSidebarToolbar {...props} />);
+
+    fireEvent.click(screen.getByRole('button', { name: labels.save }));
+
+    expect(props.onSaveChanges).toHaveBeenCalledTimes(1);
+  });
+
   it('disables unavailable undo and redo actions', () => {
     const props = { ...createProps(), canUndo: false, canRedo: false };
     render(<CanvasSidebarToolbar {...props} />);

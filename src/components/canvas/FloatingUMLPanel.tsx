@@ -76,6 +76,7 @@ export const FloatingUMLPanel: React.FC<FloatingUMLPanelProps> = ({
   viewOnly = false, saveShortcutEnabled = false,
 }) => {
   const diagramRef = useRef<UMLDiagramHandle>(null);
+  const pageRef = useRef<HTMLDivElement>(null);
   const ecoreContentRef = useRef(ecoreContent);
   ecoreContentRef.current = ecoreContent;
   const ecoreFileIdRef = useRef(ecoreFileId);
@@ -88,6 +89,16 @@ export const FloatingUMLPanel: React.FC<FloatingUMLPanelProps> = ({
 
   useModalBodyLock(true);
 
+  // Move the keyboard focus into the editor when it opens. Otherwise it stays
+  // on whatever opened it, e.g. a model card on the project canvas, which
+  // stops every key, so the editor's shortcuts (copy, paste, undo) never fire.
+  useEffect(() => {
+    const page = pageRef.current;
+    if (page && !page.contains(document.activeElement)) {
+      page.focus({ preventScroll: true });
+    }
+  }, []);
+
   useEffect(() => () => {
     diagramRef.current?.flushLayout?.();
   }, []);
@@ -95,7 +106,7 @@ export const FloatingUMLPanel: React.FC<FloatingUMLPanelProps> = ({
   useEffect(() => {
     if (ecoreContent?.trim() || ecoreFileId == null || !fetchEcoreFile) return;
     let cancelled = false;
-    (async () => {
+    void (async () => {
       try {
         const next = await fetchEcoreFile(ecoreFileId);
         if (cancelled || !next?.trim()) return;
@@ -178,6 +189,8 @@ export const FloatingUMLPanel: React.FC<FloatingUMLPanelProps> = ({
     }, 0);
   }, [saveContext, viewOnly]);
 
+  // Undo/redo shortcuts are handled by UMLDiagram itself; handling them here
+  // too would undo two steps per Ctrl/Cmd+Z.
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
       const tag = (e.target as HTMLElement)?.tagName;
@@ -189,23 +202,6 @@ export const FloatingUMLPanel: React.FC<FloatingUMLPanelProps> = ({
         e.stopPropagation();
         saveFromShortcut(inField ? e.target as HTMLElement : null);
         return;
-      }
-
-      if (mod && !inField) {
-        const key = e.key.toLowerCase();
-        if (key === 'z') {
-          e.preventDefault();
-          e.stopPropagation();
-          if (e.shiftKey) diagramRef.current?.redo?.();
-          else diagramRef.current?.undo?.();
-          return;
-        }
-        if (key === 'y') {
-          e.preventDefault();
-          e.stopPropagation();
-          diagramRef.current?.redo?.();
-          return;
-        }
       }
 
       if (e.key === 'Escape') {
@@ -226,8 +222,11 @@ export const FloatingUMLPanel: React.FC<FloatingUMLPanelProps> = ({
 
   return ReactDOM.createPortal(
     <div
+      ref={pageRef}
+      tabIndex={-1}
       data-testid="uml-fullscreen-page"
       style={{
+        outline: 'none',
         position: 'fixed',
         inset: 0,
         width: '100vw',
@@ -478,6 +477,7 @@ export const FloatingUMLPanel: React.FC<FloatingUMLPanelProps> = ({
         confirmText="Close without saving"
         cancelText="Keep editing"
         variant="danger"
+        zIndex={panelZ + 1}
         onConfirm={() => {
           setShowUnsavedDialog(false);
           const action = pendingCloseRef.current ?? doClose;

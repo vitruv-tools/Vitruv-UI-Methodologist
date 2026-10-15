@@ -10,6 +10,7 @@ import { CanvasUmlPanelLayer } from '../components/canvas/CanvasUmlPanelLayer';
 import { apiService, VsumRole, VsumUserResponse } from '../services/api';
 import { VsumDetails } from '../types';
 import { VsumMetaModelRef } from '../types/vsum';
+import { appendMetaModelVersion } from '../utils/metaModelVersion';
 import { useProjectStore } from '../store/Project';
 import { createVsumDetailsStore, getVsumDetailsStore, hasVsumDetailsStore } from '../store/VsumDetails';
 import type { EditableVsumDetails } from '../types/EditableVsumDetails';
@@ -44,6 +45,11 @@ import {
 import { UnsavedTabCloseDialog } from '../components/canvas/UnsavedTabCloseDialog';
 import { CanvasTabSession, OpenCanvasTab } from '../types/canvasTab';
 import { createCanvasTabInstanceId } from '../utils/canvasTabId';
+import {
+  clearStoredCanvasTabs,
+  readStoredCanvasTabs,
+  writeStoredCanvasTabs,
+} from '../utils/canvasTabsStorage';
 import {
   findMembershipForEmail,
   findVsumOwner,
@@ -112,8 +118,9 @@ async function dispatchWorkspaceMetaModels(metaModels: VsumMetaModelRef[]): Prom
       globalThis.dispatchEvent(new CustomEvent('vitruv.addFileToWorkspace', {
         detail: {
           fileContent,
-          fileName: `${model.name}.ecore`,
+          fileName: `${appendMetaModelVersion(model.name, model.version)}.ecore`,
           displayName: model.name,
+          version: model.version,
           description: model.description,
           keywords: model.keyword?.join(', '),
           domain: model.domain,
@@ -303,22 +310,6 @@ async function hydrateCanvasWorkspace(params: HydrateCanvasWorkspaceParams): Pro
   return true;
 }
 
-function persistLeavingTabSession(
-  previousId: string | null,
-  nextId: string | null,
-  loadingTabId: string | null,
-  cancelled: boolean,
-  openTabs: OpenCanvasTab[],
-  sessions: Map<string, CanvasTabSession>,
-  captureSession: () => CanvasTabSession,
-): void {
-  if (!previousId || previousId === nextId || loadingTabId === previousId) return;
-  const tabStillOpen = openTabs.some(t => t.instanceId === previousId);
-  if (!cancelled && tabStillOpen) {
-    sessions.set(previousId, captureSession());
-  }
-}
-
 async function loadOpenCanvasTab(
   nextId: string,
   cancelled: boolean,
@@ -416,16 +407,24 @@ export const CanvasPage: React.FC = () => {
     showPopup(message, 'error');
   }, [showPopup]);
 
-  const [openTabs, setOpenTabs] = useState<OpenCanvasTab[]>([]);
+  const tabsStorageUserKey = user?.email ?? user?.id ?? null;
+  // Tabs that were open before a page refresh; each one loads when it is opened.
+  const [openTabs, setOpenTabs] = useState<OpenCanvasTab[]>(() => (
+    readStoredCanvasTabs(tabsStorageUserKey).map(tab => ({
+      ...tab,
+      instanceId: createCanvasTabInstanceId(tab.projectId),
+    }))
+  ));
   const [activeInstanceId, setActiveInstanceId] = useState<string | null>(null);
   const sessionsRef = useRef<Map<string, CanvasTabSession>>(new Map());
   const savedBaselinesRef = useRef<Map<string, WorkspaceSnapshot>>(new Map());
-  const prevActiveInstanceIdRef = useRef<string | null>(null);
   const openTabsRef = useRef(openTabs);
   openTabsRef.current = openTabs;
   const activeInstanceIdRef = useRef(activeInstanceId);
   activeInstanceIdRef.current = activeInstanceId;
   const loadingTabRef = useRef<string | null>(null);
+  /** Tab the tab-switch effect last restored or loaded. */
+  const shownInstanceIdRef = useRef<string | null>(null);
   const loadedTabsRef = useRef<Set<string>>(new Set());
   const viewerLastUpdatedRef = useRef<string | null>(null);
   const [closeConfirmInstanceId, setCloseConfirmInstanceId] = useState<string | null>(null);
@@ -731,6 +730,7 @@ export const CanvasPage: React.FC = () => {
     umlPanels,
     topPanelId,
     workspaceSnapshot: getLiveSnapshot(),
+    viewport: flowCanvasRef.current?.getViewport?.(),
   }), [vsumName, drawerModels, myLibraryModels, publicLibraryModels, addedModelIds, umlPanels, topPanelId, getLiveSnapshot]);
 
   const isInstanceDirty = useCallback((instanceId: string): boolean => {
@@ -805,8 +805,11 @@ export const CanvasPage: React.FC = () => {
       setMetricsEdges(session.edges);
     }
 
+    // Bound to this tab's canvas: when the user switches on within 50 ms, the
+    // delayed load must not put this tab's models on the next tab's canvas.
+    const canvas = flowCanvasRef.current;
     const load = () => {
-      flowCanvasRef.current?.loadDiagramData?.(session.nodes, session.edges);
+      canvas?.loadDiagramData?.(session.nodes, session.edges);
     };
     load();
     setTimeout(load, 50);
@@ -817,15 +820,28 @@ export const CanvasPage: React.FC = () => {
   const applyRef = useRef(applyTabSession);
   applyRef.current = applyTabSession;
 
+  /**
+   * Saves the active tab's canvas so it can be restored later. Call it before
+   * another tab becomes active: the canvas is keyed by the active tab, so in
+   * that same render it is replaced by an empty one.
+   */
+  const saveActiveTabSession = useCallback(() => {
+    const instanceId = activeInstanceIdRef.current;
+    if (!instanceId || loadingTabRef.current === instanceId) return;
+    if (!openTabsRef.current.some(t => t.instanceId === instanceId)) return;
+    sessionsRef.current.set(instanceId, captureRef.current());
+  }, []);
+
   const switchToTab = useCallback((instanceId: string) => {
     const tab = openTabsRef.current.find(t => t.instanceId === instanceId);
     if (!tab || activeInstanceId === instanceId) return;
     bumpProjectRole();
+    saveActiveTabSession();
     setActiveInstanceId(instanceId);
     if (String(tab.projectId) !== id) {
       navigate(`/canvas/${tab.projectId}`, { replace: true });
     }
-  }, [navigate, id, activeInstanceId, bumpProjectRole]);
+  }, [navigate, id, activeInstanceId, bumpProjectRole, saveActiveTabSession]);
 
   const handleSelectProject = useCallback((projectId: number, name: string, accessRole?: string) => {
     const stored = readStoredProjectAccess(projectId);
@@ -845,10 +861,11 @@ export const CanvasPage: React.FC = () => {
       return;
     }
     const instanceId = createInstanceId(projectId);
+    saveActiveTabSession();
     setOpenTabs(prev => [...prev, { instanceId, projectId, name }]);
     setActiveInstanceId(instanceId);
     navigate(`/canvas/${projectId}`);
-  }, [createInstanceId, navigate, switchToTab, bumpProjectRole]);
+  }, [createInstanceId, navigate, switchToTab, bumpProjectRole, saveActiveTabSession]);
 
   const performCloseTab = useCallback((instanceId: string) => {
     sessionsRef.current.delete(instanceId);
@@ -920,6 +937,24 @@ export const CanvasPage: React.FC = () => {
   // eslint-disable-next-line react-hooks/exhaustive-deps -- dirtyRevision intentionally forces re-evaluation on every 700 ms poll tick
   }, [openTabs, dirtyRevision, isInstanceDirty]);
 
+  // Keep the open tabs across a page refresh. Leaving the project page in the
+  // app forgets them, so opening a project later starts with just that project.
+  useEffect(() => {
+    writeStoredCanvasTabs(tabsStorageUserKey, openTabs);
+  }, [openTabs, tabsStorageUserKey]);
+  useEffect(() => () => clearStoredCanvasTabs(tabsStorageUserKey), [tabsStorageUserKey]);
+
+  // A refresh or closing the page loses unsaved changes, so let the browser ask first.
+  const hasUnsavedChanges = dirtyInstanceIds.size > 0;
+  useEffect(() => {
+    if (!hasUnsavedChanges) return;
+    const warnBeforeUnload = (event: BeforeUnloadEvent) => {
+      event.preventDefault();
+    };
+    globalThis.addEventListener('beforeunload', warnBeforeUnload);
+    return () => globalThis.removeEventListener('beforeunload', warnBeforeUnload);
+  }, [hasUnsavedChanges]);
+
   useEffect(() => {
     const timer = globalThis.setInterval(() => setDirtyRevision(r => r + 1), 700);
     return () => globalThis.clearInterval(timer);
@@ -937,6 +972,10 @@ export const CanvasPage: React.FC = () => {
       return;
     }
 
+    // The URL changed to another project (e.g. browser back/forward).
+    const activeTab = openTabsRef.current.find(t => t.instanceId === activeInstanceIdRef.current);
+    if (activeTab && activeTab.projectId !== projectId) saveActiveTabSession();
+
     setOpenTabs(prev => {
       const existing = prev.find(t => t.projectId === projectId);
       if (existing) {
@@ -947,7 +986,7 @@ export const CanvasPage: React.FC = () => {
       setActiveInstanceId(instanceId);
       return [...prev, { instanceId, projectId, name: '' }];
     });
-  }, [id, createInstanceId]);
+  }, [id, createInstanceId, saveActiveTabSession]);
 
   const loadVsum = useCallback(async (vsumId: number, forInstanceId?: string) => {
     setProjectLoadState({ status: 'loading' });
@@ -1101,20 +1140,12 @@ export const CanvasPage: React.FC = () => {
     let cancelled = false;
 
     const run = async () => {
-      const previousId = prevActiveInstanceIdRef.current;
+      // The tab being left was already saved by saveActiveTabSession(). Only act
+      // when the active tab changed, not when another dependency did (e.g.
+      // loadVsum changes with the URL): that would restore or reload it again.
       const nextId = activeInstanceId;
-
-      persistLeavingTabSession(
-        previousId,
-        nextId,
-        loadingTabRef.current,
-        cancelled,
-        openTabsRef.current,
-        sessionsRef.current,
-        () => captureRef.current(),
-      );
-
-      prevActiveInstanceIdRef.current = nextId;
+      if (nextId === shownInstanceIdRef.current) return;
+      shownInstanceIdRef.current = nextId;
       if (!nextId) return;
 
       // Clear stale nodes so the new ConstraintsView instance mounts with a blank slate.
@@ -1146,7 +1177,7 @@ export const CanvasPage: React.FC = () => {
       );
     };
 
-    run();
+    void run();
     return () => { cancelled = true; };
   }, [activeInstanceId, clearCanvasWorkspace, loadVsum, bumpProjectRole, canvasModeRef, setConstraintsNodes, setMetricsEdges, setMetricsNodes, setMetricsViewTypes]);
 
@@ -1160,10 +1191,12 @@ export const CanvasPage: React.FC = () => {
       globalThis.dispatchEvent(new CustomEvent('vitruv.addFileToWorkspace', {
         detail: {
           fileContent,
-          fileName: model.name + '.ecore',
+          fileName: `${appendMetaModelVersion(model.name, model.version)}.ecore`,
           displayName: model.name,
+          version: model.version,
           domain: model.domain,
           metaModelId: model.id,
+          // sync-changes looks up reaction files by this catalog id.
           metaModelSourceId: model.sourceId ?? model.id,
           ecoreFileId: model.ecoreFileId,
           genModelFileId: model.genModelFileId,
@@ -1218,7 +1251,7 @@ export const CanvasPage: React.FC = () => {
   useEffect(() => {
     const handler = (e: Event) => {
       const { fileName, fileContent } = (e as CustomEvent).detail || {};
-      if (fileName && fileContent) handleEcoreFileExpand(fileName, fileContent);
+      if (fileName && fileContent) void handleEcoreFileExpand(fileName, fileContent);
     };
     globalThis.addEventListener('vitruv.expandFileInWorkspace', handler as EventListener);
     return () => globalThis.removeEventListener('vitruv.expandFileInWorkspace', handler as EventListener);
@@ -1297,7 +1330,17 @@ export const CanvasPage: React.FC = () => {
       const msg = (res as any)?.message || 'This VSUM can be built successfully.';
       showPopup(msg, 'success');
     } catch (e: unknown) {
-      showPopupError(e, 'Build check failed.');
+      const detail = extractApiErrorMessage(e, 'Build check failed.');
+      const missingReactionFile = detail.toLowerCase().includes('reaction file')
+        && detail.toLowerCase().includes('not found');
+      if (missingReactionFile) {
+        showPopup(
+          'Check build needs a reaction file between two models. This project has none, so the build stops. Use Save to store the canvas.',
+          'error',
+        );
+      } else {
+        showPopupError(e, 'Build check failed.');
+      }
     } finally {
       setCheckingBuild(false);
     }
@@ -1469,6 +1512,8 @@ export const CanvasPage: React.FC = () => {
       <FlowCanvas
         key={activeInstanceId ?? `canvas-${activeProjectId ?? 'new'}`}
         ref={flowCanvasRef}
+        // The canvas is new for every tab; start it with the view the tab had when it was left.
+        initialViewport={activeInstanceId ? sessionsRef.current.get(activeInstanceId)?.viewport : undefined}
         vsumId={activeProjectId?.toString()}
         readOnly={isViewOnly}
         canvasMode={canvasMode}

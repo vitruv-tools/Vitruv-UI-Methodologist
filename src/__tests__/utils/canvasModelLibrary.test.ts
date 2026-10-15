@@ -45,12 +45,14 @@ describe('canvasModelLibrary', () => {
     const libraryMetaModel = createMetaModel({
       id: 8,
       name: 'Inventory',
+      version: '2.0',
       sourceId: undefined,
     });
 
     expect(metaModelToDrawerModel(projectMetaModel, true)).toEqual({
       id: 7,
       name: 'Orders',
+      version: '1.0',
       sourceId: 70,
       domain: 'commerce',
       ecoreFileId: 71,
@@ -63,6 +65,7 @@ describe('canvasModelLibrary', () => {
     expect(metaModelToDrawerModel(libraryMetaModel, false)).toEqual({
       id: 8,
       name: 'Inventory',
+      version: '2.0',
       sourceId: 8,
       domain: 'commerce',
       ecoreFileId: 71,

@@ -150,7 +150,7 @@ export const VsumUsersTab: React.FC<Props> = ({ vsumId, onChanged, canManage = t
     }
   }, [vsumId]);
 
-  useEffect(() => { fetchMembers(); }, [fetchMembers]);
+  useEffect(() => { void fetchMembers(); }, [fetchMembers]);
 
   const loadUsersForSearch = useCallback(async () => {
     const now = Date.now();
@@ -282,7 +282,7 @@ export const VsumUsersTab: React.FC<Props> = ({ vsumId, onChanged, canManage = t
             placeholder="viewer@example.com"
             value={inviteEmail}
             onChange={(e) => setInviteEmail(e.target.value)}
-            onKeyDown={(e) => { if (e.key === 'Enter' && canInvite) inviteViewer(); }}
+            onKeyDown={(e) => { if (e.key === 'Enter' && canInvite) void inviteViewer(); }}
             style={{ ...inputStyle, flex: 1, minWidth: 220, margin: 0 }}
             disabled={inviting}
           />

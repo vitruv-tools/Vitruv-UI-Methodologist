@@ -19,6 +19,7 @@ import {
   METAMODEL_PREVIEW_LAYOUT_SCOPE,
   metaModelPreviewLayoutFileName,
 } from '../../utils/metaModelPreview';
+import { displayMetaModelVersion } from '../../utils/metaModelVersion';
 import {
   appendMetaModelSearchToken,
   buildMetaModelFindFilters,
@@ -304,6 +305,10 @@ export const ModelDetailModal: React.FC<ModelDetailModalProps> = ({
                   <input id="model-detail-name" value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} style={detailInputSt} onFocus={e => (e.currentTarget.style.borderColor = '#049484')} onBlur={e => (e.currentTarget.style.borderColor = 'var(--v-border)')} />
                 </div>
                 <div>
+                  <label htmlFor="model-detail-version" style={detailFieldLabelSt}>Version</label>
+                  <input id="model-detail-version" value={displayMetaModelVersion(displayModel.version)} readOnly disabled style={{ ...detailInputSt, color: 'var(--v-text-muted)' }} />
+                </div>
+                <div>
                   <label htmlFor="model-detail-keywords" style={detailFieldLabelSt}>Keywords</label>
                   <KeywordTagsInput id="model-detail-keywords" keywords={form.keywords} onChange={kws => setForm(f => ({ ...f, keywords: kws }))} />
                 </div>
@@ -350,6 +355,10 @@ export const ModelDetailModal: React.FC<ModelDetailModalProps> = ({
                     )}
                   </div>
                   <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--v-text)', fontFamily: FONT, lineHeight: 1.4 }}>{displayModel.name}</div>
+                </div>
+                <div>
+                  <DFieldLabel>Version</DFieldLabel>
+                  <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--v-text)', fontFamily: FONT, lineHeight: 1.4 }}>{displayMetaModelVersion(displayModel.version)}</div>
                 </div>
                 {displayModel.keyword?.length > 0 && (
                   <div>
@@ -461,7 +470,11 @@ export const ModelDetailModal: React.FC<ModelDetailModalProps> = ({
       viewOnly={!diagramEditable}
       saveShortcutEnabled={!embedded}
       onHome={onHome}
-      onClose={() => setUmlExpanded(false)}
+      onClose={() => {
+        setUmlExpanded(false);
+        // The preview shares the layout key; pick up classes moved in the full-screen editor.
+        diagramRef.current?.reloadLayout();
+      }}
       onFocus={() => { /* preview panel does not participate in focus stacking */ }}
       ecoreFileId={ecoreFileId}
       fetchEcoreFile={(fileId) => apiService.getFile(fileId)}
@@ -975,16 +988,16 @@ export const ModelLibraryTable: React.FC<ModelLibraryTableProps> = ({ onModelOpe
   if (loading) {
     tableBodyRows = (
       <tr>
-        <td colSpan={4} style={emptyRowStyle}>Loading...</td>
+        <td colSpan={5} style={emptyRowStyle}>Loading...</td>
       </tr>
     );
   } else if (page.length === 0) {
     tableBodyRows = (
       <tr>
-        <td colSpan={4} style={emptyRowStyle}>
+        <td colSpan={5} style={emptyRowStyle}>
           {search.trim()
             ? `No models match "${search.trim()}". Clear filters to see all models.`
-            : 'No models yet. Upload a .ecore file to get started.'}
+            : 'No models yet. Add a meta model to get started.'}
         </td>
       </tr>
     );
@@ -1020,7 +1033,7 @@ export const ModelLibraryTable: React.FC<ModelLibraryTableProps> = ({ onModelOpe
           onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.background = '#1e293b'; }}
         >
           <span style={{ fontSize: 18, lineHeight: 1 }}>+</span>
-          <span>Upload model</span>
+          <span>Add model</span>
         </button>
       </div>
 
@@ -1121,7 +1134,7 @@ export const ModelLibraryTable: React.FC<ModelLibraryTableProps> = ({ onModelOpe
           <table style={{ width: '100%', borderCollapse: 'collapse' }}>
             <thead>
               <tr style={{ borderBottom: '1px solid var(--v-border-subtle)' }}>
-                {['Name', 'Created', 'Projects', 'Actions'].map((col, i) => (
+                {['Name', 'Version', 'Created', 'Projects', 'Actions'].map((col, i) => (
                   <th
                     key={col}
                     style={{
@@ -1135,7 +1148,7 @@ export const ModelLibraryTable: React.FC<ModelLibraryTableProps> = ({ onModelOpe
                       background: 'var(--v-table-header)',
                       borderBottom: '1px solid var(--v-border-subtle)',
                       whiteSpace: 'nowrap',
-                      width: i === 3 ? 80 : undefined,
+                      width: i === 4 ? 80 : undefined,
                     }}
                   >
                     {col}
@@ -1188,7 +1201,7 @@ export const ModelLibraryTable: React.FC<ModelLibraryTableProps> = ({ onModelOpe
           key={viewModel.id}
           model={viewModel}
           onClose={() => closeRoute(MODEL_LIBRARY_PATH)}
-          onUpdated={() => { fetchModels(); }}
+          onUpdated={() => { void fetchModels(); }}
           umlExpanded={isUmlEditorRoute}
           onHome={onHome}
           onUmlExpandedChange={expanded => (expanded
@@ -1240,6 +1253,7 @@ const TableRow: React.FC<TableRowProps> = ({ model, onView, onEdit, onDelete }) 
       style={{ borderBottom: '1px solid var(--v-border-subtle)', background: hovered ? 'var(--v-surface-hover)' : 'var(--v-surface)', cursor: 'pointer', transition: 'background 0.1s' }}
     >
       <td style={{ padding: '13px 16px', fontSize: 14, fontWeight: 500, color: 'var(--v-text)' }}>{model.name}</td>
+      <td style={{ padding: '13px 16px', fontSize: 14, color: 'var(--v-text-secondary)', fontVariantNumeric: 'tabular-nums' }}>{displayMetaModelVersion(model.version)}</td>
       <td style={{ padding: '13px 16px', fontSize: 14, color: 'var(--v-text-muted)' }}>{formatDate(model.createdAt)}</td>
       <td style={{ padding: '13px 16px' }}>
         {hasProjects ? (

@@ -163,7 +163,7 @@ export const CanvasAccountMenu: React.FC<CanvasAccountMenuProps> = ({
               label="Log out"
               icon={<LogoutIcon />}
               danger
-              onClick={() => { setShowProfileMenu(false); AuthService.signOut().then(() => { globalThis.location.href = '/login'; }); }}
+              onClick={() => { setShowProfileMenu(false); void AuthService.signOut().then(() => { globalThis.location.href = '/login'; }); }}
             />
           </div>
         )}

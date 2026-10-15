@@ -1,4 +1,4 @@
-import { Edge, Node } from 'reactflow';
+import { Edge, Node, Viewport } from 'reactflow';
 import { DrawerModel } from '../components/canvas/ModelDrawer';
 import { WorkspaceSnapshot } from './workspace';
 
@@ -39,6 +39,8 @@ export interface CanvasTabSession {
   umlPanels: CanvasUmlPanelState[];
   topPanelId: string | null;
   workspaceSnapshot: WorkspaceSnapshot;
+  /** Pan and zoom of the canvas, so switching back to the tab shows the same view. */
+  viewport?: Viewport;
 }
 
 export interface OpenCanvasTab {

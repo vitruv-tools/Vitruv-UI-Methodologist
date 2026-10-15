@@ -109,6 +109,15 @@ const mockFetchFail = (status = 404, statusText = 'Not Found') => {
   });
 };
 
+const expectedCreateRequest = {
+  name: 'Test Model',
+  version: '1.0',
+  description: 'A description',
+  domain: 'Testing',
+  keyword: ['kw'],
+  ecoreFileId: 10,
+};
+
 // ─── tests ────────────────────────────────────────────────────────────────────
 
 describe('CreateModelModal', () => {
@@ -137,12 +146,12 @@ describe('CreateModelModal', () => {
 
   it('renders the modal title when open', () => {
     render(<CreateModelModal isOpen onClose={jest.fn()} />);
-    expect(screen.getByText(/Import Meta Model/i)).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Add Meta Model' })).toBeInTheDocument();
   });
 
   it('does not render when isOpen is false', () => {
     render(<CreateModelModal isOpen={false} onClose={jest.fn()} />);
-    expect(screen.queryByText(/Import Meta Model/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Add Meta Model/i)).not.toBeInTheDocument();
   });
 
   it('renders File and URL toggles for the Ecore card', () => {
@@ -330,6 +339,7 @@ describe('CreateModelModal', () => {
   describe('form submission', () => {
     const expectedRequest = {
       name: 'Test Model',
+      version: '1.0',
       description: 'A description',
       domain: 'Testing',
       keyword: ['kw'],
@@ -435,6 +445,43 @@ describe('CreateModelModal', () => {
   },
 );
 
+    it('sends the version typed on the form', async () => {
+      render(<CreateModelModal isOpen onClose={jest.fn()} onSuccess={jest.fn()} />);
+      fillRequiredFields();
+      fireEvent.change(screen.getByLabelText(/Version/i), { target: { value: '2.0' } });
+      await uploadEcoreViaFileMode();
+
+      await act(async () => {
+        fireEvent.click(screen.getByRole('button', { name: /Import Meta Model/i }));
+      });
+
+      await waitFor(() => {
+        expect(apiService.createMetaModel).toHaveBeenCalledWith(
+          expect.objectContaining({ name: 'Test Model', version: '2.0' }),
+        );
+      });
+    });
+
+    it('requires a non-blank version and does not check semver format', async () => {
+      render(<CreateModelModal isOpen onClose={jest.fn()} onSuccess={jest.fn()} />);
+      fillRequiredFields();
+      fireEvent.change(screen.getByLabelText(/Version/i), { target: { value: '   ' } });
+      await uploadEcoreViaFileMode();
+
+      expect(screen.getByText('Complete All Fields')).toBeDisabled();
+
+      fireEvent.change(screen.getByLabelText(/Version/i), { target: { value: 'beta' } });
+      await act(async () => {
+        fireEvent.click(screen.getByRole('button', { name: /Import Meta Model/i }));
+      });
+
+      await waitFor(() => {
+        expect(apiService.createMetaModel).toHaveBeenCalledWith(
+          expect.objectContaining({ version: 'beta' }),
+        );
+      });
+    });
+
     it.each([
       ['network error', new Error('Network error'), 'Network error'],
       ['backend validation error', { response: { data: { message: 'Invalid Ecore model' } } }, 'Invalid Ecore model'],
@@ -457,6 +504,121 @@ describe('CreateModelModal', () => {
       expect(apiService.deleteFile).toHaveBeenCalledWith(10);
       expect(onSuccess).not.toHaveBeenCalled();
       expect(screen.getByText('Complete All Fields')).toBeDisabled();
+    });
+  });
+  // ── creating from scratch ────────────────────────────────────────────────────
+
+  describe('creating a new meta model from scratch', () => {
+    const chooseCreateNew = () => fireEvent.click(screen.getByRole('button', { name: 'Create new' }));
+
+    it('starts in import mode', () => {
+      render(<CreateModelModal isOpen onClose={jest.fn()} />);
+      expect(screen.getByRole('group', { name: 'Meta model source' })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Import existing' })).toHaveAttribute('aria-pressed', 'true');
+      expect(screen.getByRole('button', { name: 'Create new' })).toHaveAttribute('aria-pressed', 'false');
+      expect(screen.getByText('Required ECore File')).toBeInTheDocument();
+    });
+
+    it('hides the Ecore file section and names the empty file after the meta model', () => {
+      render(<CreateModelModal isOpen onClose={jest.fn()} />);
+      fillRequiredFields();
+      chooseCreateNew();
+
+      expect(screen.getByRole('button', { name: 'Create new' })).toHaveAttribute('aria-pressed', 'true');
+      expect(screen.queryByText('Required ECore File')).not.toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: /Click to select file/i })).not.toBeInTheDocument();
+      expect(screen.queryByText('URL')).not.toBeInTheDocument();
+      expect(screen.getByText('testmodel.ecore')).toBeInTheDocument();
+      expect(screen.getByText('Start from an empty .ecore file')).toBeInTheDocument();
+    });
+
+    it('uploads an empty .ecore file and creates the meta model with it', async () => {
+      const onSuccess = jest.fn();
+      const onClose = jest.fn();
+      render(<CreateModelModal isOpen onClose={onClose} onSuccess={onSuccess} />);
+      fillRequiredFields();
+      chooseCreateNew();
+
+      const submitButton = screen.getByRole('button', { name: 'Create Meta Model' });
+      expect(submitButton).toBeEnabled();
+      fireEvent.click(submitButton);
+
+      await waitFor(() => expect(onSuccess).toHaveBeenCalledTimes(1));
+      expect(apiService.uploadFile).toHaveBeenCalledTimes(1);
+      const [uploaded, type] = apiService.uploadFile.mock.calls[0];
+      expect(type).toBe('ECORE');
+      expect(uploaded).toBeInstanceOf(File);
+      expect(uploaded.name).toBe('testmodel.ecore');
+      expect(uploaded.size).toBeGreaterThan(0);
+      expect(apiService.createMetaModel).toHaveBeenCalledWith(expectedCreateRequest);
+      expect(onClose).toHaveBeenCalledTimes(1);
+      expect(apiService.deleteFile).not.toHaveBeenCalled();
+    });
+
+    it('requires only the metadata fields', () => {
+      render(<CreateModelModal isOpen onClose={jest.fn()} />);
+      chooseCreateNew();
+      expect(screen.getByRole('button', { name: 'Complete All Fields' })).toBeDisabled();
+
+      fillRequiredFields();
+      expect(screen.getByRole('button', { name: 'Create Meta Model' })).toBeEnabled();
+    });
+
+    it('deletes the empty .ecore file again when the backend rejects the meta model', async () => {
+      apiService.createMetaModel.mockRejectedValueOnce({ response: { data: { message: 'Metamodel rejected: broken' } } });
+      const onSuccess = jest.fn();
+      render(<CreateModelModal isOpen onClose={jest.fn()} onSuccess={onSuccess} />);
+      fillRequiredFields();
+      chooseCreateNew();
+
+      fireEvent.click(screen.getByRole('button', { name: 'Create Meta Model' }));
+
+      await waitFor(() => {
+        expect(screen.getByRole('alert')).toHaveTextContent('Error creating meta model: Metamodel rejected: broken');
+      });
+      expect(apiService.deleteFile).toHaveBeenCalledTimes(1);
+      expect(apiService.deleteFile).toHaveBeenCalledWith(10);
+      expect(onSuccess).not.toHaveBeenCalled();
+      expect(screen.getByRole('button', { name: 'Create Meta Model' })).toBeEnabled();
+    });
+
+    it('does not create the meta model when the upload returns no file id', async () => {
+      apiService.uploadFile.mockResolvedValueOnce({ data: {} });
+      render(<CreateModelModal isOpen onClose={jest.fn()} onSuccess={jest.fn()} />);
+      fillRequiredFields();
+      chooseCreateNew();
+
+      fireEvent.click(screen.getByRole('button', { name: 'Create Meta Model' }));
+
+      await waitFor(() => {
+        expect(screen.getByRole('alert')).toHaveTextContent('did not return a file id');
+      });
+      expect(apiService.createMetaModel).not.toHaveBeenCalled();
+      expect(apiService.deleteFile).not.toHaveBeenCalled();
+    });
+
+    it('discards an uploaded file when switching to a new meta model', async () => {
+      render(<CreateModelModal isOpen onClose={jest.fn()} />);
+      await uploadEcoreViaFileMode();
+
+      chooseCreateNew();
+      await waitFor(() => expect(apiService.deleteFile).toHaveBeenCalledWith(10));
+
+      fireEvent.click(screen.getByRole('button', { name: 'Import existing' }));
+      expect(screen.getByText(/Click to select file/i)).toBeInTheDocument();
+      expect(screen.queryByText(/Ready/)).not.toBeInTheDocument();
+    });
+
+    it('goes back to import mode when reopened', async () => {
+      const { rerender } = render(<CreateModelModal isOpen onClose={jest.fn()} />);
+      chooseCreateNew();
+      fireEvent.click(screen.getByText('Cancel'));
+
+      rerender(<CreateModelModal isOpen={false} onClose={jest.fn()} />);
+      rerender(<CreateModelModal isOpen onClose={jest.fn()} />);
+      await waitFor(() => {
+        expect(screen.getByRole('button', { name: 'Import existing' })).toHaveAttribute('aria-pressed', 'true');
+      });
     });
   });
 });

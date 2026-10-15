@@ -13,6 +13,7 @@ import ReactFlow, {
   ReactFlowInstance,
   Node,
   Edge,
+  Viewport,
 } from 'reactflow';
 import 'reactflow/dist/style.css';
 import { useFlowState } from '../../hooks/useFlowState';
@@ -113,6 +114,7 @@ import {
   findEcoreTargetAtPosition,
   getBackendMetaModelId,
   getMetaModelSourceId,
+  isMetaModelRowOnCanvas,
 } from './flowCanvasNodeLookup';
 import { buildInitialReactionCode } from './flowCanvasReactionCode';
 import { buildWorkspaceSnapshot } from './flowCanvasSnapshot';
@@ -201,6 +203,8 @@ export interface FlowCanvasHandle {
   loadDiagramData: (nodes: any[], edges: any[]) => void;
   getNodes: () => Node[];
   getEdges: () => Edge[];
+  /** Current pan and zoom; undefined until the canvas is initialized. */
+  getViewport: () => Viewport | undefined;
   addEcoreFile: (fileName: string, fileContent: string, meta?: any) => void;
   updateEcoreDisplayName: (metaModelId: number, displayName: string) => void;
   updateEcoreFileData: (fileName: string, fileContent: string, ecoreFileId?: number) => void;
@@ -237,6 +241,8 @@ interface FlowCanvasProps {
   onHistoryChange?: (canUndo: boolean, canRedo: boolean) => void;
   /** Rendered directly under the Modeling / View Types toggle (e.g. project tabs). */
   projectTabsBelowModeToggle?: React.ReactNode;
+  /** Pan and zoom to start with, e.g. the view a project tab had when the user left it. */
+  initialViewport?: Viewport;
   /** Called when the user switches between Modeling / Constraints / Views / Metrics tabs. */
   onCanvasModeChange?: (mode: CanvasMode) => void;
   canvasMode?: CanvasMode;
@@ -308,6 +314,7 @@ export const FlowCanvas = forwardRef<FlowCanvasHandle, FlowCanvasProps>(
       onToggleReactionMode,
       onHistoryChange,
       projectTabsBelowModeToggle,
+      initialViewport,
       onCanvasModeChange,
       canvasMode: canvasModeProp = 'modeling',
       constraintHighlightNodeId,
@@ -1285,9 +1292,7 @@ export const FlowCanvas = forwardRef<FlowCanvasHandle, FlowCanvasProps>(
         ? meta.metaModelSourceId
         : metaModelId;
 
-      const alreadyOnCanvas = metaModelId != null && ecoreNodes.some(
-        n => n.data?.metaModelId === metaModelId || n.data?.metaModelSourceId === metaModelSourceId,
-      );
+      const alreadyOnCanvas = isMetaModelRowOnCanvas(ecoreNodes, metaModelId);
       if (alreadyOnCanvas) return;
 
       const nodeId = `ecore-${meta?.metaModelId ?? meta?.metaModelSourceId ?? Date.now()}`;
@@ -1307,11 +1312,14 @@ export const FlowCanvas = forwardRef<FlowCanvasHandle, FlowCanvasProps>(
       const newEcoreNode: Node = {
         id: nodeId,
         type: 'ecoreFile',
-        position: savedPosition
-          ?? findFreeEcorePosition(ecoreNodes, meta?.position ?? { x: 60, y: 60 }),
+        position: findFreeEcorePosition(
+          ecoreNodes,
+          savedPosition ?? meta?.position ?? { x: 60, y: 60 },
+        ),
         data: {
           fileName,
           displayName: meta?.displayName ?? fileName.replace(/\.ecore$/i, ''),
+          version: typeof meta?.version === 'string' ? meta.version : undefined,
           fileContent,
           nsUri,
           description: meta?.description,
@@ -1461,6 +1469,7 @@ export const FlowCanvas = forwardRef<FlowCanvasHandle, FlowCanvasProps>(
       loadDiagramData,
       getNodes: () => nodes,
       getEdges: () => edges,
+      getViewport: () => reactFlowInstanceRef.current?.getViewport(),
       addEcoreFile,
       updateEcoreDisplayName,
       updateEcoreFileData,
@@ -1643,6 +1652,7 @@ export const FlowCanvas = forwardRef<FlowCanvasHandle, FlowCanvasProps>(
         }}
       >
         <ReactFlow
+          defaultViewport={initialViewport}
           nodes={mappedNodes}
           edges={mappedEdges}
           onNodesChange={onNodesChange}

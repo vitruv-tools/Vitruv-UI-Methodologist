@@ -15,18 +15,23 @@ import type { UmlDiagramClass } from '../components/canvas/umlDiagramTypes';
 import {
   buildUmlLayoutPayload,
   hasSavedUmlLayout,
+  loadUmlLayoutOffset,
   loadUmlViewport,
   saveUmlLayout,
+  saveUmlViewport,
   type UmlViewport,
 } from '../utils/umlLayoutStorage';
 
 const MAX_ZOOM = 3;
 const MIN_ZOOM = 0.35;
 const TOOLBAR_ZOOM_FACTOR = 1.3;
-const WHEEL_ZOOM_FACTOR = 0.88;
+/** Zoom change per wheel pixel; a trackpad pinch sends many small deltas. */
+const WHEEL_ZOOM_SENSITIVITY = 0.01;
+/** Caps one mouse-wheel notch to roughly the previous 12% zoom step. */
+const MAX_WHEEL_ZOOM_DELTA = 12;
+const WHEEL_LINE_HEIGHT_PX = 16;
 const FIT_VIEW_PADDING = 48;
 const INITIAL_FIT_DELAY_MS = 120;
-const CLASS_POSITION_SAVE_DELAY_MS = 250;
 const LAYOUT_SAVE_DEBOUNCE_MS = 300;
 
 export interface UseUmlDiagramViewportOptions {
@@ -35,9 +40,27 @@ export interface UseUmlDiagramViewportOptions {
   diagramIdentity: string;
   fileName?: string;
   layoutScopeId: string;
-  onBeforePan: () => void;
-  isPanBlocked: () => boolean;
+  /** Called on every mouse-down in the diagram, before deciding whether it pans. */
+  onBeforePan: (event: MouseEvent) => void;
+  /** Return true when this mouse-down should not pan (e.g. it starts a selection box). */
+  isPanBlocked: (event: MouseEvent) => boolean;
   isPanTarget: (target: EventTarget | null) => boolean;
+  /** Return false for areas that scroll themselves (e.g. edit panels). Defaults to everywhere. */
+  isWheelTarget?: (target: EventTarget | null) => boolean;
+}
+
+/** Wheel delta in pixels; Shift+wheel on a mouse scrolls horizontally. */
+function getWheelDeltaPx(
+  event: WheelEvent,
+  pageHeight: number,
+): { deltaX: number; deltaY: number } {
+  let unit = 1;
+  if (event.deltaMode === 1) unit = WHEEL_LINE_HEIGHT_PX;
+  else if (event.deltaMode === 2) unit = pageHeight;
+  const deltaX = event.deltaX * unit;
+  const deltaY = event.deltaY * unit;
+  if (event.shiftKey && deltaX === 0) return { deltaX: deltaY, deltaY: 0 };
+  return { deltaX, deltaY };
 }
 
 export interface UseUmlDiagramViewportResult {
@@ -52,9 +75,12 @@ export interface UseUmlDiagramViewportResult {
   fitToView: () => void;
   clientToDiagram: (clientX: number, clientY: number) => { x: number; y: number };
   handleMinimapPan: (x: number, y: number) => void;
+  /** Save class positions together with the viewport (only on explicit save). */
   persistLayout: (classesOverride?: UmlDiagramClass[]) => void;
-  scheduleLayoutSave: () => void;
-  scheduleDebouncedLayoutSave: () => void;
+  /** Save pan/zoom only; class positions stay as last saved. */
+  persistViewport: () => void;
+  scheduleViewportSave: () => void;
+  scheduleDebouncedViewportSave: () => void;
   getCurrentViewport: () => UmlViewport;
   restoreViewport: (viewport?: UmlViewport | null) => boolean;
   restoreViewportAfterReload: () => void;
@@ -70,6 +96,7 @@ export function useUmlDiagramViewport({
   onBeforePan,
   isPanBlocked,
   isPanTarget,
+  isWheelTarget,
 }: UseUmlDiagramViewportOptions): UseUmlDiagramViewportResult {
   const [vx, setVx] = useState(0);
   const [vy, setVy] = useState(0);
@@ -103,26 +130,38 @@ export function useUmlDiagramViewport({
   const persistLayout = useCallback((classesOverride?: UmlDiagramClass[]) => {
     const classesToPersist = classesOverride ?? classesRef.current;
     if (!fileName || classesToPersist.length === 0) return;
+    const offset = layoutOffsetRef.current
+      ?? loadUmlLayoutOffset(layoutScopeId, fileName);
     saveUmlLayout(
       layoutScopeId,
       fileName,
-      buildUmlLayoutPayload(classesToPersist, getCurrentViewport()),
+      buildUmlLayoutPayload(classesToPersist, getCurrentViewport(), offset),
     );
   }, [fileName, getCurrentViewport, layoutScopeId]);
 
-  const scheduleLayoutSave = useCallback(() => {
+  const persistViewport = useCallback(() => {
     if (!fileName) return;
-    persistLayout();
-  }, [fileName, persistLayout]);
+    saveUmlViewport(
+      layoutScopeId,
+      fileName,
+      getCurrentViewport(),
+      layoutOffsetRef.current ?? loadUmlLayoutOffset(layoutScopeId, fileName),
+    );
+  }, [fileName, getCurrentViewport, layoutScopeId]);
 
-  const scheduleDebouncedLayoutSave = useCallback(() => {
+  const scheduleViewportSave = useCallback(() => {
+    if (!fileName) return;
+    persistViewport();
+  }, [fileName, persistViewport]);
+
+  const scheduleDebouncedViewportSave = useCallback(() => {
     if (!fileName) return;
     if (layoutSaveTimerRef.current) clearTimeout(layoutSaveTimerRef.current);
     layoutSaveTimerRef.current = setTimeout(() => {
       layoutSaveTimerRef.current = null;
-      persistLayout();
+      persistViewport();
     }, LAYOUT_SAVE_DEBOUNCE_MS);
-  }, [fileName, persistLayout]);
+  }, [fileName, persistViewport]);
 
   const restoreViewport = useCallback((viewport?: UmlViewport | null): boolean => {
     let saved: UmlViewport | null;
@@ -136,7 +175,20 @@ export function useUmlDiagramViewport({
     return true;
   }, [applyViewport, fileName, layoutScopeId]);
 
+  const layoutIdentityRef = useRef({ diagramIdentity, fileName, layoutScopeId });
+
   useEffect(() => {
+    // Only reset when the diagram changes; resetting on mount would drop the
+    // offset computed during the first render.
+    const previous = layoutIdentityRef.current;
+    if (
+      previous.diagramIdentity === diagramIdentity
+      && previous.fileName === fileName
+      && previous.layoutScopeId === layoutScopeId
+    ) {
+      return;
+    }
+    layoutIdentityRef.current = { diagramIdentity, fileName, layoutScopeId };
     didInitialFitRef.current = false;
     layoutOffsetRef.current = null;
   }, [diagramIdentity, fileName, layoutScopeId]);
@@ -147,26 +199,26 @@ export function useUmlDiagramViewport({
 
   useEffect(() => {
     if (!fileName) return;
-    const timer = setTimeout(persistLayout, CLASS_POSITION_SAVE_DELAY_MS);
-    return () => {
-      clearTimeout(timer);
-      persistLayout();
-    };
-  }, [classes, fileName, layoutScopeId, persistLayout]);
-
-  useEffect(() => {
-    if (!fileName) return;
     return () => {
       if (layoutSaveTimerRef.current) {
         clearTimeout(layoutSaveTimerRef.current);
         layoutSaveTimerRef.current = null;
       }
-      persistLayout();
+      persistViewport();
     };
-  }, [fileName, layoutScopeId, persistLayout]);
+  }, [fileName, layoutScopeId, persistViewport]);
 
   const layout = useMemo(() => {
     if (!layoutOffsetRef.current && allClasses.length > 0) {
+      // Reuse the offset the saved viewport was captured with; recomputing it
+      // from the current class bounds would shift the restored diagram.
+      const savedOffset = fileName
+        ? loadUmlLayoutOffset(layoutScopeId, fileName)
+        : null;
+      if (savedOffset) {
+        layoutOffsetRef.current = savedOffset;
+        return getUmlDiagramLayoutMetrics(allClasses, savedOffset);
+      }
       const initial = getUmlDiagramLayoutMetrics(allClasses);
       layoutOffsetRef.current = {
         offsetX: initial.offsetX,
@@ -175,7 +227,7 @@ export function useUmlDiagramViewport({
       return initial;
     }
     return getUmlDiagramLayoutMetrics(allClasses, layoutOffsetRef.current);
-  }, [allClasses]);
+  }, [allClasses, fileName, layoutScopeId]);
 
   const getCurrentLayoutOffset = useCallback(() => (
     layoutOffsetRef.current ?? {
@@ -188,8 +240,8 @@ export function useUmlDiagramViewport({
     viewRef.current = { ...viewRef.current, x: nextX, y: nextY };
     setVx(nextX);
     setVy(nextY);
-    scheduleDebouncedLayoutSave();
-  }, [scheduleDebouncedLayoutSave]);
+    scheduleDebouncedViewportSave();
+  }, [scheduleDebouncedViewportSave]);
 
   const applyZoom = useCallback((factor: number) => {
     const element = containerRef.current;
@@ -205,8 +257,8 @@ export function useUmlDiagramViewport({
     setVx(nextX);
     setVy(nextY);
     setVscale(nextScale);
-    scheduleDebouncedLayoutSave();
-  }, [scheduleDebouncedLayoutSave]);
+    scheduleDebouncedViewportSave();
+  }, [scheduleDebouncedViewportSave]);
 
   const zoomIn = useCallback(() => {
     applyZoom(TOOLBAR_ZOOM_FACTOR);
@@ -243,8 +295,8 @@ export function useUmlDiagramViewport({
     setVx(nextX);
     setVy(nextY);
     setVscale(scale);
-    scheduleLayoutSave();
-  }, [allClasses.length, layout, scheduleLayoutSave]);
+    scheduleViewportSave();
+  }, [allClasses.length, layout, scheduleViewportSave]);
 
   fitToViewRef.current = fitToView;
 
@@ -264,18 +316,33 @@ export function useUmlDiagramViewport({
     viewRef.current = { x: vx, y: vy, scale: vscale };
   }, [vx, vy, vscale]);
 
+  // Two-finger scroll / mouse wheel pans; pinch (sent as Ctrl+wheel) and
+  // Cmd/Ctrl+wheel zoom around the pointer, like Figma.
   useEffect(() => {
     const element = containerRef.current;
     if (!element) return;
     const handleWheel = (event: WheelEvent) => {
+      if (isWheelTarget && !isWheelTarget(event.target)) return;
       event.preventDefault();
-      const rect = element.getBoundingClientRect();
+      const { deltaX, deltaY } = getWheelDeltaPx(event, element.clientHeight);
       const { x, y, scale } = viewRef.current;
+      if (!event.ctrlKey && !event.metaKey) {
+        const nextX = x - deltaX;
+        const nextY = y - deltaY;
+        viewRef.current = { x: nextX, y: nextY, scale };
+        setVx(nextX);
+        setVy(nextY);
+        scheduleDebouncedViewportSave();
+        return;
+      }
+      const rect = element.getBoundingClientRect();
       const mouseX = event.clientX - rect.left;
       const mouseY = event.clientY - rect.top;
-      const factor = event.deltaY > 0
-        ? WHEEL_ZOOM_FACTOR
-        : 1 / WHEEL_ZOOM_FACTOR;
+      const zoomDelta = Math.max(
+        -MAX_WHEEL_ZOOM_DELTA,
+        Math.min(MAX_WHEEL_ZOOM_DELTA, deltaY),
+      );
+      const factor = Math.exp(-zoomDelta * WHEEL_ZOOM_SENSITIVITY);
       const nextScale = Math.max(
         MIN_ZOOM,
         Math.min(MAX_ZOOM, scale * factor),
@@ -287,15 +354,17 @@ export function useUmlDiagramViewport({
       setVscale(nextScale);
       setVx(nextX);
       setVy(nextY);
-      scheduleDebouncedLayoutSave();
+      scheduleDebouncedViewportSave();
     };
     element.addEventListener('wheel', handleWheel, { passive: false });
     return () => element.removeEventListener('wheel', handleWheel);
-  }, [scheduleDebouncedLayoutSave]);
+    // classes.length: the canvas element only exists once the diagram has
+    // classes, so the listener is attached again when it appears.
+  }, [classes.length, isWheelTarget, scheduleDebouncedViewportSave]);
 
   const handlePanStart = useCallback((event: MouseEvent) => {
-    onBeforePan();
-    if (isPanBlocked()) return;
+    onBeforePan(event);
+    if (isPanBlocked(event)) return;
     if (!isPanTarget(event.target)) return;
     event.preventDefault();
     setPanning(true);
@@ -318,13 +387,13 @@ export function useUmlDiagramViewport({
     };
     const handleUp = () => {
       setPanning(false);
-      scheduleLayoutSave();
+      scheduleViewportSave();
       cleanup();
     };
     panCleanupRef.current = cleanup;
     globalThis.addEventListener('mousemove', handleMove);
     globalThis.addEventListener('mouseup', handleUp);
-  }, [isPanBlocked, isPanTarget, onBeforePan, scheduleLayoutSave]);
+  }, [isPanBlocked, isPanTarget, onBeforePan, scheduleViewportSave]);
 
   useEffect(() => {
     const element = containerRef.current;
@@ -376,8 +445,9 @@ export function useUmlDiagramViewport({
     clientToDiagram,
     handleMinimapPan,
     persistLayout,
-    scheduleLayoutSave,
-    scheduleDebouncedLayoutSave,
+    persistViewport,
+    scheduleViewportSave,
+    scheduleDebouncedViewportSave,
     getCurrentViewport,
     restoreViewport,
     restoreViewportAfterReload,

@@ -10,6 +10,21 @@ const ecore = `<?xml version="1.0" encoding="UTF-8"?>
   </eClassifiers>
 </ecore:EPackage>`;
 
+describe('expandMetaModelToNodes versions', () => {
+  it('gives each canvas instance its own nodes when the package nsURI is shared', () => {
+    const first = expandMetaModelToNodes(ecore, 'pcm (1.0).ecore', { x: 0, y: 0 }, 'pcm', undefined, 'ecore-10');
+    const second = expandMetaModelToNodes(ecore, 'pcm (2.0).ecore', { x: 400, y: 0 }, 'pcm', undefined, 'ecore-11');
+
+    expect(first!.boundingBox.id).toBe('bbox-ecore-10');
+    expect(second!.boundingBox.id).toBe('bbox-ecore-11');
+    expect(first!.boundingBox.data.ownerNodeId).toBe('ecore-10');
+    expect(first!.eObjectNodes[0].id).not.toBe(second!.eObjectNodes[0].id);
+    expect(first!.eObjectNodes[0].data.group).toBe('bbox-ecore-10');
+    expect(second!.eObjectNodes[0].data.group).toBe('bbox-ecore-11');
+    expect(first!.eObjectNodes[0].data.ecore.eObjectId).toBe(second!.eObjectNodes[0].data.ecore.eObjectId);
+  });
+});
+
 describe('expandMetaModelToNodes colors', () => {
   it('uses the VSUM display color for the bounding box and EObject nodes', () => {
     const expected = metaModelDisplayColor('pcm', 'pcm.ecore');

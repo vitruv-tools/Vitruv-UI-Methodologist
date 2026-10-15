@@ -92,9 +92,20 @@ function rememberVsumPositions(ecoreNodes: Node[], vsumPositions: Map<string, Po
   }
 }
 
+function nsUriUseCount(ecoreNodes: Node[]): Map<string, number> {
+  const counts = new Map<string, number>();
+  for (const node of ecoreNodes) {
+    const nsUri = node.data?.nsUri;
+    if (typeof nsUri !== 'string' || !nsUri) continue;
+    counts.set(nsUri, (counts.get(nsUri) ?? 0) + 1);
+  }
+  return counts;
+}
+
 function expandSingleEcoreNode(
   ecoreNode: Node,
   savedLayout: ReturnType<typeof loadReactionLayout>,
+  sharedNsUris: Map<string, number>,
 ): ExpandResultEntry | null {
   const fileContent = ecoreNode.data?.fileContent;
   const fileName = ecoreNode.data?.fileName;
@@ -105,17 +116,22 @@ function expandSingleEcoreNode(
     { x: ecoreNode.position.x, y: ecoreNode.position.y },
     ecoreNode.data?.domain,
     metaModelDisplayColor(ecoreNode.data?.domain, fileName),
+    ecoreNode.id,
   );
   if (!result) return null;
-  const restored = applyReactionLayout(result, savedLayout[result.modelNsUri]);
+  const shared = (sharedNsUris.get(result.modelNsUri) ?? 0) > 1;
+  const layout = savedLayout[result.boundingBox.id]
+    ?? (shared ? undefined : savedLayout[result.modelNsUri]);
+  const restored = applyReactionLayout(result, layout);
   return { ecoreId: ecoreNode.id, result, restored };
 }
 
 function expandAllEcoreNodes(ecoreNodes: Node[]): ExpandResultEntry[] {
   const savedLayout = loadReactionLayout(useProjectStore.getState().activeId);
+  const sharedNsUris = nsUriUseCount(ecoreNodes);
   const expandResults: ExpandResultEntry[] = [];
   for (const ecoreNode of ecoreNodes) {
-    const expanded = expandSingleEcoreNode(ecoreNode, savedLayout);
+    const expanded = expandSingleEcoreNode(ecoreNode, savedLayout, sharedNsUris);
     if (expanded) expandResults.push(expanded);
   }
   return expandResults;
@@ -215,8 +231,11 @@ export function collapsedEcoreNode(
   vsumPositions: Map<string, Point>,
 ): Node {
   if (node.type !== 'ecoreFile') return node;
-  const nsUri = node.data?.nsUri;
-  const bboxId = nsUri ? `bbox-${nsUri}` : null;
+  const ownedBoxId = `bbox-${node.id}`;
+  const legacyBoxId = typeof node.data?.nsUri === 'string' && node.data.nsUri
+    ? `bbox-${node.data.nsUri}`
+    : null;
+  const bboxId = bboxPositions.has(ownedBoxId) ? ownedBoxId : legacyBoxId;
   const bboxPos = bboxId ? bboxPositions.get(bboxId) : undefined;
   const offset = bboxId ? offsets.get(bboxId) : undefined;
   const newPos = bboxPos && offset

@@ -3,7 +3,9 @@ import {
   hasSavedUmlLayout,
   loadUmlViewport,
   saveUmlLayout,
-  UML_VIEWPORT_KEY,
+  saveUmlViewport,
+  UML_OFFSET_KEY,
+  umlLayoutStorageKey,
 } from '../../utils/umlLayoutStorage';
 import {
   useUmlDiagramViewport,
@@ -18,6 +20,7 @@ jest.mock('../../utils/umlLayoutStorage', () => {
     hasSavedUmlLayout: jest.fn(),
     loadUmlViewport: jest.fn(),
     saveUmlLayout: jest.fn(),
+    saveUmlViewport: jest.fn(),
   };
 });
 
@@ -29,6 +32,9 @@ const mockedLoadUmlViewport = loadUmlViewport as jest.MockedFunction<
 >;
 const mockedSaveUmlLayout = saveUmlLayout as jest.MockedFunction<
   typeof saveUmlLayout
+>;
+const mockedSaveUmlViewport = saveUmlViewport as jest.MockedFunction<
+  typeof saveUmlViewport
 >;
 
 const CLASS_A: UmlDiagramClass = {
@@ -202,7 +208,7 @@ describe('useUmlDiagramViewport', () => {
     expect(result.current.vscale).toBe(0.35);
   });
 
-  it('anchors wheel zoom at the pointer and prevents default scrolling', () => {
+  it('anchors Ctrl/Cmd+wheel and pinch zoom at the pointer and prevents default scrolling', () => {
     const { result, rerender, options } = renderViewport({
       fileName: undefined,
     });
@@ -221,7 +227,8 @@ describe('useUmlDiagramViewport', () => {
     const wheelEvent = new WheelEvent('wheel', {
       clientX: 300,
       clientY: 250,
-      deltaY: -1,
+      deltaY: -10,
+      ctrlKey: true,
       bubbles: true,
       cancelable: true,
     });
@@ -229,7 +236,7 @@ describe('useUmlDiagramViewport', () => {
       element.dispatchEvent(wheelEvent);
     });
 
-    const expectedScale = 1 / 0.88;
+    const expectedScale = Math.exp(0.1);
     expect(wheelEvent.defaultPrevented).toBe(true);
     expect(result.current.vscale).toBeCloseTo(expectedScale);
     expect(result.current.vx).toBeCloseTo(
@@ -238,6 +245,96 @@ describe('useUmlDiagramViewport', () => {
     expect(result.current.vy).toBeCloseTo(
       200 - expectedScale * (200 - 20),
     );
+
+    act(() => {
+      element.dispatchEvent(new WheelEvent('wheel', {
+        deltaY: 500,
+        metaKey: true,
+        bubbles: true,
+        cancelable: true,
+      }));
+    });
+    expect(result.current.vscale).toBeCloseTo(expectedScale * Math.exp(-0.12));
+  });
+
+  it('pans with plain wheel and two-finger scroll', () => {
+    const { result, rerender, options } = renderViewport({
+      fileName: undefined,
+    });
+    const element = attachContainer(result.current.containerRef, {
+      width: 800,
+      height: 600,
+    });
+    rerender({ ...options, fileName: 'wheel.ecore' });
+    act(() => {
+      result.current.restoreViewport({ x: 10, y: 20, scale: 1.5 });
+    });
+
+    const scrollEvent = new WheelEvent('wheel', {
+      deltaX: 30,
+      deltaY: 40,
+      bubbles: true,
+      cancelable: true,
+    });
+    act(() => {
+      element.dispatchEvent(scrollEvent);
+    });
+    expect(scrollEvent.defaultPrevented).toBe(true);
+    expect(result.current.getCurrentViewport()).toEqual({ x: -20, y: -20, scale: 1.5 });
+
+    act(() => {
+      element.dispatchEvent(new WheelEvent('wheel', {
+        deltaY: 2,
+        deltaMode: 1,
+        shiftKey: true,
+        bubbles: true,
+        cancelable: true,
+      }));
+    });
+    expect(result.current.getCurrentViewport()).toEqual({ x: -52, y: -20, scale: 1.5 });
+  });
+
+  it('leaves wheel events alone over areas that scroll themselves', () => {
+    const isWheelTarget = jest.fn(() => false);
+    const { result, rerender, options } = renderViewport({
+      fileName: undefined,
+      isWheelTarget,
+    });
+    const element = attachContainer(result.current.containerRef);
+    rerender({ ...options, fileName: 'wheel.ecore' });
+
+    const wheelEvent = new WheelEvent('wheel', {
+      deltaY: 40,
+      bubbles: true,
+      cancelable: true,
+    });
+    act(() => {
+      element.dispatchEvent(wheelEvent);
+    });
+
+    expect(isWheelTarget).toHaveBeenCalledWith(element);
+    expect(wheelEvent.defaultPrevented).toBe(false);
+    expect(result.current.getCurrentViewport()).toEqual({ x: 0, y: 0, scale: 1 });
+  });
+
+  it('attaches the wheel listener when the canvas appears after the classes load', () => {
+    const { result, rerender, options } = renderViewport({
+      classes: [],
+      allClasses: [],
+    });
+    const element = attachContainer(result.current.containerRef);
+    const classes = [CLASS_A];
+    rerender({ ...options, classes, allClasses: classes });
+
+    act(() => {
+      element.dispatchEvent(new WheelEvent('wheel', {
+        deltaY: 40,
+        bubbles: true,
+        cancelable: true,
+      }));
+    });
+
+    expect(result.current.vy).toBe(-40);
   });
 
   it('updates from the minimap and converts client coordinates', () => {
@@ -374,32 +471,41 @@ describe('useUmlDiagramViewport', () => {
     expect(result.current.panning).toBe(false);
   });
 
-  it('debounces layout persistence for 300ms', () => {
+  it('debounces viewport persistence for 300ms without saving class positions', () => {
     const { result } = renderViewport();
-    mockedSaveUmlLayout.mockClear();
 
     act(() => {
-      result.current.scheduleDebouncedLayoutSave();
-      result.current.scheduleDebouncedLayoutSave();
+      result.current.scheduleDebouncedViewportSave();
+      result.current.scheduleDebouncedViewportSave();
       jest.advanceTimersByTime(299);
     });
 
-    expect(mockedSaveUmlLayout).toHaveBeenCalledTimes(1);
-    mockedSaveUmlLayout.mockClear();
+    expect(mockedSaveUmlViewport).not.toHaveBeenCalled();
 
     act(() => {
       jest.advanceTimersByTime(1);
     });
 
-    expect(mockedSaveUmlLayout).toHaveBeenCalledTimes(1);
-    expect(mockedSaveUmlLayout).toHaveBeenCalledWith(
+    expect(mockedSaveUmlViewport).toHaveBeenCalledTimes(1);
+    expect(mockedSaveUmlViewport).toHaveBeenCalledWith(
       'scope-1',
       'diagram.ecore',
-      expect.objectContaining({
-        A: { x: 0, y: 0 },
-        [UML_VIEWPORT_KEY]: { x: 0, y: 0, scale: 1 },
-      }),
+      { x: 0, y: 0, scale: 1 },
+      { offsetX: 480, offsetY: 480 },
     );
+    expect(mockedSaveUmlLayout).not.toHaveBeenCalled();
+  });
+
+  it('does not save class positions when classes change', () => {
+    const { rerender, options } = renderViewport();
+    const movedClasses = [{ ...CLASS_A, x: 120, y: 90 }];
+
+    rerender({ ...options, classes: movedClasses, allClasses: movedClasses });
+    act(() => {
+      jest.advanceTimersByTime(1000);
+    });
+
+    expect(mockedSaveUmlLayout).not.toHaveBeenCalled();
   });
 
   it('performs the initial fit after 120ms when no layout is saved', () => {
@@ -438,15 +544,15 @@ describe('useUmlDiagramViewport', () => {
         bubbles: true,
         cancelable: true,
       }));
-      result.current.scheduleDebouncedLayoutSave();
+      result.current.scheduleDebouncedViewportSave();
       result.current.restoreViewportAfterReload();
     });
     mockedLoadUmlViewport.mockClear();
-    mockedSaveUmlLayout.mockClear();
+    mockedSaveUmlViewport.mockClear();
 
     unmount();
     const loadCallsAfterUnmount = mockedLoadUmlViewport.mock.calls.length;
-    const saveCallsAfterUnmount = mockedSaveUmlLayout.mock.calls.length;
+    const saveCallsAfterUnmount = mockedSaveUmlViewport.mock.calls.length;
 
     act(() => {
       jest.advanceTimersByTime(1000);
@@ -463,9 +569,91 @@ describe('useUmlDiagramViewport', () => {
     expect(mockedLoadUmlViewport).toHaveBeenCalledTimes(
       loadCallsAfterUnmount,
     );
-    expect(mockedSaveUmlLayout).toHaveBeenCalledTimes(
+    expect(mockedSaveUmlViewport).toHaveBeenCalledTimes(
       saveCallsAfterUnmount,
     );
     removeEventListenerSpy.mockRestore();
+  });
+  describe('canvas offset', () => {
+    const storageKey = umlLayoutStorageKey('scope-1', 'diagram.ecore');
+
+    beforeEach(() => {
+      localStorage.clear();
+    });
+
+    afterAll(() => {
+      localStorage.clear();
+    });
+
+    it('reuses the saved offset instead of recomputing it from class bounds', () => {
+      localStorage.setItem(storageKey, JSON.stringify({
+        B: { x: 300, y: 200 },
+        [UML_OFFSET_KEY]: { x: 100, y: 150 },
+      }));
+
+      const { result } = renderViewport({ classes: [CLASS_B] });
+
+      expect(result.current.layout.offsetX).toBe(100);
+      expect(result.current.layout.offsetY).toBe(150);
+      expect(result.current.getCurrentLayoutOffset()).toEqual({
+        offsetX: 100,
+        offsetY: 150,
+      });
+    });
+
+    it('persists the offset together with the layout', () => {
+      const { result } = renderViewport({ classes: [CLASS_B] });
+
+      act(() => {
+        result.current.persistLayout();
+      });
+
+      // No saved offset: derived from the class bounds (480 - 300, 480 - 200).
+      expect(mockedSaveUmlLayout).toHaveBeenCalledWith(
+        'scope-1',
+        'diagram.ecore',
+        expect.objectContaining({
+          B: { x: 300, y: 200 },
+          [UML_OFFSET_KEY]: { x: 180, y: 280 },
+        }),
+      );
+    });
+
+    it('saves the offset with the viewport when only the view changes', () => {
+      const { result } = renderViewport({ classes: [CLASS_B] });
+
+      act(() => {
+        result.current.scheduleViewportSave();
+      });
+
+      expect(mockedSaveUmlViewport).toHaveBeenCalledWith(
+        'scope-1',
+        'diagram.ecore',
+        { x: 0, y: 0, scale: 1 },
+        { offsetX: 180, offsetY: 280 },
+      );
+      expect(mockedSaveUmlLayout).not.toHaveBeenCalled();
+    });
+
+    it('keeps the saved offset when persisting after the diagram content changed', () => {
+      localStorage.setItem(storageKey, JSON.stringify({
+        B: { x: 300, y: 200 },
+        [UML_OFFSET_KEY]: { x: 100, y: 150 },
+      }));
+      const { result, rerender, options } = renderViewport({ classes: [CLASS_B] });
+      rerender({ ...options, diagramIdentity: 'diagram-a-reloaded' });
+
+      act(() => {
+        result.current.persistLayout();
+      });
+
+      expect(mockedSaveUmlLayout).toHaveBeenCalledWith(
+        'scope-1',
+        'diagram.ecore',
+        expect.objectContaining({
+          [UML_OFFSET_KEY]: { x: 100, y: 150 },
+        }),
+      );
+    });
   });
 });

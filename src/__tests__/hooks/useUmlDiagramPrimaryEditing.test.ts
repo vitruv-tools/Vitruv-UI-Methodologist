@@ -95,8 +95,6 @@ function usePrimaryEditingHarness(options: HarnessOptions) {
     containerRef: options.containerRef,
     getCurrentViewport: options.getCurrentViewport,
     getCurrentLayoutOffset: options.getCurrentLayoutOffset,
-    scheduleDebouncedLayoutSave: options.scheduleDebouncedLayoutSave,
-    scheduleLayoutSave: options.scheduleLayoutSave,
   });
   return {
     ...editing, classes, relationships,
@@ -118,8 +116,6 @@ function makeOptions(
     containerRef: { current: null },
     getCurrentViewport: jest.fn(() => ({ x: 0, y: 0, scale: 1 })),
     getCurrentLayoutOffset: jest.fn(() => ({ offsetX: 0, offsetY: 0 })),
-    scheduleDebouncedLayoutSave: jest.fn(),
-    scheduleLayoutSave: jest.fn(),
     ...overrides,
   };
 }
@@ -534,7 +530,7 @@ describe('useUmlDiagramPrimaryEditing', () => {
       .toMatchObject({ x: -4, y: 33 });
   });
 
-  it('records once per class drag gesture and schedules movement and final layout saves', () => {
+  it('records once per class drag gesture', () => {
     const { result, options } = renderPrimaryEditing();
     const departmentBefore = result.current.classes[1];
 
@@ -547,14 +543,11 @@ describe('useUmlDiagramPrimaryEditing', () => {
       .toMatchObject({ x: 50, y: 60 });
     expect(result.current.classes[1]).toBe(departmentBefore);
     expect(options.recordChange).toHaveBeenCalledTimes(1);
-    expect(options.scheduleDebouncedLayoutSave).toHaveBeenCalledTimes(2);
-    expect(options.scheduleLayoutSave).toHaveBeenCalledTimes(1);
 
     perform(result.current.beginClassDrag);
     perform(() => result.current.moveClass('employee', 70, 80));
     perform(result.current.finishClassDrag);
     expect(options.recordChange).toHaveBeenCalledTimes(2);
-    expect(options.scheduleLayoutSave).toHaveBeenCalledTimes(2);
   });
 
   it('rejects self and duplicate relationships without history', () => {

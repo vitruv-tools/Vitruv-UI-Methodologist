@@ -622,7 +622,7 @@ export const MethodologistMetricsView: React.FC<MethodologistMetricsViewProps> =
       return;
     }
     let cancelled = false;
-    Promise.all(missing.map(async edge => {
+    void Promise.all(missing.map(async edge => {
       try {
         const code = await apiService.getFile(edge.data.reactionFileId as number);
         return [edge.id, typeof code === 'string' ? code : ''] as const;

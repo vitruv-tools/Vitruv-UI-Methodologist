@@ -48,8 +48,8 @@ export interface UseUmlDiagramPrimaryEditingOptions {
   containerRef: RefObject<HTMLElement | null>;
   getCurrentViewport: () => UmlViewport;
   getCurrentLayoutOffset: () => { offsetX: number; offsetY: number };
-  scheduleDebouncedLayoutSave: () => void;
-  scheduleLayoutSave: () => void;
+  /** Currently selected classes; dragging one of them moves all of them. */
+  getSelectedClassIds?: () => string[];
 }
 
 export interface UseUmlDiagramPrimaryEditingResult {
@@ -67,6 +67,7 @@ export interface UseUmlDiagramPrimaryEditingResult {
     name: string,
     type: string,
     visibility: UMLVisibility,
+    documentation?: string,
   ) => void;
   saveOperation: (
     classId: string,
@@ -74,6 +75,7 @@ export interface UseUmlDiagramPrimaryEditingResult {
     name: string,
     returnType: string,
     visibility: UMLVisibility,
+    documentation?: string,
   ) => void;
   addAttribute: (classId: string) => void;
   deleteAttribute: (classId: string, attributeId: string) => void;
@@ -81,11 +83,13 @@ export interface UseUmlDiagramPrimaryEditingResult {
   deleteOperation: (classId: string, operationId: string) => void;
   addClass: () => void;
   deleteClass: (classId: string) => void;
+  /** Deletes all given classes and their relationships as one undo step. */
+  deleteClasses: (classIds: string[]) => void;
   updateClass: (
     classId: string,
     patch: Partial<Pick<
       UmlDiagramClass,
-      'name' | 'isAbstract' | 'isInterface'
+      'name' | 'isAbstract' | 'isInterface' | 'documentation'
     >>,
   ) => void;
   getInheritanceParentId: (classId: string) => string | null;
@@ -114,8 +118,7 @@ export function useUmlDiagramPrimaryEditing(
     containerRef,
     getCurrentViewport,
     getCurrentLayoutOffset,
-    scheduleDebouncedLayoutSave,
-    scheduleLayoutSave,
+    getSelectedClassIds,
   }: UseUmlDiagramPrimaryEditingOptions,
 ): UseUmlDiagramPrimaryEditingResult {
   const [edit, setEdit] = useState<UmlDiagramEditState | null>(null);
@@ -123,6 +126,8 @@ export function useUmlDiagramPrimaryEditing(
   const classesRef = useRef(classes);
   const relationshipsRef = useRef(relationships);
   const dragHistorySavedRef = useRef(false);
+  /** Start positions of the classes moved by the current drag. */
+  const dragGroupRef = useRef<Map<string, { x: number; y: number }> | null>(null);
   editRef.current = edit;
   classesRef.current = classes;
   relationshipsRef.current = relationships;
@@ -167,6 +172,7 @@ export function useUmlDiagramPrimaryEditing(
     name: string,
     type: string,
     visibility: UMLVisibility,
+    documentation?: string,
   ) => {
     recordChange();
     setClasses(previousClasses => updateClassAttribute(
@@ -176,6 +182,7 @@ export function useUmlDiagramPrimaryEditing(
       name,
       type,
       visibility,
+      documentation,
     ));
     setEdit(null);
   }, [recordChange, setClasses]);
@@ -186,6 +193,7 @@ export function useUmlDiagramPrimaryEditing(
     name: string,
     returnType: string,
     visibility: UMLVisibility,
+    documentation?: string,
   ) => {
     recordChange();
     setClasses(previousClasses => updateClassOperation(
@@ -195,6 +203,7 @@ export function useUmlDiagramPrimaryEditing(
       name,
       returnType,
       visibility,
+      documentation,
     ));
     setEdit(null);
   }, [recordChange, setClasses]);
@@ -223,6 +232,7 @@ export function useUmlDiagramPrimaryEditing(
         pending.name,
         pending.type,
         pending.visibility,
+        pending.documentation,
       );
     } else if (pending.kind === 'op') {
       saveOperation(
@@ -231,6 +241,7 @@ export function useUmlDiagramPrimaryEditing(
         pending.name,
         pending.returnType,
         pending.visibility,
+        pending.documentation,
       );
     } else if (pending.kind === 'name') {
       saveName(pending.classId, pending.val);
@@ -267,6 +278,7 @@ export function useUmlDiagramPrimaryEditing(
       name: attribute.name,
       type: normalizeAttributeTypeDisplay(attribute.type),
       visibility: attribute.visibility,
+      documentation: attribute.documentation,
     });
   }, [flushPendingEdit]);
 
@@ -288,6 +300,7 @@ export function useUmlDiagramPrimaryEditing(
       name: operation.name,
       returnType: normalizeOperationReturnType(operation.returnType),
       visibility: operation.visibility,
+      documentation: operation.documentation,
     });
   }, [flushPendingEdit]);
 
@@ -329,6 +342,7 @@ export function useUmlDiagramPrimaryEditing(
       name: newAttribute.name,
       type: newAttribute.type,
       visibility: '+',
+      documentation: '',
     });
   }, [flushPendingEdit, recordChange, setClasses]);
 
@@ -362,6 +376,7 @@ export function useUmlDiagramPrimaryEditing(
       name: newOperation.name,
       returnType: newOperation.returnType,
       visibility: '+',
+      documentation: '',
     });
   }, [flushPendingEdit, recordChange, setClasses]);
 
@@ -389,23 +404,25 @@ export function useUmlDiagramPrimaryEditing(
     ));
   }, [recordChange, setClasses]);
 
-  const deleteClass = useCallback((classId: string) => {
+  const deleteClasses = useCallback((classIds: string[]) => {
+    if (classIds.length === 0) return;
+    const deletedIds = new Set(classIds);
     recordChange();
     setClasses(previousClasses => previousClasses.filter(
-      classItem => classItem.id !== classId,
+      classItem => !deletedIds.has(classItem.id),
     ));
     setRelationships(previousRelationships => previousRelationships.filter(
-      relationship => relationship.sourceId !== classId
-        && relationship.targetId !== classId,
+      relationship => !deletedIds.has(relationship.sourceId)
+        && !deletedIds.has(relationship.targetId),
     ));
     setSelectedClassId(previousId => (
-      previousId === classId ? null : previousId
+      previousId !== null && deletedIds.has(previousId) ? null : previousId
     ));
     setConnectSourceId(previousId => (
-      previousId === classId ? null : previousId
+      previousId !== null && deletedIds.has(previousId) ? null : previousId
     ));
     setEdit(previousEdit => (
-      previousEdit?.classId === classId ? null : previousEdit
+      previousEdit && deletedIds.has(previousEdit.classId) ? null : previousEdit
     ));
   }, [
     recordChange,
@@ -414,6 +431,10 @@ export function useUmlDiagramPrimaryEditing(
     setRelationships,
     setSelectedClassId,
   ]);
+
+  const deleteClass = useCallback((classId: string) => {
+    deleteClasses([classId]);
+  }, [deleteClasses]);
 
   const addClass = useCallback(() => {
     recordChange();
@@ -460,7 +481,7 @@ export function useUmlDiagramPrimaryEditing(
     classId: string,
     patch: Partial<Pick<
       UmlDiagramClass,
-      'name' | 'isAbstract' | 'isInterface'
+      'name' | 'isAbstract' | 'isInterface' | 'documentation'
     >>,
   ) => {
     recordChange();
@@ -529,7 +550,26 @@ export function useUmlDiagramPrimaryEditing(
 
   const beginClassDrag = useCallback(() => {
     dragHistorySavedRef.current = false;
+    dragGroupRef.current = null;
   }, []);
+
+  /**
+   * Dragging a selected class moves every selected class; dragging an
+   * unselected class moves only that class.
+   */
+  const collectDragGroup = useCallback((classId: string) => {
+    const selectedIds = getSelectedClassIds?.() ?? [];
+    const movedIds = new Set(
+      selectedIds.includes(classId) ? selectedIds : [classId],
+    );
+    const group = new Map<string, { x: number; y: number }>();
+    for (const classItem of classesRef.current) {
+      if (movedIds.has(classItem.id)) {
+        group.set(classItem.id, { x: classItem.x, y: classItem.y });
+      }
+    }
+    return group;
+  }, [getSelectedClassIds]);
 
   const moveClass = useCallback((
     classId: string,
@@ -540,16 +580,29 @@ export function useUmlDiagramPrimaryEditing(
       recordChange();
       dragHistorySavedRef.current = true;
     }
-    setClasses(previousClasses => previousClasses.map(classItem => (
-      classItem.id === classId ? { ...classItem, x, y } : classItem
-    )));
-    scheduleDebouncedLayoutSave();
-  }, [recordChange, scheduleDebouncedLayoutSave, setClasses]);
+    dragGroupRef.current ??= collectDragGroup(classId);
+    const group = dragGroupRef.current;
+    const anchor = group.get(classId);
+    if (!anchor || group.size <= 1) {
+      setClasses(previousClasses => previousClasses.map(classItem => (
+        classItem.id === classId ? { ...classItem, x, y } : classItem
+      )));
+      return;
+    }
+    const deltaX = x - anchor.x;
+    const deltaY = y - anchor.y;
+    setClasses(previousClasses => previousClasses.map(classItem => {
+      const start = group.get(classItem.id);
+      return start
+        ? { ...classItem, x: start.x + deltaX, y: start.y + deltaY }
+        : classItem;
+    }));
+  }, [collectDragGroup, recordChange, setClasses]);
 
   const finishClassDrag = useCallback(() => {
     dragHistorySavedRef.current = false;
-    scheduleLayoutSave();
-  }, [scheduleLayoutSave]);
+    dragGroupRef.current = null;
+  }, []);
 
   const addRelationship = useCallback((
     sourceId: string,
@@ -621,6 +674,7 @@ export function useUmlDiagramPrimaryEditing(
     deleteOperation,
     addClass,
     deleteClass,
+    deleteClasses,
     updateClass,
     getInheritanceParentId,
     setInheritanceParent,

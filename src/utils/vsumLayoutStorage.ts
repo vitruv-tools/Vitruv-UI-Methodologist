@@ -102,13 +102,34 @@ export function sanitizeVsumLayoutMap(raw: unknown): VsumLayoutMap {
   return clean;
 }
 
+function aliasUseCount(nodes: Node[], read: (node: Node) => string | undefined): Map<string, number> {
+  const counts = new Map<string, number>();
+  for (const node of nodes) {
+    if (node.type !== 'ecoreFile') continue;
+    const value = read(node);
+    if (!value) continue;
+    counts.set(value, (counts.get(value) ?? 0) + 1);
+  }
+  return counts;
+}
+
 export function captureVsumLayout(nodes: Node[]): VsumLayoutMap {
   const map: VsumLayoutMap = {};
+  const nsCounts = aliasUseCount(nodes, node => {
+    const nsUri = node.data?.nsUri;
+    return typeof nsUri === 'string' && nsUri ? nsUri : undefined;
+  });
+  const fileCounts = aliasUseCount(nodes, node => {
+    const fileName = node.data?.fileName;
+    return typeof fileName === 'string' && fileName ? fileName : undefined;
+  });
   for (const node of nodes) {
     if (node.type !== 'ecoreFile') continue;
     const coord: VsumCoord = { x: node.position.x, y: node.position.y };
     if (!isFiniteCoord(coord.x) || !isFiniteCoord(coord.y)) continue;
     for (const key of vsumLayoutKeys(vsumLayoutIdentityFromNode(node))) {
+      if (key.startsWith('ns:') && (nsCounts.get(key.slice(3)) ?? 0) > 1) continue;
+      if (key.startsWith('file:') && (fileCounts.get(key.slice(5)) ?? 0) > 1) continue;
       map[key] = coord;
     }
   }
