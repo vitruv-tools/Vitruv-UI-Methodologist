@@ -340,18 +340,19 @@ describe('ModelLibraryTable', () => {
     });
 
     it('blocks deletion up front for a model referenced by a project — only the reason and Cancel are shown', async () => {
-      const referencedModel = { ...existingModel, vsums: [{ id: 99 }] };
+      const referencedModel = { ...existingModel, vsums: [{ id: 99, name: 'Project A' }, {}] };
       apiService.findMetaModels.mockReset();
       mockLibraryFetch({ owned: [referencedModel] });
 
       renderLibrary();
       await waitFor(() => expect(screen.getByText('Existing Model')).toBeInTheDocument());
+      expect(screen.getByText('2 projects')).toHaveAttribute('title', 'Project A, 1 other project');
 
       fireEvent.click(screen.getByLabelText('Row actions'));
       fireEvent.click(screen.getByRole('menuitem', { name: 'Delete' }));
 
       // No API call and no way to confirm — the dialog opens already blocked.
-      expect(screen.getByText('This model is used by one or more projects and cannot be deleted.')).toBeInTheDocument();
+      expect(screen.getByText('This model is used by Project A, 1 other project and cannot be deleted.')).toBeInTheDocument();
       expect(apiService.deleteMetaModel).not.toHaveBeenCalled();
       expect(screen.queryByRole('button', { name: 'Delete' })).not.toBeInTheDocument();
       expect(screen.getByRole('button', { name: 'Cancel' })).toBeInTheDocument();
