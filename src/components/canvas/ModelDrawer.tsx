@@ -750,6 +750,7 @@ const DetailView: React.FC<DetailViewProps> = ({
           layoutScopeId={METAMODEL_PREVIEW_LAYOUT_SCOPE}
           ecoreContent={ecoreContent}
           saveContext={umlSaveContext}
+          saveShortcutEnabled
           onClose={() => {
             setUmlExpanded(false);
             // The preview shares the layout key; pick up classes moved in the full-screen editor.

@@ -12,6 +12,7 @@ interface MockFloatingUMLPanelProps {
   ecoreContent: string;
   saveContext?: UmlDiagramSaveContext;
   viewOnly: boolean;
+  saveShortcutEnabled: boolean;
   initialTop: number;
   initialRight: number;
   panelWidth: number;
@@ -108,6 +109,7 @@ describe('CanvasUmlPanelLayer', () => {
         modelName: 'First model',
       },
       viewOnly: true,
+      saveShortcutEnabled: true,
       initialTop: 10,
       initialRight: 20,
       panelWidth: 640,

@@ -44,6 +44,7 @@ export const CanvasUmlPanelLayer: React.FC<CanvasUmlPanelLayerProps> = ({
         ecoreContent={panel.ecoreContent}
         saveContext={buildSaveContext(panel)}
         viewOnly={viewOnly}
+        saveShortcutEnabled
         initialTop={panel.top}
         initialRight={panel.right}
         panelWidth={panel.width}

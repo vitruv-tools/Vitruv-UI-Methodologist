@@ -2,6 +2,7 @@ import React from 'react';
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { CanvasPage } from '../../pages/CanvasPage';
 import { apiService } from '../../services/api';
+import { useModalBodyLock } from '../../components/ui/modalUtils';
 
 const mockNavigate = jest.fn();
 let mockRouteId = '10';
@@ -59,6 +60,10 @@ jest.mock('../../components/flow/FlowCanvas', () => {
           {props.projectTabsBelowModeToggle}
           {nodes.map((node: any) => <span key={node.id}>{node.id}</span>)}
           <span data-testid="canvas-viewport">{`${viewport.x},${viewport.y},${viewport.zoom}`}</span>
+          {/* Like a model card, which stops every key event while it has the focus. */}
+          <div role="button" tabIndex={0} onKeyDown={(e: any) => e.stopPropagation()}>
+            Test model card
+          </div>
           <button type="button" onClick={() => setViewport({ x: 120, y: 80, zoom: 1.5 })}>
             Pan test canvas
           </button>
@@ -93,6 +98,7 @@ jest.mock('../../services/api', () => ({
     downloadVsumBundle: jest.fn(),
     renameVsum: jest.fn(),
     deleteMetaModel: jest.fn(),
+    syncVsumChanges: jest.fn(),
   },
 }));
 
@@ -154,19 +160,19 @@ describe('CanvasPage invalid project routes', () => {
   });
 });
 
-describe('CanvasPage project tabs', () => {
-  const vsumDetails = (id: number, name: string) => ({
-    data: { id, name, metaModels: [], metaModelsRelation: [], createdAt: '', updatedAt: '' },
+const vsumDetails = (id: number, name: string) => ({
+  data: { id, name, metaModels: [], metaModelsRelation: [], createdAt: '', updatedAt: '' },
+});
+
+/** Waits until the project's tab is there and its loading overlay is gone. */
+async function waitForProject(name: string) {
+  await screen.findByRole('tab', { name: new RegExp(name) });
+  await waitFor(() => {
+    expect(screen.queryByText(/Loading project…|Opening workspace…/)).not.toBeInTheDocument();
   });
+}
 
-  /** Waits until the project's tab is there and its loading overlay is gone. */
-  async function waitForProject(name: string) {
-    await screen.findByRole('tab', { name: new RegExp(name) });
-    await waitFor(() => {
-      expect(screen.queryByText(/Loading project…|Opening workspace…/)).not.toBeInTheDocument();
-    });
-  }
-
+describe('CanvasPage project tabs', () => {
   const addModel = () => fireEvent.click(screen.getByRole('button', { name: 'Add test model' }));
   const canvasModels = () => within(screen.getByTestId('flow-canvas'))
     .queryAllByText(/^model-\d+$/)
@@ -220,5 +226,61 @@ describe('CanvasPage project tabs', () => {
 
     fireEvent.click(screen.getByRole('tab', { name: /Project B/ }));
     await waitFor(() => expect(viewport()).toBe('0,0,1'));
+  });
+});
+
+describe('CanvasPage save shortcut', () => {
+  const OpenModal = () => {
+    useModalBodyLock(true);
+    return null;
+  };
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    mockRouteId = '10';
+    (apiService.findMetaModels as jest.Mock).mockResolvedValue({ data: [] });
+    (apiService.getVsumMembers as jest.Mock).mockResolvedValue({ data: [] });
+    (apiService.getVsum as jest.Mock).mockResolvedValue({ data: {} });
+    (apiService.getVsumsPaginated as jest.Mock).mockResolvedValue({ data: [] });
+    (apiService.getVsumDetails as jest.Mock).mockResolvedValue(vsumDetails(10, 'Project A'));
+    (apiService.syncVsumChanges as jest.Mock).mockResolvedValue({ data: { message: 'Saved' } });
+  });
+
+  it('saves the project with Cmd+S instead of opening the browser dialog', async () => {
+    render(<CanvasPage />);
+    await waitForProject('Project A');
+
+    const notPrevented = fireEvent.keyDown(document, { key: 's', metaKey: true });
+
+    expect(notPrevented).toBe(false);
+    await waitFor(() => expect(apiService.syncVsumChanges).toHaveBeenCalledTimes(1));
+    expect((apiService.syncVsumChanges as jest.Mock).mock.calls[0][0]).toBe(10);
+  });
+
+  it('saves the project with Cmd+S while a model on the canvas has the focus', async () => {
+    render(<CanvasPage />);
+    await waitForProject('Project A');
+    const modelCard = screen.getByRole('button', { name: 'Test model card' });
+    modelCard.focus();
+
+    const notPrevented = fireEvent.keyDown(modelCard, { key: 's', metaKey: true });
+
+    expect(notPrevented).toBe(false);
+    await waitFor(() => expect(apiService.syncVsumChanges).toHaveBeenCalledTimes(1));
+  });
+
+  it('leaves Cmd+S to an open editor or dialog', async () => {
+    render(
+      <>
+        <CanvasPage />
+        <OpenModal />
+      </>,
+    );
+    await waitForProject('Project A');
+
+    const notPrevented = fireEvent.keyDown(document, { key: 's', ctrlKey: true });
+
+    expect(notPrevented).toBe(false);
+    expect(apiService.syncVsumChanges).not.toHaveBeenCalled();
   });
 });
