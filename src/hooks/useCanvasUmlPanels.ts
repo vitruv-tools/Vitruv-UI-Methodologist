@@ -26,6 +26,8 @@ interface UseCanvasUmlPanelsOptions {
   getCanvasNodes: () => Node[];
   fetchEcoreFile: (fileId: number) => Promise<string>;
   updateEcoreFileData?: UpdateEcoreFileData;
+  /** Stores edited ecore in the project's copy; `libraryMetaModelId` is the meta model's `sourceId`. */
+  persistProjectEcore: (libraryMetaModelId: number, ecoreContent: string) => Promise<void>;
   onLoadError: (message: CanvasUmlPanelLoadErrorMessage) => void;
 }
 
@@ -63,6 +65,7 @@ export function useCanvasUmlPanels({
   getCanvasNodes,
   fetchEcoreFile,
   updateEcoreFileData,
+  persistProjectEcore,
   onLoadError,
 }: UseCanvasUmlPanelsOptions): UseCanvasUmlPanelsResult {
   const [umlPanels, setUmlPanels] = useState<CanvasUmlPanelState[]>([]);
@@ -159,16 +162,17 @@ export function useCanvasUmlPanels({
   const buildUmlSaveContext = useCallback((
     panel: CanvasUmlPanelState,
   ): UmlDiagramSaveContext | undefined => {
-    if (isViewOnly || !panel.ecoreFileId) return undefined;
     const libraryMetaModelId = panel.metaModelSourceId ?? panel.metaModelId;
+    if (isViewOnly || !panel.ecoreFileId || !libraryMetaModelId) return undefined;
     return {
-      metaModelId: libraryMetaModelId ? String(libraryMetaModelId) : '',
+      metaModelId: String(libraryMetaModelId),
       ecoreFileId: panel.ecoreFileId,
       modelName: panel.title,
       saveTarget: 'workspace',
+      persistWorkspaceEcore: ecoreContent => persistProjectEcore(libraryMetaModelId, ecoreContent),
       onSaved: result => handleUmlPanelSaved(panel.id, panel.fileName, result),
     };
-  }, [handleUmlPanelSaved, isViewOnly]);
+  }, [handleUmlPanelSaved, isViewOnly, persistProjectEcore]);
 
   const clearPanels = useCallback(() => {
     setUmlPanels([]);

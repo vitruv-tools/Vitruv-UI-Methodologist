@@ -87,7 +87,7 @@ function isPastePositionTarget(target: EventTarget | null): boolean {
   );
 }
 
-/** `library` persists to the metamodel library API; `workspace` only updates the open project/session copy. */
+/** `library` persists to the metamodel library API; `workspace` persists to the project's copy via `persistWorkspaceEcore`. */
 export type UmlDiagramSaveTarget = 'library' | 'workspace';
 
 export interface UmlDiagramSaveContext {
@@ -96,6 +96,8 @@ export interface UmlDiagramSaveContext {
   modelName: string;
   /** Defaults to `library` (Model Library / drawer). Canvas UML uses `workspace`. */
   saveTarget?: UmlDiagramSaveTarget;
+  /** `workspace` only: stores the serialized ecore in the project's copy. Rejects to keep the changes unsaved. */
+  persistWorkspaceEcore?: (ecoreContent: string) => Promise<void>;
   /** Passed to library save so relink works when GET /meta-models/{id} is unavailable. */
   metaModelMetadata?: MetaModelSaveMetadata;
   onSaved?: (result: { ecoreContent: string; ecoreFileId: number }) => void;
@@ -160,6 +162,14 @@ function getSaveButtonTitle(
   if (!hasSemanticChanges) return 'Save class positions';
   if (saveContext.saveTarget === 'workspace') return 'Save changes to project';
   return 'Save metamodel changes';
+}
+
+async function saveWorkspaceEcore(
+  saveContext: UmlDiagramSaveContext,
+  ecoreContent: string,
+): Promise<{ ecoreContent: string; ecoreFileId: number }> {
+  await saveContext.persistWorkspaceEcore?.(ecoreContent);
+  return { ecoreContent, ecoreFileId: saveContext.ecoreFileId };
 }
 
 export const UMLDiagram = forwardRef<UMLDiagramHandle, UMLDiagramProps>(({
@@ -552,10 +562,7 @@ const rels = useMemo(
     try {
       const result =
         saveContext.saveTarget === 'workspace'
-          ? {
-              ecoreContent: umlToEcore(getModel(), originalEcore),
-              ecoreFileId: saveContext.ecoreFileId,
-            }
+          ? await saveWorkspaceEcore(saveContext, umlToEcore(getModel(), originalEcore))
           : await saveMetaModelEcore({
               metaModelId: saveContext.metaModelId,
               ecoreFileId: saveContext.ecoreFileId,
