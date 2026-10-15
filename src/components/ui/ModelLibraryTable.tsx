@@ -32,6 +32,8 @@ import {
   extractCreatePayload,
   fetchLibraryMetaModels,
   fetchLibraryMetaModelsAfterCreate,
+  describeProjectUsage,
+  formatProjectUsageLabel,
   isModelReferencedByProjects,
   LibraryMetaModel,
 } from '../../utils/metaModelList';
@@ -932,7 +934,7 @@ export const ModelLibraryTable: React.FC<ModelLibraryTableProps> = ({ onModelOpe
     if (!model.isOwnedByCurrentUser) {
       setDeleteError('Only the owner of this model can delete it.');
     } else if (isModelReferencedByProjects(model)) {
-      setDeleteError('This model is used by one or more projects and cannot be deleted.');
+      setDeleteError(`This model is used by ${describeProjectUsage(model)} and cannot be deleted.`);
     } else {
       setDeleteError('');
     }
@@ -1257,8 +1259,11 @@ const TableRow: React.FC<TableRowProps> = ({ model, onView, onEdit, onDelete }) 
       <td style={{ padding: '13px 16px', fontSize: 14, color: 'var(--v-text-muted)' }}>{formatDate(model.createdAt)}</td>
       <td style={{ padding: '13px 16px' }}>
         {hasProjects ? (
-          <span style={{ padding: '3px 10px', background: 'var(--v-surface-muted)', border: '1px solid var(--v-border)', borderRadius: 20, fontSize: 12, color: 'var(--v-text-secondary)', fontWeight: 500 }}>
-            Projects
+          <span
+            title={describeProjectUsage(model)}
+            style={{ padding: '3px 10px', background: 'var(--v-surface-muted)', border: '1px solid var(--v-border)', borderRadius: 20, fontSize: 12, color: 'var(--v-text-secondary)', fontWeight: 500 }}
+          >
+            {formatProjectUsageLabel(model)}
           </span>
         ) : (
           <span style={{ color: 'var(--v-text-faint)', fontSize: 14 }}>--</span>

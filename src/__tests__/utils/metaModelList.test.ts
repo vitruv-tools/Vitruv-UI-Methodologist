@@ -1,5 +1,7 @@
 import {
+  describeProjectUsage,
   extractCreatePayload,
+  formatProjectUsageLabel,
   fetchLibraryMetaModels,
   fetchLibraryMetaModelsAfterCreate,
   findMatchingCreatedModel,
@@ -65,6 +67,34 @@ describe('isModelReferencedByProjects', () => {
 
   it('is true when the model has at least one project reference', () => {
     expect(isModelReferencedByProjects({ id: 1, name: 'Eco', projects: [{ id: 1 }] })).toBe(true);
+  });
+});
+
+describe('formatProjectUsageLabel', () => {
+  it('counts every project entry, including ones without details', () => {
+    expect(formatProjectUsageLabel({ id: 1, name: 'Eco', vsums: [{ id: 1, name: 'A' }] })).toBe('1 project');
+    expect(formatProjectUsageLabel({ id: 1, name: 'Eco', vsums: [{ id: 1, name: 'A' }, {}] })).toBe('2 projects');
+  });
+});
+
+describe('describeProjectUsage', () => {
+  it('lists visible project names and marks trashed ones', () => {
+    const model = {
+      id: 1,
+      name: 'Eco',
+      vsums: [{ id: 1, name: 'Alpha' }, { id: 2, name: 'Beta', removedAt: '2026-01-01T00:00:00Z' }],
+    };
+    expect(describeProjectUsage(model)).toBe('Alpha, Beta (in trash)');
+  });
+
+  it('only counts projects the user cannot see', () => {
+    expect(describeProjectUsage({ id: 1, name: 'Eco', vsums: [{ id: 1, name: 'Alpha' }, {}, {}] }))
+      .toBe('Alpha, 2 other projects');
+    expect(describeProjectUsage({ id: 1, name: 'Eco', vsums: [{}] })).toBe('1 project');
+  });
+
+  it('falls back to a count for the untyped projects field', () => {
+    expect(describeProjectUsage({ id: 1, name: 'Eco', projects: [{}, {}] })).toBe('2 projects');
   });
 });
 

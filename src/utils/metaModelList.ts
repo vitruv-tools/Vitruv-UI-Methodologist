@@ -13,15 +13,57 @@ export interface LibraryMetaModel {
   updatedAt?: string;
   ecoreFileId?: number;
   genModelFileId?: number;
-  vsums?: unknown[];
+  /** Projects (V-SUMs) using this model through a clone, one entry per project. */
+  vsums?: MetaModelVsumUsage[];
   projects?: unknown[];
   /** True when the current user owns this model (derived from the `ownedByUser: true` fetch bucket). */
   isOwnedByCurrentUser?: boolean;
 }
 
+/**
+ * A project (V-SUM) that uses a library model. The backend leaves all fields empty for projects
+ * the current user is not a member of, so only the entry itself counts for those.
+ */
+export interface MetaModelVsumUsage {
+  id?: number | null;
+  name?: string | null;
+  /** Set when the project is in the trash; it still blocks deleting the model. */
+  removedAt?: string | null;
+}
+
+/** Number of projects that use the model. */
+export function getProjectUsageCount(model: LibraryMetaModel): number {
+  return Math.max(model.vsums?.length ?? 0, model.projects?.length ?? 0);
+}
+
 /** True when a model is referenced by at least one project in any V-SUM. */
 export function isModelReferencedByProjects(model: LibraryMetaModel): boolean {
-  return (model.vsums?.length ?? 0) > 0 || (model.projects?.length ?? 0) > 0;
+  return getProjectUsageCount(model) > 0;
+}
+
+const projectNoun = (count: number) => (count === 1 ? 'project' : 'projects');
+
+const pluralizeProjects = (count: number) => `${count} ${projectNoun(count)}`;
+
+/** Short badge text such as "1 project" or "3 projects". */
+export function formatProjectUsageLabel(model: LibraryMetaModel): string {
+  return pluralizeProjects(getProjectUsageCount(model));
+}
+
+/**
+ * Names of the projects using the model, e.g. "Alpha, Beta (in trash), 1 other project".
+ * Projects the current user cannot see are only counted.
+ */
+export function describeProjectUsage(model: LibraryMetaModel): string {
+  const visibleNames = (model.vsums ?? [])
+    .filter((vsum): vsum is MetaModelVsumUsage & { name: string } => Boolean(vsum?.name))
+    .map((vsum) => (vsum.removedAt ? `${vsum.name} (in trash)` : vsum.name));
+  const hiddenCount = getProjectUsageCount(model) - visibleNames.length;
+  if (hiddenCount <= 0) return visibleNames.join(', ');
+  const hidden = visibleNames.length > 0
+    ? `${hiddenCount} other ${projectNoun(hiddenCount)}`
+    : pluralizeProjects(hiddenCount);
+  return [...visibleNames, hidden].join(', ');
 }
 
 export interface CreateMetaModelPayload {
