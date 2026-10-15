@@ -35,9 +35,18 @@ export const modalDialogShellStyle: React.CSSProperties = {
 };
 
 /** Prevent background scroll and interaction while a modal is open. */
+/** Number of open modals that lock the page scroll, see {@link useModalBodyLock}. */
+let openModalCount = 0;
+
+/** True while any modal that uses {@link useModalBodyLock} is open. */
+export function isAnyModalOpen(): boolean {
+  return openModalCount > 0;
+}
+
 export function useModalBodyLock(active: boolean): void {
   useEffect(() => {
     if (!active) return;
+    openModalCount += 1;
     const prevOverflow = document.body.style.overflow;
     const prevPaddingRight = document.body.style.paddingRight;
     const scrollbarWidth = window.innerWidth - document.documentElement.clientWidth;
@@ -46,6 +55,7 @@ export function useModalBodyLock(active: boolean): void {
       document.body.style.paddingRight = `${scrollbarWidth}px`;
     }
     return () => {
+      openModalCount -= 1;
       document.body.style.overflow = prevOverflow;
       document.body.style.paddingRight = prevPaddingRight;
     };

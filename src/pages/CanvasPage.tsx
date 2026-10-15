@@ -15,7 +15,7 @@ import { useProjectStore } from '../store/Project';
 import { createVsumDetailsStore, getVsumDetailsStore, hasVsumDetailsStore } from '../store/VsumDetails';
 import type { EditableVsumDetails } from '../types/EditableVsumDetails';
 import { WorkspaceSnapshot, WorkspaceSnapshotRequest } from '../types/workspace';
-import { MODAL_Z_INDEX, useModalBodyLock } from '../components/ui/modalUtils';
+import { MODAL_Z_INDEX, isAnyModalOpen, useModalBodyLock } from '../components/ui/modalUtils';
 import { CanvasProjectTabs } from '../components/canvas/CanvasProjectTabs';
 import { CanvasProjectLoadStateOverlay } from '../components/canvas/CanvasProjectLoadStateOverlay';
 import {
@@ -1434,6 +1434,21 @@ export const CanvasPage: React.FC = () => {
       setSavingChanges(false);
     }
   }, [activeProjectId, activeInstanceId, setBaselineForInstance, isViewOnly, showPopup, showPopupError]);
+
+  // Cmd/Ctrl+S saves the project instead of opening the browser's "Save Page As" dialog.
+  // While an editor or dialog is open, the shortcut is left to it: the UML and reaction
+  // editors save their own content. Listens in the capture phase because model cards on the
+  // canvas stop every key event while they have the focus.
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (!(event.ctrlKey || event.metaKey) || event.key.toLowerCase() !== 's') return;
+      event.preventDefault();
+      if (isAnyModalOpen() || savingChanges) return;
+      void handleSaveChanges();
+    };
+    document.addEventListener('keydown', onKeyDown, true);
+    return () => document.removeEventListener('keydown', onKeyDown, true);
+  }, [handleSaveChanges, savingChanges]);
 
   const navigateHome = useCallback(() => navigate('/'), [navigate]);
 
