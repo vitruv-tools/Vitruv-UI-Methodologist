@@ -87,11 +87,12 @@ interface ProjectRowProps {
   onDetails: () => void;
   onDelete: () => void;
   onRecover: () => void;
+  onDeletePermanently: () => void;
   onOpen?: () => void;
 }
 
 const ProjectRow: React.FC<ProjectRowProps> = ({
-  item, showDeleted, isUnread = false, scrollRootRef, onDetails, onDelete, onRecover, onOpen,
+  item, showDeleted, isUnread = false, scrollRootRef, onDetails, onDelete, onRecover, onDeletePermanently, onOpen,
 }) => {
   const [hovered, setHovered] = useState(false);
   const role = resolveVsumAccessRole(item.role, item.roleEn) ?? item.role;
@@ -182,14 +183,24 @@ const ProjectRow: React.FC<ProjectRowProps> = ({
       {/* Actions */}
       <td style={{ padding: '13px 16px' }} onClick={e => e.stopPropagation()}>
         {showDeleted ? (
-          <button type="button"
-            onClick={onRecover}
-            style={{ padding: '6px 14px', border: 'none', borderRadius: 7, background: '#10b981', color: '#fff', fontSize: 13, fontWeight: 600, cursor: 'pointer', transition: 'background 0.15s' }}
-            onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.background = '#059669'; }}
-            onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.background = '#10b981'; }}
-          >
-            Restore
-          </button>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+            <button type="button"
+              onClick={onRecover}
+              style={{ padding: '6px 14px', border: 'none', borderRadius: 7, background: '#10b981', color: '#fff', fontSize: 13, fontWeight: 600, cursor: 'pointer', transition: 'background 0.15s' }}
+              onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.background = '#059669'; }}
+              onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.background = '#10b981'; }}
+            >
+              Restore
+            </button>
+            <button type="button"
+              onClick={onDeletePermanently}
+              style={{ padding: '6px 14px', border: '1px solid #fca5a5', borderRadius: 7, background: 'transparent', color: '#dc2626', fontSize: 13, fontWeight: 600, cursor: 'pointer', transition: 'background 0.15s' }}
+              onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.background = 'var(--v-danger-bg)'; }}
+              onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.background = 'transparent'; }}
+            >
+              Delete permanently
+            </button>
+          </div>
         ) : (
           <PortalRowActionsMenu
             scrollRootRef={scrollRootRef}
@@ -238,6 +249,9 @@ export const ProjectsView: React.FC<ProjectsViewProps> = ({
   const [deleteError, setDeleteError] = useState('');
   const [recoverConfirmId, setRecoverConfirmId] = useState<number | null>(null);
   const [recoveringId, setRecoveringId] = useState<number | null>(null);
+  const [permanentDeleteId, setPermanentDeleteId] = useState<number | null>(null);
+  const [permanentDeleteError, setPermanentDeleteError] = useState('');
+  const [permanentDeleting, setPermanentDeleting] = useState(false);
 
   const tableBodyRef = useRef<HTMLDivElement>(null);
   const rafRef = useRef<number | null>(null);
@@ -378,6 +392,25 @@ export const ProjectsView: React.FC<ProjectsViewProps> = ({
       setError(e?.message || 'Failed to restore');
     } finally {
       setRecoveringId(null);
+    }
+  };
+
+  const closePermanentDeleteDialog = () => {
+    setPermanentDeleteId(null);
+    setPermanentDeleteError('');
+  };
+
+  const handleDeletePermanently = async () => {
+    if (!permanentDeleteId || permanentDeleting) return;
+    setPermanentDeleting(true);
+    try {
+      await apiService.deleteVsumPermanently(permanentDeleteId);
+      closePermanentDeleteDialog();
+      void loadFirstPage();
+    } catch (e: any) {
+      setPermanentDeleteError(e?.message || 'Failed to delete permanently');
+    } finally {
+      setPermanentDeleting(false);
     }
   };
 
@@ -542,7 +575,7 @@ export const ProjectsView: React.FC<ProjectsViewProps> = ({
             <thead>
               <tr style={{ borderBottom: '1px solid var(--v-border-subtle)' }}>
                 {['Name', showDeleted ? 'Deleted on' : 'Created on', 'Status', 'Actions'].map((col, i) => (
-                  <th key={col} style={{ padding: '12px 16px', textAlign: 'left', fontSize: 12, fontWeight: 600, color: 'var(--v-text-muted)', letterSpacing: '0.04em', textTransform: 'uppercase', background: 'var(--v-table-header)', borderBottom: '1px solid var(--v-border-subtle)', whiteSpace: 'nowrap', width: i === 3 ? 120 : undefined }}>
+                  <th key={col} style={{ padding: '12px 16px', textAlign: 'left', fontSize: 12, fontWeight: 600, color: 'var(--v-text-muted)', letterSpacing: '0.04em', textTransform: 'uppercase', background: 'var(--v-table-header)', borderBottom: '1px solid var(--v-border-subtle)', whiteSpace: 'nowrap', width: i === 3 ? (showDeleted ? 260 : 120) : undefined }}>
                     {col}
                   </th>
                 ))}
@@ -574,6 +607,7 @@ export const ProjectsView: React.FC<ProjectsViewProps> = ({
                     onDetails={() => setDetailsId(item.id)}
                     onDelete={() => setDeletingId(item.id)}
                     onRecover={() => setRecoverConfirmId(item.id)}
+                    onDeletePermanently={() => setPermanentDeleteId(item.id)}
                     onOpen={() => {
                       if (isSharedProject(item)) onSharedProjectOpened?.(item.id);
                     }}
@@ -625,6 +659,21 @@ export const ProjectsView: React.FC<ProjectsViewProps> = ({
         variant="success"
         onConfirm={handleRecover}
         onCancel={() => setRecoverConfirmId(null)}
+      />
+      <ConfirmDialog
+        isOpen={permanentDeleteId !== null}
+        title="Delete permanently"
+        message={
+          permanentDeleteError
+          || (permanentDeleting
+            ? 'Deleting...'
+            : 'Do you really want to delete this project permanently? This cannot be undone.')
+        }
+        confirmText="Delete permanently"
+        cancelText="Cancel"
+        variant="danger"
+        onConfirm={handleDeletePermanently}
+        onCancel={closePermanentDeleteDialog}
       />
     </div>
   );

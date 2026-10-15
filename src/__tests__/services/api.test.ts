@@ -403,6 +403,30 @@ describe('ApiService – downloadVsumBundle', () => {
   });
 });
 
+// ── deleteVsumPermanently ─────────────────────────────────────────────────────
+
+describe('ApiService – deleteVsumPermanently', () => {
+  const { AuthService } = require('../../services/auth') as { AuthService: { ensureValidToken: jest.Mock } };
+  beforeEach(() => { AuthService.ensureValidToken.mockResolvedValue('mock-token'); });
+  afterEach(() => jest.restoreAllMocks());
+
+  it('calls DELETE /api/v1/vsums/{id}/permanent', async () => {
+    mockFetch({ message: 'Vsum permanently deleted' });
+    const fetchSpy = jest.spyOn(global, 'fetch');
+
+    await apiService.deleteVsumPermanently(42);
+
+    const [url, options] = fetchSpy.mock.calls[0] as [string, RequestInit];
+    expect(url).toContain('/api/v1/vsums/42/permanent');
+    expect(options.method).toBe('DELETE');
+  });
+
+  it('rejects with the backend error message on failure', async () => {
+    mockFetch({ message: 'Vsum id not found' }, 404);
+    await expect(apiService.deleteVsumPermanently(99)).rejects.toThrow('Vsum id not found');
+  });
+});
+
 // ── updateUserName ────────────────────────────────────────────────────────────
 
 describe('ApiService – updateUserName', () => {
