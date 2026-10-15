@@ -3,6 +3,7 @@ import ReactDOM from 'react-dom';
 import { apiService } from '../../services/api';
 import { DEFAULT_META_MODEL_VERSION } from '../../utils/metaModelVersion';
 import { createEmptyEcoreFile, toEPackageName } from '../../utils/emptyEcore';
+import { findEcoreDownloadProblem, readBlobAsText } from '../../utils/ecoreDownload';
 import { KeywordTagsInput } from './KeywordTagsInput';
 import {
   modalOverlayStyle,
@@ -1140,16 +1141,28 @@ function useCreateModelForm({ isOpen, onClose, onSuccess }: CreateModelModalProp
     setFieldErrors(prev => ({ ...prev, files: '' }));
 
     try {
-      if (currentFileId > 0) {
-        await apiService.deleteFile(currentFileId)
-          .catch(() => console.warn('Failed to delete previous file'));
-      }
       startProgressSimulation(kind);
       const fetchResponse = await fetch(rawUrl);
       if (!fetchResponse.ok) {
         throw new Error(`Server returned ${fetchResponse.status} ${fetchResponse.statusText}`);
       }
       const blob = await fetchResponse.blob();
+      // A web page or other non-model content is rejected before anything reaches the backend,
+      // so it neither replaces the previous upload nor fails later when the model is created.
+      const contentProblem = findEcoreDownloadProblem(
+        await readBlobAsText(blob),
+        fetchResponse.headers?.get('content-type') ?? blob.type,
+      );
+      if (contentProblem) {
+        stopProgressSimulation(kind);
+        setUploadProgress(prev => ({ ...prev, [kind]: { progress: 0, isUploading: false } }));
+        updateKind(kind, { uploadError: contentProblem });
+        return;
+      }
+      if (currentFileId > 0) {
+        await apiService.deleteFile(currentFileId)
+          .catch(() => console.warn('Failed to delete previous file'));
+      }
       const fileName = urlPath.split('/').pop() || `imported${ext}`;
       const file = new File([blob], fileName, { type: blob.type || 'application/octet-stream' });
       const response = await apiService.uploadFile(file, apiType);

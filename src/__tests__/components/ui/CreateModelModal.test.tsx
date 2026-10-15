@@ -93,10 +93,13 @@ const uploadEcoreViaFileMode = async () => {
   });
 };
 
-const mockFetchOk = (content = '<content/>') => {
-  const blob = new Blob([content], { type: 'application/octet-stream' });
+const ECORE_CONTENT = '<?xml version="1.0" encoding="UTF-8"?>\n<ecore:EPackage name="m"/>';
+
+const mockFetchOk = (content = ECORE_CONTENT, contentType = 'application/octet-stream') => {
+  const blob = new Blob([content], { type: contentType });
   (global as any).fetch = jest.fn().mockResolvedValue({
     ok: true,
+    headers: { get: (name: string) => (name.toLowerCase() === 'content-type' ? contentType : null) },
     blob: jest.fn().mockResolvedValue(blob),
   });
 };
@@ -282,7 +285,7 @@ describe('CreateModelModal', () => {
     });
 
     it('imports a .ecore file from a valid URL and calls uploadFile with ECORE type', async () => {
-      mockFetchOk('<ecore/>');
+      mockFetchOk();
       render(<CreateModelModal isOpen onClose={jest.fn()} />);
       fireEvent.click(screen.getByText('URL'));
       fireEvent.change(screen.getByPlaceholderText(/model\.ecore/i), {
@@ -297,7 +300,7 @@ describe('CreateModelModal', () => {
     });
 
     it('shows ✓ Ready badge after a successful .ecore URL import', async () => {
-      mockFetchOk('<ecore/>');
+      mockFetchOk();
       render(<CreateModelModal isOpen onClose={jest.fn()} />);
       fireEvent.click(screen.getByText('URL'));
       fireEvent.change(screen.getByPlaceholderText(/model\.ecore/i), {
@@ -323,6 +326,65 @@ describe('CreateModelModal', () => {
       });
       await waitFor(() => {
         expect(screen.getByText(/Failed to import .ecore from URL/i)).toBeInTheDocument();
+      });
+    });
+
+    const importFromUrl = (url = 'https://example.com/model.ecore') => {
+      fireEvent.click(screen.getByText('URL'));
+      fireEvent.change(screen.getByPlaceholderText(/model\.ecore/i), { target: { value: url } });
+      fireEvent.click(screen.getByText('Import'));
+    };
+
+    it.each([
+      ['an HTML page', '<!DOCTYPE html><html><body>File viewer</body></html>', 'text/html; charset=utf-8'],
+      ['HTML sent as plain text', '\n  <html lang="en"><head><title>Sign in</title></head></html>', 'text/plain'],
+    ])('rejects a URL that returns %s and uploads nothing', async (_label, content, contentType) => {
+      mockFetchOk(content, contentType);
+      render(<CreateModelModal isOpen onClose={jest.fn()} />);
+
+      importFromUrl();
+
+      expect(await screen.findByText(/returned a web page, not the .ecore file itself/i)).toBeInTheDocument();
+      expect(apiService.uploadFile).not.toHaveBeenCalled();
+      expect(screen.queryByText(/Successfully imported/i)).not.toBeInTheDocument();
+      expect(screen.queryByText(/Ready/)).not.toBeInTheDocument();
+    });
+
+    it.each([
+      ['JSON', '{"error":"not found"}', /the content is not XML/i],
+      ['an XML error document', '<?xml version="1.0"?><Error><Code>NoSuchKey</Code></Error>', /starts with <Error>/i],
+    ])('rejects a URL that returns %s and uploads nothing', async (_label, content, message) => {
+      mockFetchOk(content, 'application/octet-stream');
+      render(<CreateModelModal isOpen onClose={jest.fn()} />);
+
+      importFromUrl();
+
+      expect(await screen.findByText(message)).toBeInTheDocument();
+      expect(apiService.uploadFile).not.toHaveBeenCalled();
+    });
+
+    it('keeps the previous upload when importing the same URL again returns a web page', async () => {
+      mockFetchOk();
+      render(<CreateModelModal isOpen onClose={jest.fn()} />);
+      importFromUrl();
+      await waitFor(() => expect(apiService.uploadFile).toHaveBeenCalledTimes(1));
+
+      mockFetchOk('<!DOCTYPE html><html></html>', 'text/html');
+      fireEvent.click(screen.getByText('Done'));
+
+      expect(await screen.findByText(/returned a web page/i)).toBeInTheDocument();
+      expect(apiService.deleteFile).not.toHaveBeenCalled();
+      expect(apiService.uploadFile).toHaveBeenCalledTimes(1);
+    });
+
+    it('accepts an .ecore file with a byte order mark and an XML declaration', async () => {
+      mockFetchOk('\uFEFF<?xml version="1.0" encoding="UTF-8"?>\n<ecore:EPackage name="m"/>', 'text/plain');
+      render(<CreateModelModal isOpen onClose={jest.fn()} />);
+
+      importFromUrl();
+
+      await waitFor(() => {
+        expect(apiService.uploadFile).toHaveBeenCalledWith(expect.any(File), 'ECORE');
       });
     });
 
@@ -378,7 +440,7 @@ describe('CreateModelModal', () => {
     if (mode === 'file') {
       await uploadEcoreViaFileMode();
     } else {
-      mockFetchOk('<ecore/>');
+      mockFetchOk();
 
       fireEvent.click(screen.getByText('URL'));
 
