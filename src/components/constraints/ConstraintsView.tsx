@@ -5,7 +5,7 @@ import { Node } from 'reactflow';
 import { cardColor } from '../flow/EcoreFileBox';
 import { APP_FONT } from '../ui/sharedStyles';
 import { apiService } from '../../services/api';
-import { writeStoredOcl } from '../../utils/oclStorage';
+import { hasClearedRuleSets, markRuleSetsCleared, writeStoredOcl } from '../../utils/oclStorage';
 import { CodeEditorModal } from '../flow/CodeEditorModal';
 import { useOclLsp } from '../../hooks/useOclLsp';
 import { MODAL_Z_INDEX, getAppPortalRoot, useModalBodyLock } from '../ui/modalUtils';
@@ -290,6 +290,11 @@ function parseRulesFromOcl(oclContent: string, ruleSetId: string): ConstraintRul
 /** Serializes all rules in a RuleSet to a single .ocl file string. */
 function ruleSetToOcl(ruleSet: RuleSet): string {
   return ruleSet.rules.map(r => r.oclDefinition).join('\n\n');
+}
+
+/** Request body for creating or updating a rule set on the backend. */
+function ruleSetBody(rs: RuleSet) {
+  return { name: rs.name, color: rs.color, description: rs.description, oclContent: ruleSetToOcl(rs) };
 }
 
 /** Returns project-specific default rule sets based on which metamodels are present on the canvas. */
@@ -1729,60 +1734,141 @@ export const ConstraintsView: React.FC<ConstraintsViewProps> = ({ vsumId: _vsumI
   }, [filterNodeId, canvasNodes]);
 
   const [ruleSets, setRuleSets] = useState<RuleSet[]>([]);
-  const defaultsAppliedRef = useRef(false);
+  const ruleSetsRef = useRef(ruleSets);
+  ruleSetsRef.current = ruleSets;
 
-  // Load rule sets from backend on mount; fall back to canvas-derived defaults.
+  // 'pending' while the project's saved rule sets load, 'none' when there are none (or there is no
+  // project), 'failed' when loading failed: then it is unknown whether the project has any.
+  const [savedRuleSets, setSavedRuleSets] = useState<'pending' | 'none' | 'loaded' | 'failed'>(
+    vsumId == null ? 'none' : 'pending',
+  );
+  // Set by the user's first change; from then on the predefined rule sets are left alone.
+  const userChangedRef = useRef(false);
+  // Ids of the predefined rule sets currently shown, while the user has not changed anything.
+  const shownDefaultsRef = useRef('');
+  // Set while rule sets are shown that are not saved yet: the predefined ones, or ones whose create
+  // request failed. The next change saves all of them.
+  const saveUnsavedRef = useRef(false);
+  // Create requests still running, with the newest version of the set to send once they return:
+  // the handlers below may run twice (React StrictMode) and users can edit faster than requests.
+  const pendingCreatesRef = useRef(new Map<string, { latest: RuleSet | null; deleted: boolean }>());
+
+  // Load the project's rule sets once; canvas changes must not trigger another request.
   useEffect(() => {
-    if (defaultsAppliedRef.current) return;
+    if (vsumId == null) return;
+    let cancelled = false;
+    apiService.getRuleSets(vsumId).then(responses => {
+      if (cancelled) return;
+      if (responses.length === 0) {
+        setSavedRuleSets('none');
+        return;
+      }
+      const loaded: RuleSet[] = responses.map(r => ({
+        id: `rs_${r.id}`,
+        backendId: r.id,
+        name: r.name,
+        color: r.color,
+        description: r.description ?? '',
+        collapsed: false,
+        rules: parseRulesFromOcl(r.oclContent, `rs_${r.id}`),
+      }));
+      // Keep sets the user added while loading; the response was requested before they existed.
+      setRuleSets(prev => [
+        ...loaded,
+        ...prev.filter(rs => !loaded.some(saved => saved.backendId === rs.backendId)),
+      ]);
+      setSavedRuleSets('loaded');
+    }).catch(err => {
+      if (cancelled) return;
+      console.warn('Failed to load rule sets from backend:', err);
+      setSavedRuleSets('failed');
+    });
+    return () => { cancelled = true; };
+  }, [vsumId]);
 
-    if (vsumId != null) {
-      apiService.getRuleSets(vsumId).then(responses => {
-        if (responses.length === 0) return; // will fall through to defaults below
-        defaultsAppliedRef.current = true;
-        setRuleSets(responses.map(r => ({
-          id: `rs_${r.id}`,
-          backendId: r.id,
-          name: r.name,
-          color: r.color,
-          description: r.description ?? '',
-          collapsed: false,
-          rules: parseRulesFromOcl(r.oclContent, `rs_${r.id}`),
-        })));
-      }).catch(err => {
-        console.warn('Failed to load rule sets from backend, falling back to defaults:', err);
-      });
-      return;
-    }
-
-    // No vsumId — use canvas-derived defaults once nodes are available
-    if (canvasNodes.length === 0) return;
+  // Without saved rule sets, show the predefined ones for the meta models on the canvas. Until the
+  // user changes something they follow the canvas, which can arrive after the lookup or change.
+  useEffect(() => {
+    if (savedRuleSets !== 'none' || userChangedRef.current) return;
+    if (vsumId != null && hasClearedRuleSets(String(vsumId))) return;
     const defaults = getDefaultRuleSets(canvasNodes);
-    if (defaults.length === 0) return;
-    defaultsAppliedRef.current = true;
+    const key = defaults.map(rs => rs.id).join(',');
+    if (key === shownDefaultsRef.current) return;
+    shownDefaultsRef.current = key;
+    saveUnsavedRef.current = vsumId != null && defaults.length > 0;
     setRuleSets(defaults.map(rs => ({
       ...rs,
       rules: rs.rules.map(r => ({ ...r, scope: oclGetScope(r.oclDefinition) })),
     })));
-  }, [vsumId, canvasNodes]);
+  }, [savedRuleSets, canvasNodes, vsumId]);
 
   useEffect(() => {
     if (vsumId == null) return;
+    // Keep the OCL the metrics view reads until there is something to replace it with: while
+    // loading, after loading failed, and while the canvas (and so the predefined sets) is unknown.
+    const nothingKnownYet = savedRuleSets === 'pending' || savedRuleSets === 'failed'
+      || (savedRuleSets === 'none' && canvasNodes.length === 0);
+    if (nothingKnownYet && !userChangedRef.current) return;
     writeStoredOcl(String(vsumId), ruleSets.map(ruleSetToOcl).join('\n\n'));
-  }, [vsumId, ruleSets]);
+  }, [vsumId, ruleSets, savedRuleSets, canvasNodes]);
+
+  const createRuleSetOnBackend = useCallback((rs: RuleSet) => {
+    if (vsumId == null) return;
+    const pending = pendingCreatesRef.current.get(rs.id);
+    if (pending) {
+      pending.latest = rs;
+      return;
+    }
+    const body = ruleSetBody(rs);
+    pendingCreatesRef.current.set(rs.id, { latest: null, deleted: false });
+    apiService.createRuleSet(vsumId, body).then(created => {
+      const { latest, deleted } = pendingCreatesRef.current.get(rs.id) ?? { latest: null, deleted: false };
+      pendingCreatesRef.current.delete(rs.id);
+      if (deleted) {
+        apiService.deleteRuleSet(vsumId, created.id).catch(err => console.error('Failed to delete RuleSet:', err));
+        return;
+      }
+      setRuleSets(prev => updateBackendId(prev, rs.id, created.id));
+      if (latest && JSON.stringify(ruleSetBody(latest)) !== JSON.stringify(body)) {
+        apiService.updateRuleSet(vsumId, created.id, ruleSetBody(latest)).catch(err =>
+          console.error('Failed to sync RuleSet:', err));
+      }
+    }).catch(err => {
+      pendingCreatesRef.current.delete(rs.id);
+      saveUnsavedRef.current = true;
+      console.error('Failed to create RuleSet:', err);
+    });
+  }, [vsumId]);
+
+  /**
+   * Saves the rule sets in `sets` that are not saved yet, except `exceptId`, which the caller saves
+   * itself. Predefined rule sets are saved this way with the first change, all together, so the
+   * ones the user did not touch are still there after a reload.
+   */
+  const saveUnsavedRuleSets = useCallback((sets: RuleSet[], exceptId?: string) => {
+    if (!saveUnsavedRef.current) return;
+    saveUnsavedRef.current = false;
+    sets
+      .filter(rs => rs.id !== exceptId && (rs.backendId === null || rs.backendId === undefined))
+      .forEach(createRuleSetOnBackend);
+  }, [createRuleSetOnBackend]);
+
+  const markUserChange = useCallback(() => {
+    userChangedRef.current = true;
+  }, []);
 
   /** Sync a single ruleset to the backend (fire-and-forget). */
   const syncRuleSet = useCallback((rs: RuleSet) => {
+    markUserChange();
     if (vsumId == null) return;
-    const body = { name: rs.name, color: rs.color, description: rs.description, oclContent: ruleSetToOcl(rs) };
+    saveUnsavedRuleSets(ruleSetsRef.current, rs.id);
     if (rs.backendId === null || rs.backendId === undefined) {
-      apiService.createRuleSet(vsumId, body).then(created => {
-        setRuleSets(prev => updateBackendId(prev, rs.id, created.id));
-      }).catch(err => console.error('Failed to create RuleSet:', err));
+      createRuleSetOnBackend(rs);
     } else {
-      apiService.updateRuleSet(vsumId, rs.backendId, body).catch(err =>
+      apiService.updateRuleSet(vsumId, rs.backendId, ruleSetBody(rs)).catch(err =>
         console.error('Failed to sync RuleSet:', err));
     }
-  }, [vsumId]);
+  }, [vsumId, markUserChange, saveUnsavedRuleSets, createRuleSetOnBackend]);
 
   const [selectedRule, setSelectedRule] = useState<ConstraintRule | null>(null);
   const [selectedRuleSet, setSelectedRuleSet] = useState<RuleSet | null>(null);
@@ -1795,9 +1881,14 @@ export const ConstraintsView: React.FC<ConstraintsViewProps> = ({ vsumId: _vsumI
   }, [onHighlightNode]);
 
   const handleSaveRuleSet = useCallback((updated: RuleSet) => {
-    setRuleSets(prev => prev.map(rs => rs.id === updated.id ? updated : rs));
-    setSelectedRuleSet(updated);
-    syncRuleSet(updated);
+    // The panel edits a copy taken when it opened: keep the current rules and backend id.
+    const current = ruleSetsRef.current.find(rs => rs.id === updated.id);
+    const merged = current
+      ? { ...current, name: updated.name, color: updated.color, description: updated.description }
+      : updated;
+    setRuleSets(prev => prev.map(rs => rs.id === merged.id ? merged : rs));
+    setSelectedRuleSet(merged);
+    syncRuleSet(merged);
   }, [syncRuleSet]);
 
   const handleRuleClick = useCallback((rule: ConstraintRule) => {
@@ -1852,15 +1943,22 @@ export const ConstraintsView: React.FC<ConstraintsViewProps> = ({ vsumId: _vsumI
   }, [syncRuleSet]);
 
   const handleDeleteRuleSet = useCallback((ruleSetId: string) => {
-    setRuleSets(prev => {
-      const rs = prev.find(r => r.id === ruleSetId);
-      if (rs?.backendId !== null && rs?.backendId !== undefined && vsumId !== null && vsumId !== undefined) {
-        apiService.deleteRuleSet(vsumId, rs.backendId).catch(err => console.error('Failed to delete RuleSet:', err));
-      }
-      return prev.filter(r => r.id !== ruleSetId);
-    });
+    markUserChange();
+    const rs = ruleSetsRef.current.find(r => r.id === ruleSetId);
+    if (rs?.backendId !== null && rs?.backendId !== undefined && vsumId !== null && vsumId !== undefined) {
+      apiService.deleteRuleSet(vsumId, rs.backendId).catch(err => console.error('Failed to delete RuleSet:', err));
+    } else {
+      // Still being created: delete it once the create request returns.
+      const pending = pendingCreatesRef.current.get(ruleSetId);
+      if (pending) pending.deleted = true;
+    }
+    const remaining = ruleSetsRef.current.filter(r => r.id !== ruleSetId);
+    saveUnsavedRuleSets(remaining);
+    // Only an empty project needs remembering: otherwise the saved rule sets are loaded next time.
+    if (remaining.length === 0 && vsumId != null) markRuleSetsCleared(String(vsumId));
+    setRuleSets(prev => prev.filter(r => r.id !== ruleSetId));
     setSelectedRuleSet(prev => prev?.id === ruleSetId ? null : prev);
-  }, [vsumId]);
+  }, [vsumId, markUserChange, saveUnsavedRuleSets]);
 
   const handleSaveRule = useCallback((updated: ConstraintRule) => {
     setRuleSets(prev => {
