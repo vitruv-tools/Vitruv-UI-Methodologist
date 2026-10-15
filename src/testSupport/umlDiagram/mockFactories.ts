@@ -75,7 +75,6 @@ export function ecoreToUmlMock() {
 export function saveMetaModelEcoreMock() {
   return {
     saveMetaModelEcore: jest.fn(),
-    saveWorkspaceModelEcore: jest.fn(),
   };
 }
 

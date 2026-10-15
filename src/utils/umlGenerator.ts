@@ -1,5 +1,11 @@
 import { FlowEdge, FlowNode } from '../types/flow';
-import { isPrimitiveAttributeType, normalizeAttributeTypeDisplay } from './ecoreToUml';
+import {
+  isPrimitiveAttributeType,
+  normalizeAttributeTypeDisplay,
+  oppositeFeatureName,
+  parseAnnotatedSourceMultiplicity,
+  readEcoreBound,
+} from './ecoreToUml';
 import { formatEcoreMultiplicity } from './umlMultiplicity';
 import { umlClassNodeId, umlPackageNodeId } from './umlLayoutStorage';
 
@@ -497,6 +503,46 @@ export const generateUMLFromEcore = (ecoreContent: string): { nodes: FlowNode[];
       }
     };
 
+    interface ReferenceEnd {
+      ownerName: string;
+      name: string;
+      lower: string | null;
+      upper: string | null;
+      opposite?: string;
+      annotatedSource?: string;
+    }
+    const referenceEnds: ReferenceEnd[] = [];
+    classElems.forEach(cls => {
+      const ownerName = cls.getAttribute('name') || '';
+      cls.querySelectorAll('eStructuralFeatures').forEach(ref => {
+        const featureType = ref.getAttribute('xsi:type') || ref.getAttribute('type') || '';
+        if (!featureType.includes('EReference')) return;
+        const opposite = oppositeFeatureName(ref.getAttribute('eOpposite'));
+        referenceEnds.push({
+          ownerName,
+          name: ref.getAttribute('name') || '',
+          lower: readEcoreBound(ref, 'lowerBound'),
+          upper: readEcoreBound(ref, 'upperBound'),
+          ...(opposite ? { opposite } : {}),
+          annotatedSource: parseAnnotatedSourceMultiplicity(ref),
+        });
+      });
+    });
+
+    const multiplicityAtSource = (end: ReferenceEnd, targetName: string, targetMultiplicity?: string) => {
+      if (end.annotatedSource) return end.annotatedSource;
+      if (end.opposite) {
+        const opposite = referenceEnds.find(other => (
+          other.ownerName === targetName && other.name === end.opposite
+        ));
+        const fromOpposite = opposite
+          ? formatEcoreMultiplicity(opposite.lower, opposite.upper)
+          : undefined;
+        if (fromOpposite) return fromOpposite;
+      }
+      return targetMultiplicity === undefined ? undefined : '1';
+    };
+
     // Associations via EReferences
     classElems.forEach((cls) => {
       const sourceName = cls.getAttribute('name') || '';
@@ -521,8 +567,8 @@ export const generateUMLFromEcore = (ecoreContent: string): { nodes: FlowNode[];
         const targetId = classNameToNodeId.get(targetType || '');
         if (!targetId) return;
         
-        const lower = ref.getAttribute('lowerBound');
-        const upper = ref.getAttribute('upperBound');
+        const lower = readEcoreBound(ref, 'lowerBound');
+        const upper = readEcoreBound(ref, 'upperBound');
         const containment = (ref.getAttribute('containment') || 'false') === 'true';
         
         // Determine relationship type
@@ -532,7 +578,12 @@ export const generateUMLFromEcore = (ecoreContent: string): { nodes: FlowNode[];
         }
 
         const targetMultiplicity = formatEcoreMultiplicity(lower, upper);
-        const sourceMultiplicity = targetMultiplicity === undefined ? undefined : '1';
+        const referenceEnd = referenceEnds.find(end => (
+          end.ownerName === sourceName && end.name === (ref.getAttribute('name') || '')
+        ));
+        const sourceMultiplicity = referenceEnd
+          ? multiplicityAtSource(referenceEnd, targetType || '', targetMultiplicity)
+          : (targetMultiplicity === undefined ? undefined : '1');
 
         const handles = chooseHandles(sourceId, targetId);
         edges.push({

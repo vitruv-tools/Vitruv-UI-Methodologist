@@ -38,6 +38,7 @@ const createOptions = (
   getCanvasNodes: () => [],
   fetchEcoreFile: jest.fn().mockResolvedValue('<fetched />'),
   updateEcoreFileData: jest.fn(),
+  persistProjectEcore: jest.fn().mockResolvedValue(undefined),
   onLoadError: jest.fn(),
   ...overrides,
 });
@@ -242,6 +243,27 @@ describe('useCanvasUmlPanels', () => {
     const { result } = renderHook(() => useCanvasUmlPanels(options));
 
     expect(result.current.buildUmlSaveContext(createPanel())).toBeUndefined();
+  });
+
+  it('stores a project edit on the source meta-model', async () => {
+    const persistProjectEcore = jest.fn().mockResolvedValue(undefined);
+    const options = createOptions({ persistProjectEcore });
+    const { result } = renderHook(() => useCanvasUmlPanels(options));
+    const saveContext = result.current.buildUmlSaveContext(createPanel());
+
+    await saveContext?.persistWorkspaceEcore?.('<edited />');
+
+    expect(persistProjectEcore).toHaveBeenCalledWith(20, '<edited />');
+  });
+
+  it('does not build save context without a meta-model id', () => {
+    const options = createOptions();
+    const { result } = renderHook(() => useCanvasUmlPanels(options));
+
+    expect(result.current.buildUmlSaveContext(createPanel({
+      metaModelId: undefined,
+      metaModelSourceId: undefined,
+    }))).toBeUndefined();
   });
 
   it('updates panel and canvas content after a workspace save', () => {

@@ -8,22 +8,16 @@ jest.mock('../../../utils/umlLayoutStorage', () => require('../../../testSupport
 
 import React, { createRef } from 'react';
 import { act, screen, waitFor } from '@testing-library/react';
-import { saveWorkspaceModelEcore } from '../../../utils/saveMetaModelEcore';
+import { saveMetaModelEcore } from '../../../utils/saveMetaModelEcore';
 import type { UMLDiagramHandle } from '../../../components/canvas/UMLDiagram';
 import { SIMPLE_ECORE } from '../../../testSupport/umlDiagram/fixtures';
 import { renderDiagram } from '../../../testSupport/umlDiagram/renderUtils';
 
 describe('UMLDiagram save', () => {
-  beforeEach(() => {
-    (saveWorkspaceModelEcore as jest.Mock).mockResolvedValue({
-      ecoreContent: SIMPLE_ECORE,
-      ecoreFileId: 42,
-    });
-  });
-
-  it('workspace save persists the ecore file and updates the open project', async () => {
+  it('workspace save sends the ecore to the project copy', async () => {
     const ref = createRef<UMLDiagramHandle>();
     const onSaved = jest.fn();
+    const persistWorkspaceEcore = jest.fn().mockResolvedValue(undefined);
 
     renderDiagram({
       ref,
@@ -33,6 +27,7 @@ describe('UMLDiagram save', () => {
         ecoreFileId: 42,
         modelName: 'simple',
         saveTarget: 'workspace',
+        persistWorkspaceEcore,
         onSaved,
       },
     });
@@ -42,14 +37,43 @@ describe('UMLDiagram save', () => {
     });
 
     await waitFor(() => {
-      expect(saveWorkspaceModelEcore).toHaveBeenCalledWith(expect.objectContaining({
+      expect(persistWorkspaceEcore).toHaveBeenCalledWith(expect.stringContaining('name="Person"'));
+      expect(onSaved).toHaveBeenCalledWith(expect.objectContaining({
+        ecoreFileId: 42,
+        ecoreContent: expect.stringContaining('name="Person"'),
+      }));
+    });
+    expect(saveMetaModelEcore).not.toHaveBeenCalled();
+    expect(screen.getByText('Saved to project')).toBeInTheDocument();
+  });
+
+  it('keeps the open diagram when the project rejects the save', async () => {
+    const ref = createRef<UMLDiagramHandle>();
+    const onSaved = jest.fn();
+    const persistWorkspaceEcore = jest.fn().mockRejectedValue(new Error('Access denied'));
+
+    renderDiagram({
+      ref,
+      ecoreContent: SIMPLE_ECORE,
+      saveContext: {
         metaModelId: '1',
         ecoreFileId: 42,
         modelName: 'simple',
-      }));
-      expect(onSaved).toHaveBeenCalledWith(expect.objectContaining({ ecoreFileId: 42 }));
+        saveTarget: 'workspace',
+        persistWorkspaceEcore,
+        onSaved,
+      },
     });
-    expect(screen.getByText('Saved to project')).toBeInTheDocument();
+
+    await act(async () => {
+      await ref.current?.save();
+    });
+
+    expect(screen.getByText('Access denied')).toBeInTheDocument();
+    expect(onSaved).not.toHaveBeenCalled();
+    expect(ref.current?.getModel().classes.map(classItem => classItem.name)).toEqual([
+      'Person',
+      'Employee',
+    ]);
   });
 });
-

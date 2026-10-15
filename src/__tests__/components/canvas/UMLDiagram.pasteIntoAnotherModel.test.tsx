@@ -17,14 +17,12 @@ import userEvent from '@testing-library/user-event';
 import type { UMLDiagramHandle, UmlDiagramSaveTarget } from '../../../components/canvas/UMLDiagram';
 import { FloatingUMLPanel } from '../../../components/canvas/FloatingUMLPanel';
 import { useUmlClassClipboardStore } from '../../../store/UmlClassClipboard';
-import { saveMetaModelEcore, saveWorkspaceModelEcore } from '../../../utils/saveMetaModelEcore';
-import { umlToEcore } from '../../../utils/umlToEcore';
+import { saveMetaModelEcore } from '../../../utils/saveMetaModelEcore';
 import { EMPTY_ECORE, REF_ECORE, SIMPLE_ECORE } from '../../../testSupport/umlDiagram/fixtures';
 import { renderDiagram } from '../../../testSupport/umlDiagram/renderUtils';
 
 const win = globalThis as unknown as Window;
 const saveToLibrary = saveMetaModelEcore as jest.Mock;
-const saveToProject = saveWorkspaceModelEcore as jest.Mock;
 
 const CLASS_LABEL = /^UML (?:class|abstract class|interface) ([^,]+)/;
 
@@ -217,6 +215,9 @@ describe('pasting between the Model library and projects', () => {
           ecoreFileId: 70,
           modelName: 'model',
           saveTarget: location.saveTarget,
+          persistWorkspaceEcore: location.saveTarget === 'workspace'
+            ? jest.fn().mockResolvedValue(undefined)
+            : undefined,
           onSaved,
         }}
         zIndex={1}
@@ -239,14 +240,6 @@ describe('pasting between the Model library and projects', () => {
 
   beforeEach(() => {
     saveToLibrary.mockResolvedValue({ ecoreContent: REF_ECORE, ecoreFileId: 71 });
-    saveToProject.mockImplementation(async (params: {
-      model: Parameters<typeof umlToEcore>[0];
-      originalEcore?: string;
-      ecoreFileId: number;
-    }) => ({
-      ecoreContent: umlToEcore(params.model, params.originalEcore),
-      ecoreFileId: params.ecoreFileId,
-    }));
   });
 
   it.each([
