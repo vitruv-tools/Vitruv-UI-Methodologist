@@ -3,6 +3,8 @@ import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { ModelDrawer, DrawerModel } from '../../../components/canvas/ModelDrawer';
 
 const mockReloadLayout = jest.fn();
+const mockSave = jest.fn();
+const mockIsDirty = jest.fn(() => false);
 
 jest.mock('../../../components/canvas/UMLDiagram', () => {
   const { forwardRef, createElement, useImperativeHandle } = require('react');
@@ -11,7 +13,8 @@ jest.mock('../../../components/canvas/UMLDiagram', () => {
       useImperativeHandle(ref, () => ({
         flushLayout: jest.fn(),
         reloadLayout: mockReloadLayout,
-        isDirty: jest.fn(() => false),
+        isDirty: mockIsDirty,
+        save: mockSave,
         tryEscape: jest.fn(() => false),
       }));
       return createElement('div', { 'data-testid': 'uml-diagram' });
@@ -32,6 +35,7 @@ const defaultProps = {
 
 beforeEach(() => {
   jest.clearAllMocks();
+  mockIsDirty.mockReturnValue(false);
 });
 
 describe('ModelDrawer real component', () => {
@@ -206,5 +210,31 @@ describe('ModelDrawer real component', () => {
 
     expect(screen.queryByTestId('uml-fullscreen-page')).not.toBeInTheDocument();
     expect(mockReloadLayout).toHaveBeenCalled();
+  });
+
+  it('saves with Cmd+S in the full-screen UML editor instead of opening the browser dialog', async () => {
+    const projectModel: DrawerModel = {
+      id: 7,
+      name: 'Shop',
+      ecoreContent: '<ecore/>',
+      ecoreFileId: 70,
+      inProject: true,
+    };
+    render(
+      <ModelDrawer
+        {...defaultProps}
+        models={[projectModel]}
+        addedModelIds={new Set([7])}
+      />,
+    );
+
+    fireEvent.contextMenu(screen.getByLabelText('View details for Shop'));
+    fireEvent.click(screen.getByTitle('Open full-screen UML editor'));
+    mockIsDirty.mockReturnValue(true);
+
+    const notPrevented = fireEvent.keyDown(globalThis, { key: 's', metaKey: true });
+
+    expect(notPrevented).toBe(false);
+    await waitFor(() => expect(mockSave).toHaveBeenCalledTimes(1));
   });
 });
