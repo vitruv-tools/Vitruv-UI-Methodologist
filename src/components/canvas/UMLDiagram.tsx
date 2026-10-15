@@ -87,7 +87,7 @@ function isPastePositionTarget(target: EventTarget | null): boolean {
   );
 }
 
-/** `library` writes the model library. `workspace` writes the project's own copy of the model. */
+/** `library` persists to the metamodel library API; `workspace` persists to the project's copy via `persistWorkspaceEcore`. */
 export type UmlDiagramSaveTarget = 'library' | 'workspace';
 
 export interface UmlDiagramSaveContext {
@@ -96,7 +96,7 @@ export interface UmlDiagramSaveContext {
   modelName: string;
   /** Defaults to `library` (Model Library / drawer). Canvas UML uses `workspace`. */
   saveTarget?: UmlDiagramSaveTarget;
-  /** `workspace` only: stores the serialized ecore in the project's copy. */
+  /** `workspace` only: stores the serialized ecore in the project's copy. Rejects to keep the changes unsaved. */
   persistWorkspaceEcore?: (ecoreContent: string) => Promise<void>;
   /** Passed to library save so relink works when GET /meta-models/{id} is unavailable. */
   metaModelMetadata?: MetaModelSaveMetadata;

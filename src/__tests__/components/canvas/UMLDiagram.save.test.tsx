@@ -14,7 +14,7 @@ import { SIMPLE_ECORE } from '../../../testSupport/umlDiagram/fixtures';
 import { renderDiagram } from '../../../testSupport/umlDiagram/renderUtils';
 
 describe('UMLDiagram save', () => {
-  it('workspace save sends the ecore to the project copy', async () => {
+  it('workspace save persists the serialized ecore before reporting success', async () => {
     const ref = createRef<UMLDiagramHandle>();
     const onSaved = jest.fn();
     const persistWorkspaceEcore = jest.fn().mockResolvedValue(undefined);
@@ -37,19 +37,20 @@ describe('UMLDiagram save', () => {
     });
 
     await waitFor(() => {
-      expect(persistWorkspaceEcore).toHaveBeenCalledWith(expect.stringContaining('name="Person"'));
-      expect(onSaved).toHaveBeenCalledWith(expect.objectContaining({
-        ecoreFileId: 42,
-        ecoreContent: expect.stringContaining('name="Person"'),
-      }));
+      expect(persistWorkspaceEcore).toHaveBeenCalledTimes(1);
     });
+    const persisted = persistWorkspaceEcore.mock.calls[0][0];
+    expect(typeof persisted).toBe('string');
+    expect(persisted).toContain('name="Person"');
+    expect(onSaved).toHaveBeenCalledWith({ ecoreContent: persisted, ecoreFileId: 42 });
     expect(saveMetaModelEcore).not.toHaveBeenCalled();
     expect(screen.getByText('Saved to project')).toBeInTheDocument();
   });
 
-  it('keeps the open diagram when the project rejects the save', async () => {
+  it('workspace save shows the backend error and keeps changes unsaved when persisting fails', async () => {
     const ref = createRef<UMLDiagramHandle>();
     const onSaved = jest.fn();
+    const onError = jest.fn();
     const persistWorkspaceEcore = jest.fn().mockRejectedValue(new Error('Access denied'));
 
     renderDiagram({
@@ -62,6 +63,7 @@ describe('UMLDiagram save', () => {
         saveTarget: 'workspace',
         persistWorkspaceEcore,
         onSaved,
+        onError,
       },
     });
 
@@ -69,8 +71,10 @@ describe('UMLDiagram save', () => {
       await ref.current?.save();
     });
 
-    expect(screen.getByText('Access denied')).toBeInTheDocument();
     expect(onSaved).not.toHaveBeenCalled();
+    expect(onError).toHaveBeenCalledWith('Access denied');
+    expect(screen.getByText('Access denied')).toBeInTheDocument();
+    expect(screen.queryByText('Saved to project')).not.toBeInTheDocument();
     expect(ref.current?.getModel().classes.map(classItem => classItem.name)).toEqual([
       'Person',
       'Employee',

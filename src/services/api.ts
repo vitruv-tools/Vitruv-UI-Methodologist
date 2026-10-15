@@ -719,8 +719,8 @@ class ApiService {
   }
 
   /**
-   * Replace the ecore of the project's copy of a meta model.
-   * `metaModelId` is the library id (`sourceId`). The library original is left unchanged.
+   * vSUMS: Replace the ecore of the project's copy of a meta model.
+   * `metaModelId` is the library id (`sourceId`); the library original is not modified.
    */
   async updateVsumMetaModelEcore(
     vsumId: number | string,

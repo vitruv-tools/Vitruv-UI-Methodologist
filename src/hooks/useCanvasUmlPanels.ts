@@ -27,7 +27,7 @@ interface UseCanvasUmlPanelsOptions {
   getCanvasNodes: () => Node[];
   fetchEcoreFile: (fileId: number) => Promise<string>;
   updateEcoreFileData?: UpdateEcoreFileData;
-  /** Stores edited ecore in the project's copy. `libraryMetaModelId` is the meta model's source id. */
+  /** Stores edited ecore in the project's copy; `libraryMetaModelId` is the meta model's `sourceId`. */
   persistProjectEcore: (libraryMetaModelId: number, ecoreContent: string) => Promise<void>;
   onLoadError: (message: CanvasUmlPanelLoadErrorMessage) => void;
 }
