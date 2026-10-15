@@ -34,6 +34,10 @@ const FolderIcon = () => (
 
 // ── Helpers ────────────────────────────────────────────────────────────────
 
+const ACTIONS_COLUMN_INDEX = 3;
+const ACTIVE_ACTIONS_COLUMN_WIDTH = 120;
+const DELETED_ACTIONS_COLUMN_WIDTH = 260;
+
 const formatDate = (iso: string) => {
   if (!iso) return '--';
   return new Date(iso).toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' });
@@ -429,6 +433,8 @@ export const ProjectsView: React.FC<ProjectsViewProps> = ({
     });
 
   const showDeleted = projectView === 'deleted';
+  // The trash shows two buttons (Restore, Delete permanently), so its actions column is wider.
+  const actionsColumnWidth = showDeleted ? DELETED_ACTIONS_COLUMN_WIDTH : ACTIVE_ACTIONS_COLUMN_WIDTH;
   const emptyTitle = emptyProjectListTitle(projectView);
   const emptyHint = emptyProjectListHint(projectView);
 
@@ -575,7 +581,7 @@ export const ProjectsView: React.FC<ProjectsViewProps> = ({
             <thead>
               <tr style={{ borderBottom: '1px solid var(--v-border-subtle)' }}>
                 {['Name', showDeleted ? 'Deleted on' : 'Created on', 'Status', 'Actions'].map((col, i) => (
-                  <th key={col} style={{ padding: '12px 16px', textAlign: 'left', fontSize: 12, fontWeight: 600, color: 'var(--v-text-muted)', letterSpacing: '0.04em', textTransform: 'uppercase', background: 'var(--v-table-header)', borderBottom: '1px solid var(--v-border-subtle)', whiteSpace: 'nowrap', width: i === 3 ? (showDeleted ? 260 : 120) : undefined }}>
+                  <th key={col} style={{ padding: '12px 16px', textAlign: 'left', fontSize: 12, fontWeight: 600, color: 'var(--v-text-muted)', letterSpacing: '0.04em', textTransform: 'uppercase', background: 'var(--v-table-header)', borderBottom: '1px solid var(--v-border-subtle)', whiteSpace: 'nowrap', width: i === ACTIONS_COLUMN_INDEX ? actionsColumnWidth : undefined }}>
                     {col}
                   </th>
                 ))}
