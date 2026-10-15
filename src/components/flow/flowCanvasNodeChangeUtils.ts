@@ -14,6 +14,14 @@ export function isReadOnlyBlockedNodeChange(change: { type?: string }): boolean 
   return change.type === 'remove';
 }
 
+/**
+ * Changes a locked canvas rejects. Unlike read-only viewers, an editor who locked
+ * the canvas may not move nodes either.
+ */
+export function isLockedBlockedNodeChange(change: { type?: string }): boolean {
+  return change.type === 'remove' || change.type === 'position';
+}
+
 export function isReadOnlyBlockedEdgeChange(change: { type?: string }): boolean {
   return change.type === 'remove';
 }

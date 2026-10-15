@@ -62,6 +62,7 @@ import {
   clearUmlCustomControlPoints,
   collectNodeFollowChanges,
   getNodeDragFlags,
+  isLockedBlockedNodeChange,
   isReadOnlyBlockedEdgeChange,
   isReadOnlyBlockedNodeChange,
   renameEcoreFileNode,
@@ -333,6 +334,9 @@ export const FlowCanvas = forwardRef<FlowCanvasHandle, FlowCanvasProps>(
     const [isDragOver, setIsDragOver] = useState(false);
     const [isInteractive, setIsInteractive] = useState(!readOnly);
     const editable = !readOnly && isInteractive;
+    // Locked with the lock button: nothing may change, not even positions. Read-only viewers are
+    // not "locked" - they may still move boxes locally.
+    const locked = !readOnly && !isInteractive;
 
     const [selectedFileId, setSelectedFileId] = useState<string | null>(null);
     const [expandedFileId, setExpandedFileId] = useState<string | null>(null);
@@ -412,9 +416,9 @@ export const FlowCanvas = forwardRef<FlowCanvasHandle, FlowCanvasProps>(
 
     // Unified delete handler — used by both keyboard Delete and context menu
     const handleRequestDelete = useCallback((nodeId: string) => {
-      if (readOnly) return;
+      if (!editable) return;
       setPendingDelete({ nodeIds: [], edgeIds: [], fileId: nodeId });
-    }, [readOnly]);
+    }, [editable]);
 
     useEffect(() => {
       if (readOnly) setIsInteractive(false);
@@ -463,6 +467,7 @@ export const FlowCanvas = forwardRef<FlowCanvasHandle, FlowCanvasProps>(
 
     const onNodesChange = useCallback((changes: any) => {
       if (readOnly && changes.some(isReadOnlyBlockedNodeChange)) return;
+      if (locked && changes.some(isLockedBlockedNodeChange)) return;
 
       const liveNodes = nodesRef.current;
       const clampedChanges = clampNodeChanges(changes, {
@@ -507,15 +512,15 @@ export const FlowCanvas = forwardRef<FlowCanvasHandle, FlowCanvasProps>(
         persistVsumLayoutFromNodes(projectId, nextNodes);
       }
       if (umlModalOpen) setEdges(clearUmlCustomControlPoints);
-    }, [originalOnNodesChange, recalculateEdgeHandles, circle, circleVisible, umlModalOpen, detailModel, setEdges, setHistoryPaused, readOnly, edges, addReactionMode]);
+    }, [originalOnNodesChange, recalculateEdgeHandles, circle, circleVisible, umlModalOpen, detailModel, setEdges, setHistoryPaused, readOnly, locked, edges, addReactionMode]);
 
     const guardedOnEdgesChange = useCallback((changes: any) => {
-      if (readOnly && changes.some(isReadOnlyBlockedEdgeChange)) return;
+      if (!editable && changes.some(isReadOnlyBlockedEdgeChange)) return;
       onEdgesChange(changes);
-    }, [onEdgesChange, readOnly]);
+    }, [onEdgesChange, editable]);
 
     const guardedOnConnect = useCallback((connection: any) => {
-      if (readOnly) return;
+      if (!editable) return;
 
       if (isReactionHandleConnection(connection)) {
         if (!validateFineGranularConnection(connection, nodes)) return;
@@ -572,7 +577,7 @@ export const FlowCanvas = forwardRef<FlowCanvasHandle, FlowCanvasProps>(
       }
 
       onConnect(connection);
-    }, [onConnect, readOnly, nodes, addEdge]);
+    }, [onConnect, editable, nodes, addEdge]);
 
     const edgeDistributionMap = useMemo(
       () => buildEdgeDistributionMap(nodes, edges),
@@ -587,7 +592,7 @@ export const FlowCanvas = forwardRef<FlowCanvasHandle, FlowCanvasProps>(
     });
 
     useFlowCanvasKeyboardShortcuts({
-      readOnly,
+      readOnly: !editable,
       nodes,
       edges,
       selectedFileId,
@@ -651,7 +656,7 @@ export const FlowCanvas = forwardRef<FlowCanvasHandle, FlowCanvasProps>(
     }, [nodes, reactFlowInstance]);
 
     const handleConnectionEnd = useCallback(async (e: MouseEvent) => {
-      if (readOnly) return;
+      if (!editable) return;
       const dragState = connectionDragState;
       setConnectionDragState(null);
 
@@ -688,7 +693,7 @@ export const FlowCanvas = forwardRef<FlowCanvasHandle, FlowCanvasProps>(
       findEcoreTargetFromPointer,
       uploadReactionFile,
       commitReactionEdge,
-      readOnly,
+      editable,
     ]);
 
     const handleConnectionMove = useCallback((e: MouseEvent) => {
@@ -727,7 +732,7 @@ export const FlowCanvas = forwardRef<FlowCanvasHandle, FlowCanvasProps>(
       handle: HandlePosition,
       tipScreenPos: { x: number; y: number },
     ) => {
-      if (readOnly || !reactFlowInstance) return;
+      if (!editable || !reactFlowInstance) return;
 
       // Convert the DOM screen position of the arrow tip to flow coordinates
       const flowTipPos = reactFlowInstance.screenToFlowPosition(tipScreenPos);
@@ -739,7 +744,7 @@ export const FlowCanvas = forwardRef<FlowCanvasHandle, FlowCanvasProps>(
         currentPosition: flowTipPos,
         sourceTipPosition: flowTipPos,
       });
-    }, [reactFlowInstance, readOnly]);
+    }, [reactFlowInstance, editable]);
 
     const createReactionEdgeFromEvent = useCallback((detail: {
       sourceNodeId: string;
@@ -765,7 +770,7 @@ export const FlowCanvas = forwardRef<FlowCanvasHandle, FlowCanvasProps>(
       }));
     }, [nodes, addEdge, getColorForPair]);
 
-    useReactionEdgeCreationEvents({ readOnly, createReactionEdgeFromEvent });
+    useReactionEdgeCreationEvents({ readOnly: !editable, createReactionEdgeFromEvent });
 
     const processRelation = useCallback((
       relation: MetaModelRelation,
@@ -982,21 +987,21 @@ export const FlowCanvas = forwardRef<FlowCanvasHandle, FlowCanvasProps>(
 
     const handleDragOver = useCallback((event: React.DragEvent) => {
       onDragOver(event);
-      setIsDragOver(true);
-    }, [onDragOver]);
+      if (editable) setIsDragOver(true);
+    }, [onDragOver, editable]);
 
     const handleDragLeave = useCallback(() => setIsDragOver(false), []);
 
     const handleDrop = useCallback((event: React.DragEvent) => {
       setIsDragOver(false);
-      if (readOnly) return;
+      if (!editable) return;
       onDrop(event);
-    }, [onDrop, readOnly]);
+    }, [onDrop, editable]);
 
     const handleLabelChange = useCallback((id: string, newLabel: string) => {
-      if (readOnly) return;
+      if (!editable) return;
       updateNodeLabel(id, newLabel);
-    }, [updateNodeLabel, readOnly]);
+    }, [updateNodeLabel, editable]);
 
     // ── Viewport ──────────────────────────────────────────────────────────────
 
@@ -1075,7 +1080,7 @@ export const FlowCanvas = forwardRef<FlowCanvasHandle, FlowCanvasProps>(
     }, [reactFlowInstance, circle.cx, circle.cy]);
 
     const handleCircleResize = useCallback((newR: number) => {
-      if (readOnly) return;
+      if (!editable) return;
       const newCircle: Circle = { ...circle, r: Math.max(MIN_CIRCLE_RADIUS, newR) };
       setCircle(newCircle);
 
@@ -1087,7 +1092,7 @@ export const FlowCanvas = forwardRef<FlowCanvasHandle, FlowCanvasProps>(
         }));
       }
       fitViewToCircle(newCircle);
-    }, [readOnly, circle, setCircle, nodes, setNodes, fitViewToCircle]);
+    }, [editable, circle, setCircle, nodes, setNodes, fitViewToCircle]);
 
     const handleAddViewType = useCallback((
       label: string,
@@ -1096,9 +1101,9 @@ export const FlowCanvas = forwardRef<FlowCanvasHandle, FlowCanvasProps>(
       angle: number,
       viewTypeEditable: boolean,
     ) => {
-      if (readOnly) return;
+      if (!editable) return;
       addViewType({ label, scope, angle, linkedNodeIds, editable: viewTypeEditable });
-    }, [addViewType, readOnly]);
+    }, [addViewType, editable]);
 
     // ── Auto-layout ───────────────────────────────────────────────────────────
 
@@ -1134,7 +1139,7 @@ export const FlowCanvas = forwardRef<FlowCanvasHandle, FlowCanvasProps>(
         ecoreNode,
         fileName,
         addReactionMode,
-        readOnly,
+        readOnly: !editable,
         reactionSourceId,
         activeCanvasMode,
         constraintFilterNodeId,
@@ -1168,15 +1173,15 @@ export const FlowCanvas = forwardRef<FlowCanvasHandle, FlowCanvasProps>(
           setSelectedFileId(action.nodeId);
           onEcoreFileSelect?.(action.fileName);
       }
-    }, [nodes, onEcoreFileSelect, addReactionMode, reactionSourceId, getColorForPair, commitReactionEdge, onReactionModeEnd, activeCanvasMode, onConstraintNodeFilter, constraintFilterNodeId, readOnly]);
+    }, [nodes, onEcoreFileSelect, addReactionMode, reactionSourceId, getColorForPair, commitReactionEdge, onReactionModeEnd, activeCanvasMode, onConstraintNodeFilter, constraintFilterNodeId, editable]);
 
     const handleEcoreFileRename = useCallback((id: string, newFileName: string) => {
-      if (readOnly) return;
+      if (!editable) return;
       const node = nodesRef.current.find(n => n.id === id);
       setNodes(current => renameEcoreFileNode(current, id, newFileName));
       persistEcoreFileRename(node, newFileName);
       onEcoreFileRename?.(id, newFileName);
-    }, [readOnly, setNodes, onEcoreFileRename]);
+    }, [editable, setNodes, onEcoreFileRename]);
 
     // Clear reaction source when mode is toggled off
     useEffect(() => {
@@ -1284,7 +1289,7 @@ export const FlowCanvas = forwardRef<FlowCanvasHandle, FlowCanvasProps>(
     }, [setNodes]);
 
     const addEcoreFile = useCallback((fileName: string, fileContent: string, meta?: any) => {
-      if (readOnly && !meta?.fromServerLoad) return;
+      if (!editable && !meta?.fromServerLoad) return;
 
       const ecoreNodes = nodesRef.current.filter(n => n.type === 'ecoreFile');
       const metaModelId = typeof meta?.metaModelId === 'number' ? meta.metaModelId : undefined;
@@ -1389,7 +1394,7 @@ export const FlowCanvas = forwardRef<FlowCanvasHandle, FlowCanvasProps>(
           });
         }
       }
-    }, [addNode, handleEcoreFileExpand, handleEcoreFileSelect, onEcoreFileSelect, onEcoreFileDelete, handleEcoreFileRename, handleRequestDelete, handleShowDetails, readOnly, addReactionMode, setNodes, setEdges]);
+    }, [addNode, handleEcoreFileExpand, handleEcoreFileSelect, onEcoreFileSelect, onEcoreFileDelete, handleEcoreFileRename, handleRequestDelete, handleShowDetails, editable, addReactionMode, setNodes, setEdges]);
 
     // ── Edge hygiene ──────────────────────────────────────────────────────────
 
@@ -1430,7 +1435,7 @@ export const FlowCanvas = forwardRef<FlowCanvasHandle, FlowCanvasProps>(
       newSourceHandle: string,
       newTargetHandle: string,
     ) => {
-      if (readOnly) return;
+      if (!editable) return;
       setEdges(prevEdges => prevEdges.map(edge =>
         edge.id === edgeId
           ? {
@@ -1440,15 +1445,15 @@ export const FlowCanvas = forwardRef<FlowCanvasHandle, FlowCanvasProps>(
           }
           : edge,
       ));
-    }, [setEdges, readOnly]);
+    }, [setEdges, editable]);
 
     const handleEdgeReorderRequest = useCallback((
       edgeId: string,
       controlPoint: { x: number; y: number },
     ) => {
-      if (readOnly) return;
+      if (!editable) return;
       setEdges(prevEdges => computeParallelEdgeReorder(prevEdges, { edgeId, controlPoint, nodes }));
-    }, [setEdges, nodes, readOnly]);
+    }, [setEdges, nodes, editable]);
 
     const handleMergeGroupHover = useCallback((groupId: string | null) => {
       setHoveredMergeGroup(groupId);
@@ -1491,11 +1496,12 @@ export const FlowCanvas = forwardRef<FlowCanvasHandle, FlowCanvasProps>(
 
     const mappedNodes = nodes.map(node => {
       if (node.type === 'editable') {
-        return mapEditableFlowNode(node, readOnly, handleLabelChange, removeNode);
+        return mapEditableFlowNode(node, !editable, handleLabelChange, removeNode, locked);
       }
       if (node.type === 'ecoreFile') {
         return mapEcoreFlowNode(node, {
-          readOnly,
+          readOnly: !editable,
+          locked,
           expandedFileId,
           selectedFileId,
           connectionDragState,
@@ -1510,7 +1516,7 @@ export const FlowCanvas = forwardRef<FlowCanvasHandle, FlowCanvasProps>(
           handleRequestDelete,
           onEcoreFileRename: handleEcoreFileRename,
           handleShowDetails,
-          handleConnectionStart: readOnly ? undefined : handleConnectionStart,
+          handleConnectionStart: editable ? handleConnectionStart : undefined,
         });
       }
       return node;
@@ -1554,7 +1560,7 @@ export const FlowCanvas = forwardRef<FlowCanvasHandle, FlowCanvasProps>(
     );
 
     const edgeMapContext = useMemo(() => ({
-      readOnly,
+      readOnly: !editable,
       routingStyle,
       hoveredMergeGroup,
       getDistribution: resolveEdgeDistribution,
@@ -1569,7 +1575,7 @@ export const FlowCanvas = forwardRef<FlowCanvasHandle, FlowCanvasProps>(
       getFineParallel: resolveFineParallel,
       getReactionRoute: resolveReactionRoute,
     }), [
-      readOnly,
+      editable,
       routingStyle,
       hoveredMergeGroup,
       resolveEdgeDistribution,
@@ -1684,6 +1690,7 @@ export const FlowCanvas = forwardRef<FlowCanvasHandle, FlowCanvasProps>(
           maxZoom={umlViewActive ? 2.5 : 2}
           translateExtent={[[-12000, -12000], [12000, 12000]]}
           selectNodesOnDrag={false}
+          proOptions={{ hideAttribution: true }}
           onPaneClick={() => {
             setDetailModel(null);
             setSelectedFileId(null);
@@ -1714,9 +1721,9 @@ export const FlowCanvas = forwardRef<FlowCanvasHandle, FlowCanvasProps>(
             viewTypes={viewTypes}
             ecoreNodes={ecoreNodes}
             onAddViewType={handleAddViewType}
-            onDeleteViewType={readOnly ? () => {} : deleteViewType}
-            onUpdateViewTypeAngle={readOnly ? () => {} : updateAngle}
-            onUnlinkNode={readOnly ? () => {} : unlinkNode}
+            onDeleteViewType={editable ? deleteViewType : () => {}}
+            onUpdateViewTypeAngle={editable ? updateAngle : () => {}}
+            onUnlinkNode={editable ? unlinkNode : () => {}}
           />
         )}
 
@@ -1763,7 +1770,7 @@ export const FlowCanvas = forwardRef<FlowCanvasHandle, FlowCanvasProps>(
             state={codeEditorState}
             onClose={handleCloseCodeEditor}
             onSave={readOnly ? async () => {} : handleSaveCode}
-            onDelete={readOnly ? undefined : handleDeleteEdge}
+            onDelete={editable ? handleDeleteEdge : undefined}
             vsumId={vsumId}
             readOnly={readOnly}
           />
@@ -1810,7 +1817,7 @@ export const FlowCanvas = forwardRef<FlowCanvasHandle, FlowCanvasProps>(
             onSave={() => lowCodeEditorRef.current?.save()}
             onDelete={() => setConfirmDeleteOpen(true)}
             saveHighlighted={lowCodeEditorDirty}
-            showDelete
+            showDelete={editable}
           >
             <LowCodeReactionEditor
               ref={lowCodeEditorRef}
@@ -1820,7 +1827,7 @@ export const FlowCanvas = forwardRef<FlowCanvasHandle, FlowCanvasProps>(
                 setLowCodeEditorDirty(false);
                 if (!readOnly) onSaveChanges?.();
               }}
-              onDeleteRequest={() => setConfirmDeleteOpen(true)}
+              onDeleteRequest={editable ? () => setConfirmDeleteOpen(true) : undefined}
             />
           </DragablePanel>
         )}

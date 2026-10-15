@@ -167,6 +167,7 @@ export const UMLViewerModal: React.FC<UMLViewerModalProps> = ({ isOpen, title, e
             edgeTypes={edgeTypes}
             onInit={handleInit}
             onPaneClick={handlePaneClick}
+            proOptions={{ hideAttribution: true }}
             elementsSelectable
             edgesFocusable
             panOnDrag

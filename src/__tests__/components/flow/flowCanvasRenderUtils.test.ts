@@ -42,6 +42,12 @@ describe('mapEcoreFlowNode', () => {
     expect(mapEcoreFlowNode(ecoreNode(), ecoreOptions({ readOnly: true })).draggable).toBe(true);
   });
 
+  it('freezes on a locked canvas', () => {
+    const options = ecoreOptions({ readOnly: true, locked: true });
+
+    expect(mapEcoreFlowNode(ecoreNode(), options).draggable).toBe(false);
+  });
+
   it('freezes while a connection is being dragged', () => {
     const options = ecoreOptions({ connectionDragState: { isActive: true } });
 
@@ -90,6 +96,11 @@ describe('mapEditableFlowNode', () => {
 
   it('is draggable for a viewer', () => {
     expect(mapEditableFlowNode(editableNode(), true, labelChange, removeNode).draggable).toBe(true);
+  });
+
+  it('freezes on a locked canvas', () => {
+    expect(mapEditableFlowNode(editableNode(), true, labelChange, removeNode, true).draggable)
+      .toBe(false);
   });
 
   it('still withholds label editing and deletion from a viewer', () => {
