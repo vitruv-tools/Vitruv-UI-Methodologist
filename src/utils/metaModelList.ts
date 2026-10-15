@@ -41,7 +41,9 @@ export function isModelReferencedByProjects(model: LibraryMetaModel): boolean {
   return getProjectUsageCount(model) > 0;
 }
 
-const pluralizeProjects = (count: number) => `${count} ${count === 1 ? 'project' : 'projects'}`;
+const projectNoun = (count: number) => (count === 1 ? 'project' : 'projects');
+
+const pluralizeProjects = (count: number) => `${count} ${projectNoun(count)}`;
 
 /** Short badge text such as "1 project" or "3 projects". */
 export function formatProjectUsageLabel(model: LibraryMetaModel): string {
@@ -59,7 +61,7 @@ export function describeProjectUsage(model: LibraryMetaModel): string {
   const hiddenCount = getProjectUsageCount(model) - visibleNames.length;
   if (hiddenCount <= 0) return visibleNames.join(', ');
   const hidden = visibleNames.length > 0
-    ? `${hiddenCount} other ${hiddenCount === 1 ? 'project' : 'projects'}`
+    ? `${hiddenCount} other ${projectNoun(hiddenCount)}`
     : pluralizeProjects(hiddenCount);
   return [...visibleNames, hidden].join(', ');
 }
