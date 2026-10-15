@@ -1,7 +1,7 @@
 import React, { useState, useRef, useCallback, useEffect, useMemo, forwardRef, useImperativeHandle } from 'react';
 import { ecoreToUml, UMLRelationship, UMLModel } from '../../utils/ecoreToUml';
-import { saveMetaModelEcore, MetaModelSaveMetadata } from '../../utils/saveMetaModelEcore';
-import { umlSemanticSnapshot, umlToEcore } from '../../utils/umlToEcore';
+import { saveMetaModelEcore, saveWorkspaceModelEcore, MetaModelSaveMetadata } from '../../utils/saveMetaModelEcore';
+import { umlSemanticSnapshot } from '../../utils/umlToEcore';
 import { validateUmlModel } from '../../utils/umlValidation';
 import { useUmlEditHistory, UmlEditSnapshot } from '../../hooks/useUmlEditHistory';
 import {
@@ -87,7 +87,10 @@ function isPastePositionTarget(target: EventTarget | null): boolean {
   );
 }
 
-/** `library` persists to the metamodel library API; `workspace` only updates the open project/session copy. */
+/**
+ * `library` writes the model library file. `workspace` writes the ecore file
+ * opened in the project and the library copy when that file is separate.
+ */
 export type UmlDiagramSaveTarget = 'library' | 'workspace';
 
 export interface UmlDiagramSaveContext {
@@ -550,20 +553,17 @@ const rels = useMemo(
     setSaving(true);
     setSaveMessage('');
     try {
-      const result =
-        saveContext.saveTarget === 'workspace'
-          ? {
-              ecoreContent: umlToEcore(getModel(), originalEcore),
-              ecoreFileId: saveContext.ecoreFileId,
-            }
-          : await saveMetaModelEcore({
-              metaModelId: saveContext.metaModelId,
-              ecoreFileId: saveContext.ecoreFileId,
-              modelName: saveContext.modelName,
-              model: getModel(),
-              originalEcore,
-              metaModelMetadata: saveContext.metaModelMetadata,
-            });
+      const persist = saveContext.saveTarget === 'workspace'
+        ? saveWorkspaceModelEcore
+        : saveMetaModelEcore;
+      const result = await persist({
+        metaModelId: saveContext.metaModelId,
+        ecoreFileId: saveContext.ecoreFileId,
+        modelName: saveContext.modelName,
+        model: getModel(),
+        originalEcore,
+        metaModelMetadata: saveContext.metaModelMetadata,
+      });
       resetFromEcore(result.ecoreContent, true);
       skipNextEcoreResetRef.current = true;
       saveContext.onSaved?.(result);

@@ -1,4 +1,4 @@
-import { formatEcoreMultiplicity } from './umlMultiplicity';
+import { formatEcoreMultiplicity, normalizeMultiplicityDisplay } from './umlMultiplicity';
 import { applyUmlDiagramLayout } from './umlClassLayout';
 import { GENMODEL_ANNOTATION_SOURCE } from './ecoreXmlNamespaces';
 import { collectClassElements, getElementType, parseEcoreDocument } from './ecoreDocument';
@@ -17,6 +17,11 @@ export const UML_VISIBILITY_OPTIONS: readonly UMLVisibility[] = ['+', '-', '#'];
 
 /** Ecore annotation source for UML visibility (+ / - / #). */
 export const UML_VISIBILITY_ANNOTATION = 'uml.visibility';
+/**
+ * Ecore stores only the target end of a reference. The source end of a UML
+ * association is kept in this annotation so a save does not reset it to 1.
+ */
+export const UML_SOURCE_MULTIPLICITY_ANNOTATION = 'uml.sourceMultiplicity';
 /** Standard Ecore/GenModel annotation source for element documentation. */
 export const ECORE_DOCUMENTATION_ANNOTATION = GENMODEL_ANNOTATION_SOURCE;
 
@@ -32,6 +37,19 @@ export function parseEcoreDocumentation(element: Element): string | undefined {
       if (detail.getAttribute('key') === 'documentation') {
         return detail.getAttribute('value') ?? '';
       }
+    }
+  }
+  return undefined;
+}
+
+/** Source-end multiplicity stored on a reference, or undefined when it was not saved. */
+export function parseAnnotatedSourceMultiplicity(element: Element): string | undefined {
+  for (const annotation of directChildElements(element, 'eAnnotations')) {
+    if (annotation.getAttribute('source') !== UML_SOURCE_MULTIPLICITY_ANNOTATION) continue;
+    for (const detail of directChildElements(annotation, 'details')) {
+      if (detail.getAttribute('key') !== 'value') continue;
+      const value = normalizeMultiplicityDisplay(detail.getAttribute('value'));
+      return value || undefined;
     }
   }
   return undefined;
@@ -204,6 +222,7 @@ interface DeferredClassRef {
   lower: string | null;
   upper: string | null;
   documentation?: string;
+  sourceMultiplicity?: string;
 }
 
 const EMPTY_UML_MODEL: UMLModel = { classes: [], relationships: [] };
@@ -236,6 +255,7 @@ function parseClassAttributes(
         lower: feat.getAttribute('lowerBound'),
         upper: feat.getAttribute('upperBound'),
         documentation: parseEcoreDocumentation(feat),
+        sourceMultiplicity: parseAnnotatedSourceMultiplicity(feat),
       });
       continue;
     }
@@ -309,11 +329,18 @@ function buildClassMap(
   return { classMap, deferredClassRefs };
 }
 
-function buildReferenceMultiplicities(lower: string | null, upper: string | null): {
+function buildReferenceMultiplicities(
+  lower: string | null,
+  upper: string | null,
+  annotatedSource?: string,
+): {
   sourceMultiplicity?: string;
   targetMultiplicity?: string;
 } {
   const targetMultiplicity = formatEcoreMultiplicity(lower, upper);
+  if (annotatedSource) {
+    return { sourceMultiplicity: annotatedSource, targetMultiplicity };
+  }
   return {
     sourceMultiplicity: targetMultiplicity === undefined ? undefined : '1',
     targetMultiplicity,
@@ -367,6 +394,7 @@ function appendReferenceRelationships(
     const multiplicities = buildReferenceMultiplicities(
       feat.getAttribute('lowerBound'),
       feat.getAttribute('upperBound'),
+      parseAnnotatedSourceMultiplicity(feat),
     );
 
     relationships.push({
@@ -391,7 +419,11 @@ function appendDeferredRelationships(
     if (!classMap.has(ref.sourceId) || !classMap.has(ref.targetId)) continue;
     if (ref.sourceId === ref.targetId) continue;
 
-    const multiplicities = buildReferenceMultiplicities(ref.lower, ref.upper);
+    const multiplicities = buildReferenceMultiplicities(
+      ref.lower,
+      ref.upper,
+      ref.sourceMultiplicity,
+    );
     relationships.push({
       id: `rel-${relIdx.value++}`,
       sourceId: ref.sourceId,

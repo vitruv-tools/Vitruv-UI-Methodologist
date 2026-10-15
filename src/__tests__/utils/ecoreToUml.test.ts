@@ -286,6 +286,19 @@ describe('ecoreToUml – references', () => {
     });
   });
 
+  it('reads a saved source multiplicity instead of defaulting it to 1', () => {
+    const reference = `${eRef('lines', 'LineItem', false, '1', '-1').replace('/>', '>')}`
+      + '<eAnnotations source="uml.sourceMultiplicity">'
+      + '<details key="value" value="0..1"/>'
+      + '</eAnnotations></eStructuralFeatures>';
+    const xml = wrap(eClass('Order', reference) + eClass('LineItem'));
+    const { relationships } = ecoreToUml(xml);
+    expect(relationships[0]).toMatchObject({
+      sourceMultiplicity: '0..1',
+      targetMultiplicity: '1..*',
+    });
+  });
+
   it('creates a composition relationship for a containment EReference', () => {
     const xml = wrap(
       eClass('Library', eRef('books', 'Book', true)) +

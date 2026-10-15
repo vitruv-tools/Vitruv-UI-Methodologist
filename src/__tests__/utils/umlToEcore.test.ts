@@ -66,6 +66,27 @@ describe('umlToEcore', () => {
     expect(xml).toContain('name="Department"');
   });
 
+  it('round-trips source and target multiplicity', () => {
+    const model = ecoreToUml(SAMPLE);
+    const person = model.classes.find(c => c.name === 'Person')!;
+    const employee = model.classes.find(c => c.name === 'Employee')!;
+    model.relationships.push({
+      id: 'rel-new',
+      sourceId: person.id,
+      targetId: employee.id,
+      type: 'association',
+      label: 'manages',
+      sourceMultiplicity: '0..*',
+      targetMultiplicity: '1..*',
+    });
+
+    const roundTrip = ecoreToUml(umlToEcore(model, SAMPLE));
+    expect(roundTrip.relationships.find(rel => rel.label === 'manages')).toMatchObject({
+      sourceMultiplicity: '0..*',
+      targetMultiplicity: '1..*',
+    });
+  });
+
   it('serializes association with label and multiplicity', () => {
     const model = ecoreToUml(SAMPLE);
     model.relationships.push({

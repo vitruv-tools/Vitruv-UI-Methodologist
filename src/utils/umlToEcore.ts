@@ -3,6 +3,7 @@ import {
   normalizeAttributeTypeDisplay,
   normalizeOperationReturnType,
   ECORE_DOCUMENTATION_ANNOTATION,
+  UML_SOURCE_MULTIPLICITY_ANNOTATION,
   UML_VISIBILITY_ANNOTATION,
   UMLAttribute,
   UMLClass,
@@ -12,7 +13,7 @@ import {
   UMLVisibility,
 } from './ecoreToUml';
 import { ECORE_XML_NAMESPACE, XSI_XML_NAMESPACE } from './ecoreXmlNamespaces';
-import { parseMultiplicity } from './umlMultiplicity';
+import { normalizeMultiplicityDisplay, parseMultiplicity } from './umlMultiplicity';
 
 const ECORE_NS = ECORE_XML_NAMESPACE;
 const XSI_NS = XSI_XML_NAMESPACE;
@@ -93,6 +94,21 @@ function renderVisibilityAnnotation(visibility: UMLVisibility, indent: string): 
   );
 }
 
+function renderSourceMultiplicityAnnotation(
+  sourceMultiplicity: string | undefined,
+  indent: string,
+): string {
+  const value = normalizeMultiplicityDisplay(sourceMultiplicity);
+  // Ecore's own bounds are the target end. `1` is the value readers assume
+  // when this annotation is absent, so only a different source end is stored.
+  if (!value || value === '1') return '';
+  return (
+    `${indent}<eAnnotations source="${UML_SOURCE_MULTIPLICITY_ANNOTATION}">` +
+    `\n${indent}  <details key="value" value="${escapeXml(value)}"/>` +
+    `\n${indent}</eAnnotations>`
+  );
+}
+
 function renderDocumentationAnnotation(documentation: string | undefined, indent: string): string {
   if (documentation === undefined || documentation === '') return '';
   return (
@@ -151,9 +167,12 @@ function renderReference(
     `    <eStructuralFeatures xsi:type="ecore:EReference" name="${escapeXml(refName)}"` +
     ` eType="#//${escapeXml(targetName)}" containment="${containment}"` +
     ` lowerBound="${lower}" upperBound="${upper}"`;
-  const documentation = renderDocumentationAnnotation(rel.documentation, '      ');
-  return documentation
-    ? `${openTag}>\n${documentation}\n    </eStructuralFeatures>`
+  const annotations = [
+    renderDocumentationAnnotation(rel.documentation, '      '),
+    renderSourceMultiplicityAnnotation(rel.sourceMultiplicity, '      '),
+  ].filter(Boolean).join('\n');
+  return annotations
+    ? `${openTag}>\n${annotations}\n    </eStructuralFeatures>`
     : `${openTag}/>`;
 }
 

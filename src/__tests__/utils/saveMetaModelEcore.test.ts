@@ -2,7 +2,7 @@ import { apiService } from '../../services/api';
 
 import { ecoreToUml } from '../../utils/ecoreToUml';
 
-import { saveMetaModelEcore } from '../../utils/saveMetaModelEcore';
+import { saveMetaModelEcore, saveWorkspaceModelEcore } from '../../utils/saveMetaModelEcore';
 
 jest.mock('../../services/api', () => ({
   apiService: {
@@ -152,5 +152,59 @@ describe('saveMetaModelEcore', () => {
 
     expect(apiService.getMetaModels).toHaveBeenCalled();
     expect(result.ecoreFileId).toBe(102);
+  });
+});
+
+describe('saveWorkspaceModelEcore', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
+  it('updates the project file and the library file when they are different copies', async () => {
+    (apiService.updateEcoreFile as jest.Mock).mockResolvedValue({});
+    (apiService.getMetaModel as jest.Mock).mockResolvedValueOnce({
+      data: { ...META, ecoreFileId: 8 },
+    });
+
+    const model = ecoreToUml(SAMPLE);
+    model.classes.push({
+      id: 'Department',
+      name: 'Department',
+      isAbstract: false,
+      isInterface: false,
+      attributes: [],
+      operations: [],
+      x: 0,
+      y: 0,
+    });
+
+    const result = await saveWorkspaceModelEcore({
+      metaModelId: '42',
+      ecoreFileId: 7,
+      modelName: 'PersonModel',
+      model,
+      originalEcore: SAMPLE,
+    });
+
+    expect(apiService.updateEcoreFile).toHaveBeenNthCalledWith(1, 7, expect.any(File));
+    expect(apiService.updateEcoreFile).toHaveBeenNthCalledWith(2, 8, expect.any(File));
+    expect(result.ecoreContent).toContain('name="Department"');
+  });
+
+  it('does not write the library file again when the project already uses it', async () => {
+    (apiService.updateEcoreFile as jest.Mock).mockResolvedValue({});
+    (apiService.getMetaModel as jest.Mock).mockResolvedValueOnce({
+      data: { ...META, ecoreFileId: 7 },
+    });
+
+    await saveWorkspaceModelEcore({
+      metaModelId: '42',
+      ecoreFileId: 7,
+      modelName: 'PersonModel',
+      model: ecoreToUml(SAMPLE),
+      originalEcore: SAMPLE,
+    });
+
+    expect(apiService.updateEcoreFile).toHaveBeenCalledTimes(1);
   });
 });

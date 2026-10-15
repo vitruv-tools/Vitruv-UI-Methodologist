@@ -8,13 +8,20 @@ jest.mock('../../../utils/umlLayoutStorage', () => require('../../../testSupport
 
 import React, { createRef } from 'react';
 import { act, screen, waitFor } from '@testing-library/react';
-import { saveMetaModelEcore } from '../../../utils/saveMetaModelEcore';
+import { saveWorkspaceModelEcore } from '../../../utils/saveMetaModelEcore';
 import type { UMLDiagramHandle } from '../../../components/canvas/UMLDiagram';
 import { SIMPLE_ECORE } from '../../../testSupport/umlDiagram/fixtures';
 import { renderDiagram } from '../../../testSupport/umlDiagram/renderUtils';
 
 describe('UMLDiagram save', () => {
-  it('workspace save calls onSaved without hitting the library API', async () => {
+  beforeEach(() => {
+    (saveWorkspaceModelEcore as jest.Mock).mockResolvedValue({
+      ecoreContent: SIMPLE_ECORE,
+      ecoreFileId: 42,
+    });
+  });
+
+  it('workspace save persists the ecore file and updates the open project', async () => {
     const ref = createRef<UMLDiagramHandle>();
     const onSaved = jest.fn();
 
@@ -35,7 +42,11 @@ describe('UMLDiagram save', () => {
     });
 
     await waitFor(() => {
-      expect(saveMetaModelEcore).not.toHaveBeenCalled();
+      expect(saveWorkspaceModelEcore).toHaveBeenCalledWith(expect.objectContaining({
+        metaModelId: '1',
+        ecoreFileId: 42,
+        modelName: 'simple',
+      }));
       expect(onSaved).toHaveBeenCalledWith(expect.objectContaining({ ecoreFileId: 42 }));
     });
     expect(screen.getByText('Saved to project')).toBeInTheDocument();

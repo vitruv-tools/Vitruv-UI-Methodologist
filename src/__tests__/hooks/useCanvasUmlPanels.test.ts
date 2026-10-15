@@ -273,6 +273,51 @@ describe('useCanvasUmlPanels', () => {
     expect(updateEcoreFileData).toHaveBeenCalledWith(
       'library.ecore',
       '<saved-content />',
+      30,
+    );
+    expect(result.current.umlPanels[0].ecoreFileId).toBe(30);
+  });
+
+  it('passes canvas metadata into the project save and keeps a replacement file id', () => {
+    const updateEcoreFileData = jest.fn();
+    const getCanvasNodes = () => [{
+      id: 'ecore-1',
+      type: 'ecoreFile',
+      position: { x: 0, y: 0 },
+      data: {
+        fileName: 'library.ecore',
+        ecoreFileId: 30,
+        description: 'A library',
+        domain: 'Software',
+        keywords: 'uml, ecore',
+      },
+    }] as Node[];
+    const options = createOptions({ updateEcoreFileData, getCanvasNodes });
+    const { result } = renderHook(() => useCanvasUmlPanels(options));
+    const panel = createPanel();
+
+    act(() => {
+      result.current.restorePanels([panel], panel.id);
+    });
+
+    expect(result.current.buildUmlSaveContext(panel)?.metaModelMetadata).toEqual({
+      description: 'A library',
+      domain: 'Software',
+      keyword: ['uml', 'ecore'],
+    });
+
+    act(() => {
+      result.current.buildUmlSaveContext(panel)?.onSaved?.({
+        ecoreContent: '<saved-content />',
+        ecoreFileId: 44,
+      });
+    });
+
+    expect(result.current.umlPanels[0].ecoreFileId).toBe(44);
+    expect(updateEcoreFileData).toHaveBeenCalledWith(
+      'library.ecore',
+      '<saved-content />',
+      44,
     );
   });
 

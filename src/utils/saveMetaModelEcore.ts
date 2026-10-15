@@ -188,3 +188,48 @@ export async function saveMetaModelEcore(
     return { ecoreContent, ecoreFileId: newFileId };
   }
 }
+
+function libraryEcoreFileId(meta: unknown): number | null {
+  if (!meta || typeof meta !== 'object' || !('ecoreFileId' in meta)) return null;
+  return parseUploadedFileId((meta as { ecoreFileId: unknown }).ecoreFileId);
+}
+
+/**
+ * Project models and the model library can point at different copies of the
+ * same metamodel. After the open copy is saved, write that content onto the
+ * library file as well when it is a different upload.
+ */
+async function copySavedEcoreOntoLibrary(
+  metaModelId: string,
+  modelName: string,
+  saved: SaveMetaModelEcoreResult,
+): Promise<void> {
+  if (!metaModelId) return;
+
+  let libraryFileId: number | null;
+  try {
+    const { data: meta } = await apiService.getMetaModel(metaModelId);
+    libraryFileId = libraryEcoreFileId(meta);
+  } catch (err) {
+    if (isUpdateEndpointMissing(err)) return;
+    throw err;
+  }
+
+  if (libraryFileId == null || libraryFileId === saved.ecoreFileId) return;
+
+  const baseName = modelName.replace(/\.ecore$/i, '').trim() || 'model';
+  await overwriteEcoreInPlace(libraryFileId, saved.ecoreContent, baseName);
+}
+
+/**
+ * Persist a model edited inside a project.
+ * Updates the ecore file the project opened, then the model library's file
+ * when that is a separate copy.
+ */
+export async function saveWorkspaceModelEcore(
+  params: SaveMetaModelEcoreParams,
+): Promise<SaveMetaModelEcoreResult> {
+  const saved = await saveMetaModelEcore(params);
+  await copySavedEcoreOntoLibrary(params.metaModelId, params.modelName, saved);
+  return saved;
+}
