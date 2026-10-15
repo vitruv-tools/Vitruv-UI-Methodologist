@@ -719,6 +719,21 @@ class ApiService {
   }
 
   /**
+   * vSUMS: Replace the ecore of the project's copy of a meta model.
+   * `metaModelId` is the library id (`sourceId`); the library original is not modified.
+   */
+  async updateVsumMetaModelEcore(
+    vsumId: number | string,
+    metaModelId: number | string,
+    data: { ecore: string },
+  ): Promise<ApiResponse<void>> {
+    return this.authenticatedRequest(`/api/v1/vsums/${vsumId}/meta-models/${metaModelId}/ecore`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    });
+  }
+
+  /**
    * vSUMS: Sync changes with relationship data
    */
   async syncVsumChanges(

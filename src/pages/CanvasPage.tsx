@@ -683,6 +683,11 @@ export const CanvasPage: React.FC = () => {
     }
     flowCanvasRef.current?.updateEcoreFileData?.(fileName, content, ecoreFileId);
   }, []);
+  const persistProjectEcore = useCallback(async (libraryMetaModelId: number, ecoreContent: string) => {
+    if (!activeProjectId) throw new Error('No project is open.');
+    if (isViewOnly) throw new Error('You do not have permission to edit project meta-models.');
+    await apiService.updateVsumMetaModelEcore(activeProjectId, libraryMetaModelId, { ecore: ecoreContent });
+  }, [activeProjectId, isViewOnly]);
   const {
     umlPanels,
     topPanelId,
@@ -701,6 +706,7 @@ export const CanvasPage: React.FC = () => {
     getCanvasNodes,
     fetchEcoreFile: fetchEcoreFileById,
     updateEcoreFileData: updateCanvasEcoreFileData,
+    persistProjectEcore,
     onLoadError: notifyUmlPanelLoadError,
   });
 
