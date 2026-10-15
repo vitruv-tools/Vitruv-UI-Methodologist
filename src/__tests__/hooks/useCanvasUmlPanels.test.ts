@@ -343,6 +343,25 @@ describe('useCanvasUmlPanels', () => {
     );
   });
 
+  it('persists workspace saves to the project copy using the library meta model id', async () => {
+    const persistProjectEcore = jest.fn().mockResolvedValue(undefined);
+    const options = createOptions({ persistProjectEcore });
+    const { result } = renderHook(() => useCanvasUmlPanels(options));
+
+    const saveContext = result.current.buildUmlSaveContext(createPanel());
+    await saveContext?.persistWorkspaceEcore?.('<edited />');
+
+    expect(persistProjectEcore).toHaveBeenCalledWith(20, '<edited />');
+  });
+
+  it('does not build save context without a meta model id', () => {
+    const options = createOptions();
+    const { result } = renderHook(() => useCanvasUmlPanels(options));
+
+    const panel = createPanel({ metaModelId: undefined, metaModelSourceId: undefined });
+    expect(result.current.buildUmlSaveContext(panel)).toBeUndefined();
+  });
+
   it('restores, removes, and clears panel state for page workflows', () => {
     const options = createOptions();
     const { result } = renderHook(() => useCanvasUmlPanels(options));
