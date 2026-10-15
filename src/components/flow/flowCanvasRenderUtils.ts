@@ -269,12 +269,14 @@ export function mapEditableFlowNode(
   readOnly: boolean,
   handleLabelChange: (id: string, label: string) => void,
   removeNode: (id: string) => void,
+  locked = false,
 ): Node {
   return {
     ...node,
     // Draggable for viewers too, matching the ecore boxes — the label and
-    // delete affordances below stay gated on readOnly.
-    draggable: true,
+    // delete affordances below stay gated on readOnly. A locked canvas moves
+    // nothing; the per-node flag would otherwise override nodesDraggable.
+    draggable: !locked,
     data: {
       ...node.data,
       onLabelChange: readOnly ? undefined : handleLabelChange,
@@ -287,6 +289,8 @@ export function mapEcoreFlowNode(
   node: Node,
   options: {
     readOnly: boolean;
+    /** Locked with the lock button; nothing may be moved, unlike for read-only viewers. */
+    locked?: boolean;
     expandedFileId: string | null;
     selectedFileId: string | null;
     connectionDragState: ConnectionDragState | null;
@@ -310,6 +314,7 @@ export function mapEcoreFlowNode(
 ): Node {
   const {
     readOnly,
+    locked = false,
     expandedFileId,
     selectedFileId,
     connectionDragState,
@@ -348,8 +353,8 @@ export function mapEcoreFlowNode(
     },
     selected: selectedFileId === node.id,
     // Draggable for viewers too — repositioning is local-only (see
-    // isReadOnlyBlockedNodeChange). Still frozen mid-connection and in
-    // add-reaction mode, where a drag would fight the click-to-target gesture.
-    draggable: !connectionDragState?.isActive && !addReactionMode,
+    // isReadOnlyBlockedNodeChange). Still frozen on a locked canvas, mid-connection
+    // and in add-reaction mode, where a drag would fight the click-to-target gesture.
+    draggable: !locked && !connectionDragState?.isActive && !addReactionMode,
   };
 }

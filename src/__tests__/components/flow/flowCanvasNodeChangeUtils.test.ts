@@ -4,6 +4,7 @@ import {
   clearUmlCustomControlPoints,
   collectNodeFollowChanges,
   getNodeDragFlags,
+  isLockedBlockedNodeChange,
   isReadOnlyBlockedEdgeChange,
   isReadOnlyBlockedNodeChange,
   renameEcoreFileNode,
@@ -26,6 +27,18 @@ describe('isReadOnlyBlockedNodeChange', () => {
   it('allows selection and dimension changes', () => {
     expect(isReadOnlyBlockedNodeChange({ type: 'select' })).toBe(false);
     expect(isReadOnlyBlockedNodeChange({ type: 'dimensions' })).toBe(false);
+  });
+});
+
+describe('isLockedBlockedNodeChange', () => {
+  it('blocks removing and moving a node', () => {
+    expect(isLockedBlockedNodeChange({ type: 'remove' })).toBe(true);
+    expect(isLockedBlockedNodeChange({ type: 'position' })).toBe(true);
+  });
+
+  it('allows selection and dimension changes', () => {
+    expect(isLockedBlockedNodeChange({ type: 'select' })).toBe(false);
+    expect(isLockedBlockedNodeChange({ type: 'dimensions' })).toBe(false);
   });
 });
 
