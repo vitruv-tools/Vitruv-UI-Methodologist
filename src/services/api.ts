@@ -769,6 +769,16 @@ class ApiService {
   }
 
   /**
+   * vSUMS: Permanently delete a VSUM that is in the trash (cannot be undone)
+   * DELETE /api/v1/vsums/{id}/permanent
+   */
+  async deleteVsumPermanently(id: number | string): Promise<ApiResponse<Record<string, never>>> {
+    return this.authenticatedRequest(`/api/v1/vsums/${id}/permanent`, {
+      method: 'DELETE',
+    });
+  }
+
+  /**
    * vSUMS: Restore to a specific version
    * PUT /api/v1/vsums/{id}/recovery
    */

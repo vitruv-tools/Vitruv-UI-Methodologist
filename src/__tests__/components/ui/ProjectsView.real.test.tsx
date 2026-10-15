@@ -14,6 +14,7 @@ jest.mock('../../../services/api', () => ({
     getRemovedVsumsPaginated: jest.fn(),
     deleteVsum: jest.fn(),
     recoverVsum: jest.fn(),
+    deleteVsumPermanently: jest.fn(),
   },
 }));
 
@@ -32,11 +33,18 @@ jest.mock('../../../components/ui/VsumDetailsModal', () => ({
 }));
 
 jest.mock('../../../components/ui/ConfirmDialog', () => ({
-  ConfirmDialog: ({ isOpen, onConfirm }: any) =>
+  ConfirmDialog: ({ isOpen, title, message, onConfirm, onCancel }: any) =>
     isOpen ? (
-      <button data-testid="confirm-btn" onClick={onConfirm}>
-        Confirm
-      </button>
+      <div data-testid="confirm-dialog">
+        <div data-testid="confirm-title">{title}</div>
+        <div data-testid="confirm-message">{message}</div>
+        <button data-testid="confirm-btn" onClick={onConfirm}>
+          Confirm
+        </button>
+        <button data-testid="cancel-btn" onClick={onCancel}>
+          Cancel
+        </button>
+      </div>
     ) : null,
 }));
 
@@ -199,5 +207,82 @@ describe('ProjectsView real component', () => {
     fireEvent.click(await screen.findByRole('menuitem', { name: 'Details' }));
 
     expect(screen.getByTestId('details-modal')).toBeInTheDocument();
+  });
+
+  describe('permanent delete from the trash', () => {
+    const trashedVsum = {
+      id: 7,
+      name: 'Trashed Project',
+      createdAt: '2024-01-01T00:00:00Z',
+      updatedAt: '2024-01-01T00:00:00Z',
+      removedAt: new Date().toISOString(),
+    };
+
+    async function openTrashWithProject() {
+      await renderProjectsView();
+      fireEvent.click(screen.getByText('Deleted projects'));
+      await settleRemoved([trashedVsum]);
+      expect(screen.getByText('Trashed Project')).toBeInTheDocument();
+    }
+
+    const clickDeletePermanently = () =>
+      fireEvent.click(screen.getByRole('button', { name: 'Delete permanently' }));
+
+    const confirmDelete = async () => {
+      await act(async () => {
+        fireEvent.click(screen.getByTestId('confirm-btn'));
+        await Promise.resolve();
+      });
+    };
+
+    it('asks for confirmation and does not call the API before it is given', async () => {
+      await openTrashWithProject();
+
+      clickDeletePermanently();
+
+      expect(screen.getByTestId('confirm-title')).toHaveTextContent('Delete permanently');
+      expect(screen.getByTestId('confirm-message')).toHaveTextContent('cannot be undone');
+      expect(apiService.deleteVsumPermanently).not.toHaveBeenCalled();
+
+      fireEvent.click(screen.getByTestId('cancel-btn'));
+
+      expect(screen.queryByTestId('confirm-dialog')).not.toBeInTheDocument();
+      expect(apiService.deleteVsumPermanently).not.toHaveBeenCalled();
+      expect(screen.getByText('Trashed Project')).toBeInTheDocument();
+    });
+
+    it('deletes the project permanently and removes it from the trash list', async () => {
+      apiService.deleteVsumPermanently.mockResolvedValue({ data: {} });
+      await openTrashWithProject();
+
+      clickDeletePermanently();
+      await confirmDelete();
+
+      expect(apiService.deleteVsumPermanently).toHaveBeenCalledTimes(1);
+      expect(apiService.deleteVsumPermanently).toHaveBeenCalledWith(7);
+      expect(screen.queryByTestId('confirm-dialog')).not.toBeInTheDocument();
+
+      // The trash list is reloaded and no longer contains the project.
+      expect(apiService.getRemovedVsumsPaginated).toHaveBeenCalledTimes(2);
+      await settleRemoved([]);
+      expect(screen.queryByText('Trashed Project')).not.toBeInTheDocument();
+      expect(screen.getByText('No deleted projects')).toBeInTheDocument();
+    });
+
+    it('shows the backend error and keeps the project when the delete fails', async () => {
+      apiService.deleteVsumPermanently.mockRejectedValue(new Error('Vsum id not found'));
+      await openTrashWithProject();
+
+      clickDeletePermanently();
+      await confirmDelete();
+
+      expect(screen.getByTestId('confirm-message')).toHaveTextContent('Vsum id not found');
+      expect(apiService.getRemovedVsumsPaginated).toHaveBeenCalledTimes(1);
+      expect(screen.getByText('Trashed Project')).toBeInTheDocument();
+
+      fireEvent.click(screen.getByTestId('cancel-btn'));
+
+      expect(screen.queryByTestId('confirm-dialog')).not.toBeInTheDocument();
+    });
   });
 });
