@@ -297,6 +297,15 @@ function ruleSetBody(rs: RuleSet) {
   return { name: rs.name, color: rs.color, description: rs.description, oclContent: ruleSetToOcl(rs) };
 }
 
+/**
+ * The rule sets loaded from the backend, followed by the ones the user added while they were
+ * loading: the response was requested before those existed.
+ */
+function mergeLoadedRuleSets(loaded: RuleSet[], current: RuleSet[]): RuleSet[] {
+  const loadedIds = new Set(loaded.map(rs => rs.backendId));
+  return [...loaded, ...current.filter(rs => !loadedIds.has(rs.backendId))];
+}
+
 /** Returns project-specific default rule sets based on which metamodels are present on the canvas. */
 function getDefaultRuleSets(canvasNodes: Node[]): RuleSet[] {
   const domains = new Set(canvasNodes.map(n => (n.data?.domain ?? '').toLowerCase()));
@@ -1772,11 +1781,7 @@ export const ConstraintsView: React.FC<ConstraintsViewProps> = ({ vsumId: _vsumI
         collapsed: false,
         rules: parseRulesFromOcl(r.oclContent, `rs_${r.id}`),
       }));
-      // Keep sets the user added while loading; the response was requested before they existed.
-      setRuleSets(prev => [
-        ...loaded,
-        ...prev.filter(rs => !loaded.some(saved => saved.backendId === rs.backendId)),
-      ]);
+      setRuleSets(prev => mergeLoadedRuleSets(loaded, prev));
       setSavedRuleSets('loaded');
     }).catch(err => {
       if (cancelled) return;
@@ -1821,23 +1826,24 @@ export const ConstraintsView: React.FC<ConstraintsViewProps> = ({ vsumId: _vsumI
     }
     const body = ruleSetBody(rs);
     pendingCreatesRef.current.set(rs.id, { latest: null, deleted: false });
-    apiService.createRuleSet(vsumId, body).then(created => {
-      const { latest, deleted } = pendingCreatesRef.current.get(rs.id) ?? { latest: null, deleted: false };
-      pendingCreatesRef.current.delete(rs.id);
-      if (deleted) {
-        apiService.deleteRuleSet(vsumId, created.id).catch(err => console.error('Failed to delete RuleSet:', err));
-        return;
-      }
-      setRuleSets(prev => updateBackendId(prev, rs.id, created.id));
-      if (latest && JSON.stringify(ruleSetBody(latest)) !== JSON.stringify(body)) {
-        apiService.updateRuleSet(vsumId, created.id, ruleSetBody(latest)).catch(err =>
-          console.error('Failed to sync RuleSet:', err));
-      }
-    }).catch(err => {
-      pendingCreatesRef.current.delete(rs.id);
-      saveUnsavedRef.current = true;
-      console.error('Failed to create RuleSet:', err);
-    });
+    apiService.createRuleSet(vsumId, body).then(
+      (created): Promise<unknown> | undefined => {
+        const { latest, deleted } = pendingCreatesRef.current.get(rs.id) ?? { latest: null, deleted: false };
+        pendingCreatesRef.current.delete(rs.id);
+        // Apply what happened while the request was running.
+        if (deleted) return apiService.deleteRuleSet(vsumId, created.id);
+        setRuleSets(prev => updateBackendId(prev, rs.id, created.id));
+        if (latest && JSON.stringify(ruleSetBody(latest)) !== JSON.stringify(body)) {
+          return apiService.updateRuleSet(vsumId, created.id, ruleSetBody(latest));
+        }
+        return undefined;
+      },
+      err => {
+        pendingCreatesRef.current.delete(rs.id);
+        saveUnsavedRef.current = true;
+        console.error('Failed to create RuleSet:', err);
+      },
+    ).catch(err => console.error('Failed to sync RuleSet:', err));
   }, [vsumId]);
 
   /**
