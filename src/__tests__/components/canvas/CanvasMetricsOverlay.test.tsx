@@ -76,10 +76,10 @@ describe('CanvasMetricsOverlay', () => {
     expect(screen.getByTestId('canvas-metrics-overlay')).toHaveStyle({ display: 'flex' });
     expect(screen.getByText('Basic Metrics')).toBeInTheDocument();
     expect(screen.getAllByText('library').length).toBeGreaterThan(0);
-    expect(screen.getByText('Methodology size')).toBeInTheDocument();
+    expect(screen.getByText('V-SUMM size')).toBeInTheDocument();
     expect(screen.queryByText('Derived / composite')).not.toBeInTheDocument();
     fireEvent.click(screen.getByTestId('metrics-tab-derived'));
-    expect(screen.getByText('Methodology size')).toBeInTheDocument();
+    expect(screen.getByText('V-SUMM size')).toBeInTheDocument();
     expect(screen.getByText('Derived / composite')).toBeInTheDocument();
     fireEvent.click(screen.getByTestId('metrics-tab-coverage'));
     expect(screen.getByText('Derived / composite')).toBeInTheDocument();
@@ -143,9 +143,9 @@ reaction SyncBook {
   it('lets the user unmark a category while keeping the others visible', async () => {
     renderOverlay({ visible: true });
     fireEvent.click(screen.getByTestId('metrics-tab-derived'));
-    expect(screen.getByText('Methodology size')).toBeInTheDocument();
+    expect(screen.getByText('V-SUMM size')).toBeInTheDocument();
     fireEvent.click(screen.getByTestId('metrics-tab-size'));
-    expect(screen.queryByText('Methodology size')).not.toBeInTheDocument();
+    expect(screen.queryByText('V-SUMM size')).not.toBeInTheDocument();
     expect(screen.getByText('Derived / composite')).toBeInTheDocument();
     await waitFor(() => {
       expect(apiService.getRuleSets).toHaveBeenCalled();
