@@ -1,13 +1,24 @@
 import React from 'react';
-import { render, screen, fireEvent, act } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { ModelDrawer, DrawerModel } from '../../../components/canvas/ModelDrawer';
 
+const mockReloadLayout = jest.fn();
+const mockSave = jest.fn();
+const mockIsDirty = jest.fn(() => false);
+
 jest.mock('../../../components/canvas/UMLDiagram', () => {
-  const { forwardRef, createElement } = require('react');
+  const { forwardRef, createElement, useImperativeHandle } = require('react');
   return {
-    UMLDiagram: forwardRef((_props: any, _ref: any) =>
-      createElement('div', { 'data-testid': 'uml-diagram' })
-    ),
+    UMLDiagram: forwardRef((_props: any, ref: any) => {
+      useImperativeHandle(ref, () => ({
+        flushLayout: jest.fn(),
+        reloadLayout: mockReloadLayout,
+        isDirty: mockIsDirty,
+        save: mockSave,
+        tryEscape: jest.fn(() => false),
+      }));
+      return createElement('div', { 'data-testid': 'uml-diagram' });
+    }),
   };
 });
 
@@ -24,6 +35,7 @@ const defaultProps = {
 
 beforeEach(() => {
   jest.clearAllMocks();
+  mockIsDirty.mockReturnValue(false);
 });
 
 describe('ModelDrawer real component', () => {
@@ -89,6 +101,22 @@ describe('ModelDrawer real component', () => {
     expect(screen.queryByText('Person Model')).not.toBeInTheDocument();
   });
 
+  it('shows each library model version in its own column', () => {
+    render(
+      <ModelDrawer
+        {...defaultProps}
+        myLibraryModels={[
+          { id: 1, name: 'Car Model', domain: 'automotive', version: '2.3' },
+          { id: 2, name: 'Person Model', domain: 'hr', version: '1.0' },
+        ]}
+      />,
+    );
+
+    expect(screen.getByText('Version')).toBeInTheDocument();
+    expect(screen.getByText('2.3')).toBeInTheDocument();
+    expect(screen.getByText('1.0')).toBeInTheDocument();
+  });
+
   it('clicking a model card calls onAddModel with the model', () => {
     const onAddModel = jest.fn();
     render(<ModelDrawer {...defaultProps} onAddModel={onAddModel} />);
@@ -123,9 +151,90 @@ describe('ModelDrawer real component', () => {
     );
     // Car Model (id=1) is in addedModelIds, should not appear in library
     // It should appear in "On canvas" section instead
-    const libraryItems = screen.queryAllByText('Car Model');
     // Model is in "On canvas" area not library area; it still renders
     // but fromLibrary filter excludes it from library list
     expect(screen.getByText('Person Model')).toBeInTheDocument();
+  });
+
+  it('renames an on-canvas model only through the project rename callback', async () => {
+    const projectModel: DrawerModel = {
+      id: 7,
+      sourceId: 42,
+      name: 'Library name',
+      inProject: true,
+    };
+    const onRenameProjectModel = jest.fn().mockResolvedValue(undefined);
+
+    render(
+      <ModelDrawer
+        {...defaultProps}
+        models={[projectModel]}
+        addedModelIds={new Set([7])}
+        onRenameProjectModel={onRenameProjectModel}
+      />,
+    );
+
+    fireEvent.contextMenu(screen.getByLabelText('View details for Library name'));
+    fireEvent.click(screen.getByText('Rename in this project'));
+    fireEvent.change(screen.getByLabelText('Project meta-model name'), {
+      target: { value: 'Project name' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+
+    await waitFor(() => {
+      expect(screen.getByText('Project name', { selector: 'span' })).toBeInTheDocument();
+    });
+    expect(onRenameProjectModel).toHaveBeenCalledWith(projectModel, 'Project name');
+  });
+  it('reloads the preview layout when the full-screen UML editor is closed', () => {
+    const projectModel: DrawerModel = {
+      id: 7,
+      name: 'Shop',
+      ecoreContent: '<ecore/>',
+      inProject: true,
+    };
+    render(
+      <ModelDrawer
+        {...defaultProps}
+        models={[projectModel]}
+        addedModelIds={new Set([7])}
+      />,
+    );
+
+    fireEvent.contextMenu(screen.getByLabelText('View details for Shop'));
+    fireEvent.click(screen.getByTitle('Open full-screen UML editor'));
+    expect(screen.getByTestId('uml-fullscreen-page')).toBeInTheDocument();
+    expect(mockReloadLayout).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByTestId('uml-page-back'));
+
+    expect(screen.queryByTestId('uml-fullscreen-page')).not.toBeInTheDocument();
+    expect(mockReloadLayout).toHaveBeenCalled();
+  });
+
+  it('saves with Cmd+S in the full-screen UML editor instead of opening the browser dialog', async () => {
+    const projectModel: DrawerModel = {
+      id: 7,
+      name: 'Shop',
+      ecoreContent: '<ecore/>',
+      ecoreFileId: 70,
+      inProject: true,
+    };
+    render(
+      <ModelDrawer
+        {...defaultProps}
+        models={[projectModel]}
+        addedModelIds={new Set([7])}
+      />,
+    );
+
+    fireEvent.contextMenu(screen.getByLabelText('View details for Shop'));
+    fireEvent.click(screen.getByTitle('Open full-screen UML editor'));
+    mockIsDirty.mockReturnValue(true);
+
+    const notPrevented = fireEvent.keyDown(globalThis, { key: 's', metaKey: true });
+
+    expect(notPrevented).toBe(false);
+    await waitFor(() => expect(mockSave).toHaveBeenCalledTimes(1));
   });
 });

@@ -28,6 +28,16 @@ export function findNodeByMetaModelId(nodes: Node[], metaModelId: number): Node 
   );
 }
 
+/**
+ * Whether this exact library or project row is already an ecore box.
+ * Match the row id only. Another version of the same model can share a source id
+ * and must still be addable.
+ */
+export function isMetaModelRowOnCanvas(nodes: Node[], rowId: number | undefined): boolean {
+  if (rowId == null) return false;
+  return findNodeByMetaModelId(nodes, rowId) != null;
+}
+
 /** Whether a flow-space point falls within a node's footprint. */
 export function isPositionInsideNode(position: { x: number; y: number }, node: Node): boolean {
   const { width, height } = node.type === 'ecoreFile' ? ECORE_FILE_BOX_SIZE : NODE_DIMENSIONS;

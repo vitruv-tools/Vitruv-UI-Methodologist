@@ -46,9 +46,10 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ user, onClose, onNam
           zIndex: 1,
           width: 'min(760px, 94vw)',
           maxHeight: '88vh',
-          background: '#ffffff',
+          background: 'var(--v-surface)',
           borderRadius: 12,
-          boxShadow: '0 8px 40px rgba(0,0,0,0.18), 0 0 0 1px rgba(0,0,0,0.07)',
+          boxShadow: 'var(--v-card-shadow)',
+          border: '1px solid var(--v-card-border)',
           display: 'flex',
           flexDirection: 'column',
           overflow: 'hidden',
@@ -62,24 +63,24 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ user, onClose, onNam
             position: 'absolute', top: 12, right: 12, zIndex: 10,
             width: 30, height: 30, borderRadius: 6,
             background: 'transparent',
-            border: '1.5px solid rgba(0,0,0,0.10)',
+            border: '1.5px solid var(--v-border)',
             display: 'flex', alignItems: 'center', justifyContent: 'center',
-            cursor: 'pointer', fontSize: 13, color: '#64748b',
+            cursor: 'pointer', fontSize: 13, color: 'var(--v-text-muted)',
             transition: 'all 0.12s',
           }}
           onMouseEnter={e => {
-            e.currentTarget.style.background = '#f1f5f9';
-            e.currentTarget.style.borderColor = 'rgba(0,0,0,0.18)';
+            e.currentTarget.style.background = 'var(--v-chrome-hover)';
+            e.currentTarget.style.color = 'var(--v-text)';
           }}
           onMouseLeave={e => {
             e.currentTarget.style.background = 'transparent';
-            e.currentTarget.style.borderColor = 'rgba(0,0,0,0.10)';
+            e.currentTarget.style.color = 'var(--v-text-muted)';
           }}
           title="Close"
         >
           ✕
         </button>
-        <div style={{ overflowY: 'auto', flex: 1, background: '#f8fafc' }}>
+        <div style={{ overflowY: 'auto', flex: 1, background: 'var(--v-page-bg)' }}>
           <ProfileView
             user={user}
             userRole="Methodologist"

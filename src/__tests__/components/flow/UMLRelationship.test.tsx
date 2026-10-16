@@ -110,7 +110,7 @@ describe('UMLRelationship', () => {
     expect(marker).toBeInTheDocument();
     const path = marker.querySelector('path');
     expect(path).not.toBeNull();
-    expect(path?.getAttribute('fill')).toBe('#0c436e');
+    expect(path?.getAttribute('fill')).toBe('var(--v-uml-edge, #0c436e)');
   });
 
   it('renders a direction marker by default for composition edges', () => {
@@ -157,13 +157,13 @@ describe('UMLRelationship', () => {
     );
 
     const path = container.querySelector('path#edge-hover-mult') as SVGPathElement;
-    expect(path?.style.stroke).toBe('#0c436e');
+    expect(path?.style.stroke).toBe('var(--v-uml-edge, #0c436e)');
 
     fireEvent.mouseEnter(screen.getByText('1'));
     expect(path?.style.stroke).toBe('#ef4444');
 
     fireEvent.mouseLeave(screen.getByText('1'));
-    expect(path?.style.stroke).toBe('#0c436e');
+    expect(path?.style.stroke).toBe('var(--v-uml-edge, #0c436e)');
   });
 
   it('uses red stroke when selected', () => {
@@ -247,6 +247,59 @@ describe('UMLRelationship', () => {
     expect(d0).toBeTruthy();
     expect(d1).toBeTruthy();
     expect(d0).not.toBe(d1);
+  });
+
+  it('lifts expanded association names off the midpoint ghost', () => {
+    const { container } = render(
+      <svg>
+        <UMLRelationship
+          id="edge-ghost-label"
+          source="s1"
+          target="t1"
+          sourceX={0}
+          sourceY={40}
+          targetX={200}
+          targetY={40}
+          data={{
+            label: 'members',
+            relationshipType: 'association',
+            expandedIntraModel: true,
+          }}
+          selected={false}
+          style={{}}
+        />
+      </svg>,
+    );
+
+    expect(screen.getByTestId('edge-ghost-label-association-name')).toHaveTextContent('members');
+    expect(container.querySelector('text')).toBeNull();
+  });
+
+  it('does not show a curve handle on selected expanded associations', () => {
+    render(
+      <svg>
+        <UMLRelationship
+          id="edge-no-curve"
+          source="s1"
+          target="t1"
+          sourceX={0}
+          sourceY={0}
+          targetX={200}
+          targetY={0}
+          data={{
+            label: 'members',
+            relationshipType: 'association',
+            expandedIntraModel: true,
+            customControlPoint: { x: 100, y: 40 },
+          }}
+          selected
+          style={{}}
+        />
+      </svg>,
+    );
+
+    expect(screen.queryByText(/Double-click to reset/i)).toBeNull();
+    expect(screen.queryByText(/DRAG HERE/i)).toBeNull();
   });
 });
 

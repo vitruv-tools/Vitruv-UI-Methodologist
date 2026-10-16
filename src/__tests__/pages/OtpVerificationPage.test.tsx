@@ -94,7 +94,7 @@ describe('OtpVerificationPage', () => {
   it('displays the countdown timer starting at 5:00', () => {
     render(<OtpVerificationPage />);
 
-    expect(screen.getByText(/Time Remaining/i)).toBeInTheDocument();
+    expect(screen.getByText(/Code expires in/i)).toBeInTheDocument();
     expect(screen.getByText('5:00')).toBeInTheDocument();
   });
 
@@ -106,7 +106,7 @@ describe('OtpVerificationPage', () => {
     });
 
     expect(
-      screen.getByRole('button', { name: /Resend Verification Code/i })
+      screen.getByRole('button', { name: /Resend code/i })
     ).toBeInTheDocument();
   });
 
@@ -119,7 +119,7 @@ describe('OtpVerificationPage', () => {
       jest.advanceTimersByTime(5 * 60 * 1000);
     });
 
-    const resendButton = screen.getByRole('button', { name: /Resend Verification Code/i });
+    const resendButton = screen.getByRole('button', { name: /Resend code/i });
     await userEvent.click(resendButton);
 
     expect(mockResendOtp).toHaveBeenCalled();
@@ -128,10 +128,10 @@ describe('OtpVerificationPage', () => {
     ).toBeInTheDocument();
   });
 
-  it('navigates back to login when Go to Sign In is clicked', async () => {
+  it('navigates back to login when Back to Sign In is clicked', async () => {
     render(<OtpVerificationPage />);
 
-    const goToLoginButton = screen.getByRole('button', { name: /Go to Sign In/i });
+    const goToLoginButton = screen.getByRole('button', { name: /Back to Sign In/i });
     await userEvent.click(goToLoginButton);
 
     expect(mockNavigate).toHaveBeenCalledWith('/login');

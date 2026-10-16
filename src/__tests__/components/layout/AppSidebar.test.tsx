@@ -6,7 +6,9 @@ import { AppSidebar } from '../../../components/layout/AppSidebar';
 jest.mock('../../../hooks/useChangePassword', () => ({
   useChangePassword: () => ({
     isOpen: false, open: jest.fn(), close: jest.fn(),
+    currentPassword: '',
     newPassword: '', confirmPassword: '',
+    setCurrentPassword: jest.fn(),
     setNewPassword: jest.fn(), setConfirmPassword: jest.fn(),
     validation: null, isConfirmValid: true,
     isChanging: false, error: null, success: false,
@@ -108,5 +110,22 @@ describe('AppSidebar', () => {
     render(<AppSidebar {...defaultProps} activeView="projects" />);
     // active nav item has fontWeight 600 — just check it renders without error
     expect(screen.getByText('Projects')).toBeInTheDocument();
+  });
+
+  it('lets the user continue in dark mode or stay in the current light theme', () => {
+    render(<AppSidebar {...defaultProps} />);
+
+    const light = screen.getByRole('button', { name: 'Light theme' });
+    const dark = screen.getByRole('button', { name: 'Dark theme' });
+
+    expect(light).toHaveAttribute('aria-pressed', 'true');
+    fireEvent.click(dark);
+
+    expect(dark).toHaveAttribute('aria-pressed', 'true');
+    expect(document.documentElement).toHaveAttribute('data-theme', 'dark');
+    expect(localStorage.getItem('vitruv.theme')).toBe('dark');
+
+    fireEvent.click(light);
+    expect(document.documentElement).toHaveAttribute('data-theme', 'light');
   });
 });

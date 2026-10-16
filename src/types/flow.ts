@@ -1,14 +1,44 @@
 import { Node, Edge } from 'reactflow';
+import type { FlowFineGranularMetaModelRelationData } from './FlowFineGranularMetaModelRelationData';
+
+/**
+ * Ecore identity data stored on expanded EObject nodes.
+ */
+export type FlowNodeECoreData = {
+  model: string;
+  eObjectId: string;
+  eAttributeIds: string[];
+  eReferenceIds: string[];
+  eOperationIds: string[];
+  eAnnotationIds: string[];
+  eSuperTypeIds: string[];
+};
 
 export interface FlowNode extends Node {
   data: {
     label: string;
     onLabelChange?: (id: string, label: string) => void;
     ecoreData?: EcoreElementData;
+    ecore?: FlowNodeECoreData;
+    isBoundingBox?: boolean;
+    group?: string;
   };
 }
 
-export type FlowEdge = Edge;
+export type UMLNode = FlowNode & {
+  data: { backendMetaModelId: number };
+};
+
+export type FlowEdgeData = {
+  relationshipType: string;
+  sourceMultiplicity?: string;
+  targetMultiplicity?: string;
+  labelX?: number;
+  labelY?: number;
+};
+
+export type FlowEdge = Edge<FlowEdgeData>;
+export type FlowEcoreEdge = Edge<FlowEdgeData & FlowFineGranularMetaModelRelationData>;
 
 export interface FlowData {
   nodes: FlowNode[];

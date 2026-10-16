@@ -138,6 +138,10 @@ describe('CircleOverlay', () => {
     it('renders the SVG overlay when circle.r > 0', () => {
         const { container } = render(<CircleOverlay {...defaultProps()} />);
         expect(container.querySelector('svg')).toBeInTheDocument();
+        const ring = [...container.querySelectorAll('circle')].find(
+            el => el.getAttribute('stroke') === 'var(--v-uml-circle, #0c436e)',
+        );
+        expect(ring).toBeTruthy();
     });
 
     it('renders a bubble for each viewType', () => {

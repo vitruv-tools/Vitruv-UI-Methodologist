@@ -159,3 +159,61 @@ describe('EcoreFileBox (real) – handleConnectionStartWrapper', () => {
     expect(handles).toEqual(['top', 'bottom', 'left', 'right']);
   });
 });
+
+describe('EcoreFileBox (real) – rename', () => {
+  afterEach(() => jest.clearAllMocks());
+
+  const renderBox = (overrides: Record<string, unknown> = {}) => {
+    const onRename = jest.fn();
+    const onSelect = jest.fn();
+    const onExpand = jest.fn();
+    render(
+      <RealEcoreFileBox
+        {...baseNodeProps}
+        data={{ ...baseData, onRename, onSelect, onExpand, ...overrides }}
+      />,
+    );
+    return { onRename, onSelect, onExpand };
+  };
+
+  const startRename = () => {
+    fireEvent.contextMenu(screen.getByRole('button', { name: /flower metamodel/i }));
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Rename' }));
+    return screen.getByLabelText('Rename metamodel');
+  };
+
+  it('lets Space type into the name and saves on Enter', () => {
+    const { onRename, onSelect, onExpand } = renderBox();
+    const input = startRename();
+
+    fireEvent.change(input, { target: { value: 'Flower Shop' } });
+    fireEvent.keyDown(input, { key: ' ' });
+    fireEvent.keyDown(input, { key: 'Enter' });
+
+    expect(onSelect).not.toHaveBeenCalled();
+    expect(onExpand).not.toHaveBeenCalled();
+    expect(onRename).toHaveBeenCalledWith('node-1', 'Flower Shop.ecore');
+    expect(screen.queryByLabelText('Rename metamodel')).not.toBeInTheDocument();
+  });
+
+  it('saves the typed name when the input blurs', () => {
+    const { onRename } = renderBox();
+    const input = startRename();
+
+    fireEvent.change(input, { target: { value: 'Garden' } });
+    fireEvent.blur(input);
+
+    expect(onRename).toHaveBeenCalledWith('node-1', 'Garden.ecore');
+  });
+
+  it('cancels without saving on Escape', () => {
+    const { onRename } = renderBox();
+    const input = startRename();
+
+    fireEvent.change(input, { target: { value: 'Should Not Save' } });
+    fireEvent.keyDown(input, { key: 'Escape' });
+
+    expect(onRename).not.toHaveBeenCalled();
+    expect(screen.queryByLabelText('Rename metamodel')).not.toBeInTheDocument();
+  });
+});

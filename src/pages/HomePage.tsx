@@ -1,4 +1,5 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
+import { useMatch, useNavigate } from 'react-router-dom';
 import { AppSidebar, SidebarView } from '../components/layout/AppSidebar';
 import { ModelLibraryTable } from '../components/ui/ModelLibraryTable';
 import { ProjectsView } from '../components/ui/ProjectsView';
@@ -7,16 +8,32 @@ import { ProfileView } from '../components/ui/ProfileView';
 import { useAuth } from '../contexts/AuthContext';
 import { AuthService } from '../services/auth';
 import { useSharedProjectNotifications } from '../hooks/useSharedProjectNotifications';
+import { themeVars } from '../theme/theme';
+import { MODEL_LIBRARY_PATH } from '../constants/routes';
 
 export const HomePage: React.FC = () => {
-  const [activeView, setActiveView] = useState<SidebarView>('home');
+  const navigate = useNavigate();
+  // The Model Library has its own URL; the other views are still kept in state at '/'.
+  const isModelLibraryRoute = useMatch(`${MODEL_LIBRARY_PATH}/*`) !== null;
+  const [nonLibraryView, setNonLibraryView] = useState<SidebarView>('home');
+  const activeView: SidebarView = isModelLibraryRoute ? 'library' : nonLibraryView;
+
+  const handleViewChange = useCallback((view: SidebarView) => {
+    if (view === 'library') {
+      if (!isModelLibraryRoute) navigate(MODEL_LIBRARY_PATH);
+      return;
+    }
+    setNonLibraryView(view);
+    if (isModelLibraryRoute) navigate('/');
+  }, [isModelLibraryRoute, navigate]);
+
   const { user, refreshCurrentUser } = useAuth();
   const userKey = user?.email ?? user?.id ?? null;
   const { unreadCount, markSeen, markAllSeen, refresh } = useSharedProjectNotifications(userKey);
 
   // Always fetch fresh profile data from the backend on mount so the sidebar
   // shows the correct name (not stale localStorage cache).
-  useEffect(() => { refreshCurrentUser(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { void refreshCurrentUser(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     if (activeView === 'projects') void refresh();
@@ -28,10 +45,10 @@ export const HomePage: React.FC = () => {
   const userEmail = user?.email;
 
   return (
-    <div style={{ width: '100vw', height: '100vh', display: 'flex', overflow: 'hidden', background: '#f7f8fa' }}>
+    <div style={{ width: '100vw', height: '100vh', display: 'flex', overflow: 'hidden', background: themeVars.pageBg }}>
       <AppSidebar
         activeView={activeView}
-        onViewChange={setActiveView}
+        onViewChange={handleViewChange}
         userName={userName}
         userRole="Methodologist"
         userEmail={userEmail}
@@ -40,13 +57,13 @@ export const HomePage: React.FC = () => {
       />
       <main style={{
         flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', position: 'relative',
-        backgroundColor: '#f3f4f6',
-        backgroundImage: 'radial-gradient(circle, #d1d5db 0.75px, transparent 0.75px)',
+        backgroundColor: themeVars.workspaceBg,
+        backgroundImage: `radial-gradient(circle, ${themeVars.workspaceDot} 0.75px, transparent 0.75px)`,
         backgroundSize: '24px 24px',
       }}>
         <div style={{ position: 'relative', flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-          {activeView === 'home'     && <LandingView userName={userName} onNavigate={setActiveView} />}
-          {activeView === 'library'  && <ModelLibraryTable />}
+          {activeView === 'home'     && <LandingView userName={userName} onNavigate={handleViewChange} />}
+          {activeView === 'library'  && <ModelLibraryTable onHome={() => handleViewChange('home')} />}
           {activeView === 'projects' && (
             <ProjectsView
               userKey={userKey}

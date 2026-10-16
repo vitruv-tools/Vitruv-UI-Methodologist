@@ -1,14 +1,19 @@
 import {
+  UML_OFFSET_KEY,
   UML_PACKAGE_LAYOUT_KEY,
+  UML_VIEWPORT_KEY,
   applyLayoutToFlowNodes,
   applyLayoutToUmlClasses,
+  buildUmlLayoutPayload,
   flowNodeLayoutKey,
   hasSavedUmlLayout,
   loadUmlLayout,
+  loadUmlLayoutOffset,
   loadUmlViewport,
   positionsFromFlowNodes,
   positionsFromUmlClasses,
   saveUmlLayout,
+  saveUmlViewport,
   sanitizeUmlPositionMap,
   umlClassNodeId,
   umlLayoutStorageKey,
@@ -111,6 +116,48 @@ describe('umlLayoutStorage', () => {
       __viewport__: { x: -40, y: 60, scale: 1.25 },
     });
     expect(loadUmlViewport(scopeId, fileName)).toEqual({ x: -40, y: 60, scale: 1.25 });
+  });
+
+  it('round-trips the canvas offset next to class positions', () => {
+    saveUmlLayout(scopeId, fileName, buildUmlLayoutPayload(
+      [{ id: 'A', x: 100, y: 200 }],
+      { x: -40, y: 60, scale: 1.25 },
+      { offsetX: 380, offsetY: 400 },
+    ));
+
+    expect(loadUmlLayoutOffset(scopeId, fileName)).toEqual({ offsetX: 380, offsetY: 400 });
+    expect(loadUmlLayout(scopeId, fileName)?.A).toEqual({ x: 100, y: 200 });
+  });
+
+  it('returns no canvas offset when none was saved', () => {
+    saveUmlLayout(scopeId, fileName, { A: { x: 100, y: 200 } });
+    expect(loadUmlLayoutOffset(scopeId, fileName)).toBeNull();
+  });
+
+  it('does not treat viewport and offset entries as a saved class layout', () => {
+    localStorage.setItem(umlLayoutStorageKey(scopeId, fileName), JSON.stringify({
+      [UML_VIEWPORT_KEY]: { x: 0, y: 0, scale: 1 },
+      [UML_OFFSET_KEY]: { x: 380, y: 400 },
+    }));
+    expect(hasSavedUmlLayout(scopeId, fileName)).toBe(false);
+  });
+
+  it('saves the viewport without touching saved class positions', () => {
+    saveUmlLayout(scopeId, fileName, { A: { x: 100, y: 200 } });
+
+    saveUmlViewport(scopeId, fileName, { x: 5, y: 6, scale: 2 }, { offsetX: 380, offsetY: 400 });
+
+    expect(loadUmlLayout(scopeId, fileName)?.A).toEqual({ x: 100, y: 200 });
+    expect(loadUmlViewport(scopeId, fileName)).toEqual({ x: 5, y: 6, scale: 2 });
+    expect(loadUmlLayoutOffset(scopeId, fileName)).toEqual({ offsetX: 380, offsetY: 400 });
+  });
+
+  it('saves the viewport before any class positions were saved', () => {
+    saveUmlViewport(scopeId, fileName, { x: 5, y: 6, scale: 2 });
+
+    expect(loadUmlViewport(scopeId, fileName)).toEqual({ x: 5, y: 6, scale: 2 });
+    expect(loadUmlLayoutOffset(scopeId, fileName)).toBeNull();
+    expect(hasSavedUmlLayout(scopeId, fileName)).toBe(false);
   });
 
   it('round-trips UMLDiagram class positions', () => {

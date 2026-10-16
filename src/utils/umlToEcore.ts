@@ -2,6 +2,7 @@ import {
   isPrimitiveAttributeType,
   normalizeAttributeTypeDisplay,
   normalizeOperationReturnType,
+  ECORE_DOCUMENTATION_ANNOTATION,
   UML_VISIBILITY_ANNOTATION,
   UMLAttribute,
   UMLClass,
@@ -16,32 +17,37 @@ import { parseMultiplicity } from './umlMultiplicity';
 const ECORE_NS = ECORE_XML_NAMESPACE;
 const XSI_NS = XSI_XML_NAMESPACE;
 
+/** Reference to a built-in Ecore data type, e.g. `ecore:EDataType http://…/Ecore#//EString`. */
+function ecoreDataType(name: string): string {
+  return `ecore:EDataType ${ECORE_NS}#//${name}`;
+}
+
+// Built-in types must point into the Ecore package. A bare `//EString` would be resolved
+// inside the user's own package, which EMF rejects as an unresolved reference.
 const PRIMITIVE_ETYPE: Record<string, string> = {
-  EString: '//EString',
-  String: '//EString',
-  EInt: '//EInt',
-  Int: '//EInt',
-  EBoolean: '//EBoolean',
-  Boolean: '//EBoolean',
-  EFloat: '//EFloat',
-  Float: '//EFloat',
-  EDouble: '//EDouble',
-  Double: '//EDouble',
-  ELong: '//ELong',
-  Long: '//ELong',
-  EShort: '//EShort',
-  Short: '//EShort',
-  EChar: '//EChar',
-  Char: '//EChar',
-  EByte: '//EByte',
-  Byte: '//EByte',
-  EDate: '//EDate',
-  Date: '//EDate',
-  EBigDecimal: '//EBigDecimal',
-  EBigInteger: '//EBigInteger',
-  EObject: '//EObject',
-  EVoid: '//EVoid',
-  Void: '//EVoid',
+  EString: ecoreDataType('EString'),
+  String: ecoreDataType('EString'),
+  EInt: ecoreDataType('EInt'),
+  Int: ecoreDataType('EInt'),
+  EBoolean: ecoreDataType('EBoolean'),
+  Boolean: ecoreDataType('EBoolean'),
+  EFloat: ecoreDataType('EFloat'),
+  Float: ecoreDataType('EFloat'),
+  EDouble: ecoreDataType('EDouble'),
+  Double: ecoreDataType('EDouble'),
+  ELong: ecoreDataType('ELong'),
+  Long: ecoreDataType('ELong'),
+  EShort: ecoreDataType('EShort'),
+  Short: ecoreDataType('EShort'),
+  EChar: ecoreDataType('EChar'),
+  Char: ecoreDataType('EChar'),
+  EByte: ecoreDataType('EByte'),
+  Byte: ecoreDataType('EByte'),
+  EDate: ecoreDataType('EDate'),
+  Date: ecoreDataType('EDate'),
+  EBigDecimal: ecoreDataType('EBigDecimal'),
+  EBigInteger: ecoreDataType('EBigInteger'),
+  EObject: `ecore:EClass ${ECORE_NS}#//EObject`,
 };
 
 function escapeXml(value: string): string {
@@ -56,7 +62,7 @@ function attributeEType(typeName: string): string {
   const normalized = normalizeAttributeTypeDisplay(typeName);
   if (PRIMITIVE_ETYPE[normalized]) return PRIMITIVE_ETYPE[normalized];
   if (PRIMITIVE_ETYPE[typeName]) return PRIMITIVE_ETYPE[typeName];
-  return '//EString';
+  return PRIMITIVE_ETYPE.EString;
 }
 
 function extractPackageOpening(originalEcore?: string): {
@@ -78,12 +84,21 @@ function extractPackageOpening(originalEcore?: string): {
   };
 }
 
-function renderVisibilityAnnotation(visibility: UMLVisibility): string {
+function renderVisibilityAnnotation(visibility: UMLVisibility, indent: string): string {
   if (visibility === '+') return '';
   return (
-    `\n      <eAnnotations source="${UML_VISIBILITY_ANNOTATION}">` +
-    `\n        <details key="symbol" value="${escapeXml(visibility)}"/>` +
-    `\n      </eAnnotations>`
+    `${indent}<eAnnotations source="${UML_VISIBILITY_ANNOTATION}">` +
+    `\n${indent}  <details key="symbol" value="${escapeXml(visibility)}"/>` +
+    `\n${indent}</eAnnotations>`
+  );
+}
+
+function renderDocumentationAnnotation(documentation: string | undefined, indent: string): string {
+  if (documentation === undefined || documentation === '') return '';
+  return (
+    `${indent}<eAnnotations source="${ECORE_DOCUMENTATION_ANNOTATION}">` +
+    `\n${indent}  <details key="documentation" value="${escapeXml(documentation)}"/>` +
+    `\n${indent}</eAnnotations>`
   );
 }
 
@@ -91,31 +106,38 @@ function renderAttribute(attr: UMLAttribute): string {
   const typeName = normalizeAttributeTypeDisplay(attr.type);
   if (!isPrimitiveAttributeType(typeName)) return '';
   const eType = attributeEType(typeName);
-  const visibilityAnn = renderVisibilityAnnotation(attr.visibility);
+  const annotations = [
+    renderDocumentationAnnotation(attr.documentation, '      '),
+    renderVisibilityAnnotation(attr.visibility, '      '),
+  ].filter(Boolean).join('\n');
   const openTag =
     `    <eStructuralFeatures xsi:type="ecore:EAttribute" name="${escapeXml(attr.name)}"` +
     ` eType="${escapeXml(eType)}" lowerBound="0" upperBound="1"`;
   // UML attributes are scalar; Ecore stores them as optional single values.
-  if (!visibilityAnn) {
+  if (!annotations) {
     return `${openTag}/>`;
   }
-  return `${openTag}>${visibilityAnn}\n    </eStructuralFeatures>`;
+  return `${openTag}>\n${annotations}\n    </eStructuralFeatures>`;
 }
 
-function operationEType(typeName: string): string {
+/** Returns the operation's eType, or undefined for void operations (Ecore omits eType). */
+function operationEType(typeName: string): string | undefined {
   const normalized = normalizeOperationReturnType(typeName);
-  if (PRIMITIVE_ETYPE[normalized]) return PRIMITIVE_ETYPE[normalized];
-  return '//EVoid';
+  return PRIMITIVE_ETYPE[normalized];
 }
 
 function renderOperation(op: UMLOperation): string {
   const eType = operationEType(op.returnType);
-  const visibilityAnn = renderVisibilityAnnotation(op.visibility);
-  const openTag = `    <eOperations name="${escapeXml(op.name)}" eType="${escapeXml(eType)}"`;
-  if (!visibilityAnn) {
+  const annotations = [
+    renderDocumentationAnnotation(op.documentation, '      '),
+    renderVisibilityAnnotation(op.visibility, '      '),
+  ].filter(Boolean).join('\n');
+  const eTypeAttr = eType ? ` eType="${escapeXml(eType)}"` : '';
+  const openTag = `    <eOperations name="${escapeXml(op.name)}"${eTypeAttr}`;
+  if (!annotations) {
     return `${openTag}/>`;
   }
-  return `${openTag}>${visibilityAnn}\n    </eOperations>`;
+  return `${openTag}>\n${annotations}\n    </eOperations>`;
 }
 
 function renderReference(
@@ -125,11 +147,14 @@ function renderReference(
   const refName = rel.label?.trim() || `${rel.type}_${targetName}`.toLowerCase();
   const { lower, upper } = parseMultiplicity(rel.targetMultiplicity ?? '0..1');
   const containment = rel.type === 'composition';
-  return (
+  const openTag =
     `    <eStructuralFeatures xsi:type="ecore:EReference" name="${escapeXml(refName)}"` +
     ` eType="#//${escapeXml(targetName)}" containment="${containment}"` +
-    ` lowerBound="${lower}" upperBound="${upper}"/>`
-  );
+    ` lowerBound="${lower}" upperBound="${upper}"`;
+  const documentation = renderDocumentationAnnotation(rel.documentation, '      ');
+  return documentation
+    ? `${openTag}>\n${documentation}\n    </eStructuralFeatures>`
+    : `${openTag}/>`;
 }
 
 function renderClass(
@@ -154,7 +179,12 @@ function renderClass(
     return target ? renderReference(rel, target.name) : '';
   }).filter(Boolean);
 
-  const body = [...attrLines, ...opLines, ...refLines].join('\n');
+  const body = [
+    renderDocumentationAnnotation(cls.documentation, '    '),
+    ...attrLines,
+    ...opLines,
+    ...refLines,
+  ].filter(Boolean).join('\n');
   const attrStr = attrs.length > 0 ? ` ${attrs.join(' ')}` : '';
 
   if (body) {

@@ -23,6 +23,14 @@ const ViewsIcon = () => (
   </svg>
 );
 
+const MetricsIcon = () => (
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+    <line x1="18" y1="20" x2="18" y2="10" />
+    <line x1="12" y1="20" x2="12" y2="4" />
+    <line x1="6" y1="20" x2="6" y2="14" />
+  </svg>
+);
+
 interface ModeOption {
   label: string;
   mode: CanvasMode;
@@ -38,7 +46,7 @@ export interface CanvasModeToggleProps {
   projectTabsBelowModeToggle?: React.ReactNode;
 }
 
-/** Modeling / Constraints / Views switch floating at the top of the canvas. */
+/** Modeling / Constraints / Views / Metrics switch floating at the top of the canvas. */
 export const CanvasModeToggle: React.FC<CanvasModeToggleProps> = ({
   activeCanvasMode,
   onSelectMode,
@@ -49,6 +57,7 @@ export const CanvasModeToggle: React.FC<CanvasModeToggleProps> = ({
     { label: 'Modeling', mode: 'modeling', icon: <ModelingIcon /> },
     ...(readOnly ? [] : [{ label: 'Constraints', mode: 'constraints' as CanvasMode, icon: <ConstraintsIcon /> }]),
     { label: 'Views', mode: 'views', icon: <ViewsIcon /> },
+    { label: 'Metrics', mode: 'metrics' as CanvasMode, icon: <MetricsIcon /> },
   ];
 
   return (
@@ -70,9 +79,9 @@ export const CanvasModeToggle: React.FC<CanvasModeToggleProps> = ({
         style={{
           display: 'flex',
           alignItems: 'center',
-          background: '#ffffff',
+          background: 'var(--v-chrome-bg)',
           borderRadius: 8,
-          boxShadow: '0 4px 16px rgba(0,0,0,0.13), 0 0 0 1px rgba(0,0,0,0.07)',
+          boxShadow: '0 4px 16px rgba(0,0,0,0.13), 0 0 0 1px var(--v-card-border)',
           height: 44,
           padding: '0 4px',
           gap: 2,
@@ -90,11 +99,11 @@ export const CanvasModeToggle: React.FC<CanvasModeToggleProps> = ({
                 alignItems: 'center',
                 gap: 6,
                 height: 34,
-                padding: '0 14px',
+                padding: '0 12px',
                 border: isActive ? '1px solid #049484' : '1px solid transparent',
                 borderRadius: 6,
                 background: isActive ? '#049484' : 'transparent',
-                color: isActive ? '#ffffff' : '#64748b',
+                color: isActive ? '#ffffff' : 'var(--v-text-muted)',
                 fontSize: 12,
                 fontWeight: 600,
                 cursor: 'pointer',
@@ -104,13 +113,13 @@ export const CanvasModeToggle: React.FC<CanvasModeToggleProps> = ({
               }}
               onMouseEnter={e => {
                 if (isActive) return;
-                e.currentTarget.style.background = '#f1f5f9';
-                e.currentTarget.style.color = '#1e293b';
+                e.currentTarget.style.background = 'var(--v-chrome-hover)';
+                e.currentTarget.style.color = 'var(--v-text)';
               }}
               onMouseLeave={e => {
                 if (isActive) return;
                 e.currentTarget.style.background = 'transparent';
-                e.currentTarget.style.color = '#64748b';
+                e.currentTarget.style.color = 'var(--v-text-muted)';
               }}
             >
               {icon}
@@ -119,6 +128,7 @@ export const CanvasModeToggle: React.FC<CanvasModeToggleProps> = ({
           );
         })}
       </div>
+
       {projectTabsBelowModeToggle}
     </div>
   );

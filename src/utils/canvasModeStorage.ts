@@ -11,7 +11,7 @@ export const canvasModeStorageKey = (projectId: number): string =>
   `${CANVAS_MODE_STORAGE_PREFIX}.${projectId}`;
 
 export const isCanvasMode = (value: unknown): value is CanvasMode =>
-  value === 'modeling' || value === 'constraints' || value === 'views';
+  value === 'modeling' || value === 'constraints' || value === 'views' || value === 'metrics';
 
 export const readStoredCanvasMode = (projectId?: number | null): CanvasMode => {
   if (!isFiniteProjectId(projectId)) return DEFAULT_CANVAS_MODE;

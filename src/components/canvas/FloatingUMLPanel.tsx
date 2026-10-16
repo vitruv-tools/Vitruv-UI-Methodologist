@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import ReactDOM from 'react-dom';
 import { MODAL_Z_INDEX, getAppPortalRoot, useModalBodyLock } from '../ui/modalUtils';
 import { ConfirmDialog } from '../ui/ConfirmDialog';
+import { ThemeToggle } from '../ui/ThemeToggle';
 import { UMLDiagram, UMLDiagramHandle, UmlDiagramSaveContext, WORKSPACE_DOT_BACKGROUND } from './UMLDiagram';
 
 interface FloatingUMLPanelProps {
@@ -32,20 +33,22 @@ interface FloatingUMLPanelProps {
   refreshing?: boolean;
   /** When true, UML diagram is view-only (no class/relationship edits). */
   viewOnly?: boolean;
+  /** When true, Cmd/Ctrl+S saves the diagram instead of opening the browser's "Save Page As" dialog. */
+  saveShortcutEnabled?: boolean;
 }
 
 /** Vitruv toolbar tokens — aligned with UMLDiagram / canvas */
 const V = {
   primary: '#049484',
-  primarySoft: '#ecfdf5',
-  primaryBorder: '#a7f3d0',
+  primarySoft: 'var(--v-uml-primary-soft)',
+  primaryBorder: 'var(--v-uml-primary-border)',
   primaryRing: 'rgba(4,148,132,0.15)',
-  ink: '#0c436e',
-  text: '#374151',
-  textMuted: '#64748b',
-  border: '#e2e8f0',
-  surface: '#ffffff',
-  surfaceHover: '#f0fdfa',
+  ink: 'var(--v-text)',
+  text: 'var(--v-text-secondary)',
+  textMuted: 'var(--v-text-muted)',
+  border: 'var(--v-border)',
+  surface: 'var(--v-surface)',
+  surfaceHover: 'var(--v-surface-hover)',
 } as const;
 
 const ToolbarDivider = () => (
@@ -70,9 +73,10 @@ const RefreshIcon = () => (
 export const FloatingUMLPanel: React.FC<FloatingUMLPanelProps> = ({
   id, title, fileName, layoutScopeId, ecoreContent, saveContext, zIndex = MODAL_Z_INDEX, onClose,
   onHome, onRefresh, ecoreFileId, fetchEcoreFile, onEcoreContentUpdated, refreshing = false,
-  viewOnly = false,
+  viewOnly = false, saveShortcutEnabled = false,
 }) => {
   const diagramRef = useRef<UMLDiagramHandle>(null);
+  const pageRef = useRef<HTMLDivElement>(null);
   const ecoreContentRef = useRef(ecoreContent);
   ecoreContentRef.current = ecoreContent;
   const ecoreFileIdRef = useRef(ecoreFileId);
@@ -85,6 +89,16 @@ export const FloatingUMLPanel: React.FC<FloatingUMLPanelProps> = ({
 
   useModalBodyLock(true);
 
+  // Move the keyboard focus into the editor when it opens. Otherwise it stays
+  // on whatever opened it, e.g. a model card on the project canvas, which
+  // stops every key, so the editor's shortcuts (copy, paste, undo) never fire.
+  useEffect(() => {
+    const page = pageRef.current;
+    if (page && !page.contains(document.activeElement)) {
+      page.focus({ preventScroll: true });
+    }
+  }, []);
+
   useEffect(() => () => {
     diagramRef.current?.flushLayout?.();
   }, []);
@@ -92,7 +106,7 @@ export const FloatingUMLPanel: React.FC<FloatingUMLPanelProps> = ({
   useEffect(() => {
     if (ecoreContent?.trim() || ecoreFileId == null || !fetchEcoreFile) return;
     let cancelled = false;
-    (async () => {
+    void (async () => {
       try {
         const next = await fetchEcoreFile(ecoreFileId);
         if (cancelled || !next?.trim()) return;
@@ -164,27 +178,30 @@ export const FloatingUMLPanel: React.FC<FloatingUMLPanelProps> = ({
     }
   }, [fetchEcoreFile, onRefresh, onEcoreContentUpdated, isRefreshing, refreshing]);
 
+  const saveFromShortcut = useCallback((focusedField: HTMLElement | null) => {
+    if (viewOnly || !saveContext) return;
+    // Inline inputs commit their value on blur, just like when the Save button is clicked.
+    focusedField?.blur();
+    // Save on the next tick so that the committed edit is part of the saved model.
+    setTimeout(() => {
+      const diagram = diagramRef.current;
+      if (diagram?.isDirty?.()) void diagram.save?.();
+    }, 0);
+  }, [saveContext, viewOnly]);
+
+  // Undo/redo shortcuts are handled by UMLDiagram itself; handling them here
+  // too would undo two steps per Ctrl/Cmd+Z.
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
       const tag = (e.target as HTMLElement)?.tagName;
       const inField = tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT';
       const mod = e.ctrlKey || e.metaKey;
 
-      if (mod && !inField) {
-        const key = e.key.toLowerCase();
-        if (key === 'z') {
-          e.preventDefault();
-          e.stopPropagation();
-          if (e.shiftKey) diagramRef.current?.redo?.();
-          else diagramRef.current?.undo?.();
-          return;
-        }
-        if (key === 'y') {
-          e.preventDefault();
-          e.stopPropagation();
-          diagramRef.current?.redo?.();
-          return;
-        }
+      if (saveShortcutEnabled && mod && e.key.toLowerCase() === 's') {
+        e.preventDefault();
+        e.stopPropagation();
+        saveFromShortcut(inField ? e.target as HTMLElement : null);
+        return;
       }
 
       if (e.key === 'Escape') {
@@ -198,15 +215,18 @@ export const FloatingUMLPanel: React.FC<FloatingUMLPanelProps> = ({
     };
     globalThis.addEventListener('keydown', onKeyDown);
     return () => globalThis.removeEventListener('keydown', onKeyDown);
-  }, [handleBack]);
+  }, [handleBack, saveFromShortcut, saveShortcutEnabled]);
 
   const showSpinner = refreshing || isRefreshing;
   const appPortalRoot = getAppPortalRoot();
 
   return ReactDOM.createPortal(
     <div
+      ref={pageRef}
+      tabIndex={-1}
       data-testid="uml-fullscreen-page"
       style={{
+        outline: 'none',
         position: 'fixed',
         inset: 0,
         width: '100vw',
@@ -228,7 +248,7 @@ export const FloatingUMLPanel: React.FC<FloatingUMLPanelProps> = ({
           top: 12,
           left: 12,
           zIndex: 40,
-          background: V.surface,
+          background: 'var(--v-chrome-bg)',
           border: `1px solid ${V.primaryBorder}`,
           boxShadow: `0 4px 14px ${V.primaryRing}, 0 0 0 1px rgba(4,148,132,0.05)`,
           display: 'flex',
@@ -403,6 +423,9 @@ export const FloatingUMLPanel: React.FC<FloatingUMLPanelProps> = ({
             {refreshMessage}
           </span>
         )}
+
+        <ToolbarDivider />
+        <ThemeToggle />
       </div>
 
       <div style={{ flex: 1, overflow: 'hidden', position: 'relative', minHeight: 0 }}>
@@ -454,6 +477,7 @@ export const FloatingUMLPanel: React.FC<FloatingUMLPanelProps> = ({
         confirmText="Close without saving"
         cancelText="Keep editing"
         variant="danger"
+        zIndex={panelZ + 1}
         onConfirm={() => {
           setShowUnsavedDialog(false);
           const action = pendingCloseRef.current ?? doClose;
@@ -482,7 +506,7 @@ const getToolbarBtnStyle = (
 
   let background: string = V.surface;
   if (disabled) {
-    background = '#f8fafc';
+    background = 'var(--v-surface-muted)';
   } else if (hov) {
     background = V.surfaceHover;
   }
@@ -526,7 +550,7 @@ const renderToolbarBtnContent = (
       <span style={{
         width: 14,
         height: 14,
-        border: '2px solid #e2e8f0',
+        border: '2px solid var(--v-border)',
         borderTopColor: V.primary,
         borderRadius: '50%',
         animation: 'uml-spin 0.7s linear infinite',
@@ -582,10 +606,10 @@ const ZoomButton: React.FC<{ title: string; onClick: () => void; children: React
       onMouseLeave={() => setHov(false)}
       style={{
         width: 32, height: 32,
-        border: '1px solid #e2e8f0',
+        border: '1px solid var(--v-border)',
         borderRadius: 8,
-        background: hov ? '#f8fafc' : '#ffffff',
-        color: hov ? '#0f172a' : '#64748b',
+        background: hov ? 'var(--v-chrome-hover)' : 'var(--v-chrome-bg)',
+        color: hov ? 'var(--v-chrome-icon-hover)' : 'var(--v-chrome-icon)',
         boxShadow: '0 1px 4px rgba(0,0,0,0.08)',
         cursor: 'pointer',
         display: 'flex', alignItems: 'center', justifyContent: 'center',

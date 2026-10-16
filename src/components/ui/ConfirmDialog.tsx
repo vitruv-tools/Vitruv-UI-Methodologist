@@ -12,6 +12,8 @@ interface ConfirmDialogProps {
   cancelText?: string;
   singleAction?: boolean;
   variant?: 'danger' | 'success';
+  /** Stacking level of the backdrop (the dialog sits one above). Raise it to open on top of another overlay. */
+  zIndex?: number;
   onConfirm: () => void;
   onCancel: () => void;
 }
@@ -39,6 +41,7 @@ export const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
   cancelText = 'Cancel',
   singleAction = false,
   variant = 'danger',
+  zIndex = MODAL_Z_INDEX,
   onConfirm,
   onCancel,
 }) => {
@@ -49,7 +52,7 @@ export const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
   const themes = {
     danger: {
       accentColor: '#dc2626',
-      iconBg: '#fef2f2',
+      iconBg: 'var(--v-danger-bg)',
       buttonBg: '#dc2626',
       buttonHoverBg: '#b91c1c',
       buttonShadow: 'rgba(220,38,38,0.25)',
@@ -57,7 +60,7 @@ export const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
     },
     success: {
       accentColor: '#059669',
-      iconBg: '#f0fdf4',
+      iconBg: 'var(--v-success-bg)',
       buttonBg: '#059669',
       buttonHoverBg: '#047857',
       buttonShadow: 'rgba(5,150,105,0.25)',
@@ -74,7 +77,7 @@ export const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
         aria-hidden="true"
         tabIndex={-1}
         onClick={onCancel}
-        style={{ ...modalBackdropStyle, zIndex: MODAL_Z_INDEX }}
+        style={{ ...modalBackdropStyle, zIndex }}
       />
       <div
         style={{
@@ -83,7 +86,7 @@ export const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
-          zIndex: MODAL_Z_INDEX + 1,
+          zIndex: zIndex + 1,
           pointerEvents: 'none',
         }}
       >
@@ -94,7 +97,7 @@ export const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
         aria-describedby="confirm-message"
         style={{
           pointerEvents: 'auto',
-          background: '#ffffff',
+          background: 'var(--v-surface)',
           borderRadius: '14px',
           boxShadow: '0 24px 60px rgba(0,0,0,0.22), 0 4px 16px rgba(0,0,0,0.08)',
           width: '420px',
@@ -145,7 +148,7 @@ export const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
             style={{
               fontSize: '19px',
               fontWeight: 700,
-              color: '#111827',
+              color: 'var(--v-text)',
               textAlign: 'center',
               lineHeight: 1.3,
               fontFamily: FONT,
@@ -159,7 +162,7 @@ export const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
             id="confirm-message"
             style={{
               fontSize: '14px',
-              color: '#6b7280',
+              color: 'var(--v-text-muted)',
               textAlign: 'center',
               lineHeight: '1.65',
               fontFamily: FONT,
@@ -185,10 +188,10 @@ export const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
               style={{
                 flex: 1,
                 padding: '11px 16px',
-                background: '#fff',
-                border: '1.5px solid #e5e7eb',
+                background: 'var(--v-surface)',
+                border: '1.5px solid var(--v-border)',
                 borderRadius: '8px',
-                color: '#374151',
+                color: 'var(--v-text-secondary)',
                 cursor: 'pointer',
                 fontSize: '14px',
                 fontWeight: 600,
@@ -196,12 +199,12 @@ export const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
                 transition: 'all 0.15s ease',
               }}
               onMouseEnter={(e) => {
-                e.currentTarget.style.background = '#f9fafb';
-                e.currentTarget.style.borderColor = '#d1d5db';
+                e.currentTarget.style.background = 'var(--v-surface-hover)';
+                e.currentTarget.style.borderColor = 'var(--v-text-faint)';
               }}
               onMouseLeave={(e) => {
-                e.currentTarget.style.background = '#fff';
-                e.currentTarget.style.borderColor = '#e5e7eb';
+                e.currentTarget.style.background = 'var(--v-surface)';
+                e.currentTarget.style.borderColor = 'var(--v-border)';
               }}
             >
               {cancelText}

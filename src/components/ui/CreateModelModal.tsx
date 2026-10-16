@@ -1,6 +1,9 @@
 import React, { useState, useRef, useEffect, useLayoutEffect, useCallback } from 'react';
 import ReactDOM from 'react-dom';
 import { apiService } from '../../services/api';
+import { DEFAULT_META_MODEL_VERSION } from '../../utils/metaModelVersion';
+import { createEmptyEcoreFile, toEPackageName } from '../../utils/emptyEcore';
+import { findEcoreDownloadProblem, readBlobAsText } from '../../utils/ecoreDownload';
 import { KeywordTagsInput } from './KeywordTagsInput';
 import {
   modalOverlayStyle,
@@ -21,24 +24,17 @@ interface CreateModelModalProps {
 
 interface CreateModelRequest {
   name: string;
+  version: string;
   description: string;
   domain: string;
   keyword: string[];
   ecoreFileId: number;
-  genModelFileId: number;
-  /**
-   * When true, backend will try to automatically fix issues
-   * in the GenModel before saving the meta model.
-   *
-   * Frontend convention:
-   * - First call should always send `false`
-   * - If backend rejects the GenModel with a "Metamodel rejected" error,
-   *   the user can opt in to a second call with this flag set to `true`.
-   */
-  applyGenModelFixes?: boolean;
 }
 
-type FileKind = 'ecore' | 'genmodel';
+type FileKind = 'ecore';
+
+/** Whether the meta model starts from an uploaded .ecore file or from an empty one. */
+type CreationMode = 'import' | 'empty';
 
 // ─── Module-level helpers ────────────────────────────────────────────────────
 
@@ -60,6 +56,16 @@ const extractFileId = (response: any): number => {
     ? Number(rawData.id)
     : Number(rawData);
   if (!Number.isFinite(fileId)) fileId = Date.now() + getSecureRandomInt(1000);
+  return fileId;
+};
+
+/** Like {@link extractFileId}, but fails instead of making up an id when the response has none. */
+const requireFileId = (response: any): number => {
+  const rawData: any = response?.data;
+  const fileId = rawData && typeof rawData === 'object' ? Number(rawData.id) : Number(rawData);
+  if (!Number.isFinite(fileId) || fileId <= 0) {
+    throw new Error('Uploading the empty .ecore file did not return a file id.');
+  }
   return fileId;
 };
 
@@ -90,10 +96,19 @@ const applyImportFailureFieldErrors = (
 };
 
 /** Form regions used for inline errors + scroll-into-view */
-export type CreateModelFieldKey = 'name' | 'description' | 'keywords' | 'domain' | 'files';
+export type CreateModelFieldKey = 'name' | 'version' | 'description' | 'keywords' | 'domain' | 'files';
+
+const EMPTY_FORM = {
+  name: '',
+  version: DEFAULT_META_MODEL_VERSION,
+  description: '',
+  domain: '',
+  keywords: [] as string[],
+};
 
 const EMPTY_FIELD_ERRORS: Record<CreateModelFieldKey, string> = {
   name: '',
+  version: '',
   description: '',
   keywords: '',
   domain: '',
@@ -103,11 +118,12 @@ const EMPTY_FIELD_ERRORS: Record<CreateModelFieldKey, string> = {
 /** Best-effort mapping of API messages to a field (otherwise use `files`). */
 function inferFieldKeyFromBackendMessage(message: string): CreateModelFieldKey | null {
   const m = message.toLowerCase();
+  if (/\bversion\b/.test(m)) return 'version';
   if (/\b(keyword|keywords)\b/.test(m)) return 'keywords';
   if (/\bdescription\b/.test(m)) return 'description';
   if (/\bdomain\b/.test(m)) return 'domain';
-  if (/\b(ecore|genmodel|gen model|file id|upload|metamodel|precheck)\b/.test(m)) return 'files';
-  if (/\b(name|title)\b/.test(m) && !/\b(genmodel|filename|file name|file\.)\b/.test(m)) return 'name';
+  if (/\b(ecore|file id|upload|metamodel|precheck)\b/.test(m)) return 'files';
+  if (/\b(name|title)\b/.test(m) && !/\b(filename|file name|file\.)\b/.test(m)) return 'name';
   return null;
 }
 
@@ -115,11 +131,10 @@ function inferFieldKeyFromBackendMessage(message: string): CreateModelFieldKey |
 
 const FILE_KIND_CONFIG: Record<FileKind, {
   ext: string;
-  apiType: 'ECORE' | 'GEN_MODEL';
-  fileIdKey: 'ecoreFileId' | 'genModelFileId';
+  apiType: 'ECORE';
+  fileIdKey: 'ecoreFileId';
 }> = {
-  ecore:    { ext: '.ecore',    apiType: 'ECORE',     fileIdKey: 'ecoreFileId' },
-  genmodel: { ext: '.genmodel', apiType: 'GEN_MODEL', fileIdKey: 'genModelFileId' },
+  ecore:    { ext: '.ecore',    apiType: 'ECORE',     fileIdKey: 'ecoreFileId' }
 };
 
 const FILE_CARD_DISPLAY_CONFIGS: Array<{
@@ -132,7 +147,6 @@ const FILE_CARD_DISPLAY_CONFIGS: Array<{
   defaultHeaderBg: string;
 }> = [
   { kind: 'ecore',    accentColor: '#049484', hoverBg: '#f0fdff', badgeBg: '#e6f7f5', badgeBorder: '#b2e4df', badgeColor: '#049484', defaultHeaderBg: '#f8fffe' },
-  { kind: 'genmodel', accentColor: '#0B1720', hoverBg: '#f4f6f8', badgeBg: '#eef0f3', badgeBorder: '#c8cdd6', badgeColor: '#0B1720', defaultHeaderBg: '#f8f9fb' },
 ];
 
 // ─── Style constants ──────────────────────────────────────────────────────────
@@ -140,7 +154,7 @@ const FILE_CARD_DISPLAY_CONFIGS: Array<{
 const FONT = 'ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, sans-serif';
 
 const modalStyle: React.CSSProperties = {
-  background: '#ffffff',
+  background: 'var(--v-surface)',
   borderRadius: 8,
   padding: 0,
   width: '540px',
@@ -150,8 +164,9 @@ const modalStyle: React.CSSProperties = {
   flexDirection: 'column',
   overflow: 'hidden',
   boxShadow: '0 8px 40px rgba(0,0,0,0.18), 0 1px 4px rgba(0,0,0,0.06)',
-  border: '1px solid #e2e8f0',
+  border: '1px solid var(--v-border)',
   fontFamily: FONT,
+  color: 'var(--v-text)',
 };
 
 const modalHeaderStyle: React.CSSProperties = {
@@ -199,34 +214,34 @@ const inputFocusStyle: React.CSSProperties = {
   borderColor: '#049484',
   outline: 'none',
   boxShadow: '0 0 0 3px rgba(4,148,132,0.1)',
-  background: '#ffffff',
+  background: 'var(--v-input-bg)',
 };
 
 const uploadSectionStyle: React.CSSProperties = {
   marginTop: '20px',
   paddingTop: '20px',
-  borderTop: '1px solid #f1f5f9',
+  borderTop: '1px solid var(--v-border-subtle)',
 };
 
 const uploadSectionTitleStyle: React.CSSProperties = {
   fontSize: 12,
   fontWeight: 600,
-  color: '#6b7280',
+  color: 'var(--v-text-muted)',
   marginBottom: 12,
   textTransform: 'uppercase',
   letterSpacing: '0.07em',
   fontFamily: FONT,
 };
 
-/** Shown inside the “Required Meta Model Files” box when POST /meta-models fails. */
+/** Shown inside the “Required Meta Model File” box when POST /meta-models fails. */
 const metaModelImportErrorBannerStyle: React.CSSProperties = {
   marginBottom: 12,
   padding: '10px 12px',
-  background: '#fef2f2',
-  border: '1px solid #fecaca',
+  background: 'var(--v-danger-bg)',
+  border: '1px solid var(--v-danger-border)',
   borderRadius: 6,
   fontSize: 13,
-  color: '#991b1b',
+  color: 'var(--v-danger-text)',
   lineHeight: 1.5,
   fontFamily: FONT,
 };
@@ -241,12 +256,12 @@ const fieldInlineErrorStyle: React.CSSProperties = {
 
 const inputErrorOutlineStyle: React.CSSProperties = {
   borderColor: '#fca5a5',
-  background: '#fffafa',
+  background: 'var(--v-danger-bg)',
 };
 
 const fileStatusStyle: React.CSSProperties = {
   fontSize: 11,
-  color: '#9ca3af',
+  color: 'var(--v-text-faint)',
   textAlign: 'center',
   marginTop: 10,
   fontFamily: FONT,
@@ -274,18 +289,18 @@ const primaryButtonStyle: React.CSSProperties = {
 };
 
 const primaryButtonDisabledStyle: React.CSSProperties = {
-  background: '#e5e7eb',
-  color: '#9ca3af',
+  background: 'var(--v-disabled-bg)',
+  color: 'var(--v-disabled-text)',
   cursor: 'not-allowed',
 };
 
 const secondaryButtonStyle: React.CSSProperties = {
   flex: '1',
   padding: '10px 18px',
-  border: '1px solid #e5e7eb',
+  border: '1px solid var(--v-border)',
   borderRadius: 6,
-  background: '#ffffff',
-  color: '#374151',
+  background: 'var(--v-surface)',
+  color: 'var(--v-text-secondary)',
   fontSize: 14,
   fontWeight: 500,
   cursor: 'pointer',
@@ -295,7 +310,7 @@ const secondaryButtonStyle: React.CSSProperties = {
 };
 
 const buttonHoverStyle: React.CSSProperties = {
-  background: '#f9fafb',
+  background: 'var(--v-surface-hover)',
 };
 
 const overlayStyle: React.CSSProperties = {
@@ -320,11 +335,11 @@ const overlayStyle: React.CSSProperties = {
 
 const overlayCardStyle: React.CSSProperties = {
   width: 'min(400px, 90vw)',
-  background: '#fff',
+  background: 'var(--v-surface)',
   borderRadius: 12,
   overflow: 'hidden',
   boxShadow: '0 24px 60px rgba(0,0,0,0.28), 0 4px 16px rgba(0,0,0,0.08)',
-  border: '1px solid #e2e8f0',
+  border: '1px solid var(--v-border)',
 };
 
 const overlayTitleStyle: React.CSSProperties = {
@@ -360,7 +375,78 @@ const modeButtonBaseStyle: React.CSSProperties = {
   transition: 'all 0.12s', whiteSpace: 'nowrap',
 };
 
+const creationModeGroupStyle: React.CSSProperties = {
+  display: 'flex', gap: 2, padding: 3, margin: '0 0 16px', minWidth: 0, position: 'relative',
+  background: 'var(--v-input-bg)', border: '1px solid var(--v-border)', borderRadius: 7,
+};
+
+// Keeps the legend available to screen readers without showing it.
+const visuallyHiddenLegendStyle: React.CSSProperties = {
+  position: 'absolute', width: 1, height: 1, padding: 0, margin: -1,
+  overflow: 'hidden', clip: 'rect(0, 0, 0, 0)', whiteSpace: 'nowrap', border: 0,
+};
+
+const creationModeButtonStyle: React.CSSProperties = {
+  flex: 1, padding: '7px 12px', border: 'none', borderRadius: 5,
+  background: 'transparent', color: 'var(--v-text-muted)',
+  fontSize: 13, fontWeight: 500, fontFamily: FONT, transition: 'all 0.12s',
+};
+
+const creationModeButtonSelectedStyle: React.CSSProperties = {
+  background: '#049484', color: '#ffffff',
+};
+
+const emptyEcoreNoteStyle: React.CSSProperties = {
+  padding: '10px 12px',
+  background: 'var(--v-surface-muted)',
+  border: '1px solid var(--v-border)',
+  borderRadius: 6,
+  fontSize: 13,
+  color: 'var(--v-text-secondary)',
+  lineHeight: 1.5,
+  fontFamily: FONT,
+};
+
+const CREATION_MODE_OPTIONS: Array<{ mode: CreationMode; label: string }> = [
+  { mode: 'import', label: 'Import existing' },
+  { mode: 'empty', label: 'Create new' },
+];
+
 // ─── Sub-components ───────────────────────────────────────────────────────────
+
+// ── CreationModeToggle: import an .ecore file or start from an empty one ─────
+
+interface CreationModeToggleProps {
+  mode: CreationMode;
+  disabled: boolean;
+  onChange: (mode: CreationMode) => void;
+}
+
+const CreationModeToggle: React.FC<CreationModeToggleProps> = ({ mode, disabled, onChange }) => (
+  <fieldset style={creationModeGroupStyle}>
+    <legend style={visuallyHiddenLegendStyle}>Meta model source</legend>
+    {CREATION_MODE_OPTIONS.map(option => {
+      const selected = option.mode === mode;
+      return (
+        <button
+          key={option.mode}
+          type="button"
+          aria-pressed={selected}
+          disabled={disabled}
+          onClick={() => onChange(option.mode)}
+          style={{
+            ...creationModeButtonStyle,
+            ...(selected ? creationModeButtonSelectedStyle : {}),
+            cursor: disabled ? 'not-allowed' : 'pointer',
+            opacity: disabled && !selected ? 0.5 : 1,
+          }}
+        >
+          {option.label}
+        </button>
+      );
+    })}
+  </fieldset>
+);
 
 const SubmitProgressOverlay: React.FC<{ progress: number }> = ({ progress }) => (
   <dialog
@@ -386,7 +472,7 @@ const SubmitProgressOverlay: React.FC<{ progress: number }> = ({ progress }) => 
         <div style={progressBarContainerStyle}>
           <div style={{ ...progressBarStyle, width: `${progress}%` }} />
         </div>
-        <div style={{ fontSize: 12, color: '#6b7280', textAlign: 'center', marginTop: 8, fontFamily: FONT }}>
+        <div style={{ fontSize: 12, color: 'var(--v-text-muted)', textAlign: 'center', marginTop: 8, fontFamily: FONT }}>
           {Math.round(progress)}%
         </div>
       </div>
@@ -410,13 +496,13 @@ const FileDropZone: React.FC<FileDropZoneProps> = ({
   isUploaded, isUploading, ext, accentColor, label, uploadedFileName, onClick,
 }) => {
   const [hov, setHov] = React.useState(false);
-  let borderColor = '#e5e7eb';
+  let borderColor = 'var(--v-border)';
   if (isUploaded) borderColor = '#bbf7d0';
-  else if (hov) borderColor = '#94a3b8';
+  else if (hov) borderColor = 'var(--v-text-muted)';
 
-  let backgroundColor = '#fafafa';
-  if (isUploaded) backgroundColor = '#f0fdf4';
-  else if (hov) backgroundColor = '#f9fafb';
+  let backgroundColor = 'var(--v-input-bg)';
+  if (isUploaded) backgroundColor = 'rgba(22, 163, 74, 0.12)';
+  else if (hov) backgroundColor = 'var(--v-surface-hover)';
 
   let icon;
   if (isUploaded) {
@@ -427,13 +513,13 @@ const FileDropZone: React.FC<FileDropZoneProps> = ({
     );
   } else if (isUploading) {
     icon = (
-      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ animation: 'spin 1s linear infinite' }}>
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--v-text-faint)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ animation: 'spin 1s linear infinite' }}>
         <path d="M21 12a9 9 0 1 1-6.219-8.56" />
       </svg>
     );
   } else {
     icon = (
-      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={hov ? accentColor : '#9ca3af'} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={hov ? accentColor : 'var(--v-text-faint)'} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
         <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
         <polyline points="17 8 12 3 7 8" />
         <line x1="12" y1="3" x2="12" y2="15" />
@@ -460,10 +546,10 @@ const FileDropZone: React.FC<FileDropZoneProps> = ({
     >
       {/* Icon */}
       {icon}
-      <div style={{ fontSize: 13, fontWeight: 500, color: isUploaded ? '#15803d' : '#374151' }}>{label}</div>
+      <div style={{ fontSize: 13, fontWeight: 500, color: isUploaded ? '#15803d' : 'var(--v-text-secondary)' }}>{label}</div>
       {isUploaded && uploadedFileName && (
         <div title={uploadedFileName} style={{
-          fontSize: 11, color: '#6b7280', maxWidth: '100%',
+          fontSize: 11, color: 'var(--v-text-muted)', maxWidth: '100%',
           overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
           fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
         }}>
@@ -471,7 +557,7 @@ const FileDropZone: React.FC<FileDropZoneProps> = ({
         </div>
       )}
       {!isUploaded && !isUploading && (
-        <div style={{ fontSize: 11, color: '#9ca3af' }}>{ext}</div>
+        <div style={{ fontSize: 11, color: 'var(--v-text-faint)' }}>{ext}</div>
       )}
     </button>
   );
@@ -498,9 +584,9 @@ const UrlImportRow: React.FC<UrlImportRowProps> = ({
   const isDisabled = isUploading || !url.trim();
   return (
     <>
-      <div style={{ fontSize: '11px', color: '#64748b', marginBottom: '6px', fontStyle: 'italic' }}>
+      <div style={{ fontSize: '11px', color: 'var(--v-text-muted)', marginBottom: '6px', fontStyle: 'italic' }}>
         Paste a raw public URL pointing to a{' '}
-        <code style={{ background: '#f1f5f9', padding: '1px 4px', borderRadius: '3px' }}>{ext}</code> file
+        <code style={{ background: 'var(--v-surface-hover)', color: 'var(--v-text)', padding: '1px 4px', borderRadius: '3px' }}>{ext}</code> file
       </div>
       <div style={{ display: 'flex', gap: '8px' }}>
         <input
@@ -584,8 +670,8 @@ const FileUploadCard: React.FC<FileUploadCardProps> = ({
   const { dropLabel, importLabel } = UPLOAD_STATE_LABELS[uploadState];
 
   const cardStyle: React.CSSProperties = {
-    background: '#ffffff',
-    border: `1px solid ${isUploaded ? '#bbf7d0' : '#e5e7eb'}`,
+    background: 'var(--v-surface-muted)',
+    border: `1px solid ${isUploaded ? '#bbf7d0' : 'var(--v-border)'}`,
     borderRadius: 6,
     marginBottom: 10,
     overflow: 'hidden',
@@ -593,12 +679,12 @@ const FileUploadCard: React.FC<FileUploadCardProps> = ({
   const fileModeStyle: React.CSSProperties = {
     ...modeButtonBaseStyle,
     background: inputMode === 'file' ? '#049484' : 'transparent',
-    color:      inputMode === 'file' ? '#ffffff'  : '#6b7280',
+    color:      inputMode === 'file' ? '#ffffff'  : 'var(--v-text-muted)',
   };
   const urlModeStyle: React.CSSProperties = {
     ...modeButtonBaseStyle,
     background: inputMode === 'url' ? '#049484' : 'transparent',
-    color:      inputMode === 'url' ? '#ffffff'  : '#6b7280',
+    color:      inputMode === 'url' ? '#ffffff'  : 'var(--v-text-muted)',
   };
 
   return (
@@ -606,7 +692,7 @@ const FileUploadCard: React.FC<FileUploadCardProps> = ({
       {/* card header */}
       <div style={{
         display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-        padding: '8px 12px', background: '#f9fafb', borderBottom: '1px solid #f1f5f9',
+        padding: '8px 12px', background: headerBg, borderBottom: '1px solid var(--v-border-subtle)',
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
           <span style={{
@@ -623,14 +709,14 @@ const FileUploadCard: React.FC<FileUploadCardProps> = ({
           )}
           {isUploaded && (
             <button type="button" onClick={onClearUpload} disabled={removeDisabled} style={{
-              fontSize: 11, fontFamily: FONT, border: '1px solid #e5e7eb', borderRadius: 4,
-              background: '#fff', color: '#6b7280', padding: '1px 7px',
+              fontSize: 11, fontFamily: FONT, border: '1px solid var(--v-border)', borderRadius: 4,
+              background: 'var(--v-surface)', color: 'var(--v-text-muted)', padding: '1px 7px',
               cursor: removeDisabled ? 'not-allowed' : 'pointer', opacity: removeDisabled ? 0.4 : 1,
             }}>Remove</button>
           )}
         </div>
         {/* mode toggle */}
-        <div style={{ display: 'flex', background: '#f1f5f9', borderRadius: 5, padding: 2, gap: 2 }}>
+        <div style={{ display: 'flex', background: 'var(--v-input-bg)', borderRadius: 5, padding: 2, gap: 2 }}>
           <button type="button" onClick={() => onModeChange('file')} style={fileModeStyle}>File</button>
           <button type="button" onClick={() => onModeChange('url')}  style={urlModeStyle}>URL</button>
         </div>
@@ -659,7 +745,7 @@ const FileUploadCard: React.FC<FileUploadCardProps> = ({
             <div style={progressBarContainerStyle}>
               <div style={{ ...progressBarStyle, width: `${uploadProgress.progress}%` }} />
             </div>
-            <div style={{ fontSize: 11, color: '#9ca3af', textAlign: 'center', marginTop: 3 }}>
+            <div style={{ fontSize: 11, color: 'var(--v-text-faint)', textAlign: 'center', marginTop: 3 }}>
               {Math.round(uploadProgress.progress)}%
             </div>
           </div>
@@ -667,8 +753,8 @@ const FileUploadCard: React.FC<FileUploadCardProps> = ({
         {uploadError && (
           <div style={{
             marginTop: 8, padding: '8px 10px',
-            background: '#fef2f2', border: '1px solid #fecaca',
-            borderRadius: 5, fontSize: 12, color: '#b91c1c',
+            background: 'var(--v-danger-bg)', border: '1px solid var(--v-danger-border)',
+            borderRadius: 5, fontSize: 12, color: 'var(--v-danger-text)',
             display: 'flex', alignItems: 'flex-start', gap: 6,
           }}>
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0, marginTop: 1 }}><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
@@ -717,57 +803,11 @@ const FormActionButtons: React.FC<FormActionButtonsProps> = ({
   );
 };
 
-interface GenModelFixPromptProps {
-  isLoading: boolean;
-  isSubmitting: boolean;
-  onCancel: () => void;
-  onApplyFixes: () => void;
-}
-
-const GenModelFixPrompt: React.FC<GenModelFixPromptProps> = ({
-  isLoading, isSubmitting, onCancel, onApplyFixes,
-}) => {
-  const isDisabled = isLoading || isSubmitting;
-  return (
-    <div style={{
-      marginTop: 16, padding: 14, borderRadius: 6,
-      border: '1px solid #fde68a', background: '#fffbeb',
-      fontSize: 13, color: '#78350f', fontFamily: FONT,
-    }}>
-      <div style={{ fontWeight: 600, marginBottom: 6 }}>
-        We detected issues in your GenModel.
-      </div>
-      <div style={{ marginBottom: 10 }}>
-        Would you like to save the meta model by letting the system automatically modify the GenModel,
-        or cancel this scenario?
-      </div>
-      <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', flexWrap: 'wrap' }}>
-        <button
-          type="button"
-          onClick={onCancel}
-          style={{ ...secondaryButtonStyle, padding: '8px 12px' }}
-          disabled={isDisabled}
-        >
-          Cancel scenario
-        </button>
-        <button
-          type="button"
-          onClick={onApplyFixes}
-          style={{ ...primaryButtonStyle, padding: '8px 12px' }}
-          disabled={isDisabled}
-        >
-          Save with automatic GenModel fixes
-        </button>
-      </div>
-    </div>
-  );
-};
 
 // ─── Per-kind UI state shape ──────────────────────────────────────────────────
 
 const EMPTY_PER_KIND = {
   ecore:    { inputMode: 'file' as 'file' | 'url', url: '', urlFileName: '', localFileName: '', uploadError: '' },
-  genmodel: { inputMode: 'file' as 'file' | 'url', url: '', urlFileName: '', localFileName: '', uploadError: '' },
 };
 
 const getUploadedDisplayName = (kindState: (typeof EMPTY_PER_KIND)['ecore']): string =>
@@ -776,30 +816,27 @@ const getUploadedDisplayName = (kindState: (typeof EMPTY_PER_KIND)['ecore']): st
 // ─── Custom hook ──────────────────────────────────────────────────────────────
 
 function useCreateModelForm({ isOpen, onClose, onSuccess }: CreateModelModalProps) {
-  const [formData, setFormData] = useState({
-    name: '', description: '', domain: '', keywords: [] as string[],
-  });
-  const [uploadedFileIds, setUploadedFileIds] = useState({ ecoreFileId: 0, genModelFileId: 0 });
+  const [formData, setFormData] = useState({ ...EMPTY_FORM, keywords: [] as string[] });
+  const [creationMode, setCreationMode] = useState<CreationMode>('import');
+  const [uploadedFileIds, setUploadedFileIds] = useState({ ecoreFileId: 0 });
   const [isLoading, setIsLoading] = useState(false);
   const [fieldErrors, setFieldErrors] = useState<Record<CreateModelFieldKey, string>>(() => ({ ...EMPTY_FIELD_ERRORS }));
   const [success, setSuccess] = useState('');
   const [uploadProgress, setUploadProgress] = useState({
     ecore: { progress: 0, isUploading: false },
-    genmodel: { progress: 0, isUploading: false },
   });
   const [submitProgress, setSubmitProgress] = useState({ progress: 0, isSubmitting: false });
   // Tracked as a ref (not state) since it's only read inside async callbacks/closures that need
   // the current value synchronously — state updates aren't visible to already-created closures
   // until the next render.
   const metaModelCreatedSuccessfullyRef = useRef(false);
-  const [showGenModelFixPrompt, setShowGenModelFixPrompt] = useState(false);
-  const [pendingCreateRequest, setPendingCreateRequest] = useState<CreateModelRequest | null>(null);
   const [scrollTarget, setScrollTarget] = useState<CreateModelFieldKey | null>(null);
 
-  // Unified per-kind UI state (replaces 6 separate ecoreInputMode / genmodelUrl / … states)
+  // Unified per-kind UI state (replaces 6 separate ecoreInputMode / … states)
   const [perKind, setPerKind] = useState(EMPTY_PER_KIND);
 
   const nameFieldRef = useRef<HTMLDivElement>(null);
+  const versionFieldRef = useRef<HTMLDivElement>(null);
   const descriptionFieldRef = useRef<HTMLDivElement>(null);
   const keywordsFieldRef = useRef<HTMLDivElement>(null);
   const domainFieldRef = useRef<HTMLDivElement>(null);
@@ -807,16 +844,15 @@ function useCreateModelForm({ isOpen, onClose, onSuccess }: CreateModelModalProp
 
   const fileInputRefs = {
     ecore:    useRef<HTMLInputElement>(null),
-    genmodel: useRef<HTMLInputElement>(null),
   };
   const ecoreProgressIntervalRef    = useRef<ReturnType<typeof setInterval> | null>(null);
-  const genmodelProgressIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const submitProgressIntervalRef   = useRef<ReturnType<typeof setInterval> | null>(null);
   const successTimeoutRef           = useRef<ReturnType<typeof setTimeout>  | null>(null);
   const progressResetTimeoutRef     = useRef<ReturnType<typeof setTimeout>  | null>(null);
 
   const fieldSectionRefs: Record<CreateModelFieldKey, React.RefObject<HTMLDivElement | null>> = {
     name: nameFieldRef,
+    version: versionFieldRef,
     description: descriptionFieldRef,
     keywords: keywordsFieldRef,
     domain: domainFieldRef,
@@ -835,16 +871,16 @@ function useCreateModelForm({ isOpen, onClose, onSuccess }: CreateModelModalProp
     setScrollTarget(null);
   }, [scrollTarget]);
 
-  const canSave = uploadedFileIds.ecoreFileId > 0 &&
-    uploadedFileIds.genModelFileId > 0 &&
+  const canSave = (creationMode === 'empty' || uploadedFileIds.ecoreFileId > 0) &&
     formData.name.trim() &&
+    formData.version.trim() &&
     formData.description.trim() &&
     formData.domain.trim() &&
     formData.keywords.length > 0;
 
   // Stable ref-only cleanup – safe with empty deps
   const clearAllTimers = useCallback(() => {
-    [ecoreProgressIntervalRef, genmodelProgressIntervalRef, submitProgressIntervalRef].forEach(ref => {
+    [ecoreProgressIntervalRef, submitProgressIntervalRef].forEach(ref => {
       if (ref.current) { clearInterval(ref.current); ref.current = null; }
     });
     [successTimeoutRef, progressResetTimeoutRef].forEach(ref => {
@@ -879,6 +915,22 @@ function useCreateModelForm({ isOpen, onClose, onSuccess }: CreateModelModalProp
     setFieldErrors(prev => ({ ...prev, files: '' }));
   };
 
+  // Starting from an empty file discards an uploaded one, the same way switching File/URL does,
+  // so a file that is no longer shown cannot linger on the server.
+  const switchCreationMode = (mode: CreationMode) => {
+    if (mode === creationMode) return;
+    if (mode === 'empty') {
+      const prevId = uploadedFileIds.ecoreFileId;
+      if (prevId > 0) {
+        apiService.deleteFile(prevId).catch(() => console.warn('Failed to delete file on mode switch'));
+      }
+      setUploadedFileIds({ ecoreFileId: 0 });
+      setPerKind(EMPTY_PER_KIND);
+    }
+    setFieldErrors(prev => ({ ...prev, files: '' }));
+    setCreationMode(mode);
+  };
+
   // ── Progress simulation ───────────────────────────────────────────────────
 
   const scheduleSuccessReset = (kind: FileKind) => {
@@ -891,19 +943,28 @@ function useCreateModelForm({ isOpen, onClose, onSuccess }: CreateModelModalProp
   };
 
   const startProgressSimulation = (kind: FileKind) => {
-    const ref = kind === 'ecore' ? ecoreProgressIntervalRef : genmodelProgressIntervalRef;
+    const ref = ecoreProgressIntervalRef;
+
     if (ref.current) clearInterval(ref.current);
+
     ref.current = globalThis.setInterval(() => {
       setUploadProgress(prev => ({
         ...prev,
-        [kind]: { progress: Math.min(prev[kind].progress + 15, 90), isUploading: true },
+        [kind]: {
+          progress: Math.min(prev[kind].progress + 15, 90),
+          isUploading: true,
+        },
       }));
     }, 200);
   };
 
-  const stopProgressSimulation = (kind: FileKind) => {
-    const ref = kind === 'ecore' ? ecoreProgressIntervalRef : genmodelProgressIntervalRef;
-    if (ref.current) { clearInterval(ref.current); ref.current = null; }
+  const stopProgressSimulation = (_kind: FileKind) => {
+    const ref = ecoreProgressIntervalRef;
+
+    if (ref.current) {
+      clearInterval(ref.current);
+      ref.current = null;
+    }
   };
 
   // ── Submit overlay helpers ────────────────────────────────────────────────
@@ -944,7 +1005,6 @@ function useCreateModelForm({ isOpen, onClose, onSuccess }: CreateModelModalProp
   const prepareSubmit = () => {
     setIsLoading(true);
     setFieldErrors({ ...EMPTY_FIELD_ERRORS });
-    setShowGenModelFixPrompt(false);
     startSubmitOverlay();
   };
 
@@ -960,7 +1020,7 @@ function useCreateModelForm({ isOpen, onClose, onSuccess }: CreateModelModalProp
       setSuccess(message);
       setTimeout(() => {
         onSuccess?.({ ...requestData, ...(responseData ?? {}), id: responseData?.id });
-        handleClose();
+        void handleClose();
       }, 300);
     });
   };
@@ -969,7 +1029,7 @@ function useCreateModelForm({ isOpen, onClose, onSuccess }: CreateModelModalProp
 
   const cleanupUploadedFiles = async () => {
     if (metaModelCreatedSuccessfullyRef.current) return;
-    const filesToDelete = [uploadedFileIds.ecoreFileId, uploadedFileIds.genModelFileId].filter(id => id > 0);
+    const filesToDelete = [uploadedFileIds.ecoreFileId].filter(id => id > 0);
     await Promise.all(
       filesToDelete.map(fileId =>
         apiService.deleteFile(fileId).catch(() => console.error('Failed to delete file'))
@@ -979,7 +1039,7 @@ function useCreateModelForm({ isOpen, onClose, onSuccess }: CreateModelModalProp
 
   /** Resets local upload UI after server deletes files (so we do not keep stale “Ready” with dead IDs). */
   const resetLocalUploadStateAfterImportFailure = () => {
-    setUploadedFileIds({ ecoreFileId: 0, genModelFileId: 0 });
+    setUploadedFileIds({ ecoreFileId: 0 });
     setPerKind(EMPTY_PER_KIND);
   };
 
@@ -1000,15 +1060,14 @@ function useCreateModelForm({ isOpen, onClose, onSuccess }: CreateModelModalProp
     await cleanupUploadedFiles();
     clearAllTimers();
     setSubmitProgress({ progress: 0, isSubmitting: false });
-    setFormData({ name: '', description: '', domain: '', keywords: [] });
-    setUploadedFileIds({ ecoreFileId: 0, genModelFileId: 0 });
+    setFormData({ ...EMPTY_FORM, keywords: [] });
+    setCreationMode('import');
+    setUploadedFileIds({ ecoreFileId: 0 });
     setFieldErrors({ ...EMPTY_FIELD_ERRORS });
     setSuccess('');
     setIsLoading(false);
-    setUploadProgress({ ecore: { progress: 0, isUploading: false }, genmodel: { progress: 0, isUploading: false } });
+    setUploadProgress({ ecore: { progress: 0, isUploading: false } });
     metaModelCreatedSuccessfullyRef.current = false;
-    setShowGenModelFixPrompt(false);
-    setPendingCreateRequest(null);
     setPerKind(EMPTY_PER_KIND);
     onClose();
   };
@@ -1082,16 +1141,28 @@ function useCreateModelForm({ isOpen, onClose, onSuccess }: CreateModelModalProp
     setFieldErrors(prev => ({ ...prev, files: '' }));
 
     try {
-      if (currentFileId > 0) {
-        await apiService.deleteFile(currentFileId)
-          .catch(() => console.warn('Failed to delete previous file'));
-      }
       startProgressSimulation(kind);
       const fetchResponse = await fetch(rawUrl);
       if (!fetchResponse.ok) {
         throw new Error(`Server returned ${fetchResponse.status} ${fetchResponse.statusText}`);
       }
       const blob = await fetchResponse.blob();
+      // A web page or other non-model content is rejected before anything reaches the backend,
+      // so it neither replaces the previous upload nor fails later when the model is created.
+      const contentProblem = findEcoreDownloadProblem(
+        await readBlobAsText(blob),
+        fetchResponse.headers?.get('content-type') ?? blob.type,
+      );
+      if (contentProblem) {
+        stopProgressSimulation(kind);
+        setUploadProgress(prev => ({ ...prev, [kind]: { progress: 0, isUploading: false } }));
+        updateKind(kind, { uploadError: contentProblem });
+        return;
+      }
+      if (currentFileId > 0) {
+        await apiService.deleteFile(currentFileId)
+          .catch(() => console.warn('Failed to delete previous file'));
+      }
       const fileName = urlPath.split('/').pop() || `imported${ext}`;
       const file = new File([blob], fileName, { type: blob.type || 'application/octet-stream' });
       const response = await apiService.uploadFile(file, apiType);
@@ -1117,13 +1188,14 @@ function useCreateModelForm({ isOpen, onClose, onSuccess }: CreateModelModalProp
   const validateClientFields = (): boolean => {
     const next = { ...EMPTY_FIELD_ERRORS };
     if (!formData.name.trim()) next.name = 'Please enter a name';
+    if (!formData.version.trim()) next.version = 'Please enter a version';
     if (!formData.description.trim()) next.description = 'Please enter a description';
     if (!formData.domain.trim()) next.domain = 'Please enter a domain';
     if (formData.keywords.length === 0) next.keywords = 'Please enter at least one keyword';
-    if (!uploadedFileIds.ecoreFileId || !uploadedFileIds.genModelFileId) {
-      next.files = 'Please upload both .ecore and .genmodel files';
+    if (creationMode === 'import' && !uploadedFileIds.ecoreFileId) {
+      next.files = 'Please upload an .ecore file';
     }
-    const order: CreateModelFieldKey[] = ['name', 'description', 'keywords', 'domain', 'files'];
+    const order: CreateModelFieldKey[] = ['name', 'version', 'description', 'keywords', 'domain', 'files'];
     const first = order.find(k => next[k]);
     if (first) {
       setFieldErrors(next);
@@ -1147,74 +1219,50 @@ function useCreateModelForm({ isOpen, onClose, onSuccess }: CreateModelModalProp
 
     prepareSubmit();
 
-    const requestData: CreateModelRequest = {
-      name: formData.name.trim(),
-      description: formData.description.trim(),
-      domain: formData.domain.trim(),
-      keyword: formData.keywords,
-      ecoreFileId: uploadedFileIds.ecoreFileId,
-      genModelFileId: uploadedFileIds.genModelFileId,
-    };
-    setPendingCreateRequest(requestData);
+    const name = formData.name.trim();
+    // Only set for a meta model created from scratch; this handler owns that file until the
+    // meta model exists, so it deletes it again if creation fails.
+    let emptyEcoreFileId = 0;
 
     try {
-      // This call only inspects the GenModel — the backend does not persist
-      // anything until the follow-up call below with applyGenModelFixes: true.
-      await apiService.createMetaModel({ ...requestData, applyGenModelFixes: false });
-    } catch (err) {
-      const { message, isMetamodelRejected } = parseBackendError(err);
-      if (isMetamodelRejected) {
-        setIsLoading(false);
-        stopSubmitOverlayWithError();
-        setFieldErrors({
-          ...EMPTY_FIELD_ERRORS,
-          files:
-            `We found some issues in your GenModel: ${message}. ` +
-            'You can let the system modify the GenModel automatically or cancel this operation.',
-        });
-        setScrollTarget('files');
-        setShowGenModelFixPrompt(true);
-        return;
+      if (creationMode === 'empty') {
+        const uploadResponse = await apiService.uploadFile(createEmptyEcoreFile(name), 'ECORE');
+        emptyEcoreFileId = requireFileId(uploadResponse);
       }
-      await handleImportFailure(message, 'Error creating meta model: ');
-      return;
-    }
 
-    try {
-      const response = await apiService.createMetaModel({ ...requestData, applyGenModelFixes: true });
-      onSubmitSuccess('Meta Model created successfully!', response.data, requestData);
-    } catch (err) {
-      const { message } = parseBackendError(err);
-      await handleImportFailure(message, 'Error creating meta model: ');
-    }
-  };
+      const requestData: CreateModelRequest = {
+        name,
+        version: formData.version.trim(),
+        description: formData.description.trim(),
+        domain: formData.domain.trim(),
+        keyword: formData.keywords,
+        ecoreFileId: creationMode === 'empty' ? emptyEcoreFileId : uploadedFileIds.ecoreFileId,
+      };
 
-  const handleApplyGenModelFixes = async () => {
-    if (!pendingCreateRequest) return;
-    prepareSubmit();
+      const response = await apiService.createMetaModel({ ...requestData });
 
-    try {
-      const response = await apiService.createMetaModel({ ...pendingCreateRequest, applyGenModelFixes: true });
       onSubmitSuccess(
-        'Meta Model created successfully with automatic GenModel fixes.',
+        'Meta Model created successfully!',
         response.data,
-        pendingCreateRequest,
+        requestData,
       );
     } catch (err) {
+      if (emptyEcoreFileId > 0) {
+        await apiService.deleteFile(emptyEcoreFileId).catch(() => console.error('Failed to delete file'));
+      }
       const { message } = parseBackendError(err);
-      await handleImportFailure(message, 'Error creating meta model with automatic GenModel fixes: ');
-    }
-  };
 
-  const handleCancelGenModelFixScenario = () => {
-    setShowGenModelFixPrompt(false);
-    handleClose();
+      await handleImportFailure(
+        message,
+        'Error creating meta model: ',
+      );
+    }
   };
 
   const getButtonText = (): string => {
     if (isLoading) return 'Creating...';
-    if (canSave) return 'Import Meta Model';
-    return 'Complete All Fields';
+    if (!canSave) return 'Complete All Fields';
+    return creationMode === 'empty' ? 'Create Meta Model' : 'Import Meta Model';
   };
 
   useEffect(() => {
@@ -1225,12 +1273,13 @@ function useCreateModelForm({ isOpen, onClose, onSuccess }: CreateModelModalProp
     }
     clearAllTimers();
     setSubmitProgress({ progress: 0, isSubmitting: false });
-    setUploadProgress({ ecore: { progress: 0, isUploading: false }, genmodel: { progress: 0, isUploading: false } });
+    setUploadProgress({ ecore: { progress: 0, isUploading: false } });
     return clearAllTimers;
   }, [isOpen, clearAllTimers]);
 
   return {
     formData, setFormData,
+    creationMode, switchCreationMode,
     uploadedFileIds,
     isLoading,
     fieldErrors,
@@ -1238,13 +1287,11 @@ function useCreateModelForm({ isOpen, onClose, onSuccess }: CreateModelModalProp
     fieldSectionRefs,
     success,
     uploadProgress, submitProgress,
-    showGenModelFixPrompt,
     perKind,
     fileInputRefs,
     canSave,
     handleFileUpload, handleUrlImport,
-    handleCreateModel, handleApplyGenModelFixes,
-    handleCancelGenModelFixScenario, handleClose,
+    handleCreateModel, handleClose,
     switchFileMode, changeFileUrl,
     clearKindUpload,
     getButtonText,
@@ -1262,7 +1309,7 @@ export const CreateModelModal: React.FC<CreateModelModalProps> = ({
 
   if (!isOpen) return null;
 
-  const { uploadedFileIds, uploadProgress, submitProgress, isLoading } = form;
+  const { uploadedFileIds, uploadProgress, submitProgress, isLoading, creationMode } = form;
 
   return ReactDOM.createPortal(
     <>
@@ -1311,17 +1358,17 @@ export const CreateModelModal: React.FC<CreateModelModalProps> = ({
           {/* ── Scrollbar style injection ── */}
           <style>{`
             .cmm-scroll::-webkit-scrollbar { width: 7px; }
-            .cmm-scroll::-webkit-scrollbar-track { background: #f1f5f9; border-radius: 4px; }
-            .cmm-scroll::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
-            .cmm-scroll::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+            .cmm-scroll::-webkit-scrollbar-track { background: var(--v-scrollbar-track); border-radius: 4px; }
+            .cmm-scroll::-webkit-scrollbar-thumb { background: var(--v-scrollbar-thumb); border-radius: 4px; }
+            .cmm-scroll::-webkit-scrollbar-thumb:hover { background: var(--v-scrollbar-thumb-hover); }
           `}</style>
 
           {/* ── Header ── */}
           <div style={modalHeaderStyle}>
             <div>
-              <h2 id="modal-title" style={modalTitleStyle}>Import Meta Model</h2>
+              <h2 id="modal-title" style={modalTitleStyle}>Add Meta Model</h2>
               <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.72)', marginTop: 3, fontFamily: FONT }}>
-                Upload your .ecore and .genmodel files
+                {creationMode === 'empty' ? 'Start from an empty .ecore file' : 'Upload your .ecore file'}
               </div>
             </div>
             <button
@@ -1337,6 +1384,12 @@ export const CreateModelModal: React.FC<CreateModelModalProps> = ({
           {/* ── Scrollable body ── */}
           <div className="cmm-scroll" style={{ flex: 1, overflowY: 'scroll', padding: '16px 24px 24px' }}>
           {form.success && <div style={successMessageStyle}>{form.success}</div>}
+
+          <CreationModeToggle
+            mode={creationMode}
+            disabled={isLoading || submitProgress.isSubmitting || uploadProgress.ecore.isUploading}
+            onChange={form.switchCreationMode}
+          />
 
           <div ref={form.fieldSectionRefs.name} style={formGroupStyle}>
             <label htmlFor="model-name-input" style={labelStyle}>Name *</label>
@@ -1357,6 +1410,31 @@ export const CreateModelModal: React.FC<CreateModelModalProps> = ({
             />
             {form.fieldErrors.name && (
               <div id="model-name-error" role="alert" style={fieldInlineErrorStyle}>{form.fieldErrors.name}</div>
+            )}
+          </div>
+
+          <div ref={form.fieldSectionRefs.version} style={formGroupStyle}>
+            <label htmlFor="model-version-input" style={labelStyle}>Version *</label>
+            <input
+              id="model-version-input"
+              type="text"
+              placeholder="1.0"
+              value={form.formData.version}
+              onChange={(e) => {
+                form.setFormData({ ...form.formData, version: e.target.value });
+                if (form.fieldErrors.version) form.setFieldErrors(prev => ({ ...prev, version: '' }));
+              }}
+              aria-invalid={!!form.fieldErrors.version}
+              aria-describedby={form.fieldErrors.version ? 'model-version-error' : 'model-version-hint'}
+              style={{ ...inputStyle, ...(form.fieldErrors.version ? inputErrorOutlineStyle : {}) }}
+              onFocus={(e) => Object.assign(e.currentTarget.style, { ...inputFocusStyle, ...(form.fieldErrors.version ? inputErrorOutlineStyle : {}) })}
+              onBlur={(e) => Object.assign(e.currentTarget.style, { ...inputStyle, ...(form.fieldErrors.version ? inputErrorOutlineStyle : {}) })}
+            />
+            <div id="model-version-hint" style={{ fontSize: 12, color: 'var(--v-text-muted)', marginTop: 4 }}>
+              Each version is stored as its own model. It cannot be changed after import.
+            </div>
+            {form.fieldErrors.version && (
+              <div id="model-version-error" role="alert" style={fieldInlineErrorStyle}>{form.fieldErrors.version}</div>
             )}
           </div>
 
@@ -1421,9 +1499,9 @@ export const CreateModelModal: React.FC<CreateModelModalProps> = ({
             )}
           </div>
 
-          {/* File Upload Section */}
+          {/* File Upload Section (replaced by a short note for an empty meta model) */}
           <div ref={form.fieldSectionRefs.files} style={uploadSectionStyle}>
-            <div style={uploadSectionTitleStyle}>Required Meta Model Files</div>
+            {creationMode === 'import' && <div style={uploadSectionTitleStyle}>Required ECore File</div>}
 
             {form.fieldErrors.files && (
               <div
@@ -1434,16 +1512,14 @@ export const CreateModelModal: React.FC<CreateModelModalProps> = ({
               </div>
             )}
 
-            {form.showGenModelFixPrompt && (
-              <GenModelFixPrompt
-                isLoading={isLoading}
-                isSubmitting={submitProgress.isSubmitting}
-                onCancel={form.handleCancelGenModelFixScenario}
-                onApplyFixes={form.handleApplyGenModelFixes}
-              />
+            {creationMode === 'empty' && (
+              <div style={emptyEcoreNoteStyle}>
+                An empty <code>{toEPackageName(form.formData.name)}.ecore</code> file is created for
+                this meta model. You can add classes in the editor once it is in your library.
+              </div>
             )}
 
-            {FILE_CARD_DISPLAY_CONFIGS.map(({ kind, accentColor, hoverBg, badgeBg, badgeBorder, badgeColor, defaultHeaderBg }) => {
+            {creationMode === 'import' && FILE_CARD_DISPLAY_CONFIGS.map(({ kind, accentColor, hoverBg, badgeBg, badgeBorder, badgeColor, defaultHeaderBg }) => {
               const { ext, fileIdKey } = FILE_KIND_CONFIG[kind];
               const fileId = uploadedFileIds[fileIdKey];
               const { inputMode, url, urlFileName, localFileName } = form.perKind[kind];
@@ -1463,7 +1539,7 @@ export const CreateModelModal: React.FC<CreateModelModalProps> = ({
                     badgeBg={badgeBg}
                     badgeBorder={badgeBorder}
                     badgeColor={badgeColor}
-                    headerBg={fileId > 0 ? '#f0fdf4' : defaultHeaderBg}
+                    headerBg={fileId > 0 ? 'var(--v-success-bg)' : defaultHeaderBg}
                     fileId={fileId}
                     inputMode={inputMode}
                     uploadProgress={uploadProgress[kind]}
@@ -1483,16 +1559,17 @@ export const CreateModelModal: React.FC<CreateModelModalProps> = ({
               );
             })}
 
-            <div style={fileStatusStyle}>
-              {uploadedFileIds.ecoreFileId > 0 && uploadedFileIds.genModelFileId > 0
-                ? (() => {
-                    const nEcore = getUploadedDisplayName(form.perKind.ecore);
-                    const nGen = getUploadedDisplayName(form.perKind.genmodel);
-                    if (nEcore && nGen) return `✅ Both files ready! (${nEcore} · ${nGen})`;
-                    return '✅ Both files ready!';
-                  })()
-                : 'Upload or import both files to continue'}
-            </div>
+            {creationMode === 'import' && (
+              <div style={fileStatusStyle}>
+                {uploadedFileIds.ecoreFileId > 0
+                  ? (() => {
+                      const nEcore = getUploadedDisplayName(form.perKind.ecore);
+                      if (nEcore) return `✅ Ecore file is ready! (${nEcore})`;
+                      return '✅ Ecore file is ready!';
+                    })()
+                  : 'Upload or import an .ecore file to continue'}
+              </div>
+            )}
           </div>
 
           <FormActionButtons

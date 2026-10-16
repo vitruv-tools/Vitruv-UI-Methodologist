@@ -110,4 +110,28 @@ describe('CanvasProjectTabs', () => {
       'Scroll with two fingers on your trackpad to see more tabs',
     );
   });
+
+  it('keeps a dirty tab at a fixed width so the name badge outline is not clipped', () => {
+    render(
+      <CanvasProjectTabs
+        tabs={tabs}
+        activeInstanceId="inst-1"
+        openProjectIds={openProjectIds(tabs)}
+        dirtyInstanceIds={new Set(['inst-2'])}
+        onActivate={jest.fn()}
+        onRequestClose={jest.fn()}
+        onSelectProject={jest.fn()}
+      />,
+    );
+
+    const dirtyTab = screen.getByRole('tab', { name: /Beta/ });
+    expect(dirtyTab).toHaveStyle({
+      width: '128px',
+      boxSizing: 'border-box',
+    });
+    expect(screen.getByTitle('Unsaved changes')).toBeInTheDocument();
+
+    const tabList = screen.getByRole('tablist');
+    expect(tabList).toHaveStyle({ overflowX: 'visible' });
+  });
 });

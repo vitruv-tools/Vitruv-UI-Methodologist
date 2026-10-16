@@ -1,11 +1,36 @@
 import React, { useState, useCallback, useEffect, useMemo } from 'react';
-import { EdgeProps, Position, useReactFlow, useStore } from 'reactflow';
-
+import { EdgeLabelRenderer, EdgeProps, Position, useReactFlow, useStore } from 'reactflow';
+import type { Node } from 'reactflow';
+import {
+  EOBJECT_DEFAULT_WIDTH,
+  FINE_REACTION_ARROW_LENGTH,
+  FINE_REACTION_SEPARATION,
+  GHOST_NODE_SIZE,
+  fineReactionPathD,
+  layoutFineReactionChord,
+  reactionArrowAngleDeg,
+  shortenSegmentEnd,
+} from '../../utils/reactionEdgeGeometry';
+import {
+  buildReactionEndpoint,
+  ecoreFileRect,
+  isRoutableNode,
+  nodeWorldRect,
+  pickSideFromPoint,
+  polylinePathD,
+  routeOrthogonalAStar,
+} from './flowCanvasAStarRouter';
 interface ReactionRelationshipData {
   label?: string;
   code?: string;
   onDoubleClick?: (edgeId: string) => void;
   routingStyle?: 'curved' | 'orthogonal';
+  fineGranular?: boolean;
+  sourceHandleId?: string | null;
+  targetHandleId?: string | null;
+  parallelIndex?: number;
+  parallelCount?: number;
+  separation?: number;
   sourceParallelIndex?: number;
   sourceParallelCount?: number;
   targetParallelIndex?: number;
@@ -17,11 +42,11 @@ interface ReactionRelationshipData {
   onHandleChange?: (edgeId: string, sourceHandle: string, targetHandle: string) => void;
   onReorderRequest?: (edgeId: string, controlPoint: { x: number; y: number }) => void;
   readOnly?: boolean;
+  routeWaypoints?: Array<{ x: number; y: number }>;
 }
 
 type HandlePosition = 'top' | 'bottom' | 'left' | 'right';
 
-const NODE_DIMENSIONS = { width: 220, height: 180 };
 const EDGE_SPACING = 25;
 
 interface PathSegment {
@@ -29,6 +54,438 @@ interface PathSegment {
   end: { x: number; y: number };
   isHorizontal: boolean;
   canDrag: boolean;
+}
+
+type Point = { x: number; y: number };
+type Rect = { x: number; y: number; width: number; height: number };
+
+interface ReactionLiveState {
+  srcNode: Node | null;
+  tgtNode: Node | null;
+  isSourceSelected: boolean;
+  isTargetSelected: boolean;
+  srcAbsX: number;
+  srcAbsY: number;
+  srcW: number;
+  srcH: number | undefined;
+  srcGhost: boolean;
+  srcAttrs: Array<{ name: string }> | undefined;
+  srcBox: Rect | null;
+  srcEcore: Rect | null;
+  tgtAbsX: number;
+  tgtAbsY: number;
+  tgtW: number;
+  tgtH: number | undefined;
+  tgtGhost: boolean;
+  tgtAttrs: Array<{ name: string }> | undefined;
+  tgtBox: Rect | null;
+  tgtEcore: Rect | null;
+  obstacles: Rect[];
+  existing: Point[][];
+}
+
+function nodeAbs(node: Node | undefined, axis: 'x' | 'y', fallback: number): number {
+  const abs = node?.positionAbsolute?.[axis];
+  if (typeof abs === 'number') return abs;
+  const pos = node?.position?.[axis];
+  if (typeof pos === 'number') return pos;
+  return fallback;
+}
+
+function ghostOrNodeSize(
+  node: Node | undefined,
+  dim: 'width' | 'height',
+  fallback: number | undefined,
+): number | undefined {
+  if (node?.type === 'ghost') return node[dim] ?? GHOST_NODE_SIZE;
+  return node?.[dim] ?? fallback;
+}
+
+function routableRect(node: Node | undefined): Rect | null {
+  if (!node || !isRoutableNode(node)) return null;
+  return nodeWorldRect(node);
+}
+
+function ecoreRectOf(node: Node | undefined): Rect | null {
+  if (node?.type !== 'ecoreFile') return null;
+  return ecoreFileRect(node);
+}
+
+function collectObstacles(nodes: Iterable<Node>, source: string, target: string): Rect[] {
+  const obstacles: Rect[] = [];
+  for (const node of nodes) {
+    if (node.id === source || node.id === target || !isRoutableNode(node)) continue;
+    const rect = nodeWorldRect(node);
+    if (rect) obstacles.push(rect);
+  }
+  return obstacles;
+}
+
+function collectExistingRoutes(
+  edges: Array<{ id: string; data?: { routeWaypoints?: Point[] } }> | undefined,
+  skipId: string,
+): Point[][] {
+  const existing: Point[][] = [];
+  for (const edge of edges ?? []) {
+    if (edge.id === skipId) continue;
+    const points = edge.data?.routeWaypoints;
+    if (Array.isArray(points) && points.length > 1) existing.push(points);
+  }
+  return existing;
+}
+
+function selectReactionLiveState(
+  store: {
+    nodeInternals: Map<string, Node>;
+    edges?: Array<{ id: string; data?: { routeWaypoints?: Point[] } }>;
+  },
+  source: string,
+  target: string,
+  sourcePos: Point,
+  targetPos: Point,
+  id: string,
+): ReactionLiveState {
+  const sourceNode = store.nodeInternals.get(source);
+  const targetNode = store.nodeInternals.get(target);
+  return {
+    srcNode: sourceNode ?? null,
+    tgtNode: targetNode ?? null,
+    isSourceSelected: sourceNode?.selected || false,
+    isTargetSelected: targetNode?.selected || false,
+    srcAbsX: nodeAbs(sourceNode, 'x', sourcePos.x),
+    srcAbsY: nodeAbs(sourceNode, 'y', sourcePos.y),
+    srcW: ghostOrNodeSize(sourceNode, 'width', EOBJECT_DEFAULT_WIDTH) ?? EOBJECT_DEFAULT_WIDTH,
+    srcH: ghostOrNodeSize(sourceNode, 'height', undefined),
+    srcGhost: sourceNode?.type === 'ghost',
+    srcAttrs: sourceNode?.data?.attributes,
+    srcBox: routableRect(sourceNode),
+    srcEcore: ecoreRectOf(sourceNode),
+    tgtAbsX: nodeAbs(targetNode, 'x', targetPos.x),
+    tgtAbsY: nodeAbs(targetNode, 'y', targetPos.y),
+    tgtW: ghostOrNodeSize(targetNode, 'width', EOBJECT_DEFAULT_WIDTH) ?? EOBJECT_DEFAULT_WIDTH,
+    tgtH: ghostOrNodeSize(targetNode, 'height', undefined),
+    tgtGhost: targetNode?.type === 'ghost',
+    tgtAttrs: targetNode?.data?.attributes,
+    tgtBox: routableRect(targetNode),
+    tgtEcore: ecoreRectOf(targetNode),
+    obstacles: collectObstacles(store.nodeInternals.values(), source, target),
+    existing: collectExistingRoutes(store.edges, id),
+  };
+}
+
+function storedWaypoints(data: ReactionRelationshipData | undefined): Point[] | null {
+  const points = data?.routeWaypoints;
+  if (Array.isArray(points) && points.length > 1) return points;
+  return null;
+}
+
+function pickLiveOrStoredRoute(
+  via: Point | null,
+  liveRoute: (via?: Point) => Point[] | null,
+  stored: Point[] | null,
+): Point[] | null {
+  if (via) return liveRoute(via);
+  return stored ?? liveRoute();
+}
+
+function buildOrthogonalDraw(routedPoints: Point[]) {
+  const tip = routedPoints.at(-1);
+  const lastStart = routedPoints.at(-2) ?? tip;
+  if (!tip || !lastStart) {
+    return {
+      edgePath: '',
+      labelX: 0,
+      labelY: 0,
+      arrowX: 0,
+      arrowY: 0,
+      arrowAngle: 0,
+      controlPoint: { x: 0, y: 0 },
+      segments: [] as PathSegment[],
+      overlayArrow: false,
+      routing: 'orthogonal' as const,
+    };
+  }
+  const lineEnd = shortenSegmentEnd(lastStart, tip, FINE_REACTION_ARROW_LENGTH);
+  const drawPoints = [...routedPoints.slice(0, -1), lineEnd];
+  const elbow = drawPoints[Math.floor(drawPoints.length / 2)];
+  const segments: PathSegment[] = drawPoints.slice(0, -1).map((segStart, index) => {
+    const end = drawPoints[index + 1];
+    return {
+      start: segStart,
+      end,
+      isHorizontal: Math.abs(segStart.y - end.y) < 1.5,
+      canDrag: index > 0 && index + 2 < drawPoints.length,
+    };
+  });
+  return {
+    edgePath: polylinePathD(drawPoints),
+    labelX: elbow.x,
+    labelY: elbow.y,
+    arrowX: tip.x,
+    arrowY: tip.y,
+    arrowAngle: reactionArrowAngleDeg(lastStart, tip),
+    controlPoint: { x: elbow.x, y: elbow.y },
+    segments,
+    overlayArrow: false,
+    routing: 'orthogonal' as const,
+  };
+}
+
+function fineRoutePoints(
+  live: ReactionLiveState,
+  sourceHandle: string | null | undefined,
+  targetHandle: string | null | undefined,
+  via?: Point,
+): Point[] | null {
+  const srcEp = live.srcNode && isRoutableNode(live.srcNode)
+    ? buildReactionEndpoint(live.srcNode, sourceHandle, 'source')
+    : null;
+  const tgtEp = live.tgtNode && isRoutableNode(live.tgtNode)
+    ? buildReactionEndpoint(live.tgtNode, targetHandle, 'target')
+    : null;
+  if (!srcEp || !tgtEp) return null;
+  return routeOrthogonalAStar({
+    source: srcEp.rect,
+    target: tgtEp.rect,
+    obstacles: live.obstacles,
+    existing: live.existing,
+    via,
+    cursor: via,
+    lockSourceHandle: srcEp.pin ? srcEp.lockSide : undefined,
+    lockTargetHandle: tgtEp.pin ? tgtEp.lockSide : undefined,
+    sourcePortT: srcEp.portT,
+    targetPortT: tgtEp.portT,
+    sourceAnchor: srcEp.anchor,
+    targetAnchor: tgtEp.anchor,
+  }).points;
+}
+
+function fineChordPath(
+  live: ReactionLiveState,
+  sourceHandle: string | null | undefined,
+  targetHandle: string | null | undefined,
+  data: ReactionRelationshipData | undefined,
+) {
+  const chord = layoutFineReactionChord({
+    source: {
+      x: live.srcAbsX,
+      y: live.srcAbsY,
+      width: live.srcW,
+      height: live.srcH,
+      attributes: live.srcAttrs,
+      isGhost: live.srcGhost,
+    },
+    target: {
+      x: live.tgtAbsX,
+      y: live.tgtAbsY,
+      width: live.tgtW,
+      height: live.tgtH,
+      attributes: live.tgtAttrs,
+      isGhost: live.tgtGhost,
+    },
+    sourceHandle,
+    targetHandle,
+    parallelIndex: data?.parallelIndex ?? 0,
+    parallelCount: data?.parallelCount ?? 1,
+    separation: data?.separation ?? FINE_REACTION_SEPARATION,
+  });
+  return {
+    edgePath: fineReactionPathD(chord),
+    labelX: (chord.drawP1.x + chord.drawP2.x) / 2,
+    labelY: (chord.drawP1.y + chord.drawP2.y) / 2,
+    arrowX: chord.p2.x,
+    arrowY: chord.p2.y,
+    arrowAngle: chord.arrowAngle,
+    controlPoint: null,
+    segments: [] as PathSegment[],
+    overlayArrow: true,
+    routing: 'chord' as const,
+  };
+}
+
+function computeFineGranularPath(
+  live: ReactionLiveState,
+  sourceHandle: string | null | undefined,
+  targetHandle: string | null | undefined,
+  data: ReactionRelationshipData | undefined,
+  tempControlPoint: Point | null,
+) {
+  const routedPoints = pickLiveOrStoredRoute(
+    tempControlPoint,
+    via => fineRoutePoints(live, sourceHandle, targetHandle, via),
+    storedWaypoints(data),
+  );
+  if (routedPoints && routedPoints.length > 1) return buildOrthogonalDraw(routedPoints);
+  return fineChordPath(live, sourceHandle, targetHandle, data);
+}
+
+function orthogonalDragPoints(live: ReactionLiveState, via: Point | null): Point[] | null {
+  const source = live.srcBox ?? live.srcEcore;
+  const target = live.tgtBox ?? live.tgtEcore;
+  if (!via || !source || !target) return null;
+  return routeOrthogonalAStar({
+    source,
+    target,
+    obstacles: live.obstacles,
+    existing: live.existing,
+    via,
+    cursor: via,
+  }).points;
+}
+
+function orthogonalLPath(
+  isSourceHorizontal: boolean,
+  actualSourceX: number,
+  actualSourceY: number,
+  actualTargetX: number,
+  actualTargetY: number,
+  centerX: number,
+  centerY: number,
+) {
+  const tip = { x: actualTargetX, y: actualTargetY };
+  const lastStart = isSourceHorizontal
+    ? { x: centerX, y: actualTargetY }
+    : { x: actualTargetX, y: centerY };
+  const lineEnd = shortenSegmentEnd(lastStart, tip, FINE_REACTION_ARROW_LENGTH);
+  let edgePath: string;
+  let segments: PathSegment[];
+  if (isSourceHorizontal) {
+    edgePath = `M ${actualSourceX},${actualSourceY} L ${centerX},${actualSourceY} L ${centerX},${actualTargetY} L ${lineEnd.x},${lineEnd.y}`;
+    segments = [
+      { start: { x: actualSourceX, y: actualSourceY }, end: { x: centerX, y: actualSourceY }, isHorizontal: true, canDrag: false },
+      { start: { x: centerX, y: actualSourceY }, end: { x: centerX, y: actualTargetY }, isHorizontal: false, canDrag: true },
+      { start: { x: lastStart.x, y: lastStart.y }, end: lineEnd, isHorizontal: true, canDrag: false },
+    ];
+  } else {
+    edgePath = `M ${actualSourceX},${actualSourceY} L ${actualSourceX},${centerY} L ${actualTargetX},${centerY} L ${lineEnd.x},${lineEnd.y}`;
+    segments = [
+      { start: { x: actualSourceX, y: actualSourceY }, end: { x: actualSourceX, y: centerY }, isHorizontal: false, canDrag: false },
+      { start: { x: actualSourceX, y: centerY }, end: { x: actualTargetX, y: centerY }, isHorizontal: true, canDrag: true },
+      { start: { x: lastStart.x, y: lastStart.y }, end: lineEnd, isHorizontal: false, canDrag: false },
+    ];
+  }
+  return {
+    edgePath,
+    labelX: centerX,
+    labelY: centerY,
+    arrowX: tip.x,
+    arrowY: tip.y,
+    arrowAngle: reactionArrowAngleDeg(lastStart, tip),
+    controlPoint: { x: centerX, y: centerY },
+    segments,
+    overlayArrow: false,
+    routing: 'orthogonal' as const,
+  };
+}
+
+function computeOrthogonalPath(
+  live: ReactionLiveState,
+  data: ReactionRelationshipData | undefined,
+  tempControlPoint: Point | null,
+  source: Point,
+  target: Point,
+  sourcePosition: Position,
+) {
+  const routedPoints = orthogonalDragPoints(live, tempControlPoint) ?? storedWaypoints(data);
+  if (routedPoints && routedPoints.length > 1) return buildOrthogonalDraw(routedPoints);
+  const centerX = tempControlPoint?.x ?? data?.customControlPoint?.x ?? (source.x + target.x) / 2;
+  const centerY = tempControlPoint?.y ?? data?.customControlPoint?.y ?? (source.y + target.y) / 2;
+  return orthogonalLPath(
+    sourcePosition === Position.Right || sourcePosition === Position.Left,
+    source.x,
+    source.y,
+    target.x,
+    target.y,
+    centerX,
+    centerY,
+  );
+}
+
+function computeStraightPath(
+  actualSourceX: number,
+  actualSourceY: number,
+  actualTargetX: number,
+  actualTargetY: number,
+) {
+  const tip = { x: actualTargetX, y: actualTargetY };
+  const start = { x: actualSourceX, y: actualSourceY };
+  const lineEnd = shortenSegmentEnd(start, tip, FINE_REACTION_ARROW_LENGTH);
+  return {
+    edgePath: `M ${actualSourceX},${actualSourceY} L ${lineEnd.x},${lineEnd.y}`,
+    labelX: (actualSourceX + actualTargetX) / 2,
+    labelY: (actualSourceY + actualTargetY) / 2,
+    arrowX: tip.x,
+    arrowY: tip.y,
+    arrowAngle: reactionArrowAngleDeg(start, tip),
+    controlPoint: null,
+    segments: [] as PathSegment[],
+    overlayArrow: false,
+    routing: 'straight' as const,
+  };
+}
+
+function computeReactionPathData(options: {
+  isFineGranular: boolean;
+  live: ReactionLiveState;
+  sourceHandle: string | null | undefined;
+  targetHandle: string | null | undefined;
+  data: ReactionRelationshipData | undefined;
+  actualSourceX: number;
+  actualSourceY: number;
+  actualTargetX: number;
+  actualTargetY: number;
+  tempControlPoint: Point | null;
+  sourcePosition: Position;
+}) {
+  if (options.isFineGranular) {
+    return computeFineGranularPath(
+      options.live,
+      options.sourceHandle,
+      options.targetHandle,
+      options.data,
+      options.tempControlPoint,
+    );
+  }
+  if (options.data?.routingStyle === 'orthogonal') {
+    return computeOrthogonalPath(
+      options.live,
+      options.data,
+      options.tempControlPoint,
+      { x: options.actualSourceX, y: options.actualSourceY },
+      { x: options.actualTargetX, y: options.actualTargetY },
+      options.sourcePosition,
+    );
+  }
+  return computeStraightPath(
+    options.actualSourceX,
+    options.actualSourceY,
+    options.actualTargetX,
+    options.actualTargetY,
+  );
+}
+
+function calculateParallelOffset(
+  parallelCount: number,
+  parallelIndex: number,
+  isVertical: boolean,
+): { offsetX: number; offsetY: number } {
+  if (parallelCount <= 1) return { offsetX: 0, offsetY: 0 };
+  const offset = (parallelIndex - (parallelCount - 1) / 2) * EDGE_SPACING;
+  if (isVertical) return { offsetX: 0, offsetY: offset };
+  return { offsetX: offset, offsetY: 0 };
+}
+
+function stateBasedColor(isHighlighted: boolean, isHovered: boolean, defaultColor: string): string {
+  if (isHighlighted) return '#ef4444';
+  if (isHovered) return '#f87171';
+  return defaultColor;
+}
+
+function strokeWidthForState(isHighlighted: boolean, isHovered: boolean, edgeWidth: string | number): string {
+  const baseWidth = Number(edgeWidth);
+  if (isHighlighted) return `${baseWidth + 2}px`;
+  if (isHovered) return `${baseWidth + 1}px`;
+  return `${baseWidth}px`;
 }
 
 export function ReactionRelationship({
@@ -51,40 +508,26 @@ export function ReactionRelationship({
   const [draggedSegmentIndex, setDraggedSegmentIndex] = useState<number | null>(null);
   const [tempControlPoint, setTempControlPoint] = useState<{ x: number; y: number } | null>(null);
 
-  // Subscribe to node selection changes using useStore
-  // This ensures the edge re-renders when any node's selection state changes
-  const nodeSelectionState = useStore((store) => {
-    const nodes = Array.from(store.nodeInternals.values());
-    const sourceNode = nodes.find(n => n.id === source);
-    const targetNode = nodes.find(n => n.id === target);
-    
-    return {
-      isSourceSelected: sourceNode?.selected || false,
-      isTargetSelected: targetNode?.selected || false
-    };
-  });
-  
-  const { isSourceSelected, isTargetSelected } = nodeSelectionState;
+  const isFineGranular = data?.fineGranular === true;
+  const sourceHandle = data?.sourceHandleId;
+  const targetHandle = data?.targetHandleId;
+
+  const live = useStore((store) =>
+    selectReactionLiveState(
+      store,
+      source,
+      target,
+      { x: sourceX, y: sourceY },
+      { x: targetX, y: targetY },
+      id,
+    ),
+  );
+
+  const { isSourceSelected, isTargetSelected } = live;
   const isNodeSelected = isSourceSelected || isTargetSelected;
   
   // Edge should be highlighted if either the edge itself is selected OR any connected node is selected
   const isHighlighted = selected || isNodeSelected;
-
-  const calculateParallelOffset = (
-    parallelCount: number,
-    parallelIndex: number,
-    isVertical: boolean
-  ): { offsetX: number; offsetY: number } => {
-    if (parallelCount <= 1) return { offsetX: 0, offsetY: 0 };
-    
-    const centerOffset = (parallelCount - 1) / 2;
-    const indexOffset = parallelIndex - centerOffset;
-    const offset = indexOffset * EDGE_SPACING;
-    
-    return isVertical 
-      ? { offsetX: 0, offsetY: offset }
-      : { offsetX: offset, offsetY: 0 };
-  };
 
   const sourceOffset = calculateParallelOffset(
     data?.sourceParallelCount ?? 1,
@@ -109,98 +552,37 @@ export function ReactionRelationship({
     const node = reactFlowInstance.getNode(nodeId);
     if (!node) return null;
 
-    const { width, height } = NODE_DIMENSIONS;
-    const handles = {
-      top: { x: node.position.x + width / 2, y: node.position.y },
-      bottom: { x: node.position.x + width / 2, y: node.position.y + height },
-      left: { x: node.position.x, y: node.position.y + height / 2 },
-      right: { x: node.position.x + width, y: node.position.y + height / 2 },
-    };
-
-    let closestHandle: HandlePosition = 'right';
-    let minDistance = Infinity;
-
-    (Object.keys(handles) as HandlePosition[]).forEach(handle => {
-      const handlePos = handles[handle];
-      const distance = Math.hypot(point.x - handlePos.x, point.y - handlePos.y);
-      if (distance < minDistance) {
-        minDistance = distance;
-        closestHandle = handle;
-      }
-    });
-
-    return closestHandle;
+    const box = nodeWorldRect(node) ?? ecoreFileRect(node);
+    return pickSideFromPoint(box, point);
   }, [reactFlowInstance]);
 
-  // Memoize path calculations
-  const pathData = useMemo(() => {
-    const centerX = tempControlPoint?.x ?? data?.customControlPoint?.x ?? (actualSourceX + actualTargetX) / 2;
-    const centerY = tempControlPoint?.y ?? data?.customControlPoint?.y ?? (actualSourceY + actualTargetY) / 2;
-    const dx = actualTargetX - actualSourceX;
-    const dy = actualTargetY - actualSourceY;
-
-    // Check if nodes are well-aligned for straight line
-    const isAlignedHorizontally = Math.abs(dy) < 30; // Within 30px vertically
-    const isAlignedVertically = Math.abs(dx) < 30; // Within 30px horizontally
-    const useStraightLine = isAlignedHorizontally || isAlignedVertically;
-
-    if (data?.routingStyle === 'orthogonal' && !useStraightLine) {
-      const isSourceHorizontal = sourcePosition === Position.Right || sourcePosition === Position.Left;
-
-      const edgePath = isSourceHorizontal
-        ? `M ${actualSourceX},${actualSourceY} L ${centerX},${actualSourceY} L ${centerX},${actualTargetY} L ${actualTargetX},${actualTargetY}`
-        : `M ${actualSourceX},${actualSourceY} L ${actualSourceX},${centerY} L ${actualTargetX},${centerY} L ${actualTargetX},${actualTargetY}`;
-
-      const segments: PathSegment[] = isSourceHorizontal
-        ? [
-            { start: { x: actualSourceX, y: actualSourceY }, end: { x: centerX, y: actualSourceY }, isHorizontal: true, canDrag: false },
-            { start: { x: centerX, y: actualSourceY }, end: { x: centerX, y: actualTargetY }, isHorizontal: false, canDrag: true },
-            { start: { x: centerX, y: actualTargetY }, end: { x: actualTargetX, y: actualTargetY }, isHorizontal: true, canDrag: false }
-          ]
-        : [
-            { start: { x: actualSourceX, y: actualSourceY }, end: { x: actualSourceX, y: centerY }, isHorizontal: false, canDrag: false },
-            { start: { x: actualSourceX, y: centerY }, end: { x: actualTargetX, y: centerY }, isHorizontal: true, canDrag: true },
-            { start: { x: actualTargetX, y: centerY }, end: { x: actualTargetX, y: actualTargetY }, isHorizontal: false, canDrag: false }
-          ];
-
-      const arrowAngles = { [Position.Top]: 90, [Position.Bottom]: -90, [Position.Left]: 0, [Position.Right]: 180 };
-
-      return {
-        edgePath,
-        labelX: centerX,
-        labelY: centerY,
-        arrowX: actualTargetX,
-        arrowY: actualTargetY,
-        arrowAngle: arrowAngles[targetPosition] ?? 0,
-        controlPoint: { x: centerX, y: centerY },
-        segments,
-      };
-    }
-
-    // Use straight line when aligned or routing style is 'curved'
-    return {
-      edgePath: `M ${actualSourceX},${actualSourceY} L ${actualTargetX},${actualTargetY}`,
-      labelX: (actualSourceX + actualTargetX) / 2,
-      labelY: (actualSourceY + actualTargetY) / 2,
-      arrowX: actualTargetX,
-      arrowY: actualTargetY,
-      arrowAngle: Math.atan2(dy, dx) * (180 / Math.PI),
-      controlPoint: null,
-      segments: [],
-    };
-  }, [
+  const pathData = useMemo(() => computeReactionPathData({
+    isFineGranular,
+    live,
+    sourceHandle,
+    targetHandle,
+    data,
     actualSourceX,
     actualSourceY,
     actualTargetX,
     actualTargetY,
-    data?.routingStyle,
-    data?.customControlPoint,
     tempControlPoint,
     sourcePosition,
-    targetPosition,
+  }), [
+    isFineGranular,
+    live,
+    sourceHandle,
+    targetHandle,
+    data,
+    actualSourceX,
+    actualSourceY,
+    actualTargetX,
+    actualTargetY,
+    tempControlPoint,
+    sourcePosition,
   ]);
 
-  const { edgePath, labelX, labelY, arrowX, arrowY, arrowAngle, controlPoint, segments } = pathData;
+  const { edgePath, labelX, labelY, arrowX, arrowY, arrowAngle, controlPoint, segments, overlayArrow, routing } = pathData;
 
   const handleSegmentDragStart = useCallback((e: React.PointerEvent, segmentIndex: number) => {
     if (data?.readOnly) return;
@@ -295,27 +677,12 @@ export function ReactionRelationship({
   };
   const edgeColor = style?.stroke || '#3b82f6';
   const edgeWidth = style?.strokeWidth || 2;
-
-  // Pre-compute style values to reduce cognitive complexity
-  const getStateBasedColor = (defaultColor: string): string => {
-    if (isHighlighted) return '#ef4444';
-    if (isHovered) return '#f87171';
-    return defaultColor;
-  };
-
-  const getMainStrokeWidth = (): string => {
-    const baseWidth = Number(edgeWidth);
-    if (isHighlighted) return `${baseWidth + 2}px`;
-    if (isHovered) return `${baseWidth + 1}px`;
-    return `${baseWidth}px`;
-  };
-
-  const activeColor = getStateBasedColor(edgeColor);
-  const labelColor = getStateBasedColor('#1f2937');
-  const codeIndicatorColor = getStateBasedColor('#0e639c');
+  const activeColor = stateBasedColor(isHighlighted, isHovered, edgeColor);
+  const labelColor = stateBasedColor(isHighlighted, isHovered, '#1f2937');
+  const codeIndicatorColor = stateBasedColor(isHighlighted, isHovered, '#0e639c');
   const isActive = isHighlighted || isHovered;
   const underlayWidth = isActive ? 8 : 7;
-  const mainStrokeWidth = getMainStrokeWidth();
+  const mainStrokeWidth = strokeWidthForState(isHighlighted, isHovered, edgeWidth);
   const controlPointFill = isDraggingSegment ? '#3b82f6' : '#ffffff';
   const showOrthogonalControls = selected && data?.routingStyle === 'orthogonal' && !data?.readOnly;
 
@@ -356,6 +723,8 @@ export function ReactionRelationship({
 
       <path
         id={id}
+        data-routing={routing}
+        className="reaction-line"
         style={{
           strokeWidth: mainStrokeWidth,
           stroke: activeColor,
@@ -372,6 +741,7 @@ export function ReactionRelationship({
         onMouseLeave={handleMouseLeave}
       />
 
+      {!overlayArrow && (
       <g transform={`translate(${arrowX}, ${arrowY}) rotate(${arrowAngle})`}>
         <polygon
           points="-10,-6 0,0 -10,6"
@@ -388,6 +758,36 @@ export function ReactionRelationship({
           onMouseLeave={handleMouseLeave}
         />
       </g>
+      )}
+
+      {overlayArrow && (
+        <EdgeLabelRenderer>
+          <div
+            className="nodrag nopan"
+            data-testid={`${id}-arrow`}
+            style={{
+              position: 'absolute',
+              left: 0,
+              top: 0,
+              transform: `translate(${arrowX}px, ${arrowY}px) rotate(${arrowAngle}deg)`,
+              transformOrigin: '0 0',
+              pointerEvents: 'none',
+              zIndex: 1001,
+              lineHeight: 0,
+            }}
+          >
+            <svg
+              width="1"
+              height="1"
+              overflow="visible"
+              aria-hidden
+              style={{ display: 'block', overflow: 'visible' }}
+            >
+              <polygon points="-10,-5 0,0 -10,5" fill={activeColor} stroke={activeColor} strokeWidth="1" />
+            </svg>
+          </div>
+        </EdgeLabelRenderer>
+      )}
 
       {data?.label && (
         <text

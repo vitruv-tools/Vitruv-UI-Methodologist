@@ -47,19 +47,20 @@ export const UnsavedTabCloseDialog: React.FC<UnsavedTabCloseDialogProps> = ({
           aria-modal="true"
           style={{
             pointerEvents: 'auto',
-            background: '#ffffff',
+            background: 'var(--v-surface)',
             borderRadius: 12,
-            boxShadow: '0 20px 50px rgba(0,0,0,0.2)',
+            boxShadow: 'var(--v-card-shadow)',
             width: 400,
             maxWidth: '92vw',
             padding: '24px',
             borderTop: '4px solid #f59e0b',
+            color: 'var(--v-text)',
           }}
         >
-          <h3 style={{ margin: '0 0 8px', fontSize: 17, fontWeight: 700, color: '#111827' }}>
+          <h3 style={{ margin: '0 0 8px', fontSize: 17, fontWeight: 700, color: 'var(--v-text)' }}>
             Unsaved changes
           </h3>
-          <p style={{ margin: '0 0 20px', fontSize: 14, color: '#6b7280', lineHeight: 1.55 }}>
+          <p style={{ margin: '0 0 20px', fontSize: 14, color: 'var(--v-text-muted)', lineHeight: 1.55 }}>
             {projectName
               ? `"${projectName}" has unsaved changes. Save before closing, or close without saving.`
               : 'This project has unsaved changes. Save before closing, or close without saving.'}
@@ -89,9 +90,9 @@ export const UnsavedTabCloseDialog: React.FC<UnsavedTabCloseDialogProps> = ({
               style={{
                 padding: '10px 14px',
                 borderRadius: 8,
-                border: '1px solid #fecaca',
-                background: '#fff',
-                color: '#dc2626',
+                border: '1px solid var(--v-danger-border)',
+                background: 'var(--v-surface)',
+                color: 'var(--v-danger-text)',
                 fontWeight: 600,
                 fontSize: 14,
                 cursor: saving ? 'not-allowed' : 'pointer',
@@ -106,9 +107,9 @@ export const UnsavedTabCloseDialog: React.FC<UnsavedTabCloseDialogProps> = ({
               style={{
                 padding: '10px 14px',
                 borderRadius: 8,
-                border: '1px solid #e5e7eb',
-                background: '#fff',
-                color: '#374151',
+                border: '1px solid var(--v-border)',
+                background: 'var(--v-surface)',
+                color: 'var(--v-text-secondary)',
                 fontWeight: 600,
                 fontSize: 14,
                 cursor: saving ? 'not-allowed' : 'pointer',

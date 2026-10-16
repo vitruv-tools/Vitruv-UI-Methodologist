@@ -34,6 +34,10 @@ const FolderIcon = () => (
 
 // ── Helpers ────────────────────────────────────────────────────────────────
 
+const ACTIONS_COLUMN_INDEX = 3;
+const ACTIVE_ACTIONS_COLUMN_WIDTH = 120;
+const DELETED_ACTIONS_COLUMN_WIDTH = 260;
+
 const formatDate = (iso: string) => {
   if (!iso) return '--';
   return new Date(iso).toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' });
@@ -87,11 +91,12 @@ interface ProjectRowProps {
   onDetails: () => void;
   onDelete: () => void;
   onRecover: () => void;
+  onDeletePermanently: () => void;
   onOpen?: () => void;
 }
 
 const ProjectRow: React.FC<ProjectRowProps> = ({
-  item, showDeleted, isUnread = false, scrollRootRef, onDetails, onDelete, onRecover, onOpen,
+  item, showDeleted, isUnread = false, scrollRootRef, onDetails, onDelete, onRecover, onDeletePermanently, onOpen,
 }) => {
   const [hovered, setHovered] = useState(false);
   const role = resolveVsumAccessRole(item.role, item.roleEn) ?? item.role;
@@ -131,7 +136,7 @@ const ProjectRow: React.FC<ProjectRowProps> = ({
       onMouseEnter={handleMouseEnter}
       onMouseLeave={handleMouseLeave}
       onDoubleClick={showDeleted ? undefined : openVsum}
-      style={{ borderBottom: '1px solid #f9fafb', background: hovered ? '#fafafa' : '#fff', transition: 'background 0.1s', cursor: showDeleted ? 'default' : 'pointer' }}
+      style={{ borderBottom: '1px solid var(--v-border-subtle)', background: hovered ? 'var(--v-surface-hover)' : 'var(--v-surface)', transition: 'background 0.1s', cursor: showDeleted ? 'default' : 'pointer' }}
     >
       {/* Name */}
       <td style={{ padding: '13px 16px' }}>
@@ -148,7 +153,7 @@ const ProjectRow: React.FC<ProjectRowProps> = ({
               }}
             />
           )}
-          <span style={{ fontSize: 14, fontWeight: 500, color: '#111827' }}>{item.name}</span>
+          <span style={{ fontSize: 14, fontWeight: 500, color: 'var(--v-text)' }}>{item.name}</span>
           {role && (
             <span style={{
               padding: '2px 7px', borderRadius: 5, fontSize: 11, fontWeight: 700,
@@ -162,7 +167,7 @@ const ProjectRow: React.FC<ProjectRowProps> = ({
       </td>
 
       {/* Date */}
-      <td style={{ padding: '13px 16px', fontSize: 14, color: '#6b7280', whiteSpace: 'nowrap' }}>
+      <td style={{ padding: '13px 16px', fontSize: 14, color: 'var(--v-text-muted)', whiteSpace: 'nowrap' }}>
         {showDeleted
           ? formatDate(item.removedAt || item.updatedAt)
           : formatDate(item.createdAt)}
@@ -182,14 +187,24 @@ const ProjectRow: React.FC<ProjectRowProps> = ({
       {/* Actions */}
       <td style={{ padding: '13px 16px' }} onClick={e => e.stopPropagation()}>
         {showDeleted ? (
-          <button type="button"
-            onClick={onRecover}
-            style={{ padding: '6px 14px', border: 'none', borderRadius: 7, background: '#10b981', color: '#fff', fontSize: 13, fontWeight: 600, cursor: 'pointer', transition: 'background 0.15s' }}
-            onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.background = '#059669'; }}
-            onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.background = '#10b981'; }}
-          >
-            Restore
-          </button>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+            <button type="button"
+              onClick={onRecover}
+              style={{ padding: '6px 14px', border: 'none', borderRadius: 7, background: '#10b981', color: '#fff', fontSize: 13, fontWeight: 600, cursor: 'pointer', transition: 'background 0.15s' }}
+              onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.background = '#059669'; }}
+              onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.background = '#10b981'; }}
+            >
+              Restore
+            </button>
+            <button type="button"
+              onClick={onDeletePermanently}
+              style={{ padding: '6px 14px', border: '1px solid #fca5a5', borderRadius: 7, background: 'transparent', color: '#dc2626', fontSize: 13, fontWeight: 600, cursor: 'pointer', transition: 'background 0.15s' }}
+              onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.background = 'var(--v-danger-bg)'; }}
+              onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.background = 'transparent'; }}
+            >
+              Delete permanently
+            </button>
+          </div>
         ) : (
           <PortalRowActionsMenu
             scrollRootRef={scrollRootRef}
@@ -238,6 +253,9 @@ export const ProjectsView: React.FC<ProjectsViewProps> = ({
   const [deleteError, setDeleteError] = useState('');
   const [recoverConfirmId, setRecoverConfirmId] = useState<number | null>(null);
   const [recoveringId, setRecoveringId] = useState<number | null>(null);
+  const [permanentDeleteId, setPermanentDeleteId] = useState<number | null>(null);
+  const [permanentDeleteError, setPermanentDeleteError] = useState('');
+  const [permanentDeleting, setPermanentDeleting] = useState(false);
 
   const tableBodyRef = useRef<HTMLDivElement>(null);
   const rafRef = useRef<number | null>(null);
@@ -323,7 +341,7 @@ export const ProjectsView: React.FC<ProjectsViewProps> = ({
     }
   }, [search, projectView]);
 
-  useEffect(() => { loadFirstPage(); }, [loadFirstPage]);
+  useEffect(() => { void loadFirstPage(); }, [loadFirstPage]);
 
   useEffect(() => {
     const onRefresh = () => { void syncListFromApi(); };
@@ -345,7 +363,7 @@ export const ProjectsView: React.FC<ProjectsViewProps> = ({
       if (rafRef.current) cancelAnimationFrame(rafRef.current);
       rafRef.current = requestAnimationFrame(() => {
         if (loading || !hasMore) return;
-        if (el.scrollHeight - el.scrollTop - el.clientHeight < 200) loadNextPage();
+        if (el.scrollHeight - el.scrollTop - el.clientHeight < 200) void loadNextPage();
       });
     };
     el.addEventListener('scroll', onScroll);
@@ -360,7 +378,7 @@ export const ProjectsView: React.FC<ProjectsViewProps> = ({
       await apiService.deleteVsum(deletingId);
       setDeletingId(null);
       setDeleteError('');
-      loadFirstPage();
+      void loadFirstPage();
     } catch (e: any) {
       setDeleteError(e?.message || 'Failed to delete');
     }
@@ -373,11 +391,30 @@ export const ProjectsView: React.FC<ProjectsViewProps> = ({
     try {
       await apiService.recoverVsum(recoverConfirmId);
       globalThis.dispatchEvent(new CustomEvent('vitruv.refreshVsums'));
-      loadFirstPage();
+      void loadFirstPage();
     } catch (e: any) {
       setError(e?.message || 'Failed to restore');
     } finally {
       setRecoveringId(null);
+    }
+  };
+
+  const closePermanentDeleteDialog = () => {
+    setPermanentDeleteId(null);
+    setPermanentDeleteError('');
+  };
+
+  const handleDeletePermanently = async () => {
+    if (!permanentDeleteId || permanentDeleting) return;
+    setPermanentDeleting(true);
+    try {
+      await apiService.deleteVsumPermanently(permanentDeleteId);
+      closePermanentDeleteDialog();
+      void loadFirstPage();
+    } catch (e: any) {
+      setPermanentDeleteError(e?.message || 'Failed to delete permanently');
+    } finally {
+      setPermanentDeleting(false);
     }
   };
 
@@ -396,6 +433,8 @@ export const ProjectsView: React.FC<ProjectsViewProps> = ({
     });
 
   const showDeleted = projectView === 'deleted';
+  // The trash shows two buttons (Restore, Delete permanently), so its actions column is wider.
+  const actionsColumnWidth = showDeleted ? DELETED_ACTIONS_COLUMN_WIDTH : ACTIVE_ACTIONS_COLUMN_WIDTH;
   const emptyTitle = emptyProjectListTitle(projectView);
   const emptyHint = emptyProjectListHint(projectView);
 
@@ -411,28 +450,28 @@ export const ProjectsView: React.FC<ProjectsViewProps> = ({
           overflow-x: hidden;
           scrollbar-gutter: stable;
           scrollbar-width: thin;
-          scrollbar-color: #cbd5e1 #f1f5f9;
+          scrollbar-color: var(--v-scrollbar-thumb) var(--v-scrollbar-track);
         }
         .projects-table-scroll::-webkit-scrollbar {
           width: 10px;
         }
         .projects-table-scroll::-webkit-scrollbar-track {
-          background: #f1f5f9;
+          background: var(--v-scrollbar-track);
           border-radius: 10px;
         }
         .projects-table-scroll::-webkit-scrollbar-thumb {
-          background: #cbd5e1;
+          background: var(--v-scrollbar-thumb);
           border-radius: 10px;
-          border: 2px solid #f1f5f9;
+          border: 2px solid var(--v-scrollbar-track);
         }
         .projects-table-scroll::-webkit-scrollbar-thumb:hover {
-          background: #94a3b8;
+          background: var(--v-scrollbar-thumb-hover);
         }
       `}</style>
 
       {/* Page header */}
       <div style={{ padding: '32px 40px 0', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexShrink: 0 }}>
-        <h1 style={{ margin: 0, fontSize: 26, fontWeight: 700, color: '#111827', letterSpacing: '-0.02em' }}>Dashboard / Projects</h1>
+        <h1 style={{ margin: 0, fontSize: 26, fontWeight: 700, color: 'var(--v-text)', letterSpacing: '-0.02em' }}>Dashboard / Projects</h1>
         <button type="button"
           onClick={() => setShowCreate(true)}
           disabled={projectView === 'shared' || projectView === 'deleted'}
@@ -461,16 +500,16 @@ export const ProjectsView: React.FC<ProjectsViewProps> = ({
           <input
             value={search}
             onChange={e => setSearch(e.target.value)}
-            onKeyDown={e => { if (e.key === 'Enter') loadFirstPage(); }}
+            onKeyDown={e => { if (e.key === 'Enter') void loadFirstPage(); }}
             placeholder="Search projects..."
-            style={{ width: '100%', padding: '8px 12px 8px 34px', border: '1px solid #e5e7eb', borderRadius: 8, fontSize: 13, color: '#374151', outline: 'none', boxSizing: 'border-box', background: '#fff', transition: 'border-color 0.15s' }}
+            style={{ width: '100%', padding: '8px 12px 8px 34px', border: '1px solid var(--v-border)', borderRadius: 8, fontSize: 13, color: 'var(--v-text-secondary)', outline: 'none', boxSizing: 'border-box', background: 'var(--v-input-bg)', transition: 'border-color 0.15s' }}
             onFocus={e => { (e.target as HTMLInputElement).style.borderColor = '#049484'; }}
-            onBlur={e => { (e.target as HTMLInputElement).style.borderColor = '#e5e7eb'; }}
+            onBlur={e => { (e.target as HTMLInputElement).style.borderColor = 'var(--v-border)'; }}
           />
         </div>
 
         {/* Active / Deleted tabs */}
-        <div style={{ display: 'flex', gap: 0, border: '1px solid #e5e7eb', borderRadius: 8, overflow: 'hidden', flexShrink: 0, flexWrap: 'wrap' }}>
+        <div style={{ display: 'flex', gap: 0, border: '1px solid var(--v-border)', borderRadius: 8, overflow: 'hidden', flexShrink: 0, flexWrap: 'wrap' }}>
           {([
             { key: 'mine' as const, label: 'My projects' },
             { key: 'shared' as const, label: 'Shared with me' },
@@ -481,8 +520,8 @@ export const ProjectsView: React.FC<ProjectsViewProps> = ({
               onClick={() => setProjectView(key)}
               style={{
                 padding: '7px 14px', border: 'none', fontSize: 13, fontWeight: projectView === key ? 600 : 400,
-                background: projectView === key ? '#f0faf8' : '#fff',
-                color: projectView === key ? '#049484' : '#6b7280',
+                background: projectView === key ? 'var(--v-uml-primary-soft)' : 'var(--v-surface)',
+                color: projectView === key ? '#049484' : 'var(--v-text-muted)',
                 cursor: 'pointer', transition: 'all 0.15s', whiteSpace: 'nowrap',
                 display: 'inline-flex',
                 alignItems: 'center',
@@ -537,12 +576,12 @@ export const ProjectsView: React.FC<ProjectsViewProps> = ({
         className="projects-table-scroll"
         style={{ flex: 1, minHeight: 0, padding: '16px 40px 24px' }}
       >
-        <div style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: 12, overflow: 'hidden', boxShadow: '0 1px 4px rgba(0,0,0,0.04)' }}>
+        <div style={{ background: 'var(--v-surface)', border: '1px solid var(--v-border)', borderRadius: 12, overflow: 'hidden', boxShadow: '0 1px 4px rgba(0,0,0,0.04)' }}>
           <table style={{ width: '100%', borderCollapse: 'collapse' }}>
             <thead>
-              <tr style={{ borderBottom: '1px solid #f3f4f6' }}>
+              <tr style={{ borderBottom: '1px solid var(--v-border-subtle)' }}>
                 {['Name', showDeleted ? 'Deleted on' : 'Created on', 'Status', 'Actions'].map((col, i) => (
-                  <th key={col} style={{ padding: '12px 16px', textAlign: 'left', fontSize: 12, fontWeight: 600, color: '#6b7280', letterSpacing: '0.04em', textTransform: 'uppercase', background: '#fafafa', borderBottom: '1px solid #f3f4f6', whiteSpace: 'nowrap', width: i === 3 ? 120 : undefined }}>
+                  <th key={col} style={{ padding: '12px 16px', textAlign: 'left', fontSize: 12, fontWeight: 600, color: 'var(--v-text-muted)', letterSpacing: '0.04em', textTransform: 'uppercase', background: 'var(--v-table-header)', borderBottom: '1px solid var(--v-border-subtle)', whiteSpace: 'nowrap', width: i === ACTIONS_COLUMN_INDEX ? actionsColumnWidth : undefined }}>
                     {col}
                   </th>
                 ))}
@@ -552,9 +591,9 @@ export const ProjectsView: React.FC<ProjectsViewProps> = ({
               {sorted.length === 0 && !loading ? (
                 <tr>
                   <td colSpan={4} style={{ padding: '56px 16px' }}>
-                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10, color: '#9ca3af' }}>
+                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10, color: 'var(--v-text-faint)' }}>
                       <FolderIcon />
-                      <div style={{ fontSize: 15, fontWeight: 600, color: '#374151' }}>
+                      <div style={{ fontSize: 15, fontWeight: 600, color: 'var(--v-text-secondary)' }}>
                         {emptyTitle}
                       </div>
                       <div style={{ fontSize: 13 }}>
@@ -574,6 +613,7 @@ export const ProjectsView: React.FC<ProjectsViewProps> = ({
                     onDetails={() => setDetailsId(item.id)}
                     onDelete={() => setDeletingId(item.id)}
                     onRecover={() => setRecoverConfirmId(item.id)}
+                    onDeletePermanently={() => setPermanentDeleteId(item.id)}
                     onOpen={() => {
                       if (isSharedProject(item)) onSharedProjectOpened?.(item.id);
                     }}
@@ -598,7 +638,7 @@ export const ProjectsView: React.FC<ProjectsViewProps> = ({
       <CreateVsumModal
         isOpen={showCreate}
         onClose={() => setShowCreate(false)}
-        onSuccess={() => { setShowCreate(false); loadFirstPage(); }}
+        onSuccess={() => { setShowCreate(false); void loadFirstPage(); }}
       />
       <VsumDetailsModal
         isOpen={detailsId !== null}
@@ -625,6 +665,21 @@ export const ProjectsView: React.FC<ProjectsViewProps> = ({
         variant="success"
         onConfirm={handleRecover}
         onCancel={() => setRecoverConfirmId(null)}
+      />
+      <ConfirmDialog
+        isOpen={permanentDeleteId !== null}
+        title="Delete permanently"
+        message={
+          permanentDeleteError
+          || (permanentDeleting
+            ? 'Deleting...'
+            : 'Do you really want to delete this project permanently? This cannot be undone.')
+        }
+        confirmText="Delete permanently"
+        cancelText="Cancel"
+        variant="danger"
+        onConfirm={handleDeletePermanently}
+        onCancel={closePermanentDeleteDialog}
       />
     </div>
   );

@@ -1,10 +1,12 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import ReactDOM from 'react-dom';
+import { useLocation, useMatch, useNavigate } from 'react-router-dom';
 import { apiService } from '../../services/api';
 import { CreateModelModal } from './CreateModelModal';
 import { KeywordTagsInput } from './KeywordTagsInput';
-import { UMLDiagram, UMLDiagramHandle } from '../canvas/UMLDiagram';
+import { UMLDiagram, UMLDiagramHandle, UmlDiagramSaveContext } from '../canvas/UMLDiagram';
 import { FloatingUMLPanel } from '../canvas/FloatingUMLPanel';
+import { MODEL_LIBRARY_PATH, modelLibraryModelPath, modelLibraryUmlPath } from '../../constants/routes';
 import { MetaModelFileDownloads } from './MetaModelFileDownloads';
 import { useModalBodyLock, modalBackdropStyle } from './modalUtils';
 import {
@@ -17,6 +19,7 @@ import {
   METAMODEL_PREVIEW_LAYOUT_SCOPE,
   metaModelPreviewLayoutFileName,
 } from '../../utils/metaModelPreview';
+import { displayMetaModelVersion } from '../../utils/metaModelVersion';
 import {
   appendMetaModelSearchToken,
   buildMetaModelFindFilters,
@@ -29,6 +32,8 @@ import {
   extractCreatePayload,
   fetchLibraryMetaModels,
   fetchLibraryMetaModelsAfterCreate,
+  describeProjectUsage,
+  formatProjectUsageLabel,
   isModelReferencedByProjects,
   LibraryMetaModel,
 } from '../../utils/metaModelList';
@@ -37,9 +42,18 @@ import { ConfirmDialog } from './ConfirmDialog';
 
 interface ModelLibraryTableProps {
   onModelOpen?: (model: any) => void;
+  /** Opens the Home view; used by the Vitruvius logo in the full-screen UML editor. */
+  onHome?: () => void;
 }
 
 // ── helpers ────────────────────────────────────────────────────────────────
+
+/** History state of model routes opened from the library, so closing them can simply go back. */
+const OPENED_FROM_LIBRARY_STATE = { openedFromLibrary: true };
+
+function isOpenedFromLibrary(state: unknown): boolean {
+  return (state as { openedFromLibrary?: boolean } | null)?.openedFromLibrary === true;
+}
 
 const formatDate = (iso: string) => {
   if (!iso) return '--';
@@ -66,6 +80,11 @@ interface ModelDetailModalProps {
   ecoreContent?: string;
   /** When true, only render the panel (backdrop is provided by the parent). */
   embedded?: boolean;
+  /** Controls the full-screen UML editor from outside (the Model Library keeps it in the URL). */
+  umlExpanded?: boolean;
+  onUmlExpandedChange?: (expanded: boolean) => void;
+  /** Called by the Vitruvius logo in the full-screen UML editor. Without it the logo is not clickable. */
+  onHome?: () => void;
 }
 
 const FONT = 'ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, sans-serif';
@@ -73,8 +92,8 @@ const DARK = '#0B1720';
 
 const detailInputSt: React.CSSProperties = {
   width: '100%', padding: '9px 12px',
-  border: '1.5px solid #e2e8f0', borderRadius: 8,
-  fontSize: 13, color: '#0f172a', background: '#f8fafc',
+  border: '1.5px solid var(--v-border)', borderRadius: 8,
+  fontSize: 13, color: 'var(--v-text)', background: 'var(--v-input-bg)',
   boxSizing: 'border-box', outline: 'none',
   fontFamily: FONT, transition: 'border-color 0.15s',
 };
@@ -108,16 +127,16 @@ function getDTheme(domain?: string): DomainTheme {
 }
 
 const DFieldLabel: React.FC<{ children: React.ReactNode }> = ({ children }) => (
-  <div style={{ fontSize: 11, fontWeight: 700, color: '#374151', marginBottom: 5, letterSpacing: '0.01em', fontFamily: FONT }}>{children}</div>
+  <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--v-text-secondary)', marginBottom: 5, letterSpacing: '0.01em', fontFamily: FONT }}>{children}</div>
 );
 
-const detailFieldLabelSt: React.CSSProperties = { display: 'block', fontSize: 11, fontWeight: 700, color: '#374151', marginBottom: 5, fontFamily: FONT };
+const detailFieldLabelSt: React.CSSProperties = { display: 'block', fontSize: 11, fontWeight: 700, color: 'var(--v-text-secondary)', marginBottom: 5, fontFamily: FONT };
 
 const DPreviewBtn: React.FC<{ title: string; onClick: () => void; children: React.ReactNode }> = ({ title, onClick, children }) => {
   const [hov, setHov] = React.useState(false);
   return (
     <button type="button" title={title} onClick={onClick} onMouseEnter={() => setHov(true)} onMouseLeave={() => setHov(false)}
-      style={{ width: 24, height: 24, border: '1px solid #e2e8f0', borderRadius: 6, background: hov ? '#f1f5f9' : '#fff', color: hov ? '#0f172a' : '#64748b', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 0.12s' }}>
+      style={{ width: 24, height: 24, border: '1px solid var(--v-border)', borderRadius: 6, background: hov ? 'var(--v-chrome-hover)' : 'var(--v-surface)', color: hov ? 'var(--v-text)' : 'var(--v-text-muted)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 0.12s' }}>
       {children}
     </button>
   );
@@ -125,6 +144,7 @@ const DPreviewBtn: React.FC<{ title: string; onClick: () => void; children: Reac
 
 export const ModelDetailModal: React.FC<ModelDetailModalProps> = ({
   model, onClose, onUpdated, ecoreContent: ecoreContentProp, embedded = false,
+  umlExpanded: umlExpandedProp, onUmlExpandedChange, onHome,
 }) => {
   const [editing, setEditing] = useState(false);
   const [form, setForm] = useState({ name: model.name || '', description: model.description || '', domain: model.domain || '', keywords: model.keyword || [] as string[] });
@@ -132,15 +152,23 @@ export const ModelDetailModal: React.FC<ModelDetailModalProps> = ({
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [ecoreContent, setEcoreContent] = useState<string | null>(ecoreContentProp ?? null);
+  const [ecoreFileId, setEcoreFileId] = useState<number | undefined>(model.ecoreFileId);
   const [fetchingUml, setFetchingUml] = useState(false);
   const [fetchError, setFetchError] = useState(false);
-  const [umlExpanded, setUmlExpanded] = useState(false);
+  const [internalUmlExpanded, setInternalUmlExpanded] = useState(false);
+  const umlExpanded = umlExpandedProp ?? internalUmlExpanded;
+  const setUmlExpanded = onUmlExpandedChange ?? setInternalUmlExpanded;
+  const diagramEditable = !embedded;
   // Local copy of the model used for read-only display — kept in sync with the
   // last successful save so the view reflects edits immediately, without waiting
   // for the parent list to refetch and hand back a new `model` prop.
   const [displayModel, setDisplayModel] = useState(model);
   const diagramRef = useRef<UMLDiagramHandle>(null);
   const theme = getDTheme(displayModel.domain);
+
+  useEffect(() => {
+    setEcoreFileId(model.ecoreFileId);
+  }, [model.ecoreFileId, model.id]);
 
   useEffect(() => {
     if (ecoreContentProp) { setEcoreContent(ecoreContentProp); return; }
@@ -151,6 +179,35 @@ export const ModelDetailModal: React.FC<ModelDetailModalProps> = ({
       .catch(() => setFetchError(true))
       .finally(() => setFetchingUml(false));
   }, [model.ecoreFileId, ecoreContentProp]);
+
+  const umlSaveContext: UmlDiagramSaveContext | undefined = useMemo(() => {
+    if (!diagramEditable || !model.id || !ecoreFileId) return undefined;
+    return {
+      metaModelId: String(model.id),
+      ecoreFileId,
+      modelName: displayModel.name,
+      saveTarget: 'library',
+      metaModelMetadata: {
+        description: displayModel.description || '',
+        domain: displayModel.domain || '',
+        keyword: displayModel.keyword || [],
+      },
+      onSaved: ({ ecoreContent: saved, ecoreFileId: newFileId }) => {
+        setEcoreContent(saved);
+        setEcoreFileId(newFileId);
+        onUpdated();
+      },
+    };
+  }, [
+    diagramEditable,
+    model.id,
+    ecoreFileId,
+    displayModel.name,
+    displayModel.description,
+    displayModel.domain,
+    displayModel.keyword,
+    onUpdated,
+  ]);
 
   const previewLayoutFile = metaModelPreviewLayoutFileName(model.id, model.name);
 
@@ -170,8 +227,7 @@ export const ModelDetailModal: React.FC<ModelDetailModalProps> = ({
     try {
       await apiService.updateMetaModel(String(model.id), {
         name: form.name, description: form.description, domain: form.domain, keyword: form.keywords,
-        ecoreFileId: model.ecoreFileId || 0,
-        genModelFileId: model.genModelFileId || 0,
+        ecoreFileId: ecoreFileId || 0,
       });
       setDisplayModel((prev: any) => ({ ...prev, name: form.name, description: form.description, domain: form.domain, keyword: form.keywords }));
       setSuccess('Saved successfully');
@@ -191,10 +247,10 @@ export const ModelDetailModal: React.FC<ModelDetailModalProps> = ({
         aria-label={`Model Preview: ${displayModel.name}`}
         onClose={onClose}
         onCancel={onClose}
-        style={{ position: 'relative', background: '#fff', borderRadius: 10, width: '80vw', height: '80vh', overflow: 'hidden', display: 'flex', flexDirection: 'column', boxShadow: '0 24px 64px rgba(0,0,0,0.22), 0 4px 16px rgba(0,0,0,0.10)', border: '1px solid #e2e8f0', fontFamily: FONT, pointerEvents: 'auto', margin: 0, padding: 0 }}
+        style={{ position: 'relative', background: 'var(--v-surface)', borderRadius: 10, width: '80vw', height: '80vh', overflow: 'hidden', display: 'flex', flexDirection: 'column', boxShadow: 'var(--v-card-shadow)', border: '1px solid var(--v-border)', fontFamily: FONT, pointerEvents: 'auto', margin: 0, padding: 0, color: 'var(--v-text)' }}
       >
         {/* ── Header ── */}
-        <div style={{ padding: '14px 20px', background: '#ffffff', borderBottom: '1px solid #f1f5f9', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
+        <div style={{ padding: '14px 20px', background: 'var(--v-surface)', borderBottom: '1px solid var(--v-border)', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0, overflow: 'hidden' }}>
             {/* BoxIcon — same as model cards */}
             <svg width="28" height="28" viewBox="0 0 32 32" fill="none" style={{ flexShrink: 0 }}>
@@ -203,21 +259,25 @@ export const ModelDetailModal: React.FC<ModelDetailModalProps> = ({
               <path d="M5 11L27 11" stroke="#049484" strokeWidth="1.3" strokeLinecap="round" />
               <path d="M16 5L5 11L16 17L27 11L16 5Z" stroke="#049484" strokeWidth="1.3" fill="#04948418" strokeLinejoin="round" />
             </svg>
-            <div style={{ fontSize: 16, fontWeight: 700, color: '#0f172a', letterSpacing: '-0.01em', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-              Model Preview: <span style={{ color: '#374151', fontWeight: 600 }}>{displayModel.name}</span>
+            <div style={{ fontSize: 16, fontWeight: 700, color: 'var(--v-text)', letterSpacing: '-0.01em', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+              Model Preview: <span style={{ color: 'var(--v-text-secondary)', fontWeight: 600 }}>{displayModel.name}</span>
             </div>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
             {!editing && (
               <button type="button"
                 onClick={() => {
+                  if (diagramEditable && (ecoreContent || ecoreFileId)) {
+                    setUmlExpanded(true);
+                    return;
+                  }
                   setForm({ name: displayModel.name || '', description: displayModel.description || '', domain: displayModel.domain || '', keywords: displayModel.keyword || [] });
                   setEditing(true);
                 }}
-                title="Edit meta-model"
-                style={{ height: 30, padding: '0 12px', border: '1px solid #e2e8f0', borderRadius: 7, background: '#f8fafc', color: '#374151', fontSize: 12, fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 5, transition: 'all 0.12s', fontFamily: FONT }}
+                title={diagramEditable ? 'Edit meta-model' : 'Edit meta-model details'}
+                style={{ height: 30, padding: '0 12px', border: '1px solid var(--v-border)', borderRadius: 7, background: 'var(--v-surface-muted)', color: 'var(--v-text-secondary)', fontSize: 12, fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 5, transition: 'all 0.12s', fontFamily: FONT }}
                 onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.background = DARK; (e.currentTarget as HTMLButtonElement).style.color = '#fff'; (e.currentTarget as HTMLButtonElement).style.borderColor = DARK; }}
-                onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.background = '#f8fafc'; (e.currentTarget as HTMLButtonElement).style.color = '#374151'; (e.currentTarget as HTMLButtonElement).style.borderColor = '#e2e8f0'; }}
+                onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.background = 'var(--v-surface-muted)'; (e.currentTarget as HTMLButtonElement).style.color = 'var(--v-text-secondary)'; (e.currentTarget as HTMLButtonElement).style.borderColor = 'var(--v-border)'; }}
               >
                 <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                   <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
@@ -228,9 +288,9 @@ export const ModelDetailModal: React.FC<ModelDetailModalProps> = ({
             )}
             <button type="button"
               onClick={onClose}
-              style={{ border: 'none', background: 'transparent', cursor: 'pointer', color: '#94a3b8', fontSize: 16, width: 30, height: 30, borderRadius: 6, display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 0.1s' }}
-              onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.background = '#f1f5f9'; (e.currentTarget as HTMLButtonElement).style.color = '#374151'; }}
-              onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.background = 'transparent'; (e.currentTarget as HTMLButtonElement).style.color = '#94a3b8'; }}
+              style={{ border: 'none', background: 'transparent', cursor: 'pointer', color: 'var(--v-text-muted)', fontSize: 16, width: 30, height: 30, borderRadius: 6, display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 0.1s' }}
+              onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.background = 'var(--v-chrome-hover)'; (e.currentTarget as HTMLButtonElement).style.color = 'var(--v-text)'; }}
+              onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.background = 'transparent'; (e.currentTarget as HTMLButtonElement).style.color = 'var(--v-text-muted)'; }}
             >✕</button>
           </div>
         </div>
@@ -239,12 +299,16 @@ export const ModelDetailModal: React.FC<ModelDetailModalProps> = ({
         <div style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
 
           {/* Left — fields */}
-          <div style={{ width: 280, flexShrink: 0, borderRight: '1px solid #f1f5f9', overflowY: 'auto', padding: '20px 22px', display: 'flex', flexDirection: 'column', gap: 20 }}>
+          <div style={{ width: 280, flexShrink: 0, borderRight: '1px solid var(--v-border)', overflowY: 'auto', padding: '20px 22px', display: 'flex', flexDirection: 'column', gap: 20, background: 'var(--v-surface)' }}>
             {editing ? (
               <form onSubmit={handleSave} style={{ display: 'flex', flexDirection: 'column', gap: 14, flex: 1 }}>
                 <div>
                   <label htmlFor="model-detail-name" style={detailFieldLabelSt}>Name</label>
-                  <input id="model-detail-name" value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} style={detailInputSt} onFocus={e => (e.currentTarget.style.borderColor = '#049484')} onBlur={e => (e.currentTarget.style.borderColor = '#e2e8f0')} />
+                  <input id="model-detail-name" value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} style={detailInputSt} onFocus={e => (e.currentTarget.style.borderColor = '#049484')} onBlur={e => (e.currentTarget.style.borderColor = 'var(--v-border)')} />
+                </div>
+                <div>
+                  <label htmlFor="model-detail-version" style={detailFieldLabelSt}>Version</label>
+                  <input id="model-detail-version" value={displayMetaModelVersion(displayModel.version)} readOnly disabled style={{ ...detailInputSt, color: 'var(--v-text-muted)' }} />
                 </div>
                 <div>
                   <label htmlFor="model-detail-keywords" style={detailFieldLabelSt}>Keywords</label>
@@ -252,18 +316,18 @@ export const ModelDetailModal: React.FC<ModelDetailModalProps> = ({
                 </div>
                 <div>
                   <label htmlFor="model-detail-description" style={detailFieldLabelSt}>Description</label>
-                  <textarea id="model-detail-description" value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))} rows={3} style={{ ...detailInputSt, resize: 'vertical', minHeight: 72 }} onFocus={e => (e.currentTarget.style.borderColor = '#049484')} onBlur={e => (e.currentTarget.style.borderColor = '#e2e8f0')} />
+                  <textarea id="model-detail-description" value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))} rows={3} style={{ ...detailInputSt, resize: 'vertical', minHeight: 72 }} onFocus={e => (e.currentTarget.style.borderColor = '#049484')} onBlur={e => (e.currentTarget.style.borderColor = 'var(--v-border)')} />
                 </div>
                 <div>
                   <label htmlFor="model-detail-domain" style={detailFieldLabelSt}>Domain</label>
-                  <input id="model-detail-domain" value={form.domain} onChange={e => setForm(f => ({ ...f, domain: e.target.value }))} style={detailInputSt} onFocus={e => (e.currentTarget.style.borderColor = '#049484')} onBlur={e => (e.currentTarget.style.borderColor = '#e2e8f0')} />
+                  <input id="model-detail-domain" value={form.domain} onChange={e => setForm(f => ({ ...f, domain: e.target.value }))} style={detailInputSt} onFocus={e => (e.currentTarget.style.borderColor = '#049484')} onBlur={e => (e.currentTarget.style.borderColor = 'var(--v-border)')} />
                 </div>
-                {error   && <div style={{ padding: '8px 12px', background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 8, fontSize: 12, color: '#dc2626' }}>{error}</div>}
-                {success && <div style={{ padding: '8px 12px', background: '#f0fdf4', border: '1px solid #86efac', borderRadius: 8, fontSize: 12, color: '#15803d' }}>{success}</div>}
+                {error   && <div style={{ padding: '8px 12px', background: 'var(--v-danger-bg)', border: '1px solid var(--v-danger-border)', borderRadius: 8, fontSize: 12, color: 'var(--v-danger-text)' }}>{error}</div>}
+                {success && <div style={{ padding: '8px 12px', background: 'var(--v-success-bg)', border: '1px solid var(--v-success-border)', borderRadius: 8, fontSize: 12, color: 'var(--v-success-text)' }}>{success}</div>}
                 <div style={{ marginTop: 'auto', paddingTop: 8, display: 'flex', gap: 8 }}>
                   <button type="button" onClick={() => setEditing(false)}
-                    style={{ flex: 1, padding: '8px 0', border: '1px solid #e2e8f0', borderRadius: 8, background: '#fff', color: '#374151', fontSize: 12, fontWeight: 600, cursor: 'pointer', fontFamily: FONT }}
-                    onMouseEnter={e => (e.currentTarget.style.background = '#f8fafc')} onMouseLeave={e => (e.currentTarget.style.background = '#fff')}>
+                    style={{ flex: 1, padding: '8px 0', border: '1px solid var(--v-border)', borderRadius: 8, background: 'var(--v-surface)', color: 'var(--v-text-secondary)', fontSize: 12, fontWeight: 600, cursor: 'pointer', fontFamily: FONT }}
+                    onMouseEnter={e => (e.currentTarget.style.background = 'var(--v-surface-hover)')} onMouseLeave={e => (e.currentTarget.style.background = 'var(--v-surface)')}>
                     Cancel
                   </button>
                   <button type="submit" disabled={!canSave}
@@ -277,8 +341,26 @@ export const ModelDetailModal: React.FC<ModelDetailModalProps> = ({
             ) : (
               <>
                 <div>
-                  <DFieldLabel>Name</DFieldLabel>
-                  <div style={{ fontSize: 14, fontWeight: 600, color: '#0f172a', fontFamily: FONT, lineHeight: 1.4 }}>{displayModel.name}</div>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+                    <DFieldLabel>Name</DFieldLabel>
+                    {diagramEditable && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setForm({ name: displayModel.name || '', description: displayModel.description || '', domain: displayModel.domain || '', keywords: displayModel.keyword || [] });
+                          setEditing(true);
+                        }}
+                        style={{ border: 'none', background: 'none', padding: 0, color: '#049484', fontSize: 11, fontWeight: 600, cursor: 'pointer', fontFamily: FONT }}
+                      >
+                        Edit details
+                      </button>
+                    )}
+                  </div>
+                  <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--v-text)', fontFamily: FONT, lineHeight: 1.4 }}>{displayModel.name}</div>
+                </div>
+                <div>
+                  <DFieldLabel>Version</DFieldLabel>
+                  <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--v-text)', fontFamily: FONT, lineHeight: 1.4 }}>{displayMetaModelVersion(displayModel.version)}</div>
                 </div>
                 {displayModel.keyword?.length > 0 && (
                   <div>
@@ -292,27 +374,26 @@ export const ModelDetailModal: React.FC<ModelDetailModalProps> = ({
                 )}
                 <div style={{ flex: 1 }}>
                   <DFieldLabel>Description</DFieldLabel>
-                  <div style={{ fontSize: 13, color: '#374151', fontFamily: FONT, lineHeight: 1.7 }}>
-                    {displayModel.description || <span style={{ color: '#cbd5e1' }}>—</span>}
+                  <div style={{ fontSize: 13, color: 'var(--v-text-secondary)', fontFamily: FONT, lineHeight: 1.7 }}>
+                    {displayModel.description || <span style={{ color: 'var(--v-text-faint)' }}>—</span>}
                   </div>
                 </div>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginTop: 'auto', paddingTop: 8, borderTop: '1px solid #f1f5f9' }}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginTop: 'auto', paddingTop: 8, borderTop: '1px solid var(--v-border)' }}>
                   <MetaModelFileDownloads
                     modelName={displayModel.name}
                     ecoreFileId={displayModel.ecoreFileId}
-                    genModelFileId={displayModel.genModelFileId}
-                    labelStyle={{ fontSize: 11, fontWeight: 700, color: '#374151', marginBottom: 5, letterSpacing: '0.01em', fontFamily: FONT }}
+                    labelStyle={{ fontSize: 11, fontWeight: 700, color: 'var(--v-text-secondary)', marginBottom: 5, letterSpacing: '0.01em', fontFamily: FONT }}
                   />
                   {model.createdAt && (
                     <div>
                       <DFieldLabel>Created</DFieldLabel>
-                      <div style={{ fontSize: 13, color: '#64748b', fontFamily: FONT }}>{formatDate(model.createdAt)}</div>
+                      <div style={{ fontSize: 13, color: 'var(--v-text-muted)', fontFamily: FONT }}>{formatDate(model.createdAt)}</div>
                     </div>
                   )}
                   {model.updatedAt && (
                     <div>
                       <DFieldLabel>Updated</DFieldLabel>
-                      <div style={{ fontSize: 13, color: '#64748b', fontFamily: FONT }}>{formatDate(model.updatedAt)}</div>
+                      <div style={{ fontSize: 13, color: 'var(--v-text-muted)', fontFamily: FONT }}>{formatDate(model.updatedAt)}</div>
                     </div>
                   )}
                 </div>
@@ -321,13 +402,13 @@ export const ModelDetailModal: React.FC<ModelDetailModalProps> = ({
           </div>
 
           {/* Right — UML preview */}
-          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', background: '#ffffff' }}>
+          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', background: 'var(--v-workspace-bg)' }}>
             {/* Label + zoom controls */}
             <div style={{ padding: '14px 18px 10px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexShrink: 0 }}>
-              <span style={{ fontSize: 13, fontWeight: 600, color: '#374151', fontFamily: FONT }}>UML</span>
+              <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--v-text-secondary)', fontFamily: FONT }}>UML</span>
               {ecoreContent && (
                 <div style={{ display: 'flex', gap: 4 }}>
-                  <DPreviewBtn title="Open full-screen UML view" onClick={() => setUmlExpanded(true)}>
+                  <DPreviewBtn title={diagramEditable ? 'Open full-screen UML editor' : 'Open full-screen UML view'} onClick={() => setUmlExpanded(true)}>
                     <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                       <polyline points="15 3 21 3 21 9" /><polyline points="9 21 3 21 3 15" />
                       <line x1="21" y1="3" x2="14" y2="10" /><line x1="3" y1="21" x2="10" y2="14" />
@@ -351,18 +432,18 @@ export const ModelDetailModal: React.FC<ModelDetailModalProps> = ({
 
             {/* Diagram card */}
             <div style={{ flex: 1, padding: '0 18px 18px', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
-              <div style={{ flex: 1, position: 'relative', background: '#ffffff', borderRadius: 10, border: '1px solid #e2e8f0', overflow: 'hidden', boxShadow: '0 1px 4px rgba(0,0,0,0.04)' }}>
+              <div style={{ flex: 1, position: 'relative', background: 'var(--v-workspace-bg)', borderRadius: 10, border: '1px solid var(--v-border)', overflow: 'hidden', boxShadow: 'var(--v-card-shadow)' }}>
                 {fetchingUml && (
-                  <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 10, color: '#94a3b8' }}>
-                    <div style={{ width: 24, height: 24, border: '2.5px solid #e2e8f0', borderTop: `2.5px solid ${theme.icon}`, borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
+                  <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 10, color: 'var(--v-text-muted)' }}>
+                    <div style={{ width: 24, height: 24, border: '2.5px solid var(--v-border)', borderTop: `2.5px solid ${theme.icon}`, borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
                     <span style={{ fontSize: 12, fontFamily: FONT }}>Loading preview…</span>
                   </div>
                 )}
                 {!fetchingUml && fetchError && (
-                  <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#cbd5e1', fontSize: 12, fontFamily: FONT }}>Could not load UML preview</div>
+                  <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--v-text-faint)', fontSize: 12, fontFamily: FONT }}>Could not load UML preview</div>
                 )}
                 {!fetchingUml && !fetchError && !ecoreContent && (
-                  <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#cbd5e1', fontSize: 12, fontFamily: FONT }}>No diagram available</div>
+                  <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--v-text-faint)', fontSize: 12, fontFamily: FONT }}>No diagram available</div>
                 )}
                 {ecoreContent && (
                   <UMLDiagram
@@ -380,17 +461,24 @@ export const ModelDetailModal: React.FC<ModelDetailModalProps> = ({
       </dialog>
   );
 
-  const expandedUmlPanel = umlExpanded && ecoreContent ? (
+  const expandedUmlPanel = umlExpanded && (ecoreContent || ecoreFileId) ? (
     <FloatingUMLPanel
       id={`metamodel-detail-${model.id}`}
-      title={model.name}
+      title={displayModel.name}
       fileName={previewLayoutFile}
       layoutScopeId={METAMODEL_PREVIEW_LAYOUT_SCOPE}
-      ecoreContent={ecoreContent}
-      viewOnly
-      onClose={() => setUmlExpanded(false)}
+      ecoreContent={ecoreContent ?? ''}
+      saveContext={umlSaveContext}
+      viewOnly={!diagramEditable}
+      saveShortcutEnabled={!embedded}
+      onHome={onHome}
+      onClose={() => {
+        setUmlExpanded(false);
+        // The preview shares the layout key; pick up classes moved in the full-screen editor.
+        diagramRef.current?.reloadLayout();
+      }}
       onFocus={() => { /* preview panel does not participate in focus stacking */ }}
-      ecoreFileId={model.ecoreFileId}
+      ecoreFileId={ecoreFileId}
       fetchEcoreFile={(fileId) => apiService.getFile(fileId)}
       onEcoreContentUpdated={(content) => setEcoreContent(content)}
       zIndex={embedded ? 10001 : 10002}
@@ -459,7 +547,7 @@ const filterRowStyle: React.CSSProperties = {
 const filterLabelStyle: React.CSSProperties = {
   fontSize: 13,
   fontWeight: 600,
-  color: '#374151',
+  color: 'var(--v-text-secondary)',
   minWidth: 76,
   flexShrink: 0,
   fontFamily: APP_FONT,
@@ -471,7 +559,7 @@ const filterFieldStyle: React.CSSProperties = {
   width: 'auto',
   padding: '9px 12px',
   fontSize: 13,
-  background: '#ffffff',
+  background: 'var(--v-input-bg)',
 };
 
 const filterTagStyle: React.CSSProperties = {
@@ -479,7 +567,7 @@ const filterTagStyle: React.CSSProperties = {
   alignItems: 'center',
   padding: '4px 10px',
   borderRadius: 999,
-  background: '#f0faf8',
+  background: 'var(--v-brand-soft)',
   border: `1px solid ${BRAND_COLOR}33`,
   color: BRAND_COLOR,
   fontSize: 12,
@@ -554,11 +642,11 @@ const AdvancedSearchModal: React.FC<AdvancedSearchModalProps> = ({
         transform: 'translate(-50%, -50%)',
         margin: 0,
         padding: 0,
-        border: '1px solid #e2e8f0',
+        border: '1px solid var(--v-border)',
         width: 'min(480px, calc(100vw - 48px))',
         maxHeight: 'min(85vh, 640px)',
         overflowY: 'auto',
-        background: '#ffffff',
+        background: 'var(--v-surface)',
         borderRadius: 12,
         boxShadow: '0 20px 50px rgba(11, 23, 32, 0.18), 0 4px 14px rgba(11, 23, 32, 0.08)',
         fontFamily: APP_FONT,
@@ -715,7 +803,7 @@ const AdvancedSearchModal: React.FC<AdvancedSearchModalProps> = ({
   );
 };
 
-export const ModelLibraryTable: React.FC<ModelLibraryTableProps> = ({ onModelOpen }) => {
+export const ModelLibraryTable: React.FC<ModelLibraryTableProps> = ({ onModelOpen, onHome }) => {
   const [models, setModels] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -724,6 +812,7 @@ export const ModelLibraryTable: React.FC<ModelLibraryTableProps> = ({ onModelOpe
   const [dateFilter, setDateFilter] = useState<MetaModelDateFilter>('all');
   const [showAdvancedSearch, setShowAdvancedSearch] = useState(false);
   const [showCreate, setShowCreate] = useState(false);
+  const [modelsLoaded, setModelsLoaded] = useState(false);
   const [viewModel, setViewModel] = useState<any>(null);
   const [deletingModel, setDeletingModel] = useState<LibraryMetaModel | null>(null);
   const [deleteError, setDeleteError] = useState('');
@@ -733,6 +822,22 @@ export const ModelLibraryTable: React.FC<ModelLibraryTableProps> = ({ onModelOpe
   /** Set right before a filter reset that's already covered by a fetch we just ran,
    *  so the mount/filter-change effect below doesn't race it with a stale re-fetch. */
   const skipNextAutoFetchRef = useRef(false);
+
+  // The opened model (preview) and its full-screen UML editor are part of the URL,
+  // so a page refresh or a shared link reopens them.
+  const navigate = useNavigate();
+  const location = useLocation();
+  const selectedModelId = useMatch<'modelId', string>(`${modelLibraryModelPath(':modelId')}/*`)?.params.modelId ?? null;
+  const isUmlEditorRoute = useMatch(modelLibraryUmlPath(':modelId')) !== null;
+
+  const openRoute = useCallback((path: string) => {
+    navigate(path, { state: OPENED_FROM_LIBRARY_STATE });
+  }, [navigate]);
+
+  const closeRoute = useCallback((parentPath: string) => {
+    if (isOpenedFromLibrary(location.state)) navigate(-1);
+    else navigate(parentPath, { replace: true });
+  }, [location.state, navigate]);
 
   // Debounce search
   useEffect(() => {
@@ -766,6 +871,7 @@ export const ModelLibraryTable: React.FC<ModelLibraryTableProps> = ({ onModelOpe
       setError(e instanceof Error ? e.message : 'Failed to load');
     } finally {
       setLoading(false);
+      setModelsLoaded(true);
     }
   }, [debouncedSearch, dateFilter]);
 
@@ -776,6 +882,18 @@ export const ModelLibraryTable: React.FC<ModelLibraryTableProps> = ({ onModelOpe
     }
     void fetchModels();
   }, [fetchModels]);
+
+  // Resolve the model in the URL from the loaded list; unknown ids fall back to the list.
+  useEffect(() => {
+    if (!selectedModelId) {
+      setViewModel(null);
+      return;
+    }
+    if (viewModel && String(viewModel.id) === selectedModelId) return;
+    const model = models.find(m => String(m.id) === selectedModelId);
+    if (model) setViewModel(model);
+    else if (modelsLoaded) navigate(MODEL_LIBRARY_PATH, { replace: true });
+  }, [selectedModelId, viewModel, models, modelsLoaded, navigate]);
 
   const clearAllFilters = useCallback(() => {
     setSearch('');
@@ -816,7 +934,7 @@ export const ModelLibraryTable: React.FC<ModelLibraryTableProps> = ({ onModelOpe
     if (!model.isOwnedByCurrentUser) {
       setDeleteError('Only the owner of this model can delete it.');
     } else if (isModelReferencedByProjects(model)) {
-      setDeleteError('This model is used by one or more projects and cannot be deleted.');
+      setDeleteError(`This model is used by ${describeProjectUsage(model)} and cannot be deleted.`);
     } else {
       setDeleteError('');
     }
@@ -835,7 +953,7 @@ export const ModelLibraryTable: React.FC<ModelLibraryTableProps> = ({ onModelOpe
       setModels(prev => prev.filter(m => m.id !== deletingModel.id));
       setDeletingModel(null);
       setDeleteError('');
-      if (viewModel?.id === deletingModel.id) setViewModel(null);
+      if (String(deletingModel.id) === selectedModelId) navigate(MODEL_LIBRARY_PATH, { replace: true });
     } catch (e: unknown) {
       // "Referenced by a project" can only be fully known by the backend (it
       // spans every V-SUM, not just ones visible to this user) — if it rejects
@@ -843,7 +961,7 @@ export const ModelLibraryTable: React.FC<ModelLibraryTableProps> = ({ onModelOpe
       // state instead of leaving an actionable "Delete" button up.
       setDeleteError(e instanceof Error ? e.message : 'Failed to delete model');
     }
-  }, [deletingModel, viewModel]);
+  }, [deletingModel, selectedModelId, navigate]);
 
   const isDeleteBlocked = !!deleteError;
 
@@ -872,16 +990,16 @@ export const ModelLibraryTable: React.FC<ModelLibraryTableProps> = ({ onModelOpe
   if (loading) {
     tableBodyRows = (
       <tr>
-        <td colSpan={4} style={emptyRowStyle}>Loading...</td>
+        <td colSpan={5} style={emptyRowStyle}>Loading...</td>
       </tr>
     );
   } else if (page.length === 0) {
     tableBodyRows = (
       <tr>
-        <td colSpan={4} style={emptyRowStyle}>
+        <td colSpan={5} style={emptyRowStyle}>
           {search.trim()
             ? `No models match "${search.trim()}". Clear filters to see all models.`
-            : 'No models yet. Upload a .ecore and .genmodel pair to get started.'}
+            : 'No models yet. Add a meta model to get started.'}
         </td>
       </tr>
     );
@@ -891,7 +1009,13 @@ export const ModelLibraryTable: React.FC<ModelLibraryTableProps> = ({ onModelOpe
         key={model.id ?? idx}
         model={model}
         onView={() => {
-          setViewModel(model);
+          openRoute(modelLibraryModelPath(model.id));
+          onModelOpen?.(model);
+        }}
+        onEdit={() => {
+          // Open the preview first so that closing the editor returns to it.
+          openRoute(modelLibraryModelPath(model.id));
+          openRoute(modelLibraryUmlPath(model.id));
           onModelOpen?.(model);
         }}
         onDelete={() => requestDeleteModel(model)}
@@ -903,7 +1027,7 @@ export const ModelLibraryTable: React.FC<ModelLibraryTableProps> = ({ onModelOpe
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
       {/* Page header */}
       <div style={{ padding: '32px 40px 0', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexShrink: 0 }}>
-        <h1 style={{ margin: 0, fontSize: 26, fontWeight: 700, color: '#111827', letterSpacing: '-0.02em' }}>Model Library</h1>
+        <h1 style={{ margin: 0, fontSize: 26, fontWeight: 700, color: 'var(--v-text)', letterSpacing: '-0.02em' }}>Model Library</h1>
         <button type="button"
           onClick={() => setShowCreate(true)}
           style={{ display: 'flex', alignItems: 'center', gap: 7, padding: '9px 18px', background: '#0B1720', color: '#fff', border: 'none', borderRadius: 9, fontSize: 14, fontWeight: 600, cursor: 'pointer', boxShadow: '0 1px 4px rgba(11,23,32,0.25)', transition: 'background 0.15s', fontFamily: 'ui-sans-serif, system-ui, sans-serif' }}
@@ -911,7 +1035,7 @@ export const ModelLibraryTable: React.FC<ModelLibraryTableProps> = ({ onModelOpe
           onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.background = '#1e293b'; }}
         >
           <span style={{ fontSize: 18, lineHeight: 1 }}>+</span>
-          <span>Upload model</span>
+          <span>Add model</span>
         </button>
       </div>
 
@@ -927,10 +1051,10 @@ export const ModelLibraryTable: React.FC<ModelLibraryTableProps> = ({ onModelOpe
               gap: 8,
               padding: '8px 14px',
               border: '1px solid',
-              borderColor: hasActiveFilters ? '#049484' : '#e5e7eb',
+              borderColor: hasActiveFilters ? '#049484' : 'var(--v-border)',
               borderRadius: 8,
-              background: hasActiveFilters ? '#f0faf8' : '#ffffff',
-              color: hasActiveFilters ? '#049484' : '#374151',
+              background: hasActiveFilters ? 'var(--v-brand-soft)' : 'var(--v-surface)',
+              color: hasActiveFilters ? '#049484' : 'var(--v-text-secondary)',
               fontSize: 13,
               fontWeight: 600,
               cursor: 'pointer',
@@ -967,10 +1091,10 @@ export const ModelLibraryTable: React.FC<ModelLibraryTableProps> = ({ onModelOpe
               }}
               style={{
                 padding: '8px 12px',
-                border: '1px solid #e5e7eb',
+                border: '1px solid var(--v-border)',
                 borderRadius: 8,
-                background: '#fff',
-                color: '#6b7280',
+                background: 'var(--v-surface)',
+                color: 'var(--v-text-muted)',
                 fontSize: 13,
                 cursor: 'pointer',
               }}
@@ -980,7 +1104,7 @@ export const ModelLibraryTable: React.FC<ModelLibraryTableProps> = ({ onModelOpe
           )}
 
           {search.trim() && (
-            <span style={{ fontSize: 13, color: '#6b7280', maxWidth: 420, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+            <span style={{ fontSize: 13, color: 'var(--v-text-muted)', maxWidth: 420, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
               Active: {search.trim()}
             </span>
           )}
@@ -1003,16 +1127,16 @@ export const ModelLibraryTable: React.FC<ModelLibraryTableProps> = ({ onModelOpe
       {/* Table area */}
       <div style={{ flex: 1, padding: '16px 40px 24px', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
         {error && (
-          <div style={{ padding: '10px 14px', background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 8, fontSize: 13, color: '#dc2626', marginBottom: 12 }}>
+          <div style={{ padding: '10px 14px', background: 'var(--v-danger-bg)', border: '1px solid var(--v-danger-border)', borderRadius: 8, fontSize: 13, color: 'var(--v-danger-text)', marginBottom: 12 }}>
             {error}
           </div>
         )}
 
-        <div style={{ flex: 1, background: '#fff', border: '1px solid #e5e7eb', borderRadius: 12, overflow: 'auto', boxShadow: '0 1px 4px rgba(0,0,0,0.04)' }}>
+        <div style={{ flex: 1, background: 'var(--v-surface)', border: '1px solid var(--v-border)', borderRadius: 12, overflow: 'auto', boxShadow: '0 1px 4px rgba(0,0,0,0.04)' }}>
           <table style={{ width: '100%', borderCollapse: 'collapse' }}>
             <thead>
-              <tr style={{ borderBottom: '1px solid #f3f4f6' }}>
-                {['Name', 'Created', 'Projects', 'Actions'].map((col, i) => (
+              <tr style={{ borderBottom: '1px solid var(--v-border-subtle)' }}>
+                {['Name', 'Version', 'Created', 'Projects', 'Actions'].map((col, i) => (
                   <th
                     key={col}
                     style={{
@@ -1020,13 +1144,13 @@ export const ModelLibraryTable: React.FC<ModelLibraryTableProps> = ({ onModelOpe
                       textAlign: 'left',
                       fontSize: 12,
                       fontWeight: 600,
-                      color: '#6b7280',
+                      color: 'var(--v-text-muted)',
                       letterSpacing: '0.04em',
                       textTransform: 'uppercase',
-                      background: '#fafafa',
-                      borderBottom: '1px solid #f3f4f6',
+                      background: 'var(--v-table-header)',
+                      borderBottom: '1px solid var(--v-border-subtle)',
                       whiteSpace: 'nowrap',
-                      width: i === 3 ? 80 : undefined,
+                      width: i === 4 ? 80 : undefined,
                     }}
                   >
                     {col}
@@ -1043,7 +1167,7 @@ export const ModelLibraryTable: React.FC<ModelLibraryTableProps> = ({ onModelOpe
         {/* Pagination */}
         {totalPages > 1 && (
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', paddingTop: 14 }}>
-            <span style={{ fontSize: 13, color: '#6b7280' }}>
+            <span style={{ fontSize: 13, color: 'var(--v-text-muted)' }}>
               {(currentPage - 1) * itemsPerPage + 1}–{Math.min(currentPage * itemsPerPage, models.length)} of {models.length}
             </span>
             <div style={{ display: 'flex', gap: 4 }}>
@@ -1076,9 +1200,15 @@ export const ModelLibraryTable: React.FC<ModelLibraryTableProps> = ({ onModelOpe
       )}
       {viewModel && (
         <ModelDetailModal
+          key={viewModel.id}
           model={viewModel}
-          onClose={() => setViewModel(null)}
-          onUpdated={() => { fetchModels(); }}
+          onClose={() => closeRoute(MODEL_LIBRARY_PATH)}
+          onUpdated={() => { void fetchModels(); }}
+          umlExpanded={isUmlEditorRoute}
+          onHome={onHome}
+          onUmlExpandedChange={expanded => (expanded
+            ? openRoute(modelLibraryUmlPath(viewModel.id))
+            : closeRoute(modelLibraryModelPath(viewModel.id)))}
         />
       )}
 
@@ -1102,10 +1232,11 @@ export const ModelLibraryTable: React.FC<ModelLibraryTableProps> = ({ onModelOpe
 interface TableRowProps {
   model: any;
   onView: () => void;
+  onEdit: () => void;
   onDelete: () => void;
 }
 
-const TableRow: React.FC<TableRowProps> = ({ model, onView, onDelete }) => {
+const TableRow: React.FC<TableRowProps> = ({ model, onView, onEdit, onDelete }) => {
   const [hovered, setHovered] = useState(false);
   const hasProjects = isModelReferencedByProjects(model);
 
@@ -1121,17 +1252,21 @@ const TableRow: React.FC<TableRowProps> = ({ model, onView, onDelete }) => {
         }
       }}
       tabIndex={0}
-      style={{ borderBottom: '1px solid #f9fafb', background: hovered ? '#fafafa' : '#fff', cursor: 'pointer', transition: 'background 0.1s' }}
+      style={{ borderBottom: '1px solid var(--v-border-subtle)', background: hovered ? 'var(--v-surface-hover)' : 'var(--v-surface)', cursor: 'pointer', transition: 'background 0.1s' }}
     >
-      <td style={{ padding: '13px 16px', fontSize: 14, fontWeight: 500, color: '#111827' }}>{model.name}</td>
-      <td style={{ padding: '13px 16px', fontSize: 14, color: '#6b7280' }}>{formatDate(model.createdAt)}</td>
+      <td style={{ padding: '13px 16px', fontSize: 14, fontWeight: 500, color: 'var(--v-text)' }}>{model.name}</td>
+      <td style={{ padding: '13px 16px', fontSize: 14, color: 'var(--v-text-secondary)', fontVariantNumeric: 'tabular-nums' }}>{displayMetaModelVersion(model.version)}</td>
+      <td style={{ padding: '13px 16px', fontSize: 14, color: 'var(--v-text-muted)' }}>{formatDate(model.createdAt)}</td>
       <td style={{ padding: '13px 16px' }}>
         {hasProjects ? (
-          <span style={{ padding: '3px 10px', background: '#f3f4f6', border: '1px solid #e5e7eb', borderRadius: 20, fontSize: 12, color: '#374151', fontWeight: 500 }}>
-            Projects
+          <span
+            title={describeProjectUsage(model)}
+            style={{ padding: '3px 10px', background: 'var(--v-surface-muted)', border: '1px solid var(--v-border)', borderRadius: 20, fontSize: 12, color: 'var(--v-text-secondary)', fontWeight: 500 }}
+          >
+            {formatProjectUsageLabel(model)}
           </span>
         ) : (
-          <span style={{ color: '#d1d5db', fontSize: 14 }}>--</span>
+          <span style={{ color: 'var(--v-text-faint)', fontSize: 14 }}>--</span>
         )}
       </td>
       <td style={{ padding: '13px 16px' }}>
@@ -1139,6 +1274,7 @@ const TableRow: React.FC<TableRowProps> = ({ model, onView, onDelete }) => {
           minWidth={140}
           actions={[
             { label: 'View details', onClick: onView },
+            { label: 'Edit', onClick: onEdit },
             ...(model.isOwnedByCurrentUser
               ? [{ label: 'Delete', onClick: onDelete, danger: true, dividerBefore: true }]
               : []),
@@ -1159,11 +1295,11 @@ interface PageBtnProps {
 }
 
 const PageBtn: React.FC<PageBtnProps> = ({ children, active, disabled, onClick }) => {
-  let color = '#374151';
+  let color = 'var(--v-text)';
   if (active) {
     color = '#fff';
   } else if (disabled) {
-    color = '#d1d5db';
+    color = 'var(--v-text-faint)';
   }
 
   return (
@@ -1173,9 +1309,9 @@ const PageBtn: React.FC<PageBtnProps> = ({ children, active, disabled, onClick }
     style={{
       padding: '6px 11px',
       border: '1px solid',
-      borderColor: active ? '#049484' : '#e5e7eb',
+      borderColor: active ? '#049484' : 'var(--v-border)',
       borderRadius: 7,
-      background: active ? '#049484' : '#fff',
+      background: active ? '#049484' : 'var(--v-surface)',
       color,
       fontSize: 13,
       fontWeight: active ? 600 : 400,

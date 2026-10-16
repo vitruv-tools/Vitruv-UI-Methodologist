@@ -204,16 +204,16 @@ export const ProjectPickerMenu: React.FC<ProjectPickerMenuProps> = ({
           overflow: 'hidden',
           display: 'flex',
           flexDirection: 'column',
-          background: '#ffffff',
-          border: '1px solid #e2e8f0',
+          background: 'var(--v-surface)',
+          border: '1px solid var(--v-border)',
           borderRadius: 10,
           boxShadow: '0 16px 40px rgba(0,0,0,0.16)',
           zIndex: MENU_Z_INDEX,
           boxSizing: 'border-box',
         }}
       >
-      <div style={{ flexShrink: 0, padding: '10px 12px', borderBottom: '1px solid #f1f5f9' }}>
-        <div style={{ fontSize: 11, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 8 }}>
+      <div style={{ flexShrink: 0, padding: '10px 12px', borderBottom: '1px solid var(--v-border)' }}>
+        <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--v-text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 8 }}>
           Your projects
         </div>
         <input
@@ -227,9 +227,11 @@ export const ProjectPickerMenu: React.FC<ProjectPickerMenuProps> = ({
             boxSizing: 'border-box',
             padding: '9px 11px',
             fontSize: 13,
-            border: '1px solid #e2e8f0',
+            border: '1px solid var(--v-border)',
             borderRadius: 8,
             outline: 'none',
+            background: 'var(--v-input-bg)',
+            color: 'var(--v-text)',
           }}
         />
       </div>
@@ -252,10 +254,10 @@ export const ProjectPickerMenu: React.FC<ProjectPickerMenuProps> = ({
         }}
       >
         {loading && (
-          <div style={{ padding: '14px 12px', fontSize: 13, color: '#64748b' }}>Loading projects…</div>
+          <div style={{ padding: '14px 12px', fontSize: 13, color: 'var(--v-text-muted)' }}>Loading projects…</div>
         )}
         {!loading && projects.length === 0 && (
-          <div style={{ padding: '14px 12px', fontSize: 13, color: '#64748b' }}>No projects found</div>
+          <div style={{ padding: '14px 12px', fontSize: 13, color: 'var(--v-text-muted)' }}>No projects found</div>
         )}
         {!loading && projects.map(project => {
           const isActive = project.id === activeProjectId;
@@ -301,7 +303,7 @@ export const ProjectPickerMenu: React.FC<ProjectPickerMenuProps> = ({
                 gap: 10,
               }}
               onMouseEnter={e => {
-                if (!isActive) e.currentTarget.style.background = '#f8fafc';
+                if (!isActive) e.currentTarget.style.background = 'var(--v-surface-hover)';
               }}
               onMouseLeave={e => {
                 if (!isActive) e.currentTarget.style.background = 'transparent';
@@ -321,14 +323,14 @@ export const ProjectPickerMenu: React.FC<ProjectPickerMenuProps> = ({
                   display: 'block',
                   fontSize: 13,
                   fontWeight: isActive ? 700 : 500,
-                  color: '#0f172a',
+                  color: 'var(--v-text)',
                   overflow: 'hidden',
                   textOverflow: 'ellipsis',
                   whiteSpace: 'nowrap',
                 }}>
                   {project.name}
                 </span>
-                <span style={{ fontSize: 11, color: '#64748b', marginTop: 2, display: 'block' }}>
+                <span style={{ fontSize: 11, color: 'var(--v-text-muted)', marginTop: 2, display: 'block' }}>
                   {statusLine}
                   {isCurrentInPill && !isActive && isOpen && ''}
                 </span>
@@ -403,24 +405,24 @@ export const ProjectPickerMenu: React.FC<ProjectPickerMenuProps> = ({
           height: 34,
           border: isCompact ? '1px solid transparent' : 'none',
           borderRadius: 6,
-          background: open ? '#f0fdfc' : 'transparent',
+          background: open ? 'var(--v-uml-primary-soft)' : 'transparent',
           cursor: disabled ? 'not-allowed' : 'pointer',
           fontSize: 13,
           fontWeight: 600,
-          color: isCompact ? '#64748b' : '#0f172a',
+          color: isCompact ? 'var(--v-text-muted)' : 'var(--v-text)',
           letterSpacing: '-0.01em',
           whiteSpace: 'nowrap',
         }}
         onMouseEnter={e => {
           if (!disabled) {
-            e.currentTarget.style.background = '#f1f5f9';
-            if (isCompact) e.currentTarget.style.color = '#1e293b';
+            e.currentTarget.style.background = 'var(--v-chrome-hover)';
+            if (isCompact) e.currentTarget.style.color = 'var(--v-text)';
           }
         }}
         onMouseLeave={e => {
           if (!open && !disabled) {
             e.currentTarget.style.background = 'transparent';
-            if (isCompact) e.currentTarget.style.color = '#64748b';
+            if (isCompact) e.currentTarget.style.color = 'var(--v-text-muted)';
           }
         }}
       >
@@ -438,7 +440,7 @@ export const ProjectPickerMenu: React.FC<ProjectPickerMenuProps> = ({
             }}>
               {currentProjectName}
             </span>
-            <span style={{ color: '#64748b', display: 'flex', flexShrink: 0 }}>
+            <span style={{ color: 'var(--v-text-muted)', display: 'flex', flexShrink: 0 }}>
               <ChevronIcon />
             </span>
           </>
@@ -447,9 +449,9 @@ export const ProjectPickerMenu: React.FC<ProjectPickerMenuProps> = ({
 
       <style>{`
         .project-picker-scroll::-webkit-scrollbar { width: 8px; }
-        .project-picker-scroll::-webkit-scrollbar-track { background: #f1f5f9; border-radius: 4px; }
+        .project-picker-scroll::-webkit-scrollbar-track { background: var(--v-scrollbar-track); border-radius: 4px; }
         .project-picker-scroll::-webkit-scrollbar-thumb {
-          background: #cbd5e1;
+          background: var(--v-scrollbar-thumb);
           border-radius: 4px;
         }
         .project-picker-scroll::-webkit-scrollbar-thumb:hover { background: #94a3b8; }

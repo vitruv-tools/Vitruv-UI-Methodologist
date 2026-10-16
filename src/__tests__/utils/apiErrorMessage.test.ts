@@ -13,4 +13,9 @@ describe('extractApiErrorMessage', () => {
   it('returns fallback for unknown errors', () => {
     expect(extractApiErrorMessage({}, 'fallback')).toBe('fallback');
   });
+
+  it('keeps the complete backend payload instead of rewriting it', () => {
+    const message = 'org.springframework.web.HttpRequestMethodNotSupportedException: Request method PUT not supported';
+    expect(extractApiErrorMessage({ response: { data: { message } } }, 'Save failed')).toBe(message);
+  });
 });

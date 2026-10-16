@@ -38,9 +38,9 @@ const DownloadButton: React.FC<DownloadButtonProps> = ({ kind, downloading, onDo
     onClick={onDownload}
     style={{
       ...btnBase,
-      border: '1px solid #e2e8f0',
-      background: downloading === kind ? '#f8fafc' : '#fff',
-      color: '#374151',
+      border: '1px solid var(--v-border)',
+      background: downloading === kind ? 'var(--v-surface-muted)' : 'var(--v-surface)',
+      color: 'var(--v-text-secondary)',
       cursor: downloading ? 'wait' : 'pointer',
     }}
   >
@@ -77,7 +77,7 @@ export const MetaModelFileDownloads: React.FC<MetaModelFileDownloadsProps> = ({
   const label = labelStyle ?? {
     fontSize: 11,
     fontWeight: 700,
-    color: '#374151',
+    color: 'var(--v-text-secondary)',
     marginBottom: 8,
     letterSpacing: '0.01em',
   };

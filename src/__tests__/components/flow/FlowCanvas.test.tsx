@@ -3,10 +3,16 @@ import { render, screen, fireEvent, act } from '@testing-library/react';
 import { FlowCanvas } from '../../../components/flow/FlowCanvas';
 import { apiService } from '../../../services/api';
 
+// Props of the last rendered <ReactFlow>, and stable stand-ins for handlers the canvas wraps.
+const mockReactFlowProps: { current: any } = { current: null };
+const mockOnNodesChange = jest.fn();
+const mockOnDrop = jest.fn();
+
 jest.mock('reactflow', () => {
-  const MockReactFlow = ({ children }: any) => (
-    <div data-testid="react-flow">{children}</div>
-  );
+  const MockReactFlow = (props: any) => {
+    mockReactFlowProps.current = props;
+    return <div data-testid="react-flow">{props.children}</div>;
+  };
   return {
     __esModule: true,
     default: MockReactFlow,
@@ -41,7 +47,7 @@ jest.mock('../../../hooks/useFlowState', () => ({
   useFlowState: () => ({
     nodes: [],
     edges: [],
-    onNodesChange: jest.fn(),
+    onNodesChange: mockOnNodesChange,
     onEdgesChange: jest.fn(),
     onConnect: jest.fn(),
     addNode: jest.fn(),
@@ -63,7 +69,7 @@ jest.mock('../../../hooks/useFlowState', () => ({
 
 jest.mock('../../../hooks/useDragAndDrop', () => ({
   useDragAndDrop: () => ({
-    onDrop: jest.fn(),
+    onDrop: mockOnDrop,
     onDragOver: jest.fn(),
   }),
 }));
@@ -107,6 +113,7 @@ jest.mock('../../../services/api', () => ({
 describe('FlowCanvas', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    localStorage.clear();
   });
 
   it('renders ReactFlow and background', () => {
@@ -134,10 +141,11 @@ describe('FlowCanvas', () => {
     expect(() => ref.current.fitUmlView()).not.toThrow();
   });
 
-  it('exposes getReactionEdges and getWorkspaceSnapshot via ref', () => {
+  it('exposes getReactionEdges, getViewTypes and getWorkspaceSnapshot via ref', () => {
     const ref = createRef<any>();
     render(<FlowCanvas ref={ref} />);
     expect(typeof ref.current.getReactionEdges).toBe('function');
+    expect(typeof ref.current.getViewTypes).toBe('function');
     expect(typeof ref.current.getWorkspaceSnapshot).toBe('function');
   });
 
@@ -302,6 +310,79 @@ describe('FlowCanvas', () => {
     render(<FlowCanvas ref={ref} />);
     act(() => { fireEvent.mouseUp(document, { clientX: 100, clientY: 200 }); });
     expect(screen.getByTestId('react-flow')).toBeInTheDocument();
+  });
+});
+
+describe('FlowCanvas – lock button', () => {
+  const lock = () => fireEvent.click(screen.getByTitle('Lock interactions'));
+
+  beforeEach(() => {
+    mockOnNodesChange.mockClear();
+    mockOnDrop.mockClear();
+  });
+
+  it('does not show the React Flow attribution link', () => {
+    render(<FlowCanvas />);
+
+    expect(mockReactFlowProps.current.proOptions).toEqual({ hideAttribution: true });
+  });
+
+  it('turns dragging and connecting off until unlocked', () => {
+    render(<FlowCanvas />);
+    expect(mockReactFlowProps.current.nodesDraggable).toBe(true);
+
+    lock();
+    expect(mockReactFlowProps.current.nodesDraggable).toBe(false);
+    expect(mockReactFlowProps.current.nodesConnectable).toBe(false);
+
+    fireEvent.click(screen.getByTitle('Unlock interactions'));
+    expect(mockReactFlowProps.current.nodesDraggable).toBe(true);
+    expect(mockReactFlowProps.current.nodesConnectable).toBe(true);
+  });
+
+  it('ignores moving and removing nodes while locked, but still lets them be selected', () => {
+    render(<FlowCanvas />);
+    lock();
+    const { onNodesChange } = mockReactFlowProps.current;
+
+    act(() => onNodesChange([{ id: 'n1', type: 'position', position: { x: 5, y: 5 }, dragging: true }]));
+    act(() => onNodesChange([{ id: 'n1', type: 'remove' }]));
+    expect(mockOnNodesChange).not.toHaveBeenCalled();
+
+    act(() => onNodesChange([{ id: 'n1', type: 'select', selected: true }]));
+    expect(mockOnNodesChange).toHaveBeenCalledTimes(1);
+  });
+
+  it('rejects models added or dropped while locked, but still loads them from the server', () => {
+    const ref = createRef<any>();
+    const onEcoreFileSelect = jest.fn();
+    render(<FlowCanvas ref={ref} onEcoreFileSelect={onEcoreFileSelect} />);
+    lock();
+
+    act(() => {
+      ref.current.addEcoreFile('added.ecore', '<ecore:EPackage name="added"/>', { metaModelId: 1 });
+    });
+    act(() => mockReactFlowProps.current.onDrop({ preventDefault: jest.fn() }));
+    expect(onEcoreFileSelect).not.toHaveBeenCalled();
+    expect(mockOnDrop).not.toHaveBeenCalled();
+
+    act(() => {
+      ref.current.addEcoreFile('loaded.ecore', '<ecore:EPackage name="loaded"/>', {
+        metaModelId: 2,
+        fromServerLoad: true,
+      });
+    });
+    expect(onEcoreFileSelect).toHaveBeenCalledWith('loaded.ecore');
+  });
+
+  it('accepts dropped models again once unlocked', () => {
+    render(<FlowCanvas />);
+    lock();
+    fireEvent.click(screen.getByTitle('Unlock interactions'));
+
+    act(() => mockReactFlowProps.current.onDrop({ preventDefault: jest.fn() }));
+
+    expect(mockOnDrop).toHaveBeenCalledTimes(1);
   });
 });
 

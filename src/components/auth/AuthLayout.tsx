@@ -1,4 +1,5 @@
 import React from 'react';
+import { ThemeToggle } from '../ui/ThemeToggle';
 
 // ── Shared styles ─────────────────────────────────────────────────────────────
 // All auth-page CSS lives here once so SignIn and SignUp stay DRY.
@@ -73,6 +74,7 @@ const AUTH_STYLES = `
   }
 
   .mock-auth-card {
+    position: relative;
     background: #ffffff;
     width: 100%;
     max-width: 460px;
@@ -443,6 +445,133 @@ const AUTH_STYLES = `
   .password-requirement.ok   { color: #1f9f92; }
   .password-requirement.fail { color: #94a3b8; }
   .password-requirement-icon { font-size: 10px; }
+
+  /* OTP verification */
+  /* Scoped under .mock-form-group so it outranks the shared input rule above,
+     which would otherwise keep the code at the standard 14px field size. */
+  .mock-form-group input.otp-code-input {
+    text-align: center;
+    font-size: 22px;
+    font-weight: 700;
+    letter-spacing: 0.4em;
+    /* Offsets the trailing letter-spacing so the digits sit optically centred. */
+    text-indent: 0.4em;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .otp-status {
+    padding: 10px 12px;
+    border-radius: 8px;
+    margin-bottom: 16px;
+    font-size: 13px;
+    line-height: 1.45;
+    white-space: pre-line;
+  }
+  .otp-status-success { background: #ecfdf5; color: #065f46; }
+  .otp-status-warning { background: #fffbeb; color: #92400e; }
+
+  .otp-timer {
+    display: flex;
+    align-items: baseline;
+    justify-content: center;
+    gap: 8px;
+    margin: 2px 0 18px;
+    font-size: 13px;
+    color: #64748b;
+  }
+  .otp-timer-value {
+    font-size: 18px;
+    font-weight: 700;
+    color: #1f9f92;
+    font-variant-numeric: tabular-nums;
+  }
+  .otp-timer-value.is-expiring { color: #dc2626; }
+
+  .otp-resend {
+    margin-top: 18px;
+    text-align: center;
+    font-size: 14px;
+    color: #475569;
+  }
+  .otp-resend-button {
+    background: none;
+    border: none;
+    color: #00876c;
+    font-weight: 700;
+    font-size: 14px;
+    cursor: pointer;
+    padding: 0;
+  }
+  .otp-resend-button:hover:not(:disabled) { color: #00755d; text-decoration: underline; }
+  .otp-resend-button:disabled { color: #94a3b8; cursor: not-allowed; }
+
+  .otp-help {
+    margin: 0 0 10px 0;
+    font-size: 12px;
+    color: #64748b;
+    line-height: 1.55;
+  }
+
+  .auth-theme-toggle {
+    position: absolute;
+    top: 12px;
+    right: 12px;
+    z-index: 2;
+    background: var(--v-surface-muted);
+    border: 1px solid var(--v-border);
+    border-radius: 10px;
+    padding: 2px;
+  }
+
+  [data-theme="dark"] .mock-auth-card {
+    background: rgba(15, 23, 42, 0.88);
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.35);
+    color: #f1f5f9;
+  }
+  [data-theme="dark"] .mock-auth-header h1 { color: #f8fafc; }
+  [data-theme="dark"] .mock-auth-header p,
+  [data-theme="dark"] .mock-auth-footer,
+  [data-theme="dark"] .otp-help,
+  [data-theme="dark"] .otp-timer { color: #94a3b8; }
+  [data-theme="dark"] .mock-form-group label { color: #e2e8f0; }
+  [data-theme="dark"] .mock-form-group input {
+    background-color: #0f172a;
+    border-color: #334155;
+    color: #f1f5f9;
+  }
+  [data-theme="dark"] .mock-form-group input:disabled {
+    background-color: #162032;
+    color: #64748b;
+  }
+  [data-theme="dark"] .mock-checkbox-container { color: #cbd5e1; }
+  [data-theme="dark"] .mock-forgot-link,
+  [data-theme="dark"] .mock-signup-link { color: #e2e8f0; }
+  [data-theme="dark"] .mock-auth-divider::before,
+  [data-theme="dark"] .mock-auth-divider::after { background: #334155; }
+  [data-theme="dark"] .modal-dialog {
+    background: #1e293b;
+    color: #f1f5f9;
+  }
+  [data-theme="dark"] .modal-header h2 { color: #f8fafc; }
+  [data-theme="dark"] .modal-header p { color: #94a3b8; }
+  [data-theme="dark"] .modal-input {
+    background: #0f172a;
+    border-color: #334155;
+    color: #f1f5f9;
+  }
+  [data-theme="dark"] .btn-secondary {
+    background: #334155;
+    color: #e2e8f0;
+  }
+  [data-theme="dark"] .password-requirements {
+    background-color: #0f172a;
+    border-color: #334155;
+  }
+  [data-theme="dark"] .password-requirements-title { color: #cbd5e1; }
+  [data-theme="dark"] .auth-theme-toggle {
+    background: var(--v-chrome-hover);
+    border-color: var(--v-border);
+  }
 `;
 
 // ── AuthErrorBanner ────────────────────────────────────────────────────────────
@@ -500,6 +629,9 @@ export function AuthLayout({ children }: Readonly<AuthLayoutProps>) {
       {/* Right form card */}
       <div className="auth-right-form-area">
         <div className="mock-auth-card">
+          <div className="auth-theme-toggle">
+            <ThemeToggle />
+          </div>
 
           {/* Logo */}
           <div className="mock-logo-container">

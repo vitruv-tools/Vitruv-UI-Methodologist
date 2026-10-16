@@ -1,5 +1,6 @@
 import React, { useRef } from 'react';
 import { BoundChangePasswordModal } from '../ui/BoundChangePasswordModal';
+import { ThemeToggle } from '../ui/ThemeToggle';
 import { useChangePassword } from '../../hooks/useChangePassword';
 import { useDismissOnOutsideClick } from '../../hooks/useDismissOnOutsideClick';
 import { getUserInitials } from '../../utils/userInitials';
@@ -339,6 +340,9 @@ export const AppSidebar: React.FC<AppSidebarProps> = ({
 
         {/* Border above user card */}
         <div style={{ borderTop: '1px solid rgba(255,255,255,0.07)', padding: '10px 12px 12px' }}>
+          <div style={{ marginBottom: 10 }}>
+            <ThemeToggle variant="segmented" tone="onDark" />
+          </div>
           {/* User card */}
           <button type="button"
             onClick={() => setMenuOpen(v => !v)}

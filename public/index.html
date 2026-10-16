@@ -4,7 +4,19 @@
     <meta charset="utf-8" />
     <link rel="icon" href="%PUBLIC_URL%/favicon.ico?v=2" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <meta name="theme-color" content="#000000" />
+    <meta name="theme-color" content="#f7f8fa" />
+    <script>
+      (function () {
+        try {
+          var theme = localStorage.getItem('vitruv.theme');
+          if (theme !== 'dark' && theme !== 'light') theme = 'light';
+          document.documentElement.setAttribute('data-theme', theme);
+          document.documentElement.style.colorScheme = theme;
+        } catch (e) {
+          document.documentElement.setAttribute('data-theme', 'light');
+        }
+      })();
+    </script>
     <meta
       name="description"
       content="Vitruvius Methodologist - Methodological Dashboard for Meta Models and Projects"

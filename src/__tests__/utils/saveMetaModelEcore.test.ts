@@ -26,10 +26,12 @@ const META = {
   description: 'Test model',
   domain: 'Testing',
   keyword: ['uml', 'ecore'],
-  genModelFileId: 20,
 };
 
 describe('saveMetaModelEcore', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
   afterEach(() => jest.clearAllMocks());
 
   it('overwrites the existing ecore file in place when update is supported', async () => {
@@ -113,7 +115,6 @@ describe('saveMetaModelEcore', () => {
         description: META.description,
         domain: META.domain,
         keyword: META.keyword,
-        genModelFileId: META.genModelFileId,
       },
     });
 
@@ -125,7 +126,6 @@ describe('saveMetaModelEcore', () => {
       domain: META.domain,
       keyword: META.keyword,
       ecoreFileId: 101,
-      genModelFileId: META.genModelFileId,
     }));
     expect(result.ecoreFileId).toBe(101);
   });

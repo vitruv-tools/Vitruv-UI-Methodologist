@@ -1,6 +1,7 @@
 import React from 'react';
 import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
 import { CreateModelModal } from '../../../components/ui/CreateModelModal';
+import { resetThemeStore, setTheme } from '../../../theme/theme';
 
 // ─── environment polyfills ────────────────────────────────────────────────────
 
@@ -72,29 +73,33 @@ const fillRequiredFields = () => {
   fireEvent.click(screen.getByText('Add KW'));
 };
 
-const uploadBothFilesViaFileMode = async () => {
-  const ecoreInput = document.querySelector('input[accept=".ecore"]') as HTMLInputElement;
-  const genmodelInput = document.querySelector('input[accept=".genmodel"]') as HTMLInputElement;
+const uploadEcoreViaFileMode = async () => {
+  const ecoreInput = document.querySelector(
+    'input[accept=".ecore"]',
+  ) as HTMLInputElement;
+
+  const file = new File(['<ecore/>'], 'a.ecore', {
+    type: 'application/octet-stream',
+  });
 
   await act(async () => {
-    fireEvent.change(ecoreInput, { target: { files: [new File([''], 'a.ecore')] } });
+    fireEvent.change(ecoreInput, {
+      target: { files: [file] },
+    });
   });
-  await waitFor(() => expect(apiService.uploadFile).toHaveBeenCalledTimes(1));
 
-  await act(async () => {
-    fireEvent.change(genmodelInput, { target: { files: [new File([''], 'a.genmodel')] } });
+  await waitFor(() => {
+    expect(apiService.uploadFile).toHaveBeenCalledWith(file, 'ECORE');
   });
-  await waitFor(() => expect(apiService.uploadFile).toHaveBeenCalledTimes(2));
 };
 
-const metamodelRejectedError = {
-  response: { data: { message: 'Metamodel rejected: invalid GenModel configuration' } },
-};
+const ECORE_CONTENT = '<?xml version="1.0" encoding="UTF-8"?>\n<ecore:EPackage name="m"/>';
 
-const mockFetchOk = (content = '<content/>') => {
-  const blob = new Blob([content], { type: 'application/octet-stream' });
+const mockFetchOk = (content = ECORE_CONTENT, contentType = 'application/octet-stream') => {
+  const blob = new Blob([content], { type: contentType });
   (global as any).fetch = jest.fn().mockResolvedValue({
     ok: true,
+    headers: { get: (name: string) => (name.toLowerCase() === 'content-type' ? contentType : null) },
     blob: jest.fn().mockResolvedValue(blob),
   });
 };
@@ -107,45 +112,68 @@ const mockFetchFail = (status = 404, statusText = 'Not Found') => {
   });
 };
 
+const expectedCreateRequest = {
+  name: 'Test Model',
+  version: '1.0',
+  description: 'A description',
+  domain: 'Testing',
+  keyword: ['kw'],
+  ecoreFileId: 10,
+};
+
 // ─── tests ────────────────────────────────────────────────────────────────────
 
 describe('CreateModelModal', () => {
   beforeEach(() => {
-    jest.clearAllMocks();
-    // Re-declare implementations after clearAllMocks to ensure they are always fresh
+    jest.resetAllMocks();
+    // Reset call history and queued one-time implementations before each test.
     apiService.uploadFile.mockResolvedValue({ data: { id: 10 } });
     apiService.deleteFile.mockResolvedValue({});
     apiService.createMetaModel.mockResolvedValue({ data: { id: 1, name: 'MM' } });
     delete (global as any).fetch;
   });
 
+  afterEach(() => {
+    resetThemeStore();
+  });
+
   // ── rendering ───────────────────────────────────────────────────────────────
+
+  it('renders only the Ecore upload input', () => {
+    render(<CreateModelModal isOpen onClose={jest.fn()} />);
+    expect(document.querySelectorAll('input[type="file"]')).toHaveLength(1);
+    expect(document.querySelector('input[accept=".ecore"]')).toBeInTheDocument();
+    expect(document.querySelector('input[accept=".genmodel"]')).not.toBeInTheDocument();
+    expect(screen.queryByText('.genmodel')).not.toBeInTheDocument();
+  });
 
   it('renders the modal title when open', () => {
     render(<CreateModelModal isOpen onClose={jest.fn()} />);
-    expect(screen.getByText(/Import Meta Model/i)).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Add Meta Model' })).toBeInTheDocument();
   });
 
   it('does not render when isOpen is false', () => {
     render(<CreateModelModal isOpen={false} onClose={jest.fn()} />);
-    expect(screen.queryByText(/Import Meta Model/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Add Meta Model/i)).not.toBeInTheDocument();
   });
 
-  it('renders .ecore and .genmodel file type badges', () => {
+  it('renders File and URL toggles for the Ecore card', () => {
     render(<CreateModelModal isOpen onClose={jest.fn()} />);
-    expect(screen.getAllByText('.ecore').length).toBeGreaterThanOrEqual(1);
-    expect(screen.getAllByText('.genmodel').length).toBeGreaterThanOrEqual(1);
-  });
-
-  it('renders File and URL toggles for both file cards', () => {
-    render(<CreateModelModal isOpen onClose={jest.fn()} />);
-    expect(screen.getAllByText('File')).toHaveLength(2);
-    expect(screen.getAllByText('URL')).toHaveLength(2);
+    expect(screen.getAllByText('File')).toHaveLength(1);
+    expect(screen.getAllByText('URL')).toHaveLength(1);
   });
 
   it('shows drop-zones by default (file mode)', () => {
     render(<CreateModelModal isOpen onClose={jest.fn()} />);
-    expect(screen.getAllByText(/Click to select file/i)).toHaveLength(2);
+    expect(screen.getAllByText(/Click to select file/i)).toHaveLength(1);
+  });
+
+  it('uses theme surfaces so the Ecore file card and disabled submit button match dark mode', () => {
+    setTheme('dark');
+    render(<CreateModelModal isOpen onClose={jest.fn()} />);
+
+    expect(screen.getByRole('button', { name: 'Complete All Fields' })).toBeDisabled();
+    expect(screen.getAllByRole('button', { name: /Click to select file/i })).toHaveLength(1);
   });
 
   it('calls onClose when Cancel is clicked', async () => {
@@ -172,16 +200,6 @@ describe('CreateModelModal', () => {
     expect(onClose).not.toHaveBeenCalled();
   });
 
-  it('keeps the modal open when the .genmodel file picker is canceled', () => {
-    const onClose = jest.fn();
-    render(<CreateModelModal isOpen onClose={onClose} />);
-    const genmodelInput = document.querySelector('input[accept=".genmodel"]') as HTMLInputElement;
-
-    fireEvent(genmodelInput, new Event('cancel', { bubbles: true, cancelable: true }));
-
-    expect(onClose).not.toHaveBeenCalled();
-  });
-
   // ── file upload mode ─────────────────────────────────────────────────────────
 
   describe('file upload mode', () => {
@@ -197,18 +215,6 @@ describe('CreateModelModal', () => {
       });
     });
 
-    it('uploads a valid .genmodel file and calls uploadFile with GEN_MODEL type', async () => {
-      render(<CreateModelModal isOpen onClose={jest.fn()} />);
-      const genmodelInput = document.querySelector('input[accept=".genmodel"]') as HTMLInputElement;
-      const file = new File(['<genmodel/>'], 'model.genmodel', { type: 'application/octet-stream' });
-      await act(async () => {
-        fireEvent.change(genmodelInput, { target: { files: [file] } });
-      });
-      await waitFor(() => {
-        expect(apiService.uploadFile).toHaveBeenCalledWith(file, 'GEN_MODEL');
-      });
-    });
-
     it('shows an error when a non-.ecore file is selected', async () => {
       render(<CreateModelModal isOpen onClose={jest.fn()} />);
       const ecoreInput = document.querySelector('input[accept=".ecore"]') as HTMLInputElement;
@@ -217,16 +223,6 @@ describe('CreateModelModal', () => {
         fireEvent.change(ecoreInput, { target: { files: [file] } });
       });
       expect(screen.getByText(/Please select a valid .ecore file/i)).toBeInTheDocument();
-    });
-
-    it('shows an error when a non-.genmodel file is selected', async () => {
-      render(<CreateModelModal isOpen onClose={jest.fn()} />);
-      const genmodelInput = document.querySelector('input[accept=".genmodel"]') as HTMLInputElement;
-      const file = new File(['content'], 'model.txt', { type: 'text/plain' });
-      await act(async () => {
-        fireEvent.change(genmodelInput, { target: { files: [file] } });
-      });
-      expect(screen.getByText(/Please select a valid .genmodel file/i)).toBeInTheDocument();
     });
 
     it('shows ✓ Ready badge after a successful .ecore upload', async () => {
@@ -265,33 +261,20 @@ describe('CreateModelModal', () => {
   describe('URL import mode', () => {
     it('shows a URL input when switching .ecore card to URL mode', () => {
       render(<CreateModelModal isOpen onClose={jest.fn()} />);
-      fireEvent.click(screen.getAllByText('URL')[0]);
+      fireEvent.click(screen.getByText('URL'));
       expect(screen.getByPlaceholderText(/model\.ecore/i)).toBeInTheDocument();
-    });
-
-    it('shows a URL input when switching .genmodel card to URL mode', () => {
-      render(<CreateModelModal isOpen onClose={jest.fn()} />);
-      fireEvent.click(screen.getAllByText('URL')[1]);
-      expect(screen.getByPlaceholderText(/model\.genmodel/i)).toBeInTheDocument();
     });
 
     it('Import button is disabled when .ecore URL is empty', () => {
       render(<CreateModelModal isOpen onClose={jest.fn()} />);
-      fireEvent.click(screen.getAllByText('URL')[0]);
-      const importBtn = screen.getByText('Import').closest('button')!;
-      expect(importBtn).toBeDisabled();
-    });
-
-    it('Import button is disabled when .genmodel URL is empty', () => {
-      render(<CreateModelModal isOpen onClose={jest.fn()} />);
-      fireEvent.click(screen.getAllByText('URL')[1]);
+      fireEvent.click(screen.getByText('URL'));
       const importBtn = screen.getByText('Import').closest('button')!;
       expect(importBtn).toBeDisabled();
     });
 
     it('shows an error when .ecore URL has the wrong extension', async () => {
       render(<CreateModelModal isOpen onClose={jest.fn()} />);
-      fireEvent.click(screen.getAllByText('URL')[0]);
+      fireEvent.click(screen.getByText('URL'));
       fireEvent.change(screen.getByPlaceholderText(/model\.ecore/i), {
         target: { value: 'https://example.com/model.txt' },
       });
@@ -301,22 +284,10 @@ describe('CreateModelModal', () => {
       expect(screen.getByText(/URL must point to a .ecore file/i)).toBeInTheDocument();
     });
 
-    it('shows an error when .genmodel URL has the wrong extension', async () => {
-      render(<CreateModelModal isOpen onClose={jest.fn()} />);
-      fireEvent.click(screen.getAllByText('URL')[1]);
-      fireEvent.change(screen.getByPlaceholderText(/model\.genmodel/i), {
-        target: { value: 'https://example.com/model.xml' },
-      });
-      await act(async () => {
-        fireEvent.click(screen.getByText('Import'));
-      });
-      expect(screen.getByText(/URL must point to a .genmodel file/i)).toBeInTheDocument();
-    });
-
     it('imports a .ecore file from a valid URL and calls uploadFile with ECORE type', async () => {
-      mockFetchOk('<ecore/>');
+      mockFetchOk();
       render(<CreateModelModal isOpen onClose={jest.fn()} />);
-      fireEvent.click(screen.getAllByText('URL')[0]);
+      fireEvent.click(screen.getByText('URL'));
       fireEvent.change(screen.getByPlaceholderText(/model\.ecore/i), {
         target: { value: 'https://raw.githubusercontent.com/org/repo/main/model.ecore' },
       });
@@ -328,25 +299,10 @@ describe('CreateModelModal', () => {
       });
     });
 
-    it('imports a .genmodel file from a valid URL and calls uploadFile with GEN_MODEL type', async () => {
-      mockFetchOk('<genmodel/>');
-      render(<CreateModelModal isOpen onClose={jest.fn()} />);
-      fireEvent.click(screen.getAllByText('URL')[1]);
-      fireEvent.change(screen.getByPlaceholderText(/model\.genmodel/i), {
-        target: { value: 'https://raw.githubusercontent.com/org/repo/main/model.genmodel' },
-      });
-      await act(async () => {
-        fireEvent.click(screen.getByText('Import'));
-      });
-      await waitFor(() => {
-        expect(apiService.uploadFile).toHaveBeenCalledWith(expect.any(File), 'GEN_MODEL');
-      });
-    });
-
     it('shows ✓ Ready badge after a successful .ecore URL import', async () => {
-      mockFetchOk('<ecore/>');
+      mockFetchOk();
       render(<CreateModelModal isOpen onClose={jest.fn()} />);
-      fireEvent.click(screen.getAllByText('URL')[0]);
+      fireEvent.click(screen.getByText('URL'));
       fireEvent.change(screen.getByPlaceholderText(/model\.ecore/i), {
         target: { value: 'https://raw.githubusercontent.com/org/repo/main/model.ecore' },
       });
@@ -361,7 +317,7 @@ describe('CreateModelModal', () => {
     it('shows an error when the .ecore URL fetch returns a non-OK response', async () => {
       mockFetchFail(404, 'Not Found');
       render(<CreateModelModal isOpen onClose={jest.fn()} />);
-      fireEvent.click(screen.getAllByText('URL')[0]);
+      fireEvent.click(screen.getByText('URL'));
       fireEvent.change(screen.getByPlaceholderText(/model\.ecore/i), {
         target: { value: 'https://example.com/missing.ecore' },
       });
@@ -373,84 +329,189 @@ describe('CreateModelModal', () => {
       });
     });
 
-    it('shows an error when the .genmodel URL fetch returns a non-OK response', async () => {
-      mockFetchFail(500, 'Server Error');
+    const importFromUrl = (url = 'https://example.com/model.ecore') => {
+      fireEvent.click(screen.getByText('URL'));
+      fireEvent.change(screen.getByPlaceholderText(/model\.ecore/i), { target: { value: url } });
+      fireEvent.click(screen.getByText('Import'));
+    };
+
+    it.each([
+      ['an HTML page', '<!DOCTYPE html><html><body>File viewer</body></html>', 'text/html; charset=utf-8'],
+      ['HTML sent as plain text', '\n  <html lang="en"><head><title>Sign in</title></head></html>', 'text/plain'],
+    ])('rejects a URL that returns %s and uploads nothing', async (_label, content, contentType) => {
+      mockFetchOk(content, contentType);
       render(<CreateModelModal isOpen onClose={jest.fn()} />);
-      fireEvent.click(screen.getAllByText('URL')[1]);
-      fireEvent.change(screen.getByPlaceholderText(/model\.genmodel/i), {
-        target: { value: 'https://example.com/missing.genmodel' },
-      });
-      await act(async () => {
-        fireEvent.click(screen.getByText('Import'));
-      });
+
+      importFromUrl();
+
+      expect(await screen.findByText(/returned a web page, not the .ecore file itself/i)).toBeInTheDocument();
+      expect(apiService.uploadFile).not.toHaveBeenCalled();
+      expect(screen.queryByText(/Successfully imported/i)).not.toBeInTheDocument();
+      expect(screen.queryByText(/Ready/)).not.toBeInTheDocument();
+    });
+
+    it.each([
+      ['JSON', '{"error":"not found"}', /the content is not XML/i],
+      ['an XML error document', '<?xml version="1.0"?><Error><Code>NoSuchKey</Code></Error>', /starts with <Error>/i],
+    ])('rejects a URL that returns %s and uploads nothing', async (_label, content, message) => {
+      mockFetchOk(content, 'application/octet-stream');
+      render(<CreateModelModal isOpen onClose={jest.fn()} />);
+
+      importFromUrl();
+
+      expect(await screen.findByText(message)).toBeInTheDocument();
+      expect(apiService.uploadFile).not.toHaveBeenCalled();
+    });
+
+    it('keeps the previous upload when importing the same URL again returns a web page', async () => {
+      mockFetchOk();
+      render(<CreateModelModal isOpen onClose={jest.fn()} />);
+      importFromUrl();
+      await waitFor(() => expect(apiService.uploadFile).toHaveBeenCalledTimes(1));
+
+      mockFetchOk('<!DOCTYPE html><html></html>', 'text/html');
+      fireEvent.click(screen.getByText('Done'));
+
+      expect(await screen.findByText(/returned a web page/i)).toBeInTheDocument();
+      expect(apiService.deleteFile).not.toHaveBeenCalled();
+      expect(apiService.uploadFile).toHaveBeenCalledTimes(1);
+    });
+
+    it('accepts an .ecore file with a byte order mark and an XML declaration', async () => {
+      mockFetchOk('\uFEFF<?xml version="1.0" encoding="UTF-8"?>\n<ecore:EPackage name="m"/>', 'text/plain');
+      render(<CreateModelModal isOpen onClose={jest.fn()} />);
+
+      importFromUrl();
+
       await waitFor(() => {
-        expect(screen.getByText(/Failed to import .genmodel from URL/i)).toBeInTheDocument();
+        expect(apiService.uploadFile).toHaveBeenCalledWith(expect.any(File), 'ECORE');
       });
     });
 
     it('switching back to file mode hides the URL input', () => {
       render(<CreateModelModal isOpen onClose={jest.fn()} />);
-      fireEvent.click(screen.getAllByText('URL')[0]);
+      fireEvent.click(screen.getByText('URL'));
       expect(screen.getByPlaceholderText(/model\.ecore/i)).toBeInTheDocument();
 
-      fireEvent.click(screen.getAllByText('File')[0]);
+      fireEvent.click(screen.getByText('File'));
       expect(screen.queryByPlaceholderText(/model\.ecore/i)).not.toBeInTheDocument();
     });
   });
 
-  // ── form submission ──────────────────────────────────────────────────────────
-
   describe('form submission', () => {
-    it('Submit button is disabled when files are not yet uploaded', () => {
+    const expectedRequest = {
+      name: 'Test Model',
+      version: '1.0',
+      description: 'A description',
+      domain: 'Testing',
+      keyword: ['kw'],
+      ecoreFileId: 10,
+    };
+
+    it('disables submission until an Ecore file is uploaded', () => {
       render(<CreateModelModal isOpen onClose={jest.fn()} />);
       fillRequiredFields();
       expect(screen.getByText('Complete All Fields')).toBeDisabled();
     });
 
-    it('creates a meta model after both files are uploaded via file mode', async () => {
-      render(<CreateModelModal isOpen onClose={jest.fn()} onSuccess={jest.fn()} />);
-      fillRequiredFields();
-      await uploadBothFilesViaFileMode();
-
-      await act(async () => {
-        fireEvent.click(screen.getByRole('button', { name: /Import Meta Model/i }));
-      });
-
-      await waitFor(() => {
-        expect(apiService.createMetaModel).toHaveBeenCalledWith(
-          expect.objectContaining({
-            name: 'Test Model',
-            description: 'A description',
-            domain: 'Testing',
-            ecoreFileId: 10,
-            genModelFileId: 10,
-            applyGenModelFixes: false,
-          }),
-        );
-      });
+    it('disables submission when required metadata is missing', async () => {
+      render(<CreateModelModal isOpen onClose={jest.fn()} />);
+      await uploadEcoreViaFileMode();
+      expect(screen.getByText('Complete All Fields')).toBeDisabled();
+      expect(apiService.createMetaModel).not.toHaveBeenCalled();
     });
 
-    it('creates a meta model after both files are imported via URL mode', async () => {
+  it.each(['file', 'url'])(
+  'creates once after an Ecore %s import',
+  async (mode) => {
+    const onSuccess = jest.fn();
+    const onClose = jest.fn();
+
+    render(
+      <CreateModelModal
+        isOpen
+        onClose={onClose}
+        onSuccess={onSuccess}
+      />,
+    );
+
+    fillRequiredFields();
+
+    if (mode === 'file') {
+      await uploadEcoreViaFileMode();
+    } else {
       mockFetchOk();
+
+      fireEvent.click(screen.getByText('URL'));
+
+      fireEvent.change(
+        screen.getByPlaceholderText(/model\.ecore/i),
+        {
+          target: {
+            value: 'https://example.com/model.ecore',
+          },
+        },
+      );
+
+      await act(async () => {
+        fireEvent.click(screen.getByText('Import'));
+      });
+
+      await waitFor(() => {
+        expect(apiService.uploadFile).toHaveBeenCalledWith(
+          expect.any(File),
+          'ECORE',
+        );
+      });
+    }
+
+    await waitFor(() => {
+      expect(
+        screen.getByRole('button', {
+          name: /Import Meta Model/i,
+        }),
+      ).toBeEnabled();
+    });
+
+    const submitButton = screen.getByRole('button', {
+      name: /Import Meta Model/i,
+    });
+
+    await act(async () => {
+      fireEvent.click(submitButton);
+    });
+
+    await waitFor(() => {
+      expect(onSuccess).toHaveBeenCalledTimes(1);
+    });
+
+    expect(apiService.uploadFile).toHaveBeenCalledTimes(1);
+    expect(apiService.uploadFile).toHaveBeenCalledWith(
+      expect.any(File),
+      'ECORE',
+    );
+
+    expect(apiService.createMetaModel).toHaveBeenCalledTimes(1);
+    expect(apiService.createMetaModel).toHaveBeenCalledWith(
+      expectedRequest,
+    );
+
+    expect(onSuccess).toHaveBeenCalledWith({
+      ...expectedRequest,
+      id: 1,
+      name: 'MM',
+    });
+
+    expect(onClose).toHaveBeenCalledTimes(1);
+    expect(apiService.deleteFile).not.toHaveBeenCalled();
+  },
+);
+
+    it('sends the version typed on the form', async () => {
       render(<CreateModelModal isOpen onClose={jest.fn()} onSuccess={jest.fn()} />);
       fillRequiredFields();
-
-      // Import .ecore via URL
-      fireEvent.click(screen.getAllByText('URL')[0]);
-      fireEvent.change(screen.getByPlaceholderText(/model\.ecore/i), {
-        target: { value: 'https://example.com/model.ecore' },
-      });
-      await act(async () => { fireEvent.click(screen.getByText('Import')); });
-      await waitFor(() => expect(apiService.uploadFile).toHaveBeenCalledTimes(1));
-
-      // Import .genmodel via URL
-      fireEvent.click(screen.getAllByText('URL')[1]);
-      fireEvent.change(screen.getByPlaceholderText(/model\.genmodel/i), {
-        target: { value: 'https://example.com/model.genmodel' },
-      });
-      // After ecore import, its button shows "✓ Done"; only genmodel shows "Import"
-      await act(async () => { fireEvent.click(screen.getByText('Import')); });
-      await waitFor(() => expect(apiService.uploadFile).toHaveBeenCalledTimes(2));
+      fireEvent.change(screen.getByLabelText(/Version/i), { target: { value: '2.0' } });
+      await uploadEcoreViaFileMode();
 
       await act(async () => {
         fireEvent.click(screen.getByRole('button', { name: /Import Meta Model/i }));
@@ -458,157 +519,167 @@ describe('CreateModelModal', () => {
 
       await waitFor(() => {
         expect(apiService.createMetaModel).toHaveBeenCalledWith(
-          expect.objectContaining({
-            name: 'Test Model',
-            ecoreFileId: 10,
-            genModelFileId: 10,
-            applyGenModelFixes: false,
-          }),
+          expect.objectContaining({ name: 'Test Model', version: '2.0' }),
         );
       });
     });
 
-    it('follows up the inspect-only call with a persisting call once the GenModel is clean', async () => {
+    it('requires a non-blank version and does not check semver format', async () => {
+      render(<CreateModelModal isOpen onClose={jest.fn()} onSuccess={jest.fn()} />);
+      fillRequiredFields();
+      fireEvent.change(screen.getByLabelText(/Version/i), { target: { value: '   ' } });
+      await uploadEcoreViaFileMode();
+
+      expect(screen.getByText('Complete All Fields')).toBeDisabled();
+
+      fireEvent.change(screen.getByLabelText(/Version/i), { target: { value: 'beta' } });
+      await act(async () => {
+        fireEvent.click(screen.getByRole('button', { name: /Import Meta Model/i }));
+      });
+
+      await waitFor(() => {
+        expect(apiService.createMetaModel).toHaveBeenCalledWith(
+          expect.objectContaining({ version: 'beta' }),
+        );
+      });
+    });
+
+    it.each([
+      ['network error', new Error('Network error'), 'Network error'],
+      ['backend validation error', { response: { data: { message: 'Invalid Ecore model' } } }, 'Invalid Ecore model'],
+    ])('reports a %s and cleans up the uploaded Ecore file', async (_label, error, message) => {
+      apiService.createMetaModel.mockRejectedValueOnce(error);
       const onSuccess = jest.fn();
       render(<CreateModelModal isOpen onClose={jest.fn()} onSuccess={onSuccess} />);
       fillRequiredFields();
-      await uploadBothFilesViaFileMode();
-
-      await act(async () => {
-        fireEvent.click(screen.getByRole('button', { name: /Import Meta Model/i }));
-      });
-
-      // POST /meta-models with applyGenModelFixes:false only inspects the GenModel and
-      // never persists it (see backend MetaModelService.create) — a second call with
-      // applyGenModelFixes:true is required to actually save the meta model.
-      await waitFor(() => {
-        expect(apiService.createMetaModel).toHaveBeenCalledTimes(2);
-      });
-      expect(apiService.createMetaModel).toHaveBeenNthCalledWith(
-        1,
-        expect.objectContaining({ applyGenModelFixes: false }),
-      );
-      expect(apiService.createMetaModel).toHaveBeenNthCalledWith(
-        2,
-        expect.objectContaining({
-          name: 'Test Model',
-          ecoreFileId: 10,
-          genModelFileId: 10,
-          applyGenModelFixes: true,
-        }),
-      );
-      await waitFor(() => expect(onSuccess).toHaveBeenCalled());
-    });
-
-    it('shows an error and never attempts the persisting call when the inspect call itself fails', async () => {
-      apiService.createMetaModel.mockRejectedValueOnce(new Error('Setup service unreachable'));
-
-      render(<CreateModelModal isOpen onClose={jest.fn()} onSuccess={jest.fn()} />);
-      fillRequiredFields();
-      await uploadBothFilesViaFileMode();
+      await uploadEcoreViaFileMode();
 
       await act(async () => {
         fireEvent.click(screen.getByRole('button', { name: /Import Meta Model/i }));
       });
 
       await waitFor(() => {
-        expect(screen.getByText(/Error creating meta model: Setup service unreachable/i)).toBeInTheDocument();
+        expect(screen.getByText(`Error creating meta model: ${message}`)).toBeInTheDocument();
       });
       expect(apiService.createMetaModel).toHaveBeenCalledTimes(1);
-    });
-
-    it('shows an error and cleans up uploaded files when the persisting call fails', async () => {
-      apiService.createMetaModel
-        .mockResolvedValueOnce({ data: {}, message: 'GenModel inspected successfully' })
-        .mockRejectedValueOnce(new Error('Network error'));
-
-      render(<CreateModelModal isOpen onClose={jest.fn()} onSuccess={jest.fn()} />);
-      fillRequiredFields();
-      await uploadBothFilesViaFileMode();
-
-      await act(async () => {
-        fireEvent.click(screen.getByRole('button', { name: /Import Meta Model/i }));
-      });
-
-      await waitFor(() => {
-        expect(screen.getByText(/Error creating meta model: Network error/i)).toBeInTheDocument();
-      });
-      expect(apiService.createMetaModel).toHaveBeenCalledTimes(2);
-      expect(apiService.deleteFile).toHaveBeenCalled();
+      expect(apiService.deleteFile).toHaveBeenCalledTimes(1);
+      expect(apiService.deleteFile).toHaveBeenCalledWith(10);
+      expect(onSuccess).not.toHaveBeenCalled();
+      expect(screen.getByText('Complete All Fields')).toBeDisabled();
     });
   });
+  // ── creating from scratch ────────────────────────────────────────────────────
 
-  describe('GenModel rejection flow', () => {
-    it('calls createMetaModel with applyGenModelFixes false and shows the fix prompt on rejection', async () => {
-      apiService.createMetaModel.mockRejectedValueOnce(metamodelRejectedError);
+  describe('creating a new meta model from scratch', () => {
+    const chooseCreateNew = () => fireEvent.click(screen.getByRole('button', { name: 'Create new' }));
+
+    it('starts in import mode', () => {
+      render(<CreateModelModal isOpen onClose={jest.fn()} />);
+      expect(screen.getByRole('group', { name: 'Meta model source' })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Import existing' })).toHaveAttribute('aria-pressed', 'true');
+      expect(screen.getByRole('button', { name: 'Create new' })).toHaveAttribute('aria-pressed', 'false');
+      expect(screen.getByText('Required ECore File')).toBeInTheDocument();
+    });
+
+    it('hides the Ecore file section and names the empty file after the meta model', () => {
       render(<CreateModelModal isOpen onClose={jest.fn()} />);
       fillRequiredFields();
-      await uploadBothFilesViaFileMode();
+      chooseCreateNew();
 
-      await act(async () => {
-        fireEvent.click(screen.getByRole('button', { name: /Import Meta Model/i }));
-      });
-
-      await waitFor(() => {
-        expect(screen.getByText(/We found some issues in your GenModel/i)).toBeInTheDocument();
-        expect(screen.getByText(/Save with automatic GenModel fixes/i)).toBeInTheDocument();
-        expect(screen.getByText(/Cancel scenario/i)).toBeInTheDocument();
-      });
-      expect(apiService.createMetaModel).toHaveBeenCalledWith(
-        expect.objectContaining({ applyGenModelFixes: false }),
-      );
-      expect(apiService.createMetaModel).toHaveBeenCalledTimes(1);
+      expect(screen.getByRole('button', { name: 'Create new' })).toHaveAttribute('aria-pressed', 'true');
+      expect(screen.queryByText('Required ECore File')).not.toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: /Click to select file/i })).not.toBeInTheDocument();
+      expect(screen.queryByText('URL')).not.toBeInTheDocument();
+      expect(screen.getByText('testmodel.ecore')).toBeInTheDocument();
+      expect(screen.getByText('Start from an empty .ecore file')).toBeInTheDocument();
     });
 
-    it('retries with applyGenModelFixes true when the user approves automatic fixes', async () => {
-      apiService.createMetaModel
-        .mockRejectedValueOnce(metamodelRejectedError)
-        .mockResolvedValueOnce({ data: { id: 2, name: 'MM' }, message: 'Created' });
+    it('uploads an empty .ecore file and creates the meta model with it', async () => {
+      const onSuccess = jest.fn();
+      const onClose = jest.fn();
+      render(<CreateModelModal isOpen onClose={onClose} onSuccess={onSuccess} />);
+      fillRequiredFields();
+      chooseCreateNew();
 
+      const submitButton = screen.getByRole('button', { name: 'Create Meta Model' });
+      expect(submitButton).toBeEnabled();
+      fireEvent.click(submitButton);
+
+      await waitFor(() => expect(onSuccess).toHaveBeenCalledTimes(1));
+      expect(apiService.uploadFile).toHaveBeenCalledTimes(1);
+      const [uploaded, type] = apiService.uploadFile.mock.calls[0];
+      expect(type).toBe('ECORE');
+      expect(uploaded).toBeInstanceOf(File);
+      expect(uploaded.name).toBe('testmodel.ecore');
+      expect(uploaded.size).toBeGreaterThan(0);
+      expect(apiService.createMetaModel).toHaveBeenCalledWith(expectedCreateRequest);
+      expect(onClose).toHaveBeenCalledTimes(1);
+      expect(apiService.deleteFile).not.toHaveBeenCalled();
+    });
+
+    it('requires only the metadata fields', () => {
+      render(<CreateModelModal isOpen onClose={jest.fn()} />);
+      chooseCreateNew();
+      expect(screen.getByRole('button', { name: 'Complete All Fields' })).toBeDisabled();
+
+      fillRequiredFields();
+      expect(screen.getByRole('button', { name: 'Create Meta Model' })).toBeEnabled();
+    });
+
+    it('deletes the empty .ecore file again when the backend rejects the meta model', async () => {
+      apiService.createMetaModel.mockRejectedValueOnce({ response: { data: { message: 'Metamodel rejected: broken' } } });
+      const onSuccess = jest.fn();
+      render(<CreateModelModal isOpen onClose={jest.fn()} onSuccess={onSuccess} />);
+      fillRequiredFields();
+      chooseCreateNew();
+
+      fireEvent.click(screen.getByRole('button', { name: 'Create Meta Model' }));
+
+      await waitFor(() => {
+        expect(screen.getByRole('alert')).toHaveTextContent('Error creating meta model: Metamodel rejected: broken');
+      });
+      expect(apiService.deleteFile).toHaveBeenCalledTimes(1);
+      expect(apiService.deleteFile).toHaveBeenCalledWith(10);
+      expect(onSuccess).not.toHaveBeenCalled();
+      expect(screen.getByRole('button', { name: 'Create Meta Model' })).toBeEnabled();
+    });
+
+    it('does not create the meta model when the upload returns no file id', async () => {
+      apiService.uploadFile.mockResolvedValueOnce({ data: {} });
       render(<CreateModelModal isOpen onClose={jest.fn()} onSuccess={jest.fn()} />);
       fillRequiredFields();
-      await uploadBothFilesViaFileMode();
+      chooseCreateNew();
 
-      await act(async () => {
-        fireEvent.click(screen.getByRole('button', { name: /Import Meta Model/i }));
-      });
-      await waitFor(() => screen.getByText(/Save with automatic GenModel fixes/i));
-
-      await act(async () => {
-        fireEvent.click(screen.getByText(/Save with automatic GenModel fixes/i));
-      });
+      fireEvent.click(screen.getByRole('button', { name: 'Create Meta Model' }));
 
       await waitFor(() => {
-        expect(apiService.createMetaModel).toHaveBeenCalledTimes(2);
-        expect(apiService.createMetaModel).toHaveBeenLastCalledWith(
-          expect.objectContaining({
-            applyGenModelFixes: true,
-            name: 'Test Model',
-            ecoreFileId: 10,
-            genModelFileId: 10,
-          }),
-        );
+        expect(screen.getByRole('alert')).toHaveTextContent('did not return a file id');
       });
+      expect(apiService.createMetaModel).not.toHaveBeenCalled();
+      expect(apiService.deleteFile).not.toHaveBeenCalled();
     });
 
-    it('closes the modal when the user cancels the GenModel fix scenario', async () => {
-      apiService.createMetaModel.mockRejectedValueOnce(metamodelRejectedError);
-      const onClose = jest.fn();
-      render(<CreateModelModal isOpen onClose={onClose} />);
-      fillRequiredFields();
-      await uploadBothFilesViaFileMode();
+    it('discards an uploaded file when switching to a new meta model', async () => {
+      render(<CreateModelModal isOpen onClose={jest.fn()} />);
+      await uploadEcoreViaFileMode();
 
-      await act(async () => {
-        fireEvent.click(screen.getByRole('button', { name: /Import Meta Model/i }));
-      });
-      await waitFor(() => screen.getByText(/Cancel scenario/i));
+      chooseCreateNew();
+      await waitFor(() => expect(apiService.deleteFile).toHaveBeenCalledWith(10));
 
-      await act(async () => {
-        fireEvent.click(screen.getByText(/Cancel scenario/i));
-      });
+      fireEvent.click(screen.getByRole('button', { name: 'Import existing' }));
+      expect(screen.getByText(/Click to select file/i)).toBeInTheDocument();
+      expect(screen.queryByText(/Ready/)).not.toBeInTheDocument();
+    });
 
+    it('goes back to import mode when reopened', async () => {
+      const { rerender } = render(<CreateModelModal isOpen onClose={jest.fn()} />);
+      chooseCreateNew();
+      fireEvent.click(screen.getByText('Cancel'));
+
+      rerender(<CreateModelModal isOpen={false} onClose={jest.fn()} />);
+      rerender(<CreateModelModal isOpen onClose={jest.fn()} />);
       await waitFor(() => {
-        expect(onClose).toHaveBeenCalled();
+        expect(screen.getByRole('button', { name: 'Import existing' })).toHaveAttribute('aria-pressed', 'true');
       });
     });
   });

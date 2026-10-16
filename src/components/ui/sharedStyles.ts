@@ -18,7 +18,7 @@ export const DANGER_COLOR_HOVER = '#b91c1c';
 
 /** Large modal panel (code editor, UML viewer, etc.) */
 export const largeModalPanelStyle: React.CSSProperties = {
-  backgroundColor: '#ffffff',
+  backgroundColor: 'var(--v-surface)',
   borderRadius: '12px',
   width: '90%',
   maxWidth: '1200px',
@@ -27,7 +27,7 @@ export const largeModalPanelStyle: React.CSSProperties = {
   display: 'flex',
   flexDirection: 'column',
   boxShadow: '0 24px 64px rgba(0, 0, 0, 0.22), 0 4px 16px rgba(0, 0, 0, 0.08)',
-  border: '1px solid #e2e8f0',
+  border: '1px solid var(--v-border)',
   overflow: 'hidden',
   position: 'relative',
   zIndex: 1,
@@ -36,8 +36,8 @@ export const largeModalPanelStyle: React.CSSProperties = {
 
 export const modalPanelHeaderStyle: React.CSSProperties = {
   padding: '14px 20px',
-  borderBottom: '1px solid #f1f5f9',
-  background: '#fafafa',
+  borderBottom: '1px solid var(--v-border-subtle)',
+  background: 'var(--v-table-header)',
   display: 'flex',
   alignItems: 'center',
   justifyContent: 'space-between',
@@ -46,8 +46,8 @@ export const modalPanelHeaderStyle: React.CSSProperties = {
 
 export const modalPanelToolbarStyle: React.CSSProperties = {
   padding: '10px 20px',
-  borderBottom: '1px solid #f1f5f9',
-  background: '#ffffff',
+  borderBottom: '1px solid var(--v-border-subtle)',
+  background: 'var(--v-surface)',
   display: 'flex',
   gap: '8px',
   flexWrap: 'wrap',
@@ -57,8 +57,8 @@ export const modalPanelToolbarStyle: React.CSSProperties = {
 
 export const modalPanelFooterStyle: React.CSSProperties = {
   padding: '10px 20px',
-  borderTop: '1px solid #f1f5f9',
-  background: '#f8fafc',
+  borderTop: '1px solid var(--v-border-subtle)',
+  background: 'var(--v-surface-muted)',
   display: 'flex',
   justifyContent: 'space-between',
   alignItems: 'center',
@@ -69,7 +69,7 @@ export const modalCloseButtonStyle: React.CSSProperties = {
   border: 'none',
   background: 'transparent',
   cursor: 'pointer',
-  color: '#94a3b8',
+  color: 'var(--v-text-muted)',
   fontSize: '18px',
   width: '32px',
   height: '32px',
@@ -103,7 +103,7 @@ export const labelStyle: React.CSSProperties = {
   display: 'block',
   fontSize: '13px',
   fontWeight: 600,
-  color: '#374151',
+  color: 'var(--v-text-secondary)',
   marginBottom: '6px',
   fontFamily: 'ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, sans-serif',
   letterSpacing: '0.01em',
@@ -112,13 +112,13 @@ export const labelStyle: React.CSSProperties = {
 export const inputStyle: React.CSSProperties = {
   width: '100%',
   padding: '10px 12px',
-  border: '1.5px solid #e2e8f0',
+  border: '1.5px solid var(--v-border)',
   borderRadius: '8px',
   fontSize: '14px',
   boxSizing: 'border-box',
   transition: 'all 0.2s ease',
-  background: '#f8fafc',
-  color: '#0f172a',
+  background: 'var(--v-surface-muted)',
+  color: 'var(--v-text)',
   fontFamily: 'ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, sans-serif',
 };
 
@@ -128,9 +128,9 @@ export const errorMessageStyle: React.CSSProperties = {
   borderRadius: '8px',
   fontSize: '13px',
   fontWeight: '500',
-  backgroundColor: '#f8d7da',
-  color: '#721c24',
-  border: '1px solid #f5c6cb',
+  backgroundColor: 'var(--v-danger-bg)',
+  color: 'var(--v-danger-text)',
+  border: '1px solid var(--v-danger-border)',
 };
 
 export const successMessageStyle: React.CSSProperties = {
@@ -139,9 +139,9 @@ export const successMessageStyle: React.CSSProperties = {
   borderRadius: '8px',
   fontSize: '13px',
   fontWeight: '500',
-  backgroundColor: '#d4edda',
-  color: '#155724',
-  border: '1px solid #c3e6cb',
+  backgroundColor: 'var(--v-success-bg)',
+  color: 'var(--v-success-text)',
+  border: '1px solid var(--v-success-border)',
 };
 
 export const fileInputStyle: React.CSSProperties = { display: 'none' };
@@ -149,7 +149,7 @@ export const fileInputStyle: React.CSSProperties = { display: 'none' };
 export const progressBarContainerStyle: React.CSSProperties = {
   width: '100%',
   height: '8px',
-  backgroundColor: '#e0e0e0',
+  backgroundColor: 'var(--v-border)',
   borderRadius: '4px',
   overflow: 'hidden',
 };

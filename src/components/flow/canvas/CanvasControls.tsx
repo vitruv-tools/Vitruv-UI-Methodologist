@@ -14,8 +14,9 @@ export const CanvasControlButton: React.FC<CanvasControlButtonProps> = ({ onClic
       width: 36,
       height: 36,
       borderRadius: 10,
-      border: '1px solid #e5e7eb',
-      background: '#ffffff',
+      border: '1px solid var(--v-border)',
+      background: 'var(--v-chrome-bg)',
+      color: 'var(--v-chrome-icon)',
       cursor: 'pointer',
       display: 'flex',
       alignItems: 'center',
@@ -25,8 +26,8 @@ export const CanvasControlButton: React.FC<CanvasControlButtonProps> = ({ onClic
       boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
     }}
     title={title}
-    onMouseEnter={e => (e.currentTarget.style.background = '#f0f0f0')}
-    onMouseLeave={e => (e.currentTarget.style.background = '#ffffff')}
+    onMouseEnter={e => (e.currentTarget.style.background = 'var(--v-chrome-hover)')}
+    onMouseLeave={e => (e.currentTarget.style.background = 'var(--v-chrome-bg)')}
   >
     {icon}
   </button>

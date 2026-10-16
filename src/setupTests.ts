@@ -3,8 +3,10 @@
 // expect(element).toHaveTextContent(/react/i)
 // learn more: https://github.com/testing-library/jest-dom
 import '@testing-library/jest-dom';
+import { act } from '@testing-library/react';
 import './__mocks__/resizeObserverMock';
 import { deserialize, serialize } from 'node:v8';
+import { resetThemeStore } from './theme/theme';
 
 // Set up environment variables for tests
 process.env.REACT_APP_API_BASE_URL = process.env.REACT_APP_API_BASE_URL || 'http://localhost:9811';
@@ -16,3 +18,9 @@ globalThis.structuredClone = (val: any) => {
   }
   return deserialize(serialize(val));
 };
+
+afterEach(() => {
+  act(() => {
+    resetThemeStore();
+  });
+});

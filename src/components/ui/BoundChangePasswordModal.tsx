@@ -13,8 +13,10 @@ export const BoundChangePasswordModal: React.FC<BoundChangePasswordModalProps> =
   <ChangePasswordModal
     isOpen={c.isOpen}
     onClose={c.close}
+    currentPassword={c.currentPassword}
     newPassword={c.newPassword}
     confirmPassword={c.confirmPassword}
+    onCurrentPasswordChange={c.setCurrentPassword}
     onNewPasswordChange={c.setNewPassword}
     onConfirmPasswordChange={c.setConfirmPassword}
     validation={c.validation}
