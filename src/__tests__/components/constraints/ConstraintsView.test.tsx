@@ -524,3 +524,270 @@ describe('ConstraintsView', () => {
     });
   });
 });
+
+// ── Predefined rule sets in a project (#544) ──────────────────────────────────
+
+describe('ConstraintsView predefined rule sets in a project', () => {
+  const kitNode = {
+    id: 'k1',
+    type: 'ecoreFile',
+    data: { fileName: 'kit.ecore', fileContent: '<ecore:EPackage name="kit"/>', domain: 'kit' },
+    position: { x: 0, y: 0 },
+  };
+  const otherNode = {
+    id: 'o1',
+    type: 'ecoreFile',
+    data: { fileName: 'other.ecore', fileContent: '<ecore:EPackage name="other"/>', domain: 'other' },
+    position: { x: 0, y: 0 },
+  };
+  const createdNames = () =>
+    (apiService.createRuleSet as jest.Mock).mock.calls.map(([, body]) => body.name);
+
+  /** Resolves each create with its own id, 100, 101, ... */
+  const createWithIds = () => {
+    let nextId = 100;
+    (apiService.createRuleSet as jest.Mock).mockImplementation(() => Promise.resolve({ id: nextId++ }));
+  };
+
+  /** Opens a rule set's panel and deletes the set. */
+  const deleteSet = async (name: string) => {
+    fireEvent.click(await screen.findByText(name));
+    fireEvent.click(screen.getByRole('button', { name: 'Delete' }));
+    await waitFor(() => expect(screen.queryByText(name)).not.toBeInTheDocument());
+  };
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    localStorage.clear();
+    (apiService.getRuleSets as jest.Mock).mockResolvedValue([]);
+    (apiService.updateRuleSet as jest.Mock).mockResolvedValue({});
+    (apiService.deleteRuleSet as jest.Mock).mockResolvedValue({});
+    createWithIds();
+  });
+
+  afterEach(() => {
+    localStorage.clear();
+  });
+
+  it('shows them when the project has no saved rule sets', async () => {
+    render(<ConstraintsView vsumId="42" canvasNodes={[pfandNode as any]} />);
+
+    expect(await screen.findByText('Crate Rules')).toBeInTheDocument();
+    expect(screen.getByText('Deposit Item Rules')).toBeInTheDocument();
+    expect(apiService.getRuleSets).toHaveBeenCalledWith(42);
+  });
+
+  it('does not show them when loading fails, since the project may have saved rule sets', async () => {
+    (apiService.getRuleSets as jest.Mock).mockRejectedValue(new Error('Network error'));
+
+    render(<ConstraintsView vsumId="42" canvasNodes={[pfandNode as any]} />);
+
+    await waitFor(() => expect(apiService.getRuleSets).toHaveBeenCalled());
+    await act(async () => { await new Promise(r => setTimeout(r, 50)); });
+    expect(screen.queryByText('Crate Rules')).not.toBeInTheDocument();
+  });
+
+  it('waits for the canvas nodes and loads the saved rule sets only once', async () => {
+    const { rerender } = render(<ConstraintsView vsumId="42" canvasNodes={[]} />);
+    await waitFor(() => expect(apiService.getRuleSets).toHaveBeenCalledTimes(1));
+
+    rerender(<ConstraintsView vsumId="42" canvasNodes={[pfandNode as any]} />);
+
+    expect(await screen.findByText('Crate Rules')).toBeInTheDocument();
+    rerender(<ConstraintsView vsumId="42" canvasNodes={[{ ...pfandNode, id: 'n2' } as any]} />);
+    expect(apiService.getRuleSets).toHaveBeenCalledTimes(1);
+  });
+
+  it('follows the canvas until the first change, e.g. when it first held another project\'s models', async () => {
+    const { rerender } = render(<ConstraintsView vsumId="42" canvasNodes={[pfandNode as any]} />);
+    await screen.findByText('Crate Rules');
+
+    rerender(<ConstraintsView vsumId="42" canvasNodes={[kitNode as any]} />);
+
+    expect(await screen.findByText('Professor Rules')).toBeInTheDocument();
+    expect(screen.queryByText('Crate Rules')).not.toBeInTheDocument();
+  });
+
+  it('does not show them when the project has saved rule sets', async () => {
+    (apiService.getRuleSets as jest.Mock).mockResolvedValue([
+      { id: 9, name: 'Saved Set', color: '#3b82f6', description: '', oclContent: 'context pfand::Kasten inv Saved:\n  true' },
+    ]);
+
+    render(<ConstraintsView vsumId="42" canvasNodes={[pfandNode as any]} />);
+
+    expect(await screen.findByText('Saved Set')).toBeInTheDocument();
+    expect(screen.queryByText('Crate Rules')).not.toBeInTheDocument();
+  });
+
+  it('saves them only with the first change, then all of them, and updates them afterwards', async () => {
+    render(<ConstraintsView vsumId="42" canvasNodes={[pfandNode as any]} />);
+    await screen.findByText('Crate Rules');
+    expect(apiService.createRuleSet).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getAllByText('Add rule')[0]);
+
+    await waitFor(() => expect(apiService.createRuleSet).toHaveBeenCalledTimes(2));
+    expect(createdNames().sort()).toEqual(['Crate Rules', 'Deposit Item Rules']);
+    const crateBody = (apiService.createRuleSet as jest.Mock).mock.calls
+      .map(([, body]) => body)
+      .find(body => body.name === 'Crate Rules');
+    expect(crateBody.oclContent).toContain('NewInvariant');
+
+    // The second change updates the saved set under the id the backend returned.
+    const crateId = 100 + createdNames().indexOf('Crate Rules');
+    await act(async () => { await new Promise(r => setTimeout(r, 0)); });
+    fireEvent.click(screen.getAllByText('Add rule')[0]);
+    await waitFor(() => expect(apiService.updateRuleSet).toHaveBeenCalledWith(42, crateId, expect.anything()));
+    expect(apiService.createRuleSet).toHaveBeenCalledTimes(2);
+  });
+
+  it('creates each of them once under React StrictMode', async () => {
+    render(
+      <React.StrictMode>
+        <ConstraintsView vsumId="42" canvasNodes={[pfandNode as any]} />
+      </React.StrictMode>,
+    );
+    await screen.findByText('Crate Rules');
+
+    fireEvent.click(screen.getAllByText('Add rule')[0]);
+
+    await waitFor(() => expect(apiService.createRuleSet).toHaveBeenCalledTimes(2));
+    await act(async () => { await new Promise(r => setTimeout(r, 50)); });
+    expect(createdNames().sort()).toEqual(['Crate Rules', 'Deposit Item Rules']);
+  });
+
+  it('saves the remaining ones when a predefined set is deleted first', async () => {
+    render(<ConstraintsView vsumId="42" canvasNodes={[pfandNode as any]} />);
+
+    await deleteSet('Crate Rules');
+
+    await waitFor(() => expect(apiService.createRuleSet).toHaveBeenCalledTimes(1));
+    expect(createdNames()).toEqual(['Deposit Item Rules']);
+    expect(apiService.deleteRuleSet).not.toHaveBeenCalled();
+  });
+
+  it('deletes a set on the backend that was deleted while it was still being created', async () => {
+    let resolveCreate: (value: { id: number }) => void = () => {};
+    (apiService.createRuleSet as jest.Mock).mockImplementation(
+      () => new Promise(resolve => { resolveCreate = resolve; }),
+    );
+    render(<ConstraintsView vsumId="42" canvasNodes={[pfandNode as any]} />);
+    await deleteSet('Crate Rules');
+    await waitFor(() => expect(apiService.createRuleSet).toHaveBeenCalledTimes(1));
+
+    await deleteSet('Deposit Item Rules');
+    await act(async () => { resolveCreate({ id: 77 }); });
+
+    await waitFor(() => expect(apiService.deleteRuleSet).toHaveBeenCalledWith(42, 77));
+  });
+
+  it('keeps them deleted after a reload', async () => {
+    const { unmount } = render(<ConstraintsView vsumId="42" canvasNodes={[pfandNode as any]} />);
+    await deleteSet('Crate Rules');
+    await deleteSet('Deposit Item Rules');
+    unmount();
+
+    render(<ConstraintsView vsumId="42" canvasNodes={[pfandNode as any]} />);
+
+    await waitFor(() => expect(apiService.getRuleSets).toHaveBeenCalledTimes(2));
+    await act(async () => { await new Promise(r => setTimeout(r, 50)); });
+    expect(screen.queryByText('Crate Rules')).not.toBeInTheDocument();
+  });
+
+  it('does not replace a set the user created when predefined ones become available later', async () => {
+    const { rerender } = render(<ConstraintsView vsumId="42" canvasNodes={[otherNode as any]} />);
+    await waitFor(() => expect(apiService.getRuleSets).toHaveBeenCalled());
+    fireEvent.click(screen.getByText('New Set'));
+    expect(await screen.findByText('New Rule Set')).toBeInTheDocument();
+
+    rerender(<ConstraintsView vsumId="42" canvasNodes={[otherNode as any, pfandNode as any]} />);
+
+    await act(async () => { await new Promise(r => setTimeout(r, 50)); });
+    expect(screen.getByText('New Rule Set')).toBeInTheDocument();
+    expect(screen.queryByText('Crate Rules')).not.toBeInTheDocument();
+  });
+
+  it('retries a predefined set with the next change when saving it failed', async () => {
+    let failDeposit = true;
+    let nextId = 100;
+    (apiService.createRuleSet as jest.Mock).mockImplementation((_vsumId: number, body: { name: string }) => {
+      if (body.name === 'Deposit Item Rules' && failDeposit) {
+        failDeposit = false;
+        return Promise.reject(new Error('Server error'));
+      }
+      return Promise.resolve({ id: nextId++ });
+    });
+    render(<ConstraintsView vsumId="42" canvasNodes={[pfandNode as any]} />);
+    await screen.findByText('Crate Rules');
+
+    fireEvent.click(screen.getAllByText('Add rule')[0]);
+    await waitFor(() => expect(apiService.createRuleSet).toHaveBeenCalledTimes(2));
+    await act(async () => { await new Promise(r => setTimeout(r, 0)); });
+    fireEvent.click(screen.getAllByText('Add rule')[0]);
+
+    await waitFor(() => expect(createdNames().filter(name => name === 'Deposit Item Rules')).toHaveLength(2));
+  });
+
+  it('keeps the OCL the metrics view reads while loading or after loading failed', async () => {
+    localStorage.setItem('vitruv_ocl_metrics_v1_42', 'context pfand::Kasten inv Earlier:\n  true');
+    (apiService.getRuleSets as jest.Mock).mockRejectedValue(new Error('Network error'));
+
+    render(<ConstraintsView vsumId="42" canvasNodes={[pfandNode as any]} />);
+
+    await waitFor(() => expect(apiService.getRuleSets).toHaveBeenCalled());
+    await act(async () => { await new Promise(r => setTimeout(r, 50)); });
+    expect(localStorage.getItem('vitruv_ocl_metrics_v1_42')).toContain('Earlier');
+  });
+
+  it('offers them again after a reload when saving them failed', async () => {
+    (apiService.createRuleSet as jest.Mock).mockRejectedValue(new Error('Server error'));
+    const { unmount } = render(<ConstraintsView vsumId="42" canvasNodes={[pfandNode as any]} />);
+    await screen.findByText('Crate Rules');
+    fireEvent.click(screen.getAllByText('Add rule')[0]);
+    await waitFor(() => expect(apiService.createRuleSet).toHaveBeenCalledTimes(2));
+    unmount();
+
+    render(<ConstraintsView vsumId="42" canvasNodes={[pfandNode as any]} />);
+
+    expect(await screen.findByText('Crate Rules')).toBeInTheDocument();
+  });
+
+  it('clears the metrics OCL once the canvas shows the project has no rule sets to offer', async () => {
+    localStorage.setItem('vitruv_ocl_metrics_v1_42', 'context pfand::Kasten inv Deleted:\n  true');
+    const { rerender } = render(<ConstraintsView vsumId="42" canvasNodes={[]} />);
+    await waitFor(() => expect(apiService.getRuleSets).toHaveBeenCalled());
+    await act(async () => { await new Promise(r => setTimeout(r, 50)); });
+    expect(localStorage.getItem('vitruv_ocl_metrics_v1_42')).toContain('Deleted');
+
+    rerender(<ConstraintsView vsumId="42" canvasNodes={[otherNode as any]} />);
+
+    await waitFor(() => expect(localStorage.getItem('vitruv_ocl_metrics_v1_42')).toBe(''));
+  });
+
+  it('keeps a set the user added while the saved ones were loading', async () => {
+    let resolveLoad: (sets: unknown[]) => void = () => {};
+    (apiService.getRuleSets as jest.Mock).mockImplementation(
+      () => new Promise(resolve => { resolveLoad = resolve; }),
+    );
+    render(<ConstraintsView vsumId="42" canvasNodes={[pfandNode as any]} />);
+    fireEvent.click(screen.getByText('New Set'));
+    expect(await screen.findByText('New Rule Set')).toBeInTheDocument();
+
+    await act(async () => {
+      resolveLoad([{ id: 9, name: 'Saved Set', color: '#3b82f6', description: '', oclContent: '' }]);
+    });
+
+    expect(await screen.findByText('Saved Set')).toBeInTheDocument();
+    expect(screen.getByText('New Rule Set')).toBeInTheDocument();
+  });
+
+  it('never saves them without a project', async () => {
+    render(<ConstraintsView canvasNodes={[pfandNode as any]} />);
+    await screen.findByText('Crate Rules');
+
+    fireEvent.click(screen.getAllByText('Add rule')[0]);
+
+    expect(await screen.findByText('NewInvariant')).toBeInTheDocument();
+    expect(apiService.createRuleSet).not.toHaveBeenCalled();
+  });
+});

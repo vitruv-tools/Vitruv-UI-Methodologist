@@ -1154,10 +1154,9 @@ export const CanvasPage: React.FC = () => {
       shownInstanceIdRef.current = nextId;
       if (!nextId) return;
 
-      // Clear stale nodes so the new ConstraintsView instance mounts with a blank slate.
-      if (canvasModeRef.current === 'constraints') {
-        setConstraintsNodes([]);
-      }
+      // Clear stale nodes so the new ConstraintsView instance mounts with a blank slate, whatever
+      // mode the previous tab was in: it would otherwise see the previous project's meta models.
+      setConstraintsNodes([]);
       if (canvasModeRef.current === 'metrics') {
         setMetricsNodes([]);
         setMetricsEdges([]);
