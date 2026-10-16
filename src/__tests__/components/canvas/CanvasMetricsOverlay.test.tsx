@@ -1,5 +1,5 @@
 import React from 'react';
-import { render, screen, waitFor, fireEvent } from '@testing-library/react';
+import { render, screen, waitFor, fireEvent, within } from '@testing-library/react';
 import type { Edge, Node } from 'reactflow';
 import {
   CanvasMetricsOverlay,
@@ -182,6 +182,49 @@ reaction SyncBook {
     ['size', 'reactions', 'coverage', 'hotspots', 'derived'].forEach(id => {
       expect(screen.getByTestId(`metrics-mark-${id}`)).toHaveAttribute('aria-checked', 'true');
     });
+    await waitFor(() => {
+      expect(apiService.getRuleSets).toHaveBeenCalled();
+    });
+  });
+
+  it('keeps class overview columns readable and scrolls them sideways', async () => {
+    const ecore = (pkg: string, className: string) => `<?xml version="1.0" encoding="UTF-8"?>
+<ecore:EPackage xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                xmlns:ecore="http://www.eclipse.org/emf/2002/Ecore" name="${pkg}">
+  <eClassifiers xsi:type="ecore:EClass" name="${className}">
+    <eStructuralFeatures xsi:type="ecore:EAttribute" name="title"/>
+  </eClassifiers>
+</ecore:EPackage>`;
+    renderOverlay({
+      visible: true,
+      canvasNodes: [
+        {
+          id: 'node-1',
+          type: 'ecoreFile',
+          position: { x: 0, y: 0 },
+          data: { fileName: 'assembly.ecore', fileContent: ecore('assembly', 'VeryLongClassifierName') },
+        },
+        {
+          id: 'node-2',
+          type: 'ecoreFile',
+          position: { x: 0, y: 0 },
+          data: { fileName: 'cad.ecore', fileContent: ecore('cad', 'AnotherLongClassifierName') },
+        },
+      ],
+    });
+
+    const scroller = screen.getByTestId('class-detail-scroll');
+    const detail = within(scroller);
+    expect(scroller).toHaveStyle({ overflowX: 'auto', overflowY: 'hidden' });
+    expect(scroller.firstElementChild).toHaveStyle({ display: 'flex', flexWrap: 'nowrap' });
+    expect(detail.getByText('assembly')).toBeInTheDocument();
+    expect(detail.getByText('cad')).toBeInTheDocument();
+
+    const classCell = detail.getByText('VeryLongClassifierName').closest('td');
+    expect(classCell).toHaveStyle({ whiteSpace: 'nowrap', wordBreak: 'normal' });
+    expect(detail.getAllByText('Attributes')[0].closest('th')).toHaveStyle({ whiteSpace: 'nowrap' });
+    expect(detail.getAllByText('Cont. height')[0].closest('th')).toHaveStyle({ whiteSpace: 'nowrap' });
+
     await waitFor(() => {
       expect(apiService.getRuleSets).toHaveBeenCalled();
     });
