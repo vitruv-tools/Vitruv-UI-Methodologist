@@ -9,6 +9,8 @@ export function parseMultiplicity(raw?: string | null): ParsedMultiplicity {
   const text = (raw ?? '').trim().replace(/^\[/, '').replace(/\]$/, '').trim();
   if (!text) return { lower: '0', upper: '1' };
 
+  if (text === '*') return { lower: '0', upper: '-1' };
+
   if (text.includes('..')) {
     const [lo, hi] = text.split('..').map(s => s.trim());
     const upper = hi === '*' ? '-1' : hi || '1';

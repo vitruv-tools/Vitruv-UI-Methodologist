@@ -215,6 +215,9 @@ describe('pasting between the Model library and projects', () => {
           ecoreFileId: 70,
           modelName: 'model',
           saveTarget: location.saveTarget,
+          persistWorkspaceEcore: location.saveTarget === 'workspace'
+            ? jest.fn().mockResolvedValue(undefined)
+            : undefined,
           onSaved,
         }}
         zIndex={1}

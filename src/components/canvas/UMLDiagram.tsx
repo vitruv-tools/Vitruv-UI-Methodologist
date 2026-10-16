@@ -153,6 +153,35 @@ function hasMovedClasses(classes: UmlDiagramClass[], savedPositions: UmlPosition
   });
 }
 
+function relationshipMultiplicityKey(relationship: {
+  type: string;
+  sourceId: string;
+  targetId: string;
+  label?: string;
+}): string {
+  return `${relationship.type}|${relationship.sourceId}|${relationship.targetId}|${relationship.label ?? ''}`;
+}
+
+/** Keep the multiplicities the user just edited when the saved ecore is read back. */
+function keepLiveMultiplicities(
+  live: UMLRelationship[],
+  parsed: UMLRelationship[],
+): UMLRelationship[] {
+  const liveByKey = new Map(live.map(relationship => [
+    relationshipMultiplicityKey(relationship),
+    relationship,
+  ]));
+  return parsed.map(relationship => {
+    const previous = liveByKey.get(relationshipMultiplicityKey(relationship));
+    if (!previous) return relationship;
+    return {
+      ...relationship,
+      sourceMultiplicity: previous.sourceMultiplicity,
+      targetMultiplicity: previous.targetMultiplicity,
+    };
+  });
+}
+
 function getSaveButtonTitle(
   hasUnsavedChanges: boolean,
   hasSemanticChanges: boolean,
@@ -168,7 +197,10 @@ async function saveWorkspaceEcore(
   saveContext: UmlDiagramSaveContext,
   ecoreContent: string,
 ): Promise<{ ecoreContent: string; ecoreFileId: number }> {
-  await saveContext.persistWorkspaceEcore?.(ecoreContent);
+  if (!saveContext.persistWorkspaceEcore) {
+    throw new Error('This model cannot be saved to the project.');
+  }
+  await saveContext.persistWorkspaceEcore(ecoreContent);
   return { ecoreContent, ecoreFileId: saveContext.ecoreFileId };
 }
 
@@ -198,7 +230,8 @@ export const UMLDiagram = forwardRef<UMLDiagramHandle, UMLDiagramProps>(({
   const initialSnapshotRef = useRef('');
   /** Class positions as last loaded or saved; moving away from them makes the diagram dirty. */
   const savedPositionsRef = useRef<UmlPositionMap>(positionsFromUmlClasses(classes));
-  const skipNextEcoreResetRef = useRef(false);
+  /** Ecore last written by Save or Reload; matching prop updates must not replace the open diagram. */
+  const appliedEcoreRef = useRef<string | null>(null);
 const rels = useMemo(
   () => assignParallelRelMeta(relationships) as UmlDiagramRelationshipLayout[],
   [relationships],
@@ -316,14 +349,17 @@ const rels = useMemo(
         return live ? { ...c, x: live.x, y: live.y } : c;
       });
     }
+    const nextRelationships = preserveLivePositions
+      ? keepLiveMultiplicities(relationshipsRef.current, next.relationships)
+      : next.relationships;
     setOriginalEcore(content);
     setClasses(baseClasses.map(c => ({ ...c, operations: c.operations ?? [] })));
-    setRelationships(next.relationships);
+    setRelationships(nextRelationships);
     resetInteractionState();
     cancelPrimaryEditRef.current();
     initialSnapshotRef.current = umlSemanticSnapshot({
       classes: baseClasses,
-      relationships: next.relationships,
+      relationships: nextRelationships,
     });
     savedPositionsRef.current = positionsFromUmlClasses(baseClasses);
     setSaveMessage('');
@@ -335,10 +371,8 @@ const rels = useMemo(
 
   // Re-apply saved layout when ecore content or file changes
   useEffect(() => {
-    if (skipNextEcoreResetRef.current) {
-      skipNextEcoreResetRef.current = false;
-      return;
-    }
+    if (appliedEcoreRef.current !== null && ecoreContent === appliedEcoreRef.current) return;
+    appliedEcoreRef.current = null;
     resetFromEcore(ecoreContent);
   }, [ecoreContent, fileName, layoutScopeId, resetFromEcore]);
 
@@ -560,19 +594,18 @@ const rels = useMemo(
     setSaving(true);
     setSaveMessage('');
     try {
-      const result =
-        saveContext.saveTarget === 'workspace'
-          ? await saveWorkspaceEcore(saveContext, umlToEcore(getModel(), originalEcore))
-          : await saveMetaModelEcore({
-              metaModelId: saveContext.metaModelId,
-              ecoreFileId: saveContext.ecoreFileId,
-              modelName: saveContext.modelName,
-              model: getModel(),
-              originalEcore,
-              metaModelMetadata: saveContext.metaModelMetadata,
-            });
+      const result = saveContext.saveTarget === 'workspace'
+        ? await saveWorkspaceEcore(saveContext, umlToEcore(getModel(), originalEcore))
+        : await saveMetaModelEcore({
+            metaModelId: saveContext.metaModelId,
+            ecoreFileId: saveContext.ecoreFileId,
+            modelName: saveContext.modelName,
+            model: getModel(),
+            originalEcore,
+            metaModelMetadata: saveContext.metaModelMetadata,
+          });
+      appliedEcoreRef.current = result.ecoreContent;
       resetFromEcore(result.ecoreContent, true);
-      skipNextEcoreResetRef.current = true;
       saveContext.onSaved?.(result);
       setSaveMessage(saveContext.saveTarget === 'workspace' ? 'Saved to project' : 'Saved');
       clearHistory();
@@ -618,7 +651,7 @@ const rels = useMemo(
       isDirty,
       save: handleSave,
       reload: (content: string) => {
-        skipNextEcoreResetRef.current = true;
+        appliedEcoreRef.current = content;
         resetFromEcore(content, false);
         restoreViewportAfterReload();
       },
@@ -827,6 +860,8 @@ const rels = useMemo(
             targetId: selectedRel.sourceId,
             sourceMultiplicity: selectedRel.targetMultiplicity,
             targetMultiplicity: selectedRel.sourceMultiplicity,
+            label: selectedRel.opposite ?? selectedRel.label,
+            opposite: selectedRel.opposite ? selectedRel.label : undefined,
           })}
         />
       )}

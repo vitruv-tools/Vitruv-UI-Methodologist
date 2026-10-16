@@ -623,6 +623,30 @@ describe('useUmlDiagramPrimaryEditing', () => {
     ]);
   });
 
+  it('copies a source-end edit onto the opposite reference', () => {
+    const courses: UMLRelationship = {
+      id: 'courses', sourceId: 'employee', targetId: 'department',
+      type: 'association', label: 'courses', opposite: 'students',
+      sourceMultiplicity: '1..*', targetMultiplicity: '0..*',
+    };
+    const students: UMLRelationship = {
+      id: 'students', sourceId: 'department', targetId: 'employee',
+      type: 'association', label: 'students', opposite: 'courses',
+      sourceMultiplicity: '0..*', targetMultiplicity: '1..*',
+    };
+    const { result } = renderPrimaryEditing({
+      initialRelationships: [courses, students],
+    });
+
+    perform(() => result.current.updateRelationship('courses', {
+      sourceMultiplicity: '0..1',
+    }));
+
+    expect(relationshipById(result.current.relationships, 'courses').sourceMultiplicity).toBe('0..1');
+    expect(relationshipById(result.current.relationships, 'students').targetMultiplicity).toBe('0..1');
+    expect(relationshipById(result.current.relationships, 'students').sourceMultiplicity).toBe('0..*');
+  });
+
   it('updates and deletes relationships while preserving fields and selection cleanup', () => {
     const { result, options } = renderPrimaryEditing({
       initialSelectedRelationshipId: 'employee-department',

@@ -3,6 +3,7 @@ import {
   normalizeAttributeTypeDisplay,
   normalizeOperationReturnType,
   ECORE_DOCUMENTATION_ANNOTATION,
+  UML_SOURCE_MULTIPLICITY_ANNOTATION,
   UML_VISIBILITY_ANNOTATION,
   UMLAttribute,
   UMLClass,
@@ -12,7 +13,7 @@ import {
   UMLVisibility,
 } from './ecoreToUml';
 import { ECORE_XML_NAMESPACE, XSI_XML_NAMESPACE } from './ecoreXmlNamespaces';
-import { parseMultiplicity } from './umlMultiplicity';
+import { normalizeMultiplicityDisplay, parseMultiplicity } from './umlMultiplicity';
 
 const ECORE_NS = ECORE_XML_NAMESPACE;
 const XSI_NS = XSI_XML_NAMESPACE;
@@ -93,6 +94,21 @@ function renderVisibilityAnnotation(visibility: UMLVisibility, indent: string): 
   );
 }
 
+function renderSourceMultiplicityAnnotation(
+  sourceMultiplicity: string | undefined,
+  indent: string,
+): string {
+  const value = normalizeMultiplicityDisplay(sourceMultiplicity);
+  // Ecore's own bounds are the target end. `1` is the value readers assume
+  // when this annotation is absent, so only a different source end is stored.
+  if (!value || value === '1') return '';
+  return (
+    `${indent}<eAnnotations source="${UML_SOURCE_MULTIPLICITY_ANNOTATION}">` +
+    `\n${indent}  <details xsi:type="ecore:EStringToStringMapEntry" key="value" value="${escapeXml(value)}"/>` +
+    `\n${indent}</eAnnotations>`
+  );
+}
+
 function renderDocumentationAnnotation(documentation: string | undefined, indent: string): string {
   if (documentation === undefined || documentation === '') return '';
   return (
@@ -140,6 +156,31 @@ function renderOperation(op: UMLOperation): string {
   return `${openTag}>\n${annotations}\n    </eOperations>`;
 }
 
+function findOppositeRelationship(
+  relationships: UMLRelationship[],
+  relationship: UMLRelationship,
+): UMLRelationship | undefined {
+  if (relationship.type === 'inheritance' || !relationship.opposite) return undefined;
+  return relationships.find(other => (
+    other.id !== relationship.id
+    && other.type !== 'inheritance'
+    && other.sourceId === relationship.targetId
+    && other.targetId === relationship.sourceId
+    && other.label === relationship.opposite
+  ));
+}
+
+/** Copy each source end onto the opposite reference's bounds before writing Ecore. */
+function syncOppositeMultiplicities(relationships: UMLRelationship[]): UMLRelationship[] {
+  const next = relationships.map(relationship => ({ ...relationship }));
+  for (const relationship of next) {
+    const opposite = findOppositeRelationship(next, relationship);
+    if (!opposite || relationship.sourceMultiplicity === undefined) continue;
+    opposite.targetMultiplicity = relationship.sourceMultiplicity;
+  }
+  return next;
+}
+
 function renderReference(
   rel: UMLRelationship,
   targetName: string,
@@ -147,13 +188,19 @@ function renderReference(
   const refName = rel.label?.trim() || `${rel.type}_${targetName}`.toLowerCase();
   const { lower, upper } = parseMultiplicity(rel.targetMultiplicity ?? '0..1');
   const containment = rel.type === 'composition';
+  const oppositeAttr = rel.opposite
+    ? ` eOpposite="#//${escapeXml(targetName)}/${escapeXml(rel.opposite)}"`
+    : '';
   const openTag =
     `    <eStructuralFeatures xsi:type="ecore:EReference" name="${escapeXml(refName)}"` +
-    ` eType="#//${escapeXml(targetName)}" containment="${containment}"` +
+    ` eType="#//${escapeXml(targetName)}" containment="${containment}"${oppositeAttr}` +
     ` lowerBound="${lower}" upperBound="${upper}"`;
-  const documentation = renderDocumentationAnnotation(rel.documentation, '      ');
-  return documentation
-    ? `${openTag}>\n${documentation}\n    </eStructuralFeatures>`
+  const annotations = [
+    renderDocumentationAnnotation(rel.documentation, '      '),
+    renderSourceMultiplicityAnnotation(rel.sourceMultiplicity, '      '),
+  ].filter(Boolean).join('\n');
+  return annotations
+    ? `${openTag}>\n${annotations}\n    </eStructuralFeatures>`
     : `${openTag}/>`;
 }
 
@@ -205,11 +252,12 @@ export function umlToEcore(model: UMLModel, originalEcore?: string): string {
   const pkg = extractPackageOpening(originalEcore);
   const classById = new Map(model.classes.map(c => [c.id, c]));
   const classNames = new Set(model.classes.map(c => c.name));
+  const relationships = syncOppositeMultiplicities(model.relationships);
 
   const inheritanceBySource = new Map<string, string[]>();
   const refsBySource = new Map<string, UMLRelationship[]>();
 
-  for (const rel of model.relationships) {
+  for (const rel of relationships) {
     if (rel.type === 'inheritance') {
       const target = classById.get(rel.targetId);
       if (!target) continue;

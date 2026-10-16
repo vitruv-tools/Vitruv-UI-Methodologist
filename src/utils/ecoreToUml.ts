@@ -1,4 +1,4 @@
-import { formatEcoreMultiplicity } from './umlMultiplicity';
+import { formatEcoreMultiplicity, normalizeMultiplicityDisplay } from './umlMultiplicity';
 import { applyUmlDiagramLayout } from './umlClassLayout';
 import { GENMODEL_ANNOTATION_SOURCE } from './ecoreXmlNamespaces';
 import { collectClassElements, getElementType, parseEcoreDocument } from './ecoreDocument';
@@ -17,11 +17,44 @@ export const UML_VISIBILITY_OPTIONS: readonly UMLVisibility[] = ['+', '-', '#'];
 
 /** Ecore annotation source for UML visibility (+ / - / #). */
 export const UML_VISIBILITY_ANNOTATION = 'uml.visibility';
+/**
+ * Ecore stores only the target end of a reference. The source end of a UML
+ * association is kept in this annotation so a save does not reset it to 1.
+ */
+export const UML_SOURCE_MULTIPLICITY_ANNOTATION = 'uml.sourceMultiplicity';
 /** Standard Ecore/GenModel annotation source for element documentation. */
 export const ECORE_DOCUMENTATION_ANNOTATION = GENMODEL_ANNOTATION_SOURCE;
 
 function directChildElements(element: Element, tagName: string): Element[] {
-  return Array.from(element.children).filter(child => child.localName === tagName);
+  const fromChildren = Array.from(element.children ?? []).filter(
+    child => (child.localName || child.tagName) === tagName,
+  );
+  if (fromChildren.length > 0) return fromChildren;
+  return Array.from(element.getElementsByTagName(tagName)).filter(
+    node => node.parentElement === element,
+  );
+}
+
+/** Ecore bound stored as an attribute or a child element (`lowerBound` / `upperBound`). */
+export function readEcoreBound(
+  element: Element,
+  bound: 'lowerBound' | 'upperBound',
+): string | null {
+  const attribute = element.getAttribute(bound);
+  if (attribute != null && attribute !== '') return attribute;
+  for (const child of directChildElements(element, bound)) {
+    const text = child.textContent?.trim();
+    if (text) return text;
+  }
+  return null;
+}
+
+/** Feature name from an Ecore `eOpposite` such as `#//Course/students`. */
+export function oppositeFeatureName(eOpposite: string | null): string | undefined {
+  if (!eOpposite) return undefined;
+  const cleaned = eOpposite.split('#').pop()?.replace(/^\/\//, '') ?? '';
+  const name = cleaned.split('/').filter(Boolean).at(-1);
+  return name || undefined;
 }
 
 /** Read documentation directly attached to this Ecore element. */
@@ -32,6 +65,19 @@ export function parseEcoreDocumentation(element: Element): string | undefined {
       if (detail.getAttribute('key') === 'documentation') {
         return detail.getAttribute('value') ?? '';
       }
+    }
+  }
+  return undefined;
+}
+
+/** Source-end multiplicity stored on a reference, or undefined when it was not saved. */
+export function parseAnnotatedSourceMultiplicity(element: Element): string | undefined {
+  for (const annotation of directChildElements(element, 'eAnnotations')) {
+    if (annotation.getAttribute('source') !== UML_SOURCE_MULTIPLICITY_ANNOTATION) continue;
+    for (const detail of directChildElements(annotation, 'details')) {
+      if (detail.getAttribute('key') !== 'value') continue;
+      const value = normalizeMultiplicityDisplay(detail.getAttribute('value'));
+      return value || undefined;
     }
   }
   return undefined;
@@ -80,6 +126,8 @@ export interface UMLRelationship {
   sourceMultiplicity?: string;
   targetMultiplicity?: string;
   documentation?: string;
+  /** Feature name of the Ecore `eOpposite` on the target class, when this end is bidirectional. */
+  opposite?: string;
 }
 
 export interface UMLModel {
@@ -204,6 +252,8 @@ interface DeferredClassRef {
   lower: string | null;
   upper: string | null;
   documentation?: string;
+  sourceMultiplicity?: string;
+  opposite?: string;
 }
 
 const EMPTY_UML_MODEL: UMLModel = { classes: [], relationships: [] };
@@ -233,9 +283,11 @@ function parseClassAttributes(
         sourceId: id,
         targetId: sanitize(typeName),
         name: attrName,
-        lower: feat.getAttribute('lowerBound'),
-        upper: feat.getAttribute('upperBound'),
+        lower: readEcoreBound(feat, 'lowerBound'),
+        upper: readEcoreBound(feat, 'upperBound'),
         documentation: parseEcoreDocumentation(feat),
+        sourceMultiplicity: parseAnnotatedSourceMultiplicity(feat),
+        opposite: oppositeFeatureName(feat.getAttribute('eOpposite')),
       });
       continue;
     }
@@ -309,15 +361,52 @@ function buildClassMap(
   return { classMap, deferredClassRefs };
 }
 
-function buildReferenceMultiplicities(lower: string | null, upper: string | null): {
+function buildReferenceMultiplicities(
+  lower: string | null,
+  upper: string | null,
+  annotatedSource?: string,
+): {
   sourceMultiplicity?: string;
   targetMultiplicity?: string;
 } {
-  const targetMultiplicity = formatEcoreMultiplicity(lower, upper);
   return {
-    sourceMultiplicity: targetMultiplicity === undefined ? undefined : '1',
-    targetMultiplicity,
+    sourceMultiplicity: annotatedSource,
+    targetMultiplicity: formatEcoreMultiplicity(lower, upper),
   };
+}
+
+function findOppositeRelationship(
+  relationships: UMLRelationship[],
+  relationship: UMLRelationship,
+): UMLRelationship | undefined {
+  if (relationship.type === 'inheritance' || !relationship.opposite) return undefined;
+  return relationships.find(other => (
+    other.id !== relationship.id
+    && other.type !== 'inheritance'
+    && other.sourceId === relationship.targetId
+    && other.targetId === relationship.sourceId
+    && other.label === relationship.opposite
+  ));
+}
+
+/**
+ * The source end of a reference is the target end of its `eOpposite`.
+ * An explicit annotation wins so a saved edit is kept. Otherwise the
+ * opposite bounds are used, and a reference with only its own bounds
+ * keeps the historical source default of 1.
+ */
+function fillSourceMultiplicities(relationships: UMLRelationship[]): void {
+  for (const relationship of relationships) {
+    if (relationship.type === 'inheritance' || relationship.sourceMultiplicity) continue;
+    const opposite = findOppositeRelationship(relationships, relationship);
+    if (opposite?.targetMultiplicity) {
+      relationship.sourceMultiplicity = opposite.targetMultiplicity;
+      continue;
+    }
+    if (relationship.targetMultiplicity !== undefined) {
+      relationship.sourceMultiplicity = '1';
+    }
+  }
 }
 
 function isValidRelationshipTarget(
@@ -365,9 +454,11 @@ function appendReferenceRelationships(
     if (!isValidRelationshipTarget(sourceId, targetId, classMap)) continue;
 
     const multiplicities = buildReferenceMultiplicities(
-      feat.getAttribute('lowerBound'),
-      feat.getAttribute('upperBound'),
+      readEcoreBound(feat, 'lowerBound'),
+      readEcoreBound(feat, 'upperBound'),
+      parseAnnotatedSourceMultiplicity(feat),
     );
+    const opposite = oppositeFeatureName(feat.getAttribute('eOpposite'));
 
     relationships.push({
       id: `rel-${relIdx.value++}`,
@@ -377,6 +468,7 @@ function appendReferenceRelationships(
       label: feat.getAttribute('name') || undefined,
       documentation: parseEcoreDocumentation(feat),
       ...multiplicities,
+      ...(opposite ? { opposite } : {}),
     });
   }
 }
@@ -391,7 +483,11 @@ function appendDeferredRelationships(
     if (!classMap.has(ref.sourceId) || !classMap.has(ref.targetId)) continue;
     if (ref.sourceId === ref.targetId) continue;
 
-    const multiplicities = buildReferenceMultiplicities(ref.lower, ref.upper);
+    const multiplicities = buildReferenceMultiplicities(
+      ref.lower,
+      ref.upper,
+      ref.sourceMultiplicity,
+    );
     relationships.push({
       id: `rel-${relIdx.value++}`,
       sourceId: ref.sourceId,
@@ -400,6 +496,7 @@ function appendDeferredRelationships(
       label: ref.name || undefined,
       documentation: ref.documentation,
       ...multiplicities,
+      ...(ref.opposite ? { opposite: ref.opposite } : {}),
     });
   }
 }
@@ -419,6 +516,7 @@ function buildRelationships(
   });
 
   appendDeferredRelationships(relationships, relIdx, deferredClassRefs, classMap);
+  fillSourceMultiplicities(relationships);
   return relationships;
 }
 

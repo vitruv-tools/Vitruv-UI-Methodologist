@@ -66,6 +66,52 @@ describe('umlToEcore', () => {
     expect(xml).toContain('name="Department"');
   });
 
+  it('writes a changed source end onto the opposite reference', () => {
+    const xml = `<?xml version="1.0" encoding="UTF-8"?>
+<ecore:EPackage xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                xmlns:ecore="http://www.eclipse.org/emf/2002/Ecore" name="school">
+  <eClassifiers xsi:type="ecore:EClass" name="Student">
+    <eStructuralFeatures xsi:type="ecore:EReference" name="courses" eType="#//Course" lowerBound="0" upperBound="-1" eOpposite="#//Course/students"/>
+  </eClassifiers>
+  <eClassifiers xsi:type="ecore:EClass" name="Course">
+    <eStructuralFeatures xsi:type="ecore:EReference" name="students" eType="#//Student" lowerBound="1" upperBound="-1" eOpposite="#//Student/courses"/>
+  </eClassifiers>
+</ecore:EPackage>`;
+    const model = ecoreToUml(xml);
+    const courses = model.relationships.find(rel => rel.label === 'courses')!;
+    courses.sourceMultiplicity = '0..1';
+
+    const roundTrip = ecoreToUml(umlToEcore(model, xml));
+    expect(roundTrip.relationships.find(rel => rel.label === 'courses')).toMatchObject({
+      sourceMultiplicity: '0..1',
+      targetMultiplicity: '0..*',
+    });
+    expect(roundTrip.relationships.find(rel => rel.label === 'students')).toMatchObject({
+      targetMultiplicity: '0..1',
+    });
+  });
+
+  it('round-trips source and target multiplicity', () => {
+    const model = ecoreToUml(SAMPLE);
+    const person = model.classes.find(c => c.name === 'Person')!;
+    const employee = model.classes.find(c => c.name === 'Employee')!;
+    model.relationships.push({
+      id: 'rel-new',
+      sourceId: person.id,
+      targetId: employee.id,
+      type: 'association',
+      label: 'manages',
+      sourceMultiplicity: '0..*',
+      targetMultiplicity: '1..*',
+    });
+
+    const roundTrip = ecoreToUml(umlToEcore(model, SAMPLE));
+    expect(roundTrip.relationships.find(rel => rel.label === 'manages')).toMatchObject({
+      sourceMultiplicity: '0..*',
+      targetMultiplicity: '1..*',
+    });
+  });
+
   it('serializes association with label and multiplicity', () => {
     const model = ecoreToUml(SAMPLE);
     model.relationships.push({

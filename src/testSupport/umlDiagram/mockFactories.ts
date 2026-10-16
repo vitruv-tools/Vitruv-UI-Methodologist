@@ -74,7 +74,7 @@ export function ecoreToUmlMock() {
 
 export function saveMetaModelEcoreMock() {
   return {
-    saveMetaModelEcore: jest.fn(() => Promise.resolve()),
+    saveMetaModelEcore: jest.fn(),
   };
 }
 

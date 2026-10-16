@@ -245,6 +245,27 @@ describe('useCanvasUmlPanels', () => {
     expect(result.current.buildUmlSaveContext(createPanel())).toBeUndefined();
   });
 
+  it('stores a project edit on the source meta-model', async () => {
+    const persistProjectEcore = jest.fn().mockResolvedValue(undefined);
+    const options = createOptions({ persistProjectEcore });
+    const { result } = renderHook(() => useCanvasUmlPanels(options));
+    const saveContext = result.current.buildUmlSaveContext(createPanel());
+
+    await saveContext?.persistWorkspaceEcore?.('<edited />');
+
+    expect(persistProjectEcore).toHaveBeenCalledWith(20, '<edited />');
+  });
+
+  it('does not build save context without a meta-model id', () => {
+    const options = createOptions();
+    const { result } = renderHook(() => useCanvasUmlPanels(options));
+
+    expect(result.current.buildUmlSaveContext(createPanel({
+      metaModelId: undefined,
+      metaModelSourceId: undefined,
+    }))).toBeUndefined();
+  });
+
   it('updates panel and canvas content after a workspace save', () => {
     const updateEcoreFileData = jest.fn();
     const options = createOptions({ updateEcoreFileData });
@@ -274,6 +295,51 @@ describe('useCanvasUmlPanels', () => {
     expect(updateEcoreFileData).toHaveBeenCalledWith(
       'library.ecore',
       '<saved-content />',
+      30,
+    );
+    expect(result.current.umlPanels[0].ecoreFileId).toBe(30);
+  });
+
+  it('passes canvas metadata into the project save and keeps a replacement file id', () => {
+    const updateEcoreFileData = jest.fn();
+    const getCanvasNodes = () => [{
+      id: 'ecore-1',
+      type: 'ecoreFile',
+      position: { x: 0, y: 0 },
+      data: {
+        fileName: 'library.ecore',
+        ecoreFileId: 30,
+        description: 'A library',
+        domain: 'Software',
+        keywords: 'uml, ecore',
+      },
+    }] as Node[];
+    const options = createOptions({ updateEcoreFileData, getCanvasNodes });
+    const { result } = renderHook(() => useCanvasUmlPanels(options));
+    const panel = createPanel();
+
+    act(() => {
+      result.current.restorePanels([panel], panel.id);
+    });
+
+    expect(result.current.buildUmlSaveContext(panel)?.metaModelMetadata).toEqual({
+      description: 'A library',
+      domain: 'Software',
+      keyword: ['uml', 'ecore'],
+    });
+
+    act(() => {
+      result.current.buildUmlSaveContext(panel)?.onSaved?.({
+        ecoreContent: '<saved-content />',
+        ecoreFileId: 44,
+      });
+    });
+
+    expect(result.current.umlPanels[0].ecoreFileId).toBe(44);
+    expect(updateEcoreFileData).toHaveBeenCalledWith(
+      'library.ecore',
+      '<saved-content />',
+      44,
     );
   });
 

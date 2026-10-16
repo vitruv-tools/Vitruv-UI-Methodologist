@@ -13,6 +13,10 @@ describe('umlMultiplicity', () => {
     expect(parseMultiplicity('0..*')).toEqual({ lower: '0', upper: '-1' });
   });
 
+  it('parses a bare star as zero or more', () => {
+    expect(parseMultiplicity('*')).toEqual({ lower: '0', upper: '-1' });
+  });
+
   it('parses bracketed range', () => {
     expect(parseMultiplicity('[1..5]')).toEqual({ lower: '1', upper: '5' });
   });

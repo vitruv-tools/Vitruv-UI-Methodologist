@@ -648,13 +648,34 @@ export function useUmlDiagramPrimaryEditing(
     patch: Partial<UMLRelationship>,
   ) => {
     recordChange();
-    setRelationships(previousRelationships => previousRelationships.map(
-      relationship => (
-        relationship.id === relationshipId
-          ? { ...relationship, ...patch }
-          : relationship
-      ),
-    ));
+    setRelationships(previousRelationships => {
+      const index = previousRelationships.findIndex(
+        relationship => relationship.id === relationshipId,
+      );
+      if (index < 0) return previousRelationships;
+      const updated = { ...previousRelationships[index], ...patch };
+      const next = previousRelationships.slice();
+      next[index] = updated;
+      if (updated.type === 'inheritance' || !updated.opposite) return next;
+      const oppositeIndex = next.findIndex(relationship => (
+        relationship.id !== updated.id
+        && relationship.type !== 'inheritance'
+        && relationship.sourceId === updated.targetId
+        && relationship.targetId === updated.sourceId
+        && relationship.label === updated.opposite
+      ));
+      if (oppositeIndex < 0) return next;
+      const oppositePatch: Partial<UMLRelationship> = {};
+      if ('sourceMultiplicity' in patch) {
+        oppositePatch.targetMultiplicity = patch.sourceMultiplicity;
+      }
+      if ('targetMultiplicity' in patch) {
+        oppositePatch.sourceMultiplicity = patch.targetMultiplicity;
+      }
+      if (Object.keys(oppositePatch).length === 0) return next;
+      next[oppositeIndex] = { ...next[oppositeIndex], ...oppositePatch };
+      return next;
+    });
   }, [recordChange, setRelationships]);
 
   return {

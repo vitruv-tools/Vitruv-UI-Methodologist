@@ -286,6 +286,50 @@ describe('ecoreToUml – references', () => {
     });
   });
 
+  it('reads multiplicity stored in child elements', () => {
+    const reference = '<eStructuralFeatures xsi:type="ecore:EReference" name="lines" eType="#//LineItem"><lowerBound>0</lowerBound><upperBound>-1</upperBound></eStructuralFeatures>';
+    const { relationships } = ecoreToUml(wrap(eClass('Order', reference) + eClass('LineItem')));
+    expect(relationships[0]).toMatchObject({
+      sourceMultiplicity: '1',
+      targetMultiplicity: '0..*',
+    });
+  });
+
+  it('uses the opposite reference bounds as the source multiplicity', () => {
+    const student = eClass(
+      'Student',
+      '<eStructuralFeatures xsi:type="ecore:EReference" name="courses" eType="#//Course" lowerBound="0" upperBound="-1" eOpposite="#//Course/students"/>',
+    );
+    const course = eClass(
+      'Course',
+      '<eStructuralFeatures xsi:type="ecore:EReference" name="students" eType="#//Student" lowerBound="1" upperBound="-1" eOpposite="#//Student/courses"/>',
+    );
+    const { relationships } = ecoreToUml(wrap(student + course));
+    expect(relationships.find(rel => rel.label === 'courses')).toMatchObject({
+      sourceMultiplicity: '1..*',
+      targetMultiplicity: '0..*',
+      opposite: 'students',
+    });
+    expect(relationships.find(rel => rel.label === 'students')).toMatchObject({
+      sourceMultiplicity: '0..*',
+      targetMultiplicity: '1..*',
+      opposite: 'courses',
+    });
+  });
+
+  it('reads a saved source multiplicity instead of defaulting it to 1', () => {
+    const reference = `${eRef('lines', 'LineItem', false, '1', '-1').replace('/>', '>')}`
+      + '<eAnnotations source="uml.sourceMultiplicity">'
+      + '<details key="value" value="0..1"/>'
+      + '</eAnnotations></eStructuralFeatures>';
+    const xml = wrap(eClass('Order', reference) + eClass('LineItem'));
+    const { relationships } = ecoreToUml(xml);
+    expect(relationships[0]).toMatchObject({
+      sourceMultiplicity: '0..1',
+      targetMultiplicity: '1..*',
+    });
+  });
+
   it('creates a composition relationship for a containment EReference', () => {
     const xml = wrap(
       eClass('Library', eRef('books', 'Book', true)) +

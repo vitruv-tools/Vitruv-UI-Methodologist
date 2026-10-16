@@ -1,6 +1,7 @@
 import { useCallback, useState } from 'react';
 import type { Node } from 'reactflow';
 import type { UmlDiagramSaveContext } from '../components/canvas/UMLDiagram';
+import type { MetaModelSaveMetadata } from '../utils/saveMetaModelEcore';
 import {
   computeUmlPanelLayout,
   enrichEcoreMetaFromCanvas,
@@ -52,10 +53,40 @@ function updatePanelEcoreContent(
   panels: CanvasUmlPanelState[],
   panelId: string,
   content: string,
+  ecoreFileId?: number,
 ): CanvasUmlPanelState[] {
   return panels.map(panel => (
-    panel.id === panelId ? { ...panel, ecoreContent: content } : panel
+    panel.id === panelId
+      ? { ...panel, ecoreContent: content, ...(ecoreFileId == null ? {} : { ecoreFileId }) }
+      : panel
   ));
+}
+
+function keywordList(value: unknown): string[] {
+  if (Array.isArray(value)) {
+    return value.filter((item): item is string => typeof item === 'string' && item.trim().length > 0);
+  }
+  if (typeof value !== 'string') return [];
+  return value.split(/[,;]+/).map(item => item.trim()).filter(Boolean);
+}
+
+function metadataFromCanvasNode(node: Node | undefined): MetaModelSaveMetadata | undefined {
+  const data = node?.data;
+  if (!data || typeof data !== 'object') return undefined;
+  const record = data as { description?: unknown; domain?: unknown; keywords?: unknown };
+  const description = typeof record.description === 'string' ? record.description : '';
+  const domain = typeof record.domain === 'string' ? record.domain : '';
+  const keyword = keywordList(record.keywords);
+  if (!description && !domain && keyword.length === 0) return undefined;
+  return { description, domain, keyword };
+}
+
+function findPanelCanvasNode(panel: CanvasUmlPanelState, nodes: Node[]): Node | undefined {
+  return nodes.find(node => {
+    if (node.type !== 'ecoreFile') return false;
+    if (panel.ecoreFileId != null && node.data?.ecoreFileId === panel.ecoreFileId) return true;
+    return node.data?.fileName === panel.fileName;
+  });
 }
 
 export function useCanvasUmlPanels({
@@ -144,12 +175,12 @@ export function useCanvasUmlPanels({
   const handleUmlPanelSaved = useCallback((
     panelId: string,
     fileName: string,
-    result: { ecoreContent: string },
+    result: { ecoreContent: string; ecoreFileId: number },
   ) => {
     setUmlPanels(previousPanels => (
-      updatePanelEcoreContent(previousPanels, panelId, result.ecoreContent)
+      updatePanelEcoreContent(previousPanels, panelId, result.ecoreContent, result.ecoreFileId)
     ));
-    updateEcoreFileData?.(fileName, result.ecoreContent);
+    updateEcoreFileData?.(fileName, result.ecoreContent, result.ecoreFileId);
   }, [updateEcoreFileData]);
 
   const handleUmlPanelEcoreContentUpdated = useCallback((
@@ -163,16 +194,17 @@ export function useCanvasUmlPanels({
     panel: CanvasUmlPanelState,
   ): UmlDiagramSaveContext | undefined => {
     const libraryMetaModelId = panel.metaModelSourceId ?? panel.metaModelId;
-    if (isViewOnly || !panel.ecoreFileId || !libraryMetaModelId) return undefined;
+    if (isViewOnly || !panel.ecoreFileId || libraryMetaModelId == null) return undefined;
     return {
       metaModelId: String(libraryMetaModelId),
       ecoreFileId: panel.ecoreFileId,
       modelName: panel.title,
       saveTarget: 'workspace',
+      metaModelMetadata: metadataFromCanvasNode(findPanelCanvasNode(panel, getCanvasNodes())),
       persistWorkspaceEcore: ecoreContent => persistProjectEcore(libraryMetaModelId, ecoreContent),
       onSaved: result => handleUmlPanelSaved(panel.id, panel.fileName, result),
     };
-  }, [handleUmlPanelSaved, isViewOnly, persistProjectEcore]);
+  }, [getCanvasNodes, handleUmlPanelSaved, isViewOnly, persistProjectEcore]);
 
   const clearPanels = useCallback(() => {
     setUmlPanels([]);

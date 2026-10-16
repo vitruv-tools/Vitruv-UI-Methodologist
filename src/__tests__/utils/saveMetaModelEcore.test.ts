@@ -154,3 +154,4 @@ describe('saveMetaModelEcore', () => {
     expect(result.ecoreFileId).toBe(102);
   });
 });
+
