@@ -187,42 +187,69 @@ const MetamodelTable: React.FC<{ metrics: MethodologistMetrics }> = ({ metrics }
   </div>
 );
 
+function classDetailThStyle(align: 'left' | 'right' = 'left'): React.CSSProperties {
+  return {
+    ...thStyle(align),
+    whiteSpace: 'nowrap',
+    wordBreak: 'normal',
+  };
+}
+
+function classDetailTdStyle(align: 'left' | 'right' = 'left'): React.CSSProperties {
+  return {
+    ...tdStyle(align),
+    whiteSpace: 'nowrap',
+    wordBreak: 'normal',
+  };
+}
+
 const AttributesPerClass: React.FC<{ metrics: MethodologistMetrics }> = ({ metrics }) => (
-  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 8 }}>
-    {metrics.metamodels.map(mm => (
-      <div key={mm.name} style={{ border: `1px solid ${T.border}`, borderRadius: 6, overflow: 'hidden', background: T.surface }}>
-        <div style={{ padding: '6px 10px', background: T.tableHeader, fontSize: 11, fontWeight: 700, color: T.text }}>
-          {mm.name || 'Unnamed'}
-        </div>
-        <table style={tableStyle()}>
-          <thead>
-            <tr>
-              <th style={thStyle()}>Class</th>
-              <th style={thStyle('right')}>Attributes</th>
-              <th style={thStyle('right')} title="EOperations">Ops</th>
-              <th style={thStyle('right')} title="Number of Children — direct subclasses">Children</th>
-              <th style={thStyle('right')} title="Depth of Inheritance Tree — how many superclasses sit above this class (roots are 0)">Depth</th>
-              <th style={thStyle('right')} title="Longest containment chain below this class">Cont. height</th>
-            </tr>
-          </thead>
-          <tbody>
-            {mm.classes.map(cls => (
-              <tr key={cls.qualifiedName}>
-                <td style={tdStyle()}>
-                  {cls.name}
-                  {cls.isAbstract ? <span style={{ color: T.muted }}> (abstract)</span> : null}
-                </td>
-                <td style={tdStyle('right')}>{cls.attributeCount}</td>
-                <td style={tdStyle('right')}>{cls.operationCount}</td>
-                <td style={tdStyle('right')}>{cls.childCount}</td>
-                <td style={tdStyle('right')}>{cls.inheritanceDepth}</td>
-                <td style={tdStyle('right')}>{cls.containmentHeight}</td>
+  <div
+    className="themed-scroll"
+    data-testid="class-detail-scroll"
+    style={{
+      maxWidth: '100%',
+      minWidth: 0,
+      overflowX: 'auto',
+      overflowY: 'hidden',
+    }}
+  >
+    <div style={{ display: 'flex', flexWrap: 'nowrap', alignItems: 'flex-start', gap: 8, width: 'max-content', paddingBottom: 6 }}>
+      {metrics.metamodels.map(mm => (
+        <div key={mm.name || `metamodel-${mm.classCount}`} style={{ flex: '0 0 auto', border: `1px solid ${T.border}`, borderRadius: 6, overflow: 'hidden', background: T.surface }}>
+          <div style={{ padding: '6px 10px', background: T.tableHeader, fontSize: 11, fontWeight: 700, color: T.text, whiteSpace: 'nowrap' }}>
+            {mm.name || 'Unnamed'}
+          </div>
+          <table style={{ ...tableStyle(), width: 'max-content', tableLayout: 'auto' }}>
+            <thead>
+              <tr>
+                <th style={classDetailThStyle()}>Class</th>
+                <th style={classDetailThStyle('right')}>Attributes</th>
+                <th style={classDetailThStyle('right')} title="EOperations">Ops</th>
+                <th style={classDetailThStyle('right')} title="Number of Children — direct subclasses">Children</th>
+                <th style={classDetailThStyle('right')} title="Depth of Inheritance Tree — how many superclasses sit above this class (roots are 0)">Depth</th>
+                <th style={classDetailThStyle('right')} title="Longest containment chain below this class">Cont. height</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-    ))}
+            </thead>
+            <tbody>
+              {mm.classes.map(cls => (
+                <tr key={cls.qualifiedName}>
+                  <td style={classDetailTdStyle()}>
+                    {cls.name}
+                    {cls.isAbstract ? <span style={{ color: T.muted }}> (abstract)</span> : null}
+                  </td>
+                  <td style={classDetailTdStyle('right')}>{cls.attributeCount}</td>
+                  <td style={classDetailTdStyle('right')}>{cls.operationCount}</td>
+                  <td style={classDetailTdStyle('right')}>{cls.childCount}</td>
+                  <td style={classDetailTdStyle('right')}>{cls.inheritanceDepth}</td>
+                  <td style={classDetailTdStyle('right')}>{cls.containmentHeight}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      ))}
+    </div>
   </div>
 );
 
