@@ -1,5 +1,5 @@
 import React from 'react';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
 import { VsumUsersTab } from '../../../components/ui/VsumUsersTab';
 
 jest.mock('../../../services/api', () => ({
@@ -60,15 +60,24 @@ describe('VsumUsersTab', () => {
   });
 
   it('searches and adds a new member', async () => {
-    render(<VsumUsersTab vsumId={1} />);
+    apiService.getVsumMembers.mockResolvedValue({ data: [] });
+    apiService.searchUsers.mockResolvedValue({
+      data: [{ id: 2, firstName: 'Bob', lastName: 'Member', email: 'bob@example.com' }],
+    });
+    apiService.addVsumMember.mockResolvedValue({});
+    const onChanged = jest.fn();
+    render(<VsumUsersTab vsumId={1} onChanged={onChanged} />);
 
-    const input = screen.getByPlaceholderText(/Search user by name or email/i);
-    fireEvent.change(input, { target: { value: 'bob' } });
+    fireEvent.change(screen.getByLabelText('Add as'), { target: { value: 'MEMBER' } });
+    fireEvent.change(screen.getByPlaceholderText('Name or email…'), { target: { value: 'bob' } });
+    fireEvent.click(await screen.findByRole('option', { name: /Bob Member/ }));
+    fireEvent.click(screen.getByRole('button', { name: 'Add member' }));
 
     await waitFor(() => {
-      expect(apiService.searchUsers).toHaveBeenCalled();
+      expect(apiService.addVsumMember).toHaveBeenCalledWith(1, { userId: 2 });
+      expect(onChanged).toHaveBeenCalled();
     });
-    // we only assert that search was triggered; UI list rendering is implementation-detail heavy
+    expect(await screen.findByText('Bob Member was added as a member.')).toBeInTheDocument();
   });
 });
 
@@ -97,7 +106,7 @@ describe('VsumUsersTab – additional tests', () => {
     render(<VsumUsersTab vsumId={1} />);
     expect(await screen.findByText('Carol Dev')).toBeInTheDocument();
     expect(screen.getByText('carol@example.com')).toBeInTheDocument();
-    expect(screen.getByText('Member')).toBeInTheDocument();
+    expect(within(screen.getByRole('table')).getByText('Member')).toBeInTheDocument();
   });
 
   it('does not show Remove button for OWNER role', async () => {
@@ -136,6 +145,7 @@ describe('VsumUsersTab – additional tests', () => {
   it('Add member button is disabled when no user is selected', async () => {
     render(<VsumUsersTab vsumId={1} />);
     await screen.findByText(/No members yet/i);
+    fireEvent.change(screen.getByLabelText('Add as'), { target: { value: 'MEMBER' } });
     expect(screen.getByRole('button', { name: /Add member/i })).toBeDisabled();
   });
 
@@ -176,7 +186,7 @@ describe('VsumUsersTab – additional tests', () => {
     render(<VsumUsersTab vsumId={1} />);
     expect(await screen.findByText('Pending invite')).toBeInTheDocument();
     expect(screen.getByText('Pending')).toBeInTheDocument();
-    expect(screen.getByText('Viewer')).toBeInTheDocument();
+    expect(within(screen.getByRole('table')).getByText('Viewer')).toBeInTheDocument();
   });
 
   it('hides invite and add controls when canManage is false', async () => {
