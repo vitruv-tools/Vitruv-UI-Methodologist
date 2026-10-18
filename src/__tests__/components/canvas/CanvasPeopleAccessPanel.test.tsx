@@ -163,7 +163,7 @@ describe('CanvasPeopleAccessPanel', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
     expect(onRefreshMembers).toHaveBeenCalledTimes(1);
 
-    fireEvent.click(screen.getByRole('button', { name: 'Invite viewer' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Invite' }));
     expect(onClose).toHaveBeenCalledTimes(1);
     expect(onShareClick).toHaveBeenCalledTimes(1);
   });
