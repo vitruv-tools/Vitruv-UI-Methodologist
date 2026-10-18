@@ -6,12 +6,15 @@ import { apiService } from '../../../services/api';
 // Props of the last rendered <ReactFlow>, and stable stand-ins for handlers the canvas wraps.
 const mockReactFlowProps: { current: any } = { current: null };
 const mockOnNodesChange = jest.fn();
+const mockOnEdgesChange = jest.fn();
 const mockOnDrop = jest.fn();
+/** Nodes the mocked flow state hands to the canvas. */
+const mockFlowNodes: { current: any[] } = { current: [] };
 
 jest.mock('reactflow', () => {
   const MockReactFlow = (props: any) => {
     mockReactFlowProps.current = props;
-    return <div data-testid="react-flow">{props.children}</div>;
+    return <div data-testid="react-flow" className="react-flow">{props.children}</div>;
   };
   return {
     __esModule: true,
@@ -24,6 +27,8 @@ jest.mock('reactflow', () => {
     Position: { Left: 'left', Right: 'right', Top: 'top', Bottom: 'bottom' },
     MarkerType: { ArrowClosed: 'arrowclosed', Arrow: 'arrow' },
     ConnectionMode: { Loose: 'loose', Strict: 'strict' },
+    SelectionMode: { Partial: 'partial', Full: 'full' },
+    useStoreApi: () => ({ setState: jest.fn(), getState: jest.fn(() => ({})) }),
     useReactFlow: () => ({
       screenToFlowPosition: jest.fn(() => ({ x: 100, y: 100 })),
       getNodes: jest.fn(() => []),
@@ -45,10 +50,10 @@ jest.mock('reactflow', () => {
 
 jest.mock('../../../hooks/useFlowState', () => ({
   useFlowState: () => ({
-    nodes: [],
+    nodes: mockFlowNodes.current,
     edges: [],
     onNodesChange: mockOnNodesChange,
-    onEdgesChange: jest.fn(),
+    onEdgesChange: mockOnEdgesChange,
     onConnect: jest.fn(),
     addNode: jest.fn(),
     addEdge: jest.fn(),
@@ -383,6 +388,158 @@ describe('FlowCanvas – lock button', () => {
     act(() => mockReactFlowProps.current.onDrop({ preventDefault: jest.fn() }));
 
     expect(mockOnDrop).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('FlowCanvas – selecting several models', () => {
+  const model = (id: string) => ({
+    id,
+    type: 'ecoreFile',
+    position: { x: 0, y: 0 },
+    data: { fileName: `${id}.ecore`, fileContent: '<ecore/>' },
+  });
+  const selectedIds = () => mockReactFlowProps.current.nodes
+    .filter((n: any) => n.selected)
+    .map((n: any) => n.id);
+  const clickModel = (id: string, additive = false) => act(() => {
+    const node = mockReactFlowProps.current.nodes.find((n: any) => n.id === id);
+    node.data.onSelect(`${id}.ecore`, { additive });
+  });
+  const boxSelect = (shiftKey: boolean, changes: Array<{ id: string; selected: boolean }>) => act(() => {
+    mockReactFlowProps.current.onSelectionStart({ shiftKey });
+    mockReactFlowProps.current.onNodesChange(changes.map(c => ({ ...c, type: 'select' })));
+    mockReactFlowProps.current.onSelectionEnd({});
+  });
+
+  beforeEach(() => {
+    mockFlowNodes.current = [model('a'), model('b'), model('c')];
+    mockOnNodesChange.mockClear();
+    mockOnEdgesChange.mockClear();
+  });
+
+  afterEach(() => {
+    mockFlowNodes.current = [];
+  });
+
+  it('adds and removes models with Shift/Cmd+click and narrows to one on a plain click', () => {
+    render(<FlowCanvas />);
+
+    clickModel('a');
+    clickModel('b', true);
+    expect(selectedIds()).toEqual(['a', 'b']);
+
+    clickModel('a', true);
+    expect(selectedIds()).toEqual(['b']);
+
+    clickModel('c');
+    expect(selectedIds()).toEqual(['c']);
+  });
+
+  it('selects the models inside the selection box', () => {
+    render(<FlowCanvas />);
+    clickModel('a');
+
+    boxSelect(false, [{ id: 'b', selected: true }, { id: 'c', selected: true }]);
+    expect(selectedIds()).toEqual(['b', 'c']);
+  });
+
+  it('adds the boxed models to the selection with Shift+drag', () => {
+    render(<FlowCanvas />);
+    clickModel('a');
+
+    // React Flow also reports the earlier selection as "not in the box"; Shift keeps it.
+    boxSelect(true, [{ id: 'b', selected: true }, { id: 'a', selected: false }]);
+    expect(selectedIds()).toEqual(['a', 'b']);
+  });
+
+  it("ignores React Flow's own select changes for models outside a selection box", () => {
+    render(<FlowCanvas />);
+    clickModel('a');
+
+    act(() => mockReactFlowProps.current.onNodesChange([{ id: 'a', type: 'select', selected: false }]));
+
+    expect(selectedIds()).toEqual(['a']);
+    expect(mockOnNodesChange).not.toHaveBeenCalled();
+  });
+
+  it('does not select the edges between boxed models', () => {
+    render(<FlowCanvas />);
+
+    act(() => {
+      mockReactFlowProps.current.onSelectionStart({ shiftKey: false });
+      mockReactFlowProps.current.onEdgesChange([{ id: 'e1', type: 'select', selected: true }]);
+    });
+
+    expect(mockOnEdgesChange).not.toHaveBeenCalled();
+  });
+
+  it('clears the selection with Escape and with a click on the empty canvas', () => {
+    render(<FlowCanvas />);
+    clickModel('a');
+    clickModel('b', true);
+
+    fireEvent.keyDown(document, { key: 'Escape' });
+    expect(selectedIds()).toEqual([]);
+
+    clickModel('a');
+    act(() => mockReactFlowProps.current.onPaneClick());
+    expect(selectedIds()).toEqual([]);
+  });
+
+  it('draws the selection box with a left-drag and pans with the middle button', () => {
+    render(<FlowCanvas />);
+
+    expect(mockReactFlowProps.current.selectionOnDrag).toBe(true);
+    expect(mockReactFlowProps.current.panOnDrag).toEqual([1]);
+    expect(mockReactFlowProps.current.selectionMode).toBe('partial');
+  });
+
+  it('keeps drag-to-pan and draws no selection box for viewers', () => {
+    render(<FlowCanvas readOnly />);
+
+    expect(mockReactFlowProps.current.selectionOnDrag).toBe(false);
+    expect(mockReactFlowProps.current.panOnDrag).toBe(true);
+  });
+
+  it('draws no selection box on a locked canvas', () => {
+    render(<FlowCanvas />);
+    fireEvent.click(screen.getByTitle('Lock interactions'));
+
+    expect(mockReactFlowProps.current.selectionOnDrag).toBe(false);
+  });
+});
+
+describe('FlowCanvas – Cmd+scroll zoom', () => {
+  const renderWithViewport = () => {
+    const instance = {
+      getViewport: jest.fn(() => ({ x: 0, y: 0, zoom: 1 })),
+      setViewport: jest.fn(),
+    };
+    render(<FlowCanvas />);
+    act(() => mockReactFlowProps.current.onInit(instance));
+    return instance;
+  };
+
+  it('zooms in with Cmd+scroll up and out with Cmd+scroll down', () => {
+    const instance = renderWithViewport();
+    const canvas = screen.getByTestId('react-flow');
+
+    fireEvent.wheel(canvas, { deltaY: -10, metaKey: true });
+    expect(instance.setViewport.mock.calls[0][0].zoom).toBeGreaterThan(1);
+
+    fireEvent.wheel(canvas, { deltaY: 10, metaKey: true });
+    expect(instance.setViewport.mock.calls[1][0].zoom).toBeLessThan(1);
+  });
+
+  it('leaves scrolling without Cmd to React Flow, and does not zoom a locked canvas', () => {
+    const instance = renderWithViewport();
+    const canvas = screen.getByTestId('react-flow');
+
+    fireEvent.wheel(canvas, { deltaY: -10 });
+    fireEvent.click(screen.getByTitle('Lock interactions'));
+    fireEvent.wheel(canvas, { deltaY: -10, metaKey: true });
+
+    expect(instance.setViewport).not.toHaveBeenCalled();
   });
 });
 

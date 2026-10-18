@@ -292,7 +292,7 @@ export function mapEcoreFlowNode(
     /** Locked with the lock button; nothing may be moved, unlike for read-only viewers. */
     locked?: boolean;
     expandedFileId: string | null;
-    selectedFileId: string | null;
+    selectedFileIds: string[];
     connectionDragState: ConnectionDragState | null;
     addReactionMode?: boolean;
     reactionSourceId: string | null;
@@ -300,7 +300,7 @@ export function mapEcoreFlowNode(
     constraintFilterNodeId?: string | null;
     edgeDistribution: unknown;
     handleEcoreFileExpand: (fileName: string, fileContent: string) => void;
-    handleEcoreFileSelect: (fileName: string) => void;
+    handleEcoreFileSelect: (fileName: string, options?: { additive?: boolean }) => void;
     onEcoreFileDelete?: (id: string) => void;
     handleRequestDelete: (id: string) => void;
     onEcoreFileRename?: (id: string, newFileName: string) => void;
@@ -316,7 +316,7 @@ export function mapEcoreFlowNode(
     readOnly,
     locked = false,
     expandedFileId,
-    selectedFileId,
+    selectedFileIds,
     connectionDragState,
     addReactionMode,
     reactionSourceId,
@@ -351,7 +351,7 @@ export function mapEcoreFlowNode(
       isConstraintContext: constraintHighlightNodeId === node.id,
       isConstraintFilter: constraintFilterNodeId === node.id,
     },
-    selected: selectedFileId === node.id,
+    selected: selectedFileIds.includes(node.id),
     // Draggable for viewers too — repositioning is local-only (see
     // isReadOnlyBlockedNodeChange). Still frozen on a locked canvas, mid-connection
     // and in add-reaction mode, where a drag would fight the click-to-target gesture.

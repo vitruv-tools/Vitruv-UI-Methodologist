@@ -16,7 +16,7 @@ const editableNode = (id = 'uml-1'): Node =>
 const ecoreOptions = (overrides: Record<string, unknown> = {}) => ({
   readOnly: false,
   expandedFileId: null,
-  selectedFileId: null,
+  selectedFileIds: [],
   connectionDragState: null,
   addReactionMode: false,
   reactionSourceId: null,
@@ -36,6 +36,13 @@ const ecoreOptions = (overrides: Record<string, unknown> = {}) => ({
 describe('mapEcoreFlowNode', () => {
   it('is draggable for an editor', () => {
     expect(mapEcoreFlowNode(ecoreNode(), ecoreOptions()).draggable).toBe(true);
+  });
+
+  it('marks the model as selected when it is one of the selected models', () => {
+    const options = ecoreOptions({ selectedFileIds: ['other', 'ecore-1'] });
+
+    expect(mapEcoreFlowNode(ecoreNode(), options).selected).toBe(true);
+    expect(mapEcoreFlowNode(ecoreNode('ecore-2'), options).selected).toBe(false);
   });
 
   it('is draggable for a viewer, so large models can be rearranged locally', () => {
