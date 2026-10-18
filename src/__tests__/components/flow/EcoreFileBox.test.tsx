@@ -217,3 +217,43 @@ describe('EcoreFileBox (real) – rename', () => {
     expect(screen.queryByLabelText('Rename metamodel')).not.toBeInTheDocument();
   });
 });
+
+describe('EcoreFileBox (real) – opening the UML diagram', () => {
+  afterEach(() => jest.clearAllMocks());
+
+  const renderBox = (overrides: Record<string, unknown> = {}) => {
+    const onExpand = jest.fn();
+    render(
+      <RealEcoreFileBox
+        {...baseNodeProps}
+        data={{ ...baseData, onExpand, ...overrides }}
+      />,
+    );
+    return { onExpand, card: screen.getByRole('button', { name: /flower metamodel/i }) };
+  };
+
+  it('shows the Open UML button to a viewer', () => {
+    const { onExpand } = renderBox({ readOnly: true });
+
+    fireEvent.click(screen.getByTitle('Open UML diagram'));
+
+    expect(onExpand).toHaveBeenCalledWith('flower.ecore', '<ecore/>');
+  });
+
+  it('opens the UML diagram on double-click', () => {
+    const { onExpand, card } = renderBox();
+
+    fireEvent.doubleClick(card);
+
+    expect(onExpand).toHaveBeenCalledWith('flower.ecore', '<ecore/>');
+  });
+
+  it('hides the Open UML button on a locked canvas, but still opens the UML diagram on double-click', () => {
+    const { onExpand, card } = renderBox({ readOnly: true, locked: true });
+
+    expect(screen.queryByTitle('Open UML diagram')).not.toBeInTheDocument();
+    fireEvent.doubleClick(card);
+
+    expect(onExpand).toHaveBeenCalledWith('flower.ecore', '<ecore/>');
+  });
+});
