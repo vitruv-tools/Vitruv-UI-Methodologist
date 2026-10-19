@@ -48,6 +48,22 @@ describe('mapEcoreFlowNode', () => {
     expect(mapEcoreFlowNode(ecoreNode(), options).draggable).toBe(false);
   });
 
+  it('tells the model card that the canvas is locked', () => {
+    const options = ecoreOptions({ readOnly: true, locked: true });
+
+    expect(mapEcoreFlowNode(ecoreNode(), options).data.locked).toBe(true);
+  });
+
+  it('keeps the model card clickable on a locked canvas', () => {
+    const options = ecoreOptions({ readOnly: true, locked: true });
+
+    expect(mapEcoreFlowNode(ecoreNode(), options).style?.pointerEvents).toBe('all');
+  });
+
+  it('leaves pointer events to React Flow on an unlocked canvas', () => {
+    expect(mapEcoreFlowNode(ecoreNode(), ecoreOptions()).style?.pointerEvents).toBeUndefined();
+  });
+
   it('freezes while a connection is being dragged', () => {
     const options = ecoreOptions({ connectionDragState: { isActive: true } });
 
