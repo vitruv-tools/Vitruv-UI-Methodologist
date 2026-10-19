@@ -353,7 +353,6 @@ export function mapEcoreFlowNode(
       isConstraintFilter: constraintFilterNodeId === node.id,
     },
     selected: selectedFileIds.includes(node.id),
-    selected: selectedFileId === node.id,
     // React Flow turns pointer events off for a node that is neither draggable nor
     // selectable, which a locked canvas makes it. Keep the card clickable so its UML can
     // still be opened; the card's read-only checks block every change.

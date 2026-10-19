@@ -235,6 +235,9 @@ describe('EcoreFileBox (real) – selecting', () => {
       ['flower.ecore', { additive: true }],
       ['flower.ecore', { additive: true }],
     ]);
+  });
+});
+
 describe('EcoreFileBox (real) – opening the UML diagram', () => {
   afterEach(() => jest.clearAllMocks());
 
