@@ -336,7 +336,8 @@ export const VsumUsersTab: React.FC<Props> = ({ vsumId, onChanged, canManage = t
             )}
             {!searching && searchResults.length > 0 && (
               <select
-                size={Math.min(6, searchResults.length)}
+                // One extra row for the placeholder, so a single match is a list, not a dropdown.
+                size={Math.min(6, searchResults.length + 1)}
                 value={selectedUser ? String(selectedUser.id) : ''}
                 onChange={(e) => {
                   const next = searchResults.find(u => String(u.id) === e.target.value) || null;
@@ -353,6 +354,9 @@ export const VsumUsersTab: React.FC<Props> = ({ vsumId, onChanged, canManage = t
                   fontFamily: APP_FONT,
                 }}
               >
+                {/* Matches the empty value: without it React selects the first user, so
+                    clicking that user changes nothing and it cannot be added. */}
+                <option value="" style={{ color: 'var(--v-text-muted)' }}>Select a user…</option>
                 {searchResults.map(u => (
                   <option key={u.id} value={String(u.id)}>
                     {userDisplayName(u)} — {u.email}

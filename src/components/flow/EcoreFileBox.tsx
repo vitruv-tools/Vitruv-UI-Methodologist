@@ -35,6 +35,8 @@ interface EcoreFileBoxData {
   isConstraintContext?: boolean;
   isConstraintFilter?: boolean;
   readOnly?: boolean;
+  /** Locked with the lock button: the Open UML button is hidden, double-click still opens UML. */
+  locked?: boolean;
   description?: string;
   keywords?: string;
   domain?: string;
@@ -140,6 +142,7 @@ export const EcoreFileBox: React.FC<NodeProps<EcoreFileBoxData>> = ({
     isConstraintContext = false,
     isConstraintFilter = false,
     readOnly = false,
+    locked = false,
   } = data;
 
   const boxRef = useRef<HTMLDivElement>(null);
@@ -373,7 +376,7 @@ export const EcoreFileBox: React.FC<NodeProps<EcoreFileBoxData>> = ({
             </span>
           )}
 
-          {readOnly && (
+          {readOnly && !locked && (
             <button
               type="button"
               title="Open UML diagram"

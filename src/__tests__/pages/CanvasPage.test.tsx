@@ -34,10 +34,12 @@ jest.mock('../../components/flow/FlowCanvas', () => {
     FlowCanvas: React.forwardRef((props: any, ref: any) => {
       const [nodes, setNodes] = React.useState([]);
       const [viewport, setViewport] = React.useState(props.initialViewport ?? { x: 0, y: 0, zoom: 1 });
+      const [locked, setLocked] = React.useState(props.initialLocked ?? false);
       React.useImperativeHandle(ref, () => ({
         loadDiagramData: (nextNodes: any[]) => setNodes(nextNodes),
         getNodes: () => nodes,
         getViewport: () => viewport,
+        isLocked: () => locked,
         getEdges: jest.fn(() => []),
         addEcoreFile: jest.fn(),
         updateEcoreFileData: jest.fn(),
@@ -54,18 +56,22 @@ jest.mock('../../components/flow/FlowCanvas', () => {
         })),
         fitUmlView: jest.fn(),
         openSelectedReactionEditor: jest.fn(() => false),
-      }), [nodes, viewport]);
+      }), [nodes, viewport, locked]);
       return (
         <div data-testid="flow-canvas">
           {props.projectTabsBelowModeToggle}
           {nodes.map((node: any) => <span key={node.id}>{node.id}</span>)}
           <span data-testid="canvas-viewport">{`${viewport.x},${viewport.y},${viewport.zoom}`}</span>
+          <span data-testid="canvas-locked">{String(locked)}</span>
           {/* Like a model card, which stops every key event while it has the focus. */}
           <div role="button" tabIndex={0} onKeyDown={(e: any) => e.stopPropagation()}>
             Test model card
           </div>
           <button type="button" onClick={() => setViewport({ x: 120, y: 80, zoom: 1.5 })}>
             Pan test canvas
+          </button>
+          <button type="button" onClick={() => setLocked(true)}>
+            Lock test canvas
           </button>
           <button
             type="button"
@@ -226,6 +232,24 @@ describe('CanvasPage project tabs', () => {
 
     fireEvent.click(screen.getByRole('tab', { name: /Project B/ }));
     await waitFor(() => expect(viewport()).toBe('0,0,1'));
+  });
+
+  it('keeps the lock of every tab when switching between project tabs', async () => {
+    const locked = () => screen.getByTestId('canvas-locked').textContent;
+    const { rerender } = render(<CanvasPage />);
+    await waitForProject('Project A');
+    fireEvent.click(screen.getByRole('button', { name: 'Lock test canvas' }));
+
+    mockRouteId = '20';
+    rerender(<CanvasPage />);
+    await waitForProject('Project B');
+    expect(locked()).toBe('false');
+
+    fireEvent.click(screen.getByRole('tab', { name: /Project A/ }));
+    await waitFor(() => expect(locked()).toBe('true'));
+
+    fireEvent.click(screen.getByRole('tab', { name: /Project B/ }));
+    await waitFor(() => expect(locked()).toBe('false'));
   });
 });
 

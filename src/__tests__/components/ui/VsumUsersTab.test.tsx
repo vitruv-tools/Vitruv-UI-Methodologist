@@ -70,6 +70,29 @@ describe('VsumUsersTab', () => {
     });
     // we only assert that search was triggered; UI list rendering is implementation-detail heavy
   });
+
+  it('lets the first suggested user be selected and added', async () => {
+    apiService.getVsumMembers.mockResolvedValue({ data: [] });
+    apiService.searchUsers.mockResolvedValue({
+      data: [{ id: 2, firstName: 'Bob', lastName: 'Member', email: 'bob@example.com' }],
+    });
+    apiService.addVsumMember.mockResolvedValue({});
+    render(<VsumUsersTab vsumId={1} />);
+    fireEvent.change(screen.getByPlaceholderText(/Search user by name or email/i), {
+      target: { value: 'bob' },
+    });
+
+    // A list even for one match, with no user selected yet, so choosing the first is a real change.
+    const results = await screen.findByRole('listbox', { name: 'Search results' });
+    expect((screen.getByRole('option', { name: /Bob Member/ }) as HTMLOptionElement).selected).toBe(false);
+    expect(screen.getByRole('button', { name: /Add member/i })).toBeDisabled();
+
+    fireEvent.change(results, { target: { value: '2' } });
+    expect(screen.getByText(/Selected:/)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /Add member/i }));
+
+    await waitFor(() => expect(apiService.addVsumMember).toHaveBeenCalledWith(1, { userId: 2 }));
+  });
 });
 
 

@@ -345,6 +345,18 @@ describe('FlowCanvas – lock button', () => {
     expect(mockReactFlowProps.current.nodesConnectable).toBe(true);
   });
 
+  it('turns double-click zoom off until unlocked, like the other zoom gestures', () => {
+    render(<FlowCanvas />);
+    expect(mockReactFlowProps.current.zoomOnDoubleClick).toBe(true);
+
+    lock();
+    expect(mockReactFlowProps.current.zoomOnDoubleClick).toBe(false);
+    expect(mockReactFlowProps.current.zoomOnScroll).toBe(false);
+
+    fireEvent.click(screen.getByTitle('Unlock interactions'));
+    expect(mockReactFlowProps.current.zoomOnDoubleClick).toBe(true);
+  });
+
   it('ignores moving and removing nodes while locked, but still lets them be selected', () => {
     render(<FlowCanvas />);
     lock();
@@ -378,6 +390,24 @@ describe('FlowCanvas – lock button', () => {
       });
     });
     expect(onEcoreFileSelect).toHaveBeenCalledWith('loaded.ecore');
+  });
+
+  it('starts locked when initialLocked is set', () => {
+    const ref = createRef<any>();
+    render(<FlowCanvas ref={ref} initialLocked />);
+
+    expect(screen.getByTitle('Unlock interactions')).toBeInTheDocument();
+    expect(mockReactFlowProps.current.nodesDraggable).toBe(false);
+    expect(ref.current.isLocked()).toBe(true);
+  });
+
+  it('reports whether it is locked', () => {
+    const ref = createRef<any>();
+    render(<FlowCanvas ref={ref} />);
+    expect(ref.current.isLocked()).toBe(false);
+
+    lock();
+    expect(ref.current.isLocked()).toBe(true);
   });
 
   it('accepts dropped models again once unlocked', () => {

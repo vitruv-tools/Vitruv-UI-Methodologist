@@ -737,6 +737,7 @@ export const CanvasPage: React.FC = () => {
     topPanelId,
     workspaceSnapshot: getLiveSnapshot(),
     viewport: flowCanvasRef.current?.getViewport?.(),
+    locked: flowCanvasRef.current?.isLocked?.(),
   }), [vsumName, drawerModels, myLibraryModels, publicLibraryModels, addedModelIds, umlPanels, topPanelId, getLiveSnapshot]);
 
   const isInstanceDirty = useCallback((instanceId: string): boolean => {
@@ -1532,8 +1533,9 @@ export const CanvasPage: React.FC = () => {
       <FlowCanvas
         key={activeInstanceId ?? `canvas-${activeProjectId ?? 'new'}`}
         ref={flowCanvasRef}
-        // The canvas is new for every tab; start it with the view the tab had when it was left.
+        // The canvas is new for every tab; start it with the view and lock the tab had when it was left.
         initialViewport={activeInstanceId ? sessionsRef.current.get(activeInstanceId)?.viewport : undefined}
+        initialLocked={activeInstanceId ? sessionsRef.current.get(activeInstanceId)?.locked : undefined}
         vsumId={activeProjectId?.toString()}
         readOnly={isViewOnly}
         canvasMode={canvasMode}

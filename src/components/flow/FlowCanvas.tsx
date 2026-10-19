@@ -209,6 +209,8 @@ export interface FlowCanvasHandle {
   getEdges: () => Edge[];
   /** Current pan and zoom; undefined until the canvas is initialized. */
   getViewport: () => Viewport | undefined;
+  /** Whether the canvas is locked with the lock button. */
+  isLocked: () => boolean;
   addEcoreFile: (fileName: string, fileContent: string, meta?: any) => void;
   updateEcoreDisplayName: (metaModelId: number, displayName: string) => void;
   updateEcoreFileData: (fileName: string, fileContent: string, ecoreFileId?: number) => void;
@@ -247,6 +249,8 @@ interface FlowCanvasProps {
   projectTabsBelowModeToggle?: React.ReactNode;
   /** Pan and zoom to start with, e.g. the view a project tab had when the user left it. */
   initialViewport?: Viewport;
+  /** Start locked, e.g. because the project tab was locked when the user left it. */
+  initialLocked?: boolean;
   /** Called when the user switches between Modeling / Constraints / Views / Metrics tabs. */
   onCanvasModeChange?: (mode: CanvasMode) => void;
   canvasMode?: CanvasMode;
@@ -319,6 +323,7 @@ export const FlowCanvas = forwardRef<FlowCanvasHandle, FlowCanvasProps>(
       onHistoryChange,
       projectTabsBelowModeToggle,
       initialViewport,
+      initialLocked = false,
       onCanvasModeChange,
       canvasMode: canvasModeProp = 'modeling',
       constraintHighlightNodeId,
@@ -335,7 +340,7 @@ export const FlowCanvas = forwardRef<FlowCanvasHandle, FlowCanvasProps>(
     const reactFlowInstanceRef = useRef<ReactFlowInstance | null>(null);
 
     const [isDragOver, setIsDragOver] = useState(false);
-    const [isInteractive, setIsInteractive] = useState(!readOnly);
+    const [isInteractive, setIsInteractive] = useState(!readOnly && !initialLocked);
     const editable = !readOnly && isInteractive;
     // Locked with the lock button: nothing may change, not even positions. Read-only viewers are
     // not "locked" - they may still move boxes locally.
@@ -1569,6 +1574,7 @@ export const FlowCanvas = forwardRef<FlowCanvasHandle, FlowCanvasProps>(
       getNodes: () => nodes,
       getEdges: () => edges,
       getViewport: () => reactFlowInstanceRef.current?.getViewport(),
+      isLocked: () => locked,
       addEcoreFile,
       updateEcoreDisplayName,
       updateEcoreFileData,
@@ -1584,7 +1590,7 @@ export const FlowCanvas = forwardRef<FlowCanvasHandle, FlowCanvasProps>(
       fitUmlView,
       openSelectedReactionEditor,
       establishBaseline,
-    }), [handleToolClick, loadDiagramData, nodes, edges, viewTypes, addEcoreFile, updateEcoreDisplayName, updateEcoreFileData, resetExpandedFile, undo, redo, canUndo, canRedo, getReactionEdges, getWorkspaceSnapshot, autoLayoutEcoreBoxes, fitUmlView, openSelectedReactionEditor, establishBaseline]);
+    }), [handleToolClick, loadDiagramData, nodes, edges, viewTypes, addEcoreFile, updateEcoreDisplayName, updateEcoreFileData, resetExpandedFile, undo, redo, canUndo, canRedo, getReactionEdges, getWorkspaceSnapshot, autoLayoutEcoreBoxes, fitUmlView, openSelectedReactionEditor, establishBaseline, locked]);
 
     // ── Render mapping ────────────────────────────────────────────────────────
 
@@ -1785,6 +1791,7 @@ export const FlowCanvas = forwardRef<FlowCanvasHandle, FlowCanvasProps>(
           panOnScroll={interactionsAllowed}
           zoomOnScroll={interactionsAllowed}
           zoomOnPinch={interactionsAllowed}
+          zoomOnDoubleClick={interactionsAllowed}
           minZoom={umlViewActive ? 0.45 : 0.05}
           maxZoom={umlViewActive ? 2.5 : 2}
           translateExtent={[[-12000, -12000], [12000, 12000]]}
