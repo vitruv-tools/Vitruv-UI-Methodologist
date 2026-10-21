@@ -215,6 +215,7 @@ describe('pasting between the Model library and projects', () => {
           ecoreFileId: 70,
           modelName: 'model',
           saveTarget: location.saveTarget,
+          persistWorkspaceEcore: async () => undefined,
           onSaved,
         }}
         zIndex={1}

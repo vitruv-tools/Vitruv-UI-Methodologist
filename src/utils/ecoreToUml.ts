@@ -1,4 +1,8 @@
-import { formatEcoreMultiplicity } from './umlMultiplicity';
+import {
+  formatEcoreMultiplicity,
+  formatMultiplicity,
+  parseMultiplicity,
+} from './umlMultiplicity';
 import { applyUmlDiagramLayout } from './umlClassLayout';
 import { GENMODEL_ANNOTATION_SOURCE } from './ecoreXmlNamespaces';
 import { collectClassElements, getElementType, parseEcoreDocument } from './ecoreDocument';
@@ -17,6 +21,14 @@ export const UML_VISIBILITY_OPTIONS: readonly UMLVisibility[] = ['+', '-', '#'];
 
 /** Ecore annotation source for UML visibility (+ / - / #). */
 export const UML_VISIBILITY_ANNOTATION = 'uml.visibility';
+/**
+ * Ecore annotation source for the UML multiplicity of an association end that the Ecore bounds
+ * cannot express: the source end (Ecore only has the target bounds), or a target written
+ * differently from its bounds (`*` for 0..*).
+ */
+export const UML_MULTIPLICITY_ANNOTATION = 'uml.multiplicity';
+export const UML_MULTIPLICITY_SOURCE_KEY = 'source';
+export const UML_MULTIPLICITY_TARGET_KEY = 'target';
 /** Standard Ecore/GenModel annotation source for element documentation. */
 export const ECORE_DOCUMENTATION_ANNOTATION = GENMODEL_ANNOTATION_SOURCE;
 
@@ -35,6 +47,25 @@ export function parseEcoreDocumentation(element: Element): string | undefined {
     }
   }
   return undefined;
+}
+
+/** UML multiplicities stored next to the Ecore bounds; a missing key means "derive from bounds". */
+interface StoredMultiplicity {
+  source?: string;
+  target?: string;
+}
+
+function parseStoredMultiplicity(element: Element): StoredMultiplicity {
+  const stored: StoredMultiplicity = {};
+  for (const annotation of directChildElements(element, 'eAnnotations')) {
+    if (annotation.getAttribute('source') !== UML_MULTIPLICITY_ANNOTATION) continue;
+    for (const detail of directChildElements(annotation, 'details')) {
+      const value = detail.getAttribute('value') ?? '';
+      if (detail.getAttribute('key') === UML_MULTIPLICITY_SOURCE_KEY) stored.source = value;
+      if (detail.getAttribute('key') === UML_MULTIPLICITY_TARGET_KEY) stored.target = value;
+    }
+  }
+  return stored;
 }
 
 export function parseUmlVisibility(element: Element): UMLVisibility {
@@ -204,6 +235,7 @@ interface DeferredClassRef {
   lower: string | null;
   upper: string | null;
   documentation?: string;
+  storedMultiplicity: StoredMultiplicity;
 }
 
 const EMPTY_UML_MODEL: UMLModel = { classes: [], relationships: [] };
@@ -236,6 +268,7 @@ function parseClassAttributes(
         lower: feat.getAttribute('lowerBound'),
         upper: feat.getAttribute('upperBound'),
         documentation: parseEcoreDocumentation(feat),
+        storedMultiplicity: parseStoredMultiplicity(feat),
       });
       continue;
     }
@@ -309,15 +342,29 @@ function buildClassMap(
   return { classMap, deferredClassRefs };
 }
 
-function buildReferenceMultiplicities(lower: string | null, upper: string | null): {
+function buildReferenceMultiplicities(
+  lower: string | null,
+  upper: string | null,
+  stored: StoredMultiplicity,
+): {
   sourceMultiplicity?: string;
   targetMultiplicity?: string;
 } {
-  const targetMultiplicity = formatEcoreMultiplicity(lower, upper);
-  return {
-    sourceMultiplicity: targetMultiplicity === undefined ? undefined : '1',
-    targetMultiplicity,
-  };
+  const boundsMultiplicity = formatEcoreMultiplicity(lower, upper);
+  // Keep the stored spelling (`*`) only while it still matches the bounds, so editing the
+  // bounds in another tool wins over a stale annotation.
+  const storedBounds = stored.target ? parseMultiplicity(stored.target) : undefined;
+  const storedTargetMatchesBounds = storedBounds !== undefined
+    && formatMultiplicity(storedBounds.lower, storedBounds.upper) === boundsMultiplicity;
+  const targetMultiplicity = storedTargetMatchesBounds ? stored.target : boundsMultiplicity;
+
+  let sourceMultiplicity: string | undefined;
+  if (stored.source !== undefined) {
+    sourceMultiplicity = stored.source || undefined;
+  } else if (targetMultiplicity !== undefined) {
+    sourceMultiplicity = '1';
+  }
+  return { sourceMultiplicity, targetMultiplicity };
 }
 
 function isValidRelationshipTarget(
@@ -367,6 +414,7 @@ function appendReferenceRelationships(
     const multiplicities = buildReferenceMultiplicities(
       feat.getAttribute('lowerBound'),
       feat.getAttribute('upperBound'),
+      parseStoredMultiplicity(feat),
     );
 
     relationships.push({
@@ -391,7 +439,11 @@ function appendDeferredRelationships(
     if (!classMap.has(ref.sourceId) || !classMap.has(ref.targetId)) continue;
     if (ref.sourceId === ref.targetId) continue;
 
-    const multiplicities = buildReferenceMultiplicities(ref.lower, ref.upper);
+    const multiplicities = buildReferenceMultiplicities(
+      ref.lower,
+      ref.upper,
+      ref.storedMultiplicity,
+    );
     relationships.push({
       id: `rel-${relIdx.value++}`,
       sourceId: ref.sourceId,
