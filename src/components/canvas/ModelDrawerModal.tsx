@@ -1,6 +1,6 @@
 import React from 'react';
 import ReactDOM from 'react-dom';
-import { DrawerModel, ModelDrawer } from './ModelDrawer';
+import { DrawerModel, ModelDrawer, SaveProjectModel } from './ModelDrawer';
 import { MODAL_Z_INDEX, modalBackdropStyle } from '../ui/modalUtils';
 
 interface ModelDrawerModalProps {
@@ -13,6 +13,7 @@ interface ModelDrawerModalProps {
   onAddModel: (model: DrawerModel) => void;
   onDeleteModel?: (model: DrawerModel) => Promise<void>;
   onRenameProjectModel?: (model: DrawerModel, name: string) => Promise<void>;
+  onSaveProjectModel?: SaveProjectModel;
   onFetchFile: (fileId: number) => Promise<string>;
 }
 
@@ -26,6 +27,7 @@ export const ModelDrawerModal: React.FC<ModelDrawerModalProps> = ({
   onAddModel,
   onDeleteModel,
   onRenameProjectModel,
+  onSaveProjectModel,
   onFetchFile,
 }) => ReactDOM.createPortal(
   <>
@@ -58,6 +60,7 @@ export const ModelDrawerModal: React.FC<ModelDrawerModalProps> = ({
         onAddModel={onAddModel}
         onDeleteModel={onDeleteModel}
         onRenameProjectModel={onRenameProjectModel}
+        onSaveProjectModel={onSaveProjectModel}
         myLibraryModels={myLibraryModels}
         publicLibraryModels={publicLibraryModels}
         onFetchFile={onFetchFile}

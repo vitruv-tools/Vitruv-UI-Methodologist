@@ -274,7 +274,28 @@ describe('useCanvasUmlPanels', () => {
     expect(updateEcoreFileData).toHaveBeenCalledWith(
       'library.ecore',
       '<saved-content />',
+      30,
     );
+  });
+
+  it('follows the project copy to its new file id after a workspace save', () => {
+    const updateEcoreFileData = jest.fn();
+    const options = createOptions({ updateEcoreFileData });
+    const { result } = renderHook(() => useCanvasUmlPanels(options));
+    const panel = createPanel();
+
+    act(() => {
+      result.current.restorePanels([panel], panel.id);
+    });
+    act(() => {
+      result.current.buildUmlSaveContext(panel)?.onSaved?.({
+        ecoreContent: '<saved-content />',
+        ecoreFileId: 99,
+      });
+    });
+
+    expect(result.current.umlPanels[0].ecoreFileId).toBe(99);
+    expect(updateEcoreFileData).toHaveBeenCalledWith('library.ecore', '<saved-content />', 99);
   });
 
   it('persists workspace saves to the project copy using the library meta model id', async () => {

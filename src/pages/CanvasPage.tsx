@@ -683,11 +683,53 @@ export const CanvasPage: React.FC = () => {
     }
     flowCanvasRef.current?.updateEcoreFileData?.(fileName, content, ecoreFileId);
   }, []);
-  const persistProjectEcore = useCallback(async (libraryMetaModelId: number, ecoreContent: string) => {
+  const persistProjectEcore = useCallback(async (
+    libraryMetaModelId: number,
+    ecoreContent: string,
+  ): Promise<{ ecoreFileId?: number } | undefined> => {
     if (!activeProjectId) throw new Error('No project is open.');
     if (isViewOnly) throw new Error('You do not have permission to edit project meta-models.');
     await apiService.updateVsumMetaModelEcore(activeProjectId, libraryMetaModelId, { ecore: ecoreContent });
+
+    // The first save gives the project its own copy of the file (it shared the library's until
+    // now), so the file id loaded with the project is stale. Pick up the new one, otherwise
+    // reloading or opening the model in this session shows the library's file without the edit.
+    try {
+      const { data: details } = await apiService.getVsumDetails(activeProjectId);
+      const projectModel = (details?.metaModels ?? []).find(
+        model => (model.sourceId ?? model.id) === libraryMetaModelId,
+      );
+      if (!projectModel?.ecoreFileId) return undefined;
+      setDrawerModels(previous => previous.map(model => (
+        (model.sourceId ?? model.id) === libraryMetaModelId
+          ? {
+            ...model,
+            ecoreFileId: projectModel.ecoreFileId,
+            genModelFileId: projectModel.genModelFileId ?? model.genModelFileId,
+          }
+          : model
+      )));
+      return { ecoreFileId: projectModel.ecoreFileId };
+    } catch {
+      // The edit itself is saved; only the file id refresh failed.
+      return undefined;
+    }
   }, [activeProjectId, isViewOnly]);
+
+  const handleSaveProjectModel = useCallback(async (model: DrawerModel, ecoreContent: string) => {
+    const sourceId = model.sourceId ?? model.id;
+    const persisted = await persistProjectEcore(sourceId, ecoreContent);
+    // Keep the model on the canvas in step, or opening it from there shows the old content.
+    const canvasNode = getCanvasNodes().find(
+      node => node.type === 'ecoreFile' && (
+        node.data?.metaModelSourceId === sourceId || node.data?.metaModelId === model.id
+      ),
+    );
+    if (typeof canvasNode?.data?.fileName === 'string') {
+      updateCanvasEcoreFileData(canvasNode.data.fileName, ecoreContent, persisted?.ecoreFileId);
+    }
+    return persisted;
+  }, [getCanvasNodes, persistProjectEcore, updateCanvasEcoreFileData]);
   const {
     umlPanels,
     topPanelId,
@@ -1595,6 +1637,7 @@ export const CanvasPage: React.FC = () => {
           onAddModel={handleAddModel}
           onDeleteModel={handleDeleteModel}
           onRenameProjectModel={handleRenameProjectMetaModel}
+          onSaveProjectModel={handleSaveProjectModel}
           onFetchFile={fetchEcoreFileById}
         />
       )}
