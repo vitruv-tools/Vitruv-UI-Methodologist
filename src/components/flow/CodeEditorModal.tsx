@@ -314,17 +314,14 @@ export function CodeEditorModal({
       pendingRequests.current.set(requestId, (message) => {
         clearTimeout(timeoutId);
         const suggestions = processCompletionResponse(message, range, monacoInstance);
-        console.log(`🧩 Completion response for request ${requestId}:`, message.result, '→', suggestions.length, 'suggestions');
         resolve({ suggestions });
       });
 
-      console.log(`🧩 Sending completion request ${requestId} for uri=${getDocumentUri()}`);
       webSocketRef.current.send(JSON.stringify(request));
     });
   };
 
   const handleEditorDidMount: OnMount = (editor, monacoInstance) => {
-    console.log('🎯 handleEditorDidMount called');
     editorRef.current = editor;
 
     const grammar = monarchGrammar || reactionsMonarch;
@@ -388,8 +385,6 @@ export function CodeEditorModal({
     try {
       const rawUser = localStorage.getItem('auth.user');
       const userId = rawUser ? JSON.parse(rawUser).id : null;
-      console.log('🔑 rawUser:', rawUser);
-      console.log('🔑 vsumId:', vsumId);
       if (!userId) {
         console.error('❌ No userId available – aborting LSP connection');
         return;
@@ -403,13 +398,10 @@ export function CodeEditorModal({
       const wsBaseUrl = apiBaseUrl.replace('https://', 'wss://').replace('http://', 'ws://');
       const wsUrl = `${wsBaseUrl}${lspEndpoint}?userId=${encodeURIComponent(userId)}&vsumId=${encodeURIComponent(vsumId)}`;
 
-      console.log('🔌 Connecting to LSP at:', wsUrl);
-
       const webSocket = new WebSocket(wsUrl);
       webSocketRef.current = webSocket;
 
       webSocket.onopen = () => {
-        console.log('✅ LSP WebSocket open:', wsUrl);
         setLspConnected(true);
         setLspError(null);
       };
@@ -430,7 +422,6 @@ export function CodeEditorModal({
 
           if (message.type === 'workspaceReady') {
             const rootUri = message.rootUri;
-            console.log('📁 workspaceReady received, rootUri:', rootUri);
             if (!rootUri) {
               console.error('❌ workspaceReady message contains no rootUri');
               return;
@@ -457,7 +448,6 @@ export function CodeEditorModal({
           }
 
           if (message.id === 1 && message.result) {
-            console.log('🚀 LSP initialize response received, sending initialized + didOpen');
             lspInitialized.current = true;
             webSocket.send(JSON.stringify({ jsonrpc: '2.0', method: 'initialized', params: {} }));
 
