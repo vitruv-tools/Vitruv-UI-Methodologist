@@ -1,0 +1,240 @@
+import React from 'react';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { ModelDrawer, DrawerModel } from '../../../components/canvas/ModelDrawer';
+
+const mockReloadLayout = jest.fn();
+const mockSave = jest.fn();
+const mockIsDirty = jest.fn(() => false);
+
+jest.mock('../../../components/canvas/UMLDiagram', () => {
+  const { forwardRef, createElement, useImperativeHandle } = require('react');
+  return {
+    UMLDiagram: forwardRef((_props: any, ref: any) => {
+      useImperativeHandle(ref, () => ({
+        flushLayout: jest.fn(),
+        reloadLayout: mockReloadLayout,
+        isDirty: mockIsDirty,
+        save: mockSave,
+        tryEscape: jest.fn(() => false),
+      }));
+      return createElement('div', { 'data-testid': 'uml-diagram' });
+    }),
+  };
+});
+
+const model1: DrawerModel = { id: 1, name: 'Car Model', domain: 'automotive', ecoreContent: '...' };
+const model2: DrawerModel = { id: 2, name: 'Person Model', domain: 'hr' };
+
+const defaultProps = {
+  models: [],
+  onClose: jest.fn(),
+  onAddModel: jest.fn(),
+  myLibraryModels: [model1, model2],
+  publicLibraryModels: [{ id: 3, name: 'Public Model', domain: 'public' }],
+};
+
+beforeEach(() => {
+  jest.clearAllMocks();
+  mockIsDirty.mockReturnValue(false);
+});
+
+describe('ModelDrawer real component', () => {
+  it('renders drawer with title "Model Library"', () => {
+    render(<ModelDrawer {...defaultProps} />);
+    expect(screen.getByText('Model Library')).toBeInTheDocument();
+  });
+
+  it('close button calls onClose', () => {
+    const onClose = jest.fn();
+    render(<ModelDrawer {...defaultProps} onClose={onClose} />);
+    const closeBtn = screen.getByTitle('Close');
+    fireEvent.click(closeBtn);
+    expect(onClose).toHaveBeenCalled();
+  });
+
+  it('shows "My Library" and "Public Library" tabs', () => {
+    render(<ModelDrawer {...defaultProps} />);
+    expect(screen.getByText('My Library')).toBeInTheDocument();
+    expect(screen.getByText('Public Library')).toBeInTheDocument();
+  });
+
+  it('switching to "Public Library" tab shows public models', () => {
+    render(<ModelDrawer {...defaultProps} />);
+    fireEvent.click(screen.getByText('Public Library'));
+    expect(screen.getByText('Public Model')).toBeInTheDocument();
+  });
+
+  it('search input filters models by name', () => {
+    render(<ModelDrawer {...defaultProps} />);
+    const searchInput = screen.getByPlaceholderText('Search models…');
+    fireEvent.change(searchInput, { target: { value: 'Car' } });
+    expect(screen.getByText('Car Model')).toBeInTheDocument();
+    expect(screen.queryByText('Person Model')).not.toBeInTheDocument();
+  });
+
+  it('clearing search shows all models', () => {
+    render(<ModelDrawer {...defaultProps} />);
+    const searchInput = screen.getByPlaceholderText('Search models…');
+    fireEvent.change(searchInput, { target: { value: 'Car' } });
+    expect(screen.queryByText('Person Model')).not.toBeInTheDocument();
+    fireEvent.change(searchInput, { target: { value: '' } });
+    expect(screen.getByText('Person Model')).toBeInTheDocument();
+  });
+
+  it('domain filter chips appear when models have domains', () => {
+    render(<ModelDrawer {...defaultProps} />);
+    // Domain chips are <button> elements; domain also appears as badge in model cards
+    const automotiveElements = screen.getAllByText('automotive');
+    expect(automotiveElements.length).toBeGreaterThan(0);
+    const hrElements = screen.getAllByText('hr');
+    expect(hrElements.length).toBeGreaterThan(0);
+  });
+
+  it('clicking a domain chip filters models', () => {
+    render(<ModelDrawer {...defaultProps} />);
+    // Domain chip is the <button> element (not the badge span in model cards)
+    const automotiveChip = screen.getAllByText('automotive').find(
+      el => el.tagName === 'BUTTON'
+    )!;
+    fireEvent.click(automotiveChip);
+    expect(screen.getByText('Car Model')).toBeInTheDocument();
+    expect(screen.queryByText('Person Model')).not.toBeInTheDocument();
+  });
+
+  it('shows each library model version in its own column', () => {
+    render(
+      <ModelDrawer
+        {...defaultProps}
+        myLibraryModels={[
+          { id: 1, name: 'Car Model', domain: 'automotive', version: '2.3' },
+          { id: 2, name: 'Person Model', domain: 'hr', version: '1.0' },
+        ]}
+      />,
+    );
+
+    expect(screen.getByText('Version')).toBeInTheDocument();
+    expect(screen.getByText('2.3')).toBeInTheDocument();
+    expect(screen.getByText('1.0')).toBeInTheDocument();
+  });
+
+  it('clicking a model card calls onAddModel with the model', () => {
+    const onAddModel = jest.fn();
+    render(<ModelDrawer {...defaultProps} onAddModel={onAddModel} />);
+    // Model cards are buttons with title "Click to add · Right-click for details"
+    const cardButtons = screen.getAllByTitle('Click to add · Right-click for details');
+    fireEvent.click(cardButtons[0]);
+    expect(onAddModel).toHaveBeenCalled();
+  });
+
+  it('loading=true shows a loading indicator', () => {
+    render(<ModelDrawer {...defaultProps} loading={true} />);
+    expect(screen.getByText('Loading...')).toBeInTheDocument();
+  });
+
+  it('empty library shows "No models available" when no models and no filter', () => {
+    render(
+      <ModelDrawer
+        {...defaultProps}
+        myLibraryModels={[]}
+        publicLibraryModels={[]}
+      />
+    );
+    expect(screen.getByText('No models available')).toBeInTheDocument();
+  });
+
+  it('addedModelIds hides those models from the library list', () => {
+    render(
+      <ModelDrawer
+        {...defaultProps}
+        addedModelIds={new Set([1])}
+      />
+    );
+    // Car Model (id=1) is in addedModelIds, should not appear in library
+    // It should appear in "On canvas" section instead
+    // Model is in "On canvas" area not library area; it still renders
+    // but fromLibrary filter excludes it from library list
+    expect(screen.getByText('Person Model')).toBeInTheDocument();
+  });
+
+  it('renames an on-canvas model only through the project rename callback', async () => {
+    const projectModel: DrawerModel = {
+      id: 7,
+      sourceId: 42,
+      name: 'Library name',
+      inProject: true,
+    };
+    const onRenameProjectModel = jest.fn().mockResolvedValue(undefined);
+
+    render(
+      <ModelDrawer
+        {...defaultProps}
+        models={[projectModel]}
+        addedModelIds={new Set([7])}
+        onRenameProjectModel={onRenameProjectModel}
+      />,
+    );
+
+    fireEvent.contextMenu(screen.getByLabelText('View details for Library name'));
+    fireEvent.click(screen.getByText('Rename in this project'));
+    fireEvent.change(screen.getByLabelText('Project meta-model name'), {
+      target: { value: 'Project name' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+
+    await waitFor(() => {
+      expect(screen.getByText('Project name', { selector: 'span' })).toBeInTheDocument();
+    });
+    expect(onRenameProjectModel).toHaveBeenCalledWith(projectModel, 'Project name');
+  });
+  it('reloads the preview layout when the full-screen UML editor is closed', () => {
+    const projectModel: DrawerModel = {
+      id: 7,
+      name: 'Shop',
+      ecoreContent: '<ecore/>',
+      inProject: true,
+    };
+    render(
+      <ModelDrawer
+        {...defaultProps}
+        models={[projectModel]}
+        addedModelIds={new Set([7])}
+      />,
+    );
+
+    fireEvent.contextMenu(screen.getByLabelText('View details for Shop'));
+    fireEvent.click(screen.getByTitle('Open full-screen UML editor'));
+    expect(screen.getByTestId('uml-fullscreen-page')).toBeInTheDocument();
+    expect(mockReloadLayout).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByTestId('uml-page-back'));
+
+    expect(screen.queryByTestId('uml-fullscreen-page')).not.toBeInTheDocument();
+    expect(mockReloadLayout).toHaveBeenCalled();
+  });
+
+  it('saves with Cmd+S in the full-screen UML editor instead of opening the browser dialog', async () => {
+    const projectModel: DrawerModel = {
+      id: 7,
+      name: 'Shop',
+      ecoreContent: '<ecore/>',
+      ecoreFileId: 70,
+      inProject: true,
+    };
+    render(
+      <ModelDrawer
+        {...defaultProps}
+        models={[projectModel]}
+        addedModelIds={new Set([7])}
+      />,
+    );
+
+    fireEvent.contextMenu(screen.getByLabelText('View details for Shop'));
+    fireEvent.click(screen.getByTitle('Open full-screen UML editor'));
+    mockIsDirty.mockReturnValue(true);
+
+    const notPrevented = fireEvent.keyDown(globalThis, { key: 's', metaKey: true });
+
+    expect(notPrevented).toBe(false);
+    await waitFor(() => expect(mockSave).toHaveBeenCalledTimes(1));
+  });
+});

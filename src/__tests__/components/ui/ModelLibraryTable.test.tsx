@@ -1,0 +1,408 @@
+import React from 'react';
+import { render, screen, fireEvent, waitFor, act, within } from '@testing-library/react';
+import { MemoryRouter, useLocation } from 'react-router-dom';
+import { ModelDetailModal, ModelLibraryTable } from '../../../components/ui/ModelLibraryTable';
+import { MODEL_LIBRARY_PATH, modelLibraryModelPath, modelLibraryUmlPath } from '../../../constants/routes';
+import { resetThemeStore, setTheme } from '../../../theme/theme';
+
+jest.mock('../../../services/api', () => ({
+  apiService: {
+    findMetaModels: jest.fn(),
+    deleteMetaModel: jest.fn(),
+    getFile: jest.fn(),
+    updateMetaModel: jest.fn(),
+  },
+}));
+
+const mockReloadLayout = jest.fn();
+
+jest.mock('../../../components/canvas/UMLDiagram', () => {
+  const { forwardRef, useImperativeHandle, createElement } = require('react');
+  return {
+    UMLDiagram: forwardRef((props: any, ref: any) => {
+      useImperativeHandle(ref, () => ({
+        zoomIn: jest.fn(),
+        zoomOut: jest.fn(),
+        fitToView: jest.fn(),
+        flushLayout: jest.fn(),
+        reloadLayout: mockReloadLayout,
+        reload: jest.fn(),
+        undo: jest.fn(),
+        redo: jest.fn(),
+        canUndo: jest.fn(() => false),
+        canRedo: jest.fn(() => false),
+        isDirty: jest.fn(() => false),
+        tryEscape: jest.fn(() => false),
+        getModel: jest.fn(() => ({ classes: [], relationships: [] })),
+        save: jest.fn(),
+      }));
+      return createElement('div', { 'data-testid': 'uml-diagram', 'data-interactive': String(props.interactive !== false) });
+    }),
+  };
+});
+
+// Stand-in for the real import modal — exposes a single button that fires
+// onSuccess with a create payload, so tests can drive ModelLibraryTable's
+// post-create refresh logic without going through the whole upload form.
+jest.mock('../../../components/ui/CreateModelModal', () => ({
+  CreateModelModal: ({ isOpen, onSuccess }: any) =>
+    isOpen ? (
+      <button
+        type="button"
+        onClick={() => onSuccess?.({ name: 'New Model', ecoreFileId: 5, genModelFileId: 6 })}
+      >
+        Simulate import success
+      </button>
+    ) : null,
+}));
+
+const { apiService } = require('../../../services/api') as {
+  apiService: {
+    findMetaModels: jest.Mock;
+    deleteMetaModel: jest.Mock;
+    getFile: jest.Mock;
+    updateMetaModel: jest.Mock;
+  };
+};
+
+const existingModel = { id: 1, name: 'Existing Model', createdAt: new Date().toISOString(), ecoreFileId: 1, genModelFileId: 1 };
+const newModel = { id: 2, name: 'New Model', createdAt: new Date().toISOString(), ecoreFileId: 5, genModelFileId: 6 };
+
+/** Mocks the 3 parallel find-all buckets fetchLibraryMetaModels issues: unscoped, owned, shared. */
+const mockLibraryFetch = (options: { owned?: any[]; notOwned?: any[] }) => {
+  const owned = options.owned ?? [];
+  const notOwned = options.notOwned ?? [];
+  apiService.findMetaModels
+    .mockResolvedValueOnce({ data: [...owned, ...notOwned] })
+    .mockResolvedValueOnce({ data: owned })
+    .mockResolvedValueOnce({ data: notOwned });
+};
+
+const CurrentPath = () => <div data-testid="current-path">{useLocation().pathname}</div>;
+
+/** Renders the library inside a router, starting at the given URL. */
+const renderLibrary = (
+  path = MODEL_LIBRARY_PATH,
+  props: React.ComponentProps<typeof ModelLibraryTable> = {},
+) => render(
+  <MemoryRouter initialEntries={[path]}>
+    <ModelLibraryTable {...props} />
+    <CurrentPath />
+  </MemoryRouter>,
+);
+
+describe('ModelLibraryTable', () => {
+  beforeEach(() => {
+    apiService.findMetaModels.mockReset();
+    apiService.deleteMetaModel.mockReset();
+    apiService.getFile.mockReset();
+    apiService.updateMetaModel.mockReset();
+    apiService.findMetaModels.mockResolvedValue({ data: [existingModel] });
+    apiService.getFile.mockResolvedValue('<ecore/>');
+  });
+
+  afterEach(() => {
+    resetThemeStore();
+  });
+
+  it('loads the list once on mount', async () => {
+    renderLibrary();
+    await waitFor(() => expect(screen.getByText('Existing Model')).toBeInTheDocument());
+    // fetchLibraryMetaModels issues 3 parallel requests (unscoped/owned/shared)
+    expect(apiService.findMetaModels).toHaveBeenCalledTimes(3);
+  });
+
+  it('does not re-fetch a second time when filters reset right after a successful import', async () => {
+    renderLibrary();
+    await waitFor(() => expect(screen.getByText('Existing Model')).toBeInTheDocument());
+
+    // Apply a non-default filter so the post-create clearAllFilters() below
+    // actually changes state — otherwise the mount/filter-change effect
+    // wouldn't re-fire at all, and the race condition couldn't be observed.
+    fireEvent.click(screen.getByText('Advanced Search'));
+    fireEvent.change(screen.getByRole('combobox'), { target: { value: 'week' } });
+    await waitFor(() => expect(apiService.findMetaModels).toHaveBeenCalledTimes(6));
+
+    apiService.findMetaModels.mockClear();
+    apiService.findMetaModels.mockResolvedValue({ data: [existingModel, newModel] });
+
+    fireEvent.click(screen.getByText('Add model'));
+    await act(async () => {
+      fireEvent.click(screen.getByText('Simulate import success'));
+    });
+
+    await waitFor(() => expect(screen.getByText('New Model')).toBeInTheDocument());
+
+    // fetchLibraryMetaModelsAfterCreate makes exactly 3 calls. If the
+    // mount/filter-change effect were not skipped after clearAllFilters()
+    // resets the date filter back to 'all', it would fire 3 more (stale) calls.
+    expect(apiService.findMetaModels).toHaveBeenCalledTimes(3);
+  });
+
+  it('still re-fetches normally for a filter change unrelated to a create', async () => {
+    renderLibrary();
+    await waitFor(() => expect(screen.getByText('Existing Model')).toBeInTheDocument());
+    apiService.findMetaModels.mockClear();
+
+    fireEvent.click(screen.getByText('Advanced Search'));
+    fireEvent.change(screen.getByRole('combobox'), { target: { value: 'month' } });
+
+    await waitFor(() => expect(apiService.findMetaModels).toHaveBeenCalledTimes(3));
+  });
+
+  it('keeps shared metadata fields in the same order when editing details', () => {
+    render(
+      <ModelDetailModal
+        model={{
+          id: 1,
+          name: 'Existing Model',
+          description: 'A description',
+          domain: 'Testing',
+          keyword: ['uml'],
+          ecoreFileId: 1,
+        }}
+        ecoreContent="<ecore/>"
+        onClose={jest.fn()}
+        onUpdated={jest.fn()}
+      />,
+    );
+
+    const name = screen.getByText('Name');
+    const keywords = screen.getByText('Keywords');
+    const description = screen.getByText('Description');
+    expect(name.compareDocumentPosition(keywords) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(keywords.compareDocumentPosition(description) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Edit details' }));
+
+    const formLabels = Array.from(document.querySelector('form')!.querySelectorAll('label'))
+      .map((label) => label.textContent);
+    expect(formLabels).toEqual(['Name', 'Version', 'Keywords', 'Description', 'Domain']);
+  });
+
+  it('opens the full-screen UML editor when Edit is clicked', () => {
+    render(
+      <ModelDetailModal
+        model={{
+          id: 1,
+          name: 'Existing Model',
+          description: 'A description',
+          domain: 'Testing',
+          keyword: ['uml'],
+          ecoreFileId: 1,
+        }}
+        ecoreContent="<ecore/>"
+        onClose={jest.fn()}
+        onUpdated={jest.fn()}
+      />,
+    );
+
+    expect(screen.queryByTestId('uml-fullscreen-page')).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Edit' }));
+    expect(screen.getByTestId('uml-fullscreen-page')).toBeInTheDocument();
+    const editorDiagrams = screen.getAllByTestId('uml-diagram');
+    expect(editorDiagrams.some(node => node.getAttribute('data-interactive') === 'true')).toBe(true);
+  });
+
+  it('reloads the preview layout when the full-screen UML editor is closed', () => {
+    mockReloadLayout.mockClear();
+    render(
+      <ModelDetailModal
+        model={{
+          id: 1,
+          name: 'Existing Model',
+          description: 'A description',
+          domain: 'Testing',
+          keyword: ['uml'],
+          ecoreFileId: 1,
+        }}
+        ecoreContent="<ecore/>"
+        onClose={jest.fn()}
+        onUpdated={jest.fn()}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Edit' }));
+    expect(mockReloadLayout).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByTestId('uml-page-back'));
+
+    expect(screen.queryByTestId('uml-fullscreen-page')).not.toBeInTheDocument();
+    expect(mockReloadLayout).toHaveBeenCalled();
+  });
+
+  it('opens the full-screen UML editor from the row Edit action', async () => {
+    apiService.findMetaModels.mockReset();
+    mockLibraryFetch({ owned: [existingModel] });
+
+    renderLibrary();
+    await waitFor(() => expect(screen.getByText('Existing Model')).toBeInTheDocument());
+
+    fireEvent.click(screen.getByLabelText('Row actions'));
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Edit' }));
+
+    await waitFor(() => expect(screen.getByTestId('uml-fullscreen-page')).toBeInTheDocument());
+    expect(screen.getByTestId('current-path')).toHaveTextContent(modelLibraryUmlPath(1));
+
+    // Closing the editor returns to the model preview, as before.
+    fireEvent.click(screen.getByTestId('uml-page-back'));
+    expect(await screen.findByRole('dialog', { name: 'Model Preview: Existing Model' })).toBeInTheDocument();
+    expect(screen.getByTestId('current-path')).toHaveTextContent(new RegExp(`^${modelLibraryModelPath(1)}$`));
+  });
+
+  describe('model URLs', () => {
+    it('reopens the preview of the model in the URL after a refresh', async () => {
+      renderLibrary(modelLibraryModelPath(1));
+
+      expect(await screen.findByRole('dialog', { name: 'Model Preview: Existing Model' })).toBeInTheDocument();
+      expect(screen.queryByTestId('uml-fullscreen-page')).not.toBeInTheDocument();
+    });
+
+    it('reopens the UML editor of the model in the URL after a refresh', async () => {
+      renderLibrary(modelLibraryUmlPath(1));
+
+      expect(await screen.findByTestId('uml-fullscreen-page')).toBeInTheDocument();
+    });
+
+    it('goes to the home page from the Vitruvius logo in the UML editor', async () => {
+      const onHome = jest.fn();
+      renderLibrary(modelLibraryUmlPath(1), { onHome });
+
+      expect(await screen.findByTestId('uml-fullscreen-page')).toBeInTheDocument();
+      fireEvent.click(screen.getByRole('button', { name: 'Back to overview' }));
+
+      expect(onHome).toHaveBeenCalledTimes(1);
+    });
+
+    it('falls back to the model list for an unknown model id', async () => {
+      renderLibrary(modelLibraryUmlPath(999));
+
+      await waitFor(() => expect(screen.getByTestId('current-path')).toHaveTextContent(new RegExp(`^${MODEL_LIBRARY_PATH}$`)));
+      expect(screen.getByText('Existing Model')).toBeInTheDocument();
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    });
+
+    it('updates the URL when opening and closing the preview and the UML editor', async () => {
+      renderLibrary();
+      expect(await screen.findByText('Existing Model')).toBeInTheDocument();
+
+      fireEvent.click(screen.getByLabelText('Row actions'));
+      fireEvent.click(screen.getByRole('menuitem', { name: 'View details' }));
+      const preview = await screen.findByRole('dialog', { name: 'Model Preview: Existing Model' });
+      expect(screen.getByTestId('current-path')).toHaveTextContent(modelLibraryModelPath(1));
+
+      fireEvent.click(within(preview).getByRole('button', { name: 'Edit' }));
+      expect(await screen.findByTestId('uml-fullscreen-page')).toBeInTheDocument();
+      expect(screen.getByTestId('current-path')).toHaveTextContent(modelLibraryUmlPath(1));
+
+      fireEvent.click(screen.getByTestId('uml-page-back'));
+      await waitFor(() => expect(screen.queryByTestId('uml-fullscreen-page')).not.toBeInTheDocument());
+      expect(screen.getByTestId('current-path')).toHaveTextContent(new RegExp(`^${modelLibraryModelPath(1)}$`));
+
+      fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: '✕' }));
+      await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+      expect(screen.getByTestId('current-path')).toHaveTextContent(new RegExp(`^${MODEL_LIBRARY_PATH}$`));
+    });
+  });
+
+  describe('delete model', () => {
+    it('lets the owner delete a model that is not referenced by any project', async () => {
+      apiService.findMetaModels.mockReset();
+      mockLibraryFetch({ owned: [existingModel] });
+      apiService.deleteMetaModel.mockResolvedValue({ data: null, message: '' });
+
+      renderLibrary();
+      await waitFor(() => expect(screen.getByText('Existing Model')).toBeInTheDocument());
+
+      fireEvent.click(screen.getByLabelText('Row actions'));
+      fireEvent.click(screen.getByRole('menuitem', { name: 'Delete' }));
+      expect(screen.getByText('Delete model')).toBeInTheDocument();
+
+      await act(async () => {
+        fireEvent.click(screen.getByRole('button', { name: 'Delete' }));
+      });
+
+      expect(apiService.deleteMetaModel).toHaveBeenCalledWith('1');
+      await waitFor(() => expect(screen.queryByText('Existing Model')).not.toBeInTheDocument());
+    });
+
+    it('does not offer a delete action for models the current user does not own', async () => {
+      apiService.findMetaModels.mockReset();
+      mockLibraryFetch({ notOwned: [existingModel] });
+
+      renderLibrary();
+      await waitFor(() => expect(screen.getByText('Existing Model')).toBeInTheDocument());
+
+      fireEvent.click(screen.getByLabelText('Row actions'));
+      expect(screen.queryByRole('menuitem', { name: 'Delete' })).not.toBeInTheDocument();
+      expect(screen.getByRole('menuitem', { name: 'View details' })).toBeInTheDocument();
+      expect(screen.getByRole('menuitem', { name: 'Edit' })).toBeInTheDocument();
+    });
+
+    it('blocks deletion up front for a model referenced by a project — only the reason and Cancel are shown', async () => {
+      const referencedModel = { ...existingModel, vsums: [{ id: 99, name: 'Project A' }, {}] };
+      apiService.findMetaModels.mockReset();
+      mockLibraryFetch({ owned: [referencedModel] });
+
+      renderLibrary();
+      await waitFor(() => expect(screen.getByText('Existing Model')).toBeInTheDocument());
+      expect(screen.getByText('2 projects')).toHaveAttribute('title', 'Project A, 1 other project');
+
+      fireEvent.click(screen.getByLabelText('Row actions'));
+      fireEvent.click(screen.getByRole('menuitem', { name: 'Delete' }));
+
+      // No API call and no way to confirm — the dialog opens already blocked.
+      expect(screen.getByText('This model is used by Project A, 1 other project and cannot be deleted.')).toBeInTheDocument();
+      expect(apiService.deleteMetaModel).not.toHaveBeenCalled();
+      expect(screen.queryByRole('button', { name: 'Delete' })).not.toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Cancel' })).toBeInTheDocument();
+
+      fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+      expect(screen.queryByText('Delete model')).not.toBeInTheDocument();
+      expect(screen.getByText('Existing Model')).toBeInTheDocument();
+    });
+
+    it('falls back to the same reason-only + Cancel state when the backend rejects the deletion', async () => {
+      apiService.findMetaModels.mockReset();
+      mockLibraryFetch({ owned: [existingModel] });
+      apiService.deleteMetaModel.mockRejectedValue(new Error('Model is still referenced by a project.'));
+
+      renderLibrary();
+      await waitFor(() => expect(screen.getByText('Existing Model')).toBeInTheDocument());
+
+      fireEvent.click(screen.getByLabelText('Row actions'));
+      fireEvent.click(screen.getByRole('menuitem', { name: 'Delete' }));
+      expect(screen.getByRole('button', { name: 'Delete' })).toBeInTheDocument();
+
+      await act(async () => {
+        fireEvent.click(screen.getByRole('button', { name: 'Delete' }));
+      });
+
+      expect(screen.getByText('Model is still referenced by a project.')).toBeInTheDocument();
+      expect(screen.getByText('Existing Model')).toBeInTheDocument();
+      // The dialog no longer offers a "Delete" retry — only acknowledge and close.
+      expect(screen.queryByRole('button', { name: 'Delete' })).not.toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Cancel' })).toBeInTheDocument();
+    });
+  });
+});
+
+describe('ModelDetailModal', () => {
+  afterEach(() => {
+    resetThemeStore();
+  });
+
+  it('uses theme surfaces so the preview sidebar matches dark mode', () => {
+    setTheme('dark');
+    render(
+      <ModelDetailModal
+        model={{ id: 1, name: 'string', description: 'string', keyword: ['string'] }}
+        onClose={jest.fn()}
+        onUpdated={jest.fn()}
+      />,
+    );
+
+    expect(screen.getByRole('dialog', { name: 'Model Preview: string' })).toBeInTheDocument();
+    expect(screen.getByText('UML')).toBeInTheDocument();
+  });
+});

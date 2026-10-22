@@ -1,6 +1,20 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useLayoutEffect, useCallback } from 'react';
+import ReactDOM from 'react-dom';
 import { apiService } from '../../services/api';
+import { DEFAULT_META_MODEL_VERSION } from '../../utils/metaModelVersion';
+import { createEmptyEcoreFile, toEPackageName } from '../../utils/emptyEcore';
+import { findEcoreDownloadProblem, readBlobAsText } from '../../utils/ecoreDownload';
 import { KeywordTagsInput } from './KeywordTagsInput';
+import {
+  modalOverlayStyle,
+  formGroupStyle,
+  labelStyle,
+  inputStyle,
+  successMessageStyle,
+  fileInputStyle,
+  progressBarContainerStyle,
+  progressBarStyle,
+} from './sharedStyles';
 
 interface CreateModelModalProps {
   isOpen: boolean;
@@ -10,480 +24,972 @@ interface CreateModelModalProps {
 
 interface CreateModelRequest {
   name: string;
+  version: string;
   description: string;
   domain: string;
   keyword: string[];
   ecoreFileId: number;
-  genModelFileId: number;
 }
 
-// Secure random number generator helper function
+type FileKind = 'ecore';
+
+/** Whether the meta model starts from an uploaded .ecore file or from an empty one. */
+type CreationMode = 'import' | 'empty';
+
+// ─── Module-level helpers ────────────────────────────────────────────────────
+
 const getSecureRandomInt = (max: number): number => {
-  const crypto = window.crypto || (window as any).msCrypto;
-  if (crypto && crypto.getRandomValues) {
+  const crypto = globalThis.crypto || (globalThis as any).msCrypto;
+  if (crypto?.getRandomValues) {
     const array = new Uint32Array(1);
     crypto.getRandomValues(array);
     return array[0] % max;
   }
-  // Fallback for environments without crypto support (should not happen in modern browsers)
   throw new Error('Cryptographically secure random number generation not available');
 };
 
-// Modal styles
-const modalOverlayStyle: React.CSSProperties = {
-  position: 'fixed',
-  top: 0,
-  left: 0,
-  right: 0,
-  bottom: 0,
-  background: 'rgba(0, 0, 0, 0.5)',
-  display: 'flex',
-  alignItems: 'center',
-  justifyContent: 'center',
-  zIndex: 1000,
+const sanitizeFileName = (fileName: string): string => fileName.replaceAll(/[<>]/g, '');
+
+const extractFileId = (response: any): number => {
+  const rawData: any = response?.data;
+  let fileId = rawData && typeof rawData === 'object' && 'id' in rawData
+    ? Number(rawData.id)
+    : Number(rawData);
+  if (!Number.isFinite(fileId)) fileId = Date.now() + getSecureRandomInt(1000);
+  return fileId;
 };
 
+/** Like {@link extractFileId}, but fails instead of making up an id when the response has none. */
+const requireFileId = (response: any): number => {
+  const rawData: any = response?.data;
+  const fileId = rawData && typeof rawData === 'object' ? Number(rawData.id) : Number(rawData);
+  if (!Number.isFinite(fileId) || fileId <= 0) {
+    throw new Error('Uploading the empty .ecore file did not return a file id.');
+  }
+  return fileId;
+};
+
+type BackendErrorPayload = { message?: string };
+
+const parseBackendError = (err: unknown): { message: string; isMetamodelRejected: boolean } => {
+  const backendPayload = (err as { response?: { data?: BackendErrorPayload } })?.response?.data;
+  const backendMessage = typeof backendPayload?.message === 'string' ? backendPayload.message : '';
+  const message = backendMessage || (err instanceof Error ? err.message : '') || 'Unknown error';
+  return { message, isMetamodelRejected: message.toLowerCase().includes('metamodel rejected') };
+};
+
+const applyImportFailureFieldErrors = (
+  message: string,
+  errorPrefix: string,
+  setFieldErrors: React.Dispatch<React.SetStateAction<Record<CreateModelFieldKey, string>>>,
+  setScrollTarget: React.Dispatch<React.SetStateAction<CreateModelFieldKey | null>>,
+) => {
+  const full = `${errorPrefix}${message}`;
+  const inferred = inferFieldKeyFromBackendMessage(message);
+  if (inferred) {
+    setFieldErrors({ ...EMPTY_FIELD_ERRORS, [inferred]: full });
+    setScrollTarget(inferred);
+    return;
+  }
+  setFieldErrors({ ...EMPTY_FIELD_ERRORS, files: full });
+  setScrollTarget('files');
+};
+
+/** Form regions used for inline errors + scroll-into-view */
+export type CreateModelFieldKey = 'name' | 'version' | 'description' | 'keywords' | 'domain' | 'files';
+
+const EMPTY_FORM = {
+  name: '',
+  version: DEFAULT_META_MODEL_VERSION,
+  description: '',
+  domain: '',
+  keywords: [] as string[],
+};
+
+const EMPTY_FIELD_ERRORS: Record<CreateModelFieldKey, string> = {
+  name: '',
+  version: '',
+  description: '',
+  keywords: '',
+  domain: '',
+  files: '',
+};
+
+/** Best-effort mapping of API messages to a field (otherwise use `files`). */
+function inferFieldKeyFromBackendMessage(message: string): CreateModelFieldKey | null {
+  const m = message.toLowerCase();
+  if (/\bversion\b/.test(m)) return 'version';
+  if (/\b(keyword|keywords)\b/.test(m)) return 'keywords';
+  if (/\bdescription\b/.test(m)) return 'description';
+  if (/\bdomain\b/.test(m)) return 'domain';
+  if (/\b(ecore|file id|upload|metamodel|precheck)\b/.test(m)) return 'files';
+  if (/\b(name|title)\b/.test(m) && !/\b(filename|file name|file\.)\b/.test(m)) return 'name';
+  return null;
+}
+
+// ─── Per-kind configuration ───────────────────────────────────────────────────
+
+const FILE_KIND_CONFIG: Record<FileKind, {
+  ext: string;
+  apiType: 'ECORE';
+  fileIdKey: 'ecoreFileId';
+}> = {
+  ecore:    { ext: '.ecore',    apiType: 'ECORE',     fileIdKey: 'ecoreFileId' }
+};
+
+const FILE_CARD_DISPLAY_CONFIGS: Array<{
+  kind: FileKind;
+  accentColor: string;
+  hoverBg: string;
+  badgeBg: string;
+  badgeBorder: string;
+  badgeColor: string;
+  defaultHeaderBg: string;
+}> = [
+  { kind: 'ecore',    accentColor: '#049484', hoverBg: '#f0fdff', badgeBg: '#e6f7f5', badgeBorder: '#b2e4df', badgeColor: '#049484', defaultHeaderBg: '#f8fffe' },
+];
+
+// ─── Style constants ──────────────────────────────────────────────────────────
+
+const FONT = 'ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, sans-serif';
+
 const modalStyle: React.CSSProperties = {
-  background: '#ffffff',
-  borderRadius: '8px',
-  padding: '28px',
-  width: '480px',
-  maxWidth: '90vw',
-  maxHeight: '85vh',
-  overflow: 'auto',
-  boxShadow: '0 20px 40px rgba(0, 0, 0, 0.2)',
-  border: '1px solid #d1ecf1',
-  fontFamily: 'Georgia, serif',
+  background: 'var(--v-surface)',
+  borderRadius: 8,
+  padding: 0,
+  width: '540px',
+  maxWidth: '94vw',
+  maxHeight: '90vh',
+  display: 'flex',
+  flexDirection: 'column',
+  overflow: 'hidden',
+  boxShadow: '0 8px 40px rgba(0,0,0,0.18), 0 1px 4px rgba(0,0,0,0.06)',
+  border: '1px solid var(--v-border)',
+  fontFamily: FONT,
+  color: 'var(--v-text)',
 };
 
 const modalHeaderStyle: React.CSSProperties = {
   display: 'flex',
   justifyContent: 'space-between',
-  alignItems: 'center',
-  marginBottom: '20px',
-  paddingBottom: '16px',
-  borderBottom: '2px solid #3498db',
+  alignItems: 'flex-start',
+  padding: '22px 24px 18px',
+  background: 'linear-gradient(135deg, #049484, #037368)',
+  flexShrink: 0,
 };
 
 const modalTitleStyle: React.CSSProperties = {
-  fontSize: '22px',
-  fontWeight: 700,
-  color: '#2c3e50',
+  fontSize: 16,
+  fontWeight: 600,
+  color: '#ffffff',
   margin: 0,
-  fontFamily: 'Georgia, serif',
+  fontFamily: FONT,
+  letterSpacing: '-0.01em',
 };
 
 const closeButtonStyle: React.CSSProperties = {
   background: 'transparent',
   border: 'none',
-  fontSize: '28px',
-  color: '#999',
+  fontSize: 18,
+  color: 'rgba(255,255,255,0.75)',
   cursor: 'pointer',
-  padding: '8px',
-  borderRadius: '8px',
-  transition: 'all 0.2s ease',
-  width: '40px',
-  height: '40px',
+  padding: 0,
+  borderRadius: 4,
+  transition: 'all 0.15s ease',
+  width: 28,
+  height: 28,
   display: 'flex',
   alignItems: 'center',
   justifyContent: 'center',
+  flexShrink: 0,
+  marginTop: 1,
 };
 
 const closeButtonHoverStyle: React.CSSProperties = {
-  background: '#f8f9fa',
-  color: '#333',
-  transform: 'rotate(90deg)',
-};
-
-const formGroupStyle: React.CSSProperties = { marginBottom: '20px' };
-
-const labelStyle: React.CSSProperties = {
-  display: 'block',
-  fontSize: '14px',
-  fontWeight: 600,
-  color: '#2c3e50',
-  marginBottom: '8px',
-  fontFamily: 'Georgia, serif',
-};
-
-const inputStyle: React.CSSProperties = {
-  width: '100%',
-  padding: '12px 14px',
-  border: '2px solid #d1ecf1',
-  borderRadius: '6px',
-  fontSize: '14px',
-  boxSizing: 'border-box',
-  transition: 'all 0.3s ease',
-  background: '#f8f9fa',
-  fontFamily: 'Georgia, serif',
+  background: 'rgba(255,255,255,0.15)',
+  color: '#ffffff',
 };
 
 const inputFocusStyle: React.CSSProperties = {
-  borderColor: '#3498db',
+  borderColor: '#049484',
   outline: 'none',
-  boxShadow: '0 0 0 3px rgba(52, 152, 219, 0.1)',
-  background: '#ffffff',
+  boxShadow: '0 0 0 3px rgba(4,148,132,0.1)',
+  background: 'var(--v-input-bg)',
 };
 
 const uploadSectionStyle: React.CSSProperties = {
   marginTop: '20px',
-  padding: '18px',
-  background: '#f8f9fa',
-  borderRadius: '6px',
-  border: '2px dashed #3498db',
+  paddingTop: '20px',
+  borderTop: '1px solid var(--v-border-subtle)',
 };
 
 const uploadSectionTitleStyle: React.CSSProperties = {
-  fontSize: '15px',
+  fontSize: 12,
   fontWeight: 600,
-  color: '#2c3e50',
-  marginBottom: '16px',
-  textAlign: 'center',
-  fontFamily: 'Georgia, serif',
+  color: 'var(--v-text-muted)',
+  marginBottom: 12,
+  textTransform: 'uppercase',
+  letterSpacing: '0.07em',
+  fontFamily: FONT,
 };
 
-const uploadButtonsContainerStyle: React.CSSProperties = {
-  display: 'flex',
-  gap: '12px',
-  marginBottom: '16px',
+/** Shown inside the “Required Meta Model File” box when POST /meta-models fails. */
+const metaModelImportErrorBannerStyle: React.CSSProperties = {
+  marginBottom: 12,
+  padding: '10px 12px',
+  background: 'var(--v-danger-bg)',
+  border: '1px solid var(--v-danger-border)',
+  borderRadius: 6,
+  fontSize: 13,
+  color: 'var(--v-danger-text)',
+  lineHeight: 1.5,
+  fontFamily: FONT,
 };
 
-const uploadButtonStyle: React.CSSProperties = {
-  flex: '1',
-  padding: '12px 14px',
-  border: '2px solid #3498db',
-  borderRadius: '6px',
-  background: '#ffffff',
-  color: '#2c3e50',
-  fontSize: '14px',
-  fontWeight: 600,
-  cursor: 'pointer',
-  transition: 'all 0.3s ease',
-  display: 'flex',
-  alignItems: 'center',
-  justifyContent: 'center',
-  gap: '8px',
-  fontFamily: 'Georgia, serif',
+const fieldInlineErrorStyle: React.CSSProperties = {
+  marginTop: 5,
+  fontSize: 12,
+  color: '#dc2626',
+  lineHeight: 1.45,
+  fontFamily: FONT,
 };
 
-const uploadButtonHoverStyle: React.CSSProperties = {
-  borderColor: '#2980b9',
-  background: '#f8f9ff',
-  color: '#2980b9',
-  transform: 'translateY(-1px)',
-  boxShadow: '0 4px 12px rgba(52, 152, 219, 0.15)',
-};
-
-const uploadButtonSuccessStyle: React.CSSProperties = {
-  borderColor: '#27ae60',
-  background: '#d5f4e6',
-  color: '#1e8449',
+const inputErrorOutlineStyle: React.CSSProperties = {
+  borderColor: '#fca5a5',
+  background: 'var(--v-danger-bg)',
 };
 
 const fileStatusStyle: React.CSSProperties = {
-  fontSize: '13px',
-  color: '#5a6c7d',
+  fontSize: 11,
+  color: 'var(--v-text-faint)',
   textAlign: 'center',
-  marginTop: '8px',
-  fontFamily: 'Georgia, serif',
-  fontStyle: 'italic',
+  marginTop: 10,
+  fontFamily: FONT,
 };
 
 const buttonGroupStyle: React.CSSProperties = {
   display: 'flex',
-  gap: '12px',
-  marginTop: '24px',
+  gap: 8,
+  marginTop: 24,
 };
 
 const primaryButtonStyle: React.CSSProperties = {
   flex: '1',
-  padding: '14px 18px',
+  padding: '10px 18px',
   border: 'none',
-  borderRadius: '6px',
-  background: 'linear-gradient(135deg, #3498db 0%, #2980b9 100%)',
+  borderRadius: 6,
+  background: '#0B1720',
   color: '#ffffff',
-  fontSize: '14px',
+  fontSize: 14,
   fontWeight: 600,
   cursor: 'pointer',
-  transition: 'all 0.3s ease',
-  fontFamily: 'Georgia, serif',
+  transition: 'background 0.15s ease',
+  fontFamily: FONT,
+  letterSpacing: '-0.01em',
 };
 
 const primaryButtonDisabledStyle: React.CSSProperties = {
-  background: '#bdc3c7',
-  color: '#7f8c8d',
+  background: 'var(--v-disabled-bg)',
+  color: 'var(--v-disabled-text)',
   cursor: 'not-allowed',
-  transform: 'none',
-  boxShadow: 'none',
 };
 
 const secondaryButtonStyle: React.CSSProperties = {
   flex: '1',
-  padding: '14px 18px',
-  border: '2px solid #3498db',
-  borderRadius: '6px',
-  background: '#ffffff',
-  color: '#2c3e50',
-  fontSize: '14px',
-  fontWeight: 600,
+  padding: '10px 18px',
+  border: '1px solid var(--v-border)',
+  borderRadius: 6,
+  background: 'var(--v-surface)',
+  color: 'var(--v-text-secondary)',
+  fontSize: 14,
+  fontWeight: 500,
   cursor: 'pointer',
-  transition: 'all 0.3s ease',
-  fontFamily: 'Georgia, serif',
+  transition: 'all 0.15s ease',
+  fontFamily: FONT,
+  letterSpacing: '-0.01em',
 };
 
 const buttonHoverStyle: React.CSSProperties = {
-  transform: 'translateY(-1px)',
-  boxShadow: '0 5px 15px rgba(52, 152, 219, 0.2)',
-};
-
-const errorMessageStyle: React.CSSProperties = {
-  padding: '8px 12px',
-  margin: '8px 0',
-  borderRadius: '6px',
-  fontSize: '12px',
-  fontWeight: '500',
-  backgroundColor: '#f8d7da',
-  color: '#721c24',
-  border: '1px solid #f5c6cb',
-};
-
-const successMessageStyle: React.CSSProperties = {
-  padding: '8px 12px',
-  margin: '8px 0',
-  borderRadius: '6px',
-  fontSize: '12px',
-  fontWeight: '500',
-  backgroundColor: '#d4edda',
-  color: '#155724',
-  border: '1px solid #c3e6cb',
-};
-
-const fileInputStyle: React.CSSProperties = { display: 'none' };
-
-const progressBarContainerStyle: React.CSSProperties = {
-  width: '100%',
-  height: '6px',
-  backgroundColor: '#e0e0e0',
-  borderRadius: '3px',
-  overflow: 'hidden',
-};
-
-const progressBarStyle: React.CSSProperties = {
-  height: '100%',
-  backgroundColor: '#3498db',
-  borderRadius: '3px',
-  transition: 'width 0.3s ease',
-  width: '0%',
+  background: 'var(--v-surface-hover)',
 };
 
 const overlayStyle: React.CSSProperties = {
   position: 'fixed',
-  inset: 0,
-  background: 'rgba(0,0,0,0.55)',
-  zIndex: 2000, // above modal
+  top: 0,
+  left: 0,
+  right: 0,
+  bottom: 0,
+  width: '100%',
+  height: '100%',
+  background: 'transparent',
+  backdropFilter: 'blur(6px)',
+  WebkitBackdropFilter: 'blur(6px)',
+  zIndex: 11000,
   display: 'flex',
   alignItems: 'center',
   justifyContent: 'center',
+  margin: 0,
+  padding: 0,
+  border: 'none',
 };
 
 const overlayCardStyle: React.CSSProperties = {
-  width: 'min(520px, 90vw)',
-  background: '#fff',
-  borderRadius: 10,
-  padding: '20px 20px 16px',
-  boxShadow: '0 20px 50px rgba(0,0,0,0.35)',
-  border: '1px solid #e5e7eb',
+  width: 'min(400px, 90vw)',
+  background: 'var(--v-surface)',
+  borderRadius: 12,
+  overflow: 'hidden',
+  boxShadow: '0 24px 60px rgba(0,0,0,0.28), 0 4px 16px rgba(0,0,0,0.08)',
+  border: '1px solid var(--v-border)',
 };
 
 const overlayTitleStyle: React.CSSProperties = {
-  fontSize: 16,
-  fontWeight: 700,
-  color: '#1f2937',
-  marginBottom: 10,
+  fontSize: 15,
+  fontWeight: 600,
+  color: '#ffffff',
+  marginBottom: 2,
   textAlign: 'center',
+  fontFamily: 'ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, sans-serif',
 };
 
 const overlayTextStyle: React.CSSProperties = {
   fontSize: 12,
-  color: '#6b7280',
-  marginBottom: 8,
+  color: 'rgba(255,255,255,0.75)',
+  marginBottom: 0,
   textAlign: 'center',
+  fontFamily: 'ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, sans-serif',
 };
 
-export const CreateModelModal: React.FC<CreateModelModalProps> = ({
-                                                                    isOpen,
-                                                                    onClose,
-                                                                    onSuccess
-                                                                  }) => {
-  const [formData, setFormData] = useState({
-    name: '',
-    description: '',
-    domain: '',
-    keywords: [] as string[],
-  });
+// ─── Upload-state label lookup (avoids nested ternaries) ─────────────────────
 
-  const [uploadedFileIds, setUploadedFileIds] = useState({
-    ecoreFileId: 0,
-    genModelFileId: 0,
-  });
+const UPLOAD_STATE_LABELS = {
+  uploading: { dropLabel: 'Uploading…',                       importLabel: 'Uploading…' },
+  uploaded:  { dropLabel: 'File uploaded — click to replace', importLabel: 'Done'       },
+  idle:      { dropLabel: 'Click to select file',             importLabel: 'Import'     },
+} as const;
 
+type UploadState = keyof typeof UPLOAD_STATE_LABELS;
+
+const modeButtonBaseStyle: React.CSSProperties = {
+  padding: '3px 10px', fontSize: '12px', fontWeight: 500, border: 'none',
+  borderRadius: '4px', cursor: 'pointer', fontFamily: FONT,
+  transition: 'all 0.12s', whiteSpace: 'nowrap',
+};
+
+const creationModeGroupStyle: React.CSSProperties = {
+  display: 'flex', gap: 2, padding: 3, margin: '0 0 16px', minWidth: 0, position: 'relative',
+  background: 'var(--v-input-bg)', border: '1px solid var(--v-border)', borderRadius: 7,
+};
+
+// Keeps the legend available to screen readers without showing it.
+const visuallyHiddenLegendStyle: React.CSSProperties = {
+  position: 'absolute', width: 1, height: 1, padding: 0, margin: -1,
+  overflow: 'hidden', clip: 'rect(0, 0, 0, 0)', whiteSpace: 'nowrap', border: 0,
+};
+
+const creationModeButtonStyle: React.CSSProperties = {
+  flex: 1, padding: '7px 12px', border: 'none', borderRadius: 5,
+  background: 'transparent', color: 'var(--v-text-muted)',
+  fontSize: 13, fontWeight: 500, fontFamily: FONT, transition: 'all 0.12s',
+};
+
+const creationModeButtonSelectedStyle: React.CSSProperties = {
+  background: '#049484', color: '#ffffff',
+};
+
+const emptyEcoreNoteStyle: React.CSSProperties = {
+  padding: '10px 12px',
+  background: 'var(--v-surface-muted)',
+  border: '1px solid var(--v-border)',
+  borderRadius: 6,
+  fontSize: 13,
+  color: 'var(--v-text-secondary)',
+  lineHeight: 1.5,
+  fontFamily: FONT,
+};
+
+const CREATION_MODE_OPTIONS: Array<{ mode: CreationMode; label: string }> = [
+  { mode: 'import', label: 'Import existing' },
+  { mode: 'empty', label: 'Create new' },
+];
+
+// ─── Sub-components ───────────────────────────────────────────────────────────
+
+// ── CreationModeToggle: import an .ecore file or start from an empty one ─────
+
+interface CreationModeToggleProps {
+  mode: CreationMode;
+  disabled: boolean;
+  onChange: (mode: CreationMode) => void;
+}
+
+const CreationModeToggle: React.FC<CreationModeToggleProps> = ({ mode, disabled, onChange }) => (
+  <fieldset style={creationModeGroupStyle}>
+    <legend style={visuallyHiddenLegendStyle}>Meta model source</legend>
+    {CREATION_MODE_OPTIONS.map(option => {
+      const selected = option.mode === mode;
+      return (
+        <button
+          key={option.mode}
+          type="button"
+          aria-pressed={selected}
+          disabled={disabled}
+          onClick={() => onChange(option.mode)}
+          style={{
+            ...creationModeButtonStyle,
+            ...(selected ? creationModeButtonSelectedStyle : {}),
+            cursor: disabled ? 'not-allowed' : 'pointer',
+            opacity: disabled && !selected ? 0.5 : 1,
+          }}
+        >
+          {option.label}
+        </button>
+      );
+    })}
+  </fieldset>
+);
+
+const SubmitProgressOverlay: React.FC<{ progress: number }> = ({ progress }) => (
+  <dialog
+    open
+    style={{ ...overlayStyle, background: 'transparent', backdropFilter: 'blur(6px)', WebkitBackdropFilter: 'blur(6px)' }}
+    aria-label="Building meta model"
+  >
+    <div style={overlayCardStyle}>
+      {/* Teal gradient header */}
+      <div style={{
+        background: 'linear-gradient(135deg, #049484, #037368)',
+        padding: '18px 24px 16px',
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        gap: 4,
+      }}>
+        <div style={overlayTitleStyle}>Building Meta Model…</div>
+        <div style={overlayTextStyle}>Please wait while we process your files.</div>
+      </div>
+      {/* Progress body */}
+      <div style={{ padding: '18px 24px 20px' }}>
+        <div style={progressBarContainerStyle}>
+          <div style={{ ...progressBarStyle, width: `${progress}%` }} />
+        </div>
+        <div style={{ fontSize: 12, color: 'var(--v-text-muted)', textAlign: 'center', marginTop: 8, fontFamily: FONT }}>
+          {Math.round(progress)}%
+        </div>
+      </div>
+    </div>
+  </dialog>
+);
+
+// ── FileDropZone: file-picker button (file mode body) ────────────────────────
+
+interface FileDropZoneProps {
+  isUploaded: boolean;
+  isUploading: boolean;
+  ext: string;
+  accentColor: string;
+  label: string;
+  uploadedFileName?: string;
+  onClick: () => void;
+}
+
+const FileDropZone: React.FC<FileDropZoneProps> = ({
+  isUploaded, isUploading, ext, accentColor, label, uploadedFileName, onClick,
+}) => {
+  const [hov, setHov] = React.useState(false);
+  let borderColor = 'var(--v-border)';
+  if (isUploaded) borderColor = '#bbf7d0';
+  else if (hov) borderColor = 'var(--v-text-muted)';
+
+  let backgroundColor = 'var(--v-input-bg)';
+  if (isUploaded) backgroundColor = 'rgba(22, 163, 74, 0.12)';
+  else if (hov) backgroundColor = 'var(--v-surface-hover)';
+
+  let icon;
+  if (isUploaded) {
+    icon = (
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#16a34a" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <polyline points="20 6 9 17 4 12" />
+      </svg>
+    );
+  } else if (isUploading) {
+    icon = (
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--v-text-faint)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ animation: 'spin 1s linear infinite' }}>
+        <path d="M21 12a9 9 0 1 1-6.219-8.56" />
+      </svg>
+    );
+  } else {
+    icon = (
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={hov ? accentColor : 'var(--v-text-faint)'} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+        <polyline points="17 8 12 3 7 8" />
+        <line x1="12" y1="3" x2="12" y2="15" />
+      </svg>
+    );
+  }
+
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={isUploading}
+      onMouseEnter={() => setHov(true)}
+      onMouseLeave={() => setHov(false)}
+      style={{
+        width: '100%', padding: '16px 14px',
+        border: `1px solid ${borderColor}`,
+        borderRadius: 6,
+        background: backgroundColor,
+        cursor: isUploading ? 'wait' : 'pointer',
+        textAlign: 'center', transition: 'all 0.15s', fontFamily: FONT,
+        display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6,
+      }}
+    >
+      {/* Icon */}
+      {icon}
+      <div style={{ fontSize: 13, fontWeight: 500, color: isUploaded ? '#15803d' : 'var(--v-text-secondary)' }}>{label}</div>
+      {isUploaded && uploadedFileName && (
+        <div title={uploadedFileName} style={{
+          fontSize: 11, color: 'var(--v-text-muted)', maxWidth: '100%',
+          overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+          fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
+        }}>
+          {uploadedFileName}
+        </div>
+      )}
+      {!isUploaded && !isUploading && (
+        <div style={{ fontSize: 11, color: 'var(--v-text-faint)' }}>{ext}</div>
+      )}
+    </button>
+  );
+};
+
+// ── UrlImportRow: URL input + import button (URL mode body) ───────────────────
+
+interface UrlImportRowProps {
+  ext: string;
+  url: string;
+  urlFileName: string;
+  isUploaded: boolean;
+  isUploading: boolean;
+  urlPlaceholder: string;
+  importLabel: string;
+  onUrlChange: (url: string) => void;
+  onUrlImport: () => void;
+}
+
+const UrlImportRow: React.FC<UrlImportRowProps> = ({
+  ext, url, urlFileName, isUploaded, isUploading, urlPlaceholder, importLabel,
+  onUrlChange, onUrlImport,
+}) => {
+  const isDisabled = isUploading || !url.trim();
+  return (
+    <>
+      <div style={{ fontSize: '11px', color: 'var(--v-text-muted)', marginBottom: '6px', fontStyle: 'italic' }}>
+        Paste a raw public URL pointing to a{' '}
+        <code style={{ background: 'var(--v-surface-hover)', color: 'var(--v-text)', padding: '1px 4px', borderRadius: '3px' }}>{ext}</code> file
+      </div>
+      <div style={{ display: 'flex', gap: '8px' }}>
+        <input
+          type="url"
+          placeholder={urlPlaceholder}
+          value={url}
+          onChange={(e) => onUrlChange(e.target.value)}
+          style={{ ...inputStyle, flex: 1, margin: 0, fontSize: '12px', padding: '8px 10px' }}
+          onFocus={(e) => Object.assign(e.currentTarget.style, { ...inputFocusStyle, flex: '1', margin: '0', fontSize: '12px', padding: '8px 10px' })}
+          onBlur={(e) => Object.assign(e.currentTarget.style, { ...inputStyle, flex: '1', margin: '0', fontSize: '12px', padding: '8px 10px' })}
+          disabled={isUploading}
+        />
+        <button
+          type="button"
+          onClick={onUrlImport}
+          disabled={isDisabled}
+          style={{
+            padding: '8px 16px', border: 'none', borderRadius: '6px',
+            fontSize: '12px', fontWeight: 600, fontFamily: FONT,
+            cursor: isDisabled ? 'not-allowed' : 'pointer',
+            background: isUploaded ? '#22c55e' : '#049484',
+            color: '#ffffff',
+            opacity: isDisabled ? 0.5 : 1,
+            transition: 'all 0.2s', whiteSpace: 'nowrap',
+          }}
+        >
+          {importLabel}
+        </button>
+      </div>
+      {urlFileName && isUploaded && (
+        <div style={{ fontSize: 11, color: '#16a34a', marginTop: 6, display: 'flex', alignItems: 'center', gap: 4 }}>
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+          <span style={{ fontFamily: 'ui-monospace, monospace', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{urlFileName}</span>
+        </div>
+      )}
+    </>
+  );
+};
+
+// ── FileUploadCard ────────────────────────────────────────────────────────────
+
+interface FileUploadCardProps {
+  ext: string;
+  accentColor: string;
+  hoverBg: string;
+  badgeBg: string;
+  badgeBorder: string;
+  badgeColor: string;
+  headerBg: string;
+  fileId: number;
+  inputMode: 'file' | 'url';
+  uploadProgress: { progress: number; isUploading: boolean };
+  url: string;
+  urlFileName: string;
+  urlPlaceholder: string;
+  uploadError: string;
+  /** Filename when the current upload came from the device (file mode) */
+  localFileName: string;
+  onModeChange: (mode: 'file' | 'url') => void;
+  onFileInputClick: () => void;
+  onUrlChange: (url: string) => void;
+  onUrlImport: () => void;
+  /** Clear this slot and delete the file on the server so the user can upload again */
+  onClearUpload: () => void;
+  removeDisabled: boolean;
+}
+
+const FileUploadCard: React.FC<FileUploadCardProps> = ({
+  ext, accentColor, hoverBg, badgeBg, badgeBorder, badgeColor, headerBg,
+  fileId, inputMode, uploadProgress, url, urlFileName, urlPlaceholder,
+  uploadError, localFileName, onModeChange, onFileInputClick, onUrlChange, onUrlImport,
+  onClearUpload, removeDisabled,
+}) => {
+  const isUploaded = fileId > 0;
+  const isUploading = uploadProgress.isUploading;
+
+  // Derive upload state once; look up all display strings from the table
+  let uploadState: UploadState = 'idle';
+  if (isUploading) uploadState = 'uploading';
+  else if (isUploaded) uploadState = 'uploaded';
+  const { dropLabel, importLabel } = UPLOAD_STATE_LABELS[uploadState];
+
+  const cardStyle: React.CSSProperties = {
+    background: 'var(--v-surface-muted)',
+    border: `1px solid ${isUploaded ? '#bbf7d0' : 'var(--v-border)'}`,
+    borderRadius: 6,
+    marginBottom: 10,
+    overflow: 'hidden',
+  };
+  const fileModeStyle: React.CSSProperties = {
+    ...modeButtonBaseStyle,
+    background: inputMode === 'file' ? '#049484' : 'transparent',
+    color:      inputMode === 'file' ? '#ffffff'  : 'var(--v-text-muted)',
+  };
+  const urlModeStyle: React.CSSProperties = {
+    ...modeButtonBaseStyle,
+    background: inputMode === 'url' ? '#049484' : 'transparent',
+    color:      inputMode === 'url' ? '#ffffff'  : 'var(--v-text-muted)',
+  };
+
+  return (
+    <div style={cardStyle}>
+      {/* card header */}
+      <div style={{
+        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+        padding: '8px 12px', background: headerBg, borderBottom: '1px solid var(--v-border-subtle)',
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <span style={{
+            fontSize: 11, fontWeight: 600, fontFamily: 'ui-monospace, monospace',
+            color: badgeColor, background: badgeBg,
+            padding: '2px 7px', borderRadius: 4, border: `1px solid ${badgeBorder}`,
+            letterSpacing: '0.03em',
+          }}>{ext}</span>
+          {isUploaded && (
+            <span style={{ fontSize: 12, color: '#16a34a', display: 'flex', alignItems: 'center', gap: 3 }}>
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+              Ready
+            </span>
+          )}
+          {isUploaded && (
+            <button type="button" onClick={onClearUpload} disabled={removeDisabled} style={{
+              fontSize: 11, fontFamily: FONT, border: '1px solid var(--v-border)', borderRadius: 4,
+              background: 'var(--v-surface)', color: 'var(--v-text-muted)', padding: '1px 7px',
+              cursor: removeDisabled ? 'not-allowed' : 'pointer', opacity: removeDisabled ? 0.4 : 1,
+            }}>Remove</button>
+          )}
+        </div>
+        {/* mode toggle */}
+        <div style={{ display: 'flex', background: 'var(--v-input-bg)', borderRadius: 5, padding: 2, gap: 2 }}>
+          <button type="button" onClick={() => onModeChange('file')} style={fileModeStyle}>File</button>
+          <button type="button" onClick={() => onModeChange('url')}  style={urlModeStyle}>URL</button>
+        </div>
+      </div>
+
+      {/* card body */}
+      <div style={{ padding: '10px 12px' }}>
+        {inputMode === 'file' ? (
+          <FileDropZone
+            isUploaded={isUploaded} isUploading={isUploading}
+            ext={ext} accentColor={accentColor}
+            label={dropLabel}
+            uploadedFileName={localFileName}
+            onClick={onFileInputClick}
+          />
+        ) : (
+          <UrlImportRow
+            ext={ext} url={url} urlFileName={urlFileName}
+            isUploaded={isUploaded} isUploading={isUploading}
+            urlPlaceholder={urlPlaceholder} importLabel={importLabel}
+            onUrlChange={onUrlChange} onUrlImport={onUrlImport}
+          />
+        )}
+        {isUploading && (
+          <div style={{ marginTop: 10 }}>
+            <div style={progressBarContainerStyle}>
+              <div style={{ ...progressBarStyle, width: `${uploadProgress.progress}%` }} />
+            </div>
+            <div style={{ fontSize: 11, color: 'var(--v-text-faint)', textAlign: 'center', marginTop: 3 }}>
+              {Math.round(uploadProgress.progress)}%
+            </div>
+          </div>
+        )}
+        {uploadError && (
+          <div style={{
+            marginTop: 8, padding: '8px 10px',
+            background: 'var(--v-danger-bg)', border: '1px solid var(--v-danger-border)',
+            borderRadius: 5, fontSize: 12, color: 'var(--v-danger-text)',
+            display: 'flex', alignItems: 'flex-start', gap: 6,
+          }}>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0, marginTop: 1 }}><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+            <span>{uploadError}</span>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
+
+interface FormActionButtonsProps {
+  isLoading: boolean;
+  isSubmitting: boolean;
+  canSave: boolean;
+  buttonText: string;
+  onCancel: () => void;
+  onSubmit: () => void;
+}
+
+const FormActionButtons: React.FC<FormActionButtonsProps> = ({
+  isLoading, isSubmitting, canSave, buttonText, onCancel, onSubmit,
+}) => {
+  const isDisabled = isLoading || isSubmitting;
+  return (
+    <div style={buttonGroupStyle}>
+      <button
+        style={secondaryButtonStyle}
+        onClick={onCancel}
+        disabled={isDisabled}
+        onMouseEnter={(e) => !isDisabled && Object.assign(e.currentTarget.style, buttonHoverStyle)}
+        onMouseLeave={(e) => !isDisabled && Object.assign(e.currentTarget.style, secondaryButtonStyle)}
+      >
+        Cancel
+      </button>
+      <button
+        style={{ ...primaryButtonStyle, ...(canSave && !isLoading ? {} : primaryButtonDisabledStyle) }}
+        onClick={onSubmit}
+        disabled={!canSave || isDisabled}
+        onMouseEnter={(e) => canSave && !isDisabled && Object.assign(e.currentTarget.style, { background: '#049484' })}
+        onMouseLeave={(e) => canSave && !isDisabled && Object.assign(e.currentTarget.style, primaryButtonStyle)}
+      >
+        {buttonText}
+      </button>
+    </div>
+  );
+};
+
+
+// ─── Per-kind UI state shape ──────────────────────────────────────────────────
+
+const EMPTY_PER_KIND = {
+  ecore:    { inputMode: 'file' as 'file' | 'url', url: '', urlFileName: '', localFileName: '', uploadError: '' },
+};
+
+const getUploadedDisplayName = (kindState: (typeof EMPTY_PER_KIND)['ecore']): string =>
+  kindState.inputMode === 'url' ? kindState.urlFileName : kindState.localFileName;
+
+// ─── Custom hook ──────────────────────────────────────────────────────────────
+
+function useCreateModelForm({ isOpen, onClose, onSuccess }: CreateModelModalProps) {
+  const [formData, setFormData] = useState({ ...EMPTY_FORM, keywords: [] as string[] });
+  const [creationMode, setCreationMode] = useState<CreationMode>('import');
+  const [uploadedFileIds, setUploadedFileIds] = useState({ ecoreFileId: 0 });
   const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState<string>('');
-  const [success, setSuccess] = useState<string>('');
-
+  const [fieldErrors, setFieldErrors] = useState<Record<CreateModelFieldKey, string>>(() => ({ ...EMPTY_FIELD_ERRORS }));
+  const [success, setSuccess] = useState('');
   const [uploadProgress, setUploadProgress] = useState({
     ecore: { progress: 0, isUploading: false },
-    genmodel: { progress: 0, isUploading: false }
   });
   const [submitProgress, setSubmitProgress] = useState({ progress: 0, isSubmitting: false });
+  // Tracked as a ref (not state) since it's only read inside async callbacks/closures that need
+  // the current value synchronously — state updates aren't visible to already-created closures
+  // until the next render.
+  const metaModelCreatedSuccessfullyRef = useRef(false);
+  const [scrollTarget, setScrollTarget] = useState<CreateModelFieldKey | null>(null);
 
-  const ecoreFileInputRef = useRef<HTMLInputElement>(null);
-  const genmodelFileInputRef = useRef<HTMLInputElement>(null);
-  const ecoreProgressIntervalRef = useRef<number | null>(null);
-  const genmodelProgressIntervalRef = useRef<number | null>(null);
-  const submitProgressIntervalRef = useRef<number | null>(null);
+  // Unified per-kind UI state (replaces 6 separate ecoreInputMode / … states)
+  const [perKind, setPerKind] = useState(EMPTY_PER_KIND);
 
-  const canSave = uploadedFileIds.ecoreFileId > 0 && uploadedFileIds.genModelFileId > 0 && formData.name.trim();
+  const nameFieldRef = useRef<HTMLDivElement>(null);
+  const versionFieldRef = useRef<HTMLDivElement>(null);
+  const descriptionFieldRef = useRef<HTMLDivElement>(null);
+  const keywordsFieldRef = useRef<HTMLDivElement>(null);
+  const domainFieldRef = useRef<HTMLDivElement>(null);
+  const filesSectionRef = useRef<HTMLDivElement>(null);
 
-  const handleEcoreFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (!file) return;
+  const fileInputRefs = {
+    ecore:    useRef<HTMLInputElement>(null),
+  };
+  const ecoreProgressIntervalRef    = useRef<ReturnType<typeof setInterval> | null>(null);
+  const submitProgressIntervalRef   = useRef<ReturnType<typeof setInterval> | null>(null);
+  const successTimeoutRef           = useRef<ReturnType<typeof setTimeout>  | null>(null);
+  const progressResetTimeoutRef     = useRef<ReturnType<typeof setTimeout>  | null>(null);
 
-    if (!file.name.endsWith('.ecore')) {
-      setError('Please select a valid .ecore file');
-      return;
-    }
-
-    setUploadProgress(prev => ({ ...prev, ecore: { progress: 0, isUploading: true } }));
-    setError('');
-
-    try {
-      if (ecoreProgressIntervalRef.current) clearInterval(ecoreProgressIntervalRef.current);
-      ecoreProgressIntervalRef.current = window.setInterval(() => {
-        setUploadProgress(prev => ({
-          ...prev,
-          ecore: {
-            progress: Math.min(prev.ecore.progress + Math.random() * 20, 90),
-            isUploading: true
-          }
-        }));
-      }, 200);
-
-      const response = await apiService.uploadFile(file, 'ECORE');
-
-      if (ecoreProgressIntervalRef.current) {
-        clearInterval(ecoreProgressIntervalRef.current);
-        ecoreProgressIntervalRef.current = null;
-      }
-
-      setUploadProgress(prev => ({ ...prev, ecore: { progress: 100, isUploading: false } }));
-
-      const rawData: any = (response as any)?.data;
-      let fileId = (rawData && typeof rawData === 'object' && 'id' in rawData)
-          ? Number(rawData.id)
-          : Number(rawData);
-      if (!Number.isFinite(fileId)) fileId = Date.now() + getSecureRandomInt(1000);
-
-      setUploadedFileIds(prev => ({ ...prev, ecoreFileId: fileId }));
-      setSuccess(`Successfully uploaded ${file.name}`);
-      setTimeout(() => setSuccess(''), 3000);
-
-      setTimeout(() => {
-        setUploadProgress(prev => ({ ...prev, ecore: { progress: 0, isUploading: false } }));
-      }, 2000);
-    } catch (err) {
-      setError(`${err instanceof Error ? err.message : 'Unknown error'}`);
-      setUploadProgress(prev => ({ ...prev, ecore: { progress: 0, isUploading: false } }));
-      if (ecoreProgressIntervalRef.current) {
-        clearInterval(ecoreProgressIntervalRef.current);
-        ecoreProgressIntervalRef.current = null;
-      }
-    }
-
-    event.target.value = '';
+  const fieldSectionRefs: Record<CreateModelFieldKey, React.RefObject<HTMLDivElement | null>> = {
+    name: nameFieldRef,
+    version: versionFieldRef,
+    description: descriptionFieldRef,
+    keywords: keywordsFieldRef,
+    domain: domainFieldRef,
+    files: filesSectionRef,
   };
 
-  const handleGenmodelFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (!file) return;
+  const fieldSectionRefsRef = useRef(fieldSectionRefs);
+  fieldSectionRefsRef.current = fieldSectionRefs;
 
-    if (!file.name.endsWith('.genmodel')) {
-      setError('Please select a valid .genmodel file');
-      return;
+  useLayoutEffect(() => {
+    if (!scrollTarget) return;
+    const el = fieldSectionRefsRef.current[scrollTarget].current;
+    if (el && typeof el.scrollIntoView === 'function') {
+      el.scrollIntoView({ behavior: 'smooth', block: 'center' });
     }
+    setScrollTarget(null);
+  }, [scrollTarget]);
 
-    setUploadProgress(prev => ({ ...prev, genmodel: { progress: 0, isUploading: true } }));
-    setError('');
+  const canSave = (creationMode === 'empty' || uploadedFileIds.ecoreFileId > 0) &&
+    formData.name.trim() &&
+    formData.version.trim() &&
+    formData.description.trim() &&
+    formData.domain.trim() &&
+    formData.keywords.length > 0;
 
-    try {
-      if (genmodelProgressIntervalRef.current) clearInterval(genmodelProgressIntervalRef.current);
-      genmodelProgressIntervalRef.current = window.setInterval(() => {
-        setUploadProgress(prev => ({
-          ...prev,
-          genmodel: {
-            progress: Math.min(prev.genmodel.progress + Math.random() * 20, 90),
-            isUploading: true
-          }
-        }));
-      }, 200);
+  // Stable ref-only cleanup – safe with empty deps
+  const clearAllTimers = useCallback(() => {
+    [ecoreProgressIntervalRef, submitProgressIntervalRef].forEach(ref => {
+      if (ref.current) { clearInterval(ref.current); ref.current = null; }
+    });
+    [successTimeoutRef, progressResetTimeoutRef].forEach(ref => {
+      if (ref.current) { clearTimeout(ref.current); ref.current = null; }
+    });
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-      const response = await apiService.uploadFile(file, 'GEN_MODEL');
+  // ── Per-kind helpers ──────────────────────────────────────────────────────
 
-      if (genmodelProgressIntervalRef.current) {
-        clearInterval(genmodelProgressIntervalRef.current);
-        genmodelProgressIntervalRef.current = null;
-      }
+  const updateKind = (kind: FileKind, patch: Partial<typeof EMPTY_PER_KIND.ecore>) =>
+    setPerKind(prev => ({ ...prev, [kind]: { ...prev[kind], ...patch } }));
 
-      setUploadProgress(prev => ({ ...prev, genmodel: { progress: 100, isUploading: false } }));
-
-      const rawData: any = (response as any)?.data;
-      let fileId = (rawData && typeof rawData === 'object' && 'id' in rawData)
-          ? Number(rawData.id)
-          : Number(rawData);
-      if (!Number.isFinite(fileId)) fileId = Date.now() + getSecureRandomInt(1000);
-
-      setUploadedFileIds(prev => ({ ...prev, genModelFileId: fileId }));
-      setSuccess(`Successfully uploaded ${file.name}`);
-      setTimeout(() => setSuccess(''), 3000);
-
-      setTimeout(() => {
-        setUploadProgress(prev => ({ ...prev, genmodel: { progress: 0, isUploading: false } }));
-      }, 2000);
-    } catch (err) {
-      setError(`Error uploading ${file.name}: ${err instanceof Error ? err.message : 'Unknown error'}`);
-      setUploadProgress(prev => ({ ...prev, genmodel: { progress: 0, isUploading: false } }));
-      if (genmodelProgressIntervalRef.current) {
-        clearInterval(genmodelProgressIntervalRef.current);
-        genmodelProgressIntervalRef.current = null;
-      }
+  const switchFileMode = (kind: FileKind, mode: 'file' | 'url') => {
+    const prevId = uploadedFileIds[FILE_KIND_CONFIG[kind].fileIdKey];
+    if (prevId > 0) {
+      apiService.deleteFile(prevId).catch(() => console.warn('Failed to delete file on mode switch'));
     }
-
-    event.target.value = '';
+    updateKind(kind, { inputMode: mode, urlFileName: '', localFileName: '', uploadError: '' });
+    setUploadedFileIds(prev => ({ ...prev, [FILE_KIND_CONFIG[kind].fileIdKey]: 0 }));
+    setFieldErrors(prev => ({ ...prev, files: '' }));
   };
 
-  const startSubmitOverlay = () => {
-    // Start overlay with progress ramping to ~90%
+  const changeFileUrl = (kind: FileKind, url: string) => {
+    // Delete the previously uploaded file the first time the user edits the URL
+    // (prevId will be 0 on subsequent keystrokes, so this fires only once per upload)
+    const prevId = uploadedFileIds[FILE_KIND_CONFIG[kind].fileIdKey];
+    if (prevId > 0) {
+      apiService.deleteFile(prevId).catch(() => console.warn('Failed to delete file on URL change'));
+    }
+    updateKind(kind, { url, urlFileName: '', localFileName: '', uploadError: '' });
+    setUploadedFileIds(prev => ({ ...prev, [FILE_KIND_CONFIG[kind].fileIdKey]: 0 }));
+    setFieldErrors(prev => ({ ...prev, files: '' }));
+  };
+
+  // Starting from an empty file discards an uploaded one, the same way switching File/URL does,
+  // so a file that is no longer shown cannot linger on the server.
+  const switchCreationMode = (mode: CreationMode) => {
+    if (mode === creationMode) return;
+    if (mode === 'empty') {
+      const prevId = uploadedFileIds.ecoreFileId;
+      if (prevId > 0) {
+        apiService.deleteFile(prevId).catch(() => console.warn('Failed to delete file on mode switch'));
+      }
+      setUploadedFileIds({ ecoreFileId: 0 });
+      setPerKind(EMPTY_PER_KIND);
+    }
+    setFieldErrors(prev => ({ ...prev, files: '' }));
+    setCreationMode(mode);
+  };
+
+  // ── Progress simulation ───────────────────────────────────────────────────
+
+  const scheduleSuccessReset = (kind: FileKind) => {
+    if (successTimeoutRef.current) clearTimeout(successTimeoutRef.current);
+    if (progressResetTimeoutRef.current) clearTimeout(progressResetTimeoutRef.current);
+    successTimeoutRef.current = globalThis.setTimeout(() => setSuccess(''), 3000);
+    progressResetTimeoutRef.current = globalThis.setTimeout(() => {
+      setUploadProgress(prev => ({ ...prev, [kind]: { progress: 0, isUploading: false } }));
+    }, 2000);
+  };
+
+  const startProgressSimulation = (kind: FileKind) => {
+    const ref = ecoreProgressIntervalRef;
+
+    if (ref.current) clearInterval(ref.current);
+
+    ref.current = globalThis.setInterval(() => {
+      setUploadProgress(prev => ({
+        ...prev,
+        [kind]: {
+          progress: Math.min(prev[kind].progress + 15, 90),
+          isUploading: true,
+        },
+      }));
+    }, 200);
+  };
+
+  const stopProgressSimulation = (_kind: FileKind) => {
+    const ref = ecoreProgressIntervalRef;
+
+    if (ref.current) {
+      clearInterval(ref.current);
+      ref.current = null;
+    }
+  };
+
+  // ── Submit overlay helpers ────────────────────────────────────────────────
+
+  const clearSubmitInterval = () => {
     if (submitProgressIntervalRef.current) {
       clearInterval(submitProgressIntervalRef.current);
       submitProgressIntervalRef.current = null;
     }
+  };
+
+  const startSubmitOverlay = () => {
+    clearSubmitInterval();
     setSubmitProgress({ progress: 0, isSubmitting: true });
-    submitProgressIntervalRef.current = window.setInterval(() => {
+    submitProgressIntervalRef.current = globalThis.setInterval(() => {
       setSubmitProgress(prev => ({
-        progress: Math.min(prev.progress + Math.random() * 16 + 4, 90), // +4..20 each tick up to 90
+        progress: Math.min(prev.progress + 10, 90),
         isSubmitting: true,
       }));
     }, 220);
   };
 
   const finishSubmitOverlay = (onDone?: () => void) => {
-    // Smoothly fill to 100
-    if (submitProgressIntervalRef.current) {
-      clearInterval(submitProgressIntervalRef.current);
-      submitProgressIntervalRef.current = null;
-    }
+    clearSubmitInterval();
     setSubmitProgress({ progress: 100, isSubmitting: true });
-    // Let user see 100% briefly
     setTimeout(() => {
       setSubmitProgress({ progress: 0, isSubmitting: false });
       onDone?.();
@@ -491,312 +997,593 @@ export const CreateModelModal: React.FC<CreateModelModalProps> = ({
   };
 
   const stopSubmitOverlayWithError = () => {
-    if (submitProgressIntervalRef.current) {
-      clearInterval(submitProgressIntervalRef.current);
-      submitProgressIntervalRef.current = null;
-    }
-    // Collapse overlay
+    clearSubmitInterval();
     setSubmitProgress({ progress: 0, isSubmitting: false });
   };
 
-  const handleCreateModel = async () => {
-    if (!canSave) {
-      setError('Please fill in all required fields and upload both files');
-      return;
-    }
-    if (formData.keywords.length === 0) {
-      setError('Please enter at least one keyword');
-      return;
-    }
-
+  // Shared setup called at the start of every submit action
+  const prepareSubmit = () => {
     setIsLoading(true);
-    setError('');
+    setFieldErrors({ ...EMPTY_FIELD_ERRORS });
     startSubmitOverlay();
-
-    try {
-      const requestData: CreateModelRequest = {
-        name: formData.name.trim(),
-        description: formData.description.trim(),
-        domain: formData.domain.trim(),
-        keyword: formData.keywords,
-        ecoreFileId: uploadedFileIds.ecoreFileId,
-        genModelFileId: uploadedFileIds.genModelFileId,
-      };
-
-      const response = await apiService.createMetaModel(requestData);
-
-      // If backend responds OK, fill to 100% and then close/reset
-      finishSubmitOverlay(() => {
-        setIsLoading(false);
-        setSuccess('Meta Model created successfully!');
-        setTimeout(() => {
-          onSuccess?.(response.data);
-          handleClose();
-        }, 300);
-      });
-    } catch (err) {
-      setIsLoading(false);
-      setError(`Error creating meta model: ${err instanceof Error ? err.message : 'Unknown error'}`);
-      stopSubmitOverlayWithError();
-    }
   };
 
-  const handleClose = () => {
-    if (submitProgressIntervalRef.current) {
-      clearInterval(submitProgressIntervalRef.current);
-      submitProgressIntervalRef.current = null;
+  // Shared happy-path handler after a successful API call
+  const onSubmitSuccess = (
+    message: string,
+    responseData: any,
+    requestData?: CreateModelRequest,
+  ) => {
+    metaModelCreatedSuccessfullyRef.current = true;
+    finishSubmitOverlay(() => {
+      setIsLoading(false);
+      setSuccess(message);
+      setTimeout(() => {
+        onSuccess?.({ ...requestData, ...(responseData ?? {}), id: responseData?.id });
+        void handleClose();
+      }, 300);
+    });
+  };
+
+  // ── File cleanup ──────────────────────────────────────────────────────────
+
+  const cleanupUploadedFiles = async () => {
+    if (metaModelCreatedSuccessfullyRef.current) return;
+    const filesToDelete = [uploadedFileIds.ecoreFileId].filter(id => id > 0);
+    await Promise.all(
+      filesToDelete.map(fileId =>
+        apiService.deleteFile(fileId).catch(() => console.error('Failed to delete file'))
+      )
+    );
+  };
+
+  /** Resets local upload UI after server deletes files (so we do not keep stale “Ready” with dead IDs). */
+  const resetLocalUploadStateAfterImportFailure = () => {
+    setUploadedFileIds({ ecoreFileId: 0 });
+    setPerKind(EMPTY_PER_KIND);
+  };
+
+  const clearKindUpload = async (kind: FileKind) => {
+    const { fileIdKey } = FILE_KIND_CONFIG[kind];
+    const id = uploadedFileIds[fileIdKey];
+    if (id > 0) {
+      await apiService.deleteFile(id).catch(() => console.warn('Failed to delete file'));
     }
-    if (ecoreProgressIntervalRef.current) {
-      clearInterval(ecoreProgressIntervalRef.current);
-      ecoreProgressIntervalRef.current = null;
-    }
-    if (genmodelProgressIntervalRef.current) {
-      clearInterval(genmodelProgressIntervalRef.current);
-      genmodelProgressIntervalRef.current = null;
-    }
+    setUploadedFileIds(prev => ({ ...prev, [fileIdKey]: 0 }));
+    updateKind(kind, { urlFileName: '', localFileName: '', uploadError: '' });
+    setFieldErrors(prev => ({ ...prev, files: '' }));
+  };
+
+  // ── Core handlers ─────────────────────────────────────────────────────────
+
+  const handleClose = async () => {
+    await cleanupUploadedFiles();
+    clearAllTimers();
     setSubmitProgress({ progress: 0, isSubmitting: false });
-    setFormData({ name: '', description: '', domain: '', keywords: [] });
-    setUploadedFileIds({ ecoreFileId: 0, genModelFileId: 0 });
-    setError('');
+    setFormData({ ...EMPTY_FORM, keywords: [] });
+    setCreationMode('import');
+    setUploadedFileIds({ ecoreFileId: 0 });
+    setFieldErrors({ ...EMPTY_FIELD_ERRORS });
     setSuccess('');
     setIsLoading(false);
-    setUploadProgress({
-      ecore: { progress: 0, isUploading: false },
-      genmodel: { progress: 0, isUploading: false }
-    });
+    setUploadProgress({ ecore: { progress: 0, isUploading: false } });
+    metaModelCreatedSuccessfullyRef.current = false;
+    setPerKind(EMPTY_PER_KIND);
     onClose();
   };
 
-  useEffect(() => {
-    if (!isOpen) {
-      if (submitProgressIntervalRef.current) {
-        clearInterval(submitProgressIntervalRef.current);
-        submitProgressIntervalRef.current = null;
-      }
-      if (ecoreProgressIntervalRef.current) {
-        clearInterval(ecoreProgressIntervalRef.current);
-        ecoreProgressIntervalRef.current = null;
-      }
-      if (genmodelProgressIntervalRef.current) {
-        clearInterval(genmodelProgressIntervalRef.current);
-        genmodelProgressIntervalRef.current = null;
-      }
-      setSubmitProgress({ progress: 0, isSubmitting: false });
-      setUploadProgress({
-        ecore: { progress: 0, isUploading: false },
-        genmodel: { progress: 0, isUploading: false }
-      });
+  const handleFileUpload = async (kind: FileKind, event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    const { ext, apiType, fileIdKey } = FILE_KIND_CONFIG[kind];
+    const currentFileId = uploadedFileIds[fileIdKey];
+
+    if (!file.name.endsWith(ext)) {
+      updateKind(kind, { uploadError: `Please select a valid ${ext} file` });
+      return;
     }
-    return () => {
-      if (submitProgressIntervalRef.current) {
-        clearInterval(submitProgressIntervalRef.current);
-        submitProgressIntervalRef.current = null;
+
+    setUploadProgress(prev => ({ ...prev, [kind]: { progress: 0, isUploading: true } }));
+    updateKind(kind, { uploadError: '' });
+    setFieldErrors(prev => ({ ...prev, files: '' }));
+
+    try {
+      if (currentFileId > 0) {
+        await apiService.deleteFile(currentFileId)
+          .catch(() => console.warn('Failed to delete previous file'));
       }
-      if (ecoreProgressIntervalRef.current) {
-        clearInterval(ecoreProgressIntervalRef.current);
-        ecoreProgressIntervalRef.current = null;
+      startProgressSimulation(kind);
+      const response = await apiService.uploadFile(file, apiType);
+      stopProgressSimulation(kind);
+      setUploadProgress(prev => ({ ...prev, [kind]: { progress: 100, isUploading: false } }));
+      setUploadedFileIds(prev => ({ ...prev, [fileIdKey]: extractFileId(response) }));
+      updateKind(kind, { localFileName: sanitizeFileName(file.name) });
+      setSuccess(`Successfully uploaded ${sanitizeFileName(file.name)}`);
+      scheduleSuccessReset(kind);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Unknown error';
+      updateKind(kind, { uploadError: `Error uploading ${sanitizeFileName(file.name)}: ${msg}`, localFileName: '' });
+      setUploadProgress(prev => ({ ...prev, [kind]: { progress: 0, isUploading: false } }));
+      setUploadedFileIds(prev => ({ ...prev, [fileIdKey]: 0 }));
+      stopProgressSimulation(kind);
+    }
+    event.target.value = '';
+  };
+
+  const handleUrlImport = async (kind: FileKind) => {
+    const { ext, apiType, fileIdKey } = FILE_KIND_CONFIG[kind];
+    const currentFileId = uploadedFileIds[fileIdKey];
+
+    // Auto-convert GitHub blob page URLs to raw content URLs
+    const rawUrl = perKind[kind].url.trim().replace(
+      /^https?:\/\/github\.com\/([^/]+\/[^/]+)\/blob\/(.+)$/,
+      'https://raw.githubusercontent.com/$1/$2',
+    );
+
+    if (!rawUrl) {
+      updateKind(kind, { uploadError: `Please enter a URL for the ${ext} file` });
+      return;
+    }
+    const urlPath = rawUrl.split('?')[0];
+    if (!urlPath.endsWith(ext)) {
+      updateKind(kind, { uploadError: `URL must point to a ${ext} file (ending with ${ext})` });
+      return;
+    }
+
+    // Reflect the (possibly converted) URL back into the input
+    if (rawUrl !== perKind[kind].url.trim()) {
+      updateKind(kind, { url: rawUrl });
+    }
+
+    setUploadProgress(prev => ({ ...prev, [kind]: { progress: 0, isUploading: true } }));
+    updateKind(kind, { uploadError: '' });
+    setFieldErrors(prev => ({ ...prev, files: '' }));
+
+    try {
+      startProgressSimulation(kind);
+      const fetchResponse = await fetch(rawUrl);
+      if (!fetchResponse.ok) {
+        throw new Error(`Server returned ${fetchResponse.status} ${fetchResponse.statusText}`);
       }
-      if (genmodelProgressIntervalRef.current) {
-        clearInterval(genmodelProgressIntervalRef.current);
-        genmodelProgressIntervalRef.current = null;
+      const blob = await fetchResponse.blob();
+      // A web page or other non-model content is rejected before anything reaches the backend,
+      // so it neither replaces the previous upload nor fails later when the model is created.
+      const contentProblem = findEcoreDownloadProblem(
+        await readBlobAsText(blob),
+        fetchResponse.headers?.get('content-type') ?? blob.type,
+      );
+      if (contentProblem) {
+        stopProgressSimulation(kind);
+        setUploadProgress(prev => ({ ...prev, [kind]: { progress: 0, isUploading: false } }));
+        updateKind(kind, { uploadError: contentProblem });
+        return;
       }
-    };
-  }, [isOpen]);
+      if (currentFileId > 0) {
+        await apiService.deleteFile(currentFileId)
+          .catch(() => console.warn('Failed to delete previous file'));
+      }
+      const fileName = urlPath.split('/').pop() || `imported${ext}`;
+      const file = new File([blob], fileName, { type: blob.type || 'application/octet-stream' });
+      const response = await apiService.uploadFile(file, apiType);
+      stopProgressSimulation(kind);
+      setUploadProgress(prev => ({ ...prev, [kind]: { progress: 100, isUploading: false } }));
+      setUploadedFileIds(prev => ({ ...prev, [fileIdKey]: extractFileId(response) }));
+      updateKind(kind, { urlFileName: sanitizeFileName(fileName), localFileName: '' });
+      setSuccess(`Successfully imported ${sanitizeFileName(fileName)}`);
+      scheduleSuccessReset(kind);
+    } catch (err) {
+      const raw = err instanceof Error ? err.message : 'Unknown error';
+      const isCors = raw === 'Failed to fetch';
+      const uploadError = isCors
+        ? `Cannot reach that URL from the browser (CORS policy). Use a raw public URL — e.g. raw.githubusercontent.com — or download the file and upload it locally.`
+        : `Failed to import ${ext} from URL: ${raw}`;
+      updateKind(kind, { uploadError, urlFileName: '', localFileName: '' });
+      setUploadProgress(prev => ({ ...prev, [kind]: { progress: 0, isUploading: false } }));
+      setUploadedFileIds(prev => ({ ...prev, [fileIdKey]: 0 }));
+      stopProgressSimulation(kind);
+    }
+  };
+
+  const validateClientFields = (): boolean => {
+    const next = { ...EMPTY_FIELD_ERRORS };
+    if (!formData.name.trim()) next.name = 'Please enter a name';
+    if (!formData.version.trim()) next.version = 'Please enter a version';
+    if (!formData.description.trim()) next.description = 'Please enter a description';
+    if (!formData.domain.trim()) next.domain = 'Please enter a domain';
+    if (formData.keywords.length === 0) next.keywords = 'Please enter at least one keyword';
+    if (creationMode === 'import' && !uploadedFileIds.ecoreFileId) {
+      next.files = 'Please upload an .ecore file';
+    }
+    const order: CreateModelFieldKey[] = ['name', 'version', 'description', 'keywords', 'domain', 'files'];
+    const first = order.find(k => next[k]);
+    if (first) {
+      setFieldErrors(next);
+      setScrollTarget(first);
+      return false;
+    }
+    setFieldErrors({ ...EMPTY_FIELD_ERRORS });
+    return true;
+  };
+
+  const handleImportFailure = async (message: string, errorPrefix: string) => {
+    setIsLoading(false);
+    stopSubmitOverlayWithError();
+    await cleanupUploadedFiles();
+    resetLocalUploadStateAfterImportFailure();
+    applyImportFailureFieldErrors(message, errorPrefix, setFieldErrors, setScrollTarget);
+  };
+
+  const handleCreateModel = async () => {
+    if (!validateClientFields()) return;
+
+    prepareSubmit();
+
+    const name = formData.name.trim();
+    // Only set for a meta model created from scratch; this handler owns that file until the
+    // meta model exists, so it deletes it again if creation fails.
+    let emptyEcoreFileId = 0;
+
+    try {
+      if (creationMode === 'empty') {
+        const uploadResponse = await apiService.uploadFile(createEmptyEcoreFile(name), 'ECORE');
+        emptyEcoreFileId = requireFileId(uploadResponse);
+      }
+
+      const requestData: CreateModelRequest = {
+        name,
+        version: formData.version.trim(),
+        description: formData.description.trim(),
+        domain: formData.domain.trim(),
+        keyword: formData.keywords,
+        ecoreFileId: creationMode === 'empty' ? emptyEcoreFileId : uploadedFileIds.ecoreFileId,
+      };
+
+      const response = await apiService.createMetaModel({ ...requestData });
+
+      onSubmitSuccess(
+        'Meta Model created successfully!',
+        response.data,
+        requestData,
+      );
+    } catch (err) {
+      if (emptyEcoreFileId > 0) {
+        await apiService.deleteFile(emptyEcoreFileId).catch(() => console.error('Failed to delete file'));
+      }
+      const { message } = parseBackendError(err);
+
+      await handleImportFailure(
+        message,
+        'Error creating meta model: ',
+      );
+    }
+  };
+
+  const getButtonText = (): string => {
+    if (isLoading) return 'Creating...';
+    if (!canSave) return 'Complete All Fields';
+    return creationMode === 'empty' ? 'Create Meta Model' : 'Import Meta Model';
+  };
+
+  useEffect(() => {
+    if (isOpen) {
+      const prev = document.body.style.overflow;
+      document.body.style.overflow = 'hidden';
+      return () => { document.body.style.overflow = prev; };
+    }
+    clearAllTimers();
+    setSubmitProgress({ progress: 0, isSubmitting: false });
+    setUploadProgress({ ecore: { progress: 0, isUploading: false } });
+    return clearAllTimers;
+  }, [isOpen, clearAllTimers]);
+
+  return {
+    formData, setFormData,
+    creationMode, switchCreationMode,
+    uploadedFileIds,
+    isLoading,
+    fieldErrors,
+    setFieldErrors,
+    fieldSectionRefs,
+    success,
+    uploadProgress, submitProgress,
+    perKind,
+    fileInputRefs,
+    canSave,
+    handleFileUpload, handleUrlImport,
+    handleCreateModel, handleClose,
+    switchFileMode, changeFileUrl,
+    clearKindUpload,
+    getButtonText,
+  };
+}
+
+// ─── Main component ───────────────────────────────────────────────────────────
+
+export const CreateModelModal: React.FC<CreateModelModalProps> = ({
+  isOpen,
+  onClose,
+  onSuccess,
+}) => {
+  const form = useCreateModelForm({ isOpen, onClose, onSuccess });
 
   if (!isOpen) return null;
 
-  return (
-      <>
-        {/* Full-screen Submit Overlay */}
-        {submitProgress.isSubmitting && (
-            <div style={overlayStyle} aria-modal="true" role="dialog" aria-label="Building meta model">
-              <div style={overlayCardStyle} onClick={(e) => e.stopPropagation()}>
-                <div style={overlayTitleStyle}>Building Meta Model…</div>
-                <div style={overlayTextStyle}>Please wait while we process your files.</div>
-                <div style={{ ...progressBarContainerStyle, marginTop: 8 }}>
-                  <div style={{ ...progressBarStyle, width: `${submitProgress.progress}%` }} />
-                </div>
-                <div style={{ fontSize: 12, color: '#374151', textAlign: 'center', marginTop: 6 }}>
-                  {Math.round(submitProgress.progress)}%
-                </div>
+  const { uploadedFileIds, uploadProgress, submitProgress, isLoading, creationMode } = form;
+
+  return ReactDOM.createPortal(
+    <>
+      {submitProgress.isSubmitting && <SubmitProgressOverlay progress={submitProgress.progress} />}
+
+      <dialog
+        open
+        aria-modal="true"
+        aria-labelledby="modal-title"
+        tabIndex={-1}
+        style={{
+          ...modalOverlayStyle,
+          background: 'transparent',
+          top: 0, left: 0, right: 0, bottom: 0,
+          width: '100%', height: '100%',
+          margin: 0, padding: 0, border: 'none',
+          display: 'grid',
+          placeItems: 'center',
+        }}
+        onClose={form.handleClose}
+        onCancel={(event) => {
+          if (event.target !== event.currentTarget) return;
+          void form.handleClose();
+        }}
+      >
+        <button
+          type="button"
+          aria-hidden="true"
+          tabIndex={-1}
+          onClick={form.handleClose}
+          style={{
+            position: 'absolute',
+            inset: 0,
+            backgroundColor: 'rgba(0, 0, 0, 0.5)',
+            backdropFilter: 'blur(6px)',
+            WebkitBackdropFilter: 'blur(6px)',
+            border: 'none',
+            padding: 0,
+            margin: 0,
+            width: '100%',
+            height: '100%',
+            cursor: 'default',
+          }}
+        />
+        <div style={{ ...modalStyle, position: 'relative', zIndex: 1 }}>
+          {/* ── Scrollbar style injection ── */}
+          <style>{`
+            .cmm-scroll::-webkit-scrollbar { width: 7px; }
+            .cmm-scroll::-webkit-scrollbar-track { background: var(--v-scrollbar-track); border-radius: 4px; }
+            .cmm-scroll::-webkit-scrollbar-thumb { background: var(--v-scrollbar-thumb); border-radius: 4px; }
+            .cmm-scroll::-webkit-scrollbar-thumb:hover { background: var(--v-scrollbar-thumb-hover); }
+          `}</style>
+
+          {/* ── Header ── */}
+          <div style={modalHeaderStyle}>
+            <div>
+              <h2 id="modal-title" style={modalTitleStyle}>Add Meta Model</h2>
+              <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.72)', marginTop: 3, fontFamily: FONT }}>
+                {creationMode === 'empty' ? 'Start from an empty .ecore file' : 'Upload your .ecore file'}
               </div>
             </div>
-        )}
-
-        {/* Modal */}
-        <div style={modalOverlayStyle} onClick={handleClose}>
-          <div style={modalStyle} onClick={(e) => e.stopPropagation()}>
-            <div style={modalHeaderStyle}>
-              <h2 style={modalTitleStyle}>Build New Meta Model</h2>
-              <button
-                  style={closeButtonStyle}
-                  onClick={handleClose}
-                  onMouseEnter={(e) => Object.assign(e.currentTarget.style, closeButtonHoverStyle)}
-                  onMouseLeave={(e) => Object.assign(e.currentTarget.style, closeButtonStyle)}
-              >
-                ×
-              </button>
-            </div>
-
-            {error && <div style={errorMessageStyle}>{error}</div>}
-            {success && <div style={successMessageStyle}>{success}</div>}
-
-            <div style={formGroupStyle}>
-              <label style={labelStyle}>Name *</label>
-              <input
-                  type="text"
-                  placeholder="Enter meta model name..."
-                  value={formData.name}
-                  onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                  style={inputStyle}
-                  onFocus={(e) => Object.assign(e.currentTarget.style, inputFocusStyle)}
-                  onBlur={(e) => Object.assign(e.currentTarget.style, inputStyle)}
-              />
-            </div>
-
-            <div style={formGroupStyle}>
-              <label style={labelStyle}>Description</label>
-              <textarea
-                  placeholder="Optional description..."
-                  value={formData.description}
-                  onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                  style={{ ...inputStyle, minHeight: '80px', resize: 'vertical', fontFamily: 'inherit' }}
-                  onFocus={(e) => Object.assign(e.currentTarget.style, inputFocusStyle)}
-                  onBlur={(e) => Object.assign(e.currentTarget.style, inputStyle)}
-              />
-            </div>
-
-            <div style={formGroupStyle}>
-              <label style={labelStyle}>Keywords</label>
-              <KeywordTagsInput
-                  keywords={formData.keywords}
-                  onChange={(keywords) => setFormData({ ...formData, keywords })}
-                  placeholder="Type keywords and press Enter..."
-                  style={inputStyle}
-              />
-              <div style={{ fontSize: '12px', color: '#666', marginTop: '4px', fontStyle: 'italic' }}>
-                Press Enter to add each keyword as colored text. Keywords will appear in different colors automatically.
-              </div>
-            </div>
-
-            <div style={formGroupStyle}>
-              <label style={labelStyle}>Domain</label>
-              <input
-                  type="text"
-                  placeholder="Enter domain"
-                  value={formData.domain}
-                  onChange={(e) => setFormData({ ...formData, domain: e.target.value })}
-                  style={inputStyle}
-                  onFocus={(e) => Object.assign(e.currentTarget.style, inputFocusStyle)}
-                  onBlur={(e) => Object.assign(e.currentTarget.style, inputStyle)}
-              />
-            </div>
-
-            {/* File Upload Section */}
-            <div style={uploadSectionStyle}>
-              <div style={uploadSectionTitleStyle}>Required Meta Model Files</div>
-
-              <input
-                  ref={ecoreFileInputRef}
-                  type="file"
-                  accept=".ecore"
-                  onChange={handleEcoreFileUpload}
-                  style={fileInputStyle}
-              />
-              <input
-                  ref={genmodelFileInputRef}
-                  type="file"
-                  accept=".genmodel"
-                  onChange={handleGenmodelFileUpload}
-                  style={fileInputStyle}
-              />
-
-              <div style={uploadButtonsContainerStyle}>
-                <div style={{ flex: '1' }}>
-                  <button
-                      style={{
-                        ...uploadButtonStyle,
-                        ...(uploadedFileIds.ecoreFileId > 0 ? uploadButtonSuccessStyle : {}),
-                        width: '100%'
-                      }}
-                      onClick={() => ecoreFileInputRef.current?.click()}
-                      disabled={uploadProgress.ecore.isUploading}
-                      onMouseEnter={(e) => !uploadedFileIds.ecoreFileId && !uploadProgress.ecore.isUploading && Object.assign(e.currentTarget.style, uploadButtonHoverStyle)}
-                      onMouseLeave={(e) => !uploadedFileIds.ecoreFileId && !uploadProgress.ecore.isUploading && Object.assign(e.currentTarget.style, uploadButtonStyle)}
-                  >
-                    {uploadProgress.ecore.isUploading ? 'Uploading...' : uploadedFileIds.ecoreFileId > 0 ? '✓' : 'Upload'} .ecore
-                  </button>
-                  {uploadProgress.ecore.isUploading && (
-                      <>
-                        <div style={{ ...progressBarContainerStyle, marginTop: 8 }}>
-                          <div style={{ ...progressBarStyle, width: `${uploadProgress.ecore.progress}%` }} />
-                        </div>
-                        <div style={{ fontSize: 12, color: '#666', textAlign: 'center', marginTop: 4 }}>
-                          {Math.round(uploadProgress.ecore.progress)}%
-                        </div>
-                      </>
-                  )}
-                </div>
-
-                <div style={{ flex: '1' }}>
-                  <button
-                      style={{
-                        ...uploadButtonStyle,
-                        ...(uploadedFileIds.genModelFileId > 0 ? uploadButtonSuccessStyle : {}),
-                        width: '100%'
-                      }}
-                      onClick={() => genmodelFileInputRef.current?.click()}
-                      disabled={uploadProgress.genmodel.isUploading}
-                      onMouseEnter={(e) => !uploadedFileIds.genModelFileId && !uploadProgress.genmodel.isUploading && Object.assign(e.currentTarget.style, uploadButtonHoverStyle)}
-                      onMouseLeave={(e) => !uploadedFileIds.genModelFileId && !uploadProgress.genmodel.isUploading && Object.assign(e.currentTarget.style, uploadButtonStyle)}
-                  >
-                    {uploadProgress.genmodel.isUploading ? 'Uploading...' : uploadedFileIds.genModelFileId > 0 ? '✓' : 'Upload'} .genmodel
-                  </button>
-                  {uploadProgress.genmodel.isUploading && (
-                      <>
-                        <div style={{ ...progressBarContainerStyle, marginTop: 8 }}>
-                          <div style={{ ...progressBarStyle, width: `${uploadProgress.genmodel.progress}%` }} />
-                        </div>
-                        <div style={{ fontSize: 12, color: '#666', textAlign: 'center', marginTop: 4 }}>
-                          {Math.round(uploadProgress.genmodel.progress)}%
-                        </div>
-                      </>
-                  )}
-                </div>
-              </div>
-
-              <div style={fileStatusStyle}>
-                {uploadedFileIds.ecoreFileId > 0 && uploadedFileIds.genModelFileId > 0
-                    ? '✅ Both files uploaded successfully!'
-                    : 'Please upload both .ecore and .genmodel files to continue'}
-              </div>
-            </div>
-
-            <div style={buttonGroupStyle}>
-              <button
-                  style={secondaryButtonStyle}
-                  onClick={handleClose}
-                  disabled={isLoading || submitProgress.isSubmitting}
-                  onMouseEnter={(e) => !isLoading && !submitProgress.isSubmitting && Object.assign(e.currentTarget.style, buttonHoverStyle)}
-                  onMouseLeave={(e) => !isLoading && !submitProgress.isSubmitting && Object.assign(e.currentTarget.style, secondaryButtonStyle)}
-              >
-                Cancel
-              </button>
-              <button
-                  style={{
-                    ...primaryButtonStyle,
-                    ...(canSave && !isLoading ? {} : primaryButtonDisabledStyle)
-                  }}
-                  onClick={handleCreateModel}
-                  disabled={!canSave || isLoading || submitProgress.isSubmitting}
-                  onMouseEnter={(e) => canSave && !isLoading && !submitProgress.isSubmitting && Object.assign(e.currentTarget.style, buttonHoverStyle)}
-                  onMouseLeave={(e) => canSave && !isLoading && !submitProgress.isSubmitting && Object.assign(e.currentTarget.style, primaryButtonStyle)}
-              >
-                {isLoading ? 'Creating...' : canSave ? 'Build Meta Model' : 'Upload Files First'}
-              </button>
-            </div>
+            <button
+              style={closeButtonStyle}
+              onClick={form.handleClose}
+              onMouseEnter={(e) => Object.assign(e.currentTarget.style, closeButtonHoverStyle)}
+              onMouseLeave={(e) => Object.assign(e.currentTarget.style, closeButtonStyle)}
+            >
+              ×
+            </button>
           </div>
+
+          {/* ── Scrollable body ── */}
+          <div className="cmm-scroll" style={{ flex: 1, overflowY: 'scroll', padding: '16px 24px 24px' }}>
+          {form.success && <div style={successMessageStyle}>{form.success}</div>}
+
+          <CreationModeToggle
+            mode={creationMode}
+            disabled={isLoading || submitProgress.isSubmitting || uploadProgress.ecore.isUploading}
+            onChange={form.switchCreationMode}
+          />
+
+          <div ref={form.fieldSectionRefs.name} style={formGroupStyle}>
+            <label htmlFor="model-name-input" style={labelStyle}>Name *</label>
+            <input
+              id="model-name-input"
+              type="text"
+              placeholder="Enter meta model name..."
+              value={form.formData.name}
+              onChange={(e) => {
+                form.setFormData({ ...form.formData, name: e.target.value });
+                if (form.fieldErrors.name) form.setFieldErrors(prev => ({ ...prev, name: '' }));
+              }}
+              aria-invalid={!!form.fieldErrors.name}
+              aria-describedby={form.fieldErrors.name ? 'model-name-error' : undefined}
+              style={{ ...inputStyle, ...(form.fieldErrors.name ? inputErrorOutlineStyle : {}) }}
+              onFocus={(e) => Object.assign(e.currentTarget.style, { ...inputFocusStyle, ...(form.fieldErrors.name ? inputErrorOutlineStyle : {}) })}
+              onBlur={(e) => Object.assign(e.currentTarget.style, { ...inputStyle, ...(form.fieldErrors.name ? inputErrorOutlineStyle : {}) })}
+            />
+            {form.fieldErrors.name && (
+              <div id="model-name-error" role="alert" style={fieldInlineErrorStyle}>{form.fieldErrors.name}</div>
+            )}
+          </div>
+
+          <div ref={form.fieldSectionRefs.version} style={formGroupStyle}>
+            <label htmlFor="model-version-input" style={labelStyle}>Version *</label>
+            <input
+              id="model-version-input"
+              type="text"
+              placeholder="1.0"
+              value={form.formData.version}
+              onChange={(e) => {
+                form.setFormData({ ...form.formData, version: e.target.value });
+                if (form.fieldErrors.version) form.setFieldErrors(prev => ({ ...prev, version: '' }));
+              }}
+              aria-invalid={!!form.fieldErrors.version}
+              aria-describedby={form.fieldErrors.version ? 'model-version-error' : 'model-version-hint'}
+              style={{ ...inputStyle, ...(form.fieldErrors.version ? inputErrorOutlineStyle : {}) }}
+              onFocus={(e) => Object.assign(e.currentTarget.style, { ...inputFocusStyle, ...(form.fieldErrors.version ? inputErrorOutlineStyle : {}) })}
+              onBlur={(e) => Object.assign(e.currentTarget.style, { ...inputStyle, ...(form.fieldErrors.version ? inputErrorOutlineStyle : {}) })}
+            />
+            <div id="model-version-hint" style={{ fontSize: 12, color: 'var(--v-text-muted)', marginTop: 4 }}>
+              Each version is stored as its own model. It cannot be changed after import.
+            </div>
+            {form.fieldErrors.version && (
+              <div id="model-version-error" role="alert" style={fieldInlineErrorStyle}>{form.fieldErrors.version}</div>
+            )}
+          </div>
+
+          <div ref={form.fieldSectionRefs.description} style={formGroupStyle}>
+            <label htmlFor="model-description-input" style={labelStyle}>Description *</label>
+            <textarea
+              id="model-description-input"
+              placeholder="Enter description..."
+              value={form.formData.description}
+              onChange={(e) => {
+                form.setFormData({ ...form.formData, description: e.target.value });
+                if (form.fieldErrors.description) form.setFieldErrors(prev => ({ ...prev, description: '' }));
+              }}
+              aria-invalid={!!form.fieldErrors.description}
+              aria-describedby={form.fieldErrors.description ? 'model-description-error' : undefined}
+              style={{ ...inputStyle, minHeight: '80px', resize: 'vertical', fontFamily: 'inherit', ...(form.fieldErrors.description ? inputErrorOutlineStyle : {}) }}
+              onFocus={(e) => Object.assign(e.currentTarget.style, { ...inputFocusStyle, ...(form.fieldErrors.description ? inputErrorOutlineStyle : {}) })}
+              onBlur={(e) => Object.assign(e.currentTarget.style, { ...inputStyle, minHeight: '80px', resize: 'vertical', fontFamily: 'inherit', ...(form.fieldErrors.description ? inputErrorOutlineStyle : {}) })}
+            />
+            {form.fieldErrors.description && (
+              <div id="model-description-error" role="alert" style={fieldInlineErrorStyle}>{form.fieldErrors.description}</div>
+            )}
+          </div>
+
+          <div ref={form.fieldSectionRefs.keywords} style={formGroupStyle}>
+            <label id="model-keywords-label" htmlFor="model-keywords-input" style={labelStyle}>Keywords *</label>
+            <KeywordTagsInput
+              id="model-keywords-input"
+              aria-labelledby="model-keywords-label"
+              keywords={form.formData.keywords}
+              onChange={(keywords) => {
+                form.setFormData({ ...form.formData, keywords });
+                if (form.fieldErrors.keywords) form.setFieldErrors(prev => ({ ...prev, keywords: '' }));
+              }}
+              placeholder="Type keywords and press Enter..."
+              style={{ ...inputStyle, ...(form.fieldErrors.keywords ? inputErrorOutlineStyle : {}) }}
+            />
+            {form.fieldErrors.keywords && (
+              <div id="model-keywords-error" role="alert" style={fieldInlineErrorStyle}>{form.fieldErrors.keywords}</div>
+            )}
+          </div>
+
+          <div ref={form.fieldSectionRefs.domain} style={formGroupStyle}>
+            <label htmlFor="model-domain-input" style={labelStyle}>Domain *</label>
+            <input
+              id="model-domain-input"
+              type="text"
+              placeholder="Enter domain"
+              value={form.formData.domain}
+              onChange={(e) => {
+                form.setFormData({ ...form.formData, domain: e.target.value });
+                if (form.fieldErrors.domain) form.setFieldErrors(prev => ({ ...prev, domain: '' }));
+              }}
+              aria-invalid={!!form.fieldErrors.domain}
+              aria-describedby={form.fieldErrors.domain ? 'model-domain-error' : undefined}
+              style={{ ...inputStyle, ...(form.fieldErrors.domain ? inputErrorOutlineStyle : {}) }}
+              onFocus={(e) => Object.assign(e.currentTarget.style, { ...inputFocusStyle, ...(form.fieldErrors.domain ? inputErrorOutlineStyle : {}) })}
+              onBlur={(e) => Object.assign(e.currentTarget.style, { ...inputStyle, ...(form.fieldErrors.domain ? inputErrorOutlineStyle : {}) })}
+            />
+            {form.fieldErrors.domain && (
+              <div id="model-domain-error" role="alert" style={fieldInlineErrorStyle}>{form.fieldErrors.domain}</div>
+            )}
+          </div>
+
+          {/* File Upload Section (replaced by a short note for an empty meta model) */}
+          <div ref={form.fieldSectionRefs.files} style={uploadSectionStyle}>
+            {creationMode === 'import' && <div style={uploadSectionTitleStyle}>Required ECore File</div>}
+
+            {form.fieldErrors.files && (
+              <div
+                role="alert"
+                style={metaModelImportErrorBannerStyle}
+              >
+                {form.fieldErrors.files}
+              </div>
+            )}
+
+            {creationMode === 'empty' && (
+              <div style={emptyEcoreNoteStyle}>
+                An empty <code>{toEPackageName(form.formData.name)}.ecore</code> file is created for
+                this meta model. You can add classes in the editor once it is in your library.
+              </div>
+            )}
+
+            {creationMode === 'import' && FILE_CARD_DISPLAY_CONFIGS.map(({ kind, accentColor, hoverBg, badgeBg, badgeBorder, badgeColor, defaultHeaderBg }) => {
+              const { ext, fileIdKey } = FILE_KIND_CONFIG[kind];
+              const fileId = uploadedFileIds[fileIdKey];
+              const { inputMode, url, urlFileName, localFileName } = form.perKind[kind];
+              return (
+                <React.Fragment key={kind}>
+                  <input
+                    ref={form.fileInputRefs[kind]}
+                    type="file"
+                    accept={ext}
+                    onChange={(e) => form.handleFileUpload(kind, e)}
+                    style={fileInputStyle}
+                  />
+                  <FileUploadCard
+                    ext={ext}
+                    accentColor={accentColor}
+                    hoverBg={hoverBg}
+                    badgeBg={badgeBg}
+                    badgeBorder={badgeBorder}
+                    badgeColor={badgeColor}
+                    headerBg={fileId > 0 ? 'var(--v-success-bg)' : defaultHeaderBg}
+                    fileId={fileId}
+                    inputMode={inputMode}
+                    uploadProgress={uploadProgress[kind]}
+                    url={url}
+                    urlFileName={urlFileName}
+                    urlPlaceholder={`https://raw.githubusercontent.com/…/model${ext}`}
+                    uploadError={form.perKind[kind].uploadError}
+                    localFileName={localFileName}
+                    onModeChange={(mode) => form.switchFileMode(kind, mode)}
+                    onFileInputClick={() => form.fileInputRefs[kind].current?.click()}
+                    onUrlChange={(newUrl) => form.changeFileUrl(kind, newUrl)}
+                    onUrlImport={() => form.handleUrlImport(kind)}
+                    onClearUpload={() => { void form.clearKindUpload(kind); }}
+                    removeDisabled={isLoading || submitProgress.isSubmitting || uploadProgress[kind].isUploading}
+                  />
+                </React.Fragment>
+              );
+            })}
+
+            {creationMode === 'import' && (
+              <div style={fileStatusStyle}>
+                {uploadedFileIds.ecoreFileId > 0
+                  ? (() => {
+                      const nEcore = getUploadedDisplayName(form.perKind.ecore);
+                      if (nEcore) return `✅ Ecore file is ready! (${nEcore})`;
+                      return '✅ Ecore file is ready!';
+                    })()
+                  : 'Upload or import an .ecore file to continue'}
+              </div>
+            )}
+          </div>
+
+          <FormActionButtons
+            isLoading={isLoading}
+            isSubmitting={submitProgress.isSubmitting}
+            canSave={!!form.canSave}
+            buttonText={form.getButtonText()}
+            onCancel={form.handleClose}
+            onSubmit={form.handleCreateModel}
+          />
+          </div>{/* end scrollable body */}
         </div>
-      </>
+      </dialog>
+    </>,
+    document.body
   );
 };

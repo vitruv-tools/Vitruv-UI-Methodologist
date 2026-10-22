@@ -1,0 +1,249 @@
+import React, { useRef } from 'react';
+import { OpenCanvasTab } from '../../types/canvasTab';
+import { ProjectPickerMenu } from './ProjectPickerMenu';
+
+const MAX_VISIBLE_TABS = 4;
+const TAB_GAP = 3;
+const TAB_WIDTH_NORMAL = 128;
+const TAB_WIDTH_COMPACT = 96;
+/** Keep tab borders inside the strip; overflow:hidden otherwise clips the right edge. */
+const TAB_STRIP_PAD_X = 3;
+const PILL_CHROME_WIDTH = 118;
+const TRACKPAD_SCROLL_HINT = 'Scroll with two fingers on your trackpad to see more tabs';
+
+const pillShellBase: React.CSSProperties = {
+  display: 'flex',
+  alignItems: 'center',
+  background: 'var(--v-chrome-bg)',
+  borderRadius: 6,
+  boxShadow: '0 2px 10px rgba(0,0,0,0.10), 0 0 0 1px rgba(0,0,0,0.06)',
+  height: 38,
+  padding: '0 5px',
+  gap: 4,
+  fontFamily: 'ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, sans-serif',
+  overflow: 'visible',
+  minWidth: 0,
+};
+
+interface CanvasProjectTabsProps {
+  tabs: OpenCanvasTab[];
+  activeInstanceId: string | null;
+  activeProjectId?: number;
+  openProjectIds: number[];
+  dirtyInstanceIds?: Set<string>;
+  loading?: boolean;
+  onActivate: (instanceId: string) => void;
+  onRequestClose: (instanceId: string) => void;
+  onSelectProject: (projectId: number, name: string, accessRole?: string) => void;
+}
+
+export const CanvasProjectTabs: React.FC<CanvasProjectTabsProps> = ({
+  tabs,
+  activeInstanceId,
+  activeProjectId,
+  openProjectIds,
+  dirtyInstanceIds = new Set(),
+  loading = false,
+  onActivate,
+  onRequestClose,
+  onSelectProject,
+}) => {
+  const scrollRef = useRef<HTMLDivElement>(null);
+
+  if (tabs.length === 0) return null;
+
+  const useCompactTabs = tabs.length > MAX_VISIBLE_TABS;
+  const visibleTabSlots = Math.min(tabs.length, MAX_VISIBLE_TABS);
+  const tabWidth = useCompactTabs ? TAB_WIDTH_COMPACT : TAB_WIDTH_NORMAL;
+  const scrollAreaMaxWidth =
+    visibleTabSlots * tabWidth
+    + Math.max(0, visibleTabSlots - 1) * TAB_GAP
+    + TAB_STRIP_PAD_X * 2;
+  const isScrollable = tabs.length > MAX_VISIBLE_TABS;
+
+  const handleTabStripWheel = (e: React.WheelEvent<HTMLDivElement>) => {
+    const el = scrollRef.current;
+    if (!el || el.scrollWidth <= el.clientWidth) return;
+    e.stopPropagation();
+  };
+
+  return (
+    <div
+      style={{
+        ...pillShellBase,
+        maxWidth: `min(${scrollAreaMaxWidth + PILL_CHROME_WIDTH}px, 90vw)`,
+      }}
+    >
+      <div
+        style={{
+          position: 'relative',
+          flex: '1 1 auto',
+          minWidth: 0,
+          maxWidth: scrollAreaMaxWidth,
+        }}
+      >
+        <div
+          ref={scrollRef}
+          className="canvas-project-tabs-scroll"
+          role="tablist"
+          aria-label="Open projects"
+          title={isScrollable ? TRACKPAD_SCROLL_HINT : undefined}
+          onWheel={handleTabStripWheel}
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: TAB_GAP,
+            overflowX: isScrollable ? 'scroll' : 'visible',
+            overflowY: 'visible',
+            padding: `0 ${TAB_STRIP_PAD_X}px`,
+            boxSizing: 'border-box',
+            minWidth: 0,
+            scrollbarWidth: 'thin',
+            overscrollBehavior: 'contain',
+            WebkitOverflowScrolling: 'touch',
+          }}
+        >
+          {tabs.map(tab => {
+            const isActive = tab.instanceId === activeInstanceId;
+            const isDirty = dirtyInstanceIds.has(tab.instanceId);
+            const label = tab.name || `Project #${tab.projectId}`;
+            const duplicateCount = tabs.filter(t => t.projectId === tab.projectId).length;
+
+            return (
+              <div
+                key={tab.instanceId}
+                role="tab"
+                tabIndex={0}
+                aria-selected={isActive}
+                onClick={() => onActivate(tab.instanceId)}
+                onKeyDown={e => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    onActivate(tab.instanceId);
+                  }
+                }}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: useCompactTabs ? 3 : 4,
+                  padding: useCompactTabs ? '0 7px' : '0 10px',
+                  width: tabWidth,
+                  boxSizing: 'border-box',
+                  height: useCompactTabs ? 26 : 28,
+                  borderRadius: 5,
+                  border: isActive ? '1px solid #049484' : '1px solid var(--v-border)',
+                  background: isActive ? 'var(--v-uml-primary-soft)' : 'var(--v-surface-hover)',
+                  cursor: 'pointer',
+                  flexShrink: 0,
+                  minWidth: 0,
+                }}
+                onMouseEnter={e => {
+                  if (!isActive) e.currentTarget.style.background = 'var(--v-chrome-hover)';
+                }}
+                onMouseLeave={e => {
+                  if (!isActive) e.currentTarget.style.background = 'var(--v-surface-hover)';
+                }}
+              >
+                {isDirty && (
+                  <span
+                    title="Unsaved changes"
+                    style={{
+                      width: useCompactTabs ? 4 : 5,
+                      height: useCompactTabs ? 4 : 5,
+                      borderRadius: '50%',
+                      background: '#f59e0b',
+                      flexShrink: 0,
+                    }}
+                  />
+                )}
+                <span
+                  style={{
+                    fontSize: useCompactTabs ? 11 : 12,
+                    fontWeight: isActive ? 700 : 500,
+                    color: isActive ? '#049484' : 'var(--v-text-muted)',
+                    whiteSpace: 'nowrap',
+                    flex: '1 1 auto',
+                    minWidth: 0,
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
+                  }}
+                  title={label}
+                >
+                  {label}
+                  {duplicateCount > 1 && (
+                      <span style={{ marginLeft: 3, fontSize: useCompactTabs ? 8 : 9, color: 'var(--v-text-faint)' }}>
+                      #{tab.projectId}
+                    </span>
+                  )}
+                </span>
+                <button
+                  type="button"
+                  aria-label={`Close ${label}`}
+                  onClick={e => {
+                    e.stopPropagation();
+                    onRequestClose(tab.instanceId);
+                  }}
+                  style={{
+                    border: 'none',
+                    background: 'transparent',
+                    color: 'var(--v-text-muted)',
+                    cursor: 'pointer',
+                    fontSize: useCompactTabs ? 12 : 13,
+                    lineHeight: 1,
+                    padding: 0,
+                    width: useCompactTabs ? 14 : 16,
+                    height: useCompactTabs ? 14 : 16,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    flexShrink: 0,
+                  }}
+                  onMouseEnter={e => { e.currentTarget.style.color = '#dc2626'; }}
+                  onMouseLeave={e => { e.currentTarget.style.color = 'var(--v-text-muted)'; }}
+                >
+                  ×
+                </button>
+              </div>
+            );
+          })}
+        </div>
+        {isScrollable && (
+          <div
+            aria-hidden
+            title={TRACKPAD_SCROLL_HINT}
+            style={{
+              position: 'absolute',
+              top: 0,
+              right: 0,
+              bottom: 0,
+              width: 14,
+              pointerEvents: 'none',
+              background: 'linear-gradient(to right, transparent, var(--v-chrome-bg))',
+            }}
+          />
+        )}
+      </div>
+      <style>{`
+        .canvas-project-tabs-scroll::-webkit-scrollbar { height: 5px; }
+        .canvas-project-tabs-scroll::-webkit-scrollbar-track { background: transparent; }
+        .canvas-project-tabs-scroll::-webkit-scrollbar-thumb {
+          background: #cbd5e1;
+          border-radius: 4px;
+        }
+        .canvas-project-tabs-scroll::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+      `}</style>
+
+      <div style={{ width: 1, height: 22, background: 'var(--v-chrome-divider)', flexShrink: 0 }} />
+
+      <ProjectPickerMenu
+        variant="compact"
+        currentProjectId={activeProjectId}
+        activeProjectId={activeProjectId}
+        openProjectIds={openProjectIds}
+        currentProjectName=""
+        disabled={loading}
+        onSelectProject={p => onSelectProject(p.id, p.name, p.role)}
+      />
+    </div>
+  );
+};

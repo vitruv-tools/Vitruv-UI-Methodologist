@@ -10,13 +10,16 @@ export function useTokenRefresh() {
       const accessExpiresAt = localStorage.getItem('auth.access_expires_at');
       if (!accessExpiresAt) return;
 
-      const expirationTime = parseInt(accessExpiresAt, 10);
+      const expirationTime = Number.parseInt(accessExpiresAt, 10);
       const now = Date.now();
       const timeUntilExpiry = expirationTime - now;
 
       // If token expires in less than 5 minutes, refresh immediately
       if (timeUntilExpiry < 5 * 60 * 1000) {
-        AuthService.refreshToken().catch(console.error);
+        AuthService.refreshToken().catch((error) => {
+          console.error('Initial token refresh failed:', error);
+          // Don't throw - this is a background operation
+        });
       }
 
       // Set up interval to check token every minute
@@ -24,7 +27,7 @@ export function useTokenRefresh() {
         const currentExpiresAt = localStorage.getItem('auth.access_expires_at');
         if (!currentExpiresAt) return;
 
-        const currentExpirationTime = parseInt(currentExpiresAt, 10);
+        const currentExpirationTime = Number.parseInt(currentExpiresAt, 10);
         const currentTime = Date.now();
         const currentTimeUntilExpiry = currentExpirationTime - currentTime;
 
@@ -70,7 +73,12 @@ export function useTokenRefresh() {
 
   // Function to get a valid token (refreshes if needed)
   const getValidToken = async () => {
-    return await AuthService.ensureValidToken();
+    try {
+      return await AuthService.ensureValidToken();
+    } catch (error) {
+      console.error('Failed to get valid token:', error);
+      throw error;
+    }
   };
 
   return {

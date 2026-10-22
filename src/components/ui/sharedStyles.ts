@@ -1,0 +1,165 @@
+import React from 'react';
+
+// Shared, reusable UI style objects to reduce duplication across components
+
+import { modalBackdropStyle, modalDialogShellStyle } from './modalUtils';
+
+/** Application-wide typography */
+export const APP_FONT =
+  'ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, sans-serif';
+
+/** Brand teal used for primary actions */
+export const BRAND_COLOR = '#049484';
+export const BRAND_COLOR_HOVER = '#037368';
+
+/** Destructive actions */
+export const DANGER_COLOR = '#dc2626';
+export const DANGER_COLOR_HOVER = '#b91c1c';
+
+/** Large modal panel (code editor, UML viewer, etc.) */
+export const largeModalPanelStyle: React.CSSProperties = {
+  backgroundColor: 'var(--v-surface)',
+  borderRadius: '12px',
+  width: '90%',
+  maxWidth: '1200px',
+  height: '85vh',
+  maxHeight: '900px',
+  display: 'flex',
+  flexDirection: 'column',
+  boxShadow: '0 24px 64px rgba(0, 0, 0, 0.22), 0 4px 16px rgba(0, 0, 0, 0.08)',
+  border: '1px solid var(--v-border)',
+  overflow: 'hidden',
+  position: 'relative',
+  zIndex: 1,
+  fontFamily: APP_FONT,
+};
+
+export const modalPanelHeaderStyle: React.CSSProperties = {
+  padding: '14px 20px',
+  borderBottom: '1px solid var(--v-border-subtle)',
+  background: 'var(--v-table-header)',
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'space-between',
+  flexShrink: 0,
+};
+
+export const modalPanelToolbarStyle: React.CSSProperties = {
+  padding: '10px 20px',
+  borderBottom: '1px solid var(--v-border-subtle)',
+  background: 'var(--v-surface)',
+  display: 'flex',
+  gap: '8px',
+  flexWrap: 'wrap',
+  alignItems: 'center',
+  flexShrink: 0,
+};
+
+export const modalPanelFooterStyle: React.CSSProperties = {
+  padding: '10px 20px',
+  borderTop: '1px solid var(--v-border-subtle)',
+  background: 'var(--v-surface-muted)',
+  display: 'flex',
+  justifyContent: 'space-between',
+  alignItems: 'center',
+  flexShrink: 0,
+};
+
+export const modalCloseButtonStyle: React.CSSProperties = {
+  border: 'none',
+  background: 'transparent',
+  cursor: 'pointer',
+  color: 'var(--v-text-muted)',
+  fontSize: '18px',
+  width: '32px',
+  height: '32px',
+  borderRadius: '8px',
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  transition: 'all 0.15s ease',
+  lineHeight: 1,
+  padding: 0,
+};
+
+export { MODAL_Z_INDEX } from './modalUtils';
+
+export const modalOverlayStyle: React.CSSProperties = {
+  ...modalDialogShellStyle,
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+};
+
+/** Backdrop layer used inside transparent <dialog> shells. */
+export const modalBackdropButtonStyle: React.CSSProperties = {
+  ...modalBackdropStyle,
+  position: 'absolute',
+};
+
+export const formGroupStyle: React.CSSProperties = { marginBottom: '20px' };
+
+export const labelStyle: React.CSSProperties = {
+  display: 'block',
+  fontSize: '13px',
+  fontWeight: 600,
+  color: 'var(--v-text-secondary)',
+  marginBottom: '6px',
+  fontFamily: 'ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, sans-serif',
+  letterSpacing: '0.01em',
+};
+
+export const inputStyle: React.CSSProperties = {
+  width: '100%',
+  padding: '10px 12px',
+  border: '1.5px solid var(--v-border)',
+  borderRadius: '8px',
+  fontSize: '14px',
+  boxSizing: 'border-box',
+  transition: 'all 0.2s ease',
+  background: 'var(--v-surface-muted)',
+  color: 'var(--v-text)',
+  fontFamily: 'ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, sans-serif',
+};
+
+export const errorMessageStyle: React.CSSProperties = {
+  padding: '10px 14px',
+  margin: '8px 0',
+  borderRadius: '8px',
+  fontSize: '13px',
+  fontWeight: '500',
+  backgroundColor: 'var(--v-danger-bg)',
+  color: 'var(--v-danger-text)',
+  border: '1px solid var(--v-danger-border)',
+};
+
+export const successMessageStyle: React.CSSProperties = {
+  padding: '10px 14px',
+  margin: '8px 0',
+  borderRadius: '8px',
+  fontSize: '13px',
+  fontWeight: '500',
+  backgroundColor: 'var(--v-success-bg)',
+  color: 'var(--v-success-text)',
+  border: '1px solid var(--v-success-border)',
+};
+
+export const fileInputStyle: React.CSSProperties = { display: 'none' };
+
+export const progressBarContainerStyle: React.CSSProperties = {
+  width: '100%',
+  height: '8px',
+  backgroundColor: 'var(--v-border)',
+  borderRadius: '4px',
+  overflow: 'hidden',
+};
+
+export const progressBarStyle: React.CSSProperties = {
+  height: '100%',
+  backgroundColor: '#049484',
+  borderRadius: '4px',
+  transition: 'width 0.3s ease',
+  width: '0%',
+};
+
+

@@ -1,721 +1,622 @@
-import React, { useState, useRef, useEffect, useCallback } from 'react';
-import { ConfirmDialog } from '../ui/ConfirmDialog';
+import React, { useState, useRef, useEffect } from 'react';
+import { createPortal } from 'react-dom';
+import { NodeProps } from 'reactflow';
+import { apiService } from '../../services/api';
+import { downloadTextAsFile } from '../../utils/downloadFile';
+import { ConnectionHandle } from './ConnectionHandle';
+import { HandlePosition } from './connectionHandleLayout';
+import { darken, metaModelDisplayColor } from '../../utils/metaModelColors';
 
-interface EcoreFileBoxProps {
+export { cardColor, darken, metaModelDisplayColor } from '../../utils/metaModelColors';
+
+// ── types ─────────────────────────────────────────────────────────────────────
+
+interface EcoreFileBoxData {
   fileName: string;
+  /** Project-facing label; fileName remains the technical canvas identifier. */
+  displayName?: string;
+  version?: string;
   fileContent: string;
-  position: { x: number; y: number };
   onExpand: (fileName: string, fileContent: string) => void;
   onSelect: (fileName: string) => void;
-  onPositionChange?: (id: string, newPosition: { x: number; y: number }) => void;
   onDelete?: (id: string) => void;
+  onRequestDelete?: (id: string) => void;
   onRename?: (id: string, newFileName: string) => void;
-  id: string;
-  isSelected?: boolean;
+  onShowDetails?: (modelObj: any, fileContent: string) => void;
+  metaModelId?: number;
+  ecoreFileId?: number;
+  genModelFileId?: number;
+  onConnectionStart?: (nodeId: string, handle: HandlePosition, tipScreenPos: { x: number; y: number }) => void;
   isExpanded?: boolean;
+  isConnectionActive?: boolean;
+  isReactionSource?: boolean;
+  isConstraintContext?: boolean;
+  isConstraintFilter?: boolean;
+  readOnly?: boolean;
   description?: string;
   keywords?: string;
   domain?: string;
   createdAt?: string;
 }
 
-const modalOverlayStyle: React.CSSProperties = {
-  position: 'fixed',
-  top: 0,
-  left: 0,
-  right: 0,
-  bottom: 0,
-  background: 'rgba(0, 0, 0, 0.5)',
-  display: 'flex',
-  alignItems: 'center',
-  justifyContent: 'center',
-  zIndex: 1000,
-  backdropFilter: 'blur(4px)',
+
+
+// ── helpers ───────────────────────────────────────────────────────────────────
+
+const removeExt = (name: string) => name.replace(/\.ecore$/i, '');
+
+/** Screen position of a connection-handle tip (matches ConnectionHandle). */
+export function handleTipFromRect(
+  rect: DOMRect,
+  handle: HandlePosition,
+): { x: number; y: number } {
+  switch (handle) {
+    case 'top':
+      return { x: rect.left + rect.width / 2, y: rect.top };
+    case 'bottom':
+      return { x: rect.left + rect.width / 2, y: rect.bottom };
+    case 'left':
+      return { x: rect.left, y: rect.top + rect.height / 2 };
+    case 'right':
+      return { x: rect.right, y: rect.top + rect.height / 2 };
+  }
+}
+
+// ── card visual helpers ───────────────────────────────────────────────────────
+
+function resolveCardBorder(bg: string, isReactionSource: boolean, isConstraintContext: boolean, isConstraintFilter: boolean, selected: boolean, isHovered: boolean, borderColor: string): string {
+  if (isReactionSource)    return '#1e293b';
+  if (isConstraintFilter)  return '#049484';
+  if (isConstraintContext) return '#049484';
+  if (selected)            return darken(bg, 45);
+  if (isHovered)           return darken(bg, 35);
+  return borderColor;
+}
+
+function resolveCardShadow(bg: string, isReactionSource: boolean, isConstraintContext: boolean, isConstraintFilter: boolean, selected: boolean, isHovered: boolean): string {
+  if (isReactionSource)    return '0 0 0 4px #1e293b33, 0 8px 24px rgba(0,0,0,0.15)';
+  if (isConstraintFilter)  return '0 0 0 3px #04948488, 0 8px 28px rgba(4,148,132,0.28)';
+  if (isConstraintContext) return '0 0 0 3px #04948455, 0 8px 24px rgba(4,148,132,0.18)';
+  if (selected)            return `0 0 0 3px ${darken(bg, 45)}55, 0 8px 24px rgba(0,0,0,0.15)`;
+  if (isHovered)           return '0 8px 24px rgba(0,0,0,0.12)';
+  return '0 3px 10px rgba(0,0,0,0.08)';
+}
+
+
+type ShowDetailsModelContext = {
+  keywords?: string;
+  metaModelId?: number;
+  fileName: string;
+  version?: string;
+  description?: string;
+  domain?: string;
+  createdAt?: string;
+  fileContent: string;
 };
 
-const modalContentStyle: React.CSSProperties = {
-  background: 'linear-gradient(145deg, #ffffff 0%, #f8f9fa 100%)',
-  border: '2px solid #dee2e6',
-  borderRadius: '16px',
-  padding: '32px',
-  maxWidth: '600px',
-  width: '90%',
-  maxHeight: '80vh',
-  overflow: 'auto',
-  boxShadow: '0 20px 60px rgba(0,0,0,0.15), 0 8px 32px rgba(0,0,0,0.1)',
-  position: 'relative',
-  fontFamily: '"Segoe UI", "Roboto", "Helvetica Neue", Arial, sans-serif',
-};
+function buildShowDetailsHandler(
+  onShowDetails: ((modelObj: any, fileContent: string) => void) | undefined,
+  setShowMenu: (v: boolean) => void,
+  context: ShowDetailsModelContext,
+): (() => void) | undefined {
+  if (!onShowDetails) return undefined;
+  return () => {
+    setShowMenu(false);
+    const kwArray = context.keywords
+      ? context.keywords.split(/[,;]+/).map((s: string) => s.trim()).filter(Boolean)
+      : [];
+    onShowDetails({
+      id: context.metaModelId,
+      name: removeExt(context.fileName),
+      version: context.version,
+      description: context.description || '',
+      domain: context.domain || '',
+      keyword: kwArray,
+      createdAt: context.createdAt,
+    }, context.fileContent);
+  };
+}
 
-const modalHeaderStyle: React.CSSProperties = {
-  display: 'flex',
-  justifyContent: 'space-between',
-  alignItems: 'center',
-  marginBottom: '24px',
-  paddingBottom: '16px',
-  borderBottom: '2px solid #e9ecef',
-};
+// ── EcoreFileBox ──────────────────────────────────────────────────────────────
 
-const modalTitleStyle: React.CSSProperties = {
-  fontSize: '24px',
-  fontWeight: '700',
-  color: '#212529',
-  fontFamily: '"Georgia", "Times New Roman", serif',
-  margin: 0,
-};
-
-const closeButtonStyle: React.CSSProperties = {
-  background: 'linear-gradient(145deg, #6c757d 0%, #495057 100%)',
-  color: 'white',
-  border: 'none',
-  borderRadius: '8px',
-  width: '32px',
-  height: '32px',
-  cursor: 'pointer',
-  display: 'flex',
-  alignItems: 'center',
-  justifyContent: 'center',
-  fontSize: '16px',
-  fontWeight: '600',
-  transition: 'all 0.2s ease',
-  boxShadow: '0 4px 12px rgba(108, 117, 125, 0.3)',
-};
-
-const closeButtonHoverStyle: React.CSSProperties = {
-  background: 'linear-gradient(145deg, #495057 0%, #343a40 100%)',
-  transform: 'scale(1.05)',
-  boxShadow: '0 6px 16px rgba(108, 117, 125, 0.4)',
-};
-
-const descriptionContentStyle: React.CSSProperties = {
-  fontSize: '16px',
-  lineHeight: '1.8',
-  color: '#495057',
-  fontFamily: '"Georgia", "Times New Roman", serif',
-  textAlign: 'justify',
-  whiteSpace: 'pre-wrap',
-  wordBreak: 'break-word',
-};
-
-const modalFooterStyle: React.CSSProperties = {
-  marginTop: '24px',
-  paddingTop: '16px',
-  borderTop: '2px solid #e9ecef',
-  display: 'flex',
-  justifyContent: 'space-between',
-  alignItems: 'center',
-  fontSize: '14px',
-  color: '#6c757d',
-  fontStyle: 'italic',
-};
-
-const boxStyle: React.CSSProperties = {
-  position: 'absolute',
-  background: 'linear-gradient(145deg, #ffffff 0%, #f8f9fa 100%)',
-  border: '2px solid #dee2e6',
-  borderRadius: '12px',
-  padding: '20px 24px',
-  width: '280px',
-  height: '180px',
-  cursor: 'pointer',
-  boxShadow: '0 4px 16px rgba(0,0,0,0.08), 0 2px 8px rgba(0,0,0,0.04)',
-  transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
-  zIndex: 100,
-  userSelect: 'none',
-  fontFamily: '"Segoe UI", "Roboto", "Helvetica Neue", Arial, sans-serif',
-  display: 'flex',
-  flexDirection: 'column',
-  justifyContent: 'space-between',
-  boxSizing: 'border-box',
-};
-
-const boxHoverStyle: React.CSSProperties = {
-  border: '2px solid #6c757d',
-  boxShadow: '0 8px 32px rgba(108, 117, 125, 0.15)',
-  transform: 'translateY(-2px) scale(1.01)',
-  background: 'linear-gradient(145deg, #ffffff 0%, #f1f3f4 100%)',
-};
-
-const selectedBoxStyle: React.CSSProperties = {
-  border: '2px solid #495057',
-  boxShadow: '0 8px 32px rgba(73, 80, 87, 0.2)',
-  transform: 'scale(1.02)',
-  background: 'linear-gradient(145deg, #ffffff 0%, #e9ecef 100%)',
-};
-
-const draggingBoxStyle: React.CSSProperties = {
-  cursor: 'grabbing',
-  opacity: 0.95,
-  transform: 'scale(1.03) rotate(1deg)',
-  zIndex: 200,
-  boxShadow: '0 16px 48px rgba(0,0,0,0.15)',
-  border: '2px solid #495057',
-};
-
-const fileNameStyle: React.CSSProperties = {
-  fontSize: '16px',
-  fontWeight: '700',
-  color: '#212529',
-  textAlign: 'center',
-  wordBreak: 'break-word',
-  lineHeight: '1.4',
-  fontFamily: '"Georgia", "Times New Roman", serif',
-  marginBottom: '8px',
-};
-
-// ... existing code ...
-
-const tooltipStyle: React.CSSProperties = {
-  position: 'absolute',
-  bottom: 'calc(100% + 12px)',
-  left: '50%',
-  transform: 'translateX(-50%)',
-  background: '#495057',
-  color: 'white',
-  padding: '16px',
-  borderRadius: '10px',
-  fontSize: '12px',
-  maxWidth: '320px',
-  wordBreak: 'break-word',
-  boxShadow: '0 8px 32px rgba(73, 80, 87, 0.3)',
-  zIndex: 1000,
-  pointerEvents: 'none',
-  opacity: 0,
-  transition: 'opacity 0.3s ease',
-  border: '1px solid #6c757d',
-  fontFamily: '"Segoe UI", "Roboto", sans-serif',
-};
-
-const tooltipArrowStyle: React.CSSProperties = {
-  position: 'absolute',
-  top: '100%',
-  left: '50%',
-  transform: 'translateX(-50%)',
-  width: 0,
-  height: 0,
-  borderLeft: '8px solid transparent',
-  borderRight: '8px solid transparent',
-  borderTop: '8px solid #495057',
-};
-
-const deleteButtonStyle: React.CSSProperties = {
-  position: 'absolute',
-  top: '-8px',
-  left: '-8px',
-  background: 'linear-gradient(145deg, #dc3545 0%, #c82333 100%)',
-  color: 'white',
-  borderRadius: '6px',
-  width: 'auto',
-  height: '24px',
-  fontSize: '10px',
-  cursor: 'pointer',
-  display: 'flex',
-  alignItems: 'center',
-  justifyContent: 'center',
-  boxShadow: '0 2px 8px rgba(220, 53, 69, 0.3)',
-  transition: 'all 0.2s ease',
-  border: '1px solid #ffffff',
-  fontFamily: '"Segoe UI", "Roboto", sans-serif',
-  fontWeight: '600',
-  padding: '0 8px',
-  textTransform: 'uppercase',
-  letterSpacing: '0.5px',
-};
-
-const deleteButtonHoverStyle: React.CSSProperties = {
-  background: 'linear-gradient(145deg, #c82333 0%, #a71e2a 100%)',
-  transform: 'scale(1.05)',
-  boxShadow: '0 4px 12px rgba(220, 53, 69, 0.4)',
-};
-
-const descriptionStyle: React.CSSProperties = {
-  fontSize: '11px',
-  color: '#6c757d',
-  textAlign: 'center',
-  marginTop: '6px',
-  fontStyle: 'italic',
-  lineHeight: '1.4',
-  fontFamily: '"Georgia", "Times New Roman", serif',
-  wordBreak: 'break-word',
-  overflowWrap: 'break-word',
-};
-
-export const EcoreFileBox: React.FC<EcoreFileBoxProps> = ({
-  fileName,
-  fileContent,
-  position,
-  onExpand,
-  onSelect,
-  onPositionChange,
-  onDelete,
-  onRename,
-  id,
-  isSelected = false,
-  isExpanded = false,
-  description,
-  keywords,
-  domain,
-  createdAt,
+export const EcoreFileBox: React.FC<NodeProps<EcoreFileBoxData>> = ({
+  id, data, selected = false, dragging = false,
 }) => {
   const [isHovered, setIsHovered] = useState(false);
-  const [isDragging, setIsDragging] = useState(false);
-  const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
-  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
-  const [isEditing, setIsEditing] = useState(false);
-  const [editName, setEditName] = useState(fileName);
-  const [showDescriptionModal, setShowDescriptionModal] = useState(false);
-  const [showKeywordsModal, setShowKeywordsModal] = useState(false);
+  const [showMenu, setShowMenu] = useState(false);
+  const [menuPos, setMenuPos] = useState({ x: 0, y: 0 });
+  const [renaming, setRenaming] = useState(false);
+  const [renameVal, setRenameVal] = useState('');
+  const [downloadingFile, setDownloadingFile] = useState<'ecore' | 'genmodel' | null>(null);
+
+  const {
+    fileName, fileContent, onExpand, onSelect, onRequestDelete, onRename,
+    onConnectionStart, isConnectionActive = false,
+    description, keywords, createdAt, domain, onShowDetails, metaModelId, displayName, version,
+    ecoreFileId, genModelFileId,
+    isReactionSource = false,
+    isConstraintContext = false,
+    isConstraintFilter = false,
+    readOnly = false,
+  } = data;
+
   const boxRef = useRef<HTMLDivElement>(null);
-  const inputRef = useRef<HTMLInputElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
+  const skipBlurSaveRef = useRef(false);
 
-  const handleShowMoreClick = (e: React.MouseEvent) => {
-    e.stopPropagation();
-    setShowDescriptionModal(true);
+  // Close menu on any left-click outside
+  useEffect(() => {
+    if (!showMenu) return;
+    const handler = (e: MouseEvent) => {
+      if (
+        menuRef.current && !menuRef.current.contains(e.target as HTMLElement) &&
+        boxRef.current && !boxRef.current.contains(e.target as HTMLElement)
+      ) {
+        setShowMenu(false);
+      }
+    };
+    globalThis.addEventListener('mousedown', handler, true);
+    return () => globalThis.removeEventListener('mousedown', handler, true);
+  }, [showMenu]);
+
+  // Close context menu when this box is dragged
+  useEffect(() => {
+    if (dragging && showMenu) setShowMenu(false);
+  }, [dragging, showMenu]);
+
+  const startConnectionFromHandle = (handle: HandlePosition) => {
+    if (!boxRef.current || !onConnectionStart) return;
+    const tip = handleTipFromRect(boxRef.current.getBoundingClientRect(), handle);
+    onConnectionStart(id, handle, tip);
   };
 
-  const handleShowMoreKeywordsClick = (e: React.MouseEvent) => {
-    e.stopPropagation();
-    setShowKeywordsModal(true);
-  };
+  const bg          = metaModelDisplayColor(domain, fileName);
+  const borderColor = darken(bg, 25);
+  const cardBorder  = resolveCardBorder(bg, isReactionSource, isConstraintContext, isConstraintFilter, selected, isHovered, borderColor);
+  const cardShadow  = resolveCardShadow(bg, isReactionSource, isConstraintContext, isConstraintFilter, selected, isHovered);
+  let cardTransform = 'scale(1)';
+  if (selected) cardTransform = 'scale(1.04)';
+  else if (isHovered) cardTransform = 'scale(1.02)';
+  const handleShowDetails = buildShowDetailsHandler(
+    onShowDetails, setShowMenu, { keywords, metaModelId, fileName, version, description, domain, createdAt, fileContent },
+  );
 
-  const handleCloseModal = () => {
-    setShowDescriptionModal(false);
-  };
-
-  const handleCloseKeywordsModal = () => {
-    setShowKeywordsModal(false);
-  };
-
-  const handleModalOverlayClick = (e: React.MouseEvent) => {
-    if (e.target === e.currentTarget) {
-      handleCloseModal();
-    }
-  };
-
-  const handleKeywordsModalOverlayClick = (e: React.MouseEvent) => {
-    if (e.target === e.currentTarget) {
-      handleCloseKeywordsModal();
-    }
-  };
-
-  const truncateDescription = (description: string, maxLength: number = 70) => {
-    if (description.length <= maxLength) {
-      return { text: description, isTruncated: false };
-    }
-    
-    const truncatedText = description.substring(0, maxLength) + '...';
-    return { text: truncatedText, isTruncated: true };
-  };
-
-  const truncateKeywords = (keywords: string, maxLength: number = 40) => {
-    if (keywords.length <= maxLength) {
-      return { text: keywords, isTruncated: false };
-    }
-    
-    const truncatedText = keywords.substring(0, maxLength) + '...';
-    return { text: truncatedText, isTruncated: true };
-  };
-
-  const handleClick = (e: React.MouseEvent) => {
-    e.stopPropagation();
-    onSelect(fileName);
-  };
-
-  const handleDoubleClick = (e: React.MouseEvent) => {
-    e.stopPropagation();
+  const handleClick = (e: React.MouseEvent) => { e.stopPropagation(); onSelect(fileName); };
+  const openUml = (e?: React.SyntheticEvent) => {
+    e?.stopPropagation();
     onExpand(fileName, fileContent);
   };
-
-  const handleDeleteClick = (e: React.MouseEvent) => {
-    e.stopPropagation();
-    setShowDeleteConfirm(true);
-  };
-
-  const confirmDelete = () => {
-    if (onDelete) {
-      onDelete(id);
+  const handleDoubleClick = (e: React.MouseEvent) => { e.stopPropagation(); openUml(); };
+  const openContextMenu = () => {
+    if (boxRef.current) {
+      const rect = boxRef.current.getBoundingClientRect();
+      setMenuPos({ x: rect.right + 8, y: rect.top + rect.height / 2 });
     }
-    setShowDeleteConfirm(false);
+    setShowMenu(v => !v);
   };
-
-  const cancelDelete = () => {
-    setShowDeleteConfirm(false);
-  };
-
-  const handleMouseDown = (e: React.MouseEvent) => {
-    if (e.button !== 0) return;
-    
+  const handleContextMenu = (e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
-    
-    const rect = boxRef.current?.getBoundingClientRect();
-    if (rect) {
-      setDragOffset({
-        x: e.clientX - rect.left,
-        y: e.clientY - rect.top,
-      });
-      
-      setTimeout(() => {
-        setIsDragging(true);
-      }, 50);
-    }
+    openContextMenu();
   };
-
-  const handleMouseMove = useCallback((e: MouseEvent) => {
-    if (!isDragging || !onPositionChange) return;
-    
-    e.preventDefault();
-    
-    const newX = e.clientX - dragOffset.x;
-    const newY = e.clientY - dragOffset.y;
-    
-    const minX = 20;
-    const minY = 20;
-    const maxX = window.innerWidth - 300;
-    const maxY = window.innerHeight - 200;
-    
-    const boundedX = Math.max(minX, Math.min(maxX, newX));
-    const boundedY = Math.max(minY, Math.min(maxY, newY));
-    
-    const currentPosition = { x: boundedX, y: boundedY };
-    onPositionChange(id, currentPosition);
-  }, [isDragging, onPositionChange, dragOffset, id]);
-
-  const handleMouseUp = useCallback(() => {
-    if (isDragging) {
-      setIsDragging(false);
-      document.body.style.cursor = '';
-      document.body.style.userSelect = '';
-    }
-  }, [isDragging]);
-
-  useEffect(() => {
-    if (isDragging) {
-      document.addEventListener('mousemove', handleMouseMove, { passive: false });
-      document.addEventListener('mouseup', handleMouseUp);
-      
-      document.body.style.cursor = 'grabbing';
-      document.body.style.userSelect = 'none';
-      
-      return () => {
-        document.removeEventListener('mousemove', handleMouseMove);
-        document.removeEventListener('mouseup', handleMouseUp);
-        document.body.style.cursor = '';
-        document.body.style.userSelect = '';
-      };
-    }
-  }, [isDragging, handleMouseMove, handleMouseUp]);
-
-  const handleFileNameDoubleClick = (e: React.MouseEvent) => {
+  const handleCardKeyDown = (e: React.KeyboardEvent) => {
     e.stopPropagation();
-    setIsEditing(true);
-    setEditName(fileName);
-    setTimeout(() => {
-      inputRef.current?.focus();
-      inputRef.current?.select();
-    }, 0);
-  };
-
-  const handleEditKeyDown = (e: React.KeyboardEvent) => {
+    if (renaming) return;
     if (e.key === 'Enter') {
-      handleSaveEdit();
-    } else if (e.key === 'Escape') {
-      setIsEditing(false);
-      setEditName(fileName);
+      e.preventDefault();
+      openUml();
+    } else if (e.key === ' ') {
+      e.preventDefault();
+      onSelect(fileName);
+    } else if (e.key === 'F10' && e.shiftKey) {
+      e.preventDefault();
+      openContextMenu();
     }
   };
 
-  const handleSaveEdit = () => {
-    if (editName.trim() && editName !== fileName && onRename) {
-      onRename(id, editName.trim());
+  const startRename = () => {
+    if (readOnly) return;
+    skipBlurSaveRef.current = false;
+    setRenameVal(removeExt(fileName));
+    setRenaming(true);
+  };
+  const saveRename = () => {
+    const trimmed = renameVal.trim();
+    if (trimmed) onRename?.(id, `${trimmed}.ecore`);
+    setRenaming(false);
+  };
+  const cancelRename = () => {
+    skipBlurSaveRef.current = true;
+    setRenaming(false);
+  };
+  const handleRenameKeyDown = (e: React.KeyboardEvent) => {
+    e.stopPropagation();
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      saveRename();
+      return;
     }
-    setIsEditing(false);
+    if (e.key === 'Escape') {
+      e.preventDefault();
+      cancelRename();
+    }
+  };
+  const handleRenameBlur = () => {
+    if (skipBlurSaveRef.current) {
+      skipBlurSaveRef.current = false;
+      return;
+    }
+    saveRename();
+  };
+  const stopRenamePointer = (e: React.SyntheticEvent) => {
+    e.stopPropagation();
   };
 
-  const handleEditBlur = () => {
-    handleSaveEdit();
-  };
+  const baseName = displayName || removeExt(fileName);
+  const cardAriaLabel = `${baseName} metamodel. Enter to open, Space to select, Shift+F10 for menu.`;
 
-  // ... existing code ...
-
-    const formatDate = (dateString: string) => {
+  const downloadMetaModelFile = async (
+    kind: 'ecore' | 'genmodel',
+    fileId: number | undefined,
+    extension: '.ecore' | '.genmodel',
+  ) => {
+    if (!fileId) return;
+    setDownloadingFile(kind);
     try {
-      const date = new Date(dateString);
-      return date.toLocaleDateString();
-    } catch {
-      return 'Unknown Date';
+      const content = await apiService.getFile(fileId);
+      downloadTextAsFile(content, `${baseName}${extension}`);
+    } catch (err) {
+      console.error(`Failed to download ${extension}:`, err);
+    } finally {
+      setDownloadingFile(null);
+      setShowMenu(false);
     }
   };
+
+  const connectionHandles = (['top', 'bottom', 'left', 'right'] as const).map(pos => (
+    <ConnectionHandle
+      key={pos}
+      position={pos}
+      isVisible={!readOnly && (selected || isConnectionActive)}
+      onConnectionStart={readOnly ? undefined : (p, tip) => onConnectionStart?.(id, p, tip)}
+      offsetIndex={0}
+      totalHandles={1}
+    />
+  ));
 
   return (
     <>
       <div
         ref={boxRef}
-        style={{
-          ...boxStyle,
-          ...(isSelected ? selectedBoxStyle : {}),
-          ...(isDragging ? draggingBoxStyle : {}),
-          ...(isHovered ? boxHoverStyle : {}),
-          left: position.x,
-          top: position.y,
-          transform: isSelected && !isDragging ? 'scale(1.02)' : 'scale(1)',
-          display: isExpanded ? 'none' : 'block',
-        }}
-        onClick={handleClick}
-        onDoubleClick={handleDoubleClick}
-        onMouseDown={handleMouseDown}
-        onMouseEnter={() => setIsHovered(true)}
-        onMouseLeave={() => setIsHovered(false)}
-        title={`Click to select, double-click to expand\nDrag to move\n${fileName}`}
+        style={{ position: 'relative', display: 'inline-block' }}
       >
-                           <div style={fileNameStyle}>
-            {isEditing ? (
-              <input
-                type="text"
-                value={editName}
-                onChange={(e) => setEditName(e.target.value)}
-                onKeyDown={handleEditKeyDown}
-                ref={inputRef}
-                style={{
-                  width: '100%',
-                  boxSizing: 'border-box',
-                  border: '2px solid #6c757d',
-                  borderRadius: '6px',
-                  outline: 'none',
-                  fontSize: '16px',
-                  fontWeight: '700',
-                  color: '#212529',
-                  textAlign: 'center',
-                  wordBreak: 'break-word',
-                  lineHeight: '1.4',
-                  padding: '8px 12px',
-                  background: '#ffffff',
-                  fontFamily: '"Georgia", "Times New Roman", serif',
-                  transition: 'border-color 0.2s ease',
-                }}
-                onFocus={(e) => {
-                  e.target.style.borderColor = '#495057';
-                }}
-                onBlur={(e) => {
-                  e.target.style.borderColor = '#6c757d';
-                  handleEditBlur();
-                }}
-              />
-            ) : (
-              <span onDoubleClick={handleFileNameDoubleClick}>
-                {fileName.replace(/\.ecore$/i, '')}
-              </span>
-            )}
-          </div>
-          
-          {description && (
-            <div style={descriptionStyle}>
-              <span style={{ fontWeight: '600', color: '#495057' }}>Description: </span>
-              {(() => {
-                const { text, isTruncated } = truncateDescription(description);
-                
-                return (
-                  <>
-                    {text}
-                    {isTruncated && (
-                      <button
-                        onClick={handleShowMoreClick}
-                        style={{
-                          background: 'none',
-                          border: 'none',
-                          color: '#3498db',
-                          fontSize: '10px',
-                          cursor: 'pointer',
-                          marginLeft: '6px',
-                          textDecoration: 'underline',
-                          fontFamily: '"Georgia", "Times New Roman", serif',
-                          padding: '0',
-                          lineHeight: '1',
-                        }}
-                      >
-                        See more
-                      </button>
-                    )}
-                  </>
-                );
-              })()}
-            </div>
-          )}
-          
-          {keywords && (
-            <div style={{
-              fontSize: '10px',
-              color: '#495057',
-              textAlign: 'center',
-              marginTop: '4px',
-              fontStyle: 'italic',
-              lineHeight: '1.3',
-              fontFamily: '"Georgia", "Times New Roman", serif',
-              fontWeight: '500',
-              wordBreak: 'break-word',
-              overflowWrap: 'break-word',
-            }}>
-              <span style={{ fontWeight: '600', color: '#495057' }}>Keywords: </span>
-              {(() => {
-                const { text, isTruncated } = truncateKeywords(keywords);
-                
-                return (
-                  <>
-                    {text}
-                    {isTruncated && (
-                      <button
-                        onClick={handleShowMoreKeywordsClick}
-                        style={{
-                          background: 'none',
-                          border: 'none',
-                          color: '#3498db',
-                          fontSize: '10px',
-                          cursor: 'pointer',
-                          marginLeft: '6px',
-                          textDecoration: 'underline',
-                          fontFamily: '"Georgia", "Times New Roman", serif',
-                          padding: '0',
-                          lineHeight: '1',
-                        }}
-                      >
-                        See more
-                      </button>
-                    )}
-                  </>
-                );
-              })()}
-            </div>
-          )}
-         
-         {createdAt && (
-           <div style={{
-             fontSize: '11px',
-             color: '#6c757d',
-             textAlign: 'center',
-             fontStyle: 'italic',
-             lineHeight: '1.4',
-             fontFamily: '"Georgia", "Times New Roman", serif',
-           }}>
-             Created: {formatDate(createdAt)}
-           </div>
-         )}
-        <button
-          style={{
-            ...deleteButtonStyle,
-            ...(isHovered ? deleteButtonHoverStyle : {}),
-          }}
-          onClick={handleDeleteClick}
-          title="Delete file"
+        {/* ── Card ── */}
+        <div
+          role="button"
+          tabIndex={0}
+          aria-label={cardAriaLabel}
+          aria-pressed={selected}
+          onClick={handleClick}
+          onDoubleClick={handleDoubleClick}
+          onContextMenu={handleContextMenu}
+          onKeyDown={handleCardKeyDown}
           onMouseEnter={() => setIsHovered(true)}
           onMouseLeave={() => setIsHovered(false)}
+          style={{
+            width: 118,
+            height: 126,
+            borderRadius: 16,
+            background: bg,
+            border: `2px solid ${cardBorder}`,
+            boxShadow: cardShadow,
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: 10,
+            cursor: 'pointer',
+            userSelect: 'none',
+            transition: 'all 0.15s',
+            transform: cardTransform,
+            position: 'relative',
+          }}
         >
-          Delete
-        </button>
+          {connectionHandles}
+
+          {/* 3D box icon */}
+          <CardIcon />
+
+          {/* Model name */}
+          {renaming ? (
+            <input
+              autoFocus
+              className="nodrag nopan"
+              value={renameVal}
+              onChange={e => setRenameVal(e.target.value)}
+              onKeyDown={handleRenameKeyDown}
+              onKeyUp={stopRenamePointer}
+              onBlur={handleRenameBlur}
+              onClick={stopRenamePointer}
+              onDoubleClick={stopRenamePointer}
+              onMouseDown={stopRenamePointer}
+              onPointerDown={stopRenamePointer}
+              aria-label="Rename metamodel"
+              style={{
+                width: 110, textAlign: 'center', fontSize: 12, fontWeight: 700,
+                border: '1.5px solid rgba(0,0,0,0.3)', borderRadius: 6,
+                background: 'rgba(255,255,255,0.7)', padding: '2px 6px', outline: 'none',
+                userSelect: 'text',
+              }}
+            />
+          ) : (
+            <span style={{
+              fontSize: 12,
+              fontWeight: 700,
+              color: 'rgba(0,0,0,0.72)',
+              textAlign: 'center',
+              padding: '0 10px',
+              wordBreak: 'break-word',
+              lineHeight: 1.3,
+              maxWidth: '100%',
+            }}>
+              {baseName}
+              {version?.trim() && (
+                <span style={{ display: 'block', fontSize: 10, fontWeight: 600, opacity: 0.7 }}>
+                  {version.trim()}
+                </span>
+              )}
+            </span>
+          )}
+
+          {readOnly && (
+            <button
+              type="button"
+              title="Open UML diagram"
+              onClick={openUml}
+              style={{
+                position: 'absolute',
+                bottom: 8,
+                left: '50%',
+                transform: 'translateX(-50%)',
+                padding: '3px 8px',
+                borderRadius: 8,
+                border: '1px solid rgba(0,0,0,0.15)',
+                background: 'rgba(255,255,255,0.85)',
+                color: 'rgba(0,0,0,0.75)',
+                fontSize: 10,
+                fontWeight: 700,
+                cursor: 'pointer',
+                lineHeight: 1.2,
+                whiteSpace: 'nowrap',
+              }}
+            >
+              Open UML
+            </button>
+          )}
+        </div>
+
       </div>
 
-      <ConfirmDialog
-        isOpen={showDeleteConfirm}
-        title="Delete ECORE File from Workspace"
-        message={`Do you want to delete "${fileName}" from workspace?`}
-        confirmText="Delete"
-        cancelText="Cancel"
-        onConfirm={confirmDelete}
-        onCancel={cancelDelete}
-      />
+      {/* ── Context menu portal (always on top of everything) ── */}
+      {showMenu && !renaming && createPortal(
+        <ContextMenu
+          menuRef={menuRef}
+          pos={menuPos}
+          fileName={fileName}
+          onClose={() => setShowMenu(false)}
+          downloadingFile={downloadingFile}
+          canDownloadEcore={!!ecoreFileId}
+          canDownloadGenModel={!!genModelFileId}
+          onDownloadEcore={() => downloadMetaModelFile('ecore', ecoreFileId, '.ecore')}
+          onDownloadGenModel={() => downloadMetaModelFile('genmodel', genModelFileId, '.genmodel')}
+          onOpenUML={() => { setShowMenu(false); openUml(); }}
+          onConnect={() => {
+            setShowMenu(false);
+            startConnectionFromHandle('right');
+          }}
+          onRename={() => { setShowMenu(false); startRename(); }}
+          onDelete={() => { setShowMenu(false); onRequestDelete?.(id); }}
+          onShowDetails={handleShowDetails}
+          readOnly={readOnly}
+        />,
+        document.body,
+      )}
 
-      
-       {isHovered && (
-         <div style={{
-           ...tooltipStyle,
-           opacity: 1,
-         }}>
-           <div style={{ fontWeight: '700', marginBottom: '10px', fontSize: '13px' }}>
-             {fileName}
-           </div>
-           <div style={{ 
-             fontSize: '11px', 
-             lineHeight: '1.5',
-             maxHeight: '120px',
-             overflow: 'hidden',
-             textOverflow: 'ellipsis',
-             color: '#e9ecef'
-           }}>
-             {fileContent.length > 200 
-               ? `${fileContent.substring(0, 200)}...` 
-               : fileContent
-             }
-           </div>
-           <div style={tooltipArrowStyle} />
-         </div>
-       )}
+      {/* ── Dialogs (legacy simple modals kept for fallback) ── */}
+    </>
+  );
+};
 
-       {showDescriptionModal && (
-         <div style={modalOverlayStyle} onClick={handleModalOverlayClick}>
-           <div style={modalContentStyle}>
-             <div style={modalHeaderStyle}>
-               <h2 style={modalTitleStyle}>
-                 {fileName.replace(/\.ecore$/i, '')} - Description
-               </h2>
-               <button
-                 style={closeButtonStyle}
-                 onClick={handleCloseModal}
-                 onMouseEnter={(e) => {
-                   Object.assign(e.currentTarget.style, closeButtonHoverStyle);
-                 }}
-                 onMouseLeave={(e) => {
-                   Object.assign(e.currentTarget.style, closeButtonStyle);
-                 }}
-                 title="Close"
-               >
-                 ×
-               </button>
-             </div>
-             
-             <div style={descriptionContentStyle}>
-               {description}
-             </div>
-             
-             <div style={modalFooterStyle}>
-               <span>Model: {fileName.replace(/\.ecore$/i, '')}</span>
-               <span>Created: {createdAt ? formatDate(createdAt) : 'Unknown Date'}</span>
-             </div>
-           </div>
-         </div>
-       )}
+// ── ContextMenu ───────────────────────────────────────────────────────────────
 
-       {showKeywordsModal && (
-         <div style={modalOverlayStyle} onClick={handleKeywordsModalOverlayClick}>
-           <div style={modalContentStyle}>
-             <div style={modalHeaderStyle}>
-               <h2 style={modalTitleStyle}>
-                 {fileName.replace(/\.ecore$/i, '')} - Keywords
-               </h2>
-               <button
-                 style={closeButtonStyle}
-                 onClick={handleCloseKeywordsModal}
-                 onMouseEnter={(e) => {
-                   Object.assign(e.currentTarget.style, closeButtonHoverStyle);
-                 }}
-                 onMouseLeave={(e) => {
-                   Object.assign(e.currentTarget.style, closeButtonStyle);
-                 }}
-                 title="Close"
-               >
-                 ×
-               </button>
-             </div>
-             
-             <div style={descriptionContentStyle}>
-               {keywords}
-             </div>
-             
-             <div style={modalFooterStyle}>
-               <span>Model: {fileName.replace(/\.ecore$/i, '')}</span>
-               <span>Created: {createdAt ? formatDate(createdAt) : 'Unknown Date'}</span>
-             </div>
-           </div>
-         </div>
-       )}
-     </>
-   );
- };
+interface ContextMenuProps {
+  menuRef: React.RefObject<HTMLDivElement | null>;
+  pos: { x: number; y: number };
+  fileName: string;
+  onClose: () => void;
+  canDownloadEcore: boolean;
+  canDownloadGenModel: boolean;
+  downloadingFile: 'ecore' | 'genmodel' | null;
+  onDownloadEcore: () => void;
+  onDownloadGenModel: () => void;
+  onOpenUML: () => void;
+  onConnect: () => void;
+  onRename: () => void;
+  onDelete: () => void;
+  onShowDetails?: () => void;
+  readOnly?: boolean;
+}
+
+const ContextMenu: React.FC<ContextMenuProps> = ({
+  menuRef, pos, fileName, onClose,
+  canDownloadEcore, canDownloadGenModel, downloadingFile,
+  onDownloadEcore, onDownloadGenModel,
+  onOpenUML, onConnect, onRename, onDelete, onShowDetails,
+  readOnly = false,
+}) => {
+  useEffect(() => {
+    menuRef.current?.focus();
+  }, [menuRef]);
+
+  const stopMenuEventBubble = (e: React.SyntheticEvent) => {
+    e.stopPropagation();
+  };
+
+  const handleMenuKeyDown = (e: React.KeyboardEvent) => {
+    e.stopPropagation();
+    if (e.key === 'Escape') onClose();
+  };
+
+  return (
+  <div
+    ref={menuRef}
+    role="menu"
+    aria-label={`Actions for ${removeExt(fileName)}`}
+    tabIndex={0}
+    style={{
+      position: 'fixed',
+      left: pos.x,
+      top: pos.y,
+      transform: 'translateY(-50%)',
+      background: '#ffffff',
+      borderRadius: 10,
+      boxShadow: '0 4px 20px rgba(0,0,0,0.14), 0 0 0 1px rgba(0,0,0,0.07)',
+      padding: 5,
+      minWidth: 178,
+      zIndex: 99999,
+    }}
+    onMouseDown={stopMenuEventBubble}
+    onClick={stopMenuEventBubble}
+    onKeyDown={handleMenuKeyDown}
+    onKeyUp={stopMenuEventBubble}
+  >
+    {/* Header */}
+    <div style={{ padding: '5px 9px 7px', borderBottom: '1px solid #f1f5f9', marginBottom: 3 }}>
+      <span style={{ fontSize: 12, fontWeight: 700, color: '#0f172a' }}>{removeExt(fileName)}</span>
+    </div>
+
+    <CMItem icon={<UMLIcon />}     label="Open UML"        onClick={onOpenUML} />
+    {!readOnly && <CMItem icon={<ConnectIcon />} label="Add connection"  onClick={onConnect} />}
+    {!readOnly && <CMItem icon={<EditIcon />}    label="Rename"          onClick={onRename} />}
+    {onShowDetails && <CMItem icon={<InfoIcon />} label="Details" onClick={onShowDetails} />}
+
+    <div style={{ height: 1, background: '#f1f5f9', margin: '4px 2px' }} />
+    <CMItem
+      icon={<DownloadIcon />}
+      label={downloadingFile === 'ecore' ? 'Downloading…' : 'Download .ecore'}
+      onClick={onDownloadEcore}
+      disabled={!canDownloadEcore || downloadingFile !== null}
+    />
+    <CMItem
+      icon={<DownloadIcon />}
+      label={downloadingFile === 'genmodel' ? 'Downloading…' : 'Download .genmodel'}
+      onClick={onDownloadGenModel}
+      disabled={!canDownloadGenModel || downloadingFile !== null}
+    />
+
+    {!readOnly && (
+      <>
+        <div style={{ height: 1, background: '#f1f5f9', margin: '4px 2px' }} />
+        <CMItem icon={<TrashIcon />}   label="Remove"          onClick={onDelete} danger />
+      </>
+    )}
+  </div>
+  );
+};
+
+function getCMItemBackground(hovered: boolean, disabled: boolean | undefined, danger: boolean | undefined): string {
+  if (!hovered || disabled) return 'transparent';
+  if (danger) return '#fef2f2';
+  return '#f8fafc';
+}
+
+function getCMItemColor(disabled: boolean | undefined, danger: boolean | undefined, hovered: boolean): string {
+  if (disabled) return '#cbd5e1';
+  if (danger) {
+    if (hovered) return '#dc2626';
+    return '#ef4444';
+  }
+  return '#475569';
+}
+
+const CMItem: React.FC<{
+  icon: React.ReactNode;
+  label: string;
+  onClick: () => void;
+  danger?: boolean;
+  disabled?: boolean;
+}> = ({ icon, label, onClick, danger, disabled }) => {
+  const [hov, setHov] = useState(false);
+  const background = getCMItemBackground(hov, disabled, danger);
+  const color = getCMItemColor(disabled, danger, hov);
+
+  return (
+    <button
+      type="button"
+      role="menuitem"
+      disabled={disabled}
+      onClick={e => { e.stopPropagation(); if (!disabled) onClick(); }}
+      onMouseEnter={() => setHov(true)}
+      onMouseLeave={() => setHov(false)}
+      style={{
+        display: 'flex', alignItems: 'center', gap: 8,
+        width: '100%', padding: '6px 9px', border: 'none', borderRadius: 7,
+        background,
+        color,
+        cursor: disabled ? 'not-allowed' : 'pointer', fontSize: 12, textAlign: 'left', transition: 'all 0.1s',
+      }}
+    >
+      {icon}
+      {label}
+    </button>
+  );
+};
+
+// ── card icon ─────────────────────────────────────────────────────────────────
+
+const CardIcon = () => (
+  <svg width="46" height="46" viewBox="0 0 32 32" fill="none">
+    <path d="M16 5L27 11V21L16 27L5 21V11L16 5Z"
+      stroke="rgba(0,0,0,0.38)" strokeWidth="1.4" fill="rgba(255,255,255,0.55)" strokeLinejoin="round" />
+    <path d="M16 5V27" stroke="rgba(0,0,0,0.28)" strokeWidth="1.2" strokeLinecap="round" />
+    <path d="M5 11L27 11" stroke="rgba(0,0,0,0.28)" strokeWidth="1.2" strokeLinecap="round" />
+    <path d="M16 5L5 11L16 17L27 11L16 5Z"
+      stroke="rgba(0,0,0,0.3)" strokeWidth="1.2" fill="rgba(255,255,255,0.35)" strokeLinejoin="round" />
+  </svg>
+);
+
+// ── small icons ───────────────────────────────────────────────────────────────
+
+const UMLIcon = () => (
+  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <rect x="3" y="3" width="18" height="18" rx="2" /><line x1="3" y1="9" x2="21" y2="9" /><line x1="9" y1="21" x2="9" y2="9" />
+  </svg>
+);
+const ConnectIcon = () => (
+  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01" />
+  </svg>
+);
+const EditIcon = () => (
+  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+    <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4z" />
+  </svg>
+);
+const InfoIcon = () => (
+  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <circle cx="12" cy="12" r="10" /><line x1="12" y1="8" x2="12" y2="12" /><line x1="12" y1="16" x2="12.01" y2="16" />
+  </svg>
+);
+const TrashIcon = () => (
+  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <polyline points="3 6 5 6 21 6" /><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" /><path d="M10 11v6M14 11v6" /><path d="M9 6V4h6v2" />
+  </svg>
+);
+const DownloadIcon = () => (
+  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+    <polyline points="7 10 12 15 17 10" />
+    <line x1="12" y1="15" x2="12" y2="3" />
+  </svg>
+);

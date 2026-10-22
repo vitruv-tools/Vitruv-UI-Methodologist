@@ -1,3 +1,14 @@
+import { config } from '../config/environment';
+import {
+  fastLoginConstants,
+  getFastLoginAuthorizationUrl as buildFastLoginAuthorizationUrl,
+  getFastLoginTokenUrl,
+  getSavedFastLoginRedirectUri,
+  FAST_LOGIN_REDIRECT_STORAGE_KEY,
+  getFastLoginRedirectUri,
+  type FastLoginIdp,
+} from '../config/fastLogin';
+
 export interface AuthResponse {
   access_token: string;
   refresh_token: string;
@@ -26,6 +37,14 @@ export interface SignUpCredentials {
 export interface SignUpResponse {
   data: any;
   message: string;
+  access_token?: string;
+  refresh_token?: string;
+  expires_in?: number;
+  refresh_expires_in?: number;
+  token_type?: string;
+  session_state?: string;
+  scope?: string;
+  'not-before-policy'?: number;
 }
 
 export interface RefreshTokenRequest {
@@ -43,36 +62,299 @@ export interface User {
   scope?: string;
 }
 
+export interface ForgotPasswordRequest {
+  email: string;
+}
+
+export interface ForgotPasswordResponse {
+  data: any;
+  message: string;
+}
+
 export class AuthService {
-  private static readonly API_BASE_URL = 'https://api-stage.cyruswallet.io';
-  private static readonly LOCAL_API_BASE_URL = 'http://fe3ab829-d558-4834-afcf-6ed7ca440ca4.ka.bw-cloud-instance.org:8080';
+  private static readonly API_BASE_URL = config.apiBaseUrl;
+  private static readonly LOCAL_API_BASE_URL = config.apiBaseUrl;
   private static readonly CLIENT_ID = 'exit-normal-customer-mobile-app';
   private static readonly GRANT_TYPE = 'password';
 
+  private static async extractErrorMessage(response: Response): Promise<string> {
+    let errorText = '';
+    try {
+      errorText = await response.text();
+    } catch { }
+    
+    let errorMessage = errorText;
+    try {
+      const parsed = JSON.parse(errorText);
+      errorMessage = parsed?.message || parsed?.error || parsed?.error_description || errorText;
+      
+      // Log detailed error information for debugging
+      console.error('API Error Details:', {
+        status: response.status,
+        statusText: response.statusText,
+        parsed,
+        rawText: errorText
+      });
+    } catch { }
+    
+    return errorMessage || response.statusText || 'Request failed';
+  }
+
+  private static isDuplicateFieldError(
+    normalizedError: string,
+    field: 'username' | 'email'
+  ): boolean {
+    const duplicateKeywords = ['already', 'exists', 'used', 'taken', 'duplicate'];
+    return normalizedError.includes(field) &&
+      duplicateKeywords.some((keyword) => normalizedError.includes(keyword));
+  }
+
+  private static getSignUpErrorMessage(status: number, errorMessage: string): string {
+    if (status === 409) {
+      return 'This username or email is already registered. Please use a different one or sign in instead.';
+    }
+    if (status === 500) {
+      return 'Server error occurred. Please try again later or contact support if the problem persists.';
+    }
+    if (status === 400) {
+      return errorMessage || 'Invalid registration data. Please check your information and try again.';
+    }
+    return errorMessage;
+  }
+
+  private static storeAuthTokens(tokenData: any): void {
+    if (!tokenData.access_token) {
+      console.warn('No authentication tokens found in sign-up response. User may need to sign in separately.');
+      return;
+    }
+
+    localStorage.setItem('auth.access_token', tokenData.access_token);
+    
+    if (tokenData.refresh_token) {
+      localStorage.setItem('auth.refresh_token', tokenData.refresh_token);
+    }
+    if (tokenData.expires_in) {
+      localStorage.setItem('auth.expires_in', tokenData.expires_in.toString());
+      const accessExpiresAt = Date.now() + (tokenData.expires_in * 1000);
+      localStorage.setItem('auth.access_expires_at', accessExpiresAt.toString());
+    }
+    if (tokenData.refresh_expires_in) {
+      localStorage.setItem('auth.refresh_expires_in', tokenData.refresh_expires_in.toString());
+      const refreshExpiresAt = Date.now() + (tokenData.refresh_expires_in * 1000);
+      localStorage.setItem('auth.refresh_expires_at', refreshExpiresAt.toString());
+    }
+    if (tokenData.token_type) {
+      localStorage.setItem('auth.token_type', tokenData.token_type);
+    }
+    if (tokenData.session_state) {
+      localStorage.setItem('auth.session_state', tokenData.session_state);
+    }
+    if (tokenData.scope) {
+      localStorage.setItem('auth.scope', tokenData.scope);
+    }
+    if (tokenData['not-before-policy'] !== undefined) {
+      localStorage.setItem('auth.not_before_policy', tokenData['not-before-policy'].toString());
+    }
+    
+    console.log('Sign-up tokens stored successfully');
+  }
+
+  private static hasStoredAuthToken(): boolean {
+    return !!localStorage.getItem('auth.access_token');
+  }
+
+  private static async autoSignInAfterSignUp(credentials: SignUpCredentials): Promise<void> {
+    // Some backends create the user without returning tokens on sign-up.
+    // In that case, sign in immediately so OTP endpoints can be called.
+    if (this.hasStoredAuthToken()) {
+      return;
+    }
+
+    try {
+      await this.signIn({
+        username: credentials.username,
+        password: credentials.password,
+      });
+      return;
+    } catch (usernameSignInError) {
+      console.warn('Auto sign-in with username failed after sign-up:', usernameSignInError);
+    }
+
+    try {
+      await this.signIn({
+        username: credentials.email,
+        password: credentials.password,
+      });
+    } catch (emailSignInError) {
+      console.warn('Auto sign-in with email failed after sign-up:', emailSignInError);
+      // Keep sign-up successful but signal to UI that sign-in is required.
+      throw new Error('Account created, but sign-in is required before email verification. Please sign in and continue.');
+    }
+  }
+
   static async signUp(credentials: SignUpCredentials): Promise<SignUpResponse> {
-    const response = await fetch(`${this.LOCAL_API_BASE_URL}/api/v1/users/sign-up`, {
+    console.log('Sign up request payload:', {
+      ...credentials,
+      password: '[REDACTED]',
+      passwordLength: credentials.password.length,
+      usernameLength: credentials.username.length,
+      emailValid: credentials.email.includes('@')
+    });
+
+    try {
+      const response = await fetch(`${this.LOCAL_API_BASE_URL}/api/v1/users/sign-up`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(credentials),
+      });
+
+      console.log('Sign up response status:', response.status, response.statusText);
+
+      if (!response.ok) {
+        const errorMessage = await this.extractErrorMessage(response);
+        console.error('Sign up failed:', {
+          status: response.status,
+          statusText: response.statusText,
+          errorMessage,
+          url: `${this.LOCAL_API_BASE_URL}/api/v1/users/sign-up`,
+          requestData: {
+            username: credentials.username,
+            email: credentials.email,
+            roleType: credentials.roleType,
+            hasFirstName: !!credentials.firstName,
+            hasLastName: !!credentials.lastName
+          }
+        });
+
+        const normalizedError = errorMessage.toLowerCase();
+        if (this.isDuplicateFieldError(normalizedError, 'username')) {
+          throw new Error('Username is already used. Please choose another username.');
+        }
+        if (this.isDuplicateFieldError(normalizedError, 'email')) {
+          throw new Error('Email is already used. Please use another email or sign in.');
+        }
+        throw new Error(this.getSignUpErrorMessage(response.status, errorMessage));
+      }
+
+      const responseData: SignUpResponse = await response.json();
+      console.log('Sign up successful, storing tokens...');
+      const tokenData = responseData.access_token ? responseData : (responseData.data || {});
+      this.storeAuthTokens(tokenData);
+      await this.autoSignInAfterSignUp(credentials);
+      
+      return responseData;
+    } catch (error: any) {
+      // Catch network errors or JSON parsing errors
+      console.error('Sign up request failed:', {
+        error: error.message,
+        errorType: error.name,
+        credentials: {
+          username: credentials.username,
+          email: credentials.email,
+          roleType: credentials.roleType
+        }
+      });
+      
+      // Re-throw the error if it's already been processed
+      if (error.message && error.message !== 'Failed to fetch') {
+        throw error;
+      }
+      
+      // Network error
+      throw new Error('Network error: Unable to connect to the server. Please check your connection and try again.');
+    }
+  }
+
+  static async forgotPassword(request: ForgotPasswordRequest): Promise<ForgotPasswordResponse> {
+    console.log('Forgot password request for email:', request.email);
+
+    const response = await fetch(`${this.LOCAL_API_BASE_URL}/api/v1/users/forgot-password`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify(credentials),
+      body: JSON.stringify(request),
     });
 
+    console.log('Forgot password response status:', response.status, response.statusText);
+
     if (!response.ok) {
-      let errorText = '';
-      try {
-        errorText = await response.text();
-      } catch {}
-      let errorMessage = errorText;
-      try {
-        const parsed = JSON.parse(errorText);
-        errorMessage = (parsed as any)?.message || (parsed as any)?.error || errorText;
-      } catch {}
-      const fallback = response.statusText || 'Request failed';
-      throw new Error(errorMessage || fallback);
+      const errorMessage = await this.extractErrorMessage(response);
+      console.error('Forgot password failed:', {
+        status: response.status,
+        statusText: response.statusText,
+        errorMessage,
+        url: `${this.LOCAL_API_BASE_URL}/api/v1/users/forgot-password`
+      });
+      throw new Error(errorMessage);
     }
 
-    const data: SignUpResponse = await response.json();
+    const responseData: ForgotPasswordResponse = await response.json();
+    console.log('Forgot password request successful:', responseData.message);
+    
+    return responseData;
+  }
+
+  static getFastLoginCallbackUri(): string {
+    return getFastLoginRedirectUri();
+  }
+
+  static getFastLoginAuthorizationUrl(idpHint?: FastLoginIdp): string {
+    return buildFastLoginAuthorizationUrl(idpHint);
+  }
+
+  static async exchangeFastLoginCode(code: string): Promise<AuthResponse> {
+    const savedRedirectUri = getSavedFastLoginRedirectUri();
+    const redirectUri = savedRedirectUri || getFastLoginRedirectUri();
+
+    const body = new URLSearchParams({
+      grant_type: 'authorization_code',
+      client_id: fastLoginConstants.clientId,
+      code,
+      redirect_uri: redirectUri,
+    });
+
+    const response = await fetch(
+      getFastLoginTokenUrl(),
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded',
+        },
+        body: body.toString(),
+      },
+    );
+
+    if (!response.ok) {
+      const errorMessage = await this.extractErrorMessage(response);
+      throw new Error(errorMessage || 'Fast login token exchange failed.');
+    }
+
+    const data: AuthResponse = await response.json();
+
+    localStorage.setItem('auth.access_token', data.access_token);
+    if (data.refresh_token) {
+      localStorage.setItem('auth.refresh_token', data.refresh_token);
+    }
+    localStorage.setItem('auth.expires_in', data.expires_in.toString());
+    localStorage.setItem('auth.refresh_expires_in', data.refresh_expires_in.toString());
+    localStorage.setItem('auth.token_type', data.token_type);
+    localStorage.setItem('auth.session_state', data.session_state);
+    localStorage.setItem('auth.scope', data.scope);
+    localStorage.setItem('auth.not_before_policy', data['not-before-policy'].toString());
+
+    const accessExpiresAt = Date.now() + (data.expires_in * 1000);
+    const refreshExpiresAt = Date.now() + (data.refresh_expires_in * 1000);
+    localStorage.setItem('auth.access_expires_at', accessExpiresAt.toString());
+    localStorage.setItem('auth.refresh_expires_at', refreshExpiresAt.toString());
+
+    try {
+      sessionStorage.removeItem(FAST_LOGIN_REDIRECT_STORAGE_KEY);
+    } catch {
+      // ignore
+    }
     return data;
   }
 
@@ -89,18 +371,18 @@ export class AuthService {
       let errorText = '';
       try {
         errorText = await response.text();
-      } catch {}
+      } catch { }
       let errorMessage = errorText;
       try {
         const parsed = JSON.parse(errorText);
-        errorMessage = (parsed as any)?.message || (parsed as any)?.error || errorText;
-      } catch {}
+        errorMessage = parsed?.message || parsed?.error || errorText;
+      } catch { }
       const fallback = response.statusText || 'Request failed';
       throw new Error(errorMessage || fallback);
     }
 
     const data: AuthResponse = await response.json();
-    
+
     localStorage.setItem('auth.access_token', data.access_token);
     localStorage.setItem('auth.refresh_token', data.refresh_token);
     localStorage.setItem('auth.expires_in', data.expires_in.toString());
@@ -109,7 +391,7 @@ export class AuthService {
     localStorage.setItem('auth.session_state', data.session_state);
     localStorage.setItem('auth.scope', data.scope);
     localStorage.setItem('auth.not_before_policy', data['not-before-policy'].toString());
-    
+
     const accessExpiresAt = Date.now() + (data.expires_in * 1000);
     const refreshExpiresAt = Date.now() + (data.refresh_expires_in * 1000);
     localStorage.setItem('auth.access_expires_at', accessExpiresAt.toString());
@@ -127,7 +409,7 @@ export class AuthService {
     }
 
     const now = Date.now();
-    const refreshExpiry = parseInt(refreshExpiresAt, 10);
+    const refreshExpiry = Number.parseInt(refreshExpiresAt, 10);
     if (Number.isFinite(refreshExpiry) && now >= refreshExpiry) {
       await this.signOut();
       return null;
@@ -185,8 +467,8 @@ export class AuthService {
     localStorage.removeItem('auth.refresh_expires_at');
     localStorage.removeItem('auth.user');
     try {
-      window.dispatchEvent(new Event('auth:signout'));
-    } catch {}
+      globalThis.dispatchEvent(new Event('auth:signout'));
+    } catch { }
   }
 
   static isAuthenticated(): boolean {
@@ -196,8 +478,8 @@ export class AuthService {
     const refreshToken = localStorage.getItem('auth.refresh_token');
     const refreshExpiresAt = localStorage.getItem('auth.refresh_expires_at');
 
-    const accessValid = !!accessToken && !!accessExpiresAt && now < parseInt(accessExpiresAt, 10);
-    const refreshValid = !!refreshToken && !!refreshExpiresAt && now < parseInt(refreshExpiresAt, 10);
+    const accessValid = !!accessToken && !!accessExpiresAt && now < Number.parseInt(accessExpiresAt, 10);
+    const refreshValid = !!refreshToken && !!refreshExpiresAt && now < Number.parseInt(refreshExpiresAt, 10);
 
     return accessValid || refreshValid;
   }
@@ -209,12 +491,12 @@ export class AuthService {
     const refreshToken = localStorage.getItem('auth.refresh_token');
     const refreshExpiresAt = localStorage.getItem('auth.refresh_expires_at');
 
-    const accessValid = !!accessToken && !!accessExpiresAt && now < parseInt(accessExpiresAt, 10);
+    const accessValid = !!accessToken && !!accessExpiresAt && now < Number.parseInt(accessExpiresAt, 10);
     if (accessValid) {
-      return accessToken as string;
+      return accessToken;
     }
 
-    const refreshValid = !!refreshToken && !!refreshExpiresAt && now < parseInt(refreshExpiresAt, 10);
+    const refreshValid = !!refreshToken && !!refreshExpiresAt && now < Number.parseInt(refreshExpiresAt, 10);
     if (!refreshValid) {
       await this.signOut();
       return null;
@@ -222,7 +504,7 @@ export class AuthService {
 
     try {
       const refreshResult = await this.refreshToken();
-      if (refreshResult && refreshResult.access_token) {
+      if (refreshResult?.access_token) {
         return refreshResult.access_token;
       }
     } catch (error) {
@@ -244,7 +526,7 @@ export class AuthService {
     if (!userData) {
       return null;
     }
-    
+
     try {
       return JSON.parse(userData);
     } catch {

@@ -1,6 +1,9 @@
 import React, { useState } from 'react';
+import ReactDOM from 'react-dom';
 import { apiService } from '../../services/api';
 import { useToast } from './ToastProvider';
+import { extractApiErrorMessage } from '../../utils/apiErrorMessage';
+import { useModalBodyLock, modalBackdropStyle, modalDialogShellStyle } from './modalUtils';
 
 interface CreateVsumModalProps {
   isOpen: boolean;
@@ -8,118 +11,72 @@ interface CreateVsumModalProps {
   onSuccess?: (vsum: any) => void;
 }
 
-const modalOverlayStyle: React.CSSProperties = {
-  position: 'fixed',
-  top: 0,
-  left: 0,
-  right: 0,
-  bottom: 0,
-  background: 'rgba(0, 0, 0, 0.5)',
-  display: 'flex',
-  alignItems: 'center',
-  justifyContent: 'center',
-  zIndex: 1000,
+const FONT = 'ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, sans-serif';
+
+// ── small sub-components to keep hover state local ────────────────────────────
+
+const CancelButton: React.FC<{ onClick: () => void; disabled: boolean }> = ({ onClick, disabled }) => {
+  const [hov, setHov] = React.useState(false);
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      onMouseEnter={() => setHov(true)}
+      onMouseLeave={() => setHov(false)}
+      style={{
+        padding: '9px 18px',
+        border: '1.5px solid var(--v-border)',
+        borderRadius: 9,
+        background: hov ? 'var(--v-surface-hover)' : 'var(--v-surface)',
+        color: 'var(--v-text-secondary)',
+        fontSize: 13,
+        fontWeight: 600,
+        cursor: disabled ? 'not-allowed' : 'pointer',
+        fontFamily: FONT,
+        transition: 'background 0.15s',
+        opacity: disabled ? 0.6 : 1,
+      }}
+    >
+      Cancel
+    </button>
+  );
 };
 
-const modalStyle: React.CSSProperties = {
-  background: '#ffffff',
-  borderRadius: '8px',
-  padding: '24px',
-  width: '480px',
-  maxWidth: '90vw',
-  maxHeight: '85vh',
-  overflow: 'auto',
-  boxShadow: '0 20px 40px rgba(0, 0, 0, 0.2)',
-  border: '1px solid #d1ecf1',
-  fontFamily: 'Georgia, serif',
+const SubmitButton: React.FC<{ onClick: () => void; disabled: boolean; loading: boolean }> = ({ onClick, disabled, loading }) => {
+  const [hov, setHov] = React.useState(false);
+  let background = '#049484';
+  if (disabled) {
+    background = '#9ca3af';
+  } else if (hov) {
+    background = '#038472';
+  }
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      onMouseEnter={() => setHov(true)}
+      onMouseLeave={() => setHov(false)}
+      style={{
+        padding: '9px 22px',
+        border: 'none',
+        borderRadius: 9,
+        background,
+        color: '#ffffff',
+        fontSize: 13,
+        fontWeight: 700,
+        cursor: disabled ? 'not-allowed' : 'pointer',
+        fontFamily: FONT,
+        transition: 'background 0.15s',
+      }}
+    >
+      {loading ? 'Creating…' : 'Create project'}
+    </button>
+  );
 };
 
-const headerStyle: React.CSSProperties = {
-  display: 'flex',
-  justifyContent: 'space-between',
-  alignItems: 'center',
-  marginBottom: '16px',
-  paddingBottom: '12px',
-  borderBottom: '2px solid #3498db',
-};
-
-const titleStyle: React.CSSProperties = {
-  fontSize: '20px',
-  fontWeight: 700,
-  color: '#2c3e50',
-  margin: 0,
-  fontFamily: 'Georgia, serif',
-};
-
-const closeButtonStyle: React.CSSProperties = {
-  background: 'transparent',
-  border: '1px solid #dee2e6',
-  fontSize: '16px',
-  color: '#6c757d',
-  cursor: 'pointer',
-  padding: '6px 10px',
-  borderRadius: '6px',
-};
-
-const formGroupStyle: React.CSSProperties = {
-  marginBottom: '14px',
-};
-
-const labelStyle: React.CSSProperties = {
-  display: 'block',
-  fontSize: '13px',
-  fontWeight: 600,
-  color: '#2c3e50',
-  marginBottom: '6px',
-  fontFamily: 'Georgia, serif',
-};
-
-const inputStyle: React.CSSProperties = {
-  width: '100%',
-  padding: '10px 12px',
-  border: '1px solid #ced4da',
-  borderRadius: '6px',
-  fontSize: '13px',
-  boxSizing: 'border-box',
-  background: '#ffffff',
-  fontFamily: 'Georgia, serif',
-};
-
-const buttonRowStyle: React.CSSProperties = {
-  display: 'flex',
-  gap: '8px',
-  justifyContent: 'flex-end',
-  marginTop: '12px',
-};
-
-const primaryButtonStyle: React.CSSProperties = {
-  padding: '10px 12px',
-  border: '1px solid #dee2e6',
-  borderRadius: '6px',
-  background: '#e7f5ff',
-  cursor: 'pointer',
-  fontWeight: 700,
-};
-
-const secondaryButtonStyle: React.CSSProperties = {
-  padding: '10px 12px',
-  border: '1px solid #dee2e6',
-  borderRadius: '6px',
-  background: '#f8f9fa',
-  cursor: 'pointer',
-  fontWeight: 600,
-};
-
-const errorMessageStyle: React.CSSProperties = {
-  padding: '8px 12px',
-  margin: '8px 0',
-  borderRadius: '6px',
-  fontSize: '12px',
-  fontWeight: '500',
-  backgroundColor: '#f8d7da',
-  color: '#721c24',
-  border: '1px solid #f5c6cb',
-};
+// ── CreateVsumModal ───────────────────────────────────────────────────────────
 
 export const CreateVsumModal: React.FC<CreateVsumModalProps> = ({ isOpen, onClose, onSuccess }) => {
   const [name, setName] = useState('');
@@ -128,25 +85,24 @@ export const CreateVsumModal: React.FC<CreateVsumModalProps> = ({ isOpen, onClos
   const [error, setError] = useState('');
   const { showSuccess, showError } = useToast();
 
+  useModalBodyLock(isOpen);
+
   if (!isOpen) return null;
 
   const handleSubmit = async () => {
     const trimmedName = name.trim();
-    if (!trimmedName) {
-      setError('Name is required');
-      return;
-    }
+    if (!trimmedName) { setError('Project name is required.'); return; }
     setLoading(true);
     setError('');
     try {
       const res = await apiService.createVsum({ name: trimmedName, description: description.trim() || undefined });
       onSuccess?.(res.data);
-      showSuccess('Vsum successfully created');
+      showSuccess('Project created successfully.');
       setName('');
       setDescription('');
       onClose();
     } catch (e) {
-      const msg = e instanceof Error ? e.message : 'Failed to create VSUM';
+      const msg = extractApiErrorMessage(e, 'Failed to create project.');
       setError(msg);
       showError(msg);
     } finally {
@@ -162,48 +118,159 @@ export const CreateVsumModal: React.FC<CreateVsumModalProps> = ({ isOpen, onClos
     onClose();
   };
 
-  return (
-    <div style={modalOverlayStyle} onClick={handleClose}>
-      <div style={modalStyle} onClick={(e) => e.stopPropagation()}>
-        <div style={headerStyle}>
-          <h3 style={titleStyle}>Create</h3>
-          <button style={closeButtonStyle} onClick={handleClose}>
-            ×
+  const inputBase: React.CSSProperties = {
+    width: '100%',
+    padding: '10px 14px',
+    border: '1.5px solid var(--v-border)',
+    borderRadius: 9,
+    fontSize: 14,
+    color: 'var(--v-text)',
+    fontFamily: FONT,
+    background: 'var(--v-input-bg)',
+    outline: 'none',
+    boxSizing: 'border-box',
+    transition: 'border-color 0.15s, box-shadow 0.15s',
+  };
+
+  return ReactDOM.createPortal(
+    <dialog
+      open
+      aria-labelledby="create-vsum-title"
+      onCancel={e => {
+        if (loading) {
+          e.preventDefault();
+          return;
+        }
+        handleClose();
+      }}
+      style={{
+        ...modalDialogShellStyle,
+        zIndex: 2000,
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+      }}
+    >
+      <button
+        type="button"
+        aria-hidden="true"
+        tabIndex={-1}
+        onClick={handleClose}
+        style={{
+          ...modalBackdropStyle,
+          position: 'absolute',
+          backgroundColor: 'rgba(0,0,0,0.25)',
+          backdropFilter: 'blur(6px)',
+          WebkitBackdropFilter: 'blur(6px)',
+          cursor: loading ? 'default' : 'pointer',
+        }}
+      />
+      <div
+        style={{
+          position: 'relative',
+          zIndex: 1,
+          width: 'min(480px, 94vw)',
+          background: 'var(--v-surface)',
+          borderRadius: 14,
+          boxShadow: 'var(--v-card-shadow)',
+          overflow: 'hidden',
+          fontFamily: FONT,
+          color: 'var(--v-text)',
+        }}
+      >
+        {/* Header */}
+        <div style={{
+          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+          padding: '20px 24px 18px',
+          borderBottom: '1px solid var(--v-border)',
+        }}>
+          <div>
+            <h2 id="create-vsum-title" style={{ margin: 0, fontSize: 16, fontWeight: 700, color: 'var(--v-text)', letterSpacing: '-0.01em' }}>
+              New Project
+            </h2>
+            <div style={{ fontSize: 13, color: 'var(--v-text-muted)', marginTop: 2 }}>
+              Create a new V-SUM workspace
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={handleClose}
+            aria-label="Close"
+            style={{
+              width: 30, height: 30, borderRadius: 6,
+              background: 'transparent',
+              border: '1.5px solid var(--v-border)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              cursor: 'pointer', fontSize: 13, color: 'var(--v-text-muted)',
+              transition: 'all 0.12s', fontFamily: FONT,
+            }}
+            onMouseEnter={e => { e.currentTarget.style.background = 'var(--v-surface-hover)'; }}
+            onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; }}
+            title="Close"
+          >
+            ✕
           </button>
         </div>
 
-        {error && <div style={errorMessageStyle}>{error}</div>}
+        {/* Body */}
+        <div style={{ padding: '20px 24px', display: 'flex', flexDirection: 'column', gap: 16 }}>
 
-        <div style={formGroupStyle}>
-          <label style={labelStyle}>Name *</label>
-          <input
-            placeholder="Enter name"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            style={inputStyle}
-            disabled={loading}
-          />
+          {error && (
+            <div style={{
+              padding: '10px 14px', borderRadius: 9,
+              background: 'var(--v-danger-bg)', border: '1px solid var(--v-danger-border)',
+              fontSize: 13, color: 'var(--v-danger-text)',
+            }}>
+              {error}
+            </div>
+          )}
+
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+            <label htmlFor="vsum-name-input" style={{ fontSize: 11, fontWeight: 700, color: 'var(--v-text-muted)', letterSpacing: '0.05em', textTransform: 'uppercase' }}>
+              Name <span style={{ color: '#dc2626' }}>*</span>
+            </label>
+            <input
+              id="vsum-name-input"
+              placeholder="e.g. My V-SUM"
+              value={name}
+              onChange={e => setName(e.target.value)}
+              onKeyDown={e => { if (e.key === 'Enter' && !loading && name.trim()) void handleSubmit(); }}
+              onFocus={e => { e.currentTarget.style.borderColor = '#049484'; e.currentTarget.style.boxShadow = '0 0 0 3px rgba(4,148,132,0.12)'; }}
+              onBlur={e => { e.currentTarget.style.borderColor = 'var(--v-border)'; e.currentTarget.style.boxShadow = 'none'; }}
+              style={inputBase}
+              disabled={loading}
+              autoFocus
+            />
+          </div>
+
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+            <label htmlFor="vsum-description-input" style={{ fontSize: 11, fontWeight: 700, color: 'var(--v-text-muted)', letterSpacing: '0.05em', textTransform: 'uppercase' }}>
+              Description <span style={{ color: 'var(--v-text-faint)', fontWeight: 400, textTransform: 'none', letterSpacing: 0 }}>(optional)</span>
+            </label>
+            <textarea
+              id="vsum-description-input"
+              placeholder="Short description of this project…"
+              value={description}
+              onChange={e => setDescription(e.target.value)}
+              onFocus={e => { e.currentTarget.style.borderColor = '#049484'; e.currentTarget.style.boxShadow = '0 0 0 3px rgba(4,148,132,0.12)'; }}
+              onBlur={e => { e.currentTarget.style.borderColor = 'var(--v-border)'; e.currentTarget.style.boxShadow = 'none'; }}
+              style={{ ...inputBase, minHeight: 80, resize: 'vertical' }}
+              disabled={loading}
+            />
+          </div>
         </div>
 
-        <div style={formGroupStyle}>
-          <label style={labelStyle}>Description</label>
-          <textarea
-            placeholder="Optional description"
-            value={description}
-            onChange={(e) => setDescription(e.target.value)}
-            style={{ ...inputStyle, minHeight: 80, resize: 'vertical' }}
-            disabled={loading}
-          />
-        </div>
-
-        <div style={buttonRowStyle}>
-          <button style={secondaryButtonStyle} onClick={handleClose} disabled={loading}>Cancel</button>
-          <button style={primaryButtonStyle} onClick={handleSubmit} disabled={loading || !name.trim()}>
-            {loading ? 'Creating...' : 'Create'}
-          </button>
+        {/* Footer */}
+        <div style={{
+          display: 'flex', justifyContent: 'flex-end', gap: 10,
+          padding: '14px 24px 20px',
+          borderTop: '1px solid var(--v-border)',
+        }}>
+          <CancelButton onClick={handleClose} disabled={loading} />
+          <SubmitButton onClick={handleSubmit} disabled={loading || !name.trim()} loading={loading} />
         </div>
       </div>
-    </div>
+    </dialog>,
+    document.body
   );
 };
-

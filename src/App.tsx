@@ -1,17 +1,17 @@
 import React from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
-import { AuthPage } from './components/auth/AuthPage';
+import { AuthPage, FastLoginCallback, KeycloakRedirect } from './components/auth';
 import { HomePage } from './pages/HomePage';
-import { ProjectPage } from './pages/ProjectPage';
+import { EditorTest } from './pages/EditorTest';
+import { OtpVerificationPage } from './pages/OtpVerificationPage';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
-import { apiService } from './services/api';
-import { exportFlowData } from './utils';
-import { Node, Edge } from 'reactflow';
+// useAuth is used in ProtectedRoute
+import { CanvasPage } from './pages/CanvasPage';
+import { MODEL_LIBRARY_PATH } from './constants/routes';
 import './App.css';
-import { SidebarTabs, MainLayout } from './components';
 
-function ProtectedRoute({ children }: { children: React.ReactNode }) {
-  const { isAuthenticated, isLoading } = useAuth();
+function ProtectedRoute({ children }: Readonly<{ children: React.ReactNode }>) {
+  const { isAuthenticated, isLoading, user } = useAuth();
 
   if (isLoading) {
     return (
@@ -21,7 +21,7 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
         alignItems: 'center',
         height: '100vh',
         fontSize: '18px',
-        color: '#666'
+        color: 'var(--v-text-muted)',
       }}>
         Loading...
       </div>
@@ -29,87 +29,47 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
   }
 
   if (!isAuthenticated) {
-    return <Navigate to="/auth" replace />;
+    return <Navigate to="/login" replace />;
+  }
+
+  // Only users with explicit verified status can access protected pages
+  if (user?.emailVerified !== true) {
+    return <Navigate to="/verify-otp" replace state={{ autoResend: true }} />;
   }
 
   return <>{children}</>;
 }
 
-// Render MainLayout immediately without lazy loading for consistent UX across routes
-
-function AppContent() {
-  const { user, signOut } = useAuth();
-
-  const handleDeploy = async (nodes: Node[], edges: Edge[]) => {
-    try {
-      const flowData = exportFlowData(nodes, edges);
-      const result = await apiService.deployFlow(flowData);
-      
-      if (result.success) {
-        alert('Flow deployed successfully!');
-      } else {
-        alert(`Deployment failed: ${result.message}`);
-      }
-    } catch (error) {
-      console.error('Deployment error:', error);
-      alert('Deployment failed. Check console for details.');
-    }
-  };
-
-  const handleSave = () => {
-    // TODO: Implement save functionality
-    console.log('Save functionality to be implemented');
-  };
-
-  const handleLoad = () => {
-    // TODO: Implement load functionality
-    console.log('Load functionality to be implemented');
-  };
-
-  const handleNew = () => {
-    // TODO: Implement new flow functionality
-    console.log('New flow functionality to be implemented');
-  };
-
-  const handleLogout = async () => {
-    await signOut();
-  };
-
-  return (
-    <MainLayout
-      onDeploy={handleDeploy}
-      onSave={handleSave}
-      onLoad={handleLoad}
-      onNew={handleNew}
-      user={user}
-      onLogout={handleLogout}
-      leftSidebar={<SidebarTabs width={350} />}
-      leftSidebarWidth={350}
-    />
-  );
-}
 
 function App() {
   return (
     <Router>
       <AuthProvider>
         <Routes>
-          <Route path="/auth" element={<AuthPage />} />
+          <Route path="/login" element={<AuthPage />} />
+          <Route path="/auth" element={<KeycloakRedirect />} />
+          <Route path="/login/callback" element={<FastLoginCallback />} />
+          <Route path="/verify-otp" element={<OtpVerificationPage />} />
           <Route path="/" element={
-             <ProtectedRoute>
+            <ProtectedRoute>
               <HomePage />
             </ProtectedRoute>
           } />
-          <Route path="/mml" element={
+          <Route path={`${MODEL_LIBRARY_PATH}/*`} element={
             <ProtectedRoute>
-              <AppContent />
-             </ProtectedRoute>
-          } />
-          <Route path="/project" element={
-            <ProtectedRoute>
-              <ProjectPage />
+              <HomePage />
             </ProtectedRoute>
           } />
+          <Route path="/canvas/:id" element={
+            <ProtectedRoute>
+              <CanvasPage />
+            </ProtectedRoute>
+          } />
+          <Route path="/mml" element={<Navigate to="/" replace />} />
+          <Route path="/project" element={<Navigate to="/" replace />} />
+          <Route path="/editor" element={<Navigate to="/" replace />} />
+          {/*Editor Test Route*/}
+          <Route path="/editor-test" element={<EditorTest />} />
         </Routes>
       </AuthProvider>
     </Router>

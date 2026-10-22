@@ -1,0 +1,60 @@
+/*
+ * CSS variable–driven visibility for reaction handles and edges.
+ *
+ * These custom properties are toggled by enableReactionHandles() /
+ * disableReactionHandles() (and corresponding edge helpers) in
+ * FineGranularReactionUtils.ts.
+ *
+ * Default: hidden (pointer-events: none, opacity: 0).
+ * Reactions mode: visible (pointer-events: auto, opacity: 1).
+ */
+
+/* ── Source handles (right side) ───────────────────────────────── */
+.react-flow .react-flow__handle.reaction-handle-source {
+  pointer-events: var(--reaction-handle-pointer-events-source, none);
+  opacity: var(--reaction-handle-opacity-source, 0);
+  transition: opacity 0.2s ease;
+}
+
+/* ── Target handles (left side) ────────────────────────────────── */
+.react-flow .react-flow__handle.reaction-handle-target {
+  pointer-events: var(--reaction-handle-pointer-events-target, none);
+  opacity: var(--reaction-handle-opacity-target, 0);
+  transition: opacity 0.2s ease;
+}
+
+/* ── Fine-granular reaction edges ──────────────────────────────── */
+.react-flow__edge.react-flow__edge-fine-granular-reaction {
+  opacity: var(--reaction-edge-opacity, 0);
+  transition: opacity 0.2s ease;
+}
+
+/* ── Bounding box node (behind classes, above the pane background) ─ */
+.react-flow__node-boundingBox {
+  overflow: visible;
+  cursor: grab;
+  z-index: 0 !important;
+}
+.react-flow__node-boundingBox:active {
+  cursor: grabbing;
+}
+.react-flow__node-eobject {
+  z-index: 1 !important;
+}
+.react-flow__node-ghost {
+  z-index: 6 !important;
+}
+
+/* Ghost midpoint handles stay hittable even if the reaction fade vars are off. */
+.react-flow .react-flow__handle.ghost-reaction-handle {
+  pointer-events: auto;
+  opacity: 1;
+}
+
+/* Reaction strokes: dashed (default, including RF animated) or solid via CSS vars. */
+.react-flow .react-flow__edge.animated.react-flow__edge-fine-granular-reaction path,
+.react-flow .react-flow__edge.animated.react-flow__edge-reactions path,
+.react-flow .react-flow__edge .reaction-line {
+  stroke-dasharray: var(--reaction-line-dasharray, 5);
+  animation: var(--reaction-line-animation, dashdraw 0.5s linear infinite);
+}

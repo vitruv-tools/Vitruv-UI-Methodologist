@@ -4,19 +4,46 @@ export interface Vsum {
   createdAt: string;
   updatedAt: string;
   removedAt?: string | null;
+  /** Current user's access role when returned from list APIs */
+  role?: string;
+  roleEn?: string;
+  /** Project owner (may be returned on shared-project list items) */
+  ownerFirstName?: string;
+  ownerLastName?: string;
+  ownerEmail?: string;
 }
 
 export interface VsumMetaModelRef {
   id: number;
   name: string;
-  role: string;
+  /** Free-form version string. Each version is its own library row. Defaults to `"1.0"` when omitted on create. */
+  version?: string;
+  description: string;
+  domain: string;
+  sourceId: number;
+  keyword: string[];
   createdAt: string;
   updatedAt: string;
   removedAt?: string | null;
+  ecoreFileId: number;
+  genModelFileId: number;
+}
+
+export interface VsumMetaModelRelation {
+  id: number;
+  sourceId: number;
+  targetId: number;
+  reactionFileId?: number | null;
+  reactionFileStorageId?: number | null;
+  /** Fine-granular (EObject-level) relations returned by VSUM details GET. */
+  fineGranularMetaModelRelationSet?: import('./FineGranularMetaModelRelation').EditableFineGranularMetaModelRelation[];
+  /** Alias some backend responses use instead of `fineGranularMetaModelRelationSet`. */
+  fineGranularMetaModelRelations?: import('./FineGranularMetaModelRelation').EditableFineGranularMetaModelRelation[];
 }
 
 export interface VsumDetails extends Vsum {
   metaModels: VsumMetaModelRef[];
+  metaModelsRelation?: VsumMetaModelRelation[];
 }
 
 export interface ApiResponse<T> {

@@ -1,9 +1,10 @@
 import { FlowNode, FlowEdge } from '../types/flow';
+
 export const parseEcoreFile = (ecoreContent: string): { nodes: FlowNode[]; edges: FlowEdge[] } => {
   try {
     const parser = new DOMParser();
     const xmlDoc = parser.parseFromString(ecoreContent, 'text/xml');
-    
+
     if (xmlDoc.getElementsByTagName('parsererror').length > 0) {
       throw new Error('Invalid XML content');
     }
@@ -22,7 +23,7 @@ export const parseEcoreFile = (ecoreContent: string): { nodes: FlowNode[]; edges
     const packages = rootPackage.querySelectorAll('eClassifiers');
     packages.forEach((pkg, index) => {
       const pkgName = pkg.getAttribute('name') || `Package${index}`;
-      
+
       const packageNode: FlowNode = {
         id: `package-${nodeId++}`,
         type: 'default',
@@ -43,13 +44,13 @@ export const parseEcoreFile = (ecoreContent: string): { nodes: FlowNode[]; edges
         const className = cls.getAttribute('name') || `Class${classIndex}`;
         const isAbstract = cls.getAttribute('abstract') === 'true';
         const isInterface = cls.getAttribute('interface') === 'true';
-        
+
         const classNode: FlowNode = {
           id: `class-${nodeId++}`,
           type: 'default',
-          position: { 
-            x: 150 + (index * 300), 
-            y: 200 + (classIndex * 150) 
+          position: {
+            x: 150 + (index * 300),
+            y: 200 + (classIndex * 150)
           },
           data: {
             label: className,
@@ -76,13 +77,13 @@ export const parseEcoreFile = (ecoreContent: string): { nodes: FlowNode[]; edges
         attributes.forEach((attr, attrIndex) => {
           const attrName = attr.getAttribute('name') || `attr${attrIndex}`;
           const attrType = attr.getAttribute('eType') || 'EString';
-          
+
           const attrNode: FlowNode = {
             id: `attr-${nodeId++}`,
             type: 'default',
-            position: { 
-              x: 200 + (index * 300), 
-              y: 350 + (classIndex * 150) + (attrIndex * 50) 
+            position: {
+              x: 200 + (index * 300),
+              y: 350 + (classIndex * 150) + (attrIndex * 50)
             },
             data: {
               label: `${attrName}: ${attrType}`,
@@ -108,13 +109,13 @@ export const parseEcoreFile = (ecoreContent: string): { nodes: FlowNode[]; edges
         references.forEach((ref, refIndex) => {
           const refName = ref.getAttribute('name') || `ref${refIndex}`;
           const refType = ref.getAttribute('eType') || 'EClass';
-          
+
           const refNode: FlowNode = {
             id: `ref-${nodeId++}`,
             type: 'default',
-            position: { 
-              x: 250 + (index * 300), 
-              y: 350 + (classIndex * 150) + (refIndex * 50) 
+            position: {
+              x: 250 + (index * 300),
+              y: 350 + (classIndex * 150) + (refIndex * 50)
             },
             data: {
               label: `${refName}: ${refType}`,
@@ -159,6 +160,12 @@ export const parseEcoreFile = (ecoreContent: string): { nodes: FlowNode[]; edges
     };
   }
 };
+
+export function extractNsUriFromEcore(ecoreContent: string): string | null {
+  const regex = /nsURI="([^"]+)"/;
+  const match = regex.exec(ecoreContent);
+  return match ? match[1] : null;
+}
 
 export const createSimpleEcoreDiagram = (ecoreContent: string): { nodes: FlowNode[]; edges: FlowEdge[] } => {
   const nodes: FlowNode[] = [];
