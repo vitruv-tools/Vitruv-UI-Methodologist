@@ -1,20 +1,21 @@
+import type { MockedFunction } from 'vitest';
 /* eslint-disable import/first, testing-library/no-container, testing-library/no-node-access */
 
-jest.mock('../../../utils/ecoreToUml', () => require('../../../testSupport/umlDiagram/mockFactories').ecoreToUmlMock());
-jest.mock('../../../utils/saveMetaModelEcore', () => require('../../../testSupport/umlDiagram/mockFactories').saveMetaModelEcoreMock());
-jest.mock('../../../utils/umlValidation', () => {
-  const actual = jest.requireActual('../../../utils/umlValidation');
-  return { ...actual, validateUmlModel: jest.fn(() => []) };
+vi.mock('../../../utils/ecoreToUml', async () => (await import('../../../testSupport/umlDiagram/mockFactories')).ecoreToUmlMock());
+vi.mock('../../../utils/saveMetaModelEcore', async () => (await import('../../../testSupport/umlDiagram/mockFactories')).saveMetaModelEcoreMock());
+vi.mock('../../../utils/umlValidation', async () => {
+  const actual = (await vi.importActual<any>('../../../utils/umlValidation'));
+  return { ...actual, validateUmlModel: vi.fn(() => []) };
 });
-jest.mock('../../../components/canvas/UMLDiagramMinimap', () => require('../../../testSupport/umlDiagram/mockFactories').umlDiagramMinimapMock());
-jest.mock('../../../utils/umlDiagramGeometry', () => require('../../../testSupport/umlDiagram/mockFactories').umlDiagramGeometryMock());
-jest.mock('../../../utils/umlClassLayout', () => require('../../../testSupport/umlDiagram/mockFactories').umlClassLayoutMock());
-jest.mock('../../../utils/umlLayoutStorage', () => require('../../../testSupport/umlDiagram/mockFactories').umlLayoutStorageMock());
+vi.mock('../../../components/canvas/UMLDiagramMinimap', async () => (await import('../../../testSupport/umlDiagram/mockFactories')).umlDiagramMinimapMock());
+vi.mock('../../../utils/umlDiagramGeometry', async () => (await import('../../../testSupport/umlDiagram/mockFactories')).umlDiagramGeometryMock());
+vi.mock('../../../utils/umlClassLayout', async () => (await import('../../../testSupport/umlDiagram/mockFactories')).umlClassLayoutMock());
+vi.mock('../../../utils/umlLayoutStorage', async () => (await import('../../../testSupport/umlDiagram/mockFactories')).umlLayoutStorageMock());
 
 import { renderDiagram } from '../../../testSupport/umlDiagram/renderUtils';
 import { validateUmlModel } from '../../../utils/umlValidation';
 
-const validateUmlModelMock = validateUmlModel as jest.MockedFunction<typeof validateUmlModel>;
+const validateUmlModelMock = validateUmlModel as MockedFunction<typeof validateUmlModel>;
 
 describe('UMLDiagram status overlays', () => {
   beforeEach(() => {

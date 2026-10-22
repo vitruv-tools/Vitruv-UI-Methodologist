@@ -1,20 +1,21 @@
+import type { Mock, MockInstance } from 'vitest';
 import React from 'react';
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { CanvasPage } from '../../pages/CanvasPage';
 import { apiService } from '../../services/api';
 import { useModalBodyLock } from '../../components/ui/modalUtils';
 
-const mockNavigate = jest.fn();
+const mockNavigate = vi.fn();
 let mockRouteId = '10';
 
-jest.mock('react-router-dom', () => ({
-  ...jest.requireActual('react-router-dom'),
+vi.mock('react-router-dom', async () => ({
+  ...(await vi.importActual<any>('react-router-dom')),
   useNavigate: () => mockNavigate,
   useParams: () => ({ id: mockRouteId }),
   useLocation: () => ({ state: null }),
 }));
 
-jest.mock('../../contexts/AuthContext', () => ({
+vi.mock('../../contexts/AuthContext', () => ({
   useAuth: () => ({
     user: {
       id: '1',
@@ -27,8 +28,8 @@ jest.mock('../../contexts/AuthContext', () => ({
   }),
 }));
 
-jest.mock('../../components/flow/FlowCanvas', () => {
-  const React = require('react');
+vi.mock('../../components/flow/FlowCanvas', async () => {
+  const React = (await import('react'));
   return {
     // Holds its own models like the real canvas, so a replaced canvas starts empty.
     FlowCanvas: React.forwardRef((props: any, ref: any) => {
@@ -38,22 +39,22 @@ jest.mock('../../components/flow/FlowCanvas', () => {
         loadDiagramData: (nextNodes: any[]) => setNodes(nextNodes),
         getNodes: () => nodes,
         getViewport: () => viewport,
-        getEdges: jest.fn(() => []),
-        addEcoreFile: jest.fn(),
-        updateEcoreFileData: jest.fn(),
-        resetExpandedFile: jest.fn(),
-        undo: jest.fn(),
-        redo: jest.fn(),
+        getEdges: vi.fn(() => []),
+        addEcoreFile: vi.fn(),
+        updateEcoreFileData: vi.fn(),
+        resetExpandedFile: vi.fn(),
+        undo: vi.fn(),
+        redo: vi.fn(),
         canUndo: false,
         canRedo: false,
-        getReactionEdges: jest.fn(() => []),
-        getViewTypes: jest.fn(() => []),
-        getWorkspaceSnapshot: jest.fn(() => ({
+        getReactionEdges: vi.fn(() => []),
+        getViewTypes: vi.fn(() => []),
+        getWorkspaceSnapshot: vi.fn(() => ({
           metaModelIds: [],
           metaModelRelationRequests: [],
         })),
-        fitUmlView: jest.fn(),
-        openSelectedReactionEditor: jest.fn(() => false),
+        fitUmlView: vi.fn(),
+        openSelectedReactionEditor: vi.fn(() => false),
       }), [nodes, viewport]);
       return (
         <div data-testid="flow-canvas">
@@ -79,26 +80,26 @@ jest.mock('../../components/flow/FlowCanvas', () => {
   };
 });
 
-jest.mock('../../components/constraints/ConstraintsView', () => ({
+vi.mock('../../components/constraints/ConstraintsView', () => ({
   ConstraintsView: () => <div data-testid="constraints-view" />,
 }));
 
-jest.mock('../../services/api', () => ({
+vi.mock('../../services/api', () => ({
   apiService: {
-    getVsumDetails: jest.fn(),
-    getVsum: jest.fn(),
-    getVsumMembers: jest.fn(),
-    getVsumsPaginated: jest.fn(),
-    findMetaModels: jest.fn(),
-    getRuleSets: jest.fn().mockResolvedValue([]),
-    getFile: jest.fn(),
-    removeVsumMember: jest.fn(),
-    buildVsum: jest.fn(),
-    downloadVsumArtifact: jest.fn(),
-    downloadVsumBundle: jest.fn(),
-    renameVsum: jest.fn(),
-    deleteMetaModel: jest.fn(),
-    syncVsumChanges: jest.fn(),
+    getVsumDetails: vi.fn(),
+    getVsum: vi.fn(),
+    getVsumMembers: vi.fn(),
+    getVsumsPaginated: vi.fn(),
+    findMetaModels: vi.fn(),
+    getRuleSets: vi.fn().mockResolvedValue([]),
+    getFile: vi.fn(),
+    removeVsumMember: vi.fn(),
+    buildVsum: vi.fn(),
+    downloadVsumArtifact: vi.fn(),
+    downloadVsumBundle: vi.fn(),
+    renameVsum: vi.fn(),
+    deleteMetaModel: vi.fn(),
+    syncVsumChanges: vi.fn(),
   },
 }));
 
@@ -112,16 +113,16 @@ const apiError = (status: number, message: string) =>
   });
 
 describe('CanvasPage invalid project routes', () => {
-  let consoleErrorSpy: jest.SpyInstance | undefined;
+  let consoleErrorSpy: MockInstance | undefined;
 
   beforeEach(() => {
-    jest.clearAllMocks();
+    vi.clearAllMocks();
     mockRouteId = '10';
-    consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
-    (apiService.findMetaModels as jest.Mock).mockResolvedValue({ data: [] });
-    (apiService.getVsumMembers as jest.Mock).mockResolvedValue({ data: [] });
-    (apiService.getVsum as jest.Mock).mockResolvedValue({ data: {} });
-    (apiService.getVsumsPaginated as jest.Mock).mockResolvedValue({ data: [] });
+    consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    (apiService.findMetaModels as Mock).mockResolvedValue({ data: [] });
+    (apiService.getVsumMembers as Mock).mockResolvedValue({ data: [] });
+    (apiService.getVsum as Mock).mockResolvedValue({ data: {} });
+    (apiService.getVsumsPaginated as Mock).mockResolvedValue({ data: [] });
   });
 
   afterEach(() => {
@@ -129,7 +130,7 @@ describe('CanvasPage invalid project routes', () => {
   });
 
   it('shows access denied and removes the canvas when details returns 403', async () => {
-    (apiService.getVsumDetails as jest.Mock).mockRejectedValueOnce(
+    (apiService.getVsumDetails as Mock).mockRejectedValueOnce(
       apiError(403, 'Forbidden'),
     );
 
@@ -145,7 +146,7 @@ describe('CanvasPage invalid project routes', () => {
 
   it('shows not found and removes the canvas when details returns 404', async () => {
     mockRouteId = '100';
-    (apiService.getVsumDetails as jest.Mock).mockRejectedValueOnce(
+    (apiService.getVsumDetails as Mock).mockRejectedValueOnce(
       apiError(404, 'Not found'),
     );
 
@@ -179,13 +180,13 @@ describe('CanvasPage project tabs', () => {
     .map(model => model.textContent);
 
   beforeEach(() => {
-    jest.clearAllMocks();
+    vi.clearAllMocks();
     mockRouteId = '10';
-    (apiService.findMetaModels as jest.Mock).mockResolvedValue({ data: [] });
-    (apiService.getVsumMembers as jest.Mock).mockResolvedValue({ data: [] });
-    (apiService.getVsum as jest.Mock).mockResolvedValue({ data: {} });
-    (apiService.getVsumsPaginated as jest.Mock).mockResolvedValue({ data: [] });
-    (apiService.getVsumDetails as jest.Mock).mockImplementation((vsumId: number) => Promise.resolve(
+    (apiService.findMetaModels as Mock).mockResolvedValue({ data: [] });
+    (apiService.getVsumMembers as Mock).mockResolvedValue({ data: [] });
+    (apiService.getVsum as Mock).mockResolvedValue({ data: {} });
+    (apiService.getVsumsPaginated as Mock).mockResolvedValue({ data: [] });
+    (apiService.getVsumDetails as Mock).mockImplementation((vsumId: number) => Promise.resolve(
       vsumId === 10 ? vsumDetails(10, 'Project A') : vsumDetails(20, 'Project B'),
     ));
   });
@@ -236,14 +237,14 @@ describe('CanvasPage save shortcut', () => {
   };
 
   beforeEach(() => {
-    jest.clearAllMocks();
+    vi.clearAllMocks();
     mockRouteId = '10';
-    (apiService.findMetaModels as jest.Mock).mockResolvedValue({ data: [] });
-    (apiService.getVsumMembers as jest.Mock).mockResolvedValue({ data: [] });
-    (apiService.getVsum as jest.Mock).mockResolvedValue({ data: {} });
-    (apiService.getVsumsPaginated as jest.Mock).mockResolvedValue({ data: [] });
-    (apiService.getVsumDetails as jest.Mock).mockResolvedValue(vsumDetails(10, 'Project A'));
-    (apiService.syncVsumChanges as jest.Mock).mockResolvedValue({ data: { message: 'Saved' } });
+    (apiService.findMetaModels as Mock).mockResolvedValue({ data: [] });
+    (apiService.getVsumMembers as Mock).mockResolvedValue({ data: [] });
+    (apiService.getVsum as Mock).mockResolvedValue({ data: {} });
+    (apiService.getVsumsPaginated as Mock).mockResolvedValue({ data: [] });
+    (apiService.getVsumDetails as Mock).mockResolvedValue(vsumDetails(10, 'Project A'));
+    (apiService.syncVsumChanges as Mock).mockResolvedValue({ data: { message: 'Saved' } });
   });
 
   it('saves the project with Cmd+S instead of opening the browser dialog', async () => {
@@ -254,7 +255,7 @@ describe('CanvasPage save shortcut', () => {
 
     expect(notPrevented).toBe(false);
     await waitFor(() => expect(apiService.syncVsumChanges).toHaveBeenCalledTimes(1));
-    expect((apiService.syncVsumChanges as jest.Mock).mock.calls[0][0]).toBe(10);
+    expect((apiService.syncVsumChanges as Mock).mock.calls[0][0]).toBe(10);
   });
 
   it('saves the project with Cmd+S while a model on the canvas has the focus', async () => {

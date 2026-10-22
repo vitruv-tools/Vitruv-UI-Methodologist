@@ -2,23 +2,24 @@ import React from 'react';
 import { render, screen, fireEvent, act } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { ProjectsView } from '../../../components/ui/ProjectsView';
+import * as apiModule from '../../../services/api';
 
-jest.mock('react-router-dom', () => ({
-  ...jest.requireActual('react-router-dom'),
-  useNavigate: () => jest.fn(),
+vi.mock('react-router-dom', async () => ({
+  ...(await vi.importActual<any>('react-router-dom')),
+  useNavigate: () => vi.fn(),
 }));
 
-jest.mock('../../../services/api', () => ({
+vi.mock('../../../services/api', () => ({
   apiService: {
-    getVsumsPaginated: jest.fn(),
-    getRemovedVsumsPaginated: jest.fn(),
-    deleteVsum: jest.fn(),
-    recoverVsum: jest.fn(),
-    deleteVsumPermanently: jest.fn(),
+    getVsumsPaginated: vi.fn(),
+    getRemovedVsumsPaginated: vi.fn(),
+    deleteVsum: vi.fn(),
+    recoverVsum: vi.fn(),
+    deleteVsumPermanently: vi.fn(),
   },
 }));
 
-jest.mock('../../../components/ui/CreateVsumModal', () => ({
+vi.mock('../../../components/ui/CreateVsumModal', () => ({
   CreateVsumModal: ({ isOpen, onClose }: any) =>
     isOpen ? (
       <div data-testid="create-modal">
@@ -27,12 +28,12 @@ jest.mock('../../../components/ui/CreateVsumModal', () => ({
     ) : null,
 }));
 
-jest.mock('../../../components/ui/VsumDetailsModal', () => ({
+vi.mock('../../../components/ui/VsumDetailsModal', () => ({
   VsumDetailsModal: ({ isOpen }: any) =>
     isOpen ? <div data-testid="details-modal" /> : null,
 }));
 
-jest.mock('../../../components/ui/ConfirmDialog', () => ({
+vi.mock('../../../components/ui/ConfirmDialog', () => ({
   ConfirmDialog: ({ isOpen, title, message, onConfirm, onCancel }: any) =>
     isOpen ? (
       <div data-testid="confirm-dialog">
@@ -48,7 +49,7 @@ jest.mock('../../../components/ui/ConfirmDialog', () => ({
     ) : null,
 }));
 
-const { apiService } = require('../../../services/api');
+const { apiService } = (apiModule as any);
 
 type VsumListResponse = { data: unknown[] };
 
@@ -73,7 +74,7 @@ const mockVsum2 = {
 };
 
 beforeEach(() => {
-  jest.clearAllMocks();
+  vi.clearAllMocks();
   apiService.getVsumsPaginated.mockImplementation(
     () => new Promise((resolve, reject) => {
       resolveVsums = resolve;

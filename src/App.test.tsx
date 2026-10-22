@@ -2,11 +2,11 @@ import { fireEvent, render, screen } from '@testing-library/react';
 import App from './App';
 import { MODEL_LIBRARY_PATH } from './constants/routes';
 
-jest.mock('./components/ui/ModelLibraryTable', () => ({
+vi.mock('./components/ui/ModelLibraryTable', () => ({
   ModelLibraryTable: () => <div data-testid="model-library-table" />,
 }));
 
-jest.mock('./components/ui/ProjectsView', () => ({
+vi.mock('./components/ui/ProjectsView', () => ({
   ProjectsView: () => <div data-testid="projects-view" />,
 }));
 

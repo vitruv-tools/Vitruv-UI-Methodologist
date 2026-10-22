@@ -1,10 +1,12 @@
+import type { Mock } from 'vitest';
 import React from 'react';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { VsumUsersTab } from '../../../components/ui/VsumUsersTab';
+import * as apiModule from '../../../services/api';
 
-jest.mock('../../../services/api', () => ({
+vi.mock('../../../services/api', () => ({
   apiService: {
-    getVsumMembers: jest.fn().mockResolvedValue({
+    getVsumMembers: vi.fn().mockResolvedValue({
       data: [
         {
           id: 1,
@@ -15,7 +17,7 @@ jest.mock('../../../services/api', () => ({
         },
       ],
     }),
-    searchUsers: jest.fn().mockResolvedValue({
+    searchUsers: vi.fn().mockResolvedValue({
       data: [
         {
           id: 2,
@@ -25,30 +27,30 @@ jest.mock('../../../services/api', () => ({
         },
       ],
     }),
-    addVsumMember: jest.fn().mockResolvedValue({}),
-    removeVsumMember: jest.fn().mockResolvedValue({}),
-    inviteVsumViewer: jest.fn().mockResolvedValue({ message: 'Invitation sent' }),
+    addVsumMember: vi.fn().mockResolvedValue({}),
+    removeVsumMember: vi.fn().mockResolvedValue({}),
+    inviteVsumViewer: vi.fn().mockResolvedValue({ message: 'Invitation sent' }),
   },
 }));
 
-const { apiService } = require('../../../services/api') as {
+const { apiService } = (apiModule as unknown) as {
   apiService: {
-    getVsumMembers: jest.Mock;
-    searchUsers: jest.Mock;
-    addVsumMember: jest.Mock;
-    removeVsumMember: jest.Mock;
-    inviteVsumViewer: jest.Mock;
+    getVsumMembers: Mock;
+    searchUsers: Mock;
+    addVsumMember: Mock;
+    removeVsumMember: Mock;
+    inviteVsumViewer: Mock;
   };
 };
 
 describe('VsumUsersTab', () => {
   beforeEach(() => {
-    jest.clearAllMocks();
-    jest.spyOn(globalThis, 'confirm').mockReturnValue(true);
+    vi.clearAllMocks();
+    vi.spyOn(globalThis, 'confirm').mockReturnValue(true);
   });
 
   afterEach(() => {
-    (globalThis.confirm as jest.Mock).mockRestore();
+    (globalThis.confirm as Mock).mockRestore();
   });
 
   it('loads and displays members', async () => {
@@ -75,14 +77,14 @@ describe('VsumUsersTab', () => {
 
 describe('VsumUsersTab – additional tests', () => {
   beforeEach(() => {
-    jest.clearAllMocks();
-    jest.spyOn(globalThis, 'confirm').mockReturnValue(true);
+    vi.clearAllMocks();
+    vi.spyOn(globalThis, 'confirm').mockReturnValue(true);
     apiService.getVsumMembers.mockResolvedValue({ data: [] });
     apiService.searchUsers.mockResolvedValue({ data: [] });
   });
 
   afterEach(() => {
-    (globalThis.confirm as jest.Mock).mockRestore();
+    (globalThis.confirm as Mock).mockRestore();
   });
 
   it('shows "No members yet." when list is empty', async () => {

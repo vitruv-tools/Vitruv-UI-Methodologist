@@ -1,10 +1,10 @@
-jest.mock('../../../utils/ecoreToUml', () => require('../../../testSupport/umlDiagram/mockFactories').ecoreToUmlMock());
-jest.mock('../../../utils/saveMetaModelEcore', () => require('../../../testSupport/umlDiagram/mockFactories').saveMetaModelEcoreMock());
-jest.mock('../../../utils/umlValidation', () => require('../../../testSupport/umlDiagram/mockFactories').umlValidationMock());
-jest.mock('../../../components/canvas/UMLDiagramMinimap', () => require('../../../testSupport/umlDiagram/mockFactories').umlDiagramMinimapMock());
-jest.mock('../../../utils/umlDiagramGeometry', () => require('../../../testSupport/umlDiagram/mockFactories').umlDiagramGeometryMock());
-jest.mock('../../../utils/umlClassLayout', () => require('../../../testSupport/umlDiagram/mockFactories').umlClassLayoutMock());
-jest.mock('../../../utils/umlLayoutStorage', () => require('../../../testSupport/umlDiagram/mockFactories').umlLayoutStorageMock());
+vi.mock('../../../utils/ecoreToUml', async () => (await import('../../../testSupport/umlDiagram/mockFactories')).ecoreToUmlMock());
+vi.mock('../../../utils/saveMetaModelEcore', async () => (await import('../../../testSupport/umlDiagram/mockFactories')).saveMetaModelEcoreMock());
+vi.mock('../../../utils/umlValidation', async () => (await import('../../../testSupport/umlDiagram/mockFactories')).umlValidationMock());
+vi.mock('../../../components/canvas/UMLDiagramMinimap', async () => (await import('../../../testSupport/umlDiagram/mockFactories')).umlDiagramMinimapMock());
+vi.mock('../../../utils/umlDiagramGeometry', async () => (await import('../../../testSupport/umlDiagram/mockFactories')).umlDiagramGeometryMock());
+vi.mock('../../../utils/umlClassLayout', async () => (await import('../../../testSupport/umlDiagram/mockFactories')).umlClassLayoutMock());
+vi.mock('../../../utils/umlLayoutStorage', async () => (await import('../../../testSupport/umlDiagram/mockFactories')).umlLayoutStorageMock());
 
 import React, { createRef } from 'react';
 import { act, screen, waitFor } from '@testing-library/react';
@@ -16,7 +16,7 @@ import { renderDiagram } from '../../../testSupport/umlDiagram/renderUtils';
 describe('UMLDiagram save', () => {
   it('workspace save calls onSaved without hitting the library API', async () => {
     const ref = createRef<UMLDiagramHandle>();
-    const onSaved = jest.fn();
+    const onSaved = vi.fn();
 
     renderDiagram({
       ref,
@@ -43,8 +43,8 @@ describe('UMLDiagram save', () => {
 
   it('workspace save persists the serialized ecore before reporting success', async () => {
     const ref = createRef<UMLDiagramHandle>();
-    const onSaved = jest.fn();
-    const persistWorkspaceEcore = jest.fn().mockResolvedValue(undefined);
+    const onSaved = vi.fn();
+    const persistWorkspaceEcore = vi.fn().mockResolvedValue(undefined);
 
     renderDiagram({
       ref,
@@ -72,9 +72,9 @@ describe('UMLDiagram save', () => {
 
   it('workspace save shows the backend error and keeps changes unsaved when persisting fails', async () => {
     const ref = createRef<UMLDiagramHandle>();
-    const onSaved = jest.fn();
-    const onError = jest.fn();
-    const persistWorkspaceEcore = jest.fn().mockRejectedValue(new Error('Access denied'));
+    const onSaved = vi.fn();
+    const onError = vi.fn();
+    const persistWorkspaceEcore = vi.fn().mockRejectedValue(new Error('Access denied'));
 
     renderDiagram({
       ref,

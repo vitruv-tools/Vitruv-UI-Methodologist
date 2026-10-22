@@ -3,38 +3,38 @@ import { render, screen, fireEvent } from '@testing-library/react';
 import { AppSidebar } from '../../../components/layout/AppSidebar';
 
 // Mock hooks that have side effects
-jest.mock('../../../hooks/useChangePassword', () => ({
+vi.mock('../../../hooks/useChangePassword', () => ({
   useChangePassword: () => ({
-    isOpen: false, open: jest.fn(), close: jest.fn(),
+    isOpen: false, open: vi.fn(), close: vi.fn(),
     currentPassword: '',
     newPassword: '', confirmPassword: '',
-    setCurrentPassword: jest.fn(),
-    setNewPassword: jest.fn(), setConfirmPassword: jest.fn(),
+    setCurrentPassword: vi.fn(),
+    setNewPassword: vi.fn(), setConfirmPassword: vi.fn(),
     validation: null, isConfirmValid: true,
     isChanging: false, error: null, success: false,
-    handleSubmit: jest.fn(), canSubmit: false,
+    handleSubmit: vi.fn(), canSubmit: false,
   }),
 }));
 
-jest.mock('../../../hooks/useDismissOnOutsideClick', () => ({
-  useDismissOnOutsideClick: jest.fn(),
+vi.mock('../../../hooks/useDismissOnOutsideClick', () => ({
+  useDismissOnOutsideClick: vi.fn(),
 }));
 
-jest.mock('../../../components/ui/BoundChangePasswordModal', () => ({
+vi.mock('../../../components/ui/BoundChangePasswordModal', () => ({
   BoundChangePasswordModal: () => null,
 }));
 
 const defaultProps = {
   activeView: 'home' as const,
-  onViewChange: jest.fn(),
+  onViewChange: vi.fn(),
   userName: 'Max Oesterle',
   userRole: 'Methodologist',
   userEmail: 'max@kit.edu',
-  onLogout: jest.fn(),
+  onLogout: vi.fn(),
 };
 
 describe('AppSidebar', () => {
-  beforeEach(() => jest.clearAllMocks());
+  beforeEach(() => vi.clearAllMocks());
 
   it('renders the Vitruvius logo text', () => {
     render(<AppSidebar {...defaultProps} />);
@@ -52,21 +52,21 @@ describe('AppSidebar', () => {
   });
 
   it('calls onViewChange with "projects" when Projects is clicked', () => {
-    const onViewChange = jest.fn();
+    const onViewChange = vi.fn();
     render(<AppSidebar {...defaultProps} onViewChange={onViewChange} />);
     fireEvent.click(screen.getByText('Projects'));
     expect(onViewChange).toHaveBeenCalledWith('projects');
   });
 
   it('calls onViewChange with "library" when Model Library is clicked', () => {
-    const onViewChange = jest.fn();
+    const onViewChange = vi.fn();
     render(<AppSidebar {...defaultProps} onViewChange={onViewChange} />);
     fireEvent.click(screen.getByText('Model Library'));
     expect(onViewChange).toHaveBeenCalledWith('library');
   });
 
   it('calls onViewChange with "home" when logo is clicked', () => {
-    const onViewChange = jest.fn();
+    const onViewChange = vi.fn();
     render(<AppSidebar {...defaultProps} onViewChange={onViewChange} />);
     fireEvent.click(screen.getByTitle('Back to home'));
     expect(onViewChange).toHaveBeenCalledWith('home');
@@ -91,7 +91,7 @@ describe('AppSidebar', () => {
   });
 
   it('calls onViewChange with "profile" when User Profile is clicked', () => {
-    const onViewChange = jest.fn();
+    const onViewChange = vi.fn();
     render(<AppSidebar {...defaultProps} onViewChange={onViewChange} />);
     fireEvent.click(screen.getByRole('button', { name: /Max Oesterle/i }));
     fireEvent.click(screen.getByText('User Profile'));
@@ -99,7 +99,7 @@ describe('AppSidebar', () => {
   });
 
   it('calls onLogout when Log out is clicked', () => {
-    const onLogout = jest.fn();
+    const onLogout = vi.fn();
     render(<AppSidebar {...defaultProps} onLogout={onLogout} />);
     fireEvent.click(screen.getByRole('button', { name: /Max Oesterle/i }));
     fireEvent.click(screen.getByText('Log out'));

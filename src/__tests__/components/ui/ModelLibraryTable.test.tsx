@@ -1,40 +1,43 @@
+import type { Mock } from 'vitest';
 import React from 'react';
 import { render, screen, fireEvent, waitFor, act, within } from '@testing-library/react';
 import { MemoryRouter, useLocation } from 'react-router-dom';
 import { ModelDetailModal, ModelLibraryTable } from '../../../components/ui/ModelLibraryTable';
 import { MODEL_LIBRARY_PATH, modelLibraryModelPath, modelLibraryUmlPath } from '../../../constants/routes';
 import { resetThemeStore, setTheme } from '../../../theme/theme';
+import * as apiModule from '../../../services/api';
 
-jest.mock('../../../services/api', () => ({
+vi.mock('../../../services/api', () => ({
   apiService: {
-    findMetaModels: jest.fn(),
-    deleteMetaModel: jest.fn(),
-    getFile: jest.fn(),
-    updateMetaModel: jest.fn(),
+    findMetaModels: vi.fn(),
+    deleteMetaModel: vi.fn(),
+    getFile: vi.fn(),
+    updateMetaModel: vi.fn(),
   },
 }));
 
-const mockReloadLayout = jest.fn();
+const mockReloadLayout = vi.fn();
 
-jest.mock('../../../components/canvas/UMLDiagram', () => {
-  const { forwardRef, useImperativeHandle, createElement } = require('react');
+vi.mock('../../../components/canvas/UMLDiagram', async () => {
+  const { forwardRef, useImperativeHandle, createElement } = (await import('react'));
   return {
+    WORKSPACE_DOT_BACKGROUND: {},
     UMLDiagram: forwardRef((props: any, ref: any) => {
       useImperativeHandle(ref, () => ({
-        zoomIn: jest.fn(),
-        zoomOut: jest.fn(),
-        fitToView: jest.fn(),
-        flushLayout: jest.fn(),
+        zoomIn: vi.fn(),
+        zoomOut: vi.fn(),
+        fitToView: vi.fn(),
+        flushLayout: vi.fn(),
         reloadLayout: mockReloadLayout,
-        reload: jest.fn(),
-        undo: jest.fn(),
-        redo: jest.fn(),
-        canUndo: jest.fn(() => false),
-        canRedo: jest.fn(() => false),
-        isDirty: jest.fn(() => false),
-        tryEscape: jest.fn(() => false),
-        getModel: jest.fn(() => ({ classes: [], relationships: [] })),
-        save: jest.fn(),
+        reload: vi.fn(),
+        undo: vi.fn(),
+        redo: vi.fn(),
+        canUndo: vi.fn(() => false),
+        canRedo: vi.fn(() => false),
+        isDirty: vi.fn(() => false),
+        tryEscape: vi.fn(() => false),
+        getModel: vi.fn(() => ({ classes: [], relationships: [] })),
+        save: vi.fn(),
       }));
       return createElement('div', { 'data-testid': 'uml-diagram', 'data-interactive': String(props.interactive !== false) });
     }),
@@ -44,7 +47,7 @@ jest.mock('../../../components/canvas/UMLDiagram', () => {
 // Stand-in for the real import modal — exposes a single button that fires
 // onSuccess with a create payload, so tests can drive ModelLibraryTable's
 // post-create refresh logic without going through the whole upload form.
-jest.mock('../../../components/ui/CreateModelModal', () => ({
+vi.mock('../../../components/ui/CreateModelModal', () => ({
   CreateModelModal: ({ isOpen, onSuccess }: any) =>
     isOpen ? (
       <button
@@ -56,12 +59,12 @@ jest.mock('../../../components/ui/CreateModelModal', () => ({
     ) : null,
 }));
 
-const { apiService } = require('../../../services/api') as {
+const { apiService } = (apiModule as unknown) as {
   apiService: {
-    findMetaModels: jest.Mock;
-    deleteMetaModel: jest.Mock;
-    getFile: jest.Mock;
-    updateMetaModel: jest.Mock;
+    findMetaModels: Mock;
+    deleteMetaModel: Mock;
+    getFile: Mock;
+    updateMetaModel: Mock;
   };
 };
 
@@ -162,8 +165,8 @@ describe('ModelLibraryTable', () => {
           ecoreFileId: 1,
         }}
         ecoreContent="<ecore/>"
-        onClose={jest.fn()}
-        onUpdated={jest.fn()}
+        onClose={vi.fn()}
+        onUpdated={vi.fn()}
       />,
     );
 
@@ -192,8 +195,8 @@ describe('ModelLibraryTable', () => {
           ecoreFileId: 1,
         }}
         ecoreContent="<ecore/>"
-        onClose={jest.fn()}
-        onUpdated={jest.fn()}
+        onClose={vi.fn()}
+        onUpdated={vi.fn()}
       />,
     );
 
@@ -217,8 +220,8 @@ describe('ModelLibraryTable', () => {
           ecoreFileId: 1,
         }}
         ecoreContent="<ecore/>"
-        onClose={jest.fn()}
-        onUpdated={jest.fn()}
+        onClose={vi.fn()}
+        onUpdated={vi.fn()}
       />,
     );
 
@@ -265,7 +268,7 @@ describe('ModelLibraryTable', () => {
     });
 
     it('goes to the home page from the Vitruvius logo in the UML editor', async () => {
-      const onHome = jest.fn();
+      const onHome = vi.fn();
       renderLibrary(modelLibraryUmlPath(1), { onHome });
 
       expect(await screen.findByTestId('uml-fullscreen-page')).toBeInTheDocument();
@@ -397,8 +400,8 @@ describe('ModelDetailModal', () => {
     render(
       <ModelDetailModal
         model={{ id: 1, name: 'string', description: 'string', keyword: ['string'] }}
-        onClose={jest.fn()}
-        onUpdated={jest.fn()}
+        onClose={vi.fn()}
+        onUpdated={vi.fn()}
       />,
     );
 

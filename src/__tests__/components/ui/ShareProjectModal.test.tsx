@@ -1,16 +1,18 @@
+import type { Mock } from 'vitest';
 import React from 'react';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { ShareProjectModal } from '../../../components/ui/ShareProjectModal';
+import * as apiModule from '../../../services/api';
 
-jest.mock('../../../services/api', () => ({
+vi.mock('../../../services/api', () => ({
   apiService: {
-    getVsumMembers: jest.fn().mockResolvedValue({ data: [] }),
-    inviteVsumViewer: jest.fn().mockResolvedValue({ message: 'Invitation sent' }),
-    removeVsumMember: jest.fn().mockResolvedValue({}),
+    getVsumMembers: vi.fn().mockResolvedValue({ data: [] }),
+    inviteVsumViewer: vi.fn().mockResolvedValue({ message: 'Invitation sent' }),
+    removeVsumMember: vi.fn().mockResolvedValue({}),
   },
 }));
 
-jest.mock('../../../components/ui/ConfirmDialog', () => ({
+vi.mock('../../../components/ui/ConfirmDialog', () => ({
   ConfirmDialog: ({
     isOpen,
     onConfirm,
@@ -31,20 +33,20 @@ jest.mock('../../../components/ui/ConfirmDialog', () => ({
   ) : null,
 }));
 
-const { apiService } = require('../../../services/api') as {
+const { apiService } = (apiModule as unknown) as {
   apiService: {
-    getVsumMembers: jest.Mock;
-    inviteVsumViewer: jest.Mock;
-    removeVsumMember: jest.Mock;
+    getVsumMembers: Mock;
+    inviteVsumViewer: Mock;
+    removeVsumMember: Mock;
   };
 };
 
 describe('ShareProjectModal', () => {
-  const onClose = jest.fn();
-  const onInvited = jest.fn();
+  const onClose = vi.fn();
+  const onInvited = vi.fn();
 
   beforeEach(() => {
-    jest.clearAllMocks();
+    vi.clearAllMocks();
     apiService.getVsumMembers.mockResolvedValue({ data: [] });
   });
 

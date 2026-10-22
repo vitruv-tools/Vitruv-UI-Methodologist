@@ -15,8 +15,8 @@ interface MockModelDrawerProps {
   onFetchFile: (fileId: number) => Promise<string>;
 }
 
-jest.mock('../../../components/canvas/ModelDrawer', () => {
-  const { createElement } = require('react');
+vi.mock('../../../components/canvas/ModelDrawer', async () => {
+  const { createElement } = (await import('react'));
   return {
     ModelDrawer: ({
       models,
@@ -68,14 +68,14 @@ const createProps = () => ({
   loading: false,
   myLibraryModels: [myLibraryModel],
   publicLibraryModels: [publicLibraryModel],
-  onClose: jest.fn(),
-  onAddModel: jest.fn(),
-  onDeleteModel: jest.fn().mockResolvedValue(undefined),
-  onFetchFile: jest.fn().mockResolvedValue('<ecore />'),
+  onClose: vi.fn(),
+  onAddModel: vi.fn(),
+  onDeleteModel: vi.fn().mockResolvedValue(undefined),
+  onFetchFile: vi.fn().mockResolvedValue('<ecore />'),
 });
 
 beforeEach(() => {
-  jest.clearAllMocks();
+  vi.clearAllMocks();
 });
 
 describe('ModelDrawerModal', () => {

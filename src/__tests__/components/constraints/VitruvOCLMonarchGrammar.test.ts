@@ -1,12 +1,13 @@
-jest.mock('monaco-editor', () => ({
+import type { Mock } from 'vitest';
+vi.mock('monaco-editor', () => ({
   languages: {
-    register: jest.fn(),
-    setMonarchTokensProvider: jest.fn(),
-    setLanguageConfiguration: jest.fn(),
-    getLanguages: jest.fn(() => []),
+    register: vi.fn(),
+    setMonarchTokensProvider: vi.fn(),
+    setLanguageConfiguration: vi.fn(),
+    getLanguages: vi.fn(() => []),
   },
   editor: {
-    defineTheme: jest.fn(),
+    defineTheme: vi.fn(),
   },
 }));
 
@@ -21,8 +22,8 @@ import {
 } from '../../../components/constraints/VitruvOCLMonarchGrammar';
 
 beforeEach(() => {
-  jest.clearAllMocks();
-  (monacoMock.languages.getLanguages as jest.Mock).mockReturnValue([]);
+  vi.clearAllMocks();
+  (monacoMock.languages.getLanguages as Mock).mockReturnValue([]);
 });
 
 describe('vitruvOCLLanguageId', () => {
@@ -138,7 +139,7 @@ describe('registerVitruvOCLLanguage', () => {
   });
 
   it('should not register again when the language is already registered', () => {
-    (monacoMock.languages.getLanguages as jest.Mock).mockReturnValue([{ id: vitruvOCLLanguageId }]);
+    (monacoMock.languages.getLanguages as Mock).mockReturnValue([{ id: vitruvOCLLanguageId }]);
     registerVitruvOCLLanguage();
     expect(monacoMock.languages.register).not.toHaveBeenCalled();
     expect(monacoMock.languages.setMonarchTokensProvider).not.toHaveBeenCalled();
@@ -152,8 +153,8 @@ describe('registerVitruvOCLLanguage', () => {
     expect(monacoMock.languages.register).toHaveBeenCalledTimes(1);
 
     // Simulate language now being present
-    jest.clearAllMocks();
-    (monacoMock.languages.getLanguages as jest.Mock).mockReturnValue([{ id: vitruvOCLLanguageId }]);
+    vi.clearAllMocks();
+    (monacoMock.languages.getLanguages as Mock).mockReturnValue([{ id: vitruvOCLLanguageId }]);
 
     // Second call — should be a no-op
     registerVitruvOCLLanguage();

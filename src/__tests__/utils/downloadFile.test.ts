@@ -2,17 +2,17 @@ import { downloadBlobAsFile } from '../../utils/downloadFile';
 
 describe('downloadBlobAsFile', () => {
   beforeEach(() => {
-    jest.useFakeTimers();
+    vi.useFakeTimers();
   });
 
   afterEach(() => {
-    jest.useRealTimers();
-    jest.restoreAllMocks();
+    vi.useRealTimers();
+    vi.restoreAllMocks();
   });
 
   it('creates a link, clicks it, and revokes the object URL after a delay', () => {
-    const revoke = jest.fn();
-    const create = jest.fn().mockReturnValue('blob:mock');
+    const revoke = vi.fn();
+    const create = vi.fn().mockReturnValue('blob:mock');
     const originalUrl = globalThis.URL;
 
     globalThis.URL = {
@@ -21,9 +21,9 @@ describe('downloadBlobAsFile', () => {
       revokeObjectURL: revoke,
     } as typeof URL;
 
-    const click = jest.fn();
-    const remove = jest.fn();
-    const appendChild = jest.spyOn(document.body, 'appendChild').mockImplementation((node) => {
+    const click = vi.fn();
+    const remove = vi.fn();
+    const appendChild = vi.spyOn(document.body, 'appendChild').mockImplementation((node) => {
       Object.assign(node as HTMLAnchorElement, { click, remove });
       return node;
     });
@@ -35,7 +35,7 @@ describe('downloadBlobAsFile', () => {
       expect(click).toHaveBeenCalled();
       expect(revoke).not.toHaveBeenCalled();
 
-      jest.runAllTimers();
+      vi.runAllTimers();
 
       expect(remove).toHaveBeenCalled();
       expect(revoke).toHaveBeenCalledWith('blob:mock');
