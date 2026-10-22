@@ -1,3 +1,4 @@
+import type { MockedFunction } from 'vitest';
 import { act, renderHook } from '@testing-library/react';
 import {
   hasSavedUmlLayout,
@@ -13,27 +14,27 @@ import {
 } from '../../hooks/useUmlDiagramViewport';
 import type { UmlDiagramClass } from '../../components/canvas/umlDiagramTypes';
 
-jest.mock('../../utils/umlLayoutStorage', () => {
-  const actual = jest.requireActual('../../utils/umlLayoutStorage');
+vi.mock('../../utils/umlLayoutStorage', async () => {
+  const actual = (await vi.importActual<any>('../../utils/umlLayoutStorage'));
   return {
     ...actual,
-    hasSavedUmlLayout: jest.fn(),
-    loadUmlViewport: jest.fn(),
-    saveUmlLayout: jest.fn(),
-    saveUmlViewport: jest.fn(),
+    hasSavedUmlLayout: vi.fn(),
+    loadUmlViewport: vi.fn(),
+    saveUmlLayout: vi.fn(),
+    saveUmlViewport: vi.fn(),
   };
 });
 
-const mockedHasSavedUmlLayout = hasSavedUmlLayout as jest.MockedFunction<
+const mockedHasSavedUmlLayout = hasSavedUmlLayout as MockedFunction<
   typeof hasSavedUmlLayout
 >;
-const mockedLoadUmlViewport = loadUmlViewport as jest.MockedFunction<
+const mockedLoadUmlViewport = loadUmlViewport as MockedFunction<
   typeof loadUmlViewport
 >;
-const mockedSaveUmlLayout = saveUmlLayout as jest.MockedFunction<
+const mockedSaveUmlLayout = saveUmlLayout as MockedFunction<
   typeof saveUmlLayout
 >;
-const mockedSaveUmlViewport = saveUmlViewport as jest.MockedFunction<
+const mockedSaveUmlViewport = saveUmlViewport as MockedFunction<
   typeof saveUmlViewport
 >;
 
@@ -69,9 +70,9 @@ function makeOptions(
     diagramIdentity: 'diagram-a',
     fileName: 'diagram.ecore',
     layoutScopeId: 'scope-1',
-    onBeforePan: jest.fn(),
-    isPanBlocked: jest.fn(() => false),
-    isPanTarget: jest.fn(() => true),
+    onBeforePan: vi.fn(),
+    isPanBlocked: vi.fn(() => false),
+    isPanTarget: vi.fn(() => true),
     ...overrides,
   };
 }
@@ -127,15 +128,15 @@ function attachContainer(
 
 describe('useUmlDiagramViewport', () => {
   beforeEach(() => {
-    jest.useFakeTimers();
-    jest.clearAllMocks();
+    vi.useFakeTimers();
+    vi.clearAllMocks();
     mockedHasSavedUmlLayout.mockReturnValue(true);
     mockedLoadUmlViewport.mockReturnValue(null);
   });
 
   afterEach(() => {
-    jest.clearAllTimers();
-    jest.useRealTimers();
+    vi.clearAllTimers();
+    vi.useRealTimers();
   });
 
   it('restores a saved viewport and keeps it when initial fit detects saved layout', () => {
@@ -161,7 +162,7 @@ describe('useUmlDiagramViewport', () => {
     expect(result.current.vscale).toBe(1.5);
 
     act(() => {
-      jest.advanceTimersByTime(120);
+      vi.advanceTimersByTime(120);
     });
 
     expect(mockedHasSavedUmlLayout).toHaveBeenCalledWith(
@@ -295,7 +296,7 @@ describe('useUmlDiagramViewport', () => {
   });
 
   it('leaves wheel events alone over areas that scroll themselves', () => {
-    const isWheelTarget = jest.fn(() => false);
+    const isWheelTarget = vi.fn(() => false);
     const { result, rerender, options } = renderViewport({
       fileName: undefined,
       isWheelTarget,
@@ -403,9 +404,9 @@ describe('useUmlDiagramViewport', () => {
   });
 
   it('honors panning guards and tracks the canvas panning lifecycle', () => {
-    const onBeforePan = jest.fn();
-    const isPanBlocked = jest.fn(() => true);
-    const isPanTarget = jest.fn(() => true);
+    const onBeforePan = vi.fn();
+    const isPanBlocked = vi.fn(() => true);
+    const isPanTarget = vi.fn(() => true);
     const { result, rerender, options } = renderViewport({
       fileName: undefined,
       onBeforePan,
@@ -477,13 +478,13 @@ describe('useUmlDiagramViewport', () => {
     act(() => {
       result.current.scheduleDebouncedViewportSave();
       result.current.scheduleDebouncedViewportSave();
-      jest.advanceTimersByTime(299);
+      vi.advanceTimersByTime(299);
     });
 
     expect(mockedSaveUmlViewport).not.toHaveBeenCalled();
 
     act(() => {
-      jest.advanceTimersByTime(1);
+      vi.advanceTimersByTime(1);
     });
 
     expect(mockedSaveUmlViewport).toHaveBeenCalledTimes(1);
@@ -502,7 +503,7 @@ describe('useUmlDiagramViewport', () => {
 
     rerender({ ...options, classes: movedClasses, allClasses: movedClasses });
     act(() => {
-      jest.advanceTimersByTime(1000);
+      vi.advanceTimersByTime(1000);
     });
 
     expect(mockedSaveUmlLayout).not.toHaveBeenCalled();
@@ -517,18 +518,18 @@ describe('useUmlDiagramViewport', () => {
     });
 
     act(() => {
-      jest.advanceTimersByTime(119);
+      vi.advanceTimersByTime(119);
     });
     expect(result.current.vscale).toBe(1);
 
     act(() => {
-      jest.advanceTimersByTime(1);
+      vi.advanceTimersByTime(1);
     });
     expect(result.current.vscale).toBe(1.15);
   });
 
   it('cleans active panning and pending layout timers on unmount', () => {
-    const removeEventListenerSpy = jest.spyOn(
+    const removeEventListenerSpy = vi.spyOn(
       globalThis,
       'removeEventListener',
     );
@@ -555,7 +556,7 @@ describe('useUmlDiagramViewport', () => {
     const saveCallsAfterUnmount = mockedSaveUmlViewport.mock.calls.length;
 
     act(() => {
-      jest.advanceTimersByTime(1000);
+      vi.advanceTimersByTime(1000);
     });
 
     expect(removeEventListenerSpy).toHaveBeenCalledWith(

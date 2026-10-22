@@ -2,7 +2,7 @@ import React from 'react';
 import { render, screen, fireEvent } from '@testing-library/react';
 import { CanvasProjectTabs } from '../../../components/canvas/CanvasProjectTabs';
 
-jest.mock('../../../components/canvas/ProjectPickerMenu', () => ({
+vi.mock('../../../components/canvas/ProjectPickerMenu', () => ({
   ProjectPickerMenu: ({ onSelectProject }: { onSelectProject: (p: { id: number; name: string }) => void }) => (
     <button type="button" onClick={() => onSelectProject({ id: 99, name: 'New' })}>
       Add project
@@ -24,16 +24,16 @@ describe('CanvasProjectTabs', () => {
         tabs={[]}
         activeInstanceId={null}
         openProjectIds={[]}
-        onActivate={jest.fn()}
-        onRequestClose={jest.fn()}
-        onSelectProject={jest.fn()}
+        onActivate={vi.fn()}
+        onRequestClose={vi.fn()}
+        onSelectProject={vi.fn()}
       />,
     );
     expect(container.firstChild).toBeNull();
   });
 
   it('renders tab labels and activates on click', () => {
-    const onActivate = jest.fn();
+    const onActivate = vi.fn();
     render(
       <CanvasProjectTabs
         tabs={tabs}
@@ -41,8 +41,8 @@ describe('CanvasProjectTabs', () => {
         openProjectIds={openProjectIds(tabs)}
         dirtyInstanceIds={new Set(['inst-2'])}
         onActivate={onActivate}
-        onRequestClose={jest.fn()}
-        onSelectProject={jest.fn()}
+        onRequestClose={vi.fn()}
+        onSelectProject={vi.fn()}
       />,
     );
 
@@ -53,15 +53,15 @@ describe('CanvasProjectTabs', () => {
   });
 
   it('requests close when the tab close control is clicked', () => {
-    const onRequestClose = jest.fn();
+    const onRequestClose = vi.fn();
     render(
       <CanvasProjectTabs
         tabs={[tabs[0]]}
         activeInstanceId="inst-1"
         openProjectIds={openProjectIds([tabs[0]])}
-        onActivate={jest.fn()}
+        onActivate={vi.fn()}
         onRequestClose={onRequestClose}
-        onSelectProject={jest.fn()}
+        onSelectProject={vi.fn()}
       />,
     );
 
@@ -70,14 +70,14 @@ describe('CanvasProjectTabs', () => {
   });
 
   it('forwards project selection from the picker', () => {
-    const onSelectProject = jest.fn();
+    const onSelectProject = vi.fn();
     render(
       <CanvasProjectTabs
         tabs={tabs}
         activeInstanceId="inst-1"
         openProjectIds={openProjectIds(tabs)}
-        onActivate={jest.fn()}
-        onRequestClose={jest.fn()}
+        onActivate={vi.fn()}
+        onRequestClose={vi.fn()}
         onSelectProject={onSelectProject}
       />,
     );
@@ -97,9 +97,9 @@ describe('CanvasProjectTabs', () => {
         tabs={manyTabs}
         activeInstanceId="inst-1"
         openProjectIds={manyTabs.map(t => t.projectId)}
-        onActivate={jest.fn()}
-        onRequestClose={jest.fn()}
-        onSelectProject={jest.fn()}
+        onActivate={vi.fn()}
+        onRequestClose={vi.fn()}
+        onSelectProject={vi.fn()}
       />,
     );
 
@@ -118,9 +118,9 @@ describe('CanvasProjectTabs', () => {
         activeInstanceId="inst-1"
         openProjectIds={openProjectIds(tabs)}
         dirtyInstanceIds={new Set(['inst-2'])}
-        onActivate={jest.fn()}
-        onRequestClose={jest.fn()}
-        onSelectProject={jest.fn()}
+        onActivate={vi.fn()}
+        onRequestClose={vi.fn()}
+        onSelectProject={vi.fn()}
       />,
     );
 

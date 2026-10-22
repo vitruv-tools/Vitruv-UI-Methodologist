@@ -1,16 +1,17 @@
+import type { Mock } from 'vitest';
 import { renderHook, act } from '@testing-library/react';
 import { useChangePassword } from '../../hooks/useChangePassword';
 import { apiService } from '../../services/api';
 
-jest.mock('../../services/api', () => ({
+vi.mock('../../services/api', () => ({
   apiService: {
-    changePassword: jest.fn(),
+    changePassword: vi.fn(),
   },
 }));
 
 describe('useChangePassword', () => {
   beforeEach(() => {
-    jest.clearAllMocks();
+    vi.clearAllMocks();
   });
 
   it('opens and closes the modal state', () => {
@@ -33,10 +34,10 @@ describe('useChangePassword', () => {
   });
 
   it('handleSubmit calls api and sets success message', async () => {
-    (apiService.changePassword as jest.Mock).mockResolvedValueOnce({
+    (apiService.changePassword as Mock).mockResolvedValueOnce({
       message: 'Password updated',
     });
-    jest.useFakeTimers();
+    vi.useFakeTimers();
 
     const { result } = renderHook(() => useChangePassword());
     act(() => {
@@ -51,7 +52,7 @@ describe('useChangePassword', () => {
 
     expect(apiService.changePassword).toHaveBeenCalledWith('Current1!', 'Secure1!');
     expect(result.current.success).toBe('Password updated');
-    jest.useRealTimers();
+    vi.useRealTimers();
   });
 
   it('does not submit without a current password', async () => {
@@ -70,7 +71,7 @@ describe('useChangePassword', () => {
   });
 
   it('displays the backend error when the current password is incorrect', async () => {
-    (apiService.changePassword as jest.Mock).mockRejectedValueOnce({
+    (apiService.changePassword as Mock).mockRejectedValueOnce({
       response: { data: { message: 'Current password is incorrect' } },
     });
 

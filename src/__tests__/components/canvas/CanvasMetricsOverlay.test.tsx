@@ -1,3 +1,4 @@
+import type { Mock } from 'vitest';
 import React from 'react';
 import { render, screen, waitFor, fireEvent, within } from '@testing-library/react';
 import type { Edge, Node } from 'reactflow';
@@ -8,28 +9,28 @@ import {
 import { apiService } from '../../../services/api';
 import { downloadBlobAsFile } from '../../../utils/downloadFile';
 
-jest.mock('../../../services/api', () => ({
+vi.mock('../../../services/api', () => ({
   apiService: {
-    getRuleSets: jest.fn(),
-    getFile: jest.fn(),
+    getRuleSets: vi.fn(),
+    getFile: vi.fn(),
   },
 }));
 
-jest.mock('../../../utils/downloadFile', () => ({
-  downloadBlobAsFile: jest.fn(),
+vi.mock('../../../utils/downloadFile', () => ({
+  downloadBlobAsFile: vi.fn(),
 }));
 
 beforeEach(() => {
   localStorage.clear();
-  (downloadBlobAsFile as jest.Mock).mockClear();
-  (apiService.getRuleSets as jest.Mock).mockResolvedValue([{
+  (downloadBlobAsFile as Mock).mockClear();
+  (apiService.getRuleSets as Mock).mockResolvedValue([{
     id: 1,
     name: 'library-rules',
     color: '#049484',
     description: '',
     oclContent: 'context library::Book inv HasTitle:\n  true',
   }]);
-  (apiService.getFile as jest.Mock).mockResolvedValue('');
+  (apiService.getFile as Mock).mockResolvedValue('');
 });
 
 const canvasNodes: Node[] = [{
@@ -90,7 +91,7 @@ describe('CanvasMetricsOverlay', () => {
   });
 
   it('loads reaction file text from the existing file API when the edge has no code', async () => {
-    (apiService.getFile as jest.Mock).mockResolvedValue(`
+    (apiService.getFile as Mock).mockResolvedValue(`
 reaction SyncBook {
   after element of type library::Book created
 }
@@ -113,7 +114,7 @@ reaction SyncBook {
   });
 
   it('calls onClose from the close button', async () => {
-    const onClose = jest.fn();
+    const onClose = vi.fn();
     renderOverlay({ visible: true, onClose });
     fireEvent.click(screen.getByRole('button', { name: 'Close metrics' }));
     expect(onClose).toHaveBeenCalledTimes(1);
@@ -123,7 +124,7 @@ reaction SyncBook {
   });
 
   it('does not close when clicking outside the panel', async () => {
-    const onClose = jest.fn();
+    const onClose = vi.fn();
     renderOverlay({ visible: true, onClose });
     fireEvent.click(screen.getByTestId('canvas-metrics-overlay'));
     expect(onClose).not.toHaveBeenCalled();

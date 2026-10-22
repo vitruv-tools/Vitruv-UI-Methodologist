@@ -4,7 +4,7 @@ import { CanvasModeToggle } from '../../../../components/flow/canvas/CanvasModeT
 
 describe('CanvasModeToggle', () => {
   const setup = (props: Partial<React.ComponentProps<typeof CanvasModeToggle>> = {}) => {
-    const onSelectMode = jest.fn();
+    const onSelectMode = vi.fn();
     render(
       <CanvasModeToggle
         activeCanvasMode="modeling"

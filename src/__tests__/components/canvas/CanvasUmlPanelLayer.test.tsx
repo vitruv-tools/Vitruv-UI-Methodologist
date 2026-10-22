@@ -26,9 +26,9 @@ interface MockFloatingUMLPanelProps {
   zIndex: number;
 }
 
-const mockFloatingUMLPanel = jest.fn((_props: MockFloatingUMLPanelProps) => null);
+const mockFloatingUMLPanel = vi.fn((_props: MockFloatingUMLPanelProps) => null);
 
-jest.mock('../../../components/canvas/FloatingUMLPanel', () => ({
+vi.mock('../../../components/canvas/FloatingUMLPanel', () => ({
   FloatingUMLPanel: (props: MockFloatingUMLPanelProps) => mockFloatingUMLPanel(props),
 }));
 
@@ -69,22 +69,22 @@ const createProps = () => ({
   topPanelId: 'panel-2',
   panelZBase: 2000,
   viewOnly: true,
-  buildSaveContext: jest.fn(
+  buildSaveContext: vi.fn(
     (panel: CanvasUmlPanelState): UmlDiagramSaveContext => ({
       metaModelId: String(panel.metaModelId),
       ecoreFileId: panel.ecoreFileId ?? 0,
       modelName: panel.title,
     }),
   ),
-  onClose: jest.fn(),
-  onFocus: jest.fn(),
-  onHome: jest.fn(),
-  onEcoreContentUpdated: jest.fn(),
-  fetchEcoreFile: jest.fn().mockResolvedValue('<fresh />'),
+  onClose: vi.fn(),
+  onFocus: vi.fn(),
+  onHome: vi.fn(),
+  onEcoreContentUpdated: vi.fn(),
+  fetchEcoreFile: vi.fn().mockResolvedValue('<fresh />'),
 });
 
 beforeEach(() => {
-  jest.clearAllMocks();
+  vi.clearAllMocks();
 });
 
 describe('CanvasUmlPanelLayer', () => {

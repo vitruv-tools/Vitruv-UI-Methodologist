@@ -28,19 +28,19 @@ describe('ChangePasswordModal', () => {
     render(
       <ChangePasswordModal
         isOpen
-        onClose={jest.fn()}
+        onClose={vi.fn()}
         currentPassword="Current1!"
         newPassword="Secure1!"
         confirmPassword="Secure1!"
-        onCurrentPasswordChange={jest.fn()}
-        onNewPasswordChange={jest.fn()}
-        onConfirmPasswordChange={jest.fn()}
+        onCurrentPasswordChange={vi.fn()}
+        onNewPasswordChange={vi.fn()}
+        onConfirmPasswordChange={vi.fn()}
         validation={validatePassword('Secure1!')}
         isConfirmValid
         isChanging={false}
         error=""
         success=""
-        onSubmit={jest.fn()}
+        onSubmit={vi.fn()}
         canSubmit
       />,
     );
@@ -65,19 +65,19 @@ describe('ChangePasswordModal', () => {
     render(
       <ChangePasswordModal
         isOpen
-        onClose={jest.fn()}
+        onClose={vi.fn()}
         currentPassword=""
         newPassword=""
         confirmPassword=""
-        onCurrentPasswordChange={jest.fn()}
-        onNewPasswordChange={jest.fn()}
-        onConfirmPasswordChange={jest.fn()}
+        onCurrentPasswordChange={vi.fn()}
+        onNewPasswordChange={vi.fn()}
+        onConfirmPasswordChange={vi.fn()}
         validation={validatePassword('')}
         isConfirmValid
         isChanging={false}
         error=""
         success=""
-        onSubmit={jest.fn()}
+        onSubmit={vi.fn()}
         canSubmit={false}
       />,
     );

@@ -113,21 +113,21 @@ function makeOptions(
     interactive: true,
     classCount: 2,
     containerRef: { current: null },
-    isEmptyCanvasTarget: jest.fn(() => true),
+    isEmptyCanvasTarget: vi.fn(() => true),
     initialRelationships: [ASSOCIATION],
     initialSelectedClassId: null,
     initialSelectedRelationshipId: null,
     initialConnectMode: false,
     initialConnectSourceId: null,
     initialEditActive: false,
-    flushPendingEdit: jest.fn(),
-    cancelEdit: jest.fn(),
-    addRelationship: jest.fn(() => true),
-    updateRelationship: jest.fn(),
-    deleteRelationship: jest.fn(),
-    deleteClass: jest.fn(),
-    handleUndo: jest.fn(),
-    handleRedo: jest.fn(),
+    flushPendingEdit: vi.fn(),
+    cancelEdit: vi.fn(),
+    addRelationship: vi.fn(() => true),
+    updateRelationship: vi.fn(),
+    deleteRelationship: vi.fn(),
+    deleteClass: vi.fn(),
+    handleUndo: vi.fn(),
+    handleRedo: vi.fn(),
     ...overrides,
   };
 }
@@ -151,7 +151,7 @@ function perform<T>(callback: () => T): T {
 function relationshipEvent(detail: number): ReactMouseEvent {
   return {
     detail,
-    stopPropagation: jest.fn(),
+    stopPropagation: vi.fn(),
   } as unknown as ReactMouseEvent;
 }
 
@@ -175,12 +175,12 @@ function dispatchKey(
 describe('useUmlDiagramInteraction', () => {
   afterEach(() => {
     document.body.replaceChildren();
-    jest.restoreAllMocks();
+    vi.restoreAllMocks();
   });
 
   it('toggles connect mode, arms a source, and connects a target', () => {
-    const flushPendingEdit = jest.fn();
-    const addRelationship = jest.fn(() => true);
+    const flushPendingEdit = vi.fn();
+    const addRelationship = vi.fn(() => true);
     const { result } = renderInteraction({
       initialConnectSourceId: 'stale-source',
       flushPendingEdit,
@@ -209,7 +209,7 @@ describe('useUmlDiagramInteraction', () => {
   });
 
   it('keeps the original source armed when target creation fails', () => {
-    const addRelationship = jest.fn(() => false);
+    const addRelationship = vi.fn(() => false);
     const { result } = renderInteraction({
       initialConnectMode: true,
       initialConnectSourceId: 'class-a',
@@ -224,7 +224,7 @@ describe('useUmlDiagramInteraction', () => {
   });
 
   it('exits on a second source click without creating a relationship', () => {
-    const addRelationship = jest.fn(() => true);
+    const addRelationship = vi.fn(() => true);
     const { result } = renderInteraction({
       initialConnectMode: true,
       initialConnectSourceId: 'class-a',
@@ -240,8 +240,8 @@ describe('useUmlDiagramInteraction', () => {
   });
 
   it('keeps class selection read-only while selecting without cycling a relationship', () => {
-    const flushPendingEdit = jest.fn();
-    const updateRelationship = jest.fn();
+    const flushPendingEdit = vi.fn();
+    const updateRelationship = vi.fn();
     const event = relationshipEvent(2);
     const { result } = renderInteraction({
       interactive: false,
@@ -262,7 +262,7 @@ describe('useUmlDiagramInteraction', () => {
   });
 
   it('cycles live relationship types on interactive double-clicks', () => {
-    const updateRelationship = jest.fn();
+    const updateRelationship = vi.fn();
     const { result } = renderInteraction({ updateRelationship });
 
     for (const expectedType of [
@@ -285,8 +285,8 @@ describe('useUmlDiagramInteraction', () => {
   });
 
   it('deletes a relationship first and falls back to the selected class', () => {
-    const deleteRelationship = jest.fn();
-    const deleteClass = jest.fn();
+    const deleteRelationship = vi.fn();
+    const deleteClass = vi.fn();
     const {
       result: relationshipResult,
       unmount: unmountRelationship,
@@ -313,23 +313,23 @@ describe('useUmlDiagramInteraction', () => {
   });
 
   it('toggles classes with an additive click and deletes several classes at once', () => {
-    const toggleClassSelection = jest.fn();
-    const deleteClass = jest.fn();
-    const deleteClasses = jest.fn();
+    const toggleClassSelection = vi.fn();
+    const deleteClass = vi.fn();
+    const deleteClasses = vi.fn();
     const options = makeOptions({ deleteClass });
     const { result } = renderHook(() => useUmlDiagramInteraction({
       ...options,
       relationships: [],
       selectedClassId: null,
-      setSelectedClassId: jest.fn(),
+      setSelectedClassId: vi.fn(),
       selectedClassIds: ['class-a', 'class-b'],
       toggleClassSelection,
       selectedRelationshipId: null,
-      setSelectedRelationshipId: jest.fn(),
+      setSelectedRelationshipId: vi.fn(),
       connectMode: false,
-      setConnectMode: jest.fn(),
+      setConnectMode: vi.fn(),
       connectSourceId: null,
-      setConnectSourceId: jest.fn(),
+      setConnectSourceId: vi.fn(),
       editActive: false,
       deleteClasses,
     }));
@@ -343,7 +343,7 @@ describe('useUmlDiagramInteraction', () => {
   });
 
   it('clears exactly one Escape layer in priority order', () => {
-    const cancelEdit = jest.fn();
+    const cancelEdit = vi.fn();
     const { result } = renderInteraction({
       initialConnectMode: true,
       initialConnectSourceId: 'class-a',
@@ -401,9 +401,9 @@ describe('useUmlDiagramInteraction', () => {
 
   it('accepts empty-canvas double-clicks and dismisses class editing', () => {
     const container = document.createElement('div');
-    const flushPendingEdit = jest.fn();
-    const cancelEdit = jest.fn();
-    const isEmptyCanvasTarget = jest.fn(() => true);
+    const flushPendingEdit = vi.fn();
+    const cancelEdit = vi.fn();
+    const isEmptyCanvasTarget = vi.fn(() => true);
     const { result } = renderInteraction({
       containerRef: { current: container },
       initialSelectedClassId: 'class-a',
@@ -416,7 +416,7 @@ describe('useUmlDiagramInteraction', () => {
       bubbles: true,
       cancelable: true,
     });
-    const stopPropagation = jest.spyOn(event, 'stopPropagation');
+    const stopPropagation = vi.spyOn(event, 'stopPropagation');
 
     act(() => container.dispatchEvent(event));
 
@@ -433,8 +433,8 @@ describe('useUmlDiagramInteraction', () => {
     const container = document.createElement('div');
     const protectedTarget = document.createElement('button');
     container.append(protectedTarget);
-    const isEmptyCanvasTarget = jest.fn(() => false);
-    const flushPendingEdit = jest.fn();
+    const isEmptyCanvasTarget = vi.fn(() => false);
+    const flushPendingEdit = vi.fn();
     renderInteraction({
       containerRef: { current: container },
       isEmptyCanvasTarget,
@@ -454,8 +454,8 @@ describe('useUmlDiagramInteraction', () => {
 
   it('removes the exact native double-click listener on cleanup', () => {
     const container = document.createElement('div');
-    const addListener = jest.spyOn(container, 'addEventListener');
-    const removeListener = jest.spyOn(container, 'removeEventListener');
+    const addListener = vi.spyOn(container, 'addEventListener');
+    const removeListener = vi.spyOn(container, 'removeEventListener');
     const view = renderInteraction({
       containerRef: { current: container },
     });
@@ -470,8 +470,8 @@ describe('useUmlDiagramInteraction', () => {
   });
 
   it('wires undo and redo through the global listener', () => {
-    const handleUndo = jest.fn();
-    const handleRedo = jest.fn();
+    const handleUndo = vi.fn();
+    const handleRedo = vi.fn();
     renderInteraction({ handleUndo, handleRedo });
 
     const undoEvent = dispatchKey('z', { ctrlKey: true });
@@ -484,7 +484,7 @@ describe('useUmlDiagramInteraction', () => {
   });
 
   it('does not register a global keyboard listener in read-only mode', () => {
-    const addListener = jest.spyOn(globalThis, 'addEventListener');
+    const addListener = vi.spyOn(globalThis, 'addEventListener');
 
     renderInteraction({ interactive: false });
 
@@ -493,8 +493,8 @@ describe('useUmlDiagramInteraction', () => {
   });
 
   it('removes the exact global keyboard listener on unmount', () => {
-    const addListener = jest.spyOn(globalThis, 'addEventListener');
-    const removeListener = jest.spyOn(globalThis, 'removeEventListener');
+    const addListener = vi.spyOn(globalThis, 'addEventListener');
+    const removeListener = vi.spyOn(globalThis, 'removeEventListener');
     const view = renderInteraction();
     const addedListener = addListener.mock.calls.find(
       call => call[0] === 'keydown',

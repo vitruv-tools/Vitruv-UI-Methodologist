@@ -1,3 +1,4 @@
+import type { Mock } from 'vitest';
 import React from 'react';
 import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
 import { ConstraintsView } from '../../../components/constraints/ConstraintsView';
@@ -5,35 +6,35 @@ import { apiService } from '../../../services/api';
 
 // ── Mocks ─────────────────────────────────────────────────────────────────────
 
-jest.mock('monaco-editor', () => ({
+vi.mock('monaco-editor', () => ({
   languages: {
-    register: jest.fn(),
-    setMonarchTokensProvider: jest.fn(),
-    setLanguageConfiguration: jest.fn(),
-    getLanguages: jest.fn(() => []),
-    registerCompletionItemProvider: jest.fn(() => ({ dispose: jest.fn() })),
+    register: vi.fn(),
+    setMonarchTokensProvider: vi.fn(),
+    setLanguageConfiguration: vi.fn(),
+    getLanguages: vi.fn(() => []),
+    registerCompletionItemProvider: vi.fn(() => ({ dispose: vi.fn() })),
   },
   editor: {
-    defineTheme: jest.fn(),
-    setTheme: jest.fn(),
-    setModelMarkers: jest.fn(),
+    defineTheme: vi.fn(),
+    setTheme: vi.fn(),
+    setModelMarkers: vi.fn(),
   },
   MarkerSeverity: { Error: 8, Warning: 4, Info: 2 },
 }));
 
-jest.mock('@monaco-editor/react', () => {
-  const mockReact = require('react');
+vi.mock('@monaco-editor/react', async () => {
+  const mockReact = (await import('react'));
   const MockEditor = ({ value, onChange, onMount }: any) => {
     mockReact.useEffect(() => {
       onMount?.({}, {
         languages: {
-          register: jest.fn(),
-          setLanguageConfiguration: jest.fn(),
-          setMonarchTokensProvider: jest.fn(),
+          register: vi.fn(),
+          setLanguageConfiguration: vi.fn(),
+          setMonarchTokensProvider: vi.fn(),
         },
         editor: {
-          defineTheme: jest.fn(),
-          setTheme: jest.fn(),
+          defineTheme: vi.fn(),
+          setTheme: vi.fn(),
         },
       });
     }, []); // eslint-disable-line react-hooks/exhaustive-deps
@@ -46,53 +47,53 @@ jest.mock('@monaco-editor/react', () => {
   return { __esModule: true, default: MockEditor };
 });
 
-jest.mock('reactflow', () => ({
+vi.mock('reactflow', () => ({
   __esModule: true,
   default: ({ children }: any) => <div>{children}</div>,
-  useReactFlow: () => ({ getNodes: jest.fn(() => []) }),
+  useReactFlow: () => ({ getNodes: vi.fn(() => []) }),
   Handle: () => null,
   Position: { Left: 'left', Right: 'right', Top: 'top', Bottom: 'bottom' },
 }));
 
-jest.mock('../../../hooks/useOclLsp', () => ({
-  useOclLsp: () => ({ onMount: jest.fn(), notifyChange: jest.fn() }),
+vi.mock('../../../hooks/useOclLsp', () => ({
+  useOclLsp: () => ({ onMount: vi.fn(), notifyChange: vi.fn() }),
 }));
 
-jest.mock('../../../components/flow/CodeEditorModal', () => ({
+vi.mock('../../../components/flow/CodeEditorModal', () => ({
   CodeEditorModal: () => null,
 }));
 
-jest.mock('../../../components/flow/EcoreFileBox', () => ({
-  cardColor: jest.fn(() => '#e2e8f0'),
+vi.mock('../../../components/flow/EcoreFileBox', () => ({
+  cardColor: vi.fn(() => '#e2e8f0'),
 }));
 
-jest.mock('../../../components/constraints/VitruvOCLMonarchGrammar', () => ({
+vi.mock('../../../components/constraints/VitruvOCLMonarchGrammar', () => ({
   vitruvOCLLanguageId: 'vitruvocl',
   vitruvOCLMonarch: {},
   vitruvOCLLanguageConfig: {},
   vitruvOCLTheme: { base: 'vs', inherit: true, rules: [], colors: {} },
 }));
 
-jest.mock('../../../services/api', () => ({
+vi.mock('../../../services/api', () => ({
   apiService: {
-    getRuleSets: jest.fn().mockResolvedValue([]),
-    createRuleSet: jest.fn().mockResolvedValue({ id: 1 }),
-    updateRuleSet: jest.fn().mockResolvedValue({}),
-    deleteRuleSet: jest.fn().mockResolvedValue({}),
+    getRuleSets: vi.fn().mockResolvedValue([]),
+    createRuleSet: vi.fn().mockResolvedValue({ id: 1 }),
+    updateRuleSet: vi.fn().mockResolvedValue({}),
+    deleteRuleSet: vi.fn().mockResolvedValue({}),
   },
 }));
 
-jest.mock('../../../components/ui/ActionButton', () => ({
+vi.mock('../../../components/ui/ActionButton', () => ({
   ActionButton: ({ children, onClick }: any) => <button onClick={onClick}>{children}</button>,
 }));
 
-jest.mock('../../../components/ui/sharedStyles', () => ({
+vi.mock('../../../components/ui/sharedStyles', () => ({
   APP_FONT: 'sans-serif',
 }));
 
-jest.mock('../../../components/ui/modalUtils', () => ({
-  ...jest.requireActual('../../../components/ui/modalUtils'),
-  useModalBodyLock: jest.fn(),
+vi.mock('../../../components/ui/modalUtils', async () => ({
+  ...(await vi.importActual<any>('../../../components/ui/modalUtils')),
+  useModalBodyLock: vi.fn(),
 }));
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -112,8 +113,8 @@ const pfandNode = {
 
 describe('ConstraintsView', () => {
   beforeEach(() => {
-    jest.clearAllMocks();
-    (apiService.getRuleSets as jest.Mock).mockResolvedValue([]);
+    vi.clearAllMocks();
+    (apiService.getRuleSets as Mock).mockResolvedValue([]);
   });
 
   // A. Rendering with no data
@@ -352,7 +353,7 @@ describe('ConstraintsView', () => {
   // J. Backend ruleset loading
   describe('backend ruleset loading', () => {
     it('renders rulesets from backend when vsumId is provided', async () => {
-      (apiService.getRuleSets as jest.Mock).mockResolvedValue([
+      (apiService.getRuleSets as Mock).mockResolvedValue([
         {
           id: 42,
           name: 'Backend Rule Set',
@@ -385,7 +386,7 @@ describe('ConstraintsView', () => {
     });
 
     it('falls back gracefully when getRuleSets returns empty', async () => {
-      (apiService.getRuleSets as jest.Mock).mockResolvedValue([]);
+      (apiService.getRuleSets as Mock).mockResolvedValue([]);
       await act(async () => {
         render(<ConstraintsView vsumId="5" canvasNodes={[]} />);
       });
@@ -397,7 +398,7 @@ describe('ConstraintsView', () => {
     });
 
     it('handles getRuleSets failure gracefully', async () => {
-      (apiService.getRuleSets as jest.Mock).mockRejectedValue(new Error('Network error'));
+      (apiService.getRuleSets as Mock).mockRejectedValue(new Error('Network error'));
       await act(async () => {
         render(<ConstraintsView vsumId="5" canvasNodes={[]} />);
       });
@@ -510,7 +511,7 @@ describe('ConstraintsView', () => {
   // O. onHighlightNode callback
   describe('onHighlightNode callback', () => {
     it('calls onHighlightNode when a rule is clicked', async () => {
-      const onHighlight = jest.fn();
+      const onHighlight = vi.fn();
       await act(async () => {
         render(
           <ConstraintsView
@@ -541,12 +542,12 @@ describe('ConstraintsView predefined rule sets in a project', () => {
     position: { x: 0, y: 0 },
   };
   const createdNames = () =>
-    (apiService.createRuleSet as jest.Mock).mock.calls.map(([, body]) => body.name);
+    (apiService.createRuleSet as Mock).mock.calls.map(([, body]) => body.name);
 
   /** Resolves each create with its own id, 100, 101, ... */
   const createWithIds = () => {
     let nextId = 100;
-    (apiService.createRuleSet as jest.Mock).mockImplementation(() => Promise.resolve({ id: nextId++ }));
+    (apiService.createRuleSet as Mock).mockImplementation(() => Promise.resolve({ id: nextId++ }));
   };
 
   /** Opens a rule set's panel and deletes the set. */
@@ -557,11 +558,11 @@ describe('ConstraintsView predefined rule sets in a project', () => {
   };
 
   beforeEach(() => {
-    jest.clearAllMocks();
+    vi.clearAllMocks();
     localStorage.clear();
-    (apiService.getRuleSets as jest.Mock).mockResolvedValue([]);
-    (apiService.updateRuleSet as jest.Mock).mockResolvedValue({});
-    (apiService.deleteRuleSet as jest.Mock).mockResolvedValue({});
+    (apiService.getRuleSets as Mock).mockResolvedValue([]);
+    (apiService.updateRuleSet as Mock).mockResolvedValue({});
+    (apiService.deleteRuleSet as Mock).mockResolvedValue({});
     createWithIds();
   });
 
@@ -578,7 +579,7 @@ describe('ConstraintsView predefined rule sets in a project', () => {
   });
 
   it('does not show them when loading fails, since the project may have saved rule sets', async () => {
-    (apiService.getRuleSets as jest.Mock).mockRejectedValue(new Error('Network error'));
+    (apiService.getRuleSets as Mock).mockRejectedValue(new Error('Network error'));
 
     render(<ConstraintsView vsumId="42" canvasNodes={[pfandNode as any]} />);
 
@@ -609,7 +610,7 @@ describe('ConstraintsView predefined rule sets in a project', () => {
   });
 
   it('does not show them when the project has saved rule sets', async () => {
-    (apiService.getRuleSets as jest.Mock).mockResolvedValue([
+    (apiService.getRuleSets as Mock).mockResolvedValue([
       { id: 9, name: 'Saved Set', color: '#3b82f6', description: '', oclContent: 'context pfand::Kasten inv Saved:\n  true' },
     ]);
 
@@ -628,7 +629,7 @@ describe('ConstraintsView predefined rule sets in a project', () => {
 
     await waitFor(() => expect(apiService.createRuleSet).toHaveBeenCalledTimes(2));
     expect(createdNames().sort()).toEqual(['Crate Rules', 'Deposit Item Rules']);
-    const crateBody = (apiService.createRuleSet as jest.Mock).mock.calls
+    const crateBody = (apiService.createRuleSet as Mock).mock.calls
       .map(([, body]) => body)
       .find(body => body.name === 'Crate Rules');
     expect(crateBody.oclContent).toContain('NewInvariant');
@@ -668,7 +669,7 @@ describe('ConstraintsView predefined rule sets in a project', () => {
 
   it('deletes a set on the backend that was deleted while it was still being created', async () => {
     let resolveCreate: (value: { id: number }) => void = () => {};
-    (apiService.createRuleSet as jest.Mock).mockImplementation(
+    (apiService.createRuleSet as Mock).mockImplementation(
       () => new Promise(resolve => { resolveCreate = resolve; }),
     );
     render(<ConstraintsView vsumId="42" canvasNodes={[pfandNode as any]} />);
@@ -710,7 +711,7 @@ describe('ConstraintsView predefined rule sets in a project', () => {
   it('retries a predefined set with the next change when saving it failed', async () => {
     let failDeposit = true;
     let nextId = 100;
-    (apiService.createRuleSet as jest.Mock).mockImplementation((_vsumId: number, body: { name: string }) => {
+    (apiService.createRuleSet as Mock).mockImplementation((_vsumId: number, body: { name: string }) => {
       if (body.name === 'Deposit Item Rules' && failDeposit) {
         failDeposit = false;
         return Promise.reject(new Error('Server error'));
@@ -730,7 +731,7 @@ describe('ConstraintsView predefined rule sets in a project', () => {
 
   it('keeps the OCL the metrics view reads while loading or after loading failed', async () => {
     localStorage.setItem('vitruv_ocl_metrics_v1_42', 'context pfand::Kasten inv Earlier:\n  true');
-    (apiService.getRuleSets as jest.Mock).mockRejectedValue(new Error('Network error'));
+    (apiService.getRuleSets as Mock).mockRejectedValue(new Error('Network error'));
 
     render(<ConstraintsView vsumId="42" canvasNodes={[pfandNode as any]} />);
 
@@ -740,7 +741,7 @@ describe('ConstraintsView predefined rule sets in a project', () => {
   });
 
   it('offers them again after a reload when saving them failed', async () => {
-    (apiService.createRuleSet as jest.Mock).mockRejectedValue(new Error('Server error'));
+    (apiService.createRuleSet as Mock).mockRejectedValue(new Error('Server error'));
     const { unmount } = render(<ConstraintsView vsumId="42" canvasNodes={[pfandNode as any]} />);
     await screen.findByText('Crate Rules');
     fireEvent.click(screen.getAllByText('Add rule')[0]);
@@ -766,7 +767,7 @@ describe('ConstraintsView predefined rule sets in a project', () => {
 
   it('keeps a set the user added while the saved ones were loading', async () => {
     let resolveLoad: (sets: unknown[]) => void = () => {};
-    (apiService.getRuleSets as jest.Mock).mockImplementation(
+    (apiService.getRuleSets as Mock).mockImplementation(
       () => new Promise(resolve => { resolveLoad = resolve; }),
     );
     render(<ConstraintsView vsumId="42" canvasNodes={[pfandNode as any]} />);

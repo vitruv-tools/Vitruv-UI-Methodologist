@@ -36,10 +36,10 @@ const createOptions = (
   openTabCount: 0,
   isViewOnly: false,
   getCanvasNodes: () => [],
-  fetchEcoreFile: jest.fn().mockResolvedValue('<fetched />'),
-  updateEcoreFileData: jest.fn(),
-  persistProjectEcore: jest.fn().mockResolvedValue(undefined),
-  onLoadError: jest.fn(),
+  fetchEcoreFile: vi.fn().mockResolvedValue('<fetched />'),
+  updateEcoreFileData: vi.fn(),
+  persistProjectEcore: vi.fn().mockResolvedValue(undefined),
+  onLoadError: vi.fn(),
   ...overrides,
 });
 
@@ -59,16 +59,16 @@ afterAll(() => {
 });
 
 beforeEach(() => {
-  jest.spyOn(Date, 'now').mockReturnValue(1234);
+  vi.spyOn(Date, 'now').mockReturnValue(1234);
 });
 
 afterEach(() => {
-  jest.restoreAllMocks();
+  vi.restoreAllMocks();
 });
 
 describe('useCanvasUmlPanels', () => {
   it('opens and focuses a panel with supplied Ecore metadata', async () => {
-    const fetchEcoreFile = jest.fn().mockResolvedValue('<unused />');
+    const fetchEcoreFile = vi.fn().mockResolvedValue('<unused />');
     const options = createOptions({
       activeProjectId: 77,
       openTabCount: 2,
@@ -122,7 +122,7 @@ describe('useCanvasUmlPanels', () => {
         ecoreFileId: 31,
       },
     };
-    const fetchEcoreFile = jest.fn().mockResolvedValue('<unused />');
+    const fetchEcoreFile = vi.fn().mockResolvedValue('<unused />');
     const options = createOptions({
       getCanvasNodes: () => [canvasNode],
       fetchEcoreFile,
@@ -145,8 +145,8 @@ describe('useCanvasUmlPanels', () => {
   });
 
   it('fetches missing Ecore content and synchronizes the canvas copy', async () => {
-    const fetchEcoreFile = jest.fn().mockResolvedValue('<fetched-content />');
-    const updateEcoreFileData = jest.fn();
+    const fetchEcoreFile = vi.fn().mockResolvedValue('<fetched-content />');
+    const updateEcoreFileData = vi.fn();
     const options = createOptions({
       fetchEcoreFile,
       updateEcoreFileData,
@@ -171,9 +171,9 @@ describe('useCanvasUmlPanels', () => {
   });
 
   it('notifies when Ecore loading fails', async () => {
-    const onLoadError = jest.fn();
+    const onLoadError = vi.fn();
     const options = createOptions({
-      fetchEcoreFile: jest.fn().mockRejectedValue(new Error('Network error')),
+      fetchEcoreFile: vi.fn().mockRejectedValue(new Error('Network error')),
       onLoadError,
     });
     const { result } = renderHook(() => useCanvasUmlPanels(options));
@@ -193,8 +193,8 @@ describe('useCanvasUmlPanels', () => {
   });
 
   it('notifies when no UML content is available', async () => {
-    const onLoadError = jest.fn();
-    const fetchEcoreFile = jest.fn();
+    const onLoadError = vi.fn();
+    const fetchEcoreFile = vi.fn();
     const options = createOptions({ fetchEcoreFile, onLoadError });
     const { result } = renderHook(() => useCanvasUmlPanels(options));
 
@@ -246,7 +246,7 @@ describe('useCanvasUmlPanels', () => {
   });
 
   it('updates panel and canvas content after a workspace save', () => {
-    const updateEcoreFileData = jest.fn();
+    const updateEcoreFileData = vi.fn();
     const options = createOptions({ updateEcoreFileData });
     const { result } = renderHook(() => useCanvasUmlPanels(options));
     const panel = createPanel();
@@ -279,7 +279,7 @@ describe('useCanvasUmlPanels', () => {
   });
 
   it('follows the project copy to its new file id after a workspace save', () => {
-    const updateEcoreFileData = jest.fn();
+    const updateEcoreFileData = vi.fn();
     const options = createOptions({ updateEcoreFileData });
     const { result } = renderHook(() => useCanvasUmlPanels(options));
     const panel = createPanel();
@@ -299,7 +299,7 @@ describe('useCanvasUmlPanels', () => {
   });
 
   it('persists workspace saves to the project copy using the library meta model id', async () => {
-    const persistProjectEcore = jest.fn().mockResolvedValue(undefined);
+    const persistProjectEcore = vi.fn().mockResolvedValue(undefined);
     const options = createOptions({ persistProjectEcore });
     const { result } = renderHook(() => useCanvasUmlPanels(options));
 

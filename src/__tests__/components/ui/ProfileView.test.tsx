@@ -1,3 +1,4 @@
+import type { Mock } from 'vitest';
 import React from 'react';
 import { act, render, screen, fireEvent } from '@testing-library/react';
 import { ProfileView } from '../../../components/ui/ProfileView';
@@ -6,35 +7,35 @@ import { User } from '../../../services/auth';
 
 // ── mocks ─────────────────────────────────────────────────────────────────────
 
-jest.mock('../../../services/api', () => ({
+vi.mock('../../../services/api', () => ({
   apiService: {
-    getUserInfo: jest.fn(),
-    updateUserName: jest.fn(),
+    getUserInfo: vi.fn(),
+    updateUserName: vi.fn(),
   },
 }));
 
-jest.mock('../../../hooks/useChangePassword', () => ({
+vi.mock('../../../hooks/useChangePassword', () => ({
   useChangePassword: () => ({
     isOpen: false,
-    open: jest.fn(),
-    close: jest.fn(),
+    open: vi.fn(),
+    close: vi.fn(),
     currentPassword: '',
     newPassword: '',
     confirmPassword: '',
-    setCurrentPassword: jest.fn(),
-    setNewPassword: jest.fn(),
-    setConfirmPassword: jest.fn(),
+    setCurrentPassword: vi.fn(),
+    setNewPassword: vi.fn(),
+    setConfirmPassword: vi.fn(),
     validation: null,
     isConfirmValid: true,
     isChanging: false,
     error: null,
     success: false,
-    handleSubmit: jest.fn(),
+    handleSubmit: vi.fn(),
     canSubmit: false,
   }),
 }));
 
-jest.mock('../../../components/ui/BoundChangePasswordModal', () => ({
+vi.mock('../../../components/ui/BoundChangePasswordModal', () => ({
   BoundChangePasswordModal: () => null,
 }));
 
@@ -91,16 +92,16 @@ async function renderProfileView(
 
 describe('ProfileView', () => {
   beforeEach(() => {
-    (apiService.getUserInfo as jest.Mock).mockImplementation(
+    (apiService.getUserInfo as Mock).mockImplementation(
       () => new Promise((resolve, reject) => {
         resolveUserInfo = resolve;
         rejectUserInfo = reject;
       }),
     );
-    (apiService.updateUserName as jest.Mock).mockResolvedValue({ message: 'User updated successfully' });
+    (apiService.updateUserName as Mock).mockResolvedValue({ message: 'User updated successfully' });
   });
 
-  afterEach(() => jest.clearAllMocks());
+  afterEach(() => vi.clearAllMocks());
 
   it('renders User Profile heading', async () => {
     await renderProfileView();
@@ -157,7 +158,7 @@ describe('ProfileView', () => {
   });
 
   it('calls onNameSaved callback after successful save', async () => {
-    const onNameSaved = jest.fn();
+    const onNameSaved = vi.fn();
     await renderProfileView(mockUser, { onNameSaved });
     fireEvent.click(screen.getByText(/Edit name/i));
     fireEvent.click(screen.getByText(/Save changes/i));
@@ -175,7 +176,7 @@ describe('ProfileView', () => {
   });
 
   it('shows error banner when updateUserName fails', async () => {
-    (apiService.updateUserName as jest.Mock).mockRejectedValue(new Error('Server error'));
+    (apiService.updateUserName as Mock).mockRejectedValue(new Error('Server error'));
     await renderProfileView();
     fireEvent.click(screen.getByText(/Edit name/i));
     fireEvent.click(screen.getByText(/Save changes/i));
