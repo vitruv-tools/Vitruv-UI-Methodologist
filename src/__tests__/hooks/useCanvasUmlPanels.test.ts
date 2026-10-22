@@ -279,7 +279,7 @@ describe('useCanvasUmlPanels', () => {
   });
 
   it('follows the project copy to its new file id after a workspace save', () => {
-    const updateEcoreFileData = jest.fn();
+    const updateEcoreFileData = vi.fn();
     const options = createOptions({ updateEcoreFileData });
     const { result } = renderHook(() => useCanvasUmlPanels(options));
     const panel = createPanel();

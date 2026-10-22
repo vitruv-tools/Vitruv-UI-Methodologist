@@ -37,6 +37,7 @@ vi.mock('../../components/flow/FlowCanvas', async () => {
       const [viewport, setViewport] = React.useState(props.initialViewport ?? { x: 0, y: 0, zoom: 1 });
       const [locked, setLocked] = React.useState(props.initialLocked ?? false);
       React.useImperativeHandle(ref, () => ({
+        isLocked: () => locked,
         loadDiagramData: (nextNodes: any[]) => setNodes(nextNodes),
         getNodes: () => nodes,
         getViewport: () => viewport,
@@ -56,7 +57,7 @@ vi.mock('../../components/flow/FlowCanvas', async () => {
         })),
         fitUmlView: vi.fn(),
         openSelectedReactionEditor: vi.fn(() => false),
-      }), [nodes, viewport]);
+      }), [nodes, viewport, locked]);
       return (
         <div data-testid="flow-canvas">
           {props.projectTabsBelowModeToggle}

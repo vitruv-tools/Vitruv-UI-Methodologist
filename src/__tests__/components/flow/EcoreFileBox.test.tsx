@@ -219,10 +219,10 @@ describe('EcoreFileBox (real) – rename', () => {
 });
 
 describe('EcoreFileBox (real) – opening the UML diagram', () => {
-  afterEach(() => jest.clearAllMocks());
+  afterEach(() => vi.clearAllMocks());
 
   const renderBox = (overrides: Record<string, unknown> = {}) => {
-    const onExpand = jest.fn();
+    const onExpand = vi.fn();
     render(
       <RealEcoreFileBox
         {...baseNodeProps}

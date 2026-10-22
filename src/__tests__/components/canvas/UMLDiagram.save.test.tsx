@@ -16,8 +16,8 @@ import { renderDiagram } from '../../../testSupport/umlDiagram/renderUtils';
 describe('UMLDiagram save', () => {
   it('workspace save fails instead of reporting success when it cannot persist', async () => {
     const ref = createRef<UMLDiagramHandle>();
-    const onSaved = jest.fn();
-    const onError = jest.fn();
+    const onSaved = vi.fn();
+    const onError = vi.fn();
 
     renderDiagram({
       ref,
@@ -42,7 +42,7 @@ describe('UMLDiagram save', () => {
 
   it('workspace save reports the new file id of the project copy', async () => {
     const ref = createRef<UMLDiagramHandle>();
-    const onSaved = jest.fn();
+    const onSaved = vi.fn();
 
     renderDiagram({
       ref,
@@ -52,7 +52,7 @@ describe('UMLDiagram save', () => {
         ecoreFileId: 42,
         modelName: 'simple',
         saveTarget: 'workspace',
-        persistWorkspaceEcore: jest.fn().mockResolvedValue({ ecoreFileId: 77 }),
+        persistWorkspaceEcore: vi.fn().mockResolvedValue({ ecoreFileId: 77 }),
         onSaved,
       },
     });
@@ -76,7 +76,7 @@ describe('UMLDiagram save', () => {
         ecoreFileId: 42,
         modelName: 'simple',
         saveTarget: 'workspace',
-        persistWorkspaceEcore: jest.fn().mockResolvedValue(undefined),
+        persistWorkspaceEcore: vi.fn().mockResolvedValue(undefined),
         onSaved,
       },
     });
