@@ -467,4 +467,15 @@ describe('CodeEditorModal – additional tests', () => {
     render(<CodeEditorModal {...defaultProps} onInitialize={onInitialize} />);
     expect(onInitialize).toHaveBeenCalledWith(defaultProps.initialCode);
   });
+
+  it('does not contain debug console.log statements in source', () => {
+    const fs = require('fs');
+    const path = require('path');
+    const sourcePath = path.join(
+      __dirname,
+      '../../../components/flow/CodeEditorModal.tsx',
+    );
+    const source = fs.readFileSync(sourcePath, 'utf8');
+    expect(source).not.toMatch(/console\.log\s*\(/);
+  });
 });
