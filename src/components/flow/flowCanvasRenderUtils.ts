@@ -337,6 +337,7 @@ export function mapEcoreFlowNode(
     data: {
       ...node.data,
       readOnly,
+      locked,
       onExpand: handleEcoreFileExpand,
       onSelect: handleEcoreFileSelect,
       onDelete: readOnly ? undefined : onEcoreFileDelete,
@@ -352,6 +353,10 @@ export function mapEcoreFlowNode(
       isConstraintFilter: constraintFilterNodeId === node.id,
     },
     selected: selectedFileId === node.id,
+    // React Flow turns pointer events off for a node that is neither draggable nor
+    // selectable, which a locked canvas makes it. Keep the card clickable so its UML can
+    // still be opened; the card's read-only checks block every change.
+    style: locked ? { ...node.style, pointerEvents: 'all' } : node.style,
     // Draggable for viewers too — repositioning is local-only (see
     // isReadOnlyBlockedNodeChange). Still frozen on a locked canvas, mid-connection
     // and in add-reaction mode, where a drag would fight the click-to-target gesture.

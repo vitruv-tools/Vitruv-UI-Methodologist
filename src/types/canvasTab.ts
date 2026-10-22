@@ -41,6 +41,8 @@ export interface CanvasTabSession {
   workspaceSnapshot: WorkspaceSnapshot;
   /** Pan and zoom of the canvas, so switching back to the tab shows the same view. */
   viewport?: Viewport;
+  /** Whether the canvas was locked with the lock button, so switching back keeps it locked. */
+  locked?: boolean;
 }
 
 export interface OpenCanvasTab {
