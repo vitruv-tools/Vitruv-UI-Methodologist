@@ -237,7 +237,7 @@ export const AppSidebar: React.FC<AppSidebarProps> = ({
     }}>
       {/* Sidebar background image */}
       <img
-        src="/assets/sidebar-bg.png"
+        src={`${process.env.PUBLIC_URL}/assets/sidebar-bg.png`}
         alt=""
         aria-hidden
         style={{
@@ -259,7 +259,7 @@ export const AppSidebar: React.FC<AppSidebarProps> = ({
           }}
           title="Back to home"
         >
-          <img src="/assets/vitruvius1.png" alt="Vitruvius" style={{ width: 32, height: 32, borderRadius: 8, flexShrink: 0 }} />
+          <img src={`${process.env.PUBLIC_URL}/assets/vitruvius1.png`} alt="Vitruvius" style={{ width: 32, height: 32, borderRadius: 8, flexShrink: 0 }} />
           <span style={{
             color: '#ffffff', fontWeight: 700, fontSize: 18,
             letterSpacing: '-0.01em', marginTop: 3,
