@@ -329,8 +329,9 @@ describe('ConstraintsView', () => {
         const optionsBtn = ruleRow.querySelector('button[title="Options"]');
         if (optionsBtn) {
           fireEvent.click(optionsBtn);
-          await waitFor(() => expect(screen.getByText('Delete')).toBeInTheDocument());
-          fireEvent.click(screen.getByText('Delete'));
+          await waitFor(() => expect(screen.getAllByText('Delete').length).toBeGreaterThan(0));
+          const ruleDelete = screen.getAllByRole('button', { name: 'Delete' }).find(button => button.getAttribute('title') !== 'Delete Rule Set');
+          fireEvent.click(ruleDelete!);
           await waitFor(() => {
             expect(screen.queryByText('CrateContainsExactly16Bottles')).not.toBeInTheDocument();
           });
@@ -444,23 +445,28 @@ describe('ConstraintsView', () => {
     });
   });
 
-  // M. RuleSet click opens panel
+  // M. Rule set panel is open for the first set, and follows clicks
   describe('ruleset panel', () => {
-    it('opens RuleSetPanel when clicking a ruleset', async () => {
+    it('shows the rule set panel for the first set without a click', async () => {
       await act(async () => {
         render(<ConstraintsView canvasNodes={[pfandNode as any]} />);
       });
-      fireEvent.click(screen.getByText('Crate Rules'));
-      await waitFor(() => {
-        expect(screen.getByText(/Rule Set:/)).toBeInTheDocument();
+      expect(screen.getByRole('region', { name: 'Rule set panel' })).toBeInTheDocument();
+      expect(screen.getByText('Rule Set: Crate Rules')).toBeInTheDocument();
+    });
+
+    it('switches the panel when another ruleset is clicked', async () => {
+      await act(async () => {
+        render(<ConstraintsView canvasNodes={[pfandNode as any]} />);
       });
+      fireEvent.click(screen.getByText('Deposit Item Rules'));
+      expect(screen.getByText('Rule Set: Deposit Item Rules')).toBeInTheDocument();
     });
 
     it('closes RuleSetPanel when clicking × button', async () => {
       await act(async () => {
         render(<ConstraintsView canvasNodes={[pfandNode as any]} />);
       });
-      fireEvent.click(screen.getByText('Crate Rules'));
       await waitFor(() => expect(screen.getByText(/Rule Set:/)).toBeInTheDocument());
       // find the × button in the panel
       const panelHeader = screen.getByText(/Rule Set:/).closest('div')?.parentElement?.parentElement;
@@ -550,10 +556,13 @@ describe('ConstraintsView predefined rule sets in a project', () => {
     (apiService.createRuleSet as Mock).mockImplementation(() => Promise.resolve({ id: nextId++ }));
   };
 
-  /** Opens a rule set's panel and deletes the set. */
+  /** Opens a rule set's panel when it is not already the selected one, then deletes the set. */
   const deleteSet = async (name: string) => {
-    fireEvent.click(await screen.findByText(name));
-    fireEvent.click(screen.getByRole('button', { name: 'Delete' }));
+    await screen.findByText(name);
+    if (!screen.queryByText(`Rule Set: ${name}`)) {
+      fireEvent.click(screen.getByText(name));
+    }
+    fireEvent.click(screen.getByTitle('Delete Rule Set'));
     await waitFor(() => expect(screen.queryByText(name)).not.toBeInTheDocument());
   };
 
@@ -575,7 +584,37 @@ describe('ConstraintsView predefined rule sets in a project', () => {
 
     expect(await screen.findByText('Crate Rules')).toBeInTheDocument();
     expect(screen.getByText('Deposit Item Rules')).toBeInTheDocument();
+    expect(await screen.findByText('Rule Set: Crate Rules')).toBeInTheDocument();
     expect(apiService.getRuleSets).toHaveBeenCalledWith(42);
+  });
+
+  it('selects the first saved rule set so the panel is visible immediately', async () => {
+    (apiService.getRuleSets as jest.Mock).mockResolvedValue([
+      { id: 9, name: 'Saved Set', color: '#3b82f6', description: '', oclContent: '' },
+      { id: 10, name: 'Second Set', color: '#10b981', description: '', oclContent: '' },
+    ]);
+
+    render(<ConstraintsView vsumId="42" canvasNodes={[otherNode as any]} />);
+
+    expect(await screen.findByText('Rule Set: Saved Set')).toBeInTheDocument();
+    expect(screen.queryByText('Default Rule Set')).not.toBeInTheDocument();
+  });
+
+  it('offers one blank rule set, already selected, when the project has no template', async () => {
+    render(<ConstraintsView vsumId="42" canvasNodes={[otherNode as any]} />);
+
+    expect(await screen.findByText('Default Rule Set')).toBeInTheDocument();
+    expect(await screen.findByText('Rule Set: Default Rule Set')).toBeInTheDocument();
+    expect(apiService.createRuleSet).not.toHaveBeenCalled();
+  });
+
+  it('offers the blank rule set again after the predefined ones were deleted', async () => {
+    localStorage.setItem('vitruv_rule_sets_cleared_v1_42', '1');
+
+    render(<ConstraintsView vsumId="42" canvasNodes={[pfandNode as any]} />);
+
+    expect(await screen.findByText('Rule Set: Default Rule Set')).toBeInTheDocument();
+    expect(screen.queryByText('Crate Rules')).not.toBeInTheDocument();
   });
 
   it('does not show them when loading fails, since the project may have saved rule sets', async () => {
