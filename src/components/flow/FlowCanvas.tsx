@@ -13,6 +13,7 @@ import ReactFlow, {
   ReactFlowInstance,
   Node,
   Edge,
+  SelectionMode,
   Viewport,
 } from 'reactflow';
 import 'reactflow/dist/style.css';
@@ -44,6 +45,8 @@ import { CanvasControls } from './canvas/CanvasControls';
 import { CanvasDropOverlay } from './canvas/CanvasDropOverlay';
 import { CanvasMinimap } from './canvas/CanvasMinimap';
 import { CanvasModeToggle } from './canvas/CanvasModeToggle';
+import { NoNodesSelectionRect } from './canvas/NoNodesSelectionRect';
+import { toggleClassInSelection } from '../canvas/umlClassSelection';
 import { ModelDetailOverlay } from './canvas/ModelDetailOverlay';
 
 import { useFlowCanvasKeyboardShortcuts } from './useFlowCanvasKeyboard';
@@ -343,7 +346,17 @@ export const FlowCanvas = forwardRef<FlowCanvasHandle, FlowCanvasProps>(
     // not "locked" - they may still move boxes locally.
     const locked = !readOnly && !isInteractive;
 
-    const [selectedFileId, setSelectedFileId] = useState<string | null>(null);
+    const [selectedFileIds, setSelectedFileIds] = useState<string[]>([]);
+    const selectedFileIdsRef = useRef(selectedFileIds);
+    selectedFileIdsRef.current = selectedFileIds;
+    /** The selected model when exactly one is selected; deleting works on a single model. */
+    const selectedFileId = selectedFileIds.length === 1 ? selectedFileIds[0] : null;
+    const selectOnlyFile = useCallback((id: string | null) => {
+      setSelectedFileIds(id ? [id] : []);
+    }, []);
+    const clearFileSelection = useCallback(() => {
+      setSelectedFileIds(ids => (ids.length === 0 ? ids : []));
+    }, []);
     const [expandedFileId, setExpandedFileId] = useState<string | null>(null);
     const [connectionDragState, setConnectionDragState] = useState<ConnectionDragState | null>(null);
     const [codeEditorState, setCodeEditorState] = useState<CodeEditorState | null>(null);
@@ -354,6 +367,22 @@ export const FlowCanvas = forwardRef<FlowCanvasHandle, FlowCanvasProps>(
     const [viewport, setViewport] = useState({ x: 0, y: 0, zoom: 1 });
     const [circleSelected, setCircleSelected] = useState(false);
     const [activeCanvasMode, setActiveCanvasMode] = useState<CanvasMode>(canvasModeProp);
+    // Left-drag on the empty canvas draws a selection box (like the UML editor) instead of
+    // panning, while models can be edited on the modeling canvas.
+    const boxSelectionEnabled = editable && !umlModalOpen && !addReactionMode && activeCanvasMode === 'modeling';
+    /** Selection box in progress: models selected before it (kept with Shift) and models inside it. */
+    const boxSelectionRef = useRef<{ base: string[]; inBox: Set<string> } | null>(null);
+
+    const handleSelectionStart = useCallback((event: React.MouseEvent) => {
+      if (!boxSelectionEnabled) return;
+      const base = event.shiftKey ? selectedFileIdsRef.current : [];
+      boxSelectionRef.current = { base, inBox: new Set() };
+      setSelectedFileIds(base);
+    }, [boxSelectionEnabled]);
+
+    const handleSelectionEnd = useCallback(() => {
+      boxSelectionRef.current = null;
+    }, []);
     // Add-reaction mode: first clicked node becomes source, second creates the edge
     const [reactionSourceId, setReactionSourceId] = useState<string | null>(null);
 
@@ -429,6 +458,40 @@ export const FlowCanvas = forwardRef<FlowCanvasHandle, FlowCanvasProps>(
       if (readOnly) setIsInteractive(false);
     }, [readOnly]);
 
+    // Cmd+scroll zooms around the pointer, like in the UML editor. React Flow only zooms while
+    // it sees Cmd held, which it misses when a model card has the focus (the card stops key events).
+    useEffect(() => {
+      const element = reactFlowWrapper.current;
+      if (!element) return undefined;
+      const handleWheel = (event: WheelEvent) => {
+        const instance = reactFlowInstanceRef.current;
+        const target = event.target as Element | null;
+        if (!event.metaKey || !instance || !target?.closest?.('.react-flow') || target.closest('.nowheel')) return;
+        if (!umlModalOpen && !readOnly && !isInteractive) return; // locked: no zoom, like the other gestures
+        event.preventDefault();
+        event.stopPropagation();
+
+        let unit = 1;
+        if (event.deltaMode === 1) unit = 16;
+        else if (event.deltaMode === 2) unit = element.clientHeight;
+        const delta = Math.max(-12, Math.min(12, event.deltaY * unit));
+        const [minZoom, maxZoom] = umlModalOpen ? [0.45, 2.5] : [0.05, 2];
+        const { x, y, zoom } = instance.getViewport();
+        const nextZoom = Math.max(minZoom, Math.min(maxZoom, zoom * Math.exp(-delta * 0.01)));
+        const rect = element.getBoundingClientRect();
+        const pointerX = event.clientX - rect.left;
+        const pointerY = event.clientY - rect.top;
+        const ratio = nextZoom / zoom;
+        instance.setViewport({
+          x: pointerX - ratio * (pointerX - x),
+          y: pointerY - ratio * (pointerY - y),
+          zoom: nextZoom,
+        });
+      };
+      element.addEventListener('wheel', handleWheel, { capture: true, passive: false });
+      return () => element.removeEventListener('wheel', handleWheel, { capture: true });
+    }, [umlModalOpen, readOnly, isInteractive]);
+
     useEffect(() => {
       setActiveCanvasMode(canvasModeProp);
       if (canvasModeProp !== 'views') setCircleSelected(false);
@@ -470,7 +533,29 @@ export const FlowCanvas = forwardRef<FlowCanvasHandle, FlowCanvasProps>(
 
     const bboxDraggingIdsRef = useRef<Set<string>>(new Set());
 
-    const onNodesChange = useCallback((changes: any) => {
+    /**
+     * Models' selection lives in selectedFileIds, so React Flow's own select changes for them
+     * are taken out here. While a selection box is drawn they say which models are inside it.
+     */
+    const takeModelSelectChanges = useCallback((changes: any[]): any[] => {
+      const modelIds = new Set(nodesRef.current.filter(n => n.type === 'ecoreFile').map(n => n.id));
+      const selectChanges = changes.filter(c => c.type === 'select' && modelIds.has(c.id));
+      if (selectChanges.length === 0) return changes;
+
+      const box = boxSelectionRef.current;
+      if (box) {
+        for (const c of selectChanges) {
+          if (c.selected) box.inBox.add(c.id);
+          else box.inBox.delete(c.id);
+        }
+        setSelectedFileIds(Array.from(new Set([...box.base, ...box.inBox])));
+      }
+      return changes.filter(c => !selectChanges.includes(c));
+    }, []);
+
+    const onNodesChange = useCallback((allChanges: any) => {
+      const changes = takeModelSelectChanges(allChanges);
+      if (changes.length === 0) return;
       if (readOnly && changes.some(isReadOnlyBlockedNodeChange)) return;
       if (locked && changes.some(isLockedBlockedNodeChange)) return;
 
@@ -517,9 +602,13 @@ export const FlowCanvas = forwardRef<FlowCanvasHandle, FlowCanvasProps>(
         persistVsumLayoutFromNodes(projectId, nextNodes);
       }
       if (umlModalOpen) setEdges(clearUmlCustomControlPoints);
-    }, [originalOnNodesChange, recalculateEdgeHandles, circle, circleVisible, umlModalOpen, detailModel, setEdges, setHistoryPaused, readOnly, locked, edges, addReactionMode]);
+    }, [originalOnNodesChange, recalculateEdgeHandles, circle, circleVisible, umlModalOpen, detailModel, setEdges, setHistoryPaused, readOnly, locked, edges, addReactionMode, takeModelSelectChanges]);
 
-    const guardedOnEdgesChange = useCallback((changes: any) => {
+    const guardedOnEdgesChange = useCallback((allChanges: any) => {
+      const changes = boxSelectionRef.current
+        ? allChanges.filter((c: any) => c.type !== 'select')
+        : allChanges;
+      if (changes.length === 0) return;
       if (!editable && changes.some(isReadOnlyBlockedEdgeChange)) return;
       onEdgesChange(changes);
     }, [onEdgesChange, editable]);
@@ -607,6 +696,7 @@ export const FlowCanvas = forwardRef<FlowCanvasHandle, FlowCanvasProps>(
       undo,
       redo,
       setPendingDelete,
+      onEscape: clearFileSelection,
     });
 
     // ── Reaction edge creation ────────────────────────────────────────────────
@@ -1136,7 +1226,7 @@ export const FlowCanvas = forwardRef<FlowCanvasHandle, FlowCanvasProps>(
 
     // ── Ecore file lifecycle ──────────────────────────────────────────────────
 
-    const handleEcoreFileSelect = useCallback((fileName: string) => {
+    const handleEcoreFileSelect = useCallback((fileName: string, options?: { additive?: boolean }) => {
       const ecoreNode = nodes.find(n => n.type === 'ecoreFile' && n.data.fileName === fileName);
       if (!ecoreNode) return;
 
@@ -1175,10 +1265,14 @@ export const FlowCanvas = forwardRef<FlowCanvasHandle, FlowCanvasProps>(
           );
           return;
         case 'select':
-          setSelectedFileId(action.nodeId);
+          if (options?.additive) {
+            setSelectedFileIds(ids => toggleClassInSelection(ids, action.nodeId));
+            return;
+          }
+          selectOnlyFile(action.nodeId);
           onEcoreFileSelect?.(action.fileName);
       }
-    }, [nodes, onEcoreFileSelect, addReactionMode, reactionSourceId, getColorForPair, commitReactionEdge, onReactionModeEnd, activeCanvasMode, onConstraintNodeFilter, constraintFilterNodeId, editable]);
+    }, [nodes, onEcoreFileSelect, addReactionMode, reactionSourceId, getColorForPair, commitReactionEdge, onReactionModeEnd, activeCanvasMode, onConstraintNodeFilter, constraintFilterNodeId, editable, selectOnlyFile]);
 
     const handleEcoreFileRename = useCallback((id: string, newFileName: string) => {
       if (!editable) return;
@@ -1240,7 +1334,7 @@ export const FlowCanvas = forwardRef<FlowCanvasHandle, FlowCanvasProps>(
 
       if (ecoreNode) {
         setExpandedFileId(ecoreNode.id);
-        setSelectedFileId(ecoreNode.id);
+        selectOnlyFile(ecoreNode.id);
       }
 
       const data = ecoreNode?.data;
@@ -1249,7 +1343,7 @@ export const FlowCanvas = forwardRef<FlowCanvasHandle, FlowCanvasProps>(
         metaModelSourceId: typeof data?.metaModelSourceId === 'number' ? data.metaModelSourceId : undefined,
         ecoreFileId: typeof data?.ecoreFileId === 'number' ? data.ecoreFileId : undefined,
       });
-    }, [nodes, onEcoreFileExpand]);
+    }, [nodes, onEcoreFileExpand, selectOnlyFile]);
 
     const updateEcoreFileData = useCallback((
       fileName: string,
@@ -1357,7 +1451,7 @@ export const FlowCanvas = forwardRef<FlowCanvasHandle, FlowCanvasProps>(
         layoutIdentity,
         newEcoreNode.position,
       );
-      setSelectedFileId(newEcoreNode.id);
+      selectOnlyFile(newEcoreNode.id);
       onEcoreFileSelect?.(fileName);
 
       // If in reaction mode, immediately expand into eobject + boundingBox nodes
@@ -1399,7 +1493,7 @@ export const FlowCanvas = forwardRef<FlowCanvasHandle, FlowCanvasProps>(
           });
         }
       }
-    }, [addNode, handleEcoreFileExpand, handleEcoreFileSelect, onEcoreFileSelect, onEcoreFileDelete, handleEcoreFileRename, handleRequestDelete, handleShowDetails, editable, addReactionMode, setNodes, setEdges]);
+    }, [addNode, handleEcoreFileExpand, handleEcoreFileSelect, onEcoreFileSelect, onEcoreFileDelete, handleEcoreFileRename, handleRequestDelete, handleShowDetails, editable, addReactionMode, setNodes, setEdges, selectOnlyFile]);
 
     // ── Edge hygiene ──────────────────────────────────────────────────────────
 
@@ -1433,7 +1527,7 @@ export const FlowCanvas = forwardRef<FlowCanvasHandle, FlowCanvasProps>(
     }, [setEdges]);
 
     useEdgeControlPointEvents({ reactFlowInstance, updateEdgeControlPoint });
-    useEdgeSelectionEvents({ setEdges, setNodes, setSelectedFileId });
+    useEdgeSelectionEvents({ setEdges, setNodes, setSelectedFileId: selectOnlyFile });
 
     const handleEdgeHandleChange = useCallback((
       edgeId: string,
@@ -1509,7 +1603,7 @@ export const FlowCanvas = forwardRef<FlowCanvasHandle, FlowCanvasProps>(
           readOnly: !editable,
           locked,
           expandedFileId,
-          selectedFileId,
+          selectedFileIds,
           connectionDragState,
           addReactionMode,
           reactionSourceId,
@@ -1688,7 +1782,12 @@ export const FlowCanvas = forwardRef<FlowCanvasHandle, FlowCanvasProps>(
           elementsSelectable={interactionsAllowed}
           edgesUpdatable={false}
           edgesFocusable={interactionsAllowed}
-          panOnDrag={interactionsAllowed}
+          // With the selection box, left-drag selects; the middle button and two-finger scroll pan.
+          panOnDrag={boxSelectionEnabled ? [1] : interactionsAllowed}
+          selectionOnDrag={boxSelectionEnabled}
+          selectionMode={SelectionMode.Partial}
+          onSelectionStart={handleSelectionStart}
+          onSelectionEnd={handleSelectionEnd}
           panOnScroll={interactionsAllowed}
           zoomOnScroll={interactionsAllowed}
           zoomOnPinch={interactionsAllowed}
@@ -1700,7 +1799,7 @@ export const FlowCanvas = forwardRef<FlowCanvasHandle, FlowCanvasProps>(
           proOptions={{ hideAttribution: true }}
           onPaneClick={() => {
             setDetailModel(null);
-            setSelectedFileId(null);
+            setSelectedFileIds([]);
             setCircleSelected(false);
             setNodes(nds => nds.map(n => ({ ...n, selected: false })));
             setEdges(eds => eds.map(e => ({ ...e, selected: false })));
@@ -1710,6 +1809,7 @@ export const FlowCanvas = forwardRef<FlowCanvasHandle, FlowCanvasProps>(
           }}
         >
           <Background color="var(--v-workspace-dot)" gap={24} size={0.75} />
+          {boxSelectionEnabled && <NoNodesSelectionRect />}
         </ReactFlow>
 
         {circleVisible && !umlModalOpen && (
@@ -1798,7 +1898,7 @@ export const FlowCanvas = forwardRef<FlowCanvasHandle, FlowCanvasProps>(
               removeEdge,
               removeNode,
               onEcoreFileDelete,
-              () => setSelectedFileId(null),
+              () => setSelectedFileIds([]),
             );
             setPendingDelete(null);
           }}

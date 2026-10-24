@@ -218,6 +218,26 @@ describe('EcoreFileBox (real) – rename', () => {
   });
 });
 
+describe('EcoreFileBox (real) – selecting', () => {
+  it('passes Shift, Cmd and Ctrl clicks on as additive selection', () => {
+    const onSelect = vi.fn();
+    render(<RealEcoreFileBox {...baseNodeProps} data={{ ...baseData, onSelect }} />);
+    const card = screen.getByRole('button', { name: /flower metamodel/i });
+
+    fireEvent.click(card);
+    fireEvent.click(card, { shiftKey: true });
+    fireEvent.click(card, { metaKey: true });
+    fireEvent.click(card, { ctrlKey: true });
+
+    expect(onSelect.mock.calls).toEqual([
+      ['flower.ecore', { additive: false }],
+      ['flower.ecore', { additive: true }],
+      ['flower.ecore', { additive: true }],
+      ['flower.ecore', { additive: true }],
+    ]);
+  });
+});
+
 describe('EcoreFileBox (real) – opening the UML diagram', () => {
   afterEach(() => vi.clearAllMocks());
 
