@@ -1,12 +1,10 @@
 // src/components/ui/VsumUsersTab.tsx
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { apiService, VsumUserResponse, UserSearchItem } from '../../services/api';
-import { ActionButton } from './ActionButton';
+import React, { useCallback, useEffect, useState } from 'react';
+import { apiService, VsumUserResponse } from '../../services/api';
+import { AddPeopleSection } from './AddPeopleSection';
 import {
   APP_FONT,
   errorMessageStyle,
-  inputStyle,
-  labelStyle,
   successMessageStyle,
 } from './sharedStyles';
 
@@ -17,10 +15,7 @@ interface Props {
   canManage?: boolean;
 }
 
-const CACHE_TTL_MS = 5 * 60 * 1000;
-
 const wrap: React.CSSProperties = { display: 'grid', gap: 16, fontFamily: APP_FONT };
-const row: React.CSSProperties = { display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' };
 const table: React.CSSProperties = { width: '100%', borderCollapse: 'collapse', userSelect: 'text' };
 const thtdBase: React.CSSProperties = { border: '1px solid var(--v-border)', padding: '8px 10px', fontSize: 13, color: 'var(--v-text)' };
 const th: React.CSSProperties = { ...thtdBase, fontWeight: 700, textAlign: 'left', background: 'var(--v-table-header)' };
@@ -50,12 +45,6 @@ const sectionTitle: React.CSSProperties = {
   fontSize: 14,
   fontWeight: 700,
   color: 'var(--v-text)',
-};
-const sectionHint: React.CSSProperties = {
-  margin: 0,
-  fontSize: 12,
-  color: 'var(--v-text-muted)',
-  lineHeight: 1.45,
 };
 const pendingBadge: React.CSSProperties = {
   display: 'inline-flex',
@@ -105,33 +94,11 @@ const memberDisplayName = (m: VsumUserResponse) => {
   return '—';
 };
 
-const isValidEmail = (email: string): boolean => {
-  const trimmed = email.trim();
-  if (!trimmed || /\s/.test(trimmed)) return false;
-  const at = trimmed.indexOf('@');
-  if (at <= 0 || at !== trimmed.lastIndexOf('@')) return false;
-  const domain = trimmed.slice(at + 1);
-  const dot = domain.indexOf('.');
-  return dot > 0 && dot < domain.length - 1;
-};
-
 export const VsumUsersTab: React.FC<Props> = ({ vsumId, onChanged, canManage = true }) => {
   const [members, setMembers] = useState<VsumUserResponse[]>([]);
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState('');
   const [success, setSuccess] = useState('');
-
-  const [inviteEmail, setInviteEmail] = useState('');
-  const [inviting, setInviting] = useState(false);
-
-  const [query, setQuery] = useState('');
-  const [searching, setSearching] = useState(false);
-  const [searchResults, setSearchResults] = useState<UserSearchItem[]>([]);
-  const [selectedUser, setSelectedUser] = useState<UserSearchItem | null>(null);
-  const [adding, setAdding] = useState(false);
-
-  const searchTimer = useRef<number | undefined>(undefined);
-  const usersCacheRef = useRef<{ at: number; data: UserSearchItem[] } | null>(null);
 
   const clearMessages = () => {
     setErr('');
@@ -152,93 +119,6 @@ export const VsumUsersTab: React.FC<Props> = ({ vsumId, onChanged, canManage = t
 
   useEffect(() => { void fetchMembers(); }, [fetchMembers]);
 
-  const loadUsersForSearch = useCallback(async () => {
-    const now = Date.now();
-    if (usersCacheRef.current && now - usersCacheRef.current.at < CACHE_TTL_MS) {
-      return usersCacheRef.current.data;
-    }
-    const res = await apiService.searchUsers({ pageNumber: 0, pageSize: 200 });
-    const data = res.data || [];
-    usersCacheRef.current = { at: now, data };
-    return data;
-  }, []);
-
-  useEffect(() => {
-    if (searchTimer.current) globalThis.clearTimeout(searchTimer.current);
-
-    const q = query.trim().toLowerCase();
-    if (!q) {
-      setSearchResults([]);
-      setSelectedUser(null);
-      return;
-    }
-
-    setSearching(true);
-    searchTimer.current = globalThis.setTimeout(async () => {
-      try {
-        clearMessages();
-        const all = await loadUsersForSearch();
-        const filtered = all.filter(u => {
-          const name = [u.firstName, u.lastName].filter(Boolean).join(' ').toLowerCase();
-          const email = (u.email || '').toLowerCase();
-          return name.includes(q) || email.includes(q);
-        });
-        setSearchResults(filtered);
-      } catch (e: any) {
-        setErr(e?.message || 'Search failed');
-      } finally {
-        setSearching(false);
-      }
-    }, 250) as unknown as number;
-
-    return () => {
-      if (searchTimer.current) globalThis.clearTimeout(searchTimer.current);
-    };
-  }, [query, loadUsersForSearch]);
-
-  const inviteViewer = async () => {
-    const email = inviteEmail.trim();
-    if (!email) return;
-    if (!isValidEmail(email)) {
-      setErr('Please enter a valid email address.');
-      setSuccess('');
-      return;
-    }
-
-    try {
-      clearMessages();
-      setInviting(true);
-      const res = await apiService.inviteVsumViewer(vsumId, { email });
-      setInviteEmail('');
-      setSuccess(res.message || `Invitation sent to ${email}.`);
-      await fetchMembers();
-      onChanged?.();
-    } catch (e: any) {
-      setErr(e?.response?.data?.message || e?.message || 'Invite failed');
-    } finally {
-      setInviting(false);
-    }
-  };
-
-  const addMember = async () => {
-    if (!selectedUser) return;
-    try {
-      clearMessages();
-      setAdding(true);
-      await apiService.addVsumMember(vsumId, { userId: Number(selectedUser.id) });
-      setSelectedUser(null);
-      setQuery('');
-      setSearchResults([]);
-      setSuccess('Member added successfully.');
-      await fetchMembers();
-      onChanged?.();
-    } catch (e: any) {
-      setErr(e?.response?.data?.message || e?.message || 'Add member failed');
-    } finally {
-      setAdding(false);
-    }
-  };
-
   const removeMember = async (vsumUserId: number) => {
     if (!globalThis.confirm('Remove this user from the VSUM?')) return;
     try {
@@ -251,128 +131,22 @@ export const VsumUsersTab: React.FC<Props> = ({ vsumId, onChanged, canManage = t
     }
   };
 
-  const canInvite = useMemo(
-    () => isValidEmail(inviteEmail) && !inviting,
-    [inviteEmail, inviting],
-  );
-  const canAdd = useMemo(() => Boolean(selectedUser) && !adding, [selectedUser, adding]);
-
-  const userDisplayName = (u: UserSearchItem) => {
-    const nameFromFields = [u.firstName, u.lastName].filter(Boolean).join(' ');
-    return (('name' in (u as any) ? (u as any).name : undefined) ?? nameFromFields) || u.email;
-  };
-
   return (
     <div style={wrap}>
       {err && <div style={errorMessageStyle}>{err}</div>}
       {success && <div style={successMessageStyle}>{success}</div>}
 
-      {/* Invite viewer */}
-      {canManage && <section style={sectionCard}>
-        <div>
-          <h4 style={sectionTitle}>Invite viewer</h4>
-          <p style={sectionHint}>
-            Grant read-only access by email. Viewers can open and explore the project but cannot
-            edit models, save changes, or invite others. Pending users receive access once they register.
-          </p>
-        </div>
-        <div style={row}>
-          <input
-            type="email"
-            placeholder="viewer@example.com"
-            value={inviteEmail}
-            onChange={(e) => setInviteEmail(e.target.value)}
-            onKeyDown={(e) => { if (e.key === 'Enter' && canInvite) void inviteViewer(); }}
-            style={{ ...inputStyle, flex: 1, minWidth: 220, margin: 0 }}
-            disabled={inviting}
-          />
-          <ActionButton
-            variant="primary"
-            size="sm"
-            onClick={inviteViewer}
-            disabled={!canInvite}
-          >
-            {inviting ? 'Sending…' : 'Invite viewer'}
-          </ActionButton>
-        </div>
-      </section>}
-
-      {/* Add member */}
-      {canManage && <section style={sectionCard}>
-        <div>
-          <h4 style={sectionTitle}>Add member</h4>
-          <p style={sectionHint}>
-            Search registered users to grant full member access (edit and collaborate).
-          </p>
-        </div>
-        <label style={{ ...labelStyle, marginBottom: 0 }} htmlFor="vsum-user-search">
-          Search by name or email
-        </label>
-        <div style={row}>
-          <input
-            id="vsum-user-search"
-            placeholder="Search user by name or email…"
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            style={{ ...inputStyle, flex: 1, minWidth: 220, margin: 0 }}
-          />
-          <ActionButton
-            variant="secondary"
-            size="sm"
-            onClick={addMember}
-            disabled={!canAdd}
-          >
-            {adding ? 'Adding…' : 'Add member'}
-          </ActionButton>
-        </div>
-
-        {query && (
-          <div style={{ border: '1px solid var(--v-border)', borderRadius: 8, overflow: 'hidden', background: 'var(--v-surface)' }}>
-            {searching && (
-              <div style={{ padding: 10, fontStyle: 'italic', color: 'var(--v-text-muted)', fontSize: 13 }}>Searching…</div>
-            )}
-            {!searching && searchResults.length === 0 && (
-              <div style={{ padding: 10, fontStyle: 'italic', color: 'var(--v-text-muted)', fontSize: 13 }}>No users found</div>
-            )}
-            {!searching && searchResults.length > 0 && (
-              <select
-                // One extra row for the placeholder, so a single match is a list, not a dropdown.
-                size={Math.min(6, searchResults.length + 1)}
-                value={selectedUser ? String(selectedUser.id) : ''}
-                onChange={(e) => {
-                  const next = searchResults.find(u => String(u.id) === e.target.value) || null;
-                  setSelectedUser(next);
-                }}
-                aria-label="Search results"
-                style={{
-                  width: '100%',
-                  border: 0,
-                  padding: 0,
-                  maxHeight: 220,
-                  overflowY: 'auto',
-                  fontSize: 13,
-                  fontFamily: APP_FONT,
-                }}
-              >
-                {/* Matches the empty value: without it React selects the first user, so
-                    clicking that user changes nothing and it cannot be added. */}
-                <option value="" style={{ color: 'var(--v-text-muted)' }}>Select a user…</option>
-                {searchResults.map(u => (
-                  <option key={u.id} value={String(u.id)}>
-                    {userDisplayName(u)} — {u.email}
-                  </option>
-                ))}
-              </select>
-            )}
-          </div>
-        )}
-
-        {selectedUser && (
-          <div style={{ fontSize: 12, color: 'var(--v-text-muted)' }}>
-            Selected: <strong style={{ color: 'var(--v-text)' }}>{userDisplayName(selectedUser)}</strong> ({selectedUser.email})
-          </div>
-        )}
-      </section>}
+      {canManage && (
+        <AddPeopleSection
+          vsumId={vsumId}
+          members={members}
+          onAdded={async () => { await fetchMembers(); onChanged?.(); }}
+          onSuccess={setSuccess}
+          onError={setErr}
+          onClearMessages={clearMessages}
+          style={sectionCard}
+        />
+      )}
 
       {/* Members table */}
       <div>

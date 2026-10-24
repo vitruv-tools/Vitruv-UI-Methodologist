@@ -3,9 +3,10 @@ import ReactDOM from 'react-dom';
 import { apiService, VsumUserResponse } from '../../services/api';
 import { memberDisplayName, parseVsumMembersResponse } from '../../utils/vsumMemberUtils';
 import { ActionButton } from './ActionButton';
+import { AddPeopleSection } from './AddPeopleSection';
 import { ConfirmDialog } from './ConfirmDialog';
 import { MODAL_Z_INDEX, modalBackdropStyle, modalDialogShellStyle, useModalBodyLock } from './modalUtils';
-import { APP_FONT, errorMessageStyle, inputStyle, labelStyle, successMessageStyle } from './sharedStyles';
+import { APP_FONT, errorMessageStyle, successMessageStyle } from './sharedStyles';
 
 interface ShareProjectModalProps {
   isOpen: boolean;
@@ -14,16 +15,6 @@ interface ShareProjectModalProps {
   onClose: () => void;
   onInvited?: () => void;
 }
-
-const isValidEmail = (email: string): boolean => {
-  const trimmed = email.trim();
-  if (!trimmed || /\s/.test(trimmed)) return false;
-  const at = trimmed.indexOf('@');
-  if (at <= 0 || at !== trimmed.lastIndexOf('@')) return false;
-  const domain = trimmed.slice(at + 1);
-  const dot = domain.indexOf('.');
-  return dot > 0 && dot < domain.length - 1;
-};
 
 const isOwnerRole = (role?: string, roleEn?: string) =>
   role === 'OWNER' || (!!roleEn && roleEn.toLowerCase().includes('owner'));
@@ -44,12 +35,12 @@ const isPendingMember = (m: VsumUserResponse) =>
 
 const roleBadge = (role: string): React.CSSProperties => {
   if (role === 'Owner') {
-    return { background: '#ecfdf5', color: '#065f46', border: '1px solid #a7f3d0' };
+    return { background: 'var(--v-success-bg)', color: 'var(--v-success-text)', border: '1px solid var(--v-success-border)' };
   }
   if (role === 'Viewer') {
-    return { background: '#eff6ff', color: '#1d4ed8', border: '1px solid #bfdbfe' };
+    return { background: 'var(--v-info-bg)', color: 'var(--v-info-text)', border: '1px solid var(--v-info-border)' };
   }
-  return { background: '#f3f4f6', color: '#374151', border: '1px solid #e5e7eb' };
+  return { background: 'var(--v-surface-hover)', color: 'var(--v-text-secondary)', border: '1px solid var(--v-border)' };
 };
 
 const removeBtnStyle: React.CSSProperties = {
@@ -58,9 +49,9 @@ const removeBtnStyle: React.CSSProperties = {
   cursor: 'pointer',
   fontWeight: 600,
   fontSize: 11,
-  border: '1px solid #fecaca',
-  background: '#fff5f5',
-  color: '#dc2626',
+  border: '1px solid var(--v-danger-border)',
+  background: 'var(--v-danger-bg)',
+  color: 'var(--v-danger-text)',
   fontFamily: APP_FONT,
   whiteSpace: 'nowrap',
 };
@@ -72,8 +63,6 @@ export const ShareProjectModal: React.FC<ShareProjectModalProps> = ({
   onClose,
   onInvited,
 }) => {
-  const [email, setEmail] = useState('');
-  const [inviting, setInviting] = useState(false);
   const [err, setErr] = useState('');
   const [success, setSuccess] = useState('');
   const [members, setMembers] = useState<VsumUserResponse[]>([]);
@@ -105,39 +94,12 @@ export const ShareProjectModal: React.FC<ShareProjectModalProps> = ({
 
   useEffect(() => {
     if (!isOpen || !vsumId) return;
-    setEmail('');
     setErr('');
     setSuccess('');
     void loadMembers();
   }, [isOpen, vsumId, loadMembers]);
 
   if (!isOpen || !vsumId) return null;
-
-  const canInvite = isValidEmail(email) && !inviting;
-
-  const invite = async () => {
-    const trimmed = email.trim();
-    if (!isValidEmail(trimmed)) {
-      setErr('Please enter a valid email address.');
-      setSuccess('');
-      return;
-    }
-
-    try {
-      setErr('');
-      setInviting(true);
-      const res = await apiService.inviteVsumViewer(vsumId, { email: trimmed });
-      setEmail('');
-      setSuccess(res.message || `Invitation sent to ${trimmed}.`);
-      await loadMembers();
-      onInvited?.();
-    } catch (e: any) {
-      setErr(e?.response?.data?.message || e?.message || 'Invite failed');
-      setSuccess('');
-    } finally {
-      setInviting(false);
-    }
-  };
 
   const removeAccess = async (member: VsumUserResponse) => {
     const label = memberDisplayName(member);
@@ -177,20 +139,20 @@ export const ShareProjectModal: React.FC<ShareProjectModalProps> = ({
             maxHeight: 'min(85vh, 640px)',
             display: 'flex',
             flexDirection: 'column',
-            background: '#fff',
+            background: 'var(--v-surface)',
             borderRadius: 14,
             boxShadow: '0 24px 64px rgba(0,0,0,0.22), 0 4px 16px rgba(0,0,0,0.08)',
-            border: '1px solid #e2e8f0',
+            border: '1px solid var(--v-border)',
             overflow: 'hidden',
           }}
         >
-          <div style={{ padding: '20px 22px 12px', borderBottom: '1px solid #f1f5f9', flexShrink: 0 }}>
-            <h2 style={{ margin: 0, fontSize: 18, fontWeight: 700, color: '#0f172a' }}>
+          <div style={{ padding: '20px 22px 12px', borderBottom: '1px solid var(--v-border-subtle)', flexShrink: 0 }}>
+            <h2 style={{ margin: 0, fontSize: 18, fontWeight: 700, color: 'var(--v-text)' }}>
               Share project
             </h2>
             {projectName && (
-              <p style={{ margin: '6px 0 0', fontSize: 13, color: '#64748b' }}>
-                Manage access to <strong style={{ color: '#334155' }}>{projectName}</strong>
+              <p style={{ margin: '6px 0 0', fontSize: 13, color: 'var(--v-text-muted)' }}>
+                Manage access to <strong style={{ color: 'var(--v-text-secondary)' }}>{projectName}</strong>
               </p>
             )}
           </div>
@@ -199,45 +161,25 @@ export const ShareProjectModal: React.FC<ShareProjectModalProps> = ({
             {err && <div style={errorMessageStyle}>{err}</div>}
             {success && <div style={successMessageStyle}>{success}</div>}
 
-            <section style={{ display: 'grid', gap: 10 }}>
-              <div>
-                <h3 style={{ margin: 0, fontSize: 14, fontWeight: 700, color: '#0f172a' }}>Invite viewer</h3>
-                <p style={{ margin: '6px 0 0', fontSize: 13, color: '#64748b', lineHeight: 1.5 }}>
-                  Send a read-only invite by email. Viewers can open and explore the project but cannot
-                  edit or invite others. Pending users get access once they register.
-                </p>
-              </div>
-
-              <label style={{ ...labelStyle, marginBottom: 0 }} htmlFor="share-invite-email">
-                Email address
-              </label>
-              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                <input
-                  id="share-invite-email"
-                  type="email"
-                  placeholder="viewer@example.com"
-                  value={email}
-                  onChange={e => setEmail(e.target.value)}
-                  onKeyDown={e => { if (e.key === 'Enter' && canInvite) invite(); }}
-                  style={{ ...inputStyle, flex: 1, minWidth: 200, margin: 0 }}
-                  disabled={inviting}
-                  autoFocus
-                />
-                <ActionButton variant="primary" size="sm" onClick={invite} disabled={!canInvite}>
-                  {inviting ? 'Sending…' : 'Invite viewer'}
-                </ActionButton>
-              </div>
-            </section>
+            <AddPeopleSection
+              vsumId={vsumId}
+              members={members}
+              onAdded={async () => { await loadMembers(); onInvited?.(); }}
+              onSuccess={setSuccess}
+              onError={setErr}
+              onClearMessages={() => { setErr(''); setSuccess(''); }}
+              autoFocus
+            />
 
             <section style={{ display: 'grid', gap: 10 }}>
-              <h3 style={{ margin: 0, fontSize: 14, fontWeight: 700, color: '#0f172a' }}>People with access</h3>
+              <h3 style={{ margin: 0, fontSize: 14, fontWeight: 700, color: 'var(--v-text)' }}>People with access</h3>
 
               {membersLoading && members.length === 0 && (
-                <p style={{ margin: 0, fontSize: 13, color: '#64748b', fontStyle: 'italic' }}>Loading…</p>
+                <p style={{ margin: 0, fontSize: 13, color: 'var(--v-text-muted)', fontStyle: 'italic' }}>Loading…</p>
               )}
 
               {!membersLoading && members.length === 0 && (
-                <p style={{ margin: 0, fontSize: 13, color: '#64748b', fontStyle: 'italic' }}>No members yet.</p>
+                <p style={{ margin: 0, fontSize: 13, color: 'var(--v-text-muted)', fontStyle: 'italic' }}>No members yet.</p>
               )}
 
               {members.length > 0 && (
@@ -259,15 +201,15 @@ export const ShareProjectModal: React.FC<ShareProjectModalProps> = ({
                           gap: 10,
                           padding: '8px 10px',
                           borderRadius: 8,
-                          border: '1px solid #f1f5f9',
-                          background: '#fafafa',
+                          border: '1px solid var(--v-border-subtle)',
+                          background: 'var(--v-surface-hover)',
                         }}
                       >
                         <div style={{ flex: 1, minWidth: 0 }}>
                           <div style={{
                             fontSize: 13,
                             fontWeight: 600,
-                            color: '#0f172a',
+                            color: 'var(--v-text)',
                             overflow: 'hidden',
                             textOverflow: 'ellipsis',
                             whiteSpace: 'nowrap',
@@ -280,9 +222,9 @@ export const ShareProjectModal: React.FC<ShareProjectModalProps> = ({
                                 borderRadius: 20,
                                 fontSize: 10,
                                 fontWeight: 700,
-                                background: '#fff7ed',
-                                color: '#c2410c',
-                                border: '1px solid #fed7aa',
+                                background: 'var(--v-warning-bg)',
+                                color: 'var(--v-warning-text)',
+                                border: '1px solid var(--v-warning-border)',
                               }}>
                                 Pending
                               </span>
@@ -290,7 +232,7 @@ export const ShareProjectModal: React.FC<ShareProjectModalProps> = ({
                           </div>
                           <div style={{
                             fontSize: 11,
-                            color: '#64748b',
+                            color: 'var(--v-text-muted)',
                             marginTop: 2,
                             overflow: 'hidden',
                             textOverflow: 'ellipsis',
@@ -336,7 +278,7 @@ export const ShareProjectModal: React.FC<ShareProjectModalProps> = ({
 
           <div style={{
             padding: '12px 22px 18px',
-            borderTop: '1px solid #f1f5f9',
+            borderTop: '1px solid var(--v-border-subtle)',
             display: 'flex',
             justifyContent: 'flex-end',
             flexShrink: 0,

@@ -1,6 +1,6 @@
 import type { Mock } from 'vitest';
 import React from 'react';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
 import { VsumUsersTab } from '../../../components/ui/VsumUsersTab';
 import * as apiModule from '../../../services/api';
 
@@ -62,38 +62,24 @@ describe('VsumUsersTab', () => {
   });
 
   it('searches and adds a new member', async () => {
-    render(<VsumUsersTab vsumId={1} />);
-
-    const input = screen.getByPlaceholderText(/Search user by name or email/i);
-    fireEvent.change(input, { target: { value: 'bob' } });
-
-    await waitFor(() => {
-      expect(apiService.searchUsers).toHaveBeenCalled();
-    });
-    // we only assert that search was triggered; UI list rendering is implementation-detail heavy
-  });
-
-  it('lets the first suggested user be selected and added', async () => {
     apiService.getVsumMembers.mockResolvedValue({ data: [] });
     apiService.searchUsers.mockResolvedValue({
       data: [{ id: 2, firstName: 'Bob', lastName: 'Member', email: 'bob@example.com' }],
     });
     apiService.addVsumMember.mockResolvedValue({});
-    render(<VsumUsersTab vsumId={1} />);
-    fireEvent.change(screen.getByPlaceholderText(/Search user by name or email/i), {
-      target: { value: 'bob' },
+    const onChanged = vi.fn();
+    render(<VsumUsersTab vsumId={1} onChanged={onChanged} />);
+
+    fireEvent.change(screen.getByLabelText('Add as'), { target: { value: 'MEMBER' } });
+    fireEvent.change(screen.getByPlaceholderText('Name or email…'), { target: { value: 'bob' } });
+    fireEvent.click(await screen.findByRole('option', { name: /Bob Member/ }));
+    fireEvent.click(screen.getByRole('button', { name: 'Add member' }));
+
+    await waitFor(() => {
+      expect(apiService.addVsumMember).toHaveBeenCalledWith(1, { userId: 2 });
+      expect(onChanged).toHaveBeenCalled();
     });
-
-    // A list even for one match, with no user selected yet, so choosing the first is a real change.
-    const results = await screen.findByRole('listbox', { name: 'Search results' });
-    expect((screen.getByRole('option', { name: /Bob Member/ }) as HTMLOptionElement).selected).toBe(false);
-    expect(screen.getByRole('button', { name: /Add member/i })).toBeDisabled();
-
-    fireEvent.change(results, { target: { value: '2' } });
-    expect(screen.getByText(/Selected:/)).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: /Add member/i }));
-
-    await waitFor(() => expect(apiService.addVsumMember).toHaveBeenCalledWith(1, { userId: 2 }));
+    expect(await screen.findByText('Bob Member was added as a member.')).toBeInTheDocument();
   });
 });
 
@@ -122,7 +108,7 @@ describe('VsumUsersTab – additional tests', () => {
     render(<VsumUsersTab vsumId={1} />);
     expect(await screen.findByText('Carol Dev')).toBeInTheDocument();
     expect(screen.getByText('carol@example.com')).toBeInTheDocument();
-    expect(screen.getByText('Member')).toBeInTheDocument();
+    expect(within(screen.getByRole('table')).getByText('Member')).toBeInTheDocument();
   });
 
   it('does not show Remove button for OWNER role', async () => {
@@ -161,6 +147,7 @@ describe('VsumUsersTab – additional tests', () => {
   it('Add member button is disabled when no user is selected', async () => {
     render(<VsumUsersTab vsumId={1} />);
     await screen.findByText(/No members yet/i);
+    fireEvent.change(screen.getByLabelText('Add as'), { target: { value: 'MEMBER' } });
     expect(screen.getByRole('button', { name: /Add member/i })).toBeDisabled();
   });
 
@@ -201,7 +188,7 @@ describe('VsumUsersTab – additional tests', () => {
     render(<VsumUsersTab vsumId={1} />);
     expect(await screen.findByText('Pending invite')).toBeInTheDocument();
     expect(screen.getByText('Pending')).toBeInTheDocument();
-    expect(screen.getByText('Viewer')).toBeInTheDocument();
+    expect(within(screen.getByRole('table')).getByText('Viewer')).toBeInTheDocument();
   });
 
   it('hides invite and add controls when canManage is false', async () => {
