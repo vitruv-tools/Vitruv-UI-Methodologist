@@ -1,3 +1,4 @@
+import type { Mock } from 'vitest';
 import React, { createRef } from 'react';
 import { render, screen, fireEvent, act } from '@testing-library/react';
 import { FlowCanvas } from '../../../components/flow/FlowCanvas';
@@ -5,10 +6,10 @@ import { apiService } from '../../../services/api';
 
 // Props of the last rendered <ReactFlow>, and stable stand-ins for handlers the canvas wraps.
 const mockReactFlowProps: { current: any } = { current: null };
-const mockOnNodesChange = jest.fn();
-const mockOnDrop = jest.fn();
+const mockOnNodesChange = vi.fn();
+const mockOnDrop = vi.fn();
 
-jest.mock('reactflow', () => {
+vi.mock('reactflow', () => {
   const MockReactFlow = (props: any) => {
     mockReactFlowProps.current = props;
     return <div data-testid="react-flow">{props.children}</div>;
@@ -25,94 +26,94 @@ jest.mock('reactflow', () => {
     MarkerType: { ArrowClosed: 'arrowclosed', Arrow: 'arrow' },
     ConnectionMode: { Loose: 'loose', Strict: 'strict' },
     useReactFlow: () => ({
-      screenToFlowPosition: jest.fn(() => ({ x: 100, y: 100 })),
-      getNodes: jest.fn(() => []),
-      getEdges: jest.fn(() => []),
-      fitView: jest.fn(),
-      project: jest.fn((pos: any) => pos),
+      screenToFlowPosition: vi.fn(() => ({ x: 100, y: 100 })),
+      getNodes: vi.fn(() => []),
+      getEdges: vi.fn(() => []),
+      fitView: vi.fn(),
+      project: vi.fn((pos: any) => pos),
     }),
-    useNodes: jest.fn(() => []),
-    useEdges: jest.fn(() => []),
-    useStore: jest.fn(() => ({})),
-    applyNodeChanges: jest.fn((changes: any, nodes: any) => nodes),
-    applyEdgeChanges: jest.fn((changes: any, edges: any) => edges),
-    addEdge: jest.fn((edge: any, edges: any) => [...edges, edge]),
-    getBezierPath: jest.fn(() => ['M0,0', 0, 0, 0, 0]),
-    getStraightPath: jest.fn(() => ['M0,0', 0, 0]),
-    getSimpleBezierPath: jest.fn(() => ['M0,0', 0, 0, 0, 0]),
+    useNodes: vi.fn(() => []),
+    useEdges: vi.fn(() => []),
+    useStore: vi.fn(() => ({})),
+    applyNodeChanges: vi.fn((changes: any, nodes: any) => nodes),
+    applyEdgeChanges: vi.fn((changes: any, edges: any) => edges),
+    addEdge: vi.fn((edge: any, edges: any) => [...edges, edge]),
+    getBezierPath: vi.fn(() => ['M0,0', 0, 0, 0, 0]),
+    getStraightPath: vi.fn(() => ['M0,0', 0, 0]),
+    getSimpleBezierPath: vi.fn(() => ['M0,0', 0, 0, 0, 0]),
   };
 });
 
-jest.mock('../../../hooks/useFlowState', () => ({
+vi.mock('../../../hooks/useFlowState', () => ({
   useFlowState: () => ({
     nodes: [],
     edges: [],
     onNodesChange: mockOnNodesChange,
-    onEdgesChange: jest.fn(),
-    onConnect: jest.fn(),
-    addNode: jest.fn(),
-    addEdge: jest.fn(),
-    updateNodeLabel: jest.fn(),
-    removeNode: jest.fn(),
-    removeEdge: jest.fn(),
-    setNodes: jest.fn(),
-    setEdges: jest.fn(),
-    undo: jest.fn(),
-    redo: jest.fn(),
+    onEdgesChange: vi.fn(),
+    onConnect: vi.fn(),
+    addNode: vi.fn(),
+    addEdge: vi.fn(),
+    updateNodeLabel: vi.fn(),
+    removeNode: vi.fn(),
+    removeEdge: vi.fn(),
+    setNodes: vi.fn(),
+    setEdges: vi.fn(),
+    undo: vi.fn(),
+    redo: vi.fn(),
     canUndo: false,
     canRedo: false,
-    updateEdgeCode: jest.fn(),
-    setHistoryPaused: jest.fn(),
-    establishBaseline: jest.fn(),
+    updateEdgeCode: vi.fn(),
+    setHistoryPaused: vi.fn(),
+    establishBaseline: vi.fn(),
   }),
 }));
 
-jest.mock('../../../hooks/useDragAndDrop', () => ({
+vi.mock('../../../hooks/useDragAndDrop', () => ({
   useDragAndDrop: () => ({
     onDrop: mockOnDrop,
-    onDragOver: jest.fn(),
+    onDragOver: vi.fn(),
   }),
 }));
 
-jest.mock('../../../components/flow/EditableNode', () => ({
+vi.mock('../../../components/flow/EditableNode', () => ({
   EditableNode: () => <div>Editable Node</div>,
 }));
 
-jest.mock('../../../components/flow/EcoreFileBox', () => ({
+vi.mock('../../../components/flow/EcoreFileBox', () => ({
   EcoreFileBox: () => <div>Ecore File</div>,
 }));
 
-jest.mock('../../../components/flow/UMLRelationship', () => ({
+vi.mock('../../../components/flow/UMLRelationship', () => ({
   UMLRelationship: () => null,
 }));
 
-jest.mock('../../../components/flow/ReactionRelationship', () => ({
+vi.mock('../../../components/flow/ReactionRelationship', () => ({
   ReactionRelationship: () => null,
 }));
 
-jest.mock('../../../components/flow/ConnectionLine', () => ({
+vi.mock('../../../components/flow/ConnectionLine', () => ({
   ConnectionLine: () => <svg data-testid="connection-line" />,
 }));
 
-jest.mock('../../../components/flow/canvas/CircleOverlay', () => ({
+vi.mock('../../../components/flow/canvas/CircleOverlay', () => ({
   CircleOverlay: () => <div data-testid="circle-overlay" />,
 }));
 
-jest.mock('../../../components/flow/CodeEditorModal', () => ({
+vi.mock('../../../components/flow/CodeEditorModal', () => ({
   CodeEditorModal: () => <div data-testid="code-editor-modal">Code Editor</div>,
 }));
 
-jest.mock('../../../services/api', () => ({
+vi.mock('../../../services/api', () => ({
   apiService: {
-    getFile: jest.fn(),
-    uploadFile: jest.fn().mockResolvedValue({ data: { id: 42 } }),
-    updateReactionFile: jest.fn().mockResolvedValue(undefined),
+    getFile: vi.fn(),
+    uploadFile: vi.fn().mockResolvedValue({ data: { id: 42 } }),
+    updateReactionFile: vi.fn().mockResolvedValue(undefined),
   },
 }));
 
 describe('FlowCanvas', () => {
   beforeEach(() => {
-    jest.clearAllMocks();
+    vi.clearAllMocks();
     localStorage.clear();
   });
 
@@ -198,7 +199,7 @@ describe('FlowCanvas', () => {
 
   it('calls onEcoreFileSelect when addEcoreFile is called', () => {
     const ref = createRef<any>();
-    const onEcoreFileSelect = jest.fn();
+    const onEcoreFileSelect = vi.fn();
     render(<FlowCanvas ref={ref} onEcoreFileSelect={onEcoreFileSelect} />);
     act(() => {
       ref.current.addEcoreFile('test.ecore', '<ecore:EPackage name="test"/>', {
@@ -211,7 +212,7 @@ describe('FlowCanvas', () => {
 
   it('allows server-loaded metamodels on a read-only canvas', () => {
     const ref = createRef<any>();
-    const onEcoreFileSelect = jest.fn();
+    const onEcoreFileSelect = vi.fn();
     render(<FlowCanvas ref={ref} readOnly onEcoreFileSelect={onEcoreFileSelect} />);
     act(() => {
       ref.current.addEcoreFile('shared.ecore', '<ecore:EPackage name="shared"/>', {
@@ -340,6 +341,18 @@ describe('FlowCanvas – lock button', () => {
     expect(mockReactFlowProps.current.nodesConnectable).toBe(true);
   });
 
+  it('turns double-click zoom off until unlocked, like the other zoom gestures', () => {
+    render(<FlowCanvas />);
+    expect(mockReactFlowProps.current.zoomOnDoubleClick).toBe(true);
+
+    lock();
+    expect(mockReactFlowProps.current.zoomOnDoubleClick).toBe(false);
+    expect(mockReactFlowProps.current.zoomOnScroll).toBe(false);
+
+    fireEvent.click(screen.getByTitle('Unlock interactions'));
+    expect(mockReactFlowProps.current.zoomOnDoubleClick).toBe(true);
+  });
+
   it('ignores moving and removing nodes while locked, but still lets them be selected', () => {
     render(<FlowCanvas />);
     lock();
@@ -355,14 +368,14 @@ describe('FlowCanvas – lock button', () => {
 
   it('rejects models added or dropped while locked, but still loads them from the server', () => {
     const ref = createRef<any>();
-    const onEcoreFileSelect = jest.fn();
+    const onEcoreFileSelect = vi.fn();
     render(<FlowCanvas ref={ref} onEcoreFileSelect={onEcoreFileSelect} />);
     lock();
 
     act(() => {
       ref.current.addEcoreFile('added.ecore', '<ecore:EPackage name="added"/>', { metaModelId: 1 });
     });
-    act(() => mockReactFlowProps.current.onDrop({ preventDefault: jest.fn() }));
+    act(() => mockReactFlowProps.current.onDrop({ preventDefault: vi.fn() }));
     expect(onEcoreFileSelect).not.toHaveBeenCalled();
     expect(mockOnDrop).not.toHaveBeenCalled();
 
@@ -375,12 +388,30 @@ describe('FlowCanvas – lock button', () => {
     expect(onEcoreFileSelect).toHaveBeenCalledWith('loaded.ecore');
   });
 
+  it('starts locked when initialLocked is set', () => {
+    const ref = createRef<any>();
+    render(<FlowCanvas ref={ref} initialLocked />);
+
+    expect(screen.getByTitle('Unlock interactions')).toBeInTheDocument();
+    expect(mockReactFlowProps.current.nodesDraggable).toBe(false);
+    expect(ref.current.isLocked()).toBe(true);
+  });
+
+  it('reports whether it is locked', () => {
+    const ref = createRef<any>();
+    render(<FlowCanvas ref={ref} />);
+    expect(ref.current.isLocked()).toBe(false);
+
+    lock();
+    expect(ref.current.isLocked()).toBe(true);
+  });
+
   it('accepts dropped models again once unlocked', () => {
     render(<FlowCanvas />);
     lock();
     fireEvent.click(screen.getByTitle('Unlock interactions'));
 
-    act(() => mockReactFlowProps.current.onDrop({ preventDefault: jest.fn() }));
+    act(() => mockReactFlowProps.current.onDrop({ preventDefault: vi.fn() }));
 
     expect(mockOnDrop).toHaveBeenCalledTimes(1);
   });
@@ -388,7 +419,7 @@ describe('FlowCanvas – lock button', () => {
 
 describe('FlowCanvas uploadFile response parsing', () => {
   it('extracts id from nested { id } response', async () => {
-    (apiService.uploadFile as jest.Mock).mockResolvedValue({ data: { id: 99 } });
+    (apiService.uploadFile as Mock).mockResolvedValue({ data: { id: 99 } });
     const result = await apiService.uploadFile(new File([''], 'f.reactions'), 'REACTION');
     const raw = (result as any)?.data;
     const id = typeof raw === 'number' ? raw
@@ -398,7 +429,7 @@ describe('FlowCanvas uploadFile response parsing', () => {
   });
 
   it('extracts id from direct number response', async () => {
-    (apiService.uploadFile as jest.Mock).mockResolvedValue({ data: 55 });
+    (apiService.uploadFile as Mock).mockResolvedValue({ data: 55 });
     const result = await apiService.uploadFile(new File([''], 'f.reactions'), 'REACTION');
     const raw = (result as any)?.data;
     const id = typeof raw === 'number' ? raw
@@ -408,7 +439,7 @@ describe('FlowCanvas uploadFile response parsing', () => {
   });
 
   it('extracts id from string number response', async () => {
-    (apiService.uploadFile as jest.Mock).mockResolvedValue({ data: '77' });
+    (apiService.uploadFile as Mock).mockResolvedValue({ data: '77' });
     const result = await apiService.uploadFile(new File([''], 'f.reactions'), 'REACTION');
     const raw = (result as any)?.data;
     const id = typeof raw === 'number' ? raw
@@ -418,7 +449,7 @@ describe('FlowCanvas uploadFile response parsing', () => {
   });
 
   it('returns null when data is null', async () => {
-    (apiService.uploadFile as jest.Mock).mockResolvedValue({ data: null });
+    (apiService.uploadFile as Mock).mockResolvedValue({ data: null });
     const result = await apiService.uploadFile(new File([''], 'f.reactions'), 'REACTION');
     const raw = (result as any)?.data;
     const id = typeof raw === 'number' ? raw
@@ -499,13 +530,13 @@ describe('isEditableElement logic', () => {
 
 describe('handleDeleteKey logic', () => {
   it('removes selected nodes when Delete is pressed', () => {
-    const removeNode = jest.fn();
-    const getNodes = jest.fn(() => [
+    const removeNode = vi.fn();
+    const getNodes = vi.fn(() => [
       { id: 'n1', selected: true },
       { id: 'n2', selected: false },
     ]);
-    const getEdges = jest.fn(() => []);
-    const event = { preventDefault: jest.fn() } as any;
+    const getEdges = vi.fn(() => []);
+    const event = { preventDefault: vi.fn() } as any;
 
     // Simulate the handleDeleteKey logic directly
     const reactFlowInstance = { getNodes, getEdges };
@@ -521,13 +552,13 @@ describe('handleDeleteKey logic', () => {
   });
 
   it('removes selected edges when Delete is pressed', () => {
-    const removeEdge = jest.fn();
-    const getNodes = jest.fn(() => []);
-    const getEdges = jest.fn(() => [
+    const removeEdge = vi.fn();
+    const getNodes = vi.fn(() => []);
+    const getEdges = vi.fn(() => [
       { id: 'e1', selected: true },
       { id: 'e2', selected: false },
     ]);
-    const event = { preventDefault: jest.fn() } as any;
+    const event = { preventDefault: vi.fn() } as any;
 
     const reactFlowInstance = { getNodes, getEdges };
     const selectedNodes = reactFlowInstance.getNodes().filter((n: any) => n.selected);
@@ -547,9 +578,9 @@ describe('handleDeleteKey logic', () => {
   });
 
   it('calls onEcoreFileDelete when selectedFileId is set', () => {
-    const onEcoreFileDelete = jest.fn();
-    const setSelectedFileId = jest.fn();
-    const event = { preventDefault: jest.fn() } as any;
+    const onEcoreFileDelete = vi.fn();
+    const setSelectedFileId = vi.fn();
+    const event = { preventDefault: vi.fn() } as any;
     const selectedFileId = 'file-123';
 
     if (selectedFileId && onEcoreFileDelete) {
@@ -564,9 +595,9 @@ describe('handleDeleteKey logic', () => {
   });
 
   it('returns false and does nothing when no nodes/edges selected and no file selected', () => {
-    const getNodes = jest.fn(() => [{ id: 'n1', selected: false }]);
-    const getEdges = jest.fn(() => [{ id: 'e1', selected: false }]);
-    const event = { preventDefault: jest.fn() } as any;
+    const getNodes = vi.fn(() => [{ id: 'n1', selected: false }]);
+    const getEdges = vi.fn(() => [{ id: 'e1', selected: false }]);
+    const event = { preventDefault: vi.fn() } as any;
     const selectedFileId = null;
 
     const reactFlowInstance = { getNodes, getEdges };
@@ -720,7 +751,7 @@ describe('handleSaveCode - toFiniteNumber and extractFileId logic', () => {
   });
 
   it('upload path: calls uploadFile when reactionFileId is null', async () => {
-    const uploadFile = jest.fn().mockResolvedValue({ data: { id: 10 } });
+    const uploadFile = vi.fn().mockResolvedValue({ data: { id: 10 } });
     const reactionFileId = null;
     let resultId: number | null = reactionFileId;
 
@@ -734,7 +765,7 @@ describe('handleSaveCode - toFiniteNumber and extractFileId logic', () => {
   });
 
   it('update path: calls updateReactionFile when reactionFileId exists', async () => {
-    const updateReactionFile = jest.fn().mockResolvedValue(undefined);
+    const updateReactionFile = vi.fn().mockResolvedValue(undefined);
     const reactionFileId = 7;
 
     if (reactionFileId != null) {
@@ -745,7 +776,7 @@ describe('handleSaveCode - toFiniteNumber and extractFileId logic', () => {
   });
 
   it('throws error when upload returns null id', async () => {
-    const uploadFile = jest.fn().mockResolvedValue({ data: null });
+    const uploadFile = vi.fn().mockResolvedValue({ data: null });
 
     let error: Error | null = null;
     try {
@@ -782,7 +813,7 @@ describe('handleEdgeDoubleClick logic', () => {
   });
 
   it('fetches file content when initialCode is empty and reactionFileId is number', async () => {
-    const getFile = jest.fn().mockResolvedValue('fetched content');
+    const getFile = vi.fn().mockResolvedValue('fetched content');
     const edge = { data: { code: '', reactionFileId: 42 } };
 
     let initialCode = edge.data?.code || '';
@@ -799,8 +830,8 @@ describe('handleEdgeDoubleClick logic', () => {
   });
 
   it('falls back to buildInitialReactionCode when initialCode is still empty after fetch', async () => {
-    const getFile = jest.fn().mockRejectedValue(new Error('not found'));
-    const buildCode = jest.fn().mockReturnValue('generated code');
+    const getFile = vi.fn().mockRejectedValue(new Error('not found'));
+    const buildCode = vi.fn().mockReturnValue('generated code');
     const edge = { id: 'e1', source: 'n1', target: 'n2', data: { reactionFileId: 42 } };
 
     let initialCode = '';
@@ -837,7 +868,7 @@ describe('handleEdgeDoubleClick logic', () => {
 
   describe('FlowCanvas – handleConnectionStart', () => {
     beforeEach(() => {
-      jest.clearAllMocks();
+      vi.clearAllMocks();
     });
 
     it('does not render ConnectionLine when no drag is active', () => {

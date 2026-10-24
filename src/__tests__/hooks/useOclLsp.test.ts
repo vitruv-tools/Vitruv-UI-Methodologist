@@ -2,11 +2,11 @@ import { renderHook, act } from '@testing-library/react';
 import { useOclLsp } from '../../hooks/useOclLsp';
 
 // ─── Mock monaco-editor ──────────────────────────────────────────────────────
-const mockSetModelMarkers = jest.fn();
-const mockRegisterCompletionItemProvider = jest.fn();
-const mockCompletionDisposable = { dispose: jest.fn() };
+const mockSetModelMarkers = vi.fn();
+const mockRegisterCompletionItemProvider = vi.fn();
+const mockCompletionDisposable = { dispose: vi.fn() };
 
-jest.mock('monaco-editor', () => ({
+vi.mock('monaco-editor', () => ({
   MarkerSeverity: { Error: 8, Warning: 4, Info: 2 },
   editor: { setModelMarkers: mockSetModelMarkers },
   languages: {
@@ -15,7 +15,7 @@ jest.mock('monaco-editor', () => ({
   },
 }));
 
-jest.mock('@monaco-editor/react', () => ({}));
+vi.mock('@monaco-editor/react', () => ({}));
 
 // ─── Mock WebSocket ───────────────────────────────────────────────────────────
 function makeMockWs() {
@@ -23,8 +23,8 @@ function makeMockWs() {
     readyState: 1,
     onmessage: null,
     onclose: null,
-    send: jest.fn(),
-    close: jest.fn(),
+    send: vi.fn(),
+    close: vi.fn(),
   };
 }
 
@@ -32,13 +32,13 @@ let mockWsInstance;
 
 beforeEach(() => {
   mockWsInstance = makeMockWs();
-  global.WebSocket = jest.fn(() => mockWsInstance) as any;
+  global.WebSocket = vi.fn(function () { return mockWsInstance; }) as any;
   global.WebSocket.OPEN = 1;
 
   localStorage.clear();
   localStorage.setItem('auth.user', JSON.stringify({ id: 'user-123' }));
 
-  jest.clearAllMocks();
+  vi.clearAllMocks();
   mockRegisterCompletionItemProvider.mockReturnValue(mockCompletionDisposable);
 });
 
@@ -71,7 +71,7 @@ function simulateMessage(data: object) {
 function mountHookAndConnect(props = defaultProps) {
   const monaco = makeMonacoStub();
   const { result, unmount } = renderHook(() => useOclLsp(props));
-  const mockEditor = { getModel: jest.fn(() => ({})) };
+  const mockEditor = { getModel: vi.fn(() => ({})) };
   act(() => {
     result.current.onMount(mockEditor as any, monaco);
   });
@@ -87,7 +87,7 @@ describe('useOclLsp', () => {
     it('does not open a WebSocket when vsumId is undefined', () => {
       const monaco = makeMonacoStub();
       const { result } = renderHook(() => useOclLsp({ ...defaultProps, vsumId: undefined }));
-      const mockEditor = { getModel: jest.fn() };
+      const mockEditor = { getModel: vi.fn() };
       act(() => { result.current.onMount(mockEditor as any, monaco); });
       expect(global.WebSocket).not.toHaveBeenCalled();
     });
@@ -96,7 +96,7 @@ describe('useOclLsp', () => {
       localStorage.removeItem('auth.user');
       const monaco = makeMonacoStub();
       const { result } = renderHook(() => useOclLsp(defaultProps));
-      const mockEditor = { getModel: jest.fn() };
+      const mockEditor = { getModel: vi.fn() };
       act(() => { result.current.onMount(mockEditor as any, monaco); });
       expect(global.WebSocket).not.toHaveBeenCalled();
     });
@@ -165,7 +165,7 @@ describe('useOclLsp', () => {
       const { result, unmount } = renderHook(() => useOclLsp(defaultProps));
       const monaco = makeMonacoStub();
       const mockModel = {};
-      const mockEditor = { getModel: jest.fn(() => mockModel) };
+      const mockEditor = { getModel: vi.fn(() => mockModel) };
 
       act(() => { result.current.onMount(mockEditor as any, monaco); });
       simulateMessage({ type: 'workspaceReady', rootUri: 'file:///workspace/' });
@@ -249,7 +249,7 @@ describe('useOclLsp', () => {
     it('does not call setModelMarkers when editor has no model', () => {
       const { result } = renderHook(() => useOclLsp(defaultProps));
       const monaco = makeMonacoStub();
-      const mockEditor = { getModel: jest.fn(() => null) };
+      const mockEditor = { getModel: vi.fn(() => null) };
 
       act(() => { result.current.onMount(mockEditor as any, monaco); });
       simulateMessage({ type: 'workspaceReady', rootUri: 'file:///workspace/' });
@@ -336,7 +336,7 @@ describe('useOclLsp', () => {
     });
 
     it('disposes the completion provider on unmount', () => {
-      const disposeFn = jest.fn();
+      const disposeFn = vi.fn();
       mockRegisterCompletionItemProvider.mockReturnValue({ dispose: disposeFn });
 
       const { unmount } = mountHookAndConnect();
@@ -377,7 +377,7 @@ describe('useOclLsp', () => {
     it('stores the editor ref and triggers connect (WebSocket is created)', () => {
       const monaco = makeMonacoStub();
       const { result } = renderHook(() => useOclLsp(defaultProps));
-      const mockEditor = { getModel: jest.fn() };
+      const mockEditor = { getModel: vi.fn() };
 
       act(() => { result.current.onMount(mockEditor as any, monaco); });
 
@@ -404,7 +404,7 @@ describe('useOclLsp', () => {
       let capturedProvider: any;
       mockRegisterCompletionItemProvider.mockImplementation((_lang, provider) => {
         capturedProvider = provider;
-        return { dispose: jest.fn() };
+        return { dispose: vi.fn() };
       });
 
       const { result, unmount } = mountHookAndConnect();
@@ -419,7 +419,7 @@ describe('useOclLsp', () => {
       const provider = getProvider();
 
       const mockModel = {
-        getWordUntilPosition: jest.fn(() => ({ startColumn: 1, endColumn: 4 })),
+        getWordUntilPosition: vi.fn(() => ({ startColumn: 1, endColumn: 4 })),
       };
       const mockPosition = { lineNumber: 1, column: 4 };
 
@@ -451,14 +451,14 @@ describe('useOclLsp', () => {
       let capturedProvider: any;
       mockRegisterCompletionItemProvider.mockImplementation((_lang, provider) => {
         capturedProvider = provider;
-        return { dispose: jest.fn() };
+        return { dispose: vi.fn() };
       });
 
       // Connect but do NOT send workspaceReady/initialized
       mountHookAndConnect();
 
       const mockModel = {
-        getWordUntilPosition: jest.fn(() => ({ startColumn: 1, endColumn: 1 })),
+        getWordUntilPosition: vi.fn(() => ({ startColumn: 1, endColumn: 1 })),
       };
       const mockPosition = { lineNumber: 1, column: 1 };
 

@@ -23,13 +23,13 @@ const ecoreOptions = (overrides: Record<string, unknown> = {}) => ({
   constraintHighlightNodeId: null,
   constraintFilterNodeId: null,
   edgeDistribution: undefined,
-  handleEcoreFileExpand: jest.fn(),
-  handleEcoreFileSelect: jest.fn(),
-  onEcoreFileDelete: jest.fn(),
-  handleRequestDelete: jest.fn(),
-  onEcoreFileRename: jest.fn(),
-  handleShowDetails: jest.fn(),
-  handleConnectionStart: jest.fn(),
+  handleEcoreFileExpand: vi.fn(),
+  handleEcoreFileSelect: vi.fn(),
+  onEcoreFileDelete: vi.fn(),
+  handleRequestDelete: vi.fn(),
+  onEcoreFileRename: vi.fn(),
+  handleShowDetails: vi.fn(),
+  handleConnectionStart: vi.fn(),
   ...overrides,
 });
 
@@ -46,6 +46,22 @@ describe('mapEcoreFlowNode', () => {
     const options = ecoreOptions({ readOnly: true, locked: true });
 
     expect(mapEcoreFlowNode(ecoreNode(), options).draggable).toBe(false);
+  });
+
+  it('tells the model card that the canvas is locked', () => {
+    const options = ecoreOptions({ readOnly: true, locked: true });
+
+    expect(mapEcoreFlowNode(ecoreNode(), options).data.locked).toBe(true);
+  });
+
+  it('keeps the model card clickable on a locked canvas', () => {
+    const options = ecoreOptions({ readOnly: true, locked: true });
+
+    expect(mapEcoreFlowNode(ecoreNode(), options).style?.pointerEvents).toBe('all');
+  });
+
+  it('leaves pointer events to React Flow on an unlocked canvas', () => {
+    expect(mapEcoreFlowNode(ecoreNode(), ecoreOptions()).style?.pointerEvents).toBeUndefined();
   });
 
   it('freezes while a connection is being dragged', () => {
@@ -72,7 +88,7 @@ describe('mapEcoreFlowNode', () => {
   it('still withholds connection starting from a viewer', () => {
     const mapped = mapEcoreFlowNode(
       ecoreNode(),
-      ecoreOptions({ readOnly: true, handleConnectionStart: jest.fn() }),
+      ecoreOptions({ readOnly: true, handleConnectionStart: vi.fn() }),
     );
 
     expect(mapped.data.onConnectionStart).toBeUndefined();
@@ -87,8 +103,8 @@ describe('mapEcoreFlowNode', () => {
 });
 
 describe('mapEditableFlowNode', () => {
-  const labelChange = jest.fn();
-  const removeNode = jest.fn();
+  const labelChange = vi.fn();
+  const removeNode = vi.fn();
 
   it('is draggable for an editor', () => {
     expect(mapEditableFlowNode(editableNode(), false, labelChange, removeNode).draggable).toBe(true);
@@ -132,13 +148,13 @@ function mapContext(overrides: Partial<MapFlowEdgeContext> = {}): MapFlowEdgeCon
     hoveredMergeGroup: null,
     getDistribution: () => ({}),
     getUmlMerge: () => emptyMerge,
-    handleMergeGroupHover: jest.fn(),
-    handleEdgeDoubleClick: jest.fn(),
-    handleEdgeDragStart: jest.fn(),
-    handleEdgeDrag: jest.fn(),
-    handleEdgeDragEnd: jest.fn(),
-    handleEdgeHandleChange: jest.fn(),
-    handleEdgeReorderRequest: jest.fn(),
+    handleMergeGroupHover: vi.fn(),
+    handleEdgeDoubleClick: vi.fn(),
+    handleEdgeDragStart: vi.fn(),
+    handleEdgeDrag: vi.fn(),
+    handleEdgeDragEnd: vi.fn(),
+    handleEdgeHandleChange: vi.fn(),
+    handleEdgeReorderRequest: vi.fn(),
     ...overrides,
   };
 }

@@ -14,7 +14,7 @@ const defaultProps = (overrides?: any) => ({
     nodeW: 280,
     nodeH: 180,
     editable: false,
-    onDelete: jest.fn(),
+    onDelete: vi.fn(),
     ...overrides,
 });
 
@@ -40,7 +40,7 @@ const openMenu = (container: HTMLElement) =>
 // ── Tests ─────────────────────────────────────────────────────────────────────
 
 describe('ViewTypeArrow', () => {
-    beforeEach(() => jest.clearAllMocks());
+    beforeEach(() => vi.clearAllMocks());
 
     // Rendering
 
@@ -105,7 +105,7 @@ describe('ViewTypeArrow', () => {
     });
 
     it('stops propagation when hitbox is clicked', () => {
-        const parentHandler = jest.fn();
+        const parentHandler = vi.fn();
         const { container } = render(
             <svg onClick={parentHandler}>
                 <ViewTypeArrow {...defaultProps()} />
@@ -116,7 +116,7 @@ describe('ViewTypeArrow', () => {
     });
 
     it('calls onDelete with id when Delete connection is clicked', () => {
-        const onDelete = jest.fn();
+        const onDelete = vi.fn();
         const { container } = renderArrow({ onDelete });
         openMenu(container);
         fireEvent.click(screen.getByText('Delete connection'));
@@ -146,7 +146,7 @@ describe('ViewTypeArrow', () => {
     });
 
     it('does not call onDelete when menu is closed via backdrop', () => {
-        const onDelete = jest.fn();
+        const onDelete = vi.fn();
         const { container } = renderArrow({ onDelete });
         openMenu(container);
         const backdrop = document.body.querySelector('button[aria-label="Close menu"]') as HTMLElement;

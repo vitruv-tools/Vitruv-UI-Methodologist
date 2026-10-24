@@ -3,9 +3,9 @@ import { render, screen } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { FastLoginCallback } from '../../../components/auth/FastLoginCallback';
 
-const mockUseFastLoginCallback = jest.fn();
+const mockUseFastLoginCallback = vi.fn();
 
-jest.mock('../../../hooks/useFastLoginCallback', () => ({
+vi.mock('../../../hooks/useFastLoginCallback', () => ({
   useFastLoginCallback: () => mockUseFastLoginCallback(),
 }));
 
@@ -19,7 +19,7 @@ function renderCallback() {
 
 describe('FastLoginCallback', () => {
   beforeEach(() => {
-    jest.clearAllMocks();
+    vi.clearAllMocks();
   });
 
   it('shows loading spinner while processing', () => {

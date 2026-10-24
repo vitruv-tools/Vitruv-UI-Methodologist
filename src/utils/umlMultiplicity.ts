@@ -9,6 +9,9 @@ export function parseMultiplicity(raw?: string | null): ParsedMultiplicity {
   const text = (raw ?? '').trim().replace(/^\[/, '').replace(/\]$/, '').trim();
   if (!text) return { lower: '0', upper: '1' };
 
+  // A bare `*` means "any number", i.e. 0..*. Ecore bounds cannot be `*`.
+  if (text === '*') return { lower: '0', upper: '-1' };
+
   if (text.includes('..')) {
     const [lo, hi] = text.split('..').map(s => s.trim());
     const upper = hi === '*' ? '-1' : hi || '1';
@@ -41,6 +44,14 @@ export function formatEcoreMultiplicity(
   const lo = normLower ?? '0';
   const hi = normUpper ?? '1';
   return lo === hi ? lo : `${lo}..${hi}`;
+}
+
+/**
+ * Source-end multiplicity a reader assumes when none is stored: Ecore references only have target
+ * bounds, so a reference with a target multiplicity is read back with source `1`.
+ */
+export function impliedSourceMultiplicity(targetMultiplicity?: string | null): string {
+  return normalizeMultiplicityDisplay(targetMultiplicity) ? '1' : '';
 }
 
 /** Common UML cardinalities for association / composition ends. */

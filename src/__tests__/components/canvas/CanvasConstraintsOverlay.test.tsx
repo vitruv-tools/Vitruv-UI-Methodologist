@@ -7,20 +7,22 @@ import {
 } from '../../../components/canvas/CanvasConstraintsOverlay';
 import type { ConstraintsViewProps } from '../../../components/constraints/ConstraintsView';
 
-const mockConstraintsViewProps = jest.fn();
+const mockConstraintsViewProps = vi.fn();
 let mockMountSequence = 0;
 
-jest.mock('../../../components/constraints/ConstraintsView', () => ({
-  ConstraintsView: (props: ConstraintsViewProps) => {
-    const mockReact = require('react') as typeof import('react');
-    mockConstraintsViewProps(props);
-    const [mountId] = mockReact.useState(() => {
-      mockMountSequence += 1;
-      return mockMountSequence;
-    });
-    return <div data-testid="constraints-view">Mount {mountId}</div>;
-  },
-}));
+vi.mock('../../../components/constraints/ConstraintsView', async () => {
+  const mockReact = await import('react');
+  return {
+    ConstraintsView: (props: ConstraintsViewProps) => {
+      mockConstraintsViewProps(props);
+      const [mountId] = mockReact.useState(() => {
+        mockMountSequence += 1;
+        return mockMountSequence;
+      });
+      return <div data-testid="constraints-view">Mount {mountId}</div>;
+    },
+  };
+});
 
 const canvasNodes: Node[] = [{
   id: 'node-1',
@@ -39,7 +41,7 @@ const renderOverlay = (
     projectId: 10,
     visible: false,
     canvasNodes,
-    onHighlightNode: jest.fn(),
+    onHighlightNode: vi.fn(),
     filterNodeId: null,
     ...overrides,
   };
@@ -56,7 +58,7 @@ const latestConstraintsViewProps = (): ConstraintsViewProps => {
 };
 
 beforeEach(() => {
-  jest.clearAllMocks();
+  vi.clearAllMocks();
   mockMountSequence = 0;
 });
 
@@ -114,7 +116,7 @@ describe('CanvasConstraintsOverlay', () => {
   });
 
   it('forwards canvas nodes, highlight callback, and filter node ID', () => {
-    const onHighlightNode = jest.fn();
+    const onHighlightNode = vi.fn();
     renderOverlay({
       canvasNodes,
       onHighlightNode,

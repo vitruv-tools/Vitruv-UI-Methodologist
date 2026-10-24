@@ -6,7 +6,7 @@ import { MODEL_LIBRARY_PATH, modelLibraryUmlPath } from '../../constants/routes'
 
 // ── mocks ─────────────────────────────────────────────────────────────────────
 
-jest.mock('../../components/layout/AppSidebar', () => ({
+vi.mock('../../components/layout/AppSidebar', () => ({
   AppSidebar: ({ userName, onViewChange }: { userName: string; onViewChange: (view: string) => void }) => (
     <nav data-testid="app-sidebar">
       Sidebar for {userName}
@@ -16,13 +16,13 @@ jest.mock('../../components/layout/AppSidebar', () => ({
   ),
 }));
 
-jest.mock('../../components/ui/LandingView', () => ({
+vi.mock('../../components/ui/LandingView', () => ({
   LandingView: ({ userName }: { userName?: string }) => (
     <div data-testid="landing-view">Landing for {userName}</div>
   ),
 }));
 
-jest.mock('../../components/ui/ModelLibraryTable', () => ({
+vi.mock('../../components/ui/ModelLibraryTable', () => ({
   ModelLibraryTable: ({ onHome }: { onHome?: () => void }) => (
     <div data-testid="model-library-table">
       Model Library
@@ -31,23 +31,23 @@ jest.mock('../../components/ui/ModelLibraryTable', () => ({
   ),
 }));
 
-jest.mock('../../components/ui/ProjectsView', () => ({
+vi.mock('../../components/ui/ProjectsView', () => ({
   ProjectsView: () => <div data-testid="projects-view">Projects</div>,
 }));
 
-jest.mock('../../components/ui/ProfileView', () => ({
+vi.mock('../../components/ui/ProfileView', () => ({
   ProfileView: () => <div data-testid="profile-view">Profile</div>,
 }));
 
-jest.mock('../../services/auth', () => ({
+vi.mock('../../services/auth', () => ({
   AuthService: {
-    signOut: jest.fn().mockResolvedValue(undefined),
+    signOut: vi.fn().mockResolvedValue(undefined),
   },
 }));
 
-const mockRefreshCurrentUser = jest.fn().mockResolvedValue(null);
+const mockRefreshCurrentUser = vi.fn().mockResolvedValue(null);
 
-jest.mock('../../contexts/AuthContext', () => ({
+vi.mock('../../contexts/AuthContext', () => ({
   useAuth: () => ({
     user: { id: '1', username: 'maxoesterle', givenName: 'Max', familyName: 'Oesterle', email: 'max@kit.edu', emailVerified: true },
     refreshCurrentUser: mockRefreshCurrentUser,
@@ -70,7 +70,7 @@ function renderHomePage(path = '/') {
 // ── tests ─────────────────────────────────────────────────────────────────────
 
 describe('HomePage', () => {
-  beforeEach(() => jest.clearAllMocks());
+  beforeEach(() => vi.clearAllMocks());
 
   it('renders the sidebar', () => {
     renderHomePage();

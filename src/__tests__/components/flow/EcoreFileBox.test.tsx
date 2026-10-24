@@ -3,9 +3,9 @@ import { render, screen, fireEvent } from '@testing-library/react';
 
 // ─── Existing mocked test ─────────────────────────────────────────────────────
 
-const mockEcoreFileBox = jest.fn((_props: any) => <div>EcoreFileBox mock</div>);
+const mockEcoreFileBox = vi.fn((_props: any) => <div>EcoreFileBox mock</div>);
 
-jest.mock('../../../components/flow/EcoreFileBox', () => ({
+vi.mock('../../../components/flow/EcoreFileBox', () => ({
   __esModule: true,
   EcoreFileBox: (props: any) => mockEcoreFileBox(props),
 }));
@@ -39,20 +39,20 @@ describe('EcoreFileBox (mocked)', () => {
 
 // ─── Real implementation tests ────────────────────────────────────────────────
 
-jest.mock('reactflow', () => {
-  const actual = jest.requireActual('reactflow');
+vi.mock('reactflow', async () => {
+  const actual = (await vi.importActual<any>('reactflow'));
   return {
     ...actual,
     Handle: ({ id }: any) => <div data-testid={`rf-handle-${id}`} />,
   };
 });
 
-jest.mock('../../../components/ui/ConfirmDialog', () => ({
+vi.mock('../../../components/ui/ConfirmDialog', () => ({
   ConfirmDialog: () => null,
 }));
 
 // Mock ConnectionHandle so we control what tipScreenPos gets passed up
-jest.mock('../../../components/flow/ConnectionHandle', () => ({
+vi.mock('../../../components/flow/ConnectionHandle', () => ({
   ConnectionHandle: ({ position, onConnectionStart, isVisible }: any) => {
     if (!isVisible) return null;
     return (
@@ -67,7 +67,7 @@ jest.mock('../../../components/flow/ConnectionHandle', () => ({
 }));
 
 const { EcoreFileBox: RealEcoreFileBox } =
-  jest.requireActual('../../../components/flow/EcoreFileBox');
+  (await vi.importActual<any>('../../../components/flow/EcoreFileBox'));
 
 const baseNodeProps = {
   id: 'node-1',
@@ -83,19 +83,19 @@ const baseNodeProps = {
 const baseData = {
   fileName: 'flower.ecore',
   fileContent: '<ecore/>',
-  onExpand: jest.fn(),
-  onSelect: jest.fn(),
-  onDelete: jest.fn(),
-  onRename: jest.fn(),
+  onExpand: vi.fn(),
+  onSelect: vi.fn(),
+  onDelete: vi.fn(),
+  onRename: vi.fn(),
   isExpanded: false,
   isConnectionActive: false,
 };
 
 describe('EcoreFileBox (real) – handleConnectionStartWrapper', () => {
-  afterEach(() => jest.clearAllMocks());
+  afterEach(() => vi.clearAllMocks());
 
   it('forwards nodeId, handle position and tipScreenPos to onConnectionStart', () => {
-    const onConnectionStart = jest.fn();
+    const onConnectionStart = vi.fn();
 
     render(
       <RealEcoreFileBox
@@ -114,7 +114,7 @@ describe('EcoreFileBox (real) – handleConnectionStartWrapper', () => {
   });
 
   it('forwards the correct nodeId for different node ids', () => {
-    const onConnectionStart = jest.fn();
+    const onConnectionStart = vi.fn();
 
     render(
       <RealEcoreFileBox
@@ -141,7 +141,7 @@ describe('EcoreFileBox (real) – handleConnectionStartWrapper', () => {
   });
 
   it('calls onConnectionStart for all four handle positions', () => {
-    const onConnectionStart = jest.fn();
+    const onConnectionStart = vi.fn();
 
     render(
       <RealEcoreFileBox
@@ -161,12 +161,12 @@ describe('EcoreFileBox (real) – handleConnectionStartWrapper', () => {
 });
 
 describe('EcoreFileBox (real) – rename', () => {
-  afterEach(() => jest.clearAllMocks());
+  afterEach(() => vi.clearAllMocks());
 
   const renderBox = (overrides: Record<string, unknown> = {}) => {
-    const onRename = jest.fn();
-    const onSelect = jest.fn();
-    const onExpand = jest.fn();
+    const onRename = vi.fn();
+    const onSelect = vi.fn();
+    const onExpand = vi.fn();
     render(
       <RealEcoreFileBox
         {...baseNodeProps}
@@ -215,5 +215,45 @@ describe('EcoreFileBox (real) – rename', () => {
 
     expect(onRename).not.toHaveBeenCalled();
     expect(screen.queryByLabelText('Rename metamodel')).not.toBeInTheDocument();
+  });
+});
+
+describe('EcoreFileBox (real) – opening the UML diagram', () => {
+  afterEach(() => vi.clearAllMocks());
+
+  const renderBox = (overrides: Record<string, unknown> = {}) => {
+    const onExpand = vi.fn();
+    render(
+      <RealEcoreFileBox
+        {...baseNodeProps}
+        data={{ ...baseData, onExpand, ...overrides }}
+      />,
+    );
+    return { onExpand, card: screen.getByRole('button', { name: /flower metamodel/i }) };
+  };
+
+  it('shows the Open UML button to a viewer', () => {
+    const { onExpand } = renderBox({ readOnly: true });
+
+    fireEvent.click(screen.getByTitle('Open UML diagram'));
+
+    expect(onExpand).toHaveBeenCalledWith('flower.ecore', '<ecore/>');
+  });
+
+  it('opens the UML diagram on double-click', () => {
+    const { onExpand, card } = renderBox();
+
+    fireEvent.doubleClick(card);
+
+    expect(onExpand).toHaveBeenCalledWith('flower.ecore', '<ecore/>');
+  });
+
+  it('hides the Open UML button on a locked canvas, but still opens the UML diagram on double-click', () => {
+    const { onExpand, card } = renderBox({ readOnly: true, locked: true });
+
+    expect(screen.queryByTitle('Open UML diagram')).not.toBeInTheDocument();
+    fireEvent.doubleClick(card);
+
+    expect(onExpand).toHaveBeenCalledWith('flower.ecore', '<ecore/>');
   });
 });

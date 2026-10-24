@@ -3,7 +3,7 @@ import { render, screen } from '@testing-library/react';
 import { ProfileModal } from '../../../components/ui/ProfileModal';
 import { setTheme } from '../../../theme/theme';
 
-jest.mock('../../../components/ui/ProfileView', () => ({
+vi.mock('../../../components/ui/ProfileView', () => ({
   ProfileView: () => <div>Profile content</div>,
 }));
 
@@ -20,7 +20,7 @@ describe('ProfileModal', () => {
   it('uses theme surfaces so the dialog matches light or dark mode', () => {
     setTheme('dark');
     render(
-      <ProfileModal user={user} onClose={jest.fn()} onNameSaved={jest.fn()} />,
+      <ProfileModal user={user} onClose={vi.fn()} onNameSaved={vi.fn()} />,
     );
 
     expect(screen.getByRole('dialog', { name: 'Profile' })).toBeInTheDocument();

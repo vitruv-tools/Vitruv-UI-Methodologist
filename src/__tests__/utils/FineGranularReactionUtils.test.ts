@@ -384,7 +384,7 @@ describe('confirmDeleteFineGranularReaction', () => {
   };
 
   it('returns false when nothing is selected', () => {
-    expect(confirmDeleteFineGranularReaction(null, [], jest.fn())).toBe(false);
+    expect(confirmDeleteFineGranularReaction(null, [], vi.fn())).toBe(false);
   });
 
   it('removes the fine edge and an empty parent coarse reaction', () => {
