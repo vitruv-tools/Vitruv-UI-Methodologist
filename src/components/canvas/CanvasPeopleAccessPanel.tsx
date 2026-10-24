@@ -208,7 +208,7 @@ export const CanvasPeopleAccessPanel: React.FC<CanvasPeopleAccessPanelProps> = (
         color: '#047857',
         lineHeight: 1.45,
       }}>
-        You are working alone. Share this project to invite viewers by email.
+        You are working alone. Share this project to add viewers or members.
       </div>
     )}
 
@@ -290,7 +290,7 @@ export const CanvasPeopleAccessPanel: React.FC<CanvasPeopleAccessPanelProps> = (
             <circle cx="18" cy="5" r="3" /><circle cx="6" cy="12" r="3" /><circle cx="18" cy="19" r="3" />
             <line x1="8.59" y1="13.51" x2="15.42" y2="17.49" /><line x1="15.41" y1="6.51" x2="8.59" y2="10.49" />
           </svg>
-          Invite viewer
+          Invite
         </button>
       </div>
     )}

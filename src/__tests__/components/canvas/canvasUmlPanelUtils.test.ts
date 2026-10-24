@@ -38,7 +38,7 @@ describe('canvasUmlPanelUtils', () => {
   });
 
   it('preserves metadata already supplied by the expand event', () => {
-    const getNodes = jest.fn((): Node[] => []);
+    const getNodes = vi.fn((): Node[] => []);
 
     expect(enrichEcoreMetaFromCanvas(
       'library.ecore',
@@ -86,8 +86,8 @@ describe('canvasUmlPanelUtils', () => {
   });
 
   it('fetches empty Ecore content and synchronizes it back to the canvas', async () => {
-    const fetchEcoreFile = jest.fn().mockResolvedValue('<fetched-content />');
-    const updateEcoreFileData = jest.fn();
+    const fetchEcoreFile = vi.fn().mockResolvedValue('<fetched-content />');
+    const updateEcoreFileData = vi.fn();
 
     await expect(loadEcoreFileContent(
       'library.ecore',
@@ -105,7 +105,7 @@ describe('canvasUmlPanelUtils', () => {
   });
 
   it('returns null when Ecore content loading fails', async () => {
-    const fetchEcoreFile = jest.fn().mockRejectedValue(new Error('Network error'));
+    const fetchEcoreFile = vi.fn().mockRejectedValue(new Error('Network error'));
 
     await expect(loadEcoreFileContent(
       'library.ecore',
@@ -116,8 +116,8 @@ describe('canvasUmlPanelUtils', () => {
   });
 
   it('preserves current content when no Ecore file ID is available', async () => {
-    const fetchEcoreFile = jest.fn();
-    const updateEcoreFileData = jest.fn();
+    const fetchEcoreFile = vi.fn();
+    const updateEcoreFileData = vi.fn();
 
     await expect(loadEcoreFileContent(
       'library.ecore',

@@ -17,15 +17,15 @@ const labels = {
 
 const createProps = () => ({
   addReactionMode: false,
-  onToggleReactionMode: jest.fn(),
-  onOpenReactionEditor: jest.fn(),
-  onToggleModelDrawer: jest.fn(),
-  onDownloadArtifact: jest.fn(),
-  onDownloadBundle: jest.fn(),
-  onSaveChanges: jest.fn(),
-  onCheckBuild: jest.fn(),
-  onUndo: jest.fn(),
-  onRedo: jest.fn(),
+  onToggleReactionMode: vi.fn(),
+  onOpenReactionEditor: vi.fn(),
+  onToggleModelDrawer: vi.fn(),
+  onDownloadArtifact: vi.fn(),
+  onDownloadBundle: vi.fn(),
+  onSaveChanges: vi.fn(),
+  onCheckBuild: vi.fn(),
+  onUndo: vi.fn(),
+  onRedo: vi.fn(),
   canUndo: true,
   canRedo: true,
   downloadingArtifact: false,
@@ -35,7 +35,7 @@ const createProps = () => ({
 });
 
 beforeEach(() => {
-  jest.clearAllMocks();
+  vi.clearAllMocks();
 });
 
 describe('CanvasSidebarToolbar', () => {

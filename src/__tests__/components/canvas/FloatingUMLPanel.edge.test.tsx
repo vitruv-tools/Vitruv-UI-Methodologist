@@ -8,25 +8,30 @@ import { FloatingUMLPanel } from '../../../components/canvas/FloatingUMLPanel';
 
 // ── mocks ─────────────────────────────────────────────────────────────────────
 
-jest.mock('../../../components/canvas/UMLDiagram', () => {
-  const { forwardRef, useImperativeHandle, createElement } = require('react');
+vi.mock('../../../components/canvas/UMLDiagram', async () => {
+  const { forwardRef, useImperativeHandle, createElement } = (await import('react'));
   return {
+    WORKSPACE_DOT_BACKGROUND: {},
     UMLDiagram: forwardRef((_props: any, ref: any) => {
       useImperativeHandle(ref, () => ({
-        zoomIn: jest.fn(),
-        zoomOut: jest.fn(),
-        fitToView: jest.fn(),
-        flushLayout: jest.fn(),
+        zoomIn: vi.fn(),
+        zoomOut: vi.fn(),
+        fitToView: vi.fn(),
+        flushLayout: vi.fn(),
       }));
       return createElement('div', { 'data-testid': 'uml-diagram' });
     }),
   };
 });
 
-jest.mock('react-dom', () => ({
-  ...jest.requireActual('react-dom'),
-  createPortal: (node: React.ReactNode) => node,
-}));
+vi.mock('react-dom', async () => {
+  const actual = await vi.importActual<any>('react-dom');
+  const mocked = {
+    ...actual,
+    createPortal: (node: React.ReactNode) => node,
+  };
+  return { ...mocked, default: mocked };
+});
 
 // ── shared defaults ───────────────────────────────────────────────────────────
 
@@ -37,8 +42,8 @@ const mkProps = (overrides: Partial<React.ComponentProps<typeof FloatingUMLPanel
   layoutScopeId: 'scope-1',
   ecoreContent: '<xml/>',
   zIndex: 10,
-  onFocus: jest.fn(),
-  onClose: jest.fn(),
+  onFocus: vi.fn(),
+  onClose: vi.fn(),
   ...overrides,
 });
 
@@ -98,8 +103,8 @@ describe('FloatingUMLPanel – zIndex', () => {
 
 describe('FloatingUMLPanel – multiple instances', () => {
   it('calls the correct onClose id when two panels are rendered', () => {
-    const onClose1 = jest.fn();
-    const onClose2 = jest.fn();
+    const onClose1 = vi.fn();
+    const onClose2 = vi.fn();
 
     const { getAllByTitle } = render(
       <>

@@ -4,8 +4,8 @@ import { ConfirmDialog } from '../../../components/ui/ConfirmDialog';
 
 describe('ConfirmDialog', () => {
   it('renders title and message and calls callbacks', () => {
-    const onConfirm = jest.fn();
-    const onCancel = jest.fn();
+    const onConfirm = vi.fn();
+    const onCancel = vi.fn();
 
     render(
       <ConfirmDialog
@@ -34,11 +34,11 @@ describe('ConfirmDialog', () => {
       .find(button => button.getAttribute('aria-hidden') === 'true');
 
     const { rerender } = render(
-      <ConfirmDialog isOpen onConfirm={jest.fn()} onCancel={jest.fn()} />,
+      <ConfirmDialog isOpen onConfirm={vi.fn()} onCancel={vi.fn()} />,
     );
     expect(backdrop()).toHaveStyle({ zIndex: '10000' });
 
-    rerender(<ConfirmDialog isOpen zIndex={10003} onConfirm={jest.fn()} onCancel={jest.fn()} />);
+    rerender(<ConfirmDialog isOpen zIndex={10003} onConfirm={vi.fn()} onCancel={vi.fn()} />);
     expect(backdrop()).toHaveStyle({ zIndex: '10003' });
     // eslint-disable-next-line testing-library/no-node-access
     expect(screen.getByRole('alertdialog').parentElement).toHaveStyle({ zIndex: '10004' });

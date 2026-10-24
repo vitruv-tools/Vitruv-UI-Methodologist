@@ -13,14 +13,14 @@ const makeClass = (name: string): UmlDiagramClass => ({
   y: 0,
 });
 
-function renderPanel(cls: UmlDiagramClass, onUpdate = jest.fn()) {
+function renderPanel(cls: UmlDiagramClass, onUpdate = vi.fn()) {
   const props = {
     classes: [cls],
     parentId: null,
     onUpdate,
-    onSetParent: jest.fn(),
-    onDelete: jest.fn(),
-    onClose: jest.fn(),
+    onSetParent: vi.fn(),
+    onDelete: vi.fn(),
+    onClose: vi.fn(),
   };
   const view = render(<ClassEditPanel cls={cls} {...props} />);
   return {

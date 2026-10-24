@@ -3,9 +3,9 @@ import { render, screen, fireEvent } from '@testing-library/react';
 
 // ─── Existing mocked test ─────────────────────────────────────────────────────
 
-const mockConnectionHandle = jest.fn((_props: any) => <div>ConnectionHandle mock</div>);
+const mockConnectionHandle = vi.fn((_props: any) => <div>ConnectionHandle mock</div>);
 
-jest.mock('../../../components/flow/ConnectionHandle', () => ({
+vi.mock('../../../components/flow/ConnectionHandle', () => ({
   __esModule: true,
   ConnectionHandle: (props: any) => mockConnectionHandle(props),
 }));
@@ -27,8 +27,8 @@ describe('ConnectionHandle (mocked)', () => {
 
 // ─── Real implementation tests ────────────────────────────────────────────────
 
-jest.mock('reactflow', () => {
-  const actual = jest.requireActual('reactflow');
+vi.mock('reactflow', async () => {
+  const actual = (await vi.importActual<any>('reactflow'));
   return {
     ...actual,
     Handle: ({ id }: any) => <div data-testid={`rf-handle-${id}`} />,
@@ -37,7 +37,7 @@ jest.mock('reactflow', () => {
 
 // Import real implementation directly — bypasses the mock above
 const { ConnectionHandle: RealConnectionHandle } =
-  jest.requireActual('../../../components/flow/ConnectionHandle');
+  (await vi.importActual<any>('../../../components/flow/ConnectionHandle'));
 
 const MOCK_RECT = {
   left: 100, right: 124,
@@ -47,11 +47,11 @@ const MOCK_RECT = {
 
 describe('ConnectionHandle (real) – tipScreenPos via getBoundingClientRect', () => {
   beforeEach(() => {
-    jest.spyOn(Element.prototype, 'getBoundingClientRect').mockReturnValue(MOCK_RECT);
+    vi.spyOn(Element.prototype, 'getBoundingClientRect').mockReturnValue(MOCK_RECT);
   });
 
   afterEach(() => {
-    jest.restoreAllMocks();
+    vi.restoreAllMocks();
   });
 
   it.each([
@@ -62,7 +62,7 @@ describe('ConnectionHandle (real) – tipScreenPos via getBoundingClientRect', (
   ] as const)(
     'fires onConnectionStart with correct tipScreenPos for position=%s',
     (position, expectedTip) => {
-      const onConnectionStart = jest.fn();
+      const onConnectionStart = vi.fn();
 
       render(
         <RealConnectionHandle
@@ -90,7 +90,7 @@ describe('ConnectionHandle (real) – tipScreenPos via getBoundingClientRect', (
 
   it('does not render the arrow button when isVisible=false', () => {
     render(
-      <RealConnectionHandle position="top" isVisible={false} onConnectionStart={jest.fn()} />
+      <RealConnectionHandle position="top" isVisible={false} onConnectionStart={vi.fn()} />
     );
     expect(screen.queryByRole('button', { name: /Connect from top/ })).toBeNull();
   });
@@ -102,7 +102,7 @@ describe('ConnectionHandle (real) – tipScreenPos via getBoundingClientRect', (
         isVisible
         offsetIndex={1}
         totalHandles={3}
-        onConnectionStart={jest.fn()}
+        onConnectionStart={vi.fn()}
       />
     );
     expect(screen.getByRole('button', { name: /2\/3/ })).toBeInTheDocument();

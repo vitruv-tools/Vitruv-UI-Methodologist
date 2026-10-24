@@ -1,11 +1,11 @@
 import React from 'react';
-import { render, screen, waitFor, act } from '@testing-library/react';
+import { render, screen, waitFor, act, fireEvent } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { SignUp } from '../../../components/auth/SignUp';
 
-const mockSignUp = jest.fn();
+const mockSignUp = vi.fn();
 
-jest.mock('../../../contexts/AuthContext', () => ({
+vi.mock('../../../contexts/AuthContext', () => ({
   useAuth: () => ({
     signUp: mockSignUp,
   }),
@@ -13,15 +13,15 @@ jest.mock('../../../contexts/AuthContext', () => ({
 
 describe('SignUp component', () => {
   beforeEach(() => {
-    jest.clearAllMocks();
-    jest.useRealTimers();
+    vi.clearAllMocks();
+    vi.useRealTimers();
   });
 
   it('renders all required fields and submit button', () => {
     render(
       <SignUp
-        onSignUpSuccess={jest.fn()}
-        onSwitchToSignIn={jest.fn()}
+        onSignUpSuccess={vi.fn()}
+        onSwitchToSignIn={vi.fn()}
       />,
     );
 
@@ -43,8 +43,8 @@ describe('SignUp component', () => {
   it('shows validation error for too short first name', async () => {
     render(
       <SignUp
-        onSignUpSuccess={jest.fn()}
-        onSwitchToSignIn={jest.fn()}
+        onSignUpSuccess={vi.fn()}
+        onSwitchToSignIn={vi.fn()}
       />,
     );
 
@@ -72,14 +72,14 @@ describe('SignUp component', () => {
   });
 
   it('calls signUp and onSignUpSuccess on valid submit', async () => {
-    jest.useFakeTimers();
-    const onSignUpSuccess = jest.fn();
+    vi.useFakeTimers();
+    const onSignUpSuccess = vi.fn();
     mockSignUp.mockResolvedValueOnce(undefined);
 
     render(
       <SignUp
         onSignUpSuccess={onSignUpSuccess}
-        onSwitchToSignIn={jest.fn()}
+        onSwitchToSignIn={vi.fn()}
       />,
     );
 
@@ -109,7 +109,7 @@ describe('SignUp component', () => {
     ).toBeInTheDocument();
 
     await act(async () => {
-      jest.advanceTimersByTime(2000);
+      vi.advanceTimersByTime(2000);
     });
 
     expect(onSignUpSuccess).toHaveBeenCalled();
@@ -119,13 +119,13 @@ describe('SignUp component', () => {
 
 describe('SignUp – additional validation and password UI', () => {
   beforeEach(() => {
-    jest.clearAllMocks();
-    jest.useRealTimers();
+    vi.clearAllMocks();
+    vi.useRealTimers();
   });
 
   const renderSignUp = () =>
     render(
-      <SignUp onSignUpSuccess={jest.fn()} onSwitchToSignIn={jest.fn()} />,
+      <SignUp onSignUpSuccess={vi.fn()} onSwitchToSignIn={vi.fn()} />,
     );
 
   it('shows password strength meter when password is entered', async () => {
@@ -213,7 +213,8 @@ describe('SignUp – additional validation and password UI', () => {
       screen.getByPlaceholderText(/Confirm your password/i),
       'Password1!',
     );
-    await userEvent.click(screen.getByRole('button', { name: /Create Account/i }));
+    // The browser's own type="email" validation blocks a button click; submit directly to reach the form's validator.
+    fireEvent.submit(screen.getByRole('button', { name: /Create Account/i }).closest('form')!);
     expect(
       await screen.findByText(/Email is invalid/i),
     ).toBeInTheDocument();

@@ -1,18 +1,20 @@
-const mockMinimapSpy = jest.fn();
+const mockMinimapSpy = vi.fn();
 
-jest.mock('../../../utils/ecoreToUml', () => require('../../../testSupport/umlDiagram/mockFactories').ecoreToUmlMock());
-jest.mock('../../../utils/saveMetaModelEcore', () => require('../../../testSupport/umlDiagram/mockFactories').saveMetaModelEcoreMock());
-jest.mock('../../../utils/umlValidation', () => require('../../../testSupport/umlDiagram/mockFactories').umlValidationMock());
-jest.mock('../../../components/canvas/UMLDiagramMinimap', () => ({
-  UMLDiagramMinimap: (props: unknown) => {
-    mockMinimapSpy(props);
-    const mockReact = require('react');
-    return mockReact.createElement('div', { 'data-testid': 'uml-minimap-stub' });
-  },
-}));
-jest.mock('../../../utils/umlDiagramGeometry', () => require('../../../testSupport/umlDiagram/mockFactories').umlDiagramGeometryMock());
-jest.mock('../../../utils/umlClassLayout', () => require('../../../testSupport/umlDiagram/mockFactories').umlClassLayoutMock());
-jest.mock('../../../utils/umlLayoutStorage', () => require('../../../testSupport/umlDiagram/mockFactories').umlLayoutStorageMock());
+vi.mock('../../../utils/ecoreToUml', async () => (await import('../../../testSupport/umlDiagram/mockFactories')).ecoreToUmlMock());
+vi.mock('../../../utils/saveMetaModelEcore', async () => (await import('../../../testSupport/umlDiagram/mockFactories')).saveMetaModelEcoreMock());
+vi.mock('../../../utils/umlValidation', async () => (await import('../../../testSupport/umlDiagram/mockFactories')).umlValidationMock());
+vi.mock('../../../components/canvas/UMLDiagramMinimap', async () => {
+  const mockReact = await import('react');
+  return {
+    UMLDiagramMinimap: (props: unknown) => {
+      mockMinimapSpy(props);
+      return mockReact.createElement('div', { 'data-testid': 'uml-minimap-stub' });
+    },
+  };
+});
+vi.mock('../../../utils/umlDiagramGeometry', async () => (await import('../../../testSupport/umlDiagram/mockFactories')).umlDiagramGeometryMock());
+vi.mock('../../../utils/umlClassLayout', async () => (await import('../../../testSupport/umlDiagram/mockFactories')).umlClassLayoutMock());
+vi.mock('../../../utils/umlLayoutStorage', async () => (await import('../../../testSupport/umlDiagram/mockFactories')).umlLayoutStorageMock());
 
 import { SIMPLE_ECORE } from '../../../testSupport/umlDiagram/fixtures';
 import { renderDiagram } from '../../../testSupport/umlDiagram/renderUtils';

@@ -790,7 +790,7 @@ export const MethodologistMetricsView: React.FC<MethodologistMetricsViewProps> =
 
         {selected.includes('size') && (
           <>
-            <Section title="Methodology size" caption="The whole methodology on the canvas: metamodels, classes, attributes, associations, and view types — not only OCL.">
+            <Section title="V-SUMM size" caption="The whole V-SUMM on the canvas: metamodels, classes, attributes, associations, and view types — not only OCL.">
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(112px, 1fr))', gap: 6 }}>
                 <InsightCard label="Metamodels" value={metrics.metamodels.length} />
                 <InsightCard label="Classes" value={metrics.classCount} sub={`${metrics.abstractClassCount} abs. · ${metrics.concreteClassCount} conc.`} />

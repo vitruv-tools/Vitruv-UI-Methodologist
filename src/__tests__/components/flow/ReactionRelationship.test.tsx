@@ -4,7 +4,7 @@ import { ReactionRelationship } from '../../../components/flow/ReactionRelations
 
 const mockInternals = new Map<string, any>();
 
-jest.mock('reactflow', () => ({
+vi.mock('reactflow', () => ({
   __esModule: true,
   useReactFlow: () => ({
     getNode: () => ({ position: { x: 0, y: 0 } }),
@@ -27,7 +27,7 @@ describe('ReactionRelationship', () => {
   beforeEach(() => mockInternals.clear());
 
   it('renders label and code indicator and calls onDoubleClick', () => {
-    const onDoubleClick = jest.fn();
+    const onDoubleClick = vi.fn();
 
     render(
       <svg>

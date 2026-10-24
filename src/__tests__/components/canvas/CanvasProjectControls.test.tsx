@@ -11,10 +11,10 @@ interface MockProjectPickerMenuProps {
   onSelectProject: (project: { id: number; name: string; role?: string }) => void;
 }
 
-const mockProjectPickerMenu = jest.fn();
+const mockProjectPickerMenu = vi.fn();
 
-jest.mock('../../../components/canvas/ProjectPickerMenu', () => {
-  const { createElement } = require('react');
+vi.mock('../../../components/canvas/ProjectPickerMenu', async () => {
+  const { createElement } = (await import('react'));
   return {
     ProjectPickerMenu: (props: MockProjectPickerMenuProps) => {
       mockProjectPickerMenu(props);
@@ -42,18 +42,18 @@ const createProps = () => ({
   editingName: false,
   nameInput: 'Current project',
   savingName: false,
-  onBack: jest.fn(),
-  onRefresh: jest.fn(),
-  onSelectProject: jest.fn(),
-  onStartRename: jest.fn(),
-  onNameInputChange: jest.fn(),
-  onConfirmRename: jest.fn(),
-  onCancelRename: jest.fn(),
+  onBack: vi.fn(),
+  onRefresh: vi.fn(),
+  onSelectProject: vi.fn(),
+  onStartRename: vi.fn(),
+  onNameInputChange: vi.fn(),
+  onConfirmRename: vi.fn(),
+  onCancelRename: vi.fn(),
   loading: false,
 });
 
 beforeEach(() => {
-  jest.clearAllMocks();
+  vi.clearAllMocks();
 });
 
 describe('CanvasProjectControls', () => {
@@ -141,20 +141,20 @@ describe('CanvasProjectControls', () => {
     render(
       <CanvasProjectControls
         {...createProps()}
-        onToggleReactionMode={jest.fn()}
-        onReactionLineStyleChange={jest.fn()}
+        onToggleReactionMode={vi.fn()}
+        onReactionLineStyleChange={vi.fn()}
       />,
     );
     expect(screen.queryByRole('button', { name: 'Dashed' })).not.toBeInTheDocument();
   });
 
   it('toggles dashed and solid reaction lines in Reactions mode', () => {
-    const onReactionLineStyleChange = jest.fn();
+    const onReactionLineStyleChange = vi.fn();
     render(
       <CanvasProjectControls
         {...createProps()}
         addReactionMode
-        onToggleReactionMode={jest.fn()}
+        onToggleReactionMode={vi.fn()}
         reactionLineStyle="dashed"
         onReactionLineStyleChange={onReactionLineStyleChange}
       />,

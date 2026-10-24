@@ -58,10 +58,10 @@ const renderPanel = (
     currentUserEmail: 'owner@example.com',
     removingMemberId: null,
     canRemoveMembers: true,
-    onRefreshMembers: jest.fn(),
-    onRequestRemove: jest.fn(),
-    onShareClick: jest.fn(),
-    onClose: jest.fn(),
+    onRefreshMembers: vi.fn(),
+    onRequestRemove: vi.fn(),
+    onShareClick: vi.fn(),
+    onClose: vi.fn(),
     ...overrides,
   };
 
@@ -117,7 +117,7 @@ describe('CanvasPeopleAccessPanel', () => {
   });
 
   it('hides removal for owners and the current user and requests removal for an eligible member', () => {
-    const onRequestRemove = jest.fn();
+    const onRequestRemove = vi.fn();
     renderPanel({
       panelMembers: [owner, member, currentUser],
       memberCount: 3,
@@ -134,7 +134,7 @@ describe('CanvasPeopleAccessPanel', () => {
   });
 
   it('shows and disables the existing removing state', () => {
-    const onRequestRemove = jest.fn();
+    const onRequestRemove = vi.fn();
     renderPanel({
       panelMembers: [member],
       removingMemberId: member.id,
@@ -149,9 +149,9 @@ describe('CanvasPeopleAccessPanel', () => {
   });
 
   it('fires refresh, share, and close callbacks', () => {
-    const onRefreshMembers = jest.fn();
-    const onShareClick = jest.fn();
-    const onClose = jest.fn();
+    const onRefreshMembers = vi.fn();
+    const onShareClick = vi.fn();
+    const onClose = vi.fn();
     renderPanel({
       panelMembers: [],
       memberCount: 0,
@@ -163,7 +163,7 @@ describe('CanvasPeopleAccessPanel', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
     expect(onRefreshMembers).toHaveBeenCalledTimes(1);
 
-    fireEvent.click(screen.getByRole('button', { name: 'Invite viewer' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Invite' }));
     expect(onClose).toHaveBeenCalledTimes(1);
     expect(onShareClick).toHaveBeenCalledTimes(1);
   });

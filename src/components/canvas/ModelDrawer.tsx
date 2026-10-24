@@ -40,6 +40,12 @@ export interface DrawerModel {
   createdAt?: string;
 }
 
+/** Resolves with the project copy's file id when saving gave it a new one. */
+export type SaveProjectModel = (
+  model: DrawerModel,
+  ecoreContent: string,
+) => Promise<{ ecoreFileId?: number } | undefined>;
+
 interface ModelDrawerProps {
   models: DrawerModel[];
   addedModelIds?: Set<number>;
@@ -54,6 +60,11 @@ interface ModelDrawerProps {
   onDeleteModel?: (model: DrawerModel) => Promise<void>;
   /** Rename a meta model only in the currently open project. */
   onRenameProjectModel?: (model: DrawerModel, name: string) => Promise<void>;
+  /**
+   * Save edits of a model that is part of the open project to the project's own copy. Without it,
+   * edits go to the model library.
+   */
+  onSaveProjectModel?: SaveProjectModel;
 }
 
 // ── color scheme per domain ───────────────────────────────────────────────────
@@ -105,6 +116,7 @@ const formatDate = (iso?: string) => {
 export const ModelDrawer: React.FC<ModelDrawerProps> = ({
   models, addedModelIds = new Set(), loading, onClose, onAddModel,
   myLibraryModels = [], publicLibraryModels = [], onFetchFile, onDeleteModel, onRenameProjectModel,
+  onSaveProjectModel,
 }) => {
   const [libTab, setLibTab] = useState<'my' | 'public'>('my');
   const [search, setSearch] = useState('');
@@ -223,6 +235,7 @@ export const ModelDrawer: React.FC<ModelDrawerProps> = ({
             addedModelIds={addedModelIds}
             onDelete={libTab === 'my' && onDeleteModel ? () => setDeletingModel(detailModel) : undefined}
             onRenameProjectModel={onRenameProjectModel ? handleRenameProjectModel : undefined}
+            onSaveProjectModel={onSaveProjectModel}
           />
         ) : (
           <LibraryView
@@ -405,24 +418,18 @@ interface DetailViewProps {
   addedModelIds: Set<number>;
   onDelete?: () => void;
   onRenameProjectModel?: (model: DrawerModel, name: string) => Promise<void>;
+  onSaveProjectModel?: SaveProjectModel;
 }
 
-const DetailView: React.FC<DetailViewProps> = ({
-  model, onFetchFile, onAddModel, addedModelIds, onDelete, onRenameProjectModel,
-}) => {
-  const [ecoreContent, setEcoreContent] = useState<string | null>(model.ecoreContent ?? null);
-  const [ecoreFileId, setEcoreFileId] = useState<number | undefined>(model.ecoreFileId);
-  const [fetchError, setFetchError] = useState(false);
-  const [fetchingUml, setFetchingUml] = useState(false);
-  const [umlExpanded, setUmlExpanded] = useState(false);
+/** Editing state of the project-name field in the detail view. */
+function useProjectRename(
+  model: DrawerModel,
+  onRenameProjectModel?: (model: DrawerModel, name: string) => Promise<void>,
+) {
   const [editingProjectName, setEditingProjectName] = useState(false);
   const [projectName, setProjectName] = useState(model.name);
   const [renameError, setRenameError] = useState('');
   const [renaming, setRenaming] = useState(false);
-  const diagramRef = useRef<UMLDiagramHandle>(null);
-  const theme = getTheme(model.domain);
-  const isOnCanvas = addedModelIds.has(model.id);
-  const canRenameProjectModel = model.inProject && !!onRenameProjectModel;
 
   useEffect(() => {
     setProjectName(model.name);
@@ -454,24 +461,76 @@ const DetailView: React.FC<DetailViewProps> = ({
     }
   };
 
-  const umlSaveContext: UmlDiagramSaveContext | undefined =
-    model.id && ecoreFileId
-      ? {
-          metaModelId: String(model.id),
-          ecoreFileId,
-          modelName: model.name,
-          saveTarget: 'library',
-          metaModelMetadata: {
-            description: model.description || '',
-            domain: model.domain || '',
-            keyword: model.keyword || [],
-          },
-          onSaved: ({ ecoreContent: saved, ecoreFileId: newFileId }) => {
-            setEcoreContent(saved);
-            setEcoreFileId(newFileId);
-          },
-        }
-      : undefined;
+  return {
+    editingProjectName,
+    setEditingProjectName,
+    projectName,
+    setProjectName,
+    renameError,
+    setRenameError,
+    renaming,
+    saveProjectName,
+  };
+}
+
+/** Save target for the detail view's diagram: project models save to the project's copy. */
+function buildDetailSaveContext(
+  model: DrawerModel,
+  ecoreFileId: number | undefined,
+  onSaveProjectModel: SaveProjectModel | undefined,
+  onSaved: NonNullable<UmlDiagramSaveContext['onSaved']>,
+): UmlDiagramSaveContext | undefined {
+  if (!model.id || !ecoreFileId) return undefined;
+  const saveToProject = model.inProject ? onSaveProjectModel : undefined;
+  return {
+    metaModelId: String(model.id),
+    ecoreFileId,
+    modelName: model.name,
+    saveTarget: saveToProject ? 'workspace' : 'library',
+    persistWorkspaceEcore: saveToProject
+      ? ecoreContent => saveToProject(model, ecoreContent)
+      : undefined,
+    metaModelMetadata: {
+      description: model.description || '',
+      domain: model.domain || '',
+      keyword: model.keyword || [],
+    },
+    onSaved,
+  };
+}
+
+const DetailView: React.FC<DetailViewProps> = ({
+  model, onFetchFile, onAddModel, addedModelIds, onDelete, onRenameProjectModel, onSaveProjectModel,
+}) => {
+  const [ecoreContent, setEcoreContent] = useState<string | null>(model.ecoreContent ?? null);
+  const [ecoreFileId, setEcoreFileId] = useState<number | undefined>(model.ecoreFileId);
+  const [fetchError, setFetchError] = useState(false);
+  const [fetchingUml, setFetchingUml] = useState(false);
+  const [umlExpanded, setUmlExpanded] = useState(false);
+  const {
+    editingProjectName,
+    setEditingProjectName,
+    projectName,
+    setProjectName,
+    renameError,
+    setRenameError,
+    renaming,
+    saveProjectName,
+  } = useProjectRename(model, onRenameProjectModel);
+  const diagramRef = useRef<UMLDiagramHandle>(null);
+  const theme = getTheme(model.domain);
+  const isOnCanvas = addedModelIds.has(model.id);
+  const canRenameProjectModel = model.inProject && !!onRenameProjectModel;
+
+  const umlSaveContext = buildDetailSaveContext(
+    model,
+    ecoreFileId,
+    onSaveProjectModel,
+    ({ ecoreContent: saved, ecoreFileId: newFileId }) => {
+      setEcoreContent(saved);
+      setEcoreFileId(newFileId);
+    },
+  );
 
   useEffect(() => {
     if (ecoreContent || !model.ecoreFileId || !onFetchFile) return;

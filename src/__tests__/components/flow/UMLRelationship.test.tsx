@@ -2,7 +2,7 @@ import React from 'react';
 import { fireEvent, render, screen } from '@testing-library/react';
 import { UMLRelationship } from '../../../components/flow/UMLRelationship';
 
-jest.mock('reactflow', () => ({
+vi.mock('reactflow', () => ({
   __esModule: true,
   useStore: (selector: any) =>
     selector({
@@ -189,7 +189,7 @@ describe('UMLRelationship', () => {
   });
 
   it('dispatches edge-clicked when the edge is clicked', () => {
-    const dispatchSpy = jest.spyOn(globalThis, 'dispatchEvent');
+    const dispatchSpy = vi.spyOn(globalThis, 'dispatchEvent');
     const { container } = render(
       <svg>
         <UMLRelationship

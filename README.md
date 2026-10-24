@@ -72,8 +72,8 @@ For detailed architecture documentation, see [ARCHITECTURE.md](./ARCHITECTURE.md
 - **`npm run build`** - Builds the app for production (generic build)
 - **`npm run build:staging`** - Builds the app for staging environment (uses `.env.staging`)
 - **`npm run build:production`** - Builds the app for production environment (uses `.env.production`)
-- **`npm test`** - Launches the test runner
-- **`npm run eject`** - Ejects from Create React App (one-way operation)
+- **`npm run preview`** - Serves the built `dist/` folder locally
+- **`npm test`** - Runs the tests with Vitest (watch mode locally, single run in CI)
 
 For detailed environment configuration, see [ENVIRONMENT_SETUP.md](./ENVIRONMENT_SETUP.md).
 
