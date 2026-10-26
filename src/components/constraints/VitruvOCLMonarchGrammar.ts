@@ -123,6 +123,45 @@ export const vitruvOCLMonarch: monaco.languages.IMonarchLanguage = {
   },
 };
 
+const DARK_OCL_FOREGROUND: Record<string, string> = {
+  comment: '6A9955',
+  'comment.block': '6A9955',
+  annotation: 'DCDCAA',
+  'annotation.value': 'CE9178',
+  'keyword.package': 'C586C0',
+  'keyword.context': '569CD6',
+  'keyword.inv': '4EC9B0',
+  'keyword.control': 'C586C0',
+  'keyword.let': 'C586C0',
+  'keyword.operator.logical': '569CD6',
+  'variable.predefined': '9CDCFE',
+  'variable.let': '9CDCFE',
+  'constant.boolean': '569CD6',
+  'constant.null': 'B0B0B0',
+  'support.function.iterator': 'DCDCAA',
+  'support.function.ocl': 'DCDCAA',
+  'type.primitive': '4EC9B0',
+  'type.collection': '4EC9B0',
+  'type.class': '4EC9B0',
+  'entity.name.label': 'DCDCAA',
+  string: 'CE9178',
+  'string.quote': 'CE9178',
+  'string.escape': 'D7BA7D',
+  'string.invalid': 'F48771',
+  number: 'B5CEA8',
+  'number.float': 'B5CEA8',
+  'operator.range': 'D4D4D4',
+  'operator.navigation': 'D4D4D4',
+  'operator.typecast': 'D4D4D4',
+  'operator.comparison': 'D4D4D4',
+  'operator.arithmetic': 'D4D4D4',
+  'operator.correspondence': 'C586C0',
+  'operator.pipe': 'D4D4D4',
+  'operator.colon': 'D4D4D4',
+  multiplicity: 'C586C0',
+  delimiter: 'D4D4D4',
+};
+
 export const vitruvOCLTheme: monaco.editor.IStandaloneThemeData = {
   base: 'vs',
   inherit: true,
@@ -169,6 +208,18 @@ export const vitruvOCLTheme: monaco.editor.IStandaloneThemeData = {
   },
 };
 
+export const vitruvOCLThemeDark: monaco.editor.IStandaloneThemeData = {
+  base: 'vs-dark',
+  inherit: true,
+  rules: vitruvOCLTheme.rules.map((rule) => ({
+    ...rule,
+    foreground: DARK_OCL_FOREGROUND[rule.token] ?? rule.foreground,
+  })),
+  colors: {
+    'editor.background': '#0f172a',
+  },
+};
+
 export const vitruvOCLLanguageConfig: monaco.languages.LanguageConfiguration = {
   comments: { lineComment: '--', blockComment: ['/*', '*/'] },
   brackets: [['(', ')'], ['{', '}'], ['[', ']']],
@@ -192,5 +243,6 @@ export function registerVitruvOCLLanguage() {
   monaco.languages.register({ id: vitruvOCLLanguageId, extensions: ['.ocl'], aliases: ['VitruvOCL'] });
   monaco.languages.setMonarchTokensProvider(vitruvOCLLanguageId, vitruvOCLMonarch);
   monaco.languages.setLanguageConfiguration(vitruvOCLLanguageId, vitruvOCLLanguageConfig);
-  monaco.editor.defineTheme('vitruvocl-dark', vitruvOCLTheme);
+  monaco.editor.defineTheme('vitruvocl-light', vitruvOCLTheme);
+  monaco.editor.defineTheme('vitruvocl-dark', vitruvOCLThemeDark);
 }
