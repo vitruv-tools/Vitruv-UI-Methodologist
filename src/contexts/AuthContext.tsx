@@ -280,8 +280,6 @@ export function AuthProvider({ children }: Readonly<AuthProviderProps>) {
                 );
             }
 
-            const signUpResponse = await AuthService.signUp(userData);
-
             const newUser: User = {
                 id: Date.now().toString(),
                 username: userData.username,
@@ -293,7 +291,6 @@ export function AuthProvider({ children }: Readonly<AuthProviderProps>) {
             AuthService.setCurrentUser(newUser);
             setUser(newUser);
 
-            console.log('Sign up successful:', signUpResponse.message);
         } catch (error: any) {
             console.error('Sign up error:', error);
             if (error instanceof Error) throw error;
