@@ -83,7 +83,6 @@ const AUTH_STYLES = `
     box-shadow: 0 10px 40px rgba(0, 0, 0, 0.06);
     text-align: center;
     box-sizing: border-box;
-    transform: translate(-100px, 0px);
     margin: auto 0;
     flex-shrink: 0;
   }
