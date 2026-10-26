@@ -3,6 +3,7 @@ import React from 'react';
 import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
 import { ConstraintsView } from '../../../components/constraints/ConstraintsView';
 import { apiService } from '../../../services/api';
+import { setTheme } from '../../../theme/theme';
 
 // ── Mocks ─────────────────────────────────────────────────────────────────────
 
@@ -24,7 +25,7 @@ vi.mock('monaco-editor', () => ({
 
 vi.mock('@monaco-editor/react', async () => {
   const mockReact = (await import('react'));
-  const MockEditor = ({ value, onChange, onMount }: any) => {
+  const MockEditor = ({ value, onChange, onMount, theme }: any) => {
     mockReact.useEffect(() => {
       onMount?.({}, {
         languages: {
@@ -40,6 +41,7 @@ vi.mock('@monaco-editor/react', async () => {
     }, []); // eslint-disable-line react-hooks/exhaustive-deps
     return mockReact.createElement('textarea', {
       'data-testid': 'monaco-editor',
+      'data-theme': theme,
       value: value ?? '',
       onChange: (e: any) => onChange?.(e.target.value),
     });
@@ -71,7 +73,8 @@ vi.mock('../../../components/constraints/VitruvOCLMonarchGrammar', () => ({
   vitruvOCLLanguageId: 'vitruvocl',
   vitruvOCLMonarch: {},
   vitruvOCLLanguageConfig: {},
-  vitruvOCLTheme: { base: 'vs', inherit: true, rules: [], colors: {} },
+  vitruvOCLTheme: { base: 'vs', inherit: true, rules: [], colors: { 'editor.background': '#ffffff' } },
+  vitruvOCLThemeDark: { base: 'vs-dark', inherit: true, rules: [], colors: { 'editor.background': '#0f172a' } },
 }));
 
 vi.mock('../../../services/api', () => ({
@@ -187,6 +190,18 @@ describe('ConstraintsView', () => {
       await waitFor(() => {
         expect(screen.getByText(/Editing:.*CrateContainsExactly16Bottles/)).toBeInTheDocument();
       });
+    });
+
+    it('uses a light editor theme in light mode and a dark one after toggling', async () => {
+      await act(async () => {
+        render(<ConstraintsView canvasNodes={[pfandNode as any]} />);
+      });
+      fireEvent.click(screen.getByText('CrateContainsExactly16Bottles'));
+      const editor = await screen.findByTestId('monaco-editor');
+      expect(editor).toHaveAttribute('data-theme', 'vitruv-editor-light');
+
+      act(() => setTheme('dark'));
+      expect(editor).toHaveAttribute('data-theme', 'vitruv-editor-dark');
     });
   });
 

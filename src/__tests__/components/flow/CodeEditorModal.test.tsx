@@ -1,16 +1,30 @@
 import React from 'react';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
 import { CodeEditorModal } from '../../../components/flow/CodeEditorModal';
+import { setTheme } from '../../../theme/theme';
+
+const monacoStub = {
+  editor: {
+    defineTheme: vi.fn(),
+    setTheme: vi.fn(),
+  },
+};
 
 vi.mock('@monaco-editor/react', () => ({
   __esModule: true,
-  default: ({ value, onChange }: any) => (
-    <textarea
-      data-testid="monaco-editor"
-      value={value}
-      onChange={(e) => onChange(e.target.value)}
-    />
-  ),
+  default: ({ value, onChange, theme, beforeMount }: any) => {
+    React.useEffect(() => {
+      beforeMount?.(monacoStub);
+    }, [beforeMount]);
+    return (
+      <textarea
+        data-testid="monaco-editor"
+        data-theme={theme}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+      />
+    );
+  },
 }));
 
 vi.mock('../../../components/ui/ConfirmDialog', () => ({
@@ -72,7 +86,32 @@ describe('CodeEditorModal', () => {
       screen.getByText(/Source\.ecore ↔ Target\.ecore/i),
     ).toBeInTheDocument();
     expect(screen.getByTestId('monaco-editor')).toHaveValue('initial code');
+    expect(screen.getByTestId('monaco-editor')).toHaveAttribute('data-theme', 'vitruv-editor-light');
+    const editorFrame = screen.getByTestId('monaco-editor').parentElement as HTMLElement;
+    expect(editorFrame.style.background).toBe('var(--v-input-bg)');
+    expect(editorFrame.style.border).toContain('var(--v-border)');
     expect(screen.getByText(/Edge ID: edge-123/i)).toBeInTheDocument();
+  });
+
+  it('switches the editor to the dark theme when the app theme changes', async () => {
+    render(<CodeEditorModal {...defaultProps} />);
+
+    await waitFor(() => {
+      expect(monacoStub.editor.setTheme).toHaveBeenCalledWith('vitruv-editor-light');
+    });
+    expect(monacoStub.editor.defineTheme).toHaveBeenCalledWith(
+      'vitruv-editor-light',
+      expect.objectContaining({ base: 'vs' }),
+    );
+    expect(monacoStub.editor.defineTheme).toHaveBeenCalledWith(
+      'vitruv-editor-dark',
+      expect.objectContaining({ base: 'vs-dark' }),
+    );
+
+    act(() => setTheme('dark'));
+
+    expect(screen.getByTestId('monaco-editor')).toHaveAttribute('data-theme', 'vitruv-editor-dark');
+    expect(monacoStub.editor.setTheme).toHaveBeenCalledWith('vitruv-editor-dark');
   });
 
   it('calls onSave when Save is clicked and modal stays open', async () => {

@@ -13,8 +13,8 @@ import {
   vitruvOCLLanguageId,
   vitruvOCLMonarch,
   vitruvOCLLanguageConfig,
-  vitruvOCLTheme,
 } from './VitruvOCLMonarchGrammar';
+import { useMonacoEditorTheme } from '../../theme/monacoEditorTheme';
 
 const T = {
   surface: 'var(--v-surface)',
@@ -35,8 +35,6 @@ const handleVitruvOCLMount: OnMount = (_editor, monacoInstance) => {
   monacoInstance.languages.register({ id: vitruvOCLLanguageId, extensions: ['.ocl'], aliases: ['VitruvOCL'] });
   monacoInstance.languages.setLanguageConfiguration(vitruvOCLLanguageId, vitruvOCLLanguageConfig);
   monacoInstance.languages.setMonarchTokensProvider(vitruvOCLLanguageId, vitruvOCLMonarch);
-  monacoInstance.editor.defineTheme('vitruvocl-theme', vitruvOCLTheme);
-  monacoInstance.editor.setTheme('vitruvocl-theme');
 };
 
 
@@ -980,6 +978,7 @@ const EditorPanel: React.FC<EditorPanelProps> = ({ rule, ruleSets, colorMap, met
     languageId: vitruvOCLLanguageId,
     getCode: () => draftRef.current.oclDefinition,
   });
+  const { themeName: monacoTheme, beforeMount: handleMonacoTheme } = useMonacoEditorTheme();
 
   // Reset draft whenever the selected rule changes (intentionally only on id, not every field).
   useEffect(() => {
@@ -1062,7 +1061,6 @@ const EditorPanel: React.FC<EditorPanelProps> = ({ rule, ruleSets, colorMap, met
         fileExtension=".ocl"
         monarchGrammar={vitruvOCLMonarch}
         languageConfig={vitruvOCLLanguageConfig}
-        theme={vitruvOCLTheme}
         title={draft.name}
       />
 
@@ -1205,9 +1203,10 @@ const EditorPanel: React.FC<EditorPanelProps> = ({ rule, ruleSets, colorMap, met
               <Editor
                 value={draft.oclDefinition}
                 onChange={handleOclChange}
+                beforeMount={handleMonacoTheme}
                 onMount={(ed, m) => { handleVitruvOCLMount(ed, m); lspOnMount(ed, m); }}
                 language={vitruvOCLLanguageId}
-                theme="vitruvocl-theme"
+                theme={monacoTheme}
                 options={{ minimap: { enabled: false }, fontSize: 13, lineNumbers: 'on', scrollBeyondLastLine: false, wordWrap: 'on', automaticLayout: true, padding: { top: 8, bottom: 8 }, folding: false, lineDecorationsWidth: 0, renderLineHighlight: 'line', overviewRulerLanes: 0 }}
               />
             </div>
