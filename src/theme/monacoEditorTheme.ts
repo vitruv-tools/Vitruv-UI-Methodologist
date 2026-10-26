@@ -14,58 +14,41 @@ interface MonacoThemeHost {
 export const MONACO_EDITOR_THEME_LIGHT = 'vitruv-editor-light';
 export const MONACO_EDITOR_THEME_DARK = 'vitruv-editor-dark';
 
-const lightEditorColors: editor.IColors = {
-  'editor.background': '#ffffff',
-  'editor.foreground': '#0f172a',
-  'editorGutter.background': '#ffffff',
-  'editorLineNumber.foreground': '#9ca3af',
-  'editorLineNumber.activeForeground': '#4b5563',
-  'editor.lineHighlightBackground': '#f8fafc',
-  'editor.lineHighlightBorder': '#00000000',
-  'editorCursor.foreground': '#0f172a',
-  'editor.selectionBackground': '#bfdbfe',
-  'editor.inactiveSelectionBackground': '#e2e8f0',
-  'editorWidget.background': '#ffffff',
-  'editorWidget.border': '#e5e7eb',
-  'editorSuggestWidget.background': '#ffffff',
-  'editorSuggestWidget.border': '#e5e7eb',
-  'editorSuggestWidget.foreground': '#0f172a',
-  'editorSuggestWidget.selectedBackground': '#f1f5f9',
-  'minimap.background': '#ffffff',
-};
-
-const darkEditorColors: editor.IColors = {
-  'editor.background': '#0f172a',
-  'editor.foreground': '#f1f5f9',
-  'editorGutter.background': '#0f172a',
-  'editorLineNumber.foreground': '#64748b',
-  'editorLineNumber.activeForeground': '#cbd5e1',
-  'editor.lineHighlightBackground': '#1e293b',
-  'editor.lineHighlightBorder': '#00000000',
-  'editorCursor.foreground': '#f1f5f9',
-  'editor.selectionBackground': '#1e3a5f',
-  'editor.inactiveSelectionBackground': '#1e293b',
-  'editorWidget.background': '#1e293b',
-  'editorWidget.border': '#334155',
-  'editorSuggestWidget.background': '#1e293b',
-  'editorSuggestWidget.border': '#334155',
-  'editorSuggestWidget.foreground': '#f1f5f9',
-  'editorSuggestWidget.selectedBackground': '#334155',
-  'minimap.background': '#0f172a',
-};
+function editorColors(mode: 'light' | 'dark'): editor.IColors {
+  const dark = mode === 'dark';
+  return {
+    'editor.background': dark ? '#0f172a' : '#ffffff',
+    'editor.foreground': dark ? '#f1f5f9' : '#0f172a',
+    'editorGutter.background': dark ? '#0f172a' : '#ffffff',
+    'editorLineNumber.foreground': dark ? '#64748b' : '#9ca3af',
+    'editorLineNumber.activeForeground': dark ? '#cbd5e1' : '#4b5563',
+    'editor.lineHighlightBackground': dark ? '#1e293b' : '#f8fafc',
+    'editor.lineHighlightBorder': '#00000000',
+    'editorCursor.foreground': dark ? '#f1f5f9' : '#0f172a',
+    'editor.selectionBackground': dark ? '#1e3a5f' : '#bfdbfe',
+    'editor.inactiveSelectionBackground': dark ? '#1e293b' : '#e2e8f0',
+    'editorWidget.background': dark ? '#1e293b' : '#ffffff',
+    'editorWidget.border': dark ? '#334155' : '#e5e7eb',
+    'editorSuggestWidget.background': dark ? '#1e293b' : '#ffffff',
+    'editorSuggestWidget.border': dark ? '#334155' : '#e5e7eb',
+    'editorSuggestWidget.foreground': dark ? '#f1f5f9' : '#0f172a',
+    'editorSuggestWidget.selectedBackground': dark ? '#334155' : '#f1f5f9',
+    'minimap.background': dark ? '#0f172a' : '#ffffff',
+  };
+}
 
 export const vitruvEditorLightTheme: editor.IStandaloneThemeData = {
   base: 'vs',
   inherit: true,
   rules: [...vitruvOCLTheme.rules, ...reactionsLightTokenRules],
-  colors: lightEditorColors,
+  colors: editorColors('light'),
 };
 
 export const vitruvEditorDarkTheme: editor.IStandaloneThemeData = {
   base: 'vs-dark',
   inherit: true,
   rules: [...vitruvOCLThemeDark.rules, ...reactionsDarkTokenRules],
-  colors: darkEditorColors,
+  colors: editorColors('dark'),
 };
 
 export function monacoEditorThemeName(mode: ThemeMode): string {
