@@ -15,26 +15,34 @@ export const MONACO_EDITOR_THEME_LIGHT = 'vitruv-editor-light';
 export const MONACO_EDITOR_THEME_DARK = 'vitruv-editor-dark';
 
 function editorColors(mode: 'light' | 'dark'): editor.IColors {
-  const dark = mode === 'dark';
-  return {
-    'editor.background': dark ? '#0f172a' : '#ffffff',
-    'editor.foreground': dark ? '#f1f5f9' : '#0f172a',
-    'editorGutter.background': dark ? '#0f172a' : '#ffffff',
-    'editorLineNumber.foreground': dark ? '#64748b' : '#9ca3af',
-    'editorLineNumber.activeForeground': dark ? '#cbd5e1' : '#4b5563',
-    'editor.lineHighlightBackground': dark ? '#1e293b' : '#f8fafc',
-    'editor.lineHighlightBorder': '#00000000',
-    'editorCursor.foreground': dark ? '#f1f5f9' : '#0f172a',
-    'editor.selectionBackground': dark ? '#1e3a5f' : '#bfdbfe',
-    'editor.inactiveSelectionBackground': dark ? '#1e293b' : '#e2e8f0',
-    'editorWidget.background': dark ? '#1e293b' : '#ffffff',
-    'editorWidget.border': dark ? '#334155' : '#e5e7eb',
-    'editorSuggestWidget.background': dark ? '#1e293b' : '#ffffff',
-    'editorSuggestWidget.border': dark ? '#334155' : '#e5e7eb',
-    'editorSuggestWidget.foreground': dark ? '#f1f5f9' : '#0f172a',
-    'editorSuggestWidget.selectedBackground': dark ? '#334155' : '#f1f5f9',
-    'minimap.background': dark ? '#0f172a' : '#ffffff',
-  };
+  const night = mode === 'dark';
+  const rows = `
+editor.background #ffffff #0f172a
+editor.foreground #0f172a #f1f5f9
+editorGutter.background #ffffff #0f172a
+editorLineNumber.foreground #9ca3af #64748b
+editorLineNumber.activeForeground #4b5563 #cbd5e1
+editor.lineHighlightBackground #f8fafc #1e293b
+editor.lineHighlightBorder #00000000 #00000000
+editorCursor.foreground #0f172a #f1f5f9
+editor.selectionBackground #bfdbfe #1e3a5f
+editor.inactiveSelectionBackground #e2e8f0 #1e293b
+editorWidget.background #ffffff #1e293b
+editorWidget.border #e5e7eb #334155
+editorSuggestWidget.background #ffffff #1e293b
+editorSuggestWidget.border #e5e7eb #334155
+editorSuggestWidget.foreground #0f172a #f1f5f9
+editorSuggestWidget.selectedBackground #f1f5f9 #334155
+minimap.background #ffffff #0f172a
+`.trim().split('\n');
+  const colors: editor.IColors = {};
+  let index = 0;
+  while (index < rows.length) {
+    const [id, day, dusk] = rows[index].trim().split(' ');
+    colors[id] = night ? dusk : day;
+    index += 1;
+  }
+  return colors;
 }
 
 export const vitruvEditorLightTheme: editor.IStandaloneThemeData = {

@@ -123,46 +123,37 @@ export const vitruvOCLMonarch: monaco.languages.IMonarchLanguage = {
   },
 };
 
-type OclTokenPaint = readonly [token: string, light: string, dark: string, fontStyle?: string];
-
-const OCL_TOKEN_PAINTS: readonly OclTokenPaint[] = [
-  ['comment', '6a9955', '6A9955', 'italic'],
-  ['comment.block', '6a9955', '6A9955', 'italic'],
-  ['annotation', '795e26', 'DCDCAA', 'bold'],
-  ['annotation.value', 'a31515', 'CE9178'],
-  ['keyword.package', 'af00db', 'C586C0'],
-  ['keyword.context', '0000ff', '569CD6', 'bold'],
-  ['keyword.inv', '267f99', '4EC9B0', 'bold'],
-  ['keyword.control', 'af00db', 'C586C0'],
-  ['keyword.let', 'af00db', 'C586C0'],
-  ['keyword.operator.logical', '0000ff', '569CD6'],
-  ['variable.predefined', '001080', '9CDCFE', 'bold'],
-  ['variable.let', '001080', '9CDCFE'],
-  ['constant.boolean', '0000ff', '569CD6'],
-  ['constant.null', '808080', 'B0B0B0'],
-  ['support.function.iterator', '795e26', 'DCDCAA'],
-  ['support.function.ocl', '795e26', 'DCDCAA'],
-  ['type.primitive', '267f99', '4EC9B0'],
-  ['type.collection', '267f99', '4EC9B0'],
-  ['type.class', '267f99', '4EC9B0', 'bold'],
-  ['entity.name.label', '795e26', 'DCDCAA', 'bold'],
-  ['string', 'a31515', 'CE9178'],
-  ['string.quote', 'a31515', 'CE9178'],
-  ['string.escape', 'ee0000', 'D7BA7D'],
-  ['string.invalid', 'cd3131', 'F48771'],
-  ['number', '098658', 'B5CEA8'],
-  ['number.float', '098658', 'B5CEA8'],
-  ['operator.range', '000000', 'D4D4D4'],
-  ['operator.navigation', '000000', 'D4D4D4'],
-  ['operator.typecast', '000000', 'D4D4D4'],
-  ['operator.comparison', '000000', 'D4D4D4'],
-  ['operator.arithmetic', '000000', 'D4D4D4'],
-  ['operator.correspondence', 'af00db', 'C586C0', 'bold'],
-  ['operator.pipe', '000000', 'D4D4D4'],
-  ['operator.colon', '000000', 'D4D4D4'],
-  ['multiplicity', 'af00db', 'C586C0'],
-  ['delimiter', '000000', 'D4D4D4'],
-];
+function oclTokenRules(mode: 'light' | 'dark'): monaco.editor.ITokenThemeRule[] {
+  const useDark = mode === 'dark';
+  const spec = `
+comment comment.block | 6a9955 | 6A9955 | italic
+annotation entity.name.label | 795e26 | DCDCAA | bold
+annotation.value string string.quote | a31515 | CE9178
+keyword.package keyword.control keyword.let multiplicity | af00db | C586C0
+keyword.context | 0000ff | 569CD6 | bold
+keyword.inv type.class | 267f99 | 4EC9B0 | bold
+keyword.operator.logical constant.boolean | 0000ff | 569CD6
+variable.predefined | 001080 | 9CDCFE | bold
+variable.let | 001080 | 9CDCFE
+constant.null | 808080 | B0B0B0
+support.function.iterator support.function.ocl | 795e26 | DCDCAA
+type.primitive type.collection | 267f99 | 4EC9B0
+string.escape | ee0000 | D7BA7D
+string.invalid | cd3131 | F48771
+number number.float | 098658 | B5CEA8
+operator.correspondence | af00db | C586C0 | bold
+operator.range operator.navigation operator.typecast operator.comparison operator.arithmetic operator.pipe operator.colon delimiter | 000000 | D4D4D4
+`.trim();
+  const rules: monaco.editor.ITokenThemeRule[] = [];
+  for (const row of spec.split('\n')) {
+    const [names, day, night, style] = row.trim().split('|').map((part) => part.trim());
+    const foreground = useDark ? night : day;
+    for (const token of names.split(/\s+/)) {
+      rules.push(style ? { token, foreground, fontStyle: style } : { token, foreground });
+    }
+  }
+  return rules;
+}
 
 function oclTheme(
   mode: 'light' | 'dark',
@@ -172,11 +163,7 @@ function oclTheme(
   return {
     base,
     inherit: true,
-    rules: OCL_TOKEN_PAINTS.map(([token, light, dark, fontStyle]) => ({
-      token,
-      foreground: mode === 'dark' ? dark : light,
-      ...(fontStyle ? { fontStyle } : {}),
-    })),
+    rules: oclTokenRules(mode),
     colors: { 'editor.background': background },
   };
 }
