@@ -978,6 +978,60 @@ class ApiService {
     });
   }
 
+  // ── Helpers ───────────────────────────────────────────────────────────────
+
+  getHelpers(vsumId: number): Promise<HelperResponse[]> {
+    return this.authenticatedRequest(`/api/v1/vsums/${vsumId}/helpers`);
+  }
+
+  createHelper(vsumId: number, body: HelperRequest): Promise<HelperResponse> {
+    return this.authenticatedRequest(`/api/v1/vsums/${vsumId}/helpers`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+  }
+
+  updateHelper(vsumId: number, helperId: number, body: HelperRequest): Promise<HelperResponse> {
+    return this.authenticatedRequest(`/api/v1/vsums/${vsumId}/helpers/${helperId}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+  }
+
+  deleteHelper(vsumId: number, helperId: number): Promise<void> {
+    return this.authenticatedRequest(`/api/v1/vsums/${vsumId}/helpers/${helperId}`, {
+      method: 'DELETE',
+    });
+  }
+
+  /** Translates an unsaved helper; problems are part of the response. */
+  previewHelper(vsumId: number, body: HelperRequest, helperId?: number): Promise<HelperPreviewResponse> {
+    const query = helperId === undefined ? '' : `?helperId=${helperId}`;
+    return this.authenticatedRequest(`/api/v1/vsums/${vsumId}/helpers/preview${query}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+  }
+
+  checkHelperName(vsumId: number, name: string, helperId?: number): Promise<HelperNameAvailabilityResponse> {
+    const params = new URLSearchParams({ name });
+    if (helperId !== undefined) params.set('helperId', String(helperId));
+    return this.authenticatedRequest(`/api/v1/vsums/${vsumId}/helpers/name-availability?${params}`);
+  }
+
+  /** The Java utility class generated from all helpers of the project. */
+  getHelperClass(vsumId: number): Promise<HelperClassResponse> {
+    return this.authenticatedRequest(`/api/v1/vsums/${vsumId}/helpers/java`);
+  }
+
+  /** Metamodel types that helpers of the project can use. */
+  getHelperTypes(vsumId: number): Promise<HelperTypeResponse[]> {
+    return this.authenticatedRequest(`/api/v1/vsums/${vsumId}/helpers/types`);
+  }
+
   /**
    * Fetch Low Code reaction metadata (field definitions for the form editor).
    */
@@ -1012,6 +1066,77 @@ export interface RuleSetPutRequest {
   color?: string;
   description?: string;
   oclContent?: string;
+}
+
+export interface HelperParameter {
+  name: string;
+  /** OCL type, e.g. `simulink::SimulinkModel` or `Sequence(simulink::Block)`. */
+  type: string;
+}
+
+export interface HelperRequest {
+  name: string;
+  description?: string;
+  returnType: string;
+  parameters: HelperParameter[];
+  /** Metamodel types usable by their simple name, e.g. `simulink::SubSystem` or `simulink::*`. */
+  imports: string[];
+  /** The OCL expression. */
+  body: string;
+}
+
+export interface HelperProblem {
+  helperName: string;
+  message: string;
+  /** 1-based position in the OCL definition, `null` if the problem is elsewhere. */
+  line: number | null;
+  column: number | null;
+}
+
+export interface HelperResponse {
+  id: number;
+  vsumId: number;
+  name: string;
+  description: string | null;
+  returnType: string;
+  parameters: HelperParameter[];
+  imports: string[];
+  body: string;
+  /** The complete helper definition in OCL. */
+  oclDefinition: string;
+  /** The generated Java method, `null` if the helper has problems. */
+  javaMethod: string | null;
+  problems: HelperProblem[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface HelperPreviewResponse {
+  oclDefinition: string;
+  javaMethod: string | null;
+  problems: HelperProblem[];
+}
+
+export interface HelperNameAvailabilityResponse {
+  available: boolean;
+  message: string | null;
+}
+
+export interface HelperClassResponse {
+  qualifiedClassName: string;
+  fileName: string;
+  source: string;
+  problems: HelperProblem[];
+}
+
+export interface HelperTypeResponse {
+  /** Qualified metamodel package, e.g. `simulink`. */
+  metamodel: string;
+  name: string;
+  /** OCL name, e.g. `simulink::SubSystem`. */
+  qualifiedName: string;
+  kind: 'CLASS' | 'ENUM' | 'DATATYPE';
+  javaName: string;
 }
 
 // Example API methods using the authenticated service
