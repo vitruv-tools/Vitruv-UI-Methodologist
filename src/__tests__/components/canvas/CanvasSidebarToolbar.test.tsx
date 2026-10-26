@@ -8,6 +8,8 @@ const labels = {
   save: 'Save. Save changes to this project',
   checkBuild: 'Check build. Verify the project compiles successfully',
   addMetaModels: 'Add meta-models. Open the meta-model drawer to add models to the canvas',
+  helpers: 'Utility Methods. Define utility methods for reactions',
+  helpersReadOnly: 'Utility Methods. View the utility methods available to reactions',
   viewReaction: 'View reaction. Select a connection line, then click to open the code',
   undoAvailable: 'Undo. Undo the last action',
   undoUnavailable: 'Undo. Nothing to undo',
@@ -83,6 +85,25 @@ describe('CanvasSidebarToolbar', () => {
     expect(screen.queryByRole('button', { name: labels.addMetaModels })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: labels.undoAvailable })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: labels.redoAvailable })).not.toBeInTheDocument();
+  });
+
+  it('places the helpers button above Add meta-models and opens the helpers', () => {
+    const onOpenHelpers = jest.fn();
+    render(<CanvasSidebarToolbar {...createProps()} onOpenHelpers={onOpenHelpers} />);
+
+    const labelsInOrder = screen.getAllByRole('button').map(button => button.getAttribute('aria-label'));
+    const helpersIndex = labelsInOrder.indexOf(labels.helpers);
+    expect(helpersIndex).toBeGreaterThan(-1);
+    expect(labelsInOrder[helpersIndex + 1]).toBe(labels.addMetaModels);
+
+    fireEvent.click(screen.getByRole('button', { name: labels.helpers }));
+    expect(onOpenHelpers).toHaveBeenCalledTimes(1);
+  });
+
+  it('offers the helpers overview to view-only members', () => {
+    render(<CanvasSidebarToolbar {...createProps()} readOnly onOpenHelpers={jest.fn()} />);
+
+    expect(screen.getByRole('button', { name: labels.helpersReadOnly })).toBeInTheDocument();
   });
 
   it('Select exits only active reaction mode', () => {

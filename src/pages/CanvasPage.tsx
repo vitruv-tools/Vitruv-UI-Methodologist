@@ -25,6 +25,7 @@ import {
 import { CanvasProjectControls } from '../components/canvas/CanvasProjectControls';
 import { extractApiErrorMessage } from '../utils/apiErrorMessage';
 import { CanvasSidebarToolbar } from '../components/canvas/CanvasSidebarToolbar';
+import { HelpersModal } from '../components/helpers/HelpersModal';
 import { CanvasProjectAccessControls } from '../components/canvas/CanvasProjectAccessControls';
 import { CanvasConstraintsOverlay } from '../components/canvas/CanvasConstraintsOverlay';
 import { CanvasMetricsOverlay } from '../components/canvas/CanvasMetricsOverlay';
@@ -354,6 +355,7 @@ export const CanvasPage: React.FC = () => {
   const [addedModelIds, setAddedModelIds] = useState<Set<number>>(new Set());
   const [loadingProject, setLoadingProject] = useState(true);
   const [showDrawer, setShowDrawer] = useState(false);
+  const [showHelpers, setShowHelpers] = useState(false);
 
   const panelZBase = MODAL_Z_INDEX;
 
@@ -1642,6 +1644,13 @@ export const CanvasPage: React.FC = () => {
         />
       )}
 
+      <HelpersModal
+        isOpen={showHelpers}
+        vsumId={activeProjectId ?? null}
+        readOnly={isViewOnly}
+        onClose={() => setShowHelpers(false)}
+      />
+
       <CanvasConstraintsOverlay
         projectId={activeProjectId}
         visible={canvasMode === 'constraints' && !isViewOnly}
@@ -1667,6 +1676,7 @@ export const CanvasPage: React.FC = () => {
         onToggleReactionMode={() => setAddReactionMode(v => !v)}
         onOpenReactionEditor={handleOpenReactionEditor}
         onToggleModelDrawer={() => setShowDrawer(d => !d)}
+        onOpenHelpers={activeProjectId ? () => setShowHelpers(true) : undefined}
         onDownloadArtifact={handleDownloadArtifact}
         onDownloadBundle={handleDownloadBundle}
         onSaveChanges={handleSaveChanges}
