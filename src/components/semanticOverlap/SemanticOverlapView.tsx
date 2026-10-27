@@ -4,7 +4,9 @@ import { useSemanticOverlapRun } from '../../hooks/useSemanticOverlapRun';
 import { useSemanticOverlapStore, type OverlapTab } from '../../store/SemanticOverlap';
 import { themeVars } from '../../theme/theme';
 import { fetchLibraryMetaModels, type LibraryMetaModel } from '../../utils/metaModelList';
+import { validateSettings } from '../../utils/semanticOverlap/settings';
 import { AnalysisProgress } from './AnalysisProgress';
+import { AnalysisSettingsPanel } from './AnalysisSettingsPanel';
 import { CorrespondenceLinkDiagram } from './CorrespondenceLinkDiagram';
 import { CorrespondenceList } from './CorrespondenceList';
 import { MetamodelPairPicker } from './MetamodelPairPicker';
@@ -33,6 +35,7 @@ export const SemanticOverlapView: React.FC = () => {
   const store = useSemanticOverlapStore();
   const { start, cancel } = useSemanticOverlapRun();
   const busy = store.status === 'loading' || store.status === 'running';
+  const settingsValid = validateSettings(store.settings).length === 0;
 
   useEffect(() => {
     let active = true;
@@ -93,13 +96,21 @@ export const SemanticOverlapView: React.FC = () => {
         />
         <button
           type="button"
-          style={{ ...primaryButton, opacity: !sourceModel || !targetModel || busy ? 0.5 : 1 }}
-          disabled={!sourceModel || !targetModel || busy}
+          style={{ ...primaryButton, opacity: !sourceModel || !targetModel || busy || !settingsValid ? 0.5 : 1 }}
+          disabled={!sourceModel || !targetModel || busy || !settingsValid}
           onClick={() => { if (sourceModel && targetModel) void start(sourceModel, targetModel); }}
         >
           {result ? 'Run again' : 'Start analysis'}
         </button>
       </div>
+
+      <AnalysisSettingsPanel
+        settings={store.settings}
+        onChange={store.updateSettings}
+        minScore={store.minScore}
+        onMinScoreChange={store.setMinScore}
+        disabled={busy}
+      />
 
       {busy && <AnalysisProgress progress={store.progress} onCancel={cancel} />}
 

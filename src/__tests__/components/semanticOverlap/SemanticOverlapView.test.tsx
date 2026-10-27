@@ -5,6 +5,10 @@ import { SemanticOverlapView } from '../../../components/semanticOverlap/Semanti
 import { useSemanticOverlapStore } from '../../../store/SemanticOverlap';
 import type { LibraryMetaModel } from '../../../utils/metaModelList';
 import { sampleResult } from './sampleResult';
+import { runOverlapAnalysis } from '../../../utils/semanticOverlap/runOverlapAnalysis';
+import { createWordNetSource } from '../../../utils/semanticOverlap/lexical/wordNetSource';
+import table from '../../../assets/wordnet/oewn-2025-synonyms.json';
+import { ecoreExcerpt, umlExcerpt } from '../../utils/semanticOverlap/fixtures';
 
 const mocks = vi.hoisted(() => ({ start: vi.fn(), cancel: vi.fn(), fetch: vi.fn() }));
 
@@ -29,6 +33,8 @@ const renderView = async (path = '/semantic-overlap') => {
   render(<MemoryRouter initialEntries={[path]}><SemanticOverlapView /></MemoryRouter>);
   await waitFor(() => expect(mocks.fetch).toHaveBeenCalled());
   await waitFor(() => expect(screen.getAllByRole('option', { name: 'UML excerpt' })).toHaveLength(2));
+  // The URL pre-selection runs after the library has loaded; a later selection change would clear results.
+  if (path.includes('target=2')) await waitFor(() => expect(store().targetId).toBe(2));
 };
 
 const finishWith = (result = sampleResult()) => act(() => {
@@ -105,5 +111,51 @@ describe('SemanticOverlapView', () => {
     await renderView();
     expect(screen.getByText(/Choose a source and a target metamodel/)).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Open English WordNet 2025' })).toBeInTheDocument();
+  });
+
+  describe('tuning (US3)', () => {
+    const lexical = createWordNetSource(table);
+    const runSynchronously = () => {
+      const settings = store().settings;
+      act(() => {
+        store().beginLoading('r');
+        store().finishRun('r', runOverlapAnalysis({ source: ecoreExcerpt(), target: umlExcerpt(), settings }, { lexical, now: () => 0 }));
+      });
+    };
+    const correspondences = () => store().result!.correspondences.map(c => ({ ids: c.sources.map(r => r.name), score: c.score }));
+
+    beforeEach(() => { mocks.start.mockImplementation(runSynchronously); });
+
+    it('reproduces the result with the same seed and changes it with another weighting', async () => {
+      await renderView('/semantic-overlap?source=1&target=2');
+      fireEvent.click(screen.getByRole('button', { name: /Analysis settings/ }));
+      fireEvent.change(screen.getByLabelText('Seed'), { target: { value: '42' } });
+      fireEvent.click(screen.getByRole('button', { name: 'Start analysis' }));
+      const first = correspondences();
+      fireEvent.click(screen.getByRole('button', { name: 'Run again' }));
+      expect(correspondences()).toEqual(first);
+
+      fireEvent.change(screen.getByRole('slider', { name: /Structural weight/ }), { target: { value: 0.9 } });
+      fireEvent.click(screen.getByRole('button', { name: 'Run again' }));
+      expect(correspondences().map(c => c.score)).not.toEqual(first.map(c => c.score));
+      expect(screen.getByRole('region', { name: 'Settings used' })).toHaveTextContent(/Seed 42.*structural 90 %/);
+    });
+
+    it('disables the analysis while a setting is invalid', async () => {
+      await renderView('/semantic-overlap?source=1&target=2');
+      fireEvent.click(screen.getByRole('button', { name: /Analysis settings/ }));
+      fireEvent.change(screen.getByLabelText('Seed'), { target: { value: 'abc' } });
+      expect(screen.getByRole('button', { name: 'Start analysis' })).toBeDisabled();
+    });
+
+    it('applies the threshold without a new run', async () => {
+      await renderView('/semantic-overlap?source=1&target=2');
+      finishWith();
+      mocks.start.mockClear();
+      fireEvent.change(screen.getByRole('slider', { name: /Minimum score shown/ }), { target: { value: 0.95 } });
+      expect(store().minScore).toBe(0.95);
+      expect(screen.getByText(/No correspondences at or above/)).toBeInTheDocument();
+      expect(mocks.start).not.toHaveBeenCalled();
+    });
   });
 });

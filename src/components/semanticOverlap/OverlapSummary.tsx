@@ -31,7 +31,25 @@ const UnmatchedList: React.FC<{ title: string; refs: readonly ElementRef[] }> = 
   </div>
 );
 
-/** Class counts, overlap percentage, unmatched classes and warnings of a result. */
+const percent = (value: number) => `${Math.round(value * 100)} %`;
+
+/** One line describing the settings and engine that produced a result (FR-013). */
+export function describeSettingsUsed(result: OverlapResult): string {
+  const { settings, engine } = result;
+  return [
+    `Seed ${settings.seed}`,
+    `effort ${settings.effort}`,
+    `structural ${percent(settings.weights.structural)} / syntactic ${percent(settings.weights.syntactic)}`,
+    `α ${settings.syntactic.alpha} / β ${settings.syntactic.beta}`,
+    `null score ${settings.nullScore}`,
+    `max. ${settings.maxTargetsPerElement} targets`,
+    `strategy ${engine.strategy.id} v${engine.strategy.version}`,
+    `measures ${engine.measures.map(m => `${m.id} v${m.version}`).join(', ')}`,
+    engine.lexicalSource ? `synonyms ${engine.lexicalSource.id} ${engine.lexicalSource.version}` : 'no synonyms',
+  ].join(' · ');
+}
+
+/** Class counts, overlap percentage, unmatched classes, warnings and the settings used. */
 export const OverlapSummary: React.FC<{ result: OverlapResult }> = ({ result }) => {
   const { summary, unmatched, warnings, source, target } = result;
   return (
@@ -47,6 +65,9 @@ export const OverlapSummary: React.FC<{ result: OverlapResult }> = ({ result }) 
         <UnmatchedList title={`Unmatched in ${source.name}`} refs={unmatched.source} />
         <UnmatchedList title={`Unmatched in ${target.name}`} refs={unmatched.target} />
       </div>
+      <section aria-label="Settings used" style={{ fontSize: 11, color: themeVars.textMuted }}>
+        {describeSettingsUsed(result)}
+      </section>
       {warnings.length > 0 && (
         <ul aria-label="Warnings" style={{
           margin: 0, padding: '8px 12px 8px 28px', fontSize: 12, borderRadius: 8,
