@@ -21,18 +21,23 @@ interface CorrespondenceLinkDiagramProps {
   minScore: number;
   selectedId: string | null;
   collapsedUnmatched: boolean;
+  expandedIds: readonly string[];
   onSelect: (correspondenceId: string | null) => void;
   onToggleUnmatched: (collapsed: boolean) => void;
+  onToggleExpand: (correspondenceId: string) => void;
 }
 
 /** Read-only React Flow view: source classes left, target classes right, score-weighted links. */
 export const CorrespondenceLinkDiagram: React.FC<CorrespondenceLinkDiagramProps> = ({
-  result, minScore, selectedId, collapsedUnmatched, onSelect, onToggleUnmatched,
+  result, minScore, selectedId, collapsedUnmatched, expandedIds, onSelect, onToggleUnmatched, onToggleExpand,
 }) => {
-  const { nodes, edges } = useMemo(
-    () => buildLinkDiagram(result, { minScore, selectedId, collapsedUnmatched }),
-    [result, minScore, selectedId, collapsedUnmatched],
-  );
+  const { nodes, edges } = useMemo(() => {
+    const diagram = buildLinkDiagram(result, { minScore, selectedId, collapsedUnmatched, expandedIds });
+    return {
+      edges: diagram.edges,
+      nodes: diagram.nodes.map(node => ({ ...node, data: { ...node.data, onToggleExpand } })),
+    };
+  }, [result, minScore, selectedId, collapsedUnmatched, expandedIds, onToggleExpand]);
 
   return (
     <div style={{ position: 'relative', height: '100%', minHeight: 420 }}>

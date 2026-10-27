@@ -5,7 +5,7 @@ import { InvalidSettingsError, runOverlapAnalysis, solutionToCorrespondences } f
 import { resolveSettings } from '../../../utils/semanticOverlap/settings';
 import type { MetamodelGraph, OverlapResult } from '../../../utils/semanticOverlap/types';
 import table from '../../../assets/wordnet/oewn-2025-synonyms.json';
-import { ecoreExcerpt, refFor, umlExcerpt } from './fixtures';
+import { ecoreExcerpt, fig1Expected, refFor, umlExcerpt } from './fixtures';
 import { diagonalProblem } from './helpers';
 
 const wordNet = createWordNetSource(table);
@@ -81,6 +81,53 @@ describe('runOverlapAnalysis', () => {
     runOverlapAnalysis({ source: ecoreExcerpt(), target: umlExcerpt(), settings }, { ...deps, onProgress: p => progress.push(p.fraction) });
     progress.slice(1).forEach((f, k) => expect(f).toBeGreaterThanOrEqual(progress[k]));
     expect(progress[progress.length - 1]).toBe(1);
+  });
+});
+
+describe('runOverlapAnalysis feature level', () => {
+  const result = runOverlapAnalysis({ source: ecoreExcerpt(), target: umlExcerpt(), settings }, deps);
+  const key = (sources: string[], targets: string[]) => `${[...sources].sort().join(',')}->${[...targets].sort().join(',')}`;
+  const allKeys = new Set(result.correspondences.flatMap(c => [c, ...(c.children ?? [])])
+    .map(c => key(c.sources.map(s => s.qualifiedName), c.targets.map(t => t.qualifiedName))));
+
+  it('adds feature-level children with their containing class', () => {
+    const eclass = result.correspondences.find(c => c.sources[0].name === 'EClass')!;
+    expect(eclass.children!.length).toBeGreaterThan(0);
+    for (const child of eclass.children!) {
+      expect(child.level).toBe('feature');
+      [...child.sources, ...child.targets].forEach(ref => expect(ref.containingClass).toBeDefined());
+    }
+    const abstract = eclass.children!.find(c => c.sources.some(s => s.name === 'abstract'))!;
+    expect(abstract.targets.map(t => t.name)).toEqual(['isAbstract']);
+    expect(eclass.children!.map(c => c.id)).toEqual(eclass.children!.map((_, k) => `${eclass.id}-f-${k + 1}`));
+  });
+
+  it('finds at least 5 of the 6 Fig. 1 correspondences (SC-003)', () => {
+    const found = fig1Expected().filter(e => allKeys.has(key(e.sources, e.targets)));
+    expect(found.length).toBeGreaterThanOrEqual(5);
+  });
+
+  it('includes inherited features', () => {
+    const named = (name: string, features: string[], superTypes: string[] = []) => ({
+      qualifiedName: `p.${name}`, name, isAbstract: false, isInterface: false, superTypes, operations: [], references: [],
+      attributes: features.map(f => ({
+        kind: 'attribute' as const, name: f, qualifiedName: `p.${name}.${f}`, owner: `p.${name}`, typeName: 'EString',
+        typeCategory: 'primitive' as const, lower: 0, upper: 1, containment: false, opposite: null,
+      })),
+    });
+    const source: MetamodelGraph = { ref: refFor('S'), rootPackage: 'p', nsUri: null, enums: [], unresolvedSupertypes: [],
+      classes: [named('NamedElement', ['name']), named('Person', ['birthday'], ['p.NamedElement'])] };
+    const target: MetamodelGraph = { ref: refFor('T', 2), rootPackage: 'p', nsUri: null, enums: [], unresolvedSupertypes: [],
+      classes: [named('Person', ['name', 'birthday'])] };
+    const res = runOverlapAnalysis({ source, target, settings }, deps);
+    const person = res.correspondences.find(c => c.sources.some(s => s.name === 'Person'))!;
+    const sourceFeatures = person.children!.flatMap(c => c.sources.map(s => s.qualifiedName));
+    expect(sourceFeatures).toContain('p.NamedElement.name');
+  });
+
+  it('keeps children deterministic for a seed', () => {
+    const again = runOverlapAnalysis({ source: ecoreExcerpt(), target: umlExcerpt(), settings }, deps);
+    expect(again.correspondences.map(c => c.children)).toEqual(result.correspondences.map(c => c.children));
   });
 });
 

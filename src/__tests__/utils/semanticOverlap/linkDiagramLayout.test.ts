@@ -2,7 +2,7 @@ import { buildLinkDiagram, nodeIdFor } from '../../../utils/semanticOverlap/link
 import { correspondenceFor, sampleResult } from '../../components/semanticOverlap/sampleResult';
 
 const result = sampleResult();
-const options = { minScore: 0, selectedId: null, collapsedUnmatched: false, columnGap: 400, rowHeight: 50 };
+const options = { minScore: 0, selectedId: null, collapsedUnmatched: false, columnGap: 400, rowHeight: 50, expandedIds: [] as string[] };
 
 describe('buildLinkDiagram', () => {
   it('puts source classes left and target classes right, read-only', () => {
@@ -46,5 +46,34 @@ describe('buildLinkDiagram', () => {
     const { edges, nodes } = buildLinkDiagram(result, { ...options, selectedId: selected.id });
     expect(edges.filter(e => e.selected).map(e => e.data!.correspondenceId)).toEqual([selected.id]);
     expect(nodes.filter(n => n.data.selected).map(n => n.data.label).sort()).toEqual(['Class', 'EClass']);
+  });
+
+  it('adds feature nodes below both class nodes and feature edges when a correspondence is expanded', () => {
+    const eclass = correspondenceFor(result, 'EClass');
+    const collapsed = buildLinkDiagram(result, options);
+    const expanded = buildLinkDiagram(result, { ...options, expandedIds: [eclass.id] });
+    const features = expanded.nodes.filter(n => n.data.level === 'feature');
+    expect(features.length).toBeGreaterThan(0);
+    const classNode = (side: 'source' | 'target', name: string) => expanded.nodes.find(n => n.data.side === side && n.data.label === name)!;
+    for (const side of ['source', 'target'] as const) {
+      const owner = classNode(side, side === 'source' ? 'EClass' : 'Class');
+      const sideFeatures = features.filter(n => n.data.side === side);
+      expect(sideFeatures.length).toBeGreaterThan(0);
+      sideFeatures.forEach(n => {
+        expect(n.position.y).toBeGreaterThan(owner.position.y);
+        expect(n.position.x).toBeGreaterThan(owner.position.x);
+      });
+    }
+    const featureEdges = expanded.edges.filter(e => e.data!.level === 'feature');
+    expect(featureEdges.length).toBe(eclass.children!.reduce((n, c) => n + c.sources.length * c.targets.length, 0));
+    expect(classNode('source', 'EClass').data).toMatchObject({ expandable: true, expanded: true });
+    expect(collapsed.nodes.some(n => n.data.level === 'feature')).toBe(false);
+    expect(collapsed.edges.some(e => e.data!.level === 'feature')).toBe(false);
+  });
+
+  it('filters feature correspondences by the threshold', () => {
+    const eclass = correspondenceFor(result, 'EClass');
+    const { edges } = buildLinkDiagram(result, { ...options, minScore: 0.999, expandedIds: [eclass.id] });
+    expect(edges.filter(e => e.data!.level === 'feature')).toHaveLength(0);
   });
 });

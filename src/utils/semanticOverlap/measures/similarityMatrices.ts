@@ -15,10 +15,13 @@ export interface SimilarityMatrices {
   combined: Float32Array;
 }
 
-/** Additional measures used in an analysis: registered on the level and given a weight. */
+/**
+ * Additional measures used on a level: given a weight in the settings and registered for that level
+ * (a measure registered only for classes does not apply to attributes and references).
+ */
 export function extraMeasures(registry: MeasureRegistry, level: MatchLevel, settings: AnalysisSettings) {
   return settings.measures
-    .filter(entry => entry.weight > 0)
+    .filter(entry => entry.weight > 0 && registry.has(entry.id, level))
     .map(entry => ({ measure: registry.get(entry.id, level), weight: entry.weight }));
 }
 

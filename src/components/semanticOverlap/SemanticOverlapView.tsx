@@ -153,8 +153,10 @@ export const SemanticOverlapView: React.FC = () => {
                   minScore={store.minScore}
                   selectedId={store.selectedCorrespondenceId}
                   collapsedUnmatched={store.collapsedUnmatched}
+                  expandedIds={store.expandedCorrespondenceIds}
                   onSelect={store.selectCorrespondence}
                   onToggleUnmatched={store.setCollapsedUnmatched}
+                  onToggleExpand={store.toggleExpanded}
                 />
               ) : (
                 <SimilarityHeatmap
@@ -172,6 +174,8 @@ export const SemanticOverlapView: React.FC = () => {
                 minScore={store.minScore}
                 selectedId={store.selectedCorrespondenceId}
                 onSelect={store.selectCorrespondence}
+                expandedIds={store.expandedCorrespondenceIds}
+                onToggleExpand={store.toggleExpanded}
               />
             </div>
           </div>

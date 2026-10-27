@@ -1,14 +1,17 @@
 import type { LexicalSource } from './lexical/wordNetSource';
-import { buildClassProfiles } from './measures/profiles';
+import { buildClassProfiles, buildFeatureProfiles } from './measures/profiles';
 import { createDefaultMeasureRegistry } from './measures/registry';
 import { computeMatrices, extraMeasures } from './measures/similarityMatrices';
 import type { MeasureRegistry } from './measures/types';
 import { BUILT_IN_MEASURES } from './measures/types';
 import { createMatchingProblem, type MatchingProblem, type Solution } from './search/matchingProblem';
 import { createDefaultStrategyRegistry, type StrategyRegistry } from './search/registry';
-import { createRng } from './search/rng';
+import { createRng, hashString } from './search/rng';
 import { validateSettings } from './settings';
-import type { Correspondence, ElementRef, MatchLevel, OverlapInput, OverlapResult, Progress } from './types';
+import type { SearchStrategy } from './search/strategy';
+import type {
+  AnalysisSettings, ClassNode, Correspondence, ElementRef, FeatureNode, MatchLevel, MetamodelGraph, OverlapInput, OverlapResult, Progress,
+} from './types';
 
 export class InvalidSettingsError extends Error {
   constructor(public readonly problems: string[]) {
@@ -31,8 +34,48 @@ const round3 = (value: number) => Math.round(value * 1000) / 1000;
 const clampUnit = (value: number) => Math.min(1, Math.max(0, value));
 const byQualifiedName = (a: ElementRef, b: ElementRef) => a.qualifiedName.localeCompare(b.qualifiedName);
 
-/** Profile progress ends here; the class-level search fills the rest. */
+/** Progress milestones: profiling, then the class-level search, then the feature level. */
 const PROFILING_END = 0.1;
+const CLASS_SEARCH_END = 0.8;
+
+/** Own and inherited attributes and references of a class (supertypes within the same file). */
+export function featuresWithInherited(graph: MetamodelGraph, qualifiedName: string): FeatureNode[] {
+  const byName = new Map(graph.classes.map(c => [c.qualifiedName, c]));
+  const seen = new Set<string>();
+  const result: FeatureNode[] = [];
+  const visit = (node: ClassNode | undefined) => {
+    if (!node || seen.has(node.qualifiedName)) return;
+    seen.add(node.qualifiedName);
+    result.push(...node.attributes, ...node.references);
+    node.superTypes.forEach(parent => visit(byName.get(parent)));
+  };
+  visit(byName.get(qualifiedName));
+  return result;
+}
+
+const uniqueFeatures = (features: FeatureNode[]) =>
+  [...new Map(features.map(f => [f.qualifiedName, f])).values()];
+
+/**
+ * Matches the attributes and references of the classes in one class correspondence (FR-012) with
+ * the same strategy; the child RNG is derived from the seed and the correspondence id.
+ */
+function matchFeatures(
+  correspondence: Correspondence,
+  input: OverlapInput,
+  deps: { lexical: LexicalSource; measures: MeasureRegistry; strategy: SearchStrategy },
+  settings: AnalysisSettings,
+): Correspondence[] {
+  const collect = (graph: MetamodelGraph, refs: ElementRef[]) =>
+    uniqueFeatures(refs.flatMap(ref => featuresWithInherited(graph, ref.qualifiedName)));
+  const sources = buildFeatureProfiles(collect(input.source, correspondence.sources), 'source', deps.lexical, settings);
+  const targets = buildFeatureProfiles(collect(input.target, correspondence.targets), 'target', deps.lexical, settings);
+  if (sources.length === 0 || targets.length === 0) return [];
+  const matrices = computeMatrices('feature', sources, targets, deps.measures, settings);
+  const problem = createMatchingProblem('feature', sources, targets, matrices, deps.measures, settings);
+  const solution = deps.strategy.search(problem, settings, createRng((settings.seed ^ hashString(correspondence.id)) >>> 0));
+  return solutionToCorrespondences(problem, solution, 'feature', `${correspondence.id}-f`).correspondences;
+}
 
 /**
  * Turns a solution into correspondences (grouping rule, FR-010): every connected component of the
@@ -141,10 +184,15 @@ export function runOverlapAnalysis(input: OverlapInput, deps: AnalysisDeps): Ove
     warnings.push('One of the metamodels has no classes, so no overlap can be computed.');
   } else {
     const solution = strategy.search(problem, settings, createRng(settings.seed),
-      p => report({ phase: p.phase, fraction: PROFILING_END + p.fraction * (1 - PROFILING_END) }));
+      p => report({ phase: p.phase, fraction: PROFILING_END + p.fraction * (CLASS_SEARCH_END - PROFILING_END) }));
     fitness = solution.fitness;
     ({ correspondences, unmatched } = solutionToCorrespondences(problem, solution, 'class'));
+    correspondences = correspondences.map((correspondence, k) => {
+      report({ phase: 'features', fraction: CLASS_SEARCH_END + (k / correspondences.length) * (1 - CLASS_SEARCH_END) });
+      return { ...correspondence, children: matchFeatures(correspondence, input, { lexical: deps.lexical, measures, strategy }, settings) };
+    });
   }
+  report({ phase: 'features', fraction: 1 });
 
   const matchedSource = sourceProfiles.length - unmatched.source.length;
   const matchedTarget = targetProfiles.length - unmatched.target.length;

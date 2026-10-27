@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { themeVars } from '../../theme/theme';
-import { visibleCorrespondences } from '../../utils/semanticOverlap/linkDiagramLayout';
-import type { ElementRef, OverlapResult } from '../../utils/semanticOverlap/types';
+import { visibleChildren, visibleCorrespondences } from '../../utils/semanticOverlap/linkDiagramLayout';
+import type { Correspondence, ElementRef, OverlapResult } from '../../utils/semanticOverlap/types';
 import { formatPercent } from './ScoreEdge';
 
 type SortKey = 'score' | 'structural' | 'syntactic';
@@ -21,10 +21,18 @@ interface CorrespondenceListProps {
   minScore: number;
   selectedId: string | null;
   onSelect: (correspondenceId: string | null) => void;
+  /** Class correspondences whose attribute/reference correspondences are shown. */
+  expandedIds: readonly string[];
+  onToggleExpand: (correspondenceId: string) => void;
 }
 
-/** Sortable table of the correspondences at or above the threshold. */
-export const CorrespondenceList: React.FC<CorrespondenceListProps> = ({ result, minScore, selectedId, onSelect }) => {
+/**
+ * Sortable table of the correspondences at or above the threshold; class rows expand to their
+ * attribute and reference correspondences.
+ */
+export const CorrespondenceList: React.FC<CorrespondenceListProps> = ({
+  result, minScore, selectedId, onSelect, expandedIds, onToggleExpand,
+}) => {
   const [sortKey, setSortKey] = useState<SortKey>('score');
   const selectedRow = useRef<HTMLTableRowElement>(null);
   const rows = useMemo(() => {
@@ -36,6 +44,54 @@ export const CorrespondenceList: React.FC<CorrespondenceListProps> = ({ result, 
   useEffect(() => {
     selectedRow.current?.scrollIntoView?.({ block: 'nearest' });
   }, [selectedId]);
+
+  const renderRow = (c: Correspondence, nested: boolean, expandable: boolean, expanded: boolean) => {
+    const selected = c.id === selectedId;
+    const nameCell: React.CSSProperties = {
+      ...bodyCell,
+      fontWeight: nested ? 400 : 500,
+      fontStyle: nested ? 'italic' : 'normal',
+      color: nested ? themeVars.textSecondary : themeVars.text,
+      paddingLeft: nested ? 38 : 14,
+    };
+    return (
+      <tr
+        key={c.id}
+        ref={selected ? selectedRow : undefined}
+        aria-selected={selected}
+        aria-level={nested ? 2 : 1}
+        onClick={() => onSelect(selected ? null : c.id)}
+        style={{
+          cursor: 'pointer',
+          borderBottom: `1px solid ${themeVars.borderSubtle}`,
+          background: selected ? themeVars.brandSoft : themeVars.surface,
+          boxShadow: selected ? 'inset 3px 0 0 #049484' : 'none',
+        }}
+      >
+        <td style={nameCell}>
+          {expandable && (
+            <button
+              type="button"
+              aria-expanded={expanded}
+              aria-label={`${expanded ? 'Hide' : 'Show'} attribute and reference matches of ${names(c.sources)}`}
+              onClick={event => { event.stopPropagation(); onToggleExpand(c.id); }}
+              style={{
+                marginRight: 6, border: `1px solid ${themeVars.border}`, borderRadius: 4, background: 'transparent',
+                color: themeVars.textSecondary, cursor: 'pointer', fontSize: 11, lineHeight: '14px', padding: '0 4px',
+              }}
+            >
+              {expanded ? '−' : '+'}
+            </button>
+          )}
+          {names(c.sources)}
+        </td>
+        <td style={{ ...nameCell, paddingLeft: 14 }}>{names(c.targets)}</td>
+        <td style={{ ...bodyCell, color: themeVars.text, fontWeight: nested ? 500 : 600 }}>{formatPercent(c.score)}</td>
+        <td style={{ ...bodyCell, color: themeVars.textSecondary }}>{formatPercent(c.scores.structural)}</td>
+        <td style={{ ...bodyCell, color: themeVars.textSecondary }}>{formatPercent(c.scores.syntactic)}</td>
+      </tr>
+    );
+  };
 
   if (rows.length === 0) {
     return (
@@ -67,26 +123,13 @@ export const CorrespondenceList: React.FC<CorrespondenceListProps> = ({ result, 
         </thead>
         <tbody>
           {rows.map(c => {
-            const selected = c.id === selectedId;
+            const children = visibleChildren(c, minScore);
+            const expanded = expandedIds.includes(c.id);
             return (
-              <tr
-                key={c.id}
-                ref={selected ? selectedRow : undefined}
-                aria-selected={selected}
-                onClick={() => onSelect(selected ? null : c.id)}
-                style={{
-                  cursor: 'pointer',
-                  borderBottom: `1px solid ${themeVars.borderSubtle}`,
-                  background: selected ? themeVars.brandSoft : themeVars.surface,
-                  boxShadow: selected ? 'inset 3px 0 0 #049484' : 'none',
-                }}
-              >
-                <td style={{ ...bodyCell, fontWeight: 500, color: themeVars.text }}>{names(c.sources)}</td>
-                <td style={{ ...bodyCell, fontWeight: 500, color: themeVars.text }}>{names(c.targets)}</td>
-                <td style={{ ...bodyCell, color: themeVars.text, fontWeight: 600 }}>{formatPercent(c.score)}</td>
-                <td style={{ ...bodyCell, color: themeVars.textSecondary }}>{formatPercent(c.scores.structural)}</td>
-                <td style={{ ...bodyCell, color: themeVars.textSecondary }}>{formatPercent(c.scores.syntactic)}</td>
-              </tr>
+              <React.Fragment key={c.id}>
+                {renderRow(c, false, children.length > 0, expanded)}
+                {expanded && children.map(child => renderRow(child, true, false, false))}
+              </React.Fragment>
             );
           })}
         </tbody>

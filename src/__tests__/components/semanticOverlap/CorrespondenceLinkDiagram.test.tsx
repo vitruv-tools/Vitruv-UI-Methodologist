@@ -23,8 +23,8 @@ vi.mock('reactflow', () => ({
 const result = sampleResult();
 
 const renderDiagram = (props: Partial<React.ComponentProps<typeof CorrespondenceLinkDiagram>> = {}) => {
-  const handlers = { onSelect: vi.fn(), onToggleUnmatched: vi.fn() };
-  render(<CorrespondenceLinkDiagram result={result} minScore={0} selectedId={null} collapsedUnmatched={false} {...handlers} {...props} />);
+  const handlers = { onSelect: vi.fn(), onToggleUnmatched: vi.fn(), onToggleExpand: vi.fn() };
+  render(<CorrespondenceLinkDiagram result={result} minScore={0} selectedId={null} collapsedUnmatched={false} expandedIds={[]} {...handlers} {...props} />);
   return handlers;
 };
 
@@ -54,5 +54,15 @@ describe('CorrespondenceLinkDiagram', () => {
     const handlers = renderDiagram();
     fireEvent.click(screen.getByLabelText('Show unmatched classes'));
     expect(handlers.onToggleUnmatched).toHaveBeenCalledWith(true);
+  });
+
+  it('passes the expand toggle to the nodes and shows features of expanded correspondences', () => {
+    const eclass = correspondenceFor(result, 'EClass');
+    const handlers = renderDiagram({ expandedIds: [eclass.id] });
+    const classNode = flowProps.current.nodes.find((n: any) => n.data.label === 'EClass');
+    expect(classNode.data).toMatchObject({ expandable: true, expanded: true });
+    classNode.data.onToggleExpand(eclass.id);
+    expect(handlers.onToggleExpand).toHaveBeenCalledWith(eclass.id);
+    expect(flowProps.current.nodes.some((n: any) => n.data.level === 'feature')).toBe(true);
   });
 });

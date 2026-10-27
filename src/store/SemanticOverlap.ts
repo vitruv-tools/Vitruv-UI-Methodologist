@@ -28,6 +28,8 @@ interface SemanticOverlapState {
   /** Display threshold only — never part of the settings or the result. */
   minScore: number;
   collapsedUnmatched: boolean;
+  /** Class correspondences whose attribute/reference correspondences are shown (diagram and list). */
+  expandedCorrespondenceIds: string[];
 
   setSource(id: number | null): void;
   setTarget(id: number | null): void;
@@ -44,6 +46,7 @@ interface SemanticOverlapState {
   setHoveredCell(cell: { row: number; column: number } | null): void;
   setMinScore(value: number): void;
   setCollapsedUnmatched(value: boolean): void;
+  toggleExpanded(correspondenceId: string): void;
   reset(): void;
 }
 
@@ -64,6 +67,7 @@ const initialState = () => ({
   hoveredCell: null,
   minScore: DEFAULT_MIN_SCORE,
   collapsedUnmatched: false,
+  expandedCorrespondenceIds: [] as string[],
 });
 
 /** A new selection invalidates the running analysis and the previous result. */
@@ -77,6 +81,7 @@ const selectionChanged = (sourceId: number | null, targetId: number | null) => (
   error: null,
   selectedCorrespondenceId: null,
   hoveredCell: null,
+  expandedCorrespondenceIds: [],
 });
 
 export const useSemanticOverlapStore = create<SemanticOverlapState>((set, get) => ({
@@ -104,7 +109,7 @@ export const useSemanticOverlapStore = create<SemanticOverlapState>((set, get) =
     if (get().runId !== runId) return;
     set({
       status: 'done', result, runId: null, progress: null,
-      selectedCorrespondenceId: null, hoveredCell: null,
+      selectedCorrespondenceId: null, hoveredCell: null, expandedCorrespondenceIds: [],
     });
   },
   failRun: (runId, message) => {
@@ -122,5 +127,10 @@ export const useSemanticOverlapStore = create<SemanticOverlapState>((set, get) =
   setHoveredCell: hoveredCell => set({ hoveredCell }),
   setMinScore: minScore => set({ minScore: Math.min(1, Math.max(0, minScore)) }),
   setCollapsedUnmatched: collapsedUnmatched => set({ collapsedUnmatched }),
+  toggleExpanded: id => set(state => ({
+    expandedCorrespondenceIds: state.expandedCorrespondenceIds.includes(id)
+      ? state.expandedCorrespondenceIds.filter(other => other !== id)
+      : [...state.expandedCorrespondenceIds, id],
+  })),
   reset: () => set(initialState()),
 }));

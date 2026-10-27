@@ -86,4 +86,16 @@ describe('semantic overlap store', () => {
     expect(store().minScore).toBe(1);
     expect(DEFAULT_MIN_SCORE).toBe(0);
   });
+
+  it('toggles expanded correspondences and clears them for a new result', () => {
+    store().toggleExpanded('c-1');
+    store().toggleExpanded('c-2');
+    store().toggleExpanded('c-1');
+    expect(store().expandedCorrespondenceIds).toEqual(['c-2']);
+    store().setSource(1);
+    store().setTarget(2);
+    store().beginLoading('r');
+    store().finishRun('r', sampleResult());
+    expect(store().expandedCorrespondenceIds).toEqual([]);
+  });
 });
