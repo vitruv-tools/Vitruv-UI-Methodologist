@@ -1,9 +1,10 @@
+import type { Mocked } from 'vitest';
 import React from 'react';
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { HelpersModal } from '../../../components/helpers/HelpersModal';
 import { apiService, type HelperResponse, type HelperTypeResponse } from '../../../services/api';
 
-jest.mock('@monaco-editor/react', () => {
+vi.mock('@monaco-editor/react', () => {
   const mockReact = require('react');
   const MockEditor = ({ value, onChange, onMount, language }: any) => {
     mockReact.useEffect(() => {
@@ -30,24 +31,24 @@ jest.mock('@monaco-editor/react', () => {
   return { __esModule: true, default: MockEditor };
 });
 
-const mockSetModelMarkers = jest.fn();
+const mockSetModelMarkers = vi.fn();
 const mockEditorModel: { current: any } = { current: null };
-const mockRegisterCompletion = jest.fn((..._args: any[]) => ({ dispose: jest.fn() }));
+const mockRegisterCompletion = vi.fn((..._args: any[]) => ({ dispose: vi.fn() }));
 
-jest.mock('../../../services/api', () => ({
+vi.mock('../../../services/api', () => ({
   apiService: {
-    getHelpers: jest.fn(),
-    getHelperTypes: jest.fn(),
-    getHelperClass: jest.fn(),
-    createHelper: jest.fn(),
-    updateHelper: jest.fn(),
-    deleteHelper: jest.fn(),
-    previewHelper: jest.fn(),
-    checkHelperName: jest.fn(),
+    getHelpers: vi.fn(),
+    getHelperTypes: vi.fn(),
+    getHelperClass: vi.fn(),
+    createHelper: vi.fn(),
+    updateHelper: vi.fn(),
+    deleteHelper: vi.fn(),
+    previewHelper: vi.fn(),
+    checkHelperName: vi.fn(),
   },
 }));
 
-const api = apiService as jest.Mocked<typeof apiService>;
+const api = apiService as Mocked<typeof apiService>;
 
 const types: HelperTypeResponse[] = [
   { metamodel: 'simulink', name: 'SimulinkModel', qualifiedName: 'simulink::SimulinkModel', kind: 'CLASS', javaName: 'x.SimulinkModel' },
@@ -80,13 +81,13 @@ const broken: HelperResponse = {
 };
 
 function renderModal(readOnly = false) {
-  const onClose = jest.fn();
+  const onClose = vi.fn();
   render(<HelpersModal isOpen vsumId={7} readOnly={readOnly} onClose={onClose} />);
   return { onClose };
 }
 
 beforeEach(() => {
-  jest.clearAllMocks();
+  vi.clearAllMocks();
   mockEditorModel.current = { getLineContent: () => 'model.contians->size()' };
   api.getHelpers.mockResolvedValue([subSystems, broken]);
   api.getHelperTypes.mockResolvedValue(types);

@@ -88,7 +88,7 @@ describe('CanvasSidebarToolbar', () => {
   });
 
   it('places the helpers button above Add meta-models and opens the helpers', () => {
-    const onOpenHelpers = jest.fn();
+    const onOpenHelpers = vi.fn();
     render(<CanvasSidebarToolbar {...createProps()} onOpenHelpers={onOpenHelpers} />);
 
     const labelsInOrder = screen.getAllByRole('button').map(button => button.getAttribute('aria-label'));
@@ -101,7 +101,7 @@ describe('CanvasSidebarToolbar', () => {
   });
 
   it('offers the helpers overview to view-only members', () => {
-    render(<CanvasSidebarToolbar {...createProps()} readOnly onOpenHelpers={jest.fn()} />);
+    render(<CanvasSidebarToolbar {...createProps()} readOnly onOpenHelpers={vi.fn()} />);
 
     expect(screen.getByRole('button', { name: labels.helpersReadOnly })).toBeInTheDocument();
   });
