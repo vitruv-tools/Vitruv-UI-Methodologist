@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ecore:EPackage xmi:version="2.0" xmlns:xmi="http://www.omg.org/XMI" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xmlns:ecore="http://www.eclipse.org/emf/2002/Ecore" name="uml" nsURI="http://example.org/uml-excerpt" nsPrefix="uml">
+  <eClassifiers xsi:type="ecore:EClass" name="Class">
+    <eStructuralFeatures xsi:type="ecore:EAttribute" name="isAbstract" eType="ecore:EDataType http://www.eclipse.org/emf/2002/Ecore#//EBoolean"/>
+    <eStructuralFeatures xsi:type="ecore:EReference" name="ownedAttributes" upperBound="-1" eType="#//Property" containment="true"/>
+  </eClassifiers>
+  <eClassifiers xsi:type="ecore:EClass" name="Property">
+    <eStructuralFeatures xsi:type="ecore:EAttribute" name="aggregation" eType="#//AggregationKind"/>
+    <eStructuralFeatures xsi:type="ecore:EReference" name="opposite" eType="#//Property"/>
+  </eClassifiers>
+  <eClassifiers xsi:type="ecore:EClass" name="Association">
+    <eStructuralFeatures xsi:type="ecore:EReference" name="memberEnd" lowerBound="2" upperBound="-1" eType="#//Property"/>
+  </eClassifiers>
+  <eClassifiers xsi:type="ecore:EEnum" name="AggregationKind">
+    <eLiterals name="none"/>
+    <eLiterals name="shared" value="1"/>
+    <eLiterals name="composite" value="2"/>
+  </eClassifiers>
+</ecore:EPackage>

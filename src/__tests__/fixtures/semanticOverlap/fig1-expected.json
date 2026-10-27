@@ -1,0 +1,11 @@
+{
+  "description": "Expected correspondences of Kessentini et al. (2014), Fig. 1 (Ecore excerpt -> UML 2.0 excerpt)",
+  "correspondences": [
+    { "sources": ["ecore.EClass"], "targets": ["uml.Class"] },
+    { "sources": ["ecore.EClass.abstract"], "targets": ["uml.Class.isAbstract"] },
+    { "sources": ["ecore.EClass.eAttributes", "ecore.EClass.eReferences"], "targets": ["uml.Class.ownedAttributes"] },
+    { "sources": ["ecore.EAttribute", "ecore.EReference"], "targets": ["uml.Property"] },
+    { "sources": ["ecore.EReference.eOpposite"], "targets": ["uml.Property.opposite"] },
+    { "sources": ["ecore.EReference.containment"], "targets": ["uml.Property.aggregation"] }
+  ]
+}
