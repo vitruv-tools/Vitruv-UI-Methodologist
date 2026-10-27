@@ -589,11 +589,6 @@ function newRule(ruleSetId: string): ConstraintRule {
   };
 }
 
-/**
- * The rule the editor opens with before the user picks one: `prev` while its set is still shown,
- * otherwise the first rule of the first set. An empty first set gets a new rule that is only a
- * draft: it is added to the set, and saved, when the user saves it in the editor.
- */
 function autoOpenedRule(prev: ConstraintRule | null, ruleSets: RuleSet[]): ConstraintRule | null {
   if (prev && ruleSets.some(rs => rs.id === prev.ruleSetId)) return prev;
   const first = ruleSets[0];
@@ -1767,6 +1762,7 @@ export interface ConstraintsViewProps {
   canvasNodes: Node[];
   onHighlightNode?: (nodeId: string | null) => void;
   filterNodeId?: string | null;
+  visible?: boolean;
 }
 
 /** Finds the canvas node ID whose Ecore metamodel matches the given context prefix (e.g. "pfand"). */
@@ -1780,8 +1776,10 @@ function findNodeIdForMetamodel(canvasNodes: Node[], metamodel: string): string 
   return null;
 }
 
-export const ConstraintsView: React.FC<ConstraintsViewProps> = ({ vsumId: _vsumId, canvasNodes, onHighlightNode, filterNodeId }) => {
+export const ConstraintsView: React.FC<ConstraintsViewProps> = ({ vsumId: _vsumId, canvasNodes, onHighlightNode, filterNodeId, visible = true }) => {
   const vsumId = _vsumId ? Number(_vsumId) : null;
+  const [hasBeenVisible, setHasBeenVisible] = useState(visible);
+  if (visible && !hasBeenVisible) setHasBeenVisible(true);
   const colorMap = useMemo(() => buildMetamodelColorMap(canvasNodes), [canvasNodes]);
   const metaClasses = useMemo(() => buildMetaClasses(canvasNodes), [canvasNodes]);
 
@@ -2031,7 +2029,6 @@ export const ConstraintsView: React.FC<ConstraintsViewProps> = ({ vsumId: _vsumI
 
   const handleSaveRule = useCallback((updated: ConstraintRule) => {
     setRuleSets(prev => {
-      // A draft rule the editor opened with (autoOpenedRule) joins its set with its first save.
       const next = findSetContainingRule(prev, updated.id) ? replaceRule(prev, updated) : addRuleToSet(prev, updated);
       const affected = findSetContainingRule(next, updated.id);
       if (affected) syncRuleSet(affected);
@@ -2071,7 +2068,7 @@ export const ConstraintsView: React.FC<ConstraintsViewProps> = ({ vsumId: _vsumI
       </div>
 
       {/* Bottom editor — floats over the center canvas, re-enables pointer events */}
-      {selectedRule && (
+      {selectedRule && hasBeenVisible && (
         <section aria-label="Rule editor" tabIndex={-1} style={{ position: 'absolute', bottom: 0, left: 260, right: 300, pointerEvents: 'auto', display: 'flex', flexDirection: 'column' }} onKeyDown={e => e.stopPropagation()}>
           <EditorPanel
             rule={selectedRule}

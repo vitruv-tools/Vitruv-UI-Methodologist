@@ -7,8 +7,6 @@ import { setTheme } from '../../../theme/theme';
 
 // ── Mocks ─────────────────────────────────────────────────────────────────────
 
-// The test config aliases every monaco-editor import to src/__mocks__/monaco-editor.ts, so this one
-// mock also covers `monaco-editor`: it keeps that stub and adds the editor component.
 vi.mock('@monaco-editor/react', async (importOriginal) => {
   const mockReact = await import('react');
   const monaco: any = await importOriginal();
@@ -87,7 +85,6 @@ const pfandNode = {
   position: { x: 0, y: 0 },
 };
 
-// The editor is open from the start, and its rule set dropdown repeats every set's name.
 configure({ defaultIgnore: 'script, style, option' });
 
 // ── Tests ─────────────────────────────────────────────────────────────────────
@@ -439,6 +436,20 @@ describe('ConstraintsView', () => {
       expect(screen.queryByRole('region', { name: 'Rule set panel' })).not.toBeInTheDocument();
     });
 
+    it('mounts the editor only once visible, and keeps its unsaved edits while hidden again', () => {
+      const { rerender } = render(<ConstraintsView canvasNodes={[pfandNode as any]} visible={false} />);
+      expect(screen.queryByRole('region', { name: 'Rule editor' })).not.toBeInTheDocument();
+      expect(screen.queryByTestId('monaco-editor')).not.toBeInTheDocument();
+
+      rerender(<ConstraintsView canvasNodes={[pfandNode as any]} visible />);
+      expect(screen.getByText('Editing: CrateContainsExactly16Bottles')).toBeInTheDocument();
+      fireEvent.change(screen.getByTestId('monaco-editor'), { target: { value: 'context pfand::Kasten inv Edited:\n  true' } });
+
+      rerender(<ConstraintsView canvasNodes={[pfandNode as any]} visible={false} />);
+      rerender(<ConstraintsView canvasNodes={[pfandNode as any]} visible />);
+      expect(screen.getByTestId('monaco-editor')).toHaveValue('context pfand::Kasten inv Edited:\n  true');
+    });
+
     it('opens the rule set panel when a ruleset is clicked, and switches it to another', async () => {
       await act(async () => {
         render(<ConstraintsView canvasNodes={[pfandNode as any]} />);
@@ -600,7 +611,6 @@ describe('ConstraintsView predefined rule sets in a project', () => {
 
     expect(await screen.findByText('Editing: NewInvariant')).toBeInTheDocument();
     expect(screen.getByLabelText('Rule Set')).toHaveValue('rs_9');
-    // Only a draft: not listed in the set and not saved.
     expect(screen.getByText('0 rules')).toBeInTheDocument();
     await act(async () => { await new Promise(r => setTimeout(r, 50)); });
     expect(apiService.updateRuleSet).not.toHaveBeenCalled();

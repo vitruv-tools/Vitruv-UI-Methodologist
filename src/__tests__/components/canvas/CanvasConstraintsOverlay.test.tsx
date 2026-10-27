@@ -126,6 +126,7 @@ describe('CanvasConstraintsOverlay', () => {
     const constraintsProps = latestConstraintsViewProps();
     expect(constraintsProps.canvasNodes).toBe(canvasNodes);
     expect(constraintsProps.filterNodeId).toBe('node-1');
+    expect(constraintsProps.visible).toBe(false);
 
     constraintsProps.onHighlightNode?.('node-1');
     expect(onHighlightNode).toHaveBeenCalledWith('node-1');

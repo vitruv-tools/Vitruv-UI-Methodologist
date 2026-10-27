@@ -28,6 +28,7 @@ export const CanvasConstraintsOverlay: React.FC<CanvasConstraintsOverlayProps> =
       canvasNodes={canvasNodes}
       onHighlightNode={onHighlightNode}
       filterNodeId={filterNodeId}
+      visible={visible}
     />
   </div>
 );
