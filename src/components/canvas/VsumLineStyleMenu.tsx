@@ -78,9 +78,15 @@ export const VsumLineStyleMenu: React.FC<VsumLineStyleMenuProps> = ({
   };
 
   const handlePointerLeave = () => {
-    if (itemRefs.current.some(item => item === document.activeElement)) {
+    const activeElement = document.activeElement;
+
+    if (
+      activeElement instanceof HTMLButtonElement &&
+      itemRefs.current.includes(activeElement)
+    ) {
       buttonRef.current?.focus();
     }
+
     setOpen(false);
   };
 
