@@ -64,7 +64,7 @@ describe('SemanticOverlapView', () => {
 
   it('pre-selects metamodels from the URL and ignores unknown ids with a notice', async () => {
     await renderView('/semantic-overlap?source=2&target=99');
-    expect(store().sourceId).toBe(2);
+    await waitFor(() => expect(store().sourceId).toBe(2));
     expect(store().targetId).toBeNull();
     expect(screen.getByRole('status')).toHaveTextContent('not available');
   });

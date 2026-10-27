@@ -57,7 +57,14 @@ describe('readMetamodelGraph', () => {
     ['a file larger than 5 MB', ' '.repeat(5 * 1024 * 1024 + 1), 'larger than 5 MB'],
     ['too many classes', wrap('<eClassifiers xsi:type="ecore:EClass" name="C"/>'.repeat(MAX_CLASSES + 1)), `more than ${MAX_CLASSES} classes`],
   ])('rejects %s and names the metamodel', (_label, text, reason) => {
-    expect(() => readMetamodelGraph(text, refFor('Broken'))).toThrow(EcoreReadError);
-    expect(() => readMetamodelGraph(text, refFor('Broken'))).toThrow(new RegExp(`Broken: .*${reason}`));
-  });
+    // Parse once: the 2,001-class document is slow in jsdom under a full parallel test run.
+    let error: unknown;
+    try {
+      readMetamodelGraph(text, refFor('Broken'));
+    } catch (caught) {
+      error = caught;
+    }
+    expect(error).toBeInstanceOf(EcoreReadError);
+    expect((error as Error).message).toMatch(new RegExp(`Broken: .*${reason}`));
+  }, 20_000);
 });
