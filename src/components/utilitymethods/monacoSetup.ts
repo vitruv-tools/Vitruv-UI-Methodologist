@@ -7,7 +7,7 @@ import {
 } from '../constraints/VitruvOCLMonarchGrammar';
 
 /** Theme shared by the OCL editor and the Java viewer; Monaco themes apply to all editors at once. */
-export const HELPER_EDITOR_THEME = 'vitruvocl-theme';
+export const UTILITY_METHOD_EDITOR_THEME = 'vitruvocl-theme';
 
 /** Registers the VitruvOCL language and theme, as the constraints editor does. */
 export function setUpVitruvOcl(monaco: Monaco): void {
@@ -16,5 +16,5 @@ export function setUpVitruvOcl(monaco: Monaco): void {
   }
   monaco.languages.setLanguageConfiguration(vitruvOCLLanguageId, vitruvOCLLanguageConfig);
   monaco.languages.setMonarchTokensProvider(vitruvOCLLanguageId, vitruvOCLMonarch);
-  monaco.editor.defineTheme(HELPER_EDITOR_THEME, vitruvOCLTheme);
+  monaco.editor.defineTheme(UTILITY_METHOD_EDITOR_THEME, vitruvOCLTheme);
 }

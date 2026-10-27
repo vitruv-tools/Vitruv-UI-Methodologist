@@ -7,7 +7,7 @@ interface CanvasSidebarToolbarProps {
   onToggleReactionMode: () => void;
   onOpenReactionEditor?: () => void;
   onToggleModelDrawer: () => void;
-  onOpenHelpers?: () => void;
+  onOpenUtilityMethods?: () => void;
   onDownloadArtifact: () => void;
   onDownloadBundle: () => void;
   onSaveChanges: () => void;
@@ -261,7 +261,7 @@ export const CanvasSidebarToolbar: React.FC<CanvasSidebarToolbarProps> = ({
   onToggleReactionMode,
   onOpenReactionEditor,
   onToggleModelDrawer,
-  onOpenHelpers,
+  onOpenUtilityMethods,
   onDownloadArtifact,
   onDownloadBundle,
   onSaveChanges,
@@ -388,13 +388,13 @@ export const CanvasSidebarToolbar: React.FC<CanvasSidebarToolbarProps> = ({
 
         {!readOnly && <SidebarDivider />}
 
-        {onOpenHelpers && (
+        {onOpenUtilityMethods && (
           <SidebarButton
             label="Utility Methods"
             description={readOnly
               ? 'View the utility methods available to reactions'
               : 'Define utility methods for reactions'}
-            onClick={onOpenHelpers}
+            onClick={onOpenUtilityMethods}
           >
             <FunctionIcon />
           </SidebarButton>

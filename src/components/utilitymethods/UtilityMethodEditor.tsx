@@ -6,30 +6,30 @@ import { modalPanelFooterStyle } from '../ui/sharedStyles';
 import { vitruvOCLLanguageId } from '../constraints/VitruvOCLMonarchGrammar';
 import {
   apiService,
-  type HelperPreviewResponse,
-  type HelperProblem,
-  type HelperResponse,
-  type HelperTypeResponse,
+  type UtilityMethodPreviewResponse,
+  type UtilityMethodProblem,
+  type UtilityMethodResponse,
+  type UtilityMethodTypeResponse,
 } from '../../services/api';
 import { extractApiErrorMessage } from '../../utils/apiErrorMessage';
 import { OclTypePicker, pickerControlStyle } from './OclTypePicker';
 import {
   EMPTY_DRAFT,
   dedent,
-  draftFromHelper,
+  draftFromUtilityMethod,
   formatSignature,
-  helperCall,
-  helperCallContext,
-  helperCallSnippet,
+  utilityMethodCall,
+  utilityMethodCallContext,
+  utilityMethodCallSnippet,
   missingField,
   requestFromDraft,
-  type HelperDraft,
-} from './helperUtils';
-import { HELPER_EDITOR_THEME, setUpVitruvOcl } from './monacoSetup';
+  type UtilityMethodDraft,
+} from './utilityMethodUtils';
+import { UTILITY_METHOD_EDITOR_THEME, setUpVitruvOcl } from './monacoSetup';
 
 const NAME_CHECK_DELAY_MS = 350;
 const PREVIEW_DELAY_MS = 600;
-const MARKER_OWNER = 'helper';
+const MARKER_OWNER = 'utilityMethod';
 const MONO = 'ui-monospace, SFMono-Regular, Menlo, monospace';
 
 const sectionLabelStyle: React.CSSProperties = {
@@ -71,22 +71,22 @@ type NameStatus =
   | { state: 'available' }
   | { state: 'unavailable'; message: string };
 
-interface HelperEditorProps {
+interface UtilityMethodEditorProps {
   vsumId: number;
-  /** The helper being edited, or `null` for a new helper. */
-  helper: HelperResponse | null;
-  types: HelperTypeResponse[];
-  /** All helpers of the project, which the definition can call. */
-  helpers: HelperResponse[];
+  /** The utility method being edited, or `null` for a new utility method. */
+  utilityMethod: UtilityMethodResponse | null;
+  types: UtilityMethodTypeResponse[];
+  /** All utility methods of the project, which the definition can call. */
+  utilityMethods: UtilityMethodResponse[];
   onCancel: () => void;
-  onSaved: (helper: HelperResponse) => void;
+  onSaved: (utilityMethod: UtilityMethodResponse) => void;
 }
 
-/** Form for defining an helper, with live translation to Java. */
-export const HelperEditor: React.FC<HelperEditorProps> = ({ vsumId, helper, types, helpers, onCancel, onSaved }) => {
-  const [draft, setDraft] = useState<HelperDraft>(() => (helper ? draftFromHelper(helper) : EMPTY_DRAFT));
+/** Form for defining an utility method, with live translation to Java. */
+export const UtilityMethodEditor: React.FC<UtilityMethodEditorProps> = ({ vsumId, utilityMethod, types, utilityMethods, onCancel, onSaved }) => {
+  const [draft, setDraft] = useState<UtilityMethodDraft>(() => (utilityMethod ? draftFromUtilityMethod(utilityMethod) : EMPTY_DRAFT));
   const [nameStatus, setNameStatus] = useState<NameStatus>({ state: 'idle' });
-  const [preview, setPreview] = useState<HelperPreviewResponse | null>(null);
+  const [preview, setPreview] = useState<UtilityMethodPreviewResponse | null>(null);
   const [previewTab, setPreviewTab] = useState<'ocl' | 'java'>('java');
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
@@ -94,19 +94,19 @@ export const HelperEditor: React.FC<HelperEditorProps> = ({ vsumId, helper, type
   const editorRef = useRef<monacoTypes.editor.IStandaloneCodeEditor | null>(null);
   const monacoRef = useRef<Monaco | null>(null);
   const completionRef = useRef<monacoTypes.IDisposable | null>(null);
-  const helperId = helper?.id;
+  const utilityMethodId = utilityMethod?.id;
 
-  const callableHelpers = useMemo(
-    () => helpers.filter(h => h.id !== helperId).sort((a, b) => a.name.localeCompare(b.name)),
-    [helpers, helperId],
+  const callableUtilityMethods = useMemo(
+    () => utilityMethods.filter(h => h.id !== utilityMethodId).sort((a, b) => a.name.localeCompare(b.name)),
+    [utilityMethods, utilityMethodId],
   );
-  const withParameter = callableHelpers.find(h => h.parameters.length > 0);
+  const withParameter = callableUtilityMethods.find(h => h.parameters.length > 0);
   const operationExample = withParameter
-    && `${withParameter.parameters[0].name}.${helperCall(withParameter, true)}`;
-  const callableHelpersRef = useRef(callableHelpers);
-  callableHelpersRef.current = callableHelpers;
+    && `${withParameter.parameters[0].name}.${utilityMethodCall(withParameter, true)}`;
+  const callableUtilityMethodsRef = useRef(callableUtilityMethods);
+  callableUtilityMethodsRef.current = callableUtilityMethods;
 
-  const update = useCallback((changes: Partial<HelperDraft>) => {
+  const update = useCallback((changes: Partial<UtilityMethodDraft>) => {
     setDraft(current => ({ ...current, ...changes }));
     setSaveError(null);
   }, []);
@@ -114,7 +114,7 @@ export const HelperEditor: React.FC<HelperEditorProps> = ({ vsumId, helper, type
   // ── live name check ──────────────────────────────────────────────────────
   const trimmedName = draft.name.trim();
   useEffect(() => {
-    if (!trimmedName || trimmedName === helper?.name) {
+    if (!trimmedName || trimmedName === utilityMethod?.name) {
       setNameStatus({ state: 'idle' });
       return undefined;
     }
@@ -122,7 +122,7 @@ export const HelperEditor: React.FC<HelperEditorProps> = ({ vsumId, helper, type
     let cancelled = false;
     const timer = globalThis.setTimeout(async () => {
       try {
-        const result = await apiService.checkHelperName(vsumId, trimmedName, helperId);
+        const result = await apiService.checkUtilityMethodName(vsumId, trimmedName, utilityMethodId);
         if (cancelled) return;
         setNameStatus(result.available
           ? { state: 'available' }
@@ -135,7 +135,7 @@ export const HelperEditor: React.FC<HelperEditorProps> = ({ vsumId, helper, type
       cancelled = true;
       globalThis.clearTimeout(timer);
     };
-  }, [trimmedName, vsumId, helperId, helper?.name]);
+  }, [trimmedName, vsumId, utilityMethodId, utilityMethod?.name]);
 
   // ── live preview ─────────────────────────────────────────────────────────
   const incomplete = missingField(draft);
@@ -148,7 +148,7 @@ export const HelperEditor: React.FC<HelperEditorProps> = ({ vsumId, helper, type
     let cancelled = false;
     const timer = globalThis.setTimeout(async () => {
       try {
-        const result = await apiService.previewHelper(vsumId, request, helperId);
+        const result = await apiService.previewUtilityMethod(vsumId, request, utilityMethodId);
         if (!cancelled) setPreview(result);
       } catch (e) {
         if (!cancelled) {
@@ -156,7 +156,7 @@ export const HelperEditor: React.FC<HelperEditorProps> = ({ vsumId, helper, type
             oclDefinition: '',
             javaMethod: null,
             problems: [{
-              helperName: request.name,
+              utilityMethodName: request.name,
               message: extractApiErrorMessage(e, 'The utility method could not be checked.'),
               line: null,
               column: null,
@@ -169,7 +169,7 @@ export const HelperEditor: React.FC<HelperEditorProps> = ({ vsumId, helper, type
       cancelled = true;
       globalThis.clearTimeout(timer);
     };
-  }, [request, incomplete, vsumId, helperId]);
+  }, [request, incomplete, vsumId, utilityMethodId]);
 
   const problems = useMemo(() => preview?.problems ?? [], [preview]);
 
@@ -179,7 +179,7 @@ export const HelperEditor: React.FC<HelperEditorProps> = ({ vsumId, helper, type
     const monaco = monacoRef.current;
     if (!model || !monaco) return;
     monaco.editor.setModelMarkers(model, MARKER_OWNER, problems
-      .filter((p): p is HelperProblem & { line: number; column: number } => p.line !== null && p.column !== null)
+      .filter((p): p is UtilityMethodProblem & { line: number; column: number } => p.line !== null && p.column !== null)
       .map(p => ({
         severity: monaco.MarkerSeverity.Error,
         message: p.message,
@@ -199,7 +199,7 @@ export const HelperEditor: React.FC<HelperEditorProps> = ({ vsumId, helper, type
       triggerCharacters: ['.'],
       provideCompletionItems: (model, position) => {
         if (model !== editor.getModel()) return { suggestions: [] };
-        const context = helperCallContext(model.getValueInRange({
+        const context = utilityMethodCallContext(model.getValueInRange({
           startLineNumber: position.lineNumber,
           startColumn: 1,
           endLineNumber: position.lineNumber,
@@ -215,14 +215,14 @@ export const HelperEditor: React.FC<HelperEditorProps> = ({ vsumId, helper, type
           endColumn: word.endColumn,
         };
         return {
-          suggestions: callableHelpersRef.current
+          suggestions: callableUtilityMethodsRef.current
             .filter(h => !onFirstArgument || h.parameters.length > 0)
             .map(h => ({
               label: h.name,
               kind: monaco.languages.CompletionItemKind.Function,
               detail: `utility method ${formatSignature(h)}`,
               documentation: h.description ?? undefined,
-              insertText: helperCallSnippet(h, onFirstArgument),
+              insertText: utilityMethodCallSnippet(h, onFirstArgument),
               insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet,
               range,
             })),
@@ -233,15 +233,15 @@ export const HelperEditor: React.FC<HelperEditorProps> = ({ vsumId, helper, type
 
   useEffect(() => () => completionRef.current?.dispose(), []);
 
-  /** Inserts a call of another helper at the cursor, or appends it if the editor is not ready. */
-  const insertHelperCall = (other: HelperResponse) => {
+  /** Inserts a call of another utility method at the cursor, or appends it if the editor is not ready. */
+  const insertUtilityMethodCall = (other: UtilityMethodResponse) => {
     const editor = editorRef.current;
     const selection = editor?.getSelection?.();
     if (!editor || !selection) {
-      update({ body: draft.body ? `${draft.body} ${helperCall(other)}` : helperCall(other) });
+      update({ body: draft.body ? `${draft.body} ${utilityMethodCall(other)}` : utilityMethodCall(other) });
       return;
     }
-    editor.executeEdits('helper-call', [{ range: selection, text: helperCall(other), forceMoveMarkers: true }]);
+    editor.executeEdits('utility-method-call', [{ range: selection, text: utilityMethodCall(other), forceMoveMarkers: true }]);
     editor.focus();
   };
 
@@ -270,9 +270,9 @@ export const HelperEditor: React.FC<HelperEditorProps> = ({ vsumId, helper, type
     setSaving(true);
     setSaveError(null);
     try {
-      const saved = helperId === undefined
-        ? await apiService.createHelper(vsumId, request)
-        : await apiService.updateHelper(vsumId, helperId, request);
+      const saved = utilityMethodId === undefined
+        ? await apiService.createUtilityMethod(vsumId, request)
+        : await apiService.updateUtilityMethod(vsumId, utilityMethodId, request);
       onSaved(saved);
     } catch (e) {
       setSaveError(extractApiErrorMessage(e, 'The utility method could not be saved.'));
@@ -290,9 +290,9 @@ export const HelperEditor: React.FC<HelperEditorProps> = ({ vsumId, helper, type
       <div style={{ flex: 1, minHeight: 0, display: 'flex' }}>
         {/* Left: signature form */}
         <div style={{ width: 400, flexShrink: 0, overflowY: 'auto', padding: '16px 20px', borderRight: '1px solid var(--v-border-subtle)' }}>
-          <label htmlFor="helper-name" style={sectionLabelStyle}>Name</label>
+          <label htmlFor="utility-method-name" style={sectionLabelStyle}>Name</label>
           <input
-            id="helper-name"
+            id="utility-method-name"
             value={draft.name}
             placeholder="getAllSubSystems"
             autoComplete="off"
@@ -301,11 +301,11 @@ export const HelperEditor: React.FC<HelperEditorProps> = ({ vsumId, helper, type
           />
           <NameStatusLine status={nameStatus} />
 
-          <label htmlFor="helper-description" style={{ ...sectionLabelStyle, marginTop: 14 }}>
+          <label htmlFor="utility-method-description" style={{ ...sectionLabelStyle, marginTop: 14 }}>
             Description <span style={{ fontWeight: 400, color: 'var(--v-text-muted)' }}>(optional)</span>
           </label>
           <textarea
-            id="helper-description"
+            id="utility-method-description"
             value={draft.description}
             rows={2}
             placeholder="What the utility method returns, shown as Javadoc"
@@ -391,19 +391,19 @@ export const HelperEditor: React.FC<HelperEditorProps> = ({ vsumId, helper, type
           </div>
 
           <div style={{ ...sectionLabelStyle, marginTop: 14 }}>Other utility methods</div>
-          {callableHelpers.length === 0 ? (
+          {callableUtilityMethods.length === 0 ? (
             <div style={hintStyle}>No other utility methods yet. Once saved, utility methods can call each other.</div>
           ) : (
             <>
               <ul aria-label="Other utility methods" style={{ listStyle: 'none', margin: 0, padding: 0 }}>
-                {callableHelpers.map(other => (
+                {callableUtilityMethods.map(other => (
                   <li key={other.id}>
                     <button
                       type="button"
-                      onClick={() => insertHelperCall(other)}
+                      onClick={() => insertUtilityMethodCall(other)}
                       aria-label={`Insert call of ${other.name}`}
                       title={other.description ?? undefined}
-                      style={helperButtonStyle}
+                      style={utilityMethodButtonStyle}
                     >
                       <span style={{ fontFamily: MONO, fontSize: 12, color: 'var(--v-text)', wordBreak: 'break-all' }}>
                         {formatSignature(other)}
@@ -433,7 +433,7 @@ export const HelperEditor: React.FC<HelperEditorProps> = ({ vsumId, helper, type
             <span style={{ flex: 1 }}>
               OCL definition
               <span style={{ fontWeight: 400, marginLeft: 8, fontFamily: MONO }}>
-                helper def : {formatSignature(draft)} =
+                def : {formatSignature(draft)} =
               </span>
             </span>
             <button
@@ -462,7 +462,7 @@ export const HelperEditor: React.FC<HelperEditorProps> = ({ vsumId, helper, type
               beforeMount={setUpVitruvOcl}
               onMount={handleEditorMount}
               language={vitruvOCLLanguageId}
-              theme={HELPER_EDITOR_THEME}
+              theme={UTILITY_METHOD_EDITOR_THEME}
               options={{
                 minimap: { enabled: false },
                 fontSize: 13,
@@ -552,7 +552,7 @@ const iconButtonStyle: React.CSSProperties = {
   padding: 0,
 };
 
-const helperButtonStyle: React.CSSProperties = {
+const utilityMethodButtonStyle: React.CSSProperties = {
   display: 'flex',
   flexDirection: 'column',
   alignItems: 'flex-start',
@@ -599,7 +599,7 @@ const NameStatusLine: React.FC<{ status: NameStatus }> = ({ status }) => {
   return <div style={hintStyle}>Becomes the Java method name, so it must be unique in this project.</div>;
 };
 
-const PreviewStatus: React.FC<{ incomplete: string | null; preview: HelperPreviewResponse | null }> = ({ incomplete, preview }) => {
+const PreviewStatus: React.FC<{ incomplete: string | null; preview: UtilityMethodPreviewResponse | null }> = ({ incomplete, preview }) => {
   if (incomplete) return <span style={{ fontWeight: 400 }}>{incomplete}</span>;
   if (!preview) return <span style={{ fontWeight: 400 }}>Translating…</span>;
   if (preview.problems.length > 0) {

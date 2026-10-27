@@ -1,7 +1,7 @@
 import React from 'react';
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
-import { HelpersModal } from '../../../components/helpers/HelpersModal';
-import { apiService, type HelperResponse, type HelperTypeResponse } from '../../../services/api';
+import { UtilityMethodsModal } from '../../../components/utilitymethods/UtilityMethodsModal';
+import { apiService, type UtilityMethodResponse, type UtilityMethodTypeResponse } from '../../../services/api';
 
 jest.mock('@monaco-editor/react', () => {
   const mockReact = require('react');
@@ -36,25 +36,25 @@ const mockRegisterCompletion = jest.fn((..._args: any[]) => ({ dispose: jest.fn(
 
 jest.mock('../../../services/api', () => ({
   apiService: {
-    getHelpers: jest.fn(),
-    getHelperTypes: jest.fn(),
-    getHelperClass: jest.fn(),
-    createHelper: jest.fn(),
-    updateHelper: jest.fn(),
-    deleteHelper: jest.fn(),
-    previewHelper: jest.fn(),
-    checkHelperName: jest.fn(),
+    getUtilityMethods: jest.fn(),
+    getUtilityMethodTypes: jest.fn(),
+    getUtilityMethodClass: jest.fn(),
+    createUtilityMethod: jest.fn(),
+    updateUtilityMethod: jest.fn(),
+    deleteUtilityMethod: jest.fn(),
+    previewUtilityMethod: jest.fn(),
+    checkUtilityMethodName: jest.fn(),
   },
 }));
 
 const api = apiService as jest.Mocked<typeof apiService>;
 
-const types: HelperTypeResponse[] = [
+const types: UtilityMethodTypeResponse[] = [
   { metamodel: 'simulink', name: 'SimulinkModel', qualifiedName: 'simulink::SimulinkModel', kind: 'CLASS', javaName: 'x.SimulinkModel' },
   { metamodel: 'simulink', name: 'SubSystem', qualifiedName: 'simulink::SubSystem', kind: 'CLASS', javaName: 'x.SubSystem' },
 ];
 
-const subSystems: HelperResponse = {
+const subSystems: UtilityMethodResponse = {
   id: 1,
   vsumId: 7,
   name: 'getAllSubSystems',
@@ -63,39 +63,39 @@ const subSystems: HelperResponse = {
   parameters: [{ name: 'model', type: 'simulink::SimulinkModel' }],
   imports: ['simulink::*'],
   body: 'model.contains->selectByKind(SubSystem)->closure(s | s.subBlocks->selectByKind(SubSystem))',
-  oclDefinition: 'helper def : getAllSubSystems(model : simulink::SimulinkModel) : Sequence(simulink::SubSystem) =\n\tmodel.contains->selectByKind(SubSystem);',
+  oclDefinition: 'def : getAllSubSystems(model : simulink::SimulinkModel) : Sequence(simulink::SubSystem) =\n\tmodel.contains->selectByKind(SubSystem);',
   javaMethod: '  public static List<SubSystem> getAllSubSystems(SimulinkModel model) {\n    return null;\n  }\n',
   problems: [],
   createdAt: '2026-10-01T00:00:00Z',
   updatedAt: '2026-10-01T00:00:00Z',
 };
 
-const broken: HelperResponse = {
+const broken: UtilityMethodResponse = {
   ...subSystems,
   id: 2,
   name: 'broken',
   description: null,
   javaMethod: null,
-  problems: [{ helperName: 'broken', message: "no feature 'contians'", line: 1, column: 7 }],
+  problems: [{ utilityMethodName: 'broken', message: "no feature 'contians'", line: 1, column: 7 }],
 };
 
 function renderModal(readOnly = false) {
   const onClose = jest.fn();
-  render(<HelpersModal isOpen vsumId={7} readOnly={readOnly} onClose={onClose} />);
+  render(<UtilityMethodsModal isOpen vsumId={7} readOnly={readOnly} onClose={onClose} />);
   return { onClose };
 }
 
 beforeEach(() => {
   jest.clearAllMocks();
   mockEditorModel.current = { getLineContent: () => 'model.contians->size()' };
-  api.getHelpers.mockResolvedValue([subSystems, broken]);
-  api.getHelperTypes.mockResolvedValue(types);
-  api.checkHelperName.mockResolvedValue({ available: true, message: null });
-  api.previewHelper.mockResolvedValue({ oclDefinition: 'helper def : x() : Boolean =\n\ttrue;', javaMethod: 'public static boolean x() {}', problems: [] });
+  api.getUtilityMethods.mockResolvedValue([subSystems, broken]);
+  api.getUtilityMethodTypes.mockResolvedValue(types);
+  api.checkUtilityMethodName.mockResolvedValue({ available: true, message: null });
+  api.previewUtilityMethod.mockResolvedValue({ oclDefinition: 'def : x() : Boolean =\n\ttrue;', javaMethod: 'public static boolean x() {}', problems: [] });
 });
 
-describe('HelpersModal overview', () => {
-  it('lists helpers with signature, OCL definition and translation status', async () => {
+describe('UtilityMethodsModal overview', () => {
+  it('lists utility methods with signature, OCL definition and translation status', async () => {
     renderModal();
 
     const card = await screen.findByRole('article', { name: 'Utility method getAllSubSystems' });
@@ -107,10 +107,10 @@ describe('HelpersModal overview', () => {
     expect(within(brokenCard).getByText('Cannot be translated')).toBeInTheDocument();
     expect(within(brokenCard).getByText("Line 1, column 7: no feature 'contians'")).toBeInTheDocument();
     expect(within(brokenCard).getByRole('button', { name: 'View Java' })).toBeDisabled();
-    expect(api.getHelpers).toHaveBeenCalledWith(7);
+    expect(api.getUtilityMethods).toHaveBeenCalledWith(7);
   });
 
-  it('opens the generated Java of a helper read-only', async () => {
+  it('opens the generated Java of a utility method read-only', async () => {
     renderModal();
     const card = await screen.findByRole('article', { name: 'Utility method getAllSubSystems' });
 
@@ -123,7 +123,7 @@ describe('HelpersModal overview', () => {
   });
 
   it('opens the whole generated class', async () => {
-    api.getHelperClass.mockResolvedValue({
+    api.getUtilityMethodClass.mockResolvedValue({
       qualifiedClassName: 'tools.vitruv.methodologisttemplate.consistency.utils.Utility',
       fileName: 'Utility.java',
       source: 'public final class Utility {}',
@@ -139,30 +139,26 @@ describe('HelpersModal overview', () => {
     expect(within(viewer).getByRole('alert')).toHaveTextContent("broken (no feature 'contians')");
   });
 
-  it('deletes a helper after confirmation and reloads the list', async () => {
-    api.deleteHelper.mockResolvedValue(undefined);
+  it('shows why a utility method cannot be deleted, and deletes it after confirmation', async () => {
+    api.deleteUtilityMethod
+      .mockRejectedValueOnce(new Error("The utility method 'broken' cannot be deleted because it is used by: other."))
+      .mockResolvedValueOnce(undefined);
     renderModal();
     const card = await screen.findByRole('article', { name: 'Utility method broken' });
+    const confirmDelete = () => {
+      fireEvent.click(within(card).getByRole('button', { name: 'Delete' }));
+      fireEvent.click(within(screen.getByRole('alertdialog')).getByRole('button', { name: 'Delete' }));
+    };
 
-    fireEvent.click(within(card).getByRole('button', { name: 'Delete' }));
-    fireEvent.click(within(screen.getByRole('alertdialog')).getByRole('button', { name: 'Delete' }));
-
-    await waitFor(() => expect(api.deleteHelper).toHaveBeenCalledWith(7, 2));
-    await waitFor(() => expect(api.getHelpers).toHaveBeenCalledTimes(2));
-  });
-
-  it('shows why a helper cannot be deleted', async () => {
-    api.deleteHelper.mockRejectedValue(new Error("The utility method 'broken' cannot be deleted because it is used by: other."));
-    renderModal();
-    const card = await screen.findByRole('article', { name: 'Utility method broken' });
-
-    fireEvent.click(within(card).getByRole('button', { name: 'Delete' }));
-    fireEvent.click(within(screen.getByRole('alertdialog')).getByRole('button', { name: 'Delete' }));
-
+    confirmDelete();
     expect(await screen.findByText(/used by: other/)).toBeInTheDocument();
+
+    confirmDelete();
+    await waitFor(() => expect(api.getUtilityMethods).toHaveBeenCalledTimes(2));
+    expect(api.deleteUtilityMethod).toHaveBeenLastCalledWith(7, 2);
   });
 
-  it('only lets view-only members look at helpers', async () => {
+  it('only lets view-only members look at utility methods', async () => {
     renderModal(true);
     await screen.findByRole('article', { name: 'Utility method getAllSubSystems' });
 
@@ -173,27 +169,27 @@ describe('HelpersModal overview', () => {
   });
 });
 
-describe('HelperEditor', () => {
-  async function openNewHelper() {
+describe('UtilityMethodEditor', () => {
+  async function openNewUtilityMethod() {
     renderModal();
     await screen.findByRole('article', { name: 'Utility method getAllSubSystems' });
     fireEvent.click(screen.getByRole('button', { name: '+ New Utility Method' }));
   }
 
   it('warns when the name is already used', async () => {
-    api.checkHelperName.mockResolvedValue({ available: false, message: "A utility method named 'getAllSubSystems' already exists in this project." });
-    await openNewHelper();
+    api.checkUtilityMethodName.mockResolvedValue({ available: false, message: "A utility method named 'getAllSubSystems' already exists in this project." });
+    await openNewUtilityMethod();
 
     fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'getAllSubSystems' } });
 
     expect(await screen.findByText(/already exists in this project/)).toBeInTheDocument();
-    expect(api.checkHelperName).toHaveBeenCalledWith(7, 'getAllSubSystems', undefined);
+    expect(api.checkUtilityMethodName).toHaveBeenCalledWith(7, 'getAllSubSystems', undefined);
     expect(screen.getByRole('button', { name: 'Save Utility Method' })).toBeDisabled();
   });
 
-  it('creates a helper from the form and returns to the overview', async () => {
-    api.createHelper.mockResolvedValue({ ...subSystems, id: 3, name: 'countSubSystems' });
-    await openNewHelper();
+  it('creates a utility method from the form and returns to the overview', async () => {
+    api.createUtilityMethod.mockResolvedValue({ ...subSystems, id: 3, name: 'countSubSystems' });
+    await openNewUtilityMethod();
 
     fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'countSubSystems' } });
     fireEvent.click(screen.getByRole('button', { name: '+ Add parameter' }));
@@ -202,12 +198,12 @@ describe('HelperEditor', () => {
     fireEvent.change(screen.getByLabelText('Add import'), { target: { value: 'simulink::*' } });
     fireEvent.change(screen.getByTestId('monaco-vitruvocl'), { target: { value: 'getAllSubSystems(model)->size()' } });
 
-    await waitFor(() => expect(api.previewHelper).toHaveBeenCalled());
+    await waitFor(() => expect(api.previewUtilityMethod).toHaveBeenCalled());
     expect(await screen.findByText('Translates to Java')).toBeInTheDocument();
     await waitFor(() => expect(screen.getByRole('button', { name: 'Save Utility Method' })).toBeEnabled());
     fireEvent.click(screen.getByRole('button', { name: 'Save Utility Method' }));
 
-    await waitFor(() => expect(api.createHelper).toHaveBeenCalledWith(7, {
+    await waitFor(() => expect(api.createUtilityMethod).toHaveBeenCalledWith(7, {
       name: 'countSubSystems',
       description: undefined,
       returnType: 'Integer',
@@ -218,23 +214,11 @@ describe('HelperEditor', () => {
     expect(await screen.findByRole('heading', { name: 'Utility Methods' })).toBeInTheDocument();
   });
 
-  it('lists the other helpers and inserts a call of one', async () => {
+  it('offers the other utility methods as suggestions and as calls to insert', async () => {
     renderModal();
     const card = await screen.findByRole('article', { name: 'Utility method broken' });
     fireEvent.click(within(card).getByRole('button', { name: 'Edit' }));
-
     const list = await screen.findByRole('list', { name: 'Other utility methods' });
-    expect(within(list).queryByText(/^broken\(/)).not.toBeInTheDocument();
-    fireEvent.click(within(list).getByRole('button', { name: 'Insert call of getAllSubSystems' }));
-
-    expect(screen.getByTestId('monaco-vitruvocl')).toHaveValue(`${broken.body} getAllSubSystems(model)`);
-  });
-
-  it('suggests the other helpers while typing the definition', async () => {
-    renderModal();
-    const card = await screen.findByRole('article', { name: 'Utility method broken' });
-    fireEvent.click(within(card).getByRole('button', { name: 'Edit' }));
-    await screen.findByRole('list', { name: 'Other utility methods' });
 
     const provider = (mockRegisterCompletion.mock.calls.at(-1) as any[])[1];
     const model = {
@@ -245,13 +229,17 @@ describe('HelperEditor', () => {
     const { suggestions } = provider.provideCompletionItems(model, { lineNumber: 1, column: 3 });
 
     expect(suggestions).toEqual([expect.objectContaining({ label: 'getAllSubSystems', insertText: 'getAllSubSystems()' })]);
+
+    expect(within(list).queryByText(/^broken\(/)).not.toBeInTheDocument();
+    fireEvent.click(within(list).getByRole('button', { name: 'Insert call of getAllSubSystems' }));
+    expect(screen.getByTestId('monaco-vitruvocl')).toHaveValue(`${broken.body} getAllSubSystems(model)`);
   });
 
   it('shows translation problems and marks them in the OCL editor', async () => {
-    api.previewHelper.mockResolvedValue({
-      oclDefinition: 'helper def : broken() : Integer =\n\tmodel.contians->size();',
+    api.previewUtilityMethod.mockResolvedValue({
+      oclDefinition: 'def : broken() : Integer =\n\tmodel.contians->size();',
       javaMethod: null,
-      problems: [{ helperName: 'broken', message: "no feature 'contians'", line: 1, column: 7 }],
+      problems: [{ utilityMethodName: 'broken', message: "no feature 'contians'", line: 1, column: 7 }],
     });
     renderModal();
     const card = await screen.findByRole('article', { name: 'Utility method broken' });
@@ -259,16 +247,16 @@ describe('HelperEditor', () => {
     fireEvent.click(within(card).getByRole('button', { name: 'Edit' }));
 
     expect(await screen.findByText("Line 1, column 7: no feature 'contians'")).toBeInTheDocument();
-    expect(api.previewHelper).toHaveBeenCalledWith(7, expect.objectContaining({ name: 'broken' }), 2);
+    expect(api.previewUtilityMethod).toHaveBeenCalledWith(7, expect.objectContaining({ name: 'broken' }), 2);
     expect(mockSetModelMarkers).toHaveBeenLastCalledWith(
       expect.anything(),
-      'helper',
+      'utilityMethod',
       [expect.objectContaining({ startLineNumber: 1, startColumn: 7, endColumn: 15, message: "no feature 'contians'" })],
     );
   });
 
   it('shows the server error when saving fails', async () => {
-    api.updateHelper.mockRejectedValue(new Error("Saving would break the utility methods that call 'getAllSubSystems': other."));
+    api.updateUtilityMethod.mockRejectedValue(new Error("Saving would break the utility methods that call 'getAllSubSystems': other."));
     renderModal();
     const card = await screen.findByRole('article', { name: 'Utility method getAllSubSystems' });
     fireEvent.click(within(card).getByRole('button', { name: 'Edit' }));
@@ -277,6 +265,6 @@ describe('HelperEditor', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Save Utility Method' }));
 
     expect(await screen.findByRole('alert')).toHaveTextContent('Saving would break the utility methods');
-    expect(api.updateHelper).toHaveBeenCalledWith(7, 1, expect.objectContaining({ name: 'getAllSubSystems' }));
+    expect(api.updateUtilityMethod).toHaveBeenCalledWith(7, 1, expect.objectContaining({ name: 'getAllSubSystems' }));
   });
 });

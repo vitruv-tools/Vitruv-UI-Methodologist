@@ -1,12 +1,12 @@
 import React, { useMemo } from 'react';
-import type { HelperTypeResponse } from '../../services/api';
+import type { UtilityMethodTypeResponse } from '../../services/api';
 import {
   COLLECTION_KINDS,
   PRIMITIVE_TYPES,
   formatTypeSelection,
   parseTypeSelection,
   type CollectionKind,
-} from './helperUtils';
+} from './utilityMethodUtils';
 
 export const pickerControlStyle: React.CSSProperties = {
   padding: '7px 9px',
@@ -22,7 +22,7 @@ export const pickerControlStyle: React.CSSProperties = {
 interface OclTypePickerProps {
   value: string;
   onChange: (value: string) => void;
-  types: HelperTypeResponse[];
+  types: UtilityMethodTypeResponse[];
   /** Accessible name prefix, e.g. "Return type". */
   label: string;
   disabled?: boolean;
@@ -35,7 +35,7 @@ interface OclTypePickerProps {
 export const OclTypePicker: React.FC<OclTypePickerProps> = ({ value, onChange, types, label, disabled }) => {
   const selection = parseTypeSelection(value);
   const byMetamodel = useMemo(() => {
-    const groups = new Map<string, HelperTypeResponse[]>();
+    const groups = new Map<string, UtilityMethodTypeResponse[]>();
     for (const type of types) {
       if (type.kind === 'DATATYPE') continue;
       groups.set(type.metamodel, [...(groups.get(type.metamodel) ?? []), type]);

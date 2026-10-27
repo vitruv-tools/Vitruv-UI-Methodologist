@@ -8,8 +8,8 @@ const labels = {
   save: 'Save. Save changes to this project',
   checkBuild: 'Check build. Verify the project compiles successfully',
   addMetaModels: 'Add meta-models. Open the meta-model drawer to add models to the canvas',
-  helpers: 'Utility Methods. Define utility methods for reactions',
-  helpersReadOnly: 'Utility Methods. View the utility methods available to reactions',
+  utilityMethods: 'Utility Methods. Define utility methods for reactions',
+  utilityMethodsReadOnly: 'Utility Methods. View the utility methods available to reactions',
   viewReaction: 'View reaction. Select a connection line, then click to open the code',
   undoAvailable: 'Undo. Undo the last action',
   undoUnavailable: 'Undo. Nothing to undo',
@@ -87,23 +87,23 @@ describe('CanvasSidebarToolbar', () => {
     expect(screen.queryByRole('button', { name: labels.redoAvailable })).not.toBeInTheDocument();
   });
 
-  it('places the helpers button above Add meta-models and opens the helpers', () => {
-    const onOpenHelpers = jest.fn();
-    render(<CanvasSidebarToolbar {...createProps()} onOpenHelpers={onOpenHelpers} />);
+  it('places the utility methods button above Add meta-models and opens the utility methods', () => {
+    const onOpenUtilityMethods = jest.fn();
+    render(<CanvasSidebarToolbar {...createProps()} onOpenUtilityMethods={onOpenUtilityMethods} />);
 
     const labelsInOrder = screen.getAllByRole('button').map(button => button.getAttribute('aria-label'));
-    const helpersIndex = labelsInOrder.indexOf(labels.helpers);
-    expect(helpersIndex).toBeGreaterThan(-1);
-    expect(labelsInOrder[helpersIndex + 1]).toBe(labels.addMetaModels);
+    const utilityMethodsIndex = labelsInOrder.indexOf(labels.utilityMethods);
+    expect(utilityMethodsIndex).toBeGreaterThan(-1);
+    expect(labelsInOrder[utilityMethodsIndex + 1]).toBe(labels.addMetaModels);
 
-    fireEvent.click(screen.getByRole('button', { name: labels.helpers }));
-    expect(onOpenHelpers).toHaveBeenCalledTimes(1);
+    fireEvent.click(screen.getByRole('button', { name: labels.utilityMethods }));
+    expect(onOpenUtilityMethods).toHaveBeenCalledTimes(1);
   });
 
-  it('offers the helpers overview to view-only members', () => {
-    render(<CanvasSidebarToolbar {...createProps()} readOnly onOpenHelpers={jest.fn()} />);
+  it('offers the utility methods overview to view-only members', () => {
+    render(<CanvasSidebarToolbar {...createProps()} readOnly onOpenUtilityMethods={jest.fn()} />);
 
-    expect(screen.getByRole('button', { name: labels.helpersReadOnly })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: labels.utilityMethodsReadOnly })).toBeInTheDocument();
   });
 
   it('Select exits only active reaction mode', () => {

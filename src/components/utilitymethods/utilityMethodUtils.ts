@@ -1,4 +1,4 @@
-import type { HelperParameter, HelperRequest, HelperResponse } from '../../services/api';
+import type { UtilityMethodParameter, UtilityMethodRequest, UtilityMethodResponse } from '../../services/api';
 
 export const PRIMITIVE_TYPES = ['Boolean', 'Integer', 'Real', 'String'] as const;
 export const COLLECTION_KINDS = ['Sequence', 'Set', 'OrderedSet', 'Bag'] as const;
@@ -35,10 +35,10 @@ export function formatTypeSelection(selection: TypeSelection): string {
 
 /** `getAll(model : simulink::SimulinkModel) : Sequence(simulink::SubSystem)` */
 export function formatSignature(
-  helper: { name: string; parameters: HelperParameter[]; returnType: string },
+  utilityMethod: { name: string; parameters: UtilityMethodParameter[]; returnType: string },
 ): string {
-  const params = helper.parameters.map(p => `${p.name} : ${p.type}`).join(', ');
-  return `${helper.name || '…'}(${params}) : ${helper.returnType || '…'}`;
+  const params = utilityMethod.parameters.map(p => `${p.name} : ${p.type}`).join(', ');
+  return `${utilityMethod.name || '…'}(${params}) : ${utilityMethod.returnType || '…'}`;
 }
 
 /** Removes the indentation all non-empty lines share, e.g. of a method inside its class. */
@@ -49,17 +49,17 @@ export function dedent(code: string): string {
   return lines.map(line => line.slice(Math.min(common, line.length - line.trimStart().length))).join('\n');
 }
 
-/** The editable state of a helper. */
-export interface HelperDraft {
+/** The editable state of a utility method. */
+export interface UtilityMethodDraft {
   name: string;
   description: string;
   returnType: string;
-  parameters: HelperParameter[];
+  parameters: UtilityMethodParameter[];
   imports: string[];
   body: string;
 }
 
-export const EMPTY_DRAFT: HelperDraft = {
+export const EMPTY_DRAFT: UtilityMethodDraft = {
   name: '',
   description: '',
   returnType: 'Boolean',
@@ -68,18 +68,18 @@ export const EMPTY_DRAFT: HelperDraft = {
   body: '',
 };
 
-export function draftFromHelper(helper: HelperResponse): HelperDraft {
+export function draftFromUtilityMethod(utilityMethod: UtilityMethodResponse): UtilityMethodDraft {
   return {
-    name: helper.name,
-    description: helper.description ?? '',
-    returnType: helper.returnType,
-    parameters: helper.parameters.map(p => ({ ...p })),
-    imports: [...helper.imports],
-    body: helper.body,
+    name: utilityMethod.name,
+    description: utilityMethod.description ?? '',
+    returnType: utilityMethod.returnType,
+    parameters: utilityMethod.parameters.map(p => ({ ...p })),
+    imports: [...utilityMethod.imports],
+    body: utilityMethod.body,
   };
 }
 
-export function requestFromDraft(draft: HelperDraft): HelperRequest {
+export function requestFromDraft(draft: UtilityMethodDraft): UtilityMethodRequest {
   return {
     name: draft.name.trim(),
     description: draft.description.trim() || undefined,
@@ -91,7 +91,7 @@ export function requestFromDraft(draft: HelperDraft): HelperRequest {
 }
 
 /** Why the draft cannot be saved yet, or `null` if all required fields are filled. */
-export function missingField(draft: HelperDraft): string | null {
+export function missingField(draft: UtilityMethodDraft): string | null {
   if (!draft.name.trim()) return 'Enter a name.';
   if (!draft.returnType.trim()) return 'Choose a return type.';
   if (draft.parameters.some(p => !p.name.trim() || !p.type.trim())) {
@@ -102,28 +102,28 @@ export function missingField(draft: HelperDraft): string | null {
 }
 
 /**
- * The OCL call of another helper, e.g. `getAll(model)`, or `getAll()` when written as an
+ * The OCL call of another utility method, e.g. `getAll(model)`, or `getAll()` when written as an
  * operation of its first argument (`model.getAll()`).
  */
-export function helperCall(helper: { name: string; parameters: HelperParameter[] }, onFirstArgument = false): string {
-  const params = helper.parameters.slice(onFirstArgument ? 1 : 0).map(p => p.name);
-  return `${helper.name}(${params.join(', ')})`;
+export function utilityMethodCall(utilityMethod: { name: string; parameters: UtilityMethodParameter[] }, onFirstArgument = false): string {
+  const params = utilityMethod.parameters.slice(onFirstArgument ? 1 : 0).map(p => p.name);
+  return `${utilityMethod.name}(${params.join(', ')})`;
 }
 
-/** Like {@link helperCall}, as a Monaco snippet whose arguments are tab stops. */
-export function helperCallSnippet(helper: { name: string; parameters: HelperParameter[] }, onFirstArgument = false): string {
-  const params = helper.parameters.slice(onFirstArgument ? 1 : 0)
+/** Like {@link utilityMethodCall}, as a Monaco snippet whose arguments are tab stops. */
+export function utilityMethodCallSnippet(utilityMethod: { name: string; parameters: UtilityMethodParameter[] }, onFirstArgument = false): string {
+  const params = utilityMethod.parameters.slice(onFirstArgument ? 1 : 0)
     .map((p, i) => `\${${i + 1}:${p.name.replace(/[$}\\]/g, '\\$&')}}`);
-  return `${helper.name}(${params.join(', ')})`;
+  return `${utilityMethod.name}(${params.join(', ')})`;
 }
 
 /**
- * How a helper call can be written at the end of `textBefore`:
- * - `'plain'`: as `helper(args)`, also after `thisModule.`
- * - `'operation'`: after `x.`, as `x.helper(remaining args)`
+ * How a utility method call can be written at the end of `textBefore`:
+ * - `'plain'`: as `utility method(args)`, also after `thisModule.`
+ * - `'operation'`: after `x.`, as `x.utility method(remaining args)`
  * - `null`: not at all, e.g. after `->`, which only takes collection operations
  */
-export function helperCallContext(textBefore: string): 'plain' | 'operation' | null {
+export function utilityMethodCallContext(textBefore: string): 'plain' | 'operation' | null {
   const prefix = textBefore.replace(/[\p{L}\p{N}_]*$/u, '');
   if (/->\s*$/.test(prefix)) return null;
   if (/\.\s*$/.test(prefix)) {

@@ -3,26 +3,20 @@ import {
   dedent,
   formatSignature,
   formatTypeSelection,
-  helperCall,
-  helperCallContext,
-  helperCallSnippet,
+  utilityMethodCall,
+  utilityMethodCallContext,
+  utilityMethodCallSnippet,
   missingField,
   parseTypeSelection,
   requestFromDraft,
-} from '../../../components/helpers/helperUtils';
+} from '../../../components/utilitymethods/utilityMethodUtils';
 
-describe('helperUtils', () => {
-  it('splits collection types into kind and element', () => {
+describe('utilityMethodUtils', () => {
+  it('splits collection types into kind and element, and formats them back', () => {
     expect(parseTypeSelection('Sequence(simulink::Block)')).toEqual({ collection: 'Sequence', element: 'simulink::Block' });
     expect(parseTypeSelection(' Integer ')).toEqual({ collection: null, element: 'Integer' });
-  });
-
-  it('does not represent nested or unknown collections', () => {
     expect(parseTypeSelection('Sequence(Set(Integer))')).toBeNull();
     expect(parseTypeSelection('Tuple(a)')).toBeNull();
-  });
-
-  it('formats type selections', () => {
     expect(formatTypeSelection({ collection: 'Set', element: 'String' })).toBe('Set(String)');
     expect(formatTypeSelection({ collection: null, element: 'simulink::Block' })).toBe('simulink::Block');
   });
@@ -63,20 +57,20 @@ describe('helperUtils', () => {
     expect(dedent('  void a() {\n\n    return;\n  }\n')).toBe('void a() {\n\n  return;\n}\n');
   });
 
-  it('writes calls of other helpers', () => {
-    const helper = { name: 'pair', parameters: [{ name: 'a', type: 'Integer' }, { name: 'b$', type: 'Integer' }] };
-    expect(helperCall(helper)).toBe('pair(a, b$)');
-    expect(helperCall(helper, true)).toBe('pair(b$)');
+  it('writes calls of other utility methods', () => {
+    const utilityMethod = { name: 'pair', parameters: [{ name: 'a', type: 'Integer' }, { name: 'b$', type: 'Integer' }] };
+    expect(utilityMethodCall(utilityMethod)).toBe('pair(a, b$)');
+    expect(utilityMethodCall(utilityMethod, true)).toBe('pair(b$)');
     // eslint-disable-next-line no-template-curly-in-string -- Monaco snippet syntax
-    expect(helperCallSnippet(helper)).toBe('pair(${1:a}, ${2:b\\$})');
-    expect(helperCallSnippet({ name: 'none', parameters: [] })).toBe('none()');
+    expect(utilityMethodCallSnippet(utilityMethod)).toBe('pair(${1:a}, ${2:b\\$})');
+    expect(utilityMethodCallSnippet({ name: 'none', parameters: [] })).toBe('none()');
   });
 
-  it('knows where a helper call can be written', () => {
-    expect(helperCallContext('let x = get')).toBe('plain');
-    expect(helperCallContext('thisModule.get')).toBe('plain');
-    expect(helperCallContext('model.')).toBe('operation');
-    expect(helperCallContext('model.contains->')).toBeNull();
-    expect(helperCallContext('model.contains->sel')).toBeNull();
+  it('knows where a utility method call can be written', () => {
+    expect(utilityMethodCallContext('let x = get')).toBe('plain');
+    expect(utilityMethodCallContext('thisModule.get')).toBe('plain');
+    expect(utilityMethodCallContext('model.')).toBe('operation');
+    expect(utilityMethodCallContext('model.contains->')).toBeNull();
+    expect(utilityMethodCallContext('model.contains->sel')).toBeNull();
   });
 });
