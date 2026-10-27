@@ -471,7 +471,7 @@ export const ProjectsView: React.FC<ProjectsViewProps> = ({
 
       {/* Page header */}
       <div style={{ padding: '32px 40px 0', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexShrink: 0 }}>
-        <h1 style={{ margin: 0, fontSize: 26, fontWeight: 700, color: 'var(--v-text)', letterSpacing: '-0.02em' }}>Dashboard / Projects</h1>
+        <h1 style={{ margin: 0, fontSize: 26, fontWeight: 700, color: 'var(--v-text)', letterSpacing: '-0.02em' }}>Workbench / Projects</h1>
         <button type="button"
           onClick={() => setShowCreate(true)}
           disabled={projectView === 'shared' || projectView === 'deleted'}
