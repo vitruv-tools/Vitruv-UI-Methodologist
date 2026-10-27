@@ -13,8 +13,8 @@ import {
   vitruvOCLLanguageId,
   vitruvOCLMonarch,
   vitruvOCLLanguageConfig,
-  vitruvOCLTheme,
 } from './VitruvOCLMonarchGrammar';
+import { useMonacoEditorTheme } from '../../theme/monacoEditorTheme';
 
 const T = {
   surface: 'var(--v-surface)',
@@ -35,8 +35,6 @@ const handleVitruvOCLMount: OnMount = (_editor, monacoInstance) => {
   monacoInstance.languages.register({ id: vitruvOCLLanguageId, extensions: ['.ocl'], aliases: ['VitruvOCL'] });
   monacoInstance.languages.setLanguageConfiguration(vitruvOCLLanguageId, vitruvOCLLanguageConfig);
   monacoInstance.languages.setMonarchTokensProvider(vitruvOCLLanguageId, vitruvOCLMonarch);
-  monacoInstance.editor.defineTheme('vitruvocl-theme', vitruvOCLTheme);
-  monacoInstance.editor.setTheme('vitruvocl-theme');
 };
 
 
@@ -306,6 +304,18 @@ function mergeLoadedRuleSets(loaded: RuleSet[], current: RuleSet[]): RuleSet[] {
   return [...loaded, ...current.filter(rs => !loadedIds.has(rs.backendId))];
 }
 
+/** Empty rule set offered when a project has none of its own, like a new reaction file's skeleton. */
+function blankRuleSet(): RuleSet {
+  return {
+    id: 'default-rule-set',
+    name: 'Default Rule Set',
+    color: '#6366f1',
+    description: '',
+    rules: [],
+    collapsed: false,
+  };
+}
+
 /** Returns project-specific default rule sets based on which metamodels are present on the canvas. */
 function getDefaultRuleSets(canvasNodes: Node[]): RuleSet[] {
   const domains = new Set(canvasNodes.map(n => (n.data?.domain ?? '').toLowerCase()));
@@ -313,6 +323,20 @@ function getDefaultRuleSets(canvasNodes: Node[]): RuleSet[] {
   if (domains.has('pfand') || files.has('pfandmodel.ecore')) return PFAND_RULE_SETS;
   if (domains.has('kit') || files.has('kit.ecore')) return KIT_RULE_SETS;
   return [];
+}
+
+/**
+ * Rule sets to show before the user has saved any. Domain templates win; otherwise a project still
+ * gets one blank set so the view never opens empty. Cleared projects keep the blank set and do not
+ * get the domain templates back.
+ */
+function offeredRuleSets(canvasNodes: Node[], vsumId: number | null, cleared: boolean): RuleSet[] {
+  if (!cleared) {
+    const domainDefaults = getDefaultRuleSets(canvasNodes);
+    if (domainDefaults.length > 0) return domainDefaults;
+  }
+  if (vsumId == null) return [];
+  return [blankRuleSet()];
 }
 
 
@@ -954,6 +978,7 @@ const EditorPanel: React.FC<EditorPanelProps> = ({ rule, ruleSets, colorMap, met
     languageId: vitruvOCLLanguageId,
     getCode: () => draftRef.current.oclDefinition,
   });
+  const { themeName: monacoTheme, beforeMount: handleMonacoTheme } = useMonacoEditorTheme();
 
   // Reset draft whenever the selected rule changes (intentionally only on id, not every field).
   useEffect(() => {
@@ -1036,7 +1061,6 @@ const EditorPanel: React.FC<EditorPanelProps> = ({ rule, ruleSets, colorMap, met
         fileExtension=".ocl"
         monarchGrammar={vitruvOCLMonarch}
         languageConfig={vitruvOCLLanguageConfig}
-        theme={vitruvOCLTheme}
         title={draft.name}
       />
 
@@ -1179,9 +1203,10 @@ const EditorPanel: React.FC<EditorPanelProps> = ({ rule, ruleSets, colorMap, met
               <Editor
                 value={draft.oclDefinition}
                 onChange={handleOclChange}
+                beforeMount={handleMonacoTheme}
                 onMount={(ed, m) => { handleVitruvOCLMount(ed, m); lspOnMount(ed, m); }}
                 language={vitruvOCLLanguageId}
-                theme="vitruvocl-theme"
+                theme={monacoTheme}
                 options={{ minimap: { enabled: false }, fontSize: 13, lineNumbers: 'on', scrollBeyondLastLine: false, wordWrap: 'on', automaticLayout: true, padding: { top: 8, bottom: 8 }, folding: false, lineDecorationsWidth: 0, renderLineHighlight: 'line', overviewRulerLanes: 0 }}
               />
             </div>
@@ -1758,6 +1783,12 @@ export const ConstraintsView: React.FC<ConstraintsViewProps> = ({ vsumId: _vsumI
   // Set while rule sets are shown that are not saved yet: the predefined ones, or ones whose create
   // request failed. The next change saves all of them.
   const saveUnsavedRef = useRef(false);
+  // Set once the user picks a rule, a rule set, or closes the bottom panel. Until then the first
+  // rule set stays selected so the panel is visible as soon as the view has something to show.
+  const selectionLockedRef = useRef(false);
+  const [selectedRule, setSelectedRule] = useState<ConstraintRule | null>(null);
+  const [selectedRuleSet, setSelectedRuleSet] = useState<RuleSet | null>(null);
+  const [searchQuery, setSearchQuery] = useState('');
   // Create requests still running, with the newest version of the set to send once they return:
   // the handlers below may run twice (React StrictMode) and users can edit faster than requests.
   const pendingCreatesRef = useRef(new Map<string, { latest: RuleSet | null; deleted: boolean }>());
@@ -1781,7 +1812,11 @@ export const ConstraintsView: React.FC<ConstraintsViewProps> = ({ vsumId: _vsumI
         collapsed: false,
         rules: parseRulesFromOcl(r.oclContent, `rs_${r.id}`),
       }));
-      setRuleSets(prev => mergeLoadedRuleSets(loaded, prev));
+      const merged = mergeLoadedRuleSets(loaded, ruleSetsRef.current);
+      setRuleSets(merged);
+      if (!selectionLockedRef.current) {
+        setSelectedRuleSet(prev => (prev && merged.some(rs => rs.id === prev.id) ? prev : merged[0]));
+      }
       setSavedRuleSets('loaded');
     }).catch(err => {
       if (cancelled) return;
@@ -1791,20 +1826,30 @@ export const ConstraintsView: React.FC<ConstraintsViewProps> = ({ vsumId: _vsumI
     return () => { cancelled = true; };
   }, [vsumId]);
 
-  // Without saved rule sets, show the predefined ones for the meta models on the canvas. Until the
-  // user changes something they follow the canvas, which can arrive after the lookup or change.
+  // Without saved rule sets, show the predefined ones for the meta models on the canvas, or one
+  // blank set when the project has no template. Until the user changes something they follow the
+  // canvas, which can arrive after the lookup or change.
   useEffect(() => {
     if (savedRuleSets !== 'none' || userChangedRef.current) return;
-    if (vsumId != null && hasClearedRuleSets(String(vsumId))) return;
-    const defaults = getDefaultRuleSets(canvasNodes);
+    const cleared = vsumId != null && hasClearedRuleSets(String(vsumId));
+    const defaults = offeredRuleSets(canvasNodes, vsumId, cleared);
     const key = defaults.map(rs => rs.id).join(',');
     if (key === shownDefaultsRef.current) return;
     shownDefaultsRef.current = key;
     saveUnsavedRef.current = vsumId != null && defaults.length > 0;
-    setRuleSets(defaults.map(rs => ({
+    const next = defaults.map(rs => ({
       ...rs,
       rules: rs.rules.map(r => ({ ...r, scope: oclGetScope(r.oclDefinition) })),
-    })));
+    }));
+    setRuleSets(next);
+    // Same update as the list, so the bottom panel is visible on the first paint that has a set.
+    if (!selectionLockedRef.current) {
+      setSelectedRuleSet(prev => {
+        if (next.length === 0) return null;
+        const match = prev ? next.find(rs => rs.id === prev.id) : undefined;
+        return match ?? next[0];
+      });
+    }
   }, [savedRuleSets, canvasNodes, vsumId]);
 
   useEffect(() => {
@@ -1876,15 +1921,16 @@ export const ConstraintsView: React.FC<ConstraintsViewProps> = ({ vsumId: _vsumI
     }
   }, [vsumId, markUserChange, saveUnsavedRuleSets, createRuleSetOnBackend]);
 
-  const [selectedRule, setSelectedRule] = useState<ConstraintRule | null>(null);
-  const [selectedRuleSet, setSelectedRuleSet] = useState<RuleSet | null>(null);
-  const [searchQuery, setSearchQuery] = useState('');
+  const lockSelection = useCallback(() => {
+    selectionLockedRef.current = true;
+  }, []);
 
   const handleRuleSetClick = useCallback((rs: RuleSet) => {
+    lockSelection();
     setSelectedRuleSet(prev => prev?.id === rs.id ? null : rs);
     setSelectedRule(null);
     onHighlightNode?.(null);
-  }, [onHighlightNode]);
+  }, [onHighlightNode, lockSelection]);
 
   const handleSaveRuleSet = useCallback((updated: RuleSet) => {
     // The panel edits a copy taken when it opened: keep the current rules and backend id.
@@ -1898,13 +1944,14 @@ export const ConstraintsView: React.FC<ConstraintsViewProps> = ({ vsumId: _vsumI
   }, [syncRuleSet]);
 
   const handleRuleClick = useCallback((rule: ConstraintRule) => {
+    lockSelection();
     const next: ConstraintRule | null = selectedRule?.id === rule.id ? null : rule;
     const metamodel = next ? oclGetContextType(next.oclDefinition).split('::')[0] : null;
     const nodeId = metamodel ? findNodeIdForMetamodel(canvasNodes, metamodel) : null;
     setSelectedRuleSet(null);
     setSelectedRule(next);
     onHighlightNode?.(nodeId);
-  }, [selectedRule, canvasNodes, onHighlightNode]);
+  }, [selectedRule, canvasNodes, onHighlightNode, lockSelection]);
 
   const handleToggleCollapse = useCallback((id: string) => {
     setRuleSets(prev => prev.map(rs => rs.id === id ? { ...rs, collapsed: !rs.collapsed } : rs));
@@ -2023,14 +2070,14 @@ export const ConstraintsView: React.FC<ConstraintsViewProps> = ({ vsumId: _vsumI
         </section>
       )}
       {selectedRuleSet && !selectedRule && (
-        <div style={{ position: 'absolute', bottom: 0, left: 260, right: 300, pointerEvents: 'auto', maxHeight: '42%', display: 'flex', flexDirection: 'column' }}>
+        <section aria-label="Rule set panel" style={{ position: 'absolute', bottom: 0, left: 260, right: 300, pointerEvents: 'auto', maxHeight: '42%', display: 'flex', flexDirection: 'column' }}>
           <RuleSetPanel
             ruleSet={selectedRuleSet}
-            onClose={() => setSelectedRuleSet(null)}
+            onClose={() => { lockSelection(); setSelectedRuleSet(null); }}
             onSave={handleSaveRuleSet}
             onDelete={() => handleDeleteRuleSet(selectedRuleSet.id)}
           />
-        </div>
+        </section>
       )}
     </div>
   );

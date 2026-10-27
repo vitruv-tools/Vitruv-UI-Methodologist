@@ -172,7 +172,7 @@ export const CanvasProjectControls: React.FC<CanvasProjectControlsProps> = ({
       onMouseLeave={event => { event.currentTarget.style.opacity = '1'; }}
     >
       <img
-        src="/assets/vitruvius1.png"
+        src={`${process.env.PUBLIC_URL}/assets/vitruvius1.png`}
         alt=""
         aria-hidden="true"
         style={{ width: 24, height: 24, borderRadius: 6, display: 'block' }}

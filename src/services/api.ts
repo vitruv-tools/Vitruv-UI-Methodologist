@@ -76,7 +76,7 @@ class ApiService {
       throw this.createApiError('', `${label} download returned an empty file`);
     }
 
-    const header = new Uint8Array(await new Response(blob.slice(0, 4)).arrayBuffer());
+    const header = new Uint8Array(await blob.slice(0, 4).arrayBuffer());
     if (header[0] !== 0x50 || header[1] !== 0x4b) {
       const preview = await blob.slice(0, 512).text();
       throw this.createApiError(preview, `${label} download did not return a valid ZIP file`);

@@ -410,7 +410,7 @@ export const generateUMLFromEcore = (ecoreContent: string): { nodes: FlowNode[];
     const edges: FlowEdge[] = [];
     let nodeId = 1;
 
-    const rootPackage = xmlDoc.querySelector(String.raw`ecore\:EPackage, EPackage`);
+    const rootPackage = xmlDoc.getElementsByTagNameNS('*', 'EPackage')[0];
     const packageName = rootPackage?.getAttribute('name') || 'Package';
 
     // Collect classes first to reference by name

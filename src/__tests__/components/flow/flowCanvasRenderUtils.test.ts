@@ -16,26 +16,33 @@ const editableNode = (id = 'uml-1'): Node =>
 const ecoreOptions = (overrides: Record<string, unknown> = {}) => ({
   readOnly: false,
   expandedFileId: null,
-  selectedFileId: null,
+  selectedFileIds: [],
   connectionDragState: null,
   addReactionMode: false,
   reactionSourceId: null,
   constraintHighlightNodeId: null,
   constraintFilterNodeId: null,
   edgeDistribution: undefined,
-  handleEcoreFileExpand: jest.fn(),
-  handleEcoreFileSelect: jest.fn(),
-  onEcoreFileDelete: jest.fn(),
-  handleRequestDelete: jest.fn(),
-  onEcoreFileRename: jest.fn(),
-  handleShowDetails: jest.fn(),
-  handleConnectionStart: jest.fn(),
+  handleEcoreFileExpand: vi.fn(),
+  handleEcoreFileSelect: vi.fn(),
+  onEcoreFileDelete: vi.fn(),
+  handleRequestDelete: vi.fn(),
+  onEcoreFileRename: vi.fn(),
+  handleShowDetails: vi.fn(),
+  handleConnectionStart: vi.fn(),
   ...overrides,
 });
 
 describe('mapEcoreFlowNode', () => {
   it('is draggable for an editor', () => {
     expect(mapEcoreFlowNode(ecoreNode(), ecoreOptions()).draggable).toBe(true);
+  });
+
+  it('marks the model as selected when it is one of the selected models', () => {
+    const options = ecoreOptions({ selectedFileIds: ['other', 'ecore-1'] });
+
+    expect(mapEcoreFlowNode(ecoreNode(), options).selected).toBe(true);
+    expect(mapEcoreFlowNode(ecoreNode('ecore-2'), options).selected).toBe(false);
   });
 
   it('is draggable for a viewer, so large models can be rearranged locally', () => {
@@ -88,7 +95,7 @@ describe('mapEcoreFlowNode', () => {
   it('still withholds connection starting from a viewer', () => {
     const mapped = mapEcoreFlowNode(
       ecoreNode(),
-      ecoreOptions({ readOnly: true, handleConnectionStart: jest.fn() }),
+      ecoreOptions({ readOnly: true, handleConnectionStart: vi.fn() }),
     );
 
     expect(mapped.data.onConnectionStart).toBeUndefined();
@@ -103,8 +110,8 @@ describe('mapEcoreFlowNode', () => {
 });
 
 describe('mapEditableFlowNode', () => {
-  const labelChange = jest.fn();
-  const removeNode = jest.fn();
+  const labelChange = vi.fn();
+  const removeNode = vi.fn();
 
   it('is draggable for an editor', () => {
     expect(mapEditableFlowNode(editableNode(), false, labelChange, removeNode).draggable).toBe(true);
@@ -148,13 +155,13 @@ function mapContext(overrides: Partial<MapFlowEdgeContext> = {}): MapFlowEdgeCon
     hoveredMergeGroup: null,
     getDistribution: () => ({}),
     getUmlMerge: () => emptyMerge,
-    handleMergeGroupHover: jest.fn(),
-    handleEdgeDoubleClick: jest.fn(),
-    handleEdgeDragStart: jest.fn(),
-    handleEdgeDrag: jest.fn(),
-    handleEdgeDragEnd: jest.fn(),
-    handleEdgeHandleChange: jest.fn(),
-    handleEdgeReorderRequest: jest.fn(),
+    handleMergeGroupHover: vi.fn(),
+    handleEdgeDoubleClick: vi.fn(),
+    handleEdgeDragStart: vi.fn(),
+    handleEdgeDrag: vi.fn(),
+    handleEdgeDragEnd: vi.fn(),
+    handleEdgeHandleChange: vi.fn(),
+    handleEdgeReorderRequest: vi.fn(),
     ...overrides,
   };
 }

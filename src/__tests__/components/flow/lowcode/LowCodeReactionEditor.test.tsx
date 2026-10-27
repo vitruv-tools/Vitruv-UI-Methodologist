@@ -1,3 +1,4 @@
+import type { Mock } from 'vitest';
 import React, { createRef } from 'react';
 import { render, screen, waitFor, fireEvent, act } from '@testing-library/react';
 import LowCodeReactionEditor, {
@@ -14,9 +15,9 @@ import { getLowCodeReactionConfig } from '../../../../utils/LowCodeReactionUtils
 import type { FlowEcoreEdge } from '../../../../types/flow';
 import type { LowCodeReactionFieldMetadata } from '../../../../types/LowCodeReactionFieldMetadata';
 
-jest.mock('../../../../services/api', () => ({
+vi.mock('../../../../services/api', () => ({
   apiService: {
-    getLowCodeReactionsMetadata: jest.fn(),
+    getLowCodeReactionsMetadata: vi.fn(),
   },
 }));
 
@@ -84,7 +85,7 @@ const edge: FlowEcoreEdge = {
 } as FlowEcoreEdge;
 
 describe('LowCodeReactionEditor', () => {
-  const getMetadata = apiService.getLowCodeReactionsMetadata as jest.Mock;
+  const getMetadata = apiService.getLowCodeReactionsMetadata as Mock;
 
   beforeEach(() => {
     getMetadata.mockResolvedValue({ data: metadata, message: 'ok' });
@@ -103,14 +104,14 @@ describe('LowCodeReactionEditor', () => {
   afterEach(() => {
     deleteVsumDetailsStore(1);
     useProjectStore.getState().setActiveId(null);
-    jest.clearAllMocks();
+    vi.clearAllMocks();
   });
 
   it('loads templates, reports dirty on edit, saves, then undo restores last saved', async () => {
     const ref = createRef<LowCodeReactionEditorHandle>();
-    const onDirtyChange = jest.fn();
-    const onSaveComplete = jest.fn();
-    const onDeleteRequest = jest.fn();
+    const onDirtyChange = vi.fn();
+    const onSaveComplete = vi.fn();
+    const onDeleteRequest = vi.fn();
 
     render(
       <LowCodeReactionEditor
@@ -157,7 +158,7 @@ describe('LowCodeReactionEditor', () => {
   });
 
   it('shows an error when metadata cannot be loaded', async () => {
-    const warn = jest.spyOn(console, 'warn').mockImplementation(() => undefined);
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
     getMetadata.mockRejectedValueOnce(new Error('down'));
     render(<LowCodeReactionEditor edge={edge} />);
     expect(await screen.findByText('Failed to load reaction templates')).toBeInTheDocument();

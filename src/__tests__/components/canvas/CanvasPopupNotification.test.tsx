@@ -54,7 +54,7 @@ describe('CanvasPopupNotification', () => {
   });
 
   it('shows the backend error, a copy control, and a close control', () => {
-    const onClose = jest.fn();
+    const onClose = vi.fn();
     render(
       <CanvasPopupNotification
         message={'java.lang.IllegalStateException: Could not build this VSUM'}

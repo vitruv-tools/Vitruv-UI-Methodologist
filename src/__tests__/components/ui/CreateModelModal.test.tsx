@@ -1,7 +1,9 @@
+import type { Mock } from 'vitest';
 import React from 'react';
 import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
 import { CreateModelModal } from '../../../components/ui/CreateModelModal';
 import { resetThemeStore, setTheme } from '../../../theme/theme';
+import * as apiModule from '../../../services/api';
 
 // ─── environment polyfills ────────────────────────────────────────────────────
 
@@ -23,20 +25,24 @@ beforeAll(() => {
 
 // ─── module mocks ─────────────────────────────────────────────────────────────
 
-jest.mock('react-dom', () => ({
-  ...jest.requireActual('react-dom'),
-  createPortal: (node: React.ReactNode) => node,
-}));
+vi.mock('react-dom', async () => {
+  const actual = await vi.importActual<any>('react-dom');
+  const mocked = {
+    ...actual,
+    createPortal: (node: React.ReactNode) => node,
+  };
+  return { ...mocked, default: mocked };
+});
 
-jest.mock('../../../services/api', () => ({
+vi.mock('../../../services/api', () => ({
   apiService: {
-    uploadFile: jest.fn().mockResolvedValue({ data: { id: 10 } }),
-    deleteFile: jest.fn().mockResolvedValue({}),
-    createMetaModel: jest.fn().mockResolvedValue({ data: { id: 1, name: 'MM' } }),
+    uploadFile: vi.fn().mockResolvedValue({ data: { id: 10 } }),
+    deleteFile: vi.fn().mockResolvedValue({}),
+    createMetaModel: vi.fn().mockResolvedValue({ data: { id: 1, name: 'MM' } }),
   },
 }));
 
-jest.mock('../../../components/ui/KeywordTagsInput', () => ({
+vi.mock('../../../components/ui/KeywordTagsInput', () => ({
   KeywordTagsInput: ({ keywords, onChange }: any) => (
     <div>
       <span>Keyword Input</span>
@@ -50,11 +56,11 @@ jest.mock('../../../components/ui/KeywordTagsInput', () => ({
   ),
 }));
 
-const { apiService } = require('../../../services/api') as {
+const { apiService } = (apiModule as unknown) as {
   apiService: {
-    uploadFile: jest.Mock;
-    deleteFile: jest.Mock;
-    createMetaModel: jest.Mock;
+    uploadFile: Mock;
+    deleteFile: Mock;
+    createMetaModel: Mock;
   };
 };
 
@@ -97,15 +103,15 @@ const ECORE_CONTENT = '<?xml version="1.0" encoding="UTF-8"?>\n<ecore:EPackage n
 
 const mockFetchOk = (content = ECORE_CONTENT, contentType = 'application/octet-stream') => {
   const blob = new Blob([content], { type: contentType });
-  (global as any).fetch = jest.fn().mockResolvedValue({
+  (global as any).fetch = vi.fn().mockResolvedValue({
     ok: true,
     headers: { get: (name: string) => (name.toLowerCase() === 'content-type' ? contentType : null) },
-    blob: jest.fn().mockResolvedValue(blob),
+    blob: vi.fn().mockResolvedValue(blob),
   });
 };
 
 const mockFetchFail = (status = 404, statusText = 'Not Found') => {
-  (global as any).fetch = jest.fn().mockResolvedValue({
+  (global as any).fetch = vi.fn().mockResolvedValue({
     ok: false,
     status,
     statusText,
@@ -125,7 +131,7 @@ const expectedCreateRequest = {
 
 describe('CreateModelModal', () => {
   beforeEach(() => {
-    jest.resetAllMocks();
+    vi.resetAllMocks();
     // Reset call history and queued one-time implementations before each test.
     apiService.uploadFile.mockResolvedValue({ data: { id: 10 } });
     apiService.deleteFile.mockResolvedValue({});
@@ -140,7 +146,7 @@ describe('CreateModelModal', () => {
   // ── rendering ───────────────────────────────────────────────────────────────
 
   it('renders only the Ecore upload input', () => {
-    render(<CreateModelModal isOpen onClose={jest.fn()} />);
+    render(<CreateModelModal isOpen onClose={vi.fn()} />);
     expect(document.querySelectorAll('input[type="file"]')).toHaveLength(1);
     expect(document.querySelector('input[accept=".ecore"]')).toBeInTheDocument();
     expect(document.querySelector('input[accept=".genmodel"]')).not.toBeInTheDocument();
@@ -148,50 +154,50 @@ describe('CreateModelModal', () => {
   });
 
   it('renders the modal title when open', () => {
-    render(<CreateModelModal isOpen onClose={jest.fn()} />);
+    render(<CreateModelModal isOpen onClose={vi.fn()} />);
     expect(screen.getByRole('heading', { name: 'Add Meta Model' })).toBeInTheDocument();
   });
 
   it('does not render when isOpen is false', () => {
-    render(<CreateModelModal isOpen={false} onClose={jest.fn()} />);
+    render(<CreateModelModal isOpen={false} onClose={vi.fn()} />);
     expect(screen.queryByText(/Add Meta Model/i)).not.toBeInTheDocument();
   });
 
   it('renders File and URL toggles for the Ecore card', () => {
-    render(<CreateModelModal isOpen onClose={jest.fn()} />);
+    render(<CreateModelModal isOpen onClose={vi.fn()} />);
     expect(screen.getAllByText('File')).toHaveLength(1);
     expect(screen.getAllByText('URL')).toHaveLength(1);
   });
 
   it('shows drop-zones by default (file mode)', () => {
-    render(<CreateModelModal isOpen onClose={jest.fn()} />);
+    render(<CreateModelModal isOpen onClose={vi.fn()} />);
     expect(screen.getAllByText(/Click to select file/i)).toHaveLength(1);
   });
 
   it('uses theme surfaces so the Ecore file card and disabled submit button match dark mode', () => {
     setTheme('dark');
-    render(<CreateModelModal isOpen onClose={jest.fn()} />);
+    render(<CreateModelModal isOpen onClose={vi.fn()} />);
 
     expect(screen.getByRole('button', { name: 'Complete All Fields' })).toBeDisabled();
     expect(screen.getAllByRole('button', { name: /Click to select file/i })).toHaveLength(1);
   });
 
   it('calls onClose when Cancel is clicked', async () => {
-    const onClose = jest.fn();
+    const onClose = vi.fn();
     render(<CreateModelModal isOpen onClose={onClose} />);
     await act(async () => { fireEvent.click(screen.getByText('Cancel')); });
     expect(onClose).toHaveBeenCalledTimes(1);
   });
 
   it('calls onClose when the × button is clicked', async () => {
-    const onClose = jest.fn();
+    const onClose = vi.fn();
     render(<CreateModelModal isOpen onClose={onClose} />);
     await act(async () => { fireEvent.click(screen.getByText('×')); });
     expect(onClose).toHaveBeenCalledTimes(1);
   });
 
   it('keeps the modal open when the .ecore file picker is canceled', () => {
-    const onClose = jest.fn();
+    const onClose = vi.fn();
     render(<CreateModelModal isOpen onClose={onClose} />);
     const ecoreInput = document.querySelector('input[accept=".ecore"]') as HTMLInputElement;
 
@@ -204,7 +210,7 @@ describe('CreateModelModal', () => {
 
   describe('file upload mode', () => {
     it('uploads a valid .ecore file and calls uploadFile with ECORE type', async () => {
-      render(<CreateModelModal isOpen onClose={jest.fn()} />);
+      render(<CreateModelModal isOpen onClose={vi.fn()} />);
       const ecoreInput = document.querySelector('input[accept=".ecore"]') as HTMLInputElement;
       const file = new File(['<ecore/>'], 'model.ecore', { type: 'application/octet-stream' });
       await act(async () => {
@@ -216,7 +222,7 @@ describe('CreateModelModal', () => {
     });
 
     it('shows an error when a non-.ecore file is selected', async () => {
-      render(<CreateModelModal isOpen onClose={jest.fn()} />);
+      render(<CreateModelModal isOpen onClose={vi.fn()} />);
       const ecoreInput = document.querySelector('input[accept=".ecore"]') as HTMLInputElement;
       const file = new File(['content'], 'model.txt', { type: 'text/plain' });
       await act(async () => {
@@ -226,7 +232,7 @@ describe('CreateModelModal', () => {
     });
 
     it('shows ✓ Ready badge after a successful .ecore upload', async () => {
-      render(<CreateModelModal isOpen onClose={jest.fn()} />);
+      render(<CreateModelModal isOpen onClose={vi.fn()} />);
       const ecoreInput = document.querySelector('input[accept=".ecore"]') as HTMLInputElement;
       const file = new File(['<ecore/>'], 'model.ecore', { type: 'application/octet-stream' });
       await act(async () => {
@@ -238,7 +244,7 @@ describe('CreateModelModal', () => {
     });
 
     it('deletes the previous file before uploading a replacement', async () => {
-      render(<CreateModelModal isOpen onClose={jest.fn()} />);
+      render(<CreateModelModal isOpen onClose={vi.fn()} />);
       const ecoreInput = document.querySelector('input[accept=".ecore"]') as HTMLInputElement;
 
       await act(async () => {
@@ -260,20 +266,20 @@ describe('CreateModelModal', () => {
 
   describe('URL import mode', () => {
     it('shows a URL input when switching .ecore card to URL mode', () => {
-      render(<CreateModelModal isOpen onClose={jest.fn()} />);
+      render(<CreateModelModal isOpen onClose={vi.fn()} />);
       fireEvent.click(screen.getByText('URL'));
       expect(screen.getByPlaceholderText(/model\.ecore/i)).toBeInTheDocument();
     });
 
     it('Import button is disabled when .ecore URL is empty', () => {
-      render(<CreateModelModal isOpen onClose={jest.fn()} />);
+      render(<CreateModelModal isOpen onClose={vi.fn()} />);
       fireEvent.click(screen.getByText('URL'));
       const importBtn = screen.getByText('Import').closest('button')!;
       expect(importBtn).toBeDisabled();
     });
 
     it('shows an error when .ecore URL has the wrong extension', async () => {
-      render(<CreateModelModal isOpen onClose={jest.fn()} />);
+      render(<CreateModelModal isOpen onClose={vi.fn()} />);
       fireEvent.click(screen.getByText('URL'));
       fireEvent.change(screen.getByPlaceholderText(/model\.ecore/i), {
         target: { value: 'https://example.com/model.txt' },
@@ -286,7 +292,7 @@ describe('CreateModelModal', () => {
 
     it('imports a .ecore file from a valid URL and calls uploadFile with ECORE type', async () => {
       mockFetchOk();
-      render(<CreateModelModal isOpen onClose={jest.fn()} />);
+      render(<CreateModelModal isOpen onClose={vi.fn()} />);
       fireEvent.click(screen.getByText('URL'));
       fireEvent.change(screen.getByPlaceholderText(/model\.ecore/i), {
         target: { value: 'https://raw.githubusercontent.com/org/repo/main/model.ecore' },
@@ -301,7 +307,7 @@ describe('CreateModelModal', () => {
 
     it('shows ✓ Ready badge after a successful .ecore URL import', async () => {
       mockFetchOk();
-      render(<CreateModelModal isOpen onClose={jest.fn()} />);
+      render(<CreateModelModal isOpen onClose={vi.fn()} />);
       fireEvent.click(screen.getByText('URL'));
       fireEvent.change(screen.getByPlaceholderText(/model\.ecore/i), {
         target: { value: 'https://raw.githubusercontent.com/org/repo/main/model.ecore' },
@@ -316,7 +322,7 @@ describe('CreateModelModal', () => {
 
     it('shows an error when the .ecore URL fetch returns a non-OK response', async () => {
       mockFetchFail(404, 'Not Found');
-      render(<CreateModelModal isOpen onClose={jest.fn()} />);
+      render(<CreateModelModal isOpen onClose={vi.fn()} />);
       fireEvent.click(screen.getByText('URL'));
       fireEvent.change(screen.getByPlaceholderText(/model\.ecore/i), {
         target: { value: 'https://example.com/missing.ecore' },
@@ -340,7 +346,7 @@ describe('CreateModelModal', () => {
       ['HTML sent as plain text', '\n  <html lang="en"><head><title>Sign in</title></head></html>', 'text/plain'],
     ])('rejects a URL that returns %s and uploads nothing', async (_label, content, contentType) => {
       mockFetchOk(content, contentType);
-      render(<CreateModelModal isOpen onClose={jest.fn()} />);
+      render(<CreateModelModal isOpen onClose={vi.fn()} />);
 
       importFromUrl();
 
@@ -355,7 +361,7 @@ describe('CreateModelModal', () => {
       ['an XML error document', '<?xml version="1.0"?><Error><Code>NoSuchKey</Code></Error>', /starts with <Error>/i],
     ])('rejects a URL that returns %s and uploads nothing', async (_label, content, message) => {
       mockFetchOk(content, 'application/octet-stream');
-      render(<CreateModelModal isOpen onClose={jest.fn()} />);
+      render(<CreateModelModal isOpen onClose={vi.fn()} />);
 
       importFromUrl();
 
@@ -365,7 +371,7 @@ describe('CreateModelModal', () => {
 
     it('keeps the previous upload when importing the same URL again returns a web page', async () => {
       mockFetchOk();
-      render(<CreateModelModal isOpen onClose={jest.fn()} />);
+      render(<CreateModelModal isOpen onClose={vi.fn()} />);
       importFromUrl();
       await waitFor(() => expect(apiService.uploadFile).toHaveBeenCalledTimes(1));
 
@@ -379,7 +385,7 @@ describe('CreateModelModal', () => {
 
     it('accepts an .ecore file with a byte order mark and an XML declaration', async () => {
       mockFetchOk('\uFEFF<?xml version="1.0" encoding="UTF-8"?>\n<ecore:EPackage name="m"/>', 'text/plain');
-      render(<CreateModelModal isOpen onClose={jest.fn()} />);
+      render(<CreateModelModal isOpen onClose={vi.fn()} />);
 
       importFromUrl();
 
@@ -389,7 +395,7 @@ describe('CreateModelModal', () => {
     });
 
     it('switching back to file mode hides the URL input', () => {
-      render(<CreateModelModal isOpen onClose={jest.fn()} />);
+      render(<CreateModelModal isOpen onClose={vi.fn()} />);
       fireEvent.click(screen.getByText('URL'));
       expect(screen.getByPlaceholderText(/model\.ecore/i)).toBeInTheDocument();
 
@@ -409,13 +415,13 @@ describe('CreateModelModal', () => {
     };
 
     it('disables submission until an Ecore file is uploaded', () => {
-      render(<CreateModelModal isOpen onClose={jest.fn()} />);
+      render(<CreateModelModal isOpen onClose={vi.fn()} />);
       fillRequiredFields();
       expect(screen.getByText('Complete All Fields')).toBeDisabled();
     });
 
     it('disables submission when required metadata is missing', async () => {
-      render(<CreateModelModal isOpen onClose={jest.fn()} />);
+      render(<CreateModelModal isOpen onClose={vi.fn()} />);
       await uploadEcoreViaFileMode();
       expect(screen.getByText('Complete All Fields')).toBeDisabled();
       expect(apiService.createMetaModel).not.toHaveBeenCalled();
@@ -424,8 +430,8 @@ describe('CreateModelModal', () => {
   it.each(['file', 'url'])(
   'creates once after an Ecore %s import',
   async (mode) => {
-    const onSuccess = jest.fn();
-    const onClose = jest.fn();
+    const onSuccess = vi.fn();
+    const onClose = vi.fn();
 
     render(
       <CreateModelModal
@@ -508,7 +514,7 @@ describe('CreateModelModal', () => {
 );
 
     it('sends the version typed on the form', async () => {
-      render(<CreateModelModal isOpen onClose={jest.fn()} onSuccess={jest.fn()} />);
+      render(<CreateModelModal isOpen onClose={vi.fn()} onSuccess={vi.fn()} />);
       fillRequiredFields();
       fireEvent.change(screen.getByLabelText(/Version/i), { target: { value: '2.0' } });
       await uploadEcoreViaFileMode();
@@ -525,7 +531,7 @@ describe('CreateModelModal', () => {
     });
 
     it('requires a non-blank version and does not check semver format', async () => {
-      render(<CreateModelModal isOpen onClose={jest.fn()} onSuccess={jest.fn()} />);
+      render(<CreateModelModal isOpen onClose={vi.fn()} onSuccess={vi.fn()} />);
       fillRequiredFields();
       fireEvent.change(screen.getByLabelText(/Version/i), { target: { value: '   ' } });
       await uploadEcoreViaFileMode();
@@ -549,8 +555,8 @@ describe('CreateModelModal', () => {
       ['backend validation error', { response: { data: { message: 'Invalid Ecore model' } } }, 'Invalid Ecore model'],
     ])('reports a %s and cleans up the uploaded Ecore file', async (_label, error, message) => {
       apiService.createMetaModel.mockRejectedValueOnce(error);
-      const onSuccess = jest.fn();
-      render(<CreateModelModal isOpen onClose={jest.fn()} onSuccess={onSuccess} />);
+      const onSuccess = vi.fn();
+      render(<CreateModelModal isOpen onClose={vi.fn()} onSuccess={onSuccess} />);
       fillRequiredFields();
       await uploadEcoreViaFileMode();
 
@@ -574,7 +580,7 @@ describe('CreateModelModal', () => {
     const chooseCreateNew = () => fireEvent.click(screen.getByRole('button', { name: 'Create new' }));
 
     it('starts in import mode', () => {
-      render(<CreateModelModal isOpen onClose={jest.fn()} />);
+      render(<CreateModelModal isOpen onClose={vi.fn()} />);
       expect(screen.getByRole('group', { name: 'Meta model source' })).toBeInTheDocument();
       expect(screen.getByRole('button', { name: 'Import existing' })).toHaveAttribute('aria-pressed', 'true');
       expect(screen.getByRole('button', { name: 'Create new' })).toHaveAttribute('aria-pressed', 'false');
@@ -582,7 +588,7 @@ describe('CreateModelModal', () => {
     });
 
     it('hides the Ecore file section and names the empty file after the meta model', () => {
-      render(<CreateModelModal isOpen onClose={jest.fn()} />);
+      render(<CreateModelModal isOpen onClose={vi.fn()} />);
       fillRequiredFields();
       chooseCreateNew();
 
@@ -595,8 +601,8 @@ describe('CreateModelModal', () => {
     });
 
     it('uploads an empty .ecore file and creates the meta model with it', async () => {
-      const onSuccess = jest.fn();
-      const onClose = jest.fn();
+      const onSuccess = vi.fn();
+      const onClose = vi.fn();
       render(<CreateModelModal isOpen onClose={onClose} onSuccess={onSuccess} />);
       fillRequiredFields();
       chooseCreateNew();
@@ -618,7 +624,7 @@ describe('CreateModelModal', () => {
     });
 
     it('requires only the metadata fields', () => {
-      render(<CreateModelModal isOpen onClose={jest.fn()} />);
+      render(<CreateModelModal isOpen onClose={vi.fn()} />);
       chooseCreateNew();
       expect(screen.getByRole('button', { name: 'Complete All Fields' })).toBeDisabled();
 
@@ -628,8 +634,8 @@ describe('CreateModelModal', () => {
 
     it('deletes the empty .ecore file again when the backend rejects the meta model', async () => {
       apiService.createMetaModel.mockRejectedValueOnce({ response: { data: { message: 'Metamodel rejected: broken' } } });
-      const onSuccess = jest.fn();
-      render(<CreateModelModal isOpen onClose={jest.fn()} onSuccess={onSuccess} />);
+      const onSuccess = vi.fn();
+      render(<CreateModelModal isOpen onClose={vi.fn()} onSuccess={onSuccess} />);
       fillRequiredFields();
       chooseCreateNew();
 
@@ -646,7 +652,7 @@ describe('CreateModelModal', () => {
 
     it('does not create the meta model when the upload returns no file id', async () => {
       apiService.uploadFile.mockResolvedValueOnce({ data: {} });
-      render(<CreateModelModal isOpen onClose={jest.fn()} onSuccess={jest.fn()} />);
+      render(<CreateModelModal isOpen onClose={vi.fn()} onSuccess={vi.fn()} />);
       fillRequiredFields();
       chooseCreateNew();
 
@@ -660,7 +666,7 @@ describe('CreateModelModal', () => {
     });
 
     it('discards an uploaded file when switching to a new meta model', async () => {
-      render(<CreateModelModal isOpen onClose={jest.fn()} />);
+      render(<CreateModelModal isOpen onClose={vi.fn()} />);
       await uploadEcoreViaFileMode();
 
       chooseCreateNew();
@@ -672,12 +678,12 @@ describe('CreateModelModal', () => {
     });
 
     it('goes back to import mode when reopened', async () => {
-      const { rerender } = render(<CreateModelModal isOpen onClose={jest.fn()} />);
+      const { rerender } = render(<CreateModelModal isOpen onClose={vi.fn()} />);
       chooseCreateNew();
       fireEvent.click(screen.getByText('Cancel'));
 
-      rerender(<CreateModelModal isOpen={false} onClose={jest.fn()} />);
-      rerender(<CreateModelModal isOpen onClose={jest.fn()} />);
+      rerender(<CreateModelModal isOpen={false} onClose={vi.fn()} />);
+      rerender(<CreateModelModal isOpen onClose={vi.fn()} />);
       await waitFor(() => {
         expect(screen.getByRole('button', { name: 'Import existing' })).toHaveAttribute('aria-pressed', 'true');
       });

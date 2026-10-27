@@ -5,7 +5,7 @@ import userEvent from '@testing-library/user-event';
 
 describe('KeywordTagsInput', () => {
   it('adds a keyword on Enter and allows removal', () => {
-    const handleChange = jest.fn();
+    const handleChange = vi.fn();
 
     render(
       <KeywordTagsInput
@@ -23,7 +23,7 @@ describe('KeywordTagsInput', () => {
   });
 
   it('splits keywords on comma and avoids duplicates', () => {
-    const handleChange = jest.fn();
+    const handleChange = vi.fn();
 
     const { rerender } = render(
       <KeywordTagsInput
@@ -55,14 +55,14 @@ describe('KeywordTagsInput', () => {
 describe('KeywordTagsInput – additional tests', () => {
   it('renders existing keywords as tags', () => {
     render(
-      <KeywordTagsInput keywords={['react', 'typescript']} onChange={jest.fn()} />,
+      <KeywordTagsInput keywords={['react', 'typescript']} onChange={vi.fn()} />,
     );
     expect(screen.getByText('react')).toBeInTheDocument();
     expect(screen.getByText('typescript')).toBeInTheDocument();
   });
 
   it('calls onChange with new keyword when Enter is pressed', async () => {
-    const onChange = jest.fn();
+    const onChange = vi.fn();
     render(<KeywordTagsInput keywords={[]} onChange={onChange} />);
 
     const input = screen.getByRole('textbox');
@@ -72,7 +72,7 @@ describe('KeywordTagsInput – additional tests', () => {
   });
 
   it('calls onChange with multiple keywords when comma-separated input is given', async () => {
-    const onChange = jest.fn();
+    const onChange = vi.fn();
     render(<KeywordTagsInput keywords={[]} onChange={onChange} />);
 
     const input = screen.getByRole('textbox');
@@ -86,7 +86,7 @@ describe('KeywordTagsInput – additional tests', () => {
   });
 
   it('removes keyword when × button is clicked', () => {
-    const onChange = jest.fn();
+    const onChange = vi.fn();
     render(
       <KeywordTagsInput keywords={['react', 'ecore']} onChange={onChange} />,
     );
@@ -96,7 +96,7 @@ describe('KeywordTagsInput – additional tests', () => {
   });
 
   it('does not add duplicate keywords', async () => {
-    const onChange = jest.fn();
+    const onChange = vi.fn();
     render(<KeywordTagsInput keywords={['react']} onChange={onChange} />);
 
     const input = screen.getByRole('textbox');
@@ -107,7 +107,7 @@ describe('KeywordTagsInput – additional tests', () => {
   });
 
   it('adds keyword on blur when input has text', async () => {
-    const onChange = jest.fn();
+    const onChange = vi.fn();
     render(<KeywordTagsInput keywords={[]} onChange={onChange} />);
 
     const input = screen.getByRole('textbox');
@@ -118,7 +118,7 @@ describe('KeywordTagsInput – additional tests', () => {
   });
 
   it('does not add empty keyword on Enter', async () => {
-    const onChange = jest.fn();
+    const onChange = vi.fn();
     render(<KeywordTagsInput keywords={[]} onChange={onChange} />);
 
     const input = screen.getByRole('textbox');
@@ -131,7 +131,7 @@ describe('KeywordTagsInput – additional tests', () => {
     render(
       <KeywordTagsInput
         keywords={[]}
-        onChange={jest.fn()}
+        onChange={vi.fn()}
         id="keywords-field"
       />,
     );

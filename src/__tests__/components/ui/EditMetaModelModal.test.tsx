@@ -1,17 +1,19 @@
+import type { Mock } from 'vitest';
 import React from 'react';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { EditMetaModelModal } from '../../../components/ui/EditMetaModelModal';
+import * as apiModule from '../../../services/api';
 
 // ── mocks ─────────────────────────────────────────────────────────────────────
 
-jest.mock('../../../services/api', () => ({
+vi.mock('../../../services/api', () => ({
   apiService: {
-    updateMetaModel: jest.fn(),
+    updateMetaModel: vi.fn(),
   },
 }));
 
-jest.mock('../../../components/ui/KeywordTagsInput', () => ({
+vi.mock('../../../components/ui/KeywordTagsInput', () => ({
   KeywordTagsInput: ({ value, onChange }: any) => (
     <div data-testid="keyword-tags-input">
       <button
@@ -25,13 +27,17 @@ jest.mock('../../../components/ui/KeywordTagsInput', () => ({
   ),
 }));
 
-jest.mock('react-dom', () => ({
-  ...jest.requireActual('react-dom'),
-  createPortal: (node: React.ReactNode) => node,
-}));
+vi.mock('react-dom', async () => {
+  const actual = await vi.importActual<any>('react-dom');
+  const mocked = {
+    ...actual,
+    createPortal: (node: React.ReactNode) => node,
+  };
+  return { ...mocked, default: mocked };
+});
 
-const { apiService } = require('../../../services/api') as {
-  apiService: { updateMetaModel: jest.Mock };
+const { apiService } = (apiModule as unknown) as {
+  apiService: { updateMetaModel: Mock };
 };
 
 // ── shared fixtures ───────────────────────────────────────────────────────────
@@ -50,7 +56,7 @@ const renderModal = (props: Partial<React.ComponentProps<typeof EditMetaModelMod
   render(
     <EditMetaModelModal
       isOpen
-      onClose={jest.fn()}
+      onClose={vi.fn()}
       metaModel={baseMetaModel}
       {...props}
     />,
@@ -61,7 +67,7 @@ const renderModal = (props: Partial<React.ComponentProps<typeof EditMetaModelMod
 describe('EditMetaModelModal – visibility', () => {
   it('renders nothing when isOpen is false', () => {
     const { container } = render(
-      <EditMetaModelModal isOpen={false} onClose={jest.fn()} metaModel={baseMetaModel} />,
+      <EditMetaModelModal isOpen={false} onClose={vi.fn()} metaModel={baseMetaModel} />,
     );
     expect(container).toBeEmptyDOMElement();
   });
@@ -97,7 +103,7 @@ describe('EditMetaModelModal – form population', () => {
     rerender(
       <EditMetaModelModal
         isOpen
-        onClose={jest.fn()}
+        onClose={vi.fn()}
         metaModel={{ ...baseMetaModel, name: 'UpdatedName' }}
       />,
     );
@@ -109,14 +115,14 @@ describe('EditMetaModelModal – form population', () => {
 
 describe('EditMetaModelModal – keyboard / dismiss', () => {
   it('calls onClose when Escape is pressed', () => {
-    const onClose = jest.fn();
+    const onClose = vi.fn();
     renderModal({ onClose });
     fireEvent.keyDown(document, { key: 'Escape' });
     expect(onClose).toHaveBeenCalled();
   });
 
   it('calls onClose when backdrop is clicked', () => {
-    const onClose = jest.fn();
+    const onClose = vi.fn();
     const { container } = renderModal({ onClose });
     // The outermost div IS the backdrop
     const backdrop = container.firstChild as HTMLElement;
@@ -125,7 +131,7 @@ describe('EditMetaModelModal – keyboard / dismiss', () => {
   });
 
   it('does NOT close when the inner dialog card is clicked', () => {
-    const onClose = jest.fn();
+    const onClose = vi.fn();
     renderModal({ onClose });
     // The name input is inside the card — clicking it should not close
     fireEvent.click(screen.getByDisplayValue('MyModel'));
@@ -137,13 +143,13 @@ describe('EditMetaModelModal – keyboard / dismiss', () => {
 
 describe('EditMetaModelModal – submit success', () => {
   beforeEach(() => {
-    jest.useFakeTimers();
+    vi.useFakeTimers();
     apiService.updateMetaModel.mockResolvedValue({});
   });
-  afterEach(() => jest.useRealTimers());
+  afterEach(() => vi.useRealTimers());
 
   it('calls updateMetaModel with the form values on submit', async () => {
-    const onClose = jest.fn();
+    const onClose = vi.fn();
     renderModal({ onClose });
 
     fireEvent.submit(document.querySelector('form')!);
@@ -166,14 +172,14 @@ describe('EditMetaModelModal – submit success', () => {
   });
 
   it('calls onSuccess and onClose after the success timeout', async () => {
-    const onSuccess = jest.fn();
-    const onClose = jest.fn();
+    const onSuccess = vi.fn();
+    const onClose = vi.fn();
     renderModal({ onSuccess, onClose });
 
     fireEvent.submit(document.querySelector('form')!);
     await waitFor(() => expect(apiService.updateMetaModel).toHaveBeenCalled());
 
-    jest.runAllTimers();
+    vi.runAllTimers();
     expect(onSuccess).toHaveBeenCalled();
     expect(onClose).toHaveBeenCalled();
   });

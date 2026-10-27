@@ -291,7 +291,7 @@ export const FloatingUMLPanel: React.FC<FloatingUMLPanelProps> = ({
             }}
           >
             <img
-              src="/assets/vitruvius1.png"
+              src={`${process.env.PUBLIC_URL}/assets/vitruvius1.png`}
               alt=""
               aria-hidden="true"
               style={{
@@ -304,7 +304,7 @@ export const FloatingUMLPanel: React.FC<FloatingUMLPanelProps> = ({
           </button>
         ) : (
           <img
-            src="/assets/vitruvius1.png"
+            src={`${process.env.PUBLIC_URL}/assets/vitruvius1.png`}
             alt="Vitruvius"
             title="Vitruvius"
             data-testid="uml-toolbar-logo"
