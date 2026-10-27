@@ -5,12 +5,15 @@ import { SemanticOverlapView } from '../../../components/semanticOverlap/Semanti
 import { useSemanticOverlapStore } from '../../../store/SemanticOverlap';
 import type { LibraryMetaModel } from '../../../utils/metaModelList';
 import { sampleResult } from './sampleResult';
+import { overlapResultToCsv, parseOverlapResult } from '../../../utils/semanticOverlap/overlapResult';
 import { runOverlapAnalysis } from '../../../utils/semanticOverlap/runOverlapAnalysis';
 import { createWordNetSource } from '../../../utils/semanticOverlap/lexical/wordNetSource';
 import table from '../../../assets/wordnet/oewn-2025-synonyms.json';
 import { ecoreExcerpt, umlExcerpt } from '../../utils/semanticOverlap/fixtures';
 
-const mocks = vi.hoisted(() => ({ start: vi.fn(), cancel: vi.fn(), fetch: vi.fn() }));
+const mocks = vi.hoisted(() => ({ start: vi.fn(), cancel: vi.fn(), fetch: vi.fn(), download: vi.fn() }));
+
+vi.mock('../../../utils/downloadFile', () => ({ downloadTextAsFile: mocks.download }));
 
 vi.mock('../../../hooks/useSemanticOverlapRun', () => ({
   useSemanticOverlapRun: () => ({ start: mocks.start, cancel: mocks.cancel }),
@@ -156,6 +159,26 @@ describe('SemanticOverlapView', () => {
       expect(store().minScore).toBe(0.95);
       expect(screen.getByText(/No correspondences at or above/)).toBeInTheDocument();
       expect(mocks.start).not.toHaveBeenCalled();
+    });
+  });
+  describe('export (US4)', () => {
+    it('is disabled without a result', async () => {
+      await renderView('/semantic-overlap?source=1&target=2');
+      expect(screen.getByRole('button', { name: 'Export JSON' })).toBeDisabled();
+      expect(screen.getByRole('button', { name: 'Export CSV' })).toBeDisabled();
+    });
+
+    it('downloads the result as JSON and CSV with sanitised file names', async () => {
+      await renderView('/semantic-overlap?source=1&target=2');
+      const result = sampleResult();
+      finishWith(result);
+      fireEvent.click(screen.getByRole('button', { name: 'Export JSON' }));
+      const [json, jsonName, jsonType] = mocks.download.mock.calls[0];
+      expect(jsonName).toBe('Ecore_excerpt-UML_excerpt-overlap.json');
+      expect(jsonType).toBe('application/json;charset=utf-8');
+      expect(parseOverlapResult(json)).toEqual(result);
+      fireEvent.click(screen.getByRole('button', { name: 'Export CSV' }));
+      expect(mocks.download).toHaveBeenLastCalledWith(overlapResultToCsv(result), 'Ecore_excerpt-UML_excerpt-overlap.csv', 'text/csv;charset=utf-8');
     });
   });
 });

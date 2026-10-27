@@ -4,7 +4,10 @@ import { useSemanticOverlapRun } from '../../hooks/useSemanticOverlapRun';
 import { useSemanticOverlapStore, type OverlapTab } from '../../store/SemanticOverlap';
 import { themeVars } from '../../theme/theme';
 import { fetchLibraryMetaModels, type LibraryMetaModel } from '../../utils/metaModelList';
+import { downloadTextAsFile } from '../../utils/downloadFile';
+import { overlapResultToCsv, serializeOverlapResult } from '../../utils/semanticOverlap/overlapResult';
 import { validateSettings } from '../../utils/semanticOverlap/settings';
+import type { OverlapResult } from '../../utils/semanticOverlap/types';
 import { AnalysisProgress } from './AnalysisProgress';
 import { AnalysisSettingsPanel } from './AnalysisSettingsPanel';
 import { CorrespondenceLinkDiagram } from './CorrespondenceLinkDiagram';
@@ -25,6 +28,15 @@ const primaryButton: React.CSSProperties = {
 };
 
 const parseId = (value: string | null) => (value && /^\d+$/.test(value) ? Number(value) : null);
+
+/** `<source>-<target>-overlap.<extension>`, restricted to safe file-name characters. */
+export const exportFileName = (result: OverlapResult, extension: 'json' | 'csv') =>
+  `${result.source.name}-${result.target.name}-overlap.${extension}`.replace(/[^A-Za-z0-9._-]/g, '_');
+
+const secondaryButton: React.CSSProperties = {
+  padding: '7px 14px', borderRadius: 8, border: `1.5px solid ${themeVars.border}`, background: themeVars.surface,
+  color: themeVars.text, fontSize: 13, fontWeight: 600, cursor: 'pointer', height: 40,
+};
 
 /** Compares two library metamodels and shows their semantic overlap. */
 export const SemanticOverlapView: React.FC = () => {
@@ -101,6 +113,22 @@ export const SemanticOverlapView: React.FC = () => {
           onClick={() => { if (sourceModel && targetModel) void start(sourceModel, targetModel); }}
         >
           {result ? 'Run again' : 'Start analysis'}
+        </button>
+        <button
+          type="button"
+          style={{ ...secondaryButton, opacity: result ? 1 : 0.5 }}
+          disabled={!result}
+          onClick={() => result && downloadTextAsFile(serializeOverlapResult(result), exportFileName(result, 'json'), 'application/json;charset=utf-8')}
+        >
+          Export JSON
+        </button>
+        <button
+          type="button"
+          style={{ ...secondaryButton, opacity: result ? 1 : 0.5 }}
+          disabled={!result}
+          onClick={() => result && downloadTextAsFile(overlapResultToCsv(result), exportFileName(result, 'csv'), 'text/csv;charset=utf-8')}
+        >
+          Export CSV
         </button>
       </div>
 

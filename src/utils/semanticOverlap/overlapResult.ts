@@ -77,3 +77,39 @@ export function parseOverlapResult(json: string): OverlapResult {
   ensure(isObject(data.unmatched) && Array.isArray(data.unmatched.source) && Array.isArray(data.unmatched.target), 'unmatched is missing');
   return data as unknown as OverlapResult;
 }
+
+const CSV_HEADER = 'level,parent,sources,targets,score,structural,syntactic';
+
+/** Quotes a CSV field when it contains a comma, quote or line break (RFC 4180). */
+function csvField(value: string): string {
+  return /[",\r\n]/.test(value) ? `"${value.replace(/"/g, '""')}"` : value;
+}
+
+const metamodelLabel = (ref: MetamodelRef) => (ref.version ? `${ref.name} (${ref.version})` : ref.name);
+
+/**
+ * Flat CSV of a result: `#` comment lines with the compared metamodels, seed and creation time,
+ * then one row per class correspondence followed by its feature correspondences.
+ */
+export function overlapResultToCsv(result: OverlapResult): string {
+  const row = (c: Correspondence, parent: string) => [
+    c.level,
+    parent,
+    c.sources.map(ref => ref.qualifiedName).join('; '),
+    c.targets.map(ref => ref.qualifiedName).join('; '),
+    c.score.toFixed(3),
+    c.scores.structural.toFixed(3),
+    c.scores.syntactic.toFixed(3),
+  ].map(csvField).join(',');
+  const lines = [
+    `# Semantic overlap: ${metamodelLabel(result.source)} -> ${metamodelLabel(result.target)}`,
+    `# seed: ${result.settings.seed}`,
+    `# created: ${result.createdAt}`,
+    CSV_HEADER,
+  ];
+  for (const correspondence of result.correspondences) {
+    lines.push(row(correspondence, ''));
+    for (const child of correspondence.children ?? []) lines.push(row(child, correspondence.id));
+  }
+  return `${lines.join('\n')}\n`;
+}
