@@ -24,6 +24,7 @@ import {
 } from '../components/canvas/CanvasPopupNotification';
 import { CanvasProjectControls } from '../components/canvas/CanvasProjectControls';
 import { extractApiErrorMessage } from '../utils/apiErrorMessage';
+import { describeBuildFailure, describeBuildSuccess } from '../utils/buildCheckMessages';
 import { CanvasSidebarToolbar } from '../components/canvas/CanvasSidebarToolbar';
 import { CanvasProjectAccessControls } from '../components/canvas/CanvasProjectAccessControls';
 import { CanvasConstraintsOverlay } from '../components/canvas/CanvasConstraintsOverlay';
@@ -1375,8 +1376,7 @@ export const CanvasPage: React.FC = () => {
     showPopup('Checking whether this VSUM can be built…', 'info');
     try {
       const res = await apiService.buildVsum(activeProjectId);
-      const msg = (res as any)?.message || 'This VSUM can be built successfully.';
-      showPopup(msg, 'success');
+      showPopup(describeBuildSuccess(res?.data?.constraintRuleSets), 'success');
     } catch (e: unknown) {
       const detail = extractApiErrorMessage(e, 'Build check failed.');
       const missingReactionFile = detail.toLowerCase().includes('reaction file')
@@ -1387,12 +1387,13 @@ export const CanvasPage: React.FC = () => {
           'error',
         );
       } else {
-        showPopupError(e, 'Build check failed.');
+        const failure = describeBuildFailure(detail);
+        showPopup(failure.message, 'error', failure.details);
       }
     } finally {
       setCheckingBuild(false);
     }
-  }, [activeProjectId, isViewOnly, showPopup, showPopupError]);
+  }, [activeProjectId, isViewOnly, showPopup]);
 
   // ── Download artifact ─────────────────────────────────────────────────────
 

@@ -309,3 +309,62 @@ describe('CanvasPage save shortcut', () => {
     expect(apiService.syncVsumChanges).not.toHaveBeenCalled();
   });
 });
+
+describe('CanvasPage build check', () => {
+  const checkBuild = () =>
+    fireEvent.click(screen.getByRole('button', { name: /Check build/ }));
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockRouteId = '10';
+    (apiService.findMetaModels as Mock).mockResolvedValue({ data: [] });
+    (apiService.getVsumMembers as Mock).mockResolvedValue({ data: [] });
+    (apiService.getVsum as Mock).mockResolvedValue({ data: {} });
+    (apiService.getVsumsPaginated as Mock).mockResolvedValue({ data: [] });
+    (apiService.getVsumDetails as Mock).mockResolvedValue(vsumDetails(10, 'Project A'));
+  });
+
+  it('reports the constraint rule sets built into the VSUM', async () => {
+    (apiService.buildVsum as Mock).mockResolvedValue({
+      data: { constraintRuleSets: ['Komponenten', 'Preise'] },
+      message: 'The build was successful.',
+    });
+    render(<CanvasPage />);
+    await waitForProject('Project A');
+
+    checkBuild();
+
+    expect(
+      await screen.findByText(
+        'This VSUM can be built. It includes 2 constraint rule sets: Komponenten, Preise.',
+      ),
+    ).toBeInTheDocument();
+  });
+
+  it('explains build failures caused by constraints', async () => {
+    (apiService.buildVsum as Mock).mockRejectedValue(
+      apiError(500, 'Constraint file Preise.ocl refers to unknown metamodel(s) [shop]'),
+    );
+    render(<CanvasPage />);
+    await waitForProject('Project A');
+
+    checkBuild();
+
+    const popup = await screen.findByTestId('canvas-popup-notification');
+    await waitFor(() => expect(popup).toHaveTextContent(/The constraints could not be built/));
+    expect(popup).toHaveTextContent(/Constraint file Preise\.ocl refers to unknown metamodel/);
+  });
+
+  it('shows other build failures unchanged', async () => {
+    (apiService.buildVsum as Mock).mockRejectedValue(
+      apiError(500, 'Maven build failed with exit code 1'),
+    );
+    render(<CanvasPage />);
+    await waitForProject('Project A');
+
+    checkBuild();
+
+    expect(await screen.findByText('Maven build failed with exit code 1')).toBeInTheDocument();
+    expect(screen.queryByText(/The constraints could not be built/)).not.toBeInTheDocument();
+  });
+});

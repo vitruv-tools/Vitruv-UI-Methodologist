@@ -1712,6 +1712,14 @@ const LeftPanel: React.FC<LeftPanelProps> = ({
         </div>
       )}
 
+      <p
+        data-testid="constraints-build-hint"
+        style={{ margin: 0, padding: '6px 12px', fontSize: 10, color: '#64748b', borderBottom: '1px solid #f1f5f9' }}
+      >
+        Each rule set with constraints is built into the VSUM as its own OCL file. Changes take effect
+        with the next build.
+      </p>
+
       {/* Rule sets */}
       <div style={{ flex: 1, overflowY: 'auto' }}>
         {filtered.map(rs => (

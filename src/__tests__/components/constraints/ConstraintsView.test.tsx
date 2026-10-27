@@ -137,6 +137,15 @@ describe('ConstraintsView', () => {
       expect(screen.getByText('Constraint Sets')).toBeInTheDocument();
     });
 
+    it('explains that rule sets take effect with the next build', async () => {
+      await act(async () => {
+        render(<ConstraintsView canvasNodes={[]} />);
+      });
+      expect(screen.getByTestId('constraints-build-hint')).toHaveTextContent(
+        /own OCL file.*next build/,
+      );
+    });
+
     it('renders Constraint Insights panel', async () => {
       await act(async () => {
         render(<ConstraintsView canvasNodes={[]} />);
