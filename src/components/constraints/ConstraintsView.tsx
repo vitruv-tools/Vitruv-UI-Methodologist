@@ -574,6 +574,33 @@ function updateBackendId(prev: RuleSet[], rsId: string, backendId: number): Rule
   return prev.map(r => r.id === rsId ? { ...r, backendId } : r);
 }
 
+function addRuleToSet(ruleSets: RuleSet[], rule: ConstraintRule): RuleSet[] {
+  return ruleSets.map(rs => rs.id === rule.ruleSetId ? { ...rs, rules: [...rs.rules, rule] } : rs);
+}
+
+function newRule(ruleSetId: string): ConstraintRule {
+  return {
+    id: `r_${Date.now()}`, name: 'NewInvariant', severity: 'WARNING', description: '',
+    ruleSetId, oclDefinition: 'context ClassName inv NewInvariant:\n  @severity WARNING\n  @message ""\n  true',
+    scope: [], type: 'Single-Metamodel',
+    createdAt: new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
+    modifiedAt: 'Just now',
+    invariantCount: 1, contextCount: 1, linesOfCode: 5, linkedReactions: 0,
+  };
+}
+
+/**
+ * The rule the editor opens with before the user picks one: `prev` while its set is still shown,
+ * otherwise the first rule of the first set. An empty first set gets a new rule that is only a
+ * draft: it is added to the set, and saved, when the user saves it in the editor.
+ */
+function autoOpenedRule(prev: ConstraintRule | null, ruleSets: RuleSet[]): ConstraintRule | null {
+  if (prev && ruleSets.some(rs => rs.id === prev.ruleSetId)) return prev;
+  const first = ruleSets[0];
+  if (!first) return null;
+  return first.rules[0] ?? newRule(first.id);
+}
+
 // ── Sub-components ────────────────────────────────────────────────────────────
 
 const RuleRow: React.FC<{ rule: ConstraintRule; selected: boolean; onClick: () => void; onDelete: () => void }> = ({ rule, selected, onClick, onDelete }) => {
@@ -1783,8 +1810,8 @@ export const ConstraintsView: React.FC<ConstraintsViewProps> = ({ vsumId: _vsumI
   // Set while rule sets are shown that are not saved yet: the predefined ones, or ones whose create
   // request failed. The next change saves all of them.
   const saveUnsavedRef = useRef(false);
-  // Set once the user picks a rule, a rule set, or closes the bottom panel. Until then the first
-  // rule set stays selected so the panel is visible as soon as the view has something to show.
+  // Set once the user picks a rule, a rule set, or closes the bottom panel. Until then the editor
+  // stays open on the first rule set (see autoOpenedRule) as soon as the view has something to show.
   const selectionLockedRef = useRef(false);
   const [selectedRule, setSelectedRule] = useState<ConstraintRule | null>(null);
   const [selectedRuleSet, setSelectedRuleSet] = useState<RuleSet | null>(null);
@@ -1815,7 +1842,7 @@ export const ConstraintsView: React.FC<ConstraintsViewProps> = ({ vsumId: _vsumI
       const merged = mergeLoadedRuleSets(loaded, ruleSetsRef.current);
       setRuleSets(merged);
       if (!selectionLockedRef.current) {
-        setSelectedRuleSet(prev => (prev && merged.some(rs => rs.id === prev.id) ? prev : merged[0]));
+        setSelectedRule(prev => autoOpenedRule(prev, merged));
       }
       setSavedRuleSets('loaded');
     }).catch(err => {
@@ -1842,13 +1869,9 @@ export const ConstraintsView: React.FC<ConstraintsViewProps> = ({ vsumId: _vsumI
       rules: rs.rules.map(r => ({ ...r, scope: oclGetScope(r.oclDefinition) })),
     }));
     setRuleSets(next);
-    // Same update as the list, so the bottom panel is visible on the first paint that has a set.
+    // Same update as the list, so the editor is visible on the first paint that has a set.
     if (!selectionLockedRef.current) {
-      setSelectedRuleSet(prev => {
-        if (next.length === 0) return null;
-        const match = prev ? next.find(rs => rs.id === prev.id) : undefined;
-        return match ?? next[0];
-      });
+      setSelectedRule(prev => autoOpenedRule(prev, next));
     }
   }, [savedRuleSets, canvasNodes, vsumId]);
 
@@ -1969,21 +1992,14 @@ export const ConstraintsView: React.FC<ConstraintsViewProps> = ({ vsumId: _vsumI
   }, [syncRuleSet]);
 
   const handleAddRule = useCallback((ruleSetId: string) => {
-    const newRule: ConstraintRule = {
-      id: `r_${Date.now()}`, name: 'NewInvariant', severity: 'WARNING', description: '',
-      ruleSetId, oclDefinition: 'context ClassName inv NewInvariant:\n  @severity WARNING\n  @message ""\n  true',
-      scope: [], type: 'Single-Metamodel',
-      createdAt: new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
-      modifiedAt: 'Just now',
-      invariantCount: 1, contextCount: 1, linesOfCode: 5, linkedReactions: 0,
-    };
+    const rule = newRule(ruleSetId);
     setRuleSets(prev => {
-      const next = prev.map(rs => rs.id === ruleSetId ? { ...rs, rules: [...rs.rules, newRule] } : rs);
+      const next = addRuleToSet(prev, rule);
       const affected = next.find(rs => rs.id === ruleSetId);
       if (affected) syncRuleSet(affected);
       return next;
     });
-    setSelectedRule(newRule);
+    setSelectedRule(rule);
   }, [syncRuleSet]);
 
   const handleAddSet = useCallback(() => {
@@ -2015,7 +2031,8 @@ export const ConstraintsView: React.FC<ConstraintsViewProps> = ({ vsumId: _vsumI
 
   const handleSaveRule = useCallback((updated: ConstraintRule) => {
     setRuleSets(prev => {
-      const next = replaceRule(prev, updated);
+      // A draft rule the editor opened with (autoOpenedRule) joins its set with its first save.
+      const next = findSetContainingRule(prev, updated.id) ? replaceRule(prev, updated) : addRuleToSet(prev, updated);
       const affected = findSetContainingRule(next, updated.id);
       if (affected) syncRuleSet(affected);
       return next;
@@ -2061,7 +2078,7 @@ export const ConstraintsView: React.FC<ConstraintsViewProps> = ({ vsumId: _vsumI
             ruleSets={ruleSets}
             colorMap={colorMap}
             metaClasses={metaClasses}
-            onClose={() => { setSelectedRule(null); onHighlightNode?.(null); }}
+            onClose={() => { lockSelection(); setSelectedRule(null); onHighlightNode?.(null); }}
             onSave={handleSaveRule}
             vsumId={vsumId ?? undefined}
             onHighlightNode={onHighlightNode}
