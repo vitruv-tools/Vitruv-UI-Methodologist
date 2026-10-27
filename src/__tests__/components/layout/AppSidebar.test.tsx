@@ -51,6 +51,13 @@ describe('AppSidebar', () => {
     expect(screen.getByText('Model Library')).toBeInTheDocument();
   });
 
+  it('renders the Semantic overlap nav item and opens it', () => {
+    const onViewChange = vi.fn();
+    render(<AppSidebar {...defaultProps} onViewChange={onViewChange} />);
+    fireEvent.click(screen.getByText('Semantic overlap'));
+    expect(onViewChange).toHaveBeenCalledWith('overlap');
+  });
+
   it('calls onViewChange with "projects" when Projects is clicked', () => {
     const onViewChange = vi.fn();
     render(<AppSidebar {...defaultProps} onViewChange={onViewChange} />);

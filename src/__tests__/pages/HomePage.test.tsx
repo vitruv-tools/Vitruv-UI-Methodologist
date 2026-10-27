@@ -2,7 +2,7 @@ import React from 'react';
 import { fireEvent, render, screen } from '@testing-library/react';
 import { MemoryRouter, useLocation } from 'react-router-dom';
 import { HomePage } from '../../pages/HomePage';
-import { MODEL_LIBRARY_PATH, modelLibraryUmlPath } from '../../constants/routes';
+import { MODEL_LIBRARY_PATH, modelLibraryUmlPath, SEMANTIC_OVERLAP_PATH } from '../../constants/routes';
 
 // ── mocks ─────────────────────────────────────────────────────────────────────
 
@@ -12,6 +12,7 @@ vi.mock('../../components/layout/AppSidebar', () => ({
       Sidebar for {userName}
       <button type="button" onClick={() => onViewChange('projects')}>Projects</button>
       <button type="button" onClick={() => onViewChange('library')}>Model Library</button>
+      <button type="button" onClick={() => onViewChange('overlap')}>Semantic overlap</button>
     </nav>
   ),
 }));
@@ -29,6 +30,10 @@ vi.mock('../../components/ui/ModelLibraryTable', () => ({
       <button type="button" onClick={onHome}>Vitruvius logo</button>
     </div>
   ),
+}));
+
+vi.mock('../../components/semanticOverlap/SemanticOverlapView', () => ({
+  SemanticOverlapView: () => <div data-testid="semantic-overlap-view">Semantic overlap</div>,
 }));
 
 vi.mock('../../components/ui/ProjectsView', () => ({
@@ -101,6 +106,22 @@ describe('HomePage', () => {
   it('calls refreshCurrentUser on mount', () => {
     renderHomePage();
     expect(mockRefreshCurrentUser).toHaveBeenCalledTimes(1);
+  });
+
+  it('renders the semantic overlap view when opened via its URL', () => {
+    renderHomePage(SEMANTIC_OVERLAP_PATH);
+    expect(screen.getByTestId('semantic-overlap-view')).toBeInTheDocument();
+    expect(screen.queryByTestId('landing-view')).not.toBeInTheDocument();
+  });
+
+  it('changes the URL when the semantic overlap view is opened from the sidebar and leaves it again', () => {
+    renderHomePage();
+    fireEvent.click(screen.getByRole('button', { name: 'Semantic overlap' }));
+    expect(screen.getByTestId('current-path')).toHaveTextContent(SEMANTIC_OVERLAP_PATH);
+    expect(screen.getByTestId('semantic-overlap-view')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Projects' }));
+    expect(screen.getByTestId('current-path')).toHaveTextContent(/^\/$/);
+    expect(screen.getByTestId('projects-view')).toBeInTheDocument();
   });
 
   it('renders the model library when opened via its URL', () => {

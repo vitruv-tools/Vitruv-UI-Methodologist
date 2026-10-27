@@ -6,7 +6,7 @@ import { useDismissOnOutsideClick } from '../../hooks/useDismissOnOutsideClick';
 import { getUserInitials } from '../../utils/userInitials';
 import { USER_PROFILE_DESCRIPTION, USER_PROFILE_LABEL } from '../../constants/accountLabels';
 
-export type SidebarView = 'home' | 'library' | 'projects' | 'profile';
+export type SidebarView = 'home' | 'library' | 'overlap' | 'projects' | 'profile';
 
 interface AppSidebarProps {
   activeView: SidebarView;
@@ -34,6 +34,12 @@ const LibraryIcon = () => (
   </svg>
 );
 
+const OverlapIcon = () => (
+  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <circle cx="9" cy="12" r="6" />
+    <circle cx="15" cy="12" r="6" />
+  </svg>
+);
 
 const UserIcon = () => (
   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -280,6 +286,7 @@ export const AppSidebar: React.FC<AppSidebarProps> = ({
           badgeCount={sharedProjectsUnreadCount}
         />
         <NavItem icon={<LibraryIcon />} label="Model Library" active={activeView === 'library'} onClick={() => onViewChange('library')} />
+        <NavItem icon={<OverlapIcon />} label="Semantic overlap" active={activeView === 'overlap'} onClick={() => onViewChange('overlap')} />
       </nav>
 
       {/* ── Bottom section ── */}

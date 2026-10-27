@@ -54,6 +54,8 @@
   --v-disabled-bg: #e5e7eb;
   --v-disabled-text: #9ca3af;
   --v-brand-soft: #f0faf8;
+  --v-heatmap-low: #f1f5f9;
+  --v-heatmap-high: #049484;
 }
 
 [data-theme="dark"] {
@@ -111,6 +113,8 @@
   --v-disabled-bg: #334155;
   --v-disabled-text: #64748b;
   --v-brand-soft: rgba(4, 148, 132, 0.16);
+  --v-heatmap-low: #1e293b;
+  --v-heatmap-high: #2dd4bf;
 }
 
 html,

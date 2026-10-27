@@ -53,6 +53,8 @@ export const themeVars = {
   disabledBg: 'var(--v-disabled-bg)',
   disabledText: 'var(--v-disabled-text)',
   brandSoft: 'var(--v-brand-soft)',
+  heatmapLow: 'var(--v-heatmap-low)',
+  heatmapHigh: 'var(--v-heatmap-high)',
 } as const;
 
 export function isThemeMode(value: unknown): value is ThemeMode {

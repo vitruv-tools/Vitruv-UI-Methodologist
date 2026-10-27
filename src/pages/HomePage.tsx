@@ -9,23 +9,32 @@ import { useAuth } from '../contexts/AuthContext';
 import { AuthService } from '../services/auth';
 import { useSharedProjectNotifications } from '../hooks/useSharedProjectNotifications';
 import { themeVars } from '../theme/theme';
-import { MODEL_LIBRARY_PATH } from '../constants/routes';
+import { MODEL_LIBRARY_PATH, SEMANTIC_OVERLAP_PATH } from '../constants/routes';
+import { SemanticOverlapView } from '../components/semanticOverlap/SemanticOverlapView';
 
 export const HomePage: React.FC = () => {
   const navigate = useNavigate();
-  // The Model Library has its own URL; the other views are still kept in state at '/'.
+  // The Model Library and the Semantic overlap view have their own URLs; the other views are still
+  // kept in state at '/'.
   const isModelLibraryRoute = useMatch(`${MODEL_LIBRARY_PATH}/*`) !== null;
+  const isOverlapRoute = useMatch(SEMANTIC_OVERLAP_PATH) !== null;
   const [nonLibraryView, setNonLibraryView] = useState<SidebarView>('home');
-  const activeView: SidebarView = isModelLibraryRoute ? 'library' : nonLibraryView;
+  let activeView: SidebarView = nonLibraryView;
+  if (isModelLibraryRoute) activeView = 'library';
+  else if (isOverlapRoute) activeView = 'overlap';
 
   const handleViewChange = useCallback((view: SidebarView) => {
     if (view === 'library') {
       if (!isModelLibraryRoute) navigate(MODEL_LIBRARY_PATH);
       return;
     }
+    if (view === 'overlap') {
+      if (!isOverlapRoute) navigate(SEMANTIC_OVERLAP_PATH);
+      return;
+    }
     setNonLibraryView(view);
-    if (isModelLibraryRoute) navigate('/');
-  }, [isModelLibraryRoute, navigate]);
+    if (isModelLibraryRoute || isOverlapRoute) navigate('/');
+  }, [isModelLibraryRoute, isOverlapRoute, navigate]);
 
   const { user, refreshCurrentUser } = useAuth();
   const userKey = user?.email ?? user?.id ?? null;
@@ -64,6 +73,7 @@ export const HomePage: React.FC = () => {
         <div style={{ position: 'relative', flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
           {activeView === 'home'     && <LandingView userName={userName} onNavigate={handleViewChange} />}
           {activeView === 'library'  && <ModelLibraryTable onHome={() => handleViewChange('home')} />}
+          {activeView === 'overlap'  && <SemanticOverlapView />}
           {activeView === 'projects' && (
             <ProjectsView
               userKey={userKey}

@@ -7,7 +7,7 @@ import { OtpVerificationPage } from './pages/OtpVerificationPage';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 // useAuth is used in ProtectedRoute
 import { CanvasPage } from './pages/CanvasPage';
-import { MODEL_LIBRARY_PATH } from './constants/routes';
+import { MODEL_LIBRARY_PATH, SEMANTIC_OVERLAP_PATH } from './constants/routes';
 import './App.css';
 
 function ProtectedRoute({ children }: Readonly<{ children: React.ReactNode }>) {
@@ -56,6 +56,11 @@ function App() {
             </ProtectedRoute>
           } />
           <Route path={`${MODEL_LIBRARY_PATH}/*`} element={
+            <ProtectedRoute>
+              <HomePage />
+            </ProtectedRoute>
+          } />
+          <Route path={SEMANTIC_OVERLAP_PATH} element={
             <ProtectedRoute>
               <HomePage />
             </ProtectedRoute>
