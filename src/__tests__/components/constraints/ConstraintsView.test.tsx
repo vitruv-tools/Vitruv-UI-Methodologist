@@ -7,27 +7,29 @@ import { setTheme } from '../../../theme/theme';
 
 // ── Mocks ─────────────────────────────────────────────────────────────────────
 
-vi.mock('monaco-editor', () => ({
-  languages: {
-    register: vi.fn(),
-    setMonarchTokensProvider: vi.fn(),
-    setLanguageConfiguration: vi.fn(),
-    getLanguages: vi.fn(() => []),
-    registerCompletionItemProvider: vi.fn(() => ({ dispose: vi.fn() })),
-  },
-  editor: {
-    defineTheme: vi.fn(),
-    setTheme: vi.fn(),
-    setModelMarkers: vi.fn(),
-  },
-  MarkerSeverity: { Error: 8, Warning: 4, Info: 2 },
-}));
+vi.mock('monaco-editor', () => {
+  const monaco = {
+    languages: {
+      register: vi.fn(),
+      setMonarchTokensProvider: vi.fn(),
+      setLanguageConfiguration: vi.fn(),
+      getLanguages: vi.fn(() => []),
+      registerCompletionItemProvider: vi.fn(() => ({ dispose: vi.fn() })),
+    },
+    editor: {
+      defineTheme: vi.fn(),
+      setTheme: vi.fn(),
+      setModelMarkers: vi.fn(),
+    },
+    MarkerSeverity: { Error: 8, Warning: 4, Info: 2 },
+  };
+  return { ...monaco, default: monaco };
+});
 
-vi.mock('@monaco-editor/react', async () => {
-  const mockReact = (await import('react'));
-  const MockEditor = ({ value, onChange, onMount, theme }: any) => {
-    mockReact.useEffect(() => {
-      onMount?.({}, {
+vi.mock('@monaco-editor/react', () => {
+  const MockEditor = ({ value, onChange, onMount, beforeMount, theme }: any) => {
+    React.useEffect(() => {
+      const monaco = {
         languages: {
           register: vi.fn(),
           setLanguageConfiguration: vi.fn(),
@@ -37,9 +39,11 @@ vi.mock('@monaco-editor/react', async () => {
           defineTheme: vi.fn(),
           setTheme: vi.fn(),
         },
-      });
+      };
+      beforeMount?.(monaco);
+      onMount?.({}, monaco);
     }, []); // eslint-disable-line react-hooks/exhaustive-deps
-    return mockReact.createElement('textarea', {
+    return React.createElement('textarea', {
       'data-testid': 'monaco-editor',
       'data-theme': theme,
       value: value ?? '',

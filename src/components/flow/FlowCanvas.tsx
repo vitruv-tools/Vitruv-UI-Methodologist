@@ -397,7 +397,9 @@ export const FlowCanvas = forwardRef<FlowCanvasHandle, FlowCanvasProps>(
     const lowCodeEditorRef = useRef<LowCodeReactionEditorHandle>(null);
     const selectedEdge = useSelectedEdgeStore((s) => s.selectedEdge);
 
-    const circleVisible = activeCanvasMode === 'views';
+    // The VSUM circle is a Views-mode layout. Reaction mode expands metamodels
+    // into a different graph, so the circle must unmount while that view is open.
+    const circleVisible = activeCanvasMode === 'views' && !addReactionMode;
 
     const {
       nodes,
@@ -1282,9 +1284,11 @@ export const FlowCanvas = forwardRef<FlowCanvasHandle, FlowCanvasProps>(
       onEcoreFileRename?.(id, newFileName);
     }, [editable, setNodes, onEcoreFileRename]);
 
-    // Clear reaction source when mode is toggled off
+    // Clear reaction source when mode is toggled off, and drop circle selection
+    // so the Views overlay does not stay selected across the reaction view.
     useEffect(() => {
-      if (!addReactionMode) setReactionSourceId(null);
+      if (addReactionMode) setCircleSelected(false);
+      else setReactionSourceId(null);
     }, [addReactionMode]);
 
     const ecoreIdentifierKey = useMemo(
