@@ -7,19 +7,50 @@ import { setTheme } from '../../../theme/theme';
 
 // ── Mocks ─────────────────────────────────────────────────────────────────────
 
-vi.mock('@monaco-editor/react', async (importOriginal) => {
-  const mockReact = await import('react');
-  const monaco: any = await importOriginal();
-  const MockEditor = ({ value, onChange, onMount, theme }: any) => {
-    mockReact.useEffect(() => { onMount?.({}, monaco); }, []); // eslint-disable-line react-hooks/exhaustive-deps
-    return mockReact.createElement('textarea', {
+vi.mock('monaco-editor', () => {
+  const monaco = {
+    languages: {
+      register: vi.fn(),
+      setMonarchTokensProvider: vi.fn(),
+      setLanguageConfiguration: vi.fn(),
+      getLanguages: vi.fn(() => []),
+      registerCompletionItemProvider: vi.fn(() => ({ dispose: vi.fn() })),
+    },
+    editor: {
+      defineTheme: vi.fn(),
+      setTheme: vi.fn(),
+      setModelMarkers: vi.fn(),
+    },
+    MarkerSeverity: { Error: 8, Warning: 4, Info: 2 },
+  };
+  return { ...monaco, default: monaco };
+});
+
+vi.mock('@monaco-editor/react', () => {
+  const MockEditor = ({ value, onChange, onMount, beforeMount, theme }: any) => {
+    React.useEffect(() => {
+      const monaco = {
+        languages: {
+          register: vi.fn(),
+          setLanguageConfiguration: vi.fn(),
+          setMonarchTokensProvider: vi.fn(),
+        },
+        editor: {
+          defineTheme: vi.fn(),
+          setTheme: vi.fn(),
+        },
+      };
+      beforeMount?.(monaco);
+      onMount?.({}, monaco);
+    }, []); // eslint-disable-line react-hooks/exhaustive-deps
+    return React.createElement('textarea', {
       'data-testid': 'monaco-editor',
       'data-theme': theme,
       value: value ?? '',
       onChange: (e: any) => onChange?.(e.target.value),
     });
   };
-  return { ...monaco, default: MockEditor };
+  return { __esModule: true, default: MockEditor };
 });
 
 vi.mock('reactflow', () => ({
