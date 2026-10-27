@@ -121,9 +121,9 @@ async function renderProjectsView() {
 }
 
 describe('ProjectsView real component', () => {
-  it('renders "Dashboard / Projects" heading', async () => {
+  it('renders "Workbench / Projects" heading', async () => {
     await renderProjectsView();
-    expect(screen.getByText('Dashboard / Projects')).toBeInTheDocument();
+    expect(screen.getByText('Workbench / Projects')).toBeInTheDocument();
   });
 
   it('renders "New project" button', async () => {
