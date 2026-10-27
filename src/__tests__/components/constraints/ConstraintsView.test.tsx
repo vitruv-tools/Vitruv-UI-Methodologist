@@ -1,60 +1,28 @@
 import type { Mock } from 'vitest';
 import React from 'react';
-import { render, screen, fireEvent, waitFor, act, configure, getConfig } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, act, configure } from '@testing-library/react';
 import { ConstraintsView } from '../../../components/constraints/ConstraintsView';
 import { apiService } from '../../../services/api';
 import { setTheme } from '../../../theme/theme';
 
 // ── Mocks ─────────────────────────────────────────────────────────────────────
 
-// The test config aliases every monaco-editor import, @monaco-editor/react included, to one
-// module, so both mocks share one factory: whichever is resolved first is used for both.
-const { mockMonaco } = vi.hoisted(() => ({
-  mockMonaco: async () => {
-    const mockReact = (await import('react'));
-    const MockEditor = ({ value, onChange, onMount, theme }: any) => {
-      mockReact.useEffect(() => {
-        onMount?.({}, {
-          languages: {
-            register: vi.fn(),
-            setLanguageConfiguration: vi.fn(),
-            setMonarchTokensProvider: vi.fn(),
-          },
-          editor: {
-            defineTheme: vi.fn(),
-            setTheme: vi.fn(),
-          },
-        });
-      }, []); // eslint-disable-line react-hooks/exhaustive-deps
-      return mockReact.createElement('textarea', {
-        'data-testid': 'monaco-editor',
-        'data-theme': theme,
-        value: value ?? '',
-        onChange: (e: any) => onChange?.(e.target.value),
-      });
-    };
-    return {
-      __esModule: true,
-      default: MockEditor,
-      languages: {
-        register: vi.fn(),
-        setMonarchTokensProvider: vi.fn(),
-        setLanguageConfiguration: vi.fn(),
-        getLanguages: vi.fn(() => []),
-        registerCompletionItemProvider: vi.fn(() => ({ dispose: vi.fn() })),
-      },
-      editor: {
-        defineTheme: vi.fn(),
-        setTheme: vi.fn(),
-        setModelMarkers: vi.fn(),
-      },
-      MarkerSeverity: { Error: 8, Warning: 4, Info: 2 },
-    };
-  },
-}));
-
-vi.mock('monaco-editor', () => mockMonaco());
-vi.mock('@monaco-editor/react', () => mockMonaco());
+// The test config aliases every monaco-editor import to src/__mocks__/monaco-editor.ts, so this one
+// mock also covers `monaco-editor`: it keeps that stub and adds the editor component.
+vi.mock('@monaco-editor/react', async (importOriginal) => {
+  const mockReact = await import('react');
+  const monaco: any = await importOriginal();
+  const MockEditor = ({ value, onChange, onMount, theme }: any) => {
+    mockReact.useEffect(() => { onMount?.({}, monaco); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+    return mockReact.createElement('textarea', {
+      'data-testid': 'monaco-editor',
+      'data-theme': theme,
+      value: value ?? '',
+      onChange: (e: any) => onChange?.(e.target.value),
+    });
+  };
+  return { ...monaco, default: MockEditor };
+});
 
 vi.mock('reactflow', () => ({
   __esModule: true,
@@ -120,9 +88,7 @@ const pfandNode = {
 };
 
 // The editor is open from the start, and its rule set dropdown repeats every set's name.
-const defaultIgnore = getConfig().defaultIgnore;
-beforeAll(() => configure({ defaultIgnore: `${defaultIgnore}, option` }));
-afterAll(() => configure({ defaultIgnore }));
+configure({ defaultIgnore: 'script, style, option' });
 
 // ── Tests ─────────────────────────────────────────────────────────────────────
 
@@ -183,17 +149,6 @@ describe('ConstraintsView', () => {
 
   // C. Click a rule → editor panel opens
   describe('editor panel opens on rule click', () => {
-    it('shows "Editing:" header after clicking a rule', async () => {
-      await act(async () => {
-        render(<ConstraintsView canvasNodes={[pfandNode as any]} />);
-      });
-      const ruleEl = screen.getByText('CrateBottlesAreUnique');
-      fireEvent.click(ruleEl);
-      await waitFor(() => {
-        expect(screen.getByText(/Editing:/)).toBeInTheDocument();
-      });
-    });
-
     it('shows the rule name in the editor header', async () => {
       await act(async () => {
         render(<ConstraintsView canvasNodes={[pfandNode as any]} />);
@@ -484,21 +439,17 @@ describe('ConstraintsView', () => {
       expect(screen.queryByRole('region', { name: 'Rule set panel' })).not.toBeInTheDocument();
     });
 
-    it('opens the rule set panel when a ruleset is clicked', async () => {
+    it('opens the rule set panel when a ruleset is clicked, and switches it to another', async () => {
       await act(async () => {
         render(<ConstraintsView canvasNodes={[pfandNode as any]} />);
       });
       fireEvent.click(screen.getByText('Crate Rules'));
       expect(screen.getByText('Rule Set: Crate Rules')).toBeInTheDocument();
       expect(screen.queryByRole('region', { name: 'Rule editor' })).not.toBeInTheDocument();
-    });
 
-    it('switches the panel when another ruleset is clicked', async () => {
-      await act(async () => {
-        render(<ConstraintsView canvasNodes={[pfandNode as any]} />);
-      });
       fireEvent.click(screen.getByText('Deposit Item Rules'));
       expect(screen.getByText('Rule Set: Deposit Item Rules')).toBeInTheDocument();
+      expect(screen.queryByText('Rule Set: Crate Rules')).not.toBeInTheDocument();
     });
 
     it('closes RuleSetPanel when clicking × button', async () => {
