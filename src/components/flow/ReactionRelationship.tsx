@@ -678,7 +678,7 @@ export function ReactionRelationship({
   const edgeColor = style?.stroke || '#3b82f6';
   const edgeWidth = style?.strokeWidth || 2;
   const activeColor = stateBasedColor(isHighlighted, isHovered, edgeColor);
-  const labelColor = stateBasedColor(isHighlighted, isHovered, '#1f2937');
+  const labelColor = stateBasedColor(isHighlighted, isHovered, 'var(--v-uml-box-text, #1f2937)');
   const codeIndicatorColor = stateBasedColor(isHighlighted, isHovered, '#0e639c');
   const isActive = isHighlighted || isHovered;
   const underlayWidth = isActive ? 8 : 7;
@@ -696,7 +696,7 @@ export function ReactionRelationship({
         d={edgePath}
         className="react-flow__edge-path"
         style={{
-          stroke: '#ffffff',
+          stroke: 'var(--v-uml-edge-halo, #ffffff)',
           strokeWidth: underlayWidth,
           opacity: 0.95,
           fill: 'none',
@@ -799,7 +799,7 @@ export function ReactionRelationship({
             fontSize: '12px',
             fontWeight: 700,
             fill: labelColor,
-            stroke: '#ffffff',
+            stroke: 'var(--v-uml-edge-halo, #ffffff)',
             strokeWidth: 3.5,
             paintOrder: 'stroke fill',
             pointerEvents: 'none',

@@ -133,13 +133,13 @@ function directionMarkerContent(relationshipType: string, color: string): React.
     return <path d="M 0 0 L 12 6 L 0 12 z" fill={color} />;
   }
   if (relationshipType === 'inheritance' || relationshipType === 'realization') {
-    return <path d="M 0 0 L 12 6 L 0 12 z" fill="#ffffff" stroke={color} strokeWidth="1.5" />;
+    return <path d="M 0 0 L 12 6 L 0 12 z" style={{ fill: 'var(--v-uml-edge-halo, #ffffff)' }} stroke={color} strokeWidth="1.5" />;
   }
   if (relationshipType === 'composition') {
     return <path d="M 7 1 L 13 7 L 7 13 L 1 7 Z" fill={color} />;
   }
   if (relationshipType === 'aggregation') {
-    return <path d="M 7 1 L 13 7 L 7 13 L 1 7 Z" fill="#ffffff" stroke={color} strokeWidth="1.5" />;
+    return <path d="M 7 1 L 13 7 L 7 13 L 1 7 Z" style={{ fill: 'var(--v-uml-edge-halo, #ffffff)' }} stroke={color} strokeWidth="1.5" />;
   }
   if (relationshipType === 'dependency') {
     return (
@@ -267,7 +267,7 @@ export function UMLRelationship({
   const [isControlHovered, setIsControlHovered] = React.useState(false);
 
   // Edge is highlighted when selected or hovered — simple, no merge state
-  const isHighlighted: boolean = !!(selected || isHovered);
+  const isHighlighted: boolean = (selected || isHovered);
   
   const handleClick = (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -442,7 +442,7 @@ export function UMLRelationship({
         d={edgePath}
         className="react-flow__edge-path"
         style={{
-          stroke: '#ffffff',
+          stroke: 'var(--v-uml-edge-halo, #ffffff)',
           strokeWidth: (isHighlighted || isHovered) ? 6 : 5,
           opacity: 0.92,
           fill: 'none',
@@ -482,7 +482,7 @@ export function UMLRelationship({
           fontSize: '11px',
           fontWeight: 600,
           fill: getHighlightColor(isHighlighted, isHovered),
-          stroke: '#ffffff',
+          stroke: 'var(--v-uml-edge-halo, #ffffff)',
           strokeWidth: 3,
           paintOrder: 'stroke fill',
           pointerEvents: 'none',
@@ -566,7 +566,7 @@ export function UMLRelationship({
                 pointerEvents: 'auto',
                 cursor: 'pointer',
                 zIndex: 1000,
-                background: 'white',
+                background: 'var(--v-surface, #ffffff)',
                 border: `1.5px solid ${edgeColor}`,
                 borderRadius: '4px',
                 padding: '1px 6px',
@@ -600,7 +600,7 @@ export function UMLRelationship({
                 pointerEvents: 'auto',
                 cursor: 'pointer',
                 zIndex: 1000,
-                background: 'white',
+                background: 'var(--v-surface, #ffffff)',
                 border: `1.5px solid ${edgeColor}`,
                 borderRadius: '4px',
                 padding: '1px 6px',
@@ -708,7 +708,7 @@ export function UMLRelationship({
                     fontSize: '12px',
                     fontWeight: 700,
                     fill: '#ef4444',
-                    stroke: '#ffffff',
+                    stroke: 'var(--v-uml-edge-halo, #ffffff)',
                     strokeWidth: 4,
                     paintOrder: 'stroke fill',
                     pointerEvents: 'none',
