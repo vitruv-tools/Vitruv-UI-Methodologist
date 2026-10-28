@@ -12,3 +12,6 @@
 
 # Note: .env.staging and .env.production are committed to the repository
 # as they don't contain secrets and are needed for CI/CD
+
+# Semantic overlap benchmark metamodels (downloaded, not redistributed)
+/src/__tests__/fixtures/semanticOverlap/benchmark/metamodels/

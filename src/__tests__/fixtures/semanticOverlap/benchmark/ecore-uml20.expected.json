@@ -1,0 +1,33 @@
+{
+  "scenario": "Ecore -> UML 2.0 CD",
+  "source": "Ecore.ecore",
+  "target": "UML_2.0_CD.ecore",
+  "level": "class",
+  "description": "Expected class correspondences between the ModelCVS Ecore and UML 2.0 class-diagram metamodels (Kessentini et al. 2014, model exchange case). Recreated by hand because the original reference alignments are lost; seeded by the paper's Fig. 1-3 (EClass-Class, EAttribute/EReference-Property) and completed from the Ecore and UML 2.0 specifications.",
+  "correspondences": [
+    { "sources": ["ecore.EModelElement"], "targets": ["uml2CD.Element"] },
+    { "sources": ["ecore.ENamedElement"], "targets": ["uml2CD.NamedElement"] },
+    { "sources": ["ecore.ETypedElement"], "targets": ["uml2CD.TypedElement", "uml2CD.MultiplicityElement"] },
+    { "sources": ["ecore.EClassifier"], "targets": ["uml2CD.Classifier", "uml2CD.Type"] },
+    { "sources": ["ecore.EClass"], "targets": ["uml2CD.Class"] },
+    { "sources": ["ecore.EDataType"], "targets": ["uml2CD.DataType", "uml2CD.PrimitiveType"] },
+    { "sources": ["ecore.EEnum"], "targets": ["uml2CD.Enumeration"] },
+    { "sources": ["ecore.EEnumLiteral"], "targets": ["uml2CD.EnumerationLiteral"] },
+    { "sources": ["ecore.EPackage"], "targets": ["uml2CD.Package"] },
+    { "sources": ["ecore.EOperation"], "targets": ["uml2CD.Operation"] },
+    { "sources": ["ecore.EParameter"], "targets": ["uml2CD.Parameter"] },
+    { "sources": ["ecore.EStructuralFeature"], "targets": ["uml2CD.StructuralFeature"] },
+    { "sources": ["ecore.EAttribute", "ecore.EReference"], "targets": ["uml2CD.Property"] },
+    { "sources": ["ecore.EAnnotation"], "targets": ["uml2CD.Comment"] }
+  ],
+  "uncertain": [
+    "ecore.ETypedElement -> uml2CD.MultiplicityElement (Ecore puts bounds on ETypedElement, UML on MultiplicityElement)",
+    "ecore.EClassifier -> uml2CD.Type (UML splits Ecore's EClassifier into Type and Classifier)",
+    "ecore.EDataType -> uml2CD.PrimitiveType (Ecore has no separate primitive type class)",
+    "ecore.EAnnotation -> uml2CD.Comment (annotations carry key/value details, comments only text)"
+  ],
+  "unmatched": {
+    "source": ["ecore.EObject", "ecore.EFactory", "ecore.EStringToStringMapEntry"],
+    "note": "No UML 2.0 class-diagram concept corresponds to these Ecore classes."
+  }
+}
