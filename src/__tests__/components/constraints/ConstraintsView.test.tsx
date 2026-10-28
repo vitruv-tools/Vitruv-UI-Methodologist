@@ -1,6 +1,6 @@
 import type { Mock } from 'vitest';
 import React from 'react';
-import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, act, configure } from '@testing-library/react';
 import { ConstraintsView } from '../../../components/constraints/ConstraintsView';
 import { apiService } from '../../../services/api';
 import { setTheme } from '../../../theme/theme';
@@ -116,6 +116,8 @@ const pfandNode = {
   position: { x: 0, y: 0 },
 };
 
+configure({ defaultIgnore: 'script, style, option' });
+
 // ── Tests ─────────────────────────────────────────────────────────────────────
 
 describe('ConstraintsView', () => {
@@ -175,24 +177,13 @@ describe('ConstraintsView', () => {
 
   // C. Click a rule → editor panel opens
   describe('editor panel opens on rule click', () => {
-    it('shows "Editing:" header after clicking a rule', async () => {
-      await act(async () => {
-        render(<ConstraintsView canvasNodes={[pfandNode as any]} />);
-      });
-      const ruleEl = screen.getByText('CrateContainsExactly16Bottles');
-      fireEvent.click(ruleEl);
-      await waitFor(() => {
-        expect(screen.getByText(/Editing:/)).toBeInTheDocument();
-      });
-    });
-
     it('shows the rule name in the editor header', async () => {
       await act(async () => {
         render(<ConstraintsView canvasNodes={[pfandNode as any]} />);
       });
-      fireEvent.click(screen.getByText('CrateContainsExactly16Bottles'));
+      fireEvent.click(screen.getByText('CrateBottlesAreUnique'));
       await waitFor(() => {
-        expect(screen.getByText(/Editing:.*CrateContainsExactly16Bottles/)).toBeInTheDocument();
+        expect(screen.getByText(/Editing:.*CrateBottlesAreUnique/)).toBeInTheDocument();
       });
     });
 
@@ -200,7 +191,7 @@ describe('ConstraintsView', () => {
       await act(async () => {
         render(<ConstraintsView canvasNodes={[pfandNode as any]} />);
       });
-      fireEvent.click(screen.getByText('CrateContainsExactly16Bottles'));
+      fireEvent.click(screen.getByText('CrateBottlesAreUnique'));
       const editor = await screen.findByTestId('monaco-editor');
       expect(editor).toHaveAttribute('data-theme', 'vitruv-editor-light');
 
@@ -302,7 +293,7 @@ describe('ConstraintsView', () => {
       await act(async () => {
         render(<ConstraintsView canvasNodes={[pfandNode as any]} />);
       });
-      fireEvent.click(screen.getByText('CrateContainsExactly16Bottles'));
+      fireEvent.click(screen.getByText('CrateBottlesAreUnique'));
       await waitFor(() => expect(screen.getByText(/Editing:/)).toBeInTheDocument());
 
       // click the close (×) button in the editor header
@@ -327,9 +318,9 @@ describe('ConstraintsView', () => {
       await act(async () => {
         render(<ConstraintsView canvasNodes={[pfandNode as any]} />);
       });
-      fireEvent.click(screen.getByText('CrateContainsExactly16Bottles'));
+      fireEvent.click(screen.getByText('CrateBottlesAreUnique'));
       await waitFor(() => expect(screen.getByText(/Editing:/)).toBeInTheDocument());
-      fireEvent.click(screen.getByText('CrateContainsExactly16Bottles'));
+      fireEvent.click(screen.getByText('CrateBottlesAreUnique'));
       await waitFor(() => {
         expect(screen.queryByText(/Editing:/)).not.toBeInTheDocument();
       });
@@ -464,28 +455,50 @@ describe('ConstraintsView', () => {
     });
   });
 
-  // M. Rule set panel is open for the first set, and follows clicks
+  // M. The editor is open on the first set's first rule; the rule set panel follows clicks
   describe('ruleset panel', () => {
-    it('shows the rule set panel for the first set without a click', async () => {
+    it('opens the editor on the first rule of the first set without a click', async () => {
       await act(async () => {
         render(<ConstraintsView canvasNodes={[pfandNode as any]} />);
       });
-      expect(screen.getByRole('region', { name: 'Rule set panel' })).toBeInTheDocument();
-      expect(screen.getByText('Rule Set: Crate Rules')).toBeInTheDocument();
+      expect(screen.getByRole('region', { name: 'Rule editor' })).toBeInTheDocument();
+      expect(screen.getByText('Editing: CrateContainsExactly16Bottles')).toBeInTheDocument();
+      expect(screen.getByLabelText('Rule Set')).toHaveValue('crate-rules');
+      expect(screen.queryByRole('region', { name: 'Rule set panel' })).not.toBeInTheDocument();
     });
 
-    it('switches the panel when another ruleset is clicked', async () => {
+    it('mounts the editor only once visible, and keeps its unsaved edits while hidden again', () => {
+      const { rerender } = render(<ConstraintsView canvasNodes={[pfandNode as any]} visible={false} />);
+      expect(screen.queryByRole('region', { name: 'Rule editor' })).not.toBeInTheDocument();
+      expect(screen.queryByTestId('monaco-editor')).not.toBeInTheDocument();
+
+      rerender(<ConstraintsView canvasNodes={[pfandNode as any]} visible />);
+      expect(screen.getByText('Editing: CrateContainsExactly16Bottles')).toBeInTheDocument();
+      fireEvent.change(screen.getByTestId('monaco-editor'), { target: { value: 'context pfand::Kasten inv Edited:\n  true' } });
+
+      rerender(<ConstraintsView canvasNodes={[pfandNode as any]} visible={false} />);
+      rerender(<ConstraintsView canvasNodes={[pfandNode as any]} visible />);
+      expect(screen.getByTestId('monaco-editor')).toHaveValue('context pfand::Kasten inv Edited:\n  true');
+    });
+
+    it('opens the rule set panel when a ruleset is clicked, and switches it to another', async () => {
       await act(async () => {
         render(<ConstraintsView canvasNodes={[pfandNode as any]} />);
       });
+      fireEvent.click(screen.getByText('Crate Rules'));
+      expect(screen.getByText('Rule Set: Crate Rules')).toBeInTheDocument();
+      expect(screen.queryByRole('region', { name: 'Rule editor' })).not.toBeInTheDocument();
+
       fireEvent.click(screen.getByText('Deposit Item Rules'));
       expect(screen.getByText('Rule Set: Deposit Item Rules')).toBeInTheDocument();
+      expect(screen.queryByText('Rule Set: Crate Rules')).not.toBeInTheDocument();
     });
 
     it('closes RuleSetPanel when clicking × button', async () => {
       await act(async () => {
         render(<ConstraintsView canvasNodes={[pfandNode as any]} />);
       });
+      fireEvent.click(screen.getByText('Crate Rules'));
       await waitFor(() => expect(screen.getByText(/Rule Set:/)).toBeInTheDocument());
       // find the × button in the panel
       const panelHeader = screen.getByText(/Rule Set:/).closest('div')?.parentElement?.parentElement;
@@ -603,28 +616,83 @@ describe('ConstraintsView predefined rule sets in a project', () => {
 
     expect(await screen.findByText('Crate Rules')).toBeInTheDocument();
     expect(screen.getByText('Deposit Item Rules')).toBeInTheDocument();
-    expect(await screen.findByText('Rule Set: Crate Rules')).toBeInTheDocument();
+    expect(await screen.findByText('Editing: CrateContainsExactly16Bottles')).toBeInTheDocument();
     expect(apiService.getRuleSets).toHaveBeenCalledWith(42);
   });
 
-  it('selects the first saved rule set so the panel is visible immediately', async () => {
-    (apiService.getRuleSets as jest.Mock).mockResolvedValue([
-      { id: 9, name: 'Saved Set', color: '#3b82f6', description: '', oclContent: '' },
+  it('opens the editor on the first saved rule set immediately', async () => {
+    (apiService.getRuleSets as Mock).mockResolvedValue([
+      { id: 9, name: 'Saved Set', color: '#3b82f6', description: '', oclContent: 'context other::A inv SavedRule:\n  true' },
       { id: 10, name: 'Second Set', color: '#10b981', description: '', oclContent: '' },
     ]);
 
     render(<ConstraintsView vsumId="42" canvasNodes={[otherNode as any]} />);
 
-    expect(await screen.findByText('Rule Set: Saved Set')).toBeInTheDocument();
+    expect(await screen.findByText('Editing: SavedRule')).toBeInTheDocument();
+    expect(screen.getByLabelText('Rule Set')).toHaveValue('rs_9');
     expect(screen.queryByText('Default Rule Set')).not.toBeInTheDocument();
   });
 
-  it('offers one blank rule set, already selected, when the project has no template', async () => {
+  it('opens a new, unsaved rule in the editor when the first saved rule set is empty', async () => {
+    (apiService.getRuleSets as Mock).mockResolvedValue([
+      { id: 9, name: 'Saved Set', color: '#3b82f6', description: '', oclContent: '' },
+    ]);
+
+    render(<ConstraintsView vsumId="42" canvasNodes={[otherNode as any]} />);
+
+    expect(await screen.findByText('Editing: NewInvariant')).toBeInTheDocument();
+    expect(screen.getByLabelText('Rule Set')).toHaveValue('rs_9');
+    expect(screen.getByText('0 rules')).toBeInTheDocument();
+    await act(async () => { await new Promise(r => setTimeout(r, 50)); });
+    expect(apiService.updateRuleSet).not.toHaveBeenCalled();
+    expect(apiService.createRuleSet).not.toHaveBeenCalled();
+  });
+
+  it('adds the new rule to its set and saves it once the user saves it in the editor', async () => {
+    (apiService.getRuleSets as Mock).mockResolvedValue([
+      { id: 9, name: 'Saved Set', color: '#3b82f6', description: '', oclContent: '' },
+    ]);
+    render(<ConstraintsView vsumId="42" canvasNodes={[otherNode as any]} />);
+    await screen.findByText('Editing: NewInvariant');
+
+    fireEvent.click(screen.getByText('Save Changes'));
+
+    await waitFor(() => expect(apiService.updateRuleSet).toHaveBeenCalledTimes(1), { timeout: 2000 });
+    const [vsumId, backendId, body] = (apiService.updateRuleSet as Mock).mock.calls[0];
+    expect([vsumId, backendId]).toEqual([42, 9]);
+    expect(body.oclContent).toContain('inv NewInvariant');
+    expect(screen.getByText('1 rules')).toBeInTheDocument();
+    expect(apiService.createRuleSet).not.toHaveBeenCalled();
+  });
+
+  it('opens a new, unsaved rule in the blank rule set when the project has no template', async () => {
     render(<ConstraintsView vsumId="42" canvasNodes={[otherNode as any]} />);
 
     expect(await screen.findByText('Default Rule Set')).toBeInTheDocument();
-    expect(await screen.findByText('Rule Set: Default Rule Set')).toBeInTheDocument();
+    expect(await screen.findByText('Editing: NewInvariant')).toBeInTheDocument();
+    expect(screen.getByLabelText('Rule Set')).toHaveValue('default-rule-set');
     expect(apiService.createRuleSet).not.toHaveBeenCalled();
+  });
+
+  it('keeps the editor closed once the user closed it, even when rule sets load later', async () => {
+    let resolveLoad: (sets: unknown[]) => void = () => {};
+    (apiService.getRuleSets as Mock).mockImplementation(
+      () => new Promise(resolve => { resolveLoad = resolve; }),
+    );
+    render(<ConstraintsView vsumId="42" canvasNodes={[pfandNode as any]} />);
+    fireEvent.click(screen.getByText('New Set'));
+    await screen.findByText('New Rule Set');
+    fireEvent.click(screen.getByText('Add rule'));
+    const header = await screen.findByText('Editing: NewInvariant');
+    fireEvent.click(header.closest('div')!.parentElement!.querySelector('button')!);
+    expect(screen.queryByText(/Editing:/)).not.toBeInTheDocument();
+
+    await act(async () => {
+      resolveLoad([{ id: 9, name: 'Saved Set', color: '#3b82f6', description: '', oclContent: 'context other::A inv SavedRule:\n  true' }]);
+    });
+
+    expect(await screen.findByText('Saved Set')).toBeInTheDocument();
+    expect(screen.queryByText(/Editing:/)).not.toBeInTheDocument();
   });
 
   it('offers the blank rule set again after the predefined ones were deleted', async () => {
@@ -632,7 +700,7 @@ describe('ConstraintsView predefined rule sets in a project', () => {
 
     render(<ConstraintsView vsumId="42" canvasNodes={[pfandNode as any]} />);
 
-    expect(await screen.findByText('Rule Set: Default Rule Set')).toBeInTheDocument();
+    expect(await screen.findByText('Default Rule Set')).toBeInTheDocument();
     expect(screen.queryByText('Crate Rules')).not.toBeInTheDocument();
   });
 
