@@ -208,6 +208,9 @@ export const EcoreFileBox: React.FC<NodeProps<EcoreFileBoxData>> = ({
     openContextMenu();
   };
   const handleCardKeyDown = (e: React.KeyboardEvent) => {
+    if (!renaming && (e.key === 'Delete' || e.key === 'Backspace')) {
+      return;
+    }
     e.stopPropagation();
     if (renaming) return;
     if (e.key === 'Enter') {
