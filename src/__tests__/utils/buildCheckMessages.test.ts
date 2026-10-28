@@ -34,10 +34,36 @@ describe('describeBuildFailure', () => {
     expect(describeBuildFailure(detail)).toEqual({
       message:
         'The constraints could not be built. Fix the rule set in Constraints mode and check the build again.'
-        + `\n\n${detail}`,
+        + '\n\nSetup-service request failed (400): Rule set "Preise" refers to unknown metamodel(s) [shop]',
       details: detail,
       constraintRelated: true,
     });
+  });
+
+  it('shows only the reason of a setup-service error and names the rule set', () => {
+    const detail =
+      "Setup-service request to '/api/vsum/jar' failed with status 400 BAD_REQUEST: "
+      + '{"errorCode":"VSUM_INPUT_ERROR","message":"Constraint file New Rule Set.ocl declares context(s)'
+      + ' [ClassName] without metamodel; use <metamodel>::<class>","path":"/api/vsum/jar","status":400}';
+
+    expect(describeBuildFailure(detail)).toEqual({
+      message:
+        'The constraints could not be built. Fix the rule set in Constraints mode and check the build again.'
+        + '\n\nRule set "New Rule Set" declares context(s) [ClassName] without metamodel;'
+        + ' use <metamodel>::<class>',
+      details: detail,
+      constraintRelated: true,
+    });
+  });
+
+  it('drops the request of a setup-service error without JSON body', () => {
+    const detail =
+      "Setup-service request to '/api/vsum/jar' failed with status 500: could not load constraints/Preise.ocl";
+
+    expect(describeBuildFailure(detail).message).toBe(
+      'The constraints could not be built. Fix the rule set in Constraints mode and check the build again.'
+      + '\n\ncould not load constraints/Preise.ocl',
+    );
   });
 
   it('recognises unqualified context declarations', () => {

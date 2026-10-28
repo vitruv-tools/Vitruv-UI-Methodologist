@@ -15,6 +15,12 @@ const CONSTRAINT_FAILURE =
 const CONSTRAINT_FAILURE_PATTERN =
   /constraint file|\.ocl(?![\w.:\-/])|without metamodel|unknown metamodel/i;
 
+/** Prefix the backend puts in front of the answer of the setup-service. */
+const SETUP_SERVICE_PREFIX = /^Setup-service request to '[^']*' failed with status [^:]*:\s*/;
+
+/** The name of a constraint file, which is the name of its rule set followed by ".ocl". */
+const CONSTRAINT_FILE = /Constraint file (.+?)\.ocl\b/g;
+
 /** Result of describing a failed build check. */
 export interface BuildFailureDescription {
   /** The text to show, which contains the original error. */
@@ -39,14 +45,39 @@ export function describeBuildSuccess(constraintRuleSets: string[] | null | undef
 }
 
 /**
- * Describes a failed build check, explaining failures caused by constraint rule sets.
+ * Extracts the reason from an error of the setup-service, without the request and the JSON around
+ * it, and names rule sets instead of their files, e.g. 'Rule set "Prices" declares context(s)
+ * [Item] without metamodel; …'.
+ */
+function readableConstraintReason(detail: string): string {
+  const reason = setupServiceMessage(detail) ?? detail.replace(SETUP_SERVICE_PREFIX, '');
+  return reason.replace(CONSTRAINT_FILE, (_match, name: string) => `Rule set "${name}"`).trim();
+}
+
+/** Returns the "message" of the JSON error body of the setup-service, if the detail contains one. */
+function setupServiceMessage(detail: string): string | undefined {
+  const start = detail.indexOf('{');
+  const end = detail.lastIndexOf('}');
+  if (start < 0 || end < start) return undefined;
+  try {
+    const body: unknown = JSON.parse(detail.slice(start, end + 1));
+    const message = (body as { message?: unknown } | null)?.message;
+    return typeof message === 'string' && message.trim() ? message : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+/**
+ * Describes a failed build check, explaining failures caused by constraint rule sets. For those,
+ * only the reason is shown; the original error stays available in the details, e.g. to copy it.
  *
  * @param detail the error message of the build check
  */
 export function describeBuildFailure(detail: string): BuildFailureDescription {
   if (CONSTRAINT_FAILURE_PATTERN.test(detail)) {
     return {
-      message: `${CONSTRAINT_FAILURE}\n\n${detail}`,
+      message: `${CONSTRAINT_FAILURE}\n\n${readableConstraintReason(detail)}`,
       details: detail,
       constraintRelated: true,
     };
