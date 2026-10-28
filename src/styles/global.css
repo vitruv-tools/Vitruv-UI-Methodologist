@@ -153,6 +153,14 @@ code {
   z-index: 30;
 }
 
+/* The Semantic overlap diagram is embedded in a page, so its controls stay inside the diagram. */
+.semantic-overlap-diagram .react-flow__controls {
+  position: absolute !important;
+  left: 12px !important;
+  bottom: 12px !important;
+  z-index: 5;
+}
+
 .react-flow__minimap {
   border-radius: 8px;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);

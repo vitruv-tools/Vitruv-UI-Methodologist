@@ -9,10 +9,10 @@ type SortKey = 'score' | 'structural' | 'syntactic';
 const SORT_LABELS: Record<SortKey, string> = { score: 'Score', structural: 'Structural', syntactic: 'Syntactic' };
 
 const headerCell: React.CSSProperties = {
-  padding: '10px 14px', fontSize: 12, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.04em',
+  padding: '8px 10px', fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.04em',
   color: themeVars.textMuted, background: themeVars.tableHeader, textAlign: 'left', position: 'sticky', top: 0,
 };
-const bodyCell: React.CSSProperties = { padding: '10px 14px', fontSize: 13 };
+const bodyCell: React.CSSProperties = { padding: '8px 10px', fontSize: 13 };
 
 const names = (refs: ElementRef[]) => refs.map(ref => ref.name).join(', ');
 
@@ -52,7 +52,7 @@ export const CorrespondenceList: React.FC<CorrespondenceListProps> = ({
       fontWeight: nested ? 400 : 500,
       fontStyle: nested ? 'italic' : 'normal',
       color: nested ? themeVars.textSecondary : themeVars.text,
-      paddingLeft: nested ? 38 : 14,
+      paddingLeft: nested ? 30 : 10,
     };
     return (
       <tr
@@ -85,7 +85,7 @@ export const CorrespondenceList: React.FC<CorrespondenceListProps> = ({
           )}
           {names(c.sources)}
         </td>
-        <td style={{ ...nameCell, paddingLeft: 14 }}>{names(c.targets)}</td>
+        <td style={{ ...nameCell, paddingLeft: 10 }}>{names(c.targets)}</td>
         <td style={{ ...bodyCell, color: themeVars.text, fontWeight: nested ? 500 : 600 }}>{formatPercent(c.score)}</td>
         <td style={{ ...bodyCell, color: themeVars.textSecondary }}>{formatPercent(c.scores.structural)}</td>
         <td style={{ ...bodyCell, color: themeVars.textSecondary }}>{formatPercent(c.scores.syntactic)}</td>
@@ -106,8 +106,8 @@ export const CorrespondenceList: React.FC<CorrespondenceListProps> = ({
       <table style={{ width: '100%', borderCollapse: 'collapse' }} aria-label="Correspondences">
         <thead>
           <tr>
-            <th style={headerCell}>{result.source.name}</th>
-            <th style={headerCell}>{result.target.name}</th>
+            <th style={headerCell} title={result.source.name}>Source</th>
+            <th style={headerCell} title={result.target.name}>Target</th>
             {(Object.keys(SORT_LABELS) as SortKey[]).map(key => (
               <th key={key} style={headerCell} aria-sort={sortKey === key ? 'descending' : 'none'}>
                 <button

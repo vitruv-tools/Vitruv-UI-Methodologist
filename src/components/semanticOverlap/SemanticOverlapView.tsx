@@ -184,7 +184,8 @@ export const SemanticOverlapView: React.FC = () => {
               </button>
             ))}
           </div>
-          <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 3fr) minmax(320px, 2fr)', gap: 16, minHeight: 480 }}>
+          {/* flexShrink 0: the page is a scrolling flex column, which would otherwise squeeze this row. */}
+          <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 3fr) minmax(360px, 2fr)', gap: 16, flexShrink: 0 }}>
             <div role="tabpanel" style={{ border: `1px solid ${themeVars.border}`, borderRadius: 12, overflow: 'hidden', background: themeVars.workspaceBg, height: 560 }}>
               {store.activeTab === 'diagram' ? (
                 <CorrespondenceLinkDiagram
