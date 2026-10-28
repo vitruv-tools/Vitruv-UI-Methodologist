@@ -13,11 +13,12 @@ describe('similarity matrices', () => {
     const matrices = computeMatrices('class', sources, targets, createDefaultMeasureRegistry(), DEFAULT_SETTINGS);
     expect([matrices.n, matrices.m]).toEqual([3, 3]);
     expect(matrices.combined).toHaveLength(9);
-    expect(Object.keys(matrices.perMeasure)).toEqual(['structural', 'cosine', 'levenshtein']);
+    expect(Object.keys(matrices.perMeasure)).toEqual(['structural', 'cosine', 'levenshtein', 'name-tokens', 'neighbourhood']);
   });
 
   it('combines syntactic = α·cosine + β·(1−LevNorm) and the weighted objectives', () => {
-    const matrices = computeMatrices('class', sources, targets, createDefaultMeasureRegistry(), DEFAULT_SETTINGS);
+    const paperOnly = { ...DEFAULT_SETTINGS, measures: [] };
+    const matrices = computeMatrices('class', sources, targets, createDefaultMeasureRegistry(), paperOnly);
     const k = 0; // EClass ↔ Class
     expect(matrices.syntactic[k]).toBeCloseTo(0.5 * matrices.perMeasure.cosine[k] + 0.5 * matrices.perMeasure.levenshtein[k]);
     expect(matrices.combined[k]).toBeCloseTo(0.5 * matrices.structural[k] + 0.5 * matrices.syntactic[k]);

@@ -38,6 +38,47 @@ const byQualifiedName = (a: ElementRef, b: ElementRef) => a.qualifiedName.locale
 const PROFILING_END = 0.1;
 const CLASS_SEARCH_END = 0.8;
 
+/**
+ * Hierarchy completion (extension of the paper, after the search): an unmatched target class whose
+ * most similar source is already matched to the target's direct supertype or subtype, with a
+ * combined similarity of at least the null score, joins that source's correspondence. UML often
+ * splits one Ecore concept over a class and its super- or subtype (`Classifier`/`Type`,
+ * `DataType`/`PrimitiveType`); the search alone rarely adds such weaker second targets.
+ */
+export function completeHierarchy(problem: MatchingProblem, solution: Solution, target: MetamodelGraph): Solution {
+  const { n, m, matrices, settings } = problem;
+  const index = new Map(problem.targets.map((p, j) => [p.ref.qualifiedName, j]));
+  const related = new Map<number, Set<number>>();
+  const link = (a: number, b: number) => {
+    if (!related.has(a)) related.set(a, new Set());
+    related.get(a)!.add(b);
+  };
+  for (const node of target.classes) {
+    const child = index.get(node.qualifiedName);
+    for (const parent of node.superTypes.map(name => index.get(name))) {
+      if (child === undefined || parent === undefined) continue;
+      link(child, parent);
+      link(parent, child);
+    }
+  }
+  const assignments = solution.assignments.map(targets => [...targets]);
+  const matched = new Set(assignments.flat());
+  for (let j = 0; j < m; j++) {
+    if (matched.has(j)) continue;
+    let best = -1;
+    for (let i = 0; i < n; i++) {
+      if (best < 0 || matrices.combined[i * m + j] > matrices.combined[best * m + j]) best = i;
+    }
+    if (best < 0 || matrices.combined[best * m + j] < settings.nullScore) continue;
+    const targets = assignments[best];
+    if (targets.length >= problem.maxTargets || !targets.some(t => related.get(j)?.has(t))) continue;
+    targets.push(j);
+    targets.sort((a, b) => a - b);
+    matched.add(j);
+  }
+  return { assignments, fitness: problem.fitness(assignments) };
+}
+
 /** Own and inherited attributes and references of a class (supertypes within the same file). */
 export function featuresWithInherited(graph: MetamodelGraph, qualifiedName: string): FeatureNode[] {
   const byName = new Map(graph.classes.map(c => [c.qualifiedName, c]));
@@ -185,8 +226,9 @@ export function runOverlapAnalysis(input: OverlapInput, deps: AnalysisDeps): Ove
   } else {
     const solution = strategy.search(problem, settings, createRng(settings.seed),
       p => report({ phase: p.phase, fraction: PROFILING_END + p.fraction * (CLASS_SEARCH_END - PROFILING_END) }));
-    fitness = solution.fitness;
-    ({ correspondences, unmatched } = solutionToCorrespondences(problem, solution, 'class'));
+    const completed = completeHierarchy(problem, solution, target);
+    fitness = completed.fitness;
+    ({ correspondences, unmatched } = solutionToCorrespondences(problem, completed, 'class'));
     correspondences = correspondences.map((correspondence, k) => {
       report({ phase: 'features', fraction: CLASS_SEARCH_END + (k / correspondences.length) * (1 - CLASS_SEARCH_END) });
       return { ...correspondence, children: matchFeatures(correspondence, input, { lexical: deps.lexical, measures, strategy }, settings) };

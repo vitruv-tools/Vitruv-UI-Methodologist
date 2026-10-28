@@ -1,13 +1,18 @@
 import type { LexicalSource } from '../lexical/wordNetSource';
 import { tokenize } from '../lexical/tokenize';
 import type { AnalysisSettings, ClassNode, FeatureNode, MetamodelGraph, Side } from '../types';
-import type { ElementProfile } from './types';
+import type { ElementProfile, NameTokens } from './types';
 
 /**
  * Weight of context tokens (feature and operation names of a class) relative to the element's own
  * name tokens, so that the name dominates the vocabulary but the context still counts (paper §3.2.1).
  */
 export const CONTEXT_TOKEN_WEIGHT = 0.5;
+
+const nameTokensWithSynonyms = (name: string, lexical: LexicalSource): NameTokens => {
+  const tokens = nameTokens(name, lexical);
+  return { tokens, tokenSynonyms: tokens.map(token => new Set(lexical.synonyms(token))) };
+};
 
 /** Lemmatised tokens of a name; unknown words stay as they are. */
 export function nameTokens(name: string, lexical: LexicalSource): string[] {
@@ -81,7 +86,12 @@ export function buildClassProfiles(
       ref: { side, kind: 'class', qualifiedName: node.qualifiedName, name: node.name },
       nameLower: node.name.toLowerCase(),
       tokens,
+      tokenSynonyms: tokens.map(token => new Set(lexical.synonyms(token))),
       ...buildVocabulary(tokens, context, lexical, settings.synonymWeight),
+      neighbours: [...new Set([
+        ...node.superTypes.map(qualifiedName => qualifiedName.slice(qualifiedName.lastIndexOf('.') + 1)),
+        ...node.references.map(reference => reference.typeName),
+      ])].filter(Boolean).map(name => nameTokensWithSynonyms(name, lexical)),
       metrics: [
         node.attributes.length,
         node.references.length,
@@ -117,7 +127,9 @@ export function buildFeatureProfiles(
       },
       nameLower: feature.name.toLowerCase(),
       tokens,
+      tokenSynonyms: tokens.map(token => new Set(lexical.synonyms(token))),
       ...buildVocabulary(tokens, [], lexical, settings.synonymWeight),
+      neighbours: feature.typeName ? [nameTokensWithSynonyms(feature.typeName, lexical)] : [],
       metrics: [
         feature.kind === 'reference' ? 1 : 0,
         Math.min(2, Math.max(0, feature.lower)),

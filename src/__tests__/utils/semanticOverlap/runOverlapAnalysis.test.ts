@@ -1,7 +1,7 @@
 import { createWordNetSource, noLexicalSource } from '../../../utils/semanticOverlap/lexical/wordNetSource';
 import { createDefaultMeasureRegistry } from '../../../utils/semanticOverlap/measures/registry';
 import type { SimilarityMeasure } from '../../../utils/semanticOverlap/measures/types';
-import { InvalidSettingsError, runOverlapAnalysis, solutionToCorrespondences } from '../../../utils/semanticOverlap/runOverlapAnalysis';
+import { completeHierarchy, InvalidSettingsError, runOverlapAnalysis, solutionToCorrespondences } from '../../../utils/semanticOverlap/runOverlapAnalysis';
 import { resolveSettings } from '../../../utils/semanticOverlap/settings';
 import type { MetamodelGraph, OverlapResult } from '../../../utils/semanticOverlap/types';
 import table from '../../../assets/wordnet/oewn-2025-synonyms.json';
@@ -163,3 +163,38 @@ describe('solutionToCorrespondences (grouping rule)', () => {
     expect(group([[0], [1], [3], [2]]).correspondences).toEqual(correspondences);
   });
 });
+
+describe('completeHierarchy', () => {
+  // Diagonal 4×4 problem; target classes: ElementB is a subtype of ElementA.
+  const problem = diagonalProblem(4, { nullScore: 0 });
+  const target: MetamodelGraph = {
+    ref: refFor('T', 2), rootPackage: 'p', nsUri: null, enums: [], unresolvedSupertypes: [],
+    classes: ['ElementA', 'ElementB', 'ElementC', 'ElementD'].map((name, k) => ({
+      qualifiedName: `p.${name}`, name, isAbstract: false, isInterface: false,
+      superTypes: k === 1 ? ['p.ElementA'] : [], attributes: [], references: [], operations: [],
+    })),
+  };
+
+  it('adds an unmatched sub- or supertype to the correspondence of its most similar source', () => {
+    const solution = { assignments: [[0], [], [2], [3]], fitness: 0 };
+    const completed = completeHierarchy(problem, solution, target);
+    // ElementB's most similar source is ElementB (index 1), which is unmatched → no completion.
+    expect(completed.assignments).toEqual([[0], [], [2], [3]]);
+  });
+
+  it('completes when the best source is matched to the related target', () => {
+    const solution = { assignments: [[0], [0], [2], [3]], fitness: 0 };
+    // ElementB (target 1) is unmatched; its best source is source 1, which is matched to ElementA (its supertype).
+    const completed = completeHierarchy(problem, solution, target);
+    expect(completed.assignments[1]).toEqual([0, 1]);
+    expect(completed.fitness).toBeCloseTo(problem.fitness(completed.assignments));
+  });
+
+  it('respects the maximum number of targets and the null score', () => {
+    const single = diagonalProblem(4, { nullScore: 0, maxTargetsPerElement: 1 });
+    expect(completeHierarchy(single, { assignments: [[0], [0], [2], [3]], fitness: 0 }, target).assignments[1]).toEqual([0]);
+    const strict = diagonalProblem(4, { nullScore: 1 });
+    expect(completeHierarchy(strict, { assignments: [[0], [0], [2], [3]], fitness: 0 }, target).assignments[1]).toEqual([0]);
+  });
+});
+

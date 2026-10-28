@@ -1,18 +1,25 @@
 import type { AnalysisSettings, ElementRef, MatchLevel } from '../types';
 
+/** Lemmatised tokens of a name with the WordNet synonyms of each token. */
+export interface NameTokens {
+  tokens: string[];
+  /** WordNet synonyms of each name token (same order as `tokens`). */
+  tokenSynonyms: ReadonlySet<string>[];
+}
+
 /** Per-element data computed once per analysis and shared by all measures. */
-export interface ElementProfile {
+export interface ElementProfile extends NameTokens {
   ref: ElementRef;
   /** Full name, lower-cased (for edit distance). */
   nameLower: string;
-  /** Lemmatised name tokens. */
-  tokens: string[];
   /** Term → term-frequency weight (name tokens, context tokens and their synonyms). */
   vocabulary: Map<string, number>;
   /** Euclidean norm of `vocabulary`. */
   norm: number;
   /** Numeric vector for the structural measure (class or feature metrics). */
   metrics: number[];
+  /** Names of related classes (classes: direct supertypes and reference target types). */
+  neighbours: NameTokens[];
 }
 
 export interface MeasureContext {
@@ -50,4 +57,8 @@ export interface MeasureRegistry {
 export const STRUCTURAL = 'structural';
 export const COSINE = 'cosine';
 export const LEVENSHTEIN = 'levenshtein';
+/** Optional additional measure comparing name tokens directly (see nameTokenMeasure.ts). */
+export const NAME_TOKENS = 'name-tokens';
+/** Optional additional measure comparing the names of related classes (see neighbourhoodMeasure.ts). */
+export const NEIGHBOURHOOD = 'neighbourhood';
 export const BUILT_IN_MEASURES = [STRUCTURAL, COSINE, LEVENSHTEIN] as const;

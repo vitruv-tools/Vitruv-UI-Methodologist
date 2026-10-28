@@ -2,10 +2,10 @@ import { createDefaultMeasureRegistry } from '../../../../utils/semanticOverlap/
 import { UnknownMeasureError, type SimilarityMeasure } from '../../../../utils/semanticOverlap/measures/types';
 
 describe('measure registry', () => {
-  it('contains the built-in measures on both levels', () => {
+  it('contains the built-in and the additional measures', () => {
     const registry = createDefaultMeasureRegistry();
-    expect(registry.list('class').map(m => m.id)).toEqual(['structural', 'cosine', 'levenshtein']);
-    expect(registry.list('feature').map(m => m.id)).toEqual(['structural', 'cosine', 'levenshtein']);
+    expect(registry.list('class').map(m => m.id)).toEqual(['structural', 'cosine', 'levenshtein', 'name-tokens', 'neighbourhood']);
+    expect(registry.list('feature').map(m => m.id)).toEqual(['structural', 'cosine', 'levenshtein', 'name-tokens']);
   });
 
   it('registers additional measures and rejects unknown ids', () => {

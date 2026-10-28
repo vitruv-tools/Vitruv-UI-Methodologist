@@ -14,6 +14,8 @@ export function profile(name: string, side: 'source' | 'target', metrics: number
     ref: { side, kind: 'class', qualifiedName: `p.${name}`, name },
     nameLower: name.toLowerCase(),
     tokens: [name.toLowerCase()],
+    tokenSynonyms: [new Set<string>()],
+    neighbours: [],
     vocabulary,
     norm,
     metrics,

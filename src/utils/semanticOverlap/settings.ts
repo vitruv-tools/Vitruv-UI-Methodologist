@@ -40,11 +40,12 @@ export const DEFAULT_SETTINGS: AnalysisSettings = {
   weights: { structural: 0.5, syntactic: 0.5 },
   syntactic: { alpha: 0.5, beta: 0.5 },
   synonymWeight: 1,
-  nullScore: 0.35,
+  nullScore: 0.25,
   maxTargetsPerElement: 2,
   ga: EFFORT_PRESETS.balanced.ga,
   sa: EFFORT_PRESETS.balanced.sa,
-  measures: [],
+  // Additional measures (extensions of the paper's measures, tuned on the benchmark).
+  measures: [{ id: 'name-tokens', weight: 0.75 }, { id: 'neighbourhood', weight: 0.4 }],
   strategy: 'hybrid-ga-sa',
 };
 
