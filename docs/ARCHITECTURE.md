@@ -195,6 +195,53 @@ async function deployFlow(flowData) {
 }
 ```
 
+## Semantic Overlap
+
+The **Semantic overlap** view (`/semantic-overlap`, sidebar entry after the Model Library) compares two
+Model Library metamodels and proposes which classes, attributes and references most likely describe the
+same concept. It implements search-based metamodel matching after Kessentini et al. (2014), *Search-based
+metamodel matching with structural and syntactic measures* (JSS 97), entirely in the browser.
+
+### Flow
+
+1. `SemanticOverlapView` lets the user pick two metamodels; `useSemanticOverlapRun` fetches both ecore
+   files via `apiService.getFile` and parses them on the main thread (`readMetamodelGraph`, needs
+   `DOMParser`).
+2. The plain graphs go to a Web Worker (`src/workers/semanticOverlap.worker.ts`), which loads the WordNet
+   synonym table and calls the pure `runOverlapAnalysis`. Progress is posted back; cancelling terminates
+   the worker (also on unmount and after a 5-minute limit).
+3. The `OverlapResult` is kept in the zustand store `src/store/SemanticOverlap.ts` and shown as a React
+   Flow link diagram, a canvas heatmap and a correspondence list that share selection, threshold and
+   expanded rows. It can be exported as JSON or CSV.
+
+### Modules (`src/utils/semanticOverlap/`)
+
+| Folder / file | Responsibility |
+|---|---|
+| `ecore/readMetamodelGraph.ts` | ecore XML → serialisable `MetamodelGraph`; input limits (5 MB, 2,000 classes) |
+| `lexical/` | camel-case tokeniser, morphy-style lemmatiser, `LexicalSource` over the bundled Open English WordNet table (`src/assets/wordnet/`, see its README) |
+| `measures/` | `SimilarityMeasure` registry; structural (Eq. 8: NAT, NAC, WMC, DIT, NOC), cosine (Eq. 1–2) and edit-distance (Eq. 3) measures from the paper, plus two additional measures: `name-tokens` (word-by-word name comparison with WordNet synonyms, weight 0.75) and `neighbourhood` (names of supertypes and reference targets, classes only, weight 0.4); profiles and precomputed similarity matrices |
+| `search/` | `MatchingProblem` (fitness Eq. 7 with a null score for unmatched elements), genetic algorithm, simulated annealing, the hybrid `hybrid-ga-sa` strategy and a strategy registry; seeded `mulberry32` RNG |
+| `runOverlapAnalysis.ts` | pipeline: class level, hierarchy completion (unmatched super-/subtypes join the correspondence of their most similar source), then attributes/references inside each class correspondence; grouping of shared targets into one correspondence |
+| `overlapResult.ts` | result format (`schemaVersion: 1`), JSON parse/validate, CSV export |
+| `linkDiagramLayout.ts` | result → React Flow nodes and edges |
+
+### Extension points
+
+- **Similarity measures**: register a `SimilarityMeasure` (per level) and give it a weight in
+  `settings.measures` — e.g. an AI/embedding-based measure. The search and the views stay unchanged.
+- **Search strategies**: register a `SearchStrategy` and select it via `settings.strategy`.
+- **Lexical source**: anything implementing `LexicalSource` can replace WordNet.
+- **Persistence / reaction generation**: `OverlapResult` is a versioned, self-contained JSON document;
+  `ElementRef`s identify elements by metamodel side, kind and qualified name, so results can be stored
+  and turned into reactions later without re-running the analysis.
+
+### Benchmark
+
+`OVERLAP_BENCHMARK=1 npx vitest run src/__tests__/utils/semanticOverlap/benchmark` reproduces the paper's
+model exchange case on the ModelCVS metamodels (download them first with
+`node scripts/fetch-overlap-benchmark.mjs`); see `src/__tests__/fixtures/semanticOverlap/benchmark/README.md`.
+
 ## Future Enhancements
 
 1. **State Management**: Consider Redux or Zustand for complex state
