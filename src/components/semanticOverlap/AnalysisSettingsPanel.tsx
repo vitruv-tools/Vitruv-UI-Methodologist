@@ -4,13 +4,20 @@ import TextField from '@mui/material/TextField';
 import ToggleButton from '@mui/material/ToggleButton';
 import ToggleButtonGroup from '@mui/material/ToggleButtonGroup';
 import { themeVars } from '../../theme/theme';
+import { approachOf } from '../../utils/semanticOverlap/approaches/registry';
+import type { ApproachId } from '../../utils/semanticOverlap/approaches/types';
+import {
+  IMPROVEMENT_IDS, IMPROVEMENT_LABELS, type ImprovedSettings, type ImprovementParams,
+} from '../../utils/semanticOverlap/improved/settings';
 import { randomSeed } from '../../utils/semanticOverlap/search/rng';
-import { EFFORT_PRESETS, validateSettings } from '../../utils/semanticOverlap/settings';
+import { EFFORT_PRESETS } from '../../utils/semanticOverlap/settings';
 import type { AnalysisSettings, Effort } from '../../utils/semanticOverlap/types';
 
 interface AnalysisSettingsPanelProps {
+  /** Approach whose settings are shown; the improved approach adds its improvements. */
+  approach?: ApproachId;
   settings: AnalysisSettings;
-  onChange: (patch: Partial<AnalysisSettings>) => void;
+  onChange: (patch: Partial<AnalysisSettings> | Partial<ImprovedSettings>) => void;
   /** Display threshold (view state, applied without a new run). */
   minScore: number;
   onMinScoreChange: (value: number) => void;
@@ -20,6 +27,53 @@ interface AnalysisSettingsPanelProps {
 const EFFORTS: Effort[] = ['fast', 'balanced', 'thorough'];
 const percent = (value: number) => `${Math.round(value * 100)} %`;
 const toNumber = (text: string) => (text.trim() === '' ? Number.NaN : Number(text));
+
+const PARAM_FIELDS: [keyof ImprovementParams, string][] = [
+  ['floodingWeight', 'Flooding weight (λ)'],
+  ['floodingMaxIterations', 'Flooding iterations'],
+  ['hypernymWeight', 'Hypernym weight'],
+  ['hypernymSenses', 'Hypernym senses'],
+  ['roleWeight', 'Role weight'],
+  ['datatypeWeight', 'Data-type weight'],
+  ['typeObjectMinSubclasses', 'Type-object min. subclasses'],
+];
+
+/** Switches for the improvements of the improved approach and their parameters. */
+const ImprovementsSection: React.FC<{
+  settings: ImprovedSettings; disabled?: boolean; onChange: (patch: Partial<ImprovedSettings>) => void;
+}> = ({ settings, disabled, onChange }) => (
+  <fieldset style={{ border: `1px solid ${themeVars.border}`, borderRadius: 8, padding: '8px 12px', margin: 0 }}>
+    <legend style={{ fontSize: 12, fontWeight: 600, color: themeVars.textSecondary }}>Improvements</legend>
+    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(230px, 1fr))', gap: 4 }}>
+      {IMPROVEMENT_IDS.map(id => (
+        <label key={id} style={{ fontSize: 13, color: themeVars.text, display: 'flex', alignItems: 'center', gap: 6 }}>
+          <input
+            type="checkbox"
+            checked={settings.improvements[id]}
+            disabled={disabled}
+            onChange={event => onChange({ improvements: { ...settings.improvements, [id]: event.target.checked } })}
+          />
+          {IMPROVEMENT_LABELS[id]}
+        </label>
+      ))}
+    </div>
+    <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', marginTop: 10 }}>
+      {PARAM_FIELDS.map(([key, label]) => (
+        <TextField
+          key={key}
+          id={`overlap-param-${key}`}
+          label={label}
+          type="number"
+          size="small"
+          value={Number.isNaN(settings.params[key]) ? '' : settings.params[key]}
+          disabled={disabled}
+          onChange={event => onChange({ params: { ...settings.params, [key]: toNumber(event.target.value) } })}
+          sx={{ width: 190 }}
+        />
+      ))}
+    </div>
+  </fieldset>
+);
 
 const SliderRow: React.FC<{
   label: string; hint: string; value: number; disabled?: boolean; onChange: (value: number) => void;
@@ -46,15 +100,16 @@ const SliderRow: React.FC<{
 
 /**
  * Display threshold plus the collapsible analysis settings: objective weights, α/β, effort,
- * seed, null score, maximum targets per element and the GA/SA parameters.
+ * seed, null score, maximum targets per element and the GA/SA parameters; for the improved
+ * approach also its improvements.
  */
 export const AnalysisSettingsPanel: React.FC<AnalysisSettingsPanelProps> = ({
-  settings, onChange, minScore, onMinScoreChange, disabled,
+  approach = 'paper', settings, onChange, minScore, onMinScoreChange, disabled,
 }) => {
   const [open, setOpen] = useState(false);
   const [seedText, setSeedText] = useState(String(settings.seed));
   const [showAdvanced, setShowAdvanced] = useState(false);
-  const problems = validateSettings(settings);
+  const problems = approachOf(approach).validate(settings);
 
   const setSeed = (seed: number) => {
     setSeedText(String(seed));
@@ -82,6 +137,9 @@ export const AnalysisSettingsPanel: React.FC<AnalysisSettingsPanelProps> = ({
       </button>
       {open && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+          {approach === 'improved' && (
+            <ImprovementsSection settings={settings as ImprovedSettings} disabled={disabled} onChange={onChange} />
+          )}
           <SliderRow
             label="Structural weight"
             hint={`Structure ${percent(settings.weights.structural)} · names ${percent(settings.weights.syntactic)}`}

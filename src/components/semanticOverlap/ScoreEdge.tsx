@@ -5,7 +5,10 @@ import type { ScoreEdgeData } from '../../utils/semanticOverlap/linkDiagramLayou
 
 export const formatPercent = (score: number) => `${Math.round(score * 100)} %`;
 
-/** A correspondence link; width and opacity grow with the score. */
+/** Dash pattern of class ↔ instance links (same-concept links are solid). */
+export const INSTANCE_DASH = '6 4';
+
+/** A correspondence link; width and opacity grow with the score. Instance links are dashed and labelled. */
 export const ScoreEdge: React.FC<EdgeProps<ScoreEdgeData>> = ({
   id, sourceX, sourceY, targetX, targetY, sourcePosition, targetPosition, data,
 }) => {
@@ -13,6 +16,7 @@ export const ScoreEdge: React.FC<EdgeProps<ScoreEdgeData>> = ({
   const [path, labelX, labelY] = getBezierPath({ sourceX, sourceY, sourcePosition, targetX, targetY, targetPosition });
   const score = data?.score ?? 0;
   const selected = data?.selected ?? false;
+  const instanceLabel = data?.instanceLabel;
   return (
     <>
       <path
@@ -22,6 +26,7 @@ export const ScoreEdge: React.FC<EdgeProps<ScoreEdgeData>> = ({
         stroke={selected ? '#049484' : themeVars.umlEdge}
         strokeWidth={(1 + 5 * score) * (selected ? 1.4 : 1)}
         strokeOpacity={selected ? 1 : 0.25 + 0.75 * score}
+        strokeDasharray={instanceLabel ? INSTANCE_DASH : undefined}
       />
       {/* Wide invisible path for easier hovering and clicking. */}
       <path
@@ -49,7 +54,7 @@ export const ScoreEdge: React.FC<EdgeProps<ScoreEdgeData>> = ({
               pointerEvents: 'none',
             }}
           >
-            {formatPercent(score)}
+            {instanceLabel ? `${instanceLabel} · ${formatPercent(score)}` : formatPercent(score)}
           </div>
         </EdgeLabelRenderer>
       )}

@@ -1,7 +1,7 @@
 import React from 'react';
 import { render, screen, within } from '@testing-library/react';
 import { OverlapSummary } from '../../../components/semanticOverlap/OverlapSummary';
-import { sampleResult } from './sampleResult';
+import { sampleImprovedResult, sampleResult } from './sampleResult';
 
 describe('OverlapSummary', () => {
   it('shows counts, overlap and unmatched classes', () => {
@@ -25,4 +25,22 @@ describe('OverlapSummary', () => {
     expect(screen.getByText('uml.Association')).toBeInTheDocument();
     expect(screen.getByText('uml.sub.Association')).toBeInTheDocument();
   });
+
+  it('names the approach and version that produced the result', () => {
+    const { unmount } = render(<OverlapSummary result={sampleResult()} />);
+    expect(screen.getByText('Kessentini et al. 2014 (paper) 2014.1')).toBeInTheDocument();
+    unmount();
+    render(<OverlapSummary result={{ ...sampleResult(), approach: { id: 'improved', version: '0.1' } }} />);
+    expect(screen.getByText('Improved 0.1')).toBeInTheDocument();
+  });
+
+  it('counts the correspondences per kind when the result has kinds', () => {
+    const { unmount } = render(<OverlapSummary result={sampleResult()} />);
+    expect(screen.queryByText(/Class ↔ instance:/)).not.toBeInTheDocument();
+    unmount();
+    const improved = sampleImprovedResult();
+    render(<OverlapSummary result={improved} />);
+    expect(screen.getByText(`Same concept: ${improved.summary.kindCounts!.same} · Class ↔ instance: 2`)).toBeInTheDocument();
+  });
 });
+

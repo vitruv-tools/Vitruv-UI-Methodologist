@@ -34,6 +34,18 @@ function checkElementRef(value: unknown, field: string): asserts value is Elemen
     && typeof value.qualifiedName === 'string' && typeof value.name === 'string', `${field} is not an element reference`);
 }
 
+const isCount = (value: unknown) => Number.isInteger(value) && (value as number) >= 0;
+
+function checkTypeObjectPattern(value: unknown, field: string) {
+  ensure(isObject(value) && (value.side === 'source' || value.side === 'target'), `${field} is not a pattern`);
+  for (const role of ['item', 'type', 'definition', 'value']) {
+    ensure(typeof value[role] === 'string', `${field}.${role} must be a qualified name`);
+  }
+  ensure(value.container === null || typeof value.container === 'string', `${field}.container must be a qualified name`);
+  ensure(isObject(value.definitionsByCategory) && isObject(value.valuesByCategory), `${field} has no data-type classes`);
+  ensure(isUnit(value.confidence), `${field}.confidence must be between 0 and 1`);
+}
+
 function checkCorrespondence(value: unknown, field: string): asserts value is Correspondence {
   ensure(isObject(value), `${field} is not an object`);
   ensure(typeof value.id === 'string' && (value.level === 'class' || value.level === 'feature'), `${field} has no id or level`);
@@ -44,6 +56,16 @@ function checkCorrespondence(value: unknown, field: string): asserts value is Co
   ensure(isUnit(value.score), `${field}.score must be between 0 and 1`);
   ensure(isObject(value.scores) && isUnit(value.scores.structural) && isUnit(value.scores.syntactic)
     && Object.values(value.scores).every(isUnit), `${field}.scores must be between 0 and 1`);
+  if (value.kind !== undefined) {
+    ensure(value.kind === 'same' || value.kind === 'instance', `${field}.kind must be 'same' or 'instance'`);
+  }
+  if (value.kind === 'instance') {
+    const instance = value.instance;
+    ensure(isObject(instance) && (instance.side === 'source' || instance.side === 'target')
+      && ['type', 'definition', 'value'].includes(instance.role as string), `${field}.instance needs a side and a role`);
+    ensure(instance.role === 'type' ? value.level === 'class' : value.level === 'feature',
+      `${field}.instance.role ${String(instance.role)} does not fit level ${String(value.level)}`);
+  }
   if (value.children !== undefined) {
     ensure(Array.isArray(value.children), `${field}.children must be a list`);
     value.children.forEach((child, k) => checkCorrespondence(child, `${field}.children[${k}]`));
@@ -70,6 +92,18 @@ export function parseOverlapResult(json: string): OverlapResult {
   ensure(isObject(data.engine) && isObject(data.engine.strategy) && Array.isArray(data.engine.measures), 'engine is missing');
   ensure(Array.isArray(data.warnings), 'warnings are missing');
   ensure(isObject(data.summary), 'summary is missing');
+  if (data.approach !== undefined) {
+    ensure(isObject(data.approach) && typeof data.approach.id === 'string' && typeof data.approach.version === 'string',
+      'approach needs an id and a version');
+  }
+  if (data.summary.kindCounts !== undefined) {
+    const counts = data.summary.kindCounts;
+    ensure(isObject(counts) && isCount(counts.same) && isCount(counts.instance), 'summary.kindCounts must be counts');
+  }
+  if (data.typeObjectPatterns !== undefined) {
+    ensure(Array.isArray(data.typeObjectPatterns), 'typeObjectPatterns must be a list');
+    data.typeObjectPatterns.forEach((pattern, k) => checkTypeObjectPattern(pattern, `typeObjectPatterns[${k}]`));
+  }
   ensure(isObject(data.classMatrix) && Array.isArray(data.classMatrix.rows) && Array.isArray(data.classMatrix.columns)
     && Array.isArray(data.classMatrix.overall) && data.classMatrix.overall.every(isUnit), 'classMatrix is invalid');
   ensure(Array.isArray(data.correspondences), 'correspondences are missing');
@@ -78,7 +112,13 @@ export function parseOverlapResult(json: string): OverlapResult {
   return data as unknown as OverlapResult;
 }
 
-const CSV_HEADER = 'level,parent,sources,targets,score,structural,syntactic';
+const CSV_HEADER = 'level,parent,sources,targets,score,structural,syntactic,kind,role';
+
+const APPROACH_LABELS: Record<string, string> = { paper: 'Kessentini et al. 2014 (paper)', improved: 'Improved' };
+
+const approachLabel = (result: OverlapResult) => (result.approach
+  ? `${APPROACH_LABELS[result.approach.id] ?? result.approach.id} ${result.approach.version}`
+  : APPROACH_LABELS.paper);
 
 /** Quotes a CSV field when it contains a comma, quote or line break (RFC 4180). */
 function csvField(value: string): string {
@@ -88,8 +128,8 @@ function csvField(value: string): string {
 const metamodelLabel = (ref: MetamodelRef) => (ref.version ? `${ref.name} (${ref.version})` : ref.name);
 
 /**
- * Flat CSV of a result: `#` comment lines with the compared metamodels, seed and creation time,
- * then one row per class correspondence followed by its feature correspondences.
+ * Flat CSV of a result: `#` comment lines with the compared metamodels, approach, seed and
+ * creation time, then one row per class correspondence followed by its feature correspondences.
  */
 export function overlapResultToCsv(result: OverlapResult): string {
   const row = (c: Correspondence, parent: string) => [
@@ -100,9 +140,12 @@ export function overlapResultToCsv(result: OverlapResult): string {
     c.score.toFixed(3),
     c.scores.structural.toFixed(3),
     c.scores.syntactic.toFixed(3),
+    c.kind ?? 'same',
+    c.instance?.role ?? '',
   ].map(csvField).join(',');
   const lines = [
     `# Semantic overlap: ${metamodelLabel(result.source)} -> ${metamodelLabel(result.target)}`,
+    `# approach: ${approachLabel(result)}`,
     `# seed: ${result.settings.seed}`,
     `# created: ${result.createdAt}`,
     CSV_HEADER,

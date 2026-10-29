@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { themeVars, useTheme } from '../../theme/theme';
+import { isInstanceCorrespondence } from '../../utils/semanticOverlap/correspondenceKind';
 import { visibleCorrespondences } from '../../utils/semanticOverlap/linkDiagramLayout';
 import type { OverlapResult } from '../../utils/semanticOverlap/types';
 import { formatPercent } from './ScoreEdge';
@@ -54,14 +55,16 @@ export const SimilarityHeatmap: React.FC<SimilarityHeatmapProps> = ({
   const { rows, columns, overall, perMeasure } = result.classMatrix;
   const cellSize = heatmapCellSize(rows.length, columns.length);
 
-  /** "row,column" → correspondence id, for every visible correspondence pair. */
+  /** "row,column" → correspondence id (and whether it is class ↔ instance), for every visible pair. */
   const chosen = useMemo(() => {
     const rowIndex = new Map(rows.map((name, i) => [name, i]));
     const columnIndex = new Map(columns.map((name, j) => [name, j]));
-    const cells = new Map<string, string>();
+    const cells = new Map<string, { id: string; instance: boolean }>();
     for (const c of visibleCorrespondences(result, minScore)) {
       for (const s of c.sources) {
-        for (const t of c.targets) cells.set(`${rowIndex.get(s.qualifiedName)},${columnIndex.get(t.qualifiedName)}`, c.id);
+        for (const t of c.targets) {
+          cells.set(`${rowIndex.get(s.qualifiedName)},${columnIndex.get(t.qualifiedName)}`, { id: c.id, instance: isInstanceCorrespondence(c) });
+        }
       }
     }
     return cells;
@@ -81,12 +84,15 @@ export const SimilarityHeatmap: React.FC<SimilarityHeatmapProps> = ({
         ctx.fillRect(j * cellSize, i * cellSize, cellSize - 1, cellSize - 1);
       }
     }
-    for (const [key, id] of chosen) {
+    for (const [key, { id, instance }] of chosen) {
       const [i, j] = key.split(',').map(Number);
       ctx.lineWidth = id === selectedId ? 3 : 2;
       ctx.strokeStyle = id === selectedId ? '#f59e0b' : '#0B1720';
+      // Class ↔ instance correspondences are outlined dashed, like their links in the diagram.
+      ctx.setLineDash?.(instance ? [3, 2] : []);
       ctx.strokeRect(j * cellSize + 1, i * cellSize + 1, cellSize - 3, cellSize - 3);
     }
+    ctx.setLineDash?.([]);
   }, [rows, columns, overall, cellSize, chosen, selectedId, theme]);
 
   const cellFromEvent = (event: React.MouseEvent<HTMLCanvasElement>) => {
@@ -143,7 +149,7 @@ export const SimilarityHeatmap: React.FC<SimilarityHeatmapProps> = ({
           onClick={event => {
             const cell = cellFromEvent(event);
             if (!cell) return;
-            const id = chosen.get(`${cell.row},${cell.column}`) ?? null;
+            const id = chosen.get(`${cell.row},${cell.column}`)?.id ?? null;
             onSelect(id);
             onCellFocus(id ? null : cell);
           }}

@@ -1,7 +1,8 @@
 import React from 'react';
 import { fireEvent, render, screen } from '@testing-library/react';
 import { CorrespondenceLinkDiagram } from '../../../components/semanticOverlap/CorrespondenceLinkDiagram';
-import { correspondenceFor, sampleResult } from './sampleResult';
+import { ScoreEdge, INSTANCE_DASH } from '../../../components/semanticOverlap/ScoreEdge';
+import { correspondenceFor, sampleImprovedResult, sampleResult } from './sampleResult';
 
 const flowProps = vi.hoisted(() => ({ current: null as any }));
 
@@ -65,4 +66,33 @@ describe('CorrespondenceLinkDiagram', () => {
     expect(handlers.onToggleExpand).toHaveBeenCalledWith(eclass.id);
     expect(flowProps.current.nodes.some((n: any) => n.data.level === 'feature')).toBe(true);
   });
+
+  describe('class ↔ instance correspondences', () => {
+    const improved = sampleImprovedResult();
+    const bolt = correspondenceFor(improved, 'Bolt');
+
+    it('labels instance edges and leaves same-concept edges unlabelled', () => {
+      renderDiagram({ result: improved, expandedIds: [bolt.id] });
+      const edges = flowProps.current.edges;
+      const boltEdge = edges.find((e: any) => e.data.correspondenceId === bolt.id);
+      expect(boltEdge.data.instanceLabel).toBe('instance of ProductKind');
+      const part = correspondenceFor(improved, 'Part');
+      expect(edges.find((e: any) => e.data.correspondenceId === part.id).data.instanceLabel).toBeUndefined();
+      const child = edges.find((e: any) => e.data.level === 'feature' && e.data.instanceLabel?.includes('(definition)'));
+      expect(child.data.instanceLabel).toMatch(/^instance of \w+Feature \(definition\)$/);
+    });
+
+    it('draws instance edges dashed with their label', () => {
+      const props = {
+        id: 'e', sourceX: 0, sourceY: 0, targetX: 10, targetY: 10, sourcePosition: 'right', targetPosition: 'left',
+        data: { correspondenceId: 'c-1', level: 'class', score: 1, selected: true, instanceLabel: 'instance of ProductKind' },
+      } as any;
+      const { container } = render(<svg><ScoreEdge {...props} /></svg>);
+      expect(container.querySelector('path')?.getAttribute('stroke-dasharray')).toBe(INSTANCE_DASH);
+      expect(screen.getByText('instance of ProductKind · 100 %')).toBeInTheDocument();
+      const { container: solid } = render(<svg><ScoreEdge {...props} data={{ ...props.data, instanceLabel: undefined }} /></svg>);
+      expect(solid.querySelector('path')?.getAttribute('stroke-dasharray')).toBeNull();
+    });
+  });
 });
+

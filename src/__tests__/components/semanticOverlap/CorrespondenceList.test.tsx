@@ -2,7 +2,7 @@ import React from 'react';
 import { fireEvent, render, screen, within } from '@testing-library/react';
 import { CorrespondenceList } from '../../../components/semanticOverlap/CorrespondenceList';
 import { formatPercent } from '../../../components/semanticOverlap/ScoreEdge';
-import { correspondenceFor, sampleResult } from './sampleResult';
+import { correspondenceFor, sampleImprovedResult, sampleResult } from './sampleResult';
 
 const result = sampleResult();
 const bodyRows = () => within(screen.getByRole('table', { name: 'Correspondences' })).getAllByRole('row').slice(1);
@@ -51,4 +51,41 @@ describe('CorrespondenceList', () => {
     expect(row).toHaveTextContent(formatPercent(abstract.score));
     expect(screen.getByText('eAttributes, eReferences')).toBeInTheDocument();
   });
+
+  describe('correspondence kinds', () => {
+    const improved = sampleImprovedResult();
+    const list = (props: Partial<React.ComponentProps<typeof CorrespondenceList>> = {}) => render(
+      <CorrespondenceList result={improved} minScore={0} selectedId={null} onSelect={vi.fn()} expandedIds={[]} onToggleExpand={vi.fn()} {...props} />);
+
+    it('shows no kind column for results without instance correspondences', () => {
+      render(<CorrespondenceList result={result} minScore={0} selectedId={null} onSelect={vi.fn()} expandedIds={[]} onToggleExpand={vi.fn()} />);
+      expect(screen.queryByRole('columnheader', { name: 'Kind' })).not.toBeInTheDocument();
+      expect(screen.queryByLabelText('Correspondence kind')).not.toBeInTheDocument();
+    });
+
+    it('marks every row with its kind', () => {
+      list();
+      expect(screen.getByRole('columnheader', { name: 'Kind' })).toBeInTheDocument();
+      expect(screen.getAllByText('instance of ProductKind')).toHaveLength(2);
+      expect(screen.getAllByText('same concept').length).toBeGreaterThan(0);
+      expect(screen.getAllByText('instance of ProductKind')[0]).toHaveAttribute('title', 'Role: type');
+    });
+
+    it('filters by kind', () => {
+      list();
+      fireEvent.change(screen.getByLabelText('Correspondence kind'), { target: { value: 'instance' } });
+      expect(screen.queryAllByText('same concept')).toHaveLength(0);
+      expect(screen.getAllByText('instance of ProductKind')).toHaveLength(2);
+      fireEvent.change(screen.getByLabelText('Correspondence kind'), { target: { value: 'same' } });
+      expect(screen.queryAllByText('instance of ProductKind')).toHaveLength(0);
+    });
+
+    it('shows the kind of expanded attribute rows', () => {
+      const bolt = correspondenceFor(improved, 'Bolt');
+      list({ expandedIds: [bolt.id] });
+      expect(screen.getByText('instance of NumberFeature (definition)')).toBeInTheDocument();
+      expect(screen.getByText('instance of NumberFeatureValue (value)')).toBeInTheDocument();
+    });
+  });
 });
+

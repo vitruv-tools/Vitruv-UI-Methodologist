@@ -1,6 +1,7 @@
 import { handleWorkerMessage, type FromWorker } from '../../workers/semanticOverlap.worker';
 import { createWordNetSource } from '../../utils/semanticOverlap/lexical/wordNetSource';
 import { resolveSettings } from '../../utils/semanticOverlap/settings';
+import { improvementsOf, resolveImprovedSettings } from '../../utils/semanticOverlap/improved/settings';
 import table from '../../assets/wordnet/oewn-2025-synonyms.json';
 import { ecoreExcerpt, umlExcerpt } from '../utils/semanticOverlap/fixtures';
 
@@ -39,5 +40,35 @@ describe('semantic overlap worker', () => {
       m => messages.push(m), { loadLexicalSource: async () => createWordNetSource(table), now: () => 0 });
     expect(messages.filter(m => m.type === 'error')).toHaveLength(1);
     expect(messages.some(m => m.type === 'done')).toBe(false);
+  });
+
+  const lexicalDeps = { loadLexicalSource: async () => createWordNetSource(table), now: () => 0 };
+  const doneResult = (messages: FromWorker[]) => {
+    const done = messages.find(m => m.type === 'done');
+    return done && done.type === 'done' ? done.result : undefined;
+  };
+
+  it('runs the paper approach when no approach is given', async () => {
+    const messages: FromWorker[] = [];
+    await handleWorkerMessage({ type: 'start', runId: 'r', input }, m => messages.push(m), lexicalDeps);
+    expect(doneResult(messages)?.approach?.id).toBe('paper');
+  });
+
+  it('runs the improved approach when asked to', async () => {
+    const messages: FromWorker[] = [];
+    const improvedInput = { ...input, settings: resolveImprovedSettings({ seed: 1 }, 'fast') };
+    await handleWorkerMessage({ type: 'start', runId: 'r', approach: 'improved', input: improvedInput }, m => messages.push(m), lexicalDeps);
+    expect(doneResult(messages)?.approach?.id).toBe('improved');
+  });
+
+  it('warns once and still finishes when the hypernyms fail to load', async () => {
+    const messages: FromWorker[] = [];
+    const improvedInput = { ...input, settings: resolveImprovedSettings({ seed: 1, improvements: improvementsOf(['hypernyms']) }, 'fast') };
+    await handleWorkerMessage({ type: 'start', runId: 'r', approach: 'improved', input: improvedInput }, m => messages.push(m), {
+      ...lexicalDeps,
+      loadHypernymSource: () => Promise.reject(new Error('asset missing')),
+    });
+    expect(messages.filter(m => m.type === 'warning')).toHaveLength(1);
+    expect(doneResult(messages)).toBeDefined();
   });
 });

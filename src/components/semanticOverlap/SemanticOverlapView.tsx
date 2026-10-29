@@ -6,15 +6,17 @@ import { themeVars } from '../../theme/theme';
 import { fetchLibraryMetaModels, type LibraryMetaModel } from '../../utils/metaModelList';
 import { downloadTextAsFile } from '../../utils/downloadFile';
 import { overlapResultToCsv, serializeOverlapResult } from '../../utils/semanticOverlap/overlapResult';
-import { validateSettings } from '../../utils/semanticOverlap/settings';
+import { approachOf } from '../../utils/semanticOverlap/approaches/registry';
 import type { OverlapResult } from '../../utils/semanticOverlap/types';
 import { AnalysisProgress } from './AnalysisProgress';
 import { AnalysisSettingsPanel } from './AnalysisSettingsPanel';
+import { ApproachSelector } from './ApproachSelector';
 import { CorrespondenceLinkDiagram } from './CorrespondenceLinkDiagram';
 import { CorrespondenceList } from './CorrespondenceList';
 import { MetamodelPairPicker } from './MetamodelPairPicker';
 import { OverlapSummary } from './OverlapSummary';
 import { SimilarityHeatmap } from './SimilarityHeatmap';
+import { TypeObjectPatternPanel } from './TypeObjectPatternPanel';
 import { WordNetAttribution } from './WordNetAttribution';
 
 const TABS: { id: OverlapTab; label: string }[] = [
@@ -47,7 +49,7 @@ export const SemanticOverlapView: React.FC = () => {
   const store = useSemanticOverlapStore();
   const { start, cancel } = useSemanticOverlapRun();
   const busy = store.status === 'loading' || store.status === 'running';
-  const settingsValid = validateSettings(store.settings).length === 0;
+  const settingsValid = approachOf(store.approach).validate(store.settings).length === 0;
 
   useEffect(() => {
     let active = true;
@@ -132,7 +134,10 @@ export const SemanticOverlapView: React.FC = () => {
         </button>
       </div>
 
+      <ApproachSelector value={store.approach} onChange={store.setApproach} disabled={busy} />
+
       <AnalysisSettingsPanel
+        approach={store.approach}
         settings={store.settings}
         onChange={store.updateSettings}
         minScore={store.minScore}
@@ -165,6 +170,9 @@ export const SemanticOverlapView: React.FC = () => {
       {result && (
         <>
           <OverlapSummary result={result} />
+          {result.typeObjectPatterns && result.typeObjectPatterns.length > 0 && (
+            <TypeObjectPatternPanel patterns={result.typeObjectPatterns} />
+          )}
           <div role="tablist" aria-label="Result views" style={{ display: 'flex', gap: 4, borderBottom: `1px solid ${themeVars.border}` }}>
             {TABS.map(tab => (
               <button

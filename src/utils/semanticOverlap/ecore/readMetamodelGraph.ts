@@ -110,6 +110,7 @@ export function readMetamodelGraph(ecoreText: string, ref: MetamodelRef): Metamo
       upper: el.getAttribute('upperBound') === null ? 1 : Number(el.getAttribute('upperBound')),
       containment: el.getAttribute('containment') === 'true',
       opposite: oppositeRef?.local ? resolveFeaturePath(oppositeRef.path, pathToQualified) : null,
+      ...(el.getAttribute('iD') === 'true' ? { isId: true } : {}),
     };
   };
 

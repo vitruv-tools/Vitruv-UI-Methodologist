@@ -199,16 +199,24 @@ async function deployFlow(flowData) {
 
 The **Semantic overlap** view (`/semantic-overlap`, sidebar entry after the Model Library) compares two
 Model Library metamodels and proposes which classes, attributes and references most likely describe the
-same concept. It implements search-based metamodel matching after Kessentini et al. (2014), *Search-based
-metamodel matching with structural and syntactic measures* (JSS 97), entirely in the browser.
+same concept. It runs entirely in the browser and offers two **approaches** (`approaches/registry.ts`):
+
+- **Kessentini et al. 2014 (paper)**: search-based metamodel matching after Kessentini et al. (2014),
+  *Search-based metamodel matching with structural and syntactic measures* (JSS 97), with the extensions
+  listed below. It is frozen: golden tests (`paperGolden.test.ts`) guarantee identical results.
+- **Improved** (default): an independent copy of the paper pipeline in `improved/` with nine switchable,
+  non-learned improvements (see below). With every improvement off it equals the paper approach
+  (`improved/equivalence.test.ts`).
 
 ### Flow
 
 1. `SemanticOverlapView` lets the user pick two metamodels; `useSemanticOverlapRun` fetches both ecore
    files via `apiService.getFile` and parses them on the main thread (`readMetamodelGraph`, needs
    `DOMParser`).
-2. The plain graphs go to a Web Worker (`src/workers/semanticOverlap.worker.ts`), which loads the WordNet
-   synonym table and calls the pure `runOverlapAnalysis`. Progress is posted back; cancelling terminates
+2. The plain graphs go to a Web Worker (`src/workers/semanticOverlap.worker.ts`) together with the chosen
+   approach. The worker loads the resources the approach needs (the WordNet synonym table, and for the
+   improved approach the WordNet hypernym table, fetched as a separate asset) and calls the approach's
+   pure `run`. Progress is posted back; cancelling terminates
    the worker (also on unmount and after a 5-minute limit).
 3. The `OverlapResult` is kept in the zustand store `src/store/SemanticOverlap.ts` and shown as a React
    Flow link diagram, a canvas heatmap and a correspondence list that share selection, threshold and
@@ -225,12 +233,37 @@ metamodel matching with structural and syntactic measures* (JSS 97), entirely in
 | `runOverlapAnalysis.ts` | pipeline: class level, hierarchy completion (unmatched super-/subtypes join the correspondence of their most similar source), then attributes/references inside each class correspondence; grouping of shared targets into one correspondence |
 | `overlapResult.ts` | result format (`schemaVersion: 1`), JSON parse/validate, CSV export |
 | `linkDiagramLayout.ts` | result → React Flow nodes and edges |
+| `approaches/` | `Approach` contract (id, version, label, defaults, validation, required resources, `run`), the paper and improved approaches and the registry with `DEFAULT_APPROACH` |
+| `correspondenceKind.ts` | labels for `same` and class ↔ instance correspondences |
+| `improved/` | the improved approach: copied runner, measures, matching problem and settings plus the improvements below |
+
+### Improvements of the improved approach (`improved/`)
+
+Each improvement is switched in `settings.improvements[<id>]`; parameters live in `settings.params`.
+The default combination (`DEFAULT_COMBINATION`) was chosen by an ablation over the benchmark suite.
+
+| Id | What it does | Code |
+|---|---|---|
+| `adaptive-weights` | scales each measure's weight by the Harmony of its matrix, so measures without signal do not dilute the combined score | `measures/harmony.ts` |
+| `hypernyms` | Wu-Palmer similarity of name words over WordNet noun hypernyms | `lexical/hypernymSource.ts`, `measures/hypernymMeasure.ts` |
+| `compounds` | splits compounds (`Brakesystem` → brake, system), expands a small abbreviation list, matches acronyms | `lexical/compounds.ts`, `lexical/abbreviations.ts` |
+| `idf` | weights name tokens by inverse document frequency over both metamodels | `lexical/idf.ts` |
+| `roles` | compares the role of classes (root container, contained part, abstract base, identifier, …) | `measures/roleMeasure.ts` |
+| `datatypes` | compares the mix of attribute data types (text, number, boolean, enum, other) | `measures/datatypeMeasure.ts` |
+| `type-object` | rule-based detection of the type-object pattern (item → type with definitions and values) and its counterpart (a base class with concrete subclasses); proposes class ↔ instance correspondences, picking the definition and value class by data type (integers and decimals apart where the metamodel distinguishes them) | `typeObject/detectTypeObject.ts` |
+| `flooding` | similarity flooding (Melnik et al. 2002) over containment, reference and inheritance edges | `flooding/similarityFlooding.ts` |
+| `hierarchy-both` | hierarchy completion also on the source side | `hierarchy/completeHierarchyBothSides.ts` |
+
+Class ↔ instance correspondences (`kind: 'instance'`, `instance: { side, role }`) say that an element of
+one metamodel corresponds to an *instance* of a class of the other, e.g. `BrakeDisk` ↔ an `ItemType`
+object. The views draw them dashed and label them; the result lists the detected `typeObjectPatterns`.
 
 ### Extension points
 
 - **Similarity measures**: register a `SimilarityMeasure` (per level) and give it a weight in
   `settings.measures` — e.g. an AI/embedding-based measure. The search and the views stay unchanged.
 - **Search strategies**: register a `SearchStrategy` and select it via `settings.strategy`.
+- **Approaches**: add an `Approach` to the registry; the view, worker and export pick it up.
 - **Lexical source**: anything implementing `LexicalSource` can replace WordNet.
 - **Persistence / reaction generation**: `OverlapResult` is a versioned, self-contained JSON document;
   `ElementRef`s identify elements by metamodel side, kind and qualified name, so results can be stored
@@ -238,9 +271,20 @@ metamodel matching with structural and syntactic measures* (JSS 97), entirely in
 
 ### Benchmark
 
-`OVERLAP_BENCHMARK=1 npx vitest run src/__tests__/utils/semanticOverlap/benchmark` reproduces the paper's
-model exchange case on the ModelCVS metamodels (download them first with
-`node scripts/fetch-overlap-benchmark.mjs`); see `src/__tests__/fixtures/semanticOverlap/benchmark/README.md`.
+The benchmark suite (`src/__tests__/utils/semanticOverlap/benchmark/suite.ts`) has four scenarios: the
+paper's Fig. 1 excerpt (committed), Ecore → UML 2.0 (ModelCVS, downloaded with
+`node scripts/fetch-overlap-benchmark.mjs`), and Brake → BOM / BOM → Brake. The Brake Specification Model
+is local only and never committed (`node scripts/fetch-overlap-benchmark.mjs --brake <path>`); tests that
+need it are skipped without it, e.g. in CI. References may mark correspondences as class ↔ instance; a
+proposed correspondence only counts if its elements and its kind match. See
+`src/__tests__/fixtures/semanticOverlap/benchmark/README.md`.
+
+- `OVERLAP_BENCHMARK=1 npx vitest run src/__tests__/utils/semanticOverlap/benchmark --reporter=verbose`
+  prints precision, recall and F-measure per scenario and approach (seeds 1–10).
+- `OVERLAP_ABLATION=1 OVERLAP_REPORT_DIR=<dir> npx vitest run src/__tests__/utils/semanticOverlap/benchmark/ablation.test.ts --reporter=verbose`
+  evaluates every improvement alone, then selects the combination (an improvement is kept only if
+  removing it lowers the average F-measure by at least 0.02 and adding the others does not help), and
+  writes a JSON report.
 
 ## Future Enhancements
 

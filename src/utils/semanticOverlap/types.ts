@@ -32,6 +32,8 @@ export interface FeatureNode {
   upper: number;
   containment: boolean;
   opposite: string | null;
+  /** `iD="true"` on an attribute; absent otherwise. */
+  isId?: boolean;
 }
 
 export interface OperationNode {
@@ -129,6 +131,15 @@ export interface ElementRef {
   containingClass?: string;
 }
 
+/** `same`: equivalent elements; `instance`: an element corresponds to an *instance* of a class. */
+export type CorrespondenceKind = 'same' | 'instance';
+/** Role of the instantiated class in a type-object pattern. */
+export type InstanceRole = 'type' | 'definition' | 'value';
+/** Data-type category of an attribute (improved approach). */
+export type DataTypeCategory = 'text' | 'number' | 'boolean' | 'enum' | 'other';
+/** Like {@link DataTypeCategory}, with numbers split into whole and decimal numbers where known. */
+export type FineDataTypeCategory = DataTypeCategory | 'integer' | 'decimal';
+
 export interface Correspondence {
   /** Stable within a result (`c-1`, `c-2`, …). */
   id: string;
@@ -141,6 +152,31 @@ export interface Correspondence {
   scores: Record<string, number>;
   /** Feature-level correspondences, only on class level. */
   children?: Correspondence[];
+  /** Absent means `'same'`. */
+  kind?: CorrespondenceKind;
+  /**
+   * Only for `kind = 'instance'`: `side` is the metamodel whose class is instantiated, e.g. for
+   * `BrakeDisk ↔ ItemType` in Brake → BOM `{ side: 'target', role: 'type' }`.
+   */
+  instance?: { side: Side; role: InstanceRole };
+  /** Produced by a rule (type-object pattern), not by the search. */
+  fixed?: boolean;
+}
+
+/** A type-object pattern detected in one metamodel, with its counterpart in the other one. */
+export interface TypeObjectPattern {
+  /** Metamodel that contains the pattern. */
+  side: Side;
+  item: string;
+  type: string;
+  definition: string;
+  value: string;
+  container: string | null;
+  definitionsByCategory: Partial<Record<FineDataTypeCategory, string>>;
+  valuesByCategory: Partial<Record<FineDataTypeCategory, string>>;
+  counterpart: { base: string; subclasses: string[]; container: string | null } | null;
+  /** Rule confidence in [0, 1]. */
+  confidence: number;
 }
 
 export interface OverlapSummary {
@@ -151,6 +187,8 @@ export interface OverlapSummary {
   /** `(matchedSource + matchedTarget) / (sourceCount + targetCount) · 100` */
   overlapPercent: number;
   fitness: number;
+  /** Class-level correspondences per kind (improved approach with type-object detection). */
+  kindCounts?: { same: number; instance: number };
 }
 
 export interface ClassSimilarityMatrix {
@@ -175,6 +213,8 @@ export interface VersionedId {
  */
 export interface OverlapResult {
   schemaVersion: 1;
+  /** Approach that produced the result; absent means the paper approach. */
+  approach?: VersionedId;
   id: string;
   createdAt: string;
   durationMs: number;
@@ -187,6 +227,7 @@ export interface OverlapResult {
   classMatrix: ClassSimilarityMatrix;
   correspondences: Correspondence[];
   unmatched: { source: ElementRef[]; target: ElementRef[] };
+  typeObjectPatterns?: TypeObjectPattern[];
 }
 
 export interface OverlapInput {

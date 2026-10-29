@@ -1,5 +1,6 @@
 import type { Edge, Node } from 'reactflow';
 import type { Correspondence, ElementRef, MatchLevel, OverlapResult, Side } from './types';
+import { instanceLabel } from './correspondenceKind';
 
 export const OVERLAP_CLASS_NODE = 'overlapClass';
 export const SCORE_EDGE = 'score';
@@ -34,7 +35,14 @@ export interface ScoreEdgeData {
   level: MatchLevel;
   score: number;
   selected: boolean;
+  /** Set for class ↔ instance correspondences, e.g. "instance of ItemType"; drawn dashed. */
+  instanceLabel?: string;
 }
+
+const instanceData = (c: Correspondence) => {
+  const label = instanceLabel(c);
+  return label ? { instanceLabel: label } : {};
+};
 
 export interface LinkDiagramOptions {
   minScore: number;
@@ -186,7 +194,7 @@ export function buildLinkDiagram(
     source: nodeIdFor('source', s.qualifiedName),
     target: nodeIdFor('target', t.qualifiedName),
     selected: c.id === selectedId,
-    data: { correspondenceId: c.id, level: 'class' as const, score: c.score, selected: c.id === selectedId },
+    data: { correspondenceId: c.id, level: 'class' as const, score: c.score, selected: c.id === selectedId, ...instanceData(c) },
   }))));
   const featureEdges: Edge<ScoreEdgeData>[] = expanded.flatMap(c => visibleChildren(c, minScore).flatMap(child =>
     child.sources.flatMap(s => child.targets.map(t => ({
@@ -195,7 +203,7 @@ export function buildLinkDiagram(
       source: featureNodeIdFor('source', c.id, s.qualifiedName),
       target: featureNodeIdFor('target', c.id, t.qualifiedName),
       selected: child.id === selectedId,
-      data: { correspondenceId: child.id, level: 'feature' as const, score: child.score, selected: child.id === selectedId },
+      data: { correspondenceId: child.id, level: 'feature' as const, score: child.score, selected: child.id === selectedId, ...instanceData(child) },
     })))));
 
   return {

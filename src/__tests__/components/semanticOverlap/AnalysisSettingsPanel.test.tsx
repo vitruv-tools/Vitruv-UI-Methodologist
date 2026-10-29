@@ -3,14 +3,19 @@ import { fireEvent, render, screen } from '@testing-library/react';
 import { AnalysisSettingsPanel } from '../../../components/semanticOverlap/AnalysisSettingsPanel';
 import { DEFAULT_SETTINGS, EFFORT_PRESETS } from '../../../utils/semanticOverlap/settings';
 import type { AnalysisSettings } from '../../../utils/semanticOverlap/types';
+import type { ApproachId } from '../../../utils/semanticOverlap/approaches/types';
+import { DEFAULT_IMPROVED_SETTINGS, type ImprovedSettings } from '../../../utils/semanticOverlap/improved/settings';
 
 /** Panel with real state, so changes are visible like in the view. */
-function Harness({ onMinScore = vi.fn(), initial = DEFAULT_SETTINGS }: { onMinScore?: (v: number) => void; initial?: AnalysisSettings }) {
+function Harness({ onMinScore = vi.fn(), initial = DEFAULT_SETTINGS, approach }: {
+  onMinScore?: (v: number) => void; initial?: AnalysisSettings; approach?: ApproachId;
+}) {
   const [settings, setSettings] = useState(initial);
   const [minScore, setMinScore] = useState(0);
   return (
     <>
       <AnalysisSettingsPanel
+        approach={approach}
         settings={settings}
         onChange={patch => setSettings(s => ({ ...s, ...patch }))}
         minScore={minScore}
@@ -83,4 +88,30 @@ describe('AnalysisSettingsPanel', () => {
     expect(onMinScore).toHaveBeenCalledWith(0.6);
     expect(current()).toEqual(before);
   });
+
+  describe('per approach', () => {
+    it('shows no improvements for the paper approach', () => {
+      render(<Harness approach="paper" />);
+      open();
+      expect(screen.queryByRole('group', { name: 'Improvements' })).not.toBeInTheDocument();
+      expect(screen.queryAllByRole('checkbox')).toHaveLength(0);
+    });
+
+    it('shows the nine improvements of the improved approach and toggles them', () => {
+      render(<Harness approach="improved" initial={DEFAULT_IMPROVED_SETTINGS} />);
+      open();
+      expect(screen.getByRole('group', { name: 'Improvements' })).toBeInTheDocument();
+      expect(screen.getAllByRole('checkbox')).toHaveLength(9);
+      fireEvent.click(screen.getByRole('checkbox', { name: 'Similarity flooding' }));
+      expect((current() as ImprovedSettings).improvements.flooding).toBe(!DEFAULT_IMPROVED_SETTINGS.improvements.flooding);
+    });
+
+    it('validates the improvement parameters', () => {
+      render(<Harness approach="improved" initial={DEFAULT_IMPROVED_SETTINGS} />);
+      open();
+      fireEvent.change(screen.getByLabelText('Flooding weight (λ)'), { target: { value: '2' } });
+      expect(screen.getByRole('alert')).toHaveTextContent('Flooding weight must be between 0 and 1.');
+    });
+  });
 });
+

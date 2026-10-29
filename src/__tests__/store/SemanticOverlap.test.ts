@@ -1,5 +1,7 @@
 import { DEFAULT_MIN_SCORE, useSemanticOverlapStore } from '../../store/SemanticOverlap';
 import { sampleResult } from '../components/semanticOverlap/sampleResult';
+import { DEFAULT_APPROACH } from '../../utils/semanticOverlap/approaches/registry';
+import type { ImprovedSettings } from '../../utils/semanticOverlap/improved/settings';
 
 const store = () => useSemanticOverlapStore.getState();
 
@@ -98,4 +100,43 @@ describe('semantic overlap store', () => {
     store().finishRun('r', sampleResult());
     expect(store().expandedCorrespondenceIds).toEqual([]);
   });
+
+  describe('approaches', () => {
+    it('starts with the default approach and settings for both approaches', () => {
+      expect(store().approach).toBe(DEFAULT_APPROACH);
+      expect(store().settingsByApproach.paper).toBeDefined();
+      expect(store().settingsByApproach.improved.improvements).toBeDefined();
+      expect(store().settings).toBe(store().settingsByApproach[DEFAULT_APPROACH]);
+    });
+
+    it('patches only the active approach', () => {
+      store().setApproach('paper');
+      store().updateSettings({ nullScore: 0.3 });
+      expect(store().settingsByApproach.paper.nullScore).toBe(0.3);
+      expect(store().settingsByApproach.improved.nullScore).not.toBe(0.3);
+      store().setApproach('improved');
+      expect(store().settings).toBe(store().settingsByApproach.improved);
+      expect((store().settings as ImprovedSettings).improvements).toBeDefined();
+    });
+
+    it('shares the seed and marks a finished result as stale when switching', () => {
+      store().setApproach('paper');
+      store().updateSettings({ seed: 1234 });
+      store().setSource(1);
+      store().setTarget(2);
+      store().beginLoading('run-1');
+      store().finishRun('run-1', sampleResult());
+      store().setApproach('improved');
+      expect(store().settings.seed).toBe(1234);
+      expect(store().status).toBe('ready');
+      expect(store().result).not.toBeNull();
+    });
+
+    it('restores the defaults on reset', () => {
+      store().setApproach(DEFAULT_APPROACH === 'paper' ? 'improved' : 'paper');
+      store().reset();
+      expect(store().approach).toBe(DEFAULT_APPROACH);
+    });
+  });
 });
+

@@ -15,3 +15,5 @@
 
 # Semantic overlap benchmark metamodels (downloaded, not redistributed)
 /src/__tests__/fixtures/semanticOverlap/benchmark/metamodels/
+# Brake Specification Model (KIT-internal brake case study, never committed)
+/src/__tests__/fixtures/semanticOverlap/benchmark/brake-bom/brakesystem.ecore

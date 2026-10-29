@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef } from 'react';
 import { apiService } from '../services/api';
 import { useSemanticOverlapStore } from '../store/SemanticOverlap';
+import { approachOf } from '../utils/semanticOverlap/approaches/registry';
 import { EcoreReadError, readMetamodelGraph } from '../utils/semanticOverlap/ecore/readMetamodelGraph';
 import type { MetamodelRef } from '../utils/semanticOverlap/types';
 import type { LibraryMetaModel } from '../utils/metaModelList';
@@ -71,6 +72,13 @@ export function useSemanticOverlapRun(deps: SemanticOverlapRunDeps = {}) {
     store.beginLoading(runId);
     const isCurrent = () => useSemanticOverlapStore.getState().runId === runId;
 
+    const { approach, settings } = store;
+    const problems = approachOf(approach).validate(settings);
+    if (problems.length > 0) {
+      store.failRun(runId, problems.join(' '));
+      return;
+    }
+
     try {
       for (const model of [source, target]) {
         if (!model.ecoreFileId) throw new EcoreReadError(model.name, 'the metamodel has no ecore file');
@@ -82,7 +90,7 @@ export function useSemanticOverlapRun(deps: SemanticOverlapRunDeps = {}) {
       const input = {
         source: readMetamodelGraph(texts[0], toRef(source, hashes[0])),
         target: readMetamodelGraph(texts[1], toRef(target, hashes[1])),
-        settings: useSemanticOverlapStore.getState().settings,
+        settings,
       };
 
       const worker = createWorker();
@@ -110,7 +118,7 @@ export function useSemanticOverlapRun(deps: SemanticOverlapRunDeps = {}) {
         useSemanticOverlapStore.getState().failRun(runId, TIMEOUT_MESSAGE);
       }, ANALYSIS_TIMEOUT_MS);
       useSemanticOverlapStore.getState().beginRunning(runId);
-      worker.postMessage({ type: 'start', runId, input });
+      worker.postMessage({ type: 'start', runId, approach, input });
     } catch (error) {
       stopWorker();
       const message = error instanceof Error ? error.message : String(error);

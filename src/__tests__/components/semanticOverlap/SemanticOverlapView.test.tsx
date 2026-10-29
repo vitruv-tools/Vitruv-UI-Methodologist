@@ -4,7 +4,7 @@ import { MemoryRouter } from 'react-router-dom';
 import { SemanticOverlapView } from '../../../components/semanticOverlap/SemanticOverlapView';
 import { useSemanticOverlapStore } from '../../../store/SemanticOverlap';
 import type { LibraryMetaModel } from '../../../utils/metaModelList';
-import { sampleResult } from './sampleResult';
+import { correspondenceFor, sampleImprovedResult, sampleResult } from './sampleResult';
 import { overlapResultToCsv, parseOverlapResult } from '../../../utils/semanticOverlap/overlapResult';
 import { runOverlapAnalysis } from '../../../utils/semanticOverlap/runOverlapAnalysis';
 import { createWordNetSource } from '../../../utils/semanticOverlap/lexical/wordNetSource';
@@ -97,6 +97,31 @@ describe('SemanticOverlapView', () => {
     expect(screen.getByTestId('heatmap')).toHaveTextContent(`heatmap ${selected}`);
     fireEvent.click(screen.getByRole('tab', { name: 'Link diagram' }));
     expect(screen.getByTestId('link-diagram')).toHaveTextContent(`diagram ${selected}`);
+  });
+
+  it('switches the approach: keeps the result, allows a new run and disables the switch while running', async () => {
+    await renderView('/semantic-overlap?source=1&target=2');
+    finishWith();
+    fireEvent.click(screen.getByRole('button', { name: 'Improved' }));
+    expect(store().approach).toBe('improved');
+    expect(screen.getByRole('region', { name: 'Overlap summary' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Run again' })).toBeEnabled();
+    act(() => store().beginLoading('r2'));
+    expect(screen.getByRole('button', { name: 'Kessentini et al. 2014 (paper)' })).toBeDisabled();
+  });
+
+  it('shows the type-object pattern panel only for results with a pattern', async () => {
+    await renderView('/semantic-overlap?source=1&target=2');
+    finishWith();
+    expect(screen.queryByRole('region', { name: 'Type-object pattern' })).not.toBeInTheDocument();
+    const improved = sampleImprovedResult();
+    finishWith(improved);
+    expect(screen.getByRole('region', { name: 'Type-object pattern' })).toBeInTheDocument();
+    // Selecting an instance correspondence in the list selects it in the diagram as well.
+    const bolt = correspondenceFor(improved, 'Bolt');
+    fireEvent.click(screen.getAllByText('instance of ProductKind')[0].closest('tr')!);
+    expect([bolt.id, correspondenceFor(improved, 'Nut').id]).toContain(store().selectedCorrespondenceId);
+    expect(screen.getByTestId('link-diagram')).toHaveTextContent(`diagram ${store().selectedCorrespondenceId}`);
   });
 
   it('shows errors with a retry', async () => {

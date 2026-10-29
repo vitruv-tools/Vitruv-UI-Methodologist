@@ -57,6 +57,24 @@ describe('useSemanticOverlapRun', () => {
     expect(state().status).toBe('running');
   });
 
+  it('sends the active approach and its settings to the worker', async () => {
+    state().setApproach('improved');
+    const { hook, workers } = setup();
+    await act(() => hook.result.current.start(ecore, uml));
+    const message = workers[0].posted[0];
+    expect(message.approach).toBe('improved');
+    expect(message.input.settings).toBe(state().settingsByApproach.improved);
+  });
+
+  it('does not start with invalid settings', async () => {
+    state().updateSettings({ seed: -1 });
+    const { hook, workers, getFile } = setup();
+    await act(() => hook.result.current.start(ecore, uml));
+    expect(getFile).not.toHaveBeenCalled();
+    expect(workers).toHaveLength(0);
+    expect(state().status).toBe('failed');
+  });
+
   it('maps progress and the result into the store and terminates the worker', async () => {
     const { hook, workers } = setup();
     await act(() => hook.result.current.start(ecore, uml));

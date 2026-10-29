@@ -6,18 +6,16 @@ import { runOverlapAnalysis } from '../../../../utils/semanticOverlap/runOverlap
 import { resolveSettings } from '../../../../utils/semanticOverlap/settings';
 import type { OverlapResult } from '../../../../utils/semanticOverlap/types';
 import table from '../../../../assets/wordnet/oewn-2025-synonyms.json';
+import { BENCHMARK_DIR, METAMODEL_DIR, SEEDS, evaluate, formatScores, mean, type Scores } from './suite';
+
+export { evaluate } from './suite';
 
 /**
  * Model exchange experiment of Kessentini et al. (2014, §5.1.1) on the ModelCVS metamodels.
  * Opt-in: OVERLAP_BENCHMARK=1 npx vitest run src/__tests__/utils/semanticOverlap/benchmark
  * (fetch the metamodels first with `node scripts/fetch-overlap-benchmark.mjs`).
  */
-const BENCHMARK_DIR = path.resolve(__dirname, '../../../fixtures/semanticOverlap/benchmark');
-const METAMODEL_DIR = path.join(BENCHMARK_DIR, 'metamodels');
-const SEEDS = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
-
 interface Expected { source: string; target: string; scenario: string; correspondences: { sources: string[]; targets: string[] }[] }
-interface Scores { precision: number; recall: number; fMeasure: number }
 
 /** Paper Appendix A, GAMMA (their approach), per scenario. */
 const PAPER: Record<string, Scores> = {
@@ -33,29 +31,11 @@ const load = (file: string, id: number) =>
     libraryId: id, name: file, ecoreFileId: id, contentHash: file,
   });
 
-const pairsOf = (entries: { sources: string[]; targets: string[] }[]) =>
-  new Set(entries.flatMap(e => e.sources.flatMap(s => e.targets.map(t => `${s} -> ${t}`))));
-
 /** Class-level precision, recall and F-measure on (source class, target class) pairs (§5.2). */
-export function evaluate(result: OverlapResult, expected: Expected): Scores {
-  const proposed = pairsOf(result.correspondences.map(c => ({
-    sources: c.sources.map(s => s.qualifiedName), targets: c.targets.map(t => t.qualifiedName),
-  })));
-  const reference = pairsOf(expected.correspondences);
-  const correct = [...proposed].filter(p => reference.has(p)).length;
-  const precision = proposed.size === 0 ? 0 : correct / proposed.size;
-  const recall = reference.size === 0 ? 0 : correct / reference.size;
-  const fMeasure = precision + recall === 0 ? 0 : (2 * precision * recall) / (precision + recall);
-  return { precision, recall, fMeasure };
-}
+const evaluateClasses = (result: OverlapResult, expected: Expected): Scores =>
+  evaluate(result, { correspondences: expected.correspondences }).class;
 
-const mean = (scores: Scores[]): Scores => ({
-  precision: scores.reduce((s, x) => s + x.precision, 0) / scores.length,
-  recall: scores.reduce((s, x) => s + x.recall, 0) / scores.length,
-  fMeasure: scores.reduce((s, x) => s + x.fMeasure, 0) / scores.length,
-});
-
-const format = (s: Scores) => `P ${s.precision.toFixed(2)}  R ${s.recall.toFixed(2)}  F ${s.fMeasure.toFixed(2)}`;
+const format = formatScores;
 
 const scenarios = (): Expected[] => ['ecore-uml20.expected.json']
   .map(file => JSON.parse(readFileSync(path.join(BENCHMARK_DIR, file), 'utf8')) as Expected);
@@ -66,7 +46,7 @@ describe.skipIf(!process.env.OVERLAP_BENCHMARK)('model exchange benchmark (SC-00
     const perScenario = scenarios().map(expected => {
       const source = load(expected.source, 1);
       const target = load(expected.target, 2);
-      const runs = SEEDS.map(seed => evaluate(
+      const runs = SEEDS.map(seed => evaluateClasses(
         runOverlapAnalysis({ source, target, settings: resolveSettings({ seed }) }, { lexical }), expected));
       return { expected, scores: mean(runs) };
     });

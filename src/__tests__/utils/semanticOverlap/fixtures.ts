@@ -18,3 +18,12 @@ export const umlExcerpt = (): MetamodelGraph =>
 
 export const fig1Expected = (): { sources: string[]; targets: string[] }[] =>
   JSON.parse(readFixture('fig1-expected.json')).correspondences;
+
+/** Local-only Brake Specification Model (never committed); tests skip when it is missing. */
+export const BRAKE_FILE = path.join(FIXTURES, 'benchmark/brake-bom/brakesystem.ecore');
+export const BOM_FILE = path.join(FIXTURES, 'benchmark/brake-bom/bom.ecore');
+/** Downloaded ModelCVS metamodels (`node scripts/fetch-overlap-benchmark.mjs`). */
+export const METAMODEL_DIR = path.join(FIXTURES, 'benchmark/metamodels');
+
+export const loadEcore = (file: string, libraryId: number): MetamodelGraph =>
+  readMetamodelGraph(readFileSync(file, 'utf8'), refFor(path.basename(file), libraryId));

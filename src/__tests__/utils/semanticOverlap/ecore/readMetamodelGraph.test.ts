@@ -46,6 +46,15 @@ describe('readMetamodelGraph', () => {
     expect(graph.unresolvedSupertypes).toEqual(['other.ecore#//Foreign']);
   });
 
+  it('marks identifier attributes', () => {
+    const graph = readMetamodelGraph(wrap(`
+      <eClassifiers xsi:type="ecore:EClass" name="Item">
+        <eStructuralFeatures xsi:type="ecore:EAttribute" name="key" iD="true" eType="ecore:EDataType http://www.eclipse.org/emf/2002/Ecore#//EString"/>
+        <eStructuralFeatures xsi:type="ecore:EAttribute" name="label" eType="ecore:EDataType http://www.eclipse.org/emf/2002/Ecore#//EString"/>
+      </eClassifiers>`), refFor('ids'));
+    expect(graph.classes[0].attributes.map(a => a.isId)).toEqual([true, undefined]);
+  });
+
   it('allows metamodels without classes', () => {
     const graph = readMetamodelGraph(wrap('<eClassifiers xsi:type="ecore:EDataType" name="Text"/>'), refFor('Empty'));
     expect(graph.classes).toEqual([]);

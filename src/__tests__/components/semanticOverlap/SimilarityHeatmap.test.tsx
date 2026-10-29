@@ -1,16 +1,22 @@
 import React from 'react';
 import { fireEvent, render, screen } from '@testing-library/react';
 import { cellAt, heatmapCellSize, SimilarityHeatmap } from '../../../components/semanticOverlap/SimilarityHeatmap';
-import { correspondenceFor, sampleResult } from './sampleResult';
+import { correspondenceFor, sampleImprovedResult, sampleResult } from './sampleResult';
 
 const result = sampleResult();
 const strokes: number[][] = [];
+/** Dash pattern in effect for each stroked rectangle. */
+const dashes: number[][] = [];
+let dash: number[] = [];
 
 beforeEach(() => {
   strokes.length = 0;
+  dashes.length = 0;
+  dash = [];
   vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockImplementation(() => ({
     clearRect: vi.fn(), fillRect: vi.fn(),
-    strokeRect: (...args: number[]) => strokes.push(args),
+    strokeRect: (...args: number[]) => { strokes.push(args); dashes.push(dash); },
+    setLineDash: (segments: number[]) => { dash = segments; },
     set fillStyle(_v: string) {}, set strokeStyle(_v: string) {}, set lineWidth(_v: number) {},
   }) as unknown as CanvasRenderingContext2D);
   vi.spyOn(HTMLCanvasElement.prototype, 'getBoundingClientRect').mockReturnValue({ left: 0, top: 0 } as DOMRect);
@@ -50,4 +56,14 @@ describe('SimilarityHeatmap', () => {
     fireEvent.mouseMove(screen.getByTestId('similarity-heatmap-canvas'), { clientX: 1, clientY: 1 });
     expect(screen.getByRole('tooltip')).toHaveTextContent(/EClass ↔ Class.*Overall/);
   });
+
+  it('outlines chosen class ↔ instance correspondences dashed', () => {
+    const improved = sampleImprovedResult();
+    render(<SimilarityHeatmap result={improved} minScore={0} selectedId={null} onSelect={vi.fn()} onCellFocus={vi.fn()} />);
+    const instancePairs = improved.correspondences.filter(c => c.kind === 'instance')
+      .reduce((n, c) => n + c.sources.length * c.targets.length, 0);
+    expect(dashes.filter(d => d.length > 0)).toHaveLength(instancePairs);
+    expect(dashes.filter(d => d.length === 0)).toHaveLength(strokes.length - instancePairs);
+  });
 });
+

@@ -1,5 +1,7 @@
 import React from 'react';
 import { themeVars } from '../../theme/theme';
+import { APPROACHES } from '../../utils/semanticOverlap/approaches/registry';
+import { IMPROVEMENT_IDS, IMPROVEMENT_LABELS, type ImprovedSettings } from '../../utils/semanticOverlap/improved/settings';
 import type { ElementRef, OverlapResult } from '../../utils/semanticOverlap/types';
 
 /** Simple names, qualified where two classes of the list share a simple name. */
@@ -33,6 +35,13 @@ const UnmatchedList: React.FC<{ title: string; refs: readonly ElementRef[] }> = 
 
 const percent = (value: number) => `${Math.round(value * 100)} %`;
 
+/** Label and version of the approach that produced a result; results without one are paper results. */
+export function approachLabel(result: OverlapResult): string {
+  const approach = result.approach ?? { id: 'paper', version: APPROACHES.paper.version };
+  const known = APPROACHES[approach.id as keyof typeof APPROACHES];
+  return `${known ? known.label : approach.id} ${approach.version}`;
+}
+
 /** One line describing the settings and engine that produced a result (FR-013). */
 export function describeSettingsUsed(result: OverlapResult): string {
   const { settings, engine } = result;
@@ -46,7 +55,14 @@ export function describeSettingsUsed(result: OverlapResult): string {
     `strategy ${engine.strategy.id} v${engine.strategy.version}`,
     `measures ${engine.measures.map(m => `${m.id} v${m.version}`).join(', ')}`,
     engine.lexicalSource ? `synonyms ${engine.lexicalSource.id} ${engine.lexicalSource.version}` : 'no synonyms',
+    ...improvementsUsed(settings as Partial<ImprovedSettings>),
   ].join(' · ');
+}
+
+function improvementsUsed(settings: Partial<ImprovedSettings>): string[] {
+  if (!settings.improvements) return [];
+  const enabled = IMPROVEMENT_IDS.filter(id => settings.improvements?.[id]).map(id => IMPROVEMENT_LABELS[id]);
+  return [`improvements: ${enabled.length > 0 ? enabled.join(', ') : 'none'}`];
 }
 
 /** Class counts, overlap percentage, unmatched classes, warnings and the settings used. */
@@ -55,10 +71,14 @@ export const OverlapSummary: React.FC<{ result: OverlapResult }> = ({ result }) 
   return (
     <section aria-label="Overlap summary" style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
       <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+        <Figure label="Approach" value={approachLabel(result)} />
         <Figure label="Overlap" value={`${summary.overlapPercent.toFixed(0)} %`} />
         <Figure label={`${source.name} classes`} value={`${summary.matchedSourceClasses} / ${summary.sourceClassCount} matched`} />
         <Figure label={`${target.name} classes`} value={`${summary.matchedTargetClasses} / ${summary.targetClassCount} matched`} />
         <Figure label="Correspondences" value={String(result.correspondences.length)} />
+        {summary.kindCounts && (
+          <Figure label="Kinds" value={`Same concept: ${summary.kindCounts.same} · Class ↔ instance: ${summary.kindCounts.instance}`} />
+        )}
         <Figure label="Fitness" value={summary.fitness.toFixed(2)} />
       </div>
       <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap' }}>

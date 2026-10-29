@@ -1,0 +1,353 @@
+{
+  "schemaVersion": 1,
+  "id": "golden",
+  "createdAt": "2023-11-14T22:13:20.000Z",
+  "durationMs": 0,
+  "source": {
+    "libraryId": 1,
+    "name": "Ecore excerpt",
+    "version": "1.0",
+    "ecoreFileId": 10,
+    "nsUri": null,
+    "contentHash": "hash-Ecore excerpt"
+  },
+  "target": {
+    "libraryId": 2,
+    "name": "UML excerpt",
+    "version": "1.0",
+    "ecoreFileId": 20,
+    "nsUri": null,
+    "contentHash": "hash-UML excerpt"
+  },
+  "settings": {
+    "seed": 3,
+    "effort": "balanced",
+    "weights": {
+      "structural": 0.5,
+      "syntactic": 0.5
+    },
+    "syntactic": {
+      "alpha": 0.5,
+      "beta": 0.5
+    },
+    "synonymWeight": 1,
+    "nullScore": 0.25,
+    "maxTargetsPerElement": 2,
+    "ga": {
+      "populationSize": 60,
+      "generations": 150,
+      "crossoverRate": 0.9,
+      "mutationRate": 0.2,
+      "mutatedFraction": 0.05,
+      "stallGenerations": 25
+    },
+    "sa": {
+      "startTemperature": 0.05,
+      "endTemperature": 0.0001,
+      "coolingFactor": 0.95,
+      "iterationsPerElement": 1
+    },
+    "measures": [
+      {
+        "id": "name-tokens",
+        "weight": 0.75
+      },
+      {
+        "id": "neighbourhood",
+        "weight": 0.4
+      }
+    ],
+    "strategy": "hybrid-ga-sa"
+  },
+  "engine": {
+    "strategy": {
+      "id": "hybrid-ga-sa",
+      "version": "1"
+    },
+    "measures": [
+      {
+        "id": "structural",
+        "version": "1"
+      },
+      {
+        "id": "cosine",
+        "version": "1"
+      },
+      {
+        "id": "levenshtein",
+        "version": "1"
+      },
+      {
+        "id": "name-tokens",
+        "version": "1",
+        "weight": 0.75
+      },
+      {
+        "id": "neighbourhood",
+        "version": "1",
+        "weight": 0.4
+      }
+    ],
+    "lexicalSource": {
+      "id": "oewn",
+      "version": "2025"
+    }
+  },
+  "warnings": [],
+  "summary": {
+    "sourceClassCount": 3,
+    "targetClassCount": 3,
+    "matchedSourceClasses": 3,
+    "matchedTargetClasses": 2,
+    "overlapPercent": 83.333,
+    "fitness": 0.519
+  },
+  "classMatrix": {
+    "rows": [
+      "ecore.EClass",
+      "ecore.EReference",
+      "ecore.EAttribute"
+    ],
+    "columns": [
+      "uml.Class",
+      "uml.Property",
+      "uml.Association"
+    ],
+    "overall": [
+      0.817,
+      0.278,
+      0.21,
+      0.233,
+      0.291,
+      0.116,
+      0.148,
+      0.449,
+      0.011
+    ],
+    "perMeasure": {
+      "structural": [
+        0.667,
+        0.667,
+        0.333,
+        1,
+        1,
+        0.5,
+        0.5,
+        0.5,
+        0
+      ],
+      "cosine": [
+        0.902,
+        0.094,
+        0,
+        0,
+        0.205,
+        0,
+        0.272,
+        0.365,
+        0
+      ],
+      "levenshtein": [
+        0.833,
+        0,
+        0.182,
+        0,
+        0.3,
+        0,
+        0,
+        0.1,
+        0.091
+      ],
+      "name-tokens": [
+        1,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0.8,
+        0
+      ],
+      "neighbourhood": [
+        0.6,
+        0.6,
+        0.6,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ]
+    }
+  },
+  "correspondences": [
+    {
+      "id": "c-1",
+      "level": "class",
+      "sources": [
+        {
+          "side": "source",
+          "kind": "class",
+          "qualifiedName": "ecore.EClass",
+          "name": "EClass"
+        }
+      ],
+      "targets": [
+        {
+          "side": "target",
+          "kind": "class",
+          "qualifiedName": "uml.Class",
+          "name": "Class"
+        }
+      ],
+      "score": 0.8172675967216492,
+      "scores": {
+        "structural": 0.6666666865348816,
+        "syntactic": 0.8675839900970459,
+        "name-tokens": 1,
+        "neighbourhood": 0.6000000238418579
+      },
+      "children": [
+        {
+          "id": "c-1-f-1",
+          "level": "feature",
+          "sources": [
+            {
+              "side": "source",
+              "kind": "attribute",
+              "qualifiedName": "ecore.EClass.abstract",
+              "name": "abstract",
+              "containingClass": "ecore.EClass"
+            }
+          ],
+          "targets": [
+            {
+              "side": "target",
+              "kind": "attribute",
+              "qualifiedName": "uml.Class.isAbstract",
+              "name": "isAbstract",
+              "containingClass": "uml.Class"
+            }
+          ],
+          "score": 0.9714285731315613,
+          "scores": {
+            "structural": 1,
+            "syntactic": 0.8999999761581421,
+            "name-tokens": 1
+          }
+        },
+        {
+          "id": "c-1-f-2",
+          "level": "feature",
+          "sources": [
+            {
+              "side": "source",
+              "kind": "reference",
+              "qualifiedName": "ecore.EClass.eAttributes",
+              "name": "eAttributes",
+              "containingClass": "ecore.EClass"
+            },
+            {
+              "side": "source",
+              "kind": "reference",
+              "qualifiedName": "ecore.EClass.eReferences",
+              "name": "eReferences",
+              "containingClass": "ecore.EClass"
+            }
+          ],
+          "targets": [
+            {
+              "side": "target",
+              "kind": "reference",
+              "qualifiedName": "uml.Class.ownedAttributes",
+              "name": "ownedAttributes",
+              "containingClass": "uml.Class"
+            }
+          ],
+          "score": 0.5731854885816574,
+          "scores": {
+            "structural": 1,
+            "syntactic": 0.44364918023347855,
+            "name-tokens": 0.375
+          }
+        }
+      ]
+    },
+    {
+      "id": "c-2",
+      "level": "class",
+      "sources": [
+        {
+          "side": "source",
+          "kind": "class",
+          "qualifiedName": "ecore.EAttribute",
+          "name": "EAttribute"
+        },
+        {
+          "side": "source",
+          "kind": "class",
+          "qualifiedName": "ecore.EReference",
+          "name": "EReference"
+        }
+      ],
+      "targets": [
+        {
+          "side": "target",
+          "kind": "class",
+          "qualifiedName": "uml.Property",
+          "name": "Property"
+        }
+      ],
+      "score": 0.37035588920116425,
+      "scores": {
+        "structural": 0.75,
+        "syntactic": 0.24253032356500626,
+        "name-tokens": 0.4000000059604645,
+        "neighbourhood": 0
+      },
+      "children": [
+        {
+          "id": "c-2-f-1",
+          "level": "feature",
+          "sources": [
+            {
+              "side": "source",
+              "kind": "reference",
+              "qualifiedName": "ecore.EReference.eOpposite",
+              "name": "eOpposite",
+              "containingClass": "ecore.EReference"
+            }
+          ],
+          "targets": [
+            {
+              "side": "target",
+              "kind": "reference",
+              "qualifiedName": "uml.Property.opposite",
+              "name": "opposite",
+              "containingClass": "uml.Property"
+            }
+          ],
+          "score": 0.9841269850730896,
+          "scores": {
+            "structural": 1,
+            "syntactic": 0.9444444179534912,
+            "name-tokens": 1
+          }
+        }
+      ]
+    }
+  ],
+  "unmatched": {
+    "source": [],
+    "target": [
+      {
+        "side": "target",
+        "kind": "class",
+        "qualifiedName": "uml.Association",
+        "name": "Association"
+      }
+    ]
+  }
+}

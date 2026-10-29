@@ -1,6 +1,7 @@
 import { create } from 'zustand';
+import { APPROACHES, DEFAULT_APPROACH, type ApproachSettingsMap } from '../utils/semanticOverlap/approaches/registry';
+import type { ApproachId } from '../utils/semanticOverlap/approaches/types';
 import { randomSeed } from '../utils/semanticOverlap/search/rng';
-import { DEFAULT_SETTINGS } from '../utils/semanticOverlap/settings';
 import type { AnalysisSettings, OverlapResult, Progress } from '../utils/semanticOverlap/types';
 
 export type OverlapStatus = 'idle' | 'ready' | 'loading' | 'running' | 'done' | 'failed';
@@ -16,6 +17,10 @@ interface SemanticOverlapState {
   status: OverlapStatus;
   sourceId: number | null;
   targetId: number | null;
+  approach: ApproachId;
+  /** Settings per approach; switching keeps each approach's own settings. */
+  settingsByApproach: ApproachSettingsMap;
+  /** Settings of the active approach (`settingsByApproach[approach]`). */
   settings: AnalysisSettings;
   /** Id of the current run; messages of other runs are ignored. */
   runId: string | null;
@@ -34,7 +39,9 @@ interface SemanticOverlapState {
   setSource(id: number | null): void;
   setTarget(id: number | null): void;
   swap(): void;
-  updateSettings(patch: Partial<AnalysisSettings>): void;
+  /** Patches the active approach's settings. */
+  updateSettings(patch: Partial<ApproachSettingsMap[ApproachId]>): void;
+  setApproach(approach: ApproachId): void;
   beginLoading(runId: string): void;
   beginRunning(runId: string): void;
   updateProgress(runId: string, progress: Progress): void;
@@ -53,22 +60,35 @@ interface SemanticOverlapState {
 const pairStatus = (sourceId: number | null, targetId: number | null): OverlapStatus =>
   sourceId !== null && targetId !== null ? 'ready' : 'idle';
 
-const initialState = () => ({
-  status: 'idle' as OverlapStatus,
-  sourceId: null,
-  targetId: null,
-  settings: { ...DEFAULT_SETTINGS, seed: randomSeed() },
-  runId: null,
-  progress: null,
-  result: null,
-  error: null,
-  activeTab: 'diagram' as OverlapTab,
-  selectedCorrespondenceId: null,
-  hoveredCell: null,
-  minScore: DEFAULT_MIN_SCORE,
-  collapsedUnmatched: false,
-  expandedCorrespondenceIds: [] as string[],
-});
+const initialSettings = (): ApproachSettingsMap => {
+  const seed = randomSeed();
+  return {
+    paper: { ...APPROACHES.paper.defaultSettings(), seed },
+    improved: { ...APPROACHES.improved.defaultSettings(), seed },
+  };
+};
+
+const initialState = () => {
+  const settingsByApproach = initialSettings();
+  return {
+    status: 'idle' as OverlapStatus,
+    sourceId: null,
+    targetId: null,
+    approach: DEFAULT_APPROACH,
+    settingsByApproach,
+    settings: settingsByApproach[DEFAULT_APPROACH] as AnalysisSettings,
+    runId: null,
+    progress: null,
+    result: null,
+    error: null,
+    activeTab: 'diagram' as OverlapTab,
+    selectedCorrespondenceId: null,
+    hoveredCell: null,
+    minScore: DEFAULT_MIN_SCORE,
+    collapsedUnmatched: false,
+    expandedCorrespondenceIds: [] as string[],
+  };
+};
 
 /** A new selection invalidates the running analysis and the previous result. */
 const selectionChanged = (sourceId: number | null, targetId: number | null) => ({
@@ -90,11 +110,26 @@ export const useSemanticOverlapStore = create<SemanticOverlapState>((set, get) =
   setSource: id => set(selectionChanged(id, get().targetId)),
   setTarget: id => set(selectionChanged(get().sourceId, id)),
   swap: () => set(selectionChanged(get().targetId, get().sourceId)),
-  updateSettings: patch => set(state => ({
-    settings: { ...state.settings, ...patch },
-    // The result stays visible with the settings it was computed with; a new run is needed.
-    status: state.status === 'done' ? pairStatus(state.sourceId, state.targetId) : state.status,
-  })),
+  updateSettings: patch => set(state => {
+    const settings = { ...state.settingsByApproach[state.approach], ...patch };
+    return {
+      settingsByApproach: { ...state.settingsByApproach, [state.approach]: settings },
+      settings,
+      // The result stays visible with the settings it was computed with; a new run is needed.
+      status: state.status === 'done' ? pairStatus(state.sourceId, state.targetId) : state.status,
+    };
+  }),
+  setApproach: approach => set(state => {
+    if (approach === state.approach) return {};
+    // Both approaches use the same seed, so a comparison on the same pair is reproducible.
+    const settings = { ...state.settingsByApproach[approach], seed: state.settings.seed };
+    return {
+      approach,
+      settingsByApproach: { ...state.settingsByApproach, [approach]: settings },
+      settings,
+      status: state.status === 'done' ? pairStatus(state.sourceId, state.targetId) : state.status,
+    };
+  }),
 
   beginLoading: runId => set({
     runId, status: 'loading', progress: { phase: 'loading', fraction: 0 }, error: null,
