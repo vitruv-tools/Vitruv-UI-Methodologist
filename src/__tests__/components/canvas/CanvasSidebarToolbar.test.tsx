@@ -20,7 +20,8 @@ const createProps = () => ({
   onToggleReactionMode: vi.fn(),
   onOpenReactionEditor: vi.fn(),
   onToggleModelDrawer: vi.fn(),
-  onDownloadArtifact: vi.fn(),
+  onDownloadProject: vi.fn(),
+  onDownloadJar: vi.fn(),
   onDownloadBundle: vi.fn(),
   onSaveChanges: vi.fn(),
   onCheckBuild: vi.fn(),
@@ -28,7 +29,8 @@ const createProps = () => ({
   onRedo: vi.fn(),
   canUndo: true,
   canRedo: true,
-  downloadingArtifact: false,
+  downloadingProject: false,
+  downloadingJar: false,
   downloadingBundle: false,
   savingChanges: false,
   checkingBuild: false,
@@ -59,7 +61,7 @@ describe('CanvasSidebarToolbar', () => {
     fireEvent.click(screen.getByRole('button', { name: labels.checkBuild }));
     fireEvent.click(screen.getByRole('button', { name: labels.addMetaModels }));
 
-    expect(props.onDownloadArtifact).toHaveBeenCalledTimes(1);
+    expect(props.onDownloadProject).toHaveBeenCalledTimes(1);
     expect(props.onSaveChanges).toHaveBeenCalledTimes(1);
     expect(props.onCheckBuild).toHaveBeenCalledTimes(1);
     expect(props.onToggleModelDrawer).toHaveBeenCalledTimes(1);
@@ -114,7 +116,7 @@ describe('CanvasSidebarToolbar', () => {
     expect(downloadButton).toHaveStyle({ cursor: 'not-allowed' });
     expect(saveButton).toHaveStyle({ cursor: 'not-allowed' });
     expect(buildButton).toHaveStyle({ cursor: 'not-allowed' });
-    expect(props.onDownloadArtifact).not.toHaveBeenCalled();
+    expect(props.onDownloadProject).not.toHaveBeenCalled();
     expect(props.onSaveChanges).not.toHaveBeenCalled();
     expect(props.onCheckBuild).not.toHaveBeenCalled();
   });
@@ -158,8 +160,32 @@ describe('CanvasSidebarToolbar', () => {
     fireEvent.click(screen.getByRole('button', { name: /Easy deploy package/ }));
 
     expect(props.onDownloadBundle).toHaveBeenCalledTimes(1);
-    expect(props.onDownloadArtifact).not.toHaveBeenCalled();
+    expect(props.onDownloadProject).not.toHaveBeenCalled();
     expect(screen.queryByText(/Easy deploy package/)).not.toBeInTheDocument();
+  });
+
+  it('offers the runnable JAR in the download menu', () => {
+    const props = createProps();
+    render(<CanvasSidebarToolbar {...props} />);
+
+    fireEvent.click(screen.getByRole('button', { name: labels.download }));
+    fireEvent.click(screen.getByRole('button', { name: /Runnable JAR/ }));
+
+    expect(props.onDownloadJar).toHaveBeenCalledTimes(1);
+    expect(props.onDownloadProject).not.toHaveBeenCalled();
+    expect(props.onDownloadBundle).not.toHaveBeenCalled();
+    expect(screen.queryByText(/Runnable JAR/)).not.toBeInTheDocument();
+  });
+
+  it('suppresses downloads while the runnable JAR is downloading', () => {
+    const props = { ...createProps(), downloadingJar: true };
+    render(<CanvasSidebarToolbar {...props} />);
+
+    fireEvent.click(screen.getByRole('button', { name: labels.download }));
+    fireEvent.click(screen.getByRole('button', { name: labels.checkBuild }));
+
+    expect(props.onCheckBuild).not.toHaveBeenCalled();
+    expect(screen.queryByText(/Runnable JAR/)).not.toBeInTheDocument();
   });
 
   it('closes the download menu on outside click without triggering a download', () => {
@@ -172,7 +198,7 @@ describe('CanvasSidebarToolbar', () => {
     fireEvent.mouseDown(document.body);
 
     expect(screen.queryByText('Project export')).not.toBeInTheDocument();
-    expect(props.onDownloadArtifact).not.toHaveBeenCalled();
+    expect(props.onDownloadProject).not.toHaveBeenCalled();
     expect(props.onDownloadBundle).not.toHaveBeenCalled();
   });
 
