@@ -5,6 +5,7 @@ import {
   mergeSharerWithMembers,
   normalizeVsumRole,
   pickMostRestrictiveRole,
+  pickSharedAwareRole,
   mergeStoredProjectAccess,
   readStoredProjectAccess,
   resolveProjectAccessRole,
@@ -101,6 +102,20 @@ describe('vsumMemberUtils', () => {
     expect(pickMostRestrictiveRole('OWNER', 'VIEWER')).toBe('VIEWER');
     expect(pickMostRestrictiveRole('OWNER', 'MEMBER')).toBe('MEMBER');
     expect(pickMostRestrictiveRole('OWNER', null)).toBe('OWNER');
+  });
+
+  it('lets a known MEMBER or VIEWER role beat the role inferred from sharing', () => {
+    expect(pickSharedAwareRole('VIEWER', 'MEMBER')).toBe('MEMBER');
+    expect(pickSharedAwareRole('VIEWER', 'MEMBER', 'VIEWER')).toBe('VIEWER');
+    expect(pickSharedAwareRole('VIEWER', 'OWNER')).toBe('VIEWER');
+    expect(pickSharedAwareRole('VIEWER', null)).toBe('VIEWER');
+    expect(pickSharedAwareRole(null, 'OWNER', 'MEMBER')).toBe('MEMBER');
+  });
+
+  it('keeps a MEMBER as MEMBER on a project shared with them', () => {
+    writeStoredProjectAccess(8, { accessRole: 'MEMBER', sharedBy: { email: 'o@x.com' } });
+    expect(resolveProjectAccessRole(8)).toBe('MEMBER');
+    expect(resolveProjectAccessRole(8, 'MEMBER')).toBe('MEMBER');
   });
 
   it('extracts shared-by contact from vsum list item', () => {

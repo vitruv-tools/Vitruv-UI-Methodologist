@@ -80,6 +80,26 @@ describe('canvasMemberPresentation', () => {
     )).toEqual([owner, currentUser, otherMember]);
   });
 
+  it('lists the owner once when the sharer is a placeholder for the owner', () => {
+    const owner = createMember({ id: 7 });
+    const placeholderSharer = createMember({ id: -1 });
+    const currentUser = createMember({
+      id: 2,
+      firstName: 'Grace',
+      lastName: 'Hopper',
+      email: 'grace@example.com',
+      role: 'MEMBER',
+    });
+
+    expect(buildCanvasPanelMembers(
+      [owner, currentUser],
+      placeholderSharer,
+      true,
+      currentUser.email,
+      'Grace Hopper',
+    )).toEqual([owner, currentUser]);
+  });
+
   it('adds a fallback current-user entry for shared projects', () => {
     const owner = createMember();
     const otherMember = createMember({
