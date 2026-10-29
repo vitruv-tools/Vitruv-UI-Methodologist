@@ -342,6 +342,42 @@ describe('ApiService – downloadVsumProject', () => {
   });
 });
 
+// ── downloadVsumJar ───────────────────────────────────────────────────────────
+
+describe('ApiService – downloadVsumJar', () => {
+  const { AuthService } = (authModule as unknown) as {
+    AuthService: { ensureValidToken: Mock; refreshToken: Mock };
+  };
+
+  beforeEach(() => {
+    AuthService.ensureValidToken.mockResolvedValue('mock-token');
+  });
+  afterEach(() => vi.restoreAllMocks());
+
+  it('requests the build artifact and returns the jar', async () => {
+    const jarBytes = new Uint8Array([0x50, 0x4b, 0x03, 0x04, 0x00]);
+    vi.spyOn(global, 'fetch').mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      statusText: 'OK',
+      headers: {
+        get: (name: string) =>
+          name.toLowerCase() === 'content-type' ? 'application/octet-stream' : null,
+      },
+      text: async () => '',
+      blob: async () => new Blob([jarBytes], { type: 'application/octet-stream' }),
+    } as unknown as Response);
+
+    const blob = await apiService.downloadVsumJar(42);
+
+    expect(blob.size).toBe(jarBytes.length);
+    expect(global.fetch).toHaveBeenCalledWith(
+      expect.stringMatching(/\/api\/v1\/vsums\/42\/build\/artifact$/),
+      expect.objectContaining({ method: 'GET' }),
+    );
+  });
+});
+
 // ── downloadVsumBundle ────────────────────────────────────────────────────────
 
 describe('ApiService – downloadVsumBundle', () => {

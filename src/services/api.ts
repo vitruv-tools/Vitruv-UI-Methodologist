@@ -665,6 +665,15 @@ class ApiService {
   }
 
   /**
+   * vSUMS: Download the built, runnable VSUM jar
+   * GET /api/v1/vsums/{id}/build/artifact
+   * Waits for the Maven build of the VSUM and returns the jar-with-dependencies
+   */
+  async downloadVsumJar(id: number | string): Promise<Blob> {
+    return this.downloadVsumZip(`/api/v1/vsums/${id}/build/artifact`, 'Runnable JAR');
+  }
+
+  /**
    * vSUMS: Download easy deploy package as ZIP file
    * GET /api/v1/vsums/{id}/build/bundle
    * Returns a ZIP file blob containing a JAR, documentation, and scripts

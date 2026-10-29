@@ -359,7 +359,8 @@ export const CanvasPage: React.FC = () => {
 
   // check / download / save
   const [checkingBuild, setCheckingBuild] = useState(false);
-  const [downloadingArtifact, setDownloadingArtifact] = useState(false);
+  const [downloadingProject, setDownloadingProject] = useState(false);
+  const [downloadingJar, setDownloadingJar] = useState(false);
   const [downloadingBundle, setDownloadingBundle] = useState(false);
   const [savingChanges, setSavingChanges] = useState(false);
   const [popup, setPopup] = useState<{
@@ -1394,11 +1395,11 @@ export const CanvasPage: React.FC = () => {
     }
   }, [activeProjectId, isViewOnly, showPopup, showPopupError]);
 
-  // ── Download artifact ─────────────────────────────────────────────────────
+  // ── Downloads ─────────────────────────────────────────────────────────────
 
-  const handleDownloadArtifact = useCallback(async () => {
+  const handleDownloadProject = useCallback(async () => {
     if (!activeProjectId) return;
-    setDownloadingArtifact(true);
+    setDownloadingProject(true);
     showPopup('Downloading project…', 'info');
     try {
       const blob = await apiService.downloadVsumProject(activeProjectId);
@@ -1407,7 +1408,22 @@ export const CanvasPage: React.FC = () => {
     } catch (e: unknown) {
       showPopupError(e, 'Download failed.');
     } finally {
-      setDownloadingArtifact(false);
+      setDownloadingProject(false);
+    }
+  }, [activeProjectId, showPopup, showPopupError]);
+
+  const handleDownloadJar = useCallback(async () => {
+    if (!activeProjectId) return;
+    setDownloadingJar(true);
+    showPopup('Building and downloading runnable JAR…', 'info');
+    try {
+      const blob = await apiService.downloadVsumJar(activeProjectId);
+      downloadBlobAsFile(blob, `vsum-${activeProjectId}.jar`);
+      showPopup('Runnable JAR downloaded successfully!', 'success');
+    } catch (e: unknown) {
+      showPopupError(e, 'Download failed.');
+    } finally {
+      setDownloadingJar(false);
     }
   }, [activeProjectId, showPopup, showPopupError]);
 
@@ -1667,7 +1683,8 @@ export const CanvasPage: React.FC = () => {
         onToggleReactionMode={() => setAddReactionMode(v => !v)}
         onOpenReactionEditor={handleOpenReactionEditor}
         onToggleModelDrawer={() => setShowDrawer(d => !d)}
-        onDownloadArtifact={handleDownloadArtifact}
+        onDownloadProject={handleDownloadProject}
+        onDownloadJar={handleDownloadJar}
         onDownloadBundle={handleDownloadBundle}
         onSaveChanges={handleSaveChanges}
         onCheckBuild={handleCheckBuild}
@@ -1675,7 +1692,8 @@ export const CanvasPage: React.FC = () => {
         onRedo={() => flowCanvasRef.current?.redo?.()}
         canUndo={canUndo}
         canRedo={canRedo}
-        downloadingArtifact={downloadingArtifact}
+        downloadingProject={downloadingProject}
+        downloadingJar={downloadingJar}
         downloadingBundle={downloadingBundle}
         savingChanges={savingChanges}
         checkingBuild={checkingBuild}

@@ -7,7 +7,8 @@ interface CanvasSidebarToolbarProps {
   onToggleReactionMode: () => void;
   onOpenReactionEditor?: () => void;
   onToggleModelDrawer: () => void;
-  onDownloadArtifact: () => void;
+  onDownloadProject: () => void;
+  onDownloadJar: () => void;
   onDownloadBundle: () => void;
   onSaveChanges: () => void;
   onCheckBuild: () => void;
@@ -15,7 +16,8 @@ interface CanvasSidebarToolbarProps {
   onRedo: () => void;
   canUndo: boolean;
   canRedo: boolean;
-  downloadingArtifact: boolean;
+  downloadingProject: boolean;
+  downloadingJar: boolean;
   downloadingBundle: boolean;
   savingChanges: boolean;
   checkingBuild: boolean;
@@ -186,6 +188,15 @@ const PackageIcon = () => (
   </svg>
 );
 
+const JarIcon = () => (
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z" />
+    <path d="M14 2v6h6" />
+    <path d="m10 13-2 2 2 2" />
+    <path d="m14 17 2-2-2-2" />
+  </svg>
+);
+
 const ZipIcon = () => (
   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
     <path d="M16 2H8a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2V4a2 2 0 0 0-2-2Z" />
@@ -251,7 +262,8 @@ export const CanvasSidebarToolbar: React.FC<CanvasSidebarToolbarProps> = ({
   onToggleReactionMode,
   onOpenReactionEditor,
   onToggleModelDrawer,
-  onDownloadArtifact,
+  onDownloadProject,
+  onDownloadJar,
   onDownloadBundle,
   onSaveChanges,
   onCheckBuild,
@@ -259,12 +271,14 @@ export const CanvasSidebarToolbar: React.FC<CanvasSidebarToolbarProps> = ({
   onRedo,
   canUndo,
   canRedo,
-  downloadingArtifact,
+  downloadingProject,
+  downloadingJar,
   downloadingBundle,
   savingChanges,
   checkingBuild,
 }) => {
-  const busy = downloadingArtifact || downloadingBundle || savingChanges || checkingBuild;
+  const downloading = downloadingProject || downloadingJar || downloadingBundle;
+  const busy = downloading || savingChanges || checkingBuild;
   const [showDownloadMenu, setShowDownloadMenu] = useState(false);
   const downloadMenuRef = useRef<HTMLDivElement>(null);
 
@@ -298,7 +312,7 @@ export const CanvasSidebarToolbar: React.FC<CanvasSidebarToolbarProps> = ({
             label="Download"
             description="Export this project"
             onClick={() => setShowDownloadMenu(current => !current)}
-            loading={downloadingArtifact || downloadingBundle}
+            loading={downloading}
             disabled={busy}
             active={showDownloadMenu}
           >
@@ -322,9 +336,17 @@ export const CanvasSidebarToolbar: React.FC<CanvasSidebarToolbarProps> = ({
                 label="Project export"
                 sublabel="Maven project to build yourself (ZIP)"
                 icon={<ZipIcon />}
-                loading={downloadingArtifact}
+                loading={downloadingProject}
                 disabled={busy}
-                onClick={() => { setShowDownloadMenu(false); onDownloadArtifact(); }}
+                onClick={() => { setShowDownloadMenu(false); onDownloadProject(); }}
+              />
+              <DownloadMenuItem
+                label="Runnable JAR"
+                sublabel="Built VSUM, start with java -jar"
+                icon={<JarIcon />}
+                loading={downloadingJar}
+                disabled={busy}
+                onClick={() => { setShowDownloadMenu(false); onDownloadJar(); }}
               />
               <DownloadMenuItem
                 label="Easy deploy package"

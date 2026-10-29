@@ -102,6 +102,7 @@ vi.mock('../../services/api', () => ({
     removeVsumMember: vi.fn(),
     buildVsum: vi.fn(),
     downloadVsumProject: vi.fn(),
+    downloadVsumJar: vi.fn(),
     downloadVsumBundle: vi.fn(),
     renameVsum: vi.fn(),
     deleteMetaModel: vi.fn(),
