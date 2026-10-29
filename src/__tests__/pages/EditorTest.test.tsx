@@ -2,7 +2,7 @@ import React from 'react';
 import { render, screen } from '@testing-library/react';
 import { EditorTest } from '../../pages/EditorTest';
 
-jest.mock('../../components/flow/CodeEditorModal', () => ({
+vi.mock('../../components/flow/CodeEditorModal', () => ({
   CodeEditorModal: (props: any) => (
     <div data-testid="code-editor-modal">
       <div>Editor is open: {props.isOpen ? 'yes' : 'no'}</div>

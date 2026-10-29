@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { ProjectPickerMenu } from './ProjectPickerMenu';
+import { VsumLineStyleMenu } from './VsumLineStyleMenu';
 
 interface CanvasProjectControlsProps {
   readOnly?: boolean;
@@ -172,7 +173,7 @@ export const CanvasProjectControls: React.FC<CanvasProjectControlsProps> = ({
       onMouseLeave={event => { event.currentTarget.style.opacity = '1'; }}
     >
       <img
-        src="/assets/vitruvius1.png"
+        src={`${process.env.PUBLIC_URL}/assets/vitruvius1.png`}
         alt=""
         aria-hidden="true"
         style={{ width: 24, height: 24, borderRadius: 6, display: 'block' }}
@@ -264,25 +265,34 @@ export const CanvasProjectControls: React.FC<CanvasProjectControlsProps> = ({
       <>
         <ProjectControlsDivider />
         <div style={{ display: 'flex', alignItems: 'center', gap: 2, padding: '0 4px' }}>
-          <button
-            type="button"
-            onClick={() => { if (addReactionMode) onToggleReactionMode(); }}
-            style={{
-              height: 24,
-              padding: '0 8px',
-              border: 'none',
-              borderRadius: 4,
-              fontSize: 10,
-              fontWeight: 700,
-              cursor: 'pointer',
-              background: !addReactionMode ? '#e3f2fd' : 'transparent',
-              color: !addReactionMode ? '#1565c0' : '#999',
-              transition: 'all 0.15s',
-              fontFamily: 'inherit',
-            }}
+          <VsumLineStyleMenu
+            lineStyle={reactionLineStyle}
+            onLineStyleChange={onReactionLineStyleChange}
+            opensOnActivate={!addReactionMode}
           >
-            VSUM
-          </button>
+            {(menuButtonProps) => (
+              <button
+                type="button"
+                {...menuButtonProps}
+                onClick={() => { if (addReactionMode) onToggleReactionMode(); }}
+                style={{
+                  height: 24,
+                  padding: '0 8px',
+                  border: 'none',
+                  borderRadius: 4,
+                  fontSize: 10,
+                  fontWeight: 700,
+                  cursor: 'pointer',
+                  background: !addReactionMode ? '#e3f2fd' : 'transparent',
+                  color: !addReactionMode ? '#1565c0' : '#999',
+                  transition: 'all 0.15s',
+                  fontFamily: 'inherit',
+                }}
+              >
+                VSUM
+              </button>
+            )}
+          </VsumLineStyleMenu>
           <button
             type="button"
             onClick={() => { if (!addReactionMode) onToggleReactionMode(); }}
@@ -303,50 +313,6 @@ export const CanvasProjectControls: React.FC<CanvasProjectControlsProps> = ({
             Reactions
           </button>
         </div>
-        {addReactionMode && onReactionLineStyleChange && (
-          <div style={{ display: 'flex', alignItems: 'center', gap: 2, padding: '0 4px' }}>
-            <button
-              type="button"
-              aria-pressed={reactionLineStyle === 'dashed'}
-              onClick={() => onReactionLineStyleChange('dashed')}
-              style={{
-                height: 24,
-                padding: '0 8px',
-                border: 'none',
-                borderRadius: 4,
-                fontSize: 10,
-                fontWeight: 700,
-                cursor: 'pointer',
-                background: reactionLineStyle === 'dashed' ? '#e8f5e9' : 'transparent',
-                color: reactionLineStyle === 'dashed' ? '#2e7d32' : '#999',
-                transition: 'all 0.15s',
-                fontFamily: 'inherit',
-              }}
-            >
-              Dashed
-            </button>
-            <button
-              type="button"
-              aria-pressed={reactionLineStyle === 'solid'}
-              onClick={() => onReactionLineStyleChange('solid')}
-              style={{
-                height: 24,
-                padding: '0 8px',
-                border: 'none',
-                borderRadius: 4,
-                fontSize: 10,
-                fontWeight: 700,
-                cursor: 'pointer',
-                background: reactionLineStyle === 'solid' ? '#e8f5e9' : 'transparent',
-                color: reactionLineStyle === 'solid' ? '#2e7d32' : '#999',
-                transition: 'all 0.15s',
-                fontFamily: 'inherit',
-              }}
-            >
-              Solid
-            </button>
-          </div>
-        )}
       </>
     )}
   </div>

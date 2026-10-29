@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import Editor, { OnMount, Monaco } from '@monaco-editor/react';
-import { reactionsMonarch, reactionsTheme, reactionsLanguageConfig } from './ReactionsMonarchGrammar';
+import { reactionsMonarch, reactionsLanguageConfig } from './ReactionsMonarchGrammar';
+import { useMonacoEditorTheme } from '../../theme/monacoEditorTheme';
 import * as monaco from 'monaco-editor';
 import { ConfirmDialog } from '../ui/ConfirmDialog';
 import { ActionButton } from '../ui/ActionButton';
@@ -33,7 +34,6 @@ interface CodeEditorModalProps {
   readonly fileExtension?: string;
   readonly monarchGrammar?: any;
   readonly languageConfig?: any;
-  readonly theme?: any;
   readonly title?: string;
   /** When true, code is visible but cannot be edited or saved. */
   readonly readOnly?: boolean;
@@ -90,7 +90,6 @@ export function CodeEditorModal({
   fileExtension = '.reactions',
   monarchGrammar,
   languageConfig,
-  theme,
   title = 'Code Editor',
   readOnly = false,
 }: CodeEditorModalProps) {
@@ -106,6 +105,7 @@ export function CodeEditorModal({
   const [showUnsavedDialog, setShowUnsavedDialog] = useState(false);
   const [saveErrorMessage, setSaveErrorMessage] = useState<string | null>(null);
 
+  const { themeName: monacoTheme, beforeMount: handleMonacoTheme } = useMonacoEditorTheme();
   const editorRef = useRef<monaco.editor.IStandaloneCodeEditor | null>(null);
   const webSocketRef = useRef<WebSocket | null>(null);
   const lspInitialized = useRef(false);
@@ -314,29 +314,22 @@ export function CodeEditorModal({
       pendingRequests.current.set(requestId, (message) => {
         clearTimeout(timeoutId);
         const suggestions = processCompletionResponse(message, range, monacoInstance);
-        console.log(`🧩 Completion response for request ${requestId}:`, message.result, '→', suggestions.length, 'suggestions');
         resolve({ suggestions });
       });
 
-      console.log(`🧩 Sending completion request ${requestId} for uri=${getDocumentUri()}`);
       webSocketRef.current.send(JSON.stringify(request));
     });
   };
 
   const handleEditorDidMount: OnMount = (editor, monacoInstance) => {
-    console.log('🎯 handleEditorDidMount called');
     editorRef.current = editor;
 
     const grammar = monarchGrammar || reactionsMonarch;
     const config = languageConfig || reactionsLanguageConfig;
-    const editorTheme = theme || reactionsTheme;
-    const themeName = `${languageId}-theme`;
 
     monacoInstance.languages.register({ id: languageId });
     monacoInstance.languages.setLanguageConfiguration(languageId, config);
     monacoInstance.languages.setMonarchTokensProvider(languageId, grammar);
-    monacoInstance.editor.defineTheme(themeName, editorTheme);
-    monacoInstance.editor.setTheme(themeName);
 
     completionProviderRef.current?.dispose();
     completionProviderRef.current = monacoInstance.languages.registerCompletionItemProvider(languageId, {
@@ -388,8 +381,6 @@ export function CodeEditorModal({
     try {
       const rawUser = localStorage.getItem('auth.user');
       const userId = rawUser ? JSON.parse(rawUser).id : null;
-      console.log('🔑 rawUser:', rawUser);
-      console.log('🔑 vsumId:', vsumId);
       if (!userId) {
         console.error('❌ No userId available – aborting LSP connection');
         return;
@@ -403,13 +394,11 @@ export function CodeEditorModal({
       const wsBaseUrl = apiBaseUrl.replace('https://', 'wss://').replace('http://', 'ws://');
       const wsUrl = `${wsBaseUrl}${lspEndpoint}?userId=${encodeURIComponent(userId)}&vsumId=${encodeURIComponent(vsumId)}`;
 
-      console.log('🔌 Connecting to LSP at:', wsUrl);
 
       const webSocket = new WebSocket(wsUrl);
       webSocketRef.current = webSocket;
 
       webSocket.onopen = () => {
-        console.log('✅ LSP WebSocket open:', wsUrl);
         setLspConnected(true);
         setLspError(null);
       };
@@ -430,7 +419,6 @@ export function CodeEditorModal({
 
           if (message.type === 'workspaceReady') {
             const rootUri = message.rootUri;
-            console.log('📁 workspaceReady received, rootUri:', rootUri);
             if (!rootUri) {
               console.error('❌ workspaceReady message contains no rootUri');
               return;
@@ -457,7 +445,6 @@ export function CodeEditorModal({
           }
 
           if (message.id === 1 && message.result) {
-            console.log('🚀 LSP initialize response received, sending initialized + didOpen');
             lspInitialized.current = true;
             webSocket.send(JSON.stringify({ jsonrpc: '2.0', method: 'initialized', params: {} }));
 
@@ -757,14 +744,15 @@ export function CodeEditorModal({
             overflow: 'hidden',
             margin: '0 16px 12px',
             borderRadius: '8px',
-            border: '1px solid #e2e8f0',
-            background: '#1e1e1e',
+            border: '1px solid var(--v-border)',
+            background: 'var(--v-input-bg)',
           }}
         >
           <Editor
             height="100%"
             language={languageId}
-            theme="vs-dark"
+            theme={monacoTheme}
+            beforeMount={handleMonacoTheme}
             value={code}
             onChange={(value) => {
               if (readOnly) return;

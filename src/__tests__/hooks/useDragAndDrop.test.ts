@@ -1,10 +1,11 @@
+import type { Mock } from 'vitest';
 import { renderHook, act } from '@testing-library/react';
 import { useDragAndDrop } from '../../hooks/useDragAndDrop';
 import { ReactFlowInstance } from 'reactflow';
 import { createRef } from 'react';
 
 // Mock ReactFlowInstance
-const mockProject = jest.fn();
+const mockProject = vi.fn();
 const mockReactFlowInstance = {
     project: mockProject,
 } as unknown as ReactFlowInstance;
@@ -35,7 +36,7 @@ function createMockDragEvent(toolData?: object, reactFlowType?: string): React.D
     if (reactFlowType) dataMap['application/reactflow'] = reactFlowType;
 
     return {
-        preventDefault: jest.fn(),
+        preventDefault: vi.fn(),
         clientX: 300,
         clientY: 200,
         dataTransfer: {
@@ -46,12 +47,12 @@ function createMockDragEvent(toolData?: object, reactFlowType?: string): React.D
 }
 
 describe('useDragAndDrop', () => {
-    let mockAddNode: jest.Mock;
+    let mockAddNode: Mock;
     let mockWrapper: React.RefObject<HTMLDivElement>;
 
     beforeEach(() => {
-        jest.clearAllMocks();
-        mockAddNode = jest.fn().mockReturnValue('new-node-id');
+        vi.clearAllMocks();
+        mockAddNode = vi.fn().mockReturnValue('new-node-id');
         mockWrapper = createMockWrapper();
         mockProject.mockReturnValue({ x: 200, y: 150 });
     });
@@ -214,7 +215,7 @@ describe('useDragAndDrop', () => {
                 );
 
                 const event = {
-                    preventDefault: jest.fn(),
+                    preventDefault: vi.fn(),
                     clientX: 300,
                     clientY: 200,
                     dataTransfer: {
@@ -393,12 +394,12 @@ describe('useDragAndDrop', () => {
 
 
 describe('useDragAndDrop – label mapping', () => {
-    let mockAddNode: jest.Mock;
+    let mockAddNode: Mock;
     let mockWrapper: React.RefObject<HTMLDivElement>;
 
     beforeEach(() => {
-        jest.clearAllMocks();
-        mockAddNode = jest.fn().mockReturnValue('new-node-id');
+        vi.clearAllMocks();
+        mockAddNode = vi.fn().mockReturnValue('new-node-id');
         mockWrapper = createMockWrapper();
     });
 
@@ -514,7 +515,7 @@ describe('useDragAndDrop – label mapping', () => {
 
     it('handles invalid JSON in tool data gracefully', () => {
         const badEvent = {
-            preventDefault: jest.fn(),
+            preventDefault: vi.fn(),
             clientX: 300, clientY: 200,
             dataTransfer: {
                 getData: (key: string) => (key === 'application/tool' ? '{bad-json' : ''),
@@ -551,7 +552,7 @@ describe('useDragAndDrop – onDragOver dropEffect', () => {
             useDragAndDrop({
                 reactFlowInstance: mockReactFlowInstance,
                 reactFlowWrapper: mockWrapper,
-                addNode: jest.fn(),
+                addNode: vi.fn(),
             }),
         );
 
@@ -566,7 +567,7 @@ describe('useDragAndDrop – onDragOver dropEffect', () => {
             useDragAndDrop({
                 reactFlowInstance: mockReactFlowInstance,
                 reactFlowWrapper: mockWrapper,
-                addNode: jest.fn(),
+                addNode: vi.fn(),
             }),
         );
 

@@ -1,19 +1,33 @@
 import React from 'react';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
 import { CodeEditorModal } from '../../../components/flow/CodeEditorModal';
+import { setTheme } from '../../../theme/theme';
 
-jest.mock('@monaco-editor/react', () => ({
+const monacoStub = {
+  editor: {
+    defineTheme: vi.fn(),
+    setTheme: vi.fn(),
+  },
+};
+
+vi.mock('@monaco-editor/react', () => ({
   __esModule: true,
-  default: ({ value, onChange }: any) => (
-    <textarea
-      data-testid="monaco-editor"
-      value={value}
-      onChange={(e) => onChange(e.target.value)}
-    />
-  ),
+  default: ({ value, onChange, theme, beforeMount }: any) => {
+    React.useEffect(() => {
+      beforeMount?.(monacoStub);
+    }, [beforeMount]);
+    return (
+      <textarea
+        data-testid="monaco-editor"
+        data-theme={theme}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+      />
+    );
+  },
 }));
 
-jest.mock('../../../components/ui/ConfirmDialog', () => ({
+vi.mock('../../../components/ui/ConfirmDialog', () => ({
   ConfirmDialog: ({
     isOpen,
     title,
@@ -37,8 +51,8 @@ jest.mock('../../../components/ui/ConfirmDialog', () => ({
 
 const defaultProps = {
   isOpen: true,
-  onClose: jest.fn(),
-  onSave: jest.fn().mockResolvedValue(undefined),
+  onClose: vi.fn(),
+  onSave: vi.fn().mockResolvedValue(undefined),
   initialCode: 'initial code',
   edgeId: 'edge-123',
   sourceFileName: 'Source.ecore',
@@ -50,8 +64,8 @@ const defaultProps = {
 describe('CodeEditorModal', () => {
   const defaultProps = {
     isOpen: true,
-    onClose: jest.fn(),
-    onSave: jest.fn().mockResolvedValue(undefined),
+    onClose: vi.fn(),
+    onSave: vi.fn().mockResolvedValue(undefined),
     initialCode: 'initial code',
     edgeId: 'edge-123',
     sourceFileName: 'Source.ecore',
@@ -61,7 +75,7 @@ describe('CodeEditorModal', () => {
   };
 
   beforeEach(() => {
-    jest.clearAllMocks();
+    vi.clearAllMocks();
   });
 
   it('renders header, file names and editor with initial code', () => {
@@ -72,12 +86,37 @@ describe('CodeEditorModal', () => {
       screen.getByText(/Source\.ecore ↔ Target\.ecore/i),
     ).toBeInTheDocument();
     expect(screen.getByTestId('monaco-editor')).toHaveValue('initial code');
+    expect(screen.getByTestId('monaco-editor')).toHaveAttribute('data-theme', 'vitruv-editor-light');
+    const editorFrame = screen.getByTestId('monaco-editor').parentElement as HTMLElement;
+    expect(editorFrame.style.background).toBe('var(--v-input-bg)');
+    expect(editorFrame.style.border).toContain('var(--v-border)');
     expect(screen.getByText(/Edge ID: edge-123/i)).toBeInTheDocument();
   });
 
+  it('switches the editor to the dark theme when the app theme changes', async () => {
+    render(<CodeEditorModal {...defaultProps} />);
+
+    await waitFor(() => {
+      expect(monacoStub.editor.setTheme).toHaveBeenCalledWith('vitruv-editor-light');
+    });
+    expect(monacoStub.editor.defineTheme).toHaveBeenCalledWith(
+      'vitruv-editor-light',
+      expect.objectContaining({ base: 'vs' }),
+    );
+    expect(monacoStub.editor.defineTheme).toHaveBeenCalledWith(
+      'vitruv-editor-dark',
+      expect.objectContaining({ base: 'vs-dark' }),
+    );
+
+    act(() => setTheme('dark'));
+
+    expect(screen.getByTestId('monaco-editor')).toHaveAttribute('data-theme', 'vitruv-editor-dark');
+    expect(monacoStub.editor.setTheme).toHaveBeenCalledWith('vitruv-editor-dark');
+  });
+
   it('calls onSave when Save is clicked and modal stays open', async () => {
-    const onSave = jest.fn().mockResolvedValue(undefined);
-    const onClose = jest.fn();
+    const onSave = vi.fn().mockResolvedValue(undefined);
+    const onClose = vi.fn();
 
     render(
       <CodeEditorModal
@@ -97,7 +136,7 @@ describe('CodeEditorModal', () => {
   });
 
   it('shows error dialog if save fails', async () => {
-    const onSave = jest.fn().mockRejectedValue(new Error('Save failed'));
+    const onSave = vi.fn().mockRejectedValue(new Error('Save failed'));
 
     render(
       <CodeEditorModal
@@ -149,7 +188,7 @@ describe('CodeEditorModal', () => {
   });
 
   it('shows unsaved changes dialog when closing with unsaved changes', async () => {
-    const onClose = jest.fn();
+    const onClose = vi.fn();
     render(
       <CodeEditorModal
         {...defaultProps}
@@ -171,7 +210,7 @@ describe('CodeEditorModal', () => {
   });
 
   it('closes without saving when confirming unsaved changes dialog', async () => {
-    const onClose = jest.fn();
+    const onClose = vi.fn();
     render(
       <CodeEditorModal
         {...defaultProps}
@@ -193,7 +232,7 @@ describe('CodeEditorModal', () => {
   });
 
   it('closes without confirmation when no unsaved changes', () => {
-    const onClose = jest.fn();
+    const onClose = vi.fn();
     render(
       <CodeEditorModal
         {...defaultProps}
@@ -210,7 +249,7 @@ describe('CodeEditorModal', () => {
   });
 
   it('hides unsaved changes indicator after successful save', async () => {
-    const onSave = jest.fn().mockResolvedValue(undefined);
+    const onSave = vi.fn().mockResolvedValue(undefined);
     render(
       <CodeEditorModal
         {...defaultProps}
@@ -234,8 +273,8 @@ describe('CodeEditorModal', () => {
   });
 
   it('calls onDelete and onClose when Delete is clicked and confirmed', async () => {
-    const onDelete = jest.fn();
-    const onClose = jest.fn();
+    const onDelete = vi.fn();
+    const onClose = vi.fn();
 
     render(
       <CodeEditorModal
@@ -255,7 +294,7 @@ describe('CodeEditorModal', () => {
   });
 
   it('does not call onDelete when deletion is cancelled', async () => {
-    const onDelete = jest.fn();
+    const onDelete = vi.fn();
 
     render(
       <CodeEditorModal
@@ -296,17 +335,17 @@ describe('CodeEditorModal', () => {
 
 describe('CodeEditorModal – additional tests', () => {
   beforeEach(() => {
-    jest.clearAllMocks();
+    vi.clearAllMocks();
     // mock localStorage for auth.user (needed by connectToLsp)
-    jest.spyOn(Storage.prototype, 'getItem').mockImplementation((key) => {
+    vi.spyOn(Storage.prototype, 'getItem').mockImplementation((key) => {
       if (key === 'auth.user') return JSON.stringify({ id: 'user-1' });
       return null;
     });
     // suppress WebSocket in unit tests
-    (globalThis as any).WebSocket = jest.fn().mockImplementation(() => ({
+    (globalThis as any).WebSocket = vi.fn().mockImplementation(() => ({
       readyState: 3, // CLOSED
-      send: jest.fn(),
-      close: jest.fn(),
+      send: vi.fn(),
+      close: vi.fn(),
       onopen: null,
       onmessage: null,
       onerror: null,
@@ -315,7 +354,7 @@ describe('CodeEditorModal – additional tests', () => {
   });
 
   afterEach(() => {
-    jest.restoreAllMocks();
+    vi.restoreAllMocks();
   });
 
   it('returns null when isOpen is false', () => {
@@ -369,7 +408,7 @@ describe('CodeEditorModal – additional tests', () => {
   });
 
   it('shows save error dialog when onSave rejects', async () => {
-    const onSave = jest.fn().mockRejectedValue(new Error('Disk full'));
+    const onSave = vi.fn().mockRejectedValue(new Error('Disk full'));
     render(<CodeEditorModal {...defaultProps} onSave={onSave} />);
 
     fireEvent.click(screen.getByTitle(/Save \(Ctrl\+S\)/i));
@@ -381,7 +420,7 @@ describe('CodeEditorModal – additional tests', () => {
   });
 
   it('closes save error dialog on OK', async () => {
-    const onSave = jest.fn().mockRejectedValue(new Error('Disk full'));
+    const onSave = vi.fn().mockRejectedValue(new Error('Disk full'));
     render(<CodeEditorModal {...defaultProps} onSave={onSave} />);
 
     fireEvent.click(screen.getByTitle(/Save \(Ctrl\+S\)/i));
@@ -394,7 +433,7 @@ describe('CodeEditorModal – additional tests', () => {
   });
 
   it('shows delete relation dialog on Delete Relation click', async () => {
-    const onDelete = jest.fn();
+    const onDelete = vi.fn();
     render(<CodeEditorModal {...defaultProps} onDelete={onDelete} />);
 
     fireEvent.click(screen.getByTitle(/Delete relation/i));
@@ -405,7 +444,7 @@ describe('CodeEditorModal – additional tests', () => {
   });
 
   it('calls onDelete and onClose when deletion confirmed', async () => {
-    const onDelete = jest.fn();
+    const onDelete = vi.fn();
     render(<CodeEditorModal {...defaultProps} onDelete={onDelete} />);
 
     fireEvent.click(screen.getByTitle(/Delete relation/i));
@@ -443,7 +482,7 @@ describe('CodeEditorModal – additional tests', () => {
   });
 
   it('shows "✓ Saved" feedback after successful save', async () => {
-    const onSave = jest.fn().mockResolvedValue(undefined);
+    const onSave = vi.fn().mockResolvedValue(undefined);
     render(<CodeEditorModal {...defaultProps} onSave={onSave} />);
 
     fireEvent.click(screen.getByTitle(/Save \(Ctrl\+S\)/i));
@@ -463,7 +502,7 @@ describe('CodeEditorModal – additional tests', () => {
   });
 
   it('calls onInitialize when isOpen is true', () => {
-    const onInitialize = jest.fn().mockReturnValue(undefined);
+    const onInitialize = vi.fn().mockReturnValue(undefined);
     render(<CodeEditorModal {...defaultProps} onInitialize={onInitialize} />);
     expect(onInitialize).toHaveBeenCalledWith(defaultProps.initialCode);
   });

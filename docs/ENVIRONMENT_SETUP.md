@@ -21,7 +21,7 @@ The project uses environment-specific configuration files:
 
 ## Environment Variables
 
-All environment variables use the `REACT_APP_` prefix as required by Create React App:
+All environment variables use the `REACT_APP_` prefix (kept from Create React App; `vite.config.ts` loads only variables with this prefix):
 
 ### `REACT_APP_API_BASE_URL`
 **Required:** Yes  

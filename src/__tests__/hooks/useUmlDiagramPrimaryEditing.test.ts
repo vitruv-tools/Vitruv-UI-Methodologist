@@ -112,10 +112,10 @@ function makeOptions(
     initialSelectedClassId: null,
     initialSelectedRelationshipId: null,
     initialConnectSourceId: null,
-    recordChange: jest.fn(),
+    recordChange: vi.fn(),
     containerRef: { current: null },
-    getCurrentViewport: jest.fn(() => ({ x: 0, y: 0, scale: 1 })),
-    getCurrentLayoutOffset: jest.fn(() => ({ offsetX: 0, offsetY: 0 })),
+    getCurrentViewport: vi.fn(() => ({ x: 0, y: 0, scale: 1 })),
+    getCurrentLayoutOffset: vi.fn(() => ({ offsetX: 0, offsetY: 0 })),
     ...overrides,
   };
 }
@@ -222,7 +222,7 @@ function savedMember(kind: MemberKind, duplicate: boolean) {
 
 describe('useUmlDiagramPrimaryEditing', () => {
   afterEach(() => {
-    jest.restoreAllMocks();
+    vi.restoreAllMocks();
     document.body.replaceChildren();
   });
 
@@ -278,7 +278,7 @@ describe('useUmlDiagramPrimaryEditing', () => {
     const input = document.createElement('input');
     document.body.append(input);
     input.focus();
-    const blurSpy = jest.spyOn(input, 'blur');
+    const blurSpy = vi.spyOn(input, 'blur');
 
     perform(result.current.flushPendingEdit);
     expect(blurSpy).toHaveBeenCalledTimes(1);
@@ -340,7 +340,7 @@ describe('useUmlDiagramPrimaryEditing', () => {
   it.each(MEMBER_CASES)(
     'adds uniquely named $label with exact defaults, IDs, and edit state',
     ({ kind, timestampBase }) => {
-      jest.spyOn(Date, 'now')
+      vi.spyOn(Date, 'now')
         .mockReturnValueOnce(timestampBase + 1)
         .mockReturnValueOnce(timestampBase + 2);
       const { result, options } = renderPrimaryEditing();
@@ -448,7 +448,7 @@ describe('useUmlDiagramPrimaryEditing', () => {
   });
 
   it('gets, replaces, clears, and self-clears inheritance with one parent', () => {
-    jest.spyOn(Date, 'now')
+    vi.spyOn(Date, 'now')
       .mockReturnValueOnce(3001)
       .mockReturnValueOnce(3002);
     const duplicateOutgoing: UMLRelationship = {
@@ -522,8 +522,8 @@ describe('useUmlDiagramPrimaryEditing', () => {
     });
     const { result: centeredResult } = renderPrimaryEditing({
       containerRef: { current: container },
-      getCurrentViewport: jest.fn(() => ({ x: 20, y: 30, scale: 2 })),
-      getCurrentLayoutOffset: jest.fn(() => ({ offsetX: 100, offsetY: 80 })),
+      getCurrentViewport: vi.fn(() => ({ x: 20, y: 30, scale: 2 })),
+      getCurrentLayoutOffset: vi.fn(() => ({ offsetX: 100, offsetY: 80 })),
     });
     perform(centeredResult.current.addClass);
     expect(classById(centeredResult.current.classes, 'NewClass'))
@@ -564,7 +564,7 @@ describe('useUmlDiagramPrimaryEditing', () => {
   });
 
   it('creates a relationship with exact defaults and selection', () => {
-    jest.spyOn(Date, 'now').mockReturnValue(4001);
+    vi.spyOn(Date, 'now').mockReturnValue(4001);
     const { result, options } = renderPrimaryEditing({
       initialRelationships: [],
     });
@@ -577,7 +577,7 @@ describe('useUmlDiagramPrimaryEditing', () => {
   });
 
   it('allows reverse associations and ignores other edge types when checking duplicates', () => {
-    jest.spyOn(Date, 'now').mockReturnValue(4002);
+    vi.spyOn(Date, 'now').mockReturnValue(4002);
     const { result, options } = renderPrimaryEditing();
     expect(perform(() => result.current.addRelationship('department', 'employee')))
       .toBe(true);
@@ -591,9 +591,9 @@ describe('useUmlDiagramPrimaryEditing', () => {
     const events: string[] = [];
     const { result } = renderPrimaryEditing({
       initialRelationships: [],
-      recordChange: jest.fn(() => events.push('record')),
+      recordChange: vi.fn(() => events.push('record')),
     });
-    jest.spyOn(Date, 'now').mockImplementation(() => {
+    vi.spyOn(Date, 'now').mockImplementation(() => {
       events.push('date');
       return 7001;
     });

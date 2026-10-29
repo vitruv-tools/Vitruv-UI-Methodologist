@@ -76,7 +76,7 @@ class ApiService {
       throw this.createApiError('', `${label} download returned an empty file`);
     }
 
-    const header = new Uint8Array(await new Response(blob.slice(0, 4)).arrayBuffer());
+    const header = new Uint8Array(await blob.slice(0, 4).arrayBuffer());
     if (header[0] !== 0x50 || header[1] !== 0x4b) {
       const preview = await blob.slice(0, 512).text();
       throw this.createApiError(preview, `${label} download did not return a valid ZIP file`);
@@ -655,12 +655,22 @@ class ApiService {
   }
 
   /**
-   * vSUMS: Download artifact as ZIP file
-   * GET /api/v1/vsums/{id}/build/artifact
-   * Returns a ZIP file blob containing the build artifact
+   * vSUMS: Download the project as ZIP file
+   * GET /api/v1/vsums/{id}/project
+   * Returns a ZIP file blob containing the project laid out like the Methodologist Template,
+   * which the user builds with `mvn clean verify`
    */
-  async downloadVsumArtifact(id: number | string): Promise<Blob> {
-    return this.downloadVsumZip(`/api/v1/vsums/${id}/build/artifact`, 'Artifact');
+  async downloadVsumProject(id: number | string): Promise<Blob> {
+    return this.downloadVsumZip(`/api/v1/vsums/${id}/project`, 'Project');
+  }
+
+  /**
+   * vSUMS: Download the built, runnable VSUM jar
+   * GET /api/v1/vsums/{id}/build/artifact
+   * Waits for the Maven build of the VSUM and returns the jar-with-dependencies
+   */
+  async downloadVsumJar(id: number | string): Promise<Blob> {
+    return this.downloadVsumZip(`/api/v1/vsums/${id}/build/artifact`, 'Runnable JAR');
   }
 
   /**

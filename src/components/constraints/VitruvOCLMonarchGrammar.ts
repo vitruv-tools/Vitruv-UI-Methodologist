@@ -123,51 +123,53 @@ export const vitruvOCLMonarch: monaco.languages.IMonarchLanguage = {
   },
 };
 
-export const vitruvOCLTheme: monaco.editor.IStandaloneThemeData = {
-  base: 'vs',
-  inherit: true,
-  rules: [
-    { token: 'comment', foreground: '6a9955', fontStyle: 'italic' },
-    { token: 'comment.block', foreground: '6a9955', fontStyle: 'italic' },
-    { token: 'annotation', foreground: '795e26', fontStyle: 'bold' },
-    { token: 'annotation.value', foreground: 'a31515' },
-    { token: 'keyword.package', foreground: 'af00db' },
-    { token: 'keyword.context', foreground: '0000ff', fontStyle: 'bold' },
-    { token: 'keyword.inv', foreground: '267f99', fontStyle: 'bold' },
-    { token: 'keyword.control', foreground: 'af00db' },
-    { token: 'keyword.let', foreground: 'af00db' },
-    { token: 'keyword.operator.logical', foreground: '0000ff' },
-    { token: 'variable.predefined', foreground: '001080', fontStyle: 'bold' },
-    { token: 'variable.let', foreground: '001080' },
-    { token: 'constant.boolean', foreground: '0000ff' },
-    { token: 'constant.null', foreground: '808080' },
-    { token: 'support.function.iterator', foreground: '795e26' },
-    { token: 'support.function.ocl', foreground: '795e26' },
-    { token: 'type.primitive', foreground: '267f99' },
-    { token: 'type.collection', foreground: '267f99' },
-    { token: 'type.class', foreground: '267f99', fontStyle: 'bold' },
-    { token: 'entity.name.label', foreground: '795e26', fontStyle: 'bold' },
-    { token: 'string', foreground: 'a31515' },
-    { token: 'string.quote', foreground: 'a31515' },
-    { token: 'string.escape', foreground: 'ee0000' },
-    { token: 'string.invalid', foreground: 'cd3131' },
-    { token: 'number', foreground: '098658' },
-    { token: 'number.float', foreground: '098658' },
-    { token: 'operator.range', foreground: '000000' },
-    { token: 'operator.navigation', foreground: '000000' },
-    { token: 'operator.typecast', foreground: '000000' },
-    { token: 'operator.comparison', foreground: '000000' },
-    { token: 'operator.arithmetic', foreground: '000000' },
-    { token: 'operator.correspondence', foreground: 'af00db', fontStyle: 'bold' },
-    { token: 'operator.pipe', foreground: '000000' },
-    { token: 'operator.colon', foreground: '000000' },
-    { token: 'multiplicity', foreground: 'af00db' },
-    { token: 'delimiter', foreground: '000000' },
-  ],
-  colors: {
-    'editor.background': '#ffffff',
-  },
-};
+function oclTokenRules(mode: 'light' | 'dark'): monaco.editor.ITokenThemeRule[] {
+  const useDark = mode === 'dark';
+  const spec = `
+comment comment.block | 6a9955 | 6A9955 | italic
+annotation entity.name.label | 795e26 | DCDCAA | bold
+annotation.value string string.quote | a31515 | CE9178
+keyword.package keyword.control keyword.let multiplicity | af00db | C586C0
+keyword.context | 0000ff | 569CD6 | bold
+keyword.inv type.class | 267f99 | 4EC9B0 | bold
+keyword.operator.logical constant.boolean | 0000ff | 569CD6
+variable.predefined | 001080 | 9CDCFE | bold
+variable.let | 001080 | 9CDCFE
+constant.null | 808080 | B0B0B0
+support.function.iterator support.function.ocl | 795e26 | DCDCAA
+type.primitive type.collection | 267f99 | 4EC9B0
+string.escape | ee0000 | D7BA7D
+string.invalid | cd3131 | F48771
+number number.float | 098658 | B5CEA8
+operator.correspondence | af00db | C586C0 | bold
+operator.range operator.navigation operator.typecast operator.comparison operator.arithmetic operator.pipe operator.colon delimiter | 000000 | D4D4D4
+`.trim();
+  const rules: monaco.editor.ITokenThemeRule[] = [];
+  for (const row of spec.split('\n')) {
+    const [names, day, night, style] = row.trim().split('|').map((part) => part.trim());
+    const foreground = useDark ? night : day;
+    for (const token of names.split(/\s+/)) {
+      rules.push(style ? { token, foreground, fontStyle: style } : { token, foreground });
+    }
+  }
+  return rules;
+}
+
+function oclTheme(
+  mode: 'light' | 'dark',
+  base: 'vs' | 'vs-dark',
+  background: string,
+): monaco.editor.IStandaloneThemeData {
+  return {
+    base,
+    inherit: true,
+    rules: oclTokenRules(mode),
+    colors: { 'editor.background': background },
+  };
+}
+
+export const vitruvOCLTheme = oclTheme('light', 'vs', '#ffffff');
+export const vitruvOCLThemeDark = oclTheme('dark', 'vs-dark', '#0f172a');
 
 export const vitruvOCLLanguageConfig: monaco.languages.LanguageConfiguration = {
   comments: { lineComment: '--', blockComment: ['/*', '*/'] },
@@ -192,5 +194,6 @@ export function registerVitruvOCLLanguage() {
   monaco.languages.register({ id: vitruvOCLLanguageId, extensions: ['.ocl'], aliases: ['VitruvOCL'] });
   monaco.languages.setMonarchTokensProvider(vitruvOCLLanguageId, vitruvOCLMonarch);
   monaco.languages.setLanguageConfiguration(vitruvOCLLanguageId, vitruvOCLLanguageConfig);
-  monaco.editor.defineTheme('vitruvocl-dark', vitruvOCLTheme);
+  monaco.editor.defineTheme('vitruvocl-light', vitruvOCLTheme);
+  monaco.editor.defineTheme('vitruvocl-dark', vitruvOCLThemeDark);
 }

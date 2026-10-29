@@ -1,3 +1,4 @@
+import type { Mock } from 'vitest';
 import React from 'react';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { CanvasPage } from '../../pages/CanvasPage';
@@ -9,14 +10,14 @@ let mockRouteId = '10';
 /** Metamodels the canvas reports; different from the loaded project means unsaved changes. */
 let mockLiveMetaModelIds: number[] = [];
 
-jest.mock('react-router-dom', () => ({
-  ...jest.requireActual('react-router-dom'),
-  useNavigate: () => jest.fn(),
+vi.mock('react-router-dom', async () => ({
+  ...(await vi.importActual<any>('react-router-dom')),
+  useNavigate: () => vi.fn(),
   useParams: () => ({ id: mockRouteId }),
   useLocation: () => ({ state: null }),
 }));
 
-jest.mock('../../contexts/AuthContext', () => ({
+vi.mock('../../contexts/AuthContext', () => ({
   useAuth: () => ({
     user: {
       id: '1',
@@ -29,51 +30,52 @@ jest.mock('../../contexts/AuthContext', () => ({
   }),
 }));
 
-jest.mock('../../components/flow/FlowCanvas', () => {
-  const React = require('react');
+vi.mock('../../components/flow/FlowCanvas', async () => {
+  const React = (await import('react'));
   return {
     FlowCanvas: React.forwardRef((props: any, ref: any) => {
       React.useImperativeHandle(ref, () => ({
-        loadDiagramData: jest.fn(),
-        getNodes: jest.fn(() => []),
-        getEdges: jest.fn(() => []),
-        addEcoreFile: jest.fn(),
-        updateEcoreFileData: jest.fn(),
-        resetExpandedFile: jest.fn(),
-        undo: jest.fn(),
-        redo: jest.fn(),
+        loadDiagramData: vi.fn(),
+        getNodes: vi.fn(() => []),
+        getEdges: vi.fn(() => []),
+        addEcoreFile: vi.fn(),
+        updateEcoreFileData: vi.fn(),
+        resetExpandedFile: vi.fn(),
+        undo: vi.fn(),
+        redo: vi.fn(),
         canUndo: false,
         canRedo: false,
-        getReactionEdges: jest.fn(() => []),
-        getViewTypes: jest.fn(() => []),
+        getReactionEdges: vi.fn(() => []),
+        getViewTypes: vi.fn(() => []),
         getWorkspaceSnapshot: () => ({ metaModelIds: mockLiveMetaModelIds, metaModelRelationRequests: [] }),
-        fitUmlView: jest.fn(),
-        openSelectedReactionEditor: jest.fn(() => false),
+        fitUmlView: vi.fn(),
+        openSelectedReactionEditor: vi.fn(() => false),
       }));
       return <div data-testid="flow-canvas">{props.projectTabsBelowModeToggle}</div>;
     }),
   };
 });
 
-jest.mock('../../components/constraints/ConstraintsView', () => ({
+vi.mock('../../components/constraints/ConstraintsView', () => ({
   ConstraintsView: () => <div data-testid="constraints-view" />,
 }));
 
-jest.mock('../../services/api', () => ({
+vi.mock('../../services/api', () => ({
   apiService: {
-    getVsumDetails: jest.fn(),
-    getVsum: jest.fn(),
-    getVsumMembers: jest.fn(),
-    getVsumsPaginated: jest.fn(),
-    findMetaModels: jest.fn(),
-    getRuleSets: jest.fn().mockResolvedValue([]),
-    getFile: jest.fn(),
-    removeVsumMember: jest.fn(),
-    buildVsum: jest.fn(),
-    downloadVsumArtifact: jest.fn(),
-    downloadVsumBundle: jest.fn(),
-    renameVsum: jest.fn(),
-    deleteMetaModel: jest.fn(),
+    getVsumDetails: vi.fn(),
+    getVsum: vi.fn(),
+    getVsumMembers: vi.fn(),
+    getVsumsPaginated: vi.fn(),
+    findMetaModels: vi.fn(),
+    getRuleSets: vi.fn().mockResolvedValue([]),
+    getFile: vi.fn(),
+    removeVsumMember: vi.fn(),
+    buildVsum: vi.fn(),
+    downloadVsumProject: vi.fn(),
+    downloadVsumJar: vi.fn(),
+    downloadVsumBundle: vi.fn(),
+    renameVsum: vi.fn(),
+    deleteMetaModel: vi.fn(),
   },
 }));
 
@@ -98,15 +100,15 @@ function refreshAsksFirst(): boolean {
 
 describe('CanvasPage open tabs after a page refresh', () => {
   beforeEach(() => {
-    jest.clearAllMocks();
+    vi.clearAllMocks();
     sessionStorage.clear();
     mockRouteId = '10';
     mockLiveMetaModelIds = [];
-    (apiService.findMetaModels as jest.Mock).mockResolvedValue({ data: [] });
-    (apiService.getVsumMembers as jest.Mock).mockResolvedValue({ data: [] });
-    (apiService.getVsum as jest.Mock).mockResolvedValue({ data: {} });
-    (apiService.getVsumsPaginated as jest.Mock).mockResolvedValue({ data: [] });
-    (apiService.getVsumDetails as jest.Mock).mockImplementation((vsumId: number) => Promise.resolve(
+    (apiService.findMetaModels as Mock).mockResolvedValue({ data: [] });
+    (apiService.getVsumMembers as Mock).mockResolvedValue({ data: [] });
+    (apiService.getVsum as Mock).mockResolvedValue({ data: {} });
+    (apiService.getVsumsPaginated as Mock).mockResolvedValue({ data: [] });
+    (apiService.getVsumDetails as Mock).mockImplementation((vsumId: number) => Promise.resolve(
       vsumId === 10 ? vsumDetails(10, 'Project A') : vsumDetails(20, 'Project B'),
     ));
   });
