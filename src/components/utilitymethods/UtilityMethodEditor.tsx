@@ -22,6 +22,7 @@ import {
   utilityMethodCallContext,
   utilityMethodCallSnippet,
   missingField,
+  newDraftParameter,
   requestFromDraft,
   type UtilityMethodDraft,
 } from './utilityMethodUtils';
@@ -318,7 +319,7 @@ export const UtilityMethodEditor: React.FC<UtilityMethodEditorProps> = ({ vsumId
             <div style={hintStyle}>No parameters. Utility methods have no context object, so pass the model elements they need.</div>
           )}
           {draft.parameters.map((parameter, index) => (
-            <div key={index} style={parameterCardStyle}>
+            <div key={parameter.key} style={parameterCardStyle}>
               <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
                 <input
                   aria-label={`Parameter ${index + 1} name`}
@@ -350,7 +351,7 @@ export const UtilityMethodEditor: React.FC<UtilityMethodEditorProps> = ({ vsumId
             variant="ghost"
             size="sm"
             style={{ marginTop: 6 }}
-            onClick={() => update({ parameters: [...draft.parameters, { name: '', type: defaultParameterType }] })}
+            onClick={() => update({ parameters: [...draft.parameters, newDraftParameter({ name: '', type: defaultParameterType })] })}
           >
             + Add parameter
           </ActionButton>
@@ -431,8 +432,7 @@ export const UtilityMethodEditor: React.FC<UtilityMethodEditorProps> = ({ vsumId
         <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column' }}>
           <div style={panelTitleStyle}>
             <span style={{ flex: 1 }}>
-              OCL definition
-              <span style={{ fontWeight: 400, marginLeft: 8, fontFamily: MONO }}>
+              OCL definition<span style={{ fontWeight: 400, marginLeft: 8, fontFamily: MONO }}>
                 def : {formatSignature(draft)} =
               </span>
             </span>

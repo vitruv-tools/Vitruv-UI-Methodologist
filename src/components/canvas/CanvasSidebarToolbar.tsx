@@ -140,7 +140,7 @@ const PlusBoxIcon = () => (
 );
 
 const FunctionIcon = () => (
-  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+  <svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
     <path d="M14.5 4.5c-1.6-.6-3.2.1-3.7 2L8.6 17c-.5 2-2.1 2.7-3.6 2.1" />
     <line x1="7.5" y1="10" x2="14" y2="10" />
     <path d="M16.5 13l4 5" />

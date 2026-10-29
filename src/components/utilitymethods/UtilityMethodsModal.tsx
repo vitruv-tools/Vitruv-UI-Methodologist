@@ -76,7 +76,7 @@ export const UtilityMethodsModal: React.FC<UtilityMethodsModalProps> = ({ isOpen
     if (!isOpen) return;
     setView({ kind: 'list' });
     setFilter('');
-    load();
+    void load();
   }, [isOpen, load]);
 
   const visibleUtilityMethods = useMemo(() => {
@@ -120,6 +120,10 @@ export const UtilityMethodsModal: React.FC<UtilityMethodsModalProps> = ({ isOpen
   };
 
   const editing = view.kind === 'edit';
+  let title = 'Utility Methods';
+  if (view.kind === 'edit') {
+    title = view.utilityMethod ? `Edit Utility Method ${view.utilityMethod.name}` : 'New Utility Method';
+  }
 
   return (
     <dialog
@@ -146,7 +150,7 @@ export const UtilityMethodsModal: React.FC<UtilityMethodsModalProps> = ({ isOpen
         <div style={modalPanelHeaderStyle}>
           <div style={{ minWidth: 0 }}>
             <h3 id="utility-methods-title" style={{ margin: 0, fontSize: 15, fontWeight: 700, color: 'var(--v-text)' }}>
-              {view.kind === 'edit' ? (view.utilityMethod ? `Edit Utility Method ${view.utilityMethod.name}` : 'New Utility Method') : 'Utility Methods'}
+              {title}
             </h3>
             <div style={{ fontSize: 12, color: 'var(--v-text-muted)', marginTop: 2 }}>
               Utility methods for reactions and routines, generated into one Java class.

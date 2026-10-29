@@ -18,14 +18,13 @@ export interface TypeSelection {
  */
 export function parseTypeSelection(type: string): TypeSelection | null {
   const trimmed = type.trim();
-  const match = /^(\w+)\s*\(\s*(.*?)\s*\)$/.exec(trimmed);
-  if (match) {
-    const [, kind, element] = match;
-    if (!(COLLECTION_KINDS as readonly string[]).includes(kind) || element.includes('(')) return null;
-    return { collection: kind as CollectionKind, element };
-  }
-  if (trimmed.includes('(')) return null;
-  return { collection: null, element: trimmed };
+  const open = trimmed.indexOf('(');
+  if (open === -1) return { collection: null, element: trimmed };
+  if (!trimmed.endsWith(')')) return null;
+  const kind = trimmed.slice(0, open).trim();
+  const element = trimmed.slice(open + 1, -1).trim();
+  if (!(COLLECTION_KINDS as readonly string[]).includes(kind) || element.includes('(')) return null;
+  return { collection: kind as CollectionKind, element };
 }
 
 export function formatTypeSelection(selection: TypeSelection): string {
@@ -49,12 +48,24 @@ export function dedent(code: string): string {
   return lines.map(line => line.slice(Math.min(common, line.length - line.trimStart().length))).join('\n');
 }
 
+/** A parameter as edited, with a stable `key` for React lists that survives removals. */
+export interface DraftParameter extends UtilityMethodParameter {
+  key: number;
+}
+
+let lastParameterKey = 0;
+
+export function newDraftParameter(parameter: UtilityMethodParameter): DraftParameter {
+  lastParameterKey += 1;
+  return { ...parameter, key: lastParameterKey };
+}
+
 /** The editable state of a utility method. */
 export interface UtilityMethodDraft {
   name: string;
   description: string;
   returnType: string;
-  parameters: UtilityMethodParameter[];
+  parameters: DraftParameter[];
   imports: string[];
   body: string;
 }
@@ -73,7 +84,7 @@ export function draftFromUtilityMethod(utilityMethod: UtilityMethodResponse): Ut
     name: utilityMethod.name,
     description: utilityMethod.description ?? '',
     returnType: utilityMethod.returnType,
-    parameters: utilityMethod.parameters.map(p => ({ ...p })),
+    parameters: utilityMethod.parameters.map(newDraftParameter),
     imports: [...utilityMethod.imports],
     body: utilityMethod.body,
   };
@@ -113,9 +124,11 @@ export function utilityMethodCall(utilityMethod: { name: string; parameters: Uti
 /** Like {@link utilityMethodCall}, as a Monaco snippet whose arguments are tab stops. */
 export function utilityMethodCallSnippet(utilityMethod: { name: string; parameters: UtilityMethodParameter[] }, onFirstArgument = false): string {
   const params = utilityMethod.parameters.slice(onFirstArgument ? 1 : 0)
-    .map((p, i) => `\${${i + 1}:${p.name.replace(/[$}\\]/g, '\\$&')}}`);
+    .map((p, i) => `\${${i + 1}:${p.name.replace(/[$}\\]/g, String.raw`\$&`)}}`);
   return `${utilityMethod.name}(${params.join(', ')})`;
 }
+
+const THIS_MODULE = 'thisModule';
 
 /**
  * How a utility method call can be written at the end of `textBefore`:
@@ -124,10 +137,11 @@ export function utilityMethodCallSnippet(utilityMethod: { name: string; paramete
  * - `null`: not at all, e.g. after `->`, which only takes collection operations
  */
 export function utilityMethodCallContext(textBefore: string): 'plain' | 'operation' | null {
-  const prefix = textBefore.replace(/[\p{L}\p{N}_]*$/u, '');
-  if (/->\s*$/.test(prefix)) return null;
-  if (/\.\s*$/.test(prefix)) {
-    return /(?:^|[^\p{L}\p{N}_.])thisModule\s*\.\s*$/u.test(prefix) ? 'plain' : 'operation';
-  }
-  return 'plain';
+  const prefix = textBefore.replace(/[\p{L}\p{N}_]*$/u, '').trimEnd();
+  if (prefix.endsWith('->')) return null;
+  if (!prefix.endsWith('.')) return 'plain';
+  const receiver = prefix.slice(0, -1).trimEnd();
+  if (!receiver.endsWith(THIS_MODULE)) return 'operation';
+  const beforeReceiver = receiver.slice(0, -THIS_MODULE.length);
+  return /[\p{L}\p{N}_.]$/u.test(beforeReceiver) ? 'operation' : 'plain';
 }
