@@ -1399,11 +1399,11 @@ export const CanvasPage: React.FC = () => {
   const handleDownloadArtifact = useCallback(async () => {
     if (!activeProjectId) return;
     setDownloadingArtifact(true);
-    showPopup('Downloading artifact…', 'info');
+    showPopup('Downloading project…', 'info');
     try {
-      const blob = await apiService.downloadVsumArtifact(activeProjectId);
-      downloadBlobAsFile(blob, `vsum-${activeProjectId}-artifact.zip`);
-      showPopup('Artifact downloaded successfully!', 'success');
+      const blob = await apiService.downloadVsumProject(activeProjectId);
+      downloadBlobAsFile(blob, `vsum-${activeProjectId}-project.zip`);
+      showPopup('Project downloaded successfully!', 'success');
     } catch (e: unknown) {
       showPopupError(e, 'Download failed.');
     } finally {

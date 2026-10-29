@@ -266,9 +266,9 @@ describe('ApiService – deleteFile', () => {
   });
 });
 
-// ── downloadVsumArtifact ───────────────────────────────────────────────────────
+// ── downloadVsumProject ───────────────────────────────────────────────────────
 
-describe('ApiService – downloadVsumArtifact', () => {
+describe('ApiService – downloadVsumProject', () => {
   const { AuthService } = (authModule as unknown) as {
     AuthService: { ensureValidToken: Mock; refreshToken: Mock };
   };
@@ -294,9 +294,18 @@ describe('ApiService – downloadVsumArtifact', () => {
   });
   afterEach(() => vi.restoreAllMocks());
 
+  it('requests the project endpoint', async () => {
+    mockZipFetch();
+    await apiService.downloadVsumProject(42);
+    expect(global.fetch).toHaveBeenCalledWith(
+      expect.stringMatching(/\/api\/v1\/vsums\/42\/project$/),
+      expect.objectContaining({ method: 'GET' }),
+    );
+  });
+
   it('returns a ZIP blob on success', async () => {
     mockZipFetch();
-    const blob = await apiService.downloadVsumArtifact(42);
+    const blob = await apiService.downloadVsumProject(42);
     expect(blob.size).toBeGreaterThan(0);
     const header = new Uint8Array(await blob.slice(0, 2).arrayBuffer());
     expect(header[0]).toBe(0x50);
@@ -316,7 +325,7 @@ describe('ApiService – downloadVsumArtifact', () => {
       blob: async () => new Blob(['{"message":"Build failed"}'], { type: 'application/json' }),
     } as unknown as Response);
 
-    await expect(apiService.downloadVsumArtifact(42)).rejects.toThrow('Build failed');
+    await expect(apiService.downloadVsumProject(42)).rejects.toThrow('Build failed');
   });
 
   it('throws on non-ok status', async () => {
@@ -329,7 +338,7 @@ describe('ApiService – downloadVsumArtifact', () => {
       blob: async () => new Blob([]),
     } as unknown as Response);
 
-    await expect(apiService.downloadVsumArtifact(42)).rejects.toThrow('Server error');
+    await expect(apiService.downloadVsumProject(42)).rejects.toThrow('Server error');
   });
 });
 

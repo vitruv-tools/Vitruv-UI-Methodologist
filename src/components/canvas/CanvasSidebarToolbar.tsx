@@ -320,7 +320,7 @@ export const CanvasSidebarToolbar: React.FC<CanvasSidebarToolbarProps> = ({
             >
               <DownloadMenuItem
                 label="Project export"
-                sublabel="Download the project as a ZIP file"
+                sublabel="Maven project to build yourself (ZIP)"
                 icon={<ZipIcon />}
                 loading={downloadingArtifact}
                 disabled={busy}
