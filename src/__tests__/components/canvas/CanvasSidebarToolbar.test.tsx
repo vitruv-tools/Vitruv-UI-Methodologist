@@ -90,7 +90,7 @@ describe('CanvasSidebarToolbar', () => {
   });
 
   it('places the utility methods button above Add meta-models and opens the utility methods', () => {
-    const onOpenUtilityMethods = jest.fn();
+    const onOpenUtilityMethods = vi.fn();
     render(<CanvasSidebarToolbar {...createProps()} onOpenUtilityMethods={onOpenUtilityMethods} />);
 
     const labelsInOrder = screen.getAllByRole('button').map(button => button.getAttribute('aria-label'));
@@ -103,7 +103,7 @@ describe('CanvasSidebarToolbar', () => {
   });
 
   it('offers the utility methods overview to view-only members', () => {
-    render(<CanvasSidebarToolbar {...createProps()} readOnly onOpenUtilityMethods={jest.fn()} />);
+    render(<CanvasSidebarToolbar {...createProps()} readOnly onOpenUtilityMethods={vi.fn()} />);
 
     expect(screen.getByRole('button', { name: labels.utilityMethodsReadOnly })).toBeInTheDocument();
   });

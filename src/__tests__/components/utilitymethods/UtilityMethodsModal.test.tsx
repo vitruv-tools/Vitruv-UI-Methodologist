@@ -1,9 +1,10 @@
+import type { Mocked } from 'vitest';
 import React from 'react';
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { UtilityMethodsModal } from '../../../components/utilitymethods/UtilityMethodsModal';
 import { apiService, type UtilityMethodResponse, type UtilityMethodTypeResponse } from '../../../services/api';
 
-jest.mock('@monaco-editor/react', () => {
+vi.mock('@monaco-editor/react', () => {
   const mockReact = require('react');
   const MockEditor = ({ value, onChange, onMount, language }: any) => {
     mockReact.useEffect(() => {
@@ -30,24 +31,24 @@ jest.mock('@monaco-editor/react', () => {
   return { __esModule: true, default: MockEditor };
 });
 
-const mockSetModelMarkers = jest.fn();
+const mockSetModelMarkers = vi.fn();
 const mockEditorModel: { current: any } = { current: null };
-const mockRegisterCompletion = jest.fn((..._args: any[]) => ({ dispose: jest.fn() }));
+const mockRegisterCompletion = vi.fn((..._args: any[]) => ({ dispose: vi.fn() }));
 
-jest.mock('../../../services/api', () => ({
+vi.mock('../../../services/api', () => ({
   apiService: {
-    getUtilityMethods: jest.fn(),
-    getUtilityMethodTypes: jest.fn(),
-    getUtilityMethodClass: jest.fn(),
-    createUtilityMethod: jest.fn(),
-    updateUtilityMethod: jest.fn(),
-    deleteUtilityMethod: jest.fn(),
-    previewUtilityMethod: jest.fn(),
-    checkUtilityMethodName: jest.fn(),
+    getUtilityMethods: vi.fn(),
+    getUtilityMethodTypes: vi.fn(),
+    getUtilityMethodClass: vi.fn(),
+    createUtilityMethod: vi.fn(),
+    updateUtilityMethod: vi.fn(),
+    deleteUtilityMethod: vi.fn(),
+    previewUtilityMethod: vi.fn(),
+    checkUtilityMethodName: vi.fn(),
   },
 }));
 
-const api = apiService as jest.Mocked<typeof apiService>;
+const api = apiService as Mocked<typeof apiService>;
 
 const types: UtilityMethodTypeResponse[] = [
   { metamodel: 'simulink', name: 'SimulinkModel', qualifiedName: 'simulink::SimulinkModel', kind: 'CLASS', javaName: 'x.SimulinkModel' },
@@ -80,13 +81,13 @@ const broken: UtilityMethodResponse = {
 };
 
 function renderModal(readOnly = false) {
-  const onClose = jest.fn();
+  const onClose = vi.fn();
   render(<UtilityMethodsModal isOpen vsumId={7} readOnly={readOnly} onClose={onClose} />);
   return { onClose };
 }
 
 beforeEach(() => {
-  jest.clearAllMocks();
+  vi.clearAllMocks();
   mockEditorModel.current = { getLineContent: () => 'model.contians->size()' };
   api.getUtilityMethods.mockResolvedValue([subSystems, broken]);
   api.getUtilityMethodTypes.mockResolvedValue(types);
