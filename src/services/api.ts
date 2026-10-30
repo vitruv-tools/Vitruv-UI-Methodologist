@@ -988,6 +988,60 @@ class ApiService {
     });
   }
 
+  // ── Utility methods ───────────────────────────────────────────────────────────────
+
+  getUtilityMethods(vsumId: number): Promise<UtilityMethodResponse[]> {
+    return this.authenticatedRequest(`/api/v1/vsums/${vsumId}/utility-methods`);
+  }
+
+  createUtilityMethod(vsumId: number, body: UtilityMethodRequest): Promise<UtilityMethodResponse> {
+    return this.authenticatedRequest(`/api/v1/vsums/${vsumId}/utility-methods`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+  }
+
+  updateUtilityMethod(vsumId: number, utilityMethodId: number, body: UtilityMethodRequest): Promise<UtilityMethodResponse> {
+    return this.authenticatedRequest(`/api/v1/vsums/${vsumId}/utility-methods/${utilityMethodId}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+  }
+
+  deleteUtilityMethod(vsumId: number, utilityMethodId: number): Promise<void> {
+    return this.authenticatedRequest(`/api/v1/vsums/${vsumId}/utility-methods/${utilityMethodId}`, {
+      method: 'DELETE',
+    });
+  }
+
+  /** Translates an unsaved utility method; problems are part of the response. */
+  previewUtilityMethod(vsumId: number, body: UtilityMethodRequest, utilityMethodId?: number): Promise<UtilityMethodPreviewResponse> {
+    const query = utilityMethodId === undefined ? '' : `?utilityMethodId=${utilityMethodId}`;
+    return this.authenticatedRequest(`/api/v1/vsums/${vsumId}/utility-methods/preview${query}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+  }
+
+  checkUtilityMethodName(vsumId: number, name: string, utilityMethodId?: number): Promise<UtilityMethodNameAvailabilityResponse> {
+    const params = new URLSearchParams({ name });
+    if (utilityMethodId !== undefined) params.set('utilityMethodId', String(utilityMethodId));
+    return this.authenticatedRequest(`/api/v1/vsums/${vsumId}/utility-methods/name-availability?${params}`);
+  }
+
+  /** The Java utility class generated from all utility methods of the project. */
+  getUtilityMethodClass(vsumId: number): Promise<UtilityMethodClassResponse> {
+    return this.authenticatedRequest(`/api/v1/vsums/${vsumId}/utility-methods/java`);
+  }
+
+  /** Metamodel types that utility methods of the project can use. */
+  getUtilityMethodTypes(vsumId: number): Promise<UtilityMethodTypeResponse[]> {
+    return this.authenticatedRequest(`/api/v1/vsums/${vsumId}/utility-methods/types`);
+  }
+
   /**
    * Fetch Low Code reaction metadata (field definitions for the form editor).
    */
@@ -1022,6 +1076,77 @@ export interface RuleSetPutRequest {
   color?: string;
   description?: string;
   oclContent?: string;
+}
+
+export interface UtilityMethodParameter {
+  name: string;
+  /** OCL type, e.g. `simulink::SimulinkModel` or `Sequence(simulink::Block)`. */
+  type: string;
+}
+
+export interface UtilityMethodRequest {
+  name: string;
+  description?: string;
+  returnType: string;
+  parameters: UtilityMethodParameter[];
+  /** Metamodel types usable by their simple name, e.g. `simulink::SubSystem` or `simulink::*`. */
+  imports: string[];
+  /** The OCL expression. */
+  body: string;
+}
+
+export interface UtilityMethodProblem {
+  utilityMethodName: string;
+  message: string;
+  /** 1-based position in the OCL definition, `null` if the problem is elsewhere. */
+  line: number | null;
+  column: number | null;
+}
+
+export interface UtilityMethodResponse {
+  id: number;
+  vsumId: number;
+  name: string;
+  description: string | null;
+  returnType: string;
+  parameters: UtilityMethodParameter[];
+  imports: string[];
+  body: string;
+  /** The complete utility method definition in OCL. */
+  oclDefinition: string;
+  /** The generated Java method, `null` if the utility method has problems. */
+  javaMethod: string | null;
+  problems: UtilityMethodProblem[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface UtilityMethodPreviewResponse {
+  oclDefinition: string;
+  javaMethod: string | null;
+  problems: UtilityMethodProblem[];
+}
+
+export interface UtilityMethodNameAvailabilityResponse {
+  available: boolean;
+  message: string | null;
+}
+
+export interface UtilityMethodClassResponse {
+  qualifiedClassName: string;
+  fileName: string;
+  source: string;
+  problems: UtilityMethodProblem[];
+}
+
+export interface UtilityMethodTypeResponse {
+  /** Qualified metamodel package, e.g. `simulink`. */
+  metamodel: string;
+  name: string;
+  /** OCL name, e.g. `simulink::SubSystem`. */
+  qualifiedName: string;
+  kind: 'CLASS' | 'ENUM' | 'DATATYPE';
+  javaName: string;
 }
 
 // Example API methods using the authenticated service

@@ -7,6 +7,7 @@ interface CanvasSidebarToolbarProps {
   onToggleReactionMode: () => void;
   onOpenReactionEditor?: () => void;
   onToggleModelDrawer: () => void;
+  onOpenUtilityMethods?: () => void;
   onDownloadProject: () => void;
   onDownloadJar: () => void;
   onDownloadBundle: () => void;
@@ -138,6 +139,15 @@ const PlusBoxIcon = () => (
   </svg>
 );
 
+const FunctionIcon = () => (
+  <svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M14.5 4.5c-1.6-.6-3.2.1-3.7 2L8.6 17c-.5 2-2.1 2.7-3.6 2.1" />
+    <line x1="7.5" y1="10" x2="14" y2="10" />
+    <path d="M16.5 13l4 5" />
+    <path d="M20.5 13l-4 5" />
+  </svg>
+);
+
 const PointerIcon = () => (
   <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
     <path d="M4 4l7 18 3-7 7-3z" />
@@ -262,6 +272,7 @@ export const CanvasSidebarToolbar: React.FC<CanvasSidebarToolbarProps> = ({
   onToggleReactionMode,
   onOpenReactionEditor,
   onToggleModelDrawer,
+  onOpenUtilityMethods,
   onDownloadProject,
   onDownloadJar,
   onDownloadBundle,
@@ -398,6 +409,18 @@ export const CanvasSidebarToolbar: React.FC<CanvasSidebarToolbarProps> = ({
         )}
 
         {!readOnly && <SidebarDivider />}
+
+        {onOpenUtilityMethods && (
+          <SidebarButton
+            label="Utility Methods"
+            description={readOnly
+              ? 'View the utility methods available to reactions'
+              : 'Define utility methods for reactions'}
+            onClick={onOpenUtilityMethods}
+          >
+            <FunctionIcon />
+          </SidebarButton>
+        )}
 
         {!readOnly && (
           <SidebarButton
