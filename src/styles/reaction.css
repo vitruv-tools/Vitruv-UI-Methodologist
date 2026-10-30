@@ -58,3 +58,11 @@
   stroke-dasharray: var(--reaction-line-dasharray, 5);
   animation: var(--reaction-line-animation, dashdraw 0.5s linear infinite);
 }
+
+/* Wider hit area than the 8px dot, still narrower than the 24px row pitch so neighbours never overlap. */
+.react-flow .react-flow__handle.reaction-handle::after {
+  content: '';
+  position: absolute;
+  inset: -5px;
+  border-radius: 50%;
+}

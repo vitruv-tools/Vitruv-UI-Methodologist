@@ -553,7 +553,9 @@ export function ghostPositionChanges(
     if (!isIntraModelUmlEdge(edge)) continue;
     const refId = edge.data?.ecore?.eReferenceId;
     if (typeof refId !== 'string' || !refId) continue;
-    const ghost = byId.get(ghostNodeId(refId));
+    // Expanded models key their nodes by instance (`uml-ref-<key>-<ref>` ↔ `ghost-<key>-<ref>`);
+    // older graphs used the bare `ghost-<ref>` id.
+    const ghost = byId.get(edge.id.replace(/^uml-ref-/, GHOST_NODE_PREFIX)) ?? byId.get(ghostNodeId(refId));
     const source = byId.get(edge.source);
     const target = byId.get(edge.target);
     if (!ghost || !source || !target) continue;
