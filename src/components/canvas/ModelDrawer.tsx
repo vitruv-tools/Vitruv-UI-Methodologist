@@ -191,7 +191,7 @@ export const ModelDrawer: React.FC<ModelDrawerProps> = ({
               color: T.text, fontSize: 13, fontWeight: 600, padding: '2px 0',
             }}
           >
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+            <svg aria-hidden="true" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
               <polyline points="15 18 9 12 15 6" />
             </svg>
             Back
@@ -337,7 +337,7 @@ const LibraryView: React.FC<LibraryViewProps> = ({
 
             {/* Search */}
             <div style={{ position: 'relative', marginBottom: 8 }}>
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="var(--v-text-muted)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
+              <svg aria-hidden="true" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="var(--v-text-muted)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
                 style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none' }}>
                 <circle cx="11" cy="11" r="8" /><line x1="21" y1="21" x2="16.65" y2="16.65" />
               </svg>
@@ -518,6 +518,7 @@ const DetailView: React.FC<DetailViewProps> = ({
     saveProjectName,
   } = useProjectRename(model, onRenameProjectModel);
   const diagramRef = useRef<UMLDiagramHandle>(null);
+  const projectNameInputRef = useRef<HTMLInputElement>(null);
   const theme = getTheme(model.domain);
   const isOnCanvas = addedModelIds.has(model.id);
   const canRenameProjectModel = model.inProject && !!onRenameProjectModel;
@@ -542,6 +543,10 @@ const DetailView: React.FC<DetailViewProps> = ({
   }, [model.ecoreFileId, ecoreContent, onFetchFile]);
 
   useEffect(() => {
+    if (editingProjectName) projectNameInputRef.current?.focus();
+  }, [editingProjectName]);
+
+  useEffect(() => {
     if (!ecoreContent) return;
     const t = setTimeout(() => diagramRef.current?.fitToView(), 150);
     return () => clearTimeout(t);
@@ -552,7 +557,7 @@ const DetailView: React.FC<DetailViewProps> = ({
 
       {/* ── Banner ── */}
       <div style={{ padding: '14px 16px', background: T.surface, borderBottom: `1px solid ${T.border}`, flexShrink: 0, display: 'flex', alignItems: 'center', gap: 10, minWidth: 0, overflow: 'hidden' }}>
-        <svg width="28" height="28" viewBox="0 0 32 32" fill="none" style={{ flexShrink: 0 }}>
+        <svg aria-hidden="true" width="28" height="28" viewBox="0 0 32 32" fill="none" style={{ flexShrink: 0 }}>
           <path d="M16 5L27 11V21L16 27L5 21V11L16 5Z" stroke="#049484" strokeWidth="1.6" fill="#04948422" strokeLinejoin="round" />
           <path d="M16 5V27" stroke="#049484" strokeWidth="1.3" strokeLinecap="round" />
           <path d="M5 11L27 11" stroke="#049484" strokeWidth="1.3" strokeLinecap="round" />
@@ -598,7 +603,7 @@ const DetailView: React.FC<DetailViewProps> = ({
                     }
                   }}
                   disabled={renaming}
-                  autoFocus
+                  ref={projectNameInputRef}
                   style={{ width: '100%', boxSizing: 'border-box', padding: '7px 8px', borderRadius: 6, border: `1px solid ${T.border}`, background: T.inputBg, color: T.text, fontFamily: FONT, fontSize: 13 }}
                 />
                 {renameError && <div role="alert" style={{ color: '#dc2626', fontSize: 11, marginTop: 5 }}>{renameError}</div>}
@@ -688,7 +693,7 @@ const DetailView: React.FC<DetailViewProps> = ({
                 color: 'var(--v-success-text)', fontSize: 12, fontWeight: 600,
                 display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
               }}>
-                <svg width="13" height="13" viewBox="0 0 16 16" fill="none">
+                <svg aria-hidden="true" width="13" height="13" viewBox="0 0 16 16" fill="none">
                   <circle cx="8" cy="8" r="7" fill="#dcfce7" stroke="#86efac" strokeWidth="1.2" />
                   <polyline points="5,8.5 7,10.5 11,6" stroke="#16a34a" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" fill="none" />
                 </svg>
@@ -706,7 +711,7 @@ const DetailView: React.FC<DetailViewProps> = ({
                 onMouseEnter={e => (e.currentTarget.style.background = '#1e293b')}
                 onMouseLeave={e => (e.currentTarget.style.background = DARK)}
               >
-                <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
+                <svg aria-hidden="true" width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
                   <line x1="6" y1="1" x2="6" y2="11" /><line x1="1" y1="6" x2="11" y2="6" />
                 </svg>
                 Add to canvas
@@ -725,7 +730,7 @@ const DetailView: React.FC<DetailViewProps> = ({
                 onMouseEnter={e => (e.currentTarget.style.background = '#fef2f2')}
                 onMouseLeave={e => (e.currentTarget.style.background = T.surface)}
               >
-                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <svg aria-hidden="true" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                   <polyline points="3 6 5 6 21 6" />
                   <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
                 </svg>
@@ -744,23 +749,23 @@ const DetailView: React.FC<DetailViewProps> = ({
             {ecoreContent && (
               <div style={{ display: 'flex', gap: 4 }}>
                 <PreviewBtn title="Open full-screen UML editor" onClick={() => setUmlExpanded(true)}>
-                  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <svg aria-hidden="true" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                     <polyline points="15 3 21 3 21 9" /><polyline points="9 21 3 21 3 15" />
                     <line x1="21" y1="3" x2="14" y2="10" /><line x1="3" y1="21" x2="10" y2="14" />
                   </svg>
                 </PreviewBtn>
                 <PreviewBtn title="Zoom in" onClick={() => diagramRef.current?.zoomIn()}>
-                  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
+                  <svg aria-hidden="true" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
                     <line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" />
                   </svg>
                 </PreviewBtn>
                 <PreviewBtn title="Zoom out" onClick={() => diagramRef.current?.zoomOut()}>
-                  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
+                  <svg aria-hidden="true" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
                     <line x1="5" y1="12" x2="19" y2="12" />
                   </svg>
                 </PreviewBtn>
                 <PreviewBtn title="Fit to view" onClick={() => diagramRef.current?.fitToView()}>
-                  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <svg aria-hidden="true" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                     <path d="M8 3H5a2 2 0 0 0-2 2v3" /><path d="M21 8V5a2 2 0 0 0-2-2h-3" />
                     <path d="M3 16v3a2 2 0 0 0 2 2h3" /><path d="M16 21h3a2 2 0 0 0 2-2v-3" />
                   </svg>
@@ -991,7 +996,7 @@ const ModelCard: React.FC<ModelCardProps> = ({ model, onCanvas, onAdd, onOpenDet
         <ModelCardFields model={model} nameColor={T.text} metaColor={T.muted} />
 
         {/* Checkmark */}
-        <svg width="14" height="14" viewBox="0 0 16 16" fill="none" style={{ flexShrink: 0, marginLeft: 'auto' }}>
+        <svg aria-hidden="true" width="14" height="14" viewBox="0 0 16 16" fill="none" style={{ flexShrink: 0, marginLeft: 'auto' }}>
           <circle cx="8" cy="8" r="7" fill="#dcfce7" stroke="#86efac" strokeWidth="1.2" />
           <polyline points="5,8.5 7,10.5 11,6" stroke="#16a34a" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" fill="none" />
         </svg>
@@ -1030,7 +1035,7 @@ const ModelCard: React.FC<ModelCardProps> = ({ model, onCanvas, onAdd, onOpenDet
 // ── BoxIcon ───────────────────────────────────────────────────────────────────
 
 const BoxIcon: React.FC<{ color: string; size?: number }> = ({ color, size = 38 }) => (
-  <svg width={size} height={size} viewBox="0 0 32 32" fill="none">
+  <svg aria-hidden="true" width={size} height={size} viewBox="0 0 32 32" fill="none">
     <path d="M16 5L27 11V21L16 27L5 21V11L16 5Z" stroke={color} strokeWidth="1.6" fill={color + '22'} strokeLinejoin="round" />
     <path d="M16 5V27" stroke={color} strokeWidth="1.3" strokeLinecap="round" />
     <path d="M5 11L27 11" stroke={color} strokeWidth="1.3" strokeLinecap="round" />
