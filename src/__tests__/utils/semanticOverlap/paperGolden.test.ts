@@ -9,6 +9,7 @@ import { resolveSettings } from '../../../utils/semanticOverlap/settings';
 import type { MetamodelGraph, OverlapResult } from '../../../utils/semanticOverlap/types';
 import table from '../../../assets/wordnet/oewn-2025-synonyms.json';
 import { ecoreExcerpt, refFor, umlExcerpt } from './fixtures';
+import { scenarios } from './benchmark/suite';
 
 /**
  * Golden results of the paper approach (Kessentini et al. 2014 plus the documented extensions),
@@ -60,5 +61,14 @@ describe('paper approach golden results', () => {
     it('Ecore -> UML 2.0', () => checkHashes('ecore-uml20.sha256.json',
       () => load(path.join(METAMODEL_DIR, 'Ecore.ecore'), 1),
       () => load(path.join(METAMODEL_DIR, 'UML_2.0_CD.ecore'), 2)), 300_000);
+  });
+
+  // Recorded when the Wimmer, Tree2Graph and further model-exchange scenarios were added, before
+  // the improvements that use them.
+  const added = scenarios().filter(s => s.family === 'wimmer' || s.family === 'tree2graph'
+    || (s.family === 'model-exchange' && s.id !== 'ecore-uml20'));
+  describe.each(added.map(s => [s.label, s] as const))('%s', (_label, scenario) => {
+    it.skipIf(!scenario.available)('seeds 1–10', () => checkHashes(`${scenario.id}.sha256.json`,
+      () => load(scenario.source, 1), () => load(scenario.target, 2)), 300_000);
   });
 });

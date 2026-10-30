@@ -12,6 +12,8 @@
 
 interface EnvironmentConfig {
   apiBaseUrl: string;
+  /** Base URL of the app's own static assets (e.g. the sentence-embedding model), ending with `/`. */
+  assetBaseUrl: string;
   environment: 'local' | 'staging' | 'production';
   isDevelopment: boolean;
   isStaging: boolean;
@@ -38,6 +40,7 @@ validateEnvironment();
  */
 export const config: EnvironmentConfig = {
   apiBaseUrl: process.env.REACT_APP_API_BASE_URL!,
+  assetBaseUrl: import.meta.env.BASE_URL,
   environment: (process.env.REACT_APP_ENV || 'production') as EnvironmentConfig['environment'],
   isDevelopment: process.env.REACT_APP_ENV === 'local',
   isStaging: process.env.REACT_APP_ENV === 'staging',

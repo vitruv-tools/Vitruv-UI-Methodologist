@@ -1,0 +1,15 @@
+{
+  "scenario": "Wimmer 3 (A2C, CA2R)",
+  "family": "wimmer",
+  "provenance": "Hand-made after Wimmer et al. 2010, Benchmark Example 3 (Fig. 7); entries derived from the example's challenge list",
+  "source": "wimmer/example-3/source.ecore",
+  "target": "wimmer/example-3/target.ecore",
+  "correspondences": [
+    {"sources": ["lhs3.Publication"], "targets": ["rhs3.Publication"]}
+  ],
+  "features": [
+    {"sources": ["lhs3.Publication.name"], "targets": ["rhs3.Publication.title"]},
+    {"sources": ["lhs3.Publication.kind"], "targets": ["rhs3.Publication.kind.name"], "kind": "path", "note": "A2A with context difference, expressed as a path over the CA2R reference kind"}
+  ],
+  "unmatched": {"target": ["rhs3.Kind"], "note": "A2C: the class Kind corresponds to the attribute Publication.kind, which the engine cannot express as a class correspondence"}
+}

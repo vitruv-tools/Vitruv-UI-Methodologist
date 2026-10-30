@@ -1,0 +1,15 @@
+{
+  "scenario": "ER -> Ecore",
+  "family": "model-exchange",
+  "source": "er_ODM.ecore",
+  "target": "Ecore.ecore",
+  "level": "class",
+  "provenance": "Recreated by hand, like ecore-uml20.expected.json: the original reference alignments of Kessentini et al. (2014) are lost; derived from the metamodels and the specifications of the languages.",
+  "correspondences": [
+    {"sources": ["ER.Entity"], "targets": ["ecore.EClass"]},
+    {"sources": ["ER.Attribute"], "targets": ["ecore.EAttribute"]},
+    {"sources": ["ER.RelationshipEnd"], "targets": ["ecore.EReference"]},
+    {"sources": ["ER.Relationship"], "targets": ["ecore.EReference"], "uncertain": true, "note": "a binary relationship becomes a pair of opposite references"}
+  ],
+  "unmatched": {"source": ["ER.PrimaryKey", "ER.ExistenceDependency", "ER.FunctionalDependency"], "note": "Ecore marks keys with EAttribute.iD and has no dependency concept."}
+}

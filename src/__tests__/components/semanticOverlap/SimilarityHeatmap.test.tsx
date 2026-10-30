@@ -1,7 +1,7 @@
 import React from 'react';
 import { fireEvent, render, screen } from '@testing-library/react';
 import { cellAt, heatmapCellSize, SimilarityHeatmap } from '../../../components/semanticOverlap/SimilarityHeatmap';
-import { correspondenceFor, sampleImprovedResult, sampleResult } from './sampleResult';
+import { correspondenceFor, sampleImprovedResult, sampleKindsResult, sampleResult } from './sampleResult';
 
 const result = sampleResult();
 const strokes: number[][] = [];
@@ -65,5 +65,13 @@ describe('SimilarityHeatmap', () => {
     expect(dashes.filter(d => d.length > 0)).toHaveLength(instancePairs);
     expect(dashes.filter(d => d.length === 0)).toHaveLength(strokes.length - instancePairs);
   });
-});
 
+  it('outlines split, merge and conditional cells with their own dash patterns', () => {
+    render(<SimilarityHeatmap result={sampleKindsResult()} minScore={0} selectedId={null} onSelect={vi.fn()} onCellFocus={vi.fn()} />);
+    // split: 2 cells, merge: 2 cells, conditional: 1 cell.
+    expect(strokes).toHaveLength(5);
+    const patterns = new Set(dashes.map(d => d.join(',')));
+    expect(patterns.size).toBe(3);
+    expect(patterns.has('')).toBe(false);
+  });
+});

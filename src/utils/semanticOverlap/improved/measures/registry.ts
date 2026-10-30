@@ -6,6 +6,8 @@ import { classCosineMeasure, featureCosineMeasure } from './cosineMeasure';
 import { classHypernymMeasure, featureHypernymMeasure } from './hypernymMeasure';
 import { classRoleMeasure } from './roleMeasure';
 import { classDatatypeMeasure } from './datatypeMeasure';
+import { classEmbeddingMeasure, featureEmbeddingMeasure } from './embeddingMeasure';
+import { classStructureTypesMeasure } from './structureTypes';
 import { classLevenshteinMeasure, featureLevenshteinMeasure } from './levenshteinMeasure';
 import { classNameTokenMeasure, featureNameTokenMeasure } from './nameTokenMeasure';
 import { classNeighbourhoodMeasure } from './neighbourhoodMeasure';
@@ -39,5 +41,6 @@ export function createDefaultMeasureRegistry(): MeasureRegistry {
     classStructuralMeasure, classCosineMeasure, classLevenshteinMeasure, classNameTokenMeasure, classNeighbourhoodMeasure,
     featureStructuralMeasure, featureCosineMeasure, featureLevenshteinMeasure, featureNameTokenMeasure,
     classHypernymMeasure, featureHypernymMeasure, classRoleMeasure, classDatatypeMeasure,
+    classEmbeddingMeasure, featureEmbeddingMeasure, classStructureTypesMeasure,
   ]);
 }

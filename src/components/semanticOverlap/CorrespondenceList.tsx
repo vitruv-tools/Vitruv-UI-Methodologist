@@ -1,33 +1,44 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { themeVars } from '../../theme/theme';
-import { instanceLabel, isInstanceCorrespondence } from '../../utils/semanticOverlap/correspondenceKind';
+import { KIND_NAMES, kindLabel, kindOf } from '../../utils/semanticOverlap/correspondenceKind';
 import { visibleChildren, visibleCorrespondences } from '../../utils/semanticOverlap/linkDiagramLayout';
-import type { Correspondence, ElementRef, OverlapResult } from '../../utils/semanticOverlap/types';
+import { CORRESPONDENCE_KINDS, type Correspondence, type CorrespondenceKind, type ElementRef, type OverlapResult } from '../../utils/semanticOverlap/types';
 import { formatPercent } from './ScoreEdge';
 
-type SortKey = 'score' | 'structural' | 'syntactic';
-type KindFilter = 'all' | 'same' | 'instance';
+type SortKey = 'score' | 'structural' | 'syntactic' | 'embedding';
+type KindFilter = 'all' | CorrespondenceKind;
 
-const KIND_FILTERS: Record<KindFilter, string> = { all: 'All', same: 'Same concept', instance: 'Class ↔ instance' };
+const KIND_TITLES: Record<CorrespondenceKind, string> = {
+  same: 'Both elements describe the same concept',
+  instance: '',
+  path: 'A feature corresponds to a navigation over two features',
+  split: 'One class corresponds to several unrelated classes',
+  merge: 'Several unrelated classes correspond to one class',
+  conditional: 'The class corresponds to the subclass only for this attribute value',
+};
 
-/** Badge naming the kind of a correspondence; the role is in the tooltip. */
+/** Badge naming the kind of a correspondence; the role or meaning is in the tooltip. */
 const KindBadge: React.FC<{ correspondence: Correspondence }> = ({ correspondence }) => {
-  const label = instanceLabel(correspondence);
+  const kind = kindOf(correspondence);
+  const special = kind !== 'same';
   return (
     <span
-      title={correspondence.instance ? `Role: ${correspondence.instance.role}` : 'Both elements describe the same concept'}
+      title={correspondence.instance ? `Role: ${correspondence.instance.role}` : KIND_TITLES[kind]}
       style={{
         display: 'inline-block', padding: '1px 8px', borderRadius: 10, fontSize: 11, whiteSpace: 'nowrap',
-        border: `1px ${label ? 'dashed' : 'solid'} ${themeVars.border}`,
-        background: label ? themeVars.brandSoft : 'transparent', color: themeVars.textSecondary,
+        border: `1px ${special ? 'dashed' : 'solid'} ${themeVars.border}`,
+        background: special ? themeVars.brandSoft : 'transparent', color: themeVars.textSecondary,
       }}
     >
-      {label ?? 'same concept'}
+      {kindLabel(correspondence)}
     </span>
   );
 };
 
-const SORT_LABELS: Record<SortKey, string> = { score: 'Score', structural: 'Structural', syntactic: 'Syntactic' };
+/** Kinds of the class correspondences and their attribute/reference correspondences. */
+const kindsIn = (result: OverlapResult) => new Set(result.correspondences.flatMap(c => [c, ...(c.children ?? [])]).map(kindOf));
+
+const SORT_LABELS: Record<SortKey, string> = { score: 'Score', structural: 'Structural', syntactic: 'Syntactic', embedding: 'Meaning (embedding)' };
 
 const headerCell: React.CSSProperties = {
   padding: '8px 10px', fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.04em',
@@ -57,11 +68,16 @@ export const CorrespondenceList: React.FC<CorrespondenceListProps> = ({
   const [sortKey, setSortKey] = useState<SortKey>('score');
   const [kindFilter, setKindFilter] = useState<KindFilter>('all');
   const selectedRow = useRef<HTMLTableRowElement>(null);
-  // The kind column and filter only appear when the result has class ↔ instance correspondences.
-  const showKinds = result.correspondences.some(isInstanceCorrespondence);
+  // The kind column and filter only appear when the result has kinds other than same-concept.
+  const kinds = useMemo(() => kindsIn(result), [result]);
+  const showKinds = [...kinds].some(kind => kind !== 'same');
+  // The sentence-embedding score is shown next to the other measures when the result used it.
+  const sortKeys = (Object.keys(SORT_LABELS) as SortKey[]).filter(key => key !== 'embedding' || result.embeddingModel !== undefined);
+  const columnCount = 2 + (showKinds ? 1 : 0) + sortKeys.length;
   const rows = useMemo(() => {
     const visible = visibleCorrespondences(result, minScore)
-      .filter(c => !showKinds || kindFilter === 'all' || (kindFilter === 'instance') === isInstanceCorrespondence(c));
+      .filter(c => !showKinds || kindFilter === 'all' || kindOf(c) === kindFilter
+        || (c.children ?? []).some(child => kindOf(child) === kindFilter));
     const value = (c: typeof visible[number]) => (sortKey === 'score' ? c.score : c.scores[sortKey] ?? 0);
     return [...visible].sort((a, b) => value(b) - value(a));
   }, [result, minScore, sortKey, showKinds, kindFilter]);
@@ -115,6 +131,11 @@ export const CorrespondenceList: React.FC<CorrespondenceListProps> = ({
         <td style={{ ...bodyCell, color: themeVars.text, fontWeight: nested ? 500 : 600 }}>{formatPercent(c.score)}</td>
         <td style={{ ...bodyCell, color: themeVars.textSecondary }}>{formatPercent(c.scores.structural)}</td>
         <td style={{ ...bodyCell, color: themeVars.textSecondary }}>{formatPercent(c.scores.syntactic)}</td>
+        {sortKeys.includes('embedding') && (
+          <td style={{ ...bodyCell, color: themeVars.textSecondary }}>
+            {c.scores.embedding === undefined ? '–' : formatPercent(c.scores.embedding)}
+          </td>
+        )}
       </tr>
     );
   };
@@ -128,7 +149,8 @@ export const CorrespondenceList: React.FC<CorrespondenceListProps> = ({
         onChange={event => setKindFilter(event.target.value as KindFilter)}
         style={{ fontSize: 12, background: themeVars.surface, color: themeVars.text, border: `1px solid ${themeVars.border}`, borderRadius: 6 }}
       >
-        {(Object.keys(KIND_FILTERS) as KindFilter[]).map(kind => <option key={kind} value={kind}>{KIND_FILTERS[kind]}</option>)}
+        <option value="all">All</option>
+        {CORRESPONDENCE_KINDS.filter(kind => kinds.has(kind)).map(kind => <option key={kind} value={kind}>{KIND_NAMES[kind]}</option>)}
       </select>
     </label>
   );
@@ -153,7 +175,7 @@ export const CorrespondenceList: React.FC<CorrespondenceListProps> = ({
             <th style={headerCell} title={result.source.name}>Source</th>
             <th style={headerCell} title={result.target.name}>Target</th>
             {showKinds && <th style={headerCell}>Kind</th>}
-            {(Object.keys(SORT_LABELS) as SortKey[]).map(key => (
+            {sortKeys.map(key => (
               <th key={key} style={headerCell} aria-sort={sortKey === key ? 'descending' : 'none'}>
                 <button
                   type="button"
@@ -172,7 +194,15 @@ export const CorrespondenceList: React.FC<CorrespondenceListProps> = ({
             const expanded = expandedIds.includes(c.id);
             return (
               <React.Fragment key={c.id}>
-                {renderRow(c, false, children.length > 0, expanded)}
+                {renderRow(c, false, children.length > 0 || c.condition !== undefined, expanded)}
+                {expanded && c.condition && (
+                  <tr aria-level={2} style={{ borderBottom: `1px solid ${themeVars.borderSubtle}` }}>
+                    <td colSpan={columnCount} style={{ ...bodyCell, paddingLeft: 30, fontSize: 12, color: themeVars.textSecondary }}>
+                      Condition: <strong>{c.condition.attribute}</strong> = <strong>{c.condition.value}</strong>
+                      {` selects ${names(c.targets)}`}
+                    </td>
+                  </tr>
+                )}
                 {expanded && children.map(child => renderRow(child, true, false, false))}
               </React.Fragment>
             );

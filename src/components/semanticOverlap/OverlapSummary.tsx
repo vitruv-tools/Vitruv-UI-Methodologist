@@ -2,7 +2,8 @@ import React from 'react';
 import { themeVars } from '../../theme/theme';
 import { APPROACHES } from '../../utils/semanticOverlap/approaches/registry';
 import { IMPROVEMENT_IDS, IMPROVEMENT_LABELS, type ImprovedSettings } from '../../utils/semanticOverlap/improved/settings';
-import type { ElementRef, OverlapResult } from '../../utils/semanticOverlap/types';
+import { KIND_NAMES } from '../../utils/semanticOverlap/correspondenceKind';
+import { CORRESPONDENCE_KINDS, type CorrespondenceKind, type ElementRef, type OverlapResult } from '../../utils/semanticOverlap/types';
 
 /** Simple names, qualified where two classes of the list share a simple name. */
 function displayNames(refs: readonly ElementRef[]): string[] {
@@ -35,6 +36,14 @@ const UnmatchedList: React.FC<{ title: string; refs: readonly ElementRef[] }> = 
 
 const percent = (value: number) => `${Math.round(value * 100)} %`;
 
+/** "Same concept: 3 · Class ↔ instance: 2 · Path: 1"; same and instance always, other kinds when present. */
+function kindCountsText(counts: Partial<Record<CorrespondenceKind, number>>): string {
+  return CORRESPONDENCE_KINDS
+    .filter(kind => kind === 'same' || kind === 'instance' || (counts[kind] ?? 0) > 0)
+    .map(kind => `${KIND_NAMES[kind]}: ${counts[kind] ?? 0}`)
+    .join(' · ');
+}
+
 /** Label and version of the approach that produced a result; results without one are paper results. */
 export function approachLabel(result: OverlapResult): string {
   const approach = result.approach ?? { id: 'paper', version: APPROACHES.paper.version };
@@ -56,6 +65,7 @@ export function describeSettingsUsed(result: OverlapResult): string {
     `measures ${engine.measures.map(m => `${m.id} v${m.version}`).join(', ')}`,
     engine.lexicalSource ? `synonyms ${engine.lexicalSource.id} ${engine.lexicalSource.version}` : 'no synonyms',
     ...improvementsUsed(settings as Partial<ImprovedSettings>),
+    ...(result.embeddingModel ? [`embedding model ${result.embeddingModel.id} (revision ${result.embeddingModel.revision.slice(0, 8)})`] : []),
   ].join(' · ');
 }
 
@@ -76,11 +86,23 @@ export const OverlapSummary: React.FC<{ result: OverlapResult }> = ({ result }) 
         <Figure label={`${source.name} classes`} value={`${summary.matchedSourceClasses} / ${summary.sourceClassCount} matched`} />
         <Figure label={`${target.name} classes`} value={`${summary.matchedTargetClasses} / ${summary.targetClassCount} matched`} />
         <Figure label="Correspondences" value={String(result.correspondences.length)} />
-        {summary.kindCounts && (
-          <Figure label="Kinds" value={`Same concept: ${summary.kindCounts.same} · Class ↔ instance: ${summary.kindCounts.instance}`} />
-        )}
+        {summary.kindCounts && <Figure label="Kinds" value={kindCountsText(summary.kindCounts)} />}
         <Figure label="Fitness" value={summary.fitness.toFixed(2)} />
+        {summary.coverage && (
+          <Figure
+            label="Coverage (classes · features)"
+            value={`${percent(summary.coverage.source.classes)} · ${percent(summary.coverage.source.features)} | ${percent(summary.coverage.target.classes)} · ${percent(summary.coverage.target.features)}`}
+          />
+        )}
+        {result.acceptanceThreshold && (
+          <Figure label="Acceptance threshold" value={result.acceptanceThreshold.value.toFixed(3)} />
+        )}
       </div>
+      {result.acceptanceThreshold?.note && (
+        <div style={{ fontSize: 11, color: themeVars.textMuted }}>
+          Acceptance threshold τ = {result.acceptanceThreshold.value.toFixed(3)}, {result.acceptanceThreshold.note}.
+        </div>
+      )}
       <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap' }}>
         <UnmatchedList title={`Unmatched in ${source.name}`} refs={unmatched.source} />
         <UnmatchedList title={`Unmatched in ${target.name}`} refs={unmatched.target} />

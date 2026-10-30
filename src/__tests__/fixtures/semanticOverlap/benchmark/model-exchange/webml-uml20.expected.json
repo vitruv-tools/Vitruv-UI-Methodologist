@@ -1,0 +1,17 @@
+{
+  "scenario": "WebML -> UML 2.0 CD",
+  "family": "model-exchange",
+  "source": "webml.ecore",
+  "target": "UML_2.0_CD.ecore",
+  "level": "class",
+  "provenance": "Recreated by hand, like ecore-uml20.expected.json: the original reference alignments of Kessentini et al. (2014) are lost; derived from the metamodels and the specifications of the languages.",
+  "correspondences": [
+    {"sources": ["webml.NamedElement"], "targets": ["uml2CD.NamedElement"]},
+    {"sources": ["webml.Entity"], "targets": ["uml2CD.Class"]},
+    {"sources": ["webml.Attribute"], "targets": ["uml2CD.Property"]},
+    {"sources": ["webml.Relationship"], "targets": ["uml2CD.Association"]},
+    {"sources": ["webml.Relationship"], "targets": ["uml2CD.Property"], "uncertain": true, "note": "a WebML relationship is one directed role with cardinalities, like an association end"},
+    {"sources": ["webml.Domain"], "targets": ["uml2CD.Enumeration"]},
+    {"sources": ["webml.DomainValue"], "targets": ["uml2CD.EnumerationLiteral"]}
+  ]
+}

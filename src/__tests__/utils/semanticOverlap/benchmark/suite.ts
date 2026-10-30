@@ -3,6 +3,7 @@ import path from 'node:path';
 import { approachOf } from '../../../../utils/semanticOverlap/approaches/registry';
 import type { ApproachDeps, ApproachId } from '../../../../utils/semanticOverlap/approaches/types';
 import { readMetamodelGraph } from '../../../../utils/semanticOverlap/ecore/readMetamodelGraph';
+import type { EmbeddingTable } from '../../../../utils/semanticOverlap/improved/embeddings/types';
 import { createHypernymSource, type HypernymTable } from '../../../../utils/semanticOverlap/improved/lexical/hypernymSource';
 import { createWordNetSource } from '../../../../utils/semanticOverlap/lexical/wordNetSource';
 import type {
@@ -30,6 +31,8 @@ export interface ReferenceEntry {
   /** Side whose class is instantiated (`kind = 'instance'`). */
   instanceSide?: Side;
   role?: InstanceRole;
+  /** Deciding attribute (qualified name) and value (`kind = 'conditional'`). */
+  condition?: { attribute: string; value: string };
   uncertain?: boolean;
   note?: string;
 }
@@ -42,11 +45,20 @@ export interface Reference {
 export interface Scores { precision: number; recall: number; fMeasure: number }
 export interface LevelScores { class: Scores; feature?: Scores }
 
-export type ScenarioId = 'fig1' | 'ecore-uml20' | 'brake-bom' | 'bom-brake';
+export type FamilyId = 'fig1' | 'model-exchange' | 'brake-bom' | 'wimmer' | 'tree2graph';
+export const FAMILY_IDS: readonly FamilyId[] = ['fig1', 'model-exchange', 'brake-bom', 'wimmer', 'tree2graph'];
+
+/** The model-exchange pairs added to Ecore -> UML 2.0: every pair with UML 2.0 or Ecore on one side. */
+export const MODEL_EXCHANGE_PAIRS = ['uml14-uml20', 'ecore-uml14', 'er-uml20', 'webml-uml20', 'er-ecore', 'webml-ecore'] as const;
+export type ModelExchangePairId = typeof MODEL_EXCHANGE_PAIRS[number];
+export const WIMMER_IDS = ['wimmer-1', 'wimmer-2', 'wimmer-3', 'wimmer-4', 'wimmer-5', 'wimmer-6'] as const;
+
+export type ScenarioId = 'fig1' | 'ecore-uml20' | 'brake-bom' | 'bom-brake' | ModelExchangePairId | typeof WIMMER_IDS[number] | 'tree2graph';
 export type ScenarioOrigin = 'committed' | 'downloaded' | 'local';
 
 export interface Scenario {
   id: ScenarioId;
+  family: FamilyId;
   label: string;
   source: string;
   target: string;
@@ -66,7 +78,25 @@ export interface LoadedScenario {
 
 const file = (...parts: string[]) => path.join(FIXTURES_DIR, ...parts);
 
-/** The four scenarios; availability depends on the downloaded and local-only files. */
+const METAMODEL_FILES: Record<string, string> = {
+  ecore: 'Ecore.ecore', uml20: 'UML_2.0_CD.ecore', uml14: 'UML_1.4.2_CD.ecore', er: 'er_ODM.ecore', webml: 'webml.ecore',
+};
+const PAIR_LABELS: Record<string, string> = { ecore: 'Ecore', uml20: 'UML 2.0', uml14: 'UML 1.4', er: 'ER', webml: 'WebML' };
+
+function modelExchangeScenario(id: ModelExchangePairId): Scenario {
+  const [from, to] = id.split('-');
+  const source = path.join(METAMODEL_DIR, METAMODEL_FILES[from]);
+  const target = path.join(METAMODEL_DIR, METAMODEL_FILES[to]);
+  return {
+    id, family: 'model-exchange', label: `${PAIR_LABELS[from]} -> ${PAIR_LABELS[to]}`, source, target,
+    referenceFile: file(`benchmark/model-exchange/${id}.expected.json`), origin: 'downloaded',
+    available: existsSync(source) && existsSync(target),
+  };
+}
+
+const WIMMER_LABELS = ['same concepts', 'n:1 concepts', 'A2C, CA2R', 'R2C, R2A', 'inheritance', 'A2I'];
+
+/** The 17 scenarios in 5 families; availability depends on the downloaded and local-only files. */
 export function scenarios(): Scenario[] {
   const brake = file('benchmark/brake-bom/brakesystem.ecore');
   const bom = file('benchmark/brake-bom/bom.ecore');
@@ -74,18 +104,30 @@ export function scenarios(): Scenario[] {
   const uml = path.join(METAMODEL_DIR, 'UML_2.0_CD.ecore');
   const brakeReference = file('benchmark/brake-bom/brake-bom.expected.json');
   return [
-    { id: 'fig1', label: 'Fig. 1 excerpt', source: file('ecore-excerpt.ecore'), target: file('uml-excerpt.ecore'),
+    { id: 'fig1', family: 'fig1', label: 'Fig. 1 excerpt', source: file('ecore-excerpt.ecore'), target: file('uml-excerpt.ecore'),
       referenceFile: file('fig1-expected.json'), origin: 'committed', available: true },
-    { id: 'ecore-uml20', label: 'Ecore -> UML 2.0', source: ecore, target: uml,
+    { id: 'ecore-uml20', family: 'model-exchange', label: 'Ecore -> UML 2.0', source: ecore, target: uml,
       referenceFile: file('benchmark/ecore-uml20.expected.json'), origin: 'downloaded', available: existsSync(ecore) && existsSync(uml) },
-    { id: 'brake-bom', label: 'Brake -> BOM', source: brake, target: bom,
+    { id: 'brake-bom', family: 'brake-bom', label: 'Brake -> BOM', source: brake, target: bom,
       referenceFile: brakeReference, origin: 'local', available: existsSync(brake) },
-    { id: 'bom-brake', label: 'BOM -> Brake', source: bom, target: brake,
+    { id: 'bom-brake', family: 'brake-bom', label: 'BOM -> Brake', source: bom, target: brake,
       referenceFile: brakeReference, origin: 'local', available: existsSync(brake), reverseOf: 'brake-bom' },
+    ...MODEL_EXCHANGE_PAIRS.map(modelExchangeScenario),
+    ...WIMMER_IDS.map((id, k): Scenario => ({
+      id, family: 'wimmer', label: `Wimmer ${k + 1} (${WIMMER_LABELS[k]})`,
+      source: file(`benchmark/wimmer/example-${k + 1}/source.ecore`), target: file(`benchmark/wimmer/example-${k + 1}/target.ecore`),
+      referenceFile: file(`benchmark/wimmer/example-${k + 1}/expected.json`), origin: 'committed', available: true,
+    })),
+    { id: 'tree2graph', family: 'tree2graph', label: 'Tree -> Graph', source: file('benchmark/tree2graph/tree.ecore'),
+      target: file('benchmark/tree2graph/graph.ecore'), referenceFile: file('benchmark/tree2graph/tree2graph.expected.json'),
+      origin: 'committed', available: true },
   ];
 }
 
-/** Reads a reference file (v1 or v2). In v1 files `uncertain` is a list of notes and ignored. */
+/**
+ * Reads a reference file (v1 or v2, plus the 003 kinds `path`, `split`, `merge` and `conditional`).
+ * In v1 files `uncertain` is a list of notes and ignored; `unmatched` is informative and not counted.
+ */
 export function readReference(json: string): Reference {
   const data = JSON.parse(json) as { correspondences: ReferenceEntry[]; features?: ReferenceEntry[] };
   const entry = (e: ReferenceEntry): ReferenceEntry => ({ ...e, uncertain: e.uncertain === true ? true : undefined });
@@ -117,16 +159,28 @@ export function splitByLevel(reference: Reference, classNames: ReadonlySet<strin
   return { correspondences: reference.correspondences.filter(isClassEntry), features: features.length > 0 ? features : undefined };
 }
 
-const keyOf = (source: string, target: string, kind: CorrespondenceKind = 'same', role?: InstanceRole) =>
-  `${source} -> ${target} #${kind}${kind === 'instance' && role ? `/${role}` : ''}`;
+type KeyDetail = { kind?: CorrespondenceKind; role?: InstanceRole; condition?: { attribute: string; value: string } };
 
-/** `"<source> -> <target> #<kind>[/<role>]"` per source × target combination. */
+const suffixOf = ({ kind, role, condition }: KeyDetail) => {
+  if (kind === 'instance' && role) return `/${role}`;
+  if (kind === 'conditional' && condition) return `/${condition.attribute}=${condition.value}`;
+  return '';
+};
+
+const keyOf = (source: string, target: string, detail: KeyDetail) =>
+  `${source} -> ${target} #${detail.kind ?? 'same'}${suffixOf(detail)}`;
+
+/**
+ * `"<source> -> <target> #<kind>[/<role>|/<attribute>=<value>]"` per source × target combination;
+ * split and merge groups therefore expand per pair.
+ */
 export function pairKeys(entries: readonly ReferenceEntry[]): Set<string> {
-  return new Set(entries.flatMap(e => e.sources.flatMap(s => e.targets.map(t => keyOf(s, t, e.kind, e.role)))));
+  return new Set(entries.flatMap(e => e.sources.flatMap(s => e.targets.map(t => keyOf(s, t, e)))));
 }
 
-const correspondenceKeys = (correspondences: readonly Correspondence[]) => new Set(correspondences.flatMap(c =>
-  c.sources.flatMap(s => c.targets.map(t => keyOf(s.qualifiedName, t.qualifiedName, c.kind, c.instance?.role))),
+export const correspondenceKeys = (correspondences: readonly Correspondence[]) => new Set(correspondences.flatMap(c =>
+  c.sources.flatMap(s => c.targets.map(t =>
+    keyOf(s.qualifiedName, t.qualifiedName, { kind: c.kind, role: c.instance?.role, condition: c.condition }))),
 ));
 
 function score(proposed: Set<string>, reference: Set<string>): Scores {
@@ -154,6 +208,19 @@ export const mean = (scores: readonly Scores[]): Scores => {
   };
 };
 
+/**
+ * Scores averaged within each family, then over the available families, so a family with many
+ * scenarios does not dominate. Scenarios without scores (skipped) are left out.
+ */
+export function familyMeans(perScenario: Partial<Record<ScenarioId, Scores>>, all: readonly Scenario[] = scenarios()) {
+  const perFamily: Partial<Record<FamilyId, Scores>> = {};
+  for (const family of FAMILY_IDS) {
+    const members = all.filter(s => s.family === family).map(s => perScenario[s.id]).filter((x): x is Scores => x !== undefined);
+    if (members.length > 0) perFamily[family] = mean(members);
+  }
+  return { perFamily, average: mean(Object.values(perFamily) as Scores[]) };
+}
+
 export const formatScores = (s: Scores | undefined) =>
   (s ? `P ${s.precision.toFixed(2)}  R ${s.recall.toFixed(2)}  F ${s.fMeasure.toFixed(2)}` : '–');
 
@@ -179,9 +246,9 @@ const lexical = createWordNetSource(table);
 // Tests have no `fetch` for the asset URL, so the table is imported directly.
 const hypernyms = createHypernymSource(hypernymTable as HypernymTable);
 
-/** Dependencies of benchmark runs: bundled WordNet data, fixed clock and id. */
-export function benchmarkDeps(): ApproachDeps {
-  return { lexical, hypernyms, now: () => 0, createId: () => 'benchmark' };
+/** Dependencies of benchmark runs: bundled WordNet data, fixed clock and id, and an optional embedding table. */
+export function benchmarkDeps(embeddings: EmbeddingTable | null = null): ApproachDeps {
+  return { lexical, hypernyms, embeddings, now: () => 0, createId: () => 'benchmark' };
 }
 
 export interface ScenarioRun {
@@ -195,10 +262,11 @@ export function runScenario<S extends AnalysisSettings>(
   approachId: ApproachId,
   settingsFor: (seed: number) => S,
   seeds: readonly number[] = SEEDS,
+  embeddings: EmbeddingTable | null = null,
 ): ScenarioRun {
   const approach = approachOf(approachId);
   const results = seeds.map(seed =>
-    approach.run({ source: loaded.source, target: loaded.target, settings: settingsFor(seed) }, benchmarkDeps()));
+    approach.run({ source: loaded.source, target: loaded.target, settings: settingsFor(seed) }, benchmarkDeps(embeddings)));
   const perSeed = results.map(r => evaluate(r, loaded.reference));
   const feature = perSeed.every(s => s.feature) ? mean(perSeed.map(s => s.feature!)) : undefined;
   return { results, scores: { class: mean(perSeed.map(s => s.class)), feature } };

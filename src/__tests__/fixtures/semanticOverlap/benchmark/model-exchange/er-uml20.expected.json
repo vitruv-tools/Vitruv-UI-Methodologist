@@ -1,0 +1,16 @@
+{
+  "scenario": "ER -> UML 2.0 CD",
+  "family": "model-exchange",
+  "source": "er_ODM.ecore",
+  "target": "UML_2.0_CD.ecore",
+  "level": "class",
+  "provenance": "Recreated by hand, like ecore-uml20.expected.json: the original reference alignments of Kessentini et al. (2014) are lost; derived from the metamodels and the specifications of the languages.",
+  "correspondences": [
+    {"sources": ["ER.Entity"], "targets": ["uml2CD.Class"]},
+    {"sources": ["ER.Attribute"], "targets": ["uml2CD.Property"]},
+    {"sources": ["ER.Relationship"], "targets": ["uml2CD.Association"]},
+    {"sources": ["ER.RelationshipEnd"], "targets": ["uml2CD.Property"], "note": "association ends are properties in UML 2.0"},
+    {"sources": ["ER.ExistenceDependency", "ER.FunctionalDependency"], "targets": ["uml2CD.Association"], "uncertain": true, "note": "special relationships; UML 2.0 has no dedicated concept"}
+  ],
+  "unmatched": {"source": ["ER.PrimaryKey"], "note": "The UML 2.0 class-diagram metamodel has no key concept."}
+}

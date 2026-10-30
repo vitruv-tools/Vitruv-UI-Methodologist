@@ -1,6 +1,7 @@
 import { createWordNetSource } from '../../../utils/semanticOverlap/lexical/wordNetSource';
 import { OverlapResultFormatError, overlapResultToCsv, parseOverlapResult, serializeOverlapResult } from '../../../utils/semanticOverlap/overlapResult';
 import { runOverlapAnalysis } from '../../../utils/semanticOverlap/runOverlapAnalysis';
+import { improvedApproach } from '../../../utils/semanticOverlap/approaches/improvedApproach';
 import { resolveSettings } from '../../../utils/semanticOverlap/settings';
 import table from '../../../assets/wordnet/oewn-2025-synonyms.json';
 import { ecoreExcerpt, umlExcerpt } from './fixtures';
@@ -119,5 +120,112 @@ describe('approach and correspondence kinds', () => {
     const csv = overlapResultToCsv({ ...result, approach: { id: 'improved', version: '0.2' }, correspondences: [typed] });
     expect(csv).toContain('# approach: Improved 0.2\n');
     expect(csv.split('\n').find(line => line.startsWith('class,'))).toMatch(/,instance,type$/);
+  });
+});
+
+describe('kinds and fields of the improved approach 0.3', () => {
+  const first = result.correspondences[0];
+  const ref = (side: 'source' | 'target', qualifiedName: string, extra: object = {}) =>
+    ({ side, kind: 'class' as const, qualifiedName, name: qualifiedName.split('.').pop()!, ...extra });
+  const pathChild = {
+    ...first, id: 'c-1-f-1', level: 'feature', kind: 'path', children: undefined,
+    sources: [ref('source', 'tree.Tree.parent', { kind: 'reference', containingClass: 'tree.Tree' })],
+    targets: [ref('target', 'graph.Node.incoming.source', { kind: 'reference', containingClass: 'graph.Node', name: 'incoming.source', path: ['incoming', 'source'] })],
+  };
+  const split = { ...first, kind: 'split', sources: [ref('source', 'a.A')], targets: [ref('target', 'b.X'), ref('target', 'b.Y')], children: [pathChild] };
+  const merge = { ...first, id: 'c-2', kind: 'merge', sources: [ref('source', 'a.A'), ref('source', 'a.B')], targets: [ref('target', 'b.X')], children: [] };
+  const conditional = {
+    ...first, id: 'c-3', kind: 'conditional', fixed: true, sources: [ref('source', 'a.Brake')], targets: [ref('target', 'b.DiscBrake')],
+    condition: { attribute: 'a.Brake.kind', value: 'DISC' }, children: [],
+  };
+  const repair = {
+    rule: 'opposite', reason: 'X.owner and X.parts are opposites, but their counterparts are not',
+    removed: { level: 'feature', sources: ['a.X.owner'], targets: ['b.Y.items'], score: 0.27 },
+    kept: { level: 'feature', sources: ['a.X.parts'], targets: ['b.Y.items'], score: 0.55 },
+  };
+  const coverage = { source: { classes: 1, features: 0.5 }, target: { classes: 0.25, features: 0 } };
+  const extended = {
+    ...result,
+    approach: { id: 'improved', version: '0.3' },
+    correspondences: [split, merge, conditional],
+    summary: { ...result.summary, kindCounts: { split: 1, merge: 1, conditional: 1, path: 1 }, coverage },
+    repairs: [repair],
+    embeddingModel: { id: 'minilm', revision: 'r1', sha256: 'abc' },
+    embeddingBaseline: { class: 0.18, feature: 0.16 },
+    acceptanceThreshold: { value: 0.31, source: 'calibrated', note: 'calibrated on the benchmark suite (improved 0.3)' },
+  };
+  const alternative = (label: string, isDefault: boolean, correspondences: unknown[]) => ({
+    label, isDefault, objectives: { lexical: 0.5, structural: 0.4 }, correspondences,
+    unmatched: result.unmatched, summary: { matchedSourceClasses: 1, matchedTargetClasses: 1, overlapPercent: 50 },
+  });
+  const withAlternatives = {
+    ...extended,
+    alternatives: [alternative('lexical', false, [merge]), alternative('balanced', true, extended.correspondences), alternative('structural', false, [])],
+  };
+
+  it('round-trips path, split, merge and conditional correspondences with repairs, coverage and threshold', () => {
+    const json = JSON.stringify(extended);
+    expect(parseOverlapResult(json)).toEqual(JSON.parse(json));
+  });
+
+  it('round-trips alternatives whose default equals the main fields', () => {
+    const json = JSON.stringify(withAlternatives);
+    expect(parseOverlapResult(json).alternatives).toHaveLength(3);
+  });
+
+  it('names the current improved version on new results', () => {
+    expect(improvedApproach.version).toBe('0.3');
+  });
+
+  it('still reads a 0.2-era export with only same and instance kinds', () => {
+    const old = { ...result, approach: { id: 'improved', version: '0.2' }, summary: { ...result.summary, kindCounts: { same: 2, instance: 1 } } };
+    const parsed = parseOverlapResult(JSON.stringify(old));
+    expect(parsed.approach).toEqual({ id: 'improved', version: '0.2' });
+    expect(parsed.repairs).toBeUndefined();
+    expect(parsed.alternatives).toBeUndefined();
+  });
+
+  const replace = (patch: object) => () => JSON.stringify({ ...extended, ...patch });
+  const withFirst = (patch: object) => replace({ correspondences: [{ ...split, ...patch }] });
+  it.each([
+    ['a path on class level', withFirst({ kind: 'path' })],
+    ['a path child without a path element', withFirst({ children: [{ ...pathChild, targets: [ref('target', 'graph.Node.name')] }] })],
+    ['a path of length one', withFirst({ children: [{ ...pathChild, targets: [{ ...pathChild.targets[0], path: ['incoming'] }] }] })],
+    ['a path whose name does not end with it', withFirst({ children: [{ ...pathChild, targets: [{ ...pathChild.targets[0], qualifiedName: 'graph.Node.x' }] }] })],
+    ['a split with one target', withFirst({ targets: [ref('target', 'b.X')] })],
+    ['a merge with one source', replace({ correspondences: [{ ...merge, sources: [ref('source', 'a.A')] }] })],
+    ['a conditional without condition', replace({ correspondences: [{ ...conditional, condition: undefined }] })],
+    ['a conditional with an empty value', replace({ correspondences: [{ ...conditional, condition: { attribute: 'a.Brake.kind', value: '' } }] })],
+    ['a conditional with two targets', replace({ correspondences: [{ ...conditional, targets: [ref('target', 'b.X'), ref('target', 'b.Y')] }] })],
+    ['an unknown kind count', replace({ summary: { ...extended.summary, kindCounts: { similar: 1 } } })],
+    ['a coverage above 1', replace({ summary: { ...extended.summary, coverage: { ...coverage, source: { classes: 1.5, features: 0 } } } })],
+    ['a repair with an unknown rule', replace({ repairs: [{ ...repair, rule: 'naming' }] })],
+    ['a repair without kept side', replace({ repairs: [{ ...repair, kept: undefined }] })],
+    ['an embedding model without revision', replace({ embeddingModel: { id: 'minilm', sha256: 'abc' } })],
+    ['a threshold with an unknown source', replace({ acceptanceThreshold: { value: 0.3, source: 'guess' } })],
+    ['no default alternative', () => JSON.stringify({ ...withAlternatives, alternatives: withAlternatives.alternatives.map(a => ({ ...a, isDefault: false })) })],
+    ['four alternatives', () => JSON.stringify({ ...withAlternatives, alternatives: [...withAlternatives.alternatives, withAlternatives.alternatives[0]] })],
+  ])('rejects %s', (_label, make) => {
+    expect(() => parseOverlapResult(make())).toThrow(OverlapResultFormatError);
+  });
+
+  it('rejects alternatives whose default differs from the main fields', () => {
+    const inconsistent = { ...withAlternatives, correspondences: [merge] };
+    expect(() => parseOverlapResult(JSON.stringify(inconsistent))).toThrow('alternatives are inconsistent');
+  });
+
+  it('writes the condition as role, and repairs, threshold and alternative as comments', () => {
+    const typed = extended as unknown as Parameters<typeof overlapResultToCsv>[0];
+    const csv = overlapResultToCsv(typed);
+    expect(csv).toContain('# acceptance threshold: 0.31 (calibrated)\n');
+    expect(csv).toContain('# repair: opposite: removed a.X.owner -> b.Y.items (0.270)\n');
+    expect(csv).toContain('level,parent,sources,targets,score,structural,syntactic,kind,role\n');
+    expect(csv.split('\n').find(line => line.includes(',conditional,'))).toMatch(/,conditional,a\.Brake\.kind=DISC$/);
+    expect(csv).toMatch(/feature,c-1,tree\.Tree\.parent,graph\.Node\.incoming\.source,.*,path,$/m);
+    const shown = overlapResultToCsv(withAlternatives as unknown as Parameters<typeof overlapResultToCsv>[0], { alternative: 0 });
+    expect(shown).toContain('# alternative: lexical (selected)\n');
+    expect(shown.split('\n').filter(line => line.startsWith('class,'))).toHaveLength(1);
+    expect(overlapResultToCsv(withAlternatives as unknown as Parameters<typeof overlapResultToCsv>[0], { alternative: 1 }))
+      .toContain('# alternative: balanced (default)\n');
   });
 });

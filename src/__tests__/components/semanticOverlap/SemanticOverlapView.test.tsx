@@ -1,10 +1,10 @@
 import React from 'react';
-import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { SemanticOverlapView } from '../../../components/semanticOverlap/SemanticOverlapView';
 import { useSemanticOverlapStore } from '../../../store/SemanticOverlap';
 import type { LibraryMetaModel } from '../../../utils/metaModelList';
-import { correspondenceFor, sampleImprovedResult, sampleResult } from './sampleResult';
+import { correspondenceFor, sampleAlternativesResult, sampleImprovedResult, sampleResult } from './sampleResult';
 import { overlapResultToCsv, parseOverlapResult } from '../../../utils/semanticOverlap/overlapResult';
 import { runOverlapAnalysis } from '../../../utils/semanticOverlap/runOverlapAnalysis';
 import { createWordNetSource } from '../../../utils/semanticOverlap/lexical/wordNetSource';
@@ -204,6 +204,42 @@ describe('SemanticOverlapView', () => {
       expect(parseOverlapResult(json)).toEqual(result);
       fireEvent.click(screen.getByRole('button', { name: 'Export CSV' }));
       expect(mocks.download).toHaveBeenLastCalledWith(overlapResultToCsv(result), 'Ecore_excerpt-UML_excerpt-overlap.csv', 'text/csv;charset=utf-8');
+    });
+  });
+
+  describe('alternative results', () => {
+    const result = sampleAlternativesResult();
+    const listRows = () => screen.getAllByRole('row').filter(row => row.closest('table')?.getAttribute('aria-label') === 'Correspondences').slice(1);
+
+    it('preselects the balanced default and switches list and summary to another alternative', async () => {
+      await renderView();
+      finishWith(result);
+      expect(screen.getByRole('button', { name: 'Balanced (default)' })).toHaveAttribute('aria-pressed', 'true');
+      expect(listRows()).toHaveLength(result.correspondences.length);
+      fireEvent.click(within(screen.getByRole('group', { name: 'Alternative results' })).getByRole('button', { name: 'Lexical' }));
+      expect(store().selectedAlternative).toBe(0);
+      expect(listRows()).toHaveLength(1);
+      expect(screen.getByRole('region', { name: 'Overlap summary' })).toHaveTextContent('1 / 3 matched');
+    });
+
+    it('resets the selection when a new result arrives and hides the switcher without alternatives', async () => {
+      await renderView();
+      finishWith(result);
+      fireEvent.click(within(screen.getByRole('group', { name: 'Alternative results' })).getByRole('button', { name: 'Structural' }));
+      finishWith(sampleResult());
+      expect(store().selectedAlternative).toBeNull();
+      expect(screen.queryByRole('group', { name: 'Alternative results' })).not.toBeInTheDocument();
+    });
+
+    it('exports the shown alternative to CSV and the whole result to JSON', async () => {
+      mocks.download.mockReset();
+      await renderView();
+      finishWith(result);
+      fireEvent.click(within(screen.getByRole('group', { name: 'Alternative results' })).getByRole('button', { name: 'Structural' }));
+      fireEvent.click(screen.getByRole('button', { name: /CSV/ }));
+      expect(mocks.download.mock.calls[0][0]).toContain('# alternative: structural (selected)');
+      fireEvent.click(screen.getByRole('button', { name: /JSON/ }));
+      expect(parseOverlapResult(mocks.download.mock.calls[1][0]).alternatives).toHaveLength(3);
     });
   });
 });

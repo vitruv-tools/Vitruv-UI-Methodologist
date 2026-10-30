@@ -1,6 +1,10 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { themeVars, useTheme } from '../../theme/theme';
-import { isInstanceCorrespondence } from '../../utils/semanticOverlap/correspondenceKind';
+import { KIND_DASH, kindOf } from '../../utils/semanticOverlap/correspondenceKind';
+import type { CorrespondenceKind } from '../../utils/semanticOverlap/types';
+
+/** Canvas dash segments of a kind's outline (shorter than the diagram's, cells are small). */
+const outlineDash = (kind: CorrespondenceKind) => (KIND_DASH[kind] ?? '').split(' ').filter(Boolean).map(n => Math.max(1, Number(n) / 2));
 import { visibleCorrespondences } from '../../utils/semanticOverlap/linkDiagramLayout';
 import type { OverlapResult } from '../../utils/semanticOverlap/types';
 import { formatPercent } from './ScoreEdge';
@@ -55,15 +59,15 @@ export const SimilarityHeatmap: React.FC<SimilarityHeatmapProps> = ({
   const { rows, columns, overall, perMeasure } = result.classMatrix;
   const cellSize = heatmapCellSize(rows.length, columns.length);
 
-  /** "row,column" → correspondence id (and whether it is class ↔ instance), for every visible pair. */
+  /** "row,column" → correspondence id and kind, for every visible pair. */
   const chosen = useMemo(() => {
     const rowIndex = new Map(rows.map((name, i) => [name, i]));
     const columnIndex = new Map(columns.map((name, j) => [name, j]));
-    const cells = new Map<string, { id: string; instance: boolean }>();
+    const cells = new Map<string, { id: string; kind: CorrespondenceKind }>();
     for (const c of visibleCorrespondences(result, minScore)) {
       for (const s of c.sources) {
         for (const t of c.targets) {
-          cells.set(`${rowIndex.get(s.qualifiedName)},${columnIndex.get(t.qualifiedName)}`, { id: c.id, instance: isInstanceCorrespondence(c) });
+          cells.set(`${rowIndex.get(s.qualifiedName)},${columnIndex.get(t.qualifiedName)}`, { id: c.id, kind: kindOf(c) });
         }
       }
     }
@@ -84,12 +88,12 @@ export const SimilarityHeatmap: React.FC<SimilarityHeatmapProps> = ({
         ctx.fillRect(j * cellSize, i * cellSize, cellSize - 1, cellSize - 1);
       }
     }
-    for (const [key, { id, instance }] of chosen) {
+    for (const [key, { id, kind }] of chosen) {
       const [i, j] = key.split(',').map(Number);
       ctx.lineWidth = id === selectedId ? 3 : 2;
       ctx.strokeStyle = id === selectedId ? '#f59e0b' : '#0B1720';
-      // Class ↔ instance correspondences are outlined dashed, like their links in the diagram.
-      ctx.setLineDash?.(instance ? [3, 2] : []);
+      // Each kind other than same-concept has its own dash pattern, like its links in the diagram.
+      ctx.setLineDash?.(outlineDash(kind));
       ctx.strokeRect(j * cellSize + 1, i * cellSize + 1, cellSize - 3, cellSize - 3);
     }
     ctx.setLineDash?.([]);

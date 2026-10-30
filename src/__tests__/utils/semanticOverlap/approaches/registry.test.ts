@@ -12,8 +12,8 @@ describe('approach registry', () => {
   it('offers the paper and the improved approach', () => {
     expect(Object.keys(APPROACHES)).toEqual(['paper', 'improved']);
     expect(APPROACHES.paper).toMatchObject({ label: 'Kessentini et al. 2014 (paper)', version: '2014.1' });
-    // Version 0.2: defaults set from the ablation run over the benchmark suite.
-    expect(APPROACHES.improved).toMatchObject({ label: 'Improved', version: '0.2' });
+    // Version 0.3: eight more improvements; the ablation over 17 scenarios kept type-object as default.
+    expect(APPROACHES.improved).toMatchObject({ label: 'Improved', version: '0.3' });
     // The improved approach meets the Brake ↔ BOM and Ecore → UML 2.0 benchmark thresholds.
     expect(DEFAULT_APPROACH).toBe('improved');
   });
@@ -31,7 +31,7 @@ describe('approach registry', () => {
   it('labels improved results', () => {
     const settings = { ...APPROACHES.improved.defaultSettings(), seed: 5 };
     const result = APPROACHES.improved.run({ source: ecoreExcerpt(), target: umlExcerpt(), settings }, deps);
-    expect(result.approach).toEqual({ id: 'improved', version: '0.2' });
+    expect(result.approach).toEqual({ id: 'improved', version: '0.3' });
   });
 
   it('names the resources an approach needs', () => {

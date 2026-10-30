@@ -1,0 +1,26 @@
+{
+  "scenario": "Ecore -> UML 1.4 CD",
+  "family": "model-exchange",
+  "source": "Ecore.ecore",
+  "target": "UML_1.4.2_CD.ecore",
+  "level": "class",
+  "provenance": "Recreated by hand, like ecore-uml20.expected.json: the original reference alignments of Kessentini et al. (2014) are lost; derived from the metamodels and the specifications of the languages.",
+  "correspondences": [
+    {"sources": ["ecore.EModelElement"], "targets": ["UML_14.Element"]},
+    {"sources": ["ecore.ENamedElement"], "targets": ["UML_14.ModelElement"]},
+    {"sources": ["ecore.EClassifier"], "targets": ["UML_14.Classifier"]},
+    {"sources": ["ecore.EClass"], "targets": ["UML_14.Class"]},
+    {"sources": ["ecore.EDataType"], "targets": ["UML_14.DataType"]},
+    {"sources": ["ecore.EDataType"], "targets": ["UML_14.Primitive"], "uncertain": true, "note": "Ecore has no separate primitive type class"},
+    {"sources": ["ecore.EEnum"], "targets": ["UML_14.Enumeration"]},
+    {"sources": ["ecore.EEnumLiteral"], "targets": ["UML_14.EnumerationLiteral"]},
+    {"sources": ["ecore.EOperation"], "targets": ["UML_14.Operation"]},
+    {"sources": ["ecore.EParameter"], "targets": ["UML_14.Parameter"]},
+    {"sources": ["ecore.EStructuralFeature"], "targets": ["UML_14.StructuralFeature"]},
+    {"sources": ["ecore.EAttribute"], "targets": ["UML_14.Attribute"]},
+    {"sources": ["ecore.EReference"], "targets": ["UML_14.AssociationEnd"]},
+    {"sources": ["ecore.ETypedElement"], "targets": ["UML_14.Multiplicity"], "uncertain": true, "note": "Ecore puts bounds on ETypedElement, UML 1.4 on a Multiplicity object"},
+    {"sources": ["ecore.EAnnotation"], "targets": ["UML_14.Comment"], "uncertain": true, "note": "annotations carry key/value details, comments only text"}
+  ],
+  "unmatched": {"source": ["ecore.EObject", "ecore.EFactory", "ecore.EStringToStringMapEntry", "ecore.EPackage"], "note": "The UML 1.4 class-diagram metamodel has no package, factory or map-entry concept."}
+}

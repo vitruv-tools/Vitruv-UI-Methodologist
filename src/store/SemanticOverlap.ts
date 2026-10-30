@@ -35,6 +35,8 @@ interface SemanticOverlapState {
   collapsedUnmatched: boolean;
   /** Class correspondences whose attribute/reference correspondences are shown (diagram and list). */
   expandedCorrespondenceIds: string[];
+  /** Index of the shown alternative (`result.alternatives`); null for results without alternatives. */
+  selectedAlternative: number | null;
 
   setSource(id: number | null): void;
   setTarget(id: number | null): void;
@@ -54,6 +56,7 @@ interface SemanticOverlapState {
   setMinScore(value: number): void;
   setCollapsedUnmatched(value: boolean): void;
   toggleExpanded(correspondenceId: string): void;
+  selectAlternative(index: number): void;
   reset(): void;
 }
 
@@ -87,8 +90,30 @@ const initialState = () => {
     minScore: DEFAULT_MIN_SCORE,
     collapsedUnmatched: false,
     expandedCorrespondenceIds: [] as string[],
+    selectedAlternative: null as number | null,
   };
 };
+
+/** The default alternative of a result, or null when it has none. */
+const defaultAlternative = (result: OverlapResult | null) => {
+  const index = result?.alternatives?.findIndex(alternative => alternative.isDefault) ?? -1;
+  return index >= 0 ? index : null;
+};
+
+/**
+ * The result as the views show it: with alternatives, the selected alternative's correspondences,
+ * unmatched classes and counts replace the main fields; otherwise the result itself.
+ */
+export function shownResult(result: OverlapResult, selectedAlternative: number | null): OverlapResult {
+  const alternative = selectedAlternative === null ? undefined : result.alternatives?.[selectedAlternative];
+  if (!alternative) return result;
+  return {
+    ...result,
+    correspondences: alternative.correspondences,
+    unmatched: alternative.unmatched,
+    summary: { ...result.summary, ...alternative.summary },
+  };
+}
 
 /** A new selection invalidates the running analysis and the previous result. */
 const selectionChanged = (sourceId: number | null, targetId: number | null) => ({
@@ -102,6 +127,7 @@ const selectionChanged = (sourceId: number | null, targetId: number | null) => (
   selectedCorrespondenceId: null,
   hoveredCell: null,
   expandedCorrespondenceIds: [],
+  selectedAlternative: null,
 });
 
 export const useSemanticOverlapStore = create<SemanticOverlapState>((set, get) => ({
@@ -145,6 +171,7 @@ export const useSemanticOverlapStore = create<SemanticOverlapState>((set, get) =
     set({
       status: 'done', result, runId: null, progress: null,
       selectedCorrespondenceId: null, hoveredCell: null, expandedCorrespondenceIds: [],
+      selectedAlternative: defaultAlternative(result),
     });
   },
   failRun: (runId, message) => {
@@ -167,5 +194,7 @@ export const useSemanticOverlapStore = create<SemanticOverlapState>((set, get) =
       ? state.expandedCorrespondenceIds.filter(other => other !== id)
       : [...state.expandedCorrespondenceIds, id],
   })),
+  // Correspondence ids repeat across alternatives, so selection and expansion start over.
+  selectAlternative: index => set({ selectedAlternative: index, selectedCorrespondenceId: null, hoveredCell: null, expandedCorrespondenceIds: [] }),
   reset: () => set(initialState()),
 }));

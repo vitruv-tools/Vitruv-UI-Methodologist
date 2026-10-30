@@ -2,7 +2,7 @@ import React from 'react';
 import { fireEvent, render, screen, within } from '@testing-library/react';
 import { CorrespondenceList } from '../../../components/semanticOverlap/CorrespondenceList';
 import { formatPercent } from '../../../components/semanticOverlap/ScoreEdge';
-import { correspondenceFor, sampleImprovedResult, sampleResult } from './sampleResult';
+import { correspondenceFor, sampleEmbeddingResult, sampleImprovedResult, sampleKindsResult, sampleResult } from './sampleResult';
 
 const result = sampleResult();
 const bodyRows = () => within(screen.getByRole('table', { name: 'Correspondences' })).getAllByRole('row').slice(1);
@@ -14,6 +14,20 @@ describe('CorrespondenceList', () => {
     expect(rows).toHaveLength(result.correspondences.length);
     expect(rows[0]).toHaveTextContent(formatPercent(result.correspondences[0].score));
     expect(screen.getByText('EAttribute, EReference')).toBeInTheDocument();
+  });
+
+  it('shows the embedding similarity next to the other measures when the result used it', () => {
+    render(<CorrespondenceList result={result} minScore={0} selectedId={null} onSelect={vi.fn()} expandedIds={[]} onToggleExpand={vi.fn()} />);
+    expect(screen.queryByRole('button', { name: 'Meaning (embedding)' })).not.toBeInTheDocument();
+  });
+
+  it('lists the embedding score per correspondence and sorts by it', () => {
+    const withEmbeddings = sampleEmbeddingResult();
+    render(<CorrespondenceList result={withEmbeddings} minScore={0} selectedId={null} onSelect={vi.fn()} expandedIds={[]} onToggleExpand={vi.fn()} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Meaning (embedding)' }));
+    const best = [...withEmbeddings.correspondences].sort((a, b) => (b.scores.embedding ?? 0) - (a.scores.embedding ?? 0))[0];
+    expect(best.scores.embedding).toBeDefined();
+    expect(bodyRows()[0]).toHaveTextContent(formatPercent(best.scores.embedding!));
   });
 
   it('re-sorts by the structural score', () => {
@@ -87,5 +101,37 @@ describe('CorrespondenceList', () => {
       expect(screen.getByText('instance of NumberFeatureValue (value)')).toBeInTheDocument();
     });
   });
-});
 
+  describe('path, split, merge and conditional correspondences', () => {
+    const kinds = sampleKindsResult();
+    const list = (props: Partial<React.ComponentProps<typeof CorrespondenceList>> = {}) => render(
+      <CorrespondenceList result={kinds} minScore={0} selectedId={null} onSelect={vi.fn()} expandedIds={[]} onToggleExpand={vi.fn()} {...props} />);
+
+    it('marks each kind with its own badge', () => {
+      list({ expandedIds: ['c-1'] });
+      expect(screen.getByText('split into 2')).toBeInTheDocument();
+      expect(screen.getByText('merge of 2')).toBeInTheDocument();
+      expect(screen.getByText('containment = true')).toBeInTheDocument();
+      expect(screen.getByText('path ownedAttributes.isDerived')).toBeInTheDocument();
+    });
+
+    it('offers the kinds present in the result as filters, including those of attribute rows', () => {
+      list();
+      const options = within(screen.getByLabelText('Correspondence kind')).getAllByRole('option').map(o => o.textContent);
+      expect(options).toEqual(['All', 'Path', 'Split', 'Merge', 'Conditional']);
+      fireEvent.change(screen.getByLabelText('Correspondence kind'), { target: { value: 'conditional' } });
+      expect(bodyRows()).toHaveLength(1);
+      fireEvent.change(screen.getByLabelText('Correspondence kind'), { target: { value: 'path' } });
+      expect(bodyRows()[0]).toHaveTextContent('EClass');
+    });
+
+    it('expands a conditional correspondence to its deciding attribute and value', () => {
+      const onToggleExpand = vi.fn();
+      const { rerender } = list({ onToggleExpand });
+      fireEvent.click(screen.getByRole('button', { name: 'Show attribute and reference matches of EReference' }));
+      expect(onToggleExpand).toHaveBeenCalledWith('c-3');
+      rerender(<CorrespondenceList result={kinds} minScore={0} selectedId={null} onSelect={vi.fn()} expandedIds={['c-3']} onToggleExpand={onToggleExpand} />);
+      expect(screen.getByText(/Condition:/).closest('td')).toHaveTextContent('Condition: ecore.EReference.containment = true selects Association');
+    });
+  });
+});

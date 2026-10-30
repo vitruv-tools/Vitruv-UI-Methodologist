@@ -17,3 +17,5 @@
 /src/__tests__/fixtures/semanticOverlap/benchmark/metamodels/
 # Brake Specification Model (KIT-internal brake case study, never committed)
 /src/__tests__/fixtures/semanticOverlap/benchmark/brake-bom/brakesystem.ecore
+# Sentence-embedding model files (fetched by scripts/fetch-embedding-model.mjs, never committed)
+/public/models/

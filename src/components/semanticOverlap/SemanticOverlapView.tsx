@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useSemanticOverlapRun } from '../../hooks/useSemanticOverlapRun';
-import { useSemanticOverlapStore, type OverlapTab } from '../../store/SemanticOverlap';
+import { shownResult, useSemanticOverlapStore, type OverlapTab } from '../../store/SemanticOverlap';
 import { themeVars } from '../../theme/theme';
 import { fetchLibraryMetaModels, type LibraryMetaModel } from '../../utils/metaModelList';
 import { downloadTextAsFile } from '../../utils/downloadFile';
@@ -16,6 +16,8 @@ import { CorrespondenceList } from './CorrespondenceList';
 import { MetamodelPairPicker } from './MetamodelPairPicker';
 import { OverlapSummary } from './OverlapSummary';
 import { SimilarityHeatmap } from './SimilarityHeatmap';
+import { AlternativeSwitcher } from './AlternativeSwitcher';
+import { RepairsPanel } from './RepairsPanel';
 import { TypeObjectPatternPanel } from './TypeObjectPatternPanel';
 import { WordNetAttribution } from './WordNetAttribution';
 
@@ -83,7 +85,10 @@ export const SemanticOverlapView: React.FC = () => {
   const byId = useMemo(() => new Map((models ?? []).map(m => [m.id, m])), [models]);
   const sourceModel = store.sourceId !== null ? byId.get(store.sourceId) : undefined;
   const targetModel = store.targetId !== null ? byId.get(store.targetId) : undefined;
-  const result = store.result;
+  // The views show the selected alternative; the JSON export keeps the whole result.
+  const fullResult = store.result;
+  const result = useMemo(() => (fullResult ? shownResult(fullResult, store.selectedAlternative) : null),
+    [fullResult, store.selectedAlternative]);
 
   return (
     <div style={{ flex: 1, minHeight: 0, overflow: 'auto', padding: '28px 32px', display: 'flex', flexDirection: 'column', gap: 18 }}>
@@ -120,7 +125,7 @@ export const SemanticOverlapView: React.FC = () => {
           type="button"
           style={{ ...secondaryButton, opacity: result ? 1 : 0.5 }}
           disabled={!result}
-          onClick={() => result && downloadTextAsFile(serializeOverlapResult(result), exportFileName(result, 'json'), 'application/json;charset=utf-8')}
+          onClick={() => fullResult && downloadTextAsFile(serializeOverlapResult(fullResult), exportFileName(fullResult, 'json'), 'application/json;charset=utf-8')}
         >
           Export JSON
         </button>
@@ -128,7 +133,9 @@ export const SemanticOverlapView: React.FC = () => {
           type="button"
           style={{ ...secondaryButton, opacity: result ? 1 : 0.5 }}
           disabled={!result}
-          onClick={() => result && downloadTextAsFile(overlapResultToCsv(result), exportFileName(result, 'csv'), 'text/csv;charset=utf-8')}
+          onClick={() => fullResult && downloadTextAsFile(
+            overlapResultToCsv(fullResult, store.selectedAlternative === null ? undefined : { alternative: store.selectedAlternative }),
+            exportFileName(fullResult, 'csv'), 'text/csv;charset=utf-8')}
         >
           Export CSV
         </button>
@@ -170,9 +177,13 @@ export const SemanticOverlapView: React.FC = () => {
       {result && (
         <>
           <OverlapSummary result={result} />
+          {result.alternatives && result.alternatives.length > 1 && (
+            <AlternativeSwitcher alternatives={result.alternatives} selected={store.selectedAlternative} onSelect={store.selectAlternative} />
+          )}
           {result.typeObjectPatterns && result.typeObjectPatterns.length > 0 && (
             <TypeObjectPatternPanel patterns={result.typeObjectPatterns} />
           )}
+          {result.repairs && result.repairs.length > 0 && <RepairsPanel repairs={result.repairs} />}
           <div role="tablist" aria-label="Result views" style={{ display: 'flex', gap: 4, borderBottom: `1px solid ${themeVars.border}` }}>
             {TABS.map(tab => (
               <button

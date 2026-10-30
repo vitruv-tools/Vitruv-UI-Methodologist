@@ -1,0 +1,17 @@
+{
+  "scenario": "Wimmer 4 (R2C, R2A)",
+  "family": "wimmer",
+  "provenance": "Hand-made after Wimmer et al. 2010, Benchmark Example 4 (Fig. 8); entries derived from the example's challenge list",
+  "source": "wimmer/example-4/source.ecore",
+  "target": "wimmer/example-4/target.ecore",
+  "correspondences": [
+    {"sources": ["lhs4.Professor"], "targets": ["rhs4.Professor"]},
+    {"sources": ["lhs4.Publication"], "targets": ["rhs4.Publication"]}
+  ],
+  "features": [
+    {"sources": ["lhs4.Professor.name"], "targets": ["rhs4.Professor.name"]},
+    {"sources": ["lhs4.Publication.name"], "targets": ["rhs4.Publication.name"]},
+    {"sources": ["lhs4.Professor.publications"], "targets": ["rhs4.Professor.entries.publication"], "kind": "path", "note": "R2C: the reference is reified as DBLPEntry; the navigation entries.publication carries it"}
+  ],
+  "unmatched": {"target": ["rhs4.DBLPEntry", "rhs4.DBLPEntry.id"], "note": "R2C and R2A: the class DBLPEntry and its id stem from the reference publications, which the engine cannot express as a class correspondence"}
+}

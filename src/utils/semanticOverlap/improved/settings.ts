@@ -3,6 +3,7 @@
  * import from the paper pipeline for logic.
  */
 import type { AnalysisSettings, Effort, GaSettings, SaSettings } from '../types';
+import { DEFAULT_EMBEDDING_MODEL, isEmbeddingModelId, type EmbeddingModelId } from './embeddings/modelManifest';
 
 const BALANCED_GA: GaSettings = {
   populationSize: 60,
@@ -106,9 +107,10 @@ export function validateSettings(settings: AnalysisSettings): string[] {
   return problems;
 }
 
-/** The nine switchable improvements of the improved approach. */
+/** The switchable improvements of the improved approach: nine from 0.2, eight added in 0.3. */
 export const IMPROVEMENT_IDS = [
   'adaptive-weights', 'hypernyms', 'compounds', 'idf', 'roles', 'datatypes', 'type-object', 'flooding', 'hierarchy-both',
+  'embeddings', 'structure-types', 'consistency', 'calibrated-null', 'paths', 'split-merge', 'conditional', 'alternatives',
 ] as const;
 export type ImprovementId = typeof IMPROVEMENT_IDS[number];
 
@@ -122,6 +124,14 @@ export const IMPROVEMENT_LABELS: Record<ImprovementId, string> = {
   'type-object': 'Type-object pattern',
   flooding: 'Similarity flooding',
   'hierarchy-both': 'Hierarchy collapsing (both sides)',
+  embeddings: 'Sentence embeddings (local model)',
+  'structure-types': 'Data-structure similarity',
+  consistency: 'Consistency repair',
+  'calibrated-null': 'Calibrated acceptance threshold',
+  paths: 'Path correspondences',
+  'split-merge': 'Class split / merge',
+  conditional: 'Conditional correspondences',
+  alternatives: 'Alternative results',
 };
 
 export interface ImprovementParams {
@@ -135,6 +145,20 @@ export interface ImprovementParams {
   datatypeWeight: number;
   /** Minimum concrete subclasses of a base class to count as type-object counterpart. */
   typeObjectMinSubclasses: number;
+  embeddingWeight: number;
+  embeddingModel: EmbeddingModelId;
+  /** Above this many distinct element descriptions the embedding measure is skipped (time budget). */
+  embeddingMaxTexts: number;
+  structureTypesWeight: number;
+  /** Flattened features compared per class at most. */
+  structureTypesMaxSignatures: number;
+  /** Null score used instead of the settings' one when the calibrated threshold is on. */
+  calibratedNullScore: number;
+  /** Classes one class may be split into or merged from at most. */
+  splitMaxParts: number;
+  /** Features in a path correspondence; fixed at 2. */
+  pathMaxLength: number;
+  alternativesCount: number;
 }
 
 export interface ImprovedSettings extends AnalysisSettings {
@@ -144,8 +168,11 @@ export interface ImprovedSettings extends AnalysisSettings {
 
 /**
  * Improvements switched on by default: the combination selected by the ablation over the benchmark
- * suite. Only the type-object pattern changed the average F-measure by at least 0.02 there; the
- * others stay available as switches.
+ * suite (version 0.3: 17 scenarios in five families, decided on family averages). Only the type-object
+ * pattern raised the family-averaged F-measure by at least 0.02 without a family losing more than
+ * 0.02. Conditional correspondences (+0.10 on the Wimmer cases) and sentence embeddings (+0.04 on the
+ * model-exchange pairs) helped single families but stayed below the rule; all stay available as
+ * switches.
  */
 export const DEFAULT_COMBINATION: readonly ImprovementId[] = ['type-object'];
 
@@ -157,6 +184,15 @@ export const DEFAULT_PARAMS: ImprovementParams = {
   roleWeight: 0.5,
   datatypeWeight: 0.5,
   typeObjectMinSubclasses: 2,
+  embeddingWeight: 0.75,
+  embeddingModel: DEFAULT_EMBEDDING_MODEL,
+  embeddingMaxTexts: 3000,
+  structureTypesWeight: 0.5,
+  structureTypesMaxSignatures: 48,
+  calibratedNullScore: 0.25,
+  splitMaxParts: 3,
+  pathMaxLength: 2,
+  alternativesCount: 3,
 };
 
 export const improvementsOf = (enabled: readonly ImprovementId[]): Record<ImprovementId, boolean> =>
@@ -168,11 +204,17 @@ export const DEFAULT_IMPROVED_SETTINGS: ImprovedSettings = {
   params: DEFAULT_PARAMS,
 };
 
-/** Like {@link resolveSettings}, plus improvements and their parameters. */
+/**
+ * Like {@link resolveSettings}, plus improvements and their parameters. Missing improvement keys and
+ * parameters (settings saved by an older version) get their defaults.
+ */
 export function resolveImprovedSettings(partial: Partial<ImprovedSettings> = {}, effort?: Effort): ImprovedSettings {
   return {
     ...resolveSettings(partial, effort),
-    improvements: { ...DEFAULT_IMPROVED_SETTINGS.improvements, ...partial.improvements },
+    // Given improvements are complete as far as their version knew them; newer ones stay off.
+    improvements: partial.improvements
+      ? { ...improvementsOf([]), ...partial.improvements }
+      : DEFAULT_IMPROVED_SETTINGS.improvements,
     params: { ...DEFAULT_PARAMS, ...partial.params },
   };
 }
@@ -197,6 +239,19 @@ export function validateImprovedSettings(settings: ImprovedSettings): string[] {
   if (!isIntInRange(params.typeObjectMinSubclasses, 2, Number.MAX_SAFE_INTEGER)) {
     problems.push('Minimum subclasses for the type-object pattern must be a whole number of at least 2.');
   }
+  if (!(params.embeddingWeight >= 0)) problems.push('Embedding weight must not be negative.');
+  if (!isEmbeddingModelId(params.embeddingModel)) problems.push('Embedding model must be one of the known models.');
+  if (!isIntInRange(params.embeddingMaxTexts, 100, 20000)) {
+    problems.push('Maximum embedded descriptions must be a whole number from 100 to 20000.');
+  }
+  if (!(params.structureTypesWeight >= 0)) problems.push('Data-structure weight must not be negative.');
+  if (!isIntInRange(params.structureTypesMaxSignatures, 8, 200)) {
+    problems.push('Compared features per class must be a whole number from 8 to 200.');
+  }
+  if (!inRange(params.calibratedNullScore, 0, 1)) problems.push('Calibrated null score must be between 0 and 1.');
+  if (!isIntInRange(params.splitMaxParts, 2, 3)) problems.push('Split/merge parts must be a whole number from 2 to 3.');
+  if (params.pathMaxLength !== 2) problems.push('Path length must be 2.');
+  if (!isIntInRange(params.alternativesCount, 1, 3)) problems.push('Number of alternatives must be a whole number from 1 to 3.');
   return problems;
 }
 

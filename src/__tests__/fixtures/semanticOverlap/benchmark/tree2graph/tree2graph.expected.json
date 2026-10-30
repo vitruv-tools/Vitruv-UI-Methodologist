@@ -1,0 +1,15 @@
+{
+  "scenario": "Tree -> Graph",
+  "family": "tree2graph",
+  "provenance": "Hand-made after the Epsilon Tree2Graph example (Fang 2022, Fig. 4.4/4.5). Edge also carries tree structure (parent links), but it is not a split of Tree; left out to keep one kind per class pair.",
+  "source": "tree2graph/tree.ecore",
+  "target": "tree2graph/graph.ecore",
+  "correspondences": [
+    {"sources": ["tree.Tree"], "targets": ["graph.Node"]}
+  ],
+  "features": [
+    {"sources": ["tree.Tree.label"], "targets": ["graph.Node.name"]},
+    {"sources": ["tree.Tree.parent"], "targets": ["graph.Node.incoming.source"], "kind": "path"}
+  ],
+  "unmatched": {"target": ["graph.Graph"], "note": "no root container on the tree side"}
+}

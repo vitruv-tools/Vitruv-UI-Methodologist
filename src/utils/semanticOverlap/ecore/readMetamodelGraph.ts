@@ -111,6 +111,7 @@ export function readMetamodelGraph(ecoreText: string, ref: MetamodelRef): Metamo
       containment: el.getAttribute('containment') === 'true',
       opposite: oppositeRef?.local ? resolveFeaturePath(oppositeRef.path, pathToQualified) : null,
       ...(el.getAttribute('iD') === 'true' ? { isId: true } : {}),
+      ...(el.getAttribute('ordered') === 'false' ? { ordered: false } : {}),
     };
   };
 

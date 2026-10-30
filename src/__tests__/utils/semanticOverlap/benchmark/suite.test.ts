@@ -3,8 +3,8 @@ import path from 'node:path';
 import type { Correspondence, ElementRef, OverlapResult } from '../../../../utils/semanticOverlap/types';
 import { sampleResult } from '../../../components/semanticOverlap/sampleResult';
 import {
-  BENCHMARK_DIR, FIXTURES_DIR, evaluate, loadScenario, pairKeys, readReference, reverseScenario, scenarios, splitByLevel,
-  type Reference,
+  BENCHMARK_DIR, FAMILY_IDS, FIXTURES_DIR, evaluate, familyMeans, loadScenario, pairKeys, readReference, reverseScenario, scenarios,
+  splitByLevel, type Reference,
 } from './suite';
 
 const ref = (qualifiedName: string, side: 'source' | 'target', kind: ElementRef['kind'] = 'class'): ElementRef =>
@@ -79,12 +79,53 @@ describe('benchmark suite', () => {
     expect(split.features).toEqual([{ sources: ['a.A.f'], targets: ['b.A.g'] }]);
   });
 
-  it('lists the four scenarios with their origin', () => {
-    expect(scenarios().map(s => [s.id, s.origin])).toEqual([
-      ['fig1', 'committed'], ['ecore-uml20', 'downloaded'], ['brake-bom', 'local'], ['bom-brake', 'local'],
+  it('lists the 17 scenarios in 5 families with their origin', () => {
+    expect(scenarios().map(s => [s.id, s.family, s.origin])).toEqual([
+      ['fig1', 'fig1', 'committed'], ['ecore-uml20', 'model-exchange', 'downloaded'],
+      ['brake-bom', 'brake-bom', 'local'], ['bom-brake', 'brake-bom', 'local'],
+      ['uml14-uml20', 'model-exchange', 'downloaded'], ['ecore-uml14', 'model-exchange', 'downloaded'],
+      ['er-uml20', 'model-exchange', 'downloaded'], ['webml-uml20', 'model-exchange', 'downloaded'],
+      ['er-ecore', 'model-exchange', 'downloaded'], ['webml-ecore', 'model-exchange', 'downloaded'],
+      ...[1, 2, 3, 4, 5, 6].map(k => [`wimmer-${k}`, 'wimmer', 'committed']),
+      ['tree2graph', 'tree2graph', 'committed'],
     ]);
+    expect(new Set(scenarios().map(s => s.family))).toEqual(new Set(FAMILY_IDS));
     const fig1 = loadScenario('fig1')!;
     expect(fig1.reference.correspondences).toHaveLength(2);
     expect(fig1.reference.features).toHaveLength(4);
+  });
+
+  it('averages within families, then over the available families', () => {
+    const f = (fMeasure: number) => ({ precision: fMeasure, recall: fMeasure, fMeasure });
+    const { perFamily, average } = familyMeans({ fig1: f(1), 'wimmer-1': f(0.2), 'wimmer-2': f(0.4), tree2graph: f(0) });
+    expect(perFamily.wimmer?.fMeasure).toBeCloseTo(0.3);
+    // model-exchange and brake-bom are missing (skipped) and do not count.
+    expect(perFamily['model-exchange']).toBeUndefined();
+    expect(average.fMeasure).toBeCloseTo((1 + 0.3 + 0) / 3);
+  });
+
+  it('builds keys for path, split, merge and conditional entries', () => {
+    expect([...pairKeys([
+      { sources: ['t.Tree.parent'], targets: ['g.Node.incoming.source'], kind: 'path' },
+      { sources: ['a.A'], targets: ['b.X', 'b.Y'], kind: 'split' },
+      { sources: ['a.A', 'a.B'], targets: ['b.Z'], kind: 'merge' },
+      { sources: ['a.R'], targets: ['b.P'], kind: 'conditional', condition: { attribute: 'a.R.kind', value: 'Professor' } },
+    ])]).toEqual([
+      't.Tree.parent -> g.Node.incoming.source #path',
+      'a.A -> b.X #split', 'a.A -> b.Y #split',
+      'a.A -> b.Z #merge', 'a.B -> b.Z #merge',
+      'a.R -> b.P #conditional/a.R.kind=Professor',
+    ]);
+    const conditional = correspondence(['a.R'], ['b.P'], { kind: 'conditional', condition: { attribute: 'a.R.kind', value: 'Professor' } });
+    const reference: Reference = { correspondences: [{ sources: ['a.R'], targets: ['b.P'], kind: 'conditional', condition: { attribute: 'a.R.kind', value: 'Professor' } }] };
+    expect(evaluate(resultWith([conditional]), reference).class.fMeasure).toBe(1);
+    const otherValue = { ...conditional, condition: { attribute: 'a.R.kind', value: 'Assistant' } };
+    expect(evaluate(resultWith([otherValue]), reference).class.fMeasure).toBe(0);
+  });
+
+  it('reads the Tree2Graph reference with its path entry', () => {
+    const reference = readReference(readFileSync(path.join(BENCHMARK_DIR, 'tree2graph/tree2graph.expected.json'), 'utf8'));
+    expect(reference.correspondences).toEqual([{ sources: ['tree.Tree'], targets: ['graph.Node'] }]);
+    expect(reference.features?.find(e => e.kind === 'path')).toMatchObject({ sources: ['tree.Tree.parent'], targets: ['graph.Node.incoming.source'] });
   });
 });

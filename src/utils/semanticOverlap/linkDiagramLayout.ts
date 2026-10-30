@@ -1,6 +1,6 @@
 import type { Edge, Node } from 'reactflow';
-import type { Correspondence, ElementRef, MatchLevel, OverlapResult, Side } from './types';
-import { instanceLabel } from './correspondenceKind';
+import type { Correspondence, CorrespondenceKind, ElementRef, MatchLevel, OverlapResult, Side } from './types';
+import { instanceLabel, structuralKindLabel } from './correspondenceKind';
 
 export const OVERLAP_CLASS_NODE = 'overlapClass';
 export const SCORE_EDGE = 'score';
@@ -37,11 +37,16 @@ export interface ScoreEdgeData {
   selected: boolean;
   /** Set for class ↔ instance correspondences, e.g. "instance of ItemType"; drawn dashed. */
   instanceLabel?: string;
+  /** Set for path, split, merge and conditional correspondences, with their label ("kind = DISC"). */
+  kind?: CorrespondenceKind;
+  kindLabel?: string;
 }
 
 const instanceData = (c: Correspondence) => {
   const label = instanceLabel(c);
-  return label ? { instanceLabel: label } : {};
+  if (label) return { instanceLabel: label };
+  const other = structuralKindLabel(c);
+  return other && c.kind ? { kind: c.kind, kindLabel: other } : {};
 };
 
 export interface LinkDiagramOptions {

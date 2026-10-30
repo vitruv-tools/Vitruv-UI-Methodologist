@@ -11,6 +11,7 @@ import { BOM_FILE, BRAKE_FILE, ecoreExcerpt, fig1Expected, loadEcore, umlExcerpt
 import { createHypernymSource, type HypernymTable } from '../../../../utils/semanticOverlap/improved/lexical/hypernymSource';
 import hypernymTable from '../../../../assets/wordnet/oewn-2025-hypernyms.json';
 import { assembly, shop } from './typeObject/typeObjectFixtures';
+import { correspondenceKeys, loadScenario, pairKeys } from '../benchmark/suite';
 
 const deps = { lexical: createWordNetSource(table), now: () => 0, createId: () => 'r' };
 const run = (source: MetamodelGraph, target: MetamodelGraph, improvements: ImprovementId[], seed = 1) =>
@@ -96,5 +97,98 @@ describe('improved analysis defaults', () => {
     const found = fig1Expected().filter(e => keys.has(key(e.sources, e.targets))
       || e.sources.every(s => e.targets.every(t => pairKeys.has(key([s], [t])))));
     expect(found.length).toBeGreaterThanOrEqual(5);
+  });
+});
+
+describe('improved analysis with the structure-based improvements of 0.3', () => {
+  const withParams = (improvements: ImprovementId[], params: Record<string, unknown> = {}) => runImprovedAnalysis({
+    source: ecoreExcerpt(), target: umlExcerpt(),
+    settings: resolveImprovedSettings({ seed: 1, improvements: improvementsOf(improvements), params: params as never }, 'fast'),
+  }, deps);
+
+  it('adds the data-structure measure as a scored, listed class measure', () => {
+    const result = withParams(['structure-types']);
+    expect(result.engine.measures.map(m => m.id)).toContain('structure-types');
+    expect(result.classMatrix.perMeasure?.['structure-types']).toHaveLength(9);
+    expect(result.correspondences.some(c => c.scores['structure-types'] !== undefined)).toBe(true);
+  });
+
+  it('reports repairs and coverage with consistency repair on, and none without', () => {
+    const result = withParams(['consistency']);
+    expect(Array.isArray(result.repairs)).toBe(true);
+    expect(result.summary.coverage?.source.classes).toBeGreaterThan(0);
+    expect(withParams([]).repairs).toBeUndefined();
+  });
+
+  it('uses the calibrated null score and shows it with its derivation', () => {
+    const result = withParams(['calibrated-null'], { calibratedNullScore: 0.9 });
+    expect(result.acceptanceThreshold).toEqual({ value: 0.9, source: 'calibrated', note: 'calibrated on the benchmark suite (improved 0.3)' });
+    // With τ = 0.9 hardly a pair is worth matching.
+    expect(result.correspondences.length).toBeLessThan(withParams([]).correspondences.length);
+    expect(result.settings.nullScore).toBe(0.25);
+  });
+});
+
+describe('improved analysis with the new correspondence kinds of 0.3', () => {
+  const runScenario = (id: 'tree2graph' | 'wimmer-6' | 'wimmer-2', improvements: ImprovementId[], seed = 1) => {
+    const loaded = loadScenario(id)!;
+    return runImprovedAnalysis({ source: loaded.source, target: loaded.target,
+      settings: resolveImprovedSettings({ seed, improvements: improvementsOf(improvements) }) }, deps);
+  };
+
+  it('proposes path correspondences on Tree2Graph for features the search left unmatched', () => {
+    const result = runScenario('tree2graph', ['paths']);
+    const paths = result.correspondences.flatMap(c => c.children ?? []).filter(c => c.kind === 'path');
+    expect(paths.length).toBeGreaterThan(0);
+    const toTarget = paths.find(c => c.sources[0].qualifiedName === 'tree.Tree.parent')!;
+    expect(toTarget.targets[0]).toMatchObject({ kind: 'reference', containingClass: 'graph.Node', path: [expect.any(String), expect.any(String)] });
+    expect(toTarget.targets[0].qualifiedName).toBe(`graph.Node.${toTarget.targets[0].path!.join('.')}`);
+    expect(result.summary.kindCounts?.path).toBe(paths.length);
+    expect(runScenario('tree2graph', []).correspondences.flatMap(c => c.children ?? []).some(c => c.kind === 'path')).toBe(false);
+  });
+
+  it('finds the conditional correspondences of Wimmer 6 as in the reference', () => {
+    const loaded = loadScenario('wimmer-6')!;
+    const result = runScenario('wimmer-6', ['conditional']);
+    const expected = [...pairKeys(loaded.reference.correspondences)].filter(key => key.includes('#conditional'));
+    const found = [...correspondenceKeys(result.correspondences)].filter(key => key.includes('#conditional'));
+    expect(found.sort()).toEqual(expected.sort());
+    expect(result.correspondences.filter(c => c.kind === 'conditional').every(c => c.fixed && c.scores.conditional === 1)).toBe(true);
+    expect(result.correspondences.some(c => c.kind !== 'conditional' && c.targets.some(t => t.name === 'ResearchStaff'))).toBe(true);
+  });
+
+  it('round-trips results with paths and conditional correspondences through the JSON export', () => {
+    for (const result of [runScenario('tree2graph', ['paths']), runScenario('wimmer-6', ['conditional'])]) {
+      expect(parseOverlapResult(serializeOverlapResult(result))).toEqual(JSON.parse(serializeOverlapResult(result)));
+    }
+  });
+
+  it('is deterministic with every improvement on (same seed, same result)', () => {
+    const all = [...IMPROVEMENT_IDS];
+    const stable = (r: OverlapResult) => ({ ...r, durationMs: 0 });
+    expect(stable(runScenario('tree2graph', all, 3))).toEqual(stable(runScenario('tree2graph', all, 3)));
+  });
+});
+
+describe('improved analysis with alternative results', () => {
+  const run3 = (seed: number) => runImprovedAnalysis({ source: ecoreExcerpt(), target: umlExcerpt(),
+    settings: resolveImprovedSettings({ seed, improvements: improvementsOf(['alternatives']) }, 'fast') }, deps);
+
+  it('returns 1–3 labelled alternatives, the balanced one as default and in the main fields', () => {
+    const result = run3(4);
+    const alternatives = result.alternatives!;
+    expect(alternatives.length).toBeGreaterThanOrEqual(1);
+    expect(alternatives.length).toBeLessThanOrEqual(3);
+    const defaults = alternatives.filter(a => a.isDefault);
+    expect(defaults).toHaveLength(1);
+    expect(defaults[0].label).toContain('balanced');
+    expect(result.correspondences).toBe(defaults[0].correspondences);
+    expect(result.unmatched).toBe(defaults[0].unmatched);
+    expect(parseOverlapResult(serializeOverlapResult(result)).alternatives).toHaveLength(alternatives.length);
+  });
+
+  it('is deterministic for a seed', () => {
+    const stable = (r: OverlapResult) => ({ ...r, durationMs: 0 });
+    expect(stable(run3(4))).toEqual(stable(run3(4)));
   });
 });

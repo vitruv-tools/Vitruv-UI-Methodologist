@@ -1,0 +1,16 @@
+{
+  "scenario": "Wimmer 6 (A2I)",
+  "family": "wimmer",
+  "provenance": "Hand-made after Wimmer et al. 2010, Benchmark Example 6 (Fig. 10); entries derived from the example's challenge list",
+  "source": "wimmer/example-6/source.ecore",
+  "target": "wimmer/example-6/target.ecore",
+  "correspondences": [
+    {"sources": ["lhs6.ResearchStaff"], "targets": ["rhs6.ResearchStaff"]},
+    {"sources": ["lhs6.ResearchStaff"], "targets": ["rhs6.Professor"], "kind": "conditional", "condition": {"attribute": "lhs6.ResearchStaff.kind", "value": "Professor"}, "uncertain": true, "note": "Professor is abstract on the right-hand side, so such instances have no target class"},
+    {"sources": ["lhs6.ResearchStaff"], "targets": ["rhs6.FullProf"], "kind": "conditional", "condition": {"attribute": "lhs6.ResearchStaff.kind", "value": "FullProf"}},
+    {"sources": ["lhs6.ResearchStaff"], "targets": ["rhs6.Assistant"], "kind": "conditional", "condition": {"attribute": "lhs6.ResearchStaff.kind", "value": "Assistant"}}
+  ],
+  "features": [
+    {"sources": ["lhs6.ResearchStaff.name"], "targets": ["rhs6.ResearchStaff.name"]}
+  ]
+}

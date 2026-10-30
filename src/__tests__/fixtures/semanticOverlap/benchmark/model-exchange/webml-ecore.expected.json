@@ -1,0 +1,16 @@
+{
+  "scenario": "WebML -> Ecore",
+  "family": "model-exchange",
+  "source": "webml.ecore",
+  "target": "Ecore.ecore",
+  "level": "class",
+  "provenance": "Recreated by hand, like ecore-uml20.expected.json: the original reference alignments of Kessentini et al. (2014) are lost; derived from the metamodels and the specifications of the languages.",
+  "correspondences": [
+    {"sources": ["webml.NamedElement"], "targets": ["ecore.ENamedElement"]},
+    {"sources": ["webml.Entity"], "targets": ["ecore.EClass"]},
+    {"sources": ["webml.Attribute"], "targets": ["ecore.EAttribute"]},
+    {"sources": ["webml.Relationship"], "targets": ["ecore.EReference"]},
+    {"sources": ["webml.Domain"], "targets": ["ecore.EEnum"]},
+    {"sources": ["webml.DomainValue"], "targets": ["ecore.EEnumLiteral"]}
+  ]
+}

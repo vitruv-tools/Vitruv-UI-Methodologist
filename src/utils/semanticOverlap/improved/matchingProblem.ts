@@ -6,6 +6,8 @@ import { combineScores, extraMeasures, type SimilarityMatrices } from './measure
 import { averageMetrics, structuralSimilarity } from './measures/structuralMeasure';
 import type { ElementProfile, MeasureRegistry } from './measures/types';
 import type { AnalysisSettings, MatchLevel } from '../types';
+import { effectiveMaxTargets } from './grouping/splitMerge';
+import { isOn, type ImprovedSettings } from './settings';
 
 /**
  * A candidate matching (paper §4.3.1): `assignments[i]` holds the target indices chosen for source
@@ -118,7 +120,9 @@ export function createMatchingProblem(
     targets,
     matrices,
     settings,
-    maxTargets: Math.max(1, Math.min(settings.maxTargetsPerElement, m)),
+    // Class split/merge may group up to `splitMaxParts` classes, independent of the setting.
+    maxTargets: Math.max(1, Math.min(effectiveMaxTargets(settings.maxTargetsPerElement,
+      level === 'class' && isOn(settings, 'split-merge') ? (settings as ImprovedSettings).params.splitMaxParts : null), m)),
     candidates,
     scoreOf,
     valueOf,

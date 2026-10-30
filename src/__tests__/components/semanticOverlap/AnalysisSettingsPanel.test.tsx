@@ -1,14 +1,18 @@
 import React, { useState } from 'react';
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { AnalysisSettingsPanel } from '../../../components/semanticOverlap/AnalysisSettingsPanel';
 import { DEFAULT_SETTINGS, EFFORT_PRESETS } from '../../../utils/semanticOverlap/settings';
 import type { AnalysisSettings } from '../../../utils/semanticOverlap/types';
 import type { ApproachId } from '../../../utils/semanticOverlap/approaches/types';
-import { DEFAULT_IMPROVED_SETTINGS, type ImprovedSettings } from '../../../utils/semanticOverlap/improved/settings';
+import { DEFAULT_IMPROVED_SETTINGS, IMPROVEMENT_IDS, type ImprovedSettings } from '../../../utils/semanticOverlap/improved/settings';
+import type { EmbeddingAvailability } from '../../../utils/semanticOverlap/improved/embeddings/types';
+import { probeEmbeddingModel, resetEmbeddingProbe } from '../../../utils/semanticOverlap/improved/embeddings/probe';
+
+const ready = () => Promise.resolve<EmbeddingAvailability>({ state: 'ready' });
 
 /** Panel with real state, so changes are visible like in the view. */
-function Harness({ onMinScore = vi.fn(), initial = DEFAULT_SETTINGS, approach }: {
-  onMinScore?: (v: number) => void; initial?: AnalysisSettings; approach?: ApproachId;
+function Harness({ onMinScore = vi.fn(), initial = DEFAULT_SETTINGS, approach, probe = ready }: {
+  onMinScore?: (v: number) => void; initial?: AnalysisSettings; approach?: ApproachId; probe?: () => Promise<EmbeddingAvailability>;
 }) {
   const [settings, setSettings] = useState(initial);
   const [minScore, setMinScore] = useState(0);
@@ -20,6 +24,7 @@ function Harness({ onMinScore = vi.fn(), initial = DEFAULT_SETTINGS, approach }:
         onChange={patch => setSettings(s => ({ ...s, ...patch }))}
         minScore={minScore}
         onMinScoreChange={v => { setMinScore(v); onMinScore(v); }}
+        probeEmbeddings={probe}
       />
       <output data-testid="settings">{JSON.stringify(settings)}</output>
     </>
@@ -97,11 +102,11 @@ describe('AnalysisSettingsPanel', () => {
       expect(screen.queryAllByRole('checkbox')).toHaveLength(0);
     });
 
-    it('shows the nine improvements of the improved approach and toggles them', () => {
+    it('shows every improvement of the improved approach and toggles them', () => {
       render(<Harness approach="improved" initial={DEFAULT_IMPROVED_SETTINGS} />);
       open();
       expect(screen.getByRole('group', { name: 'Improvements' })).toBeInTheDocument();
-      expect(screen.getAllByRole('checkbox')).toHaveLength(9);
+      expect(screen.getAllByRole('checkbox')).toHaveLength(IMPROVEMENT_IDS.length);
       fireEvent.click(screen.getByRole('checkbox', { name: 'Similarity flooding' }));
       expect((current() as ImprovedSettings).improvements.flooding).toBe(!DEFAULT_IMPROVED_SETTINGS.improvements.flooding);
     });
@@ -113,5 +118,50 @@ describe('AnalysisSettingsPanel', () => {
       expect(screen.getByRole('alert')).toHaveTextContent('Flooding weight must be between 0 and 1.');
     });
   });
-});
 
+  describe('sentence embeddings', () => {
+    const embeddingSwitch = () => screen.getByRole('checkbox', { name: 'Sentence embeddings (local model)' });
+
+    it('disables the switch with the reason when the model is unavailable', async () => {
+      const probe = () => Promise.resolve<EmbeddingAvailability>({ state: 'unavailable', reason: 'The sentence-embedding model is not in this build.' });
+      render(<Harness approach="improved" initial={DEFAULT_IMPROVED_SETTINGS} probe={probe} />);
+      open();
+      await waitFor(() => expect(embeddingSwitch()).toBeDisabled());
+      expect(embeddingSwitch().closest('label')).toHaveAttribute('title', expect.stringContaining('not in this build'));
+      expect(screen.getByRole('note')).toHaveTextContent('node scripts/fetch-embedding-model.mjs');
+    });
+
+    it('enables the switch when the model is ready and keeps the chosen model', async () => {
+      const probe = vi.fn(ready);
+      render(<Harness approach="improved" initial={DEFAULT_IMPROVED_SETTINGS} probe={probe} />);
+      open();
+      await waitFor(() => expect(probe).toHaveBeenCalledWith('minilm'));
+      expect(embeddingSwitch()).toBeEnabled();
+      fireEvent.click(embeddingSwitch());
+      expect((current() as ImprovedSettings).improvements.embeddings).toBe(true);
+      fireEvent.change(screen.getByLabelText('Embedding model'), { target: { value: 'bge-small' } });
+      expect((current() as ImprovedSettings).params.embeddingModel).toBe('bge-small');
+    });
+
+    it('validates the embedding and new improvement parameters', () => {
+      render(<Harness approach="improved" initial={DEFAULT_IMPROVED_SETTINGS} />);
+      open();
+      fireEvent.change(screen.getByLabelText('Embedding weight'), { target: { value: '-1' } });
+      expect(screen.getByRole('alert')).toHaveTextContent('Embedding weight must not be negative.');
+      fireEvent.change(screen.getByLabelText('Embedding weight'), { target: { value: '0.5' } });
+      fireEvent.change(screen.getByLabelText('Split / merge parts'), { target: { value: '4' } });
+      expect(screen.getByRole('alert')).toHaveTextContent('Split/merge parts must be a whole number from 2 to 3.');
+    });
+
+    it('probes the model under the asset base only, once per page load', async () => {
+      resetEmbeddingProbe();
+      const fetchFile = vi.fn((_url: string) => Promise.resolve(new Response(JSON.stringify({ revision: 'other' }))));
+      expect(await probeEmbeddingModel('minilm', '/app/', fetchFile)).toEqual({
+        state: 'unavailable', reason: 'The sentence-embedding model files do not match the expected version.',
+      });
+      await probeEmbeddingModel('minilm', '/app/', fetchFile);
+      expect(fetchFile.mock.calls).toEqual([['/app/models/minilm/751bff37182d3f1213fa05d7196b954e230abad9/manifest.json']]);
+      resetEmbeddingProbe();
+    });
+  });
+});

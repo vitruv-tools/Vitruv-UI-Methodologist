@@ -1,14 +1,18 @@
 import React, { useState } from 'react';
 import { EdgeLabelRenderer, getBezierPath, type EdgeProps } from 'reactflow';
 import { themeVars } from '../../theme/theme';
+import { KIND_DASH } from '../../utils/semanticOverlap/correspondenceKind';
 import type { ScoreEdgeData } from '../../utils/semanticOverlap/linkDiagramLayout';
 
 export const formatPercent = (score: number) => `${Math.round(score * 100)} %`;
 
 /** Dash pattern of class ↔ instance links (same-concept links are solid). */
-export const INSTANCE_DASH = '6 4';
+export const INSTANCE_DASH = KIND_DASH.instance;
 
-/** A correspondence link; width and opacity grow with the score. Instance links are dashed and labelled. */
+/**
+ * A correspondence link; width and opacity grow with the score. Instance, path, split, merge and
+ * conditional links have their own dash pattern and a label.
+ */
 export const ScoreEdge: React.FC<EdgeProps<ScoreEdgeData>> = ({
   id, sourceX, sourceY, targetX, targetY, sourcePosition, targetPosition, data,
 }) => {
@@ -17,6 +21,8 @@ export const ScoreEdge: React.FC<EdgeProps<ScoreEdgeData>> = ({
   const score = data?.score ?? 0;
   const selected = data?.selected ?? false;
   const instanceLabel = data?.instanceLabel;
+  const label = instanceLabel ?? data?.kindLabel;
+  const dash = instanceLabel ? INSTANCE_DASH : data?.kind && KIND_DASH[data.kind];
   return (
     <>
       <path
@@ -26,7 +32,7 @@ export const ScoreEdge: React.FC<EdgeProps<ScoreEdgeData>> = ({
         stroke={selected ? '#049484' : themeVars.umlEdge}
         strokeWidth={(1 + 5 * score) * (selected ? 1.4 : 1)}
         strokeOpacity={selected ? 1 : 0.25 + 0.75 * score}
-        strokeDasharray={instanceLabel ? INSTANCE_DASH : undefined}
+        strokeDasharray={dash || undefined}
       />
       {/* Wide invisible path for easier hovering and clicking. */}
       <path
@@ -54,7 +60,7 @@ export const ScoreEdge: React.FC<EdgeProps<ScoreEdgeData>> = ({
               pointerEvents: 'none',
             }}
           >
-            {instanceLabel ? `${instanceLabel} · ${formatPercent(score)}` : formatPercent(score)}
+            {label ? `${label} · ${formatPercent(score)}` : formatPercent(score)}
           </div>
         </EdgeLabelRenderer>
       )}

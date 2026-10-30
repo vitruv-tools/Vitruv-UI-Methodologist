@@ -34,6 +34,8 @@ export interface FeatureNode {
   opposite: string | null;
   /** `iD="true"` on an attribute; absent otherwise. */
   isId?: boolean;
+  /** `ordered="false"`; absent means ordered (the Ecore default). */
+  ordered?: boolean;
 }
 
 export interface OperationNode {
@@ -129,10 +131,21 @@ export interface ElementRef {
   name: string;
   /** Qualified name of the declaring class, for attributes and references. */
   containingClass?: string;
+  /**
+   * Only on the path side of a `kind = 'path'` feature correspondence: the feature names of the
+   * navigation, e.g. `['incoming', 'source']`; `qualifiedName` is then `<owner>.<path joined by '.'>`.
+   */
+  path?: string[];
 }
 
-/** `same`: equivalent elements; `instance`: an element corresponds to an *instance* of a class. */
-export type CorrespondenceKind = 'same' | 'instance';
+/**
+ * `same`: equivalent elements; `instance`: an element corresponds to an *instance* of a class;
+ * `path`: a feature corresponds to a navigation over two features; `split` / `merge`: one class
+ * corresponds to several unrelated classes on the other side (or the reverse); `conditional`: a
+ * class corresponds to a subclass only for one value of an attribute.
+ */
+export type CorrespondenceKind = 'same' | 'instance' | 'path' | 'split' | 'merge' | 'conditional';
+export const CORRESPONDENCE_KINDS: readonly CorrespondenceKind[] = ['same', 'instance', 'path', 'split', 'merge', 'conditional'];
 /** Role of the instantiated class in a type-object pattern. */
 export type InstanceRole = 'type' | 'definition' | 'value';
 /** Data-type category of an attribute (improved approach). */
@@ -159,8 +172,31 @@ export interface Correspondence {
    * `BrakeDisk ↔ ItemType` in Brake → BOM `{ side: 'target', role: 'type' }`.
    */
   instance?: { side: Side; role: InstanceRole };
-  /** Produced by a rule (type-object pattern), not by the search. */
+  /** Produced by a rule (type-object pattern, conditional), not by the search. */
   fixed?: boolean;
+  /** Only for `kind = 'conditional'`: the deciding attribute (qualified name) and its value. */
+  condition?: { attribute: string; value: string };
+}
+
+/** A correspondence removed by consistency repair, with the one it contradicted. */
+export interface RepairRecord {
+  rule: 'subclass' | 'reference-ends' | 'opposite' | 'containment';
+  removed: { level: MatchLevel; sources: string[]; targets: string[]; score: number };
+  kept: { level: MatchLevel; sources: string[]; targets: string[]; score: number };
+  reason: string;
+}
+
+export type AlternativeLabel = 'lexical' | 'structural' | 'balanced';
+
+/** One of up to three results of a run, labelled by what it favours. */
+export interface Alternative {
+  /** Several labels when identical alternatives were merged, e.g. `'balanced, lexical'`. */
+  label: string;
+  isDefault: boolean;
+  objectives: { lexical: number; structural: number };
+  correspondences: Correspondence[];
+  unmatched: { source: ElementRef[]; target: ElementRef[] };
+  summary: { matchedSourceClasses: number; matchedTargetClasses: number; overlapPercent: number };
 }
 
 /** A type-object pattern detected in one metamodel, with its counterpart in the other one. */
@@ -187,8 +223,10 @@ export interface OverlapSummary {
   /** `(matchedSource + matchedTarget) / (sourceCount + targetCount) · 100` */
   overlapPercent: number;
   fitness: number;
-  /** Class-level correspondences per kind (improved approach with type-object detection). */
-  kindCounts?: { same: number; instance: number };
+  /** Correspondences per kind (improved approach with a kind-producing improvement). */
+  kindCounts?: Partial<Record<CorrespondenceKind, number>>;
+  /** Share (0..1) of classes and features in a correspondence, per side (consistency repair). */
+  coverage?: { source: { classes: number; features: number }; target: { classes: number; features: number } };
 }
 
 export interface ClassSimilarityMatrix {
@@ -228,6 +266,16 @@ export interface OverlapResult {
   correspondences: Correspondence[];
   unmatched: { source: ElementRef[]; target: ElementRef[] };
   typeObjectPatterns?: TypeObjectPattern[];
+  /** Correspondences removed by consistency repair. */
+  repairs?: RepairRecord[];
+  /** Up to three alternative results; the main fields equal the one with `isDefault`. */
+  alternatives?: Alternative[];
+  /** Median cosine per level that embedding similarities are rescaled against. */
+  embeddingBaseline?: { class: number; feature: number };
+  /** Sentence-embedding model used, when the embedding measure ran. */
+  embeddingModel?: { id: string; revision: string; sha256: string };
+  /** Null score (acceptance threshold) used and where it came from. */
+  acceptanceThreshold?: { value: number; source: 'settings' | 'calibrated'; note?: string };
 }
 
 export interface OverlapInput {
@@ -237,7 +285,7 @@ export interface OverlapInput {
 }
 
 /** `loading` is set on the main thread; the other phases come from the worker. */
-export type ProgressPhase = 'loading' | 'lexicon' | 'profiling' | 'ga' | 'sa' | 'features';
+export type ProgressPhase = 'loading' | 'lexicon' | 'embeddings' | 'profiling' | 'ga' | 'sa' | 'features';
 
 export interface Progress {
   phase: ProgressPhase;

@@ -5,6 +5,7 @@ import type { Progress, ProgressPhase } from '../../utils/semanticOverlap/types'
 const PHASE_LABELS: Record<ProgressPhase, string> = {
   loading: 'Loading the metamodels…',
   lexicon: 'Loading WordNet synonyms…',
+  embeddings: 'Comparing meanings (local model)…',
   profiling: 'Comparing names and structure…',
   ga: 'Searching globally (genetic algorithm)…',
   sa: 'Refining locally (simulated annealing)…',

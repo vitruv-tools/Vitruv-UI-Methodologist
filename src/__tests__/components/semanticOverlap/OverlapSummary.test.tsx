@@ -1,7 +1,7 @@
 import React from 'react';
 import { render, screen, within } from '@testing-library/react';
 import { OverlapSummary } from '../../../components/semanticOverlap/OverlapSummary';
-import { sampleImprovedResult, sampleResult } from './sampleResult';
+import { sampleEmbeddingResult, sampleImprovedResult, sampleKindsResult, sampleResult } from './sampleResult';
 
 describe('OverlapSummary', () => {
   it('shows counts, overlap and unmatched classes', () => {
@@ -26,6 +26,23 @@ describe('OverlapSummary', () => {
     expect(screen.getByText('uml.sub.Association')).toBeInTheDocument();
   });
 
+  it('names the embedding model and revision when the embedding measure was used', () => {
+    render(<OverlapSummary result={sampleEmbeddingResult()} />);
+    expect(screen.getByRole('region', { name: 'Settings used' })).toHaveTextContent('embedding model minilm (revision fake-rev)');
+  });
+
+  it('shows the coverage shares and the calibrated acceptance threshold with its derivation', () => {
+    const result = {
+      ...sampleResult(),
+      summary: { ...sampleResult().summary, coverage: { source: { classes: 1, features: 0.5 }, target: { classes: 0.25, features: 0 } } },
+      acceptanceThreshold: { value: 0.31, source: 'calibrated' as const, note: 'calibrated on the benchmark suite (improved 0.3)' },
+    };
+    render(<OverlapSummary result={result} />);
+    expect(screen.getByText('100 % · 50 % | 25 % · 0 %')).toBeInTheDocument();
+    expect(screen.getByText('0.310')).toBeInTheDocument();
+    expect(screen.getByText(/Acceptance threshold τ = 0\.310, calibrated on the benchmark suite \(improved 0\.3\)/)).toBeInTheDocument();
+  });
+
   it('names the approach and version that produced the result', () => {
     const { unmount } = render(<OverlapSummary result={sampleResult()} />);
     expect(screen.getByText('Kessentini et al. 2014 (paper) 2014.1')).toBeInTheDocument();
@@ -42,5 +59,9 @@ describe('OverlapSummary', () => {
     render(<OverlapSummary result={improved} />);
     expect(screen.getByText(`Same concept: ${improved.summary.kindCounts!.same} · Class ↔ instance: 2`)).toBeInTheDocument();
   });
-});
 
+  it('counts every kind present, same concept and class ↔ instance always', () => {
+    render(<OverlapSummary result={sampleKindsResult()} />);
+    expect(screen.getByText('Same concept: 0 · Class ↔ instance: 0 · Path: 1 · Split: 1 · Merge: 1 · Conditional: 1')).toBeInTheDocument();
+  });
+});

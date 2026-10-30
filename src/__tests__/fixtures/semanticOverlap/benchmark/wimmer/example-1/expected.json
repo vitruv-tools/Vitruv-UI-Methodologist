@@ -1,0 +1,19 @@
+{
+  "scenario": "Wimmer 1 (same concepts, attribute settings)",
+  "family": "wimmer",
+  "provenance": "Hand-made after Wimmer et al. 2010, Benchmark Example 1 (Fig. 5); entries derived from the example's challenge list",
+  "source": "wimmer/example-1/source.ecore",
+  "target": "wimmer/example-1/target.ecore",
+  "correspondences": [
+    {"sources": ["lhs1.Professor"], "targets": ["rhs1.Prof"]},
+    {"sources": ["lhs1.Publication"], "targets": ["rhs1.Journal"], "note": "C2C with a difference in the number of valid instances"}
+  ],
+  "features": [
+    {"sources": ["lhs1.Professor.name"], "targets": ["rhs1.Prof.name"]},
+    {"sources": ["lhs1.Professor.dateOfBirth"], "targets": ["rhs1.Prof.bornIn"], "note": "A2A, multiplicity and data-type difference"},
+    {"sources": ["lhs1.Professor.salary"], "targets": ["rhs1.Prof.salary"], "note": "A2A, different currency"},
+    {"sources": ["lhs1.Professor.publications"], "targets": ["rhs1.Prof.journals"], "note": "R2R, multiplicity difference"},
+    {"sources": ["lhs1.Publication.name"], "targets": ["rhs1.Journal.name"]}
+  ],
+  "unmatched": {"source": ["lhs1.Publication.type"], "note": "no counterpart in the figure"}
+}

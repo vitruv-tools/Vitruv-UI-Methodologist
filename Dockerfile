@@ -7,6 +7,11 @@ RUN npm ci --no-audit
 
 COPY . .
 
+# Sentence-embedding model of the semantic overlap analysis, served by the app itself.
+# Use EMBEDDING_MODEL=none to build without it (the improvement is then unavailable).
+ARG EMBEDDING_MODEL=minilm
+RUN if [ "$EMBEDDING_MODEL" != "none" ]; then node scripts/fetch-embedding-model.mjs --model "$EMBEDDING_MODEL"; fi
+
 # Choose environment at build time:
 # Defaults to production.
 ARG BUILD_ENV=production

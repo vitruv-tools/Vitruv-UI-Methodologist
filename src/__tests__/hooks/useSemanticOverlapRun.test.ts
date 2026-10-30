@@ -1,3 +1,4 @@
+import { config } from '../../config/environment';
 import { act, renderHook } from '@testing-library/react';
 import { ANALYSIS_TIMEOUT_MS, TIMEOUT_MESSAGE, useSemanticOverlapRun, type OverlapWorker } from '../../hooks/useSemanticOverlapRun';
 import { useSemanticOverlapStore } from '../../store/SemanticOverlap';
@@ -64,6 +65,23 @@ describe('useSemanticOverlapRun', () => {
     const message = workers[0].posted[0];
     expect(message.approach).toBe('improved');
     expect(message.input.settings).toBe(state().settingsByApproach.improved);
+  });
+
+  it('sends the app\'s asset base, where the embedding model is served, from the configuration', async () => {
+    const { hook, workers } = setup();
+    await act(() => hook.result.current.start(ecore, uml));
+    expect(workers[0].posted[0].assetBase).toBe(config.assetBaseUrl);
+    expect(config.assetBaseUrl).toBe('/');
+  });
+
+  it('cancels while the worker is preparing embeddings', async () => {
+    const { hook, workers } = setup();
+    await act(() => hook.result.current.start(ecore, uml));
+    act(() => workers[0].emit({ type: 'progress', runId: 'run-1', phase: 'embeddings', fraction: 0.1 }));
+    expect(state().progress?.phase).toBe('embeddings');
+    act(() => hook.result.current.cancel());
+    expect(workers[0].terminated).toBe(true);
+    expect(state().status).toBe('ready');
   });
 
   it('does not start with invalid settings', async () => {

@@ -1,25 +1,32 @@
-import { IMPROVEMENT_IDS, improvementsOf, resolveImprovedSettings, type ImprovementId } from '../../../../utils/semanticOverlap/improved/settings';
+import type { EmbeddingTable } from '../../../../utils/semanticOverlap/improved/embeddings/types';
+import {
+  IMPROVEMENT_IDS, improvementsOf, resolveImprovedSettings, type ImprovementId, type ImprovementParams,
+} from '../../../../utils/semanticOverlap/improved/settings';
+import { calibrate, type Calibration } from './calibrate';
 import { resolveSettings } from '../../../../utils/semanticOverlap/settings';
-import { loadScenario, mean, runScenario, scenarios, type LevelScores, type LoadedScenario, type ScenarioId, type Scores } from './suite';
+import {
+  familyMeans, loadScenario, runScenario, scenarios, type FamilyId, type LevelScores, type LoadedScenario, type ScenarioId, type Scores,
+} from './suite';
 
 /**
  * Ablation of the improved approach's improvements on the benchmark suite: each improvement alone,
  * then a combination that keeps only improvements that still help together with the others.
  */
 
-/** Minimum change of the average class-level F-measure that counts. */
+/** Minimum change of the family-averaged class-level F-measure that counts. */
 export const THRESHOLD = 0.02;
 
 export type Classification = 'helpful' | 'neutral' | 'harmful';
 
 /**
- * Helpful: average F rises by ≥ 0.02 and no scenario drops by more than 0.02. Harmful: average F
- * drops by more than 0.02. Otherwise neutral.
+ * Decision rule on scenario families, so a family with many scenarios does not dominate. Helpful:
+ * the average F over families rises by ≥ 0.02 and no family drops by more than 0.02. Harmful: the
+ * average drops by more than 0.02. Otherwise neutral.
  */
-export function classify(deltaAverage: number, deltaPerScenario: readonly number[]): Classification {
+export function classify(deltaFamilyAverage: number, deltaPerFamily: readonly number[]): Classification {
   const EPSILON = 1e-9;
-  if (deltaAverage >= THRESHOLD - EPSILON && deltaPerScenario.every(d => d >= -THRESHOLD - EPSILON)) return 'helpful';
-  if (deltaAverage < -THRESHOLD - EPSILON) return 'harmful';
+  if (deltaFamilyAverage >= THRESHOLD - EPSILON && deltaPerFamily.every(d => d >= -THRESHOLD - EPSILON)) return 'helpful';
+  if (deltaFamilyAverage < -THRESHOLD - EPSILON) return 'harmful';
   return 'neutral';
 }
 
@@ -27,14 +34,17 @@ export interface ConfigurationResult {
   /** Enabled improvements; `null` for the paper approach. */
   configuration: ImprovementId[] | null;
   perScenario: Partial<Record<ScenarioId, LevelScores>>;
-  /** Class level, mean over the available scenarios. */
+  /** Class level, mean over the available scenarios of each family. */
+  perFamily: Partial<Record<FamilyId, Scores>>;
+  /** Class level, mean over the available families. */
   average: Scores;
 }
 
 export interface Decision {
   improvement: ImprovementId;
   step: 'single' | 'leave-one-out' | 'add-one';
-  delta: { average: number; perScenario: Partial<Record<ScenarioId, number>> };
+  /** The rule uses `average` and `perFamily`; `perScenario` is for information. */
+  delta: { average: number; perFamily: Partial<Record<FamilyId, number>>; perScenario: Partial<Record<ScenarioId, number>> };
   classification: Classification;
   kept: boolean;
   reason: string;
@@ -46,36 +56,64 @@ export function availableScenarios(): LoadedScenario[] {
 }
 
 /** Settings of a configuration (default values, only the given improvements on). */
-export const configurationSettings = (enabled: readonly ImprovementId[], seed: number) =>
-  resolveImprovedSettings({ seed, improvements: improvementsOf(enabled) });
+export const configurationSettings = (enabled: readonly ImprovementId[], seed: number, params: Partial<ImprovementParams> = {}) =>
+  resolveImprovedSettings({ seed, improvements: improvementsOf(enabled), params: params as ImprovementParams });
 
-function summarise(configuration: ImprovementId[] | null, runs: [ScenarioId, LevelScores][]): ConfigurationResult {
-  return {
-    configuration,
-    perScenario: Object.fromEntries(runs),
-    average: mean(runs.map(([, scores]) => scores.class)),
-  };
+/**
+ * Resources of an ablation run: the embedding table per scenario (null without the model) and the
+ * calibrations made so far (one per configuration with `calibrated-null`).
+ */
+export interface EvaluationContext {
+  embeddings?: (loaded: LoadedScenario) => EmbeddingTable | null;
+  calibrations?: Calibration[];
+  /** Extra parameters for every configuration (e.g. another embedding model). */
+  params?: Partial<ImprovementParams>;
+}
+
+export function summarise(configuration: ImprovementId[] | null, runs: [ScenarioId, LevelScores][]): ConfigurationResult {
+  const { perFamily, average } = familyMeans(Object.fromEntries(runs.map(([id, scores]) => [id, scores.class])));
+  return { configuration, perScenario: Object.fromEntries(runs), perFamily, average };
 }
 
 export function evaluatePaper(loaded: readonly LoadedScenario[]): ConfigurationResult {
   return summarise(null, loaded.map(s => [s.scenario.id, runScenario(s, 'paper', seed => resolveSettings({ seed })).scores]));
 }
 
-export function evaluateConfiguration(enabled: readonly ImprovementId[], loaded: readonly LoadedScenario[]): ConfigurationResult {
+/**
+ * Scores of a configuration on the loaded scenarios. A configuration with `calibrated-null` is first
+ * calibrated on the same scenarios (its τ* becomes `calibratedNullScore`).
+ */
+export function evaluateConfiguration(
+  enabled: readonly ImprovementId[],
+  loaded: readonly LoadedScenario[],
+  context: EvaluationContext = {},
+): ConfigurationResult {
   const sorted = IMPROVEMENT_IDS.filter(id => enabled.includes(id));
-  return summarise(sorted, loaded.map(s => [s.scenario.id, runScenario(s, 'improved', seed => configurationSettings(sorted, seed)).scores]));
+  const embeddings = context.embeddings ?? (() => null);
+  const params: Partial<ImprovementParams> = { ...context.params };
+  if (sorted.includes('calibrated-null')) {
+    const calibration = calibrate(sorted, loaded, embeddings);
+    context.calibrations?.push(calibration);
+    params.calibratedNullScore = calibration.tau;
+  }
+  return summarise(sorted, loaded.map(s => [s.scenario.id,
+    runScenario(s, 'improved', seed => configurationSettings(sorted, seed, params), undefined, embeddings(s)).scores]));
 }
 
-/** Change of the class-level F-measure from `before` to `after`, on average and per scenario. */
+/** Change of the class-level F-measure from `before` to `after`: family average, per family, per scenario. */
 export function delta(before: ConfigurationResult, after: ConfigurationResult): Decision['delta'] {
   const perScenario: Partial<Record<ScenarioId, number>> = {};
   for (const [id, scores] of Object.entries(after.perScenario) as [ScenarioId, LevelScores][]) {
     perScenario[id] = scores.class.fMeasure - (before.perScenario[id]?.class.fMeasure ?? 0);
   }
-  return { average: after.average.fMeasure - before.average.fMeasure, perScenario };
+  const perFamily: Partial<Record<FamilyId, number>> = {};
+  for (const [id, scores] of Object.entries(after.perFamily) as [FamilyId, Scores][]) {
+    perFamily[id] = scores.fMeasure - (before.perFamily[id]?.fMeasure ?? 0);
+  }
+  return { average: after.average.fMeasure - before.average.fMeasure, perFamily, perScenario };
 }
 
-export const classifyDelta = (d: Decision['delta']) => classify(d.average, Object.values(d.perScenario) as number[]);
+export const classifyDelta = (d: Decision['delta']) => classify(d.average, Object.values(d.perFamily) as number[]);
 
 const keyOf = (set: readonly ImprovementId[]) => IMPROVEMENT_IDS.filter(id => set.includes(id)).join('+');
 const MAX_ROUNDS = 5;

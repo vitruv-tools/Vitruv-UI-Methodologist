@@ -1,0 +1,14 @@
+{
+  "scenario": "Wimmer 2 (same concepts, n:1)",
+  "family": "wimmer",
+  "provenance": "Hand-made after Wimmer et al. 2010, Benchmark Example 2 (Fig. 6); entries derived from the example's challenge list",
+  "source": "wimmer/example-2/source.ecore",
+  "target": "wimmer/example-2/target.ecore",
+  "correspondences": [
+    {"sources": ["lhs2.Publication", "lhs2.Kind"], "targets": ["rhs2.Publication"], "kind": "merge", "note": "n:1 C2C; Kind is not in the hierarchy of Publication"}
+  ],
+  "features": [
+    {"sources": ["lhs2.Publication.title", "lhs2.Publication.subtitle"], "targets": ["rhs2.Publication.name"], "note": "n:1 A2A, concatenation"},
+    {"sources": ["lhs2.Kind.name"], "targets": ["rhs2.Publication.kind"], "note": "A2A, context difference"}
+  ]
+}

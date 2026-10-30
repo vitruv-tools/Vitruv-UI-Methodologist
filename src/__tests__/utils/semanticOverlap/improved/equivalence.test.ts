@@ -1,5 +1,3 @@
-import { existsSync } from 'node:fs';
-import path from 'node:path';
 import { runImprovedAnalysis } from '../../../../utils/semanticOverlap/improved/runImprovedAnalysis';
 import { improvementsOf, resolveImprovedSettings } from '../../../../utils/semanticOverlap/improved/settings';
 import { createWordNetSource } from '../../../../utils/semanticOverlap/lexical/wordNetSource';
@@ -7,7 +5,7 @@ import { runOverlapAnalysis } from '../../../../utils/semanticOverlap/runOverlap
 import { resolveSettings } from '../../../../utils/semanticOverlap/settings';
 import type { MetamodelGraph, OverlapResult } from '../../../../utils/semanticOverlap/types';
 import table from '../../../../assets/wordnet/oewn-2025-synonyms.json';
-import { BOM_FILE, BRAKE_FILE, METAMODEL_DIR, ecoreExcerpt, loadEcore, umlExcerpt } from '../fixtures';
+import { loadScenario, scenarios } from '../benchmark/suite';
 
 /** The improved approach with every improvement off must equal the paper approach. */
 const SEEDS = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
@@ -26,23 +24,12 @@ function expectEquivalent(source: MetamodelGraph, target: MetamodelGraph, seed: 
   expect(comparable(improved)).toEqual(comparable(paper));
 }
 
+// Every scenario of the benchmark suite; downloaded and local-only ones skip when their files are missing.
 describe('improved approach with all improvements off', () => {
-  it.each(SEEDS)('equals the paper approach on Fig. 1, seed %i', seed => expectEquivalent(ecoreExcerpt(), umlExcerpt(), seed));
-
-  describe.skipIf(!existsSync(BRAKE_FILE))('Brake ↔ BOM (local brake model)', () => {
-    it.each(SEEDS)('Brake -> BOM and BOM -> Brake, seed %i', seed => {
-      const brake = loadEcore(BRAKE_FILE, 1);
-      const bom = loadEcore(BOM_FILE, 2);
-      expectEquivalent(brake, bom, seed);
-      expectEquivalent(bom, brake, seed);
-    });
-  });
-
-  describe.skipIf(!existsSync(METAMODEL_DIR))('Ecore -> UML 2.0 (downloaded metamodels)', () => {
-    it('seeds 1–10', () => {
-      const ecore = loadEcore(path.join(METAMODEL_DIR, 'Ecore.ecore'), 1);
-      const uml = loadEcore(path.join(METAMODEL_DIR, 'UML_2.0_CD.ecore'), 2);
-      SEEDS.forEach(seed => expectEquivalent(ecore, uml, seed));
-    }, 300_000);
+  describe.each(scenarios().map(s => [s.label, s] as const))('%s', (_label, scenario) => {
+    it.skipIf(!scenario.available)('equals the paper approach for seeds 1–10', () => {
+      const loaded = loadScenario(scenario.id)!;
+      SEEDS.forEach(seed => expectEquivalent(loaded.source, loaded.target, seed));
+    }, 600_000);
   });
 });

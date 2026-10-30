@@ -1,4 +1,4 @@
-import type { Correspondence, ElementRef, MetamodelRef, OverlapResult } from './types';
+import { CORRESPONDENCE_KINDS, type Correspondence, type ElementRef, type MetamodelRef, type OverlapResult } from './types';
 
 /** Raised when a stored or imported result does not match schema version 1. */
 export class OverlapResultFormatError extends Error {
@@ -32,7 +32,38 @@ function checkElementRef(value: unknown, field: string): asserts value is Elemen
     && (value.side === 'source' || value.side === 'target')
     && ['class', 'attribute', 'reference'].includes(value.kind as string)
     && typeof value.qualifiedName === 'string' && typeof value.name === 'string', `${field} is not an element reference`);
+  if (value.path !== undefined) {
+    ensure(Array.isArray(value.path) && value.path.length === 2 && value.path.every(isNonEmptyString),
+      `${field}.path must name two features`);
+    ensure(value.qualifiedName.endsWith(`.${value.path.join('.')}`), `${field}.qualifiedName does not end with its path`);
+  }
 }
+
+/** Shape rules of the kinds beyond `same` and `instance`. */
+function checkKindShape(value: Json, field: string) {
+  const sources = value.sources as Json[];
+  const targets = value.targets as Json[];
+  const kind = value.kind as string;
+  if (kind === 'path') {
+    ensure(value.level === 'feature', `${field}: a path correspondence is on feature level`);
+    const withPath = [...sources, ...targets].filter(ref => ref.path !== undefined);
+    ensure(withPath.length === 1, `${field}: a path correspondence has exactly one element with a path`);
+  } else if (kind === 'split') {
+    ensure(value.level === 'class' && sources.length === 1 && targets.length >= 2,
+      `${field}: a split is one source class and at least two target classes`);
+  } else if (kind === 'merge') {
+    ensure(value.level === 'class' && sources.length >= 2 && targets.length === 1,
+      `${field}: a merge is at least two source classes and one target class`);
+  } else if (kind === 'conditional') {
+    ensure(value.level === 'class' && sources.length === 1 && targets.length === 1,
+      `${field}: a conditional correspondence is one source and one target class`);
+    const condition = value.condition;
+    ensure(isObject(condition) && isNonEmptyString(condition.attribute) && isNonEmptyString(condition.value),
+      `${field}.condition needs an attribute and a value`);
+  }
+}
+
+const isNonEmptyString = (value: unknown): value is string => typeof value === 'string' && value.length > 0;
 
 const isCount = (value: unknown) => Number.isInteger(value) && (value as number) >= 0;
 
@@ -57,7 +88,8 @@ function checkCorrespondence(value: unknown, field: string): asserts value is Co
   ensure(isObject(value.scores) && isUnit(value.scores.structural) && isUnit(value.scores.syntactic)
     && Object.values(value.scores).every(isUnit), `${field}.scores must be between 0 and 1`);
   if (value.kind !== undefined) {
-    ensure(value.kind === 'same' || value.kind === 'instance', `${field}.kind must be 'same' or 'instance'`);
+    ensure((CORRESPONDENCE_KINDS as readonly unknown[]).includes(value.kind), `${field}.kind must be one of ${CORRESPONDENCE_KINDS.join(', ')}`);
+    checkKindShape(value, field);
   }
   if (value.kind === 'instance') {
     const instance = value.instance;
@@ -70,6 +102,66 @@ function checkCorrespondence(value: unknown, field: string): asserts value is Co
     ensure(Array.isArray(value.children), `${field}.children must be a list`);
     value.children.forEach((child, k) => checkCorrespondence(child, `${field}.children[${k}]`));
   }
+}
+
+const REPAIR_RULES = ['subclass', 'reference-ends', 'opposite', 'containment'];
+
+function checkRepairSide(value: unknown, field: string) {
+  ensure(isObject(value) && (value.level === 'class' || value.level === 'feature')
+    && Array.isArray(value.sources) && value.sources.every(v => typeof v === 'string')
+    && Array.isArray(value.targets) && value.targets.every(v => typeof v === 'string')
+    && typeof value.score === 'number', `${field} is not a correspondence summary`);
+}
+
+/** Repairs, embedding model and baseline, acceptance threshold (all optional). */
+function checkOptionalExtensions(data: Json) {
+  if (data.repairs !== undefined) {
+    ensure(Array.isArray(data.repairs), 'repairs must be a list');
+    data.repairs.forEach((repair, k) => {
+      ensure(isObject(repair) && REPAIR_RULES.includes(repair.rule as string), `repairs[${k}] has an unknown rule`);
+      checkRepairSide(repair.removed, `repairs[${k}].removed`);
+      checkRepairSide(repair.kept, `repairs[${k}].kept`);
+      ensure(typeof repair.reason === 'string', `repairs[${k}].reason is missing`);
+    });
+  }
+  if (data.embeddingModel !== undefined) {
+    const model = data.embeddingModel;
+    ensure(isObject(model) && typeof model.id === 'string' && typeof model.revision === 'string'
+      && typeof model.sha256 === 'string', 'embeddingModel needs an id, a revision and a checksum');
+  }
+  if (data.embeddingBaseline !== undefined) {
+    const baseline = data.embeddingBaseline;
+    ensure(isObject(baseline) && typeof baseline.class === 'number' && typeof baseline.feature === 'number',
+      'embeddingBaseline needs a class and a feature value');
+  }
+  if (data.acceptanceThreshold !== undefined) {
+    const threshold = data.acceptanceThreshold;
+    ensure(isObject(threshold) && isUnit(threshold.value)
+      && (threshold.source === 'settings' || threshold.source === 'calibrated')
+      && (threshold.note === undefined || typeof threshold.note === 'string'), 'acceptanceThreshold is invalid');
+  }
+}
+
+/** 1–3 alternatives, exactly one default, and the main fields equal to the default one. */
+function checkAlternatives(data: Json) {
+  const alternatives = data.alternatives;
+  ensure(Array.isArray(alternatives) && alternatives.length >= 1 && alternatives.length <= 3, 'alternatives must have 1 to 3 entries');
+  alternatives.forEach((alternative, k) => {
+    const field = `alternatives[${k}]`;
+    ensure(isObject(alternative) && typeof alternative.label === 'string' && typeof alternative.isDefault === 'boolean',
+      `${field} needs a label and a default flag`);
+    ensure(isObject(alternative.objectives) && typeof alternative.objectives.lexical === 'number'
+      && typeof alternative.objectives.structural === 'number', `${field}.objectives are missing`);
+    ensure(Array.isArray(alternative.correspondences), `${field}.correspondences are missing`);
+    alternative.correspondences.forEach((c, j) => checkCorrespondence(c, `${field}.correspondences[${j}]`));
+    ensure(isObject(alternative.unmatched) && Array.isArray(alternative.unmatched.source)
+      && Array.isArray(alternative.unmatched.target), `${field}.unmatched is missing`);
+    ensure(isObject(alternative.summary), `${field}.summary is missing`);
+  });
+  const defaults = (alternatives as Json[]).filter(alternative => alternative.isDefault === true);
+  ensure(defaults.length === 1, 'alternatives need exactly one default');
+  const main = JSON.stringify([data.correspondences, data.unmatched]);
+  ensure(JSON.stringify([defaults[0].correspondences, defaults[0].unmatched]) === main, 'alternatives are inconsistent');
 }
 
 /** Reads a result written by {@link serializeOverlapResult}, validating schema version 1. */
@@ -98,8 +190,15 @@ export function parseOverlapResult(json: string): OverlapResult {
   }
   if (data.summary.kindCounts !== undefined) {
     const counts = data.summary.kindCounts;
-    ensure(isObject(counts) && isCount(counts.same) && isCount(counts.instance), 'summary.kindCounts must be counts');
+    ensure(isObject(counts) && Object.entries(counts).every(([kind, count]) =>
+      (CORRESPONDENCE_KINDS as readonly string[]).includes(kind) && isCount(count)), 'summary.kindCounts must be counts');
   }
+  if (data.summary.coverage !== undefined) {
+    const coverage = data.summary.coverage;
+    const shares = (side: unknown) => isObject(side) && isUnit(side.classes) && isUnit(side.features);
+    ensure(isObject(coverage) && shares(coverage.source) && shares(coverage.target), 'summary.coverage must be shares between 0 and 1');
+  }
+  checkOptionalExtensions(data);
   if (data.typeObjectPatterns !== undefined) {
     ensure(Array.isArray(data.typeObjectPatterns), 'typeObjectPatterns must be a list');
     data.typeObjectPatterns.forEach((pattern, k) => checkTypeObjectPattern(pattern, `typeObjectPatterns[${k}]`));
@@ -109,6 +208,7 @@ export function parseOverlapResult(json: string): OverlapResult {
   ensure(Array.isArray(data.correspondences), 'correspondences are missing');
   data.correspondences.forEach((c, k) => checkCorrespondence(c, `correspondences[${k}]`));
   ensure(isObject(data.unmatched) && Array.isArray(data.unmatched.source) && Array.isArray(data.unmatched.target), 'unmatched is missing');
+  if (data.alternatives !== undefined) checkAlternatives(data);
   return data as unknown as OverlapResult;
 }
 
@@ -127,11 +227,17 @@ function csvField(value: string): string {
 
 const metamodelLabel = (ref: MetamodelRef) => (ref.version ? `${ref.name} (${ref.version})` : ref.name);
 
+/** `role` column: the instance role, or `<attribute QN>=<value>` for conditional correspondences. */
+const roleOf = (c: Correspondence) =>
+  (c.kind === 'conditional' && c.condition ? `${c.condition.attribute}=${c.condition.value}` : c.instance?.role ?? '');
+
+const refList = (names: readonly string[]) => names.join('; ');
+
 /**
  * Flat CSV of a result: `#` comment lines with the compared metamodels, approach, seed and
  * creation time, then one row per class correspondence followed by its feature correspondences.
  */
-export function overlapResultToCsv(result: OverlapResult): string {
+export function overlapResultToCsv(result: OverlapResult, shown?: { alternative: number }): string {
   const row = (c: Correspondence, parent: string) => [
     c.level,
     parent,
@@ -141,16 +247,24 @@ export function overlapResultToCsv(result: OverlapResult): string {
     c.scores.structural.toFixed(3),
     c.scores.syntactic.toFixed(3),
     c.kind ?? 'same',
-    c.instance?.role ?? '',
+    roleOf(c),
   ].map(csvField).join(',');
   const lines = [
     `# Semantic overlap: ${metamodelLabel(result.source)} -> ${metamodelLabel(result.target)}`,
     `# approach: ${approachLabel(result)}`,
     `# seed: ${result.settings.seed}`,
     `# created: ${result.createdAt}`,
-    CSV_HEADER,
   ];
-  for (const correspondence of result.correspondences) {
+  const alternative = shown && result.alternatives?.[shown.alternative];
+  if (alternative) lines.push(`# alternative: ${alternative.label} (${alternative.isDefault ? 'default' : 'selected'})`);
+  if (result.acceptanceThreshold) {
+    lines.push(`# acceptance threshold: ${result.acceptanceThreshold.value} (${result.acceptanceThreshold.source})`);
+  }
+  for (const repair of result.repairs ?? []) {
+    lines.push(`# repair: ${repair.rule}: removed ${refList(repair.removed.sources)} -> ${refList(repair.removed.targets)} (${repair.removed.score.toFixed(3)})`);
+  }
+  lines.push(CSV_HEADER);
+  for (const correspondence of alternative ? alternative.correspondences : result.correspondences) {
     lines.push(row(correspondence, ''));
     for (const child of correspondence.children ?? []) lines.push(row(child, correspondence.id));
   }

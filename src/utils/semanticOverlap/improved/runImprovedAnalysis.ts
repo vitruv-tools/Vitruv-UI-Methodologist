@@ -6,23 +6,36 @@ import type { LexicalSource } from '../lexical/wordNetSource';
 import { buildClassProfiles, buildFeatureProfiles, classDocument, nameTokens, type ProfileOptions } from './measures/profiles';
 import { documentFrequencies, idfWeights } from './lexical/idf';
 import { completeHierarchyBothSides } from './hierarchy/completeHierarchyBothSides';
+import { featuresWithInherited } from './hierarchy/features';
 import { blend, buildClassGraph, similarityFlooding } from './flooding/similarityFlooding';
 import { detectTypeObject, type FixedCorrespondence, type TypeObjectMatch } from './typeObject/detectTypeObject';
+import { detectConditional, type ConditionalCorrespondence } from './conditional/detectConditional';
+import { labelGroups } from './grouping/splitMerge';
+import { pathCandidates, pickPaths } from './features/paths';
+import { describePath } from './embeddings/describe';
 import type { SimilarityMatrices } from './measures/similarityMatrices';
 import { createDefaultMeasureRegistry } from './measures/registry';
 import { computeMatrices, extraMeasures } from './measures/similarityMatrices';
-import { DATATYPES, HYPERNYM, ROLES, type MeasureRegistry } from './measures/types';
+import { DATATYPES, EMBEDDING, HYPERNYM, ROLES, STRUCTURE_TYPES, type MeasureRegistry } from './measures/types';
+import { structureTypesLookup, structureTypesMatrix, type StructureTypesLookup } from './measures/structureTypes';
+import { coverage, repairClassCorrespondences, repairFeatureCorrespondences } from './repair/consistencyRepair';
+import { featureBaseline, pairBaseline, withClassEmbeddings, withFeatureEmbeddings } from './embeddings/embeddingContext';
 import { BUILT_IN_MEASURES } from './measures/types';
 import { createMatchingProblem, type MatchingProblem, type Solution } from './matchingProblem';
+import { searchAlternatives } from './search/nsga2';
 import { createDefaultStrategyRegistry, type StrategyRegistry } from '../search/registry';
 import { createRng, hashString } from '../search/rng';
 import { isOn, validateImprovedSettings, type ImprovedSettings } from './settings';
 import type { HypernymSource } from './lexical/hypernymSource';
+import type { EmbeddingTable } from './embeddings/types';
 import type { SearchStrategy } from '../search/strategy';
 import type {
-  AnalysisSettings, ClassNode, Correspondence, ElementRef, FeatureNode, MatchLevel, MeasureWeight, MetamodelGraph, OverlapInput,
-  OverlapResult, Progress, TypeObjectPattern,
+  Alternative, AnalysisSettings, Correspondence, CorrespondenceKind, ElementRef, FeatureNode, MatchLevel, MeasureWeight, MetamodelGraph,
+  OverlapInput, OverlapResult, Progress, RepairRecord, TypeObjectPattern,
 } from '../types';
+
+/** Version of the improved approach; results and the calibrated threshold's note name it. */
+export const IMPROVED_VERSION = '0.3';
 
 export class InvalidSettingsError extends Error {
   constructor(public readonly problems: string[]) {
@@ -41,6 +54,8 @@ export interface AnalysisDeps {
   createId?: () => string;
   /** WordNet hypernym graph; null or absent when it could not be loaded. */
   hypernyms?: HypernymSource | null;
+  /** Sentence-embedding vectors of the element descriptions; null or absent when unavailable. */
+  embeddings?: EmbeddingTable | null;
 }
 
 /** Input of the improved approach: like {@link OverlapInput}, with the improved settings. */
@@ -97,27 +112,19 @@ export function completeHierarchy(problem: MatchingProblem, solution: Solution, 
   return { assignments, fitness: problem.fitness(assignments) };
 }
 
-/** Own and inherited attributes and references of a class (supertypes within the same file). */
-export function featuresWithInherited(graph: MetamodelGraph, qualifiedName: string): FeatureNode[] {
-  const byName = new Map(graph.classes.map(c => [c.qualifiedName, c]));
-  const seen = new Set<string>();
-  const result: FeatureNode[] = [];
-  const visit = (node: ClassNode | undefined) => {
-    if (!node || seen.has(node.qualifiedName)) return;
-    seen.add(node.qualifiedName);
-    result.push(...node.attributes, ...node.references);
-    node.superTypes.forEach(parent => visit(byName.get(parent)));
-  };
-  visit(byName.get(qualifiedName));
-  return result;
-}
+export { featuresWithInherited } from './hierarchy/features';
 
-/** Settings plus the additional measures that the switched-on improvements contribute. */
-export function analysisSettingsOf(settings: ImprovedSettings): ImprovedSettings {
+/**
+ * Settings plus the additional measures that the switched-on improvements contribute. The embedding
+ * measure only counts when an embedding table is available.
+ */
+export function analysisSettingsOf(settings: ImprovedSettings, available: { embeddings?: boolean } = {}): ImprovedSettings {
   const added: MeasureWeight[] = [];
   if (isOn(settings, 'hypernyms')) added.push({ id: HYPERNYM, weight: settings.params.hypernymWeight });
   if (isOn(settings, 'roles')) added.push({ id: ROLES, weight: settings.params.roleWeight });
   if (isOn(settings, 'datatypes')) added.push({ id: DATATYPES, weight: settings.params.datatypeWeight });
+  if (isOn(settings, 'embeddings') && available.embeddings) added.push({ id: EMBEDDING, weight: settings.params.embeddingWeight });
+  if (isOn(settings, 'structure-types')) added.push({ id: STRUCTURE_TYPES, weight: settings.params.structureTypesWeight });
   return added.length === 0 ? settings : { ...settings, measures: [...settings.measures, ...added] };
 }
 
@@ -149,7 +156,10 @@ const uniqueFeatures = (features: FeatureNode[]) =>
 function matchFeatures(
   correspondence: Correspondence,
   input: OverlapInput,
-  deps: { lexical: LexicalSource; measures: MeasureRegistry; strategy: SearchStrategy; hypernyms: HypernymSource | null },
+  deps: {
+    lexical: LexicalSource; measures: MeasureRegistry; strategy: SearchStrategy; hypernyms: HypernymSource | null;
+    embeddings: { table: EmbeddingTable; baseline: number } | null;
+  },
   settings: AnalysisSettings,
 ): Correspondence[] {
   const collect = (graph: MetamodelGraph, refs: ElementRef[]) =>
@@ -158,13 +168,47 @@ function matchFeatures(
   const targetFeatures = collect(input.target, correspondence.targets);
   const options = profileOptions(settings, deps.lexical, deps.hypernyms,
     compound => [...sourceFeatures, ...targetFeatures].map(f => nameTokens(f.name, deps.lexical, compound)));
-  const sources = buildFeatureProfiles(sourceFeatures, 'source', deps.lexical, settings, options);
-  const targets = buildFeatureProfiles(targetFeatures, 'target', deps.lexical, settings, options);
+  const table = deps.embeddings?.table ?? null;
+  const sources = withFeatureEmbeddings(buildFeatureProfiles(sourceFeatures, 'source', deps.lexical, settings, options), sourceFeatures, table);
+  const targets = withFeatureEmbeddings(buildFeatureProfiles(targetFeatures, 'target', deps.lexical, settings, options), targetFeatures, table);
   if (sources.length === 0 || targets.length === 0) return [];
-  const matrices = computeMatrices('feature', sources, targets, deps.measures, settings, { hypernyms: deps.hypernyms });
+  const matrices = computeMatrices('feature', sources, targets, deps.measures, settings,
+    { hypernyms: deps.hypernyms, embeddingBaseline: deps.embeddings?.baseline });
   const problem = createMatchingProblem('feature', sources, targets, matrices, deps.measures, settings);
   const solution = deps.strategy.search(problem, settings, createRng((settings.seed ^ hashString(correspondence.id)) >>> 0));
-  return solutionToCorrespondences(problem, solution, 'feature', `${correspondence.id}-f`).correspondences;
+  const found = solutionToCorrespondences(problem, solution, 'feature', `${correspondence.id}-f`);
+  if (!isOn(settings, 'paths')) return found.correspondences;
+  // Path correspondences, only for features the search left unmatched (both directions).
+  const profilePaths = (graph: MetamodelGraph, refs: ElementRef[], side: 'source' | 'target') => {
+    const candidates = pathCandidates(graph, refs, side);
+    const profiles = buildFeatureProfiles(candidates.map(c => c.feature), side, deps.lexical, settings, options)
+      .map((profile, k) => ({ ...profile, ref: candidates[k].ref, embedding: table?.vectors.get(describePath(candidates[k].first, candidates[k].second)) }));
+    return { candidates, profiles };
+  };
+  const unmatchedOf = (all: typeof sources, refs: ElementRef[]) => all.filter(p => refs.some(r => r.qualifiedName === p.ref.qualifiedName));
+  const pathProblem = (from: typeof sources, to: typeof targets) => createMatchingProblem('feature', from, to,
+    computeMatrices('feature', from, to, deps.measures, settings, { hypernyms: deps.hypernyms, embeddingBaseline: deps.embeddings?.baseline }),
+    deps.measures, settings);
+  const paths: Omit<Correspondence, 'id'>[] = [];
+  const addPicks = (pathsProblem: MatchingProblem) => {
+    for (const pick of pickPaths(pathsProblem, settings.nullScore)) {
+      const breakdown = pathsProblem.scoreOf(pick.source, [pick.target]);
+      const extras = Object.fromEntries(Object.entries(breakdown.extras).filter(([, value]) => !Number.isNaN(value)).map(([id, value]) => [id, clampUnit(value)]));
+      paths.push({
+        level: 'feature', kind: 'path',
+        sources: [pathsProblem.sources[pick.source].ref], targets: [pathsProblem.targets[pick.target].ref],
+        score: clampUnit(breakdown.combined),
+        scores: { structural: clampUnit(breakdown.structural), syntactic: clampUnit(breakdown.syntactic), ...extras },
+      });
+    }
+  };
+  const unmatchedSources = unmatchedOf(sources, found.unmatched.source);
+  const unmatchedTargets = unmatchedOf(targets, found.unmatched.target);
+  const targetPaths = profilePaths(input.target, correspondence.targets, 'target');
+  if (unmatchedSources.length > 0 && targetPaths.profiles.length > 0) addPicks(pathProblem(unmatchedSources, targetPaths.profiles));
+  const sourcePaths = profilePaths(input.source, correspondence.sources, 'source');
+  if (unmatchedTargets.length > 0 && sourcePaths.profiles.length > 0) addPicks(pathProblem(sourcePaths.profiles, unmatchedTargets));
+  return [...found.correspondences, ...paths.map((c, k) => ({ id: `${correspondence.id}-f-${found.correspondences.length + k + 1}`, ...c }))];
 }
 
 /**
@@ -262,28 +306,53 @@ function restrictProblem(problem: MatchingProblem, rows: number[], columns: numb
 
 const keyOf = (refs: readonly ElementRef[]) => refs.map(r => r.qualifiedName).join(',');
 
-/** A fixed (rule-based) correspondence with its rule confidence as score. */
-function fixedCorrespondence(fixed: FixedCorrespondence, level: MatchLevel, scores: { structural: number; syntactic: number }): Omit<Correspondence, 'id'> {
+/** A fixed (rule-based) correspondence with its rule confidence as score (under the rule's name). */
+function fixedCorrespondence(
+  fixed: FixedCorrespondence & Partial<Pick<ConditionalCorrespondence, 'condition'>>,
+  level: MatchLevel,
+  scores: { structural: number; syntactic: number },
+): Omit<Correspondence, 'id'> {
+  const rule = fixed.kind === 'conditional' ? 'conditional' : 'type-object';
   return {
     level,
     sources: fixed.sources,
     targets: fixed.targets,
     score: clampUnit(fixed.confidence),
-    scores: { structural: clampUnit(scores.structural), syntactic: clampUnit(scores.syntactic), 'type-object': clampUnit(fixed.confidence) },
+    scores: { structural: clampUnit(scores.structural), syntactic: clampUnit(scores.syntactic), [rule]: clampUnit(fixed.confidence) },
     kind: fixed.kind,
     ...(fixed.instance ? { instance: fixed.instance } : {}),
+    ...(fixed.condition ? { condition: fixed.condition } : {}),
     fixed: true,
   };
 }
 
+/** Fixed correspondences of the rules (type-object, conditional) and the classes they explain. */
+interface RuleMatches {
+  classFixed: FixedCorrespondence[];
+  featureFixed: FixedCorrespondence[];
+  covered: { source: Set<string>; target: Set<string> };
+}
+
+function ruleMatches(typeObject: TypeObjectMatch | null, conditional: ReturnType<typeof detectConditional>): RuleMatches | null {
+  if (!typeObject && !conditional) return null;
+  return {
+    classFixed: [...(typeObject?.classFixed ?? []), ...(conditional?.classFixed ?? [])],
+    featureFixed: [...(typeObject?.featureFixed.values() ?? [])].flat(),
+    covered: {
+      source: new Set([...(typeObject?.covered.source ?? []), ...(conditional?.covered.source ?? [])]),
+      target: new Set([...(typeObject?.covered.target ?? []), ...(conditional?.covered.target ?? [])]),
+    },
+  };
+}
+
 /**
- * Adds the type-object rule's fixed class correspondences to those the search found for the free
- * classes. Ids follow the descending score; classes the rule covers but does not use stay unmatched.
+ * Adds the rules' fixed class correspondences to those the search found for the free classes. Ids
+ * follow the descending score; classes a rule covers but does not use stay unmatched.
  */
-function mergeTypeObject(
+function mergeFixed(
   problem: MatchingProblem,
   free: ReturnType<typeof solutionToCorrespondences>,
-  typeObject: TypeObjectMatch,
+  rules: RuleMatches,
   freeSources: number[],
   freeTargets: number[],
   freeAssignments: number[][],
@@ -294,7 +363,7 @@ function mergeTypeObject(
   const assignments: number[][] = problem.sources.map(() => []);
   freeAssignments.forEach((targets, r) => { assignments[freeSources[r]] = targets.map(c => freeTargets[c]); });
 
-  const fixed = typeObject.classFixed.map(c => {
+  const fixed = rules.classFixed.map(c => {
     const i = sourceIndex.get(c.sources[0].qualifiedName)!;
     const j = targetIndex.get(c.targets[0].qualifiedName)!;
     if (!assignments[i].includes(j)) assignments[i].push(j);
@@ -304,12 +373,9 @@ function mergeTypeObject(
   all.sort((a, b) => b.score - a.score || keyOf(a.sources).localeCompare(keyOf(b.sources)) || keyOf(a.targets).localeCompare(keyOf(b.targets)));
   const correspondences = all.map((c, k) => ({ id: `c-${k + 1}`, ...c }));
 
-  const used = new Set([
-    ...typeObject.classFixed.flatMap(c => [...c.sources, ...c.targets]),
-    ...[...typeObject.featureFixed.values()].flat().flatMap(c => [...c.sources, ...c.targets]),
-  ].map(ref => ref.qualifiedName));
+  const used = new Set([...rules.classFixed, ...rules.featureFixed].flatMap(c => [...c.sources, ...c.targets]).map(ref => ref.qualifiedName));
   const unusedCovered = (side: 'source' | 'target') => problem[side === 'source' ? 'sources' : 'targets']
-    .filter(p => typeObject.covered[side].has(p.ref.qualifiedName) && !used.has(p.ref.qualifiedName))
+    .filter(p => rules.covered[side].has(p.ref.qualifiedName) && !used.has(p.ref.qualifiedName))
     .map(p => p.ref);
   return {
     correspondences,
@@ -328,11 +394,85 @@ function fixedFeatureCorrespondences(correspondence: Correspondence, typeObject:
     .map((c, k) => ({ id: `${correspondence.id}-f-${k + 1}`, ...fixedCorrespondence(c, 'feature', { structural: 0, syntactic: 0 }) }));
 }
 
-/** Class-level correspondences per kind. */
-const kindCounts = (correspondences: readonly Correspondence[]) => ({
-  same: correspondences.filter(c => (c.kind ?? 'same') === 'same').length,
-  instance: correspondences.filter(c => c.kind === 'instance').length,
-});
+/** Matched classes per side and the overlap percentage, from the unmatched classes. */
+function overlapSummary(sourceCount: number, targetCount: number, unmatched: { source: readonly ElementRef[]; target: readonly ElementRef[] }) {
+  const matchedSourceClasses = sourceCount - unmatched.source.length;
+  const matchedTargetClasses = targetCount - unmatched.target.length;
+  const total = sourceCount + targetCount;
+  return {
+    matchedSourceClasses,
+    matchedTargetClasses,
+    overlapPercent: total === 0 ? 0 : round3(((matchedSourceClasses + matchedTargetClasses) / total) * 100),
+  };
+}
+
+/**
+ * Correspondences per kind: class-level kinds, plus feature-level path correspondences under `path`.
+ * Kinds that do not occur are left out, except `same` and `instance` (always counted, as in 0.2).
+ */
+function kindCounts(correspondences: readonly Correspondence[]): Partial<Record<CorrespondenceKind, number>> {
+  const counts: Partial<Record<CorrespondenceKind, number>> = { same: 0, instance: 0 };
+  const add = (kind: CorrespondenceKind) => { counts[kind] = (counts[kind] ?? 0) + 1; };
+  for (const c of correspondences) {
+    add(c.kind ?? 'same');
+    (c.children ?? []).filter(child => child.kind === 'path').forEach(() => add('path'));
+  }
+  return counts;
+}
+
+/** Improvements whose results may contain kinds other than same-concept. */
+const KIND_IMPROVEMENTS = ['type-object', 'paths', 'split-merge', 'conditional'] as const;
+
+/**
+ * Class profiles and the class-level similarity matrices of an analysis (no search): profiles with
+ * embeddings, the measures, the data-structure second pass and flooding. Shared with calibration.
+ */
+export function classMatrices(
+  input: OverlapInput,
+  settings: ImprovedSettings,
+  deps: { lexical: LexicalSource; hypernyms: HypernymSource | null; measures: MeasureRegistry; embeddings: EmbeddingTable | null },
+  warnings: string[] = [],
+) {
+  const { source, target } = input;
+  const { hypernyms, measures } = deps;
+  const embeddingTable = deps.embeddings;
+  const classOptions = profileOptions(settings, deps.lexical, hypernyms,
+    compound => [...source.classes, ...target.classes].map(node => classDocument(node, deps.lexical, compound)));
+  const sourceProfiles = withClassEmbeddings(buildClassProfiles(source, 'source', deps.lexical, settings, classOptions), source, embeddingTable);
+  const targetProfiles = withClassEmbeddings(buildClassProfiles(target, 'target', deps.lexical, settings, classOptions), target, embeddingTable);
+  // Embedding similarities are rescaled against the median cosine of each level, computed once per run.
+  const embeddingBaseline = embeddingTable
+    ? {
+      class: pairBaseline(sourceProfiles.map(p => p.embedding), targetProfiles.map(p => p.embedding)),
+      feature: featureBaseline(source, target, embeddingTable),
+    }
+    : null;
+  const featureEmbeddings = embeddingTable && embeddingBaseline ? { table: embeddingTable, baseline: embeddingBaseline.feature } : null;
+  const classContext = { hypernyms, embeddingBaseline: embeddingBaseline?.class };
+  let structureTypes: StructureTypesLookup | undefined;
+  if (isOn(settings, 'structure-types')) {
+    // Second pass: the data-structure measure needs the first-pass similarity of the classes that
+    // features are typed by; the matrices are then combined with it (and adaptive weights).
+    const firstPassSettings = { ...settings, measures: settings.measures.filter(m => m.id !== STRUCTURE_TYPES) };
+    const firstPass = computeMatrices('class', sourceProfiles, targetProfiles, measures, firstPassSettings, classContext);
+    const structure = structureTypesMatrix(source, target, firstPass.combined, settings.params.structureTypesMaxSignatures);
+    structureTypes = structureTypesLookup(source, target, structure);
+  }
+  const matrices = computeMatrices('class', sourceProfiles, targetProfiles, measures, settings, { ...classContext, structureTypes });
+  if (isOn(settings, 'flooding')) {
+    const { flood } = similarityFlooding(buildClassGraph(source), buildClassGraph(target), matrices.combined,
+      matrices.n, matrices.m, settings.params.floodingMaxIterations);
+    if (flood) {
+      const weight = settings.params.floodingWeight;
+      matrices.perMeasure.flooding = flood;
+      matrices.flooding = { matrix: flood, weight };
+      matrices.combined = blend(matrices.combined, flood, weight);
+    } else if (matrices.n > 0 && matrices.m > 0) {
+      warnings.push('Similarity flooding was skipped because the metamodels are too large.');
+    }
+  }
+  return { sourceProfiles, targetProfiles, matrices, embeddingBaseline, featureEmbeddings };
+}
 
 /**
  * Runs the improved semantic overlap analysis: the paper approach (Kessentini et al. 2014) plus the
@@ -343,8 +483,15 @@ export function runImprovedAnalysis(input: ImprovedInput, deps: AnalysisDeps): O
   const { source, target } = input;
   const problems = validateImprovedSettings(input.settings);
   if (problems.length > 0) throw new InvalidSettingsError(problems);
+  const embeddingTable = isOn(input.settings, 'embeddings') ? deps.embeddings ?? null : null;
   // The result keeps the user's settings; the analysis also uses the improvements' measures.
-  const settings = analysisSettingsOf(input.settings);
+  const withMeasures = analysisSettingsOf(input.settings, { embeddings: embeddingTable !== null });
+  // The calibrated acceptance threshold replaces the null score on both levels (and in hierarchy
+  // completion). The fitness already averages over all source elements with the null score for
+  // unmatched ones, which normalises scores by the number of elements as Fang's division by the
+  // match count does; no further normalisation is needed.
+  const calibrated = isOn(withMeasures, 'calibrated-null');
+  const settings = calibrated ? { ...withMeasures, nullScore: withMeasures.params.calibratedNullScore } : withMeasures;
   const hypernyms = deps.hypernyms ?? null;
   const now = deps.now ?? Date.now;
   const startedAt = now();
@@ -360,6 +507,9 @@ export function runImprovedAnalysis(input: ImprovedInput, deps: AnalysisDeps): O
   if (isOn(settings, 'hypernyms') && !hypernyms) {
     warnings.push('WordNet hypernyms could not be loaded; hypernym similarity was skipped.');
   }
+  if (isOn(settings, 'embeddings') && !embeddingTable) {
+    warnings.push('No sentence embeddings were available, so the embedding measure was skipped.');
+  }
   for (const graph of [source, target]) {
     for (const supertype of graph.unresolvedSupertypes) {
       warnings.push(`${graph.ref.name}: supertype ${supertype} is defined in another file and was ignored.`);
@@ -367,23 +517,8 @@ export function runImprovedAnalysis(input: ImprovedInput, deps: AnalysisDeps): O
   }
 
   report({ phase: 'profiling', fraction: 0.02 });
-  const classOptions = profileOptions(settings, deps.lexical, hypernyms,
-    compound => [...source.classes, ...target.classes].map(node => classDocument(node, deps.lexical, compound)));
-  const sourceProfiles = buildClassProfiles(source, 'source', deps.lexical, settings, classOptions);
-  const targetProfiles = buildClassProfiles(target, 'target', deps.lexical, settings, classOptions);
-  const matrices = computeMatrices('class', sourceProfiles, targetProfiles, measures, settings, { hypernyms });
-  if (isOn(settings, 'flooding')) {
-    const { flood } = similarityFlooding(buildClassGraph(source), buildClassGraph(target), matrices.combined,
-      matrices.n, matrices.m, settings.params.floodingMaxIterations);
-    if (flood) {
-      const weight = settings.params.floodingWeight;
-      matrices.perMeasure.flooding = flood;
-      matrices.flooding = { matrix: flood, weight };
-      matrices.combined = blend(matrices.combined, flood, weight);
-    } else if (matrices.n > 0 && matrices.m > 0) {
-      warnings.push('Similarity flooding was skipped because the metamodels are too large.');
-    }
-  }
+  const { sourceProfiles, targetProfiles, matrices, embeddingBaseline, featureEmbeddings } = classMatrices(
+    input, settings, { lexical: deps.lexical, hypernyms, measures, embeddings: embeddingTable }, warnings);
   report({ phase: 'profiling', fraction: PROFILING_END });
 
   const problem = createMatchingProblem('class', sourceProfiles, targetProfiles, matrices, measures, settings);
@@ -391,54 +526,115 @@ export function runImprovedAnalysis(input: ImprovedInput, deps: AnalysisDeps): O
   let unmatched = { source: sourceProfiles.map(p => p.ref), target: targetProfiles.map(p => p.ref) };
   let fitness = 0;
   let typeObjectPatterns: TypeObjectPattern[] | undefined;
+  let alternatives: Alternative[] | undefined;
+  const repairs: RepairRecord[] = [];
   if (problem.n === 0 || problem.m === 0) {
     warnings.push('One of the metamodels has no classes, so no overlap can be computed.');
   } else {
     const typeObject = isOn(settings, 'type-object')
       ? detectTypeObject(source, target, settings.params.typeObjectMinSubclasses)
       : null;
-    // Classes explained by the type-object rule are fixed; the search only sees the others.
-    const freeSources = sourceProfiles.flatMap((p, i) => (typeObject?.covered.source.has(p.ref.qualifiedName) ? [] : [i]));
-    const freeTargets = targetProfiles.flatMap((p, j) => (typeObject?.covered.target.has(p.ref.qualifiedName) ? [] : [j]));
-    const free = typeObject ? restrictProblem(problem, freeSources, freeTargets, measures) : problem;
+    const conditional = isOn(settings, 'conditional')
+      ? detectConditional(source, target, word => deps.lexical.lemma(word) !== null)
+      : null;
+    const rules = ruleMatches(typeObject, conditional);
+    // Classes explained by a rule (type-object, conditional) are fixed; the search only sees the others.
+    const freeSources = sourceProfiles.flatMap((p, i) => (rules?.covered.source.has(p.ref.qualifiedName) ? [] : [i]));
+    const freeTargets = targetProfiles.flatMap((p, j) => (rules?.covered.target.has(p.ref.qualifiedName) ? [] : [j]));
+    const free = rules ? restrictProblem(problem, freeSources, freeTargets, measures) : problem;
     const searchProgress = (p: { phase: 'ga' | 'sa'; fraction: number }) =>
       report({ phase: p.phase, fraction: PROFILING_END + p.fraction * (CLASS_SEARCH_END - PROFILING_END) });
-    let freeResult: ReturnType<typeof solutionToCorrespondences> = {
-      correspondences: [], unmatched: { source: free.sources.map(p => p.ref), target: free.targets.map(p => p.ref) },
-    };
-    let freeAssignments: number[][] = free.sources.map(() => []);
-    if (free.n > 0 && free.m > 0) {
-      const solution = strategy.search(free, settings, createRng(settings.seed), searchProgress);
-      const completed = isOn(settings, 'hierarchy-both')
-        ? completeHierarchyBothSides(free, solution, source, target)
-        : completeHierarchy(free, solution, target);
-      freeAssignments = completed.assignments;
-      freeResult = solutionToCorrespondences(free, completed, 'class');
-    }
-    if (typeObject) {
-      const merged = mergeTypeObject(problem, freeResult, typeObject, freeSources, freeTargets, freeAssignments);
-      ({ correspondences, unmatched, fitness } = merged);
-      typeObjectPatterns = [typeObject.pattern];
-    } else {
-      ({ correspondences, unmatched } = freeResult);
-      fitness = problem.fitness(freeAssignments);
-    }
-    correspondences = correspondences.map((correspondence, k) => {
-      report({ phase: 'features', fraction: CLASS_SEARCH_END + (k / correspondences.length) * (1 - CLASS_SEARCH_END) });
-      const fixedChildren = correspondence.fixed && correspondence.kind === 'instance' && typeObject
-        ? fixedFeatureCorrespondences(correspondence, typeObject)
-        : null;
-      return {
-        ...correspondence,
-        children: fixedChildren ?? matchFeatures(correspondence, input, { lexical: deps.lexical, measures, strategy, hypernyms }, settings),
+    if (typeObject) typeObjectPatterns = [typeObject.pattern];
+    /**
+     * Steps after the class-level search, for one solution of the free classes: hierarchy
+     * completion, split/merge labelling, the rules' fixed correspondences, class repair, feature
+     * matching (with paths) and feature repair.
+     */
+    const finish = (solution: Solution | null, featureProgress: (fraction: number) => void) => {
+      let freeResult: ReturnType<typeof solutionToCorrespondences> = {
+        correspondences: [], unmatched: { source: free.sources.map(p => p.ref), target: free.targets.map(p => p.ref) },
       };
-    });
+      let freeAssignments: number[][] = free.sources.map(() => []);
+      if (solution) {
+        const completed = isOn(settings, 'hierarchy-both')
+          ? completeHierarchyBothSides(free, solution, source, target)
+          : completeHierarchy(free, solution, target);
+        freeAssignments = completed.assignments;
+        freeResult = solutionToCorrespondences(free, completed, 'class');
+        if (isOn(settings, 'split-merge')) {
+          freeResult = { ...freeResult, correspondences: labelGroups(freeResult.correspondences, source, target, warnings) };
+        }
+      }
+      let found: Correspondence[];
+      let notFound: { source: ElementRef[]; target: ElementRef[] };
+      let value: number;
+      if (rules) {
+        ({ correspondences: found, unmatched: notFound, fitness: value } = mergeFixed(problem, freeResult, rules, freeSources, freeTargets, freeAssignments));
+      } else {
+        ({ correspondences: found, unmatched: notFound } = freeResult);
+        value = problem.fitness(freeAssignments);
+      }
+      const removed: RepairRecord[] = [];
+      if (isOn(settings, 'consistency')) {
+        const repaired = repairClassCorrespondences(found, source, target);
+        found = repaired.correspondences;
+        removed.push(...repaired.repairs);
+        const used = new Set(found.flatMap(c => [...c.sources, ...c.targets]).map(ref => ref.qualifiedName));
+        notFound = {
+          source: sourceProfiles.filter(p => !used.has(p.ref.qualifiedName)).map(p => p.ref),
+          target: targetProfiles.filter(p => !used.has(p.ref.qualifiedName)).map(p => p.ref),
+        };
+      }
+      found = found.map((correspondence, k) => {
+        featureProgress(k / found.length);
+        const fixedChildren = correspondence.fixed && correspondence.kind === 'instance' && typeObject
+          ? fixedFeatureCorrespondences(correspondence, typeObject)
+          : null;
+        return {
+          ...correspondence,
+          children: fixedChildren ?? matchFeatures(correspondence, input,
+            { lexical: deps.lexical, measures, strategy, hypernyms, embeddings: featureEmbeddings }, settings),
+        };
+      });
+      if (isOn(settings, 'consistency')) {
+        const repaired = repairFeatureCorrespondences(found, source, target);
+        found = repaired.correspondences;
+        removed.push(...repaired.repairs);
+      }
+      return { correspondences: found, unmatched: notFound, fitness: value, repairs: removed };
+    };
+    const featureFraction = (start: number, share: number) => (fraction: number) =>
+      report({ phase: 'features', fraction: CLASS_SEARCH_END + (start + fraction * share) * (1 - CLASS_SEARCH_END) });
+    const searchable = free.n > 0 && free.m > 0;
+    let outcome: ReturnType<typeof finish>;
+    if (isOn(settings, 'alternatives') && searchable) {
+      // Alternatives: the lexical and structural objectives are searched separately (NSGA-II);
+      // every alternative is finished on its own, the balanced one fills the main fields.
+      const labelled = searchAlternatives(free, settings, createRng(settings.seed), searchProgress);
+      const finished = labelled.map((alternative, k) => ({
+        alternative,
+        outcome: finish({ assignments: alternative.assignments, fitness: free.fitness(alternative.assignments) },
+          featureFraction(k / labelled.length, 1 / labelled.length)),
+      }));
+      outcome = finished.find(f => f.alternative.labels.includes('balanced'))!.outcome;
+      alternatives = finished.map(({ alternative, outcome: alt }) => ({
+        label: alternative.labels.join(', '),
+        isDefault: alternative.labels.includes('balanced'),
+        objectives: { lexical: round3(alternative.objectives.lexical), structural: round3(alternative.objectives.structural) },
+        correspondences: alt.correspondences,
+        unmatched: alt.unmatched,
+        summary: overlapSummary(sourceProfiles.length, targetProfiles.length, alt.unmatched),
+      }));
+    } else {
+      const solution = searchable ? strategy.search(free, settings, createRng(settings.seed), searchProgress) : null;
+      outcome = finish(solution, featureFraction(0, 1));
+    }
+    ({ correspondences, unmatched, fitness } = outcome);
+    repairs.push(...outcome.repairs);
   }
   report({ phase: 'features', fraction: 1 });
 
-  const matchedSource = sourceProfiles.length - unmatched.source.length;
-  const matchedTarget = targetProfiles.length - unmatched.target.length;
-  const totalClasses = sourceProfiles.length + targetProfiles.length;
+  const { matchedSourceClasses, matchedTargetClasses, overlapPercent } = overlapSummary(sourceProfiles.length, targetProfiles.length, unmatched);
   const perMeasure: Record<string, number[]> = {};
   // Pairs a measure does not apply to (NaN internally) are exported as 0.
   for (const [id, matrix] of Object.entries(matrices.perMeasure)) {
@@ -461,15 +657,17 @@ export function runImprovedAnalysis(input: ImprovedInput, deps: AnalysisDeps): O
       ],
       lexicalSource: deps.lexical.id === 'none' ? null : { id: deps.lexical.id, version: deps.lexical.version },
     },
-    warnings,
+    // Split/merge labelling runs once per alternative and may repeat a warning.
+    warnings: [...new Set(warnings)],
     summary: {
       sourceClassCount: sourceProfiles.length,
       targetClassCount: targetProfiles.length,
-      matchedSourceClasses: matchedSource,
-      matchedTargetClasses: matchedTarget,
-      overlapPercent: totalClasses === 0 ? 0 : round3(((matchedSource + matchedTarget) / totalClasses) * 100),
+      matchedSourceClasses,
+      matchedTargetClasses,
+      overlapPercent,
       fitness: round3(fitness),
-      ...(isOn(settings, 'type-object') ? { kindCounts: kindCounts(correspondences) } : {}),
+      ...(KIND_IMPROVEMENTS.some(id => isOn(settings, id)) ? { kindCounts: kindCounts(correspondences) } : {}),
+      ...(isOn(settings, 'consistency') ? { coverage: coverage(correspondences, source, target) } : {}),
     },
     classMatrix: {
       rows: sourceProfiles.map(p => p.ref.qualifiedName),
@@ -480,5 +678,15 @@ export function runImprovedAnalysis(input: ImprovedInput, deps: AnalysisDeps): O
     correspondences,
     unmatched,
     ...(typeObjectPatterns ? { typeObjectPatterns } : {}),
+    ...(embeddingTable && embeddingBaseline ? { embeddingBaseline, embeddingModel: { ...embeddingTable.model } } : {}),
+    ...(isOn(settings, 'consistency') ? { repairs } : {}),
+    ...(alternatives ? { alternatives } : {}),
+    ...(calibrated ? {
+      acceptanceThreshold: {
+        value: settings.nullScore,
+        source: 'calibrated' as const,
+        note: `calibrated on the benchmark suite (improved ${IMPROVED_VERSION})`,
+      },
+    } : {}),
   };
 }

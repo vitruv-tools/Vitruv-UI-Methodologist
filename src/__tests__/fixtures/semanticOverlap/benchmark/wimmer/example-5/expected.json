@@ -1,0 +1,18 @@
+{
+  "scenario": "Wimmer 5 (inheritance breadth, depth, concreteness)",
+  "family": "wimmer",
+  "provenance": "Hand-made after Wimmer et al. 2010, Benchmark Example 5 (Fig. 9); entries derived from the example's challenge list",
+  "source": "wimmer/example-5/source.ecore",
+  "target": "wimmer/example-5/target.ecore",
+  "correspondences": [
+    {"sources": ["lhs5.ResearchStaff"], "targets": ["rhs5.ResearchStaff"]},
+    {"sources": ["lhs5.Professor"], "targets": ["rhs5.Professor"]},
+    {"sources": ["lhs5.FullProf"], "targets": ["rhs5.FullProf"]},
+    {"sources": ["lhs5.Assistant"], "targets": ["rhs5.Assistant"], "note": "concreteness and depth difference"},
+    {"sources": ["lhs5.PrePhd", "lhs5.PostPhd"], "targets": ["rhs5.Assistant"], "uncertain": true, "note": "depth difference: instances become instances of the concrete parent Assistant"}
+  ],
+  "features": [
+    {"sources": ["lhs5.ResearchStaff.name"], "targets": ["rhs5.ResearchStaff.name"]}
+  ],
+  "unmatched": {"source": ["lhs5.AssistantProf"], "note": "breadth difference (1:0)"}
+}

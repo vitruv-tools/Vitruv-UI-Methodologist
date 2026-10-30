@@ -35,12 +35,18 @@ export interface ElementProfile extends NameTokens {
   roleVector?: number[];
   /** Share of attribute data-type categories (see datatypeMeasure.ts); null without attributes. */
   datatypeHistogram?: number[] | null;
+  /** Sentence embedding of the element's description (see embeddingMeasure.ts); absent when unavailable. */
+  embedding?: Float32Array;
 }
 
 export interface MeasureContext {
   settings: AnalysisSettings;
   /** WordNet hypernyms (improved approach); null or absent when not loaded. */
   hypernyms?: HypernymSource | null;
+  /** Median embedding cosine of the level, that embedding similarities are rescaled against. */
+  embeddingBaseline?: number;
+  /** Second-pass data-structure similarity of classes (see structureTypes.ts). */
+  structureTypes?: { score(source: string, target: string): number };
 }
 
 /**
@@ -89,4 +95,8 @@ export const HYPERNYM = 'hypernym';
 export const ROLES = 'roles';
 /** Mix of attribute data types (see datatypeMeasure.ts). */
 export const DATATYPES = 'datatypes';
+/** Sentence-embedding similarity of element descriptions (see embeddingMeasure.ts). */
+export const EMBEDDING = 'embedding';
+/** Data-structure similarity of classes, a second-pass measure (see structureTypes.ts). */
+export const STRUCTURE_TYPES = 'structure-types';
 export const BUILT_IN_MEASURES = [STRUCTURAL, COSINE, LEVENSHTEIN] as const;

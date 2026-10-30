@@ -1,14 +1,18 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import Slider from '@mui/material/Slider';
 import TextField from '@mui/material/TextField';
 import ToggleButton from '@mui/material/ToggleButton';
 import ToggleButtonGroup from '@mui/material/ToggleButtonGroup';
+import { config } from '../../config/environment';
 import { themeVars } from '../../theme/theme';
 import { approachOf } from '../../utils/semanticOverlap/approaches/registry';
 import type { ApproachId } from '../../utils/semanticOverlap/approaches/types';
 import {
   IMPROVEMENT_IDS, IMPROVEMENT_LABELS, type ImprovedSettings, type ImprovementParams,
 } from '../../utils/semanticOverlap/improved/settings';
+import { EMBEDDING_MODEL_IDS, type EmbeddingModelId } from '../../utils/semanticOverlap/improved/embeddings/modelManifest';
+import { FETCH_MODEL_HINT, probeEmbeddingModel } from '../../utils/semanticOverlap/improved/embeddings/probe';
+import type { EmbeddingAvailability } from '../../utils/semanticOverlap/improved/embeddings/types';
 import { randomSeed } from '../../utils/semanticOverlap/search/rng';
 import { EFFORT_PRESETS } from '../../utils/semanticOverlap/settings';
 import type { AnalysisSettings, Effort } from '../../utils/semanticOverlap/types';
@@ -22,13 +26,19 @@ interface AnalysisSettingsPanelProps {
   minScore: number;
   onMinScoreChange: (value: number) => void;
   disabled?: boolean;
+  /** Checks whether the app serves an embedding model; injectable for tests. */
+  probeEmbeddings?: (id: EmbeddingModelId) => Promise<EmbeddingAvailability>;
 }
+
+const defaultProbe = (id: EmbeddingModelId) => probeEmbeddingModel(id, config.assetBaseUrl);
 
 const EFFORTS: Effort[] = ['fast', 'balanced', 'thorough'];
 const percent = (value: number) => `${Math.round(value * 100)} %`;
 const toNumber = (text: string) => (text.trim() === '' ? Number.NaN : Number(text));
 
-const PARAM_FIELDS: [keyof ImprovementParams, string][] = [
+type NumericParam = Exclude<keyof ImprovementParams, 'embeddingModel' | 'pathMaxLength'>;
+
+const PARAM_FIELDS: [NumericParam, string][] = [
   ['floodingWeight', 'Flooding weight (λ)'],
   ['floodingMaxIterations', 'Flooding iterations'],
   ['hypernymWeight', 'Hypernym weight'],
@@ -36,28 +46,64 @@ const PARAM_FIELDS: [keyof ImprovementParams, string][] = [
   ['roleWeight', 'Role weight'],
   ['datatypeWeight', 'Data-type weight'],
   ['typeObjectMinSubclasses', 'Type-object min. subclasses'],
+  ['embeddingWeight', 'Embedding weight'],
+  ['embeddingMaxTexts', 'Max. embedded descriptions'],
+  ['structureTypesWeight', 'Data-structure weight'],
+  ['structureTypesMaxSignatures', 'Compared features per class'],
+  ['calibratedNullScore', 'Calibrated null score'],
+  ['splitMaxParts', 'Split / merge parts'],
+  ['alternativesCount', 'Alternatives'],
 ];
+
+const MODEL_LABELS: Record<EmbeddingModelId, string> = { minilm: 'all-MiniLM-L6-v2', 'bge-small': 'bge-small-en-v1.5' };
 
 /** Switches for the improvements of the improved approach and their parameters. */
 const ImprovementsSection: React.FC<{
   settings: ImprovedSettings; disabled?: boolean; onChange: (patch: Partial<ImprovedSettings>) => void;
-}> = ({ settings, disabled, onChange }) => (
+  embeddings: EmbeddingAvailability;
+}> = ({ settings, disabled, onChange, embeddings }) => (
   <fieldset style={{ border: `1px solid ${themeVars.border}`, borderRadius: 8, padding: '8px 12px', margin: 0 }}>
     <legend style={{ fontSize: 12, fontWeight: 600, color: themeVars.textSecondary }}>Improvements</legend>
     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(230px, 1fr))', gap: 4 }}>
-      {IMPROVEMENT_IDS.map(id => (
-        <label key={id} style={{ fontSize: 13, color: themeVars.text, display: 'flex', alignItems: 'center', gap: 6 }}>
-          <input
-            type="checkbox"
-            checked={settings.improvements[id]}
-            disabled={disabled}
-            onChange={event => onChange({ improvements: { ...settings.improvements, [id]: event.target.checked } })}
-          />
-          {IMPROVEMENT_LABELS[id]}
-        </label>
-      ))}
+      {IMPROVEMENT_IDS.map(id => {
+        // The embedding switch needs a model served by the app.
+        const unavailable = id === 'embeddings' && embeddings.state === 'unavailable' ? embeddings.reason : null;
+        return (
+          <label
+            key={id}
+            title={unavailable ? `${unavailable} ${FETCH_MODEL_HINT}` : undefined}
+            style={{ fontSize: 13, color: unavailable ? themeVars.textMuted : themeVars.text, display: 'flex', alignItems: 'center', gap: 6 }}
+          >
+            <input
+              type="checkbox"
+              checked={settings.improvements[id] && !unavailable}
+              disabled={disabled || unavailable !== null}
+              onChange={event => onChange({ improvements: { ...settings.improvements, [id]: event.target.checked } })}
+            />
+            {IMPROVEMENT_LABELS[id]}
+          </label>
+        );
+      })}
     </div>
+    {embeddings.state === 'unavailable' && (
+      <div role="note" style={{ fontSize: 11, color: themeVars.textMuted, marginTop: 6 }}>
+        Sentence embeddings are unavailable: {embeddings.reason} {FETCH_MODEL_HINT}
+      </div>
+    )}
     <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', marginTop: 10 }}>
+      <TextField
+        id="overlap-param-embeddingModel"
+        select
+        label="Embedding model"
+        size="small"
+        value={settings.params.embeddingModel}
+        disabled={disabled}
+        onChange={event => onChange({ params: { ...settings.params, embeddingModel: event.target.value as EmbeddingModelId } })}
+        slotProps={{ select: { native: true } }}
+        sx={{ width: 190 }}
+      >
+        {EMBEDDING_MODEL_IDS.map(id => <option key={id} value={id}>{MODEL_LABELS[id]}</option>)}
+      </TextField>
       {PARAM_FIELDS.map(([key, label]) => (
         <TextField
           key={key}
@@ -104,9 +150,18 @@ const SliderRow: React.FC<{
  * approach also its improvements.
  */
 export const AnalysisSettingsPanel: React.FC<AnalysisSettingsPanelProps> = ({
-  approach = 'paper', settings, onChange, minScore, onMinScoreChange, disabled,
+  approach = 'paper', settings, onChange, minScore, onMinScoreChange, disabled, probeEmbeddings = defaultProbe,
 }) => {
   const [open, setOpen] = useState(false);
+  const [embeddings, setEmbeddings] = useState<EmbeddingAvailability>({ state: 'unknown' });
+  const embeddingModel = (settings as Partial<ImprovedSettings>).params?.embeddingModel;
+  useEffect(() => {
+    if (approach !== 'improved' || !embeddingModel) return undefined;
+    let current = true;
+    setEmbeddings({ state: 'loading' });
+    void probeEmbeddings(embeddingModel).then(availability => { if (current) setEmbeddings(availability); });
+    return () => { current = false; };
+  }, [approach, embeddingModel, probeEmbeddings]);
   const [seedText, setSeedText] = useState(String(settings.seed));
   const [showAdvanced, setShowAdvanced] = useState(false);
   const problems = approachOf(approach).validate(settings);
@@ -138,7 +193,7 @@ export const AnalysisSettingsPanel: React.FC<AnalysisSettingsPanelProps> = ({
       {open && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
           {approach === 'improved' && (
-            <ImprovementsSection settings={settings as ImprovedSettings} disabled={disabled} onChange={onChange} />
+            <ImprovementsSection settings={settings as ImprovedSettings} disabled={disabled} onChange={onChange} embeddings={embeddings} />
           )}
           <SliderRow
             label="Structural weight"

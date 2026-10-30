@@ -2,7 +2,8 @@ import React from 'react';
 import { fireEvent, render, screen } from '@testing-library/react';
 import { CorrespondenceLinkDiagram } from '../../../components/semanticOverlap/CorrespondenceLinkDiagram';
 import { ScoreEdge, INSTANCE_DASH } from '../../../components/semanticOverlap/ScoreEdge';
-import { correspondenceFor, sampleImprovedResult, sampleResult } from './sampleResult';
+import { KIND_DASH } from '../../../utils/semanticOverlap/correspondenceKind';
+import { correspondenceFor, sampleImprovedResult, sampleKindsResult, sampleResult } from './sampleResult';
 
 const flowProps = vi.hoisted(() => ({ current: null as any }));
 
@@ -94,5 +95,31 @@ describe('CorrespondenceLinkDiagram', () => {
       expect(solid.querySelector('path')?.getAttribute('stroke-dasharray')).toBeNull();
     });
   });
-});
 
+  describe('path, split, merge and conditional correspondences', () => {
+    it('labels each kind on its edges', () => {
+      renderDiagram({ result: sampleKindsResult(), expandedIds: ['c-1'] });
+      const labels = (id: string) => [...new Set(flowProps.current.edges.filter((e: any) => e.data.correspondenceId === id).map((e: any) => e.data.kindLabel))];
+      expect(labels('c-1')).toEqual(['split into 2']);
+      expect(labels('c-2')).toEqual(['merge of 2']);
+      expect(labels('c-3')).toEqual(['containment = true']);
+      expect(labels('c-1-f-1')).toEqual(['path ownedAttributes.isDerived']);
+    });
+
+    it('draws every kind with its own dash pattern and label', () => {
+      const props = (kind: string, kindLabel: string) => ({
+        id: 'e', sourceX: 0, sourceY: 0, targetX: 10, targetY: 10, sourcePosition: 'right', targetPosition: 'left',
+        data: { correspondenceId: 'c-1', level: 'class', score: 0.5, selected: true, kind, kindLabel },
+      } as any);
+      const patterns = (['path', 'split', 'merge', 'conditional'] as const).map(kind => {
+        const { container, unmount } = render(<svg><ScoreEdge {...props(kind, `${kind} label`)} /></svg>);
+        expect(screen.getByText(`${kind} label · 50 %`)).toBeInTheDocument();
+        const dash = container.querySelector('path')?.getAttribute('stroke-dasharray');
+        unmount();
+        return dash;
+      });
+      expect(patterns).toEqual([KIND_DASH.path, KIND_DASH.split, KIND_DASH.merge, KIND_DASH.conditional]);
+      expect(new Set([...patterns, INSTANCE_DASH]).size).toBe(5);
+    });
+  });
+});

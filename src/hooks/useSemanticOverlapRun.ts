@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef } from 'react';
+import { config } from '../config/environment';
 import { apiService } from '../services/api';
 import { useSemanticOverlapStore } from '../store/SemanticOverlap';
 import { approachOf } from '../utils/semanticOverlap/approaches/registry';
@@ -118,7 +119,7 @@ export function useSemanticOverlapRun(deps: SemanticOverlapRunDeps = {}) {
         useSemanticOverlapStore.getState().failRun(runId, TIMEOUT_MESSAGE);
       }, ANALYSIS_TIMEOUT_MS);
       useSemanticOverlapStore.getState().beginRunning(runId);
-      worker.postMessage({ type: 'start', runId, approach, input });
+      worker.postMessage({ type: 'start', runId, approach, input, assetBase: config.assetBaseUrl });
     } catch (error) {
       stopWorker();
       const message = error instanceof Error ? error.message : String(error);

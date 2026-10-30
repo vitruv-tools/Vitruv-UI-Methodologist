@@ -1,14 +1,16 @@
 import type { ImprovementId } from '../../../../utils/semanticOverlap/improved/settings';
-import { classify, delta, selectCombination, type ConfigurationResult } from './ablation';
+import { classify, delta, selectCombination, summarise, type ConfigurationResult } from './ablation';
 
 const scores = (fMeasure: number) => ({ class: { precision: fMeasure, recall: fMeasure, fMeasure } });
 
 describe('ablation decision rule', () => {
-  it('needs +0.02 on average and no scenario losing more than 0.02 to be helpful', () => {
+  it('needs +0.02 on the family average and no family losing more than 0.02 to be helpful', () => {
     expect(classify(0.02, [0.05, -0.01])).toBe('helpful');
     expect(classify(0.0199, [0.05])).toBe('neutral');
     expect(classify(0.05, [0.2, -0.021])).toBe('neutral');
     expect(classify(0.05, [0.2, -0.02])).toBe('helpful');
+    // A family loss just above the threshold blocks "helpful", however large the average gain.
+    expect(classify(0.3, [0.9, 0.3, -0.021])).toBe('neutral');
   });
 
   it('calls an average loss of more than 0.02 harmful', () => {
@@ -16,21 +18,31 @@ describe('ablation decision rule', () => {
     expect(classify(-0.021, [0])).toBe('harmful');
   });
 
-  it('computes deltas of the class-level F-measure per scenario and on average', () => {
-    const before: ConfigurationResult = { configuration: [], perScenario: { fig1: scores(1), 'brake-bom': scores(0) }, average: { precision: 0.5, recall: 0.5, fMeasure: 0.5 } };
-    const after: ConfigurationResult = { configuration: ['type-object'], perScenario: { fig1: scores(0.9), 'brake-bom': scores(0.8) }, average: { precision: 0.85, recall: 0.85, fMeasure: 0.85 } };
+  it('computes deltas of the class-level F-measure per family, per scenario and on the family average', () => {
+    const before = summarise([], [['fig1', scores(1)], ['brake-bom', scores(0)]]);
+    const after = summarise(['type-object'], [['fig1', scores(0.9)], ['brake-bom', scores(0.8)]]);
     const d = delta(before, after);
     expect(d.average).toBeCloseTo(0.35);
-    expect(d.perScenario.fig1).toBeCloseTo(-0.1);
+    expect(d.perFamily.fig1).toBeCloseTo(-0.1);
+    expect(d.perFamily['brake-bom']).toBeCloseTo(0.8);
     expect(d.perScenario['brake-bom']).toBeCloseTo(0.8);
+  });
+
+  it('weights families equally: two scenarios of one family count as one', () => {
+    // brake-bom and bom-brake form one family; Fig. 1 is another.
+    const result = summarise([], [['fig1', scores(0)], ['brake-bom', scores(1)], ['bom-brake', scores(0.6)]]);
+    expect(result.perFamily['brake-bom']?.fMeasure).toBeCloseTo(0.8);
+    expect(result.average.fMeasure).toBeCloseTo(0.4);
+    // The rule sees one delta per family, not per scenario.
+    const better = summarise([], [['fig1', scores(0.05)], ['brake-bom', scores(1)], ['bom-brake', scores(0.6)]]);
+    expect(Object.keys(delta(result, better).perFamily)).toEqual(['fig1', 'brake-bom']);
   });
 });
 
 describe('combination procedure', () => {
   /** Fake evaluation: one scenario whose F is given by a function of the enabled improvements. */
   const evaluator = (f: (enabled: ImprovementId[]) => number) => (enabled: ImprovementId[]): ConfigurationResult => {
-    const fMeasure = f(enabled);
-    return { configuration: enabled, perScenario: { fig1: scores(fMeasure) }, average: { precision: fMeasure, recall: fMeasure, fMeasure } };
+    return summarise(enabled, [['fig1', scores(f(enabled))]]);
   };
   const has = (enabled: ImprovementId[], id: ImprovementId) => enabled.includes(id);
 
