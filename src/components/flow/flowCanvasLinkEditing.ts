@@ -95,19 +95,21 @@ export function moveSegment(prepared: PreparedDrag, coord: number): RoutePoint[]
 export function cleanRoute(points: RoutePoint[]): RoutePoint[] {
   const deduped: RoutePoint[] = [];
   for (const p of points) {
-    const prev = deduped[deduped.length - 1];
+    const prev = deduped.at(-1);
     if (!prev || Math.abs(prev.x - p.x) >= EPS || Math.abs(prev.y - p.y) >= EPS) deduped.push(p);
   }
   if (deduped.length < 3) return deduped;
   const out: RoutePoint[] = [deduped[0]];
   for (let i = 1; i < deduped.length - 1; i++) {
-    const prev = out[out.length - 1];
+    const prev = out.at(-1);
+    if (!prev) break;
     const cur = deduped[i];
     const next = deduped[i + 1];
     const collinear = (Math.abs(prev.x - cur.x) < EPS && Math.abs(cur.x - next.x) < EPS)
       || (Math.abs(prev.y - cur.y) < EPS && Math.abs(cur.y - next.y) < EPS);
     if (!collinear) out.push(cur);
   }
-  out.push(deduped[deduped.length - 1]);
+  const end = deduped.at(-1);
+  if (end) out.push(end);
   return out;
 }

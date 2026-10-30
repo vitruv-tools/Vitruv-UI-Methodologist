@@ -775,8 +775,9 @@ export function endsAreOrthogonal(points: Point[], startSide: Side, endSide: Sid
   const en = sideNormal(endSide);
   const a = points[0];
   const b = points[1];
-  const y = points[points.length - 2];
-  const z = points[points.length - 1];
+  const y = points.at(-2);
+  const z = points.at(-1);
+  if (!y || !z) return false;
   const out = (b.x - a.x) * sn.x + (b.y - a.y) * sn.y;
   const sideways = Math.abs((b.x - a.x) * sn.y) + Math.abs((b.y - a.y) * sn.x);
   const into = (y.x - z.x) * en.x + (y.y - z.y) * en.y;
@@ -1220,10 +1221,12 @@ function onSide(rect: Rect, side: Side, p: Point): boolean {
 /** A route whose first or last run is too short to hold an arrowhead — it was squeezed between boxes. */
 export function hasCrampedEnds(route: SavedRoute): boolean {
   const pts = route.points;
-  if (pts.length < 3) return false;
+  const tail = pts.at(-2);
+  const tip = pts.at(-1);
+  if (pts.length < 3 || !tail || !tip) return false;
   const run = (a: Point, b: Point) => Math.hypot(b.x - a.x, b.y - a.y);
   const min = STUB_LENGTH / 2;
-  return run(pts[0], pts[1]) < min || run(pts[pts.length - 2], pts[pts.length - 1]) < min;
+  return run(pts[0], pts[1]) < min || run(tail, tip) < min;
 }
 
 export function asSavedRoute(value: unknown): SavedRoute | null {
@@ -1238,7 +1241,8 @@ export function asSavedRoute(value: unknown): SavedRoute | null {
 export function isSavedRouteValid(route: SavedRoute | null, source?: Rect, target?: Rect): route is SavedRoute {
   if (!route || !source || !target) return false;
   const first = route.points[0];
-  const last = route.points[route.points.length - 1];
+  const last = route.points.at(-1);
+  if (!last) return false;
   return onSide(source, route.sourceHandle, first) && onSide(target, route.targetHandle, last);
 }
 
@@ -1359,12 +1363,13 @@ function planCoarseEdges(
   for (const { edge, route } of fixed) {
     const source = rectById.get(edge.source);
     const target = rectById.get(edge.target);
-    if (!source || !target) continue;
+    const end = route.points.at(-1);
+    if (!source || !target || !end) continue;
     pushSlot(occupied, `${edge.source}|${route.sourceHandle}`, sideCoordinate(source, route.sourceHandle, route.points[0]));
     pushSlot(
       occupied,
       `${edge.target}|${route.targetHandle}`,
-      sideCoordinate(target, route.targetHandle, route.points[route.points.length - 1]),
+      sideCoordinate(target, route.targetHandle, end),
     );
   }
   return { plans, slots: assignSlots(requests, occupied) };
