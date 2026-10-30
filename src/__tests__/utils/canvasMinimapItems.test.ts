@@ -263,13 +263,11 @@ describe('minimap edges in VSUM mode', () => {
     expect(segs[0].points.length).toBeGreaterThan(2);
     const first = segs[0].points[0];
     const last = segs[0].points[segs[0].points.length - 1];
-    expect(first).toEqual({
-      x: a.position.x + ECORE_FILE_BOX_SIZE.width / 2,
-      y: a.position.y + ECORE_FILE_BOX_SIZE.height,
-    });
-    expect(last).toEqual({
-      x: b.position.x + ECORE_FILE_BOX_SIZE.width / 2,
-      y: b.position.y,
-    });
+    // The vertical gap (34px) is too small for two stubs, so the link attaches on the facing
+    // left/right sides, leaving and entering perpendicular to them.
+    expect(first.x).toBe(a.position.x + ECORE_FILE_BOX_SIZE.width);
+    expect(last.x).toBe(b.position.x);
+    expect(segs[0].points[1].y).toBe(first.y);
+    expect(segs[0].points[segs[0].points.length - 2].y).toBe(last.y);
   });
 });

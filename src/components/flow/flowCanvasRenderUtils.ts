@@ -64,6 +64,7 @@ export interface MapFlowEdgeContext {
   handleEdgeDragEnd: (edgeId: string, point: { x: number; y: number }) => void;
   handleEdgeHandleChange: (edgeId: string, newSourceHandle: string, newTargetHandle: string) => void;
   handleEdgeReorderRequest: (edgeId: string, controlPoint: { x: number; y: number }) => void;
+  handleEdgeRouteChange?: (edgeId: string, points: Array<{ x: number; y: number }>) => void;
   getFineParallel?: (edge: Edge) => { index: number; total: number } | undefined;
   getReactionRoute?: (edge: Edge) => { points: Array<{ x: number; y: number }> } | undefined;
 }
@@ -80,6 +81,7 @@ function reactionEdgeInteractionHandlers(
       onEdgeDragEnd: undefined,
       onHandleChange: undefined,
       onReorderRequest: undefined,
+      onRouteChange: undefined,
     };
   }
 
@@ -89,6 +91,7 @@ function reactionEdgeInteractionHandlers(
     onEdgeDragEnd: ctx.handleEdgeDragEnd,
     onHandleChange: ctx.handleEdgeHandleChange,
     onReorderRequest: ctx.handleEdgeReorderRequest,
+    onRouteChange: ctx.handleEdgeRouteChange,
   };
 }
 

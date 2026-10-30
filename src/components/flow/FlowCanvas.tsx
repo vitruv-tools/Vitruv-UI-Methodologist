@@ -110,6 +110,7 @@ import {
   nodeWorldRect,
   pointInRect,
   routeAllReactionEdges,
+  routeReactionEdgesWhileDragging,
   routeOrthogonalAStar,
   routeToCursorAStar,
 } from './flowCanvasAStarRouter';
@@ -178,9 +179,18 @@ import {
   upsertVsumLayoutPosition,
   type VsumLayoutIdentity,
 } from '../../utils/vsumLayoutStorage';
+import { collectVsumRoutes, loadVsumRoutes, saveVsumRoutes } from '../../utils/vsumRouteStorage';
+import { settleReactionRoutes } from './flowCanvasRouteSettle';
 
 import EObjectNode from './lowcode/EObjectNode';
 import BoundingBoxNode from './lowcode/BoundingBoxNode';
+
+/**
+ * Snap distance while dragging a reaction. Class and attribute handles are 24px apart, so the
+ * default 28px radius made the line leap between neighbouring handles; this keeps it on the one
+ * under the cursor (the handles' hit areas are widened in reaction.css to compensate).
+ */
+const REACTION_CONNECTION_RADIUS = 10;
 
 export type { CanvasMode } from './flowCanvasTypes';
 
@@ -534,6 +544,8 @@ export const FlowCanvas = forwardRef<FlowCanvasHandle, FlowCanvasProps>(
     }, [reactFlowInstance, setEdges]);
 
     const bboxDraggingIdsRef = useRef<Set<string>>(new Set());
+    const nodeDraggingRef = useRef(false);
+    const [isNodeDragging, setIsNodeDragging] = useState(false);
 
     /**
      * Models' selection lives in selectedFileIds, so React Flow's own select changes for them
@@ -570,8 +582,16 @@ export const FlowCanvas = forwardRef<FlowCanvasHandle, FlowCanvasProps>(
       });
 
       const { isDragging, dragEnded } = getNodeDragFlags(clampedChanges);
-      if (isDragging) setHistoryPaused(true);
-      if (dragEnded) setHistoryPaused(false);
+      if (isDragging) {
+        setHistoryPaused(true);
+        if (!nodeDraggingRef.current) setIsNodeDragging(true);
+        nodeDraggingRef.current = true;
+      }
+      if (dragEnded) {
+        setHistoryPaused(false);
+        nodeDraggingRef.current = false;
+        setIsNodeDragging(false);
+      }
 
       const draggingIds = bboxDraggingIdsRef.current;
       syncBboxDraggingIds(clampedChanges, draggingIds);
@@ -1550,6 +1570,41 @@ export const FlowCanvas = forwardRef<FlowCanvasHandle, FlowCanvasProps>(
       ));
     }, [setEdges, editable]);
 
+    const handleEdgeRouteChange = useCallback((
+      edgeId: string,
+      points: Array<{ x: number; y: number }>,
+    ) => {
+      if (!editable) return;
+      setEdges(prevEdges => prevEdges.map(edge => {
+        if (edge.id !== edgeId) return edge;
+        const saved = edge.data?.savedRoute;
+        if (!saved) return edge;
+        return { ...edge, data: { ...edge.data, savedRoute: { ...saved, points } } };
+      }));
+    }, [setEdges, editable]);
+
+    // Links keep their path: it is only computed for links that have none yet
+    // (new, or their box moved) and is otherwise restored from local storage.
+    useEffect(() => {
+      if (nodeDraggingRef.current || connectionDragState?.isActive || addReactionMode || umlModalOpen) return;
+      if (!edges.some(e => e.type === 'reactions')) return;
+      const projectId = useProjectStore.getState().activeId;
+      const settled = settleReactionRoutes(nodes, edges, loadVsumRoutes(projectId));
+      if (settled !== edges) setEdges(settled);
+    }, [nodes, edges, setEdges, connectionDragState?.isActive, addReactionMode, umlModalOpen]);
+
+    const savedRoutesSignatureRef = useRef('');
+    useEffect(() => {
+      if (!editable || nodeDraggingRef.current || addReactionMode || umlModalOpen) return;
+      const routes = collectVsumRoutes(nodes, edges);
+      if (Object.keys(routes).length === 0) return;
+      const projectId = useProjectStore.getState().activeId;
+      const signature = `${projectId}:${JSON.stringify(routes)}`;
+      if (signature === savedRoutesSignatureRef.current) return;
+      savedRoutesSignatureRef.current = signature;
+      saveVsumRoutes(projectId, { ...loadVsumRoutes(projectId), ...routes });
+    }, [nodes, edges, editable, addReactionMode, umlModalOpen]);
+
     const handleEdgeReorderRequest = useCallback((
       edgeId: string,
       controlPoint: { x: number; y: number },
@@ -1653,10 +1708,16 @@ export const FlowCanvas = forwardRef<FlowCanvasHandle, FlowCanvasProps>(
       [fineParallelMap],
     );
 
-    const reactionRoutes = useMemo(
-      () => routeAllReactionEdges(nodes, uniqueEdges),
-      [nodes, uniqueEdges],
-    );
+    // While a box is dragged only cheap routes are computed; the full search runs when it lands.
+    const settledRoutesRef = useRef<ReturnType<typeof routeAllReactionEdges>>(new Map());
+    const reactionRoutes = useMemo(() => {
+      if (isNodeDragging) {
+        return routeReactionEdgesWhileDragging(nodes, uniqueEdges, settledRoutesRef.current);
+      }
+      const routes = routeAllReactionEdges(nodes, uniqueEdges);
+      settledRoutesRef.current = routes;
+      return routes;
+    }, [nodes, uniqueEdges, isNodeDragging]);
 
     const resolveReactionRoute = useCallback(
       (edge: Edge) => reactionRoutes.get(edge.id),
@@ -1676,6 +1737,7 @@ export const FlowCanvas = forwardRef<FlowCanvasHandle, FlowCanvasProps>(
       handleEdgeDragEnd,
       handleEdgeHandleChange,
       handleEdgeReorderRequest,
+      handleEdgeRouteChange,
       getFineParallel: resolveFineParallel,
       getReactionRoute: resolveReactionRoute,
     }), [
@@ -1691,6 +1753,7 @@ export const FlowCanvas = forwardRef<FlowCanvasHandle, FlowCanvasProps>(
       handleEdgeDragEnd,
       handleEdgeHandleChange,
       handleEdgeReorderRequest,
+      handleEdgeRouteChange,
       resolveFineParallel,
       resolveReactionRoute,
     ]);
@@ -1769,7 +1832,7 @@ export const FlowCanvas = forwardRef<FlowCanvasHandle, FlowCanvasProps>(
           onEdgesChange={guardedOnEdgesChange}
           onConnect={guardedOnConnect}
           connectionMode={ConnectionMode.Loose}
-          connectionRadius={28}
+          connectionRadius={addReactionMode ? REACTION_CONNECTION_RADIUS : 28}
           onDrop={handleDrop}
           onDragOver={handleDragOver}
           onDragLeave={handleDragLeave}

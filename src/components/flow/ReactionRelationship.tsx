@@ -16,10 +16,15 @@ import {
   ecoreFileRect,
   isRoutableNode,
   nodeWorldRect,
-  pickSideFromPoint,
   polylinePathD,
   routeOrthogonalAStar,
 } from './flowCanvasAStarRouter';
+import {
+  cleanRoute,
+  moveSegment,
+  prepareSegmentDrag,
+  type PreparedDrag,
+} from './flowCanvasLinkEditing';
 interface ReactionRelationshipData {
   label?: string;
   code?: string;
@@ -41,13 +46,18 @@ interface ReactionRelationshipData {
   onEdgeDragEnd?: (edgeId: string, point: { x: number; y: number }) => void;
   onHandleChange?: (edgeId: string, sourceHandle: string, targetHandle: string) => void;
   onReorderRequest?: (edgeId: string, controlPoint: { x: number; y: number }) => void;
+  onRouteChange?: (edgeId: string, points: Array<{ x: number; y: number }>) => void;
   readOnly?: boolean;
   routeWaypoints?: Array<{ x: number; y: number }>;
 }
 
-type HandlePosition = 'top' | 'bottom' | 'left' | 'right';
-
 const EDGE_SPACING = 25;
+
+/**
+ * Width of the invisible hit area around a link. Wide enough to click comfortably, but under the
+ * ~20px lane pitch of parallel links so a click lands on the link you aim at, not its neighbour.
+ */
+const LINK_HIT_WIDTH = 28;
 
 interface PathSegment {
   start: { x: number; y: number };
@@ -173,6 +183,36 @@ function selectReactionLiveState(
   };
 }
 
+function sameRect(a: Rect | null, b: Rect | null): boolean {
+  if (a === b) return true;
+  if (!a || !b) return false;
+  return a.x === b.x && a.y === b.y && a.width === b.width && a.height === b.height;
+}
+
+const RECT_KEYS = new Set<keyof ReactionLiveState>(['srcBox', 'srcEcore', 'tgtBox', 'tgtEcore']);
+
+/**
+ * `selectReactionLiveState` builds a fresh object on every store update, which made every link
+ * re-render on every drag frame. Compare by value so a link only re-renders when something it
+ * reads actually changed.
+ */
+function liveStateEqual(a: ReactionLiveState, b: ReactionLiveState): boolean {
+  for (const key of Object.keys(a) as Array<keyof ReactionLiveState>) {
+    if (RECT_KEYS.has(key)) {
+      if (!sameRect(a[key] as Rect | null, b[key] as Rect | null)) return false;
+    } else if (key === 'obstacles') {
+      if (a.obstacles.length !== b.obstacles.length) return false;
+      if (a.obstacles.some((rect, i) => !sameRect(rect, b.obstacles[i]))) return false;
+    } else if (key === 'existing') {
+      if (a.existing.length !== b.existing.length) return false;
+      if (a.existing.some((path, i) => path !== b.existing[i])) return false;
+    } else if (a[key] !== b[key]) {
+      return false;
+    }
+  }
+  return true;
+}
+
 function storedWaypoints(data: ReactionRelationshipData | undefined): Point[] | null {
   const points = data?.routeWaypoints;
   if (Array.isArray(points) && points.length > 1) return points;
@@ -203,6 +243,7 @@ function buildOrthogonalDraw(routedPoints: Point[]) {
       segments: [] as PathSegment[],
       overlayArrow: false,
       routing: 'orthogonal' as const,
+      routedPoints: null as Point[] | null,
     };
   }
   const lineEnd = shortenSegmentEnd(lastStart, tip, FINE_REACTION_ARROW_LENGTH);
@@ -214,7 +255,7 @@ function buildOrthogonalDraw(routedPoints: Point[]) {
       start: segStart,
       end,
       isHorizontal: Math.abs(segStart.y - end.y) < 1.5,
-      canDrag: index > 0 && index + 2 < drawPoints.length,
+      canDrag: prepareSegmentDrag(routedPoints, index) !== null,
     };
   });
   return {
@@ -228,6 +269,7 @@ function buildOrthogonalDraw(routedPoints: Point[]) {
     segments,
     overlayArrow: false,
     routing: 'orthogonal' as const,
+    routedPoints: routedPoints as Point[] | null,
   };
 }
 
@@ -300,6 +342,7 @@ function fineChordPath(
     segments: [] as PathSegment[],
     overlayArrow: true,
     routing: 'chord' as const,
+    routedPoints: null as Point[] | null,
   };
 }
 
@@ -308,29 +351,14 @@ function computeFineGranularPath(
   sourceHandle: string | null | undefined,
   targetHandle: string | null | undefined,
   data: ReactionRelationshipData | undefined,
-  tempControlPoint: Point | null,
 ) {
   const routedPoints = pickLiveOrStoredRoute(
-    tempControlPoint,
+    null,
     via => fineRoutePoints(live, sourceHandle, targetHandle, via),
     storedWaypoints(data),
   );
   if (routedPoints && routedPoints.length > 1) return buildOrthogonalDraw(routedPoints);
   return fineChordPath(live, sourceHandle, targetHandle, data);
-}
-
-function orthogonalDragPoints(live: ReactionLiveState, via: Point | null): Point[] | null {
-  const source = live.srcBox ?? live.srcEcore;
-  const target = live.tgtBox ?? live.tgtEcore;
-  if (!via || !source || !target) return null;
-  return routeOrthogonalAStar({
-    source,
-    target,
-    obstacles: live.obstacles,
-    existing: live.existing,
-    via,
-    cursor: via,
-  }).points;
 }
 
 function orthogonalLPath(
@@ -375,21 +403,21 @@ function orthogonalLPath(
     segments,
     overlayArrow: false,
     routing: 'orthogonal' as const,
+    routedPoints: null as Point[] | null,
   };
 }
 
 function computeOrthogonalPath(
-  live: ReactionLiveState,
   data: ReactionRelationshipData | undefined,
-  tempControlPoint: Point | null,
+  dragPoints: Point[] | null,
   source: Point,
   target: Point,
   sourcePosition: Position,
 ) {
-  const routedPoints = orthogonalDragPoints(live, tempControlPoint) ?? storedWaypoints(data);
+  const routedPoints = dragPoints ?? storedWaypoints(data);
   if (routedPoints && routedPoints.length > 1) return buildOrthogonalDraw(routedPoints);
-  const centerX = tempControlPoint?.x ?? data?.customControlPoint?.x ?? (source.x + target.x) / 2;
-  const centerY = tempControlPoint?.y ?? data?.customControlPoint?.y ?? (source.y + target.y) / 2;
+  const centerX = data?.customControlPoint?.x ?? (source.x + target.x) / 2;
+  const centerY = data?.customControlPoint?.y ?? (source.y + target.y) / 2;
   return orthogonalLPath(
     sourcePosition === Position.Right || sourcePosition === Position.Left,
     source.x,
@@ -421,6 +449,7 @@ function computeStraightPath(
     segments: [] as PathSegment[],
     overlayArrow: false,
     routing: 'straight' as const,
+    routedPoints: null as Point[] | null,
   };
 }
 
@@ -434,7 +463,7 @@ function computeReactionPathData(options: {
   actualSourceY: number;
   actualTargetX: number;
   actualTargetY: number;
-  tempControlPoint: Point | null;
+  dragPoints: Point[] | null;
   sourcePosition: Position;
 }) {
   if (options.isFineGranular) {
@@ -443,14 +472,12 @@ function computeReactionPathData(options: {
       options.sourceHandle,
       options.targetHandle,
       options.data,
-      options.tempControlPoint,
     );
   }
   if (options.data?.routingStyle === 'orthogonal') {
     return computeOrthogonalPath(
-      options.live,
       options.data,
-      options.tempControlPoint,
+      options.dragPoints,
       { x: options.actualSourceX, y: options.actualSourceY },
       { x: options.actualTargetX, y: options.actualTargetY },
       options.sourcePosition,
@@ -504,9 +531,9 @@ export function ReactionRelationship({
 }: EdgeProps<ReactionRelationshipData>) {
   
   const reactFlowInstance = useReactFlow();
-  const [isDraggingSegment, setIsDraggingSegment] = useState(false);
-  const [draggedSegmentIndex, setDraggedSegmentIndex] = useState<number | null>(null);
-  const [tempControlPoint, setTempControlPoint] = useState<{ x: number; y: number } | null>(null);
+  const [drag, setDrag] = useState<PreparedDrag | null>(null);
+  const [dragPoints, setDragPoints] = useState<Point[] | null>(null);
+  const isDraggingSegment = drag !== null;
 
   const isFineGranular = data?.fineGranular === true;
   const sourceHandle = data?.sourceHandleId;
@@ -521,7 +548,7 @@ export function ReactionRelationship({
       { x: targetX, y: targetY },
       id,
     ),
-  );
+  liveStateEqual);
 
   const { isSourceSelected, isTargetSelected } = live;
   const isNodeSelected = isSourceSelected || isTargetSelected;
@@ -546,16 +573,6 @@ export function ReactionRelationship({
   const actualTargetX = targetX + targetOffset.offsetX;
   const actualTargetY = targetY + targetOffset.offsetY;
 
-  const getClosestHandle = useCallback((point: { x: number; y: number }, nodeId: string): HandlePosition | null => {
-    if (!reactFlowInstance) return null;
-    
-    const node = reactFlowInstance.getNode(nodeId);
-    if (!node) return null;
-
-    const box = nodeWorldRect(node) ?? ecoreFileRect(node);
-    return pickSideFromPoint(box, point);
-  }, [reactFlowInstance]);
-
   const pathData = useMemo(() => computeReactionPathData({
     isFineGranular,
     live,
@@ -566,7 +583,7 @@ export function ReactionRelationship({
     actualSourceY,
     actualTargetX,
     actualTargetY,
-    tempControlPoint,
+    dragPoints,
     sourcePosition,
   }), [
     isFineGranular,
@@ -578,68 +595,42 @@ export function ReactionRelationship({
     actualSourceY,
     actualTargetX,
     actualTargetY,
-    tempControlPoint,
+    dragPoints,
     sourcePosition,
   ]);
 
-  const { edgePath, labelX, labelY, arrowX, arrowY, arrowAngle, controlPoint, segments, overlayArrow, routing } = pathData;
+  const { edgePath, labelX, labelY, arrowX, arrowY, arrowAngle, segments, overlayArrow, routing, routedPoints } = pathData;
 
   const handleSegmentDragStart = useCallback((e: React.PointerEvent, segmentIndex: number) => {
-    if (data?.readOnly) return;
+    if (data?.readOnly || !routedPoints) return;
     e.stopPropagation();
     e.preventDefault();
+
+    const prepared = prepareSegmentDrag(routedPoints, segmentIndex);
+    if (!prepared) return;
 
     const targetEl = e.target as HTMLElement;
     if (targetEl.setPointerCapture) {
       try { targetEl.setPointerCapture(e.pointerId); } catch {}
     }
 
-    if (!reactFlowInstance || !controlPoint) return;
-
-    setIsDraggingSegment(true);
-    setDraggedSegmentIndex(segmentIndex);
-    setTempControlPoint(controlPoint);
+    setDrag(prepared);
+    setDragPoints(prepared.points);
     data?.onEdgeDragStart?.(id);
-  }, [id, data, reactFlowInstance, controlPoint]);
+  }, [id, data, routedPoints]);
 
   const handleSegmentDrag = useCallback((e: PointerEvent) => {
-    if (!isDraggingSegment || draggedSegmentIndex === null || !reactFlowInstance || !controlPoint) return;
-
+    if (!drag || !reactFlowInstance) return;
     const flowPos = reactFlowInstance.screenToFlowPosition({ x: e.clientX, y: e.clientY });
-    const segment = segments[draggedSegmentIndex];
-    if (!segment) return;
+    setDragPoints(moveSegment(drag, drag.horizontal ? flowPos.y : flowPos.x));
+  }, [drag, reactFlowInstance]);
 
-    const newControlPoint = { ...controlPoint };
-    if (segment.isHorizontal) {
-      newControlPoint.y = flowPos.y;
-    } else {
-      newControlPoint.x = flowPos.x;
-    }
-
-    setTempControlPoint(newControlPoint);
-    data?.onEdgeDrag?.(id, newControlPoint);
-
-    const newSourceHandle = getClosestHandle(newControlPoint, source);
-    const newTargetHandle = getClosestHandle(newControlPoint, target);
-
-    if (newSourceHandle && newTargetHandle && 
-        (newSourceHandle !== sourcePosition || newTargetHandle !== targetPosition)) {
-      data?.onHandleChange?.(id, newSourceHandle, newTargetHandle);
-    }
-
-    data?.onReorderRequest?.(id, newControlPoint);
-  }, [isDraggingSegment, draggedSegmentIndex, id, reactFlowInstance, data, segments, controlPoint, getClosestHandle, source, target, sourcePosition, targetPosition]);
-
-  const handleSegmentDragEnd = useCallback((e: PointerEvent) => {
-    if (!isDraggingSegment) return;
-
-    if (tempControlPoint) {
-      data?.onEdgeDragEnd?.(id, tempControlPoint);
-    }
-
-    setIsDraggingSegment(false);
-    setDraggedSegmentIndex(null);
-  }, [isDraggingSegment, id, data, tempControlPoint]);
+  const handleSegmentDragEnd = useCallback(() => {
+    if (!drag) return;
+    if (dragPoints) data?.onRouteChange?.(id, cleanRoute(dragPoints));
+    setDrag(null);
+    setDragPoints(null);
+  }, [drag, dragPoints, id, data]);
 
   useEffect(() => {
     if (!isDraggingSegment) return;
@@ -655,7 +646,8 @@ export function ReactionRelationship({
 
   useEffect(() => {
     if (!selected) {
-      setTempControlPoint(null);
+      setDrag(null);
+      setDragPoints(null);
     }
   }, [selected]);
 
@@ -683,7 +675,6 @@ export function ReactionRelationship({
   const isActive = isHighlighted || isHovered;
   const underlayWidth = isActive ? 8 : 7;
   const mainStrokeWidth = strokeWidthForState(isHighlighted, isHovered, edgeWidth);
-  const controlPointFill = isDraggingSegment ? '#3b82f6' : '#ffffff';
   const showOrthogonalControls = selected && data?.routingStyle === 'orthogonal' && !data?.readOnly;
 
   const handleMouseEnter = () => setIsHovered(true);
@@ -691,74 +682,71 @@ export function ReactionRelationship({
 
   return (
     <>
-      <path
-        id={`${id}-underlay`}
-        d={edgePath}
-        className="react-flow__edge-path"
-        style={{
-          stroke: 'var(--v-uml-edge-halo, #ffffff)',
-          strokeWidth: underlayWidth,
-          opacity: 0.95,
-          fill: 'none',
-          strokeLinecap: 'round',
-          strokeLinejoin: 'round',
-          transition: 'stroke-width 0.2s ease',
-        }}
-      />
-
-      <path
-        id={`${id}-clickarea`}
-        d={edgePath}
-        style={{
-          strokeWidth: '40px',
-          stroke: 'transparent',
-          fill: 'none',
-          cursor: 'pointer',
-        }}
+      <g
+        data-testid={`${id}-hit-group`}
+        style={{ cursor: 'pointer' }}
         onClick={handleClick}
         onDoubleClick={handleDoubleClick}
         onMouseEnter={handleMouseEnter}
         onMouseLeave={handleMouseLeave}
-      />
-
-      <path
-        id={id}
-        data-routing={routing}
-        className="reaction-line"
-        style={{
-          strokeWidth: mainStrokeWidth,
-          stroke: activeColor,
-          fill: 'none',
-          cursor: 'pointer',
-          strokeLinecap: 'round',
-          strokeLinejoin: 'round',
-          transition: 'stroke 0.2s ease, stroke-width 0.2s ease',
-        }}
-        d={edgePath}
-        onClick={handleClick}
-        onDoubleClick={handleDoubleClick}
-        onMouseEnter={handleMouseEnter}
-        onMouseLeave={handleMouseLeave}
-      />
-
-      {!overlayArrow && (
-      <g transform={`translate(${arrowX}, ${arrowY}) rotate(${arrowAngle})`}>
-        <polygon
-          points="-10,-6 0,0 -10,6"
-          fill={activeColor}
-          stroke={activeColor}
-          strokeWidth="1"
-          style={{ 
-            cursor: 'pointer',
-            transition: 'fill 0.2s ease, stroke 0.2s ease'
+      >
+        <path
+          id={`${id}-underlay`}
+          d={edgePath}
+          className="react-flow__edge-path"
+          style={{
+            stroke: 'var(--v-uml-edge-halo, #ffffff)',
+            strokeWidth: underlayWidth,
+            opacity: 0.95,
+            fill: 'none',
+            strokeLinecap: 'round',
+            strokeLinejoin: 'round',
+            transition: 'stroke-width 0.2s ease',
           }}
-          onClick={handleClick}
-          onDoubleClick={handleDoubleClick}
-          onMouseEnter={handleMouseEnter}
-          onMouseLeave={handleMouseLeave}
         />
+
+        {/* Invisible padding around the line so it is easy to hit. One handler set on the
+            group keeps hover steady while the pointer moves between the line, padding and arrow. */}
+        <path
+          id={`${id}-clickarea`}
+          d={edgePath}
+          style={{
+            strokeWidth: `${LINK_HIT_WIDTH}px`,
+            stroke: 'transparent',
+            fill: 'none',
+            strokeLinecap: 'round',
+            strokeLinejoin: 'round',
+            pointerEvents: 'stroke',
+          }}
+        />
+
+        <path
+          id={id}
+          data-routing={routing}
+          className="reaction-line"
+          style={{
+            strokeWidth: mainStrokeWidth,
+            stroke: activeColor,
+            fill: 'none',
+            strokeLinecap: 'round',
+            strokeLinejoin: 'round',
+            transition: 'stroke 0.2s ease, stroke-width 0.2s ease',
+          }}
+          d={edgePath}
+        />
+
+        {!overlayArrow && (
+          <g transform={`translate(${arrowX}, ${arrowY}) rotate(${arrowAngle})`}>
+            <polygon
+              points="-10,-6 0,0 -10,6"
+              fill={activeColor}
+              stroke={activeColor}
+              strokeWidth="1"
+              style={{ transition: 'fill 0.2s ease, stroke 0.2s ease' }}
+            />
+          </g>
+        )}
       </g>
-      )}
 
       {overlayArrow && (
         <EdgeLabelRenderer>
@@ -845,8 +833,13 @@ export function ReactionRelationship({
         if (!segment.canDrag) return null;
         
         const segmentPath = `M ${segment.start.x},${segment.start.y} L ${segment.end.x},${segment.end.y}`;
-        const isBeingDragged = isDraggingSegment && draggedSegmentIndex === index;
-        const segmentKey = `${id}-segment-${segment.start.x}-${segment.start.y}-${segment.end.x}-${segment.end.y}`;
+        const movingStart = drag && dragPoints?.[drag.index];
+        const isBeingDragged = Boolean(
+          movingStart
+          && Math.abs(movingStart.x - segment.start.x) < 0.5
+          && Math.abs(movingStart.y - segment.start.y) < 0.5,
+        );
+        const segmentKey = `${id}-segment-${index}`;
         
         return (
           <g key={segmentKey}>
@@ -876,18 +869,6 @@ export function ReactionRelationship({
           </g>
         );
       })}
-
-      {showOrthogonalControls && controlPoint && (
-        <circle
-          cx={controlPoint.x}
-          cy={controlPoint.y}
-          r="6"
-          fill={controlPointFill}
-          stroke={edgeColor}
-          strokeWidth="2"
-          style={{ pointerEvents: 'none' }}
-        />
-      )}
     </>
   );
 }
