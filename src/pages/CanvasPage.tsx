@@ -55,7 +55,7 @@ import {
   findVsumOwner,
   sharedByFromOwner,
   parseVsumMembersResponse,
-  pickMostRestrictiveRole,
+  pickSharedAwareRole,
   readStoredProjectAccess,
   clearStoredProjectAccess,
   resolveProjectAccessRole,
@@ -228,7 +228,7 @@ async function syncVsumApiRole(
   try {
     const vsumRes = await apiService.getVsum(vsumId);
     const apiRole = resolveVsumAccessRole(vsumRes.data?.role, vsumRes.data?.roleEn);
-    const merged = pickMostRestrictiveRole(apiRole, loadStoredRole, loadNavRole, loadInferredRole);
+    const merged = pickSharedAwareRole(loadInferredRole, apiRole, loadStoredRole, loadNavRole);
     if (merged) noteApiRole(vsumId, merged);
   } catch {
     // Role may already be set from members list or navigation state.
@@ -529,11 +529,11 @@ export const CanvasPage: React.FC = () => {
     }
 
     const myMembership = findMembershipForEmail(unique, user?.email);
-    const resolvedRole = pickMostRestrictiveRole(
+    const resolvedRole = pickSharedAwareRole(
+      sharedInferredRole,
       resolveVsumAccessRole(myMembership?.role, myMembership?.roleEn),
       resolveVsumAccessRole(options?.fallbackRole),
       navAccessRole,
-      sharedInferredRole,
     );
     if (resolvedRole && options?.vsumId) noteApiRole(options.vsumId, resolvedRole);
   }, [navAccessRole, sharedInferredRole, user?.email, noteApiRole]);
@@ -1073,11 +1073,11 @@ export const CanvasPage: React.FC = () => {
       // ────────────────────────────────────────────────────────────────
 
       const detailsRole = resolveVsumAccessRole(details.role, details.roleEn);
-      const mergedRole = pickMostRestrictiveRole(
+      const mergedRole = pickSharedAwareRole(
+        loadInferredRole,
         detailsRole,
         loadStoredRole,
         loadNavRole,
-        loadInferredRole,
       );
       if (mergedRole) noteApiRole(vsumId, mergedRole);
 
