@@ -134,6 +134,19 @@ export const IMPROVEMENT_LABELS: Record<ImprovementId, string> = {
   alternatives: 'Alternative results',
 };
 
+/**
+ * The improvements grouped by what they change, in pipeline order (for display; `IMPROVEMENT_IDS`
+ * keeps its order for reports).
+ */
+export const IMPROVEMENT_GROUPS: readonly { title: string; hint: string; ids: readonly ImprovementId[] }[] = [
+  { title: 'Name similarity', hint: 'How class and feature names are compared', ids: ['compounds', 'idf', 'hypernyms', 'embeddings'] },
+  { title: 'Structure similarity', hint: 'How the neighbourhood and data of elements are compared', ids: ['roles', 'datatypes', 'structure-types', 'flooding'] },
+  { title: 'Score combination', hint: 'How the measures are combined and when a match is accepted', ids: ['adaptive-weights', 'calibrated-null'] },
+  { title: 'Pattern rules', hint: 'Fixed correspondences for known modelling patterns', ids: ['type-object', 'conditional'] },
+  { title: 'Correspondence shapes', hint: 'Correspondences beyond one class to one class', ids: ['hierarchy-both', 'split-merge', 'paths'] },
+  { title: 'Result', hint: 'Checking and presenting the found correspondences', ids: ['consistency', 'alternatives'] },
+];
+
 export interface ImprovementParams {
   /** λ in `(1 − λ)·combined + λ·flood`. */
   floodingWeight: number;

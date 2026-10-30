@@ -1,12 +1,17 @@
 import React, { useState } from 'react';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { AnalysisSettingsPanel } from '../../../components/semanticOverlap/AnalysisSettingsPanel';
 import { DEFAULT_SETTINGS, EFFORT_PRESETS } from '../../../utils/semanticOverlap/settings';
 import type { AnalysisSettings } from '../../../utils/semanticOverlap/types';
 import type { ApproachId } from '../../../utils/semanticOverlap/approaches/types';
-import { DEFAULT_IMPROVED_SETTINGS, IMPROVEMENT_IDS, type ImprovedSettings } from '../../../utils/semanticOverlap/improved/settings';
+import {
+  DEFAULT_IMPROVED_SETTINGS, IMPROVEMENT_GROUPS, IMPROVEMENT_IDS, improvementsOf, type ImprovedSettings, type ImprovementId,
+} from '../../../utils/semanticOverlap/improved/settings';
 import type { EmbeddingAvailability } from '../../../utils/semanticOverlap/improved/embeddings/types';
 import { probeEmbeddingModel, resetEmbeddingProbe } from '../../../utils/semanticOverlap/improved/embeddings/probe';
+
+/** Improved defaults with exactly the given improvements switched on. */
+const withImprovements = (...ids: ImprovementId[]): ImprovedSettings => ({ ...DEFAULT_IMPROVED_SETTINGS, improvements: improvementsOf(ids) });
 
 const ready = () => Promise.resolve<EmbeddingAvailability>({ state: 'ready' });
 
@@ -111,8 +116,43 @@ describe('AnalysisSettingsPanel', () => {
       expect((current() as ImprovedSettings).improvements.flooding).toBe(!DEFAULT_IMPROVED_SETTINGS.improvements.flooding);
     });
 
-    it('validates the improvement parameters', () => {
+    it('groups the improvements, each exactly once', () => {
       render(<Harness approach="improved" initial={DEFAULT_IMPROVED_SETTINGS} />);
+      open();
+      for (const group of IMPROVEMENT_GROUPS) {
+        expect(screen.getByRole('region', { name: group.title })).toBeInTheDocument();
+      }
+      expect(IMPROVEMENT_GROUPS.flatMap(g => g.ids).sort()).toEqual([...IMPROVEMENT_IDS].sort());
+      const names = within(screen.getByRole('region', { name: 'Name similarity' })).getAllByRole('checkbox').map(c => c.closest('label')!.textContent);
+      expect(names).toContain('WordNet hypernyms');
+    });
+
+    it('shows an improvement\'s parameters only while it is switched on', () => {
+      render(<Harness approach="improved" initial={withImprovements()} />);
+      open();
+      expect(screen.queryByLabelText('Flooding weight (λ)')).not.toBeInTheDocument();
+      expect(screen.queryByLabelText('Embedding model')).not.toBeInTheDocument();
+      expect(screen.queryByLabelText('Alternatives')).not.toBeInTheDocument();
+      fireEvent.click(screen.getByRole('checkbox', { name: 'Similarity flooding' }));
+      expect(screen.getByLabelText('Flooding weight (λ)')).toBeInTheDocument();
+      expect(screen.getByLabelText('Flooding iterations')).toBeInTheDocument();
+      expect(screen.queryByLabelText('Hypernym weight')).not.toBeInTheDocument();
+      fireEvent.click(screen.getByRole('checkbox', { name: 'Similarity flooding' }));
+      expect(screen.queryByLabelText('Flooding weight (λ)')).not.toBeInTheDocument();
+    });
+
+    it('disables the null score while the calibrated threshold replaces it', () => {
+      render(<Harness approach="improved" initial={withImprovements()} />);
+      open();
+      expect(screen.getByRole('slider', { name: /Null score/ })).toBeEnabled();
+      fireEvent.click(screen.getByRole('checkbox', { name: 'Calibrated acceptance threshold' }));
+      expect(screen.getByRole('slider', { name: /Null score/ })).toBeDisabled();
+      expect(screen.getByText(/Replaced by the calibrated acceptance threshold/)).toBeInTheDocument();
+      expect(screen.getByLabelText('Calibrated null score')).toBeInTheDocument();
+    });
+
+    it('validates the improvement parameters', () => {
+      render(<Harness approach="improved" initial={withImprovements('flooding')} />);
       open();
       fireEvent.change(screen.getByLabelText('Flooding weight (λ)'), { target: { value: '2' } });
       expect(screen.getByRole('alert')).toHaveTextContent('Flooding weight must be between 0 and 1.');
@@ -143,9 +183,10 @@ describe('AnalysisSettingsPanel', () => {
       expect((current() as ImprovedSettings).params.embeddingModel).toBe('bge-small');
     });
 
-    it('validates the embedding and new improvement parameters', () => {
-      render(<Harness approach="improved" initial={DEFAULT_IMPROVED_SETTINGS} />);
+    it('validates the embedding and new improvement parameters', async () => {
+      render(<Harness approach="improved" initial={withImprovements('embeddings', 'split-merge')} />);
       open();
+      await screen.findByLabelText('Embedding weight');
       fireEvent.change(screen.getByLabelText('Embedding weight'), { target: { value: '-1' } });
       expect(screen.getByRole('alert')).toHaveTextContent('Embedding weight must not be negative.');
       fireEvent.change(screen.getByLabelText('Embedding weight'), { target: { value: '0.5' } });

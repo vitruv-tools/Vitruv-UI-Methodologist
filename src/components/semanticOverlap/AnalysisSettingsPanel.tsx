@@ -8,7 +8,7 @@ import { themeVars } from '../../theme/theme';
 import { approachOf } from '../../utils/semanticOverlap/approaches/registry';
 import type { ApproachId } from '../../utils/semanticOverlap/approaches/types';
 import {
-  IMPROVEMENT_IDS, IMPROVEMENT_LABELS, type ImprovedSettings, type ImprovementParams,
+  IMPROVEMENT_GROUPS, IMPROVEMENT_LABELS, isOn, type ImprovedSettings, type ImprovementId, type ImprovementParams,
 } from '../../utils/semanticOverlap/improved/settings';
 import { EMBEDDING_MODEL_IDS, type EmbeddingModelId } from '../../utils/semanticOverlap/improved/embeddings/modelManifest';
 import { FETCH_MODEL_HINT, probeEmbeddingModel } from '../../utils/semanticOverlap/improved/embeddings/probe';
@@ -38,73 +38,51 @@ const toNumber = (text: string) => (text.trim() === '' ? Number.NaN : Number(tex
 
 type NumericParam = Exclude<keyof ImprovementParams, 'embeddingModel' | 'pathMaxLength'>;
 
-const PARAM_FIELDS: [NumericParam, string][] = [
-  ['floodingWeight', 'Flooding weight (λ)'],
-  ['floodingMaxIterations', 'Flooding iterations'],
-  ['hypernymWeight', 'Hypernym weight'],
-  ['hypernymSenses', 'Hypernym senses'],
-  ['roleWeight', 'Role weight'],
-  ['datatypeWeight', 'Data-type weight'],
-  ['typeObjectMinSubclasses', 'Type-object min. subclasses'],
-  ['embeddingWeight', 'Embedding weight'],
-  ['embeddingMaxTexts', 'Max. embedded descriptions'],
-  ['structureTypesWeight', 'Data-structure weight'],
-  ['structureTypesMaxSignatures', 'Compared features per class'],
-  ['calibratedNullScore', 'Calibrated null score'],
-  ['splitMaxParts', 'Split / merge parts'],
-  ['alternativesCount', 'Alternatives'],
-];
+/** Parameters of each improvement; they are only shown while the improvement is on. */
+const PARAM_FIELDS: Partial<Record<ImprovementId, [NumericParam, string][]>> = {
+  hypernyms: [['hypernymWeight', 'Hypernym weight'], ['hypernymSenses', 'Hypernym senses']],
+  embeddings: [['embeddingWeight', 'Embedding weight'], ['embeddingMaxTexts', 'Max. embedded descriptions']],
+  roles: [['roleWeight', 'Role weight']],
+  datatypes: [['datatypeWeight', 'Data-type weight']],
+  'structure-types': [['structureTypesWeight', 'Data-structure weight'], ['structureTypesMaxSignatures', 'Compared features per class']],
+  flooding: [['floodingWeight', 'Flooding weight (λ)'], ['floodingMaxIterations', 'Flooding iterations']],
+  'calibrated-null': [['calibratedNullScore', 'Calibrated null score']],
+  'type-object': [['typeObjectMinSubclasses', 'Type-object min. subclasses']],
+  'split-merge': [['splitMaxParts', 'Split / merge parts']],
+  alternatives: [['alternativesCount', 'Alternatives']],
+};
 
 const MODEL_LABELS: Record<EmbeddingModelId, string> = { minilm: 'all-MiniLM-L6-v2', 'bge-small': 'bge-small-en-v1.5' };
 
-/** Switches for the improvements of the improved approach and their parameters. */
-const ImprovementsSection: React.FC<{
-  settings: ImprovedSettings; disabled?: boolean; onChange: (patch: Partial<ImprovedSettings>) => void;
+interface ImprovementsProps {
+  settings: ImprovedSettings;
+  disabled?: boolean;
+  onChange: (patch: Partial<ImprovedSettings>) => void;
   embeddings: EmbeddingAvailability;
-}> = ({ settings, disabled, onChange, embeddings }) => (
-  <fieldset style={{ border: `1px solid ${themeVars.border}`, borderRadius: 8, padding: '8px 12px', margin: 0 }}>
-    <legend style={{ fontSize: 12, fontWeight: 600, color: themeVars.textSecondary }}>Improvements</legend>
-    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(230px, 1fr))', gap: 4 }}>
-      {IMPROVEMENT_IDS.map(id => {
-        // The embedding switch needs a model served by the app.
-        const unavailable = id === 'embeddings' && embeddings.state === 'unavailable' ? embeddings.reason : null;
-        return (
-          <label
-            key={id}
-            title={unavailable ? `${unavailable} ${FETCH_MODEL_HINT}` : undefined}
-            style={{ fontSize: 13, color: unavailable ? themeVars.textMuted : themeVars.text, display: 'flex', alignItems: 'center', gap: 6 }}
-          >
-            <input
-              type="checkbox"
-              checked={settings.improvements[id] && !unavailable}
-              disabled={disabled || unavailable !== null}
-              onChange={event => onChange({ improvements: { ...settings.improvements, [id]: event.target.checked } })}
-            />
-            {IMPROVEMENT_LABELS[id]}
-          </label>
-        );
-      })}
-    </div>
-    {embeddings.state === 'unavailable' && (
-      <div role="note" style={{ fontSize: 11, color: themeVars.textMuted, marginTop: 6 }}>
-        Sentence embeddings are unavailable: {embeddings.reason} {FETCH_MODEL_HINT}
-      </div>
-    )}
-    <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', marginTop: 10 }}>
-      <TextField
-        id="overlap-param-embeddingModel"
-        select
-        label="Embedding model"
-        size="small"
-        value={settings.params.embeddingModel}
-        disabled={disabled}
-        onChange={event => onChange({ params: { ...settings.params, embeddingModel: event.target.value as EmbeddingModelId } })}
-        slotProps={{ select: { native: true } }}
-        sx={{ width: 190 }}
-      >
-        {EMBEDDING_MODEL_IDS.map(id => <option key={id} value={id}>{MODEL_LABELS[id]}</option>)}
-      </TextField>
-      {PARAM_FIELDS.map(([key, label]) => (
+}
+
+/** The parameter fields of one switched-on improvement. */
+const ImprovementParamFields: React.FC<ImprovementsProps & { id: ImprovementId }> = ({ id, settings, disabled, onChange }) => {
+  const fields = PARAM_FIELDS[id] ?? [];
+  if (fields.length === 0 && id !== 'embeddings') return null;
+  return (
+    <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', margin: '6px 0 4px 22px' }}>
+      {id === 'embeddings' && (
+        <TextField
+          id="overlap-param-embeddingModel"
+          select
+          label="Embedding model"
+          size="small"
+          value={settings.params.embeddingModel}
+          disabled={disabled}
+          onChange={event => onChange({ params: { ...settings.params, embeddingModel: event.target.value as EmbeddingModelId } })}
+          slotProps={{ select: { native: true } }}
+          sx={{ width: 190 }}
+        >
+          {EMBEDDING_MODEL_IDS.map(model => <option key={model} value={model}>{MODEL_LABELS[model]}</option>)}
+        </TextField>
+      )}
+      {fields.map(([key, label]) => (
         <TextField
           key={key}
           id={`overlap-param-${key}`}
@@ -118,8 +96,53 @@ const ImprovementsSection: React.FC<{
         />
       ))}
     </div>
-  </fieldset>
-);
+  );
+};
+
+/** Switches for the improvements of the improved approach, grouped, with the parameters of those switched on. */
+const ImprovementsSection: React.FC<ImprovementsProps> = props => {
+  const { settings, disabled, onChange, embeddings } = props;
+  return (
+    <fieldset style={{ border: `1px solid ${themeVars.border}`, borderRadius: 8, padding: '8px 12px', margin: 0 }}>
+      <legend style={{ fontSize: 12, fontWeight: 600, color: themeVars.textSecondary }}>Improvements</legend>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: '10px 20px' }}>
+        {IMPROVEMENT_GROUPS.map(group => (
+          <section key={group.title} aria-label={group.title}>
+            <div style={{ fontSize: 12, fontWeight: 600, color: themeVars.textSecondary }}>{group.title}</div>
+            <div style={{ fontSize: 11, color: themeVars.textMuted, marginBottom: 4 }}>{group.hint}</div>
+            {group.ids.map(id => {
+              // The embedding switch needs a model served by the app.
+              const unavailable = id === 'embeddings' && embeddings.state === 'unavailable' ? embeddings.reason : null;
+              const on = settings.improvements[id] && !unavailable;
+              return (
+                <div key={id}>
+                  <label
+                    title={unavailable ? `${unavailable} ${FETCH_MODEL_HINT}` : undefined}
+                    style={{ fontSize: 13, color: unavailable ? themeVars.textMuted : themeVars.text, display: 'flex', alignItems: 'center', gap: 6 }}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={on}
+                      disabled={disabled || unavailable !== null}
+                      onChange={event => onChange({ improvements: { ...settings.improvements, [id]: event.target.checked } })}
+                    />
+                    {IMPROVEMENT_LABELS[id]}
+                  </label>
+                  {on && <ImprovementParamFields {...props} id={id} />}
+                </div>
+              );
+            })}
+          </section>
+        ))}
+      </div>
+      {embeddings.state === 'unavailable' && (
+        <div role="note" style={{ fontSize: 11, color: themeVars.textMuted, marginTop: 6 }}>
+          Sentence embeddings are unavailable: {embeddings.reason} {FETCH_MODEL_HINT}
+        </div>
+      )}
+    </fieldset>
+  );
+};
 
 const SliderRow: React.FC<{
   label: string; hint: string; value: number; disabled?: boolean; onChange: (value: number) => void;
@@ -165,6 +188,7 @@ export const AnalysisSettingsPanel: React.FC<AnalysisSettingsPanelProps> = ({
   const [seedText, setSeedText] = useState(String(settings.seed));
   const [showAdvanced, setShowAdvanced] = useState(false);
   const problems = approachOf(approach).validate(settings);
+  const calibrated = approach === 'improved' && isOn(settings, 'calibrated-null');
 
   const setSeed = (seed: number) => {
     setSeedText(String(seed));
@@ -211,9 +235,11 @@ export const AnalysisSettingsPanel: React.FC<AnalysisSettingsPanelProps> = ({
           />
           <SliderRow
             label="Null score"
-            hint="A class stays unmatched unless a match scores higher than this"
+            hint={calibrated
+              ? 'Replaced by the calibrated acceptance threshold (improvement switched on)'
+              : 'A class stays unmatched unless a match scores higher than this'}
             value={settings.nullScore}
-            disabled={disabled}
+            disabled={disabled || calibrated}
             onChange={nullScore => onChange({ nullScore })}
           />
           <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', alignItems: 'center' }}>

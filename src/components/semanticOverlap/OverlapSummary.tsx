@@ -3,34 +3,12 @@ import { themeVars } from '../../theme/theme';
 import { APPROACHES } from '../../utils/semanticOverlap/approaches/registry';
 import { IMPROVEMENT_IDS, IMPROVEMENT_LABELS, type ImprovedSettings } from '../../utils/semanticOverlap/improved/settings';
 import { KIND_NAMES } from '../../utils/semanticOverlap/correspondenceKind';
-import { CORRESPONDENCE_KINDS, type CorrespondenceKind, type ElementRef, type OverlapResult } from '../../utils/semanticOverlap/types';
-
-/** Simple names, qualified where two classes of the list share a simple name. */
-function displayNames(refs: readonly ElementRef[]): string[] {
-  const counts = new Map<string, number>();
-  refs.forEach(ref => counts.set(ref.name, (counts.get(ref.name) ?? 0) + 1));
-  return refs.map(ref => ((counts.get(ref.name) ?? 0) > 1 ? ref.qualifiedName : ref.name));
-}
+import { CORRESPONDENCE_KINDS, type CorrespondenceKind, type OverlapResult } from '../../utils/semanticOverlap/types';
 
 const Figure: React.FC<{ label: string; value: string }> = ({ label, value }) => (
   <div style={{ padding: '10px 14px', border: `1px solid ${themeVars.border}`, borderRadius: 10, background: themeVars.surface, minWidth: 120 }}>
     <div style={{ fontSize: 11, color: themeVars.textMuted, textTransform: 'uppercase', letterSpacing: '0.04em' }}>{label}</div>
     <div style={{ fontSize: 20, fontWeight: 700, color: themeVars.text }}>{value}</div>
-  </div>
-);
-
-const UnmatchedList: React.FC<{ title: string; refs: readonly ElementRef[] }> = ({ title, refs }) => (
-  <div style={{ flex: 1, minWidth: 200 }}>
-    <div style={{ fontSize: 12, fontWeight: 600, color: themeVars.textSecondary, marginBottom: 4 }}>
-      {title} ({refs.length})
-    </div>
-    {refs.length === 0
-      ? <div style={{ fontSize: 12, color: themeVars.textMuted }}>All classes matched.</div>
-      : (
-        <ul aria-label={title} style={{ margin: 0, paddingLeft: 18, fontSize: 12, color: themeVars.textSecondary, maxHeight: 120, overflow: 'auto' }}>
-          {displayNames(refs).map(name => <li key={name}>{name}</li>)}
-        </ul>
-      )}
   </div>
 );
 
@@ -75,9 +53,9 @@ function improvementsUsed(settings: Partial<ImprovedSettings>): string[] {
   return [`improvements: ${enabled.length > 0 ? enabled.join(', ') : 'none'}`];
 }
 
-/** Class counts, overlap percentage, unmatched classes, warnings and the settings used. */
+/** Class counts, overlap percentage, warnings and the settings used. */
 export const OverlapSummary: React.FC<{ result: OverlapResult }> = ({ result }) => {
-  const { summary, unmatched, warnings, source, target } = result;
+  const { summary, warnings, source, target } = result;
   return (
     <section aria-label="Overlap summary" style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
       <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
@@ -103,10 +81,6 @@ export const OverlapSummary: React.FC<{ result: OverlapResult }> = ({ result }) 
           Acceptance threshold τ = {result.acceptanceThreshold.value.toFixed(3)}, {result.acceptanceThreshold.note}.
         </div>
       )}
-      <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap' }}>
-        <UnmatchedList title={`Unmatched in ${source.name}`} refs={unmatched.source} />
-        <UnmatchedList title={`Unmatched in ${target.name}`} refs={unmatched.target} />
-      </div>
       <section aria-label="Settings used" style={{ fontSize: 11, color: themeVars.textMuted }}>
         {describeSettingsUsed(result)}
       </section>
