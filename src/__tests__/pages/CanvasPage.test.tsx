@@ -352,7 +352,7 @@ describe('CanvasPage build check', () => {
 
     const popup = await screen.findByTestId('canvas-popup-notification');
     await waitFor(() => expect(popup).toHaveTextContent(/The constraints could not be built/));
-    expect(popup).toHaveTextContent(/Constraint file Preise\.ocl refers to unknown metamodel/);
+    expect(popup).toHaveTextContent(/Rule set "Preise" refers to unknown metamodel/);
   });
 
   it('shows other build failures unchanged', async () => {
