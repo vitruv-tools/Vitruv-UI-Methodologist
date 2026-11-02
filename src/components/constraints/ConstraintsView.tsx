@@ -1965,16 +1965,23 @@ export const ConstraintsView: React.FC<ConstraintsViewProps> = ({ vsumId: _vsumI
     setRuleSets(prev => prev.map(rs => rs.id === id ? { ...rs, collapsed: !rs.collapsed } : rs));
   }, []);
 
-  const handleDeleteRule = useCallback((ruleId: string) => {
-    setRuleSets(prev => {
-      const next = deleteRuleFromSets(prev, ruleId);
-      const affected = findSetContainingRule(prev, ruleId);
-      const syncTarget = next.find(rs => rs.id === affected?.id);
-      if (syncTarget) syncRuleSet(syncTarget);
-      return next;
-    });
-    setSelectedRule(prev => prev?.id === ruleId ? null : prev);
+  /**
+   * Applies `change` to the rule sets and saves the set with `ruleSetId` afterwards. The request is
+   * sent outside the state updater, which React may call more than once (e.g. under StrictMode).
+   */
+  const changeAndSync = useCallback((change: (sets: RuleSet[]) => RuleSet[], ruleSetId?: string) => {
+    const next = change(ruleSetsRef.current);
+    ruleSetsRef.current = next;
+    setRuleSets(change);
+    const affected = next.find(rs => rs.id === ruleSetId);
+    if (affected) syncRuleSet(affected);
   }, [syncRuleSet]);
+
+  const handleDeleteRule = useCallback((ruleId: string) => {
+    const affected = findSetContainingRule(ruleSetsRef.current, ruleId);
+    changeAndSync(sets => deleteRuleFromSets(sets, ruleId), affected?.id);
+    setSelectedRule(prev => prev?.id === ruleId ? null : prev);
+  }, [changeAndSync]);
 
   const handleAddRule = useCallback((ruleSetId: string) => {
     const newRule: ConstraintRule = {
@@ -1985,14 +1992,12 @@ export const ConstraintsView: React.FC<ConstraintsViewProps> = ({ vsumId: _vsumI
       modifiedAt: 'Just now',
       invariantCount: 1, contextCount: 1, linesOfCode: 5, linkedReactions: 0,
     };
-    setRuleSets(prev => {
-      const next = prev.map(rs => rs.id === ruleSetId ? { ...rs, rules: [...rs.rules, newRule] } : rs);
-      const affected = next.find(rs => rs.id === ruleSetId);
-      if (affected) syncRuleSet(affected);
-      return next;
-    });
+    changeAndSync(
+      sets => sets.map(rs => rs.id === ruleSetId ? { ...rs, rules: [...rs.rules, newRule] } : rs),
+      ruleSetId,
+    );
     setSelectedRule(newRule);
-  }, [syncRuleSet]);
+  }, [changeAndSync]);
 
   const handleAddSet = useCallback(() => {
     const newSet: RuleSet = {
@@ -2022,14 +2027,10 @@ export const ConstraintsView: React.FC<ConstraintsViewProps> = ({ vsumId: _vsumI
   }, [vsumId, markUserChange, saveUnsavedRuleSets]);
 
   const handleSaveRule = useCallback((updated: ConstraintRule) => {
-    setRuleSets(prev => {
-      const next = replaceRule(prev, updated);
-      const affected = findSetContainingRule(next, updated.id);
-      if (affected) syncRuleSet(affected);
-      return next;
-    });
+    const affected = findSetContainingRule(replaceRule(ruleSetsRef.current, updated), updated.id);
+    changeAndSync(sets => replaceRule(sets, updated), affected?.id);
     setSelectedRule(updated);
-  }, [syncRuleSet]);
+  }, [changeAndSync]);
 
   return (
     // pointer-events: none on container — individual panels re-enable it so the

@@ -720,6 +720,24 @@ describe('ConstraintsView predefined rule sets in a project', () => {
     expect(createdNames().sort()).toEqual(['Crate Rules', 'Deposit Item Rules']);
   });
 
+  it('updates a saved rule set once per change under React StrictMode', async () => {
+    (apiService.getRuleSets as Mock).mockResolvedValue([
+      { id: 9, name: 'Saved Set', color: '#3b82f6', description: '', oclContent: 'context pfand::Kasten inv Saved:\n  true' },
+    ]);
+    render(
+      <React.StrictMode>
+        <ConstraintsView vsumId="42" canvasNodes={[pfandNode as any]} />
+      </React.StrictMode>,
+    );
+    await screen.findByText('Saved Set');
+
+    fireEvent.click(screen.getAllByText('Add rule')[0]);
+
+    await waitFor(() => expect(apiService.updateRuleSet).toHaveBeenCalledWith(42, 9, expect.anything()));
+    await act(async () => { await new Promise(r => setTimeout(r, 50)); });
+    expect(apiService.updateRuleSet).toHaveBeenCalledTimes(1);
+  });
+
   it('saves the remaining ones when a predefined set is deleted first', async () => {
     render(<ConstraintsView vsumId="42" canvasNodes={[pfandNode as any]} />);
 
