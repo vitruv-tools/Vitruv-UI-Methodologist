@@ -26,6 +26,7 @@ import { EcoreFileBox } from './EcoreFileBox';
 import { metaModelDisplayColor } from '../../utils/metaModelColors';
 import { ConnectionLine } from './ConnectionLine';
 import { ReactionEditorModal } from './ReactionEditorModal';
+import { findMetaModelNodeByFileId, findReactionEdgeByFileId } from './flowCanvasProblemNavigation';
 import { ConfirmDialog } from '../ui/ConfirmDialog';
 import { apiService } from '../../services/api';
 import { WorkspaceSnapshot } from '../../types/workspace';
@@ -235,6 +236,13 @@ export interface FlowCanvasHandle {
   autoLayoutEcoreBoxes: () => void;
   fitUmlView: () => void;
   openSelectedReactionEditor: () => boolean;
+  /**
+   * Opens the reaction file with this id in the Reaction Editor, at `position` if given.
+   * Returns false if no reaction link on the canvas uses the file.
+   */
+  openReactionFileAt: (reactionFileId: number, position?: { lineNumber: number; column?: number }) => boolean;
+  /** Selects and opens the metamodel whose ecore or genmodel file has this id; false if absent. */
+  openMetaModelFile: (fileId: number) => boolean;
   establishBaseline: () => void;
 }
 
@@ -929,7 +937,10 @@ export const FlowCanvas = forwardRef<FlowCanvasHandle, FlowCanvasProps>(
 
     // ── Reaction code editor ──────────────────────────────────────────────────
 
-    const handleEdgeDoubleClick = useCallback(async (edgeId: string) => {
+    const handleEdgeDoubleClick = useCallback(async (
+      edgeId: string,
+      initialPosition?: CodeEditorState['initialPosition'],
+    ) => {
       const edge = edges.find(e => e.id === edgeId);
       if (!edge) return;
 
@@ -968,6 +979,7 @@ export const FlowCanvas = forwardRef<FlowCanvasHandle, FlowCanvasProps>(
         sourceFileName: getFileName(edge.source),
         targetFileName: getFileName(edge.target),
         reactionFileId,
+        initialPosition,
       });
     }, [edges, nodes]);
 
@@ -975,6 +987,16 @@ export const FlowCanvas = forwardRef<FlowCanvasHandle, FlowCanvasProps>(
       const selected = edges.filter(e => e.selected && e.type === 'reactions');
       if (selected.length === 0) return false;
       void handleEdgeDoubleClick(selected[0].id);
+      return true;
+    }, [edges, handleEdgeDoubleClick]);
+
+    const openReactionFileAt = useCallback((
+      reactionFileId: number,
+      position?: CodeEditorState['initialPosition'],
+    ): boolean => {
+      const edge = findReactionEdgeByFileId(edges, reactionFileId);
+      if (!edge) return false;
+      void handleEdgeDoubleClick(edge.id, position);
       return true;
     }, [edges, handleEdgeDoubleClick]);
 
@@ -1369,6 +1391,13 @@ export const FlowCanvas = forwardRef<FlowCanvasHandle, FlowCanvasProps>(
       });
     }, [nodes, onEcoreFileExpand, selectOnlyFile]);
 
+    const openMetaModelFile = useCallback((fileId: number): boolean => {
+      const node = findMetaModelNodeByFileId(nodes, fileId);
+      if (!node) return false;
+      handleEcoreFileExpand(node.data.fileName, node.data.fileContent ?? '');
+      return true;
+    }, [nodes, handleEcoreFileExpand]);
+
     const updateEcoreFileData = useCallback((
       fileName: string,
       fileContent: string,
@@ -1648,8 +1677,10 @@ export const FlowCanvas = forwardRef<FlowCanvasHandle, FlowCanvasProps>(
       autoLayoutEcoreBoxes,
       fitUmlView,
       openSelectedReactionEditor,
+      openReactionFileAt,
+      openMetaModelFile,
       establishBaseline,
-    }), [handleToolClick, loadDiagramData, nodes, edges, viewTypes, addEcoreFile, updateEcoreDisplayName, updateEcoreFileData, resetExpandedFile, undo, redo, canUndo, canRedo, getReactionEdges, getWorkspaceSnapshot, autoLayoutEcoreBoxes, fitUmlView, openSelectedReactionEditor, establishBaseline, locked]);
+    }), [handleToolClick, loadDiagramData, nodes, edges, viewTypes, addEcoreFile, updateEcoreDisplayName, updateEcoreFileData, resetExpandedFile, undo, redo, canUndo, canRedo, getReactionEdges, getWorkspaceSnapshot, autoLayoutEcoreBoxes, fitUmlView, openSelectedReactionEditor, openReactionFileAt, openMetaModelFile, establishBaseline, locked]);
 
     // ── Render mapping ────────────────────────────────────────────────────────
 
