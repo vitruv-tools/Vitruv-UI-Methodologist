@@ -20,6 +20,7 @@ import { CanvasProjectTabs } from '../components/canvas/CanvasProjectTabs';
 import { CanvasProjectLoadStateOverlay } from '../components/canvas/CanvasProjectLoadStateOverlay';
 import {
   CanvasPopupNotification,
+  type CanvasPopupNotificationAction,
   type CanvasPopupNotificationType,
 } from '../components/canvas/CanvasPopupNotification';
 import { CanvasProjectControls } from '../components/canvas/CanvasProjectControls';
@@ -367,6 +368,7 @@ export const CanvasPage: React.FC = () => {
     message: string;
     type: CanvasPopupNotificationType;
     details?: string;
+    action?: CanvasPopupNotificationAction;
   } | null>(null);
   const popupTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -382,12 +384,13 @@ export const CanvasPage: React.FC = () => {
     message: string,
     type: CanvasPopupNotificationType,
     details?: string,
+    action?: CanvasPopupNotificationAction,
   ) => {
     if (popupTimerRef.current) {
       globalThis.clearTimeout(popupTimerRef.current);
       popupTimerRef.current = null;
     }
-    setPopup({ message, type, details });
+    setPopup({ message, type, details, action });
     if (type === 'error') return;
     const ms = type === 'success' ? 4000 : 5000;
     popupTimerRef.current = globalThis.setTimeout(() => {
@@ -1388,12 +1391,21 @@ export const CanvasPage: React.FC = () => {
         );
       } else {
         const failure = describeBuildFailure(detail);
-        showPopup(failure.message, 'error', failure.details);
+        const openConstraints = failure.constraintRelated
+          ? {
+            label: 'Open Constraints mode',
+            onClick: () => {
+              dismissPopup();
+              handleCanvasModeChange('constraints');
+            },
+          }
+          : undefined;
+        showPopup(failure.message, 'error', failure.details, openConstraints);
       }
     } finally {
       setCheckingBuild(false);
     }
-  }, [activeProjectId, isViewOnly, showPopup]);
+  }, [activeProjectId, dismissPopup, handleCanvasModeChange, isViewOnly, showPopup]);
 
   // ── Download artifact ─────────────────────────────────────────────────────
 
@@ -1759,6 +1771,7 @@ export const CanvasPage: React.FC = () => {
           message={popup.message}
           type={popup.type}
           details={popup.details}
+          action={popup.action}
           onClose={dismissPopup}
         />
       )}

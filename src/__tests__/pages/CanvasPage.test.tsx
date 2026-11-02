@@ -4,6 +4,7 @@ import { fireEvent, render, screen, waitFor, within } from '@testing-library/rea
 import { CanvasPage } from '../../pages/CanvasPage';
 import { apiService } from '../../services/api';
 import { useModalBodyLock } from '../../components/ui/modalUtils';
+import { canvasModeStorageKey } from '../../utils/canvasModeStorage';
 
 const mockNavigate = vi.fn();
 let mockRouteId = '10';
@@ -353,6 +354,34 @@ describe('CanvasPage build check', () => {
     const popup = await screen.findByTestId('canvas-popup-notification');
     await waitFor(() => expect(popup).toHaveTextContent(/The constraints could not be built/));
     expect(popup).toHaveTextContent(/Rule set "Preise" refers to unknown metamodel/);
+  });
+
+  it('opens Constraints mode from a build failure caused by constraints', async () => {
+    (apiService.buildVsum as Mock).mockRejectedValue(
+      apiError(500, 'Constraint file Preise.ocl refers to unknown metamodel(s) [shop]'),
+    );
+    render(<CanvasPage />);
+    await waitForProject('Project A');
+    checkBuild();
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Open Constraints mode' }));
+
+    expect(await screen.findByTestId('constraints-view')).toBeInTheDocument();
+    expect(screen.queryByTestId('canvas-popup-notification')).not.toBeInTheDocument();
+    // the mode is remembered per project, so later tests would start in Constraints mode
+    localStorage.removeItem(canvasModeStorageKey(10));
+  });
+
+  it('offers no jump to Constraints mode for other build failures', async () => {
+    (apiService.buildVsum as Mock).mockRejectedValue(
+      apiError(500, 'Maven build failed with exit code 1'),
+    );
+    render(<CanvasPage />);
+    await waitForProject('Project A');
+    checkBuild();
+
+    await screen.findByText('Maven build failed with exit code 1');
+    expect(screen.queryByRole('button', { name: 'Open Constraints mode' })).not.toBeInTheDocument();
   });
 
   it('shows other build failures unchanged', async () => {
