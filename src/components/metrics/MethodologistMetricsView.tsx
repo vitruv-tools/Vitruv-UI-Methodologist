@@ -153,14 +153,9 @@ const MetamodelTable: React.FC<{ metrics: MethodologistMetrics }> = ({ metrics }
           <th style={thStyle('right')}>Classes</th>
           <th style={thStyle('right')}>Abstract</th>
           <th style={thStyle('right')}>Concrete</th>
-          <th style={thStyle('right')}>Attributes</th>
           <th style={thStyle('right')}>Refs (cont. / assoc.)</th>
           <th style={thStyle('right')}>Enums / literals</th>
           <th style={thStyle('right')}>Packages</th>
-          <th style={thStyle('right')} title="EOperations on classes">Ops</th>
-          <th style={thStyle('right')} title="Number of Children — direct subclasses">Children max / avg</th>
-          <th style={thStyle('right')} title="Depth of Inheritance Tree — how many superclasses sit above a class (roots are 0)">Inheritance max / avg</th>
-          <th style={thStyle('right')} title="Longest containment (composition) chain below a class">Cont. height</th>
           <th style={thStyle('right')} title="References whose target class lives in another package">Cross-pkg</th>
         </tr>
       </thead>
@@ -171,14 +166,9 @@ const MetamodelTable: React.FC<{ metrics: MethodologistMetrics }> = ({ metrics }
             <td style={tdStyle('right')}>{mm.classCount}</td>
             <td style={tdStyle('right')}>{mm.abstractClassCount}</td>
             <td style={tdStyle('right')}>{mm.concreteClassCount}</td>
-            <td style={tdStyle('right')}>{mm.attributesTotal}</td>
             <td style={tdStyle('right')}>{mm.containmentReferences} / {mm.nonContainmentReferences}</td>
             <td style={tdStyle('right')}>{mm.enumCount} / {mm.enumLiteralCount}</td>
             <td style={tdStyle('right')}>{mm.packageCount}</td>
-            <td style={tdStyle('right')}>{mm.operationsTotal}</td>
-            <td style={tdStyle('right')}>{mm.nocMax} / {formatAvg(mm.nocAvg)}</td>
-            <td style={tdStyle('right')}>{mm.inheritanceDepthMax} / {formatAvg(mm.inheritanceDepthAvg)}</td>
-            <td style={tdStyle('right')}>{mm.containmentHeightMax}</td>
             <td style={tdStyle('right')}>{mm.crossPackageReferences}</td>
           </tr>
         ))}
@@ -790,11 +780,10 @@ export const MethodologistMetricsView: React.FC<MethodologistMetricsViewProps> =
 
         {selected.includes('size') && (
           <>
-            <Section title="V-SUMM size" caption="The whole V-SUMM on the canvas: metamodels, classes, attributes, associations, and view types — not only OCL.">
+            <Section title="V-SUMM size" caption="Metamodels, classes, associations, and view types — not only OCL.">
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(112px, 1fr))', gap: 6 }}>
                 <InsightCard label="Metamodels" value={metrics.metamodels.length} />
                 <InsightCard label="Classes" value={metrics.classCount} sub={`${metrics.abstractClassCount} abs. · ${metrics.concreteClassCount} conc.`} />
-                <InsightCard label="Attributes" value={metrics.attributesTotal} />
                 <InsightCard
                   label="Associations"
                   value={metrics.nonContainmentReferences}
@@ -805,31 +794,12 @@ export const MethodologistMetricsView: React.FC<MethodologistMetricsViewProps> =
                   value={metrics.viewTypeCount}
                   sub={`${metrics.singleViewTypeCount} single · ${metrics.multiViewTypeCount} multi`}
                 />
+                <InsightCard label="Enums / literals" value={`${metrics.enumCount} / ${metrics.enumLiteralCount}`} />
+                <InsightCard label="Packages" value={metrics.packageCount} sub="Incl. subpackages" />
               </div>
             </Section>
 
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(112px, 1fr))', gap: 6, marginBottom: 16 }}>
-              <InsightCard label="Enums / literals" value={`${metrics.enumCount} / ${metrics.enumLiteralCount}`} />
-              <InsightCard label="Packages" value={metrics.packageCount} sub="Incl. subpackages" />
-              <InsightCard
-                label="Model elements"
-                value={metrics.instanceElementTotal}
-                sub={metrics.instanceModels.length === 0 ? 'No instance models' : `Across ${metrics.instanceModels.length} models`}
-              />
-              <InsightCard label="Operations" value={metrics.operationsTotal} />
-              <InsightCard
-                label="Children max"
-                value={metrics.nocMax}
-                sub={`avg ${formatAvg(metrics.nocAvg)}`}
-              />
-              <InsightCard
-                label="Cont. height"
-                value={metrics.containmentHeightMax}
-                sub={`${metrics.crossPackageReferences} cross-pkg refs`}
-              />
-            </div>
-
-            <Section title="Metamodels" caption="Classes, features, enumerations, packages, operations, inheritance (DIT), children (NOC), and containment height per metamodel.">
+            <Section title="Metamodels" caption="Classes, references, enumerations, packages, and cross-package references per metamodel.">
               {metrics.metamodels.length === 0 ? (
                 <div style={{ fontSize: 12, color: T.muted }}>Add metamodels on the Modeling canvas to populate this table.</div>
               ) : (
@@ -843,11 +813,10 @@ export const MethodologistMetricsView: React.FC<MethodologistMetricsViewProps> =
               </Section>
             )}
 
-            <Section title="Views" caption="View types on the Views canvas. Viewpoints are unique labels; view instances are not stored here.">
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: 6 }}>
+            <Section title="Views" caption="View types on the Views canvas. Viewpoints are unique labels.">
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(112px, 1fr))', gap: 6 }}>
                 <InsightCard label="View types" value={metrics.viewTypeCount} />
                 <InsightCard label="Viewpoints" value={metrics.viewpointCount} />
-                <InsightCard label="Views (instances)" value={0} sub="Not persisted" />
               </div>
             </Section>
           </>
@@ -867,10 +836,6 @@ export const MethodologistMetricsView: React.FC<MethodologistMetricsViewProps> =
             ) : (
               <CorrespondenceTable metrics={metrics} />
             )}
-            <div style={{ marginTop: 8, fontSize: 11, color: T.muted }}>
-              Correspondence instances: {metrics.correspondenceInstanceCount}
-              {metrics.correspondenceInstanceCount === 0 ? ' (none loaded)' : ''}
-            </div>
           </Section>
         )}
 
@@ -956,13 +921,13 @@ export const MethodologistMetricsView: React.FC<MethodologistMetricsViewProps> =
         {selected.includes('derived') && (
           <Section
             title="Derived / composite"
-            caption="Ratios from the counts above. View coverage uses classes in metamodels linked to a view type (static, no deployed VSUM). View element density uses instance model elements when those are loaded."
+            caption="Ratios from the counts above. View coverage uses classes in metamodels linked to a view type (static, no deployed VSUM)."
           >
             <DerivedTable metrics={metrics} />
           </Section>
         )}
       </div>
-    </div>
+    </div >
   );
 };
 

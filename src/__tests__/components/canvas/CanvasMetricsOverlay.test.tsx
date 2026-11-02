@@ -78,6 +78,12 @@ describe('CanvasMetricsOverlay', () => {
     expect(screen.getByText('Basic Metrics')).toBeInTheDocument();
     expect(screen.getAllByText('library').length).toBeGreaterThan(0);
     expect(screen.getByText('V-SUMM size')).toBeInTheDocument();
+    expect(screen.queryByText('Operations')).not.toBeInTheDocument();
+    expect(screen.queryByText('Children max')).not.toBeInTheDocument();
+    expect(screen.queryByText('Children max / avg')).not.toBeInTheDocument();
+    expect(screen.queryByText('Inheritance max / avg')).not.toBeInTheDocument();
+    expect(screen.queryByText('Model elements')).not.toBeInTheDocument();
+    expect(screen.queryByText('Views (instances)')).not.toBeInTheDocument();
     expect(screen.queryByText('Derived / composite')).not.toBeInTheDocument();
     fireEvent.click(screen.getByTestId('metrics-tab-derived'));
     expect(screen.getByText('V-SUMM size')).toBeInTheDocument();
@@ -225,6 +231,11 @@ reaction SyncBook {
     expect(classCell).toHaveStyle({ whiteSpace: 'nowrap', wordBreak: 'normal' });
     expect(detail.getAllByText('Attributes')[0].closest('th')).toHaveStyle({ whiteSpace: 'nowrap' });
     expect(detail.getAllByText('Cont. height')[0].closest('th')).toHaveStyle({ whiteSpace: 'nowrap' });
+    expect(detail.getAllByText('Ops')).toHaveLength(2);
+    expect(detail.getAllByText('Children')).toHaveLength(2);
+    expect(detail.getAllByText('Depth')).toHaveLength(2);
+    expect(screen.getAllByText('Attributes')).toHaveLength(detail.getAllByText('Attributes').length);
+    expect(screen.getAllByText('Cont. height')).toHaveLength(detail.getAllByText('Cont. height').length);
 
     await waitFor(() => {
       expect(apiService.getRuleSets).toHaveBeenCalled();
