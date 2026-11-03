@@ -102,6 +102,16 @@ describe('CanvasSidebarToolbar', () => {
     expect(onOpenUtilityMethods).toHaveBeenCalledTimes(1);
   });
 
+  it('shows a toolbox icon, not a function symbol, on the utility methods button', () => {
+    render(<CanvasSidebarToolbar {...createProps()} onOpenUtilityMethods={vi.fn()} />);
+
+    const button = screen.getByRole('button', { name: labels.utilityMethods });
+    const icon = button.querySelector('svg');
+    expect(icon).toHaveAttribute('data-icon', 'toolbox');
+    expect(icon).toHaveAttribute('aria-hidden', 'true');
+    expect(button).not.toHaveTextContent(/fx/i);
+  });
+
   it('offers the utility methods overview to view-only members', () => {
     render(<CanvasSidebarToolbar {...createProps()} readOnly onOpenUtilityMethods={vi.fn()} />);
 

@@ -139,12 +139,13 @@ const PlusBoxIcon = () => (
   </svg>
 );
 
-const FunctionIcon = () => (
-  <svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M14.5 4.5c-1.6-.6-3.2.1-3.7 2L8.6 17c-.5 2-2.1 2.7-3.6 2.1" />
-    <line x1="7.5" y1="10" x2="14" y2="10" />
-    <path d="M16.5 13l4 5" />
-    <path d="M20.5 13l-4 5" />
+/** A toolbox: the utility methods are reusable tools for reactions. */
+const ToolboxIcon = () => (
+  <svg aria-hidden="true" data-icon="toolbox" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+    <rect x="3" y="8" width="18" height="12" rx="2" />
+    <path d="M9 8V6a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2" />
+    <line x1="3" y1="13" x2="21" y2="13" />
+    <line x1="12" y1="12" x2="12" y2="14" />
   </svg>
 );
 
@@ -418,7 +419,7 @@ export const CanvasSidebarToolbar: React.FC<CanvasSidebarToolbarProps> = ({
               : 'Define utility methods for reactions'}
             onClick={onOpenUtilityMethods}
           >
-            <FunctionIcon />
+            <ToolboxIcon />
           </SidebarButton>
         )}
 
