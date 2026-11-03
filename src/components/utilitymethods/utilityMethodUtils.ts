@@ -153,21 +153,34 @@ export function utilityMethodCall(utilityMethod: { name: string; parameters: Uti
   return `${utilityMethod.name}(${utilityMethod.parameters.map(p => p.name).join(', ')})`;
 }
 
+/** Escapes the characters that have a meaning in Monaco snippet placeholder text. */
+function escapeSnippetText(text: string): string {
+  return text.replace(/[$}\\]/g, String.raw`\$&`);
+}
+
 /** Like {@link utilityMethodCall}, as a Monaco snippet whose arguments are tab stops. */
 export function utilityMethodCallSnippet(utilityMethod: { name: string; parameters: UtilityMethodParameter[] }): string {
   const params = utilityMethod.parameters
-    .map((p, i) => `\${${i + 1}:${p.name.replace(/[$}\\]/g, String.raw`\$&`)}}`);
+    .map((p, i) => `\${${i + 1}:${escapeSnippetText(p.name)}}`);
   return `${utilityMethod.name}(${params.join(', ')})`;
 }
 
 const UTILITY_CLASS = 'Utility';
+const NAME_CHAR = /^[\p{L}\p{N}_]$/u;
+
+/** `text` without the (partial) name at its end. A loop, because `/[…]*$/` backtracks. */
+function withoutTrailingName(text: string): string {
+  const chars = Array.from(text);
+  while (chars.length > 0 && NAME_CHAR.test(chars.at(-1) ?? '')) chars.pop();
+  return chars.join('');
+}
 
 /**
  * Whether a utility method call can be written at the end of `textBefore`: anywhere a name can
  * start, and after `Utility.`, but not after another receiver such as `model.`.
  */
 export function canCallUtilityMethodAt(textBefore: string): boolean {
-  const prefix = textBefore.replace(/[\p{L}\p{N}_]*$/u, '').trimEnd();
+  const prefix = withoutTrailingName(textBefore).trimEnd();
   if (!prefix.endsWith('.')) return true;
   const receiver = prefix.slice(0, -1).trimEnd();
   if (!receiver.endsWith(UTILITY_CLASS)) return false;

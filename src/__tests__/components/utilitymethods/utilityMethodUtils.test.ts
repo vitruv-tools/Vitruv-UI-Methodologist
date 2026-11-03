@@ -94,5 +94,8 @@ describe('utilityMethodUtils', () => {
     expect(canCallUtilityMethodAt('model.contains.fil')).toBe(false);
     expect(canCallUtilityMethodAt('MyUtility.')).toBe(false);
     expect(canCallUtilityMethodAt('a.Utility.')).toBe(false);
+    expect(canCallUtilityMethodAt('model.größe')).toBe(false);
+    expect(canCallUtilityMethodAt('Utility.𝑥_1')).toBe(true);
+    expect(canCallUtilityMethodAt('')).toBe(true);
   });
 });
