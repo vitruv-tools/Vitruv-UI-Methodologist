@@ -6,6 +6,7 @@ import { downloadTextAsFile } from '../../utils/downloadFile';
 import { overlapResultToCsv, serializeOverlapResult } from '../../utils/semanticOverlap/overlapResult';
 import type { PairDirection, PairOverlap } from '../../utils/semanticOverlap/overviewTypes';
 import { OverlapResultPanel } from './OverlapResultPanel';
+import { PANEL_BODY } from './ProjectOverlapOverview';
 import { exportFileName } from './SemanticOverlapView';
 import { secondaryButton } from './overlapButtonStyles';
 
@@ -37,12 +38,12 @@ export const ProjectPairDetail: React.FC<ProjectPairDetailProps> = ({ pair, name
   const result = useMemo(() => (fullResult ? shownResult(fullResult, view.selectedAlternative) : null), [fullResult, view.selectedAlternative]);
 
   return (
-    <div style={{ flex: 1, minHeight: 0, overflow: 'auto', padding: '24px 28px', display: 'flex', flexDirection: 'column', gap: 16, background: themeVars.pageBg, borderRadius: 12 }}>
+    <div className="themed-scroll" style={PANEL_BODY}>
       <div>
         <button type="button" onClick={onBack} style={{ ...secondaryButton, height: 32 }}>← Back to overview</button>
       </div>
       <header>
-        <h2 style={{ margin: 0, fontSize: 22, fontWeight: 700, color: themeVars.text }}>{nameA} ↔ {nameB}</h2>
+        <h3 style={{ margin: 0, fontSize: 18, fontWeight: 700, color: themeVars.text }}>{nameA} ↔ {nameB}</h3>
       </header>
 
       <div role="radiogroup" aria-label="Direction" style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>

@@ -60,6 +60,25 @@ describe('CanvasSemanticOverlapOverlay', () => {
     expect(screen.getByTestId('canvas-semantic-overlap-overlay')).toHaveStyle({ display: 'none' });
   });
 
+  it('frames the mode like Metrics: bordered panel, white header and a close button', () => {
+    const onClose = vi.fn();
+    render(<CanvasSemanticOverlapOverlay projectId={VSUM} visible canvasNodes={canvasNodes()} onClose={onClose} />);
+    const frame = screen.getByRole('region', { name: 'Semantic overlap' });
+    expect(frame).toHaveStyle({ border: '1px solid var(--v-border)', borderRadius: '12px' });
+    const header = screen.getByRole('heading', { name: 'Semantic overlap' }).closest('header')!;
+    expect(header).toHaveStyle({ background: 'var(--v-surface)' });
+    fireEvent.click(screen.getByRole('button', { name: 'Close semantic overlap' }));
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps the frame and the close button while a pair is open', async () => {
+    const { runToEnd } = renderOverlay();
+    await runToEnd();
+    fireEvent.click(screen.getByRole('button', { name: /^Ecore ↔ UML: \d+ % overlap, open details$/ }));
+    expect(screen.getByRole('heading', { name: 'Semantic overlap' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Ecore ↔ UML' })).toBeInTheDocument();
+  });
+
   it('shows nothing to run without a project', () => {
     render(<CanvasSemanticOverlapOverlay visible canvasNodes={canvasNodes()} />);
     expect(screen.queryByRole('button', { name: 'Start analysis' })).not.toBeInTheDocument();

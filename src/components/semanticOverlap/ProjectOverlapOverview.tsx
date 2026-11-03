@@ -34,6 +34,12 @@ export interface ProjectOverlapOverviewProps {
   onCancel: () => void;
 }
 
+/** Scrolling body below the panel header of the Semantic overlap mode. */
+export const PANEL_BODY: React.CSSProperties = {
+  flex: 1, minHeight: 0, overflowY: 'auto', overflowX: 'hidden', padding: '12px 16px 18px',
+  display: 'flex', flexDirection: 'column', gap: 16,
+};
+
 const panel: React.CSSProperties = {
   padding: 16, border: `1px solid ${themeVars.border}`, borderRadius: 12, background: themeVars.surface,
   display: 'flex', flexDirection: 'column', gap: 12, minWidth: 0,
@@ -97,14 +103,7 @@ export const ProjectOverlapOverview: React.FC<ProjectOverlapOverviewProps> = ({ 
   const run = () => { if (metamodels) void onStart(metamodels); };
 
   return (
-    <div ref={scrollRef} style={{ flex: 1, minHeight: 0, overflow: 'auto', padding: '24px 28px', display: 'flex', flexDirection: 'column', gap: 16, background: themeVars.pageBg, borderRadius: 12 }}>
-      <header>
-        <h2 style={{ margin: 0, fontSize: 22, fontWeight: 700, color: themeVars.text }}>Semantic overlap</h2>
-        <p style={{ margin: '4px 0 0', fontSize: 14, color: themeVars.textSecondary }}>
-          Compares every pair of metamodels on this project&apos;s canvas in both directions and ranks the pairs by
-          overlap. Approach and settings are shared with the Semantic overlap view of the home page.
-        </p>
-      </header>
+    <div ref={scrollRef} className="themed-scroll" style={PANEL_BODY}>
 
       {readError && <div role="alert" style={{ color: themeVars.dangerText }}>{readError}</div>}
 

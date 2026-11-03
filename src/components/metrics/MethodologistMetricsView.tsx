@@ -3,6 +3,7 @@ import type { Edge, Node } from 'reactflow';
 import { readStoredViewTypes, type ViewType } from '../../hooks/useViewTypes';
 import { apiService } from '../../services/api';
 import { APP_FONT } from '../ui/sharedStyles';
+import { PanelCloseButton } from '../ui/PanelCloseButton';
 import {
   collectMetamodelInputs,
   collectReactionInputs,
@@ -731,44 +732,7 @@ export const MethodologistMetricsView: React.FC<MethodologistMetricsViewProps> =
             Size, reactions, coverage, hotspots, and derived ratios. Mark the ones you want to see together.
           </div>
         </div>
-        {onClose && (
-          <button
-            type="button"
-            aria-label="Close metrics"
-            title="Close"
-            onClick={onClose}
-            style={{
-              flexShrink: 0,
-              width: 40,
-              height: 40,
-              borderRadius: '50%',
-              border: `1.5px solid ${T.border}`,
-              background: T.mutedBg,
-              color: T.text,
-              cursor: 'pointer',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              padding: 0,
-              boxShadow: '0 1px 3px rgba(0,0,0,0.12)',
-            }}
-            onMouseEnter={e => {
-              e.currentTarget.style.background = T.brand;
-              e.currentTarget.style.borderColor = T.brand;
-              e.currentTarget.style.color = '#fff';
-            }}
-            onMouseLeave={e => {
-              e.currentTarget.style.background = T.mutedBg;
-              e.currentTarget.style.borderColor = T.border;
-              e.currentTarget.style.color = T.text;
-            }}
-          >
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.8" strokeLinecap="round">
-              <line x1="18" y1="6" x2="6" y2="18" />
-              <line x1="6" y1="6" x2="18" y2="18" />
-            </svg>
-          </button>
-        )}
+        {onClose && <PanelCloseButton label="Close metrics" onClick={onClose} />}
       </div>
 
       <CategoryTabs

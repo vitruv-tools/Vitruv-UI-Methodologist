@@ -1687,6 +1687,7 @@ export const CanvasPage: React.FC = () => {
         projectName={vsumName}
         visible={canvasMode === 'overlap'}
         canvasNodes={overlapNodes}
+        onClose={() => handleCanvasModeChange('modeling')}
       />
 
       {/* Left sidebar toolbar */}

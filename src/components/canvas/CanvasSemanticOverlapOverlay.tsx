@@ -4,12 +4,17 @@ import { useProjectOverlapRun, type ProjectOverlapRunDeps } from '../../hooks/us
 import { useProjectSemanticOverlapStore } from '../../store/ProjectSemanticOverlap';
 import { ProjectOverlapOverview } from '../semanticOverlap/ProjectOverlapOverview';
 import { ProjectPairDetail } from '../semanticOverlap/ProjectPairDetail';
+import { APP_FONT } from '../ui/sharedStyles';
+import { PanelCloseButton } from '../ui/PanelCloseButton';
+import { themeVars } from '../../theme/theme';
 
 export interface CanvasSemanticOverlapOverlayProps {
   projectId?: number;
   projectName?: string | null;
   visible: boolean;
   canvasNodes: Node[];
+  /** Closes the mode (back to Modeling), like the Metrics panel. */
+  onClose?: () => void;
   /** For tests: worker factory and pool size of the analysis runs. */
   runDeps?: ProjectOverlapRunDeps;
 }
@@ -23,6 +28,7 @@ export const CanvasSemanticOverlapOverlay: React.FC<CanvasSemanticOverlapOverlay
   projectName,
   visible,
   canvasNodes,
+  onClose,
   runDeps,
 }) => {
   // Mounted for as long as the project is open: leaving the project cancels a running analysis.
@@ -65,7 +71,29 @@ export const CanvasSemanticOverlapOverlay: React.FC<CanvasSemanticOverlapOverlay
       }}
     >
       <div style={{ position: 'relative', zIndex: 1, width: '100%', maxWidth: 1280, height: '100%', display: 'flex', pointerEvents: 'auto', minWidth: 0, minHeight: 0 }}>
-        {content}
+        <section
+          aria-label="Semantic overlap"
+          style={{
+            flex: 1, minWidth: 0, height: '100%', display: 'flex', flexDirection: 'column', boxSizing: 'border-box',
+            background: themeVars.surfaceMuted, border: `1px solid ${themeVars.border}`, borderRadius: 12,
+            overflow: 'hidden', fontFamily: APP_FONT,
+          }}
+        >
+          <header style={{
+            display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12, padding: '12px 16px',
+            background: themeVars.surface, borderBottom: `1px solid ${themeVars.border}`, flexShrink: 0,
+          }}>
+            <div>
+              <h2 style={{ margin: '0 0 2px', fontSize: 14, fontWeight: 700, color: themeVars.text }}>Semantic overlap</h2>
+              <div style={{ fontSize: 11, color: themeVars.textMuted, lineHeight: 1.35 }}>
+                Compares every pair of metamodels on this project&apos;s canvas in both directions and ranks the pairs by
+                overlap.
+              </div>
+            </div>
+            {onClose && <PanelCloseButton label="Close semantic overlap" onClick={onClose} />}
+          </header>
+          {content}
+        </section>
       </div>
     </div>
   );
