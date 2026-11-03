@@ -17,12 +17,15 @@ export const BOX_PADDING = 4;
 const COST_MOVE = 1;
 const COST_TURN = 8;
 const COST_NEAR_BOX = 1;
-const COST_NEAR_CONNECTION = 10;
-const COST_CROSS_CONNECTION = 1000;
+const COST_NEAR_CONNECTION = 2;
+/** Crossing another link is cheaper than a long detour round the diagram, but overlapping along it is not. */
+const COST_CROSS_CONNECTION = 40;
 const COST_OFF_FACING = 24;
 const PORTS_PER_SIDE = 1;
 const MAX_AXIS_CELLS = 72;
 const MARGIN = 80;
+/** Length of the straight run every link leaves/enters a box with, perpendicular to its side. */
+export const STUB_LENGTH = 24;
 const ROUTABLE_TYPES = new Set(['ecoreFile', 'eobject', 'ghost']);
 
 export type Side = HandlePosition;
@@ -566,10 +569,17 @@ function pairFromCenterDelta(source: Rect, target: Rect): { source: Side; target
   return { source: 'left', target: 'right' };
 }
 
+/** Below this a link cannot fit its two stubs between boxes, so it would squeeze along them. */
+const MIN_FACING_GAP = STUB_LENGTH * 2;
+
 export function facingSides(source: Rect, target: Rect): { source: Side; target: Side } {
   const g = boxGaps(source, target);
   const horiz = positiveGap(g.east, g.west);
   const vert = positiveGap(g.south, g.north);
+  const horizRoomy = horiz >= MIN_FACING_GAP;
+  const vertRoomy = vert >= MIN_FACING_GAP;
+  if (vertRoomy && !horizRoomy) return closerVerticalPair(g);
+  if (horizRoomy && !vertRoomy) return closerHorizontalPair(g);
   if (vert >= 0 && (horiz < 0 || vert <= horiz)) return closerVerticalPair(g);
   if (horiz >= 0) return closerHorizontalPair(g);
   return pairFromCenterDelta(source, target);
@@ -711,6 +721,179 @@ function oppositeSide(side: Side): Side {
   return 'bottom';
 }
 
+function sideNormal(side: Side): Point {
+  switch (side) {
+    case 'right': return { x: 1, y: 0 };
+    case 'left': return { x: -1, y: 0 };
+    case 'top': return { x: 0, y: -1 };
+    case 'bottom': return { x: 0, y: 1 };
+  }
+}
+
+function stubOf(anchor: Point, side: Side): Point {
+  const n = sideNormal(side);
+  return { x: anchor.x + n.x * STUB_LENGTH, y: anchor.y + n.y * STUB_LENGTH };
+}
+
+function samePoint(a: Point, b: Point): boolean {
+  return Math.abs(a.x - b.x) < 0.5 && Math.abs(a.y - b.y) < 0.5;
+}
+
+/** Corner(s) taking a link from just outside its start box to `to`, leaving along the side normal. */
+function elbowFromStub(stub: Point, side: Side, to: Point): Point[] {
+  if (Math.abs(stub.x - to.x) < 0.5 || Math.abs(stub.y - to.y) < 0.5) return [to];
+  const n = sideNormal(side);
+  const alongNormal = n.x !== 0 ? (to.x - stub.x) * n.x : (to.y - stub.y) * n.y;
+  const normalFirst = n.x !== 0 ? { x: to.x, y: stub.y } : { x: stub.x, y: to.y };
+  const perpFirst = n.x !== 0 ? { x: stub.x, y: to.y } : { x: to.x, y: stub.y };
+  return [alongNormal > 0.5 ? normalFirst : perpFirst, to];
+}
+
+/** Corner(s) taking a link from `from` to just outside its end box, arriving along the side normal. */
+function elbowIntoStub(from: Point, stub: Point, side: Side): Point[] {
+  if (Math.abs(stub.x - from.x) < 0.5 || Math.abs(stub.y - from.y) < 0.5) return [stub];
+  const n = sideNormal(side);
+  const alongNormal = n.x !== 0 ? (from.x - stub.x) * n.x : (from.y - stub.y) * n.y;
+  const normalLast = n.x !== 0 ? { x: from.x, y: stub.y } : { x: stub.x, y: from.y };
+  const perpLast = n.x !== 0 ? { x: stub.x, y: from.y } : { x: from.x, y: stub.y };
+  return [alongNormal > 0.5 ? normalLast : perpLast, stub];
+}
+
+function dedupePoints(points: Point[]): Point[] {
+  const out: Point[] = [];
+  for (const p of points) {
+    const prev = lastPoint(out);
+    if (!prev || !samePoint(prev, p)) out.push(p);
+  }
+  return out;
+}
+
+/** True when the first/last segments run perpendicular to their box side, away from/into the box. */
+export function endsAreOrthogonal(points: Point[], startSide: Side, endSide: Side): boolean {
+  if (points.length < 2) return false;
+  const sn = sideNormal(startSide);
+  const en = sideNormal(endSide);
+  const a = points[0];
+  const b = points[1];
+  const y = points.at(-2);
+  const z = points.at(-1);
+  if (!y || !z) return false;
+  const out = (b.x - a.x) * sn.x + (b.y - a.y) * sn.y;
+  const sideways = Math.abs((b.x - a.x) * sn.y) + Math.abs((b.y - a.y) * sn.x);
+  const into = (y.x - z.x) * en.x + (y.y - z.y) * en.y;
+  const sideways2 = Math.abs((y.x - z.x) * en.y) + Math.abs((y.y - z.y) * en.x);
+  return out > 0.5 && sideways < 0.5 && into > 0.5 && sideways2 < 0.5;
+}
+
+const JOG_MAX = 10;
+const HOOK_MAX = ROUTING_CELL * 1.5;
+
+type Axis = 'h' | 'v';
+
+function axisOf(a: Point, b: Point): Axis | null {
+  if (Math.abs(a.y - b.y) < 0.5 && Math.abs(a.x - b.x) >= 0.5) return 'h';
+  if (Math.abs(a.x - b.x) < 0.5 && Math.abs(a.y - b.y) >= 0.5) return 'v';
+  return null;
+}
+
+function travel(a: Point, b: Point, axis: Axis): number {
+  return Math.sign(axis === 'v' ? b.y - a.y : b.x - a.x);
+}
+
+/**
+ * Removes "hooks": a run that overshoots, steps a few pixels sideways and comes straight back
+ * (grid cells rarely line up with an anchor, so the search can overshoot by up to a cell).
+ */
+function removeHooks(points: Point[]): Point[] | null {
+  for (let i = 0; i + 3 < points.length; i++) {
+    if (i === 0 || i + 3 === points.length - 1) continue;
+    const [a, b, c, d] = points.slice(i, i + 4);
+    const axis = axisOf(a, b);
+    if (!axis || axisOf(c, d) !== axis) continue;
+    const across = axisOf(b, c);
+    if (!across || across === axis) continue;
+    if (travel(a, b, axis) === travel(c, d, axis)) continue;
+    if (Math.hypot(c.x - b.x, c.y - b.y) > HOOK_MAX) continue;
+    const dir = travel(a, b, axis);
+    const within = axis === 'v'
+      ? (d.y - a.y) * dir > 0 && (b.y - d.y) * dir > 0
+      : (d.x - a.x) * dir > 0 && (b.x - d.x) * dir > 0;
+    if (!within) continue;
+    const corner = axis === 'v' ? { x: a.x, y: d.y } : { x: d.x, y: a.y };
+    return [...points.slice(0, i + 1), corner, ...points.slice(i + 3)];
+  }
+  return null;
+}
+
+/** Removes micro-jogs (a few px sideways between two long runs) by sliding one run onto the other. */
+function removeJogs(points: Point[]): Point[] | null {
+  const last = points.length - 1;
+  for (let i = 1; i + 1 < last; i++) {
+    const axis = axisOf(points[i], points[i + 1]);
+    if (!axis) continue;
+    if (Math.hypot(points[i + 1].x - points[i].x, points[i + 1].y - points[i].y) >= JOG_MAX) continue;
+    const before = axisOf(points[i - 1], points[i]);
+    const after = axisOf(points[i + 1], points[i + 2]);
+    if (!before || !after || before === axis || after === axis) continue;
+    const key = axis === 'h' ? 'x' : 'y';
+    const next = points.map(p => ({ ...p }));
+    if (i + 2 < last) {
+      next[i + 1][key] = points[i][key];
+      next[i + 2][key] = points[i][key];
+      return next;
+    }
+    if (i - 1 > 0) {
+      next[i][key] = points[i + 1][key];
+      next[i - 1][key] = points[i + 1][key];
+      return next;
+    }
+  }
+  return null;
+}
+
+/** Straightens a route: no repeated points, hooks, micro-jogs or needless bends. */
+export function tidyRoute(points: Point[]): Point[] {
+  let pts = simplifyWorld(dedupePoints(points));
+  for (let guard = 0; guard < 24; guard++) {
+    const next = removeHooks(pts) ?? removeJogs(pts);
+    if (!next) break;
+    pts = simplifyWorld(dedupePoints(next));
+  }
+  return pts;
+}
+
+/**
+ * Link body between two anchors. The first and last runs are always straight
+ * stubs perpendicular to the box side, so an arrowhead never lies along the box.
+ */
+function buildStubbedPoints(
+  startAnchor: Point,
+  startSide: Side,
+  endAnchor: Point,
+  endSide: Side,
+  mid: Point[],
+): Point[] {
+  const sStub = stubOf(startAnchor, startSide);
+  const tStub = stubOf(endAnchor, endSide);
+  const pts: Point[] = [startAnchor, sStub];
+  if (mid.length === 0) {
+    if (sideNormal(startSide).x !== 0) {
+      const midX = (sStub.x + tStub.x) / 2;
+      pts.push({ x: midX, y: sStub.y }, { x: midX, y: tStub.y });
+    } else {
+      const midY = (sStub.y + tStub.y) / 2;
+      pts.push({ x: sStub.x, y: midY }, { x: tStub.x, y: midY });
+    }
+    pts.push(tStub);
+  } else {
+    pts.push(...elbowFromStub(sStub, startSide, mid[0]), ...mid.slice(1));
+    const tail = lastPoint(pts) ?? sStub;
+    pts.push(...elbowIntoStub(tail, tStub, endSide));
+  }
+  pts.push(endAnchor);
+  return tidyRoute(pts);
+}
+
 function fallbackPath(
   source: Rect,
   target: Rect,
@@ -727,54 +910,12 @@ function fallbackPath(
   return {
     sourceHandle,
     targetHandle,
-    points: midwayOrthogonal(a, b, targetHandle),
+    points: buildStubbedPoints(a, sourceHandle, b, targetHandle, []),
   };
 }
 
-function orthogonalLeave(from: Point, to: Point, side: Side): Point[] {
-  if (side === 'left' || side === 'right') {
-    if (Math.abs(from.y - to.y) < 0.5) return [from, to];
-    return [from, { x: to.x, y: from.y }, to];
-  }
-  if (Math.abs(from.x - to.x) < 0.5) return [from, to];
-  return [from, { x: from.x, y: to.y }, to];
-}
-
-function orthogonalArrive(from: Point, to: Point, side: Side): Point[] {
-  if (side === 'top' || side === 'bottom') {
-    if (Math.abs(from.x - to.x) < 0.5) return [from, to];
-    return [from, { x: to.x, y: from.y }, to];
-  }
-  if (Math.abs(from.y - to.y) < 0.5) return [from, to];
-  return [from, { x: to.x, y: from.y }, to];
-}
-
-/** Elbows sit in the gap between the boxes, not against the destination. */
-function midwayOrthogonal(from: Point, to: Point, targetSide: Side): Point[] {
-  if (Math.abs(from.x - to.x) < 0.5 && Math.abs(from.y - to.y) < 0.5) return [from, to];
-  const midX = (from.x + to.x) / 2;
-  const midY = (from.y + to.y) / 2;
-  if (targetSide === 'left' || targetSide === 'right') {
-    if (Math.abs(from.y - to.y) < 0.5) return [from, to];
-    return [from, { x: midX, y: from.y }, { x: midX, y: to.y }, to];
-  }
-  if (Math.abs(from.x - to.x) < 0.5) return [from, to];
-  return [from, { x: from.x, y: midY }, { x: to.x, y: midY }, to];
-}
-
-function lastSegmentMatchesSide(points: Point[], side: Side): boolean {
-  if (points.length < 2) return false;
-  const from = secondLastPoint(points);
-  const to = lastPoint(points);
-  if (!from || !to) return false;
-  if (side === 'top') return Math.abs(from.x - to.x) < 1 && from.y < to.y;
-  if (side === 'bottom') return Math.abs(from.x - to.x) < 1 && from.y > to.y;
-  if (side === 'left') return Math.abs(from.y - to.y) < 1 && from.x < to.x;
-  return Math.abs(from.y - to.y) < 1 && from.x > to.x;
-}
-
 function trimPortStubs(points: Point[], start: Point, end: Point, cell: number): Point[] {
-  const limit = cell * 2;
+  const limit = cell * 1.5;
   const out = points.slice();
   while (out.length > 0) {
     const head = out.at(0);
@@ -789,15 +930,6 @@ function trimPortStubs(points: Point[], start: Point, end: Point, cell: number):
   return out;
 }
 
-function joinLeaveAndMid(head: Point[], mid: Point[]): Point[] {
-  const headTip = lastPoint(head);
-  const midStart = mid.at(0);
-  if (headTip && midStart?.x === headTip.x && midStart?.y === headTip.y) {
-    return [...head, ...mid.slice(1)];
-  }
-  return [...head, ...mid];
-}
-
 function pathFromSearch(
   grid: Grid,
   source: Rect,
@@ -809,19 +941,11 @@ function pathFromSearch(
   const startAnchor = anchors?.start ?? handleAnchor(source, search.start.side, search.start.t);
   const endAnchor = anchors?.end ?? handleAnchor(target, search.goal.side, search.goal.t);
   const mid = trimPortStubs(gridPoints, startAnchor, endAnchor, grid.cell);
-  let points: Point[];
-  if (mid.length === 0) {
-    points = midwayOrthogonal(startAnchor, endAnchor, search.goal.side);
-  } else {
-    const body = joinLeaveAndMid(orthogonalLeave(startAnchor, mid[0], search.start.side), mid);
-    const bodyTip = lastPoint(body) ?? endAnchor;
-    const tail = orthogonalArrive(bodyTip, endAnchor, search.goal.side);
-    points = [...body, ...tail.slice(1)];
-  }
+  const points = buildStubbedPoints(startAnchor, search.start.side, endAnchor, search.goal.side, mid);
   return {
     sourceHandle: search.start.side,
     targetHandle: search.goal.side,
-    points: simplifyWorld(points),
+    points,
   };
 }
 
@@ -880,16 +1004,11 @@ function routeViaPoint(
     { target: preferred.target },
   );
   if (!first || !second) return null;
-  return simplifyIfClear(
-    pathFromSearch(grid, source, target, {
+  return simplifyIfClear(pathFromSearch(grid, source, target, {
       cells: [...first.cells, ...second.cells.slice(1)],
       start: first.start,
       goal: second.goal,
-    }, anchors),
-    source,
-    target,
-    obstacles,
-  );
+    }, anchors), [source, target, ...obstacles], []);
 }
 
 export function routeOrthogonalAStar(input: RouteInput): RoutedPath {
@@ -947,50 +1066,61 @@ export function routeOrthogonalAStar(input: RouteInput): RoutedPath {
   }
   return simplifyIfClear(
     pathFromSearch(grid, input.source, input.target, search, anchors),
-    input.source,
-    input.target,
-    obstacles,
+    [input.source, input.target, ...obstacles],
+    existing,
   );
 }
 
-function pathClearanceScore(points: Point[], targetHandle: Side): number {
-  return points.length + (lastSegmentMatchesSide(points, targetHandle) ? 0 : 10);
+function segmentBox(a: Point, b: Point, pad: number): Rect {
+  return {
+    x: Math.min(a.x, b.x) - pad,
+    y: Math.min(a.y, b.y) - pad,
+    width: Math.abs(a.x - b.x) + pad * 2,
+    height: Math.abs(a.y - b.y) + pad * 2,
+  };
 }
 
+function boxesOverlap(a: Rect, b: Rect): boolean {
+  return a.x < b.x + b.width && b.x < a.x + a.width && a.y < b.y + b.height && b.y < a.y + a.height;
+}
+
+function touchesAnyPath(points: Point[], paths: Point[][]): boolean {
+  for (let i = 0; i < points.length - 1; i++) {
+    const mine = segmentBox(points[i], points[i + 1], 4);
+    for (const path of paths) {
+      for (let j = 0; j < path.length - 1; j++) {
+        if (boxesOverlap(mine, segmentBox(path[j], path[j + 1], 0))) return true;
+      }
+    }
+  }
+  return false;
+}
+
+/**
+ * Keeps ends orthogonal, and prefers the plain stubbed Z/L between the two
+ * anchors whenever it is clear of boxes and other links.
+ */
 function simplifyIfClear(
   route: RoutedPath,
-  source: Rect,
-  target: Rect,
-  obstacles: Rect[],
+  blocked: Rect[],
+  existing: Point[][],
 ): RoutedPath {
   const start = route.points[0];
   const end = lastPoint(route.points);
   if (!start || !end) return route;
-  const blocked = [source, target, ...obstacles];
-  const midway = simplifyWorld(midwayOrthogonal(start, end, route.targetHandle));
+  const direct = buildStubbedPoints(start, route.sourceHandle, end, route.targetHandle, []);
+  if (!endsAreOrthogonal(route.points, route.sourceHandle, route.targetHandle)) {
+    return { ...route, points: direct };
+  }
   if (
-    lastSegmentMatchesSide(midway, route.targetHandle)
-    && !polylineHitsRects(midway, blocked)
+    direct.length <= route.points.length
+    && endsAreOrthogonal(direct, route.sourceHandle, route.targetHandle)
+    && !polylineHitsRects(direct, blocked)
+    && !touchesAnyPath(direct, existing)
   ) {
-    return { ...route, points: midway };
+    return { ...route, points: direct };
   }
-  const candidates = [
-    orthogonalArrive(start, end, route.targetHandle),
-    orthogonalLeave(start, end, route.sourceHandle),
-  ];
-  let best = route.points;
-  let bestScore = pathClearanceScore(best, route.targetHandle);
-  for (const points of candidates) {
-    const clean = simplifyWorld(points);
-    if (polylineHitsRects(clean, blocked)) continue;
-    const nextScore = pathClearanceScore(clean, route.targetHandle);
-    if (nextScore < bestScore) {
-      best = clean;
-      bestScore = nextScore;
-    }
-  }
-  if (best === route.points) return route;
-  return { ...route, points: best };
+  return route;
 }
 
 export function routeToCursorAStar(
@@ -1040,6 +1170,7 @@ function routeOneReactionEdge(
   routable: Node[],
   rectById: Map<string, Rect>,
   placed: Point[][],
+  plan?: { sourceSide: Side; targetSide: Side; sourceT?: number; targetT?: number },
 ): RoutedPath | null {
   const sourceNode = byId.get(edge.source);
   const targetNode = byId.get(edge.target);
@@ -1058,13 +1189,190 @@ function routeOneReactionEdge(
     obstacles,
     existing: placed,
     via: edge.data?.customControlPoint,
-    lockSourceHandle: sourceEp?.pin ? sourceEp.lockSide : undefined,
-    lockTargetHandle: targetEp?.pin ? targetEp.lockSide : undefined,
-    sourcePortT: sourceEp?.portT,
-    targetPortT: targetEp?.portT,
+    lockSourceHandle: sourceEp?.pin ? sourceEp.lockSide : plan?.sourceSide,
+    lockTargetHandle: targetEp?.pin ? targetEp.lockSide : plan?.targetSide,
+    sourcePortT: sourceEp?.portT ?? plan?.sourceT,
+    targetPortT: targetEp?.portT ?? plan?.targetT,
     sourceAnchor: sourceEp?.anchor,
     targetAnchor: targetEp?.anchor,
   });
+}
+
+/** A link path kept on `edge.data.savedRoute` and in local storage; only recomputed when the link changes. */
+export interface SavedRoute {
+  points: Point[];
+  sourceHandle: Side;
+  targetHandle: Side;
+}
+
+const ROUTE_TOLERANCE = 1.5;
+
+function onSide(rect: Rect, side: Side, p: Point): boolean {
+  const withinX = p.x >= rect.x - ROUTE_TOLERANCE && p.x <= rect.x + rect.width + ROUTE_TOLERANCE;
+  const withinY = p.y >= rect.y - ROUTE_TOLERANCE && p.y <= rect.y + rect.height + ROUTE_TOLERANCE;
+  switch (side) {
+    case 'left': return withinY && Math.abs(p.x - rect.x) <= ROUTE_TOLERANCE;
+    case 'right': return withinY && Math.abs(p.x - (rect.x + rect.width)) <= ROUTE_TOLERANCE;
+    case 'top': return withinX && Math.abs(p.y - rect.y) <= ROUTE_TOLERANCE;
+    case 'bottom': return withinX && Math.abs(p.y - (rect.y + rect.height)) <= ROUTE_TOLERANCE;
+  }
+}
+
+/** A route whose first or last run is too short to hold an arrowhead — it was squeezed between boxes. */
+export function hasCrampedEnds(route: SavedRoute): boolean {
+  const pts = route.points;
+  const tail = pts.at(-2);
+  const tip = pts.at(-1);
+  if (pts.length < 3 || !tail || !tip) return false;
+  const run = (a: Point, b: Point) => Math.hypot(b.x - a.x, b.y - a.y);
+  const min = STUB_LENGTH / 2;
+  return run(pts[0], pts[1]) < min || run(tail, tip) < min;
+}
+
+export function asSavedRoute(value: unknown): SavedRoute | null {
+  const route = value as Partial<SavedRoute> | null | undefined;
+  if (!route || !Array.isArray(route.points) || route.points.length < 2) return null;
+  if (!SIDES.includes(route.sourceHandle as Side) || !SIDES.includes(route.targetHandle as Side)) return null;
+  const finite = route.points.every(p => p && Number.isFinite(p.x) && Number.isFinite(p.y));
+  return finite ? route as SavedRoute : null;
+}
+
+/** A saved route still holds when both ends sit on the boxes' sides where they were saved. */
+export function isSavedRouteValid(route: SavedRoute | null, source?: Rect, target?: Rect): route is SavedRoute {
+  if (!route || !source || !target) return false;
+  const first = route.points[0];
+  const last = route.points.at(-1);
+  if (!last) return false;
+  return onSide(source, route.sourceHandle, first) && onSide(target, route.targetHandle, last);
+}
+
+function sideCoordinate(rect: Rect, side: Side, p: Point): number {
+  const horizontal = side === 'top' || side === 'bottom';
+  const t = horizontal ? (p.x - rect.x) / rect.width : (p.y - rect.y) / rect.height;
+  return Math.min(1, Math.max(0, t));
+}
+
+function pickFreeSlot(occupied: number[]): number {
+  if (occupied.length === 0) return 0.5;
+  let best = 0.5;
+  let bestGap = -1;
+  for (let k = 1; k <= 9; k++) {
+    const t = k / 10;
+    const gap = Math.min(...occupied.map(o => Math.abs(o - t)));
+    if (gap > bestGap + 1e-6) {
+      best = t;
+      bestGap = gap;
+    }
+  }
+  return best;
+}
+
+interface SlotRequest {
+  edgeId: string;
+  role: 'source' | 'target';
+  farCoord: number;
+  /** Length in px of the box side the end attaches to. */
+  length: number;
+}
+
+/** Widest gap between neighbouring ends, and the room an arrowhead needs; short sides get tighter slots. */
+const SLOT_SPACING = 48;
+const SLOT_MARGIN = 8;
+
+function evenSlot(index: number, count: number, length: number): number {
+  if (count <= 1 || length <= 0) return 0.5;
+  const margin = Math.min(SLOT_MARGIN, length * 0.25);
+  const spacing = Math.min(SLOT_SPACING, (length - margin * 2) / (count - 1));
+  return (length / 2 + (index - (count - 1) / 2) * spacing) / length;
+}
+
+/**
+ * Spreads the ends of links that share a box side so they sit next to each
+ * other instead of on one point. Ends of already-saved links keep their place.
+ */
+function assignSlots(
+  requests: Map<string, SlotRequest[]>,
+  occupied: Map<string, number[]>,
+): Map<string, number> {
+  const result = new Map<string, number>();
+  for (const [key, list] of requests) {
+    const taken = [...(occupied.get(key) ?? [])];
+    const ordered = list.slice().sort((a, b) => a.farCoord - b.farCoord || a.edgeId.localeCompare(b.edgeId));
+    ordered.forEach((req, index) => {
+      const t = taken.length === 0 ? evenSlot(index, ordered.length, req.length) : pickFreeSlot(taken);
+      if (taken.length > 0) taken.push(t);
+      result.set(`${req.edgeId}|${req.role}`, t);
+    });
+  }
+  return result;
+}
+
+function sideLength(rect: Rect, side: Side): number {
+  return side === 'top' || side === 'bottom' ? rect.width : rect.height;
+}
+
+function rectCenter(rect: Rect): Point {
+  return { x: rect.x + rect.width / 2, y: rect.y + rect.height / 2 };
+}
+
+function pushSlot<T>(map: Map<string, T[]>, key: string, value: T): void {
+  const list = map.get(key);
+  if (list) list.push(value);
+  else map.set(key, [value]);
+}
+
+interface CoarsePlan {
+  edge: Edge;
+  sourceSide: Side;
+  targetSide: Side;
+}
+
+function planCoarseEdges(
+  pending: Edge[],
+  rectById: Map<string, Rect>,
+  fixed: Array<{ edge: Edge; route: SavedRoute }>,
+  isFree: (edge: Edge, role: 'source' | 'target') => boolean = () => true,
+): { plans: CoarsePlan[]; slots: Map<string, number> } {
+  const plans: CoarsePlan[] = [];
+  const requests = new Map<string, SlotRequest[]>();
+  const far = (side: Side, other: Point) => (side === 'top' || side === 'bottom' ? other.x : other.y);
+  for (const edge of pending) {
+    const source = rectById.get(edge.source);
+    const target = rectById.get(edge.target);
+    if (!source || !target) continue;
+    const { source: sourceSide, target: targetSide } = facingSides(source, target);
+    plans.push({ edge, sourceSide, targetSide });
+    if (isFree(edge, 'source')) {
+      pushSlot(requests, `${edge.source}|${sourceSide}`, {
+        edgeId: edge.id,
+        role: 'source',
+        farCoord: far(sourceSide, rectCenter(target)),
+        length: sideLength(source, sourceSide),
+      });
+    }
+    if (isFree(edge, 'target')) {
+      pushSlot(requests, `${edge.target}|${targetSide}`, {
+        edgeId: edge.id,
+        role: 'target',
+        farCoord: far(targetSide, rectCenter(source)),
+        length: sideLength(target, targetSide),
+      });
+    }
+  }
+  const occupied = new Map<string, number[]>();
+  for (const { edge, route } of fixed) {
+    const source = rectById.get(edge.source);
+    const target = rectById.get(edge.target);
+    const end = route.points.at(-1);
+    if (!source || !target || !end) continue;
+    pushSlot(occupied, `${edge.source}|${route.sourceHandle}`, sideCoordinate(source, route.sourceHandle, route.points[0]));
+    pushSlot(
+      occupied,
+      `${edge.target}|${route.targetHandle}`,
+      sideCoordinate(target, route.targetHandle, end),
+    );
+  }
+  return { plans, slots: assignSlots(requests, occupied) };
 }
 
 export function routeAllReactionEdges(nodes: Node[], edges: Edge[]): Map<string, RoutedPath> {
@@ -1082,25 +1390,121 @@ export function routeAllReactionEdges(nodes: Node[], edges: Edge[]): Map<string,
 
   const routes = new Map<string, RoutedPath>();
   const placed: Point[][] = [];
+  const fixed: Array<{ edge: Edge; route: SavedRoute }> = [];
+  const pendingCoarse: Edge[] = [];
+  const pendingFine: Edge[] = [];
 
   for (const edge of reactionEdges) {
-    const route = routeOneReactionEdge(edge, byId, routable, rectById, placed);
+    const saved = edge.type === 'reactions' ? asSavedRoute(edge.data?.savedRoute) : null;
+    if (isSavedRouteValid(saved, rectById.get(edge.source), rectById.get(edge.target))) {
+      routes.set(edge.id, saved);
+      placed.push(saved.points);
+      fixed.push({ edge, route: saved });
+    } else if (edge.type === 'reactions') {
+      pendingCoarse.push(edge);
+    } else {
+      pendingFine.push(edge);
+    }
+  }
+
+  // Class-level ends of fine-granular links (no pinned attribute row, not a ghost dot) get spread
+  // along their box side just like the links between meta models.
+  const isFree = (edge: Edge, role: 'source' | 'target'): boolean => {
+    if (edge.type === 'reactions') return true;
+    const node = byId.get(role === 'source' ? edge.source : edge.target);
+    if (!node || node.type === 'ghost') return false;
+    const handle = role === 'source' ? edge.sourceHandle : edge.targetHandle;
+    return !buildReactionEndpoint(node, handle, role, byId)?.pin;
+  };
+  const { plans, slots } = planCoarseEdges([...pendingFine, ...pendingCoarse], rectById, fixed, isFree);
+
+  for (const plan of plans) {
+    if (plan.edge.type === 'reactions') continue;
+    const { edge, sourceSide, targetSide } = plan;
+    const route = routeOneReactionEdge(edge, byId, routable, rectById, placed, {
+      sourceSide,
+      targetSide,
+      sourceT: slots.get(`${edge.id}|source`),
+      targetT: slots.get(`${edge.id}|target`),
+    });
     if (!route) continue;
+    routes.set(edge.id, route);
+    placed.push(route.points);
+  }
+
+  for (const { edge, sourceSide, targetSide } of plans) {
+    if (edge.type !== 'reactions') continue;
+    const source = rectById.get(edge.source);
+    const target = rectById.get(edge.target);
+    if (!source || !target) continue;
+    const obstacles = routable
+      .filter(n => n.id !== edge.source && n.id !== edge.target)
+      .map(n => rectById.get(n.id))
+      .filter((rect): rect is Rect => Boolean(rect));
+    const route = routeOrthogonalAStar({
+      source,
+      target,
+      obstacles,
+      existing: placed,
+      lockSourceHandle: sourceSide,
+      lockTargetHandle: targetSide,
+      sourcePortT: slots.get(`${edge.id}|source`),
+      targetPortT: slots.get(`${edge.id}|target`),
+    });
     routes.set(edge.id, route);
     placed.push(route.points);
   }
   return routes;
 }
 
+/**
+ * Cheap re-routing while a box is being dragged: links whose ends still sit on their boxes keep
+ * the route they had, the rest get a plain stubbed Z/L between their facing sides. The full
+ * obstacle-aware search runs once, when the drag ends.
+ */
+export function routeReactionEdgesWhileDragging(
+  nodes: Node[],
+  edges: Edge[],
+  previous: Map<string, RoutedPath>,
+): Map<string, RoutedPath> {
+  const byId = new Map(nodes.map(n => [n.id, n]));
+  const rectById = new Map<string, Rect>();
+  for (const node of nodes) {
+    if (!isRoutableNode(node)) continue;
+    const rect = nodeWorldRect(node, byId);
+    if (rect) rectById.set(node.id, rect);
+  }
+  const routes = new Map<string, RoutedPath>();
+  for (const edge of edges) {
+    if (edge.type !== 'reactions' && edge.type !== 'fine-granular-reaction') continue;
+    const sourceNode = byId.get(edge.source);
+    const targetNode = byId.get(edge.target);
+    const source = rectById.get(edge.source);
+    const target = rectById.get(edge.target);
+    if (!sourceNode || !targetNode || !source || !target) continue;
+
+    const before = previous.get(edge.id);
+    if (before && isSavedRouteValid(before, source, target)) {
+      routes.set(edge.id, before);
+      continue;
+    }
+    const { sourceEp, targetEp } = reactionEndpoints(edge, sourceNode, targetNode, byId);
+    const facing = facingSides(source, target);
+    const sourceSide = sourceEp?.pin && sourceEp.lockSide ? sourceEp.lockSide : facing.source;
+    const targetSide = targetEp?.pin && targetEp.lockSide ? targetEp.lockSide : facing.target;
+    const start = sourceEp?.anchor ?? handleAnchor(source, sourceSide, sourceEp?.portT);
+    const end = targetEp?.anchor ?? handleAnchor(target, targetSide, targetEp?.portT);
+    routes.set(edge.id, {
+      sourceHandle: sourceSide,
+      targetHandle: targetSide,
+      points: buildStubbedPoints(start, sourceSide, end, targetSide, []),
+    });
+  }
+  return routes;
+}
+
 export function applyAStarReactionHandles(nodes: Node[], edges: Edge[]): Edge[] {
-  // Handle choice must ignore a stale via-point: that waypoint is discarded
-  // whenever the attachment sides change.
-  const forHandles = edges.map(edge => (
-    edge.type === 'reactions' && edge.data?.customControlPoint
-      ? { ...edge, data: { ...edge.data, customControlPoint: undefined } }
-      : edge
-  ));
-  const routes = routeAllReactionEdges(nodes, forHandles);
+  const routes = routeAllReactionEdges(nodes, edges);
   let changed = false;
   const next = edges.map(edge => {
     const route = routes.get(edge.id);
@@ -1116,6 +1520,7 @@ export function applyAStarReactionHandles(nodes: Node[], edges: Edge[]): Edge[] 
       data: {
         ...edge.data,
         customControlPoint: undefined,
+        savedRoute: undefined,
       },
     };
   });

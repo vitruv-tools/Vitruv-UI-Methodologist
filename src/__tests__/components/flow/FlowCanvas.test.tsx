@@ -1198,5 +1198,17 @@ describe('handleEdgeDoubleClick logic', () => {
       rerender(<FlowCanvas ref={ref} canvasMode="modeling" />);
       expect(screen.queryByTestId('circle-overlay')).not.toBeInTheDocument();
     });
+
+    it('unmounts CircleOverlay when switching from Views to the Low-Code Reaction view', () => {
+      const ref = createRef<any>();
+      const { rerender } = render(<FlowCanvas ref={ref} canvasMode="views" addReactionMode={false} />);
+      expect(screen.getByTestId('circle-overlay')).toBeInTheDocument();
+
+      rerender(<FlowCanvas ref={ref} canvasMode="views" addReactionMode />);
+      expect(screen.queryByTestId('circle-overlay')).not.toBeInTheDocument();
+
+      rerender(<FlowCanvas ref={ref} canvasMode="views" addReactionMode={false} />);
+      expect(screen.getByTestId('circle-overlay')).toBeInTheDocument();
+    });
   });
 });

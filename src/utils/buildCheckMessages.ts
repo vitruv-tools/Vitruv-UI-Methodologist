@@ -10,16 +10,20 @@ const CONSTRAINT_FAILURE =
 
 /**
  * Messages of the setup-service that point to a problem in an OCL constraint file. A ".ocl" only
- * counts as file extension, so names like org.eclipse.ocl of dependencies do not match.
+ * counts as file extension, so names like org.eclipse.ocl of dependencies do not match; the
+ * problems of a file are listed below a line "<file>.ocl:".
  */
 const CONSTRAINT_FAILURE_PATTERN =
-  /constraint file|\.ocl(?![\w.:\-/])|without metamodel|unknown metamodel/i;
+  /constraint file|\.ocl(?![\w.:\-/])|\.ocl:[ \t]*$|without metamodel|unknown metamodel/im;
 
 /** Prefix the backend puts in front of the answer of the setup-service. */
 const SETUP_SERVICE_PREFIX = /^Setup-service request to '[^']*' failed with status [^:]*:\s*/;
 
 /** The name of a constraint file, which is the name of its rule set followed by ".ocl". */
 const CONSTRAINT_FILE = /Constraint file (.+?)\.ocl\b/g;
+
+/** The line above the problems of a constraint file. */
+const CONSTRAINT_FILE_HEADER = /^(.+?)\.ocl:[ \t]*$/gm;
 
 /** Result of describing a failed build check. */
 export interface BuildFailureDescription {
@@ -51,7 +55,10 @@ export function describeBuildSuccess(constraintRuleSets: string[] | null | undef
  */
 function readableConstraintReason(detail: string): string {
   const reason = setupServiceMessage(detail) ?? detail.replace(SETUP_SERVICE_PREFIX, '');
-  return reason.replace(CONSTRAINT_FILE, (_match, name: string) => `Rule set "${name}"`).trim();
+  return reason
+    .replace(CONSTRAINT_FILE, (_match, name: string) => `Rule set "${name}"`)
+    .replace(CONSTRAINT_FILE_HEADER, (_match, name: string) => `Rule set "${name}":`)
+    .trim();
 }
 
 /** Returns the "message" of the JSON error body of the setup-service, if the detail contains one. */

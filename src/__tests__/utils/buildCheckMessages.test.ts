@@ -27,6 +27,21 @@ describe('describeBuildSuccess', () => {
 });
 
 describe('describeBuildFailure', () => {
+  it('names the rule set of constraint problems reported per file', () => {
+    const detail =
+      'The VSUM build failed:\n\nPrices.ocl:\n'
+      + "- line 4: the constraint 'positive' cannot be evaluated: 4:17 unknown feature 'pryce'";
+
+    expect(describeBuildFailure(detail)).toEqual({
+      message:
+        'The constraints could not be built. Fix the rule set in Constraints mode and check the build again.'
+        + '\n\nThe VSUM build failed:\n\nRule set "Prices":\n'
+        + "- line 4: the constraint 'positive' cannot be evaluated: 4:17 unknown feature 'pryce'",
+      details: detail,
+      constraintRelated: true,
+    });
+  });
+
   it('explains failures caused by constraints and keeps the details', () => {
     const detail =
       'Setup-service request failed (400): Constraint file Preise.ocl refers to unknown metamodel(s) [shop]';

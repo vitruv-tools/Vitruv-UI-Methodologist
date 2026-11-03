@@ -467,6 +467,15 @@ describe('ghostPositionChanges', () => {
     expect(changes[0].position.y).toBe(12);
   });
 
+  it('finds ghosts whose ids carry the model instance key', () => {
+    const keyedGhost: Node = { ...ghost, id: 'ghost-ecore-7-http://m#A.ref' };
+    const keyedEdge: Edge = { ...umlEdge, id: 'uml-ref-ecore-7-http://m#A.ref' };
+    const changes = ghostPositionChanges([source, target, keyedGhost], [keyedEdge]);
+    expect(changes).toHaveLength(1);
+    expect(changes[0].id).toBe('ghost-ecore-7-http://m#A.ref');
+    expect(changes[0].position.x).toBe(194);
+  });
+
   it('returns nothing when the ghost is already on the midpoint', () => {
     const placed: Node = { ...ghost, position: { x: 194, y: 12 } };
     expect(ghostPositionChanges([source, target, placed], [umlEdge])).toEqual([]);

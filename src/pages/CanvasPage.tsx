@@ -57,7 +57,7 @@ import {
   findVsumOwner,
   sharedByFromOwner,
   parseVsumMembersResponse,
-  pickMostRestrictiveRole,
+  pickSharedAwareRole,
   readStoredProjectAccess,
   clearStoredProjectAccess,
   resolveProjectAccessRole,
@@ -230,7 +230,7 @@ async function syncVsumApiRole(
   try {
     const vsumRes = await apiService.getVsum(vsumId);
     const apiRole = resolveVsumAccessRole(vsumRes.data?.role, vsumRes.data?.roleEn);
-    const merged = pickMostRestrictiveRole(apiRole, loadStoredRole, loadNavRole, loadInferredRole);
+    const merged = pickSharedAwareRole(loadInferredRole, apiRole, loadStoredRole, loadNavRole);
     if (merged) noteApiRole(vsumId, merged);
   } catch {
     // Role may already be set from members list or navigation state.
@@ -361,7 +361,8 @@ export const CanvasPage: React.FC = () => {
 
   // check / download / save
   const [checkingBuild, setCheckingBuild] = useState(false);
-  const [downloadingArtifact, setDownloadingArtifact] = useState(false);
+  const [downloadingProject, setDownloadingProject] = useState(false);
+  const [downloadingJar, setDownloadingJar] = useState(false);
   const [downloadingBundle, setDownloadingBundle] = useState(false);
   const [savingChanges, setSavingChanges] = useState(false);
   const [popup, setPopup] = useState<{
@@ -532,11 +533,11 @@ export const CanvasPage: React.FC = () => {
     }
 
     const myMembership = findMembershipForEmail(unique, user?.email);
-    const resolvedRole = pickMostRestrictiveRole(
+    const resolvedRole = pickSharedAwareRole(
+      sharedInferredRole,
       resolveVsumAccessRole(myMembership?.role, myMembership?.roleEn),
       resolveVsumAccessRole(options?.fallbackRole),
       navAccessRole,
-      sharedInferredRole,
     );
     if (resolvedRole && options?.vsumId) noteApiRole(options.vsumId, resolvedRole);
   }, [navAccessRole, sharedInferredRole, user?.email, noteApiRole]);
@@ -1076,11 +1077,11 @@ export const CanvasPage: React.FC = () => {
       // ────────────────────────────────────────────────────────────────
 
       const detailsRole = resolveVsumAccessRole(details.role, details.roleEn);
-      const mergedRole = pickMostRestrictiveRole(
+      const mergedRole = pickSharedAwareRole(
+        loadInferredRole,
         detailsRole,
         loadStoredRole,
         loadNavRole,
-        loadInferredRole,
       );
       if (mergedRole) noteApiRole(vsumId, mergedRole);
 
@@ -1407,20 +1408,35 @@ export const CanvasPage: React.FC = () => {
     }
   }, [activeProjectId, dismissPopup, handleCanvasModeChange, isViewOnly, showPopup]);
 
-  // ── Download artifact ─────────────────────────────────────────────────────
+  // ── Downloads ─────────────────────────────────────────────────────────────
 
-  const handleDownloadArtifact = useCallback(async () => {
+  const handleDownloadProject = useCallback(async () => {
     if (!activeProjectId) return;
-    setDownloadingArtifact(true);
-    showPopup('Downloading artifact…', 'info');
+    setDownloadingProject(true);
+    showPopup('Downloading project…', 'info');
     try {
-      const blob = await apiService.downloadVsumArtifact(activeProjectId);
-      downloadBlobAsFile(blob, `vsum-${activeProjectId}-artifact.zip`);
-      showPopup('Artifact downloaded successfully!', 'success');
+      const blob = await apiService.downloadVsumProject(activeProjectId);
+      downloadBlobAsFile(blob, `vsum-${activeProjectId}-project.zip`);
+      showPopup('Project downloaded successfully!', 'success');
     } catch (e: unknown) {
       showPopupError(e, 'Download failed.');
     } finally {
-      setDownloadingArtifact(false);
+      setDownloadingProject(false);
+    }
+  }, [activeProjectId, showPopup, showPopupError]);
+
+  const handleDownloadJar = useCallback(async () => {
+    if (!activeProjectId) return;
+    setDownloadingJar(true);
+    showPopup('Building and downloading runnable JAR…', 'info');
+    try {
+      const blob = await apiService.downloadVsumJar(activeProjectId);
+      downloadBlobAsFile(blob, `vsum-${activeProjectId}.jar`);
+      showPopup('Runnable JAR downloaded successfully!', 'success');
+    } catch (e: unknown) {
+      showPopupError(e, 'Download failed.');
+    } finally {
+      setDownloadingJar(false);
     }
   }, [activeProjectId, showPopup, showPopupError]);
 
@@ -1680,7 +1696,8 @@ export const CanvasPage: React.FC = () => {
         onToggleReactionMode={() => setAddReactionMode(v => !v)}
         onOpenReactionEditor={handleOpenReactionEditor}
         onToggleModelDrawer={() => setShowDrawer(d => !d)}
-        onDownloadArtifact={handleDownloadArtifact}
+        onDownloadProject={handleDownloadProject}
+        onDownloadJar={handleDownloadJar}
         onDownloadBundle={handleDownloadBundle}
         onSaveChanges={handleSaveChanges}
         onCheckBuild={handleCheckBuild}
@@ -1688,7 +1705,8 @@ export const CanvasPage: React.FC = () => {
         onRedo={() => flowCanvasRef.current?.redo?.()}
         canUndo={canUndo}
         canRedo={canRedo}
-        downloadingArtifact={downloadingArtifact}
+        downloadingProject={downloadingProject}
+        downloadingJar={downloadingJar}
         downloadingBundle={downloadingBundle}
         savingChanges={savingChanges}
         checkingBuild={checkingBuild}

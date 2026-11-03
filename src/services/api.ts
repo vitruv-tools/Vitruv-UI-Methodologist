@@ -655,12 +655,22 @@ class ApiService {
   }
 
   /**
-   * vSUMS: Download artifact as ZIP file
-   * GET /api/v1/vsums/{id}/build/artifact
-   * Returns a ZIP file blob containing the build artifact
+   * vSUMS: Download the project as ZIP file
+   * GET /api/v1/vsums/{id}/project
+   * Returns a ZIP file blob containing the project laid out like the Methodologist Template,
+   * which the user builds with `mvn clean verify`
    */
-  async downloadVsumArtifact(id: number | string): Promise<Blob> {
-    return this.downloadVsumZip(`/api/v1/vsums/${id}/build/artifact`, 'Artifact');
+  async downloadVsumProject(id: number | string): Promise<Blob> {
+    return this.downloadVsumZip(`/api/v1/vsums/${id}/project`, 'Project');
+  }
+
+  /**
+   * vSUMS: Download the built, runnable VSUM jar
+   * GET /api/v1/vsums/{id}/build/artifact
+   * Waits for the Maven build of the VSUM and returns the jar-with-dependencies
+   */
+  async downloadVsumJar(id: number | string): Promise<Blob> {
+    return this.downloadVsumZip(`/api/v1/vsums/${id}/build/artifact`, 'Runnable JAR');
   }
 
   /**
