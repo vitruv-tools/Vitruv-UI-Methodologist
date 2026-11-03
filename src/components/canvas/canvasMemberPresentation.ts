@@ -58,7 +58,9 @@ export function buildCanvasPanelMembers(
     if (!entries.some(entry => entry.id === member.id)) entries.push(member);
   });
 
-  return entries;
+  // The sharer can be a placeholder (id -1) built from the owner's contact;
+  // keep the owner's real membership instead of listing them twice.
+  return uniqueVsumMembers(entries);
 }
 
 export function buildCanvasCollaborators(

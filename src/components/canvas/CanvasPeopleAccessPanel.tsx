@@ -52,7 +52,7 @@ const PeoplePanelMemberRow: React.FC<PeoplePanelMemberRowProps> = ({
         gap: 12,
         padding: '8px 8px',
         borderRadius: 8,
-        background: isSharer && isSharedAccess ? '#f8fafc' : 'transparent',
+        background: isSharer && isSharedAccess ? 'var(--v-surface-muted)' : 'transparent',
       }}
     >
       <CanvasUserAvatar

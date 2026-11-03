@@ -40,6 +40,7 @@ export const ReactionEditorModal: React.FC<ReactionEditorModalProps> = ({
       fileExtension=".reactions"
       title="Reaction Editor"
       readOnly={readOnly}
+      initialPosition={state.initialPosition}
     />
   );
 };

@@ -378,6 +378,99 @@ describe('ApiService – downloadVsumJar', () => {
   });
 });
 
+// ── structured build problems ─────────────────────────────────────────────────
+
+describe('ApiService – structured build problems', () => {
+  const { AuthService } = (authModule as unknown) as {
+    AuthService: { ensureValidToken: Mock; refreshToken: Mock };
+  };
+
+  const problem = {
+    source: 'REACTIONS',
+    file: 'my.reactions',
+    fileId: 7,
+    line: 51,
+    column: 30,
+    message: 'Couldn\'t resolve reference to EClass \'Foo\'.',
+  };
+
+  beforeEach(() => {
+    AuthService.ensureValidToken.mockResolvedValue('mock-token');
+  });
+  afterEach(() => vi.restoreAllMocks());
+
+  it('keeps errorCode and problems of a failed JAR export on response.data', async () => {
+    const body = {
+      message: 'The uploaded reactions do not match the uploaded metamodels',
+      errorCode: 'VSUM_REACTIONS_ERROR',
+      problems: [problem],
+    };
+    vi.spyOn(global, 'fetch').mockResolvedValueOnce({
+      ok: false,
+      status: 422,
+      statusText: 'Error',
+      headers: { get: () => 'application/json' },
+      text: async () => JSON.stringify(body),
+      blob: async () => new Blob([]),
+    } as unknown as Response);
+
+    const error = await apiService.downloadVsumJar(42).catch((e: unknown) => e);
+
+    expect(error).toBeInstanceOf(Error);
+    expect((error as Error).message).toBe(body.message);
+    expect((error as any).response.data).toMatchObject({
+      errorCode: 'VSUM_REACTIONS_ERROR',
+      problems: [problem],
+    });
+  });
+
+  it('starts an asynchronous build', async () => {
+    mockFetch({ data: { id: 3, vsumId: 42, status: 'QUEUED' }, message: 'started' }, 202);
+
+    const result = await apiService.requestVsumBuild(42);
+
+    expect(result.data.status).toBe('QUEUED');
+    expect(global.fetch).toHaveBeenCalledWith(
+      expect.stringMatching(/\/api\/v1\/vsums\/42\/builds$/),
+      expect.objectContaining({ method: 'POST' }),
+    );
+  });
+
+  it('forces a new asynchronous build on request', async () => {
+    mockFetch({ data: { id: 4, vsumId: 42, status: 'QUEUED' }, message: 'started' }, 202);
+
+    await apiService.requestVsumBuild(42, true);
+
+    expect(global.fetch).toHaveBeenCalledWith(
+      expect.stringMatching(/\/api\/v1\/vsums\/42\/builds\?force=true$/),
+      expect.objectContaining({ method: 'POST' }),
+    );
+  });
+
+  it('returns errorCode and problems of a failed asynchronous build', async () => {
+    mockFetch({
+      data: {
+        id: 3,
+        vsumId: 42,
+        status: 'FAILED',
+        errorMessage: 'The uploads do not compile',
+        errorCode: 'VSUM_BUILD_FAILED',
+        problems: [problem],
+      },
+      message: null,
+    });
+
+    const result = await apiService.getVsumBuild(42, 3);
+
+    expect(global.fetch).toHaveBeenCalledWith(
+      expect.stringMatching(/\/api\/v1\/vsums\/42\/builds\/3$/),
+      expect.any(Object),
+    );
+    expect(result.data.errorCode).toBe('VSUM_BUILD_FAILED');
+    expect(result.data.problems).toEqual([problem]);
+  });
+});
+
 // ── downloadVsumBundle ────────────────────────────────────────────────────────
 
 describe('ApiService – downloadVsumBundle', () => {

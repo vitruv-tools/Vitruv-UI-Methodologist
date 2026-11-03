@@ -68,11 +68,11 @@ const PasswordRequirements: React.FC<PasswordRequirementsProps> = ({
     <div className="password-requirements">
       <div className="password-requirements-title">Password must:</div>
       <ul className="password-requirements-list">
-        {req(hasMinLength,  'Be at least 8 characters long')}
-        {req(hasLowercase,  'Have at least one lower case character')}
-        {req(hasUppercase,  'Have at least one capital letter')}
-        {req(hasNumber,     'Have at least one number')}
-        {req(hasSymbol,     'Have at least one special character')}
+        {req(hasMinLength, 'Be at least 8 characters long')}
+        {req(hasLowercase, 'Have at least one lower case character')}
+        {req(hasUppercase, 'Have at least one capital letter')}
+        {req(hasNumber, 'Have at least one number')}
+        {req(hasSymbol, 'Have at least one special character')}
       </ul>
     </div>
   );
@@ -91,20 +91,20 @@ export function SignUp({ onSignUpSuccess, onSwitchToSignIn }: Readonly<SignUpPro
   const [error, setError] = useState<string | null>(null);
   const [isSuccess, setIsSuccess] = useState(false);
 
-  const passwordScore    = calculatePasswordStrength(formData.password);
+  const passwordScore = calculatePasswordStrength(formData.password);
   const passwordBarColor = getPasswordBarColor(passwordScore);
 
   const hasMinLength = formData.password.length >= 8 && formData.password.length <= 256;
   const hasUppercase = /\p{Lu}/u.test(formData.password);
   const hasLowercase = /\p{Ll}/u.test(formData.password);
-  const hasNumber    = /\p{Nd}/u.test(formData.password);
-  const hasSymbol    = /[^\p{L}\p{Nd}\s]/u.test(formData.password);
+  const hasNumber = /\p{Nd}/u.test(formData.password);
+  const hasSymbol = /[^\p{L}\p{Nd}\s]/u.test(formData.password);
 
   const isPasswordValid = hasMinLength && hasUppercase && hasLowercase && hasNumber && hasSymbol;
-  const isConfirmValid  = !!confirmPassword && confirmPassword === formData.password;
-  const isFormFilled    =
+  const isConfirmValid = !!confirmPassword && confirmPassword === formData.password;
+  const isFormFilled =
     !!formData.username && !!formData.email && !!formData.password &&
-    !!confirmPassword   && !!formData.firstName && !!formData.lastName;
+    !!confirmPassword && !!formData.firstName && !!formData.lastName;
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
@@ -126,8 +126,20 @@ export function SignUp({ onSignUpSuccess, onSwitchToSignIn }: Readonly<SignUpPro
     if (!email.includes('@')) {
       setError('Email is invalid'); return false;
     }
-    if (!isPasswordValid) {
-      setError('The password needs to be at least 8 characters long.'); return false;
+    if (!hasMinLength) {
+      setError('The password must be between 8 and 256 characters long.'); return false;
+    }
+    if (!hasLowercase) {
+      setError('The password must contain at least one lowercase letter.'); return false;
+    }
+    if (!hasUppercase) {
+      setError('The password must contain at least one uppercase letter.'); return false;
+    }
+    if (!hasNumber) {
+      setError('The password must contain at least one number.'); return false;
+    }
+    if (!hasSymbol) {
+      setError('The password must contain at least one special character.'); return false;
     }
     if (!isConfirmValid) {
       setError("Confirm password is empty or doesn't match"); return false;

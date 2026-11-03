@@ -64,37 +64,6 @@ code {
   cursor: grabbing;
 }
 
-/* Responsive breakpoints */
-@media (max-width: 768px) {
-  .sidebar-responsive {
-    width: 100% !important;
-    max-width: 280px;
-  }
-  
-  .header-responsive {
-    padding: 0 12px !important;
-  }
-  
-  .header-responsive h1 {
-    font-size: 16px !important;
-  }
-}
-
-@media (max-width: 480px) {
-  .sidebar-responsive {
-    width: 100% !important;
-    max-width: 100%;
-  }
-  
-  .header-responsive {
-    padding: 0 8px !important;
-  }
-  
-  .header-responsive h1 {
-    font-size: 14px !important;
-  }
-}
-
 /* Scrollbar styles — theme tokens so the thumb stays visible in light mode */
 ::-webkit-scrollbar {
   width: 8px;
@@ -122,7 +91,7 @@ code {
 
 /* Handles invisible by default; appear when hovering the node or during a live connection */
 .react-flow__handle {
-  opacity: 0 !important;
+  opacity: 0;
   transition: opacity 0.15s ease;
   pointer-events: all;
 }
@@ -130,7 +99,7 @@ code {
 .react-flow__node:hover .react-flow__handle,
 .react-flow__handle:hover,
 .react-flow__handle.connecting {
-  opacity: 1 !important;
+  opacity: 1;
 }
 
 /* Thinner, navy edge paths for a clean jjodel look */
@@ -144,12 +113,12 @@ code {
   outline: none;
 }
 
-.react-flow__controls {
+.react-flow .react-flow__controls.react-flow__panel {
   border-radius: 8px;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-  position: fixed !important;
-  left: calc(350px + 16px) !important; /* account for sidebar */
-  bottom: 16px !important;
+  position: fixed;
+  left: calc(350px + 16px); /* account for sidebar */
+  bottom: 16px;
   z-index: 30;
 }
 
@@ -197,7 +166,8 @@ code {
 
 /* Academic design principles - subtle interactions */
 button {
-  transition: all 0.2s ease;
+  transition: background-color 0.2s ease, border-color 0.2s ease, color 0.2s ease,
+    box-shadow 0.2s ease, opacity 0.2s ease;
   font-family: inherit;
 }
 
