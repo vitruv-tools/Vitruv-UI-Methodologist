@@ -6,6 +6,8 @@ import { useDismissOnOutsideClick } from '../../hooks/useDismissOnOutsideClick';
 import { getUserInitials } from '../../utils/userInitials';
 import { USER_PROFILE_DESCRIPTION, USER_PROFILE_LABEL } from '../../constants/accountLabels';
 
+const SIDEBAR_BG = '#0B1720';
+
 export type SidebarView = 'home' | 'library' | 'overlap' | 'projects' | 'profile';
 
 interface AppSidebarProps {
@@ -89,11 +91,12 @@ interface NavItemProps {
 const NavItem: React.FC<NavItemProps> = ({ icon, label, active, onClick, badgeCount = 0 }) => {
   const [hovered, setHovered] = React.useState(false);
 
-  let background = 'transparent';
+  // Opaque: the sidebar picture starts behind the lower entries and must not show through them.
+  let tint: string | null = null;
   if (active) {
-    background = 'rgba(4,148,132,0.15)';
+    tint = 'rgba(4,148,132,0.15)';
   } else if (hovered) {
-    background = 'rgba(255,255,255,0.05)';
+    tint = 'rgba(255,255,255,0.05)';
   }
 
   let color = 'rgba(255,255,255,0.55)';
@@ -111,7 +114,8 @@ const NavItem: React.FC<NavItemProps> = ({ icon, label, active, onClick, badgeCo
       style={{
         display: 'flex', alignItems: 'center', gap: 10,
         width: '100%', padding: '9px 12px', borderRadius: 8, border: 'none',
-        background,
+        backgroundColor: SIDEBAR_BG,
+        backgroundImage: tint ? `linear-gradient(${tint}, ${tint})` : 'none',
         color,
         fontSize: 14, fontWeight: active ? 600 : 400,
         cursor: 'pointer', textAlign: 'left',
@@ -236,7 +240,7 @@ export const AppSidebar: React.FC<AppSidebarProps> = ({
   return (
     <aside style={{
       width: 220, height: '100vh',
-      background: '#0B1720',
+      background: SIDEBAR_BG,
       display: 'flex', flexDirection: 'column', flexShrink: 0,
       borderRight: '1px solid rgba(255,255,255,0.06)',
       position: 'relative', overflow: 'hidden',
@@ -277,7 +281,8 @@ export const AppSidebar: React.FC<AppSidebarProps> = ({
       </div>
 
       {/* Navigation */}
-      <nav style={{ padding: '12px 8px', flex: 1, display: 'flex', flexDirection: 'column', gap: 2 }}>
+      {/* Positioned above the background picture, which would otherwise be painted over the lower entries. */}
+      <nav style={{ padding: '12px 8px', flex: 1, display: 'flex', flexDirection: 'column', gap: 2, position: 'relative', zIndex: 1 }}>
         <NavItem
           icon={<HomeIcon />}
           label="Projects"

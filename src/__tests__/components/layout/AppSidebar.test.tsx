@@ -135,4 +135,61 @@ describe('AppSidebar', () => {
     fireEvent.click(light);
     expect(document.documentElement).toHaveAttribute('data-theme', 'light');
   });
+
+  describe('navigation entries look the same', () => {
+    const NAV_LABELS = ['Projects', 'Model Library', 'Semantic overlap'];
+    const navButton = (label: string) => screen.getByRole('button', { name: label });
+    const look = (button: HTMLElement) => ({
+      backgroundColor: button.style.backgroundColor,
+      backgroundImage: button.style.backgroundImage,
+      color: button.style.color,
+    });
+
+    it('draws every entry on the opaque sidebar colour, so the background picture does not show through', () => {
+      render(<AppSidebar {...defaultProps} />);
+      const looks = NAV_LABELS.map(label => look(navButton(label)));
+      expect(looks[0].backgroundColor).toBe('rgb(11, 23, 32)');
+      expect(looks[1]).toEqual(looks[0]);
+      expect(looks[2]).toEqual(looks[0]);
+    });
+
+    it('uses the same hovered look for every entry', () => {
+      render(<AppSidebar {...defaultProps} />);
+      const looks = NAV_LABELS.map(label => {
+        const button = navButton(label);
+        fireEvent.mouseEnter(button);
+        const hovered = look(button);
+        fireEvent.mouseLeave(button);
+        return hovered;
+      });
+      expect(looks[0].backgroundImage).toContain('linear-gradient');
+      expect(looks[1]).toEqual(looks[0]);
+      expect(looks[2]).toEqual(looks[0]);
+    });
+
+    it('uses the same active look for every entry', () => {
+      const views = ['projects', 'library', 'overlap'] as const;
+      const looks = views.map((view, index) => {
+        const { unmount } = render(<AppSidebar {...defaultProps} activeView={view} />);
+        const active = look(navButton(NAV_LABELS[index]));
+        unmount();
+        return active;
+      });
+      expect(looks[1]).toEqual(looks[0]);
+      expect(looks[2]).toEqual(looks[0]);
+    });
+
+    it('draws the entries above the background picture', () => {
+      const { container } = render(<AppSidebar {...defaultProps} />);
+      const nav = container.querySelector('nav') as HTMLElement;
+      expect(nav.style.position).toBe('relative');
+      expect(nav.style.zIndex).toBe('1');
+    });
+
+    it('keeps the background picture where it starts below Model Library', () => {
+      const { container } = render(<AppSidebar {...defaultProps} />);
+      const picture = container.querySelector('img[src$="sidebar-bg.png"]') as HTMLElement;
+      expect(picture.style.top).toBe('160px');
+    });
+  });
 });
