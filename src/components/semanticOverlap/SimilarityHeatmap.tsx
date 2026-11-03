@@ -6,6 +6,7 @@ import type { CorrespondenceKind } from '../../utils/semanticOverlap/types';
 /** Canvas dash segments of a kind's outline (shorter than the diagram's, cells are small). */
 const outlineDash = (kind: CorrespondenceKind) => (KIND_DASH[kind] ?? '').split(' ').filter(Boolean).map(n => Math.max(1, Number(n) / 2));
 import { visibleCorrespondences } from '../../utils/semanticOverlap/linkDiagramLayout';
+import { heatmapColor, heatmapColours } from '../../utils/semanticOverlap/heatmapColor';
 import type { OverlapResult } from '../../utils/semanticOverlap/types';
 import { formatPercent } from './ScoreEdge';
 
@@ -24,22 +25,6 @@ export const heatmapCellSize = (rows: number, columns: number) =>
   Math.min(MAX_CELL, Math.max(MIN_CELL, Math.floor(TARGET_SIZE / Math.max(1, rows, columns))));
 
 const simpleName = (qualifiedName: string) => qualifiedName.slice(qualifiedName.lastIndexOf('.') + 1);
-
-function parseHex(color: string): [number, number, number] | null {
-  const match = /^#([0-9a-f]{6})$/i.exec(color.trim());
-  if (!match) return null;
-  const value = Number.parseInt(match[1], 16);
-  return [(value >> 16) & 255, (value >> 8) & 255, value & 255];
-}
-
-/** Resolves the theme's heatmap colours (CSS variables) to RGB at draw time. */
-function heatmapColours(): [[number, number, number], [number, number, number]] {
-  const style = getComputedStyle(document.documentElement);
-  return [
-    parseHex(style.getPropertyValue('--v-heatmap-low')) ?? [241, 245, 249],
-    parseHex(style.getPropertyValue('--v-heatmap-high')) ?? [4, 148, 132],
-  ];
-}
 
 interface SimilarityHeatmapProps {
   result: OverlapResult;
@@ -78,13 +63,11 @@ export const SimilarityHeatmap: React.FC<SimilarityHeatmapProps> = ({
     const canvas = canvasRef.current;
     const ctx = canvas?.getContext('2d');
     if (!canvas || !ctx) return;
-    const [low, high] = heatmapColours();
+    const colours = heatmapColours();
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     for (let i = 0; i < rows.length; i++) {
       for (let j = 0; j < columns.length; j++) {
-        const value = overall[i * columns.length + j] ?? 0;
-        const mix = (k: number) => Math.round(low[k] + (high[k] - low[k]) * value);
-        ctx.fillStyle = `rgb(${mix(0)}, ${mix(1)}, ${mix(2)})`;
+        ctx.fillStyle = heatmapColor(overall[i * columns.length + j] ?? 0, colours);
         ctx.fillRect(j * cellSize, i * cellSize, cellSize - 1, cellSize - 1);
       }
     }

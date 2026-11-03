@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useSemanticOverlapRun } from '../../hooks/useSemanticOverlapRun';
-import { shownResult, useSemanticOverlapStore, type OverlapTab } from '../../store/SemanticOverlap';
+import { shownResult, useSemanticOverlapStore } from '../../store/SemanticOverlap';
 import { themeVars } from '../../theme/theme';
 import { fetchLibraryMetaModels, type LibraryMetaModel } from '../../utils/metaModelList';
 import { downloadTextAsFile } from '../../utils/downloadFile';
@@ -11,36 +11,16 @@ import type { OverlapResult } from '../../utils/semanticOverlap/types';
 import { AnalysisProgress } from './AnalysisProgress';
 import { AnalysisSettingsPanel } from './AnalysisSettingsPanel';
 import { ApproachSelector } from './ApproachSelector';
-import { CorrespondenceLinkDiagram } from './CorrespondenceLinkDiagram';
-import { CorrespondenceList } from './CorrespondenceList';
 import { MetamodelPairPicker } from './MetamodelPairPicker';
-import { OverlapSummary } from './OverlapSummary';
-import { SimilarityHeatmap } from './SimilarityHeatmap';
-import { AlternativeSwitcher } from './AlternativeSwitcher';
-import { RepairsPanel } from './RepairsPanel';
-import { TypeObjectPatternPanel } from './TypeObjectPatternPanel';
+import { OverlapResultPanel } from './OverlapResultPanel';
+import { primaryButton, secondaryButton } from './overlapButtonStyles';
 import { WordNetAttribution } from './WordNetAttribution';
-
-const TABS: { id: OverlapTab; label: string }[] = [
-  { id: 'diagram', label: 'Link diagram' },
-  { id: 'heatmap', label: 'Heatmap' },
-];
-
-const primaryButton: React.CSSProperties = {
-  padding: '9px 18px', borderRadius: 9, border: 'none', background: '#0B1720', color: '#ffffff',
-  fontSize: 14, fontWeight: 600, cursor: 'pointer', boxShadow: '0 1px 4px rgba(11,23,32,0.25)', height: 40,
-};
 
 const parseId = (value: string | null) => (value && /^\d+$/.test(value) ? Number(value) : null);
 
 /** `<source>-<target>-overlap.<extension>`, restricted to safe file-name characters. */
 export const exportFileName = (result: OverlapResult, extension: 'json' | 'csv') =>
   `${result.source.name}-${result.target.name}-overlap.${extension}`.replace(/[^A-Za-z0-9._-]/g, '_');
-
-const secondaryButton: React.CSSProperties = {
-  padding: '7px 14px', borderRadius: 8, border: `1.5px solid ${themeVars.border}`, background: themeVars.surface,
-  color: themeVars.text, fontSize: 13, fontWeight: 600, cursor: 'pointer', height: 40,
-};
 
 /** Compares two library metamodels and shows their semantic overlap. */
 export const SemanticOverlapView: React.FC = () => {
@@ -174,72 +154,7 @@ export const SemanticOverlapView: React.FC = () => {
         </div>
       )}
 
-      {result && (
-        <>
-          <OverlapSummary result={result} />
-          {result.alternatives && result.alternatives.length > 1 && (
-            <AlternativeSwitcher alternatives={result.alternatives} selected={store.selectedAlternative} onSelect={store.selectAlternative} />
-          )}
-          {result.typeObjectPatterns && result.typeObjectPatterns.length > 0 && (
-            <TypeObjectPatternPanel patterns={result.typeObjectPatterns} />
-          )}
-          {result.repairs && result.repairs.length > 0 && <RepairsPanel repairs={result.repairs} />}
-          <div role="tablist" aria-label="Result views" style={{ display: 'flex', gap: 4, borderBottom: `1px solid ${themeVars.border}` }}>
-            {TABS.map(tab => (
-              <button
-                key={tab.id}
-                type="button"
-                role="tab"
-                aria-selected={store.activeTab === tab.id}
-                onClick={() => store.setActiveTab(tab.id)}
-                style={{
-                  padding: '8px 14px', border: 'none', background: 'none', cursor: 'pointer', fontSize: 14,
-                  fontWeight: store.activeTab === tab.id ? 700 : 500,
-                  color: store.activeTab === tab.id ? themeVars.text : themeVars.textSecondary,
-                  borderBottom: `2px solid ${store.activeTab === tab.id ? '#049484' : 'transparent'}`,
-                }}
-              >
-                {tab.label}
-              </button>
-            ))}
-          </div>
-          {/* flexShrink 0: the page is a scrolling flex column, which would otherwise squeeze this row. */}
-          <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 3fr) minmax(360px, 2fr)', gap: 16, flexShrink: 0 }}>
-            <div role="tabpanel" style={{ border: `1px solid ${themeVars.border}`, borderRadius: 12, overflow: 'hidden', background: themeVars.workspaceBg, height: 560 }}>
-              {store.activeTab === 'diagram' ? (
-                <CorrespondenceLinkDiagram
-                  result={result}
-                  minScore={store.minScore}
-                  selectedId={store.selectedCorrespondenceId}
-                  collapsedUnmatched={store.collapsedUnmatched}
-                  expandedIds={store.expandedCorrespondenceIds}
-                  onSelect={store.selectCorrespondence}
-                  onToggleUnmatched={store.setCollapsedUnmatched}
-                  onToggleExpand={store.toggleExpanded}
-                />
-              ) : (
-                <SimilarityHeatmap
-                  result={result}
-                  minScore={store.minScore}
-                  selectedId={store.selectedCorrespondenceId}
-                  onSelect={store.selectCorrespondence}
-                  onCellFocus={store.setHoveredCell}
-                />
-              )}
-            </div>
-            <div style={{ height: 560 }}>
-              <CorrespondenceList
-                result={result}
-                minScore={store.minScore}
-                selectedId={store.selectedCorrespondenceId}
-                onSelect={store.selectCorrespondence}
-                expandedIds={store.expandedCorrespondenceIds}
-                onToggleExpand={store.toggleExpanded}
-              />
-            </div>
-          </div>
-        </>
-      )}
+      {result && <OverlapResultPanel result={result} view={store} actions={store} />}
 
       <WordNetAttribution />
     </div>
