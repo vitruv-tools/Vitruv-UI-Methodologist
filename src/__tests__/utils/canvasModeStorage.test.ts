@@ -34,4 +34,10 @@ describe('canvasModeStorage', () => {
     expect(readStoredCanvasMode(2)).toBe('views');
     expect(readStoredCanvasMode(3)).toBe('metrics');
   });
+
+  it('keeps the Semantic overlap mode of a project', () => {
+    writeStoredCanvasMode(4, 'overlap');
+
+    expect(readStoredCanvasMode(4)).toBe('overlap');
+  });
 });

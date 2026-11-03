@@ -2,7 +2,7 @@
 export type HandlePosition = 'top' | 'bottom' | 'left' | 'right';
 
 /** Top-level canvas mode selected via the floating toggle. */
-export type CanvasMode = 'modeling' | 'constraints' | 'views' | 'metrics';
+export type CanvasMode = 'modeling' | 'constraints' | 'views' | 'metrics' | 'overlap';
 
 export interface ConnectionDragState {
   isActive: boolean;

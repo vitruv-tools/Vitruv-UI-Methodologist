@@ -35,6 +35,9 @@ interface UseCanvasModeStateResult {
   setMetricsEdges: Dispatch<SetStateAction<Edge[]>>;
   metricsViewTypes: ViewType[];
   setMetricsViewTypes: Dispatch<SetStateAction<ViewType[]>>;
+  /** Canvas nodes when the Semantic overlap mode was entered. */
+  overlapNodes: Node[];
+  setOverlapNodes: Dispatch<SetStateAction<Node[]>>;
   handleCanvasModeChange: (mode: CanvasMode) => void;
 }
 
@@ -65,6 +68,7 @@ export function useCanvasModeState({
   const [metricsNodes, setMetricsNodes] = useState<Node[]>([]);
   const [metricsEdges, setMetricsEdges] = useState<Edge[]>([]);
   const [metricsViewTypes, setMetricsViewTypes] = useState<ViewType[]>([]);
+  const [overlapNodes, setOverlapNodes] = useState<Node[]>([]);
 
   useEffect(() => {
     if (isViewOnly && canvasMode === 'constraints') {
@@ -92,6 +96,8 @@ export function useCanvasModeState({
       setMetricsNodes(snapshot.nodes);
       setMetricsEdges(snapshot.edges);
       setMetricsViewTypes(snapshot.viewTypes);
+    } else if (mode === 'overlap') {
+      setOverlapNodes(getCanvasNodes());
     } else {
       setConstraintHighlightNodeId(null);
       setConstraintFilterNodeId(null);
@@ -116,6 +122,8 @@ export function useCanvasModeState({
     setMetricsEdges,
     metricsViewTypes,
     setMetricsViewTypes,
+    overlapNodes,
+    setOverlapNodes,
     handleCanvasModeChange,
   };
 }

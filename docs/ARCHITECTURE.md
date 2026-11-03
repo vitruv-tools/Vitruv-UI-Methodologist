@@ -221,7 +221,29 @@ same concept. It runs entirely in the browser and offers two **approaches** (`ap
    the worker (also on unmount and after a 5-minute limit).
 3. The `OverlapResult` is kept in the zustand store `src/store/SemanticOverlap.ts` and shown as a React
    Flow link diagram, a canvas heatmap and a correspondence list that share selection, threshold and
-   expanded rows. It can be exported as JSON or CSV.
+   expanded rows (`OverlapResultPanel`). It can be exported as JSON or CSV.
+
+`runInWorker.ts` drives one analysis in a worker (start message, progress, result, error, 5-minute
+limit). `useSemanticOverlapRun` uses it for the home page view, `useProjectOverlapRun` for projects.
+
+### Inside a project
+
+An open project has a **Semantic overlap** canvas mode next to Metrics (`CanvasSemanticOverlapOverlay`,
+also for viewers). It compares every pair of metamodels on the project's canvas, as they are now and
+de-duplicated like the Metrics mode (`projectMetamodels.ts`), in both directions:
+
+1. `useProjectOverlapRun` runs one job per direction in a pool of up to three reusable workers, with the
+   approach and settings of the home page view (`useSemanticOverlapStore`). A failing pair does not stop
+   the others; cancelling keeps finished directions. The hook lives in the always-mounted overlay, so
+   opening a pair or switching to another mode does not stop a run; closing the project does.
+2. The overview is kept per project for the session in `src/store/ProjectSemanticOverlap.ts`. Directions
+   whose metamodels (content hash) and settings did not change keep their result on a re-run; any other
+   change marks the overview as outdated.
+3. `ProjectOverlapOverview` ranks the pairs by the higher overlap percentage of both directions
+   (`overview.ts`) and shows them as a list and a symmetric matrix coloured with the heatmap scale
+   (`heatmapColor.ts`). It exports CSV and JSON (`semantic-overlap-overview`, `schemaVersion: 1`, without
+   the full results). Selecting a pair opens `ProjectPairDetail`: the result views of either direction
+   with the usual exports, without a new analysis.
 
 ### Modules (`src/utils/semanticOverlap/`)
 
@@ -234,6 +256,9 @@ same concept. It runs entirely in the browser and offers two **approaches** (`ap
 | `runOverlapAnalysis.ts` | pipeline: class level, hierarchy completion (unmatched super-/subtypes join the correspondence of their most similar source), then attributes/references inside each class correspondence; grouping of shared targets into one correspondence |
 | `overlapResult.ts` | result format (`schemaVersion: 1`), JSON parse/validate, CSV export |
 | `linkDiagramLayout.ts` | result → React Flow nodes and edges |
+| `runInWorker.ts` | one analysis in a worker: protocol, timeout, cancellation |
+| `projectMetamodels.ts`, `overview.ts`, `overviewTypes.ts` | project overview: canvas metamodels, pairs, ranking, matrix, outdated check, CSV/JSON export |
+| `heatmapColor.ts` | the heatmap colour scale of the theme |
 | `approaches/` | `Approach` contract (id, version, label, defaults, validation, required resources, `run`), the paper and improved approaches and the registry with `DEFAULT_APPROACH` |
 | `correspondenceKind.ts` | labels, names and dash patterns of the correspondence kinds |
 | `improved/` | the improved approach: copied runner, measures, matching problem and settings plus the improvements below |

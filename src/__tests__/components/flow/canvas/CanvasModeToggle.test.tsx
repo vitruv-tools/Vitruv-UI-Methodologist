@@ -63,4 +63,22 @@ describe('CanvasModeToggle', () => {
 
     expect(screen.getByTestId('project-tabs')).toBeInTheDocument();
   });
+
+  it('offers Semantic overlap right after Metrics, also for read-only viewers', () => {
+    const { onSelectMode } = setup({ readOnly: true });
+
+    const labels = screen.getAllByRole('button').map(button => button.textContent?.trim());
+    expect(labels).toEqual(['Modeling', 'Views', 'Metrics', 'Semantic overlap']);
+
+    fireEvent.click(screen.getByRole('button', { name: /semantic overlap/i }));
+
+    expect(onSelectMode).toHaveBeenCalledWith('overlap');
+  });
+
+  it('lists the modes in order when editing is allowed', () => {
+    setup();
+
+    const labels = screen.getAllByRole('button').map(button => button.textContent?.trim());
+    expect(labels).toEqual(['Modeling', 'Constraints', 'Views', 'Metrics', 'Semantic overlap']);
+  });
 });

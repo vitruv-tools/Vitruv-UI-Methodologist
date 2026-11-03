@@ -191,7 +191,7 @@ function nodeDisplayName(node: Node | undefined, fallback: string): string {
   return fileBaseName(fileName) || fallback;
 }
 
-function metamodelDedupeKey(node: Node): string {
+export function metamodelDedupeKey(node: Node): string {
   const metaModelId = node.data?.metaModelId;
   if (typeof metaModelId === 'number' && Number.isFinite(metaModelId)) return `mm:${metaModelId}`;
   const ecoreFileId = node.data?.ecoreFileId;

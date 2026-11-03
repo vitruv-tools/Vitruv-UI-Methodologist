@@ -29,6 +29,7 @@ import { HelpersModal } from '../components/helpers/HelpersModal';
 import { CanvasProjectAccessControls } from '../components/canvas/CanvasProjectAccessControls';
 import { CanvasConstraintsOverlay } from '../components/canvas/CanvasConstraintsOverlay';
 import { CanvasMetricsOverlay } from '../components/canvas/CanvasMetricsOverlay';
+import { CanvasSemanticOverlapOverlay } from '../components/canvas/CanvasSemanticOverlapOverlay';
 import { getCanvasPanelMemberName } from '../components/canvas/canvasMemberPresentation';
 import { useCanvasModeState } from '../hooks/useCanvasModeState';
 import type { ViewType } from '../hooks/useViewTypes';
@@ -251,6 +252,7 @@ interface HydrateCanvasWorkspaceParams {
   setMetricsNodes: React.Dispatch<React.SetStateAction<Node[]>>;
   setMetricsEdges: React.Dispatch<React.SetStateAction<Edge[]>>;
   setMetricsViewTypes: React.Dispatch<React.SetStateAction<ViewType[]>>;
+  setOverlapNodes: React.Dispatch<React.SetStateAction<Node[]>>;
   setMyLibraryModels: React.Dispatch<React.SetStateAction<DrawerModel[]>>;
   setPublicLibraryModels: React.Dispatch<React.SetStateAction<DrawerModel[]>>;
 }
@@ -266,6 +268,7 @@ async function hydrateCanvasWorkspace(params: HydrateCanvasWorkspaceParams): Pro
     setMetricsNodes,
     setMetricsEdges,
     setMetricsViewTypes,
+    setOverlapNodes,
     setMyLibraryModels,
     setPublicLibraryModels,
   } = params;
@@ -299,6 +302,9 @@ async function hydrateCanvasWorkspace(params: HydrateCanvasWorkspaceParams): Pro
     setMetricsNodes(flowCanvasRef.current?.getNodes?.() ?? []);
     setMetricsEdges(flowCanvasRef.current?.getEdges?.() ?? []);
     setMetricsViewTypes(flowCanvasRef.current?.getViewTypes?.() ?? []);
+  }
+  if (canvasMode === 'overlap') {
+    setOverlapNodes(flowCanvasRef.current?.getNodes?.() ?? []);
   }
 
   // The project's existing metamodels/relations just loaded via a sequence of
@@ -666,6 +672,8 @@ export const CanvasPage: React.FC = () => {
     setMetricsEdges,
     metricsViewTypes,
     setMetricsViewTypes,
+    overlapNodes,
+    setOverlapNodes,
     handleCanvasModeChange,
   } = useCanvasModeState({
     projectId: activeProjectId,
@@ -855,6 +863,9 @@ export const CanvasPage: React.FC = () => {
       setMetricsNodes(session.nodes);
       setMetricsEdges(session.edges);
     }
+    if (canvasModeRef.current === 'overlap') {
+      setOverlapNodes(session.nodes);
+    }
 
     // Bound to this tab's canvas: when the user switches on within 50 ms, the
     // delayed load must not put this tab's models on the next tab's canvas.
@@ -864,7 +875,7 @@ export const CanvasPage: React.FC = () => {
     };
     load();
     setTimeout(load, 50);
-  }, [cancelRename, canvasModeRef, restorePanels, setConstraintsNodes, setMetricsEdges, setMetricsNodes]);
+  }, [cancelRename, canvasModeRef, restorePanels, setConstraintsNodes, setMetricsEdges, setMetricsNodes, setOverlapNodes]);
 
   const captureRef = useRef(captureCurrentTabSession);
   captureRef.current = captureCurrentTabSession;
@@ -1107,6 +1118,7 @@ export const CanvasPage: React.FC = () => {
         setMetricsNodes,
         setMetricsEdges,
         setMetricsViewTypes,
+        setOverlapNodes,
         setMyLibraryModels,
         setPublicLibraryModels,
       });
@@ -1131,7 +1143,7 @@ export const CanvasPage: React.FC = () => {
         setLoadingProject(false);
       }
     }
-  }, [clearCanvasWorkspace, setBaselineForInstance, updateTabName, applyProjectMembers, navAccess, navAccessRole, noteApiRole, canvasModeRef, setConstraintsNodes, setMetricsEdges, setMetricsNodes, setMetricsViewTypes]);
+  }, [clearCanvasWorkspace, setBaselineForInstance, updateTabName, applyProjectMembers, navAccess, navAccessRole, noteApiRole, canvasModeRef, setConstraintsNodes, setMetricsEdges, setMetricsNodes, setMetricsViewTypes, setOverlapNodes]);
 
   // Viewers: reload when the owner saves changes; detect when access is revoked.
   useEffect(() => {
@@ -1207,6 +1219,7 @@ export const CanvasPage: React.FC = () => {
         setMetricsEdges([]);
         setMetricsViewTypes([]);
       }
+      if (canvasModeRef.current === 'overlap') setOverlapNodes([]);
 
       const cached = sessionsRef.current.get(nextId);
       if (cached && loadedTabsRef.current.has(nextId)) {
@@ -1229,7 +1242,7 @@ export const CanvasPage: React.FC = () => {
 
     void run();
     return () => { cancelled = true; };
-  }, [activeInstanceId, clearCanvasWorkspace, loadVsum, bumpProjectRole, canvasModeRef, setConstraintsNodes, setMetricsEdges, setMetricsNodes, setMetricsViewTypes]);
+  }, [activeInstanceId, clearCanvasWorkspace, loadVsum, bumpProjectRole, canvasModeRef, setConstraintsNodes, setMetricsEdges, setMetricsNodes, setMetricsViewTypes, setOverlapNodes]);
 
   // ── Add model from drawer ─────────────────────────────────────────────────
 
@@ -1669,8 +1682,15 @@ export const CanvasPage: React.FC = () => {
         onClose={() => handleCanvasModeChange('modeling')}
       />
 
+      <CanvasSemanticOverlapOverlay
+        projectId={activeProjectId}
+        projectName={vsumName}
+        visible={canvasMode === 'overlap'}
+        canvasNodes={overlapNodes}
+      />
+
       {/* Left sidebar toolbar */}
-      {canvasMode !== 'constraints' && canvasMode !== 'metrics' && <CanvasSidebarToolbar
+      {canvasMode !== 'constraints' && canvasMode !== 'metrics' && canvasMode !== 'overlap' && <CanvasSidebarToolbar
         readOnly={isViewOnly}
         addReactionMode={addReactionMode}
         onToggleReactionMode={() => setAddReactionMode(v => !v)}

@@ -31,6 +31,13 @@ const MetricsIcon = () => (
   </svg>
 );
 
+const OverlapIcon = () => (
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <circle cx="9" cy="12" r="6" />
+    <circle cx="15" cy="12" r="6" />
+  </svg>
+);
+
 interface ModeOption {
   label: string;
   mode: CanvasMode;
@@ -46,7 +53,7 @@ export interface CanvasModeToggleProps {
   projectTabsBelowModeToggle?: React.ReactNode;
 }
 
-/** Modeling / Constraints / Views / Metrics switch floating at the top of the canvas. */
+/** Modeling / Constraints / Views / Metrics / Semantic overlap switch floating at the top of the canvas. */
 export const CanvasModeToggle: React.FC<CanvasModeToggleProps> = ({
   activeCanvasMode,
   onSelectMode,
@@ -58,6 +65,7 @@ export const CanvasModeToggle: React.FC<CanvasModeToggleProps> = ({
     ...(readOnly ? [] : [{ label: 'Constraints', mode: 'constraints' as CanvasMode, icon: <ConstraintsIcon /> }]),
     { label: 'Views', mode: 'views', icon: <ViewsIcon /> },
     { label: 'Metrics', mode: 'metrics' as CanvasMode, icon: <MetricsIcon /> },
+    { label: 'Semantic overlap', mode: 'overlap' as CanvasMode, icon: <OverlapIcon /> },
   ];
 
   return (

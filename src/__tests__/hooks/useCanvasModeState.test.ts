@@ -182,4 +182,21 @@ describe('useCanvasModeState', () => {
     expect(result.current.metricsViewTypes).toEqual(viewTypes);
     expect(mockWriteStoredCanvasMode).toHaveBeenCalledWith(7, 'metrics');
   });
+
+  it('snapshots the nodes when switching to Semantic overlap, also for view-only users', () => {
+    const getCanvasNodes = vi.fn(() => canvasNodes);
+    const { result } = renderHook(() => useCanvasModeState({
+      projectId: 7,
+      isViewOnly: true,
+      getCanvasNodes,
+    }));
+
+    act(() => {
+      result.current.handleCanvasModeChange('overlap');
+    });
+
+    expect(result.current.canvasMode).toBe('overlap');
+    expect(result.current.overlapNodes).toEqual(canvasNodes);
+    expect(mockWriteStoredCanvasMode).toHaveBeenCalledWith(7, 'overlap');
+  });
 });
