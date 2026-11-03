@@ -4,33 +4,27 @@ import { apiService } from '../services/api';
 import { useSemanticOverlapStore } from '../store/SemanticOverlap';
 import { approachOf } from '../utils/semanticOverlap/approaches/registry';
 import { EcoreReadError, readMetamodelGraph } from '../utils/semanticOverlap/ecore/readMetamodelGraph';
+import {
+  ANALYSIS_TIMEOUT_MS,
+  createOverlapWorker,
+  startInWorker,
+  type OverlapWorker,
+} from '../utils/semanticOverlap/runInWorker';
+import { sha256Hex } from '../utils/semanticOverlap/sha256';
 import type { MetamodelRef } from '../utils/semanticOverlap/types';
 import type { LibraryMetaModel } from '../utils/metaModelList';
-import type { FromWorker, ToWorker } from '../workers/semanticOverlap.worker';
 
-/** Hard limit for one analysis (FR-031). */
-export const ANALYSIS_TIMEOUT_MS = 5 * 60 * 1000;
-export const TIMEOUT_MESSAGE = 'Analysis stopped after 5 minutes — try a lower effort setting.';
-
-export interface OverlapWorker {
-  postMessage(message: ToWorker): void;
-  terminate(): void;
-  onmessage: ((event: MessageEvent<FromWorker>) => void) | null;
-  onerror: ((event: ErrorEvent) => void) | null;
-}
-
-export const createOverlapWorker = (): OverlapWorker =>
-  new Worker(new URL('../workers/semanticOverlap.worker.ts', import.meta.url), { type: 'module' }) as unknown as OverlapWorker;
+export {
+  ANALYSIS_TIMEOUT_MS,
+  TIMEOUT_MESSAGE,
+  createOverlapWorker,
+  type OverlapWorker,
+} from '../utils/semanticOverlap/runInWorker';
 
 export interface SemanticOverlapRunDeps {
   createWorker?: () => OverlapWorker;
   getFile?: (id: number) => Promise<string>;
   createRunId?: () => string;
-}
-
-async function sha256Hex(text: string): Promise<string> {
-  const digest = await globalThis.crypto.subtle.digest('SHA-256', new TextEncoder().encode(text));
-  return Array.from(new Uint8Array(digest), byte => byte.toString(16).padStart(2, '0')).join('');
 }
 
 const toRef = (model: LibraryMetaModel, contentHash: string): MetamodelRef => ({
@@ -52,13 +46,13 @@ export function useSemanticOverlapRun(deps: SemanticOverlapRunDeps = {}) {
     createRunId = () => globalThis.crypto.randomUUID(),
   } = deps;
   const workerRef = useRef<OverlapWorker | null>(null);
-  const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const detachRef = useRef<(() => void) | null>(null);
 
   const stopWorker = useCallback(() => {
+    detachRef.current?.();
+    detachRef.current = null;
     workerRef.current?.terminate();
     workerRef.current = null;
-    if (timeoutRef.current !== null) clearTimeout(timeoutRef.current);
-    timeoutRef.current = null;
   }, []);
 
   const cancel = useCallback(() => {
@@ -96,30 +90,21 @@ export function useSemanticOverlapRun(deps: SemanticOverlapRunDeps = {}) {
 
       const worker = createWorker();
       workerRef.current = worker;
-      worker.onmessage = ({ data }) => {
-        if (data.runId !== runId) return;
-        const current = useSemanticOverlapStore.getState();
-        if (data.type === 'progress') current.updateProgress(runId, { phase: data.phase, fraction: data.fraction });
-        if (data.type === 'done') {
-          stopWorker();
-          current.finishRun(runId, data.result);
-        }
-        if (data.type === 'error') {
-          stopWorker();
-          current.failRun(runId, data.message);
-        }
-        // 'warning' messages are also part of the result's warnings.
-      };
-      worker.onerror = event => {
-        stopWorker();
-        useSemanticOverlapStore.getState().failRun(runId, event.message || 'The analysis failed.');
-      };
-      timeoutRef.current = setTimeout(() => {
-        stopWorker();
-        useSemanticOverlapStore.getState().failRun(runId, TIMEOUT_MESSAGE);
-      }, ANALYSIS_TIMEOUT_MS);
       useSemanticOverlapStore.getState().beginRunning(runId);
-      worker.postMessage({ type: 'start', runId, approach, input, assetBase: config.assetBaseUrl });
+      detachRef.current = startInWorker(
+        { worker, runId, approach, input, assetBase: config.assetBaseUrl, timeoutMs: ANALYSIS_TIMEOUT_MS },
+        {
+          onProgress: progress => useSemanticOverlapStore.getState().updateProgress(runId, progress),
+          onDone: result => {
+            stopWorker();
+            useSemanticOverlapStore.getState().finishRun(runId, result);
+          },
+          onError: message => {
+            stopWorker();
+            useSemanticOverlapStore.getState().failRun(runId, message);
+          },
+        },
+      );
     } catch (error) {
       stopWorker();
       const message = error instanceof Error ? error.message : String(error);
