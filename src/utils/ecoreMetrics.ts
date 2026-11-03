@@ -432,19 +432,3 @@ export function parseEcoreMetamodelMetrics(
     return { ...EMPTY_METRICS, name: fallbackName };
   }
 }
-
-/** Counts instance-level model elements in an XMI / XML instance document. */
-export function countXmiModelElements(xmiContent: string): number {
-  if (!xmiContent?.trim()) return 0;
-  try {
-    const xmlDoc = new DOMParser().parseFromString(xmiContent, 'text/xml');
-    if (xmlDoc.getElementsByTagName('parsererror').length > 0) return 0;
-    const root = xmlDoc.documentElement;
-    if (!root) return 0;
-    const local = localName(root);
-    if (local === 'parsererror') return 0;
-    return xmlDoc.getElementsByTagName('*').length;
-  } catch {
-    return 0;
-  }
-}
