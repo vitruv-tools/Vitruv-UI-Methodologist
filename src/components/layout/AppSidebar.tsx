@@ -291,7 +291,10 @@ export const AppSidebar: React.FC<AppSidebarProps> = ({
           badgeCount={sharedProjectsUnreadCount}
         />
         <NavItem icon={<LibraryIcon />} label="Model Library" active={activeView === 'library'} onClick={() => onViewChange('library')} />
-        <NavItem icon={<OverlapIcon />} label="Semantic overlap" active={activeView === 'overlap'} onClick={() => onViewChange('overlap')} />
+        {/* Lies on the background picture: a full-width band in the sidebar colour keeps the picture from showing beside it. */}
+        <div data-testid="overlap-nav-band" style={{ margin: '0 -8px', padding: '0 8px', backgroundColor: SIDEBAR_BG }}>
+          <NavItem icon={<OverlapIcon />} label="Semantic overlap" active={activeView === 'overlap'} onClick={() => onViewChange('overlap')} />
+        </div>
       </nav>
 
       {/* ── Bottom section ── */}

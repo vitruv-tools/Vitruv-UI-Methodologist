@@ -186,6 +186,16 @@ describe('AppSidebar', () => {
       expect(nav.style.zIndex).toBe('1');
     });
 
+    it('puts Semantic overlap on a band as wide as the sidebar', () => {
+      render(<AppSidebar {...defaultProps} />);
+      const band = screen.getByTestId('overlap-nav-band');
+      expect(band).toContainElement(navButton('Semantic overlap'));
+      // The navigation is padded by 8px on each side; the band reaches past that to both edges.
+      expect(band.style.margin).toBe('0px -8px');
+      expect(band.style.padding).toBe('0px 8px');
+      expect(band.style.backgroundColor).toBe('rgb(11, 23, 32)');
+    });
+
     it('keeps the background picture where it starts below Model Library', () => {
       const { container } = render(<AppSidebar {...defaultProps} />);
       const picture = container.querySelector('img[src$="sidebar-bg.png"]') as HTMLElement;
