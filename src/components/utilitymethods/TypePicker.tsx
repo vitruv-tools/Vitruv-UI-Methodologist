@@ -19,20 +19,30 @@ export const pickerControlStyle: React.CSSProperties = {
   minWidth: 0,
 };
 
-interface OclTypePickerProps {
+interface TypePickerProps {
   value: string;
   onChange: (value: string) => void;
   types: UtilityMethodTypeResponse[];
   /** Accessible name prefix, e.g. "Return type". */
   label: string;
   disabled?: boolean;
+  /** Offers `void`, for return types. */
+  allowVoid?: boolean;
+  /** Called with the qualified Java name of a metamodel type that was picked by its simple name. */
+  onTypeChosen?: (javaName: string) => void;
+}
+
+/** The name a metamodel type is written with: its simple name, unless another type shares it. */
+function typeName(type: UtilityMethodTypeResponse, types: UtilityMethodTypeResponse[]): string {
+  const ambiguous = types.some(other => other !== type && other.name === type.name);
+  return ambiguous ? type.javaName : type.name;
 }
 
 /**
- * Picks an OCL type: a primitive or metamodel type, optionally as a collection.
- * Types the two selects cannot represent (e.g. nested collections) are edited as text.
+ * Picks an Xtend/Java type: a value or metamodel type, optionally as a collection.
+ * Types the two selects cannot represent (e.g. nested generics) are edited as text.
  */
-export const OclTypePicker: React.FC<OclTypePickerProps> = ({ value, onChange, types, label, disabled }) => {
+export const TypePicker: React.FC<TypePickerProps> = ({ value, onChange, types, label, disabled, allowVoid, onTypeChosen }) => {
   const selection = parseTypeSelection(value);
   const byMetamodel = useMemo(() => {
     const groups = new Map<string, UtilityMethodTypeResponse[]>();
@@ -55,9 +65,16 @@ export const OclTypePicker: React.FC<OclTypePickerProps> = ({ value, onChange, t
     );
   }
 
+  const valueTypes: readonly string[] = allowVoid ? [...PRIMITIVE_TYPES, 'void'] : PRIMITIVE_TYPES;
   const known =
-    (PRIMITIVE_TYPES as readonly string[]).includes(selection.element)
-    || types.some(t => t.qualifiedName === selection.element);
+    valueTypes.includes(selection.element)
+    || types.some(t => typeName(t, types) === selection.element);
+
+  const chooseElement = (element: string) => {
+    onChange(formatTypeSelection({ ...selection, element }));
+    const chosen = types.find(t => typeName(t, types) === element);
+    if (chosen) onTypeChosen?.(chosen.javaName);
+  };
 
   return (
     <div style={{ display: 'flex', gap: 6, flex: 1, minWidth: 0 }}>
@@ -78,19 +95,19 @@ export const OclTypePicker: React.FC<OclTypePickerProps> = ({ value, onChange, t
         aria-label={`${label} element type`}
         value={selection.element}
         disabled={disabled}
-        onChange={e => onChange(formatTypeSelection({ ...selection, element: e.target.value }))}
+        onChange={e => chooseElement(e.target.value)}
         style={{ ...pickerControlStyle, flex: 1 }}
       >
         {!selection.element && <option value="" disabled>Choose a type…</option>}
         {!known && selection.element && <option value={selection.element}>{selection.element}</option>}
-        <optgroup label="Primitive types">
-          {PRIMITIVE_TYPES.map(type => <option key={type} value={type}>{type}</option>)}
+        <optgroup label="Value types">
+          {valueTypes.map(type => <option key={type} value={type}>{type}</option>)}
         </optgroup>
         {byMetamodel.map(([metamodel, entries]) => (
           <optgroup key={metamodel} label={`Metamodel ${metamodel}`}>
             {entries.map(type => (
-              <option key={type.qualifiedName} value={type.qualifiedName}>
-                {type.qualifiedName}{type.kind === 'ENUM' ? ' (enum)' : ''}
+              <option key={type.javaName} value={typeName(type, types)} title={type.javaName}>
+                {typeName(type, types)}{type.kind === 'ENUM' ? ' (enum)' : ''}
               </option>
             ))}
           </optgroup>

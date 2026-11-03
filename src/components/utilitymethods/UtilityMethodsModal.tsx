@@ -40,7 +40,7 @@ interface JavaView {
 }
 
 /**
- * Overview of the project's utility methods: their OCL definitions, the Java they are translated to
+ * Overview of the project's utility methods: their Xtend definitions, the Java they are compiled to
  * and the editor to add, change and delete them.
  */
 export const UtilityMethodsModal: React.FC<UtilityMethodsModalProps> = ({ isOpen, vsumId, readOnly = false, onClose }) => {
@@ -197,7 +197,7 @@ export const UtilityMethodsModal: React.FC<UtilityMethodsModalProps> = ({ isOpen
               />
             </div>
             <div style={{ padding: '8px 20px', fontSize: 12, color: 'var(--v-text-secondary)', borderBottom: '1px solid var(--v-border-subtle)', background: 'var(--v-surface-muted)' }}>
-              In a reaction, add <code style={{ fontFamily: MONO }}>import {UTILITY_METHOD_CLASS}</code> and call e.g.{' '}
+              Reactions import <code style={{ fontFamily: MONO }}>Utility</code> automatically. Call e.g.{' '}
               <code style={{ fontFamily: MONO }}>Utility.{utilityMethods[0]?.name ?? 'myMethod'}(…)</code>.
             </div>
             <div style={{ flex: 1, overflowY: 'auto', padding: '12px 20px' }}>
@@ -249,7 +249,7 @@ const EmptyState: React.FC<{ readOnly: boolean; onCreate: () => void }> = ({ rea
   <div style={{ textAlign: 'center', padding: '48px 24px', color: 'var(--v-text-secondary)' }}>
     <div style={{ fontSize: 15, fontWeight: 600, color: 'var(--v-text)' }}>No utility methods yet</div>
     <p style={{ fontSize: 13, maxWidth: 520, margin: '8px auto 16px' }}>
-      Define reusable queries as utility methods with an OCL expression. They are translated into static Java
+      Define reusable queries as utility methods written in Xtend. They are compiled into static Java
       methods that every reaction of this project can call.
     </p>
     {!readOnly && <ActionButton variant="primary" size="sm" onClick={onCreate}>+ New Utility Method</ActionButton>}
@@ -265,7 +265,7 @@ interface UtilityMethodCardProps {
 }
 
 const UtilityMethodCard: React.FC<UtilityMethodCardProps> = ({ utilityMethod, readOnly, onShowJava, onEdit, onDelete }) => {
-  const translated = utilityMethod.problems.length === 0 && utilityMethod.javaMethod !== null;
+  const compiled = utilityMethod.javaMethod !== null && utilityMethod.problems.every(p => p.severity === 'WARNING');
   return (
     <article
       aria-label={`Utility method ${utilityMethod.name}`}
@@ -293,27 +293,28 @@ const UtilityMethodCard: React.FC<UtilityMethodCardProps> = ({ utilityMethod, re
             padding: '2px 8px',
             borderRadius: 999,
             flexShrink: 0,
-            background: translated ? 'var(--v-success-bg)' : 'var(--v-danger-bg)',
-            color: translated ? 'var(--v-success-text)' : 'var(--v-danger-text)',
+            background: compiled ? 'var(--v-success-bg)' : 'var(--v-danger-bg)',
+            color: compiled ? 'var(--v-success-text)' : 'var(--v-danger-text)',
           }}
         >
-          {translated ? 'Java generated' : 'Cannot be translated'}
+          {compiled ? 'Java generated' : 'Does not compile'}
         </span>
         <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
-          <ActionButton variant="secondary" size="sm" onClick={onShowJava} disabled={!translated}>View Java</ActionButton>
+          <ActionButton variant="secondary" size="sm" onClick={onShowJava} disabled={!compiled}>View Java</ActionButton>
           {!readOnly && <ActionButton variant="secondary" size="sm" onClick={onEdit}>Edit</ActionButton>}
           {!readOnly && <ActionButton variant="dangerOutline" size="sm" onClick={onDelete}>Delete</ActionButton>}
         </div>
       </div>
       <pre
-        aria-label={`OCL definition of ${utilityMethod.name}`}
+        aria-label={`Xtend definition of ${utilityMethod.name}`}
         style={{ margin: 0, padding: '10px 14px', background: 'var(--v-surface-muted)', borderTop: '1px solid var(--v-border-subtle)', fontFamily: MONO, fontSize: 12, color: 'var(--v-text)', maxHeight: 180, overflow: 'auto', whiteSpace: 'pre-wrap', tabSize: 4 }}
       >
-        {utilityMethod.oclDefinition}
+        {utilityMethod.xtendDefinition}
       </pre>
       {utilityMethod.problems.map(problem => (
-        <div key={`${problem.line}:${problem.column}:${problem.message}`} style={{ padding: '6px 14px', fontSize: 12, color: 'var(--v-danger-text)', borderTop: '1px solid var(--v-border-subtle)' }}>
-          {problem.line !== null ? `Line ${problem.line}, column ${problem.column}: ` : ''}{problem.message}
+        <div key={`${problem.severity}:${problem.line}:${problem.column}:${problem.message}`} style={{ padding: '6px 14px', fontSize: 12, color: problem.severity === 'WARNING' ? 'var(--v-warning-text)' : 'var(--v-danger-text)', borderTop: '1px solid var(--v-border-subtle)' }}>
+          {problem.severity === 'WARNING' ? 'Warning: ' : ''}
+          {problem.line === null ? '' : `Line ${problem.line}, column ${problem.column}: `}{problem.message}
         </div>
       ))}
     </article>

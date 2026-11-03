@@ -1106,7 +1106,7 @@ export interface RuleSetPutRequest {
 
 export interface UtilityMethodParameter {
   name: string;
-  /** OCL type, e.g. `simulink::SimulinkModel` or `Sequence(simulink::Block)`. */
+  /** Xtend/Java type, e.g. `SimulinkModel` or `List<Block>`. */
   type: string;
 }
 
@@ -1115,18 +1115,20 @@ export interface UtilityMethodRequest {
   description?: string;
   returnType: string;
   parameters: UtilityMethodParameter[];
-  /** Metamodel types usable by their simple name, e.g. `simulink::SubSystem` or `simulink::*`. */
+  /** Java imports, e.g. `tools.vitruv.methodologisttemplate.model.simulink.*` or `java.util.Set`. */
   imports: string[];
-  /** The OCL expression. */
+  /** The Xtend method body, without the surrounding braces. */
   body: string;
 }
 
 export interface UtilityMethodProblem {
   utilityMethodName: string;
   message: string;
-  /** 1-based position in the OCL definition, `null` if the problem is elsewhere. */
+  /** 1-based position relative to the method body, `null` if the problem is not in the body. */
   line: number | null;
   column: number | null;
+  /** Only errors keep a utility method from being saved. */
+  severity: 'ERROR' | 'WARNING';
 }
 
 export interface UtilityMethodResponse {
@@ -1138,8 +1140,8 @@ export interface UtilityMethodResponse {
   parameters: UtilityMethodParameter[];
   imports: string[];
   body: string;
-  /** The complete utility method definition in OCL. */
-  oclDefinition: string;
+  /** The utility method as it appears in the generated Xtend class. */
+  xtendDefinition: string;
   /** The generated Java method, `null` if the utility method has problems. */
   javaMethod: string | null;
   problems: UtilityMethodProblem[];
@@ -1148,7 +1150,7 @@ export interface UtilityMethodResponse {
 }
 
 export interface UtilityMethodPreviewResponse {
-  oclDefinition: string;
+  xtendDefinition: string;
   javaMethod: string | null;
   problems: UtilityMethodProblem[];
 }

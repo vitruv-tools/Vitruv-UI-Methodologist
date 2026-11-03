@@ -1,43 +1,76 @@
 import type { UtilityMethodParameter, UtilityMethodRequest, UtilityMethodResponse } from '../../services/api';
 
-export const PRIMITIVE_TYPES = ['Boolean', 'Integer', 'Real', 'String'] as const;
-export const COLLECTION_KINDS = ['Sequence', 'Set', 'OrderedSet', 'Bag'] as const;
+export const PRIMITIVE_TYPES = ['String', 'boolean', 'int', 'long', 'double'] as const;
+export const COLLECTION_KINDS = ['List', 'Set', 'Iterable'] as const;
 
 export type CollectionKind = typeof COLLECTION_KINDS[number];
 
 /** A type as edited in the type picker: an element type, optionally wrapped in a collection. */
 export interface TypeSelection {
   collection: CollectionKind | null;
-  /** A primitive (`Integer`) or metamodel type (`simulink::Block`). */
+  /** A value type (`int`) or a metamodel type by simple or qualified Java name (`SubSystem`). */
   element: string;
 }
 
 /**
- * Splits `Sequence(simulink::Block)` into collection and element type.
- * Returns `null` for types the picker cannot represent, e.g. nested collections.
+ * Splits `List<SubSystem>` into collection and element type.
+ * Returns `null` for types the picker cannot represent, e.g. nested generics or arrays.
  */
 export function parseTypeSelection(type: string): TypeSelection | null {
   const trimmed = type.trim();
-  const open = trimmed.indexOf('(');
-  if (open === -1) return { collection: null, element: trimmed };
-  if (!trimmed.endsWith(')')) return null;
+  const open = trimmed.indexOf('<');
+  if (open === -1) return trimmed.includes('[') ? null : { collection: null, element: trimmed };
+  if (!trimmed.endsWith('>')) return null;
   const kind = trimmed.slice(0, open).trim();
   const element = trimmed.slice(open + 1, -1).trim();
-  if (!(COLLECTION_KINDS as readonly string[]).includes(kind) || element.includes('(')) return null;
+  if (!(COLLECTION_KINDS as readonly string[]).includes(kind) || /[<>,[]/.test(element)) return null;
   return { collection: kind as CollectionKind, element };
 }
 
 export function formatTypeSelection(selection: TypeSelection): string {
   if (!selection.element) return '';
-  return selection.collection ? `${selection.collection}(${selection.element})` : selection.element;
+  return selection.collection ? `${selection.collection}<${boxed(selection.element)}>` : selection.element;
 }
 
-/** `getAll(model : simulink::SimulinkModel) : Sequence(simulink::SubSystem)` */
+/** Collections cannot hold primitive values in Java, so `List<int>` becomes `List<Integer>`. */
+function boxed(type: string): string {
+  const boxes: Record<string, string> = { boolean: 'Boolean', int: 'Integer', long: 'Long', double: 'Double' };
+  return boxes[type] ?? type;
+}
+
+/** The simple name of a qualified Java name, e.g. `SubSystem` for `a.b.SubSystem`. */
+export function simpleName(javaName: string): string {
+  return javaName.slice(javaName.lastIndexOf('.') + 1);
+}
+
+/** The package of a qualified Java name, e.g. `a.b` for `a.b.SubSystem`. */
+export function packageName(javaName: string): string {
+  const dot = javaName.lastIndexOf('.');
+  return dot === -1 ? '' : javaName.slice(0, dot);
+}
+
+/** Whether `imports` already make the type available by its simple name. */
+export function isImported(javaName: string, imports: readonly string[]): boolean {
+  return imports.some(entry => {
+    const trimmed = entry.trim();
+    return trimmed === javaName || trimmed === `${packageName(javaName)}.*`;
+  });
+}
+
+/** `getAll(SimulinkModel model) : List<SubSystem>` */
 export function formatSignature(
   utilityMethod: { name: string; parameters: UtilityMethodParameter[]; returnType: string },
 ): string {
-  const params = utilityMethod.parameters.map(p => `${p.name} : ${p.type}`).join(', ');
+  const params = utilityMethod.parameters.map(p => `${p.type} ${p.name}`).join(', ');
   return `${utilityMethod.name || '…'}(${params}) : ${utilityMethod.returnType || '…'}`;
+}
+
+/** `def static List<SubSystem> getAll(SimulinkModel model)`, the header the body belongs to. */
+export function formatXtendHeader(
+  utilityMethod: { name: string; parameters: UtilityMethodParameter[]; returnType: string },
+): string {
+  const params = utilityMethod.parameters.map(p => `${p.type || '…'} ${p.name || '…'}`).join(', ');
+  return `def static ${utilityMethod.returnType || '…'} ${utilityMethod.name || '…'}(${params})`;
 }
 
 /** Removes the indentation all non-empty lines share, e.g. of a method inside its class. */
@@ -73,7 +106,7 @@ export interface UtilityMethodDraft {
 export const EMPTY_DRAFT: UtilityMethodDraft = {
   name: '',
   description: '',
-  returnType: 'Boolean',
+  returnType: 'boolean',
   parameters: [],
   imports: [],
   body: '',
@@ -108,40 +141,36 @@ export function missingField(draft: UtilityMethodDraft): string | null {
   if (draft.parameters.some(p => !p.name.trim() || !p.type.trim())) {
     return 'Every parameter needs a name and a type.';
   }
-  if (!draft.body.trim()) return 'Enter the OCL definition.';
+  if (!draft.body.trim()) return 'Enter the Xtend body.';
   return null;
 }
 
 /**
- * The OCL call of another utility method, e.g. `getAll(model)`, or `getAll()` when written as an
- * operation of its first argument (`model.getAll()`).
+ * The call of another utility method, e.g. `getAll(model)`. Utility methods are static methods of
+ * the same class, so they call each other by name.
  */
-export function utilityMethodCall(utilityMethod: { name: string; parameters: UtilityMethodParameter[] }, onFirstArgument = false): string {
-  const params = utilityMethod.parameters.slice(onFirstArgument ? 1 : 0).map(p => p.name);
-  return `${utilityMethod.name}(${params.join(', ')})`;
+export function utilityMethodCall(utilityMethod: { name: string; parameters: UtilityMethodParameter[] }): string {
+  return `${utilityMethod.name}(${utilityMethod.parameters.map(p => p.name).join(', ')})`;
 }
 
 /** Like {@link utilityMethodCall}, as a Monaco snippet whose arguments are tab stops. */
-export function utilityMethodCallSnippet(utilityMethod: { name: string; parameters: UtilityMethodParameter[] }, onFirstArgument = false): string {
-  const params = utilityMethod.parameters.slice(onFirstArgument ? 1 : 0)
+export function utilityMethodCallSnippet(utilityMethod: { name: string; parameters: UtilityMethodParameter[] }): string {
+  const params = utilityMethod.parameters
     .map((p, i) => `\${${i + 1}:${p.name.replace(/[$}\\]/g, String.raw`\$&`)}}`);
   return `${utilityMethod.name}(${params.join(', ')})`;
 }
 
-const THIS_MODULE = 'thisModule';
+const UTILITY_CLASS = 'Utility';
 
 /**
- * How a utility method call can be written at the end of `textBefore`:
- * - `'plain'`: as `utility method(args)`, also after `thisModule.`
- * - `'operation'`: after `x.`, as `x.utility method(remaining args)`
- * - `null`: not at all, e.g. after `->`, which only takes collection operations
+ * Whether a utility method call can be written at the end of `textBefore`: anywhere a name can
+ * start, and after `Utility.`, but not after another receiver such as `model.`.
  */
-export function utilityMethodCallContext(textBefore: string): 'plain' | 'operation' | null {
+export function canCallUtilityMethodAt(textBefore: string): boolean {
   const prefix = textBefore.replace(/[\p{L}\p{N}_]*$/u, '').trimEnd();
-  if (prefix.endsWith('->')) return null;
-  if (!prefix.endsWith('.')) return 'plain';
+  if (!prefix.endsWith('.')) return true;
   const receiver = prefix.slice(0, -1).trimEnd();
-  if (!receiver.endsWith(THIS_MODULE)) return 'operation';
-  const beforeReceiver = receiver.slice(0, -THIS_MODULE.length);
-  return /[\p{L}\p{N}_.]$/u.test(beforeReceiver) ? 'operation' : 'plain';
+  if (!receiver.endsWith(UTILITY_CLASS)) return false;
+  const beforeReceiver = receiver.slice(0, -UTILITY_CLASS.length);
+  return !/[\p{L}\p{N}_.]$/u.test(beforeReceiver);
 }

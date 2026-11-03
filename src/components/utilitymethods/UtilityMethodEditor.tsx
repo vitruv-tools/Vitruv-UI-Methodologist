@@ -3,7 +3,6 @@ import Editor, { type Monaco, type OnMount } from '@monaco-editor/react';
 import type * as monacoTypes from 'monaco-editor';
 import { ActionButton } from '../ui/ActionButton';
 import { modalPanelFooterStyle } from '../ui/sharedStyles';
-import { vitruvOCLLanguageId } from '../constraints/VitruvOCLMonarchGrammar';
 import {
   apiService,
   type UtilityMethodPreviewResponse,
@@ -12,21 +11,25 @@ import {
   type UtilityMethodTypeResponse,
 } from '../../services/api';
 import { extractApiErrorMessage } from '../../utils/apiErrorMessage';
-import { OclTypePicker, pickerControlStyle } from './OclTypePicker';
+import { TypePicker, pickerControlStyle } from './TypePicker';
 import {
   EMPTY_DRAFT,
   dedent,
   draftFromUtilityMethod,
+  canCallUtilityMethodAt,
   formatSignature,
+  formatXtendHeader,
+  isImported,
+  packageName,
+  simpleName,
   utilityMethodCall,
-  utilityMethodCallContext,
   utilityMethodCallSnippet,
   missingField,
   newDraftParameter,
   requestFromDraft,
   type UtilityMethodDraft,
 } from './utilityMethodUtils';
-import { UTILITY_METHOD_EDITOR_THEME, setUpVitruvOcl } from './monacoSetup';
+import { UTILITY_METHOD_EDITOR_THEME, XTEND_UTILITY_LANGUAGE_ID, setUpXtendUtility } from './monacoSetup';
 
 const NAME_CHECK_DELAY_MS = 350;
 const PREVIEW_DELAY_MS = 600;
@@ -57,13 +60,14 @@ const panelTitleStyle: React.CSSProperties = {
 };
 
 const SYNTAX_HELP = [
-  ['Navigation', 'model.contains, block.name'],
-  ['Collections', 'xs->size(), ->isEmpty(), ->includes(x), ->first(), ->asSet(), ->union(ys)'],
-  ['Iterators', 'xs->select(x | …), ->reject, ->collect, ->forAll, ->exists, ->any, ->sortedBy'],
-  ['Types', 'x.oclIsKindOf(mm::C), x.oclAsType(mm::C), xs->selectByKind(mm::C)'],
-  ['Transitive', 'xs->closure(x | x.children)  (includes xs, stops on cycles)'],
-  ['Expressions', "let v = … in …, if c then a else b endif, 'text', Sequence{1..n}"],
-  ['Other utility methods', 'otherMethod(x) or thisModule.otherMethod(x)'],
+  ['Navigation', 'model.contains, block.name, model.eAllContents'],
+  ['Collections', 'xs.size, xs.isEmpty, xs.contains(x), xs.head, xs.toList, xs.toSet, xs + ys'],
+  ['Lambdas', 'xs.filter[enabled], xs.map[name], xs.exists[x | x.priority > 1], xs.forall[…]'],
+  ['Types', 'x instanceof SubSystem, x as SubSystem, xs.filter(SubSystem)'],
+  ['Sorting', 'xs.sortBy[name], xs.sortWith[a, b | …], xs.reverse'],
+  ['Expressions', "val v = …, if (c) a else b, switch x { SubSystem: … default: … }, 'text'"],
+  ['Result', 'The value of the last expression is returned; return works as well.'],
+  ['Other utility methods', 'otherMethod(x) or Utility.otherMethod(x)'],
 ] as const;
 
 type NameStatus =
@@ -83,12 +87,12 @@ interface UtilityMethodEditorProps {
   onSaved: (utilityMethod: UtilityMethodResponse) => void;
 }
 
-/** Form for defining an utility method, with live translation to Java. */
+/** Form for defining a utility method, with live compilation of its Xtend body to Java. */
 export const UtilityMethodEditor: React.FC<UtilityMethodEditorProps> = ({ vsumId, utilityMethod, types, utilityMethods, onCancel, onSaved }) => {
   const [draft, setDraft] = useState<UtilityMethodDraft>(() => (utilityMethod ? draftFromUtilityMethod(utilityMethod) : EMPTY_DRAFT));
   const [nameStatus, setNameStatus] = useState<NameStatus>({ state: 'idle' });
   const [preview, setPreview] = useState<UtilityMethodPreviewResponse | null>(null);
-  const [previewTab, setPreviewTab] = useState<'ocl' | 'java'>('java');
+  const [previewTab, setPreviewTab] = useState<'xtend' | 'java'>('java');
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [showSyntaxHelp, setShowSyntaxHelp] = useState(false);
@@ -101,9 +105,6 @@ export const UtilityMethodEditor: React.FC<UtilityMethodEditorProps> = ({ vsumId
     () => utilityMethods.filter(h => h.id !== utilityMethodId).sort((a, b) => a.name.localeCompare(b.name)),
     [utilityMethods, utilityMethodId],
   );
-  const withParameter = callableUtilityMethods.find(h => h.parameters.length > 0);
-  const operationExample = withParameter
-    && `${withParameter.parameters[0].name}.${utilityMethodCall(withParameter, true)}`;
   const callableUtilityMethodsRef = useRef(callableUtilityMethods);
   callableUtilityMethodsRef.current = callableUtilityMethods;
 
@@ -154,13 +155,14 @@ export const UtilityMethodEditor: React.FC<UtilityMethodEditorProps> = ({ vsumId
       } catch (e) {
         if (!cancelled) {
           setPreview({
-            oclDefinition: '',
+            xtendDefinition: '',
             javaMethod: null,
             problems: [{
               utilityMethodName: request.name,
               message: extractApiErrorMessage(e, 'The utility method could not be checked.'),
               line: null,
               column: null,
+              severity: 'ERROR',
             }],
           });
         }
@@ -173,8 +175,9 @@ export const UtilityMethodEditor: React.FC<UtilityMethodEditorProps> = ({ vsumId
   }, [request, incomplete, vsumId, utilityMethodId]);
 
   const problems = useMemo(() => preview?.problems ?? [], [preview]);
+  const errorCount = problems.filter(p => p.severity !== 'WARNING').length;
 
-  // Mark problems that have a position in the OCL editor.
+  // Mark problems that have a position in the body editor.
   useEffect(() => {
     const model = editorRef.current?.getModel?.();
     const monaco = monacoRef.current;
@@ -182,7 +185,7 @@ export const UtilityMethodEditor: React.FC<UtilityMethodEditorProps> = ({ vsumId
     monaco.editor.setModelMarkers(model, MARKER_OWNER, problems
       .filter((p): p is UtilityMethodProblem & { line: number; column: number } => p.line !== null && p.column !== null)
       .map(p => ({
-        severity: monaco.MarkerSeverity.Error,
+        severity: p.severity === 'WARNING' ? monaco.MarkerSeverity.Warning : monaco.MarkerSeverity.Error,
         message: p.message,
         startLineNumber: p.line,
         startColumn: p.column,
@@ -196,18 +199,17 @@ export const UtilityMethodEditor: React.FC<UtilityMethodEditorProps> = ({ vsumId
     monacoRef.current = monaco;
     completionRef.current?.dispose();
     // Providers apply to every editor of the language, so only answer for this one.
-    completionRef.current = monaco.languages.registerCompletionItemProvider(vitruvOCLLanguageId, {
+    completionRef.current = monaco.languages.registerCompletionItemProvider(XTEND_UTILITY_LANGUAGE_ID, {
       triggerCharacters: ['.'],
       provideCompletionItems: (model, position) => {
         if (model !== editor.getModel()) return { suggestions: [] };
-        const context = utilityMethodCallContext(model.getValueInRange({
+        const callable = canCallUtilityMethodAt(model.getValueInRange({
           startLineNumber: position.lineNumber,
           startColumn: 1,
           endLineNumber: position.lineNumber,
           endColumn: position.column,
         }));
-        if (!context) return { suggestions: [] };
-        const onFirstArgument = context === 'operation';
+        if (!callable) return { suggestions: [] };
         const word = model.getWordUntilPosition(position);
         const range = {
           startLineNumber: position.lineNumber,
@@ -217,13 +219,12 @@ export const UtilityMethodEditor: React.FC<UtilityMethodEditorProps> = ({ vsumId
         };
         return {
           suggestions: callableUtilityMethodsRef.current
-            .filter(h => !onFirstArgument || h.parameters.length > 0)
             .map(h => ({
               label: h.name,
               kind: monaco.languages.CompletionItemKind.Function,
               detail: `utility method ${formatSignature(h)}`,
               documentation: h.description ?? undefined,
-              insertText: utilityMethodCallSnippet(h, onFirstArgument),
+              insertText: utilityMethodCallSnippet(h),
               insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet,
               range,
             })),
@@ -247,18 +248,40 @@ export const UtilityMethodEditor: React.FC<UtilityMethodEditorProps> = ({ vsumId
   };
 
   // ── parameters & imports ─────────────────────────────────────────────────
-  const defaultParameterType = types.find(t => t.kind === 'CLASS')?.qualifiedName ?? 'String';
+  const defaultParameterType = types.find(t => t.kind === 'CLASS');
+  /** Imports the package of a metamodel type that is written by its simple name. */
+  const importType = (javaName: string) => {
+    setDraft(current => (isImported(javaName, current.imports)
+      ? current
+      : { ...current, imports: [...current.imports, `${packageName(javaName)}.*`] }));
+  };
+  const addParameter = () => {
+    update({
+      parameters: [
+        ...draft.parameters,
+        newDraftParameter({ name: '', type: defaultParameterType ? simpleName(defaultParameterType.javaName) : 'String' }),
+      ],
+    });
+    if (defaultParameterType) importType(defaultParameterType.javaName);
+  };
   const setParameter = (index: number, changes: Partial<{ name: string; type: string }>) => {
     update({ parameters: draft.parameters.map((p, i) => (i === index ? { ...p, ...changes } : p)) });
   };
 
   const importOptions = useMemo(() => {
-    const metamodels = [...new Set(types.map(t => t.metamodel))].sort((a, b) => a.localeCompare(b));
+    const packages = new Map<string, string>();
+    for (const type of types) {
+      if (type.kind !== 'DATATYPE') packages.set(packageName(type.javaName), type.metamodel);
+    }
     return [
-      ...metamodels.map(mm => ({ value: `${mm}::*`, label: `${mm}::* (all types)` })),
+      ...[...packages.entries()]
+        .sort(([a], [b]) => a.localeCompare(b))
+        .map(([pkg, metamodel]) => ({ value: `${pkg}.*`, label: `${pkg}.* (all types of ${metamodel})` })),
       ...types
         .filter(t => t.kind !== 'DATATYPE')
-        .map(t => ({ value: t.qualifiedName, label: t.qualifiedName })),
+        .map(t => ({ value: t.javaName, label: t.javaName })),
+      ...['java.util.Collection', 'java.util.Map', 'org.eclipse.emf.ecore.EObject']
+        .map(name => ({ value: name, label: name })),
     ].filter(option => !draft.imports.includes(option.value));
   }, [types, draft.imports]);
 
@@ -284,7 +307,7 @@ export const UtilityMethodEditor: React.FC<UtilityMethodEditorProps> = ({ vsumId
 
   let saveHint: string | null = incomplete;
   if (!saveHint && nameBlocked) saveHint = 'Choose another name.';
-  if (!saveHint && problems.length > 0) saveHint = 'Fix the problems shown in the preview.';
+  if (!saveHint && errorCount > 0) saveHint = 'Fix the problems shown in the preview.';
 
   return (
     <>
@@ -338,11 +361,12 @@ export const UtilityMethodEditor: React.FC<UtilityMethodEditorProps> = ({ vsumId
                 </button>
               </div>
               <div style={{ display: 'flex', marginTop: 6 }}>
-                <OclTypePicker
+                <TypePicker
                   label={`Parameter ${index + 1} type`}
                   value={parameter.type}
                   types={types}
                   onChange={type => setParameter(index, { type })}
+                  onTypeChosen={importType}
                 />
               </div>
             </div>
@@ -351,14 +375,21 @@ export const UtilityMethodEditor: React.FC<UtilityMethodEditorProps> = ({ vsumId
             variant="ghost"
             size="sm"
             style={{ marginTop: 6 }}
-            onClick={() => update({ parameters: [...draft.parameters, newDraftParameter({ name: '', type: defaultParameterType })] })}
+            onClick={addParameter}
           >
             + Add parameter
           </ActionButton>
 
           <div style={{ ...sectionLabelStyle, marginTop: 14 }}>Return type</div>
           <div style={{ display: 'flex' }}>
-            <OclTypePicker label="Return type" value={draft.returnType} types={types} onChange={returnType => update({ returnType })} />
+            <TypePicker
+              label="Return type"
+              value={draft.returnType}
+              types={types}
+              allowVoid
+              onChange={returnType => update({ returnType })}
+              onTypeChosen={importType}
+            />
           </div>
 
           <div style={{ ...sectionLabelStyle, marginTop: 14 }}>Imports</div>
@@ -387,8 +418,8 @@ export const UtilityMethodEditor: React.FC<UtilityMethodEditorProps> = ({ vsumId
             {importOptions.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}
           </select>
           <div style={hintStyle}>
-            Imported types can be written without their metamodel prefix, e.g. <code>SubSystem</code> instead
-            of <code>simulink::SubSystem</code>.
+            Imported types can be written by their simple name, e.g. <code>SubSystem</code>.{' '}
+            <code>List</code>, <code>Set</code>, <code>Map</code> and <code>Collection</code> need no import.
           </div>
 
           <div style={{ ...sectionLabelStyle, marginTop: 14 }}>Other utility methods</div>
@@ -409,9 +440,9 @@ export const UtilityMethodEditor: React.FC<UtilityMethodEditorProps> = ({ vsumId
                       <span style={{ fontFamily: MONO, fontSize: 12, color: 'var(--v-text)', wordBreak: 'break-all' }}>
                         {formatSignature(other)}
                       </span>
-                      {other.problems.length > 0 && (
+                      {other.problems.some(p => p.severity !== 'WARNING') && (
                         <span style={{ fontSize: 11, color: 'var(--v-danger-text)' }}>
-                          Has translation problems
+                          Does not compile
                         </span>
                       )}
                     </button>
@@ -419,21 +450,18 @@ export const UtilityMethodEditor: React.FC<UtilityMethodEditorProps> = ({ vsumId
                 ))}
               </ul>
               <div style={hintStyle}>
-                Click to insert a call, or start typing its name in the definition.
-                {operationExample && (
-                  <> A utility method can also be called on its first argument, e.g. <code>{operationExample}</code>.</>
-                )}
+                Click to insert a call, or start typing its name in the body.
               </div>
             </>
           )}
         </div>
 
-        {/* Right: OCL definition and preview */}
+        {/* Right: Xtend body and preview */}
         <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column' }}>
           <div style={panelTitleStyle}>
             <span style={{ flex: 1 }}>
-              OCL definition<span style={{ fontWeight: 400, marginLeft: 8, fontFamily: MONO }}>
-                def : {formatSignature(draft)} =
+              Xtend body<span style={{ fontWeight: 400, marginLeft: 8, fontFamily: MONO }}>
+                {formatXtendHeader(draft)} {'{'}
               </span>
             </span>
             <button
@@ -459,9 +487,9 @@ export const UtilityMethodEditor: React.FC<UtilityMethodEditorProps> = ({ vsumId
             <Editor
               value={draft.body}
               onChange={value => update({ body: value ?? '' })}
-              beforeMount={setUpVitruvOcl}
+              beforeMount={setUpXtendUtility}
               onMount={handleEditorMount}
-              language={vitruvOCLLanguageId}
+              language={XTEND_UTILITY_LANGUAGE_ID}
               theme={UTILITY_METHOD_EDITOR_THEME}
               options={{
                 minimap: { enabled: false },
@@ -479,7 +507,7 @@ export const UtilityMethodEditor: React.FC<UtilityMethodEditorProps> = ({ vsumId
 
           <div style={{ height: 260, flexShrink: 0, display: 'flex', flexDirection: 'column', borderTop: '1px solid var(--v-border)' }}>
             <div role="tablist" style={{ ...panelTitleStyle, gap: 4 }}>
-              {(['java', 'ocl'] as const).map(tab => (
+              {(['java', 'xtend'] as const).map(tab => (
                 <button
                   key={tab}
                   type="button"
@@ -497,7 +525,7 @@ export const UtilityMethodEditor: React.FC<UtilityMethodEditorProps> = ({ vsumId
                     color: previewTab === tab ? 'var(--v-text)' : 'var(--v-text-muted)',
                   }}
                 >
-                  {tab === 'java' ? 'Generated Java' : 'OCL definition'}
+                  {tab === 'java' ? 'Generated Java' : 'Xtend definition'}
                 </button>
               ))}
               <span style={{ flex: 1 }} />
@@ -505,16 +533,20 @@ export const UtilityMethodEditor: React.FC<UtilityMethodEditorProps> = ({ vsumId
             </div>
             <div style={{ flex: 1, overflow: 'auto', background: 'var(--v-surface)' }}>
               {problems.length > 0 && (
-                <ul aria-label="Problems" style={{ margin: 0, padding: '8px 12px 8px 28px', color: 'var(--v-danger-text)', fontSize: 12.5 }}>
+                <ul aria-label="Problems" style={{ margin: 0, padding: '8px 12px 8px 28px', fontSize: 12.5 }}>
                   {problems.map(p => (
-                    <li key={`${p.line}:${p.column}:${p.message}`}>
-                      {p.line !== null ? `Line ${p.line}, column ${p.column}: ` : ''}{p.message}
+                    <li
+                      key={`${p.severity}:${p.line}:${p.column}:${p.message}`}
+                      style={{ color: p.severity === 'WARNING' ? 'var(--v-warning-text)' : 'var(--v-danger-text)' }}
+                    >
+                      {p.severity === 'WARNING' ? 'Warning: ' : ''}
+                      {p.line === null ? '' : `Line ${p.line}, column ${p.column}: `}{p.message}
                     </li>
                   ))}
                 </ul>
               )}
               <pre style={{ margin: 0, padding: '8px 12px', fontSize: 12, fontFamily: MONO, color: 'var(--v-text)', whiteSpace: 'pre', tabSize: 4 }}>
-                {previewTab === 'java' ? dedent(preview?.javaMethod ?? '') : preview?.oclDefinition ?? ''}
+                {previewTab === 'java' ? dedent(preview?.javaMethod ?? '') : preview?.xtendDefinition ?? ''}
               </pre>
             </div>
           </div>
@@ -601,11 +633,12 @@ const NameStatusLine: React.FC<{ status: NameStatus }> = ({ status }) => {
 
 const PreviewStatus: React.FC<{ incomplete: string | null; preview: UtilityMethodPreviewResponse | null }> = ({ incomplete, preview }) => {
   if (incomplete) return <span style={{ fontWeight: 400 }}>{incomplete}</span>;
-  if (!preview) return <span style={{ fontWeight: 400 }}>Translating…</span>;
-  if (preview.problems.length > 0) {
-    return <span style={{ color: 'var(--v-danger-text)' }}>{preview.problems.length} problem(s)</span>;
+  if (!preview) return <span style={{ fontWeight: 400 }}>Compiling…</span>;
+  const errors = preview.problems.filter(p => p.severity !== 'WARNING').length;
+  if (errors > 0) {
+    return <span style={{ color: 'var(--v-danger-text)' }}>{errors} problem(s)</span>;
   }
-  return <span style={{ color: 'var(--v-success-text)' }}>Translates to Java</span>;
+  return <span style={{ color: 'var(--v-success-text)' }}>Compiles to Java</span>;
 };
 
 /** Length of the identifier starting at `start`, to underline a whole word. */

@@ -12,7 +12,7 @@ vi.mock('@monaco-editor/react', () => {
         { getModel: () => mockEditorModel.current },
         {
           editor: { setModelMarkers: mockSetModelMarkers },
-          MarkerSeverity: { Error: 8 },
+          MarkerSeverity: { Error: 8, Warning: 4 },
           languages: {
             registerCompletionItemProvider: mockRegisterCompletion,
             CompletionItemKind: { Function: 1 },
@@ -60,11 +60,11 @@ const subSystems: UtilityMethodResponse = {
   vsumId: 7,
   name: 'getAllSubSystems',
   description: 'All subsystems, including nested ones.',
-  returnType: 'Sequence(simulink::SubSystem)',
-  parameters: [{ name: 'model', type: 'simulink::SimulinkModel' }],
-  imports: ['simulink::*'],
-  body: 'model.contains->selectByKind(SubSystem)->closure(s | s.subBlocks->selectByKind(SubSystem))',
-  oclDefinition: 'def : getAllSubSystems(model : simulink::SimulinkModel) : Sequence(simulink::SubSystem) =\n\tmodel.contains->selectByKind(SubSystem);',
+  returnType: 'List<SubSystem>',
+  parameters: [{ name: 'model', type: 'SimulinkModel' }],
+  imports: ['x.*'],
+  body: 'model.eAllContents.filter(SubSystem).toList',
+  xtendDefinition: 'def static List<SubSystem> getAllSubSystems(SimulinkModel model) {\n  model.eAllContents.filter(SubSystem).toList\n}',
   javaMethod: '  public static List<SubSystem> getAllSubSystems(SimulinkModel model) {\n    return null;\n  }\n',
   problems: [],
   createdAt: '2026-10-01T00:00:00Z',
@@ -77,7 +77,7 @@ const broken: UtilityMethodResponse = {
   name: 'broken',
   description: null,
   javaMethod: null,
-  problems: [{ utilityMethodName: 'broken', message: "no feature 'contians'", line: 1, column: 7 }],
+  problems: [{ utilityMethodName: 'broken', message: 'The method contians is undefined', line: 1, column: 7, severity: 'ERROR' }],
 };
 
 function renderModal(readOnly = false) {
@@ -88,25 +88,25 @@ function renderModal(readOnly = false) {
 
 beforeEach(() => {
   vi.clearAllMocks();
-  mockEditorModel.current = { getLineContent: () => 'model.contians->size()' };
+  mockEditorModel.current = { getLineContent: () => 'model.contians.size' };
   api.getUtilityMethods.mockResolvedValue([subSystems, broken]);
   api.getUtilityMethodTypes.mockResolvedValue(types);
   api.checkUtilityMethodName.mockResolvedValue({ available: true, message: null });
-  api.previewUtilityMethod.mockResolvedValue({ oclDefinition: 'def : x() : Boolean =\n\ttrue;', javaMethod: 'public static boolean x() {}', problems: [] });
+  api.previewUtilityMethod.mockResolvedValue({ xtendDefinition: 'def static boolean x() {\n  true\n}', javaMethod: 'public static boolean x() {}', problems: [] });
 });
 
 describe('UtilityMethodsModal overview', () => {
-  it('lists utility methods with signature, OCL definition and translation status', async () => {
+  it('lists utility methods with signature, Xtend definition and compile status', async () => {
     renderModal();
 
     const card = await screen.findByRole('article', { name: 'Utility method getAllSubSystems' });
-    expect(within(card).getByText('(model : simulink::SimulinkModel) : Sequence(simulink::SubSystem)')).toBeInTheDocument();
-    expect(within(card).getByLabelText('OCL definition of getAllSubSystems')).toHaveTextContent('model.contains->selectByKind(SubSystem)');
+    expect(within(card).getByText('(SimulinkModel model) : List<SubSystem>')).toBeInTheDocument();
+    expect(within(card).getByLabelText('Xtend definition of getAllSubSystems')).toHaveTextContent('model.eAllContents.filter(SubSystem).toList');
     expect(within(card).getByText('Java generated')).toBeInTheDocument();
 
     const brokenCard = screen.getByRole('article', { name: 'Utility method broken' });
-    expect(within(brokenCard).getByText('Cannot be translated')).toBeInTheDocument();
-    expect(within(brokenCard).getByText("Line 1, column 7: no feature 'contians'")).toBeInTheDocument();
+    expect(within(brokenCard).getByText('Does not compile')).toBeInTheDocument();
+    expect(within(brokenCard).getByText('Line 1, column 7: The method contians is undefined')).toBeInTheDocument();
     expect(within(brokenCard).getByRole('button', { name: 'View Java' })).toBeDisabled();
     expect(api.getUtilityMethods).toHaveBeenCalledWith(7);
   });
@@ -137,7 +137,7 @@ describe('UtilityMethodsModal overview', () => {
 
     const viewer = await screen.findByRole('dialog', { name: 'Utility.java' });
     expect(within(viewer).getByTestId('monaco-java')).toHaveValue('public final class Utility {}');
-    expect(within(viewer).getByRole('alert')).toHaveTextContent("broken (no feature 'contians')");
+    expect(within(viewer).getByRole('alert')).toHaveTextContent('broken (The method contians is undefined)');
   });
 
   it('shows why a utility method cannot be deleted, and deletes it after confirmation', async () => {
@@ -157,6 +157,14 @@ describe('UtilityMethodsModal overview', () => {
     confirmDelete();
     await waitFor(() => expect(api.getUtilityMethods).toHaveBeenCalledTimes(2));
     expect(api.deleteUtilityMethod).toHaveBeenLastCalledWith(7, 2);
+  });
+
+  it('says that reactions import the utility class automatically', async () => {
+    renderModal();
+    await screen.findByRole('article', { name: 'Utility method getAllSubSystems' });
+
+    const hint = screen.getByText((_, element) => element?.tagName === 'DIV' && /^Reactions import/.test(element.textContent ?? ''));
+    expect(hint).toHaveTextContent('Reactions import Utility automatically. Call e.g. Utility.getAllSubSystems(…).');
   });
 
   it('only lets view-only members look at utility methods', async () => {
@@ -195,22 +203,22 @@ describe('UtilityMethodEditor', () => {
     fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'countSubSystems' } });
     fireEvent.click(screen.getByRole('button', { name: '+ Add parameter' }));
     fireEvent.change(screen.getByLabelText('Parameter 1 name'), { target: { value: 'model' } });
-    fireEvent.change(screen.getByLabelText('Return type element type'), { target: { value: 'Integer' } });
-    fireEvent.change(screen.getByLabelText('Add import'), { target: { value: 'simulink::*' } });
-    fireEvent.change(screen.getByTestId('monaco-vitruvocl'), { target: { value: 'getAllSubSystems(model)->size()' } });
+    fireEvent.change(screen.getByLabelText('Return type element type'), { target: { value: 'int' } });
+    fireEvent.change(screen.getByLabelText('Add import'), { target: { value: 'java.util.Collection' } });
+    fireEvent.change(screen.getByTestId('monaco-xtend-utility'), { target: { value: 'getAllSubSystems(model).size' } });
 
     await waitFor(() => expect(api.previewUtilityMethod).toHaveBeenCalled());
-    expect(await screen.findByText('Translates to Java')).toBeInTheDocument();
+    expect(await screen.findByText('Compiles to Java')).toBeInTheDocument();
     await waitFor(() => expect(screen.getByRole('button', { name: 'Save Utility Method' })).toBeEnabled());
     fireEvent.click(screen.getByRole('button', { name: 'Save Utility Method' }));
 
     await waitFor(() => expect(api.createUtilityMethod).toHaveBeenCalledWith(7, {
       name: 'countSubSystems',
       description: undefined,
-      returnType: 'Integer',
-      parameters: [{ name: 'model', type: 'simulink::SimulinkModel' }],
-      imports: ['simulink::*'],
-      body: 'getAllSubSystems(model)->size()',
+      returnType: 'int',
+      parameters: [{ name: 'model', type: 'SimulinkModel' }],
+      imports: ['x.*', 'java.util.Collection'],
+      body: 'getAllSubSystems(model).size',
     }));
     expect(await screen.findByRole('heading', { name: 'Utility Methods' })).toBeInTheDocument();
   });
@@ -221,39 +229,68 @@ describe('UtilityMethodEditor', () => {
     fireEvent.click(within(card).getByRole('button', { name: 'Edit' }));
     const list = await screen.findByRole('list', { name: 'Other utility methods' });
 
-    const provider = (mockRegisterCompletion.mock.calls.at(-1) as any[])[1];
+    const [language, provider] = mockRegisterCompletion.mock.calls.at(-1) as any[];
+    expect(language).toBe('xtend-utility');
+    let textBefore = 'Utility.';
     const model = {
-      getValueInRange: () => 'm.',
-      getWordUntilPosition: () => ({ startColumn: 3, endColumn: 3 }),
+      getValueInRange: () => textBefore,
+      getWordUntilPosition: () => ({ startColumn: 9, endColumn: 9 }),
     };
     mockEditorModel.current = model;
-    const { suggestions } = provider.provideCompletionItems(model, { lineNumber: 1, column: 3 });
+    const { suggestions } = provider.provideCompletionItems(model, { lineNumber: 1, column: 9 });
 
-    expect(suggestions).toEqual([expect.objectContaining({ label: 'getAllSubSystems', insertText: 'getAllSubSystems()' })]);
+    // eslint-disable-next-line no-template-curly-in-string -- Monaco snippet syntax
+    expect(suggestions).toEqual([expect.objectContaining({ label: 'getAllSubSystems', insertText: 'getAllSubSystems(${1:model})' })]);
+    textBefore = 'model.';
+    expect(provider.provideCompletionItems(model, { lineNumber: 1, column: 7 }).suggestions).toEqual([]);
 
     expect(within(list).queryByText(/^broken\(/)).not.toBeInTheDocument();
     fireEvent.click(within(list).getByRole('button', { name: 'Insert call of getAllSubSystems' }));
-    expect(screen.getByTestId('monaco-vitruvocl')).toHaveValue(`${broken.body} getAllSubSystems(model)`);
+    expect(screen.getByTestId('monaco-xtend-utility')).toHaveValue(`${broken.body} getAllSubSystems(model)`);
   });
 
-  it('shows translation problems and marks them in the OCL editor', async () => {
+  it('shows compile problems and marks them in the body editor', async () => {
     api.previewUtilityMethod.mockResolvedValue({
-      oclDefinition: 'def : broken() : Integer =\n\tmodel.contians->size();',
+      xtendDefinition: 'def static int broken(SimulinkModel model) {\n  model.contians.size\n}',
       javaMethod: null,
-      problems: [{ utilityMethodName: 'broken', message: "no feature 'contians'", line: 1, column: 7 }],
+      problems: [{ utilityMethodName: 'broken', message: 'The method contians is undefined', line: 1, column: 7, severity: 'ERROR' }],
     });
     renderModal();
     const card = await screen.findByRole('article', { name: 'Utility method broken' });
 
     fireEvent.click(within(card).getByRole('button', { name: 'Edit' }));
 
-    expect(await screen.findByText("Line 1, column 7: no feature 'contians'")).toBeInTheDocument();
+    expect(await screen.findByText('Line 1, column 7: The method contians is undefined')).toBeInTheDocument();
+    expect(screen.getByText('Xtend body')).toBeInTheDocument();
     expect(api.previewUtilityMethod).toHaveBeenCalledWith(7, expect.objectContaining({ name: 'broken' }), 2);
     expect(mockSetModelMarkers).toHaveBeenLastCalledWith(
       expect.anything(),
       'utilityMethod',
-      [expect.objectContaining({ startLineNumber: 1, startColumn: 7, endColumn: 15, message: "no feature 'contians'" })],
+      [expect.objectContaining({ severity: 8, startLineNumber: 1, startColumn: 7, endColumn: 15, message: 'The method contians is undefined' })],
     );
+    expect(screen.getByRole('button', { name: 'Save Utility Method' })).toBeEnabled();
+    expect(screen.getByText('Fix the problems shown in the preview.')).toBeInTheDocument();
+  });
+
+  it('shows warnings without counting them as problems', async () => {
+    api.previewUtilityMethod.mockResolvedValue({
+      xtendDefinition: 'def static List<SubSystem> getAllSubSystems(SimulinkModel model) {\n  val unused = 1\n}',
+      javaMethod: 'public static List<SubSystem> getAllSubSystems(final SimulinkModel model) {}',
+      problems: [{ utilityMethodName: 'getAllSubSystems', message: 'The value of the local variable unused is not used', line: 1, column: 5, severity: 'WARNING' }],
+    });
+    renderModal();
+    const card = await screen.findByRole('article', { name: 'Utility method getAllSubSystems' });
+
+    fireEvent.click(within(card).getByRole('button', { name: 'Edit' }));
+
+    expect(await screen.findByText('Compiles to Java')).toBeInTheDocument();
+    expect(screen.getByText(/Warning: Line 1, column 5/)).toBeInTheDocument();
+    expect(mockSetModelMarkers).toHaveBeenLastCalledWith(
+      expect.anything(),
+      'utilityMethod',
+      [expect.objectContaining({ severity: 4 })],
+    );
+    expect(screen.getByText('Ready to save.')).toBeInTheDocument();
   });
 
   it('shows the server error when saving fails', async () => {

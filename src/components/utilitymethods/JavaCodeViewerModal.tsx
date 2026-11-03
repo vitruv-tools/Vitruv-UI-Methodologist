@@ -10,14 +10,14 @@ import {
 import { MODAL_Z_INDEX, modalBackdropStyle, modalDialogShellStyle, useModalBodyLock } from '../ui/modalUtils';
 import { copyTextToClipboard } from '../../utils/apiErrorMessage';
 import type { UtilityMethodProblem } from '../../services/api';
-import { UTILITY_METHOD_EDITOR_THEME, setUpVitruvOcl } from './monacoSetup';
+import { UTILITY_METHOD_EDITOR_THEME, setUpXtendUtility } from './monacoSetup';
 
 interface JavaCodeViewerModalProps {
   isOpen: boolean;
   title: string;
   subtitle?: string;
   code: string;
-  /** Utility methods that are missing from the code because they cannot be translated. */
+  /** Utility methods that are missing from the code because they do not compile. */
   problems?: UtilityMethodProblem[];
   onClose: () => void;
 }
@@ -34,6 +34,8 @@ export const JavaCodeViewerModal: React.FC<JavaCodeViewerModalProps> = ({
     setCopied(await copyTextToClipboard(code));
     globalThis.setTimeout(() => setCopied(false), 2000);
   };
+
+  const failed = problems.filter(p => p.severity !== 'WARNING');
 
   return (
     <dialog
@@ -67,10 +69,10 @@ export const JavaCodeViewerModal: React.FC<JavaCodeViewerModalProps> = ({
           </div>
           <button type="button" aria-label="Close Java code" onClick={onClose} style={modalCloseButtonStyle}>×</button>
         </div>
-        {problems.length > 0 && (
+        {failed.length > 0 && (
           <div role="alert" style={{ padding: '8px 20px', background: 'var(--v-danger-bg)', color: 'var(--v-danger-text)', fontSize: 12, borderBottom: '1px solid var(--v-danger-border)' }}>
-            Not included because they cannot be translated:{' '}
-            {problems.map(p => `${p.utilityMethodName} (${p.message})`).join('; ')}
+            Not included because they do not compile:{' '}
+            {failed.map(p => `${p.utilityMethodName} (${p.message})`).join('; ')}
           </div>
         )}
         <div style={{ flex: 1, minHeight: 0 }}>
@@ -78,7 +80,7 @@ export const JavaCodeViewerModal: React.FC<JavaCodeViewerModalProps> = ({
             value={code}
             language="java"
             theme={UTILITY_METHOD_EDITOR_THEME}
-            beforeMount={setUpVitruvOcl}
+            beforeMount={setUpXtendUtility}
             options={{
               readOnly: true,
               domReadOnly: true,
