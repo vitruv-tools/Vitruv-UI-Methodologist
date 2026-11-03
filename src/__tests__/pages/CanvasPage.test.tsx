@@ -4,6 +4,7 @@ import { fireEvent, render, screen, waitFor, within } from '@testing-library/rea
 import { CanvasPage } from '../../pages/CanvasPage';
 import { apiService } from '../../services/api';
 import { useModalBodyLock } from '../../components/ui/modalUtils';
+import { canvasModeStorageKey } from '../../utils/canvasModeStorage';
 
 const mockNavigate = vi.fn();
 const mockOpenReactionFileAt = vi.fn();
@@ -312,6 +313,114 @@ describe('CanvasPage save shortcut', () => {
 
     expect(notPrevented).toBe(false);
     expect(apiService.syncVsumChanges).not.toHaveBeenCalled();
+  });
+});
+
+describe('CanvasPage build check', () => {
+  const checkBuild = () =>
+    fireEvent.click(screen.getByRole('button', { name: /Check build/ }));
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockRouteId = '10';
+    (apiService.findMetaModels as Mock).mockResolvedValue({ data: [] });
+    (apiService.getVsumMembers as Mock).mockResolvedValue({ data: [] });
+    (apiService.getVsum as Mock).mockResolvedValue({ data: {} });
+    (apiService.getVsumsPaginated as Mock).mockResolvedValue({ data: [] });
+    (apiService.getVsumDetails as Mock).mockResolvedValue(vsumDetails(10, 'Project A'));
+  });
+
+  it('reports the constraint rule sets built into the VSUM', async () => {
+    (apiService.buildVsum as Mock).mockResolvedValue({
+      data: { constraintRuleSets: ['Komponenten', 'Preise'] },
+      message: 'The build was successful.',
+    });
+    render(<CanvasPage />);
+    await waitForProject('Project A');
+
+    checkBuild();
+
+    expect(
+      await screen.findByText(
+        'This VSUM can be built. It includes 2 constraint rule sets: Komponenten, Preise.',
+      ),
+    ).toBeInTheDocument();
+  });
+
+  it('explains build failures caused by constraints', async () => {
+    (apiService.buildVsum as Mock).mockRejectedValue(
+      apiError(500, 'Constraint file Preise.ocl refers to unknown metamodel(s) [shop]'),
+    );
+    render(<CanvasPage />);
+    await waitForProject('Project A');
+
+    checkBuild();
+
+    const popup = await screen.findByTestId('canvas-popup-notification');
+    await waitFor(() => expect(popup).toHaveTextContent(/The constraints could not be built/));
+    expect(popup).toHaveTextContent(/Rule set "Preise" refers to unknown metamodel/);
+  });
+
+  it('opens Constraints mode from a build failure caused by constraints', async () => {
+    (apiService.buildVsum as Mock).mockRejectedValue(
+      apiError(500, 'Constraint file Preise.ocl refers to unknown metamodel(s) [shop]'),
+    );
+    render(<CanvasPage />);
+    await waitForProject('Project A');
+    checkBuild();
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Open Constraints mode' }));
+
+    expect(await screen.findByTestId('constraints-view')).toBeInTheDocument();
+    expect(screen.queryByTestId('canvas-popup-notification')).not.toBeInTheDocument();
+    // the mode is remembered per project, so later tests would start in Constraints mode
+    localStorage.removeItem(canvasModeStorageKey(10));
+  });
+
+  it('offers no jump to Constraints mode for other build failures', async () => {
+    (apiService.buildVsum as Mock).mockRejectedValue(
+      apiError(500, 'Maven build failed with exit code 1'),
+    );
+    render(<CanvasPage />);
+    await waitForProject('Project A');
+    checkBuild();
+
+    await screen.findByText('Maven build failed with exit code 1');
+    expect(screen.queryByRole('button', { name: 'Open Constraints mode' })).not.toBeInTheDocument();
+  });
+
+  it('shows other build failures unchanged', async () => {
+    (apiService.buildVsum as Mock).mockRejectedValue(
+      apiError(500, 'Maven build failed with exit code 1'),
+    );
+    render(<CanvasPage />);
+    await waitForProject('Project A');
+
+    checkBuild();
+
+    expect(await screen.findByText('Maven build failed with exit code 1')).toBeInTheDocument();
+    expect(screen.queryByText(/The constraints could not be built/)).not.toBeInTheDocument();
+  });
+
+  it('shows structured build problems in the problems dialog instead of the popup', async () => {
+    (apiService.buildVsum as Mock).mockRejectedValue(Object.assign(new Error('Reactions do not match'), {
+      response: {
+        status: 422,
+        data: {
+          message: 'Reactions do not match',
+          errorCode: 'VSUM_REACTIONS_ERROR',
+          problems: [{ source: 'REACTIONS', file: 'my.reactions', fileId: 7, line: 3, message: 'Unknown EClass' }],
+        },
+      },
+    }));
+    render(<CanvasPage />);
+    await waitForProject('Project A');
+
+    checkBuild();
+
+    const dialog = await screen.findByRole('dialog', { name: 'Build check failed' });
+    expect(within(dialog).getByText('my.reactions')).toBeInTheDocument();
+    expect(screen.queryByTestId('canvas-popup-notification')).not.toBeInTheDocument();
   });
 });
 

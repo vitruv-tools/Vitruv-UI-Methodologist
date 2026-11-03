@@ -20,10 +20,12 @@ import { CanvasProjectTabs } from '../components/canvas/CanvasProjectTabs';
 import { CanvasProjectLoadStateOverlay } from '../components/canvas/CanvasProjectLoadStateOverlay';
 import {
   CanvasPopupNotification,
+  type CanvasPopupNotificationAction,
   type CanvasPopupNotificationType,
 } from '../components/canvas/CanvasPopupNotification';
 import { CanvasProjectControls } from '../components/canvas/CanvasProjectControls';
 import { extractApiErrorMessage } from '../utils/apiErrorMessage';
+import { describeBuildFailure, describeBuildSuccess } from '../utils/buildCheckMessages';
 import { CanvasSidebarToolbar } from '../components/canvas/CanvasSidebarToolbar';
 import { BuildProblemsDialog } from '../components/canvas/BuildProblemsDialog';
 import type { BuildFailure, BuildProblem } from '../types/vsumBuild';
@@ -370,6 +372,7 @@ export const CanvasPage: React.FC = () => {
     message: string;
     type: CanvasPopupNotificationType;
     details?: string;
+    action?: CanvasPopupNotificationAction;
   } | null>(null);
   const popupTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -385,12 +388,13 @@ export const CanvasPage: React.FC = () => {
     message: string,
     type: CanvasPopupNotificationType,
     details?: string,
+    action?: CanvasPopupNotificationAction,
   ) => {
     if (popupTimerRef.current) {
       globalThis.clearTimeout(popupTimerRef.current);
       popupTimerRef.current = null;
     }
-    setPopup({ message, type, details });
+    setPopup({ message, type, details, action });
     if (type === 'error') return;
     const ms = type === 'success' ? 4000 : 5000;
     popupTimerRef.current = globalThis.setTimeout(() => {
@@ -1398,8 +1402,7 @@ export const CanvasPage: React.FC = () => {
     showPopup('Checking whether this VSUM can be built…', 'info');
     try {
       const res = await apiService.buildVsum(activeProjectId);
-      const msg = (res as any)?.message || 'This VSUM can be built successfully.';
-      showPopup(msg, 'success');
+      showPopup(describeBuildSuccess(res?.data?.constraintRuleSets), 'success');
     } catch (e: unknown) {
       const detail = extractApiErrorMessage(e, 'Build check failed.');
       const missingReactionFile = detail.toLowerCase().includes('reaction file')
@@ -1410,12 +1413,27 @@ export const CanvasPage: React.FC = () => {
           'error',
         );
       } else {
-        showBuildError(e, 'Build check failed.', 'Build check failed');
+        const buildFailure = buildFailureFromError(e, 'Build check failed.');
+        if (buildFailure.problems.length > 0) {
+          showBuildFailure(buildFailure, 'Build check failed');
+          return;
+        }
+        const failure = describeBuildFailure(detail);
+        const openConstraints = failure.constraintRelated
+          ? {
+            label: 'Open Constraints mode',
+            onClick: () => {
+              dismissPopup();
+              handleCanvasModeChange('constraints');
+            },
+          }
+          : undefined;
+        showPopup(failure.message, 'error', failure.details, openConstraints);
       }
     } finally {
       setCheckingBuild(false);
     }
-  }, [activeProjectId, isViewOnly, showPopup, showBuildError]);
+  }, [activeProjectId, dismissPopup, handleCanvasModeChange, isViewOnly, showPopup, showBuildFailure]);
 
   // ── Downloads ─────────────────────────────────────────────────────────────
 
@@ -1820,6 +1838,7 @@ export const CanvasPage: React.FC = () => {
           message={popup.message}
           type={popup.type}
           details={popup.details}
+          action={popup.action}
           onClose={dismissPopup}
         />
       )}

@@ -649,7 +649,7 @@ class ApiService {
    * vSUMS: Check if VSUM is buildable / trigger buildOrThrow
    * GET /api/v1/vsums/{id}/build/check
    */
-  async buildVsum(id: number | string): Promise<ApiResponse<Record<string, never>>> {
+  async buildVsum(id: number | string): Promise<ApiResponse<VsumBuildCheckResponse | null>> {
     return this.authenticatedRequest(`/api/v1/vsums/${id}/build/check`, {
       method: 'GET',
     });
@@ -1024,6 +1024,15 @@ class ApiService {
 
 // Export a singleton instance
 export const apiService = new ApiService();
+
+/** Result of a successful build check. */
+export interface VsumBuildCheckResponse {
+  /**
+   * The constraint rule sets built into the VSUM, each as its own OCL file; null if they changed
+   * during the build.
+   */
+  constraintRuleSets: string[] | null;
+}
 
 export interface RuleSetResponse {
   id: number;
