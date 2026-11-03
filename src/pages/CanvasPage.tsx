@@ -27,6 +27,9 @@ import { CanvasProjectControls } from '../components/canvas/CanvasProjectControl
 import { extractApiErrorMessage } from '../utils/apiErrorMessage';
 import { describeBuildFailure, describeBuildSuccess } from '../utils/buildCheckMessages';
 import { CanvasSidebarToolbar } from '../components/canvas/CanvasSidebarToolbar';
+import { BuildProblemsDialog } from '../components/canvas/BuildProblemsDialog';
+import type { BuildFailure, BuildProblem } from '../types/vsumBuild';
+import { buildFailureFromError, isReactionsProblem } from '../utils/buildProblems';
 import { CanvasProjectAccessControls } from '../components/canvas/CanvasProjectAccessControls';
 import { CanvasConstraintsOverlay } from '../components/canvas/CanvasConstraintsOverlay';
 import { CanvasMetricsOverlay } from '../components/canvas/CanvasMetricsOverlay';
@@ -403,6 +406,25 @@ export const CanvasPage: React.FC = () => {
   const showPopupError = useCallback((error: unknown, fallback: string) => {
     showPopup(extractApiErrorMessage(error, fallback), 'error');
   }, [showPopup]);
+
+  // Failed build or export with structured problems, shown in the problems dialog.
+  const [buildFailure, setBuildFailure] = useState<{ failure: BuildFailure; title: string } | null>(null);
+
+  /** Shows the problems of a failed build or export, or the plain error popup without problems. */
+  const showBuildFailure = useCallback((failure: BuildFailure, title: string) => {
+    if (failure.problems.length === 0) {
+      showPopup(failure.message, 'error');
+      return;
+    }
+    dismissPopup();
+    setBuildFailure({ failure, title });
+  }, [dismissPopup, showPopup]);
+
+  const showBuildError = useCallback((error: unknown, fallback: string, title: string) => {
+    showBuildFailure(buildFailureFromError(error, fallback), title);
+  }, [showBuildFailure]);
+
+  const closeBuildFailure = useCallback(() => setBuildFailure(null), []);
 
   useEffect(() => () => {
     if (popupTimerRef.current) globalThis.clearTimeout(popupTimerRef.current);
@@ -1391,6 +1413,11 @@ export const CanvasPage: React.FC = () => {
           'error',
         );
       } else {
+        const buildFailure = buildFailureFromError(e, 'Build check failed.');
+        if (buildFailure.problems.length > 0) {
+          showBuildFailure(buildFailure, 'Build check failed');
+          return;
+        }
         const failure = describeBuildFailure(detail);
         const openConstraints = failure.constraintRelated
           ? {
@@ -1406,7 +1433,7 @@ export const CanvasPage: React.FC = () => {
     } finally {
       setCheckingBuild(false);
     }
-  }, [activeProjectId, dismissPopup, handleCanvasModeChange, isViewOnly, showPopup]);
+  }, [activeProjectId, dismissPopup, handleCanvasModeChange, isViewOnly, showPopup, showBuildFailure]);
 
   // ── Downloads ─────────────────────────────────────────────────────────────
 
@@ -1419,11 +1446,11 @@ export const CanvasPage: React.FC = () => {
       downloadBlobAsFile(blob, `vsum-${activeProjectId}-project.zip`);
       showPopup('Project downloaded successfully!', 'success');
     } catch (e: unknown) {
-      showPopupError(e, 'Download failed.');
+      showBuildError(e, 'Download failed.', 'Project export failed');
     } finally {
       setDownloadingProject(false);
     }
-  }, [activeProjectId, showPopup, showPopupError]);
+  }, [activeProjectId, showPopup, showBuildError]);
 
   const handleDownloadJar = useCallback(async () => {
     if (!activeProjectId) return;
@@ -1434,11 +1461,11 @@ export const CanvasPage: React.FC = () => {
       downloadBlobAsFile(blob, `vsum-${activeProjectId}.jar`);
       showPopup('Runnable JAR downloaded successfully!', 'success');
     } catch (e: unknown) {
-      showPopupError(e, 'Download failed.');
+      showBuildError(e, 'Download failed.', 'Runnable JAR export failed');
     } finally {
       setDownloadingJar(false);
     }
-  }, [activeProjectId, showPopup, showPopupError]);
+  }, [activeProjectId, showPopup, showBuildError]);
 
   const handleDownloadBundle = useCallback(async () => {
     if (!activeProjectId) return;
@@ -1449,11 +1476,26 @@ export const CanvasPage: React.FC = () => {
       downloadBlobAsFile(blob, `vsum-${activeProjectId}-easy-deploy.zip`);
       showPopup('Easy deploy package downloaded successfully!', 'success');
     } catch (e: unknown) {
-      showPopupError(e, 'Download failed.');
+      showBuildError(e, 'Download failed.', 'Easy deploy package export failed');
     } finally {
       setDownloadingBundle(false);
     }
-  }, [activeProjectId, showPopup, showPopupError]);
+  }, [activeProjectId, showPopup, showBuildError]);
+
+  /** Opens the file of a build problem: reaction files at the problem's line, metamodels in their UML view. */
+  const handleOpenBuildProblem = useCallback((problem: BuildProblem): boolean => {
+    if (problem.fileId == null) return false;
+    const canvas = flowCanvasRef.current;
+    let opened: boolean | undefined;
+    if (isReactionsProblem(problem)) {
+      const position = problem.line ? { lineNumber: problem.line, column: problem.column } : undefined;
+      opened = canvas?.openReactionFileAt?.(problem.fileId, position);
+    } else {
+      opened = canvas?.openMetaModelFile?.(problem.fileId);
+    }
+    if (opened) setBuildFailure(null);
+    return Boolean(opened);
+  }, []);
 
   // ── Save changes ──────────────────────────────────────────────────────────
 
@@ -1782,6 +1824,13 @@ export const CanvasPage: React.FC = () => {
           onRetry={handleRetryProjectLoad}
         />
       )}
+
+      <BuildProblemsDialog
+        failure={buildFailure?.failure ?? null}
+        title={buildFailure?.title ?? ''}
+        onClose={closeBuildFailure}
+        onOpenProblem={handleOpenBuildProblem}
+      />
 
       {/* Popup notification */}
       {popup && (

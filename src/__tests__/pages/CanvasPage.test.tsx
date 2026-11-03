@@ -7,6 +7,8 @@ import { useModalBodyLock } from '../../components/ui/modalUtils';
 import { canvasModeStorageKey } from '../../utils/canvasModeStorage';
 
 const mockNavigate = vi.fn();
+const mockOpenReactionFileAt = vi.fn();
+const mockOpenMetaModelFile = vi.fn();
 let mockRouteId = '10';
 
 vi.mock('react-router-dom', async () => ({
@@ -58,6 +60,8 @@ vi.mock('../../components/flow/FlowCanvas', async () => {
         })),
         fitUmlView: vi.fn(),
         openSelectedReactionEditor: vi.fn(() => false),
+        openReactionFileAt: mockOpenReactionFileAt,
+        openMetaModelFile: mockOpenMetaModelFile,
       }), [nodes, viewport, locked]);
       return (
         <div data-testid="flow-canvas">
@@ -396,5 +400,111 @@ describe('CanvasPage build check', () => {
 
     expect(await screen.findByText('Maven build failed with exit code 1')).toBeInTheDocument();
     expect(screen.queryByText(/The constraints could not be built/)).not.toBeInTheDocument();
+  });
+
+  it('shows structured build problems in the problems dialog instead of the popup', async () => {
+    (apiService.buildVsum as Mock).mockRejectedValue(Object.assign(new Error('Reactions do not match'), {
+      response: {
+        status: 422,
+        data: {
+          message: 'Reactions do not match',
+          errorCode: 'VSUM_REACTIONS_ERROR',
+          problems: [{ source: 'REACTIONS', file: 'my.reactions', fileId: 7, line: 3, message: 'Unknown EClass' }],
+        },
+      },
+    }));
+    render(<CanvasPage />);
+    await waitForProject('Project A');
+
+    checkBuild();
+
+    const dialog = await screen.findByRole('dialog', { name: 'Build check failed' });
+    expect(within(dialog).getByText('my.reactions')).toBeInTheDocument();
+    expect(screen.queryByTestId('canvas-popup-notification')).not.toBeInTheDocument();
+  });
+});
+
+describe('CanvasPage build problems', () => {
+  const reactionProblem = {
+    source: 'REACTIONS',
+    file: 'my.reactions',
+    fileId: 7,
+    line: 51,
+    column: 30,
+    message: "Couldn't resolve reference to EClass 'Foo'.",
+  };
+
+  const exportJar = async () => {
+    render(<CanvasPage />);
+    await waitForProject('Project A');
+    fireEvent.click(screen.getByRole('button', { name: /^Download\./ }));
+    fireEvent.click(screen.getByRole('button', { name: /Runnable JAR/ }));
+  };
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockRouteId = '10';
+    (apiService.findMetaModels as Mock).mockResolvedValue({ data: [] });
+    (apiService.getVsumMembers as Mock).mockResolvedValue({ data: [] });
+    (apiService.getVsum as Mock).mockResolvedValue({ data: {} });
+    (apiService.getVsumsPaginated as Mock).mockResolvedValue({ data: [] });
+    (apiService.getVsumDetails as Mock).mockResolvedValue(vsumDetails(10, 'Project A'));
+    mockOpenReactionFileAt.mockReturnValue(true);
+    mockOpenMetaModelFile.mockReturnValue(true);
+  });
+
+  it('shows the problems of a failed JAR export and opens a reaction file at the line', async () => {
+    (apiService.downloadVsumJar as Mock).mockRejectedValueOnce(Object.assign(new Error('Reactions do not match'), {
+      response: {
+        status: 422,
+        data: { message: 'Reactions do not match', errorCode: 'VSUM_REACTIONS_ERROR', problems: [reactionProblem] },
+      },
+    }));
+
+    await exportJar();
+
+    const dialog = await screen.findByRole('dialog', { name: 'Runnable JAR export failed' });
+    expect(within(dialog).getByText('my.reactions')).toBeInTheDocument();
+    expect(screen.queryByTestId('canvas-popup-notification')).not.toBeInTheDocument();
+
+    fireEvent.click(within(dialog).getByRole('button', { name: /Open at line 51/ }));
+
+    expect(mockOpenReactionFileAt).toHaveBeenCalledWith(7, { lineNumber: 51, column: 30 });
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+  });
+
+  it('opens the metamodel of a metamodel problem and keeps the dialog if it is not on the canvas', async () => {
+    mockOpenMetaModelFile.mockReturnValue(false);
+    (apiService.downloadVsumProject as Mock).mockRejectedValueOnce(Object.assign(new Error('Bad metamodel'), {
+      response: {
+        data: {
+          message: 'Bad metamodel',
+          errorCode: 'VSUM_METAMODEL_ERROR',
+          problems: [{ source: 'METAMODEL', file: 'families.ecore', fileId: 11, message: 'No nsURI' }],
+        },
+      },
+    }));
+
+    render(<CanvasPage />);
+    await waitForProject('Project A');
+    fireEvent.click(screen.getByRole('button', { name: /^Download\./ }));
+    fireEvent.click(screen.getByRole('button', { name: /Project export/ }));
+
+    const dialog = await screen.findByRole('dialog', { name: 'Project export failed' });
+    fireEvent.click(within(dialog).getByRole('button', { name: /Open file/ }));
+
+    expect(mockOpenMetaModelFile).toHaveBeenCalledWith(11);
+    expect(within(dialog).getByRole('status')).toHaveTextContent('families.ecore is not on the canvas');
+  });
+
+  it('keeps the error popup for failures without problems', async () => {
+    (apiService.downloadVsumJar as Mock).mockRejectedValueOnce(Object.assign(new Error('Build failed'), {
+      response: { data: { message: 'Build failed' } },
+    }));
+
+    await exportJar();
+
+    expect(await screen.findByTestId('canvas-popup-notification')).toHaveTextContent('Build failed');
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
   });
 });

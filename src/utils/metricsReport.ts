@@ -64,11 +64,6 @@ export function derivedMetricRows(metrics: MethodologistMetrics): { metric: stri
       formula: 'classes in ≥1 view type / total classes',
     },
     {
-      metric: 'View element density',
-      value: formatAvg(metrics.viewElementDensity),
-      formula: 'model elements / view types',
-    },
-    {
       metric: 'Reactions per correspondence type',
       value: formatAvg(metrics.reactionsPerCorrespondenceType),
       formula: 'reactions / correspondence types',
@@ -136,18 +131,12 @@ function sizeRows(metrics: MethodologistMetrics): CsvRow[] {
   const rows: CsvRow[] = kpis(category, 'Overview', [
     ['Metamodels', metrics.metamodels.length],
     ['Classes', metrics.classCount, `${metrics.abstractClassCount} abstract, ${metrics.concreteClassCount} concrete`],
-    ['Attributes', metrics.attributesTotal],
     ['Associations', metrics.nonContainmentReferences, `${metrics.containmentReferences} containment`],
     ['View types', metrics.viewTypeCount, `${metrics.singleViewTypeCount} single, ${metrics.multiViewTypeCount} multi`],
     ['Enums', metrics.enumCount],
     ['Enum literals', metrics.enumLiteralCount],
     ['Packages', metrics.packageCount],
-    ['Model elements', metrics.instanceElementTotal, metrics.instanceModels.length === 0 ? 'No instance models' : `${metrics.instanceModels.length} models`],
-    ['Operations', metrics.operationsTotal],
-    ['Children max', metrics.nocMax, `avg ${formatAvg(metrics.nocAvg)}`],
-    ['Containment height', metrics.containmentHeightMax, `${metrics.crossPackageReferences} cross-package refs`],
     ['Viewpoints', metrics.viewpointCount],
-    ['Views (instances)', 0, 'Not persisted'],
   ]);
 
   for (const mm of metrics.metamodels) {
@@ -159,16 +148,11 @@ function sizeRows(metrics: MethodologistMetrics): CsvRow[] {
       details: [
         `abstract=${mm.abstractClassCount}`,
         `concrete=${mm.concreteClassCount}`,
-        `attributes=${mm.attributesTotal}`,
         `containment refs=${mm.containmentReferences}`,
         `association refs=${mm.nonContainmentReferences}`,
         `enums=${mm.enumCount}`,
         `literals=${mm.enumLiteralCount}`,
         `packages=${mm.packageCount}`,
-        `operations=${mm.operationsTotal}`,
-        `children max/avg=${mm.nocMax}/${formatAvg(mm.nocAvg)}`,
-        `inheritance max/avg=${mm.inheritanceDepthMax}/${formatAvg(mm.inheritanceDepthAvg)}`,
-        `cont. height=${mm.containmentHeightMax}`,
         `cross-pkg=${mm.crossPackageReferences}`,
       ].join('; '),
     });
@@ -201,7 +185,6 @@ function reactionRows(metrics: MethodologistMetrics): CsvRow[] {
     ['One-way links', metrics.oneWayReactionPairCount],
     ['Both-ways links', metrics.bidirectionalReactionPairCount],
     ['Reaction LOC', metrics.reactionTotalLoc, `avg ${formatAvg(metrics.avgLocPerReaction)} / reaction`],
-    ['Correspondence instances', metrics.correspondenceInstanceCount, metrics.correspondenceInstanceCount === 0 ? 'none loaded' : ''],
   ]);
 
   for (const ct of metrics.correspondenceTypes) {
@@ -311,46 +294,32 @@ function sizeTables(metrics: MethodologistMetrics): { name: string; csv: string 
       csv: kpiTable([
         ['Metamodels', metrics.metamodels.length],
         ['Classes', metrics.classCount, `${metrics.abstractClassCount} abstract, ${metrics.concreteClassCount} concrete`],
-        ['Attributes', metrics.attributesTotal],
         ['Associations', metrics.nonContainmentReferences, `${metrics.containmentReferences} containment`],
         ['View types', metrics.viewTypeCount, `${metrics.singleViewTypeCount} single, ${metrics.multiViewTypeCount} multi`],
         ['Enums', metrics.enumCount],
         ['Enum literals', metrics.enumLiteralCount],
         ['Packages', metrics.packageCount],
-        ['Model elements', metrics.instanceElementTotal, metrics.instanceModels.length === 0 ? 'No instance models' : `${metrics.instanceModels.length} models`],
-        ['Operations', metrics.operationsTotal],
-        ['Children max', metrics.nocMax, `avg ${formatAvg(metrics.nocAvg)}`],
-        ['Containment height', metrics.containmentHeightMax, `${metrics.crossPackageReferences} cross-package refs`],
         ['Viewpoints', metrics.viewpointCount],
-        ['Views (instances)', 0, 'Not persisted'],
       ]),
     },
     {
       name: 'size-metamodels.csv',
       csv: toCsv(
         [
-          'Metamodel', 'Classes', 'Abstract', 'Concrete', 'Attributes',
+          'Metamodel', 'Classes', 'Abstract', 'Concrete',
           'Containment refs', 'Association refs', 'Enums', 'Literals', 'Packages',
-          'Operations', 'Children max', 'Children avg', 'Inheritance max', 'Inheritance avg',
-          'Cont. height', 'Cross-pkg refs',
+          'Cross-pkg refs',
         ],
         metrics.metamodels.map(mm => [
           mm.name || 'Unnamed',
           mm.classCount,
           mm.abstractClassCount,
           mm.concreteClassCount,
-          mm.attributesTotal,
           mm.containmentReferences,
           mm.nonContainmentReferences,
           mm.enumCount,
           mm.enumLiteralCount,
           mm.packageCount,
-          mm.operationsTotal,
-          mm.nocMax,
-          formatAvg(mm.nocAvg),
-          mm.inheritanceDepthMax,
-          formatAvg(mm.inheritanceDepthAvg),
-          mm.containmentHeightMax,
           mm.crossPackageReferences,
         ]),
       ),
@@ -384,7 +353,6 @@ function reactionTables(metrics: MethodologistMetrics): { name: string; csv: str
         ['One-way links', metrics.oneWayReactionPairCount],
         ['Both-ways links', metrics.bidirectionalReactionPairCount],
         ['Reaction LOC', metrics.reactionTotalLoc, `avg ${formatAvg(metrics.avgLocPerReaction)} / reaction`],
-        ['Correspondence instances', metrics.correspondenceInstanceCount, metrics.correspondenceInstanceCount === 0 ? 'none loaded' : ''],
       ]),
     },
     {

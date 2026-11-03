@@ -26,4 +26,6 @@ export interface CodeEditorState {
   sourceFileName?: string;
   targetFileName?: string;
   reactionFileId?: number | null;
+  /** 1-based position to jump to when the editor opens, e.g. the line of a build problem. */
+  initialPosition?: { lineNumber: number; column?: number };
 }

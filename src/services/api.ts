@@ -2,6 +2,7 @@ import { AuthService } from './auth';
 import { FlowData } from '../types/flow';
 import { ApiResponse, Vsum, VsumDetails } from '../types/vsum';
 import { config } from '../config/environment';
+import type { VsumBuildResponse } from '../types/vsumBuild';
 
 class ApiService {
   private readonly baseURL = config.apiBaseUrl;
@@ -674,6 +675,31 @@ class ApiService {
   }
 
   /**
+   * vSUMS: Start an asynchronous build (or reuse an up-to-date / running one)
+   * POST /api/v1/vsums/{id}/builds
+   */
+  async requestVsumBuild(
+    id: number | string,
+    force: boolean = false,
+  ): Promise<ApiResponse<VsumBuildResponse>> {
+    const query = force ? '?force=true' : '';
+    return this.authenticatedRequest(`/api/v1/vsums/${id}/builds${query}`, {
+      method: 'POST',
+    });
+  }
+
+  /**
+   * vSUMS: Current state of one asynchronous build; failed builds carry `errorCode` and `problems`
+   * GET /api/v1/vsums/{id}/builds/{buildId}
+   */
+  async getVsumBuild(
+    id: number | string,
+    buildId: number | string,
+  ): Promise<ApiResponse<VsumBuildResponse>> {
+    return this.authenticatedRequest(`/api/v1/vsums/${id}/builds/${buildId}`);
+  }
+
+  /**
    * vSUMS: Download easy deploy package as ZIP file
    * GET /api/v1/vsums/{id}/build/bundle
    * Returns a ZIP file blob containing a JAR, documentation, and scripts
@@ -1038,6 +1064,16 @@ export interface RuleSetPutRequest {
 
 // Export the class for testing or custom instances
 export { ApiService };
+
+export type {
+  BuildFailure,
+  BuildProblem,
+  BuildProblemSource,
+  VsumBuildErrorCode,
+  VsumBuildErrorResponse,
+  VsumBuildResponse,
+  VsumBuildStatus,
+} from '../types/vsumBuild';
 
 
 export type VsumRole = 'OWNER' | 'MEMBER' | 'VIEWER';

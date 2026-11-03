@@ -11,6 +11,10 @@ const mockOnEdgesChange = vi.fn();
 const mockOnDrop = vi.fn();
 /** Nodes the mocked flow state hands to the canvas. */
 const mockFlowNodes: { current: any[] } = { current: [] };
+/** Edges the mocked flow state hands to the canvas. */
+const mockFlowEdges: { current: any[] } = { current: [] };
+/** Props of the last rendered code editor. */
+const mockCodeEditorProps: { current: any } = { current: null };
 
 vi.mock('reactflow', () => {
   const MockReactFlow = (props: any) => {
@@ -52,7 +56,7 @@ vi.mock('reactflow', () => {
 vi.mock('../../../hooks/useFlowState', () => ({
   useFlowState: () => ({
     nodes: mockFlowNodes.current,
-    edges: [],
+    edges: mockFlowEdges.current,
     onNodesChange: mockOnNodesChange,
     onEdgesChange: mockOnEdgesChange,
     onConnect: vi.fn(),
@@ -105,7 +109,10 @@ vi.mock('../../../components/flow/canvas/CircleOverlay', () => ({
 }));
 
 vi.mock('../../../components/flow/CodeEditorModal', () => ({
-  CodeEditorModal: () => <div data-testid="code-editor-modal">Code Editor</div>,
+  CodeEditorModal: (props: any) => {
+    mockCodeEditorProps.current = props;
+    return <div data-testid="code-editor-modal">Code Editor</div>;
+  },
 }));
 
 vi.mock('../../../services/api', () => ({
@@ -1210,5 +1217,68 @@ describe('handleEdgeDoubleClick logic', () => {
       rerender(<FlowCanvas ref={ref} canvasMode="views" addReactionMode={false} />);
       expect(screen.getByTestId('circle-overlay')).toBeInTheDocument();
     });
+  });
+});
+
+describe('FlowCanvas – opening the files of build problems', () => {
+  const ecoreNode = (id: string, ecoreFileId: number, genModelFileId: number) => ({
+    id,
+    type: 'ecoreFile',
+    position: { x: 0, y: 0 },
+    data: { fileName: `${id}.ecore`, fileContent: `<${id}/>`, ecoreFileId, genModelFileId, metaModelId: 1 },
+  });
+
+  beforeEach(() => {
+    mockFlowNodes.current = [ecoreNode('a', 10, 11), ecoreNode('b', 20, 21)];
+    mockFlowEdges.current = [
+      { id: 'edge-fine', source: 'a', target: 'b', type: 'fine-granular-reaction', data: { reactionFileId: 7 } },
+      { id: 'edge-ab', source: 'a', target: 'b', type: 'reactions', data: { reactionFileId: 7, code: 'reaction code' } },
+    ];
+    mockCodeEditorProps.current = null;
+  });
+
+  afterEach(() => {
+    mockFlowNodes.current = [];
+    mockFlowEdges.current = [];
+  });
+
+  it('opens the reaction file in the Reaction Editor at the line of the problem', async () => {
+    const ref = createRef<any>();
+    render(<FlowCanvas ref={ref} />);
+
+    let opened = false;
+    await act(async () => {
+      opened = ref.current.openReactionFileAt(7, { lineNumber: 51, column: 30 });
+    });
+
+    expect(opened).toBe(true);
+    expect(screen.getByTestId('code-editor-modal')).toBeInTheDocument();
+    expect(mockCodeEditorProps.current).toMatchObject({
+      edgeId: 'edge-ab',
+      initialCode: 'reaction code',
+      initialPosition: { lineNumber: 51, column: 30 },
+    });
+  });
+
+  it('reports reaction files that are not on the canvas', () => {
+    const ref = createRef<any>();
+    render(<FlowCanvas ref={ref} />);
+    expect(ref.current.openReactionFileAt(99)).toBe(false);
+    expect(screen.queryByTestId('code-editor-modal')).not.toBeInTheDocument();
+  });
+
+  it('opens the metamodel of an ecore or genmodel file id', () => {
+    const onEcoreFileExpand = vi.fn();
+    const ref = createRef<any>();
+    render(<FlowCanvas ref={ref} onEcoreFileExpand={onEcoreFileExpand} />);
+
+    let opened = false;
+    act(() => {
+      opened = ref.current.openMetaModelFile(21);
+    });
+
+    expect(opened).toBe(true);
+    expect(onEcoreFileExpand).toHaveBeenCalledWith('b.ecore', '<b/>', expect.objectContaining({ ecoreFileId: 20 }));
+    expect(ref.current.openMetaModelFile(99)).toBe(false);
   });
 });
