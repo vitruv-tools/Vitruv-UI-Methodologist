@@ -2,10 +2,12 @@ import { computeMethodologistMetrics } from '../../utils/methodologistMetrics';
 import {
   buildMetricsCsv,
   buildMetricsCsvFiles,
+  derivedMetricRows,
   formatSelectedLabel,
   metricsResultFileName,
   orderedMetricsCategories,
 } from '../../utils/metricsReport';
+import { METRIC_DEFINITIONS } from '../../utils/metricDefinitions';
 
 const metrics = computeMethodologistMetrics({
   metamodels: [{
@@ -92,10 +94,29 @@ describe('buildMetricsCsvFiles', () => {
     expect(files.find(file => file.name === 'coverage/all.csv')?.csv).toContain('HasTitle (Book)');
     expect(files.find(file => file.name === 'size/size-classes.csv')?.csv).toContain('Book');
     expect(files.find(file => file.name === 'size/size-metamodels.csv')?.csv).toContain(
-      'Metamodel,Classes,Abstract,Concrete,Containment refs,Association refs,Enums,Literals,Packages,Cross-pkg refs\r\n',
+      'Metamodel,Classes,Abstract,Concrete,Containment references,Non-containment references,'
+      + 'Enumerations,Enumeration literals,Packages,Cross-package references\r\n',
     );
     expect(files.find(file => file.name === 'size/size-classes.csv')?.csv).toContain(
-      'Metamodel,Class,Abstract,Attributes,Operations,Children,Depth,Cont. height\r\n',
+      'Metamodel,Class,Abstract,Attributes,Operations,Subclasses (NOC),Inheritance depth (DIT),Containment height\r\n',
     );
+  });
+});
+
+describe('metric terminology', () => {
+  it('uses the shared metric labels for every derived ratio', () => {
+    for (const row of derivedMetricRows(metrics)) {
+      expect(row.metric).toBe(METRIC_DEFINITIONS[row.id].label);
+    }
+  });
+
+  it('gives every metric a complete explanation', () => {
+    for (const definition of Object.values(METRIC_DEFINITIONS)) {
+      expect(definition.label.trim()).not.toBe('');
+      expect(definition.represents.trim()).not.toBe('');
+      expect(definition.measures.trim()).not.toBe('');
+      expect(definition.calculation.trim()).not.toBe('');
+      expect(definition.interpretation.trim()).not.toBe('');
+    }
   });
 });

@@ -10,12 +10,16 @@ import {
   type MethodologistMetrics,
 } from '../../utils/methodologistMetrics';
 import { readStoredOcl, writeStoredOcl } from '../../utils/oclStorage';
+import { metricLabel, type MetricId } from '../../utils/metricDefinitions';
+import { MetricLabel } from './MetricInfo';
 import { downloadBlobAsFile } from '../../utils/downloadFile';
 import {
   METRICS_CATEGORIES,
   METRICS_CATEGORY_LABELS,
   derivedMetricRows,
   formatAvg,
+  formatDirection,
+  formatOclConstraintsWithoutReaction,
   buildMetricsReportZip,
   formatSelectedLabel,
   metricsResultFileName,
@@ -51,8 +55,8 @@ function namesList(names: string[]): string {
   return names.length === 0 ? '—' : names.join(', ');
 }
 
-const InsightCard: React.FC<{ label: string; value: string | number; sub?: string }> = ({
-  label, value, sub,
+const InsightCard: React.FC<{ metric: MetricId; value: string | number; sub?: string }> = ({
+  metric, value, sub,
 }) => (
   <div style={{
     background: T.surface,
@@ -62,7 +66,7 @@ const InsightCard: React.FC<{ label: string; value: string | number; sub?: strin
     minWidth: 0,
   }}>
     <div style={{ fontSize: 10, color: T.muted, fontWeight: 600, marginBottom: 2, letterSpacing: '0.03em' }}>
-      {label}
+      <MetricLabel id={metric} />
     </div>
     <div style={{ fontSize: typeof value === 'number' ? 18 : 13, fontWeight: 700, color: T.brand, lineHeight: 1.15 }}>
       {value}
@@ -71,7 +75,7 @@ const InsightCard: React.FC<{ label: string; value: string | number; sub?: strin
   </div>
 );
 
-const InsightList: React.FC<{ label: string; names: string[]; hint?: string }> = ({ label, names, hint }) => (
+const InsightList: React.FC<{ metric: MetricId; names: string[]; hint?: string }> = ({ metric, names, hint }) => (
   <div style={{
     background: T.surface,
     borderRadius: 6,
@@ -80,7 +84,9 @@ const InsightList: React.FC<{ label: string; names: string[]; hint?: string }> =
     minWidth: 0,
   }}>
     <div style={{ fontSize: 10, color: T.muted, fontWeight: 600, marginBottom: 4, letterSpacing: '0.03em' }}>
-      {label}{hint ? ` · ${hint}` : ''} ({names.length})
+      <MetricLabel id={metric}>
+        {metricLabel(metric)}{hint ? ` · ${hint}` : ''} ({names.length})
+      </MetricLabel>
     </div>
     <div style={{ fontSize: 11, color: T.secondary, lineHeight: 1.4, wordBreak: 'break-word' }}>
       {namesList(names)}
@@ -150,13 +156,13 @@ const MetamodelTable: React.FC<{ metrics: MethodologistMetrics }> = ({ metrics }
       <thead>
         <tr>
           <th style={{ ...thStyle(), width: '16%' }}>Metamodel</th>
-          <th style={thStyle('right')}>Classes</th>
-          <th style={thStyle('right')}>Abstract</th>
-          <th style={thStyle('right')}>Concrete</th>
-          <th style={thStyle('right')}>Refs (cont. / assoc.)</th>
-          <th style={thStyle('right')}>Enums / literals</th>
-          <th style={thStyle('right')}>Packages</th>
-          <th style={thStyle('right')} title="References whose target class lives in another package">Cross-pkg</th>
+          <th style={thStyle('right')}><MetricLabel id="classes" /></th>
+          <th style={thStyle('right')}><MetricLabel id="abstractClasses" /></th>
+          <th style={thStyle('right')}><MetricLabel id="concreteClasses" /></th>
+          <th style={thStyle('right')}><MetricLabel id="references">References (containment / non-containment)</MetricLabel></th>
+          <th style={thStyle('right')}><MetricLabel id="enumerations" /></th>
+          <th style={thStyle('right')}><MetricLabel id="packages" /></th>
+          <th style={thStyle('right')}><MetricLabel id="crossPackageReferences" /></th>
         </tr>
       </thead>
       <tbody>
@@ -214,11 +220,11 @@ const AttributesPerClass: React.FC<{ metrics: MethodologistMetrics }> = ({ metri
             <thead>
               <tr>
                 <th style={classDetailThStyle()}>Class</th>
-                <th style={classDetailThStyle('right')}>Attributes</th>
-                <th style={classDetailThStyle('right')} title="EOperations">Ops</th>
-                <th style={classDetailThStyle('right')} title="Number of Children — direct subclasses">Children</th>
-                <th style={classDetailThStyle('right')} title="Depth of Inheritance Tree — how many superclasses sit above this class (roots are 0)">Depth</th>
-                <th style={classDetailThStyle('right')} title="Longest containment chain below this class">Cont. height</th>
+                <th style={classDetailThStyle('right')}><MetricLabel id="attributes" /></th>
+                <th style={classDetailThStyle('right')}><MetricLabel id="operations" /></th>
+                <th style={classDetailThStyle('right')}><MetricLabel id="subclasses" /></th>
+                <th style={classDetailThStyle('right')}><MetricLabel id="inheritanceDepth" /></th>
+                <th style={classDetailThStyle('right')}><MetricLabel id="containmentHeight" /></th>
               </tr>
             </thead>
             <tbody>
@@ -249,11 +255,11 @@ const CoverageTable: React.FC<{ metrics: MethodologistMetrics }> = ({ metrics })
       <thead>
         <tr>
           <th style={thStyle()}>Metamodel</th>
-          <th style={thStyle()}>Status</th>
-          <th style={thStyle('right')} title="Incoming reaction edges">Fan-in</th>
-          <th style={thStyle('right')} title="Outgoing reaction edges">Fan-out</th>
-          <th style={thStyle('right')}>Covered classes</th>
-          <th style={thStyle()}>Uncovered concrete classes</th>
+          <th style={thStyle()}><MetricLabel id="linkStatus" /></th>
+          <th style={thStyle('right')}><MetricLabel id="fanIn" /></th>
+          <th style={thStyle('right')}><MetricLabel id="fanOut" /></th>
+          <th style={thStyle('right')}><MetricLabel id="coveredClasses" /></th>
+          <th style={thStyle()}><MetricLabel id="uncoveredClasses" /></th>
         </tr>
       </thead>
       <tbody>
@@ -291,8 +297,8 @@ const DerivedTable: React.FC<{ metrics: MethodologistMetrics }> = ({ metrics }) 
         </thead>
         <tbody>
           {rows.map(row => (
-            <tr key={row.metric}>
-              <td style={{ ...tdStyle(), fontWeight: 600, color: T.text }}>{row.metric}</td>
+            <tr key={row.id}>
+              <td style={{ ...tdStyle(), fontWeight: 600, color: T.text }}><MetricLabel id={row.id} /></td>
               <td style={{ ...tdStyle('right'), fontWeight: 700, color: T.brand }}>{row.value}</td>
               <td style={tdStyle()}>{row.formula}</td>
             </tr>
@@ -308,13 +314,13 @@ const CorrespondenceTable: React.FC<{ metrics: MethodologistMetrics }> = ({ metr
     <table style={tableStyle()}>
       <thead>
         <tr>
-          <th style={thStyle()}>Correspondence type</th>
-          <th style={thStyle()}>Direction</th>
-          <th style={thStyle('right')}>Types in file</th>
-          <th style={thStyle('right')}>Reactions</th>
-          <th style={thStyle('right')}>Routines</th>
-          <th style={thStyle('right')}>LOC (file)</th>
-          <th style={thStyle()}>LOC per reaction</th>
+          <th style={thStyle()}><MetricLabel id="reactionsFile" /></th>
+          <th style={thStyle()}><MetricLabel id="direction" /></th>
+          <th style={thStyle('right')}><MetricLabel id="correspondenceTypes" /></th>
+          <th style={thStyle('right')}><MetricLabel id="reactions" /></th>
+          <th style={thStyle('right')}><MetricLabel id="routines" /></th>
+          <th style={thStyle('right')}><MetricLabel id="linesOfCode" /></th>
+          <th style={thStyle()}><MetricLabel id="locPerReaction" /></th>
         </tr>
       </thead>
       <tbody>
@@ -323,7 +329,7 @@ const CorrespondenceTable: React.FC<{ metrics: MethodologistMetrics }> = ({ metr
             <td style={{ ...tdStyle(), fontWeight: 600, color: T.text }}>
               {ct.sourceName} → {ct.targetName}
             </td>
-            <td style={tdStyle()}>{ct.direction === 'both-ways' ? 'Both ways' : 'One-way'}</td>
+            <td style={tdStyle()}>{formatDirection(ct.direction)}</td>
             <td style={tdStyle('right')}>{ct.correspondenceTypeCount}</td>
             <td style={tdStyle('right')}>{ct.reactionCount}</td>
             <td style={tdStyle('right')}>{ct.routineCount}</td>
@@ -414,7 +420,7 @@ const CategoryTabs: React.FC<{
         })}
       </fieldset>
       <div data-testid="metrics-marked-label" style={{ fontSize: 11, color: T.muted, lineHeight: 1.35 }}>
-        {formatSelectedLabel(selected).replace('Selected — ', 'Marked: ')}
+        {formatSelectedLabel(selected)}
       </div>
     </div>
     <MetricsDownloadMenu
@@ -718,7 +724,8 @@ export const MethodologistMetricsView: React.FC<MethodologistMetricsViewProps> =
             Basic Metrics
           </div>
           <div style={{ fontSize: 11, color: T.muted, lineHeight: 1.35 }}>
-            Size, reactions, coverage, hotspots, and derived ratios. Mark the ones you want to see together.
+            Size, reactions, coverage, hotspots, and derived ratios of this V-SUM. Select the categories you want to see together.
+            Use the ? next to a metric to see what it measures and how it is calculated.
           </div>
         </div>
         {onClose && (
@@ -774,32 +781,32 @@ export const MethodologistMetricsView: React.FC<MethodologistMetricsViewProps> =
       >
         {selected.length === 0 && (
           <div style={{ fontSize: 12, color: T.muted }}>
-            Mark one or more categories above to show them together.
+            Select one or more categories above to show them together.
           </div>
         )}
 
         {selected.includes('size') && (
           <>
-            <Section title="V-SUMM size" caption="Metamodels, classes, associations, and view types — not only OCL.">
+            <Section title="V-SUM size" caption="Metamodels, classes, references, and view types across the whole V-SUM.">
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(112px, 1fr))', gap: 6 }}>
-                <InsightCard label="Metamodels" value={metrics.metamodels.length} />
-                <InsightCard label="Classes" value={metrics.classCount} sub={`${metrics.abstractClassCount} abs. · ${metrics.concreteClassCount} conc.`} />
+                <InsightCard metric="metamodels" value={metrics.metamodels.length} />
+                <InsightCard metric="classes" value={metrics.classCount} sub={`${metrics.abstractClassCount} abstract · ${metrics.concreteClassCount} concrete`} />
                 <InsightCard
-                  label="Associations"
-                  value={metrics.nonContainmentReferences}
-                  sub={`${metrics.containmentReferences} containment`}
+                  metric="references"
+                  value={metrics.referencesTotal}
+                  sub={`${metrics.containmentReferences} containment · ${metrics.nonContainmentReferences} non-containment`}
                 />
                 <InsightCard
-                  label="View types"
+                  metric="viewTypes"
                   value={metrics.viewTypeCount}
                   sub={`${metrics.singleViewTypeCount} single · ${metrics.multiViewTypeCount} multi`}
                 />
-                <InsightCard label="Enums / literals" value={`${metrics.enumCount} / ${metrics.enumLiteralCount}`} />
-                <InsightCard label="Packages" value={metrics.packageCount} sub="Incl. subpackages" />
+                <InsightCard metric="enumerations" value={`${metrics.enumCount} / ${metrics.enumLiteralCount}`} />
+                <InsightCard metric="packages" value={metrics.packageCount} sub="Including subpackages" />
               </div>
             </Section>
 
-            <Section title="Metamodels" caption="Classes, references, enumerations, packages, and cross-package references per metamodel.">
+            <Section title="Metamodels" caption="Size and structure of each metamodel.">
               {metrics.metamodels.length === 0 ? (
                 <div style={{ fontSize: 12, color: T.muted }}>Add metamodels on the Modeling canvas to populate this table.</div>
               ) : (
@@ -808,28 +815,28 @@ export const MethodologistMetricsView: React.FC<MethodologistMetricsViewProps> =
             </Section>
 
             {metrics.metamodels.some(mm => mm.classes.length > 0) && (
-              <Section title="Class detail" caption="Attributes, operations, children (NOC), inheritance depth, and containment height for each classifier.">
+              <Section title="Class detail" caption="Attributes, operations, subclasses, inheritance depth, and containment height of each class.">
                 <AttributesPerClass metrics={metrics} />
               </Section>
             )}
 
-            <Section title="Views" caption="View types on the Views canvas. Viewpoints are unique labels.">
+            <Section title="Views" caption="View types and viewpoints defined on the Views canvas.">
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(112px, 1fr))', gap: 6 }}>
-                <InsightCard label="View types" value={metrics.viewTypeCount} />
-                <InsightCard label="Viewpoints" value={metrics.viewpointCount} />
+                <InsightCard metric="viewTypes" value={metrics.viewTypeCount} />
+                <InsightCard metric="viewpoints" value={metrics.viewpointCount} />
               </div>
             </Section>
           </>
         )}
 
         {selected.includes('reactions') && (
-          <Section title="Correspondences and reactions" caption="Each reactions file is one correspondence specification. Direction is both-ways when a reverse reaction edge exists. LOC is the size of the reaction code.">
+          <Section title="Correspondences and reactions" caption="One row per reactions file, that is, per reactions edge between two metamodels on the canvas.">
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(112px, 1fr))', gap: 6, marginBottom: 8 }}>
-              <InsightCard label="Reactions" value={metrics.reactionCount} sub={`${metrics.oneWayReactionPairCount} one-way · ${metrics.bidirectionalReactionPairCount} both`} />
-              <InsightCard label="Corr. types" value={metrics.correspondenceTypeCount} />
-              <InsightCard label="One-way links" value={metrics.oneWayReactionPairCount} />
-              <InsightCard label="Both-ways links" value={metrics.bidirectionalReactionPairCount} />
-              <InsightCard label="Reaction LOC" value={metrics.reactionTotalLoc} sub={`avg ${formatAvg(metrics.avgLocPerReaction)} / reaction`} />
+              <InsightCard metric="reactions" value={metrics.reactionCount} sub={`in ${metrics.correspondenceTypes.length} reactions files`} />
+              <InsightCard metric="correspondenceTypes" value={metrics.correspondenceTypeCount} />
+              <InsightCard metric="oneWayPairs" value={metrics.oneWayReactionPairCount} />
+              <InsightCard metric="twoWayPairs" value={metrics.bidirectionalReactionPairCount} />
+              <InsightCard metric="linesOfCode" value={metrics.reactionTotalLoc} sub={`avg ${formatAvg(metrics.avgLocPerReaction)} per reaction`} />
             </div>
             {metrics.correspondenceTypes.length === 0 ? (
               <div style={{ fontSize: 12, color: T.muted }}>Draw reaction edges between metamodels to populate this table.</div>
@@ -843,19 +850,19 @@ export const MethodologistMetricsView: React.FC<MethodologistMetricsViewProps> =
           <>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(112px, 1fr))', gap: 6, marginBottom: 16 }}>
               <InsightCard
-                label="Coverage"
+                metric="reactionCoverage"
                 value={`${metrics.correspondenceCoveragePercent}%`}
-                sub={`${metrics.coveredConcreteClassCount} of ${metrics.concreteClassCount} concrete`}
+                sub={`${metrics.coveredConcreteClassCount} of ${metrics.concreteClassCount} concrete classes`}
               />
               <InsightCard
-                label="Orphans"
+                metric="orphanMetamodels"
                 value={metrics.orphanMetamodelCount}
                 sub={`${metrics.linkedMetamodelCount} linked`}
               />
-              <InsightCard label="OCL constraints" value={metrics.oclConstraintCount} />
+              <InsightCard metric="oclConstraints" value={metrics.oclConstraintCount} />
             </div>
 
-            <Section title="Consistency coverage" caption="Orphans have no reaction edge. Fan-in / fan-out count those edges. A concrete class is covered when its name appears in a linked reactions file.">
+            <Section title="Reaction coverage per metamodel" caption="How each metamodel is connected by reactions edges, and which of its concrete classes the connected reactions files mention.">
               {metrics.metamodelLinks.length === 0 ? (
                 <div style={{ fontSize: 12, color: T.muted }}>Add metamodels on the Modeling canvas to populate this table.</div>
               ) : (
@@ -863,32 +870,32 @@ export const MethodologistMetricsView: React.FC<MethodologistMetricsViewProps> =
               )}
             </Section>
 
-            <Section title="OCL ↔ reaction gap" caption="Matched by class name in OCL context vs reaction code. Detect-only: we can flag a break but have no reaction to fix it. Repair-only: a reaction exists with no OCL rule.">
+            <Section title="Detection and repair" caption="Compares classes checked by OCL constraints (detection) with classes mentioned in reactions files (repair). Classes are matched by name.">
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 6, marginBottom: 8 }}>
-                <InsightList label="Detect only" hint="OCL, no reaction" names={metrics.detectOnlyClassNames} />
-                <InsightList label="Repair only" hint="reaction, no OCL" names={metrics.repairOnlyClassNames} />
-                <InsightList label="Detect and repair" names={metrics.detectAndRepairClassNames} />
+                <InsightList metric="detectOnly" hint="OCL, no reaction" names={metrics.detectOnlyClassNames} />
+                <InsightList metric="repairOnly" hint="reaction, no OCL" names={metrics.repairOnlyClassNames} />
+                <InsightList metric="detectAndRepair" names={metrics.detectAndRepairClassNames} />
               </div>
               {metrics.oclRulesWithoutReaction.length > 0 && (
                 <div style={{ fontSize: 11, color: T.secondary, lineHeight: 1.4 }}>
-                  Rules with no reaction: {metrics.oclRulesWithoutReaction.map(rule => `${rule.name} (${rule.contextClass || 'no context'})`).join(', ')}
+                  <MetricLabel id="oclConstraintsWithoutReaction" />: {formatOclConstraintsWithoutReaction(metrics)}
                 </div>
               )}
             </Section>
 
-            <Section title="Unprotected coverage" caption="Concrete classes and associations with no OCL context and no reaction mention — the parts that are neither checked nor kept consistent.">
+            <Section title="Unprotected elements" caption="Concrete classes and references that are neither checked by OCL constraints nor mentioned in reactions files.">
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 6 }}>
-                <InsightList label="Unprotected classes" names={metrics.unprotectedClassNames} />
-                <InsightList label="Unprotected associations" names={metrics.unprotectedAssociationNames} />
+                <InsightList metric="unprotectedClasses" names={metrics.unprotectedClassNames} />
+                <InsightList metric="unprotectedReferences" names={metrics.unprotectedAssociationNames} />
               </div>
             </Section>
           </>
         )}
 
         {selected.includes('hotspots') && (
-          <Section title="Hotspots" caption="Classes that appear in the most OCL rules and reaction files. High scores are the dangerous places to change.">
+          <Section title="Hotspots" caption="The classes that the most OCL constraints and reactions files depend on. High scores mark the riskiest places to change.">
             {metrics.hotspotClasses.length === 0 ? (
-              <div style={{ fontSize: 12, color: T.muted }}>No class names found in OCL or reactions yet.</div>
+              <div style={{ fontSize: 12, color: T.muted }}>No class names found in OCL constraints or reactions files yet.</div>
             ) : (
               <div style={{ ...tableWrapStyle() }}>
                 <table style={tableStyle()}>
@@ -896,9 +903,9 @@ export const MethodologistMetricsView: React.FC<MethodologistMetricsViewProps> =
                     <tr>
                       <th style={thStyle()}>Class</th>
                       <th style={thStyle()}>Metamodel</th>
-                      <th style={thStyle('right')}>OCL rules</th>
-                      <th style={thStyle('right')}>Reaction files</th>
-                      <th style={thStyle('right')}>Score</th>
+                      <th style={thStyle('right')}><MetricLabel id="hotspotOclConstraints" /></th>
+                      <th style={thStyle('right')}><MetricLabel id="hotspotReactionsFiles" /></th>
+                      <th style={thStyle('right')}><MetricLabel id="hotspotScore" /></th>
                     </tr>
                   </thead>
                   <tbody>
@@ -920,8 +927,8 @@ export const MethodologistMetricsView: React.FC<MethodologistMetricsViewProps> =
 
         {selected.includes('derived') && (
           <Section
-            title="Derived / composite"
-            caption="Ratios from the counts above. View coverage uses classes in metamodels linked to a view type (static, no deployed VSUM)."
+            title="Derived ratios"
+            caption="Ratios computed from the counts above. All values are computed from the canvas, not from a deployed V-SUM."
           >
             <DerivedTable metrics={metrics} />
           </Section>
