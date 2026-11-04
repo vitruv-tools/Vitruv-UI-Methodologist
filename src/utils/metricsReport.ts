@@ -84,7 +84,7 @@ export function derivedMetricRows(metrics: MethodologistMetrics): DerivedMetricR
     {
       id: 'reactionsPerCorrespondenceType',
       value: formatAvg(metrics.reactionsPerCorrespondenceType),
-      formula: 'reactions / correspondence types',
+      formula: 'reactions / coextensions',
     },
     {
       id: 'reactionComplexityRatio',
@@ -104,7 +104,7 @@ export function derivedMetricRows(metrics: MethodologistMetrics): DerivedMetricR
     {
       id: 'correspondenceTypesPerViewTypePair',
       value: formatAvg(metrics.correspondenceToViewPairRatio),
-      formula: `correspondence types / view-type pairs (${metrics.viewTypePairCount} pairs)`,
+      formula: `coextensions / view-type pairs (${metrics.viewTypePairCount} pairs)`,
     },
     {
       id: 'modularizationRatio',

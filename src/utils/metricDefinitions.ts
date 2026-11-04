@@ -142,10 +142,10 @@ export const METRIC_DEFINITIONS = {
     interpretation: 'Routines carry the actual update logic; a file with many reactions but few routines reuses logic heavily.',
   },
   correspondenceTypes: {
-    label: 'Correspondence types',
+    label: 'Coextensions',
     represents: 'Kinds of links between elements of two metamodels that reactions maintain.',
-    measures: 'Distinct correspondences declared in reactions files.',
-    calculation: 'Per reactions file: distinct "add correspondence between A and B" pairs plus distinct "corresponding to X" targets (at least 1 per file), summed over all files.',
+    measures: 'Distinct coextensions declared in reactions files.',
+    calculation: 'Distinct unordered pairs of resolved element types (e.g. Member<->Person) declared in reactions files, counted once across the whole VSUM. Variable names are ignored; coextensions whose types cannot be resolved and files without coextensions are not counted.',
     interpretation: 'Shows how many different element mappings exist between metamodels.',
   },
   oneWayPairs: {
@@ -171,7 +171,7 @@ export const METRIC_DEFINITIONS = {
   },
   reactionsFile: {
     label: 'Reactions file',
-    represents: 'One correspondence specification between a source and a target metamodel.',
+    represents: 'One coextension specification between a source and a target metamodel.',
     measures: 'One reactions edge on the canvas and the code attached to it.',
     calculation: 'One row per reactions edge, named source metamodel → target metamodel.',
     interpretation: 'Each row describes how changes in the source metamodel are propagated to the target metamodel.',
@@ -344,11 +344,11 @@ export const METRIC_DEFINITIONS = {
     interpretation: 'Below 100% means some classes cannot be seen or edited through any view type.',
   },
   reactionsPerCorrespondenceType: {
-    label: 'Reactions per correspondence type',
-    represents: 'How much reaction logic each correspondence needs.',
-    measures: 'Reactions relative to correspondence types.',
-    calculation: 'Reactions / correspondence types.',
-    interpretation: 'High values mean each correspondence is maintained by many reactions (many change scenarios per mapping).',
+    label: 'Reactions per coextension',
+    represents: 'How much reaction logic each coextension needs.',
+    measures: 'Reactions relative to coextensions.',
+    calculation: 'Reactions / coextensions.',
+    interpretation: 'High values mean each coextension is maintained by many reactions (many change scenarios per mapping).',
   },
   reactionComplexityRatio: {
     label: 'Reaction complexity ratio',
@@ -372,11 +372,11 @@ export const METRIC_DEFINITIONS = {
     interpretation: 'Above 1: some classes are in no view type. Below 1: classes are shown in several view types (overlapping views).',
   },
   correspondenceTypesPerViewTypePair: {
-    label: 'Correspondence types per view-type pair',
-    represents: 'How many correspondences exist relative to the possible combinations of view types.',
-    measures: 'Correspondence types relative to unordered pairs of view types.',
-    calculation: 'Correspondence types / (n × (n − 1) / 2), where n is the number of view types.',
-    interpretation: 'Higher values mean view types are more tightly connected by correspondences. 0 if there are fewer than 2 view types.',
+    label: 'Coextensions per view-type pair',
+    represents: 'How many coextensions exist relative to the possible combinations of view types.',
+    measures: 'Coextensions relative to unordered pairs of view types.',
+    calculation: 'Coextensions / (n × (n − 1) / 2), where n is the number of view types.',
+    interpretation: 'Higher values mean view types are more tightly connected by coextensions. 0 if there are fewer than 2 view types.',
   },
   modularizationRatio: {
     label: 'Modularization ratio',

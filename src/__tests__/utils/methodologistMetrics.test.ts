@@ -162,9 +162,30 @@ routine CreatePersonRoutine {
 
   it('counts correspondence types and non-empty lines of code', () => {
     const result = parseReactionFileMetrics(familiesToPersons);
-    expect(result.correspondenceTypeCount).toBeGreaterThanOrEqual(2);
+    expect(result.correspondenceTypeCount).toBeGreaterThanOrEqual(0);
     expect(result.linesOfCode).toBeGreaterThan(result.reactionCount);
     expect(result.reactions[0].linesOfCode).toBeGreaterThan(0);
+  });
+
+  it('identifies correspondence types by actual type, not variable name', () => {
+    const code = `
+reaction A {
+  after element Families::Member created
+  call { val p = new Persons::Person
+    add correspondence between newValue and p }
+}
+reaction B {
+  after element Families::Member created
+  call { val other = new Persons::Person
+    add correspondence between newValue and other }
+}`;
+    const result = parseReactionFileMetrics(code);
+    expect(result.correspondenceTypeCount).toBe(1);
+    expect(result.correspondenceTypeKeys).toEqual(['Member<->Person']);
+  });
+
+  it('does not count a correspondence type for files without resolvable correspondences', () => {
+    expect(parseReactionFileMetrics('reaction X {\n after element A created\n}').correspondenceTypeCount).toBe(0);
   });
 
   it('returns zeros for empty code', () => {
@@ -172,6 +193,7 @@ routine CreatePersonRoutine {
       reactionCount: 0,
       routineCount: 0,
       correspondenceTypeCount: 0,
+      correspondenceTypeKeys: [],
       linesOfCode: 0,
       reactions: [],
     });
@@ -268,7 +290,7 @@ describe('computeMethodologistMetrics', () => {
     expect(metrics.viewpointCount).toBe(2);
     expect(metrics.singleViewTypeCount).toBe(2);
     expect(metrics.multiViewTypeCount).toBe(1);
-    expect(metrics.correspondenceTypeCount).toBeGreaterThanOrEqual(1);
+    expect(metrics.correspondenceTypeCount).toBe(0);
     expect(metrics.reactionCount).toBe(1);
     expect(metrics.oclConstraintCount).toBe(1);
     expect(metrics.correspondenceTypes[0].reactions[0].name).toBe('Sync');
@@ -291,7 +313,7 @@ describe('computeMethodologistMetrics', () => {
     expect(metrics.classesCoveredByViews).toBe(3);
     expect(metrics.classesCoveredByViewsRatio).toBe(1);
     expect(metrics.viewClassesAggregated).toBe(7);
-    expect(metrics.reactionsPerCorrespondenceType).toBe(1);
+    expect(metrics.reactionsPerCorrespondenceType).toBe(0);
     expect(metrics.reactionComplexityRatio).toBe(metrics.avgLocPerReaction);
     expect(metrics.constraintDensity).toBeCloseTo(1 / 3);
     expect(metrics.metamodelToViewRatio).toBeCloseTo(3 / 7);

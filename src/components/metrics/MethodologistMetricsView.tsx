@@ -830,7 +830,7 @@ export const MethodologistMetricsView: React.FC<MethodologistMetricsViewProps> =
         )}
 
         {selected.includes('reactions') && (
-          <Section title="Correspondences and reactions" caption="One row per reactions file, that is, per reactions edge between two metamodels on the canvas.">
+          <Section title="Coextensions and reactions" caption="One row per reactions file, that is, per reactions edge between two metamodels on the canvas.">
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(112px, 1fr))', gap: 6, marginBottom: 8 }}>
               <InsightCard metric="reactions" value={metrics.reactionCount} sub={`in ${metrics.correspondenceTypes.length} reactions files`} />
               <InsightCard metric="correspondenceTypes" value={metrics.correspondenceTypeCount} />
