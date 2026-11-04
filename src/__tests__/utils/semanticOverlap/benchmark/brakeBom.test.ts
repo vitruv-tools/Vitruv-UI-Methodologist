@@ -1,7 +1,7 @@
 import { existsSync } from 'node:fs';
 import { resolveImprovedSettings } from '../../../../utils/semanticOverlap/improved/settings';
 import { resolveSettings } from '../../../../utils/semanticOverlap/settings';
-import { BRAKE_FILE, SEEDS, formatScores, loadScenario, pairKeys, runScenario } from './suite';
+import { BRAKE_FILE, SEEDS, formatScores, loadScenario, pairKeys, runScenario, type LoadedScenario, type ScenarioRun } from './suite';
 
 /**
  * Brake Specification Model ↔ BOM (local brake model, skipped when it is missing, e.g. in CI).
@@ -9,11 +9,19 @@ import { BRAKE_FILE, SEEDS, formatScores, loadScenario, pairKeys, runScenario } 
  * targets below.
  */
 describe.skipIf(!existsSync(BRAKE_FILE))('Brake ↔ BOM benchmark', () => {
-  const brakeBom = loadScenario('brake-bom')!;
-  const bomBrake = loadScenario('bom-brake')!;
-  const paper = runScenario(brakeBom, 'paper', seed => resolveSettings({ seed }));
-  const improved = runScenario(brakeBom, 'improved', seed => resolveImprovedSettings({ seed }));
-  const reverse = runScenario(bomBrake, 'improved', seed => resolveImprovedSettings({ seed }));
+  // Vitest still runs a skipped describe's body, so the scenarios load in beforeAll.
+  let brakeBom: LoadedScenario;
+  let paper: ScenarioRun;
+  let improved: ScenarioRun;
+  let reverse: ScenarioRun;
+
+  beforeAll(() => {
+    brakeBom = loadScenario('brake-bom')!;
+    const bomBrake = loadScenario('bom-brake')!;
+    paper = runScenario(brakeBom, 'paper', seed => resolveSettings({ seed }));
+    improved = runScenario(brakeBom, 'improved', seed => resolveImprovedSettings({ seed }));
+    reverse = runScenario(bomBrake, 'improved', seed => resolveImprovedSettings({ seed }));
+  });
 
   it('reports both approaches', () => {
     console.log([
