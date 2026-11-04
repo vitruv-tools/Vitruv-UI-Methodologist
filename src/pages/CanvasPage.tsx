@@ -27,6 +27,7 @@ import { CanvasProjectControls } from '../components/canvas/CanvasProjectControl
 import { extractApiErrorMessage } from '../utils/apiErrorMessage';
 import { describeBuildFailure, describeBuildSuccess } from '../utils/buildCheckMessages';
 import { CanvasSidebarToolbar } from '../components/canvas/CanvasSidebarToolbar';
+import { UtilityMethodsModal } from '../components/utilitymethods/UtilityMethodsModal';
 import { BuildProblemsDialog } from '../components/canvas/BuildProblemsDialog';
 import type { BuildFailure, BuildProblem } from '../types/vsumBuild';
 import { buildFailureFromError, isReactionsProblem } from '../utils/buildProblems';
@@ -359,6 +360,7 @@ export const CanvasPage: React.FC = () => {
   const [addedModelIds, setAddedModelIds] = useState<Set<number>>(new Set());
   const [loadingProject, setLoadingProject] = useState(true);
   const [showDrawer, setShowDrawer] = useState(false);
+  const [showUtilityMethods, setShowUtilityMethods] = useState(false);
 
   const panelZBase = MODAL_Z_INDEX;
 
@@ -1713,6 +1715,13 @@ export const CanvasPage: React.FC = () => {
         />
       )}
 
+      <UtilityMethodsModal
+        isOpen={showUtilityMethods}
+        vsumId={activeProjectId ?? null}
+        readOnly={isViewOnly}
+        onClose={() => setShowUtilityMethods(false)}
+      />
+
       <CanvasConstraintsOverlay
         projectId={activeProjectId}
         visible={canvasMode === 'constraints' && !isViewOnly}
@@ -1738,6 +1747,7 @@ export const CanvasPage: React.FC = () => {
         onToggleReactionMode={() => setAddReactionMode(v => !v)}
         onOpenReactionEditor={handleOpenReactionEditor}
         onToggleModelDrawer={() => setShowDrawer(d => !d)}
+        onOpenUtilityMethods={activeProjectId ? () => setShowUtilityMethods(true) : undefined}
         onDownloadProject={handleDownloadProject}
         onDownloadJar={handleDownloadJar}
         onDownloadBundle={handleDownloadBundle}

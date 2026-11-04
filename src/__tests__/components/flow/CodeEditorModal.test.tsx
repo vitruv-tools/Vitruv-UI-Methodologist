@@ -330,6 +330,29 @@ describe('CodeEditorModal', () => {
       expect(screen.queryByText(/Unsaved changes/i)).not.toBeInTheDocument();
     });
   });
+
+  it('opens with the initial draft as an unsaved change and saves it', async () => {
+    const onSave = vi.fn().mockResolvedValue(undefined);
+    const onClose = vi.fn();
+    render(<CodeEditorModal {...defaultProps} initialDraft="draft code" onSave={onSave} onClose={onClose} />);
+
+    expect(screen.getByTestId('monaco-editor')).toHaveValue('draft code');
+    expect(screen.getByText(/Unsaved changes/i)).toBeInTheDocument();
+
+    fireEvent.click(screen.getByTitle('Close (Esc)'));
+    expect(screen.getByTestId('confirm-Unsaved Changes')).toBeInTheDocument();
+    expect(onClose).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole('button', { name: /^Save$/i }));
+    await waitFor(() => expect(onSave).toHaveBeenCalledWith('draft code'));
+  });
+
+  it('behaves as before without an initial draft', () => {
+    render(<CodeEditorModal {...defaultProps} initialDraft={undefined} />);
+
+    expect(screen.getByTestId('monaco-editor')).toHaveValue('initial code');
+    expect(screen.queryByText(/Unsaved changes/i)).not.toBeInTheDocument();
+  });
 });
 
 

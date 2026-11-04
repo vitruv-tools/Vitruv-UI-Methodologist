@@ -1014,6 +1014,60 @@ class ApiService {
     });
   }
 
+  // ── Utility methods ───────────────────────────────────────────────────────────────
+
+  getUtilityMethods(vsumId: number): Promise<UtilityMethodResponse[]> {
+    return this.authenticatedRequest(`/api/v1/vsums/${vsumId}/utility-methods`);
+  }
+
+  createUtilityMethod(vsumId: number, body: UtilityMethodRequest): Promise<UtilityMethodResponse> {
+    return this.authenticatedRequest(`/api/v1/vsums/${vsumId}/utility-methods`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+  }
+
+  updateUtilityMethod(vsumId: number, utilityMethodId: number, body: UtilityMethodRequest): Promise<UtilityMethodResponse> {
+    return this.authenticatedRequest(`/api/v1/vsums/${vsumId}/utility-methods/${utilityMethodId}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+  }
+
+  deleteUtilityMethod(vsumId: number, utilityMethodId: number): Promise<void> {
+    return this.authenticatedRequest(`/api/v1/vsums/${vsumId}/utility-methods/${utilityMethodId}`, {
+      method: 'DELETE',
+    });
+  }
+
+  /** Translates an unsaved utility method; problems are part of the response. */
+  previewUtilityMethod(vsumId: number, body: UtilityMethodRequest, utilityMethodId?: number): Promise<UtilityMethodPreviewResponse> {
+    const query = utilityMethodId === undefined ? '' : `?utilityMethodId=${utilityMethodId}`;
+    return this.authenticatedRequest(`/api/v1/vsums/${vsumId}/utility-methods/preview${query}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+  }
+
+  checkUtilityMethodName(vsumId: number, name: string, utilityMethodId?: number): Promise<UtilityMethodNameAvailabilityResponse> {
+    const params = new URLSearchParams({ name });
+    if (utilityMethodId !== undefined) params.set('utilityMethodId', String(utilityMethodId));
+    return this.authenticatedRequest(`/api/v1/vsums/${vsumId}/utility-methods/name-availability?${params}`);
+  }
+
+  /** The Java utility class generated from all utility methods of the project. */
+  getUtilityMethodClass(vsumId: number): Promise<UtilityMethodClassResponse> {
+    return this.authenticatedRequest(`/api/v1/vsums/${vsumId}/utility-methods/java`);
+  }
+
+  /** Metamodel types that utility methods of the project can use. */
+  getUtilityMethodTypes(vsumId: number): Promise<UtilityMethodTypeResponse[]> {
+    return this.authenticatedRequest(`/api/v1/vsums/${vsumId}/utility-methods/types`);
+  }
+
   /**
    * Fetch Low Code reaction metadata (field definitions for the form editor).
    */
@@ -1057,6 +1111,79 @@ export interface RuleSetPutRequest {
   color?: string;
   description?: string;
   oclContent?: string;
+}
+
+export interface UtilityMethodParameter {
+  name: string;
+  /** Xtend/Java type, e.g. `SimulinkModel` or `List<Block>`. */
+  type: string;
+}
+
+export interface UtilityMethodRequest {
+  name: string;
+  description?: string;
+  returnType: string;
+  parameters: UtilityMethodParameter[];
+  /** Java imports, e.g. `tools.vitruv.methodologisttemplate.model.simulink.*` or `java.util.Set`. */
+  imports: string[];
+  /** The Xtend method body, without the surrounding braces. */
+  body: string;
+}
+
+export interface UtilityMethodProblem {
+  utilityMethodName: string;
+  message: string;
+  /** 1-based position relative to the method body, `null` if the problem is not in the body. */
+  line: number | null;
+  column: number | null;
+  /** Only errors keep a utility method from being saved. */
+  severity: 'ERROR' | 'WARNING';
+}
+
+export interface UtilityMethodResponse {
+  id: number;
+  vsumId: number;
+  name: string;
+  description: string | null;
+  returnType: string;
+  parameters: UtilityMethodParameter[];
+  imports: string[];
+  body: string;
+  /** The utility method as it appears in the generated Xtend class. */
+  xtendDefinition: string;
+  /** The generated Java method, `null` if the utility method has problems. */
+  javaMethod: string | null;
+  problems: UtilityMethodProblem[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface UtilityMethodPreviewResponse {
+  xtendDefinition: string;
+  javaMethod: string | null;
+  problems: UtilityMethodProblem[];
+}
+
+export interface UtilityMethodNameAvailabilityResponse {
+  available: boolean;
+  message: string | null;
+}
+
+export interface UtilityMethodClassResponse {
+  qualifiedClassName: string;
+  fileName: string;
+  source: string;
+  problems: UtilityMethodProblem[];
+}
+
+export interface UtilityMethodTypeResponse {
+  /** Qualified metamodel package, e.g. `simulink`. */
+  metamodel: string;
+  name: string;
+  /** OCL name, e.g. `simulink::SubSystem`. */
+  qualifiedName: string;
+  kind: 'CLASS' | 'ENUM' | 'DATATYPE';
+  javaName: string;
 }
 
 // Example API methods using the authenticated service

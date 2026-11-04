@@ -24,6 +24,11 @@ interface CodeEditorModalProps {
   readonly onInitialize?: (code: string) => Promise<void> | void;
   readonly onDelete?: () => void;
   readonly initialCode?: string;
+  /**
+   * Text the editor opens with instead of `initialCode`, e.g. with an import added. It counts as an
+   * unsaved change until it is saved.
+   */
+  readonly initialDraft?: string;
   readonly edgeId: string;
   readonly sourceFileName?: string;
   readonly targetFileName?: string;
@@ -99,6 +104,7 @@ export function CodeEditorModal({
   onInitialize,
   onDelete,
   initialCode = '',
+  initialDraft,
   edgeId,
   sourceFileName,
   targetFileName,
@@ -112,7 +118,7 @@ export function CodeEditorModal({
   readOnly = false,
   initialPosition,
 }: CodeEditorModalProps) {
-  const [code, setCode] = useState(initialCode);
+  const [code, setCode] = useState(initialDraft ?? initialCode);
   const [savedCode, setSavedCode] = useState(initialCode);
   const [saving, setSaving] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
@@ -167,10 +173,10 @@ export function CodeEditorModal({
   }, []);
 
   useEffect(() => {
-    setCode(initialCode);
+    setCode(initialDraft ?? initialCode);
     setSavedCode(initialCode);
     setSaveSuccess(false);
-  }, [initialCode, isOpen]);
+  }, [initialCode, initialDraft, isOpen]);
 
   useEffect(() => {
     if (isOpen && onInitialize && !readOnly) {
