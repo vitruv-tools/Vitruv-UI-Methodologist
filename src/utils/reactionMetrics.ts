@@ -108,7 +108,7 @@ export function collectCorrespondenceTypeKeys(code: string): string[] {
   };
   const pair = (a: string | null, b: string | null) => {
     if (!a || !b) return;
-    types.add([a, b].sort().join('<->'));
+    types.add([a, b].sort((x, y) => x.localeCompare(y)).join('<->'));
   };
   let match: RegExpExecArray | null;
   const between = /add\s+correspondence\s+between\s+(\S+)\s+and\s+(\S+)/g;
