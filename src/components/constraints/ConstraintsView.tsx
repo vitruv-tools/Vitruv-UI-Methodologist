@@ -574,6 +574,28 @@ function updateBackendId(prev: RuleSet[], rsId: string, backendId: number): Rule
   return prev.map(r => r.id === rsId ? { ...r, backendId } : r);
 }
 
+function addRuleToSet(ruleSets: RuleSet[], rule: ConstraintRule): RuleSet[] {
+  return ruleSets.map(rs => rs.id === rule.ruleSetId ? { ...rs, rules: [...rs.rules, rule] } : rs);
+}
+
+function newRule(ruleSetId: string): ConstraintRule {
+  return {
+    id: `r_${Date.now()}`, name: 'NewInvariant', severity: 'WARNING', description: '',
+    ruleSetId, oclDefinition: 'context ClassName inv NewInvariant:\n  @severity WARNING\n  @message ""\n  true',
+    scope: [], type: 'Single-Metamodel',
+    createdAt: new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
+    modifiedAt: 'Just now',
+    invariantCount: 1, contextCount: 1, linesOfCode: 5, linkedReactions: 0,
+  };
+}
+
+function autoOpenedRule(prev: ConstraintRule | null, ruleSets: RuleSet[]): ConstraintRule | null {
+  if (prev && ruleSets.some(rs => rs.id === prev.ruleSetId)) return prev;
+  const first = ruleSets[0];
+  if (!first) return null;
+  return first.rules[0] ?? newRule(first.id);
+}
+
 // ── Sub-components ────────────────────────────────────────────────────────────
 
 const RuleRow: React.FC<{ rule: ConstraintRule; selected: boolean; onClick: () => void; onDelete: () => void }> = ({ rule, selected, onClick, onDelete }) => {
@@ -1712,6 +1734,14 @@ const LeftPanel: React.FC<LeftPanelProps> = ({
         </div>
       )}
 
+      <p
+        data-testid="constraints-build-hint"
+        style={{ margin: 0, padding: '6px 12px', fontSize: 10, color: '#64748b', borderBottom: '1px solid #f1f5f9' }}
+      >
+        Each rule set with constraints is built into the VSUM as its own OCL file. Changes take effect
+        with the next build.
+      </p>
+
       {/* Rule sets */}
       <div style={{ flex: 1, overflowY: 'auto' }}>
         {filtered.map(rs => (
@@ -1740,6 +1770,7 @@ export interface ConstraintsViewProps {
   canvasNodes: Node[];
   onHighlightNode?: (nodeId: string | null) => void;
   filterNodeId?: string | null;
+  visible?: boolean;
 }
 
 /** Finds the canvas node ID whose Ecore metamodel matches the given context prefix (e.g. "pfand"). */
@@ -1753,8 +1784,10 @@ function findNodeIdForMetamodel(canvasNodes: Node[], metamodel: string): string 
   return null;
 }
 
-export const ConstraintsView: React.FC<ConstraintsViewProps> = ({ vsumId: _vsumId, canvasNodes, onHighlightNode, filterNodeId }) => {
+export const ConstraintsView: React.FC<ConstraintsViewProps> = ({ vsumId: _vsumId, canvasNodes, onHighlightNode, filterNodeId, visible = true }) => {
   const vsumId = _vsumId ? Number(_vsumId) : null;
+  const [hasBeenVisible, setHasBeenVisible] = useState(visible);
+  if (visible && !hasBeenVisible) setHasBeenVisible(true);
   const colorMap = useMemo(() => buildMetamodelColorMap(canvasNodes), [canvasNodes]);
   const metaClasses = useMemo(() => buildMetaClasses(canvasNodes), [canvasNodes]);
 
@@ -1783,8 +1816,8 @@ export const ConstraintsView: React.FC<ConstraintsViewProps> = ({ vsumId: _vsumI
   // Set while rule sets are shown that are not saved yet: the predefined ones, or ones whose create
   // request failed. The next change saves all of them.
   const saveUnsavedRef = useRef(false);
-  // Set once the user picks a rule, a rule set, or closes the bottom panel. Until then the first
-  // rule set stays selected so the panel is visible as soon as the view has something to show.
+  // Set once the user picks a rule, a rule set, or closes the bottom panel. Until then the editor
+  // stays open on the first rule set (see autoOpenedRule) as soon as the view has something to show.
   const selectionLockedRef = useRef(false);
   const [selectedRule, setSelectedRule] = useState<ConstraintRule | null>(null);
   const [selectedRuleSet, setSelectedRuleSet] = useState<RuleSet | null>(null);
@@ -1815,7 +1848,7 @@ export const ConstraintsView: React.FC<ConstraintsViewProps> = ({ vsumId: _vsumI
       const merged = mergeLoadedRuleSets(loaded, ruleSetsRef.current);
       setRuleSets(merged);
       if (!selectionLockedRef.current) {
-        setSelectedRuleSet(prev => (prev && merged.some(rs => rs.id === prev.id) ? prev : merged[0]));
+        setSelectedRule(prev => autoOpenedRule(prev, merged));
       }
       setSavedRuleSets('loaded');
     }).catch(err => {
@@ -1842,13 +1875,9 @@ export const ConstraintsView: React.FC<ConstraintsViewProps> = ({ vsumId: _vsumI
       rules: rs.rules.map(r => ({ ...r, scope: oclGetScope(r.oclDefinition) })),
     }));
     setRuleSets(next);
-    // Same update as the list, so the bottom panel is visible on the first paint that has a set.
+    // Same update as the list, so the editor is visible on the first paint that has a set.
     if (!selectionLockedRef.current) {
-      setSelectedRuleSet(prev => {
-        if (next.length === 0) return null;
-        const match = prev ? next.find(rs => rs.id === prev.id) : undefined;
-        return match ?? next[0];
-      });
+      setSelectedRule(prev => autoOpenedRule(prev, next));
     }
   }, [savedRuleSets, canvasNodes, vsumId]);
 
@@ -1957,34 +1986,29 @@ export const ConstraintsView: React.FC<ConstraintsViewProps> = ({ vsumId: _vsumI
     setRuleSets(prev => prev.map(rs => rs.id === id ? { ...rs, collapsed: !rs.collapsed } : rs));
   }, []);
 
-  const handleDeleteRule = useCallback((ruleId: string) => {
-    setRuleSets(prev => {
-      const next = deleteRuleFromSets(prev, ruleId);
-      const affected = findSetContainingRule(prev, ruleId);
-      const syncTarget = next.find(rs => rs.id === affected?.id);
-      if (syncTarget) syncRuleSet(syncTarget);
-      return next;
-    });
-    setSelectedRule(prev => prev?.id === ruleId ? null : prev);
+  /**
+   * Applies `change` to the rule sets and saves the set with `ruleSetId` afterwards. The request is
+   * sent outside the state updater, which React may call more than once (e.g. under StrictMode).
+   */
+  const changeAndSync = useCallback((change: (sets: RuleSet[]) => RuleSet[], ruleSetId?: string) => {
+    const next = change(ruleSetsRef.current);
+    ruleSetsRef.current = next;
+    setRuleSets(change);
+    const affected = next.find(rs => rs.id === ruleSetId);
+    if (affected) syncRuleSet(affected);
   }, [syncRuleSet]);
 
+  const handleDeleteRule = useCallback((ruleId: string) => {
+    const affected = findSetContainingRule(ruleSetsRef.current, ruleId);
+    changeAndSync(sets => deleteRuleFromSets(sets, ruleId), affected?.id);
+    setSelectedRule(prev => prev?.id === ruleId ? null : prev);
+  }, [changeAndSync]);
+
   const handleAddRule = useCallback((ruleSetId: string) => {
-    const newRule: ConstraintRule = {
-      id: `r_${Date.now()}`, name: 'NewInvariant', severity: 'WARNING', description: '',
-      ruleSetId, oclDefinition: 'context ClassName inv NewInvariant:\n  @severity WARNING\n  @message ""\n  true',
-      scope: [], type: 'Single-Metamodel',
-      createdAt: new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
-      modifiedAt: 'Just now',
-      invariantCount: 1, contextCount: 1, linesOfCode: 5, linkedReactions: 0,
-    };
-    setRuleSets(prev => {
-      const next = prev.map(rs => rs.id === ruleSetId ? { ...rs, rules: [...rs.rules, newRule] } : rs);
-      const affected = next.find(rs => rs.id === ruleSetId);
-      if (affected) syncRuleSet(affected);
-      return next;
-    });
-    setSelectedRule(newRule);
-  }, [syncRuleSet]);
+    const rule = newRule(ruleSetId);
+    changeAndSync(sets => addRuleToSet(sets, rule), ruleSetId);
+    setSelectedRule(rule);
+  }, [changeAndSync]);
 
   const handleAddSet = useCallback(() => {
     const newSet: RuleSet = {
@@ -2014,14 +2038,13 @@ export const ConstraintsView: React.FC<ConstraintsViewProps> = ({ vsumId: _vsumI
   }, [vsumId, markUserChange, saveUnsavedRuleSets]);
 
   const handleSaveRule = useCallback((updated: ConstraintRule) => {
-    setRuleSets(prev => {
-      const next = replaceRule(prev, updated);
-      const affected = findSetContainingRule(next, updated.id);
-      if (affected) syncRuleSet(affected);
-      return next;
-    });
+    // a rule that is not in a set yet (e.g. opened automatically) is added to its set
+    const change = (sets: RuleSet[]) =>
+      findSetContainingRule(sets, updated.id) ? replaceRule(sets, updated) : addRuleToSet(sets, updated);
+    const affected = findSetContainingRule(change(ruleSetsRef.current), updated.id);
+    changeAndSync(change, affected?.id);
     setSelectedRule(updated);
-  }, [syncRuleSet]);
+  }, [changeAndSync]);
 
   return (
     // pointer-events: none on container — individual panels re-enable it so the
@@ -2054,14 +2077,14 @@ export const ConstraintsView: React.FC<ConstraintsViewProps> = ({ vsumId: _vsumI
       </div>
 
       {/* Bottom editor — floats over the center canvas, re-enables pointer events */}
-      {selectedRule && (
+      {selectedRule && hasBeenVisible && (
         <section aria-label="Rule editor" tabIndex={-1} style={{ position: 'absolute', bottom: 0, left: 260, right: 300, pointerEvents: 'auto', display: 'flex', flexDirection: 'column' }} onKeyDown={e => e.stopPropagation()}>
           <EditorPanel
             rule={selectedRule}
             ruleSets={ruleSets}
             colorMap={colorMap}
             metaClasses={metaClasses}
-            onClose={() => { setSelectedRule(null); onHighlightNode?.(null); }}
+            onClose={() => { lockSelection(); setSelectedRule(null); onHighlightNode?.(null); }}
             onSave={handleSaveRule}
             vsumId={vsumId ?? undefined}
             onHighlightNode={onHighlightNode}

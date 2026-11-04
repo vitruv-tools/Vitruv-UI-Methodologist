@@ -77,13 +77,21 @@ describe('CanvasMetricsOverlay', () => {
     expect(screen.getByTestId('canvas-metrics-overlay')).toHaveStyle({ display: 'flex' });
     expect(screen.getByText('Basic Metrics')).toBeInTheDocument();
     expect(screen.getAllByText('library').length).toBeGreaterThan(0);
-    expect(screen.getByText('V-SUMM size')).toBeInTheDocument();
-    expect(screen.queryByText('Derived / composite')).not.toBeInTheDocument();
+    expect(screen.getByText('V-SUM size')).toBeInTheDocument();
+    expect(screen.getAllByText('Operations')).toHaveLength(
+      within(screen.getByTestId('class-detail-scroll')).getAllByText('Operations').length,
+    );
+    expect(screen.queryByText('Children max')).not.toBeInTheDocument();
+    expect(screen.queryByText('Children max / avg')).not.toBeInTheDocument();
+    expect(screen.queryByText('Inheritance max / avg')).not.toBeInTheDocument();
+    expect(screen.queryByText('Model elements')).not.toBeInTheDocument();
+    expect(screen.queryByText('Views (instances)')).not.toBeInTheDocument();
+    expect(screen.queryByText('Derived ratios')).not.toBeInTheDocument();
     fireEvent.click(screen.getByTestId('metrics-tab-derived'));
-    expect(screen.getByText('V-SUMM size')).toBeInTheDocument();
-    expect(screen.getByText('Derived / composite')).toBeInTheDocument();
+    expect(screen.getByText('V-SUM size')).toBeInTheDocument();
+    expect(screen.getByText('Derived ratios')).toBeInTheDocument();
     fireEvent.click(screen.getByTestId('metrics-tab-coverage'));
-    expect(screen.getByText('Derived / composite')).toBeInTheDocument();
+    expect(screen.getByText('Derived ratios')).toBeInTheDocument();
     await waitFor(() => {
       expect(apiService.getRuleSets).toHaveBeenCalledWith(10);
       expect(screen.getByText(/HasTitle \(Book\)/)).toBeInTheDocument();
@@ -144,10 +152,10 @@ reaction SyncBook {
   it('lets the user unmark a category while keeping the others visible', async () => {
     renderOverlay({ visible: true });
     fireEvent.click(screen.getByTestId('metrics-tab-derived'));
-    expect(screen.getByText('V-SUMM size')).toBeInTheDocument();
+    expect(screen.getByText('V-SUM size')).toBeInTheDocument();
     fireEvent.click(screen.getByTestId('metrics-tab-size'));
-    expect(screen.queryByText('V-SUMM size')).not.toBeInTheDocument();
-    expect(screen.getByText('Derived / composite')).toBeInTheDocument();
+    expect(screen.queryByText('V-SUM size')).not.toBeInTheDocument();
+    expect(screen.getByText('Derived ratios')).toBeInTheDocument();
     await waitFor(() => {
       expect(apiService.getRuleSets).toHaveBeenCalled();
     });
@@ -224,10 +232,45 @@ reaction SyncBook {
     const classCell = detail.getByText('VeryLongClassifierName').closest('td');
     expect(classCell).toHaveStyle({ whiteSpace: 'nowrap', wordBreak: 'normal' });
     expect(detail.getAllByText('Attributes')[0].closest('th')).toHaveStyle({ whiteSpace: 'nowrap' });
-    expect(detail.getAllByText('Cont. height')[0].closest('th')).toHaveStyle({ whiteSpace: 'nowrap' });
+    expect(detail.getAllByText('Containment height')[0].closest('th')).toHaveStyle({ whiteSpace: 'nowrap' });
+    expect(detail.getAllByText('Operations')).toHaveLength(2);
+    expect(detail.getAllByText('Subclasses (NOC)')).toHaveLength(2);
+    expect(detail.getAllByText('Inheritance depth (DIT)')).toHaveLength(2);
+    expect(screen.getAllByText('Attributes')).toHaveLength(detail.getAllByText('Attributes').length);
+    expect(screen.getAllByText('Containment height')).toHaveLength(detail.getAllByText('Containment height').length);
 
     await waitFor(() => {
       expect(apiService.getRuleSets).toHaveBeenCalled();
+    });
+  });
+
+  it('explains each metric through an accessible info button', async () => {
+    renderOverlay({ visible: true });
+    const [info] = screen.getAllByTestId('metric-info-classes');
+    expect(info).toHaveAccessibleName('About Classes');
+    expect(screen.queryByRole('tooltip')).not.toBeInTheDocument();
+
+    fireEvent.mouseEnter(info);
+    const tooltip = screen.getByRole('tooltip');
+    expect(info).toHaveAttribute('aria-describedby', tooltip.id);
+    expect(tooltip).toHaveTextContent('What it is');
+    expect(tooltip).toHaveTextContent('What it measures');
+    expect(tooltip).toHaveTextContent('How it is calculated');
+    expect(tooltip).toHaveTextContent('How to read it');
+    fireEvent.mouseLeave(info);
+    expect(screen.queryByRole('tooltip')).not.toBeInTheDocument();
+
+    fireEvent.focus(info);
+    expect(screen.getByRole('tooltip')).toBeInTheDocument();
+    fireEvent.keyDown(document, { key: 'Escape' });
+    expect(screen.queryByRole('tooltip')).not.toBeInTheDocument();
+
+    ['metrics-tab-reactions', 'metrics-tab-coverage', 'metrics-tab-hotspots', 'metrics-tab-derived'].forEach(tab => {
+      fireEvent.click(screen.getByTestId(tab));
+    });
+    await waitFor(() => {
+      ['reactionCoverage', 'detectOnly', 'unprotectedReferences', 'hotspotScore', 'modularizationRatio', 'inheritanceDepth']
+        .forEach(id => expect(screen.getAllByTestId(`metric-info-${id}`).length).toBeGreaterThan(0));
     });
   });
 });

@@ -2,10 +2,12 @@ import { computeMethodologistMetrics } from '../../utils/methodologistMetrics';
 import {
   buildMetricsCsv,
   buildMetricsCsvFiles,
+  derivedMetricRows,
   formatSelectedLabel,
   metricsResultFileName,
   orderedMetricsCategories,
 } from '../../utils/metricsReport';
+import { METRIC_DEFINITIONS } from '../../utils/metricDefinitions';
 
 const metrics = computeMethodologistMetrics({
   metamodels: [{
@@ -58,6 +60,14 @@ describe('buildMetricsCsv', () => {
     expect(csv).toContain(',Hotspots,');
     expect(csv).toContain(',Derived,');
     expect(csv).toContain('Attributes per class');
+    expect(csv).not.toContain(',Overview,Attributes,');
+    expect(csv).not.toContain(',Overview,Operations,');
+    expect(csv).not.toContain(',Overview,Children max,');
+    expect(csv).not.toContain(',Overview,Containment height,');
+    expect(csv).not.toContain('Model elements');
+    expect(csv).not.toContain('Views (instances)');
+    expect(csv).not.toContain('Correspondence instances');
+    expect(csv).not.toContain('View element density');
   });
 
   it('keeps a stable category order regardless of selection order', () => {
@@ -83,5 +93,30 @@ describe('buildMetricsCsvFiles', () => {
     expect(files[0].csv).not.toContain(',Coverage,');
     expect(files.find(file => file.name === 'coverage/all.csv')?.csv).toContain('HasTitle (Book)');
     expect(files.find(file => file.name === 'size/size-classes.csv')?.csv).toContain('Book');
+    expect(files.find(file => file.name === 'size/size-metamodels.csv')?.csv).toContain(
+      'Metamodel,Classes,Abstract,Concrete,Containment references,Non-containment references,'
+      + 'Enumerations,Enumeration literals,Packages,Cross-package references\r\n',
+    );
+    expect(files.find(file => file.name === 'size/size-classes.csv')?.csv).toContain(
+      'Metamodel,Class,Abstract,Attributes,Operations,Subclasses (NOC),Inheritance depth (DIT),Containment height\r\n',
+    );
+  });
+});
+
+describe('metric terminology', () => {
+  it('uses the shared metric labels for every derived ratio', () => {
+    for (const row of derivedMetricRows(metrics)) {
+      expect(row.metric).toBe(METRIC_DEFINITIONS[row.id].label);
+    }
+  });
+
+  it('gives every metric a complete explanation', () => {
+    for (const definition of Object.values(METRIC_DEFINITIONS)) {
+      expect(definition.label.trim()).not.toBe('');
+      expect(definition.represents.trim()).not.toBe('');
+      expect(definition.measures.trim()).not.toBe('');
+      expect(definition.calculation.trim()).not.toBe('');
+      expect(definition.interpretation.trim()).not.toBe('');
+    }
   });
 });

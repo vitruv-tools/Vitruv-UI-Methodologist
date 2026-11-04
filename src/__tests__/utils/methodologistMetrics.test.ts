@@ -1,4 +1,4 @@
-import { parseEcoreMetamodelMetrics, countXmiModelElements } from '../../utils/ecoreMetrics';
+import { parseEcoreMetamodelMetrics } from '../../utils/ecoreMetrics';
 import { countOclConstraints, extractMentionedClassNames, parseOclConstraints, parseReactionFileMetrics } from '../../utils/reactionMetrics';
 import {
   collectMetamodelInputs,
@@ -117,22 +117,6 @@ describe('parseEcoreMetamodelMetrics', () => {
     const result = parseEcoreMetamodelMetrics(xml);
     expect(result.abstractClassCount).toBe(1);
     expect(result.concreteClassCount).toBe(0);
-  });
-});
-
-describe('countXmiModelElements', () => {
-  it('counts element nodes in an instance model', () => {
-    const xmi = `<?xml version="1.0"?>
-      <library:Library xmlns:library="http://example/library">
-        <books title="One"/>
-        <books title="Two"/>
-      </library:Library>`;
-    expect(countXmiModelElements(xmi)).toBe(3);
-  });
-
-  it('returns 0 for empty or invalid content', () => {
-    expect(countXmiModelElements('')).toBe(0);
-    expect(countXmiModelElements('<')).toBe(0);
   });
 });
 
@@ -274,10 +258,6 @@ describe('computeMethodologistMetrics', () => {
       reactions: collectReactionInputs([libraryNode, personsNode], [reactionEdge]),
       viewTypes,
       oclContent: 'context library::Book inv HasTitle:\n  true',
-      instanceModels: [{
-        name: 'sample.xmi',
-        content: '<?xml version="1.0"?><library:Library xmlns:library="http://example/library"><books/></library:Library>',
-      }],
     });
 
     expect(metrics.metamodels).toHaveLength(2);
@@ -291,7 +271,6 @@ describe('computeMethodologistMetrics', () => {
     expect(metrics.correspondenceTypeCount).toBeGreaterThanOrEqual(1);
     expect(metrics.reactionCount).toBe(1);
     expect(metrics.oclConstraintCount).toBe(1);
-    expect(metrics.instanceElementTotal).toBe(2);
     expect(metrics.correspondenceTypes[0].reactions[0].name).toBe('Sync');
     expect(metrics.orphanMetamodelCount).toBe(0);
     expect(metrics.linkedMetamodelCount).toBe(2);
@@ -312,7 +291,6 @@ describe('computeMethodologistMetrics', () => {
     expect(metrics.classesCoveredByViews).toBe(3);
     expect(metrics.classesCoveredByViewsRatio).toBe(1);
     expect(metrics.viewClassesAggregated).toBe(7);
-    expect(metrics.viewElementDensity).toBeCloseTo(2 / 3);
     expect(metrics.reactionsPerCorrespondenceType).toBe(1);
     expect(metrics.reactionComplexityRatio).toBe(metrics.avgLocPerReaction);
     expect(metrics.constraintDensity).toBeCloseTo(1 / 3);
@@ -370,7 +348,6 @@ reaction SyncBook {
     });
     expect(metrics.attributesPerClass).toBe(0);
     expect(metrics.containmentRatio).toBe(0);
-    expect(metrics.viewElementDensity).toBe(0);
     expect(metrics.correspondenceToViewPairRatio).toBe(0);
     expect(metrics.modularizationRatio).toBe(0);
     expect(metrics.metamodelToViewRatio).toBe(0);

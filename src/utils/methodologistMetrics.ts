@@ -1,7 +1,6 @@
 import type { Edge, Node } from 'reactflow';
 import type { ViewType } from '../hooks/useViewTypes';
 import {
-  countXmiModelElements,
   parseEcoreMetamodelMetrics,
   type EcoreMetamodelMetrics,
 } from './ecoreMetrics';
@@ -30,23 +29,11 @@ export interface ReactionSpecInput {
   code: string;
 }
 
-export interface InstanceModelInput {
-  name: string;
-  content: string;
-}
-
-export interface CorrespondenceInstanceInput {
-  name: string;
-  content: string;
-}
-
 export interface MethodologistMetricsInput {
   metamodels: MetamodelFileInput[];
   reactions: ReactionSpecInput[];
   viewTypes: ViewType[];
   oclContent: string;
-  instanceModels?: InstanceModelInput[];
-  correspondenceInstances?: CorrespondenceInstanceInput[];
 }
 
 export interface CorrespondenceTypeMetrics {
@@ -59,11 +46,6 @@ export interface CorrespondenceTypeMetrics {
   linesOfCode: number;
   direction: 'one-way' | 'both-ways';
   reactions: ReactionBlockMetrics[];
-}
-
-export interface InstanceModelMetrics {
-  name: string;
-  elementCount: number;
 }
 
 export interface MetamodelLinkMetrics {
@@ -110,9 +92,6 @@ export interface MethodologistMetrics {
   correspondenceTypes: CorrespondenceTypeMetrics[];
   reactionCount: number;
   oclConstraintCount: number;
-  instanceModels: InstanceModelMetrics[];
-  instanceElementTotal: number;
-  correspondenceInstanceCount: number;
   operationsTotal: number;
   nocMax: number;
   nocAvg: number;
@@ -130,7 +109,6 @@ export interface MethodologistMetrics {
   classesCoveredByViews: number;
   classesCoveredByViewsRatio: number;
   viewClassesAggregated: number;
-  viewElementDensity: number;
   reactionsPerCorrespondenceType: number;
   reactionComplexityRatio: number;
   constraintDensity: number;
@@ -449,14 +427,6 @@ export function computeMethodologistMetrics(input: MethodologistMetricsInput): M
     ),
   );
 
-  const instanceModels = (input.instanceModels ?? []).map(model => ({
-    name: model.name,
-    elementCount: countXmiModelElements(model.content),
-  }));
-
-  const correspondenceInstanceCount = (input.correspondenceInstances ?? [])
-    .reduce((sum, model) => sum + countXmiModelElements(model.content), 0);
-
   const uniqueViewpoints = new Set(
     input.viewTypes.map(vt => vt.label.trim()).filter(Boolean),
   );
@@ -476,7 +446,6 @@ export function computeMethodologistMetrics(input: MethodologistMetricsInput): M
   const viewTypeCount = input.viewTypes.length;
   const viewProjection = computeViewProjection(metamodels, input.viewTypes);
   const viewTypePairCount = unorderedPairCount(viewTypeCount);
-  const instanceElementTotal = instanceModels.reduce((s, m) => s + m.elementCount, 0);
   const avgLocPerReaction = reactionLocs.length === 0
     ? 0
     : reactionLocs.reduce((s, n) => s + n, 0) / reactionLocs.length;
@@ -505,9 +474,6 @@ export function computeMethodologistMetrics(input: MethodologistMetricsInput): M
     correspondenceTypes,
     reactionCount,
     oclConstraintCount,
-    instanceModels,
-    instanceElementTotal,
-    correspondenceInstanceCount,
     operationsTotal: metamodels.reduce((s, m) => s + m.operationsTotal, 0),
     nocMax: nocValues.length === 0 ? 0 : Math.max(0, ...nocValues),
     nocAvg: metamodels.length === 0
@@ -529,7 +495,6 @@ export function computeMethodologistMetrics(input: MethodologistMetricsInput): M
     classesCoveredByViews: viewProjection.uniqueClassCount,
     classesCoveredByViewsRatio: safeRatio(viewProjection.uniqueClassCount, classCount),
     viewClassesAggregated: viewProjection.aggregatedClassCount,
-    viewElementDensity: safeRatio(instanceElementTotal, viewTypeCount),
     reactionsPerCorrespondenceType: safeRatio(reactionCount, correspondenceTypeCount),
     reactionComplexityRatio: avgLocPerReaction,
     constraintDensity: safeRatio(oclConstraintCount, classCount),

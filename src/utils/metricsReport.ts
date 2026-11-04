@@ -1,4 +1,5 @@
 import type { MethodologistMetrics } from './methodologistMetrics';
+import { metricLabel, type MetricId } from './metricDefinitions';
 import { buildZipBlob } from './zipStore';
 
 export const METRICS_CATEGORIES = ['size', 'reactions', 'coverage', 'hotspots', 'derived'] as const;
@@ -41,64 +42,77 @@ export function metricsResultFileName(projectName?: string | null): string {
   return `${safeProjectName(projectName)} metrics.zip`;
 }
 
-export function derivedMetricRows(metrics: MethodologistMetrics): { metric: string; value: string; formula: string }[] {
-  return [
+export function formatDirection(direction: 'one-way' | 'both-ways'): string {
+  return direction === 'both-ways' ? 'Two-way' : 'One-way';
+}
+
+export function formatOclConstraintsWithoutReaction(metrics: MethodologistMetrics): string {
+  return metrics.oclRulesWithoutReaction
+    .map(rule => `${rule.name} (${rule.contextClass || 'no context'})`)
+    .join(', ');
+}
+
+export interface DerivedMetricRow {
+  id: MetricId;
+  metric: string;
+  value: string;
+  formula: string;
+}
+
+export function derivedMetricRows(metrics: MethodologistMetrics): DerivedMetricRow[] {
+  const rows: Array<Omit<DerivedMetricRow, 'metric'>> = [
     {
-      metric: 'Attributes per class',
+      id: 'attributesPerClass',
       value: formatAvg(metrics.attributesPerClass),
       formula: 'attributes / classes',
     },
     {
-      metric: 'References per class',
+      id: 'referencesPerClass',
       value: formatAvg(metrics.referencesPerClass),
       formula: 'references / classes',
     },
     {
-      metric: 'Containment ratio',
+      id: 'containmentRatio',
       value: formatPercent(metrics.containmentRatio),
-      formula: 'containment references / total references',
+      formula: 'containment references / references',
     },
     {
-      metric: 'Classes covered by views',
+      id: 'classesCoveredByViews',
       value: `${formatPercent(metrics.classesCoveredByViewsRatio)} (${metrics.classesCoveredByViews}/${metrics.classCount})`,
-      formula: 'classes in ≥1 view type / total classes',
+      formula: 'classes in at least one view type / classes',
     },
     {
-      metric: 'View element density',
-      value: formatAvg(metrics.viewElementDensity),
-      formula: 'model elements / view types',
-    },
-    {
-      metric: 'Reactions per correspondence type',
+      id: 'reactionsPerCorrespondenceType',
       value: formatAvg(metrics.reactionsPerCorrespondenceType),
       formula: 'reactions / correspondence types',
     },
     {
-      metric: 'Reaction complexity ratio',
+      id: 'reactionComplexityRatio',
       value: formatAvg(metrics.reactionComplexityRatio),
-      formula: 'total reaction LOC / reactions',
+      formula: 'average lines of code per reaction',
     },
     {
-      metric: 'Constraint density',
+      id: 'constraintDensity',
       value: formatAvg(metrics.constraintDensity),
       formula: 'OCL constraints / classes',
     },
     {
-      metric: 'Metamodel-to-view ratio',
+      id: 'metamodelToViewRatio',
       value: formatAvg(metrics.metamodelToViewRatio),
-      formula: 'metamodel classes / classes aggregated across views',
+      formula: 'classes / classes summed over all view types',
     },
     {
-      metric: 'Correspondence coverage',
+      id: 'correspondenceTypesPerViewTypePair',
       value: formatAvg(metrics.correspondenceToViewPairRatio),
       formula: `correspondence types / view-type pairs (${metrics.viewTypePairCount} pairs)`,
     },
     {
-      metric: 'Modularization ratio',
+      id: 'modularizationRatio',
       value: formatAvg(metrics.modularizationRatio),
       formula: 'classes / packages',
     },
   ];
+  return rows.map(row => ({ ...row, metric: metricLabel(row.id) }));
 }
 
 type CsvRow = {
@@ -108,6 +122,8 @@ type CsvRow = {
   value: string | number;
   details?: string;
 };
+
+type KpiRow = [string, string | number, string?];
 
 function csvEscape(value: string | number): string {
   const text = String(value ?? '');
@@ -127,28 +143,75 @@ function namesList(names: string[]): string {
   return names.length === 0 ? '' : names.join(', ');
 }
 
-function kpis(category: string, section: string, rows: Array<[string, string | number, string?]>): CsvRow[] {
+function kpis(category: string, section: string, rows: KpiRow[]): CsvRow[] {
   return rows.map(([name, value, details]) => ({ category, section, name, value, details: details ?? '' }));
+}
+
+function detail(id: MetricId, value: string | number): string {
+  return `${metricLabel(id)}=${value}`;
+}
+
+function sizeOverview(metrics: MethodologistMetrics): KpiRow[] {
+  return [
+    [metricLabel('metamodels'), metrics.metamodels.length],
+    [metricLabel('classes'), metrics.classCount, `${metrics.abstractClassCount} abstract, ${metrics.concreteClassCount} concrete`],
+    [
+      metricLabel('references'),
+      metrics.referencesTotal,
+      `${metrics.containmentReferences} containment, ${metrics.nonContainmentReferences} non-containment`,
+    ],
+    [metricLabel('viewTypes'), metrics.viewTypeCount, `${metrics.singleViewTypeCount} single, ${metrics.multiViewTypeCount} multi`],
+    ['Enumerations', metrics.enumCount],
+    ['Enumeration literals', metrics.enumLiteralCount],
+    [metricLabel('packages'), metrics.packageCount, 'including subpackages'],
+    [metricLabel('viewpoints'), metrics.viewpointCount],
+  ];
+}
+
+function reactionOverview(metrics: MethodologistMetrics): KpiRow[] {
+  return [
+    [metricLabel('reactions'), metrics.reactionCount, `in ${metrics.correspondenceTypes.length} reactions files`],
+    [metricLabel('correspondenceTypes'), metrics.correspondenceTypeCount],
+    [metricLabel('oneWayPairs'), metrics.oneWayReactionPairCount],
+    [metricLabel('twoWayPairs'), metrics.bidirectionalReactionPairCount],
+    [metricLabel('linesOfCode'), metrics.reactionTotalLoc, `avg ${formatAvg(metrics.avgLocPerReaction)} per reaction`],
+  ];
+}
+
+function coverageOverview(metrics: MethodologistMetrics): KpiRow[] {
+  return [
+    [
+      `${metricLabel('reactionCoverage')} %`,
+      metrics.correspondenceCoveragePercent,
+      `${metrics.coveredConcreteClassCount} of ${metrics.concreteClassCount} concrete classes`,
+    ],
+    [metricLabel('orphanMetamodels'), metrics.orphanMetamodelCount, `${metrics.linkedMetamodelCount} linked`],
+    [metricLabel('oclConstraints'), metrics.oclConstraintCount],
+  ];
+}
+
+function detectionAndRepair(metrics: MethodologistMetrics): Array<[string, number, string]> {
+  return [
+    [metricLabel('detectOnly'), metrics.detectOnlyClassNames.length, namesList(metrics.detectOnlyClassNames)],
+    [metricLabel('repairOnly'), metrics.repairOnlyClassNames.length, namesList(metrics.repairOnlyClassNames)],
+    [metricLabel('detectAndRepair'), metrics.detectAndRepairClassNames.length, namesList(metrics.detectAndRepairClassNames)],
+    [
+      metricLabel('oclConstraintsWithoutReaction'),
+      metrics.oclRulesWithoutReaction.length,
+      formatOclConstraintsWithoutReaction(metrics),
+    ],
+    [metricLabel('unprotectedClasses'), metrics.unprotectedClassNames.length, namesList(metrics.unprotectedClassNames)],
+    [metricLabel('unprotectedReferences'), metrics.unprotectedAssociationNames.length, namesList(metrics.unprotectedAssociationNames)],
+  ];
+}
+
+function locPerReaction(reactions: { name: string; linesOfCode: number }[]): string {
+  return reactions.map(r => `${r.name}: ${r.linesOfCode}`).join('; ');
 }
 
 function sizeRows(metrics: MethodologistMetrics): CsvRow[] {
   const category = METRICS_CATEGORY_LABELS.size;
-  const rows: CsvRow[] = kpis(category, 'Overview', [
-    ['Metamodels', metrics.metamodels.length],
-    ['Classes', metrics.classCount, `${metrics.abstractClassCount} abstract, ${metrics.concreteClassCount} concrete`],
-    ['Attributes', metrics.attributesTotal],
-    ['Associations', metrics.nonContainmentReferences, `${metrics.containmentReferences} containment`],
-    ['View types', metrics.viewTypeCount, `${metrics.singleViewTypeCount} single, ${metrics.multiViewTypeCount} multi`],
-    ['Enums', metrics.enumCount],
-    ['Enum literals', metrics.enumLiteralCount],
-    ['Packages', metrics.packageCount],
-    ['Model elements', metrics.instanceElementTotal, metrics.instanceModels.length === 0 ? 'No instance models' : `${metrics.instanceModels.length} models`],
-    ['Operations', metrics.operationsTotal],
-    ['Children max', metrics.nocMax, `avg ${formatAvg(metrics.nocAvg)}`],
-    ['Containment height', metrics.containmentHeightMax, `${metrics.crossPackageReferences} cross-package refs`],
-    ['Viewpoints', metrics.viewpointCount],
-    ['Views (instances)', 0, 'Not persisted'],
-  ]);
+  const rows: CsvRow[] = kpis(category, 'Overview', sizeOverview(metrics));
 
   for (const mm of metrics.metamodels) {
     rows.push({
@@ -157,19 +220,14 @@ function sizeRows(metrics: MethodologistMetrics): CsvRow[] {
       name: mm.name || 'Unnamed',
       value: mm.classCount,
       details: [
-        `abstract=${mm.abstractClassCount}`,
-        `concrete=${mm.concreteClassCount}`,
-        `attributes=${mm.attributesTotal}`,
-        `containment refs=${mm.containmentReferences}`,
-        `association refs=${mm.nonContainmentReferences}`,
-        `enums=${mm.enumCount}`,
-        `literals=${mm.enumLiteralCount}`,
-        `packages=${mm.packageCount}`,
-        `operations=${mm.operationsTotal}`,
-        `children max/avg=${mm.nocMax}/${formatAvg(mm.nocAvg)}`,
-        `inheritance max/avg=${mm.inheritanceDepthMax}/${formatAvg(mm.inheritanceDepthAvg)}`,
-        `cont. height=${mm.containmentHeightMax}`,
-        `cross-pkg=${mm.crossPackageReferences}`,
+        detail('abstractClasses', mm.abstractClassCount),
+        detail('concreteClasses', mm.concreteClassCount),
+        `Containment references=${mm.containmentReferences}`,
+        `Non-containment references=${mm.nonContainmentReferences}`,
+        `Enumerations=${mm.enumCount}`,
+        `Enumeration literals=${mm.enumLiteralCount}`,
+        detail('packages', mm.packageCount),
+        detail('crossPackageReferences', mm.crossPackageReferences),
       ].join('; '),
     });
     for (const cls of mm.classes) {
@@ -179,12 +237,12 @@ function sizeRows(metrics: MethodologistMetrics): CsvRow[] {
         name: cls.name,
         value: cls.attributeCount,
         details: [
-          `metamodel=${mm.name || 'Unnamed'}`,
-          `abstract=${cls.isAbstract ? 'yes' : 'no'}`,
-          `operations=${cls.operationCount}`,
-          `children=${cls.childCount}`,
-          `depth=${cls.inheritanceDepth}`,
-          `cont. height=${cls.containmentHeight}`,
+          `Metamodel=${mm.name || 'Unnamed'}`,
+          `Abstract=${cls.isAbstract ? 'yes' : 'no'}`,
+          detail('operations', cls.operationCount),
+          detail('subclasses', cls.childCount),
+          detail('inheritanceDepth', cls.inheritanceDepth),
+          detail('containmentHeight', cls.containmentHeight),
         ].join('; '),
       });
     }
@@ -195,29 +253,20 @@ function sizeRows(metrics: MethodologistMetrics): CsvRow[] {
 
 function reactionRows(metrics: MethodologistMetrics): CsvRow[] {
   const category = METRICS_CATEGORY_LABELS.reactions;
-  const rows = kpis(category, 'Overview', [
-    ['Reactions', metrics.reactionCount, `${metrics.oneWayReactionPairCount} one-way, ${metrics.bidirectionalReactionPairCount} both-ways`],
-    ['Correspondence types', metrics.correspondenceTypeCount],
-    ['One-way links', metrics.oneWayReactionPairCount],
-    ['Both-ways links', metrics.bidirectionalReactionPairCount],
-    ['Reaction LOC', metrics.reactionTotalLoc, `avg ${formatAvg(metrics.avgLocPerReaction)} / reaction`],
-    ['Correspondence instances', metrics.correspondenceInstanceCount, metrics.correspondenceInstanceCount === 0 ? 'none loaded' : ''],
-  ]);
+  const rows = kpis(category, 'Overview', reactionOverview(metrics));
 
   for (const ct of metrics.correspondenceTypes) {
     rows.push({
       category,
-      section: 'Correspondences',
+      section: 'Reactions files',
       name: `${ct.sourceName} → ${ct.targetName}`,
       value: ct.reactionCount,
       details: [
-        `direction=${ct.direction === 'both-ways' ? 'both-ways' : 'one-way'}`,
-        `types=${ct.correspondenceTypeCount}`,
-        `routines=${ct.routineCount}`,
-        `LOC=${ct.linesOfCode}`,
-        ct.reactions.length === 0
-          ? ''
-          : 'LOC per reaction=' + ct.reactions.map(r => r.name + ': ' + r.linesOfCode).join('; '),
+        detail('direction', formatDirection(ct.direction)),
+        detail('correspondenceTypes', ct.correspondenceTypeCount),
+        detail('routines', ct.routineCount),
+        detail('linesOfCode', ct.linesOfCode),
+        ct.reactions.length === 0 ? '' : detail('locPerReaction', locPerReaction(ct.reactions)),
       ].filter(Boolean).join('; '),
     });
   }
@@ -227,41 +276,25 @@ function reactionRows(metrics: MethodologistMetrics): CsvRow[] {
 
 function coverageRows(metrics: MethodologistMetrics): CsvRow[] {
   const category = METRICS_CATEGORY_LABELS.coverage;
-  const rows = kpis(category, 'Overview', [
-    ['Correspondence coverage %', metrics.correspondenceCoveragePercent, `${metrics.coveredConcreteClassCount} of ${metrics.concreteClassCount} concrete`],
-    ['Orphans', metrics.orphanMetamodelCount, `${metrics.linkedMetamodelCount} linked`],
-    ['OCL constraints', metrics.oclConstraintCount],
-  ]);
+  const rows = kpis(category, 'Overview', coverageOverview(metrics));
 
   for (const link of metrics.metamodelLinks) {
     rows.push({
       category,
-      section: 'Links',
+      section: 'Metamodels',
       name: link.name || 'Unnamed',
       value: link.isOrphan ? 'Orphan' : 'Linked',
       details: [
-        `fan-in=${link.fanIn}`,
-        `fan-out=${link.fanOut}`,
-        `covered=${link.coveredConcreteClassCount}/${link.concreteClassCount}`,
-        namesList(link.uncoveredClassNames) ? `uncovered=${namesList(link.uncoveredClassNames)}` : '',
+        detail('fanIn', link.fanIn),
+        detail('fanOut', link.fanOut),
+        detail('coveredClasses', `${link.coveredConcreteClassCount}/${link.concreteClassCount}`),
+        namesList(link.uncoveredClassNames) ? detail('uncoveredClasses', namesList(link.uncoveredClassNames)) : '',
       ].filter(Boolean).join('; '),
     });
   }
 
-  const gapRows: Array<[string, number, string]> = [
-    ['Detect only', metrics.detectOnlyClassNames.length, namesList(metrics.detectOnlyClassNames)],
-    ['Repair only', metrics.repairOnlyClassNames.length, namesList(metrics.repairOnlyClassNames)],
-    ['Detect and repair', metrics.detectAndRepairClassNames.length, namesList(metrics.detectAndRepairClassNames)],
-    [
-      'Rules with no reaction',
-      metrics.oclRulesWithoutReaction.length,
-      metrics.oclRulesWithoutReaction.map(rule => `${rule.name} (${rule.contextClass || 'no context'})`).join(', '),
-    ],
-    ['Unprotected classes', metrics.unprotectedClassNames.length, namesList(metrics.unprotectedClassNames)],
-    ['Unprotected associations', metrics.unprotectedAssociationNames.length, namesList(metrics.unprotectedAssociationNames)],
-  ];
-  for (const [name, value, details] of gapRows) {
-    rows.push({ category, section: 'Gap', name, value, details });
+  for (const [name, value, details] of detectionAndRepair(metrics)) {
+    rows.push({ category, section: 'Detection and repair', name, value, details });
   }
 
   return rows;
@@ -274,7 +307,11 @@ function hotspotRows(metrics: MethodologistMetrics): CsvRow[] {
     section: 'Classes',
     name: hotspot.className,
     value: hotspot.score,
-    details: `metamodel=${hotspot.metamodel}; OCL rules=${hotspot.oclRuleCount}; reaction files=${hotspot.reactionFileCount}`,
+    details: [
+      `Metamodel=${hotspot.metamodel}`,
+      detail('hotspotOclConstraints', hotspot.oclRuleCount),
+      detail('hotspotReactionsFiles', hotspot.reactionFileCount),
+    ].join('; '),
   }));
 }
 
@@ -282,7 +319,7 @@ function derivedRows(metrics: MethodologistMetrics): CsvRow[] {
   const category = METRICS_CATEGORY_LABELS.derived;
   return derivedMetricRows(metrics).map(row => ({
     category,
-    section: 'Ratios',
+    section: 'Derived ratios',
     name: row.metric,
     value: row.value,
     details: row.formula,
@@ -297,7 +334,7 @@ const CATEGORY_ROWS: Record<MetricsCategory, (metrics: MethodologistMetrics) => 
   derived: derivedRows,
 };
 
-function kpiTable(rows: Array<[string, string | number, string?]>): string {
+function kpiTable(rows: KpiRow[]): string {
   return toCsv(
     ['Metric', 'Value', 'Details'],
     rows.map(([name, value, details]) => [name, value, details ?? '']),
@@ -308,49 +345,26 @@ function sizeTables(metrics: MethodologistMetrics): { name: string; csv: string 
   return [
     {
       name: 'size-overview.csv',
-      csv: kpiTable([
-        ['Metamodels', metrics.metamodels.length],
-        ['Classes', metrics.classCount, `${metrics.abstractClassCount} abstract, ${metrics.concreteClassCount} concrete`],
-        ['Attributes', metrics.attributesTotal],
-        ['Associations', metrics.nonContainmentReferences, `${metrics.containmentReferences} containment`],
-        ['View types', metrics.viewTypeCount, `${metrics.singleViewTypeCount} single, ${metrics.multiViewTypeCount} multi`],
-        ['Enums', metrics.enumCount],
-        ['Enum literals', metrics.enumLiteralCount],
-        ['Packages', metrics.packageCount],
-        ['Model elements', metrics.instanceElementTotal, metrics.instanceModels.length === 0 ? 'No instance models' : `${metrics.instanceModels.length} models`],
-        ['Operations', metrics.operationsTotal],
-        ['Children max', metrics.nocMax, `avg ${formatAvg(metrics.nocAvg)}`],
-        ['Containment height', metrics.containmentHeightMax, `${metrics.crossPackageReferences} cross-package refs`],
-        ['Viewpoints', metrics.viewpointCount],
-        ['Views (instances)', 0, 'Not persisted'],
-      ]),
+      csv: kpiTable(sizeOverview(metrics)),
     },
     {
       name: 'size-metamodels.csv',
       csv: toCsv(
         [
-          'Metamodel', 'Classes', 'Abstract', 'Concrete', 'Attributes',
-          'Containment refs', 'Association refs', 'Enums', 'Literals', 'Packages',
-          'Operations', 'Children max', 'Children avg', 'Inheritance max', 'Inheritance avg',
-          'Cont. height', 'Cross-pkg refs',
+          'Metamodel', metricLabel('classes'), metricLabel('abstractClasses'), metricLabel('concreteClasses'),
+          'Containment references', 'Non-containment references', 'Enumerations', 'Enumeration literals',
+          metricLabel('packages'), metricLabel('crossPackageReferences'),
         ],
         metrics.metamodels.map(mm => [
           mm.name || 'Unnamed',
           mm.classCount,
           mm.abstractClassCount,
           mm.concreteClassCount,
-          mm.attributesTotal,
           mm.containmentReferences,
           mm.nonContainmentReferences,
           mm.enumCount,
           mm.enumLiteralCount,
           mm.packageCount,
-          mm.operationsTotal,
-          mm.nocMax,
-          formatAvg(mm.nocAvg),
-          mm.inheritanceDepthMax,
-          formatAvg(mm.inheritanceDepthAvg),
-          mm.containmentHeightMax,
           mm.crossPackageReferences,
         ]),
       ),
@@ -358,7 +372,10 @@ function sizeTables(metrics: MethodologistMetrics): { name: string; csv: string 
     {
       name: 'size-classes.csv',
       csv: toCsv(
-        ['Metamodel', 'Class', 'Abstract', 'Attributes', 'Operations', 'Children', 'Depth', 'Cont. height'],
+        [
+          'Metamodel', 'Class', 'Abstract', metricLabel('attributes'), metricLabel('operations'),
+          metricLabel('subclasses'), metricLabel('inheritanceDepth'), metricLabel('containmentHeight'),
+        ],
         metrics.metamodels.flatMap(mm => mm.classes.map(cls => [
           mm.name || 'Unnamed',
           cls.name,
@@ -378,28 +395,24 @@ function reactionTables(metrics: MethodologistMetrics): { name: string; csv: str
   return [
     {
       name: 'reactions-overview.csv',
-      csv: kpiTable([
-        ['Reactions', metrics.reactionCount, `${metrics.oneWayReactionPairCount} one-way, ${metrics.bidirectionalReactionPairCount} both-ways`],
-        ['Correspondence types', metrics.correspondenceTypeCount],
-        ['One-way links', metrics.oneWayReactionPairCount],
-        ['Both-ways links', metrics.bidirectionalReactionPairCount],
-        ['Reaction LOC', metrics.reactionTotalLoc, `avg ${formatAvg(metrics.avgLocPerReaction)} / reaction`],
-        ['Correspondence instances', metrics.correspondenceInstanceCount, metrics.correspondenceInstanceCount === 0 ? 'none loaded' : ''],
-      ]),
+      csv: kpiTable(reactionOverview(metrics)),
     },
     {
       name: 'reactions-correspondences.csv',
       csv: toCsv(
-        ['Source', 'Target', 'Direction', 'Types in file', 'Reactions', 'Routines', 'LOC (file)', 'LOC per reaction'],
+        [
+          'Source', 'Target', metricLabel('direction'), metricLabel('correspondenceTypes'), metricLabel('reactions'),
+          metricLabel('routines'), metricLabel('linesOfCode'), metricLabel('locPerReaction'),
+        ],
         metrics.correspondenceTypes.map(ct => [
           ct.sourceName,
           ct.targetName,
-          ct.direction === 'both-ways' ? 'Both ways' : 'One-way',
+          formatDirection(ct.direction),
           ct.correspondenceTypeCount,
           ct.reactionCount,
           ct.routineCount,
           ct.linesOfCode,
-          ct.reactions.length === 0 ? '' : ct.reactions.map(r => `${r.name}: ${r.linesOfCode}`).join('; '),
+          locPerReaction(ct.reactions),
         ]),
       ),
     },
@@ -410,16 +423,15 @@ function coverageTables(metrics: MethodologistMetrics): { name: string; csv: str
   return [
     {
       name: 'coverage-overview.csv',
-      csv: kpiTable([
-        ['Correspondence coverage %', metrics.correspondenceCoveragePercent, `${metrics.coveredConcreteClassCount} of ${metrics.concreteClassCount} concrete`],
-        ['Orphans', metrics.orphanMetamodelCount, `${metrics.linkedMetamodelCount} linked`],
-        ['OCL constraints', metrics.oclConstraintCount],
-      ]),
+      csv: kpiTable(coverageOverview(metrics)),
     },
     {
       name: 'coverage-links.csv',
       csv: toCsv(
-        ['Metamodel', 'Status', 'Fan-in', 'Fan-out', 'Covered classes', 'Concrete classes', 'Uncovered concrete classes'],
+        [
+          'Metamodel', metricLabel('linkStatus'), metricLabel('fanIn'), metricLabel('fanOut'),
+          metricLabel('coveredClasses'), 'Concrete classes', metricLabel('uncoveredClasses'),
+        ],
         metrics.metamodelLinks.map(link => [
           link.name || 'Unnamed',
           link.isOrphan ? 'Orphan' : 'Linked',
@@ -433,21 +445,7 @@ function coverageTables(metrics: MethodologistMetrics): { name: string; csv: str
     },
     {
       name: 'coverage-gap.csv',
-      csv: toCsv(
-        ['Kind', 'Count', 'Names'],
-        [
-          ['Detect only', metrics.detectOnlyClassNames.length, namesList(metrics.detectOnlyClassNames)],
-          ['Repair only', metrics.repairOnlyClassNames.length, namesList(metrics.repairOnlyClassNames)],
-          ['Detect and repair', metrics.detectAndRepairClassNames.length, namesList(metrics.detectAndRepairClassNames)],
-          [
-            'Rules with no reaction',
-            metrics.oclRulesWithoutReaction.length,
-            metrics.oclRulesWithoutReaction.map(rule => `${rule.name} (${rule.contextClass || 'no context'})`).join(', '),
-          ],
-          ['Unprotected classes', metrics.unprotectedClassNames.length, namesList(metrics.unprotectedClassNames)],
-          ['Unprotected associations', metrics.unprotectedAssociationNames.length, namesList(metrics.unprotectedAssociationNames)],
-        ],
-      ),
+      csv: toCsv(['Kind', 'Count', 'Names'], detectionAndRepair(metrics)),
     },
   ];
 }
@@ -456,7 +454,10 @@ function hotspotTables(metrics: MethodologistMetrics): { name: string; csv: stri
   return [{
     name: 'hotspots.csv',
     csv: toCsv(
-      ['Class', 'Metamodel', 'OCL rules', 'Reaction files', 'Score'],
+      [
+        'Class', 'Metamodel', metricLabel('hotspotOclConstraints'),
+        metricLabel('hotspotReactionsFiles'), metricLabel('hotspotScore'),
+      ],
       metrics.hotspotClasses.map(hotspot => [
         hotspot.className,
         hotspot.metamodel,

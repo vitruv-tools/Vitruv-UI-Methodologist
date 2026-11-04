@@ -10,48 +10,48 @@ import {
 import { MODAL_Z_INDEX, modalBackdropStyle, modalDialogShellStyle, useModalBodyLock } from '../ui/modalUtils';
 import {
   apiService,
-  type HelperProblem,
-  type HelperResponse,
-  type HelperTypeResponse,
+  type UtilityMethodProblem,
+  type UtilityMethodResponse,
+  type UtilityMethodTypeResponse,
 } from '../../services/api';
 import { extractApiErrorMessage } from '../../utils/apiErrorMessage';
-import { HelperEditor } from './HelperEditor';
+import { UtilityMethodEditor } from './UtilityMethodEditor';
 import { JavaCodeViewerModal } from './JavaCodeViewerModal';
-import { dedent, formatSignature } from './helperUtils';
+import { dedent, formatSignature } from './utilityMethodUtils';
 
 const MONO = 'ui-monospace, SFMono-Regular, Menlo, monospace';
-const HELPER_CLASS = 'tools.vitruv.methodologisttemplate.consistency.utils.Utility';
+const UTILITY_METHOD_CLASS = 'tools.vitruv.methodologisttemplate.consistency.utils.Utility';
 
-interface HelpersModalProps {
+interface UtilityMethodsModalProps {
   isOpen: boolean;
   vsumId: number | null;
-  /** View-only members can browse helpers and their Java code but not change them. */
+  /** View-only members can browse utility methods and their Java code but not change them. */
   readOnly?: boolean;
   onClose: () => void;
 }
 
-type View = { kind: 'list' } | { kind: 'edit'; helper: HelperResponse | null };
+type View = { kind: 'list' } | { kind: 'edit'; utilityMethod: UtilityMethodResponse | null };
 
 interface JavaView {
   title: string;
   subtitle?: string;
   code: string;
-  problems?: HelperProblem[];
+  problems?: UtilityMethodProblem[];
 }
 
 /**
- * Overview of the project's helpers: their OCL definitions, the Java they are translated to
+ * Overview of the project's utility methods: their Xtend definitions, the Java they are compiled to
  * and the editor to add, change and delete them.
  */
-export const HelpersModal: React.FC<HelpersModalProps> = ({ isOpen, vsumId, readOnly = false, onClose }) => {
-  const [helpers, setHelpers] = useState<HelperResponse[]>([]);
-  const [types, setTypes] = useState<HelperTypeResponse[]>([]);
+export const UtilityMethodsModal: React.FC<UtilityMethodsModalProps> = ({ isOpen, vsumId, readOnly = false, onClose }) => {
+  const [utilityMethods, setUtilityMethods] = useState<UtilityMethodResponse[]>([]);
+  const [types, setTypes] = useState<UtilityMethodTypeResponse[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [view, setView] = useState<View>({ kind: 'list' });
   const [javaView, setJavaView] = useState<JavaView | null>(null);
   const [filter, setFilter] = useState('');
-  const [deleteTarget, setDeleteTarget] = useState<HelperResponse | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<UtilityMethodResponse | null>(null);
   useModalBodyLock(isOpen);
 
   const load = useCallback(async () => {
@@ -59,11 +59,11 @@ export const HelpersModal: React.FC<HelpersModalProps> = ({ isOpen, vsumId, read
     setLoading(true);
     setError(null);
     try {
-      const [loadedHelpers, loadedTypes] = await Promise.all([
-        apiService.getHelpers(vsumId),
-        apiService.getHelperTypes(vsumId),
+      const [loadedUtilityMethods, loadedTypes] = await Promise.all([
+        apiService.getUtilityMethods(vsumId),
+        apiService.getUtilityMethodTypes(vsumId),
       ]);
-      setHelpers(loadedHelpers ?? []);
+      setUtilityMethods(loadedUtilityMethods ?? []);
       setTypes(loadedTypes ?? []);
     } catch (e) {
       setError(extractApiErrorMessage(e, 'The utility methods could not be loaded.'));
@@ -76,21 +76,21 @@ export const HelpersModal: React.FC<HelpersModalProps> = ({ isOpen, vsumId, read
     if (!isOpen) return;
     setView({ kind: 'list' });
     setFilter('');
-    load();
+    void load();
   }, [isOpen, load]);
 
-  const visibleHelpers = useMemo(() => {
+  const visibleUtilityMethods = useMemo(() => {
     const query = filter.trim().toLowerCase();
-    if (!query) return helpers;
-    return helpers.filter(h => h.name.toLowerCase().includes(query)
+    if (!query) return utilityMethods;
+    return utilityMethods.filter(h => h.name.toLowerCase().includes(query)
       || (h.description ?? '').toLowerCase().includes(query));
-  }, [helpers, filter]);
+  }, [utilityMethods, filter]);
 
   if (!isOpen || vsumId === null) return null;
 
   const showClass = async () => {
     try {
-      const generated = await apiService.getHelperClass(vsumId);
+      const generated = await apiService.getUtilityMethodClass(vsumId);
       setJavaView({
         title: generated.fileName,
         subtitle: generated.qualifiedClassName,
@@ -107,7 +107,7 @@ export const HelpersModal: React.FC<HelpersModalProps> = ({ isOpen, vsumId, read
     setDeleteTarget(null);
     if (!target) return;
     try {
-      await apiService.deleteHelper(vsumId, target.id);
+      await apiService.deleteUtilityMethod(vsumId, target.id);
       await load();
     } catch (e) {
       setError(extractApiErrorMessage(e, `The utility method '${target.name}' could not be deleted.`));
@@ -120,11 +120,15 @@ export const HelpersModal: React.FC<HelpersModalProps> = ({ isOpen, vsumId, read
   };
 
   const editing = view.kind === 'edit';
+  let title = 'Utility Methods';
+  if (view.kind === 'edit') {
+    title = view.utilityMethod ? `Edit Utility Method ${view.utilityMethod.name}` : 'New Utility Method';
+  }
 
   return (
     <dialog
       open
-      aria-labelledby="helpers-title"
+      aria-labelledby="utility-methods-title"
       style={{ ...modalDialogShellStyle, zIndex: MODAL_Z_INDEX }}
       onCancel={e => {
         e.preventDefault();
@@ -145,8 +149,8 @@ export const HelpersModal: React.FC<HelpersModalProps> = ({ isOpen, vsumId, read
       <div style={{ ...largeModalPanelStyle, maxWidth: 1280 }}>
         <div style={modalPanelHeaderStyle}>
           <div style={{ minWidth: 0 }}>
-            <h3 id="helpers-title" style={{ margin: 0, fontSize: 15, fontWeight: 700, color: 'var(--v-text)' }}>
-              {view.kind === 'edit' ? (view.helper ? `Edit Utility Method ${view.helper.name}` : 'New Utility Method') : 'Utility Methods'}
+            <h3 id="utility-methods-title" style={{ margin: 0, fontSize: 15, fontWeight: 700, color: 'var(--v-text)' }}>
+              {title}
             </h3>
             <div style={{ fontSize: 12, color: 'var(--v-text-muted)', marginTop: 2 }}>
               Utility methods for reactions and routines, generated into one Java class.
@@ -163,12 +167,12 @@ export const HelpersModal: React.FC<HelpersModalProps> = ({ isOpen, vsumId, read
         )}
 
         {view.kind === 'edit' ? (
-          <HelperEditor
-            key={view.helper?.id ?? 'new'}
+          <UtilityMethodEditor
+            key={view.utilityMethod?.id ?? 'new'}
             vsumId={vsumId}
-            helper={view.helper}
+            utilityMethod={view.utilityMethod}
             types={types}
-            helpers={helpers}
+            utilityMethods={utilityMethods}
             onCancel={() => setView({ kind: 'list' })}
             onSaved={handleSaved}
           />
@@ -176,11 +180,11 @@ export const HelpersModal: React.FC<HelpersModalProps> = ({ isOpen, vsumId, read
           <>
             <div style={modalPanelToolbarStyle}>
               {!readOnly && (
-                <ActionButton variant="primary" size="sm" onClick={() => setView({ kind: 'edit', helper: null })}>
+                <ActionButton variant="primary" size="sm" onClick={() => setView({ kind: 'edit', utilityMethod: null })}>
                   + New Utility Method
                 </ActionButton>
               )}
-              <ActionButton variant="secondary" size="sm" onClick={showClass} disabled={helpers.length === 0}>
+              <ActionButton variant="secondary" size="sm" onClick={showClass} disabled={utilityMethods.length === 0}>
                 View Java class
               </ActionButton>
               <span style={{ flex: 1 }} />
@@ -193,26 +197,26 @@ export const HelpersModal: React.FC<HelpersModalProps> = ({ isOpen, vsumId, read
               />
             </div>
             <div style={{ padding: '8px 20px', fontSize: 12, color: 'var(--v-text-secondary)', borderBottom: '1px solid var(--v-border-subtle)', background: 'var(--v-surface-muted)' }}>
-              In a reaction, add <code style={{ fontFamily: MONO }}>import {HELPER_CLASS}</code> and call e.g.{' '}
-              <code style={{ fontFamily: MONO }}>Utility.{helpers[0]?.name ?? 'myMethod'}(…)</code>.
+              Reactions import <code style={{ fontFamily: MONO }}>Utility</code> automatically. Call e.g.{' '}
+              <code style={{ fontFamily: MONO }}>Utility.{utilityMethods[0]?.name ?? 'myMethod'}(…)</code>.
             </div>
             <div style={{ flex: 1, overflowY: 'auto', padding: '12px 20px' }}>
-              {loading && helpers.length === 0 && <div style={{ color: 'var(--v-text-muted)', fontSize: 13 }}>Loading utility methods…</div>}
-              {!loading && helpers.length === 0 && !error && (
-                <EmptyState readOnly={readOnly} onCreate={() => setView({ kind: 'edit', helper: null })} />
+              {loading && utilityMethods.length === 0 && <div style={{ color: 'var(--v-text-muted)', fontSize: 13 }}>Loading utility methods…</div>}
+              {!loading && utilityMethods.length === 0 && !error && (
+                <EmptyState readOnly={readOnly} onCreate={() => setView({ kind: 'edit', utilityMethod: null })} />
               )}
-              {visibleHelpers.map(helper => (
-                <HelperCard
-                  key={helper.id}
-                  helper={helper}
+              {visibleUtilityMethods.map(utilityMethod => (
+                <UtilityMethodCard
+                  key={utilityMethod.id}
+                  utilityMethod={utilityMethod}
                   readOnly={readOnly}
                   onShowJava={() => setJavaView({
-                    title: `Java for ${helper.name}`,
-                    subtitle: `${HELPER_CLASS}.${helper.name}`,
-                    code: dedent(helper.javaMethod ?? ''),
+                    title: `Java for ${utilityMethod.name}`,
+                    subtitle: `${UTILITY_METHOD_CLASS}.${utilityMethod.name}`,
+                    code: dedent(utilityMethod.javaMethod ?? ''),
                   })}
-                  onEdit={() => setView({ kind: 'edit', helper })}
-                  onDelete={() => setDeleteTarget(helper)}
+                  onEdit={() => setView({ kind: 'edit', utilityMethod })}
+                  onDelete={() => setDeleteTarget(utilityMethod)}
                 />
               ))}
             </div>
@@ -245,40 +249,40 @@ const EmptyState: React.FC<{ readOnly: boolean; onCreate: () => void }> = ({ rea
   <div style={{ textAlign: 'center', padding: '48px 24px', color: 'var(--v-text-secondary)' }}>
     <div style={{ fontSize: 15, fontWeight: 600, color: 'var(--v-text)' }}>No utility methods yet</div>
     <p style={{ fontSize: 13, maxWidth: 520, margin: '8px auto 16px' }}>
-      Define reusable queries as utility methods with an OCL expression. They are translated into static Java
+      Define reusable queries as utility methods written in Xtend. They are compiled into static Java
       methods that every reaction of this project can call.
     </p>
     {!readOnly && <ActionButton variant="primary" size="sm" onClick={onCreate}>+ New Utility Method</ActionButton>}
   </div>
 );
 
-interface HelperCardProps {
-  helper: HelperResponse;
+interface UtilityMethodCardProps {
+  utilityMethod: UtilityMethodResponse;
   readOnly: boolean;
   onShowJava: () => void;
   onEdit: () => void;
   onDelete: () => void;
 }
 
-const HelperCard: React.FC<HelperCardProps> = ({ helper, readOnly, onShowJava, onEdit, onDelete }) => {
-  const translated = helper.problems.length === 0 && helper.javaMethod !== null;
+const UtilityMethodCard: React.FC<UtilityMethodCardProps> = ({ utilityMethod, readOnly, onShowJava, onEdit, onDelete }) => {
+  const compiled = utilityMethod.javaMethod !== null && utilityMethod.problems.every(p => p.severity === 'WARNING');
   return (
     <article
-      aria-label={`Utility method ${helper.name}`}
+      aria-label={`Utility method ${utilityMethod.name}`}
       style={{ border: '1px solid var(--v-border)', borderRadius: 10, marginBottom: 12, background: 'var(--v-surface)', overflow: 'hidden' }}
     >
       <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12, padding: '10px 14px' }}>
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ fontFamily: MONO, fontSize: 13, color: 'var(--v-text)', overflowWrap: 'anywhere' }}>
-            <strong>{helper.name}</strong>
-            <span style={{ color: 'var(--v-text-muted)' }}>{formatSignature(helper).slice(helper.name.length)}</span>
+            <strong>{utilityMethod.name}</strong>
+            <span style={{ color: 'var(--v-text-muted)' }}>{formatSignature(utilityMethod).slice(utilityMethod.name.length)}</span>
           </div>
-          {helper.description && (
-            <div style={{ fontSize: 12.5, color: 'var(--v-text-secondary)', marginTop: 4 }}>{helper.description}</div>
+          {utilityMethod.description && (
+            <div style={{ fontSize: 12.5, color: 'var(--v-text-secondary)', marginTop: 4 }}>{utilityMethod.description}</div>
           )}
-          {helper.imports.length > 0 && (
+          {utilityMethod.imports.length > 0 && (
             <div style={{ fontSize: 11.5, color: 'var(--v-text-muted)', marginTop: 4, fontFamily: MONO }}>
-              imports {helper.imports.join(', ')}
+              imports {utilityMethod.imports.join(', ')}
             </div>
           )}
         </div>
@@ -289,27 +293,28 @@ const HelperCard: React.FC<HelperCardProps> = ({ helper, readOnly, onShowJava, o
             padding: '2px 8px',
             borderRadius: 999,
             flexShrink: 0,
-            background: translated ? 'var(--v-success-bg)' : 'var(--v-danger-bg)',
-            color: translated ? 'var(--v-success-text)' : 'var(--v-danger-text)',
+            background: compiled ? 'var(--v-success-bg)' : 'var(--v-danger-bg)',
+            color: compiled ? 'var(--v-success-text)' : 'var(--v-danger-text)',
           }}
         >
-          {translated ? 'Java generated' : 'Cannot be translated'}
+          {compiled ? 'Java generated' : 'Does not compile'}
         </span>
         <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
-          <ActionButton variant="secondary" size="sm" onClick={onShowJava} disabled={!translated}>View Java</ActionButton>
+          <ActionButton variant="secondary" size="sm" onClick={onShowJava} disabled={!compiled}>View Java</ActionButton>
           {!readOnly && <ActionButton variant="secondary" size="sm" onClick={onEdit}>Edit</ActionButton>}
           {!readOnly && <ActionButton variant="dangerOutline" size="sm" onClick={onDelete}>Delete</ActionButton>}
         </div>
       </div>
       <pre
-        aria-label={`OCL definition of ${helper.name}`}
+        aria-label={`Xtend definition of ${utilityMethod.name}`}
         style={{ margin: 0, padding: '10px 14px', background: 'var(--v-surface-muted)', borderTop: '1px solid var(--v-border-subtle)', fontFamily: MONO, fontSize: 12, color: 'var(--v-text)', maxHeight: 180, overflow: 'auto', whiteSpace: 'pre-wrap', tabSize: 4 }}
       >
-        {helper.oclDefinition}
+        {utilityMethod.xtendDefinition}
       </pre>
-      {helper.problems.map(problem => (
-        <div key={`${problem.line}:${problem.column}:${problem.message}`} style={{ padding: '6px 14px', fontSize: 12, color: 'var(--v-danger-text)', borderTop: '1px solid var(--v-border-subtle)' }}>
-          {problem.line !== null ? `Line ${problem.line}, column ${problem.column}: ` : ''}{problem.message}
+      {utilityMethod.problems.map(problem => (
+        <div key={`${problem.severity}:${problem.line}:${problem.column}:${problem.message}`} style={{ padding: '6px 14px', fontSize: 12, color: problem.severity === 'WARNING' ? 'var(--v-warning-text)' : 'var(--v-danger-text)', borderTop: '1px solid var(--v-border-subtle)' }}>
+          {problem.severity === 'WARNING' ? 'Warning: ' : ''}
+          {problem.line === null ? '' : `Line ${problem.line}, column ${problem.column}: `}{problem.message}
         </div>
       ))}
     </article>

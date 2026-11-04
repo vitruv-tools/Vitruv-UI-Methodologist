@@ -44,7 +44,12 @@ export default defineConfig(({ mode }) => {
       // Matches CRA's Jest default (resetMocks: true).
       mockReset: true,
       alias: [
-        { find: /^.*monaco-editor.*$/, replacement: path.resolve(import.meta.dirname, 'src/__mocks__/monaco-editor.ts') },
+        // Stub the monaco-editor package only. A broader match also catches
+        // @monaco-editor/react and drops the default export the editor import needs.
+        {
+          find: /^(?:.*[\\/])?monaco-editor(?:[\\/].*)?$/,
+          replacement: path.resolve(import.meta.dirname, 'src/__mocks__/monaco-editor.ts'),
+        },
       ],
       coverage: {
         provider: 'v8',

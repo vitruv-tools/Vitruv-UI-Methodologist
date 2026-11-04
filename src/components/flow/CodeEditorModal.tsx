@@ -24,6 +24,11 @@ interface CodeEditorModalProps {
   readonly onInitialize?: (code: string) => Promise<void> | void;
   readonly onDelete?: () => void;
   readonly initialCode?: string;
+  /**
+   * Text the editor opens with instead of `initialCode`, e.g. with an import added. It counts as an
+   * unsaved change until it is saved.
+   */
+  readonly initialDraft?: string;
   readonly edgeId: string;
   readonly sourceFileName?: string;
   readonly targetFileName?: string;
@@ -37,6 +42,24 @@ interface CodeEditorModalProps {
   readonly title?: string;
   /** When true, code is visible but cannot be edited or saved. */
   readonly readOnly?: boolean;
+  /** 1-based position to place the cursor at and scroll into view, e.g. a build problem. */
+  readonly initialPosition?: EditorPosition;
+}
+
+export interface EditorPosition {
+  readonly lineNumber: number;
+  readonly column?: number;
+}
+
+/** Puts the cursor at `position` and scrolls it to the middle of the editor. */
+export function revealEditorPosition(
+  editor: Pick<monaco.editor.IStandaloneCodeEditor, 'setPosition' | 'revealLineInCenter'>,
+  position: EditorPosition,
+): void {
+  const lineNumber = Math.max(1, Math.floor(position.lineNumber));
+  const column = Math.max(1, Math.floor(position.column ?? 1));
+  editor.setPosition({ lineNumber, column });
+  editor.revealLineInCenter(lineNumber);
 }
 
 const toolbarDividerStyle: React.CSSProperties = {
@@ -81,6 +104,7 @@ export function CodeEditorModal({
   onInitialize,
   onDelete,
   initialCode = '',
+  initialDraft,
   edgeId,
   sourceFileName,
   targetFileName,
@@ -92,8 +116,9 @@ export function CodeEditorModal({
   languageConfig,
   title = 'Code Editor',
   readOnly = false,
+  initialPosition,
 }: CodeEditorModalProps) {
-  const [code, setCode] = useState(initialCode);
+  const [code, setCode] = useState(initialDraft ?? initialCode);
   const [savedCode, setSavedCode] = useState(initialCode);
   const [saving, setSaving] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
@@ -148,10 +173,10 @@ export function CodeEditorModal({
   }, []);
 
   useEffect(() => {
-    setCode(initialCode);
+    setCode(initialDraft ?? initialCode);
     setSavedCode(initialCode);
     setSaveSuccess(false);
-  }, [initialCode, isOpen]);
+  }, [initialCode, initialDraft, isOpen]);
 
   useEffect(() => {
     if (isOpen && onInitialize && !readOnly) {
@@ -341,8 +366,19 @@ export function CodeEditorModal({
     if (!readOnly) {
       connectToLsp(monacoInstance);
     }
+    if (initialPosition) revealEditorPosition(editor, initialPosition);
     editor.focus();
   };
+
+  // Jump again when the editor is already open and asked for another position.
+  const initialLine = initialPosition?.lineNumber;
+  const initialColumn = initialPosition?.column;
+  useEffect(() => {
+    const editor = editorRef.current;
+    if (!editor || initialLine == null) return;
+    revealEditorPosition(editor, { lineNumber: initialLine, column: initialColumn });
+    editor.focus();
+  }, [initialLine, initialColumn]);
 
   const sendInitialize = (rootUri: string, webSocket: WebSocket) => {
     if (!rootUri) return;

@@ -3,10 +3,17 @@ import { copyTextToClipboard } from '../../utils/apiErrorMessage';
 
 export type CanvasPopupNotificationType = 'success' | 'error' | 'info';
 
+/** A button in the notification that leads to where the problem can be fixed. */
+export interface CanvasPopupNotificationAction {
+  label: string;
+  onClick: () => void;
+}
+
 interface CanvasPopupNotificationProps {
   message: string;
   type: CanvasPopupNotificationType;
   details?: string;
+  action?: CanvasPopupNotificationAction;
   onClose?: () => void;
 }
 
@@ -35,6 +42,7 @@ export const CanvasPopupNotification: React.FC<CanvasPopupNotificationProps> = (
   message,
   type,
   details,
+  action,
   onClose,
 }) => {
   const [copied, setCopied] = useState(false);
@@ -72,6 +80,15 @@ export const CanvasPopupNotification: React.FC<CanvasPopupNotificationProps> = (
         }}>
           {message}
         </p>
+        {action && (
+          <button
+            type="button"
+            style={{ ...actionButtonStyle, textDecoration: 'underline' }}
+            onClick={action.onClick}
+          >
+            {action.label}
+          </button>
+        )}
         {type === 'error' && (
           <button
             type="button"

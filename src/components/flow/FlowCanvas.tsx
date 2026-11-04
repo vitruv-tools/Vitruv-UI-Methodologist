@@ -26,6 +26,7 @@ import { EcoreFileBox } from './EcoreFileBox';
 import { metaModelDisplayColor } from '../../utils/metaModelColors';
 import { ConnectionLine } from './ConnectionLine';
 import { ReactionEditorModal } from './ReactionEditorModal';
+import { findMetaModelNodeByFileId, findReactionEdgeByFileId } from './flowCanvasProblemNavigation';
 import { ConfirmDialog } from '../ui/ConfirmDialog';
 import { apiService } from '../../services/api';
 import { WorkspaceSnapshot } from '../../types/workspace';
@@ -110,6 +111,7 @@ import {
   nodeWorldRect,
   pointInRect,
   routeAllReactionEdges,
+  routeReactionEdgesWhileDragging,
   routeOrthogonalAStar,
   routeToCursorAStar,
 } from './flowCanvasAStarRouter';
@@ -178,9 +180,18 @@ import {
   upsertVsumLayoutPosition,
   type VsumLayoutIdentity,
 } from '../../utils/vsumLayoutStorage';
+import { collectVsumRoutes, loadVsumRoutes, saveVsumRoutes } from '../../utils/vsumRouteStorage';
+import { settleReactionRoutes } from './flowCanvasRouteSettle';
 
 import EObjectNode from './lowcode/EObjectNode';
 import BoundingBoxNode from './lowcode/BoundingBoxNode';
+
+/**
+ * Snap distance while dragging a reaction. Class and attribute handles are 24px apart, so the
+ * default 28px radius made the line leap between neighbouring handles; this keeps it on the one
+ * under the cursor (the handles' hit areas are widened in reaction.css to compensate).
+ */
+const REACTION_CONNECTION_RADIUS = 10;
 
 export type { CanvasMode } from './flowCanvasTypes';
 
@@ -225,6 +236,13 @@ export interface FlowCanvasHandle {
   autoLayoutEcoreBoxes: () => void;
   fitUmlView: () => void;
   openSelectedReactionEditor: () => boolean;
+  /**
+   * Opens the reaction file with this id in the Reaction Editor, at `position` if given.
+   * Returns false if no reaction link on the canvas uses the file.
+   */
+  openReactionFileAt: (reactionFileId: number, position?: { lineNumber: number; column?: number }) => boolean;
+  /** Selects and opens the metamodel whose ecore or genmodel file has this id; false if absent. */
+  openMetaModelFile: (fileId: number) => boolean;
   establishBaseline: () => void;
 }
 
@@ -397,7 +415,9 @@ export const FlowCanvas = forwardRef<FlowCanvasHandle, FlowCanvasProps>(
     const lowCodeEditorRef = useRef<LowCodeReactionEditorHandle>(null);
     const selectedEdge = useSelectedEdgeStore((s) => s.selectedEdge);
 
-    const circleVisible = activeCanvasMode === 'views';
+    // The VSUM circle is a Views-mode layout. Reaction mode expands metamodels
+    // into a different graph, so the circle must unmount while that view is open.
+    const circleVisible = activeCanvasMode === 'views' && !addReactionMode;
 
     const {
       nodes,
@@ -532,6 +552,8 @@ export const FlowCanvas = forwardRef<FlowCanvasHandle, FlowCanvasProps>(
     }, [reactFlowInstance, setEdges]);
 
     const bboxDraggingIdsRef = useRef<Set<string>>(new Set());
+    const nodeDraggingRef = useRef(false);
+    const [isNodeDragging, setIsNodeDragging] = useState(false);
 
     /**
      * Models' selection lives in selectedFileIds, so React Flow's own select changes for them
@@ -568,8 +590,16 @@ export const FlowCanvas = forwardRef<FlowCanvasHandle, FlowCanvasProps>(
       });
 
       const { isDragging, dragEnded } = getNodeDragFlags(clampedChanges);
-      if (isDragging) setHistoryPaused(true);
-      if (dragEnded) setHistoryPaused(false);
+      if (isDragging) {
+        setHistoryPaused(true);
+        if (!nodeDraggingRef.current) setIsNodeDragging(true);
+        nodeDraggingRef.current = true;
+      }
+      if (dragEnded) {
+        setHistoryPaused(false);
+        nodeDraggingRef.current = false;
+        setIsNodeDragging(false);
+      }
 
       const draggingIds = bboxDraggingIdsRef.current;
       syncBboxDraggingIds(clampedChanges, draggingIds);
@@ -907,7 +937,10 @@ export const FlowCanvas = forwardRef<FlowCanvasHandle, FlowCanvasProps>(
 
     // ── Reaction code editor ──────────────────────────────────────────────────
 
-    const handleEdgeDoubleClick = useCallback(async (edgeId: string) => {
+    const handleEdgeDoubleClick = useCallback(async (
+      edgeId: string,
+      initialPosition?: CodeEditorState['initialPosition'],
+    ) => {
       const edge = edges.find(e => e.id === edgeId);
       if (!edge) return;
 
@@ -946,6 +979,7 @@ export const FlowCanvas = forwardRef<FlowCanvasHandle, FlowCanvasProps>(
         sourceFileName: getFileName(edge.source),
         targetFileName: getFileName(edge.target),
         reactionFileId,
+        initialPosition,
       });
     }, [edges, nodes]);
 
@@ -953,6 +987,16 @@ export const FlowCanvas = forwardRef<FlowCanvasHandle, FlowCanvasProps>(
       const selected = edges.filter(e => e.selected && e.type === 'reactions');
       if (selected.length === 0) return false;
       void handleEdgeDoubleClick(selected[0].id);
+      return true;
+    }, [edges, handleEdgeDoubleClick]);
+
+    const openReactionFileAt = useCallback((
+      reactionFileId: number,
+      position?: CodeEditorState['initialPosition'],
+    ): boolean => {
+      const edge = findReactionEdgeByFileId(edges, reactionFileId);
+      if (!edge) return false;
+      void handleEdgeDoubleClick(edge.id, position);
       return true;
     }, [edges, handleEdgeDoubleClick]);
 
@@ -1282,9 +1326,11 @@ export const FlowCanvas = forwardRef<FlowCanvasHandle, FlowCanvasProps>(
       onEcoreFileRename?.(id, newFileName);
     }, [editable, setNodes, onEcoreFileRename]);
 
-    // Clear reaction source when mode is toggled off
+    // Clear reaction source when mode is toggled off, and drop circle selection
+    // so the Views overlay does not stay selected across the reaction view.
     useEffect(() => {
-      if (!addReactionMode) setReactionSourceId(null);
+      if (addReactionMode) setCircleSelected(false);
+      else setReactionSourceId(null);
     }, [addReactionMode]);
 
     const ecoreIdentifierKey = useMemo(
@@ -1344,6 +1390,13 @@ export const FlowCanvas = forwardRef<FlowCanvasHandle, FlowCanvasProps>(
         ecoreFileId: typeof data?.ecoreFileId === 'number' ? data.ecoreFileId : undefined,
       });
     }, [nodes, onEcoreFileExpand, selectOnlyFile]);
+
+    const openMetaModelFile = useCallback((fileId: number): boolean => {
+      const node = findMetaModelNodeByFileId(nodes, fileId);
+      if (!node) return false;
+      handleEcoreFileExpand(node.data.fileName, node.data.fileContent ?? '');
+      return true;
+    }, [nodes, handleEcoreFileExpand]);
 
     const updateEcoreFileData = useCallback((
       fileName: string,
@@ -1546,6 +1599,41 @@ export const FlowCanvas = forwardRef<FlowCanvasHandle, FlowCanvasProps>(
       ));
     }, [setEdges, editable]);
 
+    const handleEdgeRouteChange = useCallback((
+      edgeId: string,
+      points: Array<{ x: number; y: number }>,
+    ) => {
+      if (!editable) return;
+      setEdges(prevEdges => prevEdges.map(edge => {
+        if (edge.id !== edgeId) return edge;
+        const saved = edge.data?.savedRoute;
+        if (!saved) return edge;
+        return { ...edge, data: { ...edge.data, savedRoute: { ...saved, points } } };
+      }));
+    }, [setEdges, editable]);
+
+    // Links keep their path: it is only computed for links that have none yet
+    // (new, or their box moved) and is otherwise restored from local storage.
+    useEffect(() => {
+      if (nodeDraggingRef.current || connectionDragState?.isActive || addReactionMode || umlModalOpen) return;
+      if (!edges.some(e => e.type === 'reactions')) return;
+      const projectId = useProjectStore.getState().activeId;
+      const settled = settleReactionRoutes(nodes, edges, loadVsumRoutes(projectId));
+      if (settled !== edges) setEdges(settled);
+    }, [nodes, edges, setEdges, connectionDragState?.isActive, addReactionMode, umlModalOpen]);
+
+    const savedRoutesSignatureRef = useRef('');
+    useEffect(() => {
+      if (!editable || nodeDraggingRef.current || addReactionMode || umlModalOpen) return;
+      const routes = collectVsumRoutes(nodes, edges);
+      if (Object.keys(routes).length === 0) return;
+      const projectId = useProjectStore.getState().activeId;
+      const signature = `${projectId}:${JSON.stringify(routes)}`;
+      if (signature === savedRoutesSignatureRef.current) return;
+      savedRoutesSignatureRef.current = signature;
+      saveVsumRoutes(projectId, { ...loadVsumRoutes(projectId), ...routes });
+    }, [nodes, edges, editable, addReactionMode, umlModalOpen]);
+
     const handleEdgeReorderRequest = useCallback((
       edgeId: string,
       controlPoint: { x: number; y: number },
@@ -1589,8 +1677,10 @@ export const FlowCanvas = forwardRef<FlowCanvasHandle, FlowCanvasProps>(
       autoLayoutEcoreBoxes,
       fitUmlView,
       openSelectedReactionEditor,
+      openReactionFileAt,
+      openMetaModelFile,
       establishBaseline,
-    }), [handleToolClick, loadDiagramData, nodes, edges, viewTypes, addEcoreFile, updateEcoreDisplayName, updateEcoreFileData, resetExpandedFile, undo, redo, canUndo, canRedo, getReactionEdges, getWorkspaceSnapshot, autoLayoutEcoreBoxes, fitUmlView, openSelectedReactionEditor, establishBaseline, locked]);
+    }), [handleToolClick, loadDiagramData, nodes, edges, viewTypes, addEcoreFile, updateEcoreDisplayName, updateEcoreFileData, resetExpandedFile, undo, redo, canUndo, canRedo, getReactionEdges, getWorkspaceSnapshot, autoLayoutEcoreBoxes, fitUmlView, openSelectedReactionEditor, openReactionFileAt, openMetaModelFile, establishBaseline, locked]);
 
     // ── Render mapping ────────────────────────────────────────────────────────
 
@@ -1649,10 +1739,16 @@ export const FlowCanvas = forwardRef<FlowCanvasHandle, FlowCanvasProps>(
       [fineParallelMap],
     );
 
-    const reactionRoutes = useMemo(
-      () => routeAllReactionEdges(nodes, uniqueEdges),
-      [nodes, uniqueEdges],
-    );
+    // While a box is dragged only cheap routes are computed; the full search runs when it lands.
+    const settledRoutesRef = useRef<ReturnType<typeof routeAllReactionEdges>>(new Map());
+    const reactionRoutes = useMemo(() => {
+      if (isNodeDragging) {
+        return routeReactionEdgesWhileDragging(nodes, uniqueEdges, settledRoutesRef.current);
+      }
+      const routes = routeAllReactionEdges(nodes, uniqueEdges);
+      settledRoutesRef.current = routes;
+      return routes;
+    }, [nodes, uniqueEdges, isNodeDragging]);
 
     const resolveReactionRoute = useCallback(
       (edge: Edge) => reactionRoutes.get(edge.id),
@@ -1672,6 +1768,7 @@ export const FlowCanvas = forwardRef<FlowCanvasHandle, FlowCanvasProps>(
       handleEdgeDragEnd,
       handleEdgeHandleChange,
       handleEdgeReorderRequest,
+      handleEdgeRouteChange,
       getFineParallel: resolveFineParallel,
       getReactionRoute: resolveReactionRoute,
     }), [
@@ -1687,6 +1784,7 @@ export const FlowCanvas = forwardRef<FlowCanvasHandle, FlowCanvasProps>(
       handleEdgeDragEnd,
       handleEdgeHandleChange,
       handleEdgeReorderRequest,
+      handleEdgeRouteChange,
       resolveFineParallel,
       resolveReactionRoute,
     ]);
@@ -1765,7 +1863,7 @@ export const FlowCanvas = forwardRef<FlowCanvasHandle, FlowCanvasProps>(
           onEdgesChange={guardedOnEdgesChange}
           onConnect={guardedOnConnect}
           connectionMode={ConnectionMode.Loose}
-          connectionRadius={28}
+          connectionRadius={addReactionMode ? REACTION_CONNECTION_RADIUS : 28}
           onDrop={handleDrop}
           onDragOver={handleDragOver}
           onDragLeave={handleDragLeave}

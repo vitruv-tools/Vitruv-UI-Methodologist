@@ -266,9 +266,9 @@ describe('ApiService – deleteFile', () => {
   });
 });
 
-// ── downloadVsumArtifact ───────────────────────────────────────────────────────
+// ── downloadVsumProject ───────────────────────────────────────────────────────
 
-describe('ApiService – downloadVsumArtifact', () => {
+describe('ApiService – downloadVsumProject', () => {
   const { AuthService } = (authModule as unknown) as {
     AuthService: { ensureValidToken: Mock; refreshToken: Mock };
   };
@@ -294,9 +294,18 @@ describe('ApiService – downloadVsumArtifact', () => {
   });
   afterEach(() => vi.restoreAllMocks());
 
+  it('requests the project endpoint', async () => {
+    mockZipFetch();
+    await apiService.downloadVsumProject(42);
+    expect(global.fetch).toHaveBeenCalledWith(
+      expect.stringMatching(/\/api\/v1\/vsums\/42\/project$/),
+      expect.objectContaining({ method: 'GET' }),
+    );
+  });
+
   it('returns a ZIP blob on success', async () => {
     mockZipFetch();
-    const blob = await apiService.downloadVsumArtifact(42);
+    const blob = await apiService.downloadVsumProject(42);
     expect(blob.size).toBeGreaterThan(0);
     const header = new Uint8Array(await blob.slice(0, 2).arrayBuffer());
     expect(header[0]).toBe(0x50);
@@ -316,7 +325,7 @@ describe('ApiService – downloadVsumArtifact', () => {
       blob: async () => new Blob(['{"message":"Build failed"}'], { type: 'application/json' }),
     } as unknown as Response);
 
-    await expect(apiService.downloadVsumArtifact(42)).rejects.toThrow('Build failed');
+    await expect(apiService.downloadVsumProject(42)).rejects.toThrow('Build failed');
   });
 
   it('throws on non-ok status', async () => {
@@ -329,7 +338,136 @@ describe('ApiService – downloadVsumArtifact', () => {
       blob: async () => new Blob([]),
     } as unknown as Response);
 
-    await expect(apiService.downloadVsumArtifact(42)).rejects.toThrow('Server error');
+    await expect(apiService.downloadVsumProject(42)).rejects.toThrow('Server error');
+  });
+});
+
+// ── downloadVsumJar ───────────────────────────────────────────────────────────
+
+describe('ApiService – downloadVsumJar', () => {
+  const { AuthService } = (authModule as unknown) as {
+    AuthService: { ensureValidToken: Mock; refreshToken: Mock };
+  };
+
+  beforeEach(() => {
+    AuthService.ensureValidToken.mockResolvedValue('mock-token');
+  });
+  afterEach(() => vi.restoreAllMocks());
+
+  it('requests the build artifact and returns the jar', async () => {
+    const jarBytes = new Uint8Array([0x50, 0x4b, 0x03, 0x04, 0x00]);
+    vi.spyOn(global, 'fetch').mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      statusText: 'OK',
+      headers: {
+        get: (name: string) =>
+          name.toLowerCase() === 'content-type' ? 'application/octet-stream' : null,
+      },
+      text: async () => '',
+      blob: async () => new Blob([jarBytes], { type: 'application/octet-stream' }),
+    } as unknown as Response);
+
+    const blob = await apiService.downloadVsumJar(42);
+
+    expect(blob.size).toBe(jarBytes.length);
+    expect(global.fetch).toHaveBeenCalledWith(
+      expect.stringMatching(/\/api\/v1\/vsums\/42\/build\/artifact$/),
+      expect.objectContaining({ method: 'GET' }),
+    );
+  });
+});
+
+// ── structured build problems ─────────────────────────────────────────────────
+
+describe('ApiService – structured build problems', () => {
+  const { AuthService } = (authModule as unknown) as {
+    AuthService: { ensureValidToken: Mock; refreshToken: Mock };
+  };
+
+  const problem = {
+    source: 'REACTIONS',
+    file: 'my.reactions',
+    fileId: 7,
+    line: 51,
+    column: 30,
+    message: 'Couldn\'t resolve reference to EClass \'Foo\'.',
+  };
+
+  beforeEach(() => {
+    AuthService.ensureValidToken.mockResolvedValue('mock-token');
+  });
+  afterEach(() => vi.restoreAllMocks());
+
+  it('keeps errorCode and problems of a failed JAR export on response.data', async () => {
+    const body = {
+      message: 'The uploaded reactions do not match the uploaded metamodels',
+      errorCode: 'VSUM_REACTIONS_ERROR',
+      problems: [problem],
+    };
+    vi.spyOn(global, 'fetch').mockResolvedValueOnce({
+      ok: false,
+      status: 422,
+      statusText: 'Error',
+      headers: { get: () => 'application/json' },
+      text: async () => JSON.stringify(body),
+      blob: async () => new Blob([]),
+    } as unknown as Response);
+
+    const error = await apiService.downloadVsumJar(42).catch((e: unknown) => e);
+
+    expect(error).toBeInstanceOf(Error);
+    expect((error as Error).message).toBe(body.message);
+    expect((error as any).response.data).toMatchObject({
+      errorCode: 'VSUM_REACTIONS_ERROR',
+      problems: [problem],
+    });
+  });
+
+  it('starts an asynchronous build', async () => {
+    mockFetch({ data: { id: 3, vsumId: 42, status: 'QUEUED' }, message: 'started' }, 202);
+
+    const result = await apiService.requestVsumBuild(42);
+
+    expect(result.data.status).toBe('QUEUED');
+    expect(global.fetch).toHaveBeenCalledWith(
+      expect.stringMatching(/\/api\/v1\/vsums\/42\/builds$/),
+      expect.objectContaining({ method: 'POST' }),
+    );
+  });
+
+  it('forces a new asynchronous build on request', async () => {
+    mockFetch({ data: { id: 4, vsumId: 42, status: 'QUEUED' }, message: 'started' }, 202);
+
+    await apiService.requestVsumBuild(42, true);
+
+    expect(global.fetch).toHaveBeenCalledWith(
+      expect.stringMatching(/\/api\/v1\/vsums\/42\/builds\?force=true$/),
+      expect.objectContaining({ method: 'POST' }),
+    );
+  });
+
+  it('returns errorCode and problems of a failed asynchronous build', async () => {
+    mockFetch({
+      data: {
+        id: 3,
+        vsumId: 42,
+        status: 'FAILED',
+        errorMessage: 'The uploads do not compile',
+        errorCode: 'VSUM_BUILD_FAILED',
+        problems: [problem],
+      },
+      message: null,
+    });
+
+    const result = await apiService.getVsumBuild(42, 3);
+
+    expect(global.fetch).toHaveBeenCalledWith(
+      expect.stringMatching(/\/api\/v1\/vsums\/42\/builds\/3$/),
+      expect.any(Object),
+    );
+    expect(result.data.errorCode).toBe('VSUM_BUILD_FAILED');
+    expect(result.data.problems).toEqual([problem]);
   });
 });
 

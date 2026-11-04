@@ -56,14 +56,14 @@ const ToolbarDivider = () => (
 );
 
 const BackIcon = () => (
-  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
     <line x1="19" y1="12" x2="5" y2="12" />
     <polyline points="12 19 5 12 12 5" />
   </svg>
 );
 
 const RefreshIcon = () => (
-  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
     <polyline points="23 4 23 10 17 10" />
     <polyline points="1 20 1 14 7 14" />
     <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15" />
@@ -448,19 +448,19 @@ export const FloatingUMLPanel: React.FC<FloatingUMLPanelProps> = ({
           zIndex: 30,
         }}>
           <ZoomButton title="Zoom in" onClick={() => diagramRef.current?.zoomIn()}>
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" aria-hidden="true">
               <line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" />
             </svg>
           </ZoomButton>
 
           <ZoomButton title="Zoom out" onClick={() => diagramRef.current?.zoomOut()}>
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" aria-hidden="true">
               <line x1="5" y1="12" x2="19" y2="12" />
             </svg>
           </ZoomButton>
 
           <ZoomButton title="Fit to view" onClick={() => diagramRef.current?.fitToView()}>
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
               <path d="M8 3H5a2 2 0 0 0-2 2v3" />
               <path d="M21 8V5a2 2 0 0 0-2-2h-3" />
               <path d="M3 16v3a2 2 0 0 0 2 2h3" />

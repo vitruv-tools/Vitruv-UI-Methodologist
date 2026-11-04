@@ -7,8 +7,9 @@ interface CanvasSidebarToolbarProps {
   onToggleReactionMode: () => void;
   onOpenReactionEditor?: () => void;
   onToggleModelDrawer: () => void;
-  onOpenHelpers?: () => void;
-  onDownloadArtifact: () => void;
+  onOpenUtilityMethods?: () => void;
+  onDownloadProject: () => void;
+  onDownloadJar: () => void;
   onDownloadBundle: () => void;
   onSaveChanges: () => void;
   onCheckBuild: () => void;
@@ -16,7 +17,8 @@ interface CanvasSidebarToolbarProps {
   onRedo: () => void;
   canUndo: boolean;
   canRedo: boolean;
-  downloadingArtifact: boolean;
+  downloadingProject: boolean;
+  downloadingJar: boolean;
   downloadingBundle: boolean;
   savingChanges: boolean;
   checkingBuild: boolean;
@@ -137,12 +139,13 @@ const PlusBoxIcon = () => (
   </svg>
 );
 
-const FunctionIcon = () => (
-  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M14.5 4.5c-1.6-.6-3.2.1-3.7 2L8.6 17c-.5 2-2.1 2.7-3.6 2.1" />
-    <line x1="7.5" y1="10" x2="14" y2="10" />
-    <path d="M16.5 13l4 5" />
-    <path d="M20.5 13l-4 5" />
+/** A toolbox: the utility methods are reusable tools for reactions. */
+const ToolboxIcon = () => (
+  <svg aria-hidden="true" data-icon="toolbox" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+    <rect x="3" y="8" width="18" height="12" rx="2" />
+    <path d="M9 8V6a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2" />
+    <line x1="3" y1="13" x2="21" y2="13" />
+    <line x1="12" y1="12" x2="12" y2="14" />
   </svg>
 );
 
@@ -193,6 +196,15 @@ const PackageIcon = () => (
     <path d="M3.27 6.96 12 12l8.73-5.04" />
     <path d="M12 22.08V12" />
     <path d="M12 2 3 7l9 5 9-5-9-5Z" />
+  </svg>
+);
+
+const JarIcon = () => (
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z" />
+    <path d="M14 2v6h6" />
+    <path d="m10 13-2 2 2 2" />
+    <path d="m14 17 2-2-2-2" />
   </svg>
 );
 
@@ -261,8 +273,9 @@ export const CanvasSidebarToolbar: React.FC<CanvasSidebarToolbarProps> = ({
   onToggleReactionMode,
   onOpenReactionEditor,
   onToggleModelDrawer,
-  onOpenHelpers,
-  onDownloadArtifact,
+  onOpenUtilityMethods,
+  onDownloadProject,
+  onDownloadJar,
   onDownloadBundle,
   onSaveChanges,
   onCheckBuild,
@@ -270,12 +283,14 @@ export const CanvasSidebarToolbar: React.FC<CanvasSidebarToolbarProps> = ({
   onRedo,
   canUndo,
   canRedo,
-  downloadingArtifact,
+  downloadingProject,
+  downloadingJar,
   downloadingBundle,
   savingChanges,
   checkingBuild,
 }) => {
-  const busy = downloadingArtifact || downloadingBundle || savingChanges || checkingBuild;
+  const downloading = downloadingProject || downloadingJar || downloadingBundle;
+  const busy = downloading || savingChanges || checkingBuild;
   const [showDownloadMenu, setShowDownloadMenu] = useState(false);
   const downloadMenuRef = useRef<HTMLDivElement>(null);
 
@@ -309,7 +324,7 @@ export const CanvasSidebarToolbar: React.FC<CanvasSidebarToolbarProps> = ({
             label="Download"
             description="Export this project"
             onClick={() => setShowDownloadMenu(current => !current)}
-            loading={downloadingArtifact || downloadingBundle}
+            loading={downloading}
             disabled={busy}
             active={showDownloadMenu}
           >
@@ -331,11 +346,19 @@ export const CanvasSidebarToolbar: React.FC<CanvasSidebarToolbarProps> = ({
             >
               <DownloadMenuItem
                 label="Project export"
-                sublabel="Download the project as a ZIP file"
+                sublabel="Maven project to build yourself (ZIP)"
                 icon={<ZipIcon />}
-                loading={downloadingArtifact}
+                loading={downloadingProject}
                 disabled={busy}
-                onClick={() => { setShowDownloadMenu(false); onDownloadArtifact(); }}
+                onClick={() => { setShowDownloadMenu(false); onDownloadProject(); }}
+              />
+              <DownloadMenuItem
+                label="Runnable JAR"
+                sublabel="Built VSUM, start with java -jar"
+                icon={<JarIcon />}
+                loading={downloadingJar}
+                disabled={busy}
+                onClick={() => { setShowDownloadMenu(false); onDownloadJar(); }}
               />
               <DownloadMenuItem
                 label="Easy deploy package"
@@ -388,15 +411,15 @@ export const CanvasSidebarToolbar: React.FC<CanvasSidebarToolbarProps> = ({
 
         {!readOnly && <SidebarDivider />}
 
-        {onOpenHelpers && (
+        {onOpenUtilityMethods && (
           <SidebarButton
             label="Utility Methods"
             description={readOnly
               ? 'View the utility methods available to reactions'
               : 'Define utility methods for reactions'}
-            onClick={onOpenHelpers}
+            onClick={onOpenUtilityMethods}
           >
-            <FunctionIcon />
+            <ToolboxIcon />
           </SidebarButton>
         )}
 

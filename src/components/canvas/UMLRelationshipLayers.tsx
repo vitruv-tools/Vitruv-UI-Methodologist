@@ -30,6 +30,7 @@ export const UMLRelationshipBaseLayer = ({
   onBackgroundClick,
 }: UMLRelationshipBaseLayerProps) => (
   <svg
+    aria-hidden="true"
     data-testid="uml-relationship-base-layer"
     style={{
       position: 'absolute',
@@ -92,6 +93,7 @@ export const UMLRelationshipOverlayLayers = ({
 }: UMLRelationshipOverlayLayersProps) => (
   <>
     <svg
+      aria-hidden="true"
       data-rel-hit-layer
       data-testid="uml-relationship-hit-layer"
       style={{
@@ -123,6 +125,7 @@ export const UMLRelationshipOverlayLayers = ({
     </svg>
 
     <svg
+      aria-hidden="true"
       data-mult-badge-layer
       data-testid="uml-relationship-multiplicity-layer"
       style={{

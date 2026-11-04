@@ -9,16 +9,16 @@ import {
 } from '../ui/sharedStyles';
 import { MODAL_Z_INDEX, modalBackdropStyle, modalDialogShellStyle, useModalBodyLock } from '../ui/modalUtils';
 import { copyTextToClipboard } from '../../utils/apiErrorMessage';
-import type { HelperProblem } from '../../services/api';
-import { HELPER_EDITOR_THEME, setUpVitruvOcl } from './monacoSetup';
+import type { UtilityMethodProblem } from '../../services/api';
+import { UTILITY_METHOD_EDITOR_THEME, setUpXtendUtility } from './monacoSetup';
 
 interface JavaCodeViewerModalProps {
   isOpen: boolean;
   title: string;
   subtitle?: string;
   code: string;
-  /** Helpers that are missing from the code because they cannot be translated. */
-  problems?: HelperProblem[];
+  /** Utility methods that are missing from the code because they do not compile. */
+  problems?: UtilityMethodProblem[];
   onClose: () => void;
 }
 
@@ -34,6 +34,8 @@ export const JavaCodeViewerModal: React.FC<JavaCodeViewerModalProps> = ({
     setCopied(await copyTextToClipboard(code));
     globalThis.setTimeout(() => setCopied(false), 2000);
   };
+
+  const failed = problems.filter(p => p.severity !== 'WARNING');
 
   return (
     <dialog
@@ -67,18 +69,18 @@ export const JavaCodeViewerModal: React.FC<JavaCodeViewerModalProps> = ({
           </div>
           <button type="button" aria-label="Close Java code" onClick={onClose} style={modalCloseButtonStyle}>×</button>
         </div>
-        {problems.length > 0 && (
+        {failed.length > 0 && (
           <div role="alert" style={{ padding: '8px 20px', background: 'var(--v-danger-bg)', color: 'var(--v-danger-text)', fontSize: 12, borderBottom: '1px solid var(--v-danger-border)' }}>
-            Not included because they cannot be translated:{' '}
-            {problems.map(p => `${p.helperName} (${p.message})`).join('; ')}
+            Not included because they do not compile:{' '}
+            {failed.map(p => `${p.utilityMethodName} (${p.message})`).join('; ')}
           </div>
         )}
         <div style={{ flex: 1, minHeight: 0 }}>
           <Editor
             value={code}
             language="java"
-            theme={HELPER_EDITOR_THEME}
-            beforeMount={setUpVitruvOcl}
+            theme={UTILITY_METHOD_EDITOR_THEME}
+            beforeMount={setUpXtendUtility}
             options={{
               readOnly: true,
               domReadOnly: true,
