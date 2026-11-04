@@ -43,6 +43,7 @@ export interface CorrespondenceTypeMetrics {
   reactionCount: number;
   routineCount: number;
   correspondenceTypeCount: number;
+  correspondenceTypeKeys: string[];
   linesOfCode: number;
   direction: 'one-way' | 'both-ways';
   reactions: ReactionBlockMetrics[];
@@ -223,14 +224,14 @@ function toCorrespondenceType(
   parsed: ReactionFileMetrics,
   direction: 'one-way' | 'both-ways',
 ): CorrespondenceTypeMetrics {
-  const declaredTypes = Math.max(parsed.correspondenceTypeCount, 1);
   return {
     id: spec.id,
     sourceName: spec.sourceName,
     targetName: spec.targetName,
     reactionCount: parsed.reactionCount,
     routineCount: parsed.routineCount,
-    correspondenceTypeCount: declaredTypes,
+    correspondenceTypeCount: parsed.correspondenceTypeCount,
+    correspondenceTypeKeys: parsed.correspondenceTypeKeys,
     linesOfCode: parsed.linesOfCode,
     direction,
     reactions: parsed.reactions,
@@ -440,7 +441,7 @@ export function computeMethodologistMetrics(input: MethodologistMetricsInput): M
   const referencesTotal = metamodels.reduce((s, m) => s + m.referencesTotal, 0);
   const containmentReferences = metamodels.reduce((s, m) => s + m.containmentReferences, 0);
   const packageCount = metamodels.reduce((s, m) => s + m.packageCount, 0);
-  const correspondenceTypeCount = correspondenceTypes.reduce((s, c) => s + c.correspondenceTypeCount, 0);
+  const correspondenceTypeCount = new Set(correspondenceTypes.flatMap(c => c.correspondenceTypeKeys)).size;
   const reactionCount = correspondenceTypes.reduce((s, c) => s + c.reactionCount, 0);
   const oclConstraintCount = countOclConstraints(input.oclContent);
   const viewTypeCount = input.viewTypes.length;

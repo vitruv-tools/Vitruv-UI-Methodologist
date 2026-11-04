@@ -142,7 +142,7 @@ export const METRIC_DEFINITIONS = {
     interpretation: 'Routines carry the actual update logic; a file with many reactions but few routines reuses logic heavily.',
   },
   correspondenceTypes: {
-    label: 'Correspondence types',
+    label: 'Coextensions',
     represents: 'Kinds of links between elements of two metamodels that reactions maintain.',
     measures: 'Distinct correspondences declared in reactions files.',
     calculation: 'Per reactions file: distinct "add correspondence between A and B" pairs plus distinct "corresponding to X" targets (at least 1 per file), summed over all files.',
@@ -344,10 +344,10 @@ export const METRIC_DEFINITIONS = {
     interpretation: 'Below 100% means some classes cannot be seen or edited through any view type.',
   },
   reactionsPerCorrespondenceType: {
-    label: 'Reactions per correspondence type',
+    label: 'Reactions per coextension',
     represents: 'How much reaction logic each correspondence needs.',
-    measures: 'Reactions relative to correspondence types.',
-    calculation: 'Reactions / correspondence types.',
+    measures: 'Reactions relative to coextensions.',
+    calculation: 'Reactions / coextensions.',
     interpretation: 'High values mean each correspondence is maintained by many reactions (many change scenarios per mapping).',
   },
   reactionComplexityRatio: {
@@ -372,10 +372,10 @@ export const METRIC_DEFINITIONS = {
     interpretation: 'Above 1: some classes are in no view type. Below 1: classes are shown in several view types (overlapping views).',
   },
   correspondenceTypesPerViewTypePair: {
-    label: 'Correspondence types per view-type pair',
+    label: 'Coextensions per view-type pair',
     represents: 'How many correspondences exist relative to the possible combinations of view types.',
-    measures: 'Correspondence types relative to unordered pairs of view types.',
-    calculation: 'Correspondence types / (n × (n − 1) / 2), where n is the number of view types.',
+    measures: 'Coextensions relative to unordered pairs of view types.',
+    calculation: 'Coextensions / (n × (n − 1) / 2), where n is the number of view types.',
     interpretation: 'Higher values mean view types are more tightly connected by correspondences. 0 if there are fewer than 2 view types.',
   },
   modularizationRatio: {

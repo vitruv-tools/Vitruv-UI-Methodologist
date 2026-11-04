@@ -7,6 +7,8 @@ export interface ReactionFileMetrics {
   reactionCount: number;
   routineCount: number;
   correspondenceTypeCount: number;
+  /** Distinct correspondence types, keyed by the actual (unordered) type pair. */
+  correspondenceTypeKeys: string[];
   linesOfCode: number;
   reactions: ReactionBlockMetrics[];
 }
@@ -15,6 +17,7 @@ const EMPTY: ReactionFileMetrics = {
   reactionCount: 0,
   routineCount: 0,
   correspondenceTypeCount: 0,
+  correspondenceTypeKeys: [],
   linesOfCode: 0,
   reactions: [],
 };
@@ -60,18 +63,62 @@ function collectNamedBlocks(code: string, keyword: 'reaction' | 'routine'): Reac
   return blocks;
 }
 
-function collectCorrespondenceTypes(code: string): number {
-  const types = new Set<string>();
-  const between = /add\s+correspondence\s+between\s+(\S+)\s+and\s+(\S+)/gi;
+const TYPE_TOKEN = String.raw`[A-Za-z_]\w*(?:::[A-Za-z_]\w*)+|[A-Z]\w*`;
+
+/** Maps variable names to the (qualified) type they are bound to in the file. */
+function collectVariableTypes(code: string): Map<string, string> {
+  const vars = new Map<string, string>();
   let match: RegExpExecArray | null;
-  while ((match = between.exec(code)) !== null) {
-    types.add(`${match[1]}::${match[2]}`);
+  // after element Pkg::Type created/inserted/... (binds newValue / affectedEObject-like names)
+  const afterElement = new RegExp(String.raw`\bafter\s+element\s+(${TYPE_TOKEN})\s+(?:created|deleted|inserted|removed|replaced)`, 'g');
+  while ((match = afterElement.exec(code)) !== null) {
+    vars.set('newValue', match[1]);
+    vars.set('affectedEObject', match[1]);
   }
-  const corresponding = /corresponding\s+to\s+(\S+)/gi;
-  while ((match = corresponding.exec(code)) !== null) {
-    types.add(`corresponding:${match[1]}`);
-  }
-  return types.size;
+  // val x = new Pkg::Type / val x = create Pkg::Type / val x = retrieve [optional|many] Pkg::Type corresponding to ...
+  const valNew = new RegExp(String.raw`\b(?:val|var)\s+([A-Za-z_]\w*)\s*=\s*(?:new\s+|create\s+)(${TYPE_TOKEN})`, 'g');
+  while ((match = valNew.exec(code)) !== null) vars.set(match[1], match[2]);
+  const valRetrieve = new RegExp(
+    String.raw`\b(?:val|var)\s+([A-Za-z_]\w*)\s*=\s*retrieve(?:\s+(?:optional|many))?\s+(${TYPE_TOKEN})\b`,
+    'g',
+  );
+  while ((match = valRetrieve.exec(code)) !== null) vars.set(match[1], match[2]);
+  // typed routine parameters: routine name(Pkg::Type x, ...)
+  const params = new RegExp(String.raw`\b(${TYPE_TOKEN})\s+([a-z_]\w*)\s*[,)]`, 'g');
+  while ((match = params.exec(code)) !== null) if (!vars.has(match[2])) vars.set(match[2], match[1]);
+  return vars;
+}
+
+function simpleTypeName(type: string): string {
+  return type.split('::').pop() || type;
+}
+
+/**
+ * Returns the distinct correspondence types declared in a reactions file, identified by
+ * the (unordered) pair of actual element types rather than by variable names.
+ */
+export function collectCorrespondenceTypeKeys(code: string): string[] {
+  const types = new Set<string>();
+  const vars = collectVariableTypes(code);
+  const resolve = (token: string): string | null => {
+    const clean = token.replace(/[,;)(]/g, '');
+    if (clean.includes('::') || /^[A-Z]/.test(clean)) return simpleTypeName(clean);
+    const t = vars.get(clean);
+    return t ? simpleTypeName(t) : null;
+  };
+  const pair = (a: string | null, b: string | null) => {
+    if (!a || !b) return;
+    types.add([a, b].sort().join('<->'));
+  };
+  let match: RegExpExecArray | null;
+  const between = /add\s+correspondence\s+between\s+(\S+)\s+and\s+(\S+)/g;
+  while ((match = between.exec(code)) !== null) pair(resolve(match[1]), resolve(match[2]));
+  const retrieveRe = new RegExp(
+    String.raw`retrieve(?:\s+(?:optional|many))?\s+(${TYPE_TOKEN})\s+corresponding\s+to\s+([A-Za-z_]\w*)`,
+    'g',
+  );
+  while ((match = retrieveRe.exec(code)) !== null) pair(resolve(match[1]), resolve(match[2]));
+  return [...types];
 }
 
 /** Class or type names mentioned in a reactions file (qualified ::Type and PascalCase tokens). */
@@ -94,12 +141,13 @@ export function parseReactionFileMetrics(code: string | null | undefined): React
   const stripped = stripComments(code);
   const reactions = collectNamedBlocks(stripped, 'reaction');
   const routines = collectNamedBlocks(stripped, 'routine');
-  const parsedTypes = collectCorrespondenceTypes(stripped);
+  const typeKeys = collectCorrespondenceTypeKeys(stripped);
 
   return {
     reactionCount: reactions.length,
     routineCount: routines.length,
-    correspondenceTypeCount: parsedTypes,
+    correspondenceTypeCount: typeKeys.length,
+    correspondenceTypeKeys: typeKeys,
     linesOfCode: countNonEmptyLines(stripped),
     reactions,
   };
