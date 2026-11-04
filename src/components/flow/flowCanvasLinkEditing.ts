@@ -40,10 +40,10 @@ export function prepareSegmentDrag(route: RoutePoint[], segment: number): Prepar
   let idx = segment;
 
   if (idx === pts.length - 2) {
-    const a = pts[idx];
-    const b = pts[idx + 1];
-    if (segmentLength(a, b) < STUB_LENGTH + MIN_SEGMENT) return null;
-    pts.splice(idx + 1, 0, pointAlong(b, a, STUB_LENGTH));
+    const segmentStart = pts[idx];
+    const segmentEnd = pts[idx + 1];
+    if (segmentLength(segmentStart, segmentEnd) < STUB_LENGTH + MIN_SEGMENT) return null;
+    pts.splice(idx + 1, 0, pointAlong(segmentEnd, segmentStart, STUB_LENGTH));
   }
   if (idx === 0) {
     const a = pts[0];

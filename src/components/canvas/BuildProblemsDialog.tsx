@@ -261,9 +261,9 @@ export const BuildProblemsDialog: React.FC<BuildProblemsDialogProps> = ({
     }
     if (event.key !== 'Tab' || !panelRef.current) return;
     const focusable = Array.from(panelRef.current.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR));
-    if (focusable.length === 0) return;
     const first = focusable[0];
-    const last = focusable[focusable.length - 1];
+    const last = focusable.at(-1);
+    if (!first || !last) return;
     if (event.shiftKey && document.activeElement === first) {
       event.preventDefault();
       last.focus();

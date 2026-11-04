@@ -14,20 +14,29 @@ vi.mock('reactflow', () => import('./__mocks__/reactflow'));
 // Testing Library's waitFor only advances fake timers when it finds a global `jest`.
 (globalThis as any).jest = { advanceTimersByTime: (ms: number) => vi.advanceTimersByTime(ms) };
 
-// jsdom's Blob lacks the promise-based readers that browsers provide.
-function readBlob<T>(blob: Blob, read: (reader: FileReader) => void): Promise<T> {
+// jsdom's Blob has no text() or arrayBuffer(). readAsBinaryString is the reader it still provides.
+function readBlobBytes(blob: Blob): Promise<Uint8Array> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
-    reader.onload = () => resolve(reader.result as T);
-    reader.onerror = () => reject(reader.error);
-    read(reader);
+    reader.onload = () => {
+      const binary = typeof reader.result === 'string' ? reader.result : '';
+      resolve(Uint8Array.from(binary, char => char.charCodeAt(0)));
+    };
+    reader.onerror = () => {
+      reject(new Error(reader.error?.message || 'Failed to read blob'));
+    };
+    reader.readAsBinaryString(blob);
   });
 }
-Blob.prototype.text ??= function (this: Blob) {
-  return readBlob<string>(this, (reader) => reader.readAsText(this));
+Blob.prototype.arrayBuffer ??= async function (this: Blob) {
+  const bytes = await readBlobBytes(this);
+  const copy = new ArrayBuffer(bytes.byteLength);
+  new Uint8Array(copy).set(bytes);
+  return copy;
 };
-Blob.prototype.arrayBuffer ??= function (this: Blob) {
-  return readBlob<ArrayBuffer>(this, (reader) => reader.readAsArrayBuffer(this));
+Blob.prototype.text ??= async function (this: Blob) {
+  const bytes = await readBlobBytes(this);
+  return new TextDecoder().decode(bytes);
 };
 
 // Set up environment variables for tests

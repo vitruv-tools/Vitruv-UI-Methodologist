@@ -191,26 +191,31 @@ function sameRect(a: Rect | null, b: Rect | null): boolean {
 
 const RECT_KEYS = new Set<keyof ReactionLiveState>(['srcBox', 'srcEcore', 'tgtBox', 'tgtEcore']);
 
+function sameRectList(a: Rect[], b: Rect[]): boolean {
+  if (a.length !== b.length) return false;
+  return a.every((rect, i) => sameRect(rect, b[i]));
+}
+
+function samePointPaths(a: Point[][], b: Point[][]): boolean {
+  if (a.length !== b.length) return false;
+  return a.every((path, i) => path === b[i]);
+}
+
+function liveStateFieldEqual(key: keyof ReactionLiveState, a: ReactionLiveState, b: ReactionLiveState): boolean {
+  if (RECT_KEYS.has(key)) return sameRect(a[key] as Rect | null, b[key] as Rect | null);
+  if (key === 'obstacles') return sameRectList(a.obstacles, b.obstacles);
+  if (key === 'existing') return samePointPaths(a.existing, b.existing);
+  return a[key] === b[key];
+}
+
 /**
  * `selectReactionLiveState` builds a fresh object on every store update, which made every link
  * re-render on every drag frame. Compare by value so a link only re-renders when something it
  * reads actually changed.
  */
 function liveStateEqual(a: ReactionLiveState, b: ReactionLiveState): boolean {
-  for (const key of Object.keys(a) as Array<keyof ReactionLiveState>) {
-    if (RECT_KEYS.has(key)) {
-      if (!sameRect(a[key] as Rect | null, b[key] as Rect | null)) return false;
-    } else if (key === 'obstacles') {
-      if (a.obstacles.length !== b.obstacles.length) return false;
-      if (a.obstacles.some((rect, i) => !sameRect(rect, b.obstacles[i]))) return false;
-    } else if (key === 'existing') {
-      if (a.existing.length !== b.existing.length) return false;
-      if (a.existing.some((path, i) => path !== b.existing[i])) return false;
-    } else if (a[key] !== b[key]) {
-      return false;
-    }
-  }
-  return true;
+  const keys = Object.keys(a) as Array<keyof ReactionLiveState>;
+  return keys.every(key => liveStateFieldEqual(key, a, b));
 }
 
 function storedWaypoints(data: ReactionRelationshipData | undefined): Point[] | null {

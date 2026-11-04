@@ -16,7 +16,6 @@ interface AddPeopleSectionProps {
   onError: (message: string) => void;
   /** Called before a new action, so old messages can be cleared. */
   onClearMessages: () => void;
-  autoFocus?: boolean;
   /** Style of the surrounding section, e.g. a card. */
   style?: React.CSSProperties;
 }
@@ -53,7 +52,6 @@ export const AddPeopleSection: React.FC<AddPeopleSectionProps> = ({
   onSuccess,
   onError,
   onClearMessages,
-  autoFocus = false,
   style,
 }) => {
   const id = useId();
@@ -226,7 +224,6 @@ export const AddPeopleSection: React.FC<AddPeopleSectionProps> = ({
               onKeyDown={e => { if (e.key === 'Enter' && canInvite) void invite(); }}
               style={{ ...inputStyle, flex: 1, minWidth: 180, margin: 0 }}
               disabled={inviting}
-              autoFocus={autoFocus}
             />
             <ActionButton variant="primary" size="sm" onClick={invite} disabled={!canInvite}>
               {inviting ? 'Sending…' : 'Invite viewer'}
@@ -241,7 +238,6 @@ export const AddPeopleSection: React.FC<AddPeopleSectionProps> = ({
               onChange={e => { setQuery(e.target.value); setSelectedUser(null); }}
               style={{ ...inputStyle, flex: 1, minWidth: 180, margin: 0 }}
               disabled={adding}
-              autoFocus={autoFocus}
             />
             <ActionButton variant="primary" size="sm" onClick={addMember} disabled={!canAddMember}>
               {adding ? 'Adding…' : 'Add member'}
