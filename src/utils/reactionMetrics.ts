@@ -22,27 +22,41 @@ const EMPTY: ReactionFileMetrics = {
   reactions: [],
 };
 
+/** Index just past the string literal that opens at `start`; an unterminated one ends at its line. */
+function endOfStringLiteral(code: string, start: number): number {
+  const quote = code[start];
+  let i = start + 1;
+  while (i < code.length && code[i] !== quote && code[i] !== '\n') {
+    i += code[i] === '\\' ? 2 : 1;
+  }
+  return Math.min(i + 1, code.length);
+}
+
+/** Index of the line break that ends the `//` comment at `start` (or the end of the text). */
+function endOfLineComment(code: string, start: number): number {
+  const end = code.indexOf('\n', start);
+  return end === -1 ? code.length : end;
+}
+
+/** Index just past the block comment that opens at `start`. */
+function endOfBlockComment(code: string, start: number): number {
+  const end = code.indexOf('*/', start + 2);
+  return end === -1 ? code.length : end + 2;
+}
+
 /** Removes `//` and block comments, leaving string literals (e.g. `"http://uri"`) untouched. */
 function stripComments(code: string): string {
   let out = '';
   let i = 0;
   while (i < code.length) {
-    const ch = code[i];
-    const next = code[i + 1];
-    if (ch === '"' || ch === "'") {
-      let j = i + 1;
-      while (j < code.length && code[j] !== ch && code[j] !== '\n') j += code[j] === '\\' ? 2 : 1;
-      out += code.slice(i, j + 1);
-      i = j + 1;
-    } else if (ch === '/' && next === '/') {
-      while (i < code.length && code[i] !== '\n') i += 1;
-    } else if (ch === '/' && next === '*') {
-      const end = code.indexOf('*/', i + 2);
-      i = end === -1 ? code.length : end + 2;
-    } else {
-      out += ch;
-      i += 1;
-    }
+    const pair = code.slice(i, i + 2);
+    let end = i + 1;
+    let keep = true;
+    if (code[i] === '"' || code[i] === "'") end = endOfStringLiteral(code, i);
+    else if (pair === '//') [end, keep] = [endOfLineComment(code, i), false];
+    else if (pair === '/*') [end, keep] = [endOfBlockComment(code, i), false];
+    if (keep) out += code.slice(i, end);
+    i = end;
   }
   return out;
 }

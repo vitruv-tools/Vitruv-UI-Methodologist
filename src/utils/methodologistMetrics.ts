@@ -321,7 +321,10 @@ function classKeyOf(metamodelId: string, classId: string): string {
 }
 
 function normalizeUri(uri: string): string {
-  return uri.trim().replace(/\/+$/, '');
+  const trimmed = uri.trim();
+  let end = trimmed.length;
+  while (end > 0 && trimmed[end - 1] === '/') end -= 1;
+  return trimmed.slice(0, end);
 }
 
 function buildClassEntries(metamodels: MetamodelWithId[]): ClassEntry[] {
