@@ -14,18 +14,24 @@ vi.mock('reactflow', () => import('./__mocks__/reactflow'));
 // Testing Library's waitFor only advances fake timers when it finds a global `jest`.
 (globalThis as any).jest = { advanceTimersByTime: (ms: number) => vi.advanceTimersByTime(ms) };
 
-// jsdom's Blob has no text() or arrayBuffer(). readAsBinaryString is the reader it still provides.
+function bytesFromDataUrl(dataUrl: string): Uint8Array {
+  const encoded = dataUrl.slice(dataUrl.indexOf(',') + 1);
+  const binary = globalThis.atob(encoded);
+  return Uint8Array.from(binary, char => char.codePointAt(0) ?? 0);
+}
+
+// jsdom's Blob has no text() or arrayBuffer(). readAsDataURL is the reader it still provides.
 function readBlobBytes(blob: Blob): Promise<Uint8Array> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.onload = () => {
-      const binary = typeof reader.result === 'string' ? reader.result : '';
-      resolve(Uint8Array.from(binary, char => char.charCodeAt(0)));
+      const dataUrl = typeof reader.result === 'string' ? reader.result : '';
+      resolve(bytesFromDataUrl(dataUrl));
     };
     reader.onerror = () => {
       reject(new Error(reader.error?.message || 'Failed to read blob'));
     };
-    reader.readAsBinaryString(blob);
+    reader.readAsDataURL(blob);
   });
 }
 Blob.prototype.arrayBuffer ??= async function (this: Blob) {
