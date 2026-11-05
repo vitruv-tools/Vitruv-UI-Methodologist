@@ -19,8 +19,26 @@ const defaultSleep = (ms: number) => new Promise<void>(resolve => {
   globalThis.setTimeout(resolve, ms);
 });
 
+const BUILD_TIMEOUT_MESSAGE = 'The build did not finish in time. Check its status again later.';
+
 export function isTerminalBuild(build: VsumBuildResponse): boolean {
   return build.status === 'SUCCEEDED' || build.status === 'FAILED';
+}
+
+async function pollUntilTerminal(
+  vsumId: number | string,
+  current: VsumBuildResponse,
+  pollsLeft: number,
+  intervalMs: number,
+  onUpdate: WaitForVsumBuildOptions['onUpdate'],
+  sleep: (ms: number) => Promise<void>,
+): Promise<VsumBuildResponse> {
+  onUpdate?.(current);
+  if (isTerminalBuild(current)) return current;
+  if (pollsLeft <= 0) throw new Error(BUILD_TIMEOUT_MESSAGE);
+  await sleep(intervalMs);
+  const response = await apiService.getVsumBuild(vsumId, current.id);
+  return pollUntilTerminal(vsumId, response.data, pollsLeft - 1, intervalMs, onUpdate, sleep);
 }
 
 /**
@@ -40,16 +58,5 @@ export async function waitForVsumBuild(
     sleep = defaultSleep,
   } = options;
 
-  let current = build;
-  onUpdate?.(current);
-  for (let polls = 0; !isTerminalBuild(current); polls += 1) {
-    if (polls >= maxPolls) {
-      throw new Error('The build did not finish in time. Check its status again later.');
-    }
-    await sleep(intervalMs);
-    const response = await apiService.getVsumBuild(vsumId, current.id);
-    current = response.data;
-    onUpdate?.(current);
-  }
-  return current;
+  return pollUntilTerminal(vsumId, build, maxPolls, intervalMs, onUpdate, sleep);
 }

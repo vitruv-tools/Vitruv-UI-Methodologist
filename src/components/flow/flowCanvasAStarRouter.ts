@@ -800,26 +800,46 @@ function travel(a: Point, b: Point, axis: Axis): number {
   return Math.sign(axis === 'v' ? b.y - a.y : b.x - a.x);
 }
 
+function axisCoord(point: Point, axis: Axis): number {
+  return axis === 'v' ? point.y : point.x;
+}
+
+/** Parallel out-and-back runs joined by a short perpendicular step. */
+function hookAxis(a: Point, b: Point, c: Point, d: Point): Axis | null {
+  const axis = axisOf(a, b);
+  if (!axis || axisOf(c, d) !== axis) return null;
+  const across = axisOf(b, c);
+  if (!across || across === axis) return null;
+  if (travel(a, b, axis) === travel(c, d, axis)) return null;
+  return axis;
+}
+
+/** The return lands between the start of the overshoot and the bend. */
+function hookLandsInside(a: Point, b: Point, d: Point, axis: Axis): boolean {
+  const dir = travel(a, b, axis);
+  const start = axisCoord(a, axis);
+  const bend = axisCoord(b, axis);
+  const end = axisCoord(d, axis);
+  return (end - start) * dir > 0 && (bend - end) * dir > 0;
+}
+
+function hookCorner(a: Point, b: Point, c: Point, d: Point): Point | null {
+  const axis = hookAxis(a, b, c, d);
+  if (!axis) return null;
+  if (Math.hypot(c.x - b.x, c.y - b.y) > HOOK_MAX) return null;
+  if (!hookLandsInside(a, b, d, axis)) return null;
+  return axis === 'v' ? { x: a.x, y: d.y } : { x: d.x, y: a.y };
+}
+
 /**
  * Removes "hooks": a run that overshoots, steps a few pixels sideways and comes straight back
  * (grid cells rarely line up with an anchor, so the search can overshoot by up to a cell).
+ * The first segment and the last bend stay put so the stubs at each box are unchanged.
  */
 function removeHooks(points: Point[]): Point[] | null {
-  for (let i = 0; i + 3 < points.length; i++) {
-    if (i === 0 || i + 3 === points.length - 1) continue;
-    const [a, b, c, d] = points.slice(i, i + 4);
-    const axis = axisOf(a, b);
-    if (!axis || axisOf(c, d) !== axis) continue;
-    const across = axisOf(b, c);
-    if (!across || across === axis) continue;
-    if (travel(a, b, axis) === travel(c, d, axis)) continue;
-    if (Math.hypot(c.x - b.x, c.y - b.y) > HOOK_MAX) continue;
-    const dir = travel(a, b, axis);
-    const within = axis === 'v'
-      ? (d.y - a.y) * dir > 0 && (b.y - d.y) * dir > 0
-      : (d.x - a.x) * dir > 0 && (b.x - d.x) * dir > 0;
-    if (!within) continue;
-    const corner = axis === 'v' ? { x: a.x, y: d.y } : { x: d.x, y: a.y };
+  for (let i = 1; i + 4 < points.length; i++) {
+    const corner = hookCorner(points[i], points[i + 1], points[i + 2], points[i + 3]);
+    if (!corner) continue;
     return [...points.slice(0, i + 1), corner, ...points.slice(i + 3)];
   }
   return null;
@@ -1375,28 +1395,44 @@ function planCoarseEdges(
   return { plans, slots: assignSlots(requests, occupied) };
 }
 
-export function routeAllReactionEdges(nodes: Node[], edges: Edge[]): Map<string, RoutedPath> {
-  const byId = new Map(nodes.map(n => [n.id, n]));
-  const routable = nodes.filter(isRoutableNode);
+function isReactionEdge(edge: Edge): boolean {
+  return edge.type === 'reactions' || edge.type === 'fine-granular-reaction';
+}
+
+function collectRoutableRects(nodes: Node[], byId: Map<string, Node>): Map<string, Rect> {
   const rectById = new Map<string, Rect>();
-  for (const node of routable) {
+  for (const node of nodes) {
+    if (!isRoutableNode(node)) continue;
     const rect = nodeWorldRect(node, byId);
     if (rect) rectById.set(node.id, rect);
   }
-  const reactionEdges = edges
-    .filter(e => e.type === 'reactions' || e.type === 'fine-granular-reaction')
-    .slice()
-    .sort((a, b) => a.id.localeCompare(b.id));
+  return rectById;
+}
 
+function savedCoarseRoute(edge: Edge, rectById: Map<string, Rect>): SavedRoute | null {
+  if (edge.type !== 'reactions') return null;
+  const saved = asSavedRoute(edge.data?.savedRoute);
+  if (!isSavedRouteValid(saved, rectById.get(edge.source), rectById.get(edge.target))) return null;
+  return saved;
+}
+
+interface ClassifiedReactionEdges {
+  routes: Map<string, RoutedPath>;
+  placed: Point[][];
+  fixed: Array<{ edge: Edge; route: SavedRoute }>;
+  pendingCoarse: Edge[];
+  pendingFine: Edge[];
+}
+
+function classifyReactionEdges(reactionEdges: Edge[], rectById: Map<string, Rect>): ClassifiedReactionEdges {
   const routes = new Map<string, RoutedPath>();
   const placed: Point[][] = [];
   const fixed: Array<{ edge: Edge; route: SavedRoute }> = [];
   const pendingCoarse: Edge[] = [];
   const pendingFine: Edge[] = [];
-
   for (const edge of reactionEdges) {
-    const saved = edge.type === 'reactions' ? asSavedRoute(edge.data?.savedRoute) : null;
-    if (isSavedRouteValid(saved, rectById.get(edge.source), rectById.get(edge.target))) {
+    const saved = savedCoarseRoute(edge, rectById);
+    if (saved) {
       routes.set(edge.id, saved);
       placed.push(saved.points);
       fixed.push({ edge, route: saved });
@@ -1406,18 +1442,40 @@ export function routeAllReactionEdges(nodes: Node[], edges: Edge[]): Map<string,
       pendingFine.push(edge);
     }
   }
+  return { routes, placed, fixed, pendingCoarse, pendingFine };
+}
 
-  // Class-level ends of fine-granular links (no pinned attribute row, not a ghost dot) get spread
-  // along their box side just like the links between meta models.
-  const isFree = (edge: Edge, role: 'source' | 'target'): boolean => {
-    if (edge.type === 'reactions') return true;
-    const node = byId.get(role === 'source' ? edge.source : edge.target);
-    if (!node || node.type === 'ghost') return false;
-    const handle = role === 'source' ? edge.sourceHandle : edge.targetHandle;
-    return !buildReactionEndpoint(node, handle, role, byId)?.pin;
-  };
-  const { plans, slots } = planCoarseEdges([...pendingFine, ...pendingCoarse], rectById, fixed, isFree);
+/**
+ * Class-level ends of fine-granular links (no pinned attribute row, not a ghost dot) get spread
+ * along their box side just like the links between meta models.
+ */
+function reactionEndIsFree(edge: Edge, role: 'source' | 'target', byId: Map<string, Node>): boolean {
+  if (edge.type === 'reactions') return true;
+  const node = byId.get(role === 'source' ? edge.source : edge.target);
+  if (!node || node.type === 'ghost') return false;
+  const handle = role === 'source' ? edge.sourceHandle : edge.targetHandle;
+  return !buildReactionEndpoint(node, handle, role, byId)?.pin;
+}
 
+function obstaclesForEdge(routable: Node[], rectById: Map<string, Rect>, edge: Edge): Rect[] {
+  const obstacles: Rect[] = [];
+  for (const node of routable) {
+    if (node.id === edge.source || node.id === edge.target) continue;
+    const rect = rectById.get(node.id);
+    if (rect) obstacles.push(rect);
+  }
+  return obstacles;
+}
+
+function placeFineReactionRoutes(
+  plans: CoarsePlan[],
+  slots: Map<string, number>,
+  routes: Map<string, RoutedPath>,
+  placed: Point[][],
+  byId: Map<string, Node>,
+  routable: Node[],
+  rectById: Map<string, Rect>,
+): void {
   for (const plan of plans) {
     if (plan.edge.type === 'reactions') continue;
     const { edge, sourceSide, targetSide } = plan;
@@ -1431,20 +1489,25 @@ export function routeAllReactionEdges(nodes: Node[], edges: Edge[]): Map<string,
     routes.set(edge.id, route);
     placed.push(route.points);
   }
+}
 
+function placeCoarseReactionRoutes(
+  plans: CoarsePlan[],
+  slots: Map<string, number>,
+  routes: Map<string, RoutedPath>,
+  placed: Point[][],
+  routable: Node[],
+  rectById: Map<string, Rect>,
+): void {
   for (const { edge, sourceSide, targetSide } of plans) {
     if (edge.type !== 'reactions') continue;
     const source = rectById.get(edge.source);
     const target = rectById.get(edge.target);
     if (!source || !target) continue;
-    const obstacles = routable
-      .filter(n => n.id !== edge.source && n.id !== edge.target)
-      .map(n => rectById.get(n.id))
-      .filter((rect): rect is Rect => Boolean(rect));
     const route = routeOrthogonalAStar({
       source,
       target,
-      obstacles,
+      obstacles: obstaclesForEdge(routable, rectById, edge),
       existing: placed,
       lockSourceHandle: sourceSide,
       lockTargetHandle: targetSide,
@@ -1454,7 +1517,56 @@ export function routeAllReactionEdges(nodes: Node[], edges: Edge[]): Map<string,
     routes.set(edge.id, route);
     placed.push(route.points);
   }
-  return routes;
+}
+
+export function routeAllReactionEdges(nodes: Node[], edges: Edge[]): Map<string, RoutedPath> {
+  const byId = new Map(nodes.map(n => [n.id, n]));
+  const routable = nodes.filter(isRoutableNode);
+  const rectById = collectRoutableRects(routable, byId);
+  const reactionEdges = edges.filter(isReactionEdge).slice().sort((a, b) => a.id.localeCompare(b.id));
+  const classified = classifyReactionEdges(reactionEdges, rectById);
+  const { plans, slots } = planCoarseEdges(
+    [...classified.pendingFine, ...classified.pendingCoarse],
+    rectById,
+    classified.fixed,
+    (edge, role) => reactionEndIsFree(edge, role, byId),
+  );
+  placeFineReactionRoutes(plans, slots, classified.routes, classified.placed, byId, routable, rectById);
+  placeCoarseReactionRoutes(plans, slots, classified.routes, classified.placed, routable, rectById);
+  return classified.routes;
+}
+
+function pinnedSide(endpoint: ReactionEndpoint | null, facing: Side): Side {
+  if (endpoint?.pin && endpoint.lockSide) return endpoint.lockSide;
+  return facing;
+}
+
+function dragRouteForEdge(
+  edge: Edge,
+  byId: Map<string, Node>,
+  rectById: Map<string, Rect>,
+  previous: Map<string, RoutedPath>,
+): RoutedPath | null {
+  const sourceNode = byId.get(edge.source);
+  const targetNode = byId.get(edge.target);
+  const source = rectById.get(edge.source);
+  const target = rectById.get(edge.target);
+  if (!sourceNode || !targetNode || !source || !target) return null;
+
+  const before = previous.get(edge.id);
+  if (before && isSavedRouteValid(before, source, target)) return before;
+
+  const { sourceEp, targetEp } = reactionEndpoints(edge, sourceNode, targetNode, byId);
+  const facing = facingSides(source, target);
+  const sourceSide = pinnedSide(sourceEp, facing.source);
+  const targetSide = pinnedSide(targetEp, facing.target);
+  const start = sourceEp?.anchor ?? handleAnchor(source, sourceSide, sourceEp?.portT);
+  const end = targetEp?.anchor ?? handleAnchor(target, targetSide, targetEp?.portT);
+  return {
+    sourceHandle: sourceSide,
+    targetHandle: targetSide,
+    points: buildStubbedPoints(start, sourceSide, end, targetSide, []),
+  };
 }
 
 /**
@@ -1468,37 +1580,13 @@ export function routeReactionEdgesWhileDragging(
   previous: Map<string, RoutedPath>,
 ): Map<string, RoutedPath> {
   const byId = new Map(nodes.map(n => [n.id, n]));
-  const rectById = new Map<string, Rect>();
-  for (const node of nodes) {
-    if (!isRoutableNode(node)) continue;
-    const rect = nodeWorldRect(node, byId);
-    if (rect) rectById.set(node.id, rect);
-  }
+  const rectById = collectRoutableRects(nodes, byId);
   const routes = new Map<string, RoutedPath>();
   for (const edge of edges) {
-    if (edge.type !== 'reactions' && edge.type !== 'fine-granular-reaction') continue;
-    const sourceNode = byId.get(edge.source);
-    const targetNode = byId.get(edge.target);
-    const source = rectById.get(edge.source);
-    const target = rectById.get(edge.target);
-    if (!sourceNode || !targetNode || !source || !target) continue;
-
-    const before = previous.get(edge.id);
-    if (before && isSavedRouteValid(before, source, target)) {
-      routes.set(edge.id, before);
-      continue;
-    }
-    const { sourceEp, targetEp } = reactionEndpoints(edge, sourceNode, targetNode, byId);
-    const facing = facingSides(source, target);
-    const sourceSide = sourceEp?.pin && sourceEp.lockSide ? sourceEp.lockSide : facing.source;
-    const targetSide = targetEp?.pin && targetEp.lockSide ? targetEp.lockSide : facing.target;
-    const start = sourceEp?.anchor ?? handleAnchor(source, sourceSide, sourceEp?.portT);
-    const end = targetEp?.anchor ?? handleAnchor(target, targetSide, targetEp?.portT);
-    routes.set(edge.id, {
-      sourceHandle: sourceSide,
-      targetHandle: targetSide,
-      points: buildStubbedPoints(start, sourceSide, end, targetSide, []),
-    });
+    if (!isReactionEdge(edge)) continue;
+    const route = dragRouteForEdge(edge, byId, rectById, previous);
+    if (!route) continue;
+    routes.set(edge.id, route);
   }
   return routes;
 }

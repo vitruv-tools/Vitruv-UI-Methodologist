@@ -168,7 +168,6 @@ export const ShareProjectModal: React.FC<ShareProjectModalProps> = ({
               onSuccess={setSuccess}
               onError={setErr}
               onClearMessages={() => { setErr(''); setSuccess(''); }}
-              autoFocus
             />
 
             <section style={{ display: 'grid', gap: 10 }}>

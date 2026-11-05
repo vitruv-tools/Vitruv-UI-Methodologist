@@ -190,21 +190,24 @@ export function groupBuildProblems(problems: readonly BuildProblem[]): BuildProb
   return Array.from(groups.values());
 }
 
+function formatBuildProblemLines(problem: BuildProblem): string[] {
+  const location = formatBuildProblemLocation(problem);
+  const lines = [location ? `- ${location}: ${problem.message}` : `- ${problem.message}`];
+  if (problem.excerpt) lines.push(problem.excerpt);
+  if (problem.hint) lines.push(`  Hint: ${problem.hint}`);
+  if (problem.hiddenFollowUpErrors) {
+    lines.push(`  (${formatHiddenFollowUpErrors(problem.hiddenFollowUpErrors)})`);
+  }
+  return lines;
+}
+
 /** Plain-text rendering of all problems, for copying into an issue or chat. */
 export function formatBuildFailureAsText(failure: BuildFailure): string {
   if (failure.problems.length === 0) return failure.message;
   const lines: string[] = [getBuildFailureHeadline(getBuildFailureKind(failure))];
   for (const group of groupBuildProblems(failure.problems)) {
-    lines.push('', `${group.label}:`);
-    for (const { problem } of group.entries) {
-      const location = formatBuildProblemLocation(problem);
-      lines.push(location ? `- ${location}: ${problem.message}` : `- ${problem.message}`);
-      if (problem.excerpt) lines.push(problem.excerpt);
-      if (problem.hint) lines.push(`  Hint: ${problem.hint}`);
-      if (problem.hiddenFollowUpErrors) {
-        lines.push(`  (${formatHiddenFollowUpErrors(problem.hiddenFollowUpErrors)})`);
-      }
-    }
+    const problemLines = group.entries.flatMap(({ problem }) => formatBuildProblemLines(problem));
+    lines.push('', `${group.label}:`, ...problemLines);
   }
   return lines.join('\n');
 }
