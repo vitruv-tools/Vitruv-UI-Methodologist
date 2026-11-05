@@ -73,6 +73,7 @@ describe('SignUp component', () => {
 
   it('calls signUp and onSignUpSuccess on valid submit', async () => {
     jest.useFakeTimers();
+    const user = userEvent.setup({ advanceTimers: jest.advanceTimersByTime });
     const onSignUpSuccess = jest.fn();
     mockSignUp.mockResolvedValueOnce(undefined);
 
@@ -83,20 +84,20 @@ describe('SignUp component', () => {
       />,
     );
 
-    await userEvent.type(screen.getByLabelText(/First Name \*/i), 'John');
-    await userEvent.type(screen.getByLabelText(/Last Name \*/i), 'Doe');
-    await userEvent.type(screen.getByLabelText(/Username \*/i), 'johndoe');
-    await userEvent.type(screen.getByLabelText(/Email \*/i), 'john@example.com');
-    await userEvent.type(
+    await user.type(screen.getByLabelText(/First Name \*/i), 'John');
+    await user.type(screen.getByLabelText(/Last Name \*/i), 'Doe');
+    await user.type(screen.getByLabelText(/Username \*/i), 'johndoe');
+    await user.type(screen.getByLabelText(/Email \*/i), 'john@example.com');
+    await user.type(
       screen.getByPlaceholderText(/Create a strong password/i),
       'Password1!',
     );
-    await userEvent.type(
+    await user.type(
       screen.getByPlaceholderText(/Confirm your password/i),
       'Password1!',
     );
 
-    await userEvent.click(
+    await user.click(
       screen.getByRole('button', { name: /Create Account/i }),
     );
 
