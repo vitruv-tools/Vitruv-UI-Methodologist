@@ -271,22 +271,22 @@ describe('pasting between the Model library and projects', () => {
   }
 
   /** Presses Ctrl+key the way the browser does: on the focused element. */
-  function pressOnFocusedElement(key: string) {
-    userEvent.keyboard(`{Control>}${key}{/Control}`);
+  async function pressOnFocusedElement(key: string) {
+    await userEvent.keyboard(`{Control>}${key}{/Control}`);
   }
 
-  it('copies and pastes in models opened from their cards on the project canvas', () => {
+  it('copies and pastes in models opened from their cards on the project canvas', async () => {
     render(<><ModelCard name="Model A" /><ModelCard name="Model B" /></>);
 
     screen.getByRole('button', { name: 'Model A' }).focus();
     const { container: sourceEditor, unmount: closeSourceEditor } = openEditor(PROJECT, SIMPLE_ECORE);
     fireEvent.click(classBox('Person', sourceEditor));
-    pressOnFocusedElement('c');
+    await pressOnFocusedElement('c');
     closeSourceEditor();
 
     screen.getByRole('button', { name: 'Model B' }).focus();
     const { container: targetEditor } = openEditor(PROJECT, REF_ECORE);
-    pressOnFocusedElement('v');
+    await pressOnFocusedElement('v');
 
     expect(classNames(targetEditor)).toEqual(['Order', 'LineItem', 'Person']);
   });

@@ -32,9 +32,12 @@ jest.mock('../../services/api', () => ({
 }));
 
 describe('OtpVerificationPage', () => {
+  let user: ReturnType<typeof userEvent.setup>;
+
   beforeEach(() => {
     jest.useFakeTimers();
     jest.clearAllMocks();
+    user = userEvent.setup({ advanceTimers: jest.advanceTimersByTime });
   });
 
   afterEach(() => {
@@ -57,10 +60,10 @@ describe('OtpVerificationPage', () => {
 
     const input = screen.getByLabelText(/Verification Code/i);
     // Enter a code shorter than the minimum length (4)
-    await userEvent.type(input, '12');
+    await user.type(input, '12');
 
     const submitButton = screen.getByRole('button', { name: /Verify Email/i });
-    await userEvent.click(submitButton);
+    await user.click(submitButton);
 
     expect(screen.getByText(/Please enter a valid OTP code/i)).toBeInTheDocument();
     expect(mockVerifyOtp).not.toHaveBeenCalled();
@@ -72,10 +75,10 @@ describe('OtpVerificationPage', () => {
     render(<OtpVerificationPage />);
 
     const input = screen.getByLabelText(/Verification Code/i);
-    await userEvent.type(input, '1234');
+    await user.type(input, '1234');
 
     const submitButton = screen.getByRole('button', { name: /Verify Email/i });
-    await userEvent.click(submitButton);
+    await user.click(submitButton);
 
     expect(mockVerifyOtp).toHaveBeenCalledWith('1234');
 
@@ -120,7 +123,7 @@ describe('OtpVerificationPage', () => {
     });
 
     const resendButton = screen.getByRole('button', { name: /Resend code/i });
-    await userEvent.click(resendButton);
+    await user.click(resendButton);
 
     expect(mockResendOtp).toHaveBeenCalled();
     expect(
@@ -132,7 +135,7 @@ describe('OtpVerificationPage', () => {
     render(<OtpVerificationPage />);
 
     const goToLoginButton = screen.getByRole('button', { name: /Back to Sign In/i });
-    await userEvent.click(goToLoginButton);
+    await user.click(goToLoginButton);
 
     expect(mockNavigate).toHaveBeenCalledWith('/login');
   });
