@@ -7,7 +7,7 @@
     "@emotion/styled": "^11.14.0",
     "@monaco-editor/react": "^4.7.0",
     "@mui/icons-material": "^7.3.7",
-    "@mui/material": "^7.3.7",
+    "@mui/material": "^9.5.0",
     "@testing-library/dom": "^10.4.2",
     "@testing-library/jest-dom": "^7.0.1",
     "@testing-library/react": "^16.3.0",
