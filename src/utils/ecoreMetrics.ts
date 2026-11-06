@@ -2,6 +2,10 @@ import { XSI_XML_NAMESPACE } from './ecoreXmlNamespaces';
 
 export interface EcoreClassMetrics {
   name: string;
+  /** Unique within its metamodel: the path below the root package, e.g. `nested/Kind`. */
+  id: string;
+  /** Subpackage path below the root package (`''` for the root package). */
+  packagePath: string;
   qualifiedName: string;
   isAbstract: boolean;
   isInterface: boolean;
@@ -15,6 +19,8 @@ export interface EcoreClassMetrics {
 export interface EcoreAssociationMetrics {
   name: string;
   ownerClass: string;
+  /** {@link EcoreClassMetrics.id} of the owning class. */
+  ownerId: string;
   targetClass: string;
   containment: boolean;
 }
@@ -24,8 +30,17 @@ export interface EcoreEnumMetrics {
   literalCount: number;
 }
 
+export interface EcorePackageMetrics {
+  name: string;
+  /** Path below the root package (`''` for the root package). */
+  path: string;
+  nsURI: string;
+  nsPrefix: string;
+}
+
 export interface EcoreMetamodelMetrics {
   name: string;
+  packages: EcorePackageMetrics[];
   packageCount: number;
   classCount: number;
   abstractClassCount: number;
@@ -52,6 +67,7 @@ export interface EcoreMetamodelMetrics {
 
 const EMPTY_METRICS: EcoreMetamodelMetrics = {
   name: '',
+  packages: [],
   packageCount: 0,
   classCount: 0,
   abstractClassCount: 0,
@@ -112,6 +128,17 @@ function parseTypeName(eType: string): string {
   return parts.at(-1) || '';
 }
 
+/** The `/`-separated class path of an eType / eSuperTypes reference, or `null` for external ones. */
+function localTypePath(eType: string): string | null {
+  const trimmed = eType.trim();
+  if (!trimmed) return null;
+  const hashIndex = trimmed.indexOf('#');
+  // `other.ecore#//Name` and `http://uri#//Name` point into another resource.
+  if (hashIndex > 0) return null;
+  const path = (hashIndex === 0 ? trimmed.slice(1) : trimmed).replace(/^\/\//, '');
+  return path || null;
+}
+
 function collectPackages(root: Element): Element[] {
   const packages: Element[] = [];
   const visit = (el: Element) => {
@@ -142,12 +169,6 @@ function classifierChildren(pkg: Element): Element[] {
   return Array.from(pkg.children).filter(el => localName(el) === 'eClassifiers');
 }
 
-function superTypeNames(cls: Element): string[] {
-  const raw = cls.getAttribute('eSuperTypes');
-  if (!raw) return [];
-  return raw.trim().split(/\s+/).map(parseTypeName).filter(Boolean);
-}
-
 function structuralFeatures(cls: Element): Element[] {
   return Array.from(cls.children).filter(el => localName(el) === 'eStructuralFeatures');
 }
@@ -173,13 +194,14 @@ function countReferences(cls: Element): { containment: number; nonContainment: n
   return { containment, nonContainment };
 }
 
-function collectAssociations(cls: Element, ownerName: string): EcoreAssociationMetrics[] {
+function collectAssociations(cls: Element, ownerName: string, ownerId: string): EcoreAssociationMetrics[] {
   const associations: EcoreAssociationMetrics[] = [];
   for (const feat of structuralFeatures(cls)) {
     if (!xsiType(feat).includes('EReference')) continue;
     associations.push({
       name: feat.getAttribute('name') || 'unnamed',
       ownerClass: ownerName,
+      ownerId,
       targetClass: parseTypeName(feat.getAttribute('eType') || ''),
       containment: feat.getAttribute('containment') === 'true',
     });
@@ -238,9 +260,11 @@ function computeLongestPathDepths(
   return depths;
 }
 
-type ClassElem = { el: Element; pkg: string };
+type ClassElem = { el: Element; pkg: string; path: string };
 
 type ClassInfo = {
+  id: string;
+  packagePath: string;
   name: string;
   pkg: string;
   qualifiedName: string;
@@ -248,14 +272,27 @@ type ClassInfo = {
   isInterface: boolean;
   attributeCount: number;
   operationCount: number;
+  /** Class ids of the supertypes that live in this metamodel. */
   supers: string[];
+  /** Class ids of containment targets that live in this metamodel. */
   containmentTargets: string[];
-  referenceTargets: { name: string; eType: string }[];
+  referenceTargets: { name: string; eType: string; id: string | null }[];
 };
+
+function packagePathOf(pkg: Element, root: Element): string {
+  const names: string[] = [];
+  let current: Element | null = pkg;
+  while (current && current !== root) {
+    names.unshift(current.getAttribute('name') || '');
+    current = current.parentElement;
+  }
+  return names.filter(Boolean).join('/');
+}
 
 function collectClassifiers(
   packages: Element[],
   packageName: string,
+  root: Element,
 ): { classElems: ClassElem[]; enumerations: EcoreEnumMetrics[] } {
   const classElems: ClassElem[] = [];
   const enumerations: EcoreEnumMetrics[] = [];
@@ -270,17 +307,49 @@ function collectClassifiers(
         continue;
       }
       if (isEClassElement(classifier)) {
-        classElems.push({ el: classifier, pkg: pkgName });
+        classElems.push({ el: classifier, pkg: pkgName, path: packagePathOf(pkg, root) });
       }
     }
   }
   return { classElems, enumerations };
 }
 
-function toClassInfo(el: Element, pkg: string): ClassInfo {
+function classIdOf(path: string, name: string): string {
+  return path ? `${path}/${name}` : name;
+}
+
+/** Resolves eType references to class ids, falling back to a unique short-name match. */
+function createClassResolver(classElems: ClassElem[]): (eType: string) => string | null {
+  const ids = new Set<string>();
+  const idsByName = new Map<string, string[]>();
+  for (const { el, path } of classElems) {
+    const name = el.getAttribute('name') || 'Unknown';
+    const id = classIdOf(path, name);
+    ids.add(id);
+    idsByName.set(name, [...(idsByName.get(name) ?? []), id]);
+  }
+  return eType => {
+    const path = localTypePath(eType);
+    if (!path) return null;
+    if (ids.has(path)) return path;
+    const candidates = idsByName.get(path.split('/').pop() || '') ?? [];
+    return candidates.length === 1 ? candidates[0] : null;
+  };
+}
+
+function toClassInfo(
+  el: Element,
+  pkg: string,
+  path: string,
+  resolve: (eType: string) => string | null,
+): ClassInfo {
   const name = el.getAttribute('name') || 'Unknown';
   const isInterface = el.getAttribute('interface') === 'true';
+  const refs = referenceTargets(el).map(t => ({ ...t, id: resolve(t.eType) }));
+  const containmentRefs = referenceTargets(el, true).map(t => resolve(t.eType));
   return {
+    id: classIdOf(path, name),
+    packagePath: path,
     name,
     pkg,
     qualifiedName: pkg ? `${pkg}::${name}` : name,
@@ -288,17 +357,22 @@ function toClassInfo(el: Element, pkg: string): ClassInfo {
     isInterface,
     attributeCount: countAttributes(el),
     operationCount: countOperations(el),
-    supers: superTypeNames(el),
-    containmentTargets: referenceTargets(el, true).map(t => t.name),
-    referenceTargets: referenceTargets(el),
+    supers: (el.getAttribute('eSuperTypes') || '')
+      .trim()
+      .split(/\s+/)
+      .map(resolve)
+      .filter((id): id is string => id !== null),
+    containmentTargets: containmentRefs.filter((id): id is string => id !== null),
+    referenceTargets: refs,
   };
 }
 
 function countChildrenByParent(classInfos: ClassInfo[]): Map<string, number> {
-  const childCounts = new Map(classInfos.map(c => [c.name, 0]));
+  const childCounts = new Map(classInfos.map(c => [c.id, 0]));
   for (const cls of classInfos) {
-    for (const parent of cls.supers) {
-      if (childCounts.has(parent)) {
+    // A class listing the same parent twice is still one child of it.
+    for (const parent of new Set(cls.supers)) {
+      if (parent !== cls.id && childCounts.has(parent)) {
         childCounts.set(parent, (childCounts.get(parent) ?? 0) + 1);
       }
     }
@@ -318,12 +392,12 @@ function sumReferences(classElems: ClassElem[]): { containment: number; nonConta
 }
 
 function countCrossPackageReferences(classInfos: ClassInfo[]): number {
-  const classPkg = new Map(classInfos.map(c => [c.name, c.pkg]));
+  const classPkg = new Map(classInfos.map(c => [c.id, c.packagePath]));
   let count = 0;
   for (const cls of classInfos) {
     for (const target of cls.referenceTargets) {
-      const targetPkg = classPkg.get(target.name);
-      if (targetPkg && targetPkg !== cls.pkg) count += 1;
+      const targetPkg = target.id === null ? undefined : classPkg.get(target.id);
+      if (targetPkg !== undefined && targetPkg !== cls.packagePath) count += 1;
     }
   }
   return count;
@@ -337,21 +411,24 @@ function toClassMetrics(
 ): EcoreClassMetrics[] {
   return classInfos.map(c => ({
     name: c.name,
+    id: c.id,
+    packagePath: c.packagePath,
     qualifiedName: c.qualifiedName,
     isAbstract: c.isAbstract,
     isInterface: c.isInterface,
     attributeCount: c.attributeCount,
-    inheritanceDepth: depths.get(c.name) ?? 0,
-    childCount: childCounts.get(c.name) ?? 0,
+    inheritanceDepth: depths.get(c.id) ?? 0,
+    childCount: childCounts.get(c.id) ?? 0,
     operationCount: c.operationCount,
-    containmentHeight: containmentHeights.get(c.name) ?? 0,
+    containmentHeight: containmentHeights.get(c.id) ?? 0,
   }));
 }
 
 function collectAllAssociations(classElems: ClassElem[]): EcoreAssociationMetrics[] {
   const associations: EcoreAssociationMetrics[] = [];
-  for (const { el } of classElems) {
-    associations.push(...collectAssociations(el, el.getAttribute('name') || 'Unknown'));
+  for (const { el, path } of classElems) {
+    const name = el.getAttribute('name') || 'Unknown';
+    associations.push(...collectAssociations(el, name, classIdOf(path, name)));
   }
   return associations;
 }
@@ -362,14 +439,15 @@ function metricsFromParsed(
   enumerations: EcoreEnumMetrics[],
   classElems: ClassElem[],
   classInfos: ClassInfo[],
+  packageInfos: EcorePackageMetrics[],
 ): EcoreMetamodelMetrics {
-  const knownNames = new Set(classInfos.map(c => c.name));
+  const knownIds = new Set(classInfos.map(c => c.id));
   const childCounts = countChildrenByParent(classInfos);
-  const depths = computeLongestPathDepths(classInfos.map(c => ({ name: c.name, next: c.supers })));
+  const depths = computeLongestPathDepths(classInfos.map(c => ({ name: c.id, next: c.supers })));
   const containmentHeights = computeLongestPathDepths(
     classInfos.map(c => ({
-      name: c.name,
-      next: c.containmentTargets.filter(t => knownNames.has(t)),
+      name: c.id,
+      next: c.containmentTargets.filter(t => knownIds.has(t)),
     })),
   );
   const { containment, nonContainment } = sumReferences(classElems);
@@ -381,6 +459,7 @@ function metricsFromParsed(
 
   return {
     name: packageName,
+    packages: packageInfos,
     packageCount: packages.length,
     classCount: classes.length,
     abstractClassCount,
@@ -425,9 +504,16 @@ export function parseEcoreMetamodelMetrics(
 
     const packageName = root.getAttribute('name') || fallbackName;
     const packages = collectPackages(root);
-    const { classElems, enumerations } = collectClassifiers(packages, packageName);
-    const classInfos = classElems.map(({ el, pkg }) => toClassInfo(el, pkg));
-    return metricsFromParsed(packageName, packages, enumerations, classElems, classInfos);
+    const { classElems, enumerations } = collectClassifiers(packages, packageName, root);
+    const resolveClass = createClassResolver(classElems);
+    const classInfos = classElems.map(({ el, pkg, path }) => toClassInfo(el, pkg, path, resolveClass));
+    const packageInfos = packages.map(pkg => ({
+      name: pkg.getAttribute('name') || packageName,
+      path: packagePathOf(pkg, root),
+      nsURI: (pkg.getAttribute('nsURI') || '').trim(),
+      nsPrefix: (pkg.getAttribute('nsPrefix') || '').trim(),
+    }));
+    return metricsFromParsed(packageName, packages, enumerations, classElems, classInfos, packageInfos);
   } catch {
     return { ...EMPTY_METRICS, name: fallbackName };
   }

@@ -1,6 +1,7 @@
 import { parseEcoreMetamodelMetrics } from '../../utils/ecoreMetrics';
-import { countOclConstraints, extractMentionedClassNames, parseOclConstraints, parseReactionFileMetrics } from '../../utils/reactionMetrics';
+import { countOclConstraints, extractReactionClassReferences, parseOclConstraints, parseReactionFileMetrics } from '../../utils/reactionMetrics';
 import {
+  canonicalMetamodelNodeIds,
   collectMetamodelInputs,
   collectReactionInputs,
   computeMethodologistMetrics,
@@ -88,7 +89,7 @@ describe('parseEcoreMetamodelMetrics', () => {
     expect(result.inheritanceDepthMax).toBe(2);
     expect(result.classes.find(c => c.name === 'Employee')?.inheritanceDepth).toBe(2);
     expect(result.classes.find(c => c.name === 'Named')?.inheritanceDepth).toBe(0);
-    expect(result.inheritanceDepthAvg).toBeCloseTo((0 + 1 + 2) / 3);
+    expect(result.inheritanceDepthAvg).toBeCloseTo((1 + 2) / 3);
     expect(result.classes.find(c => c.name === 'Named')?.childCount).toBe(1);
     expect(result.classes.find(c => c.name === 'Person')?.childCount).toBe(1);
     expect(result.classes.find(c => c.name === 'Employee')?.childCount).toBe(0);
@@ -199,13 +200,43 @@ reaction B {
     });
   });
 
-  it('extracts mentioned class names from qualified and PascalCase tokens', () => {
-    expect(extractMentionedClassNames(familiesToPersons)).toEqual(
-      expect.arrayContaining(['CreatePerson', 'DeletePerson']),
-    );
-    expect(extractMentionedClassNames('retrieve optional Families::Member corresponding to Persons::Person')).toEqual(
-      expect.arrayContaining(['Member', 'Person', 'Families', 'Persons']),
-    );
+  it('extracts only qualified metamodel class references', () => {
+    const parsed = extractReactionClassReferences(familiesToPersons);
+    expect(parsed.references).toEqual([]);
+    expect(parsed.aliases.get('Families')).toBe('http://families');
+    expect(parsed.sourceAlias).toBe('Families');
+    expect(parsed.targetAlias).toBe('Persons');
+
+    expect(extractReactionClassReferences('retrieve optional Families::Member corresponding to Persons::Person').references)
+      .toEqual([
+        { qualifier: 'Families', className: 'Member' },
+        { qualifier: 'Persons', className: 'Person' },
+      ]);
+  });
+
+  it('ignores Java/Xtend types, imports, strings and comments', () => {
+    const code = `
+import java.util.List
+import static java.lang.Math.*
+import "http://families" as Families
+
+reaction CreatePerson {
+  after element Families::Member created
+  call {
+    val String text = "Persons::Fake and Person"
+    val List list = new ArrayList()
+    // Families::Commented
+    /* Families::Block */
+    Utility::helper(text)
+  }
+}
+`;
+    const { references, aliases } = extractReactionClassReferences(code);
+    expect(aliases.get('Families')).toBe('http://families');
+    expect(references.map(r => `${r.qualifier}::${r.className}`)).toEqual([
+      'Families::Member',
+      'Utility::helper',
+    ]);
   });
 });
 
@@ -470,5 +501,172 @@ reaction SyncBook {
       reactionFileCount: 1,
       score: 3,
     });
+  });
+});
+
+describe('class matching across metamodels', () => {
+  const node = (id: string, fileName: string, content: string, extra: Record<string, unknown> = {}): Node => ({
+    id,
+    type: 'ecoreFile',
+    position: { x: 0, y: 0 },
+    data: { fileName, fileContent: content, ...extra },
+  });
+  const edge = (id: string, source: string, target: string, code: string): Edge => ({
+    id, source, target, type: 'reactions', data: { code },
+  });
+  const run = (nodes: Node[], edges: Edge[], oclContent = '') => computeMethodologistMetrics({
+    metamodels: collectMetamodelInputs(nodes),
+    reactions: collectReactionInputs(nodes, edges),
+    viewTypes: [],
+    oclContent,
+  });
+
+  const uriEcore = (name: string, uri: string, body: string) => `<?xml version="1.0" encoding="UTF-8"?>
+<ecore:EPackage xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                xmlns:ecore="http://www.eclipse.org/emf/2002/Ecore"
+                name="${name}" nsURI="${uri}" nsPrefix="${name}">${body}</ecore:EPackage>`;
+
+  const left = node('a', 'left.ecore', uriEcore('left', 'http://left', eClass('Person') + eClass('Left')));
+  const right = node('b', 'right.ecore', uriEcore('right', 'http://right', eClass('Person') + eClass('Right')));
+
+  it('does not count Java types, strings or imports as class references', () => {
+    const code = `
+import java.util.List
+import "http://left" as Left
+import "http://right" as Right
+reactions: LeftToRight
+in reaction to changes in Left
+execute actions in Right
+reaction R {
+  after element Left::Left created
+  call { val String s = "Person Right::Right" }
+}
+`;
+    const metrics = run([left, right], [edge('e', 'a', 'b', code)]);
+    const byName = Object.fromEntries(metrics.metamodelLinks.map(l => [l.name, l]));
+    expect(byName.left.uncoveredClassNames).toEqual(['Person']);
+    expect(byName.right.uncoveredClassNames).toEqual(['Person', 'Right']);
+  });
+
+  it('keeps classes with identical names in different metamodels independent', () => {
+    const code = `
+import "http://left" as Left
+import "http://right" as Right
+reactions: LeftToRight
+in reaction to changes in Left
+execute actions in Right
+reaction R { after element Left::Person created }
+`;
+    const metrics = run([left, right], [edge('e', 'a', 'b', code)]);
+    const byName = Object.fromEntries(metrics.metamodelLinks.map(l => [l.name, l]));
+    expect(byName.left.uncoveredClassNames).toEqual(['Left']);
+    expect(byName.right.uncoveredClassNames).toEqual(['Person', 'Right']);
+    expect(metrics.repairOnlyClassNames).toEqual(['left::Person']);
+    expect(metrics.unprotectedClassNames).toEqual(['Left', 'right::Person', 'Right']);
+    expect(metrics.hotspotClasses).toEqual([
+      expect.objectContaining({ className: 'Person', metamodel: 'left', reactionFileCount: 1 }),
+    ]);
+  });
+
+  it('settles identically named packages via the header and credits only that metamodel', () => {
+    const same = (id: string, file: string) => node(id, file, uriEcore('model', 'http://m', eClass('Item') + eClass(`Only${id}`)));
+    const code = `
+import "http://m" as Src
+import "http://m" as Dst
+reactions: X
+in reaction to changes in Src
+execute actions in Dst
+reaction R { after element Dst::Item created }
+`;
+    const metrics = run([same('a', 'one.ecore'), same('b', 'two.ecore')], [edge('e', 'a', 'b', code)]);
+    const byName = Object.fromEntries(metrics.metamodelLinks.map(l => [l.name, l]));
+    expect(byName.one.uncoveredClassNames).toEqual(['Item', 'Onlya']);
+    expect(byName.two.uncoveredClassNames).toEqual(['Onlyb']);
+  });
+
+  it('matches OCL contexts by package qualifier', () => {
+    const code = 'import "http://left" as Left\nreaction R { after element Left::Person created }';
+    const ocl = 'context right::Person inv Named: true';
+    const metrics = run([left, right], [edge('e', 'a', 'b', code)], ocl);
+    expect(metrics.detectOnlyClassNames).toEqual(['right::Person']);
+    expect(metrics.repairOnlyClassNames).toEqual(['left::Person']);
+    expect(metrics.oclRulesWithoutReaction).toHaveLength(1);
+  });
+
+  it('credits cross-package references to the right subpackage', () => {
+    const nested = node('n', 'nested.ecore', uriEcore(
+      'root',
+      'http://root',
+      eClass('Thing') + `<eSubpackages name="sub" nsURI="http://sub" nsPrefix="sub">${eClass('Thing')}${eClass('Deep')}</eSubpackages>`,
+    ));
+    const other = node('o', 'other.ecore', wrap(eClass('X'), 'other'));
+    const code = 'import "http://sub" as Sub\nreaction R { after element Sub::Thing created }';
+    const metrics = run([nested, other], [edge('e', 'n', 'o', code)]);
+    const link = metrics.metamodelLinks.find(l => l.name === 'nested');
+    expect(link?.concreteClassCount).toBe(3);
+    expect(link?.coveredConcreteClassCount).toBe(1);
+    expect(link?.uncoveredClassNames).toEqual(['Thing', 'Deep']);
+    expect(link?.uncoveredClassNames).not.toContain('sub/Thing');
+  });
+
+  it('tells same-named classes of one metamodel apart by subpackage', () => {
+    const nested = node('n', 'nested.ecore', uriEcore(
+      'root',
+      'http://root',
+      eClass('Thing') + `<eSubpackages name="sub" nsURI="http://sub" nsPrefix="sub">${eClass('Thing')}</eSubpackages>`,
+    ));
+    const other = node('o', 'other.ecore', wrap(eClass('X'), 'other'));
+    const code = 'import "http://root" as Root\nreaction R { after element Root::Thing created }';
+    const metrics = run([nested, other], [edge('e', 'n', 'o', code)]);
+    expect(metrics.metamodelLinks.find(l => l.name === 'nested')?.uncoveredClassNames).toEqual(['sub/Thing']);
+    expect(metrics.repairOnlyClassNames).toEqual(['nested::Thing']);
+    expect(metrics.unprotectedClassNames).toEqual(['nested::sub/Thing', 'X']);
+  });
+
+  it('does not treat a duplicated reaction-linked metamodel as an orphan', () => {
+    const original = node('n1', 'library.ecore', wrap(eClass('Book')), { metaModelId: 7 });
+    const copy = node('n1-copy', 'library.ecore', wrap(eClass('Book')), { metaModelId: 7 });
+    const persons = node('n2', 'persons.ecore', wrap(eClass('Person'), 'persons'));
+    const nodes = [original, copy, persons];
+    const edges = [edge('e', 'n1-copy', 'n2', 'reaction R { after element library::Book created }')];
+    expect(canonicalMetamodelNodeIds(nodes).get('n1-copy')).toBe('n1');
+    expect(collectReactionInputs(nodes, edges)[0]).toMatchObject({ sourceId: 'n1', targetId: 'n2' });
+    const metrics = run(nodes, edges);
+    expect(metrics.orphanMetamodelCount).toBe(0);
+    expect(metrics.metamodelLinks.find(l => l.name === 'library')).toMatchObject({ fanOut: 1, isOrphan: false });
+  });
+
+  it('ignores reaction edges that point at unknown nodes', () => {
+    const metrics = run([left], [edge('e', 'ghost-a', 'ghost-b', '')]);
+    expect(metrics.orphanMetamodelCount).toBe(1);
+  });
+});
+
+describe('number of children per class identity', () => {
+  it('keeps same-named classes in different subpackages apart', () => {
+    const xml = wrap(
+      eClass('Base', '', 'abstract="true"')
+      + eClass('Item', '', 'eSuperTypes="#//Base"')
+      + `<eSubpackages name="sub">${eClass('Item')}${eClass('Base', '', 'abstract="true"')}</eSubpackages>`,
+    );
+    const result = parseEcoreMetamodelMetrics(xml);
+    const children = Object.fromEntries(result.classes.map(c => [c.id, c.childCount]));
+    expect(children).toEqual({ Base: 1, Item: 0, 'sub/Item': 0, 'sub/Base': 0 });
+  });
+
+  it('counts subclasses that live in another package of the same metamodel', () => {
+    const xml = wrap(
+      eClass('Base', '', 'abstract="true"')
+      + `<eSubpackages name="sub">${eClass('Child', '', 'eSuperTypes="#//Base"')}${eClass('Other', '', 'eSuperTypes="#//Base"')}</eSubpackages>`,
+    );
+    const result = parseEcoreMetamodelMetrics(xml);
+    expect(result.classes.find(c => c.id === 'Base')?.childCount).toBe(2);
+    expect(result.classes.find(c => c.id === 'sub/Child')?.inheritanceDepth).toBe(1);
+  });
+
+  it('does not count parents in other resources', () => {
+    const xml = wrap(eClass('Base') + eClass('Child', '', 'eSuperTypes="other.ecore#//Base"'));
+    const result = parseEcoreMetamodelMetrics(xml);
+    expect(result.classes.find(c => c.name === 'Base')?.childCount).toBe(0);
   });
 });

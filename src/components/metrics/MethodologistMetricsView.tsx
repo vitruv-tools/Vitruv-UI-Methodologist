@@ -229,7 +229,7 @@ const AttributesPerClass: React.FC<{ metrics: MethodologistMetrics }> = ({ metri
             </thead>
             <tbody>
               {mm.classes.map(cls => (
-                <tr key={cls.qualifiedName}>
+                <tr key={cls.id}>
                   <td style={classDetailTdStyle()}>
                     {cls.name}
                     {cls.isAbstract ? <span style={{ color: T.muted }}> (abstract)</span> : null}
@@ -870,7 +870,7 @@ export const MethodologistMetricsView: React.FC<MethodologistMetricsViewProps> =
               )}
             </Section>
 
-            <Section title="Detection and repair" caption="Compares classes checked by OCL constraints (detection) with classes mentioned in reactions files (repair). Classes are matched by name.">
+            <Section title="Detection and repair" caption="Compares classes checked by OCL constraints (detection) with classes mentioned in reactions files (repair). Reactions name a class through its import alias (Alias::Class), which is matched to its metamodel and package; OCL contexts are matched by their package qualifier, or by class name if unqualified.">
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 6, marginBottom: 8 }}>
                 <InsightList metric="detectOnly" hint="OCL, no reaction" names={metrics.detectOnlyClassNames} />
                 <InsightList metric="repairOnly" hint="reaction, no OCL" names={metrics.repairOnlyClassNames} />

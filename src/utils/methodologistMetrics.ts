@@ -6,11 +6,13 @@ import {
 } from './ecoreMetrics';
 import {
   countOclConstraints,
-  extractMentionedClassNames,
   extractOclMentionedNames,
+  extractReactionClassReferences,
   parseOclConstraints,
   parseReactionFileMetrics,
+  type OclConstraint,
   type ReactionBlockMetrics,
+  type ReactionClassReferences,
   type ReactionFileMetrics,
 } from './reactionMetrics';
 
@@ -153,7 +155,7 @@ function computeViewProjection(
       if (!mm) continue;
       aggregatedClassCount += mm.classCount;
       for (const cls of mm.classes) {
-        unique.add(`${mm.id}::${cls.qualifiedName}`);
+        unique.add(`${mm.id}::${cls.id}`);
       }
     }
   }
@@ -180,6 +182,26 @@ function metamodelDedupeKey(node: Node): string {
   return `id:${node.id}`;
 }
 
+/**
+ * Maps every metamodel node id to the id of the node that represents it in the metrics.
+ *
+ * Canvas copies of the same metamodel are collapsed into the first one (see
+ * {@link collectMetamodelInputs}), but reaction edges may still be attached to a copy.
+ * Ids of nodes that are not metamodels are not in the map.
+ */
+export function canonicalMetamodelNodeIds(nodes: Node[]): Map<string, string> {
+  const firstByKey = new Map<string, string>();
+  const canonical = new Map<string, string>();
+  for (const node of nodes) {
+    if (node.type !== 'ecoreFile') continue;
+    const key = metamodelDedupeKey(node);
+    const first = firstByKey.get(key) ?? node.id;
+    firstByKey.set(key, first);
+    canonical.set(node.id, first);
+  }
+  return canonical;
+}
+
 export function collectMetamodelInputs(nodes: Node[]): MetamodelFileInput[] {
   const seen = new Set<string>();
   const inputs: MetamodelFileInput[] = [];
@@ -203,6 +225,7 @@ export function collectReactionInputs(
   codeByEdgeId: Record<string, string> = {},
 ): ReactionSpecInput[] {
   const byId = new Map(nodes.map(n => [n.id, n]));
+  const canonicalIds = canonicalMetamodelNodeIds(nodes);
   return edges
     .filter(e => e.type === 'reactions')
     .map(edge => {
@@ -210,8 +233,9 @@ export function collectReactionInputs(
       const code = codeByEdgeId[edge.id] || stored;
       return {
         id: edge.id,
-        sourceId: edge.source,
-        targetId: edge.target,
+        // Edges attached to a duplicate metamodel node count for the node that was kept.
+        sourceId: canonicalIds.get(edge.source) ?? edge.source,
+        targetId: canonicalIds.get(edge.target) ?? edge.target,
         sourceName: nodeDisplayName(byId.get(edge.source), 'source'),
         targetName: nodeDisplayName(byId.get(edge.target), 'target'),
         code,
@@ -275,9 +299,151 @@ function computeReactionDirections(reactions: ReactionSpecInput[]): {
   return { directionById, oneWayReactionPairCount, bidirectionalReactionPairCount };
 }
 
+type MetamodelWithId = EcoreMetamodelMetrics & { id: string };
+
+/** A concrete or abstract class, identified by its metamodel and its path inside it. */
+interface ClassEntry {
+  key: string;
+  className: string;
+  packagePath: string;
+  metamodel: MetamodelWithId;
+  isAbstract: boolean;
+}
+
+/** A metamodel (or one package of it, when `path` is set) that a qualifier points to. */
+interface QualifierTarget {
+  metamodel: MetamodelWithId;
+  path: string | null;
+}
+
+function classKeyOf(metamodelId: string, classId: string): string {
+  return `${metamodelId}|${classId}`;
+}
+
+function normalizeUri(uri: string): string {
+  const trimmed = uri.trim();
+  let end = trimmed.length;
+  while (end > 0 && trimmed[end - 1] === '/') end -= 1;
+  return trimmed.slice(0, end);
+}
+
+function buildClassEntries(metamodels: MetamodelWithId[]): ClassEntry[] {
+  return metamodels.flatMap(metamodel => metamodel.classes.map(cls => ({
+    key: classKeyOf(metamodel.id, cls.id),
+    className: cls.name,
+    packagePath: cls.packagePath,
+    metamodel,
+    isAbstract: cls.isAbstract,
+  })));
+}
+
+/** Finds the metamodels or packages a qualifier (`Alias`, `pkg`, `a::b`) stands for. */
+function resolveQualifier(
+  metamodels: MetamodelWithId[],
+  qualifier: string,
+  uri: string | undefined,
+): QualifierTarget[] {
+  if (uri) {
+    const wanted = normalizeUri(uri);
+    const byUri = metamodels.flatMap(metamodel => metamodel.packages
+      .filter(pkg => pkg.nsURI && normalizeUri(pkg.nsURI) === wanted)
+      .map(pkg => ({ metamodel, path: pkg.path })));
+    if (byUri.length > 0) return byUri;
+  }
+
+  const wanted = (qualifier.split('::').pop() || qualifier).trim().toLowerCase();
+  if (!wanted) return [];
+  const targets: QualifierTarget[] = [];
+  for (const metamodel of metamodels) {
+    const byName = metamodel.packages.filter(pkg =>
+      pkg.name.toLowerCase() === wanted || (pkg.nsPrefix !== '' && pkg.nsPrefix.toLowerCase() === wanted));
+    if (byName.length > 0) targets.push(...byName.map(pkg => ({ metamodel, path: pkg.path })));
+    else if (metamodel.name.toLowerCase() === wanted) targets.push({ metamodel, path: null });
+  }
+  return targets;
+}
+
+function classesOfTarget(entries: ClassEntry[], target: QualifierTarget, className: string): ClassEntry[] {
+  return entries.filter(entry =>
+    entry.metamodel.id === target.metamodel.id
+    && entry.className === className
+    && (target.path === null || entry.packagePath === target.path));
+}
+
+function narrowToMetamodel(targets: QualifierTarget[], metamodelIds: Array<string | null>): QualifierTarget[] {
+  const wanted = new Set(metamodelIds.filter((id): id is string => id !== null));
+  const narrowed = targets.filter(target => wanted.has(target.metamodel.id));
+  return narrowed.length > 0 ? narrowed : targets;
+}
+
+/**
+ * The classes a reactions file refers to, credited only to the metamodel each qualifier
+ * resolves to. A qualifier that fits several metamodels is settled by the file header
+ * (`in reaction to changes in` / `execute actions in`) and by the reaction's own endpoints;
+ * if that still leaves several, the reference is dropped rather than guessed.
+ */
+function resolveReactionClasses(
+  spec: ReactionSpecInput,
+  parsed: ReactionClassReferences,
+  metamodels: MetamodelWithId[],
+  entries: ClassEntry[],
+): Set<string> {
+  const keys = new Set<string>();
+  for (const ref of parsed.references) {
+    const alias = ref.qualifier.split('::')[0];
+    const uri = parsed.aliases.get(ref.qualifier) ?? parsed.aliases.get(alias);
+    let targets = resolveQualifier(metamodels, ref.qualifier, uri)
+      .filter(target => classesOfTarget(entries, target, ref.className).length > 0);
+
+    if (targets.length > 1) {
+      if (alias === parsed.sourceAlias) targets = narrowToMetamodel(targets, [spec.sourceId]);
+      else if (alias === parsed.targetAlias) targets = narrowToMetamodel(targets, [spec.targetId]);
+    }
+    if (targets.length > 1) targets = narrowToMetamodel(targets, [spec.sourceId, spec.targetId]);
+    if (new Set(targets.map(target => target.metamodel.id)).size > 1) continue;
+
+    for (const target of targets) {
+      classesOfTarget(entries, target, ref.className).forEach(entry => keys.add(entry.key));
+    }
+  }
+  return keys;
+}
+
+/**
+ * The classes an OCL rule is about. A qualified context (`library::Book`) is matched like a
+ * reaction qualifier; an unqualified one, or a qualifier that matches nothing, falls back to
+ * the class name, which OCL cannot tell apart between metamodels.
+ */
+function resolveOclContext(
+  rule: OclConstraint,
+  metamodels: MetamodelWithId[],
+  entries: ClassEntry[],
+): ClassEntry[] {
+  if (!rule.contextClass) return [];
+  if (rule.contextQualifier) {
+    const targets = resolveQualifier(metamodels, rule.contextQualifier, undefined);
+    const qualified = targets.flatMap(target => classesOfTarget(entries, target, rule.contextClass));
+    if (qualified.length > 0) return qualified;
+  }
+  return entries.filter(entry => entry.className === rule.contextClass);
+}
+
+/** Class name, prefixed with its subpackage when the same name exists in another package. */
+function packageQualifiedName(packagePath: string, className: string): string {
+  return packagePath ? `${packagePath}/${className}` : className;
+}
+
+function classLabeler(entries: ClassEntry[]): (entry: ClassEntry) => string {
+  const counts = new Map<string, number>();
+  for (const entry of entries) counts.set(entry.className, (counts.get(entry.className) ?? 0) + 1);
+  return entry => ((counts.get(entry.className) ?? 0) > 1
+    ? `${entry.metamodel.name}::${packageQualifiedName(entry.packagePath, entry.className)}`
+    : entry.className);
+}
+
 function computeConsistencyInsights(
-  metamodels: Array<EcoreMetamodelMetrics & { id: string }>,
-  reactions: ReactionSpecInput[],
+  metamodels: MetamodelWithId[],
+  reactionClassKeys: Set<string>[],
   oclContent: string,
 ): {
   detectOnlyClassNames: string[];
@@ -288,68 +454,55 @@ function computeConsistencyInsights(
   oclRulesWithoutReaction: OclReactionGapItem[];
   hotspotClasses: ClassHotspot[];
 } {
+  const entries = buildClassEntries(metamodels);
+  const labelOf = classLabeler(entries);
   const oclRules = parseOclConstraints(oclContent);
-  const oclContextSet = toLowerSet(oclRules.map(rule => rule.contextClass));
   const oclMentionSet = toLowerSet(extractOclMentionedNames(oclContent));
-  const reactionMentionSets = reactions.map(spec => ({
-    spec,
-    names: toLowerSet(extractMentionedClassNames(spec.code)),
-  }));
-  const reactionClassSet = new Set<string>();
-  for (const entry of reactionMentionSets) {
-    entry.names.forEach(name => reactionClassSet.add(name));
-  }
-
-  const knownClasses = metamodels.flatMap(mm => mm.classes.map(cls => ({
-    className: cls.name,
-    key: cls.name.toLowerCase(),
-    metamodel: mm.name,
-    isAbstract: cls.isAbstract,
-  })));
+  const ruleClassKeys = oclRules.map(rule => new Set(resolveOclContext(rule, metamodels, entries).map(e => e.key)));
+  const oclContextKeys = new Set(ruleClassKeys.flatMap(keys => [...keys]));
+  const reactionKeys = new Set(reactionClassKeys.flatMap(keys => [...keys]));
 
   const detectOnlyClassNames: string[] = [];
   const repairOnlyClassNames: string[] = [];
   const detectAndRepairClassNames: string[] = [];
   const unprotectedClassNames: string[] = [];
+  const unprotectedKeys = new Set<string>();
 
-  for (const cls of knownClasses) {
-    if (cls.isAbstract) continue;
-    const inOcl = oclContextSet.has(cls.key);
-    const inReaction = reactionClassSet.has(cls.key);
-    if (inOcl && inReaction) detectAndRepairClassNames.push(cls.className);
-    else if (inOcl) detectOnlyClassNames.push(cls.className);
-    else if (inReaction) repairOnlyClassNames.push(cls.className);
-    else unprotectedClassNames.push(cls.className);
+  for (const entry of entries) {
+    if (entry.isAbstract) continue;
+    const inOcl = oclContextKeys.has(entry.key);
+    const inReaction = reactionKeys.has(entry.key);
+    if (inOcl && inReaction) detectAndRepairClassNames.push(labelOf(entry));
+    else if (inOcl) detectOnlyClassNames.push(labelOf(entry));
+    else if (inReaction) repairOnlyClassNames.push(labelOf(entry));
+    else {
+      unprotectedClassNames.push(labelOf(entry));
+      unprotectedKeys.add(entry.key);
+    }
   }
 
-  const unprotectedClassSet = new Set(unprotectedClassNames.map(name => name.toLowerCase()));
-  const unprotectedAssociationNames = metamodels.flatMap(mm => mm.associations)
-    .filter(assoc => {
-      const ownerKey = assoc.ownerClass.toLowerCase();
-      const namedInOcl = oclMentionSet.has(assoc.name.toLowerCase());
-      return !namedInOcl && unprotectedClassSet.has(ownerKey);
-    })
-    .map(assoc => `${assoc.ownerClass}.${assoc.name}`);
+  const unprotectedAssociationNames = metamodels.flatMap(mm => mm.associations.map(assoc => ({ mm, assoc })))
+    .filter(({ mm, assoc }) =>
+      !oclMentionSet.has(assoc.name.toLowerCase()) && unprotectedKeys.has(classKeyOf(mm.id, assoc.ownerId)))
+    .map(({ assoc }) => `${assoc.ownerClass}.${assoc.name}`);
 
-  const oclRulesWithoutReaction = oclRules.filter(rule => {
-    const key = localNameOf(rule.contextClass).toLowerCase();
-    return key.length > 0 && !reactionClassSet.has(key);
-  });
+  const oclRulesWithoutReaction = oclRules.filter((rule, index) =>
+    rule.contextClass.length > 0 && ![...ruleClassKeys[index]].some(key => reactionKeys.has(key)));
 
-  const hotspotClasses = knownClasses
-    .map(cls => {
-      const oclRuleCount = oclRules.filter(rule => localNameOf(rule.contextClass).toLowerCase() === cls.key).length;
-      const reactionFileCount = reactionMentionSets.filter(entry => entry.names.has(cls.key)).length;
+  const hotspotClasses = entries
+    .map(entry => {
+      const oclRuleCount = ruleClassKeys.filter(keys => keys.has(entry.key)).length;
+      const reactionFileCount = reactionClassKeys.filter(keys => keys.has(entry.key)).length;
       return {
-        className: cls.className,
-        metamodel: cls.metamodel,
+        className: entry.className,
+        metamodel: entry.metamodel.name,
         oclRuleCount,
         reactionFileCount,
         score: oclRuleCount + reactionFileCount,
       };
     })
     .filter(item => item.score > 0)
-    .sort((a, b) => b.score - a.score || a.className.localeCompare(b.className))
+    .sort((a, b) => b.score - a.score || a.className.localeCompare(b.className) || a.metamodel.localeCompare(b.metamodel))
     .slice(0, 10);
 
   return {
@@ -358,46 +511,36 @@ function computeConsistencyInsights(
     detectAndRepairClassNames,
     unprotectedClassNames,
     unprotectedAssociationNames,
-    oclRulesWithoutReaction,
+    oclRulesWithoutReaction: oclRulesWithoutReaction.map(({ name, contextClass }) => ({ name, contextClass })),
     hotspotClasses,
   };
 }
 
-function mentionedNameSet(code: string): Set<string> {
-  return new Set(extractMentionedClassNames(code).map(name => name.toLowerCase()));
-}
-
 function computeMetamodelLinks(
-  metamodels: Array<EcoreMetamodelMetrics & { id: string }>,
+  metamodels: MetamodelWithId[],
   reactions: ReactionSpecInput[],
+  reactionClassKeys: Set<string>[],
 ): MetamodelLinkMetrics[] {
   const fanIn = new Map<string, number>();
   const fanOut = new Map<string, number>();
-  const mentioned = new Map<string, Set<string>>();
-
   for (const mm of metamodels) {
     fanIn.set(mm.id, 0);
     fanOut.set(mm.id, 0);
-    mentioned.set(mm.id, new Set());
   }
-
+  // Edges whose endpoint is not a known metamodel node cannot link anything.
   for (const spec of reactions) {
-    fanOut.set(spec.sourceId, (fanOut.get(spec.sourceId) ?? 0) + 1);
-    fanIn.set(spec.targetId, (fanIn.get(spec.targetId) ?? 0) + 1);
-    const names = mentionedNameSet(spec.code);
-    for (const id of [spec.sourceId, spec.targetId]) {
-      const set = mentioned.get(id);
-      if (!set) continue;
-      names.forEach(name => set.add(name));
-    }
+    if (fanOut.has(spec.sourceId)) fanOut.set(spec.sourceId, (fanOut.get(spec.sourceId) ?? 0) + 1);
+    if (fanIn.has(spec.targetId)) fanIn.set(spec.targetId, (fanIn.get(spec.targetId) ?? 0) + 1);
   }
+  const referenced = new Set(reactionClassKeys.flatMap(keys => [...keys]));
 
   return metamodels.map(mm => {
-    const names = mentioned.get(mm.id) ?? new Set<string>();
     const concrete = mm.classes.filter(cls => !cls.isAbstract);
+    const nameCounts = new Map<string, number>();
+    for (const cls of concrete) nameCounts.set(cls.name, (nameCounts.get(cls.name) ?? 0) + 1);
     const uncovered = concrete
-      .filter(cls => !names.has(cls.name.toLowerCase()))
-      .map(cls => cls.name);
+      .filter(cls => !referenced.has(classKeyOf(mm.id, cls.id)))
+      .map(cls => ((nameCounts.get(cls.name) ?? 0) > 1 ? packageQualifiedName(cls.packagePath, cls.name) : cls.name));
     const inCount = fanIn.get(mm.id) ?? 0;
     const outCount = fanOut.get(mm.id) ?? 0;
     return {
@@ -432,7 +575,10 @@ export function computeMethodologistMetrics(input: MethodologistMetricsInput): M
     input.viewTypes.map(vt => vt.label.trim()).filter(Boolean),
   );
 
-  const metamodelLinks = computeMetamodelLinks(metamodels, input.reactions);
+  const classEntries = buildClassEntries(metamodels);
+  const reactionClassKeys = input.reactions.map(spec =>
+    resolveReactionClasses(spec, extractReactionClassReferences(spec.code), metamodels, classEntries));
+  const metamodelLinks = computeMetamodelLinks(metamodels, input.reactions, reactionClassKeys);
   const reactionLocs = correspondenceTypes.flatMap(ct => ct.reactions.map(r => r.linesOfCode));
   const coveredConcreteClassCount = metamodelLinks.reduce((s, l) => s + l.coveredConcreteClassCount, 0);
   const classCount = metamodels.reduce((s, m) => s + m.classCount, 0);
@@ -453,7 +599,7 @@ export function computeMethodologistMetrics(input: MethodologistMetricsInput): M
   const nocValues = metamodels.map(m => m.nocMax);
   const reactionTotalLoc = correspondenceTypes.reduce((s, c) => s + c.linesOfCode, 0);
   const associationCount = metamodels.reduce((s, m) => s + m.associations.length, 0);
-  const consistency = computeConsistencyInsights(metamodels, input.reactions, input.oclContent);
+  const consistency = computeConsistencyInsights(metamodels, reactionClassKeys, input.oclContent);
 
   return {
     metamodels,

@@ -22,10 +22,43 @@ const EMPTY: ReactionFileMetrics = {
   reactions: [],
 };
 
+/** Index just past the string literal that opens at `start`; an unterminated one ends at its line. */
+function endOfStringLiteral(code: string, start: number): number {
+  const quote = code[start];
+  let i = start + 1;
+  while (i < code.length && code[i] !== quote && code[i] !== '\n') {
+    i += code[i] === '\\' ? 2 : 1;
+  }
+  return Math.min(i + 1, code.length);
+}
+
+/** Index of the line break that ends the `//` comment at `start` (or the end of the text). */
+function endOfLineComment(code: string, start: number): number {
+  const end = code.indexOf('\n', start);
+  return end === -1 ? code.length : end;
+}
+
+/** Index just past the block comment that opens at `start`. */
+function endOfBlockComment(code: string, start: number): number {
+  const end = code.indexOf('*/', start + 2);
+  return end === -1 ? code.length : end + 2;
+}
+
+/** Removes `//` and block comments, leaving string literals (e.g. `"http://uri"`) untouched. */
 function stripComments(code: string): string {
-  return code
-    .replace(/\/\*[\s\S]*?\*\//g, '')
-    .replace(/\/\/[^\n]*/g, '');
+  let out = '';
+  let i = 0;
+  while (i < code.length) {
+    const pair = code.slice(i, i + 2);
+    let end = i + 1;
+    let keep = true;
+    if (code[i] === '"' || code[i] === "'") end = endOfStringLiteral(code, i);
+    else if (pair === '//') [end, keep] = [endOfLineComment(code, i), false];
+    else if (pair === '/*') [end, keep] = [endOfBlockComment(code, i), false];
+    if (keep) out += code.slice(i, end);
+    i = end;
+  }
+  return out;
 }
 
 function countNonEmptyLines(text: string): number {
@@ -121,18 +154,67 @@ export function collectCorrespondenceTypeKeys(code: string): string[] {
   return [...types];
 }
 
-/** Class or type names mentioned in a reactions file (qualified ::Type and PascalCase tokens). */
-export function extractMentionedClassNames(code: string | null | undefined): string[] {
-  if (!code?.trim()) return [];
-  const stripped = stripComments(code);
-  const names = new Set<string>();
-  for (const match of stripped.matchAll(/::([A-Za-z_]\w*)/g)) {
-    names.add(match[1]);
+/** A metamodel class referenced as `qualifier::ClassName` in a reactions file. */
+export interface ReactionClassReference {
+  /** What precedes the class: an import alias (`Families`) or a package path (`a::b`). */
+  qualifier: string;
+  className: string;
+}
+
+/** What a reactions file declares about the metamodels it works with. */
+export interface ReactionClassReferences {
+  /** `import "uri" as Alias` declarations, keyed by alias. */
+  aliases: Map<string, string>;
+  /** Alias after `in reaction to changes in`, if any. */
+  sourceAlias: string | null;
+  /** Alias after `execute actions in`, if any. */
+  targetAlias: string | null;
+  references: ReactionClassReference[];
+}
+
+/** Blanks out string literals so words inside them are never read as code. */
+function stripStringLiterals(code: string): string {
+  return code.replace(/"(?:[^"\\\n]|\\.)*"|'(?:[^'\\\n]|\\.)*'/g, '""');
+}
+
+/** Drops Java and metamodel import lines (the latter are read before this runs). */
+function stripImportLines(code: string): string {
+  return code.replace(/^[ \t]*import\b[^\n]*$/gm, '');
+}
+
+/**
+ * Finds the metamodel classes a reactions file refers to.
+ *
+ * Only `qualifier::ClassName` tokens in code count. Imports, string literals, comments and
+ * unqualified words (Java/Xtend types like `String`, reaction names, …) are ignored, because
+ * a reactions file can only name a metamodel class through its import alias.
+ */
+export function extractReactionClassReferences(code: string | null | undefined): ReactionClassReferences {
+  const result: ReactionClassReferences = {
+    aliases: new Map(),
+    sourceAlias: null,
+    targetAlias: null,
+    references: [],
+  };
+  if (!code?.trim()) return result;
+
+  const uncommented = stripComments(code);
+  for (const match of uncommented.matchAll(/^[ \t]*import\s+"([^"\n]+)"\s+as\s+([A-Za-z_]\w*)/gm)) {
+    result.aliases.set(match[2], match[1].trim());
   }
-  for (const match of stripped.matchAll(/\b([A-Z]\w*)\b/g)) {
-    names.add(match[1]);
+  result.sourceAlias = /\bin\s+reaction\s+to\s+changes\s+in\s+([A-Za-z_]\w*)/.exec(uncommented)?.[1] ?? null;
+  result.targetAlias = /\bexecute\s+actions\s+in\s+([A-Za-z_]\w*)/.exec(uncommented)?.[1] ?? null;
+
+  const body = stripStringLiterals(stripImportLines(uncommented));
+  const seen = new Set<string>();
+  for (const match of body.matchAll(/\b((?:[A-Za-z_]\w*::)+)([A-Za-z_]\w*)\b/g)) {
+    const qualifier = match[1].slice(0, -2);
+    const key = `${qualifier}::${match[2]}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    result.references.push({ qualifier, className: match[2] });
   }
-  return [...names];
+  return result;
 }
 
 export function parseReactionFileMetrics(code: string | null | undefined): ReactionFileMetrics {
@@ -153,19 +235,30 @@ export function parseReactionFileMetrics(code: string | null | undefined): React
   };
 }
 
-export function parseOclConstraints(oclContent: string | null | undefined): { name: string; contextClass: string }[] {
+export interface OclConstraint {
+  name: string;
+  /** Short name of the context class. */
+  contextClass: string;
+  /** Package qualifier written before the context class (`library` in `library::Book`), or `''`. */
+  contextQualifier: string;
+}
+
+export function parseOclConstraints(oclContent: string | null | undefined): OclConstraint[] {
   if (!oclContent?.trim()) return [];
-  const constraints: { name: string; contextClass: string }[] = [];
+  const constraints: OclConstraint[] = [];
   let contextClass = '';
+  let contextQualifier = '';
   for (const line of oclContent.split(/\r?\n/)) {
     const contextMatch = /^\s*context\s+([\w:]+)/i.exec(line);
     if (contextMatch) {
       const qualified = contextMatch[1];
-      contextClass = qualified.split('::').pop() || qualified;
+      const parts = qualified.split('::').filter(Boolean);
+      contextClass = parts.pop() || qualified;
+      contextQualifier = parts.join('::');
     }
     const invMatch = /\binv\s+(\w+)\s*:/.exec(line);
     if (invMatch) {
-      constraints.push({ name: invMatch[1], contextClass });
+      constraints.push({ name: invMatch[1], contextClass, contextQualifier });
     }
   }
   return constraints;
