@@ -94,7 +94,7 @@ describe('buildMetricsCsvFiles', () => {
     expect(files.find(file => file.name === 'coverage/all.csv')?.csv).toContain('HasTitle (Book)');
     expect(files.find(file => file.name === 'size/size-classes.csv')?.csv).toContain('Book');
     expect(files.find(file => file.name === 'size/size-metamodels.csv')?.csv).toContain(
-      'Metamodel,Classes,Abstract,Concrete,Containment references,Non-containment references,'
+      'Metamodel,Classes,Abstract,Concrete,Containments,Associations,'
       + 'Enumerations,Enumeration literals,Packages,Cross-package references\r\n',
     );
     expect(files.find(file => file.name === 'size/size-classes.csv')?.csv).toContain(

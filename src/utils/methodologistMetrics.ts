@@ -100,11 +100,11 @@ export interface MethodologistMetrics {
   nocAvg: number;
   containmentHeightMax: number;
   crossPackageReferences: number;
-  avgLocPerReaction: number;
   orphanMetamodelCount: number;
   linkedMetamodelCount: number;
   coveredConcreteClassCount: number;
-  correspondenceCoveragePercent: number;
+  /** Share (0–100) of concrete classes that a reactions file references. */
+  reactionCoveragePercent: number;
   metamodelLinks: MetamodelLinkMetrics[];
   attributesPerClass: number;
   referencesPerClass: number;
@@ -113,13 +113,14 @@ export interface MethodologistMetrics {
   classesCoveredByViewsRatio: number;
   viewClassesAggregated: number;
   reactionsPerCorrespondenceType: number;
+  /** All non-empty, non-comment lines of the reactions files divided by the number of reactions. */
   reactionComplexityRatio: number;
   constraintDensity: number;
   metamodelToViewRatio: number;
-  viewTypePairCount: number;
-  correspondenceToViewPairRatio: number;
+  /** Unordered pairs of the metamodels on the canvas: m × (m − 1) / 2. */
+  metamodelPairCount: number;
+  correspondenceToMetamodelPairRatio: number;
   modularizationRatio: number;
-  associationCount: number;
   reactionTotalLoc: number;
   oneWayReactionPairCount: number;
   bidirectionalReactionPairCount: number;
@@ -579,7 +580,6 @@ export function computeMethodologistMetrics(input: MethodologistMetricsInput): M
   const reactionClassKeys = input.reactions.map(spec =>
     resolveReactionClasses(spec, extractReactionClassReferences(spec.code), metamodels, classEntries));
   const metamodelLinks = computeMetamodelLinks(metamodels, input.reactions, reactionClassKeys);
-  const reactionLocs = correspondenceTypes.flatMap(ct => ct.reactions.map(r => r.linesOfCode));
   const coveredConcreteClassCount = metamodelLinks.reduce((s, l) => s + l.coveredConcreteClassCount, 0);
   const classCount = metamodels.reduce((s, m) => s + m.classCount, 0);
   const concreteClassCount = metamodels.reduce((s, m) => s + m.concreteClassCount, 0);
@@ -592,13 +592,9 @@ export function computeMethodologistMetrics(input: MethodologistMetricsInput): M
   const oclConstraintCount = countOclConstraints(input.oclContent);
   const viewTypeCount = input.viewTypes.length;
   const viewProjection = computeViewProjection(metamodels, input.viewTypes);
-  const viewTypePairCount = unorderedPairCount(viewTypeCount);
-  const avgLocPerReaction = reactionLocs.length === 0
-    ? 0
-    : reactionLocs.reduce((s, n) => s + n, 0) / reactionLocs.length;
+  const metamodelPairCount = unorderedPairCount(metamodels.length);
   const nocValues = metamodels.map(m => m.nocMax);
   const reactionTotalLoc = correspondenceTypes.reduce((s, c) => s + c.linesOfCode, 0);
-  const associationCount = metamodels.reduce((s, m) => s + m.associations.length, 0);
   const consistency = computeConsistencyInsights(metamodels, reactionClassKeys, input.oclContent);
 
   return {
@@ -623,16 +619,14 @@ export function computeMethodologistMetrics(input: MethodologistMetricsInput): M
     oclConstraintCount,
     operationsTotal: metamodels.reduce((s, m) => s + m.operationsTotal, 0),
     nocMax: nocValues.length === 0 ? 0 : Math.max(0, ...nocValues),
-    nocAvg: metamodels.length === 0
-      ? 0
-      : metamodels.reduce((s, m) => s + m.nocAvg, 0) / metamodels.length,
+    // Weighted by class count, so it is the average over all classes, not over metamodels.
+    nocAvg: safeRatio(metamodels.reduce((s, m) => s + m.nocAvg * m.classCount, 0), classCount),
     containmentHeightMax: metamodels.reduce((s, m) => Math.max(s, m.containmentHeightMax), 0),
     crossPackageReferences: metamodels.reduce((s, m) => s + m.crossPackageReferences, 0),
-    avgLocPerReaction,
     orphanMetamodelCount: metamodelLinks.filter(l => l.isOrphan).length,
     linkedMetamodelCount: metamodelLinks.filter(l => !l.isOrphan).length,
     coveredConcreteClassCount,
-    correspondenceCoveragePercent: concreteClassCount === 0
+    reactionCoveragePercent: concreteClassCount === 0
       ? 0
       : Math.round((coveredConcreteClassCount / concreteClassCount) * 100),
     metamodelLinks,
@@ -643,13 +637,12 @@ export function computeMethodologistMetrics(input: MethodologistMetricsInput): M
     classesCoveredByViewsRatio: safeRatio(viewProjection.uniqueClassCount, classCount),
     viewClassesAggregated: viewProjection.aggregatedClassCount,
     reactionsPerCorrespondenceType: safeRatio(reactionCount, correspondenceTypeCount),
-    reactionComplexityRatio: avgLocPerReaction,
+    reactionComplexityRatio: safeRatio(reactionTotalLoc, reactionCount),
     constraintDensity: safeRatio(oclConstraintCount, classCount),
     metamodelToViewRatio: safeRatio(classCount, viewProjection.aggregatedClassCount),
-    viewTypePairCount,
-    correspondenceToViewPairRatio: safeRatio(correspondenceTypeCount, viewTypePairCount),
+    metamodelPairCount,
+    correspondenceToMetamodelPairRatio: safeRatio(correspondenceTypeCount, metamodelPairCount),
     modularizationRatio: safeRatio(classCount, packageCount),
-    associationCount,
     reactionTotalLoc,
     oneWayReactionPairCount: directions.oneWayReactionPairCount,
     bidirectionalReactionPairCount: directions.bidirectionalReactionPairCount,

@@ -6,6 +6,8 @@ import {
   collectReactionInputs,
   computeMethodologistMetrics,
 } from '../../utils/methodologistMetrics';
+import { buildMetricsCsvFiles, derivedMetricRows, formatAvg, linesPerReaction, NO_RATIO } from '../../utils/metricsReport';
+import { METRIC_DEFINITIONS } from '../../utils/metricDefinitions';
 import type { Edge, Node } from 'reactflow';
 import type { ViewType } from '../../hooks/useViewTypes';
 
@@ -337,7 +339,7 @@ describe('computeMethodologistMetrics', () => {
       fanIn: 1,
       isOrphan: false,
     });
-    expect(metrics.avgLocPerReaction).toBeGreaterThan(0);
+    expect(metrics.reactionComplexityRatio).toBeGreaterThan(0);
     expect(metrics.attributesPerClass).toBe(1);
     expect(metrics.referencesPerClass).toBeCloseTo(1 / 3);
     expect(metrics.containmentRatio).toBe(1);
@@ -345,11 +347,12 @@ describe('computeMethodologistMetrics', () => {
     expect(metrics.classesCoveredByViewsRatio).toBe(1);
     expect(metrics.viewClassesAggregated).toBe(7);
     expect(metrics.reactionsPerCorrespondenceType).toBe(0);
-    expect(metrics.reactionComplexityRatio).toBe(metrics.avgLocPerReaction);
+    expect(metrics.reactionComplexityRatio).toBe(metrics.reactionTotalLoc / metrics.reactionCount);
     expect(metrics.constraintDensity).toBeCloseTo(1 / 3);
     expect(metrics.metamodelToViewRatio).toBeCloseTo(3 / 7);
-    expect(metrics.viewTypePairCount).toBe(3);
-    expect(metrics.correspondenceToViewPairRatio).toBeCloseTo(metrics.correspondenceTypeCount / 3);
+    // Two metamodels make one pair; the three view types do not matter.
+    expect(metrics.metamodelPairCount).toBe(1);
+    expect(metrics.correspondenceToMetamodelPairRatio).toBeCloseTo(metrics.correspondenceTypeCount / 1);
     expect(metrics.modularizationRatio).toBeCloseTo(1.5);
     expect(metrics.correspondenceTypes[0].direction).toBe('one-way');
     expect(metrics.oneWayReactionPairCount).toBe(1);
@@ -389,7 +392,7 @@ reaction SyncBook {
     expect(metrics.metamodelLinks.find(l => l.name === 'library')?.uncoveredClassNames).toEqual(['Library']);
     expect(metrics.metamodelLinks.find(l => l.name === 'library')?.coveredConcreteClassCount).toBe(1);
     expect(metrics.metamodelLinks.find(l => l.name === 'persons')?.coveredConcreteClassCount).toBe(1);
-    expect(metrics.correspondenceCoveragePercent).toBe(50);
+    expect(metrics.reactionCoveragePercent).toBe(50);
   });
 
   it('returns zero derived ratios when denominators are empty', () => {
@@ -401,7 +404,7 @@ reaction SyncBook {
     });
     expect(metrics.attributesPerClass).toBe(0);
     expect(metrics.containmentRatio).toBe(0);
-    expect(metrics.correspondenceToViewPairRatio).toBe(0);
+    expect(metrics.correspondenceToMetamodelPairRatio).toBe(0);
     expect(metrics.modularizationRatio).toBe(0);
     expect(metrics.metamodelToViewRatio).toBe(0);
   });
@@ -668,5 +671,181 @@ describe('number of children per class identity', () => {
     const xml = wrap(eClass('Base') + eClass('Child', '', 'eSuperTypes="other.ecore#//Base"'));
     const result = parseEcoreMetamodelMetrics(xml);
     expect(result.classes.find(c => c.name === 'Base')?.childCount).toBe(0);
+  });
+});
+
+describe('metric definitions match their calculations', () => {
+  const node = (id: string, fileName: string, content: string): Node => ({
+    id, type: 'ecoreFile', position: { x: 0, y: 0 }, data: { fileName, fileContent: content },
+  });
+  const edge = (id: string, source: string, target: string, code: string): Edge => ({
+    id, source, target, type: 'reactions', data: { code },
+  });
+  const compute = (nodes: Node[], edges: Edge[], viewTypes: ViewType[] = []) => computeMethodologistMetrics({
+    metamodels: collectMetamodelInputs(nodes),
+    reactions: collectReactionInputs(nodes, edges),
+    viewTypes,
+    oclContent: '',
+  });
+  const row = (metrics: ReturnType<typeof compute>, id: string) =>
+    derivedMetricRows(metrics).find(r => r.id === id);
+
+  const a = node('a', 'a.ecore', wrap(eClass('A') + eClass('A2'), 'a'));
+  const b = node('b', 'b.ecore', wrap(eClass('B'), 'b'));
+  const c = node('c', 'c.ecore', wrap(eClass('C'), 'c'));
+
+  // 1 header line, 2 imports, 1 blank, 2 reactions of 2 and 3 body lines, 1 routine of 2 lines.
+  const code = [
+    'import "http://a" as a',
+    'import java.util.List',
+    '',
+    'reactions: aTob',
+    '// a comment that is not counted',
+    'reaction First {',
+    '  after element a::A created',
+    '  call { }',
+    '}',
+    'reaction Second {',
+    '  after element a::A2 created',
+    '  call {',
+    '    x()',
+    '  }',
+    '}',
+    'routine helper() {',
+    '  action { }',
+    '}',
+  ].join('\n');
+
+  describe('reaction complexity ratio', () => {
+    it('divides every line of the reactions files by the number of reactions', () => {
+      const metrics = compute([a, b], [edge('e', 'a', 'b', code)]);
+      const nonEmpty = code.split('\n').filter(l => l.trim() !== '' && !l.trim().startsWith('//')).length;
+      expect(metrics.reactionCount).toBe(2);
+      expect(metrics.reactionTotalLoc).toBe(nonEmpty);
+      expect(metrics.reactionComplexityRatio).toBe(nonEmpty / 2);
+    });
+
+    it('counts routines, imports and the header, unlike the body lines of the reactions', () => {
+      const metrics = compute([a, b], [edge('e', 'a', 'b', code)]);
+      const bodyLines = metrics.correspondenceTypes[0].reactions.map(r => r.linesOfCode);
+      const bodyAverage = bodyLines.reduce((x, y) => x + y, 0) / bodyLines.length;
+      expect(metrics.reactionComplexityRatio).toBeGreaterThan(bodyAverage);
+      expect(row(metrics, 'reactionComplexityRatio')?.formula).toContain(
+        `(${metrics.reactionTotalLoc}) / reactions (2)`,
+      );
+    });
+
+    it('gives the Lines of code note the same ratio and shows a dash without reactions', () => {
+      const withCode = compute([a, b], [edge('e', 'a', 'b', code)]);
+      expect(linesPerReaction(withCode)).toBe(`${formatAvg(withCode.reactionComplexityRatio)} per reaction`);
+      expect(row(withCode, 'reactionComplexityRatio')?.value).toBe(formatAvg(withCode.reactionComplexityRatio));
+
+      const empty = compute([a, b], [edge('e', 'a', 'b', 'import "http://a" as a')]);
+      expect(linesPerReaction(empty)).toBe('no reactions');
+      expect(row(empty, 'reactionComplexityRatio')?.value).toBe(NO_RATIO);
+    });
+  });
+
+  describe('the two coverage metrics', () => {
+    it('are named and described differently', () => {
+      const coverage = METRIC_DEFINITIONS.reactionCoverage;
+      const derived = METRIC_DEFINITIONS.correspondenceTypesPerMetamodelPair;
+      expect(coverage.label).not.toBe(derived.label);
+      expect(coverage.measures).not.toBe(derived.measures);
+      expect(coverage.calculation).toContain('concrete classes');
+      expect(derived.calculation).toContain('metamodel');
+      expect(derived.calculation).not.toContain('view type');
+      const labels = derivedMetricRows(compute([a, b], [])).map(r => r.metric);
+      expect(labels).not.toContain(coverage.label);
+      expect(new Set(labels).size).toBe(labels.length);
+    });
+
+    it('divides the coextensions by the pairs of metamodels, not of view types', () => {
+      const types = [
+        'import "http://a" as a',
+        'reaction R { after element a::A created call { add correspondence between a::A and a::A2 } }',
+      ].join('\n');
+      const manyViewTypes: ViewType[] = [1, 2, 3, 4, 5].map(i => ({
+        id: `v${i}`, label: `V${i}`, scope: 'single', angle: i, linkedNodeIds: ['a'], editable: false,
+      }));
+      const metrics = compute([a, b, c], [edge('e', 'a', 'b', types)], manyViewTypes);
+      expect(metrics.correspondenceTypeCount).toBe(1);
+      expect(metrics.metamodelPairCount).toBe(3); // 3 metamodels, 5 view types (10 pairs)
+      expect(metrics.correspondenceToMetamodelPairRatio).toBeCloseTo(1 / 3);
+      expect(row(metrics, 'correspondenceTypesPerMetamodelPair')?.formula).toContain('(3 pairs)');
+      expect(row(metrics, 'correspondenceTypesPerMetamodelPair')?.value).toBe(formatAvg(1 / 3));
+    });
+
+    it('shows a dash when there are fewer than two metamodels', () => {
+      const metrics = compute([a], []);
+      expect(metrics.metamodelPairCount).toBe(0);
+      expect(row(metrics, 'correspondenceTypesPerMetamodelPair')?.value).toBe(NO_RATIO);
+    });
+  });
+
+  describe('associations and containments', () => {
+    const refs = node('r', 'refs.ecore', wrap(
+      eClass('Owner', eRef('parts', 'Part', true) + eRef('more', 'Part', true)
+        + eRef('friend', 'Part') + eRef('buddy', 'Part') + eRef('pal', 'Part'))
+      + eClass('Part'),
+      'refs',
+    ));
+
+    it('counts them separately and keeps the total as their sum', () => {
+      const metrics = compute([refs], []);
+      expect(metrics.containmentReferences).toBe(2);
+      expect(metrics.nonContainmentReferences).toBe(3);
+      expect(metrics.referencesTotal).toBe(5);
+      expect(metrics.containmentReferences + metrics.nonContainmentReferences).toBe(metrics.referencesTotal);
+    });
+
+    it('lists both in the report overview and per metamodel', () => {
+      const metrics = compute([refs], []);
+      const files = buildMetricsCsvFiles(metrics, ['size'], 'P');
+      const overview = files.find(f => f.name === 'size/size-overview.csv')?.csv ?? '';
+      expect(overview).toContain('Containments,2');
+      expect(overview).toContain('Associations,3');
+      expect(overview).toContain('2 containments + 3 associations');
+      const perMetamodel = files.find(f => f.name === 'size/size-metamodels.csv')?.csv ?? '';
+      expect(perMetamodel).toContain('Containments,Associations');
+      expect(perMetamodel).toMatch(/refs,2,0,2,2,3,/);
+    });
+
+    it('defines the three terms consistently', () => {
+      expect(METRIC_DEFINITIONS.associations.measures).toContain('containment="false"');
+      expect(METRIC_DEFINITIONS.containments.measures).toContain('containment="true"');
+      expect(METRIC_DEFINITIONS.references.calculation).toContain('containments + associations');
+    });
+  });
+
+  describe('derived values', () => {
+    it('equal the documented formulas', () => {
+      const metrics = compute([a, b, c], [edge('e', 'a', 'b', code)]);
+      const value = (id: string) => row(metrics, id)?.value;
+      expect(value('attributesPerClass')).toBe(formatAvg(metrics.attributesTotal / metrics.classCount));
+      expect(value('referencesPerClass')).toBe(
+        formatAvg((metrics.containmentReferences + metrics.nonContainmentReferences) / metrics.classCount),
+      );
+      expect(value('reactionsPerCorrespondenceType')).toBe(NO_RATIO);
+      expect(value('modularizationRatio')).toBe(formatAvg(metrics.classCount / metrics.packageCount));
+      expect(value('constraintDensity')).toBe(formatAvg(metrics.oclConstraintCount / metrics.classCount));
+    });
+
+    it('show a dash for every ratio whose denominator is 0', () => {
+      const metrics = computeMethodologistMetrics({ metamodels: [], reactions: [], viewTypes: [], oclContent: '' });
+      for (const r of derivedMetricRows(metrics)) expect(r.value).toBe(NO_RATIO);
+    });
+
+    it('weights the overall subclass average by class count', () => {
+      const big = node('big', 'big.ecore', wrap(
+        eClass('Base') + eClass('X1', '', 'eSuperTypes="#//Base"') + eClass('X2', '', 'eSuperTypes="#//Base"')
+        + eClass('X3', '', 'eSuperTypes="#//Base"') + eClass('X4', '', 'eSuperTypes="#//Base"'),
+        'big',
+      ));
+      const small = node('small', 'small.ecore', wrap(eClass('Only'), 'small'));
+      const metrics = compute([big, small], []);
+      // 4 children over 6 classes, not the mean of 0.8 and 0.
+      expect(metrics.nocAvg).toBeCloseTo(4 / 6);
+    });
   });
 });
