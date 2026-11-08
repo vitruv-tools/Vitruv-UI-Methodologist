@@ -49,9 +49,23 @@ export const METRIC_DEFINITIONS = {
   references: {
     label: 'References',
     represents: 'Links between classes (EReferences) within the metamodels.',
-    measures: 'All EReferences, split into containment references (parent owns child) and non-containment references (plain associations).',
-    calculation: 'Count of EReferences; containment = containment="true", non-containment = all others.',
-    interpretation: 'More references means a more interconnected metamodel. Containment references define the model tree; non-containment references cross-link it.',
+    measures: 'All EReferences: containments plus associations.',
+    calculation: 'Count of EReferences = containments + associations.',
+    interpretation: 'More references means a more interconnected metamodel. See Containments and Associations for the two kinds.',
+  },
+  containments: {
+    label: 'Containments',
+    represents: 'References that make a class own other classes and so define the model tree.',
+    measures: 'EReferences with containment="true" (parent owns child).',
+    calculation: 'Count of EReferences with containment="true".',
+    interpretation: 'Containments form the tree of a model. Deleting the parent deletes its contained children.',
+  },
+  associations: {
+    label: 'Associations',
+    represents: 'References that link classes without ownership and so cross-link the model tree.',
+    measures: 'EReferences with containment="false" (plain links). Containments are not included.',
+    calculation: 'Count of EReferences with containment="false". Associations + containments = references.',
+    interpretation: 'Associations connect elements that live elsewhere in the model, so changes to one end can break the other.',
   },
   enumerations: {
     label: 'Enumerations / literals',
@@ -166,7 +180,7 @@ export const METRIC_DEFINITIONS = {
     label: 'Lines of code',
     represents: 'Size of the reactions code.',
     measures: 'Non-empty lines of code (LOC) in reactions files, excluding comments.',
-    calculation: 'Sum of non-empty, non-comment lines over all reactions files. The average is taken over individual reaction blocks.',
+    calculation: 'Sum of the non-empty, non-comment lines of all reactions files. Everything in the file counts: header, imports, reactions and routines.',
     interpretation: 'A rough indicator of implementation and maintenance effort.',
   },
   reactionsFile: {
@@ -184,10 +198,10 @@ export const METRIC_DEFINITIONS = {
     interpretation: 'One-way files only propagate changes from source to target.',
   },
   locPerReaction: {
-    label: 'LOC per reaction',
-    represents: 'Size of each individual reaction.',
-    measures: 'Non-empty, non-comment lines inside each reaction block.',
-    calculation: 'Lines between the braces of the reaction (minimum 1).',
+    label: 'Reaction body lines',
+    represents: 'Size of the body of each individual reaction.',
+    measures: 'Non-empty, non-comment lines inside the braces of each reaction block.',
+    calculation: 'Lines between the braces of the reaction (minimum 1). Routines, imports and the file header are not part of any reaction body, so these numbers do not add up to the Lines of code.',
     interpretation: 'Unusually long reactions are candidates for extracting routines.',
   },
 
@@ -195,8 +209,8 @@ export const METRIC_DEFINITIONS = {
   reactionCoverage: {
     label: 'Reaction coverage',
     represents: 'How much of the V-SUM is handled by reactions.',
-    measures: 'Concrete classes whose name appears in a reactions file connected to their metamodel.',
-    calculation: 'Covered concrete classes / all concrete classes × 100, rounded. A class is covered when its name appears in the code of a reactions edge that starts or ends at its metamodel.',
+    measures: 'Concrete classes that a reactions file references as Alias::Class (imports, strings, comments and Java types do not count).',
+    calculation: "Covered concrete classes / all concrete classes × 100, rounded. A class is covered when a reactions file refers to it through its import alias and the alias resolves to the class's own metamodel and package. This is a share of classes; Coextensions per metamodel pair is a different metric.",
     interpretation: '100% means every concrete class is referenced by some reaction. Uncovered classes can change without other models being updated.',
   },
   orphanMetamodels: {
@@ -302,8 +316,8 @@ export const METRIC_DEFINITIONS = {
   hotspotReactionsFiles: {
     label: 'Reactions files',
     represents: 'How many consistency specifications depend on a class.',
-    measures: 'Reactions files whose code mentions this class.',
-    calculation: 'Count of reactions files containing the class name.',
+    measures: 'Reactions files that reference this class as Alias::Class.',
+    calculation: 'Count of reactions files that refer to the class through an import alias resolving to its metamodel and package.',
     interpretation: 'Higher means changes to this class affect more reactions files.',
   },
   hotspotScore: {
@@ -352,10 +366,10 @@ export const METRIC_DEFINITIONS = {
   },
   reactionComplexityRatio: {
     label: 'Reaction complexity ratio',
-    represents: 'Average size of a single reaction.',
-    measures: 'Lines of code per reaction block.',
-    calculation: 'Average of the non-empty, non-comment lines in each reaction block.',
-    interpretation: 'High values point to long, complex reactions that may benefit from extracting routines.',
+    represents: 'How much reactions code exists per reaction.',
+    measures: 'All lines of the reactions files per reaction.',
+    calculation: 'Lines of code (all non-empty, non-comment lines of all reactions files: header, imports, reactions and routines) / number of reactions. Shown as a dash when there are no reactions.',
+    interpretation: 'High values point to long reactions or a lot of supporting code (routines, imports) and may benefit from restructuring.',
   },
   constraintDensity: {
     label: 'Constraint density',
@@ -371,12 +385,12 @@ export const METRIC_DEFINITIONS = {
     calculation: 'Classes / Σ (classes of the metamodels linked to each view type). A class shown in two view types is counted twice in the denominator.',
     interpretation: 'Above 1: some classes are in no view type. Below 1: classes are shown in several view types (overlapping views).',
   },
-  correspondenceTypesPerViewTypePair: {
-    label: 'Coextensions per view-type pair',
-    represents: 'How many coextensions exist relative to the possible combinations of view types.',
-    measures: 'Coextensions relative to unordered pairs of view types.',
-    calculation: 'Coextensions / (n × (n − 1) / 2), where n is the number of view types.',
-    interpretation: 'Higher values mean view types are more tightly connected by coextensions. 0 if there are fewer than 2 view types.',
+  correspondenceTypesPerMetamodelPair: {
+    label: 'Coextensions per metamodel pair',
+    represents: 'How many coextensions exist relative to the possible combinations of metamodels.',
+    measures: 'Coextensions relative to unordered pairs of the metamodels on the canvas.',
+    calculation: 'Coextensions / (m × (m − 1) / 2), where m is the number of metamodels. Shown as a dash if there are fewer than 2 metamodels. This is not Reaction coverage, which is a share of classes.',
+    interpretation: 'Higher values mean the metamodels are more tightly connected by coextensions. Coextensions are counted per mapping, so the value can be above 1.',
   },
   modularizationRatio: {
     label: 'Modularization ratio',

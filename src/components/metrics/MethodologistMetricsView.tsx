@@ -17,8 +17,8 @@ import {
   METRICS_CATEGORIES,
   METRICS_CATEGORY_LABELS,
   derivedMetricRows,
-  formatAvg,
   formatDirection,
+  linesPerReaction,
   formatOclConstraintsWithoutReaction,
   buildMetricsReportZip,
   formatSelectedLabel,
@@ -159,7 +159,8 @@ const MetamodelTable: React.FC<{ metrics: MethodologistMetrics }> = ({ metrics }
           <th style={thStyle('right')}><MetricLabel id="classes" /></th>
           <th style={thStyle('right')}><MetricLabel id="abstractClasses" /></th>
           <th style={thStyle('right')}><MetricLabel id="concreteClasses" /></th>
-          <th style={thStyle('right')}><MetricLabel id="references">References (containment / non-containment)</MetricLabel></th>
+          <th style={thStyle('right')}><MetricLabel id="containments" /></th>
+          <th style={thStyle('right')}><MetricLabel id="associations" /></th>
           <th style={thStyle('right')}><MetricLabel id="enumerations" /></th>
           <th style={thStyle('right')}><MetricLabel id="packages" /></th>
           <th style={thStyle('right')}><MetricLabel id="crossPackageReferences" /></th>
@@ -172,7 +173,8 @@ const MetamodelTable: React.FC<{ metrics: MethodologistMetrics }> = ({ metrics }
             <td style={tdStyle('right')}>{mm.classCount}</td>
             <td style={tdStyle('right')}>{mm.abstractClassCount}</td>
             <td style={tdStyle('right')}>{mm.concreteClassCount}</td>
-            <td style={tdStyle('right')}>{mm.containmentReferences} / {mm.nonContainmentReferences}</td>
+            <td style={tdStyle('right')}>{mm.containmentReferences}</td>
+            <td style={tdStyle('right')}>{mm.nonContainmentReferences}</td>
             <td style={tdStyle('right')}>{mm.enumCount} / {mm.enumLiteralCount}</td>
             <td style={tdStyle('right')}>{mm.packageCount}</td>
             <td style={tdStyle('right')}>{mm.crossPackageReferences}</td>
@@ -794,8 +796,10 @@ export const MethodologistMetricsView: React.FC<MethodologistMetricsViewProps> =
                 <InsightCard
                   metric="references"
                   value={metrics.referencesTotal}
-                  sub={`${metrics.containmentReferences} containment · ${metrics.nonContainmentReferences} non-containment`}
+                  sub={`${metrics.containmentReferences} containments + ${metrics.nonContainmentReferences} associations`}
                 />
+                <InsightCard metric="containments" value={metrics.containmentReferences} sub="owning links (tree)" />
+                <InsightCard metric="associations" value={metrics.nonContainmentReferences} sub="plain links" />
                 <InsightCard
                   metric="viewTypes"
                   value={metrics.viewTypeCount}
@@ -836,7 +840,7 @@ export const MethodologistMetricsView: React.FC<MethodologistMetricsViewProps> =
               <InsightCard metric="correspondenceTypes" value={metrics.correspondenceTypeCount} />
               <InsightCard metric="oneWayPairs" value={metrics.oneWayReactionPairCount} />
               <InsightCard metric="twoWayPairs" value={metrics.bidirectionalReactionPairCount} />
-              <InsightCard metric="linesOfCode" value={metrics.reactionTotalLoc} sub={`avg ${formatAvg(metrics.avgLocPerReaction)} per reaction`} />
+              <InsightCard metric="linesOfCode" value={metrics.reactionTotalLoc} sub={linesPerReaction(metrics)} />
             </div>
             {metrics.correspondenceTypes.length === 0 ? (
               <div style={{ fontSize: 12, color: T.muted }}>Draw reaction edges between metamodels to populate this table.</div>
@@ -851,7 +855,7 @@ export const MethodologistMetricsView: React.FC<MethodologistMetricsViewProps> =
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(112px, 1fr))', gap: 6, marginBottom: 16 }}>
               <InsightCard
                 metric="reactionCoverage"
-                value={`${metrics.correspondenceCoveragePercent}%`}
+                value={`${metrics.reactionCoveragePercent}%`}
                 sub={`${metrics.coveredConcreteClassCount} of ${metrics.concreteClassCount} concrete classes`}
               />
               <InsightCard
@@ -928,7 +932,7 @@ export const MethodologistMetricsView: React.FC<MethodologistMetricsViewProps> =
         {selected.includes('derived') && (
           <Section
             title="Derived ratios"
-            caption="Ratios computed from the counts above. All values are computed from the canvas, not from a deployed V-SUM."
+            caption="Ratios computed from the counts above. A dash means the ratio's denominator is 0. All values are computed from the canvas, not from a deployed V-SUM."
           >
             <DerivedTable metrics={metrics} />
           </Section>

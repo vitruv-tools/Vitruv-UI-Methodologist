@@ -18,6 +18,9 @@ export function formatAvg(value: number): string {
   return Number.isInteger(value) ? String(value) : value.toFixed(2);
 }
 
+/** What a ratio shows when its denominator is 0, so "no data" is not mistaken for a real 0. */
+export const NO_RATIO = '—';
+
 export function formatPercent(value: number): string {
   if (!Number.isFinite(value) || value === 0) return '0%';
   const pct = value * 100;
@@ -60,55 +63,60 @@ export interface DerivedMetricRow {
 }
 
 export function derivedMetricRows(metrics: MethodologistMetrics): DerivedMetricRow[] {
+  // A ratio is only shown when its denominator is above 0; otherwise it shows a dash.
+  const show = (denominator: number, format: () => string): string => (denominator > 0 ? format() : NO_RATIO);
   const rows: Array<Omit<DerivedMetricRow, 'metric'>> = [
     {
       id: 'attributesPerClass',
-      value: formatAvg(metrics.attributesPerClass),
+      value: show(metrics.classCount, () => formatAvg(metrics.attributesPerClass)),
       formula: 'attributes / classes',
     },
     {
       id: 'referencesPerClass',
-      value: formatAvg(metrics.referencesPerClass),
-      formula: 'references / classes',
+      value: show(metrics.classCount, () => formatAvg(metrics.referencesPerClass)),
+      formula: 'references (containments + associations) / classes',
     },
     {
       id: 'containmentRatio',
-      value: formatPercent(metrics.containmentRatio),
-      formula: 'containment references / references',
+      value: show(metrics.referencesTotal, () => formatPercent(metrics.containmentRatio)),
+      formula: 'containments / references',
     },
     {
       id: 'classesCoveredByViews',
-      value: `${formatPercent(metrics.classesCoveredByViewsRatio)} (${metrics.classesCoveredByViews}/${metrics.classCount})`,
+      value: show(
+        metrics.classCount,
+        () => `${formatPercent(metrics.classesCoveredByViewsRatio)} (${metrics.classesCoveredByViews}/${metrics.classCount})`,
+      ),
       formula: 'classes in at least one view type / classes',
     },
     {
       id: 'reactionsPerCorrespondenceType',
-      value: formatAvg(metrics.reactionsPerCorrespondenceType),
+      value: show(metrics.correspondenceTypeCount, () => formatAvg(metrics.reactionsPerCorrespondenceType)),
       formula: 'reactions / coextensions',
     },
     {
       id: 'reactionComplexityRatio',
-      value: formatAvg(metrics.reactionComplexityRatio),
-      formula: 'average lines of code per reaction',
+      value: show(metrics.reactionCount, () => formatAvg(metrics.reactionComplexityRatio)),
+      formula: `lines of code of all reactions files (${metrics.reactionTotalLoc}) / reactions (${metrics.reactionCount})`,
     },
     {
       id: 'constraintDensity',
-      value: formatAvg(metrics.constraintDensity),
+      value: show(metrics.classCount, () => formatAvg(metrics.constraintDensity)),
       formula: 'OCL constraints / classes',
     },
     {
       id: 'metamodelToViewRatio',
-      value: formatAvg(metrics.metamodelToViewRatio),
+      value: show(metrics.viewClassesAggregated, () => formatAvg(metrics.metamodelToViewRatio)),
       formula: 'classes / classes summed over all view types',
     },
     {
-      id: 'correspondenceTypesPerViewTypePair',
-      value: formatAvg(metrics.correspondenceToViewPairRatio),
-      formula: `coextensions / view-type pairs (${metrics.viewTypePairCount} pairs)`,
+      id: 'correspondenceTypesPerMetamodelPair',
+      value: show(metrics.metamodelPairCount, () => formatAvg(metrics.correspondenceToMetamodelPairRatio)),
+      formula: `coextensions / metamodel pairs (${metrics.metamodelPairCount} pairs)`,
     },
     {
       id: 'modularizationRatio',
-      value: formatAvg(metrics.modularizationRatio),
+      value: show(metrics.packageCount, () => formatAvg(metrics.modularizationRatio)),
       formula: 'classes / packages',
     },
   ];
@@ -158,8 +166,10 @@ function sizeOverview(metrics: MethodologistMetrics): KpiRow[] {
     [
       metricLabel('references'),
       metrics.referencesTotal,
-      `${metrics.containmentReferences} containment, ${metrics.nonContainmentReferences} non-containment`,
+      `${metrics.containmentReferences} containments + ${metrics.nonContainmentReferences} associations`,
     ],
+    [metricLabel('containments'), metrics.containmentReferences],
+    [metricLabel('associations'), metrics.nonContainmentReferences],
     [metricLabel('viewTypes'), metrics.viewTypeCount, `${metrics.singleViewTypeCount} single, ${metrics.multiViewTypeCount} multi`],
     ['Enumerations', metrics.enumCount],
     ['Enumeration literals', metrics.enumLiteralCount],
@@ -168,13 +178,20 @@ function sizeOverview(metrics: MethodologistMetrics): KpiRow[] {
   ];
 }
 
+/** The Lines of code card's note: the same ratio the derived table shows. */
+export function linesPerReaction(metrics: MethodologistMetrics): string {
+  return metrics.reactionCount === 0
+    ? 'no reactions'
+    : `${formatAvg(metrics.reactionComplexityRatio)} per reaction`;
+}
+
 function reactionOverview(metrics: MethodologistMetrics): KpiRow[] {
   return [
     [metricLabel('reactions'), metrics.reactionCount, `in ${metrics.correspondenceTypes.length} reactions files`],
     [metricLabel('correspondenceTypes'), metrics.correspondenceTypeCount],
     [metricLabel('oneWayPairs'), metrics.oneWayReactionPairCount],
     [metricLabel('twoWayPairs'), metrics.bidirectionalReactionPairCount],
-    [metricLabel('linesOfCode'), metrics.reactionTotalLoc, `avg ${formatAvg(metrics.avgLocPerReaction)} per reaction`],
+    [metricLabel('linesOfCode'), metrics.reactionTotalLoc, linesPerReaction(metrics)],
   ];
 }
 
@@ -182,7 +199,7 @@ function coverageOverview(metrics: MethodologistMetrics): KpiRow[] {
   return [
     [
       `${metricLabel('reactionCoverage')} %`,
-      metrics.correspondenceCoveragePercent,
+      metrics.reactionCoveragePercent,
       `${metrics.coveredConcreteClassCount} of ${metrics.concreteClassCount} concrete classes`,
     ],
     [metricLabel('orphanMetamodels'), metrics.orphanMetamodelCount, `${metrics.linkedMetamodelCount} linked`],
@@ -222,8 +239,8 @@ function sizeRows(metrics: MethodologistMetrics): CsvRow[] {
       details: [
         detail('abstractClasses', mm.abstractClassCount),
         detail('concreteClasses', mm.concreteClassCount),
-        `Containment references=${mm.containmentReferences}`,
-        `Non-containment references=${mm.nonContainmentReferences}`,
+        detail('containments', mm.containmentReferences),
+        detail('associations', mm.nonContainmentReferences),
         `Enumerations=${mm.enumCount}`,
         `Enumeration literals=${mm.enumLiteralCount}`,
         detail('packages', mm.packageCount),
@@ -352,7 +369,7 @@ function sizeTables(metrics: MethodologistMetrics): { name: string; csv: string 
       csv: toCsv(
         [
           'Metamodel', metricLabel('classes'), metricLabel('abstractClasses'), metricLabel('concreteClasses'),
-          'Containment references', 'Non-containment references', 'Enumerations', 'Enumeration literals',
+          metricLabel('containments'), metricLabel('associations'), 'Enumerations', 'Enumeration literals',
           metricLabel('packages'), metricLabel('crossPackageReferences'),
         ],
         metrics.metamodels.map(mm => [

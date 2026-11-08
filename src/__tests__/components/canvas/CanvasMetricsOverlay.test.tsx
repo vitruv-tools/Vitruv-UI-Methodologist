@@ -273,4 +273,71 @@ reaction SyncBook {
         .forEach(id => expect(screen.getAllByTestId(`metric-info-${id}`).length).toBeGreaterThan(0));
     });
   });
+
+  describe('KPI presentation', () => {
+    const ecore = (pkg: string, body: string) => `<?xml version="1.0" encoding="UTF-8"?>
+<ecore:EPackage xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                xmlns:ecore="http://www.eclipse.org/emf/2002/Ecore" name="${pkg}" nsURI="http://${pkg}">${body}</ecore:EPackage>`;
+    const node = (id: string, fileName: string, fileContent: string): Node => ({
+      id, type: 'ecoreFile', position: { x: 0, y: 0 }, data: { fileName, fileContent },
+    });
+    // Owner has 1 containment and 2 associations to Part.
+    const owner = node('n1', 'owner.ecore', ecore('owner', `
+      <eClassifiers xsi:type="ecore:EClass" name="Owner">
+        <eStructuralFeatures xsi:type="ecore:EReference" name="parts" eType="#//Part" containment="true"/>
+        <eStructuralFeatures xsi:type="ecore:EReference" name="friend" eType="#//Part"/>
+        <eStructuralFeatures xsi:type="ecore:EReference" name="buddy" eType="#//Part"/>
+      </eClassifiers>
+      <eClassifiers xsi:type="ecore:EClass" name="Part"/>`));
+    const other = node('n2', 'other.ecore', ecore('other', '<eClassifiers xsi:type="ecore:EClass" name="Thing"/>'));
+    // 7 non-empty, non-comment lines; 2 reactions of 1 body line each.
+    const code = [
+      'import "http://owner" as owner',
+      'reaction R1 {',
+      '  after element owner::Owner created',
+      '}',
+      'reaction R2 {',
+      '  after element owner::Part created',
+      '}',
+    ].join('\n');
+    const edge: Edge = { id: 'e1', source: 'n1', target: 'n2', type: 'reactions', data: { code } };
+
+    const showAll = async () => {
+      renderOverlay({ visible: true, canvasNodes: [owner, other], canvasEdges: [edge] });
+      ['reactions', 'coverage', 'derived'].forEach(tab => fireEvent.click(screen.getByTestId(`metrics-tab-${tab}`)));
+      await waitFor(() => expect(apiService.getRuleSets).toHaveBeenCalled());
+    };
+    const cardOf = (sub: string) => screen.getByText(sub).parentElement as HTMLElement;
+
+    it('shows associations and containments as separate KPIs that add up to the references', async () => {
+      await showAll();
+      expect(within(cardOf('owning links (tree)')).getByText('1')).toBeInTheDocument();
+      expect(within(cardOf('plain links')).getByText('2')).toBeInTheDocument();
+      expect(screen.getByText('1 containments + 2 associations')).toBeInTheDocument();
+      expect(within(cardOf('1 containments + 2 associations')).getByText('3')).toBeInTheDocument();
+      const header = screen.getAllByRole('columnheader').map(h => h.textContent ?? '');
+      expect(header.some(t => t.startsWith('Containments'))).toBe(true);
+      expect(header.some(t => t.startsWith('Associations'))).toBe(true);
+      expect(header.some(t => t.includes('containment / non-containment'))).toBe(false);
+    });
+
+    it('uses one reaction complexity ratio for the Lines of code note and the derived table', async () => {
+      await showAll();
+      expect(within(cardOf('3.50 per reaction')).getByText('7')).toBeInTheDocument();
+      const ratioRow = screen.getAllByRole('row').find(r => r.textContent?.startsWith('Reaction complexity ratio'));
+      expect(ratioRow).toHaveTextContent('3.50');
+      expect(ratioRow).toHaveTextContent('lines of code of all reactions files (7) / reactions (2)');
+    });
+
+    it('keeps the class coverage and the coextensions-per-metamodel-pair metrics apart', async () => {
+      await showAll();
+      expect(screen.getAllByText('Reaction coverage').length).toBeGreaterThan(0);
+      const pairRow = screen.getAllByRole('row').find(r => r.textContent?.startsWith('Coextensions per metamodel pair'));
+      expect(pairRow).toBeDefined();
+      expect(pairRow).toHaveTextContent('metamodel pairs (1 pairs)');
+      expect(screen.queryByText(/view-type pair/i)).not.toBeInTheDocument();
+      // 2 of the 3 concrete classes (Owner, Part) are referenced.
+      expect(within(cardOf('2 of 3 concrete classes')).getByText('67%')).toBeInTheDocument();
+    });
+  });
 });
