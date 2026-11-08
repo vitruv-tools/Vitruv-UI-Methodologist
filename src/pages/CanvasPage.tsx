@@ -29,8 +29,10 @@ import { describeBuildFailure, describeBuildSuccess } from '../utils/buildCheckM
 import { CanvasSidebarToolbar } from '../components/canvas/CanvasSidebarToolbar';
 import { UtilityMethodsModal } from '../components/utilitymethods/UtilityMethodsModal';
 import { BuildProblemsDialog } from '../components/canvas/BuildProblemsDialog';
+import { ValidationProblemsDialog } from '../components/canvas/ValidationProblemsDialog';
 import type { BuildFailure, BuildProblem } from '../types/vsumBuild';
 import { buildFailureFromError, isReactionsProblem } from '../utils/buildProblems';
+import { useVsumValidation } from '../hooks/useVsumValidation';
 import { CanvasProjectAccessControls } from '../components/canvas/CanvasProjectAccessControls';
 import { CanvasConstraintsOverlay } from '../components/canvas/CanvasConstraintsOverlay';
 import { CanvasMetricsOverlay } from '../components/canvas/CanvasMetricsOverlay';
@@ -427,6 +429,7 @@ export const CanvasPage: React.FC = () => {
   }, [showBuildFailure]);
 
   const closeBuildFailure = useCallback(() => setBuildFailure(null), []);
+  const [showValidationProblems, setShowValidationProblems] = useState(false);
 
   useEffect(() => () => {
     if (popupTimerRef.current) globalThis.clearTimeout(popupTimerRef.current);
@@ -515,6 +518,11 @@ export const CanvasPage: React.FC = () => {
   const isSharedAccess = effectiveVsumRole === 'VIEWER'
     || effectiveVsumRole === 'MEMBER'
     || Boolean(navAccess?.sharedBy);
+
+  const { problems: validationProblems, failure: validationFailure } = useVsumValidation(
+    activeProjectId,
+    effectiveVsumRole,
+  );
 
   const displayProjectSharer = React.useMemo(() => {
     if (projectSharer) return projectSharer;
@@ -1495,7 +1503,10 @@ export const CanvasPage: React.FC = () => {
     } else {
       opened = canvas?.openMetaModelFile?.(problem.fileId);
     }
-    if (opened) setBuildFailure(null);
+    if (opened) {
+      setBuildFailure(null);
+      setShowValidationProblems(false);
+    }
     return Boolean(opened);
   }, []);
 
@@ -1789,6 +1800,8 @@ export const CanvasPage: React.FC = () => {
         onToggleReactionMode={() => setAddReactionMode(v => !v)}
         reactionLineStyle={reactionLineStyle}
         onReactionLineStyleChange={handleReactionLineStyleChange}
+        validationProblemCount={validationProblems.length}
+        onShowValidationProblems={() => setShowValidationProblems(true)}
       />
 
       <UnsavedTabCloseDialog
@@ -1839,6 +1852,13 @@ export const CanvasPage: React.FC = () => {
         failure={buildFailure?.failure ?? null}
         title={buildFailure?.title ?? ''}
         onClose={closeBuildFailure}
+        onOpenProblem={handleOpenBuildProblem}
+      />
+
+      <ValidationProblemsDialog
+        open={showValidationProblems}
+        failure={validationFailure}
+        onClose={() => setShowValidationProblems(false)}
         onOpenProblem={handleOpenBuildProblem}
       />
 

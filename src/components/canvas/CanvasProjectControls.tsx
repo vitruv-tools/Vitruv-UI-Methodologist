@@ -23,6 +23,9 @@ interface CanvasProjectControlsProps {
   onToggleReactionMode?: () => void;
   reactionLineStyle?: 'dashed' | 'solid';
   onReactionLineStyleChange?: (style: 'dashed' | 'solid') => void;
+  /** Number of validation problems; the counter is hidden when 0 or omitted. */
+  validationProblemCount?: number;
+  onShowValidationProblems?: () => void;
 }
 
 const projectControlsStyle: React.CSSProperties = {
@@ -147,6 +150,8 @@ export const CanvasProjectControls: React.FC<CanvasProjectControlsProps> = ({
   onToggleReactionMode,
   reactionLineStyle = 'dashed',
   onReactionLineStyleChange,
+  validationProblemCount = 0,
+  onShowValidationProblems,
 }) => (
   <div style={projectControlsStyle}>
     <button
@@ -260,6 +265,31 @@ export const CanvasProjectControls: React.FC<CanvasProjectControlsProps> = ({
     >
       <RefreshIcon />
     </ProjectControlButton>
+
+    {validationProblemCount > 0 && (
+      <button
+        type="button"
+        onClick={onShowValidationProblems}
+        title="Show problems in this project"
+        data-testid="validation-problem-counter"
+        style={{
+          height: 24,
+          marginLeft: 4,
+          padding: '0 8px',
+          border: '1px solid #fecaca',
+          borderRadius: 6,
+          background: '#fef2f2',
+          color: '#b91c1c',
+          fontSize: 11,
+          fontWeight: 700,
+          cursor: 'pointer',
+          whiteSpace: 'nowrap',
+          fontFamily: 'inherit',
+        }}
+      >
+        {validationProblemCount === 1 ? '1 problem' : `${validationProblemCount} problems`}
+      </button>
+    )}
 
     {onToggleReactionMode && (
       <>

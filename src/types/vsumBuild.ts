@@ -70,6 +70,13 @@ export interface VsumBuildResponse {
   finishedAt?: string | null;
 }
 
+/** Result of the background validation (`GET /api/v1/vsums/{id}/validation`). */
+export interface VsumValidationResponse {
+  valid?: boolean;
+  problems?: BuildProblem[];
+  validatedAt?: string;
+}
+
 /** A failed build or export, reduced to what the UI shows. */
 export interface BuildFailure {
   errorCode?: string;
