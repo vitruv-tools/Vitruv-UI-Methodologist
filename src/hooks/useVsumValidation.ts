@@ -1,6 +1,6 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { apiService } from '../services/api';
-import type { BuildProblem } from '../types/vsumBuild';
+import type { BuildFailure, BuildProblem } from '../types/vsumBuild';
 
 export const VALIDATION_POLL_INTERVAL_MS = 5000;
 
@@ -8,7 +8,7 @@ export const VALIDATION_POLL_INTERVAL_MS = 5000;
  * Polls the validation result of a project while `enabled`. A failed request keeps the last result
  * and shows nothing; the next poll simply tries again.
  */
-export function useVsumValidation(projectId: number | undefined, enabled: boolean): BuildProblem[] {
+function usePolledProblems(projectId: number | undefined, enabled: boolean): BuildProblem[] {
   const [state, setState] = useState<{ projectId: number; problems: BuildProblem[] } | null>(null);
 
   useEffect(() => {
@@ -46,3 +46,24 @@ export function useVsumValidation(projectId: number | undefined, enabled: boolea
 }
 
 const EMPTY: BuildProblem[] = [];
+
+export interface VsumValidation {
+  readonly problems: BuildProblem[];
+  /** The problems as a failure for `BuildProblemsDialog`; null while there are none. */
+  readonly failure: BuildFailure | null;
+}
+
+/** Whether the role may see validation warnings: owners and members, not viewers. */
+function canSeeValidation(role: string | null): boolean {
+  return role === 'OWNER' || role === 'MEMBER';
+}
+
+/** Validation problems of a project for owners and members; viewers get none and make no requests. */
+export function useVsumValidation(projectId: number | undefined, role: string | null): VsumValidation {
+  const problems = usePolledProblems(projectId, canSeeValidation(role));
+  const failure = useMemo<BuildFailure | null>(
+    () => (problems.length > 0 ? { message: 'The project has problems.', problems } : null),
+    [problems],
+  );
+  return { problems, failure };
+}

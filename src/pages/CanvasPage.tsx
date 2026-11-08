@@ -29,6 +29,7 @@ import { describeBuildFailure, describeBuildSuccess } from '../utils/buildCheckM
 import { CanvasSidebarToolbar } from '../components/canvas/CanvasSidebarToolbar';
 import { UtilityMethodsModal } from '../components/utilitymethods/UtilityMethodsModal';
 import { BuildProblemsDialog } from '../components/canvas/BuildProblemsDialog';
+import { ValidationProblemsDialog } from '../components/canvas/ValidationProblemsDialog';
 import type { BuildFailure, BuildProblem } from '../types/vsumBuild';
 import { buildFailureFromError, isReactionsProblem } from '../utils/buildProblems';
 import { useVsumValidation } from '../hooks/useVsumValidation';
@@ -518,14 +519,10 @@ export const CanvasPage: React.FC = () => {
     || effectiveVsumRole === 'MEMBER'
     || Boolean(navAccess?.sharedBy);
 
-  // Only owners and members see validation warnings; viewers (and unresolved roles) never poll.
-  const canSeeValidation = effectiveVsumRole === 'OWNER' || effectiveVsumRole === 'MEMBER';
-  const validationProblems = useVsumValidation(activeProjectId, canSeeValidation);
-  const validationFailure = React.useMemo<BuildFailure | null>(() => (
-    validationProblems.length > 0
-      ? { message: 'The project has problems.', problems: validationProblems }
-      : null
-  ), [validationProblems]);
+  const { problems: validationProblems, failure: validationFailure } = useVsumValidation(
+    activeProjectId,
+    effectiveVsumRole,
+  );
 
   const displayProjectSharer = React.useMemo(() => {
     if (projectSharer) return projectSharer;
@@ -1858,9 +1855,9 @@ export const CanvasPage: React.FC = () => {
         onOpenProblem={handleOpenBuildProblem}
       />
 
-      <BuildProblemsDialog
-        failure={showValidationProblems ? validationFailure : null}
-        title="Problems in this project"
+      <ValidationProblemsDialog
+        open={showValidationProblems}
+        failure={validationFailure}
         onClose={() => setShowValidationProblems(false)}
         onOpenProblem={handleOpenBuildProblem}
       />
