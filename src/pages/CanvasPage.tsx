@@ -31,6 +31,7 @@ import { UtilityMethodsModal } from '../components/utilitymethods/UtilityMethods
 import { BuildProblemsDialog } from '../components/canvas/BuildProblemsDialog';
 import type { BuildFailure, BuildProblem } from '../types/vsumBuild';
 import { buildFailureFromError, isReactionsProblem } from '../utils/buildProblems';
+import { useVsumValidation } from '../hooks/useVsumValidation';
 import { CanvasProjectAccessControls } from '../components/canvas/CanvasProjectAccessControls';
 import { CanvasConstraintsOverlay } from '../components/canvas/CanvasConstraintsOverlay';
 import { CanvasMetricsOverlay } from '../components/canvas/CanvasMetricsOverlay';
@@ -427,6 +428,7 @@ export const CanvasPage: React.FC = () => {
   }, [showBuildFailure]);
 
   const closeBuildFailure = useCallback(() => setBuildFailure(null), []);
+  const [showValidationProblems, setShowValidationProblems] = useState(false);
 
   useEffect(() => () => {
     if (popupTimerRef.current) globalThis.clearTimeout(popupTimerRef.current);
@@ -515,6 +517,15 @@ export const CanvasPage: React.FC = () => {
   const isSharedAccess = effectiveVsumRole === 'VIEWER'
     || effectiveVsumRole === 'MEMBER'
     || Boolean(navAccess?.sharedBy);
+
+  // Only owners and members see validation warnings; viewers (and unresolved roles) never poll.
+  const canSeeValidation = effectiveVsumRole === 'OWNER' || effectiveVsumRole === 'MEMBER';
+  const validationProblems = useVsumValidation(activeProjectId, canSeeValidation);
+  const validationFailure = React.useMemo<BuildFailure | null>(() => (
+    validationProblems.length > 0
+      ? { message: 'The project has problems.', problems: validationProblems }
+      : null
+  ), [validationProblems]);
 
   const displayProjectSharer = React.useMemo(() => {
     if (projectSharer) return projectSharer;
@@ -1495,7 +1506,10 @@ export const CanvasPage: React.FC = () => {
     } else {
       opened = canvas?.openMetaModelFile?.(problem.fileId);
     }
-    if (opened) setBuildFailure(null);
+    if (opened) {
+      setBuildFailure(null);
+      setShowValidationProblems(false);
+    }
     return Boolean(opened);
   }, []);
 
@@ -1789,6 +1803,8 @@ export const CanvasPage: React.FC = () => {
         onToggleReactionMode={() => setAddReactionMode(v => !v)}
         reactionLineStyle={reactionLineStyle}
         onReactionLineStyleChange={handleReactionLineStyleChange}
+        validationProblemCount={validationProblems.length}
+        onShowValidationProblems={() => setShowValidationProblems(true)}
       />
 
       <UnsavedTabCloseDialog
@@ -1839,6 +1855,13 @@ export const CanvasPage: React.FC = () => {
         failure={buildFailure?.failure ?? null}
         title={buildFailure?.title ?? ''}
         onClose={closeBuildFailure}
+        onOpenProblem={handleOpenBuildProblem}
+      />
+
+      <BuildProblemsDialog
+        failure={showValidationProblems ? validationFailure : null}
+        title="Problems in this project"
+        onClose={() => setShowValidationProblems(false)}
         onOpenProblem={handleOpenBuildProblem}
       />
 

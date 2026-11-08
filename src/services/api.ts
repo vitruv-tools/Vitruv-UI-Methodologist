@@ -2,7 +2,7 @@ import { AuthService } from './auth';
 import { FlowData } from '../types/flow';
 import { ApiResponse, Vsum, VsumDetails } from '../types/vsum';
 import { config } from '../config/environment';
-import type { VsumBuildResponse } from '../types/vsumBuild';
+import type { VsumBuildResponse, VsumValidationResponse } from '../types/vsumBuild';
 
 class ApiService {
   private readonly baseURL = config.apiBaseUrl;
@@ -697,6 +697,14 @@ class ApiService {
     buildId: number | string,
   ): Promise<ApiResponse<VsumBuildResponse>> {
     return this.authenticatedRequest(`/api/v1/vsums/${id}/builds/${buildId}`);
+  }
+
+  /**
+   * vSUMS: Result of the validation the backend runs after each save
+   * GET /api/v1/vsums/{id}/validation
+   */
+  async getVsumValidation(id: number | string): Promise<ApiResponse<VsumValidationResponse>> {
+    return this.authenticatedRequest(`/api/v1/vsums/${id}/validation`);
   }
 
   /**
