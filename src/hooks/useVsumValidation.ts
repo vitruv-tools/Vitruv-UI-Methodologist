@@ -41,7 +41,7 @@ export function useVsumValidation(projectId: number | undefined, enabled: boolea
     };
   }, [projectId, enabled]);
 
-  if (!enabled || state?.projectId !== projectId) return EMPTY;
+  if (!enabled || !state || state.projectId !== projectId) return EMPTY;
   return state.problems;
 }
 
