@@ -166,7 +166,9 @@ const AUTH_STYLES = `
     padding-right: 44px;
   }
 
-  .mock-password-toggle {
+  /* Keep centering while pressed; global button:active resets transforms. */
+  .mock-password-toggle,
+  .mock-password-toggle:active {
     position: absolute;
     right: 10px;
     top: 50%;
