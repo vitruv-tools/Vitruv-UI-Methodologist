@@ -206,6 +206,20 @@ export function pickSharedAwareRole(
   return known === 'MEMBER' || known === 'VIEWER' ? known : inferredSharedRole;
 }
 
+/**
+ * Tells whether a role worked out from the member list may be recorded for a project.
+ *
+ * The member list is only readable by owners, so a viewer or member gets none. Without a
+ * membership, the role is only a guess (stored or navigation default); it must not replace a role
+ * the API already reported, or a viewer would be treated as an owner.
+ */
+export function shouldRecordMemberListRole(
+  memberRole: VsumRole | null | undefined,
+  apiRoleKnown: boolean,
+): boolean {
+  return Boolean(memberRole) || !apiRoleKnown;
+}
+
 /** Effective access role for a project (stored access + optional API role). */
 export function resolveProjectAccessRole(
   projectId: number,

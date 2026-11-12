@@ -16,6 +16,7 @@ import {
   modalPanelToolbarStyle,
 } from '../ui/sharedStyles';
 import { modalBackdropStyle, modalDialogShellStyle, useModalBodyLock } from '../ui/modalUtils';
+import { describeLspClose, openLspWebSocket } from '../../utils/lspWebSocket';
 
 interface CodeEditorModalProps {
   readonly isOpen: boolean;
@@ -415,23 +416,17 @@ export function CodeEditorModal({
 
   const connectToLsp = (monacoInstance: Monaco) => {
     try {
-      const rawUser = localStorage.getItem('auth.user');
-      const userId = rawUser ? JSON.parse(rawUser).id : null;
-      if (!userId) {
-        console.error('❌ No userId available – aborting LSP connection');
-        return;
-      }
       if (!vsumId) {
         console.error('❌ No vsumId available – aborting LSP connection');
         return;
       }
 
-      const apiBaseUrl = process.env.REACT_APP_API_BASE_URL || 'http://localhost:9811';
-      const wsBaseUrl = apiBaseUrl.replace('https://', 'wss://').replace('http://', 'ws://');
-      const wsUrl = `${wsBaseUrl}${lspEndpoint}?userId=${encodeURIComponent(userId)}&vsumId=${encodeURIComponent(vsumId)}`;
-
-
-      const webSocket = new WebSocket(wsUrl);
+      const webSocket = openLspWebSocket(lspEndpoint, vsumId);
+      if (!webSocket) {
+        console.error('❌ Not signed in – aborting LSP connection');
+        setLspError('Sign in again to use completions and validation');
+        return;
+      }
       webSocketRef.current = webSocket;
 
       webSocket.onopen = () => {
@@ -509,7 +504,7 @@ export function CodeEditorModal({
       };
 
       webSocket.onerror = (event) => {
-        console.error('💥 LSP WebSocket error for', wsUrl, event);
+        console.error('💥 LSP WebSocket error for', lspEndpoint, event);
         setLspConnected(false);
         setLspReadyBoth(false);
         setLspError('LSP connection failed — completions and validation unavailable');
@@ -522,7 +517,7 @@ export function CodeEditorModal({
         lspInitialized.current = false;
         pendingRequests.current.clear();
         if (event.code !== 1000) {
-          setLspError(`LSP disconnected (code ${event.code}) — try reopening the editor`);
+          setLspError(describeLspClose(event.code));
         }
       };
     } catch (err) {

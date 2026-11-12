@@ -9,11 +9,11 @@ import { ModelDrawerModal } from '../components/canvas/ModelDrawerModal';
 import { CanvasUmlPanelLayer } from '../components/canvas/CanvasUmlPanelLayer';
 import { apiService, VsumRole, VsumUserResponse } from '../services/api';
 import { VsumDetails } from '../types';
-import { VsumMetaModelRef } from '../types/vsum';
+import { VsumMetaModelRef } from '../types';
 import { appendMetaModelVersion } from '../utils/metaModelVersion';
 import { useProjectStore } from '../store/Project';
 import { createVsumDetailsStore, getVsumDetailsStore, hasVsumDetailsStore } from '../store/VsumDetails';
-import type { EditableVsumDetails } from '../types/EditableVsumDetails';
+import type { EditableVsumDetails } from '../types';
 import { WorkspaceSnapshot, WorkspaceSnapshotRequest } from '../types/workspace';
 import { MODAL_Z_INDEX, isAnyModalOpen, useModalBodyLock } from '../components/ui/modalUtils';
 import { CanvasProjectTabs } from '../components/canvas/CanvasProjectTabs';
@@ -64,6 +64,7 @@ import {
   sharedByFromOwner,
   parseVsumMembersResponse,
   pickSharedAwareRole,
+  shouldRecordMemberListRole,
   readStoredProjectAccess,
   clearStoredProjectAccess,
   resolveProjectAccessRole,
@@ -565,13 +566,17 @@ export const CanvasPage: React.FC = () => {
     }
 
     const myMembership = findMembershipForEmail(unique, user?.email);
+    const memberRole = resolveVsumAccessRole(myMembership?.role, myMembership?.roleEn);
     const resolvedRole = pickSharedAwareRole(
       sharedInferredRole,
-      resolveVsumAccessRole(myMembership?.role, myMembership?.roleEn),
+      memberRole,
       resolveVsumAccessRole(options?.fallbackRole),
       navAccessRole,
     );
-    if (resolvedRole && options?.vsumId) noteApiRole(options.vsumId, resolvedRole);
+    const apiRoleKnown = options?.vsumId ? projectApiRolesRef.current.has(options.vsumId) : false;
+    if (resolvedRole && options?.vsumId && shouldRecordMemberListRole(memberRole, apiRoleKnown)) {
+      noteApiRole(options.vsumId, resolvedRole);
+    }
   }, [navAccessRole, sharedInferredRole, user?.email, noteApiRole]);
 
   const refreshProjectMembers = useCallback(async () => {
