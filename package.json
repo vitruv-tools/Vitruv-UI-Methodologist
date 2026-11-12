@@ -16,7 +16,7 @@
     "@types/node": "^26.6.6",
     "@types/react": "^19.3.0",
     "@types/react-dom": "^19.3.0",
-    "ecore-ts": "^0.14.0",
+    "ecore-ts": "^0.17.8",
     "mermaid": "^12.3.0",
     "monaco-editor": "^0.57.0",
     "monaco-languageclient": "^11.0.3",
